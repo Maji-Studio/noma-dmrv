@@ -9,6 +9,7 @@ import type { PgTable, PgColumn } from "drizzle-orm/pg-core";
 import { isPgUniqueViolation } from "@/db/errors";
 import type { OrgContext } from "@/lib/auth/server";
 import { SafeError } from "@/lib/errors";
+import { DomainError } from "@/lib/domain-errors";
 import { requireOrgScope, type Executor } from "./utils";
 
 const MAX_RETRIES = 3;
@@ -155,10 +156,11 @@ function isCodeUniqueViolation(
   return isPgUniqueViolation(error, codeUniqueConstraintName(table, codeColumn));
 }
 
-function duplicateCodeError(code: string, message?: string): SafeError {
-  return new SafeError(
-    message ?? `Code "${code}" already exists. Use a different code.`,
-  );
+function duplicateCodeError(code: string, message?: string): DomainError {
+  const detail = message ?? `Code "${code}" already exists. Use a different code.`;
+  return new DomainError("conflict", detail, {
+    issues: [{ path: ["code"], code: "conflict", message: new SafeError(detail).message }],
+  });
 }
 
 /**
@@ -177,7 +179,7 @@ export async function withUniqueCodeGuard<T>(
     return await fn();
   } catch (error) {
     if (isCodeUniqueViolation(error, table, codeColumn)) {
-      throw new SafeError(message);
+      throw duplicateCodeError("", message);
     }
     throw error;
   }

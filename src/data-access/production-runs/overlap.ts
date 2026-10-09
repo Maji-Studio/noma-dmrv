@@ -8,12 +8,12 @@
  * `production_runs_reactor_start_unique_idx` is the exact-start backstop.
  */
 
+import { DomainError } from "@/lib/domain-errors";
 import { and, eq, gt, isNull, lt, ne, or, sql, type SQL } from "drizzle-orm";
 import { productionRuns } from "@/db/schema";
 import { isPgUniqueViolation } from "@/db/errors";
 import { formatLocalDate, formatLocalTime } from "@/lib/date-utils";
 import { conflictCode } from "@/lib/conflict-ref";
-import { SafeError } from "@/lib/errors";
 import type { RunConflict } from "@/lib/production-runs/overlap-conflict";
 import type { DbTransaction } from "@/db";
 import type { OrgContext } from "@/lib/auth/server";
@@ -29,10 +29,10 @@ export type { RunConflict } from "@/lib/production-runs/overlap-conflict";
  * reactor. Carries a structured `conflict` so the server action can surface a
  * link straight to the offending run.
  */
-export class ProductionRunOverlapError extends SafeError {
+export class ProductionRunOverlapError extends DomainError {
   readonly conflict: RunConflict;
   constructor(message: string, conflict: RunConflict) {
-    super(message);
+    super("conflict", message, { conflict });
     this.name = "ProductionRunOverlapError";
     this.conflict = conflict;
   }

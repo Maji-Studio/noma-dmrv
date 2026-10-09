@@ -37,7 +37,7 @@ import {
   type Sample,
 } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
-import { requireOrgScope } from "../utils";
+import { type Executor, requireOrgScope } from "../utils";
 import { SafeError } from "@/lib/errors";
 import { productionRunDateExpr } from "./date-expr";
 import { inCreditBatchProductionRuns } from "../credit-batch-lineage-filter";
@@ -314,9 +314,11 @@ export async function getProductionRuns(
  */
 async function getProductionRunFeedstocks(
   ctx: OrgContext,
-  productionRunId: string
+  productionRunId: string,
+  executor: Executor = db,
 ): Promise<ProductionRunFeedstockWithDetails[]> {
-  const result = await db
+  requireOrgScope(ctx);
+  const result = await executor
     .select({
       id: productionRunFeedstocks.id,
       feedstockId: productionRunFeedstocks.feedstockId,
@@ -335,8 +337,10 @@ async function getProductionRunFeedstocks(
 async function getProductionRunFeedstockDraws(
   ctx: OrgContext,
   productionRunId: string,
+  executor: Executor = db,
 ): Promise<ProductionRunFeedstockDrawWithDetails[]> {
-  return db
+  requireOrgScope(ctx);
+  return executor
     .select({
       id: productionRunFeedstockDraws.id,
       storageLocationId: productionRunFeedstockDraws.storageLocationId,
@@ -376,11 +380,12 @@ async function getProductionRunFeedstockDraws(
  */
 export async function getProductionRunById(
   ctx: OrgContext,
-  productionRunId: string
+  productionRunId: string,
+  executor: Executor = db,
 ): Promise<ProductionRunWithRelations> {
   requireOrgScope(ctx);
 
-  const [run] = await db
+  const [run] = await executor
     .select({
       id: productionRuns.id,
       code: productionRuns.code,
@@ -442,10 +447,10 @@ export async function getProductionRunById(
     feedstockStorageLocation,
   ] =
     await Promise.all([
-      getProductionRunFeedstocks(ctx, productionRunId),
-      getProductionRunFeedstockDraws(ctx, productionRunId),
+      getProductionRunFeedstocks(ctx, productionRunId, executor),
+      getProductionRunFeedstockDraws(ctx, productionRunId, executor),
       run.biocharStorageLocationId
-        ? db
+        ? executor
             .select({
               code: storageLocations.code,
               name: storageLocations.name,
@@ -455,7 +460,7 @@ export async function getProductionRunById(
             .then(([loc]) => loc ?? null)
         : null,
       run.feedstockStorageLocationId
-        ? db
+        ? executor
             .select({
               code: storageLocations.code,
               name: storageLocations.name,

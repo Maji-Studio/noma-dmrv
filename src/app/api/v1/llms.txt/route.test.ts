@@ -22,6 +22,6 @@ it("serves a public plain-text agent guide without a credential", async () => {
   expect(text).toContain("Required on every POST create, including dry runs");
   expect(text).toContain("POST dry runs require a key.");
   expect(text).toContain("Dry runs do not consume or replay keys; an already committed key returns 409.");
-  for (const term of ["/api/v1/openapi.json", "Authorization: Bearer", "feedstocks:write", "Idempotency-Key", "ETag", "If-Match", "dryRun", "nextCursor", "problem+json", "outcome_unknown", "Retry-After", "today", "timeZone"]) expect(text).toContain(term);
+  for (const term of ["/api/v1/openapi.json", "Authorization: Bearer", "feedstocks:write", "feedstocks:delete", "production-runs:write", "production-runs:delete", "Idempotency-Key", "ETag", "If-Match", "dryRun", "nextCursor", "problem+json", "outcome_unknown", "Retry-After", "today", "timeZone"]) expect(text).toContain(term);
   expect(text).not.toMatch(/[\u2013\u2014]/);
 });

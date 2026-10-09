@@ -15,6 +15,9 @@ import { numberBoundsOf, publishedJsonSchemas } from "./published-json-schema";
  */
 export const emptyToNull = z.literal("").transform((): null => null);
 
+/** 24-hour wall-clock time, HH:MM, with zero-padded hours and minutes. */
+export const LOCAL_TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
+
 // ============================================
 // GPS Coordinate Schemas
 // ============================================

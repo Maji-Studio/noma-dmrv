@@ -2,7 +2,7 @@ import type { z } from "zod";
 import type { ApiContext } from "@/lib/auth/api-context";
 import { logFeedstockDelivery, updateFeedstock, deleteFeedstock } from "@/lib/operations/feedstocks";
 import type { feedstockCreateEnvelopeSchema } from "@/lib/representations/envelopes";
-import { feedstockStockPreview, representFeedstock } from "@/lib/representations/feedstocks";
+import { representFeedstock } from "@/lib/representations/feedstocks";
 import { ApiHttpError } from "./http-error";
 import { API_FEEDSTOCK_MAX_ALLOCATIONS, FEEDSTOCK_REPRESENTATION_REVISION } from "@/config/api-rest";
 import { readApiFeedstock } from "@/lib/read-models/api-feedstocks";
@@ -72,6 +72,6 @@ export function feedstockCreateBody(result: OperationResult<Awaited<ReturnType<t
   const data = result.data.feedstocks.map(representFeedstock);
   return {
     data, ...(result.data.warning ? { warnings: [result.data.warning] } : {}),
-    ...(dryRun ? { preview: feedstockStockPreview(data) } : {}),
+    ...(dryRun ? { stockEffects: result.stockEffects } : {}),
   } satisfies z.infer<typeof feedstockCreateEnvelopeSchema>;
 }

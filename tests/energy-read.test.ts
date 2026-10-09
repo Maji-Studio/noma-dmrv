@@ -99,7 +99,8 @@ describe.sequential("energy read", () => {
       fixture.runs.map((run) => run.id).sort(),
     );
     expect(inputs.runs.find((run) => run.id === fixture.runs[0].id)?.day).toBe("2026-09-09");
-    expect(inputs.feedstocks).toEqual([
+    // The shared output-stock fixture adds its own fuel intake for valid run draws.
+    expect(inputs.feedstocks.filter((row) => row.id === feedstockId)).toEqual([
       expect.objectContaining({
         id: feedstockId,
         day: "2026-09-01",
@@ -107,7 +108,7 @@ describe.sequential("energy read", () => {
         legs: [{ distanceKm: LEG_KM, loadMassKg: FEEDSTOCK_WET_KG, method: "road" }],
       }),
     ]);
-    expect(inputs.feedstockDraws).toEqual([
+    expect(inputs.feedstockDraws.filter((draw) => draw.feedstockId === feedstockId)).toEqual([
       { runId: fixture.runs[0].id, feedstockId, wetMassKg: FEEDSTOCK_DRAW_KG },
     ]);
 

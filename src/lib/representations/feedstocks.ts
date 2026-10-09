@@ -1,5 +1,4 @@
 import { z } from "zod";
-import type { feedstockPreviewSchema } from "./envelopes";
 
 const nullableId = z.uuid().nullable();
 export const feedstockRepresentationSchema = z.object({
@@ -37,13 +36,4 @@ export function representFeedstock(row: FeedstockRepresentationInput): Feedstock
       (row.deliveryDate instanceof Date ? row.deliveryDate.toISOString() : row.deliveryDate).split("T")[0],
     createdAt: new Date(row.createdAt).toISOString(), updatedAt: new Date(row.updatedAt).toISOString(),
   });
-}
-
-/** Intake rows carry the stock additions, not the bin's resulting balance. */
-export function feedstockStockPreview(rows: FeedstockRepresentation[]) {
-  return rows.map((row) => ({
-    feedstockId: row.id, storageLocationId: row.storageLocationId,
-    allocatedWetMassKg: row.massWetKg, allocatedDryMassKg: row.massDryKg,
-    stockDeltaWetKg: row.status === "complete" ? row.massWetKg : 0,
-  } satisfies z.infer<typeof feedstockPreviewSchema>));
 }

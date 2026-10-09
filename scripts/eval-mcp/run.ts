@@ -50,9 +50,11 @@ async function main(): Promise<void> {
   let fixtureModule: typeof import("./fixture") | undefined;
   try {
     fixtureModule = await import("./fixture");
-    const { seedFixture, fixtureTarget, readSnapshot, evaluationExpectation } = fixtureModule;
+    const { seedFixture, fixtureTarget, readSnapshot, evaluationExpectation, evaluationRunRequirements } = fixtureModule;
     const expectation = evaluationExpectation();
     console.log(`Case 2 expectation: ${expectation}.`);
+    const requiredRunInputs = evaluationRunRequirements();
+    console.log(`Published required run fields: ${requiredRunInputs.join(", ")}. Resolve omitted references and time with grounding tools.`);
     for (const testCase of CASES) {
       controller.signal.throwIfAborted();
       const fixture = await seedFixture(testCase.id);

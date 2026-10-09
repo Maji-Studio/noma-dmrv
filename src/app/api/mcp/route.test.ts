@@ -15,6 +15,11 @@ const MCP_INSTRUCTIONS_MAX_CHARS = 2000;
 const mocks = vi.hoisted(() => ({ resolve: vi.fn(), pre: vi.fn(), post: vi.fn(), me: vi.fn(), log: vi.fn(), env: { NODE_ENV: "production", NEXT_PUBLIC_APP_URL: "https://noma.example", API_WRITES_DISABLED: false } }));
 vi.mock("@/lib/operations/runner", () => ({ runOperation: vi.fn() }));
 vi.mock("@/data-access/feedstocks", () => ({}));
+vi.mock("@/data-access/production-runs", () => ({}));
+vi.mock("@/data-access/production-run-input", () => ({}));
+vi.mock("@/data-access/code-generator", () => ({}));
+vi.mock("@/lib/read-models/api-production-runs", () => ({ readApiProductionRun: vi.fn(), readApiProductionRunList: vi.fn() }));
+vi.mock("@/lib/read-models/api-reactors", () => ({ readApiReactorList: vi.fn() }));
 vi.mock("@/data-access/storage-object-deletions", () => ({}));
 vi.mock("@/lib/mcp/server", { spy: true });
 vi.mock("@/config/env", () => ({ env: mocks.env }));
@@ -93,8 +98,8 @@ describe("authenticated MCP read route", () => {
     for (const [key, value] of Object.entries(rateHeaders)) expect(response.headers.get(key)).toBe(value);
     expect(response.headers.get("x-request-id")).toBeTruthy();
     const { result } = await body(response);
-    expect(result.tools).toHaveLength(13);
-    expect(result.tools.filter((tool: { name: string }) => !["log_feedstock_delivery", "update_feedstock", "delete_feedstock"].includes(tool.name)).every((tool: { annotations: { readOnlyHint: boolean } }) => tool.annotations.readOnlyHint)).toBe(true);
+    expect(result.tools).toHaveLength(19);
+    expect(result.tools.filter((tool: { name: string }) => !["log_feedstock_delivery", "update_feedstock", "delete_feedstock", "start_production_run", "update_production_run", "delete_production_run"].includes(tool.name)).every((tool: { annotations: { readOnlyHint: boolean } }) => tool.annotations.readOnlyHint)).toBe(true);
     const find = result.tools.find((tool: { name: string }) => tool.name === "find_feedstocks");
     expect(find.inputSchema.additionalProperties).toBe(false);
     expect(find.inputSchema.properties.limit).toMatchObject({ type: "integer", minimum: 1, maximum: API_LIST_MAX_LIMIT,
@@ -297,7 +302,7 @@ it("keeps write tools hidden for a read-only key", async () => {
 });
 it("uses singular facility wording", async () => {
   const data = await mocks.me();
-  data.facilities = [{ id: crypto.randomUUID(), code: "FAC-1", name: "Facility", timeZone: "UTC", today: "2026-10-09" }];
+  data.facilities = [{ id: crypto.randomUUID(), code: "FAC-1", name: "Facility", timeZone: "UTC", today: "2026-10-09", localTime: "12:00" }];
   mocks.me.mockResolvedValue(data);
   const { result } = await body(await call("whoami"));
   expect(result.content[0].text).toContain("1 facility,");

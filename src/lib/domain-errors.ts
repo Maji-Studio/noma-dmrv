@@ -13,6 +13,7 @@ export type DomainErrorCode =
   | "reference_not_found"
   | "reference_ambiguous"
   // Runner outcomes.
+  | "concurrent_write_retry"
   | "deadline_exceeded"
   | "outcome_unknown"
   | "idempotency_in_progress"

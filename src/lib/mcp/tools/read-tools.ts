@@ -1,3 +1,7 @@
+import { readProductionRunListFromInput, readProductionRun } from "@/lib/api/production-runs-queries";
+import { readReactorListFromInput } from "@/lib/api/reactors-queries";
+import { productionRunRepresentationSchema } from "@/lib/representations/production-runs";
+import { PRODUCTION_RUN_GUIDANCE } from "@/lib/operations/agent-guidance";
 import { z } from "zod";
 import type { ApiContext } from "@/lib/auth/api-context";
 import type { ApiScope } from "@/lib/auth/api-scopes";
@@ -21,11 +25,14 @@ import { parseQueryInput } from "@/lib/api/query";
 import { UNTRUSTED_TEXT, FEEDSTOCK_UNITS, FEEDSTOCK_DATES } from "@/lib/operations/agent-guidance";
 
 const readers = {
+  "production-runs": readProductionRunListFromInput, reactors: readReactorListFromInput,
   facilities: readFacilityListFromInput, suppliers: readSupplierListFromInput,
   "feedstock-types": readFeedstockTypeListFromInput, "storage-locations": readStorageLocationListFromInput,
   vehicles: readVehicleListFromInput, drivers: readDriverListFromInput, feedstocks: readFeedstockListFromInput,
 };
 const labels: Record<keyof typeof readers, { singular: string; plural: string }> = {
+  "production-runs": { singular: "production run", plural: "production runs" },
+  reactors: { singular: "reactor", plural: "reactors" },
   "facilities": { singular: "facility", plural: "facilities" },
   "suppliers": { singular: "supplier", plural: "suppliers" },
   "feedstock-types": { singular: "feedstock type", plural: "feedstock types" },
@@ -35,6 +42,8 @@ const labels: Record<keyof typeof readers, { singular: string; plural: string }>
   "feedstocks": { singular: "feedstock", plural: "feedstocks" },
 };
 const guidance: Record<keyof typeof readers, string> = {
+  "production-runs": PRODUCTION_RUN_GUIDANCE,
+  reactors: "Call whoami first for the run facility. Use the reactor UUID with start_production_run.",
   facilities: "Call whoami first for the credential's active facilities and local dates.",
   suppliers: "Use the supplier id with find_supplier_locations.",
   "feedstock-types": "Use the feedstock type id to identify the delivered material.",
@@ -72,10 +81,16 @@ function defineRead<S extends z.ZodType>(
 }
 
 export const readTools: ReadTool[] = [
+  defineRead({ name: "get_production_run", scope: "production-runs:read",
+    summarize: (body) => { const row = body.data as { code: string; version: number }; return `Production run ${row.code}, version ${row.version}.`; },
+    description: `${readDescriptions.get} Call find_production_runs first for an id or code. ${PRODUCTION_RUN_GUIDANCE}`,
+    input: resourceQueries["production-runs"].get.extend({ idOrCode: z.string().describe("Production run UUID or exact code.") }),
+    output: itemEnvelopeSchema(productionRunRepresentationSchema),
+  }, async (ctx, { idOrCode }) => ({ data: await readProductionRun(ctx, idOrCode) })),
   defineRead({ name: "whoami", summarize: (body) => {
     const data = body.data as z.infer<typeof meRepresentationSchema>;
     return `Organization ${data.organization.name}, ${data.facilities.length} ${data.facilities.length === 1 ? "facility" : "facilities"}, role ${data.role}.`;
-  }, description: `${readDescriptions.whoami} Call this first for facility ids, time zones and local YYYY-MM-DD dates.`, input: z.strictObject({}), output: itemEnvelopeSchema(meRepresentationSchema) },
+  }, description: `${readDescriptions.whoami} Call this first for facility ids, time zones, today and localTime for the facility clock.`, input: z.strictObject({}), output: itemEnvelopeSchema(meRepresentationSchema) },
     async (ctx) => ({ data: await readApiMe(ctx) })),
   ...resources.map((resource) => defineRead({
     name: `find_${resource.path.replaceAll("-", "_")}`, scope: resource.scope,

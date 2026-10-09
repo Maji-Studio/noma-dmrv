@@ -92,9 +92,6 @@ describe('output stock event times in PostgreSQL', () => {
         await tx.update(binMovements).set({ occurredAt: null })
           .where(and(eq(binMovements.id, movement.id), eq(binMovements.organizationId, organizationId)));
       }
-      // These ingredient-only children are outside the shared output fixture cleanup.
-      await tx.delete(productionRunFeedstockDraws).where(eq(productionRunFeedstockDraws.organizationId, organizationId));
-      await tx.delete(feedstocks).where(eq(feedstocks.organizationId, organizationId));
     });
   });
 

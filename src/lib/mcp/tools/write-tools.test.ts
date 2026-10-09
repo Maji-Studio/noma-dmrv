@@ -5,7 +5,14 @@ import { representationEtag } from "@/lib/api/etag";
 import type { ApiRouteContext } from "@/lib/api/route";
 import { DomainError, validationFailed } from "@/lib/operations/errors";
 import { toolFailure, toolOutputSchema } from "../results";
-import { writeTools } from "./write-tools";
+import { writeTools as allWriteTools } from "./write-tools";
+
+const writeTools = allWriteTools.filter((tool) => tool.scope.startsWith("feedstocks:"));
+
+vi.mock("@/data-access/production-runs", () => ({}));
+vi.mock("@/data-access/production-run-input", () => ({}));
+vi.mock("@/data-access/code-generator", () => ({}));
+vi.mock("@/lib/read-models/api-production-runs", () => ({ readApiProductionRun: vi.fn() }));
 
 const mocks = vi.hoisted(() => ({ run: vi.fn(), read: vi.fn() }));
 vi.mock("@/lib/operations/runner", () => ({ runOperation: mocks.run }));

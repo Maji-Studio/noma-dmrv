@@ -1,3 +1,9 @@
+import { z } from "zod";
+import { runOperation } from "@/lib/operations/runner";
+import { waitForBlockedOperations } from "./helpers/operation-barrier";
+import { createTestPool } from "./helpers/operation-fixture";
+import { assertCanMutateCertifiedLineage } from "@/data-access/certification-lineage-guards";
+import { updateProductionRunInTransaction } from "@/data-access/production-runs/mutations";
 import { labLogisticsVersion } from "./helpers/lab-logistics-version";
 import { productionVersion } from "./helpers/production-version";
 import { ensureOutputFixtureActor } from "./helpers/output-contract-fixtures";
@@ -49,6 +55,7 @@ import {
   feedstocks,
   orders,
   productionRunFeedstocks,
+  productionRunFeedstockDraws,
   outputStockMoistureReadings,
   productionRuns,
   productionProcesses,
@@ -69,6 +76,7 @@ interface LineageFixture {
   deliveryId: string;
   facilityId: string;
   feedstockId: string;
+  feedstockBinId: string;
   feedstockTypeId: string;
   productionProcessId: string;
   ghgStatementId: string | null;
@@ -113,11 +121,18 @@ async function createLineageFixture(
       })
       .returning({ id: feedstockTypes.id });
 
+    const [feedstockBin] = await tx.insert(storageLocations).values({
+      organizationId: TEST_ORG_ID, facilityId: facility.id, code: `BIN-CLG-${tag}`,
+      name: "Lineage feedstock source", type: "feedstock_bin", feedstockTypeId: feedstockType.id,
+    }).returning();
+
     const [feedstock] = await tx
       .insert(feedstocks)
       .values({
         organizationId: TEST_ORG_ID,
         code: `FS-CLG-${tag}`,
+        storageLocationId: feedstockBin.id,
+        status: "complete",
         facilityId: facility.id,
         feedstockTypeId: feedstockType.id,
         massDryKg: 900,
@@ -153,6 +168,11 @@ async function createLineageFixture(
         status: blockingVia === "none" ? "draft" : "complete",
       })
       .returning({ id: productionRuns.id });
+
+    await tx.insert(productionRunFeedstockDraws).values({
+      organizationId: TEST_ORG_ID, productionRunId: productionRun.id,
+      storageLocationId: feedstockBin.id, wetMassKg: 1_000,
+    });
 
     await tx.insert(productionRunFeedstocks).values({
       organizationId: TEST_ORG_ID,
@@ -301,6 +321,7 @@ async function createLineageFixture(
       deliveryId: delivery.id,
       facilityId: facility.id,
       feedstockId: feedstock.id,
+      feedstockBinId: feedstockBin.id,
       feedstockTypeId: feedstockType.id,
       productionProcessId: productionProcess.id,
       ghgStatementId,
@@ -346,12 +367,14 @@ async function cleanupLineageFixture(fixture: LineageFixture): Promise<void> {
           eq(transportLegs.entityId, fixture.feedstockId),
         ),
       );
+    await tx.delete(productionRunFeedstockDraws).where(eq(productionRunFeedstockDraws.productionRunId, fixture.productionRunId));
     await tx
       .delete(feedstocks)
       .where(eq(feedstocks.id, fixture.feedstockId));
     await tx
       .delete(productionProcesses)
       .where(eq(productionProcesses.id, fixture.productionProcessId));
+    await tx.delete(storageLocations).where(eq(storageLocations.id, fixture.feedstockBinId));
     await tx
       .delete(feedstockTypes)
       .where(eq(feedstockTypes.id, fixture.feedstockTypeId));
@@ -446,6 +469,13 @@ describe("certification lineage guards", () => {
 
   it("rejects a legacy wet-mass edit when no source bin can be identified", async () => {
     await withFixture(async (fixture) => {
+      await db.delete(productionRunFeedstockDraws).where(and(
+        eq(productionRunFeedstockDraws.organizationId, TEST_ORG_ID),
+        eq(productionRunFeedstockDraws.productionRunId, fixture.productionRunId),
+      ));
+      await db.update(productionRuns).set({ feedstockStorageLocationId: null }).where(and(
+        eq(productionRuns.organizationId, TEST_ORG_ID), eq(productionRuns.id, fixture.productionRunId),
+      ));
       await expect(
         updateProductionRun(
           makeTestOrgContext(TEST_USER_ID),
@@ -472,7 +502,7 @@ describe("certification lineage guards", () => {
         updateProductionRun(makeTestOrgContext(TEST_USER_ID), fixture.productionRunId, { expectedVersion: await productionVersion(makeTestOrgContext(TEST_USER_ID), "productionRuns", fixture.productionRunId),
           feedstockMoisturePercent: 11,
         }),
-      ).rejects.toThrow(LOCKED_COPY);
+      ).rejects.toMatchObject({ code: "certification_locked", message: expect.stringContaining(LOCKED_COPY) });
     });
   });
 
@@ -480,7 +510,7 @@ describe("certification lineage guards", () => {
     await withFixture(async (fixture) => {
       await expect(
         deleteProductionRun(makeTestOrgContext(TEST_USER_ID), fixture.productionRunId, await productionVersion(makeTestOrgContext(TEST_USER_ID), "productionRuns", fixture.productionRunId)),
-      ).rejects.toThrow(LOCKED_COPY);
+      ).rejects.toMatchObject({ code: "certification_locked", message: expect.stringContaining(LOCKED_COPY) });
     });
   });
 
@@ -887,3 +917,77 @@ describe("certification lineage guards", () => {
     }, "ghgStatement");
   });
 });
+
+it("commits a run status update and feedstock edit on the same lineage and bin with runner retries", async () => {
+  const WRITER_AND_OBSERVER_CONNECTIONS = 3;
+  const RACE_DEADLINE_MS = 20_000;
+  const INITIAL_WET_KG = 1_000;
+  const EDITED_WET_KG = 1_100;
+  const DRAW_WET_KG = 10;
+  await withFixture(async (fixture) => {
+    const ctx = makeTestOrgContext(TEST_USER_ID);
+    const [bin] = await db.insert(storageLocations).values({ organizationId: TEST_ORG_ID,
+      facilityId: fixture.facilityId, code: `LOCK-${fixture.feedstockId}`, name: "Lock regression source",
+      type: "feedstock_bin", feedstockTypeId: fixture.feedstockTypeId }).returning();
+    const [run] = await db.insert(productionRuns).values({ organizationId: TEST_ORG_ID,
+      facilityId: fixture.facilityId, reactorId: fixture.reactorId, code: `LOCK-${fixture.productionRunId}`,
+      status: "draft", startTime: new Date("2026-06-18T08:00:00Z"),
+      feedstockWetMassKg: DRAW_WET_KG, feedstockMoisturePercent: 10 }).returning();
+    await db.update(feedstocks).set({ storageLocationId: bin.id, status: "complete", massWetKg: INITIAL_WET_KG })
+      .where(eq(feedstocks.id, fixture.feedstockId));
+    await db.insert(productionRunFeedstockDraws).values({ organizationId: TEST_ORG_ID,
+      productionRunId: run.id, storageLocationId: bin.id, wetMassKg: DRAW_WET_KG });
+    await db.insert(productionRunFeedstocks).values({ organizationId: TEST_ORG_ID,
+      productionRunId: run.id, feedstockId: fixture.feedstockId, wetMassUsedKg: DRAW_WET_KG });
+    await db.insert(creditBatchProductionRuns).values({ organizationId: TEST_ORG_ID,
+      productionRunId: run.id, creditBatchId: fixture.batchId });
+    const pool = createTestPool(WRITER_AND_OBSERVER_CONNECTIONS);
+    let ready!: () => void;
+    const lineageHeld = new Promise<void>((resolve) => { ready = resolve; });
+    let feedstockAttempts = 0;
+    let runAttempts = 0;
+    let updating: Promise<unknown> | undefined;
+    const editing = runOperation({ id: "test_feedstock_edit", input: z.object({}), supportsDryRun: true,
+      execute: async ({ tx }) => {
+        const [feedstock] = await tx.select().from(feedstocks)
+          .where(and(eq(feedstocks.organizationId, TEST_ORG_ID), eq(feedstocks.id, fixture.feedstockId))).for("update");
+        await assertCanMutateCertifiedLineage(ctx, tx,
+          { entityType: "feedstock", entityId: fixture.feedstockId }, "update");
+        if (++feedstockAttempts === 1) {
+          const pid = (await tx.execute<{ pid: number }>(sql`select pg_backend_pid() as pid`)).rows[0].pid;
+          ready();
+          await waitForBlockedOperations(pool, pid, 1);
+          // The run holds the bin and waits on lineage; this edit closes the cycle.
+        }
+        return updateFeedstockInTransaction(ctx, tx, fixture.feedstockId,
+          { expectedVersion: feedstock.version, massWetKg: EDITED_WET_KG });
+      },
+    }, ctx, {}, { pool, deadlineMs: RACE_DEADLINE_MS });
+    void editing.catch(() => undefined);
+    try {
+      await Promise.race([lineageHeld, editing]);
+      updating = runOperation({ id: "test_run_status", input: z.object({}), supportsDryRun: true,
+        execute: async ({ tx }) => {
+          runAttempts++;
+          return updateProductionRunInTransaction(ctx, tx, run.id,
+            { expectedVersion: run.version, status: "running" });
+        },
+      }, ctx, {}, { pool, deadlineMs: RACE_DEADLINE_MS });
+      const [edited, updated] = await Promise.all([editing, updating]);
+      expect(edited.data.massWetKg).toBe(EDITED_WET_KG);
+      expect(updated).toMatchObject({ data: { status: "running", version: run.version + 1 } });
+      expect(feedstockAttempts + runAttempts).toBeGreaterThan(2);
+      expect((await db.select().from(productionRuns).where(eq(productionRuns.id, run.id)))[0].status).toBe("running");
+      expect((await db.select().from(feedstocks).where(eq(feedstocks.id, fixture.feedstockId)))[0].massWetKg).toBe(EDITED_WET_KG);
+    } finally {
+      await Promise.allSettled([editing, ...(updating ? [updating] : [])]);
+      await pool.end();
+      await db.delete(creditBatchProductionRuns).where(eq(creditBatchProductionRuns.productionRunId, run.id));
+      await db.delete(productionRunFeedstocks).where(eq(productionRunFeedstocks.productionRunId, run.id));
+      await db.delete(productionRunFeedstockDraws).where(eq(productionRunFeedstockDraws.productionRunId, run.id));
+      await db.delete(productionRuns).where(eq(productionRuns.id, run.id));
+      await db.update(feedstocks).set({ storageLocationId: null }).where(eq(feedstocks.id, fixture.feedstockId));
+      await db.delete(storageLocations).where(eq(storageLocations.id, bin.id));
+    }
+  }, "none");
+}, 30_000);

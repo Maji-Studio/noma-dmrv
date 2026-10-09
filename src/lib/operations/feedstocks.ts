@@ -30,14 +30,14 @@ export const logFeedstockDelivery: Operation<
   }),
   input: createFeedstockSchema,
   supportsDryRun: true,
-  execute: ({ ctx, tx }, data) =>
+  execute: ({ ctx, tx, snapshotStock }, data) =>
     withFeedstockErrors(() => createFeedstockInTransaction(ctx, tx, {
       ...data,
       transportDistanceSource: resolveDistanceSource(
         data.transportDistanceKm,
         data.transportDistanceSource,
       ),
-    })),
+    }, snapshotStock)),
 };
 
 export const updateFeedstock: Operation<typeof updateFeedstockSchema, FeedstockWithRelations> = {
@@ -49,12 +49,12 @@ export const updateFeedstock: Operation<typeof updateFeedstockSchema, FeedstockW
   }),
   input: updateFeedstockSchema,
   supportsDryRun: true,
-  execute: async ({ ctx, tx, afterCommit }, { feedstockId, transportDistanceKm, transportDistanceSource, ...updateData }) => {
+  execute: async ({ ctx, tx, afterCommit, snapshotStock }, { feedstockId, transportDistanceKm, transportDistanceSource, ...updateData }) => {
     const result = await withFeedstockErrors(() => updateFeedstockInTransaction(ctx, tx, feedstockId, {
       ...updateData,
       transportDistanceKm,
       transportDistanceSource: resolveDistanceSource(transportDistanceKm, transportDistanceSource),
-    }));
+    }, snapshotStock));
     afterCommit(async () => { await processPendingStorageObjectDeletions(ctx); });
     return result;
   },
@@ -68,8 +68,8 @@ export const deleteFeedstock: Operation<typeof deleteFeedstockSchema, void> = {
   }),
   input: deleteFeedstockSchema,
   supportsDryRun: true,
-  execute: async ({ ctx, tx, afterCommit }, { feedstockId, expectedVersion }) => {
-    await withFeedstockErrors(() => deleteFeedstockInTransaction(ctx, tx, feedstockId, expectedVersion));
+  execute: async ({ ctx, tx, afterCommit, snapshotStock }, { feedstockId, expectedVersion }) => {
+    await withFeedstockErrors(() => deleteFeedstockInTransaction(ctx, tx, feedstockId, expectedVersion, snapshotStock));
     afterCommit(async () => { await processPendingStorageObjectDeletions(ctx); });
   },
 };

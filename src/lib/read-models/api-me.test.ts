@@ -20,5 +20,16 @@ it("uses each facility's current calendar day at the same instant", async () => 
   };
   const result = await readApiMe(ctx);
   expect(result.facilities.map(({ today }) => today)).toEqual(["2026-10-07", "2026-10-06"]);
+  expect(result.facilities.map(({ localTime }) => localTime)).toEqual(["15:00", "18:00"]);
   expect(result.credential.expiresAt).toBe("2026-12-01T00:00:00.000Z");
+});
+
+it("uses midnight HH:MM and handles DST on the facility clock", async () => {
+  vi.useFakeTimers();
+  const ctx = { orgRole: "admin", scopes: [], credential: { expiresAt: new Date("2026-12-01T00:00:00Z") } } as unknown as ApiContext;
+  vi.setSystemTime(new Date("2026-11-01T10:00:00Z"));
+  const result = await readApiMe(ctx);
+  expect(result.facilities.map(({ today, localTime }) => ({ today, localTime }))).toEqual([
+    { today: "2026-11-02", localTime: "00:00" }, { today: "2026-11-01", localTime: "02:00" },
+  ]);
 });

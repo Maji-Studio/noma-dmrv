@@ -35,6 +35,11 @@ enabled = true
 [checks.seeded_oversize_rejection]
 enabled = true
 
+# A seeded positive example (fixture-backed by-id and create case) must answer 2xx.
+# The positive-status allowances below never apply to it.
+[checks.seeded_example_success]
+enabled = true
+
 [checks.positive_data_acceptance]
 expected-statuses = ["2xx", 401, 403, 404, 409, 414, 429, 431, "5xx"]
 
@@ -82,7 +87,7 @@ expected-statuses = ["2xx", 401, 403, 404, 409, 413, 414, 422, 429, 431, "5xx"]
 # 428 is valid only for the operations that require If-Match. The check has
 # operation-level scope but cannot scope expected statuses by header name.
 [[operations]]
-include-operation-id = ["update_feedstock", "delete_feedstock"]
+include-operation-id = ["update_feedstock", "delete_feedstock", "update_production_run", "delete_production_run"]
 [operations.checks.missing_required_header]
 expected-statuses = [400, 401, 403, 406, 415, 422, 428]
 
@@ -140,3 +145,25 @@ include-operation-id = "delete_feedstock"
 include-operation-id = "find_supplier_locations"
 [operations.parameters]
 "path.idOrCode" = "${API_FUZZ_SUPPLIER_ID}"
+
+[[operations]]
+include-operation-id = "get_reactor"
+[operations.parameters]
+"path.idOrCode" = "${API_FUZZ_REACTOR_ID}"
+
+[[operations]]
+include-operation-id = "get_production_run"
+[operations.parameters]
+"path.idOrCode" = "${API_FUZZ_PRODUCTION_RUN_ID}"
+
+[[operations]]
+include-operation-id = "update_production_run"
+[operations.parameters]
+"path.idOrCode" = "${API_FUZZ_PRODUCTION_RUN_ID}"
+"header.If-Match" = "${API_FUZZ_PRODUCTION_RUN_ETAG}"
+
+[[operations]]
+include-operation-id = "delete_production_run"
+[operations.parameters]
+"path.idOrCode" = "${API_FUZZ_PRODUCTION_RUN_ID}"
+"header.If-Match" = "${API_FUZZ_PRODUCTION_RUN_ETAG}"

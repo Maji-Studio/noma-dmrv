@@ -1,3 +1,4 @@
+import { PRODUCTION_RUN_REPRESENTATION_REVISION, REACTOR_REPRESENTATION_REVISION } from "@/config/api-rest";
 import {
   SUPPLIER_REPRESENTATION_REVISION,
   VEHICLE_REPRESENTATION_REVISION,
@@ -42,4 +43,11 @@ export function driverEtag(row: Pick<DriverRepresentation, "version">): string {
 
 export function feedstockTypeEtag(row: Pick<FeedstockTypeRepresentation, "version">): string {
   return representationEtag(row.version, FEEDSTOCK_TYPE_REPRESENTATION_REVISION);
+}
+
+export function productionRunEtag(row: { version: number }): string {
+  return representationEtag(row.version, PRODUCTION_RUN_REPRESENTATION_REVISION);
+}
+export function reactorEtag(row: { version: number }): string {
+  return representationEtag(row.version, REACTOR_REPRESENTATION_REVISION);
 }

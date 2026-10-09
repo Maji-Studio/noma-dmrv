@@ -2,7 +2,7 @@ import { withProductStockFingerprint } from "./product-stock-preview-fixture";
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
-import { feedstocks, storageLocations } from "@/db/schema";
+import { storageLocations } from "@/db/schema";
 import { createBiocharProduct, type CreateBiocharProductInput } from "@/data-access/biochar-product-create";
 import { createDelivery } from "@/data-access/delivery-output-writes";
 import { createOrder } from "@/data-access/orders";
@@ -50,6 +50,5 @@ export async function postMeasurement(f: PostedStockParents, changes: Partial<Ou
   return postOutputStock(f.ctx, { ...input, expectedProductVersions: preview.expectedProductVersions, basisFingerprint: preview.basisFingerprint, idempotencyKey: randomUUID(), reason: "E2E stock contract measurement" });
 }
 export async function cleanupPostedStock(f: PostedStockParents) {
-  await db.delete(feedstocks).where(eq(feedstocks.organizationId, f.ctx.organizationId));
   await cleanupOutputStockFixture(db, f.ctx.organizationId);
 }

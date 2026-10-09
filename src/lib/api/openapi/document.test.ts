@@ -93,14 +93,14 @@ it("publishes business dates as date, and preserves operation input types and co
 it("publishes pagination and search bounds on every list route", () => {
   const lists = Object.values(document.paths).map((methods) => methods.get)
     .filter((operation) => operation?.operationId.startsWith("find_"));
-  expect(lists).toHaveLength(8);
+  expect(lists).toHaveLength(10);
   for (const operation of lists) {
     const parameters = operation.parameters as { name: string; in: string; required: boolean; schema: JsonSchema }[];
     const query = Object.fromEntries(parameters.filter((parameter) => parameter.in === "query").map((parameter) => [parameter.name, parameter]));
     expect(query.limit).toMatchObject({ required: false, schema: { type: "integer", minimum: 1, maximum: API_LIST_MAX_LIMIT, default: API_LIST_DEFAULT_LIMIT } });
     expect(query.limit.schema).not.toHaveProperty("pattern");
     expect(query.cursor).toMatchObject({ required: false, schema: { type: "string", maxLength: API_CURSOR_MAX_LENGTH } });
-    expect(query.q).toMatchObject({ required: false, schema: { type: "string", maxLength: API_QUERY_MAX_LENGTH } });
+    if (operation.operationId !== "find_production_runs") expect(query.q).toMatchObject({ required: false, schema: { type: "string", maxLength: API_QUERY_MAX_LENGTH } });
     if (operation.operationId !== "find_supplier_locations") {
       expect(query.code).toMatchObject({ required: false, schema: { type: "string", maxLength: API_QUERY_MAX_LENGTH } });
     }
@@ -195,7 +195,7 @@ it("types current as a feedstock only on feedstock precondition responses", () =
     expect.objectContaining({ properties: { current: expect.objectContaining({ $ref: "#/components/schemas/feedstock" }) }, required: ["current"] }),
   ]);
   for (const [name, response] of Object.entries(document.components.responses)) {
-    if (name === "FeedstockProblem412") continue;
+    if (name === "FeedstockProblem412" || name === "ProductionRunProblem412") continue;
     expect(response.content["application/problem+json"].schema).toEqual({ $ref: "#/components/schemas/Problem" });
   }
 });
@@ -251,4 +251,24 @@ describe("OpenAPI 3.1 structure (no validator dependency)", () => {
     });
     expect(z.toJSONSchema(createFeedstockSchema, { io: "input", unrepresentable: "any" })).not.toEqual(toOperationJsonSchema(createFeedstockSchema));
   });
+});
+
+it("publishes scopes as an extensible response vocabulary without widening runtime permissions", () => {
+  const scopes = document.components.schemas.me.properties as Record<string, JsonSchema>;
+  expect(scopes.scopes.items).not.toHaveProperty("enum");
+  expect(scopes.scopes.items).toMatchObject({ type: "string", "x-extensible-enum": expect.arrayContaining(["production-runs:read", "production-runs:write", "production-runs:delete", "reactors:read"]) });
+});
+
+it("keeps production run representations unexpanded so their ETags cover every returned field", () => {
+  const run = document.components.schemas.production_run;
+  expect(run.properties).toMatchObject({ facilityId: { type: "string" }, reactorId: { type: "string" },
+    biocharStorageLocationId: expect.any(Object) });
+  for (const field of ["facilityCode", "timeZone", "reactorCode", "biocharStorageLocationCode"]) {
+    expect(run.properties).not.toHaveProperty(field);
+    expect(run.required).not.toContain(field);
+  }
+  const fields = run.properties as Record<string, JsonSchema>;
+  const draw = fields.feedstockDraws.items as JsonSchema;
+  expect(draw.properties).toHaveProperty("storageLocationId");
+  expect(draw.properties).not.toHaveProperty("storageLocationCode");
 });

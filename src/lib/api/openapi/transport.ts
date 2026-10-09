@@ -1,3 +1,4 @@
+import { apiScopeRepresentationSchema } from "@/lib/representations/me";
 import { z } from "zod";
 import { API_CURSOR_MAX_LENGTH, API_IDEMPOTENCY_KEY_MAX_LENGTH, API_LIST_DEFAULT_LIMIT, API_LIST_MAX_LIMIT } from "@/config/api-rest";
 import { IDEMPOTENCY_RETENTION_DAYS } from "@/config/operations";
@@ -12,6 +13,13 @@ export function outputSchema(schema: z.ZodType, representations: Record<string, 
   const result: JsonSchema = z.toJSONSchema(schema, {
     io: "output",
     override: ({ zodSchema, jsonSchema }) => {
+      if (zodSchema === apiScopeRepresentationSchema) {
+        // Scopes grow as resources are added. Publish an extensible vocabulary,
+        // while the runtime Zod enum still enforces the authorization allowlist.
+        const wire = jsonSchema as JsonSchema;
+        wire["x-extensible-enum"] = wire.enum;
+        delete wire.enum;
+      }
       if (zodSchema === root) return;
       // .describe() clones a schema; follow its metadata parent to the component.
       let candidate: z.core.$ZodType | undefined = zodSchema;
@@ -96,7 +104,7 @@ const errorDescriptions: Record<number, string> = {
   403: "Insufficient scope/role or organization API access disabled.",
   404: "Target or referenced resource absent or outside the credential organization.",
   405: "Unsupported method on a visible path. Private paths require authentication and permission for at least one published operation; public discovery paths do not. Supported operations never return this response.",
-  409: "Business conflict, idempotency in progress, used dry-run key, or replay unavailable.",
+  409: "Business conflict, idempotency in progress, used dry-run key, replay unavailable, or concurrent_write_retry (retryable after bounded transaction retries).",
   412: "Stale row version or representation revision; current contains the latest representation.",
   413: "JSON request exceeds the configured body limit.",
   415: "JSON body requires Content-Type: application/json.",
