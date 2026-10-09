@@ -1,15 +1,23 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { OPERATION_DEADLINE_MS } from "@/config/operations";
 import { API_BODY_MAX_BYTES, API_LIST_DEFAULT_LIMIT, API_LIST_MAX_LIMIT, API_VERSION } from "@/config/api-rest";
+import { ProtocolErrorCode } from "@modelcontextprotocol/server";
 import { API_SCOPES } from "@/lib/auth/api-scopes";
-import { serveMcp } from "@/lib/mcp/server";
+import { serveMcp, mcpRequestAccess } from "@/lib/mcp/server";
 import { DomainError } from "@/lib/domain-errors";
 import { buildOpenApiDocument } from "@/lib/api/openapi/document";
 import { GET, POST, DELETE } from "./route";
+import { mcpInstructions } from "@/lib/mcp/instructions";
+import { domainGuide, llmsGuide } from "@/lib/api/llms-guide";
 
-const mocks = vi.hoisted(() => ({ resolve: vi.fn(), pre: vi.fn(), post: vi.fn(), me: vi.fn(), log: vi.fn() }));
+const MCP_INSTRUCTIONS_MAX_CHARS = 2000;
+
+const mocks = vi.hoisted(() => ({ resolve: vi.fn(), pre: vi.fn(), post: vi.fn(), me: vi.fn(), log: vi.fn(), env: { NODE_ENV: "production", NEXT_PUBLIC_APP_URL: "https://noma.example", API_WRITES_DISABLED: false } }));
+vi.mock("@/lib/operations/runner", () => ({ runOperation: vi.fn() }));
+vi.mock("@/data-access/feedstocks", () => ({}));
+vi.mock("@/data-access/storage-object-deletions", () => ({}));
 vi.mock("@/lib/mcp/server", { spy: true });
-vi.mock("@/config/env", () => ({ env: { NODE_ENV: "production", NEXT_PUBLIC_APP_URL: "https://noma.example" } }));
+vi.mock("@/config/env", () => ({ env: mocks.env }));
 vi.mock("@/lib/auth/api-context", () => ({ resolveApiContext: mocks.resolve }));
 vi.mock("@/lib/api/guards", () => ({ preAuthGuard: mocks.pre, postAuthGuard: mocks.post }));
 vi.mock("@/lib/read-models/api-me", () => ({ readApiMe: mocks.me }));
@@ -37,8 +45,22 @@ async function body(response: Response) {
   return JSON.parse(text.trim().startsWith("{") ? text : text.split("\n").filter((line) => line.startsWith("data:")).map((line) => line.slice("data:".length)).join(""));
 }
 const call = (name: string, args: Record<string, unknown> = {}) => POST(rpc("tools/call", { name, arguments: args }));
+
+it("returns the shared domain guidance during initialize", async () => {
+  const { result } = await body(await POST(rpc("initialize", {
+    protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "unit-test", version: "1" },
+  })));
+  expect(result.instructions).toBe(mcpInstructions);
+  expect(result.instructions).toContain(domainGuide);
+  expect(llmsGuide).toContain(domainGuide);
+  expect(result.instructions.length).toBeLessThan(MCP_INSTRUCTIONS_MAX_CHARS);
+  for (const guidance of ["4200 kg", "wet mass", "dry mass", "receiving bin", "moisture", "whoami", "requestKey", "dryRun", "expectedVersion", "retryable", "untrusted data"]) {
+    expect(result.instructions.toLowerCase()).toContain(guidance.toLowerCase());
+  }
+});
 beforeEach(() => {
   vi.resetAllMocks();
+  mocks.env.API_WRITES_DISABLED = false;
   mocks.resolve.mockResolvedValue({ ok: true, ctx: { orgRole: "admin", scopes: API_SCOPES, organizationId: "org-1" } });
   mocks.pre.mockResolvedValue({ response: null, result: null });
   mocks.post.mockResolvedValue({ ok: true, headers: new Headers(rateHeaders) });
@@ -71,8 +93,8 @@ describe("authenticated MCP read route", () => {
     for (const [key, value] of Object.entries(rateHeaders)) expect(response.headers.get(key)).toBe(value);
     expect(response.headers.get("x-request-id")).toBeTruthy();
     const { result } = await body(response);
-    expect(result.tools).toHaveLength(10);
-    expect(result.tools.every((tool: { annotations: { readOnlyHint: boolean } }) => tool.annotations.readOnlyHint)).toBe(true);
+    expect(result.tools).toHaveLength(13);
+    expect(result.tools.filter((tool: { name: string }) => !["log_feedstock_delivery", "update_feedstock", "delete_feedstock"].includes(tool.name)).every((tool: { annotations: { readOnlyHint: boolean } }) => tool.annotations.readOnlyHint)).toBe(true);
     const find = result.tools.find((tool: { name: string }) => tool.name === "find_feedstocks");
     expect(find.inputSchema.additionalProperties).toBe(false);
     expect(find.inputSchema.properties.limit).toMatchObject({ type: "integer", minimum: 1, maximum: API_LIST_MAX_LIMIT,
@@ -203,7 +225,7 @@ it("serves read results on MCP revision 2026-07-28", async () => {
 it("publishes the same input fields and constraints as the matching OpenAPI parameters", async () => {
   const { result } = await body(await POST(rpc("tools/list")));
   const operations = Object.values(buildOpenApiDocument().paths).flatMap((path) => Object.values(path));
-  for (const tool of result.tools) {
+  for (const tool of result.tools.filter((tool: { annotations: { readOnlyHint: boolean } }) => tool.annotations.readOnlyHint)) {
     const operation = operations.find((candidate) => candidate.operationId === tool.name)!;
     const parameters = operation.parameters as { name: string; required: boolean; schema: Record<string, unknown> }[];
     const argumentName = (name: string) => tool.name === "find_supplier_locations" && name === "idOrCode" ? "supplierId" : name;
@@ -216,4 +238,73 @@ it("publishes the same input fields and constraints as the matching OpenAPI para
       expect(tool.inputSchema.required?.includes(argumentName(parameter.name)) ?? false).toBe(parameter.required);
     }
   }
+});
+
+it.each(["log_feedstock_delivery", "update_feedstock", "delete_feedstock"])("charges %s and dry runs as writes", async (name) => {
+  for (const dryRun of [false, true]) {
+    expect(mcpRequestAccess((await mocks.resolve()).ctx, { method: "tools/call", params: { name, arguments: { dryRun } } })).toBe("write");
+    await call(name, { dryRun });
+    expect(mocks.post).toHaveBeenLastCalledWith(expect.anything(),
+      expect.objectContaining({ access: "write", writesDisabledInHandler: true }), null);
+  }
+});
+it.each([null, [], {}, { method: "tools/list" }, { method: "tools/call", params: { name: "whoami" } }])("classifies %j as read", async (message) => {
+  expect(mcpRequestAccess((await mocks.resolve()).ctx, message)).toBe("read");
+});
+it("answers the write switch inside MCP and keeps reads working", async () => {
+  mocks.env.API_WRITES_DISABLED = true;
+  const response = await call("log_feedstock_delivery");
+  expect(response.status).toBe(200);
+  expect(await body(response)).toMatchObject({ result: { isError: true,
+    content: [{ type: "text", text: "API writes are temporarily disabled." }],
+    structuredContent: { code: "api_writes_disabled", retryable: true, detail: "API writes are temporarily disabled." },
+  } });
+  expect((await body(await call("whoami"))).result.isError).toBeUndefined();
+});
+it.each([undefined, "", "a b", "é"])("reports requestKey %j at its argument path", async (requestKey) => {
+  expect(await body(await call("log_feedstock_delivery", { requestKey }))).toMatchObject({
+    result: { isError: true, structuredContent: {
+      code: requestKey === undefined ? "idempotency_key_required" : "idempotency_key_invalid",
+      issues: [{ pointer: "/requestKey" }],
+    } },
+  });
+});
+it("publishes scoped write hints and optional requestKey", async () => {
+  mocks.resolve.mockResolvedValue({ ok: true, ctx: { orgRole: "admin", scopes: ["feedstocks:write"] } });
+  const { result } = await body(await POST(rpc("tools/list")));
+  expect(result.tools.map((tool: { name: string }) => tool.name)).toEqual(["whoami", "log_feedstock_delivery", "update_feedstock"]);
+  for (const tool of result.tools.slice(1)) {
+    expect(tool.annotations).toEqual({ readOnlyHint: false, openWorldHint: false,
+      destructiveHint: tool.name === "update_feedstock", idempotentHint: true });
+    expect(tool.inputSchema.required).not.toContain("requestKey");
+    expect(tool.inputSchema.properties.requestKey.description).toContain("Required unless dryRun is true");
+  }
+  expect((await body(await call("delete_feedstock"))).error).toEqual((await body(await call("unknown"))).error);
+});
+
+
+it("keeps write tools hidden for a read-only key", async () => {
+  mocks.resolve.mockResolvedValue({ ok: true, ctx: { orgRole: "admin", scopes: ["feedstocks:read"] } });
+  const { result } = await body(await POST(rpc("tools/list")));
+  expect(result.tools.map((tool: { name: string }) => tool.name)).toEqual(["whoami", "find_feedstocks", "get_feedstock"]);
+  for (const name of ["log_feedstock_delivery", "update_feedstock", "delete_feedstock"]) {
+    const hidden = await body(await call(name));
+    expect(mocks.post).toHaveBeenLastCalledWith(expect.anything(), expect.objectContaining({ access: "read" }), null);
+    expect(hidden.error).toEqual({ code: ProtocolErrorCode.InvalidParams, message: "Unknown tool." });
+    expect(hidden.error).toEqual((await body(await call("unknown"))).error);
+    expect(mcpRequestAccess((await mocks.resolve()).ctx, { method: "tools/call", params: { name } })).toBe("read");
+  }
+});
+it("uses singular facility wording", async () => {
+  const data = await mocks.me();
+  data.facilities = [{ id: crypto.randomUUID(), code: "FAC-1", name: "Facility", timeZone: "UTC", today: "2026-10-09" }];
+  mocks.me.mockResolvedValue(data);
+  const { result } = await body(await call("whoami"));
+  expect(result.content[0].text).toContain("1 facility,");
+});
+it("publishes the delete annotations", async () => {
+  const { result } = await body(await POST(rpc("tools/list")));
+  expect(result.tools.find((tool: { name: string }) => tool.name === "delete_feedstock").annotations).toEqual({
+    readOnlyHint: false, openWorldHint: false, destructiveHint: true, idempotentHint: true,
+  });
 });

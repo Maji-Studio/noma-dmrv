@@ -1,0 +1,2 @@
+ALTER TABLE "api_audit_events" ADD COLUMN "transport" text DEFAULT 'rest' NOT NULL;--> statement-breakpoint
+ALTER TABLE "api_audit_events" ADD CONSTRAINT "api_audit_events_transport" CHECK ("api_audit_events"."transport" in ('rest', 'mcp'));

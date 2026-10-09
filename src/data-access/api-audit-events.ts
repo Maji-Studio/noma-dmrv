@@ -8,6 +8,7 @@ export async function writeApiAuditEvent(
   ctx: OrgContext,
   tx: DbTransaction,
   event: {
+    transport: "rest" | "mcp";
     requestId: string;
     credentialId: string;
     oauthClientId?: string | null;
@@ -24,6 +25,7 @@ export async function writeApiAuditEvent(
     oauthClientId: event.oauthClientId ?? null,
     operationId: event.operationId,
     requestId: event.requestId,
+    transport: event.transport,
     entityType: effect.entityType,
     entityIds: effect.entityIds,
     changedFields: effect.changedFields,

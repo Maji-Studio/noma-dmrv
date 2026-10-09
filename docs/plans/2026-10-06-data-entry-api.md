@@ -1,7 +1,7 @@
 # Data-entry API (REST + MCP): plan
 
 - **Owner:** Kenji Nguyen
-- **Status:** in progress; Phase 0 spike done (section 15), Phase 1 foundations next
+- **Status:** in progress; Phases 0 to 3 done (sections 15 to 17), Phase 4 (production) next
 - **Last reviewed:** 2026-10-06 (against `e4ba77c2`, plus the Phase 0 branch `feat/data-entry-api-spike`)
 
 Drafted from four Codex research memos (gpt-6.1-sol: REST practice, MCP and auth, codebase audit; gpt-6-astra: independent architecture draft). Reviewed by gpt-6-astra (adversarial), gpt-6.1-sol (fact-check and QA), Fable 5.1 (architecture) and Sonnet 5.5 (API consumer walk-throughs). Section 14 lists what changed and why.
@@ -456,3 +456,14 @@ Four PRs: 2a #925 (API keys, `/api/v1/me`, the credential resolver), 2b-1 #929 (
 - Not changed: `null` clears for `massWetKg`/`moistureContentPercent` (the shared update schema forbids them, for UI parity), rate limits on the static public documents, and the rendered HTML reference (in `docs/open-questions.md`). Stock preview on PATCH/DELETE dry runs moves to Phase 4.
 
 **Phase 3 starts from:** where transport-neutral representations live (read models imported them from the REST folder; 3a moved them to `src/lib/representations`), whether MCP results reuse the REST representations, the `requestKey` contract, which lookups ship as tools first, and the agent-eval harness. The Phase 0 spike route (`src/app/api/mcp/route.ts`) is replaced. Tool names reuse the operationIds above.
+
+## 17. Phase 3 results (2026-10-09)
+
+Two PRs: 3a #933 (representations in `src/lib/representations/`, `/api/mcp` on API keys, `whoami` and the read tools) and 3b (the three feedstock write tools, the domain prompt and the agent evaluation). The section 10 exit criteria are met: three-way parity (`tests/api-feedstocks-parity.test.ts`) and the agent evaluation below.
+
+- **Write tools** (`src/lib/mcp/tools/write-tools.ts`) share REST's operations, scopes, input checks (`src/lib/api/feedstock-write-checks.ts`) and idempotency records. For update and delete, MCP sends REST's exact target and `If-Match` precondition, so a key first used over REST replays over MCP. A committed delete returns `{ deleted: { id, code } }`; REST stores the deleted row in the idempotency outcome so a replay over MCP can name it. Update and delete take the feedstock UUID, as REST PATCH and DELETE do.
+- **Admission:** a `tools/call` of a write tool the key can see is charged as a write; a hidden write tool is classified like an unknown tool and charges nothing extra. `API_WRITES_DISABLED` answers inside MCP as an `isError` result (`api_writes_disabled`, retryable) after the write buckets are charged.
+- **Audit:** `api_audit_events.transport` (`rest` | `mcp`, migration `0130`).
+- **Domain prompt:** `domainGuide` in `src/lib/api/llms-guide.ts` is shared by `llms.txt` and the MCP `instructions` (`src/lib/mcp/instructions.ts`). Shared wording lives in `src/lib/operations/agent-guidance.ts`.
+- **Agent evaluation** (`pnpm eval:mcp`, `scripts/eval-mcp/`): intake requires moisture, so the decided sentence became two cases (Kenji, 2026-10-09). Case 1 adds "at 32% moisture" and is scored on the committed row; case 2 keeps the sentence and passes when nothing is saved and the agent asks for the moisture. Case 2's expectation is read from the published contract, so it follows later changes to required fields. First results with Claude Code 2.1.295: both cases pass; case 1 used 6 tool calls (whoami, three lookups, a dry run, the commit), case 2 used 4.
+- **Not changed:** update and delete do not accept a code (plan section 5 says get and update tools accept `id` or `code`); they follow REST's UUID rule until a client needs codes.

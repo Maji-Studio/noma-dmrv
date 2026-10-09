@@ -1,4 +1,7 @@
-/** Real actions, REST handlers and Postgres. Reviewer execution only. */
+/** Real actions, REST and MCP handlers and Postgres. Supervisor execution only. */
+import { DELETE as REST_DELETE } from "@/app/api/v1/feedstocks/[idOrCode]/route";
+import { POST as MCP } from "@/app/api/mcp/route";
+import { rpc, rpcBody } from "./helpers/mcp";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { eq } from "drizzle-orm";
@@ -9,7 +12,7 @@ import { createFeedstockFn, deleteFeedstockFn, updateFeedstockFn } from "@/fn/fe
 import type { CreateFeedstockResult } from "@/data-access/feedstocks";
 import {
   binWetStock, captureFeedstockState, committedFeedstocks, createApiFeedstockFixture, decodedIntake,
-  deleteFeedstock, expectFeedstockProblem, patchFeedstock, postFeedstock,
+  deleteFeedstock, feedstockRequest, expectFeedstockProblem, patchFeedstock, postFeedstock,
   removeApiFeedstockFixture, restoreFeedstockState, seedApiFeedstock, seedFeedstockDraw,
   type ApiFeedstockFixture,
 } from "./helpers/api-feedstock-fixture";
@@ -34,7 +37,7 @@ const INVALID_WET_KG = -1;
 const INITIAL_VERSION = 1;
 const NEXT_VERSION = 2;
 
-type Scenario = "create" | "create-warning" | "update" | "delete" | "validation" | "foreign-reference" | "stale" | "blocked-delete" | "stock-blocked-delete";
+type Scenario = "create" | "create-warning" | "update" | "delete" | "validation" | "foreign-reference" | "stale" | "blocked-delete" | "stock-blocked-delete" | "update-validation";
 const cases: {
   scenario: Scenario; status: number; code: string; paths: (string | number)[][];
   rowCount: number; stock: number; wetKg: number; dryKg: number; version: number; notes: string | null;
@@ -45,6 +48,7 @@ const cases: {
   { scenario: "delete", status: 204, code: "success", paths: [], rowCount: 0, stock: 0, wetKg: INTAKE_WET_KG, dryKg: INTAKE_DRY_KG, version: INITIAL_VERSION, notes: null },
   { scenario: "validation", status: 422, code: "validation_failed", paths: [["allocations", 0, "allocatedWetMassKg"]], rowCount: 0, stock: 0, wetKg: INTAKE_WET_KG, dryKg: INTAKE_DRY_KG, version: INITIAL_VERSION, notes: null },
   { scenario: "foreign-reference", status: 404, code: "not_found", paths: [["supplierId"]], rowCount: 0, stock: 0, wetKg: INTAKE_WET_KG, dryKg: INTAKE_DRY_KG, version: INITIAL_VERSION, notes: null },
+  { scenario: "update-validation", status: 422, code: "validation_failed", paths: [["massWetKg"]], rowCount: 1, stock: INTAKE_WET_KG, wetKg: INTAKE_WET_KG, dryKg: INTAKE_DRY_KG, version: INITIAL_VERSION, notes: null },
   { scenario: "stale", status: 412, code: "stale_version", paths: [], rowCount: 1, stock: INTAKE_WET_KG, wetKg: INTAKE_WET_KG, dryKg: INTAKE_DRY_KG, version: NEXT_VERSION, notes: "Saved first" },
   { scenario: "blocked-delete", status: 409, code: "conflict", paths: [], rowCount: 1, stock: INTAKE_WET_KG - DRAW_WET_KG, wetKg: INTAKE_WET_KG, dryKg: INTAKE_DRY_KG, version: INITIAL_VERSION, notes: null },
   { scenario: "stock-blocked-delete", status: 409, code: "insufficient_stock", paths: [["storageLocationId"]], rowCount: 1, stock: INTAKE_WET_KG - DRAW_WET_KG, wetKg: INTAKE_WET_KG, dryKg: INTAKE_DRY_KG, version: INITIAL_VERSION, notes: null },
@@ -106,7 +110,7 @@ async function prepare(fixture: ApiFeedstockFixture, scenario: Scenario) {
 }
 
 async function dispatch(
-  fixture: ApiFeedstockFixture, scenario: Scenario, transport: "action" | "rest",
+  fixture: ApiFeedstockFixture, scenario: Scenario, transport: "action" | "rest" | "mcp",
   saved: Awaited<ReturnType<typeof prepare>>,
 ) {
   if (!saved) {
@@ -117,19 +121,28 @@ async function dispatch(
       command.allocations[0].allocatedWetMassKg = OVERALLOCATION_WET_KG;
       command.overrideJustification = "Scale adjustment";
     }
+    if (transport === "mcp") return rpcBody(await MCP(rpc(fixture.key, "tools/call", {
+      name: "log_feedstock_delivery", arguments: { ...command, deliveryDate: command.deliveryDate.toISOString().split("T")[0], requestKey: crypto.randomUUID() },
+    })));
     return transport === "action" ? createFeedstockFn(command) : postFeedstock(fixture, command);
   }
   const target = { feedstockId: saved.row.id, expectedVersion: saved.row.version };
   if (scenario === "delete" || scenario === "blocked-delete" || scenario === "stock-blocked-delete") {
+    if (transport === "mcp") return rpcBody(await MCP(rpc(fixture.key, "tools/call", {
+      name: "delete_feedstock", arguments: { ...target, requestKey: crypto.randomUUID() },
+    })));
     return transport === "action" ? deleteFeedstockFn(target) : deleteFeedstock(fixture, saved.row, saved.etag);
   }
-  const patch = scenario === "stale" ? { notes: "Stale draft" } : {
+  const patch = scenario === "update-validation" ? { massWetKg: INVALID_WET_KG } : scenario === "stale" ? { notes: "Stale draft" } : {
     massWetKg: UPDATED_WET_KG, moistureContentPercent: UPDATED_MOISTURE_PERCENT, notes: "Updated intake",
   };
+  if (transport === "mcp") return rpcBody(await MCP(rpc(fixture.key, "tools/call", {
+    name: "update_feedstock", arguments: { ...target, ...patch, requestKey: crypto.randomUUID() },
+  })));
   return transport === "action" ? updateFeedstockFn({ ...target, ...patch }) : patchFeedstock(fixture, saved.row, saved.etag, patch);
 }
 
-describe("feedstock action vs REST decoded-command parity", { timeout: SUITE_TIMEOUT_MS }, () => {
+describe("feedstock action, REST and MCP decoded-command parity", { timeout: SUITE_TIMEOUT_MS }, () => {
   it.each(cases)("$scenario: $code with equal committed rows and bin stock", async (testCase) => {
     if (testCase.scenario === "foreign-reference") foreignFixture = await createApiFeedstockFixture("parity-foreign");
     const saved = await prepare(fixture, testCase.scenario);
@@ -137,10 +150,30 @@ describe("feedstock action vs REST decoded-command parity", { timeout: SUITE_TIM
     const action = await dispatch(fixture, testCase.scenario, "action", saved) as ActionResult<unknown>;
     const actionRows = await committedFeedstocks(fixture);
     const actionStock = await binWetStock(fixture);
+    const actionState = await captureFeedstockState(fixture);
     await restoreFeedstockState(fixture, initialState);
     const rest = await dispatch(fixture, testCase.scenario, "rest", saved) as Response;
     const restRows = await committedFeedstocks(fixture);
     const restStock = await binWetStock(fixture);
+    const restState = await captureFeedstockState(fixture);
+    await restoreFeedstockState(fixture, initialState);
+    const { result: mcp } = await dispatch(fixture, testCase.scenario, "mcp", saved);
+    const mcpRows = await committedFeedstocks(fixture);
+    const mcpStock = await binWetStock(fixture);
+    const mcpState = await captureFeedstockState(fixture);
+    expect(mcp.isError ? mcp.structuredContent.code : "success").toBe(testCase.code);
+    expect((mcp.structuredContent.issues ?? []).map((issue: { pointer: string }) => pointerPath(issue.pointer))).toEqual(testCase.paths);
+    expect(normalizedRows(mcpRows)).toEqual(normalizedRows(actionRows));
+    expect(mcpStock).toBe(actionStock);
+    const normalizeLegs = (state: typeof actionState) => state.legs.map(({ id, entityId, createdAt, updatedAt, ...leg }) => {
+      expect(id).toBeTruthy();
+      expect(entityId).toBeTruthy();
+      expect(createdAt).toBeTruthy();
+      expect(updatedAt).toBeTruthy();
+      return leg;
+    });
+    expect(normalizeLegs(restState)).toEqual(normalizeLegs(actionState));
+    expect(normalizeLegs(mcpState)).toEqual(normalizeLegs(actionState));
     expect(auth.requireOrgContext).toHaveBeenCalledTimes(1);
     expect(rest.status).toBe(testCase.status);
     // Successful ActionResult and REST envelopes have no code; normalize that
@@ -155,6 +188,7 @@ describe("feedstock action vs REST decoded-command parity", { timeout: SUITE_TIM
       if (testCase.scenario.startsWith("create")) {
         const warning = (action.data as CreateFeedstockResult).warning;
         expect(body.warnings ?? []).toEqual(warning ? [warning] : []);
+        expect(mcp.structuredContent.warnings ?? []).toEqual(warning ? [warning] : []);
         expect(Boolean(warning)).toBe(testCase.scenario === "create-warning");
       }
     } else {
@@ -182,4 +216,24 @@ describe("feedstock action vs REST decoded-command parity", { timeout: SUITE_TIM
     expect(actionStock).toBe(testCase.stock);
     expect(restStock).toBe(actionStock);
   });
+});
+
+// DELETE has no body fields. Invalid/missing versions are a REST header refusal,
+// while actions and MCP validate the required command field.
+it("refuses a missing delete precondition in every transport without changing rows or stock", async () => {
+  const { row } = await seedApiFeedstock(fixture, INTAKE_WET_KG);
+  const before = await captureFeedstockState(fixture);
+  const action = await deleteFeedstockFn({ feedstockId: row.id } as Parameters<typeof deleteFeedstockFn>[0]);
+  expect(action).toMatchObject({ success: false, code: "validation_failed", issues: [{ path: ["expectedVersion"] }] });
+  const rest = await REST_DELETE(feedstockRequest(fixture, "DELETE", `/${row.id}`),
+    { params: Promise.resolve({ idOrCode: row.id }) });
+  expect(await expectFeedstockProblem(rest, 428, "precondition_required")).toMatchObject({ errors: [] });
+  const { result } = await rpcBody(await MCP(rpc(fixture.key, "tools/call", {
+    name: "delete_feedstock", arguments: { feedstockId: row.id, requestKey: crypto.randomUUID() },
+  })));
+  expect(result).toMatchObject({ isError: true, structuredContent: {
+    code: "validation_failed", issues: [{ pointer: "/expectedVersion" }],
+  } });
+  expect(await captureFeedstockState(fixture)).toEqual(before);
+  expect(await binWetStock(fixture)).toBe(INTAKE_WET_KG);
 });

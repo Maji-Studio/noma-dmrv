@@ -48,7 +48,7 @@ All four tables live in `src/db/schema/api.ts`:
 | Table | Grain and scope |
 |---|---|
 | `api_idempotency_records` | Unique organization/credential/key claim with fingerprint, expiry and stored outcome v2. Normal claims are org-scoped; expiry purge is a system seam. |
-| `api_audit_events` | One committed API write effect with organization, actor, credential, optional OAuth client, operation, entity ids, field names, versions, request id and outcome code. No field values; inserts are org-scoped in the write transaction. |
+| `api_audit_events` | One committed API write effect with organization, actor, credential, optional OAuth client, operation, entity ids, field names, versions, request id, outcome code and transport (`rest` or `mcp`, default `rest`). No field values; inserts are org-scoped in the write transaction. |
 | `api_rate_limit_buckets` | Token balance and refill time per bucket key. Organization-neutral system seam for hashed-IP, credential and organization budgets; no org column. |
 | `organization_api_access` | Organization primary key, enabled flag, changing user id and time. Missing row means on. Credential lookup and Platform Admin directory/toggle are privileged seams; non-Platform-Admins cannot administer it. |
 
