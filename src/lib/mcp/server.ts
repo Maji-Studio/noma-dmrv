@@ -1,29 +1,32 @@
 import { env } from "@/config/env";
-import { ApiHttpError } from "@/lib/api/http-error";
 import { writeTools } from "./tools/write-tools";
 import { createMcpHandler } from "mcp-handler";
 import { ProtocolError, ProtocolErrorCode } from "@modelcontextprotocol/server";
 import { API_VERSION } from "@/config/api-rest";
+import type { ApiContext } from "@/lib/auth/api-context";
 import type { ApiRouteContext } from "@/lib/api/route";
 import { hasRoleAndScope } from "@/lib/auth/api-scopes";
 import { deadlineExceeded } from "@/lib/domain-errors";
 import { toToolSchema } from "@/lib/operations/mcp-schema";
 import { readTools } from "./tools/read-tools";
-import { toolOutputSchema, toolFailure, toolSuccess } from "./results";
+import { toolOutputSchema, toolFailure, toolSuccess, writesDisabledResult } from "./results";
 import { mcpInstructions } from "./instructions";
 
-const writeNames = new Set(writeTools.map((tool) => tool.name));
+function visibleTools(ctx: ApiContext) {
+  return new Map([...readTools, ...writeTools].filter((tool) => !tool.scope || hasRoleAndScope(ctx, tool.scope))
+    .map((tool) => [tool.name, tool]));
+}
 
-export function mcpRequestAccess(body: unknown): "read" | "write" {
+export function mcpRequestAccess(ctx: ApiContext, body: unknown): "read" | "write" {
   if (!body || typeof body !== "object" || !("method" in body) || body.method !== "tools/call"
     || !("params" in body) || !body.params || typeof body.params !== "object"
     || !("name" in body.params) || typeof body.params.name !== "string") return "read";
-  return writeNames.has(body.params.name) ? "write" : "read";
+  const tool = visibleTools(ctx).get(body.params.name);
+  return tool && "annotations" in tool ? "write" : "read";
 }
 
 export function serveMcp(request: Request, context: ApiRouteContext): Promise<Response> {
-  const tools = new Map([...readTools, ...writeTools].filter((tool) => !tool.scope || hasRoleAndScope(context.ctx, tool.scope))
-    .map((tool) => [tool.name, tool]));
+  const tools = visibleTools(context.ctx);
   const handler = createMcpHandler((server) => {
     for (const tool of tools.values()) {
       server.registerTool(tool.name, {
@@ -40,7 +43,7 @@ export function serveMcp(request: Request, context: ApiRouteContext): Promise<Re
       try {
         if (Date.now() >= context.deadlineAt) throw deadlineExceeded("before starting");
         if ("annotations" in tool) {
-          if (env.API_WRITES_DISABLED) throw new ApiHttpError(503, "api_writes_disabled", "API writes are temporarily disabled.");
+          if (env.API_WRITES_DISABLED) return writesDisabledResult();
           const result = await tool.execute(context, rpc.params.arguments ?? {});
           tool.output.parse(result.body);
           return toolSuccess(result.body, `${result.replayed ? "Replayed: " : ""}${tool.summarize(result.body, result.dryRun)}`);

@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { OPERATION_DEADLINE_MS } from "@/config/operations";
 import { API_BODY_MAX_BYTES, API_LIST_DEFAULT_LIMIT, API_LIST_MAX_LIMIT, API_VERSION } from "@/config/api-rest";
+import { ProtocolErrorCode } from "@modelcontextprotocol/server";
 import { API_SCOPES } from "@/lib/auth/api-scopes";
 import { serveMcp, mcpRequestAccess } from "@/lib/mcp/server";
 import { DomainError } from "@/lib/domain-errors";
@@ -239,22 +240,23 @@ it("publishes the same input fields and constraints as the matching OpenAPI para
 
 it.each(["log_feedstock_delivery", "update_feedstock", "delete_feedstock"])("charges %s and dry runs as writes", async (name) => {
   for (const dryRun of [false, true]) {
-    expect(mcpRequestAccess({ method: "tools/call", params: { name, arguments: { dryRun } } })).toBe("write");
+    expect(mcpRequestAccess((await mocks.resolve()).ctx, { method: "tools/call", params: { name, arguments: { dryRun } } })).toBe("write");
     await call(name, { dryRun });
     expect(mocks.post).toHaveBeenLastCalledWith(expect.anything(),
       expect.objectContaining({ access: "write", writesDisabledInHandler: true }), null);
   }
 });
-it.each([null, [], {}, { method: "tools/list" }, { method: "tools/call", params: { name: "whoami" } }])("classifies %j as read", (message) => {
-  expect(mcpRequestAccess(message)).toBe("read");
+it.each([null, [], {}, { method: "tools/list" }, { method: "tools/call", params: { name: "whoami" } }])("classifies %j as read", async (message) => {
+  expect(mcpRequestAccess((await mocks.resolve()).ctx, message)).toBe("read");
 });
 it("answers the write switch inside MCP and keeps reads working", async () => {
   mocks.env.API_WRITES_DISABLED = true;
   const response = await call("log_feedstock_delivery");
   expect(response.status).toBe(200);
-  expect(await body(response)).toMatchObject({ result: { isError: true, structuredContent: {
-    code: "api_writes_disabled", retryable: true, detail: "The request could not be completed.",
-  } } });
+  expect(await body(response)).toMatchObject({ result: { isError: true,
+    content: [{ type: "text", text: "API writes are temporarily disabled." }],
+    structuredContent: { code: "api_writes_disabled", retryable: true, detail: "API writes are temporarily disabled." },
+  } });
   expect((await body(await call("whoami"))).result.isError).toBeUndefined();
 });
 it.each([undefined, "", "a b", "é"])("reports requestKey %j at its argument path", async (requestKey) => {
@@ -284,7 +286,11 @@ it("keeps write tools hidden for a read-only key", async () => {
   const { result } = await body(await POST(rpc("tools/list")));
   expect(result.tools.map((tool: { name: string }) => tool.name)).toEqual(["whoami", "find_feedstocks", "get_feedstock"]);
   for (const name of ["log_feedstock_delivery", "update_feedstock", "delete_feedstock"]) {
-    expect((await body(await call(name))).error).toEqual((await body(await call("unknown"))).error);
+    const hidden = await body(await call(name));
+    expect(mocks.post).toHaveBeenLastCalledWith(expect.anything(), expect.objectContaining({ access: "read" }), null);
+    expect(hidden.error).toEqual({ code: ProtocolErrorCode.InvalidParams, message: "Unknown tool." });
+    expect(hidden.error).toEqual((await body(await call("unknown"))).error);
+    expect(mcpRequestAccess((await mocks.resolve()).ctx, { method: "tools/call", params: { name } })).toBe("read");
   }
 });
 it("uses singular facility wording", async () => {

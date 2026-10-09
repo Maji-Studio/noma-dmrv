@@ -3,6 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import { apiAuditEvents, apiRateLimitBuckets } from "@/db/schema";
+import { updateApiKey } from "@/data-access/api-keys";
+import { ProtocolErrorCode } from "@modelcontextprotocol/server";
 import { API_RATE_LIMITS } from "@/config/api-rate-limits";
 import { POST as MCP } from "@/app/api/mcp/route";
 import { PATCH, DELETE } from "@/app/api/v1/feedstocks/[idOrCode]/route";
@@ -132,13 +134,36 @@ it.each([false, true])("charges write buckets for dryRun=%s while reads leave th
   await call("whoami", {});
   expect(await buckets()).toEqual(charged);
 });
+it("leaves write buckets untouched when a read-only key calls a hidden write tool", async () => {
+  vi.stubEnv("DISABLE_RATE_LIMIT", "false");
+  await updateApiKey(fixture.ctx, {
+    id: fixture.credentialId, expectedVersion: 1, name: "Read-only", scopes: ["feedstocks:read"],
+  });
+  const bucketKeys = [
+    `credential:${fixture.credentialId}:write`, `organization:${fixture.ctx.organizationId}:write`,
+  ];
+  const buckets = () => db.select().from(apiRateLimitBuckets)
+    .where(inArray(apiRateLimitBuckets.bucketKey, bucketKeys));
+  expect(await buckets()).toHaveLength(0);
+  const response = await MCP(rpc(fixture.key, "tools/call", {
+    name: "log_feedstock_delivery", arguments: { ...intake(), requestKey: crypto.randomUUID() },
+  }));
+  expect(response.status).toBe(200);
+  expect(await rpcBody(response)).toMatchObject({
+    error: { code: ProtocolErrorCode.InvalidParams, message: "Unknown tool." },
+  });
+  expect(await buckets()).toHaveLength(0);
+});
 it("answers the kill switch inside MCP while REST stays HTTP 503", async () => {
   switches.writesDisabled = true;
   expect(await call("log_feedstock_delivery", { ...intake(), requestKey: crypto.randomUUID() }))
-    .toMatchObject({ isError: true, structuredContent: { code: "api_writes_disabled", retryable: true } });
+    .toMatchObject({ isError: true, content: [{ type: "text", text: "API writes are temporarily disabled." }],
+      structuredContent: { code: "api_writes_disabled", retryable: true, detail: "API writes are temporarily disabled." } });
   expect((await call("whoami", {})).isError).toBeUndefined();
   const rest = await postFeedstock(fixture);
   expect(rest.status).toBe(503);
-  expect(await rest.json()).toMatchObject({ code: "api_writes_disabled", retryable: true });
+  expect(await rest.json()).toMatchObject({
+    code: "api_writes_disabled", retryable: true, detail: "The request could not be completed.",
+  });
   expect(await committedFeedstocks(fixture)).toHaveLength(0);
 });

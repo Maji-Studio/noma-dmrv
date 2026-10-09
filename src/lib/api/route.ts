@@ -35,7 +35,7 @@ interface ApiRouteOptions {
   /** Charge write buckets normally; the handler must enforce the write switch. */
   writesDisabledInHandler?: boolean;
   /** Runs once after authentication, before authenticated rate limiting; the handler receives the returned request. */
-  prepare?: (request: Request) => Promise<{ request: Request; access: "read" | "write" }>;
+  prepare?: (request: Request, context: ApiRouteContext) => Promise<{ request: Request; access: "read" | "write" }>;
   /** MCP checks inside the tool so expiry is a structured tool result. */
   deadlineInHandler?: boolean;
 }
@@ -64,7 +64,7 @@ export function apiRoute<Params = Record<string, never>>(
       const resolution = await resolveApiContext(request);
       if (!resolution.ok) return apiDenialResponse(resolution.denial, instance, requestId);
       const context = { deadlineAt, ctx: resolution.ctx, requestId, instance, headers: apiResponseHeaders(requestId) };
-      const prepared = options.prepare ? await options.prepare(request) : {
+      const prepared = options.prepare ? await options.prepare(request, context) : {
         request, access: request.method === "GET" || request.method === "HEAD" ? "read" as const : "write" as const,
       };
       const admission = await admitApiRequest(prepared.access, context, scope, preAuth.result, options.writesDisabledInHandler);

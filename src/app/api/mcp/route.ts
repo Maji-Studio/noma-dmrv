@@ -11,7 +11,7 @@ export const maxDuration = 30;
 const authenticatedHandler = apiRoute("api.mcp", undefined, serveMcp, {
   deadlineInHandler: true,
   writesDisabledInHandler: true,
-  prepare: async (request) => {
+  prepare: async (request, { ctx }) => {
     const bytes = await readBoundedBody(request);
     // Malformed JSON is left to the SDK's protocol parser after admission.
     let body: unknown;
@@ -23,7 +23,7 @@ const authenticatedHandler = apiRoute("api.mcp", undefined, serveMcp, {
       request: new Request(request.url, {
         method: request.method, headers: request.headers, body: bytes, signal: request.signal,
       }),
-      access: mcpRequestAccess(body),
+      access: mcpRequestAccess(ctx, body),
     };
   },
 });

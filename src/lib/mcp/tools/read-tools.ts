@@ -18,7 +18,7 @@ import { feedstockRepresentationSchema } from "@/lib/representations/feedstocks"
 import { supplierLocationRepresentationSchema } from "@/lib/representations/supplier-locations";
 import { readDescriptions } from "@/lib/operations/read-descriptions";
 import { parseQueryInput } from "@/lib/api/query";
-import { UNTRUSTED_TEXT, FEEDSTOCK_UNITS, FEEDSTOCK_DATES } from "./descriptions";
+import { UNTRUSTED_TEXT, FEEDSTOCK_UNITS, FEEDSTOCK_DATES } from "@/lib/operations/agent-guidance";
 
 const readers = {
   facilities: readFacilityListFromInput, suppliers: readSupplierListFromInput,

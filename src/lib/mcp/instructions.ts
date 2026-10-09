@@ -1,5 +1,5 @@
 import { domainGuide } from "@/lib/api/llms-guide";
-import { REQUEST_KEY_RULE } from "./tools/descriptions";
+import { REQUEST_KEY_RULE } from "@/lib/operations/agent-guidance";
 
 export const mcpInstructions = `${domainGuide}
 ## MCP requests

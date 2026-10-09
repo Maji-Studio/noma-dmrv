@@ -11,19 +11,22 @@ import { readApiFeedstock } from "@/lib/read-models/api-feedstocks";
 import { DomainError, validationFailed } from "@/lib/operations/errors";
 import { logFeedstockDelivery, updateFeedstock, deleteFeedstock } from "@/lib/operations/feedstocks";
 import { runOperation, type Operation } from "@/lib/operations/runner";
-import { toOperationJsonSchema } from "@/lib/operations/json-schema";
+import { toOperationJsonSchema, type JsonSchema } from "@/lib/operations/json-schema";
 import { feedstockCreateEnvelopeSchema, itemEnvelopeSchema } from "@/lib/representations/envelopes";
 import { feedstockRepresentationSchema, feedstockStockPreview, representFeedstock } from "@/lib/representations/feedstocks";
-import { FEEDSTOCK_DATES, FEEDSTOCK_UNITS, REQUEST_KEY_RULE, UNTRUSTED_TEXT } from "./descriptions";
+import { FEEDSTOCK_DATES, FEEDSTOCK_UNITS, REQUEST_KEY_RULE, UNTRUSTED_TEXT } from "@/lib/operations/agent-guidance";
 
 const controls = z.object({
   dryRun: z.boolean().optional().default(false).describe("Preview without saving changes."),
   requestKey: z.string().min(1).max(API_IDEMPOTENCY_KEY_MAX_LENGTH).regex(IDEMPOTENCY_KEY_PATTERN)
     .optional().describe(REQUEST_KEY_RULE),
 });
-const createInput = logFeedstockDelivery.input.extend(controls.shape);
-const updateInput = updateFeedstock.input.extend(controls.shape);
-const deleteInput = deleteFeedstock.input.extend(controls.shape);
+const createInput = logFeedstockDelivery.input.safeExtend(controls.shape);
+const updateInput = updateFeedstock.input.safeExtend(controls.shape);
+const deleteInput = deleteFeedstock.input.safeExtend(controls.shape);
+const createContract = toOperationJsonSchema(createInput);
+const updateContract = toOperationJsonSchema(updateInput);
+const deleteContract = toOperationJsonSchema(deleteInput);
 const itemOutput = itemEnvelopeSchema(feedstockRepresentationSchema);
 const deleteOutput = z.union([itemOutput, z.object({ deleted: z.object({ id: z.uuid(), code: z.string() }) })]);
 
@@ -40,8 +43,8 @@ export interface WriteTool {
   summarize: (body: Record<string, unknown>, dryRun: boolean) => string;
 }
 
-function parseControls(raw: unknown, schema: z.ZodType) {
-  rejectUnknownFields(raw, toOperationJsonSchema(schema));
+function parseControls(raw: unknown, contract: JsonSchema) {
+  rejectUnknownFields(raw, contract);
   const object = raw !== null && typeof raw === "object" && !Array.isArray(raw) ? raw as Record<string, unknown> : {};
   const { requestKey, dryRun, ...input } = object;
   const key = controls.shape.requestKey.safeParse(requestKey);
@@ -76,7 +79,7 @@ export const writeTools: WriteTool[] = [
     annotations: { ...annotations, destructiveHint: false },
     description: `Log a feedstock delivery. Call whoami, find_suppliers, find_feedstock_types and find_storage_locations first. Adds the wet mass to each receiving bin. ${writeGuidance}`,
     async execute(context, raw) {
-      const { input, dryRun, requestKey } = parseControls(raw, createInput);
+      const { input, dryRun, requestKey } = parseControls(raw, createContract);
       checkFeedstockAllocations(input);
       const result = await runOperation(logFeedstockDelivery, context.ctx, input, options(context, dryRun, requestKey));
       const data = result.data.feedstocks.map(representFeedstock);
@@ -115,8 +118,8 @@ export const writeTools: WriteTool[] = [
 ];
 
 async function mutate(context: ApiRouteContext, raw: unknown, kind: "update" | "delete") {
-  const schema = kind === "update" ? updateInput : deleteInput;
-  const { input, dryRun, requestKey } = parseControls(raw, schema);
+  const contract = kind === "update" ? updateContract : deleteContract;
+  const { input, dryRun, requestKey } = parseControls(raw, contract);
   // Decode the same operation schema REST uses before constructing its fingerprint.
   const parsed = (kind === "update" ? updateFeedstock.input : deleteFeedstock.input).safeParse(input);
   if (!parsed.success) throw validationFailed(parsed.error);

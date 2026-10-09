@@ -1,7 +1,7 @@
 import { API_IDEMPOTENCY_KEY_MAX_LENGTH, API_LIST_DEFAULT_LIMIT, API_LIST_MAX_LIMIT } from "@/config/api-rest";
 import { API_KEY_LIVE_PREFIX, API_KEY_TEST_PREFIX } from "@/config/api-keys";
 import { IDEMPOTENCY_RETENTION_DAYS } from "@/config/operations";
-import { FEEDSTOCK_UNITS, UNTRUSTED_TEXT } from "@/lib/mcp/tools/descriptions";
+import { FEEDSTOCK_UNITS, UNTRUSTED_TEXT } from "@/lib/operations/agent-guidance";
 
 export const domainGuide = `## Feedstock intake
 

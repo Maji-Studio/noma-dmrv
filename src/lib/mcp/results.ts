@@ -17,11 +17,18 @@ export function toolSuccess(structuredContent: Record<string, unknown>, text: st
   return { content: [{ type: "text" as const, text }], structuredContent };
 }
 
+export function writesDisabledResult() {
+  const structuredContent = toolErrorSchema.parse({
+    code: "api_writes_disabled", detail: "API writes are temporarily disabled.", retryable: true, issues: [],
+  });
+  return { ...toolSuccess(structuredContent, structuredContent.detail), isError: true };
+}
+
 export async function toolFailure(error: unknown, context: ApiRouteContext, name: string) {
   let response: Response;
   if (error instanceof ApiHttpError) {
     response = problemResponse({ status: error.status, code: error.code, detail: error.message,
-      current: error.current, retryable: error.code === "api_writes_disabled",
+      current: error.current,
       errors: error.issues?.map((issue) => ({
         pointer: jsonPointer(issue.path),
         code: issue.code, detail: issue.message,
