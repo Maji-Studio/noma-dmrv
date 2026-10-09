@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { ApiContext } from "@/lib/auth/api-context";
 const mocks = vi.hoisted(() => ({
   consume: vi.fn(),
-  env: { NODE_ENV: "test", API_WRITES_DISABLED: false },
+  env: { NODE_ENV: "test", API_WRITES_DISABLED: false, API_FUZZ_DISABLE_RATE_LIMIT: false },
 }));
 vi.mock("@/config/env", () => ({ env: mocks.env }));
 vi.mock("@/data-access/api-rate-limits", () => ({ consumeRateLimit: mocks.consume }));
@@ -14,6 +14,7 @@ beforeEach(() => {
   mocks.consume.mockReset().mockResolvedValue(allowed);
   mocks.env.NODE_ENV = "test";
   mocks.env.API_WRITES_DISABLED = false;
+  mocks.env.API_FUZZ_DISABLE_RATE_LIMIT = false;
   vi.stubEnv("DISABLE_RATE_LIMIT", "false");
 });
 afterEach(() => vi.unstubAllEnvs());
@@ -99,4 +100,19 @@ it("lets an opted-in handler answer the write switch after charging write bucket
   expect(mocks.consume.mock.calls.map(([bucket]) => bucket.key)).toEqual([
     "credential:credential:write", "organization:organization:write",
   ]);
+});
+
+it("bypasses all API buckets for validated hermetic fuzzing without bypassing the write switch", async () => {
+  mocks.env.NODE_ENV = "production";
+  mocks.env.API_FUZZ_DISABLE_RATE_LIMIT = true;
+  expect(await preAuthGuard(new Request("http://localhost"), info)).toEqual({ response: null, result: null });
+  for (const access of ["read", "write"] as const) {
+    expect((await postAuthGuard(ctx, { ...info, access }, null)).ok).toBe(true);
+  }
+  expect(mocks.consume).not.toHaveBeenCalled();
+  mocks.env.API_WRITES_DISABLED = true;
+  const result = await postAuthGuard(ctx, { ...info, access: "write" }, null);
+  if (result.ok) throw new Error("expected refusal");
+  expect(result.response.status).toBe(503);
+  expect(mocks.consume).not.toHaveBeenCalled();
 });

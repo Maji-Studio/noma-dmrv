@@ -8,7 +8,8 @@ import { problemResponse, rateLimitHeaders } from "./problem";
 type RequestInfo = { requestId: string; instance: string };
 
 function bypassLimits(): boolean {
-  return env.NODE_ENV !== "production" && process.env.DISABLE_RATE_LIMIT === "true";
+  return env.API_FUZZ_DISABLE_RATE_LIMIT ||
+    (env.NODE_ENV !== "production" && process.env.DISABLE_RATE_LIMIT === "true");
 }
 
 

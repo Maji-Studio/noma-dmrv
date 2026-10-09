@@ -1,6 +1,17 @@
 import { ApiHttpError } from "./http-error";
 
-export const STRONG_ETAG_PATTERN = /^"([1-9]\d*)\.([1-9]\d*)"$/;
+// Encode the parser's safe-integer bound in the published string pattern too.
+const maxInteger = String(Number.MAX_SAFE_INTEGER);
+const smallerPrefixes = [...maxInteger].flatMap((digit, index) => {
+  const minimum = index === 0 ? 1 : 0;
+  const maximum = Number(digit) - 1;
+  if (maximum < minimum) return [];
+  const range = maximum === minimum ? String(minimum) : `[${minimum}-${maximum}]`;
+  const remaining = maxInteger.length - index - 1;
+  return [`${maxInteger.slice(0, index)}${range}\\d{${remaining}}`];
+});
+const positiveSafeInteger = `(?:[1-9]\\d{0,${maxInteger.length - 2}}|${smallerPrefixes.join("|")}|${maxInteger})`;
+export const STRONG_ETAG_PATTERN = new RegExp(`^"(${positiveSafeInteger})\\.(${positiveSafeInteger})"$`);
 
 export function representationEtag(version: number, revision: number): string {
   return `"${version}.${revision}"`;

@@ -1,6 +1,6 @@
 import { expect, it, vi } from "vitest";
 import { API_BODY_MAX_BYTES, API_IDEMPOTENCY_KEY_MAX_LENGTH } from "@/config/api-rest";
-import { readIdempotencyKey, readJsonBody } from "./request-body";
+import { readIdempotencyKey, readJsonBody, readOptionalJsonBody } from "./request-body";
 
 const request = (body: string, contentType = "application/json") => new Request("https://example.test", {
   method: "POST", headers: { "content-type": contentType }, body,
@@ -48,5 +48,43 @@ it("refuses an oversized declared length without reading and cancels the body", 
   } as RequestInit);
   await expect(readJsonBody(oversized)).rejects.toMatchObject({ status: 413, code: "payload_too_large" });
   expect(pull).not.toHaveBeenCalled();
+  expect(cancel).toHaveBeenCalledOnce();
+});
+
+it.each([undefined, "", new ReadableStream({ start(controller) { controller.close(); } })])(
+  "treats zero bytes as an absent optional body regardless of media type (%s)", async (body) => {
+    const framing: Record<string, string>[] = [{}, { "content-type": "text/plain", "content-length": "0" }, { "transfer-encoding": "chunked" }];
+    for (const headers of framing) {
+      // Each stream is read only once; clone the already empty stream for each framing case.
+      const value = body instanceof ReadableStream ? new ReadableStream({ start(controller) { controller.close(); } }) : body;
+      const empty = new Request("https://example.test", { method: "DELETE", headers, body: value, duplex: "half" } as RequestInit);
+      expect(await readOptionalJsonBody(empty)).toBeUndefined();
+    }
+  },
+);
+
+it("validates actual non-empty bytes even when Content-Length claims zero", async () => {
+  const body = new Request("https://example.test", {
+    method: "DELETE", headers: { "content-length": "0" }, body: "{}",
+  });
+  await expect(readOptionalJsonBody(body)).rejects.toMatchObject({ status: 415, code: "unsupported_media_type" });
+});
+
+it("parses optional JSON and preserves null for the caller's validation", async () => {
+  expect(await readOptionalJsonBody(request("{}"))).toEqual({});
+  expect(await readOptionalJsonBody(request("null"))).toBeNull();
+  for (const body of [" ", "{"]) {
+    await expect(readOptionalJsonBody(request(body))).rejects.toMatchObject({ status: 400, code: "malformed_json" });
+  }
+  await expect(readOptionalJsonBody(request(" ", "text/plain"))).rejects.toMatchObject({ status: 415 });
+});
+
+it("bounds an optional stream without Content-Type and cancels on overflow", async () => {
+  const cancel = vi.fn();
+  const stream = new ReadableStream<Uint8Array>({
+    pull(controller) { controller.enqueue(new Uint8Array(API_BODY_MAX_BYTES + 1)); }, cancel,
+  });
+  const body = new Request("https://example.test", { method: "DELETE", body: stream, duplex: "half" } as RequestInit);
+  await expect(readOptionalJsonBody(body)).rejects.toMatchObject({ status: 413, code: "payload_too_large" });
   expect(cancel).toHaveBeenCalledOnce();
 });

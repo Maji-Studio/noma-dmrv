@@ -90,9 +90,9 @@ it("does not start a POST when authentication consumes the budget", async () => 
   expect(mocks.run).not.toHaveBeenCalled();
 });
 
-function deleteRequest(body?: BodyInit, contentType = "application/json") {
+function deleteRequest(body?: BodyInit, contentType: string | null = "application/json") {
   return new Request(`https://example.test/api/v1/feedstocks/${ID}`, {
-    method: "DELETE", headers: { "content-type": contentType, "if-match": '"1.1"' },
+    method: "DELETE", headers: { ...(contentType === null ? {} : { "content-type": contentType }), "if-match": '"1.1"' },
     ...(body === undefined ? {} : { body, duplex: "half" }),
   } as RequestInit);
 }
@@ -102,6 +102,19 @@ const deleteRoute = apiRoute("test", "feedstocks:delete", (request, context) =>
 it.each([undefined, "{}"])("accepts the empty DELETE contract (%s)", async (body) => {
   await deleteRoute(deleteRequest(body));
   expect(mocks.run).toHaveBeenCalledOnce();
+});
+
+it.each([undefined, "", new ReadableStream({ start(controller) { controller.close(); } })])(
+  "accepts a bodyless or zero-byte DELETE without Content-Type (%s)", async (body) => {
+    await deleteRoute(deleteRequest(body, null));
+    expect(mocks.run).toHaveBeenCalledOnce();
+  },
+);
+
+it.each(["{}", " "])("requires Content-Type for non-empty DELETE bytes (%s)", async (body) => {
+  const response = await deleteRoute(deleteRequest(body, null));
+  expect(response.status).toBe(415);
+  expect(mocks.run).not.toHaveBeenCalled();
 });
 
 it("rejects every DELETE property with escaped pointers before running the operation", async () => {
@@ -138,5 +151,51 @@ it("bounds a streamed DELETE body before running the operation", async () => {
   const response = await deleteRoute(deleteRequest(body));
   expect(response.status).toBe(413);
   expect(await response.json()).toMatchObject({ code: "payload_too_large" });
+  expect(mocks.run).not.toHaveBeenCalled();
+});
+
+it("accepts a create idempotency key on a dry run", async () => {
+  const response = await apiRoute("test", "feedstocks:write", createFeedstockResponse)(new Request(
+    "https://example.test/api/v1/feedstocks?dryRun=true", {
+      method: "POST", headers: { "content-type": "application/json", "idempotency-key": "dry-run-key" }, body: "{}",
+    },
+  ));
+  // The mocked operation stops after admission. This proves the adapter accepts
+  // the key and forwards dryRun rather than rejecting the header.
+  expect(response.status).toBe(404);
+  expect(mocks.run).toHaveBeenCalledOnce();
+  expect(mocks.run.mock.calls[0][3]).toMatchObject({ dryRun: true, idempotency: { key: "dry-run-key" } });
+});
+
+it.each(["false", "true"])("requires a create key before domain validation with dryRun=%s", async (dryRun) => {
+  const response = await apiRoute("test", "feedstocks:write", createFeedstockResponse)(new Request(
+    `https://example.test/api/v1/feedstocks?dryRun=${dryRun}`, {
+      method: "POST", headers: { "content-type": "application/json" }, body: "{}",
+    },
+  ));
+  expect(response.status).toBe(400);
+  expect(await response.json()).toMatchObject({ code: "idempotency_key_required" });
+  expect(mocks.run).not.toHaveBeenCalled();
+});
+
+it("preserves the runner's committed-key refusal on a create dry run", async () => {
+  mocks.run.mockRejectedValue(new DomainError("key_already_used", "Use a new key for this dry run."));
+  const response = await apiRoute("test", "feedstocks:write", createFeedstockResponse)(new Request(
+    "https://example.test/api/v1/feedstocks?dryRun=true", {
+      method: "POST", headers: { "content-type": "application/json", "idempotency-key": "committed-key" }, body: "{}",
+    },
+  ));
+  expect(response.status).toBe(409);
+  expect(await response.json()).toMatchObject({ code: "key_already_used" });
+  expect(response.headers.has("Idempotent-Replayed")).toBe(false);
+});
+
+it.each(["PATCH", "DELETE"] as const)("%s rejects a NUL target before running the operation", async (method) => {
+  const response = await apiRoute("test", method === "DELETE" ? "feedstocks:delete" : "feedstocks:write", (req, context) =>
+    mutateFeedstockResponse(req, context, "bad\u0000id", method))(new Request("https://example.test/api/v1/feedstocks/bad%00id", {
+    method, headers: { "if-match": '\"1.1\"' },
+  }));
+  expect(response.status).toBe(404);
+  expect(await response.json()).toMatchObject({ code: "not_found" });
   expect(mocks.run).not.toHaveBeenCalled();
 });

@@ -3,6 +3,7 @@ import { API_CURSOR_MAX_LENGTH, API_IDEMPOTENCY_KEY_MAX_LENGTH, API_LIST_DEFAULT
 import { IDEMPOTENCY_RETENTION_DAYS } from "@/config/operations";
 import type { JsonSchema } from "@/lib/operations/json-schema";
 import { IDEMPOTENCY_KEY_PATTERN } from "../request-body";
+import { API_CURSOR_PATTERN } from "../input-text";
 import { STRONG_ETAG_PATTERN } from "../etag";
 
 export function outputSchema(schema: z.ZodType, representations: Record<string, z.ZodType> = {}): JsonSchema {
@@ -39,7 +40,7 @@ export function queryParameters(schema: z.ZodType) {
       ? { description: field.description, type: "integer", minimum: 1, maximum: API_LIST_MAX_LIMIT, default: API_LIST_DEFAULT_LIMIT }
       : { ...field };
     // Cursor length is enforced by decodeCursor rather than the query schema.
-    if (name === "cursor") wire.maxLength = API_CURSOR_MAX_LENGTH;
+    if (name === "cursor") Object.assign(wire, { minLength: 1, maxLength: API_CURSOR_MAX_LENGTH, pattern: API_CURSOR_PATTERN.source });
     return { name, in: "query", required: generated.required?.includes(name) ?? false, description: wire.description, schema: wire };
   });
 }
@@ -51,12 +52,12 @@ export const targetParameter = (uuidOnly = false) => ({
 });
 export const idempotencyParameter = (required: boolean) => ({
   name: "Idempotency-Key", in: "header", required,
-  description: `Unique key per intended write, 1 to ${API_IDEMPOTENCY_KEY_MAX_LENGTH} visible ASCII characters. Reuse on retry; credential-scoped, retained for ${IDEMPOTENCY_RETENTION_DAYS} days. Required for creates unless dryRun=true; dry runs never consume or replay keys.`,
+  description: `Unique key per intended write, 1 to ${API_IDEMPOTENCY_KEY_MAX_LENGTH} visible ASCII characters. Reuse on retry; credential-scoped, retained for ${IDEMPOTENCY_RETENTION_DAYS} days. ${required ? "Required on every create, including dry runs; a dry run never consumes it." : "Optional on this method."} Dry runs never consume or replay keys.`,
   schema: { type: "string", minLength: 1, maxLength: API_IDEMPOTENCY_KEY_MAX_LENGTH, pattern: IDEMPOTENCY_KEY_PATTERN.source },
 });
 export const ifMatchParameter = {
   name: "If-Match", in: "header", required: true,
-  description: 'One strong ETag from the resource read, for example "3.1". Wildcards and weak tags are refused. A mismatch returns the current representation.',
+  description: `One strong ETag from the resource read: "version.revision", each a positive decimal safe integer (1 to ${Number.MAX_SAFE_INTEGER}), without leading zeros, for example "3.1". Wildcards and weak tags are refused. A mismatch returns the current representation.`,
   schema: { type: "string", pattern: STRONG_ETAG_PATTERN.source },
 };
 
@@ -78,6 +79,7 @@ export const headerComponents = {
   ...privateHeaderDefinitions, ...etagDefinition, ...writeHeaderDefinitions, ...locationDefinition,
   "WWW-Authenticate": header("Bearer authentication challenge."),
   "Retry-After": header("Seconds to wait before retrying; present on rate limits and idempotency_in_progress."),
+  Allow: header("Supported methods for this path, separated by commas; includes automatic HEAD and OPTIONS where served. Always present on 405."),
 };
 function headerReferences(definitions: Record<string, unknown>) {
   return Object.fromEntries(Object.keys(definitions).map((name) => [name, { $ref: `#/components/headers/${name}` }]));
@@ -93,6 +95,7 @@ const errorDescriptions: Record<number, string> = {
   401: "Missing, invalid, expired or revoked bearer credential, or invalid credential owner.",
   403: "Insufficient scope/role or organization API access disabled.",
   404: "Target or referenced resource absent or outside the credential organization.",
+  405: "Unsupported method on a visible path. Private paths require authentication and permission for at least one published operation; public discovery paths do not. Supported operations never return this response.",
   409: "Business conflict, idempotency in progress, used dry-run key, or replay unavailable.",
   412: "Stale row version or representation revision; current contains the latest representation.",
   413: "JSON request exceeds the configured body limit.",
@@ -110,6 +113,7 @@ export function problemResponseComponents() {
     headers: {
       ...privateHeaders,
       ...(status === 401 ? headerReferences({ "WWW-Authenticate": true }) : {}),
+      ...(status === 405 ? headerReferences({ Allow: true }) : {}),
       ...([409, 429].includes(status) ? headerReferences({ "Retry-After": true }) : {}),
     },
     content: { "application/problem+json": { schema: { $ref: "#/components/schemas/Problem" } } },

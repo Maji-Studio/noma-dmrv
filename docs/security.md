@@ -114,6 +114,12 @@ Non-obvious semantics only:
   Organization API access defaults to enabled and only Platform Admins
   can toggle it at `/admin/organizations`; disabled organizations receive
   403 `api_access_disabled` on API requests. This does not revoke their keys.
+- **`API_FUZZ_DISABLE_RATE_LIMIT`**: `true` or `false`, defaults to `false`.
+  Skips API token buckets for the production-bundle Schemathesis harness.
+  Env validation refuses `true` unless `NOMA_HERMETIC_CI=true`, `CI` is truthy,
+  and the app URL is HTTP(S) loopback. This CI-only setting never belongs in
+  deployment environments. Authentication, scopes, and `API_WRITES_DISABLED`
+  still apply. Local reproduction: [testing.md](./testing.md#api-schema-fuzzing).
 - **Both-or-neither pairs** (`superRefine`): `RESEND_API_KEY` +
   `RESEND_FROM_EMAIL`; `ISOMETRIC_ACCESS_TOKEN` + `ISOMETRIC_CLIENT_SECRET`
   (seed/CI-only, not runtime app credentials).

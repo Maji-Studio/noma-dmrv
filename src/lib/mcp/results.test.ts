@@ -4,11 +4,30 @@ import { DomainError } from "@/lib/domain-errors";
 import type { ApiRouteContext } from "@/lib/api/route";
 import { apiResponseHeaders } from "@/lib/api/problem";
 import { toolErrorSchema, toolFailure, toolSuccess } from "./results";
+import { parseQueryInput } from "@/lib/api/query";
+import { lookupListSchema } from "@/lib/api/query-schemas";
 
 const mocks = vi.hoisted(() => ({ log: vi.fn() }));
 vi.mock("@/lib/log", () => ({ logger: { error: mocks.log } }));
 beforeEach(() => vi.clearAllMocks());
 const context = { requestId: "request-1", instance: "/api/mcp", headers: apiResponseHeaders("request-1"), deadlineAt: 0 } as ApiRouteContext;
+it.each([
+  ["find_facilities", { q: "bad\u0000value" }, lookupListSchema, "/q"],
+  ["get_feedstock", { idOrCode: "FS\tbad" }, z.strictObject({ idOrCode: z.string() }), "/idOrCode"],
+])("returns invalid_query with issue pointers for %s control characters", async (name, input, schema, pointer) => {
+  let error: unknown;
+  try {
+    parseQueryInput(input, schema);
+  } catch (failure) {
+    error = failure;
+  }
+  const result = await toolFailure(error, context, name);
+  expect(result.isError).toBe(true);
+  expect(result.structuredContent).toEqual({
+    code: "invalid_query", detail: "Send query values without control characters.", retryable: false,
+    issues: [{ pointer, code: "custom", detail: "Query values must not contain control characters." }],
+  });
+});
 it("keeps both branches within the published output union without HTTP fields", async () => {
   const output = z.union([z.object({ data: z.object({ id: z.string() }) }), toolErrorSchema]);
   const success = toolSuccess({ data: { id: "resource-1" } }, "Resource retrieved.");

@@ -4,7 +4,7 @@ import { resolveApiContext, type ApiContext } from "@/lib/auth/api-context";
 import { hasRoleAndScope, type ApiScope } from "@/lib/auth/api-scopes";
 import { deadlineExceeded, DomainError } from "@/lib/domain-errors";
 import { toActionFailure } from "@/fn/action-errors";
-import { actionFailureResponse, apiDenialResponse, apiResponseHeaders, problemResponse, rateLimitHeaders } from "./problem";
+import { actionFailureResponse, apiDenialResponse, apiHttpErrorResponse, apiResponseHeaders, rateLimitHeaders } from "./problem";
 import { logApiError, shouldLogDomainError, unexpectedApiErrorResponse } from "./route-error";
 import { ApiHttpError } from "./http-error";
 import { preAuthGuard, postAuthGuard } from "./guards";
@@ -79,7 +79,7 @@ export function apiRoute<Params = Record<string, never>>(
       return finish(response);
     } catch (error) {
       if (error instanceof ApiHttpError) {
-        return finish(problemResponse({ status: error.status, code: error.code, detail: error.message, current: error.current, instance, requestId }));
+        return finish(apiHttpErrorResponse(error, instance, requestId));
       }
       if (error instanceof DomainError) {
         // The action converter logs raw causes. REST logs only trusted classes
