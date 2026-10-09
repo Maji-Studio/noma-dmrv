@@ -1,0 +1,44 @@
+# CLI and config schema verified against Schemathesis 4.29.3.
+base-url = "${API_FUZZ_BASE_URL}"
+seed = 20261009
+workers = 1
+request-timeout = 10
+
+[headers]
+Authorization = "Bearer ${API_FUZZ_KEY}"
+
+[generation]
+mode = "all"
+max-examples = 25
+# No saved Hypothesis examples from previous runs; use the seed to reproduce.
+database = "none"
+
+[checks]
+enabled = true
+
+[phases.examples]
+enabled = true
+
+[phases.coverage]
+enabled = true
+
+[phases.fuzzing]
+enabled = true
+
+# This version infers links from response schemas and Location headers. There
+# are no hand-written operation links or endpoint filters in this harness.
+[phases.stateful]
+enabled = true
+max-steps = 5
+
+[phases.stateful.inference]
+algorithms = ["location-headers", "dependency-analysis"]
+
+[phases.stateful.generation]
+max-examples = 10
+
+[output.sanitization]
+enabled = true
+
+[reports.junit]
+path = "api-fuzz-report/junit.xml"

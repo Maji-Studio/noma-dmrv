@@ -84,6 +84,8 @@ const envSchema = z.object({
   // API infrastructure
   CRON_SECRET: z.preprocess(emptyToUndefined, z.string().min(CRON_SECRET_MIN_LENGTH).optional()),
   API_WRITES_DISABLED: z.enum(["true", "false"]).default("false").transform((value) => value === "true"),
+  // Only hermetic, loopback CI may fuzz a production bundle without buckets.
+  API_FUZZ_DISABLE_RATE_LIMIT: z.enum(["true", "false"]).default("false").transform((value) => value === "true"),
 
   // Optional
   ALLOW_SELF_SIGNUP: z
@@ -268,6 +270,14 @@ const envSchema = z.object({
   // local-fs provider falls back to an ephemeral random secret with a warning.
 
   const isHermeticCiBuild = isHermeticCiBuildFor(data.NEXT_PUBLIC_APP_URL);
+
+  if (data.API_FUZZ_DISABLE_RATE_LIMIT && !isHermeticCiBuild) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["API_FUZZ_DISABLE_RATE_LIMIT"],
+      message: "API_FUZZ_DISABLE_RATE_LIMIT requires NOMA_HERMETIC_CI=true in CI with an HTTP(S) loopback app URL.",
+    });
+  }
 
   if (data.NODE_ENV === "production" && !isHermeticCiBuild && !data.CRON_SECRET) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["CRON_SECRET"], message: "CRON_SECRET is required in production." });

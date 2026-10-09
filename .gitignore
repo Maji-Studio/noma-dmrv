@@ -46,6 +46,9 @@ next-env.d.ts
 # testing
 playwright-report
 test-results
+api-fuzz-report/
+.schemathesis/
+.storage-api-fuzz/
 
 # pdf
 .tmp_pdf
