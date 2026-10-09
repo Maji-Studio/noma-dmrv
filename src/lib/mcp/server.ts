@@ -22,7 +22,7 @@ export function mcpRequestAccess(ctx: ApiContext, body: unknown): "read" | "writ
     || !("params" in body) || !body.params || typeof body.params !== "object"
     || !("name" in body.params) || typeof body.params.name !== "string") return "read";
   const tool = visibleTools(ctx).get(body.params.name);
-  return tool && "annotations" in tool ? "write" : "read";
+  return tool?.kind ?? "read";
 }
 
 export function serveMcp(request: Request, context: ApiRouteContext): Promise<Response> {
@@ -32,7 +32,7 @@ export function serveMcp(request: Request, context: ApiRouteContext): Promise<Re
       server.registerTool(tool.name, {
         description: tool.description, inputSchema: toToolSchema(tool.input),
         outputSchema: toolOutputSchema(tool.output),
-        annotations: "annotations" in tool ? tool.annotations : { readOnlyHint: true },
+        annotations: tool.kind === "write" ? tool.annotations : { readOnlyHint: true },
       }, async () => { throw new Error("The request dispatcher owns tool execution."); });
     }
     // The high-level SDK catches every tool exception and emits text-only errors.
@@ -42,7 +42,7 @@ export function serveMcp(request: Request, context: ApiRouteContext): Promise<Re
       if (!tool) throw new ProtocolError(ProtocolErrorCode.InvalidParams, "Unknown tool.");
       try {
         if (Date.now() >= context.deadlineAt) throw deadlineExceeded("before starting");
-        if ("annotations" in tool) {
+        if (tool.kind === "write") {
           if (env.API_WRITES_DISABLED) return writesDisabledResult();
           const result = await tool.execute(context, rpc.params.arguments ?? {});
           tool.output.parse(result.body);

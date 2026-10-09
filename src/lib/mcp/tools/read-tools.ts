@@ -25,6 +25,15 @@ const readers = {
   "feedstock-types": readFeedstockTypeListFromInput, "storage-locations": readStorageLocationListFromInput,
   vehicles: readVehicleListFromInput, drivers: readDriverListFromInput, feedstocks: readFeedstockListFromInput,
 };
+const labels: Record<keyof typeof readers, { singular: string; plural: string }> = {
+  "facilities": { singular: "facility", plural: "facilities" },
+  "suppliers": { singular: "supplier", plural: "suppliers" },
+  "feedstock-types": { singular: "feedstock type", plural: "feedstock types" },
+  "storage-locations": { singular: "storage location", plural: "storage locations" },
+  "vehicles": { singular: "vehicle", plural: "vehicles" },
+  "drivers": { singular: "driver", plural: "drivers" },
+  "feedstocks": { singular: "feedstock", plural: "feedstocks" },
+};
 const guidance: Record<keyof typeof readers, string> = {
   facilities: "Call whoami first for the credential's active facilities and local dates.",
   suppliers: "Use the supplier id with find_supplier_locations.",
@@ -36,6 +45,7 @@ const guidance: Record<keyof typeof readers, string> = {
 };
 
 export interface ReadTool {
+  kind: "read";
   name: string;
   summarize: (body: Record<string, unknown>) => string;
   scope?: ApiScope;
@@ -54,10 +64,10 @@ function listSummary(singular: string, plural: string) {
 
 /** The generic closes over each schema so parsed input stays typed at its reader. */
 function defineRead<S extends z.ZodType>(
-  config: Omit<ReadTool, "input" | "execute"> & { input: S },
+  config: Omit<ReadTool, "kind" | "input" | "execute"> & { input: S },
   read: (ctx: ApiContext, input: z.output<S>) => Promise<Record<string, unknown>>,
 ): ReadTool {
-  return { ...config, description: `${config.description} ${UNTRUSTED_TEXT}`,
+  return { ...config, kind: "read", description: `${config.description} ${UNTRUSTED_TEXT}`,
     execute: (ctx, raw) => read(ctx, parseQueryInput(raw, config.input)) };
 }
 
@@ -69,7 +79,7 @@ export const readTools: ReadTool[] = [
     async (ctx) => ({ data: await readApiMe(ctx) })),
   ...resources.map((resource) => defineRead({
     name: `find_${resource.path.replaceAll("-", "_")}`, scope: resource.scope,
-    summarize: listSummary(resource.path === "facilities" ? "facility" : resource.path.replaceAll("-", " ").slice(0, -1), resource.path.replaceAll("-", " ")),
+    summarize: listSummary(labels[resource.path].singular, labels[resource.path].plural),
     description: `${readDescriptions.list} ${guidance[resource.path]}`,
     input: resource.queries.list, output: listEnvelopeSchema(resource.schema),
   }, (ctx, input) => readers[resource.path](ctx, input))),

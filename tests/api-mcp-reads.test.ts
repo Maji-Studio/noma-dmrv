@@ -64,13 +64,13 @@ beforeEach(async () => {
 afterEach(async () => { await removeLookupFixture(a); await removeLookupFixture(b); });
 
 const collections = [
-  { resource: "facilities", name: "find_facilities", get: FACILITIES },
-  { resource: "suppliers", name: "find_suppliers", get: SUPPLIERS },
-  { resource: "feedstock-types", name: "find_feedstock_types", get: TYPES },
-  { resource: "storage-locations", name: "find_storage_locations", get: BINS },
-  { resource: "vehicles", name: "find_vehicles", get: VEHICLES },
-  { resource: "drivers", name: "find_drivers", get: DRIVERS },
-  { resource: "feedstocks", name: "find_feedstocks", get: FEEDSTOCKS },
+  { resource: "facilities", summary: "1 facility. More results: pass nextCursor.", name: "find_facilities", get: FACILITIES },
+  { resource: "suppliers", summary: "1 supplier. More results: pass nextCursor.", name: "find_suppliers", get: SUPPLIERS },
+  { resource: "feedstock-types", summary: "1 feedstock type. More results: pass nextCursor.", name: "find_feedstock_types", get: TYPES },
+  { resource: "storage-locations", summary: "1 storage location. More results: pass nextCursor.", name: "find_storage_locations", get: BINS },
+  { resource: "vehicles", summary: "1 vehicle. More results: pass nextCursor.", name: "find_vehicles", get: VEHICLES },
+  { resource: "drivers", summary: "1 driver. More results: pass nextCursor.", name: "find_drivers", get: DRIVERS },
+  { resource: "feedstocks", summary: "1 feedstock. More results: pass nextCursor.", name: "find_feedstocks", get: FEEDSTOCKS },
 ];
 
 describe("MCP reads with real API keys", { timeout: LOOKUP_SUITE_TIMEOUT_MS }, () => {
@@ -82,7 +82,7 @@ describe("MCP reads with real API keys", { timeout: LOOKUP_SUITE_TIMEOUT_MS }, (
     expect(result.structuredContent).toEqual(rest);
     expect(result.content).toEqual([{ type: "text", text: `Organization ${rest.data.organization.name}, ${rest.data.facilities.length} ${rest.data.facilities.length === 1 ? "facility" : "facilities"}, role ${rest.data.role}.` }]);
   });
-  it.each(collections)("matches $name filtered pages and shares cursors in both directions", async ({ resource, name, get }) => {
+  it.each(collections)("matches $name filtered pages and shares cursors in both directions", async ({ resource, name, get, summary }) => {
     const args = { q: PREFIX, limit: PAGE_SIZE };
     const response = await get(lookupRequest(resource, query(args), a.key));
     expect(response.status).toBe(200);
@@ -90,7 +90,7 @@ describe("MCP reads with real API keys", { timeout: LOOKUP_SUITE_TIMEOUT_MS }, (
     expect(first.data).toHaveLength(PAGE_SIZE);
     expect(first.nextCursor).toBeTruthy();
     const { result } = await call(name, args);
-    expect(result.content).toEqual([{ type: "text", text: `${PAGE_SIZE} ${resource === "facilities" ? "facility" : resource.replaceAll("-", " ").slice(0, -1)}. More results: pass nextCursor.` }]);
+    expect(result.content).toEqual([{ type: "text", text: summary }]);
     const mcpFirst = result.structuredContent;
     expect(mcpFirst).toEqual(first);
     const nextArgs = { ...args, cursor: first.nextCursor };

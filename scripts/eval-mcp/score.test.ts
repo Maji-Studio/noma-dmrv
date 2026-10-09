@@ -1,3 +1,4 @@
+import { TOOL_CALL_BUDGET, EXPECTED_WET_MASS_KG, EXPECTED_MOISTURE_PERCENT } from "./config";
 import { expect, it } from "vitest";
 import { caseTwoExpectation, scoreCase, type DatabaseSnapshot } from "./score";
 import type { Transcript } from "./transcript";
@@ -9,8 +10,8 @@ const target = { supplierId: "supplier-x", feedstockTypeId: "wood", facilityId: 
 const transcript: Transcript = { calls: [], finalText: "Logged.", completed: true, turns: 2, durationMs: 1000 };
 const snapshot: DatabaseSnapshot = {
   feedstocks: [{ supplierId: "supplier-x", feedstockTypeId: "wood", facilityId: "facility", storageLocationId: "bin-2",
-    massWetKg: 4200, moistureContentPercent: 32, deliveryDate: "2026-10-10" }],
-  bins: [{ id: "bin-1", beforeWetKg: 0, afterWetKg: 0 }, { id: "bin-2", beforeWetKg: 0, afterWetKg: 4200 },
+    massWetKg: EXPECTED_WET_MASS_KG, moistureContentPercent: EXPECTED_MOISTURE_PERCENT, deliveryDate: "2026-10-10" }],
+  bins: [{ id: "bin-1", beforeWetKg: 0, afterWetKg: 0 }, { id: "bin-2", beforeWetKg: 0, afterWetKg: EXPECTED_WET_MASS_KG },
     { id: "bin-3", beforeWetKg: 0, afterWetKg: 0 }],
   audits: [{ transport: "mcp" }],
 };
@@ -20,7 +21,7 @@ it("passes only when the stored delivery, bin effect and MCP audit match the req
   const wrong = structuredClone(snapshot);
   wrong.feedstocks[0].supplierId = "supplier-y";
   wrong.feedstocks[0].deliveryDate = "2026-10-09";
-  wrong.bins[0].afterWetKg = 4200;
+  wrong.bins[0].afterWetKg = EXPECTED_WET_MASS_KG;
   wrong.audits.push({ transport: "rest" });
   const score = scoreCase("complete-request", "ask-moisture", target, wrong, transcript);
   expect(score.passed).toBe(false);
@@ -49,6 +50,6 @@ it("allows dry-run errors while requiring a moisture question and no committed c
 it("fails incomplete runs, duplicate deliveries and calls above the budget", () => {
   expect(scoreCase("complete-request", "ask-moisture", target, snapshot, { ...transcript, completed: false }).passed).toBe(false);
   expect(scoreCase("complete-request", "ask-moisture", target, { ...snapshot, feedstocks: [...snapshot.feedstocks, ...snapshot.feedstocks] }, transcript).criteria.rows).toBe(false);
-  const calls = Array.from({ length: 11 }, (_, index) => ({ id: String(index), name: "mcp__noma__whoami", arguments: {} }));
+  const calls = Array.from({ length: TOOL_CALL_BUDGET + 1 }, (_, index) => ({ id: String(index), name: "mcp__noma__whoami", arguments: {} }));
   expect(scoreCase("complete-request", "ask-moisture", target, snapshot, { ...transcript, calls }).criteria.budget).toBe(false);
 });

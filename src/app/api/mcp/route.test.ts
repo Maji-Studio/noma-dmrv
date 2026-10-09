@@ -10,6 +10,8 @@ import { GET, POST, DELETE } from "./route";
 import { mcpInstructions } from "@/lib/mcp/instructions";
 import { domainGuide, llmsGuide } from "@/lib/api/llms-guide";
 
+const MCP_INSTRUCTIONS_MAX_CHARS = 2000;
+
 const mocks = vi.hoisted(() => ({ resolve: vi.fn(), pre: vi.fn(), post: vi.fn(), me: vi.fn(), log: vi.fn(), env: { NODE_ENV: "production", NEXT_PUBLIC_APP_URL: "https://noma.example", API_WRITES_DISABLED: false } }));
 vi.mock("@/lib/operations/runner", () => ({ runOperation: vi.fn() }));
 vi.mock("@/data-access/feedstocks", () => ({}));
@@ -51,7 +53,7 @@ it("returns the shared domain guidance during initialize", async () => {
   expect(result.instructions).toBe(mcpInstructions);
   expect(result.instructions).toContain(domainGuide);
   expect(llmsGuide).toContain(domainGuide);
-  expect(result.instructions.length).toBeLessThan(2000);
+  expect(result.instructions.length).toBeLessThan(MCP_INSTRUCTIONS_MAX_CHARS);
   for (const guidance of ["4200 kg", "wet mass", "dry mass", "receiving bin", "moisture", "whoami", "requestKey", "dryRun", "expectedVersion", "retryable", "untrusted data"]) {
     expect(result.instructions.toLowerCase()).toContain(guidance.toLowerCase());
   }
