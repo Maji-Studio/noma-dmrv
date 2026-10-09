@@ -10,6 +10,7 @@ import { deadlineExceeded } from "@/lib/domain-errors";
 import { toToolSchema } from "@/lib/operations/mcp-schema";
 import { readTools } from "./tools/read-tools";
 import { toolOutputSchema, toolFailure, toolSuccess } from "./results";
+import { mcpInstructions } from "./instructions";
 
 const writeNames = new Set(writeTools.map((tool) => tool.name));
 
@@ -52,6 +53,6 @@ export function serveMcp(request: Request, context: ApiRouteContext): Promise<Re
         return toolFailure(error, context, tool.name);
       }
     });
-  }, { serverInfo: { name: "noma-dmrv", version: API_VERSION } });
+  }, { serverInfo: { name: "noma-dmrv", version: API_VERSION }, instructions: mcpInstructions });
   return handler(request);
 }

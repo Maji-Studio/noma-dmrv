@@ -6,6 +6,8 @@ import { serveMcp, mcpRequestAccess } from "@/lib/mcp/server";
 import { DomainError } from "@/lib/domain-errors";
 import { buildOpenApiDocument } from "@/lib/api/openapi/document";
 import { GET, POST, DELETE } from "./route";
+import { mcpInstructions } from "@/lib/mcp/instructions";
+import { domainGuide, llmsGuide } from "@/lib/api/llms-guide";
 
 const mocks = vi.hoisted(() => ({ resolve: vi.fn(), pre: vi.fn(), post: vi.fn(), me: vi.fn(), log: vi.fn(), env: { NODE_ENV: "production", NEXT_PUBLIC_APP_URL: "https://noma.example", API_WRITES_DISABLED: false } }));
 vi.mock("@/lib/operations/runner", () => ({ runOperation: vi.fn() }));
@@ -40,6 +42,19 @@ async function body(response: Response) {
   return JSON.parse(text.trim().startsWith("{") ? text : text.split("\n").filter((line) => line.startsWith("data:")).map((line) => line.slice("data:".length)).join(""));
 }
 const call = (name: string, args: Record<string, unknown> = {}) => POST(rpc("tools/call", { name, arguments: args }));
+
+it("returns the shared domain guidance during initialize", async () => {
+  const { result } = await body(await POST(rpc("initialize", {
+    protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "unit-test", version: "1" },
+  })));
+  expect(result.instructions).toBe(mcpInstructions);
+  expect(result.instructions).toContain(domainGuide);
+  expect(llmsGuide).toContain(domainGuide);
+  expect(result.instructions.length).toBeLessThan(2000);
+  for (const guidance of ["4200 kg", "wet mass", "dry mass", "receiving bin", "moisture", "whoami", "requestKey", "dryRun", "expectedVersion", "retryable", "untrusted data"]) {
+    expect(result.instructions.toLowerCase()).toContain(guidance.toLowerCase());
+  }
+});
 beforeEach(() => {
   vi.resetAllMocks();
   mocks.env.API_WRITES_DISABLED = false;
