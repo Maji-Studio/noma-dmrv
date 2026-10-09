@@ -9,7 +9,7 @@ import type { ApiHttpError } from "./http-error";
 
 export const ACTION_STATUS = {
   validation_failed: 422, not_found: 404, stale_version: 412,
-  conflict: 409, certification_locked: 409, insufficient_stock: 409,
+  concurrent_write_retry: 409, conflict: 409, certification_locked: 409, insufficient_stock: 409,
   forbidden: 403, reference_not_found: 422, reference_ambiguous: 422,
   deadline_exceeded: 500, outcome_unknown: 500, idempotency_in_progress: 409,
   idempotency_key_reused: 422, key_already_used: 409, replay_unavailable: 409,
@@ -80,7 +80,7 @@ export function actionFailureResponse(failure: ActionFailure, instance: string, 
   return problemResponse({
     status: failure.code ? ACTION_STATUS[failure.code] : 500,
     code, detail: failure.error, instance, requestId,
-    retryable: ["deadline_exceeded", "outcome_unknown", "idempotency_in_progress"].includes(code),
+    retryable: ["deadline_exceeded", "outcome_unknown", "idempotency_in_progress", "concurrent_write_retry"].includes(code),
     ...(code === "idempotency_in_progress" ? { retryAfterSeconds: IDEMPOTENCY_RETRY_AFTER_SECONDS } : {}),
     errors: failure.issues?.map((issue) => ({
       pointer: jsonPointer(issue.path),

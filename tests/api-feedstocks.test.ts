@@ -84,6 +84,7 @@ describe("feedstock REST contract", { timeout: SUITE_TIMEOUT_MS }, () => {
     expect(first.response.headers.get("location")).toBe(`/api/v1/feedstocks/${first.row.id}`);
     expect(first.etag).toBe('"1.1"');
     expect(first.row).toMatchObject({ version: 1, deliveryDate: "2026-10-06", massWetKg: 4200, massDryKg: 2835, moistureContentPercent: 32.5 });
+    expect(JSON.parse(first.text)).not.toHaveProperty("stockEffects");
     expect(first.row).not.toHaveProperty("supplierName");
     expect(await stock()).toBe(4200);
     const replay = await POST(request("POST", "", first.body, { "idempotency-key": first.key }));
@@ -110,14 +111,32 @@ describe("feedstock REST contract", { timeout: SUITE_TIMEOUT_MS }, () => {
       expect(response.headers.has("etag")).toBe(false);
       expect(response.headers.has("idempotent-replayed")).toBe(false);
       const body = await response.json();
-      expect(body.preview).toEqual([{ feedstockId: body.data[0].id, storageLocationId: a.binId,
-        allocatedWetMassKg: 4200, allocatedDryMassKg: 2835, stockDeltaWetKg: 4200 }]);
+      expect(body.stockEffects).toEqual([{ storageLocationId: a.binId, storageLocationCode: expect.any(String), stockKind: "feedstock_bin",
+        before: { wetKg: 0, dryKg: 0 }, after: { wetKg: 4200, dryKg: 2835 }, delta: { wetKg: 4200, dryKg: 2835 } }]);
+      expect(body).not.toHaveProperty("preview");
       expect(await feedstockCount(a)).toBe(0);
       expect(await stock()).toBe(0);
       expect(await db.select().from(apiIdempotencyRecords).where(eq(apiIdempotencyRecords.organizationId, a.ctx.organizationId))).toHaveLength(0);
     }
     const saved = await create(a.input(), previewKey);
     await problem(await POST(request("POST", "?dryRun=true", a.input(), { "idempotency-key": saved.key })), 409, "key_already_used");
+  });
+
+  it.each(["PATCH", "DELETE"] as const)("returns locked balances for a %s dry run and leaves stock unchanged", async (method) => {
+    const saved = await create();
+    const before = await stock();
+    const response = await (method === "PATCH" ? PATCH : DELETE)(request(method, `/${saved.row.id}?dryRun=true`,
+      method === "PATCH" ? { massWetKg: 2100 } : undefined, { "if-match": saved.etag }), params(saved.row.id));
+    expect(response.status).toBe(200);
+    const afterWet = method === "PATCH" ? 2100 : 0;
+    const afterDry = method === "PATCH" ? 1417.5 : 0;
+    expect((await response.json()).stockEffects).toEqual([{
+      storageLocationId: a.binId, storageLocationCode: expect.any(String), stockKind: "feedstock_bin",
+      before: { wetKg: 4200, dryKg: 2835 }, after: { wetKg: afterWet, dryKg: afterDry },
+      delta: { wetKg: afterWet - 4200, dryKg: afterDry - 2835 },
+    }]);
+    expect(await stock()).toBe(before);
+    expect(await feedstockCount(a)).toBe(1);
   });
 
   it("returns all split allocations and warnings from the stored result", async () => {

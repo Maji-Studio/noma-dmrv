@@ -6,6 +6,6 @@ export const mcpInstructions = `${domainGuide}
 
 - Call whoami first. Use find_* lookups for ids.
 - ${REQUEST_KEY_RULE}
-- Use expectedVersion from get_feedstock for updates and deletes.
+- Use expectedVersion from the resource get_* tool for updates and deletes.
 - Follow retryable on errors.
 `;

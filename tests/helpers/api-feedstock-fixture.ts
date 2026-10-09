@@ -1,3 +1,4 @@
+import type { ApiScope } from "@/lib/auth/api-scopes";
 import { randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import { expect } from "vitest";
@@ -13,10 +14,14 @@ import { GET, PATCH, DELETE } from "@/app/api/v1/feedstocks/[idOrCode]/route";
 import { POST } from "@/app/api/v1/feedstocks/route";
 import { createFeedstockSchema, type CreateFeedstockData } from "@/schemas/feedstocks";
 import { feedstockRepresentationSchema, type FeedstockRepresentation } from "@/lib/representations/feedstocks";
-import { createIntakeFixture, removeIntakeFixture, type IntakeFixture } from "./operation-fixture";
+import { addFixtureReactor, createIntakeFixture, removeIntakeFixture, type IntakeFixture } from "./operation-fixture";
+
+export const PRODUCTION_RUN_FIXTURE_DRAW_WET_KG = 1200;
+const PRODUCTION_RUN_FIXTURE_MOISTURE_PERCENT = 32.5;
+const PRODUCTION_RUN_FIXTURE_START_TIME = "2026-10-06T10:00:00Z";
 
 const API_URL = "http://localhost:3100/api/v1/feedstocks";
-const INTAKE_SCOPES = ["feedstocks:read", "feedstocks:write", "feedstocks:delete"];
+const INTAKE_SCOPES: readonly ApiScope[] = ["feedstocks:read", "feedstocks:write", "feedstocks:delete"];
 
 export interface ApiFeedstockFixture extends IntakeFixture {
   key: string;
@@ -24,7 +29,7 @@ export interface ApiFeedstockFixture extends IntakeFixture {
 }
 
 /** Real credential owner; the action session mock must resolve this same ctx. */
-export async function createApiFeedstockFixture(label: string): Promise<ApiFeedstockFixture> {
+export async function createApiFeedstockFixture(label: string, scopes: readonly ApiScope[] = INTAKE_SCOPES): Promise<ApiFeedstockFixture> {
   const fixture = await createIntakeFixture(`${label}-${randomUUID()}`);
   await db.insert(users).values({
     id: fixture.ctx.userId, email: `${fixture.ctx.userId}@example.test`,
@@ -37,7 +42,7 @@ export async function createApiFeedstockFixture(label: string): Promise<ApiFeeds
   await db.update(storageLocations).set({ feedstockTypeId: fixture.feedstockTypeId })
     .where(and(eq(storageLocations.organizationId, fixture.ctx.organizationId), eq(storageLocations.id, fixture.binId)));
   const credential = await createApiKey(fixture.ctx, {
-    name: "Feedstock suite", scopes: INTAKE_SCOPES, expiresIn: API_KEY_DEFAULT_EXPIRY_SECONDS,
+    name: "Feedstock suite", scopes: [...scopes], expiresIn: API_KEY_DEFAULT_EXPIRY_SECONDS,
   });
   return { ...fixture, key: credential.key, credentialId: credential.id };
 }
@@ -174,4 +179,33 @@ export async function seedFeedstockDraw(
     organizationId: org, productionRunId: run.id, ...allocation,
   })));
   return run;
+}
+
+export interface ApiProductionRunFixture extends ApiFeedstockFixture { reactorId: string; outputBinId: string }
+
+/** Production tests share intake, credential and teardown setup with feedstocks. */
+export async function createApiProductionRunFixture(label: string): Promise<ApiProductionRunFixture> {
+  const fixture = await createApiFeedstockFixture(label, [
+    "feedstocks:read", "feedstocks:write", "production-runs:read", "production-runs:write", "production-runs:delete", "reactors:read",
+  ]);
+  const reactorId = await addFixtureReactor(fixture, label);
+  const [outputBin] = await db.insert(storageLocations).values({
+    organizationId: fixture.ctx.organizationId, facilityId: fixture.facilityId,
+    code: "OUT-1", name: "Output bin", type: "biochar_bin",
+  }).returning({ id: storageLocations.id });
+  return { ...fixture, reactorId, outputBinId: outputBin.id };
+}
+
+export function productionRunInput(fixture: ApiProductionRunFixture, withDraw = true) {
+  return {
+    facilityId: fixture.facilityId, reactorId: fixture.reactorId, status: "running" as const,
+    startTime: PRODUCTION_RUN_FIXTURE_START_TIME, feedstockMoisturePercent: PRODUCTION_RUN_FIXTURE_MOISTURE_PERCENT,
+    ...(withDraw ? { feedstockDraws: [{ storageLocationId: fixture.binId, wetMassKg: PRODUCTION_RUN_FIXTURE_DRAW_WET_KG }] } : {}),
+  };
+}
+export function productionRunRequest(fixture: ApiFeedstockFixture, method: string, path = "", body?: unknown, headers: Record<string, string> = {}) {
+  return new Request(`http://localhost:3100/api/v1/production-runs${path}`, {
+    method, headers: { authorization: `Bearer ${fixture.key}`, ...(body === undefined ? {} : { "content-type": "application/json" }), ...headers },
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+  });
 }

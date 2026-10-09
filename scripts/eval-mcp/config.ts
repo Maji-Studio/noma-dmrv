@@ -12,11 +12,15 @@ export const MCP_CONFIG_PLACEHOLDER = "{mcp-config}";
 export const FACILITY_TIME_ZONE = "Africa/Dar_es_Salaam";
 export const EXPECTED_WET_MASS_KG = 4200;
 export const EXPECTED_MOISTURE_PERCENT = 32;
+export const EXPECTED_DRAW_WET_MASS_KG = 1500;
+export const TARGET_REACTOR_CODE = "R1";
 export const BIN_CODES = ["B1", "B2", "B3"] as const;
 export const TARGET_BIN_CODE = "B2";
 export const CASES = [
   { id: "complete-request", text: "log 4.2 t wet wood chips at 32% moisture from supplier X into bin B2" },
   { id: "missing-moisture", text: "log 4.2 t wet wood chips from supplier X into bin B2" },
+  { id: "chained-mass-omitted", text: "log 4.2 t wet wood chips from supplier X into bin B2 at 32% moisture, then start a run on R1 with that feedstock" },
+  { id: "chained-complete", text: "log 4.2 t wet wood chips from supplier X into bin B2 at 32% moisture, then start a run on R1 with that feedstock, drawing 1.5 t wet from B2" },
 ] as const;
 
 /** Shared flags are exported so the supervisor can adjust the harness. */

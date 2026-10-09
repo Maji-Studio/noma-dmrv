@@ -170,3 +170,7 @@ export function pgErrorCode(err: unknown): string | undefined {
   }
   return undefined;
 }
+
+/** Transaction failures safe to retry only before COMMIT is sent. */
+export const PG_DEADLOCK_DETECTED = "40P01";
+export const PG_SERIALIZATION_FAILURE = "40001";

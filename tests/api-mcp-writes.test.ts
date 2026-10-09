@@ -1,4 +1,3 @@
-/** Real database suites: not run by the implementation agent; needs the supervisor. */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
@@ -76,10 +75,24 @@ describe("MCP feedstock writes", { timeout: SUITE_TIMEOUT_MS }, () => {
     expect(await binWetStock(fixture)).toBe(kind === "update" ? MASS_KG / 2 : 0);
     expect(await audits()).toHaveLength(2);
   });
+  it.each(["update", "delete"] as const)("returns stock effects for a dry-run %s without changing stock", async (kind) => {
+    const saved = await seedApiFeedstock(fixture, MASS_KG);
+    const result = await call(`${kind}_feedstock`, { feedstockId: saved.row.id, expectedVersion: saved.row.version,
+      dryRun: true, ...(kind === "update" ? { massWetKg: MASS_KG / 2 } : {}),
+    });
+    expect(result.isError).toBeUndefined();
+    expect(result.structuredContent.stockEffects).toMatchObject([{
+      storageLocationId: fixture.binId, stockKind: "feedstock_bin", before: { wetKg: MASS_KG },
+      after: { wetKg: kind === "update" ? MASS_KG / 2 : 0 },
+      delta: { wetKg: kind === "update" ? -MASS_KG / 2 : -MASS_KG },
+    }]);
+    expect(await binWetStock(fixture)).toBe(MASS_KG);
+  });
+
   it("audits committed MCP writes once and never previews", async () => {
     const preview = await call("log_feedstock_delivery", { ...intake(), dryRun: true });
     expect(preview.isError).toBeUndefined();
-    expect(preview.structuredContent.preview).toHaveLength(1);
+    expect(preview.structuredContent.stockEffects).toHaveLength(1);
     expect(preview.content[0].text).toContain("provisional code");
     expect(await committedFeedstocks(fixture)).toHaveLength(0);
     expect(await audits()).toHaveLength(0);

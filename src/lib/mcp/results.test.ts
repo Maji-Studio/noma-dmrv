@@ -13,7 +13,7 @@ beforeEach(() => vi.clearAllMocks());
 const context = { requestId: "request-1", instance: "/api/mcp", headers: apiResponseHeaders("request-1"), deadlineAt: 0 } as ApiRouteContext;
 it.each([
   ["find_facilities", { q: "bad\u0000value" }, lookupListSchema, "/q"],
-  ["get_feedstock", { idOrCode: "FS\tbad" }, z.strictObject({ idOrCode: z.string() }), "/idOrCode"],
+  ["find_feedstocks", { cursor: "bad\tvalue" }, lookupListSchema, "/cursor"],
 ])("returns invalid_query with issue pointers for %s control characters", async (name, input, schema, pointer) => {
   let error: unknown;
   try {

@@ -45,6 +45,14 @@ org-scoped reads or audit inserts.
 
 Frozen/locked rows are protected by dedicated modules in `src/data-access/`, not by DB constraints alone: `bin-stock-guards.ts`, `lock-bin-stocks.ts`, the `*-stock-locks.ts` family (`biochar-product`, `delivery`, `formulation`, `order`, `production-run`), `facility-durability-lock.ts`, `certification-lineage-guards.ts`, `unique-name-guards.ts`. A fresh `db.update()` that skips these silently bypasses the freeze — route mutations through the guarded helpers.
 
+API production-run reads select the run and its explicit draws in one statement,
+so their row version and draw masses share a statement snapshot. The public run
+representation carries reference IDs; clients resolve codes and facility zones
+through lookups. Its strong ETag covers the run version and representation
+revision. Feedstock edits change bin stock and their own version, but do not
+rewrite the run's measured moisture, draws or batch allocations and do not bump
+the run version. A change to the run itself bumps its version.
+
 ## Numeric Column Families
 
 `src/db/schema/numeric-families.ts` (migration `0066`) exports `massKg`, `tonnes`, `ppm`, `fraction`, `percent`, and `emissionFactor` (kg CO₂e per activity unit, migration `0120`), all exact `numeric(p,s)`.

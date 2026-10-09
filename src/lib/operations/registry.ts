@@ -1,7 +1,11 @@
+import { startProductionRun, updateProductionRun, deleteProductionRun } from "./production-runs";
 import { logFeedstockDelivery, updateFeedstock, deleteFeedstock } from "./feedstocks";
 
 /** Explicit write allowlist. Existing read models become the read side later. */
 export const operationRegistry = {
+  start_production_run: startProductionRun,
+  update_production_run: updateProductionRun,
+  delete_production_run: deleteProductionRun,
   log_feedstock_delivery: logFeedstockDelivery,
   update_feedstock: updateFeedstock,
   delete_feedstock: deleteFeedstock,

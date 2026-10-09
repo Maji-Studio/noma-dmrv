@@ -1,3 +1,4 @@
+import { stockEffectsSchema } from "./stock-effects";
 import { z } from "zod";
 import { feedstockRepresentationSchema } from "./feedstocks";
 
@@ -10,15 +11,11 @@ export function listEnvelopeSchema(schema: z.ZodType) {
     nextCursor: z.string().nullable().describe("Opaque cursor for the next page, or null at the end; keep filters unchanged."),
   });
 }
-export const feedstockPreviewSchema = z.object({
-  feedstockId: z.uuid().describe("Provisional feedstock identifier, UUID."),
-  storageLocationId: z.uuid().nullable().describe("Receiving bin identifier, UUID, or null when unspecified."),
-  allocatedWetMassKg: z.number().nullable().describe("Allocated wet mass in kilograms, or null when unavailable."),
-  allocatedDryMassKg: z.number().describe("Allocated dry mass in kilograms."),
-  stockDeltaWetKg: z.number().nullable().describe("Wet stock addition in kilograms; zero for incomplete rows, not the resulting bin balance."),
-});
+export function stockWriteEnvelopeSchema(schema: z.ZodType) {
+  return itemEnvelopeSchema(schema).extend({ stockEffects: stockEffectsSchema.optional() });
+}
 export const feedstockCreateEnvelopeSchema = z.object({
   data: z.array(feedstockRepresentationSchema).describe("Created feedstocks, one per bin allocation; ids and codes are provisional in a dry run."),
   warnings: z.array(z.string()).optional().describe("Non-fatal operator guidance, plain text."),
-  preview: z.array(feedstockPreviewSchema).optional().describe("Stock additions for a dry run only, in kilograms."),
+  stockEffects: stockEffectsSchema.optional(),
 });

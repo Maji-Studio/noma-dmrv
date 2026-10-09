@@ -32,11 +32,12 @@ components (UI)
   serves Server Actions with native types, including `Date` and `undefined`.
   The action shape is `withAction((ctx) => runOperationInProcess(op, ctx, input))`.
   `src/lib/operations/registry.ts` is the explicit allowlist of exposed
-  operations; its keys match operation ids.
+  operations; its keys match operation ids. Feedstock and production-run writes use this layer.
 - The runner owns the transaction. Data-access ...InTransaction(ctx, tx, ...)
   functions and the helpers they call read and write only through `tx`,
   including reference checks and result enrichment. After-commit hooks run
   after a real commit; dry runs roll back and skip them.
+  Before COMMIT, deadlocks, serialization failures and operation lock-timeout aborts retry the whole transaction within the deadline, including dry runs; exhausted attempts return retryable `concurrent_write_retry`.
 - `src/lib/read-models/` holds server-only read cores that take an already
   resolved `OrgContext` and return domain data. They are not Server Actions and
   are not exported from a `"use server"` file; the caller authenticates first.
@@ -587,6 +588,24 @@ output)`, which returns `src/lib/operation-effect.ts:OperationEffect`: outcome
 code (`created`, `updated`, `deleted`), entity type and ids, versions before and
 after, and changed field names. It contains no field values. The runner returns
 this transport-neutral effect alongside data.
+
+Dry-run stock writes also return `stockEffects` beside `data`. The runner supplies
+an optional `OperationScope.snapshotStock` observer, passed to transaction writers.
+Writers declare the affected old and new bins after their normal locks and before
+the first mutation. The runner reads the balances again after execution, inside
+the same transaction, and returns one before/after/delta entry per changed bin.
+Real writes and the UI have no observer and pay no snapshot reads. Feedstock
+wet kilograms use the existing stock derivation; dry kilograms are its
+intake-moisture estimate, nullable when unavailable. Output bins use the guard's
+all-layer dry balance (null for unresolved layers) and leave wet kilograms null. This contract replaces the
+feedstock-create additions-only `preview` and is shared by create, PATCH and
+DELETE in REST and MCP. Future output-stock operations can pass the same observer.
+
+Production-run operation inputs accept offset date-time strings or facility-local
+`{ date, time }` objects. Local times resolve through the transaction's effective
+facility, including a new facility on update. Native Dates are an in-process
+convenience and do not appear as a third published shape. UI actions validate
+the form contract before passing only operation fields to the runner.
 
 The `audit` run option supplies request id, credential id and optional OAuth
 client id for API writes only. Audited operations must implement `describe`.

@@ -4,6 +4,8 @@ on:
   pull_request:
     paths:
       - src/lib/api/**
+      - src/lib/operations/**
+      - src/lib/representations/**
       - src/app/api/**
       - src/proxy.ts
       - src/config/env.ts

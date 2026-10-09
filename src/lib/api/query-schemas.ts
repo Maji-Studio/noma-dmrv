@@ -1,3 +1,4 @@
+import { PRODUCTION_RUN_STATUSES } from "@/lib/production-runs/lifecycle";
 import { z } from "zod";
 import { publishedJsonSchemas } from "@/schemas/published-json-schema";
 import { API_CURSOR_MAX_LENGTH, API_LIST_DEFAULT_LIMIT, API_LIST_MAX_LIMIT, API_QUERY_MAX_LENGTH } from "@/config/api-rest";
@@ -34,8 +35,17 @@ export const feedstockListSchema = facilityLookupListSchema.extend({
   q: prefixSchema.describe("Case-insensitive literal prefix search on feedstock code."),
 });
 
+export const productionRunListSchema = z.strictObject({
+  q: prefixSchema.describe("Case-insensitive literal prefix search on production run code."),
+  ...paginationShape, facilityId: facilityIdSchema, code: codeSchema,
+  reactorId: z.uuid().optional().describe("Reactor filter, UUID."),
+  status: z.enum(PRODUCTION_RUN_STATUSES).optional().describe("Production run status filter."),
+});
+
 /** Shared by REST adapters and the public contract, without handler dependencies. */
 export const resourceQueries = {
+  "production-runs": { list: productionRunListSchema, get: lookupGetSchema },
+  reactors: { list: facilityLookupListSchema, get: lookupGetSchema },
   feedstocks: { list: feedstockListSchema, get: lookupGetSchema },
   facilities: { list: lookupListSchema, get: lookupGetSchema },
   suppliers: { list: lookupListSchema, get: lookupGetSchema },

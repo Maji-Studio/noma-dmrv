@@ -5,6 +5,12 @@
  * request always answers before the platform kills it.
  */
 
+/** Total transaction attempts, including the initial attempt. */
+export const OPERATION_MAX_ATTEMPTS = 3;
+/** Uniform jitter between these bounds before a fresh transaction. */
+export const OPERATION_RETRY_MIN_DELAY_MS = 10;
+export const OPERATION_RETRY_MAX_DELAY_MS = 50;
+
 /** Whole-operation budget: pool acquisition, every statement and the commit. */
 export const OPERATION_DEADLINE_MS = 10_000;
 
