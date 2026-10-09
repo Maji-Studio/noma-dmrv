@@ -14,6 +14,9 @@ import type { EvalFixture } from "./fixture";
 async function main(): Promise<void> {
   const keep = process.argv.includes("--keep");
   if (process.argv.slice(2).some((arg) => arg !== "--keep")) throw new Error("Usage: pnpm eval:mcp [--keep]");
+  // The app config (auth secret included) must match the dev server's, which reads .env.local.
+  // The database URL below comes from .env.test alone and replaces the local one.
+  config({ path: ".env.local", quiet: true });
   const loaded = config({ path: ".env.test", override: true, quiet: true });
   if (loaded.error || !loaded.parsed) throw new Error("Agent evaluation needs the worktree's .env.test.");
   // Resolve from the file alone. An inherited dev DATABASE_URL must never supply a fallback.
