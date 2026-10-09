@@ -246,3 +246,17 @@ it("publishes scopes as an extensible response vocabulary without widening runti
   expect(scopes.scopes.items).not.toHaveProperty("enum");
   expect(scopes.scopes.items).toMatchObject({ type: "string", "x-extensible-enum": expect.arrayContaining(["production-runs:read", "production-runs:write", "production-runs:delete", "reactors:read"]) });
 });
+
+it("keeps production run representations unexpanded so their ETags cover every returned field", () => {
+  const run = document.components.schemas.production_run;
+  expect(run.properties).toMatchObject({ facilityId: { type: "string" }, reactorId: { type: "string" },
+    biocharStorageLocationId: expect.any(Object) });
+  for (const field of ["facilityCode", "timeZone", "reactorCode", "biocharStorageLocationCode"]) {
+    expect(run.properties).not.toHaveProperty(field);
+    expect(run.required).not.toContain(field);
+  }
+  const fields = run.properties as Record<string, JsonSchema>;
+  const draw = fields.feedstockDraws.items as JsonSchema;
+  expect(draw.properties).toHaveProperty("storageLocationId");
+  expect(draw.properties).not.toHaveProperty("storageLocationCode");
+});

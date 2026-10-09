@@ -40,10 +40,10 @@ describe("production run REST outcomes", { timeout: TIMEOUT_MS }, () => {
   it("persists the run, explicit draw and resulting bin stock and returns a stable projection", async () => {
     const saved = await create();
     expect(saved.response.headers.get("location")).toBe(`/api/v1/production-runs/${saved.row.id}`);
-    expect(saved.etag).toBe('"1.1"');
+    expect(saved.etag).toBe('"1.2"');
     expect(saved.body).not.toHaveProperty("stockEffects");
     expect(saved.row).toMatchObject({ status: "running", version: 1, reactorId: a.reactorId,
-      feedstockDraws: [{ storageLocationId: a.binId, wetMassKg: 1200, storageLocationCode: expect.any(String) }] });
+      feedstockDraws: [{ storageLocationId: a.binId, wetMassKg: 1200 }] });
     for (const field of ["organizationId", "feedstocks", "operatorName", "stockPostingSequence"]) expect(saved.row).not.toHaveProperty(field);
     expect(await rows()).toMatchObject([{ id: saved.row.id, feedstockWetMassKg: 1200 }]);
     expect(await db.select().from(productionRunFeedstockDraws).where(eq(productionRunFeedstockDraws.organizationId, a.ctx.organizationId)))
@@ -59,7 +59,7 @@ describe("production run REST outcomes", { timeout: TIMEOUT_MS }, () => {
   it("resolves local date/time in a non-UTC facility and refuses offset-less instants", async () => {
     await db.update(facilities).set({ timezone: "Africa/Nairobi" }).where(and(eq(facilities.id, a.facilityId), eq(facilities.organizationId, a.ctx.organizationId)));
     const saved = await create({ ...productionRunInput(a), startTime: { date: "2026-10-06", time: "13:00" } });
-    expect(saved.row).toMatchObject({ startTime: "2026-10-06T10:00:00.000Z", timeZone: "Africa/Nairobi" });
+    expect(saved.row).toMatchObject({ startTime: "2026-10-06T10:00:00.000Z" });
     expect((await rows())[0].startTime.toISOString()).toBe("2026-10-06T10:00:00.000Z");
     const refused = await problem(await POST(request("POST", "", { ...productionRunInput(a), startTime: "2026-10-06T13:00:00" }, { "idempotency-key": randomUUID() })), 422, "validation_failed");
     expect(refused.errors).toContainEqual(expect.objectContaining({ pointer: "/startTime" }));
@@ -87,8 +87,8 @@ describe("production run REST outcomes", { timeout: TIMEOUT_MS }, () => {
     const response = await patch(saved.row.id, { status: "complete", endTime: "2026-10-06T11:00:00Z",
       biocharOutputKg: 200, biocharMoisturePercent: 2, biocharStorageLocationId: a.outputBinId }, saved.etag);
     expect(response.status).toBe(200);
-    expect(response.headers.get("etag")).toBe('"2.1"');
-    expect((await response.json()).data).toMatchObject({ status: "complete", biocharOutputKg: 200, biocharStorageLocationId: a.outputBinId, biocharStorageLocationCode: "OUT-1", feedstockDraws: saved.row.feedstockDraws });
+    expect(response.headers.get("etag")).toBe('"2.2"');
+    expect((await response.json()).data).toMatchObject({ status: "complete", biocharOutputKg: 200, biocharStorageLocationId: a.outputBinId, feedstockDraws: saved.row.feedstockDraws });
     expect(await rows()).toMatchObject([{ status: "complete", biocharOutputKg: 200, version: 2 }]);
     expect(await binWetStock(a)).toBe(3000);
   });
@@ -178,8 +178,8 @@ describe("production run REST outcomes", { timeout: TIMEOUT_MS }, () => {
     for (const id of [foreign.row.id, randomUUID()]) {
       const missing = await problem(await GET(request("GET", `/${id}`), params(id)), 404, "not_found");
       expect(missing.errors).toContainEqual(expect.objectContaining({ pointer: "/productionRunId" }));
-      await problem(await patch(id, {}, '"1.1"'), 404, "not_found");
-      await problem(await DELETE(request("DELETE", `/${id}`, undefined, { "if-match": '"1.1"' }), params(id)), 404, "not_found");
+      await problem(await patch(id, {}, '"1.2"'), 404, "not_found");
+      await problem(await DELETE(request("DELETE", `/${id}`, undefined, { "if-match": '"1.2"' }), params(id)), 404, "not_found");
       expect(JSON.stringify(missing)).not.toContain(foreign.row.code);
     }
     for (const [field, id, pointer] of [["reactorId", b.reactorId, "/reactorId"], ["reactorId", randomUUID(), "/reactorId"], ["storageLocationId", b.binId, "/feedstockDraws/0/storageLocationId"], ["storageLocationId", randomUUID(), "/feedstockDraws/0/storageLocationId"]]) {

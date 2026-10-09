@@ -81,12 +81,17 @@ Re-run the migrate line after pulling new migrations. A worktree made with
 
 ## Agent evaluation
 
-`pnpm eval:mcp` runs two feedstock intake requests through headless Claude Code
-and the local MCP server. It needs Docker with the test database schema ready,
+`pnpm eval:mcp` runs two feedstock intake requests and two chained production-run
+requests through headless Claude Code and the local MCP server. It needs Docker with the test database schema ready,
 the worktree's `.env.test`, and a logged-in Claude Code subscription. It refuses
 non-test databases, creates a fresh organization and API key per case, and scores
 the stored rows, bin stock, audit transport and tool-call count. Case 2 follows
 the published schema: ask for moisture when required, otherwise log without it.
+The chained case without draw mass requires a mass request in the final answer and
+either no run or a running run without draws. Any saved draw fails. The complete
+chain requires R1 running today in the facility zone, a 1500 kg wet draw from B2
+and the resulting stock. Required run references and start time come from the
+published contract and grounding tools.
 
 This is a local check before merge, not a CI gate. Paste its Markdown table into
 the PR. Transcripts, the dev server log, Markdown and JSON scores are saved in

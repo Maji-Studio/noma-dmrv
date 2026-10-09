@@ -15,7 +15,7 @@ export const domainGuide = `## Feedstock intake
 ## Production runs
 
 - ${PRODUCTION_RUN_GUIDANCE}
-- Resolve the reactor and bins in the run facility before writing. PATCH status to complete, failed or cancelled; there are no command endpoints.
+- Resolve the reactor and bins in the run facility before writing.
 `;
 
 export const llmsGuide = `# noma data-entry API v1

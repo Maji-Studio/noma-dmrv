@@ -37,7 +37,7 @@ export const productionRunWriteTools: WriteTool[] = [
     },
     summarize(body, dryRun) {
       const row = body.data as ProductionRunRepresentation;
-      return dryRun ? `Dry run: would start production run ${row.code} (provisional code).` : `Started production run ${row.code}.`;
+      return dryRun ? `Dry run: would start production run ${row.code} (provisional code).` : `Started production run ${row.code} (${row.status}).`;
     },
   },
   {
@@ -47,7 +47,7 @@ export const productionRunWriteTools: WriteTool[] = [
     execute: (context, raw) => mutate(context, raw, "update"),
     summarize(body, dryRun) {
       const row = body.data as ProductionRunRepresentation;
-      return dryRun ? `Dry run: would update production run ${row.code} to version ${row.version}.` : `Updated production run ${row.code} to version ${row.version}.`;
+      return dryRun ? `Dry run: would update production run ${row.code} to version ${row.version}.` : `Updated production run ${row.code} (${row.status}) to version ${row.version}.`;
     },
   },
   {

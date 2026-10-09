@@ -4,18 +4,20 @@ import { productionRunRepresentationSchema, representProductionRun, type Product
 const id = "df2795a4-886b-4a89-bbdd-532c6b1b8e45";
 const now = new Date("2026-10-06T12:00:00Z");
 const row: ProductionRunRepresentationInput = {
-  id, code: "PR-26-0001", version: 1, facilityId: id, facilityCode: "FAC-1", timeZone: "Africa/Nairobi",
-  reactorId: id, reactorCode: "R-1", status: "running", cancellationReason: null, startTime: now, endTime: null,
-  operatorId: null, feedstockDraws: [{ storageLocationId: id, storageLocationCode: "B2", wetMassKg: 1200 }],
+  id, code: "PR-26-0001", version: 1, facilityId: id,
+  reactorId: id, status: "running", cancellationReason: null, startTime: now, endTime: null,
+  operatorId: null, feedstockDraws: [{ storageLocationId: id, wetMassKg: 1200 }],
   feedstockMoisturePercent: 30, feedingRateKgHr: 600, residenceTimeMinutes: 20, dieselOperationLiters: 0,
   dieselGensetLiters: null, preprocessingFuelLiters: null, electricityKwh: 12, biocharOutputKg: null,
-  biocharMoisturePercent: null, biocharStorageLocationId: null, biocharStorageLocationCode: null, createdAt: now, updatedAt: now,
+  biocharMoisturePercent: null, biocharStorageLocationId: null, createdAt: now, updatedAt: now,
 };
 it("projects explicit fields and strips internal allocations, row fields and operator names", () => {
-  const data = representProductionRun({ ...row, organizationId: "foreign", feedstocks: [{ id }], operatorName: "private" } as ProductionRunRepresentationInput);
-  expect(data).toMatchObject({ startTime: now.toISOString(), endTime: null, timeZone: "Africa/Nairobi", feedstockDraws: row.feedstockDraws, dieselOperationLiters: 0 });
+  const joinedRow = { ...row, organizationId: "foreign", feedstocks: [{ id }], operatorName: "private", facilityCode: "FAC-1", timeZone: "Africa/Nairobi", reactorCode: "R1", biocharStorageLocationCode: "OUT-1", feedstockDraws: [{ ...row.feedstockDraws[0], storageLocationCode: "B2" }] };
+  const data = representProductionRun(joinedRow);
+  expect(data).toMatchObject({ startTime: now.toISOString(), endTime: null, feedstockDraws: row.feedstockDraws, dieselOperationLiters: 0 });
   expect(Object.keys(data).sort()).toEqual(Object.keys(productionRunRepresentationSchema.shape).sort());
-  for (const field of ["organizationId", "feedstocks", "operatorName", "feedstockWetMassKg", "stockPostingSequence"]) expect(data).not.toHaveProperty(field);
+  for (const field of ["organizationId", "feedstocks", "operatorName", "feedstockWetMassKg", "stockPostingSequence", "facilityCode", "timeZone", "reactorCode", "biocharStorageLocationCode"]) expect(data).not.toHaveProperty(field);
+  expect(data.feedstockDraws[0]).not.toHaveProperty("storageLocationCode");
   expect(representProductionRun(JSON.parse(JSON.stringify(data)))).toEqual(data);
 });
 it("normalizes closed run times to UTC and preserves nulls and zero", () => {

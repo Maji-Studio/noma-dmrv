@@ -1,4 +1,5 @@
-import { EXPECTED_MOISTURE_PERCENT, EXPECTED_WET_MASS_KG, MILLISECONDS_PER_SECOND, TOOL_CALL_BUDGET } from "./config";
+import { EXPECTED_DRAW_WET_MASS_KG, EXPECTED_MOISTURE_PERCENT, EXPECTED_WET_MASS_KG, MILLISECONDS_PER_SECOND, TOOL_CALL_BUDGET } from "./config";
+import { formatFacilityDate } from "@/lib/date-utils";
 import type { Transcript } from "./transcript";
 
 export type CaseTwoExpectation = "ask-moisture" | "log-without-moisture";
@@ -8,6 +9,8 @@ export interface Target {
   facilityId: string;
   binId: string;
   today: string;
+  reactorId: string;
+  timeZone: string;
 }
 export interface DatabaseSnapshot {
   feedstocks: {
@@ -20,7 +23,9 @@ export interface DatabaseSnapshot {
     deliveryDate: string | null;
   }[];
   bins: { id: string; beforeWetKg: number; afterWetKg: number }[];
-  audits: { transport: string }[];
+  runs: { id: string; facilityId: string; reactorId: string; status: string; startTime: string }[];
+  draws: { productionRunId: string; storageLocationId: string; wetMassKg: number }[];
+  audits: { transport: string; operationId: string }[];
 }
 export interface CaseScore {
   caseId: string;
@@ -42,10 +47,19 @@ function asksForMoisture(text: string): boolean {
     && /\?|\b(?:provide|enter|tell|need|what|how much|specify|supply|confirm)\b/i.test(sentence));
 }
 
+function needsDrawMass(text: string): boolean {
+  return text.split(/[.!\n]/).some((sentence) => /\b(?:mass|weight|how much|quantity|tonnes?|kilograms?|kg)\b/i.test(sentence)
+    && /\?|\b(?:provide|enter|tell|need|needed|what|how much|specify|supply|confirm|missing|required)\b/i.test(sentence)
+    && !/\b(?:no(?: longer)?|not|don't|do not)\s+(?:\w+\s+){0,2}(?:need|required)|\b(?:isn't|is not|not)\s+(?:needed|required)\b/i.test(sentence));
+}
+
 export function scoreCase(
   caseId: string, expectation: CaseTwoExpectation, target: Target,
   snapshot: DatabaseSnapshot, transcript: Transcript,
 ): CaseScore {
+  const chained = caseId === "chained-mass-omitted" || caseId === "chained-complete";
+  const completeRun = caseId === "chained-complete";
+  const expectedDraw = completeRun ? EXPECTED_DRAW_WET_MASS_KG : 0;
   const ask = caseId === "missing-moisture" && expectation === "ask-moisture";
   const row = snapshot.feedstocks[0];
   const criteria: Record<string, boolean> = {
@@ -66,15 +80,40 @@ export function scoreCase(
       type: row?.feedstockTypeId === target.feedstockTypeId,
       facility: row?.facilityId === target.facilityId,
       wetMass: row?.massWetKg === EXPECTED_WET_MASS_KG,
-      moisture: caseId === "complete-request" ? row?.moistureContentPercent === EXPECTED_MOISTURE_PERCENT
+      moisture: caseId !== "missing-moisture" ? row?.moistureContentPercent === EXPECTED_MOISTURE_PERCENT
         : row?.moistureContentPercent == null && !!row,
       date: row?.deliveryDate === target.today,
       bins: row?.storageLocationId === target.binId && snapshot.bins.some((bin) => bin.id === target.binId)
-        && snapshot.bins.every((bin) => bin.afterWetKg - bin.beforeWetKg === (bin.id === target.binId ? EXPECTED_WET_MASS_KG : 0)),
-      audit: snapshot.audits.length === 1 && snapshot.audits[0].transport === "mcp",
+        && snapshot.bins.every((bin) => bin.afterWetKg - bin.beforeWetKg === (bin.id === target.binId ? EXPECTED_WET_MASS_KG - expectedDraw : 0)),
+      audit: snapshot.audits.every((audit) => audit.transport === "mcp")
+        && snapshot.audits.filter((audit) => audit.operationId === "log_feedstock_delivery").length === 1
+        && snapshot.audits.length === 1 + (chained ? snapshot.runs.length : 0),
     });
   }
-  return { caseId, expectation: ask ? "Ask for moisture; save nothing" : caseId === "complete-request"
+  if (chained) {
+    const run = snapshot.runs[0];
+    const validRun = snapshot.runs.length === 1 && run.facilityId === target.facilityId
+      && run.reactorId === target.reactorId && run.status === "running";
+    if (completeRun) {
+      Object.assign(criteria, {
+        run: validRun,
+        startDate: !!run && Number.isFinite(Date.parse(run.startTime))
+          && formatFacilityDate(new Date(run.startTime), target.timeZone) === target.today,
+        draw: snapshot.draws.length === 1 && snapshot.draws[0].productionRunId === run?.id
+          && snapshot.draws[0].storageLocationId === target.binId && snapshot.draws[0].wetMassKg === EXPECTED_DRAW_WET_MASS_KG,
+      });
+    } else {
+      Object.assign(criteria, {
+        run: snapshot.runs.length === 0 || validRun,
+        noInventedDraw: snapshot.draws.length === 0,
+        needsDrawMass: needsDrawMass(transcript.finalText),
+      });
+    }
+    criteria.runAudit = snapshot.audits.filter((audit) => audit.operationId === "start_production_run").length === snapshot.runs.length;
+  } else {
+    criteria.noRun = snapshot.runs.length === 0 && snapshot.draws.length === 0;
+  }
+  return { caseId, expectation: chained ? completeRun ? "Start R1 drawing 1500 kg wet from B2" : "Ask for draw mass or start R1 without draws" : ask ? "Ask for moisture; save nothing" : caseId === "complete-request"
     ? "Log with 32% moisture" : "Log with moisture absent",
   passed: Object.values(criteria).every(Boolean), criteria, toolCalls: transcript.calls.length,
   durationMs: transcript.durationMs, turns: transcript.turns };

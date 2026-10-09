@@ -16,6 +16,10 @@ import { createFeedstockSchema, type CreateFeedstockData } from "@/schemas/feeds
 import { feedstockRepresentationSchema, type FeedstockRepresentation } from "@/lib/representations/feedstocks";
 import { addFixtureReactor, createIntakeFixture, removeIntakeFixture, type IntakeFixture } from "./operation-fixture";
 
+export const PRODUCTION_RUN_FIXTURE_DRAW_WET_KG = 1200;
+const PRODUCTION_RUN_FIXTURE_MOISTURE_PERCENT = 32.5;
+const PRODUCTION_RUN_FIXTURE_START_TIME = "2026-10-06T10:00:00Z";
+
 const API_URL = "http://localhost:3100/api/v1/feedstocks";
 const INTAKE_SCOPES: readonly ApiScope[] = ["feedstocks:read", "feedstocks:write", "feedstocks:delete"];
 
@@ -195,8 +199,8 @@ export async function createApiProductionRunFixture(label: string): Promise<ApiP
 export function productionRunInput(fixture: ApiProductionRunFixture, withDraw = true) {
   return {
     facilityId: fixture.facilityId, reactorId: fixture.reactorId, status: "running" as const,
-    startTime: "2026-10-06T10:00:00Z", feedstockMoisturePercent: 32.5,
-    ...(withDraw ? { feedstockDraws: [{ storageLocationId: fixture.binId, wetMassKg: 1200 }] } : {}),
+    startTime: PRODUCTION_RUN_FIXTURE_START_TIME, feedstockMoisturePercent: PRODUCTION_RUN_FIXTURE_MOISTURE_PERCENT,
+    ...(withDraw ? { feedstockDraws: [{ storageLocationId: fixture.binId, wetMassKg: PRODUCTION_RUN_FIXTURE_DRAW_WET_KG }] } : {}),
   };
 }
 export function productionRunRequest(fixture: ApiFeedstockFixture, method: string, path = "", body?: unknown, headers: Record<string, string> = {}) {

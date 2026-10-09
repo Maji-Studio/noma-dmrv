@@ -15,7 +15,7 @@ export function checkProductionRunDraws(body: unknown) {
   }
 }
 
-/** Enrich inside the runner transaction so saved and replayed outcomes have the same facility clock. */
+/** Read the public projection inside the write transaction for saved and replayed outcomes. */
 export const representationCheckedStart: Operation<typeof startProductionRun.input, ProductionRunRepresentation> = {
   ...startProductionRun,
   describe: (input, output) => ({ outcome: "created", entityType: "productionRun", entityIds: [output.id], versionBefore: null, versionAfter: output.version, changedFields: Object.keys(input).filter((key) => input[key as keyof typeof input] !== undefined).sort() }),

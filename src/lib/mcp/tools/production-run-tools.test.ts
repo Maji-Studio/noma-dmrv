@@ -30,11 +30,11 @@ const ID = "df2795a4-886b-4a89-bbdd-532c6b1b8e45";
 const CLOCK = "2026-10-06T10:00:00.000Z";
 const DEADLINE_MS = 10_000;
 const row = productionRunRepresentationSchema.parse({
-  id: ID, code: "PR-26-0001", version: 1, facilityId: ID, facilityCode: "FAC-1", reactorId: ID, reactorCode: "R-1",
-  timeZone: "Africa/Nairobi", status: "running", startTime: CLOCK, feedstockDraws: [], createdAt: CLOCK, updatedAt: CLOCK,
+  id: ID, code: "PR-26-0001", version: 1, facilityId: ID, reactorId: ID,
+  status: "running", startTime: CLOCK, feedstockDraws: [], createdAt: CLOCK, updatedAt: CLOCK,
   ...Object.fromEntries(["cancellationReason", "endTime", "operatorId", "feedstockMoisturePercent", "feedingRateKgHr", "residenceTimeMinutes",
     "dieselOperationLiters", "dieselGensetLiters", "preprocessingFuelLiters", "electricityKwh", "biocharOutputKg", "biocharMoisturePercent",
-    "biocharStorageLocationId", "biocharStorageLocationCode"].map((key) => [key, null])),
+    "biocharStorageLocationId"].map((key) => [key, null])),
 });
 const context = {
   ctx: { userId: "user", credentialId: "credential", organizationId: "org", orgRole: "admin", scopes: ["production-runs:write", "production-runs:read", "production-runs:delete", "reactors:read"] },
@@ -58,7 +58,7 @@ it.each(productionRunWriteTools)("runs $name with shared input, scopes, replay o
   expect(operation.input).toBe(tool.name === "start_production_run" ? createProductionRunInput : tool.name === "update_production_run" ? updateProductionRunInput : deleteProductionRunSchema);
   expect(input).toEqual(args(tool.name));
   expect(options.audit).toEqual({ transport: "mcp", credentialId: "credential", requestId: "request" });
-  expect(options.idempotency).toEqual({ credentialId: "credential", key: "one-write", ...(tool.name === "start_production_run" ? {} : { target: ID, precondition: '"1.1"' }) });
+  expect(options.idempotency).toEqual({ credentialId: "credential", key: "one-write", ...(tool.name === "start_production_run" ? {} : { target: ID, precondition: '"1.2"' }) });
   expect(tool.output.safeParse(result.body).success).toBe(true);
   expect(tool.summarize(result.body, false)).toContain(row.code);
   expect(tool.description).toContain(PRODUCTION_RUN_GUIDANCE);
