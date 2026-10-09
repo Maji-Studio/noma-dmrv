@@ -11,3 +11,9 @@ it("preserves untracked wet mass and unknown dry estimates as null", () => {
   expect(diffStockBalances([before], [{ ...before, balance: { wetKg: null, dryKg: 30 } }])[0].delta).toEqual({ wetKg: null, dryKg: 10 });
   expect(diffStockBalances([bin], [{ ...bin, balance: { wetKg: 50, dryKg: null } }])[0].delta).toEqual({ wetKg: -50, dryKg: null });
 });
+
+it("preserves unknown observations even when both reads failed", () => {
+  const unknown = { ...bin, balance: { wetKg: null, dryKg: null } };
+  expect(diffStockBalances([unknown], [unknown])).toMatchObject([{ before: unknown.balance, after: unknown.balance, delta: unknown.balance }]);
+  expect(diffStockBalances([bin], [])).toMatchObject([{ after: unknown.balance, delta: unknown.balance }]);
+});

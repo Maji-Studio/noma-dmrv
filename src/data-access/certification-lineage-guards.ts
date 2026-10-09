@@ -28,7 +28,7 @@ import {
   type CertificationArtifactLock,
 } from "@/lib/certification/submission-lock";
 import { SafeError } from "@/lib/errors";
-import { and, eq, inArray, or, type SQL } from "drizzle-orm";
+import { and, eq, inArray, or, sql, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { requireOrgScope } from "./utils";
 
@@ -80,7 +80,7 @@ function targetCondition(target: CertifiedLineageTarget): SQL {
 function lineageQuery(
   ctx: OrgContext,
   tx: DbTransaction,
-  target: CertifiedLineageTarget,
+  targets: readonly CertifiedLineageTarget[],
 ) {
   requireOrgScope(ctx);
   return tx
@@ -168,7 +168,7 @@ function lineageQuery(
         eq(ghgStatementSubmission.organizationId, ctx.organizationId),
       ),
     )
-    .where(and(eq(creditBatches.organizationId, ctx.organizationId), targetCondition(target)));
+    .where(and(eq(creditBatches.organizationId, ctx.organizationId), or(...targets.map(targetCondition))));
 }
 
 /** Advisory UI read; mutations must use getLockedCertifiedLineage instead. */
@@ -178,7 +178,7 @@ export async function getCertifiedLineage(
   target: CertifiedLineageTarget,
 ) {
   requireOrgScope(ctx);
-  return lineageQuery(ctx, tx, target);
+  return lineageQuery(ctx, tx, [target]);
 }
 
 export type LockedCertifiedLineageRow = Awaited<
@@ -215,12 +215,41 @@ export async function getLockedCertifiedLineage(
   target: CertifiedLineageTarget,
 ): Promise<LockedCertifiedLineageRow[]> {
   requireOrgScope(ctx);
-  const lineage = await lineageQuery(ctx, tx, target);
-  const lockedArtifacts = lineageArtifactLocks(lineage);
-  await acquireCertificationArtifactLocksSorted(tx, lockedArtifacts);
+  return getLockedCertifiedLineages(ctx, tx, [target]);
+}
 
-  const resolvedLineage = await lineageQuery(ctx, tx, target);
-  const lockedKeys = new Set(lockedArtifacts.map(certificationArtifactLockKey));
+/** Lock lineage in sorted order; prospective membership may skip busy artifacts. */
+export async function getLockedCertifiedLineages(
+  ctx: OrgContext,
+  tx: DbTransaction,
+  targets: readonly CertifiedLineageTarget[],
+  bestEffort = false,
+): Promise<LockedCertifiedLineageRow[]> {
+  requireOrgScope(ctx);
+  if (targets.length === 0) return [];
+  const lineage = await lineageQuery(ctx, tx, targets);
+  const lockedArtifacts = lineageArtifactLocks(lineage);
+  const acquiredKeys = new Set<string>();
+  if (bestEffort) {
+    // Prospective membership must never wait on another writer's artifacts.
+    for (const key of [...new Set(lockedArtifacts.map(certificationArtifactLockKey))].sort()) {
+      const result = await tx.execute<{ acquired: boolean }>(
+        sql`SELECT pg_try_advisory_xact_lock(hashtext(${key})) AS acquired`,
+      );
+      if (result.rows[0]?.acquired) acquiredKeys.add(key);
+    }
+  } else {
+    await acquireCertificationArtifactLocksSorted(tx, lockedArtifacts);
+    for (const artifact of lockedArtifacts) acquiredKeys.add(certificationArtifactLockKey(artifact));
+  }
+
+  const resolvedLineage = await lineageQuery(ctx, tx, targets);
+  const lockedKeys = acquiredKeys;
+  if (bestEffort) {
+    return resolvedLineage.filter((row) => lineageArtifactLocks([row]).every(
+      (artifact) => lockedKeys.has(certificationArtifactLockKey(artifact)),
+    ));
+  }
   const introducedUnlockedArtifact = lineageArtifactLocks(resolvedLineage).some(
     (artifact) => !lockedKeys.has(certificationArtifactLockKey(artifact)),
   );

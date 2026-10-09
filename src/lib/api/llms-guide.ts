@@ -8,8 +8,8 @@ export const domainGuide = `## Feedstock intake
 - Operators weigh wet mass as received. Dry mass is derived from wet mass and moisture, not weighed for bin stock. ${FEEDSTOCK_UNITS}
 - A feedstock record is material received into one feedstock bin, with its feedstock type, supplier, wet mass, moisture and delivery date. One delivery logged into several bins creates one record per receiving bin.
 - Business dates are the facility's local YYYY-MM-DD. Use its today and IANA timeZone from whoami or /me, never the device or model clock.
-- Read before writing: resolve ids through lookups and read the current version before an update or delete.
-- Never invent a required value the operator did not give, such as moisture. Ask the operator for it.
+- Resolve ids through lookups. Read the current version before updating or deleting.
+- Ask for missing required values such as moisture. Never invent them.
 - ${UNTRUSTED_TEXT}
 
 ## Production runs
@@ -27,7 +27,7 @@ ${domainGuide}
 ## REST requests
 
 - Authenticate private routes with Authorization: Bearer <key> only. Keys start with ${API_KEY_LIVE_PREFIX} or ${API_KEY_TEST_PREFIX}. Cookies and x-api-key do not authenticate.
-- GET /me returns the credential organization, active facilities, role, scopes and expiry. Reads require the resource :read scope. Creates and updates require the resource :write scope; deletes require its :delete scope. /me needs no scope. Domain guards still apply.
+- GET /me returns the credential organization, active facilities, role, scopes and expiry. Reads require the resource :read scope. Feedstock creates and updates require feedstocks:write; deletes require feedstocks:delete. Production run creates and updates require production-runs:write; deletes require production-runs:delete. /me needs no scope. Domain guards still apply.
 - Resolve reference UUIDs through read-only facilities, suppliers, feedstock-types, storage-locations, vehicles, drivers and reactors. Supplier locations require the parent UUID. GET detail accepts UUID or exact code; PATCH and DELETE require UUID.
 - Send JSON for POST and PATCH. DELETE may omit the body; a supplied body must be an empty JSON object. Field names state units: masses are kilograms, distances kilometres, moisture is percent 0 to 100. POST /feedstocks returns an array, one item per receiving bin allocation. PATCH omission preserves a value; null clears clearable fields; zero stays zero. Unknown fields are rejected.
 - Use one Idempotency-Key per intended write and reuse it on retries. Required for committed POST creates, recommended for PATCH and DELETE. Keys use 1 to ${API_IDEMPOTENCY_KEY_MAX_LENGTH} visible ASCII characters, are credential-scoped and retained for ${IDEMPOTENCY_RETENTION_DAYS} days. Idempotent-Replayed: true marks a replay.

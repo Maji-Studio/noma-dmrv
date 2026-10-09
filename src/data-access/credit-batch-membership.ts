@@ -571,6 +571,7 @@ export async function attachProductionRunToMatchingCreditBatch(
   ctx: OrgContext,
   tx: DbTransaction,
   productionRunId: string,
+  prelockedArtifacts?: ReadonlySet<string>,
 ): Promise<string | null> {
   const [run] = await tx
     .select({
@@ -672,15 +673,15 @@ export async function attachProductionRunToMatchingCreditBatch(
   }
 
   const [batch] = matchingBatches;
-  const lockedRemovals = await lockCreditBatchArtifacts(ctx, tx, batch.id);
-  const [lockedBatch] = await tx.select({ id: creditBatches.id })
-    .from(creditBatches)
-    .where(and(eq(creditBatches.id, batch.id), eq(creditBatches.organizationId, ctx.organizationId),
-      eq(creditBatches.facilityId, run.facilityId), eq(creditBatches.feedstockTypeId, feedstockTypeId),
-      lte(creditBatches.startDate, run.date), gte(creditBatches.endDate, run.date), isNull(creditBatches.archivedAt)))
-    .for("update");
-  if (!lockedBatch) return null;
   try {
+    const lockedRemovals = await lockCreditBatchArtifacts(ctx, tx, batch.id, prelockedArtifacts);
+    const [lockedBatch] = await tx.select({ id: creditBatches.id })
+      .from(creditBatches)
+      .where(and(eq(creditBatches.id, batch.id), eq(creditBatches.organizationId, ctx.organizationId),
+        eq(creditBatches.facilityId, run.facilityId), eq(creditBatches.feedstockTypeId, feedstockTypeId),
+        lte(creditBatches.startDate, run.date), gte(creditBatches.endDate, run.date), isNull(creditBatches.archivedAt)))
+      .for("update", { skipLocked: true });
+    if (!lockedBatch) return null;
     if (
       await isCreditBatchMembershipLockedBySubmission(
         ctx,

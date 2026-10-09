@@ -130,6 +130,21 @@ describe('output stock dependency races', () => {
     }
   }, TEST_TIMEOUT_MS);
 
+  it.each([
+    { biocharOutputKg: 1100 },
+    { biocharStorageLocationId: null },
+    { feedingRateKgHr: 100 },
+  ])('preserves legacy terminal prerequisites for an unrelated edit: %j', async (patch) => {
+    const f = await parents();
+    const updated = await updateProductionRun(f.ctx, f.runs[0].id, {
+      expectedVersion: await productionVersion(f.ctx, "productionRuns", f.runs[0].id), ...patch,
+    });
+    expect(updated).toMatchObject({ ...patch, status: 'complete', feedstockWetMassKg: null, feedstockMoisturePercent: null });
+    await expect(updateProductionRun(f.ctx, f.runs[0].id, {
+      expectedVersion: await productionVersion(f.ctx, "productionRuns", f.runs[0].id), status: 'complete',
+    })).rejects.toThrow('Add at least one feedstock source.');
+  });
+
   it('blocks ordinary source changes after a count with no allocation rows', async () => {
     const f = await parents();
     const input = { storageLocationId: f.source.id, facilityId: f.facility.id, occurredAt: '2026-09-14T12:00:00.000Z',

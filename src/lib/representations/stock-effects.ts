@@ -21,9 +21,9 @@ export type StockEffects = z.infer<typeof stockEffectsSchema>;
 
 export function diffStockBalances(before: StockBalance[], after: StockBalance[]): StockEffects {
   return before.flatMap(({ balance, ...bin }) => {
-    const next = after.find((row) => row.storageLocationId === bin.storageLocationId)?.balance;
-    if (!next) throw new Error("A snapshotted stock bin disappeared during the operation.");
-    if (next.wetKg === balance.wetKg && next.dryKg === balance.dryKg) return [];
+    const next = after.find((row) => row.storageLocationId === bin.storageLocationId)?.balance
+      ?? { wetKg: null, dryKg: null };
+    if (next.dryKg !== null && next.wetKg === balance.wetKg && next.dryKg === balance.dryKg) return [];
     return [{ ...bin, before: balance, after: next, delta: {
       wetKg: next.wetKg === null || balance.wetKg === null ? null : next.wetKg - balance.wetKg,
       dryKg: next.dryKg === null || balance.dryKg === null ? null : next.dryKg - balance.dryKg,

@@ -59,11 +59,6 @@ export async function deleteProductionRunInTransaction(
   // if the final productionRuns delete fails. Foreign-key constraints remain
   // the race-safe backstop for dependent records; without the transaction the
   // removable children would already be gone, leaving a half-deleted run.
-  await lockBinStocks(ctx, tx, [
-    ...existingFeedstockStorageLocationIds,
-    existing.biocharStorageLocationId,
-  ]);
-
   const [locked] = await tx
     .select({
       id: productionRuns.id,
@@ -82,6 +77,19 @@ export async function deleteProductionRunInTransaction(
     throw runReferenceNotFound("Production run not found");
   }
   assertRowVersion({ entity: PRODUCTION_RUN_CONFLICT_ENTITY, id: productionRunId, expectedVersion, actualVersion: locked.version });
+  // Existing entity row -> sorted certification lineage -> sorted bin locks.
+  await assertCanMutateCertifiedLineage(
+    ctx,
+    tx,
+    { entityType: "productionRun", entityId: productionRunId },
+    "delete",
+  );
+
+  await lockBinStocks(ctx, tx, [
+    ...existingFeedstockStorageLocationIds,
+    existing.biocharStorageLocationId,
+  ]);
+
   const lockedFeedstockStorageLocationIds =
     await getProductionRunFeedstockDrawStorageIds(ctx, tx, productionRunId);
   assertProductionRunStockSnapshot(
@@ -102,13 +110,6 @@ export async function deleteProductionRunInTransaction(
   );
 
   await snapshotStock?.(tx, [...lockedFeedstockStorageLocationIds, locked.biocharStorageLocationId]);
-
-  await assertCanMutateCertifiedLineage(
-    ctx,
-    tx,
-    { entityType: "productionRun", entityId: productionRunId },
-    "delete",
-  );
 
   const dependentProduct = await getProductionRunDependentProduct(
     ctx,

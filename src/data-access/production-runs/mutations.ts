@@ -62,6 +62,7 @@ import {
   isReactorStartUniqueViolation,
 } from "./overlap";
 import { assertProductionRunOutputBasisChange, getProductionRunDependentProduct } from "./product-dependencies";
+import { lockProductionRunLineage } from "./lineage-locks";
 import { getProductionRunById } from "./queries";
 import type { ProductionRunWithRelations } from "./types";
 
@@ -72,6 +73,7 @@ const END_AFTER_START_MESSAGE = "End time must be after the start time";
 const PREFLIGHT_OUTCOME_VIOLATIONS = [
   "end-not-after-start",
   "dry-mass-balance-exceeded",
+  "feedstock-required",
 ] as const;
 
 /**
@@ -210,6 +212,9 @@ export async function createProductionRunInTransaction(
   try {
     await lockActiveFacilityReference(ctx, tx, data.facilityId);
 
+    // No existing run row on create. Lock prospective lineage before sorted bins.
+    const lineageLocks = await lockProductionRunLineage(ctx, tx, { facilityId: data.facilityId, status });
+
     await lockBinStocks(ctx, tx, [
       ...feedstockDraws.map((draw) => draw.storageLocationId),
       data.feedstockStorageLocationId,
@@ -297,7 +302,7 @@ export async function createProductionRunInTransaction(
       cancellationReason: data.cancellationReason ?? null,
     });
 
-    await attachProductionRunToMatchingCreditBatch(ctx, tx, created.id);
+    await attachProductionRunToMatchingCreditBatch(ctx, tx, created.id, lineageLocks);
 
     run = created;
   } catch (error) {
@@ -416,6 +421,11 @@ export async function updateProductionRunInTransaction(
       ? undefined
       : normalizeProductionRunFeedstockDraws(inputFeedstockDraws);
 
+  // Existing terminal records may predate required draws/moisture. Unrelated
+  // edits preserve those inputs; explicit prerequisite edits must validate them.
+  const preservesFeedstockPrerequisites = data.status === undefined &&
+    normalizedFeedstockDraws === undefined && data.feedstockMoisturePercent === undefined;
+
   // Moving the run to another facility requires that facility to be active
   // (no children move under an archived parent — mirrors createProductionRun).
   if (data.facilityId && data.facilityId !== existing.facilityId) {
@@ -518,7 +528,7 @@ export async function updateProductionRunInTransaction(
         drawCount: effectiveFeedstockDrawCount,
       },
     },
-    { only: PREFLIGHT_OUTCOME_VIOLATIONS },
+    { only: PREFLIGHT_OUTCOME_VIOLATIONS, skipFeedstockRequired: preservesFeedstockPrerequisites },
   );
   if (normalizedFeedstockDraws !== undefined || data.feedstockMoisturePercent !== undefined) {
     updateData.feedstockMassDryKg =
@@ -554,16 +564,6 @@ export async function updateProductionRunInTransaction(
       await lockActiveFacilityReference(ctx, tx, data.facilityId);
     }
 
-    await lockProductionRunUpdateStock(
-      ctx,
-      tx,
-      {
-        feedstockStorageLocationIds: existingFeedstockStorageLocationIds,
-        biocharStorageLocationId: existing.biocharStorageLocationId,
-      },
-      { ...data, feedstockDraws: normalizedFeedstockDraws },
-    );
-
     const [locked] = await tx
       .select()
       .from(productionRuns)
@@ -583,6 +583,27 @@ export async function updateProductionRunInTransaction(
       expectedVersion: data.expectedVersion,
       actualVersion: locked.version,
     });
+    // Existing entity row -> sorted certification lineage -> sorted bin locks.
+    const lineageLocks = await lockProductionRunLineage(ctx, tx, {
+      productionRunId, facilityId: data.facilityId ?? locked.facilityId, status: data.status ?? locked.status,
+    });
+    await assertCanMutateCertifiedLineage(
+      ctx,
+      tx,
+      { entityType: "productionRun", entityId: productionRunId },
+      "update",
+    );
+
+    await lockProductionRunUpdateStock(
+      ctx,
+      tx,
+      {
+        feedstockStorageLocationIds: existingFeedstockStorageLocationIds,
+        biocharStorageLocationId: existing.biocharStorageLocationId,
+      },
+      { ...data, feedstockDraws: normalizedFeedstockDraws },
+    );
+
     const lockedFeedstockStorageLocationIds =
       await getProductionRunFeedstockDrawStorageIds(ctx, tx, productionRunId);
     assertProductionRunStockSnapshot(
@@ -649,7 +670,7 @@ export async function updateProductionRunInTransaction(
             lockedFeedstockStorageLocationIds.length,
         },
       },
-      { only: PREFLIGHT_OUTCOME_VIOLATIONS },
+      { only: PREFLIGHT_OUTCOME_VIOLATIONS, skipFeedstockRequired: preservesFeedstockPrerequisites },
     );
 
     if (lockedTargetStatus !== locked.status && lockedTargetStatus !== "complete") {
@@ -684,13 +705,6 @@ export async function updateProductionRunInTransaction(
       }
     }
 
-    await assertCanMutateCertifiedLineage(
-      ctx,
-      tx,
-      { entityType: "productionRun", entityId: productionRunId },
-      "update",
-    );
-
     // A cancelled run frees its slot, so only an occupying run needs this guard.
     if (statusOccupiesReactor(lockedTargetStatus)) {
       await assertNoReactorRunOverlap(ctx, tx, {
@@ -705,6 +719,12 @@ export async function updateProductionRunInTransaction(
       data.biocharStorageLocationId !== undefined
         ? data.biocharStorageLocationId
         : locked.biocharStorageLocationId;
+    if (
+      effectiveBiocharStorageId &&
+      (data.biocharStorageLocationId !== undefined || data.facilityId !== undefined)
+    ) {
+      await validateBiocharStorageLocation(ctx, tx, effectiveBiocharStorageId, lockedTargetFacilityId, "Biochar");
+    }
     const biocharStockState =
       await deriveProductionRunUpdateBiocharStockState(
         ctx,
@@ -724,12 +744,6 @@ export async function updateProductionRunInTransaction(
       );
     }
 
-    if (
-      effectiveBiocharStorageId &&
-      (data.biocharStorageLocationId !== undefined || data.facilityId !== undefined)
-    ) {
-      await validateBiocharStorageLocation(ctx, tx, effectiveBiocharStorageId, lockedTargetFacilityId, "Biochar");
-    }
     await assertRunAdditionAfterSplit(ctx, tx, { status: lockedTargetStatus, biocharStorageLocationId: effectiveBiocharStorageId, facilityId: lockedTargetFacilityId, endTime: lockedTargetEndTime }, locked);
 
     const transactionUpdateData = { ...updateData };
@@ -788,10 +802,8 @@ export async function updateProductionRunInTransaction(
     const consumedFeedstockWetKg =
       await getProductionRunFeedstockDrawTotal(ctx, tx, productionRunId);
 
-    // Unfiltered: window + dry-mass are eligible here but always pre-caught by
-    // the locked PREFLIGHT_OUTCOME_VIOLATIONS re-check above over the same
-    // merged inputs — keep that preflight scope or cancelled/draft runs start
-    // failing dry-mass here.
+    // Recheck all outcome rules after allocation. Only untouched feedstock
+    // prerequisites are exempt for existing records, as in both preflights.
     assertProductionRunOutcome({
       status: lockedTargetStatus,
       startTime: lockedTargetStartTime,
@@ -817,11 +829,12 @@ export async function updateProductionRunInTransaction(
         consumedFeedstockWetKg,
       },
       cancellationReason: lockedTargetCancellationReason,
-    });
+    }, { skipFeedstockRequired: preservesFeedstockPrerequisites });
     await attachProductionRunToMatchingCreditBatch(
       ctx,
       tx,
       productionRunId,
+      lineageLocks,
     );
       },
     );

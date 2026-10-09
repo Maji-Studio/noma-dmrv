@@ -19,6 +19,6 @@ it("serves a public plain-text agent guide without a credential", async () => {
   const text = await response.text();
   expect(await repeated.text()).toBe(text);
   expect(text).toContain("X-Request-Id identifies requests.");
-  for (const term of ["/api/v1/openapi.json", "Authorization: Bearer", "feedstocks:write", "Idempotency-Key", "ETag", "If-Match", "dryRun", "nextCursor", "problem+json", "outcome_unknown", "Retry-After", "today", "timeZone"]) expect(text).toContain(term);
+  for (const term of ["/api/v1/openapi.json", "Authorization: Bearer", "feedstocks:write", "feedstocks:delete", "production-runs:write", "production-runs:delete", "Idempotency-Key", "ETag", "If-Match", "dryRun", "nextCursor", "problem+json", "outcome_unknown", "Retry-After", "today", "timeZone"]) expect(text).toContain(term);
   expect(text).not.toMatch(/[\u2013\u2014]/);
 });

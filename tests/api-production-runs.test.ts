@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { facilities, productionRuns, productionRunFeedstockDraws } from "@/db/schema";
+import { facilities, storageLocations, productionRuns, productionRunFeedstockDraws } from "@/db/schema";
 import { createApiKey } from "@/data-access/api-keys";
 import { API_KEY_DEFAULT_EXPIRY_SECONDS } from "@/config/api-keys";
 import { GET as LIST, POST } from "@/app/api/v1/production-runs/route";
@@ -210,5 +210,72 @@ describe("production run REST outcomes", { timeout: TIMEOUT_MS }, () => {
     const writer = { ...a, key: (await createApiKey(a.ctx, { name: "Run writer", scopes: ["production-runs:read", "production-runs:write"], expiresIn: API_KEY_DEFAULT_EXPIRY_SECONDS })).key };
     await problem(await DELETE(request("DELETE", `/${saved.row.id}`, undefined, { "if-match": saved.etag }, writer), params(saved.row.id)), 403, "missing_scope");
     expect(await rows()).toHaveLength(1);
+  });
+});
+
+describe("production run review regressions", { timeout: TIMEOUT_MS }, () => {
+  it("rejects terminal create without draws or moisture using the form field messages", async () => {
+    const body = { ...productionRunInput(a), status: "complete", endTime: "2026-10-06T11:00:00Z",
+      biocharOutputKg: 200, biocharMoisturePercent: 2, feedstockMoisturePercent: null, feedstockDraws: [] };
+    const refusal = await problem(await POST(request("POST", "", body, { "idempotency-key": randomUUID() })), 422, "validation_failed");
+    expect(refusal.errors).toEqual(expect.arrayContaining([
+      expect.objectContaining({ pointer: "/feedstockDraws", detail: "Add at least one feedstock source." }),
+      expect.objectContaining({ pointer: "/feedstockMoisturePercent", detail: "Enter feedstock moisture." }),
+    ]));
+    const moistureOnly = await problem(await POST(request("POST", "", { ...body, feedstockDraws: productionRunInput(a).feedstockDraws },
+      { "idempotency-key": randomUUID() })), 422, "validation_failed");
+    expect(moistureOnly.errors).toContainEqual(expect.objectContaining({ pointer: "/feedstockMoisturePercent", detail: "Enter feedstock moisture." }));
+    const drawsOnly = await problem(await POST(request("POST", "", { ...body, feedstockMoisturePercent: 20 },
+      { "idempotency-key": randomUUID() })), 422, "validation_failed");
+    expect(drawsOnly.errors).toContainEqual(expect.objectContaining({ pointer: "/feedstockDraws", detail: "Add at least one feedstock source." }));
+    expect(await rows()).toHaveLength(0);
+    expect(await binWetStock(a)).toBe(4200);
+  });
+
+  it.each(["complete", "failed"])("requires moisture and draws when PATCH makes a run %s", async (status) => {
+    const saved = await create({ ...productionRunInput(a), feedstockMoisturePercent: null });
+    const terminal = { status, endTime: "2026-10-06T11:00:00Z", biocharOutputKg: 200, biocharMoisturePercent: 2 };
+    const refusal = await problem(await patch(saved.row.id, terminal, saved.etag), 422, "validation_failed");
+    expect(refusal.errors).toContainEqual(expect.objectContaining({ pointer: "/feedstockMoisturePercent", detail: "Enter feedstock moisture." }));
+    const noDraws = await problem(await patch(saved.row.id, { ...terminal, feedstockMoisturePercent: 20, feedstockDraws: [] }, saved.etag), 422, "validation_failed");
+    expect(noDraws.errors).toContainEqual(expect.objectContaining({ pointer: "/feedstockDraws", detail: "Add at least one feedstock source." }));
+    expect(await rows()).toMatchObject([{ status: "running", version: 1 }]);
+    const completed = await patch(saved.row.id, { ...terminal, feedstockMoisturePercent: 20 }, saved.etag);
+    expect(completed.status).toBe(200);
+    const cleared = await problem(await patch(saved.row.id, { feedstockMoisturePercent: null }, completed.headers.get("etag")!), 422, "validation_failed");
+    expect(cleared.errors).toContainEqual(expect.objectContaining({ pointer: "/feedstockMoisturePercent" }));
+  });
+
+  it("keeps the submitted index for a missing lower-id draw on create and PATCH", async () => {
+    const feedstockDraws = [{ storageLocationId: a.binId, wetMassKg: 100 },
+      { storageLocationId: "00000000-0000-4000-8000-000000000001", wetMassKg: 100 }];
+    const refused = await problem(await POST(request("POST", "", { ...productionRunInput(a), feedstockDraws },
+      { "idempotency-key": randomUUID() })), 404, "not_found");
+    expect(refused.errors).toContainEqual(expect.objectContaining({ pointer: "/feedstockDraws/1/storageLocationId" }));
+    const saved = await create();
+    const patched = await problem(await patch(saved.row.id, { feedstockDraws }, saved.etag), 404, "not_found");
+    expect(patched.errors).toContainEqual(expect.objectContaining({ pointer: "/feedstockDraws/1/storageLocationId" }));
+  });
+
+  it("distinguishes inaccessible output bins from wrong-type or wrong-facility bins", async () => {
+    for (const biocharStorageLocationId of [b.outputBinId, randomUUID()]) {
+      const refusal = await problem(await POST(request("POST", "", { ...productionRunInput(a), biocharStorageLocationId },
+        { "idempotency-key": randomUUID() })), 404, "not_found");
+      expect(refusal.errors).toContainEqual(expect.objectContaining({ pointer: "/biocharStorageLocationId" }));
+    }
+    const saved = await create();
+    for (const biocharStorageLocationId of [b.outputBinId, randomUUID()]) {
+      const refusal = await problem(await patch(saved.row.id, { biocharStorageLocationId }, saved.etag), 404, "not_found");
+      expect(refusal.errors).toContainEqual(expect.objectContaining({ pointer: "/biocharStorageLocationId" }));
+    }
+    const [facility] = await db.insert(facilities).values({ organizationId: a.ctx.organizationId, code: "OTHER", name: "Other facility" }).returning();
+    const [bin] = await db.insert(storageLocations).values({ organizationId: a.ctx.organizationId, facilityId: facility.id,
+      code: "OTHER-OUTPUT", name: "Other output", type: "biochar_bin" }).returning();
+    for (const biocharStorageLocationId of [a.binId, bin.id]) {
+      await problem(await patch(saved.row.id, { biocharStorageLocationId }, saved.etag), 422, "validation_failed");
+      await problem(await POST(request("POST", "", { ...productionRunInput(a), status: "draft", startTime: "2026-10-05T10:00:00Z", endTime: "2026-10-05T11:00:00Z", biocharStorageLocationId },
+        { "idempotency-key": randomUUID() })), 422, "validation_failed");
+    }
+    expect(await rows()).toMatchObject([{ id: saved.row.id, version: 1 }]);
   });
 });

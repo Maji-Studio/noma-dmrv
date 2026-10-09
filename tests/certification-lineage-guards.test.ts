@@ -1,3 +1,7 @@
+import { openOperationBarrier, waitForBlockedOperations } from "./helpers/operation-barrier";
+import { createTestPool } from "./helpers/operation-fixture";
+import { assertCanMutateCertifiedLineage } from "@/data-access/certification-lineage-guards";
+import { updateProductionRunInTransaction } from "@/data-access/production-runs/mutations";
 import { labLogisticsVersion } from "./helpers/lab-logistics-version";
 import { productionVersion } from "./helpers/production-version";
 import { ensureOutputFixtureActor } from "./helpers/output-contract-fixtures";
@@ -49,6 +53,7 @@ import {
   feedstocks,
   orders,
   productionRunFeedstocks,
+  productionRunFeedstockDraws,
   outputStockMoistureReadings,
   productionRuns,
   productionProcesses,
@@ -69,6 +74,7 @@ interface LineageFixture {
   deliveryId: string;
   facilityId: string;
   feedstockId: string;
+  feedstockBinId: string;
   feedstockTypeId: string;
   productionProcessId: string;
   ghgStatementId: string | null;
@@ -113,11 +119,18 @@ async function createLineageFixture(
       })
       .returning({ id: feedstockTypes.id });
 
+    const [feedstockBin] = await tx.insert(storageLocations).values({
+      organizationId: TEST_ORG_ID, facilityId: facility.id, code: `BIN-CLG-${tag}`,
+      name: "Lineage feedstock source", type: "feedstock_bin", feedstockTypeId: feedstockType.id,
+    }).returning();
+
     const [feedstock] = await tx
       .insert(feedstocks)
       .values({
         organizationId: TEST_ORG_ID,
         code: `FS-CLG-${tag}`,
+        storageLocationId: feedstockBin.id,
+        status: "complete",
         facilityId: facility.id,
         feedstockTypeId: feedstockType.id,
         massDryKg: 900,
@@ -153,6 +166,11 @@ async function createLineageFixture(
         status: blockingVia === "none" ? "draft" : "complete",
       })
       .returning({ id: productionRuns.id });
+
+    await tx.insert(productionRunFeedstockDraws).values({
+      organizationId: TEST_ORG_ID, productionRunId: productionRun.id,
+      storageLocationId: feedstockBin.id, wetMassKg: 1_000,
+    });
 
     await tx.insert(productionRunFeedstocks).values({
       organizationId: TEST_ORG_ID,
@@ -301,6 +319,7 @@ async function createLineageFixture(
       deliveryId: delivery.id,
       facilityId: facility.id,
       feedstockId: feedstock.id,
+      feedstockBinId: feedstockBin.id,
       feedstockTypeId: feedstockType.id,
       productionProcessId: productionProcess.id,
       ghgStatementId,
@@ -346,12 +365,14 @@ async function cleanupLineageFixture(fixture: LineageFixture): Promise<void> {
           eq(transportLegs.entityId, fixture.feedstockId),
         ),
       );
+    await tx.delete(productionRunFeedstockDraws).where(eq(productionRunFeedstockDraws.productionRunId, fixture.productionRunId));
     await tx
       .delete(feedstocks)
       .where(eq(feedstocks.id, fixture.feedstockId));
     await tx
       .delete(productionProcesses)
       .where(eq(productionProcesses.id, fixture.productionProcessId));
+    await tx.delete(storageLocations).where(eq(storageLocations.id, fixture.feedstockBinId));
     await tx
       .delete(feedstockTypes)
       .where(eq(feedstockTypes.id, fixture.feedstockTypeId));
@@ -446,6 +467,13 @@ describe("certification lineage guards", () => {
 
   it("rejects a legacy wet-mass edit when no source bin can be identified", async () => {
     await withFixture(async (fixture) => {
+      await db.delete(productionRunFeedstockDraws).where(and(
+        eq(productionRunFeedstockDraws.organizationId, TEST_ORG_ID),
+        eq(productionRunFeedstockDraws.productionRunId, fixture.productionRunId),
+      ));
+      await db.update(productionRuns).set({ feedstockStorageLocationId: null }).where(and(
+        eq(productionRuns.organizationId, TEST_ORG_ID), eq(productionRuns.id, fixture.productionRunId),
+      ));
       await expect(
         updateProductionRun(
           makeTestOrgContext(TEST_USER_ID),
@@ -887,3 +915,66 @@ describe("certification lineage guards", () => {
     }, "ghgStatement");
   });
 });
+
+// DB-backed regression: not run, needs the supervisor.
+it("serializes a run status update and feedstock edit on the same lineage and bin", async () => {
+  const WRITER_AND_OBSERVER_CONNECTIONS = 3;
+  const RACE_LOCK_TIMEOUT_MS = 10_000;
+  const INITIAL_WET_KG = 1_000;
+  const EDITED_WET_KG = 1_100;
+  const DRAW_WET_KG = 10;
+  await withFixture(async (fixture) => {
+    const ctx = makeTestOrgContext(TEST_USER_ID);
+    const [bin] = await db.insert(storageLocations).values({ organizationId: TEST_ORG_ID,
+      facilityId: fixture.facilityId, code: `LOCK-${fixture.feedstockId}`, name: "Lock regression source",
+      type: "feedstock_bin", feedstockTypeId: fixture.feedstockTypeId }).returning();
+    const [run] = await db.insert(productionRuns).values({ organizationId: TEST_ORG_ID,
+      facilityId: fixture.facilityId, reactorId: fixture.reactorId, code: `LOCK-${fixture.productionRunId}`,
+      status: "draft", startTime: new Date("2026-06-18T08:00:00Z"),
+      feedstockWetMassKg: DRAW_WET_KG, feedstockMoisturePercent: 10 }).returning();
+    await db.update(feedstocks).set({ storageLocationId: bin.id, status: "complete", massWetKg: INITIAL_WET_KG })
+      .where(eq(feedstocks.id, fixture.feedstockId));
+    await db.insert(productionRunFeedstockDraws).values({ organizationId: TEST_ORG_ID,
+      productionRunId: run.id, storageLocationId: bin.id, wetMassKg: DRAW_WET_KG });
+    await db.insert(productionRunFeedstocks).values({ organizationId: TEST_ORG_ID,
+      productionRunId: run.id, feedstockId: fixture.feedstockId, wetMassUsedKg: DRAW_WET_KG });
+    await db.insert(creditBatchProductionRuns).values({ organizationId: TEST_ORG_ID,
+      productionRunId: run.id, creditBatchId: fixture.batchId });
+    const pool = createTestPool(WRITER_AND_OBSERVER_CONNECTIONS);
+    const feedstockWriter = await openOperationBarrier(pool);
+    const runWriter = await openOperationBarrier(pool);
+    let updating: Promise<unknown> | undefined;
+    try {
+      await feedstockWriter.tx.execute(sql.raw(`set local lock_timeout = ${RACE_LOCK_TIMEOUT_MS}`));
+      await runWriter.tx.execute(sql.raw(`set local lock_timeout = ${RACE_LOCK_TIMEOUT_MS}`));
+      const [feedstock] = await feedstockWriter.tx.select().from(feedstocks)
+        .where(and(eq(feedstocks.organizationId, TEST_ORG_ID), eq(feedstocks.id, fixture.feedstockId))).for("update");
+      await assertCanMutateCertifiedLineage(ctx, feedstockWriter.tx,
+        { entityType: "feedstock", entityId: fixture.feedstockId }, "update");
+      updating = updateProductionRunInTransaction(ctx, runWriter.tx, run.id,
+        { expectedVersion: run.version, status: "running" })
+        .then(async (updated) => { await runWriter.commit(); return updated; })
+        .catch(async (error: unknown) => { await runWriter.rollback(); throw error; });
+      void updating.catch(() => undefined);
+      await waitForBlockedOperations(pool, feedstockWriter.pid, 1);
+      // Previously the run held the bin while waiting on our lineage lock.
+      // This real feedstock edit then waited on that bin, completing the cycle.
+      const edited = await updateFeedstockInTransaction(ctx, feedstockWriter.tx, fixture.feedstockId,
+        { expectedVersion: feedstock.version, massWetKg: EDITED_WET_KG });
+      await feedstockWriter.commit();
+      expect(edited.massWetKg).toBe(EDITED_WET_KG);
+      await expect(updating).resolves.toMatchObject({ status: "running", version: run.version + 1 });
+    } finally {
+      await feedstockWriter.rollback();
+      if (updating) await Promise.allSettled([updating]);
+      await runWriter.rollback();
+      await pool.end();
+      await db.delete(creditBatchProductionRuns).where(eq(creditBatchProductionRuns.productionRunId, run.id));
+      await db.delete(productionRunFeedstocks).where(eq(productionRunFeedstocks.productionRunId, run.id));
+      await db.delete(productionRunFeedstockDraws).where(eq(productionRunFeedstockDraws.productionRunId, run.id));
+      await db.delete(productionRuns).where(eq(productionRuns.id, run.id));
+      await db.update(feedstocks).set({ storageLocationId: null }).where(eq(feedstocks.id, fixture.feedstockId));
+      await db.delete(storageLocations).where(eq(storageLocations.id, bin.id));
+    }
+  }, "none");
+}, 30_000);
