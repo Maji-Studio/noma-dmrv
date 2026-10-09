@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { updateProductionRunSchema } from "./production-runs";
+import { clearableNumber, pipeToCanonicalNumber, toClearableNumber } from "./helpers";
 import { publishedJsonSchemas } from "./published-json-schema";
 
 const offsetInstant = z.iso.datetime({ offset: true, message: "Add an explicit offset (Z or +hh:mm), or send { date, time }." });
@@ -23,15 +24,16 @@ const describedFields = {
   cancellationReason: fields.cancellationReason.describe("Cancellation reason, untrusted plain text; required when cancelling."),
   operatorId: fields.operatorId.describe("Operator UUID, or null to clear."),
   feedstockDraws: fields.feedstockDraws.describe("Explicit source feedstock bin draws; each wet mass is in kilograms."),
-  feedstockMoisturePercent: fields.feedstockMoisturePercent.describe("Feedstock water as percent of wet mass, 0 to 100."),
-  feedingRateKgHr: fields.feedingRateKgHr.describe("Feed rate in kilograms per hour."),
-  residenceTimeMinutes: fields.residenceTimeMinutes.describe("Residence time in minutes."),
-  dieselOperationLiters: fields.dieselOperationLiters.describe("Operational diesel in litres."),
-  dieselGensetLiters: fields.dieselGensetLiters.describe("Generator diesel in litres."),
-  preprocessingFuelLiters: fields.preprocessingFuelLiters.describe("Preprocessing fuel in litres."),
-  electricityKwh: fields.electricityKwh.describe("Electricity in kilowatt hours."),
-  biocharOutputKg: fields.biocharOutputKg.describe("Wet biochar output in kilograms."),
-  biocharMoisturePercent: fields.biocharMoisturePercent.describe("Biochar water as percent of wet mass, 0 to 100."),
+  feedstockMoisturePercent: pipeToCanonicalNumber(clearableNumber, fields.feedstockMoisturePercent).describe("Feedstock water as percent of wet mass, 0 to 100."),
+  feedingRateKgHr: pipeToCanonicalNumber(clearableNumber, fields.feedingRateKgHr).describe("Feed rate in kilograms per hour."),
+  // A direct preprocess keeps the canonical integer type in the published schema.
+  residenceTimeMinutes: z.preprocess(toClearableNumber, fields.residenceTimeMinutes).describe("Residence time in minutes."),
+  dieselOperationLiters: pipeToCanonicalNumber(clearableNumber, fields.dieselOperationLiters).describe("Operational diesel in litres."),
+  dieselGensetLiters: pipeToCanonicalNumber(clearableNumber, fields.dieselGensetLiters).describe("Generator diesel in litres."),
+  preprocessingFuelLiters: pipeToCanonicalNumber(clearableNumber, fields.preprocessingFuelLiters).describe("Preprocessing fuel in litres."),
+  electricityKwh: pipeToCanonicalNumber(clearableNumber, fields.electricityKwh).describe("Electricity in kilowatt hours."),
+  biocharOutputKg: pipeToCanonicalNumber(clearableNumber, fields.biocharOutputKg).describe("Wet biochar output in kilograms."),
+  biocharMoisturePercent: pipeToCanonicalNumber(clearableNumber, fields.biocharMoisturePercent).describe("Biochar water as percent of wet mass, 0 to 100."),
   biocharStorageLocationId: fields.biocharStorageLocationId.describe("Output bin UUID in the effective facility, or null to clear."),
 };
 export const createProductionRunInput = z.strictObject({

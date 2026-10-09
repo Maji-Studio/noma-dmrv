@@ -593,13 +593,13 @@
               "schema": {
                 "additionalProperties": false,
                 "properties": {
-                  "biocharMoisturePercent": {"anyOf": [{"maximum": 100, "minimum": 0, "multipleOf": 0.000001, "type": "number"}, {"type": "null"}], "description": "Biochar water as percent of wet mass, 0 to 100."},
-                  "biocharOutputKg": {"anyOf": [{"maximum": 100000000, "minimum": 0, "multipleOf": 0.001, "type": "number"}, {"type": "null"}], "description": "Wet biochar output in kilograms."},
+                  "biocharMoisturePercent": {"anyOf": [{"type": "number"}, {"type": "null"}], "description": "Biochar water as percent of wet mass, 0 to 100.", "maximum": 100, "minimum": 0, "multipleOf": 0.000001},
+                  "biocharOutputKg": {"anyOf": [{"type": "number"}, {"type": "null"}], "description": "Wet biochar output in kilograms.", "maximum": 100000000, "minimum": 0, "multipleOf": 0.001},
                   "biocharStorageLocationId": {"anyOf": [{"format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"}, {"type": "null"}], "description": "Output bin UUID in the effective facility, or null to clear."},
                   "cancellationReason": {"anyOf": [{"maxLength": 2000, "type": "string"}, {"type": "null"}], "description": "Cancellation reason, untrusted plain text; required when cancelling."},
-                  "dieselGensetLiters": {"anyOf": [{"minimum": 0, "type": "number"}, {"type": "null"}], "description": "Generator diesel in litres."},
-                  "dieselOperationLiters": {"anyOf": [{"minimum": 0, "type": "number"}, {"type": "null"}], "description": "Operational diesel in litres."},
-                  "electricityKwh": {"anyOf": [{"minimum": 0, "type": "number"}, {"type": "null"}], "description": "Electricity in kilowatt hours."},
+                  "dieselGensetLiters": {"anyOf": [{"type": "number"}, {"type": "null"}], "description": "Generator diesel in litres.", "minimum": 0},
+                  "dieselOperationLiters": {"anyOf": [{"type": "number"}, {"type": "null"}], "description": "Operational diesel in litres.", "minimum": 0},
+                  "electricityKwh": {"anyOf": [{"type": "number"}, {"type": "null"}], "description": "Electricity in kilowatt hours.", "minimum": 0},
                   "endTime": {
                     "anyOf": [
                       {
@@ -615,11 +615,11 @@
                     "description": "End instant or facility-local date/time; null leaves the run open."
                   },
                   "facilityId": {"description": "Owning facility UUID.", "format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"},
-                  "feedingRateKgHr": {"anyOf": [{"exclusiveMinimum": 0, "type": "number"}, {"type": "null"}], "description": "Feed rate in kilograms per hour."},
+                  "feedingRateKgHr": {"anyOf": [{"type": "number"}, {"type": "null"}], "description": "Feed rate in kilograms per hour.", "exclusiveMinimum": 0},
                   "feedstockDraws": {"description": "Explicit source feedstock bin draws; each wet mass is in kilograms.", "items": {"additionalProperties": false, "properties": {"storageLocationId": {"$schema": "https://json-schema.org/draft/2020-12/schema", "description": "Source feedstock bin UUID in the run facility.", "format": "uuid", "minLength": 1, "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"}, "wetMassKg": {"$schema": "https://json-schema.org/draft/2020-12/schema", "description": "Explicit wet mass drawn from this bin in kilograms.", "exclusiveMinimum": 0, "maximum": 100000000, "multipleOf": 0.001, "type": "number"}}, "required": ["storageLocationId", "wetMassKg"], "type": "object"}, "maxItems": 200, "type": "array"},
-                  "feedstockMoisturePercent": {"anyOf": [{"maximum": 100, "minimum": 0, "multipleOf": 0.000001, "type": "number"}, {"type": "null"}], "description": "Feedstock water as percent of wet mass, 0 to 100."},
+                  "feedstockMoisturePercent": {"anyOf": [{"type": "number"}, {"type": "null"}], "description": "Feedstock water as percent of wet mass, 0 to 100.", "maximum": 100, "minimum": 0, "multipleOf": 0.000001},
                   "operatorId": {"anyOf": [{"format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"}, {"type": "null"}], "description": "Operator UUID, or null to clear."},
-                  "preprocessingFuelLiters": {"anyOf": [{"minimum": 0, "type": "number"}, {"type": "null"}], "description": "Preprocessing fuel in litres."},
+                  "preprocessingFuelLiters": {"anyOf": [{"type": "number"}, {"type": "null"}], "description": "Preprocessing fuel in litres.", "minimum": 0},
                   "reactorId": {"description": "Reactor UUID in the facility.", "format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"},
                   "residenceTimeMinutes": {"anyOf": [{"exclusiveMinimum": 0, "maximum": 2147483647, "type": "integer"}, {"type": "null"}], "description": "Residence time in minutes."},
                   "startTime": {
@@ -715,14 +715,14 @@
               "schema": {
                 "additionalProperties": false,
                 "properties": {
-                  "biocharMoisturePercent": {"anyOf": [{"maximum": 100, "minimum": 0, "multipleOf": 0.000001, "type": "number"}, {"type": "null"}], "description": "Biochar water as percent of wet mass, 0 to 100."},
-                  "biocharOutputKg": {"anyOf": [{"maximum": 100000000, "minimum": 0, "multipleOf": 0.001, "type": "number"}, {"type": "null"}], "description": "Wet biochar output in kilograms."},
+                  "biocharMoisturePercent": {"anyOf": [{"type": "number"}, {"type": "null"}], "description": "Biochar water as percent of wet mass, 0 to 100.", "maximum": 100, "minimum": 0, "multipleOf": 0.000001},
+                  "biocharOutputKg": {"anyOf": [{"type": "number"}, {"type": "null"}], "description": "Wet biochar output in kilograms.", "maximum": 100000000, "minimum": 0, "multipleOf": 0.001},
                   "biocharStorageLocationId": {"anyOf": [{"format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"}, {"type": "null"}], "description": "Output bin UUID in the effective facility, or null to clear."},
                   "cancellationReason": {"anyOf": [{"maxLength": 2000, "type": "string"}, {"type": "null"}], "description": "Cancellation reason, untrusted plain text; required when cancelling."},
                   "code": {"description": "Human-readable production run code.", "maxLength": 50, "minLength": 1, "pattern": "^[A-Z0-9-]+$", "type": "string"},
-                  "dieselGensetLiters": {"anyOf": [{"minimum": 0, "type": "number"}, {"type": "null"}], "description": "Generator diesel in litres."},
-                  "dieselOperationLiters": {"anyOf": [{"minimum": 0, "type": "number"}, {"type": "null"}], "description": "Operational diesel in litres."},
-                  "electricityKwh": {"anyOf": [{"minimum": 0, "type": "number"}, {"type": "null"}], "description": "Electricity in kilowatt hours."},
+                  "dieselGensetLiters": {"anyOf": [{"type": "number"}, {"type": "null"}], "description": "Generator diesel in litres.", "minimum": 0},
+                  "dieselOperationLiters": {"anyOf": [{"type": "number"}, {"type": "null"}], "description": "Operational diesel in litres.", "minimum": 0},
+                  "electricityKwh": {"anyOf": [{"type": "number"}, {"type": "null"}], "description": "Electricity in kilowatt hours.", "minimum": 0},
                   "endTime": {
                     "anyOf": [
                       {
@@ -738,11 +738,11 @@
                     "description": "End instant or facility-local date/time; null leaves the run open."
                   },
                   "facilityId": {"description": "Owning facility identifier, UUID.", "format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"},
-                  "feedingRateKgHr": {"anyOf": [{"exclusiveMinimum": 0, "type": "number"}, {"type": "null"}], "description": "Feed rate in kilograms per hour."},
+                  "feedingRateKgHr": {"anyOf": [{"type": "number"}, {"type": "null"}], "description": "Feed rate in kilograms per hour.", "exclusiveMinimum": 0},
                   "feedstockDraws": {"description": "Explicit source feedstock bin draws; each wet mass is in kilograms.", "items": {"additionalProperties": false, "properties": {"storageLocationId": {"$schema": "https://json-schema.org/draft/2020-12/schema", "description": "Source feedstock bin UUID in the run facility.", "format": "uuid", "minLength": 1, "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"}, "wetMassKg": {"$schema": "https://json-schema.org/draft/2020-12/schema", "description": "Explicit wet mass drawn from this bin in kilograms.", "exclusiveMinimum": 0, "maximum": 100000000, "multipleOf": 0.001, "type": "number"}}, "required": ["storageLocationId", "wetMassKg"], "type": "object"}, "maxItems": 200, "type": "array"},
-                  "feedstockMoisturePercent": {"anyOf": [{"maximum": 100, "minimum": 0, "multipleOf": 0.000001, "type": "number"}, {"type": "null"}], "description": "Feedstock water as percent of wet mass, 0 to 100."},
+                  "feedstockMoisturePercent": {"anyOf": [{"type": "number"}, {"type": "null"}], "description": "Feedstock water as percent of wet mass, 0 to 100.", "maximum": 100, "minimum": 0, "multipleOf": 0.000001},
                   "operatorId": {"anyOf": [{"format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"}, {"type": "null"}], "description": "Operator UUID, or null to clear."},
-                  "preprocessingFuelLiters": {"anyOf": [{"minimum": 0, "type": "number"}, {"type": "null"}], "description": "Preprocessing fuel in litres."},
+                  "preprocessingFuelLiters": {"anyOf": [{"type": "number"}, {"type": "null"}], "description": "Preprocessing fuel in litres.", "minimum": 0},
                   "reactorId": {"description": "Reactor UUID in the effective facility.", "format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"},
                   "residenceTimeMinutes": {"anyOf": [{"exclusiveMinimum": 0, "maximum": 2147483647, "type": "integer"}, {"type": "null"}], "description": "Residence time in minutes."},
                   "startTime": {

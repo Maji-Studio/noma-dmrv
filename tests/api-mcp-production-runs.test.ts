@@ -37,6 +37,32 @@ const rows = () => db.select().from(productionRuns).where(eq(productionRuns.orga
 
 const toolNames = ["start_production_run", "update_production_run", "delete_production_run", "find_reactors", "find_production_runs", "get_production_run"];
 describe("production MCP tools", { timeout: TIMEOUT_MS }, () => {
+  it("reports duplicate codes with the same conflict and pointer as REST", async () => {
+    const first = (await call("start_production_run", { ...productionRunInput(a), requestKey: randomUUID() })).structuredContent.data;
+    const second = (await call("start_production_run", { ...productionRunInput(a, false), status: "cancelled",
+      cancellationReason: "Not started", endTime: "2026-10-06T11:00:00Z", requestKey: randomUUID() })).structuredContent.data;
+    const refused = await call("update_production_run", { productionRunId: second.id, expectedVersion: second.version,
+      code: first.code, requestKey: randomUUID() });
+    expect(refused).toMatchObject({ isError: true, structuredContent: { code: "conflict",
+      issues: [expect.objectContaining({ pointer: "/code", code: "conflict" })] } });
+    expect(await rows()).toEqual(expect.arrayContaining([expect.objectContaining({ id: second.id, code: second.code, version: 1 })]));
+  });
+
+  it("accepts numeric form encodings on create and update without clearing omissions", async () => {
+    const created = await call("start_production_run", { ...productionRunInput(a), electricityKwh: "12.5",
+      residenceTimeMinutes: "12", feedstockMoisturePercent: "20",
+      feedstockDraws: [{ storageLocationId: a.binId, wetMassKg: "1200" }], requestKey: randomUUID() });
+    const row = created.structuredContent.data;
+    expect(row).toMatchObject({ electricityKwh: 12.5, residenceTimeMinutes: 12 });
+    const changed = await call("update_production_run", { productionRunId: row.id, expectedVersion: row.version,
+      electricityKwh: "", dieselOperationLiters: "0", feedingRateKgHr: "12.5",
+      feedstockDraws: [{ storageLocationId: a.binId, wetMassKg: "600" }], requestKey: randomUUID() });
+    expect(changed.structuredContent.data).toMatchObject({ electricityKwh: null, dieselOperationLiters: 0,
+      feedingRateKgHr: 12.5, residenceTimeMinutes: 12, feedstockMoisturePercent: 20 });
+    expect(await rows()).toMatchObject([{ electricityKwh: null, dieselOperationLiters: 0, feedstockWetMassKg: 600, residenceTimeMinutes: 12 }]);
+    expect(await binWetStock(a)).toBe(3600);
+  });
+
   it("registers all six tools with scopes and destructive annotations", async () => {
     const { result } = await rpcBody(await MCP(rpc(a.key, "tools/list")));
     for (const name of toolNames) expect(result.tools).toContainEqual(expect.objectContaining({ name }));

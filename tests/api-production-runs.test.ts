@@ -219,6 +219,27 @@ describe("production run REST outcomes", { timeout: TIMEOUT_MS }, () => {
 });
 
 describe("production run review regressions", { timeout: TIMEOUT_MS }, () => {
+  it("returns a duplicate PATCH code as a conflict with its field pointer", async () => {
+    const first = await create();
+    const second = await create({ ...productionRunInput(a, false), status: "cancelled", cancellationReason: "Not started", endTime: "2026-10-06T11:00:00Z" });
+    const refusal = await problem(await patch(second.row.id, { code: first.row.code }, second.etag), 409, "conflict");
+    expect(refusal.errors).toContainEqual(expect.objectContaining({ pointer: "/code", code: "conflict" }));
+    expect(await rows()).toEqual(expect.arrayContaining([expect.objectContaining({ id: second.row.id, code: second.row.code, version: 1 })]));
+  });
+
+  it("coerces numeric strings on create and PATCH, and clears optional numbers", async () => {
+    const saved = await create({ ...productionRunInput(a), electricityKwh: "12.5", residenceTimeMinutes: "12",
+      feedstockMoisturePercent: "20", feedstockDraws: [{ storageLocationId: a.binId, wetMassKg: "1200" }] });
+    expect(saved.row).toMatchObject({ electricityKwh: 12.5, residenceTimeMinutes: 12, feedstockMoisturePercent: 20 });
+    const changed = await patch(saved.row.id, { electricityKwh: "", dieselOperationLiters: "0",
+      feedingRateKgHr: "12.5", feedstockDraws: [{ storageLocationId: a.binId, wetMassKg: "600" }] }, saved.etag);
+    expect(changed.status).toBe(200);
+    expect((await changed.json()).data).toMatchObject({ electricityKwh: null, dieselOperationLiters: 0,
+      feedingRateKgHr: 12.5, residenceTimeMinutes: 12, feedstockMoisturePercent: 20 });
+    expect(await rows()).toMatchObject([{ electricityKwh: null, dieselOperationLiters: 0, feedstockWetMassKg: 600, residenceTimeMinutes: 12 }]);
+    expect(await binWetStock(a)).toBe(3600);
+  });
+
   it("refuses a failed create with the status pointer", async () => {
     const refusal = await problem(await POST(request("POST", "", { ...productionRunInput(a), status: "failed" },
       { "idempotency-key": randomUUID() })), 422, "validation_failed");
