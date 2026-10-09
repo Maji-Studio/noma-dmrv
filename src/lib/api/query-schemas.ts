@@ -11,6 +11,7 @@ const prefixSchema = z.string().max(API_QUERY_MAX_LENGTH).optional();
 const codeSchema = z.string().max(API_QUERY_MAX_LENGTH).optional().describe("Exact human-readable resource code.");
 publishedJsonSchemas.add(pageLimitSchema, { jsonSchema: {
   type: "integer", minimum: 1, maximum: API_LIST_MAX_LIMIT, default: API_LIST_DEFAULT_LIMIT,
+  description: `Page size, integer 1 to ${API_LIST_MAX_LIMIT}; defaults to ${API_LIST_DEFAULT_LIMIT}.`,
 } });
 publishedJsonSchemas.add(cursorSchema, { jsonSchema: { type: "string", maxLength: API_CURSOR_MAX_LENGTH } });
 const paginationShape = { limit: pageLimitSchema, cursor: cursorSchema };

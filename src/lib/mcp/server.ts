@@ -6,7 +6,9 @@ import type { ApiRouteContext } from "@/lib/api/route";
 import { hasRoleAndScope } from "@/lib/auth/api-scopes";
 import { deadlineExceeded } from "@/lib/domain-errors";
 import { toToolSchema } from "@/lib/operations/mcp-schema";
-import { readTools } from "./tools/read-tools";
+import { meRepresentationSchema } from "@/lib/representations/me";
+import { feedstockRepresentationSchema } from "@/lib/representations/feedstocks";
+import { readTools, type ReadTool } from "./tools/read-tools";
 import { toolErrorSchema, toolFailure, toolSuccess } from "./results";
 
 /** Phase 3b changes this classifier when write tools are introduced. */
@@ -15,9 +17,14 @@ export function mcpRequestAccess(_body: unknown): "read" | "write" {
   return "read";
 }
 
-function summary(body: Record<string, unknown>): string {
-  if (Array.isArray(body.data)) return `${body.data.length} results.${body.nextCursor ? " More results: pass nextCursor." : ""}`;
-  return "Resource retrieved.";
+function summary(tool: ReadTool, body: Record<string, unknown>): string {
+  if (Array.isArray(body.data)) return `${body.data.length} ${tool.noun}.${body.nextCursor ? " More results: pass nextCursor." : ""}`;
+  if (tool.name === "whoami") {
+    const data = body.data as z.infer<typeof meRepresentationSchema>;
+    return `${tool.noun} ${data.organization.name}, ${data.facilities.length} facilities, role ${data.role}.`;
+  }
+  const data = body.data as z.infer<typeof feedstockRepresentationSchema>;
+  return `${tool.noun} ${data.code}, version ${data.version}.`;
 }
 
 export function serveMcp(request: Request, context: ApiRouteContext): Promise<Response> {
@@ -41,7 +48,7 @@ export function serveMcp(request: Request, context: ApiRouteContext): Promise<Re
         const body = await tool.execute(context.ctx, rpc.params.arguments ?? {});
         // A broken reader is an internal error, never an input validation failure.
         tool.output.parse(body);
-        return toolSuccess(body, summary(body));
+        return toolSuccess(body, summary(tool, body));
       } catch (error) {
         return toolFailure(error, context, tool.name);
       }

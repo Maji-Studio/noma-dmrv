@@ -86,7 +86,10 @@ describe("MCP reads with real API keys", { timeout: LOOKUP_SUITE_TIMEOUT_MS }, (
   it("matches whoami to REST with the same key", async () => {
     const response = await ME(lookupRequest("me", "", a.key));
     expect(response.status).toBe(200);
-    expect((await call("whoami")).result.structuredContent).toEqual(await response.json());
+    const rest = await response.json();
+    const { result } = await call("whoami");
+    expect(result.structuredContent).toEqual(rest);
+    expect(result.content).toEqual([{ type: "text", text: `Organization ${rest.data.organization.name}, ${rest.data.facilities.length} facilities, role ${rest.data.role}.` }]);
   });
   it.each(collections)("matches $name filtered pages and shares cursors in both directions", async ({ resource, name, get }) => {
     const args = { q: PREFIX, limit: PAGE_SIZE };
@@ -95,7 +98,9 @@ describe("MCP reads with real API keys", { timeout: LOOKUP_SUITE_TIMEOUT_MS }, (
     const first = await response.json();
     expect(first.data).toHaveLength(PAGE_SIZE);
     expect(first.nextCursor).toBeTruthy();
-    const mcpFirst = (await call(name, args)).result.structuredContent;
+    const { result } = await call(name, args);
+    expect(result.content).toEqual([{ type: "text", text: `${PAGE_SIZE} ${resource.replaceAll("-", " ")}. More results: pass nextCursor.` }]);
+    const mcpFirst = result.structuredContent;
     expect(mcpFirst).toEqual(first);
     const nextArgs = { ...args, cursor: first.nextCursor };
     const second = await (await get(lookupRequest(resource, query(nextArgs), a.key))).json();
@@ -110,15 +115,24 @@ describe("MCP reads with real API keys", { timeout: LOOKUP_SUITE_TIMEOUT_MS }, (
     const rest = (input: Record<string, unknown>) => LOCATIONS(lookupRequest("suppliers", `/${a.supplierId}/locations${query(input)}`, a.key), lookupParams(a.supplierId));
     const first = await (await rest(args)).json();
     expect(first.nextCursor).toBeTruthy();
-    expect((await call("find_supplier_locations", { ...args, idOrCode: a.supplierId })).result.structuredContent).toEqual(first);
+    expect((await call("find_supplier_locations", { ...args, supplierId: a.supplierId })).result.structuredContent).toEqual(first);
     const next = { ...args, cursor: first.nextCursor };
-    expect((await call("find_supplier_locations", { ...next, idOrCode: a.supplierId })).result.structuredContent).toEqual(await (await rest(next)).json());
+    expect((await call("find_supplier_locations", { ...next, supplierId: a.supplierId })).result.structuredContent).toEqual(await (await rest(next)).json());
+  });
+  it("reports invalid supplier identifiers at the MCP argument name", async () => {
+    const { result } = await call("find_supplier_locations", { supplierId: "not-a-uuid" });
+    expect(result).toMatchObject({ isError: true, structuredContent: {
+      code: "invalid_query", issues: [{ pointer: "/supplierId" }],
+    } });
   });
   it("matches feedstock detail by id and by code", async () => {
     for (const idOrCode of [rows[0].id, rows[0].code]) {
       const response = await FEEDSTOCK(lookupRequest("feedstocks", `/${idOrCode}`, a.key), lookupParams(idOrCode));
       expect(response.status).toBe(200);
-      expect((await call("get_feedstock", { idOrCode })).result.structuredContent).toEqual(await response.json());
+      const rest = await response.json();
+      const { result } = await call("get_feedstock", { idOrCode });
+      expect(result.structuredContent).toEqual(rest);
+      expect(result.content).toEqual([{ type: "text", text: `Feedstock ${rest.data.code}, version ${rest.data.version}.` }]);
     }
   });
   it("filters scopes and refuses hidden tools exactly like unknown tools", async () => {
@@ -135,19 +149,22 @@ describe("MCP reads with real API keys", { timeout: LOOKUP_SUITE_TIMEOUT_MS }, (
     await db.update(feedstocks).set({ code: foreignCode }).where(eq(feedstocks.id, foreignRows[0].id));
     for (const [name, args] of [
       ["get_feedstock", { idOrCode: foreignRows[0].id }], ["get_feedstock", { idOrCode: foreignCode }],
-      ["find_supplier_locations", { idOrCode: b.supplierId }], ["find_storage_locations", { facilityId: b.facilityId }],
+      ["find_supplier_locations", { supplierId: b.supplierId }], ["find_storage_locations", { facilityId: b.facilityId }],
     ] as const) {
       const { result } = await call(name, args);
       expect(result).toMatchObject({ isError: true, structuredContent: { code: "not_found" } });
       expect(result.structuredContent).not.toHaveProperty("data");
     }
   });
-  it.each([{ unknown: true }, { limit: API_LIST_MAX_LIMIT + 1 }, { cursor: "malformed" }])("matches REST validation codes and issue paths for %j", async (args) => {
+  it.each([{ unknown: true }, { limit: API_LIST_MAX_LIMIT + 1 }, { cursor: "malformed" }])("matches REST validation codes and preserves MCP query issue paths for %j", async (args) => {
     const rest = await (await FEEDSTOCKS(lookupRequest("feedstocks", query(args), a.key))).json();
     const { result } = await call("find_feedstocks", args);
     expect(result.isError).toBe(true);
     expect(result.structuredContent.code).toBe(rest.code);
-    expect(result.structuredContent.issues).toEqual(rest.errors);
+    if ("cursor" in args) expect(result.structuredContent.issues).toEqual(rest.errors);
+    else expect(result.structuredContent.issues).toEqual(expect.arrayContaining([
+      expect.objectContaining({ pointer: "limit" in args ? "/limit" : "" }),
+    ]));
     expect(result.structuredContent).not.toHaveProperty("data");
   });
   it.each(["revoked", "expired"])("answers a %s key with HTTP 401", async (state) => {

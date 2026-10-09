@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { OPERATION_DEADLINE_MS } from "@/config/operations";
-import { API_LIST_MAX_LIMIT, API_VERSION } from "@/config/api-rest";
+import { API_BODY_MAX_BYTES, API_LIST_DEFAULT_LIMIT, API_LIST_MAX_LIMIT, API_VERSION } from "@/config/api-rest";
 import { API_SCOPES } from "@/lib/auth/api-scopes";
 import { DomainError } from "@/lib/domain-errors";
 import { buildOpenApiDocument } from "@/lib/api/openapi/document";
@@ -73,8 +73,47 @@ describe("authenticated MCP read route", () => {
     expect(result.tools.every((tool: { annotations: { readOnlyHint: boolean } }) => tool.annotations.readOnlyHint)).toBe(true);
     const find = result.tools.find((tool: { name: string }) => tool.name === "find_feedstocks");
     expect(find.inputSchema.additionalProperties).toBe(false);
-    expect(find.inputSchema.properties.limit).toMatchObject({ type: "integer", minimum: 1, maximum: API_LIST_MAX_LIMIT });
+    expect(find.inputSchema.properties.limit).toMatchObject({ type: "integer", minimum: 1, maximum: API_LIST_MAX_LIMIT,
+      description: `Page size, integer 1 to ${API_LIST_MAX_LIMIT}; defaults to ${API_LIST_DEFAULT_LIMIT}.` });
     expect(find.outputSchema.anyOf).toHaveLength(2);
+  });
+  it.each(["declared", "chunked"])("bounds a %s body before authenticated buckets or dispatch", async (kind) => {
+    const cancel = vi.fn();
+    const pull = vi.fn((controller: ReadableStreamDefaultController<Uint8Array>) => {
+      controller.enqueue(new Uint8Array(API_BODY_MAX_BYTES / 2 + 1));
+    });
+    const stream = new ReadableStream({ pull, cancel }, { highWaterMark: 0 });
+    const headers = rpc("tools/call").headers;
+    if (kind === "declared") headers.set("content-length", String(API_BODY_MAX_BYTES + 1));
+    mocks.pre.mockResolvedValue({ response: null, result: { allowed: true, limit: 600, remaining: 599, resetSeconds: 1 } });
+    const response = await POST(new Request(ENDPOINT, { method: "POST", headers, body: stream, duplex: "half" } as RequestInit));
+    expect(response.status).toBe(413);
+    expect(response.headers.get("content-type")).toBe("application/problem+json");
+    expect(response.headers.get("x-request-id")).toBeTruthy();
+    for (const [key, value] of Object.entries(rateHeaders)) expect(response.headers.get(key)).toBe(value);
+    expect(await response.json()).toMatchObject({ code: "payload_too_large" });
+    expect(cancel).toHaveBeenCalledOnce();
+    expect(pull).toHaveBeenCalledTimes(kind === "declared" ? 0 : 2);
+    expect(mocks.post).not.toHaveBeenCalled();
+    expect(mocks.me).not.toHaveBeenCalled();
+  });
+  it("serves a body exactly at the byte limit and names the organization", async () => {
+    const request = rpc("tools/call", { name: "whoami", arguments: {} });
+    const json = await request.text();
+    const padded = json + " ".repeat(API_BODY_MAX_BYTES - new TextEncoder().encode(json).length);
+    request.headers.set("content-length", String(API_BODY_MAX_BYTES));
+    const response = await POST(new Request(ENDPOINT, { method: "POST", headers: request.headers, body: padded }));
+    expect(response.status).toBe(200);
+    expect(await body(response)).toMatchObject({ result: {
+      content: [{ type: "text", text: "Organization Test, 0 facilities, role admin." }],
+      structuredContent: { data: { organization: { id: "org-1" } } },
+    } });
+    expect(mocks.me).toHaveBeenCalledOnce();
+  });
+  it("points invalid supplier UUID issues at supplierId", async () => {
+    expect(await body(await call("find_supplier_locations", { supplierId: "not-a-uuid" }))).toMatchObject({
+      result: { isError: true, structuredContent: { code: "invalid_query", issues: [{ pointer: "/supplierId" }] } },
+    });
   });
   it("publishes the configured server version", async () => {
     const { result } = await body(await POST(rpc("initialize", { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "test", version: "1" } })));
@@ -87,7 +126,7 @@ describe("authenticated MCP read route", () => {
     expect((await body(await call("find_feedstocks"))).error).toEqual((await body(await call("unknown"))).error);
   });
   it.each([{ unknown: true }, { limit: API_LIST_MAX_LIMIT + 1 }, { limit: 0 }, { limit: 1.5 }])("returns structured query validation for %j", async (args) => {
-    expect(await body(await call("find_feedstocks", args))).toMatchObject({ result: { isError: true, structuredContent: { code: "invalid_query", issues: [] } } });
+    expect(await body(await call("find_feedstocks", args))).toMatchObject({ result: { isError: true, structuredContent: { code: "invalid_query", issues: expect.arrayContaining([expect.objectContaining({ pointer: expect.any(String) })]) } } });
   });
   it("accepts numeric limit and converts malformed cursors as REST does", async () => {
     expect(await body(await call("find_feedstocks", { limit: 1, cursor: "bad" }))).toMatchObject({ result: { isError: true, structuredContent: { code: "invalid_cursor", issues: [] } } });
@@ -145,10 +184,14 @@ it("publishes the same input fields and constraints as the matching OpenAPI para
   for (const tool of result.tools) {
     const operation = operations.find((candidate) => candidate.operationId === tool.name)!;
     const parameters = operation.parameters as { name: string; required: boolean; schema: Record<string, unknown> }[];
-    expect(Object.keys(tool.inputSchema.properties).sort()).toEqual(parameters.map((parameter) => parameter.name).sort());
+    const argumentName = (name: string) => tool.name === "find_supplier_locations" && name === "idOrCode" ? "supplierId" : name;
+    expect(Object.keys(tool.inputSchema.properties).sort()).toEqual(parameters.map((parameter) => argumentName(parameter.name)).sort());
     for (const parameter of parameters) {
-      expect(tool.inputSchema.properties[parameter.name]).toMatchObject(parameter.schema);
-      expect(tool.inputSchema.required?.includes(parameter.name) ?? false).toBe(parameter.required);
+      const schema = { ...parameter.schema };
+      // MCP describes its integer input independently of REST's preserved wording.
+      if (parameter.name === "limit") delete schema.description;
+      expect(tool.inputSchema.properties[argumentName(parameter.name)]).toMatchObject(schema);
+      expect(tool.inputSchema.required?.includes(argumentName(parameter.name)) ?? false).toBe(parameter.required);
     }
   }
 });

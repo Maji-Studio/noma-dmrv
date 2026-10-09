@@ -3,9 +3,11 @@ import { ApiHttpError } from "./http-error";
 
 export const IDEMPOTENCY_KEY_PATTERN = /^[\x21-\x7e]+$/;
 
-export async function readJsonBody(request: Request): Promise<unknown> {
-  if (request.headers.get("content-type")?.split(";", 1)[0].trim().toLowerCase() !== "application/json") {
-    throw new ApiHttpError(415, "unsupported_media_type", "Use Content-Type: application/json.");
+/** Read at most the shared JSON body limit, including requests without a length. */
+export async function readBoundedBody(request: Request): Promise<Buffer<ArrayBuffer>> {
+  if (Number(request.headers.get("content-length")) > API_BODY_MAX_BYTES) {
+    await request.body?.cancel();
+    throw new ApiHttpError(413, "payload_too_large", "The JSON body exceeds the size limit.");
   }
   const reader = request.body?.getReader();
   const chunks: Uint8Array[] = [];
@@ -26,8 +28,16 @@ export async function readJsonBody(request: Request): Promise<unknown> {
       reader.releaseLock();
     }
   }
+  return Buffer.concat(chunks);
+}
+
+export async function readJsonBody(request: Request): Promise<unknown> {
+  if (request.headers.get("content-type")?.split(";", 1)[0].trim().toLowerCase() !== "application/json") {
+    throw new ApiHttpError(415, "unsupported_media_type", "Use Content-Type: application/json.");
+  }
+  const bytes = await readBoundedBody(request);
   try {
-    return JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(Buffer.concat(chunks)));
+    return JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
   } catch {
     throw new ApiHttpError(400, "malformed_json", "Send a valid JSON body.");
   }

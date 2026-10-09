@@ -1,3 +1,4 @@
+import type { RateLimitResult } from "@/data-access/api-rate-limits";
 import type { z } from "zod";
 import type { problemSchema } from "./problem-schema";
 import type { ActionFailure } from "@/fn/action-errors";
@@ -21,6 +22,14 @@ const TITLES: Record<number, string> = {
 };
 export function apiResponseHeaders(requestId: string): Headers {
   return new Headers({ "Cache-Control": "private, no-store", "X-Request-Id": requestId });
+}
+
+export function rateLimitHeaders(result: RateLimitResult): Headers {
+  return new Headers({
+    "RateLimit-Limit": String(result.limit),
+    "RateLimit-Remaining": String(result.remaining),
+    "RateLimit-Reset": String(result.resetSeconds),
+  });
 }
 
 type ProblemOptions = {

@@ -37,6 +37,7 @@ const guidance: Record<keyof typeof readers, string> = {
 
 export interface ReadTool {
   name: string;
+  noun: string;
   scope?: ApiScope;
   description: string;
   input: z.ZodType;
@@ -54,19 +55,20 @@ function defineRead<S extends z.ZodType>(
 }
 
 export const readTools: ReadTool[] = [
-  defineRead({ name: "whoami", description: `${readDescriptions.whoami} Call this first for facility ids, time zones and local YYYY-MM-DD dates.`, input: z.strictObject({}), output: itemEnvelopeSchema(meRepresentationSchema) },
+  defineRead({ name: "whoami", noun: "Organization", description: `${readDescriptions.whoami} Call this first for facility ids, time zones and local YYYY-MM-DD dates.`, input: z.strictObject({}), output: itemEnvelopeSchema(meRepresentationSchema) },
     async (ctx) => ({ data: await readApiMe(ctx) })),
   ...resources.map((resource) => defineRead({
     name: `find_${resource.path.replaceAll("-", "_")}`, scope: resource.scope,
+    noun: resource.path.replaceAll("-", " "),
     description: `${readDescriptions.list} ${guidance[resource.path]}`,
     input: resource.queries.list, output: listEnvelopeSchema(resource.schema),
   }, (ctx, input) => readers[resource.path](ctx, input))),
-  defineRead({ name: "find_supplier_locations", scope: "suppliers:read",
-    description: `${readDescriptions.supplierLocations} Call find_suppliers first for the supplier UUID in idOrCode. Coordinates are WGS 84 decimal degrees.`,
-    input: supplierLocationListSchema.extend({ idOrCode: z.uuid().describe("Target identifier, UUID; codes are not accepted on this method.") }),
+  defineRead({ name: "find_supplier_locations", noun: "supplier locations", scope: "suppliers:read",
+    description: `${readDescriptions.supplierLocations} Call find_suppliers first for the supplier UUID in supplierId. Coordinates are WGS 84 decimal degrees.`,
+    input: supplierLocationListSchema.extend({ supplierId: z.uuid().describe("Supplier identifier, UUID, from find_suppliers.") }),
     output: listEnvelopeSchema(supplierLocationRepresentationSchema),
-  }, (ctx, { idOrCode, ...input }) => readSupplierLocationListFromInput(ctx, input, idOrCode)),
-  defineRead({ name: "get_feedstock", scope: "feedstocks:read",
+  }, (ctx, { supplierId, ...input }) => readSupplierLocationListFromInput(ctx, input, supplierId)),
+  defineRead({ name: "get_feedstock", noun: "Feedstock", scope: "feedstocks:read",
     description: `${readDescriptions.get} Call find_feedstocks first for an id or code. Masses are kilograms; moisture is percent of wet mass, 0 to 100. Delivery dates are facility-local YYYY-MM-DD.`,
     input: resourceQueries.feedstocks.get.extend({ idOrCode: z.string().describe("Resource UUID or exact human-readable code.") }),
     output: itemEnvelopeSchema(feedstockRepresentationSchema),

@@ -1,19 +1,28 @@
 import { localhostAllowedOrigins, originValidationResponse } from "@modelcontextprotocol/server";
 import { env } from "@/config/env";
+import { readBoundedBody } from "@/lib/api/request-body";
 import { apiRoute } from "@/lib/api/route";
 import { mcpRequestAccess, serveMcp } from "@/lib/mcp/server";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
 
-const authenticatedHandler = apiRoute("api.mcp", undefined, serveMcp, {
-  deadlineInHandler: true,
-  access: async (request) => {
-    // Malformed JSON is left to the SDK's protocol parser after admission.
-    const body: unknown = await request.clone().json().catch(() => undefined);
-    return mcpRequestAccess(body);
-  },
-});
+function authenticatedHandler(request: Request): Promise<Response> {
+  let preparedRequest = request;
+  return apiRoute("api.mcp", undefined, (_request, context) => serveMcp(preparedRequest, context), {
+    deadlineInHandler: true,
+    access: async () => {
+      const bytes = await readBoundedBody(request);
+      preparedRequest = new Request(request.url, {
+        method: request.method, headers: request.headers, body: bytes, signal: request.signal,
+      });
+      // Malformed JSON is left to the SDK's protocol parser after admission.
+      let body: unknown;
+      try { body = JSON.parse(new TextDecoder().decode(bytes)); } catch { /* SDK owns parse errors. */ }
+      return mcpRequestAccess(body);
+    },
+  })(request);
+}
 
 export async function POST(request: Request): Promise<Response> {
   const hostnames = localhostAllowedOrigins();

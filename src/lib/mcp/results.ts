@@ -19,7 +19,11 @@ export function toolSuccess(structuredContent: Record<string, unknown>, text: st
 export async function toolFailure(error: unknown, context: ApiRouteContext, name: string) {
   let response: Response;
   if (error instanceof ApiHttpError) {
-    response = problemResponse({ status: error.status, code: error.code, detail: error.message, instance: context.instance, requestId: context.requestId });
+    response = problemResponse({ status: error.status, code: error.code, detail: error.message,
+      errors: error.issues?.map((issue) => ({
+        pointer: issue.path.length ? `/${issue.path.map((part) => String(part).replaceAll("~", "~0").replaceAll("/", "~1")).join("/")}` : "",
+        code: issue.code, detail: issue.message,
+      })), instance: context.instance, requestId: context.requestId });
   } else if (error instanceof DomainError) {
     if (error.cause !== undefined || error.code === "deadline_exceeded") logApiError(error, name, context.requestId);
     response = actionFailureResponse(toActionFailure(error, {

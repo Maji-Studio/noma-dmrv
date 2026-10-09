@@ -14,7 +14,7 @@ export function parseApiQuery<S extends z.ZodType>(request: Request, schema: S):
 /** Shared validation preserves REST query error codes and issue paths. */
 export function parseQueryInput<S extends z.ZodType>(values: unknown, schema: S): z.output<S> {
   const parsed = schema.safeParse(values);
-  if (!parsed.success) throw new ApiHttpError(400, "invalid_query", "Send valid query parameters.");
+  if (!parsed.success) throw new ApiHttpError(400, "invalid_query", "Send valid query parameters.", undefined, parsed.error.issues);
   return parsed.data;
 }
 

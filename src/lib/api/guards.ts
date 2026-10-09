@@ -3,7 +3,7 @@ import { API_RATE_LIMITS } from "@/config/api-rate-limits";
 import { consumeRateLimit, type RateLimitResult } from "@/data-access/api-rate-limits";
 import type { ApiContext } from "@/lib/auth/api-context";
 import { clientIpBucketKey } from "./client-ip";
-import { problemResponse } from "./problem";
+import { problemResponse, rateLimitHeaders } from "./problem";
 
 type RequestInfo = { requestId: string; instance: string };
 
@@ -11,13 +11,6 @@ function bypassLimits(): boolean {
   return env.NODE_ENV !== "production" && process.env.DISABLE_RATE_LIMIT === "true";
 }
 
-function rateLimitHeaders(result: RateLimitResult): Headers {
-  return new Headers({
-    "RateLimit-Limit": String(result.limit),
-    "RateLimit-Remaining": String(result.remaining),
-    "RateLimit-Reset": String(result.resetSeconds),
-  });
-}
 
 function limitedResponse(result: RateLimitResult, info: RequestInfo): Response {
   const response = problemResponse({

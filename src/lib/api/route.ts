@@ -4,7 +4,7 @@ import { resolveApiContext, type ApiContext } from "@/lib/auth/api-context";
 import { hasRoleAndScope, type ApiScope } from "@/lib/auth/api-scopes";
 import { deadlineExceeded, DomainError } from "@/lib/domain-errors";
 import { toActionFailure } from "@/fn/action-errors";
-import { actionFailureResponse, apiDenialResponse, apiResponseHeaders, problemResponse } from "./problem";
+import { actionFailureResponse, apiDenialResponse, apiResponseHeaders, problemResponse, rateLimitHeaders } from "./problem";
 import { logApiError, unexpectedApiErrorResponse } from "./route-error";
 import { ApiHttpError } from "./http-error";
 import { preAuthGuard, postAuthGuard } from "./guards";
@@ -55,6 +55,9 @@ export function apiRoute<Params = Record<string, never>>(
     try {
       const preAuth = await preAuthGuard(request, { instance, requestId });
       if (preAuth.response) return preAuth.response;
+      if (preAuth.result) {
+        for (const [name, value] of rateLimitHeaders(preAuth.result)) headers.set(name, value);
+      }
       const resolution = await resolveApiContext(request);
       if (!resolution.ok) return apiDenialResponse(resolution.denial, instance, requestId);
       const context = { deadlineAt, ctx: resolution.ctx, requestId, instance, headers: apiResponseHeaders(requestId) };
