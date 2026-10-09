@@ -79,6 +79,7 @@ export const headerComponents = {
   ...privateHeaderDefinitions, ...etagDefinition, ...writeHeaderDefinitions, ...locationDefinition,
   "WWW-Authenticate": header("Bearer authentication challenge."),
   "Retry-After": header("Seconds to wait before retrying; present on rate limits and idempotency_in_progress."),
+  Allow: header("Supported methods for this path, separated by commas; includes automatic HEAD and OPTIONS where served. Always present on 405."),
 };
 function headerReferences(definitions: Record<string, unknown>) {
   return Object.fromEntries(Object.keys(definitions).map((name) => [name, { $ref: `#/components/headers/${name}` }]));
@@ -94,6 +95,7 @@ const errorDescriptions: Record<number, string> = {
   401: "Missing, invalid, expired or revoked bearer credential, or invalid credential owner.",
   403: "Insufficient scope/role or organization API access disabled.",
   404: "Target or referenced resource absent or outside the credential organization.",
+  405: "Unsupported method on a visible path. Private paths require authentication and permission for at least one published operation; public discovery paths do not. Supported operations never return this response.",
   409: "Business conflict, idempotency in progress, used dry-run key, or replay unavailable.",
   412: "Stale row version or representation revision; current contains the latest representation.",
   413: "JSON request exceeds the configured body limit.",
@@ -111,6 +113,7 @@ export function problemResponseComponents() {
     headers: {
       ...privateHeaders,
       ...(status === 401 ? headerReferences({ "WWW-Authenticate": true }) : {}),
+      ...(status === 405 ? headerReferences({ Allow: true }) : {}),
       ...([409, 429].includes(status) ? headerReferences({ "Retry-After": true }) : {}),
     },
     content: { "application/problem+json": { schema: { $ref: "#/components/schemas/Problem" } } },

@@ -15,7 +15,7 @@ export const ACTION_STATUS = {
 } satisfies Record<DomainErrorCode, number>;
 
 const TITLES: Record<number, string> = {
-  400: "Bad request", 401: "Unauthorized", 403: "Forbidden", 404: "Not found",
+  400: "Bad request", 401: "Unauthorized", 403: "Forbidden", 404: "Not found", 405: "Method not allowed",
   409: "Conflict", 412: "Precondition failed", 413: "Payload too large",
   415: "Unsupported media type", 422: "Validation failed", 428: "Precondition required",
   429: "Too many requests", 500: "Internal server error", 503: "Service unavailable",

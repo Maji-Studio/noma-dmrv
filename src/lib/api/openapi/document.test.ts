@@ -200,6 +200,18 @@ it("types current as a feedstock only on feedstock precondition responses", () =
   }
 });
 
+it("describes a shared path-level 405 honestly without adding it to supported operations", () => {
+  expect(document.components.responses.Problem405).toMatchObject({
+    headers: { Allow: { $ref: "#/components/headers/Allow" } },
+    content: { "application/problem+json": { schema: { $ref: "#/components/schemas/Problem" } } },
+  });
+  expect(document.components.headers.Allow.description).toContain("Always present on 405");
+  expect(document.info.description).toContain("path-level refusal");
+  for (const methods of Object.values(document.paths)) {
+    for (const operation of Object.values(methods)) expect(operation.responses).not.toHaveProperty("405");
+  }
+});
+
 describe("OpenAPI 3.1 structure (no validator dependency)", () => {
   it("defines info, relative servers, HTTP bearer security and explicit scope metadata", () => {
     expect(document.openapi).toBe("3.1.0");
