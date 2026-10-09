@@ -1,6 +1,6 @@
 import { apiRoute } from "@/lib/api/route";
 import { readSupplier } from "@/lib/api/suppliers-queries";
-import { supplierEtag } from "@/lib/api/representations/suppliers";
+import { supplierEtag } from "@/lib/api/representation-etags";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;

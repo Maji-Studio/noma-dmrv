@@ -4,8 +4,8 @@ import { resolveApiContext, type ApiContext } from "@/lib/auth/api-context";
 import { hasRoleAndScope, type ApiScope } from "@/lib/auth/api-scopes";
 import { deadlineExceeded, DomainError } from "@/lib/domain-errors";
 import { toActionFailure } from "@/fn/action-errors";
-import { actionFailureResponse, apiDenialResponse, apiResponseHeaders, problemResponse } from "./problem";
-import { logApiError, unexpectedApiErrorResponse } from "./route-error";
+import { actionFailureResponse, apiDenialResponse, apiResponseHeaders, problemResponse, rateLimitHeaders } from "./problem";
+import { logApiError, shouldLogDomainError, unexpectedApiErrorResponse } from "./route-error";
 import { ApiHttpError } from "./http-error";
 import { preAuthGuard, postAuthGuard } from "./guards";
 import type { RateLimitResult } from "@/data-access/api-rate-limits";
@@ -20,21 +20,29 @@ export interface ApiRouteContext {
 
 /** Scope checks precede the authenticated write switch and rate limits. */
 async function admitApiRequest(
-  request: Request, context: ApiRouteContext, scope: ApiScope | undefined, ipResult: RateLimitResult | null,
+  access: "read" | "write", context: ApiRouteContext, scope: ApiScope | undefined, ipResult: RateLimitResult | null,
 ) {
   if (scope && !hasRoleAndScope(context.ctx, scope)) {
     return { ok: false as const, response: apiDenialResponse("missing_scope", context.instance, context.requestId) };
   }
   return postAuthGuard(context.ctx, {
     requestId: context.requestId, instance: context.instance,
-    access: request.method === "GET" || request.method === "HEAD" ? "read" : "write",
+    access,
   }, ipResult);
+}
+
+interface ApiRouteOptions {
+  /** Runs once after authentication, before authenticated rate limiting; the handler receives the returned request. */
+  prepare?: (request: Request) => Promise<{ request: Request; access: "read" | "write" }>;
+  /** MCP checks inside the tool so expiry is a structured tool result. */
+  deadlineInHandler?: boolean;
 }
 
 export function apiRoute<Params = Record<string, never>>(
   op: string,
   scope: ApiScope | undefined,
   handler: (request: Request, context: ApiRouteContext, params: Params) => Promise<Response>,
+  options: ApiRouteOptions = {},
 ) {
   return async (request: Request, route?: { params: Promise<Params> }): Promise<Response> => {
     const deadlineAt = Date.now() + OPERATION_DEADLINE_MS;
@@ -48,18 +56,24 @@ export function apiRoute<Params = Record<string, never>>(
     try {
       const preAuth = await preAuthGuard(request, { instance, requestId });
       if (preAuth.response) return preAuth.response;
+      if (preAuth.result) {
+        for (const [name, value] of rateLimitHeaders(preAuth.result)) headers.set(name, value);
+      }
       const resolution = await resolveApiContext(request);
       if (!resolution.ok) return apiDenialResponse(resolution.denial, instance, requestId);
       const context = { deadlineAt, ctx: resolution.ctx, requestId, instance, headers: apiResponseHeaders(requestId) };
-      const admission = await admitApiRequest(request, context, scope, preAuth.result);
+      const prepared = options.prepare ? await options.prepare(request) : {
+        request, access: request.method === "GET" || request.method === "HEAD" ? "read" as const : "write" as const,
+      };
+      const admission = await admitApiRequest(prepared.access, context, scope, preAuth.result);
       if (!admission.ok) return admission.response;
       for (const [name, value] of admission.headers) {
         headers.set(name, value);
         context.headers.set(name, value);
       }
       const params = route ? await route.params : {} as Params;
-      if (Date.now() >= deadlineAt) throw deadlineExceeded("before starting");
-      const response = await handler(request, context, params);
+      if (!options.deadlineInHandler && Date.now() >= deadlineAt) throw deadlineExceeded("before starting");
+      const response = await handler(prepared.request, context, params);
       return finish(response);
     } catch (error) {
       if (error instanceof ApiHttpError) {
@@ -68,7 +82,7 @@ export function apiRoute<Params = Record<string, never>>(
       if (error instanceof DomainError) {
         // The action converter logs raw causes. REST logs only trusted classes
         // and codes, then uses the same conversion without its action logger.
-        if (error.cause !== undefined || error.code === "outcome_unknown" || error.code === "deadline_exceeded") {
+        if (shouldLogDomainError(error)) {
           logApiError(error, op, requestId);
         }
         const failure = toActionFailure(error, {

@@ -1,7 +1,7 @@
 import { findApiVehicle, listApiVehicles } from "@/data-access/api-vehicles";
 import type { ApiLookupFilters, ApiLookupIdentifier } from "@/data-access/api-lookup-filters";
 import type { OrgContext } from "@/lib/auth/server";
-import { representVehicle } from "@/lib/api/representations/vehicles";
+import { representVehicle } from "@/lib/representations/vehicles";
 import { readListPage, type ReadListQuery } from "./api-list";
 
 export function readApiVehicleList(ctx: OrgContext, query: ReadListQuery<ApiLookupFilters>) {

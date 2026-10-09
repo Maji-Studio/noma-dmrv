@@ -8,8 +8,13 @@ export function parseApiQuery<S extends z.ZodType>(request: Request, schema: S):
     if (Object.hasOwn(values, key)) throw new ApiHttpError(400, "invalid_query", "Query parameters must not repeat.");
     Object.defineProperty(values, key, { value, enumerable: true });
   }
+  return parseQueryInput(values, schema);
+}
+
+/** Shared validation preserves REST query error codes and issue paths. */
+export function parseQueryInput<S extends z.ZodType>(values: unknown, schema: S): z.output<S> {
   const parsed = schema.safeParse(values);
-  if (!parsed.success) throw new ApiHttpError(400, "invalid_query", "Send valid query parameters.");
+  if (!parsed.success) throw new ApiHttpError(400, "invalid_query", "Send valid query parameters.", undefined, parsed.error.issues);
   return parsed.data;
 }
 

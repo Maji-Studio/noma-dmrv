@@ -1,6 +1,4 @@
 import { z } from "zod";
-import { FEEDSTOCK_TYPE_REPRESENTATION_REVISION } from "@/config/api-rest";
-import { representationEtag } from "../etag";
 import { lookupFields, lookupInstants, lookupVersion, type LookupRepresentationInput } from "./lookup-fields";
 
 export const feedstockTypeRepresentationSchema = z.object({
@@ -14,8 +12,4 @@ export type FeedstockTypeRepresentationInput = LookupRepresentationInput<Feedsto
 
 export function representFeedstockType(row: FeedstockTypeRepresentationInput): FeedstockTypeRepresentation {
   return feedstockTypeRepresentationSchema.parse({ ...row, ...lookupInstants(row) });
-}
-
-export function feedstockTypeEtag(row: Pick<FeedstockTypeRepresentation, "version">): string {
-  return representationEtag(row.version, FEEDSTOCK_TYPE_REPRESENTATION_REVISION);
 }

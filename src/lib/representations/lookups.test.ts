@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { facilityEtag, facilityRepresentationSchema, representFacility } from "./facilities";
-import { supplierEtag, supplierRepresentationSchema, representSupplier } from "./suppliers";
-import { feedstockTypeEtag, feedstockTypeRepresentationSchema, representFeedstockType } from "./feedstock-types";
-import { storageLocationEtag, storageLocationRepresentationSchema, representStorageLocation } from "./storage-locations";
-import { vehicleEtag, vehicleRepresentationSchema, representVehicle } from "./vehicles";
-import { driverEtag, driverRepresentationSchema, representDriver } from "./drivers";
+import { facilityRepresentationSchema, representFacility } from "./facilities";
+import { supplierRepresentationSchema, representSupplier } from "./suppliers";
+import { feedstockTypeRepresentationSchema, representFeedstockType } from "./feedstock-types";
+import { storageLocationRepresentationSchema, representStorageLocation } from "./storage-locations";
+import { vehicleRepresentationSchema, representVehicle } from "./vehicles";
+import { driverRepresentationSchema, representDriver } from "./drivers";
 import { supplierLocationRepresentationSchema, representSupplierLocation } from "./supplier-locations";
 
 const id = "4d766880-6bb2-4dcb-ad62-e00c04bcbb4b";
@@ -61,10 +61,9 @@ describe.each(cases)("$name representation", ({ schema, map, json, expected: out
   });
 });
 
-it("serializes archive Dates and stored instants, and emits strong version/revision ETags", () => {
+it("serializes archive Dates and stored instants", () => {
   expect(representFacility({ ...base, version: 7, timezone: "UTC", archivedAt: new Date(archived) }).archivedAt).toBe(archived);
   expect(representFeedstockType({ ...base, version: 7, category: "forestry", usage: "pyrolysis", archivedAt: archived }).archivedAt).toBe(archived);
   expect(representStorageLocation({ ...base, version: 7, facilityId: id, type: "biochar_bin", capacityKg: null, feedstockTypeId: null, archivedAt: new Date(archived) })).toMatchObject({ archivedAt: archived, capacityKg: null });
-  for (const etag of [facilityEtag, supplierEtag, feedstockTypeEtag, storageLocationEtag, vehicleEtag, driverEtag]) expect(etag({ version: 7 })).toBe('"7.1"');
   expect(representVehicle({ ...base, version: 7, vehicleType: "truck", identifier: null }).identifier).toBeNull();
 });

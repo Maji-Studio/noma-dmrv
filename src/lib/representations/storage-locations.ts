@@ -1,6 +1,4 @@
 import { z } from "zod";
-import { STORAGE_LOCATION_REPRESENTATION_REVISION } from "@/config/api-rest";
-import { representationEtag } from "../etag";
 import { lookupFields, lookupInstants, lookupVersion, lookupFacilityId, type LookupRepresentationInput } from "./lookup-fields";
 
 export const storageLocationRepresentationSchema = z.object({
@@ -16,8 +14,4 @@ export type StorageLocationRepresentationInput = LookupRepresentationInput<Stora
 
 export function representStorageLocation(row: StorageLocationRepresentationInput): StorageLocationRepresentation {
   return storageLocationRepresentationSchema.parse({ ...row, ...lookupInstants(row) });
-}
-
-export function storageLocationEtag(row: Pick<StorageLocationRepresentation, "version">): string {
-  return representationEtag(row.version, STORAGE_LOCATION_REPRESENTATION_REVISION);
 }

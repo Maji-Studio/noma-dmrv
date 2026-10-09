@@ -30,7 +30,7 @@ function replaceInPlace(target: JsonSchema, replacement: JsonSchema): void {
   const description = target.description;
   for (const key of Object.keys(target)) delete target[key];
   Object.assign(target, structuredClone(replacement));
-  if (description !== undefined) target.description = description;
+  if (description !== undefined && replacement.description === undefined) target.description = description;
 }
 
 function isFormEncodingBranch(node: unknown): boolean {

@@ -1,6 +1,6 @@
 import { apiRoute } from "@/lib/api/route";
 import { readStorageLocation } from "@/lib/api/storage-locations-queries";
-import { storageLocationEtag } from "@/lib/api/representations/storage-locations";
+import { storageLocationEtag } from "@/lib/api/representation-etags";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;

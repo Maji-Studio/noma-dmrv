@@ -1,4 +1,4 @@
-import { expect, it } from "vitest";
+import { expect, it, vi } from "vitest";
 import { API_BODY_MAX_BYTES, API_IDEMPOTENCY_KEY_MAX_LENGTH } from "@/config/api-rest";
 import { readIdempotencyKey, readJsonBody } from "./request-body";
 
@@ -35,4 +35,18 @@ it("requires keys only when requested and validates visible ASCII length", () =>
     expect(() => readIdempotencyKey(keyed(key), false)).toThrow(expect.objectContaining({ code: "idempotency_key_invalid" }));
   }
   expect(readIdempotencyKey(keyed("x".repeat(API_IDEMPOTENCY_KEY_MAX_LENGTH)), true)).toHaveLength(API_IDEMPOTENCY_KEY_MAX_LENGTH);
+});
+
+
+it("refuses an oversized declared length without reading and cancels the body", async () => {
+  const pull = vi.fn();
+  const cancel = vi.fn();
+  const stream = new ReadableStream<Uint8Array>({ pull, cancel }, { highWaterMark: 0 });
+  const oversized = new Request("https://example.test", {
+    method: "POST", headers: { "content-type": "application/json", "content-length": String(API_BODY_MAX_BYTES + 1) },
+    body: stream, duplex: "half",
+  } as RequestInit);
+  await expect(readJsonBody(oversized)).rejects.toMatchObject({ status: 413, code: "payload_too_large" });
+  expect(pull).not.toHaveBeenCalled();
+  expect(cancel).toHaveBeenCalledOnce();
 });
