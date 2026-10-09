@@ -8,7 +8,7 @@ import {
   storageLocations,
 } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
-import { SafeError } from "@/lib/errors";
+import { productionRunValidationError, withProductionRunErrors } from "@/lib/production-run-domain-errors";
 import {
   MASS_INPUT_MAX_KG,
   MASS_KG_INPUT_STEP,
@@ -18,6 +18,8 @@ import {
   assertFeedstockWetDrawWithinStock,
 } from "../feedstock-wet-stock";
 import { requireOrgScope } from "../utils";
+
+const drawValidationError = (message: string) => productionRunValidationError(message, ["feedstockDraws"]);
 
 const MASS_PRECISION_FACTOR = 1 / MASS_KG_INPUT_STEP;
 
@@ -35,14 +37,14 @@ export function normalizeProductionRunFeedstockDraws(
 
   const normalized = draws.map((draw) => {
     if (!z.uuid().safeParse(draw.storageLocationId).success) {
-      throw new SafeError("Choose a valid feedstock source bin");
+      throw drawValidationError("Choose a valid feedstock source bin");
     }
     if (
       !Number.isFinite(draw.wetMassKg) ||
       draw.wetMassKg <= 0 ||
       draw.wetMassKg > MASS_INPUT_MAX_KG
     ) {
-      throw new SafeError("Feedstock draw wet mass must be a positive valid mass");
+      throw drawValidationError("Feedstock draw wet mass must be a positive valid mass");
     }
 
     const massUnits = Math.round(draw.wetMassKg * MASS_PRECISION_FACTOR);
@@ -51,15 +53,15 @@ export function normalizeProductionRunFeedstockDraws(
       Math.abs(massUnits / MASS_PRECISION_FACTOR - draw.wetMassKg) >
         Number.EPSILON
     ) {
-      throw new SafeError("Feedstock draw wet mass must use at most 3 decimal places");
+      throw drawValidationError("Feedstock draw wet mass must use at most 3 decimal places");
     }
     if (seenStorageLocationIds.has(draw.storageLocationId)) {
-      throw new SafeError("Each feedstock source bin can only be used once per run");
+      throw drawValidationError("Each feedstock source bin can only be used once per run");
     }
     seenStorageLocationIds.add(draw.storageLocationId);
     totalMassUnits += massUnits;
     if (!Number.isSafeInteger(totalMassUnits)) {
-      throw new SafeError("Total feedstock wet mass is too large");
+      throw drawValidationError("Total feedstock wet mass is too large");
     }
 
     return {
@@ -69,7 +71,7 @@ export function normalizeProductionRunFeedstockDraws(
   });
 
   if (totalMassUnits / MASS_PRECISION_FACTOR > MASS_INPUT_MAX_KG) {
-    throw new SafeError("Total feedstock wet mass is too large");
+    throw drawValidationError("Total feedstock wet mass is too large");
   }
 
   return normalized.sort((left, right) => {
@@ -167,20 +169,20 @@ export async function validateProductionRunFeedstockDrawSources(
 
   for (const draw of draws) {
     const location = locationsById.get(draw.storageLocationId);
-    if (!location) throw new SafeError("Feedstock storage bin not found or archived");
+    if (!location) throw drawValidationError("Feedstock storage bin not found or archived");
     if (location.facilityId !== facilityId) {
-      throw new SafeError("Feedstock bin does not belong to the selected facility");
+      throw drawValidationError("Feedstock bin does not belong to the selected facility");
     }
     if (location.type !== "feedstock_bin") {
-      throw new SafeError("Selected storage bin is not a feedstock bin");
+      throw drawValidationError("Selected storage bin is not a feedstock bin");
     }
     if (!location.feedstockTypeId || !location.feedstockTypeUsage) {
-      throw new SafeError(
+      throw drawValidationError(
         "Source bin must be restricted to a feedstock type before it can feed a production run",
       );
     }
     if (location.feedstockTypeUsage !== "pyrolysis") {
-      throw new SafeError(
+      throw drawValidationError(
         "Source bin holds a blend feedstock type and cannot feed a production run",
       );
     }
@@ -207,12 +209,12 @@ export async function replaceProductionRunFeedstockDraws(
   );
 
   for (const draw of draws) {
-    await assertFeedstockWetDrawWithinStock(ctx, tx, {
+    await withProductionRunErrors(() => assertFeedstockWetDrawWithinStock(ctx, tx, {
       storageLocationId: draw.storageLocationId,
       requestedWetKg: draw.wetMassKg,
       excludeRunId: params.productionRunId,
       binLockAlreadyHeld: true,
-    });
+    }), ["feedstockDraws"]);
   }
 
   await tx.delete(productionRunFeedstocks).where(
@@ -240,12 +242,12 @@ export async function replaceProductionRunFeedstockDraws(
   }
 
   for (const draw of draws) {
-    const allocations = await allocateFeedstockWetMass(
+    const allocations = await withProductionRunErrors(() => allocateFeedstockWetMass(
       ctx,
       tx,
       draw.storageLocationId,
       draw.wetMassKg,
-    );
+    ), ["feedstockDraws"]);
     await tx.insert(productionRunFeedstocks).values(
       allocations.map((allocation) => ({
         organizationId: ctx.organizationId,

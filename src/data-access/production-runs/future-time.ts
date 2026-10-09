@@ -1,6 +1,7 @@
-import { SafeError } from "@/lib/errors";
+import { DomainError } from "@/lib/domain-errors";
 import {
   formatProductionRunFutureTimeError,
+  PRODUCTION_RUN_FUTURE_TIME_MESSAGES,
   getFutureProductionRunTimeFields,
 } from "@/lib/production-runs/time-validation";
 
@@ -18,6 +19,8 @@ export function assertProductionRunTimesNotFuture(
 ): void {
   const futureFields = getFutureProductionRunTimeFields(input, now);
   if (futureFields.length > 0) {
-    throw new SafeError(formatProductionRunFutureTimeError(futureFields));
+    throw new DomainError("validation_failed", formatProductionRunFutureTimeError(futureFields), {
+      issues: futureFields.map((field) => ({ path: [field], code: "validation_failed", message: PRODUCTION_RUN_FUTURE_TIME_MESSAGES[field] })),
+    });
   }
 }

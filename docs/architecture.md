@@ -32,7 +32,7 @@ components (UI)
   serves Server Actions with native types, including `Date` and `undefined`.
   The action shape is `withAction((ctx) => runOperationInProcess(op, ctx, input))`.
   `src/lib/operations/registry.ts` is the explicit allowlist of exposed
-  operations; its keys match operation ids.
+  operations; its keys match operation ids. Feedstock and production-run writes use this layer.
 - The runner owns the transaction. Data-access ...InTransaction(ctx, tx, ...)
   functions and the helpers they call read and write only through `tx`,
   including reference checks and result enrichment. After-commit hooks run

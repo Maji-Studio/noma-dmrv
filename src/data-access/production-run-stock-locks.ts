@@ -1,3 +1,5 @@
+import { productionRunValidationError } from "@/lib/production-run-domain-errors";
+import { requireOrgScope } from "./utils";
 import type { DbTransaction } from "@/db";
 import { getOutputBinAllLayersDryKg } from "./output-stock";
 import type { OrgContext } from "@/lib/auth/server";
@@ -38,6 +40,7 @@ export async function lockProductionRunUpdateStock(
   snapshot: ProductionRunStockSnapshot,
   data: ProductionRunStockUpdate,
 ): Promise<void> {
+  requireOrgScope(ctx);
   const feedstockStockChanged =
     data.feedstockDraws !== undefined || data.facilityId !== undefined;
 
@@ -81,6 +84,7 @@ export async function deriveProductionRunBiocharStockState(
   storageLocationIds: ReadonlyArray<string | null>,
   excludeUnresolvedRunId?: string,
 ): Promise<BiocharBinStockState[]> {
+  requireOrgScope(ctx);
   const uniqueIds = [...new Set(
     storageLocationIds.filter((id): id is string => id != null),
   )];
@@ -110,6 +114,7 @@ export async function deriveProductionRunUpdateBiocharStockState(
     "biocharStorageLocationId" | "biocharOutputKg" | "biocharMoisturePercent" | "endTime" | "status"
   >,
 ): Promise<BiocharBinStockState[]> {
+  requireOrgScope(ctx);
   const biocharStockChanged =
     data.biocharMoisturePercent !== undefined || data.endTime !== undefined || data.status !== undefined ||
     (data.biocharOutputKg !== undefined &&
@@ -134,6 +139,7 @@ export async function assertProductionRunBiocharStockNotOverdrawn(
   tx: DbTransaction,
   stockState: ReadonlyArray<BiocharBinStockState>,
 ): Promise<void> {
+  requireOrgScope(ctx);
   for (const previous of stockState) {
     const transactionAvailableKg = await deriveBiocharAvailableKg(
       ctx,
@@ -145,7 +151,7 @@ export async function assertProductionRunBiocharStockNotOverdrawn(
       additionalDrawKg > 0 &&
       isOverdraw(additionalDrawKg, previous.availableKg)
     ) {
-      throw overdrawError("biochar");
+      throw productionRunValidationError(overdrawError("biochar").message, ["biocharOutputKg"]);
     }
   }
 }

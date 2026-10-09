@@ -9,6 +9,10 @@ import { Pool } from "pg";
 import { db } from "@/db";
 import {
   apiIdempotencyRecords,
+  reactors,
+  productionRuns,
+  productionRunFeedstockDraws,
+  productionRunFeedstocks,
   facilities,
   feedstocks,
   feedstockTypes,
@@ -104,6 +108,10 @@ export async function feedstockCount(fixture: IntakeFixture): Promise<number> {
 
 export async function removeIntakeFixture(fixture: IntakeFixture): Promise<void> {
   const organizationId = fixture.ctx.organizationId;
+  await db.delete(productionRunFeedstocks).where(eq(productionRunFeedstocks.organizationId, organizationId));
+  await db.delete(productionRunFeedstockDraws).where(eq(productionRunFeedstockDraws.organizationId, organizationId));
+  await db.delete(productionRuns).where(eq(productionRuns.organizationId, organizationId));
+  await db.delete(reactors).where(eq(reactors.organizationId, organizationId));
   await db.delete(transportLegs).where(eq(transportLegs.organizationId, organizationId));
   await db.delete(feedstocks).where(eq(feedstocks.organizationId, organizationId));
   await db.delete(storageLocations).where(eq(storageLocations.organizationId, organizationId));
@@ -123,4 +131,16 @@ export function createTestPool(max: number): Pool {
     max,
     lock_timeout: DEFAULT_DB_POOL_LOCK_TIMEOUT_MS,
   });
+}
+
+/** A run-ready facility; intake itself is exercised through the feedstock operation. */
+export async function createProductionRunFixture(label: string): Promise<IntakeFixture & { reactorId: string }> {
+  const fixture = await createIntakeFixture(label);
+  await db.update(storageLocations).set({ feedstockTypeId: fixture.feedstockTypeId })
+    .where(eq(storageLocations.organizationId, fixture.ctx.organizationId));
+  const [reactor] = await db.insert(reactors).values({
+    organizationId: fixture.ctx.organizationId, facilityId: fixture.facilityId,
+    code: `R-${label}`, identifier: `Reactor ${label}`, reactorType: "auger",
+  }).returning({ id: reactors.id });
+  return { ...fixture, reactorId: reactor.id };
 }
