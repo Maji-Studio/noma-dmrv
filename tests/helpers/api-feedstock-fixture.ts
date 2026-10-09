@@ -12,7 +12,7 @@ import { deriveFeedstockWetStockKg } from "@/data-access/feedstock-wet-stock";
 import { GET, PATCH, DELETE } from "@/app/api/v1/feedstocks/[idOrCode]/route";
 import { POST } from "@/app/api/v1/feedstocks/route";
 import { createFeedstockSchema, type CreateFeedstockData } from "@/schemas/feedstocks";
-import { feedstockRepresentationSchema, type FeedstockRepresentation } from "@/lib/api/representations/feedstocks";
+import { feedstockRepresentationSchema, type FeedstockRepresentation } from "@/lib/representations/feedstocks";
 import { createIntakeFixture, removeIntakeFixture, type IntakeFixture } from "./operation-fixture";
 
 const API_URL = "http://localhost:3100/api/v1/feedstocks";

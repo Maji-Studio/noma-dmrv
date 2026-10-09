@@ -14,7 +14,11 @@ function databaseCause(error: unknown): DatabaseError | undefined {
   return undefined;
 }
 
-/** REST failures never log messages, headers, payloads, stacks or raw causes. */
+export function shouldLogDomainError(error: DomainError): boolean {
+  return error.cause !== undefined || error.code === "outcome_unknown" || error.code === "deadline_exceeded";
+}
+
+/** API failures never log messages, headers, payloads, stacks or raw causes. */
 export function logApiError(error: unknown, op: string, requestId: string): void {
   // Classify by trusted classes rather than a mutable error.name, which could
   // itself contain credential material supplied by a plugin or upstream API.

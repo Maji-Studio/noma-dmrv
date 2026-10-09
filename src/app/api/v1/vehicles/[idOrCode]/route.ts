@@ -1,6 +1,6 @@
 import { apiRoute } from "@/lib/api/route";
 import { readVehicle } from "@/lib/api/vehicles-queries";
-import { vehicleEtag } from "@/lib/api/representations/vehicles";
+import { vehicleEtag } from "@/lib/api/representation-etags";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;

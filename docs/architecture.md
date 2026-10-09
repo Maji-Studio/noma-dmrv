@@ -254,8 +254,7 @@ runtime.
   everything except static assets — **including `/api`**; `/api/auth/*` is
   explicitly allowed through.
 - The proxy lets exact `/api/mcp`, `/api/v1`, and `/api/v1/*` through before
-  session lookup. The development-only MCP spike checks no credential and returns 404 in production
-  builds. REST routes resolve bearer credentials with `resolveApiContext`;
+  session lookup. MCP and private REST routes resolve bearer API keys with `resolveApiContext`;
   `/api/v1x`, `/api/mcpx` and `/api/mcp/tools` stay behind the session, covered by
   `tests/middleware.test.ts`.
 - Data-access org checks remain the source of truth for authorization; the proxy
@@ -264,7 +263,7 @@ runtime.
   `/api/storage-local/[...key]`, `/api/documents/[id]`,
   `/api/ghg-statement-reports/[reportId]`,
   `/api/certification/submissions`, private `/api/reads/*`, bearer-authenticated `/api/v1/*`,
-  the development-only `/api/mcp` spike, and secret-authenticated
+  authenticated `/api/mcp`, and secret-authenticated
   `/api/cron/purge-api-records`. Documents are
   normally resolved through `getOrgContext()`. The report route is the one
   deliberate public bearer-capability seam: middleware lets it through, then
@@ -630,7 +629,7 @@ unexpected errors never expose their messages or causes.
 Feedstock reads and stale-write re-reads use `lib/read-models/api-feedstocks.ts`,
 which calls `data-access/api-feedstocks.ts`. Read models accept an organization
 context, parsed filters, a limit and a decoded cursor position, and return
-representations plus the next position. REST owns cursor encoding and decoding;
+representations plus the next position. REST and MCP share parsed-input readers in `lib/api/*-queries.ts` and cursor encoding and decoding;
 `lib/read-models/api-list.ts` owns page slicing for feedstock and lookup reads. The list orders by
 `(createdAt, id)` descending and keeps PostgreSQL microseconds in the cursor;
 cursors bind the resource, organization and filters, but not page size. The
@@ -672,7 +671,7 @@ Facilities, suppliers, feedstock types, storage locations, vehicles and drivers
 expose read-only list and id-or-code routes through `lib/api/route.ts` and their
 resource scopes. `lib/api/*-queries.ts` validates strict query schemas and calls
 `lib/read-models/api-*.ts`, including the supplier-location list. The read models
-map explicit output schemas in `lib/api/representations/`; organization predicates
+map explicit output schemas in `lib/representations/`; organization predicates
 and facility-filter checks remain in `data-access/api-*.ts`.
 
 `lib/api/lookup-query.ts` shares the feedstock cursor contract: newest-first
@@ -740,3 +739,35 @@ the snapshot and add the specific method/path and exact change description from
 impact in the PR and remove stale entries after the change reaches the base.
 The [oasdiff ignore-file format](https://github.com/oasdiff/oasdiff/blob/v1.32.1/docs/BREAKING-CHANGES.md#ignoring-specific-breaking-changes)
 requires the method/path (or `components`) and change description on each line.
+
+### MCP read tools on API keys
+
+`src/app/api/mcp/route.ts` serves stateless JSON-RPC POSTs through the pinned
+`mcp-handler` and MCP server SDK. GET and DELETE return 405. Origin validation
+runs first; requests without Origin pass. The shared `lib/api/route.ts`
+admission wrapper starts the deadline before authentication, assigns a request
+id and applies the same API-key resolver and rate-limit buckets as REST.
+After authentication, the preparation hook bounds the body to `API_BODY_MAX_BYTES`
+and returns HTTP 413 `payload_too_large` if it exceeds that limit. JSON-RPC
+batch arrays return HTTP 400 `batch_not_supported`. Both refusals use
+`application/problem+json` and precede authenticated rate limiting and dispatch.
+Every admitted MCP request counts as a read; `lib/mcp/server.ts` owns the
+parsed-body classifier for future write tools.
+
+`src/lib/mcp/tools/read-tools.ts` defines whoami, the intake find tools and
+get_feedstock. Each request captures its resolved context in a fresh server.
+Only tools authorized by `hasRoleAndScope` are registered or callable. Tool
+schemas reuse REST query schemas and transport-neutral `lib/representations/`
+output envelopes. Numeric limits accept JSON numbers as well as REST strings.
+HTTP-only ETag builders live in `lib/api/representation-etags.ts`.
+
+The SDK publishes schemas through `toToolSchema`. A low-level tools/call
+handler owns argument parsing so validation failures remain structured.
+Success structuredContent is exactly the matching REST GET body. Expected
+failures use the REST problem code and JSON Pointer errors, named `issues` in
+MCP, without HTTP metadata. MCP `invalid_query` results include Zod issues
+as JSON Pointer `issues`; REST query failures return an empty `errors` array.
+Each output schema is a success/error union with `type: "object"` at its root.
+Unexpected failures are generic JSON-RPC internal errors, logged with
+request id and tool name without raw input. The tool dispatcher checks the
+request deadline before each read. No write tools or sessions are exposed.

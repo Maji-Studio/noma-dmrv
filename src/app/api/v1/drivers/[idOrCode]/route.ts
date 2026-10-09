@@ -1,6 +1,6 @@
 import { apiRoute } from "@/lib/api/route";
 import { readDriver } from "@/lib/api/drivers-queries";
-import { driverEtag } from "@/lib/api/representations/drivers";
+import { driverEtag } from "@/lib/api/representation-etags";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;

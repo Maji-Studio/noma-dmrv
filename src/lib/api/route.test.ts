@@ -143,3 +143,29 @@ it.each(["success", "returned problem", "http error", "domain error", "unexpecte
     else expect(response.headers.get("content-type")).toContain("application/problem+json");
   },
 );
+
+
+it("prepares once after authentication and passes the replacement request to the handler", async () => {
+  const original = request();
+  const replacement = new Request(original, { method: "POST", body: "prepared" });
+  const prepare = vi.fn(async () => ({ request: replacement, access: "read" as const }));
+  const handler = vi.fn(async (received: Request) => new Response(await received.text()));
+  const response = await apiRoute("test", undefined, handler, { prepare })(original);
+  expect(await response.text()).toBe("prepared");
+  expect(prepare).toHaveBeenCalledExactlyOnceWith(original);
+  expect(handler).toHaveBeenCalledWith(replacement, expect.any(Object), {});
+  expect(mocks.post).toHaveBeenCalledWith(expect.any(Object), expect.objectContaining({ access: "read" }), null);
+  const order = [mocks.resolve, prepare, mocks.post, handler].map((mock) => mock.mock.invocationCallOrder[0]);
+  expect(order).toEqual([...order].sort((a, b) => a - b));
+});
+
+it("does not prepare an unauthenticated request", async () => {
+  mocks.resolve.mockResolvedValue({ ok: false, denial: "credential_missing" });
+  const prepare = vi.fn();
+  const handler = vi.fn();
+  const response = await apiRoute("test", undefined, handler, { prepare })(request());
+  expect(response.status).toBe(401);
+  expect(prepare).not.toHaveBeenCalled();
+  expect(mocks.post).not.toHaveBeenCalled();
+  expect(handler).not.toHaveBeenCalled();
+});

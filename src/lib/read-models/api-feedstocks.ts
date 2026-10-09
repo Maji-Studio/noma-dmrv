@@ -1,7 +1,7 @@
 import { findApiFeedstock, listApiFeedstocks } from "@/data-access/api-feedstocks";
 import type { ApiFacilityLookupFilters, ApiLookupIdentifier } from "@/data-access/api-lookup-filters";
 import type { OrgContext } from "@/lib/auth/server";
-import { representFeedstock } from "@/lib/api/representations/feedstocks";
+import { representFeedstock } from "@/lib/representations/feedstocks";
 import { readListPage, type ReadListQuery } from "./api-list";
 import type { Executor } from "@/data-access/utils";
 

@@ -1,3 +1,4 @@
+export const API_VERSION = "1.0.0";
 export const API_BODY_MAX_BYTES = 256 * 1024;
 export const API_LIST_DEFAULT_LIMIT = 50;
 export const API_LIST_MAX_LIMIT = 200;

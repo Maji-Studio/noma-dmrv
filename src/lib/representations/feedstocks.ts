@@ -1,7 +1,5 @@
 import { z } from "zod";
 import type { feedstockPreviewSchema } from "./envelopes";
-import { FEEDSTOCK_REPRESENTATION_REVISION } from "@/config/api-rest";
-import { representationEtag } from "../etag";
 
 const nullableId = z.uuid().nullable();
 export const feedstockRepresentationSchema = z.object({
@@ -39,10 +37,6 @@ export function representFeedstock(row: FeedstockRepresentationInput): Feedstock
       (row.deliveryDate instanceof Date ? row.deliveryDate.toISOString() : row.deliveryDate).split("T")[0],
     createdAt: new Date(row.createdAt).toISOString(), updatedAt: new Date(row.updatedAt).toISOString(),
   });
-}
-
-export function feedstockEtag(row: Pick<FeedstockRepresentation, "version">): string {
-  return representationEtag(row.version, FEEDSTOCK_REPRESENTATION_REVISION);
 }
 
 /** Intake rows carry the stock additions, not the bin's resulting balance. */

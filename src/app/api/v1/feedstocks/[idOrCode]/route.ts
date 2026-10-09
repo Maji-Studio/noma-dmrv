@@ -1,7 +1,7 @@
 import { apiRoute } from "@/lib/api/route";
 import { readFeedstock } from "@/lib/api/feedstock-queries";
 import { mutateFeedstockResponse } from "@/lib/api/feedstock-mutations";
-import { feedstockEtag } from "@/lib/api/representations/feedstocks";
+import { feedstockEtag } from "@/lib/api/representation-etags";
 import { parseApiQuery } from "@/lib/api/query";
 import { resourceQueries } from "@/lib/api/query-schemas";
 

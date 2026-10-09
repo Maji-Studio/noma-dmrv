@@ -1,6 +1,6 @@
 import { apiRoute } from "@/lib/api/route";
 import { readFeedstockType } from "@/lib/api/feedstock-types-queries";
-import { feedstockTypeEtag } from "@/lib/api/representations/feedstock-types";
+import { feedstockTypeEtag } from "@/lib/api/representation-etags";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;

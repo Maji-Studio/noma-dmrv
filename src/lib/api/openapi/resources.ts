@@ -1,10 +1,10 @@
-import { facilityRepresentationSchema } from "../representations/facilities";
-import { supplierRepresentationSchema } from "../representations/suppliers";
-import { feedstockTypeRepresentationSchema } from "../representations/feedstock-types";
-import { storageLocationRepresentationSchema } from "../representations/storage-locations";
-import { vehicleRepresentationSchema } from "../representations/vehicles";
-import { driverRepresentationSchema } from "../representations/drivers";
-import { feedstockRepresentationSchema } from "../representations/feedstocks";
+import { facilityRepresentationSchema } from "@/lib/representations/facilities";
+import { supplierRepresentationSchema } from "@/lib/representations/suppliers";
+import { feedstockTypeRepresentationSchema } from "@/lib/representations/feedstock-types";
+import { storageLocationRepresentationSchema } from "@/lib/representations/storage-locations";
+import { vehicleRepresentationSchema } from "@/lib/representations/vehicles";
+import { driverRepresentationSchema } from "@/lib/representations/drivers";
+import { feedstockRepresentationSchema } from "@/lib/representations/feedstocks";
 import { resourceQueries } from "../query-schemas";
 import type { ApiScope } from "@/lib/auth/api-scopes";
 
