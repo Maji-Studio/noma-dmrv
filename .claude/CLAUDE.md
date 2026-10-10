@@ -16,36 +16,16 @@ Guidance for Claude Code. **These instructions OVERRIDE default behavior — fol
 
 ## Project Overview
 
-**noma-dmrv** is a biochar carbon-credit MRV (Monitoring, Reporting, Verification) system: Next.js 16 App Router, Better Auth, PostgreSQL + Drizzle (60+ tables), 16 core biochar-entity CRUD workflows, a Chain-of-Custody DAG, energy/emissions accounting, and an **Isometric Certify** registry integration.
-
-Traceability chain: Facility → Reactor → Feedstock Delivery → Feedstock → Production Run → Biochar Product → Order → Delivery → Application → Credit Batch → Sample.
-
 Domain language lives in **`GLOSSARY.md`** (repo root) — a pure glossary (Removal, Credit batch, Roll-up, Evidence method, …). Its definitions **override casual usage**; consult it before naming things or writing requirements/docs.
 
-## Essential Commands
+## Database Commands
 
-| Command                     | Purpose                                                |
-| --------------------------- | ------------------------------------------------------ |
-| `pnpm dev`                  | Dev server (port 3100)                                 |
-| `pnpm build` / `pnpm start` | Production build / serve                               |
-| `pnpm lint`                 | ESLint                                                 |
-| `pnpm db:generate`          | Generate migrations from schema changes (SAFE)         |
-| `pnpm db:push`              | Push schema directly (review first)                    |
-| `pnpm db:reset`             | Drop all tables, run the **migration chain**, ensure admin user (DESTRUCTIVE; does not seed — `pnpm db:seed` is separate) |
-| `pnpm db:studio`            | Drizzle Studio (SAFE)                                  |
-| `pnpm test:e2e`             | Playwright E2E (starts or reuses the app server)       |
+- `pnpm db:reset` is **DESTRUCTIVE**: drops the `public` and `drizzle` schemas, runs the **migration chain**, ensures the admin user. It does not seed — `pnpm db:seed` is separate.
+- `pnpm db:push` pushes the schema directly — review first.
 
-## Architecture — each layer imports only from the layer below
+## Architecture
 
-```text
-Component (UI)
-  ↓ hooks/        React Query — client state
-  ↓ fn/           Server actions — "use server", Zod validation, orchestration
-  ↓ data-access/  DB queries + auth guards
-  ↓ db/           Connection & schema
-```
-
-Never skip layers · `fn/` always has `"use server"` and validates input with Zod · every `data-access/` function calls an auth guard · server functions return `ActionResult<T>`. See `docs/architecture.md`.
+Never skip layers: UI → `hooks/` → `fn/` → `data-access/` → `db/`, plus the read paths in `docs/architecture.md`. Server Actions in `fn/` carry `"use server"`, validate input with Zod and return `ActionResult<T>`; non-action helpers in `fn/` (e.g. `with-action.ts`) deliberately omit the directive. Normal `data-access/` functions enforce org scope; keep explicit `// org-scope-ok:` seams.
 
 ## Git & Branch Guardrails
 
@@ -53,7 +33,7 @@ Never skip layers · `fn/` always has `"use server"` and validates input with Zo
 - **Confirm the target branch before every commit** (`git branch --show-current`) — misplaced commits are a recurring failure mode.
 - Run git/gh operations as **discrete steps**, not chained `&&` one-liners.
 - Default PR base is `staging`; `staging` → `main` promotions are their own explicit step.
-- **One writer per worktree.** Cut new work with `scripts/worktree.sh new <name> <branch>` (own DBs, port, env) and remove it with `scripts/worktree.sh teardown <name>`; never branch in the main checkout. This includes worktrees that skills create for subagents (e.g. `implement-spec`). See `docs/testing.md#worktrees`.
+- **One writer per worktree.** Cut new work with `scripts/worktree.sh new <name> <branch>` (own DBs, port, env) and remove it with `scripts/worktree.sh teardown <name>`; never branch in the main checkout. This includes worktrees that skills create for subagents (e.g. `implement-spec`). See `docs/testing.md#worktrees`. Use the server command `new` prints; `pnpm dev` binds port 3100.
 
 ## Review Remediation (CodeRabbit / Claude review / audits)
 
@@ -63,15 +43,21 @@ For every finding: **verify it against the actual code first**, fix only valid o
 
 Shared across all projects in `~/.claude/model-selection.md` (imported by the global `~/.claude/CLAUDE.md`; source: `shared-agent-skills/policies/model-selection.md`). Change it with the `update-model-policy` skill, not here.
 
+**Project override (Kenji's request, 2026-10-07): implementation in this repo goes to Codex, not Claude agents.**
+
+- **gpt-6-astra** (`medium`) implements the hard parts: org scoping, auth and tenancy, schema changes and migrations, the Chain-of-Custody DAG, energy/emissions accounting, the Isometric Certify integration, and anything that changes credit quantities.
+- **gpt-6.1-sol** (`high`) implements routine work (CRUD wiring that follows `TEMPLATE_USAGE.md`, forms, UI pages, copy, tests) and cross-checks every astra diff with `codex-review`. Astra reviews sol's larger diffs in turn, and any sol diff that touches `data-access/` or auth, so each change gets the other model's eyes.
+- Claude scopes each task, writes the self-contained prompt, inspects the diff, runs `pnpm lint`, `pnpm typecheck` and the relevant tests, and commits. Follow the `codex-implementation` skill (its repo constraints are this repo's); for astra runs swap in `-m gpt-6-astra -c 'model_reasoning_effort="medium"'`. Run Codex in the task's worktree (`scripts/worktree.sh new`), never the main checkout. Run `codex exec … < /dev/null` when backgrounded, or it hangs on "Reading additional input from stdin".
+
 ## Docs Index — read the target BEFORE doing the work (docs are NOT auto-indexed)
 
 - **Pre-production database policy:** no production database exists yet. Do not spend effort preserving or migrating production data, maintaining backward-compatible transitional schemas, or writing production backfills. Keep the migration chain usable for development and tests; reset local databases when needed, and tell the user before a schema change requires resetting the shared staging database.
 - Before ANY **form/schema** work → `docs/forms.md` — `@/schemas/helpers` numeric helpers, Zod 4 string formats, never `valueAsNumber`.
-- Before **Isometric/certification/requirements** work → `docs/isometric/README.md` + `versions.json`, and call the isometric MCP `how_to` first. Local summaries are **non-authoritative** — verify against the registry.
+- Before **Isometric/certification/requirements** work → `docs/isometric/README.md` + `docs/isometric/versions.json`, and call the isometric MCP `how_to` first. Local summaries are **non-authoritative** — verify against the registry.
 - Before **UI** work → `docs/design-system.md` — Canonical Page Shell, `EmptyState` (never bare text), a11y, and the token trap: default Tailwind spacing/radius classes are **deleted**, not remapped (`p-4` = 4px, `rounded-md` = nothing).
 - Before **writing or changing user-facing copy or generated operator content** → `docs/ux-writing.md` — shared terminology, message structure, surface-specific guidance, and the ban on en/em dashes.
 - Before **writing code** → `docs/code-style.md` — naming/file conventions, the org-scoping seam + waiver syntax, React Compiler rules (no manual memo, avoid `useEffect`), local gates.
-- Before **any test** work → `docs/testing.md` — two layers (Vitest in root `tests/` and colocated `src/**/*.test.{ts,tsx}` + Playwright E2E), fixtures, `.env.test`, E2E naming prefixes, `db:reset` on dup keys.
+- Before **any test** work → `docs/testing.md` — fixtures, `.env.test`, E2E naming prefixes, `db:reset` on dup keys.
 - Before **writing a server action or data-access query** → `docs/architecture.md` — `withAction()`, `OrgContext`, `ActionResult` (+ `conflict`), React Query key factories, facility context, CI/CD.
 - Before **env / secrets / tenancy** work → `docs/security.md` — env inventory is `envSchema`, fail-closed prod gates, 1Password items differ.
 - **Auth guards, route protection, org context** → `docs/auth.md` — owns the guard vocabulary (redirect-vs-throw, `requireOrgScope` vs `requireAuth`).
@@ -79,7 +65,7 @@ Shared across all projects in `~/.claude/model-selection.md` (imported by the gl
 - **Where a new file goes** (flat feature folders, global-vs-feature, docs hygiene) → `docs/organization.md`.
 - **Traceability** (DAG | Map | Sankey, Trail; credit-batch anchored) → `docs/traceability.md`.
 - **File uploads / object storage** → `docs/storage.md`.
-- **Marketing site** (`site/`, standalone Astro package, port 3120, two Vercel projects, domains, env) → `docs/site.md`.
+- **Marketing site** (`site/`) → `docs/site.md`.
 - **Auth email not arriving** (Resend both-or-neither, local fallback) → `docs/mail-setup.md`.
 - **Stuck on a known gotcha** → `docs/troubleshooting.md`.
 - **Library version drift vs training data** (Drizzle callback, Zod 4, async `params`; Cache Components are NOT enabled) → `docs/modern-patterns.md`.
