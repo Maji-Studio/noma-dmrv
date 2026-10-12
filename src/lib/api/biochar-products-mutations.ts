@@ -1,4 +1,3 @@
-import { z } from "zod";
 import { DomainError } from "@/lib/domain-errors";
 import { toOperationJsonSchema } from "@/lib/operations/json-schema";
 import { runOperation } from "@/lib/operations/runner";
@@ -12,6 +11,7 @@ import { mutationQuerySchema, parseApiQuery } from "./query";
 import { readIdempotencyKey, readJsonBody } from "./request-body";
 import type { ApiRouteContext } from "./route";
 import { rejectUnknownFields } from "./unknown-fields";
+import { canonicalUuid } from "./canonical-uuid";
 
 const createContract = toOperationJsonSchema(makeBiocharProductApiInput);
 const patchContract = toOperationJsonSchema(updateBiocharProductApiInput);
@@ -36,11 +36,12 @@ export async function createBiocharProductResponse(request: Request, { ctx, head
   return Response.json(responseBody, { status: dryRun ? 200 : 201, headers });
 }
 
-export async function updateBiocharProductResponse(request: Request, { ctx, headers, deadlineAt, requestId }: ApiRouteContext, id: string) {
+export async function updateBiocharProductResponse(request: Request, { ctx, headers, deadlineAt, requestId }: ApiRouteContext, segment: string) {
   const { dryRun } = parseApiQuery(request, mutationQuerySchema);
   const precondition = request.headers.get("if-match");
   const { version, revision } = parseIfMatch(precondition);
-  if (!z.uuid().safeParse(id).success) throw new DomainError("not_found", "Biochar product was not found.");
+  const id = canonicalUuid(segment);
+  if (!id) throw new DomainError("not_found", "Biochar product was not found.");
   const key = readIdempotencyKey(request, false);
   return withCurrentOnStale(ctx, id, async () => {
     const body = await readJsonBody(request);

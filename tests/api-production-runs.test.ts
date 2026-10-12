@@ -11,6 +11,7 @@ import {
   createApiProductionRunFixture, removeApiFeedstockFixture, seedApiFeedstock, binWetStock,
   productionRunInput, productionRunRequest, expectFeedstockProblem as problem, type ApiProductionRunFixture,
 } from "./helpers/api-feedstock-fixture";
+import { uppercaseUuids } from "./helpers/uppercase-uuids";
 
 const TIMEOUT_MS = 30_000;
 let a: ApiProductionRunFixture;
@@ -89,6 +90,28 @@ describe("production run REST outcomes", { timeout: TIMEOUT_MS }, () => {
     expect(response.headers.get("etag")).toBe('"2.2"');
     expect((await response.json()).data).toMatchObject({ status: "complete", biocharOutputKg: 200, biocharStorageLocationId: a.outputBinId, feedstockDraws: saved.row.feedstockDraws });
     expect(await rows()).toMatchObject([{ status: "complete", biocharOutputKg: 200, version: 2 }]);
+    expect(await binWetStock(a)).toBe(3000);
+  });
+
+  it("canonicalizes uppercase reference and path UUIDs, so either case replays one key (api/uuid-case)", async () => {
+    const saved = await create(uppercaseUuids(productionRunInput(a)));
+    expect(saved.row).toMatchObject({ facilityId: a.facilityId, reactorId: a.reactorId, feedstockDraws: [{ storageLocationId: a.binId }] });
+    const createReplay = await POST(request("POST", "", productionRunInput(a), { "idempotency-key": saved.key }));
+    expect(createReplay.status).toBe(201);
+    expect(createReplay.headers.get("idempotent-replayed")).toBe("true");
+    expect(await createReplay.json()).toEqual(saved.body);
+    const key = randomUUID();
+    const body = { status: "complete", endTime: "2026-10-06T11:00:00Z", biocharOutputKg: 200, biocharMoisturePercent: 2, biocharStorageLocationId: a.outputBinId };
+    const upperId = saved.row.id.toUpperCase();
+    const patched = await PATCH(request("PATCH", `/${upperId}`, uppercaseUuids(body), { "if-match": saved.etag, "idempotency-key": key }), params(upperId));
+    expect(patched.status).toBe(200);
+    const text = await patched.text();
+    expect(JSON.parse(text).data).toMatchObject({ id: saved.row.id, biocharStorageLocationId: a.outputBinId, version: 2 });
+    const patchReplay = await PATCH(request("PATCH", `/${saved.row.id}`, body, { "if-match": saved.etag, "idempotency-key": key }), params(saved.row.id));
+    expect(patchReplay.status).toBe(200);
+    expect(patchReplay.headers.get("idempotent-replayed")).toBe("true");
+    expect(await patchReplay.text()).toBe(text);
+    expect(await rows()).toMatchObject([{ id: saved.row.id, version: 2 }]);
     expect(await binWetStock(a)).toBe(3000);
   });
 

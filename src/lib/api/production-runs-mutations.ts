@@ -10,6 +10,7 @@ import { parseIfMatch } from "./etag";
 import { mutationQuerySchema, parseApiQuery } from "./query";
 import { readIdempotencyKey, readJsonBody, readOptionalJsonBody } from "./request-body";
 import { rejectUnknownFields } from "./unknown-fields";
+import { canonicalUuid } from "./canonical-uuid";
 import { representProductionRun } from "@/lib/representations/production-runs";
 import { productionRunEtag } from "@/lib/api/representation-etags";
 
@@ -38,12 +39,13 @@ export async function createProductionRunResponse(request: Request, { ctx, heade
   return Response.json(responseBody, { status: dryRun ? 200 : 201, headers });
 }
 
-export async function mutateProductionRunResponse(request: Request, context: ApiRouteContext, id: string, method: "PATCH" | "DELETE") {
+export async function mutateProductionRunResponse(request: Request, context: ApiRouteContext, segment: string, method: "PATCH" | "DELETE") {
   const { ctx, headers, deadlineAt, requestId } = context;
   const { dryRun } = parseApiQuery(request, mutationQuerySchema);
   const precondition = request.headers.get("if-match");
   const { version, revision } = parseIfMatch(precondition);
-  if (!z.uuid().safeParse(id).success) throw new DomainError("not_found", "Production run was not found.");
+  const id = canonicalUuid(segment);
+  if (!id) throw new DomainError("not_found", "Production run was not found.");
   const key = readIdempotencyKey(request, false);
   const options = {
     audit: { requestId, credentialId: ctx.credentialId, transport: "rest" as const },

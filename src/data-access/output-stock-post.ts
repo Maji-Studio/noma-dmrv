@@ -38,7 +38,7 @@ const DIRECT_COMMAND_KINDS: ReadonlySet<string> = new Set(['loss', 'count']);
  */
 type StockPostingInput = Omit<OutputStockPostInput, 'expectedProductVersions' | 'basisFingerprint'> & { expectedProductVersions?: Record<string, number>; basisFingerprint?: string };
 
-type PostedOutputRequest = NonNullable<Awaited<ReturnType<typeof findMovementRequest>>>;
+export type PostedOutputRequest = NonNullable<Awaited<ReturnType<typeof findMovementRequest>>>;
 type PersistOptions = {
   deliveryId?: string;
   targetBiocharProductId?: string;
@@ -82,9 +82,7 @@ export async function withOutputStockPostingInTransaction<T>(ctx: OrgContext, tx
   requireOrgScope(ctx);
   const { input, payload = input } = posting;
   if (posting.locksTransportRoutes) await lockBiocharTransportRouteTopology(ctx, tx);
-  // Serializes a request even if a reused key names a different bin.
-  await lockMovementRequest(ctx, tx, input.idempotencyKey);
-  const existing = await findMovementRequest(ctx, tx, { idempotencyKey: input.idempotencyKey, payload, storageLocationId: input.storageLocationId, conflictMessage: OUTPUT_REQUEST_CONFLICT_MESSAGE });
+  const existing = await findPostedOutputRequest(ctx, tx, { idempotencyKey: input.idempotencyKey, payload, storageLocationId: input.storageLocationId });
   if (existing) return posting.replay(tx, existing);
   const binIds = [input.storageLocationId, ...(posting.additionalBinIds ?? [])];
   await lockBinStocks(ctx, tx, binIds);
@@ -92,6 +90,19 @@ export async function withOutputStockPostingInTransaction<T>(ctx: OrgContext, tx
   await options.snapshotStock?.(tx, binIds);
   return posting.write(tx, ({ basisFingerprint, ...persist } = {}) =>
     persistOutputStock(ctx, tx, basisFingerprint ? { ...input, basisFingerprint } : input, { ...persist, payload }));
+}
+
+/**
+ * The movement a request key already posted, or undefined on a first submit,
+ * read under the request lock, which serializes a request even if a reused
+ * key names a different bin. A changed payload is a conflict. A caller may
+ * look up its key before its own checks; the posting seam takes the same
+ * transaction-scoped lock again, which PostgreSQL grants to its holder.
+ */
+export async function findPostedOutputRequest(ctx: OrgContext, tx: DbTransaction, request: { idempotencyKey: string; payload: unknown; storageLocationId: string }) {
+  requireOrgScope(ctx);
+  await lockMovementRequest(ctx, tx, request.idempotencyKey);
+  return findMovementRequest(ctx, tx, { ...request, conflictMessage: OUTPUT_REQUEST_CONFLICT_MESSAGE });
 }
 
 /** `withOutputStockPostingInTransaction` in a transaction of its own. */

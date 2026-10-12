@@ -1,4 +1,3 @@
-import { z } from "zod";
 import { DomainError } from "@/lib/domain-errors";
 import { toOperationJsonSchema } from "@/lib/operations/json-schema";
 import { runWithStockBasisPreview } from "@/lib/operations/stock-basis-preview";
@@ -8,6 +7,7 @@ import { mutationQuerySchema, parseApiQuery } from "./query";
 import { readIdempotencyKey, readJsonBody } from "./request-body";
 import type { ApiRouteContext } from "./route";
 import { rejectUnknownFields } from "./unknown-fields";
+import { canonicalUuid } from "./canonical-uuid";
 
 const bodyContract = toOperationJsonSchema(recordOutputStockMovementApiBody);
 const BIN_NOT_FOUND_MESSAGE = "Storage location was not found.";
@@ -17,10 +17,11 @@ const BIN_NOT_FOUND_MESSAGE = "Storage location was not found.";
  * every other write target; a code answers 404. There is no movement GET, so
  * the 201 carries no Location, and movements are unversioned, so no ETag.
  */
-export async function recordOutputStockMovementResponse(request: Request, { ctx, headers, deadlineAt, requestId }: ApiRouteContext, storageLocationId: string) {
+export async function recordOutputStockMovementResponse(request: Request, { ctx, headers, deadlineAt, requestId }: ApiRouteContext, segment: string) {
   const { dryRun } = parseApiQuery(request, mutationQuerySchema);
   const key = readIdempotencyKey(request, true);
-  if (!z.uuid().safeParse(storageLocationId).success) {
+  const storageLocationId = canonicalUuid(segment);
+  if (!storageLocationId) {
     throw new DomainError("not_found", BIN_NOT_FOUND_MESSAGE, { issues: [{ path: ["storageLocationId"], code: "not_found", message: BIN_NOT_FOUND_MESSAGE }] });
   }
   const body = await readJsonBody(request);

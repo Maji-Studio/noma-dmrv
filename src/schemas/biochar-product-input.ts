@@ -6,7 +6,7 @@ import {
 import { eventInstantSchema } from "./event-instant";
 import {
   clearableNumber, expectedVersionSchema, massKgSchema, optionalNumber, pipeToCanonicalNumber,
-  requiredMassKgSchema, stockEventInstantSchema, storedPercentSchema,
+  requiredMassKgSchema, stockEventInstantSchema, storedPercentSchema, uuidSchema,
 } from "./helpers";
 import { MAX_STOCK_ENTRY_ITEMS, moistureSchema, orderedSourcesSchema, OUTPUT_STOCK_REQUEST_KEY_MAX_LENGTH } from "./output-stock";
 
@@ -19,8 +19,8 @@ const ingredientMoistureSchema = storedPercentSchema().min(MOISTURE_MIN, "Must b
 
 /** One formulation line as mixed: its wet mass and the moisture measured for the material used. */
 const ingredientInput = z.strictObject({
-  formulationIngredientId: z.uuid().describe("Formulation line UUID; one entry per line of the formulation."),
-  storageLocationId: z.uuid().nullable().describe("Feedstock bin the ingredient was drawn from, UUID, or null for material not tracked in a bin."),
+  formulationIngredientId: uuidSchema().describe("Formulation line UUID; one entry per line of the formulation."),
+  storageLocationId: uuidSchema().nullable().describe("Feedstock bin the ingredient was drawn from, UUID, or null for material not tracked in a bin."),
   wetMassKg: requiredMassKgSchema("Ingredient mass must be 0 or greater").describe("Wet ingredient mass in kilograms, as weighed. 0 records a line that was not used."),
   moisturePercent: ingredientMoistureSchema.nullable().optional().describe("Measured moisture of the material used, percent of wet mass. Required when wetMassKg is above 0."),
 }).superRefine((value, ctx) => {
@@ -37,12 +37,12 @@ const ingredientsInput = z.array(ingredientInput).max(MAX_STOCK_ENTRY_ITEMS).sup
 
 /** What REST and MCP publish for a new product (decision 52): the parts as weighed, not the blend. */
 const publishedCreateFields = {
-  facilityId: z.uuid().describe("Facility the product is mixed and placed at, UUID."),
-  formulationId: z.uuid().describe("Formulation UUID, including the Pure biochar formulation for an unblended product."),
+  facilityId: uuidSchema().describe("Facility the product is mixed and placed at, UUID."),
+  formulationId: uuidSchema().describe("Formulation UUID, including the Pure biochar formulation for an unblended product."),
   placedAt: eventInstantSchema,
   status: z.enum(biocharProductStatusValues).default("testing").describe("Product state: draft, testing, ready or sold. Defaults to testing."),
-  sourceBiocharStorageLocationId: z.uuid().describe("Biochar bin the biochar was drawn from, UUID."),
-  storageLocationId: z.uuid().describe("Product bin the blend was placed in, UUID. A bin with no formulation yet is claimed for this one."),
+  sourceBiocharStorageLocationId: uuidSchema().describe("Biochar bin the biochar was drawn from, UUID."),
+  storageLocationId: uuidSchema().describe("Product bin the blend was placed in, UUID. A bin with no formulation yet is claimed for this one."),
   biocharWetMassKg: biocharProductFormSchema.shape.massKg.describe("Wet biochar drawn from the source bin as weighed, in kilograms, without ingredients or added water."),
   biocharMoisturePercent: moistureSchema().nullable().optional().describe("Measured biochar moisture as percent of wet mass, below 100. Required unless sources are given."),
   sources: orderedSourcesSchema.optional().describe("Split biochar bins only: the sub-bins drawn, each layerId a production run UUID, in the order they were emptied, each with its moisture."),
@@ -88,10 +88,10 @@ const publishedUpdateFields = {
  * so a changed one is refused rather than ignored. None is in the published contract.
  */
 const unpublishedUpdateFields = {
-  facilityId: z.uuid().optional(),
-  formulationId: z.uuid().optional(),
+  facilityId: uuidSchema().optional(),
+  formulationId: uuidSchema().optional(),
   placedAt: stockEventInstantSchema().optional(),
-  storageLocationId: z.uuid().nullable().optional(),
+  storageLocationId: uuidSchema().nullable().optional(),
   massKg: massKgSchema().optional(),
   moistureContentPercent: storedPercentSchema().min(MOISTURE_MIN).max(MOISTURE_MAX).optional(),
   waterAddedKg: massKgSchema().optional(),
@@ -103,7 +103,7 @@ export const updateBiocharProductApiInput = z.strictObject(publishedUpdateFields
 
 /** The published `update_biochar_product` tool input: the id and version join the body because MCP has no path or If-Match. */
 export const updateBiocharProductToolInput = z.strictObject({
-  biocharProductId: z.uuid().describe("Target biochar product UUID."),
+  biocharProductId: uuidSchema().describe("Target biochar product UUID."),
   expectedVersion: expectedVersionSchema.describe("Version from get_biochar_product."),
   ...publishedUpdateFields,
 });
@@ -111,7 +111,7 @@ export const updateBiocharProductToolInput = z.strictObject({
 /** The full `update_biochar_product` input. */
 export const updateBiocharProductInput = z.strictObject({
   ...publishedUpdateFields,
-  biocharProductId: z.uuid().describe("Target biochar product UUID."),
+  biocharProductId: uuidSchema().describe("Target biochar product UUID."),
   expectedVersion: expectedVersionSchema.describe("Version from get_biochar_product."),
   ...unpublishedUpdateFields,
 });

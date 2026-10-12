@@ -3,6 +3,7 @@ import { readReactorListFromInput } from "@/lib/api/reactors-queries";
 import { productionRunRepresentationSchema } from "@/lib/representations/production-runs";
 import { PRODUCTION_RUN_GUIDANCE } from "@/lib/operations/agent-guidance";
 import { z } from "zod";
+import { uuidSchema } from "@/schemas/helpers";
 import type { ApiContext } from "@/lib/auth/api-context";
 import type { ApiScope } from "@/lib/auth/api-scopes";
 import { resources } from "@/lib/api/openapi/resources";
@@ -121,7 +122,7 @@ export const readTools: ReadTool[] = [
   findTool("formulations", resourceQueries["formulations"].list, readFormulationListFromInput),
   defineRead({ name: "find_supplier_locations", summarize: listSummary("supplier location", "supplier locations"), scope: "suppliers:read",
     description: `${readDescriptions.supplierLocations} Call find_suppliers first for the supplier UUID in supplierId. Coordinates are WGS 84 decimal degrees.`,
-    input: supplierLocationListSchema.extend({ supplierId: z.uuid().describe("Supplier identifier, UUID, from find_suppliers.") }),
+    input: supplierLocationListSchema.extend({ supplierId: uuidSchema().describe("Supplier identifier, UUID, from find_suppliers.") }),
     output: listEnvelopeSchema(supplierLocationRepresentationSchema),
   }, (ctx, { supplierId, ...input }) => readSupplierLocationListFromInput(ctx, input, supplierId)),
   defineRead({ name: "get_feedstock", summarize: (body) => {

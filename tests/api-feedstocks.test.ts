@@ -13,6 +13,7 @@ import { deriveFeedstockWetStockKg } from "@/data-access/feedstock-wet-stock";
 import { GET as LIST, POST } from "@/app/api/v1/feedstocks/route";
 import { GET, PATCH, DELETE } from "@/app/api/v1/feedstocks/[idOrCode]/route";
 import { createIntakeFixture, feedstockCount, removeIntakeFixture, type IntakeFixture } from "./helpers/operation-fixture";
+import { uppercaseUuids } from "./helpers/uppercase-uuids";
 
 const mocks = vi.hoisted(() => ({ env: { API_WRITES_DISABLED: false } }));
 vi.mock("@/config/env", async (importOriginal) => {
@@ -95,6 +96,26 @@ describe("feedstock REST contract", { timeout: SUITE_TIMEOUT_MS }, () => {
     expect(await feedstockCount(a)).toBe(1);
     expect(await stock()).toBe(4200);
     await problem(await POST(request("POST", "", a.input(100), { "idempotency-key": first.key })), 422, "idempotency_key_reused");
+  });
+
+  it("canonicalizes uppercase reference and path UUIDs, so either case replays one key (api/uuid-case)", async () => {
+    const upper = await create(uppercaseUuids(a.input()));
+    expect(upper.row).toMatchObject({ facilityId: a.facilityId, supplierId: a.supplierId, feedstockTypeId: a.feedstockTypeId, storageLocationId: a.binId });
+    const lower = await POST(request("POST", "", a.input(), { "idempotency-key": upper.key }));
+    expect(lower.status).toBe(201);
+    expect(lower.headers.get("idempotent-replayed")).toBe("true");
+    expect(await lower.text()).toBe(upper.text);
+    const key = randomUUID();
+    const patched = await patch(upper.row.id.toUpperCase(), { notes: "Either case", storageLocationId: a.binId.toUpperCase() }, upper.etag, keyA, { "idempotency-key": key });
+    expect(patched.status).toBe(200);
+    const text = await patched.text();
+    expect(JSON.parse(text).data).toMatchObject({ id: upper.row.id, storageLocationId: a.binId, version: 2 });
+    const replay = await patch(upper.row.id, { notes: "Either case", storageLocationId: a.binId }, upper.etag, keyA, { "idempotency-key": key });
+    expect(replay.status).toBe(200);
+    expect(replay.headers.get("idempotent-replayed")).toBe("true");
+    expect(await replay.text()).toBe(text);
+    expect(await feedstockCount(a)).toBe(1);
+    expect(await stock()).toBe(4200);
   });
 
   it("requires a valid create key, while dry run rolls back stock and idempotency", async () => {

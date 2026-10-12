@@ -18,6 +18,7 @@ import {
   storedPercentSchema,
   toIntOrNull,
   toNumberOrNull,
+  uuidSchema,
 } from "./helpers";
 import {
   allowedProductionRunStatusesFrom,
@@ -141,7 +142,7 @@ export const productionRunFeedstockDrawSchema = z.object({
           : "Choose a valid source bin.",
     })
     .min(1, "Select a source bin.")
-    .uuid("Choose a valid source bin."),
+    .uuid("Choose a valid source bin.").toLowerCase(),
   wetMassKg: requiredPositiveMassKgSchema(
     "Enter wet mass.",
     "Wet mass must be a number.",
@@ -486,15 +487,15 @@ export const createProductionRunSchema = productionRunFormSchema.refine(
  * All fields optional except productionRunId
  */
 export const updateProductionRunSchema = z.object({
-  productionRunId: z.string().uuid("Choose a valid production run."),
+  productionRunId: uuidSchema("Choose a valid production run."),
   code: z
     .string()
     .min(1)
     .max(50)
     .regex(/^[A-Z0-9-]+$/)
     .optional(),
-  facilityId: z.string().uuid().optional(),
-  reactorId: z.string().uuid().optional(),
+  facilityId: uuidSchema().optional(),
+  reactorId: uuidSchema().optional(),
   status: z.enum(productionRunStatuses).optional(),
   expectedVersion: expectedVersionSchema,
   cancellationReason: z.string().max(CANCELLATION_REASON_MAX_LENGTH).nullable().optional(),
@@ -523,7 +524,7 @@ export const updateProductionRunSchema = z.object({
       return date;
     }),
   ]).optional(),
-  operatorId: emptyToNull.or(z.string().uuid()).nullable().optional(),
+  operatorId: emptyToNull.or(uuidSchema()).nullable().optional(),
   feedstockDraws: productionRunFeedstockDrawsSchema.optional(),
   feedstockWetMassKg: massKgSchema().positive().optional().nullable(),
   feedstockMoisturePercent: storedPercentSchema()
@@ -543,8 +544,8 @@ export const updateProductionRunSchema = z.object({
     .max(100)
     .optional()
     .nullable(),
-  biocharStorageLocationId: emptyToNull.or(z.string().uuid()).nullable().optional(),
-  feedstockStorageLocationId: emptyToNull.or(z.string().uuid()).nullable().optional(),
+  biocharStorageLocationId: emptyToNull.or(uuidSchema()).nullable().optional(),
+  feedstockStorageLocationId: emptyToNull.or(uuidSchema()).nullable().optional(),
 }).superRefine(rejectLegacyFeedstockFields);
 
 /**
@@ -552,7 +553,7 @@ export const updateProductionRunSchema = z.object({
  */
 export const deleteProductionRunSchema = z.object({
   expectedVersion: expectedVersionSchema,
-  productionRunId: z.string().uuid("Choose a valid production run."),
+  productionRunId: uuidSchema("Choose a valid production run."),
 });
 
 // ============================================

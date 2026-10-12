@@ -16,6 +16,7 @@ import {
   seedRestProduct, writeIdempotencyRecords, FUTURE_AT,
 } from "./helpers/api-biochar-write-fixture";
 import { rpc, rpcBody } from "./helpers/mcp";
+import { uppercaseUuids } from "./helpers/uppercase-uuids";
 
 const switches = vi.hoisted(() => ({ writesDisabled: false }));
 vi.mock("@/config/env", async (importOriginal) => {
@@ -167,6 +168,26 @@ describe("biochar product MCP tools", { timeout: TIMEOUT_MS }, () => {
     expect(state.products).toHaveLength(1);
     expect(state.movements).toHaveLength(2);
     expect(await productWriteAudits(a)).toMatchObject([{ transport: "rest" }]);
+  });
+
+  it("replays an uppercase-UUID REST key over MCP in lowercase for a product and a movement (api/uuid-case)", async () => {
+    const productKey = randomUUID();
+    const rest = await postProductRest(a, uppercaseUuids(blendedProductBody(a)), productKey);
+    expect(rest.status).toBe(201);
+    const replay = await call("make_biochar_product", { ...blendedProductBody(a), requestKey: productKey });
+    expect(replay.content[0].text).toMatch(/^Replayed: Made biochar product/);
+    expect(replay.structuredContent).toEqual(await rest.json());
+    const movementKey = randomUUID();
+    const restMovement = await postMovementRest(a, a.source.id.toUpperCase(), lossBody(), movementKey);
+    expect(restMovement.status).toBe(201);
+    const movementReplay = await call("record_output_stock_movement", { ...movementArgs(), requestKey: movementKey });
+    expect(movementReplay.content[0].text).toMatch(/^Replayed: /);
+    expect(movementReplay.structuredContent).toEqual(await restMovement.json());
+    const upperMovement = await call("record_output_stock_movement", { ...movementArgs(lossBody(), a.source.id.toUpperCase()), requestKey: movementKey });
+    expect(upperMovement.content[0].text).toMatch(/^Replayed: /);
+    const state = await captureProductWriteState(a);
+    expect(state.products).toHaveLength(1);
+    expect(state.movements).toHaveLength(2);
   });
 
   it("answers a stale basisFingerprint with a preview, claims no key, and the retry on the preview saves", async () => {

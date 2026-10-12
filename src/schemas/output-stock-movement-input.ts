@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { eventInstantSchema } from "./event-instant";
-import { expectedVersionSchema } from "./helpers";
+import { expectedVersionSchema, uuidSchema } from "./helpers";
 import {
   moistureSchema, orderedSourcesSchema, OUTPUT_STOCK_REASON_MAX_LENGTH, OUTPUT_STOCK_REQUEST_KEY_MAX_LENGTH,
   reasonSchema, refineOutputStockEntry, wetMassSchema,
@@ -18,7 +18,7 @@ const publishedBodyFields = {
 };
 
 const publishedFields = {
-  storageLocationId: z.uuid().describe("Biochar or product bin UUID. The facility and its time zone come from the bin."),
+  storageLocationId: uuidSchema().describe("Biochar or product bin UUID. The facility and its time zone come from the bin."),
   ...publishedBodyFields,
 };
 
@@ -29,8 +29,8 @@ const publishedFields = {
  */
 const unpublishedFields = {
   kind: z.enum(["loss", "count", "delivery"]),
-  correctsMovementId: z.uuid().optional(),
-  facilityId: z.uuid().optional(),
+  correctsMovementId: uuidSchema().optional(),
+  facilityId: uuidSchema().optional(),
   expectedProductVersions: z.record(z.uuid(), expectedVersionSchema).optional(),
   idempotencyKey: z.string().trim().min(1).max(OUTPUT_STOCK_REQUEST_KEY_MAX_LENGTH).optional(),
 };
