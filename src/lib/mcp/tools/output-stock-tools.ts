@@ -1,3 +1,4 @@
+import { canonicalUuid } from "@/lib/api/canonical-uuid";
 import { recordedMovementBody, representationCheckedRecord } from "@/lib/api/output-stock-movement-write-checks";
 import { OUTPUT_STOCK_GUIDANCE, REQUEST_KEY_RULE, UNTRUSTED_TEXT } from "@/lib/operations/agent-guidance";
 import { toOperationJsonSchema } from "@/lib/operations/json-schema";
@@ -22,7 +23,7 @@ export const outputStockWriteTools: WriteTool[] = [
       const bin = (input as { storageLocationId?: unknown } | null)?.storageLocationId;
       // Like REST, the bin is the idempotency target so one key cannot move two bins.
       const result = await runWithStockBasisPreview(representationCheckedRecord, context.ctx, input,
-        stockWriteOptions(context, dryRun, requestKey, typeof bin === "string" ? bin : undefined), (data) => data.basisFingerprint);
+        stockWriteOptions(context, dryRun, requestKey, typeof bin === "string" ? canonicalUuid(bin) ?? bin : undefined), (data) => data.basisFingerprint);
       return { ...result, body: recordedMovementBody(result, dryRun) };
     },
     summarize(body, dryRun) {

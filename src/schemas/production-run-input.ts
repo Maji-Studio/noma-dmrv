@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { updateProductionRunSchema } from "./production-runs";
-import { clearableNumber, pipeToCanonicalNumber, toClearableNumber } from "./helpers";
+import { clearableNumber, pipeToCanonicalNumber, toClearableNumber, uuidSchema } from "./helpers";
 import { eventInstantSchema } from "./event-instant";
 import { publishedJsonSchemas } from "./published-json-schema";
 
@@ -35,7 +35,7 @@ const describedFields = {
 };
 export const createProductionRunInput = z.strictObject({
   ...describedFields,
-  facilityId: z.uuid().describe("Owning facility UUID."), reactorId: z.uuid().describe("Reactor UUID in the facility."),
+  facilityId: uuidSchema().describe("Owning facility UUID."), reactorId: uuidSchema().describe("Reactor UUID in the facility."),
   status: fields.status.unwrap().default("draft").describe("Initial run state: draft, running, complete or cancelled."),
   startTime: productionRunInstantSchema,
   endTime: productionRunInstantSchema.nullable().optional().describe("End instant or facility-local date/time; null leaves the run open."),

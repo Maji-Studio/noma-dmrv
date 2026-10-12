@@ -7,6 +7,8 @@ import type { Operation, OperationResult, RunOptions } from "./runner";
 
 const runner = vi.hoisted(() => ({ runOperation: vi.fn() }));
 vi.mock("./runner", () => ({ runOperation: runner.runOperation }));
+const log = vi.hoisted(() => ({ error: vi.fn() }));
+vi.mock("@/lib/log", () => ({ logger: { error: log.error, warn: vi.fn(), info: vi.fn(), child: () => ({ error: log.error }) } }));
 import { runWithStockBasisPreview } from "./stock-basis-preview";
 
 const NOW = 1_000_000;
@@ -23,7 +25,7 @@ const options = (extra: Partial<RunOptions> = {}) => ({
 });
 const basisOf = (data: { basisFingerprint: string }) => data.basisFingerprint;
 
-beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(NOW); runner.runOperation.mockReset(); });
+beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(NOW); runner.runOperation.mockReset(); log.error.mockReset(); });
 afterEach(() => { vi.useRealTimers(); });
 
 describe("runWithStockBasisPreview", () => {
@@ -74,6 +76,28 @@ describe("runWithStockBasisPreview", () => {
     const failure = await runWithStockBasisPreview(operation, ctx, {}, options(), basisOf).catch((error: unknown) => error);
     expect(failure).toMatchObject({ code: "stock_basis_changed", message: "Stock changed.", conflict: { id: "bin" } });
     expect(failure).not.toHaveProperty("preview");
+  });
+
+  it("logs an unexpected preview failure by operation and request id only, and still returns the original conflict", async () => {
+    runner.runOperation.mockRejectedValueOnce(stale());
+    runner.runOperation.mockRejectedValueOnce(new TypeError("value 12.5 kg for operator@example.test"));
+    const failure = await runWithStockBasisPreview(operation, ctx, { reason: "Spilled" }, options(), basisOf).catch((error: unknown) => error);
+    expect(failure).toMatchObject({ code: "stock_basis_changed", message: "Stock changed." });
+    expect(failure).not.toHaveProperty("preview");
+    expect(log.error).toHaveBeenCalledTimes(1);
+    expect(log.error).toHaveBeenCalledWith({ op: "test_op", requestId: "request", errorName: "TypeError" }, "API request failed");
+    expect(JSON.stringify(log.error.mock.calls)).not.toMatch(/12\.5|example\.test|Spilled/);
+  });
+
+  it("logs a domain failure only when the API treats it as unexpected", async () => {
+    runner.runOperation.mockRejectedValueOnce(stale());
+    runner.runOperation.mockRejectedValueOnce(new DomainError("insufficient_stock", "Short."));
+    await expect(runWithStockBasisPreview(operation, ctx, {}, options(), basisOf)).rejects.toMatchObject({ code: "stock_basis_changed" });
+    expect(log.error).not.toHaveBeenCalled();
+    runner.runOperation.mockRejectedValueOnce(stale());
+    runner.runOperation.mockRejectedValueOnce(new DomainError("validation_failed", "Bad.", { cause: new Error("driver failure") }));
+    await expect(runWithStockBasisPreview(operation, ctx, {}, options(), basisOf)).rejects.toMatchObject({ code: "stock_basis_changed" });
+    expect(log.error).toHaveBeenCalledWith({ op: "test_op", requestId: "request", errorName: "DomainError", code: "validation_failed" }, "API request failed");
   });
 
   it("rethrows every other failure without a preview run", async () => {

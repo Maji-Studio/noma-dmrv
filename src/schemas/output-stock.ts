@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { expectedVersionSchema, massKgSchema, stockEventInstantSchema, storedPercentSchema } from './helpers';
+import { expectedVersionSchema, massKgSchema, stockEventInstantSchema, storedPercentSchema, uuidSchema } from './helpers';
 
 const WET_MASS_REQUIRED = 'Enter the wet mass.';
 const MOISTURE_REQUIRED = 'Enter the measured moisture.';
@@ -30,7 +30,7 @@ export const MAX_STOCK_ENTRY_ITEMS = 200;
 
 /** One sub-bin of a split-bin draw with the moisture read as it was emptied. */
 export const orderedSourceSchema = z.object({
-  layerId: z.uuid('Choose a sub-bin.').describe('Sub-bin drawn: on a biochar bin, the UUID of the production run that filled it; on a product bin, the UUID of the biochar product placed in it.'),
+  layerId: uuidSchema('Choose a sub-bin.').describe('Sub-bin drawn: on a biochar bin, the UUID of the production run that filled it; on a product bin, the UUID of the biochar product placed in it.'),
   moisturePercent: moistureSchema().describe('Measured moisture of this sub-bin as percent of wet mass, below 100.'),
 });
 /** A split-bin draw's sub-bins in the order they were emptied: at least one, each once. */

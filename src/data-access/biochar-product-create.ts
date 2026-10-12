@@ -11,7 +11,7 @@ import { assertEventTimesNotFuture } from './future-event-time';
 import { revalidateProductStock } from './product-stock-preview';
 import { assertAdditionAfterSplit } from './output-bin-stock-mode';
 import { blockedOutputStockError } from './output-stock-errors';
-import { withOutputStockPostingInTransaction, type OutputStockPostingOptions } from './output-stock-post';
+import { findPostedOutputRequest, withOutputStockPostingInTransaction, type OutputStockPostingOptions, type PostedOutputRequest } from './output-stock-post';
 import { postedMoisturePercent } from './output-stock-operations';
 import { requireOrgScope } from './utils';
 
@@ -56,6 +56,44 @@ function ingredientReplayFacts(ingredient: Record<string, unknown>) {
   return Object.fromEntries(INGREDIENT_REPLAY_FACTS.map((key) => [key, ingredient[key] ?? null]));
 }
 
+/** A create without its generated code. A lookup's composition needs only the operator's facts per line. */
+export type BiocharProductRequest = Omit<CreateBiocharProductInput, 'code'>;
+
+/**
+ * What a product request key stands for. Auto-generated display codes may
+ * change on a retried request; all operator facts must match. Composition
+ * lines carry catalog names and ratios read at write time, so only the
+ * operator's facts per line count.
+ */
+function productRequestPayload(data: BiocharProductRequest) {
+  return { ...Object.fromEntries(Object.entries(data).filter(([key]) => key !== 'code' && key !== 'composition')),
+    ingredients: ((data.composition?.ingredients ?? []) as Record<string, unknown>[]).map(ingredientReplayFacts)
+      // Recipe lines come back in no fixed order; the hash must not depend on it.
+      .sort((a, b) => String(a.formulationIngredientId).localeCompare(String(b.formulationIngredientId))) };
+}
+
+async function replayPostedProduct(ctx: OrgContext, tx: DbTransaction, existing: PostedOutputRequest): Promise<CreatedBiocharProduct> {
+  requireOrgScope(ctx);
+  const [product] = await tx.select().from(biocharProducts).where(and(eq(biocharProducts.organizationId, ctx.organizationId), eq(biocharProducts.id, String(existing.inputSnapshot?.targetBiocharProductId))));
+  if (!product) throw new SafeError('The posted product could not be found.');
+  // Every output movement stores its basis (bin_movements check constraint).
+  return { product, basisFingerprint: existing.basisFingerprint ?? '' };
+}
+
+/**
+ * The product a request key already committed, or undefined, found under the
+ * request lock from the operator's facts alone. A caller runs it before any
+ * live recipe or facility check, so a retried create still replays after a
+ * formulation line was added or removed or the facility was archived. A key
+ * reused with different facts is a conflict, as in the posting seam.
+ */
+export async function findCommittedBiocharProduct(ctx: OrgContext, tx: DbTransaction, data: BiocharProductRequest): Promise<CreatedBiocharProduct | undefined> {
+  requireOrgScope(ctx);
+  if (!data.sourceBiocharStorageLocationId) return undefined;
+  const existing = await findPostedOutputRequest(ctx, tx, { idempotencyKey: data.idempotencyKey, payload: productRequestPayload(data), storageLocationId: data.sourceBiocharStorageLocationId });
+  return existing ? replayPostedProduct(ctx, tx, existing) : undefined;
+}
+
 /**
  * Creates a product inside the caller's transaction (the operation runner's,
  * or `createBiocharProduct`'s). A generated-code retry calls this again in a
@@ -79,19 +117,9 @@ export async function createBiocharProductInTransaction(ctx: OrgContext, tx: DbT
     kind: 'production_draw' as const, wetMassKg: wet,
     ...(data.sources?.length ? { sources: data.sources } : { moisturePercent: data.moistureContentPercent }),
     idempotencyKey: data.idempotencyKey, reason: `Product ${data.code}` };
-  // Auto-generated display codes may change on a retried request; all operator facts must match.
-  // Composition lines carry catalog names and ratios read at write time, so only the operator's facts per line count.
-  const payload = { ...Object.fromEntries(Object.entries(data).filter(([key]) => key !== 'code' && key !== 'composition')),
-    ingredients: ((data.composition?.ingredients ?? []) as Record<string, unknown>[]).map(ingredientReplayFacts)
-      // Recipe lines come back in no fixed order; the hash must not depend on it.
-      .sort((a, b) => String(a.formulationIngredientId).localeCompare(String(b.formulationIngredientId))) };
+  const payload = productRequestPayload(data);
   const additionalBinIds = [productBinId, ...getCompositionIngredientDraws(data.composition).map(d => d.storageLocationId)];
-  return withOutputStockPostingInTransaction(ctx, tx, { input, payload, additionalBinIds, replay: async (replayTx, existing) => {
-      const [product] = await replayTx.select().from(biocharProducts).where(and(eq(biocharProducts.organizationId, ctx.organizationId), eq(biocharProducts.id, String(existing.inputSnapshot?.targetBiocharProductId))));
-      if (!product) throw new SafeError('The posted product could not be found.');
-      // Every output movement stores its basis (bin_movements check constraint).
-      return { product, basisFingerprint: existing.basisFingerprint ?? '' };
-    }, write: async (writeTx, post) => {
+  return withOutputStockPostingInTransaction(ctx, tx, { input, payload, additionalBinIds, replay: (replayTx, existing) => replayPostedProduct(ctx, replayTx, existing), write: async (writeTx, post) => {
     const [facility] = await writeTx.select({ id: facilities.id }).from(facilities).where(and(eq(facilities.organizationId, ctx.organizationId), eq(facilities.id, data.facilityId), isNull(facilities.archivedAt))).for('share');
     if (!facility) throw new SafeError('Facility not found or archived');
     const [formulation] = await writeTx.select().from(formulations).where(and(eq(formulations.organizationId, ctx.organizationId), eq(formulations.id, data.formulationId))).for('share');

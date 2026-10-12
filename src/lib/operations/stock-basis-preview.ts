@@ -1,13 +1,16 @@
 import type { z } from "zod";
 import { deadlineExceeded, DomainError } from "@/lib/domain-errors";
 import type { OrgContext } from "@/lib/auth/server";
+import { logApiError, shouldLogDomainError } from "@/lib/api/route-error";
 import type { Jsonified } from "./jsonified";
 import { runOperation, type Operation, type OperationResult, type RunOptions } from "./runner";
 
-export interface StockBasisPreviewOptions extends Omit<RunOptions, "deadlineMs" | "dryRun"> {
+export interface StockBasisPreviewOptions extends Omit<RunOptions, "deadlineMs" | "dryRun" | "audit"> {
   /** The request's own deadline (epoch ms). The fallback never extends it. */
   deadlineAt: number;
   dryRun?: boolean;
+  /** API writes are always audited; its request id also labels a failed preview's log line. */
+  audit: NonNullable<RunOptions["audit"]>;
 }
 
 function remainingMs(deadlineAt: number): number {
@@ -34,7 +37,9 @@ function withoutBasis(input: unknown): unknown {
  * key. It takes no second admission or rate-limit pass: the request was
  * charged once. It runs within the time left of the original deadline; if the
  * time is spent or the preview fails for any reason, the original error is
- * thrown unchanged, without `preview`.
+ * thrown unchanged, without `preview`. A preview failure the API would treat
+ * as unexpected is logged value-free (operation and request ids, error class
+ * and code); an ordinary domain refusal is not.
  *
  * `basisOf` reads the basis fingerprint out of the operation's output.
  */
@@ -58,8 +63,11 @@ export async function runWithStockBasisPreview<Input extends z.ZodType, Output>(
       const fresh = await runOperation(operation, ctx, withoutBasis(input), { pool: runOptions.pool, dryRun: true, deadlineMs });
       const basisFingerprint = basisOf(fresh.data);
       if (basisFingerprint && fresh.stockEffects) preview = { basisFingerprint, stockEffects: fresh.stockEffects };
-    } catch {
+    } catch (previewError) {
       // The original conflict is still true and still actionable without a preview.
+      if (!(previewError instanceof DomainError) || shouldLogDomainError(previewError)) {
+        logApiError(previewError, operation.id, runOptions.audit.requestId);
+      }
     }
     if (!preview) throw error;
     throw new DomainError("stock_basis_changed", error.message, { conflict: error.conflict, blockers: error.blockers, preview });

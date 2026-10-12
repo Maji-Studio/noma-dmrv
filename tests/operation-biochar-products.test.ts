@@ -13,7 +13,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest
 import { and, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
-  binMovements, biocharProducts, biocharProductSourceAllocations, feedstocks, feedstockTypes, formulationIngredients, outputStockAllocations, productIngredientSnapshots, storageLocations,
+  binMovements, biocharProducts, biocharProductSourceAllocations, facilities, feedstocks, feedstockTypes, formulationIngredients, outputStockAllocations, productIngredientSnapshots, storageLocations,
   type BiocharProduct,
 } from "@/db/schema";
 import { generateNextCodes } from "@/data-access/code-generator";
@@ -207,6 +207,69 @@ describe("creating products", () => {
     const replay = await runOperationInProcess(makeBiocharProduct, f.ctx, blended(f, { idempotencyKey, ingredients }));
     expect(replay.product.id).toBe(first.product.id);
     expect(await productsOf(f)).toHaveLength(1);
+  });
+
+  // api/product-replay-recipe-edit: the committed product is looked up before the live recipe and facility checks.
+  it("replays a blended form request after a formulation line is added", async () => {
+    const f = await fixture();
+    const idempotencyKey = randomUUID();
+    const first = await runOperationInProcess(makeBiocharProduct, f.ctx, blended(f, { idempotencyKey }));
+    const [secondType] = await db.insert(feedstockTypes).values({ organizationId: f.ctx.organizationId, code: `E2E-BP-T2-${f.tag}`, name: `E2E Second ${f.tag}`, category: "compost", usage: "blend" }).returning();
+    await db.insert(formulationIngredients).values({ organizationId: f.ctx.organizationId, formulationId: f.recipe.id, feedstockTypeId: secondType.id, ratio: 0.1 });
+    const replay = await runOperationInProcess(makeBiocharProduct, f.ctx, blended(f, { idempotencyKey }));
+    expect(replay.product.id).toBe(first.product.id);
+    expect(replay.basisFingerprint).toBe(first.basisFingerprint);
+    // A new request is checked against the recipe as it now stands.
+    await expect(runOperationInProcess(makeBiocharProduct, f.ctx, blended(f, { idempotencyKey: randomUUID() })))
+      .rejects.toMatchObject({ code: "validation_failed", issues: [{ path: ["ingredients"] }] });
+    expect(await productsOf(f)).toHaveLength(1);
+    expect(await ingredientStock(f)).toBe(INGREDIENT_STOCK_KG - INGREDIENT_WET_KG);
+  });
+
+  it("replays a blended form request after a formulation line is removed", async () => {
+    const f = await fixture();
+    const organizationId = f.ctx.organizationId;
+    const [secondType] = await db.insert(feedstockTypes).values({ organizationId, code: `E2E-BP-T2-${f.tag}`, name: `E2E Second ${f.tag}`, category: "compost", usage: "blend" }).returning();
+    const [second] = await db.insert(formulationIngredients).values({ organizationId, formulationId: f.recipe.id, feedstockTypeId: secondType.id, ratio: 0.1 }).returning();
+    // A line recorded at 0 kg keeps no ingredient snapshot, so the recipe can drop it afterwards.
+    const ingredients = [...blended(f).ingredients, { formulationIngredientId: second.id, storageLocationId: null, wetMassKg: 0 }];
+    const idempotencyKey = randomUUID();
+    const first = await runOperationInProcess(makeBiocharProduct, f.ctx, blended(f, { idempotencyKey, ingredients }));
+    await db.delete(formulationIngredients).where(and(eq(formulationIngredients.organizationId, organizationId), eq(formulationIngredients.id, second.id)));
+    const replay = await runOperationInProcess(makeBiocharProduct, f.ctx, blended(f, { idempotencyKey, ingredients }));
+    expect(replay.product.id).toBe(first.product.id);
+    await expect(runOperationInProcess(makeBiocharProduct, f.ctx, blended(f, { idempotencyKey: randomUUID(), ingredients })))
+      .rejects.toMatchObject({ code: "validation_failed", issues: [{ path: ["ingredients", 1, "formulationIngredientId"] }] });
+    expect(await productsOf(f)).toHaveLength(1);
+  });
+
+  it("replays a form request after its facility is archived", async () => {
+    const f = await fixture();
+    const idempotencyKey = randomUUID();
+    const first = await runOperationInProcess(makeBiocharProduct, f.ctx, pure(f, { idempotencyKey }));
+    await db.update(facilities).set({ archivedAt: new Date() }).where(and(eq(facilities.organizationId, f.ctx.organizationId), eq(facilities.id, f.facility.id)));
+    const replay = await runOperationInProcess(makeBiocharProduct, f.ctx, pure(f, { idempotencyKey }));
+    expect(replay.product.id).toBe(first.product.id);
+    await expect(runOperationInProcess(makeBiocharProduct, f.ctx, pure(f, { idempotencyKey: randomUUID() })))
+      .rejects.toMatchObject({ code: "not_found", issues: [{ path: ["facilityId"] }] });
+    // Different facts under the same key stay a conflict, before the archived facility is read.
+    await expect(runOperationInProcess(makeBiocharProduct, f.ctx, pure(f, { idempotencyKey, biocharWetMassKg: BIOCHAR_WET_KG + 1 })))
+      .rejects.toMatchObject({ code: "conflict" });
+    expect(await productsOf(f)).toHaveLength(1);
+    expect(await sourceStock(f)).toBe(BIN_DRY_KG - BIOCHAR_DRY_KG);
+  });
+
+  it("never replays another organization's product under the same request key", async () => {
+    const a = await fixture();
+    const b = await fixture();
+    const idempotencyKey = randomUUID();
+    const first = await runOperationInProcess(makeBiocharProduct, a.ctx, pure(a, { idempotencyKey }));
+    // A's exact facts are foreign ids to B, so the early lookup finds nothing and the live checks refuse them.
+    await expect(runOperationInProcess(makeBiocharProduct, b.ctx, pure(a, { idempotencyKey }))).rejects.toMatchObject({ code: "not_found" });
+    const own = await runOperationInProcess(makeBiocharProduct, b.ctx, pure(b, { idempotencyKey }));
+    expect(own.product.id).not.toBe(first.product.id);
+    expect(await productsOf(a)).toHaveLength(1);
+    expect(await productsOf(b)).toHaveLength(1);
   });
 });
 
