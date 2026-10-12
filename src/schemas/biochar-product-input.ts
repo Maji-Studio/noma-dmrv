@@ -8,7 +8,7 @@ import {
   clearableNumber, expectedVersionSchema, massKgSchema, optionalNumber, pipeToCanonicalNumber,
   requiredMassKgSchema, stockEventInstantSchema, storedPercentSchema,
 } from "./helpers";
-import { moistureSchema, orderedSourcesSchema, OUTPUT_STOCK_REQUEST_KEY_MAX_LENGTH } from "./output-stock";
+import { MAX_STOCK_ENTRY_ITEMS, moistureSchema, orderedSourcesSchema, OUTPUT_STOCK_REQUEST_KEY_MAX_LENGTH } from "./output-stock";
 
 const INGREDIENT_MOISTURE_REQUIRED = "Enter the measured moisture for every ingredient added.";
 const BIOCHAR_MOISTURE_REQUIRED = "Enter the measured biochar moisture, or the sub-bins drawn from a split bin.";
@@ -27,7 +27,7 @@ const ingredientInput = z.strictObject({
   if (value.wetMassKg > 0 && value.moisturePercent == null) ctx.addIssue({ code: "custom", path: ["moisturePercent"], message: INGREDIENT_MOISTURE_REQUIRED });
 });
 
-const ingredientsInput = z.array(ingredientInput).superRefine((ingredients, ctx) => {
+const ingredientsInput = z.array(ingredientInput).max(MAX_STOCK_ENTRY_ITEMS).superRefine((ingredients, ctx) => {
   const seen = new Set<string>();
   ingredients.forEach((ingredient, index) => {
     if (seen.has(ingredient.formulationIngredientId)) ctx.addIssue({ code: "custom", path: [index, "formulationIngredientId"], message: DUPLICATE_FORMULATION_INGREDIENT_MESSAGE });

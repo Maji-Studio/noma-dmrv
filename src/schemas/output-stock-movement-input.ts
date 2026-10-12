@@ -7,8 +7,7 @@ import {
 } from "./output-stock";
 
 /** What REST and MCP publish (decisions 50 and 53): losses and counts, no corrections, no product versions. */
-const publishedFields = {
-  storageLocationId: z.uuid().describe("Biochar or product bin UUID. The facility and its time zone come from the bin."),
+const publishedBodyFields = {
   kind: z.enum(["loss", "count"]).describe("loss: wet mass that left the bin. count: the whole bin weighed; it resets stock and moisture and never raises stock."),
   occurredAt: eventInstantSchema,
   wetMassKg: wetMassSchema().describe("Wet kilograms lost, or the whole counted bin. A count of 0 records the bin as empty."),
@@ -16,6 +15,11 @@ const publishedFields = {
   sources: orderedSourcesSchema.optional().describe("Split bins, losses only: the sub-bins in the order they were emptied, each with its moisture."),
   reason: reasonSchema(OUTPUT_STOCK_REASON_MAX_LENGTH).describe("Why the stock changed, untrusted plain text."),
   basisFingerprint: z.string().min(1).optional().describe("basisFingerprint from a dry run. If stock moved since, the write is refused with stock_basis_changed. Omit it to act on current stock."),
+};
+
+const publishedFields = {
+  storageLocationId: z.uuid().describe("Biochar or product bin UUID. The facility and its time zone come from the bin."),
+  ...publishedBodyFields,
 };
 
 /**
@@ -31,8 +35,11 @@ const unpublishedFields = {
   idempotencyKey: z.string().trim().min(1).max(OUTPUT_STOCK_REQUEST_KEY_MAX_LENGTH).optional(),
 };
 
-/** The published body of `record_output_stock_movement`; adapters reject anything else. */
+/** The published input of `record_output_stock_movement`; adapters reject anything else. */
 export const recordOutputStockMovementApiInput = z.strictObject(publishedFields).superRefine(refineOutputStockEntry);
+
+/** The REST body: the bin is the path segment, so the body names everything else. */
+export const recordOutputStockMovementApiBody = z.strictObject(publishedBodyFields).superRefine(refineOutputStockEntry);
 
 /** The full operation input: the published body plus the UI-only fields. */
 export const recordOutputStockMovementInput = z.strictObject({ ...publishedFields, ...unpublishedFields }).superRefine(refineOutputStockEntry);

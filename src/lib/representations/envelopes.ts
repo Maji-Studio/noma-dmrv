@@ -14,6 +14,12 @@ export function listEnvelopeSchema(schema: z.ZodType, order = "newest first by (
 export function stockWriteEnvelopeSchema(schema: z.ZodType) {
   return itemEnvelopeSchema(schema).extend({ stockEffects: stockEffectsSchema.optional() });
 }
+/** A stock write that can name the basis it drew on: a dry run adds the fingerprint to send back with the real write. */
+export function stockBasisWriteEnvelopeSchema(schema: z.ZodType) {
+  return stockWriteEnvelopeSchema(schema).extend({
+    basisFingerprint: z.string().optional().describe("Dry runs only: the stock basis these effects were computed on, opaque string. Send it as basisFingerprint on the real write to refuse it if stock moved."),
+  });
+}
 export const feedstockCreateEnvelopeSchema = z.object({
   data: z.array(feedstockRepresentationSchema).describe("Created feedstocks, one per bin allocation; ids and codes are provisional in a dry run."),
   warnings: z.array(z.string()).optional().describe("Non-fatal operator guidance, plain text."),

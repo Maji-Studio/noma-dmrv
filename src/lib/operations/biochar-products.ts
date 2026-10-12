@@ -11,6 +11,7 @@ import { withOutputStockErrors } from "@/lib/output-stock-domain-errors";
 import { makeBiocharProductInput, updateBiocharProductInput, type MakeBiocharProductInput } from "@/schemas/biochar-product-input";
 import { resolveEventInstant } from "./event-times";
 import { GENERATED_MOVEMENT_KEY_PREFIX } from "./output-stock";
+import type { OperationEffect } from "@/lib/operation-effect";
 import type { Operation } from "./runner";
 
 const AUTO_CODE_COUNT = 1;
@@ -54,14 +55,26 @@ function compositionFromLines(ingredients: MakeBiocharProductInput["ingredients"
   return rows.length ? { ingredients: rows.sort((a, b) => recipeOrder(a) - recipeOrder(b)) } : {};
 }
 
+/** The audit effects of a created and an updated product; adapters that publish a different output reuse them. */
+export function describeMadeProduct(input: object, product: { id: string; version: number }): OperationEffect {
+  return {
+    outcome: "created", entityType: PRODUCT_ENTITY, entityIds: [product.id],
+    versionBefore: null, versionAfter: product.version, changedFields: changedFields(input),
+  };
+}
+
+export function describeUpdatedProduct(input: object, product: { id: string; version: number }, versionBefore: number): OperationEffect {
+  return {
+    outcome: "updated", entityType: PRODUCT_ENTITY, entityIds: [product.id],
+    versionBefore, versionAfter: product.version, changedFields: changedFields(input),
+  };
+}
+
 export const makeBiocharProduct: Operation<typeof makeBiocharProductInput, CreatedBiocharProduct<BiocharProductRecord>> = {
   id: "make_biochar_product",
   input: makeBiocharProductInput,
   supportsDryRun: true,
-  describe: (input, output) => ({
-    outcome: "created", entityType: PRODUCT_ENTITY, entityIds: [output.product.id],
-    versionBefore: null, versionAfter: output.product.version, changedFields: changedFields(input),
-  }),
+  describe: (input, output) => describeMadeProduct(input, output.product),
   execute: ({ ctx, tx, snapshotStock }, input) => withOutputStockErrors(async () => {
     // The facility supplies the zone a facility-local placement is read in.
     const facility = await readProductFacility(ctx, tx, input.facilityId);
@@ -100,9 +113,6 @@ export const updateBiocharProduct: Operation<typeof updateBiocharProductInput, B
   id: "update_biochar_product",
   input: updateBiocharProductInput,
   supportsDryRun: true,
-  describe: (input, output) => ({
-    outcome: "updated", entityType: PRODUCT_ENTITY, entityIds: [output.id],
-    versionBefore: input.expectedVersion, versionAfter: output.version, changedFields: changedFields(input),
-  }),
+  describe: (input, output) => describeUpdatedProduct(input, output, input.expectedVersion),
   execute: ({ ctx, tx }, { biocharProductId, ...changes }) => withOutputStockErrors(async () => toBiocharProductRecord(await updateBiocharProductInTransaction(ctx, tx, biocharProductId, changes))),
 };

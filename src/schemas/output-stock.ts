@@ -25,13 +25,16 @@ export const reasonSchema = (max: number) => z
   .min(1, REASON_REQUIRED)
   .max(max, `Keep the reason under ${max} characters.`);
 
+/** Bounds the sub-bins or ingredients one stock entry may list, as for run draws. */
+export const MAX_STOCK_ENTRY_ITEMS = 200;
+
 /** One sub-bin of a split-bin draw with the moisture read as it was emptied. */
 export const orderedSourceSchema = z.object({
-  layerId: z.uuid('Choose a sub-bin.'),
-  moisturePercent: moistureSchema(),
+  layerId: z.uuid('Choose a sub-bin.').describe('Sub-bin drawn: on a biochar bin, the UUID of the production run that filled it; on a product bin, the UUID of the biochar product placed in it.'),
+  moisturePercent: moistureSchema().describe('Measured moisture of this sub-bin as percent of wet mass, below 100.'),
 });
 /** A split-bin draw's sub-bins in the order they were emptied: at least one, each once. */
-export const orderedSourcesSchema = z.array(orderedSourceSchema).min(1)
+export const orderedSourcesSchema = z.array(orderedSourceSchema).min(1).max(MAX_STOCK_ENTRY_ITEMS)
   .refine(sources => new Set(sources.map(source => source.layerId)).size === sources.length, 'Choose each sub-bin once.');
 /** The fields every output-stock entry rule reads. */
 interface OutputStockEntry {

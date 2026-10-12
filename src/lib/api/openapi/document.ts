@@ -9,8 +9,7 @@ import { z } from "zod";
 import { API_BODY_MAX_BYTES, API_FEEDSTOCK_MAX_ALLOCATIONS, API_DOCS_CACHE_SECONDS } from "@/config/api-rest";
 import { API_KEY_LIVE_PREFIX, API_KEY_TEST_PREFIX } from "@/config/api-keys";
 import { createFeedstockSchema, updateFeedstockSchema } from "@/schemas/feedstocks";
-import { toOperationJsonSchema, type JsonSchema } from "@/lib/operations/json-schema";
-import type { ApiScope } from "@/lib/auth/api-scopes";
+import type { JsonSchema } from "@/lib/operations/json-schema";
 import { problemSchema } from "../problem-schema";
 import { mutationQuerySchema } from "../query";
 import { outputStockMovementListSchema, supplierLocationListSchema } from "../query-schemas";
@@ -20,40 +19,14 @@ import { meRepresentationSchema } from "@/lib/representations/me";
 import { feedstockRepresentationSchema } from "@/lib/representations/feedstocks";
 import { itemEnvelopeSchema, stockWriteEnvelopeSchema, listEnvelopeSchema, feedstockCreateEnvelopeSchema } from "@/lib/representations/envelopes";
 import { resources, restResources } from "./resources";
+import { operationInput, privateOperation, requestBody, type Paths } from "./operation-kit";
+import { addBiocharWritePaths } from "./biochar-writes";
 import { outputSchema, queryParameters, targetParameter, idempotencyParameter, ifMatchParameter, privateHeaders, requestIdHeader, etagHeader, writeHeaders, locationHeader, problemResponses, jsonResponse, headerComponents, problemResponseComponents } from "./transport";
 
-interface OperationDocument {
-  operationId: string;
-  description: string;
-  "x-required-scope": ApiScope | null;
-  security?: { bearerAuth: never[] }[];
-  parameters?: unknown[];
-  requestBody?: unknown;
-  responses: Record<string, unknown>;
-}
-type Paths = Record<string, Record<string, OperationDocument>>;
 const READ_ERRORS = [400, 401, 403, 429, 500];
 const WRITE_ERRORS = [400, 401, 403, 404, 409, 422, 429, 500, 503];
 const JSON_INDENT = 2;
 const SNAPSHOT_LINE_WIDTH = 2000;
-
-function privateOperation(operationId: string, scope: ApiScope | undefined, description: string, responses: Record<string, unknown>, parameters: unknown[] = []): OperationDocument {
-  return { operationId, description: `${description} Required scope: ${scope ?? "none (any authenticated API key)"}.`, "x-required-scope": scope ?? null, parameters, responses };
-}
-function operationInput(schema: Parameters<typeof toOperationJsonSchema>[0]): JsonSchema {
-  const result = toOperationJsonSchema(schema);
-  delete result.$schema;
-  // REST rejects unknown keys recursively, while forms retain their stripping behavior.
-  function close(node: unknown): void {
-    if (!node || typeof node !== "object") return;
-    if (Array.isArray(node)) return node.forEach(close);
-    const record = node as JsonSchema;
-    if (record.properties) record.additionalProperties = false;
-    Object.values(record).forEach(close);
-  }
-  close(result);
-  return result;
-}
 
 /** Pure deterministic build: no environment, clock, credential or database imports. */
 export function buildOpenApiDocument() {
@@ -88,6 +61,14 @@ export function buildOpenApiDocument() {
   responses.ProductionRunProblem412 = { ...responses.Problem412,
     content: { "application/problem+json": { schema: { $ref: "#/components/schemas/ProductionRunPreconditionProblem" } } },
   };
+  schemas.BiocharProductPreconditionProblem = {
+    allOf: [{ $ref: "#/components/schemas/Problem" }, { type: "object", properties: {
+      current: { $ref: "#/components/schemas/biochar_product", description: "Current biochar product after a failed version precondition." },
+    }, required: ["current"] }],
+  };
+  responses.BiocharProductProblem412 = { ...responses.Problem412,
+    content: { "application/problem+json": { schema: { $ref: "#/components/schemas/BiocharProductPreconditionProblem" } } },
+  };
   const runPreconditionResponse = { "412": { $ref: "#/components/responses/ProductionRunProblem412" } };
   const feedstockPreconditionResponse = { "412": { $ref: "#/components/responses/FeedstockProblem412" } };
   for (const resource of published) {
@@ -120,7 +101,6 @@ export function buildOpenApiDocument() {
   const createInput = operationInput(createFeedstockSchema);
   (createInput.properties as Record<string, JsonSchema>).allocations.maxItems = API_FEEDSTOCK_MAX_ALLOCATIONS;
   const patchInput = operationInput(updateFeedstockSchema.omit({ feedstockId: true, expectedVersion: true }));
-  const requestBody = (schema: JsonSchema, example: unknown) => ({ required: true, description: `JSON body, maximum ${API_BODY_MAX_BYTES} bytes. Unknown properties are rejected.`, content: { "application/json": { schema, example } } });
   paths["/feedstocks"].post = {
     ...privateOperation("log_feedstock_delivery", "feedstocks:write", "Record a wood-chip intake split across receiving bins. Positive wet masses and moisture 0 to 100 are required; allocation overage requires justification. Dry runs roll back, skip external effects and return provisional ids, codes and stock additions. Location and ETag identify the first feedstock on committed responses and are absent on dry runs.",
       { ...problemResponses([...WRITE_ERRORS, 413, 415]),
@@ -182,6 +162,8 @@ export function buildOpenApiDocument() {
       [targetParameter(true), ...queryParameters(mutationQuerySchema), ifMatchParameter, idempotencyParameter(false)]),
     requestBody: { required: false, description: `Optional empty JSON object, maximum ${API_BODY_MAX_BYTES} bytes.`, content: { "application/json": { schema: operationInput(z.strictObject({})), example: {} } } },
   };
+
+  addBiocharWritePaths(paths, { publishOutput, writeErrors: WRITE_ERRORS });
 
   for (const [path, operationId, mediaType, description] of [
     ["/openapi.json", "get_openapi_document", "application/json", "Public OpenAPI 3.1 contract."],

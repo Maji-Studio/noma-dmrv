@@ -203,7 +203,7 @@ it("types current as a feedstock only on feedstock precondition responses", () =
     expect.objectContaining({ properties: { current: expect.objectContaining({ $ref: "#/components/schemas/feedstock" }) }, required: ["current"] }),
   ]);
   for (const [name, response] of Object.entries(document.components.responses)) {
-    if (name === "FeedstockProblem412" || name === "ProductionRunProblem412") continue;
+    if (name === "FeedstockProblem412" || name === "ProductionRunProblem412" || name === "BiocharProductProblem412") continue;
     expect(response.content["application/problem+json"].schema).toEqual({ $ref: "#/components/schemas/Problem" });
   }
 });
@@ -279,4 +279,28 @@ it("keeps production run representations unexpanded so their ETags cover every r
   const draw = fields.feedstockDraws.items as JsonSchema;
   expect(draw.properties).toHaveProperty("storageLocationId");
   expect(draw.properties).not.toHaveProperty("storageLocationCode");
+});
+
+it("publishes the product and movement writes with one scope, required keys and no deletion", () => {
+  const writes = [
+    document.paths["/biochar-products"].post, document.paths["/biochar-products/{idOrCode}"].patch,
+    document.paths["/storage-locations/{idOrCode}/stock-movements"].post,
+  ];
+  expect(writes.map((operation) => operation.operationId)).toEqual(["make_biochar_product", "update_biochar_product", "record_output_stock_movement"]);
+  for (const operation of writes) expect(operation["x-required-scope"]).toBe("biochar-products:write");
+  expect(document.paths["/biochar-products/{idOrCode}"]).not.toHaveProperty("delete");
+  for (const operation of [writes[0], writes[2]]) {
+    expect(operation.parameters).toContainEqual(expect.objectContaining({ name: "Idempotency-Key", required: true }));
+    expect(Object.keys(operation.responses)).toEqual(expect.arrayContaining(["200", "201", "404", "409", "422"]));
+  }
+  expect(writes[1].responses["412"]).toEqual({ $ref: "#/components/responses/BiocharProductProblem412" });
+  expect(writes[1].parameters).toContainEqual(expect.objectContaining({ name: "If-Match", required: true }));
+  type BodySchema = { properties: Record<string, JsonSchema> };
+  const bodyOf = (operation: (typeof writes)[number]) => (operation.requestBody as { content: { "application/json": { schema: BodySchema } } }).content["application/json"].schema;
+  const movementBody = bodyOf(writes[2]);
+  expect(movementBody.properties.kind.enum).toEqual(["loss", "count"]);
+  for (const forbidden of ["storageLocationId", "correctsMovementId", "expectedProductVersions", "idempotencyKey"]) expect(movementBody.properties).not.toHaveProperty(forbidden);
+  const productBody = bodyOf(writes[0]);
+  for (const forbidden of ["code", "idempotencyKey", "expectedProductVersions"]) expect(productBody.properties).not.toHaveProperty(forbidden);
+  expect(document.components.schemas.Problem.properties).toHaveProperty("preview");
 });

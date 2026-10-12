@@ -3,7 +3,7 @@ import { db } from "@/db";
 import { binMovements, outputStockAllocations } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import { DomainError } from "@/lib/domain-errors";
-import { requireOrgScope } from "./utils";
+import { requireOrgScope, type Executor } from "./utils";
 import { findApiStorageLocation } from "./api-storage-locations";
 import { lookupCursorCreatedAt, type ApiLookupIdentifier, type ApiLookupPosition } from "./api-lookup-filters";
 
@@ -41,17 +41,9 @@ export async function requireApiOutputBin(ctx: OrgContext, identifier: ApiLookup
   return bin;
 }
 
-/**
- * Newest posting first by posting sequence, a bigserial that never repeats and
- * grows with every commit order of the ledger. The cursor's id resolves to its
- * sequence inside the statement, so the page boundary needs no timestamp.
- */
-export async function listApiOutputStockMovements(
-  ctx: OrgContext, filters: { storageLocationId: string }, limit: number, cursor?: ApiLookupPosition,
-) {
-  requireOrgScope(ctx);
-  const bin = await requireApiOutputBin(ctx, { id: filters.storageLocationId });
-  return db.select({
+/** The published movement columns; raw subquery columns stay qualified so the correlation cannot bind locally. */
+function movementFields(ctx: OrgContext) {
+  return {
     id: binMovements.id,
     storageLocationId: binMovements.storageLocationId,
     kind: binMovements.outputKind,
@@ -78,7 +70,20 @@ export async function listApiOutputStockMovements(
     deliveryId: allocationLink(ctx, "delivery_id"),
     createdAt: binMovements.createdAt,
     cursorCreatedAt: lookupCursorCreatedAt(binMovements.createdAt),
-  }).from(binMovements).where(and(
+  };
+}
+
+/**
+ * Newest posting first by posting sequence, a bigserial that never repeats and
+ * grows with every commit order of the ledger. The cursor's id resolves to its
+ * sequence inside the statement, so the page boundary needs no timestamp.
+ */
+export async function listApiOutputStockMovements(
+  ctx: OrgContext, filters: { storageLocationId: string }, limit: number, cursor?: ApiLookupPosition,
+) {
+  requireOrgScope(ctx);
+  const bin = await requireApiOutputBin(ctx, { id: filters.storageLocationId });
+  return db.select(movementFields(ctx)).from(binMovements).where(and(
     eq(binMovements.organizationId, ctx.organizationId), eq(binMovements.storageLocationId, bin.id),
     inArray(binMovements.lane, OUTPUT_LANES), isNotNull(binMovements.outputKind),
     cursor ? sql`"bin_movements"."posting_sequence" < (
@@ -86,4 +91,15 @@ export async function listApiOutputStockMovements(
       where earlier.id = ${cursor.id}::uuid and earlier.organization_id = ${ctx.organizationId} and earlier.storage_location_id = ${bin.id}
     )` : undefined,
   )).orderBy(desc(binMovements.postingSequence)).limit(limit + 1);
+}
+
+/** One output movement by id, read in the write transaction that posted it. */
+export async function findApiOutputStockMovement(ctx: OrgContext, movementId: string, executor: Executor = db) {
+  requireOrgScope(ctx);
+  const [row] = await executor.select(movementFields(ctx)).from(binMovements).where(and(
+    eq(binMovements.organizationId, ctx.organizationId), eq(binMovements.id, movementId),
+    inArray(binMovements.lane, OUTPUT_LANES), isNotNull(binMovements.outputKind),
+  )).limit(1);
+  if (!row) throw new DomainError("not_found", "Movement was not found.");
+  return row;
 }

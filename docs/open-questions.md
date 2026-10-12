@@ -371,6 +371,20 @@ Pure starter residue; org scoping came later via ADR 0010.
   sequences rather than the storage-location version, then a REST path and an
   MCP tool.
 
+### API UUIDs are compared case-sensitively (`api/uuid-case`, opened 2026-10-12)
+
+- Zod `z.uuid()` and the OpenAPI `uuid` format accept uppercase hex, and
+  PostgreSQL matches it, but rows come back lowercase. JavaScript comparisons
+  after a read then miss: for example
+  `src/data-access/biochar-product-references.ts:findMissingProductReference`
+  answers 404 for an uppercase facility id, and
+  `src/data-access/output-stock-post.ts:readOutputStockBin` compares facility
+  ids as strings. Feedstock and production-run writes share the pattern.
+- **Resolve via:** one canonicalization at the API boundary (lowercase every
+  published UUID field and path id before the operation runs, including the
+  idempotency payload hash), plus an uppercase-reference case in each write
+  suite.
+
 ### Registry credentials can be replaced but not removed (`certification/credential-removal`, opened 2026-07-28)
 
 - The certifier settings pane replaces keys by typing over a masked field, and

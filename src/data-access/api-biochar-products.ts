@@ -4,7 +4,7 @@ import { biocharProductSourceAllocations, biocharProducts, storageLocations } fr
 import type { OrgContext } from "@/lib/auth/server";
 import { DomainError } from "@/lib/domain-errors";
 import type { BiocharProductStatus } from "@/schemas/biochar-products";
-import { requireOrgScope } from "./utils";
+import { requireOrgScope, type Executor } from "./utils";
 import { findApiFormulation } from "./api-formulations";
 import { lookupCursorCreatedAt, lookupPosition, lookupSearch, requireApiLookupFacility, type ApiLookupIdentifier, type ApiLookupPosition } from "./api-lookup-filters";
 
@@ -17,9 +17,9 @@ interface SavedIngredient {
   wetMassKg: number | null; moisturePercent: number | null;
 }
 
-function productQuery(ctx: OrgContext) {
+function productQuery(ctx: OrgContext, executor: Executor = db) {
   requireOrgScope(ctx);
-  return db.select({
+  return executor.select({
     id: biocharProducts.id,
     code: biocharProducts.code,
     version: biocharProducts.version,
@@ -70,9 +70,9 @@ function productQuery(ctx: OrgContext) {
   }).from(biocharProducts);
 }
 
-export async function findApiBiocharProduct(ctx: OrgContext, identifier: ApiLookupIdentifier) {
+export async function findApiBiocharProduct(ctx: OrgContext, identifier: ApiLookupIdentifier, executor: Executor = db) {
   requireOrgScope(ctx);
-  const [row] = await productQuery(ctx).where(and(
+  const [row] = await productQuery(ctx, executor).where(and(
     eq(biocharProducts.organizationId, ctx.organizationId),
     "id" in identifier ? eq(biocharProducts.id, identifier.id) : eq(biocharProducts.code, identifier.code),
   )).limit(1);

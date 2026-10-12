@@ -12,6 +12,7 @@ import { cleanupOutputStockFixture } from "./output-stock-cleanup";
 import { seedOutputStockParents } from "./output-stock-fixture";
 
 export const PRODUCT_API_SCOPES: readonly ApiScope[] = ["biochar-products:read", "formulations:read", "storage-locations:read"];
+export const PRODUCT_WRITE_SCOPES: readonly ApiScope[] = [...PRODUCT_API_SCOPES, "biochar-products:write"];
 export const FIRST_PLACED_AT = "2026-09-12T12:00:00.000Z";
 export const SECOND_PLACED_AT = "2026-09-13T12:00:00.000Z";
 export const BIOCHAR_WET_KG = 500;
@@ -32,6 +33,9 @@ const ENTITY_BASE = "http://localhost:3100/api/v1";
 export type ApiProductParents = Awaited<ReturnType<typeof seedOutputStockParents>>;
 export interface ApiProductFixture extends ApiProductParents {
   key: string;
+  /** Read and write scopes for the products and movement writes. */
+  writeKey: string;
+  writeCredentialId: string;
   /** A real key whose scopes name neither products, formulations nor movements. */
   otherScopeKey: string;
   /** Formulations only: the scope precedence fixture. */
@@ -42,8 +46,11 @@ export interface ApiProductFixture extends ApiProductParents {
   r2: string;
 }
 
+async function issueCredential(f: ApiProductParents, name: string, scopes: readonly ApiScope[]) {
+  return createApiKey(f.ctx, { name, scopes: [...scopes], expiresIn: API_KEY_DEFAULT_EXPIRY_SECONDS });
+}
 async function issueKey(f: ApiProductParents, name: string, scopes: readonly ApiScope[]) {
-  return (await createApiKey(f.ctx, { name, scopes: [...scopes], expiresIn: API_KEY_DEFAULT_EXPIRY_SECONDS })).key;
+  return (await issueCredential(f, name, scopes)).key;
 }
 
 /** Parents from the output-stock fixture, a Pure product bin, a stocked ingredient bin and real credentials. */
@@ -58,8 +65,10 @@ export async function createApiProductFixture(): Promise<ApiProductFixture> {
   await db.insert(feedstocks).values({ organizationId, facilityId: f.facility.id, code: `E2E-API-IN-${f.tag}`, status: "complete", feedstockTypeId: f.ingredientType.id,
     storageLocationId: ingredientBin.id, massWetKg: INGREDIENT_STOCK_KG, massDryKg: INGREDIENT_STOCK_KG * (1 - INGREDIENT_MOISTURE_PERCENT / 100),
     moistureContentPercent: INGREDIENT_MOISTURE_PERCENT, deliveryDate: new Date("2026-09-01") });
+  const writer = await issueCredential(f, "Product writer", PRODUCT_WRITE_SCOPES);
   return {
     ...f, pureBin, ingredientBin, r1: f.runs[0].id, r2: f.runs[1].id,
+    writeKey: writer.key, writeCredentialId: writer.id,
     key: await issueKey(f, "Product reader", PRODUCT_API_SCOPES),
     otherScopeKey: await issueKey(f, "Other scope", ["feedstocks:read"]),
     formulationsOnlyKey: await issueKey(f, "Formulations only", ["formulations:read"]),

@@ -1,5 +1,6 @@
 import { apiRoute } from "@/lib/api/route";
 import { readBiocharProduct } from "@/lib/api/biochar-products-queries";
+import { updateBiocharProductResponse } from "@/lib/api/biochar-products-mutations";
 import { biocharProductEtag } from "@/lib/api/representation-etags";
 import { parseApiQuery } from "@/lib/api/query";
 import { resourceQueries } from "@/lib/api/query-schemas";
@@ -14,3 +15,5 @@ export const GET = apiRoute<Params>("api.v1.biochar-products.get", "biochar-prod
   headers.set("ETag", biocharProductEtag(data));
   return Response.json({ data }, { headers });
 });
+export const PATCH = apiRoute<Params>("api.v1.biochar-products.update", "biochar-products:write", (request, context, { idOrCode }) =>
+  updateBiocharProductResponse(request, context, idOrCode));
