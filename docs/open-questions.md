@@ -349,6 +349,28 @@ Pure starter residue; org scoping came later via ADR 0010.
   core and the shared operation runner before registering REST routes or MCP
   tools.
 
+### Output-stock corrections are not on the API (`api/stock-corrections`, opened 2026-10-12)
+
+- Decision 50 in the [data-entry API plan](./plans/2026-10-06-data-entry-api.md#13-decisions-kenji-2026-10-06)
+  keeps corrections UI-only. `record_output_stock_movement` publishes
+  `loss | count` and ignores `correctsMovementId`; the UI passes it through
+  `src/fn/output-stock.ts:postOutputStockFn`. Movement history is readable at
+  `GET /storage-locations/{id}/stock-movements`.
+- **Resolve via:** a decision on scope (a destructive `stock-corrections:write`
+  granted per key, any-of admission shared by REST and MCP listing,
+  registration and rate-limit classification), delivery corrections, and
+  tests for ordinary-only, correction-only, both and neither credentials.
+
+### Sub-bin stock is not readable on the API (`api/sub-bin-reads`, opened 2026-10-12)
+
+- Split output bins expose no sub-bin or remaining-stock read. A loss with
+  `sources` names production-run layers that clients find through runs and
+  movement history, without seeing what each layer still holds. Decision 55
+  deferred it.
+- **Resolve via:** a stock-bearing read model whose ETag tracks movement
+  sequences rather than the storage-location version, then a REST path and an
+  MCP tool.
+
 ### Registry credentials can be replaced but not removed (`certification/credential-removal`, opened 2026-07-28)
 
 - The certifier settings pane replaces keys by typing over a masked field, and

@@ -391,6 +391,16 @@ Decided 2026-10-09 (supervisor decision during Phase 4a review):
 48. **Production-run responses carry UTC instants and reference ids only**, without facility codes or the facility time zone. A joined mutable field would change the response body under an unchanged strong ETag. Clients read the zone from `/facilities` or `whoami`.
 49. **The operation runner retries operations aborted before COMMIT** with a deadlock (40P01), serialization failure (40001) or lock timeout (55P03), up to a fixed attempt cap within the original deadline. Exhausted retries answer the retryable `concurrent_write_retry` (409). Claim-lock waits still answer `idempotency_in_progress`, and an exhausted deadline answers `deadline_exceeded`. See `data/lock-order` in [open questions](../open-questions.md#run-writers-feedstock-edits-and-output-postings-lock-in-different-orders-datalock-order-opened-2026-10-09).
 
+Decided 2026-10-12 (Kenji, round 6, Phase 4b):
+
+50. **No stock corrections on the API for now.** This amends decisions 43 and 44: the `stock-corrections:write` scope is not added, REST and MCP take no `correctsMovementId`, and the published movement `kind` is `loss | count`. The UI keeps its corrections; the operation may carry `correctsMovementId` as an unpublished field for the UI. Movement history stays readable (decision 55). API corrections are in the backlog (`api/stock-corrections` in [open questions](../open-questions.md)).
+51. **Every layer whose moisture reading changes passes the certification-lineage guard,** not only the layers drawn from. A count on a bin holding certified material is refused with `certification_locked`. This applies to the UI too, including the original readings a UI correction removes.
+52. **Product create takes the parts, not the blend:** `biocharWetMassKg` as weighed, `biocharMoisturePercent`, `waterAddedKg` (required) and `ingredients[]` with wet mass and moisture each. The server derives the stored blend `massKg` exactly as the form does.
+53. **Stock movements take an optional `basisFingerprint` and no `expectedProductVersions`.** A stale fingerprint answers 409 `stock_basis_changed` with `preview`. Named exception to the version rule: without a fingerprint, a stock command acts on current stock under the bin lock.
+54. **Delivery corrections stay off the API** (moot under decision 50).
+55. **Discovery reads:** `GET /formulations[/{idOrCode}]` with lines `{ id, feedstockTypeId, ratio }` (scope `formulations:read`, on by default) and `find_formulations`; `GET /storage-locations/{id}/stock-movements` (scope `biochar-products:read`, read-only) and `find_output_stock_movements`. Sub-bin reads are deferred (`api/sub-bin-reads`).
+56. **Future event times are refused** for product `placedAt` and movement `occurredAt`, in the app and the API, as for runs (`src/data-access/production-runs/future-time.ts`). Backdating stays allowed.
+
 ## 14. What review changed
 
 | Change | Raised by |
