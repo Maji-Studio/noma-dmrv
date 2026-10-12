@@ -23,14 +23,19 @@ function refusal(layers: OutputStockLayer[], request: OutputStockRequest, policy
   }
   throw new Error('Expected a planner refusal');
 }
-const classify = (error: RangeError, drawsWholeBin = false) => classifyPlannerFailure(error, { storageLocationId: BIN, drawsWholeBin });
+const classify = (error: RangeError, drawsWholeBin = false, lane: 'biochar' | 'product' = 'product') => classifyPlannerFailure(error, { storageLocationId: BIN, lane, drawsWholeBin });
 
 describe('capacity failures are stock shortages, in solids', () => {
   it('reports a blended bin by its total solids, not its dry biochar', () => {
     // 2,500 kg wet at 15% is 2,125 kg solids against 1,820 kg held (of which 1,500 kg is dry biochar).
     const error = refusal(blends(), { kind: 'wet', wetKg: 2500, moisturePercent: 15 });
     expect(error).toBeInstanceOf(InsufficientSolidsError);
-    expect(classify(error)).toEqual({ kind: 'insufficient_stock', storageLocationId: BIN, availableSolidsKg: 1820, requestedSolidsKg: 2125 });
+    expect(classify(error)).toEqual({ kind: 'insufficient_stock', storageLocationId: BIN, measure: 'total_solids', availableSolidsKg: 1820, requestedSolidsKg: 2125 });
+  });
+
+  it('names a biochar bin\'s solids as dry biochar', () => {
+    const error = refusal(bays(), { kind: 'solids', solidsKg: 2000 });
+    expect(classify(error, false, 'biochar')).toMatchObject({ kind: 'insufficient_stock', measure: 'dry_biochar', availableSolidsKg: 1480.2 });
   });
 
   it('keeps the planner message the operator copy is keyed on', () => {
@@ -56,14 +61,14 @@ describe('capacity failures are stock shortages, in solids', () => {
     const error = refusal(bays(), { kind: 'ordered', wetKg: 2200, sources: [{ layerId: 'B-0412', moisturePercent: 30 }, { layerId: 'B-0419', moisturePercent: 33 }] });
     expect(error).toBeInstanceOf(SubBinOverdrawError);
     expect(error.message).toBe('Measured solids exceed the sub-bin');
-    const blocking = classify(error);
-    expect(blocking).toMatchObject({ kind: 'insufficient_stock', storageLocationId: BIN, layerId: 'B-0419', availableSolidsKg: 637 });
+    const blocking = classify(error, false, 'biochar');
+    expect(blocking).toMatchObject({ kind: 'insufficient_stock', storageLocationId: BIN, layerId: 'B-0419', measure: 'dry_biochar', availableSolidsKg: 637 });
     expect(blocking.kind === 'insufficient_stock' && blocking.requestedSolidsKg).toBeCloseTo(666.937, 3);
   });
 
   it('reports a load through every sub-bin the bin holds as short of the bin', () => {
     const error = refusal(bays(), { kind: 'ordered', wetKg: 2200, sources: [{ layerId: 'B-0412', moisturePercent: 30 }, { layerId: 'B-0419', moisturePercent: 33 }] });
-    const blocking = classify(error, true);
+    const blocking = classify(error, true, 'biochar');
     expect(blocking).not.toHaveProperty('layerId');
     expect(blocking).toMatchObject({ kind: 'insufficient_stock', storageLocationId: BIN, availableSolidsKg: 1480.2 });
     expect(blocking.kind === 'insufficient_stock' && blocking.requestedSolidsKg).toBeCloseTo(843.2 + 666.937, 3);

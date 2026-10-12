@@ -1,6 +1,7 @@
 import { assertRowVersion, nextVersion } from "./row-version";
 import { db, type DbTransaction } from '@/db';
-import { biocharProducts, binMovements, deliveries, facilities, outputStockAllocations, outputStockMoistureReadings, outputStockRunAllocations, storageLocations, type BiocharProduct, type Delivery } from '@/db/schema';
+import { biocharProducts, binMovements, deliveries, facilities, outputStockAllocations, outputStockMoistureReadings, outputStockRunAllocations, storageLocations, type BiocharProductRecord, type Delivery } from '@/db/schema';
+import { toBiocharProductRecord } from './biochar-product-record';
 import type { OrgContext } from '@/lib/auth/server';
 import { DomainError } from '@/lib/domain-errors';
 import { SafeError } from '@/lib/errors';
@@ -38,7 +39,17 @@ const DIRECT_COMMAND_KINDS: ReadonlySet<string> = new Set(['loss', 'count']);
 type StockPostingInput = Omit<OutputStockPostInput, 'expectedProductVersions' | 'basisFingerprint'> & { expectedProductVersions?: Record<string, number>; basisFingerprint?: string };
 
 type PostedOutputRequest = NonNullable<Awaited<ReturnType<typeof findMovementRequest>>>;
-type PersistOptions = { deliveryId?: string; targetBiocharProductId?: string; payload?: unknown };
+type PersistOptions = {
+  deliveryId?: string;
+  targetBiocharProductId?: string;
+  payload?: unknown;
+  /**
+   * The basis stored on the movement when the caller planned on more than this
+   * bin: a product create's fingerprint across its source, product and
+   * ingredient bins, so a replay returns what the dry run returned.
+   */
+  recordedBasisFingerprint?: string;
+};
 type PostedOutputStock = Awaited<ReturnType<typeof persistOutputStock>>;
 
 export interface OutputStockPosting<T> {
@@ -108,8 +119,12 @@ async function persistOutputStock(ctx: OrgContext, tx: DbTransaction, input: Sto
   // Drawn and restored layers, readings reset, and original readings a
   // correction removes, even when a backdated replacement records none for a layer.
   const changedLayerIds = await changedOutputLayerIds(ctx, tx, { ...prepared, plan });
-  // Losses, counts and corrections change certified evidence; a delivery or product draw has its own guards.
-  if (correction || DIRECT_COMMAND_KINDS.has(input.kind)) await assertOutputLayersMutable(ctx, tx, prepared.lane, changedLayerIds);
+  // Losses, counts and corrections change certified evidence. A delivery or a
+  // product draw consumes stock under its own guards, but any reading it would
+  // reset still passes the lineage guard (decision 51).
+  const guardedLayerIds = correction || DIRECT_COMMAND_KINDS.has(input.kind)
+    ? changedLayerIds : changedLayerIds.filter(id => prepared.readings.some(reading => reading.layerId === id));
+  await assertOutputLayersMutable(ctx, tx, prepared.lane, guardedLayerIds);
   if (correction?.deliveryId) await withFeedstockErrors(() => assertCanMutateCertifiedLineage(ctx, tx, { entityType: 'delivery', entityId: correction.deliveryId! }, 'update'), 'certification_locked');
   // Bin locks precede product rows everywhere. Lock parents before inserting
   // ledger children (their foreign keys acquire parent key-share locks).
@@ -125,7 +140,7 @@ async function persistOutputStock(ctx: OrgContext, tx: DbTransaction, input: Sto
   }
   const payloadHash = stockFingerprint(options.payload ?? input);
   // The basis the posting was planned on, whether or not the caller named one.
-  const basisFingerprint = input.basisFingerprint ?? preview.basisFingerprint;
+  const basisFingerprint = options.recordedBasisFingerprint ?? input.basisFingerprint ?? preview.basisFingerprint;
   if (correction) {
     const restoreGrams = correction.allocations.reduce((sum, a) => sum + grams(a.dryMassKg), BigInt(0));
     // These audit balances include every layer, including physically future intakes.
@@ -195,7 +210,7 @@ export interface RecordedOutputStockMovement {
   /** The stock basis the movement was planned on; a dry run's value is what a write may send back. */
   basisFingerprint: string;
   preview: OutputStockPreview;
-  savedProducts: BiocharProduct[];
+  savedProducts: BiocharProductRecord[];
   savedDeliveries: Delivery[];
 }
 
@@ -241,11 +256,11 @@ export async function recordOutputStockMovementInTransaction(ctx: OrgContext, tx
       return { savedDeliveries: existing.inputSnapshot?.deliveryId
         ? await replayTx.select().from(deliveries).where(and(eq(deliveries.organizationId, ctx.organizationId), eq(deliveries.id, String(existing.inputSnapshot.deliveryId))))
         : [], movementId: existing.id, basisFingerprint: existing.basisFingerprint ?? preview.basisFingerprint, preview,
-        savedProducts: await replayTx.select().from(biocharProducts).where(and(eq(biocharProducts.organizationId, ctx.organizationId), eq(biocharProducts.storageLocationId, input.storageLocationId))) };
+        savedProducts: (await replayTx.select().from(biocharProducts).where(and(eq(biocharProducts.organizationId, ctx.organizationId), eq(biocharProducts.storageLocationId, input.storageLocationId)))).map(toBiocharProductRecord) };
     },
     write: async (_tx, post) => {
       const result = await post();
-      return { movementId: result.movement.id, basisFingerprint: result.preview.basisFingerprint, preview: result.preview, savedProducts: result.savedProducts, savedDeliveries: result.savedDeliveries };
+      return { movementId: result.movement.id, basisFingerprint: result.preview.basisFingerprint, preview: result.preview, savedProducts: result.savedProducts.map(toBiocharProductRecord), savedDeliveries: result.savedDeliveries };
     },
   }, options);
 }

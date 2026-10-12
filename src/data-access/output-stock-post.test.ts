@@ -87,10 +87,10 @@ describe('posting refusals under the locks', () => {
   it('refuses a capacity failure with the blocking message, typed as a shortage', async () => {
     const message = 'Not enough dry biochar in the selected bin for this wet mass at this moisture. Reduce the wet mass or choose another bin.';
     mocks.prepare.mockResolvedValue(prepared({ preview: { basisFingerprint: 'basis', blockingMessage: message },
-      blocking: { kind: 'insufficient_stock', storageLocationId: 'source', availableSolidsKg: 50, requestedSolidsKg: 90 } }));
+      blocking: { kind: 'insufficient_stock', storageLocationId: 'source', measure: 'dry_biochar', availableSolidsKg: 50, requestedSolidsKg: 90 } }));
     const refusal = await post().catch((error: unknown) => error);
     expect(refusal).toBeInstanceOf(OutputStockShortageError);
-    expect(refusal).toMatchObject({ message, details: { storageLocationId: 'source', availableSolidsKg: 50, requestedSolidsKg: 90 } });
+    expect(refusal).toMatchObject({ message, details: { storageLocationId: 'source', measure: 'dry_biochar', availableSolidsKg: 50, requestedSolidsKg: 90 } });
   });
 
   it('keeps an invalid request a plain refusal with its blocking message', async () => {
@@ -111,7 +111,7 @@ describe('optional stock basis (decision 53)', () => {
 
   it('acts on current stock without a fingerprint, so only the planner can refuse', async () => {
     mocks.prepare.mockResolvedValue(prepared({ preview: { basisFingerprint: 'moved', blockingMessage: 'Short.' },
-      blocking: { kind: 'insufficient_stock', storageLocationId: 'source', availableSolidsKg: 1, requestedSolidsKg: 2 } }));
+      blocking: { kind: 'insufficient_stock', storageLocationId: 'source', measure: 'dry_biochar', availableSolidsKg: 1, requestedSolidsKg: 2 } }));
     const refusal = await withOutputStockPosting(ctx, { input: current, replay: vi.fn(), write: async (_tx, persist) => persist() }).catch((error: unknown) => error);
     expect(refusal).toBeInstanceOf(OutputStockShortageError);
   });
@@ -136,7 +136,16 @@ describe('lineage of changed layers (decision 51)', () => {
     mocks.changed.mockResolvedValue(['run']);
     await withOutputStockPosting(ctx, { input, replay: vi.fn(), write: async (_tx, persist) => persist() }).catch(() => undefined);
     expect(mocks.changed).toHaveBeenCalled();
-    expect(mocks.assertLayers).not.toHaveBeenCalled();
+    expect(mocks.assertLayers).toHaveBeenCalledWith(ctx, tx, 'biochar', []);
+  });
+
+  it('still guards a reading that any other posting would reset', async () => {
+    mocks.prepare.mockResolvedValue({ ...planned, layers: [{ id: 'run' }, { id: 'read' }], readings: [{ layerId: 'read' }], plan: { allocations: [{ layerId: 'run' }] } });
+    mocks.changed.mockResolvedValue(['run', 'read']);
+    mocks.assertLayers.mockRejectedValue(new DomainError('certification_locked', 'Production run is locked by a certification submission.'));
+    await expect(withOutputStockPosting(ctx, { input, replay: vi.fn(), write: async (_tx, persist) => persist() }))
+      .rejects.toMatchObject({ code: 'certification_locked' });
+    expect(mocks.assertLayers).toHaveBeenCalledWith(ctx, tx, 'biochar', ['read']);
   });
 });
 

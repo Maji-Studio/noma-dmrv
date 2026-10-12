@@ -5,22 +5,23 @@
  * placed 2026-09-11); R2 belongs to a Removal. Counts that never draw from R2
  * but reset its reading, and a correction that removes R2's original reading,
  * are refused with `certification_locked`. Without a submitted artifact the
- * same lineage is open and the same movements save.
+ * same lineage is open and the same movements save. A product bin's layers
+ * are products: a count resetting a certified product's reading is refused
+ * the same way.
  */
 import { randomUUID } from "node:crypto";
 import { afterEach, describe, expect, it } from "vitest";
-import { eq, sql } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
-import {
-  applications, binMovements, certificationSubmissions, certifierRemovals, creditBatchApplications, creditBatchProductionRuns,
-  creditBatches, deliveries, feedstocks, productionProcesses,
-} from "@/db/schema";
-import { createOrder } from "@/data-access/orders";
+import { binMovements, storageLocations } from "@/db/schema";
+import { createBiocharProduct } from "@/data-access/biochar-product-create";
 import { previewOutputStock } from "@/data-access/output-stock-operations";
 import { recordOutputStockMovement } from "@/lib/operations/output-stock";
 import { runOperation, runOperationInProcess } from "@/lib/operations/runner";
+import { certifyOutputLineage, cleanupCertifiedOutputLineage, LINEAGE_LOCKED_COPY } from "./helpers/certified-output-lineage";
 import { cleanupOutputStockFixture } from "./helpers/output-stock-cleanup";
 import { seedOutputStockParents } from "./helpers/output-stock-fixture";
+import { withProductStockFingerprint } from "./helpers/product-stock-preview-fixture";
 
 type Fixture = Awaited<ReturnType<typeof seedOutputStockParents>>;
 
@@ -34,23 +35,20 @@ const EVEN_COUNT_WET_KG = 1875;
 const PARTIAL_COUNT_WET_KG = 1250;
 /** 1125 kg at 20% is R1's 900 kg of solids. */
 const R1_COUNT_WET_KG = 1125;
-const DELIVERED_KG = 100;
-const APPLIED_TONNES = 0.1;
-const FIELD_SIZE_HA = 1;
-const FIELD_LATITUDE = -3.3349;
-const FIELD_LONGITUDE = 37.3404;
-const LOCKED_COPY = "is locked by a certification submission.";
+/** A Pure biochar product of 500 kg wet at 10%, drawn from R1: 450 kg of solids in the product bin. */
+const PRODUCT_PLACED_AT = "2026-09-12T12:00:00.000Z";
+const PRODUCT_WET_KG = 500;
+const PRODUCT_MOISTURE = 10;
+/** 500 kg at 10% is the product's 450 kg of solids: no draw, a reading on the product. */
+const EVEN_PRODUCT_COUNT_WET_KG = 500;
+/** 400 kg at 10% is 360 kg of solids: 90 kg drawn from the product, a reading on what is left. */
+const PARTIAL_PRODUCT_COUNT_WET_KG = 400;
 
 const fixtures: Fixture[] = [];
 afterEach(async () => {
   for (const f of fixtures.splice(0)) {
-    const organizationId = f.ctx.organizationId;
-    await db.transaction(async (tx) => {
-      for (const table of ["certification_submissions", "credit_batch_applications", "credit_batch_production_runs", "credit_batches", "certifier_removals", "production_processes"]) {
-        await tx.execute(sql`delete from ${sql.identifier(table)} where organization_id = ${organizationId}`);
-      }
-    });
-    await cleanupOutputStockFixture(db, organizationId);
+    await cleanupCertifiedOutputLineage(f.ctx.organizationId);
+    await cleanupOutputStockFixture(db, f.ctx.organizationId);
   }
 });
 
@@ -60,40 +58,14 @@ async function fixture(): Promise<Fixture> {
   return f;
 }
 
-/**
- * Puts R2 in a credit batch whose applied slice belongs to a Removal, the
- * lineage `assertCanMutateCertifiedLineage` follows. `submitted` adds the
- * Isometric submission that locks it.
- */
-async function certifyR2(f: Fixture, submitted: boolean) {
-  const organizationId = f.ctx.organizationId;
-  const [intake] = await db.select({ feedstockTypeId: feedstocks.feedstockTypeId }).from(feedstocks).where(eq(feedstocks.organizationId, organizationId));
-  const order = await createOrder(f.ctx, { code: `E2E-OSL-O-${f.tag}`, facilityId: f.facility.id, customerId: f.customer.id,
-    formulationId: f.pure.id, orderDate: new Date(STOCK_TIME), quantityKg: DELIVERED_KG, packaging: "loose" });
-  const [delivery] = await db.insert(deliveries).values({ organizationId, code: `E2E-OSL-D-${f.tag}`, facilityId: f.facility.id, orderId: order.id,
-    storageLocationId: f.bin.id, deliveryDate: new Date(STOCK_TIME), status: "delivered", deliveredWetMassKg: DELIVERED_KG, massDryKg: DELIVERED_KG }).returning();
-  const [application] = await db.insert(applications).values({ organizationId, code: `E2E-OSL-A-${f.tag}`, deliveryId: delivery.id,
-    applicationDate: new Date(STOCK_TIME), biocharAppliedTons: APPLIED_TONNES, biocharAppliedDryTons: APPLIED_TONNES,
-    fieldSizeHa: FIELD_SIZE_HA, gpsLatitude: FIELD_LATITUDE, gpsLongitude: FIELD_LONGITUDE }).returning();
-  const [process] = await db.insert(productionProcesses).values({ organizationId, facilityId: f.facility.id, feedstockTypeId: intake.feedstockTypeId }).returning();
-  const [batch] = await db.insert(creditBatches).values({ organizationId, code: `E2E-OSL-CB-${f.tag}`, facilityId: f.facility.id, feedstockTypeId: intake.feedstockTypeId,
-    productionProcessId: process.id, status: "pending", startDate: "2026-09-01", endDate: "2026-09-30", certifier: "isometric" }).returning();
-  const [removal] = await db.insert(certifierRemovals).values({ organizationId, facilityId: f.facility.id }).returning();
-  await db.insert(creditBatchProductionRuns).values({ organizationId, creditBatchId: batch.id, productionRunId: f.runs[1].id });
-  await db.insert(creditBatchApplications).values({ organizationId, creditBatchId: batch.id, applicationId: application.id,
-    allocatedWetMassKg: DELIVERED_KG, allocatedDryMassKg: DELIVERED_KG, removalId: removal.id });
-  if (submitted) {
-    await db.insert(certificationSubmissions).values({ organizationId, provider: "isometric", submissionType: "removal", localEntityType: "removal",
-      localEntityId: removal.id, externalId: `ext_osl_${f.tag}`, version: 1, status: "submitted", payloadHash: `hash-${f.tag}`,
-      payloadSnapshot: { fixture: "operation-output-stock-lineage" }, submittedAt: new Date(STOCK_TIME) });
-  }
-}
+/** R2 in a credit batch whose applied slice belongs to a Removal; `submitted` locks it. */
+const certifyR2 = (f: Fixture, submitted: boolean) => certifyOutputLineage(f, { runId: f.runs[1].id, submitted });
 
 const count = (f: Fixture, wetMassKg: number, changes: Record<string, unknown> = {}) => ({
   storageLocationId: f.source.id, kind: "count", occurredAt: STOCK_TIME, wetMassKg, moisturePercent: COUNT_MOISTURE, reason: "E2E stock take", ...changes,
 });
 const movementCount = async (f: Fixture) => (await db.select().from(binMovements).where(eq(binMovements.organizationId, f.ctx.organizationId))).length;
-const locked = { code: "certification_locked", message: expect.stringContaining(LOCKED_COPY) };
+const locked = { code: "certification_locked", message: expect.stringContaining(LINEAGE_LOCKED_COPY) };
 
 /** A count posted while R2 was open, then R2 certified, then the form's correction of it. */
 async function correctableCount(f: Fixture) {
@@ -159,5 +131,43 @@ describe("form corrections on a bin holding certified runs", () => {
     const { post } = await formCorrection(f, original, { occurredAt: BEFORE_R2, wetMassKg: R1_COUNT_WET_KG });
     await expect(post()).rejects.toMatchObject(locked);
     expect(await movementCount(f)).toBe(before);
+  });
+});
+
+/**
+ * A Pure product bin holding one product drawn from R1. The product joins
+ * R1's certified lineage through the application's share of it.
+ */
+async function productBin(f: Fixture, submitted: boolean) {
+  const [bin] = await db.insert(storageLocations).values({ organizationId: f.ctx.organizationId, facilityId: f.facility.id, formulationId: f.pure.id,
+    code: `E2E-OSL-PB-${f.tag}`, name: `E2E Pure bin ${f.tag}`, type: "product_bin" }).returning();
+  const product = await createBiocharProduct(f.ctx, await withProductStockFingerprint(f.ctx, { code: `E2E-OSL-P-${f.tag}`, facilityId: f.facility.id,
+    formulationId: f.pure.id, placedAt: PRODUCT_PLACED_AT, sourceBiocharStorageLocationId: f.source.id, storageLocationId: bin.id,
+    massKg: PRODUCT_WET_KG, moistureContentPercent: PRODUCT_MOISTURE, waterAddedKg: 0, idempotencyKey: randomUUID(), composition: {} }));
+  await certifyOutputLineage(f, { runId: f.runs[0].id, productId: product.id, deliveryBinId: bin.id, submitted });
+  return bin;
+}
+const productCount = (binId: string, wetMassKg: number) => ({
+  storageLocationId: binId, kind: "count", occurredAt: STOCK_TIME, wetMassKg, moisturePercent: PRODUCT_MOISTURE, reason: "E2E product stock take",
+});
+const binMovementCount = async (f: Fixture, binId: string) => (await db.select().from(binMovements)
+  .where(and(eq(binMovements.organizationId, f.ctx.organizationId), eq(binMovements.storageLocationId, binId)))).length;
+
+describe("counts on a product bin holding a certified product", () => {
+  it("refuses a zero-draw count and a partial count that reset the certified product's reading", async () => {
+    const f = await fixture();
+    const bin = await productBin(f, true);
+    await expect(runOperation(recordOutputStockMovement, f.ctx, productCount(bin.id, EVEN_PRODUCT_COUNT_WET_KG))).rejects.toMatchObject(locked);
+    await expect(runOperation(recordOutputStockMovement, f.ctx, productCount(bin.id, PARTIAL_PRODUCT_COUNT_WET_KG))).rejects.toMatchObject(locked);
+    expect(await binMovementCount(f, bin.id)).toBe(0);
+  });
+
+  it("saves the same counts while the product's lineage has no submitted artifact", async () => {
+    const f = await fixture();
+    const bin = await productBin(f, false);
+    const even = await runOperation(recordOutputStockMovement, f.ctx, productCount(bin.id, EVEN_PRODUCT_COUNT_WET_KG));
+    expect(even.data.preview.removedDryKg).toBe(0);
+    await runOperation(recordOutputStockMovement, f.ctx, productCount(bin.id, PARTIAL_PRODUCT_COUNT_WET_KG));
+    expect(await binMovementCount(f, bin.id)).toBe(2);
   });
 });

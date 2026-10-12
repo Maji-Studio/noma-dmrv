@@ -20,9 +20,14 @@ export async function previewProductStock(ctx: OrgContext, input: ProductStockPr
   return db.transaction(async tx => (await prepareProductStock(ctx, input, tx)).bins);
 }
 
-/** The same request projection is recomputed under all bin locks before writes. */
-export async function prepareProductStock(ctx: OrgContext, input: ProductStockPreviewInput, tx: DbTransaction) {
+/**
+ * The same request projection is recomputed under all bin locks before writes.
+ * The placement is read as one UTC instant, so a dry run and a write that name
+ * the same moment in different notations share a fingerprint.
+ */
+export async function prepareProductStock(ctx: OrgContext, raw: ProductStockPreviewInput, tx: DbTransaction) {
     requireOrgScope(ctx);
+    const input = { ...raw, placedAt: new Date(raw.placedAt).toISOString() };
     const base = { facilityId: input.facilityId, occurredAt: input.placedAt };
     // A split biochar bin is read per sub-bin; the draw then has no single moisture.
     const source = await prepareOutputStock(ctx, { ...base, storageLocationId: input.sourceBiocharStorageLocationId, kind: 'production_draw', wetMassKg: input.massKg,
@@ -94,9 +99,15 @@ export function assertProductStockBasis(expected: string, prepared: Awaited<Retu
   if (expected !== prepared.basisFingerprint) throw new StockBasisChangedError(prepared.source.bin);
 }
 
-/** A previously previewable request becoming unavailable is also a refresh conflict. */
-export async function revalidateProductStock(ctx: OrgContext, input: ProductStockPreviewInput, tx: DbTransaction, expectedFingerprint: string) {
+/**
+ * Recomputes the product's stock basis under the bin locks. With a fingerprint
+ * from a preview, a moved basis is a refresh conflict, and so is a previewed
+ * request becoming unavailable. Without one the product acts on current stock
+ * (decision 53) and a refusal is the real refusal.
+ */
+export async function revalidateProductStock(ctx: OrgContext, input: ProductStockPreviewInput, tx: DbTransaction, expectedFingerprint?: string) {
   requireOrgScope(ctx);
+  if (expectedFingerprint === undefined) return prepareProductStock(ctx, input, tx);
   try {
     const prepared = await prepareProductStock(ctx, input, tx);
     assertProductStockBasis(expectedFingerprint, prepared);

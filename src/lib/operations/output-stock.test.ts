@@ -53,9 +53,9 @@ describe("record_output_stock_movement", () => {
 
   it("points a short sub-bin at its sources entry and a short bin at the mass", async () => {
     const sources = [{ layerId: LAYER_A, moisturePercent: 10 }, { layerId: LAYER_B, moisturePercent: 20 }];
-    mocks.record.mockRejectedValueOnce(new OutputStockShortageError("Short.", { storageLocationId: BIN_ID, layerId: LAYER_B, availableSolidsKg: 1, requestedSolidsKg: 2 }));
+    mocks.record.mockRejectedValueOnce(new OutputStockShortageError("Short.", { storageLocationId: BIN_ID, layerId: LAYER_B, measure: "dry_biochar", availableSolidsKg: 1, requestedSolidsKg: 2 }));
     await expect(execute({ ...loss, moisturePercent: undefined, sources })).rejects.toMatchObject({ code: "insufficient_stock", issues: [{ path: ["sources", 1] }] });
-    mocks.record.mockRejectedValueOnce(new OutputStockShortageError("Short.", { storageLocationId: BIN_ID, availableSolidsKg: 1, requestedSolidsKg: 2 }));
+    mocks.record.mockRejectedValueOnce(new OutputStockShortageError("Short.", { storageLocationId: BIN_ID, measure: "dry_biochar", availableSolidsKg: 1, requestedSolidsKg: 2 }));
     await expect(execute(loss)).rejects.toMatchObject({ code: "insufficient_stock", issues: [{ path: ["wetMassKg"] }] });
   });
 

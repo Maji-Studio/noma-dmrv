@@ -128,3 +128,27 @@ it('returns a typed refresh conflict if the ingredient basis is no longer availa
   expect(refusal).toMatchObject({ name: 'ActionConflictError', message: 'Stock changed since this preview. Refresh the preview and try again.' });
   expect(refusal).toBeInstanceOf(StockBasisChangedError);
 });
+
+describe('optional product fingerprint (decision 53)', () => {
+  it('lets the real refusal through when no fingerprint was sent', async () => {
+    const { SafeError } = await import('@/lib/errors');
+    const missing = new SafeError('Ingredient stock not found.');
+    mocks.composition.mockRejectedValue(missing);
+    const refusal = await revalidateProductStock(ctx, input, tx).catch((error: unknown) => error);
+    expect(refusal).toBe(missing);
+    expect(refusal).not.toBeInstanceOf(StockBasisChangedError);
+  });
+
+  it('acts on current stock without comparing a basis', async () => {
+    const prepared = await revalidateProductStock(ctx, input, tx);
+    expect(prepared.basisFingerprint).toEqual(expect.any(String));
+  });
+
+  it('reads the placement as one UTC instant, so equal instants share a fingerprint', async () => {
+    const utc = await prepareProductStock(ctx, input, tx);
+    expect(mocks.prepare.mock.calls[0][1]).toMatchObject({ occurredAt: '2026-09-14T12:00:00.000Z' });
+    const offset = await repeatPrepared({ ...input, placedAt: '2026-09-14T15:00:00+03:00' });
+    expect(mocks.prepare.mock.calls[2][1]).toMatchObject({ occurredAt: '2026-09-14T12:00:00.000Z' });
+    expect(offset.basisFingerprint).toBe(utc.basisFingerprint);
+  });
+});

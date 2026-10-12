@@ -13,7 +13,7 @@ import { withOutputStockErrors } from "./output-stock-domain-errors";
 const failing = (error: unknown) => async () => { throw error; };
 const failureOptions = { fallbackMessage: "Failed to save", log: { message: "test" } };
 const shortageMessage = "Not enough dry biochar in the selected bin for this wet mass at this moisture. Reduce the wet mass or choose another bin.";
-const shortage = { storageLocationId: "bin-id", availableSolidsKg: 1820, requestedSolidsKg: 2125 };
+const shortage = { storageLocationId: "bin-id", measure: "total_solids" as const, availableSolidsKg: 1820, requestedSolidsKg: 2125 };
 
 describe("withOutputStockErrors", () => {
   it("passes typed failures and unexpected errors through untouched", async () => {
@@ -62,7 +62,7 @@ describe("withOutputStockErrors", () => {
     const details = { storageLocationId: "ingredient-bin", availableWetKg: 20, requestedWetKg: 30 };
     const refusal = overdrawError("feedstock", details);
     await expect(withOutputStockErrors(failing(refusal))).rejects.toMatchObject({
-      code: "insufficient_stock", message: refusal.message, issues: [{ path: ["ingredients"], meta: { ...details, unit: "kg" } }],
+      code: "insufficient_stock", message: refusal.message, issues: [{ path: ["ingredients"], meta: { ...details, measure: "ingredient_wet_stock", unit: "kg" } }],
     });
     await expect(withOutputStockErrors(failing(refusal), { ingredient: () => ["ingredients", 2, "storageLocationId"] }))
       .rejects.toMatchObject({ issues: [{ path: ["ingredients", 2, "storageLocationId"] }] });

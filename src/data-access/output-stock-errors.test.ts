@@ -6,14 +6,14 @@ const message = 'Not enough dry biochar in the selected bin for this wet mass at
 
 describe('blockedOutputStockError', () => {
   it('types a capacity failure as a shortage with the same message', () => {
-    const error = blockedOutputStockError({ kind: 'insufficient_stock', storageLocationId: 'bin', availableSolidsKg: 10, requestedSolidsKg: 12 }, message);
+    const error = blockedOutputStockError({ kind: 'insufficient_stock', storageLocationId: 'bin', measure: 'dry_biochar', availableSolidsKg: 10, requestedSolidsKg: 12 }, message);
     expect(error).toBeInstanceOf(OutputStockShortageError);
     expect(error.message).toBe(message);
-    expect((error as OutputStockShortageError).details).toEqual({ storageLocationId: 'bin', availableSolidsKg: 10, requestedSolidsKg: 12 });
+    expect((error as OutputStockShortageError).details).toEqual({ storageLocationId: 'bin', measure: 'dry_biochar', availableSolidsKg: 10, requestedSolidsKg: 12 });
   });
 
   it('keeps a short sub-bin on the detail', () => {
-    const error = blockedOutputStockError({ kind: 'insufficient_stock', storageLocationId: 'bin', layerId: 'run', availableSolidsKg: 10, requestedSolidsKg: 12 }, message);
+    const error = blockedOutputStockError({ kind: 'insufficient_stock', storageLocationId: 'bin', layerId: 'run', measure: 'dry_biochar', availableSolidsKg: 10, requestedSolidsKg: 12 }, message);
     expect((error as OutputStockShortageError).details).toMatchObject({ layerId: 'run' });
   });
 

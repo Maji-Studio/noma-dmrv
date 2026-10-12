@@ -28,8 +28,8 @@ export class OutputStockShortageError extends SafeError {
 /** What a blocked plan throws: a typed shortage for a capacity failure, otherwise the plain refusal. */
 export function blockedOutputStockError(blocking: OutputStockBlocking | null | undefined, message: string): SafeError {
   if (blocking?.kind !== 'insufficient_stock') return new SafeError(message);
-  const { storageLocationId, layerId, availableSolidsKg, requestedSolidsKg } = blocking;
-  return new OutputStockShortageError(message, { storageLocationId, ...(layerId ? { layerId } : {}), availableSolidsKg, requestedSolidsKg });
+  const { storageLocationId, layerId, measure, availableSolidsKg, requestedSolidsKg } = blocking;
+  return new OutputStockShortageError(message, { storageLocationId, ...(layerId ? { layerId } : {}), measure, availableSolidsKg, requestedSolidsKg });
 }
 
 /** A missing or foreign output-stock reference, pointing at the field that named it. */

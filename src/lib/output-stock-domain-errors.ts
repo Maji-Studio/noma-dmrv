@@ -10,6 +10,8 @@ type StockOverdrawDetails = NonNullable<StockOverdrawError["details"]>;
 
 const DEFAULT_SHORTAGE_PATH: Path = ["wetMassKg"];
 const DEFAULT_INGREDIENT_PATH: Path = ["ingredients"];
+/** An ingredient bin keeps wet stock: its shortage is in wet kilograms, never solids. */
+const INGREDIENT_MEASURE = "ingredient_wet_stock";
 
 export interface OutputStockErrorPaths {
   /** Where an output-bin shortage points. A function can point a short sub-bin at its `sources` entry. */
@@ -30,7 +32,8 @@ function pointer<T>(target: Pointer<T> | undefined, fallback: Path, detail: T): 
  * boundary, like `withProductionRunErrors`. A stale stock basis becomes
  * `stock_basis_changed` (bin `conflict` kept; the adapter adds `preview`);
  * planner and ingredient shortages become `insufficient_stock` with solids or
- * wet kilograms as issue metadata. Certification-lineage refusals arrive
+ * wet kilograms as issue metadata, and a `measure` naming which: dry biochar
+ * (biochar bin), total solids (product bin) or ingredient wet stock. Certification-lineage refusals arrive
  * already typed: call sites wrap `assertCanMutateCertifiedLineage` in
  * `withFeedstockErrors(..., "certification_locked")`, as 4a does, and a
  * `DomainError` passes through unchanged.
@@ -52,7 +55,7 @@ export async function withOutputStockErrors<T>(work: () => Promise<T>, paths: Ou
     if (error instanceof StockOverdrawError && error.details) {
       throw new DomainError("insufficient_stock", error.message, {
         issues: [{ path: pointer(paths.ingredient, DEFAULT_INGREDIENT_PATH, error.details), code: "insufficient_stock", message: error.message,
-          meta: { ...error.details, unit: "kg" } }],
+          meta: { ...error.details, measure: INGREDIENT_MEASURE, unit: "kg" } }],
       });
     }
     if (error instanceof ActionConflictError) {

@@ -85,7 +85,7 @@ export async function prepareOutputStock(ctx: OrgContext, raw: OutputStockPrevie
     const held = planningLayers.filter(l => l.placedAt <= input.occurredAt && l.remainingSolidsKg && l.remainingSolidsKg.numerator > BigInt(0));
     const drawsWholeBin = Boolean(sources) && held.every(l => sources!.some(s => s.layerId === l.id));
     blockingMessage = (drawsWholeBin && error instanceof SubBinOverdrawError ? null : subBinMessage(error, codeMap)) ?? operatorStockMessage(error instanceof SubBinOverdrawError ? 'Insufficient exact dry solids' : error.message);
-    blocking = classifyPlannerFailure(error, { storageLocationId: bin.id, drawsWholeBin });
+    blocking = classifyPlannerFailure(error, { storageLocationId: bin.id, lane, drawsWholeBin });
   }
   if (correction && plan) await prepareOutputCorrection(ctx, input, state.layers, reader, plan.allocations.map(a => a.layerId));
   const beforeDryKg = Number(kilograms(layers.filter(l => l.placedAt <= input.occurredAt).reduce((sum, l) => sum + grams(l.remainingDryBiocharKg), BigInt(0))));

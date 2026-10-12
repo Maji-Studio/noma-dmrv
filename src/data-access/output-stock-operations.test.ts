@@ -119,7 +119,7 @@ it('keeps the operator blocking message and adds the typed shortage for API call
   const short = await prepare(200, 10);
   expect(short.plan).toBeNull();
   expect(short.preview.blockingMessage).toBe('Not enough dry biochar in the selected bin for this wet mass at this moisture. Reduce the wet mass or choose another bin.');
-  expect(short.blocking).toEqual({ kind: 'insufficient_stock', storageLocationId: binId, availableSolidsKg: 100, requestedSolidsKg: 180 });
+  expect(short.blocking).toEqual({ kind: 'insufficient_stock', storageLocationId: binId, measure: 'dry_biochar', availableSolidsKg: 100, requestedSolidsKg: 180 });
   expect(short.preview).not.toHaveProperty('blocking');
   const fits = await prepare(50, 10);
   expect(fits.blocking).toBeNull();
