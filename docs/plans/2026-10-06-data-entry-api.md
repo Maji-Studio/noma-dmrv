@@ -101,7 +101,9 @@ The draft proposed separate canonical and form schemas; review measured that at 
 - list endpoints take `?q=` (case-insensitive prefix on code and name) and `?code=`;
 - an unresolved or ambiguous reference returns 422 with `reference_not_found` / `reference_ambiguous` and the candidates (scoped to the organization, and to a facility where codes repeat across facilities).
 
-**Methods.** `GET` list and get; `POST` create (201 + `Location`); `PATCH` update (200); `DELETE` (204) only where the entity has a delete. Domain transitions are explicit commands (`POST /facilities/{id}/archive`, `POST /biochar-products/{id}/corrections`), never a force flag.
+**Methods.** `GET` list and get; `POST` create (201 + `Location`); `PATCH` update (200); `DELETE` (204) only where the entity has a delete. Domain transitions are explicit commands (`POST /facilities/{id}/archive`), never a force flag. Stock corrections are not on the API yet (decision 50).
+
+**Biochar products and output stock (Phase 4b).** `GET /biochar-products` and `/{idOrCode}` (`biochar-products:read`), `POST /biochar-products` (201, `Location`, ETag; the body takes the weighed parts, decision 52), `PATCH /biochar-products/{id}` (`code`, `status`, `densityKgM3`; `If-Match` required), `GET /formulations` and `/{idOrCode}` (`formulations:read`), `GET /storage-locations/{idOrCode}/stock-movements` (`biochar-products:read`, read-only history) and `POST /storage-locations/{id}/stock-movements` (`biochar-products:write`; `loss` and `count`). Creates require `Idempotency-Key`, dry runs return `stockEffects` and `basisFingerprint`, and a stale fingerprint answers 409 `stock_basis_changed` with `preview`.
 
 **Dry run.** Writes accept `?dryRun=true`: decode, run the locked guards inside the transaction, return the would-be result (or the domain error), roll back. Rules:
 - Work outside the database never runs in a dry run. Essential external work is **enqueued in the transaction** (the existing storage-deletion queue, `src/data-access/documents.ts:577`, is the pattern) and drained by idempotent consumers with an independent retry path. The runner's after-commit hook only triggers an early drain, after the real commit, never after a savepoint or a dry run. Best-effort telemetry may be a plain hook. A hook failure never makes a committed write look rolled back.
@@ -177,6 +179,7 @@ The API never promises rollback once `COMMIT` may have reached PostgreSQL. Files
 - **Stack.** MCP revision 2026-07-28 (stateless core, Streamable HTTP) via `mcp-handler` 2.2.0 on `@modelcontextprotocol/server` 2.3.0 (SDK v2; not `@modelcontextprotocol/sdk` 1.x), in a Node route handler, without sessions or Redis. Pinned exactly after the Phase 0 interop check (section 15).
 - **Auth, in two steps.** Phase 3: bearer API keys, which Claude Code, Cursor and similar clients send from config. This puts agents on data entry without waiting for OAuth. OAuth track (starts when Phase 3 lands): OAuth for clients that require it (claude.ai and ChatGPT connectors, third parties).
 - **Tools come from operations**: same schema, same runner, same scopes. Names are verb-first and in domain language: `log_feedstock_delivery`, `start_production_run`, `record_application`, `find_suppliers`, `find_storage_locations`. Descriptions state preconditions, units, side effects ("deducts from the bin") and what to call first. No generic `create_record`, no SQL.
+- **Biochar tools (Phase 4b):** `find_biochar_products`, `get_biochar_product`, `make_biochar_product`, `update_biochar_product`, `find_formulations`, `find_output_stock_movements` and `record_output_stock_movement`, on `biochar-products:read|write` and `formulations:read`. Descriptions tell agents to pass the dry run's `basisFingerprint` to the real write.
 - **Grounding tools:** `whoami` (organization, facilities with time zones, current facility date, role, scopes) and `find_*` lookups returning compact `{ id, code, name, facility }`. Get and update tools accept `id` or `code`.
 - **Toolsets by workflow**, in rollout order (`feedstock-intake`, `production`, `lab`, `logistics`, `field-application`, `master-data`), filtered by the credential's scopes. Grow a toolset only when end-to-end agent evaluations of its workflow pass; a tool count is not the gate.
 - **Writes:** every write tool has `dryRun`. Updates, deletes and commands take a required `expectedVersion` (reads return `version`). Creates and stock-moving commands take a **required** `requestKey`, except on dry runs (decision 32). REST creates require `Idempotency-Key` even on dry runs (decision 47). Both transports route committed writes into the same idempotency records; the description tells agents to generate one per intended write and reuse it on retry. JSON-RPC request ids are not used as keys: MCP only requires them to be unique among a sender's unanswered requests, so they repeat. No server-side dedupe by payload hash either: two identical deliveries can be real.
@@ -498,3 +501,33 @@ Two PRs: 3a #933 (representations in `src/lib/representations/`, `/api/mcp` on A
 - **Domain prompt:** `domainGuide` in `src/lib/api/llms-guide.ts` is shared by `llms.txt` and the MCP `instructions` (`src/lib/mcp/instructions.ts`). Shared wording lives in `src/lib/operations/agent-guidance.ts`.
 - **Agent evaluation** (`pnpm eval:mcp`, `scripts/eval-mcp/`): intake requires moisture, so the decided sentence became two cases (Kenji, 2026-10-09). Case 1 adds "at 32% moisture" and is scored on the committed row; case 2 keeps the sentence and passes when nothing is saved and the agent asks for the moisture. Case 2's expectation is read from the published contract, so it follows later changes to required fields. First results with Claude Code 2.1.295: both cases pass; case 1 used 6 tool calls (whoami, three lookups, a dry run, the commit), case 2 used 4.
 - **Not changed:** update and delete do not accept a code (plan section 5 says get and update tools accept `id` or `code`); they follow REST's UUID rule until a client needs codes.
+
+## 18. Phase 4b results (2026-10-12)
+
+Biochar products and output-stock movements on REST and MCP, in seven commits. Decisions 50 to 56 (section 13) override the first spec where they differ.
+
+**What shipped, per commit:**
+1. Foundations: `eventInstantSchema` and `resolveEventInstant` shared with runs, the `stock_basis_changed` domain error with an optional `preview`, and typed output-stock failures with a wrapper that maps them to domain errors.
+2. Movements on the runner: `record_output_stock_movement` with dry run, posting through `withOutputStockPostingInTransaction`, an optional `basisFingerprint`, the certification-lineage guard on every layer whose reading changes (decision 51) and refused future times (decision 56).
+3. Products on the runner: `make_biochar_product` (the same optional fingerprint and lineage guard) and `update_biochar_product` (a version precondition, no fingerprint).
+4. Reads: scopes `biochar-products:read|write` and `formulations:read`, `GET /biochar-products`, `/formulations` and the movement history, with ETags.
+5. REST writes: product create and update and movement POST, with dry runs, 404 pointers for foreign references, and the `stock_basis_changed` preview.
+6. MCP: the seven tools above, agent guidance in `llms.txt`, and three-way parity through the real server actions.
+7. Fuzzing and docs: the seed gained a biochar bin, a completed run with output, a product bin, a Pure and a blended formulation, one product and one loss; `hooks.py` gives the product create, product PATCH, movement history and movement POST seeded examples; the 428 list includes the product PATCH; this section.
+
+**Decisions made during implementation:**
+- The published blend takes parts (decision 52). The server derives the stored blend mass, and the form does the same.
+- Replays are byte-stable: a stored result comes back from JSON storage with its keys reordered, so it is parsed through the representation schema again, which restores the published order.
+- Product write results are `BiocharProductRecord`, without the bigint posting sequence, which the runner cannot serialize.
+- A product request key's payload hash covers the operator's facts per ingredient (line, bin, wet mass, moisture), not the catalog names and ratios the server copies into the composition, so a retry after a catalog edit still replays.
+- Product draws from certified stock stay allowed. Readings on certified layers are refused (decision 51).
+- The stale-fingerprint preview is one adapter fallback: a dry run of the same input without the fingerprint, inside the request deadline. It never claims the key.
+- The OpenAPI snapshot is written at a line width of 2000 so `openapi/v1.json` stays under the 1000-line limit. Sub-bin and ingredient lists are capped at 200 items.
+- A movement write names its bin by UUID only. The history read and the product read accept an id or a code.
+- The MCP server instructions were not extended (1972 of 2000 characters); the product and stock guidance lives in tool descriptions and `llms.txt`.
+- Movement history is ordered by posting sequence, newest first, since a reversal and its replacement share a timestamp.
+- No agent-evaluation case was added for products; round 6 did not ask for one.
+
+**Fuzzing:** Phase 4b adds no new harness mechanism beyond examples that pin both a path id and a create body (the movement POST). A stale `deliveryDate` assertion in `hooks.test.py` was fixed because the hook binds the real clock.
+
+**Not changed:** stock corrections (`api/stock-corrections`), sub-bin stock reads (`api/sub-bin-reads`) and case-insensitive UUIDs (`api/uuid-case`) are in [open questions](../open-questions.md). The product delete and the `data/lock-order` inversions are unchanged.

@@ -329,6 +329,10 @@ Pure starter residue; org scoping came later via ADR 0010.
   reports other COMMIT failures as `outcome_unknown`. The runner does not retry
   COMMIT failures. This does not establish a global order or add retries to
   callers that bypass the runner.
+- Output-stock postings and product creates now run inside the runner's
+  transaction (`record_output_stock_movement`, `make_biochar_product`,
+  `update_biochar_product`), so they get the bounded retry above. Their bin lock
+  order is unchanged, so the inversions listed here still apply to them.
 - **Resolve via:** a cross-writer lock inventory, a documented order covering
   process scopes, artifacts, bins, parent rows and foreign keys, and
   deterministic races for run create/update/delete against intake edits, batch

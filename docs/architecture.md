@@ -32,7 +32,11 @@ components (UI)
   serves Server Actions with native types, including `Date` and `undefined`.
   The action shape is `withAction((ctx) => runOperationInProcess(op, ctx, input))`.
   `src/lib/operations/registry.ts` is the explicit allowlist of exposed
-  operations; its keys match operation ids. Feedstock and production-run writes use this layer.
+  operations; its keys match operation ids. Feedstock, production-run, biochar-product and
+  output-stock movement writes use this layer (`make_biochar_product`,
+  `update_biochar_product`, `record_output_stock_movement`). UI product deletes
+  stay off the runner. UI delivery corrections use the runner through
+  `record_output_stock_movement` but stay off the API (decision 50).
 - The runner owns the transaction. Data-access ...InTransaction(ctx, tx, ...)
   functions and the helpers they call read and write only through `tx`,
   including reference checks and result enrichment. After-commit hooks run
@@ -599,7 +603,21 @@ wet kilograms use the existing stock derivation; dry kilograms are its
 intake-moisture estimate, nullable when unavailable. Output bins use the guard's
 all-layer dry balance (null for unresolved layers) and leave wet kilograms null. This contract replaces the
 feedstock-create additions-only `preview` and is shared by create, PATCH and
-DELETE in REST and MCP. Future output-stock operations can pass the same observer.
+DELETE in REST and MCP. Output-stock postings and product creates pass the same observer.
+
+Output-stock postings run inside the runner's transaction through
+`src/data-access/output-stock-post.ts:withOutputStockPostingInTransaction`;
+`withOutputStockPosting` remains the `db.transaction` wrapper for callers outside
+the runner. Product create and update have matching `...InTransaction` writers.
+Product creates and movement postings take an optional `basisFingerprint` (product
+updates use a version precondition instead): a stale one fails with
+`stock_basis_changed` (409), and without one the write acts on current stock under
+the bin locks. REST and MCP adapters answer that error through
+`src/lib/operations/stock-basis-preview.ts:runWithStockBasisPreview`, which runs
+the same input as a dry run without the stale fingerprint, within the request's
+own deadline, and attaches its `basisFingerprint` and `stockEffects` as `preview`.
+If that dry run fails, the 409 carries no `preview`. The fallback never claims an
+idempotency key.
 
 Production-run operation inputs accept offset date-time strings or facility-local
 `{ date, time }` objects. Local times resolve through the transaction's effective

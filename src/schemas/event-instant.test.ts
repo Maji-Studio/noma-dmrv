@@ -27,6 +27,7 @@ describe("event instant schema", () => {
   it.each([
     ["an impossible calendar date", { date: "2026-02-30", time: "12:00" }],
     ["a time with seconds", { date: "2026-01-01", time: "10:00:00" }],
+    ["an offset instant without seconds, which RFC 3339 requires", "2026-01-01T10:00Z"],
     ["an unknown local field", { date: "2026-01-01", time: "10:00", zone: "Europe/Paris" }],
     ["a bare date", "2026-01-01"],
   ])("refuses %s", (_label, value) => {

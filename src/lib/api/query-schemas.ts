@@ -1,6 +1,7 @@
 import { PRODUCTION_RUN_STATUSES } from "@/lib/production-runs/lifecycle";
 import { biocharProductStatusValues } from "@/schemas/biochar-products";
 import { z } from "zod";
+import { offsetInstantSchema } from "@/schemas/event-instant";
 import { publishedJsonSchemas } from "@/schemas/published-json-schema";
 import { API_CURSOR_MAX_LENGTH, API_LIST_DEFAULT_LIMIT, API_LIST_MAX_LIMIT, API_QUERY_MAX_LENGTH } from "@/config/api-rest";
 
@@ -43,7 +44,7 @@ export const productionRunListSchema = z.strictObject({
   status: z.enum(PRODUCTION_RUN_STATUSES).optional().describe("Production run status filter."),
 });
 
-const placedInstantSchema = z.iso.datetime({ offset: true });
+const placedInstantSchema = offsetInstantSchema();
 export const biocharProductListSchema = z.strictObject({
   q: prefixSchema.describe("Case-insensitive literal prefix search on biochar product code."),
   ...paginationShape, facilityId: facilityIdSchema, code: codeSchema,
