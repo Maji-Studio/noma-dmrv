@@ -40,10 +40,10 @@ function compositionFromLines(ingredients: MakeBiocharProductInput["ingredients"
         issues: [{ path: ["ingredients", index, "formulationIngredientId"], code: "validation_failed", message: NOT_A_LINE_MESSAGE }],
       });
     }
+    const { formulationIngredientId, ...facts } = ingredientFacts(ingredient);
     return {
-      formulationIngredientId: line.id, feedstockTypeId: line.feedstockTypeId, feedstockTypeName: line.feedstockTypeName,
-      feedstockTypeCategory: line.feedstockTypeCategory, ratio: line.ratio, storageLocationId: ingredient.storageLocationId,
-      massKg: ingredient.wetMassKg, moistureContentPercent: ingredient.moisturePercent ?? null,
+      formulationIngredientId, feedstockTypeId: line.feedstockTypeId, feedstockTypeName: line.feedstockTypeName,
+      feedstockTypeCategory: line.feedstockTypeCategory, ratio: line.ratio, ...facts,
     };
   });
   if (lines.some((line) => !ingredients.some((ingredient) => ingredient.formulationIngredientId === line.id))) {

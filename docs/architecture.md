@@ -609,6 +609,12 @@ Output-stock postings run inside the runner's transaction through
 `src/data-access/output-stock-post.ts:withOutputStockPostingInTransaction`;
 `withOutputStockPosting` remains the `db.transaction` wrapper for callers outside
 the runner. Product create and update have matching `...InTransaction` writers.
+A product create that carries a form request key first looks it up from the
+operator's facts (`src/data-access/biochar-product-create.ts:findCommittedBiocharProduct`,
+under the request lock) before the live facility and recipe checks, so a retry
+replays the committed product after a formulation line is added or removed or
+the facility is archived. A facility-local placement takes the ordinary path,
+since resolving it needs the facility's zone.
 Product creates and movement postings take an optional `basisFingerprint` (product
 updates use a version precondition instead): a stale one fails with
 `stock_basis_changed` (409), and without one the write acts on current stock under
@@ -740,8 +746,9 @@ no locations. Supplier locations have no code or archive column.
 ### Public API contract
 
 Published UUID inputs accept either case and are lowercased before the operation
-runs: body and query fields through `src/schemas/helpers.ts:uuidSchema` (or a
-trailing `.toLowerCase()` on a chain with its own messages), path ids and the MCP
+runs: body and query fields through `src/schemas/helpers.ts:uuidSchema` (older
+feedstock and run chains with their own messages end in `.toLowerCase()`, which
+keeps `format: uuid` in the published schema), path ids and the MCP
 movement target through `src/lib/api/canonical-uuid.ts:canonicalUuid`. Rows come
 back lowercase, so string comparisons and idempotency fingerprints see one
 spelling; the published JSON Schema is unchanged.

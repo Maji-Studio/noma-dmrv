@@ -20,8 +20,10 @@ export const emptyToNull = z.literal("").transform((): null => null);
  * `uuid` format allows, and PostgreSQL matches either, but rows come back
  * lowercase, so an id compared as a string after a read, or hashed into an
  * idempotency fingerprint, must arrive lowercase too. The overwrite leaves
- * the published JSON Schema unchanged. A chain with its own messages
- * (`z.string().min(1, ...).uuid(...)`) ends in `.toLowerCase()` instead.
+ * the published JSON Schema unchanged. Existing chains with their own
+ * messages (`z.string().min(1, ...).uuid(...)`) end in `.toLowerCase()`
+ * instead: piping them into this schema would drop `format: uuid` from the
+ * published contract. New schemas use this helper.
  */
 export function uuidSchema(message?: string) {
   return z.uuid(message).toLowerCase();
