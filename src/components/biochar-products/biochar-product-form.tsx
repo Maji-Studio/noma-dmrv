@@ -118,8 +118,6 @@ export function ProductCompositionBlock({
   return <DetailedOnly unless={started}>{preview}</DetailedOnly>;
 }
 
-export { prepareBiocharProductSubmission };
-
 // ============================================
 // Component
 // ============================================

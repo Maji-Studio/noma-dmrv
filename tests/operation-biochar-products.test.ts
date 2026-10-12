@@ -183,6 +183,31 @@ describe("creating products", () => {
     expect(replay.product.id).toBe(first.product.id);
     expect(await productsOf(f)).toHaveLength(1);
   });
+
+  it("replays a blended form request after the formulation's lines change order", async () => {
+    const f = await fixture();
+    const organizationId = f.ctx.organizationId;
+    const [secondType] = await db.insert(feedstockTypes).values({ organizationId, code: `E2E-BP-T2-${f.tag}`, name: `E2E Second ${f.tag}`, category: "compost", usage: "blend" }).returning();
+    const [secondBin] = await db.insert(storageLocations).values({ organizationId, facilityId: f.facility.id, feedstockTypeId: secondType.id,
+      code: `E2E-BP-IB2-${f.tag}`, name: `E2E Second bin ${f.tag}`, type: "feedstock_bin" }).returning();
+    await db.insert(feedstocks).values({ organizationId, facilityId: f.facility.id, code: `E2E-BP-IN2-${f.tag}`, status: "complete", feedstockTypeId: secondType.id,
+      storageLocationId: secondBin.id, massWetKg: INGREDIENT_STOCK_KG, massDryKg: INGREDIENT_STOCK_KG * (1 - INGREDIENT_MOISTURE / 100),
+      moistureContentPercent: INGREDIENT_MOISTURE, deliveryDate: new Date("2026-09-01") });
+    const [second] = await db.insert(formulationIngredients).values({ organizationId, formulationId: f.recipe.id, feedstockTypeId: secondType.id, ratio: 0.1 }).returning();
+    await db.update(formulationIngredients).set({ sortOrder: 0 }).where(eq(formulationIngredients.id, f.ingredient.id));
+    await db.update(formulationIngredients).set({ sortOrder: 1 }).where(eq(formulationIngredients.id, second.id));
+    const ingredients = [
+      { formulationIngredientId: f.ingredient.id, storageLocationId: f.ingredientBin.id, wetMassKg: INGREDIENT_WET_KG, moisturePercent: INGREDIENT_MOISTURE },
+      { formulationIngredientId: second.id, storageLocationId: secondBin.id, wetMassKg: INGREDIENT_WET_KG, moisturePercent: INGREDIENT_MOISTURE },
+    ];
+    const idempotencyKey = randomUUID();
+    const first = await runOperationInProcess(makeBiocharProduct, f.ctx, blended(f, { idempotencyKey, ingredients }));
+    await db.update(formulationIngredients).set({ sortOrder: 1 }).where(eq(formulationIngredients.id, f.ingredient.id));
+    await db.update(formulationIngredients).set({ sortOrder: 0 }).where(eq(formulationIngredients.id, second.id));
+    const replay = await runOperationInProcess(makeBiocharProduct, f.ctx, blended(f, { idempotencyKey, ingredients }));
+    expect(replay.product.id).toBe(first.product.id);
+    expect(await productsOf(f)).toHaveLength(1);
+  });
 });
 
 describe("dry runs and the optional stock basis (decision 53)", () => {

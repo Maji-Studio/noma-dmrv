@@ -23,13 +23,6 @@ export const resources = ([
   { path: "storage-locations", singular: "storage_location", schema: storageLocationRepresentationSchema },
   { path: "vehicles", singular: "vehicle", schema: vehicleRepresentationSchema },
   { path: "drivers", singular: "driver", schema: driverRepresentationSchema },
-] as const).map((resource) => ({ ...resource, queries: resourceQueries[resource.path], scope: `${resource.path}:read` as ApiScope }));
-
-/**
- * Resources served over REST whose MCP find and get tools arrive with the MCP
- * commit; the OpenAPI document publishes both lists.
- */
-export const restResources = ([
   { path: "biochar-products", singular: "biochar_product", schema: biocharProductRepresentationSchema },
   { path: "formulations", singular: "formulation", schema: formulationRepresentationSchema },
 ] as const).map((resource) => ({ ...resource, queries: resourceQueries[resource.path], scope: `${resource.path}:read` as ApiScope }));

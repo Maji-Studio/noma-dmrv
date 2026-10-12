@@ -527,6 +527,7 @@ Biochar products and output-stock movements on REST and MCP, in seven commits. D
 - The MCP server instructions were not extended (1972 of 2000 characters); the product and stock guidance lives in tool descriptions and `llms.txt`.
 - Movement history is ordered by posting sequence, newest first, since a reversal and its replacement share a timestamp.
 - No agent-evaluation case was added for products; round 6 did not ask for one.
+- The published `insufficient_stock` issue meta replaces the spec's `availableDryKg` and `requestedDryKg`. It carries `measure` (`dry_biochar` for a biochar bin, `total_solids` for a product bin, `ingredient_wet_stock` for an ingredient bin) and `unit: "kg"`. A bin shortage sends `availableSolidsKg` and `requestedSolidsKg`, plus `storageLocationId` and, for a short sub-bin, `layerId`. An ingredient shortage sends `availableWetKg` and `requestedWetKg` with `storageLocationId`. A product bin's total solids are not dry biochar, so one dry-named pair would mislead.
 
 **Fuzzing:** Phase 4b adds no new harness mechanism beyond examples that pin both a path id and a create body (the movement POST). A stale `deliveryDate` assertion in `hooks.test.py` was fixed because the hook binds the real clock.
 

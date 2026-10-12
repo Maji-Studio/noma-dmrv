@@ -164,6 +164,19 @@ describe("event times (decision 56)", () => {
     expect(await movements(f)).toEqual([]);
   });
 
+  it("lets a correction keep a future-dated entry's own time, and refuses a new future time", async () => {
+    const f = await fixture();
+    const first = await runOperationInProcess(recordOutputStockMovement, f.ctx, loss(f));
+    // A delivery dated later today carries a future time; stand in for one with a direct update.
+    const later = new Date(Date.now() + DAY_MS);
+    await db.update(binMovements).set({ occurredAt: later }).where(eq(binMovements.id, first.movementId));
+    const correction = (occurredAt: string) => loss(f, { occurredAt, correctsMovementId: first.movementId, wetMassKg: LOSS_WET_KG / 2, reason: "E2E corrected" });
+    await expect(runOperationInProcess(recordOutputStockMovement, f.ctx, correction(new Date(later.getTime() + FUTURE_MS).toISOString())))
+      .rejects.toMatchObject({ code: "validation_failed", issues: [{ path: ["occurredAt"] }] });
+    await expect(runOperationInProcess(recordOutputStockMovement, f.ctx, correction(later.toISOString())))
+      .resolves.toMatchObject({ movementId: expect.any(String) });
+  });
+
   it("allows a backdated movement, read in the facility zone", async () => {
     const f = await fixture();
     const result = await runOperation(recordOutputStockMovement, f.ctx, loss(f, { occurredAt: { date: BEFORE_R2.slice(0, 10), time: "12:00" } }));

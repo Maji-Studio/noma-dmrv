@@ -237,9 +237,19 @@ export async function readOutputStockBin(ctx: OrgContext, tx: DbTransaction, tar
   return { id: bin.id, facilityId: bin.facilityId, timeZone: bin.timeZone };
 }
 
+/** The time of the entry a correction replaces, so keeping that time is never refused as future. */
+async function correctedEntryTime(ctx: OrgContext, tx: DbTransaction, movementId: string | undefined): Promise<number | null> {
+  if (!movementId) return null;
+  const [original] = await tx.select({ occurredAt: binMovements.occurredAt }).from(binMovements)
+    .where(and(eq(binMovements.organizationId, ctx.organizationId), eq(binMovements.id, movementId)));
+  return original?.occurredAt ? original.occurredAt.getTime() : null;
+}
+
 /**
  * Posts a loss, a count or a UI correction inside the caller's transaction.
- * A future `occurredAt` is refused (decision 56); backdating stays allowed.
+ * A future `occurredAt` is refused (decision 56); backdating stays allowed. A
+ * correction may keep the corrected entry's own time, which a delivery dated
+ * later today can carry.
  */
 export async function recordOutputStockMovementInTransaction(ctx: OrgContext, tx: DbTransaction, command: z.input<typeof outputStockCommandSchema>, options: RecordOutputStockMovementOptions = {}): Promise<RecordedOutputStockMovement> {
   requireOrgScope(ctx);
@@ -247,7 +257,10 @@ export async function recordOutputStockMovementInTransaction(ctx: OrgContext, tx
     throw new DomainError('validation_failed', OWN_FORMS_MESSAGE, { issues: [{ path: ['kind'], code: 'validation_failed', message: OWN_FORMS_MESSAGE }] });
   }
   const input = outputStockCommandSchema.parse(command);
-  assertEventTimesNotFuture({ occurredAt: new Date(input.occurredAt) }, { occurredAt: OUTPUT_STOCK_FUTURE_TIME_MESSAGE }, options.now ?? new Date());
+  const occurredAt = new Date(input.occurredAt);
+  if (occurredAt.getTime() !== await correctedEntryTime(ctx, tx, input.correctsMovementId)) {
+    assertEventTimesNotFuture({ occurredAt }, { occurredAt: OUTPUT_STOCK_FUTURE_TIME_MESSAGE }, options.now ?? new Date());
+  }
   return withOutputStockPostingInTransaction(ctx, tx, {
     input,
     locksTransportRoutes: true,

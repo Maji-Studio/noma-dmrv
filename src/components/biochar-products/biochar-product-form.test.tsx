@@ -4,9 +4,9 @@ import type { UseFormRegisterReturn } from "react-hook-form";
 
 import {
   BiocharSourceMassFields,
-  prepareBiocharProductSubmission,
   ProductCompositionBlock,
 } from "./biochar-product-form";
+import { prepareBiocharProductSubmission } from "@/lib/biochar-composition/product-submission";
 import { FormDetailProvider } from "@/components/forms/form-detail-context";
 import { formProductComposition } from "./form-product-composition";
 import type { BiocharProductFormData } from "@/schemas/biochar-products";

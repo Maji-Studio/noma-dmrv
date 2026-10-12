@@ -51,6 +51,11 @@ export interface CreateBiocharProductOptions extends OutputStockPostingOptions {
   now?: Date;
 }
 
+/** The facts an operator enters per ingredient; a retried request must repeat them exactly. */
+function ingredientReplayFacts(ingredient: Record<string, unknown>) {
+  return Object.fromEntries(INGREDIENT_REPLAY_FACTS.map((key) => [key, ingredient[key] ?? null]));
+}
+
 /**
  * Creates a product inside the caller's transaction (the operation runner's,
  * or `createBiocharProduct`'s). A generated-code retry calls this again in a
@@ -58,11 +63,6 @@ export interface CreateBiocharProductOptions extends OutputStockPostingOptions {
  * locks and one snapshot of every bin, and plans on the stock it then sees.
  * A future placement is refused (decision 56); backdating stays allowed.
  */
-/** The facts an operator enters per ingredient; a retried request must repeat them exactly. */
-function ingredientReplayFacts(ingredient: Record<string, unknown>) {
-  return Object.fromEntries(INGREDIENT_REPLAY_FACTS.map((key) => [key, ingredient[key] ?? null]));
-}
-
 export async function createBiocharProductInTransaction(ctx: OrgContext, tx: DbTransaction, data: CreateBiocharProductInput, options: CreateBiocharProductOptions = {}): Promise<CreatedBiocharProduct> {
   requireOrgScope(ctx);
   if (!data.formulationId) throw new SafeError('Choose a formulation, including Pure biochar for an unblended product.');
@@ -82,7 +82,9 @@ export async function createBiocharProductInTransaction(ctx: OrgContext, tx: DbT
   // Auto-generated display codes may change on a retried request; all operator facts must match.
   // Composition lines carry catalog names and ratios read at write time, so only the operator's facts per line count.
   const payload = { ...Object.fromEntries(Object.entries(data).filter(([key]) => key !== 'code' && key !== 'composition')),
-    ingredients: ((data.composition?.ingredients ?? []) as Record<string, unknown>[]).map(ingredientReplayFacts) };
+    ingredients: ((data.composition?.ingredients ?? []) as Record<string, unknown>[]).map(ingredientReplayFacts)
+      // Recipe lines come back in no fixed order; the hash must not depend on it.
+      .sort((a, b) => String(a.formulationIngredientId).localeCompare(String(b.formulationIngredientId))) };
   const additionalBinIds = [productBinId, ...getCompositionIngredientDraws(data.composition).map(d => d.storageLocationId)];
   return withOutputStockPostingInTransaction(ctx, tx, { input, payload, additionalBinIds, replay: async (replayTx, existing) => {
       const [product] = await replayTx.select().from(biocharProducts).where(and(eq(biocharProducts.organizationId, ctx.organizationId), eq(biocharProducts.id, String(existing.inputSnapshot?.targetBiocharProductId))));

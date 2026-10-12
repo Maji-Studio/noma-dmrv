@@ -365,6 +365,16 @@ Pure starter residue; org scoping came later via ADR 0010.
   registration and rate-limit classification), delivery corrections, and
   tests for ordinary-only, correction-only, both and neither credentials.
 
+### A retried product create fails after a recipe line is added or removed (`api/product-replay-recipe-edit`, opened 2026-10-12)
+
+- A UI product create retried with the same request key, after a formulation
+  line was added or removed, fails validation in
+  `src/lib/operations/biochar-products.ts:compositionFromLines` before the
+  replay lookup, so the committed product is not returned. Reordering lines or
+  renaming and re-ratioing them replays correctly.
+- **Resolve via:** a request-key lookup before recipe validation, using the
+  operator's facts only.
+
 ### Sub-bin stock is not readable on the API (`api/sub-bin-reads`, opened 2026-10-12)
 
 - Split output bins expose no sub-bin or remaining-stock read. A loss with

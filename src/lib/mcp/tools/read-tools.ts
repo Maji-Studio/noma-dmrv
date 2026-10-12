@@ -5,7 +5,7 @@ import { PRODUCTION_RUN_GUIDANCE } from "@/lib/operations/agent-guidance";
 import { z } from "zod";
 import type { ApiContext } from "@/lib/auth/api-context";
 import type { ApiScope } from "@/lib/auth/api-scopes";
-import { resources, restResources } from "@/lib/api/openapi/resources";
+import { resources } from "@/lib/api/openapi/resources";
 import { outputStockMovementListSchema, resourceQueries, supplierLocationListSchema } from "@/lib/api/query-schemas";
 import { readFacilityListFromInput } from "@/lib/api/facilities-queries";
 import { readSupplierListFromInput } from "@/lib/api/suppliers-queries";
@@ -29,14 +29,9 @@ import { readDescriptions } from "@/lib/operations/read-descriptions";
 import { parseQueryInput } from "@/lib/api/query";
 import { UNTRUSTED_TEXT, FEEDSTOCK_UNITS, FEEDSTOCK_DATES, BIOCHAR_PRODUCT_MASS } from "@/lib/operations/agent-guidance";
 
-const readers = {
-  "production-runs": readProductionRunListFromInput, reactors: readReactorListFromInput,
-  facilities: readFacilityListFromInput, suppliers: readSupplierListFromInput,
-  "feedstock-types": readFeedstockTypeListFromInput, "storage-locations": readStorageLocationListFromInput,
-  vehicles: readVehicleListFromInput, drivers: readDriverListFromInput, feedstocks: readFeedstockListFromInput,
-  "biochar-products": readBiocharProductListFromInput, formulations: readFormulationListFromInput,
-};
-const labels: Record<keyof typeof readers, { singular: string; plural: string }> = {
+type ResourcePath = keyof typeof resourceQueries;
+
+const labels: Record<ResourcePath, { singular: string; plural: string }> = {
   "production-runs": { singular: "production run", plural: "production runs" },
   reactors: { singular: "reactor", plural: "reactors" },
   "facilities": { singular: "facility", plural: "facilities" },
@@ -49,7 +44,7 @@ const labels: Record<keyof typeof readers, { singular: string; plural: string }>
   "biochar-products": { singular: "biochar product", plural: "biochar products" },
   formulations: { singular: "formulation", plural: "formulations" },
 };
-const guidance: Record<keyof typeof readers, string> = {
+const guidance: Record<ResourcePath, string> = {
   "production-runs": PRODUCTION_RUN_GUIDANCE,
   reactors: "Call whoami first for the run facility. Use the reactor UUID with start_production_run.",
   facilities: "Call whoami first for the credential's active facilities and local dates.",
@@ -90,6 +85,17 @@ function defineRead<S extends z.ZodType>(
     execute: (ctx, raw) => read(ctx, parseQueryInput(raw, config.input)) };
 }
 
+/** Pairs each resource's list schema with its own reader, so the parsed input is checked against that reader's filters. */
+function findTool<K extends ResourcePath, S extends z.ZodType>(path: K, list: S, read: (ctx: ApiContext, input: z.output<S>) => Promise<Record<string, unknown>>): ReadTool {
+  const resource = resources.find((candidate) => candidate.path === path)!;
+  return defineRead({
+    name: `find_${path.replaceAll("-", "_")}`, scope: resource.scope,
+    summarize: listSummary(labels[path].singular, labels[path].plural),
+    description: `${readDescriptions.list} ${guidance[path]}`,
+    input: list, output: listEnvelopeSchema(resource.schema),
+  }, read);
+}
+
 export const readTools: ReadTool[] = [
   defineRead({ name: "get_production_run", scope: "production-runs:read",
     summarize: (body) => { const row = body.data as { code: string; version: number }; return `Production run ${row.code}, version ${row.version}.`; },
@@ -102,13 +108,17 @@ export const readTools: ReadTool[] = [
     return `Organization ${data.organization.name}, ${data.facilities.length} ${data.facilities.length === 1 ? "facility" : "facilities"}, role ${data.role}.`;
   }, description: `${readDescriptions.whoami} Call this first for facility ids, time zones, today and localTime for the facility clock.`, input: z.strictObject({}), output: itemEnvelopeSchema(meRepresentationSchema) },
     async (ctx) => ({ data: await readApiMe(ctx) })),
-  ...[...resources, ...restResources].map((resource) => defineRead({
-    name: `find_${resource.path.replaceAll("-", "_")}`, scope: resource.scope,
-    summarize: listSummary(labels[resource.path].singular, labels[resource.path].plural),
-    description: `${readDescriptions.list} ${guidance[resource.path]}`,
-    input: resource.queries.list, output: listEnvelopeSchema(resource.schema),
-      // Each resource's input is parsed by its own list schema; the union of readers cannot express that pairing.
-  }, (ctx, input) => (readers[resource.path] as (ctx: ApiContext, input: never) => Promise<Record<string, unknown>>)(ctx, input as never))),
+  findTool("production-runs", resourceQueries["production-runs"].list, readProductionRunListFromInput),
+  findTool("reactors", resourceQueries["reactors"].list, readReactorListFromInput),
+  findTool("feedstocks", resourceQueries["feedstocks"].list, readFeedstockListFromInput),
+  findTool("facilities", resourceQueries["facilities"].list, readFacilityListFromInput),
+  findTool("suppliers", resourceQueries["suppliers"].list, readSupplierListFromInput),
+  findTool("feedstock-types", resourceQueries["feedstock-types"].list, readFeedstockTypeListFromInput),
+  findTool("storage-locations", resourceQueries["storage-locations"].list, readStorageLocationListFromInput),
+  findTool("vehicles", resourceQueries["vehicles"].list, readVehicleListFromInput),
+  findTool("drivers", resourceQueries["drivers"].list, readDriverListFromInput),
+  findTool("biochar-products", resourceQueries["biochar-products"].list, readBiocharProductListFromInput),
+  findTool("formulations", resourceQueries["formulations"].list, readFormulationListFromInput),
   defineRead({ name: "find_supplier_locations", summarize: listSummary("supplier location", "supplier locations"), scope: "suppliers:read",
     description: `${readDescriptions.supplierLocations} Call find_suppliers first for the supplier UUID in supplierId. Coordinates are WGS 84 decimal degrees.`,
     input: supplierLocationListSchema.extend({ supplierId: z.uuid().describe("Supplier identifier, UUID, from find_suppliers.") }),

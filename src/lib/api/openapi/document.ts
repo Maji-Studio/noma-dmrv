@@ -18,7 +18,7 @@ import { supplierLocationRepresentationSchema } from "@/lib/representations/supp
 import { meRepresentationSchema } from "@/lib/representations/me";
 import { feedstockRepresentationSchema } from "@/lib/representations/feedstocks";
 import { itemEnvelopeSchema, stockWriteEnvelopeSchema, listEnvelopeSchema, feedstockCreateEnvelopeSchema } from "@/lib/representations/envelopes";
-import { resources, restResources } from "./resources";
+import { resources } from "./resources";
 import { operationInput, privateOperation, requestBody, type Paths } from "./operation-kit";
 import { addBiocharWritePaths } from "./biochar-writes";
 import { outputSchema, queryParameters, targetParameter, idempotencyParameter, ifMatchParameter, privateHeaders, requestIdHeader, etagHeader, writeHeaders, locationHeader, problemResponses, jsonResponse, headerComponents, problemResponseComponents } from "./transport";
@@ -31,7 +31,7 @@ const SNAPSHOT_LINE_WIDTH = 2000;
 /** Pure deterministic build: no environment, clock, credential or database imports. */
 export function buildOpenApiDocument() {
   const paths: Paths = {};
-  const published = [...resources, ...restResources];
+  const published = resources;
   const representations: Record<string, z.ZodType> = Object.fromEntries(published.map((resource) => [resource.singular, resource.schema]));
   representations.supplier_location = supplierLocationRepresentationSchema;
   representations.output_stock_movement = outputStockMovementRepresentationSchema;
