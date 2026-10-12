@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { createBiocharProductInTransaction, type CreatedBiocharProduct } from "@/data-access/biochar-product-create";
+import { createBiocharProductInTransaction, findCommittedBiocharProduct, type BiocharProductRequest, type CreatedBiocharProduct } from "@/data-access/biochar-product-create";
 import { readProductFacility, readProductFormulationLines, type ProductFormulationLine } from "@/data-access/biochar-product-input";
 import { updateBiocharProductInTransaction } from "@/data-access/biochar-product-update";
 import { CODE_CONFLICT_MESSAGES, withAutoCodes } from "@/data-access/code-generator";
@@ -9,10 +9,10 @@ import { deriveBlendMassKg } from "@/lib/biochar-composition/composition";
 import { DomainError } from "@/lib/domain-errors";
 import { withOutputStockErrors } from "@/lib/output-stock-domain-errors";
 import { makeBiocharProductInput, updateBiocharProductInput, type MakeBiocharProductInput } from "@/schemas/biochar-product-input";
-import { resolveEventInstant } from "./event-times";
+import { hasLocalEventInstant, resolveEventInstant } from "./event-times";
 import { GENERATED_MOVEMENT_KEY_PREFIX } from "./output-stock";
 import type { OperationEffect } from "@/lib/operation-effect";
-import type { Operation } from "./runner";
+import type { Operation, OperationScope } from "./runner";
 
 const AUTO_CODE_COUNT = 1;
 const PRODUCT_ENTITY = "biocharProduct";
@@ -55,6 +55,43 @@ function compositionFromLines(ingredients: MakeBiocharProductInput["ingredients"
   return rows.length ? { ingredients: rows.sort((a, b) => recipeOrder(a) - recipeOrder(b)) } : {};
 }
 
+/** What the operator entered for one formulation line, under the names `compositionFromLines` records it with. */
+function ingredientFacts(ingredient: MakeBiocharProductInput["ingredients"][number]) {
+  return {
+    formulationIngredientId: ingredient.formulationIngredientId, storageLocationId: ingredient.storageLocationId,
+    massKg: ingredient.wetMassKg, moistureContentPercent: ingredient.moisturePercent ?? null,
+  };
+}
+
+/** The create a product request stands for, without the generated code or the recipe's composition. */
+function productRequest(input: MakeBiocharProductInput, placedAt: string, idempotencyKey: string): Omit<BiocharProductRequest, "composition"> {
+  // The stored blend is derived exactly as the form derives it (decision 52).
+  const massKg = deriveBlendMassKg(input.biocharWetMassKg, input.ingredients.map((ingredient) => ({ massKg: ingredient.wetMassKg }))) ?? input.biocharWetMassKg;
+  return {
+    facilityId: input.facilityId, formulationId: input.formulationId, placedAt, idempotencyKey,
+    basisFingerprint: input.basisFingerprint, status: input.status,
+    sourceBiocharStorageLocationId: input.sourceBiocharStorageLocationId, storageLocationId: input.storageLocationId,
+    massKg, moistureContentPercent: input.biocharMoisturePercent ?? null, sources: input.sources,
+    densityKgM3: input.densityKgM3 ?? null, waterAddedKg: input.waterAddedKg,
+  };
+}
+
+/**
+ * The product a resubmitted form already committed under its request key,
+ * looked up from the operator's facts before the live facility and recipe
+ * checks, so a line added or removed, or the facility archived, since the
+ * first submit cannot refuse the retry. A facility-local placement needs the
+ * facility's zone, so it takes the ordinary path.
+ */
+async function findCommittedProduct({ ctx, tx }: OperationScope, input: MakeBiocharProductInput) {
+  if (!input.idempotencyKey || hasLocalEventInstant(input.placedAt)) return undefined;
+  const placedAt = resolveEventInstant(input.placedAt, undefined, ["placedAt"]).toISOString();
+  const committed = await findCommittedBiocharProduct(ctx, tx, {
+    ...productRequest(input, placedAt, input.idempotencyKey), composition: { ingredients: input.ingredients.map(ingredientFacts) },
+  });
+  return committed && { ...committed, product: toBiocharProductRecord(committed.product) };
+}
+
 /** The audit effects of a created and an updated product; adapters that publish a different output reuse them. */
 export function describeMadeProduct(input: object, product: { id: string; version: number }): OperationEffect {
   return {
@@ -75,24 +112,20 @@ export const makeBiocharProduct: Operation<typeof makeBiocharProductInput, Creat
   input: makeBiocharProductInput,
   supportsDryRun: true,
   describe: (input, output) => describeMadeProduct(input, output.product),
-  execute: ({ ctx, tx, snapshotStock }, input) => withOutputStockErrors(async () => {
+  execute: (scope, input) => withOutputStockErrors(async () => {
+    const { ctx, tx, snapshotStock } = scope;
+    const committed = await findCommittedProduct(scope, input);
+    if (committed) return committed;
     // The facility supplies the zone a facility-local placement is read in.
     const facility = await readProductFacility(ctx, tx, input.facilityId);
     const composition = compositionFromLines(input.ingredients, await readProductFormulationLines(ctx, tx, input.formulationId));
     const placedAt = resolveEventInstant(input.placedAt, facility.timeZone, ["placedAt"]).toISOString();
-    // The stored blend is derived exactly as the form derives it (decision 52).
-    const massKg = deriveBlendMassKg(input.biocharWetMassKg, input.ingredients.map((ingredient) => ({ massKg: ingredient.wetMassKg }))) ?? input.biocharWetMassKg;
     // A fresh movement key per execution never double-posts; see GENERATED_MOVEMENT_KEY_PREFIX.
     const idempotencyKey = input.idempotencyKey ?? `${GENERATED_MOVEMENT_KEY_PREFIX}${randomUUID()}`;
+    const request = productRequest(input, placedAt, idempotencyKey);
     // Each code attempt runs the whole create, posting seam included, in its own savepoint.
     const created = await withAutoCodes(ctx, tx, "BP", biocharProducts, biocharProducts.code, AUTO_CODE_COUNT,
-      ([code], savepoint) => createBiocharProductInTransaction(ctx, savepoint, {
-        code, facilityId: facility.id, formulationId: input.formulationId, placedAt, idempotencyKey,
-        basisFingerprint: input.basisFingerprint, status: input.status,
-        sourceBiocharStorageLocationId: input.sourceBiocharStorageLocationId, storageLocationId: input.storageLocationId,
-        massKg, moistureContentPercent: input.biocharMoisturePercent ?? null, sources: input.sources,
-        densityKgM3: input.densityKgM3 ?? null, waterAddedKg: input.waterAddedKg, composition,
-      }, { snapshotStock }),
+      ([code], savepoint) => createBiocharProductInTransaction(ctx, savepoint, { code, ...request, composition }, { snapshotStock }),
       CODE_CONFLICT_MESSAGES.biocharProduct);
     return { ...created, product: toBiocharProductRecord(created.product) };
   }, {

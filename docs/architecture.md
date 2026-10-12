@@ -616,8 +616,9 @@ the bin locks. REST and MCP adapters answer that error through
 `src/lib/operations/stock-basis-preview.ts:runWithStockBasisPreview`, which runs
 the same input as a dry run without the stale fingerprint, within the request's
 own deadline, and attaches its `basisFingerprint` and `stockEffects` as `preview`.
-If that dry run fails, the 409 carries no `preview`. The fallback never claims an
-idempotency key.
+If that dry run fails, the 409 carries no `preview`; a failure the API treats as
+unexpected is logged value-free with the operation and request ids, a domain
+refusal is not. The fallback never claims an idempotency key.
 
 Production-run operation inputs accept offset date-time strings or facility-local
 `{ date, time }` objects. Local times resolve through the transaction's effective
@@ -737,6 +738,13 @@ supplier ID; a missing or foreign supplier returns 404, including when it has
 no locations. Supplier locations have no code or archive column.
 
 ### Public API contract
+
+Published UUID inputs accept either case and are lowercased before the operation
+runs: body and query fields through `src/schemas/helpers.ts:uuidSchema` (or a
+trailing `.toLowerCase()` on a chain with its own messages), path ids and the MCP
+movement target through `src/lib/api/canonical-uuid.ts:canonicalUuid`. Rows come
+back lowercase, so string comparisons and idempotency fingerprints see one
+spelling; the published JSON Schema is unchanged.
 
 `src/lib/api/openapi/document.ts:buildOpenApiDocument` builds OpenAPI 3.1 with
 relative `/api/v1` servers and stable operation ids. Operation bodies use only

@@ -15,6 +15,18 @@ import { numberBoundsOf, publishedJsonSchemas } from "./published-json-schema";
  */
 export const emptyToNull = z.literal("").transform((): null => null);
 
+/**
+ * A UUID in canonical lowercase. Either case validates, as the published
+ * `uuid` format allows, and PostgreSQL matches either, but rows come back
+ * lowercase, so an id compared as a string after a read, or hashed into an
+ * idempotency fingerprint, must arrive lowercase too. The overwrite leaves
+ * the published JSON Schema unchanged. A chain with its own messages
+ * (`z.string().min(1, ...).uuid(...)`) ends in `.toLowerCase()` instead.
+ */
+export function uuidSchema(message?: string) {
+  return z.uuid(message).toLowerCase();
+}
+
 /** 24-hour wall-clock time, HH:MM, with zero-padded hours and minutes. */
 export const LOCAL_TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
 

@@ -3,9 +3,9 @@ import { conflictCode } from "@/lib/conflict-ref";
 import { DomainError } from "@/lib/domain-errors";
 import { SafeError } from "@/lib/errors";
 
-const mocks = vi.hoisted(() => ({ facility: vi.fn(), lines: vi.fn(), create: vi.fn(), update: vi.fn(), autoCodes: vi.fn() }));
+const mocks = vi.hoisted(() => ({ facility: vi.fn(), lines: vi.fn(), create: vi.fn(), committed: vi.fn(), update: vi.fn(), autoCodes: vi.fn() }));
 vi.mock("@/data-access/biochar-product-input", () => ({ readProductFacility: mocks.facility, readProductFormulationLines: mocks.lines }));
-vi.mock("@/data-access/biochar-product-create", () => ({ createBiocharProductInTransaction: mocks.create }));
+vi.mock("@/data-access/biochar-product-create", () => ({ createBiocharProductInTransaction: mocks.create, findCommittedBiocharProduct: mocks.committed }));
 vi.mock("@/data-access/biochar-product-update", () => ({ updateBiocharProductInTransaction: mocks.update }));
 vi.mock("@/data-access/code-generator", () => ({ withAutoCodes: mocks.autoCodes, CODE_CONFLICT_MESSAGES: { biocharProduct: "A biochar product with this code already exists" } }));
 vi.mock("@/data-access/output-stock-post", () => ({ readOutputStockBin: vi.fn(), recordOutputStockMovementInTransaction: vi.fn() }));
@@ -44,6 +44,7 @@ beforeEach(() => {
   mocks.facility.mockResolvedValue({ id: FACILITY_ID, timeZone: "Africa/Dar_es_Salaam" });
   mocks.lines.mockResolvedValue([line]);
   mocks.create.mockResolvedValue(created);
+  mocks.committed.mockResolvedValue(undefined);
   mocks.autoCodes.mockImplementation(async (_ctx, _tx, _prefix, _table, _column, _count, insert) => insert(["BP-26-001"], savepoint));
 });
 
@@ -75,6 +76,39 @@ describe("make_biochar_product", () => {
   it("keeps the form's request key and the dry run's fingerprint", async () => {
     await make({ ...blended, idempotencyKey: "form-key", basisFingerprint: "product-basis" });
     expect(mocks.create.mock.calls[0][2]).toMatchObject({ idempotencyKey: "form-key", basisFingerprint: "product-basis" });
+  });
+
+  it("returns a form request's committed product before reading the facility or the recipe (api/product-replay-recipe-edit)", async () => {
+    mocks.committed.mockResolvedValue(created);
+    // Since the first submit the recipe gained a line and the facility was archived.
+    mocks.lines.mockResolvedValue([line, { ...line, id: RUN_A }]);
+    mocks.facility.mockRejectedValue(new DomainError("not_found", "Facility not found or archived"));
+    await expect(make({ ...blended, idempotencyKey: "form-key" })).resolves.toEqual(created);
+    expect(mocks.facility).not.toHaveBeenCalled();
+    expect(mocks.lines).not.toHaveBeenCalled();
+    expect(mocks.create).not.toHaveBeenCalled();
+    const [lookupCtx, lookupTx, request] = mocks.committed.mock.calls[0];
+    expect([lookupCtx, lookupTx]).toEqual([ctx, tx]);
+    expect(request).toMatchObject({ idempotencyKey: "form-key", placedAt: "2026-09-14T12:00:00.000Z", massKg: 120.375,
+      composition: { ingredients: [{ formulationIngredientId: LINE_ID, storageLocationId: INGREDIENT_BIN_ID, massKg: 20.25, moistureContentPercent: 30 }] } });
+  });
+
+  it("looks a request key up with the facts the create posts under it, in the same order", async () => {
+    await make({ ...blended, idempotencyKey: "form-key", basisFingerprint: "product-basis" });
+    const { composition: lookupComposition, ...lookup } = mocks.committed.mock.calls[0][2];
+    const { code: _code, composition, ...posted } = mocks.create.mock.calls[0][2];
+    void _code;
+    expect(Object.entries(lookup)).toEqual(Object.entries(posted));
+    const operatorFacts = ({ formulationIngredientId, storageLocationId, massKg, moistureContentPercent }: Record<string, unknown>) =>
+      ({ formulationIngredientId, storageLocationId, massKg, moistureContentPercent });
+    expect(lookupComposition.ingredients).toEqual(composition.ingredients.map(operatorFacts));
+  });
+
+  it("looks nothing up early without a request key or for a facility-local placement", async () => {
+    await make(blended);
+    await make({ ...blended, idempotencyKey: "form-key", placedAt: { date: "2026-09-14", time: "15:00" } });
+    expect(mocks.committed).not.toHaveBeenCalled();
+    expect(mocks.create).toHaveBeenCalledTimes(2);
   });
 
   it("records the composition in recipe order, whatever order the lines were sent in", async () => {

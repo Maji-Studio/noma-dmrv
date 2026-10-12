@@ -16,6 +16,7 @@ import {
   blendedProductBody, captureProductWriteState, FUTURE_AT, ingredientLine, patchProductRest, postProductRest, productWriteAudits, pureProductBody,
   readRestProduct, requiredEtag, seedRestProduct, writeIdempotencyRecords,
 } from "./helpers/api-biochar-write-fixture";
+import { uppercaseUuids } from "./helpers/uppercase-uuids";
 
 const TIMEOUT_MS = 60_000;
 const SOURCE_DRY_KG = 1500;
@@ -115,6 +116,29 @@ describe("biochar product create", { timeout: TIMEOUT_MS }, () => {
     expect(state.products).toHaveLength(1);
     expect(state.movements).toHaveLength(1);
     expect(await productWriteAudits(a)).toHaveLength(1);
+  });
+
+  it("canonicalizes uppercase reference UUIDs, so either case replays one key (api/uuid-case)", async () => {
+    const key = randomUUID();
+    const upper = await postProductRest(a, uppercaseUuids(blendedProductBody(a)), key);
+    expect(upper.status).toBe(201);
+    const text = await upper.text();
+    expect(JSON.parse(text).data).toMatchObject({
+      facilityId: a.facility.id, formulationId: a.recipe.id, sourceBiocharStorageLocationId: a.source.id, storageLocationId: a.bin.id,
+      ingredients: [{ formulationIngredientId: a.ingredient.id, storageLocationId: a.ingredientBin.id }],
+    });
+    const lower = await postProductRest(a, blendedProductBody(a), key);
+    expect(lower.status).toBe(201);
+    expect(lower.headers.get("idempotent-replayed")).toBe("true");
+    expect(await lower.text()).toBe(text);
+    const { data } = JSON.parse(text);
+    const patched = await patchProductRest(a, data.id.toUpperCase(), { densityKgM3: DENSITY_KG_M3 }, requiredEtag(upper));
+    expect(patched.status).toBe(200);
+    expect((await patched.json()).data).toMatchObject({ id: data.id, densityKgM3: DENSITY_KG_M3, version: 2 });
+    const state = await captureProductWriteState(a);
+    expect(state.products).toHaveLength(1);
+    expect(state.movements).toHaveLength(1);
+    expect(await productWriteAudits(a)).toHaveLength(2);
   });
 
   const foreign = () => randomUUID();

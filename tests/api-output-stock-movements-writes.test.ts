@@ -61,6 +61,20 @@ describe("output bin stock movement writes", { timeout: TIMEOUT_MS }, () => {
     expect((await productWriteAudits(a, "movement"))[0].changedFields).not.toContain("basisFingerprint");
   });
 
+  it("canonicalizes an uppercase bin UUID, so either case replays one key (api/uuid-case)", async () => {
+    const key = randomUUID();
+    const upper = await postMovementRest(a, a.source.id.toUpperCase(), lossBody(), key);
+    expect(upper.status).toBe(201);
+    const text = await upper.text();
+    expect(JSON.parse(text).data).toMatchObject({ storageLocationId: a.source.id, kind: "loss", productionRunIds: [a.r1] });
+    const lower = await postMovementRest(a, a.source.id, lossBody(), key);
+    expect(lower.status).toBe(201);
+    expect(lower.headers.get("idempotent-replayed")).toBe("true");
+    expect(await lower.text()).toBe(text);
+    expect((await captureProductWriteState(a)).movements).toHaveLength(1);
+    expect(await productWriteAudits(a, "movement")).toHaveLength(1);
+  });
+
   it("records a count that resets the bin to the counted stock and a count of zero that empties it", async () => {
     const counted = await postMovementRest(a, a.source.id, countBody(COUNTED_WET_KG));
     expect(counted.status).toBe(201);
