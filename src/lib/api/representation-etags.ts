@@ -1,4 +1,4 @@
-import { PRODUCTION_RUN_REPRESENTATION_REVISION, REACTOR_REPRESENTATION_REVISION } from "@/config/api-rest";
+import { BIOCHAR_PRODUCT_REPRESENTATION_REVISION, FORMULATION_REPRESENTATION_REVISION, PRODUCTION_RUN_REPRESENTATION_REVISION, REACTOR_REPRESENTATION_REVISION } from "@/config/api-rest";
 import {
   SUPPLIER_REPRESENTATION_REVISION,
   VEHICLE_REPRESENTATION_REVISION,
@@ -50,4 +50,10 @@ export function productionRunEtag(row: { version: number }): string {
 }
 export function reactorEtag(row: { version: number }): string {
   return representationEtag(row.version, REACTOR_REPRESENTATION_REVISION);
+}
+export function biocharProductEtag(row: { version: number }): string {
+  return representationEtag(row.version, BIOCHAR_PRODUCT_REPRESENTATION_REVISION);
+}
+export function formulationEtag(row: { version: number }): string {
+  return representationEtag(row.version, FORMULATION_REPRESENTATION_REVISION);
 }

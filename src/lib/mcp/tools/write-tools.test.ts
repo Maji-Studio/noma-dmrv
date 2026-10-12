@@ -12,6 +12,14 @@ const writeTools = allWriteTools.filter((tool) => tool.scope.startsWith("feedsto
 vi.mock("@/data-access/production-runs", () => ({}));
 vi.mock("@/data-access/production-run-input", () => ({}));
 vi.mock("@/data-access/code-generator", () => ({}));
+vi.mock("@/data-access/biochar-product-references", () => ({}));
+vi.mock("@/data-access/biochar-product-create", () => ({}));
+vi.mock("@/data-access/biochar-product-input", () => ({}));
+vi.mock("@/data-access/biochar-product-update", () => ({}));
+vi.mock("@/data-access/biochar-product-record", () => ({}));
+vi.mock("@/data-access/output-stock-post", () => ({}));
+vi.mock("@/lib/read-models/api-biochar-products", () => ({ readApiBiocharProduct: vi.fn() }));
+vi.mock("@/lib/read-models/api-output-stock-movements", () => ({ readApiOutputStockMovement: vi.fn() }));
 vi.mock("@/lib/read-models/api-production-runs", () => ({ readApiProductionRun: vi.fn() }));
 
 const mocks = vi.hoisted(() => ({ run: vi.fn(), read: vi.fn() }));

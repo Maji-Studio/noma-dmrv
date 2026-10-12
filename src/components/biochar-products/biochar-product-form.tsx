@@ -28,8 +28,8 @@ import { useOutputDrawDraft } from "@/hooks/use-output-draw-draft";
 import { useSubBinDraw } from "@/hooks/use-sub-bin-draw";
 import { SubBinDrawField } from "@/components/storage-locations/sub-bin-draw-field";
 import { MoistureResetChange } from "@/components/storage-locations/moisture-reset-change";
+import { prepareBiocharProductSubmission } from "@/lib/biochar-composition/product-submission";
 import {
-  deriveBlendMassKg,
   deriveSourceBiocharMassKg,
   fromCompositionJsonb,
   SOURCE_BIOCHAR_MASS_ERROR,
@@ -116,33 +116,6 @@ export function ProductCompositionBlock({
     />
   );
   return <DetailedOnly unless={started}>{preview}</DetailedOnly>;
-}
-
-/**
- * The form captures the biochar-only wet mass, while the persisted `massKg`
- * stays the pre-water blend total (biochar plus every recorded ingredient) so
- * server accounting is unchanged. Edits pass the stored total through
- * verbatim: the mass field is disabled, and rebuilding the total from rows
- * reconciled against a since-edited formulation would silently change the
- * record. Immutable source allocations additionally keep their persisted
- * composition server-side.
- */
-export function prepareBiocharProductSubmission(
-  data: BiocharProductFormData,
-  allocationFrozen: boolean,
-  persistedBlendMassKg?: number,
-): BiocharProductFormData {
-  const massKg =
-    persistedBlendMassKg !== undefined
-      ? persistedBlendMassKg
-      : deriveBlendMassKg(
-          typeof data.massKg === "number" ? data.massKg : null,
-          data.ingredientBins,
-        ) ?? data.massKg;
-  const next = { ...data, massKg };
-  return allocationFrozen
-    ? { ...next, ingredientBins: undefined }
-    : next;
 }
 
 // ============================================

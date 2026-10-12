@@ -87,7 +87,7 @@ expected-statuses = ["2xx", 401, 403, 404, 409, 413, 414, 422, 429, 431, "5xx"]
 # 428 is valid only for the operations that require If-Match. The check has
 # operation-level scope but cannot scope expected statuses by header name.
 [[operations]]
-include-operation-id = ["update_feedstock", "delete_feedstock", "update_production_run", "delete_production_run"]
+include-operation-id = ["update_feedstock", "delete_feedstock", "update_production_run", "delete_production_run", "update_biochar_product"]
 [operations.checks.missing_required_header]
 expected-statuses = [400, 401, 403, 406, 415, 422, 428]
 
@@ -167,3 +167,30 @@ include-operation-id = "delete_production_run"
 [operations.parameters]
 "path.idOrCode" = "${API_FUZZ_PRODUCTION_RUN_ID}"
 "header.If-Match" = "${API_FUZZ_PRODUCTION_RUN_ETAG}"
+
+[[operations]]
+include-operation-id = "get_biochar_product"
+[operations.parameters]
+"path.idOrCode" = "${API_FUZZ_BIOCHAR_PRODUCT_ID}"
+
+[[operations]]
+include-operation-id = "update_biochar_product"
+[operations.parameters]
+"path.idOrCode" = "${API_FUZZ_BIOCHAR_PRODUCT_ID}"
+"header.If-Match" = "${API_FUZZ_BIOCHAR_PRODUCT_ETAG}"
+
+[[operations]]
+include-operation-id = "get_formulation"
+[operations.parameters]
+"path.idOrCode" = "${API_FUZZ_PURE_FORMULATION_ID}"
+
+# The stock-movement history and write share the seeded biochar bin.
+[[operations]]
+include-operation-id = "find_output_stock_movements"
+[operations.parameters]
+"path.idOrCode" = "${API_FUZZ_BIOCHAR_BIN_ID}"
+
+[[operations]]
+include-operation-id = "record_output_stock_movement"
+[operations.parameters]
+"path.idOrCode" = "${API_FUZZ_BIOCHAR_BIN_ID}"

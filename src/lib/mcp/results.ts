@@ -10,7 +10,7 @@ import { DomainError } from "@/lib/domain-errors";
 import { toActionFailure } from "@/fn/action-errors";
 
 /** REST's `errors` become MCP `issues`; HTTP metadata does not cross transports. */
-export const toolErrorSchema = problemSchema.pick({ code: true, detail: true, retryable: true, conflict: true, blockers: true, current: true })
+export const toolErrorSchema = problemSchema.pick({ code: true, detail: true, retryable: true, conflict: true, blockers: true, current: true, preview: true })
   .extend({ issues: problemSchema.shape.errors });
 
 export function toolSuccess(structuredContent: Record<string, unknown>, text: string) {

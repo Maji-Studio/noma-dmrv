@@ -36,7 +36,8 @@ const DELIVERIES_URL = "/deliveries";
 const RUN_DATE = "2025-06-15";
 const RUN_START_TIME = "08:00";
 const RUN_END_TIME = "12:00";
-const DELIVERY_DATE = "2027-06-16";
+// After RUN_DATE and in the past: delivery corrections refuse future times (decision 56).
+const DELIVERY_DATE = "2025-06-16";
 
 const BIOCHAR_BIN_STOCK_KG = "100";
 const ORDER_QUANTITY_KG = "200000";

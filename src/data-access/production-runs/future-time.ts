@@ -1,9 +1,8 @@
 import type { SnapshotStock } from "../stock-effects";
-import { DomainError } from "@/lib/domain-errors";
+import { assertEventTimesNotFuture } from "../future-event-time";
 import {
   formatProductionRunFutureTimeError,
   PRODUCTION_RUN_FUTURE_TIME_MESSAGES,
-  getFutureProductionRunTimeFields,
 } from "@/lib/production-runs/time-validation";
 
 export type ProductionRunMutationOptions = {
@@ -19,10 +18,10 @@ export function assertProductionRunTimesNotFuture(
   },
   now: Date,
 ): void {
-  const futureFields = getFutureProductionRunTimeFields(input, now);
-  if (futureFields.length > 0) {
-    throw new DomainError("validation_failed", formatProductionRunFutureTimeError(futureFields), {
-      issues: futureFields.map((field) => ({ path: [field], code: "validation_failed", message: PRODUCTION_RUN_FUTURE_TIME_MESSAGES[field] })),
-    });
-  }
+  assertEventTimesNotFuture(
+    { startTime: input.startTime, endTime: input.endTime },
+    PRODUCTION_RUN_FUTURE_TIME_MESSAGES,
+    now,
+    formatProductionRunFutureTimeError,
+  );
 }

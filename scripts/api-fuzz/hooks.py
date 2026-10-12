@@ -25,9 +25,19 @@ SEEDED_RUN_CREATE_START_AGE = timedelta(hours=1)
 # Wet kg drawn by the seeded run create from the run bin (seed.ts draws the same).
 SEEDED_RUN_DRAW_WET_MASS_KG = 10
 SEEDED_RUN_MOISTURE_PERCENT = 20
+# seed.ts places its product 4 hours ago and posts a loss 3.5 hours ago, both
+# after the completed run's output. The dry-run examples sit after them all.
+SEEDED_PRODUCT_PLACED_AGE = timedelta(minutes=30)
+SEEDED_MOVEMENT_AGE = timedelta(hours=1)
+# Wet kg of biochar the seeded product create draws (seed.ts draws the same).
+SEEDED_PRODUCT_BIOCHAR_WET_MASS_KG = 5
+SEEDED_BIOCHAR_MOISTURE_PERCENT = 10
+# Well under what the seeded biochar bin holds after its product and loss.
+SEEDED_LOSS_WET_MASS_KG = 1
 SEEDED_TARGETS = {}
 SEEDED_ETAGS = {}
 SEEDED_CREATE_BODIES = {}
+SEEDED_PATCH_BODIES = {}
 
 
 @schemathesis.check
@@ -73,6 +83,7 @@ def after_load_schema(ctx, schema):
     SEEDED_TARGETS.clear()
     SEEDED_ETAGS.clear()
     SEEDED_CREATE_BODIES.clear()
+    SEEDED_PATCH_BODIES.clear()
     schema.config.parameters.pop("query.cursor", None)
     for result in schema.get_all_operations():
         operation = result.ok()
@@ -116,6 +127,29 @@ def after_load_schema(ctx, schema):
             feedstockMoisturePercent=SEEDED_RUN_MOISTURE_PERCENT,
         )
         SEEDED_CREATE_BODIES["POST /production-runs"] = run
+    # Products draw from the seeded biochar bin into the seeded product bin.
+    pure = SEEDED_TARGETS.get("GET /formulations/{idOrCode}")
+    biochar_bin = SEEDED_TARGETS.get("GET /storage-locations/{idOrCode}/stock-movements")
+    product_bin = os.environ.get("API_FUZZ_PRODUCT_BIN_ID")
+    if facility is not None and pure is not None and biochar_bin is not None and product_bin:
+        product = deepcopy(schema["/biochar-products"]["POST"].definition.raw["requestBody"]["content"]["application/json"]["example"])
+        product.update(
+            facilityId=facility, formulationId=pure, ingredients=[], waterAddedKg=0,
+            placedAt=(datetime.now(timezone.utc) - SEEDED_PRODUCT_PLACED_AGE).isoformat(timespec="seconds"),
+            sourceBiocharStorageLocationId=biochar_bin, storageLocationId=product_bin,
+            biocharWetMassKg=SEEDED_PRODUCT_BIOCHAR_WET_MASS_KG, biocharMoisturePercent=SEEDED_BIOCHAR_MOISTURE_PERCENT,
+        )
+        SEEDED_CREATE_BODIES["POST /biochar-products"] = product
+    if biochar_bin is not None:
+        movement = deepcopy(schema["/storage-locations/{idOrCode}/stock-movements"]["POST"].definition.raw["requestBody"]["content"]["application/json"]["example"])
+        movement.update(
+            kind="loss", wetMassKg=SEEDED_LOSS_WET_MASS_KG, moisturePercent=SEEDED_BIOCHAR_MOISTURE_PERCENT,
+            occurredAt=(datetime.now(timezone.utc) - SEEDED_MOVEMENT_AGE).isoformat(timespec="seconds"),
+        )
+        SEEDED_CREATE_BODIES["POST /storage-locations/{idOrCode}/stock-movements"] = movement
+    # An empty product patch is not a meaningful change, so the dry run sends the published example.
+    SEEDED_PATCH_BODIES["PATCH /biochar-products/{idOrCode}"] = deepcopy(
+        schema["/biochar-products/{idOrCode}"]["PATCH"].definition.raw["requestBody"]["content"]["application/json"]["example"])
 
 
 @schemathesis.hook
@@ -138,10 +172,12 @@ def before_add_examples(ctx, examples):
     if is_create:
         kwargs.update(query={"dryRun": "true"}, headers={"Idempotency-Key": str(uuid4())},
                       body=deepcopy(create_body), media_type="application/json")
-    else:
+    # A create under a seeded parent (stock movements) also pins the path id.
+    if target is not None:
         kwargs["path_parameters"] = {"idOrCode": target}
     if operation.method.upper() in {"PATCH", "DELETE"}:
-        kwargs.update(query={"dryRun": "true"}, headers={"If-Match": SEEDED_ETAGS[operation.label]}, body={}, media_type="application/json")
+        kwargs.update(query={"dryRun": "true"}, headers={"If-Match": SEEDED_ETAGS[operation.label]},
+                      body=deepcopy(SEEDED_PATCH_BODIES.get(operation.label, {})), media_type="application/json")
     examples.append(operation.Case(**kwargs))
     if is_create and operation.label == "POST /feedstocks":
         oversize = deepcopy(kwargs)

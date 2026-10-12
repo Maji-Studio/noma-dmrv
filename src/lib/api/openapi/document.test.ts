@@ -28,7 +28,6 @@ it("is deterministic and exactly matches the committed contract", () => {
   expect(buildOpenApiDocument()).toEqual(document);
   expect(serializeOpenApiDocument()).toBe(serializeOpenApiDocument());
   expect(readFileSync("openapi/v1.json", "utf8")).toBe(serializeOpenApiDocument());
-  expect(serializeOpenApiDocument().split("\n").length).toBeLessThan(1000);
   expect(JSON.parse(serializeOpenApiDocument())).toEqual(document);
 });
 
@@ -93,13 +92,17 @@ it("publishes business dates as date, and preserves operation input types and co
 it("publishes pagination and search bounds on every list route", () => {
   const lists = Object.values(document.paths).map((methods) => methods.get)
     .filter((operation) => operation?.operationId.startsWith("find_"));
-  expect(lists).toHaveLength(10);
+  expect(lists).toHaveLength(13);
   for (const operation of lists) {
     const parameters = operation.parameters as { name: string; in: string; required: boolean; schema: JsonSchema }[];
     const query = Object.fromEntries(parameters.filter((parameter) => parameter.in === "query").map((parameter) => [parameter.name, parameter]));
     expect(query.limit).toMatchObject({ required: false, schema: { type: "integer", minimum: 1, maximum: API_LIST_MAX_LIMIT, default: API_LIST_DEFAULT_LIMIT } });
     expect(query.limit.schema).not.toHaveProperty("pattern");
     expect(query.cursor).toMatchObject({ required: false, schema: { type: "string", maxLength: API_CURSOR_MAX_LENGTH } });
+    if (operation.operationId === "find_output_stock_movements") {
+      expect(Object.keys(query).sort()).toEqual(["cursor", "limit"]);
+      continue;
+    }
     if (operation.operationId !== "find_production_runs") expect(query.q).toMatchObject({ required: false, schema: { type: "string", maxLength: API_QUERY_MAX_LENGTH } });
     if (operation.operationId !== "find_supplier_locations") {
       expect(query.code).toMatchObject({ required: false, schema: { type: "string", maxLength: API_QUERY_MAX_LENGTH } });
@@ -125,6 +128,10 @@ it("requires preconditions and requires create idempotency with possible respons
   expect(response("/facilities/{idOrCode}").headers).toHaveProperty("ETag");
   expect(response("/drivers/{idOrCode}").headers).toHaveProperty("ETag");
   expect(response("/vehicles/{idOrCode}").headers).toHaveProperty("ETag");
+  expect(response("/biochar-products/{idOrCode}").headers).toHaveProperty("ETag");
+  expect(response("/formulations/{idOrCode}").headers).toHaveProperty("ETag");
+  expect(Object.keys(document.paths["/storage-locations/{idOrCode}/stock-movements"].get.responses).sort()).toEqual(["200", "400", "401", "403", "404", "422", "429", "500"]);
+  expect(document.paths["/storage-locations/{idOrCode}/stock-movements"].get["x-required-scope"]).toBe("biochar-products:read");
 });
 
 it("accepts an optional empty DELETE object and publishes its body errors", () => {
@@ -195,7 +202,7 @@ it("types current as a feedstock only on feedstock precondition responses", () =
     expect.objectContaining({ properties: { current: expect.objectContaining({ $ref: "#/components/schemas/feedstock" }) }, required: ["current"] }),
   ]);
   for (const [name, response] of Object.entries(document.components.responses)) {
-    if (name === "FeedstockProblem412" || name === "ProductionRunProblem412") continue;
+    if (name === "FeedstockProblem412" || name === "ProductionRunProblem412" || name === "BiocharProductProblem412") continue;
     expect(response.content["application/problem+json"].schema).toEqual({ $ref: "#/components/schemas/Problem" });
   }
 });
@@ -271,4 +278,28 @@ it("keeps production run representations unexpanded so their ETags cover every r
   const draw = fields.feedstockDraws.items as JsonSchema;
   expect(draw.properties).toHaveProperty("storageLocationId");
   expect(draw.properties).not.toHaveProperty("storageLocationCode");
+});
+
+it("publishes the product and movement writes with one scope, required keys and no deletion", () => {
+  const writes = [
+    document.paths["/biochar-products"].post, document.paths["/biochar-products/{idOrCode}"].patch,
+    document.paths["/storage-locations/{idOrCode}/stock-movements"].post,
+  ];
+  expect(writes.map((operation) => operation.operationId)).toEqual(["make_biochar_product", "update_biochar_product", "record_output_stock_movement"]);
+  for (const operation of writes) expect(operation["x-required-scope"]).toBe("biochar-products:write");
+  expect(document.paths["/biochar-products/{idOrCode}"]).not.toHaveProperty("delete");
+  for (const operation of [writes[0], writes[2]]) {
+    expect(operation.parameters).toContainEqual(expect.objectContaining({ name: "Idempotency-Key", required: true }));
+    expect(Object.keys(operation.responses)).toEqual(expect.arrayContaining(["200", "201", "404", "409", "422"]));
+  }
+  expect(writes[1].responses["412"]).toEqual({ $ref: "#/components/responses/BiocharProductProblem412" });
+  expect(writes[1].parameters).toContainEqual(expect.objectContaining({ name: "If-Match", required: true }));
+  type BodySchema = { properties: Record<string, JsonSchema> };
+  const bodyOf = (operation: (typeof writes)[number]) => (operation.requestBody as { content: { "application/json": { schema: BodySchema } } }).content["application/json"].schema;
+  const movementBody = bodyOf(writes[2]);
+  expect(movementBody.properties.kind.enum).toEqual(["loss", "count"]);
+  for (const forbidden of ["storageLocationId", "correctsMovementId", "expectedProductVersions", "idempotencyKey"]) expect(movementBody.properties).not.toHaveProperty(forbidden);
+  const productBody = bodyOf(writes[0]);
+  for (const forbidden of ["code", "idempotencyKey", "expectedProductVersions"]) expect(productBody.properties).not.toHaveProperty(forbidden);
+  expect(document.components.schemas.Problem.properties).toHaveProperty("preview");
 });

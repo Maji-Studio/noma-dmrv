@@ -109,6 +109,8 @@ describe('output stock event times in PostgreSQL', () => {
 
   it('refuses actual archive for future production and product stock while retaining date-filtered previews', async () => {
     const future = '2099-09-16T12:00:00.000Z';
+    // Placements after the server clock are refused (decision 56); this stock predates an injected clock.
+    const afterFutureProduction = new Date('2099-09-17T00:00:00.000Z');
     const f = await fixture(new Date('2099-09-16T00:00:00Z'));
     await expect(archiveStorageLocation(f.ctx, f.source.id, await masterDataVersion(f.ctx, "storageLocations", f.source.id))).rejects.toThrow('Cannot archive');
     const input: ProductStockPreviewInput = { facilityId: f.facility.id, formulationId: f.recipe.id, placedAt: future,
@@ -119,7 +121,7 @@ describe('output stock event times in PostgreSQL', () => {
     await createBiocharProduct(f.ctx, { code: `E2E-FUTURE-${f.tag}`, facilityId: f.facility.id, formulationId: f.recipe.id, placedAt: future,
       sourceBiocharStorageLocationId: f.source.id, storageLocationId: f.bin.id, massKg: 100, moistureContentPercent: 0, waterAddedKg: 0,
       composition: { ingredients: input.ingredientBins },
-      idempotencyKey: randomUUID(), basisFingerprint: preview.basisFingerprint });
+      idempotencyKey: randomUUID(), basisFingerprint: preview.basisFingerprint }, { now: afterFutureProduction });
     expect(await getOutputBinAllLayersDryKg(f.ctx, f.bin.id)).toBe(100);
     await expect(archiveStorageLocation(f.ctx, f.bin.id, await masterDataVersion(f.ctx, "storageLocations", f.bin.id))).rejects.toThrow('Cannot archive');
     for (const id of [f.source.id, f.bin.id]) {
