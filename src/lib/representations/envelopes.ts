@@ -5,9 +5,9 @@ import { feedstockRepresentationSchema } from "./feedstocks";
 export function itemEnvelopeSchema(schema: z.ZodType) {
   return z.object({ data: schema.describe("Resource representation.") });
 }
-export function listEnvelopeSchema(schema: z.ZodType) {
+export function listEnvelopeSchema(schema: z.ZodType, order = "newest first by (createdAt, id)") {
   return z.object({
-    data: z.array(schema).describe("Page of resources, newest first by (createdAt, id)."),
+    data: z.array(schema).describe(`Page of resources, ${order}.`),
     nextCursor: z.string().nullable().describe("Opaque cursor for the next page, or null at the end; keep filters unchanged."),
   });
 }

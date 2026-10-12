@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/db";
-import { drivers, members, supplierLocations, users, vehicles } from "@/db/schema";
+import { drivers, formulationIngredients, formulations, members, supplierLocations, users, vehicles } from "@/db/schema";
 import { API_KEY_DEFAULT_EXPIRY_SECONDS } from "@/config/api-keys";
 import { API_LIST_MAX_LIMIT } from "@/config/api-rest";
 import { createApiKey } from "@/data-access/api-keys";
@@ -34,7 +34,7 @@ export async function createLookupFixture(): Promise<LookupFixture> {
 }
 
 export async function removeLookupFixture(fixture: LookupFixture) {
-  for (const table of [supplierLocations, vehicles, drivers]) {
+  for (const table of [formulationIngredients, formulations, supplierLocations, vehicles, drivers]) {
     await db.delete(table).where(eq(table.organizationId, fixture.ctx.organizationId));
   }
   await removeIntakeFixture(fixture);

@@ -93,13 +93,17 @@ it("publishes business dates as date, and preserves operation input types and co
 it("publishes pagination and search bounds on every list route", () => {
   const lists = Object.values(document.paths).map((methods) => methods.get)
     .filter((operation) => operation?.operationId.startsWith("find_"));
-  expect(lists).toHaveLength(10);
+  expect(lists).toHaveLength(13);
   for (const operation of lists) {
     const parameters = operation.parameters as { name: string; in: string; required: boolean; schema: JsonSchema }[];
     const query = Object.fromEntries(parameters.filter((parameter) => parameter.in === "query").map((parameter) => [parameter.name, parameter]));
     expect(query.limit).toMatchObject({ required: false, schema: { type: "integer", minimum: 1, maximum: API_LIST_MAX_LIMIT, default: API_LIST_DEFAULT_LIMIT } });
     expect(query.limit.schema).not.toHaveProperty("pattern");
     expect(query.cursor).toMatchObject({ required: false, schema: { type: "string", maxLength: API_CURSOR_MAX_LENGTH } });
+    if (operation.operationId === "find_output_stock_movements") {
+      expect(Object.keys(query).sort()).toEqual(["cursor", "limit"]);
+      continue;
+    }
     if (operation.operationId !== "find_production_runs") expect(query.q).toMatchObject({ required: false, schema: { type: "string", maxLength: API_QUERY_MAX_LENGTH } });
     if (operation.operationId !== "find_supplier_locations") {
       expect(query.code).toMatchObject({ required: false, schema: { type: "string", maxLength: API_QUERY_MAX_LENGTH } });
@@ -125,6 +129,10 @@ it("requires preconditions and requires create idempotency with possible respons
   expect(response("/facilities/{idOrCode}").headers).toHaveProperty("ETag");
   expect(response("/drivers/{idOrCode}").headers).toHaveProperty("ETag");
   expect(response("/vehicles/{idOrCode}").headers).toHaveProperty("ETag");
+  expect(response("/biochar-products/{idOrCode}").headers).toHaveProperty("ETag");
+  expect(response("/formulations/{idOrCode}").headers).toHaveProperty("ETag");
+  expect(Object.keys(document.paths["/storage-locations/{idOrCode}/stock-movements"].get.responses).sort()).toEqual(["200", "400", "401", "403", "404", "422", "429", "500"]);
+  expect(document.paths["/storage-locations/{idOrCode}/stock-movements"].get["x-required-scope"]).toBe("biochar-products:read");
 });
 
 it("accepts an optional empty DELETE object and publishes its body errors", () => {

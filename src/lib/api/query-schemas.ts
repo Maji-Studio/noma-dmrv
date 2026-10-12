@@ -1,4 +1,5 @@
 import { PRODUCTION_RUN_STATUSES } from "@/lib/production-runs/lifecycle";
+import { biocharProductStatusValues } from "@/schemas/biochar-products";
 import { z } from "zod";
 import { publishedJsonSchemas } from "@/schemas/published-json-schema";
 import { API_CURSOR_MAX_LENGTH, API_LIST_DEFAULT_LIMIT, API_LIST_MAX_LIMIT, API_QUERY_MAX_LENGTH } from "@/config/api-rest";
@@ -42,10 +43,24 @@ export const productionRunListSchema = z.strictObject({
   status: z.enum(PRODUCTION_RUN_STATUSES).optional().describe("Production run status filter."),
 });
 
+const placedInstantSchema = z.iso.datetime({ offset: true });
+export const biocharProductListSchema = z.strictObject({
+  q: prefixSchema.describe("Case-insensitive literal prefix search on biochar product code."),
+  ...paginationShape, facilityId: facilityIdSchema, code: codeSchema,
+  status: z.enum(biocharProductStatusValues).optional().describe("Product status filter."),
+  storageLocationId: z.uuid().optional().describe("Product bin filter, UUID."),
+  formulationId: z.uuid().optional().describe("Formulation filter, UUID."),
+  placedFrom: placedInstantSchema.optional().describe("Only products placed at or after this RFC 3339 instant with an explicit offset; encode + as %2B or use Z."),
+  placedBefore: placedInstantSchema.optional().describe("Only products placed before this RFC 3339 instant with an explicit offset; encode + as %2B or use Z."),
+});
+export const outputStockMovementListSchema = z.strictObject(paginationShape);
+
 /** Shared by REST adapters and the public contract, without handler dependencies. */
 export const resourceQueries = {
   "production-runs": { list: productionRunListSchema, get: lookupGetSchema },
   reactors: { list: facilityLookupListSchema, get: lookupGetSchema },
+  "biochar-products": { list: biocharProductListSchema, get: lookupGetSchema },
+  formulations: { list: lookupListSchema, get: lookupGetSchema },
   feedstocks: { list: feedstockListSchema, get: lookupGetSchema },
   facilities: { list: lookupListSchema, get: lookupGetSchema },
   suppliers: { list: lookupListSchema, get: lookupGetSchema },

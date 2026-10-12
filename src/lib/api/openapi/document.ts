@@ -13,12 +13,13 @@ import { toOperationJsonSchema, type JsonSchema } from "@/lib/operations/json-sc
 import type { ApiScope } from "@/lib/auth/api-scopes";
 import { problemSchema } from "../problem-schema";
 import { mutationQuerySchema } from "../query";
-import { supplierLocationListSchema } from "../query-schemas";
+import { outputStockMovementListSchema, supplierLocationListSchema } from "../query-schemas";
+import { outputStockMovementRepresentationSchema } from "@/lib/representations/output-stock-movements";
 import { supplierLocationRepresentationSchema } from "@/lib/representations/supplier-locations";
 import { meRepresentationSchema } from "@/lib/representations/me";
 import { feedstockRepresentationSchema } from "@/lib/representations/feedstocks";
 import { itemEnvelopeSchema, stockWriteEnvelopeSchema, listEnvelopeSchema, feedstockCreateEnvelopeSchema } from "@/lib/representations/envelopes";
-import { resources } from "./resources";
+import { resources, restResources } from "./resources";
 import { outputSchema, queryParameters, targetParameter, idempotencyParameter, ifMatchParameter, privateHeaders, requestIdHeader, etagHeader, writeHeaders, locationHeader, problemResponses, jsonResponse, headerComponents, problemResponseComponents } from "./transport";
 
 interface OperationDocument {
@@ -34,7 +35,7 @@ type Paths = Record<string, Record<string, OperationDocument>>;
 const READ_ERRORS = [400, 401, 403, 429, 500];
 const WRITE_ERRORS = [400, 401, 403, 404, 409, 422, 429, 500, 503];
 const JSON_INDENT = 2;
-const SNAPSHOT_LINE_WIDTH = 1000;
+const SNAPSHOT_LINE_WIDTH = 2000;
 
 function privateOperation(operationId: string, scope: ApiScope | undefined, description: string, responses: Record<string, unknown>, parameters: unknown[] = []): OperationDocument {
   return { operationId, description: `${description} Required scope: ${scope ?? "none (any authenticated API key)"}.`, "x-required-scope": scope ?? null, parameters, responses };
@@ -57,8 +58,10 @@ function operationInput(schema: Parameters<typeof toOperationJsonSchema>[0]): Js
 /** Pure deterministic build: no environment, clock, credential or database imports. */
 export function buildOpenApiDocument() {
   const paths: Paths = {};
-  const representations: Record<string, z.ZodType> = Object.fromEntries(resources.map((resource) => [resource.singular, resource.schema]));
+  const published = [...resources, ...restResources];
+  const representations: Record<string, z.ZodType> = Object.fromEntries(published.map((resource) => [resource.singular, resource.schema]));
   representations.supplier_location = supplierLocationRepresentationSchema;
+  representations.output_stock_movement = outputStockMovementRepresentationSchema;
   representations.me = meRepresentationSchema;
   representations.stockEffects = stockEffectsSchema;
   const publishOutput = (schema: z.ZodType) => outputSchema(schema, representations);
@@ -87,7 +90,7 @@ export function buildOpenApiDocument() {
   };
   const runPreconditionResponse = { "412": { $ref: "#/components/responses/ProductionRunProblem412" } };
   const feedstockPreconditionResponse = { "412": { $ref: "#/components/responses/FeedstockProblem412" } };
-  for (const resource of resources) {
+  for (const resource of published) {
     paths[`/${resource.path}`] = { get: privateOperation(
       `find_${resource.path.replaceAll("-", "_")}`, resource.scope,
       readDescriptions.list,
@@ -105,6 +108,11 @@ export function buildOpenApiDocument() {
     "find_supplier_locations", "suppliers:read", readDescriptions.supplierLocations,
     { ...problemResponses([...READ_ERRORS, 404]), "200": jsonResponse("Supplier location page.", publishOutput(listEnvelopeSchema(supplierLocationRepresentationSchema))) },
     [targetParameter(true), ...queryParameters(supplierLocationListSchema)],
+  ) };
+  paths["/storage-locations/{idOrCode}/stock-movements"] = { get: privateOperation(
+    "find_output_stock_movements", "biochar-products:read", readDescriptions.outputStockMovements,
+    { ...problemResponses([...READ_ERRORS, 404, 422]), "200": jsonResponse("Movement page.", publishOutput(listEnvelopeSchema(outputStockMovementRepresentationSchema, "newest posting first"))) },
+    [targetParameter(), ...queryParameters(outputStockMovementListSchema)],
   ) };
   paths["/me"] = { get: privateOperation("whoami", undefined, readDescriptions.whoami,
     { ...problemResponses([401, 403, 404, 429, 500]), "200": jsonResponse("Credential context.", publishOutput(itemEnvelopeSchema(meRepresentationSchema))) }) };
@@ -187,7 +195,7 @@ export function buildOpenApiDocument() {
   }
   return {
     openapi: "3.1.0",
-    info: { title: "noma data-entry API", version: API_VERSION, description: "Organization-scoped feedstock intake, production runs and read-only lookups. Business dates are facility-local YYYY-MM-DD; event times are sent as RFC 3339 with an explicit offset or as facility-local { date, time }, and returned as UTC instants. Additive changes remain in v1; breaking versions use v2 with Deprecation and Sunset headers. Unsupported methods on visible paths return Problem405 with Allow listing supported methods, including automatic HEAD and OPTIONS. Private refusals follow bearer authentication and path visibility checks; unknown or invisible paths return 404 without Allow. Public discovery paths need no credential. This response is a path-level refusal, not a response of a published operation." },
+    info: { title: "noma data-entry API", version: API_VERSION, description: "Organization-scoped feedstock intake, production runs, biochar products and read-only lookups, including formulations and output bin stock movement history. Business dates are facility-local YYYY-MM-DD; event times are sent as RFC 3339 with an explicit offset or as facility-local { date, time }, and returned as UTC instants. Additive changes remain in v1; breaking versions use v2 with Deprecation and Sunset headers. Unsupported methods on visible paths return Problem405 with Allow listing supported methods, including automatic HEAD and OPTIONS. Private refusals follow bearer authentication and path visibility checks; unknown or invisible paths return 404 without Allow. Public discovery paths need no credential. This response is a path-level refusal, not a response of a published operation." },
     servers: [{ url: "/api/v1" }], security: [{ bearerAuth: [] }], paths,
     components: { securitySchemes: { bearerAuth: { type: "http", scheme: "bearer", bearerFormat: "API key", description: `Authorization: Bearer <key> only. Keys use ${API_KEY_LIVE_PREFIX} or ${API_KEY_TEST_PREFIX} prefixes and bind exactly one organization; cookies and x-api-key cannot authorize requests.` } }, schemas, headers: headerComponents, responses },
   };
