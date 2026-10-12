@@ -70,9 +70,10 @@ authority**.
 ## Repo-specific constraints to inject into every prompt
 
 - **pnpm only** — never npm/yarn.
-- Respect the **layered architecture** (components → hooks → fn → data-access → db); `fn/`
-  files have `"use server"` + Zod validation; every `data-access/` function calls an auth
-  guard.
+- Respect the **layered architecture** (components → hooks → fn → data-access → db). Server
+  Action files in `fn/` have `"use server"` + Zod validation; non-action helpers there (e.g.
+  `with-action.ts`, `*-core.ts`) must NOT carry the directive. Normal `data-access/` functions
+  call an auth guard and filter on `organizationId`; keep explicit `// org-scope-ok:` seams.
 - **Never read or edit `.env*` files** (sole exception: the codex-computer-use sign-in flow
   reads `ADMIN_EMAIL`/`ADMIN_PASSWORD` from `.env.local` — that skill covers it); never log
   PII (log IDs, not emails/names).
@@ -93,7 +94,7 @@ Acceptance criteria:
 
 Constraints:
 - pnpm only; follow the layered architecture (components → hooks → fn → data-access → db).
-- fn/ files use "use server" + Zod; every data-access function calls an auth guard.
+- Server Action files in fn/ use "use server" + Zod; non-action helpers (with-action.ts, *-core.ts) must not; normal data-access functions call an auth guard and keep org-scope-ok seams.
 - Do not read or edit .env* files; do not log PII; kebab-case files; no file over 1000 lines.
 - Do not commit, push, deploy, edit global config, or touch staging/main.
 - Follow existing patterns in <reference files>; do not change <files to avoid>.

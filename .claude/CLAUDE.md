@@ -41,7 +41,7 @@ For every finding: **verify it against the actual code first**, fix only valid o
 
 ## Model Selection
 
-Shared across all projects in `~/.claude/model-selection.md` (imported by the global `~/.claude/CLAUDE.md`; source: `shared-agent-skills/policies/model-selection.md`). Change it with the `update-model-policy` skill, not here.
+Shared across all projects in `~/.claude/model-selection.md` (imported by the global `~/.claude/CLAUDE.md`; source: `shared-agent-skills/policies/model-selection.md`). Change the shared policy with the `update-model-policy` skill, not here; the project override below takes precedence in this repo.
 
 **Project override (Kenji's request, 2026-10-07): implementation in this repo goes to Codex, not Claude agents.**
 
