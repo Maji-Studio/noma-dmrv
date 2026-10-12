@@ -15,6 +15,7 @@ import { and, asc, eq, isNull } from 'drizzle-orm';
 import { requestFingerprint } from './bin-movement-requests';
 import { getBiocharOutputStockLayers, getLayerMoistureBases, getOutputBinStocks, getProductOutputStockLayers } from './output-stock';
 import { getCertifiedLineage } from './certification-lineage-guards';
+import { changedOutputLayerIds, outputLayerTarget } from './output-stock-lineage';
 import { getStockModeChanges } from './output-bin-stock-mode';
 import { getOutputStockFacilityTimezone } from './output-stock-dates';
 import { prepareOutputCorrection } from './output-stock-corrections';
@@ -219,8 +220,8 @@ export async function previewOutputStock(ctx: OrgContext, input: OutputStockPrev
     return await db.transaction(async tx => {
       const prepared = await prepareOutputStock(ctx, input, tx);
       if (prepared.correction && prepared.plan) {
-        const targets = prepared.layers.filter(layer => prepared.plan!.allocations.some(a => a.layerId === layer.id) || prepared.correction!.allocations.some(a => (a.biocharProductId ?? a.productionRunId) === layer.id))
-          .map(layer => ({ entityType: prepared.lane === 'product' ? 'biocharProduct' as const : 'productionRun' as const, entityId: layer.id }));
+        // The same layers the posting guards (decision 51), readings included.
+        const targets = (await changedOutputLayerIds(ctx, tx, prepared)).map(layerId => outputLayerTarget(prepared.lane, layerId));
         const lineage = (await Promise.all(targets.map(target => getCertifiedLineage(ctx, tx, target)))).flat();
         if (prepared.correction.deliveryId) lineage.push(...await getCertifiedLineage(ctx, tx, { entityType: 'delivery', entityId: prepared.correction.deliveryId }));
         const blockers = lineage.filter(row => row.removalSubmissionId || row.ghgStatementSubmissionId).map(row => ({

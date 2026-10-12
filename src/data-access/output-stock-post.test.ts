@@ -1,15 +1,19 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const mocks = vi.hoisted(() => ({ lockRoutes: vi.fn(), lockRequest: vi.fn(), findRequest: vi.fn(), lockBins: vi.fn(), prepare: vi.fn() }));
+const mocks = vi.hoisted(() => ({ lockRoutes: vi.fn(), lockRequest: vi.fn(), findRequest: vi.fn(), lockBins: vi.fn(), prepare: vi.fn(),
+  transaction: vi.fn(), changed: vi.fn(), assertLayers: vi.fn() }));
 const tx = {};
-vi.mock('@/db', () => ({ db: { transaction: async (run: (tx: unknown) => unknown) => run(tx) } }));
+vi.mock('@/db', () => ({ db: { transaction: mocks.transaction } }));
 vi.mock('./utils', () => ({ requireOrgScope: vi.fn() }));
 vi.mock('./bin-movement-requests', () => ({ lockMovementRequest: mocks.lockRequest, findMovementRequest: mocks.findRequest }));
 vi.mock('./lock-bin-stocks', () => ({ lockBinStocks: mocks.lockBins }));
 vi.mock('./transport-legs', () => ({ lockBiocharTransportRouteTopology: mocks.lockRoutes, syncBiocharProductTransportLegs: vi.fn() }));
 vi.mock('./output-stock-operations', () => ({ prepareOutputStock: mocks.prepare, postedMoisturePercent: vi.fn(), stockFingerprint: vi.fn() }));
-import { withOutputStockPosting } from './output-stock-post';
+vi.mock('./output-stock-lineage', () => ({ changedOutputLayerIds: mocks.changed, assertOutputLayersMutable: mocks.assertLayers }));
+import type { DbTransaction } from '@/db';
+import { readOutputStockBin, recordOutputStockMovementInTransaction, withOutputStockPosting, withOutputStockPostingInTransaction } from './output-stock-post';
 import { OutputStockShortageError, StockBasisChangedError } from './output-stock-errors';
+import { DomainError } from '@/lib/domain-errors';
 import { SafeError } from '@/lib/errors';
 
 const ctx = { organizationId: 'org', userId: 'operator', orgRole: 'owner' as const, isPlatformAdmin: false };
@@ -17,7 +21,10 @@ const input = { storageLocationId: 'source', facilityId: 'facility', occurredAt:
   wetMassKg: 100, moisturePercent: 10, idempotencyKey: 'request', basisFingerprint: 'basis', reason: 'Delivery D-1' };
 const order = (mock: ReturnType<typeof vi.fn>) => mock.mock.invocationCallOrder[0];
 
-beforeEach(() => vi.resetAllMocks());
+beforeEach(() => {
+  vi.resetAllMocks();
+  mocks.transaction.mockImplementation(async (run: (tx: unknown) => unknown) => run(tx));
+});
 
 describe('output stock posting scope', () => {
   it('locks routes, the request key, then every named bin before the write runs', async () => {
@@ -40,6 +47,27 @@ describe('output stock posting scope', () => {
     expect(mocks.lockRoutes).not.toHaveBeenCalled();
     expect(mocks.lockBins).not.toHaveBeenCalled();
     expect(write).not.toHaveBeenCalled();
+  });
+});
+
+describe('posting inside a caller transaction', () => {
+  it('uses the caller transaction and snapshots every locked bin once, after the bin locks and before the write', async () => {
+    const snapshotStock = vi.fn();
+    const write = vi.fn().mockResolvedValue('written');
+    const callerTx = {} as DbTransaction;
+    await expect(withOutputStockPostingInTransaction(ctx, callerTx, { input, additionalBinIds: ['destination', null], locksTransportRoutes: true, replay: vi.fn(), write }, { snapshotStock })).resolves.toBe('written');
+    expect(mocks.transaction).not.toHaveBeenCalled();
+    expect(snapshotStock).toHaveBeenCalledTimes(1);
+    expect(snapshotStock).toHaveBeenCalledWith(callerTx, ['source', 'destination', null]);
+    expect(order(mocks.lockBins)).toBeLessThan(order(snapshotStock));
+    expect(order(snapshotStock)).toBeLessThan(order(write));
+  });
+
+  it('takes no snapshot when the key replays', async () => {
+    const snapshotStock = vi.fn();
+    mocks.findRequest.mockResolvedValue({ id: 'movement' });
+    await withOutputStockPostingInTransaction(ctx, {} as DbTransaction, { input, replay: async () => 'replayed', write: vi.fn() }, { snapshotStock });
+    expect(snapshotStock).not.toHaveBeenCalled();
   });
 });
 
@@ -72,5 +100,86 @@ describe('posting refusals under the locks', () => {
     expect(refusal).toBeInstanceOf(SafeError);
     expect(refusal).not.toBeInstanceOf(OutputStockShortageError);
     expect(refusal).toMatchObject({ message });
+  });
+});
+
+describe('optional stock basis (decision 53)', () => {
+  const { basisFingerprint: _omitted, ...current } = input;
+  void _omitted;
+  const prepared = (overrides: Record<string, unknown>) => ({ bin: { id: 'source', code: 'BC-1' }, lane: 'biochar', layers: [], readings: [], correction: null,
+    plan: null, blocking: null, preview: { basisFingerprint: 'moved', blockingMessage: null }, ...overrides });
+
+  it('acts on current stock without a fingerprint, so only the planner can refuse', async () => {
+    mocks.prepare.mockResolvedValue(prepared({ preview: { basisFingerprint: 'moved', blockingMessage: 'Short.' },
+      blocking: { kind: 'insufficient_stock', storageLocationId: 'source', availableSolidsKg: 1, requestedSolidsKg: 2 } }));
+    const refusal = await withOutputStockPosting(ctx, { input: current, replay: vi.fn(), write: async (_tx, persist) => persist() }).catch((error: unknown) => error);
+    expect(refusal).toBeInstanceOf(OutputStockShortageError);
+  });
+});
+
+describe('lineage of changed layers (decision 51)', () => {
+  const count = { ...input, kind: 'count' as const, wetMassKg: 500, moisturePercent: 20 };
+  const planned = { bin: { id: 'source', code: 'BC-1' }, lane: 'biochar', layers: [{ id: 'run' }], readings: [{ layerId: 'run' }], correction: null,
+    plan: { allocations: [] }, blocking: null, preview: { basisFingerprint: 'basis', blockingMessage: null } };
+
+  it('refuses a zero-draw count on certified layers before any product lock or write', async () => {
+    mocks.prepare.mockResolvedValue(planned);
+    mocks.changed.mockResolvedValue(['run']);
+    mocks.assertLayers.mockRejectedValue(new DomainError('certification_locked', 'Production run is locked by a certification submission.'));
+    await expect(withOutputStockPosting(ctx, { input: count, replay: vi.fn(), write: async (_tx, persist) => persist() }))
+      .rejects.toMatchObject({ code: 'certification_locked' });
+    expect(mocks.assertLayers).toHaveBeenCalledWith(ctx, tx, 'biochar', ['run']);
+  });
+
+  it('leaves forward draws by deliveries and products to their own guards', async () => {
+    mocks.prepare.mockResolvedValue({ ...planned, readings: [], plan: { allocations: [{ layerId: 'run' }] } });
+    mocks.changed.mockResolvedValue(['run']);
+    await withOutputStockPosting(ctx, { input, replay: vi.fn(), write: async (_tx, persist) => persist() }).catch(() => undefined);
+    expect(mocks.changed).toHaveBeenCalled();
+    expect(mocks.assertLayers).not.toHaveBeenCalled();
+  });
+});
+
+describe('recording a movement', () => {
+  const now = new Date('2026-09-14T12:00:00.000Z');
+  const command = { ...input, storageLocationId: '00000000-0000-4000-8000-000000000001', facilityId: '00000000-0000-4000-8000-000000000002',
+    kind: 'loss' as const, expectedProductVersions: {}, occurredAt: now.toISOString() };
+
+  it('refuses a future time before taking any lock', async () => {
+    const refusal = await recordOutputStockMovementInTransaction(ctx, tx as DbTransaction, { ...command, occurredAt: '2026-09-14T12:00:00.001Z' }, { now }).catch((error: unknown) => error);
+    expect(refusal).toMatchObject({ code: 'validation_failed', message: 'Date and time cannot be in the future. Enter a time at or before now.', issues: [{ path: ['occurredAt'] }] });
+    expect(mocks.lockRequest).not.toHaveBeenCalled();
+  });
+
+  it('accepts a time exactly at the server clock and posts on the caller transaction', async () => {
+    mocks.prepare.mockRejectedValue(new Error('stop after the locks'));
+    await expect(recordOutputStockMovementInTransaction(ctx, tx as DbTransaction, command, { now })).rejects.toThrow('stop after the locks');
+    expect(mocks.lockRoutes).toHaveBeenCalled();
+    expect(mocks.lockRequest).toHaveBeenCalledWith(ctx, tx, 'request');
+    expect(mocks.transaction).not.toHaveBeenCalled();
+  });
+
+  it('refuses deliveries and product draws that are not corrections', async () => {
+    await expect(recordOutputStockMovementInTransaction(ctx, tx as DbTransaction, { ...command, kind: 'delivery' }, { now })).rejects.toMatchObject({ code: 'validation_failed', issues: [{ path: ['kind'] }] });
+    await expect(recordOutputStockMovementInTransaction(ctx, tx as DbTransaction, { ...command, kind: 'production_draw' }, { now })).rejects.toMatchObject({ code: 'validation_failed' });
+    expect(mocks.lockRequest).not.toHaveBeenCalled();
+  });
+});
+
+describe('reading the named bin', () => {
+  const reader = (rows: unknown[]) => ({ select: () => ({ from: () => ({ innerJoin: () => ({ where: async () => rows }) }) }) }) as unknown as DbTransaction;
+  const bin = { id: 'source', facilityId: 'facility', type: 'biochar_bin', timeZone: 'Africa/Dar_es_Salaam' };
+
+  it('returns the facility and its zone', async () => {
+    await expect(readOutputStockBin(ctx, reader([bin]), { storageLocationId: 'source' })).resolves.toEqual({ id: 'source', facilityId: 'facility', timeZone: 'Africa/Dar_es_Salaam' });
+  });
+
+  it('answers a missing, archived or foreign bin, or one in another facility, as not found', async () => {
+    await expect(readOutputStockBin(ctx, reader([]), { storageLocationId: 'source' })).rejects.toMatchObject({ code: 'not_found', issues: [{ path: ['storageLocationId'] }] });
+    await expect(readOutputStockBin(ctx, reader([bin]), { storageLocationId: 'source', facilityId: 'other' })).rejects.toMatchObject({ code: 'not_found' });
+  });
+
+  it('refuses a feedstock bin', async () => {
+    await expect(readOutputStockBin(ctx, reader([{ ...bin, type: 'feedstock_bin' }]), { storageLocationId: 'source' })).rejects.toMatchObject({ code: 'validation_failed', issues: [{ path: ['storageLocationId'] }] });
   });
 });

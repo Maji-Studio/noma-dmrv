@@ -1,5 +1,6 @@
 import { startProductionRun, updateProductionRun, deleteProductionRun } from "./production-runs";
 import { logFeedstockDelivery, updateFeedstock, deleteFeedstock } from "./feedstocks";
+import { recordOutputStockMovement } from "./output-stock";
 
 /** Explicit write allowlist. Existing read models become the read side later. */
 export const operationRegistry = {
@@ -9,6 +10,7 @@ export const operationRegistry = {
   log_feedstock_delivery: logFeedstockDelivery,
   update_feedstock: updateFeedstock,
   delete_feedstock: deleteFeedstock,
+  record_output_stock_movement: recordOutputStockMovement,
 } as const;
 
 export type OperationId = keyof typeof operationRegistry;

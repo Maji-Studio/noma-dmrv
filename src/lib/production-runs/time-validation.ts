@@ -1,3 +1,5 @@
+import { getFutureEventFields } from "@/lib/future-event-times";
+
 export const PRODUCTION_RUN_FUTURE_TIME_MESSAGES = {
   startTime:
     "Start time cannot be in the future. Enter a time at or before now.",
@@ -14,14 +16,7 @@ export function getFutureProductionRunTimeFields(
   },
   now: Date,
 ): ProductionRunFutureTimeField[] {
-  const fields: ProductionRunFutureTimeField[] = [];
-  if (input.startTime && input.startTime.getTime() > now.getTime()) {
-    fields.push("startTime");
-  }
-  if (input.endTime && input.endTime.getTime() > now.getTime()) {
-    fields.push("endTime");
-  }
-  return fields;
+  return getFutureEventFields({ startTime: input.startTime, endTime: input.endTime }, now);
 }
 
 export function formatProductionRunFutureTimeError(

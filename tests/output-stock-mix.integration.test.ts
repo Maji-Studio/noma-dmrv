@@ -116,7 +116,10 @@ describe("mix bin draws in PostgreSQL", () => {
   it("refuses to switch to split while a movement is recorded for later than now", async () => {
     const f = await twoBatches();
     await setMode(f, "mix", new Date("2026-09-12T00:00:00.000Z"));
-    await postMeasurement(f, { kind: "count", wetMassKg: 0, moisturePercent: null, occurredAt: new Date(Date.now() + 86_400_000).toISOString() });
+    const count = await postMeasurement(f, { kind: "count", wetMassKg: 0, moisturePercent: null });
+    // Future movements are refused since decision 56; one saved before that still guards the switch.
+    await db.update(binMovements).set({ occurredAt: new Date(Date.now() + 86_400_000) })
+      .where(and(eq(binMovements.organizationId, f.ctx.organizationId), eq(binMovements.id, count.movementId)));
     await expect(setMode(f, "split")).rejects.toThrow(/^This bin has a movement recorded for .*Switch it to split after that time\.$/);
   });
 
