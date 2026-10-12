@@ -10,6 +10,19 @@ const INTAKE_MOISTURE_PERCENT = 20;
 const RUN_DRAW_WET_MASS_KG = 10;
 const SEEDED_RUN_START_HOURS_AGO = 3;
 const SEEDED_RUN_END_HOURS_AGO = 2;
+// The completed run that fills the biochar bin ends before the product, which
+// precedes the loss. hooks.py places its create example later still.
+const OUTPUT_RUN_START_HOURS_AGO = 6;
+const OUTPUT_RUN_END_HOURS_AGO = 5;
+const OUTPUT_RUN_DRAW_WET_MASS_KG = 60;
+const BIOCHAR_OUTPUT_WET_MASS_KG = 20;
+const BIOCHAR_MOISTURE_PERCENT = 10;
+const PRODUCT_PLACED_HOURS_AGO = 4;
+const PRODUCT_BIOCHAR_WET_MASS_KG = 5;
+const LOSS_HOURS_AGO = 3.5;
+const LOSS_WET_MASS_KG = 1;
+const BLEND_BIOCHAR_RATIO = 0.8;
+const BLEND_INGREDIENT_RATIO = 0.2;
 const MS_PER_HOUR = 3_600_000;
 const PRIVATE_FILE_MODE = 0o600;
 
@@ -37,6 +50,10 @@ async function main(): Promise<void> {
   const { startProductionRun } = await import("@/lib/operations/production-runs");
   const { productionRunEtag } = await import("@/lib/api/representation-etags");
   const { createStorageLocation } = await import("@/data-access/storage-locations");
+  const { createFormulation } = await import("@/data-access/formulations");
+  const { makeBiocharProduct } = await import("@/lib/operations/biochar-products");
+  const { recordOutputStockMovement } = await import("@/lib/operations/output-stock");
+  const { biocharProductEtag } = await import("@/lib/api/representation-etags");
   const { createApiKey } = await import("@/data-access/api-keys");
   const { API_SCOPES } = await import("@/lib/auth/api-scopes");
   const { API_KEY_DEFAULT_EXPIRY_SECONDS } = await import("@/config/api-keys");
@@ -102,6 +119,41 @@ async function main(): Promise<void> {
     feedstockDraws: [{ storageLocationId: runBin.id, wetMassKg: RUN_DRAW_WET_MASS_KG }],
     feedstockMoisturePercent: INTAKE_MOISTURE_PERCENT,
   })).data;
+  // Biochar side. Bin and formulation names are unique per facility.
+  const biocharBin = await createStorageLocation(ctx, {
+    code: "FUZZ-BC-BIN", name: `${FIXTURE_LABEL} biochar bin`, type: "biochar_bin", facilityId: facility.id,
+  });
+  const productBin = await createStorageLocation(ctx, {
+    code: "FUZZ-PB-BIN", name: `${FIXTURE_LABEL} product bin`, type: "product_bin", facilityId: facility.id,
+  });
+  await runOperation(startProductionRun, ctx, {
+    facilityId: facility.id, reactorId: reactor.id, status: "complete",
+    startTime: new Date(now - OUTPUT_RUN_START_HOURS_AGO * MS_PER_HOUR).toISOString(),
+    endTime: new Date(now - OUTPUT_RUN_END_HOURS_AGO * MS_PER_HOUR).toISOString(),
+    feedstockDraws: [{ storageLocationId: runBin.id, wetMassKg: OUTPUT_RUN_DRAW_WET_MASS_KG }],
+    feedstockMoisturePercent: INTAKE_MOISTURE_PERCENT,
+    biocharStorageLocationId: biocharBin.id, biocharOutputKg: BIOCHAR_OUTPUT_WET_MASS_KG,
+    biocharMoisturePercent: BIOCHAR_MOISTURE_PERCENT,
+  });
+  const pure = await createFormulation(ctx, { code: "FUZZ-PURE", name: `${FIXTURE_LABEL} pure biochar`, biocharRatio: 1 });
+  const blendType = await createFeedstockType(ctx, {
+    code: "FUZZ-BLEND", name: `${FIXTURE_LABEL} blend ingredient`, category: "compost", usage: "blend",
+  });
+  const blend = await createFormulation(ctx, {
+    code: "FUZZ-MIX", name: `${FIXTURE_LABEL} blend`, biocharRatio: BLEND_BIOCHAR_RATIO,
+    ingredients: [{ feedstockTypeId: blendType.id, ratio: BLEND_INGREDIENT_RATIO }],
+  });
+  const product = (await runOperation(makeBiocharProduct, ctx, {
+    facilityId: facility.id, formulationId: pure.id,
+    placedAt: new Date(now - PRODUCT_PLACED_HOURS_AGO * MS_PER_HOUR).toISOString(),
+    sourceBiocharStorageLocationId: biocharBin.id, storageLocationId: productBin.id,
+    biocharWetMassKg: PRODUCT_BIOCHAR_WET_MASS_KG, biocharMoisturePercent: BIOCHAR_MOISTURE_PERCENT, waterAddedKg: 0,
+  })).data.product;
+  const loss = (await runOperation(recordOutputStockMovement, ctx, {
+    storageLocationId: biocharBin.id, kind: "loss",
+    occurredAt: new Date(now - LOSS_HOURS_AGO * MS_PER_HOUR).toISOString(),
+    wetMassKg: LOSS_WET_MASS_KG, moisturePercent: BIOCHAR_MOISTURE_PERCENT, reason: "API fuzz fixture loss",
+  })).data;
   const credential = await createApiKey(ctx, {
     name: FIXTURE_LABEL, scopes: [...API_SCOPES], expiresIn: API_KEY_DEFAULT_EXPIRY_SECONDS,
   });
@@ -119,6 +171,10 @@ async function main(): Promise<void> {
     driverId: driver.id, driverCode: driver.code, vehicleId: vehicle.id, vehicleCode: vehicle.code,
     // Supplier locations have no code column or by-id API route.
     supplierLocationId: supplierLocation.id,
+    biocharBinId: biocharBin.id, biocharBinCode: biocharBin.code, productBinId: productBin.id,
+    pureFormulationId: pure.id, pureFormulationCode: pure.code, blendFormulationId: blend.id, blendFormulationCode: blend.code,
+    biocharProductId: product.id, biocharProductCode: product.code, biocharProductEtag: biocharProductEtag(product),
+    lossMovementId: loss.movementId,
     feedstockId: feedstock.id, feedstockCode: feedstock.code, feedstockEtag: feedstockEtag(feedstock),
   }, null, 2) + "\n", { mode: PRIVATE_FILE_MODE, flag: "wx" });
   console.log(`API_FUZZ_FIXTURE=${outputPath}`);

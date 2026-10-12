@@ -8,4 +8,10 @@ it("offers production permissions and defaults new workflow reads on and mutatio
   expect(API_KEY_DEFAULT_SCOPES.some((scope) => !scope.endsWith(":read"))).toBe(false);
   expect(permissionSummary(["production-runs:read", "production-runs:write", "reactors:read"]))
     .toBe("Production runs: Read, Write; Reactors: Read");
+
+  expect(API_PERMISSION_ROWS).toContainEqual({ entity: "biochar-products", label: "Biochar products and output stock", scopes: ["biochar-products:read", "biochar-products:write"] });
+  expect(API_PERMISSION_ROWS).toContainEqual({ entity: "formulations", label: "Formulations", scopes: ["formulations:read"] });
+  expect(API_KEY_DEFAULT_SCOPES).toEqual(expect.arrayContaining(["biochar-products:read", "formulations:read"]));
+  expect(API_KEY_DEFAULT_SCOPES).not.toContain("biochar-products:write");
+  expect(API_PERMISSION_ROWS.flatMap((row) => row.scopes).some((scope) => scope.startsWith("stock-corrections"))).toBe(false);
 });

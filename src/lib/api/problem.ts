@@ -9,7 +9,7 @@ import type { ApiHttpError } from "./http-error";
 
 export const ACTION_STATUS = {
   validation_failed: 422, not_found: 404, stale_version: 412,
-  concurrent_write_retry: 409, conflict: 409, certification_locked: 409, insufficient_stock: 409,
+  concurrent_write_retry: 409, conflict: 409, certification_locked: 409, insufficient_stock: 409, stock_basis_changed: 409,
   forbidden: 403, reference_not_found: 422, reference_ambiguous: 422,
   deadline_exceeded: 500, outcome_unknown: 500, idempotency_in_progress: 409,
   idempotency_key_reused: 422, key_already_used: 409, replay_unavailable: 409,
@@ -40,6 +40,7 @@ type ProblemOptions = {
   conflict?: ActionFailure["conflict"]; blockers?: ActionFailure["blockers"];
   retryAfterSeconds?: number;
   current?: unknown;
+  preview?: ActionFailure["preview"];
 };
 export function problemResponse(options: ProblemOptions): Response {
   const { status, code, instance, requestId } = options;
@@ -56,6 +57,7 @@ export function problemResponse(options: ProblemOptions): Response {
     ...(!internal && options.conflict ? { conflict: options.conflict } : {}),
     ...(!internal && options.blockers ? { blockers: options.blockers } : {}),
     ...(!internal && options.current !== undefined ? { current: options.current } : {}),
+    ...(!internal && options.preview ? { preview: options.preview } : {}),
   } satisfies z.infer<typeof problemSchema>, { status, headers });
 }
 
@@ -86,6 +88,6 @@ export function actionFailureResponse(failure: ActionFailure, instance: string, 
       pointer: jsonPointer(issue.path),
       code: issue.code, detail: issue.message, ...(issue.meta ? { meta: issue.meta } : {}),
     })),
-    conflict: failure.conflict, blockers: failure.blockers,
+    conflict: failure.conflict, blockers: failure.blockers, preview: failure.preview,
   });
 }

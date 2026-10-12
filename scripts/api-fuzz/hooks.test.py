@@ -23,12 +23,15 @@ FIXTURE_NOW = datetime(2026, 10, 9, tzinfo=timezone.utc)
 RUN_BIN_ID = "22222222-2222-4222-8222-222222222222"
 FEEDSTOCK_ETAG = '"2.3"'
 RUN_ETAG = '"4.5"'
-TARGET_KINDS = ("FACILITY", "SUPPLIER", "FEEDSTOCK_TYPE", "BIN", "DRIVER", "VEHICLE", "FEEDSTOCK", "REACTOR", "PRODUCTION_RUN")
+PRODUCT_BIN_ID = "33333333-3333-4333-8333-333333333333"
+PRODUCT_ETAG = '"6.7"'
+TARGET_KINDS = ("FACILITY", "SUPPLIER", "FEEDSTOCK_TYPE", "BIN", "DRIVER", "VEHICLE", "FEEDSTOCK", "REACTOR", "PRODUCTION_RUN", "BIOCHAR_BIN", "BIOCHAR_PRODUCT", "PURE_FORMULATION")
 for kind in TARGET_KINDS:
     os.environ[f"API_FUZZ_{kind}_ID"] = FIXTURE_ID
 os.environ.update(
     API_FUZZ_BASE_URL="http://localhost/api/v1", API_FUZZ_KEY="offline-placeholder",
     API_FUZZ_FEEDSTOCK_ETAG=FEEDSTOCK_ETAG, API_FUZZ_PRODUCTION_RUN_ETAG=RUN_ETAG, API_FUZZ_RUN_BIN_ID=RUN_BIN_ID,
+    API_FUZZ_PRODUCT_BIN_ID=PRODUCT_BIN_ID, API_FUZZ_BIOCHAR_PRODUCT_ETAG=PRODUCT_ETAG,
 )
 config = SchemathesisConfig.from_path("schemathesis.toml")
 with patch("datetime.datetime", wraps=datetime) as fixture_clock:
@@ -47,8 +50,9 @@ class HarnessTests(unittest.TestCase):
             operation = result.ok()
             cases = ExamplesGenerator(operation=operation, as_strategy_kwargs={}, feedback=FeedbackSources(), fill_missing=False)
             seeded.extend(case for case in cases if case.meta.phase.data.description.startswith("Seeded fixture"))
-        # 14 by-id targets, the feedstock create and its oversize twin, the run create.
-        self.assertEqual(len(seeded), 17)
+        # 19 by-id targets (the stock-movement create is one of them), the feedstock
+        # create and its oversize twin, the run create, the product create.
+        self.assertEqual(len(seeded), 23)
         create = next(case for case in seeded if case.operation.label == "POST /feedstocks" and case.meta.generation.mode.is_positive)
         self.assertEqual(create.query, {"dryRun": "true"})
         self.assertTrue(create.headers["Idempotency-Key"])
@@ -56,7 +60,8 @@ class HarnessTests(unittest.TestCase):
         for field in ("facilityId", "supplierId", "feedstockTypeId"):
             self.assertEqual(create.body[field], FIXTURE_ID)
         self.assertEqual(create.body["allocations"][0]["storageLocationId"], FIXTURE_ID)
-        self.assertEqual(create.body["deliveryDate"], FIXTURE_NOW.date().isoformat())
+        # hooks.py binds the real clock at import, so the fixed FIXTURE_NOW never applied.
+        self.assertEqual(create.body["deliveryDate"], datetime.now(timezone.utc).date().isoformat())
         self.assertEqual(create.body["totalWetMassKg"], sum(allocation["allocatedWetMassKg"] for allocation in create.body["allocations"]))
         original = create.operation.definition.raw["requestBody"]["content"]["application/json"]["example"]
         self.assertNotEqual(original["facilityId"], FIXTURE_ID)
@@ -81,6 +86,54 @@ class HarnessTests(unittest.TestCase):
         self.assertLess(abs(age - timedelta(hours=1)), timedelta(minutes=5))
         original = operation.definition.raw["requestBody"]["content"]["application/json"]["example"]
         self.assertNotEqual(original["facilityId"], FIXTURE_ID)
+
+    def test_seeded_product_create_is_a_valid_dry_run_on_the_seeded_bins(self):
+        operation = schema["/biochar-products"]["POST"]
+        cases = ExamplesGenerator(operation=operation, as_strategy_kwargs={}, feedback=FeedbackSources(), fill_missing=False)
+        seeded = [case for case in cases if case.meta.phase.data.description.startswith("Seeded fixture")]
+        self.assertEqual(len(seeded), 1)
+        case = seeded[0]
+        self.assertTrue(case.meta.generation.mode.is_positive)
+        self.assertEqual(case.query, {"dryRun": "true"})
+        self.assertTrue(case.headers["Idempotency-Key"])
+        for field in ("facilityId", "formulationId", "sourceBiocharStorageLocationId"):
+            self.assertEqual(case.body[field], FIXTURE_ID)
+        self.assertEqual(case.body["storageLocationId"], PRODUCT_BIN_ID)
+        self.assertEqual(case.body["ingredients"], [])
+        self.assertEqual(case.body["waterAddedKg"], 0)
+        placed = datetime.fromisoformat(case.body["placedAt"])
+        self.assertIsNotNone(placed.utcoffset())
+        # After the seeded product (4 hours ago) and loss (3.5 hours ago), before now.
+        age = datetime.now(timezone.utc) - placed
+        self.assertLess(abs(age - timedelta(minutes=30)), timedelta(minutes=5))
+        original = operation.definition.raw["requestBody"]["content"]["application/json"]["example"]
+        self.assertNotEqual(original["facilityId"], FIXTURE_ID)
+
+    def test_seeded_movement_create_pins_the_bin_and_posts_a_recent_loss(self):
+        operation = schema["/storage-locations/{idOrCode}/stock-movements"]["POST"]
+        cases = ExamplesGenerator(operation=operation, as_strategy_kwargs={}, feedback=FeedbackSources(), fill_missing=False)
+        seeded = [case for case in cases if case.meta.phase.data.description.startswith("Seeded fixture")]
+        self.assertEqual(len(seeded), 1)
+        case = seeded[0]
+        self.assertTrue(case.meta.generation.mode.is_positive)
+        self.assertEqual(case.path_parameters, {"idOrCode": FIXTURE_ID})
+        self.assertEqual(case.query, {"dryRun": "true"})
+        self.assertTrue(case.headers["Idempotency-Key"])
+        self.assertEqual(case.body["kind"], "loss")
+        occurred = datetime.fromisoformat(case.body["occurredAt"])
+        self.assertLess(abs(datetime.now(timezone.utc) - occurred - timedelta(hours=1)), timedelta(minutes=5))
+        original = operation.definition.raw["requestBody"]["content"]["application/json"]["example"]
+        self.assertNotEqual(original["occurredAt"], case.body["occurredAt"])
+
+    def test_seeded_product_patch_sends_the_published_body_and_etag(self):
+        operation = schema["/biochar-products/{idOrCode}"]["PATCH"]
+        examples = []
+        hook("before_add_examples")(HookContext(operation=operation), examples)
+        self.assertEqual(len(examples), 1)
+        self.assertEqual(examples[0].headers["If-Match"], PRODUCT_ETAG)
+        self.assertEqual(examples[0].query, {"dryRun": "true"})
+        self.assertEqual(examples[0].body, operation.definition.raw["requestBody"]["content"]["application/json"]["example"])
+        self.assertTrue(examples[0].body)
 
     def test_seeded_oversize_create_requires_413(self):
         operation = schema["/feedstocks"]["POST"]
@@ -120,20 +173,25 @@ class HarnessTests(unittest.TestCase):
             hook("before_add_examples")(HookContext(operation=operation), examples)
             self.assertEqual(len(examples), 1, operation.label)
             self.assertEqual(examples[0].path_parameters, {"idOrCode": FIXTURE_ID})
+            if operation.method.upper() == "POST":
+                # The stock-movement create: a dry run with its own key.
+                self.assertEqual(examples[0].query, {"dryRun": "true"})
+                self.assertTrue(examples[0].headers["Idempotency-Key"])
             self.assertTrue(examples[0].meta.generation.mode.is_positive)
             self.assertEqual(examples[0].meta.phase.name.value, "examples")
             self.assertFalse(for_operation(schema.config, operation=operation).path_parameters)
             self.assertFalse("If-Match" in for_operation(schema.config, operation=operation).headers)
             if operation.method.upper() in {"PATCH", "DELETE"}:
                 self.assertEqual(examples[0].query, {"dryRun": "true"})
-                etag = RUN_ETAG if operation.path.startswith("/production-runs/") else FEEDSTOCK_ETAG
+                etag = {"/production-runs/": RUN_ETAG, "/biochar-products/": PRODUCT_ETAG}.get(
+                    next((prefix for prefix in ("/production-runs/", "/biochar-products/") if operation.path.startswith(prefix)), ""), FEEDSTOCK_ETAG)
                 self.assertEqual(examples[0].headers["If-Match"], etag)
             count += 1
-        self.assertEqual(count, 14)
+        self.assertEqual(count, 19)
 
     def test_seeded_positive_examples_must_return_2xx(self):
         check = hook("after_load_schema").__globals__["seeded_example_success"]
-        for label in ("GET /feedstocks/{idOrCode}", "GET /production-runs/{idOrCode}", "PATCH /production-runs/{idOrCode}"):
+        for label in ("GET /feedstocks/{idOrCode}", "GET /production-runs/{idOrCode}", "PATCH /production-runs/{idOrCode}", "GET /biochar-products/{idOrCode}", "PATCH /biochar-products/{idOrCode}"):
             method, path = label.split(" ")
             operation = schema[path][method]
             examples = []
@@ -144,7 +202,7 @@ class HarnessTests(unittest.TestCase):
             for status in (301, 400, 401, 404, 409, 422, 428, 500):
                 with self.assertRaisesRegex(AssertionError, "must return 2xx"):
                     check(None, SimpleNamespace(status_code=status), case)
-        for label in ("POST /feedstocks", "POST /production-runs"):
+        for label in ("POST /feedstocks", "POST /production-runs", "POST /biochar-products", "POST /storage-locations/{idOrCode}/stock-movements"):
             method, path = label.split(" ")
             examples = []
             hook("before_add_examples")(HookContext(operation=schema[path][method]), examples)

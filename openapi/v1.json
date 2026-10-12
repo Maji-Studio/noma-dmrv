@@ -14,6 +14,7 @@
       "X-Request-Id": {"description": "Request correlation identifier, UUID.", "schema": {"description": "Request correlation identifier, UUID.", "format": "uuid", "type": "string"}}
     },
     "responses": {
+      "BiocharProductProblem412": {"content": {"application/problem+json": {"schema": {"$ref": "#/components/schemas/BiocharProductPreconditionProblem"}}}, "description": "Stale row version or representation revision; current contains the latest representation.", "headers": {"RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}},
       "FeedstockProblem412": {"content": {"application/problem+json": {"schema": {"$ref": "#/components/schemas/FeedstockPreconditionProblem"}}}, "description": "Stale row version or representation revision; current contains the latest representation.", "headers": {"RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}},
       "Problem400": {"content": {"application/problem+json": {"schema": {"$ref": "#/components/schemas/Problem"}}}, "description": "Malformed JSON, invalid query/header syntax, or missing create idempotency key, as applicable.", "headers": {"RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}},
       "Problem401": {"content": {"application/problem+json": {"schema": {"$ref": "#/components/schemas/Problem"}}}, "description": "Missing, invalid, expired or revoked bearer credential, or invalid credential owner.", "headers": {"RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "WWW-Authenticate": {"$ref": "#/components/headers/WWW-Authenticate"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}},
@@ -32,6 +33,7 @@
       "ProductionRunProblem412": {"content": {"application/problem+json": {"schema": {"$ref": "#/components/schemas/ProductionRunPreconditionProblem"}}}, "description": "Stale row version or representation revision; current contains the latest representation.", "headers": {"RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}}
     },
     "schemas": {
+      "BiocharProductPreconditionProblem": {"allOf": [{"$ref": "#/components/schemas/Problem"}, {"properties": {"current": {"$ref": "#/components/schemas/biochar_product", "description": "Current biochar product after a failed version precondition."}}, "required": ["current"], "type": "object"}]},
       "FeedstockPreconditionProblem": {"allOf": [{"$ref": "#/components/schemas/Problem"}, {"properties": {"current": {"$ref": "#/components/schemas/feedstock", "description": "Current feedstock representation after a failed version precondition."}}, "required": ["current"], "type": "object"}]},
       "Problem": {
         "additionalProperties": false,
@@ -43,6 +45,7 @@
           "detail": {"description": "Actionable plain-text detail; server failures are sanitized.", "type": "string"},
           "errors": {"description": "Input issues; empty for server failures.", "items": {"additionalProperties": false, "properties": {"code": {"description": "Stable field error code.", "type": "string"}, "detail": {"description": "Field correction guidance, plain text.", "type": "string"}, "meta": {"additionalProperties": {}, "description": "Non-sensitive constraint metadata, such as maximum or unit; never rejected values.", "propertyNames": {"type": "string"}, "type": "object"}, "pointer": {"description": "RFC 6901 JSON Pointer to the invalid input; empty string denotes the root.", "type": "string"}}, "required": ["pointer", "code", "detail"], "type": "object"}, "type": "array"},
           "instance": {"description": "Request path, URI reference.", "type": "string"},
+          "preview": {"additionalProperties": false, "description": "Fresh dry run after stock_basis_changed: the current basis fingerprint and stock effects. Absent when no preview could be computed.", "properties": {"basisFingerprint": {"description": "Stock basis of the fresh dry run, opaque string; send it back to write against that stock.", "type": "string"}, "stockEffects": {"$ref": "#/components/schemas/stockEffects", "description": "Changed bin balances inside the dry-run transaction, before rollback. All masses are kilograms."}}, "required": ["basisFingerprint", "stockEffects"], "type": "object"},
           "retryable": {"description": "Whether retrying may succeed; retain the same idempotency key.", "type": "boolean"},
           "status": {"description": "HTTP response status code.", "maximum": 9007199254740991, "minimum": -9007199254740991, "type": "integer"},
           "title": {"description": "Short HTTP status title, plain text.", "type": "string"},
@@ -52,6 +55,48 @@
         "type": "object"
       },
       "ProductionRunPreconditionProblem": {"allOf": [{"$ref": "#/components/schemas/Problem"}, {"properties": {"current": {"$ref": "#/components/schemas/production_run", "description": "Current production run after a failed version precondition."}}, "required": ["current"], "type": "object"}]},
+      "biochar_product": {
+        "additionalProperties": false,
+        "properties": {
+          "archivedAt": {"anyOf": [{"format": "date-time", "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$", "type": "string"}, {"type": "null"}], "description": "Archive instant in UTC (RFC 3339), or null when active."},
+          "biocharMoisturePercent": {"anyOf": [{"type": "number"}, {"type": "null"}], "description": "Measured biochar moisture as percent of wet mass; the overall figure for a split-bin draw."},
+          "biocharWetMassKg": {"anyOf": [{"type": "number"}, {"type": "null"}], "description": "Wet biochar drawn from the source bin as weighed, in kilograms, without ingredients or added water."},
+          "code": {"description": "Human-readable product code.", "type": "string"},
+          "createdAt": {"description": "Creation instant in UTC, RFC 3339.", "format": "date-time", "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$", "type": "string"},
+          "densityKgM3": {"anyOf": [{"type": "number"}, {"type": "null"}], "description": "Bulk density in kilograms per cubic metre, or null."},
+          "expiresAt": {"anyOf": [{"format": "date-time", "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$", "type": "string"}, {"type": "null"}], "description": "Instant the 12-month stockpiling validity ends, UTC, RFC 3339, or null."},
+          "facilityId": {"description": "Owning facility identifier, UUID.", "format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"},
+          "formulationId": {"description": "Formulation identifier, UUID; the Pure biochar formulation for an unblended product.", "format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"},
+          "id": {"description": "Biochar product identifier, UUID.", "format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"},
+          "ingredients": {
+            "description": "Ingredients as mixed, in recipe order, from the snapshot saved with the product.",
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "feedstockTypeId": {"description": "Feedstock type of the ingredient as mixed, UUID.", "format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"},
+                "formulationIngredientId": {"description": "Formulation line UUID this ingredient was mixed for.", "format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"},
+                "moisturePercent": {"anyOf": [{"type": "number"}, {"type": "null"}], "description": "Measured moisture of the material used, percent of wet mass, or null when none was recorded."},
+                "storageLocationId": {"anyOf": [{"format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"}, {"type": "null"}], "description": "Feedstock bin the ingredient was drawn from, UUID, or null for material not tracked in a bin."},
+                "wetMassKg": {"anyOf": [{"type": "number"}, {"type": "null"}], "description": "Wet ingredient mass in kilograms; 0 for a line that was not used."}
+              },
+              "required": ["formulationIngredientId", "feedstockTypeId", "storageLocationId", "wetMassKg", "moisturePercent"],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "placedAt": {"description": "Instant the product was mixed and placed, UTC, RFC 3339.", "format": "date-time", "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$", "type": "string"},
+          "productionDate": {"description": "Instant of the oldest biochar lot drawn, UTC, RFC 3339.", "format": "date-time", "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$", "type": "string"},
+          "sourceAllocations": {"description": "Biochar drawn per production run, ordered by run id.", "items": {"additionalProperties": false, "properties": {"dryMassKg": {"description": "Dry biochar drawn from that run in kilograms.", "type": "number"}, "productionRunId": {"description": "Production run the biochar came from, UUID.", "format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"}, "wetMassKg": {"description": "Wet biochar drawn from that run in kilograms.", "type": "number"}}, "required": ["productionRunId", "wetMassKg", "dryMassKg"], "type": "object"}, "type": "array"},
+          "sourceBiocharStorageLocationId": {"anyOf": [{"format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"}, {"type": "null"}], "description": "Biochar bin the biochar was drawn from, UUID, or null."},
+          "status": {"description": "Product state: draft, testing, ready or sold.", "enum": ["draft", "testing", "ready", "sold"], "type": "string"},
+          "storageLocationId": {"anyOf": [{"format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"}, {"type": "null"}], "description": "Product bin the blend was placed in, UUID, or null."},
+          "updatedAt": {"description": "Last update instant in UTC, RFC 3339.", "format": "date-time", "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$", "type": "string"},
+          "version": {"description": "Positive row version for concurrency checks.", "exclusiveMinimum": 0, "maximum": 9007199254740991, "type": "integer"},
+          "waterAddedKg": {"anyOf": [{"type": "number"}, {"type": "null"}], "description": "Water added to the blend in kilograms."}
+        },
+        "required": ["id", "code", "version", "facilityId", "formulationId", "status", "placedAt", "productionDate", "expiresAt", "sourceBiocharStorageLocationId", "storageLocationId", "biocharWetMassKg", "biocharMoisturePercent", "waterAddedKg", "densityKgM3", "ingredients", "sourceAllocations", "archivedAt", "createdAt", "updatedAt"],
+        "type": "object"
+      },
       "driver": {
         "additionalProperties": false,
         "properties": {
@@ -124,6 +169,26 @@
         "required": ["id", "code", "name", "archivedAt", "createdAt", "updatedAt", "version", "category", "usage"],
         "type": "object"
       },
+      "formulation": {
+        "additionalProperties": false,
+        "properties": {
+          "archivedAt": {"anyOf": [{"format": "date-time", "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$", "type": "string"}, {"type": "null"}], "description": "Archive event instant in UTC (RFC 3339), or null when active or archiving is unsupported."},
+          "biocharRatio": {"anyOf": [{"type": "number"}, {"type": "null"}], "description": "Biochar share of the blend as a fraction from 0 to 1, or null when not set."},
+          "code": {"description": "Exact human-readable code, unique within the organization.", "type": "string"},
+          "createdAt": {"description": "Creation event instant in UTC (RFC 3339).", "format": "date-time", "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$", "type": "string"},
+          "id": {"description": "Resource identifier, UUID.", "format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"},
+          "lines": {
+            "description": "Ingredient lines in recipe order; empty for Pure biochar.",
+            "items": {"additionalProperties": false, "properties": {"feedstockTypeId": {"description": "Feedstock type of the ingredient, UUID.", "format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"}, "id": {"description": "Formulation line UUID; pass it as formulationIngredientId when making a biochar product.", "format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"}, "ratio": {"anyOf": [{"type": "number"}, {"type": "null"}], "description": "Volume share of the blend as a fraction from 0 to 1, or null. Guidance only: it never sets a mass."}}, "required": ["id", "feedstockTypeId", "ratio"], "type": "object"},
+            "type": "array"
+          },
+          "name": {"description": "Human-readable display name, plain text.", "type": "string"},
+          "updatedAt": {"description": "Last update event instant in UTC (RFC 3339).", "format": "date-time", "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$", "type": "string"},
+          "version": {"description": "Positive integer row version for concurrency checks.", "exclusiveMinimum": 0, "maximum": 9007199254740991, "type": "integer"}
+        },
+        "required": ["id", "code", "name", "archivedAt", "createdAt", "updatedAt", "version", "biocharRatio", "lines"],
+        "type": "object"
+      },
       "me": {
         "additionalProperties": false,
         "properties": {
@@ -147,9 +212,33 @@
           },
           "organization": {"additionalProperties": false, "description": "Organization bound to the authenticated credential.", "properties": {"id": {"description": "Credential-bound organization identifier, opaque string.", "type": "string"}, "name": {"description": "Organization display name, plain text.", "type": "string"}}, "required": ["id", "name"], "type": "object"},
           "role": {"description": "Live organization role: owner owns the organization; admin administers it.", "enum": ["owner", "admin"], "type": "string"},
-          "scopes": {"description": "Credential scopes intersected with the live membership role.", "items": {"description": "Per-resource permission: read lists and retrieves, write creates and updates, delete removes; no wildcards. Additional resource scopes may be introduced in v1.", "type": "string", "x-extensible-enum": ["production-runs:read", "production-runs:write", "production-runs:delete", "reactors:read", "feedstocks:read", "feedstocks:write", "feedstocks:delete", "facilities:read", "suppliers:read", "feedstock-types:read", "storage-locations:read", "vehicles:read", "drivers:read"]}, "type": "array"}
+          "scopes": {"description": "Credential scopes intersected with the live membership role.", "items": {"description": "Per-resource permission: read lists and retrieves, write creates and updates, delete removes; no wildcards. Additional resource scopes may be introduced in v1.", "type": "string", "x-extensible-enum": ["production-runs:read", "production-runs:write", "production-runs:delete", "reactors:read", "biochar-products:read", "biochar-products:write", "formulations:read", "feedstocks:read", "feedstocks:write", "feedstocks:delete", "facilities:read", "suppliers:read", "feedstock-types:read", "storage-locations:read", "vehicles:read", "drivers:read"]}, "type": "array"}
         },
         "required": ["organization", "facilities", "role", "scopes", "credential"],
+        "type": "object"
+      },
+      "output_stock_movement": {
+        "additionalProperties": false,
+        "properties": {
+          "balanceAfterDryKg": {"description": "Dry biochar in the bin just after the movement, kilograms.", "type": "number"},
+          "balanceBeforeDryKg": {"description": "Dry biochar in the bin just before the movement, kilograms.", "type": "number"},
+          "biocharProductIds": {"description": "Biochar products the stock was drawn from or restored to, ordered by id.", "items": {"format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"}, "type": "array"},
+          "correctedByMovementId": {"anyOf": [{"format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"}, {"type": "null"}], "description": "Reversal that undid this movement, UUID, or null."},
+          "correctsMovementId": {"anyOf": [{"format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"}, {"type": "null"}], "description": "Movement this reversal or replacement corrects, UUID, or null."},
+          "createdAt": {"description": "Posting instant in UTC, RFC 3339.", "format": "date-time", "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$", "type": "string"},
+          "deliveryId": {"anyOf": [{"format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"}, {"type": "null"}], "description": "Delivery this movement shipped or corrected, UUID, or null."},
+          "dryDeltaKg": {"description": "Change in dry biochar in kilograms: negative when stock left, positive for a reversal.", "type": "number"},
+          "id": {"description": "Movement identifier, UUID.", "format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"},
+          "kind": {"description": "What happened: production_draw and product_draw feed a new product, delivery ships stock, loss and count are manual, reversal and replacement are corrections, merge and split change the bin layout.", "enum": ["production_draw", "product_draw", "delivery", "loss", "count", "reversal", "replacement", "merge", "split"], "type": "string"},
+          "moisturePercent": {"anyOf": [{"type": "number"}, {"type": "null"}], "description": "Moisture posted as percent of wet mass; the overall figure for a split-bin draw; null when none applies."},
+          "occurredAt": {"description": "Instant the stock changed, UTC, RFC 3339.", "format": "date-time", "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$", "type": "string"},
+          "productionRunIds": {"description": "Production runs the stock was drawn from or restored to, ordered by id.", "items": {"format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"}, "type": "array"},
+          "reason": {"description": "Why the stock changed, untrusted plain text.", "type": "string"},
+          "storageLocationId": {"description": "Biochar or product bin the movement was posted on, UUID.", "format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"},
+          "targetBiocharProductId": {"anyOf": [{"format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"}, {"type": "null"}], "description": "Product this draw created, UUID, or null."},
+          "wetMassKg": {"anyOf": [{"type": "number"}, {"type": "null"}], "description": "Wet kilograms posted, or the whole counted bin for a count; null for a reversal or when none was recorded."}
+        },
+        "required": ["id", "storageLocationId", "kind", "occurredAt", "wetMassKg", "moisturePercent", "dryDeltaKg", "balanceBeforeDryKg", "balanceAfterDryKg", "reason", "correctsMovementId", "correctedByMovementId", "productionRunIds", "biocharProductIds", "targetBiocharProductId", "deliveryId", "createdAt"],
         "type": "object"
       },
       "production_run": {
@@ -281,9 +370,154 @@
     },
     "securitySchemes": {"bearerAuth": {"bearerFormat": "API key", "description": "Authorization: Bearer <key> only. Keys use noma_live_ or noma_test_ prefixes and bind exactly one organization; cookies and x-api-key cannot authorize requests.", "scheme": "bearer", "type": "http"}}
   },
-  "info": {"description": "Organization-scoped feedstock intake, production runs and read-only lookups. Business dates are facility-local YYYY-MM-DD; event times are sent as RFC 3339 with an explicit offset or as facility-local { date, time }, and returned as UTC instants. Additive changes remain in v1; breaking versions use v2 with Deprecation and Sunset headers. Unsupported methods on visible paths return Problem405 with Allow listing supported methods, including automatic HEAD and OPTIONS. Private refusals follow bearer authentication and path visibility checks; unknown or invisible paths return 404 without Allow. Public discovery paths need no credential. This response is a path-level refusal, not a response of a published operation.", "title": "noma data-entry API", "version": "1.0.0"},
+  "info": {"description": "Organization-scoped feedstock intake, production runs, biochar products and read-only lookups, including formulations and output bin stock movement history. Business dates are facility-local YYYY-MM-DD; event times are sent as RFC 3339 with an explicit offset or as facility-local { date, time }, and returned as UTC instants. Additive changes remain in v1; breaking versions use v2 with Deprecation and Sunset headers. Unsupported methods on visible paths return Problem405 with Allow listing supported methods, including automatic HEAD and OPTIONS. Private refusals follow bearer authentication and path visibility checks; unknown or invisible paths return 404 without Allow. Public discovery paths need no credential. This response is a path-level refusal, not a response of a published operation.", "title": "noma data-entry API", "version": "1.0.0"},
   "openapi": "3.1.0",
   "paths": {
+    "/biochar-products": {
+      "get": {
+        "description": "List a page ordered newest first by (createdAt, id). Cursors bind organization and filters; no totals or include. Lookup lists exclude archived rows where supported. Required scope: biochar-products:read.",
+        "operationId": "find_biochar_products",
+        "parameters": [
+          {"description": "Case-insensitive literal prefix search on biochar product code.", "in": "query", "name": "q", "required": false, "schema": {"description": "Case-insensitive literal prefix search on biochar product code.", "maxLength": 255, "pattern": "^[^\\x00-\\x1f\\x7f-\\x9f]*$(?![\\s\\S])", "type": "string"}},
+          {"description": "Page size as a decimal integer string; defaults to 50, maximum 200.", "in": "query", "name": "limit", "required": false, "schema": {"default": 50, "description": "Page size as a decimal integer string; defaults to 50, maximum 200.", "maximum": 200, "minimum": 1, "type": "integer"}},
+          {"description": "Opaque base64url continuation cursor bound to organization, resource and filters. Use only nextCursor from the same list and filters.", "in": "query", "name": "cursor", "required": false, "schema": {"description": "Opaque base64url continuation cursor bound to organization, resource and filters. Use only nextCursor from the same list and filters.", "maxLength": 4096, "minLength": 1, "pattern": "^[A-Za-z0-9_-]+$", "type": "string"}},
+          {"description": "Receiving facility filter, UUID.", "in": "query", "name": "facilityId", "required": false, "schema": {"description": "Receiving facility filter, UUID.", "format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"}},
+          {"description": "Exact human-readable resource code.", "in": "query", "name": "code", "required": false, "schema": {"description": "Exact human-readable resource code.", "maxLength": 255, "pattern": "^[^\\x00-\\x1f\\x7f-\\x9f]*$(?![\\s\\S])", "type": "string"}},
+          {"description": "Product status filter.", "in": "query", "name": "status", "required": false, "schema": {"description": "Product status filter.", "enum": ["draft", "testing", "ready", "sold"], "type": "string"}},
+          {"description": "Product bin filter, UUID.", "in": "query", "name": "storageLocationId", "required": false, "schema": {"description": "Product bin filter, UUID.", "format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"}},
+          {"description": "Formulation filter, UUID.", "in": "query", "name": "formulationId", "required": false, "schema": {"description": "Formulation filter, UUID.", "format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"}},
+          {"description": "Only products placed at or after this RFC 3339 instant with an explicit offset; encode + as %2B or use Z.", "in": "query", "name": "placedFrom", "required": false, "schema": {"description": "Only products placed at or after this RFC 3339 instant with an explicit offset; encode + as %2B or use Z.", "format": "date-time", "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$", "type": "string"}},
+          {"description": "Only products placed before this RFC 3339 instant with an explicit offset; encode + as %2B or use Z.", "in": "query", "name": "placedBefore", "required": false, "schema": {"description": "Only products placed before this RFC 3339 instant with an explicit offset; encode + as %2B or use Z.", "format": "date-time", "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$", "type": "string"}}
+        ],
+        "responses": {
+          "200": {"content": {"application/json": {"schema": {"additionalProperties": false, "properties": {"data": {"description": "Page of resources, newest first by (createdAt, id).", "items": {"$ref": "#/components/schemas/biochar_product"}, "type": "array"}, "nextCursor": {"anyOf": [{"type": "string"}, {"type": "null"}], "description": "Opaque cursor for the next page, or null at the end; keep filters unchanged."}}, "required": ["data", "nextCursor"], "type": "object"}}}, "description": "Resource page.", "headers": {"RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}},
+          "400": {"$ref": "#/components/responses/Problem400"},
+          "401": {"$ref": "#/components/responses/Problem401"},
+          "403": {"$ref": "#/components/responses/Problem403"},
+          "404": {"$ref": "#/components/responses/Problem404"},
+          "429": {"$ref": "#/components/responses/Problem429"},
+          "500": {"$ref": "#/components/responses/Problem500"}
+        },
+        "x-required-scope": "biochar-products:read"
+      },
+      "post": {
+        "description": "Make a biochar product: draw biochar (and ingredients, for a blend) from bins and place it in a product bin. The biochar mass is as weighed, without ingredients or water; the server derives the stored blend. Refusals: 404 for an unknown or foreign reference, 409 insufficient_stock, stock_basis_changed, certification_locked or conflict, 422 for invalid input. Dry runs return basisFingerprint with the stock effects. Send it back as basisFingerprint to refuse the write if stock moved since; the refusal is 409 stock_basis_changed with a fresh preview. Without it the write acts on current stock. Masses are kilograms and moisture is percent of wet mass. Send event times as RFC 3339 with an explicit offset or as facility-local { date, time }; a time in the future is refused. Location and ETag appear only on committed creates. Required scope: biochar-products:write.",
+        "operationId": "make_biochar_product",
+        "parameters": [{"description": "true validates and previews the write then rolls back; false commits the write (default).", "in": "query", "name": "dryRun", "required": false, "schema": {"description": "true validates and previews the write then rolls back; false commits the write (default).", "enum": ["true", "false"], "type": "string"}}, {"description": "Unique key per intended write, 1 to 255 visible ASCII characters. Reuse on retry; credential-scoped, retained for 7 days. Required on every create, including dry runs; a dry run never consumes it. Dry runs never consume or replay keys.", "in": "header", "name": "Idempotency-Key", "required": true, "schema": {"maxLength": 255, "minLength": 1, "pattern": "^[\\x21-\\x7e]+$", "type": "string"}}],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {"biocharMoisturePercent": 10, "biocharWetMassKg": 500, "facilityId": "df2795a4-886b-4a89-bbdd-532c6b1b8e45", "formulationId": "0c6a1e3a-4a3f-4d0e-9a38-7a1f5c3f1b20", "ingredients": [], "placedAt": "2026-10-08T09:30:00Z", "sourceBiocharStorageLocationId": "ea31ace1-5b30-4443-adb4-26b43bfa5599", "storageLocationId": "df0f2a35-884c-4293-8783-31aa9fc5e315", "waterAddedKg": 0},
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "basisFingerprint": {"description": "basisFingerprint from a dry run. If stock moved since, the write is refused with stock_basis_changed. Omit it to draw current stock.", "minLength": 1, "type": "string"},
+                  "biocharMoisturePercent": {"anyOf": [{"type": "number"}, {"type": "null"}], "description": "Measured biochar moisture as percent of wet mass, below 100. Required unless sources are given."},
+                  "biocharWetMassKg": {"description": "Wet biochar drawn from the source bin as weighed, in kilograms, without ingredients or added water.", "exclusiveMinimum": 0, "maximum": 100000000, "multipleOf": 0.001, "type": "number"},
+                  "densityKgM3": {"anyOf": [{"type": "number"}, {"type": "null"}], "description": "Bulk density in kilograms per cubic metre.", "minimum": 0},
+                  "facilityId": {"description": "Facility the product is mixed and placed at, UUID.", "format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"},
+                  "formulationId": {"description": "Formulation UUID, including the Pure biochar formulation for an unblended product.", "format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"},
+                  "ingredients": {
+                    "description": "One entry per formulation line with its wet mass and measured moisture. Empty for Pure biochar.",
+                    "items": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "formulationIngredientId": {"description": "Formulation line UUID; one entry per line of the formulation.", "format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"},
+                        "moisturePercent": {"anyOf": [{"maximum": 100, "minimum": 0, "multipleOf": 0.000001, "type": "number"}, {"type": "null"}], "description": "Measured moisture of the material used, percent of wet mass. Required when wetMassKg is above 0."},
+                        "storageLocationId": {"anyOf": [{"format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"}, {"type": "null"}], "description": "Feedstock bin the ingredient was drawn from, UUID, or null for material not tracked in a bin."},
+                        "wetMassKg": {"description": "Wet ingredient mass in kilograms, as weighed. 0 records a line that was not used.", "maximum": 100000000, "minimum": 0, "multipleOf": 0.001, "type": "number"}
+                      },
+                      "required": ["formulationIngredientId", "storageLocationId", "wetMassKg"],
+                      "type": "object"
+                    },
+                    "maxItems": 200,
+                    "type": "array"
+                  },
+                  "placedAt": {
+                    "$schema": "https://json-schema.org/draft/2020-12/schema",
+                    "anyOf": [
+                      {"format": "date-time", "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$", "type": "string"},
+                      {"additionalProperties": false, "properties": {"date": {"description": "Calendar date in the effective facility time zone, YYYY-MM-DD.", "format": "date", "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$", "type": "string"}, "time": {"description": "Facility-local wall time, HH:MM. DST gaps and ambiguous repeated times are refused.", "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$", "type": "string"}}, "required": ["date", "time"], "type": "object"}
+                    ],
+                    "description": "An RFC 3339 instant with explicit offset, or a date/time in the effective facility zone."
+                  },
+                  "sourceBiocharStorageLocationId": {"description": "Biochar bin the biochar was drawn from, UUID.", "format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"},
+                  "sources": {"description": "Split biochar bins only: the sub-bins drawn, each layerId a production run UUID, in the order they were emptied, each with its moisture.", "items": {"additionalProperties": false, "properties": {"layerId": {"description": "Sub-bin drawn: on a biochar bin, the UUID of the production run that filled it; on a product bin, the UUID of the biochar product placed in it.", "format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"}, "moisturePercent": {"description": "Measured moisture of this sub-bin as percent of wet mass, below 100.", "type": "number"}}, "required": ["layerId", "moisturePercent"], "type": "object"}, "maxItems": 200, "minItems": 1, "type": "array"},
+                  "status": {"default": "testing", "description": "Product state: draft, testing, ready or sold. Defaults to testing.", "enum": ["draft", "testing", "ready", "sold"], "type": "string"},
+                  "storageLocationId": {"description": "Product bin the blend was placed in, UUID. A bin with no formulation yet is claimed for this one.", "format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"},
+                  "waterAddedKg": {"description": "Water added to the blend in kilograms; 0 when none.", "maximum": 100000000, "minimum": 0, "multipleOf": 0.001, "type": "number"}
+                },
+                "required": ["facilityId", "formulationId", "placedAt", "sourceBiocharStorageLocationId", "storageLocationId", "biocharWetMassKg", "waterAddedKg"],
+                "type": "object"
+              }
+            }
+          },
+          "description": "JSON body, maximum 262144 bytes. Unknown properties are rejected.",
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {"application/json": {"schema": {"additionalProperties": false, "properties": {"basisFingerprint": {"description": "Dry runs only: the stock basis these effects were computed on, opaque string. Send it as basisFingerprint on the real write to refuse it if stock moved.", "type": "string"}, "data": {"$ref": "#/components/schemas/biochar_product", "description": "Resource representation."}, "stockEffects": {"$ref": "#/components/schemas/stockEffects", "description": "Changed bin balances inside the dry-run transaction, before rollback. All masses are kilograms."}}, "required": ["data"], "type": "object"}}},
+            "description": "Dry-run product preview with stockEffects and basisFingerprint.",
+            "headers": {"Dry-Run": {"$ref": "#/components/headers/Dry-Run"}, "Idempotent-Replayed": {"$ref": "#/components/headers/Idempotent-Replayed"}, "RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}
+          },
+          "201": {
+            "content": {"application/json": {"schema": {"additionalProperties": false, "properties": {"basisFingerprint": {"description": "Dry runs only: the stock basis these effects were computed on, opaque string. Send it as basisFingerprint on the real write to refuse it if stock moved.", "type": "string"}, "data": {"$ref": "#/components/schemas/biochar_product", "description": "Resource representation."}, "stockEffects": {"$ref": "#/components/schemas/stockEffects", "description": "Changed bin balances inside the dry-run transaction, before rollback. All masses are kilograms."}}, "required": ["data"], "type": "object"}}},
+            "description": "Product committed, or replayed.",
+            "headers": {"Dry-Run": {"$ref": "#/components/headers/Dry-Run"}, "ETag": {"$ref": "#/components/headers/ETag"}, "Idempotent-Replayed": {"$ref": "#/components/headers/Idempotent-Replayed"}, "Location": {"$ref": "#/components/headers/Location"}, "RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}
+          },
+          "400": {"$ref": "#/components/responses/Problem400"},
+          "401": {"$ref": "#/components/responses/Problem401"},
+          "403": {"$ref": "#/components/responses/Problem403"},
+          "404": {"$ref": "#/components/responses/Problem404"},
+          "409": {"$ref": "#/components/responses/Problem409"},
+          "413": {"$ref": "#/components/responses/Problem413"},
+          "415": {"$ref": "#/components/responses/Problem415"},
+          "422": {"$ref": "#/components/responses/Problem422"},
+          "429": {"$ref": "#/components/responses/Problem429"},
+          "500": {"$ref": "#/components/responses/Problem500"},
+          "503": {"$ref": "#/components/responses/Problem503"}
+        },
+        "x-required-scope": "biochar-products:write"
+      }
+    },
+    "/biochar-products/{idOrCode}": {
+      "get": {
+        "description": "Read a stable resource representation by UUID or exact code; archived lookups remain readable. Required scope: biochar-products:read.",
+        "operationId": "get_biochar_product",
+        "parameters": [{"description": "Resource UUID or exact human-readable code.", "in": "path", "name": "idOrCode", "required": true, "schema": {"type": "string"}}],
+        "responses": {"200": {"content": {"application/json": {"schema": {"additionalProperties": false, "properties": {"data": {"$ref": "#/components/schemas/biochar_product", "description": "Resource representation."}}, "required": ["data"], "type": "object"}}}, "description": "Resource representation.", "headers": {"ETag": {"$ref": "#/components/headers/ETag"}, "RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}}, "400": {"$ref": "#/components/responses/Problem400"}, "401": {"$ref": "#/components/responses/Problem401"}, "403": {"$ref": "#/components/responses/Problem403"}, "404": {"$ref": "#/components/responses/Problem404"}, "429": {"$ref": "#/components/responses/Problem429"}, "500": {"$ref": "#/components/responses/Problem500"}},
+        "x-required-scope": "biochar-products:read"
+      },
+      "patch": {
+        "description": "Update a product by UUID with a strong If-Match. Only code, status and densityKgM3 can change; null clears the density. Where, from what and how much the product was drawn is fixed once posted. Omission preserves fields. Dry runs roll back; replays precede precondition checks. Required scope: biochar-products:write.",
+        "operationId": "update_biochar_product",
+        "parameters": [
+          {"description": "Target identifier, UUID; codes are not accepted on this method.", "in": "path", "name": "idOrCode", "required": true, "schema": {"format": "uuid", "type": "string"}},
+          {"description": "true validates and previews the write then rolls back; false commits the write (default).", "in": "query", "name": "dryRun", "required": false, "schema": {"description": "true validates and previews the write then rolls back; false commits the write (default).", "enum": ["true", "false"], "type": "string"}},
+          {"description": "One strong ETag from the resource read: \"version.revision\", each a positive decimal safe integer (1 to 9007199254740991), without leading zeros, for example \"3.1\". Wildcards and weak tags are refused. A mismatch returns the current representation.", "in": "header", "name": "If-Match", "required": true, "schema": {"pattern": "^\"((?:[1-9]\\d{0,14}|[1-8]\\d{15}|900[0-6]\\d{12}|90070\\d{11}|90071[0-8]\\d{10}|900719[0-8]\\d{9}|9007199[0-1]\\d{8}|90071992[0-4]\\d{7}|900719925[0-3]\\d{6}|9007199254[0-6]\\d{5}|90071992547[0-3]\\d{4}|9007199254740[0-8]\\d{2}|90071992547409[0-8]\\d{1}|9007199254740990\\d{0}|9007199254740991))\\.((?:[1-9]\\d{0,14}|[1-8]\\d{15}|900[0-6]\\d{12}|90070\\d{11}|90071[0-8]\\d{10}|900719[0-8]\\d{9}|9007199[0-1]\\d{8}|90071992[0-4]\\d{7}|900719925[0-3]\\d{6}|9007199254[0-6]\\d{5}|90071992547[0-3]\\d{4}|9007199254740[0-8]\\d{2}|90071992547409[0-8]\\d{1}|9007199254740990\\d{0}|9007199254740991))\"$", "type": "string"}},
+          {"description": "Unique key per intended write, 1 to 255 visible ASCII characters. Reuse on retry; credential-scoped, retained for 7 days. Optional on this method. Dry runs never consume or replay keys.", "in": "header", "name": "Idempotency-Key", "required": false, "schema": {"maxLength": 255, "minLength": 1, "pattern": "^[\\x21-\\x7e]+$", "type": "string"}}
+        ],
+        "requestBody": {"content": {"application/json": {"example": {"densityKgM3": 250, "status": "ready"}, "schema": {"additionalProperties": false, "properties": {"code": {"description": "Human-readable product code.", "maxLength": 50, "minLength": 1, "pattern": "^[A-Z0-9-]+$", "type": "string"}, "densityKgM3": {"anyOf": [{"type": "number"}, {"type": "null"}], "description": "Bulk density in kilograms per cubic metre, or null to clear.", "minimum": 0}, "status": {"description": "Product state: draft, testing, ready or sold.", "enum": ["draft", "testing", "ready", "sold"], "type": "string"}}, "type": "object"}}}, "description": "JSON body, maximum 262144 bytes. Unknown properties are rejected.", "required": true},
+        "responses": {
+          "200": {"content": {"application/json": {"schema": {"additionalProperties": false, "properties": {"data": {"$ref": "#/components/schemas/biochar_product", "description": "Resource representation."}}, "required": ["data"], "type": "object"}}}, "description": "Updated product or dry-run representation. ETag is absent on dry runs.", "headers": {"Dry-Run": {"$ref": "#/components/headers/Dry-Run"}, "ETag": {"$ref": "#/components/headers/ETag"}, "Idempotent-Replayed": {"$ref": "#/components/headers/Idempotent-Replayed"}, "RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}},
+          "400": {"$ref": "#/components/responses/Problem400"},
+          "401": {"$ref": "#/components/responses/Problem401"},
+          "403": {"$ref": "#/components/responses/Problem403"},
+          "404": {"$ref": "#/components/responses/Problem404"},
+          "409": {"$ref": "#/components/responses/Problem409"},
+          "412": {"$ref": "#/components/responses/BiocharProductProblem412"},
+          "413": {"$ref": "#/components/responses/Problem413"},
+          "415": {"$ref": "#/components/responses/Problem415"},
+          "422": {"$ref": "#/components/responses/Problem422"},
+          "428": {"$ref": "#/components/responses/Problem428"},
+          "429": {"$ref": "#/components/responses/Problem429"},
+          "500": {"$ref": "#/components/responses/Problem500"},
+          "503": {"$ref": "#/components/responses/Problem503"}
+        },
+        "x-required-scope": "biochar-products:write"
+      }
+    },
     "/drivers": {
       "get": {
         "description": "List a page ordered newest first by (createdAt, id). Cursors bind organization and filters; no totals or include. Lookup lists exclude archived rows where supported. Required scope: drivers:read.",
@@ -545,6 +779,36 @@
           "503": {"$ref": "#/components/responses/Problem503"}
         },
         "x-required-scope": "feedstocks:write"
+      }
+    },
+    "/formulations": {
+      "get": {
+        "description": "List a page ordered newest first by (createdAt, id). Cursors bind organization and filters; no totals or include. Lookup lists exclude archived rows where supported. Required scope: formulations:read.",
+        "operationId": "find_formulations",
+        "parameters": [
+          {"description": "Page size as a decimal integer string; defaults to 50, maximum 200.", "in": "query", "name": "limit", "required": false, "schema": {"default": 50, "description": "Page size as a decimal integer string; defaults to 50, maximum 200.", "maximum": 200, "minimum": 1, "type": "integer"}},
+          {"description": "Opaque base64url continuation cursor bound to organization, resource and filters. Use only nextCursor from the same list and filters.", "in": "query", "name": "cursor", "required": false, "schema": {"description": "Opaque base64url continuation cursor bound to organization, resource and filters. Use only nextCursor from the same list and filters.", "maxLength": 4096, "minLength": 1, "pattern": "^[A-Za-z0-9_-]+$", "type": "string"}},
+          {"description": "Case-insensitive literal prefix search on code or name.", "in": "query", "name": "q", "required": false, "schema": {"description": "Case-insensitive literal prefix search on code or name.", "maxLength": 255, "pattern": "^[^\\x00-\\x1f\\x7f-\\x9f]*$(?![\\s\\S])", "type": "string"}},
+          {"description": "Exact human-readable resource code.", "in": "query", "name": "code", "required": false, "schema": {"description": "Exact human-readable resource code.", "maxLength": 255, "pattern": "^[^\\x00-\\x1f\\x7f-\\x9f]*$(?![\\s\\S])", "type": "string"}}
+        ],
+        "responses": {
+          "200": {"content": {"application/json": {"schema": {"additionalProperties": false, "properties": {"data": {"description": "Page of resources, newest first by (createdAt, id).", "items": {"$ref": "#/components/schemas/formulation"}, "type": "array"}, "nextCursor": {"anyOf": [{"type": "string"}, {"type": "null"}], "description": "Opaque cursor for the next page, or null at the end; keep filters unchanged."}}, "required": ["data", "nextCursor"], "type": "object"}}}, "description": "Resource page.", "headers": {"RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}},
+          "400": {"$ref": "#/components/responses/Problem400"},
+          "401": {"$ref": "#/components/responses/Problem401"},
+          "403": {"$ref": "#/components/responses/Problem403"},
+          "429": {"$ref": "#/components/responses/Problem429"},
+          "500": {"$ref": "#/components/responses/Problem500"}
+        },
+        "x-required-scope": "formulations:read"
+      }
+    },
+    "/formulations/{idOrCode}": {
+      "get": {
+        "description": "Read a stable resource representation by UUID or exact code; archived lookups remain readable. Required scope: formulations:read.",
+        "operationId": "get_formulation",
+        "parameters": [{"description": "Resource UUID or exact human-readable code.", "in": "path", "name": "idOrCode", "required": true, "schema": {"type": "string"}}],
+        "responses": {"200": {"content": {"application/json": {"schema": {"additionalProperties": false, "properties": {"data": {"$ref": "#/components/schemas/formulation", "description": "Resource representation."}}, "required": ["data"], "type": "object"}}}, "description": "Resource representation.", "headers": {"ETag": {"$ref": "#/components/headers/ETag"}, "RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}}, "400": {"$ref": "#/components/responses/Problem400"}, "401": {"$ref": "#/components/responses/Problem401"}, "403": {"$ref": "#/components/responses/Problem403"}, "404": {"$ref": "#/components/responses/Problem404"}, "429": {"$ref": "#/components/responses/Problem429"}, "500": {"$ref": "#/components/responses/Problem500"}},
+        "x-required-scope": "formulations:read"
       }
     },
     "/llms.txt": {"get": {"description": "Public agent guide.", "operationId": "get_llms_guide", "responses": {"200": {"content": {"text/plain": {"schema": {"description": "Plain-text guide for API agents.", "type": "string"}}}, "description": "Public agent guide.", "headers": {"Cache-Control": {"description": "Public cache, max-age=300 seconds.", "schema": {"type": "string"}}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}}}, "security": [], "x-required-scope": null}},
@@ -843,6 +1107,83 @@
         "parameters": [{"description": "Resource UUID or exact human-readable code.", "in": "path", "name": "idOrCode", "required": true, "schema": {"type": "string"}}, {"description": "Receiving facility filter, UUID.", "in": "query", "name": "facilityId", "required": false, "schema": {"description": "Receiving facility filter, UUID.", "format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"}}],
         "responses": {"200": {"content": {"application/json": {"schema": {"additionalProperties": false, "properties": {"data": {"$ref": "#/components/schemas/storage_location", "description": "Resource representation."}}, "required": ["data"], "type": "object"}}}, "description": "Resource representation.", "headers": {"ETag": {"$ref": "#/components/headers/ETag"}, "RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}}, "400": {"$ref": "#/components/responses/Problem400"}, "401": {"$ref": "#/components/responses/Problem401"}, "403": {"$ref": "#/components/responses/Problem403"}, "404": {"$ref": "#/components/responses/Problem404"}, "429": {"$ref": "#/components/responses/Problem429"}, "500": {"$ref": "#/components/responses/Problem500"}},
         "x-required-scope": "storage-locations:read"
+      }
+    },
+    "/storage-locations/{idOrCode}/stock-movements": {
+      "get": {
+        "description": "List the stock movements posted on one biochar or product bin by bin UUID or code, newest posting first. Read-only history: draws, losses, counts, deliveries and corrections. A feedstock bin answers 422. Cursors bind the organization and bin; no totals. Required scope: biochar-products:read.",
+        "operationId": "find_output_stock_movements",
+        "parameters": [{"description": "Resource UUID or exact human-readable code.", "in": "path", "name": "idOrCode", "required": true, "schema": {"type": "string"}}, {"description": "Page size as a decimal integer string; defaults to 50, maximum 200.", "in": "query", "name": "limit", "required": false, "schema": {"default": 50, "description": "Page size as a decimal integer string; defaults to 50, maximum 200.", "maximum": 200, "minimum": 1, "type": "integer"}}, {"description": "Opaque base64url continuation cursor bound to organization, resource and filters. Use only nextCursor from the same list and filters.", "in": "query", "name": "cursor", "required": false, "schema": {"description": "Opaque base64url continuation cursor bound to organization, resource and filters. Use only nextCursor from the same list and filters.", "maxLength": 4096, "minLength": 1, "pattern": "^[A-Za-z0-9_-]+$", "type": "string"}}],
+        "responses": {
+          "200": {"content": {"application/json": {"schema": {"additionalProperties": false, "properties": {"data": {"description": "Page of resources, newest posting first.", "items": {"$ref": "#/components/schemas/output_stock_movement"}, "type": "array"}, "nextCursor": {"anyOf": [{"type": "string"}, {"type": "null"}], "description": "Opaque cursor for the next page, or null at the end; keep filters unchanged."}}, "required": ["data", "nextCursor"], "type": "object"}}}, "description": "Movement page.", "headers": {"RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}},
+          "400": {"$ref": "#/components/responses/Problem400"},
+          "401": {"$ref": "#/components/responses/Problem401"},
+          "403": {"$ref": "#/components/responses/Problem403"},
+          "404": {"$ref": "#/components/responses/Problem404"},
+          "422": {"$ref": "#/components/responses/Problem422"},
+          "429": {"$ref": "#/components/responses/Problem429"},
+          "500": {"$ref": "#/components/responses/Problem500"}
+        },
+        "x-required-scope": "biochar-products:read"
+      },
+      "post": {
+        "description": "Record a loss or a count on a biochar or product bin, by bin UUID. A loss is wet mass that left the bin. A count is the whole bin weighed: it resets stock and moisture and never raises stock, and a count of 0 records the bin as empty. Corrections are not available. A feedstock bin answers 422 and a missing, archived or foreign bin 404, both on /storageLocationId. Dry runs return basisFingerprint with the stock effects. Send it back as basisFingerprint to refuse the write if stock moved since; the refusal is 409 stock_basis_changed with a fresh preview. Without it the write acts on current stock. Masses are kilograms and moisture is percent of wet mass. Send event times as RFC 3339 with an explicit offset or as facility-local { date, time }; a time in the future is refused. Movements are not versioned and have no read by id, so the 201 carries neither ETag nor Location. Required scope: biochar-products:write.",
+        "operationId": "record_output_stock_movement",
+        "parameters": [{"description": "Target identifier, UUID; codes are not accepted on this method.", "in": "path", "name": "idOrCode", "required": true, "schema": {"format": "uuid", "type": "string"}}, {"description": "true validates and previews the write then rolls back; false commits the write (default).", "in": "query", "name": "dryRun", "required": false, "schema": {"description": "true validates and previews the write then rolls back; false commits the write (default).", "enum": ["true", "false"], "type": "string"}}, {"description": "Unique key per intended write, 1 to 255 visible ASCII characters. Reuse on retry; credential-scoped, retained for 7 days. Required on every create, including dry runs; a dry run never consumes it. Dry runs never consume or replay keys.", "in": "header", "name": "Idempotency-Key", "required": true, "schema": {"maxLength": 255, "minLength": 1, "pattern": "^[\\x21-\\x7e]+$", "type": "string"}}],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {"kind": "loss", "moisturePercent": 10, "occurredAt": "2026-10-08T09:30:00Z", "reason": "Spilled while loading.", "wetMassKg": 25},
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "basisFingerprint": {"description": "basisFingerprint from a dry run. If stock moved since, the write is refused with stock_basis_changed. Omit it to act on current stock.", "minLength": 1, "type": "string"},
+                  "kind": {"description": "loss: wet mass that left the bin. count: the whole bin weighed; it resets stock and moisture and never raises stock.", "enum": ["loss", "count"], "type": "string"},
+                  "moisturePercent": {"anyOf": [{"type": "number"}, {"type": "null"}], "description": "Measured moisture as percent of wet mass, below 100. Required unless sources are given or a count is 0."},
+                  "occurredAt": {
+                    "$schema": "https://json-schema.org/draft/2020-12/schema",
+                    "anyOf": [
+                      {"format": "date-time", "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$", "type": "string"},
+                      {"additionalProperties": false, "properties": {"date": {"description": "Calendar date in the effective facility time zone, YYYY-MM-DD.", "format": "date", "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$", "type": "string"}, "time": {"description": "Facility-local wall time, HH:MM. DST gaps and ambiguous repeated times are refused.", "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$", "type": "string"}}, "required": ["date", "time"], "type": "object"}
+                    ],
+                    "description": "An RFC 3339 instant with explicit offset, or a date/time in the effective facility zone."
+                  },
+                  "reason": {"description": "Why the stock changed, untrusted plain text.", "maxLength": 2000, "minLength": 1, "type": "string"},
+                  "sources": {"description": "Split bins, losses only: the sub-bins in the order they were emptied, each with its moisture.", "items": {"additionalProperties": false, "properties": {"layerId": {"description": "Sub-bin drawn: on a biochar bin, the UUID of the production run that filled it; on a product bin, the UUID of the biochar product placed in it.", "format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"}, "moisturePercent": {"description": "Measured moisture of this sub-bin as percent of wet mass, below 100.", "type": "number"}}, "required": ["layerId", "moisturePercent"], "type": "object"}, "maxItems": 200, "minItems": 1, "type": "array"},
+                  "wetMassKg": {"description": "Wet kilograms lost, or the whole counted bin. A count of 0 records the bin as empty.", "type": "number"}
+                },
+                "required": ["kind", "occurredAt", "wetMassKg", "reason"],
+                "type": "object"
+              }
+            }
+          },
+          "description": "JSON body, maximum 262144 bytes. Unknown properties are rejected.",
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {"application/json": {"schema": {"additionalProperties": false, "properties": {"basisFingerprint": {"description": "Dry runs only: the stock basis these effects were computed on, opaque string. Send it as basisFingerprint on the real write to refuse it if stock moved.", "type": "string"}, "data": {"$ref": "#/components/schemas/output_stock_movement", "description": "Resource representation."}, "stockEffects": {"$ref": "#/components/schemas/stockEffects", "description": "Changed bin balances inside the dry-run transaction, before rollback. All masses are kilograms."}}, "required": ["data"], "type": "object"}}},
+            "description": "Dry-run movement preview with stockEffects and basisFingerprint.",
+            "headers": {"Dry-Run": {"$ref": "#/components/headers/Dry-Run"}, "Idempotent-Replayed": {"$ref": "#/components/headers/Idempotent-Replayed"}, "RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}
+          },
+          "201": {
+            "content": {"application/json": {"schema": {"additionalProperties": false, "properties": {"basisFingerprint": {"description": "Dry runs only: the stock basis these effects were computed on, opaque string. Send it as basisFingerprint on the real write to refuse it if stock moved.", "type": "string"}, "data": {"$ref": "#/components/schemas/output_stock_movement", "description": "Resource representation."}, "stockEffects": {"$ref": "#/components/schemas/stockEffects", "description": "Changed bin balances inside the dry-run transaction, before rollback. All masses are kilograms."}}, "required": ["data"], "type": "object"}}},
+            "description": "Movement committed, or replayed.",
+            "headers": {"Dry-Run": {"$ref": "#/components/headers/Dry-Run"}, "Idempotent-Replayed": {"$ref": "#/components/headers/Idempotent-Replayed"}, "RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}
+          },
+          "400": {"$ref": "#/components/responses/Problem400"},
+          "401": {"$ref": "#/components/responses/Problem401"},
+          "403": {"$ref": "#/components/responses/Problem403"},
+          "404": {"$ref": "#/components/responses/Problem404"},
+          "409": {"$ref": "#/components/responses/Problem409"},
+          "413": {"$ref": "#/components/responses/Problem413"},
+          "415": {"$ref": "#/components/responses/Problem415"},
+          "422": {"$ref": "#/components/responses/Problem422"},
+          "429": {"$ref": "#/components/responses/Problem429"},
+          "500": {"$ref": "#/components/responses/Problem500"},
+          "503": {"$ref": "#/components/responses/Problem503"}
+        },
+        "x-required-scope": "biochar-products:write"
       }
     },
     "/suppliers": {

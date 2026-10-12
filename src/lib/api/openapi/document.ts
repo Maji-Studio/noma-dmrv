@@ -9,62 +9,38 @@ import { z } from "zod";
 import { API_BODY_MAX_BYTES, API_FEEDSTOCK_MAX_ALLOCATIONS, API_DOCS_CACHE_SECONDS } from "@/config/api-rest";
 import { API_KEY_LIVE_PREFIX, API_KEY_TEST_PREFIX } from "@/config/api-keys";
 import { createFeedstockSchema, updateFeedstockSchema } from "@/schemas/feedstocks";
-import { toOperationJsonSchema, type JsonSchema } from "@/lib/operations/json-schema";
-import type { ApiScope } from "@/lib/auth/api-scopes";
+import type { JsonSchema } from "@/lib/operations/json-schema";
 import { problemSchema } from "../problem-schema";
 import { mutationQuerySchema } from "../query";
-import { supplierLocationListSchema } from "../query-schemas";
+import { outputStockMovementListSchema, supplierLocationListSchema } from "../query-schemas";
+import { outputStockMovementRepresentationSchema } from "@/lib/representations/output-stock-movements";
 import { supplierLocationRepresentationSchema } from "@/lib/representations/supplier-locations";
 import { meRepresentationSchema } from "@/lib/representations/me";
 import { feedstockRepresentationSchema } from "@/lib/representations/feedstocks";
 import { itemEnvelopeSchema, stockWriteEnvelopeSchema, listEnvelopeSchema, feedstockCreateEnvelopeSchema } from "@/lib/representations/envelopes";
 import { resources } from "./resources";
+import { operationInput, privateOperation, requestBody, type Paths } from "./operation-kit";
+import { addBiocharWritePaths } from "./biochar-writes";
 import { outputSchema, queryParameters, targetParameter, idempotencyParameter, ifMatchParameter, privateHeaders, requestIdHeader, etagHeader, writeHeaders, locationHeader, problemResponses, jsonResponse, headerComponents, problemResponseComponents } from "./transport";
 
-interface OperationDocument {
-  operationId: string;
-  description: string;
-  "x-required-scope": ApiScope | null;
-  security?: { bearerAuth: never[] }[];
-  parameters?: unknown[];
-  requestBody?: unknown;
-  responses: Record<string, unknown>;
-}
-type Paths = Record<string, Record<string, OperationDocument>>;
 const READ_ERRORS = [400, 401, 403, 429, 500];
 const WRITE_ERRORS = [400, 401, 403, 404, 409, 422, 429, 500, 503];
 const JSON_INDENT = 2;
 const SNAPSHOT_LINE_WIDTH = 1000;
 
-function privateOperation(operationId: string, scope: ApiScope | undefined, description: string, responses: Record<string, unknown>, parameters: unknown[] = []): OperationDocument {
-  return { operationId, description: `${description} Required scope: ${scope ?? "none (any authenticated API key)"}.`, "x-required-scope": scope ?? null, parameters, responses };
-}
-function operationInput(schema: Parameters<typeof toOperationJsonSchema>[0]): JsonSchema {
-  const result = toOperationJsonSchema(schema);
-  delete result.$schema;
-  // REST rejects unknown keys recursively, while forms retain their stripping behavior.
-  function close(node: unknown): void {
-    if (!node || typeof node !== "object") return;
-    if (Array.isArray(node)) return node.forEach(close);
-    const record = node as JsonSchema;
-    if (record.properties) record.additionalProperties = false;
-    Object.values(record).forEach(close);
-  }
-  close(result);
-  return result;
-}
-
 /** Pure deterministic build: no environment, clock, credential or database imports. */
 export function buildOpenApiDocument() {
   const paths: Paths = {};
-  const representations: Record<string, z.ZodType> = Object.fromEntries(resources.map((resource) => [resource.singular, resource.schema]));
+  const published = resources;
+  const representations: Record<string, z.ZodType> = Object.fromEntries(published.map((resource) => [resource.singular, resource.schema]));
   representations.supplier_location = supplierLocationRepresentationSchema;
+  representations.output_stock_movement = outputStockMovementRepresentationSchema;
   representations.me = meRepresentationSchema;
   representations.stockEffects = stockEffectsSchema;
   const publishOutput = (schema: z.ZodType) => outputSchema(schema, representations);
   const schemas: Record<string, JsonSchema> = {
     ...Object.fromEntries(Object.entries(representations).map(([name, schema]) => [name, outputSchema(schema)])),
-    Problem: outputSchema(problemSchema),
+    Problem: publishOutput(problemSchema),
     FeedstockPreconditionProblem: {
       allOf: [
         { $ref: "#/components/schemas/Problem" },
@@ -85,9 +61,17 @@ export function buildOpenApiDocument() {
   responses.ProductionRunProblem412 = { ...responses.Problem412,
     content: { "application/problem+json": { schema: { $ref: "#/components/schemas/ProductionRunPreconditionProblem" } } },
   };
+  schemas.BiocharProductPreconditionProblem = {
+    allOf: [{ $ref: "#/components/schemas/Problem" }, { type: "object", properties: {
+      current: { $ref: "#/components/schemas/biochar_product", description: "Current biochar product after a failed version precondition." },
+    }, required: ["current"] }],
+  };
+  responses.BiocharProductProblem412 = { ...responses.Problem412,
+    content: { "application/problem+json": { schema: { $ref: "#/components/schemas/BiocharProductPreconditionProblem" } } },
+  };
   const runPreconditionResponse = { "412": { $ref: "#/components/responses/ProductionRunProblem412" } };
   const feedstockPreconditionResponse = { "412": { $ref: "#/components/responses/FeedstockProblem412" } };
-  for (const resource of resources) {
+  for (const resource of published) {
     paths[`/${resource.path}`] = { get: privateOperation(
       `find_${resource.path.replaceAll("-", "_")}`, resource.scope,
       readDescriptions.list,
@@ -106,13 +90,17 @@ export function buildOpenApiDocument() {
     { ...problemResponses([...READ_ERRORS, 404]), "200": jsonResponse("Supplier location page.", publishOutput(listEnvelopeSchema(supplierLocationRepresentationSchema))) },
     [targetParameter(true), ...queryParameters(supplierLocationListSchema)],
   ) };
+  paths["/storage-locations/{idOrCode}/stock-movements"] = { get: privateOperation(
+    "find_output_stock_movements", "biochar-products:read", readDescriptions.outputStockMovements,
+    { ...problemResponses([...READ_ERRORS, 404, 422]), "200": jsonResponse("Movement page.", publishOutput(listEnvelopeSchema(outputStockMovementRepresentationSchema, "newest posting first"))) },
+    [targetParameter(), ...queryParameters(outputStockMovementListSchema)],
+  ) };
   paths["/me"] = { get: privateOperation("whoami", undefined, readDescriptions.whoami,
     { ...problemResponses([401, 403, 404, 429, 500]), "200": jsonResponse("Credential context.", publishOutput(itemEnvelopeSchema(meRepresentationSchema))) }) };
 
   const createInput = operationInput(createFeedstockSchema);
   (createInput.properties as Record<string, JsonSchema>).allocations.maxItems = API_FEEDSTOCK_MAX_ALLOCATIONS;
   const patchInput = operationInput(updateFeedstockSchema.omit({ feedstockId: true, expectedVersion: true }));
-  const requestBody = (schema: JsonSchema, example: unknown) => ({ required: true, description: `JSON body, maximum ${API_BODY_MAX_BYTES} bytes. Unknown properties are rejected.`, content: { "application/json": { schema, example } } });
   paths["/feedstocks"].post = {
     ...privateOperation("log_feedstock_delivery", "feedstocks:write", "Record a wood-chip intake split across receiving bins. Positive wet masses and moisture 0 to 100 are required; allocation overage requires justification. Dry runs roll back, skip external effects and return provisional ids, codes and stock additions. Location and ETag identify the first feedstock on committed responses and are absent on dry runs.",
       { ...problemResponses([...WRITE_ERRORS, 413, 415]),
@@ -175,6 +163,8 @@ export function buildOpenApiDocument() {
     requestBody: { required: false, description: `Optional empty JSON object, maximum ${API_BODY_MAX_BYTES} bytes.`, content: { "application/json": { schema: operationInput(z.strictObject({})), example: {} } } },
   };
 
+  addBiocharWritePaths(paths, { publishOutput, writeErrors: WRITE_ERRORS });
+
   for (const [path, operationId, mediaType, description] of [
     ["/openapi.json", "get_openapi_document", "application/json", "Public OpenAPI 3.1 contract."],
     ["/llms.txt", "get_llms_guide", "text/plain", "Public agent guide."],
@@ -187,7 +177,7 @@ export function buildOpenApiDocument() {
   }
   return {
     openapi: "3.1.0",
-    info: { title: "noma data-entry API", version: API_VERSION, description: "Organization-scoped feedstock intake, production runs and read-only lookups. Business dates are facility-local YYYY-MM-DD; event times are sent as RFC 3339 with an explicit offset or as facility-local { date, time }, and returned as UTC instants. Additive changes remain in v1; breaking versions use v2 with Deprecation and Sunset headers. Unsupported methods on visible paths return Problem405 with Allow listing supported methods, including automatic HEAD and OPTIONS. Private refusals follow bearer authentication and path visibility checks; unknown or invisible paths return 404 without Allow. Public discovery paths need no credential. This response is a path-level refusal, not a response of a published operation." },
+    info: { title: "noma data-entry API", version: API_VERSION, description: "Organization-scoped feedstock intake, production runs, biochar products and read-only lookups, including formulations and output bin stock movement history. Business dates are facility-local YYYY-MM-DD; event times are sent as RFC 3339 with an explicit offset or as facility-local { date, time }, and returned as UTC instants. Additive changes remain in v1; breaking versions use v2 with Deprecation and Sunset headers. Unsupported methods on visible paths return Problem405 with Allow listing supported methods, including automatic HEAD and OPTIONS. Private refusals follow bearer authentication and path visibility checks; unknown or invisible paths return 404 without Allow. Public discovery paths need no credential. This response is a path-level refusal, not a response of a published operation." },
     servers: [{ url: "/api/v1" }], security: [{ bearerAuth: [] }], paths,
     components: { securitySchemes: { bearerAuth: { type: "http", scheme: "bearer", bearerFormat: "API key", description: `Authorization: Bearer <key> only. Keys use ${API_KEY_LIVE_PREFIX} or ${API_KEY_TEST_PREFIX} prefixes and bind exactly one organization; cookies and x-api-key cannot authorize requests.` } }, schemas, headers: headerComponents, responses },
   };

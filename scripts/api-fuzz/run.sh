@@ -15,6 +15,7 @@ const fields = {
   FACILITY: 'facility', SUPPLIER: 'supplier', FEEDSTOCK_TYPE: 'feedstockType',
   BIN: 'bin', DRIVER: 'driver', VEHICLE: 'vehicle', FEEDSTOCK: 'feedstock',
   REACTOR: 'reactor', PRODUCTION_RUN: 'productionRun',
+  BIOCHAR_BIN: 'biocharBin', BIOCHAR_PRODUCT: 'biocharProduct', PURE_FORMULATION: 'pureFormulation',
 };
 for (const [name, field] of Object.entries(fields)) {
   for (const suffix of ['Id', 'Code']) {
@@ -29,11 +30,14 @@ if (typeof fixture.supplierLocationId !== 'string' || !/^[A-Za-z0-9_-]+$/.test(f
   throw new Error('Missing or invalid fixture field: supplierLocationId');
 }
 console.log(`API_FUZZ_SUPPLIER_LOCATION_ID=${fixture.supplierLocationId}`);
-if (typeof fixture.runBinId !== 'string' || !/^[A-Za-z0-9_-]+$/.test(fixture.runBinId)) {
-  throw new Error('Missing or invalid fixture field: runBinId');
+// Bins the create examples draw from or place into (no by-id route of their own).
+for (const [name, field] of [['RUN_BIN', 'runBinId'], ['PRODUCT_BIN', 'productBinId']]) {
+  if (typeof fixture[field] !== 'string' || !/^[A-Za-z0-9_-]+$/.test(fixture[field])) {
+    throw new Error(`Missing or invalid fixture field: ${field}`);
+  }
+  console.log(`API_FUZZ_${name}_ID=${fixture[field]}`);
 }
-console.log(`API_FUZZ_RUN_BIN_ID=${fixture.runBinId}`);
-for (const [name, field] of [['FEEDSTOCK', 'feedstockEtag'], ['PRODUCTION_RUN', 'productionRunEtag']]) {
+for (const [name, field] of [['FEEDSTOCK', 'feedstockEtag'], ['PRODUCTION_RUN', 'productionRunEtag'], ['BIOCHAR_PRODUCT', 'biocharProductEtag']]) {
   if (typeof fixture[field] !== 'string' || !/^"[1-9]\d*\.[1-9]\d*"$/.test(fixture[field])) {
     throw new Error(`Missing or invalid fixture field: ${field}`);
   }

@@ -17,7 +17,8 @@ conventions) · [testing.md](./testing.md) (E2E) · [../TEMPLATE_USAGE.md](../TE
 - Component exports are **PascalCase**; hook and plain-function exports are **camelCase**.
 - **1000-line cap** per file, enforced as an ESLint `max-lines` **error**, so an oversized
   file fails `pnpm lint` and CI. Exempt and never to be "fixed" by splitting: `src/lib/isometric/generated/**` and
-  `src/db/seed-data.ts` (see `eslint.config.mjs`).
+  `src/db/seed-data.ts` (see `eslint.config.mjs`). The generated OpenAPI snapshot `openapi/v1.json` is also
+  exempt (Kenji, 2026-10-12): it is pretty-printed at a 1000-character line width and grows with the contract.
 - Feature folders under `src/components/<feature>/` are **flat** with a barrel `index.ts`
   — no `components/` / `dialogs/` / `hooks/` subfolders, even for large features
   (`src/components/credit-batches/` is the reference).

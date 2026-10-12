@@ -118,8 +118,11 @@ before seeding; the seed does not load env files. Use the workflow's hermetic
 env block for production-build parity. The seed creates a verified Owner, the
 intake prerequisites, a driver, vehicle, supplier location, committed feedstock
 intake, a reactor and a closed production run through the operation runner (the run
-draws from its own second bin, so the feedstock cases keep their stock), and a key with
-all current scopes, including delete.
+draws from its own second bin, so the feedstock cases keep their stock). For
+biochar it adds a completed run with output in a biochar bin, a product bin, a Pure
+and a blended formulation, one product placed from that stock and one loss, all
+through the operations. Bin and formulation names are unique per facility. The key
+has all current scopes, including delete.
 Its private JSON file contains the key and fixture ids; never upload that file.
 
 ```bash
@@ -130,6 +133,11 @@ export API_FUZZ_KEY=$(node -p 'JSON.parse(require("node:fs").readFileSync(proces
 # Build and start the app separately with the same DATABASE_URL and auth secret.
 API_FUZZ_BASE_URL=http://127.0.0.1:3100/api/v1 pnpm api:fuzz
 ```
+
+The hooks give the product and stock-movement operations seeded examples: a dry-run
+product create on the seeded bins, a product PATCH with its ETag, and a dry-run loss
+on the biochar bin, each with an `Idempotency-Key`. `hooks.test.py` checks them
+offline; run it with `uvx --from "schemathesis==4.29.3" python scripts/api-fuzz/hooks.test.py`.
 
 Fuzzing writes and deletes data, so use only a throwaway fixture organization.
 For a production bundle, `API_FUZZ_DISABLE_RATE_LIMIT=true` bypasses only API

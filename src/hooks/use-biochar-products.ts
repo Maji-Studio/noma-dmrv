@@ -11,7 +11,7 @@ import type {
   BiocharProductWithRelations,
   PaginatedBiocharProducts,
 } from "@/data-access/biochar-products";
-import type { BiocharProduct } from "@/db/schema";
+import type { BiocharProductRecord } from "@/db/schema";
 import {
   createBiocharProductFn,
   deleteBiocharProductFn,
@@ -98,7 +98,7 @@ export function useBiocharProduct(productId: string, enabled = true) {
  * Supports optional callbacks for custom behavior
  */
 export function useCreateBiocharProduct(
-  callbacks?: MutationCallbacks<BiocharProduct, CreateBiocharProductData>
+  callbacks?: MutationCallbacks<BiocharProductRecord, CreateBiocharProductData>
 ) {
   const queryClient = useQueryClient();
 
@@ -138,7 +138,7 @@ export function useCreateBiocharProduct(
  * Supports optimistic updates for immediate UI feedback
  */
 export function useUpdateBiocharProduct(
-  callbacks?: MutationCallbacks<BiocharProduct, UpdateBiocharProductData>,
+  callbacks?: MutationCallbacks<BiocharProductRecord, UpdateBiocharProductData>,
   options?: OptimisticUpdateOptions
 ) {
   const queryClient = useQueryClient();

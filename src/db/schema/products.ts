@@ -307,6 +307,8 @@ export const biocharProductSourceAllocationsRelations = relations(
 export type Formulation = InferSelectModel<typeof formulations>;
 export type FormulationIngredient = InferSelectModel<typeof formulationIngredients>;
 export type BiocharProduct = InferSelectModel<typeof biocharProducts>;
+/** A product as writes return it: the stock posting sequence is internal ordering, and a bigint does not serialize. */
+export type BiocharProductRecord = Omit<BiocharProduct, "stockPostingSequence">;
 export type BiocharProductSourceAllocation = InferSelectModel<
   typeof biocharProductSourceAllocations
 >;

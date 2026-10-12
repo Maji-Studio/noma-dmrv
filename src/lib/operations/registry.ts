@@ -1,5 +1,7 @@
 import { startProductionRun, updateProductionRun, deleteProductionRun } from "./production-runs";
 import { logFeedstockDelivery, updateFeedstock, deleteFeedstock } from "./feedstocks";
+import { recordOutputStockMovement } from "./output-stock";
+import { makeBiocharProduct, updateBiocharProduct } from "./biochar-products";
 
 /** Explicit write allowlist. Existing read models become the read side later. */
 export const operationRegistry = {
@@ -9,6 +11,9 @@ export const operationRegistry = {
   log_feedstock_delivery: logFeedstockDelivery,
   update_feedstock: updateFeedstock,
   delete_feedstock: deleteFeedstock,
+  record_output_stock_movement: recordOutputStockMovement,
+  make_biochar_product: makeBiocharProduct,
+  update_biochar_product: updateBiocharProduct,
 } as const;
 
 export type OperationId = keyof typeof operationRegistry;

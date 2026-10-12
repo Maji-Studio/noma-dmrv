@@ -8,3 +8,11 @@ export const PRODUCTION_RUN_TIMES = "Send times as facility-local { date, time }
 export const PRODUCTION_RUN_STATUS = "Change a run's status through update_production_run. Completing uses status complete; failing uses failed; cancelling uses cancelled and a cancellationReason.";
 export const PRODUCTION_RUN_REFERENCES = "Run records carry IDs. Resolve codes with lookups and facility zones with whoami or find_facilities.";
 export const PRODUCTION_RUN_GUIDANCE = `${PRODUCTION_RUN_UNITS} ${PRODUCTION_RUN_TIMES} ${PRODUCTION_RUN_STATUS} ${PRODUCTION_RUN_REFERENCES}`;
+
+export const BIOCHAR_PRODUCT_MASS = "A product takes the biochar mass as weighed (biocharWetMassKg, without ingredients or water) plus each ingredient's own wet mass and moisture, never the blend; the server derives the blend. Pure biochar takes no ingredients.";
+export const OUTPUT_STOCK_TIMES = "Send times as RFC 3339 with an explicit offset, or facility-local { date, time } from whoami. A time in the future is refused.";
+export const OUTPUT_STOCK_BASIS = "Run with dryRun first and pass its basisFingerprint on the real write. If stock moved since, the write fails with stock_basis_changed and a fresh preview to write against.";
+export const OUTPUT_STOCK_COUNT = "A count is the whole bin weighed: its wet mass and one moisture, 0 for an empty bin. It resets stock and never raises it.";
+export const OUTPUT_STOCK_NO_CORRECTIONS = "Corrections are not available through the API.";
+export const BIOCHAR_PRODUCT_GUIDANCE = `${BIOCHAR_PRODUCT_MASS} ${OUTPUT_STOCK_TIMES} ${OUTPUT_STOCK_BASIS}`;
+export const OUTPUT_STOCK_GUIDANCE = `${OUTPUT_STOCK_TIMES} ${OUTPUT_STOCK_COUNT} ${OUTPUT_STOCK_BASIS} ${OUTPUT_STOCK_NO_CORRECTIONS}`;

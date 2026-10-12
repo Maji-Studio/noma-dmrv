@@ -41,3 +41,12 @@ export function writeOptions(context: ApiRouteContext, dryRun: boolean, key?: st
   };
 }
 
+
+/** Options for a stock write that may fall back to a basis preview, which needs the request deadline itself. */
+export function stockWriteOptions(context: ApiRouteContext, dryRun: boolean, key?: string, target?: string) {
+  return {
+    deadlineAt: context.deadlineAt, dryRun,
+    audit: { requestId: context.requestId, credentialId: context.ctx.credentialId, transport: "mcp" as const },
+    idempotency: key ? { credentialId: context.ctx.credentialId, key, ...(target ? { target } : {}) } : undefined,
+  };
+}

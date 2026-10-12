@@ -17,6 +17,7 @@ export const stockEffectSchema = stockBalanceSchema.omit({ balance: true }).exte
 });
 export const stockEffectsSchema = z.array(stockEffectSchema).describe("Changed bin balances inside the dry-run transaction, before rollback. All masses are kilograms.");
 export type StockBalance = z.infer<typeof stockBalanceSchema>;
+export type StockEffect = z.infer<typeof stockEffectSchema>;
 export type StockEffects = z.infer<typeof stockEffectsSchema>;
 
 export function diffStockBalances(before: StockBalance[], after: StockBalance[]): StockEffects {

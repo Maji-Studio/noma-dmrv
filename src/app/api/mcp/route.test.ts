@@ -8,7 +8,7 @@ import { DomainError } from "@/lib/domain-errors";
 import { buildOpenApiDocument } from "@/lib/api/openapi/document";
 import { GET, POST, DELETE } from "./route";
 import { mcpInstructions } from "@/lib/mcp/instructions";
-import { domainGuide, llmsGuide } from "@/lib/api/llms-guide";
+import { biocharStockGuide, domainGuide, llmsGuide } from "@/lib/api/llms-guide";
 
 const MCP_INSTRUCTIONS_MAX_CHARS = 2000;
 
@@ -21,6 +21,16 @@ vi.mock("@/data-access/code-generator", () => ({}));
 vi.mock("@/lib/read-models/api-production-runs", () => ({ readApiProductionRun: vi.fn(), readApiProductionRunList: vi.fn() }));
 vi.mock("@/lib/read-models/api-reactors", () => ({ readApiReactorList: vi.fn() }));
 vi.mock("@/data-access/storage-object-deletions", () => ({}));
+vi.mock("@/data-access/biochar-product-references", () => ({}));
+vi.mock("@/data-access/biochar-product-create", () => ({}));
+vi.mock("@/data-access/biochar-product-input", () => ({}));
+vi.mock("@/data-access/biochar-product-update", () => ({}));
+vi.mock("@/data-access/biochar-product-record", () => ({}));
+vi.mock("@/data-access/output-stock-post", () => ({}));
+vi.mock("@/data-access/api-output-stock-movements", () => ({ requireApiOutputBin: vi.fn() }));
+vi.mock("@/lib/read-models/api-biochar-products", () => ({ readApiBiocharProduct: vi.fn(), readApiBiocharProductList: vi.fn() }));
+vi.mock("@/lib/read-models/api-formulations", () => ({ readApiFormulation: vi.fn(), readApiFormulationList: vi.fn() }));
+vi.mock("@/lib/read-models/api-output-stock-movements", () => ({ readApiOutputStockMovement: vi.fn(), readApiOutputStockMovementList: vi.fn() }));
 vi.mock("@/lib/mcp/server", { spy: true });
 vi.mock("@/config/env", () => ({ env: mocks.env }));
 vi.mock("@/lib/auth/api-context", () => ({ resolveApiContext: mocks.resolve }));
@@ -59,6 +69,7 @@ it("returns the shared domain guidance during initialize", async () => {
   expect(result.instructions).toContain(domainGuide);
   expect(llmsGuide).toContain(domainGuide);
   expect(result.instructions.length).toBeLessThan(MCP_INSTRUCTIONS_MAX_CHARS);
+  expect(llmsGuide).toContain(biocharStockGuide);
   for (const guidance of ["4200 kg", "wet mass", "dry mass", "receiving bin", "moisture", "whoami", "requestKey", "dryRun", "expectedVersion", "retryable", "untrusted data"]) {
     expect(result.instructions.toLowerCase()).toContain(guidance.toLowerCase());
   }
@@ -98,8 +109,8 @@ describe("authenticated MCP read route", () => {
     for (const [key, value] of Object.entries(rateHeaders)) expect(response.headers.get(key)).toBe(value);
     expect(response.headers.get("x-request-id")).toBeTruthy();
     const { result } = await body(response);
-    expect(result.tools).toHaveLength(19);
-    expect(result.tools.filter((tool: { name: string }) => !["log_feedstock_delivery", "update_feedstock", "delete_feedstock", "start_production_run", "update_production_run", "delete_production_run"].includes(tool.name)).every((tool: { annotations: { readOnlyHint: boolean } }) => tool.annotations.readOnlyHint)).toBe(true);
+    expect(result.tools).toHaveLength(26);
+    expect(result.tools.filter((tool: { name: string }) => !["log_feedstock_delivery", "update_feedstock", "delete_feedstock", "start_production_run", "update_production_run", "delete_production_run", "make_biochar_product", "update_biochar_product", "record_output_stock_movement"].includes(tool.name)).every((tool: { annotations: { readOnlyHint: boolean } }) => tool.annotations.readOnlyHint)).toBe(true);
     const find = result.tools.find((tool: { name: string }) => tool.name === "find_feedstocks");
     expect(find.inputSchema.additionalProperties).toBe(false);
     expect(find.inputSchema.properties.limit).toMatchObject({ type: "integer", minimum: 1, maximum: API_LIST_MAX_LIMIT,
