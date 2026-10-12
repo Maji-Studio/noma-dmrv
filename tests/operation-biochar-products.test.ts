@@ -258,6 +258,19 @@ describe("creating products", () => {
     expect(await productsOf(f)).toHaveLength(1);
     expect(await sourceStock(f)).toBe(BIN_DRY_KG - BIOCHAR_DRY_KG);
   });
+
+  it("never replays another organization's product under the same request key", async () => {
+    const a = await fixture();
+    const b = await fixture();
+    const idempotencyKey = randomUUID();
+    const first = await runOperationInProcess(makeBiocharProduct, a.ctx, pure(a, { idempotencyKey }));
+    // A's exact facts are foreign ids to B, so the early lookup finds nothing and the live checks refuse them.
+    await expect(runOperationInProcess(makeBiocharProduct, b.ctx, pure(a, { idempotencyKey }))).rejects.toMatchObject({ code: "not_found" });
+    const own = await runOperationInProcess(makeBiocharProduct, b.ctx, pure(b, { idempotencyKey }));
+    expect(own.product.id).not.toBe(first.product.id);
+    expect(await productsOf(a)).toHaveLength(1);
+    expect(await productsOf(b)).toHaveLength(1);
+  });
 });
 
 describe("dry runs and the optional stock basis (decision 53)", () => {
