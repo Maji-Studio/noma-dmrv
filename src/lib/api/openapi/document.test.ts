@@ -28,7 +28,6 @@ it("is deterministic and exactly matches the committed contract", () => {
   expect(buildOpenApiDocument()).toEqual(document);
   expect(serializeOpenApiDocument()).toBe(serializeOpenApiDocument());
   expect(readFileSync("openapi/v1.json", "utf8")).toBe(serializeOpenApiDocument());
-  expect(serializeOpenApiDocument().split("\n").length).toBeLessThan(1000);
   expect(JSON.parse(serializeOpenApiDocument())).toEqual(document);
 });
 

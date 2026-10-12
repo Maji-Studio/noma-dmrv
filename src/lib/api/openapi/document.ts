@@ -26,7 +26,7 @@ import { outputSchema, queryParameters, targetParameter, idempotencyParameter, i
 const READ_ERRORS = [400, 401, 403, 429, 500];
 const WRITE_ERRORS = [400, 401, 403, 404, 409, 422, 429, 500, 503];
 const JSON_INDENT = 2;
-const SNAPSHOT_LINE_WIDTH = 2000;
+const SNAPSHOT_LINE_WIDTH = 1000;
 
 /** Pure deterministic build: no environment, clock, credential or database imports. */
 export function buildOpenApiDocument() {

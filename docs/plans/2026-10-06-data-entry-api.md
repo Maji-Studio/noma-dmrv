@@ -522,7 +522,8 @@ Biochar products and output-stock movements on REST and MCP, in seven commits. D
 - A product request key's payload hash covers the operator's facts per ingredient (line, bin, wet mass, moisture), not the catalog names and ratios the server copies into the composition, so a retry after a catalog edit still replays.
 - Product draws from certified stock stay allowed. Readings on certified layers are refused (decision 51).
 - The stale-fingerprint preview is one adapter fallback: a dry run of the same input without the fingerprint, inside the request deadline. It never claims the key.
-- The OpenAPI snapshot is written at a line width of 2000 so `openapi/v1.json` stays under the 1000-line limit. Sub-bin and ingredient lists are capped at 200 items.
+- `openapi/v1.json` is a generated file exempt from the 1000-line cap (Kenji, 2026-10-12, `docs/code-style.md`); it stays pretty-printed at a 1000-character line width. Sub-bin and ingredient lists are capped at 200 items.
+- Decision 56 applies to corrections too, with no exception (Kenji, 2026-10-12): an entry whose own time is still in the future, such as a delivery dated later today, can be corrected only once that time has passed.
 - A movement write names its bin by UUID only. The history read and the product read accept an id or a code.
 - The MCP server instructions were not extended (1972 of 2000 characters); the product and stock guidance lives in tool descriptions and `llms.txt`.
 - Movement history is ordered by posting sequence, newest first, since a reversal and its replacement share a timestamp.

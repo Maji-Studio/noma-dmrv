@@ -757,7 +757,7 @@ The rendered reference remains deferred in
 
 Run `pnpm openapi:generate` after a contract change and include `openapi/v1.json`
 in its PR. The colocated generator test compares the exact stable, pretty-printed
-snapshot with code (compact leaf schemas keep the generated file below the line cap),
+snapshot with code (a generated file, exempt from the 1000-line cap),
 checks route coverage and validates the OpenAPI structure.
 
 `pnpm openapi:client-check` generates TypeScript API types from `openapi/v1.json`
