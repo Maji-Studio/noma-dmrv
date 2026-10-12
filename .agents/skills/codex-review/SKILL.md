@@ -10,6 +10,9 @@ output is **evidence, not authority**.
 **Model:** gpt-6.1-sol at `high` is the default reviewer. Swap in
 `-m gpt-6-astra -c 'model_reasoning_effort="medium"'` for plan reviews and for diffs that touch
 security, auth/tenancy, money or data integrity, or when a gpt-6.1-sol review looks shallow.
+Never review a diff with the model that wrote it: if gpt-6-astra implemented the change, review
+with gpt-6.1-sol even when the escalation above would pick gpt-6-astra, and vice versa. Model
+assignments in the project's CLAUDE.md take precedence over these defaults.
 
 ## Shared invocation rules
 
