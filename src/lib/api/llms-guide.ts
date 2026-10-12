@@ -1,7 +1,7 @@
 import { API_IDEMPOTENCY_KEY_MAX_LENGTH, API_LIST_DEFAULT_LIMIT, API_LIST_MAX_LIMIT } from "@/config/api-rest";
 import { API_KEY_LIVE_PREFIX, API_KEY_TEST_PREFIX } from "@/config/api-keys";
 import { IDEMPOTENCY_RETENTION_DAYS } from "@/config/operations";
-import { FEEDSTOCK_UNITS, PRODUCTION_RUN_GUIDANCE, UNTRUSTED_TEXT } from "@/lib/operations/agent-guidance";
+import { BIOCHAR_PRODUCT_MASS, FEEDSTOCK_UNITS, OUTPUT_STOCK_BASIS, OUTPUT_STOCK_COUNT, OUTPUT_STOCK_NO_CORRECTIONS, OUTPUT_STOCK_TIMES, PRODUCTION_RUN_GUIDANCE, UNTRUSTED_TEXT } from "@/lib/operations/agent-guidance";
 
 export const domainGuide = `## Feedstock intake
 
@@ -18,12 +18,26 @@ export const domainGuide = `## Feedstock intake
 - Resolve the reactor and bins in the run facility before writing.
 `;
 
+/**
+ * Biochar product and bin stock guidance. It lives in llms.txt and the MCP tool
+ * descriptions rather than the MCP server instructions, which stay under 2000 characters.
+ */
+export const biocharStockGuide = `## Biochar products and bin stock
+
+- ${BIOCHAR_PRODUCT_MASS}
+- Losses and counts are posted on a biochar or product bin. ${OUTPUT_STOCK_COUNT}
+- ${OUTPUT_STOCK_TIMES}
+- ${OUTPUT_STOCK_BASIS}
+- ${OUTPUT_STOCK_NO_CORRECTIONS}
+`;
+
 export const llmsGuide = `# noma data-entry API v1
 
 Public contract: /api/v1/openapi.json
 Base URL: /api/v1
 
 ${domainGuide}
+${biocharStockGuide}
 ## REST requests
 
 - Authenticate private routes with Authorization: Bearer <key> only. Keys start with ${API_KEY_LIVE_PREFIX} or ${API_KEY_TEST_PREFIX}. Cookies and x-api-key do not authenticate.

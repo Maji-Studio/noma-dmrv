@@ -101,6 +101,13 @@ const unpublishedUpdateFields = {
 /** The published PATCH body; the transport supplies the product id and the If-Match version. */
 export const updateBiocharProductApiInput = z.strictObject(publishedUpdateFields);
 
+/** The published `update_biochar_product` tool input: the id and version join the body because MCP has no path or If-Match. */
+export const updateBiocharProductToolInput = z.strictObject({
+  biocharProductId: z.uuid().describe("Target biochar product UUID."),
+  expectedVersion: expectedVersionSchema.describe("Version from get_biochar_product."),
+  ...publishedUpdateFields,
+});
+
 /** The full `update_biochar_product` input. */
 export const updateBiocharProductInput = z.strictObject({
   ...publishedUpdateFields,
