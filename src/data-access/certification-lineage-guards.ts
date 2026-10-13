@@ -34,7 +34,7 @@ import { requireOrgScope } from "./utils";
 
 export type CertifiedLineageEntityType = Exclude<
   CertificationLineageLockEntityType,
-  "transportLeg"
+  "transportLeg" | "vehicle"
 >;
 
 export interface CertifiedLineageTarget {
@@ -77,10 +77,35 @@ function targetCondition(target: CertifiedLineageTarget): SQL {
   }
 }
 
+/** Records that share one master-data reference, such as a vehicle. */
+export interface CertifiedLineageTargetSet {
+  feedstockIds: readonly string[];
+  deliveryIds: readonly string[];
+}
+
+function targetSetCondition(targets: CertifiedLineageTargetSet): SQL | undefined {
+  const conditions: SQL[] = [];
+  if (targets.feedstockIds.length > 0) {
+    conditions.push(inArray(feedstocks.id, [...targets.feedstockIds]));
+  }
+  if (targets.deliveryIds.length > 0) {
+    conditions.push(inArray(deliveries.id, [...targets.deliveryIds]));
+  }
+  return conditions.length > 0 ? or(...conditions) : undefined;
+}
+
 function lineageQuery(
   ctx: OrgContext,
   tx: DbTransaction,
   target: CertifiedLineageTarget,
+) {
+  return lineageQueryWhere(ctx, tx, targetCondition(target));
+}
+
+function lineageQueryWhere(
+  ctx: OrgContext,
+  tx: DbTransaction,
+  condition: SQL,
 ) {
   requireOrgScope(ctx);
   return tx
@@ -168,7 +193,7 @@ function lineageQuery(
         eq(ghgStatementSubmission.organizationId, ctx.organizationId),
       ),
     )
-    .where(and(eq(creditBatches.organizationId, ctx.organizationId), targetCondition(target)));
+    .where(and(eq(creditBatches.organizationId, ctx.organizationId), condition));
 }
 
 /** Advisory UI read; mutations must use getLockedCertifiedLineage instead. */
@@ -182,8 +207,13 @@ export async function getCertifiedLineage(
 }
 
 export type LockedCertifiedLineageRow = Awaited<
-  ReturnType<ReturnType<typeof lineageQuery>["execute"]>
+  ReturnType<ReturnType<typeof lineageQueryWhere>["execute"]>
 >[number];
+
+/** True when the row's Removal or GHG Statement has a blocking submission. */
+export function isSubmittedLineageRow(row: LockedCertifiedLineageRow): boolean {
+  return Boolean(row.removalSubmissionId || row.ghgStatementSubmissionId);
+}
 
 function lineageArtifactLocks(
   lineage: LockedCertifiedLineageRow[],
@@ -215,11 +245,34 @@ export async function getLockedCertifiedLineage(
   target: CertifiedLineageTarget,
 ): Promise<LockedCertifiedLineageRow[]> {
   requireOrgScope(ctx);
-  const lineage = await lineageQuery(ctx, tx, target);
+  return lockLineage(tx, () => lineageQuery(ctx, tx, target));
+}
+
+/**
+ * The locked lineage of every feedstock and delivery in `targets`, resolved in
+ * one query. Used when a shared reference (a vehicle) changes a value those
+ * records were certified with. Empty sets resolve to no lineage.
+ */
+export async function getLockedCertifiedLineageForTargetSet(
+  ctx: OrgContext,
+  tx: DbTransaction,
+  targets: CertifiedLineageTargetSet,
+): Promise<LockedCertifiedLineageRow[]> {
+  requireOrgScope(ctx);
+  const condition = targetSetCondition(targets);
+  if (!condition) return [];
+  return lockLineage(tx, () => lineageQueryWhere(ctx, tx, condition));
+}
+
+async function lockLineage(
+  tx: DbTransaction,
+  resolve: () => PromiseLike<LockedCertifiedLineageRow[]>,
+): Promise<LockedCertifiedLineageRow[]> {
+  const lineage = await resolve();
   const lockedArtifacts = lineageArtifactLocks(lineage);
   await acquireCertificationArtifactLocksSorted(tx, lockedArtifacts);
 
-  const resolvedLineage = await lineageQuery(ctx, tx, target);
+  const resolvedLineage = await resolve();
   const lockedKeys = new Set(lockedArtifacts.map(certificationArtifactLockKey));
   const introducedUnlockedArtifact = lineageArtifactLocks(resolvedLineage).some(
     (artifact) => !lockedKeys.has(certificationArtifactLockKey(artifact)),
@@ -231,6 +284,70 @@ export async function getLockedCertifiedLineage(
   }
 
   return resolvedLineage;
+}
+
+/** Lineage gained an artifact after its locks were taken; a writer never locks it late. */
+export class CertificationLineageChangedError extends SafeError {
+  constructor() {
+    super("Certification lineage changed while it was being locked. Refresh and retry.");
+    this.name = "CertificationLineageChangedError";
+  }
+}
+
+/** One target a writer checks after its row locks, with the copy a lock hit shows. */
+export interface CertifiedLineageCheck {
+  target: CertifiedLineageTarget;
+  mutation: CertificationLineageMutation;
+  subjectEntityType?: CertificationLineageLockEntityType;
+  lineageRelationship?: "linked" | "selected";
+}
+
+/**
+ * First half of the shared write order (artifacts, then rows): resolves every
+ * target's lineage and locks the union of their artifacts in one sorted pass.
+ * Returns the keys held, for `assertLockedLineagesAllowMutation` to compare
+ * against once the caller holds its row locks.
+ */
+export async function lockCertifiedLineageArtifacts(
+  ctx: OrgContext,
+  tx: DbTransaction,
+  targets: CertifiedLineageTarget[],
+): Promise<ReadonlySet<string>> {
+  requireOrgScope(ctx);
+  const artifacts: CertificationArtifactLock[] = [];
+  for (const target of targets) {
+    artifacts.push(...lineageArtifactLocks(await lineageQuery(ctx, tx, target)));
+  }
+  await acquireCertificationArtifactLocksSorted(tx, artifacts);
+  return new Set(artifacts.map(certificationArtifactLockKey));
+}
+
+/**
+ * Second half, after the caller's row locks: re-resolves each target. An
+ * artifact that was not locked up front (a Removal assigned while the writer
+ * waited on a row) refuses the write rather than being locked out of order;
+ * a blocking submission on any target refuses with that target's copy.
+ */
+export async function assertLockedLineagesAllowMutation(
+  ctx: OrgContext,
+  tx: DbTransaction,
+  lockedKeys: ReadonlySet<string>,
+  checks: CertifiedLineageCheck[],
+): Promise<void> {
+  requireOrgScope(ctx);
+  for (const check of checks) {
+    const lineage = await lineageQuery(ctx, tx, check.target);
+    if (lineageArtifactLocks(lineage).some((artifact) => !lockedKeys.has(certificationArtifactLockKey(artifact)))) {
+      throw new CertificationLineageChangedError();
+    }
+    if (!lineage.some((row) => row.removalSubmissionId || row.ghgStatementSubmissionId)) continue;
+    throw new SafeError(formatCertificationLineageLockMessage({
+      mutation: check.mutation,
+      subjectEntityType: check.subjectEntityType ?? check.target.entityType,
+      lineageEntityType: check.target.entityType,
+      lineageRelationship: check.lineageRelationship,
+    }));
+  }
 }
 
 /**
@@ -250,7 +367,7 @@ export async function assertCanMutateCertifiedLineage(
 ): Promise<void> {
   requireOrgScope(ctx);
   const hit = (await getLockedCertifiedLineage(ctx, tx, target)).find(
-    (row) => row.removalSubmissionId || row.ghgStatementSubmissionId,
+    isSubmittedLineageRow,
   );
 
   if (!hit) return;

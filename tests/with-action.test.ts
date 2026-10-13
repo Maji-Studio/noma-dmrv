@@ -87,6 +87,13 @@ describe("withAction", () => {
     expect(result).toEqual({
       success: false,
       error: "Name is required.",
+      code: "validation_failed",
+      issues: [{
+        path: ["name"],
+        code: "too_small",
+        message: "Name is required",
+        meta: { minimum: 1, inclusive: true },
+      }],
     });
   });
 
@@ -102,6 +109,13 @@ describe("withAction", () => {
     expect(result).toEqual({
       success: false,
       error: "Invalid filter parameters: Page must be positive.",
+      code: "validation_failed",
+      issues: [{
+        path: ["page"],
+        code: "too_small",
+        message: "Page must be positive",
+        meta: { minimum: 1, inclusive: true },
+      }],
     });
   });
 
@@ -277,10 +291,21 @@ describe("withAction", () => {
       throw new ActionConflictError("Overlaps PR-001.", conflict);
     }, { mapError });
 
-    expect(zodResult).toEqual({ success: false, error: "Name is required." });
+    expect(zodResult).toEqual({
+      success: false,
+      error: "Name is required.",
+      code: "validation_failed",
+      issues: [{
+        path: ["name"],
+        code: "too_small",
+        message: "Name is required",
+        meta: { minimum: 1, inclusive: true },
+      }],
+    });
     expect(conflictResult).toEqual({
       success: false,
       error: "Overlaps PR-001.",
+      code: "conflict",
       conflict,
     });
     expect(mapError).not.toHaveBeenCalled();

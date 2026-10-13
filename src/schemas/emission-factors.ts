@@ -8,7 +8,7 @@ import {
   EMISSION_FACTOR_INPUT_MAX,
   EMISSION_FACTOR_SOURCE_NOTE_MAX_LENGTH,
 } from "@/config/emission-factors";
-import { expectedUpdatedAtSchema, requiredNumber } from "./helpers";
+import { expectedVersionSchema, requiredNumber } from "./helpers";
 
 function factorField(requiredMessage: string) {
   return requiredNumber(requiredMessage).pipe(
@@ -38,12 +38,10 @@ export const saveFacilityEmissionFactorsSchema =
   facilityEmissionFactorsFormSchema.extend({
     facilityId: z.uuid(),
     /**
-     * The saved row's `updatedAt` the form loaded, or null when it loaded no
-     * row. Omitted skips the check. Null is what stops a second first save
-     * from silently overwriting the first.
+     * The saved row's integer version, or null when the form loaded no row.
+     * Required even on first save, so concurrent first saves cannot overwrite.
      */
-    // Null first: the date branch coerces null to the epoch.
-    expectedUpdatedAt: z.union([z.null(), expectedUpdatedAtSchema]),
+    expectedVersion: z.union([z.null(), expectedVersionSchema]),
   });
 
 /** What the form holds: numbers arrive as strings from the inputs. */

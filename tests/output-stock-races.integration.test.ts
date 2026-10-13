@@ -1,3 +1,4 @@
+import { productionVersion } from "./helpers/production-version";
 import { withProductStockFingerprint } from "./helpers/product-stock-preview-fixture";
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -94,7 +95,7 @@ describe('output stock dependency races', () => {
     let correctionResult: Promise<{ error?: unknown; value?: unknown }> | undefined;
     try {
       const applicationPid = await inserted.promise;
-      correctionResult = postOutputStock(f.ctx, { ...correctionInput, basisFingerprint: preview.basisFingerprint,
+      correctionResult = postOutputStock(f.ctx, { ...correctionInput, expectedProductVersions: preview.expectedProductVersions, basisFingerprint: preview.basisFingerprint,
         idempotencyKey: randomUUID(), reason: 'E2E correcting while application commits' })
         .then(value => ({ value }), error => ({ error }));
       await expect.poll(async () => {
@@ -129,19 +130,34 @@ describe('output stock dependency races', () => {
     }
   }, TEST_TIMEOUT_MS);
 
+  it.each([
+    { biocharOutputKg: 1100 },
+    { biocharStorageLocationId: null },
+    { feedingRateKgHr: 100 },
+  ])('accepts edits to terminal runs with valid feedstock: %j', async (patch) => {
+    const f = await parents();
+    const updated = await updateProductionRun(f.ctx, f.runs[0].id, {
+      expectedVersion: await productionVersion(f.ctx, "productionRuns", f.runs[0].id), ...patch,
+    });
+    expect(updated).toMatchObject({ ...patch, status: 'complete', feedstockWetMassKg: 3000, feedstockMoisturePercent: 10 });
+    await expect(updateProductionRun(f.ctx, f.runs[0].id, {
+      expectedVersion: await productionVersion(f.ctx, "productionRuns", f.runs[0].id), status: 'complete',
+    })).resolves.toMatchObject({ status: 'complete' });
+  });
+
   it('blocks ordinary source changes after a count with no allocation rows', async () => {
     const f = await parents();
     const input = { storageLocationId: f.source.id, facilityId: f.facility.id, occurredAt: '2026-09-14T12:00:00.000Z',
       kind: 'count' as const, wetMassKg: 1500, moisturePercent: 0 };
     const preview = await previewOutputStock(f.ctx, input);
     expect(preview.removedDryKg).toBe(0);
-    const count = await postOutputStock(f.ctx, { ...input, basisFingerprint: preview.basisFingerprint,
+    const count = await postOutputStock(f.ctx, { ...input, expectedProductVersions: preview.expectedProductVersions, basisFingerprint: preview.basisFingerprint,
       idempotencyKey: randomUUID(), reason: `E2E allocation-free count ${f.tag}` });
     const effects = await db.select().from(outputStockAllocations).where(eq(outputStockAllocations.movementId, count.movementId));
     expect(effects).toHaveLength(0);
-    await expect(updateProductionRun(f.ctx, f.runs[0].id, { biocharOutputKg: 1100 }))
+    await expect(updateProductionRun(f.ctx, f.runs[0].id, { expectedVersion: await productionVersion(f.ctx, "productionRuns", f.runs[0].id), biocharOutputKg: 1100 }))
       .rejects.toThrow(`Production stock is covered by count: E2E allocation-free count ${f.tag}`);
-    await expect(updateProductionRun(f.ctx, f.runs[0].id, { endTime: new Date('2026-09-09T13:00:00Z') }))
+    await expect(updateProductionRun(f.ctx, f.runs[0].id, { expectedVersion: await productionVersion(f.ctx, "productionRuns", f.runs[0].id), endTime: new Date('2026-09-09T13:00:00Z') }))
       .rejects.toThrow('Production stock is covered by count');
     const [saved] = await db.select().from(productionRuns).where(eq(productionRuns.id, f.runs[0].id));
     expect(saved.biocharOutputKg).toBe(1000);

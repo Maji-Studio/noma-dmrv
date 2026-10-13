@@ -14,7 +14,7 @@
  * country-specific.
  */
 import { sql } from "drizzle-orm";
-import {
+import { integer,
   check,
   foreignKey,
   index,
@@ -32,6 +32,7 @@ export const facilityEmissionFactors = pgTable(
   "facility_emission_factors",
   {
     id: uuid("id").primaryKey().defaultRandom(),
+    version: integer('version').notNull().default(1),
     organizationId: text("organization_id")
       .notNull()
       .references(() => organizations.id),

@@ -3,13 +3,14 @@
  * Format: {PREFIX}-{YY}-{NNN} (e.g., BP-26-001)
  */
 
-import { db } from "@/db";
+import { db, type DbTransaction } from "@/db";
 import { and, eq, getTableName, sql } from "drizzle-orm";
 import type { PgTable, PgColumn } from "drizzle-orm/pg-core";
 import { isPgUniqueViolation } from "@/db/errors";
 import type { OrgContext } from "@/lib/auth/server";
 import { SafeError } from "@/lib/errors";
-import { requireOrgScope } from "./utils";
+import { DomainError } from "@/lib/domain-errors";
+import { requireOrgScope, type Executor } from "./utils";
 
 const MAX_RETRIES = 3;
 const RETRY_BACKOFF_BASE_MS = 50;
@@ -25,6 +26,8 @@ export const CODE_CONFLICT_MESSAGES = {
   order: "An order with this code already exists",
   productionRun: "A production run with this code already exists",
   reactor: "A reactor with this code already exists",
+  // The Sample form's copy since issue #395, kept byte for byte.
+  sample: "A Sample with this code already exists.",
   storageLocation: "A storage bin with this code already exists",
   supplier: "A supplier with this code already exists",
   vehicle: "A vehicle with this code already exists",
@@ -89,13 +92,16 @@ async function generateNextCode(
 /**
  * Generate multiple sequential codes in one call.
  * Avoids the duplicate code bug when generating codes before a batch insert.
+ * Inside a transaction pass its `tx` as `executor`: a read through the global
+ * pool waits on the transaction's own connection at pool size 1.
  */
 export async function generateNextCodes(
   ctx: OrgContext,
   prefix: string,
   table: OrgScopedCodeTable,
   codeColumn: PgColumn,
-  count: number
+  count: number,
+  executor: Executor = db,
 ): Promise<string[]> {
   requireOrgScope(ctx);
   const year = currentYearShort();
@@ -103,7 +109,7 @@ export async function generateNextCodes(
 
   // MAX on the integer suffix (see generateNextCode for why the raw-string max
   // is wrong once the sequence passes 3 digits).
-  const result = await db
+  const result = await executor
     .select({
       maxSuffix: sql<
         number | null
@@ -152,10 +158,11 @@ function isCodeUniqueViolation(
   return isPgUniqueViolation(error, codeUniqueConstraintName(table, codeColumn));
 }
 
-function duplicateCodeError(code: string, message?: string): SafeError {
-  return new SafeError(
-    message ?? `Code "${code}" already exists. Use a different code.`,
-  );
+function duplicateCodeError(code: string, message?: string): DomainError {
+  const detail = message ?? `Code "${code}" already exists. Use a different code.`;
+  return new DomainError("conflict", detail, {
+    issues: [{ path: ["code"], code: "conflict", message: new SafeError(detail).message }],
+  });
 }
 
 /**
@@ -174,7 +181,7 @@ export async function withUniqueCodeGuard<T>(
     return await fn();
   } catch (error) {
     if (isCodeUniqueViolation(error, table, codeColumn)) {
-      throw new SafeError(message);
+      throw duplicateCodeError("", message);
     }
     throw error;
   }
@@ -215,26 +222,61 @@ export async function withAutoCode<T>(
     }
   }
 
+  return retryGeneratedCodes(
+    table, codeColumn,
+    async () => [await generateNextCode(ctx, prefix, table, codeColumn)],
+    (codes) => insertFn(codes[0]),
+    duplicateMessage,
+  );
+}
+
+/**
+ * `count` generated codes for inserts inside a caller-owned transaction,
+ * retried on a code collision. Each attempt runs in a savepoint, so a unique
+ * violation rolls back only that attempt instead of aborting the transaction,
+ * and the next attempt's MAX read (Read Committed, a fresh snapshot per
+ * statement) sees the row that won. `insertFn` gets the savepoint and must do
+ * all of its writes through it.
+ */
+export async function withAutoCodes<T>(
+  ctx: OrgContext,
+  tx: DbTransaction,
+  prefix: string,
+  table: OrgScopedCodeTable,
+  codeColumn: PgColumn,
+  count: number,
+  insertFn: (codes: string[], savepoint: DbTransaction) => Promise<T>,
+  duplicateMessage?: string,
+): Promise<T> {
+  requireOrgScope(ctx);
+  return retryGeneratedCodes(
+    table, codeColumn,
+    () => generateNextCodes(ctx, prefix, table, codeColumn, count, tx),
+    (codes) => tx.transaction((savepoint) => insertFn(codes, savepoint)),
+    duplicateMessage,
+  );
+}
+
+/** Retry only this code constraint; generation failures and other constraints propagate. */
+async function retryGeneratedCodes<T>(
+  table: OrgScopedCodeTable,
+  codeColumn: PgColumn,
+  generate: () => Promise<string[]>,
+  insert: (codes: string[]) => Promise<T>,
+  duplicateMessage?: string,
+): Promise<T> {
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
-    const code = await generateNextCode(ctx, prefix, table, codeColumn);
+    const codes = await generate();
     try {
-      return await insertFn(code);
+      return await insert(codes);
     } catch (error) {
-      if (isCodeUniqueViolation(error, table, codeColumn)) {
-        if (attempt < MAX_RETRIES - 1) {
-          // Brief pause before retry to let the other transaction commit
-          await new Promise((resolve) =>
-            setTimeout(resolve, RETRY_BACKOFF_BASE_MS * (attempt + 1)),
-          );
-          continue;
-        }
-        throw duplicateCodeError(code, duplicateMessage);
-      }
-      throw error;
+      if (!isCodeUniqueViolation(error, table, codeColumn)) throw error;
+      if (attempt === MAX_RETRIES - 1) throw duplicateCodeError(codes[0], duplicateMessage);
+      await new Promise((resolve) =>
+        setTimeout(resolve, RETRY_BACKOFF_BASE_MS * (attempt + 1)),
+      );
     }
   }
-
-  // Should never reach here, but TypeScript needs it
   throw new SafeError(
     `A unique code could not be generated after ${MAX_RETRIES} attempts. Enter a code manually.`,
   );

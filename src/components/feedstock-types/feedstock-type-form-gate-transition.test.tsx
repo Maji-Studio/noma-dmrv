@@ -148,6 +148,7 @@ vi.mock("@phosphor-icons/react/dist/ssr", () => ({
   InfoIcon: () => null,
   WarningIcon: () => null,
   CheckCircleIcon: () => null,
+  ArrowSquareOutIcon: () => null,
 }));
 
 vi.mock("@/hooks/use-facility-context", () => ({
@@ -207,6 +208,7 @@ const persistedFeedstockType: FeedstockType = {
   isometricFeedstockTypeId: ISOMETRIC_ID,
   archivedAt: null,
   createdAt: new Date("2026-01-01T00:00:00Z"),
+  version: 1,
   updatedAt: new Date("2026-01-01T00:00:00Z"),
 };
 
@@ -221,6 +223,25 @@ function renderForm(props: {
 beforeEach(() => harness.reset());
 
 describe("FeedstockTypeForm Isometric gate transitions", () => {
+  it("places the certified-feedstock warning above Usage, Name and Category", () => {
+    const onSubmit = vi.fn();
+    renderForm({ onSubmit });
+    harness.formValues.usage = "pyrolysis";
+
+    const markup = renderForm({ onSubmit });
+    const warning = markup.indexOf(
+      "Only feedstock types that exist in Isometric can pass verification.",
+    );
+    const usage = markup.indexOf('id="usage"');
+    const name = markup.indexOf('id="name"');
+    const category = markup.indexOf('id="category"');
+
+    expect(warning).toBeGreaterThanOrEqual(0);
+    expect(usage).toBeGreaterThan(warning);
+    expect(name).toBeGreaterThan(usage);
+    expect(category).toBeGreaterThan(name);
+  });
+
   it("does not validate the untouched local category when selecting an Isometric feedstock", () => {
     const onSubmit = vi.fn();
 
@@ -231,7 +252,9 @@ describe("FeedstockTypeForm Isometric gate transitions", () => {
 
     const selectedMarkup = renderForm({ onSubmit });
 
-    expect(selectedMarkup).toContain("Selected from Isometric");
+    // The selected catalogue row is the only selection display on this tab.
+    expect(selectedMarkup).not.toContain("Selected from Isometric");
+    expect(selectedMarkup).toContain('id="isometric-category"');
     expect(selectedMarkup).not.toContain("Category is required");
   });
 

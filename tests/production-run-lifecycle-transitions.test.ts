@@ -1,3 +1,4 @@
+import { productionVersion } from "./helpers/production-version";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { inArray } from "drizzle-orm";
 import { db } from "@/db";
@@ -36,7 +37,7 @@ describe("updateProductionRun terminal to running", () => {
       const tag = crypto.randomUUID().slice(0, 8).toUpperCase();
       const [facility] = await db
         .insert(facilities)
-        .values({
+        .values({ timezone: "UTC",
           organizationId: TEST_ORG_ID,
           code: `FAC-REOPEN-${tag}`,
           name: `Reopen Facility ${tag}`,
@@ -70,7 +71,7 @@ describe("updateProductionRun terminal to running", () => {
         .returning({ id: productionRuns.id });
       createdRunIds.push(run.id);
 
-      const reopened = await updateProductionRun(makeTestOrgContext(), run.id, {
+      const reopened = await updateProductionRun(makeTestOrgContext(), run.id, { expectedVersion: await productionVersion(makeTestOrgContext(), "productionRuns", run.id),
         status: "running",
         endTime: null,
       });

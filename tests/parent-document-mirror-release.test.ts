@@ -1,3 +1,4 @@
+import { masterDataVersion } from "./helpers/master-data-version";
 /**
  * Parent-record deletion and Isometric Source mappings: an unreferenced
  * mapping, or one cited only by a deleted Removal, is released with the
@@ -70,7 +71,7 @@ describe("parent document mirror release", () => {
           submissionId = await insertRemovalSnapshot({ sourceId, deleted: snapshot.deleted });
         }
 
-        await deleteReactor(makeTestOrgContext(TEST_USER_ID), fixture.reactorId);
+        await deleteReactor(makeTestOrgContext(TEST_USER_ID), fixture.reactorId, await masterDataVersion(makeTestOrgContext(TEST_USER_ID), "reactors", fixture.reactorId));
         await processPendingStorageObjectDeletions(makeTestOrgContext(TEST_USER_ID));
 
         expect(provider.objects.has(key)).toBe(false);
@@ -117,7 +118,7 @@ describe("parent document mirror release", () => {
       submissionId = await insertRemovalSnapshot({ sourceId, deleted: false });
 
       await expect(
-        deleteReactor(makeTestOrgContext(TEST_USER_ID), fixture.reactorId),
+        deleteReactor(makeTestOrgContext(TEST_USER_ID), fixture.reactorId, await masterDataVersion(makeTestOrgContext(TEST_USER_ID), "reactors", fixture.reactorId)),
       ).rejects.toThrow(/certification provider/);
 
       expect(provider.deleteCalls).toEqual([]);

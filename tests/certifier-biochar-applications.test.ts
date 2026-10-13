@@ -74,7 +74,7 @@ beforeAll(async () => {
   ids.foreignSubmission = foreignSubmission.id;
   const [facility] = await db
     .insert(facilities)
-    .values({
+    .values({ timezone: "UTC",
       organizationId: TEST_ORG_ID,
       code: `FAC-BCA-${tag}`,
       name: `Biochar Application Facility ${tag}`,

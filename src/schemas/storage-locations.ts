@@ -7,7 +7,7 @@ import { z } from "zod";
 import { OUTPUT_STOCK_MODES, type OutputStockMode } from "@/lib/output-stock/stock-mode";
 import {
   emptyToNull,
-  expectedUpdatedAtSchema,
+  expectedVersionSchema,
   positiveMassKgSchema,
   stockEventInstantSchema,
 } from "./helpers";
@@ -190,7 +190,7 @@ export const createStorageLocationSchema = storageLocationFormSchema;
  */
 export const updateStorageLocationSchema = z.object({
   storageLocationId: z.string().uuid("Choose a valid storage bin."),
-  expectedUpdatedAt: expectedUpdatedAtSchema,
+  expectedVersion: expectedVersionSchema,
   code: z
     .string()
     .min(1)
@@ -236,13 +236,14 @@ export const updateStorageLocationSchema = z.object({
  * Schema for deleting a storage location
  */
 export const deleteStorageLocationSchema = z.object({
+  expectedVersion: expectedVersionSchema,
   storageLocationId: z.string().uuid("Choose a valid storage bin."),
 });
 
 /**
  * Schemas for reversible storage-location lifecycle actions.
  */
-export const getStorageLocationSchema = deleteStorageLocationSchema;
+export const getStorageLocationSchema = deleteStorageLocationSchema.omit({ expectedVersion: true });
 export const archiveStorageLocationSchema = deleteStorageLocationSchema;
 export const restoreStorageLocationSchema = deleteStorageLocationSchema;
 

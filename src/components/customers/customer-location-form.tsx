@@ -22,9 +22,26 @@ import { CustomerLocationFields } from "./customer-location-fields";
 // Component
 // ============================================
 
+/** Fields the form pre-fills from: a saved location or a pending one. */
+export type CustomerLocationInitialValues = Pick<CustomerLocation, "country"> &
+  Partial<
+    Pick<
+      CustomerLocation,
+      | "name"
+      | "stateRegion"
+      | "city"
+      | "gpsLatitude"
+      | "gpsLongitude"
+      | "address"
+      | "distanceFromFacilityKm"
+      | "distanceSource"
+      | "defaultSoilTemperatureC"
+      | "isDefault"
+    >
+  >;
+
 export type EditableCustomerLocation = Pick<
   CustomerLocation,
-  | "id"
   | "name"
   | "country"
   | "stateRegion"
@@ -36,13 +53,20 @@ export type EditableCustomerLocation = Pick<
   | "distanceSource"
   | "defaultSoilTemperatureC"
   | "isDefault"
-  // The version the dialog opened on, echoed back on save (issue #768).
-  | "updatedAt"
->;
+> &
+  Pick<
+    CustomerLocation,
+    | "id"
+    | "updatedAt"
+    // The integer version the dialog opened on, echoed back on save (issue #768).
+    | "version"
+  >;
 
 interface CustomerLocationFormProps {
   /** Existing location data for editing (undefined for create mode) */
-  location?: EditableCustomerLocation;
+  location?: CustomerLocationInitialValues;
+  /** Start "default" checked for a new location (the customer's first). */
+  initialIsDefault?: boolean;
   /** Prefix field IDs when the form opens above another form with overlapping IDs. */
   idPrefix?: string;
   /** Form submission handler */
@@ -59,6 +83,7 @@ interface CustomerLocationFormProps {
 
 export function CustomerLocationForm({
   location,
+  initialIsDefault = false,
   idPrefix,
   onSubmit,
   onCancel,
@@ -82,7 +107,7 @@ export function CustomerLocationForm({
     distanceFromFacilityKm: location?.distanceFromFacilityKm ?? undefined,
     distanceSource: location?.distanceSource ?? null,
     defaultSoilTemperatureC: location?.defaultSoilTemperatureC ?? undefined,
-    isDefault: location?.isDefault ?? false,
+    isDefault: location?.isDefault ?? initialIsDefault,
   };
 
   const form = useForm<
@@ -112,6 +137,7 @@ export function CustomerLocationForm({
       <CustomerLocationFields
         form={form}
         isSubmitting={isSubmitting}
+        isCurrentDefault={location?.isDefault === true}
         idPrefix={idPrefix}
         certStatus={certStatus}
       />

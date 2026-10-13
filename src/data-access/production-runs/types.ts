@@ -52,6 +52,7 @@ export interface ProductionRunWithRelations {
   /** True only when an uploaded sensor-data document is saved for this run. */
   hasReadingsFile: boolean;
   createdAt: Date;
+  version: number;
   updatedAt: Date;
   // Relations
   facilityCode: string | null;

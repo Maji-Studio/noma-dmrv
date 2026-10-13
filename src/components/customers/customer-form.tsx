@@ -4,6 +4,8 @@
  * Used in both create and edit views for customers
  */
 "use client";
+import { toDeleteErrorMessage } from "@/lib/stale-version";
+import { useToast } from "@/components/ui/toast";
 
 import { useState } from "react";
 import { useForm } from "react-hook-form";
@@ -27,6 +29,13 @@ import { useCustomerLocations, useDeleteCustomerLocation } from "@/hooks/use-cus
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { Button } from "@/components/ui/button";
 import { QuickAddDialogShell } from "@/components/forms/entity-select/quick-add-dialog-shell";
+import { DefaultLocationBadge } from "@/components/ui/default-location-badge";
+import {
+  withAddedLocation,
+  withoutLocation,
+  shouldStartAsDefault,
+  withUpdatedLocation,
+} from "@/lib/party-location-defaults";
 import { CustomerLocationDialog } from "./customer-location-dialog";
 import {
   CustomerLocationForm,
@@ -136,12 +145,17 @@ export function CustomerForm({
   });
 
   const handleAddPendingLocation = (loc: PendingLocation) => {
-    setPendingLocations((prev) => [...prev, loc]);
+    setPendingLocations((prev) => withAddedLocation(prev, loc));
+    setLocationError(null);
+  };
+
+  const handleUpdatePendingLocation = (index: number, loc: PendingLocation) => {
+    setPendingLocations((prev) => withUpdatedLocation(prev, index, loc));
     setLocationError(null);
   };
 
   const handleRemovePendingLocation = (index: number) => {
-    setPendingLocations((prev) => prev.filter((_, i) => i !== index));
+    setPendingLocations((prev) => withoutLocation(prev, index));
   };
 
   return (
@@ -226,6 +240,7 @@ export function CustomerForm({
         <CreateModeLocationsSection
           locations={pendingLocations}
           onAdd={handleAddPendingLocation}
+          onUpdate={handleUpdatePendingLocation}
           onRemove={handleRemovePendingLocation}
           error={locationError}
         />
@@ -250,15 +265,21 @@ export function CustomerForm({
 function CreateModeLocationsSection({
   locations,
   onAdd,
+  onUpdate,
   onRemove,
   error,
 }: {
   locations: PendingLocation[];
   onAdd: (loc: PendingLocation) => void;
+  onUpdate: (index: number, loc: PendingLocation) => void;
   onRemove: (index: number) => void;
   error: string | null;
 }) {
   const [isLocationDialogOpen, setIsLocationDialogOpen] = useState(false);
+  // Kept after close so the dialog title does not flip mid exit transition.
+  const [editingLocationIndex, setEditingLocationIndex] = useState<number | null>(null);
+  const editingLocation =
+    editingLocationIndex === null ? undefined : locations[editingLocationIndex];
   // The server action caps the compound payload at the same constant, so the
   // form must stop here rather than submit something the server rejects.
   const isAtLocationLimit = locations.length >= MAX_PENDING_CUSTOMER_LOCATIONS;
@@ -275,7 +296,10 @@ function CreateModeLocationsSection({
           variant="noOutline"
           size="small"
           disabled={isAtLocationLimit}
-          onClick={() => setIsLocationDialogOpen(true)}
+          onClick={() => {
+            setEditingLocationIndex(null);
+            setIsLocationDialogOpen(true);
+          }}
           className="text-[var(--color-interaction)]"
         >
           <PlusIcon size={14} weight="bold" />
@@ -312,7 +336,10 @@ function CreateModeLocationsSection({
                 <div className="flex items-center gap-10 min-w-0">
                   <MapPinIcon size={16} className="shrink-0 text-[var(--color-text-tertiary)]" />
                   <div className="min-w-0">
-                    <p className="body-small font-medium truncate">{loc.name}</p>
+                    <p className="body-small font-medium flex items-center gap-8 min-w-0">
+                      <span className="truncate">{loc.name}</span>
+                      {loc.isDefault ? <DefaultLocationBadge /> : null}
+                    </p>
                     {locationSummary ? (
                       <p className="text-[var(--text-xs)] text-[var(--color-text-tertiary)] truncate">
                         {locationSummary}
@@ -324,15 +351,27 @@ function CreateModeLocationsSection({
                     </p>
                   </div>
                 </div>
-                <Button
-                  variant="destructive"
-                  size="icon"
-                  onClick={() => onRemove(index)}
-                  className="shrink-0"
-                  aria-label={`Remove ${loc.name}`}
-                >
-                  <TrashIcon size={16} />
-                </Button>
+                <div className="flex shrink-0 items-center gap-8">
+                  <Button
+                    variant="noOutline"
+                    size="icon"
+                    onClick={() => {
+                      setEditingLocationIndex(index);
+                      setIsLocationDialogOpen(true);
+                    }}
+                    aria-label={`Edit ${loc.name}`}
+                  >
+                    <PencilIcon size={16} />
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    size="icon"
+                    onClick={() => onRemove(index)}
+                    aria-label={`Remove ${loc.name}`}
+                  >
+                    <TrashIcon size={16} />
+                  </Button>
+                </div>
               </div>
             );
           })}
@@ -342,14 +381,20 @@ function CreateModeLocationsSection({
       <QuickAddDialogShell
         isOpen={isLocationDialogOpen}
         onClose={() => setIsLocationDialogOpen(false)}
-        title="Add location"
+        title={editingLocation ? "Edit location" : "Add location"}
         width="lg"
         testId="location-quick-add-dialog"
       >
         <CustomerLocationForm
           idPrefix="pending-loc"
+          location={editingLocation}
+          initialIsDefault={shouldStartAsDefault(locations.length)}
           onSubmit={(location) => {
-            onAdd(location);
+            if (editingLocationIndex === null) {
+              onAdd(location);
+            } else {
+              onUpdate(editingLocationIndex, location);
+            }
             setIsLocationDialogOpen(false);
           }}
           onCancel={() => setIsLocationDialogOpen(false)}
@@ -364,6 +409,7 @@ function CreateModeLocationsSection({
 // ============================================
 
 function LocationsSection({ customerId }: { customerId: string }) {
+  const toast = useToast();
   // `editingLocation` is deliberately not cleared on close: the modal keeps its
   // subtree mounted for the exit transition, so clearing it there would flip the
   // dialog title and submit label to the "Add" wording mid-fade. Opening the add
@@ -371,18 +417,19 @@ function LocationsSection({ customerId }: { customerId: string }) {
   const [isLocationDialogOpen, setIsLocationDialogOpen] = useState(false);
   const [editingLocation, setEditingLocation] =
     useState<EditableCustomerLocation | null>(null);
-  const [deletingLocationId, setDeletingLocationId] = useState<string | null>(null);
+  const [deletingLocation, setDeletingLocation] = useState<EditableCustomerLocation | null>(null);
 
   const { data: locations, isLoading, isError } = useCustomerLocations(customerId);
   const deleteLocation = useDeleteCustomerLocation(customerId);
 
   const handleDeleteConfirm = async () => {
-    if (!deletingLocationId) return;
+    if (!deletingLocation) return;
     try {
-      await deleteLocation.mutateAsync(deletingLocationId);
-      setDeletingLocationId(null);
-    } catch {
-      setDeletingLocationId(null);
+      await deleteLocation.mutateAsync({ locationId: deletingLocation.id, expectedVersion: deletingLocation.version });
+      setDeletingLocation(null);
+    } catch (error) {
+      toast.error(toDeleteErrorMessage(error, "Location", "Location was not deleted. Try again."));
+      setDeletingLocation(null);
     }
   };
 
@@ -424,7 +471,10 @@ function LocationsSection({ customerId }: { customerId: string }) {
               <div className="flex items-center gap-10 min-w-0">
                 <MapPinIcon size={16} className="shrink-0 text-[var(--color-text-tertiary)]" />
                 <div className="min-w-0">
-                  <p className="body-small font-medium truncate">{loc.name}</p>
+                  <p className="body-small font-medium flex items-center gap-8 min-w-0">
+                    <span className="truncate">{loc.name}</span>
+                    {loc.isDefault ? <DefaultLocationBadge /> : null}
+                  </p>
                   <p className="text-[var(--text-xs)] text-[var(--color-text-tertiary)] truncate">
                     {formatSavedLocationSummary(loc)}
                   </p>
@@ -445,7 +495,7 @@ function LocationsSection({ customerId }: { customerId: string }) {
                 <Button
                   variant="destructive"
                   size="icon"
-                  onClick={() => setDeletingLocationId(loc.id)}
+                  onClick={() => setDeletingLocation(loc)}
                   aria-label={`Delete ${loc.name || loc.country}`}
                 >
                   <TrashIcon size={16} />
@@ -461,14 +511,15 @@ function LocationsSection({ customerId }: { customerId: string }) {
         onClose={() => setIsLocationDialogOpen(false)}
         customerId={customerId}
         location={editingLocation ?? undefined}
+        isFirstLocation={!isLoading && !isError && locations?.length === 0}
       />
 
       <DeleteConfirmDialog
-        isOpen={!!deletingLocationId}
+        isOpen={!!deletingLocation}
         title="Delete location"
         message="Are you sure you want to delete this location? This action cannot be undone."
         onConfirm={handleDeleteConfirm}
-        onCancel={() => setDeletingLocationId(null)}
+        onCancel={() => setDeletingLocation(null)}
         isPending={deleteLocation.isPending}
       />
     </FormSection>

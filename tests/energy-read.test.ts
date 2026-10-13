@@ -24,7 +24,7 @@ import {
   upsertFacilityEmissionFactors,
 } from "@/data-access/facility-emission-factors";
 import { buildEnergyBreakdown } from "@/lib/energy/attribution";
-import { ActionConflictError } from "@/lib/errors";
+import { DomainError } from "@/lib/domain-errors";
 import { STALE_VERSION_CONFLICT_CODE } from "@/lib/stale-version";
 import {
   cleanupPostedStock,
@@ -99,7 +99,8 @@ describe.sequential("energy read", () => {
       fixture.runs.map((run) => run.id).sort(),
     );
     expect(inputs.runs.find((run) => run.id === fixture.runs[0].id)?.day).toBe("2026-09-09");
-    expect(inputs.feedstocks).toEqual([
+    // The shared output-stock fixture adds its own fuel intake for valid run draws.
+    expect(inputs.feedstocks.filter((row) => row.id === feedstockId)).toEqual([
       expect.objectContaining({
         id: feedstockId,
         day: "2026-09-01",
@@ -107,7 +108,7 @@ describe.sequential("energy read", () => {
         legs: [{ distanceKm: LEG_KM, loadMassKg: FEEDSTOCK_WET_KG, method: "road" }],
       }),
     ]);
-    expect(inputs.feedstockDraws).toEqual([
+    expect(inputs.feedstockDraws.filter((draw) => draw.feedstockId === feedstockId)).toEqual([
       { runId: fixture.runs[0].id, feedstockId, wetMassKg: FEEDSTOCK_DRAW_KG },
     ]);
 
@@ -182,11 +183,12 @@ describe.sequential("facility emission factors", () => {
   it("reads null until saved, then round-trips and updates in place", async () => {
     await expect(getFacilityEmissionFactors(fixture.ctx, fixture.facility.id)).resolves.toBeNull();
 
-    await upsertFacilityEmissionFactors(fixture.ctx, { facilityId: fixture.facility.id, ...FACTORS });
+    const first = await upsertFacilityEmissionFactors(fixture.ctx, { facilityId: fixture.facility.id, ...FACTORS, expectedVersion: null });
     await upsertFacilityEmissionFactors(fixture.ctx, {
       facilityId: fixture.facility.id,
       ...FACTORS,
       gridKgCo2ePerKwh: 0.5,
+      expectedVersion: first.version,
     });
 
     const saved = await getFacilityEmissionFactors(fixture.ctx, fixture.facility.id);
@@ -201,13 +203,13 @@ describe.sequential("facility emission factors", () => {
   it("refuses a save built on a stale version, and a second first save", async () => {
     const saved = await getFacilityEmissionFactors(fixture.ctx, fixture.facility.id);
     if (!saved) throw new Error("expected saved factors");
-    const opened = saved.updatedAt;
+    const opened = saved.version;
 
     const fresh = await upsertFacilityEmissionFactors(fixture.ctx, {
       facilityId: fixture.facility.id,
       ...FACTORS,
       gridKgCo2ePerKwh: 0.6,
-      expectedUpdatedAt: opened,
+      expectedVersion: opened,
     });
     expect(fresh.gridKgCo2ePerKwh).toBe(0.6);
 
@@ -215,9 +217,9 @@ describe.sequential("facility emission factors", () => {
       facilityId: fixture.facility.id,
       ...FACTORS,
       gridKgCo2ePerKwh: 0.7,
-      expectedUpdatedAt: opened,
+      expectedVersion: opened,
     });
-    await expect(staleSave).rejects.toBeInstanceOf(ActionConflictError);
+    await expect(staleSave).rejects.toBeInstanceOf(DomainError);
     await expect(staleSave).rejects.toMatchObject({
       conflict: { code: STALE_VERSION_CONFLICT_CODE },
     });
@@ -227,7 +229,7 @@ describe.sequential("facility emission factors", () => {
       upsertFacilityEmissionFactors(fixture.ctx, {
         facilityId: fixture.facility.id,
         ...FACTORS,
-        expectedUpdatedAt: null,
+        expectedVersion: null,
       }),
     ).rejects.toMatchObject({ conflict: { code: STALE_VERSION_CONFLICT_CODE } });
     await expect(getFacilityEmissionFactors(fixture.ctx, fixture.facility.id)).resolves.toMatchObject({
@@ -242,7 +244,7 @@ describe.sequential("facility emission factors", () => {
         facilityId: fixture.facility.id,
         ...FACTORS,
         gridKgCo2ePerKwh: grid,
-        expectedUpdatedAt: null,
+        expectedVersion: null,
       });
     const results = await Promise.allSettled([first(0.31), first(0.32)]);
     expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
@@ -254,7 +256,7 @@ describe.sequential("facility emission factors", () => {
     const foreign = makeTestOrgContext();
     await expect(getFacilityEmissionFactors(foreign, fixture.facility.id)).resolves.toBeNull();
     await expect(
-      upsertFacilityEmissionFactors(foreign, { facilityId: fixture.facility.id, ...FACTORS }),
+      upsertFacilityEmissionFactors(foreign, { facilityId: fixture.facility.id, ...FACTORS, expectedVersion: null }),
     ).rejects.toThrow();
   });
 
@@ -265,7 +267,7 @@ describe.sequential("facility emission factors", () => {
         upsertFacilityEmissionFactors(fixture.ctx, {
           facilityId: fixture.facility.id,
           ...FACTORS,
-          expectedUpdatedAt: null,
+          expectedVersion: null,
         }),
       ).rejects.toThrow("Facility was not found or is archived.");
     } finally {
@@ -277,7 +279,7 @@ describe.sequential("facility emission factors", () => {
     await expect(
       upsertFacilityEmissionFactors(
         { ...fixture.ctx, orgRole: "member" },
-        { facilityId: fixture.facility.id, ...FACTORS },
+        { facilityId: fixture.facility.id, ...FACTORS, expectedVersion: null },
       ),
     ).rejects.toThrow();
   });

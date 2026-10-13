@@ -36,6 +36,11 @@ export const createItemSchema = itemFormSchema.extend({ projectId: z.uuid() });
 
 When form and update variants share a repeated object shape (ingredient bins, allocations), extract a base schema and `.extend()` per variant — the form variant adds the preprocessors, the server variant does not.
 
+For integer row-version preconditions, use `expectedVersionSchema` from
+`@/schemas/helpers` on update and delete schemas. It requires the positive
+integer loaded with the record and tells the operator to reload when it is
+missing or invalid. Every edit form uses this integer mechanism. See [architecture.md](./architecture.md#expected-version-checks-on-edit-forms).
+
 ### Zod 4 string formats
 
 Format checks are **top-level**, not chained. The chained forms still compile but emit a deprecation diagnostic.
@@ -47,6 +52,13 @@ Format checks are **top-level**, not chained. The chained forms still compile bu
 | `z.string().url()` | `z.url()` |
 | `z.string().datetime()` | `z.iso.datetime()` |
 | `z.string().date()` | `z.iso.date()` |
+
+New UUID inputs use `uuidSchema(message?)` from `@/schemas/helpers`, not bare
+`z.uuid()`: it lowercases the id, so ids compare and fingerprint the same way
+rows come back, and the published schema is unchanged. Keep
+`.uuid(msg).toLowerCase()` on existing chains such as
+`z.string().min(1, …).uuid(…)`: piping a chained check through `uuidSchema`
+drops `format: uuid` from the OpenAPI document.
 
 `z.iso.datetime()` accepts UTC `Z` only by default — exactly what `Date.prototype.toISOString()` emits. Pass `{ offset: true }` for numeric offsets, `{ local: true }` for none. Validate timestamp **format** at parse time rather than guarding `Number.isNaN(new Date(x).getTime())` downstream.
 
@@ -163,12 +175,18 @@ Prefer the `PositionPicker` component (map preview + address search + manual lat
 
 ## Dates
 
-For a new or changed `<input type="date">` whose value is parsed into a `Date`,
-use `requiredDateOnly` / `optionalDateOnly` from `@/schemas/helpers`. They parse
-`"YYYY-MM-DD"` at **local** midnight, because `new Date("YYYY-MM-DD")` parses as
-**UTC** midnight, which can render as the adjacent day and walk a stored date on
-an edit/save round-trip. `z.iso.date()` validates a string but does not produce
-a `Date`.
+Use `calendarDateSchema` from `@/schemas/helpers` for business dates persisted
+as **UTC-midnight date-only values**, such as the feedstock delivery date. It
+accepts strict `YYYY-MM-DD` strings and real calendar days only, decodes them to
+a UTC-midnight `Date`, and publishes as `format: date`. Server re-validation
+accepts a `Date` only at UTC midnight. Use `toDateInputValue` for defaults of
+these persisted UTC date-only values.
+
+Use `requiredDateOnly` / `optionalDateOnly` where a date is combined with a
+facility time, as in production runs. They parse `"YYYY-MM-DD"` at **local**
+midnight, because `new Date("YYYY-MM-DD")` parses as **UTC** midnight, which can
+render as the adjacent day and walk a stored date on an edit/save round-trip.
+`z.iso.date()` validates a string but does not produce a `Date`.
 
 Several established application/order/delivery/credit-batch schemas still use
 `z.coerce.date()` while their components protect the default side with
@@ -178,7 +196,7 @@ and database column and migrate the round trip deliberately. The
 production-run schemas are the current reference for the local date-only
 helpers.
 
-Defaults have the mirror-image hazard. **Never `toISOString()`** for a form default — use `@/lib/date-utils`:
+For local date and time defaults, **never use `toISOString()`**. Use `@/lib/date-utils`:
 
 ```typescript
 date: formatLocalDate(new Date()),          // "2026-03-03"  → <input type="date">
@@ -186,6 +204,8 @@ startTime: formatLocalDateTime(new Date()), // "2026-03-03T14:30" → datetime-l
 ```
 
 `toDateInputValue`, `parseLocalDateString`, and the facility-timezone display helpers (`formatFacilityTime`, `formatFacilityDate`, `formatTimezoneLabel` — all timestamps are stored UTC) also live in `src/lib/date-utils.ts`.
+
+Timezone fields use `requiredTimezoneSchema()` / `optionalTimezoneSchema()` / `ianaTimezoneSchema()` from `@/schemas/timezone` (the one valid-IANA-zone check, backed by the `@vvo/tzdb` catalogue in `@/lib/timezones`) and the `TimezoneCombobox`, never a hand-listed enum. No timezone has a default: facility fields start empty and required, and the organization default may stay unset.
 
 **Output stock event times** (product placed, delivery, loss, count) are entered
 and shown on the facility clock, like production runs
@@ -202,6 +222,12 @@ and shown on the facility clock, like production runs
 - `stockEventInstantSchema()` (`@/schemas/helpers`) validates the wire value.
 - Read surfaces format it on the same clock; see
   [design-system.md](./design-system.md#date-and-time-display).
+
+A lab sample's sampling time uses the same picker on the clock of its credit
+batch's facility (round 7 Q51): the zone comes from the batch durability
+summary, with the context facility's clock until that loads. The server
+action schema takes a `Date` or an instant with an explicit offset, never a
+bare wall clock.
 
 ## Components
 
@@ -222,6 +248,11 @@ All from the `@/components/forms` barrel (`src/components/forms/index.ts`) — r
 
 Notes/description/address textareas inside a grid always span full width: wrap in `md:col-span-2` (2-col grids) or `md:col-span-3`.
 
+A dropdown takes the full width of the form, and its menu is as wide as the
+field. It never shares a row with another field or action. Where a legacy
+layout still forces sharing, the important dropdown sits on the left. Table
+toolbars, filters and pagination are exempt.
+
 Free-form **Notes** fields are always the final editable field before
 `FormActions`. Put derived previews or selectable cohorts immediately after the
 inputs that control them, then place Notes after those previews. Documentation
@@ -241,7 +272,7 @@ A `SectionLabel` title over a `space-y-16` field stack, with a `pt-16` hairline 
 
 - **`space-y-20`** — all side-sheet forms (top-level `<form>`), sectioned or not. `FormSection` owns intra-section rhythm; nothing else sets section spacing.
 - **`space-y-24`** — full-page and auth forms only.
-- Field grids inside sections: `grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-20`.
+- Field grids inside sections: `grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-20` for inputs only; a dropdown gets its own `grid-cols-1` row (see the dropdown rule above).
 - Controls in a field-grid row top-align independently. `FormField`'s fixed
   `min-h-24` label row keeps one-line labels level; a wrapped label still shifts
   only its own control down. Do not "fix" that with per-field label heights,
@@ -256,7 +287,7 @@ The only CTA row — left-aligned, primary action first, sticky by default, noth
 
 - Never stack a parent dialog or step-flow footer beneath `FormActions`. The
   embedded form owns the one action row. Give its secondary action the
-  context-specific label (for example, `cancelLabel="Skip setup"`) and omit the
+  context-specific label (for example, `cancelLabel="Not now"`) and omit the
   parent footer for that step.
 - Submission-level server/action/root errors go through `errorMessage`; `FormActions` renders the shared `ServerError` immediately above the buttons inside the same sticky footer. Do not render the same error in a parent sheet or earlier in the form.
 - Nested inline forms (child-entity editors, transport legs) pass `sticky={false}`.
@@ -265,6 +296,12 @@ The only CTA row — left-aligned, primary action first, sticky by default, noth
   signal that sees programmatic `setValue` from custom widgets. Inside a sheet
   the Cancel *click* routes through the sheet's guarded cancel; the caller's
   `onCancel` still decides whether a Cancel button renders at all.
+- `FormDialog` also reads `control` and the submitting state to guard every
+  dismissal path. Multiple forms in one dialog register independently. Keep
+  controls mounted after a failed save; reset RHF defaults after success.
+  `showSubmit={false}` hides a premature or unnecessary action while keeping
+  dirty tracking active; `submitVariant="default"` uses the outline style for
+  a secondary action such as linking a registry project.
 - When the actions render **inside an owning parent form**, pass `submitType="button"` + `onSubmitClick` — nesting `<form>` elements is invalid HTML.
 - `formId` is the escape hatch when extension content must render between the fields and the CTA: the CTA lives outside the `<form>` and points back at it by id.
 - `submitDisabled` gates on an unmet precondition (e.g. an unchecked acknowledgement).
@@ -356,6 +393,31 @@ Do not store raw uploaded GeoJSON in the JSONB column or infer a complete
 boundary evidence path from the presence of one file alone.
 
 ## Entity select
+
+Pass `allowEdit` to `EntitySelect` or `FormEntitySelect` to offer **Edit <name>**
+beside **Add new**. `EntityEditDialog` loads a fresh record on each open and
+renders the entity's existing form in `QuickAddDialogShell`. The opened record
+and version stay fixed while editing, including after a stale-save refusal.
+The shared shell stops portalled form submits from reaching the entry form.
+Nested dialogs use the shared modal stack; Escape closes only the top layer.
+
+The label uses the selected entity's name; `editLabel` overrides it. Editing
+leaves the selected value unchanged. With `selectionLocked` and a selection, only
+Edit is available. `disabled` prevents all interaction, including Edit.
+`onEditSelected` remains available for custom edit flows and takes precedence
+over the built-in handler. Archived records open read-only, without Reconcile or
+stock actions.
+
+Supported types are storage bins, formulations, suppliers, customers, feedstock
+types, reactors, orders, vehicles, operators and drivers. Feedstock-type Edit
+requires the server-resolved management permission (Owner, Admin or Platform
+Admin). Facility and Credit batch pickers deliberately have no Edit row. Driver
+is supported by the shared dialog but currently has no form picker.
+
+`SELECT_SEARCH_MIN_OPTIONS` in `src/config/forms.ts` is 5: search shows from
+6 options. `alwaysShowSearch` and `hideSearch` remain explicit overrides.
+Bin allocation and production draw rows give the bin picker its own full row,
+with mass below it.
 
 `emptyToNull` coerces the `""` an `EntitySelect` sends when nothing is picked, before the UUID check:
 

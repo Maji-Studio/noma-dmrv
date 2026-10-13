@@ -1,8 +1,7 @@
 /**
  * StorageBinSheet — the storage bin's view / edit / create side sheet.
  *
- * One sheet for every place a bin opens: the storage board and the bin pickers
- * in entry forms (`StorageBinActions`). The caller owns which bin is open and
+ * The storage board uses this sheet; entry-form pickers use the quick-add modal. The caller owns which bin is open and
  * in which mode; the sheet owns the save, its error, and the success toast.
  * Reconcile stays with the caller, because it closes this sheet and opens its
  * own so the two panels never stack.
@@ -74,7 +73,7 @@ export function StorageBinSheet({
         storageLocationId: state.entity.id,
         // The version the side sheet opened on, never a refetched one, so a
         // concurrent edit is refused instead of silently overwritten (#768).
-        expectedUpdatedAt: state.entity.updatedAt,
+        expectedVersion: state.entity.version,
         ...data,
       });
       onStateChange(null);

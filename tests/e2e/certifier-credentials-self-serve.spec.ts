@@ -61,7 +61,9 @@ test.describe("Isometric credentials self-service", () => {
       // and a Replace action, never an input holding the secret.
       await organization.getByRole("button", { name: "Isometric keys" }).click();
       const keys = page.getByRole("dialog");
-      await expect(keys.getByText("Ends 4321", { exact: false })).toBeVisible();
+      await expect(keys.getByText("••••4321", { exact: false })).toBeVisible();
+      await expect(keys.getByText("••••••••", { exact: true })).toBeVisible();
+      await expect(keys.getByRole("button", { name: "Save and test connection" })).toHaveCount(0);
       await expect(keys.locator('input[type="password"]')).toHaveCount(0);
       await expect(keys.getByRole("button", { name: /^Replace/ })).toHaveCount(2);
       await page.keyboard.press("Escape");
@@ -81,7 +83,7 @@ test.describe("Isometric credentials self-service", () => {
         .getByRole("button", { name: "Isometric keys" })
         .click();
       await expect(
-        page.getByRole("dialog").getByText("Ends 9876", { exact: false }),
+        page.getByRole("dialog").getByText("••••9876", { exact: false }),
       ).toBeVisible();
     } finally {
       await db.delete(certifierCredentials).where(whereOrg);
@@ -106,7 +108,7 @@ test.describe("Isometric credentials self-service", () => {
       page.getByRole("heading", { name: "Certifier", exact: true }),
     ).toBeVisible();
     await expect(page.getByLabel("Access token")).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "Save keys" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Save and test connection" })).toHaveCount(0);
     await expect(
       page.getByRole("button", { name: "Link Isometric project" }),
     ).toHaveCount(0);

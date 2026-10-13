@@ -151,3 +151,26 @@ export function isPgForeignKeyViolation(err: unknown, constraint: string): boole
   }
   return false;
 }
+
+// SQLSTATE for lock_not_available, raised when `lock_timeout` expires.
+export const PG_LOCK_NOT_AVAILABLE = "55P03";
+// SQLSTATE for transaction_timeout, which terminates the session (Postgres 17+).
+export const PG_TRANSACTION_TIMEOUT = "25P04";
+// SQLSTATE for query_canceled, raised when `statement_timeout` expires.
+export const PG_QUERY_CANCELED = "57014";
+
+/** The SQLSTATE on `err` or anywhere on its `.cause` chain, if any. */
+export function pgErrorCode(err: unknown): string | undefined {
+  let current: unknown = err;
+  for (let depth = 0; current != null && depth < MAX_CAUSE_DEPTH; depth++) {
+    if (typeof current !== "object") break;
+    const e = current as { code?: unknown; cause?: unknown };
+    if (typeof e.code === "string" && /^[0-9A-Z]{5}$/.test(e.code)) return e.code;
+    current = e.cause;
+  }
+  return undefined;
+}
+
+/** Transaction failures safe to retry only before COMMIT is sent. */
+export const PG_DEADLOCK_DETECTED = "40P01";
+export const PG_SERIALIZATION_FAILURE = "40001";

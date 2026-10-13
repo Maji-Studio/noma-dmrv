@@ -107,7 +107,7 @@ async function createFullWorkflowData(): Promise<TestWorkflowData> {
     };
 
     // 1. Create facility (infrastructure foundation)
-    await tx.insert(schema.facilities).values({
+    await tx.insert(schema.facilities).values({ timezone: "UTC",
         organizationId: DEC_ORG_ID,
       id: ids.facility,
       code: codes.facility,
@@ -177,7 +177,7 @@ async function createFullWorkflowData(): Promise<TestWorkflowData> {
       name: `E2E Test Vehicle ${testRunId}`,
       identifier: `Vehicle-${testRunId}`,
       vehicleType: "truck",
-      fuelType: "diesel",
+      fuelType: "Diesel",
       fuelConsumptionLPerKm: 0.3,
       modelYear: 2020,
     });

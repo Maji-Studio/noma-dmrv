@@ -22,12 +22,14 @@
   "account": {
     "id": "Unique account identifier",
     "userId": "FK to the user who owns this account",
-    "accountId": "Provider-specific account identifier (e.g. email)",
+    "accountId": "Provider-specific account identifier; the user id for email/password credentials",
     "providerId": "Auth provider type (credential, oauth, etc.)",
     "accessToken": "OAuth access token if applicable",
     "refreshToken": "OAuth refresh token if applicable",
     "idToken": "OAuth ID token if applicable",
-    "expiresAt": "Token expiry timestamp",
+    "accessTokenExpiresAt": "OAuth provider access token expiry timestamp; null for email/password credentials",
+    "refreshTokenExpiresAt": "OAuth provider refresh token expiry timestamp; null for email/password credentials",
+    "scope": "Granted OAuth provider scope; null for email/password credentials",
     "password": "Hashed password for credential auth",
     "createdAt": "Timestamp when the record was created",
     "updatedAt": "Timestamp of last modification"

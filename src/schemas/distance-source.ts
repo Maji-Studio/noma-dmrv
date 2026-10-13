@@ -24,6 +24,7 @@ export type DistanceSourceValue = (typeof distanceSources)[number];
 /** Form/action field: the provenance of the sibling distance field. */
 export const optionalDistanceSource = z
   .enum(distanceSources)
+  .describe("Distance evidence: map_estimate is a mapped route, manual is operator-entered, document is documented evidence.")
   .nullable()
   .optional();
 

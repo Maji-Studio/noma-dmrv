@@ -38,9 +38,27 @@ export const PRO_RATA_POLICY = 'pro_rata' satisfies DrawPolicy;
 export class UntickSubBinError extends RangeError {
   constructor(public readonly layerId: string) { super('Load never reaches this sub-bin; untick it'); }
 }
-/** The last sub-bin's measured solids exceed what its records hold; a count comes first. */
+/**
+ * The last sub-bin's measured solids exceed what its records hold; a count comes first.
+ * Carries the sub-bin's solids and what the load asks of it, and the same pair
+ * across every chosen sub-bin (the emptied ones give their whole solids).
+ */
 export class SubBinOverdrawError extends RangeError {
-  constructor(public readonly layerId: string) { super('Measured solids exceed the sub-bin'); }
+  constructor(public readonly layerId: string, readonly solids: SubBinOverdrawSolids) { super('Measured solids exceed the sub-bin'); }
+}
+export interface SubBinOverdrawSolids {
+  /** Exact solids the last sub-bin holds, kg. */
+  availableKg: Rational;
+  /** Exact solids the load leaves for the last sub-bin, kg. */
+  requestedKg: Rational;
+  /** Exact solids every chosen sub-bin holds, kg. */
+  selectedAvailableKg: Rational;
+  /** Exact solids of the whole load across the chosen sub-bins, kg. */
+  selectedRequestedKg: Rational;
+}
+/** The measured solids exceed the solids the eligible layers hold (kg, exact). */
+export class InsufficientSolidsError extends RangeError {
+  constructor(readonly availableSolidsKg: Rational, readonly requestedSolidsKg: Rational) { super('Insufficient exact dry solids'); }
 }
 
 /** Grid (per kg) a split draw's partial solids and a mix draw's shares are floored to: 1e-9 kg, one microgram. */
@@ -150,6 +168,7 @@ export function planOutputStock(layers: readonly OutputStockLayer[], occurredAt:
     let wetLeft = decimal(request.wetKg);
     if (wetLeft.numerator <= BigInt(0)) throw new RangeError('Draw must be positive');
     const byId = new Map(eligible.map(p => [p.layer.id, p]));
+    let emptiedSolidsKg = rational(BigInt(0));
     if (!request.sources.length) throw new RangeError('Choose at least one sub-bin');
     if (new Set(request.sources.map(source => source.layerId)).size !== request.sources.length ||
       request.sources.some(source => !byId.has(source.layerId))) {
@@ -165,9 +184,11 @@ export function planOutputStock(layers: readonly OutputStockLayer[], occurredAt:
         wetLeft = subtract(wetLeft, wetKg);
         if (wetLeft.numerator <= BigInt(0)) throw new UntickSubBinError(request.sources[index + 1].layerId);
         draw(p, p.capacity, wetKg, source.moisturePercent);
+        emptiedSolidsKg = add(emptiedSolidsKg, p.capacity);
       } else {
         const exactSolidsKg = multiply(wetLeft, fraction);
-        if (compare(exactSolidsKg, p.capacity) > BigInt(0)) throw new SubBinOverdrawError(source.layerId);
+        if (compare(exactSolidsKg, p.capacity) > BigInt(0)) throw new SubBinOverdrawError(source.layerId, { availableKg: p.capacity, requestedKg: exactSolidsKg,
+          selectedAvailableKg: add(emptiedSolidsKg, p.capacity), selectedRequestedKg: add(emptiedSolidsKg, exactSolidsKg) });
         // Emptied sub-bins pass their readings into this remainder's denominator. Rounding
         // the last partial draw down to a fixed grid keeps later exact balances bounded.
         const solidsKg = compare(exactSolidsKg, p.capacity) === BigInt(0) ? p.capacity : floorToGrid(exactSolidsKg);
@@ -182,7 +203,7 @@ export function planOutputStock(layers: readonly OutputStockLayer[], occurredAt:
     if (!count && measured.numerator <= BigInt(0)) throw new RangeError('Draw must be positive');
     discrepancySolidsKg = count ? subtract(measured, expectedSolidsKg) : rational(BigInt(0));
     const requested = count ? subtract(expectedSolidsKg, measured) : measured;
-    if (compare(requested, expectedSolidsKg) > BigInt(0)) throw new RangeError('Insufficient exact dry solids');
+    if (compare(requested, expectedSolidsKg) > BigInt(0)) throw new InsufficientSolidsError(expectedSolidsKg, requested);
     let left = requested.numerator > BigInt(0) ? requested : rational(BigInt(0));
     const readingPercent = request.kind === 'wet' ? request.moisturePercent : null;
     const take = (p: Prepared, solidsKg: Rational) =>

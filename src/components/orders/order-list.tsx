@@ -1,8 +1,10 @@
+"use client";
+
+import { toDeleteErrorMessage } from "@/lib/stale-version";
 /**
  * OrderList component
  * Main order listing with CRUD operations, filters, and DataTable
  */
-"use client";
 
 import { EntitySelect, ServerError } from "@/components/forms";
 import { SelectFacilityEmptyState } from "@/components/navigation";
@@ -152,6 +154,7 @@ export function OrderList() {
 
   // Delete state
   const [deletingOrderId, setDeletingOrderId] = useState<string | null>(null);
+  const [deletingVersion, setDeletingVersion] = useState<number | null>(null);
 
   // Error state
   const [formError, setFormError] = useState<string | null>(null);
@@ -227,7 +230,7 @@ export function OrderList() {
     if (!sideSheet?.entity) return;
     setFormError(null);
     try {
-      await updateOrder.mutateAsync({ orderId: sideSheet.entity.id, ...data });
+      await updateOrder.mutateAsync({ orderId: sideSheet.entity.id, expectedVersion: sideSheet.entity.version, ...data });
       closeSideSheet();
       toast.success("Order updated.");
     } catch (error) {
@@ -235,17 +238,22 @@ export function OrderList() {
     }
   };
 
-  const handleDelete = (orderId: string) => setDeletingOrderId(orderId);
+  const handleDelete = (orderId: string) => {
+    const row = (orders).find((item) => item.id === orderId);
+    if (!row) return;
+    setDeletingVersion(row.version);
+    setDeletingOrderId(orderId);
+  };
 
   const handleDeleteConfirm = async () => {
-    if (!deletingOrderId) return;
+    if (!deletingOrderId || deletingVersion === null) return;
     setDeleteError(null);
     try {
-      await deleteOrder.mutateAsync(deletingOrderId);
+      await deleteOrder.mutateAsync({ orderId: deletingOrderId, expectedVersion: deletingVersion });
       setDeletingOrderId(null);
       toast.success("Order deleted.");
     } catch (error) {
-      setDeleteError(error instanceof Error ? error.message : "Order was not deleted. Try again.");
+      setDeleteError(toDeleteErrorMessage(error, "Order", "Order was not deleted. Try again."));
     }
   };
 

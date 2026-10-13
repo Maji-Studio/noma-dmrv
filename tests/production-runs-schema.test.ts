@@ -61,7 +61,7 @@ describe("production run action feedstock contract", () => {
   });
 
   it("rejects legacy feedstock fields on update", () => {
-    const result = updateProductionRunSchema.safeParse({
+    const result = updateProductionRunSchema.safeParse({ expectedVersion: 1,
       productionRunId: "55555555-5555-4555-8555-555555555555",
       feedstockWetMassKg: 100,
       feedstockStorageLocationId:

@@ -320,10 +320,12 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
           name="orderId"
           label="Order"
           entityType="order"
+          allowEdit
           placeholder="Select order..."
           required
           showRemainingDryMass={false}
-          disabled={isSubmitting || isEditMode || !formFacilityId}
+          disabled={isSubmitting || !formFacilityId}
+          selectionLocked={isEditMode}
           filterBy={formFacilityId ? { facilityId: formFacilityId } : undefined}
           emptyHint={{
             message:
@@ -405,29 +407,7 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
           activeTarget={focusTarget}
           actionLabel="Complete the saved transport route information"
         >
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-          <FormField
-            id="distanceKmOverride"
-            label="One-way distance"
-            unit="km"
-            error={errors.distanceKmOverride?.message}
-            helperText={distanceHelperText}
-            cue={distanceCue}
-          >
-            <FormInput
-              id="distanceKmOverride"
-              type="number"
-              step="any"
-              min={0}
-              placeholder="e.g., 85"
-              disabled={isSubmitting}
-              error={!!errors.distanceKmOverride}
-              value={distanceDraft}
-              onChange={(event) => handleDistanceChange(event.target.value)}
-              onBlur={handleDistanceBlur}
-            />
-          </FormField>
-
+        <div className="grid grid-cols-1 gap-x-16 gap-y-20">
           <FormField
             id="distanceSource"
             label="Distance source"
@@ -447,6 +427,28 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
               value={effectiveDraftDistanceSource ?? ""}
               onChange={(event) => handleDistanceSourceChange(event.target.value)}
               onBlur={() => void trigger("distanceSource")}
+            />
+          </FormField>
+
+          <FormField
+            id="distanceKmOverride"
+            label="One-way distance"
+            unit="km"
+            error={errors.distanceKmOverride?.message}
+            helperText={distanceHelperText}
+            cue={distanceCue}
+          >
+            <FormInput
+              id="distanceKmOverride"
+              type="number"
+              step="any"
+              min={0}
+              placeholder="e.g., 85"
+              disabled={isSubmitting}
+              error={!!errors.distanceKmOverride}
+              value={distanceDraft}
+              onChange={(event) => handleDistanceChange(event.target.value)}
+              onBlur={handleDistanceBlur}
             />
           </FormField>
 

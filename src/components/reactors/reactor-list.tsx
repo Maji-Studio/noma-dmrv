@@ -4,6 +4,8 @@
  * Includes stat cards and unified EntitySideSheet
  */
 "use client";
+import { StaleVersionError, toDeleteErrorMessage } from "@/lib/stale-version";
+
 
 import { useState } from "react";
 import { useDebounce } from "@/hooks/use-debounce";
@@ -115,7 +117,7 @@ export function ReactorList() {
     entity: ReactorWithRelations | null;
     mode: SideSheetMode;
   } | null>(null);
-  const [deletingReactorId, setDeletingReactorId] = useState<string | null>(null);
+  const [deletingReactor, setDeletingReactor] = useState<ReactorWithRelations | null>(null);
 
   // Error state
   const [createError, setCreateError] = useState<string | null>(null);
@@ -183,7 +185,7 @@ export function ReactorList() {
     if (!sideSheet?.entity) return;
     setUpdateError(null);
     try {
-      await updateReactor.mutateAsync({ reactorId: sideSheet.entity.id, ...data });
+      await updateReactor.mutateAsync({ reactorId: sideSheet.entity.id, expectedVersion: sideSheet.entity.version, ...data });
       setSideSheet(null);
       toast.success("Reactor updated.");
     } catch (error) {
@@ -192,18 +194,19 @@ export function ReactorList() {
   };
 
   const handleDelete = (reactorId: string) => {
-    setDeletingReactorId(reactorId);
+    setDeletingReactor((reactorsData?.items ?? []).find((row) => row.id === reactorId) ?? null);
   };
 
   const handleDeleteConfirm = async () => {
-    if (!deletingReactorId) return;
+    if (!deletingReactor) return;
     setDeleteError(null);
     try {
-      await deleteReactor.mutateAsync(deletingReactorId);
-      setDeletingReactorId(null);
+      await deleteReactor.mutateAsync({ reactorId: deletingReactor.id, expectedVersion: deletingReactor.version });
+      setDeletingReactor(null);
       toast.success("Reactor deleted.");
     } catch (error) {
-      setDeleteError(error instanceof Error ? error.message : "Reactor was not deleted. Try again.");
+      if (error instanceof StaleVersionError) setDeletingReactor(null);
+      setDeleteError(toDeleteErrorMessage(error, `Reactor ${deletingReactor.code}`, "Reactor was not deleted. Try again."));
     }
   };
 
@@ -339,12 +342,12 @@ export function ReactorList() {
 
       {/* Delete Confirmation Dialog */}
       <DeleteConfirmDialog
-        isOpen={!!deletingReactorId}
+        isOpen={!!deletingReactor}
         title="Delete reactor"
         message="Are you sure you want to delete this reactor? This action cannot be undone. Note: Reactors with associated production runs cannot be deleted."
         onConfirm={handleDeleteConfirm}
         onCancel={() => {
-          setDeletingReactorId(null);
+          setDeletingReactor(null);
           setDeleteError(null);
         }}
         isPending={deleteReactor.isPending}

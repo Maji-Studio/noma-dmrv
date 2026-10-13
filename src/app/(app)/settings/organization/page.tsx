@@ -5,6 +5,7 @@
 import { redirect } from "next/navigation";
 import { OrganizationSettings } from "@/components/organizations/organization-settings";
 import { SettingsConsole } from "@/components/settings";
+import { canOwnApiKey } from "@/lib/auth/api-scopes";
 import { getOrgContext } from "@/lib/auth/server";
 import { readActiveOrganization } from "@/lib/read-models";
 
@@ -31,6 +32,7 @@ export default async function OrganizationSettingsPage() {
           : "Manage members and access for your organization."
       }
       canManageDefaults={canManage}
+      canManageApiKeys={canOwnApiKey(ctx.orgRole)}
       isPlatformAdmin={ctx.isPlatformAdmin}
     >
       <OrganizationSettings canManage={canManage} />

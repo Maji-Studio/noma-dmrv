@@ -3,6 +3,7 @@
  * Main biochar product listing with CRUD operations, stat cards, and DataTable
  */
 "use client";
+import { StaleVersionError, toDeleteErrorMessage } from "@/lib/stale-version";
 
 import { ServerError } from "@/components/forms";
 import { SelectFacilityEmptyState } from "@/components/navigation";
@@ -268,7 +269,8 @@ export function BiocharProductList() {
   );
   const creditBatchFilter = creditBatchFilterParam ?? "";
   const [sideSheet, setSideSheet] = useState<SideSheetState | null>(null);
-  const [deletingProductId, setDeletingProductId] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<BiocharProductWithRelations | null>(null);
+  const deletingProductId = deleting?.id;
   const [formError, setFormError] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [searchInput, setSearchInput] = useState("");
@@ -302,11 +304,18 @@ export function BiocharProductList() {
   const toast = useToast();
 
   const products = productsData?.items ?? [];
+  const setDeletingProductId = (id: string | null) => setDeleting(products.find(row => row.id === id) ?? null);
+  // Freeze the version beneath a deep-linked edit draft across refetches.
+  const [deepLinkSnapshot, setDeepLinkSnapshot] = useState<BiocharProductWithRelations | null>(null);
+  if (!focusedProductId && deepLinkSnapshot) setDeepLinkSnapshot(null);
+  if (focusedProductId && focusedProduct.data && deepLinkSnapshot?.id !== focusedProductId) {
+    setDeepLinkSnapshot(focusedProduct.data);
+  }
   const deepLinkedSideSheet =
     focusedProductId && focusedProduct.data
       ? ({
           mode: deepLinkMode === "edit" ? "edit" : "view",
-          entity: focusedProduct.data,
+          entity: deepLinkMode === "edit" ? deepLinkSnapshot ?? focusedProduct.data : focusedProduct.data,
         } as const)
       : null;
   const displaySideSheet = sideSheet ?? deepLinkedSideSheet;
@@ -373,7 +382,7 @@ export function BiocharProductList() {
     if (!editing) return;
     setFormError(null);
     try {
-      await updateProduct.mutateAsync({ productId: editing.id, ...data });
+      await updateProduct.mutateAsync({ productId: editing.id, expectedVersion: editing.version, ...data });
       setSideSheet(null);
       setFocusedProductId(null);
       setDeepLinkMode(null);
@@ -387,14 +396,15 @@ export function BiocharProductList() {
   const handleDelete = (productId: string) => setDeletingProductId(productId);
 
   const handleDeleteConfirm = async () => {
-    if (!deletingProductId) return;
+    if (!deleting) return;
     setDeleteError(null);
     try {
-      await deleteProduct.mutateAsync(deletingProductId);
+      await deleteProduct.mutateAsync({ productId: deleting.id, expectedVersion: deleting.version });
       setDeletingProductId(null);
       toast.success("Biochar product deleted.");
     } catch (error) {
-      setDeleteError(error instanceof Error ? error.message : "Biochar product was not deleted. Try again.");
+      if (error instanceof StaleVersionError) setDeleting(null);
+      setDeleteError(toDeleteErrorMessage(error, `Biochar product ${deleting.code}`, "Biochar product was not deleted. Try again."));
     }
   };
 

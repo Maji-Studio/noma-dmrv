@@ -55,8 +55,10 @@ export interface EntitySelectProps {
   onChange: (value: string | undefined) => void;
   /** Placeholder text */
   placeholder?: string;
-  /** Whether the field is disabled */
+  /** Disables all picker interaction, including editing. */
   disabled?: boolean;
+  /** Locks selection while allowing an Edit-only menu for the selected entity. */
+  selectionLocked?: boolean;
   /** Whether the field has an error */
   error?: boolean;
   /** Optional className for styling */
@@ -115,12 +117,13 @@ export interface EntitySelectProps {
     label: string;
     subtitle?: string;
   };
-  /**
-   * Buttons rendered to the right of the trigger (e.g. View / Edit for the
-   * selected entity). They sit outside the dropdown's box, so the option list
-   * keeps the trigger's width.
-   */
-  trailingActions?: React.ReactNode;
+  /** Open the shared edit modal for the selected entity. */
+  allowEdit?: boolean;
+  /** Opens the selected entity without changing the value. */
+  onEditSelected?: () => void;
+  /** Overrides the default Edit <selectedOption.name> label. */
+  editLabel?: string;
+
 }
 
 export interface UseEntityOptionsParams {

@@ -6,25 +6,21 @@
  */
 
 import {
-  createBiocharProduct,
   deleteBiocharProduct,
   getBiocharProductById as getBiocharProductByIdData,
   getBiocharProducts as getBiocharProductsData,
-  updateBiocharProduct,
   type BiocharProductWithRelations,
   type PaginatedBiocharProducts,
 } from "@/data-access/biochar-products";
-import type { BiocharProduct } from "@/db/schema";
+import type { BiocharProductRecord } from "@/db/schema";
 import { z } from "zod";
 
-import {
-  CODE_CONFLICT_MESSAGES,
-  withAutoCode,
-} from "@/data-access/code-generator";
 import { requireOrgFacility } from "@/data-access/utils";
-import { biocharProducts } from "@/db/schema";
 import { requireOrgContext } from "@/lib/auth/server";
-import { toCompositionJsonb } from "@/lib/biochar-composition/composition";
+import { deriveSourceBiocharMassKg, toCompositionJsonb } from "@/lib/biochar-composition/composition";
+import { SafeError } from "@/lib/errors";
+import { makeBiocharProduct, updateBiocharProduct } from "@/lib/operations/biochar-products";
+import { runOperationInProcess } from "@/lib/operations/runner";
 import {
   biocharProductFilterSchema,
   createBiocharProductSchema,
@@ -37,6 +33,8 @@ import {
   formatZodActionError,
   toLoggedActionError,
 } from "./action-errors";
+
+const ZERO_SOURCE_BIOCHAR_MESSAGE = "A product requires positive source biochar.";
 
 function biocharProductActionError(
   error: unknown,
@@ -117,45 +115,42 @@ export async function getBiocharProductByIdFn(
 // ============================================
 
 /**
- * Create a new biochar product
+ * Create a new biochar product through `make_biochar_product`, as the API
+ * does. The form submits the pre-water blend; the operation takes the biochar
+ * as weighed and derives the same blend again.
  */
 export async function createBiocharProductFn(
   data: z.infer<typeof createBiocharProductSchema>
-): Promise<ActionResult<BiocharProduct>> {
+): Promise<ActionResult<BiocharProductRecord>> {
   return withAction(async (ctx) => {
     const validated = createBiocharProductSchema.parse(data);
+    const ingredientBins = validated.ingredientBins ?? [];
+    const biocharWetMassKg = deriveSourceBiocharMassKg(validated.massKg, ingredientBins);
+    if (biocharWetMassKg == null || biocharWetMassKg <= 0) throw new SafeError(ZERO_SOURCE_BIOCHAR_MESSAGE);
 
-    const composition = toCompositionJsonb(validated.ingredientBins, { mode: "create" });
+    const created = await runOperationInProcess(makeBiocharProduct, ctx, {
+      facilityId: validated.facilityId,
+      formulationId: validated.formulationId,
+      placedAt: validated.placedAt,
+      status: validated.status,
+      sourceBiocharStorageLocationId: validated.sourceBiocharStorageLocationId,
+      storageLocationId: validated.storageLocationId,
+      biocharWetMassKg,
+      // A split biochar bin is read per sub-bin; its rows replace the one moisture.
+      ...(validated.sources ? { sources: validated.sources } : { biocharMoisturePercent: validated.moistureContentPercent ?? null }),
+      waterAddedKg: validated.waterAddedKg,
+      densityKgM3: validated.densityKgM3 ?? null,
+      ingredients: ingredientBins.map((bin) => ({
+        formulationIngredientId: bin.formulationIngredientId,
+        storageLocationId: bin.storageLocationId ?? null,
+        wetMassKg: bin.massKg,
+        moisturePercent: bin.moistureContentPercent ?? null,
+      })),
+      basisFingerprint: validated.basisFingerprint,
+      idempotencyKey: validated.idempotencyKey,
+    });
 
-    const product = await withAutoCode(
-      ctx,
-      "BP",
-      biocharProducts,
-      biocharProducts.code,
-      undefined,
-      (code) =>
-        createBiocharProduct(ctx, {
-          code,
-          facilityId: validated.facilityId,
-          formulationId: validated.formulationId,
-          placedAt: validated.placedAt,
-          idempotencyKey: validated.idempotencyKey,
-          basisFingerprint: validated.basisFingerprint,
-          status: validated.status,
-          sourceBiocharStorageLocationId:
-            validated.sourceBiocharStorageLocationId,
-          storageLocationId: validated.storageLocationId || null,
-          massKg: validated.massKg ?? null,
-          moistureContentPercent: validated.moistureContentPercent ?? null,
-          sources: validated.sources,
-          densityKgM3: validated.densityKgM3 ?? null,
-          waterAddedKg: validated.waterAddedKg ?? null,
-          composition,
-        }),
-      CODE_CONFLICT_MESSAGES.biocharProduct,
-    );
-
-    return product;
+    return created.product;
   }, {
     fallbackMessage: "Failed to create biochar product",
     log: { message: "biochar product action failed", context: { op: "biochar-product:create" } },
@@ -167,49 +162,36 @@ export async function createBiocharProductFn(
 // ============================================
 
 /**
- * Update an existing biochar product
+ * Update an existing biochar product through `update_biochar_product`. The
+ * form resends the posted facts, so a changed one is refused, not ignored.
  */
 export async function updateBiocharProductFn(
   data: z.infer<typeof updateBiocharProductSchema>
-): Promise<ActionResult<BiocharProduct>> {
-  try {
-    const ctx = await requireOrgContext();
-
+): Promise<ActionResult<BiocharProductRecord>> {
+  return withAction(async (ctx) => {
     const validated = updateBiocharProductSchema.parse(data);
 
     const composition = toCompositionJsonb(validated.ingredientBins, { mode: "update" });
 
-    const product = await updateBiocharProduct(ctx, validated.productId, {
+    return runOperationInProcess(updateBiocharProduct, ctx, {
+      biocharProductId: validated.productId,
+      expectedVersion: validated.expectedVersion,
       code: validated.code,
       facilityId: validated.facilityId,
       formulationId: validated.formulationId,
       placedAt: validated.placedAt,
       status: validated.status,
-      storageLocationId: validated.storageLocationId === "" ? null : validated.storageLocationId,
+      storageLocationId: validated.storageLocationId,
       massKg: validated.massKg,
       moistureContentPercent: validated.moistureContentPercent,
       densityKgM3: validated.densityKgM3,
       waterAddedKg: validated.waterAddedKg,
       ...(composition !== undefined && { composition }),
     });
-
-    return { success: true, data: product };
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return {
-        success: false,
-        error: formatZodActionError(error),
-      };
-    }
-    return {
-      success: false,
-      error: biocharProductActionError(
-        error,
-        "Failed to update biochar product",
-        "biochar-product:update",
-      ),
-    };
-  }
+  }, {
+    fallbackMessage: "Failed to update biochar product",
+    log: { message: "biochar product action failed", context: { op: "biochar-product:update" } },
+  });
 }
 
 // ============================================
@@ -222,27 +204,13 @@ export async function updateBiocharProductFn(
 export async function deleteBiocharProductFn(
   data: z.infer<typeof deleteBiocharProductSchema>
 ): Promise<ActionResult<void>> {
-  try {
-    const ctx = await requireOrgContext();
-
+  return withAction(async (ctx) => {
     const validated = deleteBiocharProductSchema.parse(data);
-    await deleteBiocharProduct(ctx, validated.productId);
+    await deleteBiocharProduct(ctx, validated.productId, validated.expectedVersion);
 
-    return { success: true, data: undefined };
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return {
-        success: false,
-        error: formatZodActionError(error),
-      };
-    }
-    return {
-      success: false,
-      error: biocharProductActionError(
-        error,
-        "Failed to delete biochar product",
-        "biochar-product:delete",
-      ),
-    };
-  }
+    return;
+  }, {
+    fallbackMessage: "Failed to delete biochar product",
+    log: { message: "biochar product action failed", context: { op: "biochar-product:delete" } },
+  });
 }

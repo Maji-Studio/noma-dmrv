@@ -13,9 +13,7 @@ import {
 } from "@/components/forms";
 import {
   facilityFormSchema,
-  timezones,
   type FacilityFormData,
-  type Timezone,
 } from "@/schemas/facilities";
 import {
   durabilityOptions,
@@ -27,21 +25,21 @@ import {
   FacilityIsometricConnector,
 } from "@/components/certification";
 import { useOrganizationDefaultValues } from "@/hooks/use-organization-settings";
+import { isValidIanaTimezone } from "@/lib/timezones";
 import { TimezoneCombobox } from "./timezone-combobox";
 
 // 1000-year is the go-forward tier (ADR 0021); new facilities default to it.
 const DEFAULT_DURABILITY_OPTION: DurabilityOption = "1000_year";
 
 /**
- * A zone the picker actually offers, or `undefined`. Both the facility column
- * and the organization default are free text, so either can hold a zone this
- * list does not carry; seeding the select with one would leave it showing the
- * first option and silently save that instead.
+ * A zone the picker offers, or `undefined`. The facility column and the
+ * organization default are free text, so either can hold a zone the catalogue
+ * does not carry; seeding the picker with one would show a value the schema
+ * then rejects. No zone is assumed when neither holds a valid one: the field
+ * starts empty and the operator chooses.
  */
-function resolveTimezone(zone: string | null | undefined): Timezone | undefined {
-  return zone && timezones.includes(zone as Timezone)
-    ? (zone as Timezone)
-    : undefined;
+function resolveTimezone(zone: string | null | undefined): string | undefined {
+  return isValidIanaTimezone(zone) ? zone : undefined;
 }
 
 function getDefaultDurabilityOption(
@@ -108,7 +106,8 @@ export function FacilityForm({
 
   const gpsLatitude = watch("gpsLatitude");
   const gpsLongitude = watch("gpsLongitude");
-  const timezone = watch("timezone") as Timezone | undefined;
+  const timezone = watch("timezone") as string | undefined;
+  const country = watch("country");
   const durabilityOption = watch("durabilityOption") ?? DEFAULT_DURABILITY_OPTION;
   const timezoneField = register("timezone");
 
@@ -161,7 +160,7 @@ export function FacilityForm({
         </FormField>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
+      <div className="grid grid-cols-1 gap-x-16 gap-y-20">
         <FormField
           id="timezone"
           label="Timezone"
@@ -173,6 +172,7 @@ export function FacilityForm({
             name={timezoneField.name}
             inputRef={timezoneField.ref}
             value={timezone}
+            country={country}
             onChange={(value) =>
               setValue("timezone", value, {
                 shouldDirty: true,

@@ -143,7 +143,7 @@ async function createFixture(
   const externalProjectId = `prj_ggs_bd_${runId}`;
   const [facility] = await db
     .insert(facilities)
-    .values({ organizationId: TEST_ORG_ID, name: `GGS Boundary Facility ${runId}`, code: `FAC-GB-${runId}` })
+    .values({ timezone: "UTC", organizationId: TEST_ORG_ID, name: `GGS Boundary Facility ${runId}`, code: `FAC-GB-${runId}` })
     .returning({ id: facilities.id });
   createdFacilityIds.push(facility.id);
   await db.insert(certifierProjects).values({

@@ -13,7 +13,7 @@ in [forms.md](./forms.md); naming and React rules in
 components (UI)
   -> hooks (React Query)
   -> /api/reads Route Handlers (migrated reads) / fn (everything else)
-  -> lib/read-models (transport-neutral read orchestration)
+  -> lib/read-models (reads) / lib/operations (migrated writes)
   -> data-access (org scope + queries)
   -> db (Drizzle schema + connection)
 ```
@@ -21,11 +21,28 @@ components (UI)
 - UI never talks directly to `db`; no layer skipping.
 - `fn/` is `"use server"`, validates with Zod, returns `ActionResult<T>`.
 - Trusted-context implementations (anything taking an already resolved
-  `OrgContext`) live in directive-free modules, conventionally
-  `fn/**/*-core.ts` (`source-candidates.ts` and `submit-removal.ts` are
-  directive-free too). A `"use server"` file exports only actions that
-  resolve their own context from the session (`withAction`); CI enforces this
-  with `pnpm check:server-action-exports`.
+  `OrgContext`) live in directive-free modules. Migrated writes use
+  `src/lib/operations/`; legacy cores remain under fn/**/*-core.ts.
+  A `"use server"` file exports only actions that resolve their own context
+  from the session (`withAction`); CI enforces this with
+  `pnpm check:server-action-exports`.
+- `src/lib/operations/` defines each operation as an `id`, an `input` Zod
+  schema and an `execute` function. `runOperation` serves transports with
+  JSON-normalized results, idempotency and dry run. `runOperationInProcess`
+  serves Server Actions with native types, including `Date` and `undefined`.
+  The action shape is `withAction((ctx) => runOperationInProcess(op, ctx, input))`.
+  `src/lib/operations/registry.ts` is the explicit allowlist of exposed
+  operations; its keys match operation ids. Feedstock, production-run, biochar-product and
+  output-stock movement and lab sample writes use this layer (`make_biochar_product`,
+  `update_biochar_product`, `record_output_stock_movement`, `record_lab_sample`,
+  `update_lab_sample`, `delete_lab_sample`). UI product deletes
+  stay off the runner. UI delivery corrections use the runner through
+  `record_output_stock_movement` but stay off the API (decision 50).
+- The runner owns the transaction. Data-access ...InTransaction(ctx, tx, ...)
+  functions and the helpers they call read and write only through `tx`,
+  including reference checks and result enrichment. After-commit hooks run
+  after a real commit; dry runs roll back and skip them.
+  Before COMMIT, deadlocks, serialization failures and operation lock-timeout aborts retry the whole transaction within the deadline, including dry runs; exhausted attempts return retryable `concurrent_write_retry`.
 - `src/lib/read-models/` holds server-only read cores that take an already
   resolved `OrgContext` and return domain data. They are not Server Actions and
   are not exported from a `"use server"` file; the caller authenticates first.
@@ -88,10 +105,11 @@ geocode/route are the current users.
 Two more options exist for migrating the legacy wrappers without changing what
 they log or return. `log: { message, context }` replaces the generic
 "server action failed" log line, so an entity module keeps its own message and
-`op` context. `mapError(error)` runs after the Zod and conflict branches and
-before the logged fallback: return a failure result for a domain error the
-action answers itself (a field error, a conflict of its own; the returned
-shape is preserved in the action's result type), or `undefined` to fall
+`op` context. `mapError(error)` runs after the Zod, `DomainError` and conflict
+branches and before the logged fallback. A `DomainError` is always formatted
+by `toActionFailure`; `mapError` never sees it. Return a failure result for
+another safe error the action answers itself (a field error, a conflict of its
+own; the returned shape is preserved in the action's result type), or `undefined` to fall
 through. A mapped result bypasses `toActionError` and is not logged, so map
 only error classes that extend `SafeError`, whose messages are written for
 the operator; anything else must fall through to the logged fallback.
@@ -106,9 +124,15 @@ disclosure bug.
 
 ### `ActionResult` — every server function returns this
 
-`src/types/actions.ts`. The failure branch may carry
-`conflict?: ConflictRef` so a form can deep-link the operator to the blocking
-record instead of only showing text, and `blockers?: ConflictRef[]` next to it
+`src/types/actions.ts`. The failure branch keeps readable `error` text and
+adds an optional stable `code` plus `issues` with field paths, issue codes,
+messages and safe constraint metadata. Domain errors keep their domain code;
+Zod failures use `validation_failed`. A stale conflict uses `stale_version`,
+and other typed conflicts use `conflict`. Legacy safe errors and unexpected
+failures can still omit `code` and `issues`.
+
+The failure branch may carry `conflict?: ConflictRef` so a form can deep-link
+the operator to the blocking record instead of only showing text, and `blockers?: ConflictRef[]` next to it
 for the further records that also stand in the way, in the order the operator
 should clear them. `ConflictRef` (`src/lib/conflict-ref.ts`) is
 `{ entity, id, code }`. `code` is what the operator reads for that record,
@@ -138,24 +162,44 @@ transaction. Never use it to describe a rollback. Copy vocabulary:
 
 ### Expected-version checks on edit forms
 
-`src/lib/stale-version.ts` (client-safe vocabulary) + `assertExpectedVersion`
-in `src/data-access/expected-version.ts`. An edit form sends the `updatedAt` it
-loaded as `expectedUpdatedAt`; the updater compares it against the row it read
-under `FOR UPDATE` and throws `ActionConflictError` with
-`code: "stale-version"` when they differ. The hook re-throws that as
-`StaleVersionError`, and the form shows `STALE_VERSION_MESSAGE` in its error
-banner while keeping the operator's draft. The field is always optional, so a
-payload that never loaded a version still saves. The check guards against a
-stale cached row as much as a second operator: two tabs, or an edit sheet
-opened off a cached list. The rule is blanket: every updater with an edit form
-must do the check, and every edit form must send `expectedUpdatedAt`.
-Implemented today for facility, feedstock, storage bin, customer (+ location),
-supplier (+ location), application, production run and facility emission
-factors. The factors save is an upsert: its form sends `null` when it loaded
-no row, so a row saved since (or a concurrent first save, serialized by the
-facility row lock) is refused as stale. The edit forms that do
-not check yet are listed in [open-questions.md](./open-questions.md) under
-`architecture/expected-version-gaps`.
+`src/data-access/row-version.ts` owns the integer row-version pattern.
+Call `assertRowVersion` immediately after the org-scoped `FOR UPDATE` read,
+and include `nextVersion` in every writer's `.set()` so the version increments
+in the same statement as the change. Sibling and cascade writes bump every
+affected row too, including facility archive and restore. Ordinary UI updates
+and deletes must send the `expectedVersion` loaded when the operator opened
+the record. Feedstocks, facilities, reactors, storage bins, suppliers and their
+locations, customers and their locations, formulations, feedstock types,
+facility emission factors, production runs, production incidents, in-process
+measurements (`productionSamples`), biochar products, lab samples, orders,
+deliveries, transport legs, applications, and credit batches use integer row
+versions. Inserts start at version 1. Stock loss, count, and correction commands
+send the product versions from their preview; posting checks the affected
+products and returns their incremented rows. Delivery creation deliberately
+consumes current stock under bin locks and bumps its affected products as an
+internal side effect. Facility archive and restore bump descendant runs and
+products without child preconditions.
+
+Vehicles, drivers and operators use integer row versions for edits and deletes (`src/data-access/vehicles.ts`, `drivers.ts`, `operators.ts`).
+
+Successful saves and corrections merge returned versions into every list cache
+that supplies edit sheets before invalidation. Stale deletes refresh the list
+and explain that the record was not deleted.
+
+A mismatch throws `DomainError` with `code: "stale_version"` and a conflict
+reference to the edited record using the `stale-version` sentinel. The hook
+re-throws it as `StaleVersionError` through `src/lib/stale-version.ts`. The
+form shows `STALE_VERSION_MESSAGE` while keeping the operator's draft.
+
+The emission-factors upsert instead requires `expectedVersion: number | null`.
+Its form sends `null` when it loaded no row, so a row saved since (or a
+concurrent first save, serialized by the facility row lock) is refused as stale.
+A numeric version must match the locked factors row.
+
+Internal current-state commands bump without child preconditions: derived
+transport-leg sync, credit-batch auto-attachment and membership sample links, registry submission
+state, removal deletion, claim reservations, delivery stock-posting side effects,
+and facility archive/restore cascades.
 
 ### Facility context
 
@@ -173,6 +217,16 @@ populate the dropdown; `useOpenCreateIntent()` opens create dialogs from
 `?create=true` deep links. `FormEntitySelect` auto-clears when parent values
 change via `dependsOn` (backed by the standalone `useClearOnDependencyChange`).
 See [forms.md](./forms.md).
+
+The vehicle, driver and operator quick-add dialogs also edit: pass the loaded
+record (`vehicle`, `driver`, `operator`), or render `EntityEditDialog` with
+`{ entityType, entityId, isOpen, onClose }` to load it by id. A save seeds the picker's entity cache
+with the new name. Deletes refuse while any record references the row and name
+where it is used (`src/data-access/fleet-usage.ts`). A vehicle's type is
+copied onto each feedstock intake's derived transport leg, so a type or model
+year edit refreshes those leg snapshots in the same transaction. A type change
+is refused, naming the credit batch, while a submitted credit batch holds an
+intake or delivery that uses the vehicle.
 
 ### Structured logging — `@/lib/log` (server-only)
 
@@ -199,9 +253,12 @@ runtime.
   `src/app/(app)/admin/*` admin-only · `src/app/api/*` API routes.
 - `src/app/(app)/layout.tsx` enforces auth and mounts `FacilityProvider`.
 - **Three configuration surfaces, deliberately not one.** `/settings`
-  (`Members` · `Defaults`) is org configuration. Every member can view the
+  (`Members` · `Defaults` · `Vehicles and crew` · `API keys`) is org configuration. Every member can view the
   Members roster; only Owners/Admins (and Platform Admins) can mutate membership
-  or open Defaults. `/certification/settings` is registry configuration and
+  or open Defaults. Every member can edit and delete vehicles, drivers and
+  operators in Vehicles and crew, as every member can create them from a picker. API keys require a verified Owner/Admin membership; a
+  Platform Admin without that membership cannot manage keys.
+  `/certification/settings` is registry configuration and
   stays there by ADR
   [0007](./adr/0007-certification-workspace-consolidation.md). `/admin` is
   cross-tenant platform administration (`users.role === "admin"`) and is now
@@ -213,12 +270,18 @@ runtime.
   runtime (not Edge) so Better Auth can use `crypto`. The matcher covers
   everything except static assets — **including `/api`**; `/api/auth/*` is
   explicitly allowed through.
+- The proxy lets exact `/api/mcp`, `/api/v1`, and `/api/v1/*` through before
+  session lookup. MCP and private REST routes resolve bearer API keys with `resolveApiContext`;
+  `/api/v1x`, `/api/mcpx` and `/api/mcp/tools` stay behind the session, covered by
+  `tests/middleware.test.ts`.
 - Data-access org checks remain the source of truth for authorization; the proxy
   is routing, not authz. See [auth.md](./auth.md).
-- Six API route families: `/api/auth/[...all]`,
+- Nine API route families: `/api/auth/[...all]`,
   `/api/storage-local/[...key]`, `/api/documents/[id]`,
-  `/api/ghg-statement-reports/[reportId]`, and
-  `/api/certification/submissions`, plus private `/api/reads/*`. Documents are
+  `/api/ghg-statement-reports/[reportId]`,
+  `/api/certification/submissions`, private `/api/reads/*`, bearer-authenticated `/api/v1/*`,
+  authenticated `/api/mcp`, and secret-authenticated
+  `/api/cron/purge-api-records`. Documents are
   normally resolved through `getOrgContext()`. The report route is the one
   deliberate public bearer-capability seam: middleware lets it through, then
   the route verifies a per-report token against the stored digest and redirects
@@ -517,3 +580,290 @@ plain Actions secret. See [security.md](./security.md) → Secrets Management.
 
 See [Output stock and completed deliveries](output-stock.md) for physical FIFO,
 conserved dry stock, immutable corrections, and saved downstream provenance.
+
+## REST credential boundary
+
+`/api/v1` bypasses session middleware. Private routes authenticate through
+`resolveApiContext`. This privileged authentication seam reads the key's hash,
+owner and live membership through `data-access/api-credential-auth.ts` before
+constructing an `OrgContext`; its cross-organization lookup is explicitly
+waived. Membership hooks use the same module to disable affected credentials.
+Ordinary credential management keeps the action → data-access → database
+flow and never trusts input organization or owner IDs. The plugin retains
+hashing and verification responsibility.
+
+`GET /api/v1/me` uses `lib/read-models/api-me.ts` → `data-access/api-me.ts`;
+route handlers do not import the database. The shared REST problem builder
+lives at `lib/api/problem.ts`. See [auth.md](./auth.md#api-credentials) for
+credential and denial contracts.
+
+### Lab samples on the runner
+
+Lab sample create, update (including a move to another credit batch) and delete
+run through `src/lib/operations/lab-samples.ts`; the Server Actions in
+`src/fn/samples.ts` and REST/MCP share them. Every writer takes locks in one
+order (`src/data-access/samples/write-scope.ts`): certification artifacts for
+every lineage the write touches, then credit batches in id order, then the
+sample. The set includes the batch a legacy production run link reaches, and a
+transport leg whose parent is a sample takes the same scope. Lineage is
+re-resolved against the artifacts held, so a Removal assigned while the writer
+waited refuses the write (`certification_locked`) and no artifact is locked late.
+Existence, archive state, facility, window and time zone are read from the
+locked batch. Archived batches refuse create, update and move. Facility archive
+locks its credit batches in id order first, matching the sample writers.
+Ratios and warnings come from the merged locked row
+(`src/lib/calculations/sample-ratios.ts`,
+`src/lib/certification/sample-entry-warnings.ts`).
+Reads (`src/data-access/api-lab-samples.ts`, `api-credit-batches.ts`) hide
+samples on archived batches from lists and still serve them by id.
+
+### Operation effects and API bookkeeping
+
+`src/lib/operations/runner.ts:Operation` optionally supplies `describe(input,
+output)`, which returns `src/lib/operation-effect.ts:OperationEffect`: outcome
+code (`created`, `updated`, `deleted`), entity type and ids, versions before and
+after, and changed field names. It contains no field values. The runner returns
+this transport-neutral effect alongside data.
+
+Dry-run stock writes also return `stockEffects` beside `data`. The runner supplies
+an optional `OperationScope.snapshotStock` observer, passed to transaction writers.
+Writers declare the affected old and new bins after their normal locks and before
+the first mutation. The runner reads the balances again after execution, inside
+the same transaction, and returns one before/after/delta entry per changed bin.
+Real writes and the UI have no observer and pay no snapshot reads. Feedstock
+wet kilograms use the existing stock derivation; dry kilograms are its
+intake-moisture estimate, nullable when unavailable. Output bins use the guard's
+all-layer dry balance (null for unresolved layers) and leave wet kilograms null. This contract replaces the
+feedstock-create additions-only `preview` and is shared by create, PATCH and
+DELETE in REST and MCP. Output-stock postings and product creates pass the same observer.
+
+Output-stock postings run inside the runner's transaction through
+`src/data-access/output-stock-post.ts:withOutputStockPostingInTransaction`;
+`withOutputStockPosting` remains the `db.transaction` wrapper for callers outside
+the runner. Product create and update have matching `...InTransaction` writers.
+A product create that carries a form request key first looks it up from the
+operator's facts (`src/data-access/biochar-product-create.ts:findCommittedBiocharProduct`,
+under the request lock) before the live facility and recipe checks, so a retry
+replays the committed product after a formulation line is added or removed or
+the facility is archived. A facility-local placement takes the ordinary path,
+since resolving it needs the facility's zone.
+Product creates and movement postings take an optional `basisFingerprint` (product
+updates use a version precondition instead): a stale one fails with
+`stock_basis_changed` (409), and without one the write acts on current stock under
+the bin locks. REST and MCP adapters answer that error through
+`src/lib/operations/stock-basis-preview.ts:runWithStockBasisPreview`, which runs
+the same input as a dry run without the stale fingerprint, within the request's
+own deadline, and attaches its `basisFingerprint` and `stockEffects` as `preview`.
+If that dry run fails, the 409 carries no `preview`; a failure the API treats as
+unexpected is logged value-free with the operation and request ids, a domain
+refusal is not. The fallback never claims an idempotency key.
+
+Production-run operation inputs accept offset date-time strings or facility-local
+`{ date, time }` objects. Local times resolve through the transaction's effective
+facility, including a new facility on update. Native Dates are an in-process
+convenience and do not appear as a third published shape. UI actions validate
+the form contract before passing only operation fields to the runner.
+
+The `audit` run option supplies request id, credential id and optional OAuth
+client id for API writes only. Audited operations must implement `describe`.
+`src/data-access/api-audit-events.ts:writeApiAuditEvent` records the effect and
+resolved organization/user inside the operation's transaction. UI writes do
+not pass `audit`; dry runs and idempotent replays add no audit row.
+
+Stored outcome v2 is `{ kind: "success", data, effect? }` in
+`api_idempotency_records`, with schema version 2. Effects retain outcome code,
+entity ids and versions for adapters; data is JSON-normalized and a void result
+is stored as `null`. Only committed successes are retained. Older schema
+versions answer `replay_unavailable`. The claim path deletes expired records
+lazily before reclaiming their keys.
+
+`src/lib/api/guards.ts:preAuthGuard` charges the pre-authentication IP limit
+first. Routes then resolve the credential with `resolveApiContext` (including
+organization API access), and call `src/lib/api/guards.ts:postAuthGuard`: the
+write kill switch precedes credential and organization limits, charged in that
+order with separate read/write budgets. Dry runs count as writes. PostgreSQL
+token buckets are debited outside the operation transaction; rollback never
+refunds them. Limits come from `src/config/api-rate-limits.ts:API_RATE_LIMITS`.
+
+`GET /api/cron/purge-api-records` verifies a bearer `CRON_SECRET`, then purges
+expired idempotency records and idle rate-limit buckets in bounded batches.
+`vercel.json` schedules it daily at 03:00 UTC on Production deployments only.
+Staging is Preview and relies on lazy claim expiry; see
+[security.md](./security.md#environment-variables).
+
+### Feedstock REST adapter
+
+`lib/api/route.ts` records the deadline, runs `preAuthGuard`, resolves the
+credential, checks role/scope through `admitApiRequest`, then runs
+`postAuthGuard` before the handler. GET and HEAD use read budgets (including
+`/api/v1/me`); all other methods, including dry runs, use write budgets. Guard
+denials return directly. Admitted responses, including problems, carry the
+returned rate-limit headers alongside private response headers. Domain
+failures use the server-action conversion with REST's value-free logger;
+unexpected errors never expose their messages or causes.
+
+Feedstock reads and stale-write re-reads use `lib/read-models/api-feedstocks.ts`,
+which calls `data-access/api-feedstocks.ts`. Read models accept an organization
+context, parsed filters, a limit and a decoded cursor position, and return
+representations plus the next position. REST and MCP share parsed-input readers in `lib/api/*-queries.ts` and cursor encoding and decoding;
+`lib/read-models/api-list.ts` owns page slicing for feedstock and lookup reads. The list orders by
+`(createdAt, id)` descending and keeps PostgreSQL microseconds in the cursor;
+cursors bind the resource, organization and filters, but not page size. The
+representation deliberately contains only feedstock-owned fields and reference
+ids, without joined transport data or entity names. Supplier-location and driver
+ids are not feedstock columns. Percent values use 0–100. Business dates use
+`YYYY-MM-DD`; creation/update instants use UTC RFC 3339.
+
+`POST /api/v1/feedstocks` records an intake that may split across bins, so
+`data` is always an array of the created feedstock representations, including
+for one allocation. The REST adapter caps each intake at 200 allocations.
+Every REST create requires `Idempotency-Key`, including dry runs. A dry run
+never claims, consumes or replays the key; a committed key returns 409
+`key_already_used`. MCP dry-run tools may still omit `requestKey`.
+`Location` and `ETag` identify the first returned feedstock;
+each array member also has its own id and version. GET detail and PATCH return
+one object. All mutation responses map the runner's JSON outcome, keeping
+create and PATCH replay bodies identical to the original response.
+
+PATCH passes partial input to the operation, which resolves omitted fields
+against the locked row. The body cannot supply `feedstockId` or
+`expectedVersion`; these come from the path and strong If-Match tag. Revision
+and target checks run in the operation's execute phase, after the runner's
+idempotency replay, so a committed retry remains recoverable after later edits
+or deletion. Version/revision conflicts return the current representation.
+
+A create dry run returns `preview` alongside `data`: one entry per allocation,
+with wet/dry kilograms and the stock contribution. These are additions, not
+projected bin balances; only complete intake rows contribute to the wet stock
+lane. DELETE dry runs return the representation that would be removed, and
+run the same locked deletion guards before rolling back. Bodyless DELETE is
+accepted, including zero-byte streams without Content-Type. Non-empty bodies
+use the bounded JSON reader, require application/json and must be empty objects.
+Stock-lane refusals return `insufficient_stock` with the bin and blockers plus
+`errors[].meta`: `storageLocationId`, `availableWetKg`, `requestedWetKg` and
+`unit: "kg"`. For post-write integrity, available mass is the proposed intake
+supply plus positive net movements; requested mass is existing consumption plus
+negative net movements. The operator message remains unchanged.
+
+### Intake lookup REST adapters
+
+Facilities, suppliers, feedstock types, storage locations, vehicles and drivers
+expose read-only list and id-or-code routes through `lib/api/route.ts` and their
+resource scopes. `lib/api/*-queries.ts` validates strict query schemas and calls
+`lib/read-models/api-*.ts`, including the supplier-location list. The read models
+map explicit output schemas in `lib/representations/`; organization predicates
+and facility-filter checks remain in `data-access/api-*.ts`.
+
+`lib/api/lookup-query.ts` shares the feedstock cursor contract: newest-first
+`(createdAt, id)` ordering, PostgreSQL microseconds, organization/resource/filter
+binding, configured page limits, and no totals. Lookup search is a literal,
+case-insensitive prefix on code or name; `code` is exact. Only storage locations
+have a facility filter. Each lookup table reserves codes per organization, so
+facility-level code ambiguity is not possible with the current constraints.
+
+Lists exclude archived rows where supported; detail reads return them with
+`archivedAt`. Facilities, suppliers, feedstock types, storage locations, vehicles
+and drivers return row versions and strong version/revision ETags on detail reads.
+Vehicles and drivers have no archive column and return `archivedAt: null`.
+Output projections exclude contact fields and driver license numbers. Facilities expose `timeZone`, storage
+locations expose the material lane, capacity in kilograms and feedstock-type
+restriction, and vehicles expose their stored identifier/plate and vehicle type.
+
+`GET /api/v1/suppliers/{id}/locations` accepts a supplier UUID only, checks the
+parent's organization before querying its children, and paginates locations with
+name search and coordinates in decimal degrees. Its cursor also binds the
+supplier ID; a missing or foreign supplier returns 404, including when it has
+no locations. Supplier locations have no code or archive column.
+
+### Public API contract
+
+Published UUID inputs accept either case and are lowercased before the operation
+runs: body and query fields through `src/schemas/helpers.ts:uuidSchema` (older
+feedstock and run chains with their own messages end in `.toLowerCase()`, which
+keeps `format: uuid` in the published schema), path ids and the MCP
+movement target through `src/lib/api/canonical-uuid.ts:canonicalUuid`. Rows come
+back lowercase, so string comparisons and idempotency fingerprints see one
+spelling; the published JSON Schema is unchanged.
+
+`src/lib/api/openapi/document.ts:buildOpenApiDocument` builds OpenAPI 3.1 with
+relative `/api/v1` servers and stable operation ids. Operation bodies use only
+`src/lib/operations/json-schema.ts:toOperationJsonSchema`; output representations
+use Zod's output JSON Schema conversion. Strict query schemas live in
+`src/lib/api/query-schemas.ts` and `src/lib/api/query.ts`. The `resourceQueries`
+map is shared by resource adapters and the document generator. Descriptions belong in
+Zod schemas. Transport headers and possible statuses are declared in the generator.
+The generator imports no runtime credentials, environment or database modules.
+
+`GET /api/v1/openapi.json` and `GET /api/v1/llms.txt` are public, bypass credential
+resolution and rate-limit guards, and cache publicly for 300 seconds. OpenAPI
+serialization is cached lazily per module instance; the agent guide is a
+module-level string. Each origin response carries a fresh `X-Request-Id`. The short
+agent guide covers discovery, units, local business dates and safe retry behavior.
+The rendered reference remains deferred in
+[open-questions.md](./open-questions.md).
+
+Run `pnpm openapi:generate` after a contract change and include `openapi/v1.json`
+in its PR. The colocated generator test compares the exact stable, pretty-printed
+snapshot with code (a generated file, exempt from the 1000-line cap),
+checks route coverage and validates the OpenAPI structure.
+
+`pnpm openapi:client-check` generates TypeScript API types from `openapi/v1.json`
+with `openapi-typescript` into a temporary directory outside the repository,
+then checks that file with the repository's TypeScript compiler using
+`tsc --noEmit --strict`. The temporary directory is removed on success or failure;
+the generated client is not committed. CI runs this check in `quality-static`
+on every PR and push, including the first release without a base snapshot.
+
+The CI `openapi-breaking` job compares the PR base SHA snapshot with the head
+using checksum-verified oasdiff v1.32.1 and `breaking --fail-on ERR`. A base without
+the snapshot is the first release and passes with an explicit notice.
+
+Prefer additive changes in v1; incompatible versions use v2 with Deprecation and
+Sunset headers. For an accepted deliberate break or contract correction, regenerate
+the snapshot and add the specific method/path and exact change description from
+`oasdiff breaking <base> openapi/v1.json --format singleline` to
+`openapi/accepted-breaking-changes.txt` in the same PR. CI passes that file to
+`--err-ignore`; do not blanket-ignore a check or endpoint. Explain the client
+impact in the PR and remove stale entries after the change reaches the base.
+The [oasdiff ignore-file format](https://github.com/oasdiff/oasdiff/blob/v1.32.1/docs/BREAKING-CHANGES.md#ignoring-specific-breaking-changes)
+requires the method/path (or `components`) and change description on each line.
+
+### MCP tools on API keys
+
+`src/app/api/mcp/route.ts` serves stateless JSON-RPC POSTs through the pinned
+`mcp-handler` and MCP server SDK. GET and DELETE return 405. Origin validation
+runs first; requests without Origin pass. The shared `lib/api/route.ts`
+admission wrapper starts the deadline before authentication, assigns a request
+id and applies the same API-key resolver and rate-limit buckets as REST.
+After authentication, the preparation hook bounds the body to `API_BODY_MAX_BYTES`
+and returns HTTP 413 `payload_too_large` if it exceeds that limit. JSON-RPC
+batch arrays return HTTP 400 `batch_not_supported`. Both refusals use
+`application/problem+json` and precede authenticated rate limiting and dispatch.
+`lib/mcp/server.ts` classifies calls to write tools as writes, including dry runs;
+other admitted MCP requests count as reads.
+
+`src/lib/mcp/tools/read-tools.ts` defines whoami, the intake find tools and
+get_feedstock. Each request captures its resolved context in a fresh server.
+`src/lib/mcp/tools/write-tools.ts` adds log_feedstock_delivery, update_feedstock
+and delete_feedstock through the same operation runner as REST. Each write needs
+one requestKey reused on retry; dryRun previews may omit it. Updates and deletes
+take expectedVersion from get_feedstock. Audit rows record transport `mcp`.
+Only tools authorized by `hasRoleAndScope` are registered or callable. Tool
+schemas reuse REST query schemas and transport-neutral `lib/representations/`
+output envelopes. Numeric limits accept JSON numbers as well as REST strings.
+HTTP-only ETag builders live in `lib/api/representation-etags.ts`.
+
+The SDK publishes schemas through `toToolSchema`. A low-level tools/call
+handler owns argument parsing so validation failures remain structured.
+Success structuredContent uses the matching REST response envelope. Expected
+failures use the REST problem code and JSON Pointer errors, named `issues` in
+MCP, without HTTP metadata. Both transports include query validation issues
+with JSON Pointers: REST uses `errors` and MCP uses `issues`. Each issue carries
+`pointer`, `code` and `detail`.
+Each output schema is a success/error union with `type: "object"` at its root.
+Unexpected failures are generic JSON-RPC internal errors, logged with
+request id and tool name without raw input. The tool dispatcher checks the
+request deadline before each tool. `API_WRITES_DISABLED` returns an in-MCP
+`isError` result with code `api_writes_disabled`; reads keep working. No sessions
+are exposed. Initialize returns short server instructions built from the domain
+section shared with `llms.txt`, plus MCP grounding and retry guidance.

@@ -240,15 +240,17 @@ export async function requireOrgContext(): Promise<OrgContext> {
   return ctx;
 }
 
+/** Non-throwing role check for UI affordances and role enforcement. */
+export function hasOrgRole(ctx: OrgContext, minRole: OrgRole): boolean {
+  return ctx.isPlatformAdmin || (ctx.orgRole !== null && ORG_ROLE_RANK[ctx.orgRole] >= ORG_ROLE_RANK[minRole]);
+}
+
 /**
  * Assert the context holds at least `minRole` in the active org. Owner ⊃ Admin
  * ⊃ Member; Platform Admins always pass. Throws SafeError otherwise.
  */
 export function requireOrgRole(ctx: OrgContext, minRole: OrgRole): void {
-  if (ctx.isPlatformAdmin) {
-    return;
-  }
-  if (!ctx.orgRole || ORG_ROLE_RANK[ctx.orgRole] < ORG_ROLE_RANK[minRole]) {
+  if (!hasOrgRole(ctx, minRole)) {
     throw new SafeError("You don't have permission to perform this action.");
   }
 }

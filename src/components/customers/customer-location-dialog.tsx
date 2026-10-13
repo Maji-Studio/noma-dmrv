@@ -29,6 +29,8 @@ interface CustomerLocationDialogProps {
   onClose: () => void;
   customerId: string;
   location?: EditableCustomerLocation;
+  /** True when the party has no saved locations yet, so "default" starts checked. */
+  isFirstLocation?: boolean;
 }
 
 // ============================================
@@ -40,6 +42,7 @@ export function CustomerLocationDialog({
   onClose,
   customerId,
   location,
+  isFirstLocation = false,
 }: CustomerLocationDialogProps) {
   const [error, setError] = useState<string | null>(null);
   const createLocation = useCreateCustomerLocation();
@@ -75,7 +78,7 @@ export function CustomerLocationDialog({
           locationId: location.id,
           // The version the dialog opened on, so a concurrent edit is refused
           // instead of silently overwritten (#768).
-          expectedUpdatedAt: location.updatedAt,
+          expectedVersion: location.version,
           ...locationData,
         });
       } else {
@@ -112,6 +115,7 @@ export function CustomerLocationDialog({
       <CustomerLocationForm
         idPrefix={CUSTOMER_LOCATION_DIALOG_ID_PREFIX}
         location={location}
+        initialIsDefault={isFirstLocation}
         onSubmit={handleSubmit}
         onCancel={handleClose}
         isSubmitting={

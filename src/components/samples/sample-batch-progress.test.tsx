@@ -57,6 +57,7 @@ function summaryWith(
     creditBatchCode: "CB-001",
     sampling: "sampled",
     durabilityOption: "200_year",
+    facilityTimezone: null,
     sampleCount: replicates.length,
     usableReplicateCount,
     minimumReplicates: MINIMUM_REPLICATES,
@@ -67,6 +68,7 @@ function summaryWith(
       oToCorgMean: usableReplicateCount > 0 ? 0.15 : null,
       hToCWithinThreshold: usableReplicateCount > 0 ? true : null,
       oToCWithinThreshold: usableReplicateCount > 0 ? true : null,
+      unpairedHToCSampleCodes: [],
     },
     submitted: {
       hToCorg: null,

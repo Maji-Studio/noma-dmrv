@@ -53,7 +53,7 @@ export const SHIPMENT = { date: "2026-09-22", time: "09:00", wetMassKg: 1000, mo
 export const EQUIPMENT = {
   reactor: { identifier: "Mafinga reactor 1", reactorType: "batch", nominalThroughputTph: 0.125 },
   driver: { name: "Demo driver" }, operator: { name: "Demo operator" },
-  vehicle: { name: "Demo truck", identifier: "DEMO-MAFINGA", vehicleType: "truck", fuelType: "diesel", fuelConsumptionLPerKm: 0.3 },
+  vehicle: { name: "Demo truck", identifier: "DEMO-MAFINGA", vehicleType: "truck", fuelType: "Diesel", fuelConsumptionLPerKm: 0.3 },
 } as const;
 export const PERIOD = { start: "2026-09-01", end: "2026-09-30" };
 export const CSV = { intervalMinutes: 5, minutesPerHour: 60, hours: 8, millisecondsPerMinute: 60_000, temperatureC: 550, temperatureSwingC: 15, pressureBar: 1.02, pressureSwingBar: 0.01, oscillationRows: 6 };

@@ -16,6 +16,7 @@ import {
 // `mass_distance × factor` equals the per-leg sum (Transportation v1.1 §5).
 function leg(distanceKm: number, loadMassKg: number | null): TransportLeg {
   return {
+    version: 1,
     organizationId: TEST_ORG_ID,
     id: "tl_" + distanceKm + "_" + (loadMassKg ?? "null"),
     entityType: "biochar",

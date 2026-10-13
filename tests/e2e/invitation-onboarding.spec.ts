@@ -2,10 +2,11 @@ import { randomUUID } from "node:crypto";
 import { eq, inArray } from "drizzle-orm";
 import { test, expect } from "./fixtures";
 import { createDbConnection } from "./fixtures/db";
-import { invitations } from "../../src/db/schema";
+import { accounts, invitations, members, organizations, sessions, users } from "../../src/db/schema";
 import { DEC_ORG_ID } from "../../src/db/org-defaults";
 
 const VALIDITY_MS = 60_000;
+const SETUP_INVITATION_VALIDITY_MS = 600_000;
 if (!process.env.DATABASE_URL) {
   throw new Error("Set DATABASE_URL before running invitation onboarding tests.");
 }
@@ -51,3 +52,46 @@ test("existing invitee reaches sign-in while the wrong signed-in user remains re
   await expect(operatorPage.getByRole("button", { name: "Accept invitation", exact: true })).toHaveCount(0);
   await expect(operatorPage.getByRole("button", { name: "Create account and join" })).toHaveCount(0);
 });
+
+for (const role of ["admin", "member"] as const) {
+  test(`a new invited ${role} lands on the appropriate dashboard setup state`, async ({ page, testUsers }) => {
+    const tag = randomUUID();
+    const organizationId = `e2e-invited-org-${tag}`;
+    const invitationId = `e2e-invited-setup-${tag}`;
+    const email = `invited-setup-${tag}@e2e.local`;
+    await db.insert(organizations).values({ id: organizationId, name: `E2E Invited Org ${tag}`, slug: `e2e-invited-${tag}` });
+    try {
+      await db.insert(invitations).values({
+        id: invitationId, email, inviterId: testUsers.admin.id, organizationId, role,
+        status: "pending", expiresAt: new Date(Date.now() + SETUP_INVITATION_VALIDITY_MS),
+      });
+      await page.goto(`/accept-invitation/${invitationId}`);
+      // Client-side validation is a hydration signal before entering the draft.
+      await page.getByRole("button", { name: "Create account and join" }).click();
+      await expect(page.getByText("Name is required.", { exact: true })).toBeVisible();
+      await page.getByRole("textbox", { name: "Name", exact: true }).fill(`E2E Invited ${role}`);
+      await page.getByLabel("Password", { exact: true }).fill("TestPassword123!");
+      await page.getByRole("button", { name: "Create account and join" }).click();
+      await expect(page).toHaveURL(/\/dashboard(?:[/?#]|$)/);
+      if (role === "admin") {
+        const guide = page.getByRole("region", { name: "Getting started" });
+        await expect(guide.getByRole("button", { name: "Add facility" })).toBeVisible();
+        await expect(guide.locator('[aria-current="step"]').getByText("Add your facility")).toBeVisible();
+      } else {
+        await expect(page.getByRole("heading", { name: "Setup in progress" })).toBeVisible();
+        await expect(page.getByRole("region", { name: "Getting started" })).toHaveCount(0);
+      }
+      await expect(page.getByRole("dialog")).toHaveCount(0);
+    } finally {
+      const [invitee] = await db.select({ id: users.id }).from(users).where(eq(users.email, email));
+      await db.delete(invitations).where(eq(invitations.organizationId, organizationId));
+      await db.delete(members).where(eq(members.organizationId, organizationId));
+      if (invitee) {
+        await db.delete(sessions).where(eq(sessions.userId, invitee.id));
+        await db.delete(accounts).where(eq(accounts.userId, invitee.id));
+        await db.delete(users).where(eq(users.id, invitee.id));
+      }
+      await db.delete(organizations).where(eq(organizations.id, organizationId));
+    }
+  });
+}

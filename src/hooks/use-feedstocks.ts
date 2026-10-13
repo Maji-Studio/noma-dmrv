@@ -9,6 +9,7 @@ import type {
   FeedstockStatsFilterData,
   CreateFeedstockData,
   UpdateFeedstockData,
+  DeleteFeedstockData,
 } from "@/schemas/feedstocks";
 import type {
   FeedstockWithRelations,
@@ -22,7 +23,7 @@ import {
   updateFeedstockFn,
   deleteFeedstockFn,
 } from "@/fn/feedstocks";
-import { throwActionError } from "@/lib/stale-version";
+import { StaleVersionError, throwActionError } from "@/lib/stale-version";
 import { storageLocationKeys } from "./use-storage-locations";
 import type { MutationCallbacks } from "./types";
 import { dashboardOverviewKeys } from "./use-dashboard-overview";
@@ -163,13 +164,13 @@ export function useUpdateFeedstock(callbacks?: MutationCallbacks<FeedstockWithRe
   });
 }
 
-export function useDeleteFeedstock(callbacks?: MutationCallbacks<void, string>) {
+export function useDeleteFeedstock(callbacks?: MutationCallbacks<void, DeleteFeedstockData>) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (feedstockId: string) => {
-      const result = await deleteFeedstockFn({ feedstockId });
-      if (!result.success) throw new Error(result.error);
+    mutationFn: async (data: DeleteFeedstockData) => {
+      const result = await deleteFeedstockFn(data);
+      if (!result.success) throwActionError(result);
     },
     onSuccess: (data, variables) => {
       queryClient.invalidateQueries({ queryKey: feedstockKeys.lists() });
@@ -185,6 +186,12 @@ export function useDeleteFeedstock(callbacks?: MutationCallbacks<void, string>) 
       queryClient.invalidateQueries({ queryKey: certificationKeys.all });
       callbacks?.onSuccess?.(data, variables);
     },
-    onError: callbacks?.onError,
+    onError: (error, variables) => {
+      if (error instanceof StaleVersionError) {
+        queryClient.invalidateQueries({ queryKey: feedstockKeys.lists() });
+        queryClient.invalidateQueries({ queryKey: feedstockKeys.detail(variables.feedstockId) });
+      }
+      return callbacks?.onError?.(error, variables);
+    },
   });
 }

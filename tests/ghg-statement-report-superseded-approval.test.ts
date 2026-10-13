@@ -79,7 +79,7 @@ beforeAll(async () => {
     role: "admin",
     emailVerified: true,
   });
-  await db.insert(facilities).values({
+  await db.insert(facilities).values({ timezone: "UTC",
     id: FACILITY_ID,
     organizationId: TEST_ORG_ID,
     name: `Superseded Facility ${FACILITY_ID.slice(0, 8)}`,

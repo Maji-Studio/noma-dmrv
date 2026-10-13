@@ -1,3 +1,4 @@
+import { expectedVersionSchema } from "./helpers";
 // Transport legs use the Isometric distance-based method (Eq. 3): we record
 // distance + cargo mass per leg; the emission factor lives in the Isometric
 // component blueprint (not stored here). Required fields mirror the DB check
@@ -123,6 +124,7 @@ export const createTransportLegSchema = z.object({
 export type CreateTransportLegData = z.infer<typeof createTransportLegSchema>;
 
 export const updateTransportLegSchema = z.object({
+  expectedVersion: expectedVersionSchema,
   id: z.string().uuid("Choose a valid transport leg."),
   ...baseTransportLegShape,
 });
@@ -130,5 +132,8 @@ export const updateTransportLegSchema = z.object({
 export type UpdateTransportLegData = z.infer<typeof updateTransportLegSchema>;
 
 export const deleteTransportLegSchema = z.object({
+  expectedVersion: expectedVersionSchema,
   id: z.string().uuid("Choose a valid transport leg."),
 });
+
+export type DeleteTransportLegData = z.infer<typeof deleteTransportLegSchema>;

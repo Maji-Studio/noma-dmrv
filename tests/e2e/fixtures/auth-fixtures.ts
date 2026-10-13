@@ -183,7 +183,7 @@ export async function seedTestUsers(
           .values({
             id: `e2e-account-${role}-${testRunId}`,
             userId: userId,
-            accountId: `e2e-${role}-account-${testRunId}`,
+            accountId: userId,
             providerId: "credential",
             password: passwordHash,
           })

@@ -1,3 +1,5 @@
+import { labLogisticsVersion } from "./helpers/lab-logistics-version";
+import { masterDataVersion } from "./helpers/master-data-version";
 import { preparePureOutputProductFixture, ensureOutputFixtureActor } from "./helpers/output-contract-fixtures";
 import { previewOutputStock } from "@/data-access/output-stock-operations";
 import { deleteOutputDeliveryFixtures, deleteOutputProductFixtures, deleteOutputFacilityFixtures, outputProductFixtureValues, outputOrderFixtureValues } from "./helpers/output-contract-fixtures";
@@ -25,8 +27,8 @@ import {
   updateDelivery,
 } from "@/data-access/deliveries";
 import {
-  createFeedstock,
-  updateFeedstock,
+  createFeedstockInTransaction,
+  updateFeedstockInTransaction,
 } from "@/data-access/feedstocks";
 import {
   ensureTestOrg,
@@ -42,7 +44,6 @@ describe("derived transport-leg transaction boundaries", () => {
     supplierIds: [] as string[],
     supplierLocationIds: [] as string[],
     feedstockTypeIds: [] as string[],
-    feedstockCodes: [] as string[],
     storageLocationIds: [] as string[],
     customerIds: [] as string[],
     customerLocationIds: [] as string[],
@@ -54,13 +55,14 @@ describe("derived transport-leg transaction boundaries", () => {
   beforeAll(async () => { await ensureTestOrg(); await ensureOutputFixtureActor(ctx); });
 
   afterEach(async () => {
-    const trackedFeedstocks = created.feedstockCodes.length > 0
+    // Feedstock codes are generated, so feedstocks are tracked by facility.
+    const trackedFeedstocks = created.facilityIds.length > 0
       ? await db
           .select({ id: feedstocks.id })
           .from(feedstocks)
           .where(and(
             eq(feedstocks.organizationId, TEST_ORG_ID),
-            inArray(feedstocks.code, created.feedstockCodes),
+            inArray(feedstocks.facilityId, created.facilityIds),
           ))
       : [];
     const entityIds = [
@@ -121,7 +123,7 @@ describe("derived transport-leg transaction boundaries", () => {
     const tag = crypto.randomUUID().slice(0, 8).toUpperCase();
     const [facility] = await db
       .insert(facilities)
-      .values({
+      .values({ timezone: "UTC",
         organizationId: TEST_ORG_ID,
         code: `FAC-TL-${tag}`,
         name: `Transport Transaction Facility ${tag}`,
@@ -162,12 +164,8 @@ describe("derived transport-leg transaction boundaries", () => {
       .returning({ id: storageLocations.id });
     created.storageLocationIds.push(bin.id);
 
-    const feedstockCode = `FS-TL-${tag}`;
-    created.feedstockCodes.push(feedstockCode);
     await expect(
-      createFeedstock(
-        ctx,
-        {
+      db.transaction((tx) => createFeedstockInTransaction(ctx, tx, {
           facilityId: facility.id,
           deliveryDate: new Date("2026-07-19T00:00:00Z"),
           supplierId: supplier.id,
@@ -178,9 +176,7 @@ describe("derived transport-leg transaction boundaries", () => {
           transportDistanceKm: 25,
           // Exercise a database rejection specifically in derived persistence.
           transportDistanceSource: "invalid_source" as never,
-        },
-        async () => [feedstockCode],
-      ),
+        })),
     ).rejects.toThrow();
 
     const [persistedFeedstock] = await db
@@ -188,7 +184,7 @@ describe("derived transport-leg transaction boundaries", () => {
       .from(feedstocks)
       .where(and(
         eq(feedstocks.organizationId, TEST_ORG_ID),
-        eq(feedstocks.code, feedstockCode),
+        eq(feedstocks.facilityId, facility.id),
       ));
     const [persistedBin] = await db
       .select({ feedstockTypeId: storageLocations.feedstockTypeId })
@@ -203,7 +199,7 @@ describe("derived transport-leg transaction boundaries", () => {
     const tag = crypto.randomUUID().slice(0, 8).toUpperCase();
     const [facility] = await db
       .insert(facilities)
-      .values({
+      .values({ timezone: "UTC",
         organizationId: TEST_ORG_ID,
         code: `FAC-OVR-${tag}`,
         name: `Override Facility ${tag}`,
@@ -268,11 +264,7 @@ describe("derived transport-leg transaction boundaries", () => {
       .returning({ id: storageLocations.id });
     created.storageLocationIds.push(bin.id);
 
-    const feedstockCode = `FS-OVR-${tag}`;
-    created.feedstockCodes.push(feedstockCode);
-    const result = await createFeedstock(
-      ctx,
-      {
+    const result = await db.transaction((tx) => createFeedstockInTransaction(ctx, tx, {
         facilityId: facility.id,
         deliveryDate: new Date("2026-07-19T00:00:00Z"),
         supplierId: supplier.id,
@@ -282,13 +274,14 @@ describe("derived transport-leg transaction boundaries", () => {
         allocations: [{ storageLocationId: bin.id, allocatedWetMassKg: 100 }],
         transportDistanceKm: 25,
         transportDistanceSource: "document",
-      },
-      async () => [feedstockCode],
-    );
+      }));
     expect(result.feedstocks[0].status).toBe("complete");
     const feedstockId = result.feedstocks[0].id;
 
-    await updateFeedstock(ctx, feedstockId, { notes: "Partial update" });
+    const partialUpdate = await db.transaction((tx) => updateFeedstockInTransaction(ctx, tx, feedstockId, {
+      expectedVersion: result.feedstocks[0].version,
+      notes: "Partial update",
+    }));
 
     const [derived] = await db
       .select({
@@ -308,9 +301,10 @@ describe("derived transport-leg transaction boundaries", () => {
 
     // With no explicit transport fields, a route-anchor change discards the
     // stale saved override and recomputes from the new supplier's default.
-    await updateFeedstock(ctx, feedstockId, {
+    const routeUpdate = await db.transaction((tx) => updateFeedstockInTransaction(ctx, tx, feedstockId, {
+      expectedVersion: partialUpdate.version,
       supplierId: newRouteSupplier.id,
-    });
+    }));
 
     const [rerouted] = await db
       .select({
@@ -332,11 +326,12 @@ describe("derived transport-leg transaction boundaries", () => {
 
     // An explicit override submitted with a reroute is authoritative. It must
     // not be discarded merely because the supplier anchor also changed.
-    await updateFeedstock(ctx, feedstockId, {
+    await db.transaction((tx) => updateFeedstockInTransaction(ctx, tx, feedstockId, {
+      expectedVersion: routeUpdate.version,
       supplierId: supplier.id,
       transportDistanceKm: 30,
       transportDistanceSource: "document",
-    });
+    }));
 
     const [explicitReroute] = await db
       .select({
@@ -361,7 +356,7 @@ describe("derived transport-leg transaction boundaries", () => {
     const tag = crypto.randomUUID().slice(0, 8).toUpperCase();
     const [facility] = await db
       .insert(facilities)
-      .values({
+      .values({ timezone: "UTC",
         organizationId: TEST_ORG_ID,
         code: `FAC-DIST-${tag}`,
         name: `Distribution Transaction Facility ${tag}`,
@@ -472,7 +467,7 @@ describe("derived transport-leg transaction boundaries", () => {
       isDerived: false,
     });
 
-    await expect(updateDelivery(ctx, delivery.id, { orderId: secondOrder.id })).rejects.toThrow(/Correct entry/);
+    await expect(updateDelivery(ctx, delivery.id, { expectedVersion: await labLogisticsVersion(ctx, "deliveries", delivery.id), orderId: secondOrder.id })).rejects.toThrow(/Correct entry/);
 
     const legsAfterReassignment = await db
       .select({
@@ -490,7 +485,7 @@ describe("derived transport-leg transaction boundaries", () => {
     ]));
     expect(legsAfterReassignment).toHaveLength(3);
 
-    await updateCustomerLocation(ctx, secondLocation.id, {
+    await updateCustomerLocation(ctx, secondLocation.id, { expectedVersion: await masterDataVersion(ctx, "customerLocations", secondLocation.id),
       distanceFromFacilityKm: 80,
       distanceSource: "map_estimate",
     });
@@ -504,7 +499,7 @@ describe("derived transport-leg transaction boundaries", () => {
       ));
     expect(updatedDerived.distanceKm).toBe(80);
 
-    await updateCustomerLocation(ctx, firstLocation.id, {
+    await updateCustomerLocation(ctx, firstLocation.id, { expectedVersion: await masterDataVersion(ctx, "customerLocations", firstLocation.id),
       distanceFromFacilityKm: 40,
       distanceSource: "map_estimate",
     });
@@ -517,7 +512,7 @@ describe("derived transport-leg transaction boundaries", () => {
       ));
     expect(firstDerived).toEqual([{ distanceKm: 40 }]);
 
-    await expect(deleteDelivery(ctx, delivery.id)).rejects.toThrow(/Correct entry/);
+    await expect(deleteDelivery(ctx, delivery.id, await labLogisticsVersion(ctx, "deliveries", delivery.id))).rejects.toThrow(/Correct entry/);
     const remainingLegs = await db
       .select({
         entityId: transportLegs.entityId,

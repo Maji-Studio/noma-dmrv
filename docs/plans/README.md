@@ -25,3 +25,4 @@ Active plans:
 - [2026-09-07 Simplification rollout plan](./2026-09-07-simplification-rollout-plan.md), proposed, owner Kenji Nguyen. Review of the analysis plus the Phase A / Phase B split.
 - [2026-09-14 FIFO bin accounting](./2026-09-14-fifo-bin-accounting.md), approved, owner Kenji Nguyen. Implementation pending in [#756](https://github.com/Maji-Studio/noma-dmrv/issues/756).
 - [2026-09-16 Loading speed plan](./2026-09-16-loading-speed-plan.md), proposed, owner Kenji Nguyen. Finish PRs #761-#763, then region move, auth dedupe, dashboard query budget, shell streaming.
+- [2026-10-06 Data-entry API (REST + MCP)](./2026-10-06-data-entry-api.md), in progress, owner Kenji Nguyen. Phase 0 spike done (section 15); Phase 1 foundations next.

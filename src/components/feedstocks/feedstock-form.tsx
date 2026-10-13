@@ -404,7 +404,7 @@ export function FeedstockForm({
           fields={["facilityId", "deliveryDate", "supplierId"]}
         >
           {!contextFacilityId && !feedstock && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
+            <div className="grid grid-cols-1 gap-x-16 gap-y-20">
               <FormEntitySelect
                 control={formControl}
                 name="facilityId"
@@ -417,7 +417,7 @@ export function FeedstockForm({
             </div>
           )}
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
+          <div className="grid grid-cols-1 gap-x-16 gap-y-20">
             <FormField
               id="deliveryDate"
               label="Delivery date"
@@ -438,6 +438,7 @@ export function FeedstockForm({
               name="supplierId"
               label="Supplier"
               entityType="supplier"
+              allowEdit
               placeholder="Select supplier..."
               disabled={isSubmitting}
               required
@@ -463,13 +464,14 @@ export function FeedstockForm({
             "transportDistanceKm",
           ]}
         >
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-            <div className="md:col-span-2">
+          <div className="grid grid-cols-1 gap-x-16 gap-y-20">
+            <div>
               <FormEntitySelect
                 control={formControl}
                 name="vehicleId"
                 label="Vehicle"
                 entityType="vehicle"
+                allowEdit
                 placeholder="Select vehicle..."
                 disabled={isSubmitting}
                 allowCreate
@@ -636,6 +638,7 @@ export function FeedstockForm({
               name="feedstockTypeId"
               label="Feedstock type"
               entityType="feedstockType"
+              allowEdit
               placeholder="Select feedstock type..."
               disabled={isSubmitting}
               required

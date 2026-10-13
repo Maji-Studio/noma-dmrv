@@ -530,18 +530,7 @@ export function ApplicationForm({
           </FormField>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-          <FormField id="cropType" label="Crop type" error={errors.cropType?.message}>
-            <FormInput
-              id="cropType"
-              type="text"
-              placeholder="e.g., Coffee"
-              disabled={isSubmitting}
-              error={!!errors.cropType}
-              {...register("cropType")}
-            />
-          </FormField>
-
+        <div className="grid grid-cols-1 gap-x-16 gap-y-20">
           <FormField
             id="applicationMethodType"
             label="Application method"
@@ -554,6 +543,17 @@ export function ApplicationForm({
               error={!!errors.applicationMethodType}
               options={applicationMethodOptions}
               {...register("applicationMethodType")}
+            />
+          </FormField>
+
+          <FormField id="cropType" label="Crop type" error={errors.cropType?.message}>
+            <FormInput
+              id="cropType"
+              type="text"
+              placeholder="e.g., Coffee"
+              disabled={isSubmitting}
+              error={!!errors.cropType}
+              {...register("cropType")}
             />
           </FormField>
         </div>
@@ -627,7 +627,7 @@ export function ApplicationForm({
         hint="Used in the Isometric 200-year durability calculation."
         fields={["soilTemperatureSource", "soilTemperatureC"]}
       >
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
+        <div className="grid grid-cols-1 gap-x-16 gap-y-20">
           <FormField
             id="soilTemperatureSource"
             label="Temperature source"

@@ -1,9 +1,10 @@
+"use client";
+
 /**
  * DeliveryList component
  * Main delivery listing with CRUD operations using DataTable
  * Includes stat cards, status badges, and EntitySideSheet
  */
-"use client";
 
 import { EntityCertifyReadinessBadge } from "@/components/certification/entity-certify-readiness-badge";
 import { ServerError } from "@/components/forms";
@@ -266,6 +267,11 @@ export function DeliveryList() {
     !!focusedDeliveryId,
   );
 
+  // Freeze the opening draft and version; detail refetches must not advance it.
+  if (!sideSheet && deepLinkMode === "edit" && focusedDelivery.data && focusedDeliveryId === focusedDelivery.data.id) {
+    setSideSheet({ mode: "edit", entity: deliveryDetailToRelations(focusedDelivery.data) });
+  }
+
   // Mutations
   const createDelivery = useCreateDelivery();
   const updateDelivery = useUpdateDelivery();
@@ -391,6 +397,7 @@ export function DeliveryList() {
     try {
       await updateDelivery.mutateAsync({
         deliveryId: displaySideSheet.entity.id,
+        expectedVersion: displaySideSheet.entity.version,
         ...data,
       });
       closeSideSheet();

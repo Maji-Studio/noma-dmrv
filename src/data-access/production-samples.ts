@@ -1,3 +1,4 @@
+import { assertRowVersion, nextVersion } from "./row-version";
 /**
  * Production Samples Data Access Layer
  * CRUD operations for in-process field measurements with auth guards
@@ -18,6 +19,7 @@ import { processPendingStorageObjectDeletions } from "./storage-object-deletions
 
 export interface ProductionSampleWithRelations {
   id: string;
+  version: number;
   productionRunId: string;
   sampleCode: string | null;
   timestamp: Date;
@@ -39,6 +41,7 @@ export interface ProductionSampleWithRelations {
 
 // Shared select projection used by all read queries
 const sampleSelect = {
+  version: productionSamples.version,
   id: productionSamples.id,
   productionRunId: productionSamples.productionRunId,
   sampleCode: productionSamples.sampleCode,
@@ -169,6 +172,7 @@ export async function updateProductionSample(
   ctx: OrgContext,
   id: string,
   data: {
+    expectedVersion: number;
     timestamp?: Date;
     weightGrams?: number | null;
     volumeMl?: number | null;
@@ -186,9 +190,15 @@ export async function updateProductionSample(
   if (data.sampledById) await assertSameOrg(ctx, operators, data.sampledById);
 
   return db.transaction(async (tx) => {
+    const [locked] = await tx.select().from(productionSamples)
+      .where(and(eq(productionSamples.id, id), eq(productionSamples.organizationId, ctx.organizationId))).for("update");
+    if (!locked) throw new SafeError("In-process measurement not found.");
+    const { expectedVersion, ...changes } = data;
+    assertRowVersion({ entity: "productionSample", id, expectedVersion, actualVersion: locked.version });
+
     await tx
       .update(productionSamples)
-      .set({ ...data, updatedAt: new Date() })
+      .set({ ...changes, version: nextVersion(productionSamples.version), updatedAt: new Date() })
       .where(and(eq(productionSamples.id, id), eq(productionSamples.organizationId, ctx.organizationId)));
 
     // Read the row back inside the transaction (issue #769): a read that fails
@@ -206,11 +216,17 @@ export async function updateProductionSample(
  */
 export async function deleteProductionSample(
   ctx: OrgContext,
-  id: string
+  id: string,
+  expectedVersion: number
 ): Promise<void> {
   requireOrgScope(ctx);
 
   await db.transaction(async (tx) => {
+    const [locked] = await tx.select().from(productionSamples)
+      .where(and(eq(productionSamples.id, id), eq(productionSamples.organizationId, ctx.organizationId))).for("update");
+    if (!locked) throw new SafeError("In-process measurement not found.");
+    assertRowVersion({ entity: "productionSample", id, expectedVersion, actualVersion: locked.version });
+
     const rows = await tx
       .delete(productionSamples)
       .where(and(eq(productionSamples.id, id), eq(productionSamples.organizationId, ctx.organizationId)))

@@ -2,7 +2,7 @@
  * OrganizationCertifierCredentials — the organization's write-only Isometric
  * keys. Every facility in the organization submits with them.
  *
- * Once keys are stored, each one shows as "Ends 1a2b" (or "Saved") with a
+ * Once keys are stored, each one shows as a mask with a
  * Replace action; only Replace opens an empty input, and "Keep saved key"
  * closes it again. An untouched key keeps its mask in the form state and is
  * sent as `undefined`, which the data-access layer reads as "keep the stored
@@ -38,6 +38,7 @@ import {
   CERTIFIER_CREDENTIAL_MASK,
   certifierCredentialsFormSchema,
   certifierCredentialsRotationSchema,
+  maskedSecretDisplay,
   type CertifierCredentialsFormInput,
 } from "@/schemas/organizations";
 import { Notice } from "@/components/ui/notice";
@@ -99,7 +100,7 @@ function CredentialsForm({
   const [serverError, setServerError] = useState("");
   const [verification, setVerification] =
     useState<CertifierCredentialsVerification | null>(null);
-  // A saved key shows as "Ends 1a2b · Replace"; its input only appears once
+  // A saved key shows as a mask with Replace; its input only appears once
   // the operator asks to replace it. Untouched keys keep the mask, which the
   // submit handler reads as "keep the stored value".
   const [replacing, setReplacing] = useState({
@@ -108,12 +109,12 @@ function CredentialsForm({
   });
 
   function startReplace(field: keyof typeof replacing) {
-    setValue(field, "");
+    setValue(field, "", { shouldDirty: true });
     setReplacing((current) => ({ ...current, [field]: true }));
   }
 
   function cancelReplace(field: keyof typeof replacing) {
-    setValue(field, CERTIFIER_CREDENTIAL_MASK);
+    setValue(field, CERTIFIER_CREDENTIAL_MASK, { shouldDirty: true });
     setReplacing((current) => ({ ...current, [field]: false }));
   }
 
@@ -187,7 +188,7 @@ function CredentialsForm({
         <CredentialKeyField
           id={tokenId}
           label="Access token"
-          savedText={accessTokenLast4 ? `Ends ${accessTokenLast4}` : "Saved"}
+          savedText={maskedSecretDisplay(accessTokenLast4)}
           configured={configured}
           replacing={replacing.accessToken}
           error={errors.accessToken?.message}
@@ -199,7 +200,7 @@ function CredentialsForm({
         <CredentialKeyField
           id={secretId}
           label="Client secret"
-          savedText="Saved"
+          savedText={maskedSecretDisplay()}
           configured={configured}
           replacing={replacing.clientSecret}
           error={errors.clientSecret?.message}
@@ -216,7 +217,8 @@ function CredentialsForm({
         control={control}
         isSubmitting={setCredentials.isPending}
         errorMessage={serverError}
-        submitLabel="Save keys"
+        showSubmit={!configured || replacing.accessToken || replacing.clientSecret}
+        submitLabel="Save and test connection"
         submittingLabel="Saving and connecting…"
         sticky={false}
       />
@@ -225,7 +227,7 @@ function CredentialsForm({
 }
 
 /**
- * One key. Saved and untouched it reads "Ends 1a2b" with a Replace action
+ * One key. Saved and untouched it shows a mask with a Replace action
  * (only the last characters are ever shown, never the secret); replacing it
  * swaps in an empty input with a way back to the saved key.
  */
@@ -273,6 +275,7 @@ function CredentialKeyField({
               variant="weak"
               size="small"
               aria-label={`Replace ${noun}`}
+              disabled={disabled}
               onClick={onReplace}
             >
               Replace
@@ -294,6 +297,7 @@ function CredentialKeyField({
           variant="weak"
           size="small"
           className="self-start"
+          disabled={disabled}
           onClick={onCancel}
         >
           Keep saved key

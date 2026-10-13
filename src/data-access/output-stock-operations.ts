@@ -2,7 +2,7 @@ import { db, type DbTransaction } from '@/db';
 import { binMovements, biocharProducts, formulations, productionRuns, storageLocations } from '@/db/schema';
 import type { OrgContext } from '@/lib/auth/server';
 import { ActionConflictError, SafeError } from '@/lib/errors';
-import { add, compare, decimal, divide, grams, kilograms, multiply, operatorStockMessage, planOutputStock, rational, readRational, rationalToNumber, SubBinOverdrawError, subtract, UntickSubBinError, PRO_RATA_POLICY, type DrawPolicy, type OutputStockLayer, type OutputStockRequest } from '@/lib/output-stock';
+import { add, classifyPlannerFailure, compare, decimal, divide, grams, kilograms, multiply, operatorStockMessage, planOutputStock, rational, readRational, rationalToNumber, SubBinOverdrawError, subtract, UntickSubBinError, PRO_RATA_POLICY, type DrawPolicy, type OutputStockBlocking, type OutputStockLayer, type OutputStockRequest } from '@/lib/output-stock';
 import { mixPileName, outputStockEventLabel } from '@/lib/output-stock/labels';
 import { stockModeAt, type OutputStockMode, type StockModeChange } from '@/lib/output-stock/stock-mode';
 import { estimateStock, planReadings, planWetRemovals, withMovement, type LayerMoistureBasis, type PlannedReading } from '@/lib/output-stock/moisture-estimate';
@@ -15,6 +15,7 @@ import { and, asc, eq, isNull } from 'drizzle-orm';
 import { requestFingerprint } from './bin-movement-requests';
 import { getBiocharOutputStockLayers, getLayerMoistureBases, getOutputBinStocks, getProductOutputStockLayers } from './output-stock';
 import { getCertifiedLineage } from './certification-lineage-guards';
+import { changedOutputLayerIds, outputLayerTarget } from './output-stock-lineage';
 import { getStockModeChanges } from './output-bin-stock-mode';
 import { getOutputStockFacilityTimezone } from './output-stock-dates';
 import { prepareOutputCorrection } from './output-stock-corrections';
@@ -55,9 +56,14 @@ export async function prepareOutputStock(ctx: OrgContext, raw: OutputStockPrevie
   const planningLayers = preserveLossSources ? layers.filter(l => correction!.allocations.some(a => (a.biocharProductId ?? a.productionRunId) === l.id)) : layers;
   const events = await reader.select({ id: binMovements.id, sequence: binMovements.postingSequence, kind: binMovements.outputKind, occurredAt: binMovements.occurredAt, reason: binMovements.reason, correctsMovementId: binMovements.correctsMovementId })
     .from(binMovements).where(and(eq(binMovements.organizationId, ctx.organizationId), eq(binMovements.storageLocationId, bin.id))).orderBy(asc(binMovements.postingSequence));
-  const basisFingerprint = requestFingerprint({ layers, events: events.map(e => ({ id: e.id, sequence: e.sequence })), formulationId: bin.formulationId, occurredAt: input.occurredAt, correctsMovementId: input.correctsMovementId });
-  const codes = lane === 'product'
-    ? await reader.select({ id: biocharProducts.id, code: biocharProducts.code }).from(biocharProducts).where(and(eq(biocharProducts.organizationId, ctx.organizationId), eq(biocharProducts.storageLocationId, bin.id)))
+  // Layer queries have no row-order contract; metadata updates may reorder them.
+  // Hash the same stock identically without changing the planner's layer input.
+  const fingerprintLayers = [...layers].sort((a, b) => a.id.localeCompare(b.id));
+  const basisFingerprint = requestFingerprint({ layers: fingerprintLayers, events: events.map(e => ({ id: e.id, sequence: e.sequence })), formulationId: bin.formulationId, occurredAt: input.occurredAt, correctsMovementId: input.correctsMovementId });
+  const productCodes = lane === 'product'
+    ? await reader.select({ id: biocharProducts.id, version: biocharProducts.version, code: biocharProducts.code }).from(biocharProducts).where(and(eq(biocharProducts.organizationId, ctx.organizationId), eq(biocharProducts.storageLocationId, bin.id)))
+    : [];
+  const codes = lane === 'product' ? productCodes
     : await reader.select({ id: productionRuns.id, code: productionRuns.code }).from(productionRuns).where(and(eq(productionRuns.organizationId, ctx.organizationId), eq(productionRuns.biocharStorageLocationId, bin.id)));
   const codeMap = new Map(codes.map(row => [row.id, row.code]));
   const runCodes = await reader.select({ id: productionRuns.id, code: productionRuns.code }).from(productionRuns).where(and(eq(productionRuns.organizationId, ctx.organizationId), eq(productionRuns.facilityId, input.facilityId)));
@@ -65,6 +71,8 @@ export async function prepareOutputStock(ctx: OrgContext, raw: OutputStockPrevie
   const before = planOutputStock(layers, input.occurredAt, { kind: 'count', wetKg: 0 });
   let plan: ReturnType<typeof planOutputStock> | null = null;
   let blockingMessage: string | null = null;
+  // Typed twin of blockingMessage for API callers: a shortage, or a request to change.
+  let blocking: OutputStockBlocking | null = null;
   const request: OutputStockRequest = input.kind === 'count'
     ? { kind: 'count', wetKg: input.wetMassKg, moisturePercent: input.moisturePercent ?? undefined }
     : sources ? { kind: 'ordered', wetKg: input.wetMassKg, sources }
@@ -77,6 +85,7 @@ export async function prepareOutputStock(ctx: OrgContext, raw: OutputStockPrevie
     const held = planningLayers.filter(l => l.placedAt <= input.occurredAt && l.remainingSolidsKg && l.remainingSolidsKg.numerator > BigInt(0));
     const drawsWholeBin = Boolean(sources) && held.every(l => sources!.some(s => s.layerId === l.id));
     blockingMessage = (drawsWholeBin && error instanceof SubBinOverdrawError ? null : subBinMessage(error, codeMap)) ?? operatorStockMessage(error instanceof SubBinOverdrawError ? 'Insufficient exact dry solids' : error.message);
+    blocking = classifyPlannerFailure(error, { storageLocationId: bin.id, lane, drawsWholeBin });
   }
   if (correction && plan) await prepareOutputCorrection(ctx, input, state.layers, reader, plan.allocations.map(a => a.layerId));
   const beforeDryKg = Number(kilograms(layers.filter(l => l.placedAt <= input.occurredAt).reduce((sum, l) => sum + grams(l.remainingDryBiocharKg), BigInt(0))));
@@ -113,6 +122,7 @@ export async function prepareOutputStock(ctx: OrgContext, raw: OutputStockPrevie
   };
   const [formulation] = bin.formulationId ? await reader.select({ name: formulations.name }).from(formulations).where(and(eq(formulations.organizationId, ctx.organizationId), eq(formulations.id, bin.formulationId))) : [];
   const preview: OutputStockPreview = {
+    expectedProductVersions: Object.fromEntries(productCodes.map(row => [row.id, row.version])),
     basisFingerprint, storageLocationId: bin.id, binName: bin.name, binCode: bin.code, formulationName: formulation?.name ?? null, lane, beforeDryKg,
     beforeAllocations: layerViews(layers, bases), afterAllocations: layerViews(afterLayers, afterBases),
     afterDryKg: beforeDryKg - Number(plan?.drawnDryKg ?? 0), beforeSolidsKg, afterSolidsKg,
@@ -127,7 +137,7 @@ export async function prepareOutputStock(ctx: OrgContext, raw: OutputStockPrevie
       dryMassKg: Number(a.dryKg), wetMassKg: a.wetShareKg ? rationalNumber(a.wetShareKg) : null,
       runs: a.runs.map(r => ({ productionRunId: r.productionRunId, code: runMap.get(r.productionRunId) ?? r.productionRunId, dryMassKg: Number(r.dryKg) })) })) ?? [], blockingMessage,
   };
-  return { input, bin, lane, layers, plan, preview, correction, sources, readings, policy };
+  return { input, bin, lane, layers, plan, preview, blocking, correction, sources, readings, policy };
 }
 
 const REMOVAL_KINDS: ReadonlySet<string> = new Set(['delivery', 'loss', 'count', 'production_draw', 'product_draw', 'replacement']);
@@ -210,8 +220,8 @@ export async function previewOutputStock(ctx: OrgContext, input: OutputStockPrev
     return await db.transaction(async tx => {
       const prepared = await prepareOutputStock(ctx, input, tx);
       if (prepared.correction && prepared.plan) {
-        const targets = prepared.layers.filter(layer => prepared.plan!.allocations.some(a => a.layerId === layer.id) || prepared.correction!.allocations.some(a => (a.biocharProductId ?? a.productionRunId) === layer.id))
-          .map(layer => ({ entityType: prepared.lane === 'product' ? 'biocharProduct' as const : 'productionRun' as const, entityId: layer.id }));
+        // The same layers the posting guards (decision 51), readings included.
+        const targets = (await changedOutputLayerIds(ctx, tx, prepared)).map(layerId => outputLayerTarget(prepared.lane, layerId));
         const lineage = (await Promise.all(targets.map(target => getCertifiedLineage(ctx, tx, target)))).flat();
         if (prepared.correction.deliveryId) lineage.push(...await getCertifiedLineage(ctx, tx, { entityType: 'delivery', entityId: prepared.correction.deliveryId }));
         const blockers = lineage.filter(row => row.removalSubmissionId || row.ghgStatementSubmissionId).map(row => ({

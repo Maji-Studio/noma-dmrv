@@ -23,7 +23,6 @@ import { useFieldArray, useForm, useWatch, Controller, type Resolver } from "rea
 import { getRunConflict, type RunConflict } from "@/lib/production-runs/overlap-conflict";
 import { FactoryIcon, PlantIcon, LightningIcon, PackageIcon, PlusIcon } from "@phosphor-icons/react/dist/ssr";
 import { FormField, FormInput, FormTextarea, MassMoistureFields, MoistureField, FormActions, FormError, FormSection, FormSpine, ResolvedErrorRevalidator, makeCertFieldStatus, type CertFieldStatus } from "@/components/forms";
-import { StorageBinActions } from "@/components/storage-locations/storage-bin-actions";
 import { Button } from "@/components/ui/button";
 import { ProductionReadingsField } from "./production-readings-field";
 import { SegmentedControl } from "@/components/forms/segmented-control";
@@ -75,7 +74,7 @@ const EMPTY_FEEDSTOCK_DRAW = { storageLocationId: "", wetMassKg: undefined };
 
 export type ProductionRunSubmitData = Omit<ProductionRunFormData, "endTime"> & {
   endTime?: ProductionRunFormData["endTime"] | null;
-  expectedUpdatedAt?: Date;
+  expectedVersion?: number;
 };
 
 interface ProductionRunFormProps {
@@ -342,7 +341,7 @@ export function ProductionRunForm({
     }
     const combined: ProductionRunSubmitData = {
       ...data,
-      expectedUpdatedAt: productionRun?.updatedAt,
+      expectedVersion: productionRun?.version,
       startTime: runWindow.startTime,
       endTime: runWindow.endTime,
     };
@@ -414,7 +413,7 @@ export function ProductionRunForm({
           </FormField>
         )}
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
+        <div className="grid grid-cols-1 gap-x-16 gap-y-20">
           <FormField id="reactorId" label="Reactor" error={errors.reactorId?.message} required>
             <Controller
               name="reactorId"
@@ -423,6 +422,7 @@ export function ProductionRunForm({
                 <EntitySelect
                   id="reactorId"
                   entityType="reactor"
+                  allowEdit
                   value={field.value}
                   onChange={field.onChange}
                   placeholder="Select a reactor..."
@@ -443,6 +443,7 @@ export function ProductionRunForm({
                 <EntitySelect
                   id="operatorId"
                   entityType="operator"
+                  allowEdit
                   value={field.value || undefined}
                   onChange={field.onChange}
                   placeholder="Select operator..."
@@ -603,7 +604,6 @@ export function ProductionRunForm({
         ))}
 
 
-
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <MoistureField
             id="feedstockMoisturePercent"
@@ -672,6 +672,7 @@ export function ProductionRunForm({
               <EntitySelect
                 id="biocharStorageLocationId"
                 entityType="storageLocation"
+                allowEdit
                 value={field.value || undefined}
                 onChange={field.onChange}
                 disabled={isSubmitting || !watchedFacilityId}
@@ -679,7 +680,6 @@ export function ProductionRunForm({
                 filterBy={watchedFacilityId ? { facilityId: watchedFacilityId, type: "biochar_bin" } : undefined}
                 allowCreate={!!watchedFacilityId}
                 onCreateNew={() => biocharBinDialog.open()}
-                trailingActions={<StorageBinActions storageLocationId={field.value} />}
               />
             )}
           />

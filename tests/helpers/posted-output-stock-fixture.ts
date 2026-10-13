@@ -2,7 +2,7 @@ import { withProductStockFingerprint } from "./product-stock-preview-fixture";
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
-import { feedstocks, storageLocations } from "@/db/schema";
+import { storageLocations } from "@/db/schema";
 import { createBiocharProduct, type CreateBiocharProductInput } from "@/data-access/biochar-product-create";
 import { createDelivery } from "@/data-access/delivery-output-writes";
 import { createOrder } from "@/data-access/orders";
@@ -39,7 +39,7 @@ export async function postProduct(f: PostedStockParents, changes: Partial<Create
 export async function deliveryInput(f: Awaited<ReturnType<typeof postedStockFixture>>, wetMassKg: number, moisturePercent = 0) {
   const preview = await previewOutputStock(f.ctx, { facilityId: f.facility.id, storageLocationId: f.bin.id, occurredAt: STOCK_TIME, kind: "delivery", wetMassKg, moisturePercent });
   return { code: `E2E-STOCK-D-${randomUUID().toUpperCase()}`, facilityId: f.facility.id, orderId: f.order.id, storageLocationId: f.bin.id,
-    deliveryDate: new Date(STOCK_TIME), deliveredWetMassKg: wetMassKg, moistureContentPercent: moisturePercent, idempotencyKey: randomUUID(), basisFingerprint: preview.basisFingerprint };
+    deliveryDate: new Date(STOCK_TIME), deliveredWetMassKg: wetMassKg, moistureContentPercent: moisturePercent, idempotencyKey: randomUUID(), expectedProductVersions: preview.expectedProductVersions, basisFingerprint: preview.basisFingerprint };
 }
 export async function postDelivery(f: Awaited<ReturnType<typeof postedStockFixture>>, wetMassKg: number, moisturePercent = 0) {
   return createDelivery(f.ctx, await deliveryInput(f, wetMassKg, moisturePercent));
@@ -47,9 +47,8 @@ export async function postDelivery(f: Awaited<ReturnType<typeof postedStockFixtu
 export async function postMeasurement(f: PostedStockParents, changes: Partial<OutputStockPreviewInput> & Pick<OutputStockPreviewInput, "kind" | "wetMassKg">) {
   const input = { facilityId: f.facility.id, storageLocationId: f.bin.id, occurredAt: STOCK_TIME, moisturePercent: 0, ...changes };
   const preview = await previewOutputStock(f.ctx, input);
-  return postOutputStock(f.ctx, { ...input, basisFingerprint: preview.basisFingerprint, idempotencyKey: randomUUID(), reason: "E2E stock contract measurement" });
+  return postOutputStock(f.ctx, { ...input, expectedProductVersions: preview.expectedProductVersions, basisFingerprint: preview.basisFingerprint, idempotencyKey: randomUUID(), reason: "E2E stock contract measurement" });
 }
 export async function cleanupPostedStock(f: PostedStockParents) {
-  await db.delete(feedstocks).where(eq(feedstocks.organizationId, f.ctx.organizationId));
   await cleanupOutputStockFixture(db, f.ctx.organizationId);
 }

@@ -29,12 +29,12 @@ import {
 } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import { conflictCode, type ConflictRef } from "@/lib/conflict-ref";
-import { ActionConflictError } from "@/lib/errors";
+import { DomainError } from "@/lib/domain-errors";
 import { formatDateTime, formatMassKg } from "@/lib/format-utils";
 import { CANCELLED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
 import { STOCK_CONFLICT_ENTITY } from "@/lib/stock-conflict-entities";
 import { isStockOverdraw } from "@/lib/stock-overdraw";
-import { deriveFeedstockWetStockKg } from "./feedstock-wet-stock";
+import { deriveLaneStock } from "./lane-stock-derivation";
 import { requireOrgScope } from "./utils";
 
 /** Which write is being refused, so the message names the right action. */
@@ -203,14 +203,22 @@ export async function assertFeedstockBinLanesNotNegative(
     );
 
   for (const bin of bins) {
-    const availableWetKg = await deriveFeedstockWetStockKg(ctx, tx, bin.id);
-    if (isNegativeStock(availableWetKg)) {
+    const [stock] = await deriveLaneStock(ctx, tx, { storageLocationIds: [bin.id], lanes: "feedstock" });
+    if (isNegativeStock(stock.feedstockStockWetKg)) {
       const blockers = await listLaneWithdrawals(ctx, tx, bin.id);
-      throw new ActionConflictError(
-        negativeLaneMessage(write, bin.code, Math.abs(availableWetKg)),
-        { entity: CONFLICT_ENTITY, id: bin.id, code: conflictCode(bin.code) },
-        { blockers },
-      );
+      const message = negativeLaneMessage(write, bin.code, Math.abs(stock.feedstockStockWetKg));
+      // Compare the proposed intake supply with existing withdrawals. Movement
+      // adjustments contribute to supply or demand according to their net sign.
+      throw new DomainError("insufficient_stock", message, {
+        conflict: { entity: CONFLICT_ENTITY, id: bin.id, code: conflictCode(bin.code) },
+        blockers,
+        issues: [{ path: ["storageLocationId"], code: "insufficient_stock", message, meta: {
+          storageLocationId: bin.id,
+          availableWetKg: stock.feedstockIntakeWetKg + Math.max(stock.feedstockMovementDeltaKg, 0),
+          requestedWetKg: stock.feedstockConsumedWetKg + Math.max(-stock.feedstockMovementDeltaKg, 0),
+          unit: "kg",
+        } }],
+      });
     }
   }
 }

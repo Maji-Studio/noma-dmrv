@@ -12,6 +12,8 @@ migrations, and soft-delete semantics live in [`database.md`](./database.md).
 | Area | File |
 |---|---|
 | Auth, orgs, members, invitations | `src/db/schema/auth.ts` |
+| API credentials (`api_keys`) and management records (`api_key_owners`) | `src/db/schema/api-keys.ts` |
+| API bookkeeping (`api_idempotency_records`, `api_audit_events`, `api_rate_limit_buckets`, `organization_api_access`) | `src/db/schema/api.ts` |
 | Facilities, reactors, storage locations | `src/db/schema/facilities.ts` |
 | Suppliers, customers, their locations, drivers, operators | `src/db/schema/parties.ts` |
 | Feedstock deliveries, types, feedstocks | `src/db/schema/feedstock.ts` |
@@ -34,6 +36,22 @@ migrations, and soft-delete semantics live in [`database.md`](./database.md).
 | Route cache | `src/db/schema/geo.ts` |
 | Shared enums / shared numeric column types | `src/db/schema/common.ts` · `src/db/schema/numeric-families.ts` |
 
+Production runs, incident reports, in-process production samples, and biochar
+products each carry a required integer `version`, initially 1. Every row update
+increments it atomically, including archive cascades and product stock effects.
+Edit and delete commands must send the loaded version.
+
+## API bookkeeping
+
+All four tables live in `src/db/schema/api.ts`:
+
+| Table | Grain and scope |
+|---|---|
+| `api_idempotency_records` | Unique organization/credential/key claim with fingerprint, expiry and stored outcome v2. Normal claims are org-scoped; expiry purge is a system seam. |
+| `api_audit_events` | One committed API write effect with organization, actor, credential, optional OAuth client, operation, entity ids, field names, versions, request id, outcome code and transport (`rest` or `mcp`, default `rest`). No field values; inserts are org-scoped in the write transaction. |
+| `api_rate_limit_buckets` | Token balance and refill time per bucket key. Organization-neutral system seam for hashed-IP, credential and organization budgets; no org column. |
+| `organization_api_access` | Organization primary key, enabled flag, changing user id and time. Missing row means on. Credential lookup and Platform Admin directory/toggle are privileged seams; non-Platform-Admins cannot administer it. |
+
 ## Invariants and traps
 
 - **Multi-tenancy.** Every MRV/domain table carries a NOT NULL
@@ -41,7 +59,9 @@ migrations, and soft-delete semantics live in [`database.md`](./database.md).
   paths are **composite** on `(id, organization_id)` (e.g.
   `credit_batch_production_runs` → `credit_batches(id, organization_id)`).
   Better Auth infrastructure in `auth.ts` uses its own user/session/account/org
-  relationships, and `geo_route_cache` is intentionally organization-neutral.
+  relationships. `api_keys.reference_id` is the Better Auth plugin's organization
+  id; `api_key_owners` carries `organization_id` and a management `version`
+  independent of plugin last-used bookkeeping. `geo_route_cache` is intentionally organization-neutral.
   Those are explicit infrastructure exceptions; a new domain table or join
   that omits organization scope is wrong. See [ADR
   0010](./adr/0010-shared-schema-org-column-tenancy.md) and
@@ -68,13 +88,38 @@ migrations, and soft-delete semantics live in [`database.md`](./database.md).
   organizations only under its explicit `// org-scope-ok:` capability waiver;
   all management paths remain org-scoped.
 - **`certifier_organization_settings` holds provider policy above the facility scope.** Its Source visibility value is unique per `(organization_id, provider)`, defaults to private when the row is absent, and applies only to newly mirrored registry Sources.
-- **`organization_settings` holds operating defaults that seed forms, never protocol constants.** One row per organization (unique on `organization_id`); every column is NOT NULL with a default mirroring the literal it replaced, and the read falls back to `DEFAULT_ORGANIZATION_SETTINGS` (`src/config/organization-settings.ts`) when no row exists, so consumers never see null. Changing a default never rewrites a saved record. Protocol-derived thresholds stay constants — a settings row that could move the H:C eligibility ceiling or the Method-B sample floor would let an operator weaken a certification gate from a form.
+- **`organization_settings` holds operating defaults that seed forms, never protocol constants.** One row per organization (unique on `organization_id`); every column except `default_timezone` is NOT NULL with a default mirroring the literal it replaced, and the read falls back to `DEFAULT_ORGANIZATION_SETTINGS` (`src/config/organization-settings.ts`) when no row exists. `default_timezone` is nullable with no default: null means the organization has not chosen a zone, and the facility form then starts empty. Changing a default never rewrites a saved record. Protocol-derived thresholds stay constants — a settings row that could move the H:C eligibility ceiling or the Method-B sample floor would let an operator weaken a certification gate from a form.
 - **`facility_emission_factors` holds display-only estimate factors**, one row per facility (unique on `facility_id`, composite FK to `facilities(id, organization_id)`): kg CO₂e per litre of diesel, per kWh of grid electricity and per tonne-km of road freight, plus a source note. All three are NOT NULL, so a row is complete or absent; no row means the Energy page shows activity only. They feed no submission; Isometric applies its own template factors ([ADR 0031](./adr/0031-operator-energy-estimates.md), [ADR 0018](./adr/0018-isometric-owns-project-emissions.md)).
+- **Integer row versions** start at 1 on feedstocks and editable master data: facilities, reactors, storage locations, suppliers and supplier locations, customers and customer locations, formulations, feedstock types, vehicles, drivers, operators, and facility emission factors. Every writer increments the affected row; edit and delete payloads carry the loaded version ([architecture.md](./architecture.md#expected-version-checks-on-edit-forms)).
 - **Soft delete** via nullable `archived_at` on `facilities` and its operational descendants — see [`database.md`](./database.md) → "Soft Delete — Facility Archive".
 - **All domain enums** are in `src/db/schema/common.ts` — read the file, not a sample.
+
+## Auth account columns
+
+Better Auth maps its account model to `account` in
+`src/db/schema/auth.ts`. It stores required text `id`, `user_id`, `account_id`
+and `provider_id`; nullable text `access_token`, `refresh_token`, `id_token`,
+`scope` and `password`; nullable timestamps `access_token_expires_at` and
+`refresh_token_expires_at`; and required timestamps `created_at` and
+`updated_at`. See [auth.md](./auth.md) for the Better Auth version and credential
+identity rule. Credential `account_id` equals `user_id`. Indexes cover account
+and session `user_id` and verification `identifier`, alongside the membership
+and invitation indexes.
+Application table names, extra columns, membership uniqueness and the partial
+pending-invitation uniqueness constraint are preserved.
 
 ## Related references
 
 - Chain-of-custody traversal: [`traceability.md`](./traceability.md) · [ADR 0011](./adr/0011-credit-batch-anchored-chain-of-custody.md)
 - Layering rules for queries on these tables: [`architecture.md`](./architecture.md)
 - Isometric requirement mapping: [`isometric/schema-mapping.md`](./isometric/schema-mapping.md) · conditional fields: [`isometric/condition-registry.md`](./isometric/condition-registry.md)
+
+## Edit-form row versions
+
+Editable entity rows carry an integer `version NOT NULL DEFAULT 1`. This includes
+lab `samples`, `orders`, `deliveries`, `transport_legs`, `applications`, and
+`credit_batches`. Every update, including derived and cascade changes, increments
+the version in the same statement. UI commands require the loaded version; see
+[expected-version checks](./architecture.md#expected-version-checks-on-edit-forms).
+Sample `analysis_date`, `r0_analysis_date`, and `tga_analysis_date` are calendar
+`date` columns; `sampling_time` remains a timestamp instant.

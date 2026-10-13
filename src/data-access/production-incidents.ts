@@ -1,3 +1,4 @@
+import { assertRowVersion, nextVersion } from "./row-version";
 /**
  * Production Incidents Data Access Layer
  * CRUD operations for incident reports associated with production runs
@@ -14,6 +15,7 @@ import { processPendingStorageObjectDeletions } from "./storage-object-deletions
 
 export interface ProductionIncidentWithRelations {
   id: string;
+  version: number;
   productionRunId: string;
   incidentTime: Date;
   incidentDate: Date;
@@ -31,6 +33,7 @@ export interface ProductionIncidentWithRelations {
 }
 
 const incidentSelect = {
+  version: incidentReports.version,
   id: incidentReports.id,
   productionRunId: incidentReports.productionRunId,
   incidentTime: incidentReports.incidentTime,
@@ -138,6 +141,7 @@ export async function updateProductionIncident(
   ctx: OrgContext,
   id: string,
   data: {
+    expectedVersion: number;
     incidentTime?: Date;
     operatorId?: string | null;
     reactorId?: string | null;
@@ -151,15 +155,6 @@ export async function updateProductionIncident(
 
   if (data.operatorId) await assertSameOrg(ctx, operators, data.operatorId);
   if (data.reactorId) await assertSameOrg(ctx, reactors, data.reactorId);
-
-  const [existing] = await db
-    .select({ id: incidentReports.id })
-    .from(incidentReports)
-    .where(and(eq(incidentReports.id, id), eq(incidentReports.organizationId, ctx.organizationId)));
-
-  if (!existing) {
-    throw new SafeError("Production incident not found");
-  }
 
   const updateData: Record<string, unknown> = {
     updatedAt: new Date(),
@@ -179,9 +174,14 @@ export async function updateProductionIncident(
   if (data.notes !== undefined) updateData.notes = data.notes;
 
   return db.transaction(async (tx) => {
+    const [locked] = await tx.select().from(incidentReports)
+      .where(and(eq(incidentReports.id, id), eq(incidentReports.organizationId, ctx.organizationId))).for("update");
+    if (!locked) throw new SafeError("Production incident not found");
+    assertRowVersion({ entity: "productionIncident", id, expectedVersion: data.expectedVersion, actualVersion: locked.version });
+
     await tx
       .update(incidentReports)
-      .set(updateData)
+      .set({ ...updateData, version: nextVersion(incidentReports.version) })
       .where(and(eq(incidentReports.id, id), eq(incidentReports.organizationId, ctx.organizationId)));
 
     // Read the row back inside the transaction (issue #769).
@@ -191,11 +191,17 @@ export async function updateProductionIncident(
 
 export async function deleteProductionIncident(
   ctx: OrgContext,
-  id: string
+  id: string,
+  expectedVersion: number
 ): Promise<void> {
   requireOrgScope(ctx);
 
   await db.transaction(async (tx) => {
+    const [locked] = await tx.select().from(incidentReports)
+      .where(and(eq(incidentReports.id, id), eq(incidentReports.organizationId, ctx.organizationId))).for("update");
+    if (!locked) throw new SafeError("Production incident not found");
+    assertRowVersion({ entity: "productionIncident", id, expectedVersion, actualVersion: locked.version });
+
     const rows = await tx
       .delete(incidentReports)
       .where(and(eq(incidentReports.id, id), eq(incidentReports.organizationId, ctx.organizationId)))

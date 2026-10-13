@@ -8,7 +8,7 @@
  * to see *whose* keys they are.
  *
  * Lives here rather than in onboarding because certification owns the registry
- * concept; the onboarding wizard and the certifier settings pane both render it.
+ * concept; the dashboard registry dialog and the certifier settings pane both render it.
  */
 "use client";
 

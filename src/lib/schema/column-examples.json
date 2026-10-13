@@ -22,12 +22,14 @@
   "account": {
     "id": "acc_001",
     "userId": "usr_k7x2m9",
-    "accountId": "jane@noma.earth",
+    "accountId": "usr_k7x2m9",
     "providerId": "credential",
     "accessToken": null,
     "refreshToken": null,
     "idToken": null,
-    "expiresAt": null,
+    "accessTokenExpiresAt": null,
+    "refreshTokenExpiresAt": null,
+    "scope": null,
     "password": "***hashed***",
     "createdAt": "2025-03-15T09:00:00Z",
     "updatedAt": "2025-03-15T09:00:00Z"

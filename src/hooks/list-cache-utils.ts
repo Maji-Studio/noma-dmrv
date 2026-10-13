@@ -1,9 +1,9 @@
 /**
  * Shared React Query cache helpers for the paginated entity list caches.
  *
- * The update hooks save with `expectedUpdatedAt` (issue #768), so any row a
+ * Updates save with integer `expectedVersion`, so any row a
  * cache hands to an edit sheet has to carry a version the server really
- * wrote. An optimistic row therefore keeps the `updatedAt` it was read on, and
+ * wrote. An optimistic row therefore keeps the version it was read on, and
  * this helper installs the saved row once the server answers.
  */
 import type { QueryClient, QueryKey } from "@tanstack/react-query";
@@ -31,5 +31,27 @@ export function patchListCachesWithSavedRow<TItem extends { id: string }>(
             ),
           }
         : old,
+  );
+}
+
+/** Merge a saved row into one unpaginated list at its exact query key. */
+export function patchArrayListCacheByExactKeyWithSavedRow<TItem extends { id: string }>(
+  queryClient: QueryClient,
+  listKey: QueryKey,
+  saved: Partial<TItem> & { id: string },
+): void {
+  queryClient.setQueryData<TItem[]>(listKey, (old) =>
+    old?.map((item) => item.id === saved.id ? { ...item, ...saved } : item),
+  );
+}
+
+/** Merge a saved row into every unpaginated list under a query-key prefix. */
+export function patchArrayListCachesByPrefixWithSavedRow<TItem extends { id: string }>(
+  queryClient: QueryClient,
+  listsKey: QueryKey,
+  saved: Partial<TItem> & { id: string },
+): void {
+  queryClient.setQueriesData<TItem[]>({ queryKey: listsKey }, (old) =>
+    old?.map((item) => item.id === saved.id ? { ...item, ...saved } : item),
   );
 }

@@ -11,7 +11,7 @@ describe('output operation boundary', () => {
   });
   it('requires idempotency, preview and a reason for posting', () => {
     expect(outputStockPostSchema.safeParse(input).success).toBe(false);
-    expect(outputStockPostSchema.safeParse({ ...input, idempotencyKey: 'request', basisFingerprint: 'basis', reason: 'Spillage' }).success).toBe(true);
+    expect(outputStockPostSchema.safeParse({ ...input, expectedProductVersions: {}, idempotencyKey: 'request', basisFingerprint: 'basis', reason: 'Spillage' }).success).toBe(true);
     expect(outputStockPostSchema.safeParse({ ...input, idempotencyKey: ' ', basisFingerprint: 'basis', reason: ' ' }).success).toBe(false);
   });
   it('requires mass and moisture to round-trip through stored precision', () => {
@@ -27,7 +27,7 @@ describe('output operation boundary', () => {
       const result = outputStockPostSchema.safeParse(value);
       return result.success ? [] : result.error.issues.map(issue => issue.message);
     };
-    const base = { ...input, idempotencyKey: 'request', basisFingerprint: 'basis', reason: 'Spillage' };
+    const base = { ...input, expectedProductVersions: {}, idempotencyKey: 'request', basisFingerprint: 'basis', reason: 'Spillage' };
     expect(messages({ ...base, wetMassKg: null })).toEqual(['Enter the wet mass.']);
     expect(messages({ ...base, wetMassKg: undefined })).toEqual(['Enter the wet mass.']);
     expect(messages({ ...base, moisturePercent: 'x' })).toEqual(['Enter the moisture as a number.']);

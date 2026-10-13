@@ -166,7 +166,7 @@ export function buildProductionRunWindow(input: {
  *
  * `ProductionRunWithRelations` does not carry the facility's zone, so editing a
  * run whose facility is missing from the context list falls back to
- * `DEFAULT_FACILITY_TIMEZONE`. That fallback is stated in the UI rather
+ * `UNKNOWN_FACILITY_TIMEZONE`. That fallback is stated in the UI rather
  * than applied silently — a silently-wrong default is what caused QA F-2.
  */
 export function productionRunTimezoneHelperText(

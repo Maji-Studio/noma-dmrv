@@ -17,6 +17,7 @@ const importedFeedstockType: FeedstockType = {
   isometricFeedstockTypeId: IMPORTED_ID,
   archivedAt: null,
   createdAt: new Date("2026-07-23T00:00:00Z"),
+  version: 1,
   updatedAt: new Date("2026-07-23T00:00:00Z"),
 };
 
@@ -26,7 +27,7 @@ vi.mock("@/hooks/use-facility-context", () => ({
 
 vi.mock("@/hooks/use-certification", () => ({
   useFacilityCertifierSummary: () => ({
-    data: { mapping: { id: "mapping-1" } },
+    data: { mapping: { id: "mapping-1" }, isProduction: true },
     isLoading: false,
     error: null,
   }),
@@ -68,6 +69,9 @@ describe("IsometricFeedstockBrowser", () => {
       `data-testid="isometric-feedstock-option-${IMPORTED_ID}" disabled=""`,
     );
     expect(html).toContain("Imported");
+    expect(html).toContain(`href="https://to.isometric.com/certify/${AVAILABLE_ID}"`);
+    expect(html).toContain('target="_blank"');
+    expect(html).toContain('rel="noopener noreferrer"');
     expect(html).not.toContain(
       `data-testid="isometric-feedstock-option-${AVAILABLE_ID}" disabled=""`,
     );

@@ -8,6 +8,10 @@ themselves. Related: [security.md](./security.md) (env inventory),
 [database.md](./database.md), [troubleshooting.md](./troubleshooting.md),
 [isometric/README.md](./isometric/README.md).
 
+Vitest defaults to the `node` environment. Component tests that need a real DOM
+or portals opt in with `// @vitest-environment jsdom` and use
+`@testing-library/react`.
+
 ## Which runner picks up which file
 
 `vitest.config.ts` uses Vitest's normal discovery and excludes `**/e2e/**`,
@@ -78,6 +82,105 @@ echo "TEST_DATABASE_URL=postgresql://postgres:postgres@localhost:5433/noma_dmrv_
 
 Re-run the migrate line after pulling new migrations. A worktree made with
 `scripts/worktree.sh` gets its own test database.
+
+## Agent evaluation
+
+`pnpm eval:mcp` runs two feedstock intake requests, two chained production-run
+requests and two lab sample requests (three replicates; a replicate without organic
+carbon) through headless Claude Code and the local MCP server. It needs Docker with the test database schema ready,
+the worktree's `.env.test`, and a logged-in Claude Code subscription. It refuses
+non-test databases, creates a fresh organization and API key per case, and scores
+the stored rows, bin stock, audit transport and tool-call count. Case 2 follows
+the published schema: ask for moisture when required, otherwise log without it.
+The chained case without draw mass requires a mass request in the final answer and
+either no run or a running run without draws. Any saved draw fails. The complete
+chain requires R1 running today in the facility zone, a 1500 kg wet draw from B2
+and the resulting stock. Required run references and start time come from the
+published contract and grounding tools.
+
+This is a local check before merge, not a CI gate. Paste its Markdown table into
+the PR. Transcripts, the dev server log, Markdown and JSON scores are saved in
+the printed temporary run directory with keys redacted. Fixture organizations
+are removed on exit; `pnpm eval:mcp --keep` retains them and prints their ids.
+`EVAL_MCP_MODEL` selects a model. Port, timeouts, budget and Claude flags live in
+`scripts/eval-mcp/config.ts`.
+
+## API schema fuzzing
+
+`pnpm api:fuzz` runs Schemathesis 4.29.3 against every operation in the freshly
+generated v1 OpenAPI document. It runs examples, coverage, fuzzing (25 examples
+per operation), and inferred stateful links (10 scenarios, at most 5 steps).
+[API fuzz CI](../.github/workflows/api-fuzz.yml) runs on PRs touching
+`src/lib/api/**`, `src/lib/operations/**`, `src/lib/representations/**`,
+`src/app/api/**`, `src/proxy.ts`, `src/config/env.ts`, `openapi/**`, or the harness
+files (the workflow, `scripts/api-fuzz/**` and `schemathesis.toml`). It uses
+CI Postgres and `pnpm build` plus `pnpm start`, limits the fuzz step to five
+minutes, and uploads `api-fuzz-report/junit.xml` even after test failures.
+
+Locally, install `uv` and prepare an empty, migrated local database whose name
+contains a `test` or `e2e` segment. Export `DATABASE_URL` and the app environment
+before seeding; the seed does not load env files. Use the workflow's hermetic
+env block for production-build parity. The seed creates a verified Owner, the
+intake prerequisites, a driver, vehicle, supplier location, committed feedstock
+intake, a reactor and a closed production run through the operation runner (the run
+draws from its own second bin, so the feedstock cases keep their stock). For
+biochar it adds a completed run with output in a biochar bin, a product bin, a Pure
+and a blended formulation, one product placed from that stock and one loss, all
+through the operations. Bin and formulation names are unique per facility. The key
+has all current scopes, including delete.
+Its private JSON file contains the key and fixture ids; never upload that file.
+
+```bash
+fixture_dir=$(mktemp -d)
+pnpm tsx scripts/api-fuzz/seed.ts "$fixture_dir/fixture.json"
+export API_FUZZ_FIXTURE="$fixture_dir/fixture.json"
+export API_FUZZ_KEY=$(node -p 'JSON.parse(require("node:fs").readFileSync(process.argv[1], "utf8")).key' "$fixture_dir/fixture.json")
+# Build and start the app separately with the same DATABASE_URL and auth secret.
+API_FUZZ_BASE_URL=http://127.0.0.1:3100/api/v1 pnpm api:fuzz
+```
+
+The hooks give the product and stock-movement operations seeded examples: a dry-run
+product create on the seeded bins, a product PATCH with its ETag, and a dry-run loss
+on the biochar bin, each with an `Idempotency-Key`. `hooks.test.py` checks them
+offline; run it with `uvx --from "schemathesis==4.29.3" python scripts/api-fuzz/hooks.test.py`.
+
+Fuzzing writes and deletes data, so use only a throwaway fixture organization.
+For a production bundle, `API_FUZZ_DISABLE_RATE_LIMIT=true` bypasses only API
+token buckets and is refused unless `CI=true` (or `1`),
+`NOMA_HERMETIC_CI=true`, and `NEXT_PUBLIC_APP_URL` is an HTTP(S) loopback URL.
+Authentication, scopes, and the write kill switch still apply. Keep this flag
+out of deployment environments.
+
+Reproduce a run with the same Schemathesis version, generated schema, and
+starting fixture state: `pnpm api:fuzz --seed 20261009` (the checked-in seed).
+Set `API_FUZZ_BASE_URL`, `API_FUZZ_KEY` and `API_FUZZ_FIXTURE` as above.
+The runner exports fixture ids and codes from that private file. Configured
+by-id parameters become deterministic examples only; coverage and fuzzing still
+generate random ids. PATCH and DELETE seeded examples use dry runs. POST also
+has a seeded dry-run example: the published intake body is rebound to fixture
+references and the UTC fixture facility date, with a fresh Idempotency-Key. The
+production run create example is the published body rebound to the fixture facility,
+reactor and run bin, starting one hour ago after the seeded run's window. Every seeded
+positive example (by-id and create) must answer 2xx (`seeded_example_success`); the
+statuses allowed for generated cases never excuse it.
+Examples do not suppress phase-specific missing-data warnings when generated
+references repeatedly return 404 in coverage or fuzzing. Positive
+list requests omit opaque cursors because their binding cannot be generated from
+JSON Schema; negative cursor probes remain enabled. Cursor unit tests cover
+valid continuations and organization/resource/filter mismatches.
+The hooks treat 414 and 431 as pre-application transport refusals. Other status
+codes still undergo contract checks, and 400 is not allowed globally for positive
+requests. Deliberate missing or invalid authentication probes may return 401;
+a request carrying the configured fixture key that returns 401 fails a dedicated
+check. TRACE is omitted from unsupported-method probes because `next start` rejects
+it before app dispatch. QUERY is also omitted because the HTTP parser returns
+an empty 400 on both `next start` and Vercel. Other methods remain checked.
+Positive writes (POST, PATCH and DELETE) accept 422 for cross-field domain
+refusals that JSON Schema cannot express; positive reads still reject 422. The JUnit failure and terminal
+output include a minimized request; replace its sanitized bearer header with
+the private fixture key to replay it. After mutations, restore the starting
+throwaway fixture state before comparing runs. Fresh fixtures have new ids,
+so rebind ids in a saved request when using a new seed fixture.
 
 ## Worktrees
 

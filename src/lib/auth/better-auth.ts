@@ -2,12 +2,20 @@
  * Better Auth configuration
  * Sets up authentication with email/password and admin invite
  */
+import { apiKey } from "@better-auth/api-key";
+import { APIError, createAuthMiddleware } from "better-auth/api";
+import { createAccessControl } from "better-auth/plugins/access";
+import { defaultStatements, ownerAc, adminAc, memberAc } from "better-auth/plugins/organization/access";
+import { API_KEY_DEFAULT_EXPIRY_SECONDS, API_KEY_LIVE_PREFIX, API_KEY_MAX_EXPIRY_DAYS, API_KEY_TEST_PREFIX } from "@/config/api-keys";
+import { disableOwnerApiKeys } from "@/data-access/api-credential-auth";
+import { canOwnApiKey } from "./api-scopes";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { nextCookies } from "better-auth/next-js";
 import { organization } from "better-auth/plugins";
 import { asc, eq } from "drizzle-orm";
 import { Resend } from "resend";
+import { AUTH_PASSWORD_MIN_LENGTH, AUTH_PASSWORD_MAX_LENGTH } from "@/config/auth";
 import { env } from "@/config/env";
 import { db } from "@/db";
 import { seedOrgDefaults } from "@/db/org-defaults";
@@ -136,7 +144,19 @@ function buildTrustedOrigins(): string[] {
   return [...new Set(origins)];
 }
 
+const apiKeyActions = ["create", "read", "update", "delete"] as const;
+const organizationAccess = createAccessControl({ ...defaultStatements, apiKey: apiKeyActions });
+
 export const auth = betterAuth({
+  hooks: {
+    before: createAuthMiddleware(async (ctx) => {
+      // HTTP callers cannot bypass the guarded application actions. Block reads
+      // too, so plugin responses cannot expose credential hashes or metadata.
+      if (ctx.path?.startsWith("/api-key/") && (ctx.request || ctx.headers)) {
+        throw new APIError("FORBIDDEN", { message: "Use organization credential actions." });
+      }
+    }),
+  },
   database: drizzleAdapter(db, {
     provider: "pg",
     // Better Auth composes several writes (for example user + credential
@@ -144,6 +164,7 @@ export const auth = betterAuth({
     // default, so opt in explicitly or those writes can commit independently.
     transaction: true,
     schema: {
+      apikey: schema.apiKeys,
       user: schema.users,
       session: schema.sessions,
       account: schema.accounts,
@@ -170,8 +191,8 @@ export const auth = betterAuth({
     enabled: true,
     disableSignUp: !env.ALLOW_SELF_SIGNUP,
     requireEmailVerification: true,
-    minPasswordLength: 8,
-    maxPasswordLength: 72,
+    minPasswordLength: AUTH_PASSWORD_MIN_LENGTH,
+    maxPasswordLength: AUTH_PASSWORD_MAX_LENGTH,
     sendResetPassword: async ({ user, url }) => {
       try {
         await sendAuthEmail({
@@ -250,6 +271,18 @@ export const auth = betterAuth({
   baseURL: env.NEXT_PUBLIC_APP_URL,
   trustedOrigins: buildTrustedOrigins(),
   databaseHooks: {
+    account: {
+      create: {
+        // Better Auth 1.7 looks up credentials by both userId and accountId.
+        // Invitation bootstrap creates user + account atomically through
+        // createOAuthUser; this hook receives the newly generated user ID.
+        before: async (account) => ({
+          data: account.providerId === "credential"
+            ? { ...account, accountId: account.userId }
+            : account,
+        }),
+      },
+    },
     session: {
       create: {
         // On sign-in, restore a still-accessible preference or choose the
@@ -321,12 +354,39 @@ export const auth = betterAuth({
     },
   },
   plugins: [
+    apiKey({
+      references: "organization",
+      defaultPrefix: env.NODE_ENV === "production" ? API_KEY_LIVE_PREFIX : API_KEY_TEST_PREFIX,
+      keyExpiration: {
+        // The implementation uses seconds despite the defaultExpiresIn type comment.
+        defaultExpiresIn: API_KEY_DEFAULT_EXPIRY_SECONDS,
+        minExpiresIn: 0,
+        maxExpiresIn: API_KEY_MAX_EXPIRY_DAYS,
+      },
+      enableSessionForAPIKeys: false,
+      rateLimit: { enabled: false },
+      startingCharactersConfig: { shouldStore: false },
+    }),
     organization({
+      ac: organizationAccess,
+      roles: {
+        owner: organizationAccess.newRole({ ...ownerAc.statements, apiKey: apiKeyActions }),
+        admin: organizationAccess.newRole({ ...adminAc.statements, apiKey: apiKeyActions }),
+        member: organizationAccess.newRole(memberAc.statements),
+      },
       // Organization creation is reserved for app-level Platform Admins. The
       // guarded server action uses the server-only userId path so the selected
       // user, rather than the acting Platform Admin, becomes the Owner.
       allowUserToCreateOrganization: false,
       organizationHooks: {
+        afterRemoveMember: async ({ member }) => {
+          await disableOwnerApiKeys(member.organizationId, member.userId);
+        },
+        afterUpdateMemberRole: async ({ member }) => {
+          if (!canOwnApiKey(member.role)) {
+            await disableOwnerApiKeys(member.organizationId, member.userId);
+          }
+        },
         afterCreateOrganization: async ({ organization }) => {
           try {
             await seedOrgDefaults(db, organization.id);

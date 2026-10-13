@@ -1,11 +1,17 @@
 import { z } from "zod";
+import { AUTH_PASSWORD_MIN_LENGTH, AUTH_PASSWORD_MAX_LENGTH } from "@/config/auth";
+
+export const passwordSchema = z
+  .string()
+  .min(AUTH_PASSWORD_MIN_LENGTH, `Password must be at least ${AUTH_PASSWORD_MIN_LENGTH} characters.`)
+  .max(AUTH_PASSWORD_MAX_LENGTH, `Password must be at most ${AUTH_PASSWORD_MAX_LENGTH} characters.`);
 
 /**
  * Schema for login form
  */
 export const loginSchema = z.object({
   email: z.string().email({ message: "Enter a valid email address." }),
-  password: z.string().min(8, "Password must be at least 8 characters"),
+  password: passwordSchema,
 });
 
 /**
@@ -21,8 +27,8 @@ export const forgotPasswordSchema = z.object({
  */
 export const setPasswordSchema = z
   .object({
-    password: z.string().min(8, "Password must be at least 8 characters"),
-    confirmPassword: z.string().min(8, "Password must be at least 8 characters"),
+    password: passwordSchema,
+    confirmPassword: passwordSchema,
   })
   .refine((data) => data.password === data.confirmPassword, {
     message: "Passwords do not match",
@@ -35,8 +41,8 @@ export const setPasswordSchema = z
  */
 export const resetPasswordSchema = z
   .object({
-    newPassword: z.string().min(8, "Password must be at least 8 characters"),
-    confirmPassword: z.string().min(8, "Password must be at least 8 characters"),
+    newPassword: passwordSchema,
+    confirmPassword: passwordSchema,
   })
   .refine((data) => data.newPassword === data.confirmPassword, {
     message: "Passwords do not match",

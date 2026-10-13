@@ -68,7 +68,7 @@ describe("data-access/quick-add: auth enforcement", () => {
         name: "Test Vehicle",
         identifier: "ABC-123",
         vehicleType: "truck",
-        fuelType: "diesel",
+        fuelType: "Diesel",
         fuelConsumptionLPerKm: 0.15,
         modelYear: 2024,
       })

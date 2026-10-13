@@ -1,3 +1,4 @@
+import { STALE_VERSION_MESSAGE, STALE_VERSION_CONFLICT_CODE, StaleVersionError } from "@/lib/stale-version";
 /**
  * A save from a deep-linked sample sheet works and closes it for good.
  *
@@ -127,6 +128,7 @@ const SAMPLE = {
   sampleCode: "SMP-26-001",
   creditBatchCode: null,
   facilityName: null,
+  version: 1,
   updatedAt: new Date("2026-01-01T00:00:00.000Z"),
 };
 
@@ -154,7 +156,7 @@ describe("SampleList deep-linked sheet", () => {
       renderer?.update(<SampleList />);
     });
 
-    expect(harness.update).toHaveBeenCalledWith(expect.objectContaining({ sampleId: SAMPLE_ID }));
+    expect(harness.update).toHaveBeenCalledWith(expect.objectContaining({ sampleId: SAMPLE_ID, expectedVersion: SAMPLE.version }));
     expect(harness.query.sample).toBeNull();
     expect(harness.query.mode).toBeNull();
     expect(harness.sheet.open).toBe(false);
@@ -180,9 +182,23 @@ describe("SampleList deep-linked sheet", () => {
       renderer?.update(<SampleList />);
     });
 
-    expect(harness.update).toHaveBeenCalledWith(expect.objectContaining({ sampleId: SAMPLE_ID }));
+    expect(harness.update).toHaveBeenCalledWith(expect.objectContaining({ sampleId: SAMPLE_ID, expectedVersion: SAMPLE.version }));
     expect(harness.query.sample).toBeNull();
     expect(harness.sheet.open).toBe(false);
     renderer?.unmount();
   });
+  it("keeps the opened version and draft sheet after a stale save even when details refetch", async () => {
+    harness.query = { sample: SAMPLE_ID, mode: "edit" };
+    harness.update.mockRejectedValue(new StaleVersionError(STALE_VERSION_MESSAGE, { entity: "sample", id: SAMPLE_ID, code: STALE_VERSION_CONFLICT_CODE }));
+    await act(async () => { renderer = create(<SampleList />); });
+    harness.sample = { ...SAMPLE, version: SAMPLE.version + 1 };
+    await act(async () => { renderer?.update(<SampleList />); });
+    const draft = { labName: "Unsaved draft" };
+    await act(async () => { await harness.onSubmit?.(draft); });
+    expect(harness.update).toHaveBeenCalledWith(expect.objectContaining({ ...draft, sampleId: SAMPLE_ID, expectedVersion: SAMPLE.version }));
+    expect(harness.sheet).toEqual({ open: true, mode: "edit" });
+    expect(harness.query.sample).toBe(SAMPLE_ID);
+    renderer?.unmount();
+  });
+
 });

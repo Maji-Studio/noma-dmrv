@@ -155,7 +155,7 @@ describe("application schemas", () => {
 
   it("rejects a zero-hectare field at the update server boundary", () => {
     expect(
-      updateApplicationSchema.safeParse({
+      updateApplicationSchema.safeParse({ expectedVersion: 1,
         applicationId: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
         fieldSizeHa: 0,
       }).success,
@@ -199,7 +199,7 @@ describe("application schemas", () => {
 
   it("rejects a below-quantum applied mass on the update action but allows omitting it", () => {
     for (const value of [0, MASS_TONNES_INPUT_STEP / 10]) {
-      const result = updateApplicationSchema.safeParse({
+      const result = updateApplicationSchema.safeParse({ expectedVersion: 1,
         applicationId: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
         biocharAppliedTons: value,
       });
@@ -218,7 +218,7 @@ describe("application schemas", () => {
     }
 
     expect(
-      updateApplicationSchema.safeParse({
+      updateApplicationSchema.safeParse({ expectedVersion: 1,
         applicationId: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
         cropType: "Maize",
       }).success,
@@ -248,7 +248,7 @@ describe("application schemas", () => {
   });
 
   it("allows clearing both GPS coordinates through the update action", () => {
-    const result = updateApplicationSchema.safeParse({
+    const result = updateApplicationSchema.safeParse({ expectedVersion: 1,
       applicationId: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
       gpsLatitude: null,
       gpsLongitude: null,
@@ -258,7 +258,7 @@ describe("application schemas", () => {
   });
 
   it("allows a partial coordinate payload before it is merged with saved state", () => {
-    const result = updateApplicationSchema.safeParse({
+    const result = updateApplicationSchema.safeParse({ expectedVersion: 1,
       applicationId: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
       gpsLatitude: null,
     });
@@ -291,7 +291,7 @@ describe("application schemas", () => {
       biocharAppliedDryTons: 1,
       ...customerLocation,
     });
-    const updateResult = updateApplicationSchema.parse({
+    const updateResult = updateApplicationSchema.parse({ expectedVersion: 1,
       applicationId: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
       biocharAppliedTons: 0.1,
       biocharAppliedDryTons: 0,

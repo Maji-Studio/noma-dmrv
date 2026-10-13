@@ -57,6 +57,8 @@ vi.mock("@/hooks/use-organizations", () => ({
 }));
 
 vi.mock("@/hooks/use-certification", () => ({
+  // Read by use-fleet through the entity-select quick-add dialogs.
+  certificationKeys: { all: ["certification"] },
   useFacilityCertifierSummary: () => ({
     data: {
       isProduction: false,
