@@ -38,6 +38,7 @@ import {
   CERTIFIER_CREDENTIAL_MASK,
   certifierCredentialsFormSchema,
   certifierCredentialsRotationSchema,
+  maskedSecretDisplay,
   type CertifierCredentialsFormInput,
 } from "@/schemas/organizations";
 import { Notice } from "@/components/ui/notice";
@@ -187,7 +188,7 @@ function CredentialsForm({
         <CredentialKeyField
           id={tokenId}
           label="Access token"
-          savedText={accessTokenLast4 ? `••••${accessTokenLast4}` : CERTIFIER_CREDENTIAL_MASK}
+          savedText={maskedSecretDisplay(accessTokenLast4)}
           configured={configured}
           replacing={replacing.accessToken}
           error={errors.accessToken?.message}
@@ -199,7 +200,7 @@ function CredentialsForm({
         <CredentialKeyField
           id={secretId}
           label="Client secret"
-          savedText={CERTIFIER_CREDENTIAL_MASK}
+          savedText={maskedSecretDisplay()}
           configured={configured}
           replacing={replacing.clientSecret}
           error={errors.clientSecret?.message}

@@ -24,6 +24,7 @@ export function SetupGuide({
   onCollapse,
 }: SetupGuideProps) {
   const { steps, doneCount, total, activeIndex } = progress;
+  const hasFacility = steps.some((step) => step.id === "facility" && step.done);
 
   return (
     <section
@@ -45,14 +46,14 @@ export function SetupGuide({
           <span className="body-caption text-[var(--color-text-tertiary)]">
             {doneCount} of {total} done
           </span>
-          <Button
+          {hasFacility && <Button
             variant="noOutline"
             size="icon"
             aria-label="Hide setup guide"
             onClick={onCollapse}
           >
             <EyeSlashIcon size={20} weight="bold" />
-          </Button>
+          </Button>}
         </div>
       </header>
 

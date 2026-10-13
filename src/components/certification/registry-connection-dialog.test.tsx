@@ -27,11 +27,11 @@ vi.mock("@/hooks/use-certifier-credentials", () => ({
   useOrgCertifierCredentialsStatus: () => ({ data: { configured: mocks.configured, accessTokenLast4: "Uwhl" }, isLoading: false }),
   useSetOrgCertifierCredentials: () => ({ mutateAsync: mocks.saveKeys, isPending: false }),
 }));
-const loaderData = {
+const loaderData: FacilityCertifierMapping = {
   mapping: null,
   availableProjects: [{ id: "prj_test", name: "Test project", country_code: "TZ", description: null, risk_of_reversal: null, short_description: null }],
   availableTemplates: [], linkHints: [], isProduction: false, isConfigured: true,
-} satisfies FacilityCertifierMapping;
+};
 vi.mock("@/hooks/use-certification", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/hooks/use-certification")>()),
   useFacilityCertifierMapping: () => ({ data: loaderData, isLoading: false }),
@@ -47,6 +47,7 @@ beforeEach(() => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   vi.clearAllMocks();
   mocks.configured = true;
+  loaderData.mapping = null;
   mocks.saveKeys.mockResolvedValue({ verification: { ok: true, message: "Connection tested." } });
   mocks.saveMapping.mockResolvedValue({});
 });
@@ -81,12 +82,38 @@ async function submit(index: number) {
 describe("registry connection dialog", () => {
   it("masks saved keys and hides both save and link until there is work to do", async () => {
     await mount();
-    expect(text()).toContain("••••Uwhl");
-    expect(text()).toContain("••••••••");
+    expect(renderer.root.findByProps({ role: "group", "aria-label": "Access token, saved" }).findByType("span").children).toEqual(["••••Uwhl"]);
+    expect(renderer.root.findByProps({ role: "group", "aria-label": "Client secret, saved" }).findByType("span").children).toEqual(["••••••••"]);
     expect(button("Save and test connection")).toBeUndefined();
     expect(button("Link project")).toBeUndefined();
     await dismiss();
     expect(close).toHaveBeenCalledOnce();
+  });
+
+  it("returns to the existing mapping on inline Edit then Cancel and keeps the dialog open", async () => {
+    loaderData.mapping = {
+      id: "mapping-1", organizationId: "org-1", facilityId: FACILITY_ID,
+      provider: "isometric", externalProjectId: "prj_test", protocolSlug: "biochar",
+      protocolVersion: null, defaultRemovalTemplateId: null,
+      gensetEnergyYieldKwhPerLitre: null, defaultSoilTemperatureC: null,
+      defaultSoilTemperatureSource: null, webhookSecret: null,
+      externalFacilityId: "fcl_test", metadata: null,
+      createdAt: new Date("2026-10-13T00:00:00Z"), updatedAt: new Date("2026-10-13T00:00:00Z"),
+    };
+    await mount();
+    expect(renderer.root.findAllByType("form")).toHaveLength(1);
+    await click("Edit");
+    expect(renderer.root.findAllByType("form")).toHaveLength(2);
+    expect(button("Cancel")).toBeDefined();
+    await click("Cancel");
+    expect(close).not.toHaveBeenCalled();
+    expect(renderer.root.findAllByType(Modal)[0].props.isOpen).toBe(true);
+    expect(renderer.root.findAllByType("form")).toHaveLength(1);
+    expect(text()).toContain("Linked at");
+    expect(text()).toContain("prj_test");
+    expect(button("Edit")).toBeDefined();
+    expect(button("Cancel")).toBeUndefined();
+    expect(mocks.saveMapping).not.toHaveBeenCalled();
   });
 
   it("warns on typed replacement keys, keeps input on Keep editing, and discards explicitly", async () => {

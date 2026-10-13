@@ -49,6 +49,7 @@ describe("dashboard setup actions", () => {
       renderer = create(<SetupGuide progress={progress} actions={actions} onCollapse={vi.fn()} />);
     });
     expect(progress.activeIndex).toBe(activeIndex);
+    expect(renderer.root.findAllByProps({ "aria-label": "Hide setup guide" }).length > 0).toBe(activeIndex !== 0);
     const primary = renderer.root.findAllByType(Button).filter((node) => node.props.variant === "primary");
     expect(primary).toHaveLength(1);
     expect(primary[0].props.children).toBe(label);

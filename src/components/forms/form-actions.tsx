@@ -100,14 +100,17 @@ export function FormActions<
   // form behaves the same without per-list wiring. The caller's `onCancel`
   // still owns *presence*: no handler, no Cancel button. Nested inline forms
   // (sticky={false}) and forms inside a Modal (context barrier) keep the
-  // caller-supplied handler. FormDialog routes Cancel through its own guard.
+  // caller-supplied handler. Sticky FormDialog actions use its own guard.
   const sheetActions = useSideSheetActions();
   const dialogActions = React.useContext(FormDialogContext);
   const inSheet = sticky && sheetActions !== null;
+  const inDialog = sticky && dialogActions !== null;
   const handleCancel = onCancel
     ? inSheet
       ? sheetActions.cancel
-      : dialogActions?.cancel ?? onCancel
+      : inDialog
+        ? dialogActions.cancel
+        : onCancel
     : undefined;
   return (
     <>

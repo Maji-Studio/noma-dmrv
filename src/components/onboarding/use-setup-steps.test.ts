@@ -118,8 +118,11 @@ describe("resolveMode", () => {
   it("takes over a zero-facility org by role", () => {
     const fresh = makeStatus({ facilityCount: 0, supplierCount: 0, facility: null });
     expect(mode(fresh, { facilityId: null })).toBe("takeover-guide");
-    expect(mode(fresh, { facilityId: null, collapsed: true })).toBe("strip");
+    expect(mode(fresh, { facilityId: null, collapsed: true })).toBe("takeover-guide");
     expect(mode({ ...fresh, isOwnerOrAdmin: false }, { facilityId: null })).toBe(
+      "takeover-member",
+    );
+    expect(mode({ ...fresh, isOwnerOrAdmin: false }, { facilityId: null, collapsed: true })).toBe(
       "takeover-member",
     );
   });

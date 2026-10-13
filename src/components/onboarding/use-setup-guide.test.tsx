@@ -92,7 +92,7 @@ describe("useSetupGuide freshness", () => {
     expect(mocks.fetch).not.toHaveBeenCalled();
   });
 
-  it("persists collapse per account and organization, including an empty organization", async () => {
+  it("persists collapse per account and organization without hiding an empty organization's guide", async () => {
     const storage = new Map<string, string>();
     vi.stubGlobal("window", { localStorage: {
       getItem: (key: string) => storage.get(key) ?? null,
@@ -106,12 +106,13 @@ describe("useSetupGuide freshness", () => {
       await new Promise((resolve) => setTimeout(resolve, 0));
       gate.setCollapsed(true);
     });
-    expect(gate.mode).toBe("strip");
+    expect(gate.mode).toBe("takeover-guide");
     expect(storage.get(onboardingGuideCollapsedKey("user-1", "org-1"))).toBe("true");
     await act(async () => renderer.update(<QueryClientProvider client={client}><Harness organizationId="org-2" /></QueryClientProvider>));
     expect(gate.collapsed).toBe(false);
     await act(async () => renderer.update(<QueryClientProvider client={client}><Harness organizationId="org-1" /></QueryClientProvider>));
     expect(gate.collapsed).toBe(true);
+    expect(gate.mode).toBe("takeover-guide");
     mocks.userId = "user-2";
     await act(async () => renderer.update(<QueryClientProvider client={client}><Harness organizationId="org-1" /></QueryClientProvider>));
     expect(gate.collapsed).toBe(false);

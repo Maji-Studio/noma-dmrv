@@ -138,8 +138,7 @@ export function resolveMode({
 
   // Fresh org, no facility yet: the guide is the landing surface. A Member waits.
   if (status.facilityCount === 0) {
-    if (!status.isOwnerOrAdmin) return "takeover-member";
-    return collapsed ? "strip" : "takeover-guide";
+    return status.isOwnerOrAdmin ? "takeover-guide" : "takeover-member";
   }
 
   // Facilities exist but none is selected — the normal "select a facility"
