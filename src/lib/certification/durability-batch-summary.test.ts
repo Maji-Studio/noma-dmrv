@@ -253,6 +253,37 @@ describe("buildDurabilityBatchSummaries", () => {
     expect(summary.sampleCount).toBe(4);
     expect(summary.usableReplicateCount).toBe(3);
     expect(summary.meetsMinimum).toBe(true);
+    // Its H/C is still in the submitted mean, so the summary names it (Q54).
+    expect(summary.eligibility.unpairedHToCSampleCodes).toEqual(["S-INC"]);
+  });
+
+  it("names a Sample whose adverse H/C_org is submitted without O/C_org (Q54)", () => {
+    const paired = [0, 1, 2].map((i) =>
+      sample({
+        id: `p${i}`,
+        sampleCode: `S-P-0${i}`,
+        hToCOrgRatio: 0.3,
+        oToCOrgRatio: 0.1,
+      }),
+    );
+    const adverse = sample({
+      id: "adverse",
+      sampleCode: "S-ADV",
+      hToCOrgRatio: 1.2,
+    });
+
+    const [summary] = buildDurabilityBatchSummaries([
+      batch({
+        creditBatchId: "cb-a",
+        creditBatchCode: "CB-A",
+        samples: [...paired, adverse],
+      }),
+    ]);
+
+    // The paired verdict passes while the submitted mean carries the 1.2.
+    expect(summary.eligibility.eligible).toBe(true);
+    expect(summary.submitted.hToCorg?.mean).toBeCloseTo(0.525, 5);
+    expect(summary.eligibility.unpairedHToCSampleCodes).toEqual(["S-ADV"]);
   });
 
   it("handles string sampling timestamps when resolving replicate days", () => {

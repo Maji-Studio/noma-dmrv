@@ -12,6 +12,12 @@
  *       unsampled blueprint and is not judged on chemistry here.
  *   (c) Replicate sufficiency — any SAMPLED batch must pool ≥ 3 replicates
  *       (§8.3.1) across its member runs/days.
+ *   (d) Paired submission: eligibility is judged on paired replicates, but
+ *       the submitted H/C_org mean pools every usable H/C_org
+ *       (`buildPerBatchDurabilityData`). A replicate with a usable H/C_org and
+ *       no usable O/C_org blocks, so clearing O/C_org cannot hide an adverse
+ *       H/C_org from eligibility while it still reaches the registry
+ *       (round 7 Q54).
  *
  * §8.3.1 requires the 3 replicates to be "representative of the full range of
  * physical characteristics (eg. particle size, color) available in the batch" —
@@ -42,6 +48,9 @@ import {
 } from "@/lib/calculations/biochar-eligibility";
 import type { CreditBatchSampling } from "@/schemas/credit-batches";
 
+/** Label for an unpaired replicate whose provenance row is missing. */
+const UNPAIRED_REPLICATE_FALLBACK_LABEL = "replicate";
+
 /**
  * Provenance of one pooled replicate, for the production-window checks. The
  * originating production run is deliberately absent: §8.3.1 imposes no
@@ -64,7 +73,10 @@ export interface BatchGateFacts {
   sampling: CreditBatchSampling;
   /** Per-replicate stability ratios, pooled across the batch's member runs/days. */
   replicates: ReplicateRatios[];
-  /** Parallel to `replicates` — each replicate's run/day, for window diagnostics. */
+  /**
+   * Parallel to `replicates` (same index): each replicate's Sample code and
+   * day, for window diagnostics and the paired-submission blocker.
+   */
   replicateProvenance: ReplicateProvenance[];
 }
 
@@ -151,6 +163,23 @@ export function evaluateDurabilitySubmissionGates(
     } else if (eligibility.eligible === null) {
       blockers.push(
         `Credit batch ${batch.creditBatchCode} is missing H/C_org or O/C_org chemistry, so its eligibility under module §3 Table 2 cannot be confirmed. Record both values before submitting.`,
+      );
+    }
+
+    // (d) Paired submission: the submitted H/C_org population (same
+    // `isUsableNumber` predicate as the aggregation) minus the paired replicates
+    // eligibility already judged.
+    const unpairedSampleCodes = eligibility.unpairedHToCReplicateIndexes
+      .map(
+        (index) =>
+          batch.replicateProvenance[index]?.sampleCode ??
+          `${UNPAIRED_REPLICATE_FALLBACK_LABEL} ${index + 1}`,
+      )
+      .sort((left, right) => left.localeCompare(right));
+    if (unpairedSampleCodes.length > 0) {
+      const count = unpairedSampleCodes.length;
+      blockers.push(
+        `Credit batch ${batch.creditBatchCode} has ${count} ${pluralize(count, "Sample")} with H/C_org but no O/C_org: ${unpairedSampleCodes.join(", ")}. The submitted H/C_org mean includes ${count === 1 ? "this Sample" : "these Samples"}. Record the O/C_org or correct the ${pluralize(count, "Sample")} before submitting.`,
       );
     }
   }

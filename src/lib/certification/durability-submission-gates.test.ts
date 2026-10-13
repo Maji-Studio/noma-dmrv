@@ -117,6 +117,58 @@ describe("evaluateDurabilitySubmissionGates (D3 fail-closed blocks, credit-batch
     expect(r.blockers.some((b) => /indeterminate|cannot confirm|missing/i.test(b))).toBe(true);
   });
 
+  // Kenji, round 7 Q54: the submitted H/C_org mean pools every usable H/C_org,
+  // while eligibility is judged on paired replicates only. A replicate whose H/C
+  // would be submitted without its O/C blocks, rather than hiding an adverse
+  // result from eligibility while it still reaches the registry.
+  it("blocks when a replicate in the submitted H/C_org mean lacks its paired O/C_org", () => {
+    const r = evaluateDurabilitySubmissionGates([
+      gateBatch({
+        replicates: [
+          { hToCOrgRatio: 0.3, oToCOrgRatio: 0.1 },
+          { hToCOrgRatio: 0.3, oToCOrgRatio: 0.1 },
+          { hToCOrgRatio: 0.3, oToCOrgRatio: 0.1 },
+          { hToCOrgRatio: 1.2, oToCOrgRatio: null },
+        ],
+      }),
+    ]);
+    expect(r.ok).toBe(false);
+    expect(r.blockers).toEqual([
+      "Credit batch CB-1 has 1 Sample with H/C_org but no O/C_org: SAM-4. The submitted H/C_org mean includes this Sample. Record the O/C_org or correct the Sample before submitting.",
+    ]);
+  });
+
+  it("names every unpaired Sample and treats a non-finite O/C_org as missing", () => {
+    const r = evaluateDurabilitySubmissionGates([
+      gateBatch({
+        replicates: [
+          ...eligibleTriplet,
+          { hToCOrgRatio: 0.31, oToCOrgRatio: undefined },
+          { hToCOrgRatio: 0.29, oToCOrgRatio: Number.NaN },
+        ],
+      }),
+    ]);
+    expect(r.ok).toBe(false);
+    expect(
+      r.blockers.some(
+        (b) => /2 Samples with H\/C_org but no O\/C_org: SAM-4, SAM-5\./.test(b),
+      ),
+    ).toBe(true);
+  });
+
+  it("does not block a replicate with O/C_org but no H/C_org (not in the submitted mean)", () => {
+    const r = evaluateDurabilitySubmissionGates([
+      gateBatch({
+        replicates: [
+          ...eligibleTriplet,
+          { hToCOrgRatio: null, oToCOrgRatio: 0.1 },
+        ],
+      }),
+    ]);
+    expect(r.ok).toBe(true);
+    expect(r.blockers).toEqual([]);
+  });
+
   // §8.3.1 requires 3 samples "representative of the full range of physical
   // characteristics ... available in the batch" — it does NOT require them to
   // come from distinct production runs or distinct days. (The distinct-days

@@ -124,6 +124,32 @@ describe("evaluateRunEligibility (per-run mean, D8)", () => {
     expect(r.usableReplicateCount).toBe(2);
     expect(r.eligible).toBe(true);
   });
+
+  it("flags replicates whose H/C_org is submitted without a paired O/C_org (Q54)", () => {
+    // The submitted H/C_org mean pools every usable H/C_org, so the 1.2 replicate
+    // reaches the registry even though the paired verdict ignores it.
+    const r = evaluateRunEligibility([
+      { hToCOrgRatio: 0.3, oToCOrgRatio: 0.1 },
+      { hToCOrgRatio: 0.3, oToCOrgRatio: 0.1 },
+      { hToCOrgRatio: 0.3, oToCOrgRatio: 0.1 },
+      { hToCOrgRatio: 1.2, oToCOrgRatio: null },
+      { hToCOrgRatio: null, oToCOrgRatio: 0.1 },
+      { hToCOrgRatio: 0.3, oToCOrgRatio: Number.NaN },
+    ]);
+    expect(r.eligible).toBe(true);
+    expect(r.unpairedHToCReplicateIndexes).toEqual([3, 5]);
+    expect(
+      r.warnings.some((w) => /without O\/C_org blocks submission/.test(w)),
+    ).toBe(true);
+  });
+
+  it("reports no unpaired H/C_org replicates when every H/C_org has its O/C_org", () => {
+    const r = evaluateRunEligibility([
+      { hToCOrgRatio: 0.3, oToCOrgRatio: 0.1 },
+      { hToCOrgRatio: null, oToCOrgRatio: 0.1 },
+    ]);
+    expect(r.unpairedHToCReplicateIndexes).toEqual([]);
+  });
 });
 
 describe("evaluateReplicateCount (module §4 — ≥3 per run)", () => {
