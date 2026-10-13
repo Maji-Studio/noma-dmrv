@@ -166,6 +166,12 @@ fill, 40px height (textarea grows), the interaction-colour border and ring on
 focus, a red border on error and 50% opacity when disabled. There is no inset
 shadow. Do not add one to a control; elevation is border and paper (above).
 
+Trailing icons sit 12px from the field's right edge: the native select chevron,
+the entity select chevron, the date and time picker glyph and the search clear
+button. The entity select Clear X sits 8px left of the chevron inside a 44px hit
+area. Date and time inputs get this from `TEMPORAL_INPUT_CLASSES` in the shared
+`Input`; `tests/visual/trailing-icons.spec.ts` checks it (opt-in, `FORM_CAPTURE=1`).
+
 The entity select popover separates options with spacing, a hover fill and a
 selected fill, not per-row rules, and uses Phosphor icons. The search box and
 the "Edit <name>" and "Add new" footer rows are part of the same menu, not boxed apart.
