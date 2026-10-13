@@ -14,11 +14,12 @@ import {
   deleteDelivery,
   getDeliveries as getDeliveriesData,
   getDeliveryWithRelations as getDeliveryWithRelationsData,
-  updateDelivery,
   type CreatedDelivery,
   type DeliveryDetail,
   type PaginatedDeliveries,
+  type UpdatedDelivery,
 } from "@/data-access/deliveries";
+import { updateDelivery } from "@/lib/operations/deliveries";
 import {
   getDeliveryStats as getDeliveryStatsData,
   type DeliveryStats,
@@ -214,13 +215,17 @@ export async function createDeliveryFn(
  */
 export async function updateDeliveryFn(
   data: z.infer<typeof updateDeliverySchema>
-): Promise<ActionResult<Delivery>> {
+): Promise<ActionResult<UpdatedDelivery>> {
   return withAction(async (ctx) => {
 
     const validated = updateDeliverySchema.parse(data);
 
     const delivery = await updateDelivery(ctx, validated.deliveryId, {
       expectedVersion: validated.expectedVersion,
+      sources: validated.sources,
+      correctsMovementId: validated.correctsMovementId,
+      idempotencyKey: validated.idempotencyKey,
+      basisFingerprint: validated.basisFingerprint,
       code: validated.code,
       orderId: validated.orderId,
       facilityId: validated.facilityId,

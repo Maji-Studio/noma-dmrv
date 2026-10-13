@@ -33,9 +33,9 @@ const cases = [
     json: () => representFeedstockType({ ...base, version: 7, category: "forestry", usage: "pyrolysis", createdAt: instant, updatedAt: instant }),
     expected: { ...expected, version: 7, category: "forestry", usage: "pyrolysis" } },
   { name: "storage location", schema: storageLocationRepresentationSchema,
-    map: () => representStorageLocation({ ...base, ...privateFields, version: 7, facilityId: id, type: "feedstock_bin", capacityKg: 0, feedstockTypeId: null }),
-    json: () => representStorageLocation({ ...base, version: 7, facilityId: id, type: "feedstock_bin", capacityKg: 0, feedstockTypeId: null, createdAt: instant, updatedAt: instant }),
-    expected: { ...expected, version: 7, facilityId: id, type: "feedstock_bin", capacityKg: 0, feedstockTypeId: null } },
+    map: () => representStorageLocation({ ...base, ...privateFields, version: 7, facilityId: id, type: "feedstock_bin", capacityKg: 0, feedstockTypeId: null, drawOrder: "oldest_first" }),
+    json: () => representStorageLocation({ ...base, version: 7, facilityId: id, type: "feedstock_bin", capacityKg: 0, feedstockTypeId: null, drawOrder: "oldest_first", createdAt: instant, updatedAt: instant }),
+    expected: { ...expected, version: 7, facilityId: id, type: "feedstock_bin", capacityKg: 0, feedstockTypeId: null, drawOrder: "oldest_first" } },
   { name: "vehicle", schema: vehicleRepresentationSchema,
     map: () => representVehicle({ ...base, version: 7, ...privateFields, identifier: "T 123 ABC", vehicleType: "truck" }),
     json: () => representVehicle({ ...base, version: 7, identifier: "T 123 ABC", vehicleType: "truck", createdAt: instant, updatedAt: instant }),
@@ -64,6 +64,6 @@ describe.each(cases)("$name representation", ({ schema, map, json, expected: out
 it("serializes archive Dates and stored instants", () => {
   expect(representFacility({ ...base, version: 7, timezone: "UTC", durabilityOption: "1000_year", archivedAt: new Date(archived) }).archivedAt).toBe(archived);
   expect(representFeedstockType({ ...base, version: 7, category: "forestry", usage: "pyrolysis", archivedAt: archived }).archivedAt).toBe(archived);
-  expect(representStorageLocation({ ...base, version: 7, facilityId: id, type: "biochar_bin", capacityKg: null, feedstockTypeId: null, archivedAt: new Date(archived) })).toMatchObject({ archivedAt: archived, capacityKg: null });
+  expect(representStorageLocation({ ...base, version: 7, facilityId: id, type: "biochar_bin", capacityKg: null, feedstockTypeId: null, drawOrder: "newest_first", archivedAt: new Date(archived) })).toMatchObject({ archivedAt: archived, capacityKg: null });
   expect(representVehicle({ ...base, version: 7, vehicleType: "truck", identifier: null }).identifier).toBeNull();
 });

@@ -1,3 +1,4 @@
+import { feedstockBinStockKeys } from "./feedstock-bin-stock-keys";
 import type { QueryClient } from "@tanstack/react-query";
 import type { EntityType } from "@/components/forms/entity-select/types";
 
@@ -56,6 +57,9 @@ export function invalidateStockEntityQueries(
   queryClient: QueryClient,
   mutationType: StockMutationType,
 ) {
+  if (mutationType === "feedstock" || mutationType === "productionRun" || mutationType === "biocharProduct" || mutationType === "binMovement") {
+    void queryClient.invalidateQueries({ queryKey: feedstockBinStockKeys.all });
+  }
   for (const entityType of stockEntityDependencies[mutationType]) {
     invalidateEntityTypeQueries(queryClient, entityType);
   }

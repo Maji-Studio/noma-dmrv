@@ -16,6 +16,8 @@ import {
   storageLocations,
 } from "@/db/schema";
 import type { EntityOption } from "@/components/forms/entity-select/types";
+import { initialStockMode } from "./output-bin-stock-mode";
+import type { OutputDrawOrder, OutputStockMode } from "@/lib/output-stock/stock-mode";
 import type { StorageLocationType } from "@/schemas/storage-locations";
 import { assertSameOrg, requireOrgScope } from "./utils";
 import { SafeError } from "@/lib/errors";
@@ -235,6 +237,8 @@ export interface CreateStorageLocationData {
   capacityKg?: number | null;
   feedstockTypeId?: string | null;
   formulationId?: string | null;
+  stockMode?: OutputStockMode;
+  drawOrder?: OutputDrawOrder;
 }
 
 /**
@@ -268,6 +272,8 @@ export async function createStorageLocation(
           capacityKg: data.capacityKg ?? null,
           feedstockTypeId: data.feedstockTypeId ?? null,
           formulationId: data.formulationId ?? null,
+          stockMode: initialStockMode(data.type, data.stockMode),
+          drawOrder: data.drawOrder ?? "oldest_first",
         })
         .returning(),
     );

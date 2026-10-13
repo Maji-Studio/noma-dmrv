@@ -143,7 +143,7 @@ describe("mix bin draws in PostgreSQL", () => {
     await setMode(f, "mix", new Date("2026-09-12T00:00:00.000Z"));
     const loss = await postMeasurement(f, { kind: "loss", wetMassKg: 10, moisturePercent: 0 });
     const backdated = await previewOutputStock(f.ctx, { facilityId: f.facility.id, storageLocationId: f.bin.id, occurredAt: "2026-09-14T06:00:00.000Z", kind: "loss", wetMassKg: 5, moisturePercent: 0 });
-    expect(backdated.calculatedWithout).toEqual([{ id: loss.movementId, occurredAt: STOCK_TIME, label: expect.stringMatching(/^Stock loss \(Sep 14, 2026, /) }]);
+    expect(backdated.calculatedWithout).toEqual([{ id: loss.movementId, occurredAt: STOCK_TIME, label: expect.stringMatching(/^Lost mass \(Sep 14, 2026, /) }]);
     const later = await previewOutputStock(f.ctx, { facilityId: f.facility.id, storageLocationId: f.bin.id, occurredAt: "2026-09-14T18:00:00.000Z", kind: "loss", wetMassKg: 5, moisturePercent: 0 });
     expect(later.calculatedWithout).toEqual([]);
   });

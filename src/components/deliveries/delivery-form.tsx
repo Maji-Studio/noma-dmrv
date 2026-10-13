@@ -5,6 +5,8 @@
  */
 "use client";
 
+import { Notice } from "@/components/ui/notice";
+import { useDeliveryStockEdit } from "@/hooks/use-delivery-stock-edit";
 import { DeliveryStockDetails } from "./delivery-stock-details";
 import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
 import { nullableNumericValue } from "@/lib/form-utils";
@@ -81,6 +83,10 @@ interface DeliveryFormProps {
 
 export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = false, errorMessage, submitLabel, deferredAttachments, focusTarget }: DeliveryFormProps) {
   const isEditMode = !!delivery;
+  const stockEdit = useDeliveryStockEdit(delivery);
+  const [openedMovement, setOpenedMovement] = useState(stockEdit.movement);
+  if (!openedMovement && stockEdit.movement) setOpenedMovement(stockEdit.movement);
+  const massLocked = isEditMode && (!stockEdit.editable || (!!openedMovement && openedMovement.id !== stockEdit.movement?.id));
   const formId = useId();
   const { facilityId: contextFacilityId } = useFacilityContext();
   const formFacilityId = delivery?.facilityId ?? contextFacilityId;
@@ -97,6 +103,7 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
 
   const defaultValues = {
     idempotencyKey,
+    correctsMovementId: undefined as string | undefined,
     basisFingerprint: "pending-preview",
     orderId: delivery?.orderId ?? "",
     deliveryDate: (delivery?.deliveryDate ? new Date(delivery.deliveryDate) : new Date()).toISOString(),
@@ -132,6 +139,7 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
   const certStatus = makeCertFieldStatus(isEditMode ? defaultValues : undefined);
 
   const watchWetMass = useWatch({ control, name: "deliveredWetMassKg" });
+  const watchSources = useWatch({ control, name: "sources" });
   const watchMoisture = useWatch({ control, name: "moistureContentPercent" });
   const watchOrderId = useWatch({ control, name: "orderId" });
   const watchBinId = useWatch({ control, name: "storageLocationId" });
@@ -239,25 +247,31 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
   const moisture = watchMoisture === "" || watchMoisture == null ? NaN : Number(watchMoisture);
   // A split product bin takes one reading per sub-bin the load reaches.
   const draw = useSubBinDraw({
-    bin: !isEditMode && watchBinId && formFacilityId ? { storageLocationId: watchBinId, facilityId: formFacilityId } : null,
+    bin: !massLocked && watchBinId && formFacilityId ? { storageLocationId: watchBinId, facilityId: formFacilityId } : null,
     occurredAt: watchDate ? String(watchDate) : null, wetKg: wetMass,
+    correction: openedMovement ? { movementId: openedMovement.id, kind: "delivery", sources: openedMovement.sources } : undefined,
   });
   const [attempted, setAttempted] = useState(false);
+  const massChanged = isEditMode && (draw.changed || wetMass !== delivery.deliveredWetMassKg || (!draw.active && moisture !== delivery.moistureContentPercent) ||
+    ((draw.sources ?? watchSources) != null && JSON.stringify(draw.sources ?? watchSources) !== JSON.stringify(openedMovement?.sources)));
+  const stockChanged = !isEditMode || (!massLocked && massChanged);
   const { preview: stockPreview, estimate: moistureEstimate, gate, beginSubmit } = useOutputDrawDraft({
-    draw, bypass: isEditMode,
+    draw, bypass: !stockChanged,
     singleMoistureReady: Number.isFinite(moisture) && moisture >= 0 && moisture < 100,
     moisturePercent: moisture,
     entry: watchBinId && watchDate && wetMass > 0 && Number.isFinite(wetMass)
-      ? { storageLocationId: watchBinId, facilityId: formFacilityId ?? "", kind: "delivery", occurredAt: String(watchDate), wetMassKg: wetMass }
+      ? { storageLocationId: watchBinId, facilityId: formFacilityId ?? "", kind: "delivery", correctsMovementId: openedMovement?.id, occurredAt: String(watchDate), wetMassKg: wetMass }
       : null,
     estimateFor: { storageLocationId: watchBinId, facilityId: formFacilityId, occurredAt: watchDate ? String(watchDate) : null },
     // A split load saves its sub-bins and readings; its overall moisture is derived on save.
     writeReadings: (sources, split) => {
+      if (!stockChanged) return;
       setValue("sources", sources);
       if (split) setValue("moistureContentPercent", undefined);
     },
   });
-  const { canSave, submitDisabled, basisFingerprint } = gate();
+  const { canSave, submitDisabled: draftSubmitDisabled, basisFingerprint } = gate();
+  const submitDisabled = draftSubmitDisabled || (massLocked && massChanged);
   useClearOnDependencyChange(watchOrderId, () => setValue("storageLocationId", ""));
   const deliveredWetMassError = errors.deliveredWetMassKg?.message ?? stockPreview.data?.blockingMessage ?? undefined;
 
@@ -269,11 +283,12 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
   const defaultSubmitLabel = isEditMode ? "Update delivery" : "Create delivery";
 
   const submitDelivery = handleSubmit(async (data) => {
-    if (!canSave) return;
+    if (!canSave || (massLocked && massChanged)) return;
     const normalized = data.distanceKmOverride == null ? { ...data, distanceNote: "" } : data;
     // A failed save needs no refetch here: the host reports the error and the
     // mutation hooks invalidate `outputStockKeys.all`, which refreshes this preview.
-    await onSubmit({ ...normalized, status: "delivered", idempotencyKey, basisFingerprint } as DeliveryFormData);
+    await onSubmit({ ...normalized, status: "delivered", idempotencyKey, basisFingerprint: basisFingerprint ?? "pending-preview", correctsMovementId: stockChanged ? openedMovement?.id : undefined,
+      ...(isEditMode && !stockChanged ? { sources: undefined, deliveredWetMassKg: delivery.deliveredWetMassKg, moistureContentPercent: delivery.moistureContentPercent ?? undefined } : {}) } as DeliveryFormData);
   });
 
   // Why the field is empty stays visible (a cue). With a distance there is no
@@ -362,6 +377,7 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
         icon={<ScalesIcon size={14} weight="bold" />}
         fields={["deliveredWetMassKg", "moistureContentPercent"]}
       >
+        {isEditMode && massLocked && <Notice tone="info">{stockEdit.movement?.editLockedReason ?? (stockEdit.history.error ? "Stock edit availability could not be loaded. Reload this delivery." : stockEdit.movement ? "This delivery was corrected. Reload it before editing its mass." : "Loading stock edit availability...")}</Notice>}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <WetMassField
             id="deliveredWetMassKg"
@@ -370,7 +386,7 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
             error={deliveredWetMassError}
             hint="Measured wet mass at departure, water included."
             required
-            disabled={isSubmitting || isEditMode}
+            disabled={isSubmitting || massLocked}
             placeholder="e.g. 1000"
             certifyRequired={isDeliveryCertifyField("deliveredWetMassKg")}
             certifyStatus={certStatus("deliveredWetMassKg")}
@@ -378,13 +394,13 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
               setValueAs: nullableNumericValue,
             })}
           />
-          {draw.usesSingleMoisture && <MoistureField
+          {(massLocked || draw.usesSingleMoisture) && <MoistureField
             id="moistureContentPercent"
             label="Biochar product moisture"
             unit="%"
             error={errors.moistureContentPercent?.message}
             required
-            disabled={isSubmitting || isEditMode}
+            disabled={isSubmitting || massLocked}
             placeholder="e.g. 20"
             estimate={isEditMode ? undefined : moistureEstimate}
             reading={watchMoisture}
@@ -396,7 +412,7 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
               wrapper drops out while every child is hidden (before a bin and
               mass give a preview), so it adds no empty grid row under the inputs. */}
           <div className="md:col-span-2 space-y-16 [&:not(:has(>:not([hidden])))]:hidden">
-            {draw.active && <SubBinDrawField draw={draw} timeZone={deliveryClock.timeZone} idPrefix="delivery" disabled={isSubmitting} showErrors={attempted} />}
+            {draw.active && <SubBinDrawField draw={draw} timeZone={deliveryClock.timeZone} idPrefix="delivery" disabled={isSubmitting || massLocked} showErrors={attempted} />}
             {draw.query.error && <p role="alert" className="body-caption text-[var(--color-status-error)]">{draw.query.error.message}</p>}
             {delivery && <DeliveryStockDetails deliveryId={delivery.id} storageLocationId={delivery.storageLocationId} wetMassKg={delivery.deliveredWetMassKg} dryMassKg={delivery.massDryKg} />}
             {stockPreview.isFetching && <p role="status" className="body-caption text-[var(--color-text-tertiary)]">Refreshing stock preview...</p>}

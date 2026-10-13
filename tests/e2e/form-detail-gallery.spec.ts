@@ -317,32 +317,22 @@ test("gallery production run create read edit credit batch and sample read", asy
   await pairs(page, "sample-read", ["Transport"]);
 });
 
-test("gallery output bin reconciliation loss and correction", async ({ adminPage: page, testUsers }) => {
+test("gallery output bin lost mass and history", async ({ adminPage: page, testUsers }) => {
   const f = await seedOutputStockBrowserFixture(testUsers.admin.id, true);
   await bin(page, f);
-  await page.getByRole("button", { name: "Reconcile stock", exact: true }).click();
-  await fillStock(page, "600", "E2E stock count: drying only, no dry biochar loss.");
-  await pairs(page, "output-bin-reconciliation", ["Stock preview", "Reason"]);
-  await page.getByRole("button", { name: "Reconcile stock", exact: true }).last().click();
-  await expect(page.getByRole("dialog")).toHaveCount(0);
-  await bin(page, f);
-  await page.getByRole("button", { name: "Record loss", exact: true }).click();
+  await page.getByRole("button", { name: "Adjust stock", exact: true }).click();
   await fillStock(page, "120", "E2E spill during loading.");
   await pairs(page, "output-bin-loss", ["Stock preview", "Reason"]);
-  await page.getByRole("button", { name: "Record loss", exact: true }).last().click();
+  await page.getByRole("button", { name: "Save lost mass", exact: true }).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await bin(page, f);
-  await page.getByRole("button", { name: "Stock history", exact: true }).first().click();
+  await page.getByRole("button", { name: "History", exact: true }).click();
   const history = page.getByRole("dialog", { name: "Stock history", exact: true });
-  await history.locator("article").filter({ hasText: "E2E spill during loading." }).getByRole("button", { name: "Correct entry" }).click();
-  await fillStock(page, "12", "E2E corrected spill after scale ticket review.");
-  await pairs(page, "output-stock-correction", ["Proposed replacement", "Stock preview"], "Stock history");
-  await history.getByRole("button", { name: "Save correction", exact: true }).click();
-  await expect(history.getByText("E2E corrected spill after scale ticket review.", { exact: true }).first()).toBeVisible();
+  await history.locator("details").filter({ hasText: "E2E spill during loading." }).locator("summary").click();
   for (const viewport of VIEWPORTS) {
     await page.setViewportSize(viewport);
     await scrollTop(history);
-    await capture(page, `output-stock-correction-saved-${viewport.width}-history`);
+    await capture(page, `output-stock-lost-mass-${viewport.width}-history`);
   }
 });
 

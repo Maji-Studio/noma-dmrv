@@ -38,7 +38,7 @@ import { assertBinIdentityChangeAllowed } from "./storage-location-identity-guar
 import { layersHoldMaterial } from "@/lib/output-stock";
 import { readOutputBinAllLayers } from "./output-stock";
 import { applyStockModeChange, initialStockMode } from "./output-bin-stock-mode";
-import type { OutputStockMode } from "@/lib/output-stock/stock-mode";
+import type { OutputDrawOrder, OutputStockMode } from "@/lib/output-stock/stock-mode";
 import {
   countStorageLocationReferences,
   storageLocationBlockers,
@@ -173,6 +173,7 @@ export async function getStorageLocations(
       feedstockTypeId: storageLocations.feedstockTypeId,
       formulationId: storageLocations.formulationId,
       stockMode: storageLocations.stockMode,
+      drawOrder: storageLocations.drawOrder,
       facilityId: storageLocations.facilityId,
       archivedAt: storageLocations.archivedAt,
       createdAt: storageLocations.createdAt,
@@ -271,6 +272,7 @@ export async function getStorageLocationWithFacility(
       feedstockTypeId: storageLocations.feedstockTypeId,
       formulationId: storageLocations.formulationId,
       stockMode: storageLocations.stockMode,
+      drawOrder: storageLocations.drawOrder,
       facilityId: storageLocations.facilityId,
       archivedAt: storageLocations.archivedAt,
       createdAt: storageLocations.createdAt,
@@ -332,6 +334,7 @@ export async function createStorageLocation(
     feedstockTypeId?: string | null;
     formulationId?: string | null;
     stockMode?: OutputStockMode;
+    drawOrder?: OutputDrawOrder;
     storageMethod?: string | null;
     storageDescription?: string | null;
     supplierReferenceId?: string | null;
@@ -398,6 +401,7 @@ export async function createStorageLocation(
           : null,
         formulationId,
         stockMode: initialStockMode(data.type, data.stockMode),
+        drawOrder: data.drawOrder ?? "oldest_first",
         storageMethod: data.storageMethod ?? null,
         storageDescription: data.storageDescription ?? null,
         supplierReferenceId: data.supplierReferenceId ?? null,
@@ -461,6 +465,7 @@ export async function updateStorageLocation(
     formulationId?: string | null;
     /** Split to mix posts a merge at `mergedAt`; mix to split needs an empty bin. */
     stockMode?: OutputStockMode;
+    drawOrder?: OutputDrawOrder;
     mergedAt?: Date;
     storageMethod?: string | null;
     storageDescription?: string | null;

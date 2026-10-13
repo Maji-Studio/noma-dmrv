@@ -7,7 +7,8 @@ import { db, type DbTransaction } from "@/db";
 import { samples, biocharProducts, deliveries, outputStockAllocations, applicationOutputAllocations, certifierRemovals, creditBatchApplications, creditBatchProductionRuns, creditBatches, productionProcesses } from "@/db/schema";
 import { deleteBiocharProduct, updateBiocharProduct } from "@/data-access/biochar-products";
 import { createSample, updateSample, deleteSample } from "@/data-access/samples";
-import { updateDelivery, deleteDelivery } from "@/data-access/delivery-output-writes";
+import { deleteDelivery } from "@/data-access/delivery-output-writes";
+import { updateDelivery } from "@/lib/operations/deliveries";
 import { updateCreditBatch } from "@/data-access/credit-batches";
 import { createApplication } from "@/data-access/applications";
 import { getLockedCertifiedLineage } from "@/data-access/certification-lineage-guards";
@@ -374,7 +375,7 @@ it.each(["update", "delete"] as const)("delivery %s waits for application creati
     expect(await creating).toMatchObject({ ok: true });
     expect(await mutating).toMatchObject(operation === "update"
       ? { ok: true, value: { version: delivery.version + 1, distanceNote: "E2E edited route" } }
-      : { ok: false, error: { message: "Posted deliveries retain their history. Use Correct entry in bin history." } });
+      : { ok: false, error: { message: "Posted deliveries retain their history and cannot be deleted. Edit mass and moisture while the delivery is the bin's latest stock entry." } });
   } finally {
     resume.release();
     await Promise.all([creating, mutating]);

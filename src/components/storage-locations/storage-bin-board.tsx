@@ -90,7 +90,6 @@ export interface StorageBinBoardProps {
   onArchive: (binId: string) => void;
   onRestore: (binId: string) => void;
   onDelete: (binId: string) => void;
-  onRecordLoss?: (bin: StorageLocationWithFacility) => void;
   onReconcile: (bin: StorageLocationWithFacility) => void;
 }
 
@@ -143,7 +142,7 @@ function binRowActions(
   bin: StorageLocationWithFacility,
   handlers: Pick<
     StorageBinBoardProps,
-    "onEdit" | "onArchive" | "onRestore" | "onDelete" | "onReconcile" | "onRecordLoss"
+    "onEdit" | "onArchive" | "onRestore" | "onDelete" | "onReconcile"
   >,
 ): BinRowAction[] {
   if (bin.archivedAt != null) {
@@ -156,9 +155,8 @@ function binRowActions(
     ];
   }
   return [
-    ...(bin.type !== "feedstock_bin" && handlers.onRecordLoss ? [{ label: "Record loss", onSelect: () => handlers.onRecordLoss?.(bin) }] : []),
     {
-      label: "Reconcile stock",
+      label: "Adjust stock",
       icon: <ArrowsClockwiseIcon size={16} />,
       onSelect: () => handlers.onReconcile(bin),
     },

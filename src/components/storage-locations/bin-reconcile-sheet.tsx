@@ -7,7 +7,7 @@ import {
   ResolvedErrorRevalidator,
 } from "@/components/forms";
 import { FormActions } from "@/components/forms/form-actions";
-import { SegmentedControl } from "@/components/forms/segmented-control";
+import { LOST_MASS_LABEL, LOST_MASS_SUBMIT_LABEL } from "@/lib/output-stock/labels";
 import { SlideOverPanel } from "@/components/ui/slide-over-panel";
 import { useToast } from "@/components/ui/toast";
 import type { StorageLocationWithFacility } from "@/data-access/storage-locations";
@@ -36,17 +36,9 @@ import { LossReasonChips } from "./loss-reason-chips";
 
 /** Shown when a resubmit reuses a request key that already saved a loss. */
 const LOSS_CONFLICT_MESSAGE =
-  "A loss from this form is already recorded. Check the reconciliation history before you submit again.";
-
-type OutputKind = "loss" | "count";
-
-const MOVEMENT_OPTIONS = [
-  { value: "loss", label: "Record loss" },
-  { value: "count", label: "Reconcile stock" },
-] as const;
+  "A loss from this form is already recorded. Check the stock history before you submit again.";
 
 interface BinReconcileSheetProps {
-  initialKind?: OutputKind;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   storageLocation: StorageLocationWithFacility | null;
@@ -131,7 +123,7 @@ function LossForm({
         lossMassKg: values.lossMassKg,
       });
       setIdempotencyKey(crypto.randomUUID());
-      toast.success("Loss recorded");
+      toast.success("Lost mass saved");
       onRecorded?.();
     } catch (error) {
       if (error instanceof RecordLossFieldError) {
@@ -212,20 +204,18 @@ function LossForm({
         onCancel={onCancel}
         isSubmitting={recordLoss.isPending}
         errorMessage={serverError ?? undefined}
-        submitLabel="Record loss"
+        submitLabel={LOST_MASS_SUBMIT_LABEL}
       />
     </form>
   );
 }
 
 export function BinReconcileSheet({
-  initialKind = "count",
   open,
   onOpenChange,
   storageLocation,
   onRecorded,
 }: BinReconcileSheetProps) {
-  const [outputKind, setOutputKind] = useState<OutputKind>(initialKind);
   const close = () => onOpenChange(false);
   const handleRecorded = () => {
     onRecorded?.();
@@ -233,13 +223,13 @@ export function BinReconcileSheet({
   };
 
   return (
-    <FormDetailProvider scope={`${open}:${storageLocation?.id}:${outputKind}`} enabled={!!storageLocation && storageLocation.type !== "feedstock_bin"}>
+    <FormDetailProvider scope={`${open}:${storageLocation?.id}`} enabled={!!storageLocation && storageLocation.type !== "feedstock_bin"}>
     <SlideOverPanel.Root open={open} onOpenChange={onOpenChange}>
       <SlideOverPanel.Content size="default">
         <SlideOverPanel.Header showClose actions={<FormDetailControl />}>
           <div className="flex flex-col gap-4 min-w-0">
             <SlideOverPanel.Title>
-              {storageLocation ? `Reconcile ${storageLocation.code}` : "Reconcile"}
+              {LOST_MASS_LABEL}
             </SlideOverPanel.Title>
             {storageLocation && (
               <SlideOverPanel.Description className="truncate">
@@ -263,15 +253,7 @@ export function BinReconcileSheet({
                 onRecorded={handleRecorded}
               />
               </> : <>
-                {/* Which mode the sheet is in has to be readable at a glance:
-                    the two forms differ only in their labels otherwise. */}
-                <SegmentedControl
-                  legend="Movement to record"
-                  options={MOVEMENT_OPTIONS}
-                  value={outputKind}
-                  onValueChange={(next) => setOutputKind(next as OutputKind)}
-                />
-                <OutputStockForm key={`${storageLocation.id}-${outputKind}`} storageLocationId={storageLocation.id} facilityId={storageLocation.facilityId} kind={outputKind} onCancel={close} onRecorded={handleRecorded} />
+                <OutputStockForm key={storageLocation.id} storageLocationId={storageLocation.id} facilityId={storageLocation.facilityId} onCancel={close} onRecorded={handleRecorded} />
               </> }
             </div>
           )}

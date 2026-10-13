@@ -83,6 +83,11 @@ export const outputStockPostSchema = outputStockCommandSchema.safeExtend({
   expectedProductVersions: z.record(z.uuid(), expectedVersionSchema),
   basisFingerprint: z.string().min(1),
 });
+/** Browser stock forms edit only Lost mass; deliveries keep their own versioned form. */
+export const outputStockFormPostSchema = outputStockPostSchema.safeExtend({ kind: z.enum(['loss', 'count']) }).superRefine((data, ctx) => {
+  if (data.correctsMovementId && data.kind !== 'loss')
+    ctx.addIssue({ code: 'custom', path: ['correctsMovementId'], message: 'Only Lost mass entries can be edited here.' });
+});
 export const outputSubBinsSchema = z.object({
   storageLocationId: z.uuid(),
   facilityId: z.uuid(),

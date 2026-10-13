@@ -10,6 +10,17 @@ const mixes = () => [layer('A', '900', '200'), layer('B', '600', '120', BigInt(2
 const wet = (layers: OutputStockLayer[], wetKg: number, moisturePercent: number) => planOutputStock(layers, DAY, { kind: 'wet', wetKg, moisturePercent });
 const rain = () => wet(mixes(), 2000, 30);
 describe('issue 756 exact FIFO', () => {
+  it('draws newest physical stock first, breaking time ties by posting sequence', () => {
+    const older = { ...layer('older', '100', '0', BigInt(3)), placedAt: '2026-09-13T10:00:00.000Z' };
+    const plan = planOutputStock([layer('first', '100'), older, layer('newest', '100', '0', BigInt(2))], DAY,
+      { kind: 'wet', wetKg: 150, moisturePercent: 0 }, 'lifo');
+    expect(plan.allocations.map(a => [a.layerId, a.dryKg])).toEqual([['newest', '100.000'], ['first', '50.000']]);
+  });
+  it('keeps an explicit sub-bin order over a newest-first policy', () => {
+    const plan = planOutputStock(mixes(), DAY, { kind: 'ordered', wetKg: 100,
+      sources: [{ layerId: 'A', moisturePercent: 0 }] }, 'lifo');
+    expect(plan.allocations.map(a => a.layerId)).toEqual(['A']);
+  });
   it('rain load and half mixed application', () => {
     const plan = rain();
     expect(plan.allocations.map(a => a.dryKg)).toEqual(['900.000', '250.000']);

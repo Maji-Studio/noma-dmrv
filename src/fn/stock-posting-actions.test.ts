@@ -13,6 +13,7 @@ vi.mock("@/data-access/biochar-products", () => ({}));
 vi.mock("@/lib/operations/runner", () => ({ runOperationInProcess: mocks.run }));
 vi.mock("@/lib/operations/biochar-products", () => ({ makeBiocharProduct: { id: "make_biochar_product" }, updateBiocharProduct: { id: "update_biochar_product" } }));
 vi.mock("@/data-access/deliveries", () => ({ createDelivery: mocks.create }));
+vi.mock("@/lib/operations/deliveries", () => ({ updateDelivery: vi.fn() }));
 vi.mock("@/data-access/delivery-stats", () => ({}));
 vi.mock("@/data-access/utils", () => ({}));
 vi.mock("@/db/schema", () => ({ biocharProducts: { code: "code" }, deliveries: { code: "code" } }));

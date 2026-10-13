@@ -46,7 +46,7 @@ const storageLocation: StorageLocationWithFacility = {
   organizationId: "00000000-0000-4000-8000-000000000002",
   code: "FB-001",
   name: "North hopper",
-  stockMode: "split",
+  stockMode: "split", drawOrder: "oldest_first",
   type: "feedstock_bin",
   capacityKg: null,
   storageMethod: null,
@@ -116,7 +116,7 @@ describe("BinReconcileSheet", () => {
         />,
       );
 
-      expect(markup).toContain("Reconcile FB-001");
+      expect(markup).toContain("Lost mass");
       expect(markup).toContain("North hopper");
       expect(markup).toContain(expectedStockLabel);
       expect(markup).toContain("After this loss");
@@ -129,7 +129,7 @@ describe("BinReconcileSheet", () => {
       expect(markup).toContain(expectedLossLabel);
       expect(markup).toContain('id="loss-amount"');
       expect(markup).toContain('id="loss-reason"');
-      expect(markup).toContain("Record loss");
+      expect(markup).toContain("Save lost mass");
       expect(markup).toContain("Cancel");
 
       expect(markup).not.toContain("Reconciliation type");
@@ -141,20 +141,20 @@ describe("BinReconcileSheet", () => {
 });
 
 vi.mock("@/hooks/use-output-stock", () => ({
-  useOutputSubBins: () => ({ data: undefined, error: null }),
+  useOutputSubBins: () => ({ data: { stockMode: "mix", subBins: [] }, error: null }),
   useOutputStockBalance: () => ({ data: undefined }),
   useOutputStockPreview: () => ({ data: undefined, isFetching: false, refetch: vi.fn() }),
   usePostOutputStock: () => ({ isPending: false, mutateAsync: vi.fn() }),
 }));
 
 describe("Output-bin reconciliation", () => {
-  it.each(["biochar_bin", "product_bin"] as const)("offers count and loss for %s", (type) => {
+  it.each(["biochar_bin", "product_bin"] as const)("opens directly on lost mass for %s", (type) => {
     const markup = renderToStaticMarkup(<BinReconcileSheet open onOpenChange={() => undefined} storageLocation={{ ...storageLocation, type }} />);
-    expect(markup).toContain("Counted wet mass (kg)");
+    expect(markup).toContain("Wet mass removed (kg)");
     expect(markup).toContain("Moisture (%)");
-    expect(markup).toContain("Record loss");
-    expect(markup).toContain("Reconcile stock");
-    expect(markup).toContain("A zero count does not need moisture.");
+    expect(markup).toContain("Save lost mass");
+    expect(markup).not.toContain("Reconcile stock");
+    expect(markup).not.toContain("Counted wet mass");
     expect(markup).not.toContain("Current derived stock");
   });
 });

@@ -1,6 +1,6 @@
 import type { z } from 'zod';
 import type { MoistureBasis } from '@/lib/output-stock/moisture-estimate';
-import type { OutputStockMode } from '@/lib/output-stock/stock-mode';
+import type { OutputDrawOrder, OutputStockMode } from '@/lib/output-stock/stock-mode';
 import type { orderedSourceSchema } from '@/schemas/output-stock';
 /** Serializable operator read models; exact fractions remain inside the ledger. */
 export interface OutputStockAllocationView {
@@ -87,6 +87,8 @@ export interface OutputStockPostInput extends OutputStockPreviewInput {
 }
 
 export interface OutputStockHistoryEntry {
+  /** Null while this loss or delivery is latest; omitted for other kinds. */
+  editLockedReason?: string | null;
   id: string;
   kind: string;
   eventKind?: 'delivery' | 'loss' | 'count' | 'production_draw';
@@ -102,6 +104,11 @@ export interface OutputStockHistoryEntry {
   afterDryKg: number;
   correctsMovementId: string | null;
   deliveryId: string | null;
+  /** The form this movement came from, when it has one. */
+  source?: { entity: 'productionRun' | 'biocharProduct' | 'delivery' | 'application'; id: string };
+  /** Frozen changes for the chart; null means the wet or solids basis is unresolved. */
+  wetDeltaKg?: number | null;
+  solidsDeltaKg?: number | null;
   allocations: OutputStockAllocationView[];
   /** Split draws: the sub-bins and readings the entry was posted with. */
   sources?: { layerId: string; moisturePercent: number }[];
@@ -138,7 +145,9 @@ export interface OutputSubBin {
 
 export interface OutputSubBins {
   stockMode: OutputStockMode;
-  /** Oldest first: the order a draw takes them in unless the operator changes it. */
+  /** The bin's default draw order: where the picker starts unless the operator changes it. */
+  drawOrder: OutputDrawOrder;
+  /** Split bins follow `drawOrder`; mix bins keep chronological batch display. */
   subBins: OutputSubBin[];
 }
 

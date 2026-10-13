@@ -44,6 +44,12 @@ describe("record_output_stock_movement", () => {
     expect(mocks.record.mock.calls[0][2]).toMatchObject({ idempotencyKey: "form-key", basisFingerprint: "basis", expectedProductVersions: { [LAYER_A]: 2 } });
   });
 
+  it("requires the latest correction only when the in-process caller asks for it", async () => {
+    await execute({ ...loss, correctsMovementId: LAYER_A, requireLatestCorrection: true });
+    expect(mocks.record.mock.calls[0][3]).toEqual({ snapshotStock, requireLatestCorrection: true });
+    expect(mocks.record.mock.calls[0][2]).not.toHaveProperty("requireLatestCorrection");
+  });
+
   it("answers a moved basis with stock_basis_changed and keeps the bin conflict", async () => {
     mocks.record.mockRejectedValue(new StockBasisChangedError({ id: BIN_ID, code: "BC-001" }));
     await expect(execute({ ...loss, basisFingerprint: "stale" })).rejects.toMatchObject({
@@ -77,7 +83,7 @@ describe("published movement body", () => {
   it("accepts losses and counts and refuses UI-only fields", () => {
     expect(recordOutputStockMovementApiInput.safeParse(loss).success).toBe(true);
     expect(recordOutputStockMovementApiInput.safeParse({ ...loss, kind: "count", wetMassKg: 0, moisturePercent: null }).success).toBe(true);
-    for (const extra of [{ kind: "delivery" }, { correctsMovementId: LAYER_A }, { facilityId: FACILITY_ID }, { expectedProductVersions: {} }, { idempotencyKey: "key" }]) {
+    for (const extra of [{ kind: "delivery" }, { correctsMovementId: LAYER_A }, { facilityId: FACILITY_ID }, { expectedProductVersions: {} }, { idempotencyKey: "key" }, { requireLatestCorrection: true }]) {
       expect(recordOutputStockMovementApiInput.safeParse({ ...loss, ...extra }).success, JSON.stringify(extra)).toBe(false);
     }
   });

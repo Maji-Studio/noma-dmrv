@@ -1,5 +1,16 @@
+import type { DrawPolicy } from './planner';
+
 export const OUTPUT_STOCK_MODES = ['split', 'mix'] as const;
 export type OutputStockMode = (typeof OUTPUT_STOCK_MODES)[number];
+
+/** A split bin's default for previews and posting; an explicit order overrides it. */
+export const OUTPUT_DRAW_ORDERS = ['oldest_first', 'newest_first'] as const;
+export type OutputDrawOrder = (typeof OUTPUT_DRAW_ORDERS)[number];
+
+/** Shared default for every output draw; mix bins always draw pro rata. */
+export function resolveDrawPolicy(mode: OutputStockMode, order: OutputDrawOrder): DrawPolicy {
+  return mode === 'mix' ? 'pro_rata' : order === 'newest_first' ? 'lifo' : 'fifo';
+}
 
 /** A timed switch of a bin's stock mode: a merge (to mix) or a switch back to split once empty. */
 export interface StockModeChange {

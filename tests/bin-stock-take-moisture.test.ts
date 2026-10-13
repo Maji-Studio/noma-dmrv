@@ -35,7 +35,7 @@ vi.mock("@/lib/auth/server", async (importOriginal) => {
   };
 });
 
-import { recordStockTakeFn } from "@/fn/bin-movements";
+import { getFeedstockBinStockFn, recordStockTakeFn } from "@/fn/bin-movements";
 
 beforeAll(async () => {
   await ensureTestOrg();
@@ -114,6 +114,11 @@ describe("feedstock stock-take moisture integrity", () => {
       expect(Number(recorded.data.countedWetMassKg)).toBe(100);
       expect(Number(recorded.data.moistureRatioUsed)).toBe(0.2);
 
+      const ledger = await getFeedstockBinStockFn(bin.id);
+      expect(ledger).toMatchObject({ success: true, data: { currentWetKg: 100 } });
+      if (ledger.success) expect(ledger.data.entries.find(entry => entry.kind === "count")).toMatchObject({ countedWetKg: 100, sourceId: null });
+      expect(await getFeedstockBinStockFn("invalid-id")).toMatchObject({ success: false, code: "validation_failed" });
+
       const exactConfirmation = await recordStockTakeFn({
         storageLocationId: bin.id,
         lane: "feedstock",
@@ -160,7 +165,7 @@ describe("feedstock stock-take moisture integrity", () => {
           reason: "Generic movement caller cannot bypass stock-take checks",
         }),
       ).rejects.toThrow(
-        /^Use Reconcile stock to record a stock-take adjustment$/,
+        /^Check the source record, or record Lost mass if stock was lost\.$/,
       );
 
       const preciseSnapshot = await recordStockTakeFn({

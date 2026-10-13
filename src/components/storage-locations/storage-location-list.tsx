@@ -56,7 +56,6 @@ export function StorageLocationList() {
   );
 
   const [sideSheet, setSideSheet] = useState<StorageBinSheetState | null>(null);
-  const [reconcileKind, setReconcileKind] = useState<"loss" | "count">("count");
   const [reconcilingBin, setReconcilingBin] =
     useState<StorageLocationWithFacility | null>(null);
   const [deletingBin, setDeletingBin] = useState<StorageLocationWithFacility | null>(null);
@@ -150,10 +149,9 @@ export function StorageLocationList() {
   const openEdit = (storageLocation: StorageLocationWithFacility) =>
     setSideSheet({ mode: "edit", entity: storageLocation });
 
-  // Reconcile lives in its own side sheet — close the detail sheet first so the
+  // Lost mass lives in its own side sheet — close the detail sheet first so the
   // two panels never stack.
-  const openReconcile = (storageLocation: StorageLocationWithFacility, kind: "loss" | "count" = "count") => {
-    setReconcileKind(kind);
+  const openReconcile = (storageLocation: StorageLocationWithFacility) => {
     setSideSheet(null);
     setReconcilingBin(storageLocation);
   };
@@ -244,7 +242,6 @@ export function StorageLocationList() {
         onRestore={handleRestore}
         onDelete={handleDelete}
         onReconcile={openReconcile}
-        onRecordLoss={(bin) => openReconcile(bin, "loss")}
       />
 
       {deleteError && !deletingBin && (
@@ -271,8 +268,7 @@ export function StorageLocationList() {
       />
 
       <BinReconcileSheet
-        key={`${reconcilingBin?.id}-${reconcileKind}`}
-        initialKind={reconcileKind}
+        key={reconcilingBin?.id}
         open={!!reconcilingBin}
         onOpenChange={(open) => {
           if (!open) setReconcilingBin(null);

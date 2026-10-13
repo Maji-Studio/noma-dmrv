@@ -41,3 +41,22 @@ Moisture changes make recorded wet quantities an unreliable limit for biochar le
 Multiple source-layer allocations must reach deliveries, applications, credit-batch slices, traceability, and certification guards. Source and allocation sums close to grams; one transaction validates and posts stock changes and their audit trail. The interface leads with wet mass removed and smaller dry biochar beneath, before/after bin cards with bars, visible batch shares, and explicit correction effects. Conditional wet estimates are labelled and do not become new bin measurements; bin history opens through More info.
 
 The project's registry basis remains [Biochar v1.1](https://registry.isometric.com/protocol/biochar/1.1) and [Agricultural Soils v1.1](https://registry.isometric.com/module/biochar-storage-agricultural-soils/1.1). This is an internal method, not a claim of registry approval. The PDD must justify its physical loading and composition assumptions and evidence before credit use. Ingredient-solids decay remains an accepted conservative bias under those assumptions. No production backfill or transitional compatibility is required; the migration chain must work, and shared staging resets require prior notice.
+
+
+## Addendum (2026-10-13): split-bin default draw order
+
+Split biochar and product bins can default to Oldest first (`oldest_first`) or
+Newest first (`newest_first`). Oldest first remains the database default.
+The current bin setting governs a new draw without explicit sources, including
+backdated draws; operators can override it for each draw. The picker, bays,
+Next out, previews and posting use the same order. Newest first reverses physical
+placement time and posting-sequence ties. Existing allocations never change
+when the preference changes.
+
+The planner resolves the setting to `fifo` or `lifo`; explicit sources retain
+`operator_order`. Each allocation saves that policy plus `defaultDrawOrder`
+and any explicit order in `basis_snapshot`. Bin edits use the existing version
+check and stock lock, and a changed setting invalidates preview fingerprints.
+Delivery, product creation, lost mass and public REST/MCP writes all share this
+resolution. Migration 0134 adds the enum and non-null column with an oldest-first
+default. Mix bins remain governed by ADR 0030.

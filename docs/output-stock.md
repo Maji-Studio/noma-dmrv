@@ -34,7 +34,8 @@ operator measurement. Later intake changes do not rewrite that snapshot. Every
 product has a formulation, including Pure biochar.
 
 The shared planner turns measured wet mass and moisture into exact solids. It
-walks eligible layers in FIFO order using each layer's frozen dry-biochar share.
+walks eligible layers in the split bin's default or operator-supplied order,
+using each layer's frozen dry-biochar share; mix bins draw pro rata.
 Exact physical residuals survive independently of gram attribution, preventing
 repeated rounding from authorizing excess consumption. Cumulative source-run
 apportionment stays proportional to the frozen composition and closes every
@@ -50,13 +51,13 @@ from in the order they were emptied, each with its own moisture reading
 reading; the last takes the rest of the one load weight at its reading. If the
 weight never reaches a named sub-bin the draw is refused with "Untick" advice,
 and if the last sub-bin would give more solids than its records hold the save
-is blocked until the bin is reconciled. Without `sources` the draw is oldest first at one
-reading. Counts stay whole-bin.
+is blocked. Without `sources` the draw follows the bin's default at one
+reading. API counts stay whole-bin.
 
-Each allocation's `basis_snapshot` records `policy` (`fifo`, `operator_order`
-or `pro_rata`), the operator's `order`, and the `readingPercent` used for
+Each allocation's `basis_snapshot` records `policy` (`fifo`, `lifo`, `operator_order`
+or `pro_rata`), `defaultDrawOrder` (the split-bin setting, null for mix), the operator's `order`, and the `readingPercent` used for
 that layer. A draw from several sub-bins stores its overall moisture as
-1 − solids ÷ wet, which history also shows. A correction starts from the saved
+1 − solids ÷ wet, which history also shows. The server correction path starts from the saved
 order and readings and may change them, through the same
 preview and refusals as a new draw, and only while no later movement,
 application or certification submission depends on the original. The last
@@ -96,13 +97,78 @@ measured wet mass, and moisture. Its immutable layer and run allocations determi
 its dry biochar total. Legacy storage-inventory rows are not a stock ledger.
 
 Applications take proportional shares of the saved truck allocation. They do not
-repeat FIFO against the bin. Saved shares feed batch accounting, certification
+repeat the planner against the bin. Saved shares feed batch accounting, certification
 guards, traceability, and transport. Product transport loads use measured wet
 shares, including physical residuals whose dry grams were already attributed.
 
+## Operator stock sheets
+
+Every bin uses the same stock card and a separate Stock over time card. Split
+output bins show fixed-width bays in the bin's default draw order, wrapping when
+needed, with a key below. Mix and feedstock bins show one pile. A lone vessel
+fills against the configured capacity and lists its parts beside it. Multiple
+split bays compare wet mass against the largest bay. Without capacity, a lone
+vessel fills its available height. Split bays and Next out follow the bin's configured default draw order.
+
+Adjust stock in the stock card header opens Lost mass directly. There is no
+count action or generic Correct entry action in the UI. History sits under the chart, groups
+entries by facility-local day, and keeps old counts and corrections readable.
+Corrections show separate Original and Corrected blocks with an arrow between.
+Mode changes say Switched to mix or Switched to split.
+
+History links to the originating production run, biochar product, delivery or
+feedstock intake when the entry has one. Fix a wrong entry in the form where it
+was entered (decision 1). An output-bin Lost mass entry has an Edit action that opens its
+own form with the saved time, mass, moisture, draw and reason (decision 3).
+Delivery mass, moisture and split-bin draw readings can be edited in the delivery
+form. Both saves append a reversal and replacement, shown as Original and Corrected.
+The delivery row stays in agreement with its replacement movement.
+
+These two edits are allowed only while the entry is the bin's latest recorded
+movement. Any newer entry locks it, including a backdated entry, an addition,
+a draw from another sub-bin, a count, a mode change or a correction. History
+replaces Lost mass Edit with the lock reason; the delivery form makes its mass
+fields read-only and gives the same reason. Later draws have already saved their
+batch shares against the stock this entry left, so changing it afterwards would
+make those shares wrong. The server checks this inside the write transaction
+under the posting path's bin-stock lock. Application and certification guards
+still apply. Delivery source, order, date/time and deletion stay locked.
+Old counts remain readable without an edit action.
+Feedstock Lost mass currently supports creation only: its writer has no linked
+reversal and replacement command, so feedstock history does not yet offer Edit.
+
+New output postings freeze a constant-size receipt count and identity hash under
+the bin lock. A changed receipt set locks the edit, even when a newly added
+receipt is physically backdated. Metadata edits alone leave the marker unchanged.
+The lock predicate also reads older development entries with `receiptIds`.
+
+The chart uses steps: dry biochar (output) or estimated solids (feedstock), plus
+hatched estimated water. Product ingredient solids are a separate solid band,
+not water. Output points replay frozen stock effects, including reversals, in
+physical-time order; explanatory moisture rows are not counted twice. Missing
+historical wet or solids bases leave water unknown. Bay, pile-band and chart
+point details open on hover, keyboard focus or tap.
+
+Feedstock's org-scoped `feedstock-bin-ledger.ts` reads completed intakes,
+production-run draws, product ingredient draws, losses and old counts. The pile
+is pooled. Saved per-batch run draws are subtracted from their own intake batches.
+Draws without saved batch shares, such as ingredients and losses, are estimated
+pro rata over the remaining batches present at that entry. Each chart point uses
+the same ordered prefix as its wet balance, including recorded-order timestamp
+ties. Each batch's estimated dry solids use
+its intake dry-to-wet ratio. This does not rewrite saved feedstock allocations.
+Chart points start at the first intake, so an earlier dated run draw does not
+claim that an intake has missing mass. Missing intake mass basis leaves composition unavailable;
+the wet ledger remains readable. Pending intakes stay outside stock.
+
 ## Losses, counts, and corrections
 
-A measured loss consumes stock through the same planner. A count compares measured
+A measured loss consumes stock through the same planner. Counts and corrections
+remain supported by the native server writer. The browser stock action accepts
+corrections only for Lost mass; delivery edits go through delivery CRUD and its
+version check, and count corrections are refused. REST/MCP do not publish a
+correction input. Output-bin Lost mass corrections use the entry's own Edit
+action; counts have no stock-sheet action. A count compares measured
 solids with expected solids: drying alone causes no loss, an excess observation
 creates no stock, and a zero count closes the exact remaining stock without a
 moisture reading.
@@ -110,15 +176,16 @@ moisture reading.
 Corrections append a reversal of the original effects and a replacement. They
 retain actor, reason, physical and recorded times, input basis, and before/after
 balances. A reduced loss restores its original source provenance even after a
-late older intake. An eligible, unapplied delivery correction can explicitly use
-newly recorded physically older stock. Later dependent draws, counts,
-applications, and certification artifacts block corrections with a named reason.
+late older intake through the existing server correction contract. REST/MCP keep
+that dependency-based contract; the Lost mass form and delivery update use the
+stricter latest-entry rule above. Later dependent draws, counts, applications,
+and certification artifacts continue to block server corrections with a named reason.
 
 Preview fingerprints are checked again while holding bin and request locks.
 Repeated request keys return the saved result; changing the payload for a reused
 key fails. Delivery corrections also lock the delivery before checking for
-applications. Posted product and delivery measurements cannot be silently edited
-or deleted through ordinary CRUD forms.
+applications. Posted product measurements stay immutable. Delivery mass edits append corrections;
+posted products and deliveries cannot be deleted through ordinary CRUD forms.
 
 ## Code and verification
 
@@ -133,3 +200,31 @@ local reset; the migration intentionally supplies no production backfill.
 The regression suite includes pure gram conservation, real PostgreSQL writer
 races and rollback, consumer SQL, and `tests/e2e/output-bin-fifo.spec.ts`. The dated
 execution plan is in `docs/plans/2026-09-14-issue-756-test-plan.md`.
+
+## Per-bin default draw order
+
+Split biochar and product bins have a **Default draw order**: **Oldest first**
+(`oldest_first`, the default) or **Newest first** (`newest_first`). The setting
+appears below Stock mode in the form and on the read view. The illustrated
+cards play on hover and keyboard focus; reduced motion shows the settled bay.
+The picker, bays and Next out all start in that order. An operator can still
+supply a different order and readings for one draw.
+
+The default resolves to `fifo` or `lifo` in the shared preview/posting planner,
+including delivery, product creation (`production_draw`), loss and API counts.
+Newest first reverses both physical placement time and posting-sequence ties.
+An explicit `sources` list wins and records `operator_order`. REST/MCP dry runs
+execute the same writer and roll it back, so their stock effects agree with saves.
+Mix remains `pro_rata`; feedstock and ingredient draws are unchanged.
+
+Allocation `basis_snapshot` retains the resolved `policy`, `defaultDrawOrder`,
+manual `order` (null without `sources`), and each layer's `readingPercent`,
+alongside its existing mass and provenance basis. Changing the setting uses the
+bin's existing version check and stock lock, invalidates preview fingerprints,
+and does not rewrite saved allocations. The current setting applies to a new
+backdated draw too; default changes are preferences, not timed merge events.
+
+Migration `0134_output_draw_order.sql` adds the non-null `draw_order` column
+and `output_draw_order` enum. Existing rows and seed inserts that omit it get
+`oldest_first`. REST/MCP storage-location reads expose `drawOrder`; there is no
+new public write endpoint for the setting.

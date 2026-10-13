@@ -19,3 +19,15 @@ Some yards keep biochar or product as one well-mixed pile rather than separate b
 Provenance stays exact per production run, so deliveries, applications and credit batches need no change. The dry total of every removal comes from its own weight and reading. Pro-rata only decides which batches it is attributed to, which is why a backdated entry can be left unreplayed.
 
 Registry basis (pinned v1.1): the protocol allows C_biochar "for either a blend of biochars (Storage Batch), or for individual Production Batches", and the Agricultural Soils module requires projects to "demonstrate the degree of homogeneity within a single Storage or Production Batch". The PDD must describe the mixing practice, how homogeneity is shown, pro-rata attribution, and the moisture-reading method before mix-bin removals support credits. This is an internal method, not a claim of registry approval.
+
+
+## Addendum (2026-10-13): split-bin defaults do not change mix draws
+
+The per-bin `draw_order` preference introduced in migration 0134 applies only
+while an output bin is Split. A Mix draw still takes every eligible layer pro
+rata, regardless of that preference, and still rejects explicit sub-bin sources.
+Its allocation `basis_snapshot` records `policy: "pro_rata"` and
+`defaultDrawOrder: null`. A split draw records the current default alongside its
+resolved FIFO, LIFO or operator order, as described in ADR 0029's addendum.
+The stored preference survives mode changes; the existing timed stock-mode
+rules decide whether a backdated event was split or mix.

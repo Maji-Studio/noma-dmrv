@@ -26,7 +26,7 @@ import {
   deleteCreditBatch,
   updateCreditBatch,
 } from "@/data-access/credit-batches";
-import { updateDelivery } from "@/data-access/deliveries";
+import { updateDelivery } from "@/lib/operations/deliveries";
 import { updateFeedstockInTransaction } from "@/data-access/feedstocks";
 import { updateOrder } from "@/data-access/orders";
 import {

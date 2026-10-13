@@ -74,7 +74,7 @@ function paneRoot(page: Page): Locator {
 
 async function binHistory(page: Page, ctx: CaptureContext, type: SeededBin["type"]) {
   const sheet = await openBinSheet(page, ctx, binName(ctx, type));
-  return openDialogFromButton(sheet, page, "Stock history");
+  return openDialogFromButton(sheet, page, "History");
 }
 
 const transportFeedstock: Surface[] = [
@@ -174,6 +174,16 @@ const transportFeedstock: Surface[] = [
 
 const stockSamples: Surface[] = [
   {
+    id: "bin.read-feedstock",
+    family: "stock-samples",
+    title: "Storage bin read sheet (feedstock bin)",
+    kind: "sheet",
+    mode: "read",
+    fill: "none",
+    skip: noBin("feedstock_bin", "feedstock"),
+    open: (page, ctx) => openBinSheet(page, ctx, binName(ctx, "feedstock_bin")),
+  },
+  {
     id: "bin.read-output",
     family: "stock-samples",
     title: "Storage bin read sheet (biochar bin)",
@@ -206,36 +216,24 @@ const stockSamples: Surface[] = [
   {
     id: "bin.loss-feedstock",
     family: "stock-samples",
-    title: "Record loss (feedstock bin)",
+    title: "Lost mass (feedstock bin)",
     kind: "sheet",
     mode: "form",
     fill: "empty",
     errors: true,
     skip: noBin("feedstock_bin", "feedstock"),
-    // A feedstock bin has no "Record loss" button; "Reconcile stock" opens its loss form.
-    open: (page, ctx) => binMovementSheet(page, ctx, "feedstock_bin", "Reconcile stock"),
+    open: (page, ctx) => binMovementSheet(page, ctx, "feedstock_bin", "Adjust stock"),
   },
   {
     id: "bin.loss-output",
     family: "stock-samples",
-    title: "Record loss (biochar bin)",
+    title: "Lost mass (biochar bin)",
     kind: "sheet",
     mode: "form",
     fill: "empty",
     errors: true,
     skip: noBin("biochar_bin", "biochar"),
-    open: (page, ctx) => binMovementSheet(page, ctx, "biochar_bin", "Record loss"),
-  },
-  {
-    id: "bin.count-output",
-    family: "stock-samples",
-    title: "Reconcile stock / count (biochar bin)",
-    kind: "sheet",
-    mode: "form",
-    fill: "empty",
-    errors: true,
-    skip: noBin("biochar_bin", "biochar"),
-    open: (page, ctx) => binMovementSheet(page, ctx, "biochar_bin", "Reconcile stock"),
+    open: (page, ctx) => binMovementSheet(page, ctx, "biochar_bin", "Adjust stock"),
   },
   {
     id: "bin.split-order",
@@ -246,7 +244,7 @@ const stockSamples: Surface[] = [
     fill: "filled",
     skip: noBin("biochar_bin", "biochar"),
     open: async (page, ctx) => {
-      const sheet = await binMovementSheet(page, ctx, "biochar_bin", "Record loss");
+      const sheet = await binMovementSheet(page, ctx, "biochar_bin", "Adjust stock");
       const wet = sheet.getByRole("textbox", { name: /^Wet mass removed/ }).or(sheet.getByLabel(/^Wet mass removed/)).first();
       await wet.fill(PREVIEW_LOSS_KG);
       await settle(page, sheet);
@@ -268,7 +266,7 @@ const stockSamples: Surface[] = [
   {
     id: "bin.history-feedstock",
     family: "stock-samples",
-    title: "Reconciliation history (feedstock bin)",
+    title: "Stock history (feedstock bin)",
     kind: "dialog",
     mode: "read",
     fill: "none",
@@ -284,27 +282,6 @@ const stockSamples: Surface[] = [
     fill: "none",
     skip: noBin("biochar_bin", "biochar"),
     open: (page, ctx) => binHistory(page, ctx, "biochar_bin"),
-  },
-  {
-    id: "bin.correction",
-    family: "stock-samples",
-    title: "Stock history correction",
-    kind: "dialog",
-    mode: "form",
-    fill: "filled",
-    skip: noBin("product_bin", "product"),
-    open: async (page, ctx) => {
-      for (const type of ["product_bin", "biochar_bin"] as const) {
-        if (!findBin(ctx, { type })) continue;
-        const history = await binHistory(page, ctx, type);
-        const correct = history.getByRole("button", { name: /^Correct entry/ }).first();
-        if ((await correct.count()) === 0) continue;
-        await correct.click();
-        await expect(history.getByRole("radio", { name: "Simple", exact: true })).toBeAttached();
-        return lastDialog(page);
-      }
-      return "no correctable loss, count or delivery movement on the seeded output bins";
-    },
   },
   {
     id: "quick-add.storage-bin",

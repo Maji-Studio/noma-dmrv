@@ -17,20 +17,22 @@ import { SubBinInfo, subBinMoistureText, subBinWetText } from "./sub-bin-card";
 interface Props {
   isOpen: boolean;
   onClose: () => void;
-  /** All sub-bins in the bin, oldest first. */
+  /** All sub-bins in the bin, in its default draw order. */
   subBins: OutputSubBin[];
-  /** Null means oldest first, every sub-bin ticked. */
+  /** Null means the default order, every sub-bin ticked. */
   order: string[] | null;
+  /** The bin's default order by name, such as "Oldest first". */
+  defaultOrderLabel: string;
   onApply: (order: string[] | null) => void;
   timeZone: string;
 }
 
-/** Oldest first is every sub-bin ticked in its original order; anything else is the operator's order. */
-function isOldestFirst(order: readonly string[], subBins: readonly OutputSubBin[]) {
+/** The default is every sub-bin ticked in its original order; anything else is the operator's order. */
+function isDefaultOrder(order: readonly string[], subBins: readonly OutputSubBin[]) {
   return order.length === subBins.length && order.every((id, index) => id === subBins[index].layerId);
 }
 
-export function SubBinOrderDialog({ isOpen, onClose, subBins, order, onApply, timeZone }: Props) {
+export function SubBinOrderDialog({ isOpen, onClose, subBins, order, defaultOrderLabel, onApply, timeZone }: Props) {
   const titleId = useId();
   const [draft, setDraft] = useState<string[]>([]);
   const [dragged, setDragged] = useState<string | null>(null);
@@ -57,7 +59,7 @@ export function SubBinOrderDialog({ isOpen, onClose, subBins, order, onApply, ti
     refocus(controlId("tick", id));
   };
   const apply = () => {
-    onApply(isOldestFirst(draft, subBins) ? null : draft);
+    onApply(isDefaultOrder(draft, subBins) ? null : draft);
     onClose();
   };
 
@@ -123,7 +125,7 @@ export function SubBinOrderDialog({ isOpen, onClose, subBins, order, onApply, ti
         {draft.length === 0 && <p role="alert" className="body-caption text-[var(--color-status-error)]">Tick at least one sub-bin.</p>}
         <p aria-live="polite" className="sr-only">{announcement}</p>
         <div className="flex flex-wrap items-center justify-between gap-8">
-          <Button type="button" variant="noOutline" disabled={isOldestFirst(draft, subBins)} onClick={() => { setDraft(subBins.map(s => s.layerId)); setAnnouncement("Every sub-bin is back in the load, oldest first."); }}>Reset to oldest first</Button>
+          <Button type="button" variant="noOutline" disabled={isDefaultOrder(draft, subBins)} onClick={() => { setDraft(subBins.map(s => s.layerId)); setAnnouncement(`Every sub-bin is back in the load, ${defaultOrderLabel.toLowerCase()}.`); }}>{`Reset to ${defaultOrderLabel.toLowerCase()}`}</Button>
           <div className="flex gap-8">
             <Button type="button" variant="weak" onClick={onClose}>Cancel</Button>
             <Button type="button" variant="primary" disabled={draft.length === 0} onClick={apply}>Use this order</Button>
