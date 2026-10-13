@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+import { canonicalJson } from "@/lib/canonical-json";
 import { ApiHttpError } from "./http-error";
 
 // Encode the parser's safe-integer bound in the published string pattern too.
@@ -15,6 +17,16 @@ export const STRONG_ETAG_PATTERN = new RegExp(`^"(${positiveSafeInteger})\\.(${p
 
 export function representationEtag(version: number, revision: number): string {
   return `"${version}.${revision}"`;
+}
+
+/**
+ * A strong ETag over a whole published body: sha256 of the canonical JSON of
+ * `{ revision, data }`, base64url without padding. Two bodies share it only
+ * when every published value matches. It is a read validator, not a version:
+ * it never matches `STRONG_ETAG_PATTERN`, so `parseIfMatch` refuses it.
+ */
+export function bodyHashEtag(revision: number, data: unknown): string {
+  return `"sha256-${createHash("sha256").update(canonicalJson({ revision, data })).digest("base64url")}"`;
 }
 
 export function parseIfMatch(value: string | null): { version: number; revision: number } {

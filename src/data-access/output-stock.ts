@@ -16,7 +16,7 @@ type Reader = Pick<DbTransaction, 'select'>;
 type ReadOptions = { includeArchived?: boolean; excludeUnresolvedRunId?: string };
 type OutputBinType = 'biochar_bin' | 'product_bin';
 /** An output bin already found in scope: whose facility its layers must share, and whether archived layers count. */
-interface OutputBinRef { id: string; type: OutputBinType; facilityId: string; includeArchived: boolean }
+export interface OutputBinRef { id: string; type: OutputBinType; facilityId: string; includeArchived: boolean }
 
 const isOutputBinType = (type: string): type is OutputBinType => type === 'biochar_bin' || type === 'product_bin';
 
@@ -39,7 +39,8 @@ export async function getOutputStockAllocationProjection(ctx: OrgContext, filter
 /**
  * Every saved row that shapes the layers of `bins`, in one query per table
  * whatever the bin count. Rows are grouped per bin in memory, where the
- * facility and archived rules of each bin apply.
+ * facility and archived rules of each bin apply. Each query is ordered, so the
+ * projection never depends on the order PostgreSQL returns rows in.
  */
 async function readLayerRows(ctx: OrgContext, bins: readonly OutputBinRef[], reader: Reader) {
   const biocharBinIds = bins.filter(bin => bin.type === 'biochar_bin').map(bin => bin.id);
@@ -47,13 +48,16 @@ async function readLayerRows(ctx: OrgContext, bins: readonly OutputBinRef[], rea
   const [runs, biocharSources, products, effects] = await Promise.all([
     biocharBinIds.length ? reader.select({ id: productionRuns.id, binId: productionRuns.biocharStorageLocationId, facilityId: productionRuns.facilityId, archivedAt: productionRuns.archivedAt,
       endTime: productionRuns.endTime, dryKg: sql<string | null>`${productionRuns.biocharDryMassKg}::text`, postingSequence: productionRuns.stockPostingSequence })
-      .from(productionRuns).where(and(eq(productionRuns.organizationId, ctx.organizationId), inArray(productionRuns.biocharStorageLocationId, biocharBinIds), eq(productionRuns.status, COMPLETED_PRODUCTION_RUN_STATUS))) : [],
+      .from(productionRuns).where(and(eq(productionRuns.organizationId, ctx.organizationId), inArray(productionRuns.biocharStorageLocationId, biocharBinIds), eq(productionRuns.status, COMPLETED_PRODUCTION_RUN_STATUS)))
+      .orderBy(asc(productionRuns.stockPostingSequence), asc(productionRuns.id)) : [],
     biocharBinIds.length ? reader.select({ binId: biocharProductSourceAllocations.sourceStorageLocationId, productId: biocharProductSourceAllocations.biocharProductId, runId: biocharProductSourceAllocations.productionRunId,
       dryKg: sql<string>`${biocharProductSourceAllocations.allocatedDryMassKg}::text` }).from(biocharProductSourceAllocations)
-      .where(and(eq(biocharProductSourceAllocations.organizationId, ctx.organizationId), inArray(biocharProductSourceAllocations.sourceStorageLocationId, biocharBinIds))) : [],
+      .where(and(eq(biocharProductSourceAllocations.organizationId, ctx.organizationId), inArray(biocharProductSourceAllocations.sourceStorageLocationId, biocharBinIds)))
+      .orderBy(asc(biocharProductSourceAllocations.biocharProductId), asc(biocharProductSourceAllocations.productionRunId)) : [],
     productBinIds.length ? reader.select({ id: biocharProducts.id, binId: biocharProducts.storageLocationId, facilityId: biocharProducts.facilityId, archivedAt: biocharProducts.archivedAt,
       placedAt: biocharProducts.placedAt, postingSequence: biocharProducts.stockPostingSequence, composition: biocharProducts.composition })
-      .from(biocharProducts).where(and(eq(biocharProducts.organizationId, ctx.organizationId), inArray(biocharProducts.storageLocationId, productBinIds))) : [],
+      .from(biocharProducts).where(and(eq(biocharProducts.organizationId, ctx.organizationId), inArray(biocharProducts.storageLocationId, productBinIds)))
+      .orderBy(asc(biocharProducts.stockPostingSequence), asc(biocharProducts.id)) : [],
     getOutputStockAllocationProjection(ctx, { sourceStorageLocationIds: bins.map(bin => bin.id) }, reader),
   ]);
   const productIds = products.map(product => product.id);
@@ -61,9 +65,11 @@ async function readLayerRows(ctx: OrgContext, bins: readonly OutputBinRef[], rea
     productIds.length ? reader.select({ productId: biocharProductSourceAllocations.biocharProductId, runId: biocharProductSourceAllocations.productionRunId, runFacilityId: productionRuns.facilityId,
       dryKg: sql<string>`${biocharProductSourceAllocations.allocatedDryMassKg}::text` })
       .from(biocharProductSourceAllocations).innerJoin(productionRuns, and(eq(productionRuns.id, biocharProductSourceAllocations.productionRunId), eq(productionRuns.organizationId, ctx.organizationId)))
-      .where(and(eq(biocharProductSourceAllocations.organizationId, ctx.organizationId), inArray(biocharProductSourceAllocations.biocharProductId, productIds))).orderBy(asc(biocharProductSourceAllocations.productionRunId)) : [],
+      .where(and(eq(biocharProductSourceAllocations.organizationId, ctx.organizationId), inArray(biocharProductSourceAllocations.biocharProductId, productIds)))
+      .orderBy(asc(biocharProductSourceAllocations.biocharProductId), asc(biocharProductSourceAllocations.productionRunId)) : [],
     productIds.length ? reader.select({ biocharProductId: productIngredientSnapshots.biocharProductId, formulationIngredientId: productIngredientSnapshots.formulationIngredientId, drySolidsKg: productIngredientSnapshots.drySolidsKg })
-      .from(productIngredientSnapshots).where(and(eq(productIngredientSnapshots.organizationId, ctx.organizationId), inArray(productIngredientSnapshots.biocharProductId, productIds))) : [],
+      .from(productIngredientSnapshots).where(and(eq(productIngredientSnapshots.organizationId, ctx.organizationId), inArray(productIngredientSnapshots.biocharProductId, productIds)))
+      .orderBy(asc(productIngredientSnapshots.biocharProductId), asc(productIngredientSnapshots.formulationIngredientId)) : [],
   ]);
   return { runs, biocharSources, products, productSources, ingredients, effects };
 }
@@ -239,4 +245,22 @@ export async function getLayerMoistureBases(ctx: OrgContext, bin: { id: string; 
   requireOrgScope(ctx);
   const rows = await readMoistureRows(ctx, [{ id: bin.id, type: bin.type === 'product_bin' ? 'product_bin' : 'biochar_bin' }], reader);
   return projectMoistureBases(layers, moistureRowsFor(bin, rows, options.ignoreMovementId));
+}
+
+/** Every row one bin's layers and moisture bases are projected from, read through `reader`. */
+export async function readOutputBinRows(ctx: OrgContext, bin: OutputBinRef, reader: Reader) {
+  requireOrgScope(ctx);
+  const [layers, moisture] = await Promise.all([readLayerRows(ctx, [bin], reader), readMoistureRows(ctx, [bin], reader)]);
+  return { layers, moisture };
+}
+export type OutputBinRows = Awaited<ReturnType<typeof readOutputBinRows>>;
+
+/** One bin's layers from its rows. Throws UnresolvedOutputStockError when its facts are incomplete. */
+export function projectOutputBinLayers(bin: OutputBinRef, rows: OutputBinRows): OutputStockLayer[] {
+  return projectBinLayers(bin, rows.layers);
+}
+
+/** The moisture bases of `layers` from the bin's rows; `ignoreMovementId` as in `getLayerMoistureBases`. */
+export function projectOutputBinMoistureBases(bin: OutputBinRef, layers: readonly OutputStockLayer[], rows: OutputBinRows, ignoreMovementId?: string): LayerMoistureBasis[] {
+  return projectMoistureBases(layers, moistureRowsFor(bin, rows.moisture, ignoreMovementId));
 }

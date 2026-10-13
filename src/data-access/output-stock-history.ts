@@ -1,4 +1,4 @@
-import { db } from '@/db';
+import { db, type DbTransaction } from '@/db';
 import { binMovements, biocharProducts, biocharProductSourceAllocations, productionRuns, storageLocations, users } from '@/db/schema';
 import type { OrgContext } from '@/lib/auth/server';
 import { SafeError } from '@/lib/errors';
@@ -8,18 +8,21 @@ import { and, asc, eq } from 'drizzle-orm';
 import { getOutputStockAllocationProjection } from './output-stock';
 import { requireOrgScope } from './utils';
 
-/** Intake facts retain their recorded wet mass; movement facts remain immutable. */
-export async function getOutputStockHistory(ctx: OrgContext, storageLocationId: string): Promise<OutputStockHistoryEntry[]> {
+/**
+ * Intake facts retain their recorded wet mass; movement facts remain immutable.
+ * A snapshot read passes its transaction as `reader`, so history and stock agree.
+ */
+export async function getOutputStockHistory(ctx: OrgContext, storageLocationId: string, reader: Pick<DbTransaction, 'select'> = db): Promise<OutputStockHistoryEntry[]> {
   requireOrgScope(ctx);
-  const [bin] = await db.select().from(storageLocations).where(and(eq(storageLocations.organizationId, ctx.organizationId), eq(storageLocations.id, storageLocationId)));
+  const [bin] = await reader.select().from(storageLocations).where(and(eq(storageLocations.organizationId, ctx.organizationId), eq(storageLocations.id, storageLocationId)));
   if (!bin) throw new SafeError('Storage bin not found');
-  const movements = await db.select({ movement: binMovements, actorName: users.name }).from(binMovements)
+  const movements = await reader.select({ movement: binMovements, actorName: users.name }).from(binMovements)
     .leftJoin(users, eq(users.id, binMovements.createdBy))
     .where(and(eq(binMovements.organizationId, ctx.organizationId), eq(binMovements.storageLocationId, storageLocationId))).orderBy(asc(binMovements.postingSequence));
-  const rows = await getOutputStockAllocationProjection(ctx, { sourceStorageLocationId: storageLocationId });
-  const products = await db.select().from(biocharProducts).where(and(eq(biocharProducts.organizationId, ctx.organizationId), eq(biocharProducts.storageLocationId, storageLocationId)));
-  const runs = await db.select().from(productionRuns).where(and(eq(productionRuns.organizationId, ctx.organizationId), eq(productionRuns.facilityId, bin.facilityId)));
-  const sources = await db.select().from(biocharProductSourceAllocations).where(eq(biocharProductSourceAllocations.organizationId, ctx.organizationId));
+  const rows = await getOutputStockAllocationProjection(ctx, { sourceStorageLocationId: storageLocationId }, reader);
+  const products = await reader.select().from(biocharProducts).where(and(eq(biocharProducts.organizationId, ctx.organizationId), eq(biocharProducts.storageLocationId, storageLocationId)));
+  const runs = await reader.select().from(productionRuns).where(and(eq(productionRuns.organizationId, ctx.organizationId), eq(productionRuns.facilityId, bin.facilityId)));
+  const sources = await reader.select().from(biocharProductSourceAllocations).where(eq(biocharProductSourceAllocations.organizationId, ctx.organizationId));
   const runCode = new Map(runs.map(r => [r.id, r.code]));
   const productCode = new Map(products.map(p => [p.id, p.code]));
   const history: OutputStockHistoryEntry[] = movements.filter(({ movement: m }) => m.outputKind).flatMap(({ movement: m, actorName }) => {
