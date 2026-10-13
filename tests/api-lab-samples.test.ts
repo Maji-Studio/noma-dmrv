@@ -163,7 +163,7 @@ describe("lab sample reads", { timeout: TIMEOUT_MS }, () => {
   });
 
   it("matches the legacy run's facility only for a sample with no credit batch", async () => {
-    const [other] = await db.insert(facilities).values({ organizationId: a.ctx.organizationId, code: `E2E-LAB-F2-${a.tag}`, name: `E2E Lab F2 ${a.tag}` }).returning();
+    const [other] = await db.insert(facilities).values({ timezone: "UTC", organizationId: a.ctx.organizationId, code: `E2E-LAB-F2-${a.tag}`, name: `E2E Lab F2 ${a.tag}` }).returning();
     const moved = await insertApiSample(a, {
       code: `SAM-API-MOVED-${a.tag}`, creditBatchId: a.batchA.id, productionRunId: a.runs[0].id, samplingTime: FIRST_SAMPLED, createdAt: "2026-10-01T14:00:00.000Z",
     });
