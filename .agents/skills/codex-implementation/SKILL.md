@@ -83,7 +83,7 @@ authority**.
 ## Example Prompt
 
 ```text
-Repository: /Users/kenji/Dropbox/Maji/18 Dark Earth Carbon/noma-dmrv (branch: <current>)
+Repository: <task worktree from scripts/worktree.sh new, never the main checkout> (branch: <current>)
 Artifact directory: <ARTIFACT_DIR> (write your report to report.md here)
 
 Goal: <one-sentence goal>.

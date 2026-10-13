@@ -140,5 +140,7 @@ or test gaps.
 ```
 
 Repo context worth adding when relevant: pnpm-only; layered architecture
-(components → hooks → fn → data-access → db) with `"use server"` + Zod in `fn/` and auth
-guards in every `data-access/` function; never log PII; kebab-case files; 1000-line cap.
+(components → hooks → fn → data-access → db) with `"use server"` + Zod in Server Action files
+in `fn/` (non-action helpers such as `with-action.ts` and `*-core.ts` must not carry it) and auth
+guards plus org scoping in normal `data-access/` functions (`// org-scope-ok:` seams are
+deliberate); never log PII; kebab-case files; 1000-line cap.
