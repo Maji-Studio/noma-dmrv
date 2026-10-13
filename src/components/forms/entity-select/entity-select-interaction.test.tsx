@@ -7,7 +7,7 @@ import { useForm } from "react-hook-form";
 import { Modal } from "@/components/ui/modal/modal";
 import type { EntityOption } from "./types";
 
-const state = vi.hoisted(() => ({ options: [] as EntityOption[], loading: false, error: null as Error | null }));
+const state = vi.hoisted(() => ({ options: [] as EntityOption[], loading: false, canManage: false, error: null as Error | null }));
 vi.mock("@/hooks/use-entities", () => ({
   useEntityOptions: ({ search }: { search: string }) => ({
     data: state.options.filter((option) => option.name.toLowerCase().includes(search.toLowerCase())),
@@ -21,11 +21,16 @@ vi.mock("./operator-quick-add-dialog", () => ({ OperatorQuickAddDialog: () => nu
 vi.mock("./vehicle-quick-add-dialog", () => ({ VehicleQuickAddDialog: () => null }));
 vi.mock("./feedstock-type-quick-add-dialog", () => ({ FeedstockTypeQuickAddDialog: () => null }));
 vi.mock("./formulation-quick-add-dialog", () => ({ FormulationQuickAddDialog: () => null }));
+vi.mock("@/hooks/use-entity-edit-record", () => ({
+  isEditableEntityType: (type: string) => !["facility", "creditBatch"].includes(type),
+  useCanManageFeedstockTypes: () => state.canManage,
+}));
 const scroll = vi.fn();
 let finePointer = true;
 beforeEach(() => {
   state.options = [{ id: "one", code: "1", name: "North bin" }, { id: "two", code: "2", name: "South bin" }];
   state.loading = false;
+  state.canManage = false;
   state.error = null;
   finePointer = true;
   scroll.mockClear();
@@ -270,4 +275,14 @@ describe("EntitySelect menu interactions", () => {
     expect(activeTestId()).toBe("entity-select-create");
     expect(scroll.mock.contexts.at(-1)).toBe(screen.getByTestId("entity-select-create"));
   });
+});
+
+it("shows feedstock-type Edit only with management permission", () => {
+  const props = { entityType: "feedstockType" as const, value: "one", allowEdit: true, onChange: vi.fn(), onEditSelected: vi.fn() };
+  const view = render(<EntitySelect {...props} />);
+  open(); expect(screen.queryByTestId("entity-select-edit")).toBeNull();
+  state.canManage = true; view.rerender(<EntitySelect {...props} />);
+  expect(screen.getByTestId("entity-select-edit")).toBeTruthy();
+  fireEvent.click(screen.getByTestId("entity-select-edit"));
+  expect(props.onEditSelected).toHaveBeenCalledOnce();
 });

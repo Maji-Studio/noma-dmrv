@@ -29,6 +29,8 @@ import {
 import type { ActionResult } from "@/types/actions";
 import { z } from "zod";
 import { withAction } from "./with-action";
+import { getOrderById } from "@/data-access/orders";
+import { uuidSchema } from "@/schemas/helpers";
 
 // ============================================
 // List/Query Operations
@@ -163,4 +165,8 @@ export async function deleteOrderFn(
     const validated = deleteOrderSchema.parse(data);
     await deleteOrder(ctx, validated.orderId, validated.expectedVersion);
   }, { fallbackMessage: "Failed to delete order" });
+}
+
+export async function getOrderByIdFn(id: string) {
+  return withAction((ctx) => getOrderById(ctx, uuidSchema().parse(id)));
 }

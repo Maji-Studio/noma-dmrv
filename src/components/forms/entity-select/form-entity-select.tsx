@@ -68,6 +68,7 @@ interface FormEntitySelectProps<
   /** Empty-list hint naming the upstream prerequisite (see EntitySelectProps). */
   emptyHint?: EntitySelectProps["emptyHint"];
   /** Also available when selection is locked with selectionLocked. */
+  allowEdit?: boolean;
   onEditSelected?: EntitySelectProps["onEditSelected"];
   editLabel?: string;
 }
@@ -97,6 +98,7 @@ export function FormEntitySelect<
   showRemainingDryMass = true,
   dependsOn,
   emptyHint,
+  allowEdit,
   onEditSelected,
   editLabel,
 }: FormEntitySelectProps<TFieldValues, TName>) {
@@ -135,6 +137,7 @@ export function FormEntitySelect<
         hideSearch={hideSearch}
         showRemainingDryMass={showRemainingDryMass}
         emptyHint={emptyHint}
+        allowEdit={allowEdit}
         onEditSelected={onEditSelected}
         editLabel={editLabel}
       />

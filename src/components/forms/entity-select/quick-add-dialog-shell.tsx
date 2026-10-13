@@ -69,7 +69,7 @@ export function QuickAddDialogShell({
         </div>
 
         {/* Form content */}
-        <div className="p-24 flex flex-col gap-24">
+        <div className="p-24 flex flex-col gap-24" onSubmit={stopSubmitBubbling}>
           {children}
         </div>
       </div>
