@@ -16,10 +16,14 @@ vi.mock("@/components/forms", async () => {
     FormActions: ({
       submitDisabled,
       submitLabel,
+      showSubmit = true,
+      submitVariant,
     }: {
       submitDisabled?: boolean;
       submitLabel?: string;
-    }) => <button disabled={submitDisabled}>{submitLabel}</button>,
+      showSubmit?: boolean;
+      submitVariant?: string;
+    }) => showSubmit ? <button data-variant={submitVariant} disabled={submitDisabled}>{submitLabel}</button> : null,
     FormField: ({
       label,
       children,
@@ -102,7 +106,7 @@ beforeEach(() => {
 });
 
 describe("FacilityCertifierSection", () => {
-  it("keeps the disabled link action visible until a project is selected", () => {
+  it("hides the link action until a project is selected", () => {
     const markup = renderToStaticMarkup(
       <FacilityCertifierSection
         facilityId="facility-1"
@@ -113,8 +117,7 @@ describe("FacilityCertifierSection", () => {
     );
 
     expect(markup).toContain("Select a project");
-    expect(markup).toContain(">Link project<");
-    expect(markup).toContain("disabled");
+    expect(markup).not.toContain(">Link project<");
     expect(markup).not.toContain("Default Removal template");
     expect(markup).not.toContain("Isometric facility ID");
   });
@@ -154,6 +157,7 @@ describe("FacilityCertifierSection", () => {
     expect(markup).toContain("Default Removal template");
     expect(markup).toContain("Isometric facility ID");
     expect(markup).toContain("Save changes");
+    expect(markup).toContain('data-variant="default"');
   });
 
   it("restores persisted project fields after switching away and back", async () => {

@@ -709,22 +709,17 @@ const settingsAuth: Surface[] = [
   })),
 ];
 
-/**
- * The onboarding wizard and setup guide (dashboard-view.tsx) render only for
- * an org owner or admin whose org has no facility or an unfinished required
- * setup step. No route or query opens them, and reaching that state writes
- * (a new org or facility), so each step is listed with its reason.
- */
-const ONBOARDING_STEPS = ["welcome", "facility", "reactor", "registry", "setup-guide"] as const;
+/** Setup surfaces require an unfinished organization in this read-only capture harness. */
+const ONBOARDING_STEPS = ["facility", "reactor", "registry", "setup-guide"] as const;
 const onboarding: Surface[] = ONBOARDING_STEPS.map((step): Surface => ({
   id: `onboarding.${step}`,
   family: "settings-auth-onboarding",
-  title: step === "setup-guide" ? "Onboarding setup guide" : `Onboarding wizard, ${step} step`,
+  title: step === "setup-guide" ? "Dashboard setup guide" : `Dashboard setup, ${step}`,
   kind: step === "setup-guide" ? "page" : "dialog",
   mode: "form",
   fill: "empty",
   skip: (ctx) =>
-    `unreachable without writes: the org has a facility (${ctx.facility.code}); the wizard and guide render only for an org with no facility or an unfinished required setup step, and no route opens them`,
+    `unreachable without writes: facility ${ctx.facility.code} is already set up; the dashboard guide appears only while required setup is incomplete`,
   open: async () => "unreachable without writes",
 }));
 

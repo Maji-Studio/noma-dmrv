@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { FormDialog } from "@/components/ui/form-dialog";
 import { Modal } from "@/components/ui/modal";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { useToast } from "@/components/ui/toast";
@@ -119,7 +120,7 @@ export function OrganizationAdminRow({ org, apiAccessEnabled, entering, onEnter 
           </div>
         </div>
       </Modal>
-      <Modal
+      <FormDialog
         isOpen={keysOpen}
         onClose={() => setKeysOpen(false)}
         dismissible={!saving}
@@ -137,7 +138,7 @@ export function OrganizationAdminRow({ org, apiAccessEnabled, entering, onEnter 
             onSavingChange={setSaving}
           />
         </div>
-      </Modal>
+      </FormDialog>
     </>
   );
 }

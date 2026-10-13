@@ -4,10 +4,11 @@
  */
 "use client";
 
-import { useState, type ChangeEvent } from "react";
+import { useContext, useState, type ChangeEvent } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Modal } from "@/components/ui";
+import { FormDialogContext } from "@/components/ui/form-dialog-context";
+import { FormDialog } from "@/components/ui/form-dialog";
 import {
   FormActions,
   FormField,
@@ -43,7 +44,7 @@ export function FacilityCertifierDialog({
   loaderData,
 }: FacilityCertifierDialogProps) {
   return (
-    <Modal
+    <FormDialog
       isOpen={isOpen}
       onClose={onClose}
       ariaLabelledBy="facility-certifier-dialog-title"
@@ -57,7 +58,7 @@ export function FacilityCertifierDialog({
         onCancel={onClose}
         presentation="dialog"
       />
-    </Modal>
+    </FormDialog>
   );
 }
 
@@ -71,8 +72,7 @@ interface FacilityCertifierFormProps {
 
 /**
  * Shared project-link form. Dialog presentation remains available on routed
- * Settings surfaces; onboarding uses the inline presentation so a modal never
- * opens inside its wizard.
+ * Settings surfaces; the dashboard registry dialog uses inline presentation.
  */
 export function FacilityCertifierForm({
   facilityId,
@@ -98,12 +98,14 @@ export function FacilityCertifierForm({
     control,
     setValue,
     setError,
+    reset,
     formState: { errors, isSubmitting },
   } = useForm<SaveMappingInput>({
     resolver: zodResolver(saveMappingSchema),
     defaultValues,
   });
 
+  const dialogActions = useContext(FormDialogContext);
   const toast = useToast();
   const saveMutation = useSaveFacilityCertifierMapping();
 
@@ -185,6 +187,8 @@ export function FacilityCertifierForm({
     }
     try {
       await saveMutation.mutateAsync(data);
+      reset(data);
+      dialogActions?.markSaved(control);
       toast.success("Certifier mapping saved");
       onSaved?.();
     } catch (error) {
@@ -326,7 +330,9 @@ export function FacilityCertifierForm({
         onCancel={onCancel}
         isSubmitting={isSubmitting || saveMutation.isPending}
         errorMessage={errors.root?.serverError?.message}
-        submitDisabled={blockedOnShareAck || !watchedProjectId}
+        submitDisabled={blockedOnShareAck}
+        showSubmit={!!watchedProjectId}
+        submitVariant="default"
         submitLabel={mapping ? "Save changes" : "Link project"}
         sticky={presentation === "dialog"}
       />

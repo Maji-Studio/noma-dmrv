@@ -1,9 +1,19 @@
 import { describe, expect, it } from "vitest";
-import { CERTIFIER_CREDENTIAL_MASK } from "@/schemas/organizations";
+import { CERTIFIER_CREDENTIAL_MASK, maskedSecretDisplay } from "@/schemas/organizations";
 import {
   NOTHING_CHANGED_MESSAGE,
   resolveCredentialSubmission,
 } from "./organization-certifier-credentials";
+
+describe("maskedSecretDisplay", () => {
+  it("shows exactly four bullets followed by the saved suffix", () => {
+    expect(maskedSecretDisplay("Uwhl")).toBe("••••Uwhl");
+  });
+
+  it.each([undefined, null, ""])("shows exactly eight bullets without a suffix (%s)", (last4) => {
+    expect(maskedSecretDisplay(last4)).toBe("••••••••");
+  });
+});
 
 describe("resolveCredentialSubmission (Replace / Keep saved key contract)", () => {
   it("sends only the replaced key; the untouched one stays undefined", () => {

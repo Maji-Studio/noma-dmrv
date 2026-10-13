@@ -66,6 +66,18 @@ describe("FormActions", () => {
     expect(markup).not.toContain("Cancel");
   });
 
+  it("hides an unnecessary submit action without leaving an empty footer", () => {
+    const markup = renderToStaticMarkup(<FormActions showSubmit={false} submitLabel="Save keys" />);
+    expect(markup).not.toContain("Save keys");
+    expect(markup).not.toContain("border-t");
+  });
+
+  it("renders secondary submit actions with the outline style", () => {
+    const markup = renderToStaticMarkup(<FormActions submitLabel="Link project" submitVariant="default" />);
+    expect(markup).toContain("bg-transparent");
+    expect(markup).not.toContain("text-white");
+  });
+
   it("keeps Cancel as the default secondary action label", () => {
     const markup = renderToStaticMarkup(
       <FormActions submitLabel="Save record" onCancel={() => undefined} />,

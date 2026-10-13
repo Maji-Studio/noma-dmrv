@@ -16,7 +16,7 @@ import * as React from "react";
 import { FormDetailProvider, FormDetailControl } from "@/components/forms/form-detail-context";
 import { SlideOverPanel } from "@/components/ui/slide-over-panel";
 import { Button } from "@/components/ui/button";
-import { Modal } from "@/components/ui/modal";
+import { DiscardChangesDialog } from "@/components/ui/discard-changes-dialog";
 import {
   DetailSpine,
   type DetailPanelSection,
@@ -134,7 +134,6 @@ function EntitySideSheet({
   const [pendingDiscard, setPendingDiscard] = React.useState<
     "close" | "view" | null
   >(null);
-  const discardTitleId = React.useId();
 
   // Imperative scrollport work (sanctioned useEffect): the body element
   // persists across view -> edit, so without a reset the edit form inherits
@@ -286,36 +285,15 @@ function EntitySideSheet({
 
         {/* Unsaved-changes guard: Escape, backdrop, close icon, Cancel and the
             back arrow all funnel here instead of discarding typed work. */}
-        <Modal
+        <DiscardChangesDialog
           isOpen={pendingDiscard !== null}
           onClose={() => setPendingDiscard(null)}
-          ariaLabelledBy={discardTitleId}
-          width="sm"
-        >
-          <div className="flex flex-col gap-16">
-            <h2 id={discardTitleId} className="title-heading-4">
-              Discard unsaved changes?
-            </h2>
-            <p className="body-small text-[var(--color-text-secondary)]">
-              This form has changes that are not saved.
-            </p>
-            <div className="flex items-center justify-start gap-16">
-              <Button
-                variant="destructive"
-                onClick={() => {
-                  const action = pendingDiscard;
-                  setPendingDiscard(null);
-                  if (action) confirmDiscard(action);
-                }}
-              >
-                Discard changes
-              </Button>
-              <Button variant="default" onClick={() => setPendingDiscard(null)}>
-                Keep editing
-              </Button>
-            </div>
-          </div>
-        </Modal>
+          onDiscard={() => {
+            const action = pendingDiscard;
+            setPendingDiscard(null);
+            if (action) confirmDiscard(action);
+          }}
+        />
       </SlideOverPanel.Content>
     </SlideOverPanel.Root>
     </FormDetailProvider>

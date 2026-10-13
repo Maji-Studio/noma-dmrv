@@ -20,6 +20,7 @@
 import { type ReactNode, useEffect, useRef } from "react";
 import { Dialog } from "@base-ui/react/dialog";
 import { cn } from "@/lib/utils";
+import { FormDialogContext } from "@/components/ui/form-dialog-context";
 import { SideSheetActionsContext } from "@/components/ui/entity-side-sheet/side-sheet-context";
 
 /**
@@ -182,7 +183,9 @@ export function Modal({
               own interaction scope, so a FormActions Cancel in here must not
               navigate the sheet underneath. */}
           <SideSheetActionsContext.Provider value={null}>
-            <div className={contentClassName}>{children}</div>
+            <FormDialogContext.Provider value={null}>
+              <div className={contentClassName}>{children}</div>
+            </FormDialogContext.Provider>
           </SideSheetActionsContext.Provider>
         </Dialog.Popup>
       </Dialog.Portal>

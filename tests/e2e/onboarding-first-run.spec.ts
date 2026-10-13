@@ -1,13 +1,4 @@
-/**
- * First-run onboarding — the wizard and the getting-started guide, driven as a
- * brand-new org Owner (the plan's target persona).
- *
- * The shared seeded org already has facilities, so the wizard would never
- * auto-open there. This spec provisions its own empty org + owner user
- * (mirroring the auth-fixtures seeding idiom), signs in through the auth API,
- * and walks: auto-opened wizard → facility → reactor → registry → guide spine
- * → collapse/expand → supplier CTA round-trip → self-clearing step state.
- */
+/** First-run dashboard guide for a fresh organization, using normal create surfaces. */
 import { eq } from "drizzle-orm";
 import { hashPassword } from "better-auth/crypto";
 import { expect, test } from "./fixtures";
@@ -30,7 +21,7 @@ const OWNER = {
 };
 
 test.describe("First-run onboarding", () => {
-  test("wizard auto-opens for a fresh org and the guide walks the chain", async ({
+  test("the dashboard guide opens shared forms and advances after creation", async ({
     adminPage,
     browser,
     baseURL,
@@ -75,63 +66,58 @@ test.describe("First-run onboarding", () => {
     try {
       context = await createDirectAuthContext(browser, OWNER, baseURL!);
       const page = await context.newPage();
-      // 1. The wizard auto-opens on a zero-facility org.
       await page.goto("/dashboard");
-      const wizard = page.getByRole("dialog", { name: "Set up your facility" });
-      await expect(wizard).toBeVisible();
-      await expect(wizard.getByText("Welcome")).toBeVisible();
+      const guide = page.getByRole("region", { name: "Getting started" });
+      await expect(guide).toBeVisible();
+      await expect(page.getByRole("dialog")).toHaveCount(0);
+      await expect(guide.getByText("0 of 7 done")).toBeVisible();
+      const activeStep = guide.locator('[aria-current="step"]');
+      await expect(activeStep.getByRole("button", { name: "Add facility" })).toBeVisible();
+      await expect(guide.getByRole("button", { name: "Register reactor" })).toBeDisabled();
+      await expect(guide.getByRole("button", { name: "Connect registry" })).toBeDisabled();
 
-      // 2. Facility step — the real facility form shows the active tier and
-      // the locked future pathway.
-      await wizard.getByRole("button", { name: "Get started" }).click();
-      await expect(wizard.getByLabel(/facility name/i)).toBeVisible();
-      await expect(
-        wizard.getByRole("button", { name: "Skip setup", exact: true }),
-      ).toHaveCount(1);
-      await expect(
-        wizard.getByRole("button", { name: "Cancel", exact: true }),
-      ).toHaveCount(0);
-      const tierGroup = wizard.getByRole("radiogroup", {
-        name: "Durability tier",
-      });
-      await expect(tierGroup).toBeVisible();
-      await expect(
-        tierGroup.getByRole("radio", { name: /1000-year/i }),
-      ).toHaveAttribute("aria-checked", "true");
-      await expect(
-        tierGroup.getByRole("radio", { name: /200-year/i }),
-      ).toHaveAttribute("aria-disabled", "true");
-      await wizard.getByLabel(/facility name/i).fill("CU Test Facility");
-      await wizard.getByLabel(/country/i).fill("Tanzania");
-      await wizard.getByLabel(/timezone/i).fill("Nairobi");
-      await page
-        .getByRole("option", { name: "Africa/Nairobi (UTC+3)" })
-        .click();
-      await wizard.getByRole("button", { name: "Add facility" }).click();
+      await guide.getByRole("button", { name: "Add facility" }).click();
+      const facilitySheet = page.getByRole("dialog", { name: "Create facility" });
+      await expect(facilitySheet.getByRole("button", { name: "Cancel", exact: true })).toBeVisible();
+      const tierGroup = facilitySheet.getByRole("radiogroup", { name: "Durability tier" });
+      await expect(tierGroup.getByRole("radio", { name: /1000-year/i })).toHaveAttribute("aria-checked", "true");
+      await expect(tierGroup.getByRole("radio", { name: /200-year/i })).toHaveAttribute("aria-disabled", "true");
+      await facilitySheet.getByRole("textbox", { name: /facility name/i }).fill(`E2E Onboarding Facility ${RUN_TAG}`);
+      await facilitySheet.getByRole("textbox", { name: /^country/i }).fill("Tanzania");
+      await facilitySheet.getByRole("combobox", { name: /timezone/i }).fill("Nairobi");
+      await page.getByRole("option", { name: "Africa/Nairobi (UTC+3)" }).click();
+      await facilitySheet.getByRole("button", { name: "Create facility", exact: true }).click();
+      await expect(facilitySheet).not.toBeVisible();
+      await expect(page).toHaveURL(/\/dashboard(?:[/?#]|$)/);
+      await expect(guide.getByText("1 of 7 done")).toBeVisible();
+      await expect(activeStep.getByRole("button", { name: "Register reactor" })).toBeVisible();
 
-      // 3. Reactor step.
-      await expect(
-        wizard.getByRole("button", { name: "Register reactor" }),
-      ).toBeVisible();
-      await expect(
-        wizard.getByRole("button", { name: "Skip setup", exact: true }),
-      ).toHaveCount(1);
-      await expect(
-        wizard.getByRole("button", { name: "Cancel", exact: true }),
-      ).toHaveCount(0);
-      await wizard.getByLabel(/identifier/i).fill("CU-R1");
-      await wizard.getByLabel(/reactor type/i).selectOption({ index: 1 });
-      await wizard
-        .getByRole("button", { name: "Register reactor", exact: true })
-        .first()
-        .click();
+      await guide.getByRole("button", { name: "Register reactor" }).click();
+      const reactorSheet = page.getByRole("dialog", { name: "Create reactor" });
+      await reactorSheet.getByRole("textbox", { name: /^identifier/i }).fill(`E2E Onboarding Reactor ${RUN_TAG}`);
+      await reactorSheet.getByRole("combobox", { name: /reactor type/i }).selectOption({ index: 1 });
+      await reactorSheet.getByRole("button", { name: "Create reactor", exact: true }).click();
+      await expect(reactorSheet).not.toBeVisible();
+      await expect(page).toHaveURL(/\/dashboard(?:[/?#]|$)/);
+      await expect(guide.getByText("2 of 7 done")).toBeVisible();
+      await expect(activeStep.getByRole("button", { name: "Connect registry" })).toBeVisible();
 
-      // 4. Registry step — picker cards + self-serve credentials on the NEW org.
-      await expect(wizard.getByText("Puro.earth")).toBeVisible();
-      await expect(wizard.getByText("CSI")).toBeVisible();
-      await expect(wizard.getByText(/coming soon/i).first()).toBeVisible();
-      await expect(wizard.getByLabel("Access token")).toBeVisible();
-      await expect(wizard.getByLabel("Client secret")).toBeVisible();
+      await guide.getByRole("button", { name: "Connect registry" }).click();
+      const registry = page.getByRole("dialog", { name: "Connect your registry", exact: true });
+      await expect(registry.getByText("Puro.earth")).toBeVisible();
+      await expect(registry.getByText("CSI")).toBeVisible();
+      await expect(registry.getByLabel("Access token")).toBeVisible();
+      await expect(registry.getByLabel("Client secret")).toBeVisible();
+      await registry.getByLabel("Access token").fill("e2e-unsaved-token");
+      await page.keyboard.press("Escape");
+      const discard = page.getByRole("dialog", { name: "Discard unsaved changes?" });
+      await expect(discard).toBeVisible();
+      await discard.getByRole("button", { name: "Keep editing" }).click();
+      await expect(registry.getByLabel("Access token")).toHaveValue("e2e-unsaved-token");
+      await registry.getByRole("button", { name: "Close", exact: true }).click();
+      await discard.getByRole("button", { name: "Discard changes" }).click();
+      await expect(registry).not.toBeVisible();
+      await expect(page).toHaveURL(/\/dashboard(?:[/?#]|$)/);
 
       // Credential writes verify against live Isometric. Keep this PR-shard
       // journey hermetic: seed the encrypted row directly, then exercise the
@@ -151,17 +137,10 @@ test.describe("First-run onboarding", () => {
       await expect(organization.getByText("Keys saved")).toBeVisible();
       await organization.getByRole("button", { name: "Isometric keys" }).click();
       await expect(
-        adminPage.getByRole("dialog").getByText("Ends 9999", { exact: false }),
+        adminPage.getByRole("dialog").getByText("••••9999", { exact: false }),
       ).toBeVisible();
 
-      // 5. Finish → the guide takes over the dashboard body.
-      await wizard.getByRole("button", { name: "Finish" }).click();
-      await expect(wizard).not.toBeVisible();
-      const guide = page.getByRole("region", { name: "Getting started" });
-      await expect(guide).toBeVisible();
-      await expect(
-        guide.getByText("Build your first traceability chain"),
-      ).toBeVisible();
+      await expect(guide.getByText("Build your first traceability chain")).toBeVisible();
       // Credentials alone don't complete the registry step — done-ness needs
       // the facility↔project LINK, which fake keys can't produce. Honest
       // derivation: 2 of 7, registry stays the single active step.
@@ -177,13 +156,13 @@ test.describe("First-run onboarding", () => {
       await page.getByRole("button", { name: "Show guide" }).click();
       await expect(guide).toBeVisible();
 
-      // 7. Supplier round-trip via its upcoming-step link: create sheet
+      // Supplier round-trip via its secondary action: create sheet
       // deep-link, then the step self-clears on client-side dashboard return.
-      await guide.getByRole("link", { name: "Add supplier" }).click();
+      await guide.getByRole("button", { name: "Add supplier" }).click();
       await expect(page).toHaveURL(/\/suppliers/);
       const sheet = page.getByRole("dialog", { name: "Create supplier" });
       await expect(sheet.getByLabel(/supplier name|^name/i)).toBeVisible();
-      await sheet.getByLabel(/supplier name|^name/i).fill("CU Test Supplier");
+      await sheet.getByLabel(/supplier name|^name/i).fill(`E2E Onboarding Supplier ${RUN_TAG}`);
       // Suppliers require at least one committed source location: open the
       // nested dialog, fill its required fields (country and GPS position),
       // and commit it before returning to the still-open supplier sheet.
@@ -197,7 +176,7 @@ test.describe("First-run onboarding", () => {
         name: "Location name",
       });
       await expect(locationName).toBeVisible();
-      await locationName.fill("CU Source Site");
+      await locationName.fill("E2E Onboarding Source Site");
       await locationDialog.getByLabel("Country").fill("Tanzania");
       const lat = locationDialog.getByRole("spinbutton", {
         name: /^GPS latitude(?: Required)?$/,
@@ -214,7 +193,7 @@ test.describe("First-run onboarding", () => {
       await expect(locationDialog).not.toBeVisible();
       await expect(sheet).toBeVisible();
       // Dialog committed → exactly one pending location row in the supplier sheet.
-      await expect(sheet.getByText("CU Source Site")).toBeVisible();
+      await expect(sheet.getByText("E2E Onboarding Source Site")).toBeVisible();
       await sheet.getByRole("button", { name: "Create supplier" }).click();
       // The sheet closes only after the create mutation succeeds — wait for it
       // so the dashboard return can't race the in-flight write.
@@ -225,12 +204,10 @@ test.describe("First-run onboarding", () => {
       await expect(page).toHaveURL(/\/dashboard(?:[/?#]|$)/);
       await expect(guide.getByText("3 of 7 done")).toBeVisible();
 
-      // 8. With a facility present the wizard never auto-opens again.
+      // Returning to the dashboard keeps the guide visible without opening a dialog.
       await page.reload();
       await expect(guide).toBeVisible();
-      await expect(
-        page.getByRole("dialog", { name: "Set up your facility" }),
-      ).not.toBeVisible();
+      await expect(page.getByRole("dialog")).toHaveCount(0);
     } finally {
       // The harness may have already torn the context down on test timeout.
       await context?.close().catch(() => {});

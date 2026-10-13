@@ -43,8 +43,17 @@ export type CreateOrganizationInput = z.infer<typeof createOrganizationSchema>;
  * First-time credential entry: both halves have to be typed, because there is
  * nothing stored to fall back on.
  */
-const MASK_CHARACTER = "\u2022";
+export const MASK_CHARACTER = "\u2022";
 export const CERTIFIER_CREDENTIAL_MASK = MASK_CHARACTER.repeat(16);
+const MASKED_SECRET_PREFIX_LENGTH = 4;
+const MASKED_SECRET_DISPLAY_LENGTH = 8;
+
+export function maskedSecretDisplay(last4?: string | null): string {
+  return last4
+    ? MASK_CHARACTER.repeat(MASKED_SECRET_PREFIX_LENGTH) + last4
+    : MASK_CHARACTER.repeat(MASKED_SECRET_DISPLAY_LENGTH);
+}
+
 const MASK_CONTAMINATION_MESSAGE =
   "Remove the masked placeholder before entering a key.";
 

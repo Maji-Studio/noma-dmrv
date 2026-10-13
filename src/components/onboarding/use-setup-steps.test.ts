@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { OnboardingStatus } from "@/data-access/onboarding";
 import { buildStepHref } from "./onboarding-constants";
-import { resolveMode } from "./use-onboarding-gate";
+import { resolveMode } from "./use-setup-guide";
 import { deriveSetupProgress } from "./use-setup-steps";
 
 const FACILITY_ID = "3e0a4a86-1af9-4b39-a97e-08fbd8b0f1aa";
@@ -118,7 +118,11 @@ describe("resolveMode", () => {
   it("takes over a zero-facility org by role", () => {
     const fresh = makeStatus({ facilityCount: 0, supplierCount: 0, facility: null });
     expect(mode(fresh, { facilityId: null })).toBe("takeover-guide");
+    expect(mode(fresh, { facilityId: null, collapsed: true })).toBe("takeover-guide");
     expect(mode({ ...fresh, isOwnerOrAdmin: false }, { facilityId: null })).toBe(
+      "takeover-member",
+    );
+    expect(mode({ ...fresh, isOwnerOrAdmin: false }, { facilityId: null, collapsed: true })).toBe(
       "takeover-member",
     );
   });
@@ -163,7 +167,7 @@ describe("resolveMode", () => {
     expect(mode(preOperational)).toBe("takeover-member");
 
     // Reactor exists → the Member gets the real dashboard even though later
-    // steps (e.g. the platform-admin-gated registry link) are still open.
+    // steps (e.g. the admin-managed registry link) are still open.
     const operational = makeStatus({
       isOwnerOrAdmin: false,
       facility: { ...makeStatus().facility!, registryConnected: false },

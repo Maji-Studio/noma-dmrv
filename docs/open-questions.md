@@ -220,8 +220,7 @@ Pure starter residue; org scoping came later via ADR 0010.
 ### Registry picker needs approved Puro Earth / CSI logo assets (`onboarding/registry-picker-logos`, opened 2026-07-22)
 
 - The archived onboarding plan
-  ([`2026-07-21-onboarding.md`](./archive/plans/2026-07-21-onboarding.md)) asks the wizard's
-  registry step to show Puro Earth and CSI greyed **with their logos**.
+  ([`2026-07-21-onboarding.md`](./archive/plans/2026-07-21-onboarding.md)) asks the registry picker to show Puro Earth and CSI greyed **with their logos**.
   `src/components/certification/registry-picker.tsx` deliberately renders styled
   text wordmarks instead: we hold no approved logo files, and bundling
   unofficial reproductions of third-party registry branding is worse than no

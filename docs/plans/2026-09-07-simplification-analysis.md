@@ -214,7 +214,7 @@ All LOC figures are estimates. Where I re-measured, the corrected number is give
 
 **Files:** `src/components/certification/index.ts`, `blueprint-list.tsx` (44), `certify-panel.tsx` (236), `telemetry-panel.tsx` (164).
 
-**Evidence and verification result: confirmed.** Exactly five files import `@/components/certification`: `src/app/(app)/certification/layout.tsx`, `src/app/(app)/certification/settings/page.tsx`, `src/components/facilities/facility-form.tsx`, `facility-list.tsx`, and `src/components/onboarding/wizard-registry-step.tsx`. Every other component in the folder is imported by relative path from inside it, so the remaining 21 barrel lines are re-export noise. `BlueprintList` and `CertifyPanel` appear only in their own file plus the barrel line; `CertifyPanel`'s only other mention is a stale docstring at `sources-panel.tsx:11`.
+**Evidence and verification result: confirmed.** Exactly five files import `@/components/certification`: `src/app/(app)/certification/layout.tsx`, `src/app/(app)/certification/settings/page.tsx`, `src/components/facilities/facility-form.tsx`, `facility-list.tsx`, and the onboarding registry step (since removed). Every other component in the folder is imported by relative path from inside it, so the remaining 21 barrel lines are re-export noise. `BlueprintList` and `CertifyPanel` appear only in their own file plus the barrel line; `CertifyPanel`'s only other mention is a stale docstring at `sources-panel.tsx:11`.
 
 **Proposal.** Delete `blueprint-list.tsx` and `certify-panel.tsx` (leave `telemetry-panel.tsx` to finding 9), cut `index.ts` to the symbols the five external importers use, and fix the stale `sources-panel.tsx:11` comment.
 

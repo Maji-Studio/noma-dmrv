@@ -46,15 +46,16 @@ interface FacilityCertifierSectionProps {
   /**
    * Drop the section's own border-top wrapper and "Certification" title when
    * the host already provides a titled block (the Certifier settings pane, the
-   * onboarding wizard's registry step). Management actions still render, below
+   * dashboard registry dialog). Management actions still render, below
    * the content rather than in the header the host owns.
    */
   embedded?: boolean;
   /**
    * Show project linking directly in the host instead of opening a dialog.
-   * Use inside an existing modal, such as the onboarding wizard.
+   * Use inside an existing modal, such as the dashboard registry dialog.
    */
   linkPresentation?: "dialog" | "inline";
+  onLinked?: () => void;
 }
 
 export function FacilityCertifierSection({
@@ -62,12 +63,14 @@ export function FacilityCertifierSection({
   canManage,
   embedded = false,
   linkPresentation = "dialog",
+  onLinked,
 }: FacilityCertifierSectionProps) {
   return canManage ? (
     <FacilityCertifierManage
       facilityId={facilityId}
       embedded={embedded}
       linkPresentation={linkPresentation}
+      onLinked={onLinked}
     />
   ) : (
     <FacilityCertifierReadOnly facilityId={facilityId} embedded={embedded} />
@@ -266,10 +269,12 @@ function FacilityCertifierManage({
   facilityId,
   embedded,
   linkPresentation,
+  onLinked,
 }: {
   facilityId: string;
   embedded: boolean;
   linkPresentation: "dialog" | "inline";
+  onLinked?: () => void;
 }) {
   const { data, isLoading, error } = useFacilityCertifierMapping(facilityId);
   const [editOpen, setEditOpen] = useState(false);
@@ -368,7 +373,10 @@ function FacilityCertifierManage({
                   <FacilityCertifierForm
                     facilityId={facilityId}
                     loaderData={data}
-                    onSaved={() => setEditOpen(false)}
+                    onSaved={() => {
+                      setEditOpen(false);
+                      onLinked?.();
+                    }}
                     onCancel={mapping ? () => setEditOpen(false) : undefined}
                     presentation="inline"
                   />
