@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { rational, storeRational } from './exact';
 import { BEFORE_LEDGER_SEQUENCE, outputStockBalance, preLedgerWetRemovals, projectBiocharLayers, projectMoistureBases, projectProductLayers, UnresolvedOutputStockError, type AllocationEffectRow, type CompletedRunRow } from './layer-projection';
 
-const run: CompletedRunRow = { id: 'run', dryKg: '100.000', endTime: new Date('2026-09-01T12:00:00.000Z'), postingSequence: BigInt(1) };
+const run: CompletedRunRow = { id: 'run', code: 'PR-0042', dryKg: '100.000', endTime: new Date('2026-09-01T12:00:00.000Z'), postingSequence: BigInt(1) };
 const noRows = { sources: [], effects: [] };
 
 /** A saved draw of `dryKg` from a layer, with the solids it took. */
@@ -15,12 +15,34 @@ function effect(id: string, layer: { productionRunId?: string; biocharProductId?
 }
 
 describe('biochar layers', () => {
+  it('names the production run to repair when dry biochar mass is missing', () => {
+    const unresolved = { ...run, dryKg: null };
+    expect(() => projectBiocharLayers({ runs: [unresolved], ...noRows })).toThrow(
+      'Production run PR-0042 has no dry biochar mass. Add the biochar wet mass and moisture to that run, then try again.',
+    );
+  });
+
+  it('says the dry biochar mass is zero rather than missing', () => {
+    expect(() => projectBiocharLayers({ runs: [{ ...run, dryKg: '0.000' }], ...noRows })).toThrow(
+      'Production run PR-0042 has zero dry biochar mass. Check its biochar wet mass and moisture, then try again.',
+    );
+  });
+
   it.each([null, 'NaN', 'Infinity', '0'])('treats run dry mass %s as unresolved', dryKg => {
     expect(() => projectBiocharLayers({ runs: [{ ...run, dryKg }], ...noRows })).toThrow(UnresolvedOutputStockError);
   });
 
   it('treats a run with no end time as unresolved', () => {
     expect(() => projectBiocharLayers({ runs: [{ ...run, endTime: null }], ...noRows })).toThrow(UnresolvedOutputStockError);
+    expect(() => projectBiocharLayers({ runs: [{ ...run, endTime: null }], ...noRows })).toThrow(
+      'Production run PR-0042 has no end time. Add the end time to that run, then try again.',
+    );
+  });
+
+  it('names both facts to repair when dry biochar mass and end time are missing', () => {
+    expect(() => projectBiocharLayers({ runs: [{ ...run, dryKg: null, endTime: null }], ...noRows })).toThrow(
+      'Production run PR-0042 has no dry biochar mass and no end time. Add the biochar wet mass, moisture and end time to that run, then try again.',
+    );
   });
 
   it('counts a product draw once when both its source snapshot and ledger allocation exist', () => {

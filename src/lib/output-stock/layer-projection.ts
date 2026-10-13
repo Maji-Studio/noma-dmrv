@@ -27,7 +27,7 @@ export interface AllocationEffectRow {
 /** A product's draw from a production run, saved when the product was made. */
 export interface SourceDrawRow { productId: string; runId: string; dryKg: string }
 
-export interface CompletedRunRow { id: string; endTime: Date | null; dryKg: string | null; postingSequence: bigint }
+export interface CompletedRunRow { id: string; code: string; endTime: Date | null; dryKg: string | null; postingSequence: bigint }
 
 export interface ProductRow { id: string; placedAt: Date | null; postingSequence: bigint; composition: unknown }
 
@@ -57,6 +57,14 @@ function isResolvedDryKg(dryKg: string | null): dryKg is string {
   return dryKg != null && Number.isFinite(Number(dryKg)) && Number(dryKg) > 0;
 }
 
+function unresolvedRunMessage(run: CompletedRunRow): string {
+  if (isResolvedDryKg(run.dryKg)) return `Production run ${run.code} has no end time. Add the end time to that run, then try again.`;
+  if (!run.endTime) return `Production run ${run.code} has no dry biochar mass and no end time. Add the biochar wet mass, moisture and end time to that run, then try again.`;
+  // Zero is a measurement, not an absence: the wet mass and moisture are there.
+  if (run.dryKg != null && Number(run.dryKg) === 0) return `Production run ${run.code} has zero dry biochar mass. Check its biochar wet mass and moisture, then try again.`;
+  return `Production run ${run.code} has no dry biochar mass. Add the biochar wet mass and moisture to that run, then try again.`;
+}
+
 /**
  * A biochar bin's layers: one per completed run. A product draw with ledger
  * allocations is counted from the ledger; its source snapshot then names the
@@ -74,7 +82,7 @@ export function projectBiocharLayers(rows: { runs: readonly CompletedRunRow[]; s
     }
     return false;
   }).map(run => {
-    if (!run.endTime || !isResolvedDryKg(run.dryKg)) throw new UnresolvedOutputStockError('Production dry mass or completion date is unresolved. Complete the production run mass and date.');
+    if (!run.endTime || !isResolvedDryKg(run.dryKg)) throw new UnresolvedOutputStockError(unresolvedRunMessage(run));
     const sourceDraw = preLedger.filter(s => s.runId === run.id).reduce((sum, s) => sum + grams(s.dryKg), BigInt(0));
     const runEffects = effects.filter(e => e.productionRunId === run.id);
     const ledgerDraw = runEffects.reduce((sum, e) => sum + gramsSigned(e.dryMassKg), BigInt(0));
