@@ -647,7 +647,7 @@ describe("EntitySelect caller-owned options", () => {
   it.each(["storage bin", "credit batch", "feedstock", "Removal template", "Isometric project"])("names the empty record type (%s) and keeps search-miss guidance", (optionLabel) => {
     render(<EntitySelect options={[]} optionLabel={optionLabel} onChange={vi.fn()} alwaysShowSearch />);
     open();
-    expect(screen.getByTestId("entity-select-empty").textContent).toBe(`No ${optionLabel.toLowerCase()} records yet.`);
+    expect(screen.getByTestId("entity-select-empty").textContent).toBe(`No ${optionLabel} records yet.`);
     fireEvent.change(screen.getByTestId("entity-select-search"), { target: { value: "missing" } });
     expect(screen.getByTestId("entity-select-empty").textContent).toBe("No matches. Change or clear your search.");
   });
