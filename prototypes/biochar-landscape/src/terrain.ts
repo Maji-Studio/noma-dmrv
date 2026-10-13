@@ -4,7 +4,7 @@ import { STEPS } from './process-data';
 import * as THREE from 'three';
 import { PALETTE, box, beam, material } from './model-kit';
 import { LAND, elevation, siteElevation } from './terrain-height';
-import lightBake from './terrain-light-bake.json';
+import lightBake from './bakes/terrain-light-bake.json';
 import { SHADING_UNIFORMS } from './shading-state';
 export { LAND, elevation } from './terrain-height';
 const vertexShader = `attribute vec3 bakedLighting;varying vec3 vBake;varying vec3 vWorld;varying vec3 vNormal;void main(){vWorld=position;vNormal=normal;vBake=bakedLighting;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}`;

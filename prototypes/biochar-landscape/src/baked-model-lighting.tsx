@@ -1,7 +1,7 @@
 import * as THREE from 'three';
-import atlasBake from './model-light-bake.json';
-import circleBake from './model-light-bake-circle.json';
-import campusBake from './model-light-bake-campus.json';
+import atlasBake from './bakes/model-light-bake.json';
+import circleBake from './bakes/model-light-bake-circle.json';
+import campusBake from './bakes/model-light-bake-campus.json';
 import { COMPOSITION } from './composition-state';
 const bake = { atlas: atlasBake, circle: circleBake, campus: campusBake }[COMPOSITION];
 import { elevation } from './terrain-height';
