@@ -13,6 +13,7 @@ import {
   drivers,
   feedstocks,
   operators,
+  productionRunFeedstocks,
   organizations,
   productionRuns,
   transportLegs,
@@ -22,6 +23,7 @@ import {
 import { deleteDriver, getDriver, listDrivers, updateDriver } from "@/data-access/drivers";
 import { deleteOperator, getOperator, listOperators, updateOperator } from "@/data-access/operators";
 import { deleteVehicle, getVehicle, listVehicles, updateVehicle } from "@/data-access/vehicles";
+import { updateFeedstockInTransaction } from "@/data-access/feedstocks";
 import type { OrgContext } from "@/lib/auth/server";
 import { acquireCertificationArtifactLocksSorted } from "@/lib/certification/submission-lock";
 import { STALE_VERSION_MESSAGE } from "@/lib/stale-version";
@@ -45,6 +47,8 @@ const LEG_DISTANCE_KM = 40;
 const LEG_LOAD_KG = 1_000;
 const ORIGINAL_MODEL_YEAR = 2018;
 const LOCKED_COPY = "is locked by a certification submission.";
+const WAITER_POLL_TIMEOUT_MS = 5_000;
+const SECOND_INTAKE_WET_KG = 500;
 
 const createdVehicleIds: string[] = [];
 const createdDriverIds: string[] = [];
@@ -119,6 +123,54 @@ async function withFleetFixture(
       await detachFleet(fixture);
     }
   }, blockingVia);
+}
+
+
+/** A second intake in the same lineage (same production run), on no vehicle. */
+async function insertSecondIntake(fixture: LineageFixture) {
+  const [first] = await db.select().from(feedstocks).where(eq(feedstocks.id, fixture.feedstockId));
+  const [second] = await db.insert(feedstocks).values({
+    organizationId: TEST_ORG_ID,
+    code: `${first.code}-B`,
+    storageLocationId: first.storageLocationId,
+    status: "complete",
+    facilityId: first.facilityId,
+    feedstockTypeId: first.feedstockTypeId,
+    massDryKg: SECOND_INTAKE_WET_KG * 0.9,
+    massWetKg: SECOND_INTAKE_WET_KG,
+    moistureContentPercent: 10,
+  }).returning();
+  await db.insert(productionRunFeedstocks).values({
+    organizationId: TEST_ORG_ID,
+    productionRunId: fixture.productionRunId,
+    feedstockId: second.id,
+    wetMassUsedKg: SECOND_INTAKE_WET_KG,
+  });
+  return second;
+}
+
+async function deleteSecondIntake(feedstockId: string) {
+  await db.delete(productionRunFeedstocks).where(eq(productionRunFeedstocks.feedstockId, feedstockId));
+  await db.delete(transportLegs).where(eq(transportLegs.entityId, feedstockId));
+  await db.delete(feedstocks).where(eq(feedstocks.id, feedstockId));
+}
+
+/** Resolve once `count` backends wait on an advisory lock `heldByPid` holds. */
+async function waitForAdvisoryWaiters(heldByPid: number, count: number) {
+  await expect.poll(async () => {
+    const result = await db.execute<{ waiters: number }>(sql`
+      select count(*)::int as waiters
+      from pg_locks waiting
+      join pg_locks held
+        on held.locktype = waiting.locktype
+       and held.objid is not distinct from waiting.objid
+       and held.classid is not distinct from waiting.classid
+       and held.objsubid is not distinct from waiting.objsubid
+      where waiting.locktype = 'advisory' and not waiting.granted
+        and held.granted and held.pid = ${heldByPid}
+    `);
+    return result.rows[0]?.waiters ?? 0;
+  }, { timeout: WAITER_POLL_TIMEOUT_MS }).toBeGreaterThanOrEqual(count);
 }
 
 async function batchCode(batchId: string) {
@@ -388,6 +440,52 @@ describe("vehicle type change", () => {
         releaseSubmit();
         await submitter.catch(() => undefined);
         await db.delete(certificationSubmissions).where(eq(certificationSubmissions.localEntityId, fixture.removalId));
+      }
+    }, "none");
+  });
+  it("completes alongside a feedstock save that moves an intake in the same lineage onto the vehicle", async () => {
+    await withFleetFixture(async (fixture) => {
+      const vehicle = await insertVehicle();
+      await useVehicleOnFeedstock(fixture, vehicle);
+      const second = await insertSecondIntake(fixture);
+
+      let releaseArtifact = () => {};
+      let signalLocked!: (pid: number) => void;
+      const locked = new Promise<number>((resolve) => { signalLocked = resolve; });
+      const release = new Promise<void>((resolve) => { releaseArtifact = resolve; });
+      // Stands in for a submission holding the lineage's artifact lock, so the
+      // feedstock save and the vehicle edit queue up behind it in that order.
+      const holder = db.transaction(async (tx) => {
+        await acquireCertificationArtifactLocksSorted(tx, [
+          { provider: "isometric", localEntityType: "removal", localEntityId: fixture.removalId },
+        ]);
+        const backend = await tx.execute<{ pid: number }>(sql`select pg_backend_pid() as pid`);
+        signalLocked(backend.rows[0]?.pid ?? 0);
+        await release;
+      });
+
+      try {
+        const holderPid = await locked;
+        const save = db.transaction((tx) =>
+          updateFeedstockInTransaction(ctx, tx, second.id, { expectedVersion: second.version, vehicleId: vehicle.id }));
+        void save.catch(() => undefined);
+        await waitForAdvisoryWaiters(holderPid, 1);
+        const edit = updateVehicle(ctx, vehicle.id, vehicleEdit(vehicle, { vehicleType: "tractor" }), vehicle.version);
+        void edit.catch(() => undefined);
+        await waitForAdvisoryWaiters(holderPid, 2);
+        releaseArtifact();
+        await holder;
+
+        const [saved, edited] = await Promise.allSettled([save, edit]);
+        expect(saved.status, String((saved as PromiseRejectedResult).reason)).toBe("fulfilled");
+        expect(edited.status, String((edited as PromiseRejectedResult).reason)).toBe("fulfilled");
+        expect((await getVehicle(ctx, vehicle.id))?.vehicleType).toBe("tractor");
+        expect((await derivedLeg(fixture.feedstockId)).vehicleType).toBe("tractor");
+      } finally {
+        releaseArtifact();
+        await holder.catch(() => undefined);
+        await db.update(feedstocks).set({ vehicleId: null }).where(eq(feedstocks.id, second.id));
+        await deleteSecondIntake(second.id);
       }
     }, "none");
   });

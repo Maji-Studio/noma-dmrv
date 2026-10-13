@@ -31,6 +31,7 @@ import {
   getCertifiedLineage,
   getLockedCertifiedLineageForTargetSet,
   isSubmittedLineageRow,
+  type LockedCertifiedLineageRow,
 } from "./certification-lineage-guards";
 import { countVehicleUsage } from "./fleet-usage";
 import { assertRowVersion, nextVersion } from "./row-version";
@@ -45,6 +46,10 @@ const VEHICLE_FK_CONSTRAINTS = [
   "feedstock_deliveries_vehicle_id_vehicles_id_fk",
   "feedstocks_vehicle_id_vehicles_id_fk",
 ] as const;
+/** Restarts when records move onto or off the vehicle mid-edit. */
+const MAX_UPDATE_ATTEMPTS = 3;
+const VEHICLE_REFERENCES_CHANGED =
+  "The vehicle was not saved because records using it changed while it was saving. Save again.";
 const VEHICLE_IN_USE =
   "Vehicle was not deleted because records still use it. Choose another vehicle on those records, or keep this one.";
 
@@ -83,36 +88,51 @@ export async function getVehicle(ctx: OrgContext, vehicleId: string): Promise<Ve
 // Update
 // ============================================
 
+interface VehicleReferences {
+  feedstockIds: string[];
+  deliveryIds: string[];
+}
+
 /**
- * Lock every feedstock intake that uses the vehicle, in id order. A feedstock
- * save locks its own row before it resyncs its leg, so holding these rows means
- * no concurrent save can write the old type back after this edit commits.
+ * The intakes and deliveries that use the vehicle. With `lockFeedstocks`, the
+ * intake rows are locked in id order: a feedstock save locks its own row
+ * before it resyncs its leg, so holding them means no concurrent save can
+ * write the old type back after this edit commits.
  */
-async function lockFeedstocksUsingVehicle(
+async function vehicleReferences(
   ctx: OrgContext,
   tx: DbTransaction,
   vehicleId: string,
-): Promise<string[]> {
-  const rows = await tx
+  lockFeedstocks: boolean,
+): Promise<VehicleReferences> {
+  const feedstockQuery = tx
     .select({ id: feedstocks.id })
     .from(feedstocks)
     .where(and(eq(feedstocks.vehicleId, vehicleId), eq(feedstocks.organizationId, ctx.organizationId)))
-    .orderBy(asc(feedstocks.id))
-    .for("update");
-  return rows.map((row) => row.id);
-}
-
-async function deliveriesUsingVehicle(
-  ctx: OrgContext,
-  tx: DbTransaction,
-  vehicleId: string,
-): Promise<string[]> {
-  const rows = await tx
+    .orderBy(asc(feedstocks.id));
+  const feedstockRows = await (lockFeedstocks ? feedstockQuery.for("update") : feedstockQuery);
+  const deliveryRows = await tx
     .select({ id: deliveries.id })
     .from(deliveries)
-    .where(and(eq(deliveries.vehicleId, vehicleId), eq(deliveries.organizationId, ctx.organizationId)));
-  return rows.map((row) => row.id);
+    .where(and(eq(deliveries.vehicleId, vehicleId), eq(deliveries.organizationId, ctx.organizationId)))
+    .orderBy(asc(deliveries.id));
+  return {
+    feedstockIds: feedstockRows.map((row) => row.id),
+    deliveryIds: deliveryRows.map((row) => row.id),
+  };
 }
+
+function sameReferences(a: VehicleReferences, b: VehicleReferences): boolean {
+  const same = (x: string[], y: string[]) => x.length === y.length && x.every((id, index) => id === y[index]);
+  return same(a.feedstockIds, b.feedstockIds) && same(a.deliveryIds, b.deliveryIds);
+}
+
+/**
+ * The records using the vehicle changed between the unlocked read and the
+ * vehicle row lock. Taking the new records' certification locks after the
+ * vehicle lock would invert the lock order, so the whole transaction restarts.
+ */
+class VehicleReferencesChangedError extends Error {}
 
 async function lockedVehicle(
   ctx: OrgContext,
@@ -171,29 +191,101 @@ async function throwVehicleTypeLocked(
 }
 
 /**
- * Resolve which feedstock legs take the new type and model year. Throws when
- * the type changes while a submitted credit batch holds a record using it.
+ * One attempt at the edit. Lock order, shared with every feedstock and
+ * delivery save: record rows, then certification artifact locks, then the
+ * vehicle row (a save takes KEY SHARE on it only when it points a record at
+ * the vehicle, after its own artifact locks). Because this edit takes the
+ * artifact locks before the vehicle row, neither side ever waits for an
+ * artifact while holding a lock the other needs, so the two cannot deadlock.
  */
-async function legsToRefresh(
+async function updateVehicleOnce(
   ctx: OrgContext,
   tx: DbTransaction,
   vehicleId: string,
-  typeChanged: boolean,
-): Promise<string[]> {
-  // Re-read under the vehicle lock: a record that pointed here while we waited
-  // has committed by now, and a new one cannot appear until we commit.
-  const feedstockIds = await lockFeedstocksUsingVehicle(ctx, tx, vehicleId);
-  const deliveryIds = await deliveriesUsingVehicle(ctx, tx, vehicleId);
-  const lineage = await getLockedCertifiedLineageForTargetSet(ctx, tx, { feedstockIds, deliveryIds });
-  const submitted = lineage.filter(isSubmittedLineageRow);
+  data: UpdateVehicleData,
+  expectedVersion: number,
+): Promise<Vehicle> {
+  const modelYear = data.modelYear ?? null;
+  const [current] = await tx
+    .select({ vehicleType: vehicles.vehicleType, modelYear: vehicles.modelYear })
+    .from(vehicles)
+    .where(and(eq(vehicles.id, vehicleId), eq(vehicles.organizationId, ctx.organizationId)));
+  if (!current) throw new DomainError("not_found", VEHICLE_NOT_FOUND);
+  const typeChanged = current.vehicleType !== data.vehicleType;
+  const snapshotChanged = typeChanged || current.modelYear !== modelYear;
 
-  if (submitted.length === 0) return feedstockIds;
-  if (typeChanged) {
+  let references: VehicleReferences | null = null;
+  let submitted: LockedCertifiedLineageRow[] = [];
+  if (snapshotChanged) {
+    references = await vehicleReferences(ctx, tx, vehicleId, true);
+    const lineage = await getLockedCertifiedLineageForTargetSet(ctx, tx, references);
+    submitted = lineage.filter(isSubmittedLineageRow);
+  }
+
+  const locked = await lockedVehicle(ctx, tx, vehicleId, expectedVersion);
+  if (locked.vehicleType !== current.vehicleType || locked.modelYear !== current.modelYear) {
+    throw new VehicleReferencesChangedError();
+  }
+  // Under the vehicle lock no record can newly point here, and one that did
+  // while we waited has committed. Any difference means locks we lack.
+  if (references && !sameReferences(references, await vehicleReferences(ctx, tx, vehicleId, false))) {
+    throw new VehicleReferencesChangedError();
+  }
+
+  if (typeChanged && submitted.length > 0) {
     await throwVehicleTypeLocked(ctx, tx, submitted.map((row) => row.creditBatchId));
   }
   // A model year edit is metadata: it saves, and only legs outside a
   // submitted credit batch follow it.
-  return unsubmittedFeedstocks(ctx, tx, feedstockIds);
+  const refreshLegs = !references
+    ? []
+    : submitted.length === 0
+      ? references.feedstockIds
+      : await unsubmittedFeedstocks(ctx, tx, references.feedstockIds);
+
+  const [duplicate] = await tx
+    .select({ id: vehicles.id })
+    .from(vehicles)
+    .where(and(
+      eq(vehicles.name, data.name),
+      ne(vehicles.id, vehicleId),
+      eq(vehicles.organizationId, ctx.organizationId),
+    ));
+  if (duplicate) throw new DomainError("conflict", VEHICLE_NAME_TAKEN);
+
+  const [updated] = await tx
+    .update(vehicles)
+    .set({
+      name: data.name,
+      identifier: data.identifier ?? null,
+      vehicleType: data.vehicleType,
+      fuelType: data.fuelType ?? null,
+      fuelConsumptionLPerKm: data.fuelConsumptionLPerKm ?? null,
+      modelYear,
+      version: nextVersion(vehicles.version),
+      updatedAt: new Date(),
+    })
+    .where(and(eq(vehicles.id, vehicleId), eq(vehicles.organizationId, ctx.organizationId)))
+    .returning();
+
+  if (refreshLegs.length > 0) {
+    await tx
+      .update(transportLegs)
+      .set({
+        vehicleType: data.vehicleType,
+        modelYear,
+        version: nextVersion(transportLegs.version),
+        updatedAt: new Date(),
+      })
+      .where(and(
+        eq(transportLegs.entityType, "feedstock"),
+        eq(transportLegs.isDerived, true),
+        inArray(transportLegs.entityId, refreshLegs),
+        eq(transportLegs.organizationId, ctx.organizationId),
+      ));
+  }
+
+  return updated;
 }
 
 export async function updateVehicle(
@@ -203,75 +295,19 @@ export async function updateVehicle(
   expectedVersion: number,
 ): Promise<Vehicle> {
   requireOrgScope(ctx);
-  const modelYear = data.modelYear ?? null;
-
-  try {
-    return await db.transaction(async (tx) => {
-      const [current] = await tx
-        .select({ vehicleType: vehicles.vehicleType, modelYear: vehicles.modelYear })
-        .from(vehicles)
-        .where(and(eq(vehicles.id, vehicleId), eq(vehicles.organizationId, ctx.organizationId)));
-      if (!current) throw new DomainError("not_found", VEHICLE_NOT_FOUND);
-      const snapshotChanges =
-        current.vehicleType !== data.vehicleType || current.modelYear !== modelYear;
-
-      // Feedstock rows before the vehicle row: the order a feedstock save takes.
-      if (snapshotChanges) await lockFeedstocksUsingVehicle(ctx, tx, vehicleId);
-      const locked = await lockedVehicle(ctx, tx, vehicleId, expectedVersion);
-      const typeChanged = locked.vehicleType !== data.vehicleType;
-      const refreshLegs = typeChanged || locked.modelYear !== modelYear
-        ? await legsToRefresh(ctx, tx, vehicleId, typeChanged)
-        : [];
-
-      const [duplicate] = await tx
-        .select({ id: vehicles.id })
-        .from(vehicles)
-        .where(and(
-          eq(vehicles.name, data.name),
-          ne(vehicles.id, vehicleId),
-          eq(vehicles.organizationId, ctx.organizationId),
-        ));
-      if (duplicate) throw new DomainError("conflict", VEHICLE_NAME_TAKEN);
-
-      const [updated] = await tx
-        .update(vehicles)
-        .set({
-          name: data.name,
-          identifier: data.identifier ?? null,
-          vehicleType: data.vehicleType,
-          fuelType: data.fuelType ?? null,
-          fuelConsumptionLPerKm: data.fuelConsumptionLPerKm ?? null,
-          modelYear,
-          version: nextVersion(vehicles.version),
-          updatedAt: new Date(),
-        })
-        .where(and(eq(vehicles.id, vehicleId), eq(vehicles.organizationId, ctx.organizationId)))
-        .returning();
-
-      if (refreshLegs.length > 0) {
-        await tx
-          .update(transportLegs)
-          .set({
-            vehicleType: data.vehicleType,
-            modelYear,
-            version: nextVersion(transportLegs.version),
-            updatedAt: new Date(),
-          })
-          .where(and(
-            eq(transportLegs.entityType, "feedstock"),
-            eq(transportLegs.isDerived, true),
-            inArray(transportLegs.entityId, refreshLegs),
-            eq(transportLegs.organizationId, ctx.organizationId),
-          ));
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      return await db.transaction((tx) => updateVehicleOnce(ctx, tx, vehicleId, data, expectedVersion));
+    } catch (error) {
+      if (error instanceof VehicleReferencesChangedError) {
+        if (attempt < MAX_UPDATE_ATTEMPTS) continue;
+        throw new DomainError("concurrent_write_retry", VEHICLE_REFERENCES_CHANGED, { retryable: true });
       }
-
-      return updated;
-    });
-  } catch (error) {
-    if (isPgUniqueViolation(error, VEHICLE_NAME_CONSTRAINT)) {
-      throw new DomainError("conflict", VEHICLE_NAME_TAKEN);
+      if (isPgUniqueViolation(error, VEHICLE_NAME_CONSTRAINT)) {
+        throw new DomainError("conflict", VEHICLE_NAME_TAKEN);
+      }
+      throw error;
     }
-    throw error;
   }
 }
 
