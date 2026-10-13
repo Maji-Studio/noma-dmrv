@@ -34,6 +34,27 @@ export const ORGANIC_CARBON_EXCEEDS_TOTAL_MESSAGE =
 export const COMBINED_CARBON_EXCEEDS_TOTAL_MESSAGE =
   `Organic plus inorganic carbon cannot exceed total carbon by more than ${CARBON_RECONCILIATION_TOLERANCE_PERCENTAGE_POINTS} percentage points. Correct the carbon values.`;
 
+/**
+ * Practical upper bounds for the unbounded physical inputs. Their columns are
+ * `real`, which overflows near 3.4e38, so an absurd value must fail as a field
+ * error rather than a database overflow. Generous for any lab sample.
+ */
+export const SAMPLE_PHYSICAL_INPUT_MAX = {
+  weightGrams: 1_000_000,
+  volumeMl: 1_000_000,
+  bulkDensityKgPerM3: 10_000,
+  // Grams per kilogram cannot exceed the kilogram itself.
+  saltContentGPerKg: 1_000,
+} as const;
+
+export type SamplePhysicalInputField = keyof typeof SAMPLE_PHYSICAL_INPUT_MAX;
+
+/** Non-negative and at most the field's practical maximum. */
+export function samplePhysicalNumber(field: SamplePhysicalInputField) {
+  const max = SAMPLE_PHYSICAL_INPUT_MAX[field];
+  return z.number().finite().min(0, NON_NEGATIVE_NUMBER_MESSAGE).max(max, `Enter a value up to ${max.toLocaleString("en-US")}`);
+}
+
 export const SAMPLING_TIME_REQUIRED_MESSAGE = "Enter the sampling time.";
 const SAMPLING_TIME_OFFSET_MESSAGE =
   "Enter the sampling time with a time zone offset, as in 2026-10-12T09:30:00Z.";
@@ -67,9 +88,8 @@ const requiredPercent = requiredNumber("This field is required").pipe(
   percentNumber,
 );
 
-const optionalNonNegativeNumber = optionalNumber.pipe(
-  nonNegativeNumber.nullable().optional(),
-).optional();
+const optionalPhysicalNumber = (field: SamplePhysicalInputField) =>
+  optionalNumber.pipe(samplePhysicalNumber(field).nullable().optional()).optional();
 
 // hToCOrgRatio / oToCOrgRatio are atomic ratios (not 0–1 fractions) backed by
 // the `fraction` DB family (numeric(7,6)) — cap at the column's ceiling so an
@@ -197,8 +217,8 @@ export const sampleFormSchema = z
     analysisDate: optionalCalendarDateSchema(),
 
     // Sample weight/volume
-    weightGrams: optionalNonNegativeNumber,
-    volumeMl: optionalNonNegativeNumber,
+    weightGrams: optionalPhysicalNumber("weightGrams"),
+    volumeMl: optionalPhysicalNumber("volumeMl"),
 
     // === Section 2: Carbon Analysis ===
     totalCarbonPercent: requiredPercent,
@@ -222,9 +242,9 @@ export const sampleFormSchema = z
     moistureContentPercent: optionalPercentInput,
 
     // === Section 5: Physical ===
-    bulkDensityKgPerM3: optionalNonNegativeNumber,
+    bulkDensityKgPerM3: optionalPhysicalNumber("bulkDensityKgPerM3"),
     ph: optionalPh,
-    saltContentGPerKg: optionalNonNegativeNumber,
+    saltContentGPerKg: optionalPhysicalNumber("saltContentGPerKg"),
 
     // === Section 6: Stability ===
     // H:C org ratio - can be calculated from totalHydrogenPercent / organicCarbonPercent
@@ -348,8 +368,8 @@ export const updateSampleSchema = z.object({
   labName: z.string().max(200).optional().nullable(),
   labAccreditation: z.string().max(200).optional().nullable(),
   analysisDate: optionalCalendarDateSchema(),
-  weightGrams: nonNegativeNumber.optional().nullable(),
-  volumeMl: nonNegativeNumber.optional().nullable(),
+  weightGrams: samplePhysicalNumber("weightGrams").optional().nullable(),
+  volumeMl: samplePhysicalNumber("volumeMl").optional().nullable(),
   totalCarbonPercent: percentNumber.optional(),
   organicCarbonPercent: percentNumber.optional(),
   inorganicCarbonPercent: percentNumber.optional().nullable(),
@@ -359,9 +379,9 @@ export const updateSampleSchema = z.object({
   totalSulfurPercent: percentNumber.optional().nullable(),
   ashContentPercent: percentNumber.optional().nullable(),
   moistureContentPercent: percentNumber.optional().nullable(),
-  bulkDensityKgPerM3: nonNegativeNumber.optional().nullable(),
+  bulkDensityKgPerM3: samplePhysicalNumber("bulkDensityKgPerM3").optional().nullable(),
   ph: z.number().min(PH_MIN, PH_RANGE_MESSAGE).max(PH_MAX, PH_RANGE_MESSAGE).optional().nullable(),
-  saltContentGPerKg: nonNegativeNumber.optional().nullable(),
+  saltContentGPerKg: samplePhysicalNumber("saltContentGPerKg").optional().nullable(),
   hToCOrgRatio: nonNegativeRatio.optional().nullable(),
   oToCOrgRatio: nonNegativeRatio.optional().nullable(),
   durabilityOption: z.enum(["200_year", "1000_year"]).optional(),

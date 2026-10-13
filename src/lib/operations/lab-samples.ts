@@ -1,0 +1,77 @@
+import { CODE_CONFLICT_MESSAGES, withAutoCodes, withUniqueCodeGuard } from "@/data-access/code-generator";
+import {
+  createSampleInTransaction,
+  deleteSampleInTransaction,
+  updateSampleInTransaction,
+  type SampleWriteResult,
+} from "@/data-access/samples";
+import { processPendingStorageObjectDeletions } from "@/data-access/storage-object-deletions";
+import { samples } from "@/db/schema";
+import { withSampleErrors } from "@/lib/sample-domain-errors";
+import { deleteLabSampleInput, recordLabSampleInput, updateLabSampleInput } from "@/schemas/lab-sample-input";
+import type { Operation } from "./runner";
+
+/**
+ * Lab Sample writes (Phase 5a): one replicate's lab results on one credit
+ * batch. The Server Actions and the API run these same operations.
+ *
+ * A write's result carries the saved Sample, `notices` (each calculated
+ * ratio, round 7 Q50) and `warnings` (what a registry submission will still
+ * need, round 7 Q52 and Q53). Neither blocks the write.
+ */
+
+const AUTO_CODE_COUNT = 1;
+const SAMPLE_CODE_PREFIX = "SAM";
+const ENTITY_TYPE = "labSample";
+
+/** Preconditions and the target describe how a write was sent, not what it changed. */
+const NOT_CHANGES: ReadonlySet<string> = new Set(["labSampleId", "expectedVersion"]);
+
+function changedFields(input: object): string[] {
+  return Object.entries(input).filter(([key, value]) => value !== undefined && !NOT_CHANGES.has(key)).map(([key]) => key).sort();
+}
+
+export const recordLabSample: Operation<typeof recordLabSampleInput, SampleWriteResult> = {
+  id: "record_lab_sample",
+  input: recordLabSampleInput,
+  supportsDryRun: true,
+  describe: (input, output) => ({
+    outcome: "created", entityType: ENTITY_TYPE, entityIds: [output.sample.id],
+    versionBefore: null, versionAfter: output.sample.version, changedFields: changedFields(input),
+  }),
+  // Each code attempt runs the whole create, locks included, in its own savepoint.
+  execute: ({ ctx, tx }, input) => withSampleErrors(() => withAutoCodes(
+    ctx, tx, SAMPLE_CODE_PREFIX, samples, samples.sampleCode, AUTO_CODE_COUNT,
+    ([sampleCode], savepoint) => createSampleInTransaction(ctx, savepoint, { ...input, sampleCode }),
+    CODE_CONFLICT_MESSAGES.sample,
+  )),
+};
+
+export const updateLabSample: Operation<typeof updateLabSampleInput, SampleWriteResult> = {
+  id: "update_lab_sample",
+  input: updateLabSampleInput,
+  supportsDryRun: true,
+  describe: (input, output) => ({
+    outcome: "updated", entityType: ENTITY_TYPE, entityIds: [output.sample.id],
+    versionBefore: input.expectedVersion, versionAfter: output.sample.version, changedFields: changedFields(input),
+  }),
+  execute: ({ ctx, tx }, { labSampleId, code, ...changes }) => withSampleErrors(() => withUniqueCodeGuard(
+    ctx, samples, samples.sampleCode, CODE_CONFLICT_MESSAGES.sample,
+    () => updateSampleInTransaction(ctx, tx, labSampleId, { ...changes, sampleCode: code }),
+  )),
+};
+
+export const deleteLabSample: Operation<typeof deleteLabSampleInput, void> = {
+  id: "delete_lab_sample",
+  input: deleteLabSampleInput,
+  supportsDryRun: true,
+  describe: (input) => ({
+    outcome: "deleted", entityType: ENTITY_TYPE, entityIds: [input.labSampleId],
+    versionBefore: input.expectedVersion, versionAfter: null, changedFields: [],
+  }),
+  execute: async ({ ctx, tx, afterCommit }, { labSampleId, expectedVersion }) => {
+    await withSampleErrors(() => deleteSampleInTransaction(ctx, tx, labSampleId, expectedVersion));
+    // Retired documents queue their storage deletions; drain them only once committed.
+    afterCommit(async () => { await processPendingStorageObjectDeletions(ctx); });
+  },
+};

@@ -4,7 +4,7 @@ import {
   calendarDateSchema, clearableNumber, expectedVersionSchema, optionalNumber, PG_INTEGER_MAX, pipeToCanonicalNumber,
   RATIO_INPUT_MAX, RATIO_MAX_MESSAGE, requiredNumber, toClearableNumber, toNumberOrNull, uuidSchema,
 } from "./helpers";
-import { CARBON_RECONCILIATION_TOLERANCE_PERCENTAGE_POINTS, getSampleCarbonReconciliationErrors, updateSampleSchema } from "./samples";
+import { CARBON_RECONCILIATION_TOLERANCE_PERCENTAGE_POINTS, getSampleCarbonReconciliationErrors, samplePhysicalNumber, updateSampleSchema } from "./samples";
 
 /**
  * What REST and MCP publish for one lab Sample (Phase 5a). Not published:
@@ -77,11 +77,11 @@ const DESCRIPTIONS = {
 
 /** The numeric lab results, each with its canonical rule. Totals are handled separately: they are required. */
 const NUMERIC_FIELDS = {
-  weightGrams: nonNegative, volumeMl: nonNegative,
+  weightGrams: samplePhysicalNumber("weightGrams"), volumeMl: samplePhysicalNumber("volumeMl"),
   inorganicCarbonPercent: percent,
   totalHydrogenPercent: percent, totalNitrogenPercent: percent, totalOxygenPercent: percent, totalSulfurPercent: percent,
   ashContentPercent: percent, moistureContentPercent: percent,
-  bulkDensityKgPerM3: nonNegative, ph, saltContentGPerKg: nonNegative,
+  bulkDensityKgPerM3: samplePhysicalNumber("bulkDensityKgPerM3"), ph, saltContentGPerKg: samplePhysicalNumber("saltContentGPerKg"),
   oToCOrgRatio: ratio,
   randomReflectanceR0Percent: percent, sReflectanceFraction: fraction,
   reactiveCarbonPercent: percent, residualCarbonPercent: percent,
@@ -160,3 +160,11 @@ export const updateLabSampleInput = z.strictObject({
 }).superRefine(refineCarbon);
 
 export type UpdateLabSampleInput = z.output<typeof updateLabSampleInput>;
+
+/** The `delete_lab_sample` input. Deleting also deletes the Sample's transport legs and retires its documents. */
+export const deleteLabSampleInput = z.strictObject({
+  labSampleId: uuidSchema().describe("Target lab sample UUID."),
+  expectedVersion: expectedVersionSchema.describe("Version from get_lab_sample."),
+});
+
+export type DeleteLabSampleInput = z.output<typeof deleteLabSampleInput>;

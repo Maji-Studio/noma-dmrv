@@ -99,6 +99,25 @@ describe("deriveSampleRatios", () => {
     const justBelow = 9.99994 * 1.008 * 1 / 12.011;
     expect(deriveSampleRatios({ ...NO_INPUTS, totalHydrogenPercent: justBelow, organicCarbonPercent: 1 }).hToCOrgRatio).toBe(9.9999);
   });
+
+  it("refuses a ratio that is not a finite number, such as a subnormal organic carbon", () => {
+    // 5e-324 / 12.011 underflows to 0, so 0 / 0 is NaN and any hydrogen over it is Infinity.
+    const SUBNORMAL = Number.MIN_VALUE;
+    for (const hydrogen of [0, 5]) {
+      let failure: unknown;
+      try {
+        deriveSampleRatios({ ...NO_INPUTS, totalHydrogenPercent: hydrogen, organicCarbonPercent: SUBNORMAL });
+      } catch (error) {
+        failure = error;
+      }
+      expect(failure).toBeInstanceOf(SampleRatioCapError);
+      expect(failure).toMatchObject({ ratio: "hToCOrgRatio", field: "totalHydrogenPercent" });
+      expect((failure as Error).message).toBe("H/C_org cannot be calculated from these hydrogen and organic carbon values. Check the hydrogen and organic carbon values.");
+      expect((failure as Error).message).not.toMatch(/NaN|Infinity/);
+    }
+    expect(() => deriveSampleRatios({ ...NO_INPUTS, totalOxygenPercent: 0, organicCarbonPercent: SUBNORMAL }))
+      .toThrow(expect.objectContaining({ ratio: "oToCOrgRatio", field: "totalOxygenPercent" }));
+  });
 });
 
 describe("previewSampleRatios", () => {

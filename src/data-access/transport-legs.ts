@@ -48,6 +48,7 @@ import {
   transportEvidenceDocumentCount,
 } from "./transport-evidence-projections";
 import { requireOrgScope } from "./utils";
+import { lockSampleParent } from "./samples/write-scope";
 
 export type TransportEntityType = TransportEntityTypeValue;
 
@@ -263,6 +264,12 @@ export async function createTransportLeg(
       "transportLeg",
       "linked",
     );
+    // The pre-check above read the parent outside this transaction. A Sample
+    // parent is locked in the shared order (artifacts, batch, sample) and
+    // re-read here, so a concurrent Sample delete cannot orphan the new leg.
+    if (input.entityType === "sample" && !(await lockSampleParent(ctx, tx, input.entityId))) {
+      throw new SafeError(`${ENTITY_LABEL.sample} not found`);
+    }
 
     return tx
       .insert(transportLegs)

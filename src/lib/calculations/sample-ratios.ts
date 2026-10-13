@@ -65,7 +65,10 @@ export class SampleRatioCapError extends SafeError {
 
   constructor(ratio: SampleRatioField, value: number) {
     const label = RATIO_LABELS[ratio];
-    super(`${label.name} calculated from ${label.element} and organic carbon is ${formatSampleRatio(value)}, above the maximum of ${RATIO_INPUT_MAX}. Check the ${label.element} and organic carbon values.`);
+    super(Number.isFinite(value)
+      ? `${label.name} calculated from ${label.element} and organic carbon is ${formatSampleRatio(value)}, above the maximum of ${RATIO_INPUT_MAX}. Check the ${label.element} and organic carbon values.`
+      // An organic carbon figure too small to divide by (a subnormal) gives no number at all.
+      : `${label.name} cannot be calculated from these ${label.element} and organic carbon values. Check the ${label.element} and organic carbon values.`);
     this.name = "SampleRatioCapError";
     this.ratio = ratio;
     this.field = label.source;
@@ -115,7 +118,7 @@ export function previewSampleRatios(input: SampleRatioInputs): SampleRatioPrevie
 /**
  * The ratios to save for the effective sample (patch merged over the stored
  * row on an update). Throws `SampleRatioCapError` for a calculated ratio above
- * `RATIO_INPUT_MAX` after rounding. A lab O/C_org is not checked here: its
+ * `RATIO_INPUT_MAX` after rounding, or one that is not a finite number. A lab O/C_org is not checked here: its
  * input schema already caps it.
  */
 export function deriveSampleRatios(input: SampleRatioInputs): DerivedSampleRatios {
@@ -127,7 +130,7 @@ export function deriveSampleRatios(input: SampleRatioInputs): DerivedSampleRatio
   ];
   for (const [field, value] of calculated) {
     if (value === null) continue;
-    if (value > RATIO_INPUT_MAX) throw new SampleRatioCapError(field, value);
+    if (!Number.isFinite(value) || value > RATIO_INPUT_MAX) throw new SampleRatioCapError(field, value);
     const label = RATIO_LABELS[field];
     notices.push({ field, message: `${label.name} calculated from ${label.element} and organic carbon: ${formatSampleRatio(value)}` });
   }

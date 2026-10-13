@@ -90,6 +90,16 @@ export function sampleBeforeBatchWindowError(samplingDay: string, batch: SampleB
   return new SampleFieldError(sampleBeforeBatchWindowMessage(samplingDay, batch), "samplingTime");
 }
 
+/** The batch facility has no usable zone, so a sampling day cannot be placed on its calendar. Never guessed as UTC. */
+export function sampleFacilityZoneMissingError(batchCode: string): SampleFieldError {
+  return new SampleFieldError(`Credit batch ${batchCode}'s facility has no time zone. Set the facility time zone, then save the Sample again.`, "samplingTime");
+}
+
+/** The Sample is not in this organization, or was deleted. Same copy the writers always used. */
+export function sampleNotFound(): DomainError {
+  return new DomainError("not_found", "Sample not found");
+}
+
 function typed(code: "validation_failed" | "not_found", error: SafeError, path: Path, meta?: Record<string, unknown>): DomainError {
   const failure = new DomainError(code, error.message, { issues: [{ path, code, message: error.message, ...(meta ? { meta } : {}) }] });
   // The guard already normalized this operator message through SafeError.

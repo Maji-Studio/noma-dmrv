@@ -34,6 +34,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { FlaskIcon, FireIcon, CubeIcon, CalculatorIcon, EyeIcon, ThermometerIcon } from "@phosphor-icons/react/dist/ssr";
 import { FormField, FormInput, EntitySelect, FormActions, FormSection, FormSpine, MoistureField, makeCertFieldStatus } from "@/components/forms";
 import { EventTimeInput } from "@/components/forms/event-time-input";
+import { resolveSamplingClock, withClearedMeasurements } from "./sample-form-values";
 import { ResolvedErrorRevalidator } from "@/components/forms";
 import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
 import { RATIO_MAX_MESSAGE } from "@/schemas/helpers";
@@ -199,19 +200,23 @@ export function SampleForm({
   // declared tier (issue #309). Sync it into form state from the batch summary
   // (the same query the progress panel below reads) so the conditional
   // 1000-year sections and their validation follow the chosen batch.
-  const { data: batchSummary } = useBatchDurabilitySummary(
+  const { data: batchSummary, status: batchSummaryStatus } = useBatchDurabilitySummary(
     watchedCreditBatchId || "",
     !!watchedCreditBatchId,
   );
   const batchDurabilityOption = batchSummary?.durabilityOption;
   // Sampling time is entered on the credit batch facility's clock (round 7
-  // Q51). The batch picker lists the context facility's batches, so its clock
-  // stands in until the selected batch's summary names the zone.
+  // Q51), and only once that batch's zone is known: the context facility's
+  // clock is never a stand-in, since a deep-linked sample's batch can sit in
+  // another zone.
   const contextClock = useFacilityClock(contextFacilityId);
-  const batchTimeZone = batchSummary?.facilityTimezone ?? null;
-  const samplingClock = batchTimeZone
-    ? { timeZone: batchTimeZone, hint: facilityTimeCue(batchTimeZone) }
-    : contextClock;
+  const samplingClock = resolveSamplingClock({
+    creditBatchId: watchedCreditBatchId,
+    lookup: batchSummaryStatus,
+    batchTimeZone: batchSummary?.facilityTimezone,
+    placeholderTimeZone: contextClock.timeZone,
+    cue: facilityTimeCue,
+  });
   useEffect(() => {
     if (batchDurabilityOption) {
       setValue("durabilityOption", batchDurabilityOption);
@@ -303,7 +308,13 @@ export function SampleForm({
 
   const defaultSubmitLabel = isEditMode ? "Update Sample" : "Create Sample";
 
-  const handleFormSubmit = handleSubmit((data) => {
+  const handleFormSubmit = handleSubmit((entered) => {
+    if (!samplingClock.ready) {
+      setError("samplingTime", { type: "validate", message: samplingClock.hint });
+      return;
+    }
+    // An emptied optional input clears the stored value instead of keeping it.
+    const data = withClearedMeasurements(entered);
     // Calculated ratios are injected after the zod resolver ran, so the
     // shared helper re-checks the numeric(7,6) cap; an out-of-range ratio
     // would otherwise only surface as a generic server error.
@@ -317,7 +328,7 @@ export function SampleForm({
       });
     } catch (error) {
       if (!(error instanceof SampleRatioCapError)) throw error;
-      setError(error.ratio, { type: "max", message: RATIO_MAX_MESSAGE });
+      setError(error.ratio, { type: "max", message: Number.isFinite(error.value) ? RATIO_MAX_MESSAGE : error.message });
       return;
     }
     // null clears a stored ratio on edit, as the partial-update contract reads it.
@@ -378,7 +389,7 @@ export function SampleForm({
                     name="samplingTime"
                     id="samplingTime"
                     timeZone={samplingClock.timeZone}
-                    disabled={isSubmitting}
+                    disabled={isSubmitting || !samplingClock.ready}
                   />
                 </FormField>
 

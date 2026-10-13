@@ -3,6 +3,7 @@ import { rejectUnknownFields } from "@/lib/api/unknown-fields";
 import { toOperationJsonSchema } from "@/lib/operations/json-schema";
 import { RATIO_INPUT_MAX } from "./helpers";
 import { recordLabSampleInput, updateLabSampleApiInput, updateLabSampleInput } from "./lab-sample-input";
+import { SAMPLE_PHYSICAL_INPUT_MAX, sampleFormSchema, updateSampleSchema } from "./samples";
 
 const BATCH_ID = "00000000-0000-4000-8000-000000000001";
 const SAMPLE_ID = "00000000-0000-4000-8000-000000000002";
@@ -128,4 +129,25 @@ it("rejects unknown nested fields against the published contract and keeps numbe
     expect(JSON.stringify(published[field]), field).toMatch(/"type":"(number|integer)"/);
     expect(JSON.stringify(published[field]), field).not.toContain('"type":"string"');
   }
+});
+
+describe("physical input maximums", () => {
+  // Their columns are `real`: an absurd value must fail as a field error, not a database overflow.
+  it.each(Object.entries(SAMPLE_PHYSICAL_INPUT_MAX))("caps %s at %d on create, PATCH and the form", (field, max) => {
+    expect(recordLabSampleInput.safeParse({ ...create, [field]: max }).success).toBe(true);
+    for (const value of [max + 1, 1e100]) {
+      const created = recordLabSampleInput.safeParse({ ...create, [field]: value });
+      expect(created.error?.issues[0]?.path).toEqual([field]);
+      expect(updateLabSampleInput.safeParse({ ...update, [field]: value }).success).toBe(false);
+      expect(updateSampleSchema.safeParse({ expectedVersion: 1, sampleId: SAMPLE_ID, [field]: value }).success).toBe(false);
+      expect(sampleFormSchema.safeParse({ ...create, samplingTime: new Date("2026-10-12T09:30:00Z"), [field]: value }).success).toBe(false);
+    }
+  });
+
+  it("publishes each maximum in the JSON Schema", () => {
+    const schema = toOperationJsonSchema(recordLabSampleInput) as { properties: Record<string, { maximum?: number }> };
+    for (const [field, max] of Object.entries(SAMPLE_PHYSICAL_INPUT_MAX)) {
+      expect(schema.properties[field]?.maximum, field).toBe(max);
+    }
+  });
 });
