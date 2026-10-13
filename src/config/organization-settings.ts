@@ -3,6 +3,7 @@
  *
  * These values mirror the column defaults on `organization_settings`
  * (`@/db/schema/settings`), which in turn mirror the literals they replaced.
+ * `defaultTimezone` has no column default and is null until chosen.
  * Keeping them in `@/config` rather than in data-access means a client
  * component can render the same fallback the server would resolve, without
  * importing the schema.
