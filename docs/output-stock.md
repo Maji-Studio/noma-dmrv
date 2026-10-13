@@ -224,7 +224,7 @@ bin's existing version check and stock lock, invalidates preview fingerprints,
 and does not rewrite saved allocations. The current setting applies to a new
 backdated draw too; default changes are preferences, not timed merge events.
 
-Migration `0133_output_draw_order.sql` adds the non-null `draw_order` column
+Migration `0134_output_draw_order.sql` adds the non-null `draw_order` column
 and `output_draw_order` enum. Existing rows and seed inserts that omit it get
 `oldest_first`. REST/MCP storage-location reads expose `drawOrder`; there is no
 new public write endpoint for the setting.
