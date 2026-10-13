@@ -35,16 +35,13 @@ it("requires moisture on API-shaped terminal creation before writing", async () 
 });
 
 describe("merged terminal update prerequisites", () => {
-  it.each(["biocharOutputKg", "biocharStorageLocationId", "biocharMoisturePercent"] as const)("checks legacy output requirements when %s is supplied unchanged", async (field) => {
-    const existing = { id: "run", facilityId: "facility", reactorId: "reactor", status: "complete" as const,
+  it("refuses a metadata-only save on a complete run without an output bin", async () => {
+    const state = preflightTransaction([[{ id: "run", facilityId: "facility", reactorId: "reactor", status: "complete",
       startTime: START, endTime: END, feedstockWetMassKg: DRAW_KG, feedstockMoisturePercent: 20,
-      biocharOutputKg: OUTPUT_KG, biocharStorageLocationId: null, biocharMoisturePercent: null };
-    const state = preflightTransaction([[existing], [{ storageLocationId: BIN_ID }]]);
+      biocharOutputKg: OUTPUT_KG, biocharStorageLocationId: null, biocharMoisturePercent: 5 }], [{ storageLocationId: BIN_ID }]]);
     await expect(updateProductionRunInTransaction(ctx, state.tx, "run", {
-      expectedVersion: 1, [field]: existing[field],
-    }, { now: NOW })).rejects.toMatchObject({ code: "validation_failed", issues: [
-      { path: ["biocharStorageLocationId"] },
-    ] });
+      expectedVersion: 1, electricityKwh: 0,
+    }, { now: NOW })).rejects.toMatchObject({ code: "validation_failed", issues: [{ path: ["biocharStorageLocationId"] }] });
     expect(state.update).not.toHaveBeenCalled();
   });
 

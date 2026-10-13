@@ -209,7 +209,6 @@ export function assertProductionRunOutcome(
   input: ProductionRunOutcomeInput,
   options: {
     only?: readonly ProductionRunOutcomeViolation["code"][];
-    skip?: readonly ProductionRunOutcomeViolation["code"][];
   } = {},
 ): void {
   const violations = getProductionRunOutcomeViolations(input);
@@ -220,7 +219,6 @@ export function assertProductionRunOutcome(
     : MUTATION_VIOLATION_PRIORITY;
   const violation = priority
     .filter((code) => !options.only || options.only.includes(code))
-    .filter((code) => !options.skip?.includes(code))
     .map((code) => violations.find((candidate) => candidate.code === code))
     .find((candidate) => candidate !== undefined);
 
