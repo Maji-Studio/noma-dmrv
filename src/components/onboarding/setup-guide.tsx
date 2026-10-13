@@ -9,18 +9,18 @@
 import { EyeSlashIcon } from "@phosphor-icons/react/dist/ssr";
 import { Button } from "@/components/ui";
 import type { SetupProgress } from "./use-setup-steps";
+import type { SetupActions } from "./setup-actions";
 import { SetupSpine } from "./setup-spine";
 
 interface SetupGuideProps {
   progress: SetupProgress;
-  /** Reopen the first-run wizard from the facility step (no facility yet). */
-  onStartFacility: () => void;
+  actions: SetupActions;
   onCollapse: () => void;
 }
 
 export function SetupGuide({
   progress,
-  onStartFacility,
+  actions,
   onCollapse,
 }: SetupGuideProps) {
   const { steps, doneCount, total, activeIndex } = progress;
@@ -36,8 +36,9 @@ export function SetupGuide({
             Build your first traceability chain
           </h2>
           <p className="body-small text-[var(--color-text-secondary)]">
-            Work down the chain, from your facility to a verified credit batch.
-            You can finish these steps at your own pace.
+            A few steps to get your facility producing verified carbon removals.
+            Start with your facility, reactor and registry connection. Suppliers,
+            feedstock, production runs and credit batches can wait until you&apos;re ready.
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-12">
@@ -58,7 +59,7 @@ export function SetupGuide({
       <SetupSpine
         steps={steps}
         activeIndex={activeIndex}
-        onStartFacility={onStartFacility}
+        actions={actions}
       />
     </section>
   );

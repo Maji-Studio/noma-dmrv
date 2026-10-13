@@ -282,7 +282,7 @@ The only CTA row — left-aligned, primary action first, sticky by default, noth
 
 - Never stack a parent dialog or step-flow footer beneath `FormActions`. The
   embedded form owns the one action row. Give its secondary action the
-  context-specific label (for example, `cancelLabel="Skip setup"`) and omit the
+  context-specific label (for example, `cancelLabel="Cancel"`) and omit the
   parent footer for that step.
 - Submission-level server/action/root errors go through `errorMessage`; `FormActions` renders the shared `ServerError` immediately above the buttons inside the same sticky footer. Do not render the same error in a parent sheet or earlier in the form.
 - Nested inline forms (child-entity editors, transport legs) pass `sticky={false}`.
@@ -291,6 +291,12 @@ The only CTA row — left-aligned, primary action first, sticky by default, noth
   signal that sees programmatic `setValue` from custom widgets. Inside a sheet
   the Cancel *click* routes through the sheet's guarded cancel; the caller's
   `onCancel` still decides whether a Cancel button renders at all.
+- `FormDialog` also reads `control` and the submitting state to guard every
+  dismissal path. Multiple forms in one dialog register independently. Keep
+  controls mounted after a failed save; reset RHF defaults after success.
+  `showSubmit={false}` hides a premature or unnecessary action while keeping
+  dirty tracking active; `submitVariant="default"` uses the outline style for
+  a secondary action such as linking a registry project.
 - When the actions render **inside an owning parent form**, pass `submitType="button"` + `onSubmitClick` — nesting `<form>` elements is invalid HTML.
 - `formId` is the escape hatch when extension content must render between the fields and the CTA: the CTA lives outside the `<form>` and points back at it by id.
 - `submitDisabled` gates on an unmet precondition (e.g. an unchecked acknowledgement).
