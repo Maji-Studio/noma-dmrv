@@ -312,6 +312,7 @@ const productionRunFormObject = z.object({
 export function makeProductionRunFormSchema(
   timeZone: string,
   now: () => Date = () => new Date(),
+  savedStatus?: ProductionRunStatus,
 ) {
   return productionRunFormObject.superRefine((data, ctx) => {
     const start = resolveInstant(data.startDate, data.startTime, timeZone);
@@ -438,6 +439,8 @@ export function makeProductionRunFormSchema(
           });
           break;
         case "running-end-forbidden":
+          // The submit handler clears the saved end when reopening a physical run.
+          if (savedStatus === "complete" || savedStatus === "failed") break;
           ctx.addIssue({
             code: z.ZodIssueCode.custom,
             path: ["endTime"],

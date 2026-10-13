@@ -166,6 +166,7 @@ export function ProductionRunForm({
     (
       buildProductionRunResolver(
         resolveFacilityTimezone(facilities, values.facilityId),
+        productionRun?.status,
       ) as unknown as Resolver<
         ProductionRunFormValues,
         unknown,

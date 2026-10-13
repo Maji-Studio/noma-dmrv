@@ -2,10 +2,6 @@ DROP INDEX "production_runs_reactor_start_unique_idx";--> statement-breakpoint
 ALTER TABLE "production_runs" DROP CONSTRAINT "production_runs_cancelled_requires_reason";--> statement-breakpoint
 ALTER TABLE "production_runs" ALTER COLUMN "status" DROP DEFAULT;--> statement-breakpoint
 ALTER TABLE "production_runs" ALTER COLUMN "status" SET DATA TYPE text USING "status"::text;--> statement-breakpoint
-UPDATE "production_runs" SET "status" = CASE
-  WHEN "end_time" IS NULL THEN 'running'
-  ELSE 'failed'
-END WHERE "status" = 'draft';--> statement-breakpoint
 DROP TYPE "public"."production_run_status";--> statement-breakpoint
 CREATE TYPE "public"."production_run_status" AS ENUM('running', 'complete', 'failed', 'cancelled');--> statement-breakpoint
 ALTER TABLE "production_runs" ALTER COLUMN "status" SET DATA TYPE "public"."production_run_status" USING "status"::"public"."production_run_status";--> statement-breakpoint

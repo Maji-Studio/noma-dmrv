@@ -169,6 +169,13 @@ describe("production MCP tools", { timeout: TIMEOUT_MS }, () => {
     const cursor = (await call("find_production_runs", { limit: 1 })).structuredContent.nextCursor;
     expect(await call("find_production_runs", { cursor }, b.key)).toMatchObject({ isError: true, structuredContent: { code: "invalid_cursor" } });
   });
+
+  it.each(["failed", "cancelled"])("refuses %s on MCP create with the status pointer", async (status) => {
+    const result = await call("start_production_run", { ...productionRunInput(a), status, requestKey: randomUUID() });
+    expect(result).toMatchObject({ isError: true, structuredContent: { code: "validation_failed",
+      issues: [expect.objectContaining({ pointer: "/status" })] } });
+    expect(await rows()).toHaveLength(0);
+  });
 });
 
 
@@ -180,10 +187,3 @@ async function createCancelled() {
   expect(result.isError).not.toBe(true);
   return result.structuredContent.data;
 }
-
-it.each(["failed", "cancelled"])("refuses %s on MCP create with the status pointer", async (status) => {
-  const result = await call("start_production_run", { ...productionRunInput(a), status, requestKey: randomUUID() });
-  expect(result).toMatchObject({ isError: true, structuredContent: { code: "validation_failed",
-    issues: [expect.objectContaining({ pointer: "/status" })] } });
-  expect(await rows()).toHaveLength(0);
-});

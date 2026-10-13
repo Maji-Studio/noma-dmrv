@@ -18,13 +18,13 @@ import {
   NonexistentLocalTimeError,
   facilityTimeHelperText,
 } from "@/lib/date-utils";
-import { makeProductionRunFormSchema } from "@/schemas/production-runs";
+import { makeProductionRunFormSchema, type ProductionRunStatus } from "@/schemas/production-runs";
 
 /** date-fns pattern matching what `<input type="time">` accepts and emits. */
 export const TIME_INPUT_FORMAT = "HH:mm";
 
-export const buildProductionRunResolver = (timeZone: string) =>
-  zodResolver(makeProductionRunFormSchema(timeZone));
+export const buildProductionRunResolver = (timeZone: string, savedStatus?: ProductionRunStatus) =>
+  zodResolver(makeProductionRunFormSchema(timeZone, undefined, savedStatus));
 
 export type ProductionRunResolver = ReturnType<typeof buildProductionRunResolver>;
 
