@@ -39,3 +39,12 @@ it.each(inputs)("keeps draw checks for coerced masses and canonical published nu
     expect(JSON.stringify(published[field])).not.toContain('"type":"string"');
   }
 });
+
+
+it.each(inputs)("publishes conditional output requirements for $name", ({ schema }) => {
+  const contract = toOperationJsonSchema(schema);
+  const fields = contract.properties as Record<string, { description: string }>;
+  expect(fields.biocharStorageLocationId.description).toContain("Required when complete");
+  expect(fields.biocharMoisturePercent.description).toContain("Required when complete");
+  expect(fields.biocharOutputKg.description).toContain("Must be positive when complete");
+});

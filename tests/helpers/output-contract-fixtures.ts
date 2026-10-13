@@ -98,7 +98,12 @@ async function persistFixtureProvenance(executor: Executor, delivery: Delivery, 
   if (!runShares.length) {
     const [reactor] = await executor.insert(reactors).values({ organizationId: product.organizationId, facilityId: product.facilityId, code: `E2E-REACTOR-${randomUUID()}`, identifier: `E2E Fixture reactor ${randomUUID()}`, reactorType: "auger" }).returning();
     ownedReactors.add(reactor.id);
-    const [run] = await executor.insert(productionRuns).values({ organizationId: product.organizationId, facilityId: product.facilityId, reactorId: reactor.id, code: `E2E-RUN-${randomUUID()}`, status: "complete", startTime: new Date(product.placedAt.getTime() - FIXTURE_RUN_LEAD_MS), biocharDryMassKg: delivery.massDryKg }).returning();
+    const [outputBin] = await executor.insert(storageLocations).values({
+      organizationId: product.organizationId, facilityId: product.facilityId,
+      code: `E2E-OUT-${randomUUID()}`, name: `E2E Run output ${randomUUID()}`, type: "biochar_bin",
+    }).returning();
+    ownedBins.add(outputBin.id);
+    const [run] = await executor.insert(productionRuns).values({ biocharStorageLocationId: outputBin.id, biocharMoisturePercent: 0, biocharOutputKg: delivery.massDryKg, organizationId: product.organizationId, facilityId: product.facilityId, reactorId: reactor.id, code: `E2E-RUN-${randomUUID()}`, status: "complete", startTime: new Date(product.placedAt.getTime() - FIXTURE_RUN_LEAD_MS), biocharDryMassKg: delivery.massDryKg }).returning();
     ownedRuns.add(run.id);
     runShares = [{ id: run.id, dry: delivery.massDryKg }];
   }

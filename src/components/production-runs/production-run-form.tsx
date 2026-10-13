@@ -663,6 +663,7 @@ export function ProductionRunForm({
         <FormField
           id="biocharStorageLocationId"
           label="Biochar storage bin"
+          required={watchedStatus === "complete"}
           error={errors.biocharStorageLocationId?.message}
         >
           <Controller
@@ -692,6 +693,7 @@ export function ProductionRunForm({
           moisturePercent={watchedBiocharMoisture}
           wet={{
             id: "biocharOutputKg",
+            required: watchedStatus === "complete",
             error: biocharOutputError,
             warning: massBalanceFeedback.wetWarning,
             disabled: isSubmitting,
@@ -702,6 +704,7 @@ export function ProductionRunForm({
           }}
           moisture={{
             id: "biocharMoisturePercent",
+            required: watchedStatus === "complete",
             error: errors.biocharMoisturePercent?.message,
             disabled: isSubmitting,
             placeholder: "e.g. 1.5",

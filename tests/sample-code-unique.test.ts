@@ -1,3 +1,4 @@
+import { createProductionRunOutputBin } from "./helpers/production-run-output-bin";
 import { labLogisticsVersion } from "./helpers/lab-logistics-version";
 import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
 /**
@@ -17,7 +18,7 @@ import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-o
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { inArray } from "drizzle-orm";
 import { db } from "@/db";
-import { facilities, reactors } from "@/db/schema/facilities";
+import { facilities, reactors, storageLocations } from "@/db/schema/facilities";
 import { feedstockTypes, feedstocks } from "@/db/schema/feedstock";
 import {
   productionRuns,
@@ -122,6 +123,7 @@ beforeAll(async () => {
     .returning({ id: feedstocks.id });
   createdIds.feedstocks.push(feedstock.id);
 
+  const outputBinId = await createProductionRunOutputBin(TEST_ORG_ID, facility.id);
   const [run] = await db
     .insert(productionRuns)
     .values({
@@ -132,7 +134,8 @@ beforeAll(async () => {
       reactorId: reactor.id,
       startTime: new Date("2025-06-10T08:00:00Z"),
       endTime: new Date("2025-06-10T12:00:00Z"),
-      biocharDryMassKg: 4000,
+      biocharStorageLocationId: outputBinId, biocharMoisturePercent: 0,
+      biocharOutputKg: 4000, biocharDryMassKg: 4000,
     })
     .returning({ id: productionRuns.id });
   createdIds.productionRuns.push(run.id);
@@ -195,6 +198,7 @@ afterAll(async () => {
         .where(inArray(feedstocks.id, createdIds.feedstocks));
     }
     if (createdIds.facilities.length > 0) {
+      await tx.delete(storageLocations).where(inArray(storageLocations.facilityId, createdIds.facilities));
       await tx
         .delete(productionProcesses)
         .where(inArray(productionProcesses.facilityId, createdIds.facilities));

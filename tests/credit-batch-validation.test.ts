@@ -1,3 +1,4 @@
+import { createProductionRunOutputBin } from "./helpers/production-run-output-bin";
 import { labLogisticsVersion } from "./helpers/lab-logistics-version";
 import { productionVersion } from "./helpers/production-version";
 import { insertOutputApplicationFixture } from "./helpers/output-contract-fixtures";
@@ -15,7 +16,7 @@ import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-o
 import { describe, expect, it, beforeAll, afterAll } from "vitest";
 import { eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { facilities, reactors } from "@/db/schema/facilities";
+import { facilities, reactors, storageLocations } from "@/db/schema/facilities";
 import {
   creditBatches,
   creditBatchApplications,
@@ -126,6 +127,8 @@ beforeAll(async () => {
     .returning({ id: reactors.id });
   createdIds.reactors.push(reactorA.id, reactorB.id);
 
+  const outputBinA = await createProductionRunOutputBin(TEST_ORG_ID, facilityA.id);
+  const outputBinB = await createProductionRunOutputBin(TEST_ORG_ID, facilityB.id);
   const productionRunRows = await db
     .insert(productionRuns)
     .values([
@@ -227,7 +230,7 @@ beforeAll(async () => {
         biocharOutputKg: 100,
         biocharDryMassKg: 100,
       },
-    ].map((row) => ({ ...row, status: "complete" as const })))
+    ].map((row) => ({ ...row, status: "complete" as const, biocharMoisturePercent: 0, biocharStorageLocationId: row.facilityId === facilityA.id ? outputBinA : outputBinB })))
     .returning({ id: productionRuns.id });
   [
     runInFacilityA,
@@ -478,6 +481,7 @@ afterAll(async () => {
         .where(inArray(customers.id, createdIds.customers));
     }
     if (createdIds.facilities.length > 0) {
+      await tx.delete(storageLocations).where(inArray(storageLocations.facilityId, createdIds.facilities));
       // createCreditBatch find-or-creates a production_processes row per
       // (facility, feedstockType); it isn't tracked in createdIds, so clear it
       // by facility before deleting facilities/feedstockTypes it references.

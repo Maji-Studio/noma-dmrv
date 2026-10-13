@@ -1,3 +1,4 @@
+import { createProductionRunOutputBin } from "./production-run-output-bin";
 import type { ApiScope } from "@/lib/auth/api-scopes";
 import { randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
@@ -165,10 +166,12 @@ export async function seedFeedstockDraw(
     organizationId: org, facilityId: fixture.facilityId,
     code: "R-FEEDSTOCK-SUITE", identifier: "Feedstock suite reactor", reactorType: "auger",
   }).returning();
+  const outputBinId = await createProductionRunOutputBin(org, fixture.facilityId);
   const wetMassKg = allocations.reduce((sum, allocation) => sum + allocation.wetMassUsedKg, 0);
   const [run] = await db.insert(productionRuns).values({
     organizationId: org, facilityId: fixture.facilityId, reactorId: reactor.id,
     code: "PR-FEEDSTOCK-SUITE", status: "complete",
+    biocharStorageLocationId: outputBinId, biocharMoisturePercent: 0,
     startTime: new Date("2026-10-06T10:00:00Z"), endTime: new Date("2026-10-06T11:00:00Z"),
     feedstockStorageLocationId: fixture.binId, feedstockWetMassKg: wetMassKg,
   }).returning();

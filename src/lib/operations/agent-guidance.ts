@@ -6,7 +6,7 @@ export const STOCK_EFFECTS_RULE = "Use dryRun to inspect stockEffects: each chan
 
 export const PRODUCTION_RUN_UNITS = "Masses are kilograms. Convert tonnes to kilograms exactly once. Draws are wet mass withdrawn from a feedstock bin. Never invent a draw mass the user did not give: ask, or start the run without draws and say the mass is still needed.";
 export const PRODUCTION_RUN_TIMES = "Send times as facility-local { date, time } from whoami or RFC 3339 with an explicit offset. For 'now', use the facility's { date: today, time: localTime }, never the device or model clock.";
-export const PRODUCTION_RUN_STATUS = "Change a run's status through update_production_run. Completing uses status complete; failing uses failed; cancelling uses cancelled and a cancellationReason.";
+export const PRODUCTION_RUN_STATUS = "Use update_production_run for status changes. Complete requires positive biochar output, an output bin and biochar moisture. Failed uses failed; cancelled needs cancellationReason.";
 export const PRODUCTION_RUN_REFERENCES = "Run records carry IDs. Resolve codes with lookups and facility zones with whoami or find_facilities.";
 export const PRODUCTION_RUN_GUIDANCE = `${PRODUCTION_RUN_UNITS} ${PRODUCTION_RUN_TIMES} ${PRODUCTION_RUN_STATUS} ${PRODUCTION_RUN_REFERENCES}`;
 

@@ -23,6 +23,8 @@ import {
 import {
   allowedProductionRunStatusesFrom,
   DRY_MASS_BALANCE_MESSAGE,
+  COMPLETE_OUTPUT_BIN_MESSAGE,
+  COMPLETE_OUTPUT_MOISTURE_MESSAGE,
   getProductionRunOutcomeViolations,
   PRODUCTION_RUN_STATUSES,
   type ProductionRunStatus,
@@ -364,6 +366,7 @@ export function makeProductionRunFormSchema(
       endTimePresent: endPresent,
       cancellationReason: data.cancellationReason,
       biocharOutputKg: data.biocharOutputKg,
+      biocharStorageLocationId: data.biocharStorageLocationId,
       biocharMoisturePercent: data.biocharMoisturePercent,
       feedstockWetMassKg: totalFeedstockWetMassKg,
       feedstockMoisturePercent: data.feedstockMoisturePercent,
@@ -388,6 +391,12 @@ export function makeProductionRunFormSchema(
             path: ["endTime"],
             message: `A ${violation.status} run needs an end date and time.`,
           });
+          break;
+        case "complete-output-bin-required":
+          ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["biocharStorageLocationId"], message: COMPLETE_OUTPUT_BIN_MESSAGE });
+          break;
+        case "complete-output-moisture-required":
+          ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["biocharMoisturePercent"], message: COMPLETE_OUTPUT_MOISTURE_MESSAGE });
           break;
         case "complete-output-required":
           ctx.addIssue({

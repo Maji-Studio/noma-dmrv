@@ -132,7 +132,6 @@ describe('output stock dependency races', () => {
 
   it.each([
     { biocharOutputKg: 1100 },
-    { biocharStorageLocationId: null },
     { feedingRateKgHr: 100 },
   ])('accepts edits to terminal runs with valid feedstock: %j', async (patch) => {
     const f = await parents();
@@ -143,6 +142,15 @@ describe('output stock dependency races', () => {
     await expect(updateProductionRun(f.ctx, f.runs[0].id, {
       expectedVersion: await productionVersion(f.ctx, "productionRuns", f.runs[0].id), status: 'complete',
     })).resolves.toMatchObject({ status: 'complete' });
+  });
+
+  it.each(['biocharStorageLocationId', 'biocharMoisturePercent'] as const)('refuses clearing %s on a complete run', async (field) => {
+    const f = await parents();
+    await expect(updateProductionRun(f.ctx, f.runs[0].id, {
+      expectedVersion: f.runs[0].version, [field]: null,
+    })).rejects.toMatchObject({ code: 'validation_failed', issues: [{ path: [field] }] });
+    const [saved] = await db.select().from(productionRuns).where(eq(productionRuns.id, f.runs[0].id));
+    expect(saved).toEqual(f.runs[0]);
   });
 
   it('blocks ordinary source changes after a count with no allocation rows', async () => {

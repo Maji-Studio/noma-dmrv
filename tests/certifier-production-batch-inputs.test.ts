@@ -1,3 +1,4 @@
+import { createProductionRunOutputBin } from "./helpers/production-run-output-bin";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
@@ -10,6 +11,7 @@ import {
   productionProcesses,
   productionRuns,
   reactors,
+  storageLocations,
 } from "@/db/schema";
 import { certifierProductionBatches } from "@/db/schema/certifier-production-batches";
 import {
@@ -31,6 +33,7 @@ describe("getProductionBatchRegistryInputs", () => {
   const ctx = makeTestOrgContext(TEST_USER_ID);
   let facilityId = "";
   let reactorId = "";
+  let outputBinId = "";
   let feedstockTypeId = "";
   let productionProcessId = "";
   const creditBatchIds: string[] = [];
@@ -47,6 +50,7 @@ describe("getProductionBatchRegistryInputs", () => {
       })
       .returning({ id: facilities.id });
     facilityId = facility.id;
+    outputBinId = await createProductionRunOutputBin(TEST_ORG_ID, facilityId);
     const [reactor] = await db
       .insert(reactors)
       .values({
@@ -109,6 +113,7 @@ describe("getProductionBatchRegistryInputs", () => {
       .where(eq(productionProcesses.id, productionProcessId));
     await db.delete(reactors).where(eq(reactors.id, reactorId));
     await db.delete(feedstockTypes).where(eq(feedstockTypes.id, feedstockTypeId));
+    await db.delete(storageLocations).where(eq(storageLocations.id, outputBinId));
     await db.delete(facilities).where(eq(facilities.id, facilityId));
   });
 
@@ -149,6 +154,7 @@ describe("getProductionBatchRegistryInputs", () => {
           facilityId,
           reactorId,
           status: "complete",
+          biocharStorageLocationId: outputBinId, biocharMoisturePercent: 0,
           startTime: new Date("2026-01-03T08:00:00.000Z"),
           endTime: new Date("2026-01-03T12:00:00.000Z"),
           biocharDryMassKg: 10,
@@ -159,6 +165,7 @@ describe("getProductionBatchRegistryInputs", () => {
           facilityId,
           reactorId,
           status: "complete",
+          biocharStorageLocationId: outputBinId, biocharMoisturePercent: 0,
           startTime: new Date("2026-01-02T07:00:00.000Z"),
           endTime: new Date("2026-01-31T23:00:00.000Z"),
           biocharDryMassKg: 20,
@@ -169,6 +176,7 @@ describe("getProductionBatchRegistryInputs", () => {
           facilityId,
           reactorId,
           status: "complete",
+          biocharStorageLocationId: outputBinId, biocharMoisturePercent: 0,
           startTime: new Date("2026-02-05T09:00:00.000Z"),
           endTime: new Date("2026-02-05T11:00:00.000Z"),
           biocharDryMassKg: 30,
