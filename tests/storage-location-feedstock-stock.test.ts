@@ -23,7 +23,7 @@ interface FeedstockStockFixture {
   feedstockIds: string[];
 }
 
-async function createFixture(runId: string): Promise<FeedstockStockFixture> {
+async function createFixture(runId: string, feedstockIds?: readonly string[]): Promise<FeedstockStockFixture> {
   return db.transaction(async (tx) => {
     const [facility] = await tx
       .insert(facilities)
@@ -60,6 +60,7 @@ async function createFixture(runId: string): Promise<FeedstockStockFixture> {
       .insert(feedstocks)
       .values([
         {
+          id: feedstockIds?.[0],
           organizationId: TEST_ORG_ID,
           code: `FS-STOCK-COMPLETE-${runId}`,
           facilityId: facility.id,
@@ -71,6 +72,7 @@ async function createFixture(runId: string): Promise<FeedstockStockFixture> {
           storageLocationId: storageLocation.id,
         },
         {
+          id: feedstockIds?.[1],
           organizationId: TEST_ORG_ID,
           code: `FS-STOCK-PENDING-${runId}`,
           facilityId: facility.id,
@@ -224,6 +226,23 @@ describe("storage-location feedstock stock", () => {
       await cleanupFixture(fixture);
     }
   });
+});
+
+it.each(["physical", "recorded", "id"] as const)("orders intake batches and timeline by physical time, recorded time, then id (%s)", async (orderBy) => {
+  // Put insertion order against the tie-breakers, and id order against the earlier keys.
+  const ids = [crypto.randomUUID(), crypto.randomUUID()].sort();
+  if (orderBy !== "recorded") ids.reverse();
+  const f = await createFixture(crypto.randomUUID().slice(0, 8).toUpperCase(), ids);
+  try {
+    const earlier = new Date("2026-09-08T12:00:00Z");
+    const later = new Date("2026-09-09T12:00:00Z");
+    await db.update(feedstocks).set({ deliveryDate: earlier, createdAt: orderBy === "id" ? earlier : later }).where(eq(feedstocks.id, ids[0]));
+    await db.update(feedstocks).set({ status: "complete", deliveryDate: orderBy === "physical" ? later : earlier, createdAt: earlier }).where(eq(feedstocks.id, ids[1]));
+    const ledger = await getFeedstockBinStock(makeTestOrgContext(TEST_USER_ID), f.storageLocationId);
+    const expected = orderBy === "physical" ? ids : [...ids].reverse();
+    expect(ledger.entries.map(entry => entry.id)).toEqual(expected);
+    expect(ledger.batches.map(batch => batch.id)).toEqual(expected);
+  } finally { await cleanupFixture(f); }
 });
 
 it.each([false, true])("keeps a loss on A before B arrives, including same-time entries (%s)", async (sameTime) => {

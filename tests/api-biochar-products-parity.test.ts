@@ -1,5 +1,5 @@
 /** Real handlers, credentials and Postgres. Written for reviewer execution; never run by the implementation agent. */
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
@@ -35,6 +35,10 @@ afterEach(async () => {
   auth.requireOrgContext.mockReset();
 }, TIMEOUT_MS);
 
+function sourceReceiptMarker(f: ApiProductFixture) {
+  return { count: f.runs.length, identityHash: createHash("sha256").update(JSON.stringify(f.runs.map(run => run.id).sort())).digest("hex") };
+}
+
 /**
  * Each transport runs in its own organization. Fixture ids become labels, the ids
  * the writes generated become the labels the caller names, any other id stays visible
@@ -53,6 +57,8 @@ function scrub(value: unknown, f: ApiProductFixture, generated: Record<string, s
   const dropped = new Set(["createdAt", "updatedAt", "code", "storageLocationCode", "basisFingerprint", "payloadHash", "idempotencyKey", "expectedProductVersions"]);
   let text = JSON.stringify(value, (key, v) => dropped.has(key) || /Sequence$/.test(key) ? undefined : typeof v === "bigint" ? v.toString() : v);
   text = text.replaceAll(f.tag, "<tag>");
+  // Separate organizations have different receipt ids. Only normalize the exact expected hash.
+  text = text.replaceAll(sourceReceiptMarker(f).identityHash, "<source-receipts>");
   for (const [id, label] of labels) text = text.replaceAll(id, `<${label}>`);
   const unexpected = new Map<string, string>();
   return JSON.parse(text.replace(UUID_PATTERN, (id) => {
@@ -135,6 +141,7 @@ async function captureNormalized(f: ApiProductFixture, productId: string) {
   const stockAllocations = await db.select().from(outputStockAllocations).where(eq(outputStockAllocations.organizationId, org));
   expect(state.products).toHaveLength(1);
   expect(state.movements).toHaveLength(2);
+  for (const movement of state.movements) expect(movement.inputSnapshot?.receiptMarker).toEqual(sourceReceiptMarker(f));
   const [drawMovement, lossMovement] = state.movements;
   expect(state.products[0].id).toBe(productId);
   expect(drawMovement.outputKind).toBe("production_draw");

@@ -100,7 +100,8 @@ export async function getFeedstockBinStock(ctx: OrgContext, storageLocationId: s
   const currentWetKg = round(wetKg);
   const shares = new Map(replay.batches.map(batch => [batch.id, batch]));
   const pile = batches.filter(b => Number(b.wetKg ?? 0) > 0)
-    .sort((a, b) => (a.deliveryDate ?? a.createdAt).getTime() - (b.deliveryDate ?? b.createdAt).getTime())
+    .sort((a, b) => (a.deliveryDate ?? a.createdAt).getTime() - (b.deliveryDate ?? b.createdAt).getTime()
+      || a.createdAt.getTime() - b.createdAt.getTime() || a.id.localeCompare(b.id))
     .map(b => ({ id: b.id, code: b.code, receivedAt: (b.deliveryDate ?? b.createdAt).toISOString(),
       wetKg: shares.get(b.id)?.wetKg ?? 0,
       intakeWetKg: Number(b.wetKg), dryKg: missingDryBasis || b.dryKg === null ? null : shares.get(b.id)?.dryKg ?? null, moisturePercent: b.moisturePercent === null ? null : Number(b.moisturePercent) }));
