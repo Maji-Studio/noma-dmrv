@@ -53,8 +53,8 @@ const EMPTY_INGREDIENT = {
 /** Width of the remove button; the biochar row reserves the same slot so every share lines up. */
 const REMOVE_SLOT_CLASSES = "size-40 shrink-0";
 
-/** One row per material: name on the left, share (and remove) on the right, at every level. */
-const MATERIAL_ROW_CLASSES = "grid grid-cols-1 md:grid-cols-3 gap-x-16 gap-y-20";
+/** One block per material: the material on its own row, its share (and remove) below. */
+const MATERIAL_ROW_CLASSES = "grid grid-cols-1 gap-y-20";
 
 /** Display tolerance (in percent) for the "fully allocated" state. */
 const PERCENT_DISPLAY_TOLERANCE = 0.1;
@@ -303,12 +303,11 @@ export function FormulationForm({
           </Button>
         }
       >
-        {/* One flat row per material: its name field, then its share.
-            Every share sits in the right-hand column so the shares read down
-            as one column that adds up to 100%. */}
+        {/* Each blend material gets a full-width picker, then its share and
+            remove action below it. */}
         <div className="space-y-20">
           <div className={MATERIAL_ROW_CLASSES}>
-            <div className="flex flex-col gap-4 md:col-span-2">
+            <div className="flex flex-col gap-4">
               <div className="flex min-h-24 items-start gap-6">
                 <span className="body-small font-medium text-[var(--color-text-secondary)]">
                   Base material
@@ -350,7 +349,7 @@ export function FormulationForm({
                   />
                 </FormField>
               </div>
-              {/* Holds the width of the remove button below, so every share lines up. */}
+              {/* Reserves space for the ingredient remove action. */}
               <span aria-hidden="true" className={`hidden md:block ${REMOVE_SLOT_CLASSES}`} />
             </div>
           </div>
@@ -363,7 +362,7 @@ export function FormulationForm({
 
           {fields.map((field, index) => (
             <div key={field.id} className={MATERIAL_ROW_CLASSES}>
-              <div className="md:col-span-2">
+              <div>
                 <FormEntitySelect
                   control={formControl}
                   name={`ingredients.${index}.feedstockTypeId`}

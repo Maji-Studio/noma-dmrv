@@ -248,6 +248,11 @@ All from the `@/components/forms` barrel (`src/components/forms/index.ts`) — r
 
 Notes/description/address textareas inside a grid always span full width: wrap in `md:col-span-2` (2-col grids) or `md:col-span-3`.
 
+A dropdown takes the full width of the form, and its menu is as wide as the
+field. It never shares a row with another field or action. Where a legacy
+layout still forces sharing, the important dropdown sits on the left. Table
+toolbars, filters and pagination are exempt.
+
 Free-form **Notes** fields are always the final editable field before
 `FormActions`. Put derived previews or selectable cohorts immediately after the
 inputs that control them, then place Notes after those previews. Documentation
@@ -267,7 +272,7 @@ A `SectionLabel` title over a `space-y-16` field stack, with a `pt-16` hairline 
 
 - **`space-y-20`** — all side-sheet forms (top-level `<form>`), sectioned or not. `FormSection` owns intra-section rhythm; nothing else sets section spacing.
 - **`space-y-24`** — full-page and auth forms only.
-- Field grids inside sections: `grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-20`.
+- Field grids inside sections: `grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-20` for inputs only; a dropdown gets its own `grid-cols-1` row (see the dropdown rule above).
 - Controls in a field-grid row top-align independently. `FormField`'s fixed
   `min-h-24` label row keeps one-line labels level; a wrapped label still shifts
   only its own control down. Do not "fix" that with per-field label heights,
