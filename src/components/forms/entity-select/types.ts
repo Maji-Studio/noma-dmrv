@@ -55,7 +55,7 @@ export interface EntitySelectProps {
   onChange: (value: string | undefined) => void;
   /** Placeholder text */
   placeholder?: string;
-  /** Whether the field is disabled */
+  /** Locks selection; onEditSelected still allows editing the selected entity. */
   disabled?: boolean;
   /** Whether the field has an error */
   error?: boolean;
@@ -115,12 +115,12 @@ export interface EntitySelectProps {
     label: string;
     subtitle?: string;
   };
-  /**
-   * Buttons rendered to the right of the trigger (e.g. View / Edit for the
-   * selected entity). They sit outside the dropdown's box, so the option list
-   * keeps the trigger's width.
-   */
-  trailingActions?: React.ReactNode;
+  /** Opens the selected entity without changing the value. With disabled and a
+   * selected value, the picker stays openable but offers only this Edit action. */
+  onEditSelected?: () => void;
+  /** Overrides the default Edit <selectedOption.name> label. */
+  editLabel?: string;
+
 }
 
 export interface UseEntityOptionsParams {

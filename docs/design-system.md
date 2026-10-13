@@ -168,7 +168,9 @@ shadow. Do not add one to a control; elevation is border and paper (above).
 
 The entity select popover separates options with spacing, a hover fill and a
 selected fill, not per-row rules, and uses Phosphor icons. The search box and
-the "Add new" row are part of the same list, not boxed apart. Give the trigger
+the "Edit <name>" and "Add new" footer rows are part of the same menu, not boxed apart.
+All menu rows have a minimum 44px touch target. The portalled menu flips to fit
+the available viewport; touch opens it without focusing search. Give the trigger
 the `FormField` id (`FormEntitySelect` does) so the field label names it.
 
 ---

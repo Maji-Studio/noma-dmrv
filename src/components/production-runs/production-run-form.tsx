@@ -23,7 +23,8 @@ import { useFieldArray, useForm, useWatch, Controller, type Resolver } from "rea
 import { getRunConflict, type RunConflict } from "@/lib/production-runs/overlap-conflict";
 import { FactoryIcon, PlantIcon, LightningIcon, PackageIcon, PlusIcon } from "@phosphor-icons/react/dist/ssr";
 import { FormField, FormInput, FormTextarea, MassMoistureFields, MoistureField, FormActions, FormError, FormSection, FormSpine, ResolvedErrorRevalidator, makeCertFieldStatus, type CertFieldStatus } from "@/components/forms";
-import { StorageBinActions } from "@/components/storage-locations/storage-bin-actions";
+import { useStorageBinEditDialog } from "@/hooks/use-storage-bin-edit-dialog";
+import { StorageBinEditDialog } from "@/components/forms/entity-select/storage-bin-edit-dialog";
 import { Button } from "@/components/ui/button";
 import { ProductionReadingsField } from "./production-readings-field";
 import { SegmentedControl } from "@/components/forms/segmented-control";
@@ -366,6 +367,8 @@ export function ProductionRunForm({
     }
   });
 
+  const binEdit = useStorageBinEditDialog();
+
   return (
     <div className="space-y-20">
       <form id={formId} onSubmit={handleFormSubmit}>
@@ -679,7 +682,7 @@ export function ProductionRunForm({
                 filterBy={watchedFacilityId ? { facilityId: watchedFacilityId, type: "biochar_bin" } : undefined}
                 allowCreate={!!watchedFacilityId}
                 onCreateNew={() => biocharBinDialog.open()}
-                trailingActions={<StorageBinActions storageLocationId={field.value} />}
+                onEditSelected={() => void binEdit.open(field.value)}
               />
             )}
           />
@@ -836,6 +839,7 @@ export function ProductionRunForm({
       </FormSpine>
 
       </form>
+      <StorageBinEditDialog {...binEdit} />
 
       {watchedFacilityId && (
         <StorageLocationQuickAddDialog

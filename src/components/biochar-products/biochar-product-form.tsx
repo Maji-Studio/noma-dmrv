@@ -18,7 +18,8 @@ import {
   useQuickAddDialog,
 } from "@/components/forms/entity-select";
 import { StockChangeLabel } from "@/components/storage-locations/stock-change-label";
-import { StorageBinActions } from "@/components/storage-locations/storage-bin-actions";
+import { useStorageBinEditDialog } from "@/hooks/use-storage-bin-edit-dialog";
+import { StorageBinEditDialog } from "@/components/forms/entity-select/storage-bin-edit-dialog";
 import { ActionableFocusTarget } from "@/components/ui/actionable-focus-target";
 import { ProductCompositionPreview } from "@/components/ui/product-composition-preview";
 import type { BiocharProductWithRelations } from "@/data-access/biochar-products";
@@ -361,6 +362,8 @@ export function BiocharProductForm({
     allocationFrozen: hasFrozenSourceAllocation,
   });
 
+  const binEdit = useStorageBinEditDialog();
+
   return (
     <div className="space-y-20">
       {focusTarget && (
@@ -447,7 +450,7 @@ export function BiocharProductForm({
                     : "/storage-locations",
                   linkLabel: "Open storage bins",
                 }}
-                trailingActions={<StorageBinActions storageLocationId={field.value} />}
+                onEditSelected={() => void binEdit.open(field.value)}
               />
             )}
           />
@@ -626,7 +629,7 @@ export function BiocharProductForm({
                 }}
                 allowCreate
                 onCreateNew={() => storageLocationDialog.open()}
-                trailingActions={<StorageBinActions storageLocationId={field.value} />}
+                onEditSelected={() => void binEdit.open(field.value)}
               />
             )}
           />
@@ -678,6 +681,7 @@ export function BiocharProductForm({
         submitLabel={submitLabel}
         defaultSubmitLabel={defaultSubmitLabel}
       />
+      <StorageBinEditDialog {...binEdit} />
     </div>
   );
 }

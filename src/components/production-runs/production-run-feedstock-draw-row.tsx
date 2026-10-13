@@ -2,7 +2,8 @@
 
 import { TrashIcon } from "@phosphor-icons/react/dist/ssr";
 import { EntitySelect, FormField, FormInput, StockReconciliationLink } from "@/components/forms";
-import { StorageBinActions } from "@/components/storage-locations/storage-bin-actions";
+import { useStorageBinEditDialog } from "@/hooks/use-storage-bin-edit-dialog";
+import { StorageBinEditDialog } from "@/components/forms/entity-select/storage-bin-edit-dialog";
 import { Button } from "@/components/ui/button";
 import { useStockAvailability } from "@/hooks/use-stock-availability";
 import {
@@ -72,6 +73,8 @@ export function ProductionRunFeedstockDrawRow({
       : undefined;
   const resolvedWetMassError = wetMassError ?? stockError;
 
+  const binEdit = useStorageBinEditDialog();
+
   return (
     <div
       className="space-y-12"
@@ -93,8 +96,7 @@ export function ProductionRunFeedstockDrawRow({
         </Button>
       </div>
 
-      {/* The bin column is wider: it carries the View and Edit buttons. */}
-      <div className="grid grid-cols-1 md:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] gap-x-16 gap-y-20">
+      <div className="flex flex-col gap-y-20">
         <FormField
           id={`feedstockDraws.${index}.storageLocationId`}
           label="Source bin"
@@ -129,7 +131,7 @@ export function ProductionRunFeedstockDrawRow({
               massError: resolvedWetMassError,
               overdrawError: stockError,
             })}
-            trailingActions={<StorageBinActions storageLocationId={storageLocationId} />}
+            onEditSelected={() => void binEdit.open(storageLocationId)}
           />
         </FormField>
         <input
@@ -173,6 +175,7 @@ export function ProductionRunFeedstockDrawRow({
           )}
         </div>
       </div>
+      <StorageBinEditDialog {...binEdit} />
     </div>
   );
 }
