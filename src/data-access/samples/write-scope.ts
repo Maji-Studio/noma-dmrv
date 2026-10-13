@@ -18,7 +18,7 @@
 
 import { and, eq, inArray } from "drizzle-orm";
 import type { DbTransaction } from "@/db";
-import { creditBatches, facilities, samples } from "@/db/schema";
+import { creditBatches, creditBatchProductionRuns, facilities, samples } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import { formatFacilityDate } from "@/lib/date-utils";
 import { withFeedstockErrors } from "@/lib/feedstock-domain-errors";
@@ -33,9 +33,11 @@ import {
 import type { EventInstant } from "@/schemas/event-instant";
 import {
   assertLockedLineagesAllowMutation,
+  CertificationLineageChangedError,
   lockCertifiedLineageArtifacts,
   type CertifiedLineageCheck,
 } from "../certification-lineage-guards";
+import { staleRowVersion } from "../row-version";
 import { requireOrgScope } from "../utils";
 
 export type LockedSampleRow = typeof samples.$inferSelect;
@@ -52,6 +54,8 @@ export interface LockedSampleBatch {
 
 export interface SampleWriteScope {
   batches: ReadonlyMap<string, LockedSampleBatch>;
+  /** Every batch id this writer asked to lock, found or not. */
+  lockedBatchIds: ReadonlySet<string>;
   /** The locked Sample on an update or delete; undefined when it is gone. */
   sample?: LockedSampleRow;
 }
@@ -92,7 +96,7 @@ export async function lockSampleWriteScope(
     .where(and(eq(samples.id, args.sampleId), eq(samples.organizationId, ctx.organizationId)))
     .for("update");
   await asCertificationLocked(() => assertLockedLineagesAllowMutation(ctx, tx, lockedKeys, args.lineage));
-  return { batches: new Map(batchRows.map((batch) => [batch.id, batch])), sample };
+  return { batches: new Map(batchRows.map((batch) => [batch.id, batch])), lockedBatchIds: new Set(batchIds), sample };
 }
 
 /** A locked batch a Sample may be written onto: present in the organization and not archived (round 7 Q56). */
@@ -160,17 +164,73 @@ export function assertBatchTierEvidence(facility: SampleBatchFacility, values: S
   if (values.sReflectanceFraction == null) throw sampleTierEvidenceError("sReflectanceFraction");
 }
 
+/** How an existing Sample reaches credit batches: directly, and through its legacy run's batch. */
+export interface SampleLinks {
+  creditBatchId: string | null;
+  productionRunId: string | null;
+  /** Every batch the Sample's certification lineage can follow, direct and legacy fallback. */
+  lineageBatchIds: string[];
+}
+
+async function lineageBatchIds(ctx: OrgContext, tx: DbTransaction, link: { creditBatchId: string | null; productionRunId: string | null }): Promise<string[]> {
+  const ids = link.creditBatchId ? [link.creditBatchId] : [];
+  if (link.productionRunId) {
+    const runBatches = await tx.select({ creditBatchId: creditBatchProductionRuns.creditBatchId }).from(creditBatchProductionRuns)
+      .where(and(eq(creditBatchProductionRuns.productionRunId, link.productionRunId), eq(creditBatchProductionRuns.organizationId, ctx.organizationId)));
+    ids.push(...runBatches.map((row) => row.creditBatchId));
+  }
+  return [...new Set(ids)];
+}
+
 /**
- * For a child write under a Sample (a transport leg): lock the Sample's batch,
- * then the Sample, after the caller's artifact locks, so a concurrent Sample
- * delete either finished first (the Sample is gone) or waits for the child.
+ * Unlocked read of the batches to lock for an existing Sample. The lineage
+ * guard follows the legacy run link as a fallback (`certification-lineage-guards.ts`),
+ * so the run's batch is locked too, not only the direct one.
  */
-export async function lockSampleParent(ctx: OrgContext, tx: DbTransaction, sampleId: string): Promise<LockedSampleRow | undefined> {
+export async function readSampleLinks(ctx: OrgContext, tx: DbTransaction, sampleId: string): Promise<SampleLinks | undefined> {
   requireOrgScope(ctx);
-  const [snapshot] = await tx.select({ creditBatchId: samples.creditBatchId }).from(samples)
+  const [link] = await tx.select({ creditBatchId: samples.creditBatchId, productionRunId: samples.productionRunId }).from(samples)
     .where(and(eq(samples.id, sampleId), eq(samples.organizationId, ctx.organizationId)));
-  if (!snapshot) return undefined;
-  const scope = await lockSampleWriteScope(ctx, tx, { lineage: [], creditBatchIds: [snapshot.creditBatchId], sampleId });
-  // A move between the read and the lock left the new batch unlocked; the caller refuses.
-  return scope.sample && scope.sample.creditBatchId === snapshot.creditBatchId ? scope.sample : undefined;
+  return link && { ...link, lineageBatchIds: await lineageBatchIds(ctx, tx, link) };
+}
+
+/**
+ * After the locks: the locked Sample still has the links that were read, and
+ * every batch they reach is held. A changed link is a stale version; a run
+ * that joined another batch meanwhile is a lineage change, refused rather than
+ * locked late.
+ */
+export async function assertSampleLinksHeld(ctx: OrgContext, tx: DbTransaction, scope: SampleWriteScope, sampleId: string, read: SampleLinks): Promise<void> {
+  const locked = scope.sample;
+  if (!locked) return;
+  if (locked.creditBatchId !== read.creditBatchId || locked.productionRunId !== read.productionRunId) throw staleRowVersion("sample", sampleId);
+  const reached = await lineageBatchIds(ctx, tx, locked);
+  if (reached.some((id) => !scope.lockedBatchIds.has(id))) {
+    await asCertificationLocked(async () => { throw new CertificationLineageChangedError(); });
+  }
+}
+
+/**
+ * For a child write under a Sample (a transport leg): the Sample's full lock
+ * scope (its artifacts, every batch its lineage reaches, then the Sample) and
+ * the lineage re-checked under those locks, so a Removal assigned while the
+ * child waited refuses it, and a concurrent Sample delete either finished
+ * first (the Sample is gone) or waits for the child.
+ */
+export async function lockSampleParent(
+  ctx: OrgContext,
+  tx: DbTransaction,
+  sampleId: string,
+  lineage: Omit<CertifiedLineageCheck, "target">,
+): Promise<LockedSampleRow | undefined> {
+  requireOrgScope(ctx);
+  const links = await readSampleLinks(ctx, tx, sampleId);
+  if (!links) return undefined;
+  const scope = await lockSampleWriteScope(ctx, tx, {
+    lineage: [{ ...lineage, target: { entityType: "sample", entityId: sampleId } }],
+    creditBatchIds: links.lineageBatchIds,
+    sampleId,
+  });
+  await assertSampleLinksHeld(ctx, tx, scope, sampleId, links);
+  return scope.sample;
 }

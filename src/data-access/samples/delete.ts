@@ -4,10 +4,10 @@ import { samples } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import { sampleNotFound } from "@/lib/sample-domain-errors";
 import { retireDocumentsForEntities } from "../documents";
-import { assertRowVersion, staleRowVersion } from "../row-version";
+import { assertRowVersion } from "../row-version";
 import { deleteTransportLegsForEntity } from "../transport-legs";
 import { requireOrgScope } from "../utils";
-import { lockSampleWriteScope } from "./write-scope";
+import { assertSampleLinksHeld, lockSampleWriteScope, readSampleLinks } from "./write-scope";
 
 /**
  * Delete a lab Sample inside the caller's transaction: its transport legs go
@@ -23,17 +23,16 @@ export async function deleteSampleInTransaction(
   expectedVersion: number,
 ): Promise<void> {
   requireOrgScope(ctx);
-  const [snapshot] = await tx.select({ creditBatchId: samples.creditBatchId }).from(samples)
-    .where(and(eq(samples.id, sampleId), eq(samples.organizationId, ctx.organizationId)));
-  if (!snapshot) throw sampleNotFound();
+  const links = await readSampleLinks(ctx, tx, sampleId);
+  if (!links) throw sampleNotFound();
   const scope = await lockSampleWriteScope(ctx, tx, {
     lineage: [{ target: { entityType: "sample", entityId: sampleId }, mutation: "delete" }],
-    creditBatchIds: [snapshot.creditBatchId],
+    creditBatchIds: links.lineageBatchIds,
     sampleId,
   });
   if (!scope.sample) throw sampleNotFound();
   assertRowVersion({ entity: "sample", id: sampleId, expectedVersion, actualVersion: scope.sample.version });
-  if (scope.sample.creditBatchId !== snapshot.creditBatchId) throw staleRowVersion("sample", sampleId);
+  await assertSampleLinksHeld(ctx, tx, scope, sampleId, links);
 
   const transportLegDocuments = await deleteTransportLegsForEntity(ctx, tx, "sample", sampleId);
   const deleted = await tx

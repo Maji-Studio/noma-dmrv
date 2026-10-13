@@ -34,12 +34,11 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { FlaskIcon, FireIcon, CubeIcon, CalculatorIcon, EyeIcon, ThermometerIcon } from "@phosphor-icons/react/dist/ssr";
 import { FormField, FormInput, EntitySelect, FormActions, FormSection, FormSpine, MoistureField, makeCertFieldStatus } from "@/components/forms";
 import { EventTimeInput } from "@/components/forms/event-time-input";
-import { resolveSamplingClock, withClearedMeasurements } from "./sample-form-values";
+import { labOToCOrgRatioDefault, prepareSampleSubmission, resolveSamplingClock } from "./sample-form-values";
 import { ResolvedErrorRevalidator } from "@/components/forms";
 import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
 import { RATIO_MAX_MESSAGE } from "@/schemas/helpers";
 import {
-  deriveSampleRatios,
   formatSampleRatio,
   previewSampleRatios,
   SampleRatioCapError,
@@ -146,7 +145,8 @@ export function SampleForm({
       ph: sample?.ph ?? undefined,
       saltContentGPerKg: sample?.saltContentGPerKg ?? undefined,
       hToCOrgRatio: sample?.hToCOrgRatio ?? undefined,
-      oToCOrgRatio: sample?.oToCOrgRatio ?? undefined,
+      // A ratio calculated from saved oxygen is not a lab figure; the preview shows it.
+      oToCOrgRatio: labOToCOrgRatioDefault(sample),
       durabilityOption: sample?.durabilityOption ?? "200_year",
       randomReflectanceR0Percent: sample?.randomReflectanceR0Percent ?? undefined,
       sReflectanceFraction: sample?.sReflectanceFraction ?? undefined,
@@ -313,26 +313,19 @@ export function SampleForm({
       setError("samplingTime", { type: "validate", message: samplingClock.hint });
       return;
     }
-    // An emptied optional input clears the stored value instead of keeping it.
-    const data = withClearedMeasurements(entered);
-    // Calculated ratios are injected after the zod resolver ran, so the
-    // shared helper re-checks the numeric(7,6) cap; an out-of-range ratio
-    // would otherwise only surface as a generic server error.
-    let ratios: ReturnType<typeof deriveSampleRatios>;
+    // Emptied inputs clear, and the ratios are calculated as the server will
+    // store them. They are injected after the zod resolver ran, so the shared
+    // helper re-checks the numeric(7,6) cap; an out-of-range ratio would
+    // otherwise only surface as a generic server error.
+    let submission: ReturnType<typeof prepareSampleSubmission<typeof entered>>;
     try {
-      ratios = deriveSampleRatios({
-        totalHydrogenPercent: data.totalHydrogenPercent,
-        totalOxygenPercent: data.totalOxygenPercent,
-        organicCarbonPercent: data.organicCarbonPercent,
-        oToCOrgRatio: data.oToCOrgRatio,
-      });
+      submission = prepareSampleSubmission(entered);
     } catch (error) {
       if (!(error instanceof SampleRatioCapError)) throw error;
       setError(error.ratio, { type: "max", message: Number.isFinite(error.value) ? RATIO_MAX_MESSAGE : error.message });
       return;
     }
-    // null clears a stored ratio on edit, as the partial-update contract reads it.
-    onSubmit({ ...data, hToCOrgRatio: ratios.hToCOrgRatio, oToCOrgRatio: ratios.oToCOrgRatio } as unknown as SampleFormData);
+    onSubmit(submission as unknown as SampleFormData);
   });
 
   return (

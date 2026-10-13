@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
+import { derivedRatioColumns, mergeOverLocked } from "@/data-access/samples/write-values";
 import {
+  labOToCOrgRatioDefault,
+  prepareSampleSubmission,
   resolveSamplingClock,
   SAMPLE_CLEARABLE_NUMBER_FIELDS,
   SAMPLING_CLOCK_FAILED_HINT,
@@ -53,5 +56,34 @@ describe("resolveSamplingClock", () => {
 
   it("asks for a credit batch before a time", () => {
     expect(clock("success", BATCH_ZONE, null)).toMatchObject({ ready: false, hint: SAMPLING_CLOCK_NO_BATCH_HINT });
+  });
+});
+
+describe("lab O/C_org on the edit form (oxygen cleared)", () => {
+  // A saved sample with oxygen: its stored O/C_org was calculated from that oxygen.
+  const saved = { totalHydrogenPercent: 1.5, totalOxygenPercent: 6, organicCarbonPercent: 75, oToCOrgRatio: 0.0601 };
+
+  it("starts the editable lab O/C_org empty when the saved ratio was calculated from oxygen", () => {
+    expect(labOToCOrgRatioDefault(saved)).toBeUndefined();
+    expect(labOToCOrgRatioDefault({ totalOxygenPercent: null, oToCOrgRatio: 0.15 })).toBe(0.15);
+    expect(labOToCOrgRatioDefault(undefined)).toBeUndefined();
+  });
+
+  it("clearing oxygen without a replacement ratio clears O/C_org, as the same PATCH through the operation does", () => {
+    const entered = { totalCarbonPercent: 80, organicCarbonPercent: 75, totalHydrogenPercent: 1.5, totalOxygenPercent: undefined, oToCOrgRatio: labOToCOrgRatioDefault(saved) };
+    const submitted = prepareSampleSubmission(entered);
+    expect(submitted).toMatchObject({ totalOxygenPercent: null, oToCOrgRatio: null });
+
+    const locked = { ...saved, totalCarbonPercent: 80, inorganicCarbonPercent: null, moistureContentPercent: null, sampleCode: "SAM-26-001",
+      randomReflectanceR0Percent: null, sReflectanceFraction: null, r0MeasurementCount: null, reactiveCarbonPercent: null, residualCarbonPercent: null,
+      hToCOrgRatio: 0.2383 } as unknown as Parameters<typeof mergeOverLocked>[0];
+    const formPatch = derivedRatioColumns(mergeOverLocked(locked, { expectedVersion: 1, totalOxygenPercent: null, oToCOrgRatio: submitted.oToCOrgRatio }));
+    const apiPatch = derivedRatioColumns(mergeOverLocked(locked, { expectedVersion: 1, totalOxygenPercent: null }));
+    expect(formPatch.columns).toEqual(apiPatch.columns);
+    expect(formPatch.columns.oToCOrgRatio).toBeNull();
+  });
+
+  it("keeps a lab O/C_org the operator enters on a sample without oxygen", () => {
+    expect(prepareSampleSubmission({ totalCarbonPercent: 80, organicCarbonPercent: 75, totalHydrogenPercent: undefined, totalOxygenPercent: undefined, oToCOrgRatio: 0.12 }).oToCOrgRatio).toBe(0.12);
   });
 });

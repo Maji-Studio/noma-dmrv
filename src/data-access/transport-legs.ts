@@ -253,22 +253,26 @@ export async function createTransportLeg(
   await resolveEntityFacility(ctx, input.entityType, input.entityId);
 
   const [row] = await db.transaction(async (tx) => {
-    await assertCanMutateCertifiedLineage(
-      ctx,
-      tx,
-      {
-        entityType: CERTIFIED_LINEAGE_TARGET[input.entityType],
-        entityId: input.entityId,
-      },
-      "create",
-      "transportLeg",
-      "linked",
-    );
-    // The pre-check above read the parent outside this transaction. A Sample
-    // parent is locked in the shared order (artifacts, batch, sample) and
-    // re-read here, so a concurrent Sample delete cannot orphan the new leg.
-    if (input.entityType === "sample" && !(await lockSampleParent(ctx, tx, input.entityId))) {
-      throw new SafeError(`${ENTITY_LABEL.sample} not found`);
+    if (input.entityType === "sample") {
+      // The pre-check above read the parent outside this transaction. A Sample
+      // parent takes the Sample writers' full lock scope (artifacts, every
+      // batch its lineage reaches, the Sample) and its lineage is re-checked
+      // under those locks, so neither a concurrent Sample delete nor a Removal
+      // assigned while the leg waited can be missed.
+      const parent = await lockSampleParent(ctx, tx, input.entityId, { mutation: "create", subjectEntityType: "transportLeg", lineageRelationship: "linked" });
+      if (!parent) throw new SafeError(`${ENTITY_LABEL.sample} not found`);
+    } else {
+      await assertCanMutateCertifiedLineage(
+        ctx,
+        tx,
+        {
+          entityType: CERTIFIED_LINEAGE_TARGET[input.entityType],
+          entityId: input.entityId,
+        },
+        "create",
+        "transportLeg",
+        "linked",
+      );
     }
 
     return tx

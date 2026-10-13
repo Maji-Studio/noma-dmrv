@@ -4,14 +4,15 @@ import { samples } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import { SampleFieldError, sampleNotFound } from "@/lib/sample-domain-errors";
 import type { CertifiedLineageCheck } from "../certification-lineage-guards";
-import { assertRowVersion, nextVersion, staleRowVersion } from "../row-version";
+import { assertRowVersion, nextVersion } from "../row-version";
 import { requireOrgScope } from "../utils";
 import { assertCarbonReconciliation } from "./carbon-reconciliation";
 import { assertSamplingTimeNotFuture } from "./future-time";
 import { getSampleById } from "./sample-by-id";
 import { derivedRatioColumns, entryWarnings, mergeOverLocked, optionalColumns, type SampleWriteResult, type UpdateSampleRequest } from "./write-values";
 import {
-  assertBatchTierEvidence, lockSampleWriteScope, readSampleBatchFacility, requireWritableBatch, resolveSamplingTimeForBatch,
+  assertBatchTierEvidence, assertSampleLinksHeld, lockSampleWriteScope, readSampleBatchFacility, readSampleLinks,
+  requireWritableBatch, resolveSamplingTimeForBatch,
 } from "./write-scope";
 
 const LEGACY_LOCAL_TIME_MESSAGE = "This Sample has no credit batch, so it has no facility clock. Enter the sampling time with a time zone offset.";
@@ -33,23 +34,24 @@ export async function updateSampleInTransaction(
 ): Promise<SampleWriteResult> {
   requireOrgScope(ctx);
   // Unlocked read for the batches to lock; the locked row below is authoritative.
-  const [snapshot] = await tx.select({ creditBatchId: samples.creditBatchId }).from(samples)
-    .where(and(eq(samples.id, sampleId), eq(samples.organizationId, ctx.organizationId)));
-  if (!snapshot) throw sampleNotFound();
-  const moving = request.creditBatchId !== undefined && request.creditBatchId !== snapshot.creditBatchId;
+  const links = await readSampleLinks(ctx, tx, sampleId);
+  if (!links) throw sampleNotFound();
+  const moving = request.creditBatchId !== undefined && request.creditBatchId !== links.creditBatchId;
   const lineage: CertifiedLineageCheck[] = [{ target: { entityType: "sample", entityId: sampleId }, mutation: "update" }];
   // Moving a sample onto a batch that is already part of a submitted artifact
   // would silently change certified chemistry, so the target batch is guarded too.
   if (moving) {
     lineage.push({ target: { entityType: "creditBatch", entityId: request.creditBatchId! }, mutation: "update", subjectEntityType: "sample", lineageRelationship: "selected" });
   }
-  const scope = await lockSampleWriteScope(ctx, tx, { lineage, creditBatchIds: [snapshot.creditBatchId, request.creditBatchId], sampleId });
+  const scope = await lockSampleWriteScope(ctx, tx, { lineage, creditBatchIds: [...links.lineageBatchIds, request.creditBatchId], sampleId });
   const locked = scope.sample;
   if (!locked) throw sampleNotFound();
   assertRowVersion({ entity: "sample", id: sampleId, expectedVersion: request.expectedVersion, actualVersion: locked.version });
-  // A move committed between the snapshot and the lock bumps the version, so
-  // this only fires for a caller that already held the newer version.
-  if (locked.creditBatchId !== snapshot.creditBatchId) throw staleRowVersion("sample", sampleId);
+  // A link change committed between the read and the lock bumps the version,
+  // so this only fires for a caller that already held the newer version.
+  await assertSampleLinksHeld(ctx, tx, scope, sampleId, links);
+  // Moving off an archived batch is a write on it too (round 7 Q56).
+  if (moving && locked.creditBatchId) requireWritableBatch(scope, locked.creditBatchId);
 
   const effective = mergeOverLocked(locked, request);
   assertCarbonReconciliation(effective, {});

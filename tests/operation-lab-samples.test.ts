@@ -163,6 +163,17 @@ describe("credit batch checks read under the batch lock", { timeout: SUITE_TIMEO
     expect(await sampleRows(f)).toMatchObject([{ id: onA.id, version: 1, creditBatchId: f.batchA.id }]);
   });
 
+  it("refuses a move off an archived batch, and still allows deleting a sample there", async () => {
+    const f = await fixture();
+    const onA = (await record(f)).data.sample;
+    await archive(f, f.batchA);
+    await expect(runOperation(updateLabSample, f.ctx, { labSampleId: onA.id, expectedVersion: 1, creditBatchId: f.batchB!.id, samplingTime: "2026-08-10T08:00:00Z" }))
+      .rejects.toMatchObject({ ...onField("creditBatchId", "not_found"), message: `Credit batch ${f.batchA.code} is archived. Choose an active credit batch.` });
+    expect(await sampleRows(f)).toMatchObject([{ id: onA.id, version: 1, creditBatchId: f.batchA.id }]);
+    await runOperation(deleteLabSample, f.ctx, { labSampleId: onA.id, expectedVersion: 1 });
+    expect(await sampleRows(f)).toEqual([]);
+  });
+
   it("answers another organization's batch with not_found on /creditBatchId and no side effect", async () => {
     const f = await fixture();
     const other = await fixture({ withSecondBatch: false });
@@ -295,6 +306,60 @@ describe("certification lineage", { timeout: SUITE_TIMEOUT_MS }, () => {
     const created = (await record(f)).data.sample;
     await expect(assignedWhileWaiting(f, f.batchA, () => runOperation(deleteLabSample, f.ctx, { labSampleId: created.id, expectedVersion: 1 })))
       .rejects.toMatchObject(locked(LINEAGE_CHANGED));
+    expect(await sampleRows(f)).toHaveLength(1);
+  });
+});
+
+describe("certification lineage of children and legacy links", { timeout: SUITE_TIMEOUT_MS }, () => {
+  /** Holds `batch` and assigns its submitted Removal; `write` must queue behind the barrier. */
+  async function assignWhileQueued(f: LabSampleFixture, batch: LabSampleBatch, write: () => Promise<unknown>) {
+    const barrier = await openOperationBarrier(barrierPool);
+    let pending: Promise<unknown> | undefined;
+    try {
+      await barrier.tx.select({ id: creditBatches.id }).from(creditBatches)
+        .where(and(eq(creditBatches.id, batch.id), eq(creditBatches.organizationId, f.ctx.organizationId))).for("update");
+      await assignRemoval(f, batch, { submitted: true, executor: barrier.tx });
+      pending = write();
+      await waitForBlockedOperations(barrierPool, barrier.pid, 1);
+      await barrier.commit();
+    } catch (error) {
+      await barrier.rollback();
+      await Promise.allSettled([pending]);
+      throw error;
+    }
+    return pending!;
+  }
+
+  it("refuses a transport leg when the Sample's lineage is assigned while the leg waits", async () => {
+    const f = await fixture();
+    const created = (await record(f)).data.sample;
+    const leg = () => createTransportLeg(f.ctx, { entityType: "sample", entityId: created.id, distanceKm: 10, loadMassKg: 1,
+      transportMethodType: "road", calculationMethodType: "distance_based" });
+    await expect(assignWhileQueued(f, f.batchA, leg)).rejects.toThrow(LINEAGE_CHANGED);
+    expect(await legRows(f)).toEqual([]);
+  });
+
+  /** A pre-re-grain row: on batch A directly, with its legacy run in batch B. */
+  async function legacySample(f: LabSampleFixture) {
+    const [row] = await db.insert(samples).values({ organizationId: f.ctx.organizationId, sampleCode: `E2E-LAB-LEGACY-${f.tag}`,
+      creditBatchId: f.batchA.id, productionRunId: f.batchB!.runId, samplingTime: new Date(IN_WINDOW),
+      totalCarbonPercent: 80, organicCarbonPercent: 75 }).returning();
+    return row;
+  }
+
+  it("locks the batch a legacy run link reaches, so its lineage cannot be assigned under an update", async () => {
+    const f = await fixture();
+    const legacy = await legacySample(f);
+    const update = () => runOperation(updateLabSample, f.ctx, { labSampleId: legacy.id, expectedVersion: 1, labName: "x" });
+    await expect(assignWhileQueued(f, f.batchB!, update)).rejects.toMatchObject(locked(LINEAGE_CHANGED));
+    expect(await sampleRows(f)).toMatchObject([{ id: legacy.id, version: 1, labName: null }]);
+  });
+
+  it("locks the batch a legacy run link reaches on delete too", async () => {
+    const f = await fixture();
+    const legacy = await legacySample(f);
+    const remove = () => runOperation(deleteLabSample, f.ctx, { labSampleId: legacy.id, expectedVersion: 1 });
+    await expect(assignWhileQueued(f, f.batchB!, remove)).rejects.toMatchObject(locked(LINEAGE_CHANGED));
     expect(await sampleRows(f)).toHaveLength(1);
   });
 });

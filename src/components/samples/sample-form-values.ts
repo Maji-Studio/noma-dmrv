@@ -6,6 +6,8 @@
  * Total and organic carbon are required and never cleared.
  */
 
+import { deriveSampleRatios, type SampleRatioInputs } from "@/lib/calculations/sample-ratios";
+
 export const SAMPLE_CLEARABLE_NUMBER_FIELDS = [
   "weightGrams", "volumeMl", "inorganicCarbonPercent",
   "totalHydrogenPercent", "totalNitrogenPercent", "totalOxygenPercent", "totalSulfurPercent",
@@ -50,4 +52,29 @@ export function resolveSamplingClock(args: {
   if (args.lookup === "pending") return blocked(SAMPLING_CLOCK_LOADING_HINT);
   if (args.lookup === "error" || !args.batchTimeZone) return blocked(SAMPLING_CLOCK_FAILED_HINT);
   return { ready: true, timeZone: args.batchTimeZone, hint: args.cue(args.batchTimeZone) };
+}
+
+/**
+ * The editable lab O/C_org a saved sample opens with. A sample with oxygen
+ * stored a calculated ratio, which is not a lab figure: the field starts empty
+ * and the preview shows the calculation. Otherwise clearing oxygen would
+ * submit the old calculated ratio as if the lab had reported it.
+ */
+export function labOToCOrgRatioDefault(
+  sample: { totalOxygenPercent: number | null; oToCOrgRatio: number | null } | null | undefined,
+): number | undefined {
+  if (!sample || sample.totalOxygenPercent != null) return undefined;
+  return sample.oToCOrgRatio ?? undefined;
+}
+
+/**
+ * The payload the form submits: emptied measurements cleared, and both ratios
+ * as the server will store them, from the helper the server shares (round 7
+ * Q50). Throws `SampleRatioCapError` for a calculated ratio the column cannot hold.
+ */
+export function prepareSampleSubmission<T extends SampleRatioInputs>(entered: T): T & { hToCOrgRatio: number | null; oToCOrgRatio: number | null } {
+  const data = withClearedMeasurements(entered);
+  const ratios = deriveSampleRatios(data);
+  // null clears a stored ratio on edit, as the partial-update contract reads it.
+  return { ...data, hToCOrgRatio: ratios.hToCOrgRatio, oToCOrgRatio: ratios.oToCOrgRatio };
 }
