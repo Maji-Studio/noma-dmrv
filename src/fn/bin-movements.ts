@@ -13,6 +13,9 @@
  * ratio, so the persisted delta and snapshot columns cannot disagree.
  */
 
+import { getFeedstockBinStock } from "@/data-access/feedstock-bin-ledger";
+import { uuidSchema } from "@/schemas/helpers";
+import { withAction } from "./with-action";
 import type { ConflictRef } from "@/lib/conflict-ref";
 import { z } from "zod";
 import { requireOrgContext } from "@/lib/auth/server";
@@ -176,4 +179,9 @@ export async function recordLossFn(
       ),
     };
   }
+}
+
+/** The pooled feedstock stock card and its complete movement history. */
+export async function getFeedstockBinStockFn(storageLocationId: string) {
+  return withAction(async (ctx) => getFeedstockBinStock(ctx, uuidSchema().parse(storageLocationId)));
 }

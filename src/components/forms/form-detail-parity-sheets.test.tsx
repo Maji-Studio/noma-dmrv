@@ -33,8 +33,10 @@ vi.mock("@/hooks/use-output-stock", async (importOriginal) => ({
   useOutputSubBins: () => ({ data: { stockMode: "mix", subBins: [{ code: "B-001", dryMassKg: 800 }, { code: "B-002", dryMassKg: 640 }] }, isLoading: false, error: null }),
   useOutputStockHistory: () => ({ data: [{ id: "entry", deliveryId: "delivery", kind: "delivery", occurredAt: "2026-09-22T12:00:00.000Z", recordedAt: "2026-09-22", actorName: null, reason: "Recorded", correctsMovementId: null, wetMassKg: 100, moisturePercent: 20, dryMassKg: 80, beforeDryKg: 200, afterDryKg: 120, allocations: [{ layerId: "batch", code: "B-001", wetMassKg: null, dryMassKg: 80, runs: [{ productionRunId: "run", code: "PR-001", dryMassKg: 80 }] }] }], isLoading: false, error: null }),
 }));
-vi.mock("@/components/storage-locations/output-stock-history", () => ({ OutputStockHistory: ({ triggerLabel }: { triggerLabel?: string }) => <button type="button">{triggerLabel ?? "Stock history"}</button> }));
-vi.mock("@/components/storage-locations/bin-movement-history-modal", () => ({ BinMovementHistoryModal: ({ triggerLabel }: { triggerLabel: string }) => <button type="button">{triggerLabel}</button> }));
+vi.mock("@/components/storage-locations/output-stock-history", () => ({ OutputStockHistory: ({ triggerLabel }: { triggerLabel?: string }) => <button type="button">{triggerLabel ?? "History"}</button>, outputStockSeries: () => ({ points: [], modeChanges: [] }) }));
+vi.mock("@/components/storage-locations/feedstock-bin-balance", () => ({ FeedstockBinBalance: () => <button type="button">History</button> }));
+// This render-only check inspects tooltip triggers; interaction has its own DOM test.
+vi.mock("@/components/storage-locations/sub-bin-card", async (importOriginal) => ({ ...await importOriginal<typeof import("@/components/storage-locations/sub-bin-card")>(), DetailsTooltip: ({ trigger }: { trigger: ReactNode }) => trigger }));
 vi.mock("@/components/transport-legs", () => ({ TransportLegsSummary: stub("Transport legs"), TransportRoutePreview: stub("Transport route"), TransportEvidencePanel: stub("Transport evidence") }));
 vi.mock("@/components/ui/entity-detail-value", () => ({ EntityDetailValue: stub("Manure store") }));
 vi.mock("@/components/feedstock-types/feedstock-type-sampling", () => ({ FeedstockTypeSampling: stub("Feedstock sampling") }));

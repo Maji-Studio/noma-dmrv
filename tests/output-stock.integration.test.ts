@@ -10,6 +10,7 @@ import { createOrder } from '@/data-access/orders';
 import { getDeliveryAllocationProvenance } from '@/data-access/delivery-allocation-provenance';
 import { createDelivery, updateDelivery, deleteDelivery } from '@/data-access/delivery-output-writes';
 import { getOutputStockHistory } from '@/data-access/output-stock-history';
+import { buildStockLevelSeries } from '@/components/storage-locations/stock-level-series';
 import { getMatchingOutputBins, previewOutputStock } from '@/data-access/output-stock-operations';
 import { postOutputStock } from '@/data-access/output-stock-post';
 import { cleanupOutputStockFixture } from './helpers/output-stock-cleanup';
@@ -51,6 +52,17 @@ describe('output FIFO transactions', () => {
     const retry = await createDelivery(f.ctx, f.deliveryInput);
     expect(retry.id).toBe(delivery.id);
     expect(delivery.massDryKg).toBe(1150);
+    const history = await getOutputStockHistory(f.ctx, f.bin.id);
+    expect(history.find(entry => entry.deliveryId === delivery.id)).toMatchObject({
+      source: { entity: 'delivery', id: delivery.id }, solidsDeltaKg: -1400,
+    });
+    expect(history.filter(entry => entry.kind === 'intake').every(entry => entry.source?.entity === 'biocharProduct')).toBe(true);
+    // The current estimator drops emptied layers. Replay its frozen effects,
+    // rather than treating the truck weight as a whole-bin moisture reset.
+    const last = buildStockLevelSeries(history).points.at(-1)!;
+    expect(last.dryKg).toBe(350);
+    expect(last.ingredientsKg).toBeCloseTo(70, 6);
+    expect(last.waterKg).toBeCloseTo(1000 - 300 / 0.7 - 420, 6);
     const allocations = await db.select().from(outputStockAllocations).where(eq(outputStockAllocations.deliveryId, delivery.id));
     expect(allocations.reduce((sum, a) => sum + Number(a.wetMassKg), 0)).toBe(2000);
     expect(allocations.reduce((sum, a) => sum + Number(a.dryMassKg), 0)).toBe(1150);
@@ -60,7 +72,7 @@ describe('output FIFO transactions', () => {
       expect(a.basisSnapshot.solidsKg).toBeTruthy();
     }
     await expect(createDelivery(f.ctx, { ...f.deliveryInput, deliveredWetMassKg: 1900 })).rejects.toThrow('different values');
-    await expect(updateDelivery(f.ctx, delivery.id, { expectedVersion: await labLogisticsVersion(f.ctx, "deliveries", delivery.id), deliveredWetMassKg: 1900 })).rejects.toThrow('Correct entry');
+    await expect(updateDelivery(f.ctx, delivery.id, { expectedVersion: await labLogisticsVersion(f.ctx, "deliveries", delivery.id), deliveredWetMassKg: 1900 })).rejects.toThrow('Posted delivery');
     await expect(deleteDelivery(f.ctx, delivery.id, await labLogisticsVersion(f.ctx, "deliveries", delivery.id))).rejects.toThrow('history');
     const [recorded] = await db.select({ wet: sql<number>`sum(${biocharProducts.massKg})`.mapWith(Number) }).from(biocharProducts).where(eq(biocharProducts.storageLocationId, f.bin.id));
     expect(recorded.wet).toBe(2500);
@@ -93,6 +105,8 @@ describe('output FIFO transactions', () => {
     expect(correction.preview.afterDryKg).toBe(343);
     const zero = await post(f, { ...base, wetMassKg: 0, moisturePercent: undefined });
     expect(zero.preview.removedDryKg).toBe(343);
+    const series = buildStockLevelSeries(await getOutputStockHistory(f.ctx, f.bin.id));
+    expect(series.points.at(-1)).toMatchObject({ dryKg: 0, waterKg: expect.closeTo(0, 6), ingredientsKg: expect.closeTo(0, 6) });
     await expect(post(f, { ...base, kind: 'loss', wetMassKg: 6, correctsMovementId: correction.movementId })).rejects.toThrow('later');
   });
   it('rejects shortages, physically future sources, organization and formulation forgery; orders need no stock and bins are unpaginated', async () => {

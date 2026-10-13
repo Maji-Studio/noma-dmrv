@@ -46,7 +46,6 @@ const FIRST_FEEDSTOCK_DRAW_WET_MASS_SELECTOR =
 const feedstockOverdrawText =
   /^Only .+ of wet feedstock is available\. Reduce the wet mass\.$/;
 const biocharOverdrawText = /Not enough dry biochar in the selected bin/;
-const deliveryOverdrawText = /Not enough dry biochar in the selected bin/;
 
 /** Open the existing draft run form against the seeded 120 kg-wet source bin. */
 async function openRunFormWithSource(
@@ -662,8 +661,9 @@ test.describe("createDelivery order-balance guard", () => {
   });
 });
 
-async function openDeliveryCorrection(page: Page, seededData: SeededChainData) {
-  // Ordinary edit retains stock measurements; the journal owns replacements.
+/** Posted delivery measurements remain locked; history links to the saved delivery. */
+test("opens the delivery source from stock history and keeps posted masses locked", async ({ adminPage: page, seededData }) => {
+  await createDeliveredDelivery(page, seededData, "80000");
   await editFirstRow(page, "deliveredWetMassKg");
   await expect(page.locator('input[name="deliveredWetMassKg"]')).toBeDisabled();
   await expect(page.locator('input[name="moistureContentPercent"]')).toBeDisabled();
@@ -671,45 +671,11 @@ async function openDeliveryCorrection(page: Page, seededData: SeededChainData) {
   await waitForFacilityHydration(page, seededData.facility.name);
   await page.getByPlaceholder("Search by code or name…").fill(seededData.productStorageLocation.code);
   await page.getByText(seededData.productStorageLocation.name, { exact: true }).first().click();
-  await page.getByRole("button", { name: "Stock history", exact: true }).first().click();
+  await page.getByRole("button", { name: "History", exact: true }).click();
   const history = page.getByRole("dialog", { name: "Stock history", exact: true });
-  await history.locator("article").filter({ has: page.getByRole("heading", { name: "Delivery", exact: true }) }).getByRole("button", { name: "Correct entry" }).click();
-  await history.locator("#stock-reason").fill("E2E corrected loading measurement");
-  return history;
-}
-
-/** Path 6: a linked correction restores the original draw before its replacement. */
-test.describe("updateDelivery product-batch guard", () => {
-  test("rejects an edited delivery exceeding total product stock", async ({
-    adminPage: page,
-    seededData,
-  }) => {
-    // The delivery owns 80,000 kg; replacing it with 100,001 kg is still invalid.
-    await createDeliveredDelivery(page, seededData, "80000");
-    const history = await openDeliveryCorrection(page, seededData);
-    await history.locator("#stock-wet").fill("100001");
-    await expect(history.getByRole("button", { name: "Save correction", exact: true })).toBeDisabled();
-
-    await expect(
-      history.getByRole("alert").filter({ hasText: deliveryOverdrawText }),
-    ).toBeVisible({ timeout: 10000 });
-  });
-
-  test("accepts an increased delivery when its old draw is excluded", async ({
-    adminPage: page,
-    seededData,
-  }) => {
-    // 80,000 → 90,000 kg is valid; old + replacement would falsely be 170,000.
-    await createDeliveredDelivery(page, seededData, "80000");
-    const history = await openDeliveryCorrection(page, seededData);
-    await history.locator("#stock-wet").fill("90000");
-    await history.getByRole("button", { name: "Save correction", exact: true }).click();
-    await expect(history.getByText("E2E corrected loading measurement", { exact: true }).first()).toBeVisible();
-    // The original entry stays, marked reversed; its reversal is folded into
-    // the replacement that names it.
-    await expect(history.getByRole("heading", { name: /^Delivery\s*Reversed$/ })).toBeVisible();
-    const replacement = history.locator("article").filter({ hasText: "E2E corrected loading measurement" });
-    await expect(replacement).toContainText("Replacement");
-    await expect(replacement).toContainText(/Reverses the entry recorded /);
-  });
+  const delivery = history.locator("details").filter({ hasText: "Delivery" }).first();
+  await delivery.locator("summary").click();
+  await delivery.getByRole("link", { name: "Open delivery" }).click();
+  await expect(page).toHaveURL(/deliveries.*delivery=/);
+  await expect(page.getByRole("dialog")).toBeVisible();
 });

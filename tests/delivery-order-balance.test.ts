@@ -41,7 +41,7 @@ describe("completed delivery order balance", () => {
   it("uses measured shipment moisture to remove dry solids", async () => {
     const f = await fixture(1000); const delivery = await postDelivery(f, 1000, 40);
     expect(delivery.massDryKg).toBe(600);
-    await expect(updateDelivery(f.ctx, delivery.id, { expectedVersion: await labLogisticsVersion(f.ctx, "deliveries", delivery.id), moistureContentPercent: 5 })).rejects.toThrow("Correct entry");
+    await expect(updateDelivery(f.ctx, delivery.id, { expectedVersion: await labLogisticsVersion(f.ctx, "deliveries", delivery.id), moistureContentPercent: 5 })).rejects.toThrow("Posted delivery");
     expect(await getOutputBinAllLayersDryKg(f.ctx, f.bin.id)).toBe(400);
   });
   it("closes the exact dry remainder across partial measured deliveries", async () => {
@@ -71,7 +71,7 @@ describe("completed delivery order balance", () => {
     const f = await fixture(); const delivery = await postDelivery(f, 50);
     await createApplication(f.ctx, { code: `E2E-AP-${f.tag}`, deliveryId: delivery.id, applicationDate: new Date(STOCK_DATE), biocharAppliedTons: 0.025, fieldSizeHa: 1, evidenceMethod: "location" });
     await expect(correction(f, delivery.id, 40)).rejects.toThrow(/application/i);
-    await expect(updateDelivery(f.ctx, delivery.id, { expectedVersion: await labLogisticsVersion(f.ctx, "deliveries", delivery.id), deliveredWetMassKg: 40 })).rejects.toThrow("Correct entry");
+    await expect(updateDelivery(f.ctx, delivery.id, { expectedVersion: await labLogisticsVersion(f.ctx, "deliveries", delivery.id), deliveredWetMassKg: 40 })).rejects.toThrow("Posted delivery");
   });
   it("allows competing orders without reserving or over-allocating physical stock", async () => {
     const f = await fixture(800);

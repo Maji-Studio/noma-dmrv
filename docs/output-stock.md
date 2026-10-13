@@ -50,13 +50,13 @@ from in the order they were emptied, each with its own moisture reading
 reading; the last takes the rest of the one load weight at its reading. If the
 weight never reaches a named sub-bin the draw is refused with "Untick" advice,
 and if the last sub-bin would give more solids than its records hold the save
-is blocked until the bin is reconciled. Without `sources` the draw is oldest first at one
-reading. Counts stay whole-bin.
+is blocked. Without `sources` the draw is oldest first at one
+reading. API counts stay whole-bin.
 
 Each allocation's `basis_snapshot` records `policy` (`fifo`, `operator_order`
 or `pro_rata`), the operator's `order`, and the `readingPercent` used for
 that layer. A draw from several sub-bins stores its overall moisture as
-1 − solids ÷ wet, which history also shows. A correction starts from the saved
+1 − solids ÷ wet, which history also shows. The server correction path starts from the saved
 order and readings and may change them, through the same
 preview and refusals as a new draw, and only while no later movement,
 application or certification submission depends on the original. The last
@@ -100,9 +100,46 @@ repeat FIFO against the bin. Saved shares feed batch accounting, certification
 guards, traceability, and transport. Product transport loads use measured wet
 shares, including physical residuals whose dry grams were already attributed.
 
+## Operator stock sheets
+
+Every bin uses the same stock card and a separate Stock over time card. Split
+output bins show fixed-width bays in oldest-first draw order, wrapping when
+needed, with a key below. Mix and feedstock bins show one pile. A lone vessel
+fills against the configured capacity and lists its parts beside it. Multiple
+split bays compare wet mass against the largest bay. Without capacity, a lone
+vessel fills its available height. The per-bin default draw order is not yet
+configurable.
+
+Adjust stock in the stock card header opens Lost mass directly. There is no
+count action or correction form in the UI. History sits under the chart, groups
+entries by facility-local day, and keeps old counts and corrections readable.
+Corrections show separate Original and Corrected blocks with an arrow between.
+Mode changes say Switched to mix or Switched to split.
+
+History links to the originating production run, biochar product, delivery or
+feedstock intake when the entry has one. Lost mass and old counts have no source
+form or link. A source link opens the existing record; it does not relax posted
+stock guards. The operator workflow for fixing a wrong delivery or lost-mass
+entry remains an open decision, so the UI gives no correction instructions.
+
+The chart uses steps: dry biochar (output) or estimated solids (feedstock), plus
+hatched estimated water. Product ingredient solids are a separate solid band,
+not water. Output points replay frozen stock effects, including reversals, in
+physical-time order; explanatory moisture rows are not counted twice. Missing
+historical wet or solids bases leave water unknown. Bay, pile-band and chart
+point details open on hover, keyboard focus or tap.
+
+Feedstock's org-scoped `feedstock-bin-ledger.ts` reads completed intakes,
+production-run draws, product ingredient draws, losses and old counts. The pile
+is pooled: its batch split is the intake split, matching feedstock allocation.
+Dry solids use the intake-weighted dry-to-wet ratio, rather than output stock's
+immutable layer planner. Missing intake mass basis leaves composition unavailable;
+the wet ledger remains readable. Pending intakes stay outside stock.
+
 ## Losses, counts, and corrections
 
-A measured loss consumes stock through the same planner. A count compares measured
+A measured loss consumes stock through the same planner. Counts and corrections
+remain supported by the API and server, but have no stock-sheet action. A count compares measured
 solids with expected solids: drying alone causes no loss, an excess observation
 creates no stock, and a zero count closes the exact remaining stock without a
 moisture reading.

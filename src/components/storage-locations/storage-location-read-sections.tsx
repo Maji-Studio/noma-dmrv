@@ -1,16 +1,11 @@
 /** Storage bin side-sheet view mode: the sections config for EntitySideSheet. */
-import { Button } from "@/components/ui";
 import { formatDate, formatMassKg } from "@/lib/format-utils";
-import { formatMoisturePercent } from "@/lib/mass-moisture";
 import { formatStorageLocationType, OUTPUT_STOCK_MODE_LABELS } from "@/schemas/storage-locations";
-import { ArrowsClockwiseIcon } from "@phosphor-icons/react/dist/ssr";
-import { BinMovementHistoryModal } from "./bin-movement-history-modal";
+import { FeedstockBinBalance } from "./feedstock-bin-balance";
 import { OutputBinBalance } from "./output-bin-balance";
-import { OutputStockHistory } from "./output-stock-history";
 import type { DetailPanelSection } from "@/components/ui/detail-panel";
 import type { StorageLocationWithFacility } from "@/data-access/storage-locations";
 
-const ACTION_ICON_PX = 18;
 
 function formatDateOrFallback(value: Date | null) {
   if (!value) return "No completed applications";
@@ -27,10 +22,6 @@ function formatDateOrFallback(value: Date | null) {
 function buildStorageDetailFields(storageLocation: StorageLocationWithFacility) {
   if (storageLocation.type === "feedstock_bin") {
     return [
-      {
-        label: "Current wet stock",
-        value: formatMassKg(storageLocation.feedstockInventory.currentWetMassKg),
-      },
       ...(storageLocation.feedstockInventory.pendingWetMassKg > 0
         ? [
             {
@@ -43,14 +34,6 @@ function buildStorageDetailFields(storageLocation: StorageLocationWithFacility) 
             },
           ]
         : []),
-      {
-        label: "Estimated dry mass (non-binding)",
-        value: formatMassKg(storageLocation.feedstockInventory.estimatedDryMassKg),
-      },
-      {
-        label: "Estimated moisture",
-        value: formatMoisturePercent(storageLocation.feedstockInventory.estimatedMoisturePercent),
-      },
       {
         label: "Feedstock types",
         value:
@@ -120,7 +103,7 @@ function buildStorageDetailFields(storageLocation: StorageLocationWithFacility) 
   ];
 }
 
-export function storageLocationSheetSections(bin: StorageLocationWithFacility, onReconcile: (bin: StorageLocationWithFacility, kind?: "loss" | "count") => void): DetailPanelSection[] {
+export function storageLocationSheetSections(bin: StorageLocationWithFacility, onReconcile: (bin: StorageLocationWithFacility) => void): DetailPanelSection[] {
   return [
     {
       title: "Storage details",
@@ -158,18 +141,12 @@ export function storageLocationSheetSections(bin: StorageLocationWithFacility, o
     {
       title: "Inventory",
       fields: buildStorageDetailFields(bin),
-      content: (
-        <div className="flex flex-col gap-16">
-          {bin.type !== "feedstock_bin" && <Button variant="default" onClick={() => onReconcile(bin, "loss")}>Record loss</Button>}
-          <Button
-            variant="default"
-            onClick={() => onReconcile(bin)}
-          >
-            <ArrowsClockwiseIcon size={ACTION_ICON_PX} weight="bold" />
-            Reconcile stock
-          </Button>
-          {bin.type === "feedstock_bin" ? <BinMovementHistoryModal compact triggerLabel="Stock history" storageLocationId={bin.id} /> : <><OutputBinBalance storageLocationId={bin.id} facilityId={bin.facilityId} /><OutputStockHistory compact triggerLabel="Stock history" storageLocationId={bin.id} facilityId={bin.facilityId} /></>}
-        </div>
+      content: bin.type === "feedstock_bin" ? (
+        <FeedstockBinBalance storageLocationId={bin.id} facilityId={bin.facilityId} capacityKg={bin.capacityKg}
+          onAdjust={bin.archivedAt ? undefined : () => onReconcile(bin)} />
+      ) : (
+        <OutputBinBalance storageLocationId={bin.id} facilityId={bin.facilityId} capacityKg={bin.capacityKg}
+          onAdjust={bin.archivedAt ? undefined : () => onReconcile(bin)} />
       ),
     },
   ];

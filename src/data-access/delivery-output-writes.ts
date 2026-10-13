@@ -64,9 +64,9 @@ export async function updateDelivery(ctx: OrgContext, deliveryId: string, raw: O
     if (!existing) throw new SafeError('Delivery not found');
     assertRowVersion({ entity: "delivery", id: deliveryId, expectedVersion: data.expectedVersion, actualVersion: existing.version });
     for (const key of ['orderId', 'facilityId', 'storageLocationId', 'deliveredWetMassKg', 'moistureContentPercent'] as const) {
-      if (data[key] !== undefined && data[key] !== existing[key]) throw new SafeError('Use Correct entry in bin history and enter a reason to change posted stock.');
+      if (data[key] !== undefined && data[key] !== existing[key]) throw new SafeError('Posted delivery stock measurements cannot be changed here.');
     }
-    if (data.deliveryDate && data.deliveryDate.getTime() !== existing.deliveryDate.getTime()) throw new SafeError('Use Correct entry in bin history to change the delivery time.');
+    if (data.deliveryDate && data.deliveryDate.getTime() !== existing.deliveryDate.getTime()) throw new SafeError('Posted delivery time cannot be changed here.');
     const [saved] = await tx.update(deliveries).set({ version: nextVersion(deliveries.version), code: data.code, driverId: data.driverId, vehicleId: data.vehicleId, distanceKmOverride: data.distanceKmOverride,
       distanceSource: data.distanceSource, distanceNote: data.distanceNote, updatedAt: new Date() }).where(and(eq(deliveries.organizationId, ctx.organizationId), eq(deliveries.id, deliveryId))).returning();
     const rows = await getOutputStockAllocationProjection(ctx, { deliveryId }, tx);
@@ -83,6 +83,6 @@ export async function deleteDelivery(ctx: OrgContext, deliveryId: string, expect
     if (!versionRow) throw new SafeError("Delivery not found");
     assertRowVersion({ entity: "delivery", id: deliveryId, expectedVersion: expectedVersion, actualVersion: versionRow.version });
 
-    throw new SafeError('Posted deliveries retain their history. Use Correct entry in bin history.');
+    throw new SafeError('Posted deliveries retain their history and cannot be deleted.');
   });
 }

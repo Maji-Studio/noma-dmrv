@@ -2,12 +2,12 @@ import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import type { UseFormRegisterReturn } from "react-hook-form";
 import { type ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
-import type { OutputStockPreviewInput, OutputStockHistoryEntry } from "@/types/output-stock";
+import type { OutputStockPreviewInput } from "@/types/output-stock";
 
 const mocks = vi.hoisted(() => ({ mutate: vi.fn(), refetch: vi.fn(), input: null as OutputStockPreviewInput | null, error: null as Error | null }));
 vi.mock("@/hooks/use-facility-context", () => ({ useFacilityClock: () => ({ timeZone: "UTC", hint: "Facility time: UTC" }) }));
 vi.mock("@/hooks/use-output-stock", () => ({
-  useOutputSubBins: () => ({ data: undefined, error: null }),
+  useOutputSubBins: () => ({ data: { stockMode: "mix", subBins: [] }, error: null }),
   useOutputStockBalance: () => ({ data: undefined }),
   usePostOutputStock: () => ({ mutateAsync: mocks.mutate, isPending: false }),
   useOutputStockPreview: (input: OutputStockPreviewInput | null) => {
@@ -28,10 +28,11 @@ vi.mock("@/components/forms", async () => {
 vi.mock("./output-stock-history", () => ({ OutputStockHistory: ({ storageLocationId }: { storageLocationId: string }) => <button data-history-bin={storageLocationId}>More info</button> }));
 import { OutputStockForm } from "./output-stock-form";
 
-const original: OutputStockHistoryEntry = {
-  id: "00000000-0000-4000-8000-000000000001", kind: "count", occurredAt: "2026-09-14T12:00:00.000Z", recordedAt: "2026-09-14T10:00:00Z", actorName: null,
-  reason: "Original", wetMassKg: 0, moisturePercent: null, dryMassKg: 350, beforeDryKg: 350, afterDryKg: 0, correctsMovementId: null, deliveryId: null, allocations: [],
-};
+async function fillLoss(renderer: ReactTestRenderer) {
+  for (const [name, value] of [["wetMassKg", 10], ["moisturePercent", 20]] as const) {
+    await act(async () => { renderer.root.findByProps({ name }).props.onChange({ target: { name, value }, type: "change" }); });
+  }
+}
 
 describe("OutputStockForm", () => {
   it("stops a nested child's submit before validation so an owning product form cannot submit", async () => {
@@ -39,7 +40,8 @@ describe("OutputStockForm", () => {
     const recorded = vi.fn();
     mocks.mutate.mockReset().mockResolvedValue({ id: "saved" });
     let renderer!: ReactTestRenderer;
-    await act(async () => { renderer = create(<form onSubmit={parentSubmit}><OutputStockForm storageLocationId="00000000-0000-4000-8000-000000000002" facilityId="00000000-0000-4000-8000-000000000003" kind="count" original={original} onCancel={vi.fn()} onRecorded={recorded} /></form>); });
+    await act(async () => { renderer = create(<form onSubmit={parentSubmit}><OutputStockForm storageLocationId="00000000-0000-4000-8000-000000000002" facilityId="00000000-0000-4000-8000-000000000003" onCancel={vi.fn()} onRecorded={recorded} /></form>); });
+    await fillLoss(renderer);
     const forms = renderer.root.findAllByType("form");
     // React portals preserve this owning React ancestry despite separate DOM roots.
     const dispatchSubmit = async () => {
@@ -52,22 +54,23 @@ describe("OutputStockForm", () => {
     };
     await act(dispatchSubmit);
     expect(mocks.mutate).not.toHaveBeenCalled();
-    await act(async () => { renderer.root.findByType("textarea").props.onChange({ target: { name: "reason", value: "Verified empty bin" }, type: "change" }); });
+    await act(async () => { renderer.root.findByType("textarea").props.onChange({ target: { name: "reason", value: "Spillage while loading" }, type: "change" }); });
     await act(dispatchSubmit);
     expect(mocks.mutate).toHaveBeenCalledOnce();
     expect(recorded).toHaveBeenCalledOnce();
     expect(parentSubmit).not.toHaveBeenCalled();
     await act(async () => renderer.unmount());
   });
-  it("allows zero count without moisture and retries a correction with the same key and current basis", async () => {
+  it("requires a lost-mass measurement and retries with the same key and refreshed basis", async () => {
     mocks.mutate.mockReset().mockRejectedValueOnce(new Error("Stock changed. Review the refreshed preview.")).mockResolvedValueOnce({ id: "saved" });
     const recorded = vi.fn();
     let renderer!: ReactTestRenderer;
-    await act(async () => { renderer = create(<OutputStockForm storageLocationId="00000000-0000-4000-8000-000000000002" facilityId="00000000-0000-4000-8000-000000000003" kind="count" original={original} onCancel={vi.fn()} onRecorded={recorded} />); });
+    await act(async () => { renderer = create(<OutputStockForm storageLocationId="00000000-0000-4000-8000-000000000002" facilityId="00000000-0000-4000-8000-000000000003" onCancel={vi.fn()} onRecorded={recorded} />); });
+    await fillLoss(renderer);
     expect(renderer.root.findAllByProps({ "data-history-bin": "00000000-0000-4000-8000-000000000002" })).toHaveLength(1);
-    expect(mocks.input?.moisturePercent).toBeNull();
-    expect(mocks.input?.wetMassKg).toBe(0);
-    await act(async () => { renderer.root.findByType("textarea").props.onChange({ target: { name: "reason", value: "Verified empty bin" }, type: "change" }); });
+    expect(mocks.input?.moisturePercent).toBe(20);
+    expect(mocks.input?.wetMassKg).toBe(10);
+    await act(async () => { renderer.root.findByType("textarea").props.onChange({ target: { name: "reason", value: "Spillage while loading" }, type: "change" }); });
     const submit = () => renderer.root.findByType("form").props.onSubmit({ stopPropagation: vi.fn(), preventDefault: vi.fn(), persist: vi.fn() });
     await act(async () => { await submit(); });
     expect(recorded).not.toHaveBeenCalled();
@@ -75,7 +78,7 @@ describe("OutputStockForm", () => {
     await act(async () => { await submit(); });
     expect(mocks.mutate).toHaveBeenCalledTimes(2);
     const first = mocks.mutate.mock.calls[0][0];
-    expect(first).toMatchObject({ wetMassKg: 0, moisturePercent: null, correctsMovementId: original.id, basisFingerprint: "current-basis", reason: "Verified empty bin" });
+    expect(first).toMatchObject({ kind: "loss", wetMassKg: 10, moisturePercent: 20, basisFingerprint: "current-basis", reason: "Spillage while loading" });
     expect(mocks.mutate.mock.calls[1][0].idempotencyKey).toBe(first.idempotencyKey);
     expect(recorded).toHaveBeenCalledOnce();
     await act(async () => renderer.unmount());
@@ -85,9 +88,10 @@ describe("OutputStockForm", () => {
     mocks.error = new Error("Preview unavailable");
     let renderer!: ReactTestRenderer;
     try {
-      await act(async () => { renderer = create(<OutputStockForm storageLocationId="00000000-0000-4000-8000-000000000002" facilityId="00000000-0000-4000-8000-000000000003" kind="count" original={original} onCancel={vi.fn()} onRecorded={vi.fn()} />); });
+      await act(async () => { renderer = create(<OutputStockForm storageLocationId="00000000-0000-4000-8000-000000000002" facilityId="00000000-0000-4000-8000-000000000003" onCancel={vi.fn()} onRecorded={vi.fn()} />); });
+      await fillLoss(renderer);
       expect(renderer.root.findByProps({ "data-submit-disabled": "true" })).toBeTruthy();
-      await act(async () => { renderer.root.findByType("textarea").props.onChange({ target: { name: "reason", value: "Verified empty bin" }, type: "change" }); });
+      await act(async () => { renderer.root.findByType("textarea").props.onChange({ target: { name: "reason", value: "Spillage while loading" }, type: "change" }); });
       await act(async () => { await renderer.root.findByType("form").props.onSubmit({ stopPropagation: vi.fn(), preventDefault: vi.fn(), persist: vi.fn() }); });
       expect(mocks.mutate).not.toHaveBeenCalled();
     } finally {

@@ -7,9 +7,11 @@ import { outputStockKeys } from "./use-output-stock";
  * (and the negative-stock badge) refresh immediately.
  */
 
+import { feedstockBinStockKeys } from "./feedstock-bin-stock-keys";
 import type { ConflictRef } from "@/lib/conflict-ref";
 import {
   getBinMovementsFn,
+  getFeedstockBinStockFn,
   recordLossFn,
   recordStockTakeFn,
 } from "@/fn/bin-movements";
@@ -149,5 +151,18 @@ export function useRecordLoss() {
       return result.data;
     },
     onSuccess: (_data, variables) => invalidate(variables.storageLocationId),
+  });
+}
+
+/** A feedstock bin's stock timeline and proportional intake split. */
+export function useFeedstockBinStock(storageLocationId: string, enabled = true) {
+  return useQuery({
+    queryKey: feedstockBinStockKeys.detail(storageLocationId),
+    queryFn: async () => {
+      const result = await getFeedstockBinStockFn(storageLocationId);
+      if (!result.success) throw new Error(result.error);
+      return result.data;
+    },
+    enabled: enabled && !!storageLocationId,
   });
 }

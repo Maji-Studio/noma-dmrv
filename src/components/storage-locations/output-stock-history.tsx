@@ -1,122 +1,130 @@
 "use client";
 
 import { CompositionLedger } from "@/components/forms";
-import { FormDetailProvider, FormDetailControl } from "@/components/forms/form-detail-context";
 import { Button } from "@/components/ui";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Modal } from "@/components/ui/modal";
 import { InfoHint } from "@/components/ui/tooltip";
 import { useOutputStockHistory } from "@/hooks/use-output-stock";
 import { useFacilityClock } from "@/hooks/use-facility-context";
-import { formatFacilityDateTime } from "@/lib/format-utils";
+import { formatFacilityTime } from "@/lib/date-utils";
+import { formatFacilityDateTime, formatFacilityDay, formatMassKg } from "@/lib/format-utils";
+import { formatMoisturePercent } from "@/lib/mass-moisture";
 import { outputStockEventLabel } from "@/lib/output-stock/labels";
 import type { OutputStockHistoryEntry } from "@/types/output-stock";
-import { ClockCounterClockwiseIcon, PencilSimpleIcon } from "@phosphor-icons/react/dist/ssr";
-import { useState } from "react";
-import { StockKindIcon } from "./stock-kind-icons";
+import { ClockCounterClockwiseIcon } from "@phosphor-icons/react/dist/ssr";
+import { useState, type ReactNode } from "react";
 import { MoistureResetChange } from "./moisture-reset-change";
-import { OutputStockForm } from "./output-stock-form";
-import {
-  CalculationDisclosure,
-  formatWetAtMoisture,
-  InlineMassChange,
-  StockChip,
-  StockRows,
-} from "./stock-figures";
+import { StockSourceLink } from "./stock-source-link";
+import { LedgerBeforeAfter, LedgerBreak, LedgerDayHeader, LedgerFacts, LedgerLine } from "./stock-ledger";
+import { buildStockLevelSeries } from "./stock-level-chart";
+import { CalculationDisclosure } from "./stock-figures";
 import { Notice } from "@/components/ui/notice";
 
-const CORRECTABLE_KINDS = ["loss", "count", "delivery"];
+const ICON_PX = 16;
+const TIME_FORMAT = "HH:mm";
 
-/** A mode change moves no stock; it changes how every later draw is taken. */
+/** A mode change moves no stock; it changes how every later removal is drawn. */
 const MODE_CHANGE_CAPTIONS: Record<string, string> = {
-  merge: "From this time on, every draw takes each batch in proportion to what it holds.",
-  split: "From this time on, each batch added is kept apart as its own sub-bin.",
+  merge: "From here on the bin is one blended pile: each draw takes from every batch in proportion to what it holds.",
+  split: "From here on each batch added is kept apart as its own sub-bin.",
 };
 
 /** The one fact the entries cannot show as a figure. */
 const HISTORY_HINT =
-  "Each entry is one measurement. Wet stock is the mass added less the mass taken out; only a count sets moisture again, and it never rewrites an earlier measurement.";
+  "Each entry is one measurement. Wet stock is the mass added less the mass taken out. Only a count sets moisture again; earlier measurements stay unchanged.";
 
-interface EntryProps {
+/** The entry's own size with the moisture it was weighed at, for the original and corrected blocks. */
+function entryFigure(entry: OutputStockHistoryEntry, kind: string): string {
+  return `${entryAmount(entry, kind)}${entry.moisturePercent === null ? "" : ` at ${formatMoisturePercent(entry.moisturePercent)}`}`;
+}
+
+/** The entry's own size: what was weighed or counted, signed by direction. */
+function entryAmount(entry: OutputStockHistoryEntry, kind: string): string {
+  if (kind === "count") return entry.wetMassKg === null ? `${formatMassKg(entry.afterDryKg)} dry` : `${formatMassKg(entry.wetMassKg)} wet`;
+  // dryMassKg is signed: removals positive, intakes negative.
+  const sign = entry.dryMassKg > 0 ? "−" : entry.dryMassKg < 0 ? "+" : "";
+  return entry.wetMassKg === null ? `${sign}${formatMassKg(Math.abs(entry.dryMassKg))} dry` : `${sign}${formatMassKg(entry.wetMassKg)} wet`;
+}
+
+interface LedgerRowProps {
   entry: OutputStockHistoryEntry;
-  kindLabel: string;
-  /** Movement kind the label and icon come from ("replacement" for a correction). */
-  kindKey: string;
+  /** Movement kind the label and icon come from: the original kind for a correction. */
+  kind: string;
   reversedEntry?: OutputStockHistoryEntry;
+  /** The correction that replaced this entry, when one did. */
+  replacedBy?: OutputStockHistoryEntry;
+  moistureEntry?: OutputStockHistoryEntry;
   reversed: boolean;
-  correctable: boolean;
-  last: boolean;
-  /** Facility zone every time on the timeline reads in. */
+  defaultOpen: boolean;
   timeZone: string;
-  onCorrect: () => void;
+  facilityId: string;
 }
 
 /**
- * One movement on the bin's timeline.
- *
- * The rail carries the sequence, the chip names the move, and the figures sit
- * in aligned rows. A correction folds its reversal into the replacement it
- * belongs to, so one operator action reads as one entry.
+ * One operator action as one line: time, what happened, the entry's own size
+ * and the dry biochar left after. Under the line: whether it still counts, the
+ * bin before and after, what a correction changed, then who recorded it.
  */
-function HistoryEntry({ entry, kindLabel, kindKey, reversedEntry, reversed, correctable, last, timeZone, onCorrect }: EntryProps) {
-  const subject = `${kindLabel.toLowerCase()} on ${formatFacilityDateTime(entry.occurredAt, timeZone)}`;
-  const rows = [
-    ...(entry.wetMassKg === null ? [] : [{ label: "Wet", value: formatWetAtMoisture(entry.wetMassKg, entry.moisturePercent) }]),
-    { label: "Dry biochar", value: <InlineMassChange beforeKg={entry.beforeDryKg} afterKg={entry.afterDryKg} /> },
-  ];
+function LedgerRow({ entry, kind, reversedEntry, replacedBy, moistureEntry, reversed, defaultOpen, timeZone, facilityId }: LedgerRowProps) {
+  const label = outputStockEventLabel(kind);
+  const subject = `${label.toLowerCase()} on ${formatFacilityDateTime(entry.occurredAt, timeZone)}`;
+  const recordedLater = entry.recordedAt.slice(0, 16) !== entry.occurredAt.slice(0, 16);
+  const note = entry.reason && entry.kind !== "intake" ? entry.reason : entry.allocations.map((allocation) => allocation.code).join(", ");
+  const chips = [...(reversed ? [replacedBy ? "Replaced" : "Reversed"] : []), ...(reversedEntry ? ["Correction"] : [])];
   return (
-    <li className="flex gap-12">
-      <div className="flex flex-col items-center" aria-hidden="true">
-        <StockKindIcon kind={kindKey} size={16} className={`mt-4 shrink-0 bg-[var(--color-background-white)] ${reversed ? "text-[var(--color-text-tertiary)]" : "text-[var(--color-text-primary)]"}`} />
-        {!last && <span className="w-1 flex-1 bg-[var(--color-border-secondary)]" />}
-      </div>
-      <article id={`output-movement-${entry.id}`} className="min-w-0 flex-1 space-y-8 pb-24">
-        <div className="flex items-center justify-between gap-12">
-          <h4 className="flex min-w-0 items-center gap-6">
-            <span className="body-small font-medium text-[var(--color-text-primary)]">{kindLabel}</span>
-            {reversed && <StockChip>Reversed</StockChip>}
-          </h4>
-          <span className="body-caption tabular-nums whitespace-nowrap text-[var(--color-text-tertiary)]">{formatFacilityDateTime(entry.occurredAt, timeZone)}</span>
-        </div>
-        {MODE_CHANGE_CAPTIONS[entry.kind]
-          ? <p className="body-caption text-[var(--color-text-secondary)]">{MODE_CHANGE_CAPTIONS[entry.kind]}</p>
-          : entry.moistureReset ? <MoistureResetChange reset={entry.moistureReset} named={false} /> : <StockRows inline label={`${kindLabel} figures`} rows={rows} />}
-        {reversedEntry && (
-          <p className="body-caption text-[var(--color-text-secondary)]">
-            Reverses the entry recorded {formatFacilityDateTime(reversedEntry.occurredAt, timeZone)}.
-          </p>
-        )}
-        {entry.reason && !MODE_CHANGE_CAPTIONS[entry.kind] && <p className="body-caption text-[var(--color-text-secondary)]">{entry.reason}</p>}
-        <p className="body-caption text-[var(--color-text-tertiary)]">
-          Recorded {formatFacilityDateTime(entry.recordedAt, timeZone)}{entry.actorName ? ` by ${entry.actorName}` : ""}
+    <LedgerLine id={`output-movement-${entry.id}`} time={formatFacilityTime(new Date(entry.occurredAt), timeZone, TIME_FORMAT)}
+      iconKind={entry.correctsMovementId && entry.kind !== "reversal" ? kind : entry.kind} label={label} chips={chips} note={note}
+      amount={entryAmount(entry, kind)} after={formatMassKg(entry.afterDryKg)} struck={reversed} defaultOpen={defaultOpen}>
+      {reversed && (
+        <p className="body-caption text-[var(--color-text-secondary)]">
+          {replacedBy ? `Replaced by the correction recorded ${formatFacilityDateTime(replacedBy.recordedAt, timeZone)}.` : "Reversed."} It no longer counts toward the stock.
         </p>
-        {entry.allocations.length > 0 && (
-          <CalculationDisclosure subject={subject}>
-            <CompositionLedger
-              hideZero
-              label={`Batches drawn by the ${subject}`}
-              totalLabel="Dry biochar in this entry"
-              // dryMassKg is signed (intakes are negative); the ledger needs the entry's size.
-              total={Math.abs(entry.dryMassKg)}
-              segments={entry.allocations.map(allocation => ({ label: allocation.code, mass: allocation.dryMassKg, category: "dry-batch" as const }))}
-            />
-          </CalculationDisclosure>
-        )}
-        {correctable && (
-          <Button type="button" variant="noOutline" className="-ml-8 min-h-44 gap-8 px-8 normal-case" onClick={onCorrect}>
-            <PencilSimpleIcon size={16} aria-hidden="true" />
-            <span className="body-caption normal-case">Correct entry</span>
-          </Button>
-        )}
-      </article>
-    </li>
+      )}
+      <LedgerBeforeAfter title="Dry biochar in the bin" before={`${formatMassKg(entry.beforeDryKg)} dry`} after={`${formatMassKg(entry.afterDryKg)} dry`} />
+      {reversedEntry && (
+        <LedgerBeforeAfter title={`Corrects the ${label.toLowerCase()} from ${formatFacilityDateTime(reversedEntry.occurredAt, timeZone)}`} labels={["Original", "Corrected"]}
+          before={{ value: entryFigure(reversedEntry, kind), caption: `${formatMassKg(reversedEntry.afterDryKg)} dry after` }}
+          after={{ value: entryFigure(entry, kind), caption: `${formatMassKg(entry.afterDryKg)} dry after` }} />
+      )}
+      {moistureEntry?.moistureReset && <MoistureResetChange reset={moistureEntry.moistureReset} />}
+      <LedgerFacts facts={[
+        ...(entry.moisturePercent !== null && !reversedEntry ? [{ label: "Moisture", value: formatMoisturePercent(entry.moisturePercent) }] : []),
+        ...(entry.reason && entry.kind !== "intake" ? [{ label: reversedEntry ? "Why corrected" : "Reason", value: entry.reason }] : []),
+        { label: "Recorded", value: `${recordedLater ? formatFacilityDateTime(entry.recordedAt, timeZone) : "At the time"}${entry.actorName ? ` by ${entry.actorName}` : ""}` },
+      ]} />
+      <StockSourceLink source={entry.source} facilityId={facilityId} />
+      {entry.allocations.length > 0 && (
+        <CalculationDisclosure subject={subject}>
+          <CompositionLedger
+            hideZero
+            label={`Batches in the ${subject}`}
+            totalLabel="Dry biochar in this entry"
+            total={Math.abs(entry.dryMassKg)}
+            segments={entry.allocations.map(allocation => ({ label: allocation.code, mass: allocation.dryMassKg, category: "dry-batch" as const }))}
+          />
+        </CalculationDisclosure>
+      )}
+    </LedgerLine>
   );
 }
 
-export function OutputStockHistory({ storageLocationId, facilityId, movementId, triggerLabel = "More info", compact = false }: { storageLocationId: string; facilityId: string; movementId?: string; triggerLabel?: string; compact?: boolean }) {
+/** Replay frozen movement effects, including reversals, without resetting moisture on a draw. */
+export function outputStockSeries(entries: readonly OutputStockHistoryEntry[]) {
+  return buildStockLevelSeries(entries);
+}
+
+export function OutputStockHistory({ storageLocationId, facilityId, movementId, triggerLabel = "More info", compact = false, renderTrigger }: {
+  storageLocationId: string;
+  facilityId: string;
+  movementId?: string;
+  triggerLabel?: string;
+  compact?: boolean;
+  /** Draws the opener in the caller's own style, given the history icon. */
+  renderTrigger?: (open: () => void, icon: ReactNode) => ReactNode;
+}) {
   const clock = useFacilityClock(facilityId);
   const [open, setOpen] = useState(false);
-  const [original, setOriginal] = useState<OutputStockHistoryEntry>();
   const history = useOutputStockHistory(storageLocationId, open);
   const entries = history.data ?? [];
   const correctedIds = new Set(entries.filter(entry => entry.kind === "reversal").map(entry => entry.correctsMovementId));
@@ -124,47 +132,64 @@ export function OutputStockHistory({ storageLocationId, facilityId, movementId, 
   const isReversed = (entry: OutputStockHistoryEntry) => correctedIds.has(entry.measuredByMovementId ?? entry.id);
   const originalKind = (entry: OutputStockHistoryEntry): string => entry.eventKind ?? (entry.correctsMovementId ? originalKind(entries.find(item => item.id === entry.correctsMovementId) ?? { ...entry, correctsMovementId: null }) : entry.kind);
   // A movement opened on its own keeps the "Moisture updated" row its reading added.
-  const shown = entries.toReversed().filter(entry => !movementId || entry.id === movementId || entry.measuredByMovementId === movementId);
+  const shown = entries.filter(entry => !movementId || entry.id === movementId || entry.measuredByMovementId === movementId);
   // A correction posts a reversal plus a replacement against the same entry.
   // The replacement carries both, so a lone reversal row would double-count it.
   const foldedIntoReplacement = (entry: OutputStockHistoryEntry) =>
     entry.kind === "reversal" && shown.some(other => other.kind !== "reversal" && other.correctsMovementId === entry.correctsMovementId);
-  const timeline = shown.filter(entry => !foldedIntoReplacement(entry));
+  // A reading's "Moisture updated" row folds into the movement that measured it.
+  const moistureFor = (entry: OutputStockHistoryEntry) => shown.find(other => other.kind === "moisture_update" && other.measuredByMovementId === entry.id);
+  const foldedIntoMovement = (entry: OutputStockHistoryEntry) =>
+    entry.kind === "moisture_update" && shown.some(other => other.id === entry.measuredByMovementId);
+  // A corrected entry stays in the list, struck through, beside the replacement that names it.
+  const timeline = shown
+    .filter(entry => !foldedIntoReplacement(entry) && !foldedIntoMovement(entry))
+    .sort((a, b) => b.occurredAt.localeCompare(a.occurredAt) || b.recordedAt.localeCompare(a.recordedAt));
+  const openHistory = () => setOpen(true);
+  const icon = <ClockCounterClockwiseIcon size={compact ? 18 : ICON_PX} aria-hidden="true" />;
+
   return <>
-    <Button type="button" variant={compact ? "noOutline" : "default"} className={compact ? "min-h-44 gap-8 px-8 normal-case" : undefined} onClick={() => setOpen(true)}>{compact && <ClockCounterClockwiseIcon size={18} aria-hidden="true" />}<span className={compact ? "body-caption normal-case" : undefined}>{triggerLabel}</span></Button>
-    <Modal isOpen={open} onClose={() => { setOpen(false); setOriginal(undefined); }} ariaLabel="Stock history" width="md">
-      <FormDetailProvider scope={`${open}:${original?.id}`} enabled={!!original}>
+    {renderTrigger ? renderTrigger(openHistory, icon) : (
+      <Button type="button" variant={compact ? "noOutline" : "default"} className={compact ? "min-h-44 gap-8 px-8 normal-case" : undefined} onClick={openHistory}>{compact && icon}<span className={compact ? "body-caption normal-case" : undefined}>{triggerLabel}</span></Button>
+    )}
+    <Modal isOpen={open} onClose={() => setOpen(false)} ariaLabel="Stock history" width="md">
       <div className="space-y-20">
         <div className="flex items-center justify-between gap-12 pr-24">
           <h3 className="flex min-w-0 items-center gap-6 title-heading-3">
             <span className="truncate">Stock history</span>
             <InfoHint label="About stock history">{HISTORY_HINT}</InfoHint>
           </h3>
-          <FormDetailControl />
         </div>
-        {original ? <OutputStockForm storageLocationId={storageLocationId} facilityId={facilityId} kind={originalKind(original) === "count" ? "count" : originalKind(original) === "delivery" ? "delivery" : "loss"} original={original} onCancel={() => setOriginal(undefined)} onRecorded={() => setOriginal(undefined)} /> : <>
           {history.isLoading && <p role="status" className="body-caption text-[var(--color-text-secondary)]">Loading the stock history</p>}
           {history.error && <Notice tone="error">{history.error.message}</Notice>}
           {history.data?.length === 0 && <EmptyState icon={<ClockCounterClockwiseIcon size={32} />} title="No stock history" description="Recorded movements will appear here." padding="sm" />}
-          {timeline.length > 0 && <ul>
-            {timeline.map((entry, index) => (
-              <HistoryEntry
-                timeZone={clock.timeZone}
-                key={entry.id}
-                entry={entry}
-                kindKey={entry.correctsMovementId && entry.kind !== "reversal" ? "replacement" : entry.kind}
-                kindLabel={outputStockEventLabel(entry.correctsMovementId && entry.kind !== "reversal" ? "replacement" : entry.kind)}
-                reversedEntry={entry.correctsMovementId ? entries.find(item => item.id === entry.correctsMovementId) : undefined}
-                reversed={isReversed(entry)}
-                correctable={entry.kind !== "reversal" && !correctedIds.has(entry.id) && CORRECTABLE_KINDS.includes(originalKind(entry))}
-                last={index === timeline.length - 1}
-                onCorrect={() => setOriginal(entry)}
-              />
-            ))}
-          </ul>}
-        </>}
+          {timeline.length > 0 && <div className="tabular-nums">
+            {timeline.map((entry, index) => {
+              const day = formatFacilityDay(entry.occurredAt, clock.timeZone);
+              const dayHeader = index === 0 || day !== formatFacilityDay(timeline[index - 1].occurredAt, clock.timeZone)
+                ? <LedgerDayHeader day={day} afterLabel={index === 0 ? "Dry biochar after" : undefined} /> : null;
+              const kind = entry.correctsMovementId && entry.kind !== "reversal" ? originalKind(entry) : entry.kind;
+              return <div key={entry.id}>
+                {dayHeader}
+                {MODE_CHANGE_CAPTIONS[entry.kind] ? (
+                  <LedgerBreak id={`output-movement-${entry.id}`} iconKind={entry.kind} title={`${formatFacilityTime(new Date(entry.occurredAt), clock.timeZone, TIME_FORMAT)} ${outputStockEventLabel(entry.kind)}`} caption={MODE_CHANGE_CAPTIONS[entry.kind]} source={<StockSourceLink source={entry.source} facilityId={facilityId} />} />
+                ) : (
+                  <LedgerRow
+                    entry={entry}
+                    kind={kind}
+                    timeZone={clock.timeZone}
+                    reversedEntry={entry.correctsMovementId && entry.kind !== "reversal" ? entries.find(item => item.id === entry.correctsMovementId) : undefined}
+                    replacedBy={entries.find(item => item.correctsMovementId === entry.id && item.kind !== "reversal")}
+                    moistureEntry={moistureFor(entry)}
+                    reversed={isReversed(entry)}
+                    defaultOpen={!!movementId}
+                    facilityId={facilityId}
+                  />
+                )}
+              </div>;
+            })}
+          </div>}
       </div>
-      </FormDetailProvider>
     </Modal>
   </>;
 }

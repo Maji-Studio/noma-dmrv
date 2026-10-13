@@ -102,6 +102,11 @@ export interface OutputStockHistoryEntry {
   afterDryKg: number;
   correctsMovementId: string | null;
   deliveryId: string | null;
+  /** The form this movement came from, when it has one. */
+  source?: { entity: 'productionRun' | 'biocharProduct' | 'delivery' | 'application'; id: string };
+  /** Frozen changes for the chart; null means the wet or solids basis is unresolved. */
+  wetDeltaKg?: number | null;
+  solidsDeltaKg?: number | null;
   allocations: OutputStockAllocationView[];
   /** Split draws: the sub-bins and readings the entry was posted with. */
   sources?: { layerId: string; moisturePercent: number }[];

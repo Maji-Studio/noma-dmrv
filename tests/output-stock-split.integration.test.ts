@@ -79,7 +79,7 @@ describe("split bin draws in PostgreSQL", () => {
     expect((await previewOutputStock(f.ctx, correction)).blockingMessage).toBeNull();
     // Oldest first takes P1, but it would have split differently with P2 restored.
     await postMeasurement(f, { kind: "loss", wetMassKg: 100 });
-    expect((await previewOutputStock(f.ctx, correction)).blockingMessage).toMatch(/Correction blocked by a later stock loss/);
+    expect((await previewOutputStock(f.ctx, correction)).blockingMessage).toMatch(/Correction blocked by a later lost mass/);
   });
 
   it("feeds applications from a split delivery and then locks its correction", async () => {
