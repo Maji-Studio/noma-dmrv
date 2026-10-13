@@ -248,6 +248,11 @@ All from the `@/components/forms` barrel (`src/components/forms/index.ts`) — r
 
 Notes/description/address textareas inside a grid always span full width: wrap in `md:col-span-2` (2-col grids) or `md:col-span-3`.
 
+A dropdown takes the full width of the form, and its menu is as wide as the
+field. It never shares a row with another field or action. Where a legacy
+layout still forces sharing, the important dropdown sits on the left. Table
+toolbars, filters and pagination are exempt.
+
 Free-form **Notes** fields are always the final editable field before
 `FormActions`. Put derived previews or selectable cohorts immediately after the
 inputs that control them, then place Notes after those previews. Documentation
