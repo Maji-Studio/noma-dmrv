@@ -520,7 +520,8 @@ A one-option enum is a fixed value, not a control.
 Both controls are native radios in a `fieldset` with an `sr-only` legend, so
 the browser gives one tab stop and arrow keys that move and select. Do not add
 `role`, `tabIndex` or key handlers. The selected option carries a check glyph
-plus a heavier border (not colour alone; both survive forced-colors). Wire them
+plus a heavier border (not colour alone; both survive forced-colors).
+Unselected segments are bordered too, so they read as clickable. Wire them
 like `FormSelect` (`{...register("field")}`) or controlled
 (`value` + `onValueChange`). Inside a `FormField`, give the control the same
 `id` and pass `legend` for the accessible name: the visible label stays
