@@ -48,8 +48,17 @@ import {
 } from "@/lib/calculations/biochar-eligibility";
 import type { CreditBatchSampling } from "@/schemas/credit-batches";
 
-/** Label for an unpaired replicate whose provenance row is missing. */
-const UNPAIRED_REPLICATE_FALLBACK_LABEL = "replicate";
+/**
+ * The unpaired-H/C_org explanation shared by blocker (d) and the readiness
+ * chip, so both surfaces name the same Samples in the same order and words.
+ */
+export function describeUnpairedHToCSamples(sampleCodes: string[]): string {
+  const count = sampleCodes.length;
+  const sorted = [...sampleCodes].sort((left, right) =>
+    left.localeCompare(right),
+  );
+  return `${count} ${pluralize(count, "Sample")} with H/C_org but no O/C_org: ${sorted.join(", ")}. Eligibility is judged only on Samples with both ratios, so ${count === 1 ? "this H/C_org goes" : "these H/C_org values go"} unchecked. Record the O/C_org or correct the ${pluralize(count, "Sample")} before submitting.`;
+}
 
 /**
  * Provenance of one pooled replicate, for the production-window checks. The
@@ -169,17 +178,12 @@ export function evaluateDurabilitySubmissionGates(
     // (d) Paired submission: the submitted H/C_org population (same
     // `isUsableNumber` predicate as the aggregation) minus the paired replicates
     // eligibility already judged.
-    const unpairedSampleCodes = eligibility.unpairedHToCReplicateIndexes
-      .map(
-        (index) =>
-          batch.replicateProvenance[index]?.sampleCode ??
-          `${UNPAIRED_REPLICATE_FALLBACK_LABEL} ${index + 1}`,
-      )
-      .sort((left, right) => left.localeCompare(right));
+    const unpairedSampleCodes = eligibility.unpairedHToCReplicateIndexes.map(
+      (index) => batch.replicateProvenance[index].sampleCode,
+    );
     if (unpairedSampleCodes.length > 0) {
-      const count = unpairedSampleCodes.length;
       blockers.push(
-        `Credit batch ${batch.creditBatchCode} has ${count} ${pluralize(count, "Sample")} with H/C_org but no O/C_org: ${unpairedSampleCodes.join(", ")}. Eligibility is judged only on Samples with both ratios, so ${count === 1 ? "this H/C_org goes" : "these H/C_org values go"} unchecked. Record the O/C_org or correct the ${pluralize(count, "Sample")} before submitting.`,
+        `Credit batch ${batch.creditBatchCode} has ${describeUnpairedHToCSamples(unpairedSampleCodes)}`,
       );
     }
   }

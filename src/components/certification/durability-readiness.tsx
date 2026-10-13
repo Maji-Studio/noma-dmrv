@@ -23,6 +23,7 @@ import {
 } from "@/lib/certification/durability-batch-summary";
 import type { ValueWithStdDev } from "@/lib/isometric/utils/durability-aggregation";
 import { MISSING_VALUE } from "@/lib/copy-utils";
+import { describeUnpairedHToCSamples } from "@/lib/certification/durability-submission-gates";
 
 type Tone = "ok" | "wait" | "bad" | "off";
 
@@ -105,12 +106,11 @@ function eligibilityChip(
   // A passing paired verdict is not ready while an H/C_org reaches the
   // submitted mean without its O/C_org: the submission gate blocks (round 7 Q54).
   if (eligibility.eligible === true && unpaired.length > 0) {
-    const one = unpaired.length === 1;
     return {
       tone: "wait",
       icon: undefined,
       label: "Chemistry incomplete",
-      hint: `${one ? "Sample" : "Samples"} ${unpaired.join(", ")} ${one ? "has" : "have"} H/C_org but no O/C_org. Eligibility is judged only on Samples with both ratios, so submission is blocked. Record the O/C_org or correct the ${one ? "Sample" : "Samples"}.`,
+      hint: `This batch has ${describeUnpairedHToCSamples(unpaired)}`,
     };
   }
   if (eligibility.eligible === true) {

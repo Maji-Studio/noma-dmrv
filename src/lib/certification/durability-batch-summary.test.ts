@@ -286,6 +286,19 @@ describe("buildDurabilityBatchSummaries", () => {
     expect(summary.eligibility.unpairedHToCSampleCodes).toEqual(["S-ADV"]);
   });
 
+  it("leaves unpaired Samples unnamed on an unsampled batch, as the gate does", () => {
+    const [summary] = buildDurabilityBatchSummaries([
+      batch({
+        creditBatchId: "cb-u",
+        creditBatchCode: "CB-U",
+        sampling: "unsampled",
+        samples: [sample({ id: "u", sampleCode: "S-U", hToCOrgRatio: 1.2 })],
+      }),
+    ]);
+
+    expect(summary.eligibility.unpairedHToCSampleCodes).toEqual([]);
+  });
+
   it("handles string sampling timestamps when resolving replicate days", () => {
     const stringDays = eligibleSamples().map((s, i) =>
       sample({

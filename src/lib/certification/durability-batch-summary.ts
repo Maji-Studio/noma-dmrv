@@ -265,9 +265,13 @@ export function buildDurabilityBatchSummaries(
         oToCorgMean: eligibility.meanOToCOrgRatio,
         hToCWithinThreshold: eligibility.hToCWithinThreshold,
         oToCWithinThreshold: eligibility.oToCWithinThreshold,
-        unpairedHToCSampleCodes: eligibility.unpairedHToCReplicateIndexes.map(
-          (index) => batch.samples[index].sampleCode,
-        ),
+        // Mirrors gate (d), which exempts unsampled batches.
+        unpairedHToCSampleCodes:
+          batch.sampling === "unsampled"
+            ? []
+            : eligibility.unpairedHToCReplicateIndexes.map(
+                (index) => batch.samples[index].sampleCode,
+              ),
       },
       submitted: {
         hToCorg: dp?.hToCorgRatio ?? null,
