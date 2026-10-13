@@ -1,3 +1,4 @@
+import { createProductionRunOutputBin } from "./helpers/production-run-output-bin";
 import { labLogisticsVersion } from "./helpers/lab-logistics-version";
 import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
 /**
@@ -122,10 +123,7 @@ beforeAll(async () => {
     .returning({ id: feedstocks.id });
   createdIds.feedstocks.push(feedstock.id);
 
-  const [outputBin] = await db.insert(storageLocations).values({
-    organizationId: TEST_ORG_ID, facilityId: facility.id, code: `BIN-SC-OUT-${suffix}`,
-    name: `E2E Sample output ${suffix}`, type: "biochar_bin",
-  }).returning();
+  const outputBinId = await createProductionRunOutputBin(TEST_ORG_ID, facility.id);
   const [run] = await db
     .insert(productionRuns)
     .values({
@@ -136,7 +134,7 @@ beforeAll(async () => {
       reactorId: reactor.id,
       startTime: new Date("2025-06-10T08:00:00Z"),
       endTime: new Date("2025-06-10T12:00:00Z"),
-      biocharStorageLocationId: outputBin.id, biocharMoisturePercent: 0,
+      biocharStorageLocationId: outputBinId, biocharMoisturePercent: 0,
       biocharOutputKg: 4000, biocharDryMassKg: 4000,
     })
     .returning({ id: productionRuns.id });

@@ -1,5 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { and, eq } from "drizzle-orm";
+import { db } from "@/db";
+import { biocharProducts, formulations, productionRuns } from "@/db/schema";
 import { POST as MCP } from "@/app/api/mcp/route";
 import { createProductionRunFn, updateProductionRunFn } from "@/fn/production-runs";
 import { createProductionRunSchema, updateProductionRunSchema } from "@/schemas/production-runs";
@@ -23,9 +26,51 @@ beforeEach(async () => {
   await seedApiFeedstock(fixture);
   auth.requireOrgContext.mockResolvedValue(fixture.ctx);
 });
-afterEach(async () => { await removeApiFeedstockFixture(fixture); auth.requireOrgContext.mockReset(); });
+afterEach(async () => {
+  await db.delete(biocharProducts).where(eq(biocharProducts.organizationId, fixture.ctx.organizationId));
+  await db.delete(formulations).where(eq(formulations.organizationId, fixture.ctx.organizationId));
+  await removeApiFeedstockFixture(fixture);
+  auth.requireOrgContext.mockReset();
+});
 
 describe.each(TRANSPORTS)("complete output through %s", (transport) => {
+  it.each(REQUIREMENTS)("allows metadata edits on a legacy complete run missing $field with a dependent product", async ({ field }) => {
+    const complete = await seedApiProductionRun(fixture, { ...productionRunInput(fixture), ...completionPatch(fixture) });
+    await db.update(productionRuns).set({ [field]: null }).where(and(
+      eq(productionRuns.organizationId, fixture.ctx.organizationId), eq(productionRuns.id, complete.row.id),
+    ));
+    const [formulation] = await db.insert(formulations).values({
+      organizationId: fixture.ctx.organizationId, code: "E2E-LEGACY-PURE", name: "E2E Legacy pure", biocharRatio: 1,
+    }).returning();
+    await db.insert(biocharProducts).values({
+      organizationId: fixture.ctx.organizationId, facilityId: fixture.facilityId,
+      code: "E2E-LEGACY-PRODUCT", formulationId: formulation.id,
+      placedAt: new Date(complete.row.endTime!), linkedProductionRunId: complete.row.id,
+    });
+    const baseline = await captureProductionRunState(fixture);
+    for (const status of [undefined, "complete"] as const) {
+      const saved = await readProductionRun(fixture, complete.row.id);
+      const patch = { electricityKwh: 0, status };
+      if (transport === "action") {
+        expect(await updateProductionRunFn({
+          productionRunId: saved.row.id, expectedVersion: saved.row.version, ...patch,
+        })).toMatchObject({ success: true });
+      } else if (transport === "rest") {
+        expect((await patchProductionRun(fixture, saved.row, saved.etag, patch)).status).toBe(200);
+      } else {
+        const { result } = await rpcBody(await MCP(rpc(fixture.key, "tools/call", {
+          name: "update_production_run", arguments: {
+            productionRunId: saved.row.id, expectedVersion: saved.row.version, requestKey: randomUUID(), ...patch,
+          },
+        })));
+        expect(result.isError).not.toBe(true);
+      }
+      const after = await captureProductionRunState(fixture);
+      expect(after.runs[0]).toMatchObject({ status: "complete", [field]: null, electricityKwh: 0, version: saved.row.version + 1 });
+      expect({ ...after, runs: [] }).toEqual({ ...baseline, runs: [] });
+    }
+  }, TIMEOUT_MS);
+
   async function refuse(body: Record<string, unknown>, requirement: typeof REQUIREMENTS[number], saved?: Awaited<ReturnType<typeof seedApiProductionRun>>) {
     const target = saved ? { productionRunId: saved.row.id, expectedVersion: saved.row.version } : {};
     if (transport === "action") {

@@ -198,13 +198,15 @@ bound); these are the decisions it deliberately did not make.
   operator message. Fail-closed held: no ProductionBatch and no Removal reached
   the registry. But the gate fires AFTER the 15 monitored-input datapoint POSTs
   succeeded, so a refused submission leaves orphan datapoints in the registry.
-- Root enabler: run completion validates positive WET output only
-  (`complete-output-required` in `src/lib/production-runs/lifecycle.ts`) and a
-  moisture of 100% is accepted, so 0 kg dry is legally reachable. The
+- Root enabler: run completion requires positive wet output, an output bin,
+  and biochar moisture (`complete-output-required`, `complete-output-bin-required`,
+  and `complete-output-moisture-required` in `src/lib/production-runs/lifecycle.ts`).
+  A moisture of 100% is still accepted, so 0 kg dry remains reachable. The
   `runsMissingDryMass` (NULL dry mass) branch in
   `buildProductionBatchSubmission` (`src/fn/certification/production-batches.ts`)
   is unreachable from the UI - batch
-  membership requires `complete` runs and `complete` requires wet output - so
+  membership requires `complete` runs and `complete` requires wet output, an
+  output bin, and biochar moisture - so
   that branch is defence-in-depth only.
 - **Resolve via:** decide which layers should also know. Candidates, roughly
   independent: (a) a readiness/pre-submit check that every member run has dry

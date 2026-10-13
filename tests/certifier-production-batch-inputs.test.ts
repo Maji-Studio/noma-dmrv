@@ -1,3 +1,4 @@
+import { createProductionRunOutputBin } from "./helpers/production-run-output-bin";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
@@ -49,11 +50,7 @@ describe("getProductionBatchRegistryInputs", () => {
       })
       .returning({ id: facilities.id });
     facilityId = facility.id;
-    const [outputBin] = await db.insert(storageLocations).values({
-      organizationId: TEST_ORG_ID, facilityId, code: `BIN-PTB-OUT-${tag}`,
-      name: `E2E Production batch output ${tag}`, type: "biochar_bin",
-    }).returning();
-    outputBinId = outputBin.id;
+    outputBinId = await createProductionRunOutputBin(TEST_ORG_ID, facilityId);
     const [reactor] = await db
       .insert(reactors)
       .values({

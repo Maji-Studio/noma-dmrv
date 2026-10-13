@@ -26,6 +26,7 @@ import {
   assertProductionRunTransition,
   statusOccupiesReactor,
   type ProductionRunStatus,
+  type ProductionRunOutcomeViolation,
 } from "@/lib/production-runs/lifecycle";
 import { and, eq, isNull } from "drizzle-orm";
 import { assertCanMutateCertifiedLineage } from "../certification-lineage-guards";
@@ -471,6 +472,13 @@ export async function updateProductionRunInTransaction(
     now,
   );
   const effectiveStatus = data.status ?? existing.status;
+  // Legacy complete runs remain editable until their output section is touched.
+  const outputFieldsTouched = data.biocharStorageLocationId !== undefined ||
+    data.biocharMoisturePercent !== undefined || data.biocharOutputKg !== undefined;
+  const skippedOutputViolations = (previousStatus: ProductionRunStatus): ProductionRunOutcomeViolation["code"][] =>
+    previousStatus === "complete" && !outputFieldsTouched
+      ? ["complete-output-bin-required", "complete-output-moisture-required"]
+      : [];
   const effectiveFeedstockWetMassKg =
     normalizedFeedstockDraws !== undefined
       ? sumProductionRunFeedstockDraws(normalizedFeedstockDraws)
@@ -527,7 +535,7 @@ export async function updateProductionRunInTransaction(
         drawCount: effectiveFeedstockDrawCount,
       },
     },
-    { only: PREFLIGHT_OUTCOME_VIOLATIONS },
+    { only: PREFLIGHT_OUTCOME_VIOLATIONS, skip: skippedOutputViolations(existing.status) },
   );
   if (normalizedFeedstockDraws !== undefined || data.feedstockMoisturePercent !== undefined) {
     updateData.feedstockMassDryKg =
@@ -627,6 +635,11 @@ export async function updateProductionRunInTransaction(
       data.cancellationReason !== undefined
         ? data.cancellationReason
         : locked.cancellationReason;
+    const effectiveBiocharStorageId =
+      data.biocharStorageLocationId !== undefined
+        ? data.biocharStorageLocationId
+        : locked.biocharStorageLocationId;
+    const lockedSkippedOutputViolations = skippedOutputViolations(locked.status);
 
     assertProductionRunTransition(locked.status, lockedTargetStatus);
     assertProductionRunOutcome(
@@ -637,7 +650,7 @@ export async function updateProductionRunInTransaction(
         endTimePresent: lockedTargetEndTime !== null,
         cancellationReason: lockedTargetCancellationReason,
         biocharOutputKg: lockedTargetBiocharOutput,
-        biocharStorageLocationId: data.biocharStorageLocationId !== undefined ? data.biocharStorageLocationId : locked.biocharStorageLocationId,
+        biocharStorageLocationId: effectiveBiocharStorageId,
         biocharMoisturePercent:
           data.biocharMoisturePercent !== undefined
             ? data.biocharMoisturePercent
@@ -659,7 +672,7 @@ export async function updateProductionRunInTransaction(
             lockedFeedstockStorageLocationIds.length,
         },
       },
-      { only: PREFLIGHT_OUTCOME_VIOLATIONS },
+      { only: PREFLIGHT_OUTCOME_VIOLATIONS, skip: lockedSkippedOutputViolations },
     );
 
     if (lockedTargetStatus !== locked.status && lockedTargetStatus !== "complete") {
@@ -711,10 +724,6 @@ export async function updateProductionRunInTransaction(
       });
     }
 
-    const effectiveBiocharStorageId =
-      data.biocharStorageLocationId !== undefined
-        ? data.biocharStorageLocationId
-        : locked.biocharStorageLocationId;
     if (
       effectiveBiocharStorageId &&
       (data.biocharStorageLocationId !== undefined || data.facilityId !== undefined)
@@ -798,8 +807,7 @@ export async function updateProductionRunInTransaction(
     const consumedFeedstockWetKg =
       await getProductionRunFeedstockDrawTotal(ctx, tx, productionRunId);
 
-    // Recheck all outcome rules after allocation. Only untouched feedstock
-    // prerequisites are exempt for existing records, as in both preflights.
+    // Recheck after allocation with the same legacy output exemptions.
     assertProductionRunOutcome({
       status: lockedTargetStatus,
       startTime: lockedTargetStartTime,
@@ -826,7 +834,7 @@ export async function updateProductionRunInTransaction(
         consumedFeedstockWetKg,
       },
       cancellationReason: lockedTargetCancellationReason,
-    });
+    }, { skip: lockedSkippedOutputViolations });
     await attachProductionRunToMatchingCreditBatch(
       ctx,
       tx,

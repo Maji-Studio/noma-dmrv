@@ -1,3 +1,4 @@
+import { createProductionRunOutputBin } from "./helpers/production-run-output-bin";
 import { beforeAll, describe, expect, it } from "vitest";
 import { eq, sql } from "drizzle-orm";
 import { db } from "@/db";
@@ -48,10 +49,7 @@ async function fixture() {
     code: `FS-RACE-${f.runId}`, status: "complete",
     massDryKg: FEEDSTOCK_DRY_KG, massWetKg: FEEDSTOCK_WET_KG, moistureContentPercent: MOISTURE_PERCENT,
   }).returning();
-  const [outputBin] = await db.insert(storageLocations).values({
-    organizationId: TEST_ORG_ID, facilityId: f.facilityId,
-    code: `BIN-RACE-OUT-${f.runId}`, name: `E2E Race output ${f.runId}`, type: "biochar_bin",
-  }).returning();
+  const outputBinId = await createProductionRunOutputBin(TEST_ORG_ID, f.facilityId);
   const run = await createProductionRun(ctx, {
     code: `PR-RACE-${f.runId}`, facilityId: f.facilityId, reactorId: reactor.id,
     status: "running", startTime: new Date("2026-01-15T08:00:00Z"), endTime: null,
@@ -63,7 +61,7 @@ async function fixture() {
     complete: () => updateProductionRun(ctx, run.id, {
       expectedVersion: run.version, status: "complete",
       endTime: new Date("2026-01-15T12:00:00Z"),
-      biocharStorageLocationId: outputBin.id,
+      biocharStorageLocationId: outputBinId,
       biocharOutputKg: BIOCHAR_WET_KG, biocharMoisturePercent: MOISTURE_PERCENT,
     }),
     cleanup: async () => {
@@ -78,7 +76,7 @@ async function fixture() {
       await db.delete(productionProcesses).where(eq(productionProcesses.facilityId, f.facilityId));
       await db.delete(feedstocks).where(eq(feedstocks.id, stock.id));
       await db.delete(storageLocations).where(eq(storageLocations.id, bin.id));
-      await db.delete(storageLocations).where(eq(storageLocations.id, outputBin.id));
+      await db.delete(storageLocations).where(eq(storageLocations.id, outputBinId));
       await db.delete(reactors).where(eq(reactors.id, reactor.id));
       await cleanupOutputFixtureParents(db, f.facilityId);
       await db.delete(facilities).where(eq(facilities.id, f.facilityId));
