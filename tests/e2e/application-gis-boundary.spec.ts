@@ -69,13 +69,7 @@ test("adds, reads, replaces, and removes a GIS boundary", async ({
   await waitForSideSheet(page);
   await page.locator("#orderDate").fill(today);
   await selectEntity(page, "Customer", seededData.customer.id, seededData.customer.name);
-  await page.waitForSelector(
-    'select[name="customerLocationId"]:not([disabled])',
-    { timeout: COLD_COMPILE_TIMEOUT_MS },
-  );
-  await page
-    .locator("#customerLocationId")
-    .selectOption(seededData.customerLocation.id);
+  await selectEntity(page, "Customer location", seededData.customerLocation.id, seededData.customerLocation.name);
   await selectEntity(
     page,
     "Formulation", seededData.formulation.id, seededData.formulation.name,
@@ -93,7 +87,7 @@ test("adds, reads, replaces, and removes a GIS boundary", async ({
   await page.getByRole("button", { name: "New delivery" }).click();
   await waitForSideSheet(page);
   await selectFirstEntity(page, "Order");
-  await page.selectOption('select[name="storageLocationId"]', seededData.productStorageLocation.id);
+  await selectEntity(page, "Actual source bin", seededData.productStorageLocation.id, seededData.productStorageLocation.name);
   await page.locator("#deliveredWetMassKg").fill("100");
   await fillStockMoisture(page, "delivery", "10");
   await page
@@ -107,14 +101,7 @@ test("adds, reads, replaces, and removes a GIS boundary", async ({
   await page.getByRole("button", { name: "New application" }).click();
   await waitForSideSheet(page);
   await page.locator("#applicationDate").fill(today);
-  const deliverySelect = page.locator("#deliveryId");
-  const deliveryValue = await deliverySelect
-    .locator("option:not([value=''])")
-    .first()
-    .getAttribute("value");
-  expect(deliveryValue).not.toBeNull();
-  if (!deliveryValue) throw new Error("No delivered delivery was available");
-  await deliverySelect.selectOption(deliveryValue);
+  await selectFirstEntity(page, "Delivery");
   await page.locator("#biocharAppliedTons").fill("50");
   await page.locator("#fieldSizeHa").fill("2");
   await page.locator("#fieldIdentifier").fill(fieldIdentifier);

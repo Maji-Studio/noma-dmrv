@@ -1,31 +1,56 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { EntitySelect } from "./entity-select";
 import { FormEntitySelect } from "./form-entity-select";
-import { useForm } from "react-hook-form";
+import { useController, useForm } from "react-hook-form";
 import { Modal } from "@/components/ui/modal/modal";
-import type { EntityOption } from "./types";
+import { FormField } from "../form-field";
+import type { EntityOption, EntityType } from "./types";
+import { ENTITY_SEARCH_LIMIT } from "@/config/forms";
+import { useState } from "react";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 
-const state = vi.hoisted(() => ({ options: [] as EntityOption[], loading: false, error: null as Error | null }));
+const state = vi.hoisted(() => ({ permissionChecks: 0, dialogMounts: [] as string[], listEnabled: [] as boolean[], detailIds: [] as (string | undefined)[], options: [] as EntityOption[], loading: false, canManage: false, error: null as Error | null }));
 vi.mock("@/hooks/use-entities", () => ({
-  useEntityOptions: ({ search }: { search: string }) => ({
-    data: state.options.filter((option) => option.name.toLowerCase().includes(search.toLowerCase())),
-    isLoading: state.loading,
-    error: state.error,
-  }),
-  useEntityById: () => ({ data: { id: "one", code: "1", name: "North bin" }, isPending: false }),
+  useEntityOptions: ({ search, enabled }: { search: string; enabled: boolean }) => {
+    state.listEnabled.push(enabled);
+    return {
+      data: state.options.filter((option) => option.name.toLowerCase().includes(search.toLowerCase())),
+      isLoading: state.loading,
+      error: state.error,
+    };
+  },
+  useEntityById: (_type: string, id: string | undefined) => {
+    state.detailIds.push(id);
+    return { data: { id: "one", code: "1", name: "North bin" }, isPending: false };
+  },
 }));
-vi.mock("./driver-quick-add-dialog", () => ({ DriverQuickAddDialog: () => null }));
-vi.mock("./operator-quick-add-dialog", () => ({ OperatorQuickAddDialog: () => null }));
-vi.mock("./vehicle-quick-add-dialog", () => ({ VehicleQuickAddDialog: () => null }));
-vi.mock("./feedstock-type-quick-add-dialog", () => ({ FeedstockTypeQuickAddDialog: () => null }));
-vi.mock("./formulation-quick-add-dialog", () => ({ FormulationQuickAddDialog: () => null }));
+vi.mock("./driver-quick-add-dialog", () => ({ DriverQuickAddDialog: (props: TestQuickAddDialogProps) => { state.dialogMounts.push("Driver"); return <TestQuickAddDialog {...props} />; } }));
+vi.mock("./operator-quick-add-dialog", () => ({ OperatorQuickAddDialog: (props: TestQuickAddDialogProps) => { state.dialogMounts.push("Operator"); return <TestQuickAddDialog {...props} />; } }));
+vi.mock("./vehicle-quick-add-dialog", () => ({ VehicleQuickAddDialog: (props: TestQuickAddDialogProps) => { state.dialogMounts.push("Vehicle"); return <TestQuickAddDialog {...props} />; } }));
+vi.mock("./feedstock-type-quick-add-dialog", () => ({ FeedstockTypeQuickAddDialog: (props: TestQuickAddDialogProps) => { state.dialogMounts.push("FeedstockType"); return <TestQuickAddDialog {...props} />; } }));
+vi.mock("./formulation-quick-add-dialog", () => ({ FormulationQuickAddDialog: (props: TestQuickAddDialogProps) => { state.dialogMounts.push("Formulation"); return <TestQuickAddDialog {...props} />; } }));
+vi.mock("@/hooks/use-entity-edit-record", () => ({
+  isEditableEntityType: (type: string) => !["facility", "creditBatch"].includes(type),
+  useCanManageFeedstockTypes: () => { state.permissionChecks += 1; return state.canManage; },
+}));
+vi.mock("./entity-edit-dialog", () => ({
+  EntityEditDialog: ({ entityId, onClose }: { entityId: string; onClose: () => void }) => (
+    <button type="button" data-testid="shared-edit-dialog" onClick={onClose}>{entityId}</button>
+  ),
+}));
 const scroll = vi.fn();
 let finePointer = true;
 beforeEach(() => {
   state.options = [{ id: "one", code: "1", name: "North bin" }, { id: "two", code: "2", name: "South bin" }];
+  state.listEnabled = [];
+  state.detailIds = [];
+  state.permissionChecks = 0;
+  state.dialogMounts = [];
   state.loading = false;
+  state.canManage = false;
   state.error = null;
   finePointer = true;
   scroll.mockClear();
@@ -45,11 +70,197 @@ function LockedFormPicker() {
   return <FormEntitySelect control={control} name="binId" label="Storage bin" entityType="storageLocation" selectionLocked onEditSelected={vi.fn()} />;
 }
 
+const requiredPickerSchema = z.object({ binId: z.string().min(1, "Select a storage bin.") });
+interface TestQuickAddDialogProps { isOpen: boolean; onClose: () => void }
+function TestQuickAddDialog({ isOpen, onClose }: TestQuickAddDialogProps) {
+  return <Modal isOpen={isOpen} onClose={onClose} ariaLabel="Quick-add entity">
+    <input aria-label="Entity name" />
+    <input aria-label="Entity code" />
+    <button type="button" onClick={onClose}>Cancel</button>
+  </Modal>;
+}
+
+function QuickAddFormPicker({ entityType, onBlur }: { entityType: EntityType; onBlur: () => void }) {
+  const { control } = useForm({ defaultValues: { binId: "" }, resolver: zodResolver(requiredPickerSchema), mode: "onTouched" });
+  const { field, fieldState } = useController({ control, name: "binId" });
+  return <>
+    <FormField id="required-entity" label="Required entity" required error={fieldState.error?.message}>
+      <EntitySelect id="required-entity" entityType={entityType} value={field.value} onChange={field.onChange} onBlur={() => { onBlur(); field.onBlur(); }} allowCreate alwaysShowSearch />
+    </FormField>
+    <button type="button">Outside picker</button>
+  </>;
+}
+
+function TouchedFormPicker({ alwaysShowSearch }: { alwaysShowSearch: boolean }) {
+  const { control } = useForm({
+    defaultValues: { binId: "" },
+    resolver: zodResolver(requiredPickerSchema),
+    mode: "onTouched",
+  });
+  return <>
+    <FormEntitySelect control={control} name="binId" label="Storage bin" entityType="storageLocation" required autoSelectSingle={false} alwaysShowSearch={alwaysShowSearch} />
+    <button type="button">Outside picker</button>
+  </>;
+}
+
+describe("EntitySelect touched validation", () => {
+  it.each(["driver", "operator", "vehicle", "feedstockType", "formulation"] as const)("does not blur or validate a required picker while its %s quick-add dialog has focus", async (entityType) => {
+    const blur = vi.fn();
+    const { container } = render(<QuickAddFormPicker entityType={entityType} onBlur={blur} />);
+    act(() => trigger().focus()); open();
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByTestId("entity-select-search")));
+    fireEvent.click(screen.getByTestId("entity-select-create"));
+    await screen.findByRole("dialog", { name: "Quick-add entity" });
+    expect(container.contains(screen.getByRole("textbox", { name: "Entity name" }))).toBe(false);
+    expect(blur).not.toHaveBeenCalled();
+    await act(async () => { screen.getByRole("textbox", { name: "Entity name" }).focus(); });
+    expect(blur).not.toHaveBeenCalled();
+    await act(async () => { screen.getByRole("textbox", { name: "Entity code" }).focus(); });
+    expect(blur).not.toHaveBeenCalled();
+    expect(container.querySelector('[role="alert"]')).toBeNull();
+    await act(async () => { screen.getByRole("button", { name: "Cancel" }).focus(); });
+    expect(blur).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Quick-add entity" })).toBeNull());
+    expect(blur).not.toHaveBeenCalled();
+    expect(container.querySelector('[role="alert"]')).toBeNull();
+    await act(async () => { trigger().focus(); });
+    await act(async () => { screen.getByRole("button", { name: "Outside picker" }).focus(); });
+    expect(blur).toHaveBeenCalledOnce();
+    expect((await screen.findByRole("alert")).textContent).toBe("Select a storage bin.");
+  });
+
+  it("notifies blur after clearing a focused prefilled closed picker and moving outside", () => {
+    const blur = vi.fn(); const change = vi.fn();
+    function PrefilledPicker() {
+      const [value, setValue] = useState<string | undefined>("one");
+      return <EntitySelect options={state.options} value={value} onChange={(next) => { setValue(next); change(next); }} onBlur={blur} />;
+    }
+    render(<><PrefilledPicker /><button type="button">Outside picker</button></>);
+    expect(trigger().getAttribute("aria-expanded")).toBe("false");
+    const clear = screen.getByTestId("entity-select-clear");
+    act(() => clear.focus());
+    expect(document.activeElement).toBe(clear);
+    fireEvent.click(clear);
+    expect(change).toHaveBeenCalledExactlyOnceWith("");
+    expect(screen.queryByTestId("entity-select-clear")).toBeNull();
+    expect(blur).not.toHaveBeenCalled();
+    act(() => screen.getByRole("button", { name: "Outside picker" }).focus());
+    expect(blur).toHaveBeenCalledOnce();
+  });
+
+  it.each([false, true])("does not validate while opening or picking with the mouse (search: %s)", async (alwaysShowSearch) => {
+    render(<TouchedFormPicker alwaysShowSearch={alwaysShowSearch} />);
+    act(() => trigger().focus());
+    open();
+    if (alwaysShowSearch) await waitFor(() => expect(document.activeElement).toBe(screen.getByTestId("entity-select-search")));
+    expect(screen.queryByRole("alert")).toBeNull();
+    const option = screen.getByTestId("entity-option-two");
+    fireEvent.pointerDown(option);
+    // A non-focusable option sends focus to the body before its click.
+    await act(async () => { (document.activeElement as HTMLElement).blur(); });
+    expect(screen.queryByRole("alert")).toBeNull();
+    await act(async () => { fireEvent.click(option); });
+    expect(trigger().textContent).toBe("South bin");
+    expect(screen.queryByRole("alert")).toBeNull();
+    await act(async () => { screen.getByRole("button", { name: "Outside picker" }).focus(); });
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it.each([
+    { dismissal: "Escape", search: false }, { dismissal: "Escape", search: true },
+    { dismissal: "outside", search: false }, { dismissal: "outside", search: true },
+  ])("validates an empty picker dismissed by $dismissal (search: $search)", async ({ dismissal, search }) => {
+    render(<TouchedFormPicker alwaysShowSearch={search} />);
+    act(() => trigger().focus()); open();
+    if (search) await waitFor(() => expect(document.activeElement).toBe(screen.getByTestId("entity-select-search")));
+    expect(screen.queryByRole("alert")).toBeNull();
+    if (dismissal === "Escape") key("Escape");
+    else fireEvent.pointerDown(screen.getByRole("button", { name: "Outside picker" }));
+    expect((await screen.findByRole("alert")).textContent).toBe("Select a storage bin.");
+    expect(screen.queryByTestId("entity-select-listbox")).toBeNull();
+  });
+
+  it("notifies direct callers only when focus leaves the trigger and portal", async () => {
+    const blur = vi.fn();
+    render(<><EntitySelect options={state.options} onChange={vi.fn()} onBlur={blur} alwaysShowSearch /><button type="button">Outside picker</button></>);
+    act(() => trigger().focus()); open();
+    const search = await screen.findByTestId("entity-select-search");
+    await waitFor(() => expect(document.activeElement).toBe(search));
+    expect(blur).not.toHaveBeenCalled();
+    act(() => trigger().focus());
+    act(() => search.focus());
+    expect(blur).not.toHaveBeenCalled();
+    act(() => screen.getByRole("button", { name: "Outside picker" }).focus());
+    expect(blur).toHaveBeenCalledOnce();
+    expect(screen.queryByTestId("entity-select-listbox")).toBeNull();
+  });
+});
+
+function AutoSelectPicker({ dependsOn, filterBy }: { dependsOn?: string; filterBy?: Record<string, string> }) {
+  const [value, setValue] = useState<string | undefined>("");
+  return <EntitySelect options={[state.options[0]]} value={value} onChange={setValue} autoSelectSingle dependsOn={dependsOn} filterBy={filterBy} noneOption={{ label: "None" }} />;
+}
+
+describe("EntitySelect automatic selection after clear", () => {
+  it.each(["clear", "none"])("keeps a user %s until dependsOn changes", async (method) => {
+    const view = render(<AutoSelectPicker dependsOn="customer-one" />);
+    await waitFor(() => expect(trigger().textContent).toBe("North bin"));
+    if (method === "clear") fireEvent.click(screen.getByTestId("entity-select-clear"));
+    else { open(); fireEvent.click(screen.getByTestId("entity-select-none")); }
+    expect(trigger().textContent).toBe("None");
+    view.rerender(<AutoSelectPicker dependsOn="customer-one" />);
+    open(); key("Escape");
+    expect(trigger().textContent).toBe("None");
+    view.rerender(<AutoSelectPicker dependsOn="customer-two" />);
+    await waitFor(() => expect(trigger().textContent).toBe("North bin"));
+  });
+
+  it("resets on changed filter values, rather than a new filter object", async () => {
+    const view = render(<AutoSelectPicker filterBy={{ customerId: "one", facilityId: "facility" }} />);
+    await waitFor(() => expect(trigger().textContent).toBe("North bin"));
+    fireEvent.click(screen.getByTestId("entity-select-clear"));
+    view.rerender(<AutoSelectPicker filterBy={{ facilityId: "facility", customerId: "one" }} />);
+    expect(trigger().textContent).toBe("None");
+    view.rerender(<AutoSelectPicker filterBy={{ customerId: "two", facilityId: "facility" }} />);
+    await waitFor(() => expect(trigger().textContent).toBe("North bin"));
+  });
+});
+
 describe("EntitySelect menu interactions", () => {
   it.each([{ value: undefined, edit: true }, { value: "one", edit: false }])("requires selection and callback: %s", ({ value, edit }) => {
     render(<EntitySelect entityType="storageLocation" value={value} onChange={vi.fn()} onEditSelected={edit ? vi.fn() : undefined} />);
     open();
     expect(screen.queryByTestId("entity-select-edit")).toBeNull();
+  });
+
+  it("opens the shared edit dialog with allowEdit and preserves selection", async () => {
+    const change = vi.fn();
+    render(<EntitySelect entityType="storageLocation" value="one" selectionLocked allowEdit onChange={change} />);
+    open(); key("Enter");
+    await waitFor(() => expect(screen.getByTestId("shared-edit-dialog").textContent).toBe("one"));
+    expect(change).not.toHaveBeenCalled();
+    expect(trigger().getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(screen.getByTestId("shared-edit-dialog"));
+    expect(screen.queryByTestId("shared-edit-dialog")).toBeNull();
+  });
+
+  it("gives a custom edit callback precedence over allowEdit", () => {
+    const edit = vi.fn();
+    render(<EntitySelect entityType="storageLocation" value="one" allowEdit onChange={vi.fn()} onEditSelected={edit} />);
+    open(); fireEvent.click(screen.getByTestId("entity-select-edit"));
+    expect(edit).toHaveBeenCalledOnce();
+    expect(screen.queryByTestId("shared-edit-dialog")).toBeNull();
+  });
+
+  it("does not invoke Add new on Enter without an explicit highlight", () => {
+    state.options = [];
+    const create = vi.fn();
+    render(<EntitySelect entityType="storageLocation" onChange={vi.fn()} allowCreate onCreateNew={create} />);
+    open(); key("Enter");
+    expect(create).not.toHaveBeenCalled();
+    key("ArrowDown"); key("Enter");
+    expect(create).toHaveBeenCalledOnce();
   });
 
   it("uses the name, closes on edit and leaves the value unchanged", () => {
@@ -269,5 +480,177 @@ describe("EntitySelect menu interactions", () => {
     key("ArrowDown");
     expect(activeTestId()).toBe("entity-select-create");
     expect(scroll.mock.contexts.at(-1)).toBe(screen.getByTestId("entity-select-create"));
+  });
+});
+
+it("shows feedstock-type Edit only with management permission", () => {
+  const props = { entityType: "feedstockType" as const, value: "one", allowEdit: true, onChange: vi.fn(), onEditSelected: vi.fn() };
+  const view = render(<EntitySelect {...props} />);
+  open(); expect(screen.queryByTestId("entity-select-edit")).toBeNull();
+  state.canManage = true; view.rerender(<EntitySelect {...props} />);
+  expect(screen.getByTestId("entity-select-edit")).toBeTruthy();
+  fireEvent.click(screen.getByTestId("entity-select-edit"));
+  expect(props.onEditSelected).toHaveBeenCalledOnce();
+});
+
+describe("EntitySelect caller-owned options", () => {
+  const localOptions: EntityOption[] = [
+    { id: "pending", code: "DL-01", name: "Pending load", subtitle: "not yet delivered", disabled: true },
+    { id: "shipped", code: "DL-02", name: "South field", subtitle: "Maize" },
+    { id: "other", code: "DL-03", name: "North field", subtitle: "Coffee" },
+  ];
+
+  it.each(["storageLocation", "feedstockType"] as const)("ignores built-in edit and create in local %s mode without mounting queries or dialogs", (entityType) => {
+    state.canManage = true;
+    render(<EntitySelect entityType={entityType} options={localOptions} value="shipped" allowEdit allowCreate onChange={vi.fn()} />);
+    open();
+    expect(screen.queryByTestId("entity-select-edit")).toBeNull();
+    expect(screen.queryByTestId("entity-select-create")).toBeNull();
+    expect(state.listEnabled).toEqual([]);
+    expect(state.detailIds).toEqual([]);
+    expect(state.permissionChecks).toBe(0);
+    expect(state.dialogMounts).toEqual([]);
+  });
+
+  it.each([
+    { value: "prj_saved", placeholder: "Select a project", selectedLabel: undefined, expected: "prj_saved" },
+    { value: "prj_saved", placeholder: "Select a project", selectedLabel: "Saved project", expected: "Saved project" },
+    { value: "tpl_saved", placeholder: "No default", selectedLabel: undefined, expected: "tpl_saved" },
+  ])("shows a missing saved value as $expected without entity queries", ({ value, placeholder, selectedLabel, expected }) => {
+    const change = vi.fn();
+    const { rerender } = render(<EntitySelect options={localOptions} value={value} selectedLabel={selectedLabel} placeholder={placeholder} onChange={change} autoSelectSingle />);
+    expect(trigger().textContent).toBe(expected);
+    open();
+    expect(screen.queryByTestId(`entity-option-${value}`)).toBeNull();
+    expect(change).not.toHaveBeenCalled();
+    rerender(<EntitySelect options={[]} value={value} selectedLabel={selectedLabel} placeholder={placeholder} onChange={change} isLoading />);
+    expect(trigger().textContent).toBe(expected);
+    rerender(<EntitySelect options={[]} value={value} selectedLabel={selectedLabel} placeholder={placeholder} onChange={change} error={new Error("Registry unavailable")} />);
+    expect(trigger().textContent).toBe(expected);
+    expect(state.listEnabled).toEqual([]);
+    expect(state.detailIds).toEqual([]);
+    fireEvent.click(screen.getByTestId("entity-select-clear"));
+    expect(change).toHaveBeenCalledExactlyOnceWith("");
+    rerender(<EntitySelect options={[]} selectedLabel={selectedLabel} placeholder={placeholder} onChange={change} />);
+    expect(trigger().textContent).toBe(placeholder);
+  });
+
+  it("can switch between local and server sources without conditional hooks", () => {
+    const change = vi.fn();
+    const { rerender } = render(<EntitySelect entityType="storageLocation" options={localOptions} value="shipped" onChange={change} />);
+    expect(trigger().textContent).toBe("South field");
+    expect(state.listEnabled).toEqual([]);
+    expect(state.detailIds).toEqual([]);
+    rerender(<EntitySelect entityType="storageLocation" value="one" onChange={change} />);
+    expect(trigger().textContent).toBe("North bin");
+    expect(state.listEnabled.length).toBeGreaterThan(0);
+    expect(state.detailIds).toContain("one");
+    state.listEnabled = [];
+    state.detailIds = [];
+    rerender(<EntitySelect entityType="storageLocation" options={localOptions} value="shipped" onChange={change} />);
+    open();
+    fireEvent.click(screen.getByTestId("entity-option-other"));
+    expect(change).toHaveBeenCalledExactlyOnceWith("other");
+    expect(state.listEnabled).toEqual([]);
+    expect(state.detailIds).toEqual([]);
+  });
+
+  it("prefers the current option label over the saved label", () => {
+    render(<EntitySelect options={localOptions} value="shipped" selectedLabel="Old field name" onChange={vi.fn()} />);
+    expect(trigger().textContent).toBe("South field");
+  });
+
+  it("filters locally by name, code and subtitle without entity queries", () => {
+    const { rerender } = render(<EntitySelect options={localOptions} optionLabel="delivery" value="shipped" onChange={vi.fn()} alwaysShowSearch />);
+    expect(trigger().textContent).toContain("South field");
+    open();
+    const search = screen.getByTestId("entity-select-search");
+    for (const query of ["south", "DL-02", "maIZE"]) {
+      fireEvent.change(search, { target: { value: query } });
+      expect(screen.getAllByRole("option")).toHaveLength(1);
+      expect(screen.getByTestId("entity-option-shipped")).toBeTruthy();
+      expect(trigger().textContent).toContain("South field");
+    }
+    fireEvent.change(search, { target: { value: "not found" } });
+    expect(screen.queryAllByRole("option")).toHaveLength(0);
+    expect(trigger().textContent).toContain("South field");
+    rerender(<EntitySelect options={localOptions.map((option) => ({ ...option, name: "Updated label" }))} value="shipped" onChange={vi.fn()} alwaysShowSearch />);
+    expect(trigger().textContent).toContain("Updated label");
+    expect(state.listEnabled).toEqual([]);
+    expect(state.detailIds).toEqual([]);
+  });
+
+  it("shows disabled options and their reason but skips click and keyboard selection", () => {
+    const change = vi.fn();
+    render(<EntitySelect options={localOptions} onChange={change} />);
+    open();
+    const pending = screen.getByTestId("entity-option-pending");
+    expect(pending.getAttribute("aria-disabled")).toBe("true");
+    expect(pending.textContent).toContain("not yet delivered");
+    fireEvent.click(pending);
+    expect(change).not.toHaveBeenCalled();
+    expect(activeTestId()).toBe("entity-option-shipped");
+    key("ArrowUp"); expect(activeTestId()).toBe("entity-option-shipped");
+    key("ArrowDown"); expect(activeTestId()).toBe("entity-option-other");
+    key("Home"); key("Enter");
+    expect(change).toHaveBeenCalledExactlyOnceWith("shipped");
+  });
+
+  it("cannot auto-select or keyboard-select a list containing only a disabled option", () => {
+    const change = vi.fn();
+    render(<EntitySelect options={[localOptions[0]]} onChange={change} autoSelectSingle />);
+    open(); key("ArrowDown"); key("Enter");
+    expect(trigger().getAttribute("aria-activedescendant")).toBeNull();
+    expect(change).not.toHaveBeenCalled();
+  });
+
+  it("renders caller loading and errors instead of selectable retained options", () => {
+    const { rerender } = render(<EntitySelect options={localOptions} onChange={vi.fn()} isLoading />);
+    open();
+    expect(screen.getByText("Loading...")).toBeTruthy();
+    expect(screen.queryAllByRole("option")).toHaveLength(0);
+    rerender(<EntitySelect options={localOptions} onChange={vi.fn()} error={new Error("Registry unavailable")} />);
+    expect(screen.getByText("Error loading options")).toBeTruthy();
+    expect(screen.queryAllByRole("option")).toHaveLength(0);
+  });
+
+  it.each([5, 6])("uses the shared search threshold for local options (%i)", (count) => {
+    const options = Array.from({ length: count }, (_, i) => ({ id: String(i), code: String(i), name: `Project ${i}` }));
+    render(<EntitySelect options={options} onChange={vi.fn()} />); open();
+    expect(Boolean(screen.queryByTestId("entity-select-search"))).toBe(count === 6);
+  });
+});
+
+describe("EntitySelect result limit hint", () => {
+  it.each([ENTITY_SEARCH_LIMIT - 1, ENTITY_SEARCH_LIMIT])("shows a non-selectable hint only at the server cap (%i)", (count) => {
+    state.options = Array.from({ length: count }, (_, i) => ({ id: String(i), code: String(i), name: `Bin ${i}` }));
+    const change = vi.fn();
+    render(<EntitySelect entityType="storageLocation" onChange={change} />); open();
+    expect(Boolean(screen.queryByTestId("entity-select-more-results"))).toBe(count === ENTITY_SEARCH_LIMIT);
+    const hint = screen.queryByTestId("entity-select-more-results");
+    if (hint) {
+      expect(hint.getAttribute("role")).toBe("presentation");
+      fireEvent.click(hint);
+      expect(change).not.toHaveBeenCalled();
+    }
+    expect(screen.getAllByRole("option")).toHaveLength(count);
+    fireEvent.keyDown(trigger(), { key: "End" });
+    expect(activeTestId()).toBe(`entity-option-${count - 1}`);
+    key("Enter");
+    expect(change).toHaveBeenCalledExactlyOnceWith(String(count - 1));
+  });
+
+  it("does not claim caller-owned lists are capped", () => {
+    const options = Array.from({ length: ENTITY_SEARCH_LIMIT }, (_, i) => ({ id: String(i), code: String(i), name: `Project ${i}` }));
+    render(<EntitySelect options={options} onChange={vi.fn()} />); open();
+    expect(screen.queryByTestId("entity-select-more-results")).toBeNull();
+  });
+
+  it("keeps search reachable when excluded options hide the entire capped page", () => {
+    state.options = Array.from({ length: ENTITY_SEARCH_LIMIT }, (_, i) => ({ id: String(i), code: String(i), name: `Bin ${i}` }));
+    render(<EntitySelect entityType="storageLocation" excludeIds={state.options.map((option) => option.id)} onChange={vi.fn()} />); open();
+    expect(screen.getByTestId("entity-select-more-results")).toBeTruthy();
+    expect(screen.getByTestId("entity-select-search")).toBeTruthy();
+    expect(screen.queryAllByRole("option")).toHaveLength(0);
   });
 });

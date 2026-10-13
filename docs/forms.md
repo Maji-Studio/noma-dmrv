@@ -240,6 +240,9 @@ All from the `@/components/forms` barrel (`src/components/forms/index.ts`) — r
   - The label row is `min-h-24` (the ⓘ hit area), so a one-line label reads at the same height with or without a CERT chip or ⓘ. The ⓘ is a sibling of the `<label>`, never inside it.
 - **`FormError` / `ServerError`** — field-level vs server-level; both carry `role="alert"`. For server validation targeting a field, use RHF `setError('root.serverError', …)`.
 - **`FormSelect`**, **`FormInput`**, **`FormTextarea`** — styled primitives; spread `{...register(name)}`.
+  Use `EntitySelect` / `FormEntitySelect` for lists of user data, including
+  customer locations, deliveries and registry projects or templates. Keep
+  native `FormSelect` for hard-coded lists such as enums, units and roles.
 - **`ChoiceCardGroup`**, **`SegmentedControl`** — native-radio choice controls, spread `{...register(name)}` like `FormSelect`. When to use which, and the sizing and a11y contract: [design-system.md](./design-system.md#choice-controls--srccomponentsforms). Evidence method is the card reference (`application-evidence-panel.tsx`), loss / count the segmented one (`bin-reconcile-sheet.tsx`).
 - **`MassMoistureFields`** — the canonical wet-mass + moisture pair for an unmixed material, with the live `MoistureSplit` bar spanning both. It owns the labels, wet-basis hint, range helper, and derived readout. A blended biochar product is the exception: pair standalone `WetMassField` and `MoistureField` controls with `ProductCompositionPreview`, because finished-product moisture does not split tracked dry biochar from ingredients and water. The standalone fields also cover lab samples with no paired mass and bin stock-takes whose counted mass is recorded separately. Each takes the caller's `register(...)` result so `setValueAs` stays with the owning form. Pass `materialLabel` ("Biochar", "Feedstock") to qualify canonical labels, and `step="any"` for a column backed by `real` instead of the exact `numeric` families. Vocabulary and precision come from `@/lib/mass-moisture` — see [design-system.md](./design-system.md#wet-mass-moisture-dry-mass). (`DryMassInput` and its "Dry: 237.5 kg" caption are gone.)
 - **`DistanceCalcField`** — derived transport-leg distance. It and similar derived-with-provenance fields (distance plus `distanceSource`) are wired with `useController`, one per field, written through `field.onChange(...)`; never `watch` / `useWatch` plus `setValue`. Pass `null` to clear, not `undefined`: `useController` falls back to the default value on `undefined`, so a cleared saved value reappears. A provenance select bound to a controller field spreads `{...field}` instead of `register`, as `transport-leg-form.tsx` does. Reference: `src/components/customers/customer-location-fields.tsx`.
@@ -394,15 +397,33 @@ boundary evidence path from the presence of one file alone.
 
 ## Entity select
 
-Pass `onEditSelected` to offer **Edit <name>** beside **Add new** in the menu.
+Pass `allowEdit` to `EntitySelect` or `FormEntitySelect` to offer **Edit <name>**
+beside **Add new**. `EntityEditDialog` loads a fresh record on each open and
+renders the entity's existing form in `QuickAddDialogShell`. The opened record
+and version stay fixed while editing, including after a stale-save refusal.
+The shared shell stops portalled form submits from reaching the entry form.
+Nested dialogs use the shared modal stack; Escape closes only the top layer.
+
 The label uses the selected entity's name; `editLabel` overrides it. Editing
 leaves the selected value unchanged. With `selectionLocked` and a selection, only
-Edit is available. `disabled` prevents all interaction, including Edit. Bin
-pickers use `useStorageBinEditDialog` to load a fresh record and open the
-quick-add modal in edit mode; archived bins open read-only.
+Edit is available. `disabled` prevents all interaction, including Edit.
+`onEditSelected` remains available for custom edit flows and takes precedence
+over the built-in handler. Archived records open read-only, without Reconcile or
+stock actions.
+
+Supported types are storage bins, formulations, suppliers, customers, feedstock
+types, reactors, orders, vehicles, operators and drivers. Feedstock-type Edit
+requires the server-resolved management permission (Owner, Admin or Platform
+Admin). Facility and Credit batch pickers deliberately have no Edit row. Driver
+is supported by the shared dialog but currently has no form picker.
 
 `SELECT_SEARCH_MIN_OPTIONS` in `src/config/forms.ts` is 5: search shows from
 6 options. `alwaysShowSearch` and `hideSearch` remain explicit overrides.
+Caller-owned lists pass `options`, `isLoading` and an `Error` via `error`.
+This mode filters names, codes and subtitles locally and makes no entity
+queries. `optionLabel` names its search box. An option's `disabled` flag keeps
+it visible but skips it for click, keyboard and automatic selection.
+Server-backed lists show a refine-search hint when the result limit is reached.
 Bin allocation and production draw rows give the bin picker its own full row,
 with mass below it.
 

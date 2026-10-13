@@ -17,7 +17,7 @@ test.describe("Split bin picker", () => {
     await page.getByRole("button", { name: "New delivery", exact: true }).click();
     await page.locator("#deliveryDate").fill(FIFO_BROWSER_TIME);
     await selectEntity(page, "Order", f.order.id, f.order.code);
-    await page.locator("#storageLocationId").selectOption(f.bin.id);
+    await selectEntity(page, "Actual source bin", f.bin.id, f.bin.name);
     await page.locator("#deliveredWetMassKg").fill("1200");
     // Oldest first: 1,200 kg wet stays inside the older batch, so one row.
     const reading = (code: string) => page.getByRole("spinbutton", { name: `${code} moisture` });
