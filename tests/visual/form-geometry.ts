@@ -16,8 +16,8 @@ export type BodyMode = "form" | "read" | "page";
 export interface MeasureArgs {
   kind: SurfaceKind;
   mode: BodyMode;
-  /** Actual UA shadow-node content edges collected with Chromium DevTools. */
-  nativePickerIcons?: { index: number; right: number | null }[];
+  /** Actual UA shadow-node content edges collected with Chromium DevTools (measureNativePickerIcons). */
+  nativePickerIcons: { index: number; right: number | null }[];
 }
 
 export interface TrailingIconGeometry {
@@ -528,12 +528,15 @@ export function measureFormGeometry(args: MeasureArgs): Geometry {
     const icon = trigger.querySelector("[data-trailing-icon]");
     addTrailingIcon(trigger, "entity", trigger.getAttribute("data-has-value") === "true", icon && isVisible(icon) ? icon.getBoundingClientRect().right : null);
   }
-  const temporalInputs = body.querySelectorAll<HTMLInputElement>('input[type="date"], input[type="time"], input[type="datetime-local"]');
+  // Must match TEMPORAL_INPUT_SELECTOR in native-picker-geometry.ts: nativePickerIcons is keyed by index.
+  // Inlined because this function runs in the page through page.evaluate.
+  const temporalSelector = 'input[type="date"], input[type="time"], input[type="datetime-local"]';
+  const temporalInputs = body.querySelectorAll<HTMLInputElement>(temporalSelector);
   for (const input of temporalInputs) {
     if (!isVisible(input) || input.disabled || input.readOnly) continue;
     // The indices refer to all temporal inputs under root, including sheet chrome.
-    const index = Array.from(root.querySelectorAll('input[type="date"], input[type="time"], input[type="datetime-local"]')).indexOf(input);
-    const native = args.nativePickerIcons?.find((icon) => icon.index === index);
+    const index = Array.from(root.querySelectorAll(temporalSelector)).indexOf(input);
+    const native = args.nativePickerIcons.find((icon) => icon.index === index);
     addTrailingIcon(input, input.type as TrailingIconGeometry["kind"], Boolean(input.value), native?.right ?? null);
   }
 

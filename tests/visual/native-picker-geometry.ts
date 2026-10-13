@@ -1,6 +1,7 @@
 import type { Page } from "@playwright/test";
 import type { MeasureArgs } from "./form-geometry";
 
+// Must match the temporal selector in measureFormGeometry (form-geometry.ts): icons are keyed by index.
 const TEMPORAL_INPUT_SELECTOR = 'input[type="date"], input[type="time"], input[type="datetime-local"]';
 const PICKER_SHADOW_ID = "picker";
 const QUAD_COORDINATE_PAIRS = 2;
