@@ -297,6 +297,7 @@ export function OrderForm({
         onClose={() => setEditingLocation(null)}
         customerId={editingLocation.customerId}
         location={editingLocation.location}
+        facility={formFacility}
       />
     )}
     </>

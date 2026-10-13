@@ -74,7 +74,7 @@ const searchEntitiesSchema = z
     ...data,
     filterBy: data.filterBy?.customerId === undefined
       ? data.filterBy
-      : { ...data.filterBy, customerId: data.filterBy.customerId.toLowerCase() },
+      : { ...data.filterBy, customerId: uuidSchema().parse(data.filterBy.customerId) },
   }));
 
 /**

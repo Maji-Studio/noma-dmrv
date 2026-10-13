@@ -14,6 +14,7 @@ import {
   type CustomerLocationFormInput,
 } from "@/schemas/customers";
 import type { CustomerLocation } from "@/db/schema/parties";
+import type { Facility } from "@/db/schema";
 import { useOrganizationDefaultValues } from "@/hooks/use-organization-settings";
 import { resolveLocationCountry } from "@/lib/location-defaults";
 import { CustomerLocationFields } from "./customer-location-fields";
@@ -65,6 +66,7 @@ export type EditableCustomerLocation = Pick<
 interface CustomerLocationFormProps {
   /** Existing location data for editing (undefined for create mode) */
   location?: CustomerLocationInitialValues;
+  facility?: Facility;
   /** Start "default" checked for a new location (the customer's first). */
   initialIsDefault?: boolean;
   /** Prefix field IDs when the form opens above another form with overlapping IDs. */
@@ -83,6 +85,7 @@ interface CustomerLocationFormProps {
 
 export function CustomerLocationForm({
   location,
+  facility,
   initialIsDefault = false,
   idPrefix,
   onSubmit,
@@ -136,6 +139,7 @@ export function CustomerLocationForm({
     >
       <CustomerLocationFields
         form={form}
+        facility={facility}
         isSubmitting={isSubmitting}
         isCurrentDefault={location?.isDefault === true}
         idPrefix={idPrefix}

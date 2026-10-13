@@ -13,6 +13,7 @@ import {
   type CertFieldStatus,
 } from "@/components/forms";
 import { useFacilityContext } from "@/hooks/use-facility-context";
+import type { Facility } from "@/db/schema";
 import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
 import type {
   CustomerLocationFormData,
@@ -27,6 +28,8 @@ type CustomerLocationFormApi = UseFormReturn<
 
 interface CustomerLocationFieldsProps {
   form: CustomerLocationFormApi;
+  /** Calculation origin; standalone callers fall back to the selected facility. */
+  facility?: Facility;
   isSubmitting?: boolean;
   /** The edited location is the party's default; it stays checked until another is set. */
   isCurrentDefault?: boolean;
@@ -40,6 +43,7 @@ function fieldId(idPrefix: string | undefined, fieldName: string): string {
 
 export function CustomerLocationFields({
   form,
+  facility,
   isSubmitting = false,
   isCurrentDefault = false,
   idPrefix,
@@ -76,18 +80,19 @@ export function CustomerLocationFields({
     | undefined;
   const distanceSource = distanceSourceField.value;
 
-  // CALC endpoints: the globally selected facility → this destination site.
+  // CALC endpoints: the caller's facility (or global selection) → this site.
   const { selectedFacility } = useFacilityContext();
+  const originFacility = facility ?? selectedFacility;
   const locationPoint =
     gpsLatitude != null && gpsLongitude != null
       ? { lat: gpsLatitude, lng: gpsLongitude }
       : null;
   const facilityPoint =
-    selectedFacility?.gpsLatitude != null &&
-    selectedFacility?.gpsLongitude != null
+    originFacility?.gpsLatitude != null &&
+    originFacility?.gpsLongitude != null
       ? {
-          lat: selectedFacility.gpsLatitude,
-          lng: selectedFacility.gpsLongitude,
+          lat: originFacility.gpsLatitude,
+          lng: originFacility.gpsLongitude,
         }
       : null;
 
@@ -247,7 +252,7 @@ export function CustomerLocationFields({
             }}
             origin={facilityPoint}
             destination={locationPoint}
-            originLabel="selected facility"
+            originLabel={facility ? `facility ${facility.name}` : "selected facility"}
             destinationLabel="application site position"
           />
         </div>

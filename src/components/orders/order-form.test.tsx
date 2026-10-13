@@ -10,7 +10,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import type { CustomerLocation, Order } from "@/db/schema";
+import type { CustomerLocation, Facility, Order } from "@/db/schema";
 import type { EntityOption, EntityType } from "@/components/forms/entity-select/types";
 
 const state = vi.hoisted(() => ({
@@ -22,12 +22,14 @@ const state = vi.hoisted(() => ({
   locationOptions: [] as EntityOption[],
   locations: [] as CustomerLocation[],
   editLocation: vi.fn(),
+  facilities: [{ id: "facility", name: "Facility", timezone: "UTC" }] as Facility[],
 }));
 
 vi.mock("@/hooks/use-facility-context", () => ({
   useFacilityContext: () => ({
     facilityId: "facility",
-    facilities: [{ id: "facility", name: "Facility", timezone: "UTC" }],
+    facilities: state.facilities,
+    selectedFacility: state.facilities[0],
     activeOrganizationId: "org",
   }),
 }));
@@ -56,18 +58,20 @@ vi.mock("@/hooks/use-entities", () => ({
     enabled?: boolean;
   }) => {
     state.optionRequests.push({ entityType, enabled });
-    return { data: entityType === "customerLocation" ? state.locationOptions : [], dataUpdatedAt: 0, isLoading: false, error: null };
+    return { data: enabled && entityType === "customerLocation" ? state.locationOptions : [], dataUpdatedAt: 0, isLoading: false, error: null };
   },
   useEntityById: (entityType: EntityType, id: string | undefined) => {
     state.detailRequests.push({ entityType, id });
-    const data = entityType === "customer" && id ? state.customersById[id] : null;
+    const data = entityType === "customerLocation"
+      ? state.locationOptions.find((option) => option.id === id)
+      : entityType === "customer" && id ? state.customersById[id] : null;
     return { data: data ?? null, dataUpdatedAt: 1, isPending: false };
   },
 }));
 
 vi.mock("@/components/customers/customer-location-dialog", () => ({
-  CustomerLocationDialog: ({ customerId, location, onClose }: { customerId: string; location: CustomerLocation; onClose: () => void }) => {
-    state.editLocation({ customerId, location });
+  CustomerLocationDialog: ({ customerId, location, facility, onClose }: { customerId: string; location: CustomerLocation; facility?: Facility; onClose: () => void }) => {
+    state.editLocation({ customerId, location, facility });
     return <button type="button" onClick={onClose}>Close location editor</button>;
   },
 }));
@@ -92,6 +96,7 @@ beforeEach(() => {
   state.locationOptions = [];
   state.locations = [];
   state.editLocation.mockClear();
+  state.facilities = [{ id: "facility", name: "Facility", timezone: "UTC" } as Facility];
   Element.prototype.scrollIntoView = vi.fn();
   window.matchMedia = vi.fn().mockImplementation(() => ({ matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn() }));
 });
@@ -132,23 +137,27 @@ describe("OrderForm customer field", () => {
     client.clear();
   });
 
-  it("opens the selected location in edit mode and keeps its opening version fixed", () => {
+  it("keeps the opening version fixed while refreshed detail data updates the selected label", () => {
     const location = { id: "location-1", customerId: "customer-1", name: "North field", country: "TZ", version: 1 } as CustomerLocation;
     state.locations = [location];
     state.locationOptions = [{ id: location.id, code: "", name: location.name! }];
-    const order = { customerId: location.customerId, customerLocationId: location.id } as Order;
+    const orderFacility = { id: "order-facility", name: "Order facility", timezone: "UTC", gpsLatitude: -6.8, gpsLongitude: 39.2 } as Facility;
+    state.facilities.push(orderFacility);
+    const order = { facilityId: orderFacility.id, customerId: location.customerId, customerLocationId: location.id } as Order;
     const client = new QueryClient();
     const view = <QueryClientProvider client={client}><OrderForm order={order} onSubmit={noop} /></QueryClientProvider>;
     const { rerender } = render(view);
     fireEvent.click(screen.getByRole("combobox", { name: "Customer location" }));
     fireEvent.click(screen.getByTestId("entity-select-edit"));
-    expect(state.editLocation).toHaveBeenLastCalledWith({ customerId: location.customerId, location });
+    expect(state.editLocation).toHaveBeenLastCalledWith({ customerId: location.customerId, location, facility: orderFacility });
     state.locations = [{ ...location, version: 2, name: "Renamed field" }];
     state.locationOptions = [{ ...state.locationOptions[0], name: "Renamed field" }];
     rerender(<QueryClientProvider client={client}><OrderForm order={order} onSubmit={noop} /></QueryClientProvider>);
-    expect(state.editLocation).toHaveBeenLastCalledWith({ customerId: location.customerId, location });
+    expect(state.editLocation).toHaveBeenLastCalledWith({ customerId: location.customerId, location, facility: orderFacility });
     fireEvent.click(screen.getByRole("button", { name: "Close location editor" }));
     expect(screen.getByRole("combobox", { name: "Customer location" }).textContent).toBe("Renamed field");
+    expect(state.optionRequests.filter((request) => request.entityType === "customerLocation").at(-1)?.enabled).toBe(false);
+    expect(state.detailRequests).toContainEqual({ entityType: "customerLocation", id: location.id });
     client.clear();
   });
 

@@ -683,7 +683,7 @@ function EntitySelectView({
                     // Explain WHY the list is empty and link the upstream fix; a
                     // search miss keeps the plain "no match" reading instead.
                     emptyHint && searchQuery.length === 0 ? (
-                      <li data-testid="entity-select-empty">
+                      <li role="presentation" data-testid="entity-select-empty">
                         <p className="px-12 py-10 body-small text-[var(--color-text-tertiary)]">
                           {emptyHint.message}
                         </p>
@@ -709,8 +709,8 @@ function EntitySelectView({
                         )}
                       </li>
                     ) : (
-                      <li data-testid="entity-select-empty" className="px-16 py-12 text-[var(--text-s)] text-[var(--color-text-tertiary)]">
-                        {searchQuery.length > 0 ? "No matches. Change or clear your search." : "Nothing to select yet."}
+                      <li role="presentation" data-testid="entity-select-empty" className="px-16 py-12 text-[var(--text-s)] text-[var(--color-text-tertiary)]">
+                        {searchQuery.length > 0 ? "No matches. Change or clear your search." : `No ${entityLabel.toLowerCase()} records yet.`}
                       </li>
                     )
                   ) : null)}

@@ -13,6 +13,7 @@ import {
 } from "@/hooks/use-customers";
 import { toSaveErrorMessage } from "@/lib/stale-version";
 import type { CustomerLocationFormData } from "@/schemas/customers";
+import type { Facility } from "@/db/schema";
 import {
   CustomerLocationForm,
   type EditableCustomerLocation,
@@ -29,6 +30,7 @@ interface CustomerLocationDialogProps {
   onClose: () => void;
   customerId: string;
   location?: EditableCustomerLocation;
+  facility?: Facility;
   /** True when the party has no saved locations yet, so "default" starts checked. */
   isFirstLocation?: boolean;
 }
@@ -42,6 +44,7 @@ export function CustomerLocationDialog({
   onClose,
   customerId,
   location,
+  facility,
   isFirstLocation = false,
 }: CustomerLocationDialogProps) {
   const [error, setError] = useState<string | null>(null);
@@ -115,6 +118,7 @@ export function CustomerLocationDialog({
       <CustomerLocationForm
         idPrefix={CUSTOMER_LOCATION_DIALOG_ID_PREFIX}
         location={location}
+        facility={facility}
         initialIsDefault={isFirstLocation}
         onSubmit={handleSubmit}
         onCancel={handleClose}

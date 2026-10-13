@@ -639,8 +639,17 @@ describe("EntitySelect caller-owned options", () => {
     rerender(<EntitySelect options={[]} onChange={vi.fn()} loadError={new Error("Unavailable")} />);
     expect(screen.queryByTestId("entity-select-empty")).toBeNull();
     rerender(<EntitySelect options={[]} onChange={vi.fn()} />);
-    expect(screen.getByTestId("entity-select-empty").textContent).toBe("Nothing to select yet.");
+    expect(screen.getByTestId("entity-select-empty").textContent).toBe("No option records yet.");
+    expect(screen.getByTestId("entity-select-empty").getAttribute("role")).toBe("presentation");
     expect(screen.queryAllByRole("option")).toHaveLength(0);
+  });
+
+  it.each(["storage bin", "credit batch", "feedstock", "Removal template", "Isometric project"])("names the empty record type (%s) and keeps search-miss guidance", (optionLabel) => {
+    render(<EntitySelect options={[]} optionLabel={optionLabel} onChange={vi.fn()} alwaysShowSearch />);
+    open();
+    expect(screen.getByTestId("entity-select-empty").textContent).toBe(`No ${optionLabel.toLowerCase()} records yet.`);
+    fireEvent.change(screen.getByTestId("entity-select-search"), { target: { value: "missing" } });
+    expect(screen.getByTestId("entity-select-empty").textContent).toBe("No matches. Change or clear your search.");
   });
 
   it.each([5, 6])("uses the shared search threshold for local options (%i)", (count) => {

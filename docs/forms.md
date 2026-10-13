@@ -416,6 +416,8 @@ types, reactors, orders, vehicles, operators and drivers. Feedstock-type Edit
 requires the server-resolved management permission (Owner, Admin or Platform
 Admin). Facility and Credit batch pickers deliberately have no Edit row. Driver
 is supported by the shared dialog but currently has no form picker.
+The order form's Customer location picker uses `onEditSelected` to open
+`CustomerLocationDialog` for the selected location.
 
 `SELECT_SEARCH_MIN_OPTIONS` in `src/config/forms.ts` is 5: search shows from
 6 options. `alwaysShowSearch` and `hideSearch` remain explicit overrides.
