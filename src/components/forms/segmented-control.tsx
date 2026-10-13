@@ -98,10 +98,10 @@ export const SegmentedControl = forwardRef<HTMLInputElement, SegmentedControlPro
               />
               <span
                 className={cn(
-                  "flex min-h-44 w-full items-center justify-center gap-6 border border-transparent px-12 text-center",
+                  "flex min-h-44 w-full items-center justify-center gap-6 border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] px-12 text-center",
                   "body-small text-[var(--color-text-secondary)] transition-colors duration-300",
-                  "hover:text-[var(--color-text-primary)]",
-                  "peer-checked:border-[var(--color-interaction)] peer-checked:bg-[var(--color-background-white)] peer-checked:text-[var(--color-text-primary)]",
+                  "hover:border-[var(--color-border-primary)] hover:text-[var(--color-text-primary)]",
+                  "peer-checked:border-[var(--color-interaction)] peer-checked:text-[var(--color-text-primary)]",
                   "forced-colors:peer-checked:border-[Highlight] forced-colors:peer-checked:border-2",
                   "peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-[var(--color-interaction)]",
                   "peer-disabled:opacity-60",

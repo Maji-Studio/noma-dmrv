@@ -206,3 +206,29 @@ describe("isometricRegistry — public registry pages", () => {
     expect(isometricRegistry.protocol("biochar", "latest")).toBeNull();
   });
 });
+
+describe("isometricRegistry.feedstockType", () => {
+  it("uses the redirect service in production and encodes the id", () => {
+    expect(
+      isometricRegistry.feedstockType({
+        environment: "production",
+        isometricFeedstockTypeId: "ftt_1CB8GFK691S05XDT",
+      }),
+    ).toBe("https://to.isometric.com/certify/ftt_1CB8GFK691S05XDT");
+    expect(
+      isometricRegistry.feedstockType({
+        environment: "production",
+        isometricFeedstockTypeId: "ftt a/b?c",
+      }),
+    ).toBe("https://to.isometric.com/certify/ftt%20a%2Fb%3Fc");
+  });
+
+  it("falls back to the sandbox Certify home on the sandbox host", () => {
+    expect(
+      isometricRegistry.feedstockType({
+        environment: "sandbox",
+        isometricFeedstockTypeId: "ftt_1CB8GFK691S05XDT",
+      }),
+    ).toBe("https://registry.sandbox.isometric.com/account/certify");
+  });
+});

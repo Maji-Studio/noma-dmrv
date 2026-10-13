@@ -19,6 +19,8 @@ import {
 } from "@/hooks/use-certification";
 import { useFeedstockTypeList } from "@/hooks/use-feedstock-types";
 import type { IsometricFeedstockType } from "@/lib/isometric";
+import { cn } from "@/lib/utils";
+import { IsometricFeedstockLink } from "./isometric-feedstock-link";
 
 const settingsHref = (facilityId: string) =>
   `/certification/settings?facility=${encodeURIComponent(facilityId)}`;
@@ -130,16 +132,16 @@ export function IsometricFeedstockBrowser({
         {catalogue.data.map((type) => {
           const isImported = importedIds.has(type.id);
           return (
-            <li key={type.id}>
+            <li key={type.id} className="flex items-center gap-8 pr-12">
               <button
                 type="button"
                 onClick={() => onSelect?.(type)}
                 data-testid={`isometric-feedstock-option-${type.id}`}
                 disabled={isImported}
-                className="flex w-full items-start justify-between gap-12 px-12 py-8 text-left transition-colors hover:bg-[var(--color-background-medium)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-border-primary)] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent"
+                className="flex min-w-0 flex-1 items-center justify-between gap-12 px-12 py-8 text-left transition-colors hover:bg-[var(--color-background-medium)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-border-primary)] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent"
                 aria-pressed={selectedId === type.id}
               >
-                <span className="flex flex-col gap-2">
+                <span className="flex min-w-0 flex-col gap-2">
                   <span className="body-small text-[var(--color-text-primary)]">
                     {type.name}
                   </span>
@@ -151,11 +153,14 @@ export function IsometricFeedstockBrowser({
                   </span>
                 </span>
                 <span
-                  className={`label-button shrink-0 ${
+                  className={cn(
+                    "label-button inline-flex min-h-32 shrink-0 items-center border px-12",
                     isImported
-                      ? "text-[var(--color-text-tertiary)]"
-                      : "text-[var(--color-interaction)]"
-                  }`}
+                      ? "border-transparent text-[var(--color-text-tertiary)]"
+                      : selectedId === type.id
+                        ? "border-[var(--color-interaction)] bg-[var(--color-background-white)] text-[var(--color-text-primary)]"
+                        : "border-[var(--color-interaction)] text-[var(--color-interaction)]",
+                  )}
                 >
                   {isImported
                     ? "Imported"
@@ -164,6 +169,11 @@ export function IsometricFeedstockBrowser({
                       : "Use"}
                 </span>
               </button>
+              <IsometricFeedstockLink
+                isometricFeedstockTypeId={type.id}
+                isProduction={summary.data.isProduction}
+                name={type.name}
+              />
             </li>
           );
         })}

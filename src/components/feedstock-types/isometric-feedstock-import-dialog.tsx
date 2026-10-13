@@ -89,7 +89,10 @@ export function IsometricFeedstockImportDialog({
 
         {selected && (
           <div className="border-t border-[var(--color-border-tertiary)] pt-16">
-            <FormField id="import-feedstock-category" label="Local category" required>
+            <FormField id="import-feedstock-category" label="Local category"
+              helperText="Used inside noma only, for example in bin and delivery subtitles. It is not sent to Isometric."
+              required
+            >
               <FormSelect
                 id="import-feedstock-category"
                 value={category}

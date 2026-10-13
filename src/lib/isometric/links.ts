@@ -11,6 +11,11 @@ const CERTIFY_HOSTS = {
   production: REGISTRY,
 } as const;
 
+// Isometric's redirect service resolves any resource id to its Certify page
+// (confirmed via the Isometric MCP: https://to.isometric.com/certify/ftt_...).
+// It is a single production service; no sandbox equivalent is documented.
+const CERTIFY_REDIRECT = "https://to.isometric.com/certify";
+
 const REGISTRY_MINOR_VERSION_PATTERN = /\bv?(\d+\.\d+)(?:\.\d+)?\b/i;
 
 export function normalizeRegistryMinorVersion(version: string): string | null {
@@ -29,6 +34,16 @@ export const isometricRegistry = {
     if (!minorVersion) return null;
     return `${REGISTRY}/module/${encodeURIComponent(slug)}/${encodeURIComponent(minorVersion)}`;
   },
+  // A feedstock type has no confirmed standalone Certify page on the sandbox
+  // host, so sandbox links to the Certify workspace home on that host and
+  // production uses the redirect service, which resolves the ftt_ id.
+  feedstockType: (args: {
+    environment: IsometricEnvironment;
+    isometricFeedstockTypeId: string;
+  }) =>
+    args.environment === "production"
+      ? `${CERTIFY_REDIRECT}/${encodeURIComponent(args.isometricFeedstockTypeId)}`
+      : `${CERTIFY_HOSTS.sandbox}/account/certify`,
   // The supplier's view of a project is an environment-specific PRIVATE Certify
   // workspace page (NOT the public /project/{id} registry page, which only
   // exists after credit issuance) — it nests under /account/certify on the same

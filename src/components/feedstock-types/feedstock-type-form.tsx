@@ -38,6 +38,10 @@ import {
   visibleFeedstockTypeSection,
 } from "./feedstock-type-form-logic";
 import { Notice } from "@/components/ui/notice";
+import { IsometricFeedstockLink } from "./isometric-feedstock-link";
+
+const LOCAL_CATEGORY_HINT =
+  "Used inside noma only, for example in bin and delivery subtitles. It is not sent to Isometric.";
 
 // General = the local record (the only editable surface). Isometric =
 // read-only browse of the registry catalogue. Selecting a registry row pre-fills
@@ -76,8 +80,10 @@ interface FeedstockTypeFormProps {
   defaultUsage?: FeedstockTypeUsage;
   /** When true, the usage select is constrained to the parent workflow's usage. */
   lockUsage?: boolean;
-  /** Optional hint text shown above the form fields */
+  /** Optional hint text, shown in the info tooltip on the Usage label */
   hint?: string;
+  /** Pin the action row to the bottom edge of a scrolling container (side sheets). Modals pass false. */
+  stickyActions?: boolean;
 }
 
 export function FeedstockTypeForm({
@@ -90,6 +96,7 @@ export function FeedstockTypeForm({
   defaultUsage,
   lockUsage = false,
   hint,
+  stickyActions = true,
 }: FeedstockTypeFormProps) {
   const isEditMode = !!feedstockType;
   const { facilityId } = useFacilityContext();
@@ -226,11 +233,18 @@ export function FeedstockTypeForm({
   const selectedIsometricSummary = selectedIsometricFeedstock && (
     <Notice tone="success" title={`Selected from Isometric: ${selectedIsometricFeedstock.name}`}>
       <div className="flex flex-col gap-2">
-        <p className="body-caption font-mono text-[var(--color-text-tertiary)]">
-          {selectedIsometricFeedstock.id}
-          {selectedIsometricFeedstock.supplier_reference_id
-            ? ` · ref ${selectedIsometricFeedstock.supplier_reference_id}`
-            : ""}
+        <p className="body-caption flex items-center gap-4 font-mono text-[var(--color-text-tertiary)]">
+          <span>
+            {selectedIsometricFeedstock.id}
+            {selectedIsometricFeedstock.supplier_reference_id
+              ? ` · ref ${selectedIsometricFeedstock.supplier_reference_id}`
+              : ""}
+          </span>
+          <IsometricFeedstockLink
+            isometricFeedstockTypeId={selectedIsometricFeedstock.id}
+            isProduction={certifierSummary.data?.isProduction ?? false}
+            name={selectedIsometricFeedstock.name}
+          />
         </p>
         {selectedIsometricNameChanged && (
           <p className="body-caption text-[var(--st-wait)]">
@@ -308,12 +322,6 @@ export function FeedstockTypeForm({
         >
           {visibleActiveSection === "general" && (
             <div className="space-y-20">
-              {hint && (
-                <p className="text-[var(--text-s)] text-[var(--color-text-tertiary)]">
-                  {hint}
-                </p>
-              )}
-
               {selectedIsometricSummary}
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
@@ -321,6 +329,7 @@ export function FeedstockTypeForm({
                   <FormField
                     id="usage"
                     label="Usage"
+                    helperText={hint}
                     error={errors.usage?.message}
                     required
                   >
@@ -359,12 +368,6 @@ export function FeedstockTypeForm({
                   />
                 </FormField>
 
-                {showCertifiedFeedstockWarning && (
-                  <Notice tone="warning" className="md:col-span-2">
-                    {CERTIFIED_FEEDSTOCK_WARNING}
-                  </Notice>
-                )}
-
                 <FormField
                   id="category"
                   label="Category"
@@ -380,6 +383,12 @@ export function FeedstockTypeForm({
                     {...register("category")}
                   />
                 </FormField>
+
+                {showCertifiedFeedstockWarning && (
+                  <Notice tone="warning" className="md:col-span-2">
+                    {CERTIFIED_FEEDSTOCK_WARNING}
+                  </Notice>
+                )}
               </div>
 
               <FormField
@@ -403,6 +412,7 @@ export function FeedstockTypeForm({
                 errorMessage={errorMessage}
                 submitLabel={submitLabel}
                 defaultSubmitLabel={defaultSubmitLabel}
+                sticky={stickyActions}
               />
             </div>
           )}
@@ -427,11 +437,10 @@ export function FeedstockTypeForm({
 
               {selectedIsometricFeedstock && (
                 <div className="space-y-20 border-t border-[var(--color-border-secondary)] pt-20">
-                  {selectedIsometricSummary}
-
                   <FormField
                     id="isometric-category"
                     label="Local category"
+                    helperText={LOCAL_CATEGORY_HINT}
                     error={errors.category?.message}
                     required
                   >
@@ -452,6 +461,7 @@ export function FeedstockTypeForm({
                     errorMessage={errorMessage}
                     submitLabel={submitLabel}
                     defaultSubmitLabel={defaultSubmitLabel}
+                    sticky={stickyActions}
                   />
                 </div>
               )}
