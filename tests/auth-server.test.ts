@@ -21,7 +21,7 @@ vi.mock("@/lib/auth/providers/better-auth-server", () => ({
   signOut: vi.fn(),
 }));
 
-import { getUser } from "@/lib/auth/server";
+import { getUser, hasOrgRole, requireOrgRole, type OrgContext } from "@/lib/auth/server";
 
 const sessionUser = {
   id: "stale-user-id",
@@ -78,5 +78,23 @@ describe("getUser", () => {
 
     await expect(getUser()).resolves.toEqual(mappedDatabaseUser);
     expect(mocks.mapBetterAuthUser).toHaveBeenCalledWith(databaseUser);
+  });
+});
+
+
+describe("organization role checks", () => {
+  const roles = [null, "member", "admin", "owner"] as const;
+  const minimumRoles = ["member", "admin", "owner"] as const;
+  it.each(roles)("shares the permission decision for role %s", (orgRole) => {
+    const ctx: OrgContext = { userId: "user", organizationId: "org", orgRole, isPlatformAdmin: false };
+    for (const minRole of minimumRoles) {
+      const allowed = roles.indexOf(orgRole) >= roles.indexOf(minRole);
+      expect(hasOrgRole(ctx, minRole)).toBe(allowed);
+      if (allowed) expect(() => requireOrgRole(ctx, minRole)).not.toThrow();
+      else expect(() => requireOrgRole(ctx, minRole)).toThrow("You don't have permission");
+      const platformAdmin = { ...ctx, isPlatformAdmin: true };
+      expect(hasOrgRole(platformAdmin, minRole)).toBe(true);
+      expect(() => requireOrgRole(platformAdmin, minRole)).not.toThrow();
+    }
   });
 });

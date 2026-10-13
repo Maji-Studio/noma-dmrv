@@ -23,8 +23,6 @@ import { useFieldArray, useForm, useWatch, Controller, type Resolver } from "rea
 import { getRunConflict, type RunConflict } from "@/lib/production-runs/overlap-conflict";
 import { FactoryIcon, PlantIcon, LightningIcon, PackageIcon, PlusIcon } from "@phosphor-icons/react/dist/ssr";
 import { FormField, FormInput, FormTextarea, MassMoistureFields, MoistureField, FormActions, FormError, FormSection, FormSpine, ResolvedErrorRevalidator, makeCertFieldStatus, type CertFieldStatus } from "@/components/forms";
-import { useStorageBinEditDialog } from "@/hooks/use-storage-bin-edit-dialog";
-import { StorageBinEditDialog } from "@/components/forms/entity-select/storage-bin-edit-dialog";
 import { Button } from "@/components/ui/button";
 import { ProductionReadingsField } from "./production-readings-field";
 import { SegmentedControl } from "@/components/forms/segmented-control";
@@ -367,8 +365,6 @@ export function ProductionRunForm({
     }
   });
 
-  const binEdit = useStorageBinEditDialog();
-
   return (
     <div className="space-y-20">
       <form id={formId} onSubmit={handleFormSubmit}>
@@ -426,6 +422,7 @@ export function ProductionRunForm({
                 <EntitySelect
                   id="reactorId"
                   entityType="reactor"
+                  allowEdit
                   value={field.value}
                   onChange={field.onChange}
                   placeholder="Select a reactor..."
@@ -446,6 +443,7 @@ export function ProductionRunForm({
                 <EntitySelect
                   id="operatorId"
                   entityType="operator"
+                  allowEdit
                   value={field.value || undefined}
                   onChange={field.onChange}
                   placeholder="Select operator..."
@@ -606,7 +604,6 @@ export function ProductionRunForm({
         ))}
 
 
-
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <MoistureField
             id="feedstockMoisturePercent"
@@ -675,6 +672,7 @@ export function ProductionRunForm({
               <EntitySelect
                 id="biocharStorageLocationId"
                 entityType="storageLocation"
+                allowEdit
                 value={field.value || undefined}
                 onChange={field.onChange}
                 disabled={isSubmitting || !watchedFacilityId}
@@ -682,7 +680,6 @@ export function ProductionRunForm({
                 filterBy={watchedFacilityId ? { facilityId: watchedFacilityId, type: "biochar_bin" } : undefined}
                 allowCreate={!!watchedFacilityId}
                 onCreateNew={() => biocharBinDialog.open()}
-                onEditSelected={() => void binEdit.open(field.value)}
               />
             )}
           />
@@ -839,7 +836,6 @@ export function ProductionRunForm({
       </FormSpine>
 
       </form>
-      <StorageBinEditDialog {...binEdit} />
 
       {watchedFacilityId && (
         <StorageLocationQuickAddDialog

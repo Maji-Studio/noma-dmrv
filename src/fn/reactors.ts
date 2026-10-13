@@ -33,6 +33,8 @@ import {
   formatZodActionError,
   toLoggedActionError,
 } from "./action-errors";
+import { getReactorById } from "@/data-access/reactors";
+import { uuidSchema } from "@/schemas/helpers";
 
 function reactorActionError(
   error: unknown,
@@ -182,4 +184,8 @@ export async function deleteReactorFn(
 
     return undefined;
   }, { fallbackMessage: "Failed to delete reactor", log: { message: "reactor action failed", context: { op: "reactor:delete" } } });
+}
+
+export async function getReactorByIdFn(id: string) {
+  return withAction((ctx) => getReactorById(ctx, uuidSchema().parse(id)));
 }

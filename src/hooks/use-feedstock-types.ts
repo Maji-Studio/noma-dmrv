@@ -5,7 +5,7 @@ import { throwActionError, StaleVersionError } from "@/lib/stale-version";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { patchArrayListCacheByExactKeyWithSavedRow } from "./list-cache-utils";
 import type { FeedstockType } from "@/db/schema";
-import { entityKeys } from "./entity-query-keys";
+import { invalidateEntityTypeQueries } from "./entity-query-keys";
 import {
   archiveFeedstockTypeFn,
   createFeedstockTypeFn,
@@ -22,8 +22,10 @@ import type {
 } from "@/schemas/feedstock-types";
 import { certificationKeys } from "./use-certification";
 
-const feedstockTypeKeys = {
+export const feedstockTypeKeys = {
   all: ["feedstock-types"] as const,
+  canManage: () => [...feedstockTypeKeys.all, "can-manage"] as const,
+  detail: (id: string) => ["feedstock-types", "detail", id] as const,
   list: () => ["feedstock-types", "list"] as const,
 };
 
@@ -44,9 +46,7 @@ function useInvalidateFeedstockTypes() {
   return () => {
     void queryClient.invalidateQueries({ queryKey: feedstockTypeKeys.all });
     void queryClient.invalidateQueries({ queryKey: certificationKeys.all });
-    void queryClient.invalidateQueries({
-      queryKey: entityKeys.listPrefix("feedstockType"),
-    });
+    invalidateEntityTypeQueries(queryClient, "feedstockType");
   };
 }
 

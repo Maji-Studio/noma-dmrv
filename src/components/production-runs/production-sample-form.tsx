@@ -111,6 +111,7 @@ export function ProductionSampleForm({
                 <EntitySelect
                   id="production-sample-sampledById"
                   entityType="operator"
+                  allowEdit
                   value={field.value ?? ""}
                   onChange={field.onChange}
                   placeholder="Select operator..."

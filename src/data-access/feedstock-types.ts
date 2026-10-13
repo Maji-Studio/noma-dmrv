@@ -32,6 +32,8 @@ import {
 import { requireOrgScope } from "./utils";
 import { hasCertifierCredentials } from "./certifier-credentials";
 
+export const FEEDSTOCK_TYPE_MANAGE_ROLE = "admin";
+
 const ISOMETRIC_FEEDSTOCK_TYPE_CONSTRAINT =
   "feedstock_types_organization_id_isometric_id_unique";
 const FEEDSTOCK_TYPE_NAME_USAGE_CONSTRAINT =
@@ -55,7 +57,7 @@ export async function createFeedstockType(
   data: CreateFeedstockTypeData & { code: string },
 ): Promise<FeedstockType> {
   requireOrgScope(ctx);
-  requireOrgRole(ctx, "admin");
+  requireOrgRole(ctx, FEEDSTOCK_TYPE_MANAGE_ROLE);
   const [created] = await db
     .insert(feedstockTypes)
     .values({
@@ -77,7 +79,7 @@ export async function updateFeedstockType(
   data: UpdateFeedstockTypeData,
 ): Promise<FeedstockType> {
   requireOrgScope(ctx);
-  requireOrgRole(ctx, "admin");
+  requireOrgRole(ctx, FEEDSTOCK_TYPE_MANAGE_ROLE);
   const { feedstockTypeId, expectedVersion, ...changes } = data;
   return db.transaction(async (tx) => {
     const [locked] = await tx
@@ -140,7 +142,7 @@ export async function archiveFeedstockType(
   expectedVersion: number,
 ): Promise<FeedstockType> {
   requireOrgScope(ctx);
-  requireOrgRole(ctx, "admin");
+  requireOrgRole(ctx, FEEDSTOCK_TYPE_MANAGE_ROLE);
   return db.transaction(async (tx) => {
     const [versioned] = await tx.select({ version: feedstockTypes.version })
       .from(feedstockTypes)
@@ -171,7 +173,7 @@ export async function unarchiveFeedstockType(
   expectedVersion: number,
 ): Promise<FeedstockType> {
   requireOrgScope(ctx);
-  requireOrgRole(ctx, "admin");
+  requireOrgRole(ctx, FEEDSTOCK_TYPE_MANAGE_ROLE);
   return db.transaction(async (tx) => {
     const [versioned] = await tx.select({ version: feedstockTypes.version })
       .from(feedstockTypes)
@@ -249,7 +251,7 @@ export async function deleteFeedstockType(
   expectedVersion: number,
 ): Promise<{ id: string }> {
   requireOrgScope(ctx);
-  requireOrgRole(ctx, "admin");
+  requireOrgRole(ctx, FEEDSTOCK_TYPE_MANAGE_ROLE);
   return db.transaction(async (tx) => {
     const [versioned] = await tx.select({ version: feedstockTypes.version })
       .from(feedstockTypes)
@@ -289,7 +291,7 @@ export async function importIsometricFeedstockType(
   code: string,
 ): Promise<FeedstockType> {
   requireOrgScope(ctx);
-  requireOrgRole(ctx, "admin");
+  requireOrgRole(ctx, FEEDSTOCK_TYPE_MANAGE_ROLE);
   if (!(await hasCertifierCredentials(ctx, "isometric"))) {
     throw new SafeError(
       "Connect this Organization to Isometric before importing feedstock types.",
@@ -336,4 +338,14 @@ export async function importIsometricFeedstockType(
     }
     throw error;
   }
+}
+
+/** Load an edit record within the active organization. */
+export async function getFeedstockTypeById(ctx: OrgContext, id: string): Promise<FeedstockType> {
+  requireOrgScope(ctx);
+  const [record] = await db.select().from(feedstockTypes).where(
+    and(eq(feedstockTypes.id, id), eq(feedstockTypes.organizationId, ctx.organizationId)),
+  );
+  if (!record) throw new SafeError("The record could not be found.");
+  return record;
 }

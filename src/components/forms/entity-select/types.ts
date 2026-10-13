@@ -117,6 +117,8 @@ export interface EntitySelectProps {
     label: string;
     subtitle?: string;
   };
+  /** Open the shared edit modal for the selected entity. */
+  allowEdit?: boolean;
   /** Opens the selected entity without changing the value. */
   onEditSelected?: () => void;
   /** Overrides the default Edit <selectedOption.name> label. */

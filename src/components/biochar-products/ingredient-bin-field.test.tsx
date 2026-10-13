@@ -5,10 +5,6 @@ import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { CompositionRow } from "@/lib/biochar-composition";
 
-vi.mock("@/hooks/use-storage-bin-edit-dialog", () => ({
-  useStorageBinEditDialog: () => ({ bin: null, open: vi.fn(), close: vi.fn() }),
-}));
-
 interface CapturedEntitySelectProps {
   allowCreate?: boolean;
   createLabel?: string;

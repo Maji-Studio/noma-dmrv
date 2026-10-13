@@ -1,6 +1,5 @@
 /**
- * Vehicles, drivers and operators: settings lists, a by-id read for the edit
- * dialog, and the edit and delete mutations.
+ * Vehicles, drivers and operators: settings lists and edit and delete mutations.
  *
  * Every write refreshes the fleet lists, the entity-select caches for its kind
  * and the records that display it. A vehicle edit can also refresh the derived
@@ -14,9 +13,6 @@ import {
   deleteDriverFn,
   deleteOperatorFn,
   deleteVehicleFn,
-  getDriverFn,
-  getOperatorFn,
-  getVehicleFn,
   listDriversFn,
   listOperatorsFn,
   listVehiclesFn,
@@ -134,29 +130,10 @@ const LIST_FNS = {
   operator: listOperatorsFn,
 } satisfies { [K in FleetKind]: () => Promise<ActionResult<FleetRecords[K][]>> };
 
-const GET_FNS = {
-  vehicle: (id: string) => getVehicleFn({ vehicleId: id }),
-  driver: (id: string) => getDriverFn({ driverId: id }),
-  operator: (id: string) => getOperatorFn({ operatorId: id }),
-} satisfies { [K in FleetKind]: (id: string) => Promise<ActionResult<FleetRecords[K]>> };
-
 export function useFleetList<K extends FleetKind>(kind: K) {
   return useQuery({
     queryKey: fleetKeys.list(kind),
     queryFn: () => unwrap(LIST_FNS[kind]() as Promise<ActionResult<FleetRecords[K][]>>),
-  });
-}
-
-/**
- * One record, read fresh whenever an edit dialog opens on it. Pass
- * `enabled: false` while the dialog is closed.
- */
-export function useFleetRecord<K extends FleetKind>(kind: K, id: string | null | undefined, enabled = true) {
-  return useQuery({
-    queryKey: fleetKeys.detail(kind, id ?? ""),
-    queryFn: () => unwrap(GET_FNS[kind](id!) as Promise<ActionResult<FleetRecords[K]>>),
-    enabled: enabled && Boolean(id),
-    staleTime: 0,
   });
 }
 

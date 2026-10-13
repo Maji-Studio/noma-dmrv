@@ -305,6 +305,7 @@ export function CreditBatchForm({
             name="feedstockTypeId"
             label="Feedstock type"
             entityType="feedstockType"
+            allowEdit
             placeholder="Select feedstock type..."
             disabled={isSubmitting}
             required

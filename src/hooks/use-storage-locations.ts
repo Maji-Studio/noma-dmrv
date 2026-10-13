@@ -23,7 +23,6 @@ import type {
 } from "@/data-access/storage-locations";
 import {
   getStorageLocationsFn,
-  getStorageLocationFn,
   createStorageLocationFn,
   archiveStorageLocationFn,
   restoreStorageLocationFn,
@@ -84,27 +83,6 @@ export function useStorageLocations(
     // the previous page means the control the operator just used stays put.
     placeholderData: keepPreviousData,
   });
-}
-
-/**
- * Returns a loader for one storage bin with its facility and inventory fields,
- * the shape the bin sheet reads. It always refetches, so a sheet opened from a
- * form shows the bin's current stock, not a cached figure.
- */
-export function useLoadStorageLocation() {
-  const queryClient = useQueryClient();
-  return (storageLocationId: string) =>
-    queryClient.fetchQuery({
-      queryKey: storageLocationKeys.detailWithFacility(storageLocationId),
-      staleTime: 0,
-      queryFn: async () => {
-        const result = await getStorageLocationFn({ storageLocationId });
-        if (!result.success) {
-          throwActionError(result);
-        }
-        return result.data;
-      },
-    });
 }
 
 // ============================================

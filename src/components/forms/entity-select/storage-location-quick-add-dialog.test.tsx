@@ -7,7 +7,9 @@ import { SideSheetActionsContext, useSideSheetActions } from "@/components/ui/en
 import type { StorageLocationWithFacility } from "@/data-access/storage-locations";
 import type { StorageLocationFormData } from "@/schemas/storage-locations";
 import { StorageLocationQuickAddDialog } from "./storage-location-quick-add-dialog";
-import { StorageBinEditDialog } from "./storage-bin-edit-dialog";
+function StorageBinEditDialog({ bin, close }: { bin: StorageLocationWithFacility; close: () => void }) {
+  return <StorageLocationQuickAddDialog isOpen storageLocation={bin} facilityId={bin.facilityId} onClose={close} onSuccess={() => undefined} />;
+}
 
 const mocks = vi.hoisted(() => ({ update: vi.fn(), create: vi.fn(), success: vi.fn(), actions: undefined as unknown }));
 vi.mock("@/hooks/use-storage-locations", () => ({ useUpdateStorageLocation: () => ({ mutateAsync: mocks.update, isPending: false }) }));

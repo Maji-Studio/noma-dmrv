@@ -20,6 +20,8 @@ import {
   XIcon,
 } from "@phosphor-icons/react/dist/ssr";
 import { Popover } from "@base-ui/react/popover";
+import dynamic from "next/dynamic";
+import { isEditableEntityType, useCanManageFeedstockTypes } from "@/hooks/use-entity-edit-record";
 import { SELECT_SEARCH_MIN_OPTIONS } from "@/config/forms";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -36,6 +38,8 @@ import { formatRemainingMass } from "./remaining-mass";
 
 import { EntitySelectRow, type SelectRow } from "./entity-select-row";
 export { EntityOptionText } from "./entity-select-row";
+
+const EntityEditDialog = dynamic(() => import("./entity-edit-dialog").then((module) => module.EntityEditDialog));
 
 const MENU_SIDE_OFFSET = 4;
 const MENU_COLLISION_PADDING = 8;
@@ -94,7 +98,17 @@ function getFeedstockTypeDefaultUsage(filterBy?: Record<string, string>) {
   return usage === "pyrolysis" || usage === "blend" ? usage : undefined;
 }
 
-export function EntitySelect({
+export function EntitySelect(props: EntitySelectProps) {
+  if (props.entityType === "feedstockType" && props.allowEdit) return <FeedstockTypeSelect {...props} />;
+  return <EntitySelectControl {...props} />;
+}
+
+function FeedstockTypeSelect(props: EntitySelectProps) {
+  const canManage = useCanManageFeedstockTypes();
+  return <EntitySelectControl {...props} allowEdit={canManage} onEditSelected={canManage ? props.onEditSelected : undefined} />;
+}
+
+function EntitySelectControl({
   id,
   entityType,
   value,
@@ -117,11 +131,14 @@ export function EntitySelect({
   formatSelectedLabel,
   emptyHint,
   noneOption,
-  onEditSelected,
+  onEditSelected: customEditSelected,
+  allowEdit = false,
   editLabel,
   "aria-describedby": ariaDescribedBy,
   "aria-invalid": ariaInvalid,
 }: EntitySelectProps) {
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const onEditSelected = customEditSelected ?? (allowEdit && isEditableEntityType(entityType) ? () => setIsEditOpen(true) : undefined);
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
@@ -606,6 +623,9 @@ export function EntitySelect({
           </Popover.Portal>
         )}
 
+        {isEditOpen && isEditableEntityType(entityType) && (
+          <EntityEditDialog entityType={entityType} entityId={value} isOpen={isEditOpen} onClose={() => setIsEditOpen(false)} />
+        )}
         <DriverQuickAddDialog
           isOpen={isDriverDialogOpen}
           onClose={() => setIsDriverDialogOpen(false)}

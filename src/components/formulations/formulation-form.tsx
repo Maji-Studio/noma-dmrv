@@ -368,6 +368,7 @@ export function FormulationForm({
                   name={`ingredients.${index}.feedstockTypeId`}
                   label="Blend material"
                   entityType="feedstockType"
+                  allowEdit
                   placeholder="Select a blend material..."
                   disabled={isSubmitting}
                   required

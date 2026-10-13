@@ -411,3 +411,13 @@ export async function deleteOrder(
 // ============================================
 // Utility Operations
 // ============================================
+
+/** Load an edit record within the active organization. */
+export async function getOrderById(ctx: OrgContext, id: string): Promise<Order> {
+  requireOrgScope(ctx);
+  const [record] = await db.select().from(orders).where(
+    and(eq(orders.id, id), eq(orders.organizationId, ctx.organizationId)),
+  );
+  if (!record) throw new SafeError("The record could not be found.");
+  return record;
+}

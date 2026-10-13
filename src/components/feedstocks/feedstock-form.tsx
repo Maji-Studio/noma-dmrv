@@ -438,6 +438,7 @@ export function FeedstockForm({
               name="supplierId"
               label="Supplier"
               entityType="supplier"
+              allowEdit
               placeholder="Select supplier..."
               disabled={isSubmitting}
               required
@@ -470,6 +471,7 @@ export function FeedstockForm({
                 name="vehicleId"
                 label="Vehicle"
                 entityType="vehicle"
+                allowEdit
                 placeholder="Select vehicle..."
                 disabled={isSubmitting}
                 allowCreate
@@ -636,6 +638,7 @@ export function FeedstockForm({
               name="feedstockTypeId"
               label="Feedstock type"
               entityType="feedstockType"
+              allowEdit
               placeholder="Select feedstock type..."
               disabled={isSubmitting}
               required

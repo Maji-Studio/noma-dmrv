@@ -394,12 +394,25 @@ boundary evidence path from the presence of one file alone.
 
 ## Entity select
 
-Pass `onEditSelected` to offer **Edit <name>** beside **Add new** in the menu.
+Pass `allowEdit` to `EntitySelect` or `FormEntitySelect` to offer **Edit <name>**
+beside **Add new**. `EntityEditDialog` loads a fresh record on each open and
+renders the entity's existing form in `QuickAddDialogShell`. The opened record
+and version stay fixed while editing, including after a stale-save refusal.
+The shared shell stops portalled form submits from reaching the entry form.
+Nested dialogs use the shared modal stack; Escape closes only the top layer.
+
 The label uses the selected entity's name; `editLabel` overrides it. Editing
 leaves the selected value unchanged. With `selectionLocked` and a selection, only
-Edit is available. `disabled` prevents all interaction, including Edit. Bin
-pickers use `useStorageBinEditDialog` to load a fresh record and open the
-quick-add modal in edit mode; archived bins open read-only.
+Edit is available. `disabled` prevents all interaction, including Edit.
+`onEditSelected` remains available for custom edit flows and takes precedence
+over the built-in handler. Archived records open read-only, without Reconcile or
+stock actions.
+
+Supported types are storage bins, formulations, suppliers, customers, feedstock
+types, reactors, orders, vehicles, operators and drivers. Feedstock-type Edit
+requires the server-resolved management permission (Owner, Admin or Platform
+Admin). Facility and Credit batch pickers deliberately have no Edit row. Driver
+is supported by the shared dialog but currently has no form picker.
 
 `SELECT_SEARCH_MIN_OPTIONS` in `src/config/forms.ts` is 5: search shows from
 6 options. `alwaysShowSearch` and `hideSearch` remain explicit overrides.

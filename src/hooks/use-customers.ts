@@ -4,6 +4,7 @@
  * Includes query keys, mutations, optimistic updates, and cache invalidation
  */
 
+import { orderKeys } from "./use-orders";
 import {
   keepPreviousData,
   type QueryClient,
@@ -522,6 +523,8 @@ export function useCreateCustomerLocation(
       // Pre-populate the detail cache
       queryClient.setQueryData(customerLocationKeys.detail(data.id), data);
 
+      queryClient.invalidateQueries({ queryKey: orderKeys.selects() });
+
       await callbacks?.onSuccess?.(data, variables);
     },
     onError: async (error, variables) => {
@@ -565,6 +568,8 @@ export function useUpdateCustomerLocation(
       queryClient.invalidateQueries({
         queryKey: customerKeys.detailWithRelations(data.customerId),
       });
+
+      queryClient.invalidateQueries({ queryKey: orderKeys.selects() });
 
       await callbacks?.onSuccess?.(data, variables);
     },
@@ -617,6 +622,8 @@ export function useDeleteCustomerLocation(
       });
       // Invalidate customer lists (location count changed)
       queryClient.invalidateQueries({ queryKey: customerKeys.lists() });
+
+      queryClient.invalidateQueries({ queryKey: orderKeys.selects() });
 
       await callbacks?.onSuccess?.(undefined, variables);
     },
