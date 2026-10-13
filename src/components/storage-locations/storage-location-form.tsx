@@ -271,6 +271,7 @@ export function StorageLocationForm({
             name="feedstockTypeId"
             label="Feedstock type"
             entityType="feedstockType"
+            allowEdit
             placeholder="Select feedstock type..."
             disabled={isSubmitting || lockFeedstockType}
             required
@@ -291,6 +292,7 @@ export function StorageLocationForm({
             name="formulationId"
             label="Formulation"
             entityType="formulation"
+            allowEdit
             placeholder="Pure biochar (no formulation)"
             disabled={isSubmitting}
             helperText="Restricts this bin to one formulation. Leave it empty for a pure biochar bin, which the first formulated product stored here will claim."

@@ -6,10 +6,8 @@
 "use client";
 
 import { TrashIcon } from "@phosphor-icons/react/dist/ssr";
-import { useWatch, type Control, type UseFormRegisterReturn, type FieldError } from "react-hook-form";
+import type { Control, UseFormRegisterReturn, FieldError } from "react-hook-form";
 import { FormField, FormInput, FormEntitySelect } from "@/components/forms";
-import { useStorageBinEditDialog } from "@/hooks/use-storage-bin-edit-dialog";
-import { StorageBinEditDialog } from "@/components/forms/entity-select/storage-bin-edit-dialog";
 import { Button } from "@/components/ui/button";
 import { MASS_KG_INPUT_STEP } from "@/schemas/helpers";
 
@@ -46,13 +44,6 @@ export function BinAllocationRow({
   feedstockTypeId,
   onCreateNew,
 }: BinAllocationRowProps) {
-  const storageLocationId: string | undefined = useWatch({
-    control,
-    name: `allocations.${index}.storageLocationId`,
-  });
-
-  const binEdit = useStorageBinEditDialog();
-
   return (
     <div className="flex items-start gap-12">
       <div className="flex flex-col gap-y-12 flex-1">
@@ -61,6 +52,7 @@ export function BinAllocationRow({
           name={`allocations.${index}.storageLocationId`}
           label="Storage bin"
           entityType="storageLocation"
+          allowEdit
           placeholder="Select bin..."
           disabled={disabled}
           required
@@ -73,7 +65,6 @@ export function BinAllocationRow({
           dependsOn={[feedstockTypeId, facilityId]}
           allowCreate={Boolean(onCreateNew)}
           onCreateNew={onCreateNew}
-          onEditSelected={() => void binEdit.open(storageLocationId)}
         />
 
         <FormField
@@ -107,7 +98,6 @@ export function BinAllocationRow({
           <TrashIcon size={18} />
         </Button>
       )}
-      <StorageBinEditDialog {...binEdit} />
     </div>
   );
 }

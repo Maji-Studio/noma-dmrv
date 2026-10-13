@@ -1,3 +1,5 @@
+import { invalidateEntityTypeQueries } from "./entity-query-keys";
+import { getReactorByIdFn } from "@/fn/reactors";
 import { throwActionError, StaleVersionError } from "@/lib/stale-version";
 /**
  * Reactors React Query Hooks
@@ -89,6 +91,7 @@ export function useCreateReactor(
       await callbacks?.onMutate?.(variables);
     },
     onSuccess: async (data, variables) => {
+      invalidateEntityTypeQueries(queryClient, "reactor");
       // Pre-populate the detail cache with the authoritative created reactor.
       queryClient.setQueryData(reactorKeys.detail(data.id), data);
 
@@ -200,6 +203,7 @@ export function useUpdateReactor(
       return { previousReactor, previousLists };
     },
     onSuccess: async (data, variables) => {
+      invalidateEntityTypeQueries(queryClient, "reactor");
       // Update cache with actual server data
       queryClient.setQueryData(reactorKeys.detail(data.id), data);
       patchListCachesWithSavedRow<ReactorWithRelations>(queryClient, reactorKeys.lists(), data);
@@ -380,3 +384,15 @@ export function useDeleteReactor(
 // ============================================
 // Cache Invalidation Utilities
 // ============================================
+
+export function useReactor(id: string, enabled = true) {
+  return useQuery({
+    queryKey: reactorKeys.detail(id),
+    queryFn: async () => {
+      const result = await getReactorByIdFn(id);
+      if (!result.success) throwActionError(result);
+      return result.data;
+    },
+    enabled: enabled && !!id,
+  });
+}

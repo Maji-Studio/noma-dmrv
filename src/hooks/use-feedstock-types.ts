@@ -5,8 +5,9 @@ import { throwActionError, StaleVersionError } from "@/lib/stale-version";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { patchArrayListCacheByExactKeyWithSavedRow } from "./list-cache-utils";
 import type { FeedstockType } from "@/db/schema";
-import { entityKeys } from "./entity-query-keys";
+import { invalidateEntityTypeQueries } from "./entity-query-keys";
 import {
+  getFeedstockTypeByIdFn,
   archiveFeedstockTypeFn,
   createFeedstockTypeFn,
   deleteFeedstockTypeFn,
@@ -22,8 +23,10 @@ import type {
 } from "@/schemas/feedstock-types";
 import { certificationKeys } from "./use-certification";
 
-const feedstockTypeKeys = {
+export const feedstockTypeKeys = {
   all: ["feedstock-types"] as const,
+  canManage: () => [...feedstockTypeKeys.all, "can-manage"] as const,
+  detail: (id: string) => ["feedstock-types", "detail", id] as const,
   list: () => ["feedstock-types", "list"] as const,
 };
 
@@ -44,9 +47,7 @@ function useInvalidateFeedstockTypes() {
   return () => {
     void queryClient.invalidateQueries({ queryKey: feedstockTypeKeys.all });
     void queryClient.invalidateQueries({ queryKey: certificationKeys.all });
-    void queryClient.invalidateQueries({
-      queryKey: entityKeys.listPrefix("feedstockType"),
-    });
+    invalidateEntityTypeQueries(queryClient, "feedstockType");
   };
 }
 
@@ -135,5 +136,17 @@ export function useImportIsometricFeedstockType() {
       return result.data;
     },
     onSuccess: invalidate,
+  });
+}
+
+export function useFeedstockType(id: string, enabled = true) {
+  return useQuery({
+    queryKey: feedstockTypeKeys.detail(id),
+    queryFn: async () => {
+      const result = await getFeedstockTypeByIdFn(id);
+      if (!result.success) throwActionError(result);
+      return result.data;
+    },
+    enabled: enabled && !!id,
   });
 }

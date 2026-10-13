@@ -1,3 +1,4 @@
+import { getOrderByIdFn } from "@/fn/orders";
 import { StaleVersionError, throwActionError } from "@/lib/stale-version";
 import { patchListCachesWithSavedRow } from "./list-cache-utils";
 /**
@@ -345,3 +346,15 @@ export function useDeleteOrder(callbacks?: MutationCallbacks<void, DeleteOrderDa
 // ============================================
 // Cache Invalidation Utilities
 // ============================================
+
+export function useOrder(id: string, enabled = true) {
+  return useQuery({
+    queryKey: orderKeys.detail(id),
+    queryFn: async () => {
+      const result = await getOrderByIdFn(id);
+      if (!result.success) throwActionError(result);
+      return result.data;
+    },
+    enabled: enabled && !!id,
+  });
+}

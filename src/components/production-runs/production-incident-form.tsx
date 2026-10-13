@@ -122,6 +122,7 @@ export function ProductionIncidentForm({
                 <EntitySelect
                   id="incident-reactorId"
                   entityType="reactor"
+                  allowEdit
                   value={field.value ?? ""}
                   onChange={field.onChange}
                   placeholder="Select reactor..."
@@ -145,6 +146,7 @@ export function ProductionIncidentForm({
                 <EntitySelect
                   id="incident-operatorId"
                   entityType="operator"
+                  allowEdit
                   value={field.value ?? ""}
                   onChange={field.onChange}
                   placeholder="Select operator..."

@@ -320,6 +320,7 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
           name="orderId"
           label="Order"
           entityType="order"
+          allowEdit
           placeholder="Select order..."
           required
           showRemainingDryMass={false}

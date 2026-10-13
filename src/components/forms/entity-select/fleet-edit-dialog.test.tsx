@@ -43,6 +43,16 @@ vi.mock("@/hooks/use-fleet", () => ({
   useUpdateOperator: () => ({ mutateAsync: mocks.updateOperator, isPending: false }),
 }));
 
+vi.mock("@/hooks/use-entity-edit-record", async () => {
+  const { useState } = await import("react");
+  return { useEntityEditRecord: () => {
+    const [openedAt] = useState(mocks.record.dataUpdatedAt);
+    return { ...mocks.record, isFetchedAfterMount: mocks.record.dataUpdatedAt > openedAt,
+      isFetching: false, isSuccess: !mocks.record.isError };
+  } };
+});
+vi.mock("@/components/ui/toast", () => ({ useToast: () => ({ error: vi.fn() }) }));
+
 import { FleetEditDialog, isFleetKind } from "./fleet-edit-dialog";
 
 const vehicle: Vehicle = {
@@ -268,6 +278,23 @@ describe("FleetEditDialog", () => {
       credentials: "Kiln lead",
       contactPhone: null,
     });
+  });
+
+  it("edits a driver with the version loaded on open", async () => {
+    const driver = { ...vehicle, licenseNumber: "License", contactPhone: null };
+    const close = vi.fn();
+    mocks.updateDriver.mockResolvedValue(driver);
+    await openOn(
+      (isOpen) => <FleetEditDialog kind="driver" entityId={driver.id} isOpen={isOpen} onClose={close} />,
+      undefined,
+      driver,
+    );
+    await submit();
+    expect(mocks.updateDriver).toHaveBeenCalledWith({
+      driverId: driver.id, expectedVersion: driver.version, name: driver.name,
+      licenseNumber: "License", contactPhone: null,
+    });
+    expect(close).toHaveBeenCalledOnce();
   });
 
   it("shows a retry while the record cannot be loaded", async () => {

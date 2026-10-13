@@ -337,3 +337,13 @@ export async function importIsometricFeedstockType(
     throw error;
   }
 }
+
+/** Load an edit record within the active organization. */
+export async function getFeedstockTypeById(ctx: OrgContext, id: string): Promise<FeedstockType> {
+  requireOrgScope(ctx);
+  const [record] = await db.select().from(feedstockTypes).where(
+    and(eq(feedstockTypes.id, id), eq(feedstockTypes.organizationId, ctx.organizationId)),
+  );
+  if (!record) throw new SafeError("The record could not be found.");
+  return record;
+}

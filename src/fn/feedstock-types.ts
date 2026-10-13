@@ -26,6 +26,8 @@ import {
 } from "@/schemas/feedstock-types";
 import type { ActionResult } from "@/types/actions";
 import { withAction } from "./with-action";
+import { getFeedstockTypeById } from "@/data-access/feedstock-types";
+import { uuidSchema } from "@/schemas/helpers";
 
 const FEEDSTOCK_TYPE_CODE_PREFIX = "FT";
 
@@ -114,4 +116,13 @@ export async function importIsometricFeedstockTypeFn(
       (code) => importIsometricFeedstockType(ctx, entry, data.category, code),
     );
   });
+}
+
+export async function getFeedstockTypeByIdFn(id: string) {
+  return withAction((ctx) => getFeedstockTypeById(ctx, uuidSchema().parse(id)));
+}
+
+/** UI affordance only; writes still enforce the role in data access. */
+export async function canManageFeedstockTypesFn() {
+  return withAction(async (ctx) => ctx.isPlatformAdmin || ctx.orgRole === "owner" || ctx.orgRole === "admin");
 }
