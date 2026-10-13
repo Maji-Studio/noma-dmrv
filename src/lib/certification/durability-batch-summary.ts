@@ -156,6 +156,11 @@ export interface DurabilityBatchSummary {
   sampling: CreditBatchSampling;
   /** The batch's declared durability tier — samples inherit it (issue #309). */
   durabilityOption: "200_year" | "1000_year";
+  /**
+   * The batch facility's IANA zone, which the lab-sample form reads its
+   * sampling time in (round 7 Q51); null when the input carried none.
+   */
+  facilityTimezone: string | null;
   /** Raw lab sample rows pooled on this batch (across member runs/days). */
   sampleCount: number;
   /** Replicates carrying paired H/C_org + O/C_org — the eligibility / ≥3-count set. */
@@ -249,6 +254,7 @@ export function buildDurabilityBatchSummaries(
       creditBatchCode: batch.creditBatchCode,
       sampling: batch.sampling,
       durabilityOption: batch.durabilityOption ?? "200_year",
+      facilityTimezone: batch.facilityTimezone ?? null,
       sampleCount: batch.samples.length,
       usableReplicateCount: eligibility.usableReplicateCount,
       minimumReplicates: MINIMUM_REPLICATES_PER_BATCH,

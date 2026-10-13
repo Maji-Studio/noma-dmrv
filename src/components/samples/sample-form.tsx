@@ -24,8 +24,8 @@
 "use client";
 
 import { numericValue, integerValue } from "@/lib/form-utils";
-import { formatLocalDateTime } from "@/lib/date-utils";
-import { useFacilityContext } from "@/hooks/use-facility-context";
+import { facilityTimeCue } from "@/lib/date-utils";
+import { useFacilityClock, useFacilityContext } from "@/hooks/use-facility-context";
 import { useBatchDurabilitySummary } from "@/hooks/use-certification";
 
 import { useEffect, useId } from "react";
@@ -33,13 +33,18 @@ import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { FlaskIcon, FireIcon, CubeIcon, CalculatorIcon, EyeIcon, ThermometerIcon } from "@phosphor-icons/react/dist/ssr";
 import { FormField, FormInput, EntitySelect, FormActions, FormSection, FormSpine, MoistureField, makeCertFieldStatus } from "@/components/forms";
+import { EventTimeInput } from "@/components/forms/event-time-input";
 import { ResolvedErrorRevalidator } from "@/components/forms";
 import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
-import { RATIO_INPUT_MAX, RATIO_MAX_MESSAGE } from "@/schemas/helpers";
+import { RATIO_MAX_MESSAGE } from "@/schemas/helpers";
+import {
+  deriveSampleRatios,
+  formatSampleRatio,
+  previewSampleRatios,
+  SampleRatioCapError,
+} from "@/lib/calculations/sample-ratios";
 import {
   sampleFormSchema,
-  calculateHToCOrgRatio,
-  calculateOToCOrgRatio,
   formatDurabilityOption,
   getSampleCarbonReconciliationErrors,
   type SampleFormData,
@@ -120,9 +125,8 @@ export function SampleForm({
 
   const defaultValues = {
       creditBatchId: preselectedCreditBatchId || sample?.creditBatchId || "",
-      samplingTime: sample?.samplingTime
-        ? formatLocalDateTime(new Date(sample.samplingTime))
-        : formatLocalDateTime(new Date()),
+      // An instant; EventTimeInput shows it on the batch facility's clock.
+      samplingTime: (sample?.samplingTime ? new Date(sample.samplingTime) : new Date()).toISOString(),
       labName: sample?.labName ?? "",
       labAccreditation: sample?.labAccreditation ?? "",
       analysisDate: sample?.analysisDate ?? "",
@@ -200,6 +204,14 @@ export function SampleForm({
     !!watchedCreditBatchId,
   );
   const batchDurabilityOption = batchSummary?.durabilityOption;
+  // Sampling time is entered on the credit batch facility's clock (round 7
+  // Q51). The batch picker lists the context facility's batches, so its clock
+  // stands in until the selected batch's summary names the zone.
+  const contextClock = useFacilityClock(contextFacilityId);
+  const batchTimeZone = batchSummary?.facilityTimezone ?? null;
+  const samplingClock = batchTimeZone
+    ? { timeZone: batchTimeZone, hint: facilityTimeCue(batchTimeZone) }
+    : contextClock;
   useEffect(() => {
     if (batchDurabilityOption) {
       setValue("durabilityOption", batchDurabilityOption);
@@ -235,21 +247,15 @@ export function SampleForm({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [watchedNutrientClaimEnabled]);
 
-  // Derive H:C org ratio from watched values (no useEffect needed)
-  const calculatedHToCRatio = calculateHToCOrgRatio(
-    watchedHydrogenPercent as number | null,
-    watchedOrganicCarbonPercent as number | null
-  );
-
-  // Derive O:C org from O% and C_org% so the universal eligibility gate
-  // (O/C_org < 0.2) survives when the manual O:Corg input is left blank.
-  // A manually-entered O:Corg still wins.
-  const calculatedOToCRatio = calculateOToCOrgRatio(
-    watchedOxygenPercent as number | null,
-    watchedOrganicCarbonPercent as number | null
-  );
-  const resolvedOToCRatio =
-    (watchedOToCOrgRatio as number | null | undefined) ?? calculatedOToCRatio;
+  // The ratios this sample will be saved with, from the helper the server
+  // shares (round 7 Q50): H:C org always calculated, O:C org calculated
+  // whenever oxygen is entered, the lab O:C org kept only without oxygen.
+  const ratioPreview = previewSampleRatios({
+    totalHydrogenPercent: watchedHydrogenPercent as number | null,
+    totalOxygenPercent: watchedOxygenPercent as number | null,
+    organicCarbonPercent: watchedOrganicCarbonPercent as number | null,
+    oToCOrgRatio: watchedOToCOrgRatio as number | null | undefined,
+  });
 
   const is1000Year = watchedDurabilityOption === "1000_year";
   const liveCarbonErrors = getSampleCarbonReconciliationErrors({
@@ -272,7 +278,7 @@ export function SampleForm({
         id="oToCOrgRatio"
         label="O:C org ratio"
         error={errors.oToCOrgRatio?.message}
-        helperText="Enter the lab ratio, or derive it from O% and C_org%."
+        helperText="Enter the lab ratio when the lab reported no oxygen. With O% entered, the ratio is calculated from O% and C_org%."
         certifyRequired={isSampleCertifyField("oToCOrgRatio")}
         certifyStatus={certStatus("oToCOrgRatio")}
       >
@@ -281,8 +287,8 @@ export function SampleForm({
           type="number"
           step="any"
           placeholder={
-            calculatedOToCRatio !== null
-              ? calculatedOToCRatio.toFixed(4)
+            ratioPreview.oToCOrgSource === "calculated" && ratioPreview.oToCOrgRatio !== null
+              ? formatSampleRatio(ratioPreview.oToCOrgRatio)
               : "e.g., 0.15"
           }
           disabled={isSubmitting}
@@ -298,31 +304,24 @@ export function SampleForm({
   const defaultSubmitLabel = isEditMode ? "Update Sample" : "Create Sample";
 
   const handleFormSubmit = handleSubmit((data) => {
-    // Inject calculated H:C ratio at submit time
-    if (calculatedHToCRatio !== null) {
-      data.hToCOrgRatio = parseFloat(calculatedHToCRatio.toFixed(4));
-    }
-    // Fall back to the derived O:Corg when no manual value was entered, so the
-    // O/C_org eligibility gate has an input even under 1000-year.
-    if (data.oToCOrgRatio == null && calculatedOToCRatio !== null) {
-      data.oToCOrgRatio = parseFloat(calculatedOToCRatio.toFixed(4));
-    }
-    // Derived values are injected after the zod resolver ran, so re-check the
-    // numeric(7,6) cap here or an out-of-range auto-calculated ratio would
-    // only surface as a generic server error.
-    let derivedRatioOverCap = false;
-    if (data.hToCOrgRatio != null && data.hToCOrgRatio > RATIO_INPUT_MAX) {
-      setError("hToCOrgRatio", { type: "max", message: RATIO_MAX_MESSAGE });
-      derivedRatioOverCap = true;
-    }
-    if (data.oToCOrgRatio != null && data.oToCOrgRatio > RATIO_INPUT_MAX) {
-      setError("oToCOrgRatio", { type: "max", message: RATIO_MAX_MESSAGE });
-      derivedRatioOverCap = true;
-    }
-    if (derivedRatioOverCap) {
+    // Calculated ratios are injected after the zod resolver ran, so the
+    // shared helper re-checks the numeric(7,6) cap; an out-of-range ratio
+    // would otherwise only surface as a generic server error.
+    let ratios: ReturnType<typeof deriveSampleRatios>;
+    try {
+      ratios = deriveSampleRatios({
+        totalHydrogenPercent: data.totalHydrogenPercent,
+        totalOxygenPercent: data.totalOxygenPercent,
+        organicCarbonPercent: data.organicCarbonPercent,
+        oToCOrgRatio: data.oToCOrgRatio,
+      });
+    } catch (error) {
+      if (!(error instanceof SampleRatioCapError)) throw error;
+      setError(error.ratio, { type: "max", message: RATIO_MAX_MESSAGE });
       return;
     }
-    onSubmit(data as unknown as SampleFormData);
+    // null clears a stored ratio on edit, as the partial-update contract reads it.
+    onSubmit({ ...data, hToCOrgRatio: ratios.hToCOrgRatio, oToCOrgRatio: ratios.oToCOrgRatio } as unknown as SampleFormData);
   });
 
   return (
@@ -371,16 +370,15 @@ export function SampleForm({
                   id="samplingTime"
                   label="Sampling time"
                   error={errors.samplingTime?.message}
+                  cue={samplingClock.hint}
                   required
                 >
-                  <FormInput
+                  <EventTimeInput
+                    control={control}
+                    name="samplingTime"
                     id="samplingTime"
-                    type="datetime-local"
+                    timeZone={samplingClock.timeZone}
                     disabled={isSubmitting}
-                    error={!!errors.samplingTime}
-                    {...register("samplingTime", {
-                      setValueAs: (v) => (v ? new Date(v) : undefined),
-                    })}
                   />
                 </FormField>
 
@@ -743,20 +741,20 @@ export function SampleForm({
               {stabilityRatioFields}
 
               <SampleDerivedRatios
-                hToCOrgRatio={calculatedHToCRatio}
-                oToCOrgRatio={resolvedOToCRatio}
+                hToCOrgRatio={ratioPreview.hToCOrgRatio}
+                oToCOrgRatio={ratioPreview.oToCOrgRatio}
                 hydrogenPercent={(watchedHydrogenPercent as number | null) ?? null}
                 oxygenPercent={(watchedOxygenPercent as number | null) ?? null}
                 organicCarbonPercent={(watchedOrganicCarbonPercent as number | null) ?? null}
-                oToCFromLab={(watchedOToCOrgRatio as number | null | undefined) != null}
+                oToCFromLab={ratioPreview.oToCOrgSource === "lab"}
                 error={errors.hToCOrgRatio?.message}
                 certifyRequired={isSampleCertifyField}
                 certifyStatus={certStatus}
               />
 
               <SampleEligibilityAdvisory
-                hToCOrgRatio={calculatedHToCRatio}
-                oToCOrgRatio={resolvedOToCRatio}
+                hToCOrgRatio={ratioPreview.hToCOrgRatio}
+                oToCOrgRatio={ratioPreview.oToCOrgRatio}
               />
         </FormSection>
 

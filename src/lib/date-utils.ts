@@ -222,10 +222,15 @@ export function facilityTimeHelperText(
   const resolved = facilityId
     ? facilities.some((facility) => facility.id === facilityId)
     : false;
-  const label = resolveFacilityTimezone(facilities, facilityId).replaceAll("_", " ");
+  const timeZone = resolveFacilityTimezone(facilities, facilityId);
   return resolved
-    ? `Facility time: ${label}`
-    : `Facility time is not set. Using ${label}.`;
+    ? facilityTimeCue(timeZone)
+    : `Facility time is not set. Using ${timeZone.replaceAll("_", " ")}.`;
+}
+
+/** The cue for a known facility zone, for a form that has the zone but not the facility. */
+export function facilityTimeCue(timeZone: string): string {
+  return `Facility time: ${timeZone.replaceAll("_", " ")}`;
 }
 
 /** Format a Date as "YYYY-MM-DD" in local timezone. */

@@ -123,25 +123,23 @@ export interface SampleStats {
 
 import { assertSameOrg, requireOrgScope, type Executor } from "./utils";
 import { SafeError } from "@/lib/errors";
-import {
-  isPgCheckViolationMessage,
-  isPgUniqueViolation,
-} from "@/db/errors";
+import { isPgUniqueViolation } from "@/db/errors";
 import { assertCanMutateCertifiedLineage } from "./certification-lineage-guards";
 import { assertCarbonReconciliation } from "./samples/carbon-reconciliation";
+import {
+  SAMPLE_CREDIT_BATCH_NOT_FOUND_MESSAGE,
+  SAMPLE_TIER_EVIDENCE_MESSAGES,
+} from "@/lib/sample-domain-errors";
 
 // DB-enforced sample-code uniqueness (issue #395). Drizzle names the
 // `.unique()` on `samples.sampleCode` this constraint.
 const SAMPLE_CODE_UNIQUE_CONSTRAINT = "samples_organization_id_sample_code_unique";
-const METHOD_B_BASELINE_VIOLATION_FRAGMENT =
-  "cannot use Method B: requires >= 30 prior Method A samples";
-const METHOD_B_BASELINE_FLOOR_MESSAGE =
-  "This change would reduce the Method-B baseline below 30 qualifying Method-A Samples. Keep at least 30 qualifying Method-A Samples recorded before Method B was enabled.";
 
 /**
- * Run a sample update/delete and translate invariant-specific Postgres errors
- * into operator-facing SafeErrors. Create routes code uniqueness through
- * `withAutoCode`; the Method-B trigger can reject updates and deletes.
+ * Run a sample update/delete and translate a duplicate edited code into an
+ * operator-facing SafeError. Create routes code uniqueness through
+ * `withAutoCode`. (The Method-B trigger mapping went with migration 0089,
+ * which dropped those triggers.)
  */
 async function guardSampleMutation<T>(fn: () => Promise<T>): Promise<T> {
   try {
@@ -149,9 +147,6 @@ async function guardSampleMutation<T>(fn: () => Promise<T>): Promise<T> {
   } catch (err) {
     if (isPgUniqueViolation(err, SAMPLE_CODE_UNIQUE_CONSTRAINT)) {
       throw new SafeError("A Sample with this code already exists.");
-    }
-    if (isPgCheckViolationMessage(err, METHOD_B_BASELINE_VIOLATION_FRAGMENT)) {
-      throw new SafeError(METHOD_B_BASELINE_FLOOR_MESSAGE);
     }
     throw err;
   }
@@ -515,28 +510,22 @@ async function requireBatchTierEvidence(
     .where(and(eq(creditBatches.id, creditBatchId), eq(creditBatches.organizationId, ctx.organizationId)));
 
   if (!creditBatch) {
-    throw new SafeError("Credit batch not found");
+    throw new SafeError(SAMPLE_CREDIT_BATCH_NOT_FOUND_MESSAGE);
   }
   if (creditBatch.durabilityOption !== "1000_year") {
     return;
   }
   if (values.randomReflectanceR0Percent == null) {
-    throw new SafeError(
-      "R₀ reflectance is required for a Sample on a 1000-year credit batch.",
-    );
+    throw new SafeError(SAMPLE_TIER_EVIDENCE_MESSAGES.randomReflectanceR0Percent);
   }
   if (
     values.reactiveCarbonPercent == null &&
     values.residualCarbonPercent == null
   ) {
-    throw new SafeError(
-      "TGA non-reactive carbon is required for a Sample on a 1000-year credit batch.",
-    );
+    throw new SafeError(SAMPLE_TIER_EVIDENCE_MESSAGES.residualCarbonPercent);
   }
   if (values.sReflectanceFraction == null) {
-    throw new SafeError(
-      "R₀ readings at or above 2% are required for a Sample on a 1000-year credit batch.",
-    );
+    throw new SafeError(SAMPLE_TIER_EVIDENCE_MESSAGES.sReflectanceFraction);
   }
 }
 

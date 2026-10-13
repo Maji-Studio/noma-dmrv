@@ -9,6 +9,7 @@ import { expectedVersionSchema } from "./helpers";
  */
 
 import { z } from "zod";
+import { offsetInstantSchema } from "./event-instant";
 import {
   optionalNumber,
   optionalPercent,
@@ -32,6 +33,24 @@ export const ORGANIC_CARBON_EXCEEDS_TOTAL_MESSAGE =
   `Organic carbon cannot exceed total carbon by more than ${CARBON_RECONCILIATION_TOLERANCE_PERCENTAGE_POINTS} percentage points. Correct the carbon values.`;
 export const COMBINED_CARBON_EXCEEDS_TOTAL_MESSAGE =
   `Organic plus inorganic carbon cannot exceed total carbon by more than ${CARBON_RECONCILIATION_TOLERANCE_PERCENTAGE_POINTS} percentage points. Correct the carbon values.`;
+
+export const SAMPLING_TIME_REQUIRED_MESSAGE = "Enter the sampling time.";
+const SAMPLING_TIME_OFFSET_MESSAGE =
+  "Enter the sampling time with a time zone offset, as in 2026-10-12T09:30:00Z.";
+
+/**
+ * When the sample was taken. Server actions take a native Date; a string must
+ * be an instant with an explicit offset (round 7 Q51). The form resolves its
+ * facility wall clock to that instant with `EventTimeInput`, so a time is
+ * never read in the browser's zone.
+ */
+const samplingTimeSchema = z.union([
+  z.date(),
+  z.string()
+    .min(1, SAMPLING_TIME_REQUIRED_MESSAGE)
+    .pipe(offsetInstantSchema(SAMPLING_TIME_OFFSET_MESSAGE))
+    .transform((value) => new Date(value)),
+], { error: SAMPLING_TIME_REQUIRED_MESSAGE });
 
 const percentNumber = z
   .number()
@@ -170,17 +189,7 @@ export const sampleFormSchema = z
     // (issue #309). The batch pools biochar across its member runs, so the
     // sample never anchors on a production run.
     creditBatchId: z.string().min(1, "Select a credit batch.").uuid("Choose a valid credit batch."),
-    samplingTime: z.union([
-      z.date(),
-      z.string().transform((val, ctx) => {
-        const date = new Date(val);
-        if (isNaN(date.getTime())) {
-          ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Enter a valid date." });
-          return z.NEVER;
-        }
-        return date;
-      }),
-    ]),
+    samplingTime: samplingTimeSchema,
 
     // Lab info (optional)
     labName: z.string().max(200).optional().nullable().or(z.literal("")),
@@ -335,17 +344,7 @@ export const updateSampleSchema = z.object({
     .regex(/^[A-Z0-9-]+$/)
     .optional(),
   creditBatchId: z.string().uuid("Choose a valid credit batch.").optional(),
-  samplingTime: z.union([
-    z.date(),
-    z.string().transform((val, ctx) => {
-      const date = new Date(val);
-      if (isNaN(date.getTime())) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Enter a valid date." });
-        return z.NEVER;
-      }
-      return date;
-    }),
-  ]).optional(),
+  samplingTime: samplingTimeSchema.optional(),
   labName: z.string().max(200).optional().nullable(),
   labAccreditation: z.string().max(200).optional().nullable(),
   analysisDate: optionalCalendarDateSchema(),
@@ -442,34 +441,6 @@ export type SampleFilterData = z.infer<typeof sampleFilterSchema>;
 // ============================================
 // Helper Functions
 // ============================================
-
-/**
- * Calculate H:C org ratio from hydrogen and organic carbon percentages
- */
-export function calculateHToCOrgRatio(
-  hydrogenPercent: number | null | undefined,
-  organicCarbonPercent: number | null | undefined
-): number | null {
-  if (hydrogenPercent == null || organicCarbonPercent == null || organicCarbonPercent === 0) {
-    return null;
-  }
-  // Atomic ratio: (H% / 1.008) / (Corg% / 12.011)
-  return (hydrogenPercent / 1.008) / (organicCarbonPercent / 12.011);
-}
-
-/**
- * Calculate O:C org ratio from oxygen and organic carbon percentages
- */
-export function calculateOToCOrgRatio(
-  oxygenPercent: number | null | undefined,
-  organicCarbonPercent: number | null | undefined
-): number | null {
-  if (oxygenPercent == null || organicCarbonPercent == null || organicCarbonPercent === 0) {
-    return null;
-  }
-  // Atomic ratio: (O% / 15.999) / (Corg% / 12.011)
-  return (oxygenPercent / 15.999) / (organicCarbonPercent / 12.011);
-}
 
 /**
  * Format durability option for display

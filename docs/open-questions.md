@@ -284,16 +284,6 @@ Pure starter residue; org scoping came later via ADR 0010.
   transaction, race the callback against the deadline and keep the client out
   of the pool until the callback settles; until then keep `execute` database-only.
 
-### Instant input parsing until Phase 4 (`api/instant-input-parsing`, opened 2026-10-07)
-
-- Incident time (`src/schemas/production-incidents.ts:productionIncidentFormSchema`)
-  and sample `samplingTime` (`src/schemas/samples.ts:updateSampleSchema.samplingTime`)
-  retain instant parsing until Phase 4's API input schemas. Only sample business
-  dates use strict calendar-date parsing here.
-- **Resolve via:** Phase 4 API input schemas moving these fields onto the shared
-  instant/calendar helpers, with schema tests proving the intended parsing for
-  each field; then delete this entry.
-
 ### Run writers, feedstock edits and output postings lock in different orders (`data/lock-order`, opened 2026-10-09)
 
 - `src/data-access/production-runs/mutations.ts:updateProductionRunInTransaction`
@@ -347,11 +337,16 @@ Pure starter residue; org scoping came later via ADR 0010.
   `src/lib/operations/production-runs.ts:startProductionRun`,
   `src/data-access/production-runs/readings.ts:getProductionRunReadings` and
   `src/fn/production-incidents.ts:createProductionIncidentFn`.
+- Incident time (`src/schemas/production-incidents.ts:productionIncidentFormSchema.incidentTime`)
+  still reads any string through `new Date(value)`, so a time without an offset
+  takes the server's zone. Lab sample `samplingTime` moved onto
+  `offsetInstantSchema` in Phase 5a.
 - **Resolve via:** a scoped follow-up defining readings batch size, per-item
   outcomes and externalId replay semantics, plus incident operations,
   permissions, representations and outcome/BOLA tests. Reuse the reading import
   core and the shared operation runner before registering REST routes or MCP
-  tools.
+  tools. Move incident time onto the shared instant helpers in the same change,
+  with schema tests proving the parsing.
 
 ### Output-stock corrections are not on the API (`api/stock-corrections`, opened 2026-10-12)
 

@@ -4,9 +4,9 @@
  *
  * H:C_org is never typed: it is always the atomic ratio of the hydrogen and
  * organic-carbon percentages entered above, so a read-only input for it invites
- * an edit that cannot happen. O:C_org accepts a lab value, and this line shows
- * whichever figure the eligibility check will actually use, so an operator can
- * see their entry take effect.
+ * an edit that cannot happen. O:C_org is calculated whenever oxygen is
+ * entered and takes the lab value only without oxygen; this line shows the
+ * figure that will be saved, so an operator can see which one applies.
  *
  * The two figures are the block's headline, shown at both levels. Detailed
  * adds the atomic formulas with this sample's own numbers behind
@@ -19,14 +19,10 @@ import { DerivedHeadline } from "@/components/forms/derived-headline";
 import { CertificationFieldTag } from "@/components/ui/certification-field-tag";
 import type { CertFieldStatus } from "@/components/ui/certification-field-tag";
 import { MISSING_VALUE } from "@/lib/copy-utils";
-
-/** Molar masses, in the order the atomic ratios divide by them. */
-const MOLAR_MASS = { hydrogen: 1.008, oxygen: 15.999, carbon: 12.011 } as const;
-/** Four decimals, matching the precision the ratios are saved at. */
-const RATIO_DECIMALS = 4;
+import { formatSampleRatio, SAMPLE_RATIO_MOLAR_MASS as MOLAR_MASS } from "@/lib/calculations/sample-ratios";
 
 function formatRatio(value: number | null): string {
-  return value == null ? MISSING_VALUE.notRecorded : value.toFixed(RATIO_DECIMALS);
+  return value == null ? MISSING_VALUE.notRecorded : formatSampleRatio(value);
 }
 
 function DerivedRatio({ label, value, certifyRequired, certifyStatus }: {

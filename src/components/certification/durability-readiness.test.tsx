@@ -15,6 +15,7 @@ function summary(): DurabilityBatchSummary {
     creditBatchCode: "CB-1",
     sampling: "sampled",
     durabilityOption: "1000_year",
+    facilityTimezone: null,
     sampleCount: 1,
     usableReplicateCount: 1,
     minimumReplicates: 3,

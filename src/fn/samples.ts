@@ -28,6 +28,10 @@ import { requireOrgContext } from "@/lib/auth/server";
 import { formatFacilityDate } from "@/lib/date-utils";
 import { SafeError } from "@/lib/errors";
 import {
+  SAMPLE_CREDIT_BATCH_NOT_FOUND_MESSAGE,
+  sampleBeforeBatchWindowMessage,
+} from "@/lib/sample-domain-errors";
+import {
   createSampleSchema,
   deleteSampleSchema,
   updateSampleSchema,
@@ -58,14 +62,12 @@ async function assertSampleNotBeforeBatchWindow(
   const batch = await getCreditBatchById(ctx, creditBatchId, {
     skipPreview: true,
   });
-  if (!batch) throw new SafeError("Credit batch not found");
+  if (!batch) throw new SafeError(SAMPLE_CREDIT_BATCH_NOT_FOUND_MESSAGE);
 
   const facility = await getFacilityById(ctx, batch.facilityId);
   const samplingDay = formatFacilityDate(samplingTime, facility.timezone);
   if (samplingDay < batch.startDate) {
-    throw new SafeError(
-      `Sample date ${samplingDay} is before credit batch ${batch.code}'s production window, ${batch.startDate} to ${batch.endDate}. Choose a date within or after the production window.`,
-    );
+    throw new SafeError(sampleBeforeBatchWindowMessage(samplingDay, batch));
   }
 }
 
