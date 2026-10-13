@@ -16,6 +16,16 @@ export type BodyMode = "form" | "read" | "page";
 export interface MeasureArgs {
   kind: SurfaceKind;
   mode: BodyMode;
+  /** Actual UA shadow-node content edges collected with Chromium DevTools. */
+  nativePickerIcons?: { index: number; right: number | null }[];
+}
+
+export interface TrailingIconGeometry {
+  field: string;
+  kind: "entity" | "date" | "time" | "datetime-local";
+  state: "empty" | "filled";
+  rightInset: number | null;
+  valid: boolean;
 }
 
 export interface TextStyle {
@@ -58,6 +68,7 @@ export interface Geometry {
     orphanedGridItems: { grid: string; columns: number; items: number }[];
     wrappedLabels: { row: string; labels: string[] }[];
   };
+  trailingIcons: TrailingIconGeometry[];
   overflow: {
     bodyHorizontalScroll: boolean;
     pageHorizontalScroll: boolean;
@@ -77,6 +88,7 @@ export function measureFormGeometry(args: MeasureArgs): Geometry {
   const HALF_WIDTH_RATIO = 0.6;
   const NEAR_MISALIGN_MAX_PX = 12;
   const PX_TOLERANCE = 1;
+  const TRAILING_ICON_INSET_PX = 12;
   const MIN_PARAGRAPH_CHARS = 1;
   /** The FormSpine's gutter column (form-spine.tsx grid-cols-[24px_1fr]); not a layout grid. */
   const FORM_SPINE_GUTTER_PX = 24;
@@ -495,6 +507,36 @@ export function measureFormGeometry(args: MeasureArgs): Geometry {
     ...actionEls.filter(explained).map(actionText),
   ]);
 
+  /* ------------------------------------------------------ Trailing icons */
+  const trailingIcons: TrailingIconGeometry[] = [];
+  const addTrailingIcon = (field: Element, kind: TrailingIconGeometry["kind"], filled: boolean, right: number | null) => {
+    // Every kind uses 12px +/- 1px from the padding-box right edge:
+    // border-box right minus border-right width, matching FormSelect's
+    // default background-origin (padding-box) and background-position: right 12px.
+    const borderRight = parseFloat(getComputedStyle(field).borderRightWidth) || 0;
+    const inset = right === null ? null : field.getBoundingClientRect().right - borderRight - right;
+    trailingIcons.push({
+      field: field.id || field.getAttribute("aria-label") || describe(field),
+      kind,
+      state: filled ? "filled" : "empty",
+      rightInset: inset === null ? null : round(inset),
+      valid: inset !== null && Math.abs(inset - TRAILING_ICON_INSET_PX) <= PX_TOLERANCE,
+    });
+  };
+  for (const trigger of body.querySelectorAll('[data-testid="entity-select-trigger"]')) {
+    if (!isVisible(trigger)) continue;
+    const icon = trigger.querySelector("[data-trailing-icon]");
+    addTrailingIcon(trigger, "entity", trigger.getAttribute("data-has-value") === "true", icon && isVisible(icon) ? icon.getBoundingClientRect().right : null);
+  }
+  const temporalInputs = body.querySelectorAll<HTMLInputElement>('input[type="date"], input[type="time"], input[type="datetime-local"]');
+  for (const input of temporalInputs) {
+    if (!isVisible(input) || input.disabled || input.readOnly) continue;
+    // The indices refer to all temporal inputs under root, including sheet chrome.
+    const index = Array.from(root.querySelectorAll('input[type="date"], input[type="time"], input[type="datetime-local"]')).indexOf(input);
+    const native = args.nativePickerIcons?.find((icon) => icon.index === index);
+    addTrailingIcon(input, input.type as TrailingIconGeometry["kind"], Boolean(input.value), native?.right ?? null);
+  }
+
   const html = document.documentElement;
   return {
     body: { width: Math.round(bodyRect.width), clientHeight: body.clientHeight, scrollHeight: body.scrollHeight },
@@ -502,6 +544,7 @@ export function measureFormGeometry(args: MeasureArgs): Geometry {
     lines: { items: lineItems, violations: lineItems.filter((item) => item.allowed === null).length },
     rhythm: { gaps },
     alignment: { controlLeftEdges, nearMisaligned, loneHalfWidth, orphanedGridItems, wrappedLabels },
+    trailingIcons,
     overflow: {
       bodyHorizontalScroll: body.scrollWidth > body.clientWidth + PX_TOLERANCE,
       pageHorizontalScroll: html.scrollWidth > window.innerWidth + PX_TOLERANCE,
