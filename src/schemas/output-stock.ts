@@ -86,7 +86,8 @@ export const outputStockPostSchema = outputStockCommandSchema.safeExtend({
 export const outputSubBinsSchema = z.object({
   storageLocationId: z.uuid(),
   facilityId: z.uuid(),
-  occurredAt: stockEventInstantSchema(),
+  /** Omitted means now, taken on the server after the bin lookup. */
+  occurredAt: stockEventInstantSchema().optional(),
   correctsMovementId: z.uuid().optional(),
   kind: z.enum(['delivery', 'loss', 'count', 'production_draw']).optional(),
 });

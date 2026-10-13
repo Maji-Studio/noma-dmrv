@@ -14,15 +14,19 @@ import {
   type ApiLookupPosition,
 } from "./api-lookup-filters";
 
-/** A snapshot read passes its transaction as `executor`; both queries then read through it. */
+/**
+ * A snapshot read passes its transaction as `executor`; both queries then read
+ * through it. The bin query runs first, so it is the statement that fixes a
+ * snapshot; a foreign facility still answers before an unknown bin.
+ */
 export async function findApiStorageLocation(ctx: OrgContext, identifier: ApiLookupIdentifier, facilityId?: string, executor: Executor = db) {
   requireOrgScope(ctx);
-  await requireApiLookupFacility(ctx, facilityId, executor);
   const [row] = await executor.select().from(storageLocations).where(and(
     eq(storageLocations.organizationId, ctx.organizationId),
     "id" in identifier ? eq(storageLocations.id, identifier.id) : eq(storageLocations.code, identifier.code),
     facilityId === undefined ? undefined : eq(storageLocations.facilityId, facilityId),
   )).limit(1);
+  await requireApiLookupFacility(ctx, facilityId, executor);
   if (!row) throw new DomainError("not_found", "Storage location was not found.");
   return row;
 }

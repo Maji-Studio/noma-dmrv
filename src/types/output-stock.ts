@@ -145,7 +145,8 @@ export interface OutputSubBins {
 export interface OutputSubBinsInput {
   storageLocationId: string;
   facilityId: string;
-  occurredAt: string;
+  /** The entry's time. Omitted means now, taken on the server once the read's snapshot is fixed. */
+  occurredAt?: string;
   /** A correction reads the sub-bins as they were before the entry it replaces. */
   correctsMovementId?: string;
   kind?: OutputStockPreviewInput['kind'];

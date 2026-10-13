@@ -124,11 +124,12 @@ export function projectOutputBinStock(input: OutputBinStockInput): ResolvedOutpu
       estimatedWetKg: estimate?.wetKg ?? null, estimatedMoisturePercent: estimate?.moisturePercent ?? null, moistureBasis: estimate?.basis ?? null };
   });
   // A held layer without a moisture basis leaves the bin's wet mass unknown, as a basis without wet mass does.
+  // An empty bin holds 0 kg wet with no moisture, as the bins list shows it.
   const pile = heldBases.length === held.length ? estimateStockExact(heldBases, input.at) : null;
   const totals: OutputBinStockTotals = {
     dryBiocharKg: subBins.reduce((sum, subBin) => add(sum, subBin.dryBiocharKg), ZERO),
     solidsKg: subBins.reduce((sum, subBin) => add(sum, subBin.solidsKg), ZERO),
-    estimatedWetKg: held.length ? pile?.wetKg ?? null : null,
+    estimatedWetKg: pile?.wetKg ?? null,
     estimatedMoisturePercent: pile?.moisturePercent ?? null,
     moistureBasis: pile?.basis ?? null,
   };

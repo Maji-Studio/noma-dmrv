@@ -6,33 +6,23 @@
  * through the app pool as a concurrent operator would.
  */
 import type { Pool, PoolClient } from "pg";
-import { drizzle } from "drizzle-orm/node-postgres";
 import { and, eq } from "drizzle-orm";
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
-import { db, type DbTransaction } from "@/db";
-import * as schema from "@/db/schema";
+import { afterEach, describe, expect, it } from "vitest";
+import { db } from "@/db";
 import { biocharProducts, productionRuns, reactors, storageLocations } from "@/db/schema";
-import { readApiOutputBinStock, type ApiOutputBinStockInput } from "@/data-access/api-output-bin-stock";
+import { readApiOutputBinStock } from "@/data-access/api-output-bin-stock";
 import { requireApiOutputBin } from "@/data-access/api-output-stock-movements";
 import { getOutputSubBins } from "@/data-access/output-sub-bins";
 import { decimal, rational } from "@/lib/output-stock";
-import type { OrgContext } from "@/lib/auth/server";
-import { createTestPool } from "./helpers/operation-fixture";
 import { cleanupPostedStock, postedStockFixture, postMeasurement, postProduct } from "./helpers/posted-output-stock-fixture";
 
 const TIMEOUT_MS = 30_000;
-const READ_CONNECTIONS = 1;
-/** Statement 1 is BEGIN; statement 2 is the bin lookup that fixes the snapshot. */
-const LOOKUP_STATEMENT = 2;
 /** Long enough that an instant taken before a placement is strictly earlier than it. */
 const CLOCK_STEP_MS = 5;
 
 type Fixture = Awaited<ReturnType<typeof postedStockFixture>>;
 const fixtures: Fixture[] = [];
-let readPool: Pool;
-beforeAll(() => { readPool = createTestPool(READ_CONNECTIONS); });
 afterEach(async () => { for (const f of fixtures.splice(0)) await cleanupPostedStock(f); });
-afterAll(async () => { await readPool.end(); });
 
 async function fixture(options: Parameters<typeof postedStockFixture>[0] = { stockKg: 0 }) {
   const f = await postedStockFixture(options);
@@ -40,64 +30,108 @@ async function fixture(options: Parameters<typeof postedStockFixture>[0] = { sto
   return f;
 }
 
+type Send = (...args: unknown[]) => Promise<{ rows?: Record<string, unknown>[] }>;
+interface Statement { index: number; text: string }
 interface ConnectionHooks {
-  /** Runs before the numbered statement is sent. */
-  before?: Record<number, () => Promise<void>>;
-  /** Runs once the numbered statement has answered, before the read sees the answer or sends anything else. */
-  after?: Record<number, () => Promise<void>>;
+  /** Runs before a statement is sent. */
+  before?: (statement: Statement) => Promise<void>;
+  /** Runs once a statement has answered, before the read sees the answer or sends anything else. `send` queries the same connection. */
+  after?: (statement: Statement, send: Send) => Promise<void>;
   /** Reverses the rows of every result, as PostgreSQL may return unordered rows in any order. */
   reverseRows?: boolean;
 }
 
-/** Reads on a dedicated connection inside a snapshot transaction, with `hooks` on its statements. */
-async function readThrough(ctx: OrgContext, input: ApiOutputBinStockInput, hooks: ConnectionHooks) {
-  const client: PoolClient = await readPool.connect();
-  const original = client.query.bind(client) as (...args: unknown[]) => Promise<{ rows?: unknown[] }>;
-  let statement = 0;
-  (client as unknown as { query: unknown }).query = async (...args: unknown[]) => {
-    statement += 1;
-    await hooks.before?.[statement]?.();
-    const current = statement;
-    const result = await original(...args);
-    await hooks.after?.[current]?.();
-    if (hooks.reverseRows && Array.isArray(result?.rows)) result.rows.reverse();
-    return result;
+const statementText = (query: unknown) => typeof query === "string" ? query : String((query as { text?: unknown }).text ?? "");
+/** A storage-location select: the bin lookup each read starts with. */
+const isBinLookup = (text: string | undefined) => /from "storage_locations"/.test(text ?? "");
+const pause = () => new Promise(resolve => setTimeout(resolve, CLOCK_STEP_MS));
+
+/**
+ * Runs `read` with `hooks` on the next connection the app pool hands out: the
+ * one the read's own snapshot transaction (`withStockSnapshot`) takes, so the
+ * production transaction settings are under test. Writes in hooks take other
+ * pooled connections, as a concurrent operator's would.
+ */
+async function onReadConnection<T>(hooks: ConnectionHooks, read: () => Promise<T>): Promise<{ result: T; statements: string[] }> {
+  const pool = db.$client as Pool;
+  const statements: string[] = [];
+  let restore = () => {};
+  const instrument = (client: PoolClient) => {
+    const original = client.query;
+    const send = original.bind(client) as Send;
+    (client as unknown as { query: unknown }).query = async (...args: unknown[]) => {
+      const statement = { index: statements.length + 1, text: statementText(args[0]) };
+      statements.push(statement.text);
+      await hooks.before?.(statement);
+      const result = await send(...args);
+      await hooks.after?.(statement, send);
+      if (hooks.reverseRows && Array.isArray(result?.rows)) result.rows.reverse();
+      return result;
+    };
+    restore = () => { client.query = original; };
   };
+  pool.once("acquire", instrument);
   try {
-    return await drizzle(client, { schema }).transaction(tx => readApiOutputBinStock(ctx, input, tx as unknown as DbTransaction),
-      { isolationLevel: "repeatable read", accessMode: "read only" });
+    return { result: await read(), statements };
   } finally {
-    (client as unknown as { query: unknown }).query = original;
-    client.release();
+    pool.off("acquire", instrument);
+    restore();
   }
 }
 
+/** Places a product while the read waits before its bin lookup, once. */
+function placeBeforeLookup(f: Fixture) {
+  const placed = { id: "" };
+  const before = async (statement: Statement) => {
+    if (placed.id || !isBinLookup(statement.text)) return;
+    // An instant taken before this point is now strictly earlier than the placement.
+    await pause();
+    placed.id = (await postProduct(f, { massKg: 50, placedAt: new Date().toISOString() })).id;
+  };
+  return { placed, before };
+}
+
 describe("output bin stock read in PostgreSQL", { timeout: TIMEOUT_MS }, () => {
-  it("answers a loss posted right after its lookup with the stock before it", async () => {
+  it("runs in a read-only repeatable-read snapshot and answers a loss posted right after its lookup with the stock before it", async () => {
     const f = await fixture();
     await postProduct(f, { massKg: 400 });
     const input = { identifier: { id: f.bin.id } };
     const before = await readApiOutputBinStock(f.ctx, input);
+    const settings: Record<string, unknown> = {};
     // Every later query would see the loss outside the snapshot.
-    const during = await readThrough(f.ctx, input, { after: { [LOOKUP_STATEMENT]: async () => {
+    const { result: during, statements } = await onReadConnection({ after: async (statement, send) => {
+      if (!isBinLookup(statement.text) || "isolation" in settings) return;
+      settings.isolation = (await send("show transaction_isolation")).rows?.[0]?.transaction_isolation;
+      settings.readOnly = (await send("show transaction_read_only")).rows?.[0]?.transaction_read_only;
       await postMeasurement(f, { kind: "loss", wetMassKg: 10, moisturePercent: 0 });
-    } } });
+    } }, () => readApiOutputBinStock(f.ctx, input));
+    expect(statements[0]).toMatch(/^begin/i);
+    expect(isBinLookup(statements[1])).toBe(true);
+    expect(settings).toEqual({ isolation: "repeatable read", readOnly: "on" });
     expect(during).toEqual(before);
     const after = await readApiOutputBinStock(f.ctx, input);
     expect(after.totals?.dryBiocharKg).toEqual(decimal("390"));
   });
 
-  it("counts a placement committed before the snapshot, though it is newer than the read's start", async () => {
+  it.each([["without", false], ["with", true]] as const)("counts a placement committed just before the lookup, %s a facility filter", async (_label, withFacility) => {
     const f = await fixture();
     await postProduct(f, { massKg: 400 });
-    let placed = "";
-    const stock = await readThrough(f.ctx, { identifier: { id: f.bin.id } }, { before: { [LOOKUP_STATEMENT]: async () => {
-      await new Promise(resolve => setTimeout(resolve, CLOCK_STEP_MS));
-      placed = (await postProduct(f, { massKg: 50, placedAt: new Date().toISOString() })).id;
-    } } });
-    // An instant taken before the lookup fixed the snapshot would leave the new product out as placed later.
-    expect(stock.subBins.map(subBin => subBin.layerId)).toContain(placed);
+    const race = placeBeforeLookup(f);
+    const input = { identifier: { id: f.bin.id }, ...(withFacility ? { facilityId: f.facility.id } : {}) };
+    const { result: stock, statements } = await onReadConnection({ before: race.before }, () => readApiOutputBinStock(f.ctx, input));
+    // The bin lookup fixes the snapshot; an instant taken before it, or a facility check run first, would leave the new product out.
+    expect(isBinLookup(statements[1])).toBe(true);
+    expect(stock.subBins.map(subBin => subBin.layerId)).toContain(race.placed.id);
     expect(stock.totals?.dryBiocharKg).toEqual(decimal("450"));
+  });
+
+  it("counts a placement committed just before the picker's lookup when it reads now", async () => {
+    const f = await fixture();
+    await postProduct(f, { massKg: 400 });
+    const race = placeBeforeLookup(f);
+    const { result: picker } = await onReadConnection({ before: race.before },
+      () => getOutputSubBins(f.ctx, { facilityId: f.facility.id, storageLocationId: f.bin.id }));
+    expect(picker.subBins.map(subBin => subBin.layerId)).toContain(race.placed.id);
   });
 
   it("gives the same answer whatever order rows arrive in, and on every read", async () => {
@@ -109,7 +143,7 @@ describe("output bin stock read in PostgreSQL", { timeout: TIMEOUT_MS }, () => {
     const input = { identifier: { code: f.bin.code } };
     const ordered = await readApiOutputBinStock(f.ctx, input);
     expect(ordered.subBins).toHaveLength(3);
-    expect(await readThrough(f.ctx, input, { reverseRows: true })).toEqual(ordered);
+    expect((await onReadConnection({ reverseRows: true }, () => readApiOutputBinStock(f.ctx, input))).result).toEqual(ordered);
     expect(await readApiOutputBinStock(f.ctx, input)).toEqual(ordered);
   });
 
@@ -118,7 +152,7 @@ describe("output bin stock read in PostgreSQL", { timeout: TIMEOUT_MS }, () => {
     await postProduct(f, { massKg: 400, placedAt: "2026-09-12T12:00:00.000Z" });
     await postProduct(f, { massKg: 300, placedAt: "2026-09-13T12:00:00.000Z" });
     const stock = await readApiOutputBinStock(f.ctx, { identifier: { id: f.bin.id } });
-    const picker = await getOutputSubBins(f.ctx, { facilityId: f.facility.id, storageLocationId: f.bin.id, occurredAt: new Date().toISOString() });
+    const picker = await getOutputSubBins(f.ctx, { facilityId: f.facility.id, storageLocationId: f.bin.id });
     expect(picker.subBins.map(subBin => [subBin.layerId, subBin.code, subBin.dryMassKg])).toEqual(stock.subBins.map(subBin => [subBin.layerId, subBin.code, Number(subBin.dryBiocharKg.numerator) / Number(subBin.dryBiocharKg.denominator)]));
     expect(picker.stockMode).toBe(stock.stockMode);
   });
@@ -134,10 +168,10 @@ describe("output bin stock read in PostgreSQL", { timeout: TIMEOUT_MS }, () => {
     expect(biochar.subBins.map(subBin => [subBin.layerKind, subBin.code])).toEqual(f.runs.map(run => ["production_run", run.code]));
   });
 
-  it("answers an empty bin as resolved with zero totals", async () => {
+  it("answers an empty bin as resolved with zero totals and no moisture", async () => {
     const f = await fixture();
     expect(await readApiOutputBinStock(f.ctx, { identifier: { id: f.bin.id } })).toMatchObject({ status: "resolved", unresolvedReason: null, subBins: [],
-      totals: { dryBiocharKg: rational(BigInt(0)), solidsKg: rational(BigInt(0)), estimatedWetKg: null, estimatedMoisturePercent: null, moistureBasis: null } });
+      totals: { dryBiocharKg: rational(BigInt(0)), solidsKg: rational(BigInt(0)), estimatedWetKg: rational(BigInt(0)), estimatedMoisturePercent: null, moistureBasis: null } });
   });
 
   it("reads an archived bin with its archived layers", async () => {

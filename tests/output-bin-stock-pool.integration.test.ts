@@ -40,16 +40,25 @@ describe("output bin stock reads on a pool of one connection", { timeout: TIMEOU
     fixtures.push(f);
     await postProduct(f, { massKg: 400, placedAt: "2026-09-12T12:00:00.000Z" });
     await postProduct(f, { massKg: 300, placedAt: "2026-09-13T12:00:00.000Z" });
-    const count = await postMeasurement(f, { kind: "count", wetMassKg: 800, moisturePercent: 10 });
+    const subBinsNow = () => getOutputSubBins(f.ctx, { facilityId: f.facility.id, storageLocationId: f.bin.id });
+    /** What a sub-bin holds and its moisture, without its movements. */
+    const stockOf = (subBins: Awaited<ReturnType<typeof subBinsNow>>) => subBins.subBins.map(subBin => ({ layerId: subBin.layerId, dryMassKg: subBin.dryMassKg, solidsKg: subBin.solidsKg,
+      wetEstimateKg: subBin.wetEstimateKg, moisturePercent: subBin.moisturePercent, basis: subBin.basis }));
+    const beforeCount = stockOf(await subBinsNow());
+    expect(beforeCount.map(subBin => [subBin.dryMassKg, subBin.moisturePercent, subBin.basis?.source])).toEqual([[400, 0, "recorded"], [300, 0, "recorded"]]);
+    // 700 kg wet at 10% is 630 kg solids: the count takes 70 kg and sets every sub-bin to 10%.
+    const count = await postMeasurement(f, { kind: "count", wetMassKg: 700, moisturePercent: 10 });
     const product = await readApiOutputBinStock(f.ctx, { identifier: { code: f.bin.code }, facilityId: f.facility.id });
     expect(product).toMatchObject({ status: "resolved", subBins: [{}, {}] });
     expect((await readApiOutputBinStock(f.ctx, { identifier: { id: f.source.id } })).status).toBe("resolved");
-    const picker = await getOutputSubBins(f.ctx, { facilityId: f.facility.id, storageLocationId: f.bin.id, occurredAt: new Date().toISOString() });
-    expect(picker.subBins).toHaveLength(2);
+    const picker = await subBinsNow();
     expect(picker.subBins[0].recentMovements.length).toBeGreaterThan(0);
-    // A correction preview reads the corrected entry through the same connection.
+    const counted = stockOf(picker);
+    expect(counted.reduce((sum, subBin) => sum + subBin.dryMassKg, 0)).toBeCloseTo(630, 9);
+    expect(counted.map(subBin => [subBin.moisturePercent, subBin.basis?.source])).toEqual([[10, "reading"], [10, "reading"]]);
+    // A correction of the count reads the sub-bins as they were before it: its draw restored, its readings dropped.
     const correcting = await getOutputSubBins(f.ctx, { facilityId: f.facility.id, storageLocationId: f.bin.id, occurredAt: new Date().toISOString(),
       correctsMovementId: count.movementId, kind: "count" });
-    expect(correcting.subBins).toHaveLength(2);
+    expect(stockOf(correcting)).toEqual(beforeCount);
   });
 });

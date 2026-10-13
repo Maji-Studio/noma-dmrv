@@ -15,7 +15,7 @@ import { getOutputStockHistory } from './output-stock-history';
 import { requireOrgScope } from './utils';
 
 /**
- * The sub-bins a bin holds at `occurredAt`, oldest first, with the bin's mode then, each with its
+ * The sub-bins a bin holds at `occurredAt` (now when omitted), oldest first, with the bin's mode then, each with its
  * own moisture estimate and latest movements. A correction reads them as they
  * were before the entry it replaces, so the operator can re-choose them. When
  * the correction itself is refused, the bin's current sub-bins still show: the
@@ -31,8 +31,10 @@ export async function getOutputSubBins(ctx: OrgContext, raw: OutputSubBinsInput,
     eq(storageLocations.organizationId, ctx.organizationId), eq(storageLocations.id, input.storageLocationId),
     eq(storageLocations.facilityId, input.facilityId), isNull(storageLocations.archivedAt)));
   if (!bin || !isOutputBinType(bin.type)) throw new SafeError('Output bin not found or archived');
-  const correction = input.correctsMovementId && input.kind ? { ...input, kind: input.kind, wetMassKg: 0 } : null;
-  const { stock, unresolved } = await readOutputBinStockAt(ctx, { ...bin, type: bin.type }, input.occurredAt, tx, {
+  // The lookup fixed the snapshot, so "now" taken here never leaves out a batch the snapshot shows.
+  const occurredAt = input.occurredAt ?? new Date().toISOString();
+  const correction = input.correctsMovementId && input.kind ? { ...input, occurredAt, kind: input.kind, wetMassKg: 0 } : null;
+  const { stock, unresolved } = await readOutputBinStockAt(ctx, { ...bin, type: bin.type }, occurredAt, tx, {
     includeArchived: false, ignoreMovementId: input.correctsMovementId,
     adjustLayers: correction ? async layers => {
       try {

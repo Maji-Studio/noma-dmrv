@@ -103,10 +103,10 @@ describe('bin stock projection', () => {
     expect(stock.totals).toMatchObject({ estimatedWetKg: null, estimatedMoisturePercent: null, moistureBasis: { source: 'recorded', at: T0 } });
   });
 
-  it('answers an empty bin as resolved with zero totals', () => {
+  it('answers an empty bin as resolved with zero totals and no moisture, as the bins list does', () => {
     const stock = projectOutputBinStock(input([]));
     expect(stock).toEqual({ bin, stockMode: 'split', status: 'resolved', unresolvedReason: null, subBins: [],
-      totals: { dryBiocharKg: rational(BigInt(0)), solidsKg: rational(BigInt(0)), estimatedWetKg: null, estimatedMoisturePercent: null, moistureBasis: null } });
+      totals: { dryBiocharKg: rational(BigInt(0)), solidsKg: rational(BigInt(0)), estimatedWetKg: rational(BigInt(0)), estimatedMoisturePercent: null, moistureBasis: null } });
   });
 
   it('names product layers as biochar products and leaves a missing code for the caller to judge', () => {
