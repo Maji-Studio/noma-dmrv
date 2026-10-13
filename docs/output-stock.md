@@ -111,16 +111,29 @@ split bays compare wet mass against the largest bay. Without capacity, a lone
 vessel fills its available height. Split bays and Next out follow the bin's configured default draw order.
 
 Adjust stock in the stock card header opens Lost mass directly. There is no
-count action or correction form in the UI. History sits under the chart, groups
+count action or generic Correct entry action in the UI. History sits under the chart, groups
 entries by facility-local day, and keeps old counts and corrections readable.
 Corrections show separate Original and Corrected blocks with an arrow between.
 Mode changes say Switched to mix or Switched to split.
 
 History links to the originating production run, biochar product, delivery or
-feedstock intake when the entry has one. Lost mass and old counts have no source
-form or link. A source link opens the existing record; it does not relax posted
-stock guards. The operator workflow for fixing a wrong delivery or lost-mass
-entry remains an open decision, so the UI gives no correction instructions.
+feedstock intake when the entry has one. Fix a wrong entry in the form where it
+was entered (decision 1). A Lost mass entry has an Edit action that opens its
+own form with the saved time, mass, moisture, draw and reason (decision 3).
+Delivery mass, moisture and split-bin draw readings can be edited in the delivery
+form. Both saves append a reversal and replacement, shown as Original and Corrected.
+The delivery row stays in agreement with its replacement movement.
+
+These two edits are allowed only while the entry is the bin's latest recorded
+movement. Any newer entry locks it, including a backdated entry, an addition,
+a draw from another sub-bin, a count, a mode change or a correction. History
+replaces Lost mass Edit with the lock reason; the delivery form makes its mass
+fields read-only and gives the same reason. Later draws have already saved their
+batch shares against the stock this entry left, so changing it afterwards would
+make those shares wrong. The server checks this inside the write transaction
+under the posting path's bin-stock lock. Application and certification guards
+still apply. Delivery source, order, date/time and deletion stay locked.
+Old counts remain readable without an edit action.
 
 The chart uses steps: dry biochar (output) or estimated solids (feedstock), plus
 hatched estimated water. Product ingredient solids are a separate solid band,
@@ -131,15 +144,18 @@ point details open on hover, keyboard focus or tap.
 
 Feedstock's org-scoped `feedstock-bin-ledger.ts` reads completed intakes,
 production-run draws, product ingredient draws, losses and old counts. The pile
-is pooled: its batch split is the intake split, matching feedstock allocation.
-Dry solids use the intake-weighted dry-to-wet ratio, rather than output stock's
-immutable layer planner. Missing intake mass basis leaves composition unavailable;
+is pooled. Saved per-batch run draws are subtracted from their own intake batches.
+Draws without saved batch shares, such as ingredients and losses, are estimated
+pro rata over the remaining batch stock. Each batch's estimated dry solids use
+its intake dry-to-wet ratio. This does not rewrite saved feedstock allocations.
+Chart points start at the first intake, so an earlier dated run draw does not
+claim that an intake has missing mass. Missing intake mass basis leaves composition unavailable;
 the wet ledger remains readable. Pending intakes stay outside stock.
 
 ## Losses, counts, and corrections
 
 A measured loss consumes stock through the same planner. Counts and corrections
-remain supported by the API and server, but have no stock-sheet action. A count compares measured
+remain supported by the server. Lost mass corrections use the entry's own Edit action; counts have no stock-sheet action. A count compares measured
 solids with expected solids: drying alone causes no loss, an excess observation
 creates no stock, and a zero count closes the exact remaining stock without a
 moisture reading.
@@ -147,15 +163,16 @@ moisture reading.
 Corrections append a reversal of the original effects and a replacement. They
 retain actor, reason, physical and recorded times, input basis, and before/after
 balances. A reduced loss restores its original source provenance even after a
-late older intake. An eligible, unapplied delivery correction can explicitly use
-newly recorded physically older stock. Later dependent draws, counts,
-applications, and certification artifacts block corrections with a named reason.
+late older intake through the existing server correction contract. REST/MCP keep
+that dependency-based contract; the Lost mass form and delivery update use the
+stricter latest-entry rule above. Later dependent draws, counts, applications,
+and certification artifacts continue to block server corrections with a named reason.
 
 Preview fingerprints are checked again while holding bin and request locks.
 Repeated request keys return the saved result; changing the payload for a reused
 key fails. Delivery corrections also lock the delivery before checking for
-applications. Posted product and delivery measurements cannot be silently edited
-or deleted through ordinary CRUD forms.
+applications. Posted product measurements stay immutable. Delivery mass edits append corrections;
+posted products and deliveries cannot be deleted through ordinary CRUD forms.
 
 ## Code and verification
 

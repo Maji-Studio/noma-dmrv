@@ -87,6 +87,8 @@ export interface OutputStockPostInput extends OutputStockPreviewInput {
 }
 
 export interface OutputStockHistoryEntry {
+  /** Null while this loss or delivery is latest; omitted for other kinds. */
+  editLockedReason?: string | null;
   id: string;
   kind: string;
   eventKind?: 'delivery' | 'loss' | 'count' | 'production_draw';

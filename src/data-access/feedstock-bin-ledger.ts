@@ -1,10 +1,11 @@
 import { and, eq, inArray, ne } from 'drizzle-orm';
 import { db } from '@/db';
-import { binMovements, biocharProducts, feedstocks, productionRunFeedstockDraws, productionRuns, storageLocations, users } from '@/db/schema';
+import { binMovements, biocharProducts, feedstocks, productionRunFeedstockDraws, productionRunFeedstocks, productionRuns, storageLocations, users } from '@/db/schema';
 import type { OrgContext } from '@/lib/auth/server';
 import { SafeError } from '@/lib/errors';
 import { CANCELLED_PRODUCTION_RUN_STATUS } from '@/lib/production-runs/lifecycle';
 import type { FeedstockBinStock, FeedstockLedgerEntry } from '@/types/feedstock-bin-ledger';
+import { feedstockPile } from '@/lib/feedstock-pile';
 import { requireOrgScope } from './utils';
 
 const MASS_DECIMALS = 1_000;
@@ -17,11 +18,9 @@ const round = (kg: number) => Math.round(kg * MASS_DECIMALS) / MASS_DECIMALS;
  * production-run and product-ingredient draws, and recorded losses and
  * stock-takes, each with the wet stock before and after it.
  *
- * Wet mass is the bin's stock currency (`deriveLaneStock`). Draws take every
- * complete batch in proportion to its intake mass (`allocateFeedstockWetMass`),
- * so the pile's batch split is the intake split, and its dry estimate is the
- * received batches' dry-to-wet ratio. Both are estimates; the wet figures
- * are the ledger's own.
+ * Wet mass is the bin's stock currency. Saved run shares are subtracted from
+ * their own batches. Draws without batch records are estimated pro rata over
+ * the remainder; dry composition uses each intake's dry-to-wet ratio.
  */
 export async function getFeedstockBinStock(ctx: OrgContext, storageLocationId: string): Promise<FeedstockBinStock> {
   requireOrgScope(ctx);
@@ -30,7 +29,7 @@ export async function getFeedstockBinStock(ctx: OrgContext, storageLocationId: s
   if (!bin) throw new SafeError('Storage bin not found');
   if (bin.type !== 'feedstock_bin') throw new SafeError('This bin does not hold feedstock');
 
-  const [batches, runDraws, products, movements] = await Promise.all([
+  const [batches, runDraws, products, movements, batchDraws] = await Promise.all([
     db.select({ id: feedstocks.id, code: feedstocks.code, deliveryDate: feedstocks.deliveryDate, createdAt: feedstocks.createdAt,
       wetKg: feedstocks.massWetKg, dryKg: feedstocks.massDryKg, moisturePercent: feedstocks.moistureContentPercent })
       .from(feedstocks)
@@ -49,6 +48,11 @@ export async function getFeedstockBinStock(ctx: OrgContext, storageLocationId: s
       .leftJoin(users, eq(users.id, binMovements.createdBy))
       .where(and(eq(binMovements.organizationId, ctx.organizationId), eq(binMovements.storageLocationId, storageLocationId),
         eq(binMovements.lane, 'feedstock'), inArray(binMovements.movementType, ['loss', 'adjustment']))),
+    db.select({ feedstockId: productionRunFeedstocks.feedstockId, wetKg: productionRunFeedstocks.wetMassUsedKg, occurredAt: productionRuns.startTime })
+      .from(productionRunFeedstocks)
+      .innerJoin(feedstocks, and(eq(feedstocks.id, productionRunFeedstocks.feedstockId), eq(feedstocks.organizationId, ctx.organizationId)))
+      .innerJoin(productionRuns, and(eq(productionRuns.id, productionRunFeedstocks.productionRunId), eq(productionRuns.organizationId, ctx.organizationId)))
+      .where(and(eq(productionRunFeedstocks.organizationId, ctx.organizationId), eq(feedstocks.storageLocationId, storageLocationId), ne(productionRuns.status, CANCELLED_PRODUCTION_RUN_STATUS))),
   ]);
 
   const ingredientDraws = products.map(product => {
@@ -76,25 +80,30 @@ export async function getFeedstockBinStock(ctx: OrgContext, storageLocationId: s
 
   let wetKg = 0;
   let intakeWetKg = 0;
-  let intakeDryKg = 0;
   let missingDryBasis = false;
   const entries = drafts.map(({ intakeDryKg: dry, ...draft }): FeedstockLedgerEntry => {
     const beforeWetKg = round(wetKg);
     wetKg += draft.wetDeltaKg ?? 0;
     if (draft.kind === 'intake') {
       intakeWetKg += draft.wetDeltaKg ?? 0;
-      intakeDryKg += dry ?? 0;
       missingDryBasis ||= dry === null || (dry > 0 && !(draft.wetDeltaKg != null && draft.wetDeltaKg > 0));
     }
-    const ratio = intakeWetKg > 0 && !missingDryBasis ? intakeDryKg / intakeWetKg : null;
-    return { ...draft, beforeWetKg, afterWetKg: round(wetKg), estimatedDryKg: wetKg === 0 ? 0 : ratio === null ? null : round(Math.max(wetKg, 0) * ratio) };
+    const stocked = batches.filter(batch => (batch.deliveryDate ?? batch.createdAt).toISOString() <= draft.occurredAt);
+    const savedDraws = batchDraws.filter(draw => draw.occurredAt.toISOString() <= draft.occurredAt);
+    const shares = feedstockPile(stocked.map(batch => ({ id: batch.id, wetKg: Number(batch.wetKg ?? 0), dryKg: batch.dryKg === null ? null : Number(batch.dryKg) })),
+      savedDraws.map(draw => ({ ...draw, wetKg: Number(draw.wetKg) })), wetKg);
+    const dryKg = intakeWetKg > 0 && !missingDryBasis ? round(shares.reduce((sum, batch) => sum + (batch.dryKg ?? 0), 0)) : null;
+    return { ...draft, beforeWetKg, afterWetKg: round(wetKg), estimatedDryKg: wetKg === 0 ? 0 : dryKg };
   });
 
   const currentWetKg = round(wetKg);
+  const shares = new Map(feedstockPile(batches.map(b => ({ id: b.id, wetKg: Number(b.wetKg ?? 0), dryKg: b.dryKg === null ? null : Number(b.dryKg) })),
+    batchDraws.map(draw => ({ ...draw, wetKg: Number(draw.wetKg) })), currentWetKg).map(batch => [batch.id, batch]));
   const pile = batches.filter(b => Number(b.wetKg ?? 0) > 0)
     .sort((a, b) => (a.deliveryDate ?? a.createdAt).getTime() - (b.deliveryDate ?? b.createdAt).getTime())
     .map(b => ({ id: b.id, code: b.code, receivedAt: (b.deliveryDate ?? b.createdAt).toISOString(),
-      wetKg: intakeWetKg > 0 ? round(Math.max(currentWetKg, 0) * Number(b.wetKg) / intakeWetKg) : 0,
-      intakeWetKg: Number(b.wetKg), dryKg: missingDryBasis || b.dryKg === null ? null : round(Math.max(currentWetKg, 0) * Number(b.dryKg) / intakeWetKg), moisturePercent: b.moisturePercent === null ? null : Number(b.moisturePercent) }));
-  return { currentWetKg, entries, batches: pile };
+      wetKg: shares.get(b.id)?.wetKg ?? 0,
+      intakeWetKg: Number(b.wetKg), dryKg: missingDryBasis || b.dryKg === null ? null : shares.get(b.id)?.dryKg ?? null, moisturePercent: b.moisturePercent === null ? null : Number(b.moisturePercent) }));
+  if (entries.length && !missingDryBasis) entries[entries.length - 1].estimatedDryKg = round(pile.reduce((sum, batch) => sum + (batch.dryKg ?? 0), 0));
+  return { currentWetKg, missingDryBasis, entries, batches: pile };
 }

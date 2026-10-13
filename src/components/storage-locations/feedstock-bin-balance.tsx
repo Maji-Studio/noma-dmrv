@@ -1,7 +1,7 @@
 /**
  * A feedstock bin's stock card and history, the same card and ledger the
- * output bins use. A feedstock bin is one pooled pile: every draw takes each
- * batch in proportion to what it brought, so it is drawn as one vessel with
+ * output bins use. Saved run draws keep their batch shares; draws without
+ * batch records are estimated pro rata. The pile is one vessel with
  * the estimated water above its solids. Wet mass is the bin's own stock; dry solids are an
  * estimate from the batches' intake moisture.
  */
@@ -19,7 +19,7 @@ import { MISSING_VALUE } from "@/lib/copy-utils";
 import { formatFacilityTime } from "@/lib/date-utils";
 import { formatFacilityDateTime, formatFacilityDay, formatMassKg } from "@/lib/format-utils";
 import { formatMoisturePercent } from "@/lib/mass-moisture";
-import { LOST_MASS_LABEL } from "@/lib/output-stock/labels";
+import { LOST_MASS_LABEL, outputStockEventLabel } from "@/lib/output-stock/labels";
 import type { FeedstockLedgerEntry } from "@/types/feedstock-bin-ledger";
 import { CardTextButton, StockCard, StockChartCard } from "./stock-card";
 import { LedgerBeforeAfter, LedgerDayHeader, LedgerFacts, LedgerLine } from "./stock-ledger";
@@ -27,13 +27,15 @@ import { StockLevelChart, type StockLevelPoint } from "./stock-level-chart";
 import { StockSourceLink } from "./stock-source-link";
 import { MixPileBay, type PileBand } from "./sub-bin-bays";
 
+const ICON_PX = 16;
+const EMPTY_ICON_PX = 32;
 const TIME_FORMAT = "HH:mm";
 const PERCENT = 100;
-const CARD_HINT = "Wet stock is what was received, minus production runs, product ingredients and lost mass. Every draw takes each batch in proportion to what it brought. Dry solids are an estimate from the batches' intake moisture.";
+const CARD_HINT = "Wet stock is what was received, minus production runs, product ingredients and lost mass. Run draws keep their saved batch shares. Other draws are estimated in proportion to what remains. Dry solids are an estimate from the batches' intake moisture.";
 const HISTORY_HINT = "Every entry that moved feedstock in or out of this bin, with the wet stock left after it.";
 
 const ENTRY_LABELS: Record<FeedstockLedgerEntry["kind"], string> = {
-  intake: "Received", run_draw: "Production run", ingredient_draw: "Product ingredient", loss: LOST_MASS_LABEL, count: "Stock count",
+  intake: outputStockEventLabel("intake"), run_draw: "Production run", ingredient_draw: "Product ingredient", loss: LOST_MASS_LABEL, count: "Stock count",
 };
 /** Icon per entry, from the shared stock-kind set. */
 const ENTRY_ICONS: Record<FeedstockLedgerEntry["kind"], string> = {
@@ -48,8 +50,10 @@ function signedWet(kg: number | null): string {
 
 /** The bin's level after each entry: estimated dry solids, with the rest of the wet stock as water. */
 function feedstockStockPoints(entries: readonly FeedstockLedgerEntry[]): StockLevelPoint[] {
-  if (entries.some(entry => entry.estimatedDryKg === null)) return [];
-  return entries.map((entry) => ({
+  const firstIntake = entries.findIndex(entry => entry.kind === "intake");
+  const stocked = firstIntake < 0 ? [] : entries.slice(firstIntake);
+  if (stocked.some(entry => entry.estimatedDryKg === null)) return [];
+  return stocked.map((entry) => ({
     t: Date.parse(entry.occurredAt),
     dryKg: entry.estimatedDryKg!,
     waterKg: entry.estimatedDryKg === null ? null : Math.max(entry.afterWetKg - entry.estimatedDryKg, 0),
@@ -68,7 +72,7 @@ function FeedstockStockHistory({ storageLocationId, facilityId, renderTrigger }:
   const entries = stock.data?.entries ?? [];
   const timeline = entries.toReversed();
   return <>
-    {renderTrigger(() => setOpen(true), <ClockCounterClockwiseIcon size={16} aria-hidden="true" />)}
+    {renderTrigger(() => setOpen(true), <ClockCounterClockwiseIcon size={ICON_PX} aria-hidden="true" />)}
     <Modal isOpen={open} onClose={() => setOpen(false)} ariaLabel="Stock history" width="md">
       <div className="space-y-20">
         <h3 className="flex min-w-0 items-center gap-6 pr-24 title-heading-3">
@@ -77,7 +81,7 @@ function FeedstockStockHistory({ storageLocationId, facilityId, renderTrigger }:
         </h3>
         {stock.isLoading && <p role="status" className="body-caption text-[var(--color-text-secondary)]">Loading the stock history</p>}
         {stock.error && <Notice tone="error">{stock.error.message}</Notice>}
-        {stock.data && entries.length === 0 && <EmptyState icon={<ClockCounterClockwiseIcon size={32} />} title="No stock history" description="Feedstock received into this bin will appear here." padding="sm" />}
+        {stock.data && entries.length === 0 && <EmptyState icon={<ClockCounterClockwiseIcon size={EMPTY_ICON_PX} />} title="No stock history" description="Feedstock received into this bin will appear here." padding="sm" />}
         {timeline.length > 0 && <div className="tabular-nums">
           {timeline.map((entry, index) => {
             const day = formatFacilityDay(entry.occurredAt, clock.timeZone);
@@ -154,7 +158,7 @@ export function FeedstockBinBalance({ storageLocationId, facilityId, capacityKg,
     </StockCard>
     <StockChartCard history={<FeedstockStockHistory storageLocationId={storageLocationId} facilityId={facilityId}
       renderTrigger={(open, icon) => <CardTextButton icon={icon} onClick={open}>History</CardTextButton>} />}>
-      {stock.error ? <Notice tone="error">{stock.error.message}</Notice> : stock.isLoading ? <p role="status" className="body-caption">Loading stock history</p> : points.length > 0 ? <StockLevelChart compact points={points} timeZone={clock.timeZone} now={stock.dataUpdatedAt} solidLabel="Dry solids, estimated" /> : stock.data && stock.data.entries.length > 0 ? <EmptyState icon={null} title="Stock composition unavailable" description="An intake is missing its mass basis. Wet movements are available in History." padding="sm" /> : undefined}
+      {stock.error ? <Notice tone="error">{stock.error.message}</Notice> : stock.isLoading ? <p role="status" className="body-caption">Loading stock history</p> : points.length > 0 ? <StockLevelChart compact points={points} timeZone={clock.timeZone} now={stock.dataUpdatedAt} solidLabel="Dry solids, estimated" /> : stock.data?.missingDryBasis ? <EmptyState icon={null} title="Stock composition unavailable" description="An intake is missing its mass basis. Wet movements are available in History." padding="sm" /> : undefined}
     </StockChartCard>
   </div>;
 }

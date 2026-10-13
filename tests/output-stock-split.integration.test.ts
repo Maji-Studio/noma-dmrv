@@ -90,7 +90,7 @@ describe("split bin draws in PostgreSQL", () => {
     const untick = await previewOutputStock(f.ctx, { ...base, wetMassKg: 300, sources: [{ layerId: f.p2.id, moisturePercent: 20 }, { layerId: f.p1.id, moisturePercent: 25 }] });
     expect(untick.blockingMessage).toBe(`This load is used up before it reaches ${f.p1.code}. Untick ${f.p1.code}.`);
     const overdraw = await previewOutputStock(f.ctx, { ...base, wetMassKg: 500, sources: [{ layerId: f.p1.id, moisturePercent: 0 }] });
-    expect(overdraw.blockingMessage).toBe(`This load holds more dry solids than ${f.p1.code} holds by the records. Reconcile stock first.`);
+    expect(overdraw.blockingMessage).toBe(`This load holds more dry solids than ${f.p1.code} holds by the records. Check the mass and moisture in the source record.`);
   });
 
   it("starts a correction from the saved order and readings and lets the operator change them", async () => {

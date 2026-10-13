@@ -21,7 +21,7 @@ export interface FeedstockLedgerEntry {
   estimatedDryKg: number | null;
 }
 
-/** A batch's share of the pooled pile: draws take each batch in proportion to its intake. */
+/** A batch's remaining stock after saved shares and estimated unassigned draws. */
 export interface FeedstockPileBatch {
   id: string;
   code: string;
@@ -37,6 +37,8 @@ export interface FeedstockPileBatch {
 
 export interface FeedstockBinStock {
   currentWetKg: number;
+  /** True only when a completed intake lacks its mass basis. */
+  missingDryBasis: boolean;
   /** Oldest first. */
   entries: FeedstockLedgerEntry[];
   /** Oldest first. */

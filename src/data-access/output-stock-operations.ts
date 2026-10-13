@@ -210,7 +210,7 @@ function subBinMessage(error: RangeError, codes: Map<string, string>): string | 
   }
   if (error instanceof SubBinOverdrawError) {
     const code = codes.get(error.layerId) ?? error.layerId;
-    return `This load holds more dry solids than ${code} holds by the records. Reconcile stock first.`;
+    return `This load holds more dry solids than ${code} holds by the records. Check the mass and moisture in the source record.`;
   }
   return null;
 }

@@ -6,14 +6,16 @@
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { conflictCode } from "@/lib/conflict-ref";
+import { ActionConflictError } from "@/lib/errors";
 import { DomainError } from "@/lib/domain-errors";
 
-const mocks = vi.hoisted(() => ({ requireOrgContext: vi.fn(), runOperationInProcess: vi.fn(), loggerError: vi.fn() }));
+const mocks = vi.hoisted(() => ({ requireOrgContext: vi.fn(), runOperationInProcess: vi.fn(), loggerError: vi.fn(), correct: vi.fn() }));
 vi.mock("@/db", () => ({ db: {} }));
 vi.mock("@/lib/auth/server", () => ({ requireOrgContext: mocks.requireOrgContext }));
 vi.mock("@/lib/operations/runner", () => ({ runOperationInProcess: mocks.runOperationInProcess }));
 vi.mock("@/lib/operations/output-stock", () => ({ recordOutputStockMovement: { id: "record_output_stock_movement" } }));
 vi.mock("@/data-access/output-stock-operations", () => ({ getMatchingOutputBins: vi.fn(), getOutputStockHistory: vi.fn(), previewOutputStock: vi.fn() }));
+vi.mock("@/data-access/output-stock-form-edits", () => ({ correctOutputStockEntry: mocks.correct }));
 vi.mock("@/data-access/output-sub-bins", () => ({ getOutputSubBins: vi.fn() }));
 vi.mock("@/lib/log", () => ({
   logger: { error: mocks.loggerError, child: () => ({ error: mocks.loggerError }) },
@@ -56,4 +58,13 @@ describe("postOutputStockFn", () => {
     expect(await postOutputStockFn({ ...command, reason: " " })).toMatchObject({ success: false, code: "validation_failed" });
     expect(mocks.runOperationInProcess).not.toHaveBeenCalled();
   });
+});
+
+it.each(["loss", "delivery"] as const)("returns a conflict for a locked %s form correction", async (kind) => {
+  const conflict = { entity: "storageLocation", id: BIN_ID, code: conflictCode("BC-001") };
+  mocks.correct.mockRejectedValue(new ActionConflictError("Locked because newer stock entries were recorded on this bin after it.", conflict));
+  expect(await postOutputStockFn({ ...command, kind, correctsMovementId: FACILITY_ID })).toEqual({
+    success: false, code: "conflict", error: "Locked because newer stock entries were recorded on this bin after it.", conflict,
+  });
+  expect(mocks.runOperationInProcess).not.toHaveBeenCalled();
 });

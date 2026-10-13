@@ -224,7 +224,7 @@ test.describe("Output-bin conserved FIFO", () => {
     await evidence(page, info, "delivery-source-from-stock-history");
   });
 
-  test("records lost mass directly and keeps its history readable", async ({ adminPage: page, testUsers }, info) => {
+  test("edits latest Lost mass and locks it after a newer entry", async ({ adminPage: page, testUsers }, info) => {
     const f = await seedOutputStockBrowserFixture(testUsers.admin.id, true);
     await openBin(page, f);
     await page.getByRole("button", { name: "Adjust stock", exact: true }).click();
@@ -247,5 +247,31 @@ test.describe("Output-bin conserved FIFO", () => {
     await expect(loss).toContainText("280 kg");
     await expect(loss.getByRole("link")).toHaveCount(0);
     await evidence(page, info, "lost-mass-history");
+    await loss.getByRole("button", { name: "Edit", exact: true }).click();
+    const edit = page.getByRole("dialog", { name: "Edit lost mass", exact: true });
+    await expect(edit.locator("#stock-wet")).toHaveValue("120");
+    await expect(edit.locator("#stock-reason")).toHaveValue("E2E FIFO spill");
+    await edit.locator("#stock-wet").fill("60");
+    await edit.getByRole("button", { name: "Save changes", exact: true }).click();
+    await expect(edit).toHaveCount(0);
+    expect((await readOutputStockBrowserFixture(f)).balance.beforeDryKg).toBe(315);
+    const corrected = history.locator("details").filter({ hasText: "Correction" }).first();
+    await corrected.locator("summary").click();
+    await expect(corrected).toContainText("Original");
+    await expect(corrected).toContainText("Corrected");
+    await evidence(page, info, "lost-mass-corrected");
+
+    await openBin(page, f);
+    await page.getByRole("button", { name: "Adjust stock", exact: true }).click();
+    await fillStock(page, "10", "30", "E2E newer FIFO spill");
+    await page.getByRole("button", { name: "Save lost mass", exact: true }).click();
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    await openBin(page, f);
+    await page.getByRole("button", { name: "History", exact: true }).click();
+    const locked = history.locator("details").filter({ hasText: "Correction" }).first();
+    await locked.locator("summary").click();
+    await expect(locked.getByRole("button", { name: "Edit", exact: true })).toHaveCount(0);
+    await expect(locked).toContainText("Locked because newer stock entries were recorded on this bin after it.");
+    await evidence(page, info, "lost-mass-locked");
   });
 });

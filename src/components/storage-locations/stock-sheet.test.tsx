@@ -55,7 +55,7 @@ it("keeps old counts and corrections readable, folds reversals, groups days and 
 
 it("uses the same feedstock cards, links intake/run/product history and leaves loss/count entries without links", async () => {
   const kinds = ["intake", "run_draw", "ingredient_draw", "loss", "count"] as const;
-  state.feedstock = { currentWetKg: 50, batches: [{ id: "intake-id", code: "FS-001", receivedAt: INSTANT, wetKg: 50, intakeWetKg: 100, dryKg: 40, moisturePercent: 20 }],
+  state.feedstock = { missingDryBasis: false, currentWetKg: 50, batches: [{ id: "intake-id", code: "FS-001", receivedAt: INSTANT, wetKg: 50, intakeWetKg: 100, dryKg: 40, moisturePercent: 20 }],
     entries: kinds.map((kind, index) => ({ id: `${kind}-row`, sourceId: index < 3 ? `${kind}-id` : null, kind, occurredAt: INSTANT, recordedAt: INSTANT, actorName: null,
       code: null, reason: "", wetDeltaKg: index === 0 ? 100 : -10, beforeWetKg: 100, afterWetKg: 50, estimatedDryKg: 40, countedWetKg: kind === "count" ? 50 : null, moisturePercent: 20 })) };
   const adjust = vi.fn();
@@ -76,7 +76,7 @@ it("uses the same feedstock cards, links intake/run/product history and leaves l
 });
 
 it("keeps missing feedstock composition explicit instead of treating all wet mass as solids", async () => {
-  state.feedstock = { ...state.feedstock!, entries: state.feedstock!.entries.map(entry => ({ ...entry, estimatedDryKg: null })) };
+  state.feedstock = { ...state.feedstock!, missingDryBasis: true, entries: state.feedstock!.entries.map(entry => ({ ...entry, estimatedDryKg: null })) };
   let renderer!: ReactTestRenderer;
   await act(async () => { renderer = create(<FeedstockBinBalance storageLocationId={BIN_ID} facilityId={FACILITY_ID} capacityKg={100} />); });
   expect(JSON.stringify(renderer.toJSON())).toContain("Stock composition unavailable");
@@ -102,5 +102,29 @@ it("exposes chart details through labelled HTML buttons while the drawing is dec
   await act(async () => { renderer = create(<StockLevelChart points={[{ t: Date.parse(INSTANT), dryKg: 80, waterKg: 20 }]} now={Date.parse(NEXT_DAY)} timeZone="UTC" />); });
   expect(renderer.root.findByType("svg").props["aria-hidden"]).toBe("true");
   expect(renderer.root.findByType("button").props["aria-label"]).toContain("details");
+  await act(async () => renderer.unmount());
+});
+
+it("offers Edit only for the latest Lost mass and explains the locked entry", async () => {
+  state.output = [entry({ id: "older", editLockedReason: "Locked because newer stock entries were recorded on this bin after it." }),
+    entry({ id: "latest", editLockedReason: null })];
+  let renderer!: ReactTestRenderer;
+  await act(async () => { renderer = create(<OutputStockHistory storageLocationId={BIN_ID} facilityId={FACILITY_ID} triggerLabel="History" />); });
+  await act(async () => renderer.root.findByType("button").props.onClick());
+  expect(renderer.root.findAllByType("button").filter(button => text(button) === "Edit")).toHaveLength(1);
+  expect(JSON.stringify(renderer.toJSON())).toContain("Locked because newer stock entries were recorded on this bin after it.");
+  await act(async () => renderer.unmount());
+});
+
+it("charts feedstock after its first intake when a run was dated earlier without claiming missing intake mass", async () => {
+  const base = { recordedAt: INSTANT, actorName: null, code: null, reason: "", countedWetKg: null, moisturePercent: null, sourceId: null };
+  state.feedstock = { missingDryBasis: false, currentWetKg: 40, batches: [], entries: [
+    { ...base, id: "early", kind: "run_draw", occurredAt: INSTANT, wetDeltaKg: -60, beforeWetKg: 0, afterWetKg: -60, estimatedDryKg: null },
+    { ...base, id: "intake", kind: "intake", occurredAt: NEXT_DAY, wetDeltaKg: 100, beforeWetKg: -60, afterWetKg: 40, estimatedDryKg: 32 },
+  ] };
+  let renderer!: ReactTestRenderer;
+  await act(async () => { renderer = create(<FeedstockBinBalance storageLocationId={BIN_ID} facilityId={FACILITY_ID} capacityKg={100} />); });
+  expect(renderer.root.findAllByType(StockLevelChart)).toHaveLength(1);
+  expect(JSON.stringify(renderer.toJSON())).not.toContain("An intake is missing its mass basis");
   await act(async () => renderer.unmount());
 });

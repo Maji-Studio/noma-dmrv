@@ -11,6 +11,7 @@ import { StockKindIcon } from "./stock-kind-icons";
 import { StockChip } from "./stock-figures";
 
 const ICON_PX = 16;
+const CARET_ICON_PX = 14;
 
 export function LedgerDayHeader({ day, afterLabel }: { day: string; afterLabel?: string }) {
   return (
@@ -50,7 +51,7 @@ export function LedgerLine({ id, time, iconKind, label, chips = [], note, amount
           <span className={`body-small font-medium ${struck ? "line-through text-[var(--color-text-tertiary)]" : ""}`}>{amount}</span>
           <span className="body-caption text-[var(--color-text-tertiary)]">{after}</span>
         </span>
-        <CaretDownIcon size={14} aria-hidden="true" className="mt-4 text-[var(--color-text-tertiary)] transition-transform group-open:rotate-180 motion-reduce:transition-none" />
+        <CaretDownIcon size={CARET_ICON_PX} aria-hidden="true" className="mt-4 text-[var(--color-text-tertiary)] transition-transform group-open:rotate-180 motion-reduce:transition-none" />
       </summary>
       <div className="flex flex-col gap-10 pb-16 sm:pl-64">{children}</div>
     </details>

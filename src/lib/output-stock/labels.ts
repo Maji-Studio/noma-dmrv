@@ -19,3 +19,6 @@ export const STOCK_ACTION_LABEL = "Adjust stock";
 /** What the stock action records: mass that left the bin without a delivery or draw. */
 export const LOST_MASS_LABEL = "Lost mass";
 export const LOST_MASS_SUBMIT_LABEL = "Save lost mass";
+
+/** Shared operator reason for form edits that would change newer saved stock shares. */
+export const STOCK_ENTRY_LOCKED_REASON = "Locked because newer stock entries were recorded on this bin after it.";

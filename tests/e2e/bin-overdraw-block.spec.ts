@@ -26,6 +26,7 @@ import {
   waitForSideSheetClose,
 } from "./fixtures/page-helpers";
 import { fillStockMoisture } from "./helpers/stock-moisture";
+import { FIFO_BROWSER_TIME, seedOutputStockBrowserFixture } from "./helpers/output-stock-browser-fixture";
 import { chooseRunStatus } from "./helpers/run-status";
 
 const PRODUCTION_RUNS_URL = "/production-runs";
@@ -225,26 +226,6 @@ async function editRowByText(
   ).toBeVisible();
 }
 
-/** Open the first list row through its overflow-menu Edit action. */
-async function editFirstRow(page: Page, readyInputName: string) {
-  await expect(async () => {
-    await page
-      .locator("tbody tr")
-      .first()
-      .getByRole("button", { name: /Actions for/ })
-      .click({ timeout: 5000 });
-    await page
-      .getByRole("menuitem", { name: "Edit" })
-      .click({ timeout: 5000 });
-  }).toPass({ timeout: 30000 });
-  await waitForSideSheet(page);
-  await expect(
-    page.locator(
-      `[role="dialog"] input[name="${readyInputName}"]`,
-    ),
-  ).toBeVisible();
-}
-
 /** Save an edit from any entity side sheet using the shared CTA label. */
 async function saveEdit(page: Page) {
   await page
@@ -388,18 +369,6 @@ async function submitDeliveryCreate(page: Page) {
     .locator('[role="dialog"]')
     .locator('button:has-text("Create delivery")')
     .click();
-}
-
-/** Create a delivered delivery after creating its product-backed order. */
-async function createDeliveredDelivery(
-  page: Page,
-  seededData: SeededChainData,
-  wetMassKg: string,
-) {
-  await createOrder(page, seededData);
-  await openDeliveredDeliveryForm(page, seededData, wetMassKg);
-  await submitDeliveryCreate(page);
-  await waitForSideSheetClose(page);
 }
 
 /** Path 1: createProductionRun feedstock draw from 120 kg wet on hand. */
@@ -661,21 +630,51 @@ test.describe("createDelivery order-balance guard", () => {
   });
 });
 
-/** Posted delivery measurements remain locked; history links to the saved delivery. */
-test("opens the delivery source from stock history and keeps posted masses locked", async ({ adminPage: page, seededData }) => {
-  await createDeliveredDelivery(page, seededData, "80000");
-  await editFirstRow(page, "deliveredWetMassKg");
-  await expect(page.locator('input[name="deliveredWetMassKg"]')).toBeDisabled();
-  await expect(page.locator('input[name="moistureContentPercent"]')).toBeDisabled();
-  await page.goto(`/storage-locations?facility=${seededData.facility.id}`);
-  await waitForFacilityHydration(page, seededData.facility.name);
-  await page.getByPlaceholder("Search by code or name…").fill(seededData.productStorageLocation.code);
-  await page.getByText(seededData.productStorageLocation.name, { exact: true }).first().click();
+/** Latest delivery measurements can be corrected; a newer stock entry locks them. */
+test("edits latest delivery mass, links its saved source and locks it after newer stock", async ({ adminPage: page, testUsers }) => {
+  const f = await seedOutputStockBrowserFixture(testUsers.admin.id, true);
+  const created = f.delivery!;
+  await page.goto(`/deliveries?facility=${f.facility.id}&delivery=${created.id}`);
+  await waitForFacilityHydration(page, f.facility.name);
+  await page.getByRole("button", { name: "Edit delivery", exact: true }).click();
+  const wet = page.locator('input[name="deliveredWetMassKg"]');
+  await expect(wet).toBeEnabled();
+  await expect(page.locator('input[name="deliveryDate"]')).toBeDisabled();
+  await wet.fill("1900");
+  await fillStockMoisture(page, "delivery", "30");
+  await page.getByRole("button", { name: "Save changes", exact: true }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+
+  const openBin = async () => {
+    await page.goto(`/storage-locations?facility=${f.facility.id}`);
+    await waitForFacilityHydration(page, f.facility.name);
+    await page.getByPlaceholder("Search by code or name…").fill(f.bin.code);
+    await page.getByText(f.bin.name, { exact: true }).first().click();
+  };
+  await openBin();
   await page.getByRole("button", { name: "History", exact: true }).click();
   const history = page.getByRole("dialog", { name: "Stock history", exact: true });
-  const delivery = history.locator("details").filter({ hasText: "Delivery" }).first();
-  await delivery.locator("summary").click();
-  await delivery.getByRole("link", { name: "Open delivery" }).click();
-  await expect(page).toHaveURL(/deliveries.*delivery=/);
-  await expect(page.getByRole("dialog")).toBeVisible();
+  const corrected = history.locator("details").filter({ hasText: "Correction" }).first();
+  await corrected.locator("summary").click();
+  await expect(corrected).toContainText("Original");
+  await expect(corrected).toContainText("Corrected");
+  const link = corrected.getByRole("link", { name: "Open delivery" });
+  await expect(link).toHaveAttribute("href", `/deliveries?facility=${f.facility.id}&delivery=${created.id}`);
+  await link.click();
+  await expect(page.getByRole("dialog")).toContainText(created.code);
+
+  await openBin();
+  await page.getByRole("button", { name: "Adjust stock", exact: true }).click();
+  await page.locator("#occurredAt").fill(FIFO_BROWSER_TIME);
+  await page.locator("#stock-wet").fill("10");
+  await fillStockMoisture(page, "stock", "30");
+  await page.locator("#stock-reason").fill("E2E newer stock entry");
+  await page.getByRole("button", { name: "Save lost mass", exact: true }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await page.goto(`/deliveries?facility=${f.facility.id}&delivery=${created.id}`);
+  await waitForFacilityHydration(page, f.facility.name);
+  await page.getByRole("button", { name: "Edit delivery", exact: true }).click();
+  await expect(wet).toBeDisabled();
+  await expect(page.locator('input[name="moistureContentPercent"]')).toBeDisabled();
+  await expect(page.getByRole("dialog")).toContainText("Locked because newer stock entries were recorded on this bin after it.");
 });

@@ -221,6 +221,10 @@ export async function updateDeliveryFn(
 
     const delivery = await updateDelivery(ctx, validated.deliveryId, {
       expectedVersion: validated.expectedVersion,
+      sources: validated.sources,
+      correctsMovementId: validated.correctsMovementId,
+      idempotencyKey: validated.idempotencyKey,
+      basisFingerprint: validated.basisFingerprint,
       code: validated.code,
       orderId: validated.orderId,
       facilityId: validated.facilityId,

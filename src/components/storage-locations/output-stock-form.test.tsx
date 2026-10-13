@@ -100,3 +100,17 @@ describe("OutputStockForm", () => {
     }
   });
 });
+
+it("prefills a Lost mass edit and posts its correction target with the saved event time", async () => {
+  mocks.mutate.mockReset().mockResolvedValue({ id: "saved" });
+  const correction = { id: "00000000-0000-4000-8000-000000000004", kind: "loss", wetMassKg: 10, moisturePercent: 20, reason: "Wrong reading",
+    occurredAt: "2026-09-14T12:00:00.000Z", recordedAt: "2026-09-14T12:00:00.000Z", actorName: null, dryMassKg: 8,
+    beforeDryKg: 100, afterDryKg: 92, correctsMovementId: null, deliveryId: null, allocations: [], editLockedReason: null };
+  let renderer!: ReactTestRenderer;
+  await act(async () => { renderer = create(<OutputStockForm storageLocationId="00000000-0000-4000-8000-000000000002" facilityId="00000000-0000-4000-8000-000000000003" correction={correction} onCancel={vi.fn()} onRecorded={vi.fn()} />); });
+  expect(mocks.input).toMatchObject({ wetMassKg: 10, moisturePercent: 20, occurredAt: correction.occurredAt, correctsMovementId: correction.id });
+  await act(async () => renderer.root.findByProps({ name: "wetMassKg" }).props.onChange({ target: { name: "wetMassKg", value: 5 }, type: "change" }));
+  await act(async () => { await renderer.root.findByType("form").props.onSubmit({ stopPropagation: vi.fn(), preventDefault: vi.fn(), persist: vi.fn() }); });
+  expect(mocks.mutate).toHaveBeenCalledWith(expect.objectContaining({ wetMassKg: 5, reason: "Wrong reading", correctsMovementId: correction.id, occurredAt: correction.occurredAt }));
+  await act(async () => renderer.unmount());
+});

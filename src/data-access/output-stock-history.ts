@@ -7,6 +7,7 @@ import type { OutputMoistureReset, OutputStockHistoryEntry, OutputStockPreview }
 import { and, asc, eq, inArray } from 'drizzle-orm';
 import { getOutputStockAllocationProjection } from './output-stock';
 import { requireOrgScope } from './utils';
+import { stockEntryLockReason } from '@/lib/output-stock/edit-lock';
 
 /** Intake facts retain their recorded wet mass; movement facts remain immutable. */
 export async function getOutputStockHistory(ctx: OrgContext, storageLocationId: string): Promise<OutputStockHistoryEntry[]> {
@@ -35,6 +36,8 @@ export async function getOutputStockHistory(ctx: OrgContext, storageLocationId: 
     const targetProductId = m.inputSnapshot?.targetBiocharProductId;
     const deliveryId = allocations.find(a => a.deliveryId)?.deliveryId ?? (typeof m.inputSnapshot?.deliveryId === 'string' ? m.inputSnapshot.deliveryId : null);
     const savedSources = orderedSourcesSchema.safeParse(m.inputSnapshot?.sources);
+    const correctionSources = savedSources.success ? savedSources.data : kind === 'loss' || kind === 'delivery'
+      ? allocations.flatMap(a => a.basisSnapshot.readingPercent == null ? [] : [{ layerId: (a.biocharProductId ?? a.productionRunId)!, moisturePercent: Number(a.basisSnapshot.readingPercent) }]) : [];
     const entry: OutputStockHistoryEntry = { id: m.id, kind: m.outputKind!, eventKind: kind === 'loss' || kind === 'count' || kind === 'delivery' || kind === 'production_draw' ? kind : undefined,
       occurredAt: m.occurredAt!.toISOString(), recordedAt: m.createdAt.toISOString(), actorName,
       reason: m.reason, wetMassKg: typeof m.inputSnapshot?.wetMassKg === 'number' ? m.inputSnapshot.wetMassKg : null,
@@ -49,7 +52,7 @@ export async function getOutputStockHistory(ctx: OrgContext, storageLocationId: 
         code: (a.biocharProductId ? productCode.get(a.biocharProductId) : runCode.get(a.productionRunId!)) ?? String(a.basisSnapshot.code),
         wetMassKg: a.wetMassKg === null ? null : Number(a.wetMassKg), dryMassKg: Number(a.dryMassKg),
         runs: effects.filter(e => e.allocation.id === a.id && e.run).map(e => ({ productionRunId: e.run!.productionRunId, code: runCode.get(e.run!.productionRunId) ?? e.run!.productionRunId, dryMassKg: Number(e.run!.dryMassKg) })) })),
-      ...(savedSources.success ? { sources: savedSources.data } : {}) };
+      ...(correctionSources.length ? { sources: correctionSources } : {}) };
     // A reading gets its own row right after the movement that measured it,
     // showing the change the operator saw when it was saved.
     const reset = m.outputKind === 'reversal' ? null : preview?.moistureReset;
@@ -79,6 +82,14 @@ export async function getOutputStockHistory(ctx: OrgContext, storageLocationId: 
   for (const entry of history) {
     if (entry.kind === 'intake') { entry.beforeDryKg = balance; entry.afterDryKg = balance - entry.dryMassKg; }
     balance -= entry.dryMassKg;
+  }
+  const latestSequence = movements.at(-1)?.movement.postingSequence ?? BigInt(0);
+  const receiptFacts = [...products.map(product => ({ id: product.id, recordedAt: product.createdAt })),
+    ...runs.filter(run => run.biocharStorageLocationId === storageLocationId && run.status === 'complete').map(run => ({ id: run.id, recordedAt: run.updatedAt }))];
+  for (const entry of history) {
+    if (entry.kind === 'reversal' || !['loss', 'delivery'].includes(entry.eventKind ?? entry.kind)) continue;
+    const original = movements.find(row => row.movement.id === entry.id)?.movement;
+    if (original) entry.editLockedReason = stockEntryLockReason(original, latestSequence, receiptFacts);
   }
   return history;
 }

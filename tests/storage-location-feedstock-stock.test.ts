@@ -10,7 +10,7 @@ import { getFacilities } from "@/data-access/facilities";
 import { facilities, storageLocations } from "@/db/schema/facilities";
 import { feedstocks, feedstockTypes } from "@/db/schema/feedstock";
 import { biocharProducts } from "@/db/schema/products";
-import { binMovements, productionRunFeedstockDraws, productionRuns } from "@/db/schema";
+import { binMovements, productionRunFeedstockDraws, productionRunFeedstocks, productionRuns } from "@/db/schema";
 import { seedOutputStockParents } from "./helpers/output-stock-fixture";
 import { cleanupOutputStockFixture } from "./helpers/output-stock-cleanup";
 
@@ -224,4 +224,24 @@ describe("storage-location feedstock stock", () => {
       await cleanupFixture(fixture);
     }
   });
+});
+
+it("keeps A40 and B100 after A100, a saved A60 run draw, then B100", async () => {
+  const f = await seedOutputStockParents(db);
+  try {
+    const [draw] = await db.select().from(productionRunFeedstockDraws).where(eq(productionRunFeedstockDraws.productionRunId, f.runs[0].id));
+    await db.update(productionRuns).set({ status: "cancelled", cancellationReason: "Fixture" }).where(eq(productionRuns.id, f.runs[1].id));
+    const [a] = await db.update(feedstocks).set({ massWetKg: 100, massDryKg: 80, moistureContentPercent: 20, deliveryDate: new Date("2026-09-08T12:00:00Z") })
+      .where(eq(feedstocks.storageLocationId, draw.storageLocationId)).returning();
+    await db.update(productionRunFeedstockDraws).set({ wetMassKg: 60 }).where(eq(productionRunFeedstockDraws.id, draw.id));
+    await db.update(productionRunFeedstocks).set({ wetMassUsedKg: 60 }).where(eq(productionRunFeedstocks.productionRunId, f.runs[0].id));
+    const [b] = await db.insert(feedstocks).values({ organizationId: f.ctx.organizationId, facilityId: f.facility.id, feedstockTypeId: a.feedstockTypeId,
+      storageLocationId: draw.storageLocationId, code: `E2E-FIFO-BATCH-B-${f.tag}`, status: "complete", massWetKg: 100, massDryKg: 50,
+      moistureContentPercent: 50, deliveryDate: new Date("2026-09-10T12:00:00Z") }).returning();
+    const ledger = await getFeedstockBinStock(f.ctx, draw.storageLocationId);
+    expect(ledger.currentWetKg).toBe(140);
+    expect(ledger.batches).toMatchObject([{ id: a.id, wetKg: 40, dryKg: 32 }, { id: b.id, wetKg: 100, dryKg: 50 }]);
+    expect(ledger.entries.at(-1)?.estimatedDryKg).toBe(82);
+    expect(ledger.missingDryBasis).toBe(false);
+  } finally { await cleanupOutputStockFixture(db, f.ctx.organizationId); }
 });

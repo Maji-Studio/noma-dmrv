@@ -16,16 +16,18 @@ import { useForm, useWatch } from "react-hook-form";
 import { OutputStockHistory } from "./output-stock-history";
 import { OutputStockPreview } from "./output-stock-preview";
 import { SubBinDrawField } from "./sub-bin-draw-field";
+import type { OutputStockHistoryEntry } from "@/types/output-stock";
 import { Notice } from "@/components/ui/notice";
 
 interface Props {
   storageLocationId: string;
   facilityId: string;
+  correction?: OutputStockHistoryEntry;
   onCancel: () => void;
   onRecorded: () => void;
 }
 
-export function OutputStockForm({ storageLocationId, facilityId, onCancel, onRecorded }: Props) {
+export function OutputStockForm({ storageLocationId, facilityId, correction, onCancel, onRecorded }: Props) {
   const [idempotencyKey, setIdempotencyKey] = useState(() => crypto.randomUUID());
   const [serverError, setServerError] = useState<string>();
   const [attempted, setAttempted] = useState(false);
@@ -37,16 +39,17 @@ export function OutputStockForm({ storageLocationId, facilityId, onCancel, onRec
     defaultValues: {
       storageLocationId, facilityId, kind: "loss" as const,
       expectedProductVersions: {}, basisFingerprint: "pending-preview", idempotencyKey,
-      occurredAt: new Date().toISOString(),
-      wetMassKg: undefined,
-      moisturePercent: null,
-      reason: "",
+      occurredAt: correction?.occurredAt ?? new Date().toISOString(),
+      correctsMovementId: correction?.id,
+      wetMassKg: correction?.wetMassKg ?? undefined,
+      moisturePercent: correction?.moisturePercent ?? null,
+      reason: correction?.reason ?? "",
     },
   });
   const values = useWatch({ control });
   const wetMassKg = values.wetMassKg;
   // Split losses read each reached sub-bin; mix losses use one reading.
-  const draw = useSubBinDraw({ bin: { storageLocationId, facilityId }, occurredAt: values.occurredAt, wetKg: wetMassKg });
+  const draw = useSubBinDraw({ bin: { storageLocationId, facilityId }, occurredAt: values.occurredAt, wetKg: wetMassKg, correction: correction ? { movementId: correction.id, kind: "loss", sources: correction.sources } : undefined });
   const candidate = outputStockPreviewSchema.safeParse(draw.active
     ? { ...values, moisturePercent: null, sources: draw.sources ?? undefined }
     : { ...values, sources: undefined });
@@ -97,6 +100,6 @@ export function OutputStockForm({ storageLocationId, facilityId, onCancel, onRec
         </FormField>
       </FormSection>
     </FormSpine>
-    <FormActions control={control} onCancel={onCancel} isSubmitting={mutation.isPending} errorMessage={serverError} submitDisabled={submitDisabled} submitLabel={LOST_MASS_SUBMIT_LABEL} />
+    <FormActions control={control} onCancel={onCancel} isSubmitting={mutation.isPending} errorMessage={serverError} submitDisabled={submitDisabled} submitLabel={correction ? "Save changes" : LOST_MASS_SUBMIT_LABEL} />
   </form>;
 }

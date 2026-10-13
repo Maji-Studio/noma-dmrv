@@ -210,7 +210,7 @@ export async function createBinMovement(
   if (input.lane !== 'feedstock') throw new SafeError('Use the output stock preview and posting action for output bins.');
   if (input.movementType !== "loss") {
     throw new SafeError(
-      "Use Reconcile stock to record a stock-take adjustment",
+      "Check the source record, or record Lost mass if stock was lost.",
     );
   }
   const payload = {

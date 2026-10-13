@@ -10,7 +10,7 @@ import { useFacilityClock } from "@/hooks/use-facility-context";
 import { formatFacilityTime } from "@/lib/date-utils";
 import { formatFacilityDateTime, formatFacilityDay, formatMassKg } from "@/lib/format-utils";
 import { formatMoisturePercent } from "@/lib/mass-moisture";
-import { outputStockEventLabel } from "@/lib/output-stock/labels";
+import { LOST_MASS_LABEL, outputStockEventLabel } from "@/lib/output-stock/labels";
 import type { OutputStockHistoryEntry } from "@/types/output-stock";
 import { ClockCounterClockwiseIcon } from "@phosphor-icons/react/dist/ssr";
 import { useState, type ReactNode } from "react";
@@ -19,6 +19,8 @@ import { StockSourceLink } from "./stock-source-link";
 import { LedgerBeforeAfter, LedgerBreak, LedgerDayHeader, LedgerFacts, LedgerLine } from "./stock-ledger";
 import { buildStockLevelSeries } from "./stock-level-chart";
 import { CalculationDisclosure } from "./stock-figures";
+import { OutputStockForm } from "./output-stock-form";
+import { FormDialog } from "@/components/ui/form-dialog";
 import { Notice } from "@/components/ui/notice";
 
 const ICON_PX = 16;
@@ -59,6 +61,7 @@ interface LedgerRowProps {
   defaultOpen: boolean;
   timeZone: string;
   facilityId: string;
+  onEdit: (entry: OutputStockHistoryEntry) => void;
 }
 
 /**
@@ -66,7 +69,7 @@ interface LedgerRowProps {
  * and the dry biochar left after. Under the line: whether it still counts, the
  * bin before and after, what a correction changed, then who recorded it.
  */
-function LedgerRow({ entry, kind, reversedEntry, replacedBy, moistureEntry, reversed, defaultOpen, timeZone, facilityId }: LedgerRowProps) {
+function LedgerRow({ entry, kind, reversedEntry, replacedBy, moistureEntry, reversed, defaultOpen, timeZone, facilityId, onEdit }: LedgerRowProps) {
   const label = outputStockEventLabel(kind);
   const subject = `${label.toLowerCase()} on ${formatFacilityDateTime(entry.occurredAt, timeZone)}`;
   const recordedLater = entry.recordedAt.slice(0, 16) !== entry.occurredAt.slice(0, 16);
@@ -93,6 +96,9 @@ function LedgerRow({ entry, kind, reversedEntry, replacedBy, moistureEntry, reve
         ...(entry.reason && entry.kind !== "intake" ? [{ label: reversedEntry ? "Why corrected" : "Reason", value: entry.reason }] : []),
         { label: "Recorded", value: `${recordedLater ? formatFacilityDateTime(entry.recordedAt, timeZone) : "At the time"}${entry.actorName ? ` by ${entry.actorName}` : ""}` },
       ]} />
+      {kind === "loss" && !reversed && (entry.editLockedReason === null
+        ? <Button type="button" variant="noOutline" onClick={() => onEdit(entry)}>Edit</Button>
+        : entry.editLockedReason ? <Notice tone="info">{entry.editLockedReason}</Notice> : null)}
       <StockSourceLink source={entry.source} facilityId={facilityId} />
       {entry.allocations.length > 0 && (
         <CalculationDisclosure subject={subject}>
@@ -125,6 +131,7 @@ export function OutputStockHistory({ storageLocationId, facilityId, movementId, 
 }) {
   const clock = useFacilityClock(facilityId);
   const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState<OutputStockHistoryEntry | null>(null);
   const history = useOutputStockHistory(storageLocationId, open);
   const entries = history.data ?? [];
   const correctedIds = new Set(entries.filter(entry => entry.kind === "reversal").map(entry => entry.correctsMovementId));
@@ -184,6 +191,7 @@ export function OutputStockHistory({ storageLocationId, facilityId, movementId, 
                     reversed={isReversed(entry)}
                     defaultOpen={!!movementId}
                     facilityId={facilityId}
+                    onEdit={setEditing}
                   />
                 )}
               </div>;
@@ -191,5 +199,10 @@ export function OutputStockHistory({ storageLocationId, facilityId, movementId, 
           </div>}
       </div>
     </Modal>
+    <FormDialog isOpen={editing !== null} onClose={() => setEditing(null)} ariaLabel="Edit lost mass" width="md">
+      <h3 className="title-heading-3 mb-20">{LOST_MASS_LABEL}</h3>
+      {editing && <OutputStockForm key={editing.id} storageLocationId={storageLocationId} facilityId={facilityId} correction={editing}
+        onCancel={() => setEditing(null)} onRecorded={() => setEditing(null)} />}
+    </FormDialog>
   </>;
 }

@@ -36,8 +36,8 @@ components (UI)
   output-stock movement and lab sample writes use this layer (`make_biochar_product`,
   `update_biochar_product`, `record_output_stock_movement`, `record_lab_sample`,
   `update_lab_sample`, `delete_lab_sample`). UI product deletes
-  stay off the runner. UI delivery corrections use the runner through
-  `record_output_stock_movement` but stay off the API (decision 50).
+  stay off the runner. Lost mass form edits and delivery mass updates use the shared stock writer
+  with a strict latest-entry check. The API correction contract stays dependency-based.
 - The runner owns the transaction. Data-access ...InTransaction(ctx, tx, ...)
   functions and the helpers they call read and write only through `tx`,
   including reference checks and result enrichment. After-commit hooks run

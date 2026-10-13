@@ -72,7 +72,7 @@ describe('output FIFO transactions', () => {
       expect(a.basisSnapshot.solidsKg).toBeTruthy();
     }
     await expect(createDelivery(f.ctx, { ...f.deliveryInput, deliveredWetMassKg: 1900 })).rejects.toThrow('different values');
-    await expect(updateDelivery(f.ctx, delivery.id, { expectedVersion: await labLogisticsVersion(f.ctx, "deliveries", delivery.id), deliveredWetMassKg: 1900 })).rejects.toThrow('Posted delivery');
+    await expect(updateDelivery(f.ctx, delivery.id, { expectedVersion: await labLogisticsVersion(f.ctx, "deliveries", delivery.id), deliveredWetMassKg: 1900 })).resolves.toMatchObject({ deliveredWetMassKg: 1900, massDryKg: 1091.667 });
     await expect(deleteDelivery(f.ctx, delivery.id, await labLogisticsVersion(f.ctx, "deliveries", delivery.id))).rejects.toThrow('history');
     const [recorded] = await db.select({ wet: sql<number>`sum(${biocharProducts.massKg})`.mapWith(Number) }).from(biocharProducts).where(eq(biocharProducts.storageLocationId, f.bin.id));
     expect(recorded.wet).toBe(2500);

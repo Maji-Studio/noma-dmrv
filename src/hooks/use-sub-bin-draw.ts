@@ -16,6 +16,7 @@ interface SubBinDrawOptions {
 /** The operator's choices, kept per bin so another bin starts from its default. */
 interface DrawChoices {
   binId: string | null;
+  correctionId?: string;
   /** Null drains in the bin's default order; otherwise the ticked sub-bins in the order they were emptied. */
   order: string[] | null;
   /** Each reading as typed, so a half-typed "3." stays in the input. */
@@ -46,11 +47,11 @@ export function useSubBinDraw({ bin, occurredAt, wetKg, correction }: SubBinDraw
   const saved = correction?.sources?.length ? correction.sources : null;
   const binId = bin?.storageLocationId ?? null;
   const [stored, setStored] = useState<DrawChoices>(() => ({
-    binId,
+    binId, correctionId: correction?.movementId,
     order: saved ? saved.map(s => s.layerId) : null,
     readings: Object.fromEntries((saved ?? []).map(s => [s.layerId, String(s.moisturePercent)])),
   }));
-  const choices: DrawChoices = stored.binId === binId ? stored : { binId, order: null, readings: {} };
+  const choices: DrawChoices = stored.binId === binId && stored.correctionId === correction?.movementId ? stored : { binId, correctionId: correction?.movementId, order: saved ? saved.map(s => s.layerId) : null, readings: Object.fromEntries((saved ?? []).map(s => [s.layerId, String(s.moisturePercent)])) };
   const subBins: OutputSubBin[] = query.data?.stockMode === "split" ? query.data.subBins : [];
   const active = subBins.length > 0;
   const ordered = orderSubBins(subBins, choices.order);
