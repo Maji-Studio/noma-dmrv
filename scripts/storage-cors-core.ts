@@ -14,6 +14,17 @@ export function appOrigin(value: string): string {
   return url.origin;
 }
 
+/** Local bucket diagnostics can run without allowing a loopback browser origin. */
+export function smokeCorsOrigin(value: string, ci: boolean): string | null {
+  const url = new URL(value);
+  const loopback = ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname);
+  if (!ci && url.protocol === "http:" && loopback && !url.username && !url.password &&
+      url.pathname === "/" && !url.search && !url.hash) {
+    return null;
+  }
+  return appOrigin(value);
+}
+
 /** Preserve other applications' rules when the bucket is shared. */
 export function withUploadCorsRule(rules: CORSRule[], origin: string): CORSRule[] {
   const normalized = appOrigin(origin);

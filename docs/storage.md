@@ -281,6 +281,11 @@ the configured app origin plus the actual PUT response CORS header. This catches
 stale origin allowlists as well as credential and storage failures. A full UI
 walkthrough remains separate.
 
+Outside CI, an HTTP loopback `NEXT_PUBLIC_APP_URL` (the local/worktree default)
+deliberately skips browser CORS checks and still tests the storage round-trip.
+Set `NEXT_PUBLIC_APP_URL` to the deployed HTTPS app origin to check its CORS too.
+CI always requires an exact HTTPS origin and never skips the CORS gate.
+
 Unit coverage lives in `tests/documents-*.test.ts` and `tests/*storage*.test.ts`
 (plus `tests/parent-document-retirement.test.ts`). Conventions:
 [testing.md](./testing.md). Known failure modes:

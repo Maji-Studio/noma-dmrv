@@ -24,7 +24,7 @@
 import { randomUUID } from "node:crypto";
 import { pathToFileURL } from "node:url";
 import { config } from "dotenv";
-import { appOrigin, assertUploadCors } from "./storage-cors-core";
+import { smokeCorsOrigin, assertUploadCors } from "./storage-cors-core";
 
 config({ path: ".env.local" });
 
@@ -50,7 +50,10 @@ export async function runStorageSmoke(): Promise<void> {
     process.exit(2);
   }
 
-  const origin = appOrigin(process.env.NEXT_PUBLIC_APP_URL ?? "");
+  const origin = smokeCorsOrigin(process.env.NEXT_PUBLIC_APP_URL ?? "", Boolean(process.env.CI));
+  if (origin === null) {
+    console.log("SKIP CORS     → local HTTP loopback origin; storage round-trip only");
+  }
   console.log(`Storage provider: ${provider.name} (bucket=${provider.bucket})`);
 
   const key = buildStorageKey({
@@ -78,17 +81,19 @@ export async function runStorageSmoke(): Promise<void> {
       expiresInSeconds: PRESIGN_TTL_SECONDS,
     });
     console.log(`PUT target: ${safeUrlSummary(upload.url)}`);
-    try {
-      await assertUploadCors(upload.url, origin);
-      console.log("OK  CORS     → app-origin PUT preflight accepted");
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Storage CORS preflight failed";
-      corsFailures.push(message);
-      console.error(message);
+    if (origin !== null) {
+      try {
+        await assertUploadCors(upload.url, origin);
+        console.log("OK  CORS     → app-origin PUT preflight accepted");
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Storage CORS preflight failed";
+        corsFailures.push(message);
+        console.error(message);
+      }
     }
     const putRes = await fetchOrFail("PUT", upload.url, {
       method: upload.method,
-      headers: { ...upload.headers, Origin: origin },
+      headers: { ...upload.headers, ...(origin === null ? {} : { Origin: origin }) },
       body,
     });
     if (!putRes.ok) {
@@ -97,7 +102,7 @@ export async function runStorageSmoke(): Promise<void> {
     }
     uploaded = true;
     const allowedOrigin = putRes.headers.get("access-control-allow-origin");
-    if (allowedOrigin !== origin && allowedOrigin !== "*") {
+    if (origin !== null && allowedOrigin !== origin && allowedOrigin !== "*") {
       const message = "PUT response does not allow the configured app origin through CORS.";
       corsFailures.push(message);
       console.error(message);

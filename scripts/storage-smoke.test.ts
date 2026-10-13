@@ -23,6 +23,7 @@ describe("storage smoke diagnostics", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.stubEnv("NEXT_PUBLIC_APP_URL", ORIGIN);
+    vi.stubEnv("CI", "");
     process.exitCode = undefined;
     body = "";
     vi.spyOn(console, "log").mockImplementation(() => {});
@@ -77,5 +78,33 @@ describe("storage smoke diagnostics", () => {
     expect(console.error).toHaveBeenCalledWith("Storage CORS preflight failed (403)");
     expect(console.error).toHaveBeenCalledWith(expect.stringContaining("PUT failed: 403"));
     expect(process.exitCode).toBe(1);
+  });
+
+  it.each(["http://localhost:3102", "http://127.0.0.1:3102", "http://[::1]:3102"])(
+    "keeps local bucket diagnostics available without browser CORS: %s", async (origin) => {
+      vi.stubEnv("NEXT_PUBLIC_APP_URL", origin);
+      mockStorage(403, null);
+      await runStorageSmoke();
+      expect(fetch).toHaveBeenCalledTimes(2);
+      expect(fetch).not.toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ method: "OPTIONS" }));
+      expect(fetch).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ method: "PUT", headers: {} }));
+      expect(mocks.headObject).toHaveBeenCalledTimes(2);
+      expect(mocks.deleteObject).toHaveBeenCalledWith(PROBE_KEY);
+      expect(console.log).toHaveBeenCalledWith(expect.stringContaining("SKIP CORS"));
+      expect(process.exitCode).toBeUndefined();
+    },
+  );
+
+  it("does not skip browser CORS for a local HTTP origin in CI", async () => {
+    vi.stubEnv("NEXT_PUBLIC_APP_URL", "http://localhost:3102");
+    vi.stubEnv("CI", "true");
+    await expect(runStorageSmoke()).rejects.toThrow("exact HTTPS app origin");
+    expect(mocks.createUploadUrl).not.toHaveBeenCalled();
+  });
+
+  it("does not skip browser CORS for a non-local HTTP origin", async () => {
+    vi.stubEnv("NEXT_PUBLIC_APP_URL", "http://staging.app.noma.maji.studio");
+    await expect(runStorageSmoke()).rejects.toThrow("exact HTTPS app origin");
+    expect(mocks.createUploadUrl).not.toHaveBeenCalled();
   });
 });
