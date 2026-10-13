@@ -1,5 +1,4 @@
 import { invalidateEntityTypeQueries } from "./entity-query-keys";
-import { getReactorByIdFn } from "@/fn/reactors";
 import { throwActionError, StaleVersionError } from "@/lib/stale-version";
 /**
  * Reactors React Query Hooks
@@ -384,15 +383,3 @@ export function useDeleteReactor(
 // ============================================
 // Cache Invalidation Utilities
 // ============================================
-
-export function useReactor(id: string, enabled = true) {
-  return useQuery({
-    queryKey: reactorKeys.detail(id),
-    queryFn: async () => {
-      const result = await getReactorByIdFn(id);
-      if (!result.success) throwActionError(result);
-      return result.data;
-    },
-    enabled: enabled && !!id,
-  });
-}

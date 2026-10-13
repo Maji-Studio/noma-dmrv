@@ -37,7 +37,6 @@ vi.mock("@/hooks/use-quick-add-submit", () => ({
 }));
 
 vi.mock("@/hooks/use-fleet", () => ({
-  useFleetRecord: () => mocks.record,
   useUpdateVehicle: () => ({ mutateAsync: mocks.updateVehicle, isPending: false }),
   useUpdateDriver: () => ({ mutateAsync: mocks.updateDriver, isPending: false }),
   useUpdateOperator: () => ({ mutateAsync: mocks.updateOperator, isPending: false }),
@@ -53,7 +52,7 @@ vi.mock("@/hooks/use-entity-edit-record", async () => {
 });
 vi.mock("@/components/ui/toast", () => ({ useToast: () => ({ error: vi.fn() }) }));
 
-import { FleetEditDialog, isFleetKind } from "./fleet-edit-dialog";
+import { EntityEditDialog } from "./entity-edit-dialog";
 
 const vehicle: Vehicle = {
   id: "8f6c2c3e-0d7a-4c1b-9a51-2f3f6d1e9b10",
@@ -125,7 +124,7 @@ async function openOn(dialog: typeof element, cached: unknown, fresh: unknown) {
 
 function vehicleDialog(onClose = vi.fn()) {
   return function renderVehicleDialog(isOpen: boolean) {
-    return <FleetEditDialog kind="vehicle" entityId={vehicle.id} isOpen={isOpen} onClose={onClose} />;
+    return <EntityEditDialog entityType="vehicle" entityId={vehicle.id} isOpen={isOpen} onClose={onClose} />;
   };
 }
 
@@ -147,13 +146,7 @@ afterEach(async () => {
   if (tree) await act(async () => tree.unmount());
 });
 
-describe("isFleetKind", () => {
-  it("matches only vehicles, drivers and operators", () => {
-    expect(["vehicle", "driver", "operator", "supplier"].map(isFleetKind)).toEqual([true, true, true, false]);
-  });
-});
-
-describe("FleetEditDialog", () => {
+describe("EntityEditDialog", () => {
   it("opens the vehicle in the quick-add dialog and saves an update with the loaded version", async () => {
     const onClose = vi.fn();
     await openOn(vehicleDialog(onClose), undefined, vehicle);
@@ -209,7 +202,7 @@ describe("FleetEditDialog", () => {
     const outerSubmit = vi.fn();
     await openOn((isOpen) => (
       <form onSubmit={outerSubmit}>
-        <FleetEditDialog kind="vehicle" entityId={vehicle.id} isOpen={isOpen} onClose={vi.fn()} />
+        <EntityEditDialog entityType="vehicle" entityId={vehicle.id} isOpen={isOpen} onClose={vi.fn()} />
       </form>
     ), undefined, vehicle);
     const wrapper = tree.root.findAll((node) => node.type === "div" && typeof node.props.onSubmit === "function")[0];
@@ -265,7 +258,7 @@ describe("FleetEditDialog", () => {
 
   it("edits an operator from the fresh read, not a cached row", async () => {
     await openOn(
-      (isOpen) => <FleetEditDialog kind="operator" entityId={operator.id} isOpen={isOpen} onClose={vi.fn()} />,
+      (isOpen) => <EntityEditDialog entityType="operator" entityId={operator.id} isOpen={isOpen} onClose={vi.fn()} />,
       { ...operator, credentials: "Old credentials" },
       operator,
     );
@@ -285,7 +278,7 @@ describe("FleetEditDialog", () => {
     const close = vi.fn();
     mocks.updateDriver.mockResolvedValue(driver);
     await openOn(
-      (isOpen) => <FleetEditDialog kind="driver" entityId={driver.id} isOpen={isOpen} onClose={close} />,
+      (isOpen) => <EntityEditDialog entityType="driver" entityId={driver.id} isOpen={isOpen} onClose={close} />,
       undefined,
       driver,
     );
@@ -300,7 +293,7 @@ describe("FleetEditDialog", () => {
   it("shows a retry while the record cannot be loaded", async () => {
     mocks.record = { data: undefined, dataUpdatedAt: 0, isError: true, refetch: vi.fn() };
     await act(async () => {
-      tree = create(<FleetEditDialog kind="driver" entityId="driver-1" isOpen onClose={vi.fn()} />);
+      tree = create(<EntityEditDialog entityType="driver" entityId="driver-1" isOpen onClose={vi.fn()} />);
     });
     expect(text(tree.root)).toContain("The driver could not be loaded. Try again.");
     expect(tree.root.findAllByType("form")).toHaveLength(0);

@@ -7,7 +7,6 @@ import { patchArrayListCacheByExactKeyWithSavedRow } from "./list-cache-utils";
 import type { FeedstockType } from "@/db/schema";
 import { invalidateEntityTypeQueries } from "./entity-query-keys";
 import {
-  getFeedstockTypeByIdFn,
   archiveFeedstockTypeFn,
   createFeedstockTypeFn,
   deleteFeedstockTypeFn,
@@ -136,17 +135,5 @@ export function useImportIsometricFeedstockType() {
       return result.data;
     },
     onSuccess: invalidate,
-  });
-}
-
-export function useFeedstockType(id: string, enabled = true) {
-  return useQuery({
-    queryKey: feedstockTypeKeys.detail(id),
-    queryFn: async () => {
-      const result = await getFeedstockTypeByIdFn(id);
-      if (!result.success) throwActionError(result);
-      return result.data;
-    },
-    enabled: enabled && !!id,
   });
 }

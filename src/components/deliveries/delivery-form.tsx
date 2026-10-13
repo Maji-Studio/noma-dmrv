@@ -324,7 +324,8 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
           placeholder="Select order..."
           required
           showRemainingDryMass={false}
-          disabled={isSubmitting || isEditMode || !formFacilityId}
+          disabled={isSubmitting || !formFacilityId}
+          selectionLocked={isEditMode}
           filterBy={formFacilityId ? { facilityId: formFacilityId } : undefined}
           emptyHint={{
             message:

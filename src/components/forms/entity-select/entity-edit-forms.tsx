@@ -1,5 +1,7 @@
 "use client";
 
+import type { ReactNode } from "react";
+import type { ModalWidth } from "@/components/ui/modal";
 import { useOpenSnapshot } from "@/hooks/use-open-snapshot";
 import { usePickerEditSubmit } from "@/hooks/use-picker-edit-submit";
 import type { EntityEditRecords } from "@/hooks/use-entity-edit-record";
@@ -29,110 +31,88 @@ interface EditProps<K extends keyof EntityEditRecords> {
   onClose: () => void;
 }
 
-export function CustomerEditFormDialog({ record: incoming, isOpen, onClose }: EditProps<"customer">) {
+interface PickerEditFormDialogProps<R extends { id: string }, D> {
+  record: R;
+  isOpen: boolean;
+  onClose: () => void;
+  save: (data: D, record: R) => Promise<unknown>;
+  isPending: boolean;
+  title: string;
+  testId: string;
+  width?: ModalWidth;
+  renderForm: (record: R, props: {
+    key: string;
+    onSubmit: (data: D) => Promise<void>;
+    onCancel: () => void;
+    isSubmitting: boolean;
+    errorMessage?: string;
+    submitLabel: string;
+  }) => ReactNode;
+}
+
+function PickerEditFormDialog<R extends { id: string }, D>({
+  record: incoming, isOpen, onClose, save, isPending, title, testId, width, renderForm,
+}: PickerEditFormDialogProps<R, D>) {
   const { snapshot, sessionKey } = useOpenSnapshot(isOpen, incoming);
   const record = snapshot ?? incoming;
+  const { error, handleSubmit, resetError } = usePickerEditSubmit<D>(
+    (data) => save(data, record), onClose,
+  );
+  return (
+    <QuickAddDialogShell isOpen={isOpen} onClose={onClose} onOpen={resetError}
+      title={title} testId={testId} dismissible={!isPending} width={width}>
+      {renderForm(record, {
+        key: sessionKey, onSubmit: handleSubmit, onCancel: onClose,
+        isSubmitting: isPending, errorMessage: error, submitLabel: "Save changes",
+      })}
+    </QuickAddDialogShell>
+  );
+}
+
+export function CustomerEditFormDialog(props: EditProps<"customer">) {
   const update = useUpdateCustomer();
-  const { error, handleSubmit, resetError } = usePickerEditSubmit<CustomerFormData>(
-    (data) => update.mutateAsync({ ...data, customerId: record.id, expectedVersion: record.version }),
-    onClose,
-  );
-  return (
-    <QuickAddDialogShell isOpen={isOpen} onClose={onClose} onOpen={resetError} title="Edit customer"
-      testId="customer-edit-dialog" dismissible={!update.isPending}>
-      <CustomerForm key={sessionKey} customer={record} customerId={record.id}
-        onSubmit={handleSubmit} onCancel={onClose} isSubmitting={update.isPending}
-        errorMessage={error} submitLabel="Save changes" />
-    </QuickAddDialogShell>
-  );
+  return <PickerEditFormDialog {...props} title="Edit customer" testId="customer-edit-dialog"
+    isPending={update.isPending}
+    save={(data: CustomerFormData, record) => update.mutateAsync({ ...data, customerId: record.id, expectedVersion: record.version })}
+    renderForm={(record, { key, ...formProps }) => <CustomerForm key={key} {...formProps} customer={record} customerId={record.id} />} />;
 }
 
-export function ReactorEditFormDialog({ record: incoming, isOpen, onClose }: EditProps<"reactor">) {
-  const { snapshot, sessionKey } = useOpenSnapshot(isOpen, incoming);
-  const record = snapshot ?? incoming;
+export function ReactorEditFormDialog(props: EditProps<"reactor">) {
   const update = useUpdateReactor();
-  const { error, handleSubmit, resetError } = usePickerEditSubmit<CreateReactorData>(
-    (data) => update.mutateAsync({ ...data, reactorId: record.id, expectedVersion: record.version }),
-    onClose,
-  );
-  return (
-    <QuickAddDialogShell isOpen={isOpen} onClose={onClose} onOpen={resetError} title="Edit reactor"
-      testId="reactor-edit-dialog" dismissible={!update.isPending}>
-      <ReactorForm key={sessionKey} reactor={record}
-        onSubmit={handleSubmit} onCancel={onClose} isSubmitting={update.isPending}
-        errorMessage={error} submitLabel="Save changes" />
-    </QuickAddDialogShell>
-  );
+  return <PickerEditFormDialog {...props} title="Edit reactor" testId="reactor-edit-dialog"
+    isPending={update.isPending}
+    save={(data: CreateReactorData, record) => update.mutateAsync({ ...data, reactorId: record.id, expectedVersion: record.version })}
+    renderForm={(record, { key, ...formProps }) => <ReactorForm key={key} {...formProps} reactor={record} />} />;
 }
 
-export function OrderEditFormDialog({ record: incoming, isOpen, onClose }: EditProps<"order">) {
-  const { snapshot, sessionKey } = useOpenSnapshot(isOpen, incoming);
-  const record = snapshot ?? incoming;
+export function OrderEditFormDialog(props: EditProps<"order">) {
   const update = useUpdateOrder();
-  const { error, handleSubmit, resetError } = usePickerEditSubmit<OrderFormData>(
-    (data) => update.mutateAsync({ ...data, orderId: record.id, expectedVersion: record.version }),
-    onClose,
-  );
-  return (
-    <QuickAddDialogShell isOpen={isOpen} onClose={onClose} onOpen={resetError} title="Edit order"
-      testId="order-edit-dialog" dismissible={!update.isPending}>
-      <OrderForm key={sessionKey} order={record}
-        onSubmit={handleSubmit} onCancel={onClose} isSubmitting={update.isPending}
-        errorMessage={error} submitLabel="Save changes" />
-    </QuickAddDialogShell>
-  );
+  return <PickerEditFormDialog {...props} title="Edit order" testId="order-edit-dialog"
+    isPending={update.isPending}
+    save={(data: OrderFormData, record) => update.mutateAsync({ ...data, orderId: record.id, expectedVersion: record.version })}
+    renderForm={(record, { key, ...formProps }) => <OrderForm key={key} {...formProps} order={record} />} />;
 }
 
-export function SupplierEditFormDialog({ record: incoming, isOpen, onClose }: EditProps<"supplier">) {
-  const { snapshot, sessionKey } = useOpenSnapshot(isOpen, incoming);
-  const record = snapshot ?? incoming;
+export function SupplierEditFormDialog(props: EditProps<"supplier">) {
   const update = useUpdateSupplier();
-  const { error, handleSubmit, resetError } = usePickerEditSubmit<SupplierFormData>(
-    (data) => update.mutateAsync({ ...data, supplierId: record.id, expectedVersion: record.version }),
-    onClose,
-  );
-  return (
-    <QuickAddDialogShell isOpen={isOpen} onClose={onClose} onOpen={resetError} title="Edit supplier"
-      testId="supplier-edit-dialog" dismissible={!update.isPending}>
-      <SupplierForm key={sessionKey} supplier={record} supplierId={record.id}
-        onSubmit={handleSubmit} onCancel={onClose} isSubmitting={update.isPending}
-        errorMessage={error} submitLabel="Save changes" />
-    </QuickAddDialogShell>
-  );
+  return <PickerEditFormDialog {...props} title="Edit supplier" testId="supplier-edit-dialog"
+    isPending={update.isPending}
+    save={(data: SupplierFormData, record) => update.mutateAsync({ ...data, supplierId: record.id, expectedVersion: record.version })}
+    renderForm={(record, { key, ...formProps }) => <SupplierForm key={key} {...formProps} supplier={record} supplierId={record.id} />} />;
 }
 
-export function FormulationEditFormDialog({ record: incoming, isOpen, onClose }: EditProps<"formulation">) {
-  const { snapshot, sessionKey } = useOpenSnapshot(isOpen, incoming);
-  const record = snapshot ?? incoming;
+export function FormulationEditFormDialog(props: EditProps<"formulation">) {
   const update = useUpdateFormulation();
-  const { error, handleSubmit, resetError } = usePickerEditSubmit<FormulationFormData>(
-    (data) => update.mutateAsync({ ...data, formulationId: record.id, expectedVersion: record.version }),
-    onClose,
-  );
-  return (
-    <QuickAddDialogShell isOpen={isOpen} onClose={onClose} onOpen={resetError} title="Edit formulation"
-      testId="formulation-edit-dialog" dismissible={!update.isPending} width="lg">
-      <FormulationForm key={sessionKey} formulation={record}
-        onSubmit={handleSubmit} onCancel={onClose} isSubmitting={update.isPending}
-        errorMessage={error} submitLabel="Save changes" />
-    </QuickAddDialogShell>
-  );
+  return <PickerEditFormDialog {...props} title="Edit formulation" testId="formulation-edit-dialog" width="lg"
+    isPending={update.isPending}
+    save={(data: FormulationFormData, record) => update.mutateAsync({ ...data, formulationId: record.id, expectedVersion: record.version })}
+    renderForm={(record, { key, ...formProps }) => <FormulationForm key={key} {...formProps} formulation={record} />} />;
 }
 
-export function FeedstockTypeEditFormDialog({ record: incoming, isOpen, onClose }: EditProps<"feedstockType">) {
-  const { snapshot, sessionKey } = useOpenSnapshot(isOpen, incoming);
-  const record = snapshot ?? incoming;
+export function FeedstockTypeEditFormDialog(props: EditProps<"feedstockType">) {
   const update = useUpdateFeedstockType();
-  const { error, handleSubmit, resetError } = usePickerEditSubmit<FeedstockTypeFormData>(
-    (data) => update.mutateAsync({ ...data, feedstockTypeId: record.id, expectedVersion: record.version }),
-    onClose,
-  );
-  return (
-    <QuickAddDialogShell isOpen={isOpen} onClose={onClose} onOpen={resetError} title="Edit feedstock type"
-      testId="feedstock-type-edit-dialog" dismissible={!update.isPending}>
-      <FeedstockTypeForm key={sessionKey} feedstockType={record} stickyActions={false}
-        onSubmit={handleSubmit} onCancel={onClose} isSubmitting={update.isPending}
-        errorMessage={error} submitLabel="Save changes" />
-    </QuickAddDialogShell>
-  );
+  return <PickerEditFormDialog {...props} title="Edit feedstock type" testId="feedstock-type-edit-dialog"
+    isPending={update.isPending}
+    save={(data: FeedstockTypeFormData, record) => update.mutateAsync({ ...data, feedstockTypeId: record.id, expectedVersion: record.version })}
+    renderForm={(record, { key, ...formProps }) => <FeedstockTypeForm key={key} {...formProps} feedstockType={record} stickyActions={false} guardDialogCancel />} />;
 }

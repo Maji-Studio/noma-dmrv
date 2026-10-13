@@ -531,7 +531,8 @@ export function BiocharProductForm({
                 allowEdit
                 value={field.value || ""}
                 onChange={field.onChange}
-                disabled={isSubmitting || isEditMode}
+                disabled={isSubmitting}
+                selectionLocked={isEditMode}
                 error={!!fieldState.error}
               />
             )}

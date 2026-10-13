@@ -273,7 +273,8 @@ export function StorageLocationForm({
             entityType="feedstockType"
             allowEdit
             placeholder="Select feedstock type..."
-            disabled={isSubmitting || lockFeedstockType}
+            disabled={isSubmitting}
+            selectionLocked={lockFeedstockType}
             required
             helperText={feedstockTypeHelperText}
             allowCreate={!lockFeedstockType}

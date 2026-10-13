@@ -6,8 +6,12 @@ import { getOrderByIdFn } from "./orders";
 
 const mocks = vi.hoisted(() => ({ context: vi.fn(), read: vi.fn() }));
 vi.mock("@/db", () => ({ db: {} }));
-vi.mock("@/lib/auth/server", () => ({ requireOrgContext: mocks.context }));
-vi.mock("@/data-access/feedstock-types", () => ({ getFeedstockTypeById: mocks.read }));
+vi.mock("@/lib/auth/server", async (importOriginal) => ({
+  ...await importOriginal<typeof import("@/lib/auth/server")>(), requireOrgContext: mocks.context,
+}));
+vi.mock("@/data-access/feedstock-types", async (importOriginal) => ({
+  ...await importOriginal<typeof import("@/data-access/feedstock-types")>(), getFeedstockTypeById: mocks.read,
+}));
 vi.mock("@/data-access/reactors", () => ({ getReactorById: mocks.read }));
 vi.mock("@/data-access/orders", () => ({ getOrderById: mocks.read }));
 vi.mock("@/lib/log", () => ({ logger: { error: vi.fn(), child: () => ({ error: vi.fn() }) }, sanitizeErrorMessage: () => "error" }));
@@ -24,7 +28,8 @@ it.each([
   { orgRole: "member", isPlatformAdmin: false, allowed: false },
   { orgRole: "admin", isPlatformAdmin: false, allowed: true },
   { orgRole: "owner", isPlatformAdmin: false, allowed: true },
-  { orgRole: "member", isPlatformAdmin: true, allowed: true },
+  { orgRole: null, isPlatformAdmin: true, allowed: true },
+  { orgRole: null, isPlatformAdmin: false, allowed: false },
 ])("resolves management permission from the session: %s", async ({ orgRole, isPlatformAdmin, allowed }) => {
   mocks.context.mockResolvedValue({ ...ctx, orgRole, isPlatformAdmin });
   expect(await canManageFeedstockTypesFn()).toEqual({ success: true, data: allowed });

@@ -3,6 +3,7 @@
 import { withAutoCode } from "@/data-access/code-generator";
 import { hasCertifierCredentials } from "@/data-access/certifier-credentials";
 import {
+  FEEDSTOCK_TYPE_MANAGE_ROLE,
   archiveFeedstockType,
   createFeedstockType,
   deleteFeedstockType,
@@ -12,7 +13,7 @@ import {
   updateFeedstockType,
 } from "@/data-access/feedstock-types";
 import { feedstockTypes, type FeedstockType } from "@/db/schema";
-import { requireOrgRole } from "@/lib/auth/server";
+import { hasOrgRole, requireOrgRole } from "@/lib/auth/server";
 import { SafeError } from "@/lib/errors";
 import {
   getIsometricClientForOrg,
@@ -92,7 +93,7 @@ export async function importIsometricFeedstockTypeFn(
   input: unknown,
 ): Promise<ActionResult<FeedstockType>> {
   return withAction(async (ctx) => {
-    requireOrgRole(ctx, "admin");
+    requireOrgRole(ctx, FEEDSTOCK_TYPE_MANAGE_ROLE);
     const data = importIsometricFeedstockTypeSchema.parse(input);
     if (!(await hasCertifierCredentials(ctx, "isometric"))) {
       throw new SafeError(
@@ -124,5 +125,5 @@ export async function getFeedstockTypeByIdFn(id: string) {
 
 /** UI affordance only; writes still enforce the role in data access. */
 export async function canManageFeedstockTypesFn() {
-  return withAction(async (ctx) => ctx.isPlatformAdmin || ctx.orgRole === "owner" || ctx.orgRole === "admin");
+  return withAction(async (ctx) => hasOrgRole(ctx, FEEDSTOCK_TYPE_MANAGE_ROLE));
 }
