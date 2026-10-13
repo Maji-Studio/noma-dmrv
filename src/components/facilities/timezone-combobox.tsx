@@ -142,7 +142,7 @@ export function TimezoneCombobox({
           className="z-[var(--z-layer-popover)] w-[var(--anchor-width)]"
         >
           <Combobox.Popup className="w-full bg-[var(--paper)] [border:var(--hair)] outline-none">
-            <Combobox.Empty className="px-12 py-10 body-small text-[var(--color-text-tertiary)]">
+            <Combobox.Empty className="px-12 py-10 empty:hidden body-small text-[var(--color-text-tertiary)]">
               No timezones found
             </Combobox.Empty>
             <Combobox.List className="max-h-320 overflow-y-auto py-4">
