@@ -14,16 +14,29 @@ import {
 describe("withClearedMeasurements", () => {
   it("sends an emptied hydrogen input as null so the update clears it", () => {
     // numericValue("") leaves undefined in form state; undefined means "keep" on update.
-    const submitted = withClearedMeasurements({ totalCarbonPercent: 80, organicCarbonPercent: 75, totalHydrogenPercent: undefined });
+    const submitted = withClearedMeasurements({ totalCarbonPercent: 80, organicCarbonPercent: 75, totalHydrogenPercent: undefined }, { totalHydrogenPercent: true });
     expect(submitted.totalHydrogenPercent).toBeNull();
   });
 
-  it("clears every optional measurement and keeps entered values and other fields", () => {
-    const submitted = withClearedMeasurements({ totalCarbonPercent: 80, organicCarbonPercent: 75, totalOxygenPercent: 4.2, labName: "" });
+  it("clears every optional measurement the operator emptied and keeps entered values and other fields", () => {
+    const changed = Object.fromEntries(SAMPLE_CLEARABLE_NUMBER_FIELDS.map((field) => [field, true]));
+    const submitted = withClearedMeasurements({ totalCarbonPercent: 80, organicCarbonPercent: 75, totalOxygenPercent: 4.2, labName: "" }, changed);
     expect(submitted).toMatchObject({ totalCarbonPercent: 80, organicCarbonPercent: 75, totalOxygenPercent: 4.2, labName: "" });
     for (const field of SAMPLE_CLEARABLE_NUMBER_FIELDS.filter((name) => name !== "totalOxygenPercent")) {
       expect(submitted).toHaveProperty(field, null);
     }
+  });
+
+  it("keeps stored values the form blanked by itself, such as hidden 1,000-year evidence and nutrients", () => {
+    // A 200-year batch hides R0 and TGA, and nutrients are hidden while claims are off;
+    // the form sets them undefined without the operator touching them.
+    const submitted = withClearedMeasurements(
+      { totalCarbonPercent: 80, organicCarbonPercent: 75, randomReflectanceR0Percent: undefined, residualCarbonPercent: undefined, phosphorusPercent: undefined, labName: "Lab" },
+      { labName: true },
+    );
+    expect(submitted.randomReflectanceR0Percent).toBeUndefined();
+    expect(submitted.residualCarbonPercent).toBeUndefined();
+    expect(submitted.phosphorusPercent).toBeUndefined();
   });
 
   it("never clears the required carbon figures", () => {
@@ -71,7 +84,7 @@ describe("lab O/C_org on the edit form (oxygen cleared)", () => {
 
   it("clearing oxygen without a replacement ratio clears O/C_org, as the same PATCH through the operation does", () => {
     const entered = { totalCarbonPercent: 80, organicCarbonPercent: 75, totalHydrogenPercent: 1.5, totalOxygenPercent: undefined, oToCOrgRatio: labOToCOrgRatioDefault(saved) };
-    const submitted = prepareSampleSubmission(entered);
+    const submitted = prepareSampleSubmission(entered, { totalOxygenPercent: true });
     expect(submitted).toMatchObject({ totalOxygenPercent: null, oToCOrgRatio: null });
 
     const locked = { ...saved, totalCarbonPercent: 80, inorganicCarbonPercent: null, moistureContentPercent: null, sampleCode: "SAM-26-001",
@@ -84,6 +97,6 @@ describe("lab O/C_org on the edit form (oxygen cleared)", () => {
   });
 
   it("keeps a lab O/C_org the operator enters on a sample without oxygen", () => {
-    expect(prepareSampleSubmission({ totalCarbonPercent: 80, organicCarbonPercent: 75, totalHydrogenPercent: undefined, totalOxygenPercent: undefined, oToCOrgRatio: 0.12 }).oToCOrgRatio).toBe(0.12);
+    expect(prepareSampleSubmission({ totalCarbonPercent: 80, organicCarbonPercent: 75, totalHydrogenPercent: undefined, totalOxygenPercent: undefined, oToCOrgRatio: 0.12 }, { oToCOrgRatio: true }).oToCOrgRatio).toBe(0.12);
   });
 });

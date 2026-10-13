@@ -173,7 +173,7 @@ export function SampleForm({
     watch,
     setValue,
     setError,
-    formState: { errors },
+    formState: { errors, dirtyFields },
   } = useForm({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     resolver: zodResolver(sampleFormSchema) as any,
@@ -322,7 +322,7 @@ export function SampleForm({
     // otherwise only surface as a generic server error.
     let submission: ReturnType<typeof prepareSampleSubmission<typeof entered>>;
     try {
-      submission = prepareSampleSubmission(entered);
+      submission = prepareSampleSubmission(entered, dirtyFields);
     } catch (error) {
       if (!(error instanceof SampleRatioCapError)) throw error;
       setError(error.ratio, { type: "max", message: Number.isFinite(error.value) ? RATIO_MAX_MESSAGE : error.message });

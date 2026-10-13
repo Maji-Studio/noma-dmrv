@@ -1,6 +1,6 @@
 /**
  * The Sample form keeps an emptied number input as `undefined`, which the
- * partial-update contract reads as "keep the stored value". On submit every
+ * partial-update contract reads as "keep the stored value". On submit an
  * optional measurement the operator emptied becomes `null`, so clearing
  * hydrogen clears it (and with it H/C_org) instead of silently restoring it.
  * Total and organic carbon are required and never cleared.
@@ -17,10 +17,18 @@ export const SAMPLE_CLEARABLE_NUMBER_FIELDS = [
   "phosphorusPercent", "potassiumPercent", "magnesiumPercent", "calciumPercent", "ironPercent",
 ] as const;
 
-export function withClearedMeasurements<T extends object>(data: T): T {
+/** The fields the operator changed, as react-hook-form's `dirtyFields` reports them. */
+export type ChangedFields = Partial<Record<string, unknown>>;
+
+/**
+ * Only a field the operator changed and left empty becomes `null`. Fields the
+ * form blanks by itself (1,000-year evidence hidden on a 200-year batch,
+ * nutrients while claims are off) stay `undefined`, so the stored values are kept.
+ */
+export function withClearedMeasurements<T extends object>(data: T, changed: ChangedFields): T {
   const cleared = { ...data } as Record<string, unknown>;
   for (const field of SAMPLE_CLEARABLE_NUMBER_FIELDS) {
-    if (cleared[field] === undefined) cleared[field] = null;
+    if (cleared[field] === undefined && changed[field]) cleared[field] = null;
   }
   return cleared as T;
 }
@@ -72,8 +80,8 @@ export function labOToCOrgRatioDefault(
  * as the server will store them, from the helper the server shares (round 7
  * Q50). Throws `SampleRatioCapError` for a calculated ratio the column cannot hold.
  */
-export function prepareSampleSubmission<T extends SampleRatioInputs>(entered: T): T & { hToCOrgRatio: number | null; oToCOrgRatio: number | null } {
-  const data = withClearedMeasurements(entered);
+export function prepareSampleSubmission<T extends SampleRatioInputs>(entered: T, changed: ChangedFields): T & { hToCOrgRatio: number | null; oToCOrgRatio: number | null } {
+  const data = withClearedMeasurements(entered, changed);
   const ratios = deriveSampleRatios(data);
   // null clears a stored ratio on edit, as the partial-update contract reads it.
   return { ...data, hToCOrgRatio: ratios.hToCOrgRatio, oToCOrgRatio: ratios.oToCOrgRatio };
