@@ -491,6 +491,12 @@ restore for free.
 - Width tokens: `sm` 400px (confirmations) · `md` 560px (default: forms,
   wizards) · `lg` 720px (dense forms) · `xl` 880px (rich content). All are
   full-width below `sm`.
+- **`FormDialog`** (`src/components/ui/form-dialog.tsx`) wraps `Modal` for
+  dismissible forms. It shares `DiscardChangesDialog` with `EntitySideSheet`.
+  Forms pass their RHF `control` and submitting state to `FormActions`; each
+  form reports separately, so saving keys cannot clear an unlinked project
+  draft in the same registry dialog. Cancel, Escape, backdrop and the close
+  button all warn before discarding and hold while a save is pending.
 - **`dismissOnClickOutside={false}`** for multi-step workflows where a stray
   backdrop click would discard in-progress work. Close button and ESC stay live.
 - **`dismissible={false}`** only while an irreversible request is active. It
@@ -566,7 +572,7 @@ product, credit batch, sample, members, invitations). They are decoration
   keep Phosphor until a drawing exists. The filtered branch of the same empty state keeps
   its Phosphor icon, so the `icon` prop switches with the title. Error states,
   filtered states and nested `padding="sm"` empties never get a drawing.
-- Onboarding: the welcome step and the setup-in-progress state.
+- Onboarding: the setup-in-progress state. The dashboard guide carries welcome copy in its header.
 
 Everything else (buttons, table rows, KPI cards, nav) stays on Phosphor.
 
@@ -581,8 +587,7 @@ The stock mode art (`stock-mode-art.tsx`) is the one older exception, wider and
 with tinted grains.
 
 **Motion.** Hovering the host plays a short loop: the choice card's label, or
-any element with the `illo-host` class. `EmptyState` and the onboarding welcome
-step are hosts. Keyboard focus inside the host plays it too, and a disabled card
+any element with the `illo-host` class. `EmptyState` is a host. Keyboard focus inside the host plays it too, and a disabled card
 stays still. Wrap the moving part in `<Motion kind="…">`. The kinds are `bob`,
 `rise`, `flicker`, `sway`, `pop`, `drop`, `lift`, `draw` (give the path
 `pathLength={1}`) and `stamp`. The dotted ground scrolls on its own. `delay`
