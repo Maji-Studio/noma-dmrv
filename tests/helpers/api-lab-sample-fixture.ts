@@ -21,18 +21,30 @@ export interface ApiLabFixture extends LabSampleFixture {
   creditBatchesOnlyKey: string;
   /** Write and delete scopes alone: they must not grant any read. */
   writeOnlyKey: string;
+  /** `lab-samples:write` alone: it must not delete or read. */
+  writeKey: string;
+  writeCredentialId: string;
+  /** `lab-samples:delete` alone. */
+  deleteKey: string;
   otherScopeKey: string;
 }
 
+async function issueCredential(f: LabSampleFixture, name: string, scopes: readonly ApiScope[]) {
+  return createApiKey(f.ctx, { name, scopes: [...scopes], expiresIn: API_KEY_DEFAULT_EXPIRY_SECONDS });
+}
 async function issueKey(f: LabSampleFixture, name: string, scopes: readonly ApiScope[]) {
-  return (await createApiKey(f.ctx, { name, scopes: [...scopes], expiresIn: API_KEY_DEFAULT_EXPIRY_SECONDS })).key;
+  return (await issueCredential(f, name, scopes)).key;
 }
 
 export async function createApiLabFixture(options: LabSampleFixtureOptions = {}): Promise<ApiLabFixture> {
   const f = await createLabSampleFixture(options);
   await db.insert(members).values({ id: randomUUID(), organizationId: f.ctx.organizationId, userId: f.ctx.userId, role: "owner" });
+  const writer = await issueCredential(f, "Lab sample writer", ["lab-samples:write"]);
   return {
     ...f,
+    writeKey: writer.key,
+    writeCredentialId: writer.id,
+    deleteKey: await issueKey(f, "Lab sample deleter", ["lab-samples:delete"]),
     key: await issueKey(f, "Lab reader", READ_SCOPES),
     labSamplesOnlyKey: await issueKey(f, "Lab samples only", ["lab-samples:read"]),
     creditBatchesOnlyKey: await issueKey(f, "Credit batches only", ["credit-batches:read"]),

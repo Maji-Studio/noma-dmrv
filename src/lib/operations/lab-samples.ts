@@ -8,8 +8,11 @@ import {
 import { processPendingStorageObjectDeletions } from "@/data-access/storage-object-deletions";
 import { samples } from "@/db/schema";
 import { withSampleErrors } from "@/lib/sample-domain-errors";
-import { deleteLabSampleInput, recordLabSampleInput, updateLabSampleInput } from "@/schemas/lab-sample-input";
-import type { Operation } from "./runner";
+import {
+  deleteLabSampleInput, recordLabSampleInput, updateLabSampleInput,
+  type RecordLabSampleInput, type UpdateLabSampleInput,
+} from "@/schemas/lab-sample-input";
+import type { Operation, OperationEffect } from "./runner";
 
 /**
  * Lab Sample writes (Phase 5a): one replicate's lab results on one credit
@@ -31,14 +34,29 @@ function changedFields(input: object): string[] {
   return Object.entries(input).filter(([key, value]) => value !== undefined && !NOT_CHANGES.has(key)).map(([key]) => key).sort();
 }
 
+interface SavedSample { id: string; version: number }
+
+/** Audit effect of a create, shared with the API adapter that publishes the saved row instead. */
+export function describeRecordedLabSample(input: RecordLabSampleInput, sample: SavedSample): OperationEffect {
+  return {
+    outcome: "created", entityType: ENTITY_TYPE, entityIds: [sample.id],
+    versionBefore: null, versionAfter: sample.version, changedFields: changedFields(input),
+  };
+}
+
+/** Audit effect of an update, shared with the API adapter. */
+export function describeUpdatedLabSample(input: UpdateLabSampleInput, sample: SavedSample): OperationEffect {
+  return {
+    outcome: "updated", entityType: ENTITY_TYPE, entityIds: [sample.id],
+    versionBefore: input.expectedVersion, versionAfter: sample.version, changedFields: changedFields(input),
+  };
+}
+
 export const recordLabSample: Operation<typeof recordLabSampleInput, SampleWriteResult> = {
   id: "record_lab_sample",
   input: recordLabSampleInput,
   supportsDryRun: true,
-  describe: (input, output) => ({
-    outcome: "created", entityType: ENTITY_TYPE, entityIds: [output.sample.id],
-    versionBefore: null, versionAfter: output.sample.version, changedFields: changedFields(input),
-  }),
+  describe: (input, output) => describeRecordedLabSample(input, output.sample),
   // Each code attempt runs the whole create, locks included, in its own savepoint.
   execute: ({ ctx, tx }, input) => withSampleErrors(() => withAutoCodes(
     ctx, tx, SAMPLE_CODE_PREFIX, samples, samples.sampleCode, AUTO_CODE_COUNT,
@@ -51,10 +69,7 @@ export const updateLabSample: Operation<typeof updateLabSampleInput, SampleWrite
   id: "update_lab_sample",
   input: updateLabSampleInput,
   supportsDryRun: true,
-  describe: (input, output) => ({
-    outcome: "updated", entityType: ENTITY_TYPE, entityIds: [output.sample.id],
-    versionBefore: input.expectedVersion, versionAfter: output.sample.version, changedFields: changedFields(input),
-  }),
+  describe: (input, output) => describeUpdatedLabSample(input, output.sample),
   execute: ({ ctx, tx }, { labSampleId, code, ...changes }) => withSampleErrors(() => withUniqueCodeGuard(
     ctx, samples, samples.sampleCode, CODE_CONFLICT_MESSAGES.sample,
     () => updateSampleInTransaction(ctx, tx, labSampleId, { ...changes, sampleCode: code }),

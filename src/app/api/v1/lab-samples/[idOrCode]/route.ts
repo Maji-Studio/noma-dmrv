@@ -1,5 +1,6 @@
 import { apiRoute } from "@/lib/api/route";
 import { readLabSample } from "@/lib/api/lab-samples-queries";
+import { mutateLabSampleResponse } from "@/lib/api/lab-samples-mutations";
 import { labSampleEtag } from "@/lib/api/representation-etags";
 import { parseApiQuery } from "@/lib/api/query";
 import { resourceQueries } from "@/lib/api/query-schemas";
@@ -14,3 +15,7 @@ export const GET = apiRoute<Params>("api.v1.lab-samples.get", "lab-samples:read"
   headers.set("ETag", labSampleEtag(data));
   return Response.json({ data }, { headers });
 });
+export const PATCH = apiRoute<Params>("api.v1.lab-samples.update", "lab-samples:write", (request, context, { idOrCode }) =>
+  mutateLabSampleResponse(request, context, idOrCode, "PATCH"));
+export const DELETE = apiRoute<Params>("api.v1.lab-samples.delete", "lab-samples:delete", (request, context, { idOrCode }) =>
+  mutateLabSampleResponse(request, context, idOrCode, "DELETE"));

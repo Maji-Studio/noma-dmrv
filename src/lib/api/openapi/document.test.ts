@@ -202,7 +202,7 @@ it("types current as a feedstock only on feedstock precondition responses", () =
     expect.objectContaining({ properties: { current: expect.objectContaining({ $ref: "#/components/schemas/feedstock" }) }, required: ["current"] }),
   ]);
   for (const [name, response] of Object.entries(document.components.responses)) {
-    if (name === "FeedstockProblem412" || name === "ProductionRunProblem412" || name === "BiocharProductProblem412") continue;
+    if (name === "FeedstockProblem412" || name === "ProductionRunProblem412" || name === "BiocharProductProblem412" || name === "LabSampleProblem412") continue;
     expect(response.content["application/problem+json"].schema).toEqual({ $ref: "#/components/schemas/Problem" });
   }
 });
@@ -304,7 +304,7 @@ it("publishes the product and movement writes with one scope, required keys and 
   expect(document.components.schemas.Problem.properties).toHaveProperty("preview");
 });
 
-it("publishes lab sample and credit batch reads with their own scopes and no write operations yet", () => {
+it("publishes lab sample and credit batch reads with their own scopes, and lab sample writes with theirs", () => {
   expect(document.paths["/lab-samples"].get).toMatchObject({ operationId: "find_lab_samples", "x-required-scope": "lab-samples:read" });
   expect(document.paths["/lab-samples/{idOrCode}"].get).toMatchObject({ operationId: "get_lab_sample", "x-required-scope": "lab-samples:read" });
   expect(document.paths["/credit-batches"].get).toMatchObject({ operationId: "find_credit_batches", "x-required-scope": "credit-batches:read" });
@@ -315,4 +315,15 @@ it("publishes lab sample and credit batch reads with their own scopes and no wri
   expect(Object.keys(document.components.schemas.credit_batch.properties as object).sort()).toEqual(
     ["archivedAt", "code", "createdAt", "endDate", "facilityId", "feedstockTypeId", "id", "sampling", "startDate", "status", "updatedAt", "version"]);
   expect(document.components.schemas.facility.properties).toHaveProperty("durabilityOption");
+  expect(document.paths["/credit-batches"]).not.toHaveProperty("post");
+  expect(document.paths["/lab-samples"].post).toMatchObject({ operationId: "record_lab_sample", "x-required-scope": "lab-samples:write" });
+  expect(document.paths["/lab-samples/{idOrCode}"].patch).toMatchObject({ operationId: "update_lab_sample", "x-required-scope": "lab-samples:write" });
+  expect(document.paths["/lab-samples/{idOrCode}"].delete).toMatchObject({ operationId: "delete_lab_sample", "x-required-scope": "lab-samples:delete" });
+  expect(document.paths["/lab-samples/batch"]).toBeUndefined();
+  const patch = document.paths["/lab-samples/{idOrCode}"].patch;
+  expect(patch.responses["412"]).toEqual({ $ref: "#/components/responses/LabSampleProblem412" });
+  expect(Object.keys(patch.responses)).toContain("428");
+  const patchProperties = (patch.requestBody as { content: { "application/json": { schema: { properties: object } } } }).content["application/json"].schema.properties;
+  for (const forbidden of ["labSampleId", "expectedVersion", "hToCOrgRatio"]) expect(patchProperties).not.toHaveProperty(forbidden);
+  expect(patchProperties).toHaveProperty("creditBatchId");
 });
