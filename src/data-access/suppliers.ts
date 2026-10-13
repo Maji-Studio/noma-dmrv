@@ -777,7 +777,16 @@ export async function deleteSupplierLocation(
   expectedVersion: number
 ): Promise<void> {
   requireOrgScope(ctx);
+  const { supplierId } = await ensureSupplierLocationExists(ctx, locationId);
   return db.transaction(async (tx) => {
+    // Serialize location writers with parent deletion before locking children,
+    // matching create/update. A lock alone does not change the supplier's version.
+    const [parent] = await tx.select({ id: suppliers.id })
+      .from(suppliers)
+      .where(and(eq(suppliers.id, supplierId), eq(suppliers.organizationId, ctx.organizationId)))
+      .for("no key update");
+    if (!parent) throw new SafeError("Supplier not found");
+
     const [versioned] = await tx.select({ version: supplierLocations.version })
       .from(supplierLocations)
       .where(and(eq(supplierLocations.id, locationId), eq(supplierLocations.organizationId, ctx.organizationId)))

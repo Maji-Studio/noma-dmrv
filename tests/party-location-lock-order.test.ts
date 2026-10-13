@@ -2,8 +2,8 @@ import { and, eq, sql } from "drizzle-orm";
 import { beforeAll, describe, expect, it } from "vitest";
 import { db } from "@/db";
 import { customers, customerLocations, suppliers, supplierLocations, facilities, feedstockTypes, feedstocks } from "@/db/schema";
-import { createSupplierLocation, deleteSupplier, updateSupplierLocation } from "@/data-access/suppliers";
-import { createCustomerLocation, deleteCustomer, updateCustomerLocation } from "@/data-access/customers";
+import { createSupplierLocation, deleteSupplier, deleteSupplierLocation, updateSupplierLocation } from "@/data-access/suppliers";
+import { createCustomerLocation, deleteCustomer, deleteCustomerLocation, updateCustomerLocation } from "@/data-access/customers";
 import { SafeError } from "@/lib/errors";
 import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
 
@@ -40,6 +40,9 @@ describe.each(["supplier", "customer"] as const)("%s location parent-first locks
     const update = () => kind === "supplier"
       ? updateSupplierLocation(ctx, location.id, { expectedVersion: location.version, isDefault: true })
       : updateCustomerLocation(ctx, location.id, { expectedVersion: location.version, isDefault: true });
+    const delete_ = () => kind === "supplier"
+      ? deleteSupplierLocation(ctx, location.id, location.version)
+      : deleteCustomerLocation(ctx, location.id, location.version);
     const remove = () => kind === "supplier"
       ? deleteSupplier(ctx, parent.id, parent.version)
       : deleteCustomer(ctx, parent.id, parent.version);
@@ -55,10 +58,10 @@ describe.each(["supplier", "customer"] as const)("%s location parent-first locks
       }
       await db.delete(parents).where(and(eq(parents.id, parent.id), eq(parents.organizationId, TEST_ORG_ID)));
     };
-    return { parent, location, create, update, remove, readParent, readChildren, cleanup };
+    return { parent, location, create, update, delete: delete_, remove, readParent, readChildren, cleanup };
   }
 
-  it.each(["create", "update"] as const)("queues deletion behind a %s that is waiting for a child", async (operation) => {
+  it.each(["create", "update", "delete"] as const)("queues deletion behind a %s that is waiting for a child", async (operation) => {
     const f = await fixture();
     let write: Promise<PromiseSettledResult<unknown>[]> | undefined;
     let deletion: Promise<PromiseSettledResult<void>[]> | undefined;
@@ -89,6 +92,12 @@ describe.each(["supplier", "customer"] as const)("%s location parent-first locks
         expect(await f.readParent()).toEqual([]);
         expect(await f.readChildren()).toEqual([]);
       } else {
+        if (operation === "delete") {
+          // The writer removed the only location, so the guard no longer applies.
+          expect(outcome).toEqual({ status: "fulfilled", value: undefined });
+          expect(await f.readParent()).toEqual([]);
+          return;
+        }
         expect(outcome.status).toBe("rejected");
         if (outcome.status !== "rejected") throw new Error("Expected location guard");
         expect(outcome.reason).toBeInstanceOf(SafeError);

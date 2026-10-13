@@ -21,6 +21,12 @@ import { assertRowVersion, nextVersion } from "./row-version";
 const CUSTOMER_CONFLICT_ENTITY = "customer";
 const CUSTOMER_LOCATION_CONFLICT_ENTITY = "customerLocation";
 
+/** Customer location list order; promotion on delete uses the same order. */
+const CUSTOMER_LOCATION_ORDER = [
+  sql`${customerLocations.name} asc nulls last`,
+  asc(customerLocations.id),
+];
+
 // ============================================
 // Types
 // ============================================
@@ -294,7 +300,7 @@ export async function getCustomerLocations(
     })
     .from(customerLocations)
     .where(and(eq(customerLocations.customerId, customerId), eq(customerLocations.organizationId, ctx.organizationId)))
-    .orderBy(sql`${customerLocations.name} asc nulls last`);
+    .orderBy(...CUSTOMER_LOCATION_ORDER);
 }
 
 // ============================================
@@ -595,7 +601,20 @@ export async function deleteCustomerLocation(
   expectedVersion: number
 ): Promise<void> {
   requireOrgScope(ctx);
+  const [located] = await db
+    .select({ customerId: customerLocations.customerId })
+    .from(customerLocations)
+    .where(and(eq(customerLocations.id, locationId), eq(customerLocations.organizationId, ctx.organizationId)));
+  if (!located) throw new SafeError("Customer location not found");
+
   return db.transaction(async (tx) => {
+    // Keep parent -> child order. Locking does not bump the parent version.
+    const [parent] = await tx.select({ id: customers.id })
+      .from(customers)
+      .where(and(eq(customers.id, located.customerId), eq(customers.organizationId, ctx.organizationId)))
+      .for("no key update");
+    if (!parent) throw new SafeError("Customer not found");
+
     const [versioned] = await tx.select({ version: customerLocations.version })
       .from(customerLocations)
       .where(and(eq(customerLocations.id, locationId), eq(customerLocations.organizationId, ctx.organizationId)))
@@ -615,7 +634,7 @@ export async function deleteCustomerLocation(
         .select({ id: customerLocations.id })
         .from(customerLocations)
         .where(and(eq(customerLocations.customerId, gone.customerId), eq(customerLocations.organizationId, ctx.organizationId)))
-        .orderBy(sql`${customerLocations.name} asc nulls last`)
+        .orderBy(...CUSTOMER_LOCATION_ORDER)
         .limit(1)
         .for("update");
       if (next) {

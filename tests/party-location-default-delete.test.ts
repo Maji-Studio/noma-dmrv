@@ -20,7 +20,7 @@ describe.each(["supplier", "customer"] as const)("%s location delete keeps a def
       const first = await createSupplierLocation(ctx, { supplierId: parent.id, name: "A", country: "CH" });
       const second = await createSupplierLocation(ctx, { supplierId: parent.id, name: "B", country: "CH" });
       return {
-        first, second,
+        parentId: parent.id, first, second,
         remove: (l: { id: string; version: number }) => deleteSupplierLocation(ctx, l.id, l.version),
         read: () => db.select().from(supplierLocations)
           .where(and(eq(supplierLocations.supplierId, parent.id), eq(supplierLocations.organizationId, TEST_ORG_ID))),
@@ -36,7 +36,7 @@ describe.each(["supplier", "customer"] as const)("%s location delete keeps a def
     const first = await createCustomerLocation(ctx, { customerId: parent.id, name: "A", country: "CH", isDefault: true });
     const second = await createCustomerLocation(ctx, { customerId: parent.id, name: "B", country: "CH" });
     return {
-      first, second,
+      parentId: parent.id, first, second,
       remove: (l: { id: string; version: number }) => deleteCustomerLocation(ctx, l.id, l.version),
       read: () => db.select().from(customerLocations)
         .where(and(eq(customerLocations.customerId, parent.id), eq(customerLocations.organizationId, TEST_ORG_ID))),
@@ -68,6 +68,33 @@ describe.each(["supplier", "customer"] as const)("%s location delete keeps a def
       await f.remove(f.second);
       const rows = await f.read();
       expect(rows.map((r) => [r.id, r.isDefault])).toEqual([[f.first.id, true]]);
+    } finally {
+      await f.cleanup();
+    }
+  });
+
+  it("promotes the lowest id when the remaining candidates tie", async () => {
+    const f = await fixture();
+    try {
+      const TIED_AT = new Date("2026-01-01T00:00:00.000Z");
+      const ids = [crypto.randomUUID(), crypto.randomUUID()].sort();
+      // Insert the higher id first so insertion order cannot decide the result.
+      for (const id of [ids[1], ids[0]]) {
+        if (kind === "supplier") {
+          await db.insert(supplierLocations).values({
+            id, organizationId: TEST_ORG_ID, supplierId: f.parentId, name: "T", country: "CH", createdAt: TIED_AT,
+          });
+        } else {
+          await db.insert(customerLocations).values({
+            id, organizationId: TEST_ORG_ID, customerId: f.parentId, name: "T", country: "CH", createdAt: TIED_AT,
+          });
+        }
+      }
+      // Drop the plain second row so only tied candidates remain.
+      await f.remove(f.second);
+      await f.remove(f.first);
+      const rows = await f.read();
+      expect(rows.filter((r) => r.isDefault).map((r) => r.id)).toEqual([ids[0]]);
     } finally {
       await f.cleanup();
     }
