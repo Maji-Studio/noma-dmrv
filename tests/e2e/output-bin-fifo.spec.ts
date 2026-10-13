@@ -17,8 +17,12 @@ async function evidence(page: Page, info: TestInfo, name: string) {
 }
 
 async function openBin(page: Page, f: Fixture) {
+  // The sidebar that signals facility hydration is hidden on mobile, so hydrate at desktop width.
+  const viewport = page.viewportSize();
+  await page.setViewportSize(DRAW_ORDER_VIEWPORTS[0]);
   await page.goto(`/storage-locations?facility=${f.facility.id}`);
   await waitForFacilityHydration(page, f.facility.name);
+  if (viewport) await page.setViewportSize(viewport);
   await page.getByPlaceholder("Search by code or name…").fill(f.bin.code);
   await page.getByText(f.bin.name, { exact: true }).first().click();
   await expect(page.getByRole("dialog")).toBeVisible();
@@ -47,7 +51,7 @@ test.describe("Output-bin conserved FIFO", () => {
       await order.getByRole("radio", { name: /^Newest first/ }).locator("..").click();
       await order.getByRole("radio", { name: /^Newest first/ }).focus();
       await evidence(page, info, `default-draw-order-${viewport.name}`);
-      await page.getByRole("button", { name: "Update storage bin", exact: true }).click();
+      await page.getByRole("button", { name: "Save changes", exact: true }).click();
       await expect(page.getByRole("dialog")).toHaveCount(0);
       await openBin(page, f);
       await expect(page.getByRole("dialog").getByText("Newest first", { exact: true })).toBeVisible();
