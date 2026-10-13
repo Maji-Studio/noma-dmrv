@@ -20,6 +20,7 @@ import {
   BuildingsIcon,
   KeyIcon,
   SlidersHorizontalIcon,
+  TruckIcon,
   UsersIcon,
 } from "@phosphor-icons/react/dist/ssr";
 import { PageHeader, SettingsRail, type SettingsSectionMeta } from "@/components/ui";
@@ -27,6 +28,7 @@ import {
   SETTINGS_DEFAULTS_HREF,
   SETTINGS_API_KEYS_HREF,
   SETTINGS_MEMBERS_HREF,
+  SETTINGS_VEHICLES_AND_CREW_HREF,
 } from "@/lib/settings/links";
 
 /** A rail plus a form pane stops being readable past roughly this width. */
@@ -82,6 +84,16 @@ export function SettingsConsole({
       icon: SlidersHorizontalIcon,
     });
   }
+
+  // Every member records the deliveries and runs these appear on, so every
+  // member can manage them, as they can create them from a picker.
+  sections.push({
+    key: SETTINGS_VEHICLES_AND_CREW_HREF,
+    href: SETTINGS_VEHICLES_AND_CREW_HREF,
+    tier: "organization",
+    label: "Vehicles and crew",
+    icon: TruckIcon,
+  });
 
   if (canManageApiKeys || isPlatformAdmin) {
     sections.push({

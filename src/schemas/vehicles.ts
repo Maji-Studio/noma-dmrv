@@ -58,6 +58,32 @@ export const FUEL_TYPE_OPTIONS: ReadonlyArray<{ value: FuelType; label: string }
   { value: "Biodiesel", label: "Biodiesel" },
 ];
 
+export interface SelectOption {
+  value: string;
+  label: string;
+}
+
+/**
+ * Fit a stored free-text value to a select's options. `vehicle_type` and
+ * `fuel_type` are free text, and older rows hold other casings ("diesel").
+ * With `ignoreCase`, a value takes the option that matches it in any case.
+ * A value no option matches is kept as an extra option, so opening and saving
+ * an edit never clears it. Vehicle type matches exactly: re-casing it would
+ * count as a type change, which a submitted credit batch can refuse.
+ */
+export function selectOptionsForStoredValue(
+  options: ReadonlyArray<SelectOption>,
+  stored: string | null | undefined,
+  { ignoreCase }: { ignoreCase: boolean },
+): { value: string; options: ReadonlyArray<SelectOption> } {
+  const trimmed = stored?.trim() ?? "";
+  if (!trimmed) return { value: "", options };
+  const fold = (text: string) => (ignoreCase ? text.toLowerCase() : text);
+  const match = options.find((option) => fold(option.value) === fold(trimmed));
+  if (match) return { value: match.value, options };
+  return { value: trimmed, options: [...options, { value: trimmed, label: trimmed }] };
+}
+
 // ============================================
 // Vehicle Form Schema (Client-side validation)
 // ============================================

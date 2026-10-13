@@ -4,6 +4,8 @@ import { describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({ fetchEnabled: [] as boolean[] }));
 
 vi.mock("@/hooks/use-transport-legs", () => ({
+  // Read by use-fleet through the entity-select quick-add dialogs.
+  transportLegKeys: { all: ["transportLegs"] },
   useCreateTransportLeg: () => ({ isPending: false }),
   useDeleteTransportLeg: () => ({ isPending: false }),
   useUpdateTransportLeg: () => ({ isPending: false }),

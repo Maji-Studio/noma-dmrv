@@ -6,8 +6,15 @@
  */
 "use client";
 
-import { useId } from "react";
+import { useId, type SyntheticEvent } from "react";
 import { Modal, type ModalWidth } from "@/components/ui";
+
+/**
+ * A dialog renders through a portal but still sits inside the entry form in
+ * the React tree, where its own form's submit would bubble on to the entry
+ * form's `onSubmit` and save it. Wrap the dialog's form to stop it there.
+ */
+export const stopSubmitBubbling = (event: SyntheticEvent) => event.stopPropagation();
 
 interface QuickAddDialogShellProps {
   isOpen: boolean;
