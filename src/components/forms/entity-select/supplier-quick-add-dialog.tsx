@@ -5,9 +5,6 @@
  */
 "use client";
 
-import type { EntityEditRecords } from "@/hooks/use-entity-edit-record";
-import { SupplierEditFormDialog } from "./entity-edit-forms";
-
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRef, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
@@ -30,13 +27,12 @@ import { QuickAddDialogShell } from "./quick-add-dialog-shell";
 import type { EntityOption } from "./types";
 
 interface SupplierQuickAddDialogProps {
-  supplier?: EntityEditRecords["supplier"];
   isOpen: boolean;
   onClose: () => void;
   onSuccess?: (entity: EntityOption) => void;
 }
 
-function SupplierCreateDialog({
+export function SupplierQuickAddDialog({
   isOpen,
   onClose,
   onSuccess = () => undefined,
@@ -216,9 +212,4 @@ function SupplierCreateDialog({
       </form>
     </QuickAddDialogShell>
   );
-}
-
-export function SupplierQuickAddDialog(props: SupplierQuickAddDialogProps) {
-  if (props.supplier) return <SupplierEditFormDialog record={props.supplier} isOpen={props.isOpen} onClose={props.onClose} />;
-  return <SupplierCreateDialog {...props} />;
 }

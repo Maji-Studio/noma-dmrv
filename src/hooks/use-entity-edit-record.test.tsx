@@ -4,6 +4,9 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { useCanManageFeedstockTypes, useEntityEditRecord, type EditableEntityType } from "./use-entity-edit-record";
+import { useSupplier } from "./use-suppliers";
+import { useFormulation, formulationKeys } from "./use-formulations";
+import { useCustomerWithRelations, customerKeys } from "./use-customers";
 import { supplierKeys } from "./supplier-query-keys";
 
 const mocks = vi.hoisted(() => ({ read: vi.fn(), permission: vi.fn() }));
@@ -30,13 +33,23 @@ it.each<EditableEntityType>(["formulation", "supplier", "customer", "feedstockTy
   const payload = type === "storageLocation" ? { storageLocationId: "one" } : ["vehicle", "driver", "operator"].includes(type) ? { [`${type}Id`]: "one" } : "one";
   expect(mocks.read).toHaveBeenCalledWith(payload);
 });
-it("refetches a cached record on each new edit session", async () => {
-  client.setQueryData(supplierKeys.detail("one"), { ...record, version: 1 });
-  const first = renderHook(() => useEntityEditRecord("supplier", "one"), { wrapper });
+const normalHooks = { formulation: useFormulation, supplier: useSupplier, customer: useCustomerWithRelations };
+const detailKeys = { formulation: formulationKeys.detail, supplier: supplierKeys.detail, customer: customerKeys.detailWithRelations };
+it.each(["formulation", "supplier", "customer"] as const)("shares the normal %s record cache and refetches on each edit session", async (type) => {
+  const key = detailKeys[type]("one");
+  client.setQueryData(key, { ...record, version: 1 });
+  const useRecord = normalHooks[type];
+  const normal = renderHook(() => useRecord("one"), { wrapper });
+  expect(normal.result.current.data?.version).toBe(1);
+  expect(mocks.read).not.toHaveBeenCalled();
+  normal.unmount();
+  const first = renderHook(() => useEntityEditRecord(type, "one"), { wrapper });
   await waitFor(() => expect(first.result.current.isFetchedAfterMount).toBe(true));
-  expect(first.result.current.data?.version).toBe(2); first.unmount();
+  expect(first.result.current.data?.version).toBe(2);
+  expect(client.getQueryData(key)).toEqual(record);
+  first.unmount();
   mocks.read.mockResolvedValue({ success: true, data: { ...record, version: 3 } });
-  const second = renderHook(() => useEntityEditRecord("supplier", "one"), { wrapper });
+  const second = renderHook(() => useEntityEditRecord(type, "one"), { wrapper });
   await waitFor(() => expect(second.result.current.data?.version).toBe(3));
   expect(mocks.read).toHaveBeenCalledTimes(2);
 });

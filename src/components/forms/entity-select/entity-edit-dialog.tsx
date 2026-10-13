@@ -14,10 +14,7 @@ import { VehicleQuickAddDialog } from "./vehicle-quick-add-dialog";
 import { DriverQuickAddDialog } from "./driver-quick-add-dialog";
 import { OperatorQuickAddDialog } from "./operator-quick-add-dialog";
 import { StorageLocationQuickAddDialog } from "./storage-location-quick-add-dialog";
-import { FormulationQuickAddDialog } from "./formulation-quick-add-dialog";
-import { FeedstockTypeQuickAddDialog } from "./feedstock-type-quick-add-dialog";
-import { SupplierQuickAddDialog } from "./supplier-quick-add-dialog";
-import { CustomerEditFormDialog, ReactorEditFormDialog, OrderEditFormDialog } from "./entity-edit-forms";
+import { CustomerEditFormDialog, ReactorEditFormDialog, OrderEditFormDialog, FormulationEditFormDialog, SupplierEditFormDialog, FeedstockTypeEditFormDialog } from "./entity-edit-forms";
 
 export interface EntityEditDialogProps {
   entityType: EditableEntityType;
@@ -89,9 +86,9 @@ function EntityEditSession({ entityType, entityId, onClose }: {
       const bin = record as EntityEditRecords["storageLocation"];
       return <StorageLocationQuickAddDialog {...props} storageLocation={bin} facilityId={bin.facilityId} />;
     }
-    case "formulation": return <FormulationQuickAddDialog {...props} formulation={record as EntityEditRecords["formulation"]} />;
-    case "supplier": return <SupplierQuickAddDialog {...props} supplier={record as EntityEditRecords["supplier"]} />;
-    case "feedstockType": return <FeedstockTypeQuickAddDialog {...props} feedstockType={record as EntityEditRecords["feedstockType"]} />;
+    case "formulation": return <FormulationEditFormDialog {...props} record={record as EntityEditRecords["formulation"]} />;
+    case "supplier": return <SupplierEditFormDialog {...props} record={record as EntityEditRecords["supplier"]} />;
+    case "feedstockType": return <FeedstockTypeEditFormDialog {...props} record={record as EntityEditRecords["feedstockType"]} />;
     case "customer": return <CustomerEditFormDialog {...props} record={record as EntityEditRecords["customer"]} />;
     case "reactor": return <ReactorEditFormDialog {...props} record={record as EntityEditRecords["reactor"]} />;
     case "order": return <OrderEditFormDialog {...props} record={record as EntityEditRecords["order"]} />;

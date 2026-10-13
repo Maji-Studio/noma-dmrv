@@ -11,9 +11,6 @@
  */
 "use client";
 
-import type { EntityEditRecords } from "@/hooks/use-entity-edit-record";
-import { FormulationEditFormDialog } from "./entity-edit-forms";
-
 import { createFormulationFn } from "@/fn/formulations";
 import { FormulationForm } from "@/components/formulations";
 import type { FormulationFormData } from "@/schemas/formulations";
@@ -22,13 +19,12 @@ import { QuickAddDialogShell } from "./quick-add-dialog-shell";
 import type { EntityOption } from "./types";
 
 interface FormulationQuickAddDialogProps {
-  formulation?: EntityEditRecords["formulation"];
   isOpen: boolean;
   onClose: () => void;
   onSuccess?: (entity: EntityOption) => void;
 }
 
-function FormulationCreateDialog({
+export function FormulationQuickAddDialog({
   isOpen,
   onClose,
   onSuccess = () => undefined,
@@ -73,9 +69,4 @@ function FormulationCreateDialog({
       />
     </QuickAddDialogShell>
   );
-}
-
-export function FormulationQuickAddDialog(props: FormulationQuickAddDialogProps) {
-  if (props.formulation) return <FormulationEditFormDialog record={props.formulation} isOpen={props.isOpen} onClose={props.onClose} />;
-  return <FormulationCreateDialog {...props} />;
 }
