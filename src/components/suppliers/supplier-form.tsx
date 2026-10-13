@@ -44,6 +44,13 @@ import type { DistanceSourceValue } from "@/schemas/distance-source";
 import type { Supplier, SupplierLocation } from "@/db/schema/parties";
 import { Button } from "@/components/ui/button";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
+import { DefaultLocationBadge } from "@/components/default-location-badge";
+import {
+  addLocation,
+  removeLocation,
+  shouldStartAsDefault,
+  updateLocation,
+} from "@/lib/party-location-defaults";
 import { SupplierLocationDialog } from "./supplier-location-dialog";
 import { SupplierLocationForm } from "./supplier-location-form";
 
@@ -177,12 +184,20 @@ export function SupplierForm({
   });
 
   const handleAddPendingLocation = (loc: PendingSupplierLocation) => {
-    setPendingLocations((prev) => [...prev, loc]);
+    setPendingLocations((prev) => addLocation(prev, loc));
+    setLocationError(null);
+  };
+
+  const handleUpdatePendingLocation = (
+    index: number,
+    loc: PendingSupplierLocation,
+  ) => {
+    setPendingLocations((prev) => updateLocation(prev, index, loc));
     setLocationError(null);
   };
 
   const handleRemovePendingLocation = (index: number) => {
-    setPendingLocations((prev) => prev.filter((_, i) => i !== index));
+    setPendingLocations((prev) => removeLocation(prev, index));
   };
 
   return (
@@ -206,6 +221,7 @@ export function SupplierForm({
         <CreateModeLocationsSection
           locations={pendingLocations}
           onAdd={handleAddPendingLocation}
+          onUpdate={handleUpdatePendingLocation}
           onRemove={handleRemovePendingLocation}
           error={locationError}
         />
@@ -330,15 +346,21 @@ export function SupplierForm({
 function CreateModeLocationsSection({
   locations,
   onAdd,
+  onUpdate,
   onRemove,
   error,
 }: {
   locations: PendingSupplierLocation[];
   onAdd: (loc: PendingSupplierLocation) => void;
+  onUpdate: (index: number, loc: PendingSupplierLocation) => void;
   onRemove: (index: number) => void;
   error: string | null;
 }) {
   const [isLocationDialogOpen, setIsLocationDialogOpen] = useState(false);
+  // Kept after close so the dialog title does not flip mid exit transition.
+  const [editingLocationIndex, setEditingLocationIndex] = useState<number | null>(null);
+  const editingLocation =
+    editingLocationIndex === null ? undefined : locations[editingLocationIndex];
 
   return (
     <FormSection
@@ -351,7 +373,10 @@ function CreateModeLocationsSection({
         <Button
           variant="noOutline"
           size="small"
-          onClick={() => setIsLocationDialogOpen(true)}
+          onClick={() => {
+            setEditingLocationIndex(null);
+            setIsLocationDialogOpen(true);
+          }}
           className="text-[var(--color-interaction)]"
         >
           <PlusIcon size={14} weight="bold" />
@@ -383,7 +408,10 @@ function CreateModeLocationsSection({
                 <div className="flex items-center gap-10 min-w-0">
                   <MapPinIcon size={16} className="shrink-0 text-[var(--color-text-tertiary)]" />
                   <div className="min-w-0">
-                    <p className="body-small font-medium truncate">{title}</p>
+                    <p className="body-small font-medium flex items-center gap-8 min-w-0">
+                      <span className="truncate">{title}</span>
+                      {loc.isDefault ? <DefaultLocationBadge /> : null}
+                    </p>
                     {locationSummary ? (
                       <p className="text-[var(--text-xs)] text-[var(--color-text-tertiary)] truncate">
                         {locationSummary}
@@ -395,15 +423,27 @@ function CreateModeLocationsSection({
                     </p>
                   </div>
                 </div>
-                <Button
-                  variant="destructive"
-                  size="icon"
-                  onClick={() => onRemove(index)}
-                  className="shrink-0"
-                  aria-label={`Remove ${title}`}
-                >
-                  <TrashIcon size={16} />
-                </Button>
+                <div className="flex shrink-0 items-center gap-8">
+                  <Button
+                    variant="noOutline"
+                    size="icon"
+                    onClick={() => {
+                      setEditingLocationIndex(index);
+                      setIsLocationDialogOpen(true);
+                    }}
+                    aria-label={`Edit ${title}`}
+                  >
+                    <PencilIcon size={16} />
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    size="icon"
+                    onClick={() => onRemove(index)}
+                    aria-label={`Remove ${title}`}
+                  >
+                    <TrashIcon size={16} />
+                  </Button>
+                </div>
               </div>
             );
           })}
@@ -413,14 +453,21 @@ function CreateModeLocationsSection({
       <QuickAddDialogShell
         isOpen={isLocationDialogOpen}
         onClose={() => setIsLocationDialogOpen(false)}
-        title="Add location"
+        title={editingLocation ? "Edit location" : "Add location"}
         width="lg"
         testId="supplier-location-quick-add-dialog"
       >
         <SupplierLocationForm
           idPrefix="pending-loc"
+          location={editingLocation}
+          initialIsDefault={shouldStartAsDefault(locations.length)}
           onSubmit={(location) => {
-            onAdd(normalizePendingSupplierLocation(location));
+            const pendingLocation = normalizePendingSupplierLocation(location);
+            if (editingLocationIndex === null) {
+              onAdd(pendingLocation);
+            } else {
+              onUpdate(editingLocationIndex, pendingLocation);
+            }
             setIsLocationDialogOpen(false);
           }}
           onCancel={() => setIsLocationDialogOpen(false)}
@@ -502,7 +549,10 @@ function LocationsSection({ supplierId }: { supplierId: string }) {
               <div className="flex items-center gap-10 min-w-0">
                 <MapPinIcon size={16} className="shrink-0 text-[var(--color-text-tertiary)]" />
                 <div className="min-w-0">
-                  <p className="body-small font-medium truncate">{loc.name || loc.country}</p>
+                  <p className="body-small font-medium flex items-center gap-8 min-w-0">
+                    <span className="truncate">{loc.name || loc.country}</span>
+                    {loc.isDefault ? <DefaultLocationBadge /> : null}
+                  </p>
                   <p className="text-[var(--text-xs)] text-[var(--color-text-tertiary)] truncate">
                     {loc.address || "Location not set"}
                     {loc.gpsLatitude !== null && loc.gpsLongitude !== null
@@ -542,6 +592,7 @@ function LocationsSection({ supplierId }: { supplierId: string }) {
         onClose={() => setIsLocationDialogOpen(false)}
         supplierId={supplierId}
         location={editingLocation ?? undefined}
+        isFirstLocation={!locations || locations.length === 0}
       />
 
       <DeleteConfirmDialog

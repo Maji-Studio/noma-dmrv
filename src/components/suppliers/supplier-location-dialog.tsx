@@ -27,6 +27,8 @@ interface SupplierLocationDialogProps {
   onClose: () => void;
   supplierId: string;
   location?: SupplierLocation;
+  /** True when the party has no saved locations yet, so "default" starts checked. */
+  isFirstLocation?: boolean;
 }
 
 // ============================================
@@ -38,6 +40,7 @@ export function SupplierLocationDialog({
   onClose,
   supplierId,
   location,
+  isFirstLocation = false,
 }: SupplierLocationDialogProps) {
   const [error, setError] = useState<string | null>(null);
   const createLocation = useCreateSupplierLocation();
@@ -95,6 +98,7 @@ export function SupplierLocationDialog({
       <SupplierLocationForm
         idPrefix={SUPPLIER_LOCATION_DIALOG_ID_PREFIX}
         location={location}
+        initialIsDefault={isFirstLocation}
         onSubmit={handleSubmit}
         onCancel={handleClose}
         isSubmitting={

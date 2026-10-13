@@ -603,7 +603,28 @@ export async function deleteCustomerLocation(
     if (!versioned) throw new SafeError("Customer location not found");
     assertRowVersion({ entity: CUSTOMER_LOCATION_CONFLICT_ENTITY, id: locationId, expectedVersion, actualVersion: versioned.version });
 
-    await tx.delete(customerLocations).where(and(eq(customerLocations.id, locationId), eq(customerLocations.organizationId, ctx.organizationId)));
+    const [gone] = await tx
+      .delete(customerLocations)
+      .where(and(eq(customerLocations.id, locationId), eq(customerLocations.organizationId, ctx.organizationId)))
+      .returning({ customerId: customerLocations.customerId, isDefault: customerLocations.isDefault });
+
+    // Deleting the default promotes the first remaining location (list order)
+    // so a customer with locations always has a default.
+    if (gone?.isDefault) {
+      const [next] = await tx
+        .select({ id: customerLocations.id })
+        .from(customerLocations)
+        .where(and(eq(customerLocations.customerId, gone.customerId), eq(customerLocations.organizationId, ctx.organizationId)))
+        .orderBy(sql`${customerLocations.name} asc nulls last`)
+        .limit(1)
+        .for("update");
+      if (next) {
+        await tx
+          .update(customerLocations)
+          .set({ version: nextVersion(customerLocations.version), isDefault: true, updatedAt: new Date() })
+          .where(and(eq(customerLocations.id, next.id), eq(customerLocations.organizationId, ctx.organizationId)));
+      }
+    }
 
   });
 }

@@ -34,7 +34,23 @@ import { resolveLocationCountry } from "@/lib/location-defaults";
 
 interface SupplierLocationFormProps {
   /** Existing location data for editing (undefined for create mode) */
-  location?: SupplierLocation;
+  location?: Pick<SupplierLocation, "country"> &
+    Partial<
+      Pick<
+        SupplierLocation,
+        | "name"
+        | "stateRegion"
+        | "city"
+        | "gpsLatitude"
+        | "gpsLongitude"
+        | "address"
+        | "distanceFromFacilityKm"
+        | "distanceSource"
+        | "isDefault"
+      >
+    >;
+  /** Start "default" checked for a new location (the party's first). */
+  initialIsDefault?: boolean;
   /** Prefix field IDs when the form opens above another form with overlapping IDs. */
   idPrefix?: string;
   /** Form submission handler */
@@ -55,6 +71,7 @@ function fieldId(idPrefix: string | undefined, fieldName: string): string {
 
 export function SupplierLocationForm({
   location,
+  initialIsDefault = false,
   idPrefix,
   onSubmit,
   onCancel,
@@ -77,7 +94,7 @@ export function SupplierLocationForm({
     address: location?.address ?? "",
     distanceFromFacilityKm: location?.distanceFromFacilityKm ?? undefined,
     distanceSource: location?.distanceSource ?? null,
-    isDefault: location?.isDefault ?? false,
+    isDefault: location?.isDefault ?? initialIsDefault,
   };
 
   const {

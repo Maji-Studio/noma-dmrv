@@ -793,10 +793,38 @@ export async function deleteSupplierLocation(
           eq(supplierLocations.organizationId, ctx.organizationId),
         ),
       )
-      .returning({ id: supplierLocations.id });
+      .returning({
+        id: supplierLocations.id,
+        supplierId: supplierLocations.supplierId,
+        isDefault: supplierLocations.isDefault,
+      });
 
     if (deleted.length === 0) {
       throw new SafeError("Supplier location not found");
+    }
+
+    // Deleting the default promotes the first remaining location (in list
+    // order) so a supplier with locations always has a default.
+    const [gone] = deleted;
+    if (gone.isDefault) {
+      const [next] = await tx
+        .select({ id: supplierLocations.id })
+        .from(supplierLocations)
+        .where(
+          and(
+            eq(supplierLocations.supplierId, gone.supplierId),
+            eq(supplierLocations.organizationId, ctx.organizationId),
+          ),
+        )
+        .orderBy(...SUPPLIER_LOCATION_ORDER)
+        .limit(1)
+        .for("update");
+      if (next) {
+        await tx
+          .update(supplierLocations)
+          .set({ version: nextVersion(supplierLocations.version), isDefault: true, updatedAt: new Date() })
+          .where(and(eq(supplierLocations.id, next.id), eq(supplierLocations.organizationId, ctx.organizationId)));
+      }
     }
 
   });
