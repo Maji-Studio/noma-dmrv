@@ -2,6 +2,8 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { EntitySelect } from "./entity-select";
+import { FormEntitySelect } from "./form-entity-select";
+import { useForm } from "react-hook-form";
 import { Modal } from "@/components/ui/modal/modal";
 import type { EntityOption } from "./types";
 
@@ -38,6 +40,11 @@ function activeTestId() {
   return document.getElementById(trigger().getAttribute("aria-activedescendant")!)?.getAttribute("data-testid");
 }
 
+function LockedFormPicker() {
+  const { control } = useForm({ defaultValues: { binId: "one" } });
+  return <FormEntitySelect control={control} name="binId" label="Storage bin" entityType="storageLocation" selectionLocked onEditSelected={vi.fn()} />;
+}
+
 describe("EntitySelect menu interactions", () => {
   it.each([{ value: undefined, edit: true }, { value: "one", edit: false }])("requires selection and callback: %s", ({ value, edit }) => {
     render(<EntitySelect entityType="storageLocation" value={value} onChange={vi.fn()} onEditSelected={edit ? vi.fn() : undefined} />);
@@ -64,7 +71,7 @@ describe("EntitySelect menu interactions", () => {
   });
 
   it("keeps an ordinary disabled picker closed", () => {
-    render(<EntitySelect entityType="storageLocation" disabled onChange={vi.fn()} onEditSelected={vi.fn()} />);
+    render(<EntitySelect entityType="storageLocation" value="one" disabled onChange={vi.fn()} onEditSelected={vi.fn()} />);
     open(); key("ArrowDown");
     expect(screen.queryByTestId("entity-select-listbox")).toBeNull();
   });
@@ -79,6 +86,7 @@ describe("EntitySelect menu interactions", () => {
     fireEvent.pointerDown(screen.getByTestId("entity-option-two"));
     fireEvent.click(screen.getByTestId("entity-option-two"));
     expect(change).toHaveBeenCalledWith("two");
+    expect(document.activeElement).toBe(trigger());
     expect(close).not.toHaveBeenCalled();
     open(); key("Escape");
     expect(trigger().getAttribute("aria-expanded")).toBe("false");
@@ -98,10 +106,21 @@ describe("EntitySelect menu interactions", () => {
     expect(edit).toHaveBeenCalledOnce(); expect(change).not.toHaveBeenCalled();
   });
 
+  it("forwards the selection lock through the form wrapper", () => {
+    render(<LockedFormPicker />);
+    open();
+    expect(trigger().getAttribute("aria-readonly")).toBe("true");
+    expect(screen.getByTestId("entity-select-edit")).toBeTruthy();
+    expect(screen.queryAllByRole("option")).toHaveLength(0);
+  });
+
   it("offers only Edit when locked", () => {
     const edit = vi.fn(); const change = vi.fn();
-    render(<EntitySelect entityType="storageLocation" value="one" disabled onChange={change} onEditSelected={edit} noneOption={{ label: "None" }} allowCreate onCreateNew={vi.fn()} alwaysShowSearch />);
+    render(<EntitySelect entityType="storageLocation" value="one" selectionLocked onChange={change} onEditSelected={edit} noneOption={{ label: "None" }} allowCreate onCreateNew={vi.fn()} alwaysShowSearch />);
     open();
+    expect(trigger().getAttribute("aria-readonly")).toBe("true");
+    expect(trigger().className).toContain("opacity-50");
+    expect(trigger().className).not.toContain("hover:border");
     expect(screen.queryAllByRole("option")).toHaveLength(0);
     expect(screen.queryByTestId("entity-select-create")).toBeNull();
     expect(screen.queryByTestId("entity-select-search")).toBeNull();
@@ -158,6 +177,36 @@ describe("EntitySelect menu interactions", () => {
     await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("link", { name: "Create storage bin" })));
     expect(trigger().getAttribute("aria-expanded")).toBe("true");
     expect(close).not.toHaveBeenCalled();
+  });
+
+  it.each([false, true])("returns focus from search on Tab (shift: %s)", async (shiftKey) => {
+    render(<EntitySelect entityType="storageLocation" onChange={vi.fn()} alwaysShowSearch />);
+    open();
+    const search = screen.getByTestId("entity-select-search");
+    await waitFor(() => expect(document.activeElement).toBe(search));
+    expect(fireEvent.keyDown(search, { key: "Tab", shiftKey })).toBe(false);
+    expect(screen.queryByTestId("entity-select-listbox")).toBeNull();
+    expect(document.activeElement).toBe(trigger());
+    expect(fireEvent.keyDown(trigger(), { key: "Tab", shiftKey })).toBe(true);
+  });
+
+  it.each([false, true])("returns focus from the recovery link on Tab (shift: %s)", async (shiftKey) => {
+    state.options = [];
+    render(<EntitySelect entityType="storageLocation" onChange={vi.fn()} emptyHint={{ message: "Create a bin first", href: "/storage-locations" }} />);
+    trigger().focus(); open();
+    fireEvent.keyDown(trigger(), { key: "Tab" });
+    const link = screen.getByRole("link");
+    await waitFor(() => expect(document.activeElement).toBe(link));
+    expect(fireEvent.keyDown(link, { key: "Tab", shiftKey })).toBe(false);
+    expect(screen.queryByTestId("entity-select-listbox")).toBeNull();
+    expect(document.activeElement).toBe(trigger());
+    expect(fireEvent.keyDown(trigger(), { key: "Tab", shiftKey })).toBe(true);
+  });
+
+  it("lets disabled override a selection lock", () => {
+    render(<EntitySelect entityType="storageLocation" value="one" disabled selectionLocked onChange={vi.fn()} onEditSelected={vi.fn()} />);
+    open(); key("Enter");
+    expect(screen.queryByTestId("entity-select-listbox")).toBeNull();
   });
 
   it.each([5, 6])("shows search from six options (%i)", (count) => {

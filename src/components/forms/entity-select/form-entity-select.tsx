@@ -29,6 +29,7 @@ interface FormEntitySelectProps<
   helperText?: string;
   /** Whether the field is disabled */
   disabled?: boolean;
+  selectionLocked?: EntitySelectProps["selectionLocked"];
   /** Whether to allow creating new entities inline */
   allowCreate?: boolean;
   /** Label for the quick-add button */
@@ -66,7 +67,7 @@ interface FormEntitySelectProps<
   dependsOn?: string | null | (string | null | undefined)[];
   /** Empty-list hint naming the upstream prerequisite (see EntitySelectProps). */
   emptyHint?: EntitySelectProps["emptyHint"];
-  /** Also available when selection is locked with disabled. */
+  /** Also available when selection is locked with selectionLocked. */
   onEditSelected?: EntitySelectProps["onEditSelected"];
   editLabel?: string;
 }
@@ -82,6 +83,7 @@ export function FormEntitySelect<
   placeholder,
   helperText,
   disabled = false,
+  selectionLocked = false,
   allowCreate = false,
   createLabel,
   onCreateNew,
@@ -121,6 +123,7 @@ export function FormEntitySelect<
         }}
         placeholder={placeholder}
         disabled={disabled}
+        selectionLocked={selectionLocked}
         error={!!fieldState.error}
         allowCreate={allowCreate}
         createLabel={createLabel}

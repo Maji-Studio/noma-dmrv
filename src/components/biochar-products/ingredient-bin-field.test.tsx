@@ -13,6 +13,7 @@ interface CapturedEntitySelectProps {
   allowCreate?: boolean;
   createLabel?: string;
   disabled?: boolean;
+  selectionLocked?: boolean;
   onBlur?: () => void;
   emptyHint?: { message: string };
   filterBy?: Record<string, string>;
@@ -135,12 +136,13 @@ function renderField(
   allocationFrozen = false,
   previews?: AffectedStockPreview[],
   previewsAvailable = false,
+  isSubmitting = false,
 ) {
   return renderToStaticMarkup(
     <IngredientBinField
       row={row}
       control={{} as Control<FieldValues>}
-      isSubmitting={false}
+      isSubmitting={isSubmitting}
       facilityId="facility-1"
       allocationFrozen={allocationFrozen}
       previews={previews}
@@ -284,7 +286,12 @@ describe("IngredientBinField feedstock-bin quick add", () => {
     expect(state.close).toHaveBeenCalledOnce();
   });
 
-  it("disables both allocation controls only when the source allocation is frozen", () => {
+  it.each([false, true])("disables the bin during submit even when frozen=%s", (frozen) => {
+    renderField(frozen, undefined, false, true);
+    expect(state.select).toMatchObject({ disabled: true, selectionLocked: frozen });
+  });
+
+  it("locks bin selection and disables mass when the source allocation is frozen", () => {
     renderField();
     expect(state.select?.disabled).toBe(false);
     expect(state.massInput?.disabled).toBe(false);
@@ -292,7 +299,8 @@ describe("IngredientBinField feedstock-bin quick add", () => {
     renderField(true);
     expect(state.select).toMatchObject({
       allowCreate: false,
-      disabled: true,
+      disabled: false,
+      selectionLocked: true,
       onCreateNew: undefined,
     });
     expect(state.massInput?.disabled).toBe(true);

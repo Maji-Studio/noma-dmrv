@@ -27,6 +27,10 @@ conventions) · [testing.md](./testing.md) (E2E) · [../TEMPLATE_USAGE.md](../TE
   `src/` (vitest, `environment: "node"`, see `vitest.config.ts`). Add one by default for
   schemas and pure logic — E2E is not a substitute.
 
+Vitest defaults to the `node` environment. Component tests that need a real DOM
+or portals opt in with `// @vitest-environment jsdom` and use
+`@testing-library/react`.
+
 ## Auth & org scoping — the most violated convention here
 
 Three distinct seams; do not collapse them.

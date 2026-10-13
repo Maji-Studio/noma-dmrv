@@ -8,6 +8,7 @@ import {
   useState,
   useRef,
   useEffect,
+  useEffectEvent,
   useId,
   type KeyboardEvent,
 } from "react";
@@ -38,6 +39,10 @@ export { EntityOptionText } from "./entity-select-row";
 
 const MENU_SIDE_OFFSET = 4;
 const MENU_COLLISION_PADDING = 8;
+
+function shouldFocusSearch(showSearch: boolean, openedWithTouch: boolean) {
+  return showSearch && !openedWithTouch && window.matchMedia("(pointer: fine)").matches;
+}
 
 export function shouldRenderCreateAction({
   allowCreate,
@@ -96,6 +101,7 @@ export function EntitySelect({
   onChange,
   placeholder,
   disabled = false,
+  selectionLocked = false,
   error = false,
   className,
   allowCreate = false,
@@ -150,7 +156,7 @@ export function EntitySelect({
     entityType,
     search: debouncedSearch,
     filterBy,
-    enabled: !disabled && (isOpen || (autoSelectSingle && !value)),
+    enabled: !disabled && !selectionLocked && (isOpen || (autoSelectSingle && !value)),
   });
 
   // Hide already-picked options (e.g. blend materials chosen on other lines),
@@ -238,10 +244,9 @@ export function EntitySelect({
   });
 
   const canEdit = Boolean(value && selectedOption && onEditSelected);
-  const lockedEditable = disabled && canEdit;
-  const triggerDisabled = disabled && !lockedEditable;
+  const triggerDisabled = disabled || (selectionLocked && !canEdit);
   const rows: SelectRow[] = [];
-  if (!disabled) {
+  if (!disabled && !selectionLocked) {
     if (noneOption && !searchQuery) {
       rows.push({ id: `${entitySelectId}-none`, kind: "none" });
     }
@@ -254,22 +259,22 @@ export function EntitySelect({
     }
   }
   if (canEdit) rows.push({ id: `${entitySelectId}-edit`, kind: "edit" });
-  if (!disabled && shouldShowCreateAction) {
+  if (!disabled && !selectionLocked && shouldShowCreateAction) {
     rows.push({ id: `${entitySelectId}-create`, kind: "create" });
   }
   const activeRow = rows.find((row) => row.id === highlightedId) ?? rows[0];
   const activeId = isOpen ? activeRow?.id : undefined;
-  const showSearch = !disabled && !hideSearch &&
+  const showSearch = !disabled && !selectionLocked && !hideSearch &&
     (alwaysShowSearch || searchQuery.length > 0 || options.length > SELECT_SEARCH_MIN_OPTIONS);
+
+  const closeMenuFromEffect = useEffectEvent(closeMenu);
 
   // Portalled content counts as inside the picker for pointer dismissal.
   useEffect(() => {
     function handlePointerDown(event: PointerEvent) {
       if (!containerRef.current?.contains(event.target as Node) &&
           !popupRef.current?.contains(event.target as Node)) {
-        setIsOpen(false);
-        setSearchQuery("");
-        setHighlightedId(null);
+        closeMenuFromEffect();
       }
     }
     document.addEventListener("pointerdown", handlePointerDown);
@@ -277,20 +282,21 @@ export function EntitySelect({
   }, []);
 
   useEffect(() => {
-    if (isOpen && showSearch && !openedWithTouch.current && window.matchMedia("(pointer: fine)").matches) {
+    if (isOpen && shouldFocusSearch(showSearch, openedWithTouch.current)) {
       inputRef.current?.focus();
     }
   }, [isOpen, showSearch]);
 
   // Auto-select when there is exactly one option and no current value
   useEffect(() => {
-    if (autoSelectSingle && !disabled && !value && options.length === 1 && !isLoading) {
+    if (autoSelectSingle && !disabled && !selectionLocked && !value && options.length === 1 && !isLoading) {
       onChange(options[0].id);
     }
-  }, [autoSelectSingle, disabled, value, options, isLoading, onChange]);
+  }, [autoSelectSingle, disabled, selectionLocked, value, options, isLoading, onChange]);
 
   const activateRow = (row: SelectRow) => {
     closeMenu();
+    triggerRef.current?.focus();
     switch (row.kind) {
       case "none":
         onChange("");
@@ -315,7 +321,7 @@ export function EntitySelect({
   // list is genuinely empty (not loading/errored, no active search). While it's
   // showing, forward Tab explicitly enters the portal before the next form field.
   const showEmptyStateRecoveryLink =
-    !disabled &&
+    !disabled && !selectionLocked &&
     !isLoading &&
     !fetchError &&
     options.length === 0 &&
@@ -323,7 +329,7 @@ export function EntitySelect({
     !!emptyHint?.href;
 
   const handleKeyDown = (
-    e: KeyboardEvent<HTMLInputElement | HTMLButtonElement>,
+    e: KeyboardEvent<HTMLInputElement | HTMLButtonElement | HTMLAnchorElement>,
   ) => {
     if (triggerDisabled) return;
     if (!isOpen) {
@@ -364,7 +370,11 @@ export function EntitySelect({
         }
         break;
       case "Tab":
-        if (showEmptyStateRecoveryLink && !e.shiftKey) {
+        if (popupRef.current?.contains(e.currentTarget)) {
+          e.preventDefault();
+          closeMenu();
+          triggerRef.current?.focus();
+        } else if (showEmptyStateRecoveryLink && !e.shiftKey) {
           e.preventDefault();
           recoveryLinkRef.current?.focus();
         } else closeMenu();
@@ -397,6 +407,7 @@ export function EntitySelect({
             onKeyDown={handleKeyDown}
             disabled={triggerDisabled}
             role="combobox"
+            aria-readonly={selectionLocked || undefined}
             aria-haspopup="listbox"
             aria-expanded={isOpen}
             aria-controls={listboxId}
@@ -415,8 +426,10 @@ export function EntitySelect({
                 : "border-[var(--color-border-secondary)]",
               triggerDisabled
                 ? "cursor-not-allowed opacity-50"
-                : "cursor-pointer hover:border-[var(--color-interaction)]",
-              value && !disabled ? "pr-[72px]" : "pr-[40px]"
+                : selectionLocked
+                  ? "cursor-pointer opacity-50"
+                  : "cursor-pointer hover:border-[var(--color-interaction)]",
+              value && !disabled && !selectionLocked ? "pr-[72px]" : "pr-[40px]"
             )}
           >
             <span
@@ -444,7 +457,7 @@ export function EntitySelect({
               )}
             />
           </button>
-          {value && !disabled && (
+          {value && !disabled && !selectionLocked && (
             <Button
               variant="noOutline"
               size="icon"
@@ -478,7 +491,7 @@ export function EntitySelect({
             >
               <Popover.Popup
                 ref={popupRef}
-                initialFocus={() => showSearch && !openedWithTouch.current && window.matchMedia("(pointer: fine)").matches ? inputRef.current : false}
+                initialFocus={() => shouldFocusSearch(showSearch, openedWithTouch.current) ? inputRef.current : false}
                 finalFocus={false}
                 role="presentation"
                 className="flex max-h-[var(--available-height)] flex-col overflow-hidden bg-[var(--paper)] [border:var(--hair)]"
@@ -518,7 +531,7 @@ export function EntitySelect({
                   data-testid="entity-select-listbox"
                   className="min-h-0 overflow-y-auto"
                 >
-                  {!disabled && (isLoading ? (
+                  {!disabled && !selectionLocked && (isLoading ? (
                     <li className="flex items-center justify-center gap-2 px-16 py-12 text-[var(--color-text-tertiary)]">
                       <SpinnerIcon aria-hidden weight="bold" className="size-16 animate-spin" />
                       <span className="text-[var(--text-s)]">Loading...</span>
@@ -546,6 +559,9 @@ export function EntitySelect({
                             href={emptyHint.href}
                             target="_blank"
                             rel="noopener noreferrer"
+                            onKeyDown={(event) => {
+                              if (event.key === "Tab" || event.key === "Escape") handleKeyDown(event);
+                            }}
                             onBlur={(e) => {
                               // Tab is allowed to land here (see handleKeyDown), so
                               // closing falls to the link itself once focus leaves
@@ -555,8 +571,7 @@ export function EntitySelect({
                                   e.relatedTarget as Node | null,
                                 )
                               ) {
-                                setIsOpen(false);
-                                setSearchQuery("");
+                                closeMenu();
                               }
                             }}
                             className="flex min-h-44 w-full items-center gap-8 px-12 py-8 body-small font-medium text-[var(--color-interaction)] transition-colors hover:bg-[var(--color-background-medium)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-interaction)]"

@@ -396,9 +396,10 @@ boundary evidence path from the presence of one file alone.
 
 Pass `onEditSelected` to offer **Edit <name>** beside **Add new** in the menu.
 The label uses the selected entity's name; `editLabel` overrides it. Editing
-leaves the selected value unchanged. With `disabled` and a selection, only Edit
-is available. Bin pickers use `useStorageBinEditDialog` to load a fresh record
-and open the quick-add modal in edit mode; archived bins open read-only.
+leaves the selected value unchanged. With `selectionLocked` and a selection, only
+Edit is available. `disabled` prevents all interaction, including Edit. Bin
+pickers use `useStorageBinEditDialog` to load a fresh record and open the
+quick-add modal in edit mode; archived bins open read-only.
 
 `SELECT_SEARCH_MIN_OPTIONS` in `src/config/forms.ts` is 5: search shows from
 6 options. `alwaysShowSearch` and `hideSearch` remain explicit overrides.

@@ -434,7 +434,8 @@ export function BiocharProductForm({
                     available={sourcePreviewFresh}
                   />
                 )}
-                disabled={isSubmitting || isEditMode}
+                disabled={isSubmitting}
+                selectionLocked={isEditMode}
                 error={!!fieldState.error}
                 filterBy={{
                   ...(selectedFacilityId

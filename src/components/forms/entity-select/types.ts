@@ -55,8 +55,10 @@ export interface EntitySelectProps {
   onChange: (value: string | undefined) => void;
   /** Placeholder text */
   placeholder?: string;
-  /** Locks selection; onEditSelected still allows editing the selected entity. */
+  /** Disables all picker interaction, including editing. */
   disabled?: boolean;
+  /** Locks selection while allowing an Edit-only menu for the selected entity. */
+  selectionLocked?: boolean;
   /** Whether the field has an error */
   error?: boolean;
   /** Optional className for styling */
@@ -115,8 +117,7 @@ export interface EntitySelectProps {
     label: string;
     subtitle?: string;
   };
-  /** Opens the selected entity without changing the value. With disabled and a
-   * selected value, the picker stays openable but offers only this Edit action. */
+  /** Opens the selected entity without changing the value. */
   onEditSelected?: () => void;
   /** Overrides the default Edit <selectedOption.name> label. */
   editLabel?: string;
