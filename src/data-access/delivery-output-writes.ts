@@ -1,6 +1,6 @@
 import { assertRowVersion, nextVersion } from "./row-version";
 import { randomUUID } from 'node:crypto';
-import { db } from '@/db';
+import { db, type DbTransaction } from '@/db';
 import { deliveries, drivers, facilities, orders, storageLocations, vehicles, type BiocharProduct, type Delivery } from '@/db/schema';
 import type { OrgContext } from '@/lib/auth/server';
 import { SafeError } from '@/lib/errors';
@@ -51,54 +51,52 @@ export async function createDelivery(ctx: OrgContext, raw: z.input<typeof create
     return { ...saved, savedProducts: posted.savedProducts };
   } });
 }
-export async function updateDelivery(ctx: OrgContext, deliveryId: string, raw: Omit<z.input<typeof updateDeliverySchema>, 'deliveryId'>): Promise<Delivery> {
+export async function updateDeliveryInTransaction(ctx: OrgContext, tx: DbTransaction, deliveryId: string, raw: Omit<z.input<typeof updateDeliverySchema>, 'deliveryId'>): Promise<Delivery> {
   requireOrgScope(ctx);
   const data = updateDeliverySchema.parse({ ...raw, deliveryId });
-  if (data.driverId) await assertSameOrg(ctx, drivers, data.driverId);
-  if (data.vehicleId) await assertSameOrg(ctx, vehicles, data.vehicleId);
-  return db.transaction(async tx => {
-    await lockBiocharTransportRouteTopology(ctx, tx);
-    const requestKey = data.idempotencyKey ?? randomUUID();
-    await lockMovementRequest(ctx, tx, requestKey);
-    const [snapshot] = await tx.select().from(deliveries).where(and(eq(deliveries.organizationId, ctx.organizationId), eq(deliveries.id, deliveryId)));
-    if (!snapshot) throw new SafeError('Delivery not found');
-    // Match stock posting and application creation: topology, request, bin, artifacts, delivery.
-    await lockBinStock(ctx, tx, snapshot.storageLocationId);
-    await assertCanMutateCertifiedLineage(ctx, tx, { entityType: 'delivery', entityId: deliveryId }, 'update');
-    const [existing] = await tx.select().from(deliveries).where(and(eq(deliveries.organizationId, ctx.organizationId), eq(deliveries.id, deliveryId))).for('update');
-    if (!existing) throw new SafeError('Delivery not found');
-    assertRowVersion({ entity: "delivery", id: deliveryId, expectedVersion: data.expectedVersion, actualVersion: existing.version });
-    for (const key of ['orderId', 'facilityId', 'storageLocationId'] as const) {
-      if (data[key] !== undefined && data[key] !== existing[key]) throw new SafeError('The order, facility and source bin of a posted delivery cannot be changed.');
-    }
-    if (data.deliveryDate && data.deliveryDate.getTime() !== existing.deliveryDate.getTime()) throw new SafeError('The date and time of a posted delivery cannot be changed. Edit its mass and moisture while it is the latest stock entry.');
-    const rows = await getOutputStockAllocationProjection(ctx, { deliveryId }, tx);
-    const reversedIds = new Set(rows.filter(r => r.movement.outputKind === 'reversal').map(r => r.movement.correctsMovementId));
-    const current = rows.filter(r => r.movement.outputKind !== 'reversal' && !reversedIds.has(r.movement.id))
-      .sort((a, b) => a.movement.postingSequence > b.movement.postingSequence ? -1 : 1)[0]?.movement;
-    const massChanged = data.deliveredWetMassKg !== undefined && data.deliveredWetMassKg !== existing.deliveredWetMassKg;
-    const moistureChanged = data.moistureContentPercent !== undefined && data.moistureContentPercent !== existing.moistureContentPercent;
-    const sourcesChanged = data.sources !== undefined && JSON.stringify(data.sources) !== JSON.stringify(current?.inputSnapshot?.sources);
-    if (massChanged || moistureChanged || sourcesChanged) {
-      if (!current) throw new SafeError('Posted delivery stock entry not found.');
-      await assertLatestOutputMovement(ctx, existing.storageLocationId, current.id, tx);
-      if (data.correctsMovementId && data.correctsMovementId !== current.id) throw new SafeError('This delivery was corrected. Reload it before editing its mass.');
-      const savedSources = current.inputSnapshot?.sources;
-      if (moistureChanged && data.sources === undefined && Array.isArray(savedSources)) throw new SafeError('Edit the moisture reading for each sub-bin in this delivery.');
-      await recordOutputStockMovementInTransaction(ctx, tx, {
-        storageLocationId: existing.storageLocationId, facilityId: existing.facilityId, kind: 'delivery',
-        occurredAt: existing.deliveryDate.toISOString(), wetMassKg: data.deliveredWetMassKg === undefined ? existing.deliveredWetMassKg! : data.deliveredWetMassKg!,
-        moisturePercent: data.moistureContentPercent ?? existing.moistureContentPercent, sources: data.sources,
-        correctsMovementId: current.id, idempotencyKey: requestKey, basisFingerprint: data.basisFingerprint,
-        reason: `Delivery ${data.code ?? existing.code}: mass or moisture edited`,
-      }, { requireLatestCorrection: true });
-    }
-    const [saved] = await tx.update(deliveries).set({ version: nextVersion(deliveries.version), code: data.code, driverId: data.driverId, vehicleId: data.vehicleId, distanceKmOverride: data.distanceKmOverride,
-      distanceSource: data.distanceSource, distanceNote: data.distanceNote, updatedAt: new Date() }).where(and(eq(deliveries.organizationId, ctx.organizationId), eq(deliveries.id, deliveryId))).returning();
-    const savedRows = await getOutputStockAllocationProjection(ctx, { deliveryId }, tx);
-    await syncBiocharProductTransportLegs(ctx, tx, [...new Set(savedRows.flatMap(r => r.allocation.biocharProductId ? [r.allocation.biocharProductId] : []))]);
-    return saved;
-  });
+  if (data.driverId) await assertSameOrg(ctx, drivers, data.driverId, tx);
+  if (data.vehicleId) await assertSameOrg(ctx, vehicles, data.vehicleId, tx);
+  await lockBiocharTransportRouteTopology(ctx, tx);
+  const requestKey = data.idempotencyKey ?? randomUUID();
+  await lockMovementRequest(ctx, tx, requestKey);
+  const [snapshot] = await tx.select().from(deliveries).where(and(eq(deliveries.organizationId, ctx.organizationId), eq(deliveries.id, deliveryId)));
+  if (!snapshot) throw new SafeError('Delivery not found');
+  // Match stock posting and application creation: topology, request, bin, artifacts, delivery.
+  await lockBinStock(ctx, tx, snapshot.storageLocationId);
+  await assertCanMutateCertifiedLineage(ctx, tx, { entityType: 'delivery', entityId: deliveryId }, 'update');
+  const [existing] = await tx.select().from(deliveries).where(and(eq(deliveries.organizationId, ctx.organizationId), eq(deliveries.id, deliveryId))).for('update');
+  if (!existing) throw new SafeError('Delivery not found');
+  assertRowVersion({ entity: "delivery", id: deliveryId, expectedVersion: data.expectedVersion, actualVersion: existing.version });
+  for (const key of ['orderId', 'facilityId', 'storageLocationId'] as const) {
+    if (data[key] !== undefined && data[key] !== existing[key]) throw new SafeError('The order, facility and source bin of a posted delivery cannot be changed.');
+  }
+  if (data.deliveryDate && data.deliveryDate.getTime() !== existing.deliveryDate.getTime()) throw new SafeError('The date and time of a posted delivery cannot be changed. Edit its mass and moisture while it is the latest stock entry.');
+  const rows = await getOutputStockAllocationProjection(ctx, { deliveryId }, tx);
+  const reversedIds = new Set(rows.filter(r => r.movement.outputKind === 'reversal').map(r => r.movement.correctsMovementId));
+  const current = rows.filter(r => r.movement.outputKind !== 'reversal' && !reversedIds.has(r.movement.id))
+    .sort((a, b) => a.movement.postingSequence > b.movement.postingSequence ? -1 : 1)[0]?.movement;
+  const massChanged = data.deliveredWetMassKg !== undefined && data.deliveredWetMassKg !== existing.deliveredWetMassKg;
+  const moistureChanged = data.moistureContentPercent !== undefined && data.moistureContentPercent !== existing.moistureContentPercent;
+  const sourcesChanged = data.sources !== undefined && JSON.stringify(data.sources) !== JSON.stringify(current?.inputSnapshot?.sources);
+  if (massChanged || moistureChanged || sourcesChanged) {
+    if (!current) throw new SafeError('Posted delivery stock entry not found.');
+    await assertLatestOutputMovement(ctx, existing.storageLocationId, current.id, tx);
+    if (data.correctsMovementId && data.correctsMovementId !== current.id) throw new SafeError('This delivery was corrected. Reload it before editing its mass.');
+    const savedSources = current.inputSnapshot?.sources;
+    if (moistureChanged && data.sources === undefined && Array.isArray(savedSources)) throw new SafeError('Edit the moisture reading for each sub-bin in this delivery.');
+    await recordOutputStockMovementInTransaction(ctx, tx, {
+      storageLocationId: existing.storageLocationId, facilityId: existing.facilityId, kind: 'delivery',
+      occurredAt: existing.deliveryDate.toISOString(), wetMassKg: data.deliveredWetMassKg === undefined ? existing.deliveredWetMassKg! : data.deliveredWetMassKg!,
+      moisturePercent: data.moistureContentPercent ?? existing.moistureContentPercent, sources: data.sources,
+      correctsMovementId: current.id, idempotencyKey: requestKey, basisFingerprint: data.basisFingerprint,
+      reason: `Delivery ${data.code ?? existing.code}: mass or moisture edited`,
+    }, { requireLatestCorrection: true });
+  }
+  const [saved] = await tx.update(deliveries).set({ version: nextVersion(deliveries.version), code: data.code, driverId: data.driverId, vehicleId: data.vehicleId, distanceKmOverride: data.distanceKmOverride,
+    distanceSource: data.distanceSource, distanceNote: data.distanceNote, updatedAt: new Date() }).where(and(eq(deliveries.organizationId, ctx.organizationId), eq(deliveries.id, deliveryId))).returning();
+  const savedRows = await getOutputStockAllocationProjection(ctx, { deliveryId }, tx);
+  await syncBiocharProductTransportLegs(ctx, tx, [...new Set(savedRows.flatMap(r => r.allocation.biocharProductId ? [r.allocation.biocharProductId] : []))]);
+  return saved;
 }
 export async function deleteDelivery(ctx: OrgContext, deliveryId: string, expectedVersion: number): Promise<void> {
   requireOrgScope(ctx);

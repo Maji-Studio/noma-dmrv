@@ -1,8 +1,8 @@
 import { beforeEach, expect, it, vi } from 'vitest';
 
-const mocks = vi.hoisted(() => ({ transaction: vi.fn(), post: vi.fn() }));
-vi.mock('@/db', () => ({ db: { transaction: mocks.transaction } }));
-vi.mock('./output-stock-post', () => ({ recordOutputStockMovementInTransaction: mocks.post }));
+const mocks = vi.hoisted(() => ({ run: vi.fn() }));
+vi.mock('./runner', () => ({ runOperationInProcess: mocks.run }));
+vi.mock('./output-stock', () => ({ recordOutputStockMovement: {} }));
 
 import { correctOutputStockEntry } from './output-stock-form-edits';
 
@@ -18,6 +18,5 @@ beforeEach(() => vi.clearAllMocks());
 
 it('refuses delivery corrections at the stock form boundary before opening a transaction', async () => {
   await expect(correctOutputStockEntry(ctx, input)).rejects.toThrow('Choose a Lost mass entry to edit.');
-  expect(mocks.transaction).not.toHaveBeenCalled();
-  expect(mocks.post).not.toHaveBeenCalled();
+  expect(mocks.run).not.toHaveBeenCalled();
 });

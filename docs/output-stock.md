@@ -201,7 +201,7 @@ The regression suite includes pure gram conservation, real PostgreSQL writer
 races and rollback, consumer SQL, and `tests/e2e/output-bin-fifo.spec.ts`. The dated
 execution plan is in `docs/plans/2026-09-14-issue-756-test-plan.md`.
 
-## Addendum (2026-10-13): per-bin default draw order
+## Per-bin default draw order
 
 Split biochar and product bins have a **Default draw order**: **Oldest first**
 (`oldest_first`, the default) or **Newest first** (`newest_first`). The setting
@@ -224,7 +224,7 @@ bin's existing version check and stock lock, invalidates preview fingerprints,
 and does not rewrite saved allocations. The current setting applies to a new
 backdated draw too; default changes are preferences, not timed merge events.
 
-Migration `0133_flaky_mariko_yashida.sql` adds the non-null `draw_order` column
+Migration `0133_output_draw_order.sql` adds the non-null `draw_order` column
 and `output_draw_order` enum. Existing rows and seed inserts that omit it get
 `oldest_first`. REST/MCP storage-location reads expose `drawOrder`; there is no
 new public write endpoint for the setting.

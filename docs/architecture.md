@@ -36,8 +36,13 @@ components (UI)
   output-stock movement and lab sample writes use this layer (`make_biochar_product`,
   `update_biochar_product`, `record_output_stock_movement`, `record_lab_sample`,
   `update_lab_sample`, `delete_lab_sample`). UI product deletes
-  stay off the runner. Lost mass form edits and delivery mass updates use the shared stock writer
-  with a strict latest-entry check. The API correction contract stays dependency-based.
+  stay off the runner. Lost mass form edits run `record_output_stock_movement`
+  with the unpublished `requireLatestCorrection` option. Delivery updates run
+  the UI-only `update_posted_delivery` operation: the delivery row, stock
+  correction and transport legs share its transaction. Both use the shared
+  stock writer with a strict latest-entry check. These UI options and the
+  delivery operation are not published in REST/MCP. The native correction
+  contract stays dependency-based.
 - The runner owns the transaction. Data-access ...InTransaction(ctx, tx, ...)
   functions and the helpers they call read and write only through `tx`,
   including reference checks and result enrichment. After-commit hooks run

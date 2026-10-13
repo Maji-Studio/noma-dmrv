@@ -24,8 +24,8 @@ import { updateCustomerLocation } from "@/data-access/customers";
 import {
   createDelivery,
   deleteDelivery,
-  updateDelivery,
 } from "@/data-access/deliveries";
+import { updateDelivery } from "@/lib/operations/deliveries";
 import {
   createFeedstockInTransaction,
   updateFeedstockInTransaction,

@@ -14,11 +14,11 @@ import {
   deleteDelivery,
   getDeliveries as getDeliveriesData,
   getDeliveryWithRelations as getDeliveryWithRelationsData,
-  updateDelivery,
   type CreatedDelivery,
   type DeliveryDetail,
   type PaginatedDeliveries,
 } from "@/data-access/deliveries";
+import { updateDelivery } from "@/lib/operations/deliveries";
 import {
   getDeliveryStats as getDeliveryStatsData,
   type DeliveryStats,

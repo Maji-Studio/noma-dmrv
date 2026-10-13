@@ -1,17 +1,51 @@
 import { randomUUID } from "node:crypto";
-import { afterEach, expect, it } from "vitest";
+import { afterEach, expect, it, vi } from "vitest";
 import { db } from "@/db";
 import { binMovements } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { getOutputStockHistory } from "@/data-access/output-stock-history";
 import { previewOutputStock } from "@/data-access/output-stock-operations";
-import { correctOutputStockEntry } from "@/data-access/output-stock-form-edits";
-import { createDelivery, updateDelivery } from "@/data-access/delivery-output-writes";
+import { correctOutputStockEntry } from "@/lib/operations/output-stock-form-edits";
+import { createDelivery} from "@/data-access/delivery-output-writes";
+import { updateDelivery } from "@/lib/operations/deliveries";
+import * as ownedTransaction from "@/data-access/owned-transaction";
 import { cleanupPostedStock, postedStockFixture, postMeasurement, postDelivery, postProduct, deliveryInput, STOCK_TIME } from "./helpers/posted-output-stock-fixture";
 
 const fixtures: Awaited<ReturnType<typeof postedStockFixture>>[] = [];
-afterEach(async () => { for (const f of fixtures.splice(0)) await cleanupPostedStock(f); });
+afterEach(async () => { vi.restoreAllMocks(); for (const f of fixtures.splice(0)) await cleanupPostedStock(f); });
 async function fixture() { const f = await postedStockFixture(); fixtures.push(f); return f; }
+
+it.each(["40P01", "40001", "55P03"])("retries a Lost mass correction after %s without duplicate ledger effects", async (code) => {
+  const f = await fixture();
+  const original = await postMeasurement(f, { kind: "loss", wetMassKg: 100 });
+  const input = { facilityId: f.facility.id, storageLocationId: f.bin.id, occurredAt: STOCK_TIME, kind: "loss" as const,
+    wetMassKg: 40, moisturePercent: 0, correctsMovementId: original.movementId };
+  const preview = await previewOutputStock(f.ctx, input);
+  const runOwned = ownedTransaction.runOwnedTransaction;
+  const attempt = vi.spyOn(ownedTransaction, "runOwnedTransaction").mockImplementationOnce((ctx, deadline, callback, pool) =>
+    runOwned(ctx, deadline, async tx => { await callback(tx); throw Object.assign(new Error("Retry test"), { code }); }, pool));
+  const saved = await correctOutputStockEntry(f.ctx, { ...input, reason: "Wrong scale reading", idempotencyKey: randomUUID(),
+    basisFingerprint: preview.basisFingerprint, expectedProductVersions: preview.expectedProductVersions });
+  expect(attempt).toHaveBeenCalledTimes(2);
+  expect(saved.preview.afterDryKg).toBe(960);
+  const history = await getOutputStockHistory(f.ctx, f.bin.id);
+  expect(history.filter(entry => entry.kind === "replacement")).toHaveLength(1);
+  expect(history.filter(entry => entry.kind === "reversal")).toHaveLength(1);
+});
+
+it.each(["40P01", "40001", "55P03"])("retries the whole delivery correction after %s with the row and ledger together", async (code) => {
+  const f = await fixture();
+  const delivery = await postDelivery(f, 100);
+  const runOwned = ownedTransaction.runOwnedTransaction;
+  const attempt = vi.spyOn(ownedTransaction, "runOwnedTransaction").mockImplementationOnce((ctx, deadline, callback, pool) =>
+    runOwned(ctx, deadline, async tx => { await callback(tx); throw Object.assign(new Error("Retry test"), { code }); }, pool));
+  const saved = await updateDelivery(f.ctx, delivery.id, { expectedVersion: delivery.version, deliveredWetMassKg: 40 });
+  expect(attempt).toHaveBeenCalledTimes(2);
+  expect(saved).toMatchObject({ version: delivery.version + 2, deliveredWetMassKg: 40, massDryKg: 40 });
+  const history = await getOutputStockHistory(f.ctx, f.bin.id);
+  expect(history.filter(entry => entry.kind === "replacement")).toMatchObject([{ wetMassKg: 40, afterDryKg: 960 }]);
+  expect(history.filter(entry => entry.kind === "reversal")).toHaveLength(1);
+});
 
 it("edits the latest Lost mass with a reversal and replacement and changes the balance", async () => {
   const f = await fixture();
@@ -31,7 +65,7 @@ it("edits the latest Lost mass with a reversal and replacement and changes the b
   ]));
 });
 
-it("refuses a delivery date change through the stock form correction boundary", async () => {
+it("refuses delivery corrections through the Lost mass form boundary", async () => {
   const f = await fixture();
   const delivery = await postDelivery(f, 100);
   const movement = (await getOutputStockHistory(f.ctx, f.bin.id)).find(entry => entry.deliveryId === delivery.id)!;

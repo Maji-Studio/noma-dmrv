@@ -7,7 +7,7 @@ import type { OutputStockPostInput, OutputStockPreviewInput, OutputSubBinsInput 
 import { recordOutputStockMovement } from '@/lib/operations/output-stock';
 import { runOperationInProcess } from '@/lib/operations/runner';
 import { z } from 'zod';
-import { correctOutputStockEntry } from '@/data-access/output-stock-form-edits';
+import { correctOutputStockEntry } from '@/lib/operations/output-stock-form-edits';
 import { withAction } from './with-action';
 
 export async function previewOutputStockFn(input: OutputStockPreviewInput) {

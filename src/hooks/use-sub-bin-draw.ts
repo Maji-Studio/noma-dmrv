@@ -52,6 +52,9 @@ export function useSubBinDraw({ bin, occurredAt, wetKg, correction }: SubBinDraw
     readings: Object.fromEntries((saved ?? []).map(s => [s.layerId, String(s.moisturePercent)])),
   }));
   const choices: DrawChoices = stored.binId === binId && stored.correctionId === correction?.movementId ? stored : { binId, correctionId: correction?.movementId, order: saved ? saved.map(s => s.layerId) : null, readings: Object.fromEntries((saved ?? []).map(s => [s.layerId, String(s.moisturePercent)])) };
+  const savedReadings = Object.fromEntries((saved ?? []).map(s => [s.layerId, String(s.moisturePercent)]));
+  const changed = JSON.stringify(choices.order) !== JSON.stringify(saved ? saved.map(s => s.layerId) : null) ||
+    Object.entries(choices.readings).some(([id, raw]) => raw !== savedReadings[id]);
   const subBins: OutputSubBin[] = query.data?.stockMode === "split" ? query.data.subBins : [];
   const active = subBins.length > 0;
   const ordered = orderSubBins(subBins, choices.order);
@@ -81,6 +84,8 @@ export function useSubBinDraw({ bin, occurredAt, wetKg, correction }: SubBinDraw
     plan,
     order: choices.order,
     readings: choices.readings,
+    /** Raw choices differ from the opened draw, even while its readings or order are invalid. */
+    changed,
     sources,
     untickCode,
     needsTick,

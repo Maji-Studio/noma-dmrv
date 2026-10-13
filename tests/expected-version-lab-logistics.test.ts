@@ -43,7 +43,8 @@ import {
 import { createCreditBatch, updateCreditBatch, deleteCreditBatch } from "@/data-access/credit-batches";
 import { updateSample, deleteSample } from "@/data-access/samples";
 import { updateOrder, deleteOrder } from "@/data-access/orders";
-import { updateDelivery, deleteDelivery } from "@/data-access/delivery-output-writes";
+import { deleteDelivery } from "@/data-access/delivery-output-writes";
+import { updateDelivery } from "@/lib/operations/deliveries";
 import { createTransportLeg, updateTransportLeg, deleteTransportLeg, syncFeedstockTransportLeg } from "@/data-access/transport-legs";
 import { archiveFacility, restoreFacility } from "@/data-access/facilities";
 import { masterDataVersion } from "./helpers/master-data-version";

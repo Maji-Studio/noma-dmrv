@@ -36,8 +36,19 @@ export async function getOutputStockHistory(ctx: OrgContext, storageLocationId: 
     const targetProductId = m.inputSnapshot?.targetBiocharProductId;
     const deliveryId = allocations.find(a => a.deliveryId)?.deliveryId ?? (typeof m.inputSnapshot?.deliveryId === 'string' ? m.inputSnapshot.deliveryId : null);
     const savedSources = orderedSourcesSchema.safeParse(m.inputSnapshot?.sources);
+    const drawPolicy = allocations[0]?.basisSnapshot.policy;
+    // Default split draws have no saved sources. Replay their frozen draw order,
+    // never allocation UUID order or a pro-rata mix as an ordered draw.
+    const splitDraw = (drawPolicy === 'fifo' || drawPolicy === 'lifo') && allocations.every(a => a.basisSnapshot.policy === drawPolicy);
+    const drawAllocations = splitDraw ? [...allocations].sort((a, b) => {
+      const placement = String(a.basisSnapshot.placedAt).localeCompare(String(b.basisSnapshot.placedAt));
+      const aSequence = BigInt(String(a.basisSnapshot.postingSequence));
+      const bSequence = BigInt(String(b.basisSnapshot.postingSequence));
+      return placement || (aSequence < bSequence ? -1 : aSequence > bSequence ? 1 : 0);
+    }) : [];
+    if (drawPolicy === 'lifo') drawAllocations.reverse();
     const correctionSources = savedSources.success ? savedSources.data : kind === 'loss' || kind === 'delivery'
-      ? allocations.flatMap(a => a.basisSnapshot.readingPercent == null ? [] : [{ layerId: (a.biocharProductId ?? a.productionRunId)!, moisturePercent: Number(a.basisSnapshot.readingPercent) }]) : [];
+      ? drawAllocations.flatMap(a => a.basisSnapshot.readingPercent == null ? [] : [{ layerId: (a.biocharProductId ?? a.productionRunId)!, moisturePercent: Number(a.basisSnapshot.readingPercent) }]) : [];
     const entry: OutputStockHistoryEntry = { id: m.id, kind: m.outputKind!, eventKind: kind === 'loss' || kind === 'count' || kind === 'delivery' || kind === 'production_draw' ? kind : undefined,
       occurredAt: m.occurredAt!.toISOString(), recordedAt: m.createdAt.toISOString(), actorName,
       reason: m.reason, wetMassKg: typeof m.inputSnapshot?.wetMassKg === 'number' ? m.inputSnapshot.wetMassKg : null,

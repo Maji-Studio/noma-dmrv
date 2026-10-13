@@ -252,7 +252,7 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
     correction: openedMovement ? { movementId: openedMovement.id, kind: "delivery", sources: openedMovement.sources } : undefined,
   });
   const [attempted, setAttempted] = useState(false);
-  const massChanged = isEditMode && (wetMass !== delivery.deliveredWetMassKg || (!draw.active && moisture !== delivery.moistureContentPercent) ||
+  const massChanged = isEditMode && (draw.changed || wetMass !== delivery.deliveredWetMassKg || (!draw.active && moisture !== delivery.moistureContentPercent) ||
     ((draw.sources ?? watchSources) != null && JSON.stringify(draw.sources ?? watchSources) !== JSON.stringify(openedMovement?.sources)));
   const stockChanged = !isEditMode || (!massLocked && massChanged);
   const { preview: stockPreview, estimate: moistureEstimate, gate, beginSubmit } = useOutputDrawDraft({
