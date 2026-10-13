@@ -183,7 +183,10 @@ export function SampleForm({
   });
 
   // CERT chips reflect the saved record (frozen), neutral while creating.
-  const certStatus = makeCertFieldStatus(isEditMode ? defaultValues : undefined);
+  // The saved O/C, not the editable lab default, which is empty when oxygen derives it.
+  const certStatus = makeCertFieldStatus(
+    isEditMode ? { ...defaultValues, oToCOrgRatio: sample?.oToCOrgRatio ?? undefined } : undefined,
+  );
 
   // Watch fields for calculated values and conditional rendering
   const watchedCreditBatchId = watch("creditBatchId");
