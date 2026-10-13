@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { and, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { creditBatches, samples } from "@/db/schema";
+import { creditBatches, facilities, productionRuns, samples } from "@/db/schema";
 import { GET as LIST } from "@/app/api/v1/lab-samples/route";
 import { GET } from "@/app/api/v1/lab-samples/[idOrCode]/route";
 import { labSampleRepresentationSchema } from "@/lib/representations/lab-samples";
@@ -160,6 +160,25 @@ describe("lab sample reads", { timeout: TIMEOUT_MS }, () => {
       expect(response.status).toBe(200);
       expect((await response.json()).data).toMatchObject({ id: august.id, creditBatchId: a.batchB!.id });
     }
+  });
+
+  it("matches the legacy run's facility only for a sample with no credit batch", async () => {
+    const [other] = await db.insert(facilities).values({ organizationId: a.ctx.organizationId, code: `E2E-LAB-F2-${a.tag}`, name: `E2E Lab F2 ${a.tag}` }).returning();
+    const moved = await insertApiSample(a, {
+      code: `SAM-API-MOVED-${a.tag}`, creditBatchId: a.batchA.id, productionRunId: a.runs[0].id, samplingTime: FIRST_SAMPLED, createdAt: "2026-10-01T14:00:00.000Z",
+    });
+    await db.update(productionRuns).set({ facilityId: other.id })
+      .where(and(eq(productionRuns.id, a.runs[0].id), eq(productionRuns.organizationId, a.ctx.organizationId)));
+    expect(await ids(await list(`?facilityId=${other.id}`))).toEqual([legacy.id]);
+    expect(await ids(await list(`?facilityId=${a.facility.id}`))).toContain(moved.id);
+    expect(await ids(await list(`?facilityId=${a.facility.id}`))).not.toContain(legacy.id);
+  });
+
+  it("hides a legacy sample whose production run is archived from lists but reads it by id", async () => {
+    await db.update(productionRuns).set({ archivedAt: ARCHIVED_AT })
+      .where(and(eq(productionRuns.id, a.runs[0].id), eq(productionRuns.organizationId, a.ctx.organizationId)));
+    expect(await ids(await list())).not.toContain(legacy.id);
+    expect((await get(legacy.id)).status).toBe(200);
   });
 
   it("canonicalizes uppercase UUIDs in the path and in filters", async () => {

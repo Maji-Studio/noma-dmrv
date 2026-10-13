@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, isNull, lt, or } from "drizzle-orm";
+import { and, desc, eq, gte, isNotNull, isNull, lt, or } from "drizzle-orm";
 import { db } from "@/db";
 import { creditBatches, productionRuns, samples } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
@@ -73,7 +73,8 @@ export async function findApiLabSample(ctx: OrgContext, identifier: ApiLookupIde
 /**
  * Newest first by (createdAt, id). The facility filter matches through the
  * credit batch, or through the production run on a legacy sample that has
- * none, as the app's list does. Samples on archived batches are hidden.
+ * none, as the app's list does. Samples on archived batches, and legacy
+ * samples on archived production runs, are hidden.
  */
 export async function listApiLabSamples(ctx: OrgContext, filters: ApiLabSampleFilters, limit: number, cursor?: ApiLookupPosition) {
   requireOrgScope(ctx);
@@ -84,7 +85,13 @@ export async function listApiLabSamples(ctx: OrgContext, filters: ApiLabSampleFi
     .leftJoin(productionRuns, and(eq(samples.productionRunId, productionRuns.id), eq(productionRuns.organizationId, ctx.organizationId)))
     .where(and(
       eq(samples.organizationId, ctx.organizationId), isNull(creditBatches.archivedAt),
-      filters.facilityId ? or(eq(creditBatches.facilityId, filters.facilityId), eq(productionRuns.facilityId, filters.facilityId)) : undefined,
+      // The legacy run stands in only when the sample has no batch: for archive
+      // state and for the facility filter alike.
+      or(isNotNull(samples.creditBatchId), isNull(productionRuns.archivedAt)),
+      filters.facilityId ? or(
+        eq(creditBatches.facilityId, filters.facilityId),
+        and(isNull(samples.creditBatchId), eq(productionRuns.facilityId, filters.facilityId)),
+      ) : undefined,
       filters.creditBatchId ? eq(samples.creditBatchId, filters.creditBatchId) : undefined,
       filters.code !== undefined ? eq(samples.sampleCode, filters.code) : undefined,
       filters.sampledFrom ? gte(samples.samplingTime, new Date(filters.sampledFrom)) : undefined,
