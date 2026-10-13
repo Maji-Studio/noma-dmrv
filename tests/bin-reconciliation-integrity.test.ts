@@ -104,7 +104,7 @@ describe("bin reconciliation integrity", { timeout: CONCURRENCY_TEST_TIMEOUT_MS 
     const runCode = `PR-TAKE-RUN-${tag}`;
     const [facility] = await db
       .insert(facilities)
-      .values({
+      .values({ timezone: "UTC",
         organizationId: TEST_ORG_ID,
         code: `FAC-TAKE-RUN-${tag}`,
         name: `Stock Take Run Facility ${tag}`,

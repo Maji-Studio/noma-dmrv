@@ -34,7 +34,7 @@ beforeAll(async () => {
     const fixture = await db.transaction(async (tx) => {
       const [facility] = await tx
         .insert(facilities)
-        .values({ organizationId: TEST_ORG_ID, code: `FAC-OCG-${tag}`, name: `OCG Facility ${tag}` })
+        .values({ timezone: "UTC", organizationId: TEST_ORG_ID, code: `FAC-OCG-${tag}`, name: `OCG Facility ${tag}` })
         .returning({ id: facilities.id });
       const [product] = await tx
         .insert(biocharProducts)

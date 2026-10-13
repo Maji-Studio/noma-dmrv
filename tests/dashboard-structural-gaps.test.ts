@@ -94,11 +94,13 @@ beforeAll(async () => {
       .values([
         {
           organizationId: TEST_ORG_ID,
+          timezone: "UTC",
           code: `FAC-DG-GAP-${tag}`,
           name: `Dashboard gap ${tag}`,
         },
         {
           organizationId: TEST_ORG_ID,
+          timezone: "UTC",
           code: `FAC-DG-CLEAR-${tag}`,
           name: `Dashboard clear ${tag}`,
           gpsLatitude: -6.16,
@@ -106,6 +108,7 @@ beforeAll(async () => {
         },
         {
           organizationId: TEST_ORG_ID,
+          timezone: "UTC",
           code: `FAC-DG-OTHER-${tag}`,
           name: `Dashboard other ${tag}`,
           gpsLatitude: -6.17,

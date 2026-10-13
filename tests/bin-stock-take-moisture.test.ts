@@ -56,7 +56,7 @@ describe("feedstock stock-take moisture integrity", () => {
     const ctx = makeTestOrgContext(TEST_USER_ID);
     const [facility] = await db
       .insert(facilities)
-      .values({
+      .values({ timezone: "UTC",
         organizationId: TEST_ORG_ID,
         code: `FAC-STOCK-MOIST-${tag}`,
         name: `Stock Moisture Facility ${tag}`,

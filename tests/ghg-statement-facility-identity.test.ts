@@ -86,7 +86,7 @@ async function createFacility(
   const runId = crypto.randomUUID().slice(0, 8);
   const [facility] = await db
     .insert(facilities)
-    .values({
+    .values({ timezone: "UTC",
       organizationId,
       name: `GGS Identity ${label} ${runId}`,
       code: `FAC-GI-${runId}`,

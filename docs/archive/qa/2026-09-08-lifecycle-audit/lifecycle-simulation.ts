@@ -25,7 +25,7 @@ beforeAll(() => ensureTestOrg());
 
 async function fixture() {
   const tag = crypto.randomUUID();
-  const [facility] = await db.insert(facilities).values({
+  const [facility] = await db.insert(facilities).values({ timezone: "UTC",
     organizationId: TEST_ORG_ID, code: `AUD-${tag}`, name: `Audit ${tag}`, country: "CHE",
   }).returning();
   const [type] = await db.insert(feedstockTypes).values({

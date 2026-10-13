@@ -1,6 +1,6 @@
 "use client";
 
-import type { Ref } from "react";
+import { useState, type Ref } from "react";
 import { Combobox } from "@base-ui/react/combobox";
 import {
   CaretDownIcon,
@@ -9,28 +9,51 @@ import {
 } from "@phosphor-icons/react/dist/ssr";
 import { formatTimezoneLabel } from "@/lib/date-utils";
 import { cn } from "@/lib/utils";
-import { timezones, type Timezone } from "@/schemas/facilities";
+import {
+  orderWithSuggestions,
+  searchQueryAfterInputChange,
+  searchTimezones,
+  findTimezoneEntry,
+  timezonesForCountry,
+  type TimezoneEntry,
+} from "@/lib/timezones";
 
 const POPOVER_SIDE_OFFSET_PX = 4;
 
 interface TimezoneOption {
-  value: Timezone;
+  value: string;
   label: string;
+  /** "Tanzania · East Africa Time": what the id alone does not say. */
+  detail: string;
 }
 
-const TIMEZONE_OPTIONS: readonly TimezoneOption[] = timezones.map((timezone) => ({
-  value: timezone,
-  label: formatTimezoneLabel(timezone),
-}));
+/** Labels read the clock, so build each once and reuse it across renders. */
+const optionCache = new Map<string, TimezoneOption>();
+
+function toOption(entry: TimezoneEntry): TimezoneOption {
+  const cached = optionCache.get(entry.id);
+  if (cached) return cached;
+  const option = {
+    value: entry.id,
+    label: formatTimezoneLabel(entry.id),
+    detail: [entry.countryName, entry.readableName].filter(Boolean).join(" · "),
+  };
+  optionCache.set(entry.id, option);
+  return option;
+}
 
 interface TimezoneComboboxProps {
   id: string;
   name: string;
   inputRef: Ref<HTMLInputElement>;
-  value?: Timezone;
-  onChange: (value: Timezone | undefined) => void;
+  value?: string;
+  /** Free-text country of the record; its zones are offered first. */
+  country?: string | null;
+  onChange: (value: string | undefined) => void;
   onBlur: () => void;
   disabled?: boolean;
+  /** Native required constraint; off where the zone is optional. */
+  required?: boolean;
   error?: boolean;
   placeholder?: string;
   "aria-describedby"?: string;
@@ -42,16 +65,29 @@ export function TimezoneCombobox({
   name,
   inputRef,
   value,
+  country,
   onChange,
   onBlur,
   disabled = false,
+  required = true,
   error = false,
-  placeholder = "Search timezone…",
+  placeholder = "Select timezone",
   "aria-describedby": ariaDescribedBy,
   "aria-invalid": ariaInvalid,
 }: TimezoneComboboxProps) {
-  const selectedOption =
-    TIMEZONE_OPTIONS.find((option) => option.value === value) ?? null;
+  const [query, setQuery] = useState("");
+  const selectedEntry = findTimezoneEntry(value);
+  const selectedOption = selectedEntry ? toOption(selectedEntry) : null;
+  const suggested = timezonesForCountry(country);
+  const suggestedIds = new Set(suggested.map((entry) => entry.id));
+  // The input shows the chosen label after a pick; that is not a search.
+  const searchText = query;
+  const visibleOptions = (
+    searchText
+      ? searchTimezones(searchText, suggestedIds)
+      : orderWithSuggestions(suggested)
+  ).map(toOption);
+  const showSuggestedTag = !searchText && suggestedIds.size > 0;
   const isInvalid =
     error || ariaInvalid === true || ariaInvalid === "true";
 
@@ -59,7 +95,11 @@ export function TimezoneCombobox({
     <Combobox.Root
       id={`${id}-combobox`}
       name={name}
-      items={TIMEZONE_OPTIONS}
+      items={visibleOptions}
+      filteredItems={visibleOptions}
+      onInputValueChange={(value, details) =>
+        setQuery(searchQueryAfterInputChange(value, details.reason))
+      }
       value={selectedOption}
       onValueChange={(option) => onChange(option?.value)}
       isItemEqualToValue={(option, selected) =>
@@ -67,7 +107,7 @@ export function TimezoneCombobox({
       }
       autoHighlight
       disabled={disabled}
-      required
+      required={required}
     >
       <div className="relative">
         <MagnifyingGlassIcon
@@ -102,7 +142,7 @@ export function TimezoneCombobox({
           className="z-[var(--z-layer-popover)] w-[var(--anchor-width)]"
         >
           <Combobox.Popup className="w-full bg-[var(--paper)] [border:var(--hair)] outline-none">
-            <Combobox.Empty className="px-12 py-10 body-small text-[var(--color-text-tertiary)]">
+            <Combobox.Empty className="px-12 py-10 empty:hidden body-small text-[var(--color-text-tertiary)]">
               No timezones found
             </Combobox.Empty>
             <Combobox.List className="max-h-320 overflow-y-auto py-4">
@@ -116,7 +156,19 @@ export function TimezoneCombobox({
                     "data-[highlighted]:bg-[var(--color-background-medium)]",
                   )}
                 >
-                  <span className="min-w-0 flex-1">{option.label}</span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block">{option.label}</span>
+                    {option.detail ? (
+                      <span className="block body-caption text-[var(--color-text-tertiary)]">
+                        {option.detail}
+                      </span>
+                    ) : null}
+                  </span>
+                  {showSuggestedTag && suggestedIds.has(option.value) ? (
+                    <span className="shrink-0 body-caption text-[var(--color-text-tertiary)]">
+                      Suggested
+                    </span>
+                  ) : null}
                   <Combobox.ItemIndicator className="shrink-0 text-[var(--color-text-primary)]">
                     <CheckIcon aria-hidden size={16} weight="bold" />
                   </Combobox.ItemIndicator>

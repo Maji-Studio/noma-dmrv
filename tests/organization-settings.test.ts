@@ -108,6 +108,19 @@ describe.sequential("organization operating defaults", () => {
     });
   });
 
+  it("stores no timezone when the organization has not chosen one", async () => {
+    const ctx = makeTestOrgContext();
+    await upsertOrganizationDefaults(ctx, {
+      ...DEFAULT_ORGANIZATION_SETTINGS,
+      defaultTimezone: null,
+    });
+
+    expect(DEFAULT_ORGANIZATION_SETTINGS.defaultTimezone).toBeNull();
+    await expect(getOrganizationDefaults(ctx)).resolves.toMatchObject({
+      defaultTimezone: null,
+    });
+  });
+
   it("refuses a write from a member", async () => {
     const ctx = { ...makeTestOrgContext(), orgRole: "member" as const };
     await expect(

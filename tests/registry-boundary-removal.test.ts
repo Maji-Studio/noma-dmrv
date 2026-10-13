@@ -198,7 +198,7 @@ async function createFixture(): Promise<Fixture> {
   const isometricFeedstockTypeId = `${ISOMETRIC_FEEDSTOCK_TYPE_ID}_${runId}`;
   const [facility] = await db
     .insert(facilities)
-    .values({
+    .values({ timezone: "UTC",
       organizationId: TEST_ORG_ID,
       name: `Boundary Facility ${runId}`,
       code: `FAC-BD-${runId}`,

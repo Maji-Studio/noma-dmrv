@@ -20,7 +20,7 @@ export const facilities = pgTable(
     location: text('location'),
     gpsLatitude: doublePrecision('gps_latitude'),
     gpsLongitude: doublePrecision('gps_longitude'),
-    timezone: text('timezone').notNull().default('UTC'),
+    timezone: text('timezone').notNull(),
     country: text('country').notNull().default('UNKNOWN'),
     address: text('address'),
     contactEmail: text('contact_email'),

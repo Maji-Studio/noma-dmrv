@@ -116,7 +116,7 @@ describe.each(["supplier", "customer"] as const)("%s location parent-first locks
     async (operation) => {
       const f = await fixture();
       const tag = crypto.randomUUID();
-      const [facility] = await db.insert(facilities).values({
+      const [facility] = await db.insert(facilities).values({ timezone: "UTC",
         organizationId: TEST_ORG_ID, code: `FAC-${tag}`, name: `Lock facility ${tag}`, country: "CH",
       }).returning();
       const [feedstockType] = await db.insert(feedstockTypes).values({
