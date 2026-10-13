@@ -11,6 +11,7 @@ import { previewOutputStock } from "@/data-access/output-stock-operations";
 import { getOutputSubBins } from "@/data-access/output-sub-bins";
 import { postOutputStock } from "@/data-access/output-stock-post";
 import { updateStorageLocation } from "@/data-access/storage-locations";
+import { updateDelivery } from "@/lib/operations/deliveries";
 import { SafeError } from "@/lib/errors";
 import { cleanupPostedStock, postedStockFixture, postMeasurement, postProduct, deliveryInput, STOCK_DATE, STOCK_TIME } from "./helpers/posted-output-stock-fixture";
 
@@ -132,6 +133,12 @@ describe("split bin draws in PostgreSQL", () => {
     const blocked = await previewOutputStock(f.ctx, { facilityId: f.facility.id, storageLocationId: f.bin.id, occurredAt: STOCK_TIME, kind: "delivery", wetMassKg: 400,
       correctsMovementId: allocation.movementId, sources });
     expect(blocked.blockingMessage).toMatch(/Correction blocked by application/);
+    // The history locks the applied delivery up front, so its form can still save other fields.
+    const history = await getOutputStockHistory(f.ctx, f.bin.id);
+    expect(history.find(entry => entry.deliveryId === delivery.id)).toMatchObject({ editLockedReason: `Locked because application E2E-SPLIT-AP-${f.tag} uses this delivery.` });
+    const [current] = await db.select().from(deliveries).where(eq(deliveries.id, delivery.id));
+    const saved = await updateDelivery(f.ctx, delivery.id, { expectedVersion: current.version, distanceNote: "Route note" });
+    expect(saved).toMatchObject({ distanceNote: "Route note", deliveredWetMassKg: 500, savedProducts: [] });
   });
 
   it("keeps provenance for a last sub-bin reached by less than half a gram of dry solids", async () => {

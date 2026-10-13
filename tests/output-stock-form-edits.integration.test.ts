@@ -110,7 +110,8 @@ it("corrects a latest delivery wet mass and keeps its row and stock movement in 
   const f = await fixture();
   const delivery = await postDelivery(f, 100);
   const saved = await updateDelivery(f.ctx, delivery.id, { expectedVersion: delivery.version, deliveredWetMassKg: 40 });
-  expect(saved).toMatchObject({ deliveredWetMassKg: 40, massDryKg: 40, deliveryDate: delivery.deliveryDate });
+  expect(saved).toMatchObject({ deliveredWetMassKg: 40, massDryKg: 40, deliveryDate: delivery.deliveryDate,
+    savedProducts: [expect.objectContaining({ id: f.product!.id })] });
   const history = await getOutputStockHistory(f.ctx, f.bin.id);
   expect(history.filter(e => e.deliveryId === delivery.id)).toEqual(expect.arrayContaining([
     expect.objectContaining({ kind: "reversal" }),

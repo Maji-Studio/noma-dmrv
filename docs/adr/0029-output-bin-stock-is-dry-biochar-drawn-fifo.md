@@ -58,5 +58,5 @@ The planner resolves the setting to `fifo` or `lifo`; explicit sources retain
 and any explicit order in `basis_snapshot`. Bin edits use the existing version
 check and stock lock, and a changed setting invalidates preview fingerprints.
 Delivery, product creation, lost mass and public REST/MCP writes all share this
-resolution. Migration 0133 adds the enum and non-null column with an oldest-first
+resolution. Migration 0134 adds the enum and non-null column with an oldest-first
 default. Mix bins remain governed by ADR 0030.

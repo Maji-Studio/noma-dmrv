@@ -1,7 +1,7 @@
 import { assertRowVersion, nextVersion } from "./row-version";
 import { randomUUID } from 'node:crypto';
 import { db, type DbTransaction } from '@/db';
-import { deliveries, drivers, facilities, orders, storageLocations, vehicles, type BiocharProduct, type Delivery } from '@/db/schema';
+import { deliveries, drivers, facilities, orders, storageLocations, vehicles, type BiocharProduct, type BiocharProductRecord, type Delivery } from '@/db/schema';
 import type { OrgContext } from '@/lib/auth/server';
 import { SafeError } from '@/lib/errors';
 import { createDeliverySchema, updateDeliverySchema } from '@/schemas/deliveries';
@@ -18,6 +18,8 @@ import { lockBiocharTransportRouteTopology, syncBiocharProductTransportLegs } fr
 import { assertSameOrg, requireOrgScope } from './utils';
 
 export type CreatedDelivery = Delivery & { savedProducts: BiocharProduct[] };
+/** A mass or moisture edit re-posts stock, so the products it touched return with their new versions. */
+export type UpdatedDelivery = Delivery & { savedProducts: BiocharProductRecord[] };
 
 export async function createDelivery(ctx: OrgContext, raw: z.input<typeof createDeliverySchema>): Promise<CreatedDelivery> {
   requireOrgScope(ctx);
@@ -51,7 +53,7 @@ export async function createDelivery(ctx: OrgContext, raw: z.input<typeof create
     return { ...saved, savedProducts: posted.savedProducts };
   } });
 }
-export async function updateDeliveryInTransaction(ctx: OrgContext, tx: DbTransaction, deliveryId: string, raw: Omit<z.input<typeof updateDeliverySchema>, 'deliveryId'>): Promise<Delivery> {
+export async function updateDeliveryInTransaction(ctx: OrgContext, tx: DbTransaction, deliveryId: string, raw: Omit<z.input<typeof updateDeliverySchema>, 'deliveryId'>): Promise<UpdatedDelivery> {
   requireOrgScope(ctx);
   const data = updateDeliverySchema.parse({ ...raw, deliveryId });
   if (data.driverId) await assertSameOrg(ctx, drivers, data.driverId, tx);
@@ -77,6 +79,7 @@ export async function updateDeliveryInTransaction(ctx: OrgContext, tx: DbTransac
     .sort((a, b) => a.movement.postingSequence > b.movement.postingSequence ? -1 : 1)[0]?.movement;
   const massChanged = data.deliveredWetMassKg !== undefined && data.deliveredWetMassKg !== existing.deliveredWetMassKg;
   const moistureChanged = data.moistureContentPercent !== undefined && data.moistureContentPercent !== existing.moistureContentPercent;
+  let savedProducts: BiocharProductRecord[] = [];
   const sourcesChanged = data.sources !== undefined && JSON.stringify(data.sources) !== JSON.stringify(current?.inputSnapshot?.sources);
   if (massChanged || moistureChanged || sourcesChanged) {
     if (!current) throw new SafeError('Posted delivery stock entry not found.');
@@ -84,19 +87,19 @@ export async function updateDeliveryInTransaction(ctx: OrgContext, tx: DbTransac
     if (data.correctsMovementId && data.correctsMovementId !== current.id) throw new SafeError('This delivery was corrected. Reload it before editing its mass.');
     const savedSources = current.inputSnapshot?.sources;
     if (moistureChanged && data.sources === undefined && Array.isArray(savedSources)) throw new SafeError('Edit the moisture reading for each sub-bin in this delivery.');
-    await recordOutputStockMovementInTransaction(ctx, tx, {
+    ({ savedProducts } = await recordOutputStockMovementInTransaction(ctx, tx, {
       storageLocationId: existing.storageLocationId, facilityId: existing.facilityId, kind: 'delivery',
       occurredAt: existing.deliveryDate.toISOString(), wetMassKg: data.deliveredWetMassKg === undefined ? existing.deliveredWetMassKg! : data.deliveredWetMassKg!,
       moisturePercent: data.moistureContentPercent ?? existing.moistureContentPercent, sources: data.sources,
       correctsMovementId: current.id, idempotencyKey: requestKey, basisFingerprint: data.basisFingerprint,
       reason: `Delivery ${data.code ?? existing.code}: mass or moisture edited`,
-    }, { requireLatestCorrection: true });
+    }, { requireLatestCorrection: true }));
   }
   const [saved] = await tx.update(deliveries).set({ version: nextVersion(deliveries.version), code: data.code, driverId: data.driverId, vehicleId: data.vehicleId, distanceKmOverride: data.distanceKmOverride,
     distanceSource: data.distanceSource, distanceNote: data.distanceNote, updatedAt: new Date() }).where(and(eq(deliveries.organizationId, ctx.organizationId), eq(deliveries.id, deliveryId))).returning();
   const savedRows = await getOutputStockAllocationProjection(ctx, { deliveryId }, tx);
   await syncBiocharProductTransportLegs(ctx, tx, [...new Set(savedRows.flatMap(r => r.allocation.biocharProductId ? [r.allocation.biocharProductId] : []))]);
-  return saved;
+  return { ...saved, savedProducts };
 }
 export async function deleteDelivery(ctx: OrgContext, deliveryId: string, expectedVersion: number): Promise<void> {
   requireOrgScope(ctx);

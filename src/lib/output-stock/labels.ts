@@ -22,3 +22,5 @@ export const LOST_MASS_SUBMIT_LABEL = "Save lost mass";
 
 /** Shared operator reason for form edits that would change newer saved stock shares. */
 export const STOCK_ENTRY_LOCKED_REASON = "Locked because newer stock entries were recorded on this bin after it.";
+/** An application builds on the delivery, so its stock can no longer change. */
+export const deliveryAppliedLockedReason = (applicationCode: string) => `Locked because application ${applicationCode} uses this delivery.`;

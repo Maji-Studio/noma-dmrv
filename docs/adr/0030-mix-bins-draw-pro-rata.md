@@ -23,7 +23,7 @@ Registry basis (pinned v1.1): the protocol allows C_biochar "for either a blend 
 
 ## Addendum (2026-10-13): split-bin defaults do not change mix draws
 
-The per-bin `draw_order` preference introduced in migration 0133 applies only
+The per-bin `draw_order` preference introduced in migration 0134 applies only
 while an output bin is Split. A Mix draw still takes every eligible layer pro
 rata, regardless of that preference, and still rejects explicit sub-bin sources.
 Its allocation `basis_snapshot` records `policy: "pro_rata"` and

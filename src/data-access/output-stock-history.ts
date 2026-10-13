@@ -1,5 +1,5 @@
 import { db } from '@/db';
-import { binMovements, biocharProducts, biocharProductSourceAllocations, productionRuns, productIngredientSnapshots, storageLocations, users } from '@/db/schema';
+import { applications, binMovements, biocharProducts, biocharProductSourceAllocations, productionRuns, productIngredientSnapshots, storageLocations, users } from '@/db/schema';
 import type { OrgContext } from '@/lib/auth/server';
 import { SafeError } from '@/lib/errors';
 import { orderedSourcesSchema } from '@/schemas/output-stock';
@@ -8,6 +8,7 @@ import { and, asc, eq, inArray } from 'drizzle-orm';
 import { getOutputStockAllocationProjection } from './output-stock';
 import { requireOrgScope } from './utils';
 import { stockEntryLockReason } from '@/lib/output-stock/edit-lock';
+import { deliveryAppliedLockedReason } from '@/lib/output-stock/labels';
 
 /** Intake facts retain their recorded wet mass; movement facts remain immutable. */
 export async function getOutputStockHistory(ctx: OrgContext, storageLocationId: string): Promise<OutputStockHistoryEntry[]> {
@@ -97,10 +98,16 @@ export async function getOutputStockHistory(ctx: OrgContext, storageLocationId: 
   const latestSequence = movements.at(-1)?.movement.postingSequence ?? BigInt(0);
   const receiptFacts = [...products.map(product => ({ id: product.id, recordedAt: product.createdAt })),
     ...runs.filter(run => run.biocharStorageLocationId === storageLocationId && run.status === 'complete').map(run => ({ id: run.id, recordedAt: run.updatedAt }))];
+  // The correction path refuses an applied delivery too; locking it here keeps the delivery's other fields saveable.
+  const deliveryIds = [...new Set(history.flatMap(entry => entry.deliveryId ? [entry.deliveryId] : []))];
+  const applied = deliveryIds.length === 0 ? [] : await db.select({ deliveryId: applications.deliveryId, code: applications.code }).from(applications)
+    .where(and(eq(applications.organizationId, ctx.organizationId), inArray(applications.deliveryId, deliveryIds)));
+  const applicationCode = new Map(applied.map(row => [row.deliveryId, row.code]));
   for (const entry of history) {
     if (entry.kind === 'reversal' || !['loss', 'delivery'].includes(entry.eventKind ?? entry.kind)) continue;
     const original = movements.find(row => row.movement.id === entry.id)?.movement;
-    if (original) entry.editLockedReason = stockEntryLockReason(original, latestSequence, receiptFacts);
+    const code = entry.deliveryId ? applicationCode.get(entry.deliveryId) : undefined;
+    if (original) entry.editLockedReason = code ? deliveryAppliedLockedReason(code) : stockEntryLockReason(original, latestSequence, receiptFacts);
   }
   return history;
 }
