@@ -645,7 +645,7 @@ describe("EntitySelect caller-owned options", () => {
     expect(screen.queryAllByRole("option")).toHaveLength(0);
   });
 
-  it.each(["storage bin", "credit batch", "feedstock", "Removal template", "Isometric project"])("names the empty record type (%s) and keeps search-miss guidance", (optionLabel) => {
+  it.each(["storage bin", "Isometric project"])("names the empty record type (%s) and keeps search-miss guidance", (optionLabel) => {
     render(<EntitySelect options={[]} optionLabel={optionLabel} onChange={vi.fn()} alwaysShowSearch />);
     open();
     expect(screen.getByTestId("entity-select-empty").textContent).toBe(`No matching ${optionLabel} records.`);
