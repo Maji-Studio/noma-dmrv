@@ -10,7 +10,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import type { Order } from "@/db/schema";
+import type { CustomerLocation, Order } from "@/db/schema";
 import type { EntityOption, EntityType } from "@/components/forms/entity-select/types";
 
 const state = vi.hoisted(() => ({
@@ -20,6 +20,8 @@ const state = vi.hoisted(() => ({
   detailRequests: [] as { entityType: EntityType; id: string | undefined }[],
   customersById: {} as Record<string, EntityOption>,
   locationOptions: [] as EntityOption[],
+  locations: [] as CustomerLocation[],
+  editLocation: vi.fn(),
 }));
 
 vi.mock("@/hooks/use-facility-context", () => ({
@@ -38,7 +40,7 @@ vi.mock("@/hooks/use-organization-settings", () => ({
 }));
 
 vi.mock("@/hooks/use-customers", () => ({
-  useCustomerLocations: () => ({ data: [] }),
+  useCustomerLocations: () => ({ data: state.locations }),
 }));
 
 vi.mock("@/components/orders/matching-output-bins", () => ({
@@ -63,6 +65,13 @@ vi.mock("@/hooks/use-entities", () => ({
   },
 }));
 
+vi.mock("@/components/customers/customer-location-dialog", () => ({
+  CustomerLocationDialog: ({ customerId, location, onClose }: { customerId: string; location: CustomerLocation; onClose: () => void }) => {
+    state.editLocation({ customerId, location });
+    return <button type="button" onClick={onClose}>Close location editor</button>;
+  },
+}));
+
 import { OrderForm } from "./order-form";
 
 const noop = () => {};
@@ -81,6 +90,8 @@ beforeEach(() => {
   state.detailRequests = [];
   state.customersById = {};
   state.locationOptions = [];
+  state.locations = [];
+  state.editLocation.mockClear();
   Element.prototype.scrollIntoView = vi.fn();
   window.matchMedia = vi.fn().mockImplementation(() => ({ matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn() }));
 });
@@ -118,6 +129,35 @@ describe("OrderForm customer field", () => {
     expect(picker.textContent).toBe("Select location...");
     fireEvent.submit(picker.closest("form")!);
     await waitFor(() => expect(submit).toHaveBeenCalledWith(expect.objectContaining({ customerLocationId: null })));
+    client.clear();
+  });
+
+  it("opens the selected location in edit mode and keeps its opening version fixed", () => {
+    const location = { id: "location-1", customerId: "customer-1", name: "North field", country: "TZ", version: 1 } as CustomerLocation;
+    state.locations = [location];
+    state.locationOptions = [{ id: location.id, code: "", name: location.name! }];
+    const order = { customerId: location.customerId, customerLocationId: location.id } as Order;
+    const client = new QueryClient();
+    const view = <QueryClientProvider client={client}><OrderForm order={order} onSubmit={noop} /></QueryClientProvider>;
+    const { rerender } = render(view);
+    fireEvent.click(screen.getByRole("combobox", { name: "Customer location" }));
+    fireEvent.click(screen.getByTestId("entity-select-edit"));
+    expect(state.editLocation).toHaveBeenLastCalledWith({ customerId: location.customerId, location });
+    state.locations = [{ ...location, version: 2, name: "Renamed field" }];
+    state.locationOptions = [{ ...state.locationOptions[0], name: "Renamed field" }];
+    rerender(<QueryClientProvider client={client}><OrderForm order={order} onSubmit={noop} /></QueryClientProvider>);
+    expect(state.editLocation).toHaveBeenLastCalledWith({ customerId: location.customerId, location });
+    fireEvent.click(screen.getByRole("button", { name: "Close location editor" }));
+    expect(screen.getByRole("combobox", { name: "Customer location" }).textContent).toBe("Renamed field");
+    client.clear();
+  });
+
+  it("offers no location edit until the scoped location record is available", () => {
+    state.locationOptions = [{ id: "location-1", code: "", name: "North field" }];
+    const client = new QueryClient();
+    render(<QueryClientProvider client={client}><OrderForm order={{ customerId: "customer-1", customerLocationId: "location-1" } as Order} onSubmit={noop} /></QueryClientProvider>);
+    fireEvent.click(screen.getByRole("combobox", { name: "Customer location" }));
+    expect(screen.queryByTestId("entity-select-edit")).toBeNull();
     client.clear();
   });
 
