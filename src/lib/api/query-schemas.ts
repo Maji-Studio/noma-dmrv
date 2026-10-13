@@ -1,5 +1,6 @@
 import { PRODUCTION_RUN_STATUSES } from "@/lib/production-runs/lifecycle";
 import { biocharProductStatusValues } from "@/schemas/biochar-products";
+import { creditBatchSamplingChoices, creditBatchStatuses } from "@/schemas/credit-batches";
 import { z } from "zod";
 import { offsetInstantSchema } from "@/schemas/event-instant";
 import { publishedJsonSchemas } from "@/schemas/published-json-schema";
@@ -55,6 +56,21 @@ export const biocharProductListSchema = z.strictObject({
   placedFrom: placedInstantSchema.optional().describe("Only products placed at or after this RFC 3339 instant with an explicit offset; encode + as %2B or use Z."),
   placedBefore: placedInstantSchema.optional().describe("Only products placed before this RFC 3339 instant with an explicit offset; encode + as %2B or use Z."),
 });
+const sampledInstantSchema = offsetInstantSchema();
+export const labSampleListSchema = z.strictObject({
+  q: prefixSchema.describe("Case-insensitive literal prefix search on lab sample code."),
+  ...paginationShape, code: codeSchema,
+  facilityId: uuidSchema().optional().describe("Facility filter, UUID. Matches samples whose credit batch belongs to the facility."),
+  creditBatchId: uuidSchema().optional().describe("Credit batch filter, UUID."),
+  sampledFrom: sampledInstantSchema.optional().describe("Only samples taken at or after this RFC 3339 instant with an explicit offset; encode + as %2B or use Z."),
+  sampledBefore: sampledInstantSchema.optional().describe("Only samples taken before this RFC 3339 instant with an explicit offset; encode + as %2B or use Z."),
+});
+export const creditBatchListSchema = z.strictObject({
+  q: prefixSchema.describe("Case-insensitive literal prefix search on credit batch code."),
+  ...paginationShape, facilityId: facilityIdSchema, code: codeSchema,
+  status: z.enum(creditBatchStatuses).optional().describe("Credit batch status filter."),
+  sampling: z.enum(creditBatchSamplingChoices).optional().describe("Credit batch sampling filter."),
+});
 export const outputStockMovementListSchema = z.strictObject(paginationShape);
 
 /** Shared by REST adapters and the public contract, without handler dependencies. */
@@ -70,4 +86,6 @@ export const resourceQueries = {
   "storage-locations": { list: facilityLookupListSchema, get: facilityLookupGetSchema },
   vehicles: { list: lookupListSchema, get: lookupGetSchema },
   drivers: { list: lookupListSchema, get: lookupGetSchema },
+  "lab-samples": { list: labSampleListSchema, get: lookupGetSchema },
+  "credit-batches": { list: creditBatchListSchema, get: lookupGetSchema },
 };

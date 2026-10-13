@@ -23,6 +23,28 @@ export const CASES = [
   { id: "chained-complete", text: "log 4.2 t wet wood chips from supplier X into bin B2 at 32% moisture, then start a run on R1 with that feedstock, drawing 1.5 t wet from B2" },
 ] as const;
 
+export const LAB_TOOL_CALL_BUDGET = 8;
+export const LAB_BATCH_CODE = "CB-X";
+export const LAB_DURABILITY_OPTION = "200_year";
+export const LAB_BATCH_WINDOW_DAYS = 30;
+export const LAB_SAMPLING_LOCAL_TIME = "10:00";
+/** Stored `real` columns round-trip through float32, so percents compare within this. */
+export const LAB_VALUE_TOLERANCE = 1e-4;
+export const LAB_RATIO_TOLERANCE = 1e-6;
+/** Dry-basis results for three replicates of one batch. Organic carbon is distinct per replicate, so rows pair up by it. */
+export const LAB_REPLICATES = [
+  { totalCarbonPercent: 82.4, organicCarbonPercent: 78.1, hydrogenPercent: 2.1, oxygenPercent: 6.3, ashPercent: 8.5, moisturePercent: 4.2 },
+  { totalCarbonPercent: 81.7, organicCarbonPercent: 77.6, hydrogenPercent: 2.3, oxygenPercent: 6.8, ashPercent: 9.1, moisturePercent: 4.6 },
+  { totalCarbonPercent: 83.1, organicCarbonPercent: 79, hydrogenPercent: 2, oxygenPercent: 5.9, ashPercent: 8.2, moisturePercent: 3.9 },
+] as const;
+/** A replicate that leaves out organic carbon. */
+export const LAB_INCOMPLETE_REPLICATE = { totalCarbonPercent: 81.2, hydrogenPercent: 2, moisturePercent: 4.5 } as const;
+const REPLICATE_TEXT = LAB_REPLICATES.map((r, index) => `Replicate ${index + 1}: total carbon ${r.totalCarbonPercent}%, organic carbon ${r.organicCarbonPercent}%, hydrogen ${r.hydrogenPercent}%, oxygen ${r.oxygenPercent}%, ash ${r.ashPercent}%, moisture ${r.moisturePercent}%.`).join(" ");
+export const LAB_CASES = [
+  { id: "lab-complete", text: `log the lab results for credit batch ${LAB_BATCH_CODE}, sampled yesterday at ${LAB_SAMPLING_LOCAL_TIME}. Three replicates, all dry basis. ${REPLICATE_TEXT}` },
+  { id: "lab-missing-organic", text: `log a lab sample for credit batch ${LAB_BATCH_CODE}, taken yesterday at ${LAB_SAMPLING_LOCAL_TIME}: total carbon ${LAB_INCOMPLETE_REPLICATE.totalCarbonPercent}%, hydrogen ${LAB_INCOMPLETE_REPLICATE.hydrogenPercent}%, moisture ${LAB_INCOMPLETE_REPLICATE.moisturePercent}%, dry basis` },
+] as const;
+
 /** Shared flags are exported so the supervisor can adjust the harness. */
 export const CLAUDE_FLAGS = [
   "--mcp-config", MCP_CONFIG_PLACEHOLDER, "--strict-mcp-config", "--tools", "", "--allowedTools", "mcp__noma",

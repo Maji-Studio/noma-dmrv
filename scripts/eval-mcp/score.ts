@@ -35,6 +35,8 @@ export interface CaseScore {
   toolCalls: number;
   durationMs: number | null;
   turns: number | null;
+  /** Tool-call budget this case was scored against; the shared budget when absent. */
+  budget?: number;
 }
 
 export function caseTwoExpectation(contract: Record<string, unknown>): CaseTwoExpectation {
@@ -124,7 +126,7 @@ export function markdownReport(scores: CaseScore[]): string {
   const header = ["Case", "Expectation", "Result", ...columns, "Tool calls", "Turns", "Duration"];
   const rows = scores.map((score) => [score.caseId, score.expectation, score.passed ? "PASS" : "FAIL",
     ...columns.map((column) => column in score.criteria ? score.criteria[column] ? "PASS" : "FAIL" : "n/a"),
-    `${score.toolCalls}/${TOOL_CALL_BUDGET}`, String(score.turns ?? "n/a"),
+    `${score.toolCalls}/${score.budget ?? TOOL_CALL_BUDGET}`, String(score.turns ?? "n/a"),
     score.durationMs === null ? "n/a" : `${(score.durationMs / MILLISECONDS_PER_SECOND).toFixed(1)} s`]);
   return [header, header.map(() => "---"), ...rows].map((row) => `| ${row.join(" | ")} |`).join("\n") + "\n";
 }

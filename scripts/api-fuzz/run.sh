@@ -16,6 +16,7 @@ const fields = {
   BIN: 'bin', DRIVER: 'driver', VEHICLE: 'vehicle', FEEDSTOCK: 'feedstock',
   REACTOR: 'reactor', PRODUCTION_RUN: 'productionRun',
   BIOCHAR_BIN: 'biocharBin', BIOCHAR_PRODUCT: 'biocharProduct', PURE_FORMULATION: 'pureFormulation',
+  CREDIT_BATCH: 'creditBatch', LAB_SAMPLE: 'labSample',
 };
 for (const [name, field] of Object.entries(fields)) {
   for (const suffix of ['Id', 'Code']) {
@@ -37,7 +38,7 @@ for (const [name, field] of [['RUN_BIN', 'runBinId'], ['PRODUCT_BIN', 'productBi
   }
   console.log(`API_FUZZ_${name}_ID=${fixture[field]}`);
 }
-for (const [name, field] of [['FEEDSTOCK', 'feedstockEtag'], ['PRODUCTION_RUN', 'productionRunEtag'], ['BIOCHAR_PRODUCT', 'biocharProductEtag']]) {
+for (const [name, field] of [['FEEDSTOCK', 'feedstockEtag'], ['PRODUCTION_RUN', 'productionRunEtag'], ['BIOCHAR_PRODUCT', 'biocharProductEtag'], ['LAB_SAMPLE', 'labSampleEtag']]) {
   if (typeof fixture[field] !== 'string' || !/^"[1-9]\d*\.[1-9]\d*"$/.test(fixture[field])) {
     throw new Error(`Missing or invalid fixture field: ${field}`);
   }

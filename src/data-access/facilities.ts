@@ -594,6 +594,11 @@ export async function archiveFacility(
     await tx.select({ id: biocharProducts.id }).from(biocharProducts)
       .where(and(eq(biocharProducts.facilityId, facilityId), eq(biocharProducts.organizationId, ctx.organizationId), isNull(biocharProducts.archivedAt)))
       .orderBy(asc(biocharProducts.id)).for("no key update");
+    // Sample writers lock credit batches in id order; the bulk update below
+    // would take them in scan order and could deadlock against a sample move.
+    await tx.select({ id: creditBatches.id }).from(creditBatches)
+      .where(and(eq(creditBatches.facilityId, facilityId), eq(creditBatches.organizationId, ctx.organizationId), isNull(creditBatches.archivedAt)))
+      .orderBy(asc(creditBatches.id)).for("no key update");
 
     // Cascade: only rows not already archived get this stamp, so a future
     // per-entity archive cannot be clobbered (restore clears indiscriminately

@@ -1,5 +1,18 @@
 # Isometric Docs Change Log
 
+## 2026-10-13: Lab sample entry warnings and archived batches
+
+- Writing a lab sample (UI or API) returns non-blocking warnings that mirror
+  the submission gates: complete H/C_org and O/C_org, a sampling day before the
+  credit batch window, and on 1,000-year batches R0, S, TGA and at least 500 R0
+  readings (`src/lib/certification/sample-entry-warnings.ts`). The 500 floor is
+  a "should" in module v1.1 and warns only; the TGA requirement is an open
+  registry question (`isometric/tga-1000-year-requirement`).
+- Creating, updating or moving a sample onto an archived credit batch is
+  refused. Reads and deletes still work.
+- H/C_org and O/C_org are calculated by the server whenever their inputs are
+  present (`src/lib/calculations/sample-ratios.ts`).
+
 ## 2026-10-13: A Sample with H/C_org but no O/C_org blocks submission
 
 - Eligibility (module §3 Table 2) is judged on Samples that carry both

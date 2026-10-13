@@ -1,7 +1,7 @@
 import { API_IDEMPOTENCY_KEY_MAX_LENGTH, API_LIST_DEFAULT_LIMIT, API_LIST_MAX_LIMIT } from "@/config/api-rest";
 import { API_KEY_LIVE_PREFIX, API_KEY_TEST_PREFIX } from "@/config/api-keys";
 import { IDEMPOTENCY_RETENTION_DAYS } from "@/config/operations";
-import { BIOCHAR_PRODUCT_MASS, FEEDSTOCK_UNITS, OUTPUT_STOCK_BASIS, OUTPUT_STOCK_COUNT, OUTPUT_STOCK_NO_CORRECTIONS, OUTPUT_STOCK_TIMES, PRODUCTION_RUN_GUIDANCE, UNTRUSTED_TEXT } from "@/lib/operations/agent-guidance";
+import { BIOCHAR_PRODUCT_MASS, FEEDSTOCK_UNITS, LAB_SAMPLE_BATCHES, LAB_SAMPLE_RATIOS, LAB_SAMPLE_TIMES, LAB_SAMPLE_UNITS, LAB_SAMPLE_WARNINGS, OUTPUT_STOCK_BASIS, OUTPUT_STOCK_COUNT, OUTPUT_STOCK_NO_CORRECTIONS, OUTPUT_STOCK_TIMES, PRODUCTION_RUN_GUIDANCE, UNTRUSTED_TEXT } from "@/lib/operations/agent-guidance";
 
 export const domainGuide = `## Feedstock intake
 
@@ -31,6 +31,16 @@ export const biocharStockGuide = `## Biochar products and bin stock
 - ${OUTPUT_STOCK_NO_CORRECTIONS}
 `;
 
+/** Lab sample guidance lives in llms.txt and the MCP tool descriptions, not the MCP server instructions, which stay under 2000 characters. */
+export const labSampleGuide = `## Lab samples
+
+- ${LAB_SAMPLE_BATCHES}
+- ${LAB_SAMPLE_UNITS}
+- ${LAB_SAMPLE_TIMES}
+- ${LAB_SAMPLE_RATIOS}
+- ${LAB_SAMPLE_WARNINGS}
+`;
+
 export const llmsGuide = `# noma data-entry API v1
 
 Public contract: /api/v1/openapi.json
@@ -38,11 +48,12 @@ Base URL: /api/v1
 
 ${domainGuide}
 ${biocharStockGuide}
+${labSampleGuide}
 ## REST requests
 
 - Authenticate private routes with Authorization: Bearer <key> only. Keys start with ${API_KEY_LIVE_PREFIX} or ${API_KEY_TEST_PREFIX}. Cookies and x-api-key do not authenticate.
 - GET /me returns the credential organization, active facilities, role, scopes and expiry. Reads require the resource :read scope. Feedstock creates and updates require feedstocks:write; deletes require feedstocks:delete. Production run creates and updates require production-runs:write; deletes require production-runs:delete. Biochar product creates and updates, and loss and count postings on output bins, require biochar-products:write; products cannot be deleted. /me needs no scope. Domain guards still apply.
-- Resolve reference UUIDs through read-only facilities, suppliers, feedstock-types, storage-locations, vehicles, drivers and reactors. Biochar products (biochar-products:read) and formulations (formulations:read) are read-only lookups; /storage-locations/{idOrCode}/stock-movements lists a biochar or product bin's posted movements, newest first (biochar-products:read), and POST on it records a loss or count (UUID only). Supplier locations require the parent UUID. GET detail accepts UUID or exact code; PATCH and DELETE require UUID.
+- Resolve reference UUIDs through read-only facilities, suppliers, feedstock-types, storage-locations, vehicles, drivers and reactors. Biochar products (biochar-products:read) and formulations (formulations:read) are read-only lookups; /storage-locations/{idOrCode}/stock-movements lists a biochar or product bin's posted movements, newest first (biochar-products:read), and POST on it records a loss or count (UUID only). Credit batches (credit-batches:read) are a read-only lookup. A lab sample (lab-samples:read) belongs to one credit batch, and the batch's facility, shown in the facility's durabilityOption and timeZone, sets its tier and clock. POST /lab-samples (lab-samples:write, Idempotency-Key required) records one replicate and PATCH moves or edits it; DELETE needs lab-samples:delete. Writes return the sample and any calculated ratios or certification gaps in warnings. Supplier locations require the parent UUID. GET detail accepts UUID or exact code; PATCH and DELETE require UUID.
 - Send JSON for POST and PATCH. DELETE may omit the body or send zero bytes without Content-Type; a non-empty body must be an empty JSON object with Content-Type: application/json. Field names state units: masses are kilograms, distances kilometres, moisture is percent 0 to 100. POST /feedstocks returns an array, one item per receiving bin allocation. PATCH omission preserves a value; null clears clearable fields; zero stays zero. Unknown fields are rejected.
 - Use one Idempotency-Key per intended write and reuse it on retries. Required on every POST create, including dry runs, recommended for PATCH and DELETE. Keys use 1 to ${API_IDEMPOTENCY_KEY_MAX_LENGTH} visible ASCII characters, are credential-scoped and retained for ${IDEMPOTENCY_RETENTION_DAYS} days. Idempotent-Replayed: true marks a replay.
 - Read the resource's ETag before PATCH or DELETE and send that exact strong tag in If-Match. Missing, weak or wildcard tags return 428; stale tags return 412 with current. Read and reconcile before attempting a new write.

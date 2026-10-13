@@ -26,6 +26,8 @@ export const CODE_CONFLICT_MESSAGES = {
   order: "An order with this code already exists",
   productionRun: "A production run with this code already exists",
   reactor: "A reactor with this code already exists",
+  // The Sample form's copy since issue #395, kept byte for byte.
+  sample: "A Sample with this code already exists.",
   storageLocation: "A storage bin with this code already exists",
   supplier: "A supplier with this code already exists",
   vehicle: "A vehicle with this code already exists",

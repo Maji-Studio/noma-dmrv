@@ -25,3 +25,9 @@ export const feedstockCreateEnvelopeSchema = z.object({
   warnings: z.array(z.string()).optional().describe("Non-fatal operator guidance, plain text."),
   stockEffects: stockEffectsSchema.optional(),
 });
+/** A write that can add plain-text guidance to the saved row: calculated ratios first, then what a registry submission still needs. Never blocks. */
+export function guidedWriteEnvelopeSchema(schema: z.ZodType) {
+  return itemEnvelopeSchema(schema).extend({
+    warnings: z.array(z.string()).optional().describe("Non-fatal guidance, plain text: ratios the server calculated, then certification gaps. Absent when there is none."),
+  });
+}

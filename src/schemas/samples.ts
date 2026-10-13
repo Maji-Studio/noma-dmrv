@@ -9,6 +9,7 @@ import { expectedVersionSchema } from "./helpers";
  */
 
 import { z } from "zod";
+import { offsetInstantSchema } from "./event-instant";
 import {
   optionalNumber,
   optionalPercent,
@@ -33,6 +34,45 @@ export const ORGANIC_CARBON_EXCEEDS_TOTAL_MESSAGE =
 export const COMBINED_CARBON_EXCEEDS_TOTAL_MESSAGE =
   `Organic plus inorganic carbon cannot exceed total carbon by more than ${CARBON_RECONCILIATION_TOLERANCE_PERCENTAGE_POINTS} percentage points. Correct the carbon values.`;
 
+/**
+ * Practical upper bounds for the unbounded physical inputs. Their columns are
+ * `real`, which overflows near 3.4e38, so an absurd value must fail as a field
+ * error rather than a database overflow. Generous for any lab sample.
+ */
+export const SAMPLE_PHYSICAL_INPUT_MAX = {
+  weightGrams: 1_000_000,
+  volumeMl: 1_000_000,
+  bulkDensityKgPerM3: 10_000,
+  // Grams per kilogram cannot exceed the kilogram itself.
+  saltContentGPerKg: 1_000,
+} as const;
+
+export type SamplePhysicalInputField = keyof typeof SAMPLE_PHYSICAL_INPUT_MAX;
+
+/** Non-negative and at most the field's practical maximum. */
+export function samplePhysicalNumber(field: SamplePhysicalInputField) {
+  const max = SAMPLE_PHYSICAL_INPUT_MAX[field];
+  return z.number().finite().min(0, NON_NEGATIVE_NUMBER_MESSAGE).max(max, `Enter a value up to ${max.toLocaleString("en-US")}`);
+}
+
+export const SAMPLING_TIME_REQUIRED_MESSAGE = "Enter the sampling time.";
+const SAMPLING_TIME_OFFSET_MESSAGE =
+  "Enter the sampling time with a time zone offset, as in 2026-10-12T09:30:00Z.";
+
+/**
+ * When the sample was taken. Server actions take a native Date; a string must
+ * be an instant with an explicit offset (round 7 Q51). The form resolves its
+ * facility wall clock to that instant with `EventTimeInput`, so a time is
+ * never read in the browser's zone.
+ */
+const samplingTimeSchema = z.union([
+  z.date(),
+  z.string()
+    .min(1, SAMPLING_TIME_REQUIRED_MESSAGE)
+    .pipe(offsetInstantSchema(SAMPLING_TIME_OFFSET_MESSAGE))
+    .transform((value) => new Date(value)),
+], { error: SAMPLING_TIME_REQUIRED_MESSAGE });
+
 const percentNumber = z
   .number()
   .finite()
@@ -48,9 +88,8 @@ const requiredPercent = requiredNumber("This field is required").pipe(
   percentNumber,
 );
 
-const optionalNonNegativeNumber = optionalNumber.pipe(
-  nonNegativeNumber.nullable().optional(),
-).optional();
+const optionalPhysicalNumber = (field: SamplePhysicalInputField) =>
+  optionalNumber.pipe(samplePhysicalNumber(field).nullable().optional()).optional();
 
 // hToCOrgRatio / oToCOrgRatio are atomic ratios (not 0–1 fractions) backed by
 // the `fraction` DB family (numeric(7,6)) — cap at the column's ceiling so an
@@ -170,17 +209,7 @@ export const sampleFormSchema = z
     // (issue #309). The batch pools biochar across its member runs, so the
     // sample never anchors on a production run.
     creditBatchId: z.string().min(1, "Select a credit batch.").uuid("Choose a valid credit batch."),
-    samplingTime: z.union([
-      z.date(),
-      z.string().transform((val, ctx) => {
-        const date = new Date(val);
-        if (isNaN(date.getTime())) {
-          ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Enter a valid date." });
-          return z.NEVER;
-        }
-        return date;
-      }),
-    ]),
+    samplingTime: samplingTimeSchema,
 
     // Lab info (optional)
     labName: z.string().max(200).optional().nullable().or(z.literal("")),
@@ -188,8 +217,8 @@ export const sampleFormSchema = z
     analysisDate: optionalCalendarDateSchema(),
 
     // Sample weight/volume
-    weightGrams: optionalNonNegativeNumber,
-    volumeMl: optionalNonNegativeNumber,
+    weightGrams: optionalPhysicalNumber("weightGrams"),
+    volumeMl: optionalPhysicalNumber("volumeMl"),
 
     // === Section 2: Carbon Analysis ===
     totalCarbonPercent: requiredPercent,
@@ -213,9 +242,9 @@ export const sampleFormSchema = z
     moistureContentPercent: optionalPercentInput,
 
     // === Section 5: Physical ===
-    bulkDensityKgPerM3: optionalNonNegativeNumber,
+    bulkDensityKgPerM3: optionalPhysicalNumber("bulkDensityKgPerM3"),
     ph: optionalPh,
-    saltContentGPerKg: optionalNonNegativeNumber,
+    saltContentGPerKg: optionalPhysicalNumber("saltContentGPerKg"),
 
     // === Section 6: Stability ===
     // H:C org ratio - can be calculated from totalHydrogenPercent / organicCarbonPercent
@@ -335,22 +364,12 @@ export const updateSampleSchema = z.object({
     .regex(/^[A-Z0-9-]+$/)
     .optional(),
   creditBatchId: z.string().uuid("Choose a valid credit batch.").optional(),
-  samplingTime: z.union([
-    z.date(),
-    z.string().transform((val, ctx) => {
-      const date = new Date(val);
-      if (isNaN(date.getTime())) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Enter a valid date." });
-        return z.NEVER;
-      }
-      return date;
-    }),
-  ]).optional(),
+  samplingTime: samplingTimeSchema.optional(),
   labName: z.string().max(200).optional().nullable(),
   labAccreditation: z.string().max(200).optional().nullable(),
   analysisDate: optionalCalendarDateSchema(),
-  weightGrams: nonNegativeNumber.optional().nullable(),
-  volumeMl: nonNegativeNumber.optional().nullable(),
+  weightGrams: samplePhysicalNumber("weightGrams").optional().nullable(),
+  volumeMl: samplePhysicalNumber("volumeMl").optional().nullable(),
   totalCarbonPercent: percentNumber.optional(),
   organicCarbonPercent: percentNumber.optional(),
   inorganicCarbonPercent: percentNumber.optional().nullable(),
@@ -360,9 +379,9 @@ export const updateSampleSchema = z.object({
   totalSulfurPercent: percentNumber.optional().nullable(),
   ashContentPercent: percentNumber.optional().nullable(),
   moistureContentPercent: percentNumber.optional().nullable(),
-  bulkDensityKgPerM3: nonNegativeNumber.optional().nullable(),
+  bulkDensityKgPerM3: samplePhysicalNumber("bulkDensityKgPerM3").optional().nullable(),
   ph: z.number().min(PH_MIN, PH_RANGE_MESSAGE).max(PH_MAX, PH_RANGE_MESSAGE).optional().nullable(),
-  saltContentGPerKg: nonNegativeNumber.optional().nullable(),
+  saltContentGPerKg: samplePhysicalNumber("saltContentGPerKg").optional().nullable(),
   hToCOrgRatio: nonNegativeRatio.optional().nullable(),
   oToCOrgRatio: nonNegativeRatio.optional().nullable(),
   durabilityOption: z.enum(["200_year", "1000_year"]).optional(),
@@ -442,34 +461,6 @@ export type SampleFilterData = z.infer<typeof sampleFilterSchema>;
 // ============================================
 // Helper Functions
 // ============================================
-
-/**
- * Calculate H:C org ratio from hydrogen and organic carbon percentages
- */
-export function calculateHToCOrgRatio(
-  hydrogenPercent: number | null | undefined,
-  organicCarbonPercent: number | null | undefined
-): number | null {
-  if (hydrogenPercent == null || organicCarbonPercent == null || organicCarbonPercent === 0) {
-    return null;
-  }
-  // Atomic ratio: (H% / 1.008) / (Corg% / 12.011)
-  return (hydrogenPercent / 1.008) / (organicCarbonPercent / 12.011);
-}
-
-/**
- * Calculate O:C org ratio from oxygen and organic carbon percentages
- */
-export function calculateOToCOrgRatio(
-  oxygenPercent: number | null | undefined,
-  organicCarbonPercent: number | null | undefined
-): number | null {
-  if (oxygenPercent == null || organicCarbonPercent == null || organicCarbonPercent === 0) {
-    return null;
-  }
-  // Atomic ratio: (O% / 15.999) / (Corg% / 12.011)
-  return (oxygenPercent / 15.999) / (organicCarbonPercent / 12.011);
-}
 
 /**
  * Format durability option for display

@@ -105,6 +105,8 @@ The draft proposed separate canonical and form schemas; review measured that at 
 
 **Biochar products and output stock (Phase 4b).** `GET /biochar-products` and `/{idOrCode}` (`biochar-products:read`), `POST /biochar-products` (201, `Location`, ETag; the body takes the weighed parts, decision 52), `PATCH /biochar-products/{id}` (`code`, `status`, `densityKgM3`; `If-Match` required), `GET /formulations` and `/{idOrCode}` (`formulations:read`), `GET /storage-locations/{idOrCode}/stock-movements` (`biochar-products:read`, read-only history) and `POST /storage-locations/{id}/stock-movements` (`biochar-products:write`; `loss` and `count`). Creates require `Idempotency-Key`, dry runs return `stockEffects` and `basisFingerprint`, and a stale fingerprint answers 409 `stock_basis_changed` with `preview`.
 
+**Lab samples and credit batches (Phase 5a).** `GET /lab-samples` and `/{idOrCode}` (`lab-samples:read`), `POST /lab-samples` (`lab-samples:write`; `Idempotency-Key` required, dry runs too; 201, `Location`, ETag), `PATCH /lab-samples/{id}` (UUID only, `If-Match` required; accepts `code` and a move to another credit batch) and `DELETE /lab-samples/{id}` (`lab-samples:delete`, off by default; `If-Match`; also deletes the sample's transport legs and retires its lab report documents). `GET /credit-batches` and `/{idOrCode}` (`credit-batches:read`, on by default) are the lookup a sample needs; credit batch writes stay UI-only. The facility representation gains `durabilityOption`. Lists use the `(createdAt, id)` keyset; samples on archived credit batches are hidden from lists and readable by id. A lab sample write answers `{ data, warnings }`: the warnings say which ratios the server calculated and what a registry submission will still need, and never block the write. The sampling time takes the two event-instant shapes, read in the credit batch facility's zone, and a future time is refused. Create, update and move are refused on an archived credit batch (decision 65).
+
 **Dry run.** Writes accept `?dryRun=true`: decode, run the locked guards inside the transaction, return the would-be result (or the domain error), roll back. Rules:
 - Work outside the database never runs in a dry run. Essential external work is **enqueued in the transaction** (the existing storage-deletion queue, `src/data-access/documents.ts:577`, is the pattern) and drained by idempotent consumers with an independent retry path. The runner's after-commit hook only triggers an early drain, after the real commit, never after a savepoint or a dry run. Best-effort telemetry may be a plain hook. A hook failure never makes a committed write look rolled back.
 - Operations with irreversible external effects do not offer dry run: upload request and confirm (confirm deletes invalid objects before throwing, `src/fn/documents.ts:218`), and anything touching Isometric.
@@ -180,6 +182,7 @@ The API never promises rollback once `COMMIT` may have reached PostgreSQL. Files
 - **Auth, in two steps.** Phase 3: bearer API keys, which Claude Code, Cursor and similar clients send from config. This puts agents on data entry without waiting for OAuth. OAuth track (starts when Phase 3 lands): OAuth for clients that require it (claude.ai and ChatGPT connectors, third parties).
 - **Tools come from operations**: same schema, same runner, same scopes. Names are verb-first and in domain language: `log_feedstock_delivery`, `start_production_run`, `record_application`, `find_suppliers`, `find_storage_locations`. Descriptions state preconditions, units, side effects ("deducts from the bin") and what to call first. No generic `create_record`, no SQL.
 - **Biochar tools (Phase 4b):** `find_biochar_products`, `get_biochar_product`, `make_biochar_product`, `update_biochar_product`, `find_formulations`, `find_output_stock_movements` and `record_output_stock_movement`, on `biochar-products:read|write` and `formulations:read`. Descriptions tell agents to pass the dry run's `basisFingerprint` to the real write.
+- **Lab sample tools (Phase 5a):** `find_lab_samples`, `get_lab_sample`, `find_credit_batches`, `record_lab_sample`, `update_lab_sample` and `delete_lab_sample`, on `lab-samples:read|write|delete` and `credit-batches:read`. They share REST's operations, idempotency records and `{ data, warnings }` results; the result text says when a ratio was calculated. Update and delete take the sample UUID and an `expectedVersion`.
 - **Grounding tools:** `whoami` (organization, facilities with time zones, current facility date, role, scopes) and `find_*` lookups returning compact `{ id, code, name, facility }`. Get and update tools accept `id` or `code`.
 - **Toolsets by workflow**, in rollout order (`feedstock-intake`, `production`, `lab`, `logistics`, `field-application`, `master-data`), filtered by the credential's scopes. Grow a toolset only when end-to-end agent evaluations of its workflow pass; a tool count is not the gate.
 - **Writes:** every write tool has `dryRun`. Updates, deletes and commands take a required `expectedVersion` (reads return `version`). Creates and stock-moving commands take a **required** `requestKey`, except on dry runs (decision 32). REST creates require `Idempotency-Key` even on dry runs (decision 47). Both transports route committed writes into the same idempotency records; the description tells agents to generate one per intended write and reuse it on retry. JSON-RPC request ids are not used as keys: MCP only requires them to be unique among a sender's unanswered requests, so they repeat. No server-side dedupe by payload hash either: two identical deliveries can be real.
@@ -235,7 +238,7 @@ Domain guards still apply on top: a key with delete permission still cannot dele
 
 ## 8. Batches and offline (design now, build later)
 
-- **Homogeneous batch endpoints** where the data is naturally bulk: `POST /production-runs/{id}/readings/batch` (reuse the reading-import core) and lab sample results. Bounded size, per-item results, per-item `externalId` for idempotent upserts. Lab results batch in Phase 5, readings batch with production in Phase 4, both additive to v1.
+- **Homogeneous batch endpoints** where the data is naturally bulk: `POST /production-runs/{id}/readings/batch` (reuse the reading-import core) and lab sample results. Bounded size, per-item results, per-item `externalId` for idempotent upserts. Readings batch with production in Phase 4, additive to v1. Lab results stay single creates for now (decision 58); a later multi-sample endpoint must allow samples from different credit batches and sampling times.
 - **Offline mobile** (Phase 8, its own plan):
   - client-generated UUIDs: a matching fingerprint replays, a different payload conflicts, no foreign record is ever exposed;
   - an outbox with idempotency key and base version: on 412 the app shows the operator a comparison and never auto-merges masses, allocations or certification state;
@@ -293,7 +296,7 @@ Use the existing Vitest layout and throwaway test DB (`docs/testing.md`; Vitest 
 | 2. REST pilot: feedstock intake | `/api/v1/feedstocks` CRUD with dry run and stock preview; **read-only** lookups intake needs (facilities, suppliers + locations, feedstock types, storage locations, vehicles, drivers); API keys with the permission grid; `/me`; problem+json; ETag/If-Match; idempotency records + audit; rate limits; public OpenAPI | Outcome, action-vs-REST parity, BOLA, idempotency, stock-race and version-cascade suites green |
 | 3. MCP on API keys | `/api/mcp` with `whoami`, `find_*` and the `feedstock-intake` toolset | Three-way parity; agent eval for "log 4.2 t wet wood chips from supplier X into bin B2" passes |
 | 4. Production | Production runs (feedstock draws, output stock), then biochar products (stock posting, corrections) | Stock invariants and races per operation; agent eval "start a run on R1 with that feedstock"; Schemathesis on |
-| 5. Lab and logistics | Lab samples (+ lab result batch endpoint), orders, deliveries | Per-operation outcome, parity, authorization and stock tests |
+| 5. Lab and logistics | Lab samples (5a, single creates only, decision 58), then orders and deliveries | Per-operation outcome, parity, authorization and stock tests |
 | 6. Field application | Applications with evidence documents (upload request, presigned PUT, confirm) | Same, plus document upload tests |
 | 7. Master data writes | Suppliers, customers, formulations (reads already exist from Phase 2) | Same |
 | OAuth track (starts when Phase 3 lands) | `@better-auth/oauth-provider` + `@better-auth/cimd` + `@better-auth/mcp` on 1.7.7 (already upgraded in 1.5): consent with organization choice, grant checks, discovery documents; mobile public client; claude.ai and ChatGPT connectors | OAuth test list green; named connectors work |
@@ -491,6 +494,21 @@ Four PRs: 2a #925 (API keys, `/api/v1/me`, the credential resolver), 2b-1 #929 (
 
 **Phase 3 starts from:** where transport-neutral representations live (read models imported them from the REST folder; 3a moved them to `src/lib/representations`), whether MCP results reuse the REST representations, the `requestKey` contract, which lookups ship as tools first, and the agent-eval harness. The Phase 0 spike route (`src/app/api/mcp/route.ts`) is replaced. Tool names reuse the operationIds above.
 
+Decided 2026-10-13 (Kenji, round 7, Phase 5a). The numbering continues from decision 56; no renumbering was needed.
+
+57. **Phase 5a is lab samples only** (Q48). Orders and deliveries get their own spec. Kenji asked about photographing a lab report and having AI fill the fields: issue #329 ("upload lab results file and autofill sample chemistry entries") already covers it and stays out of 5a.
+58. **Lab samples are created one at a time** (Q49). There is no `POST /lab-samples/batch` and no `record_lab_samples`. Kenji's note: it should be possible to save several samples, but they usually come from different production dates, so a future multi-sample endpoint must not assume one credit batch or one sampling time (`api/multi-sample-create` in [open questions](../open-questions.md)).
+59. **The server derives the ratios** (Q50). H/C_org is always calculated from hydrogen and organic carbon, or empty when either is missing, including after an input is cleared. O/C_org is calculated whenever oxygen is present; a sent O/C_org is stored only when oxygen is absent. Values round to 4 decimals and anything above the column cap is refused, never clamped. The reply says the ratio was calculated, for example "H/C_org calculated from hydrogen and organic carbon: 0.2979"; the MCP result text says the same.
+60. **Sampling times are read in the facility's zone** (Q51). The form switches from the browser zone to the credit batch facility's zone. The zone comes back on requests: the facility representation has `timeZone`, and `whoami` and `/me` give the facility's current local time. Tool descriptions point agents there.
+61. **Certification gaps warn and do not block at entry** (Q52). The warnings mirror what readiness and the 1,000-year checks will require (complete H/C_org and O/C_org, measured inorganic carbon and S on every 1,000-year sample, sampling before the batch window).
+62. **TGA stays required for 1,000-year batches, and fewer than 500 R0 readings only warns** (Q53). Kenji asked whether a removal can still be submitted below 500 readings: yes, the module says "should", so it is a warning and not a submission blocker, and the warning text says so. Biochar Agricultural Soils module v1.1 never mentions TGA, so `isometric/tga-1000-year-requirement` stays a `needs-registry-check` question.
+63. **Submission blocks while a replicate in the submitted H/C mean lacks its paired O/C** (Q54). Separate small PR #948 with a four-replicate regression test, run in parallel with 5a. Operator copy follows `docs/ux-writing.md`.
+64. **Batch edits that move the window past existing samples are allowed** (Q55). Readiness flags samples before the new window (submission already blocks them); there is no batch-edit refusal.
+65. **Create, update and move are refused on an archived credit batch** (Q56), in the app and the API. Reads still work. Delete is not named in the answer and stays allowed.
+66. **`lab-samples:delete` is off by default** (Q57). PATCH accepts `code` and a move to another credit batch.
+67. **The sub-bin stock read is its own follow-up PR after 5a** (Q58). It is the next item from `api/sub-bin-reads`, designed as in the Phase 5a spec: one consistent snapshot and one evaluation instant, deterministic serialization, ETag = hash of the published body.
+68. **Stock corrections stay UI-only** (Q59). They stay in the backlog as `api/stock-corrections`.
+
 ## 17. Phase 3 results (2026-10-09)
 
 Two PRs: 3a #933 (representations in `src/lib/representations/`, `/api/mcp` on API keys, `whoami` and the read tools) and 3b (the three feedstock write tools, the domain prompt and the agent evaluation). The section 10 exit criteria are met: three-way parity (`tests/api-feedstocks-parity.test.ts`) and the agent evaluation below.
@@ -533,3 +551,48 @@ Biochar products and output-stock movements on REST and MCP, in seven commits. D
 **Fuzzing:** Phase 4b adds no new harness mechanism beyond examples that pin both a path id and a create body (the movement POST). A stale `deliveryDate` assertion in `hooks.test.py` was fixed because the hook binds the real clock.
 
 **Not changed:** stock corrections (`api/stock-corrections`), sub-bin stock reads (`api/sub-bin-reads`) and case-insensitive UUIDs (`api/uuid-case`) are in [open questions](../open-questions.md). The product delete and the `data/lock-order` inversions are unchanged.
+
+## 19. Phase 5a results (2026-10-13)
+
+Lab samples and the credit batch lookup on REST and MCP, in seven commits on `feat/api-lab-samples`. Decisions 57 to 68 (section 13) override the first spec where they differ.
+
+**What shipped, per commit:**
+1. Foundations: strict input schemas for create and PATCH (dry-basis units, `uuidSchema` batch ids, event-instant sampling times), the ratio helper with calculated-ratio notices, typed sample errors with JSON pointers, and server action schemas that no longer parse times in the server's zone.
+2. Writes on the runner: `record_lab_sample`, `update_lab_sample` and `delete_lab_sample`, called in process by the Server Actions. Lock order is certification artifacts, then credit batches in id order, then the sample; lineage is revalidated after the locks. Sample-parented transport legs take the same scope.
+3. Reads: scopes `lab-samples:read|write|delete` and `credit-batches:read`, `GET /lab-samples` and `/credit-batches` with keyset lists, strong ETags and filters, and `durabilityOption` on the facility representation (revision 2).
+4. REST writes: POST, PATCH and DELETE with dry runs, `Idempotency-Key`, `If-Match`, 412 with the current representation, and `warnings` on write responses.
+5. MCP: six tools, agent guidance in `llms.txt`, and three-way parity (action, REST, MCP).
+6. Agent evaluation: a credit batch on a 200-year facility and two cases (see the evaluation line below).
+7. Fuzzing and docs: the seed gained a 200-year facility, a credit batch over the completed run and one lab sample; `hooks.py` gives the sample create, PATCH and DELETE seeded examples and the credit batch and sample by-id reads; this section.
+
+**Decisions made during implementation:**
+- The form drops a typed lab O/C_org when oxygen is present (decision 59), and starts that field empty so clearing oxygen cannot save a calculated value as a lab value. A legacy lab H/C_org without hydrogen is lost on any edit.
+- Delete on an archived credit batch is allowed (decision 65 names create, update and move).
+- A lineage change after the batch lock refuses with `certification_locked`; it does not retry.
+- The legacy production run link decides facility and archive state only for samples with no credit batch.
+- Archiving a facility locks its credit batches in id order first, like sample writers, so a sample move cannot deadlock against an archive.
+- Reads return strong ETags but, like every other resource, do not answer `If-None-Match` with 304.
+
+**Review findings fixed:** (gpt-6.1-sol and gpt-6-astra, per commit)
+- Sample-parented transport legs did not lock their parent in artifact, batch, sample order, so a Removal assigned while a leg waited was missed.
+- Update and delete did not lock the batch reached through a legacy run link.
+- A move off an archived batch was allowed.
+- A sample moved to another facility's batch kept matching its old run's facility; a legacy sample stayed listed after its run was archived.
+- Facility archive locked batches in scan order against the sample writers' id order.
+- PATCH and DELETE needed the request deadline applied while the body was still arriving.
+- Keyed PATCH and DELETE replays, key reuse and key isolation had no tests.
+- The after-window submission warning claimed that protocol section 8.3.1 permits sampling from stored material. Fixed in this PR: it now repeats what the protocol asks (biochar in its final pre-storage condition, and before blending when co-applied) and asks the operator to confirm the Sample represents the batch in that condition. It stays a warning.
+- Entry warnings did not flag a saved sample without both H/C_org and O/C_org (no oxygen and no lab O/C_org, or zero organic carbon), which submission gate (c) does not count.
+
+**Residual risks:**
+- Transport-leg update and delete still read the parent through the global `db` before their transaction; only create was fixed (`data/transport-leg-parent-reads`).
+- No `(organization_id, created_at, id)` index backs the API keyset lists (`data/api-keyset-list-indexes`).
+- The facility representation's new required `durabilityOption` can break strict clients; check the OpenAPI breaking-change job.
+- Readiness shows "O:Corg ratio" twice next to the #948 blocker; left as is.
+- The R0 count floor and the TGA requirement still differ from module v1.1 (`isometric/tga-1000-year-requirement`).
+
+**Tests:** full Vitest suite 6,893 passed (811 files, 75 s).
+**Fuzzing:** local Schemathesis run against a production build, 4,582 cases, 0 failures. With the new operations, Schemathesis 4.29.3 handed the fuzzing phase a positive create without its required `Idempotency-Key` (lab samples and production runs); `hooks.py` now supplies the key on positive cases, and the coverage phase still sends the missing-header case.
+**Agent evaluation:** `pnpm eval:mcp` passes all six cases on the second run: lab-complete 6/8 calls, lab-missing-organic 2/8. On the first run the Phase 4 case chained-complete went over its budget (11/10) after three supplier searches; the rerun used 7.
+
+**Follow-ups:** the Q54 eligibility fix (#948), then the sub-bin stock read PR (decision 67). Photo autofill is issue #329. A multi-sample create and stock corrections are in [open questions](../open-questions.md).

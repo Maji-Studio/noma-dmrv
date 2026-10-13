@@ -326,7 +326,9 @@ describe("Sample side — anchor directly on the credit batch (issue #309)", () 
         organicCarbonPercent: 78,
       }),
     ).rejects.toThrow(
-      "Credit batch was not found in this Organization.",
+      // The writer reads the batch under its lock; the Server Action always showed this copy
+      // ("Credit batch not found", as SafeError normalizes it).
+      "Credit batch was not found.",
     );
   });
 

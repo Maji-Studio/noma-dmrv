@@ -4,7 +4,10 @@ import { STALE_VERSION_CONFLICT_CODE, STALE_VERSION_MESSAGE } from "@/lib/stale-
 const mocks = vi.hoisted(() => ({ write: vi.fn(), read: vi.fn() }));
 vi.mock("@/lib/auth/server", () => ({ requireOrgContext: async () => ({ organizationId: "org", userId: "user", orgRole: "owner", isPlatformAdmin: false }) }));
 vi.mock("@/data-access/code-generator", () => ({ CODE_CONFLICT_MESSAGES: {}, withAutoCode: vi.fn() }));
-vi.mock("@/data-access/samples", () => ({ updateSample: mocks.write, deleteSample: mocks.write, getSampleById: mocks.read }));
+vi.mock("@/data-access/samples", () => ({ getSampleById: mocks.read }));
+// Sample writes run the lab sample operations in process.
+vi.mock("@/lib/operations/runner", () => ({ runOperationInProcess: mocks.write }));
+vi.mock("@/lib/operations/lab-samples", () => ({ recordLabSample: {}, updateLabSample: {}, deleteLabSample: {} }));
 vi.mock("@/data-access/orders", () => ({ updateOrder: mocks.write, deleteOrder: mocks.write }));
 vi.mock("@/data-access/deliveries", () => ({ updateDelivery: mocks.write, deleteDelivery: mocks.write }));
 vi.mock("@/data-access/applications", () => ({ updateApplication: mocks.write, deleteApplication: mocks.write, getApplicationById: mocks.read }));

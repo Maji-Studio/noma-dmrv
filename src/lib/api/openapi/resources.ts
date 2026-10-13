@@ -9,6 +9,8 @@ import { driverRepresentationSchema } from "@/lib/representations/drivers";
 import { feedstockRepresentationSchema } from "@/lib/representations/feedstocks";
 import { biocharProductRepresentationSchema } from "@/lib/representations/biochar-products";
 import { formulationRepresentationSchema } from "@/lib/representations/formulations";
+import { labSampleRepresentationSchema } from "@/lib/representations/lab-samples";
+import { creditBatchRepresentationSchema } from "@/lib/representations/credit-batches";
 import { resourceQueries } from "../query-schemas";
 import type { ApiScope } from "@/lib/auth/api-scopes";
 
@@ -25,4 +27,6 @@ export const resources = ([
   { path: "drivers", singular: "driver", schema: driverRepresentationSchema },
   { path: "biochar-products", singular: "biochar_product", schema: biocharProductRepresentationSchema },
   { path: "formulations", singular: "formulation", schema: formulationRepresentationSchema },
+  { path: "lab-samples", singular: "lab_sample", schema: labSampleRepresentationSchema },
+  { path: "credit-batches", singular: "credit_batch", schema: creditBatchRepresentationSchema },
 ] as const).map((resource) => ({ ...resource, queries: resourceQueries[resource.path], scope: `${resource.path}:read` as ApiScope }));

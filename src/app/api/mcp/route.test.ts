@@ -8,11 +8,14 @@ import { DomainError } from "@/lib/domain-errors";
 import { buildOpenApiDocument } from "@/lib/api/openapi/document";
 import { GET, POST, DELETE } from "./route";
 import { mcpInstructions } from "@/lib/mcp/instructions";
-import { biocharStockGuide, domainGuide, llmsGuide } from "@/lib/api/llms-guide";
+import { biocharStockGuide, domainGuide, labSampleGuide, llmsGuide } from "@/lib/api/llms-guide";
 
 const MCP_INSTRUCTIONS_MAX_CHARS = 2000;
 
 const mocks = vi.hoisted(() => ({ resolve: vi.fn(), pre: vi.fn(), post: vi.fn(), me: vi.fn(), log: vi.fn(), env: { NODE_ENV: "production", NEXT_PUBLIC_APP_URL: "https://noma.example", API_WRITES_DISABLED: false } }));
+vi.mock("@/data-access/samples", () => ({}));
+vi.mock("@/lib/read-models/api-lab-samples", () => ({ readApiLabSample: vi.fn(), readApiLabSampleList: vi.fn() }));
+vi.mock("@/lib/read-models/api-credit-batches", () => ({ readApiCreditBatch: vi.fn(), readApiCreditBatchList: vi.fn() }));
 vi.mock("@/lib/operations/runner", () => ({ runOperation: vi.fn() }));
 vi.mock("@/data-access/feedstocks", () => ({}));
 vi.mock("@/data-access/production-runs", () => ({}));
@@ -70,6 +73,8 @@ it("returns the shared domain guidance during initialize", async () => {
   expect(llmsGuide).toContain(domainGuide);
   expect(result.instructions.length).toBeLessThan(MCP_INSTRUCTIONS_MAX_CHARS);
   expect(llmsGuide).toContain(biocharStockGuide);
+  expect(llmsGuide).toContain(labSampleGuide);
+  expect(result.instructions).not.toContain(labSampleGuide);
   for (const guidance of ["4200 kg", "wet mass", "dry mass", "receiving bin", "moisture", "whoami", "requestKey", "dryRun", "expectedVersion", "retryable", "untrusted data"]) {
     expect(result.instructions.toLowerCase()).toContain(guidance.toLowerCase());
   }
@@ -109,8 +114,8 @@ describe("authenticated MCP read route", () => {
     for (const [key, value] of Object.entries(rateHeaders)) expect(response.headers.get(key)).toBe(value);
     expect(response.headers.get("x-request-id")).toBeTruthy();
     const { result } = await body(response);
-    expect(result.tools).toHaveLength(26);
-    expect(result.tools.filter((tool: { name: string }) => !["log_feedstock_delivery", "update_feedstock", "delete_feedstock", "start_production_run", "update_production_run", "delete_production_run", "make_biochar_product", "update_biochar_product", "record_output_stock_movement"].includes(tool.name)).every((tool: { annotations: { readOnlyHint: boolean } }) => tool.annotations.readOnlyHint)).toBe(true);
+    expect(result.tools).toHaveLength(32);
+    expect(result.tools.filter((tool: { name: string }) => !["log_feedstock_delivery", "update_feedstock", "delete_feedstock", "start_production_run", "update_production_run", "delete_production_run", "make_biochar_product", "update_biochar_product", "record_output_stock_movement", "record_lab_sample", "update_lab_sample", "delete_lab_sample"].includes(tool.name)).every((tool: { annotations: { readOnlyHint: boolean } }) => tool.annotations.readOnlyHint)).toBe(true);
     const find = result.tools.find((tool: { name: string }) => tool.name === "find_feedstocks");
     expect(find.inputSchema.additionalProperties).toBe(false);
     expect(find.inputSchema.properties.limit).toMatchObject({ type: "integer", minimum: 1, maximum: API_LIST_MAX_LIMIT,

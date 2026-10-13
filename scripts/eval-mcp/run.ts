@@ -3,13 +3,15 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { assertThrowawayTestDatabase, resolveTestDatabaseUrl } from "../../tests/helpers/throwaway-database";
-import { CASES, EVAL_PORT } from "./config";
+import { CASES, EVAL_PORT, LAB_CASES } from "./config";
 import { runClaude } from "./claude";
 import type { ManagedProcess } from "./process";
 import { markdownReport, scoreCase, type CaseScore } from "./score";
+import { labSampleDays, scoreLabCase } from "./score-lab";
 import { assertFreePort, startServer, waitForServer } from "./server";
 import { redactKeys } from "./transcript";
 import type { EvalFixture } from "./fixture";
+import type { LabEvalFixture } from "./fixture-lab";
 
 async function main(): Promise<void> {
   const keep = process.argv.includes("--keep");
@@ -43,16 +45,20 @@ async function main(): Promise<void> {
   process.once("SIGINT", interrupt);
   process.once("SIGTERM", interrupt);
   const fixtures: EvalFixture[] = [];
+  const labFixtures: LabEvalFixture[] = [];
+  // Every seeded organization, so cleanup covers feedstock and lab fixtures alike.
+  const organizations: { id: string; remove: () => Promise<void> }[] = [];
   const keys: string[] = [];
   const scores: CaseScore[] = [];
   const results: Record<string, unknown>[] = [];
   // All imports with DB/auth initialization happen after the throwaway guard.
-  let fixtureModule: typeof import("./fixture") | undefined;
   try {
-    fixtureModule = await import("./fixture");
+    const fixtureModule = await import("./fixture");
+    const labModule = await import("./fixture-lab");
     const { seedFixture, fixtureTarget, readSnapshot, evaluationExpectation, evaluationRunRequirements } = fixtureModule;
     const expectation = evaluationExpectation();
     console.log(`Case 2 expectation: ${expectation}.`);
+    labModule.checkLabContract();
     const requiredRunInputs = evaluationRunRequirements();
     console.log(`Published required run fields: ${requiredRunInputs.join(", ")}. Resolve omitted references and time with grounding tools.`);
     for (const testCase of CASES) {
@@ -60,6 +66,14 @@ async function main(): Promise<void> {
       const fixture = await seedFixture(testCase.id);
       fixtures.push(fixture);
       keys.push(fixture.key);
+      organizations.push({ id: fixture.ctx.organizationId, remove: () => fixtureModule.cleanupFixture(fixture) });
+    }
+    for (const testCase of LAB_CASES) {
+      controller.signal.throwIfAborted();
+      const fixture = await labModule.seedLabFixture(testCase.id);
+      labFixtures.push(fixture);
+      keys.push(fixture.key);
+      organizations.push({ id: fixture.ctx.organizationId, remove: () => labModule.cleanupLabFixture(fixture) });
     }
     const server = startServer(process.cwd(), runDirectory, process.env, keys);
     children.add(server);
@@ -75,16 +89,29 @@ async function main(): Promise<void> {
       scores.push(score);
       results.push({ ...score, organizationId: fixture.ctx.organizationId, target, snapshot, ...run });
     }
+    for (const [index, testCase] of LAB_CASES.entries()) {
+      controller.signal.throwIfAborted();
+      const fixture = labFixtures[index];
+      // Yesterday is read in the facility zone at both ends of the run, so a local midnight inside it cannot flake the case.
+      const startedAt = new Date();
+      const run = await runClaude(testCase.id, testCase.text, fixture.key, baseUrl, runDirectory,
+        controller.signal, (child) => children.add(child), (child) => children.delete(child));
+      const target = labModule.labTarget(fixture, labSampleDays(startedAt, new Date(), fixture.facility.timeZone));
+      const snapshot = await labModule.readLabSnapshot(fixture);
+      const score = scoreLabCase(testCase.id, target, snapshot, run.transcript);
+      scores.push(score);
+      results.push({ ...score, organizationId: fixture.ctx.organizationId, target, snapshot, ...run });
+    }
     if (scores.some((score) => !score.passed)) process.exitCode = 1;
   } finally {
     // Stop writers before cleanup, also on startup failure and interrupted cases.
     const stopped = await Promise.allSettled([...children].map((child) => child.stop()));
     if (stopped.some((result) => result.status === "rejected")) process.exitCode = 1;
-    for (const fixture of fixtures) {
-      if (keep) console.log(`Kept organization: ${fixture.ctx.organizationId}`);
+    for (const organization of organizations) {
+      if (keep) console.log(`Kept organization: ${organization.id}`);
       else {
-        try { await fixtureModule!.cleanupFixture(fixture); }
-        catch { console.error(`Could not remove evaluation organization ${fixture.ctx.organizationId}.`); process.exitCode = 1; }
+        try { await organization.remove(); }
+        catch { console.error(`Could not remove evaluation organization ${organization.id}.`); process.exitCode = 1; }
       }
     }
     process.removeListener("SIGINT", interrupt);

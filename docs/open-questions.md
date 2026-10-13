@@ -284,16 +284,6 @@ Pure starter residue; org scoping came later via ADR 0010.
   transaction, race the callback against the deadline and keep the client out
   of the pool until the callback settles; until then keep `execute` database-only.
 
-### Instant input parsing until Phase 4 (`api/instant-input-parsing`, opened 2026-10-07)
-
-- Incident time (`src/schemas/production-incidents.ts:productionIncidentFormSchema`)
-  and sample `samplingTime` (`src/schemas/samples.ts:updateSampleSchema.samplingTime`)
-  retain instant parsing until Phase 4's API input schemas. Only sample business
-  dates use strict calendar-date parsing here.
-- **Resolve via:** Phase 4 API input schemas moving these fields onto the shared
-  instant/calendar helpers, with schema tests proving the intended parsing for
-  each field; then delete this entry.
-
 ### Run writers, feedstock edits and output postings lock in different orders (`data/lock-order`, opened 2026-10-09)
 
 - `src/data-access/production-runs/mutations.ts:updateProductionRunInTransaction`
@@ -347,11 +337,16 @@ Pure starter residue; org scoping came later via ADR 0010.
   `src/lib/operations/production-runs.ts:startProductionRun`,
   `src/data-access/production-runs/readings.ts:getProductionRunReadings` and
   `src/fn/production-incidents.ts:createProductionIncidentFn`.
+- Incident time (`src/schemas/production-incidents.ts:productionIncidentFormSchema.incidentTime`)
+  still reads any string through `new Date(value)`, so a time without an offset
+  takes the server's zone. Lab sample `samplingTime` moved onto
+  `offsetInstantSchema` in Phase 5a.
 - **Resolve via:** a scoped follow-up defining readings batch size, per-item
   outcomes and externalId replay semantics, plus incident operations,
   permissions, representations and outcome/BOLA tests. Reuse the reading import
   core and the shared operation runner before registering REST routes or MCP
-  tools.
+  tools. Move incident time onto the shared instant helpers in the same change,
+  with schema tests proving the parsing.
 
 ### Output-stock corrections are not on the API (`api/stock-corrections`, opened 2026-10-12)
 
@@ -371,9 +366,49 @@ Pure starter residue; org scoping came later via ADR 0010.
   `sources` names production-run layers that clients find through runs and
   movement history, without seeing what each layer still holds. Decision 55
   deferred it.
-- **Resolve via:** a stock-bearing read model whose ETag tracks movement
-  sequences rather than the storage-location version, then a REST path and an
-  MCP tool.
+- **Next after Phase 5a** (round 7 Q58, its own PR). Design: one consistent
+  snapshot and one evaluation instant for the whole projection, deterministic
+  serialization, ETag = hash of the published body (distinct from
+  `basisFingerprint`), and defined behaviour for archived, null, ordering and
+  size limits.
+- **Resolve via:** a stock-bearing read model whose ETag is that body hash
+  rather than the storage-location version, then a REST path
+  (`GET /storage-locations/{idOrCode}/stock`) and an MCP tool (`get_bin_stock`).
+
+### A multi-sample create must not assume one credit batch or one sampling time (`api/multi-sample-create`, opened 2026-10-13)
+
+- Round 7 Q49 kept `POST /lab-samples` and `record_lab_sample` single
+  (`src/lib/operations/lab-samples.ts:recordLabSample`). Kenji's note: saving
+  several samples at once should be possible, but they usually come from
+  different production dates. See the batches topic in plan
+  [section 8](./plans/2026-10-06-data-entry-api.md#8-batches-and-offline-design-now-build-later).
+- **Resolve via:** a multi-sample endpoint whose items each carry their own
+  `creditBatchId` and `samplingTime`, with one idempotency key and audit effect
+  for the whole body, results in request order and pointers
+  `/samples/{index}/...`. Do not copy the earlier one-batch draft.
+
+### Transport-leg update and delete read their parent outside the transaction (`data/transport-leg-parent-reads`, opened 2026-10-13)
+
+- `src/data-access/transport-legs.ts:updateTransportLeg` and
+  `deleteTransportLeg` read the leg's parent through the global `db` before
+  their transaction. Only `createTransportLeg` was moved under the sample lock
+  scope (artifacts, credit batches in id order, then sample) in Phase 5a. A
+  sample deleted or reassigned in between is not seen by the pre-read, and the
+  global read can self-deadlock when the pool size is 1.
+- **Resolve via:** take the same lock scope and re-resolve the parent inside the
+  transaction for update and delete, with create-vs-delete and update-vs-delete
+  tests in both orders.
+
+### No keyset index backs the API list orderings (`data/api-keyset-list-indexes`, opened 2026-10-13)
+
+- Every API list orders by `(createdAt, id)` within an organization
+  (`src/data-access/api-lab-samples.ts`, `src/data-access/api-credit-batches.ts`,
+  and the feedstock, production-run and product lists). No list table has an
+  `(organization_id, created_at, id)` index; `src/db/schema/production.ts`
+  indexes `production_runs` by facility only, and `samples` by credit batch and
+  sampling time.
+- Fine at pilot volumes. **Resolve via:** measure a list at realistic volume,
+  then add one covering index per list table in a single migration.
 
 ### Registry credentials can be replaced but not removed (`certification/credential-removal`, opened 2026-07-28)
 
@@ -650,6 +685,22 @@ companion inherits this file's schema, invariants, and resolution rules.
   [`docs/isometric/changes.md`](./isometric/changes.md); if it is present, pin
   `ISOMETRIC_DEMO_TEMPLATE_ID` in the workflow and restore the third category to
   the assertion (S).
+
+### The app requires TGA for 1,000-year durability but the module never mentions it (`isometric/tga-1000-year-requirement`, opened 2026-10-13, `needs-registry-check`)
+
+- **Observed:** `src/data-access/samples/write-scope.ts` refuses a 1,000-year
+  lab sample without TGA reactive or residual carbon, and readiness requires it
+  for submission. Biochar Agricultural Soils module v1.1 (Option 2) names R0 and
+  the fraction passing the 2% benchmark, and never mentions TGA.
+- The same text says proponents "should report a set of at least 500
+  measurements of R0" per sample. That is a "should", so
+  `src/lib/certification/sample-entry-warnings.ts` only warns below
+  `R0_MEASUREMENTS_PER_SAMPLE_GUIDANCE`; it does not block submission (round 7
+  Q53).
+- **Resolve via:** check the module text and the registry's accepted evidence
+  through the Isometric MCP server (`how_to`, then the protocol tools). Then
+  keep, relax or replace the TGA requirement and record the outcome in
+  [`docs/isometric/changes.md`](./isometric/changes.md).
 
 ### Unsampled batches with incidental Samples may still submit an H/C_org mean (`isometric/unsampled-incidental-chemistry`, opened 2026-10-13)
 

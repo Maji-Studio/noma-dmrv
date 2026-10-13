@@ -9,6 +9,9 @@ import { writeTools as allWriteTools } from "./write-tools";
 
 const writeTools = allWriteTools.filter((tool) => tool.scope.startsWith("feedstocks:"));
 
+vi.mock("@/data-access/samples", () => ({}));
+vi.mock("@/lib/read-models/api-lab-samples", () => ({ readApiLabSample: vi.fn(), readApiLabSampleList: vi.fn() }));
+vi.mock("@/lib/read-models/api-credit-batches", () => ({ readApiCreditBatch: vi.fn(), readApiCreditBatchList: vi.fn() }));
 vi.mock("@/data-access/production-runs", () => ({}));
 vi.mock("@/data-access/production-run-input", () => ({}));
 vi.mock("@/data-access/code-generator", () => ({}));

@@ -1,9 +1,6 @@
 import { describe, expect, it } from "vitest";
-import {
-  calculateHToCOrgRatio,
-  sampleFormSchema,
-  updateSampleSchema,
-} from "@/schemas/samples";
+import { sampleFormSchema, updateSampleSchema } from "@/schemas/samples";
+import { calculateHToCOrgRatio } from "@/lib/calculations/sample-ratios";
 import { RATIO_INPUT_MAX, RATIO_MAX_MESSAGE } from "@/schemas/helpers";
 
 const UUID = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee";

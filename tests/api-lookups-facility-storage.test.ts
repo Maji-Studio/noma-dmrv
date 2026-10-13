@@ -1,6 +1,7 @@
 /** Real handlers and Postgres. Written for reviewer execution; never run by the implementation agent. */
 import { sql } from "drizzle-orm";
 import { db } from "@/db";
+import { FACILITY_REPRESENTATION_REVISION } from "@/config/api-rest";
 import { facilities, storageLocations } from "@/db/schema";
 import { GET as FACILITIES_LIST } from "@/app/api/v1/facilities/route";
 import { GET as FACILITIES_GET } from "@/app/api/v1/facilities/[idOrCode]/route";
@@ -9,7 +10,7 @@ import { GET as STORAGE_LOCATIONS_GET } from "@/app/api/v1/storage-locations/[id
 import { LOOKUP_ARCHIVE_INSTANT, LOOKUP_CODES, LOOKUP_IDS, lookupContract } from "./helpers/api-lookups";
 
 lookupContract({
-  resource: "facilities", list: FACILITIES_LIST, get: FACILITIES_GET,
+  resource: "facilities", list: FACILITIES_LIST, get: FACILITIES_GET, revision: FACILITY_REPRESENTATION_REVISION,
   seed: async (fixture) => {
     const active = await db.insert(facilities).values(LOOKUP_IDS.map((id, index) => ({
       id, organizationId: fixture.ctx.organizationId, code: LOOKUP_CODES[index], name: `Lookup name ${index}`,

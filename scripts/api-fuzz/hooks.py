@@ -34,6 +34,12 @@ SEEDED_PRODUCT_BIOCHAR_WET_MASS_KG = 5
 SEEDED_BIOCHAR_MOISTURE_PERCENT = 10
 # Well under what the seeded biochar bin holds after its product and loss.
 SEEDED_LOSS_WET_MASS_KG = 1
+# seed.ts takes its lab sample 1 hour ago, inside the credit batch window. The
+# dry-run create is taken later still, and never in the future.
+SEEDED_LAB_SAMPLE_AGE = timedelta(minutes=30)
+# A real change on a 200-year batch, so the dry run PATCH has something to apply.
+SEEDED_LAB_SAMPLE_PATCH = {"labName": "API fuzz lab"}
+IDEMPOTENCY_HEADER = "Idempotency-Key"
 SEEDED_TARGETS = {}
 SEEDED_ETAGS = {}
 SEEDED_CREATE_BODIES = {}
@@ -147,6 +153,16 @@ def after_load_schema(ctx, schema):
             occurredAt=(datetime.now(timezone.utc) - SEEDED_MOVEMENT_AGE).isoformat(timespec="seconds"),
         )
         SEEDED_CREATE_BODIES["POST /storage-locations/{idOrCode}/stock-movements"] = movement
+    # Lab samples go onto the seeded credit batch (a 200-year facility, so no R0 or TGA).
+    credit_batch = SEEDED_TARGETS.get("GET /credit-batches/{idOrCode}")
+    if credit_batch is not None:
+        sample = deepcopy(schema["/lab-samples"]["POST"].definition.raw["requestBody"]["content"]["application/json"]["example"])
+        sample.update(
+            creditBatchId=credit_batch,
+            samplingTime=(datetime.now(timezone.utc) - SEEDED_LAB_SAMPLE_AGE).isoformat(timespec="seconds"),
+        )
+        SEEDED_CREATE_BODIES["POST /lab-samples"] = sample
+    SEEDED_PATCH_BODIES["PATCH /lab-samples/{idOrCode}"] = deepcopy(SEEDED_LAB_SAMPLE_PATCH)
     # An empty product patch is not a meaningful change, so the dry run sends the published example.
     SEEDED_PATCH_BODIES["PATCH /biochar-products/{idOrCode}"] = deepcopy(
         schema["/biochar-products/{idOrCode}"]["PATCH"].definition.raw["requestBody"]["content"]["application/json"]["example"])
@@ -194,3 +210,18 @@ def before_call(ctx, case, **kwargs):
     # Positive requests start on page one; negative cursor probes remain intact.
     if case.meta is not None and case.meta.generation.mode.is_positive and case.query:
         case.query.pop("cursor", None)
+    # Schemathesis 4.29.3 can hand the fuzzing phase a positive case without a
+    # required header (seen on creates with facility-local times). Supply the
+    # Idempotency-Key it promised; coverage still sends the negative case.
+    if case.meta is not None and case.meta.generation.mode.is_positive and requires_idempotency_key(case.operation):
+        headers = case.headers if case.headers is not None else {}
+        if not any(name.lower() == IDEMPOTENCY_HEADER.lower() for name in headers):
+            headers[IDEMPOTENCY_HEADER] = str(uuid4())
+            case.headers = headers
+
+
+def requires_idempotency_key(operation):
+    return any(
+        parameter.get("in") == "header" and parameter.get("name") == IDEMPOTENCY_HEADER and parameter.get("required")
+        for parameter in operation.definition.raw.get("parameters", [])
+    )
