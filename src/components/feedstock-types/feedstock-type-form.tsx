@@ -83,6 +83,8 @@ interface FeedstockTypeFormProps {
   hint?: string;
   /** Pin the action row to the bottom edge of a scrolling container (side sheets). Modals pass false. */
   stickyActions?: boolean;
+  /** Use the dialog discard guard for a non-sticky modal footer. */
+  guardDialogCancel?: boolean;
 }
 
 export function FeedstockTypeForm({
@@ -96,6 +98,7 @@ export function FeedstockTypeForm({
   lockUsage = false,
   hint,
   stickyActions = true,
+  guardDialogCancel,
 }: FeedstockTypeFormProps) {
   const isEditMode = !!feedstockType;
   const { facilityId } = useFacilityContext();
@@ -414,6 +417,7 @@ export function FeedstockTypeForm({
                 submitLabel={submitLabel}
                 defaultSubmitLabel={defaultSubmitLabel}
                 sticky={stickyActions}
+                guardDialogCancel={guardDialogCancel}
               />
             </div>
           )}
@@ -463,6 +467,7 @@ export function FeedstockTypeForm({
                     submitLabel={submitLabel}
                     defaultSubmitLabel={defaultSubmitLabel}
                     sticky={stickyActions}
+                    guardDialogCancel={guardDialogCancel}
                   />
                 </div>
               )}
