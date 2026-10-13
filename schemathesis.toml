@@ -194,3 +194,27 @@ include-operation-id = "find_output_stock_movements"
 include-operation-id = "record_output_stock_movement"
 [operations.parameters]
 "path.idOrCode" = "${API_FUZZ_BIOCHAR_BIN_ID}"
+
+# The credit batch and the lab sample sit on a 200-year facility, so a sample
+# needs no R0 or TGA evidence. The dry-run create, update and delete use them.
+[[operations]]
+include-operation-id = "get_credit_batch"
+[operations.parameters]
+"path.idOrCode" = "${API_FUZZ_CREDIT_BATCH_ID}"
+
+[[operations]]
+include-operation-id = "get_lab_sample"
+[operations.parameters]
+"path.idOrCode" = "${API_FUZZ_LAB_SAMPLE_ID}"
+
+[[operations]]
+include-operation-id = "update_lab_sample"
+[operations.parameters]
+"path.idOrCode" = "${API_FUZZ_LAB_SAMPLE_ID}"
+"header.If-Match" = "${API_FUZZ_LAB_SAMPLE_ETAG}"
+
+[[operations]]
+include-operation-id = "delete_lab_sample"
+[operations.parameters]
+"path.idOrCode" = "${API_FUZZ_LAB_SAMPLE_ID}"
+"header.If-Match" = "${API_FUZZ_LAB_SAMPLE_ETAG}"

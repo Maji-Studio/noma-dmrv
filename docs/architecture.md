@@ -33,8 +33,9 @@ components (UI)
   The action shape is `withAction((ctx) => runOperationInProcess(op, ctx, input))`.
   `src/lib/operations/registry.ts` is the explicit allowlist of exposed
   operations; its keys match operation ids. Feedstock, production-run, biochar-product and
-  output-stock movement writes use this layer (`make_biochar_product`,
-  `update_biochar_product`, `record_output_stock_movement`). UI product deletes
+  output-stock movement and lab sample writes use this layer (`make_biochar_product`,
+  `update_biochar_product`, `record_output_stock_movement`, `record_lab_sample`,
+  `update_lab_sample`, `delete_lab_sample`). UI product deletes
   stay off the runner. UI delivery corrections use the runner through
   `record_output_stock_movement` but stay off the API (decision 50).
 - The runner owns the transaction. Data-access ...InTransaction(ctx, tx, ...)
@@ -584,6 +585,26 @@ hashing and verification responsibility.
 route handlers do not import the database. The shared REST problem builder
 lives at `lib/api/problem.ts`. See [auth.md](./auth.md#api-credentials) for
 credential and denial contracts.
+
+### Lab samples on the runner
+
+Lab sample create, update (including a move to another credit batch) and delete
+run through `src/lib/operations/lab-samples.ts`; the Server Actions in
+`src/fn/samples.ts` and REST/MCP share them. Every writer takes locks in one
+order (`src/data-access/samples/write-scope.ts`): certification artifacts for
+every lineage the write touches, then credit batches in id order, then the
+sample. The set includes the batch a legacy production run link reaches, and a
+transport leg whose parent is a sample takes the same scope. Lineage is
+re-resolved against the artifacts held, so a Removal assigned while the writer
+waited refuses the write (`certification_locked`) and no artifact is locked late.
+Existence, archive state, facility, window and time zone are read from the
+locked batch. Archived batches refuse create, update and move. Facility archive
+locks its credit batches in id order first, matching the sample writers.
+Ratios and warnings come from the merged locked row
+(`src/lib/calculations/sample-ratios.ts`,
+`src/lib/certification/sample-entry-warnings.ts`).
+Reads (`src/data-access/api-lab-samples.ts`, `api-credit-batches.ts`) hide
+samples on archived batches from lists and still serve them by id.
 
 ### Operation effects and API bookkeeping
 

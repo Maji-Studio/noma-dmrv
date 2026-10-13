@@ -23,7 +23,17 @@ const LOSS_HOURS_AGO = 3.5;
 const LOSS_WET_MASS_KG = 1;
 const BLEND_BIOCHAR_RATIO = 0.8;
 const BLEND_INGREDIENT_RATIO = 0.2;
+// The credit batch covers the completed run's day and the day before, so a sample
+// taken shortly before now is inside its window whatever the clock reads.
+const BATCH_WINDOW_DAYS_BACK = 1;
+const BATCH_CURRENCY = "TZS";
+const SAMPLE_TAKEN_HOURS_AGO = 1;
+const SAMPLE_TOTAL_CARBON_PERCENT = 80;
+const SAMPLE_ORGANIC_CARBON_PERCENT = 78;
+const SAMPLE_INORGANIC_CARBON_PERCENT = 2;
+const SAMPLE_HYDROGEN_PERCENT = 2.5;
 const MS_PER_HOUR = 3_600_000;
+const MS_PER_DAY = 24 * MS_PER_HOUR;
 const PRIVATE_FILE_MODE = 0o600;
 
 async function main(): Promise<void> {
@@ -53,7 +63,9 @@ async function main(): Promise<void> {
   const { createFormulation } = await import("@/data-access/formulations");
   const { makeBiocharProduct } = await import("@/lib/operations/biochar-products");
   const { recordOutputStockMovement } = await import("@/lib/operations/output-stock");
-  const { biocharProductEtag } = await import("@/lib/api/representation-etags");
+  const { biocharProductEtag, creditBatchEtag, labSampleEtag } = await import("@/lib/api/representation-etags");
+  const { createCreditBatch } = await import("@/data-access/credit-batches");
+  const { recordLabSample } = await import("@/lib/operations/lab-samples");
   const { createApiKey } = await import("@/data-access/api-keys");
   const { API_SCOPES } = await import("@/lib/auth/api-scopes");
   const { API_KEY_DEFAULT_EXPIRY_SECONDS } = await import("@/config/api-keys");
@@ -73,8 +85,10 @@ async function main(): Promise<void> {
     await tx.insert(members).values({ id: randomUUID(), organizationId, userId, role: "owner" });
   });
   const ctx = { organizationId, userId, orgRole: "owner" as const, isPlatformAdmin: false };
+  // A 200-year facility: a lab sample there needs no R0 or TGA evidence.
   const facility = await createFacility(ctx, {
     code: "FUZZ-FAC", name: FIXTURE_LABEL, country: "FR", timezone: FACILITY_TIME_ZONE,
+    durabilityOption: "200_year",
   });
   const supplier = await createSupplier(ctx, { code: "FUZZ-SUP", name: FIXTURE_LABEL });
   const feedstockType = await createFeedstockType(ctx, {
@@ -126,7 +140,7 @@ async function main(): Promise<void> {
   const productBin = await createStorageLocation(ctx, {
     code: "FUZZ-PB-BIN", name: `${FIXTURE_LABEL} product bin`, type: "product_bin", facilityId: facility.id,
   });
-  await runOperation(startProductionRun, ctx, {
+  const outputRun = (await runOperation(startProductionRun, ctx, {
     facilityId: facility.id, reactorId: reactor.id, status: "complete",
     startTime: new Date(now - OUTPUT_RUN_START_HOURS_AGO * MS_PER_HOUR).toISOString(),
     endTime: new Date(now - OUTPUT_RUN_END_HOURS_AGO * MS_PER_HOUR).toISOString(),
@@ -134,7 +148,20 @@ async function main(): Promise<void> {
     feedstockMoisturePercent: INTAKE_MOISTURE_PERCENT,
     biocharStorageLocationId: biocharBin.id, biocharOutputKg: BIOCHAR_OUTPUT_WET_MASS_KG,
     biocharMoisturePercent: BIOCHAR_MOISTURE_PERCENT,
+  })).data;
+  // One month at most (credit_batches_isometric_max_one_month); the completed run
+  // joins by id. The draft run is not complete, so the batch ignores it.
+  const creditBatch = await createCreditBatch(ctx, {
+    code: "FUZZ-CB", facilityId: facility.id, feedstockTypeId: feedstockType.id,
+    startDate: new Date(now - BATCH_WINDOW_DAYS_BACK * MS_PER_DAY), endDate: new Date(now),
+    productionRunIds: [outputRun.id], currency: BATCH_CURRENCY,
   });
+  const labSample = (await runOperation(recordLabSample, ctx, {
+    creditBatchId: creditBatch.id,
+    samplingTime: new Date(now - SAMPLE_TAKEN_HOURS_AGO * MS_PER_HOUR).toISOString(),
+    totalCarbonPercent: SAMPLE_TOTAL_CARBON_PERCENT, organicCarbonPercent: SAMPLE_ORGANIC_CARBON_PERCENT,
+    inorganicCarbonPercent: SAMPLE_INORGANIC_CARBON_PERCENT, totalHydrogenPercent: SAMPLE_HYDROGEN_PERCENT,
+  })).data.sample;
   const pure = await createFormulation(ctx, { code: "FUZZ-PURE", name: `${FIXTURE_LABEL} pure biochar`, biocharRatio: 1 });
   const blendType = await createFeedstockType(ctx, {
     code: "FUZZ-BLEND", name: `${FIXTURE_LABEL} blend ingredient`, category: "compost", usage: "blend",
@@ -175,6 +202,8 @@ async function main(): Promise<void> {
     pureFormulationId: pure.id, pureFormulationCode: pure.code, blendFormulationId: blend.id, blendFormulationCode: blend.code,
     biocharProductId: product.id, biocharProductCode: product.code, biocharProductEtag: biocharProductEtag(product),
     lossMovementId: loss.movementId,
+    creditBatchId: creditBatch.id, creditBatchCode: creditBatch.code, creditBatchEtag: creditBatchEtag(creditBatch),
+    labSampleId: labSample.id, labSampleCode: labSample.sampleCode, labSampleEtag: labSampleEtag(labSample),
     feedstockId: feedstock.id, feedstockCode: feedstock.code, feedstockEtag: feedstockEtag(feedstock),
   }, null, 2) + "\n", { mode: PRIVATE_FILE_MODE, flag: "wx" });
   console.log(`API_FUZZ_FIXTURE=${outputPath}`);
