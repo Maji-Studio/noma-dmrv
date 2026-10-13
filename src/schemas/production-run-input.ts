@@ -29,9 +29,9 @@ const describedFields = {
   dieselGensetLiters: pipeToCanonicalNumber(clearableNumber, fields.dieselGensetLiters).describe("Generator diesel in litres."),
   preprocessingFuelLiters: pipeToCanonicalNumber(clearableNumber, fields.preprocessingFuelLiters).describe("Preprocessing fuel in litres."),
   electricityKwh: pipeToCanonicalNumber(clearableNumber, fields.electricityKwh).describe("Electricity in kilowatt hours."),
-  biocharOutputKg: pipeToCanonicalNumber(clearableNumber, fields.biocharOutputKg).describe("Wet biochar output in kilograms."),
-  biocharMoisturePercent: pipeToCanonicalNumber(clearableNumber, fields.biocharMoisturePercent).describe("Biochar water as percent of wet mass, 0 to 100."),
-  biocharStorageLocationId: fields.biocharStorageLocationId.describe("Output bin UUID in the effective facility, or null to clear."),
+  biocharOutputKg: pipeToCanonicalNumber(clearableNumber, fields.biocharOutputKg).describe("Wet biochar output in kilograms. Must be positive when complete."),
+  biocharMoisturePercent: pipeToCanonicalNumber(clearableNumber, fields.biocharMoisturePercent).describe("Biochar water as percent of wet mass, 0 to 100. Required when complete."),
+  biocharStorageLocationId: fields.biocharStorageLocationId.describe("Biochar output bin UUID in the effective facility. Required when complete; null clears it for other statuses."),
 };
 export const createProductionRunInput = z.strictObject({
   ...describedFields,

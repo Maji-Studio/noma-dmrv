@@ -22,6 +22,7 @@ function makeOutcomeInput(
     endTimePresent: true,
     cancellationReason: null,
     biocharOutputKg: 20,
+    biocharStorageLocationId: "output-bin-id",
     biocharMoisturePercent: 0,
     feedstockWetMassKg: 100,
     feedstockMoisturePercent: 20,
@@ -174,6 +175,30 @@ describe("production-run lifecycle", () => {
       );
     });
 
+    it.each([null, undefined])("requires biochar moisture when complete: %s", (moisture) => {
+      const input = makeOutcomeInput({ biocharMoisturePercent: moisture });
+      expect(getProductionRunOutcomeViolations(input)).toContainEqual({ code: "complete-output-moisture-required" });
+      expect(() => assertProductionRunOutcome(input)).toThrow("Enter biochar moisture for a complete run.");
+    });
+
+    it("accepts zero biochar moisture when complete", () => {
+      expect(() => assertProductionRunOutcome(makeOutcomeInput({ biocharMoisturePercent: 0 }))).not.toThrow();
+    });
+
+    it.each(["draft", "running", "failed", "cancelled"] as const)("allows missing output bin and moisture when %s", (status) => {
+      const terminal = status === "failed";
+      const input = makeOutcomeInput({ status, endTime: terminal ? END_TIME : null, endTimePresent: terminal,
+        cancellationReason: "Recorded in error", biocharStorageLocationId: null, biocharMoisturePercent: null });
+      expect(getProductionRunOutcomeViolations(input)).toEqual([]);
+      expect(() => assertProductionRunOutcome(input)).not.toThrow();
+    });
+
+    it.each([null, undefined, ""])("requires an output bin when complete: %s", (bin) => {
+      const input = { ...makeOutcomeInput(), biocharStorageLocationId: bin };
+      expect(getProductionRunOutcomeViolations(input)).toContainEqual({ code: "complete-output-bin-required" });
+      expect(() => assertProductionRunOutcome(input)).toThrow("Select a biochar output bin for a complete run.");
+    });
+
     it.each([
       {
         label: "source bin",
@@ -231,6 +256,8 @@ describe("production-run lifecycle", () => {
           endTime: null,
           endTimePresent: false,
           biocharOutputKg: 0,
+          biocharStorageLocationId: null,
+          biocharMoisturePercent: null,
           feedstock: { basis: "consumed-mass", consumedFeedstockWetKg: 0 },
         }),
       );
@@ -238,6 +265,8 @@ describe("production-run lifecycle", () => {
       expect(violations).toEqual([
         { code: "terminal-end-required", status: "complete" },
         { code: "complete-output-required" },
+        { code: "complete-output-bin-required" },
+        { code: "complete-output-moisture-required" },
         {
           code: "feedstock-required",
           status: "complete",

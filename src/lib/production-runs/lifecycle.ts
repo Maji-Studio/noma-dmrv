@@ -7,6 +7,9 @@ export const CANCELLED_PRODUCTION_RUN_STATUS = "cancelled" as const;
 export const DRY_MASS_BALANCE_MESSAGE =
   "Dry output exceeds dry input. Reduce the biochar output or correct the moisture values.";
 
+export const COMPLETE_OUTPUT_MOISTURE_MESSAGE = "Enter biochar moisture for a complete run.";
+export const COMPLETE_OUTPUT_BIN_MESSAGE = "Select a biochar output bin for a complete run.";
+
 export const PRODUCTION_RUN_STATUSES = [
   "draft",
   "running",
@@ -35,6 +38,7 @@ export type ProductionRunOutcomeInput = {
   endTimePresent: boolean;
   cancellationReason: string | null | undefined;
   biocharOutputKg: number | null | undefined;
+  biocharStorageLocationId: string | null | undefined;
   biocharMoisturePercent: number | null | undefined;
   feedstockWetMassKg: number | null | undefined;
   feedstockMoisturePercent: number | null | undefined;
@@ -58,6 +62,8 @@ export type ProductionRunOutcomeViolation =
       status: TerminalProductionRunStatus;
     }
   | { code: "complete-output-required" }
+  | { code: "complete-output-bin-required" }
+  | { code: "complete-output-moisture-required" }
   | {
       code: "feedstock-required";
       status: TerminalProductionRunStatus;
@@ -143,6 +149,14 @@ export function getProductionRunOutcomeViolations(
     violations.push({ code: "complete-output-required" });
   }
 
+  if (input.status === "complete" && !input.biocharStorageLocationId) {
+    violations.push({ code: "complete-output-bin-required" });
+  }
+
+  if (input.status === "complete" && input.biocharMoisturePercent == null) {
+    violations.push({ code: "complete-output-moisture-required" });
+  }
+
   if (terminalStatus) {
     const feedstockIsMissing =
       input.feedstock.basis === "form-inputs"
@@ -187,6 +201,8 @@ const MUTATION_VIOLATION_PRIORITY: readonly ProductionRunOutcomeViolation["code"
   "terminal-end-required",
   "feedstock-required",
   "complete-output-required",
+  "complete-output-bin-required",
+  "complete-output-moisture-required",
 ];
 
 export function assertProductionRunOutcome(
@@ -232,6 +248,14 @@ export function assertProductionRunOutcome(
       }
       throw new SafeError(`A ${violation.status} run must consume feedstock`);
     }
+    case "complete-output-moisture-required":
+      throw new DomainError("validation_failed", COMPLETE_OUTPUT_MOISTURE_MESSAGE, {
+        issues: [{ path: ["biocharMoisturePercent"], code: "validation_failed", message: COMPLETE_OUTPUT_MOISTURE_MESSAGE }],
+      });
+    case "complete-output-bin-required":
+      throw new DomainError("validation_failed", COMPLETE_OUTPUT_BIN_MESSAGE, {
+        issues: [{ path: ["biocharStorageLocationId"], code: "validation_failed", message: COMPLETE_OUTPUT_BIN_MESSAGE }],
+      });
     case "complete-output-required":
       throw new SafeError("A complete run must record positive biochar output");
   }

@@ -505,3 +505,23 @@ describe("productionRunFilterSchema", () => {
     expect(result.creditBatchId).toBe(creditBatchId);
   });
 });
+
+
+describe("complete run output requirements", () => {
+  it.each([null, undefined, ""])("reports inline output errors for empty values: %s", (missing) => {
+    const result = productionRunFormSchema.safeParse({ ...completeProductionRunInput,
+      biocharStorageLocationId: missing, biocharMoisturePercent: missing });
+    expect(result.success).toBe(false);
+    if (!result.success) expect(result.error.issues).toEqual(expect.arrayContaining([
+      expect.objectContaining({ path: ["biocharStorageLocationId"], message: "Select a biochar output bin for a complete run." }),
+      expect.objectContaining({ path: ["biocharMoisturePercent"], message: "Enter biochar moisture for a complete run." }),
+    ]));
+  });
+  it("accepts zero biochar moisture", () => {
+    expect(productionRunFormSchema.safeParse({ ...completeProductionRunInput, biocharMoisturePercent: 0 }).success).toBe(true);
+  });
+  it.each(["draft", "running", "failed", "cancelled"])("allows empty output for %s", (status) => {
+    expect(productionRunFormSchema.safeParse({ ...completeProductionRunInput, status,
+      cancellationReason: "Recorded in error", biocharStorageLocationId: null, biocharMoisturePercent: null }).success).toBe(true);
+  });
+});

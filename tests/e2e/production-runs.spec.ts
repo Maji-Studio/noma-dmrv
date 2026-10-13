@@ -518,7 +518,13 @@ test.describe("Production Run lifecycle (#254)", () => {
       "#feedstockDraws-error",
     );
 
+    for (const field of ["biocharStorageLocationId", "biocharOutputKg", "biocharMoisturePercent"]) {
+      await expect(dialog.locator(`label[for="${field}"]`)).not.toContainText("Required");
+    }
     await chooseRunStatus(dialog, "complete");
+    for (const field of ["biocharStorageLocationId", "biocharOutputKg", "biocharMoisturePercent"]) {
+      await expect(dialog.locator(`label[for="${field}"]`)).toContainText("Required");
+    }
     await dialog
       .getByRole("button", { name: "Remove feedstock source 1" })
       .click();
@@ -541,6 +547,12 @@ test.describe("Production Run lifecycle (#254)", () => {
 
     await submitCreate(page);
     await expect(feedstockRequirement).toHaveText("Enter feedstock moisture.");
+    await expect(dialog.locator("#biocharStorageLocationId-error")).toHaveText("Select a biochar output bin for a complete run.");
+    await expect(dialog.locator("#biocharMoisturePercent-error")).toHaveText("Enter biochar moisture for a complete run.");
+    await selectEntity(page, "Biochar Storage", seededData.biocharStorageLocation.id, seededData.biocharStorageLocation.name);
+    await dialog.locator('input[name="biocharMoisturePercent"]').fill("0");
+    await expect(dialog.locator("#biocharStorageLocationId-error")).toBeHidden();
+    await expect(dialog.locator("#biocharMoisturePercent-error")).toBeHidden();
   });
 
   test("offers only legal initial statuses", async ({
@@ -613,6 +625,8 @@ test.describe("Production Run lifecycle (#254)", () => {
       seededData.feedstockStorageLocation.id,
       seededData.feedstockStorageLocation.name,
     );
+    await selectEntity(page, "Biochar Storage", seededData.biocharStorageLocation.id, seededData.biocharStorageLocation.name);
+    await dialog.locator('input[name="biocharMoisturePercent"]').fill("0");
     await dialog.locator('input[name="biocharOutputKg"]').fill("10");
 
     const wetMass = dialog.locator(FIRST_FEEDSTOCK_DRAW_WET_MASS_SELECTOR);
