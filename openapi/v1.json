@@ -377,6 +377,7 @@
           "capacityKg": {"anyOf": [{"type": "number"}, {"type": "null"}], "description": "Storage capacity in kilograms, or null when unspecified."},
           "code": {"description": "Exact human-readable code, unique within the organization.", "type": "string"},
           "createdAt": {"description": "Creation event instant in UTC (RFC 3339).", "format": "date-time", "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$", "type": "string"},
+          "drawOrder": {"description": "Default draw order for split biochar and product bins. Ignored by mix and feedstock bins.", "enum": ["oldest_first", "newest_first"], "type": "string"},
           "facilityId": {"description": "Owning facility identifier, UUID.", "format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"},
           "feedstockTypeId": {"anyOf": [{"format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"}, {"type": "null"}], "description": "Allowed feedstock type identifier, UUID, or null when unrestricted or inapplicable."},
           "id": {"description": "Resource identifier, UUID.", "format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"},
@@ -385,7 +386,7 @@
           "updatedAt": {"description": "Last update event instant in UTC (RFC 3339).", "format": "date-time", "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$", "type": "string"},
           "version": {"description": "Positive integer row version for concurrency checks.", "exclusiveMinimum": 0, "maximum": 9007199254740991, "type": "integer"}
         },
-        "required": ["id", "code", "name", "archivedAt", "createdAt", "updatedAt", "version", "facilityId", "type", "capacityKg", "feedstockTypeId"],
+        "required": ["id", "code", "name", "archivedAt", "createdAt", "updatedAt", "version", "facilityId", "type", "drawOrder", "capacityKg", "feedstockTypeId"],
         "type": "object"
       },
       "supplier": {

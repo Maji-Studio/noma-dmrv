@@ -123,17 +123,17 @@ export async function openQuickAdd(page: Page, scope: Locator, trigger: string):
   return dialog;
 }
 
-/** Opens a bin's loss or count sheet from its read sheet. */
+/** Opens a bin's lost-mass sheet from its read sheet. */
 export async function binMovementSheet(
   page: Page,
   ctx: CaptureContext,
   type: SeededBin["type"],
-  button: "Record loss" | "Reconcile stock",
+  button: "Adjust stock",
 ): Promise<Locator> {
   const sheet = await openBinSheet(page, ctx, findBin(ctx, { type })!.name);
   await sheet.getByRole("button", { name: button, exact: true }).first().click();
   const movement = lastSheet(page);
-  await expect(movement.getByRole("heading", { name: /^Reconcile / }).first()).toBeVisible();
+  await expect(movement.getByRole("heading", { name: "Lost mass" }).first()).toBeVisible();
   return movement;
 }
 

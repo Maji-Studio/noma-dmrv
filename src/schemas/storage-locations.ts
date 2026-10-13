@@ -4,7 +4,7 @@
  */
 
 import { z } from "zod";
-import { OUTPUT_STOCK_MODES, type OutputStockMode } from "@/lib/output-stock/stock-mode";
+import { OUTPUT_DRAW_ORDERS, OUTPUT_STOCK_MODES, type OutputDrawOrder, type OutputStockMode } from "@/lib/output-stock/stock-mode";
 import {
   emptyToNull,
   expectedVersionSchema,
@@ -82,6 +82,12 @@ export const OUTPUT_STOCK_MODE_LABELS: Record<OutputStockMode, string> = {
   mix: "Mix: one blended pile",
 };
 
+/** Names shared by the bin setting, read view and draw picker. */
+export const OUTPUT_DRAW_ORDER_LABELS: Record<OutputDrawOrder, string> = {
+  oldest_first: "Oldest first",
+  newest_first: "Newest first",
+};
+
 /** The bin types that choose a stock mode. */
 export type OutputBinType = Extract<StorageLocationType, "biochar_bin" | "product_bin">;
 
@@ -143,6 +149,7 @@ export const storageLocationFormSchema = z.object({
   // formulation put into it (`data-access/biochar-products.ts`).
   formulationId: emptyToNull.or(z.string().uuid("Choose a valid formulation.")).nullable().optional(),
   stockMode: z.enum(outputStockModes, { message: "Choose split or mix." }).optional(),
+  drawOrder: z.enum(OUTPUT_DRAW_ORDERS, { message: "Choose oldest or newest first." }).optional(),
   mergedAt: mergedAtSchema,
   storageMethod: z
     .string()
@@ -204,6 +211,7 @@ export const updateStorageLocationSchema = z.object({
   feedstockTypeId: emptyToNull.or(z.string().uuid()).nullable().optional(),
   formulationId: emptyToNull.or(z.string().uuid()).nullable().optional(),
   stockMode: z.enum(outputStockModes).optional(),
+  drawOrder: z.enum(OUTPUT_DRAW_ORDERS).optional(),
   mergedAt: mergedAtSchema,
   storageMethod: z.string().max(255).optional().nullable(),
   storageDescription: z.string().max(1000).optional().nullable(),

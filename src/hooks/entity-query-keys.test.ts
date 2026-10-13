@@ -43,10 +43,13 @@ describe("entity query keys", () => {
     invalidateStockEntityQueries(queryClient, mutation);
 
     expect(invalidateQueries.mock.calls.map(([filters]) => filters)).toEqual(
-      types.flatMap((entityType) => [
+      [
+        ...(["feedstock", "productionRun", "biocharProduct", "binMovement"].includes(mutation) ? [{ queryKey: ["feedstockBinStock"] }] : []),
+        ...types.flatMap((entityType) => [
         { queryKey: entityKeys.listPrefix(entityType) },
         { queryKey: entityKeys.detailPrefix(entityType) },
       ]),
+      ],
     );
   });
 });

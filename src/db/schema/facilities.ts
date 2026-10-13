@@ -1,6 +1,6 @@
 import { relations, sql } from 'drizzle-orm';
 import { integer, check, doublePrecision, foreignKey, pgTable, text, timestamp, unique, uniqueIndex, uuid, real, jsonb } from 'drizzle-orm/pg-core';
-import { outputStockMode, storageLocationType, durabilityOption } from './common';
+import { outputDrawOrder, outputStockMode, storageLocationType, durabilityOption } from './common';
 import { organizations } from './auth';
 
 // ============================================
@@ -143,6 +143,8 @@ export const storageLocations = pgTable(
     // Output bins only in practice: split (default, separate sub-bins) or mix
     // (one pile drawn pro rata). Feedstock bins stay split and ignore it.
     stockMode: outputStockMode('stock_mode').default('split').notNull(),
+    // Split output bins draw in this order unless the operator supplies an order.
+    drawOrder: outputDrawOrder('draw_order').default('oldest_first').notNull(),
     facilityId: uuid('facility_id')
       .notNull(),
     // Stamped by the facility archive cascade; NULL = active

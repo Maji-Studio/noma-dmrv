@@ -8,7 +8,7 @@ import { DeliveryForm } from "./delivery-form";
 import { useCreateCustomerLocation, useUpdateCustomerLocation, useDeleteCustomerLocation } from "@/hooks/use-customers";
 import { orderKeys } from "@/hooks/use-orders";
 
-const state = vi.hoisted(() => ({ distance: 12, save: vi.fn(), read: vi.fn() }));
+const state = vi.hoisted(() => ({ locked: false, distance: 12, save: vi.fn(), read: vi.fn() }));
 vi.mock("@/fn/orders", () => ({
   getOrdersForSelectFn: () => {
     state.read();
@@ -28,9 +28,11 @@ vi.mock("@/hooks/use-facilities", async (importOriginal) => ({
   ...await importOriginal<typeof import("@/hooks/use-facilities")>(), useFacility: () => ({ data: null }),
 }));
 vi.mock("@/hooks/use-output-stock", async (importOriginal) => ({
-  ...await importOriginal<typeof import("@/hooks/use-output-stock")>(), useMatchingOutputBins: () => ({ data: [] }),
+  ...await importOriginal<typeof import("@/hooks/use-output-stock")>(),
+  useOutputStockHistory: () => ({ data: [{ id: "movement-one", kind: "delivery", deliveryId: "delivery-one", editLockedReason: state.locked ? "Locked because newer stock entries were recorded on this bin after it." : null }] }),
+  useMatchingOutputBins: () => ({ data: [] }),
 }));
-vi.mock("@/hooks/use-sub-bin-draw", () => ({ useSubBinDraw: () => ({ active: false, usesSingleMoisture: false, query: {} }) }));
+vi.mock("@/hooks/use-sub-bin-draw", () => ({ useSubBinDraw: () => ({ active: false, usesSingleMoisture: true, query: {} }) }));
 vi.mock("@/hooks/use-output-draw-draft", () => ({ useOutputDrawDraft: () => ({
   preview: {}, estimate: null, gate: () => ({ canSave: true, submitDisabled: false }), beginSubmit: vi.fn(),
 }) }));
@@ -112,4 +114,20 @@ it.each(["create", "update", "delete"] as const)("refreshes the open delivery's 
   expect(client.getQueryState(orderKeys.select("other-facility"))?.isInvalidated).toBe(true);
   expect(state.read).toHaveBeenCalledTimes(2);
   expect(parentSave).not.toHaveBeenCalled();
+});
+
+it("allows latest delivery mass edits and keeps its event time locked", () => {
+  state.locked = false;
+  render(<DeliveryForm delivery={delivery} onSubmit={vi.fn()} />, { wrapper });
+  expect(screen.getByRole("spinbutton", { name: /Biochar product wet mass/ }).hasAttribute("disabled")).toBe(false);
+  expect(screen.getByRole("spinbutton", { name: /^Biochar product moisture/ }).hasAttribute("disabled")).toBe(false);
+  expect(screen.getByLabelText(/Delivery date and time/).hasAttribute("disabled")).toBe(true);
+});
+
+it("locks delivery mass and moisture with the newer-stock reason", () => {
+  state.locked = true;
+  render(<DeliveryForm delivery={delivery} onSubmit={vi.fn()} />, { wrapper });
+  expect(screen.getByRole("spinbutton", { name: /Biochar product wet mass/ }).hasAttribute("disabled")).toBe(true);
+  expect(screen.getByRole("spinbutton", { name: /^Biochar product moisture/ }).hasAttribute("disabled")).toBe(true);
+  expect(screen.getByText("Locked because newer stock entries were recorded on this bin after it.")).toBeTruthy();
 });
