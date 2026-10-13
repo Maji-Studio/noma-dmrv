@@ -557,6 +557,7 @@ function EntitySelectView({
             aria-describedby={triggerDescribedBy}
             aria-invalid={ariaInvalid}
             data-testid="entity-select-trigger"
+            data-has-value={Boolean(value)}
             className={cn(
               "flex h-40 w-full items-center justify-between gap-2 border bg-[var(--color-background-white)] px-12 text-[var(--text-s)] transition-all",
               "focus-visible:outline-none focus-visible:border-[var(--color-interaction)] focus-visible:ring-1 focus-visible:ring-[var(--color-interaction)]",
@@ -568,7 +569,7 @@ function EntitySelectView({
                 : selectionLocked
                   ? "cursor-pointer opacity-50"
                   : "cursor-pointer hover:border-[var(--color-interaction)]",
-              value && !disabled && !selectionLocked ? "pr-[72px]" : "pr-[40px]"
+              value && !disabled && !selectionLocked ? "pr-72" : "pr-36"
             )}
           >
             <span
@@ -589,9 +590,10 @@ function EntitySelectView({
             </span>
             <CaretDownIcon
               aria-hidden
+              data-trailing-icon=""
               weight="bold"
               className={cn(
-                "size-16 shrink-0 text-[var(--color-text-tertiary)] transition-transform",
+                "pointer-events-none absolute right-12 size-16 shrink-0 text-[var(--color-text-tertiary)] transition-transform",
                 isOpen && "rotate-180"
               )}
             />
@@ -603,7 +605,9 @@ function EntitySelectView({
               onClick={handleClear}
               aria-label="Clear selection"
               data-testid="entity-select-clear"
-              className="absolute right-20 h-44 w-44 hover:bg-[var(--color-background-medium)] text-[var(--color-text-tertiary)] hover:text-[var(--color-text-primary)]"
+              // The hit area ends where the chevron starts; align the X toward
+              // that edge with an 8px gap, keeping all 44px clickable.
+              className="absolute right-28 h-44 w-44 justify-end pr-8 hover:bg-[var(--color-background-medium)] text-[var(--color-text-tertiary)] hover:text-[var(--color-text-primary)]"
             >
               <XIcon aria-hidden weight="bold" className="size-16" />
             </Button>
