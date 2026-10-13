@@ -129,6 +129,7 @@ export function EntitySelect({
   const popupRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const recoveryLinkRef = useRef<HTMLAnchorElement>(null);
   const openedWithTouch = useRef(false);
   const entitySelectId = useId();
   const listboxId = `${entitySelectId}-listbox`;
@@ -312,9 +313,9 @@ export function EntitySelect({
 
   // The empty-state renders a recovery link (`emptyHint.href`) only when the
   // list is genuinely empty (not loading/errored, no active search). While it's
-  // showing, Tab must NOT close the dropdown — that would unmount the link before
-  // focus could land on it, leaving it keyboard-unreachable.
+  // showing, forward Tab explicitly enters the portal before the next form field.
   const showEmptyStateRecoveryLink =
+    !disabled &&
     !isLoading &&
     !fetchError &&
     options.length === 0 &&
@@ -340,6 +341,7 @@ export function EntitySelect({
       case "ArrowUp":
       case "Home":
       case "End": {
+        if ((e.key === "Home" || e.key === "End") && e.currentTarget === inputRef.current) break;
         e.preventDefault();
         const next = e.key === "Home" ? 0 : e.key === "End" ? rows.length - 1
           : Math.max(0, Math.min(rows.length - 1, index + (e.key === "ArrowDown" ? 1 : -1)));
@@ -362,9 +364,10 @@ export function EntitySelect({
         }
         break;
       case "Tab":
-        // Let Tab move focus to the empty-state recovery link instead of
-        // closing (unmounting) the dropdown out from under it.
-        if (!showEmptyStateRecoveryLink) closeMenu();
+        if (showEmptyStateRecoveryLink && !e.shiftKey) {
+          e.preventDefault();
+          recoveryLinkRef.current?.focus();
+        } else closeMenu();
         break;
     }
   };
@@ -493,7 +496,10 @@ export function EntitySelect({
                         aria-activedescendant={activeId}
                         type="text"
                         value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
+                        onChange={(e) => {
+                          setSearchQuery(e.target.value);
+                          setHighlightedId(null);
+                        }}
                         onKeyDown={handleKeyDown}
                         placeholder={`Search ${ENTITY_TYPE_LABELS[entityType] || entityType}...`}
                         aria-label={`Search ${ENTITY_TYPE_LABELS[entityType] || entityType}`}
@@ -536,6 +542,7 @@ export function EntitySelect({
                         */}
                         {emptyHint.href && (
                           <a
+                            ref={recoveryLinkRef}
                             href={emptyHint.href}
                             target="_blank"
                             rel="noopener noreferrer"

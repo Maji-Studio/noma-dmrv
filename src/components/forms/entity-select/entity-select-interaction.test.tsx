@@ -7,7 +7,11 @@ import type { EntityOption } from "./types";
 
 const state = vi.hoisted(() => ({ options: [] as EntityOption[], loading: false, error: null as Error | null }));
 vi.mock("@/hooks/use-entities", () => ({
-  useEntityOptions: () => ({ data: state.options, isLoading: state.loading, error: state.error }),
+  useEntityOptions: ({ search }: { search: string }) => ({
+    data: state.options.filter((option) => option.name.toLowerCase().includes(search.toLowerCase())),
+    isLoading: state.loading,
+    error: state.error,
+  }),
   useEntityById: () => ({ data: { id: "one", code: "1", name: "North bin" }, isPending: false }),
 }));
 vi.mock("./driver-quick-add-dialog", () => ({ DriverQuickAddDialog: () => null }));
@@ -103,6 +107,57 @@ describe("EntitySelect menu interactions", () => {
     expect(screen.queryByTestId("entity-select-search")).toBeNull();
     expect(screen.queryByTestId("entity-select-clear")).toBeNull();
     key("Enter"); expect(edit).toHaveBeenCalledOnce(); expect(change).not.toHaveBeenCalled();
+  });
+
+  it("selects the first search match after Edit was highlighted", async () => {
+    const change = vi.fn(); const edit = vi.fn();
+    render(<EntitySelect entityType="storageLocation" value="one" onChange={change} onEditSelected={edit} alwaysShowSearch />);
+    open();
+    const search = screen.getByTestId("entity-select-search");
+    await waitFor(() => expect(document.activeElement).toBe(search));
+    key("ArrowDown"); key("ArrowDown");
+    expect(activeTestId()).toBe("entity-select-edit");
+    fireEvent.change(search, { target: { value: "South" } });
+    expect(activeTestId()).toBe("entity-option-one");
+    await waitFor(() => expect(screen.queryByTestId("entity-option-one")).toBeNull());
+    key("Enter");
+    expect(change).toHaveBeenCalledExactlyOnceWith("two");
+    expect(edit).not.toHaveBeenCalled();
+  });
+
+  it.each(["Home", "End"])("leaves %s to the search input's native caret behavior", async (navigationKey) => {
+    const change = vi.fn();
+    render(<EntitySelect entityType="storageLocation" value="one" onChange={change} onEditSelected={vi.fn()} alwaysShowSearch />);
+    open();
+    const search = screen.getByTestId("entity-select-search");
+    await waitFor(() => expect(document.activeElement).toBe(search));
+    fireEvent.change(search, { target: { value: "bin" } });
+    key("ArrowDown");
+    expect(activeTestId()).toBe("entity-option-two");
+    // jsdom has no native caret movement; an uncancelled key leaves it to the browser.
+    expect(fireEvent.keyDown(search, { key: navigationKey })).toBe(true);
+    expect(activeTestId()).toBe("entity-option-two");
+    key("ArrowUp"); key("Enter");
+    expect(change).toHaveBeenCalledExactlyOnceWith("one");
+  });
+
+  it.each([false, true])("tabs from the trigger into the portalled recovery link (modal: %s)", async (inModal) => {
+    state.options = [];
+    const close = vi.fn();
+    const fields = <>
+      <EntitySelect entityType="storageLocation" onChange={vi.fn()} emptyHint={{ message: "Create a bin first", href: "/storage-locations", linkLabel: "Create storage bin" }} />
+      <input aria-label="Next field" />
+    </>;
+    render(inModal ? <Modal isOpen onClose={close} ariaLabel="Entry form">{fields}</Modal> : fields);
+    if (inModal) await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("button", { name: "Close" })));
+    trigger().focus();
+    key("ArrowDown");
+    expect(screen.queryByTestId("entity-select-search")).toBeNull();
+    expect(document.activeElement).toBe(trigger());
+    fireEvent.keyDown(trigger(), { key: "Tab" });
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("link", { name: "Create storage bin" })));
+    expect(trigger().getAttribute("aria-expanded")).toBe("true");
+    expect(close).not.toHaveBeenCalled();
   });
 
   it.each([5, 6])("shows search from six options (%i)", (count) => {
