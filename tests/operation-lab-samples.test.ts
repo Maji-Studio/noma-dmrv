@@ -418,7 +418,7 @@ describe("ratios", { timeout: SUITE_TIMEOUT_MS }, () => {
 describe("warnings", { timeout: SUITE_TIMEOUT_MS }, () => {
   it("warns on a 1,000-year batch for missing inorganic carbon and under 500 R₀ readings, and still saves", async () => {
     const f = await fixture({ durabilityOption: "1000_year" });
-    const created = await record(f, { ...TIER_1000_EVIDENCE, r0MeasurementCount: 120 });
+    const created = await record(f, { ...TIER_1000_EVIDENCE, totalOxygenPercent: 6, r0MeasurementCount: 120 });
     const code = created.data.sample.sampleCode;
     expect(created.data.warnings).toEqual([
       `Sample ${code} has no measured inorganic carbon. A 1,000-year Removal with credit batch ${f.batchA.code} cannot be submitted until every Sample has them.`,
@@ -431,8 +431,30 @@ describe("warnings", { timeout: SUITE_TIMEOUT_MS }, () => {
   it("warns on any tier when hydrogen or moisture is missing", async () => {
     const f = await fixture();
     const created = await record(f, { totalHydrogenPercent: undefined, moistureContentPercent: undefined });
-    expect(created.data.warnings).toHaveLength(2);
-    expect(created.data.warnings.join(" ")).toMatch(/no total hydrogen.*no moisture content/);
+    // Without hydrogen or oxygen the Sample also lacks both ratios gate (c) counts.
+    expect(created.data.warnings).toHaveLength(3);
+    expect(created.data.warnings.join(" ")).toMatch(/no total hydrogen.*no moisture content.*no H\/C_org and O\/C_org/);
+  });
+
+  it("warns when a saved Sample has no O/C_org, then stops once oxygen is entered", async () => {
+    const f = await fixture();
+    const created = await record(f);
+    const code = created.data.sample.sampleCode;
+    expect(created.data.sample.oToCOrgRatio).toBeNull();
+    expect(created.data.warnings).toEqual([
+      `Sample ${code} has no O/C_org, so it is not one of the 3 Samples with complete H/C_org and O/C_org results credit batch ${f.batchA.code} needs before submitting. Enter total oxygen, or the lab's O/C_org when the lab reported no oxygen.`,
+    ]);
+    const withOxygen = await runOperation(updateLabSample, f.ctx, { labSampleId: created.data.sample.id, expectedVersion: 1, totalOxygenPercent: 6 });
+    expect(withOxygen.data.warnings).toEqual([]);
+  });
+
+  it("warns when zero organic carbon leaves both ratios empty", async () => {
+    const f = await fixture();
+    const created = await record(f, { organicCarbonPercent: 0, totalOxygenPercent: 6 });
+    expect(created.data.sample).toMatchObject({ hToCOrgRatio: null, oToCOrgRatio: null });
+    expect(created.data.warnings).toEqual([
+      `Sample ${created.data.sample.sampleCode} has no H/C_org and O/C_org, so it is not one of the 3 Samples with complete H/C_org and O/C_org results credit batch ${f.batchA.code} needs before submitting. With organic carbon at 0, neither ratio can be calculated. Check the organic carbon value.`,
+    ]);
   });
 });
 

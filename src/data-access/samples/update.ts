@@ -55,6 +55,7 @@ export async function updateSampleInTransaction(
 
   const effective = mergeOverLocked(locked, request);
   assertCarbonReconciliation(effective, {});
+  const ratios = derivedRatioColumns(effective);
 
   // Legacy batchless rows keep their batch-free behaviour until moved onto a batch.
   const creditBatchId = request.creditBatchId ?? locked.creditBatchId;
@@ -69,13 +70,12 @@ export async function updateSampleInTransaction(
       samplingTime = resolveSamplingTimeForBatch(request.samplingTime ?? locked.samplingTime, batch, facility);
     }
     assertBatchTierEvidence(facility, effective);
-    warnings = entryWarnings(effective, batch, facility);
+    warnings = entryWarnings(effective, ratios.columns, batch, facility);
   } else if (request.samplingTime !== undefined) {
     // No batch, so no facility clock: only an instant can be placed.
     samplingTime = resolveLegacySamplingTime(request.samplingTime);
   }
   if (request.samplingTime !== undefined && samplingTime) assertSamplingTimeNotFuture(samplingTime, options.now ?? new Date());
-  const ratios = derivedRatioColumns(effective);
 
   await tx.update(samples).set({
     ...optionalColumns(request, false),

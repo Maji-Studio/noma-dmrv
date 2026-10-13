@@ -173,6 +173,7 @@ export interface SampleLinks {
 }
 
 async function lineageBatchIds(ctx: OrgContext, tx: DbTransaction, link: { creditBatchId: string | null; productionRunId: string | null }): Promise<string[]> {
+  requireOrgScope(ctx);
   const ids = link.creditBatchId ? [link.creditBatchId] : [];
   if (link.productionRunId) {
     const runBatches = await tx.select({ creditBatchId: creditBatchProductionRuns.creditBatchId }).from(creditBatchProductionRuns)
@@ -201,6 +202,7 @@ export async function readSampleLinks(ctx: OrgContext, tx: DbTransaction, sample
  * locked late.
  */
 export async function assertSampleLinksHeld(ctx: OrgContext, tx: DbTransaction, scope: SampleWriteScope, sampleId: string, read: SampleLinks): Promise<void> {
+  requireOrgScope(ctx);
   const locked = scope.sample;
   if (!locked) return;
   if (locked.creditBatchId !== read.creditBatchId || locked.productionRunId !== read.productionRunId) throw staleRowVersion("sample", sampleId);

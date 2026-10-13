@@ -156,9 +156,17 @@ export function derivedRatioColumns(values: EffectiveSampleValues) {
   return { columns: { hToCOrgRatio: ratios.hToCOrgRatio, oToCOrgRatio: ratios.oToCOrgRatio }, notices: ratios.notices };
 }
 
-export function entryWarnings(values: EffectiveSampleValues, batch: LockedSampleBatch, facility: SampleBatchFacility): string[] {
+/** `ratios` are the saved ones (`derivedRatioColumns`), never the lab O/C_org input in `values`. */
+export function entryWarnings(
+  values: EffectiveSampleValues,
+  ratios: { hToCOrgRatio: number | null; oToCOrgRatio: number | null },
+  batch: LockedSampleBatch,
+  facility: SampleBatchFacility,
+): string[] {
   return sampleEntryWarnings({
     ...values,
+    hToCOrgRatio: ratios.hToCOrgRatio,
+    oToCOrgRatio: ratios.oToCOrgRatio,
     creditBatchCode: batch.code,
     durabilityOption: facility.durabilityOption,
     sampling: batch.sampling,

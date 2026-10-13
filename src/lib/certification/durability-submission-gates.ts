@@ -20,10 +20,10 @@
  * random-sampling cadence ACROSS production batches, a separate requirement.)
  * We therefore do not judge within-batch run/day distribution at all.
  *
- * Post-production sampling from stored material is permitted by §8.3.1 provided
- * the samples cover different parts of the stored batch; operators receive a
- * warning to confirm that with the registry. A sample before the production
- * window is physically impossible and blocks submission.
+ * A sample after the production window only warns: §8.3.1 asks for biochar in its
+ * "final pre-storage condition" (before blending when co-applied), not by the end
+ * date, so the operator confirms the Sample represents that condition. A sample
+ * before the production window is physically impossible and blocks submission.
  *
  * Pure and client-safe — the submission orchestrator (`submit-removal.ts`)
  * assembles the per-batch facts and throws a single SafeError on the blockers.
@@ -99,7 +99,7 @@ export function evaluateDurabilitySubmissionGates(
           );
         } else if (sample.samplingDay > batch.endDate) {
           warnings.push(
-            `Sample ${sample.sampleCode} was taken on ${sample.samplingDay}, after credit batch ${batch.creditBatchCode}'s production window, ${batch.startDate} to ${batch.endDate}. §8.3.1 permits sampling from stored material only when Samples are spatially distributed across the stored batch. Confirm this with the registry.`,
+            `Sample ${sample.sampleCode} was taken on ${sample.samplingDay}, after credit batch ${batch.creditBatchCode}'s production window, ${batch.startDate} to ${batch.endDate}. §8.3.1 says biochar should be sampled in its final pre-storage condition, after processing and at typical moisture levels, and before blending when it is applied with other substances such as compost. Confirm this Sample represents the batch in that condition.`,
           );
         }
       }

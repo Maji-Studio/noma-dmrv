@@ -13,13 +13,13 @@ import { and, eq } from "drizzle-orm";
 import type { Pool } from "pg";
 import { db } from "@/db";
 import { creditBatches, samples, transportLegs } from "@/db/schema";
-import { deleteCreditBatch } from "@/data-access/credit-batches";
+import { deleteCreditBatch, updateCreditBatch } from "@/data-access/credit-batches";
 import { archiveFacility } from "@/data-access/facilities";
 import { createTransportLeg } from "@/data-access/transport-legs";
 import { deleteLabSample, recordLabSample, updateLabSample } from "@/lib/operations/lab-samples";
 import { runOperation, runOperationInProcess } from "@/lib/operations/runner";
 import { SafeError } from "@/lib/errors";
-import { cleanupLabSampleFixture, createLabSampleFixture, type LabSampleFixture } from "./helpers/lab-sample-fixture";
+import { cleanupLabSampleFixture, createLabSampleFixture, type LabSampleFixture, type LabSampleFixtureOptions } from "./helpers/lab-sample-fixture";
 import { labLogisticsVersion } from "./helpers/lab-logistics-version";
 import { masterDataVersion } from "./helpers/master-data-version";
 import { openOperationBarrier, waitForBlockedOperations } from "./helpers/operation-barrier";
@@ -49,8 +49,8 @@ afterAll(async () => {
   await writerPool.end();
 });
 
-async function fixture() {
-  const f = await createLabSampleFixture();
+async function fixture(options?: LabSampleFixtureOptions) {
+  const f = await createLabSampleFixture(options);
   fixtures.push(f);
   return f;
 }
@@ -160,5 +160,50 @@ describe("lab sample writers race", { timeout: SUITE_TIMEOUT_MS }, () => {
     }
     expect(await sampleRows(f)).toEqual([]);
     expect(await db.select().from(transportLegs).where(eq(transportLegs.organizationId, f.ctx.organizationId))).toEqual([]);
+  });
+
+  it.each([["batch edit first", true], ["create first", false]] as const)("create against a batch edit that moves the start past the sampling time: %s", async (_label, editFirst) => {
+    // R1 ran on 2026-09-09, so it stays inside the edited window; batch B is left out to keep R2 free.
+    const f = await fixture({ withSecondBatch: false });
+    const version = await labLogisticsVersion(f.ctx, "creditBatches", f.batchA.id);
+    const create = () => runOperation(recordLabSample, f.ctx, { ...input(f), samplingTime: "2026-09-05T08:00:00Z" }, { pool: writerPool });
+    const edit = () => updateCreditBatch(f.ctx, f.batchA.id, { expectedVersion: version, startDate: new Date("2026-09-08") });
+    const [first, second] = await queueOnBatch(f, editFirst ? [edit, create] : [create, edit]);
+    expect(first.ok).toBe(true);
+    if (editFirst) {
+      // The create reads the edited window under the batch lock.
+      expect(second).toMatchObject({ ok: false, error: { code: "validation_failed", issues: [expect.objectContaining({ path: ["samplingTime"] })] } });
+      expect(await sampleRows(f)).toEqual([]);
+    } else {
+      // Q55: the edit stays allowed; readiness flags the earlier sample.
+      expect(second.ok).toBe(true);
+      expect(await sampleRows(f)).toHaveLength(1);
+    }
+  });
+
+  it.each([["update first", true], ["archive first", false]] as const)("update against a facility archive: %s", async (_label, updateFirst) => {
+    const f = await fixture();
+    const created = (await runOperation(recordLabSample, f.ctx, input(f))).data.sample;
+    const update = () => runOperation(updateLabSample, f.ctx, { labSampleId: created.id, expectedVersion: 1, labName: "Edit" }, { pool: writerPool });
+    const archive = async () => archiveFacility(f.ctx, f.facility.id, await masterDataVersion(f.ctx, "facilities", f.facility.id));
+    const [first, second] = await queueOnBatch(f, updateFirst ? [update, archive] : [archive, update]);
+    expect(first.ok).toBe(true);
+    if (updateFirst) {
+      expect(second.ok).toBe(true);
+      expect(await sampleRows(f)).toMatchObject([{ version: 2, labName: "Edit" }]);
+    } else {
+      expect(second).toMatchObject({ ok: false, error: { code: "not_found", issues: [expect.objectContaining({ path: ["creditBatchId"] })] } });
+      expect(await sampleRows(f)).toMatchObject([{ version: 1, labName: null }]);
+    }
+  });
+
+  it.each([["delete first", true], ["archive first", false]] as const)("delete against a facility archive: %s, both succeed", async (_label, deleteFirst) => {
+    const f = await fixture();
+    const created = (await runOperation(recordLabSample, f.ctx, input(f))).data.sample;
+    const remove = () => runOperation(deleteLabSample, f.ctx, { labSampleId: created.id, expectedVersion: 1 }, { pool: writerPool });
+    const archive = async () => archiveFacility(f.ctx, f.facility.id, await masterDataVersion(f.ctx, "facilities", f.facility.id));
+    const outcomes = await queueOnBatch(f, deleteFirst ? [remove, archive] : [archive, remove]);
+    expect(outcomes.map((outcome) => outcome.ok)).toEqual([true, true]);
+    expect(await sampleRows(f)).toEqual([]);
   });
 });

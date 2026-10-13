@@ -572,7 +572,6 @@ Lab samples and the credit batch lookup on REST and MCP, in seven commits on `fe
 - The legacy production run link decides facility and archive state only for samples with no credit batch.
 - Archiving a facility locks its credit batches in id order first, like sample writers, so a sample move cannot deadlock against an archive.
 - Reads return strong ETags but, like every other resource, do not answer `If-None-Match` with 304.
-- The after-window warning keeps its current attribution to protocol section 8.3.1. The protocol says biochar is sampled in its final pre-storage condition and before blending; it does not make the batch end date the deadline. The fix waits for #948, which touches the same file.
 
 **Review findings fixed:** (gpt-6.1-sol and gpt-6-astra, per commit)
 - Sample-parented transport legs did not lock their parent in artifact, batch, sample order, so a Removal assigned while a leg waited was missed.
@@ -582,6 +581,8 @@ Lab samples and the credit batch lookup on REST and MCP, in seven commits on `fe
 - Facility archive locked batches in scan order against the sample writers' id order.
 - PATCH and DELETE needed the request deadline applied while the body was still arriving.
 - Keyed PATCH and DELETE replays, key reuse and key isolation had no tests.
+- The after-window submission warning claimed that protocol section 8.3.1 permits sampling from stored material. Fixed in this PR: it now repeats what the protocol asks (biochar in its final pre-storage condition, and before blending when co-applied) and asks the operator to confirm the Sample represents the batch in that condition. It stays a warning.
+- Entry warnings did not flag a saved sample without both H/C_org and O/C_org (no oxygen and no lab O/C_org, or zero organic carbon), which submission gate (c) does not count.
 
 **Residual risks:**
 - Transport-leg update and delete still read the parent through the global `db` before their transaction; only create was fixed (`data/transport-leg-parent-reads`).

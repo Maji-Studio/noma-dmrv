@@ -6,6 +6,7 @@ const complete: SampleEntryFacts = {
   sampleCode: "SAM-26-001", creditBatchCode: "CB-26-001", durabilityOption: "1000_year", sampling: "sampled",
   totalCarbonPercent: 80, inorganicCarbonPercent: 3, sReflectanceFraction: 0.9,
   totalHydrogenPercent: 1.5, moistureContentPercent: 10, r0MeasurementCount: R0_MEASUREMENTS_PER_SAMPLE_GUIDANCE,
+  organicCarbonPercent: 75, totalOxygenPercent: 6, hToCOrgRatio: 0.2383, oToCOrgRatio: 0.06,
 };
 
 describe("sampleEntryWarnings", () => {
@@ -46,5 +47,28 @@ describe("sampleEntryWarnings", () => {
   it("never uses an en or em dash", () => {
     const all = sampleEntryWarnings({ ...complete, inorganicCarbonPercent: null, totalHydrogenPercent: null, moistureContentPercent: null, r0MeasurementCount: 1 });
     expect(all.join(" ")).not.toMatch(/[–—]/);
+  });
+
+  it("warns when a sampled Sample has no O/C_org: no oxygen and no lab ratio", () => {
+    const warnings = sampleEntryWarnings({ ...complete, durabilityOption: "200_year", totalOxygenPercent: null, oToCOrgRatio: null });
+    expect(warnings).toEqual([
+      "Sample SAM-26-001 has no O/C_org, so it is not one of the 3 Samples with complete H/C_org and O/C_org results credit batch CB-26-001 needs before submitting. Enter total oxygen, or the lab's O/C_org when the lab reported no oxygen.",
+    ]);
+  });
+
+  it("warns when zero organic carbon leaves both ratios empty", () => {
+    const warnings = sampleEntryWarnings({ ...complete, durabilityOption: "200_year", organicCarbonPercent: 0, hToCOrgRatio: null, oToCOrgRatio: null });
+    expect(warnings).toEqual([
+      "Sample SAM-26-001 has no H/C_org and O/C_org, so it is not one of the 3 Samples with complete H/C_org and O/C_org results credit batch CB-26-001 needs before submitting. With organic carbon at 0, neither ratio can be calculated. Check the organic carbon value.",
+    ]);
+  });
+
+  it("does not repeat the missing hydrogen line as a ratio hint, and skips unsampled batches", () => {
+    const noHydrogen = { ...complete, durabilityOption: "200_year" as const, totalHydrogenPercent: null, hToCOrgRatio: null };
+    const warnings = sampleEntryWarnings(noHydrogen);
+    expect(warnings).toHaveLength(2);
+    expect(warnings[0]).toMatch(/^Sample SAM-26-001 has no total hydrogen/);
+    expect(warnings[1]).toBe("Sample SAM-26-001 has no H/C_org, so it is not one of the 3 Samples with complete H/C_org and O/C_org results credit batch CB-26-001 needs before submitting.");
+    expect(sampleEntryWarnings({ ...noHydrogen, sampling: "unsampled" })).toHaveLength(1);
   });
 });

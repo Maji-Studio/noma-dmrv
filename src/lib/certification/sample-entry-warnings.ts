@@ -13,6 +13,7 @@
  */
 
 import type { CreditBatchSampling } from "@/schemas/credit-batches";
+import { MINIMUM_REPLICATES_PER_BATCH } from "@/lib/calculations/biochar-eligibility";
 import { missingSampled1000YearMeasurements } from "./durability-1000-replicates";
 
 /** Module v1.1 Option 2: R₀ readings per Sample for 1,000-year crediting. */
@@ -30,6 +31,34 @@ export interface SampleEntryFacts {
   totalHydrogenPercent: number | null;
   moistureContentPercent: number | null;
   r0MeasurementCount: number | null;
+  organicCarbonPercent: number | null;
+  totalOxygenPercent: number | null;
+  /** The ratios as saved: derived from the effective row, or the kept lab O/C_org. */
+  hToCOrgRatio: number | null;
+  oToCOrgRatio: number | null;
+}
+
+/**
+ * Gate (c) counts only replicates with both H/C_org and O/C_org
+ * (`durability-submission-gates.ts`), so a Sample missing either does not
+ * help its batch reach the minimum. Worded after that gate's blocker.
+ */
+function missingRatioWarning(facts: SampleEntryFacts): string | null {
+  const missing = [
+    facts.hToCOrgRatio == null ? "H/C_org" : null,
+    facts.oToCOrgRatio == null ? "O/C_org" : null,
+  ].filter((ratio): ratio is string => ratio != null);
+  if (missing.length === 0) return null;
+  const line = `Sample ${facts.sampleCode} has no ${joinWithAnd(missing)}, so it is not one of the ${MINIMUM_REPLICATES_PER_BATCH} Samples with complete H/C_org and O/C_org results credit batch ${facts.creditBatchCode} needs before submitting.`;
+  if (facts.organicCarbonPercent === 0) {
+    const cause = missing.length > 1 ? "neither ratio can be calculated" : `${missing[0]} cannot be calculated`;
+    return `${line} With organic carbon at 0, ${cause}. Check the organic carbon value.`;
+  }
+  if (facts.oToCOrgRatio == null && facts.totalOxygenPercent == null) {
+    return `${line} Enter total oxygen, or the lab's O/C_org when the lab reported no oxygen.`;
+  }
+  // A missing hydrogen figure has its own line below.
+  return line;
 }
 
 function joinWithAnd(items: string[]): string {
@@ -47,12 +76,15 @@ export function sampleEntryWarnings(facts: SampleEntryFacts): string[] {
       warnings.push(`Sample ${facts.sampleCode} has no ${joinWithAnd(missing)}. A 1,000-year Removal with credit batch ${facts.creditBatchCode} cannot be submitted until every Sample has them.`);
     }
   }
+  // Unsampled batches submit through the unsampled blueprint; the gate does not judge their chemistry.
+  const ratioWarning = facts.sampling === "sampled" ? missingRatioWarning(facts) : null;
   if (facts.totalHydrogenPercent == null) {
     warnings.push(`Sample ${facts.sampleCode} has no total hydrogen, so H/C_org cannot be calculated. The biochar module requires H/C_org for every production batch (Table 2).`);
   }
   if (facts.moistureContentPercent == null) {
     warnings.push(`Sample ${facts.sampleCode} has no moisture content. The biochar module requires moisture for every production batch (Table 2).`);
   }
+  if (ratioWarning) warnings.push(ratioWarning);
   if (is1000Year && (facts.r0MeasurementCount == null || facts.r0MeasurementCount < R0_MEASUREMENTS_PER_SAMPLE_GUIDANCE)) {
     const counted = facts.r0MeasurementCount == null
       ? `Sample ${facts.sampleCode} has no R₀ measurement count.`

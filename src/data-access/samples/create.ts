@@ -70,6 +70,6 @@ export async function createSampleInTransaction(
     // Read back inside the transaction, so a failed read never reports a saved sample as missing (issue #769).
     sample: await getSampleById(ctx, created.id, tx),
     notices: ratios.notices,
-    warnings: entryWarnings(effective, batch, facility),
+    warnings: entryWarnings(effective, ratios.columns, batch, facility),
   };
 }
