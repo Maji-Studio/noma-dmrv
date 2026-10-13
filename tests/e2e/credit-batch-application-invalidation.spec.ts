@@ -46,14 +46,7 @@ async function createApplicationForLineage(
 
   await page.fill('input[name="orderDate"]', today);
   await selectEntity(page, "Customer", seededData.customer.id, seededData.customer.name);
-  await page.waitForSelector(
-    'select[name="customerLocationId"]:not([disabled])',
-    { timeout: 8000 },
-  );
-  await page.selectOption(
-    'select[name="customerLocationId"]',
-    seededData.customerLocation.id,
-  );
+  await selectEntity(page, "Customer location", seededData.customerLocation.id, seededData.customerLocation.name);
   await selectEntity(
     page,
     "Formulation", seededData.formulation.id, seededData.formulation.name,
@@ -71,7 +64,7 @@ async function createApplicationForLineage(
   await waitForSideSheet(page);
 
   await selectFirstEntity(page, "Order");
-  await page.selectOption('select[name="storageLocationId"]', seededData.productStorageLocation.id);
+  await selectEntity(page, "Actual source bin", seededData.productStorageLocation.id, seededData.productStorageLocation.name);
   await page.fill('input[name="deliveredWetMassKg"]', "10000");
   await fillStockMoisture(page, "delivery", "10");
   await page.locator('[role="dialog"]').locator('button:has-text("Create delivery")').click();
@@ -85,14 +78,7 @@ async function createApplicationForLineage(
   await waitForSideSheet(page);
 
   await page.fill('input[name="applicationDate"]', today);
-  const deliverySelect = page.locator('select[name="deliveryId"]');
-  const firstDeliveryValue = await deliverySelect
-    .locator("option:not([value=''])")
-    .first()
-    .getAttribute("value");
-  if (firstDeliveryValue) {
-    await deliverySelect.selectOption(firstDeliveryValue);
-  }
+  await selectFirstEntity(page, "Delivery");
   await page.fill('input[name="biocharAppliedTons"]', "5000");
   await page.fill('input[name="fieldSizeHa"]', "2");
   await page.locator('[role="dialog"]').locator('button:has-text("Create application")').click();

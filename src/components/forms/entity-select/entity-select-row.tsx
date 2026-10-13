@@ -36,6 +36,7 @@ export function EntitySelectRow({
   row, active, value, noneOption, editLabel, createLabel, onActivate, onHighlight,
 }: EntitySelectRowProps) {
   const isAction = row.kind === "edit" || row.kind === "create";
+  const disabled = row.kind === "option" && row.option.disabled;
   const selected = row.kind === "none" ? !value : row.kind === "option" && row.option.id === value;
   return (
     <li
@@ -47,11 +48,13 @@ export function EntitySelectRow({
       }}
       role={isAction ? "button" : "option"}
       aria-selected={isAction ? undefined : selected}
+      aria-disabled={disabled || undefined}
       data-testid={row.kind === "option" ? `entity-option-${row.option.id}` : `entity-select-${row.kind}`}
-      onClick={onActivate}
-      onPointerMove={onHighlight}
+      onClick={disabled ? undefined : onActivate}
+      onPointerMove={disabled ? undefined : onHighlight}
       className={cn(
-        "min-h-44 px-12 py-8 cursor-pointer transition-colors",
+        "min-h-44 px-12 py-8 transition-colors",
+        disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer",
         isAction && "flex items-center gap-8 text-[var(--color-interaction)]",
         active && "bg-[var(--color-background-medium)]",
         selected && "bg-[var(--color-background-interaction-light)]",

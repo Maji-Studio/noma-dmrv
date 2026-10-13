@@ -10,7 +10,6 @@ import { numericValue } from "@/lib/form-utils";
 import { FormActions, FormEntitySelect, FormField, FormInput, FormSection, FormSpine } from "@/components/forms";
 import { FormSelect } from "@/components/forms/form-select";
 import type { Order } from "@/db/schema";
-import { useClearOnDependencyChange } from "@/hooks/use-clear-on-dependency-change";
 import { useCustomerLocations } from "@/hooks/use-customers";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { useOrganizationDefaultValues } from "@/hooks/use-organization-settings";
@@ -130,11 +129,6 @@ export function OrderForm({
   // Get customer locations for selected customer
   const customerLocations = customerLocationsData ?? [];
 
-  const locationOptions = customerLocations.map((l: { id: string; name: string | null }) => ({
-    value: l.id,
-    label: l.name ?? "Unnamed location",
-  }));
-
   // Details panel data for the selected location (issue #196). The facility
   // resolves from the form's own facilityId so edit mode shows the order's
   // facility even when the global selector points elsewhere.
@@ -152,19 +146,6 @@ export function OrderForm({
       }
     }
   }, [contextFacilityId, order?.facilityId, setValue, getValues]);
-
-  // Clear stale location when customer changes (skips initial mount so
-  // edit-mode defaults survive)
-  useClearOnDependencyChange(watchedCustomerId, () =>
-    setValue("customerLocationId", "")
-  );
-
-  // Auto-select location when customer has exactly one
-  useEffect(() => {
-    if (customerLocationsData?.length === 1 && !getValues("customerLocationId")) {
-      setValue("customerLocationId", customerLocationsData[0].id);
-    }
-  }, [customerLocationsData, setValue, getValues]);
 
   const defaultSubmitLabel = isEditMode ? "Update order" : "Create order";
 
@@ -222,24 +203,18 @@ export function OrderForm({
             autoSelectSingle={false}
           />
 
-          <FormField
+          <FormEntitySelect
             id="customerLocationId"
+            control={control}
+            name="customerLocationId"
             label="Customer location"
-            error={errors.customerLocationId?.message}
-          >
-            <FormSelect
-              id="customerLocationId"
-              placeholder={
-                selectedCustomerId
-                  ? "Select location..."
-                  : "Select a customer first"
-              }
-              disabled={isSubmitting || !selectedCustomerId}
-              error={!!errors.customerLocationId}
-              options={locationOptions}
-              {...register("customerLocationId")}
-            />
-          </FormField>
+            entityType="customerLocation"
+            placeholder={selectedCustomerId ? "Select location..." : "Select a customer first"}
+            disabled={isSubmitting || !selectedCustomerId}
+            filterBy={selectedCustomerId ? { customerId: selectedCustomerId } : undefined}
+            dependsOn={watchedCustomerId}
+            autoSelectSingle
+          />
         </div>
 
         {selectedLocation && (

@@ -4,16 +4,16 @@
  */
 "use client";
 
-import { useContext, useState, type ChangeEvent } from "react";
-import { useForm, useWatch } from "react-hook-form";
+import { useContext, useState } from "react";
+import { useController, useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { FormDialogContext } from "@/components/ui/form-dialog-context";
 import { FormDialog } from "@/components/ui/form-dialog";
 import {
+  EntitySelect,
   FormActions,
   FormField,
   FormInput,
-  FormSelect,
 } from "@/components/forms";
 import { useToast } from "@/components/ui/toast";
 import {
@@ -117,27 +117,30 @@ export function FacilityCertifierForm({
     useState(false);
 
   const watchedProjectId = useWatch({ control, name: "externalProjectId" });
-  const projectRegistration = register("externalProjectId");
-  const { data: liveTemplates, isLoading: templatesLoading } =
+  const { field: projectField } = useController({ control, name: "externalProjectId" });
+  const { field: templateField } = useController({ control, name: "defaultRemovalTemplateId" });
+  const { data: liveTemplates, isLoading: templatesLoading, error: templatesError } =
     useIsometricProjectTemplates(watchedProjectId || null);
 
   // When the project changes, clear project-scoped registry identifiers and
   // reset the share acknowledgment. A stale template or facility id from the
   // previous Isometric project would fail validation or send telemetry to the
   // wrong facility, and the ack must be re-confirmed for the new project.
-  const handleProjectChange = (event: ChangeEvent<HTMLSelectElement>) => {
-    projectRegistration.onChange(event);
+  const handleProjectChange = (value: string | undefined) => {
+    const projectId = value ?? "";
+    if (projectId === projectField.value) return;
+    projectField.onChange(projectId);
     const returnsToPersistedProject =
-      mapping?.externalProjectId === event.target.value;
+      mapping?.externalProjectId === projectId;
     setValue(
       "defaultRemovalTemplateId",
       returnsToPersistedProject
-        ? mapping.defaultRemovalTemplateId ?? ""
+        ? mapping?.defaultRemovalTemplateId ?? ""
         : "",
     );
     setValue(
       "externalFacilityId",
-      returnsToPersistedProject ? mapping.externalFacilityId ?? "" : "",
+      returnsToPersistedProject ? mapping?.externalFacilityId ?? "" : "",
     );
     setAcknowledgeSharedProject(false);
   };
@@ -154,8 +157,9 @@ export function FacilityCertifierForm({
   })();
 
   const projectOptions = availableProjects.map((project) => ({
-    value: project.id,
-    label: `${project.name}: ${project.id}`,
+    id: project.id,
+    code: project.id,
+    name: `${project.name}: ${project.id}`,
   }));
 
   const templates = liveTemplates ?? loaderData.availableTemplates;
@@ -164,8 +168,9 @@ export function FacilityCertifierForm({
   const templateOptions = templates
     .filter((t) => t.credit_type === "REMOVAL")
     .map((t) => ({
-      value: t.id,
-      label: `${t.display_name}: ${t.id}`,
+      id: t.id,
+      code: t.id,
+      name: `${t.display_name}: ${t.id}`,
     }));
 
   const linkedHintForSelected = watchedProjectId
@@ -241,12 +246,14 @@ export function FacilityCertifierForm({
         required
         error={errors.externalProjectId?.message}
       >
-        <FormSelect
+        <EntitySelect
           id="externalProjectId"
+          optionLabel="Isometric project"
           placeholder="Select a project"
           options={projectOptions}
           error={!!errors.externalProjectId}
-          {...projectRegistration}
+          value={projectField.value}
+          onBlur={projectField.onBlur}
           onChange={handleProjectChange}
         />
       </FormField>
@@ -285,13 +292,17 @@ export function FacilityCertifierForm({
             cue={templateCue}
             helperText={templateHelperText}
           >
-            <FormSelect
+            <EntitySelect
               id="defaultRemovalTemplateId"
+              optionLabel="Removal template"
               placeholder="No default"
               options={templateOptions}
-              error={!!errors.defaultRemovalTemplateId}
+              error={(templateOptions.length === 0 ? templatesError : null) ?? !!errors.defaultRemovalTemplateId}
+              isLoading={templatesLoading}
               disabled={!watchedProjectId || templatesLoading}
-              {...register("defaultRemovalTemplateId")}
+              value={templateField.value ?? ""}
+              onChange={templateField.onChange}
+              onBlur={templateField.onBlur}
             />
           </FormField>
 

@@ -249,11 +249,13 @@ export async function getStorageLocations(ctx: OrgContext, params: {
   feedstockTypeUsage?: "pyrolysis" | "blend";
   /** Show product bins reserved for this formulation, plus unassigned (empty) bins. */
   formulationId?: string;
+  /** Delivery draws require an exact match, excluding unassigned bins. */
+  strictFormulation?: boolean;
   /** Show only pure-biochar product bins (formulation unset). For pure-biochar products. */
   pureProductOnly?: boolean;
   limit: number;
 }): Promise<EntityOption[]> {
-  const { search, facilityId, type, feedstockTypeId, feedstockTypeUsage, formulationId, pureProductOnly, limit } =
+  const { search, facilityId, type, feedstockTypeId, feedstockTypeUsage, formulationId, strictFormulation, pureProductOnly, limit } =
     params;
   requireOrgScope(ctx);
 
@@ -319,7 +321,7 @@ export async function getStorageLocations(ctx: OrgContext, params: {
     conditions.push(
       and(
         eq(storageLocations.type, "product_bin"),
-        or(
+        strictFormulation ? eq(storageLocations.formulationId, formulationId) : or(
           sql`${storageLocations.formulationId} IS NULL`,
           eq(storageLocations.formulationId, formulationId)
         )!
