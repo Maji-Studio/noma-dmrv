@@ -207,6 +207,7 @@ export function SupplierQuickAddDialog({
           errorMessage={error ?? undefined}
           submitLabel={`Create ${entityLabel}`}
           sticky={false}
+          guardDialogCancel
         />
       </form>
     </QuickAddDialogShell>

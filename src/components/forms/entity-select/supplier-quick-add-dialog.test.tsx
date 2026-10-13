@@ -29,8 +29,8 @@ const mocks = vi.hoisted(() => ({
     | undefined,
 }));
 
-vi.mock("@/components/ui", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@/components/ui")>();
+vi.mock("@/components/ui/modal", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/components/ui/modal")>();
 
   return {
     ...actual,
@@ -53,7 +53,7 @@ vi.mock("@/components/ui", async (importOriginal) => {
         if (isOpen && !wasOpen.current) onOpen?.();
         wasOpen.current = isOpen;
       }, [isOpen, onOpen]);
-      mocks.modalProps = { ...props, isOpen, onClose };
+      if (onOpen) mocks.modalProps = { ...props, isOpen, onClose };
       return isOpen ? <div role="dialog">{children}</div> : null;
     },
   };

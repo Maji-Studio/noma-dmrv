@@ -67,6 +67,8 @@ interface FormActionsProps<
   formId?: string;
   /** Sticky footer (default) — disable for nested inline forms. */
   sticky?: boolean;
+  /** Route Cancel through FormDialog even for a non-sticky dialog footer. */
+  guardDialogCancel?: boolean;
   /** Use `button` when actions render inside an owning parent form. */
   submitType?: "submit" | "button";
   /** Click handler for a non-submit action button. */
@@ -92,6 +94,7 @@ export function FormActions<
   submitDisabled = false,
   formId,
   sticky = true,
+  guardDialogCancel = sticky,
   submitType = "submit",
   onSubmitClick,
 }: FormActionsProps<TFieldValues, TContext, TTransformed>) {
@@ -99,12 +102,12 @@ export function FormActions<
   // sheet (edit -> back to read view, create -> guarded close) so every sheet
   // form behaves the same without per-list wiring. The caller's `onCancel`
   // still owns *presence*: no handler, no Cancel button. Nested inline forms
-  // (sticky={false}) and forms inside a Modal (context barrier) keep the
-  // caller-supplied handler. Sticky FormDialog actions use its own guard.
+  // (sticky={false}) keep the caller-supplied handler by default.
+  // Dialog footers can opt into its guard independently of sticky layout.
   const sheetActions = useSideSheetActions();
   const dialogActions = React.useContext(FormDialogContext);
   const inSheet = sticky && sheetActions !== null;
-  const inDialog = sticky && dialogActions !== null;
+  const inDialog = guardDialogCancel && dialogActions !== null;
   const handleCancel = onCancel
     ? inSheet
       ? sheetActions.cancel

@@ -180,7 +180,8 @@ test("organization domain data is isolated across lists, record URLs, and picker
     .getByTestId("entity-select-trigger");
 
   await supplierTrigger.click();
-  const options = dialog.getByRole("listbox");
+  // The menu renders in a portal, outside the dialog.
+  const options = orgB.page.getByTestId("entity-select-listbox");
   await expect(options.getByRole("option", { name: new RegExp(orgB.supplier.name) })).toBeVisible();
   await expect(options.getByText(seededData.supplier.name, { exact: true })).toHaveCount(0);
 });

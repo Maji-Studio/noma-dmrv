@@ -8,7 +8,8 @@
 import { TrashIcon } from "@phosphor-icons/react/dist/ssr";
 import { useWatch, type Control, type UseFormRegisterReturn, type FieldError } from "react-hook-form";
 import { FormField, FormInput, FormEntitySelect } from "@/components/forms";
-import { StorageBinActions } from "@/components/storage-locations/storage-bin-actions";
+import { useStorageBinEditDialog } from "@/hooks/use-storage-bin-edit-dialog";
+import { StorageBinEditDialog } from "@/components/forms/entity-select/storage-bin-edit-dialog";
 import { Button } from "@/components/ui/button";
 import { MASS_KG_INPUT_STEP } from "@/schemas/helpers";
 
@@ -50,10 +51,11 @@ export function BinAllocationRow({
     name: `allocations.${index}.storageLocationId`,
   });
 
+  const binEdit = useStorageBinEditDialog();
+
   return (
     <div className="flex items-start gap-12">
-      {/* The bin column is wider: it carries the View and Edit buttons. */}
-      <div className="grid grid-cols-1 md:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] gap-x-16 gap-y-12 flex-1">
+      <div className="flex flex-col gap-y-12 flex-1">
         <FormEntitySelect
           control={control}
           name={`allocations.${index}.storageLocationId`}
@@ -71,7 +73,7 @@ export function BinAllocationRow({
           dependsOn={[feedstockTypeId, facilityId]}
           allowCreate={Boolean(onCreateNew)}
           onCreateNew={onCreateNew}
-          trailingActions={<StorageBinActions storageLocationId={storageLocationId} />}
+          onEditSelected={() => void binEdit.open(storageLocationId)}
         />
 
         <FormField
@@ -105,6 +107,7 @@ export function BinAllocationRow({
           <TrashIcon size={18} />
         </Button>
       )}
+      <StorageBinEditDialog {...binEdit} />
     </div>
   );
 }

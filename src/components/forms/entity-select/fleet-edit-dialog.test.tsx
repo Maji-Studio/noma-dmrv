@@ -11,8 +11,8 @@ const mocks = vi.hoisted(() => ({
   updateOperator: vi.fn(),
 }));
 
-vi.mock("@/components/ui", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@/components/ui")>();
+vi.mock("@/components/ui/modal", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/components/ui/modal")>();
   return {
     ...actual,
     Modal: ({ children, isOpen }: { children: ReactNode; isOpen: boolean }) =>

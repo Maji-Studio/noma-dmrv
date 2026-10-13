@@ -13,7 +13,8 @@ import { WET_MASS_FIELD_LABEL } from "@/lib/mass-moisture";
 import { MASS_KG_INPUT_STEP } from "@/schemas/helpers";
 import { formatStorageLocationType } from "@/schemas/storage-locations";
 import { StockChangeLabel } from "@/components/storage-locations/stock-change-label";
-import { StorageBinActions } from "@/components/storage-locations/storage-bin-actions";
+import { useStorageBinEditDialog } from "@/hooks/use-storage-bin-edit-dialog";
+import { StorageBinEditDialog } from "@/components/forms/entity-select/storage-bin-edit-dialog";
 import type { AffectedStockPreview } from "@/types/output-stock";
 import { useState } from "react";
 import {
@@ -166,6 +167,7 @@ export function IngredientBinField({
   previewsAvailable = false,
 }: IngredientBinFieldProps) {
   const feedstockBinDialog = useQuickAddDialog();
+  const binEdit = useStorageBinEditDialog();
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
@@ -188,7 +190,8 @@ export function IngredientBinField({
                     value={field.value || ""}
                     onChange={field.onChange}
                     placeholder="Select a feedstock bin..."
-                    disabled={isSubmitting || allocationFrozen}
+                    disabled={isSubmitting}
+                    selectionLocked={allocationFrozen}
                     error={!!fieldState.error}
                     filterBy={{
                       ...(facilityId ? { facilityId } : {}),
@@ -213,7 +216,7 @@ export function IngredientBinField({
                         ? feedstockBinDialog.open
                         : undefined
                     }
-                    trailingActions={<StorageBinActions storageLocationId={field.value} />}
+                    onEditSelected={() => void binEdit.open(field.value)}
                   />
                 </FormField>
                 <AffectedBinNotices preview={stock} />
@@ -271,6 +274,7 @@ export function IngredientBinField({
           frozen={allocationFrozen}
         />
       </div>
+      <StorageBinEditDialog {...binEdit} />
     </div>
   );
 }

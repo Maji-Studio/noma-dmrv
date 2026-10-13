@@ -8,6 +8,10 @@ themselves. Related: [security.md](./security.md) (env inventory),
 [database.md](./database.md), [troubleshooting.md](./troubleshooting.md),
 [isometric/README.md](./isometric/README.md).
 
+Vitest defaults to the `node` environment. Component tests that need a real DOM
+or portals opt in with `// @vitest-environment jsdom` and use
+`@testing-library/react`.
+
 ## Which runner picks up which file
 
 `vitest.config.ts` uses Vitest's normal discovery and excludes `**/e2e/**`,
