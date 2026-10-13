@@ -141,7 +141,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Load production database secret from 1Password
+      - name: Load production database secrets from 1Password
         uses: 1password/load-secrets-action@70062d7a876d3eb6334754fa26efd2fbd90c32f2 # v5.0.1
         with:
           export-env: true
@@ -149,6 +149,8 @@ jobs:
         env:
           OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
           DATABASE_URL: op://Environment Variables/noma-dmrv env production/DATABASE_URL
+          # Provider CA keeps managed database TLS verification enabled.
+          DATABASE_CA_CERT: op://Environment Variables/noma-dmrv env production/DATABASE_CA_CERT
 
       - name: Setup pnpm
         # Version comes from packageManager in package.json.
@@ -200,6 +202,8 @@ jobs:
         env:
           OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
           DATABASE_URL: op://Environment Variables/noma-dmrv env production/DATABASE_URL
+          # Provider CA keeps managed database TLS verification enabled.
+          DATABASE_CA_CERT: op://Environment Variables/noma-dmrv env production/DATABASE_CA_CERT
           ADMIN_EMAIL: op://Environment Variables/noma-dmrv env production/ADMIN_EMAIL
           ADMIN_PASSWORD: op://Environment Variables/noma-dmrv env production/ADMIN_PASSWORD
           CREDENTIALS_ENCRYPTION_KEY: op://Environment Variables/noma-dmrv env production/CREDENTIALS_ENCRYPTION_KEY
@@ -391,6 +395,8 @@ jobs:
         env:
           OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
           DATABASE_URL: op://Environment Variables/noma-dmrv env production/DATABASE_URL
+          # Provider CA keeps managed database TLS verification enabled.
+          DATABASE_CA_CERT: op://Environment Variables/noma-dmrv env production/DATABASE_CA_CERT
           DB_RESET_ALLOW_REMOTE: op://Environment Variables/noma-dmrv env production/DB_RESET_ALLOW_REMOTE
           ADMIN_EMAIL: op://Environment Variables/noma-dmrv env production/ADMIN_EMAIL
           ADMIN_PASSWORD: op://Environment Variables/noma-dmrv env production/ADMIN_PASSWORD

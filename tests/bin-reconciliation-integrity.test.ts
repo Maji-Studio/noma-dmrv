@@ -182,7 +182,8 @@ describe("bin reconciliation integrity", { timeout: CONCURRENCY_TEST_TIMEOUT_MS 
         signalWriteBarrierReady();
         await releaseWriteBarrierPromise;
       });
-      await writeBarrierReady;
+      // A failed lock acquisition must reach cleanup instead of leaving readiness pending.
+      await Promise.race([writeBarrierReady, writeBarrierTransaction]);
 
       concurrentResults = Promise.allSettled([
         recordStockTakeFn({
