@@ -179,7 +179,7 @@ export function evaluateDurabilitySubmissionGates(
     if (unpairedSampleCodes.length > 0) {
       const count = unpairedSampleCodes.length;
       blockers.push(
-        `Credit batch ${batch.creditBatchCode} has ${count} ${pluralize(count, "Sample")} with H/C_org but no O/C_org: ${unpairedSampleCodes.join(", ")}. The submitted H/C_org mean includes ${count === 1 ? "this Sample" : "these Samples"}. Record the O/C_org or correct the ${pluralize(count, "Sample")} before submitting.`,
+        `Credit batch ${batch.creditBatchCode} has ${count} ${pluralize(count, "Sample")} with H/C_org but no O/C_org: ${unpairedSampleCodes.join(", ")}. Eligibility is judged only on Samples with both ratios, so ${count === 1 ? "this H/C_org goes" : "these H/C_org values go"} unchecked. Record the O/C_org or correct the ${pluralize(count, "Sample")} before submitting.`,
       );
     }
   }

@@ -83,7 +83,7 @@ describe("buildDurabilityGates paired submission (Q54)", () => {
     ]);
 
     expect(result.blockers).toEqual([
-      "Credit batch CB-1 has 1 Sample with H/C_org but no O/C_org: SAM-4. The submitted H/C_org mean includes this Sample. Record the O/C_org or correct the Sample before submitting.",
+      "Credit batch CB-1 has 1 Sample with H/C_org but no O/C_org: SAM-4. Eligibility is judged only on Samples with both ratios, so this H/C_org goes unchecked. Record the O/C_org or correct the Sample before submitting.",
     ]);
   });
 });

@@ -110,7 +110,7 @@ function eligibilityChip(
       tone: "wait",
       icon: undefined,
       label: "Chemistry incomplete",
-      hint: `${one ? "Sample" : "Samples"} ${unpaired.join(", ")} ${one ? "has" : "have"} H/C_org but no O/C_org. The submitted H/C_org mean includes ${one ? "this Sample" : "these Samples"}, so submission is blocked. Record the O/C_org or correct the ${one ? "Sample" : "Samples"}.`,
+      hint: `${one ? "Sample" : "Samples"} ${unpaired.join(", ")} ${one ? "has" : "have"} H/C_org but no O/C_org. Eligibility is judged only on Samples with both ratios, so submission is blocked. Record the O/C_org or correct the ${one ? "Sample" : "Samples"}.`,
     };
   }
   if (eligibility.eligible === true) {
