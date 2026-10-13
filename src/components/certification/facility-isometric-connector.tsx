@@ -251,8 +251,10 @@ function ConnectorBody({
     (isProduction && !confirmProduction) ||
     saveMutation.isPending;
 
-  const handleSelect = (value: string) => {
-    setSelectedProjectId(value);
+  const handleSelect = (value: string | undefined) => {
+    const projectId = value ?? "";
+    if (projectId === selected) return;
+    setSelectedProjectId(projectId);
     setAcknowledgeSharedProject(false);
     setConfirmProduction(false);
     setServerError(null);
@@ -329,7 +331,7 @@ function ConnectorBody({
                 placeholder="Select a project"
                 options={projectOptions}
                 value={selected}
-                onChange={(value) => handleSelect(value ?? "")}
+                onChange={handleSelect}
                 disabled={saveMutation.isPending}
               />
             </FormField>

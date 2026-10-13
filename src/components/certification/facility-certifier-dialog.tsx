@@ -127,9 +127,11 @@ export function FacilityCertifierForm({
   // previous Isometric project would fail validation or send telemetry to the
   // wrong facility, and the ack must be re-confirmed for the new project.
   const handleProjectChange = (value: string | undefined) => {
-    projectField.onChange(value ?? "");
+    const projectId = value ?? "";
+    if (projectId === projectField.value) return;
+    projectField.onChange(projectId);
     const returnsToPersistedProject =
-      mapping?.externalProjectId === value;
+      mapping?.externalProjectId === projectId;
     setValue(
       "defaultRemovalTemplateId",
       returnsToPersistedProject

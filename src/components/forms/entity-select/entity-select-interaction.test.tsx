@@ -3,9 +3,10 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-libra
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { EntitySelect } from "./entity-select";
 import { FormEntitySelect } from "./form-entity-select";
-import { useForm } from "react-hook-form";
+import { useController, useForm } from "react-hook-form";
 import { Modal } from "@/components/ui/modal/modal";
-import type { EntityOption } from "./types";
+import { FormField } from "../form-field";
+import type { EntityOption, EntityType } from "./types";
 import { ENTITY_SEARCH_LIMIT } from "@/config/forms";
 import { useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -26,11 +27,11 @@ vi.mock("@/hooks/use-entities", () => ({
     return { data: { id: "one", code: "1", name: "North bin" }, isPending: false };
   },
 }));
-vi.mock("./driver-quick-add-dialog", () => ({ DriverQuickAddDialog: () => { state.dialogMounts.push("Driver"); return null; } }));
-vi.mock("./operator-quick-add-dialog", () => ({ OperatorQuickAddDialog: () => { state.dialogMounts.push("Operator"); return null; } }));
-vi.mock("./vehicle-quick-add-dialog", () => ({ VehicleQuickAddDialog: () => { state.dialogMounts.push("Vehicle"); return null; } }));
-vi.mock("./feedstock-type-quick-add-dialog", () => ({ FeedstockTypeQuickAddDialog: () => { state.dialogMounts.push("FeedstockType"); return null; } }));
-vi.mock("./formulation-quick-add-dialog", () => ({ FormulationQuickAddDialog: () => { state.dialogMounts.push("Formulation"); return null; } }));
+vi.mock("./driver-quick-add-dialog", () => ({ DriverQuickAddDialog: (props: TestQuickAddDialogProps) => { state.dialogMounts.push("Driver"); return <TestQuickAddDialog {...props} />; } }));
+vi.mock("./operator-quick-add-dialog", () => ({ OperatorQuickAddDialog: (props: TestQuickAddDialogProps) => { state.dialogMounts.push("Operator"); return <TestQuickAddDialog {...props} />; } }));
+vi.mock("./vehicle-quick-add-dialog", () => ({ VehicleQuickAddDialog: (props: TestQuickAddDialogProps) => { state.dialogMounts.push("Vehicle"); return <TestQuickAddDialog {...props} />; } }));
+vi.mock("./feedstock-type-quick-add-dialog", () => ({ FeedstockTypeQuickAddDialog: (props: TestQuickAddDialogProps) => { state.dialogMounts.push("FeedstockType"); return <TestQuickAddDialog {...props} />; } }));
+vi.mock("./formulation-quick-add-dialog", () => ({ FormulationQuickAddDialog: (props: TestQuickAddDialogProps) => { state.dialogMounts.push("Formulation"); return <TestQuickAddDialog {...props} />; } }));
 vi.mock("@/hooks/use-entity-edit-record", () => ({
   isEditableEntityType: (type: string) => !["facility", "creditBatch"].includes(type),
   useCanManageFeedstockTypes: () => { state.permissionChecks += 1; return state.canManage; },
@@ -70,6 +71,26 @@ function LockedFormPicker() {
 }
 
 const requiredPickerSchema = z.object({ binId: z.string().min(1, "Select a storage bin.") });
+interface TestQuickAddDialogProps { isOpen: boolean; onClose: () => void }
+function TestQuickAddDialog({ isOpen, onClose }: TestQuickAddDialogProps) {
+  return <Modal isOpen={isOpen} onClose={onClose} ariaLabel="Quick-add entity">
+    <input aria-label="Entity name" />
+    <input aria-label="Entity code" />
+    <button type="button" onClick={onClose}>Cancel</button>
+  </Modal>;
+}
+
+function QuickAddFormPicker({ entityType, onBlur }: { entityType: EntityType; onBlur: () => void }) {
+  const { control } = useForm({ defaultValues: { binId: "" }, resolver: zodResolver(requiredPickerSchema), mode: "onTouched" });
+  const { field, fieldState } = useController({ control, name: "binId" });
+  return <>
+    <FormField id="required-entity" label="Required entity" required error={fieldState.error?.message}>
+      <EntitySelect id="required-entity" entityType={entityType} value={field.value} onChange={field.onChange} onBlur={() => { onBlur(); field.onBlur(); }} allowCreate alwaysShowSearch />
+    </FormField>
+    <button type="button">Outside picker</button>
+  </>;
+}
+
 function TouchedFormPicker({ alwaysShowSearch }: { alwaysShowSearch: boolean }) {
   const { control } = useForm({
     defaultValues: { binId: "" },
@@ -83,6 +104,32 @@ function TouchedFormPicker({ alwaysShowSearch }: { alwaysShowSearch: boolean }) 
 }
 
 describe("EntitySelect touched validation", () => {
+  it.each(["driver", "operator", "vehicle", "feedstockType", "formulation"] as const)("does not blur or validate a required picker while its %s quick-add dialog has focus", async (entityType) => {
+    const blur = vi.fn();
+    const { container } = render(<QuickAddFormPicker entityType={entityType} onBlur={blur} />);
+    act(() => trigger().focus()); open();
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByTestId("entity-select-search")));
+    fireEvent.click(screen.getByTestId("entity-select-create"));
+    await screen.findByRole("dialog", { name: "Quick-add entity" });
+    expect(container.contains(screen.getByRole("textbox", { name: "Entity name" }))).toBe(false);
+    expect(blur).not.toHaveBeenCalled();
+    await act(async () => { screen.getByRole("textbox", { name: "Entity name" }).focus(); });
+    expect(blur).not.toHaveBeenCalled();
+    await act(async () => { screen.getByRole("textbox", { name: "Entity code" }).focus(); });
+    expect(blur).not.toHaveBeenCalled();
+    expect(container.querySelector('[role="alert"]')).toBeNull();
+    await act(async () => { screen.getByRole("button", { name: "Cancel" }).focus(); });
+    expect(blur).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Quick-add entity" })).toBeNull());
+    expect(blur).not.toHaveBeenCalled();
+    expect(container.querySelector('[role="alert"]')).toBeNull();
+    await act(async () => { trigger().focus(); });
+    await act(async () => { screen.getByRole("button", { name: "Outside picker" }).focus(); });
+    expect(blur).toHaveBeenCalledOnce();
+    expect((await screen.findByRole("alert")).textContent).toBe("Select a storage bin.");
+  });
+
   it("notifies blur after clearing a focused prefilled closed picker and moving outside", () => {
     const blur = vi.fn(); const change = vi.fn();
     function PrefilledPicker() {

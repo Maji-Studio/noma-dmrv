@@ -232,6 +232,8 @@ function EntitySelectView({
   const [isVehicleDialogOpen, setIsVehicleDialogOpen] = useState(false);
   const [isFeedstockTypeDialogOpen, setIsFeedstockTypeDialogOpen] = useState(false);
   const [isFormulationDialogOpen, setIsFormulationDialogOpen] = useState(false);
+  const isQuickAddDialogOpen = isDriverDialogOpen || isOperatorDialogOpen ||
+    isVehicleDialogOpen || isFeedstockTypeDialogOpen || isFormulationDialogOpen;
 
   const containerRef = useRef<HTMLDivElement>(null);
   const popupRef = useRef<HTMLDivElement>(null);
@@ -332,7 +334,8 @@ function EntitySelectView({
     setHighlightedId(null);
   };
   const handlePickerBlur = (event: FocusEvent<HTMLElement>) => {
-    if (isInsidePicker(event.relatedTarget)) return;
+    // Opening quick-add moves focus outside the picker without touching it.
+    if (isQuickAddDialogOpen || isInsidePicker(event.relatedTarget)) return;
     // A pointer press on a non-focusable row can blur to the body before
     // its click selects the value. Let selection or dismissal finish first.
     if (isOpen && !event.relatedTarget) return;
@@ -729,38 +732,37 @@ function EntitySelectView({
             </Popover.Positioner>
           </Popover.Portal>
         )}
-
-        {!isLocal && (
-          <>
-            <DriverQuickAddDialog
-              isOpen={isDriverDialogOpen}
-              onClose={() => setIsDriverDialogOpen(false)}
-              onSuccess={handleCreatedEntity}
-            />
-            <OperatorQuickAddDialog
-              isOpen={isOperatorDialogOpen}
-              onClose={() => setIsOperatorDialogOpen(false)}
-              onSuccess={handleCreatedEntity}
-            />
-            <VehicleQuickAddDialog
-              isOpen={isVehicleDialogOpen}
-              onClose={() => setIsVehicleDialogOpen(false)}
-              onSuccess={handleCreatedEntity}
-            />
-            <FeedstockTypeQuickAddDialog
-              isOpen={isFeedstockTypeDialogOpen}
-              onClose={() => setIsFeedstockTypeDialogOpen(false)}
-              onSuccess={handleCreatedEntity}
-              defaultUsage={getFeedstockTypeDefaultUsage(filterBy)}
-            />
-            <FormulationQuickAddDialog
-              isOpen={isFormulationDialogOpen}
-              onClose={() => setIsFormulationDialogOpen(false)}
-              onSuccess={handleCreatedEntity}
-            />
-          </>
-        )}
       </div>
+      {!isLocal && (
+        <>
+          <DriverQuickAddDialog
+            isOpen={isDriverDialogOpen}
+            onClose={() => setIsDriverDialogOpen(false)}
+            onSuccess={handleCreatedEntity}
+          />
+          <OperatorQuickAddDialog
+            isOpen={isOperatorDialogOpen}
+            onClose={() => setIsOperatorDialogOpen(false)}
+            onSuccess={handleCreatedEntity}
+          />
+          <VehicleQuickAddDialog
+            isOpen={isVehicleDialogOpen}
+            onClose={() => setIsVehicleDialogOpen(false)}
+            onSuccess={handleCreatedEntity}
+          />
+          <FeedstockTypeQuickAddDialog
+            isOpen={isFeedstockTypeDialogOpen}
+            onClose={() => setIsFeedstockTypeDialogOpen(false)}
+            onSuccess={handleCreatedEntity}
+            defaultUsage={getFeedstockTypeDefaultUsage(filterBy)}
+          />
+          <FormulationQuickAddDialog
+            isOpen={isFormulationDialogOpen}
+            onClose={() => setIsFormulationDialogOpen(false)}
+            onSuccess={handleCreatedEntity}
+          />
+        </>
+      )}
     </Popover.Root>
   );
 }
