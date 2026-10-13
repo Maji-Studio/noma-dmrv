@@ -73,7 +73,9 @@ const END_AFTER_START_MESSAGE = "End time must be after the start time";
 const PREFLIGHT_OUTCOME_VIOLATIONS = [
   "end-not-after-start",
   "dry-mass-balance-exceeded",
+  "terminal-end-required",
   "feedstock-required",
+  "complete-output-required",
   "complete-output-bin-required",
   "complete-output-moisture-required",
 ] as const;

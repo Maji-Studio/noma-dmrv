@@ -101,3 +101,30 @@ it.each(["biocharStorageLocationId", "biocharMoisturePercent"] as const)("refuse
   }, { now: NOW })).rejects.toMatchObject({ code: "validation_failed", issues: [{ path: [field] }] });
   expect(state.insert).not.toHaveBeenCalled();
 });
+
+const OUTPUT_PRIORITY_CASES = [
+  { endTime: END, biocharOutputKg: null, message: "A complete run must record positive biochar output" },
+  { endTime: null, biocharOutputKg: OUTPUT_KG, message: "A complete run needs an end time" },
+] as const;
+
+it.each(OUTPUT_PRIORITY_CASES)("preserves create outcome priority: $message", async ({ endTime, biocharOutputKg, message }) => {
+  const state = preflightTransaction([[{ id: "facility", archivedAt: null }], [{ id: "reactor", facilityId: "facility" }]]);
+  await expect(createProductionRunInTransaction(ctx, state.tx, {
+    code: "PR-26-001", facilityId: "facility", reactorId: "reactor", status: "complete", startTime: START, endTime,
+    feedstockDraws: [{ storageLocationId: BIN_ID, wetMassKg: DRAW_KG }], feedstockMoisturePercent: 20,
+    biocharOutputKg, biocharStorageLocationId: null, biocharMoisturePercent: null,
+  }, { now: NOW })).rejects.toThrow(message);
+  expect(state.insert).not.toHaveBeenCalled();
+});
+
+it.each(OUTPUT_PRIORITY_CASES)("preserves merged update outcome priority: $message", async ({ endTime, biocharOutputKg, message }) => {
+  const state = preflightTransaction([[{
+    id: "run", facilityId: "facility", reactorId: "reactor", status: "running", startTime: START, endTime: null,
+    feedstockWetMassKg: DRAW_KG, feedstockMoisturePercent: 20,
+    biocharOutputKg: null, biocharStorageLocationId: null, biocharMoisturePercent: null,
+  }], [{ storageLocationId: BIN_ID }]]);
+  await expect(updateProductionRunInTransaction(ctx, state.tx, "run", {
+    expectedVersion: 1, status: "complete", endTime, biocharOutputKg,
+  }, { now: NOW })).rejects.toThrow(message);
+  expect(state.update).not.toHaveBeenCalled();
+});
