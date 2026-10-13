@@ -3,8 +3,9 @@
 /**
  * SegmentedControl: short, equal options as one bar (loss / count, storage
  * type). Same native-radio contract as ChoiceCardGroup: one tab stop, arrow
- * keys move and select, register(name) or value + onValueChange. The selected
- * segment is raised, bordered and carries a check glyph, so it reads without
+ * keys move and select, register(name) or value + onValueChange. Every segment
+ * is bordered so unselected ones read as clickable; the selected segment gets
+ * the interaction-coloured border and a check glyph, so it reads without
  * colour and in forced-colors mode.
  */
 
@@ -100,7 +101,8 @@ export const SegmentedControl = forwardRef<HTMLInputElement, SegmentedControlPro
                 className={cn(
                   "flex min-h-44 w-full items-center justify-center gap-6 border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] px-12 text-center",
                   "body-small text-[var(--color-text-secondary)] transition-colors duration-300",
-                  "hover:border-[var(--color-border-primary)] hover:text-[var(--color-text-primary)]",
+                  "hover:text-[var(--color-text-primary)]",
+                  "peer-[:not(:checked):not(:disabled)]:hover:border-[var(--color-border-primary)]",
                   "peer-checked:border-[var(--color-interaction)] peer-checked:text-[var(--color-text-primary)]",
                   "forced-colors:peer-checked:border-[Highlight] forced-colors:peer-checked:border-2",
                   "peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-[var(--color-interaction)]",

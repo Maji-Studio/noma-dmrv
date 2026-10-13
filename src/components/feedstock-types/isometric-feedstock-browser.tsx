@@ -20,7 +20,8 @@ import {
 import { useFeedstockTypeList } from "@/hooks/use-feedstock-types";
 import type { IsometricFeedstockType } from "@/lib/isometric";
 import { cn } from "@/lib/utils";
-import { IsometricFeedstockLink } from "./isometric-feedstock-link";
+import { IsometricLink } from "@/components/certification/isometric-link";
+import { isometricRegistry } from "@/lib/isometric/links";
 
 const settingsHref = (facilityId: string) =>
   `/certification/settings?facility=${encodeURIComponent(facilityId)}`;
@@ -169,10 +170,11 @@ export function IsometricFeedstockBrowser({
                       : "Use"}
                 </span>
               </button>
-              <IsometricFeedstockLink
-                isometricFeedstockTypeId={type.id}
-                isProduction={summary.data.isProduction}
-                name={type.name}
+              <IsometricLink
+                href={isometricRegistry.feedstockType({
+                  environment: summary.data.isProduction ? "production" : "sandbox",
+                  isometricFeedstockTypeId: type.id,
+                })}
               />
             </li>
           );

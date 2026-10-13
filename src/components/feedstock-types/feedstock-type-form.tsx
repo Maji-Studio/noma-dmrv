@@ -29,6 +29,7 @@ import { useClearOnDependencyChange } from "@/hooks/use-clear-on-dependency-chan
 import { IsometricFeedstockBrowser } from "./isometric-feedstock-browser";
 import type { IsometricFeedstockType } from "@/lib/isometric";
 import {
+  LOCAL_CATEGORY_HINT,
   feedstockTypeUsageOptionsFor,
   initialFeedstockTypeUsage,
   shouldClearCategoryForIsometricSelection,
@@ -38,10 +39,8 @@ import {
   visibleFeedstockTypeSection,
 } from "./feedstock-type-form-logic";
 import { Notice } from "@/components/ui/notice";
-import { IsometricFeedstockLink } from "./isometric-feedstock-link";
-
-const LOCAL_CATEGORY_HINT =
-  "Used inside noma only, for example in bin and delivery subtitles. It is not sent to Isometric.";
+import { IsometricLink } from "@/components/certification/isometric-link";
+import { isometricRegistry } from "@/lib/isometric/links";
 
 // General = the local record (the only editable surface). Isometric =
 // read-only browse of the registry catalogue. Selecting a registry row pre-fills
@@ -240,10 +239,11 @@ export function FeedstockTypeForm({
               ? ` · ref ${selectedIsometricFeedstock.supplier_reference_id}`
               : ""}
           </span>
-          <IsometricFeedstockLink
-            isometricFeedstockTypeId={selectedIsometricFeedstock.id}
-            isProduction={certifierSummary.data?.isProduction ?? false}
-            name={selectedIsometricFeedstock.name}
+          <IsometricLink
+            href={isometricRegistry.feedstockType({
+              environment: certifierSummary.data?.isProduction ? "production" : "sandbox",
+              isometricFeedstockTypeId: selectedIsometricFeedstock.id,
+            })}
           />
         </p>
         {selectedIsometricNameChanged && (

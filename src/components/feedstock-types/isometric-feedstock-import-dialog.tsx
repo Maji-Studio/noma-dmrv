@@ -12,6 +12,7 @@ import {
   PYROLYSIS_FEEDSTOCK_CATEGORY_OPTIONS,
   pyrolysisFeedstockCategories,
 } from "@/schemas/feedstock-types";
+import { LOCAL_CATEGORY_HINT } from "./feedstock-type-form-logic";
 import { IsometricFeedstockBrowser } from "./isometric-feedstock-browser";
 
 const TITLE_ID = "isometric-feedstock-import-title";
@@ -90,7 +91,7 @@ export function IsometricFeedstockImportDialog({
         {selected && (
           <div className="border-t border-[var(--color-border-tertiary)] pt-16">
             <FormField id="import-feedstock-category" label="Local category"
-              helperText="Used inside noma only, for example in bin and delivery subtitles. It is not sent to Isometric."
+              helperText={LOCAL_CATEGORY_HINT}
               required
             >
               <FormSelect
