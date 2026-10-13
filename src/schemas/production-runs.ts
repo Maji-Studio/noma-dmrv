@@ -21,10 +21,12 @@ import {
   uuidSchema,
 } from "./helpers";
 import {
-  allowedProductionRunStatusesFrom,
+  PRODUCTION_RUN_CREATE_STATUSES,
+  PRODUCTION_RUN_CREATE_STATUS_MESSAGE,
   DRY_MASS_BALANCE_MESSAGE,
   COMPLETE_OUTPUT_BIN_MESSAGE,
   COMPLETE_OUTPUT_MOISTURE_MESSAGE,
+  RUNNING_END_FORBIDDEN_MESSAGE,
   getProductionRunOutcomeViolations,
   PRODUCTION_RUN_STATUSES,
   type ProductionRunStatus,
@@ -218,7 +220,7 @@ const productionRunFormObject = z.object({
   reactorId: z.string().min(1, "Select a reactor.").uuid("Choose a valid reactor."),
 
   // Status
-  status: z.enum(productionRunStatuses).default("draft"),
+  status: z.enum(productionRunStatuses).default("running"),
   cancellationReason: z.string().max(CANCELLATION_REASON_MAX_LENGTH).optional().or(z.literal("")),
 
   // Timing — explicit date + time pairs. The run's start (date + time) is
@@ -436,8 +438,11 @@ export function makeProductionRunFormSchema(
           });
           break;
         case "running-end-forbidden":
-          // Pre-existing adapter divergence: the mutation rejects this state,
-          // while the form schema has historically allowed it.
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["endTime"],
+            message: RUNNING_END_FORBIDDEN_MESSAGE,
+          });
           break;
       }
     }
@@ -482,14 +487,9 @@ function rejectLegacyFeedstockFields(
 /**
  * Schema for creating a production run (server action)
  */
-export const createProductionRunSchema = productionRunFormSchema.refine(
-  (data) => allowedProductionRunStatusesFrom("draft").includes(data.status),
-  {
-    path: ["status"],
-    message:
-      "A new production run can only start as Draft, Running, Complete, or Cancelled.",
-  },
-).superRefine(rejectLegacyFeedstockFields);
+export const createProductionRunSchema = productionRunFormSchema.safeExtend({
+  status: z.enum(PRODUCTION_RUN_CREATE_STATUSES, { error: PRODUCTION_RUN_CREATE_STATUS_MESSAGE }).default("running"),
+}).superRefine(rejectLegacyFeedstockFields);
 
 /**
  * Schema for updating a production run (server action)
@@ -627,7 +627,6 @@ export type ProductionRunFilterData = z.infer<typeof productionRunFilterSchema>;
  */
 export function formatProductionRunStatus(status: ProductionRunStatus): string {
   const labels: Record<ProductionRunStatus, string> = {
-    draft: "Draft",
     running: "Running",
     complete: "Complete",
     failed: "Failed",

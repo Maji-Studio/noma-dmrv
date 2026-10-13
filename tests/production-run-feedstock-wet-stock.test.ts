@@ -268,7 +268,7 @@ describe("production-run wet feedstock stock", () => {
       code: `PR-WET-MIXED-${tag}`,
       facilityId,
       reactorId,
-      status: "draft",
+      status: "running",
       startTime: new Date("2026-08-04T08:00:00Z"),
       endTime: null,
       feedstockDraws: [],
@@ -333,7 +333,7 @@ describe("production-run wet feedstock stock", () => {
       code: `PR-WET-OVERDRAW-${tag}`,
       facilityId,
       reactorId,
-      status: "draft",
+      status: "running",
       startTime: new Date("2026-08-05T08:00:00Z"),
       endTime: null,
       feedstockDraws: [
@@ -370,9 +370,9 @@ describe("production-run wet feedstock stock", () => {
         code: `PR-WET-CONCURRENT-${suffix}-${tag}`,
         facilityId,
         reactorId: reactor,
-        status: "draft",
+        status: "running",
         startTime: new Date(`2026-08-0${suffix}T08:00:00Z`),
-        endTime: new Date(`2026-08-0${suffix}T09:00:00Z`),
+        endTime: null,
         feedstockDraws: [{ storageLocationId, wetMassKg: requestedWetMassKg }],
       }).then((run) => {
         productionRunIds.add(run.id);

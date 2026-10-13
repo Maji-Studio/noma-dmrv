@@ -1,3 +1,4 @@
+import { addFixtureReactor } from "./helpers/operation-fixture";
 import { productionRunEtag } from "@/lib/api/representation-etags";
 import { randomUUID } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -39,13 +40,12 @@ const toolNames = ["start_production_run", "update_production_run", "delete_prod
 describe("production MCP tools", { timeout: TIMEOUT_MS }, () => {
   it("reports duplicate codes with the same conflict and pointer as REST", async () => {
     const first = (await call("start_production_run", { ...productionRunInput(a), requestKey: randomUUID() })).structuredContent.data;
-    const second = (await call("start_production_run", { ...productionRunInput(a, false), status: "cancelled",
-      cancellationReason: "Not started", endTime: "2026-10-06T11:00:00Z", requestKey: randomUUID() })).structuredContent.data;
+    const second = await createCancelled();
     const refused = await call("update_production_run", { productionRunId: second.id, expectedVersion: second.version,
       code: first.code, requestKey: randomUUID() });
     expect(refused).toMatchObject({ isError: true, structuredContent: { code: "conflict",
       issues: [expect.objectContaining({ pointer: "/code", code: "conflict" })] } });
-    expect(await rows()).toEqual(expect.arrayContaining([expect.objectContaining({ id: second.id, code: second.code, version: 1 })]));
+    expect(await rows()).toEqual(expect.arrayContaining([expect.objectContaining({ id: second.id, code: second.code, version: 2 })]));
   });
 
   it("accepts numeric form encodings on create and update without clearing omissions", async () => {
@@ -165,8 +165,25 @@ describe("production MCP tools", { timeout: TIMEOUT_MS }, () => {
     expect(await rows()).toHaveLength(0);
     expect(await binWetStock(a)).toBe(4200);
     await call("start_production_run", { ...productionRunInput(a), requestKey: randomUUID() });
-    await call("start_production_run", { ...productionRunInput(a, false), status: "cancelled", cancellationReason: "Not started", endTime: "2026-10-06T11:00:00Z", requestKey: randomUUID() });
+    await createCancelled();
     const cursor = (await call("find_production_runs", { limit: 1 })).structuredContent.nextCursor;
     expect(await call("find_production_runs", { cursor }, b.key)).toMatchObject({ isError: true, structuredContent: { code: "invalid_cursor" } });
   });
+});
+
+
+async function createCancelled() {
+  const reactorId = await addFixtureReactor(a, `cancel-${randomUUID()}`);
+  const saved = (await call("start_production_run", { ...productionRunInput(a, false), reactorId, requestKey: randomUUID() })).structuredContent.data;
+  const result = await call("update_production_run", { productionRunId: saved.id, expectedVersion: saved.version,
+    status: "cancelled", cancellationReason: "Not started", requestKey: randomUUID() });
+  expect(result.isError).not.toBe(true);
+  return result.structuredContent.data;
+}
+
+it.each(["failed", "cancelled"])("refuses %s on MCP create with the status pointer", async (status) => {
+  const result = await call("start_production_run", { ...productionRunInput(a), status, requestKey: randomUUID() });
+  expect(result).toMatchObject({ isError: true, structuredContent: { code: "validation_failed",
+    issues: [expect.objectContaining({ pointer: "/status" })] } });
+  expect(await rows()).toHaveLength(0);
 });

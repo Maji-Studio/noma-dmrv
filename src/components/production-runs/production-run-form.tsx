@@ -45,6 +45,7 @@ import {
 } from "./production-run-mass-balance";
 import {
   allowedProductionRunStatusesFrom,
+  PRODUCTION_RUN_CREATE_STATUSES,
   shouldClearProductionRunEndTime,
   shouldIncludeProductionRunEndTime,
 } from "@/lib/production-runs/lifecycle";
@@ -110,8 +111,10 @@ export function ProductionRunForm({
 }: ProductionRunFormProps) {
   const formId = useId();
   const isEditMode = !!productionRun;
-  const transitionFrom = (productionRun?.status as ProductionRunStatus) ?? "draft";
-  const statusOptions = allowedProductionRunStatusesFrom(transitionFrom).map(
+  const transitionFrom = (productionRun?.status as ProductionRunStatus) ?? "running";
+  const statusOptions = (isEditMode
+    ? allowedProductionRunStatusesFrom(transitionFrom)
+    : PRODUCTION_RUN_CREATE_STATUSES).map(
     (status) => ({ value: status, label: formatProductionRunStatus(status) }),
   );
   const { facilityId: contextFacilityId, facilities } = useFacilityContext();
@@ -121,7 +124,7 @@ export function ProductionRunForm({
   const defaultValues = {
     facilityId: productionRun?.facilityId || contextFacilityId || "",
     reactorId: productionRun?.reactorId ?? "",
-    status: (productionRun?.status as ProductionRunStatus) ?? "draft",
+    status: (productionRun?.status as ProductionRunStatus) ?? "running",
     cancellationReason: productionRun?.cancellationReason ?? "",
     ...productionRunTimingDefaults(
       productionRun,

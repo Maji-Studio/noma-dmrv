@@ -53,7 +53,7 @@ import { productionRunSheetSections, RunStatusBadge } from "./production-run-rea
 import { ProductionIncidentTable } from "./production-incident-table";
 import { ProductionSampleTable } from "./production-sample-table";
 import {
-  type ProductionRunFormData,
+  type CreateProductionRunData,
   type ProductionRunFilterData,
   type ProductionRunStatus,
 } from "@/schemas/production-runs";
@@ -265,7 +265,7 @@ export function ProductionRunList() {
     entityType: "production_run",
     entityNoun: "Production run",
     executeCreate: async (data: ProductionRunSubmitData) => {
-      const run = await createRun.mutateAsync(data as ProductionRunFormData);
+      const run = await createRun.mutateAsync(data as CreateProductionRunData);
       return { entities: [run], result: run };
     },
     setError: setCreateError,
@@ -572,7 +572,6 @@ export function ProductionRunList() {
               aria-label="Filter production runs by status"
             >
               <option value="">All statuses</option>
-              <option value="draft">Draft</option>
               <option value="running">Running</option>
               <option value="complete">Complete</option>
               <option value="failed">Failed</option>
