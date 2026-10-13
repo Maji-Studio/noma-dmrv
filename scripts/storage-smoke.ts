@@ -22,6 +22,7 @@
  * smoke debris is trivially identifiable if a run dies before cleanup.
  */
 import { randomUUID } from "node:crypto";
+import { pathToFileURL } from "node:url";
 import { config } from "dotenv";
 import { appOrigin, assertUploadCors } from "./storage-cors-core";
 
@@ -33,7 +34,7 @@ const SMOKE_CONTENT_TYPE = "text/plain";
 const SMOKE_MAX_BYTES = 1024;
 const PRESIGN_TTL_SECONDS = 120;
 
-async function main(): Promise<void> {
+export async function runStorageSmoke(): Promise<void> {
   // Defer imports until env is loaded so env.ts validation sees the values.
   const { getStorageProvider, buildStorageKey } = await import(
     "../src/lib/storage"
@@ -67,6 +68,7 @@ async function main(): Promise<void> {
   console.log(`Probe key: ${key}`);
 
   let uploaded = false;
+  const corsFailures: string[] = [];
   try {
     // 1. Mint presigned PUT and upload.
     const upload = await provider.createUploadUrl({
@@ -76,8 +78,14 @@ async function main(): Promise<void> {
       expiresInSeconds: PRESIGN_TTL_SECONDS,
     });
     console.log(`PUT target: ${safeUrlSummary(upload.url)}`);
-    await assertUploadCors(upload.url, origin);
-    console.log("OK  CORS     → app-origin PUT preflight accepted");
+    try {
+      await assertUploadCors(upload.url, origin);
+      console.log("OK  CORS     → app-origin PUT preflight accepted");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Storage CORS preflight failed";
+      corsFailures.push(message);
+      console.error(message);
+    }
     const putRes = await fetchOrFail("PUT", upload.url, {
       method: upload.method,
       headers: { ...upload.headers, Origin: origin },
@@ -90,7 +98,9 @@ async function main(): Promise<void> {
     uploaded = true;
     const allowedOrigin = putRes.headers.get("access-control-allow-origin");
     if (allowedOrigin !== origin && allowedOrigin !== "*") {
-      fail("PUT response does not allow the configured app origin through CORS.");
+      const message = "PUT response does not allow the configured app origin through CORS.";
+      corsFailures.push(message);
+      console.error(message);
     }
     console.log(`OK  PUT      → ${putRes.status} (${expectedBytes} bytes)`);
 
@@ -136,6 +146,9 @@ async function main(): Promise<void> {
     console.log(`OK  DELETE   → object gone (HEAD 404)`);
 
     console.log("\nOK — storage round-trip passed.");
+    if (corsFailures.length > 0) {
+      fail(`Storage CORS checks failed: ${corsFailures.join("; ")}`);
+    }
   } catch (err) {
     // Best-effort cleanup so a mid-run failure doesn't leave debris.
     if (uploaded) {
@@ -149,7 +162,7 @@ async function main(): Promise<void> {
       }
     }
     console.error(err instanceof Error ? err.message : String(err));
-    process.exit(1);
+    process.exitCode = 1;
   }
 }
 
@@ -203,7 +216,9 @@ function formatError(err: unknown): string {
   return details.join(" ");
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  runStorageSmoke().catch((err) => {
+    console.error(err);
+    process.exitCode = 1;
+  });
+}
