@@ -651,6 +651,20 @@ companion inherits this file's schema, invariants, and resolution rules.
   `ISOMETRIC_DEMO_TEMPLATE_ID` in the workflow and restore the third category to
   the assertion (S).
 
+### Unsampled batches with incidental Samples may still submit an H/C_org mean (`isometric/unsampled-incidental-chemistry`, opened 2026-10-13)
+
+- The durability gates skip chemistry checks when a credit batch's stored
+  `sampling` choice is `unsampled` (`src/lib/certification/durability-submission-gates.ts`),
+  but `buildPerBatchDurabilityData` (`src/lib/isometric/utils/durability-aggregation.ts`)
+  marks a batch sampled whenever any Sample carries a usable H/C_org. An
+  unsampled batch with an incidental Sample could therefore send an H/C_org mean
+  the gates never judged.
+- Not live today: `assertSupportedDurabilityConfiguration` refuses everything
+  but sampled 1,000-year submissions.
+- **Resolve via:** before enabling 200-year or unsampled submission, make the
+  aggregation follow the stored `sampling` choice and add a test with an
+  incidental Sample on an unsampled batch.
+
 Audit follow-ups opened 2026-05-25 are in [open-questions-audit-follow-ups.md](./open-questions-audit-follow-ups.md).
 
 ## Product bins & formulations

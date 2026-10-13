@@ -32,6 +32,7 @@
 
 import type { Sample } from "@/db/schema";
 import { pluralize } from "@/lib/copy-utils";
+import { isUsableNumber } from "@/lib/calculations/biochar-eligibility";
 import {
   SOIL_TEMPERATURE_FLOOR_C,
   SOIL_TEMPERATURE_SUBDIVIDE_SPREAD_C,
@@ -49,9 +50,8 @@ export const H_TO_CORG_RECONCILIATION_TOLERANCE = 0.05;
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-function isUsableNumber(value: number | null | undefined): value is number {
-  return value != null && Number.isFinite(value);
-}
+// `isUsableNumber` is the eligibility module's predicate, so the H/C_org
+// population submitted here is exactly the one the durability gates judge.
 
 /** A replicate mean plus its sample (n−1) standard deviation. */
 export interface ValueWithStdDev {

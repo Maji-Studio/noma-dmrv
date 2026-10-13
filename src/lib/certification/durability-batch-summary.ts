@@ -139,6 +139,12 @@ export interface DurabilitySummaryEligibility {
   hToCWithinThreshold: boolean | null;
   /** mean < 0.2; null when the O/C_org mean is indeterminate. */
   oToCWithinThreshold: boolean | null;
+  /**
+   * Sample codes whose H/C_org is in the submitted mean without a paired
+   * O/C_org. The submission gate blocks on these (Q54), so a passing paired
+   * verdict is not ready while any remain.
+   */
+  unpairedHToCSampleCodes: string[];
 }
 
 /** The mean ± std-dev the measurement-sample POST submits for this batch. */
@@ -259,6 +265,13 @@ export function buildDurabilityBatchSummaries(
         oToCorgMean: eligibility.meanOToCOrgRatio,
         hToCWithinThreshold: eligibility.hToCWithinThreshold,
         oToCWithinThreshold: eligibility.oToCWithinThreshold,
+        // Mirrors gate (d), which exempts unsampled batches.
+        unpairedHToCSampleCodes:
+          batch.sampling === "unsampled"
+            ? []
+            : eligibility.unpairedHToCReplicateIndexes.map(
+                (index) => batch.samples[index].sampleCode,
+              ),
       },
       submitted: {
         hToCorg: dp?.hToCorgRatio ?? null,
