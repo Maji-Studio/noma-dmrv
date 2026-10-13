@@ -194,7 +194,7 @@ async function persistOutputStock(ctx: OrgContext, tx: DbTransaction, input: Sto
       deliveryId: options.deliveryId ?? correction?.deliveryId ?? null, targetBiocharProductId: options.targetBiocharProductId ?? null,
       dryMassKg: a.dryKg, wetMassKg, basisSnapshot: { solidsKg: storeRational(a.solidsKg), wetShareKg: a.wetShareKg ? storeRational(a.wetShareKg) : null,
         establishedDryBiocharKg: layer.establishedDryBiocharKg, ingredientDrySolidsKg: layer.ingredientDrySolidsKg, placedAt: layer.placedAt, postingSequence: String(layer.postingSequence), code: preview.allocations[index].code,
-        policy, order, readingPercent: a.readingPercent == null ? null : String(a.readingPercent) } }).returning();
+        policy, defaultDrawOrder: preview.stockMode === 'split' ? prepared.bin.drawOrder : null, order, readingPercent: a.readingPercent == null ? null : String(a.readingPercent) } }).returning();
     for (const run of a.runs) await tx.insert(outputStockRunAllocations).values({ organizationId: ctx.organizationId, allocationId: allocation.id, productionRunId: run.productionRunId, dryMassKg: run.dryKg });
   }
   // A count's reading sets the wet stock and moisture of every layer it

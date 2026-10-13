@@ -1,6 +1,6 @@
 import type { z } from 'zod';
 import type { MoistureBasis } from '@/lib/output-stock/moisture-estimate';
-import type { OutputStockMode } from '@/lib/output-stock/stock-mode';
+import type { OutputDrawOrder, OutputStockMode } from '@/lib/output-stock/stock-mode';
 import type { orderedSourceSchema } from '@/schemas/output-stock';
 /** Serializable operator read models; exact fractions remain inside the ledger. */
 export interface OutputStockAllocationView {
@@ -143,7 +143,9 @@ export interface OutputSubBin {
 
 export interface OutputSubBins {
   stockMode: OutputStockMode;
-  /** Oldest first: the order a draw takes them in unless the operator changes it. */
+  /** The bin's default draw order: where the picker starts unless the operator changes it. */
+  drawOrder: OutputDrawOrder;
+  /** Split bins follow `drawOrder`; mix bins keep chronological batch display. */
   subBins: OutputSubBin[];
 }
 

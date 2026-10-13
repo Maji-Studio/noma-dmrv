@@ -26,11 +26,11 @@ export type OutputStockRequest =
   | { kind: 'ordered'; wetKg: Decimal; sources: readonly OrderedSource[] };
 export interface OrderedSource { layerId: string; moisturePercent: Decimal }
 /**
- * How a removal is attributed to layers: oldest first, or, in a mix bin, from
+ * How a removal is attributed to layers: oldest or newest first, or, in a mix bin, from
  * every layer present in proportion to its remaining solids (ADR 0030). A split
  * bin's sub-bin order is the `ordered` request, not a policy.
  */
-export type DrawPolicy = 'fifo' | 'pro_rata';
+export type DrawPolicy = 'fifo' | 'lifo' | 'pro_rata';
 /** The policy a mix draw's allocations are saved with; the credit hold matches on it. */
 export const PRO_RATA_POLICY = 'pro_rata' satisfies DrawPolicy;
 
@@ -102,7 +102,7 @@ function wetSolids(wetKg: Decimal, moisturePercent: Decimal | undefined): Ration
 }
 
 /**
- * Pure FIFO. Capacity is checked as an exact rational BEFORE any gram rounding.
+ * Ordered stock planning. Capacity is checked as an exact rational BEFORE any gram rounding.
  * Cumulative layer consumption rounds half-up, while exact physical solids
  * residuals survive every posting. Full layers and final run remainders close
  * exactly. Run weights use frozen remaining provenance, never live source data.
@@ -111,7 +111,7 @@ function wetSolids(wetKg: Decimal, moisturePercent: Decimal | undefined): Ration
  */
 export function planOutputStock(layers: readonly OutputStockLayer[], occurredAt: string, request: OutputStockRequest, policy: DrawPolicy = 'fifo') {
   const at = canonicalInstant(occurredAt);
-  if (request.kind === 'ordered' && policy !== 'fifo') throw new RangeError('A mix bin has no sub-bin order');
+  if (request.kind === 'ordered' && policy === 'pro_rata') throw new RangeError('A mix bin has no sub-bin order');
   const ids = new Set<string>();
   const sequences = new Set<bigint>();
   const prepared = layers.map(layer => {
@@ -142,6 +142,7 @@ export function planOutputStock(layers: readonly OutputStockLayer[], occurredAt:
     }
     return { layer, placedAt, established, remaining, fraction, capacity, runs };
   }).sort((a, b) => a.placedAt.localeCompare(b.placedAt) || (a.layer.postingSequence < b.layer.postingSequence ? -1 : 1));
+  if (policy === 'lifo') prepared.reverse();
   const eligible = prepared.filter(p => p.placedAt <= at);
   const expectedSolidsKg = eligible.reduce((sum, p) => add(sum, p.capacity), rational(BigInt(0)));
   type Prepared = (typeof prepared)[number];

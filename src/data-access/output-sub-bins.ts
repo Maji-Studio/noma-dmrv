@@ -16,7 +16,7 @@ import { getOutputStockHistory } from './output-stock-history';
 import { requireOrgScope } from './utils';
 
 /**
- * The sub-bins a bin holds at `occurredAt`, oldest first, with the bin's mode then, each with its
+ * The sub-bins a bin holds at `occurredAt`, in the bin's default draw order, with the bin's mode then, each with its
  * own moisture estimate and latest movements. A correction reads them as they
  * were before the entry it replaces, so the operator can re-choose them. When
  * the correction itself is refused, the bin's current sub-bins still show: the
@@ -46,9 +46,12 @@ export async function getOutputSubBins(ctx: OrgContext, raw: OutputSubBinsInput)
   const history = await getOutputStockHistory(ctx, bin.id);
   const held = layers.filter(layer => layer.placedAt <= input.occurredAt && layer.remainingSolidsKg && layer.remainingSolidsKg.numerator > BigInt(0))
     .sort((a, b) => a.placedAt.localeCompare(b.placedAt) || (a.postingSequence < b.postingSequence ? -1 : a.postingSequence > b.postingSequence ? 1 : 0));
+  const stockMode = await getStockModeAt(ctx, bin, input.occurredAt);
+  if (stockMode === 'split' && bin.drawOrder === 'newest_first') held.reverse();
   return {
+    drawOrder: bin.drawOrder,
     // A merged bin was split before its merge, so a draw timed then still picks sub-bins.
-    stockMode: await getStockModeAt(ctx, bin, input.occurredAt),
+    stockMode,
     subBins: held.map(layer => {
       const basis = bases.find(b => b.layerId === layer.id);
       const estimate = basis ? estimateStock([basis], input.occurredAt) : null;

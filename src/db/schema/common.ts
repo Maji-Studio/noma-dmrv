@@ -55,6 +55,12 @@ export const storageLocationType = pgEnum('storage_location_type', [
  */
 export const outputStockMode = pgEnum('output_stock_mode', ['split', 'mix']);
 
+/**
+ * The default order for split-bin draws. Operators can override it per draw;
+ * each allocation saves the resolved policy (ADR 0029 addendum).
+ */
+export const outputDrawOrder = pgEnum('output_draw_order', ['oldest_first', 'newest_first']);
+
 export const feedstockTypeUsage = pgEnum('feedstock_type_usage', [
   'pyrolysis',
   'blend',

@@ -1,9 +1,9 @@
 /** Real handlers, credentials and Postgres. Written for reviewer execution; never run by the implementation agent. */
 import { randomUUID } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { biocharProductSourceAllocations, outputStockAllocations } from "@/db/schema";
+import { biocharProductSourceAllocations, outputStockAllocations, storageLocations } from "@/db/schema";
 import { POST as MCP } from "@/app/api/mcp/route";
 import { createBiocharProductFn } from "@/fn/biochar-products";
 import { postOutputStockFn, previewOutputStockFn } from "@/fn/output-stock";
@@ -159,18 +159,25 @@ async function captureNormalized(f: ApiProductFixture, productId: string) {
 }
 
 describe("biochar product three-way parity", { timeout: TIMEOUT_MS }, () => {
-  it("previews, makes a blended product and records a loss with equal rows, references, representation, stock effects and audit effects", async () => {
+  it.each(["oldest_first", "newest_first"] as const)("previews and saves products and losses with equal provenance and stock effects across transports (%s)", async (drawOrder) => {
     const previewed: unknown[] = [];
     const captured: unknown[] = [];
     const audits: unknown[] = [];
     for (const transport of TRANSPORTS) {
       const f = fixtures.get(transport)!;
+      await db.update(storageLocations).set({ drawOrder }).where(and(eq(storageLocations.id, f.source.id), eq(storageLocations.organizationId, f.ctx.organizationId)));
       auth.requireOrgContext.mockResolvedValue(f.ctx);
       previewed.push(await previews(transport, f));
       expect((await captureProductWriteState(f)).products).toEqual([]);
       const id = await makeProduct(transport, f);
       await recordLoss(transport, f);
       captured.push(await captureNormalized(f, id));
+      const allocations = await db.select().from(outputStockAllocations).where(eq(outputStockAllocations.organizationId, f.ctx.organizationId));
+      expect(allocations).toHaveLength(2);
+      for (const allocation of allocations) expect(allocation).toMatchObject({
+        productionRunId: drawOrder === "newest_first" ? f.r2 : f.r1,
+        basisSnapshot: { policy: drawOrder === "newest_first" ? "lifo" : "fifo", defaultDrawOrder: drawOrder },
+      });
       const events = await productWriteAudits(f);
       const movementEvents = await productWriteAudits(f, "movement");
       if (transport === "action") expect([...events, ...movementEvents]).toEqual([]); // API audit only.

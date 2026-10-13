@@ -13,10 +13,10 @@ interface SubBinDrawOptions {
   correction?: { movementId: string; kind: OutputStockPreviewInput["kind"]; sources?: { layerId: string; moisturePercent: number }[] };
 }
 
-/** The operator's choices, kept per bin so another bin starts from oldest first. */
+/** The operator's choices, kept per bin so another bin starts from its default. */
 interface DrawChoices {
   binId: string | null;
-  /** Null drains oldest first; otherwise the ticked sub-bins in the order they were emptied. */
+  /** Null drains in the bin's default order; otherwise the ticked sub-bins in the order they were emptied. */
   order: string[] | null;
   /** Each reading as typed, so a half-typed "3." stays in the input. */
   readings: Record<string, string>;
@@ -57,7 +57,7 @@ export function useSubBinDraw({ bin, occurredAt, wetKg, correction }: SubBinDraw
   const readings = Object.fromEntries(Object.entries(choices.readings).map(([id, raw]) => [id, parseReading(raw)]));
   const plan = planSubBinRows(ordered.map(s => ({ layerId: s.layerId, solidsKg: s.solidsKg, estimatedMoisturePercent: s.moisturePercent })), readings, wetKg);
   // Only an order the operator chose can name a sub-bin the load never
-  // reaches; oldest first simply stops where the load does.
+  // reaches; the default order simply stops where the load does.
   const untickCode = choices.order && plan.complete ? ordered.find(s => s.layerId === plan.unreached[0])?.code ?? null : null;
   // A chosen order the load outgrows while other sub-bins sit unticked needs
   // another tick, not a count: the bin holds more than the ticks do.

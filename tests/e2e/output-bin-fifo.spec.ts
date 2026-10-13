@@ -7,6 +7,7 @@ import {
 import { fillStockMoisture } from "./helpers/stock-moisture";
 
 const FLOW_TIMEOUT_MS = 180_000;
+const DRAW_ORDER_VIEWPORTS = [{ name: "desktop", width: 1280, height: 900 }, { name: "mobile", width: 390, height: 844 }] as const;
 type Fixture = Awaited<ReturnType<typeof seedOutputStockBrowserFixture>>;
 
 async function evidence(page: Page, info: TestInfo, name: string) {
@@ -32,6 +33,44 @@ async function fillStock(page: Page, wet: string, moisture: string, reason: stri
 
 test.describe("Output-bin conserved FIFO", () => {
   test.setTimeout(FLOW_TIMEOUT_MS);
+
+  for (const viewport of DRAW_ORDER_VIEWPORTS) {
+    test(`sets newest first, shows Next out and saves the default draw (${viewport.name})`, async ({ adminPage: page, testUsers }, info) => {
+      await page.setViewportSize(viewport);
+      const f = await seedOutputStockBrowserFixture(testUsers.admin.id);
+      await openBin(page, f);
+      await page.getByRole("button", { name: "Edit storage bin", exact: true }).click();
+      const order = page.getByRole("group", { name: "Default draw order", exact: true });
+      await expect(order).toBeVisible();
+      await expect(order.getByRole("radio", { name: /^Oldest first/ })).toBeChecked();
+      await evidence(page, info, `default-draw-order-before-${viewport.name}`);
+      await order.getByRole("radio", { name: /^Newest first/ }).locator("..").click();
+      await order.getByRole("radio", { name: /^Newest first/ }).focus();
+      await evidence(page, info, `default-draw-order-${viewport.name}`);
+      await page.getByRole("button", { name: "Update storage bin", exact: true }).click();
+      await expect(page.getByRole("dialog")).toHaveCount(0);
+      await openBin(page, f);
+      await expect(page.getByRole("dialog").getByText("Newest first", { exact: true })).toBeVisible();
+      const nextOut = page.getByRole("list", { name: "Sub-bins, next out first" }).getByRole("listitem").first();
+      await expect(nextOut).toContainText("Next out");
+      await expect(nextOut).toContainText(f.products[1].code);
+      await evidence(page, info, `newest-first-bays-${viewport.name}`);
+      await page.getByRole("button", { name: "Adjust stock", exact: true }).click();
+      await fillStock(page, "100", "0", "E2E newest-first loss");
+      await expect(page.getByText("Newest first", { exact: true })).toBeVisible();
+      await expect(page.locator(`[id="stock-moisture-${f.products[1].id}"]`)).toBeVisible();
+      await expect(page.locator(`[id="stock-moisture-${f.products[0].id}"]`)).toHaveCount(0);
+      await page.getByRole("button", { name: "Change the sub-bins in this load" }).click();
+      await expect(page.getByRole("button", { name: "Reset to newest first" })).toBeDisabled();
+      await page.getByRole("button", { name: "Use this order", exact: true }).click();
+      await page.getByRole("button", { name: "Save lost mass", exact: true }).click();
+      await expect(page.getByRole("dialog")).toHaveCount(0);
+      const saved = await readOutputStockBrowserFixture(f);
+      expect(saved.balance.beforeAllocations?.find(layer => layer.layerId === f.products[0].id)?.dryMassKg).toBe(900);
+      // The newer product contains 600 kg biochar in 720 kg solids: 100 kg at 0% removes 83.333 kg biochar.
+      expect(saved.balance.beforeAllocations?.find(layer => layer.layerId === f.products[1].id)?.dryMassKg).toBeCloseTo(516.667, 3);
+    });
+  }
 
   test("creates a Pure formulation product with an actual placement date and shows its stock", async ({ adminPage: page, testUsers }, info) => {
     const f = await seedOutputStockBrowserFixture(testUsers.admin.id);

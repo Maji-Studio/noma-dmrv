@@ -127,7 +127,7 @@ function SubBinBay({ subBin, index, percent, nextOut, timeZone }: { subBin: Outp
   );
 }
 
-/** A split bin's sub-bins as bins, oldest first: the first is the next one out. Hover or tap a bin for its details. */
+/** A split bin's sub-bins as bins, in default draw order: the first is the next one out. Hover or tap a bin for its details. */
 export function SubBinBays({ subBins, timeZone, label, capacityKg }: { subBins: OutputSubBin[]; timeZone: string; label: string; capacityKg?: number | null }) {
   const ingredientsKg = subBins.reduce((sum, subBin) => sum + bayIngredientsKg(subBin), 0);
   const waterKg = subBins.reduce((sum, subBin) => sum + bayWaterKg(subBin), 0);

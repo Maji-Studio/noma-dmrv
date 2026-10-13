@@ -34,7 +34,8 @@ operator measurement. Later intake changes do not rewrite that snapshot. Every
 product has a formulation, including Pure biochar.
 
 The shared planner turns measured wet mass and moisture into exact solids. It
-walks eligible layers in FIFO order using each layer's frozen dry-biochar share.
+walks eligible layers in the split bin's default or operator-supplied order,
+using each layer's frozen dry-biochar share; mix bins draw pro rata.
 Exact physical residuals survive independently of gram attribution, preventing
 repeated rounding from authorizing excess consumption. Cumulative source-run
 apportionment stays proportional to the frozen composition and closes every
@@ -50,11 +51,11 @@ from in the order they were emptied, each with its own moisture reading
 reading; the last takes the rest of the one load weight at its reading. If the
 weight never reaches a named sub-bin the draw is refused with "Untick" advice,
 and if the last sub-bin would give more solids than its records hold the save
-is blocked. Without `sources` the draw is oldest first at one
+is blocked. Without `sources` the draw follows the bin's default at one
 reading. API counts stay whole-bin.
 
-Each allocation's `basis_snapshot` records `policy` (`fifo`, `operator_order`
-or `pro_rata`), the operator's `order`, and the `readingPercent` used for
+Each allocation's `basis_snapshot` records `policy` (`fifo`, `lifo`, `operator_order`
+or `pro_rata`), `defaultDrawOrder` (the split-bin setting, null for mix), the operator's `order`, and the `readingPercent` used for
 that layer. A draw from several sub-bins stores its overall moisture as
 1 − solids ÷ wet, which history also shows. The server correction path starts from the saved
 order and readings and may change them, through the same
@@ -96,19 +97,18 @@ measured wet mass, and moisture. Its immutable layer and run allocations determi
 its dry biochar total. Legacy storage-inventory rows are not a stock ledger.
 
 Applications take proportional shares of the saved truck allocation. They do not
-repeat FIFO against the bin. Saved shares feed batch accounting, certification
+repeat the planner against the bin. Saved shares feed batch accounting, certification
 guards, traceability, and transport. Product transport loads use measured wet
 shares, including physical residuals whose dry grams were already attributed.
 
 ## Operator stock sheets
 
 Every bin uses the same stock card and a separate Stock over time card. Split
-output bins show fixed-width bays in oldest-first draw order, wrapping when
+output bins show fixed-width bays in the bin's default draw order, wrapping when
 needed, with a key below. Mix and feedstock bins show one pile. A lone vessel
 fills against the configured capacity and lists its parts beside it. Multiple
 split bays compare wet mass against the largest bay. Without capacity, a lone
-vessel fills its available height. The per-bin default draw order is not yet
-configurable.
+vessel fills its available height. Split bays and Next out follow the bin's configured default draw order.
 
 Adjust stock in the stock card header opens Lost mass directly. There is no
 count action or correction form in the UI. History sits under the chart, groups
@@ -170,3 +170,31 @@ local reset; the migration intentionally supplies no production backfill.
 The regression suite includes pure gram conservation, real PostgreSQL writer
 races and rollback, consumer SQL, and `tests/e2e/output-bin-fifo.spec.ts`. The dated
 execution plan is in `docs/plans/2026-09-14-issue-756-test-plan.md`.
+
+## Addendum (2026-10-13): per-bin default draw order
+
+Split biochar and product bins have a **Default draw order**: **Oldest first**
+(`oldest_first`, the default) or **Newest first** (`newest_first`). The setting
+appears below Stock mode in the form and on the read view. The illustrated
+cards play on hover and keyboard focus; reduced motion shows the settled bay.
+The picker, bays and Next out all start in that order. An operator can still
+supply a different order and readings for one draw.
+
+The default resolves to `fifo` or `lifo` in the shared preview/posting planner,
+including delivery, product creation (`production_draw`), loss and API counts.
+Newest first reverses both physical placement time and posting-sequence ties.
+An explicit `sources` list wins and records `operator_order`. REST/MCP dry runs
+execute the same writer and roll it back, so their stock effects agree with saves.
+Mix remains `pro_rata`; feedstock and ingredient draws are unchanged.
+
+Allocation `basis_snapshot` retains the resolved `policy`, `defaultDrawOrder`,
+manual `order` (null without `sources`), and each layer's `readingPercent`,
+alongside its existing mass and provenance basis. Changing the setting uses the
+bin's existing version check and stock lock, invalidates preview fingerprints,
+and does not rewrite saved allocations. The current setting applies to a new
+backdated draw too; default changes are preferences, not timed merge events.
+
+Migration `0133_flaky_mariko_yashida.sql` adds the non-null `draw_order` column
+and `output_draw_order` enum. Existing rows and seed inserts that omit it get
+`oldest_first`. REST/MCP storage-location reads expose `drawOrder`; there is no
+new public write endpoint for the setting.

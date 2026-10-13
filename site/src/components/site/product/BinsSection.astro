@@ -101,7 +101,7 @@ const STEPS = [
     key: "draw", name: "Draw", num: kg(DRAW), label: "dry biochar drawn",
     text: `Bin A draws the oldest layer first (FIFO): all of ${l1.date}, then part of ${l2.date}. The water in it goes along: ${kg(WATER)}.`,
     rows: [{ sw: "l1", name: l1.date, v: kg(FROM_L1) }, { sw: "l2", name: l2.date, v: kg(FROM_L2) }, { sw: "w", name: "Water", v: kg(WATER) }],
-    aside: "Each bin has its own draw method: oldest first (FIFO), newest first (LIFO), or a share of every layer (mix). Need a different rule? We can set it up for your site.",
+    aside: "Split biochar and product bins default to oldest first (FIFO) or newest first (LIFO). You can change the order for each draw. Mix bins draw a share of every layer.",
   },
   {
     key: "weigh", name: "Weigh", num: kg(WET), label: "on the weighbridge", lit: true,

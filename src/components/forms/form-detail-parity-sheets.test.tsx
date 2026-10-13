@@ -77,7 +77,7 @@ type Arg<F extends (...args: never[]) => unknown, I extends number = 0> = Parame
 const location = { name: "North field", country: "TZ", stateRegion: "Iringa", city: "Mafinga", address: "Plot 4", gpsLatitude: -8.3, gpsLongitude: 35.3, distanceFromFacilityKm: 12, isDefault: true, defaultSoilTemperatureC: 22 };
 
 const storageBin = (type: string, stockMode: string) => as<Arg<typeof storageLocationSheetSections>>({
-  id: `${type}-bin`, facilityId: "facility", type, stockMode, name: `${type} bin`, capacityKg: 5000, storageMethod: "Covered heap", storageDescription: null,
+  id: `${type}-bin`, facilityId: "facility", type, stockMode, drawOrder: "newest_first", name: `${type} bin`, capacityKg: 5000, storageMethod: "Covered heap", storageDescription: null,
   feedstockTypeName: "Maize cobs", formulationName: "Mix",
   feedstockInventory: { currentWetMassKg: 900, pendingWetMassKg: 100, pendingBatchCount: 1, estimatedDryMassKg: 700, estimatedMoisturePercent: 22, feedstockTypes: ["Maize cobs"] },
   biocharInventory: { allocatedToProductsKg: 400, productionRunCount: 3, downstreamFormulations: ["Mix"] },
@@ -155,6 +155,15 @@ const READ_SECTION_CASES: { file: string; name: string; sections: DetailPanelSec
 beforeAll(() => Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true }));
 
 describe("read sheet detail level parity", () => {
+  it("shows the saved default only on split output bin read views", () => {
+    for (const [type, mode] of [["biochar_bin", "split"], ["product_bin", "split"], ["product_bin", "mix"], ["feedstock_bin", "split"]]) {
+      const sections = storageLocationSheetSections(storageBin(type, mode), noop);
+      const order = sections.flatMap(section => section.fields ?? []).find(field => field.label === "Default draw order");
+      if (type !== "feedstock_bin" && mode === "split") expect(order?.value).toBe("Newest first");
+      else expect(order).toBeUndefined();
+    }
+  });
+
   it("covers every read-section builder", () => {
     const builders = sourceFiles()
       .filter(file => /\):\s*DetailPanelSection\[\]/.test(file.text) || file.path.endsWith("-read-sections.tsx"))

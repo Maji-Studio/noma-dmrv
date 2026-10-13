@@ -192,6 +192,21 @@ beforeAll(() => {
 afterAll(() => { vi.unstubAllGlobals(); });
 
 describe("sheet form detail level parity", () => {
+  it.each([
+    ["biochar_bin", "split", true], ["product_bin", "split", true],
+    ["biochar_bin", "mix", false], ["product_bin", "mix", false], ["feedstock_bin", "split", false],
+  ] as const)("shows default draw order only for split output bins (%s, %s)", async (type, stockMode, shown) => {
+    const { simple, detailed } = await renderBothLevels(<StorageLocationForm onSubmit={noop}
+      storageLocation={as({ id: "bin", facilityId: "facility", type, stockMode, drawOrder: "newest_first", name: "Bin" })} />);
+    for (const view of [simple, detailed]) {
+      expect(view.items.includes("field:Default draw order")).toBe(shown);
+      if (shown) {
+        expect(view.text).toContain("Oldest first");
+        expect(view.text).toContain("Newest first");
+      }
+    }
+  });
+
   it("covers every sheet form, or names why a form is not one", () => {
     const forms = sourceFiles().map(file => file.path).filter(path => path.endsWith("-form.tsx"));
     const covered = new Set([...CREATE_CASES, ...EDIT_CASES].map(entry => entry.file));

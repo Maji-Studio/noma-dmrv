@@ -67,6 +67,8 @@ export function StorageLocationQuickAddDialog({
         capacityKg: data.capacityKg ?? null,
         feedstockTypeId: data.feedstockTypeId ?? null,
         formulationId: data.formulationId ?? null,
+        stockMode: data.stockMode,
+        drawOrder: data.drawOrder,
       }),
     onSuccess,
     onClose,

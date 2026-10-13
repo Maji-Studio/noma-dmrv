@@ -74,3 +74,20 @@ describe("stock mode", () => {
     expect(updateStorageLocationSchema.safeParse({ expectedVersion: 1, storageLocationId: FACILITY_ID, type: "feedstock_bin", stockMode: "mix" }).success).toBe(false);
   });
 });
+
+describe("default draw order", () => {
+  const create = { name: "North bay", facilityId: FACILITY_ID, type: "biochar_bin", stockMode: "split" };
+  const update = { storageLocationId: RELATED_ID, expectedVersion: 1 };
+  it.each(["oldest_first", "newest_first"])("carries %s through create and update", (drawOrder) => {
+    expect(storageLocationFormSchema.parse({ ...create, drawOrder }).drawOrder).toBe(drawOrder);
+    expect(updateStorageLocationSchema.parse({ ...update, drawOrder }).drawOrder).toBe(drawOrder);
+  });
+  it("allows omission for seeds and partial updates but rejects null and unknown orders", () => {
+    expect(storageLocationFormSchema.parse(create).drawOrder).toBeUndefined();
+    expect(updateStorageLocationSchema.parse(update).drawOrder).toBeUndefined();
+    for (const drawOrder of [null, "random"]) {
+      expect(storageLocationFormSchema.safeParse({ ...create, drawOrder }).success).toBe(false);
+      expect(updateStorageLocationSchema.safeParse({ ...update, drawOrder }).success).toBe(false);
+    }
+  });
+});

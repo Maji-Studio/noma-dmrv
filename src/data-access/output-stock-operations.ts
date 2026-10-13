@@ -2,9 +2,9 @@ import { db, type DbTransaction } from '@/db';
 import { binMovements, biocharProducts, formulations, productionRuns, storageLocations } from '@/db/schema';
 import type { OrgContext } from '@/lib/auth/server';
 import { ActionConflictError, SafeError } from '@/lib/errors';
-import { add, classifyPlannerFailure, compare, decimal, divide, grams, kilograms, multiply, operatorStockMessage, planOutputStock, rational, readRational, rationalToNumber, SubBinOverdrawError, subtract, UntickSubBinError, PRO_RATA_POLICY, type DrawPolicy, type OutputStockBlocking, type OutputStockLayer, type OutputStockRequest } from '@/lib/output-stock';
+import { add, classifyPlannerFailure, compare, decimal, divide, grams, kilograms, multiply, operatorStockMessage, planOutputStock, rational, readRational, rationalToNumber, SubBinOverdrawError, subtract, UntickSubBinError, type OutputStockBlocking, type OutputStockLayer, type OutputStockRequest } from '@/lib/output-stock';
 import { mixPileName, outputStockEventLabel } from '@/lib/output-stock/labels';
-import { stockModeAt, type OutputStockMode, type StockModeChange } from '@/lib/output-stock/stock-mode';
+import { resolveDrawPolicy, stockModeAt, type OutputStockMode, type StockModeChange } from '@/lib/output-stock/stock-mode';
 import { estimateStock, planReadings, planWetRemovals, withMovement, type LayerMoistureBasis, type PlannedReading } from '@/lib/output-stock/moisture-estimate';
 import { formatFacilityDateTime } from '@/lib/format-utils';
 import { formatMoisturePercent, PERCENT_SCALE } from '@/lib/mass-moisture';
@@ -45,7 +45,7 @@ export async function prepareOutputStock(ctx: OrgContext, raw: OutputStockPrevie
   // A merged bin stays split before its merge, so an entry timed before it is planned as split.
   const modeChanges = await getStockModeChanges(ctx, bin.id, reader);
   const stockMode = stockModeAt(bin.stockMode, modeChanges, input.occurredAt);
-  const policy: DrawPolicy = stockMode === 'mix' ? PRO_RATA_POLICY : 'fifo';
+  const policy = resolveDrawPolicy(stockMode, bin.drawOrder);
   if (sources && stockMode !== 'split') throw new SafeError('Only a split bin takes a sub-bin order.');
   if (!sources && input.moisturePercent == null && !(input.kind === 'count' && input.wetMassKg === 0)) throw new SafeError('Enter the measured moisture.');
   // Reducing a loss restores its own saved provenance, even after a late intake.
@@ -59,7 +59,7 @@ export async function prepareOutputStock(ctx: OrgContext, raw: OutputStockPrevie
   // Layer queries have no row-order contract; metadata updates may reorder them.
   // Hash the same stock identically without changing the planner's layer input.
   const fingerprintLayers = [...layers].sort((a, b) => a.id.localeCompare(b.id));
-  const basisFingerprint = requestFingerprint({ layers: fingerprintLayers, events: events.map(e => ({ id: e.id, sequence: e.sequence })), formulationId: bin.formulationId, occurredAt: input.occurredAt, correctsMovementId: input.correctsMovementId });
+  const basisFingerprint = requestFingerprint({ layers: fingerprintLayers, events: events.map(e => ({ id: e.id, sequence: e.sequence })), formulationId: bin.formulationId, stockMode, drawOrder: stockMode === 'split' ? bin.drawOrder : null, occurredAt: input.occurredAt, correctsMovementId: input.correctsMovementId });
   const productCodes = lane === 'product'
     ? await reader.select({ id: biocharProducts.id, version: biocharProducts.version, code: biocharProducts.code }).from(biocharProducts).where(and(eq(biocharProducts.organizationId, ctx.organizationId), eq(biocharProducts.storageLocationId, bin.id)))
     : [];
