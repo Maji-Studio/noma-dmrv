@@ -83,6 +83,8 @@ describe("production run window validation", () => {
       }],
       feedstockMoisturePercent: 10,
       biocharOutputKg: 20,
+      biocharMoisturePercent: 0,
+      biocharStorageLocationId: "44444444-4444-4444-8444-444444444444",
     });
     expect(parsed.success).toBe(true);
   });

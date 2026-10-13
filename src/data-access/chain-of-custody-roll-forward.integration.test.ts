@@ -52,7 +52,10 @@ describe.skipIf(!available)("run roll-forward PostgreSQL queries", () => {
     await executor.insert(schema.facilities).values({ timezone: "UTC", ...org, id: ids.facility, code: "F", name: "Fixture" });
     await executor.insert(schema.storageLocations).values({ ...org, id: ids.bin, facilityId: ids.facility, code: "BIN", name: "Fixture bin", type: "product_bin" });
     // `outsideRun` is not a batch member but shares the shipped product layer.
-    await executor.insert(schema.productionRuns).values(["run", "outsideRun"].map(key => ({ ...org, id: ids[key], facilityId: ids.facility, code: key, reactorId: randomUUID(), status: "complete" as const, biocharDryMassKg: 1000 })));
+    const [outputBin] = await executor.insert(schema.storageLocations).values({
+      ...org, facilityId: ids.facility, code: "OUT", name: "E2E Run output", type: "biochar_bin",
+    }).returning();
+    await executor.insert(schema.productionRuns).values(["run", "outsideRun"].map(key => ({ ...org, id: ids[key], facilityId: ids.facility, code: key, reactorId: randomUUID(), status: "complete" as const, biocharStorageLocationId: outputBin.id, biocharMoisturePercent: 0, biocharOutputKg: 1000, biocharDryMassKg: 1000 })));
     await executor.insert(schema.formulations).values({ ...org, id: ids.formulation, code: "FORM", name: "Fixture pure", biocharRatio: 1 });
     await executor.insert(schema.biocharProducts).values(["shipped", "stocked", "foreign"].map(label => ({ ...org, id: ids[label], facilityId: ids.facility, code: label, formulationId: ids.formulation, placedAt: new Date("2026-01-01T12:00:00.000Z"), productionDate: new Date("2026-01-01"), massKg: 600 })));
     // A legacy lot: no source bin, no allocation row, linked to the run directly.
