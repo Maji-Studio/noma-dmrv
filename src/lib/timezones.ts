@@ -125,6 +125,8 @@ export function timezonesForCountry(
 const RANK_WORD_EXACT = 0;
 const RANK_WORD_PREFIX = 1;
 const RANK_SUBSTRING = 2;
+/** Shorter tokens match whole words only; a substring hit on 2 letters is noise. */
+const MIN_SUBSTRING_TOKEN_LENGTH = 3;
 const RANK_NONE = Number.POSITIVE_INFINITY;
 
 interface SearchableEntry {
@@ -157,7 +159,7 @@ function rankToken(token: string, fields: readonly string[]): number {
     if (words.includes(token)) best = Math.min(best, RANK_WORD_EXACT);
     else if (words.some((word) => word.startsWith(token))) {
       best = Math.min(best, RANK_WORD_PREFIX);
-    } else if (token.length > 2 && field.includes(token)) {
+    } else if (token.length >= MIN_SUBSTRING_TOKEN_LENGTH && field.includes(token)) {
       best = Math.min(best, RANK_SUBSTRING);
     }
   }

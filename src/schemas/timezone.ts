@@ -13,7 +13,7 @@ import { isValidIanaTimezone } from "@/lib/timezones";
 export const TIMEZONE_REQUIRED_MESSAGE = "Timezone is required";
 export const TIMEZONE_INVALID_MESSAGE = "Choose a timezone from the list.";
 
-/** A canonical IANA zone id the picker offers. */
+/** Any IANA id the catalogue knows, canonical or alias, stored as given. */
 export function ianaTimezoneSchema(requiredMessage = TIMEZONE_REQUIRED_MESSAGE) {
   return z
     .string({ message: requiredMessage })

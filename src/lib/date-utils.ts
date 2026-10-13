@@ -8,10 +8,11 @@
 import { SafeError } from "@/lib/errors";
 
 /**
- * Zone used only to *display* a time whose facility row cannot be found (a
- * facility absent from the loaded list, or deleted). It is not a default: every
+ * Zone used when a facility cannot be resolved (absent from the loaded list, or
+ * deleted): to display times and to read times entered against it. The UI says
+ * so through {@link facilityTimeHelperText}. It is not a default: every
  * facility stores its own zone (`facilities.timezone` is required, with no
- * default), and nothing that attributes a day to a facility may use this.
+ * default), and this value is never written to a facility.
  */
 export const UNKNOWN_FACILITY_TIMEZONE = "UTC";
 

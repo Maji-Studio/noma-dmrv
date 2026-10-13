@@ -224,8 +224,8 @@ describe("resolveFacilityTimezone", () => {
 
   // Edit mode for a run whose facility is not in the context list, and the
   // create form before the facility list has loaded. Falls back to the
-  // `facilities.timezone` column default rather than the browser's zone.
-  it("falls back to the column default for an unknown or absent facility", () => {
+  // unknown-facility zone rather than the browser's zone.
+  it("falls back to the unknown-facility zone for an unknown or absent facility", () => {
     expect(resolveFacilityTimezone(facilities, "facility-z")).toBe(
       UNKNOWN_FACILITY_TIMEZONE,
     );

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatTimezoneLabel } from "@/lib/date-utils";
+import { formatFacilityDate, formatTimezoneLabel } from "@/lib/date-utils";
 import {
   countryCodeFromText,
   findTimezoneEntry,
@@ -38,6 +38,16 @@ describe("isValidIanaTimezone", () => {
   it("rejects unknown, mis-cased, empty and non-string values", () => {
     for (const value of ["Mars/Olympus", "africa/nairobi", "", " UTC", null, undefined, 3]) {
       expect(isValidIanaTimezone(value)).toBe(false);
+    }
+  });
+
+  it("formats every accepted alias, since aliases can be stored", () => {
+    for (const entry of TIMEZONE_ENTRIES) {
+      for (const alias of entry.aliases) {
+        expect(isValidIanaTimezone(alias)).toBe(true);
+        expect(() => formatTimezoneLabel(alias)).not.toThrow();
+        expect(() => formatFacilityDate(new Date(0), alias)).not.toThrow();
+      }
     }
   });
 
