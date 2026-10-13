@@ -132,6 +132,10 @@ export function IsometricFeedstockBrowser({
       >
         {catalogue.data.map((type) => {
           const isImported = importedIds.has(type.id);
+          const certifyHref = isometricRegistry.feedstockType({
+            environment: summary.data.isProduction ? "production" : "sandbox",
+            isometricFeedstockTypeId: type.id,
+          });
           return (
             <li key={type.id} className="flex items-center gap-8 pr-12">
               <button
@@ -170,12 +174,7 @@ export function IsometricFeedstockBrowser({
                       : "Use"}
                 </span>
               </button>
-              <IsometricLink
-                href={isometricRegistry.feedstockType({
-                  environment: summary.data.isProduction ? "production" : "sandbox",
-                  isometricFeedstockTypeId: type.id,
-                })}
-              />
+              {certifyHref && <IsometricLink href={certifyHref} />}
             </li>
           );
         })}

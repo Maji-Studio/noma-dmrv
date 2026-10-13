@@ -223,12 +223,12 @@ describe("isometricRegistry.feedstockType", () => {
     ).toBe("https://to.isometric.com/certify/ftt%20a%2Fb%3Fc");
   });
 
-  it("falls back to the sandbox Certify home on the sandbox host", () => {
+  it("has no link on sandbox", () => {
     expect(
       isometricRegistry.feedstockType({
         environment: "sandbox",
         isometricFeedstockTypeId: "ftt_1CB8GFK691S05XDT",
       }),
-    ).toBe("https://registry.sandbox.isometric.com/account/certify");
+    ).toBeNull();
   });
 });

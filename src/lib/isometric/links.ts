@@ -34,16 +34,16 @@ export const isometricRegistry = {
     if (!minorVersion) return null;
     return `${REGISTRY}/module/${encodeURIComponent(slug)}/${encodeURIComponent(minorVersion)}`;
   },
-  // A feedstock type has no confirmed standalone Certify page on the sandbox
-  // host, so sandbox links to the Certify workspace home on that host and
-  // production uses the redirect service, which resolves the ftt_ id.
+  // Production resolves the ftt_ id through the redirect service. No sandbox
+  // equivalent exists, so sandbox returns null (callers render no link), like
+  // the protocol and module builders.
   feedstockType: (args: {
     environment: IsometricEnvironment;
     isometricFeedstockTypeId: string;
-  }) =>
+  }): string | null =>
     args.environment === "production"
       ? `${CERTIFY_REDIRECT}/${encodeURIComponent(args.isometricFeedstockTypeId)}`
-      : `${CERTIFY_HOSTS.sandbox}/account/certify`,
+      : null,
   // The supplier's view of a project is an environment-specific PRIVATE Certify
   // workspace page (NOT the public /project/{id} registry page, which only
   // exists after credit issuance) — it nests under /account/certify on the same

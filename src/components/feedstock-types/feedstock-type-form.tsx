@@ -229,6 +229,12 @@ export function FeedstockTypeForm({
   const defaultSubmitLabel = isEditMode
     ? "Update feedstock type"
     : "Create feedstock type";
+  const selectedIsometricHref = selectedIsometricFeedstock
+    ? isometricRegistry.feedstockType({
+        environment: certifierSummary.data?.isProduction ? "production" : "sandbox",
+        isometricFeedstockTypeId: selectedIsometricFeedstock.id,
+      })
+    : null;
   const selectedIsometricSummary = selectedIsometricFeedstock && (
     <Notice tone="success" title={`Selected from Isometric: ${selectedIsometricFeedstock.name}`}>
       <div className="flex flex-col gap-2">
@@ -239,12 +245,7 @@ export function FeedstockTypeForm({
               ? ` · ref ${selectedIsometricFeedstock.supplier_reference_id}`
               : ""}
           </span>
-          <IsometricLink
-            href={isometricRegistry.feedstockType({
-              environment: certifierSummary.data?.isProduction ? "production" : "sandbox",
-              isometricFeedstockTypeId: selectedIsometricFeedstock.id,
-            })}
-          />
+          {selectedIsometricHref && <IsometricLink href={selectedIsometricHref} />}
         </p>
         {selectedIsometricNameChanged && (
           <p className="body-caption text-[var(--st-wait)]">

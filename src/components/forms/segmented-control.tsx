@@ -103,7 +103,7 @@ export const SegmentedControl = forwardRef<HTMLInputElement, SegmentedControlPro
                   "body-small text-[var(--color-text-secondary)] transition-colors duration-300",
                   "hover:text-[var(--color-text-primary)]",
                   "peer-[:not(:checked):not(:disabled)]:hover:border-[var(--color-border-primary)]",
-                  "peer-checked:border-[var(--color-interaction)] peer-checked:text-[var(--color-text-primary)]",
+                  "peer-checked:border-[var(--color-interaction)] peer-checked:shadow-[inset_0_0_0_1px_var(--color-interaction)] peer-checked:text-[var(--color-text-primary)]",
                   "forced-colors:peer-checked:border-[Highlight] forced-colors:peer-checked:border-2",
                   "peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-[var(--color-interaction)]",
                   "peer-disabled:opacity-60",

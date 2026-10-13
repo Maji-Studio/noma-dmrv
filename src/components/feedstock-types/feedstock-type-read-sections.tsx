@@ -20,6 +20,12 @@ export function feedstockTypeSheetSections(
   /** Registry environment for the Certify link; sandbox when unknown. */
   isProduction = false,
 ): DetailPanelSection[] {
+  const isometricHref = feedstockType.isometricFeedstockTypeId
+    ? isometricRegistry.feedstockType({
+        environment: isProduction ? "production" : "sandbox",
+        isometricFeedstockTypeId: feedstockType.isometricFeedstockTypeId,
+      })
+    : null;
   return [
     {
       title: "Catalogue",
@@ -34,12 +40,7 @@ export function feedstockTypeSheetSections(
           value: feedstockType.isometricFeedstockTypeId ? (
             <span className="inline-flex items-center gap-4">
               <span className="font-mono">{feedstockType.isometricFeedstockTypeId}</span>
-              <IsometricLink
-                href={isometricRegistry.feedstockType({
-                  environment: isProduction ? "production" : "sandbox",
-                  isometricFeedstockTypeId: feedstockType.isometricFeedstockTypeId,
-                })}
-              />
+              {isometricHref && <IsometricLink href={isometricHref} />}
             </span>
           ) : null,
         },

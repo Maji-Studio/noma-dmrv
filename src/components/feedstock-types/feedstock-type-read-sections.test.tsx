@@ -31,6 +31,12 @@ describe("feedstockTypeSheetSections Isometric link", () => {
     expect(html).toContain('rel="noopener noreferrer"');
   });
 
+  it("renders no link on sandbox", () => {
+    const html = renderToStaticMarkup(<>{isometricField(linked, false)}</>);
+    expect(html).toContain("ftt_1");
+    expect(html).not.toContain("<a");
+  });
+
   it("shows no value for an unlinked record", () => {
     expect(isometricField({ ...linked, isometricFeedstockTypeId: null }, true)).toBeNull();
   });
