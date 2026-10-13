@@ -1,7 +1,7 @@
 /** Sample side-sheet view mode: the sections config for EntitySideSheet. */
 import { TransportLegsSummary } from "@/components/transport-legs";
 import { certificationDetailField } from "@/lib/certification/certify-field-registry";
-import { formatDate, formatDateTime, formatPercent } from "@/lib/format-utils";
+import { formatDate, formatDateTime, formatFacilityDateTime, formatPercent } from "@/lib/format-utils";
 import { formatMoisturePercent, MOISTURE_FIELD_LABEL, PERCENT_SCALE } from "@/lib/mass-moisture";
 import { formatDurabilityOption } from "@/schemas/samples";
 import { SampleDocumentsPanel } from "./sample-documents-panel";
@@ -16,13 +16,24 @@ function formatLabPercent(value: number | null | undefined): string {
   return formatPercent(value, { digits: LAB_PERCENT_FRACTION_DIGITS });
 }
 
+/**
+ * Sampling time on the credit batch facility's clock, the clock it is entered
+ * on (round 7 Q51). Only a legacy row with no batch or run facility falls back
+ * to the viewer's clock.
+ */
+export function formatSamplingTime(sample: Pick<SampleWithRelations, "samplingTime" | "facilityTimezone">): string {
+  return sample.facilityTimezone
+    ? formatFacilityDateTime(sample.samplingTime, sample.facilityTimezone)
+    : formatDateTime(sample.samplingTime);
+}
+
 export function sampleSheetSections(sample: SampleWithRelations): DetailPanelSection[] {
   return [
     {
       title: "Sample information",
       fields: [
         { label: "Credit batch", value: sample.creditBatchCode },
-        { label: "Sampling time", value: formatDateTime(sample.samplingTime) },
+        { label: "Sampling time", value: formatSamplingTime(sample) },
         { label: "Analysis date", value: formatDate(sample.analysisDate) },
         { label: "Lab name", value: sample.labName },
         { label: "Lab accreditation", value: sample.labAccreditation },

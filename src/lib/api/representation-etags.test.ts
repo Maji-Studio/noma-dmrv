@@ -1,10 +1,14 @@
 import { expect, it } from "vitest";
-import { driverEtag, facilityEtag, feedstockEtag, feedstockTypeEtag, storageLocationEtag, supplierEtag, vehicleEtag, productionRunEtag, biocharProductEtag, formulationEtag } from "./representation-etags";
+import { driverEtag, facilityEtag, feedstockEtag, feedstockTypeEtag, storageLocationEtag, supplierEtag, vehicleEtag, productionRunEtag, biocharProductEtag, formulationEtag, labSampleEtag, creditBatchEtag } from "./representation-etags";
 
 it("builds strong ETags from row version and representation revision", () => {
-  for (const etag of [driverEtag, facilityEtag, feedstockEtag, feedstockTypeEtag, storageLocationEtag, supplierEtag, vehicleEtag, biocharProductEtag, formulationEtag]) {
+  for (const etag of [driverEtag, feedstockEtag, feedstockTypeEtag, storageLocationEtag, supplierEtag, vehicleEtag, biocharProductEtag, formulationEtag, labSampleEtag, creditBatchEtag]) {
     expect(etag({ version: 7 })).toBe('"7.1"');
   }
+});
+
+it("uses revision 2 for the facility representation that gained durabilityOption", () => {
+  expect(facilityEtag({ version: 7 })).toBe('"7.2"');
 });
 
 it("uses revision 2 for the production run representation with reference IDs", () => {

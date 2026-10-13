@@ -22,6 +22,7 @@ const UPDATE_INPUTS: Record<string, unknown> = {
   update_production_run: { productionRunId: FEEDSTOCK_ID, expectedVersion: INITIAL_VERSION },
   update_feedstock: { feedstockId: FEEDSTOCK_ID, expectedVersion: INITIAL_VERSION },
   update_biochar_product: { biocharProductId: FEEDSTOCK_ID, expectedVersion: INITIAL_VERSION },
+  update_lab_sample: { labSampleId: FEEDSTOCK_ID, expectedVersion: INITIAL_VERSION },
 };
 
 describe.each(Object.entries(operationRegistry))("registry operation %s", (key, operation) => {

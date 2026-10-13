@@ -14,4 +14,11 @@ it("offers production permissions and defaults new workflow reads on and mutatio
   expect(API_KEY_DEFAULT_SCOPES).toEqual(expect.arrayContaining(["biochar-products:read", "formulations:read"]));
   expect(API_KEY_DEFAULT_SCOPES).not.toContain("biochar-products:write");
   expect(API_PERMISSION_ROWS.flatMap((row) => row.scopes).some((scope) => scope.startsWith("stock-corrections"))).toBe(false);
+
+  expect(API_PERMISSION_ROWS).toContainEqual({ entity: "lab-samples", label: "Lab samples", scopes: ["lab-samples:read", "lab-samples:write", "lab-samples:delete"] });
+  expect(API_PERMISSION_ROWS).toContainEqual({ entity: "credit-batches", label: "Credit batches", scopes: ["credit-batches:read"] });
+  expect(API_KEY_DEFAULT_SCOPES).toEqual(expect.arrayContaining(["lab-samples:read", "credit-batches:read"]));
+  expect(API_KEY_DEFAULT_SCOPES).not.toContain("lab-samples:write");
+  expect(API_KEY_DEFAULT_SCOPES).not.toContain("lab-samples:delete");
+  expect(permissionSummary(["lab-samples:read", "lab-samples:write"])).toBe("Lab samples: Read, Write");
 });

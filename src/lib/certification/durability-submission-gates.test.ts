@@ -245,7 +245,7 @@ describe("evaluateDurabilitySubmissionGates (D3 fail-closed blocks, credit-batch
     ).toBe(true);
   });
 
-  it("counts a post-window sample as usable and warns to confirm stored-material sampling", () => {
+  it("counts a post-window sample as usable and warns to confirm its pre-storage condition", () => {
     const r = evaluateDurabilitySubmissionGates([
       gateBatch({
         replicates: eligibleTriplet,
@@ -259,8 +259,14 @@ describe("evaluateDurabilitySubmissionGates (D3 fail-closed blocks, credit-batch
 
     expect(r.ok).toBe(true);
     expect(r.blockers.every((b) => !/replicate/.test(b))).toBe(true);
-    expect(r.warnings.some((w) => /SAM-26-003/.test(w) && /stored material/.test(w) && /registry/.test(w))).toBe(true);
-    // The stored-material advisory is the ONLY warning — no distribution note.
+    // Protocol v1.1 asks for the final pre-storage condition and pre-blend sampling; it permits no "stored material" route.
+    expect(r.warnings).toEqual([
+      "Sample SAM-26-003 was taken on 2026-07-20, after credit batch CB-1's production window, 2026-06-01 to 2026-06-30. "
+        + "§8.3.1 says biochar should be sampled in its final pre-storage condition, after processing and at typical moisture levels, "
+        + "and before blending when it is applied with other substances such as compost. Confirm this Sample represents the batch in that condition.",
+    ]);
+    expect(r.warnings.join(" ")).not.toMatch(/stored material|registry|[\u2013\u2014]/);
+    // The pre-storage advisory is the ONLY warning, with no distribution note.
     expect(r.warnings).toHaveLength(1);
   });
 

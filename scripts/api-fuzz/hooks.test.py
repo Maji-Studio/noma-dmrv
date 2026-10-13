@@ -25,13 +25,14 @@ FEEDSTOCK_ETAG = '"2.3"'
 RUN_ETAG = '"4.5"'
 PRODUCT_BIN_ID = "33333333-3333-4333-8333-333333333333"
 PRODUCT_ETAG = '"6.7"'
-TARGET_KINDS = ("FACILITY", "SUPPLIER", "FEEDSTOCK_TYPE", "BIN", "DRIVER", "VEHICLE", "FEEDSTOCK", "REACTOR", "PRODUCTION_RUN", "BIOCHAR_BIN", "BIOCHAR_PRODUCT", "PURE_FORMULATION")
+LAB_SAMPLE_ETAG = '"8.9"'
+TARGET_KINDS = ("FACILITY", "SUPPLIER", "FEEDSTOCK_TYPE", "BIN", "DRIVER", "VEHICLE", "FEEDSTOCK", "REACTOR", "PRODUCTION_RUN", "BIOCHAR_BIN", "BIOCHAR_PRODUCT", "PURE_FORMULATION", "CREDIT_BATCH", "LAB_SAMPLE")
 for kind in TARGET_KINDS:
     os.environ[f"API_FUZZ_{kind}_ID"] = FIXTURE_ID
 os.environ.update(
     API_FUZZ_BASE_URL="http://localhost/api/v1", API_FUZZ_KEY="offline-placeholder",
     API_FUZZ_FEEDSTOCK_ETAG=FEEDSTOCK_ETAG, API_FUZZ_PRODUCTION_RUN_ETAG=RUN_ETAG, API_FUZZ_RUN_BIN_ID=RUN_BIN_ID,
-    API_FUZZ_PRODUCT_BIN_ID=PRODUCT_BIN_ID, API_FUZZ_BIOCHAR_PRODUCT_ETAG=PRODUCT_ETAG,
+    API_FUZZ_PRODUCT_BIN_ID=PRODUCT_BIN_ID, API_FUZZ_BIOCHAR_PRODUCT_ETAG=PRODUCT_ETAG, API_FUZZ_LAB_SAMPLE_ETAG=LAB_SAMPLE_ETAG,
 )
 config = SchemathesisConfig.from_path("schemathesis.toml")
 with patch("datetime.datetime", wraps=datetime) as fixture_clock:
@@ -50,9 +51,10 @@ class HarnessTests(unittest.TestCase):
             operation = result.ok()
             cases = ExamplesGenerator(operation=operation, as_strategy_kwargs={}, feedback=FeedbackSources(), fill_missing=False)
             seeded.extend(case for case in cases if case.meta.phase.data.description.startswith("Seeded fixture"))
-        # 19 by-id targets (the stock-movement create is one of them), the feedstock
-        # create and its oversize twin, the run create, the product create.
-        self.assertEqual(len(seeded), 23)
+        # 23 by-id targets (the stock-movement create is one of them), the feedstock
+        # create and its oversize twin, the run create, the product create, the
+        # lab sample create.
+        self.assertEqual(len(seeded), 28)
         create = next(case for case in seeded if case.operation.label == "POST /feedstocks" and case.meta.generation.mode.is_positive)
         self.assertEqual(create.query, {"dryRun": "true"})
         self.assertTrue(create.headers["Idempotency-Key"])
@@ -108,6 +110,43 @@ class HarnessTests(unittest.TestCase):
         self.assertLess(abs(age - timedelta(minutes=30)), timedelta(minutes=5))
         original = operation.definition.raw["requestBody"]["content"]["application/json"]["example"]
         self.assertNotEqual(original["facilityId"], FIXTURE_ID)
+
+    def test_seeded_lab_sample_create_is_a_valid_dry_run_on_the_seeded_batch(self):
+        operation = schema["/lab-samples"]["POST"]
+        cases = ExamplesGenerator(operation=operation, as_strategy_kwargs={}, feedback=FeedbackSources(), fill_missing=False)
+        seeded = [case for case in cases if case.meta.phase.data.description.startswith("Seeded fixture")]
+        self.assertEqual(len(seeded), 1)
+        case = seeded[0]
+        self.assertTrue(case.meta.generation.mode.is_positive)
+        self.assertEqual(case.query, {"dryRun": "true"})
+        self.assertTrue(case.headers["Idempotency-Key"])
+        self.assertEqual(case.body["creditBatchId"], FIXTURE_ID)
+        # A sampling instant with an offset, shortly before now and never in the future.
+        sampled = datetime.fromisoformat(case.body["samplingTime"])
+        self.assertIsNotNone(sampled.utcoffset())
+        age = datetime.now(timezone.utc) - sampled
+        self.assertLess(abs(age - timedelta(minutes=30)), timedelta(minutes=5))
+        # The published example carries only 200-year fields: no R0 or TGA evidence.
+        for field in ("randomReflectanceR0Percent", "sReflectanceFraction", "residualCarbonPercent", "reactiveCarbonPercent"):
+            self.assertNotIn(field, case.body)
+        original = operation.definition.raw["requestBody"]["content"]["application/json"]["example"]
+        self.assertNotEqual(original["creditBatchId"], FIXTURE_ID)
+
+    def test_seeded_lab_sample_patch_and_delete_use_the_etag_and_a_real_change(self):
+        patch_operation = schema["/lab-samples/{idOrCode}"]["PATCH"]
+        examples = []
+        hook("before_add_examples")(HookContext(operation=patch_operation), examples)
+        self.assertEqual(len(examples), 1)
+        self.assertEqual(examples[0].headers["If-Match"], LAB_SAMPLE_ETAG)
+        self.assertEqual(examples[0].query, {"dryRun": "true"})
+        self.assertEqual(examples[0].path_parameters, {"idOrCode": FIXTURE_ID})
+        self.assertTrue(examples[0].body)
+        delete_examples = []
+        hook("before_add_examples")(HookContext(operation=schema["/lab-samples/{idOrCode}"]["DELETE"]), delete_examples)
+        self.assertEqual(len(delete_examples), 1)
+        self.assertEqual(delete_examples[0].headers["If-Match"], LAB_SAMPLE_ETAG)
+        self.assertEqual(delete_examples[0].query, {"dryRun": "true"})
+        self.assertEqual(delete_examples[0].body, {})
 
     def test_seeded_movement_create_pins_the_bin_and_posts_a_recent_loss(self):
         operation = schema["/storage-locations/{idOrCode}/stock-movements"]["POST"]
@@ -183,15 +222,15 @@ class HarnessTests(unittest.TestCase):
             self.assertFalse("If-Match" in for_operation(schema.config, operation=operation).headers)
             if operation.method.upper() in {"PATCH", "DELETE"}:
                 self.assertEqual(examples[0].query, {"dryRun": "true"})
-                etag = {"/production-runs/": RUN_ETAG, "/biochar-products/": PRODUCT_ETAG}.get(
-                    next((prefix for prefix in ("/production-runs/", "/biochar-products/") if operation.path.startswith(prefix)), ""), FEEDSTOCK_ETAG)
+                etags = {"/production-runs/": RUN_ETAG, "/biochar-products/": PRODUCT_ETAG, "/lab-samples/": LAB_SAMPLE_ETAG}
+                etag = etags.get(next((prefix for prefix in etags if operation.path.startswith(prefix)), ""), FEEDSTOCK_ETAG)
                 self.assertEqual(examples[0].headers["If-Match"], etag)
             count += 1
-        self.assertEqual(count, 19)
+        self.assertEqual(count, 23)
 
     def test_seeded_positive_examples_must_return_2xx(self):
         check = hook("after_load_schema").__globals__["seeded_example_success"]
-        for label in ("GET /feedstocks/{idOrCode}", "GET /production-runs/{idOrCode}", "PATCH /production-runs/{idOrCode}", "GET /biochar-products/{idOrCode}", "PATCH /biochar-products/{idOrCode}"):
+        for label in ("GET /feedstocks/{idOrCode}", "GET /production-runs/{idOrCode}", "PATCH /production-runs/{idOrCode}", "GET /biochar-products/{idOrCode}", "PATCH /biochar-products/{idOrCode}", "GET /credit-batches/{idOrCode}", "GET /lab-samples/{idOrCode}", "PATCH /lab-samples/{idOrCode}", "DELETE /lab-samples/{idOrCode}"):
             method, path = label.split(" ")
             operation = schema[path][method]
             examples = []
@@ -202,7 +241,7 @@ class HarnessTests(unittest.TestCase):
             for status in (301, 400, 401, 404, 409, 422, 428, 500):
                 with self.assertRaisesRegex(AssertionError, "must return 2xx"):
                     check(None, SimpleNamespace(status_code=status), case)
-        for label in ("POST /feedstocks", "POST /production-runs", "POST /biochar-products", "POST /storage-locations/{idOrCode}/stock-movements"):
+        for label in ("POST /feedstocks", "POST /production-runs", "POST /biochar-products", "POST /lab-samples", "POST /storage-locations/{idOrCode}/stock-movements"):
             method, path = label.split(" ")
             examples = []
             hook("before_add_examples")(HookContext(operation=schema[path][method]), examples)
@@ -228,6 +267,22 @@ class HarnessTests(unittest.TestCase):
             hook("before_call")(HookContext(operation=operation), case)
             self.assertEqual("cursor" in case.query, mode.is_negative)
             self.assertEqual(case.query["q"], "wood")
+
+    def test_only_positive_creates_regain_a_dropped_idempotency_key(self):
+        operation = schema["/lab-samples"]["POST"]
+        for mode in GenerationMode:
+            case = operation.Case(headers={}, body={})
+            case._meta = CaseMetadata(generation=GenerationInfo(time=0, mode=mode), components={}, phase=PhaseInfo.coverage(CoverageScenario.DEFAULT_POSITIVE_TEST, "offline test"))
+            hook("before_call")(HookContext(operation=operation), case)
+            self.assertEqual("Idempotency-Key" in case.headers, mode.is_positive)
+        kept = operation.Case(headers={"idempotency-key": "kept"}, body={})
+        kept._meta = CaseMetadata(generation=GenerationInfo(time=0, mode=GenerationMode.POSITIVE), components={}, phase=PhaseInfo.coverage(CoverageScenario.DEFAULT_POSITIVE_TEST, "offline test"))
+        hook("before_call")(HookContext(operation=operation), kept)
+        self.assertEqual(kept.headers, {"idempotency-key": "kept"})
+        patch = schema["/lab-samples/{idOrCode}"]["PATCH"].Case(headers={}, body={})
+        patch._meta = kept._meta
+        hook("before_call")(HookContext(operation=patch.operation), patch)
+        self.assertNotIn("Idempotency-Key", patch.headers)
 
     @settings(max_examples=5, database=None, deadline=None)
     @given(schema["/facilities"]["GET"].as_strategy(generation_mode=GenerationMode.POSITIVE))

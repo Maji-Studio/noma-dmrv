@@ -70,8 +70,9 @@ function postWindowNote(
     summary: `${formatCount(samples.length, "Sample")} ${sampleVerb} taken after production ended.`,
     detail:
       `${sampleSubject} ${sampleVerb} sampled ${samplingRange}, ` +
-      `after ${first.batchCode}'s production window (${productionWindow}). Under §8.3.1, ` +
-      "stored-material Samples must represent the batch's full range; confirm this with the registry.",
+      `after ${first.batchCode}'s production window (${productionWindow}). ` +
+      "§8.3.1 asks for Samples of the biochar in its final pre-storage condition, and before blending when it is applied with other substances. " +
+      `Confirm ${samples.length === 1 ? "this Sample represents" : "these Samples represent"} the batch in that condition.`,
   };
 }
 
@@ -122,7 +123,7 @@ function knownWarningNote(
 
 /**
  * Converts technical submission warnings into short operator notes. Repeated
- * stored-material warnings for one batch become a single note; protocol detail
+ * after-window warnings for one batch become a single note; protocol detail
  * remains available to the UI through the note's tooltip text.
  */
 export function buildSubmissionWarningNotes(

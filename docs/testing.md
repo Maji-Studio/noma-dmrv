@@ -81,8 +81,9 @@ Re-run the migrate line after pulling new migrations. A worktree made with
 
 ## Agent evaluation
 
-`pnpm eval:mcp` runs two feedstock intake requests and two chained production-run
-requests through headless Claude Code and the local MCP server. It needs Docker with the test database schema ready,
+`pnpm eval:mcp` runs two feedstock intake requests, two chained production-run
+requests and two lab sample requests (three replicates; a replicate without organic
+carbon) through headless Claude Code and the local MCP server. It needs Docker with the test database schema ready,
 the worktree's `.env.test`, and a logged-in Claude Code subscription. It refuses
 non-test databases, creates a fresh organization and API key per case, and scores
 the stored rows, bin stock, audit transport and tool-call count. Case 2 follows

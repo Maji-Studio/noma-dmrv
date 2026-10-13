@@ -16,12 +16,8 @@
  * `assertDryMassBalance` in ../production-runs/mutations.ts merges the same way.
  */
 import type { samples } from "@/db/schema";
-import { SafeError } from "@/lib/errors";
-import {
-  CARBON_RECONCILIATION_TOLERANCE_PERCENTAGE_POINTS,
-  COMBINED_CARBON_EXCEEDS_TOTAL_MESSAGE,
-  ORGANIC_CARBON_EXCEEDS_TOTAL_MESSAGE,
-} from "@/schemas/samples";
+import { sampleCarbonReconciliationError } from "@/lib/sample-domain-errors";
+import { CARBON_RECONCILIATION_TOLERANCE_PERCENTAGE_POINTS } from "@/schemas/samples";
 
 export function assertCarbonReconciliation(
   existing: Pick<
@@ -56,7 +52,7 @@ export function assertCarbonReconciliation(
     organic != null &&
     organic - total > CARBON_RECONCILIATION_TOLERANCE_PERCENTAGE_POINTS
   ) {
-    throw new SafeError(ORGANIC_CARBON_EXCEEDS_TOTAL_MESSAGE);
+    throw sampleCarbonReconciliationError("organicCarbonPercent");
   }
   if (
     total != null &&
@@ -65,6 +61,6 @@ export function assertCarbonReconciliation(
     organic + inorganic - total >
       CARBON_RECONCILIATION_TOLERANCE_PERCENTAGE_POINTS
   ) {
-    throw new SafeError(COMBINED_CARBON_EXCEEDS_TOTAL_MESSAGE);
+    throw sampleCarbonReconciliationError("inorganicCarbonPercent");
   }
 }

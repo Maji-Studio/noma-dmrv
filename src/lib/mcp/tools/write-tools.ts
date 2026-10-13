@@ -2,6 +2,7 @@ import { controls, parseControls, writeOptions } from "./write-controls";
 import { productionRunWriteTools } from "./production-run-tools";
 import { biocharProductWriteTools } from "./biochar-product-tools";
 import { outputStockWriteTools } from "./output-stock-tools";
+import { labSampleWriteTools } from "./lab-sample-tools";
 import { FEEDSTOCK_REPRESENTATION_REVISION } from "@/config/api-rest";
 import { z } from "zod";
 import type { ApiRouteContext } from "@/lib/api/route";
@@ -85,6 +86,7 @@ export const writeTools: WriteTool[] = [
   ...productionRunWriteTools,
   ...biocharProductWriteTools,
   ...outputStockWriteTools,
+  ...labSampleWriteTools,
 ];
 
 async function mutate(context: ApiRouteContext, raw: unknown, kind: "update" | "delete") {

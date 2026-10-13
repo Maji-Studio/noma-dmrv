@@ -53,6 +53,13 @@ Format checks are **top-level**, not chained. The chained forms still compile bu
 | `z.string().datetime()` | `z.iso.datetime()` |
 | `z.string().date()` | `z.iso.date()` |
 
+New UUID inputs use `uuidSchema(message?)` from `@/schemas/helpers`, not bare
+`z.uuid()`: it lowercases the id, so ids compare and fingerprint the same way
+rows come back, and the published schema is unchanged. Keep
+`.uuid(msg).toLowerCase()` on existing chains such as
+`z.string().min(1, …).uuid(…)`: piping a chained check through `uuidSchema`
+drops `format: uuid` from the OpenAPI document.
+
 `z.iso.datetime()` accepts UTC `Z` only by default — exactly what `Date.prototype.toISOString()` emits. Pass `{ offset: true }` for numeric offsets, `{ local: true }` for none. Validate timestamp **format** at parse time rather than guarding `Number.isNaN(new Date(x).getTime())` downstream.
 
 `z.ZodIssueCode.custom` is still the in-repo idiom for `ctx.addIssue` under Zod 4 (see `src/schemas/helpers.ts`, `src/schemas/samples.ts`, `src/config/env.ts`) — do not churn those call sites.
@@ -213,6 +220,12 @@ and shown on the facility clock, like production runs
 - `stockEventInstantSchema()` (`@/schemas/helpers`) validates the wire value.
 - Read surfaces format it on the same clock; see
   [design-system.md](./design-system.md#date-and-time-display).
+
+A lab sample's sampling time uses the same picker on the clock of its credit
+batch's facility (round 7 Q51): the zone comes from the batch durability
+summary, with the context facility's clock until that loads. The server
+action schema takes a `Date` or an instant with an explicit offset, never a
+bare wall clock.
 
 ## Components
 

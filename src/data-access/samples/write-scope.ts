@@ -1,0 +1,238 @@
+/**
+ * The lock order every lab Sample writer shares, and the checks that read the
+ * locked credit batch (Phase 5a, plan review items 1 and 4):
+ *
+ * 1. Certification artifacts: the union of every lineage the write touches
+ *    (the Sample's own, the target batch on a create or move), one sorted pass.
+ * 2. Credit batch rows `FOR UPDATE`, sorted by id. Membership writers lock the
+ *    batch before its samples, and the sample's batch FK is checked on write.
+ * 3. The Sample row `FOR UPDATE`.
+ * 4. Lineage re-resolved against the artifacts held. A Removal assigned while
+ *    this writer waited refuses the write; its artifact is never locked late.
+ *
+ * Batch existence, archive state, facility, window and zone are all read after
+ * step 2, so a batch archive, delete or window edit either finished first and
+ * is seen, or waits for this write. Every read goes through `tx`: a global
+ * `db` read inside a runner transaction waits on itself at pool size 1.
+ */
+
+import { and, eq, inArray } from "drizzle-orm";
+import type { DbTransaction } from "@/db";
+import { creditBatches, creditBatchProductionRuns, facilities, samples } from "@/db/schema";
+import type { OrgContext } from "@/lib/auth/server";
+import { formatFacilityDate } from "@/lib/date-utils";
+import { withFeedstockErrors } from "@/lib/feedstock-domain-errors";
+import { hasLocalEventInstant, resolveEventInstant } from "@/lib/operations/event-times";
+import {
+  sampleBeforeBatchWindowError,
+  sampleCreditBatchArchived,
+  sampleCreditBatchNotFound,
+  sampleFacilityZoneMissingError,
+  sampleTierEvidenceError,
+} from "@/lib/sample-domain-errors";
+import type { EventInstant } from "@/schemas/event-instant";
+import {
+  assertLockedLineagesAllowMutation,
+  CertificationLineageChangedError,
+  lockCertifiedLineageArtifacts,
+  type CertifiedLineageCheck,
+} from "../certification-lineage-guards";
+import { staleRowVersion } from "../row-version";
+import { requireOrgScope } from "../utils";
+
+export type LockedSampleRow = typeof samples.$inferSelect;
+
+export interface LockedSampleBatch {
+  id: string;
+  code: string;
+  facilityId: string;
+  startDate: string;
+  endDate: string;
+  sampling: (typeof creditBatches.$inferSelect)["sampling"];
+  archivedAt: Date | null;
+}
+
+export interface SampleWriteScope {
+  batches: ReadonlyMap<string, LockedSampleBatch>;
+  /** Every batch id this writer asked to lock, found or not. */
+  lockedBatchIds: ReadonlySet<string>;
+  /** The locked Sample on an update or delete; undefined when it is gone. */
+  sample?: LockedSampleRow;
+}
+
+/** The batch's facility as a Sample write needs it: the zone and the declared tier. */
+export interface SampleBatchFacility {
+  timeZone: string | null;
+  durabilityOption: "200_year" | "1000_year" | null;
+}
+
+/** Lineage refusals are `certification_locked` across the runner boundary; the copy is unchanged. */
+function asCertificationLocked<T>(work: () => Promise<T>): Promise<T> {
+  return withFeedstockErrors(work, "certification_locked");
+}
+
+/** Steps 1 to 4 above. `creditBatchIds` may hold nulls (legacy batchless rows) and repeats. */
+export async function lockSampleWriteScope(
+  ctx: OrgContext,
+  tx: DbTransaction,
+  args: { lineage: CertifiedLineageCheck[]; creditBatchIds: (string | null | undefined)[]; sampleId?: string },
+): Promise<SampleWriteScope> {
+  requireOrgScope(ctx);
+  const lockedKeys = await asCertificationLocked(() => lockCertifiedLineageArtifacts(ctx, tx, args.lineage.map((check) => check.target)));
+  const batchIds = [...new Set(args.creditBatchIds.filter((id): id is string => !!id))].sort();
+  const batchRows = batchIds.length === 0 ? [] : await tx
+    .select({
+      id: creditBatches.id, code: creditBatches.code, facilityId: creditBatches.facilityId,
+      startDate: creditBatches.startDate, endDate: creditBatches.endDate,
+      sampling: creditBatches.sampling, archivedAt: creditBatches.archivedAt,
+    })
+    .from(creditBatches)
+    .where(and(inArray(creditBatches.id, batchIds), eq(creditBatches.organizationId, ctx.organizationId)))
+    .orderBy(creditBatches.id)
+    .for("update");
+  const [sample] = args.sampleId === undefined ? [] : await tx
+    .select()
+    .from(samples)
+    .where(and(eq(samples.id, args.sampleId), eq(samples.organizationId, ctx.organizationId)))
+    .for("update");
+  await asCertificationLocked(() => assertLockedLineagesAllowMutation(ctx, tx, lockedKeys, args.lineage));
+  return { batches: new Map(batchRows.map((batch) => [batch.id, batch])), lockedBatchIds: new Set(batchIds), sample };
+}
+
+/** A locked batch a Sample may be written onto: present in the organization and not archived (round 7 Q56). */
+export function requireWritableBatch(scope: SampleWriteScope, creditBatchId: string): LockedSampleBatch {
+  const batch = scope.batches.get(creditBatchId);
+  if (!batch) throw sampleCreditBatchNotFound();
+  if (batch.archivedAt) throw sampleCreditBatchArchived(batch.code);
+  return batch;
+}
+
+export async function readSampleBatchFacility(ctx: OrgContext, tx: DbTransaction, batch: LockedSampleBatch): Promise<SampleBatchFacility> {
+  requireOrgScope(ctx);
+  const [facility] = await tx
+    .select({ timeZone: facilities.timezone, durabilityOption: facilities.durabilityOption })
+    .from(facilities)
+    .where(and(eq(facilities.id, batch.facilityId), eq(facilities.organizationId, ctx.organizationId)));
+  return { timeZone: facility?.timeZone ?? null, durabilityOption: facility?.durabilityOption ?? null };
+}
+
+function isKnownTimeZone(timeZone: string): boolean {
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** The zone the batch's sampling calendar runs on; a missing or unknown zone refuses, never falls back to UTC. */
+export function requireBatchTimeZone(batch: LockedSampleBatch, facility: SampleBatchFacility): string {
+  const timeZone = facility.timeZone?.trim();
+  if (!timeZone || !isKnownTimeZone(timeZone)) throw sampleFacilityZoneMissingError(batch.code);
+  return timeZone;
+}
+
+/**
+ * Resolves `samplingTime` in the locked batch facility's zone and refuses a
+ * sampling day before the batch's production window (on the same calendar).
+ * Sampling after the window stays allowed; submission warns on it.
+ */
+export function resolveSamplingTimeForBatch(value: EventInstant, batch: LockedSampleBatch, facility: SampleBatchFacility): Date {
+  const timeZone = requireBatchTimeZone(batch, facility);
+  const samplingTime = resolveEventInstant(value, hasLocalEventInstant(value) ? timeZone : undefined, ["samplingTime"]);
+  const samplingDay = formatFacilityDate(samplingTime, timeZone);
+  if (samplingDay < batch.startDate) throw sampleBeforeBatchWindowError(samplingDay, batch);
+  return samplingTime;
+}
+
+export interface SampleTierEvidence {
+  randomReflectanceR0Percent: number | null;
+  sReflectanceFraction: number | null;
+  reactiveCarbonPercent: number | null;
+  residualCarbonPercent: number | null;
+}
+
+/**
+ * The 1,000-year evidence invariant, judged on the tier of the locked batch's
+ * facility, never the form's mirror of it (issue #309, PR #336). The facility
+ * tier itself is not locked here; that residual race is tracked separately.
+ */
+export function assertBatchTierEvidence(facility: SampleBatchFacility, values: SampleTierEvidence): void {
+  if (facility.durabilityOption !== "1000_year") return;
+  if (values.randomReflectanceR0Percent == null) throw sampleTierEvidenceError("randomReflectanceR0Percent");
+  if (values.reactiveCarbonPercent == null && values.residualCarbonPercent == null) throw sampleTierEvidenceError("residualCarbonPercent");
+  if (values.sReflectanceFraction == null) throw sampleTierEvidenceError("sReflectanceFraction");
+}
+
+/** How an existing Sample reaches credit batches: directly, and through its legacy run's batch. */
+export interface SampleLinks {
+  creditBatchId: string | null;
+  productionRunId: string | null;
+  /** Every batch the Sample's certification lineage can follow, direct and legacy fallback. */
+  lineageBatchIds: string[];
+}
+
+async function lineageBatchIds(ctx: OrgContext, tx: DbTransaction, link: { creditBatchId: string | null; productionRunId: string | null }): Promise<string[]> {
+  requireOrgScope(ctx);
+  const ids = link.creditBatchId ? [link.creditBatchId] : [];
+  if (link.productionRunId) {
+    const runBatches = await tx.select({ creditBatchId: creditBatchProductionRuns.creditBatchId }).from(creditBatchProductionRuns)
+      .where(and(eq(creditBatchProductionRuns.productionRunId, link.productionRunId), eq(creditBatchProductionRuns.organizationId, ctx.organizationId)));
+    ids.push(...runBatches.map((row) => row.creditBatchId));
+  }
+  return [...new Set(ids)];
+}
+
+/**
+ * Unlocked read of the batches to lock for an existing Sample. The lineage
+ * guard follows the legacy run link as a fallback (`certification-lineage-guards.ts`),
+ * so the run's batch is locked too, not only the direct one.
+ */
+export async function readSampleLinks(ctx: OrgContext, tx: DbTransaction, sampleId: string): Promise<SampleLinks | undefined> {
+  requireOrgScope(ctx);
+  const [link] = await tx.select({ creditBatchId: samples.creditBatchId, productionRunId: samples.productionRunId }).from(samples)
+    .where(and(eq(samples.id, sampleId), eq(samples.organizationId, ctx.organizationId)));
+  return link && { ...link, lineageBatchIds: await lineageBatchIds(ctx, tx, link) };
+}
+
+/**
+ * After the locks: the locked Sample still has the links that were read, and
+ * every batch they reach is held. A changed link is a stale version; a run
+ * that joined another batch meanwhile is a lineage change, refused rather than
+ * locked late.
+ */
+export async function assertSampleLinksHeld(ctx: OrgContext, tx: DbTransaction, scope: SampleWriteScope, sampleId: string, read: SampleLinks): Promise<void> {
+  requireOrgScope(ctx);
+  const locked = scope.sample;
+  if (!locked) return;
+  if (locked.creditBatchId !== read.creditBatchId || locked.productionRunId !== read.productionRunId) throw staleRowVersion("sample", sampleId);
+  const reached = await lineageBatchIds(ctx, tx, locked);
+  if (reached.some((id) => !scope.lockedBatchIds.has(id))) {
+    await asCertificationLocked(async () => { throw new CertificationLineageChangedError(); });
+  }
+}
+
+/**
+ * For a child write under a Sample (a transport leg): the Sample's full lock
+ * scope (its artifacts, every batch its lineage reaches, then the Sample) and
+ * the lineage re-checked under those locks, so a Removal assigned while the
+ * child waited refuses it, and a concurrent Sample delete either finished
+ * first (the Sample is gone) or waits for the child.
+ */
+export async function lockSampleParent(
+  ctx: OrgContext,
+  tx: DbTransaction,
+  sampleId: string,
+  lineage: Omit<CertifiedLineageCheck, "target">,
+): Promise<LockedSampleRow | undefined> {
+  requireOrgScope(ctx);
+  const links = await readSampleLinks(ctx, tx, sampleId);
+  if (!links) return undefined;
+  const scope = await lockSampleWriteScope(ctx, tx, {
+    lineage: [{ ...lineage, target: { entityType: "sample", entityId: sampleId } }],
+    creditBatchIds: links.lineageBatchIds,
+    sampleId,
+  });
+  await assertSampleLinksHeld(ctx, tx, scope, sampleId, links);
+  return scope.sample;
+}

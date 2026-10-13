@@ -1,7 +1,7 @@
 import { BIOCHAR_PRODUCT_REPRESENTATION_REVISION } from "@/config/api-rest";
 import { madeProductBody, productBodyData, representationCheckedMake, representationCheckedUpdate, withCurrentOnStale } from "@/lib/api/biochar-product-write-checks";
 import type { ApiRouteContext } from "@/lib/api/route";
-import { BIOCHAR_PRODUCT_GUIDANCE, REQUEST_KEY_RULE, UNTRUSTED_TEXT } from "@/lib/operations/agent-guidance";
+import { BIOCHAR_PRODUCT_GUIDANCE, REQUEST_KEY_RULE, STOCK_EFFECTS_RULE, UNTRUSTED_TEXT } from "@/lib/operations/agent-guidance";
 import { validationFailed } from "@/lib/operations/errors";
 import { toOperationJsonSchema } from "@/lib/operations/json-schema";
 import { runOperation } from "@/lib/operations/runner";
@@ -19,7 +19,7 @@ const updateContract = toOperationJsonSchema(updateInput);
 const createOutput = stockBasisWriteEnvelopeSchema(biocharProductRepresentationSchema);
 const updateOutput = itemEnvelopeSchema(biocharProductRepresentationSchema);
 const annotations = { readOnlyHint: false, openWorldHint: false, idempotentHint: true } as const;
-const guidance = `${REQUEST_KEY_RULE} ${UNTRUSTED_TEXT}`;
+const guidance = `${REQUEST_KEY_RULE} ${STOCK_EFFECTS_RULE} ${UNTRUSTED_TEXT}`;
 
 export const biocharProductWriteTools: WriteTool[] = [
   {

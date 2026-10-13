@@ -57,6 +57,7 @@ function summaryWith(
     creditBatchCode: "CB-001",
     sampling: "sampled",
     durabilityOption: "200_year",
+    facilityTimezone: null,
     sampleCount: replicates.length,
     usableReplicateCount,
     minimumReplicates: MINIMUM_REPLICATES,

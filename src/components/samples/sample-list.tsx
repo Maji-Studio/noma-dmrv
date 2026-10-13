@@ -41,7 +41,7 @@ import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui"
 import { useToast } from "@/components/ui/toast";
 import { EntityCertifyReadinessBadge } from "@/components/certification/entity-certify-readiness-badge";
 import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readiness";
-import { formatDateRange, formatDateTime } from "@/lib/format-utils";
+import { formatDateRange } from "@/lib/format-utils";
 import {
   ENTITY_DEEP_LINK_FOCUS_PARAM,
   ENTITY_DEEP_LINK_MODE_PARAM,
@@ -54,7 +54,7 @@ import {
   type SampleFilterData,
 } from "@/schemas/samples";
 import type { SampleWithRelations } from "@/data-access/samples";
-import { sampleSheetSections } from "./sample-read-sections";
+import { formatSamplingTime, sampleSheetSections } from "./sample-read-sections";
 import type { TransportLegFormData } from "@/schemas/transport-legs";
 import {
   leaveSampleCreateIntent,
@@ -116,7 +116,7 @@ function createColumns(
       accessorKey: "samplingTime",
       meta: { nowrap: true },
       header: "Sampling time",
-      cell: ({ row }) => formatDateTime(row.original.samplingTime),
+      cell: ({ row }) => formatSamplingTime(row.original),
     },
     {
       id: "creditBatch",

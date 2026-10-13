@@ -61,10 +61,12 @@ interface LookupContract {
   list: (request: Request) => Promise<Response>;
   get: (request: Request, params: ReturnType<typeof lookupParams>) => Promise<Response>;
   seed: (fixture: LookupFixture) => Promise<{ active: LookupRow[]; archived?: LookupRow }>;
+  /** The resource's representation revision, the ETag suffix. */
+  revision?: number;
 }
 
 /** Real API keys, route handlers and Postgres; each contract owns its organizations. */
-export function lookupContract({ resource, list, get, seed }: LookupContract) {
+export function lookupContract({ resource, list, get, seed, revision = 1 }: LookupContract) {
   describe(`${resource} lookup REST contract`, { timeout: LOOKUP_SUITE_TIMEOUT_MS }, () => {
     let a: LookupFixture;
     let b: LookupFixture;
@@ -108,7 +110,7 @@ export function lookupContract({ resource, list, get, seed }: LookupContract) {
           expect(response.status).toBe(200);
           expect(response.headers.get("cache-control")).toBe("private, no-store");
           expect(response.headers.get("x-request-id")).toBeTruthy();
-          expect(response.headers.get("etag")).toBe(`"${row.version}.1"`);
+          expect(response.headers.get("etag")).toBe(`"${row.version}.${revision}"`);
           const { data } = await response.json();
           expect(data).toMatchObject({ id: row.id, code: row.code, name: row.name, version: row.version, archivedAt: row.archivedAt?.toISOString() ?? null });
           for (const field of ["organizationId", "contactName", "contactEmail", "contactPhone", "licenseNumber"]) expect(data).not.toHaveProperty(field);

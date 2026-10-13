@@ -10,6 +10,9 @@ import { readTools } from "./read-tools";
 import { mcpRequestAccess } from "../server";
 
 const mocks = vi.hoisted(() => ({ run: vi.fn(), read: vi.fn(), start: vi.fn(), update: vi.fn(), remove: vi.fn() }));
+vi.mock("@/data-access/samples", () => ({}));
+vi.mock("@/lib/read-models/api-lab-samples", () => ({ readApiLabSample: vi.fn(), readApiLabSampleList: vi.fn() }));
+vi.mock("@/lib/read-models/api-credit-batches", () => ({ readApiCreditBatch: vi.fn(), readApiCreditBatchList: vi.fn() }));
 vi.mock("@/lib/operations/runner", () => ({ runOperation: mocks.run }));
 vi.mock("@/lib/operations/production-runs", async () => {
   const { createProductionRunInput: input, updateProductionRunInput: update } = await import("@/schemas/production-run-input");
