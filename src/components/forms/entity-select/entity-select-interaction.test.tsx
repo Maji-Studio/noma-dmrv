@@ -6,29 +6,45 @@ import { FormEntitySelect } from "./form-entity-select";
 import { useForm } from "react-hook-form";
 import { Modal } from "@/components/ui/modal/modal";
 import type { EntityOption } from "./types";
+import { ENTITY_SEARCH_LIMIT } from "@/config/forms";
 
-const state = vi.hoisted(() => ({ options: [] as EntityOption[], loading: false, canManage: false, error: null as Error | null }));
+const state = vi.hoisted(() => ({ permissionChecks: 0, dialogMounts: [] as string[], listEnabled: [] as boolean[], detailIds: [] as (string | undefined)[], options: [] as EntityOption[], loading: false, canManage: false, error: null as Error | null }));
 vi.mock("@/hooks/use-entities", () => ({
-  useEntityOptions: ({ search }: { search: string }) => ({
-    data: state.options.filter((option) => option.name.toLowerCase().includes(search.toLowerCase())),
-    isLoading: state.loading,
-    error: state.error,
-  }),
-  useEntityById: () => ({ data: { id: "one", code: "1", name: "North bin" }, isPending: false }),
+  useEntityOptions: ({ search, enabled }: { search: string; enabled: boolean }) => {
+    state.listEnabled.push(enabled);
+    return {
+      data: state.options.filter((option) => option.name.toLowerCase().includes(search.toLowerCase())),
+      isLoading: state.loading,
+      error: state.error,
+    };
+  },
+  useEntityById: (_type: string, id: string | undefined) => {
+    state.detailIds.push(id);
+    return { data: { id: "one", code: "1", name: "North bin" }, isPending: false };
+  },
 }));
-vi.mock("./driver-quick-add-dialog", () => ({ DriverQuickAddDialog: () => null }));
-vi.mock("./operator-quick-add-dialog", () => ({ OperatorQuickAddDialog: () => null }));
-vi.mock("./vehicle-quick-add-dialog", () => ({ VehicleQuickAddDialog: () => null }));
-vi.mock("./feedstock-type-quick-add-dialog", () => ({ FeedstockTypeQuickAddDialog: () => null }));
-vi.mock("./formulation-quick-add-dialog", () => ({ FormulationQuickAddDialog: () => null }));
+vi.mock("./driver-quick-add-dialog", () => ({ DriverQuickAddDialog: () => { state.dialogMounts.push("Driver"); return null; } }));
+vi.mock("./operator-quick-add-dialog", () => ({ OperatorQuickAddDialog: () => { state.dialogMounts.push("Operator"); return null; } }));
+vi.mock("./vehicle-quick-add-dialog", () => ({ VehicleQuickAddDialog: () => { state.dialogMounts.push("Vehicle"); return null; } }));
+vi.mock("./feedstock-type-quick-add-dialog", () => ({ FeedstockTypeQuickAddDialog: () => { state.dialogMounts.push("FeedstockType"); return null; } }));
+vi.mock("./formulation-quick-add-dialog", () => ({ FormulationQuickAddDialog: () => { state.dialogMounts.push("Formulation"); return null; } }));
 vi.mock("@/hooks/use-entity-edit-record", () => ({
   isEditableEntityType: (type: string) => !["facility", "creditBatch"].includes(type),
-  useCanManageFeedstockTypes: () => state.canManage,
+  useCanManageFeedstockTypes: () => { state.permissionChecks += 1; return state.canManage; },
+}));
+vi.mock("./entity-edit-dialog", () => ({
+  EntityEditDialog: ({ entityId, onClose }: { entityId: string; onClose: () => void }) => (
+    <button type="button" data-testid="shared-edit-dialog" onClick={onClose}>{entityId}</button>
+  ),
 }));
 const scroll = vi.fn();
 let finePointer = true;
 beforeEach(() => {
   state.options = [{ id: "one", code: "1", name: "North bin" }, { id: "two", code: "2", name: "South bin" }];
+  state.listEnabled = [];
+  state.detailIds = [];
+  state.permissionChecks = 0;
+  state.dialogMounts = [];
   state.loading = false;
   state.canManage = false;
   state.error = null;
@@ -55,6 +71,35 @@ describe("EntitySelect menu interactions", () => {
     render(<EntitySelect entityType="storageLocation" value={value} onChange={vi.fn()} onEditSelected={edit ? vi.fn() : undefined} />);
     open();
     expect(screen.queryByTestId("entity-select-edit")).toBeNull();
+  });
+
+  it("opens the shared edit dialog with allowEdit and preserves selection", async () => {
+    const change = vi.fn();
+    render(<EntitySelect entityType="storageLocation" value="one" selectionLocked allowEdit onChange={change} />);
+    open(); key("Enter");
+    await waitFor(() => expect(screen.getByTestId("shared-edit-dialog").textContent).toBe("one"));
+    expect(change).not.toHaveBeenCalled();
+    expect(trigger().getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(screen.getByTestId("shared-edit-dialog"));
+    expect(screen.queryByTestId("shared-edit-dialog")).toBeNull();
+  });
+
+  it("gives a custom edit callback precedence over allowEdit", () => {
+    const edit = vi.fn();
+    render(<EntitySelect entityType="storageLocation" value="one" allowEdit onChange={vi.fn()} onEditSelected={edit} />);
+    open(); fireEvent.click(screen.getByTestId("entity-select-edit"));
+    expect(edit).toHaveBeenCalledOnce();
+    expect(screen.queryByTestId("shared-edit-dialog")).toBeNull();
+  });
+
+  it("does not invoke Add new on Enter without an explicit highlight", () => {
+    state.options = [];
+    const create = vi.fn();
+    render(<EntitySelect entityType="storageLocation" onChange={vi.fn()} allowCreate onCreateNew={create} />);
+    open(); key("Enter");
+    expect(create).not.toHaveBeenCalled();
+    key("ArrowDown"); key("Enter");
+    expect(create).toHaveBeenCalledOnce();
   });
 
   it("uses the name, closes on edit and leaves the value unchanged", () => {
@@ -285,4 +330,166 @@ it("shows feedstock-type Edit only with management permission", () => {
   expect(screen.getByTestId("entity-select-edit")).toBeTruthy();
   fireEvent.click(screen.getByTestId("entity-select-edit"));
   expect(props.onEditSelected).toHaveBeenCalledOnce();
+});
+
+describe("EntitySelect caller-owned options", () => {
+  const localOptions: EntityOption[] = [
+    { id: "pending", code: "DL-01", name: "Pending load", subtitle: "not yet delivered", disabled: true },
+    { id: "shipped", code: "DL-02", name: "South field", subtitle: "Maize" },
+    { id: "other", code: "DL-03", name: "North field", subtitle: "Coffee" },
+  ];
+
+  it.each(["storageLocation", "feedstockType"] as const)("ignores built-in edit and create in local %s mode without mounting queries or dialogs", (entityType) => {
+    state.canManage = true;
+    render(<EntitySelect entityType={entityType} options={localOptions} value="shipped" allowEdit allowCreate onChange={vi.fn()} />);
+    open();
+    expect(screen.queryByTestId("entity-select-edit")).toBeNull();
+    expect(screen.queryByTestId("entity-select-create")).toBeNull();
+    expect(state.listEnabled).toEqual([]);
+    expect(state.detailIds).toEqual([]);
+    expect(state.permissionChecks).toBe(0);
+    expect(state.dialogMounts).toEqual([]);
+  });
+
+  it.each([
+    { value: "prj_saved", placeholder: "Select a project", selectedLabel: undefined, expected: "prj_saved" },
+    { value: "prj_saved", placeholder: "Select a project", selectedLabel: "Saved project", expected: "Saved project" },
+    { value: "tpl_saved", placeholder: "No default", selectedLabel: undefined, expected: "tpl_saved" },
+  ])("shows a missing saved value as $expected without entity queries", ({ value, placeholder, selectedLabel, expected }) => {
+    const change = vi.fn();
+    const { rerender } = render(<EntitySelect options={localOptions} value={value} selectedLabel={selectedLabel} placeholder={placeholder} onChange={change} autoSelectSingle />);
+    expect(trigger().textContent).toBe(expected);
+    open();
+    expect(screen.queryByTestId(`entity-option-${value}`)).toBeNull();
+    expect(change).not.toHaveBeenCalled();
+    rerender(<EntitySelect options={[]} value={value} selectedLabel={selectedLabel} placeholder={placeholder} onChange={change} isLoading />);
+    expect(trigger().textContent).toBe(expected);
+    rerender(<EntitySelect options={[]} value={value} selectedLabel={selectedLabel} placeholder={placeholder} onChange={change} error={new Error("Registry unavailable")} />);
+    expect(trigger().textContent).toBe(expected);
+    expect(state.listEnabled).toEqual([]);
+    expect(state.detailIds).toEqual([]);
+    fireEvent.click(screen.getByTestId("entity-select-clear"));
+    expect(change).toHaveBeenCalledExactlyOnceWith("");
+    rerender(<EntitySelect options={[]} selectedLabel={selectedLabel} placeholder={placeholder} onChange={change} />);
+    expect(trigger().textContent).toBe(placeholder);
+  });
+
+  it("can switch between local and server sources without conditional hooks", () => {
+    const change = vi.fn();
+    const { rerender } = render(<EntitySelect entityType="storageLocation" options={localOptions} value="shipped" onChange={change} />);
+    expect(trigger().textContent).toBe("South field");
+    expect(state.listEnabled).toEqual([]);
+    expect(state.detailIds).toEqual([]);
+    rerender(<EntitySelect entityType="storageLocation" value="one" onChange={change} />);
+    expect(trigger().textContent).toBe("North bin");
+    expect(state.listEnabled.length).toBeGreaterThan(0);
+    expect(state.detailIds).toContain("one");
+    state.listEnabled = [];
+    state.detailIds = [];
+    rerender(<EntitySelect entityType="storageLocation" options={localOptions} value="shipped" onChange={change} />);
+    open();
+    fireEvent.click(screen.getByTestId("entity-option-other"));
+    expect(change).toHaveBeenCalledExactlyOnceWith("other");
+    expect(state.listEnabled).toEqual([]);
+    expect(state.detailIds).toEqual([]);
+  });
+
+  it("prefers the current option label over the saved label", () => {
+    render(<EntitySelect options={localOptions} value="shipped" selectedLabel="Old field name" onChange={vi.fn()} />);
+    expect(trigger().textContent).toBe("South field");
+  });
+
+  it("filters locally by name, code and subtitle without entity queries", () => {
+    const { rerender } = render(<EntitySelect options={localOptions} optionLabel="delivery" value="shipped" onChange={vi.fn()} alwaysShowSearch />);
+    expect(trigger().textContent).toContain("South field");
+    open();
+    const search = screen.getByTestId("entity-select-search");
+    for (const query of ["south", "DL-02", "maIZE"]) {
+      fireEvent.change(search, { target: { value: query } });
+      expect(screen.getAllByRole("option")).toHaveLength(1);
+      expect(screen.getByTestId("entity-option-shipped")).toBeTruthy();
+      expect(trigger().textContent).toContain("South field");
+    }
+    fireEvent.change(search, { target: { value: "not found" } });
+    expect(screen.queryAllByRole("option")).toHaveLength(0);
+    expect(trigger().textContent).toContain("South field");
+    rerender(<EntitySelect options={localOptions.map((option) => ({ ...option, name: "Updated label" }))} value="shipped" onChange={vi.fn()} alwaysShowSearch />);
+    expect(trigger().textContent).toContain("Updated label");
+    expect(state.listEnabled).toEqual([]);
+    expect(state.detailIds).toEqual([]);
+  });
+
+  it("shows disabled options and their reason but skips click and keyboard selection", () => {
+    const change = vi.fn();
+    render(<EntitySelect options={localOptions} onChange={change} />);
+    open();
+    const pending = screen.getByTestId("entity-option-pending");
+    expect(pending.getAttribute("aria-disabled")).toBe("true");
+    expect(pending.textContent).toContain("not yet delivered");
+    fireEvent.click(pending);
+    expect(change).not.toHaveBeenCalled();
+    expect(activeTestId()).toBe("entity-option-shipped");
+    key("ArrowUp"); expect(activeTestId()).toBe("entity-option-shipped");
+    key("ArrowDown"); expect(activeTestId()).toBe("entity-option-other");
+    key("Home"); key("Enter");
+    expect(change).toHaveBeenCalledExactlyOnceWith("shipped");
+  });
+
+  it("cannot auto-select or keyboard-select a list containing only a disabled option", () => {
+    const change = vi.fn();
+    render(<EntitySelect options={[localOptions[0]]} onChange={change} autoSelectSingle />);
+    open(); key("ArrowDown"); key("Enter");
+    expect(trigger().getAttribute("aria-activedescendant")).toBeNull();
+    expect(change).not.toHaveBeenCalled();
+  });
+
+  it("renders caller loading and errors instead of selectable retained options", () => {
+    const { rerender } = render(<EntitySelect options={localOptions} onChange={vi.fn()} isLoading />);
+    open();
+    expect(screen.getByText("Loading...")).toBeTruthy();
+    expect(screen.queryAllByRole("option")).toHaveLength(0);
+    rerender(<EntitySelect options={localOptions} onChange={vi.fn()} error={new Error("Registry unavailable")} />);
+    expect(screen.getByText("Error loading options")).toBeTruthy();
+    expect(screen.queryAllByRole("option")).toHaveLength(0);
+  });
+
+  it.each([5, 6])("uses the shared search threshold for local options (%i)", (count) => {
+    const options = Array.from({ length: count }, (_, i) => ({ id: String(i), code: String(i), name: `Project ${i}` }));
+    render(<EntitySelect options={options} onChange={vi.fn()} />); open();
+    expect(Boolean(screen.queryByTestId("entity-select-search"))).toBe(count === 6);
+  });
+});
+
+describe("EntitySelect result limit hint", () => {
+  it.each([ENTITY_SEARCH_LIMIT - 1, ENTITY_SEARCH_LIMIT])("shows a non-selectable hint only at the server cap (%i)", (count) => {
+    state.options = Array.from({ length: count }, (_, i) => ({ id: String(i), code: String(i), name: `Bin ${i}` }));
+    const change = vi.fn();
+    render(<EntitySelect entityType="storageLocation" onChange={change} />); open();
+    expect(Boolean(screen.queryByTestId("entity-select-more-results"))).toBe(count === ENTITY_SEARCH_LIMIT);
+    const hint = screen.queryByTestId("entity-select-more-results");
+    if (hint) {
+      expect(hint.getAttribute("role")).toBe("presentation");
+      fireEvent.click(hint);
+      expect(change).not.toHaveBeenCalled();
+    }
+    expect(screen.getAllByRole("option")).toHaveLength(count);
+    fireEvent.keyDown(trigger(), { key: "End" });
+    expect(activeTestId()).toBe(`entity-option-${count - 1}`);
+    key("Enter");
+    expect(change).toHaveBeenCalledExactlyOnceWith(String(count - 1));
+  });
+
+  it("does not claim caller-owned lists are capped", () => {
+    const options = Array.from({ length: ENTITY_SEARCH_LIMIT }, (_, i) => ({ id: String(i), code: String(i), name: `Project ${i}` }));
+    render(<EntitySelect options={options} onChange={vi.fn()} />); open();
+    expect(screen.queryByTestId("entity-select-more-results")).toBeNull();
+  });
+
+  it("keeps search reachable when excluded options hide the entire capped page", () => {
+    state.options = Array.from({ length: ENTITY_SEARCH_LIMIT }, (_, i) => ({ id: String(i), code: String(i), name: `Bin ${i}` }));
+    render(<EntitySelect entityType="storageLocation" excludeIds={state.options.map((option) => option.id)} onChange={vi.fn()} />); open();
+    expect(screen.getByTestId("entity-select-more-results")).toBeTruthy();
+    expect(screen.getByTestId("entity-select-search")).toBeTruthy();
+    expect(screen.queryAllByRole("option")).toHaveLength(0);
+  });
 });

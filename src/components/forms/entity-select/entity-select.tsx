@@ -11,6 +11,8 @@ import {
   useEffectEvent,
   useId,
   type KeyboardEvent,
+  type Dispatch,
+  type SetStateAction,
 } from "react";
 import {
   ArrowSquareOutIcon,
@@ -22,7 +24,7 @@ import {
 import { Popover } from "@base-ui/react/popover";
 import dynamic from "next/dynamic";
 import { isEditableEntityType, useCanManageFeedstockTypes } from "@/hooks/use-entity-edit-record";
-import { SELECT_SEARCH_MIN_OPTIONS } from "@/config/forms";
+import { ENTITY_SEARCH_LIMIT, SELECT_SEARCH_MIN_OPTIONS } from "@/config/forms";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useEntityOptions, useEntityById } from "@/hooks/use-entities";
@@ -98,21 +100,102 @@ function getFeedstockTypeDefaultUsage(filterBy?: Record<string, string>) {
   return usage === "pyrolysis" || usage === "blend" ? usage : undefined;
 }
 
+interface PickerState {
+  isOpen: boolean;
+  setIsOpen: Dispatch<SetStateAction<boolean>>;
+  searchQuery: string;
+  setSearchQuery: Dispatch<SetStateAction<string>>;
+}
+
+interface EntityQueryData {
+  fetchedOptions: EntityOption[];
+  listDataUpdatedAt: number;
+  queryLoading: boolean;
+  queryError: Error | null;
+  selectedEntity: EntityOption | null | undefined;
+  detailDataUpdatedAt: number;
+  isSelectedEntityPending: boolean;
+}
+
 export function EntitySelect(props: EntitySelectProps) {
-  if (props.entityType === "feedstockType" && props.allowEdit) return <FeedstockTypeSelect {...props} />;
-  return <EntitySelectControl {...props} />;
+  const [isOpen, setIsOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const pickerState = { isOpen, setIsOpen, searchQuery, setSearchQuery };
+
+  // Separate components keep query hooks unconditional in server mode and
+  // let caller-owned lists render without a QueryClientProvider.
+  return props.options !== undefined
+    ? <EntitySelectView {...props} {...pickerState} />
+    : props.entityType === "feedstockType" && props.allowEdit
+      ? <FeedstockTypeSelect {...props} {...pickerState} />
+      : <ServerEntitySelect {...props} {...pickerState} />;
 }
 
-function FeedstockTypeSelect(props: EntitySelectProps) {
+type ServerEntitySelectProps = Extract<EntitySelectProps, { options?: undefined }> & PickerState;
+
+function FeedstockTypeSelect(props: ServerEntitySelectProps) {
   const canManage = useCanManageFeedstockTypes();
-  return <EntitySelectControl {...props} allowEdit={canManage} onEditSelected={canManage ? props.onEditSelected : undefined} />;
+  return <ServerEntitySelect {...props} allowEdit={canManage} onEditSelected={canManage ? props.onEditSelected : undefined} />;
 }
 
-function EntitySelectControl({
+function ServerEntitySelect(props: ServerEntitySelectProps) {
+  const { entityType, filterBy, disabled, selectionLocked, isOpen, autoSelectSingle, value, searchQuery } = props;
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const onEditSelected = props.onEditSelected ?? (props.allowEdit && isEditableEntityType(entityType) ? () => setIsEditOpen(true) : undefined);
+  const debouncedSearch = useDebounce(searchQuery, 200);
+  const {
+    data: fetchedOptions = [],
+    dataUpdatedAt: listDataUpdatedAt,
+    isLoading: queryLoading,
+    error: queryError,
+  } = useEntityOptions({
+    entityType,
+    search: debouncedSearch,
+    filterBy,
+    enabled: !disabled && !selectionLocked && (isOpen || (!!autoSelectSingle && !value)),
+  });
+  // Stock derivation filters must match between list and detail queries.
+  const detailFilterBy = filterBy?.excludeOrderId
+    ? { excludeOrderId: filterBy.excludeOrderId }
+    : undefined;
+  const {
+    data: selectedEntity,
+    dataUpdatedAt: detailDataUpdatedAt,
+    isPending: isSelectedEntityPending,
+  } = useEntityById(entityType, value, detailFilterBy);
+
+  return (
+    <>
+      <EntitySelectView
+        {...props}
+        onEditSelected={onEditSelected}
+        queryData={{
+          fetchedOptions,
+          listDataUpdatedAt,
+          queryLoading,
+          queryError,
+          selectedEntity,
+          detailDataUpdatedAt,
+          isSelectedEntityPending,
+        }}
+      />
+      {isEditOpen && isEditableEntityType(entityType) && (
+        <EntityEditDialog entityType={entityType} entityId={value} isOpen={isEditOpen} onClose={() => setIsEditOpen(false)} />
+      )}
+    </>
+  );
+}
+
+function EntitySelectView({
   id,
   entityType,
+  options: suppliedOptions,
+  optionLabel,
+  isLoading: suppliedLoading = false,
   value,
+  selectedLabel,
   onChange,
+  onBlur,
   placeholder,
   disabled = false,
   selectionLocked = false,
@@ -131,16 +214,16 @@ function EntitySelectControl({
   formatSelectedLabel,
   emptyHint,
   noneOption,
-  onEditSelected: customEditSelected,
-  allowEdit = false,
+  onEditSelected,
   editLabel,
   "aria-describedby": ariaDescribedBy,
   "aria-invalid": ariaInvalid,
-}: EntitySelectProps) {
-  const [isEditOpen, setIsEditOpen] = useState(false);
-  const onEditSelected = customEditSelected ?? (allowEdit && isEditableEntityType(entityType) ? () => setIsEditOpen(true) : undefined);
-  const [isOpen, setIsOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
+  isOpen,
+  setIsOpen,
+  searchQuery,
+  setSearchQuery,
+  queryData,
+}: EntitySelectProps & PickerState & { queryData?: EntityQueryData }) {
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
   const [isDriverDialogOpen, setIsDriverDialogOpen] = useState(false);
   const [isOperatorDialogOpen, setIsOperatorDialogOpen] = useState(false);
@@ -159,51 +242,44 @@ function EntitySelectControl({
   const remainingMassId = `${entitySelectId}-remaining-mass`;
   const selectedLabelId = `${entitySelectId}-selected`;
 
-  // Debounce search for better performance
-  const debouncedSearch = useDebounce(searchQuery, 200);
-
-  // Fetch options based on search
-  // Also fetch eagerly when autoSelectSingle is enabled (to detect single-option case)
   const {
-    data: fetchedOptions = [],
-    dataUpdatedAt: listDataUpdatedAt,
-    isLoading,
-    error: fetchError,
-  } = useEntityOptions({
-    entityType,
-    search: debouncedSearch,
-    filterBy,
-    enabled: !disabled && !selectionLocked && (isOpen || (autoSelectSingle && !value)),
-  });
+    fetchedOptions = [],
+    listDataUpdatedAt = 0,
+    queryLoading = false,
+    queryError = null,
+    selectedEntity,
+    detailDataUpdatedAt = 0,
+    isSelectedEntityPending = false,
+  } = queryData ?? {};
+
+  const isLocal = suppliedOptions !== undefined;
+  const isLoading = isLocal ? suppliedLoading : queryLoading;
+  const fetchError = isLocal ? (error instanceof Error ? error : null) : queryError;
+  const entityLabel = optionLabel ?? (entityType ? ENTITY_TYPE_LABELS[entityType] : "option");
+  const sourceOptions = suppliedOptions ?? fetchedOptions;
+  const normalizedSearch = searchQuery.trim().toLowerCase();
+  const searchedOptions = isLocal && normalizedSearch
+    ? sourceOptions.filter((option) =>
+        [option.name, option.code, option.subtitle].some((text) => text?.toLowerCase().includes(normalizedSearch)))
+    : sourceOptions;
+  const showMoreResults = !isLocal && !isLoading && !fetchError && fetchedOptions.length >= ENTITY_SEARCH_LIMIT;
 
   // Hide already-picked options (e.g. blend materials chosen on other lines),
   // but never hide the current selection so it stays visible in its own field.
   const options =
     excludeIds && excludeIds.length > 0
-      ? fetchedOptions.filter(
+      ? searchedOptions.filter(
           (option) => option.id === value || !excludeIds.includes(option.id)
         )
-      : fetchedOptions;
-
-  // Fetch selected entity details. Derivation-affecting filters (the order
-  // exclusion behind remaining-stock figures) must reach the detail fetch
-  // too, or the caption's "freshest source wins" rule would mix an excluded
-  // list figure with an unexcluded detail figure.
-  const detailFilterBy = filterBy?.excludeOrderId
-    ? { excludeOrderId: filterBy.excludeOrderId }
-    : undefined;
-  const {
-    data: selectedEntity,
-    dataUpdatedAt: detailDataUpdatedAt,
-    isPending: isSelectedEntityPending,
-  } = useEntityById(entityType, value, detailFilterBy);
+      : searchedOptions;
 
   const listedOption = options.find((option) => option.id === value);
   const selectedOption =
-    selectedEntity?.id === value ? selectedEntity : listedOption;
+    isLocal ? suppliedOptions.find((option) => option.id === value)
+      : selectedEntity?.id === value ? selectedEntity : listedOption;
   const displayText = selectedOption
     ? (formatSelectedLabel ? formatSelectedLabel(selectedOption) : selectedOption.name)
-    : "";
+    : isLocal && value ? selectedLabel || value : "";
   // Identity remains detail-first, but stock is derived data: use whichever
   // query most recently succeeded. dataUpdatedAt intentionally survives a
   // failed refetch, so retained detail data cannot mask a fresher list result.
@@ -211,7 +287,7 @@ function EntitySelectControl({
     ? selectFreshRemainingMass({
         listedOption,
         listDataUpdatedAt,
-        selectedEntity,
+        selectedEntity: isLocal ? selectedOption : selectedEntity,
         detailDataUpdatedAt,
         value,
       })
@@ -229,7 +305,7 @@ function EntitySelectControl({
   // Only while the by-ID fetch is unresolved — once it settles without a
   // match (deleted or inaccessible entity) the ordinary placeholder returns.
   const isSelectionLoading = Boolean(
-    value && !selectedOption && isSelectedEntityPending,
+    !isLocal && value && !selectedOption && isSelectedEntityPending,
   );
 
   const closeMenu = () => {
@@ -248,7 +324,7 @@ function EntitySelectControl({
     feedstockType: () => setIsFeedstockTypeDialogOpen(true),
     formulation: () => setIsFormulationDialogOpen(true),
   };
-  const defaultCreateAction = createActions[entityType as keyof typeof createActions];
+  const defaultCreateAction = isLocal ? undefined : createActions[entityType as keyof typeof createActions];
 
   const resolvedCreateAction = onCreateNew ?? defaultCreateAction;
   const hasCreateAction = Boolean(resolvedCreateAction);
@@ -279,14 +355,15 @@ function EntitySelectControl({
   if (!disabled && !selectionLocked && shouldShowCreateAction) {
     rows.push({ id: `${entitySelectId}-create`, kind: "create" });
   }
+  const selectableRows = rows.filter((row) => row.kind !== "option" || !row.option.disabled);
   // Without an explicit highlight, Enter picks the first entity (or None),
   // never Edit or Add new; a locked picker only has its Edit row.
-  const activeRow = rows.find((row) => row.id === highlightedId)
-    ?? rows.find((row) => row.kind === "option" || row.kind === "none")
-    ?? (selectionLocked ? rows[0] : undefined);
+  const activeRow = selectableRows.find((row) => row.id === highlightedId)
+    ?? selectableRows.find((row) => row.kind === "option" || row.kind === "none")
+    ?? (selectionLocked ? selectableRows[0] : undefined);
   const activeId = isOpen ? activeRow?.id : undefined;
   const showSearch = !disabled && !selectionLocked && !hideSearch &&
-    (alwaysShowSearch || searchQuery.length > 0 || options.length > SELECT_SEARCH_MIN_OPTIONS);
+    (alwaysShowSearch || searchQuery.length > 0 || showMoreResults || options.length > SELECT_SEARCH_MIN_OPTIONS);
 
   const closeMenuFromEffect = useEffectEvent(closeMenu);
 
@@ -310,12 +387,13 @@ function EntitySelectControl({
 
   // Auto-select when there is exactly one option and no current value
   useEffect(() => {
-    if (autoSelectSingle && !disabled && !selectionLocked && !value && options.length === 1 && !isLoading) {
+    if (autoSelectSingle && !disabled && !selectionLocked && !value && options.length === 1 && !options[0].disabled && !isLoading && !fetchError && !searchQuery) {
       onChange(options[0].id);
     }
-  }, [autoSelectSingle, disabled, selectionLocked, value, options, isLoading, onChange]);
+  }, [autoSelectSingle, disabled, selectionLocked, value, options, isLoading, fetchError, searchQuery, onChange]);
 
   const activateRow = (row: SelectRow) => {
+    if (row.kind === "option" && row.option.disabled) return;
     closeMenu();
     triggerRef.current?.focus();
     switch (row.kind) {
@@ -358,11 +436,11 @@ function EntitySelectControl({
         e.preventDefault();
         openedWithTouch.current = false;
         setIsOpen(true);
-        setHighlightedId(e.key === "ArrowUp" ? rows.at(-1)?.id ?? null : null);
+        setHighlightedId(e.key === "ArrowUp" ? selectableRows.at(-1)?.id ?? null : null);
       }
       return;
     }
-    const index = rows.findIndex((row) => row.id === activeRow?.id);
+    const index = selectableRows.findIndex((row) => row.id === activeRow?.id);
     switch (e.key) {
       case "ArrowDown":
       case "ArrowUp":
@@ -370,9 +448,9 @@ function EntitySelectControl({
       case "End": {
         if ((e.key === "Home" || e.key === "End") && e.currentTarget === inputRef.current) break;
         e.preventDefault();
-        const next = e.key === "Home" ? 0 : e.key === "End" ? rows.length - 1
-          : Math.max(0, Math.min(rows.length - 1, index + (e.key === "ArrowDown" ? 1 : -1)));
-        setHighlightedId(rows[next]?.id ?? null);
+        const next = e.key === "Home" ? 0 : e.key === "End" ? selectableRows.length - 1
+          : Math.max(0, Math.min(selectableRows.length - 1, index + (e.key === "ArrowDown" ? 1 : -1)));
+        setHighlightedId(selectableRows[next]?.id ?? null);
         break;
       }
       case "Enter":
@@ -408,8 +486,8 @@ function EntitySelectControl({
     else if (!triggerDisabled) setIsOpen(true);
   };
 
-  const defaultPlaceholder = `Select ${ENTITY_TYPE_LABELS[entityType] || entityType}...`;
-  const defaultCreateLabel = `Add new ${ENTITY_TYPE_LABELS[entityType] || entityType}`;
+  const defaultPlaceholder = `Select ${entityLabel}...`;
+  const defaultCreateLabel = `Add new ${entityLabel}`;
 
   return (
     <Popover.Root open={isOpen} onOpenChange={(open) => { if (!open) closeMenu(); }}>
@@ -426,6 +504,7 @@ function EntitySelectControl({
             onClick={handleToggle}
             onPointerDown={(event) => { openedWithTouch.current = event.pointerType === "touch"; }}
             onKeyDown={handleKeyDown}
+            onBlur={onBlur}
             disabled={triggerDisabled}
             role="combobox"
             aria-readonly={selectionLocked || undefined}
@@ -535,8 +614,8 @@ function EntitySelectControl({
                           setHighlightedId(null);
                         }}
                         onKeyDown={handleKeyDown}
-                        placeholder={`Search ${ENTITY_TYPE_LABELS[entityType] || entityType}...`}
-                        aria-label={`Search ${ENTITY_TYPE_LABELS[entityType] || entityType}`}
+                        placeholder={`Search ${entityLabel}...`}
+                        aria-label={`Search ${entityLabel}`}
                         data-testid="entity-select-search"
                         className="w-full h-[40px] pl-36 pr-12 border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] text-[var(--text-s)] placeholder:text-[var(--color-text-tertiary)] focus:outline-none focus:border-[var(--color-interaction)] focus:ring-1 focus:ring-[var(--color-interaction)]"
                       />
@@ -548,7 +627,7 @@ function EntitySelectControl({
                 <ul
                   id={listboxId}
                   role="listbox"
-                  aria-label={`${ENTITY_TYPE_LABELS[entityType] || entityType} options`}
+                  aria-label={`${entityLabel} options`}
                   data-testid="entity-select-listbox"
                   className="min-h-0 overflow-y-auto"
                 >
@@ -617,41 +696,47 @@ function EntitySelectControl({
                       onHighlight={() => setHighlightedId(row.id)}
                     />
                   ))}
+                  {!disabled && !selectionLocked && showMoreResults && (
+                    <li role="presentation" data-testid="entity-select-more-results" className="px-12 py-8 body-caption text-[var(--color-text-tertiary)]">
+                      More results may be available. Refine your search.
+                    </li>
+                  )}
                 </ul>
               </Popover.Popup>
             </Popover.Positioner>
           </Popover.Portal>
         )}
 
-        {isEditOpen && isEditableEntityType(entityType) && (
-          <EntityEditDialog entityType={entityType} entityId={value} isOpen={isEditOpen} onClose={() => setIsEditOpen(false)} />
+        {!isLocal && (
+          <>
+            <DriverQuickAddDialog
+              isOpen={isDriverDialogOpen}
+              onClose={() => setIsDriverDialogOpen(false)}
+              onSuccess={handleCreatedEntity}
+            />
+            <OperatorQuickAddDialog
+              isOpen={isOperatorDialogOpen}
+              onClose={() => setIsOperatorDialogOpen(false)}
+              onSuccess={handleCreatedEntity}
+            />
+            <VehicleQuickAddDialog
+              isOpen={isVehicleDialogOpen}
+              onClose={() => setIsVehicleDialogOpen(false)}
+              onSuccess={handleCreatedEntity}
+            />
+            <FeedstockTypeQuickAddDialog
+              isOpen={isFeedstockTypeDialogOpen}
+              onClose={() => setIsFeedstockTypeDialogOpen(false)}
+              onSuccess={handleCreatedEntity}
+              defaultUsage={getFeedstockTypeDefaultUsage(filterBy)}
+            />
+            <FormulationQuickAddDialog
+              isOpen={isFormulationDialogOpen}
+              onClose={() => setIsFormulationDialogOpen(false)}
+              onSuccess={handleCreatedEntity}
+            />
+          </>
         )}
-        <DriverQuickAddDialog
-          isOpen={isDriverDialogOpen}
-          onClose={() => setIsDriverDialogOpen(false)}
-          onSuccess={handleCreatedEntity}
-        />
-        <OperatorQuickAddDialog
-          isOpen={isOperatorDialogOpen}
-          onClose={() => setIsOperatorDialogOpen(false)}
-          onSuccess={handleCreatedEntity}
-        />
-        <VehicleQuickAddDialog
-          isOpen={isVehicleDialogOpen}
-          onClose={() => setIsVehicleDialogOpen(false)}
-          onSuccess={handleCreatedEntity}
-        />
-        <FeedstockTypeQuickAddDialog
-          isOpen={isFeedstockTypeDialogOpen}
-          onClose={() => setIsFeedstockTypeDialogOpen(false)}
-          onSuccess={handleCreatedEntity}
-          defaultUsage={getFeedstockTypeDefaultUsage(filterBy)}
-        />
-        <FormulationQuickAddDialog
-          isOpen={isFormulationDialogOpen}
-          onClose={() => setIsFormulationDialogOpen(false)}
-          onSuccess={handleCreatedEntity}
-        />
       </div>
     </Popover.Root>
   );

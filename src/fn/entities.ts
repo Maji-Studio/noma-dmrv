@@ -12,7 +12,7 @@ import { z } from "zod";
 import { withAction } from "./with-action";
 
 const ENTITY_TYPES = [
-  "facility", "reactor", "supplier", "customer", "driver", "operator",
+  "facility", "reactor", "supplier", "customer", "customerLocation", "driver", "operator",
   "storageLocation", "vehicle", "feedstockType", "feedstock",
   "productionRun", "application", "formulation", "biocharProduct", "order",
   "creditBatch",
@@ -35,6 +35,13 @@ const searchEntitiesSchema = z
     limit: z.number().int().positive().max(MAX_SEARCH_LIMIT).optional(),
   })
   .superRefine((data, ctx) => {
+    if (data.filterBy?.customerId !== undefined && !z.uuid().safeParse(data.filterBy.customerId).success) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["filterBy", "customerId"],
+        message: "The customer filter is invalid. Select a customer and try again.",
+      });
+    }
     // filterBy is a free-form record; facilityId feeds the org-scope guard
     // and uuid-typed query filters, so a blank/malformed value must be a
     // validation error rather than silently degrading to an unfiltered read.

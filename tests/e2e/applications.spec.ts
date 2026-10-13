@@ -106,14 +106,7 @@ test.describe("Application + Credit Batch UI CRUD", () => {
     await selectEntity(page, "Customer", seededData.customer.id, seededData.customer.name);
 
     // Wait for customer locations to load (cascading from customer selection)
-    await page.waitForSelector(
-      'select[name="customerLocationId"]:not([disabled])',
-      { timeout: 8000 }
-    );
-    await page.selectOption(
-      'select[name="customerLocationId"]',
-      seededData.customerLocation.id
-    );
+    await selectEntity(page, "Customer location", seededData.customerLocation.id, seededData.customerLocation.name);
 
     await selectEntity(
       page,
@@ -135,7 +128,7 @@ test.describe("Application + Credit Batch UI CRUD", () => {
     // Applications require a delivered delivery (issue #284)
     // The order picker is a FormEntitySelect (custom dropdown) — pick the first option
     await selectFirstEntity(page, "Order");
-    await page.selectOption('select[name="storageLocationId"]', seededData.productStorageLocation.id);
+    await selectEntity(page, "Actual source bin", seededData.productStorageLocation.id, seededData.productStorageLocation.name);
     await page.fill('input[name="deliveredWetMassKg"]', "10000");
     await fillStockMoisture(page, "delivery", "10");
 
@@ -152,14 +145,7 @@ test.describe("Application + Credit Batch UI CRUD", () => {
     await page.fill('input[name="applicationDate"]', today);
 
     // Select the first available delivery
-    const deliverySelect = page.locator('select[name="deliveryId"]');
-    const deliveryOptions = deliverySelect.locator("option:not([value=''])");
-    const firstDeliveryValue = await deliveryOptions
-      .first()
-      .getAttribute("value");
-    if (firstDeliveryValue) {
-      await deliverySelect.selectOption(firstDeliveryValue);
-    }
+    await selectFirstEntity(page, "Delivery");
 
     // Fill required and optional fields
     await page.fill('input[name="biocharAppliedTons"]', "5000");
@@ -236,14 +222,7 @@ test.describe("Application + Credit Batch UI CRUD", () => {
 
     await page.fill('input[name="orderDate"]', today);
     await selectEntity(page, "Customer", seededData.customer.id, seededData.customer.name);
-    await page.waitForSelector(
-      'select[name="customerLocationId"]:not([disabled])',
-      { timeout: 8000 }
-    );
-    await page.selectOption(
-      'select[name="customerLocationId"]',
-      seededData.customerLocation.id
-    );
+    await selectEntity(page, "Customer location", seededData.customerLocation.id, seededData.customerLocation.name);
     await selectEntity(
       page,
       "Formulation", seededData.formulation.id, seededData.formulation.name
@@ -260,7 +239,9 @@ test.describe("Application + Credit Batch UI CRUD", () => {
     await page.waitForLoadState("networkidle");
     await page.click('button:has-text("New application")');
     await waitForSideSheet(page);
-    await expect(page.locator('select[name="deliveryId"] option:not([value=""])')).toHaveCount(0);
+    await page.locator("#deliveryId").click();
+    await expect(page.getByTestId("entity-select-listbox").getByRole("option")).toHaveCount(0);
+    await page.locator("#deliveryId").press("Escape");
     await page.locator('[role="dialog"]').getByRole("button", { name: "Create application", exact: true }).click();
     await expect(page.locator("#deliveryId-error")).toBeVisible();
     await expect(page.locator('[role="dialog"]')).toBeVisible();

@@ -17,6 +17,8 @@ interface FormEntitySelectProps<
 > {
   /** React Hook Form control object */
   control: Control<TFieldValues>;
+  /** Preserve a caller's existing field id. */
+  id?: string;
   /** Field name in the form */
   name: TName;
   /** Label for the field */
@@ -78,6 +80,7 @@ export function FormEntitySelect<
   TName extends FieldPath<TFieldValues> = FieldPath<TFieldValues>
 >({
   control,
+  id: suppliedId,
   name,
   label,
   entityType,
@@ -102,7 +105,8 @@ export function FormEntitySelect<
   onEditSelected,
   editLabel,
 }: FormEntitySelectProps<TFieldValues, TName>) {
-  const id = useId();
+  const generatedId = useId();
+  const id = suppliedId ?? generatedId;
   const { field, fieldState } = useController({ control, name });
 
   useClearOnDependencyChange(dependsOn, field.onChange);
@@ -119,6 +123,7 @@ export function FormEntitySelect<
         id={id}
         entityType={entityType}
         value={field.value}
+        onBlur={field.onBlur}
         onChange={(value) => {
           field.onChange(value);
           onChange?.(value);

@@ -9,6 +9,8 @@ export interface EntityOption {
   name: string;
   /** Optional subtitle for additional context (e.g., location, type) */
   subtitle?: string;
+  /** Visible for context, but cannot be selected. */
+  disabled?: boolean;
   /** Structured mass data for forms that render a selected entity's mass. */
   mass?: {
     moisturePercent: number | null;
@@ -31,6 +33,7 @@ export type EntityType =
   | "reactor"
   | "supplier"
   | "customer"
+  | "customerLocation"
   | "driver"
   | "operator"
   | "storageLocation"
@@ -44,23 +47,28 @@ export type EntityType =
   | "order"
   | "creditBatch";
 
-export interface EntitySelectProps {
+interface EntitySelectBaseProps {
   /** Id of the trigger; a wrapping FormField passes its own so the label names the control. */
   id?: string;
-  /** The type of entity to select */
-  entityType: EntityType;
+  /** Noun used for local-option search and placeholders. */
+  optionLabel?: string;
+  /** Loading state for caller-owned options. */
+  isLoading?: boolean;
   /** Current selected value (entity ID) */
   value?: string;
+  /** Fallback label when a saved value is absent from caller-owned options. */
+  selectedLabel?: string;
   /** Callback when selection changes */
   onChange: (value: string | undefined) => void;
+  onBlur?: () => void;
   /** Placeholder text */
   placeholder?: string;
   /** Disables all picker interaction, including editing. */
   disabled?: boolean;
   /** Locks selection while allowing an Edit-only menu for the selected entity. */
   selectionLocked?: boolean;
-  /** Whether the field has an error */
-  error?: boolean;
+  /** Field error styling, or the caller-owned list's loading error. */
+  error?: boolean | Error | null;
   /** Optional className for styling */
   className?: string;
   /** Description ids supplied by a wrapping FormField. */
@@ -125,6 +133,14 @@ export interface EntitySelectProps {
   editLabel?: string;
 
 }
+
+/** A picker has either a server entity type or a caller-owned list. */
+export type EntitySelectProps = EntitySelectBaseProps & (
+  /** Server-backed search. */
+  | { entityType: EntityType; options?: undefined }
+  /** Caller-owned options use local search and disable all entity queries. */
+  | { entityType?: EntityType; options: readonly EntityOption[] }
+);
 
 export interface UseEntityOptionsParams {
   entityType: EntityType;

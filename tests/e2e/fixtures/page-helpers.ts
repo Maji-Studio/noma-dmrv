@@ -196,7 +196,7 @@ export async function selectFirstEntity(page: Page, fieldLabel: string) {
   await page.waitForSelector('[data-testid="entity-select-listbox"]', {
     timeout: 10000,
   });
-  await page.locator('[role="option"]').first().click();
+  await page.locator('[role="option"][data-testid^="entity-option-"]:not([aria-disabled="true"])').first().click();
 }
 
 export async function selectFirstCreditBatchProductionRun(
