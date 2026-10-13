@@ -201,7 +201,7 @@ test("gallery delivery and application create read edit", async ({ adminPage: pa
   await page.getByRole("button", { name: "New delivery", exact: true }).click();
   await page.locator("#deliveryDate").fill(FIFO_BROWSER_TIME);
   await selectEntity(page, "Order", f.order.id, f.order.code);
-  await page.locator("#storageLocationId").selectOption(f.bin.id);
+  await selectEntity(page, "Actual source bin", f.bin.id, f.bin.name);
   await page.locator("#deliveredWetMassKg").fill("2500");
   await fillStockMoisture(page, "delivery", "15");
   // The blocker renders once, under the wet-mass field, never a second time inside the preview.
@@ -229,7 +229,7 @@ test("gallery delivery and application create read edit", async ({ adminPage: pa
   await navigate(page, "applications", f.facility);
   await page.getByRole("button", { name: "New application", exact: true }).click();
   await page.locator("#applicationDate").fill(DATE);
-  await page.locator("#deliveryId").selectOption(delivery.id);
+  await selectEntity(page, "Delivery", delivery.id, delivery.code);
   await page.locator("#biocharAppliedTons").fill("1000");
   await page.locator("#fieldSizeHa").fill("1");
   await page.locator("#fieldIdentifier").fill("E2E Demonstration plot A");

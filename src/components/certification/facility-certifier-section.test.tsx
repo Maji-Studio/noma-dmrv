@@ -5,6 +5,16 @@ import type { FacilityCertifierMapping } from "@/fn/certification/facility-mappi
 import { useFacilityCertifierMapping } from "@/hooks/use-certification";
 import { FacilityCertifierForm } from "./facility-certifier-dialog";
 import { FacilityCertifierSection } from "./facility-certifier-section";
+import { EntitySelect } from "@/components/forms/entity-select/entity-select";
+import type { EntitySelectProps } from "@/components/forms/entity-select/types";
+
+vi.mock("@/components/forms/entity-select/entity-select", () => ({
+  EntitySelect: ({ id, value, options, placeholder }: EntitySelectProps) => (
+    <button id={id} role="combobox" aria-controls={`${id}-options`} aria-expanded={false}>
+      {options?.find((option) => option.id === value)?.name ?? placeholder}
+    </button>
+  ),
+}));
 
 vi.mock("@/components/ui/toast", () => ({
   useToast: () => ({ success: vi.fn() }),
@@ -12,7 +22,9 @@ vi.mock("@/components/ui/toast", () => ({
 
 vi.mock("@/components/forms", async () => {
   const { forwardRef } = await import("react");
+  const { EntitySelect } = await import("@/components/forms/entity-select/entity-select");
   return {
+    EntitySelect,
     FormActions: ({
       submitDisabled,
       submitLabel,
@@ -221,12 +233,10 @@ describe("FacilityCertifierSection", () => {
 
     const changeProject = async (value: string) => {
       const select = renderer?.root
-        .findAllByType("select")
+        .findAllByType(EntitySelect)
         .find((node) => node.props.id === "externalProjectId");
       await act(async () => {
-        select?.props.onChange({
-          target: { name: "externalProjectId", type: "select-one", value },
-        });
+        select?.props.onChange(value);
       });
     };
 

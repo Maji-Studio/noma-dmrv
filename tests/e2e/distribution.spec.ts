@@ -42,13 +42,7 @@ async function createOrderViaUi(
 
   await page.fill('input[name="orderDate"]', "2026-03-02");
   await selectEntity(page, "Customer", seededData.customer.id, seededData.customer.name);
-  await page.waitForSelector('select[name="customerLocationId"]:not([disabled])', {
-    timeout: 8000,
-  });
-  await page.selectOption(
-    'select[name="customerLocationId"]',
-    seededData.customerLocation.id
-  );
+  await selectEntity(page, "Customer location", seededData.customerLocation.id, seededData.customerLocation.name);
 
   // Selecting a location surfaces the read-only details panel with the
   // delivery route at the stored facility distance (issue #196). The route
@@ -84,7 +78,7 @@ async function createDeliveryViaUi(page: Page, seededData: SeededChainData) {
 
   await page.fill('input[name="deliveryDate"]', "2026-03-02T12:00");
   await selectEntityByText(page, "Order", seededData.customer.name);
-  await page.selectOption('select[name="storageLocationId"]', seededData.productStorageLocation.id);
+  await selectEntity(page, "Actual source bin", seededData.productStorageLocation.id, seededData.productStorageLocation.name);
   await page.fill('input[name="deliveredWetMassKg"]', "95");
   await fillStockMoisture(page, "delivery", "10");
   await page.click('button[type="submit"]:has-text("Create delivery")');

@@ -17,11 +17,11 @@ import { formatDayString } from "@/lib/format-utils";
 import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
 
 import { useEffect, useState } from "react";
-import { useForm, useWatch } from "react-hook-form";
+import { useController, useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import type { z } from "zod";
 import { PackageIcon, MapPinIcon, FileIcon, MapTrifoldIcon, ThermometerIcon } from "@phosphor-icons/react/dist/ssr";
-import { FormField, FormInput, FormSelect, FormSection, FormSpine, FormActions, makeCertFieldStatus } from "@/components/forms";
+import { EntitySelect, FormField, FormInput, FormSelect, FormSection, FormSpine, FormActions, makeCertFieldStatus } from "@/components/forms";
 import { ResolvedErrorRevalidator } from "@/components/forms";
 import { ProductCompositionPreview } from "@/components/ui/product-composition-preview";
 import {
@@ -204,6 +204,7 @@ export function ApplicationForm({
 
   const defaultSubmitLabel = isEditMode ? "Update application" : "Create application";
   const selectedDeliveryId = useWatch({ control, name: "deliveryId" });
+  const { field: deliveryField } = useController({ control, name: "deliveryId" });
   const watchedAppliedKg = useWatch({ control, name: "biocharAppliedTons" });
   const evidenceMethod = useWatch({ control, name: "evidenceMethod" }) as ApplicationEvidenceMethod;
   const gpsLatitude = useWatch({ control, name: "gpsLatitude" }) as number | null | undefined;
@@ -213,8 +214,9 @@ export function ApplicationForm({
   // Only delivered deliveries accept applications (issue #284) — undelivered
   // ones stay visible but disabled so operators see why they can't pick them.
   const deliveryOptions = deliveries.map((d) => ({
-    value: d.id,
-    label:
+    id: d.id,
+    code: d.code,
+    name:
       d.status === "delivered"
         ? formatApplicationDeliveryOptionLabel(d)
         : `${formatApplicationDeliveryOptionLabel(d)} · not yet delivered`,
@@ -445,13 +447,16 @@ export function ApplicationForm({
             cue={stockCues.deliveryCue}
             helperText="Choose a delivery by order, formulation, and kg."
           >
-            <FormSelect
+            <EntitySelect
               id="deliveryId"
+              optionLabel="delivery"
               placeholder="Select delivery..."
               disabled={isSubmitting}
               error={!!errors.deliveryId}
               options={deliveryOptions}
-              {...register("deliveryId")}
+              value={deliveryField.value}
+              onChange={deliveryField.onChange}
+              onBlur={deliveryField.onBlur}
             />
           </FormField>
         </div>

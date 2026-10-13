@@ -38,14 +38,7 @@ async function createOrderViaUi(page: Page, seededData: SeededChainData) {
 
   await page.fill('input[name="orderDate"]', "2026-03-02");
   await selectEntity(page, "Customer", seededData.customer.id, seededData.customer.name);
-  await page.waitForSelector(
-    'select[name="customerLocationId"]:not([disabled])',
-    { timeout: 8000 }
-  );
-  await page.selectOption(
-    'select[name="customerLocationId"]',
-    seededData.customerLocation.id
-  );
+  await selectEntity(page, "Customer location", seededData.customerLocation.id, seededData.customerLocation.name);
   await page.selectOption('select[name="packaging"]', "loose");
   await page.fill('input[name="quantityKg"]', "50");
   await selectEntity(page, "Formulation", seededData.formulation.id, seededData.formulation.name);
@@ -141,7 +134,7 @@ test.describe("Transport round trip (#852)", () => {
     await expect(
       dialog.getByRole("list", { name: "Biochar distribution route" })
     ).toContainText(/50 km\s*round trip/);
-    await page.selectOption('select[name="storageLocationId"]', seededData.productStorageLocation.id);
+    await selectEntity(page, "Actual source bin", seededData.productStorageLocation.id, seededData.productStorageLocation.name);
     await page.fill('input[name="deliveredWetMassKg"]', "45");
     await fillStockMoisture(page, "delivery", "10");
     await page.click('button[type="submit"]:has-text("Create delivery")');

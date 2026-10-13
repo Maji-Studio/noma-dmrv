@@ -39,7 +39,9 @@ vi.mock("./delivery-stock-details", () => ({ DeliveryStockDetails: () => null })
 vi.mock("./delivery-trailing-sections", () => ({ DeliveryEvidenceSection: () => null }));
 vi.mock("@/hooks/use-entities", () => ({
   useEntityOptions: () => ({ data: [{ id: "order-one", code: "ORD-1", name: "Order one" }, { id: "order-two", code: "ORD-2", name: "Order two" }] }),
-  useEntityById: () => ({ data: { id: "order-one", code: "ORD-1", name: "Order one" } }),
+  useEntityById: (entityType: string) => ({ data: entityType === "storageLocation"
+    ? { id: "bin-one", code: "BIN-1", name: "Source bin" }
+    : { id: "order-one", code: "ORD-1", name: "Order one" } }),
 }));
 
 const delivery = {
@@ -75,6 +77,22 @@ it("opens the existing delivery's order picker with only Edit and preserves the 
   expect(screen.queryByTestId("entity-select-clear")).toBeNull();
   fireEvent.keyDown(trigger, { key: "Escape" });
   expect(trigger.textContent).toContain("Order one");
+});
+
+it("opens the existing delivery's source bin picker with only Edit and preserves its selection", async () => {
+  render(<DeliveryForm delivery={delivery} onSubmit={vi.fn()} />, { wrapper });
+  const trigger = screen.getByRole("combobox", { name: /Actual source bin/ });
+  expect(trigger.hasAttribute("disabled")).toBe(false);
+  expect(trigger.getAttribute("aria-readonly")).toBe("true");
+  fireEvent.click(trigger);
+  const menu = await screen.findByTestId("entity-select-listbox");
+  expect(within(menu).getByTestId("entity-select-edit").textContent).toBe("Edit Source bin");
+  expect(menu.children).toHaveLength(1);
+  expect(within(menu).queryAllByRole("option")).toHaveLength(0);
+  expect(screen.queryByTestId("entity-select-clear")).toBeNull();
+  fireEvent.keyDown(trigger, { key: "ArrowDown" });
+  fireEvent.keyDown(trigger, { key: "Escape" });
+  expect(trigger.textContent).toBe("Source bin");
 });
 
 it.each(["create", "update", "delete"] as const)("refreshes the open delivery's inherited distance after a nested location %s without saving its parents", async (operation) => {

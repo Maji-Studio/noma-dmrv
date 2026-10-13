@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 /**
  * OrderForm customer field.
  *
@@ -7,7 +8,8 @@
  */
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { renderToStaticMarkup } from "react-dom/server";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import type { Order } from "@/db/schema";
 import type { EntityOption, EntityType } from "@/components/forms/entity-select/types";
 
@@ -17,6 +19,7 @@ const state = vi.hoisted(() => ({
   /** Every by-id request, so edit-mode preselection is observable. */
   detailRequests: [] as { entityType: EntityType; id: string | undefined }[],
   customersById: {} as Record<string, EntityOption>,
+  locationOptions: [] as EntityOption[],
 }));
 
 vi.mock("@/hooks/use-facility-context", () => ({
@@ -51,7 +54,7 @@ vi.mock("@/hooks/use-entities", () => ({
     enabled?: boolean;
   }) => {
     state.optionRequests.push({ entityType, enabled });
-    return { data: [], dataUpdatedAt: 0, isLoading: false, error: null };
+    return { data: entityType === "customerLocation" ? state.locationOptions : [], dataUpdatedAt: 0, isLoading: false, error: null };
   },
   useEntityById: (entityType: EntityType, id: string | undefined) => {
     state.detailRequests.push({ entityType, id });
@@ -77,7 +80,11 @@ beforeEach(() => {
   state.optionRequests = [];
   state.detailRequests = [];
   state.customersById = {};
+  state.locationOptions = [];
+  Element.prototype.scrollIntoView = vi.fn();
+  window.matchMedia = vi.fn().mockImplementation(() => ({ matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn() }));
 });
+afterEach(cleanup);
 
 describe("OrderForm product details", () => {
   it("collects no price or currency", () => {
@@ -92,6 +99,28 @@ describe("OrderForm product details", () => {
 });
 
 describe("OrderForm customer field", () => {
+  it("submits null after the operator clears the customer's sole location", async () => {
+    const locationId = "11111111-1111-4111-8111-111111111111";
+    state.locationOptions = [{ id: locationId, code: "", name: "Only location" }];
+    const submit = vi.fn();
+    const client = new QueryClient();
+    render(<QueryClientProvider client={client}>
+      <OrderForm order={{
+        id: "order-1", facilityId: "22222222-2222-4222-8222-222222222222",
+        customerId: "33333333-3333-4333-8333-333333333333", customerLocationId: "",
+        formulationId: "44444444-4444-4444-8444-444444444444",
+        orderDate: "2026-09-01", quantityKg: 1000, packaging: "loose",
+      } as unknown as Order} onSubmit={submit} />
+    </QueryClientProvider>);
+    const picker = screen.getByRole("combobox", { name: "Customer location" });
+    await waitFor(() => expect(picker.textContent).toBe("Only location"));
+    fireEvent.click(within(picker.parentElement!).getByTestId("entity-select-clear"));
+    expect(picker.textContent).toBe("Select location...");
+    fireEvent.submit(picker.closest("form")!);
+    await waitFor(() => expect(submit).toHaveBeenCalledWith(expect.objectContaining({ customerLocationId: null })));
+    client.clear();
+  });
+
   it("renders a searchable combobox instead of a truncated native select", () => {
     const html = renderForm();
 

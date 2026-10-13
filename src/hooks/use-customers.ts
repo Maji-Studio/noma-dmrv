@@ -57,6 +57,7 @@ const customerLocationKeys = {
 };
 
 const CUSTOMER_ENTITY_TYPE = "customer" as const;
+const CUSTOMER_LOCATION_ENTITY_TYPE = "customerLocation" as const;
 
 /**
  * Seed the customer detail cache and the EntitySelect caches so the order form
@@ -222,6 +223,7 @@ export function useCreateCustomerWithLocations(
           location,
         );
       }
+      invalidateEntityTypeQueries(queryClient, CUSTOMER_LOCATION_ENTITY_TYPE);
 
       await callbacks?.onSuccess?.(data, variables);
     },
@@ -522,6 +524,7 @@ export function useCreateCustomerLocation(
 
       // Pre-populate the detail cache
       queryClient.setQueryData(customerLocationKeys.detail(data.id), data);
+      invalidateEntityTypeQueries(queryClient, CUSTOMER_LOCATION_ENTITY_TYPE);
 
       queryClient.invalidateQueries({ queryKey: orderKeys.selects() });
 
@@ -559,6 +562,7 @@ export function useUpdateCustomerLocation(
       patchArrayListCacheByExactKeyWithSavedRow<CustomerLocation>(queryClient, customerKeys.locations(data.customerId), data);
       // Update cache with actual server data
       queryClient.setQueryData(customerLocationKeys.detail(data.id), data);
+      invalidateEntityTypeQueries(queryClient, CUSTOMER_LOCATION_ENTITY_TYPE);
 
       // Invalidate customer locations list
       queryClient.invalidateQueries({
@@ -612,6 +616,8 @@ export function useDeleteCustomerLocation(
       queryClient.removeQueries({
         queryKey: customerLocationKeys.detail(locationId),
       });
+      queryClient.removeQueries({ queryKey: entityKeys.detail(CUSTOMER_LOCATION_ENTITY_TYPE, locationId) });
+      invalidateEntityTypeQueries(queryClient, CUSTOMER_LOCATION_ENTITY_TYPE);
       // Invalidate customer locations list
       queryClient.invalidateQueries({
         queryKey: customerKeys.locations(customerId),

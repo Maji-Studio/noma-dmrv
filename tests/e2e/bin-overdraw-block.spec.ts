@@ -350,14 +350,7 @@ async function createOrder(page: Page, seededData: SeededChainData, quantityKg =
     seededData.customer.id,
     seededData.customer.name,
   );
-  await page.waitForSelector(
-    'select[name="customerLocationId"]:not([disabled])',
-    { timeout: 8000 },
-  );
-  await page.selectOption(
-    'select[name="customerLocationId"]',
-    seededData.customerLocation.id,
-  );
+  await selectEntity(page, "Customer location", seededData.customerLocation.id, seededData.customerLocation.name);
   await page.selectOption('select[name="packaging"]', "loose");
   await page.fill('input[name="quantityKg"]', quantityKg);
   await selectEntity(
@@ -385,7 +378,7 @@ async function openDeliveredDeliveryForm(
 
   await page.fill('input[name="deliveryDate"]', `${DELIVERY_DATE}T12:00`);
   await selectEntityByText(page, "Order", seededData.customer.name);
-  await page.selectOption('select[name="storageLocationId"]', seededData.productStorageLocation.id);
+  await selectEntity(page, "Actual source bin", seededData.productStorageLocation.id, seededData.productStorageLocation.name);
   await page.fill('input[name="deliveredWetMassKg"]', wetMassKg);
   await fillStockMoisture(page, "delivery", "10");
 }

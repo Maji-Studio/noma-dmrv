@@ -14,6 +14,7 @@ export const ENTITY_TYPE_LABELS: Record<EntityType, string> = {
   reactor: "reactor",
   supplier: "supplier",
   customer: "customer",
+  customerLocation: "customer location",
   driver: "driver",
   operator: "operator",
   storageLocation: "storage bin",
