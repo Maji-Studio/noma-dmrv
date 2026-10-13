@@ -11,7 +11,7 @@ name: Storage health
 # No noma DB, no app boot.
 #
 # Storage secrets come from 1Password via the "Load storage secrets" step:
-#   op://Environment Variables/noma-dmrv env staging/{STORAGE_PROVIDER,
+#   op://Environment Variables/noma-dmrv env staging/{NEXT_PUBLIC_APP_URL,STORAGE_PROVIDER,
 #   STORAGE_BUCKET,STORAGE_REGION,STORAGE_ENDPOINT,STORAGE_PREFIX,STORAGE_ACCESS_KEY_ID,
 #   STORAGE_SECRET_ACCESS_KEY}
 # (STORAGE_ENDPOINT is required — staging is DO Spaces, where the AWS SDK
@@ -19,9 +19,9 @@ name: Storage health
 # exactly.)
 # CI authenticates with a single repo secret, OP_SERVICE_ACCOUNT_TOKEN. When it
 # is absent the load + smoke steps are skipped so forks/PRs stay green rather
-# than failing on missing creds. The non-storage env vars below are
-# format-valid placeholders only — env.ts validates them at import time but the
-# storage code path never opens a DB connection or boots the app.
+# than failing on missing creds. NEXT_PUBLIC_APP_URL is the real staging origin for
+# browser CORS checks. DATABASE_URL and BETTER_AUTH_SECRET below are format-valid
+# placeholders only; storage never opens a DB connection or boots the app.
 
 on:
   schedule:
