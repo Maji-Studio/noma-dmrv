@@ -207,7 +207,7 @@ export async function seedChainData(
         name: `E2E Seed Vehicle ${testRunId}`,
         identifier: `TZ-${testRunId}`,
         vehicleType: "truck",
-        fuelType: "diesel",
+        fuelType: "Diesel",
         fuelConsumptionLPerKm: 0.25,
         modelYear: 2022,
       });

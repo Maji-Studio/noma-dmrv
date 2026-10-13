@@ -24,7 +24,6 @@ import type { UseDeferredAttachmentsResult } from "@/hooks/use-deferred-attachme
 import { useFacility } from "@/hooks/use-facilities";
 import { useFacilityClock, useFacilityContext } from "@/hooks/use-facility-context";
 import { useOrdersForSelect } from "@/hooks/use-orders";
-import { useMatchingOutputBins } from "@/hooks/use-output-stock";
 import { useOutputDrawDraft } from "@/hooks/use-output-draw-draft";
 import { useSubBinDraw } from "@/hooks/use-sub-bin-draw";
 import { SubBinDrawField } from "@/components/storage-locations/sub-bin-draw-field";
@@ -235,7 +234,6 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
     setValue("distanceNote", "");
   });
 
-  const matchingBins = useMatchingOutputBins(formFacilityId ?? "", selectedOrder?.formulationId ?? "");
   const wetMass = Number(watchWetMass);
   const moisture = watchMoisture === "" || watchMoisture == null ? NaN : Number(watchMoisture);
   // A split product bin takes one reading per sub-bin the load reaches.
@@ -320,10 +318,12 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
           name="orderId"
           label="Order"
           entityType="order"
+          allowEdit
           placeholder="Select order..."
           required
           showRemainingDryMass={false}
-          disabled={isSubmitting || isEditMode || !formFacilityId}
+          disabled={isSubmitting || !formFacilityId}
+          selectionLocked={isEditMode}
           filterBy={formFacilityId ? { facilityId: formFacilityId } : undefined}
           emptyHint={{
             message:
@@ -334,10 +334,25 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
             linkLabel: "Open orders",
           }}
         />
-        <FormField id="storageLocationId" label="Actual source bin" required error={errors.storageLocationId?.message}>
-          <FormSelect id="storageLocationId" placeholder="Select matching source bin..." disabled={isSubmitting || isEditMode} options={(matchingBins.data ?? []).map(bin => ({ value: bin.id, label: bin.name }))} {...register("storageLocationId")} />
-        </FormField>
-        {matchingBins.error && <p role="alert" className="body-caption text-[var(--color-status-error)]">{matchingBins.error.message}</p>}
+        <FormEntitySelect
+          id="storageLocationId"
+          control={control}
+          name="storageLocationId"
+          label="Actual source bin"
+          entityType="storageLocation"
+          allowEdit
+          placeholder="Select matching source bin..."
+          required
+          autoSelectSingle={false}
+          disabled={isSubmitting}
+          selectionLocked={isEditMode}
+          filterBy={formFacilityId && selectedOrder?.formulationId ? {
+            facilityId: formFacilityId,
+            type: "product_bin",
+            formulationId: selectedOrder.formulationId,
+            formulationMatch: "strict",
+          } : { formulationMatch: "strict" }}
+        />
       </FormSection>
 
       {/* Mass & Moisture Section */}
@@ -405,29 +420,7 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
           activeTarget={focusTarget}
           actionLabel="Complete the saved transport route information"
         >
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-          <FormField
-            id="distanceKmOverride"
-            label="One-way distance"
-            unit="km"
-            error={errors.distanceKmOverride?.message}
-            helperText={distanceHelperText}
-            cue={distanceCue}
-          >
-            <FormInput
-              id="distanceKmOverride"
-              type="number"
-              step="any"
-              min={0}
-              placeholder="e.g., 85"
-              disabled={isSubmitting}
-              error={!!errors.distanceKmOverride}
-              value={distanceDraft}
-              onChange={(event) => handleDistanceChange(event.target.value)}
-              onBlur={handleDistanceBlur}
-            />
-          </FormField>
-
+        <div className="grid grid-cols-1 gap-x-16 gap-y-20">
           <FormField
             id="distanceSource"
             label="Distance source"
@@ -447,6 +440,28 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
               value={effectiveDraftDistanceSource ?? ""}
               onChange={(event) => handleDistanceSourceChange(event.target.value)}
               onBlur={() => void trigger("distanceSource")}
+            />
+          </FormField>
+
+          <FormField
+            id="distanceKmOverride"
+            label="One-way distance"
+            unit="km"
+            error={errors.distanceKmOverride?.message}
+            helperText={distanceHelperText}
+            cue={distanceCue}
+          >
+            <FormInput
+              id="distanceKmOverride"
+              type="number"
+              step="any"
+              min={0}
+              placeholder="e.g., 85"
+              disabled={isSubmitting}
+              error={!!errors.distanceKmOverride}
+              value={distanceDraft}
+              onChange={(event) => handleDistanceChange(event.target.value)}
+              onBlur={handleDistanceBlur}
             />
           </FormField>
 

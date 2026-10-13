@@ -38,8 +38,9 @@ export const orderKeys = {
   detail: (id: string) => [...orderKeys.details(), id] as const,
   detailWithRelations: (id: string) =>
     [...orderKeys.details(), id, "relations"] as const,
+  selects: () => [...orderKeys.all, "select"] as const,
   select: (facilityId?: string) =>
-    [...orderKeys.all, "select", facilityId] as const,
+    [...orderKeys.selects(), facilityId] as const,
   codeCheck: (code: string, excludeId?: string) =>
     [...orderKeys.all, "codeCheck", code, excludeId] as const,
 };
@@ -204,6 +205,7 @@ export function useUpdateOrder(
     },
     onSuccess: async (data, variables) => {
       patchListCachesWithSavedRow(queryClient, orderKeys.lists(), data);
+      queryClient.invalidateQueries({ queryKey: orderKeys.selects() });
       // Update cache with actual server data
       queryClient.setQueryData(orderKeys.detail(data.id), data);
 

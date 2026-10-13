@@ -13,13 +13,14 @@ import { WarningOctagonIcon } from "@phosphor-icons/react/dist/ssr";
 import { EmptyState } from "@/components/ui/empty-state";
 import { SelectFacilityEmptyState } from "@/components/navigation";
 import {
-  OnboardingWizard,
   SetupGuide,
   SetupGuideSkeleton,
   SetupInProgressState,
   SetupStrip,
-  useOnboardingGate,
+  useSetupGuide,
 } from "@/components/onboarding";
+import { SetupCreateSheet } from "@/components/onboarding/setup-create-sheet";
+import { RegistryConnectionDialog } from "@/components/certification/registry-connection-dialog";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { useDashboardOverview } from "@/hooks/use-dashboard-overview";
 import type { DashboardRange } from "@/data-access/dashboard-overview";
@@ -36,14 +37,20 @@ const DEFAULT_RANGE: DashboardRange = "month";
 export function DashboardView() {
   const { activeOrganizationId, facilityId, selectedFacility } =
     useFacilityContext();
+  const [setupSurface, setSetupSurface] = useState<"facility" | "reactor" | "registry" | null>(null);
   const [range, setRange] = useState<DashboardRange>(DEFAULT_RANGE);
   const { data, isLoading, error } = useDashboardOverview(facilityId, range);
 
   // First-run onboarding decides whether the setup surfaces take over the body
   // (a fresh facility would render meaningless zeros), recede to a strip, or
-  // stay out of the way once setup is complete. The wizard is always mounted —
-  // the dashboard is the post-login landing.
-  const onboarding = useOnboardingGate(facilityId, activeOrganizationId);
+  // stay out of the way once setup is complete.
+  const onboarding = useSetupGuide(facilityId, activeOrganizationId);
+  const setupActions = {
+    facilityId,
+    onOpenFacility: () => setSetupSurface("facility"),
+    onOpenReactor: () => setSetupSurface("reactor"),
+    onOpenRegistry: () => setSetupSurface("registry"),
+  };
   const isTakeover =
     onboarding.mode === "takeover-guide" ||
     onboarding.mode === "takeover-member";
@@ -85,7 +92,7 @@ export function DashboardView() {
         ) : (
           <SetupGuide
             progress={onboarding.progress}
-            onStartFacility={onboarding.wizard.open}
+            actions={setupActions}
             onCollapse={() => onboarding.setCollapsed(true)}
           />
         )
@@ -94,6 +101,7 @@ export function DashboardView() {
           {onboarding.mode === "strip" && (
             <SetupStrip
               progress={onboarding.progress}
+              actions={setupActions}
               onExpand={() => onboarding.setCollapsed(false)}
             />
           )}
@@ -116,7 +124,18 @@ export function DashboardView() {
         </>
       )}
 
-      <OnboardingWizard wizard={onboarding.wizard} status={onboarding.status} />
+      {(setupSurface === "facility" || setupSurface === "reactor") && (
+        <SetupCreateSheet key={setupSurface} entity={setupSurface} onClose={() => setSetupSurface(null)} />
+      )}
+      {setupSurface === "registry" && facilityId && (
+        <RegistryConnectionDialog
+          key={facilityId}
+          facilityId={facilityId}
+          facilityLabel={selectedFacility?.code}
+          canManage={onboarding.status?.isOwnerOrAdmin ?? false}
+          onClose={() => setSetupSurface(null)}
+        />
+      )}
     </div>
   );
 }

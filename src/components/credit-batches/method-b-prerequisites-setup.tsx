@@ -93,7 +93,21 @@ export function MethodBPrerequisitesSetup({
         testId="method-b-prerequisites-dialog"
         dismissible={!recordPrerequisites.isPending}
       >
-        <div className="grid grid-cols-1 gap-x-16 gap-y-20 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-x-16 gap-y-20">
+          <FormField
+            id="method-b-moisture-pathway"
+            label="Moisture pathway"
+            error={errors.moisturePathway?.message}
+            required
+          >
+            <FormSelect
+              id="method-b-moisture-pathway"
+              options={MOISTURE_OPTIONS}
+              error={!!errors.moisturePathway}
+              disabled={recordPrerequisites.isPending}
+              {...register("moisturePathway")}
+            />
+          </FormField>
           <FormField
             id="method-b-agreed-baseline"
             label="Agreed baseline size"
@@ -107,20 +121,6 @@ export function MethodBPrerequisitesSetup({
               error={!!errors.agreedBaselineSize}
               disabled={recordPrerequisites.isPending}
               {...register("agreedBaselineSize")}
-            />
-          </FormField>
-          <FormField
-            id="method-b-moisture-pathway"
-            label="Moisture pathway"
-            error={errors.moisturePathway?.message}
-            required
-          >
-            <FormSelect
-              id="method-b-moisture-pathway"
-              options={MOISTURE_OPTIONS}
-              error={!!errors.moisturePathway}
-              disabled={recordPrerequisites.isPending}
-              {...register("moisturePathway")}
             />
           </FormField>
         </div>

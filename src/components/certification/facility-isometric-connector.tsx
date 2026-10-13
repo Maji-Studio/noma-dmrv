@@ -24,7 +24,7 @@ import { useId, useState } from "react";
 import Link from "next/link";
 import { Button, Modal } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
-import { FormField, FormInput, FormSelect, ServerError } from "@/components/forms";
+import { EntitySelect, FormField, FormInput, ServerError } from "@/components/forms";
 import {
   useFacilityCertifierMapping,
   useFacilityCertifierSummary,
@@ -194,8 +194,10 @@ function ConnectorBody({
     return (
       <ConnectorShell header={header}>
         <FormField id="isometric-project" label="Isometric project">
-          <FormSelect
+          <EntitySelect
             id="isometric-project"
+            optionLabel="Isometric project"
+            onChange={() => {}}
             placeholder="Isometric not configured"
             options={[]}
             disabled
@@ -233,8 +235,9 @@ function ConnectorBody({
     !!(mapping.defaultRemovalTemplateId || mapping.externalFacilityId);
 
   const projectOptions = availableProjects.map((project) => ({
-    value: project.id,
-    label: `${project.name}: ${project.id}`,
+    id: project.id,
+    code: project.id,
+    name: `${project.name}: ${project.id}`,
   }));
 
   const trimmedFacilityId = facilityIdInput.trim();
@@ -248,8 +251,10 @@ function ConnectorBody({
     (isProduction && !confirmProduction) ||
     saveMutation.isPending;
 
-  const handleSelect = (value: string) => {
-    setSelectedProjectId(value);
+  const handleSelect = (value: string | undefined) => {
+    const projectId = value ?? "";
+    if (projectId === selected) return;
+    setSelectedProjectId(projectId);
     setAcknowledgeSharedProject(false);
     setConfirmProduction(false);
     setServerError(null);
@@ -317,15 +322,16 @@ function ConnectorBody({
           No projects found on Isometric for this account.
         </p>
       ) : (
-        <div className="flex items-end gap-12">
-          <div className="flex-1">
+        <div className="flex flex-col items-start gap-12">
+          <div className="w-full">
             <FormField id="isometric-project" label="Isometric project">
-              <FormSelect
+              <EntitySelect
                 id="isometric-project"
+                optionLabel="Isometric project"
                 placeholder="Select a project"
                 options={projectOptions}
                 value={selected}
-                onChange={(event) => handleSelect(event.target.value)}
+                onChange={handleSelect}
                 disabled={saveMutation.isPending}
               />
             </FormField>

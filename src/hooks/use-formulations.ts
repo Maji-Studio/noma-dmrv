@@ -1,3 +1,4 @@
+import { invalidateEntityTypeQueries } from "./entity-query-keys";
 import { throwActionError, StaleVersionError } from "@/lib/stale-version";
 /**
  * Formulations React Query Hooks
@@ -30,7 +31,7 @@ import type { MutationCallbacks, OptimisticUpdateOptions } from "./types";
 // Query Keys
 // ============================================
 
-const formulationKeys = {
+export const formulationKeys = {
   all: ["formulations"] as const,
   lists: () => [...formulationKeys.all, "list"] as const,
   list: (filters?: Partial<FormulationFilterData>) =>
@@ -106,6 +107,7 @@ export function useCreateFormulation(
       await callbacks?.onMutate?.(variables);
     },
     onSuccess: async (data, variables) => {
+      invalidateEntityTypeQueries(queryClient, "formulation");
       // Invalidate all formulation lists
       queryClient.invalidateQueries({ queryKey: formulationKeys.lists() });
       // Invalidate options for dropdowns
@@ -208,6 +210,7 @@ export function useUpdateFormulation(
       return { previousFormulation, previousLists };
     },
     onSuccess: async (data, variables) => {
+      invalidateEntityTypeQueries(queryClient, "formulation");
       // Update cache with actual server data
       queryClient.setQueryData(formulationKeys.detail(data.id), data);
       patchListCachesWithSavedRow<FormulationWithIngredients>(queryClient, formulationKeys.lists(), data);

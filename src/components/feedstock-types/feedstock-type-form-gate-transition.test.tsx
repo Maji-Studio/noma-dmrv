@@ -223,6 +223,25 @@ function renderForm(props: {
 beforeEach(() => harness.reset());
 
 describe("FeedstockTypeForm Isometric gate transitions", () => {
+  it("places the certified-feedstock warning above Usage, Name and Category", () => {
+    const onSubmit = vi.fn();
+    renderForm({ onSubmit });
+    harness.formValues.usage = "pyrolysis";
+
+    const markup = renderForm({ onSubmit });
+    const warning = markup.indexOf(
+      "Only feedstock types that exist in Isometric can pass verification.",
+    );
+    const usage = markup.indexOf('id="usage"');
+    const name = markup.indexOf('id="name"');
+    const category = markup.indexOf('id="category"');
+
+    expect(warning).toBeGreaterThanOrEqual(0);
+    expect(usage).toBeGreaterThan(warning);
+    expect(name).toBeGreaterThan(usage);
+    expect(category).toBeGreaterThan(name);
+  });
+
   it("does not validate the untouched local category when selecting an Isometric feedstock", () => {
     const onSubmit = vi.fn();
 

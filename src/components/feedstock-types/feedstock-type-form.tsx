@@ -83,6 +83,8 @@ interface FeedstockTypeFormProps {
   hint?: string;
   /** Pin the action row to the bottom edge of a scrolling container (side sheets). Modals pass false. */
   stickyActions?: boolean;
+  /** Use the dialog discard guard for a non-sticky modal footer. */
+  guardDialogCancel?: boolean;
 }
 
 export function FeedstockTypeForm({
@@ -96,6 +98,7 @@ export function FeedstockTypeForm({
   lockUsage = false,
   hint,
   stickyActions = true,
+  guardDialogCancel,
 }: FeedstockTypeFormProps) {
   const isEditMode = !!feedstockType;
   const { facilityId } = useFacilityContext();
@@ -325,8 +328,14 @@ export function FeedstockTypeForm({
             <div className="space-y-20">
               {selectedIsometricSummary}
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-                <div className="space-y-10 md:col-span-2">
+              {showCertifiedFeedstockWarning && (
+                <Notice tone="warning">
+                  {CERTIFIED_FEEDSTOCK_WARNING}
+                </Notice>
+              )}
+
+              <div className="grid grid-cols-1 gap-x-16 gap-y-20">
+                <div className="space-y-10">
                   <FormField
                     id="usage"
                     label="Usage"
@@ -384,12 +393,6 @@ export function FeedstockTypeForm({
                     {...register("category")}
                   />
                 </FormField>
-
-                {showCertifiedFeedstockWarning && (
-                  <Notice tone="warning" className="md:col-span-2">
-                    {CERTIFIED_FEEDSTOCK_WARNING}
-                  </Notice>
-                )}
               </div>
 
               <FormField
@@ -414,6 +417,7 @@ export function FeedstockTypeForm({
                 submitLabel={submitLabel}
                 defaultSubmitLabel={defaultSubmitLabel}
                 sticky={stickyActions}
+                guardDialogCancel={guardDialogCancel}
               />
             </div>
           )}
@@ -463,6 +467,7 @@ export function FeedstockTypeForm({
                     submitLabel={submitLabel}
                     defaultSubmitLabel={defaultSubmitLabel}
                     sticky={stickyActions}
+                    guardDialogCancel={guardDialogCancel}
                   />
                 </div>
               )}

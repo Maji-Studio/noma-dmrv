@@ -2,7 +2,6 @@
 
 import { TrashIcon } from "@phosphor-icons/react/dist/ssr";
 import { EntitySelect, FormField, FormInput, StockReconciliationLink } from "@/components/forms";
-import { StorageBinActions } from "@/components/storage-locations/storage-bin-actions";
 import { Button } from "@/components/ui/button";
 import { useStockAvailability } from "@/hooks/use-stock-availability";
 import {
@@ -93,8 +92,7 @@ export function ProductionRunFeedstockDrawRow({
         </Button>
       </div>
 
-      {/* The bin column is wider: it carries the View and Edit buttons. */}
-      <div className="grid grid-cols-1 md:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] gap-x-16 gap-y-20">
+      <div className="flex flex-col gap-y-20">
         <FormField
           id={`feedstockDraws.${index}.storageLocationId`}
           label="Source bin"
@@ -104,6 +102,7 @@ export function ProductionRunFeedstockDrawRow({
           <EntitySelect
             id={`feedstockDraws.${index}.storageLocationId`}
             entityType="storageLocation"
+            allowEdit
             value={storageLocationId}
             onChange={onStorageLocationChange}
             placeholder="Select bin..."
@@ -129,7 +128,6 @@ export function ProductionRunFeedstockDrawRow({
               massError: resolvedWetMassError,
               overdrawError: stockError,
             })}
-            trailingActions={<StorageBinActions storageLocationId={storageLocationId} />}
           />
         </FormField>
         <input

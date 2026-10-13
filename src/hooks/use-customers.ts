@@ -4,6 +4,7 @@
  * Includes query keys, mutations, optimistic updates, and cache invalidation
  */
 
+import { orderKeys } from "./use-orders";
 import {
   keepPreviousData,
   type QueryClient,
@@ -56,6 +57,7 @@ const customerLocationKeys = {
 };
 
 const CUSTOMER_ENTITY_TYPE = "customer" as const;
+const CUSTOMER_LOCATION_ENTITY_TYPE = "customerLocation" as const;
 
 /**
  * Seed the customer detail cache and the EntitySelect caches so the order form
@@ -221,6 +223,7 @@ export function useCreateCustomerWithLocations(
           location,
         );
       }
+      invalidateEntityTypeQueries(queryClient, CUSTOMER_LOCATION_ENTITY_TYPE);
 
       await callbacks?.onSuccess?.(data, variables);
     },
@@ -521,6 +524,9 @@ export function useCreateCustomerLocation(
 
       // Pre-populate the detail cache
       queryClient.setQueryData(customerLocationKeys.detail(data.id), data);
+      invalidateEntityTypeQueries(queryClient, CUSTOMER_LOCATION_ENTITY_TYPE);
+
+      queryClient.invalidateQueries({ queryKey: orderKeys.selects() });
 
       await callbacks?.onSuccess?.(data, variables);
     },
@@ -556,6 +562,7 @@ export function useUpdateCustomerLocation(
       patchArrayListCacheByExactKeyWithSavedRow<CustomerLocation>(queryClient, customerKeys.locations(data.customerId), data);
       // Update cache with actual server data
       queryClient.setQueryData(customerLocationKeys.detail(data.id), data);
+      invalidateEntityTypeQueries(queryClient, CUSTOMER_LOCATION_ENTITY_TYPE);
 
       // Invalidate customer locations list
       queryClient.invalidateQueries({
@@ -565,6 +572,8 @@ export function useUpdateCustomerLocation(
       queryClient.invalidateQueries({
         queryKey: customerKeys.detailWithRelations(data.customerId),
       });
+
+      queryClient.invalidateQueries({ queryKey: orderKeys.selects() });
 
       await callbacks?.onSuccess?.(data, variables);
     },
@@ -607,6 +616,8 @@ export function useDeleteCustomerLocation(
       queryClient.removeQueries({
         queryKey: customerLocationKeys.detail(locationId),
       });
+      queryClient.removeQueries({ queryKey: entityKeys.detail(CUSTOMER_LOCATION_ENTITY_TYPE, locationId) });
+      invalidateEntityTypeQueries(queryClient, CUSTOMER_LOCATION_ENTITY_TYPE);
       // Invalidate customer locations list
       queryClient.invalidateQueries({
         queryKey: customerKeys.locations(customerId),
@@ -617,6 +628,8 @@ export function useDeleteCustomerLocation(
       });
       // Invalidate customer lists (location count changed)
       queryClient.invalidateQueries({ queryKey: customerKeys.lists() });
+
+      queryClient.invalidateQueries({ queryKey: orderKeys.selects() });
 
       await callbacks?.onSuccess?.(undefined, variables);
     },

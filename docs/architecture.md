@@ -180,7 +180,7 @@ consumes current stock under bin locks and bumps its affected products as an
 internal side effect. Facility archive and restore bump descendant runs and
 products without child preconditions.
 
-Vehicles and drivers start at version 1; any future writer must bump `version` with `nextVersion` when changing a surviving row.
+Vehicles, drivers and operators use integer row versions for edits and deletes (`src/data-access/vehicles.ts`, `drivers.ts`, `operators.ts`).
 
 Successful saves and corrections merge returned versions into every list cache
 that supplies edit sheets before invalidation. Stale deletes refresh the list
@@ -218,6 +218,16 @@ populate the dropdown; `useOpenCreateIntent()` opens create dialogs from
 change via `dependsOn` (backed by the standalone `useClearOnDependencyChange`).
 See [forms.md](./forms.md).
 
+The vehicle, driver and operator quick-add dialogs also edit: pass the loaded
+record (`vehicle`, `driver`, `operator`), or render `EntityEditDialog` with
+`{ entityType, entityId, isOpen, onClose }` to load it by id. A save seeds the picker's entity cache
+with the new name. Deletes refuse while any record references the row and name
+where it is used (`src/data-access/fleet-usage.ts`). A vehicle's type is
+copied onto each feedstock intake's derived transport leg, so a type or model
+year edit refreshes those leg snapshots in the same transaction. A type change
+is refused, naming the credit batch, while a submitted credit batch holds an
+intake or delivery that uses the vehicle.
+
 ### Structured logging — `@/lib/log` (server-only)
 
 `logger.info({ userId, removalId }, "msg")`; `logger.child(bindings)` merges
@@ -243,9 +253,10 @@ runtime.
   `src/app/(app)/admin/*` admin-only · `src/app/api/*` API routes.
 - `src/app/(app)/layout.tsx` enforces auth and mounts `FacilityProvider`.
 - **Three configuration surfaces, deliberately not one.** `/settings`
-  (`Members` · `Defaults` · `API keys`) is org configuration. Every member can view the
+  (`Members` · `Defaults` · `Vehicles and crew` · `API keys`) is org configuration. Every member can view the
   Members roster; only Owners/Admins (and Platform Admins) can mutate membership
-  or open Defaults. API keys require a verified Owner/Admin membership; a
+  or open Defaults. Every member can edit and delete vehicles, drivers and
+  operators in Vehicles and crew, as every member can create them from a picker. API keys require a verified Owner/Admin membership; a
   Platform Admin without that membership cannot manage keys.
   `/certification/settings` is registry configuration and
   stays there by ADR
