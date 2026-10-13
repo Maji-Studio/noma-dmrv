@@ -204,3 +204,16 @@ export function orderWithSuggestions(
     ...TIMEZONE_ENTRIES.filter((entry) => !suggestedIds.has(entry.id)),
   ];
 }
+
+/** Base UI's reason for the user typing in the input (vs. an automatic fill). */
+export const INPUT_CHANGE_REASON = "input-change";
+
+/**
+ * The search text after an input-value change. Only the user typing counts:
+ * Base UI also rewrites the input to the chosen label on a pick, a focus-out or
+ * a reopen, and those must not filter the list. Comparing the text with the
+ * selected label cannot tell the two apart (typing "UTC" over a selected "UTC").
+ */
+export function searchQueryAfterInputChange(value: string, reason: string): string {
+  return reason === INPUT_CHANGE_REASON ? value.trim() : "";
+}

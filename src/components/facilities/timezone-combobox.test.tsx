@@ -34,3 +34,15 @@ describe("TimezoneCombobox", () => {
     expect(html).toContain("Australia/Sydney");
   });
 });
+
+describe("TimezoneCombobox required", () => {
+  it("is natively required by default and can be made optional", () => {
+    const required = renderToStaticMarkup(<TimezoneCombobox {...baseProps} />);
+    const optional = renderToStaticMarkup(
+      <TimezoneCombobox {...baseProps} required={false} />,
+    );
+
+    expect(required).toContain('required=""');
+    expect(optional).not.toContain('required=""');
+  });
+});

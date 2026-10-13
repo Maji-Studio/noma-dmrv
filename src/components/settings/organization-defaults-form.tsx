@@ -196,6 +196,7 @@ function DefaultsForm({ defaults }: { defaults: OrganizationDefaults }) {
                 shouldTouch: true,
               })
             }
+            required={false}
             error={!!errors.defaultTimezone}
           />
         </FormField>

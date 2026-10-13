@@ -5,10 +5,12 @@ import {
   findTimezoneEntry,
   isValidIanaTimezone,
   orderWithSuggestions,
+  searchQueryAfterInputChange,
   searchTimezones,
   TIMEZONE_ENTRIES,
   timezonesForCountry,
 } from "@/lib/timezones";
+import { organizationSettingsFormSchema } from "@/schemas/organization-settings";
 import {
   ianaTimezoneSchema,
   optionalTimezoneSchema,
@@ -67,6 +69,21 @@ describe("timezone schemas", () => {
   });
 });
 
+describe("organization defaults without a timezone", () => {
+  it("saves with an empty timezone", () => {
+    const base = {
+      defaultCountry: "",
+      defaultEvidenceMethod: "location",
+      defaultPackaging: "loose",
+    };
+    for (const defaultTimezone of ["", null, undefined]) {
+      const result = organizationSettingsFormSchema.safeParse({ ...base, defaultTimezone });
+      expect(result.success).toBe(true);
+      expect(result.data?.defaultTimezone).toBeNull();
+    }
+  });
+});
+
 describe("searchTimezones", () => {
   it("finds a zone by country", () => {
     expect(ids("Tanzania")).toEqual(["Africa/Dar_es_Salaam"]);
@@ -101,6 +118,22 @@ describe("searchTimezones", () => {
   it("ranks equal matches with preferred zones first", () => {
     const first = new Set(["America/Denver"]);
     expect(searchTimezones("United States", first)[0]?.id).toBe("America/Denver");
+  });
+});
+
+describe("searchQueryAfterInputChange", () => {
+  it("filters only on what the user types", () => {
+    expect(searchQueryAfterInputChange("UT", "input-change")).toBe("UT");
+    expect(searchQueryAfterInputChange(" UTC ", "input-change")).toBe("UTC");
+  });
+
+  it("ignores automatic fills, so typing the selected label still searches", () => {
+    for (const reason of ["item-press", "focus-out", "input-clear", "none"]) {
+      expect(searchQueryAfterInputChange("UTC", reason)).toBe("");
+    }
+    // UTC selected, user types "UTC": a search, narrowed to the UTC zone.
+    const query = searchQueryAfterInputChange("UTC", "input-change");
+    expect(searchTimezones(query).map((entry) => entry.id)).toEqual(["UTC"]);
   });
 });
 

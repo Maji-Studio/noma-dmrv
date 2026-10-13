@@ -11,6 +11,7 @@ import { formatTimezoneLabel } from "@/lib/date-utils";
 import { cn } from "@/lib/utils";
 import {
   orderWithSuggestions,
+  searchQueryAfterInputChange,
   searchTimezones,
   findTimezoneEntry,
   timezonesForCountry,
@@ -51,6 +52,8 @@ interface TimezoneComboboxProps {
   onChange: (value: string | undefined) => void;
   onBlur: () => void;
   disabled?: boolean;
+  /** Native required constraint; off where the zone is optional. */
+  required?: boolean;
   error?: boolean;
   placeholder?: string;
   "aria-describedby"?: string;
@@ -66,6 +69,7 @@ export function TimezoneCombobox({
   onChange,
   onBlur,
   disabled = false,
+  required = true,
   error = false,
   placeholder = "Select timezone",
   "aria-describedby": ariaDescribedBy,
@@ -77,7 +81,7 @@ export function TimezoneCombobox({
   const suggested = timezonesForCountry(country);
   const suggestedIds = new Set(suggested.map((entry) => entry.id));
   // The input shows the chosen label after a pick; that is not a search.
-  const searchText = query === selectedOption?.label ? "" : query.trim();
+  const searchText = query;
   const visibleOptions = (
     searchText
       ? searchTimezones(searchText, suggestedIds)
@@ -93,7 +97,9 @@ export function TimezoneCombobox({
       name={name}
       items={visibleOptions}
       filteredItems={visibleOptions}
-      onInputValueChange={setQuery}
+      onInputValueChange={(value, details) =>
+        setQuery(searchQueryAfterInputChange(value, details.reason))
+      }
       value={selectedOption}
       onValueChange={(option) => onChange(option?.value)}
       isItemEqualToValue={(option, selected) =>
@@ -101,7 +107,7 @@ export function TimezoneCombobox({
       }
       autoHighlight
       disabled={disabled}
-      required
+      required={required}
     >
       <div className="relative">
         <MagnifyingGlassIcon
