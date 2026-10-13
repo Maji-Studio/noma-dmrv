@@ -32,7 +32,8 @@ const loaderData = {
   availableProjects: [{ id: "prj_test", name: "Test project", country_code: "TZ", description: null, risk_of_reversal: null, short_description: null }],
   availableTemplates: [], linkHints: [], isProduction: false, isConfigured: true,
 } satisfies FacilityCertifierMapping;
-vi.mock("@/hooks/use-certification", () => ({
+vi.mock("@/hooks/use-certification", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/hooks/use-certification")>()),
   useFacilityCertifierMapping: () => ({ data: loaderData, isLoading: false }),
   useDeleteFacilityCertifierMapping: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useIsometricProjectTemplates: () => ({ data: [], isLoading: false }),
