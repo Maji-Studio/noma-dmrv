@@ -145,7 +145,12 @@ only a **split bin**'s sub-bins are physically separate.
 **Split bin**:
 An output bin whose layers sit physically apart as **sub-bins**. The operator
 records which sub-bins a draw came from and the order they were emptied;
-otherwise the bin's default draw order (oldest first or newest first) applies.
+otherwise the bin's **default draw order** applies.
+
+**Default draw order**:
+The order a **split bin** draws from its **sub-bins**: *Oldest first* unless
+set to *Newest first*. The operator can override it per draw by choosing
+sub-bins in order.
 
 **Sub-bin**:
 One layer of a split bin in its own bay, bag or heap, with its own moisture.

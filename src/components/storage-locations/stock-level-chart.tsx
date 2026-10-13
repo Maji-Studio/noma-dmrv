@@ -12,7 +12,6 @@ import { formatFacilityTime } from "@/lib/date-utils";
 import { formatMassKg } from "@/lib/format-utils";
 import { DetailsTooltip } from "./sub-bin-card";
 import type { StockLevelPoint, StockModeChange } from "./stock-level-series";
-export { buildStockLevelSeries } from "./stock-level-series";
 export type { StockLevelPoint } from "./stock-level-series";
 
 const VIEW_W = 600;
@@ -26,6 +25,12 @@ const Y_HEADROOM = 1.1;
 const X_TICKS = 4;
 const TICK_DATE_FORMAT = "MMM d";
 const PERCENT = 100;
+const AXIS_FONT_PX = 11;
+const TICK_LABEL_GAP = 6;
+const TICK_LABEL_BASELINE = 4;
+const MODE_LABEL_OFFSET = { x: 4, y: 10 } as const;
+const POINT_RADIUS = 3;
+const POINT_STROKE = 1.5;
 
 type Vertex = { x: number; y: number };
 
@@ -90,7 +95,7 @@ export function StockLevelChart({ points, modeChanges = [], timeZone, now, solid
           {yTicks.map((kg, index) => (
             <g key={index}>
               <line x1={PAD.left} x2={VIEW_W - PAD.right} y1={y(kg)} y2={y(kg)} stroke="var(--color-border-secondary)" strokeWidth="1" />
-              <text x={PAD.left - 6} y={y(kg) + 4} textAnchor="end" fontSize="11" fill="var(--color-text-tertiary)">{kg.toLocaleString("en-US")}</text>
+              <text x={PAD.left - TICK_LABEL_GAP} y={y(kg) + TICK_LABEL_BASELINE} textAnchor="end" fontSize={AXIS_FONT_PX} fill="var(--color-text-tertiary)">{kg.toLocaleString("en-US")}</text>
             </g>
           ))}
           {hasIngredients && <path d={ingredientsArea} fill="var(--acc-infra)" stroke="none" />}
@@ -100,12 +105,12 @@ export function StockLevelChart({ points, modeChanges = [], timeZone, now, solid
           {modeChanges.map((change) => (
             <g key={change.t}>
               <line x1={x(change.t)} x2={x(change.t)} y1={PAD.top} y2={baseY} stroke="var(--clr-dark-purple-40)" strokeDasharray="3 3" />
-              <text x={x(change.t) - 4} y={PAD.top + 10} textAnchor="end" fontSize="11" fill="var(--color-text-secondary)">{change.kind === "merge" ? "Mixed" : "Split"}</text>
+              <text x={x(change.t) - MODE_LABEL_OFFSET.x} y={PAD.top + MODE_LABEL_OFFSET.y} textAnchor="end" fontSize={AXIS_FONT_PX} fill="var(--color-text-secondary)">{change.kind === "merge" ? "Mixed" : "Split"}</text>
             </g>
           ))}
-          {dryLine.map((p, i) => <circle key={i} cx={p.x} cy={p.y} r="3" fill="var(--color-background-white)" stroke="var(--clr-dark-purple-100)" strokeWidth="1.5" />)}
+          {dryLine.map((p, i) => <circle key={i} cx={p.x} cy={p.y} r={POINT_RADIUS} fill="var(--color-background-white)" stroke="var(--clr-dark-purple-100)" strokeWidth={POINT_STROKE} />)}
           {xTicks.map((t, i) => (
-            <text key={t} x={x(t)} y={viewH - 6} fontSize="11" fill="var(--color-text-tertiary)" textAnchor={i === 0 ? "start" : i === X_TICKS - 1 ? "end" : "middle"}>
+            <text key={t} x={x(t)} y={viewH - TICK_LABEL_GAP} fontSize={AXIS_FONT_PX} fill="var(--color-text-tertiary)" textAnchor={i === 0 ? "start" : i === X_TICKS - 1 ? "end" : "middle"}>
               {formatFacilityTime(new Date(t), timeZone, TICK_DATE_FORMAT)}
             </text>
           ))}

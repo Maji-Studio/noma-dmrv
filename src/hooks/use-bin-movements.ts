@@ -2,7 +2,7 @@ import { outputStockKeys } from "./use-output-stock";
 /**
  * Bin Movements React Query Hooks (issue #194)
  *
- * Reconciliation history query + append-only stock-take / loss mutations.
+ * Feedstock stock query + append-only stock-take / loss mutations.
  * Successful writes invalidate the storage-location caches so derived stock
  * (and the negative-stock badge) refresh immediately.
  */
@@ -10,7 +10,6 @@ import { outputStockKeys } from "./use-output-stock";
 import { feedstockBinStockKeys } from "./feedstock-bin-stock-keys";
 import type { ConflictRef } from "@/lib/conflict-ref";
 import {
-  getBinMovementsFn,
   getFeedstockBinStockFn,
   recordLossFn,
   recordStockTakeFn,
@@ -81,35 +80,10 @@ export class RecordStockTakeFieldError extends Error {
   }
 }
 
-const binMovementKeys = {
-  all: ["binMovements"] as const,
-  byLocation: (storageLocationId: string) =>
-    [...binMovementKeys.all, storageLocationId] as const,
-};
-
-/** Reconciliation history for a bin, newest first. */
-export function useBinMovements(storageLocationId: string, enabled = true) {
-  return useQuery({
-    queryKey: binMovementKeys.byLocation(storageLocationId),
-    queryFn: async () => {
-      const result = await getBinMovementsFn(storageLocationId);
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-      return result.data;
-    },
-    enabled: enabled && !!storageLocationId,
-    staleTime: 15_000,
-  });
-}
-
 /** Invalidate the caches a movement affects (history + all derived stock). */
 function useInvalidateAfterMovement() {
   const queryClient = useQueryClient();
   return (storageLocationId: string) => {
-    queryClient.invalidateQueries({
-      queryKey: binMovementKeys.byLocation(storageLocationId),
-    });
     // Derived stock lives on the storage-location lists/details.
     queryClient.invalidateQueries({ queryKey: storageLocationKeys.lists() });
     queryClient.invalidateQueries({

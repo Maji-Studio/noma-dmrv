@@ -6,6 +6,7 @@ import { orderedSourcesSchema } from '@/schemas/output-stock';
 import type { OutputMoistureReset, OutputStockHistoryEntry, OutputStockPreview } from '@/types/output-stock';
 import { and, asc, eq, inArray } from 'drizzle-orm';
 import { getOutputStockAllocationProjection } from './output-stock';
+import { outputBinReceipts } from './output-stock-edit-lock';
 import { requireOrgScope } from './utils';
 import { stockEntryLockReason } from '@/lib/output-stock/edit-lock';
 import { deliveryAppliedLockedReason } from '@/lib/output-stock/labels';
@@ -96,8 +97,7 @@ export async function getOutputStockHistory(ctx: OrgContext, storageLocationId: 
     balance -= entry.dryMassKg;
   }
   const latestSequence = movements.at(-1)?.movement.postingSequence ?? BigInt(0);
-  const receiptFacts = [...products.map(product => ({ id: product.id, recordedAt: product.createdAt })),
-    ...runs.filter(run => run.biocharStorageLocationId === storageLocationId && run.status === 'complete').map(run => ({ id: run.id, recordedAt: run.updatedAt }))];
+  const receiptFacts = await outputBinReceipts(ctx, storageLocationId, db);
   // The correction path refuses an applied delivery too; locking it here keeps the delivery's other fields saveable.
   const deliveryIds = [...new Set(history.flatMap(entry => entry.deliveryId ? [entry.deliveryId] : []))];
   const applied = deliveryIds.length === 0 ? [] : await db.select({ deliveryId: applications.deliveryId, code: applications.code }).from(applications)

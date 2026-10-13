@@ -79,18 +79,6 @@ it("refuses delivery corrections through the Lost mass form boundary", async () 
     .toMatchObject({ deliveryDate: delivery.deliveryDate, deliveredWetMassKg: 40 });
 });
 
-it("keeps an existing receiptIds snapshot editable until another receipt arrives", async () => {
-  const f = await fixture();
-  const original = await postMeasurement(f, { kind: "loss", wetMassKg: 100 });
-  const [movement] = await db.select().from(binMovements).where(eq(binMovements.id, original.movementId));
-  const snapshot = { ...movement.inputSnapshot };
-  delete snapshot.receiptMarker;
-  await db.update(binMovements).set({ inputSnapshot: { ...snapshot, receiptIds: [f.product!.id] } }).where(eq(binMovements.id, movement.id));
-  expect((await getOutputStockHistory(f.ctx, f.bin.id)).find(entry => entry.id === movement.id)?.editLockedReason).toBeNull();
-  await postProduct(f, { massKg: 100, placedAt: "2026-09-11T12:00:00.000Z" });
-  expect((await getOutputStockHistory(f.ctx, f.bin.id)).find(entry => entry.id === movement.id)?.editLockedReason).toMatch(/^Locked/);
-});
-
 it("refuses a Lost mass edit after a newer movement even from an unrelated sub-bin", async () => {
   const f = await fixture();
   const other = await postProduct(f, { massKg: 100 });

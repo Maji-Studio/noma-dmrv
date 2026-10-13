@@ -21,17 +21,14 @@ import { z } from "zod";
 import { requireOrgContext } from "@/lib/auth/server";
 import {
   createBinMovement,
-  getBinMovements as getBinMovementsData,
   recordStockTakeMovement,
   StockTakeIncreaseError,
-  type BinMovementWithActor,
 } from "@/data-access/bin-movements";
 import type { BinMovement } from "@/db/schema";
 import {
   recordLossSchema,
   recordStockTakeSchema,
 } from "@/schemas/bin-movements";
-import type { ActionResult } from "@/types/actions";
 import { ActionConflictError } from "@/lib/errors";
 import { StockOverdrawError } from "@/data-access/bin-stock-guards";
 import {
@@ -61,29 +58,6 @@ function binMovementActionError(
     message: "bin movement action failed",
     context: { op },
   });
-}
-
-// ============================================
-// Read
-// ============================================
-
-export async function getBinMovementsFn(
-  storageLocationId: string
-): Promise<ActionResult<BinMovementWithActor[]>> {
-  try {
-    const ctx = await requireOrgContext();
-    const movements = await getBinMovementsData(ctx, storageLocationId);
-    return { success: true, data: movements };
-  } catch (error) {
-    return {
-      success: false,
-      error: binMovementActionError(
-        error,
-        "Failed to load reconciliation history",
-        "bin-movement:list"
-      ),
-    };
-  }
 }
 
 // ============================================

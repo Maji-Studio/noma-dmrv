@@ -10,14 +10,20 @@ import { requireOrgScope } from './utils';
 
 type Reader = Pick<DbTransaction, 'select'>;
 
+/** Receipts live outside the movement sequence, including future and archived receipts. */
+export async function outputBinReceipts(ctx: OrgContext, storageLocationId: string, reader: Reader): Promise<{ id: string; recordedAt: Date }[]> {
+  requireOrgScope(ctx);
+  const [products, runs] = await Promise.all([
+    reader.select({ id: biocharProducts.id, recordedAt: biocharProducts.createdAt }).from(biocharProducts).where(and(eq(biocharProducts.organizationId, ctx.organizationId), eq(biocharProducts.storageLocationId, storageLocationId))),
+    reader.select({ id: productionRuns.id, recordedAt: productionRuns.updatedAt }).from(productionRuns).where(and(eq(productionRuns.organizationId, ctx.organizationId), eq(productionRuns.biocharStorageLocationId, storageLocationId), eq(productionRuns.status, 'complete'))),
+  ]);
+  return [...products, ...runs];
+}
+
 /** Freeze a bounded receipt marker under the bin lock, including future and archived receipts. */
 export async function outputReceiptMarker(ctx: OrgContext, storageLocationId: string, reader: Reader) {
   requireOrgScope(ctx);
-  const [products, runs] = await Promise.all([
-    reader.select({ id: biocharProducts.id }).from(biocharProducts).where(and(eq(biocharProducts.organizationId, ctx.organizationId), eq(biocharProducts.storageLocationId, storageLocationId))),
-    reader.select({ id: productionRuns.id }).from(productionRuns).where(and(eq(productionRuns.organizationId, ctx.organizationId), eq(productionRuns.biocharStorageLocationId, storageLocationId), eq(productionRuns.status, 'complete'))),
-  ]);
-  return stockReceiptMarker([...products, ...runs]);
+  return stockReceiptMarker(await outputBinReceipts(ctx, storageLocationId, reader));
 }
 
 /** Posting order, rather than physical event time: a backdated new entry also locks edits. */
@@ -25,13 +31,11 @@ export async function outputMovementLockReason(ctx: OrgContext, storageLocationI
   requireOrgScope(ctx);
   const [original] = await reader.select().from(binMovements).where(and(eq(binMovements.organizationId, ctx.organizationId), eq(binMovements.storageLocationId, storageLocationId), eq(binMovements.id, movementId)));
   if (!original) throw new SafeError('Stock entry not found.');
-  const [later, products, runs] = await Promise.all([
+  const [later, receipts] = await Promise.all([
     reader.select({ id: binMovements.id }).from(binMovements).where(and(eq(binMovements.organizationId, ctx.organizationId), eq(binMovements.storageLocationId, storageLocationId), gt(binMovements.postingSequence, original.postingSequence))).limit(1),
-    // Receipts live on their own records, outside the bin-movement sequence.
-    reader.select({ id: biocharProducts.id, recordedAt: biocharProducts.createdAt }).from(biocharProducts).where(and(eq(biocharProducts.organizationId, ctx.organizationId), eq(biocharProducts.storageLocationId, storageLocationId))),
-    reader.select({ id: productionRuns.id, recordedAt: productionRuns.updatedAt }).from(productionRuns).where(and(eq(productionRuns.organizationId, ctx.organizationId), eq(productionRuns.biocharStorageLocationId, storageLocationId), eq(productionRuns.status, 'complete'))),
+    outputBinReceipts(ctx, storageLocationId, reader),
   ]);
-  return stockEntryLockReason(original, original.postingSequence + (later.length ? BigInt(1) : BigInt(0)), [...products, ...runs]);
+  return stockEntryLockReason(original, original.postingSequence + (later.length ? BigInt(1) : BigInt(0)), receipts);
 }
 
 /** Caller holds the posting path's transaction-scoped bin-stock lock. */

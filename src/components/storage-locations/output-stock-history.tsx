@@ -17,7 +17,6 @@ import { useState, type ReactNode } from "react";
 import { MoistureResetChange } from "./moisture-reset-change";
 import { StockSourceLink } from "./stock-source-link";
 import { LedgerBeforeAfter, LedgerBreak, LedgerDayHeader, LedgerFacts, LedgerLine } from "./stock-ledger";
-import { buildStockLevelSeries } from "./stock-level-chart";
 import { CalculationDisclosure } from "./stock-figures";
 import { OutputStockForm } from "./output-stock-form";
 import { FormDialog } from "@/components/ui/form-dialog";
@@ -113,11 +112,6 @@ function LedgerRow({ entry, kind, reversedEntry, replacedBy, moistureEntry, reve
       )}
     </LedgerLine>
   );
-}
-
-/** Replay frozen movement effects, including reversals, without resetting moisture on a draw. */
-export function outputStockSeries(entries: readonly OutputStockHistoryEntry[]) {
-  return buildStockLevelSeries(entries);
 }
 
 export function OutputStockHistory({ storageLocationId, facilityId, movementId, triggerLabel = "More info", compact = false, renderTrigger }: {

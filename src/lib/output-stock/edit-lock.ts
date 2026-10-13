@@ -17,9 +17,5 @@ export function stockEntryLockReason(original: Movement, latestSequence: bigint,
     const current = stockReceiptMarker(receipts);
     return marker.count !== current.count || marker.identityHash !== current.identityHash ? STOCK_ENTRY_LOCKED_REASON : null;
   }
-  const receiptIds = original.inputSnapshot?.receiptIds;
-  const productVersions = (original.inputSnapshot?.preview as { expectedProductVersions?: Record<string, number> } | undefined)?.expectedProductVersions;
-  const knownIds = Array.isArray(receiptIds) ? new Set(receiptIds) : productVersions && Object.keys(productVersions).length ? new Set(Object.keys(productVersions)) : null;
-  const newerReceipt = receipts.some(receipt => knownIds ? !knownIds.has(receipt.id) : receipt.recordedAt > original.createdAt);
-  return newerReceipt ? STOCK_ENTRY_LOCKED_REASON : null;
+  return STOCK_ENTRY_LOCKED_REASON;
 }

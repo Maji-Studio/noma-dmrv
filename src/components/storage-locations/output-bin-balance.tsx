@@ -6,8 +6,9 @@ import { MISSING_VALUE } from "@/lib/copy-utils";
 import { formatMassKg } from "@/lib/format-utils";
 import { formatMoisturePercent } from "@/lib/mass-moisture";
 import { mixPileName } from "@/lib/output-stock/labels";
-import { OutputStockHistory, outputStockSeries } from "./output-stock-history";
+import { OutputStockHistory } from "./output-stock-history";
 import { StockLevelChart } from "./stock-level-chart";
+import { buildStockLevelSeries } from "./stock-level-series";
 import { CardTextButton, StockCard, StockChartCard } from "./stock-card";
 import { formatWetEstimate } from "./stock-preview-shared";
 import { MixPileBay, SubBinBays, type PileBand } from "./sub-bin-bays";
@@ -70,7 +71,7 @@ export function OutputBinBalance({ storageLocationId, facilityId, capacityKg, on
   const ready = !!preview.data && !subBins.isLoading;
   // Shares the history modal's query, so opening it shows the same data at once.
   const history = useOutputStockHistory(storageLocationId);
-  const series = history.data ? outputStockSeries(history.data) : null;
+  const series = history.data ? buildStockLevelSeries(history.data) : null;
 
   return <div className="flex flex-col gap-16">
     <StockCard

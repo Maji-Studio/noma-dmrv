@@ -23,11 +23,7 @@ it('still locks on a newer posting sequence', () => {
     .toBe(STOCK_ENTRY_LOCKED_REASON);
 });
 
-it('reads saved receipt IDs and legacy product versions before falling back to timestamps', () => {
-  for (const inputSnapshot of [{ receiptIds: ['a'] }, { preview: { expectedProductVersions: { a: 1 } } }]) {
-    expect(stockEntryLockReason({ ...original, inputSnapshot }, BigInt(1), receipts)).toBeNull();
-    expect(stockEntryLockReason({ ...original, inputSnapshot }, BigInt(1), [{ id: 'b', recordedAt: before }])).toBe(STOCK_ENTRY_LOCKED_REASON);
-  }
-  expect(stockEntryLockReason(original, BigInt(1), receipts)).toBeNull();
-  expect(stockEntryLockReason(original, BigInt(1), [{ id: 'a', recordedAt: after }])).toBe(STOCK_ENTRY_LOCKED_REASON);
+it.each([null, {}, { receiptMarker: { count: 1 } }, { receiptMarker: { count: '1', identityHash: 'hash' } }])('locks a missing or invalid receipt marker: %j', inputSnapshot => {
+  expect(stockEntryLockReason({ ...original, inputSnapshot }, BigInt(1), receipts)).toBe(STOCK_ENTRY_LOCKED_REASON);
+  expect(stockEntryLockReason({ ...original, inputSnapshot }, BigInt(1), [])).toBe(STOCK_ENTRY_LOCKED_REASON);
 });
