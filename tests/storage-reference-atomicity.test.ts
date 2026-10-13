@@ -193,7 +193,7 @@ async function createFixture(): Promise<Fixture> {
         organizationId: TEST_ORG_ID,
         facilityId: facility.id,
         code: `PR-SRA-EXISTING-${tag}`,
-        status: "draft",
+        status: "running",
         startTime: new Date("2026-07-24T06:00:00Z"),
         endTime: null,
         reactorId: reactor.id,

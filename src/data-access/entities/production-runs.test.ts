@@ -28,11 +28,11 @@ describe("toProductionRunEntityOption", () => {
         id: "run-2",
         code: "PR-26-004",
         date: "2026-05-18",
-        status: "draft",
+        status: "running",
         biocharOutputKg: null,
         biocharDryMassKg: null,
         biocharStorageName: null,
       }).subtitle,
-    ).toBe("Draft · Wet: Not recorded · Dry: Not recorded");
+    ).toBe("Running · Wet: Not recorded · Dry: Not recorded");
   });
 });

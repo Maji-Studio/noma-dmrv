@@ -331,7 +331,7 @@
           "reactorId": {"description": "Reactor identifier, UUID.", "format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"},
           "residenceTimeMinutes": {"anyOf": [{"type": "number"}, {"type": "null"}], "description": "Residence time in minutes."},
           "startTime": {"description": "Start instant in UTC, RFC 3339.", "format": "date-time", "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$", "type": "string"},
-          "status": {"description": "Run status; change it through update_production_run.", "enum": ["draft", "running", "complete", "failed", "cancelled"], "type": "string"},
+          "status": {"description": "Run status; change it through update_production_run.", "enum": ["running", "complete", "failed", "cancelled"], "type": "string"},
           "updatedAt": {"description": "Last update instant in UTC, RFC 3339.", "format": "date-time", "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$", "type": "string"},
           "version": {"description": "Positive row version for concurrency checks.", "exclusiveMinimum": 0, "maximum": 9007199254740991, "type": "integer"}
         },
@@ -1161,7 +1161,7 @@
           {"description": "Receiving facility filter, UUID.", "in": "query", "name": "facilityId", "required": false, "schema": {"description": "Receiving facility filter, UUID.", "format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"}},
           {"description": "Exact human-readable resource code.", "in": "query", "name": "code", "required": false, "schema": {"description": "Exact human-readable resource code.", "maxLength": 255, "pattern": "^[^\\x00-\\x1f\\x7f-\\x9f]*$(?![\\s\\S])", "type": "string"}},
           {"description": "Reactor filter, UUID.", "in": "query", "name": "reactorId", "required": false, "schema": {"description": "Reactor filter, UUID.", "format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"}},
-          {"description": "Production run status filter.", "in": "query", "name": "status", "required": false, "schema": {"description": "Production run status filter.", "enum": ["draft", "running", "complete", "failed", "cancelled"], "type": "string"}}
+          {"description": "Production run status filter.", "in": "query", "name": "status", "required": false, "schema": {"description": "Production run status filter.", "enum": ["running", "complete", "failed", "cancelled"], "type": "string"}}
         ],
         "responses": {
           "200": {"content": {"application/json": {"schema": {"additionalProperties": false, "properties": {"data": {"description": "Page of resources, newest first by (createdAt, id).", "items": {"$ref": "#/components/schemas/production_run"}, "type": "array"}, "nextCursor": {"anyOf": [{"type": "string"}, {"type": "null"}], "description": "Opaque cursor for the next page, or null at the end; keep filters unchanged."}}, "required": ["data", "nextCursor"], "type": "object"}}}, "description": "Resource page.", "headers": {"RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}},
@@ -1222,7 +1222,7 @@
                     ],
                     "description": "An RFC 3339 instant with explicit offset, or a date/time in the effective facility zone."
                   },
-                  "status": {"default": "draft", "description": "Initial run state: draft, running, complete or cancelled.", "enum": ["draft", "running", "complete", "failed", "cancelled"], "type": "string"}
+                  "status": {"default": "running", "description": "Initial run state: running or complete.", "enum": ["running", "complete"], "type": "string"}
                 },
                 "required": ["facilityId", "reactorId", "startTime"],
                 "type": "object"
@@ -1345,7 +1345,7 @@
                     ],
                     "description": "Start instant or facility-local date/time."
                   },
-                  "status": {"description": "Run state: draft, running, complete, failed or cancelled.", "enum": ["draft", "running", "complete", "failed", "cancelled"], "type": "string"}
+                  "status": {"description": "Run state: running, complete, failed or cancelled.", "enum": ["running", "complete", "failed", "cancelled"], "type": "string"}
                 },
                 "type": "object"
               }

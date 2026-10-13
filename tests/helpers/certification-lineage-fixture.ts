@@ -138,7 +138,7 @@ export async function createLineageFixture(
         code: `PR-CLG-${tag}`,
         facilityId: facility.id,
         startTime: new Date("2026-06-13T08:00:00Z"),
-        endTime: new Date("2026-06-13T12:00:00Z"),
+        endTime: blockingVia === "none" ? null : new Date("2026-06-13T12:00:00Z"),
         reactorId: reactor.id,
         feedstockWetMassKg: 1_000,
         feedstockMoisturePercent: 10,
@@ -147,7 +147,7 @@ export async function createLineageFixture(
         biocharOutputKg: 300,
         biocharMoisturePercent: 5,
         biocharDryMassKg: 285,
-        status: blockingVia === "none" ? "draft" : "complete",
+        status: blockingVia === "none" ? "running" : "complete",
       })
       .returning({ id: productionRuns.id });
 

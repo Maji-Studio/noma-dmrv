@@ -23,7 +23,7 @@ let fixture: Awaited<ReturnType<typeof createProductionRunFixture>>;
 const input = () => ({
   facilityId: fixture.facilityId, reactorId: fixture.reactorId,
   startTime: new Date("2026-01-01T10:00:00Z"),
-  endTime: new Date("2026-01-01T11:00:00Z"), status: "draft",
+  endTime: null,
   feedstockDraws: [{ storageLocationId: fixture.binId, wetMassKg: DRAW_KG }],
 });
 const stock = () => deriveFeedstockWetStockKg(fixture.ctx, db, fixture.binId);
@@ -53,6 +53,7 @@ describe("production operations at pool size one", { timeout: SUITE_TIMEOUT_MS }
     const created = await runOperation(startProductionRun, fixture.ctx, input());
     expect(created.data.code).toMatch(/^PR-\d{2}-\d{3,}$/);
     expect(created.data.version).toBe(1);
+    expect(created.data.status).toBe("running");
     expect(created).not.toHaveProperty("stockEffects");
     expect(created.data.feedstockDraws).toHaveLength(1);
     expect(await stock()).toBe(INTAKE_KG - DRAW_KG);
@@ -84,7 +85,7 @@ describe("production operations at pool size one", { timeout: SUITE_TIMEOUT_MS }
 
   it("reports source wet/dry loss and completed output dry gain before rollback", async () => {
     const result = await runOperation(startProductionRun, fixture.ctx, {
-      ...input(), status: "complete", biocharStorageLocationId: outputBinId,
+      ...input(), status: "complete", endTime: new Date("2026-01-01T11:00:00Z"), biocharStorageLocationId: outputBinId,
       biocharOutputKg: OUTPUT_KG, biocharMoisturePercent: OUTPUT_MOISTURE, feedstockMoisturePercent: 32.5,
     }, { dryRun: true });
     expect(result.stockEffects).toHaveLength(2);

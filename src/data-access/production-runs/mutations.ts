@@ -24,6 +24,7 @@ import { SafeError } from "@/lib/errors";
 import {
   assertProductionRunOutcome,
   assertProductionRunTransition,
+  assertProductionRunCreateStatus,
   statusOccupiesReactor,
   type ProductionRunStatus,
 } from "@/lib/production-runs/lifecycle";
@@ -72,6 +73,7 @@ const END_AFTER_START_CONSTRAINT = "production_runs_end_after_start";
 const END_AFTER_START_MESSAGE = "End time must be after the start time";
 const PREFLIGHT_OUTCOME_VIOLATIONS = [
   "end-not-after-start",
+  "running-end-forbidden",
   "dry-mass-balance-exceeded",
   "terminal-end-required",
   "feedstock-required",
@@ -171,7 +173,7 @@ export async function createProductionRunInTransaction(
     throw new SafeError("Reactor does not belong to the selected facility");
   }
 
-  const status = data.status ?? "draft";
+  const status = data.status ?? "running";
   const feedstockDraws = normalizeProductionRunFeedstockDraws(
     data.feedstockDraws ??
       (data.feedstockStorageLocationId && data.feedstockWetMassKg
@@ -182,7 +184,7 @@ export async function createProductionRunInTransaction(
         : []),
   );
   const feedstockWetMassKg = sumProductionRunFeedstockDraws(feedstockDraws);
-  assertProductionRunTransition("draft", status);
+  assertProductionRunCreateStatus(status);
   assertProductionRunOutcome(
     {
       status,
@@ -290,7 +292,7 @@ export async function createProductionRunInTransaction(
 
     // Unfiltered: window + dry-mass are eligible here but always pre-caught by
     // the PREFLIGHT_OUTCOME_VIOLATIONS check above over the same inputs — keep
-    // that preflight scope or cancelled/draft runs start failing dry-mass here.
+    // that preflight scope or non-terminal runs start failing dry-mass here.
     assertProductionRunOutcome({
       status,
       startTime: data.startTime,

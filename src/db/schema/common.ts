@@ -10,7 +10,6 @@ export const feedstockStatus = pgEnum('feedstock_status', [
 ]);
 
 export const productionRunStatus = pgEnum('production_run_status', [
-  'draft',
   'running',
   'complete',
   'failed',

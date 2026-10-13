@@ -48,7 +48,7 @@ const feedstockOverdrawText =
   /^Only .+ of wet feedstock is available\. Reduce the wet mass\.$/;
 const biocharOverdrawText = /Not enough dry biochar in the selected bin/;
 
-/** Open the existing draft run form against the seeded 120 kg-wet source bin. */
+/** Open a new run form against the seeded 120 kg-wet source bin. */
 async function openRunFormWithSource(
   page: Page,
   seededData: SeededChainData,
@@ -64,7 +64,7 @@ async function openRunFormWithSource(
   await page.getByRole("button", { name: "New production run" }).click();
   await waitForSideSheet(page);
 
-  await chooseRunStatus(page, "draft");
+  await chooseRunStatus(page, "running");
   await selectEntity(
     page,
     "Reactor",

@@ -1,5 +1,5 @@
 {
-  "id": "4bcbea0c-9980-4522-bf98-d82069a824cd",
+  "id": "b3e3ee8b-5903-41ff-9986-85727bfb734a",
   "prevId": "51cbc360-d48a-49d6-89fa-f0897fc9912f",
   "version": "7",
   "dialect": "postgresql",
@@ -6564,14 +6564,6 @@
           "notNull": true,
           "default": "'split'"
         },
-        "draw_order": {
-          "name": "draw_order",
-          "type": "output_draw_order",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'oldest_first'"
-        },
         "facility_id": {
           "name": "facility_id",
           "type": "uuid",
@@ -10004,7 +9996,7 @@
           "typeSchema": "public",
           "primaryKey": false,
           "notNull": true,
-          "default": "'draft'"
+          "default": "'running'"
         },
         "cancellation_reason": {
           "name": "cancellation_reason",
@@ -13054,14 +13046,6 @@
         "measured_every_batch"
       ]
     },
-    "public.output_draw_order": {
-      "name": "output_draw_order",
-      "schema": "public",
-      "values": [
-        "oldest_first",
-        "newest_first"
-      ]
-    },
     "public.output_stock_mode": {
       "name": "output_stock_mode",
       "schema": "public",
@@ -13082,7 +13066,6 @@
       "name": "production_run_status",
       "schema": "public",
       "values": [
-        "draft",
         "running",
         "complete",
         "failed",
