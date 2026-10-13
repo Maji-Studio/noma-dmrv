@@ -416,10 +416,14 @@ types, reactors, orders, vehicles, operators and drivers. Feedstock-type Edit
 requires the server-resolved management permission (Owner, Admin or Platform
 Admin). Facility and Credit batch pickers deliberately have no Edit row. Driver
 is supported by the shared dialog but currently has no form picker.
+The order form's Customer location picker uses `onEditSelected` to open
+`CustomerLocationDialog` for the selected location.
 
 `SELECT_SEARCH_MIN_OPTIONS` in `src/config/forms.ts` is 5: search shows from
 6 options. `alwaysShowSearch` and `hideSearch` remain explicit overrides.
-Caller-owned lists pass `options`, `isLoading` and an `Error` via `error`.
+Caller-owned lists pass `options`, `isLoading` and an `Error` via `loadError`.
+`error` is a boolean for field-invalid styling only; a load failure shows the
+load-failure message without marking the field invalid.
 This mode filters names, codes and subtitles locally and makes no entity
 queries. `optionLabel` names its search box. An option's `disabled` flag keeps
 it visible but skips it for click, keyboard and automatic selection.

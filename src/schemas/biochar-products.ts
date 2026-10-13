@@ -47,6 +47,9 @@ export type BiocharProductStatus = typeof biocharProductStatusValues[number];
  */
 export const PURE_PRODUCT_BIN_FILTER = "pure" as const;
 
+/** Delivery-source bins must match the order formulation exactly. */
+export const STRICT_FORMULATION_MATCH = "strict" as const;
+
 // ============================================
 // Ingredient Bin Schema (shared between form and update)
 // ============================================

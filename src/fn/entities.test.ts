@@ -16,7 +16,7 @@ beforeEach(() => {
   mocks.read.mockResolvedValue([]);
 });
 
-it("normalizes the customer filter before passing it to the scoped read", async () => {
+it("normalizes an uppercase customer filter before passing it to the scoped read", async () => {
   const input = { entityType: "customerLocation", filterBy: { customerId } };
   expect(await searchEntitiesFn(input)).toEqual({ success: true, data: [] });
   expect(mocks.read).toHaveBeenCalledWith(ctx, { ...input, filterBy: { customerId: customerId.toLowerCase() } });
@@ -29,4 +29,17 @@ it.each(["", "invalid"])("rejects an invalid customer filter (%s) with the exist
     error: expect.stringContaining("The customer filter is invalid. Select a customer and try again."),
   });
   expect(mocks.read).not.toHaveBeenCalled();
+});
+
+it("preserves validate-only sibling filters when normalizing the customer id", async () => {
+  const input = {
+    entityType: "customerLocation",
+    filterBy: { customerId, facilityId: customerId, excludeOrderId: customerId, type: "product_bin" },
+  };
+  expect(await searchEntitiesFn(input)).toEqual({ success: true, data: [] });
+  expect(mocks.read).toHaveBeenCalledWith(ctx, {
+    ...input,
+    filterBy: { ...input.filterBy, customerId: customerId.toLowerCase() },
+  });
+  expect(input.filterBy.customerId).toBe(customerId);
 });

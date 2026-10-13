@@ -229,6 +229,7 @@ describe("customer location mutations refresh the new picker", () => {
     const listKey = entityKeys.list("customerLocation", "North", { customerId: customer.id });
     const detailKey = entityKeys.detail("customerLocation", location.id);
     queryClient.setQueryData(listKey, [location]);
+    queryClient.setQueryData(customerKeys.locations(customer.id), [{ ...location, name: "Old name" }]);
     queryClient.setQueryData(detailKey, { ...location, name: "Old name" });
     const { mutation, renderer } = await renderMutation(queryClient, operation === "create" ? useCreateCustomerLocation : useUpdateCustomerLocation);
     await act(async () => {
@@ -240,6 +241,10 @@ describe("customer location mutations refresh the new picker", () => {
     });
     expect(queryClient.getQueryState(listKey)?.isInvalidated).toBe(true);
     expect(queryClient.getQueryState(detailKey)?.isInvalidated).toBe(true);
+    expect(queryClient.getQueryState(customerKeys.locations(customer.id))?.isInvalidated).toBe(true);
+    if (operation === "update") {
+      expect(queryClient.getQueryData(customerKeys.locations(customer.id))).toEqual([location]);
+    }
     await act(async () => renderer?.unmount());
     queryClient.clear();
   });

@@ -67,8 +67,10 @@ interface EntitySelectBaseProps {
   disabled?: boolean;
   /** Locks selection while allowing an Edit-only menu for the selected entity. */
   selectionLocked?: boolean;
-  /** Field error styling, or the caller-owned list's loading error. */
-  error?: boolean | Error | null;
+  /** Loading error for caller-owned options; does not mark the field invalid. */
+  loadError?: Error | null;
+  /** Field validation error styling. */
+  error?: boolean;
   /** Optional className for styling */
   className?: string;
   /** Description ids supplied by a wrapping FormField. */

@@ -14,7 +14,7 @@ import type {
 } from "@/components/forms/entity-select/types";
 import { productionRunStatus } from "@/db/schema/common";
 import type { OrgContext } from "@/lib/auth/server";
-import { PURE_PRODUCT_BIN_FILTER } from "@/schemas/biochar-products";
+import { PURE_PRODUCT_BIN_FILTER, STRICT_FORMULATION_MATCH } from "@/schemas/biochar-products";
 import {
   storageLocationTypes,
   type StorageLocationType,
@@ -112,7 +112,7 @@ export async function getEntities(
         rawFormulation && rawFormulation !== PURE_PRODUCT_BIN_FILTER
           ? rawFormulation
           : undefined;
-      if (filterBy?.formulationMatch === "strict" && !formulationId && !pureProductOnly) return [];
+      if (filterBy?.formulationMatch === STRICT_FORMULATION_MATCH && !formulationId && !pureProductOnly) return [];
       const rawFeedstockTypeUsage = filterBy?.feedstockTypeUsage?.trim();
       const feedstockTypeUsage =
         rawFeedstockTypeUsage === "pyrolysis" || rawFeedstockTypeUsage === "blend"
@@ -126,7 +126,7 @@ export async function getEntities(
         feedstockTypeUsage,
         formulationId,
         pureProductOnly,
-        strictFormulation: filterBy?.formulationMatch === "strict",
+        strictFormulation: filterBy?.formulationMatch === STRICT_FORMULATION_MATCH,
         limit,
       });
     }

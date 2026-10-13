@@ -5,6 +5,7 @@ import { eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import { customerLocations, customers, facilities, formulations, organizations, storageLocations } from "@/db/schema";
 import { getEntities, getEntityById } from "@/data-access/entities";
+import { STRICT_FORMULATION_MATCH } from "@/schemas/biochar-products";
 import { ENTITY_SEARCH_LIMIT } from "@/config/forms";
 import { makeTestOrgContext } from "./helpers/test-org";
 
@@ -114,7 +115,7 @@ describe("storage-bin formulation filter", () => {
       entityType: "storageLocation",
       filterBy: {
         facilityId: f.facilityId, type: "product_bin", formulationId: f.formulationId,
-        ...(strict ? { formulationMatch: "strict" } : {}),
+        ...(strict ? { formulationMatch: STRICT_FORMULATION_MATCH } : {}),
       },
       limit: ENTITY_SEARCH_LIMIT,
     });
@@ -130,6 +131,6 @@ describe("storage-bin formulation filter", () => {
   });
 
   it("does not widen a strict search without a formulation", async () => {
-    expect(await getEntities(ctx, { entityType: "storageLocation", filterBy: { formulationMatch: "strict" } })).toEqual([]);
+    expect(await getEntities(ctx, { entityType: "storageLocation", filterBy: { formulationMatch: STRICT_FORMULATION_MATCH } })).toEqual([]);
   });
 });

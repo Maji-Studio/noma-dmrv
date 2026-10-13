@@ -38,9 +38,7 @@ const searchEntitiesSchema = z
   .superRefine((data, ctx) => {
     if (data.filterBy?.customerId !== undefined) {
       const customerId = uuidSchema().safeParse(data.filterBy.customerId);
-      if (customerId.success) {
-        data.filterBy.customerId = customerId.data;
-      } else {
+      if (!customerId.success) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           path: ["filterBy", "customerId"],
@@ -71,7 +69,13 @@ const searchEntitiesSchema = z
         message: "The order filter is invalid. Refresh the page and try again.",
       });
     }
-  });
+  })
+  .transform((data) => ({
+    ...data,
+    filterBy: data.filterBy?.customerId === undefined
+      ? data.filterBy
+      : { ...data.filterBy, customerId: uuidSchema().parse(data.filterBy.customerId) },
+  }));
 
 /**
  * Search entities by type with optional filters

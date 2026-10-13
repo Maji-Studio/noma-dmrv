@@ -211,6 +211,7 @@ export async function expectNoEntityOptions(page: Page, fieldLabel: string) {
   await trigger.click();
   await expect(trigger).toHaveAttribute("aria-expanded", "true");
   const listbox = page.getByTestId("entity-select-listbox");
+  await expect(listbox.getByTestId("entity-select-empty")).toBeVisible();
   await expect(listbox.locator('[data-testid^="entity-option-"]')).toHaveCount(0);
   await trigger.press("Escape");
 }
