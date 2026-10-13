@@ -38,6 +38,10 @@ vi.mock("@/components/orders/order-form", () => ({ OrderForm: EditForm }));
 vi.mock("@/components/suppliers/supplier-form", () => ({ SupplierForm: EditForm }));
 vi.mock("@/components/formulations/formulation-form", () => ({ FormulationForm: EditForm }));
 vi.mock("@/components/feedstock-types/feedstock-type-form", () => ({ FeedstockTypeForm: EditForm }));
+// These quick-add dialogs only create records; editing uses the forms directly.
+vi.mock("./formulation-quick-add-dialog", () => ({ FormulationQuickAddDialog: () => { throw new Error("Quick-add cannot edit a formulation"); } }));
+vi.mock("./supplier-quick-add-dialog", () => ({ SupplierQuickAddDialog: () => { throw new Error("Quick-add cannot edit a supplier"); } }));
+vi.mock("./feedstock-type-quick-add-dialog", () => ({ FeedstockTypeQuickAddDialog: () => { throw new Error("Quick-add cannot edit a feedstock type"); } }));
 // Their actual update and archived-bin contracts have dedicated regression suites.
 vi.mock("./vehicle-quick-add-dialog", () => ({ VehicleQuickAddDialog: ({ vehicle }: { vehicle: { name: string } }) => <span>Edit vehicle {vehicle.name}</span> }));
 vi.mock("./driver-quick-add-dialog", () => ({ DriverQuickAddDialog: ({ driver }: { driver: { name: string } }) => <span>Edit driver {driver.name}</span> }));

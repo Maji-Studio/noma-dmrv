@@ -7,6 +7,7 @@
 import { orderKeys } from "./use-orders";
 import {
   keepPreviousData,
+  queryOptions,
   type QueryClient,
   useMutation,
   useQuery,
@@ -108,8 +109,8 @@ export function useCustomers(filters?: Partial<CustomerFilterData>) {
 /**
  * Hook to fetch a customer with all its relations
  */
-export function useCustomerWithRelations(customerId: string, enabled = true) {
-  return useQuery({
+export function customerWithRelationsQueryOptions(customerId: string) {
+  return queryOptions({
     queryKey: customerKeys.detailWithRelations(customerId),
     queryFn: async () => {
       const result = await getCustomerWithRelationsFn(customerId);
@@ -118,8 +119,15 @@ export function useCustomerWithRelations(customerId: string, enabled = true) {
       }
       return result.data;
     },
-    enabled: enabled && !!customerId,
+    enabled: !!customerId,
     staleTime: CUSTOMER_DETAIL_STALE_TIME_MS,
+  });
+}
+
+export function useCustomerWithRelations(customerId: string, enabled = true) {
+  return useQuery({
+    ...customerWithRelationsQueryOptions(customerId),
+    enabled: enabled && !!customerId,
   });
 }
 
@@ -330,6 +338,7 @@ export function useUpdateCustomer(
       );
       queryClient.invalidateQueries({ queryKey: customerKeys.lists() });
       invalidateEntityTypeQueries(queryClient, CUSTOMER_ENTITY_TYPE);
+      invalidateEntityTypeQueries(queryClient, "order");
 
       await callbacks?.onSuccess?.(data, variables);
     },
