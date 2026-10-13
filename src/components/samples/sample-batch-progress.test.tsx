@@ -67,6 +67,7 @@ function summaryWith(
       oToCorgMean: usableReplicateCount > 0 ? 0.15 : null,
       hToCWithinThreshold: usableReplicateCount > 0 ? true : null,
       oToCWithinThreshold: usableReplicateCount > 0 ? true : null,
+      unpairedHToCSampleCodes: [],
     },
     submitted: {
       hToCorg: null,

@@ -45,9 +45,10 @@ export const MINIMUM_REPLICATES_PER_BATCH = 3;
 /**
  * A chemistry value is usable only when present and finite. Exported so the
  * durability gates count the same complete-chemistry replicate set this module
- * uses for `usableReplicateCount`. Section 8.3.1 requires at least three
- * representative Samples from the credit batch; incomplete chemistry cannot
- * satisfy that minimum.
+ * uses for `usableReplicateCount`, and so the durability aggregation submits the
+ * same H/C_org population the gates judge. Section 8.3.1 requires at least
+ * three representative Samples from the credit batch; incomplete chemistry
+ * cannot satisfy that minimum.
  */
 export function isUsableNumber(
   value: number | null | undefined,
@@ -95,6 +96,14 @@ export interface RunEligibilityResult {
    * with incomplete chemistry can never read eligible on a single paired sample.
    */
   usableReplicateCount: number;
+  /**
+   * 0-based indexes of replicates with a usable H/C_org but no usable O/C_org.
+   * The submitted H/C_org mean pools every usable H/C_org
+   * (`buildPerBatchDurabilityData`) while the verdict above sees only paired
+   * replicates, so these block submission rather than hiding an adverse H/C_org
+   * from eligibility (round 7 Q54).
+   */
+  unpairedHToCReplicateIndexes: number[];
   warnings: string[];
 }
 
@@ -154,9 +163,15 @@ export function evaluateRunEligibility(
   const pairedMeanOToCOrgRatio = meanOf(
     pairedReplicates.map((r) => r.oToCOrgRatio),
   );
+  const unpairedHToCReplicateIndexes: number[] = [];
+  replicates.forEach((r, index) => {
+    if (isUsableNumber(r.hToCOrgRatio) && !isUsableNumber(r.oToCOrgRatio)) {
+      unpairedHToCReplicateIndexes.push(index);
+    }
+  });
   if (replicates.length > 0 && usableReplicateCount < replicates.length) {
     warnings.push(
-      "Some replicates are missing H/C_org or O/C_org; eligibility is judged only on replicates with complete paired chemistry.",
+      "Some Samples are missing H/C_org or O/C_org. Eligibility uses only Samples with both ratios, and a Sample with H/C_org but without O/C_org blocks submission. Record the missing ratios.",
     );
   }
 
@@ -195,6 +210,7 @@ export function evaluateRunEligibility(
     oToCWithinThreshold,
     outlierReplicateIndexes,
     usableReplicateCount,
+    unpairedHToCReplicateIndexes,
     warnings,
   };
 }
