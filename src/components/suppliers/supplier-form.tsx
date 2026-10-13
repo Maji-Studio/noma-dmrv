@@ -44,12 +44,12 @@ import type { DistanceSourceValue } from "@/schemas/distance-source";
 import type { Supplier, SupplierLocation } from "@/db/schema/parties";
 import { Button } from "@/components/ui/button";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
-import { DefaultLocationBadge } from "@/components/default-location-badge";
+import { DefaultLocationBadge } from "@/components/ui/default-location-badge";
 import {
-  addLocation,
-  removeLocation,
+  withAddedLocation,
+  withoutLocation,
   shouldStartAsDefault,
-  updateLocation,
+  withUpdatedLocation,
 } from "@/lib/party-location-defaults";
 import { SupplierLocationDialog } from "./supplier-location-dialog";
 import { SupplierLocationForm } from "./supplier-location-form";
@@ -184,7 +184,7 @@ export function SupplierForm({
   });
 
   const handleAddPendingLocation = (loc: PendingSupplierLocation) => {
-    setPendingLocations((prev) => addLocation(prev, loc));
+    setPendingLocations((prev) => withAddedLocation(prev, loc));
     setLocationError(null);
   };
 
@@ -192,12 +192,12 @@ export function SupplierForm({
     index: number,
     loc: PendingSupplierLocation,
   ) => {
-    setPendingLocations((prev) => updateLocation(prev, index, loc));
+    setPendingLocations((prev) => withUpdatedLocation(prev, index, loc));
     setLocationError(null);
   };
 
   const handleRemovePendingLocation = (index: number) => {
-    setPendingLocations((prev) => removeLocation(prev, index));
+    setPendingLocations((prev) => withoutLocation(prev, index));
   };
 
   return (
@@ -592,7 +592,7 @@ function LocationsSection({ supplierId }: { supplierId: string }) {
         onClose={() => setIsLocationDialogOpen(false)}
         supplierId={supplierId}
         location={editingLocation ?? undefined}
-        isFirstLocation={!locations || locations.length === 0}
+        isFirstLocation={!isLoading && !isError && locations?.length === 0}
       />
 
       <DeleteConfirmDialog

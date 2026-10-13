@@ -110,6 +110,13 @@ describe.each([
     tree.root.findAll(
       (node) => node.type === "span" && node.props["data-status"] === "active",
     );
+  const rowFor = (label: string) =>
+    tree.root.findAll(
+      (node) =>
+        node.type === "div" &&
+        String(node.props.className).includes("border") &&
+        textOf(node).includes(label),
+    )[0];
   const addLocation = (name: string, isDefault: boolean) => {
     const add = tree.root.findAll(
       (node) =>
@@ -148,6 +155,8 @@ describe.each([
     addLocation("Gamma", true);
     expect(pills()).toHaveLength(1);
     expect(textOf(pills()[0])).toBe("Default");
+    expect(textOf(rowFor("Gamma"))).toContain("Default");
+    expect(textOf(rowFor("Alpha"))).not.toContain("Default");
   });
 
   it("puts Edit before Remove and reopens the dialog pre-filled", () => {
@@ -174,12 +183,6 @@ describe.each([
     addLocation("Beta", false);
     act(() => button("Remove Alpha").props.onClick());
     expect(pills()).toHaveLength(1);
-    const betaRow = tree.root.findAll(
-      (node) =>
-        node.type === "div" &&
-        String(node.props.className).includes("border") &&
-        textOf(node).includes("Beta"),
-    )[0];
-    expect(textOf(betaRow)).toContain("Default");
+    expect(textOf(rowFor("Beta"))).toContain("Default");
   });
 });

@@ -549,6 +549,7 @@ export async function updateCustomerLocation(
         customerId: customerLocations.customerId,
         version: customerLocations.version,
         updatedAt: customerLocations.updatedAt,
+        isDefault: customerLocations.isDefault,
       })
       .from(customerLocations)
       .where(and(eq(customerLocations.id, locationId), eq(customerLocations.organizationId, ctx.organizationId)))
@@ -556,6 +557,10 @@ export async function updateCustomerLocation(
 
     if (!existing) {
       throw new SafeError("Customer location not found");
+    }
+    // The default moves only by setting another location as default.
+    if (existing.isDefault && updateData.isDefault === false) {
+      updateData.isDefault = true;
     }
     assertRowVersion({
       entity: CUSTOMER_LOCATION_CONFLICT_ENTITY,
@@ -601,13 +606,13 @@ export async function deleteCustomerLocation(
   expectedVersion: number
 ): Promise<void> {
   requireOrgScope(ctx);
-  const [located] = await db
-    .select({ customerId: customerLocations.customerId })
-    .from(customerLocations)
-    .where(and(eq(customerLocations.id, locationId), eq(customerLocations.organizationId, ctx.organizationId)));
-  if (!located) throw new SafeError("Customer location not found");
-
   return db.transaction(async (tx) => {
+    // Discover the immutable parent ID without locking a child first.
+    const [located] = await tx.select({ customerId: customerLocations.customerId })
+      .from(customerLocations)
+      .where(and(eq(customerLocations.id, locationId), eq(customerLocations.organizationId, ctx.organizationId)));
+    if (!located) throw new SafeError("Customer location not found");
+
     // Keep parent -> child order. Locking does not bump the parent version.
     const [parent] = await tx.select({ id: customers.id })
       .from(customers)

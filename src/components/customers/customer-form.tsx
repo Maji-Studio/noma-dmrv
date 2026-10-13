@@ -29,12 +29,12 @@ import { useCustomerLocations, useDeleteCustomerLocation } from "@/hooks/use-cus
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { Button } from "@/components/ui/button";
 import { QuickAddDialogShell } from "@/components/forms/entity-select/quick-add-dialog-shell";
-import { DefaultLocationBadge } from "@/components/default-location-badge";
+import { DefaultLocationBadge } from "@/components/ui/default-location-badge";
 import {
-  addLocation,
-  removeLocation,
+  withAddedLocation,
+  withoutLocation,
   shouldStartAsDefault,
-  updateLocation,
+  withUpdatedLocation,
 } from "@/lib/party-location-defaults";
 import { CustomerLocationDialog } from "./customer-location-dialog";
 import {
@@ -145,17 +145,17 @@ export function CustomerForm({
   });
 
   const handleAddPendingLocation = (loc: PendingLocation) => {
-    setPendingLocations((prev) => addLocation(prev, loc));
+    setPendingLocations((prev) => withAddedLocation(prev, loc));
     setLocationError(null);
   };
 
   const handleUpdatePendingLocation = (index: number, loc: PendingLocation) => {
-    setPendingLocations((prev) => updateLocation(prev, index, loc));
+    setPendingLocations((prev) => withUpdatedLocation(prev, index, loc));
     setLocationError(null);
   };
 
   const handleRemovePendingLocation = (index: number) => {
-    setPendingLocations((prev) => removeLocation(prev, index));
+    setPendingLocations((prev) => withoutLocation(prev, index));
   };
 
   return (
@@ -511,7 +511,7 @@ function LocationsSection({ customerId }: { customerId: string }) {
         onClose={() => setIsLocationDialogOpen(false)}
         customerId={customerId}
         location={editingLocation ?? undefined}
-        isFirstLocation={!locations || locations.length === 0}
+        isFirstLocation={!isLoading && !isError && locations?.length === 0}
       />
 
       <DeleteConfirmDialog

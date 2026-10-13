@@ -2,8 +2,8 @@ import { and, eq } from "drizzle-orm";
 import { beforeAll, describe, expect, it } from "vitest";
 import { db } from "@/db";
 import { customers, customerLocations, suppliers, supplierLocations } from "@/db/schema";
-import { createSupplierLocation, deleteSupplierLocation } from "@/data-access/suppliers";
-import { createCustomerLocation, deleteCustomerLocation } from "@/data-access/customers";
+import { createSupplierLocation, deleteSupplierLocation, updateSupplierLocation } from "@/data-access/suppliers";
+import { createCustomerLocation, deleteCustomerLocation, updateCustomerLocation } from "@/data-access/customers";
 import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
 
 const ctx = makeTestOrgContext();
@@ -22,6 +22,8 @@ describe.each(["supplier", "customer"] as const)("%s location delete keeps a def
       return {
         parentId: parent.id, first, second,
         remove: (l: { id: string; version: number }) => deleteSupplierLocation(ctx, l.id, l.version),
+        uncheck: (l: { id: string; version: number }) =>
+          updateSupplierLocation(ctx, l.id, { expectedVersion: l.version, isDefault: false }),
         read: () => db.select().from(supplierLocations)
           .where(and(eq(supplierLocations.supplierId, parent.id), eq(supplierLocations.organizationId, TEST_ORG_ID))),
         cleanup: async () => {
@@ -38,6 +40,8 @@ describe.each(["supplier", "customer"] as const)("%s location delete keeps a def
     return {
       parentId: parent.id, first, second,
       remove: (l: { id: string; version: number }) => deleteCustomerLocation(ctx, l.id, l.version),
+      uncheck: (l: { id: string; version: number }) =>
+        updateCustomerLocation(ctx, l.id, { expectedVersion: l.version, isDefault: false }),
       read: () => db.select().from(customerLocations)
         .where(and(eq(customerLocations.customerId, parent.id), eq(customerLocations.organizationId, TEST_ORG_ID))),
       cleanup: async () => {
@@ -68,6 +72,18 @@ describe.each(["supplier", "customer"] as const)("%s location delete keeps a def
       await f.remove(f.second);
       const rows = await f.read();
       expect(rows.map((r) => [r.id, r.isDefault])).toEqual([[f.first.id, true]]);
+    } finally {
+      await f.cleanup();
+    }
+  });
+
+  it("keeps the only default when its checkbox is cleared", async () => {
+    const f = await fixture();
+    try {
+      const updated = await f.uncheck(f.first);
+      expect(updated.isDefault).toBe(true);
+      const rows = await f.read();
+      expect(rows.filter((r) => r.isDefault).map((r) => r.id)).toEqual([f.first.id]);
     } finally {
       await f.cleanup();
     }

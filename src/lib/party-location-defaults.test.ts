@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
-  addLocation,
-  removeLocation,
+  withAddedLocation,
+  withoutLocation,
   shouldStartAsDefault,
-  updateLocation,
+  withUpdatedLocation,
 } from "./party-location-defaults";
 
 const loc = (name: string, isDefault = false) => ({ name, isDefault });
@@ -17,37 +17,37 @@ describe("party location defaults", () => {
   });
 
   it("makes the first location default even when unchecked", () => {
-    expect(defaults(addLocation([], loc("a")))).toEqual(["a"]);
+    expect(defaults(withAddedLocation([], loc("a")))).toEqual(["a"]);
   });
 
   it("keeps the existing default when a later location is unchecked", () => {
-    const list = addLocation([loc("a", true)], loc("b"));
+    const list = withAddedLocation([loc("a", true)], loc("b"));
     expect(defaults(list)).toEqual(["a"]);
   });
 
   it("moves the default when a later location is checked", () => {
-    const list = addLocation([loc("a", true)], loc("b", true));
+    const list = withAddedLocation([loc("a", true)], loc("b", true));
     expect(defaults(list)).toEqual(["b"]);
   });
 
   it("clears other defaults when an edited location is checked", () => {
-    const list = updateLocation([loc("a", true), loc("b")], 1, loc("b", true));
+    const list = withUpdatedLocation([loc("a", true), loc("b")], 1, loc("b", true));
     expect(defaults(list)).toEqual(["b"]);
   });
 
   it("keeps the only default when its checkbox is cleared", () => {
-    const list = updateLocation([loc("a", true), loc("b")], 0, loc("a"));
+    const list = withUpdatedLocation([loc("a", true), loc("b")], 0, loc("a"));
     expect(defaults(list)).toEqual(["a"]);
   });
 
   it("promotes the first remaining location when the default is deleted", () => {
-    const list = removeLocation([loc("a"), loc("b", true), loc("c")], 1);
+    const list = withoutLocation([loc("a"), loc("b", true), loc("c")], 1);
     expect(defaults(list)).toEqual(["a"]);
   });
 
   it("leaves the default alone when another location is deleted", () => {
-    const list = removeLocation([loc("a", true), loc("b")], 1);
+    const list = withoutLocation([loc("a", true), loc("b")], 1);
     expect(defaults(list)).toEqual(["a"]);
-    expect(removeLocation([loc("a", true)], 0)).toEqual([]);
+    expect(withoutLocation([loc("a", true)], 0)).toEqual([]);
   });
 });

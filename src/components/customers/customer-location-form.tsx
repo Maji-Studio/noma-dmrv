@@ -137,6 +137,7 @@ export function CustomerLocationForm({
       <CustomerLocationFields
         form={form}
         isSubmitting={isSubmitting}
+        isCurrentDefault={location?.isDefault === true}
         idPrefix={idPrefix}
         certStatus={certStatus}
       />

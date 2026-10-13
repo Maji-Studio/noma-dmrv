@@ -713,7 +713,7 @@ export async function updateSupplierLocation(
     if (!parent) throw new SafeError("Supplier not found");
 
     const [locked] = await tx
-      .select({ version: supplierLocations.version })
+      .select({ version: supplierLocations.version, isDefault: supplierLocations.isDefault })
       .from(supplierLocations)
       .where(
         and(
@@ -725,6 +725,10 @@ export async function updateSupplierLocation(
 
     if (!locked) {
       throw new SafeError("Supplier location not found");
+    }
+    // The default moves only by setting another location as default.
+    if (locked.isDefault && locationData.isDefault === false) {
+      locationData.isDefault = true;
     }
     assertRowVersion({
       entity: SUPPLIER_LOCATION_CONFLICT_ENTITY,

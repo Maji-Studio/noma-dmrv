@@ -35,7 +35,7 @@ function ensureDefault<T extends DefaultableLocation>(
   return withSingleDefault(locations, preferredIndex);
 }
 
-export function addLocation<T extends DefaultableLocation>(
+export function withAddedLocation<T extends DefaultableLocation>(
   locations: T[],
   added: T,
 ): T[] {
@@ -48,7 +48,7 @@ export function addLocation<T extends DefaultableLocation>(
   );
 }
 
-export function updateLocation<T extends DefaultableLocation>(
+export function withUpdatedLocation<T extends DefaultableLocation>(
   locations: T[],
   index: number,
   updated: T,
@@ -59,7 +59,7 @@ export function updateLocation<T extends DefaultableLocation>(
   return ensureDefault(next, index);
 }
 
-export function removeLocation<T extends DefaultableLocation>(
+export function withoutLocation<T extends DefaultableLocation>(
   locations: T[],
   index: number,
 ): T[] {
