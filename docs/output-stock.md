@@ -118,7 +118,7 @@ Mode changes say Switched to mix or Switched to split.
 
 History links to the originating production run, biochar product, delivery or
 feedstock intake when the entry has one. Fix a wrong entry in the form where it
-was entered (decision 1). A Lost mass entry has an Edit action that opens its
+was entered (decision 1). An output-bin Lost mass entry has an Edit action that opens its
 own form with the saved time, mass, moisture, draw and reason (decision 3).
 Delivery mass, moisture and split-bin draw readings can be edited in the delivery
 form. Both saves append a reversal and replacement, shown as Original and Corrected.
@@ -134,6 +134,13 @@ make those shares wrong. The server checks this inside the write transaction
 under the posting path's bin-stock lock. Application and certification guards
 still apply. Delivery source, order, date/time and deletion stay locked.
 Old counts remain readable without an edit action.
+Feedstock Lost mass currently supports creation only: its writer has no linked
+reversal and replacement command, so feedstock history does not yet offer Edit.
+
+New output postings freeze a constant-size receipt count and identity hash under
+the bin lock. A changed receipt set locks the edit, even when a newly added
+receipt is physically backdated. Metadata edits alone leave the marker unchanged.
+The lock predicate also reads older development entries with `receiptIds`.
 
 The chart uses steps: dry biochar (output) or estimated solids (feedstock), plus
 hatched estimated water. Product ingredient solids are a separate solid band,
@@ -146,7 +153,9 @@ Feedstock's org-scoped `feedstock-bin-ledger.ts` reads completed intakes,
 production-run draws, product ingredient draws, losses and old counts. The pile
 is pooled. Saved per-batch run draws are subtracted from their own intake batches.
 Draws without saved batch shares, such as ingredients and losses, are estimated
-pro rata over the remaining batch stock. Each batch's estimated dry solids use
+pro rata over the remaining batches present at that entry. Each chart point uses
+the same ordered prefix as its wet balance, including recorded-order timestamp
+ties. Each batch's estimated dry solids use
 its intake dry-to-wet ratio. This does not rewrite saved feedstock allocations.
 Chart points start at the first intake, so an earlier dated run draw does not
 claim that an intake has missing mass. Missing intake mass basis leaves composition unavailable;
@@ -155,7 +164,11 @@ the wet ledger remains readable. Pending intakes stay outside stock.
 ## Losses, counts, and corrections
 
 A measured loss consumes stock through the same planner. Counts and corrections
-remain supported by the server. Lost mass corrections use the entry's own Edit action; counts have no stock-sheet action. A count compares measured
+remain supported by the native server writer. The browser stock action accepts
+corrections only for Lost mass; delivery edits go through delivery CRUD and its
+version check, and count corrections are refused. REST/MCP do not publish a
+correction input. Output-bin Lost mass corrections use the entry's own Edit
+action; counts have no stock-sheet action. A count compares measured
 solids with expected solids: drying alone causes no loss, an excess observation
 creates no stock, and a zero count closes the exact remaining stock without a
 moisture reading.

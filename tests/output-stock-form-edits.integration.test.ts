@@ -1,5 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { afterEach, expect, it } from "vitest";
+import { db } from "@/db";
+import { binMovements } from "@/db/schema";
+import { eq } from "drizzle-orm";
 import { getOutputStockHistory } from "@/data-access/output-stock-history";
 import { previewOutputStock } from "@/data-access/output-stock-operations";
 import { correctOutputStockEntry } from "@/data-access/output-stock-form-edits";
@@ -19,10 +22,39 @@ it("edits the latest Lost mass with a reversal and replacement and changes the b
   const saved = await correctOutputStockEntry(f.ctx, { ...input, reason: "Wrong scale reading", idempotencyKey: randomUUID(),
     basisFingerprint: preview.basisFingerprint, expectedProductVersions: preview.expectedProductVersions });
   expect(saved.preview.afterDryKg).toBe(960);
+  const [movement] = await db.select().from(binMovements).where(eq(binMovements.id, saved.movementId));
+  expect(movement.inputSnapshot).not.toHaveProperty("receiptIds");
+  expect(movement.inputSnapshot?.receiptMarker).toMatchObject({ count: 1, identityHash: expect.stringMatching(/^[a-f0-9]{64}$/) });
   expect(await getOutputStockHistory(f.ctx, f.bin.id)).toEqual(expect.arrayContaining([
     expect.objectContaining({ kind: "reversal", correctsMovementId: original.movementId }),
     expect.objectContaining({ id: saved.movementId, kind: "replacement", wetMassKg: 40, editLockedReason: null }),
   ]));
+});
+
+it("refuses a delivery date change through the stock form correction boundary", async () => {
+  const f = await fixture();
+  const delivery = await postDelivery(f, 100);
+  const movement = (await getOutputStockHistory(f.ctx, f.bin.id)).find(entry => entry.deliveryId === delivery.id)!;
+  const input = { facilityId: f.facility.id, storageLocationId: f.bin.id, occurredAt: "2026-09-13T12:00:00.000Z", kind: "delivery" as const,
+    wetMassKg: 40, moisturePercent: 0, correctsMovementId: movement.id };
+  const preview = await previewOutputStock(f.ctx, input);
+  await expect(correctOutputStockEntry(f.ctx, { ...input, reason: "Wrong reading", idempotencyKey: randomUUID(),
+    basisFingerprint: preview.basisFingerprint, expectedProductVersions: preview.expectedProductVersions })).rejects.toThrow("Choose a Lost mass entry to edit.");
+  expect(await getOutputStockHistory(f.ctx, f.bin.id)).not.toEqual(expect.arrayContaining([expect.objectContaining({ kind: "replacement" })]));
+  expect(await updateDelivery(f.ctx, delivery.id, { expectedVersion: delivery.version, deliveredWetMassKg: 40 }))
+    .toMatchObject({ deliveryDate: delivery.deliveryDate, deliveredWetMassKg: 40 });
+});
+
+it("keeps an existing receiptIds snapshot editable until another receipt arrives", async () => {
+  const f = await fixture();
+  const original = await postMeasurement(f, { kind: "loss", wetMassKg: 100 });
+  const [movement] = await db.select().from(binMovements).where(eq(binMovements.id, original.movementId));
+  const snapshot = { ...movement.inputSnapshot };
+  delete snapshot.receiptMarker;
+  await db.update(binMovements).set({ inputSnapshot: { ...snapshot, receiptIds: [f.product!.id] } }).where(eq(binMovements.id, movement.id));
+  expect((await getOutputStockHistory(f.ctx, f.bin.id)).find(entry => entry.id === movement.id)?.editLockedReason).toBeNull();
+  await postProduct(f, { massKg: 100, placedAt: "2026-09-11T12:00:00.000Z" });
+  expect((await getOutputStockHistory(f.ctx, f.bin.id)).find(entry => entry.id === movement.id)?.editLockedReason).toMatch(/^Locked/);
 });
 
 it("refuses a Lost mass edit after a newer movement even from an unrelated sub-bin", async () => {

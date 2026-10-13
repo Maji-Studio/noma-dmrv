@@ -5,7 +5,7 @@ import type { OrgContext } from '@/lib/auth/server';
 import { SafeError } from '@/lib/errors';
 import { CANCELLED_PRODUCTION_RUN_STATUS } from '@/lib/production-runs/lifecycle';
 import type { FeedstockBinStock, FeedstockLedgerEntry } from '@/types/feedstock-bin-ledger';
-import { feedstockPile } from '@/lib/feedstock-pile';
+import { feedstockPileTimeline } from '@/lib/feedstock-pile';
 import { requireOrgScope } from './utils';
 
 const MASS_DECIMALS = 1_000;
@@ -20,7 +20,7 @@ const round = (kg: number) => Math.round(kg * MASS_DECIMALS) / MASS_DECIMALS;
  *
  * Wet mass is the bin's stock currency. Saved run shares are subtracted from
  * their own batches. Draws without batch records are estimated pro rata over
- * the remainder; dry composition uses each intake's dry-to-wet ratio.
+ * stock present at each entry; dry composition uses each intake's dry-to-wet ratio.
  */
 export async function getFeedstockBinStock(ctx: OrgContext, storageLocationId: string): Promise<FeedstockBinStock> {
   requireOrgScope(ctx);
@@ -48,7 +48,7 @@ export async function getFeedstockBinStock(ctx: OrgContext, storageLocationId: s
       .leftJoin(users, eq(users.id, binMovements.createdBy))
       .where(and(eq(binMovements.organizationId, ctx.organizationId), eq(binMovements.storageLocationId, storageLocationId),
         eq(binMovements.lane, 'feedstock'), inArray(binMovements.movementType, ['loss', 'adjustment']))),
-    db.select({ feedstockId: productionRunFeedstocks.feedstockId, wetKg: productionRunFeedstocks.wetMassUsedKg, occurredAt: productionRuns.startTime })
+    db.select({ feedstockId: productionRunFeedstocks.feedstockId, wetKg: productionRunFeedstocks.wetMassUsedKg, productionRunId: productionRunFeedstocks.productionRunId })
       .from(productionRunFeedstocks)
       .innerJoin(feedstocks, and(eq(feedstocks.id, productionRunFeedstocks.feedstockId), eq(feedstocks.organizationId, ctx.organizationId)))
       .innerJoin(productionRuns, and(eq(productionRuns.id, productionRunFeedstocks.productionRunId), eq(productionRuns.organizationId, ctx.organizationId)))
@@ -62,43 +62,43 @@ export async function getFeedstockBinStock(ctx: OrgContext, storageLocationId: s
       ingredient.storageLocationId === storageLocationId && typeof ingredient.massKg === 'number' && Number.isFinite(ingredient.massKg) && ingredient.massKg > 0
         ? sum + ingredient.massKg : sum, 0) };
   });
-  type Draft = Omit<FeedstockLedgerEntry, 'beforeWetKg' | 'afterWetKg' | 'estimatedDryKg'> & { intakeDryKg: number | null };
+  type Draft = Omit<FeedstockLedgerEntry, 'beforeWetKg' | 'afterWetKg' | 'estimatedDryKg'>;
   const drafts: Draft[] = [
     ...batches.map((b): Draft => ({ id: b.id, sourceId: b.id, kind: 'intake', occurredAt: (b.deliveryDate ?? b.createdAt).toISOString(),
       recordedAt: b.createdAt.toISOString(), actorName: null, code: b.code, reason: '', wetDeltaKg: b.wetKg, countedWetKg: null,
-      moisturePercent: b.moisturePercent === null ? null : Number(b.moisturePercent), intakeDryKg: b.dryKg === null ? null : Number(b.dryKg) })),
+      moisturePercent: b.moisturePercent === null ? null : Number(b.moisturePercent) })),
     ...runDraws.map((d): Draft => ({ id: d.id, sourceId: d.sourceId, kind: 'run_draw', occurredAt: d.startTime.toISOString(), recordedAt: d.createdAt.toISOString(),
-      actorName: null, code: d.code, reason: '', wetDeltaKg: -Number(d.wetKg), countedWetKg: null, moisturePercent: null, intakeDryKg: 0 })),
+      actorName: null, code: d.code, reason: '', wetDeltaKg: -Number(d.wetKg), countedWetKg: null, moisturePercent: null })),
     ...ingredientDraws.filter(p => Number(p.ingredientWetKg ?? 0) > 0).map((p): Draft => ({ id: p.id, sourceId: p.id, kind: 'ingredient_draw', occurredAt: p.placedAt.toISOString(),
       recordedAt: p.createdAt.toISOString(), actorName: null, code: p.code, reason: '', wetDeltaKg: -Number(p.ingredientWetKg), countedWetKg: null,
-      moisturePercent: null, intakeDryKg: 0 })),
+      moisturePercent: null })),
     ...movements.map(({ movement: m, actorName }): Draft => ({ id: m.id, sourceId: null, kind: m.movementType === 'loss' ? 'loss' : 'count',
       occurredAt: (m.occurredAt ?? m.createdAt).toISOString(), recordedAt: m.createdAt.toISOString(), actorName, code: null, reason: m.reason,
       wetDeltaKg: Number(m.massDeltaKg), countedWetKg: m.countedWetMassKg ?? m.countedMassKg,
-      moisturePercent: m.moistureRatioUsed === null ? null : Number(m.moistureRatioUsed) * PERCENT, intakeDryKg: 0 })),
+      moisturePercent: m.moistureRatioUsed === null ? null : Number(m.moistureRatioUsed) * PERCENT })),
   ].sort((a, b) => a.occurredAt.localeCompare(b.occurredAt) || a.recordedAt.localeCompare(b.recordedAt) || a.id.localeCompare(b.id));
 
+  const intakeById = new Map(batches.map(batch => [batch.id, { id: batch.id, wetKg: Number(batch.wetKg ?? 0), dryKg: batch.dryKg === null ? null : Number(batch.dryKg) }]));
+  const drawsByRun = new Map<string, { feedstockId: string; wetKg: number }[]>();
+  for (const draw of batchDraws) {
+    const shares = drawsByRun.get(draw.productionRunId) ?? [];
+    shares.push({ feedstockId: draw.feedstockId, wetKg: Number(draw.wetKg) });
+    drawsByRun.set(draw.productionRunId, shares);
+  }
+  const replay = feedstockPileTimeline(drafts.map(draft => ({ wetDeltaKg: draft.wetDeltaKg,
+    intake: draft.kind === 'intake' ? intakeById.get(draft.id) : undefined,
+    draws: draft.kind === 'run_draw' && draft.sourceId ? drawsByRun.get(draft.sourceId) : undefined,
+  })));
+  const missingDryBasis = batches.some(batch => batch.dryKg === null || (Number(batch.dryKg) > 0 && !(Number(batch.wetKg) > 0)));
   let wetKg = 0;
-  let intakeWetKg = 0;
-  let missingDryBasis = false;
-  const entries = drafts.map(({ intakeDryKg: dry, ...draft }): FeedstockLedgerEntry => {
+  const entries = drafts.map((draft, index): FeedstockLedgerEntry => {
     const beforeWetKg = round(wetKg);
     wetKg += draft.wetDeltaKg ?? 0;
-    if (draft.kind === 'intake') {
-      intakeWetKg += draft.wetDeltaKg ?? 0;
-      missingDryBasis ||= dry === null || (dry > 0 && !(draft.wetDeltaKg != null && draft.wetDeltaKg > 0));
-    }
-    const stocked = batches.filter(batch => (batch.deliveryDate ?? batch.createdAt).toISOString() <= draft.occurredAt);
-    const savedDraws = batchDraws.filter(draw => draw.occurredAt.toISOString() <= draft.occurredAt);
-    const shares = feedstockPile(stocked.map(batch => ({ id: batch.id, wetKg: Number(batch.wetKg ?? 0), dryKg: batch.dryKg === null ? null : Number(batch.dryKg) })),
-      savedDraws.map(draw => ({ ...draw, wetKg: Number(draw.wetKg) })), wetKg);
-    const dryKg = intakeWetKg > 0 && !missingDryBasis ? round(shares.reduce((sum, batch) => sum + (batch.dryKg ?? 0), 0)) : null;
-    return { ...draft, beforeWetKg, afterWetKg: round(wetKg), estimatedDryKg: wetKg === 0 ? 0 : dryKg };
+    return { ...draft, beforeWetKg, afterWetKg: round(wetKg), estimatedDryKg: replay.points[index].dryKg };
   });
 
   const currentWetKg = round(wetKg);
-  const shares = new Map(feedstockPile(batches.map(b => ({ id: b.id, wetKg: Number(b.wetKg ?? 0), dryKg: b.dryKg === null ? null : Number(b.dryKg) })),
-    batchDraws.map(draw => ({ ...draw, wetKg: Number(draw.wetKg) })), currentWetKg).map(batch => [batch.id, batch]));
+  const shares = new Map(replay.batches.map(batch => [batch.id, batch]));
   const pile = batches.filter(b => Number(b.wetKg ?? 0) > 0)
     .sort((a, b) => (a.deliveryDate ?? a.createdAt).getTime() - (b.deliveryDate ?? b.createdAt).getTime())
     .map(b => ({ id: b.id, code: b.code, receivedAt: (b.deliveryDate ?? b.createdAt).toISOString(),

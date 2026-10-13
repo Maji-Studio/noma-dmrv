@@ -226,6 +226,48 @@ describe("storage-location feedstock stock", () => {
   });
 });
 
+it.each([false, true])("keeps a loss on A before B arrives, including same-time entries (%s)", async (sameTime) => {
+  const f = await createFixture(crypto.randomUUID().slice(0, 8).toUpperCase());
+  try {
+    const intakeTime = new Date("2026-09-08T12:00:00Z");
+    const lossTime = sameTime ? intakeTime : new Date("2026-09-09T12:00:00Z");
+    const secondTime = sameTime ? intakeTime : new Date("2026-09-10T12:00:00Z");
+    await db.update(feedstocks).set({ deliveryDate: intakeTime, createdAt: new Date("2026-09-11T08:00:00Z") }).where(eq(feedstocks.id, f.feedstockIds[0]));
+    await db.update(feedstocks).set({ status: "complete", massWetKg: 100, massDryKg: 50, moistureContentPercent: 50,
+      deliveryDate: secondTime, createdAt: new Date("2026-09-11T08:10:00Z") }).where(eq(feedstocks.id, f.feedstockIds[1]));
+    await db.insert(binMovements).values({ organizationId: TEST_ORG_ID, storageLocationId: f.storageLocationId, lane: "feedstock",
+      movementType: "loss", massDeltaKg: -50, reason: "Spilled", occurredAt: lossTime, createdAt: new Date("2026-09-11T08:05:00Z") });
+    const ledger = await getFeedstockBinStock(makeTestOrgContext(TEST_USER_ID), f.storageLocationId);
+    expect(ledger.currentWetKg).toBe(150);
+    expect(ledger.entries.map(entry => [entry.kind, entry.afterWetKg, entry.estimatedDryKg]))
+      .toEqual([["intake", 100, 80], ["loss", 50, 40], ["intake", 150, 90]]);
+    expect(ledger.batches).toMatchObject([{ id: f.feedstockIds[0], wetKg: 50, dryKg: 40 }, { id: f.feedstockIds[1], wetKg: 100, dryKg: 50 }]);
+  } finally {
+    await db.delete(binMovements).where(eq(binMovements.storageLocationId, f.storageLocationId));
+    await cleanupFixture(f);
+  }
+});
+
+it("charts only recorded intakes and saved draws within each same-time prefix", async () => {
+  const f = await seedOutputStockParents(db);
+  try {
+    const instant = new Date("2026-09-08T12:00:00Z");
+    const [draw] = await db.select().from(productionRunFeedstockDraws).where(eq(productionRunFeedstockDraws.productionRunId, f.runs[0].id));
+    await db.update(productionRuns).set({ status: "cancelled", cancellationReason: "Fixture" }).where(eq(productionRuns.id, f.runs[1].id));
+    await db.update(productionRuns).set({ startTime: instant }).where(eq(productionRuns.id, f.runs[0].id));
+    const [a] = await db.update(feedstocks).set({ massWetKg: 100, massDryKg: 80, moistureContentPercent: 20, deliveryDate: instant,
+      createdAt: new Date("2026-09-11T08:00:00Z") }).where(eq(feedstocks.storageLocationId, draw.storageLocationId)).returning();
+    await db.update(productionRunFeedstockDraws).set({ wetMassKg: 60, createdAt: new Date("2026-09-11T08:05:00Z") }).where(eq(productionRunFeedstockDraws.id, draw.id));
+    await db.update(productionRunFeedstocks).set({ wetMassUsedKg: 60 }).where(eq(productionRunFeedstocks.productionRunId, f.runs[0].id));
+    await db.insert(feedstocks).values({ organizationId: f.ctx.organizationId, facilityId: f.facility.id, feedstockTypeId: a.feedstockTypeId,
+      storageLocationId: draw.storageLocationId, code: `E2E-FIFO-SAME-TIME-${f.tag}`, status: "complete", massWetKg: 100, massDryKg: 50,
+      moistureContentPercent: 50, deliveryDate: instant, createdAt: new Date("2026-09-11T08:10:00Z") });
+    const ledger = await getFeedstockBinStock(f.ctx, draw.storageLocationId);
+    expect(ledger.entries.map(entry => [entry.kind, entry.afterWetKg, entry.estimatedDryKg]))
+      .toEqual([["intake", 100, 80], ["run_draw", 40, 32], ["intake", 140, 82]]);
+  } finally { await cleanupOutputStockFixture(db, f.ctx.organizationId); }
+});
+
 it("keeps A40 and B100 after A100, a saved A60 run draw, then B100", async () => {
   const f = await seedOutputStockParents(db);
   try {

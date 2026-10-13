@@ -3,21 +3,21 @@ import { binMovements, biocharProducts, productionRuns, storageLocations } from 
 import type { OrgContext } from '@/lib/auth/server';
 import { ActionConflictError, SafeError } from '@/lib/errors';
 import { conflictCode } from '@/lib/conflict-ref';
-import { stockEntryLockReason } from '@/lib/output-stock/edit-lock';
+import { stockEntryLockReason, stockReceiptMarker } from '@/lib/output-stock/edit-lock';
 import { STOCK_ENTRY_LOCKED_REASON } from '@/lib/output-stock/labels';
 import { and, eq, gt } from 'drizzle-orm';
 import { requireOrgScope } from './utils';
 
 type Reader = Pick<DbTransaction, 'select'>;
 
-/** Freeze all receipt identities under the bin lock, including physically future and archived receipts. */
-export async function outputReceiptIds(ctx: OrgContext, storageLocationId: string, reader: Reader): Promise<string[]> {
+/** Freeze a bounded receipt marker under the bin lock, including future and archived receipts. */
+export async function outputReceiptMarker(ctx: OrgContext, storageLocationId: string, reader: Reader) {
   requireOrgScope(ctx);
   const [products, runs] = await Promise.all([
     reader.select({ id: biocharProducts.id }).from(biocharProducts).where(and(eq(biocharProducts.organizationId, ctx.organizationId), eq(biocharProducts.storageLocationId, storageLocationId))),
     reader.select({ id: productionRuns.id }).from(productionRuns).where(and(eq(productionRuns.organizationId, ctx.organizationId), eq(productionRuns.biocharStorageLocationId, storageLocationId), eq(productionRuns.status, 'complete'))),
   ]);
-  return [...products, ...runs].map(receipt => receipt.id);
+  return stockReceiptMarker([...products, ...runs]);
 }
 
 /** Posting order, rather than physical event time: a backdated new entry also locks edits. */

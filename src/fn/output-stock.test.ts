@@ -33,7 +33,7 @@ const command = {
 };
 
 beforeEach(() => {
-  vi.clearAllMocks();
+  vi.resetAllMocks();
   mocks.requireOrgContext.mockResolvedValue(ctx);
 });
 
@@ -60,10 +60,17 @@ describe("postOutputStockFn", () => {
   });
 });
 
-it.each(["loss", "delivery"] as const)("returns a conflict for a locked %s form correction", async (kind) => {
+it.each(["delivery", "count"] as const)("refuses a direct browser %s correction before either writer runs", async (kind) => {
+  expect(await postOutputStockFn({ ...command, kind, correctsMovementId: FACILITY_ID }))
+    .toMatchObject({ success: false, code: "validation_failed" });
+  expect(mocks.correct).not.toHaveBeenCalled();
+  expect(mocks.runOperationInProcess).not.toHaveBeenCalled();
+});
+
+it("returns a conflict for a locked loss form correction", async () => {
   const conflict = { entity: "storageLocation", id: BIN_ID, code: conflictCode("BC-001") };
   mocks.correct.mockRejectedValue(new ActionConflictError("Locked because newer stock entries were recorded on this bin after it.", conflict));
-  expect(await postOutputStockFn({ ...command, kind, correctsMovementId: FACILITY_ID })).toEqual({
+  expect(await postOutputStockFn({ ...command, correctsMovementId: FACILITY_ID })).toEqual({
     success: false, code: "conflict", error: "Locked because newer stock entries were recorded on this bin after it.", conflict,
   });
   expect(mocks.runOperationInProcess).not.toHaveBeenCalled();

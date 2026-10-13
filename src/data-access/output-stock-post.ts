@@ -22,7 +22,7 @@ import { postedMoisturePercent, prepareOutputStock, stockFingerprint } from './o
 import type { SnapshotStock } from './stock-effects';
 import { lockBiocharTransportRouteTopology, syncBiocharProductTransportLegs } from './transport-legs';
 import { requireOrgScope } from './utils';
-import { assertLatestOutputMovement, outputReceiptIds } from './output-stock-edit-lock';
+import { assertLatestOutputMovement, outputReceiptMarker } from './output-stock-edit-lock';
 
 const OUTPUT_REQUEST_CONFLICT_MESSAGE = 'This request key was already used with different values.';
 const OUTPUT_BIN_NOT_FOUND_MESSAGE = 'Output bin not found or archived';
@@ -173,7 +173,7 @@ async function persistOutputStock(ctx: OrgContext, tx: DbTransaction, input: Sto
   const [movement] = await tx.insert(binMovements).values({ organizationId: ctx.organizationId, storageLocationId: input.storageLocationId, lane: prepared.lane,
     movementType: 'adjustment', massDeltaKg: -Number(plan.drawnDryKg), reason: input.reason, createdBy: ctx.userId,
     outputKind: correction ? 'replacement' : input.kind, occurredAt: new Date(input.occurredAt), idempotencyKey: input.idempotencyKey,
-    basisFingerprint, inputSnapshot: { ...input, sources: prepared.sources, receiptIds: await outputReceiptIds(ctx, input.storageLocationId, tx),
+    basisFingerprint, inputSnapshot: { ...input, sources: prepared.sources, receiptMarker: await outputReceiptMarker(ctx, input.storageLocationId, tx),
       // A split draw has no single reading; history shows its overall moisture, 1 − solids ÷ wet.
       moisturePercent: postedMoisturePercent(prepared), actorId: ctx.userId, payloadHash, targetBiocharProductId: options.targetBiocharProductId, deliveryId: options.deliveryId ?? correction?.deliveryId, discrepancySolidsKg: storeRational(plan.discrepancySolidsKg), preview },
     outputDryDeltaKg: kilograms(-grams(plan.drawnDryKg)), balanceBeforeDryKg: kilograms(beforeGrams), balanceAfterDryKg: kilograms(beforeGrams - grams(plan.drawnDryKg)), correctsMovementId: correction?.original.id ?? null }).returning();

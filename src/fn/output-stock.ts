@@ -2,7 +2,7 @@
 
 import { getMatchingOutputBins, getOutputStockHistory, previewOutputStock } from '@/data-access/output-stock-operations';
 import { getOutputSubBins } from '@/data-access/output-sub-bins';
-import { matchingOutputBinsSchema, outputStockPostSchema, outputStockPreviewSchema, outputSubBinsSchema } from '@/schemas/output-stock';
+import { matchingOutputBinsSchema, outputStockFormPostSchema, outputStockPreviewSchema, outputSubBinsSchema } from '@/schemas/output-stock';
 import type { OutputStockPostInput, OutputStockPreviewInput, OutputSubBinsInput } from '@/types/output-stock';
 import { recordOutputStockMovement } from '@/lib/operations/output-stock';
 import { runOperationInProcess } from '@/lib/operations/runner';
@@ -19,11 +19,11 @@ export async function getOutputStockHistoryFn(storageLocationId: string) {
 export async function getMatchingOutputBinsFn(input: { facilityId: string; formulationId: string }) {
   return withAction(ctx => getMatchingOutputBins(ctx, matchingOutputBinsSchema.parse(input)));
 }
-/** New losses and counts share the API operation; form edits require the latest entry. */
+/** New losses and counts share the API operation; only Lost mass has a stock form edit. */
 export async function postOutputStockFn(input: OutputStockPostInput) {
   return withAction(ctx => {
-    const data = outputStockPostSchema.parse(input);
-    return (data.kind === 'loss' || data.kind === 'delivery') && data.correctsMovementId
+    const data = outputStockFormPostSchema.parse(input);
+    return data.correctsMovementId
       ? correctOutputStockEntry(ctx, data)
       : runOperationInProcess(recordOutputStockMovement, ctx, data);
   });

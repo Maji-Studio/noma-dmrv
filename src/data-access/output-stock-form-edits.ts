@@ -10,6 +10,6 @@ import { requireOrgScope } from './utils';
 export async function correctOutputStockEntry(ctx: OrgContext, raw: OutputStockPostInput) {
   requireOrgScope(ctx);
   const input = outputStockPostSchema.parse(raw);
-  if (!['loss', 'delivery'].includes(input.kind) || !input.correctsMovementId) throw new SafeError('Choose a Lost mass or delivery entry to edit.');
+  if (input.kind !== 'loss' || !input.correctsMovementId) throw new SafeError('Choose a Lost mass entry to edit.');
   return db.transaction(tx => recordOutputStockMovementInTransaction(ctx, tx, input, { requireLatestCorrection: true }));
 }
