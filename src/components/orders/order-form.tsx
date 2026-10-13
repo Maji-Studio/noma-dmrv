@@ -206,7 +206,7 @@ export function OrderForm({
         icon={<StorefrontIcon size={14} weight="bold" />}
         fields={["customerId", "customerLocationId"]}
       >
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
+        <div className="grid grid-cols-1 gap-x-16 gap-y-20">
           <FormEntitySelect
             control={control}
             name="customerId"
@@ -257,7 +257,22 @@ export function OrderForm({
       >
         <FormEntitySelect control={control} name="formulationId" label="Formulation" entityType="formulation" placeholder="Select formulation..." required disabled={isSubmitting} />
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
+        <div className="grid grid-cols-1 gap-x-16 gap-y-20">
+          <FormField
+            id="packaging"
+            label="Packaging"
+            error={errors.packaging?.message}
+            required
+          >
+            <FormSelect
+              id="packaging"
+              disabled={isSubmitting}
+              error={!!errors.packaging}
+              options={packagingOptions}
+              {...register("packaging")}
+            />
+          </FormField>
+
           <FormField
             id="quantityKg"
             label="Requested wet mass (kg)"
@@ -276,23 +291,8 @@ export function OrderForm({
               })}
             />
           </FormField>
-
-          <FormField
-            id="packaging"
-            label="Packaging"
-            error={errors.packaging?.message}
-            required
-          >
-            <FormSelect
-              id="packaging"
-              disabled={isSubmitting}
-              error={!!errors.packaging}
-              options={packagingOptions}
-              {...register("packaging")}
-            />
-          </FormField>
         </div>
-        {/* Right after the wet mass and packaging row, so the operator
+        {/* Right after the wet mass field, so the operator
             compares the request with what the matching bins hold. */}
         <MatchingOutputBins facilityId={watchedFacilityId || ""} formulationId={watchedFormulationId || ""} />
       </FormSection>

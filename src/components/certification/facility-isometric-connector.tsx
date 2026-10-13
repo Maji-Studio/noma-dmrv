@@ -317,8 +317,8 @@ function ConnectorBody({
           No projects found on Isometric for this account.
         </p>
       ) : (
-        <div className="flex items-end gap-12">
-          <div className="flex-1">
+        <div className="flex flex-col items-start gap-12">
+          <div className="w-full">
             <FormField id="isometric-project" label="Isometric project">
               <FormSelect
                 id="isometric-project"

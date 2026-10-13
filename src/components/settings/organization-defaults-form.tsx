@@ -156,7 +156,7 @@ function DefaultsForm({ defaults }: { defaults: OrganizationDefaults }) {
       className="content-measure-preview flex flex-col gap-24"
     >
       <FormSection title="Region" divider={false}>
-        <div className="grid grid-cols-1 gap-x-16 gap-y-16 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-x-16 gap-y-16">
         <FormField
           id="default-country"
           label="Country"

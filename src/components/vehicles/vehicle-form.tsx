@@ -90,7 +90,7 @@ export function VehicleForm({
         </FormField>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
+      <div className="grid grid-cols-1 gap-x-16 gap-y-20">
         <FormField
           id="vehicleType"
           label="Vehicle type"

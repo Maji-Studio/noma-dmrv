@@ -170,7 +170,7 @@ export function OrganizationSettings({ canManage }: { canManage: boolean }) {
             onSubmit={handleSubmit(onInvite)}
             className="content-measure-form flex flex-col gap-16"
           >
-            <div className="grid grid-cols-1 gap-16 md:grid-cols-[1fr_180px]">
+            <div className="grid grid-cols-1 gap-16">
               <FormField
                 id="invite-email"
                 label="Email"
