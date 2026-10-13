@@ -13,6 +13,8 @@ const ENTITY_LABELS: Record<string, string> = {
   "storage-locations": "Storage bins",
   vehicles: "Vehicles",
   drivers: "Drivers",
+  "lab-samples": "Lab samples",
+  "credit-batches": "Credit batches",
 };
 export const API_PERMISSION_ACTIONS = ["read", "write", "delete"] as const;
 export const API_PERMISSION_LABELS = { read: "Read", write: "Write", delete: "Delete" };

@@ -92,7 +92,7 @@ it("publishes business dates as date, and preserves operation input types and co
 it("publishes pagination and search bounds on every list route", () => {
   const lists = Object.values(document.paths).map((methods) => methods.get)
     .filter((operation) => operation?.operationId.startsWith("find_"));
-  expect(lists).toHaveLength(13);
+  expect(lists).toHaveLength(15);
   for (const operation of lists) {
     const parameters = operation.parameters as { name: string; in: string; required: boolean; schema: JsonSchema }[];
     const query = Object.fromEntries(parameters.filter((parameter) => parameter.in === "query").map((parameter) => [parameter.name, parameter]));
@@ -302,4 +302,17 @@ it("publishes the product and movement writes with one scope, required keys and 
   const productBody = bodyOf(writes[0]);
   for (const forbidden of ["code", "idempotencyKey", "expectedProductVersions"]) expect(productBody.properties).not.toHaveProperty(forbidden);
   expect(document.components.schemas.Problem.properties).toHaveProperty("preview");
+});
+
+it("publishes lab sample and credit batch reads with their own scopes and no write operations yet", () => {
+  expect(document.paths["/lab-samples"].get).toMatchObject({ operationId: "find_lab_samples", "x-required-scope": "lab-samples:read" });
+  expect(document.paths["/lab-samples/{idOrCode}"].get).toMatchObject({ operationId: "get_lab_sample", "x-required-scope": "lab-samples:read" });
+  expect(document.paths["/credit-batches"].get).toMatchObject({ operationId: "find_credit_batches", "x-required-scope": "credit-batches:read" });
+  expect(document.paths["/credit-batches/{idOrCode}"].get).toMatchObject({ operationId: "get_credit_batch", "x-required-scope": "credit-batches:read" });
+  expect(document.paths["/lab-samples/{idOrCode}"].get.responses["200"]).toMatchObject({ headers: { ETag: expect.any(Object) } });
+  const sample = document.components.schemas.lab_sample.properties as Record<string, JsonSchema>;
+  for (const field of ["facilityId", "durabilityOption", "creditBatchCode", "productionRunId", "timeZone"]) expect(sample).not.toHaveProperty(field);
+  expect(Object.keys(document.components.schemas.credit_batch.properties as object).sort()).toEqual(
+    ["archivedAt", "code", "createdAt", "endDate", "facilityId", "feedstockTypeId", "id", "sampling", "startDate", "status", "updatedAt", "version"]);
+  expect(document.components.schemas.facility.properties).toHaveProperty("durabilityOption");
 });

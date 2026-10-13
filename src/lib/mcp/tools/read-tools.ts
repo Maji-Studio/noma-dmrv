@@ -44,6 +44,8 @@ const labels: Record<ResourcePath, { singular: string; plural: string }> = {
   "feedstocks": { singular: "feedstock", plural: "feedstocks" },
   "biochar-products": { singular: "biochar product", plural: "biochar products" },
   formulations: { singular: "formulation", plural: "formulations" },
+  "lab-samples": { singular: "lab sample", plural: "lab samples" },
+  "credit-batches": { singular: "credit batch", plural: "credit batches" },
 };
 const guidance: Record<ResourcePath, string> = {
   "production-runs": PRODUCTION_RUN_GUIDANCE,
@@ -57,6 +59,8 @@ const guidance: Record<ResourcePath, string> = {
   feedstocks: `Call whoami first for facility ids. ${FEEDSTOCK_UNITS} ${FEEDSTOCK_DATES}`,
   "biochar-products": `Call whoami first for facility ids. Filter by facilityId, formulationId, status or storageLocationId. ${BIOCHAR_PRODUCT_MASS}`,
   formulations: "Each formulation lists its lines as { id, feedstockTypeId, ratio }. Pass a line id as formulationIngredientId in make_biochar_product.",
+  "lab-samples": "Filter by creditBatchId or facilityId; sampledFrom and sampledBefore take RFC 3339 instants with an explicit offset.",
+  "credit-batches": "Call whoami first for facility ids. A lab sample belongs to one credit batch; the batch's facility sets its durability tier and time zone.",
 };
 
 export interface ReadTool {

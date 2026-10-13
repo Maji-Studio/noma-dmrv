@@ -21,9 +21,9 @@ const privateFields = {
 // Independent expected field sets ensure adding row columns never expands the API.
 const cases = [
   { name: "facility", schema: facilityRepresentationSchema,
-    map: () => representFacility({ ...base, ...privateFields, version: 7, timezone: "Africa/Dar_es_Salaam" }),
-    json: () => representFacility({ ...base, version: 7, timezone: "Africa/Dar_es_Salaam", createdAt: instant, updatedAt: instant }),
-    expected: { ...expected, version: 7, timeZone: "Africa/Dar_es_Salaam" } },
+    map: () => representFacility({ ...base, ...privateFields, version: 7, timezone: "Africa/Dar_es_Salaam", durabilityOption: "200_year" }),
+    json: () => representFacility({ ...base, version: 7, timezone: "Africa/Dar_es_Salaam", durabilityOption: "200_year", createdAt: instant, updatedAt: instant }),
+    expected: { ...expected, version: 7, timeZone: "Africa/Dar_es_Salaam", durabilityOption: "200_year" } },
   { name: "supplier", schema: supplierRepresentationSchema,
     map: () => representSupplier({ ...base, ...privateFields, version: 7 }),
     json: () => representSupplier({ ...base, version: 7, createdAt: instant, updatedAt: instant }),
@@ -62,7 +62,7 @@ describe.each(cases)("$name representation", ({ schema, map, json, expected: out
 });
 
 it("serializes archive Dates and stored instants", () => {
-  expect(representFacility({ ...base, version: 7, timezone: "UTC", archivedAt: new Date(archived) }).archivedAt).toBe(archived);
+  expect(representFacility({ ...base, version: 7, timezone: "UTC", durabilityOption: "1000_year", archivedAt: new Date(archived) }).archivedAt).toBe(archived);
   expect(representFeedstockType({ ...base, version: 7, category: "forestry", usage: "pyrolysis", archivedAt: archived }).archivedAt).toBe(archived);
   expect(representStorageLocation({ ...base, version: 7, facilityId: id, type: "biochar_bin", capacityKg: null, feedstockTypeId: null, archivedAt: new Date(archived) })).toMatchObject({ archivedAt: archived, capacityKg: null });
   expect(representVehicle({ ...base, version: 7, vehicleType: "truck", identifier: null }).identifier).toBeNull();

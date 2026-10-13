@@ -97,6 +97,25 @@
         "required": ["id", "code", "version", "facilityId", "formulationId", "status", "placedAt", "productionDate", "expiresAt", "sourceBiocharStorageLocationId", "storageLocationId", "biocharWetMassKg", "biocharMoisturePercent", "waterAddedKg", "densityKgM3", "ingredients", "sourceAllocations", "archivedAt", "createdAt", "updatedAt"],
         "type": "object"
       },
+      "credit_batch": {
+        "additionalProperties": false,
+        "properties": {
+          "archivedAt": {"anyOf": [{"format": "date-time", "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$", "type": "string"}, {"type": "null"}], "description": "Archive instant in UTC (RFC 3339), or null when active."},
+          "code": {"description": "Human-readable credit batch code, unique within the organization.", "type": "string"},
+          "createdAt": {"description": "Creation instant in UTC, RFC 3339.", "format": "date-time", "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$", "type": "string"},
+          "endDate": {"description": "Last day of the batch's production window, YYYY-MM-DD, in the facility's time zone.", "format": "date", "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$", "type": "string"},
+          "facilityId": {"description": "Owning facility identifier, UUID. The facility sets the durability tier and the time zone.", "format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"},
+          "feedstockTypeId": {"description": "The one feedstock type of this batch, UUID.", "format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"},
+          "id": {"description": "Credit batch identifier, UUID.", "format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"},
+          "sampling": {"description": "Whether the batch is sampled or unsampled; fixed at creation.", "enum": ["sampled", "unsampled"], "type": "string"},
+          "startDate": {"description": "First day of the batch's production window, YYYY-MM-DD, in the facility's time zone.", "format": "date", "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$", "type": "string"},
+          "status": {"description": "Registry progress: draft, pending, verified, issued or rejected.", "enum": ["draft", "pending", "verified", "issued", "rejected"], "type": "string"},
+          "updatedAt": {"description": "Last update instant in UTC, RFC 3339.", "format": "date-time", "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$", "type": "string"},
+          "version": {"description": "Positive row version for concurrency checks.", "exclusiveMinimum": 0, "maximum": 9007199254740991, "type": "integer"}
+        },
+        "required": ["id", "code", "version", "facilityId", "feedstockTypeId", "status", "sampling", "startDate", "endDate", "archivedAt", "createdAt", "updatedAt"],
+        "type": "object"
+      },
       "driver": {
         "additionalProperties": false,
         "properties": {
@@ -117,13 +136,14 @@
           "archivedAt": {"anyOf": [{"format": "date-time", "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$", "type": "string"}, {"type": "null"}], "description": "Archive event instant in UTC (RFC 3339), or null when active or archiving is unsupported."},
           "code": {"description": "Exact human-readable code, unique within the organization.", "type": "string"},
           "createdAt": {"description": "Creation event instant in UTC (RFC 3339).", "format": "date-time", "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$", "type": "string"},
+          "durabilityOption": {"description": "Durability tier the facility claims, which its credit batches and lab samples inherit: 200_year (H/C_org) or 1000_year (R0 and TGA evidence).", "enum": ["200_year", "1000_year"], "type": "string"},
           "id": {"description": "Resource identifier, UUID.", "format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"},
           "name": {"description": "Human-readable display name, plain text.", "type": "string"},
           "timeZone": {"description": "IANA facility time zone used to interpret local business dates and times.", "type": "string"},
           "updatedAt": {"description": "Last update event instant in UTC (RFC 3339).", "format": "date-time", "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$", "type": "string"},
           "version": {"description": "Positive integer row version for concurrency checks.", "exclusiveMinimum": 0, "maximum": 9007199254740991, "type": "integer"}
         },
-        "required": ["id", "code", "name", "archivedAt", "createdAt", "updatedAt", "version", "timeZone"],
+        "required": ["id", "code", "name", "archivedAt", "createdAt", "updatedAt", "version", "timeZone", "durabilityOption"],
         "type": "object"
       },
       "feedstock": {
@@ -189,6 +209,51 @@
         "required": ["id", "code", "name", "archivedAt", "createdAt", "updatedAt", "version", "biocharRatio", "lines"],
         "type": "object"
       },
+      "lab_sample": {
+        "additionalProperties": false,
+        "properties": {
+          "analysisDate": {"anyOf": [{"format": "date", "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$", "type": "string"}, {"type": "null"}], "description": "Date the laboratory analysed the sample, YYYY-MM-DD, or null."},
+          "ashContentPercent": {"anyOf": [{"type": "number"}, {"type": "null"}], "description": "Ash, percent of dry mass (dry basis)."},
+          "bulkDensityKgPerM3": {"anyOf": [{"type": "number"}, {"type": "null"}], "description": "Bulk density in kilograms per cubic metre."},
+          "calciumPercent": {"anyOf": [{"type": "number"}, {"type": "null"}], "description": "Calcium, percent of dry mass (dry basis)."},
+          "code": {"description": "Human-readable sample code, unique within the organization.", "type": "string"},
+          "createdAt": {"description": "Creation instant in UTC, RFC 3339.", "format": "date-time", "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$", "type": "string"},
+          "creditBatchId": {"anyOf": [{"format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"}, {"type": "null"}], "description": "Credit batch this replicate characterises, UUID, or null on a legacy sample that never had one."},
+          "hToCOrgRatio": {"anyOf": [{"type": "number"}, {"type": "null"}], "description": "Atomic H/C_org ratio, calculated by the server from totalHydrogenPercent and organicCarbonPercent; null without hydrogen."},
+          "id": {"description": "Lab sample identifier, UUID.", "format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"},
+          "inorganicCarbonPercent": {"anyOf": [{"type": "number"}, {"type": "null"}], "description": "Inorganic carbon, percent of dry mass (dry basis)."},
+          "ironPercent": {"anyOf": [{"type": "number"}, {"type": "null"}], "description": "Iron, percent of dry mass (dry basis)."},
+          "labAccreditation": {"anyOf": [{"type": "string"}, {"type": "null"}], "description": "The laboratory's accreditation, untrusted plain text, or null."},
+          "labName": {"anyOf": [{"type": "string"}, {"type": "null"}], "description": "Laboratory that analysed the sample, untrusted plain text, or null."},
+          "magnesiumPercent": {"anyOf": [{"type": "number"}, {"type": "null"}], "description": "Magnesium, percent of dry mass (dry basis)."},
+          "moistureContentPercent": {"anyOf": [{"type": "number"}, {"type": "null"}], "description": "Moisture as percent of wet mass."},
+          "oToCOrgRatio": {"anyOf": [{"type": "number"}, {"type": "null"}], "description": "Atomic O/C_org ratio: calculated from totalOxygenPercent and organicCarbonPercent when oxygen is present, otherwise the laboratory's value or null."},
+          "organicCarbonPercent": {"description": "Organic carbon, percent of dry mass (dry basis).", "type": "number"},
+          "ph": {"anyOf": [{"type": "number"}, {"type": "null"}], "description": "pH, 0 to 14."},
+          "phosphorusPercent": {"anyOf": [{"type": "number"}, {"type": "null"}], "description": "Phosphorus, percent of dry mass (dry basis)."},
+          "potassiumPercent": {"anyOf": [{"type": "number"}, {"type": "null"}], "description": "Potassium, percent of dry mass (dry basis)."},
+          "r0AnalysisDate": {"anyOf": [{"format": "date", "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$", "type": "string"}, {"type": "null"}], "description": "Date of the R0 analysis, YYYY-MM-DD, or null."},
+          "r0MeasurementCount": {"anyOf": [{"maximum": 9007199254740991, "minimum": -9007199254740991, "type": "integer"}, {"type": "null"}], "description": "Number of R0 readings behind randomReflectanceR0Percent."},
+          "randomReflectanceR0Percent": {"anyOf": [{"type": "number"}, {"type": "null"}], "description": "Mean random reflectance R0 in percent (ISO 7404-5)."},
+          "reactiveCarbonPercent": {"anyOf": [{"type": "number"}, {"type": "null"}], "description": "TGA reactive carbon in percent."},
+          "residualCarbonPercent": {"anyOf": [{"type": "number"}, {"type": "null"}], "description": "TGA non-reactive (residual) carbon in percent."},
+          "sReflectanceFraction": {"anyOf": [{"type": "number"}, {"type": "null"}], "description": "Fraction of this sample's R0 readings at or above 2%, 0 to 1."},
+          "saltContentGPerKg": {"anyOf": [{"type": "number"}, {"type": "null"}], "description": "Salt content in grams per kilogram."},
+          "samplingTime": {"description": "When the sample was taken, an instant in UTC, RFC 3339.", "format": "date-time", "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$", "type": "string"},
+          "tgaAnalysisDate": {"anyOf": [{"format": "date", "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$", "type": "string"}, {"type": "null"}], "description": "Date of the TGA analysis, YYYY-MM-DD, or null."},
+          "totalCarbonPercent": {"description": "Total carbon, percent of dry mass (dry basis).", "type": "number"},
+          "totalHydrogenPercent": {"anyOf": [{"type": "number"}, {"type": "null"}], "description": "Total hydrogen, percent of dry mass (dry basis)."},
+          "totalNitrogenPercent": {"anyOf": [{"type": "number"}, {"type": "null"}], "description": "Total nitrogen, percent of dry mass (dry basis)."},
+          "totalOxygenPercent": {"anyOf": [{"type": "number"}, {"type": "null"}], "description": "Total oxygen, percent of dry mass (dry basis)."},
+          "totalSulfurPercent": {"anyOf": [{"type": "number"}, {"type": "null"}], "description": "Total sulfur, percent of dry mass (dry basis)."},
+          "updatedAt": {"description": "Last update instant in UTC, RFC 3339.", "format": "date-time", "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$", "type": "string"},
+          "version": {"description": "Positive row version for concurrency checks.", "exclusiveMinimum": 0, "maximum": 9007199254740991, "type": "integer"},
+          "volumeMl": {"anyOf": [{"type": "number"}, {"type": "null"}], "description": "Sample volume sent for analysis in millilitres."},
+          "weightGrams": {"anyOf": [{"type": "number"}, {"type": "null"}], "description": "Sample mass sent for analysis in grams."}
+        },
+        "required": ["id", "code", "version", "creditBatchId", "samplingTime", "labName", "labAccreditation", "analysisDate", "weightGrams", "volumeMl", "totalCarbonPercent", "organicCarbonPercent", "inorganicCarbonPercent", "totalHydrogenPercent", "totalNitrogenPercent", "totalOxygenPercent", "totalSulfurPercent", "ashContentPercent", "moistureContentPercent", "bulkDensityKgPerM3", "ph", "saltContentGPerKg", "hToCOrgRatio", "oToCOrgRatio", "randomReflectanceR0Percent", "sReflectanceFraction", "r0MeasurementCount", "r0AnalysisDate", "reactiveCarbonPercent", "residualCarbonPercent", "tgaAnalysisDate", "phosphorusPercent", "potassiumPercent", "magnesiumPercent", "calciumPercent", "ironPercent", "createdAt", "updatedAt"],
+        "type": "object"
+      },
       "me": {
         "additionalProperties": false,
         "properties": {
@@ -212,7 +277,7 @@
           },
           "organization": {"additionalProperties": false, "description": "Organization bound to the authenticated credential.", "properties": {"id": {"description": "Credential-bound organization identifier, opaque string.", "type": "string"}, "name": {"description": "Organization display name, plain text.", "type": "string"}}, "required": ["id", "name"], "type": "object"},
           "role": {"description": "Live organization role: owner owns the organization; admin administers it.", "enum": ["owner", "admin"], "type": "string"},
-          "scopes": {"description": "Credential scopes intersected with the live membership role.", "items": {"description": "Per-resource permission: read lists and retrieves, write creates and updates, delete removes; no wildcards. Additional resource scopes may be introduced in v1.", "type": "string", "x-extensible-enum": ["production-runs:read", "production-runs:write", "production-runs:delete", "reactors:read", "biochar-products:read", "biochar-products:write", "formulations:read", "feedstocks:read", "feedstocks:write", "feedstocks:delete", "facilities:read", "suppliers:read", "feedstock-types:read", "storage-locations:read", "vehicles:read", "drivers:read"]}, "type": "array"}
+          "scopes": {"description": "Credential scopes intersected with the live membership role.", "items": {"description": "Per-resource permission: read lists and retrieves, write creates and updates, delete removes; no wildcards. Additional resource scopes may be introduced in v1.", "type": "string", "x-extensible-enum": ["production-runs:read", "production-runs:write", "production-runs:delete", "reactors:read", "biochar-products:read", "biochar-products:write", "formulations:read", "feedstocks:read", "feedstocks:write", "feedstocks:delete", "facilities:read", "suppliers:read", "feedstock-types:read", "storage-locations:read", "vehicles:read", "drivers:read", "lab-samples:read", "lab-samples:write", "lab-samples:delete", "credit-batches:read"]}, "type": "array"}
         },
         "required": ["organization", "facilities", "role", "scopes", "credential"],
         "type": "object"
@@ -518,6 +583,40 @@
         "x-required-scope": "biochar-products:write"
       }
     },
+    "/credit-batches": {
+      "get": {
+        "description": "List a page ordered newest first by (createdAt, id). Cursors bind organization and filters; no totals or include. Lookup lists exclude archived rows where supported. Required scope: credit-batches:read.",
+        "operationId": "find_credit_batches",
+        "parameters": [
+          {"description": "Case-insensitive literal prefix search on credit batch code.", "in": "query", "name": "q", "required": false, "schema": {"description": "Case-insensitive literal prefix search on credit batch code.", "maxLength": 255, "pattern": "^[^\\x00-\\x1f\\x7f-\\x9f]*$(?![\\s\\S])", "type": "string"}},
+          {"description": "Page size as a decimal integer string; defaults to 50, maximum 200.", "in": "query", "name": "limit", "required": false, "schema": {"default": 50, "description": "Page size as a decimal integer string; defaults to 50, maximum 200.", "maximum": 200, "minimum": 1, "type": "integer"}},
+          {"description": "Opaque base64url continuation cursor bound to organization, resource and filters. Use only nextCursor from the same list and filters.", "in": "query", "name": "cursor", "required": false, "schema": {"description": "Opaque base64url continuation cursor bound to organization, resource and filters. Use only nextCursor from the same list and filters.", "maxLength": 4096, "minLength": 1, "pattern": "^[A-Za-z0-9_-]+$", "type": "string"}},
+          {"description": "Receiving facility filter, UUID.", "in": "query", "name": "facilityId", "required": false, "schema": {"description": "Receiving facility filter, UUID.", "format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"}},
+          {"description": "Exact human-readable resource code.", "in": "query", "name": "code", "required": false, "schema": {"description": "Exact human-readable resource code.", "maxLength": 255, "pattern": "^[^\\x00-\\x1f\\x7f-\\x9f]*$(?![\\s\\S])", "type": "string"}},
+          {"description": "Credit batch status filter.", "in": "query", "name": "status", "required": false, "schema": {"description": "Credit batch status filter.", "enum": ["draft", "pending", "verified", "issued", "rejected"], "type": "string"}},
+          {"description": "Credit batch sampling filter.", "in": "query", "name": "sampling", "required": false, "schema": {"description": "Credit batch sampling filter.", "enum": ["sampled", "unsampled"], "type": "string"}}
+        ],
+        "responses": {
+          "200": {"content": {"application/json": {"schema": {"additionalProperties": false, "properties": {"data": {"description": "Page of resources, newest first by (createdAt, id).", "items": {"$ref": "#/components/schemas/credit_batch"}, "type": "array"}, "nextCursor": {"anyOf": [{"type": "string"}, {"type": "null"}], "description": "Opaque cursor for the next page, or null at the end; keep filters unchanged."}}, "required": ["data", "nextCursor"], "type": "object"}}}, "description": "Resource page.", "headers": {"RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}},
+          "400": {"$ref": "#/components/responses/Problem400"},
+          "401": {"$ref": "#/components/responses/Problem401"},
+          "403": {"$ref": "#/components/responses/Problem403"},
+          "404": {"$ref": "#/components/responses/Problem404"},
+          "429": {"$ref": "#/components/responses/Problem429"},
+          "500": {"$ref": "#/components/responses/Problem500"}
+        },
+        "x-required-scope": "credit-batches:read"
+      }
+    },
+    "/credit-batches/{idOrCode}": {
+      "get": {
+        "description": "Read a stable resource representation by UUID or exact code; archived lookups remain readable. Required scope: credit-batches:read.",
+        "operationId": "get_credit_batch",
+        "parameters": [{"description": "Resource UUID or exact human-readable code.", "in": "path", "name": "idOrCode", "required": true, "schema": {"type": "string"}}],
+        "responses": {"200": {"content": {"application/json": {"schema": {"additionalProperties": false, "properties": {"data": {"$ref": "#/components/schemas/credit_batch", "description": "Resource representation."}}, "required": ["data"], "type": "object"}}}, "description": "Resource representation.", "headers": {"ETag": {"$ref": "#/components/headers/ETag"}, "RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}}, "400": {"$ref": "#/components/responses/Problem400"}, "401": {"$ref": "#/components/responses/Problem401"}, "403": {"$ref": "#/components/responses/Problem403"}, "404": {"$ref": "#/components/responses/Problem404"}, "429": {"$ref": "#/components/responses/Problem429"}, "500": {"$ref": "#/components/responses/Problem500"}},
+        "x-required-scope": "credit-batches:read"
+      }
+    },
     "/drivers": {
       "get": {
         "description": "List a page ordered newest first by (createdAt, id). Cursors bind organization and filters; no totals or include. Lookup lists exclude archived rows where supported. Required scope: drivers:read.",
@@ -809,6 +908,41 @@
         "parameters": [{"description": "Resource UUID or exact human-readable code.", "in": "path", "name": "idOrCode", "required": true, "schema": {"type": "string"}}],
         "responses": {"200": {"content": {"application/json": {"schema": {"additionalProperties": false, "properties": {"data": {"$ref": "#/components/schemas/formulation", "description": "Resource representation."}}, "required": ["data"], "type": "object"}}}, "description": "Resource representation.", "headers": {"ETag": {"$ref": "#/components/headers/ETag"}, "RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}}, "400": {"$ref": "#/components/responses/Problem400"}, "401": {"$ref": "#/components/responses/Problem401"}, "403": {"$ref": "#/components/responses/Problem403"}, "404": {"$ref": "#/components/responses/Problem404"}, "429": {"$ref": "#/components/responses/Problem429"}, "500": {"$ref": "#/components/responses/Problem500"}},
         "x-required-scope": "formulations:read"
+      }
+    },
+    "/lab-samples": {
+      "get": {
+        "description": "List a page ordered newest first by (createdAt, id). Cursors bind organization and filters; no totals or include. Lookup lists exclude archived rows where supported. Required scope: lab-samples:read.",
+        "operationId": "find_lab_samples",
+        "parameters": [
+          {"description": "Case-insensitive literal prefix search on lab sample code.", "in": "query", "name": "q", "required": false, "schema": {"description": "Case-insensitive literal prefix search on lab sample code.", "maxLength": 255, "pattern": "^[^\\x00-\\x1f\\x7f-\\x9f]*$(?![\\s\\S])", "type": "string"}},
+          {"description": "Page size as a decimal integer string; defaults to 50, maximum 200.", "in": "query", "name": "limit", "required": false, "schema": {"default": 50, "description": "Page size as a decimal integer string; defaults to 50, maximum 200.", "maximum": 200, "minimum": 1, "type": "integer"}},
+          {"description": "Opaque base64url continuation cursor bound to organization, resource and filters. Use only nextCursor from the same list and filters.", "in": "query", "name": "cursor", "required": false, "schema": {"description": "Opaque base64url continuation cursor bound to organization, resource and filters. Use only nextCursor from the same list and filters.", "maxLength": 4096, "minLength": 1, "pattern": "^[A-Za-z0-9_-]+$", "type": "string"}},
+          {"description": "Exact human-readable resource code.", "in": "query", "name": "code", "required": false, "schema": {"description": "Exact human-readable resource code.", "maxLength": 255, "pattern": "^[^\\x00-\\x1f\\x7f-\\x9f]*$(?![\\s\\S])", "type": "string"}},
+          {"description": "Facility filter, UUID. Matches samples whose credit batch belongs to the facility.", "in": "query", "name": "facilityId", "required": false, "schema": {"description": "Facility filter, UUID. Matches samples whose credit batch belongs to the facility.", "format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"}},
+          {"description": "Credit batch filter, UUID.", "in": "query", "name": "creditBatchId", "required": false, "schema": {"description": "Credit batch filter, UUID.", "format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"}},
+          {"description": "Only samples taken at or after this RFC 3339 instant with an explicit offset; encode + as %2B or use Z.", "in": "query", "name": "sampledFrom", "required": false, "schema": {"description": "Only samples taken at or after this RFC 3339 instant with an explicit offset; encode + as %2B or use Z.", "format": "date-time", "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$", "type": "string"}},
+          {"description": "Only samples taken before this RFC 3339 instant with an explicit offset; encode + as %2B or use Z.", "in": "query", "name": "sampledBefore", "required": false, "schema": {"description": "Only samples taken before this RFC 3339 instant with an explicit offset; encode + as %2B or use Z.", "format": "date-time", "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$", "type": "string"}}
+        ],
+        "responses": {
+          "200": {"content": {"application/json": {"schema": {"additionalProperties": false, "properties": {"data": {"description": "Page of resources, newest first by (createdAt, id).", "items": {"$ref": "#/components/schemas/lab_sample"}, "type": "array"}, "nextCursor": {"anyOf": [{"type": "string"}, {"type": "null"}], "description": "Opaque cursor for the next page, or null at the end; keep filters unchanged."}}, "required": ["data", "nextCursor"], "type": "object"}}}, "description": "Resource page.", "headers": {"RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}},
+          "400": {"$ref": "#/components/responses/Problem400"},
+          "401": {"$ref": "#/components/responses/Problem401"},
+          "403": {"$ref": "#/components/responses/Problem403"},
+          "404": {"$ref": "#/components/responses/Problem404"},
+          "429": {"$ref": "#/components/responses/Problem429"},
+          "500": {"$ref": "#/components/responses/Problem500"}
+        },
+        "x-required-scope": "lab-samples:read"
+      }
+    },
+    "/lab-samples/{idOrCode}": {
+      "get": {
+        "description": "Read a stable resource representation by UUID or exact code; archived lookups remain readable. Required scope: lab-samples:read.",
+        "operationId": "get_lab_sample",
+        "parameters": [{"description": "Resource UUID or exact human-readable code.", "in": "path", "name": "idOrCode", "required": true, "schema": {"type": "string"}}],
+        "responses": {"200": {"content": {"application/json": {"schema": {"additionalProperties": false, "properties": {"data": {"$ref": "#/components/schemas/lab_sample", "description": "Resource representation."}}, "required": ["data"], "type": "object"}}}, "description": "Resource representation.", "headers": {"ETag": {"$ref": "#/components/headers/ETag"}, "RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}}, "400": {"$ref": "#/components/responses/Problem400"}, "401": {"$ref": "#/components/responses/Problem401"}, "403": {"$ref": "#/components/responses/Problem403"}, "404": {"$ref": "#/components/responses/Problem404"}, "429": {"$ref": "#/components/responses/Problem429"}, "500": {"$ref": "#/components/responses/Problem500"}},
+        "x-required-scope": "lab-samples:read"
       }
     },
     "/llms.txt": {"get": {"description": "Public agent guide.", "operationId": "get_llms_guide", "responses": {"200": {"content": {"text/plain": {"schema": {"description": "Plain-text guide for API agents.", "type": "string"}}}, "description": "Public agent guide.", "headers": {"Cache-Control": {"description": "Public cache, max-age=300 seconds.", "schema": {"type": "string"}}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}}}, "security": [], "x-required-scope": null}},
