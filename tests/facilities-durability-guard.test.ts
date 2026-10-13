@@ -64,7 +64,7 @@ async function setupFacility(
 ): Promise<FacilityChain> {
   const [facility] = await db
     .insert(facilities)
-    .values({
+    .values({ timezone: "UTC",
       organizationId: TEST_ORG_ID,
       name: `Durability-Guard ${tag} ${runId}`,
       code: `FAC-DG-${tag}-${runId}`,

@@ -1,5 +1,5 @@
 import { KG_PER_TONNE } from "@/lib/calculations/unit-conversions";
-import { DEFAULT_FACILITY_TIMEZONE } from "@/lib/date-utils";
+import { UNKNOWN_FACILITY_TIMEZONE } from "@/lib/date-utils";
 import { formatDayString, formatFacilityDay, formatMassKg } from "@/lib/format-utils";
 import { formatWetDryStock } from "@/lib/mass-moisture";
 import { formatRemainingMass } from "@/components/forms/entity-select/remaining-mass";
@@ -128,7 +128,7 @@ export const formatKg = formatMassKg;
 export function formatApplicationDeliveryDay(delivery: Pick<ApplicationDeliveryOption, "deliveryDate" | "deliveryDay">): string {
   return delivery.deliveryDay
     ? formatDayString(delivery.deliveryDay)
-    : formatFacilityDay(delivery.deliveryDate, DEFAULT_FACILITY_TIMEZONE);
+    : formatFacilityDay(delivery.deliveryDate, UNKNOWN_FACILITY_TIMEZONE);
 }
 
 export function getApplicationDeliveryMassLabel(delivery: ApplicationDeliveryOption): string | null {

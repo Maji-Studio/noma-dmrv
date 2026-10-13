@@ -333,7 +333,7 @@ describe("production run review regressions", { timeout: TIMEOUT_MS }, () => {
       const refusal = await problem(await patch(saved.row.id, { biocharStorageLocationId }, saved.etag), 404, "not_found");
       expect(refusal.errors).toContainEqual(expect.objectContaining({ pointer: "/biocharStorageLocationId" }));
     }
-    const [facility] = await db.insert(facilities).values({ organizationId: a.ctx.organizationId, code: "OTHER", name: "Other facility" }).returning();
+    const [facility] = await db.insert(facilities).values({ timezone: "UTC", organizationId: a.ctx.organizationId, code: "OTHER", name: "Other facility" }).returning();
     const [bin] = await db.insert(storageLocations).values({ organizationId: a.ctx.organizationId, facilityId: facility.id,
       code: "OTHER-OUTPUT", name: "Other output", type: "biochar_bin" }).returning();
     for (const biocharStorageLocationId of [a.binId, bin.id]) {

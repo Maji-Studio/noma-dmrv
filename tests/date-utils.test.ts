@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   AmbiguousLocalTimeError,
   combineDateAndTime,
-  DEFAULT_FACILITY_TIMEZONE,
+  UNKNOWN_FACILITY_TIMEZONE,
   formatFacilityDate,
   formatFacilityTime,
   formatLocalDate,
@@ -227,13 +227,13 @@ describe("resolveFacilityTimezone", () => {
   // `facilities.timezone` column default rather than the browser's zone.
   it("falls back to the column default for an unknown or absent facility", () => {
     expect(resolveFacilityTimezone(facilities, "facility-z")).toBe(
-      DEFAULT_FACILITY_TIMEZONE,
+      UNKNOWN_FACILITY_TIMEZONE,
     );
     expect(resolveFacilityTimezone(facilities, null)).toBe(
-      DEFAULT_FACILITY_TIMEZONE,
+      UNKNOWN_FACILITY_TIMEZONE,
     );
     expect(resolveFacilityTimezone([], "facility-a")).toBe(
-      DEFAULT_FACILITY_TIMEZONE,
+      UNKNOWN_FACILITY_TIMEZONE,
     );
   });
 });

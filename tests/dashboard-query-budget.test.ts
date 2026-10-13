@@ -58,7 +58,7 @@ beforeAll(async () => {
   const tag = crypto.randomUUID().slice(0, 8);
   const [facility] = await db
     .insert(facilities)
-    .values({ organizationId: TEST_ORG_ID, code: `QB-F-${tag}`, name: `Query budget ${tag}` })
+    .values({ timezone: "UTC", organizationId: TEST_ORG_ID, code: `QB-F-${tag}`, name: `Query budget ${tag}` })
     .returning({ id: facilities.id });
   const [feedstockType] = await db
     .insert(feedstockTypes)

@@ -118,7 +118,7 @@ async function seedFixture(): Promise<Fixture> {
 
     const [facility] = await tx
       .insert(facilities)
-      .values({
+      .values({ timezone: "UTC",
         organizationId,
         code: `E2E-EXVB-F-${tag}`,
         name: `E2E Lab logistics versions ${tag}`,

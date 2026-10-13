@@ -88,7 +88,7 @@ async function createFixture(): Promise<Fixture> {
   return db.transaction(async (tx) => {
     const [facility] = await tx
       .insert(facilities)
-      .values({ organizationId: TEST_ORG_ID, code: `FAC-PCW-${tag}`, name: `PCW Facility ${tag}` })
+      .values({ timezone: "UTC", organizationId: TEST_ORG_ID, code: `FAC-PCW-${tag}`, name: `PCW Facility ${tag}` })
       .returning({ id: facilities.id });
     createdFacilityIds.push(facility.id);
 

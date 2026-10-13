@@ -11,37 +11,33 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { SlidersHorizontalIcon } from "@phosphor-icons/react/dist/ssr";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import {
   ChoiceCardGroup,
   FormActions,
   FormField,
   FormInput,
   FormSection,
-  FormSelect,
   SegmentedControl,
   ServerError,
 } from "@/components/forms";
 import { EmptyState } from "@/components/ui";
 import { Skeleton } from "@/components/ui/loading-skeleton";
 import { useToast } from "@/components/ui/toast";
-import {
-  DEFAULT_ORGANIZATION_TIMEZONE,
-  type OrganizationDefaults,
-} from "@/config/organization-settings";
+import type { OrganizationDefaults } from "@/config/organization-settings";
 import {
   useOrganizationDefaults,
   useSaveOrganizationDefaults,
 } from "@/hooks/use-organization-settings";
 import { useFacilityContext } from "@/hooks/use-facility-context";
-import { formatTimezoneLabel } from "@/lib/date-utils";
+import { isValidIanaTimezone } from "@/lib/timezones";
 import {
   APPLICATION_EVIDENCE_METHOD_DESCRIPTIONS,
   formatApplicationEvidenceMethod,
   isSelectableApplicationEvidenceMethod,
   selectableApplicationEvidenceMethods,
 } from "@/schemas/applications";
-import { timezones, type Timezone } from "@/schemas/facilities";
+import { TimezoneCombobox } from "@/components/facilities/timezone-combobox";
 import { packagingTypes, type PackagingType } from "@/schemas/orders";
 import {
   organizationSettingsFormSchema,
@@ -50,11 +46,6 @@ import {
 } from "@/schemas/organization-settings";
 import { useState } from "react";
 import { EVIDENCE_METHOD_ART } from "@/components/applications";
-
-const TIMEZONE_OPTIONS = timezones.map((zone) => ({
-  value: zone,
-  label: formatTimezoneLabel(zone),
-}));
 
 // A default evidence method decides which evidence every new application asks
 // for, so it is a card choice with its consequence spelled out.
@@ -74,10 +65,6 @@ const PACKAGING_OPTIONS = packagingTypes.map((type) => ({
   value: type,
   label: PACKAGING_LABELS[type],
 }));
-
-function isOfferedTimezone(zone: string): zone is Timezone {
-  return (timezones as readonly string[]).includes(zone);
-}
 
 export function OrganizationDefaultsForm() {
   const { activeOrganizationId } = useFacilityContext();
@@ -120,6 +107,7 @@ function DefaultsForm({ defaults }: { defaults: OrganizationDefaults }) {
     control,
     register,
     handleSubmit,
+    setValue,
     formState: { errors },
   } = useForm<OrganizationSettingsInput, unknown, OrganizationSettingsValues>({
     resolver: zodResolver(organizationSettingsFormSchema),
@@ -128,11 +116,10 @@ function DefaultsForm({ defaults }: { defaults: OrganizationDefaults }) {
       // The country input holds a string; null is the stored "not said".
       defaultCountry: defaults.defaultCountry ?? "",
       // The column is free text, so a stored zone the picker does not offer
-      // (a seed, a hand-edited row) would leave the select on its first option
-      // and silently save that. Fall back explicitly instead.
-      defaultTimezone: isOfferedTimezone(defaults.defaultTimezone)
+      // (a seed, a hand-edited row) starts empty rather than being saved back.
+      defaultTimezone: isValidIanaTimezone(defaults.defaultTimezone)
         ? defaults.defaultTimezone
-        : DEFAULT_ORGANIZATION_TIMEZONE,
+        : null,
       defaultEvidenceMethod: isSelectableApplicationEvidenceMethod(
         defaults.defaultEvidenceMethod,
       )
@@ -140,6 +127,14 @@ function DefaultsForm({ defaults }: { defaults: OrganizationDefaults }) {
         : "location",
     },
   });
+
+  const defaultTimezone =
+    (useWatch({ control, name: "defaultTimezone" }) as string | null | undefined) ??
+    undefined;
+  const timezoneField = register("defaultTimezone");
+  const defaultCountry = useWatch({ control, name: "defaultCountry" }) as
+    | string
+    | undefined;
 
   async function onSubmit(values: OrganizationSettingsValues) {
     setServerError("");
@@ -184,11 +179,24 @@ function DefaultsForm({ defaults }: { defaults: OrganizationDefaults }) {
           cue="Seeds new facilities. Existing facilities keep their own."
           hint="A facility's timezone decides which day a Sample or production run is attributed to. Set it before adding records."
         >
-          <FormSelect
+          <TimezoneCombobox
             id="default-timezone"
-            options={TIMEZONE_OPTIONS}
+            name={timezoneField.name}
+            inputRef={timezoneField.ref}
+            value={defaultTimezone}
+            country={defaultCountry}
+            onChange={(value) =>
+              setValue("defaultTimezone", value ?? null, {
+                shouldDirty: true,
+                shouldValidate: true,
+              })
+            }
+            onBlur={() =>
+              setValue("defaultTimezone", defaultTimezone ?? null, {
+                shouldTouch: true,
+              })
+            }
             error={!!errors.defaultTimezone}
-            {...register("defaultTimezone")}
           />
         </FormField>
         </div>

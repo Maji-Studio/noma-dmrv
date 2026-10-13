@@ -45,7 +45,7 @@ export const organizationSettings = pgTable(
      */
     defaultCountry: text("default_country"),
     /** IANA zone. Wrong values silently shift sampling-day attribution. */
-    defaultTimezone: text("default_timezone").notNull().default("UTC"),
+    defaultTimezone: text("default_timezone"),
     defaultEvidenceMethod: applicationEvidenceMethod("default_evidence_method")
       .notNull()
       .default("location"),

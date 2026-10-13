@@ -198,6 +198,8 @@ startTime: formatLocalDateTime(new Date()), // "2026-03-03T14:30" → datetime-l
 
 `toDateInputValue`, `parseLocalDateString`, and the facility-timezone display helpers (`formatFacilityTime`, `formatFacilityDate`, `formatTimezoneLabel` — all timestamps are stored UTC) also live in `src/lib/date-utils.ts`.
 
+Timezone fields use `requiredTimezoneSchema()` / `optionalTimezoneSchema()` / `ianaTimezoneSchema()` from `@/schemas/timezone` (the one valid-IANA-zone check, backed by the `@vvo/tzdb` catalogue in `@/lib/timezones`) and the `TimezoneCombobox`, never a hand-listed enum. No timezone has a default: facility fields start empty and required, and the organization default may stay unset.
+
 **Output stock event times** (product placed, delivery, loss, count) are entered
 and shown on the facility clock, like production runs
 ([output-stock.md](./output-stock.md)). The contract:

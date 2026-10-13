@@ -71,7 +71,7 @@ async function createFacility(): Promise<string> {
   const tag = crypto.randomUUID().slice(0, 8);
   const [facility] = await db
     .insert(facilities)
-    .values({
+    .values({ timezone: "UTC",
       organizationId: TEST_ORG_ID,
       code: `FAC-CPM-${tag}`,
       name: `Certifier Project Mapping ${tag}`,

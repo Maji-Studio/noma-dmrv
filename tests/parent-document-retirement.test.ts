@@ -212,7 +212,7 @@ describe("parent document retirement", () => {
     const tag = crypto.randomUUID().slice(0, 8);
     const [facility] = await db
       .insert(facilities)
-      .values({
+      .values({ timezone: "UTC",
         organizationId: TEST_ORG_ID,
         code: `FAC-DEL-${tag}`,
         name: `Delivery evidence facility ${tag}`,
@@ -680,7 +680,7 @@ describe("parent document retirement", () => {
     const tag = crypto.randomUUID().slice(0, 8);
     const [facility] = await db
       .insert(facilities)
-      .values({
+      .values({ timezone: "UTC",
         organizationId: TEST_ORG_ID,
         code: `FAC-DERIVED-${tag}`,
         name: `Derived leg facility ${tag}`,
@@ -792,7 +792,7 @@ describe("parent document retirement", () => {
     const tag = crypto.randomUUID().slice(0, 8);
     const [facility] = await db
       .insert(facilities)
-      .values({
+      .values({ timezone: "UTC",
         organizationId: TEST_ORG_ID,
         code: `FAC-NEST-${tag}`,
         name: `Nested evidence facility ${tag}`,

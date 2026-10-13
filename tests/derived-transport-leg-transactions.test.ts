@@ -123,7 +123,7 @@ describe("derived transport-leg transaction boundaries", () => {
     const tag = crypto.randomUUID().slice(0, 8).toUpperCase();
     const [facility] = await db
       .insert(facilities)
-      .values({
+      .values({ timezone: "UTC",
         organizationId: TEST_ORG_ID,
         code: `FAC-TL-${tag}`,
         name: `Transport Transaction Facility ${tag}`,
@@ -199,7 +199,7 @@ describe("derived transport-leg transaction boundaries", () => {
     const tag = crypto.randomUUID().slice(0, 8).toUpperCase();
     const [facility] = await db
       .insert(facilities)
-      .values({
+      .values({ timezone: "UTC",
         organizationId: TEST_ORG_ID,
         code: `FAC-OVR-${tag}`,
         name: `Override Facility ${tag}`,
@@ -356,7 +356,7 @@ describe("derived transport-leg transaction boundaries", () => {
     const tag = crypto.randomUUID().slice(0, 8).toUpperCase();
     const [facility] = await db
       .insert(facilities)
-      .values({
+      .values({ timezone: "UTC",
         organizationId: TEST_ORG_ID,
         code: `FAC-DIST-${tag}`,
         name: `Distribution Transaction Facility ${tag}`,

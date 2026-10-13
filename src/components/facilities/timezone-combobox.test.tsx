@@ -1,0 +1,28 @@
+import { renderToStaticMarkup } from "react-dom/server";
+import { describe, expect, it, vi } from "vitest";
+import { TimezoneCombobox } from "./timezone-combobox";
+
+const baseProps = {
+  id: "timezone",
+  name: "timezone",
+  inputRef: vi.fn(),
+  onChange: vi.fn(),
+  onBlur: vi.fn(),
+};
+
+describe("TimezoneCombobox", () => {
+  it("starts empty with the select placeholder when nothing is chosen", () => {
+    const html = renderToStaticMarkup(<TimezoneCombobox {...baseProps} />);
+
+    expect(html).toContain('placeholder="Select timezone"');
+    expect(html).not.toContain('value="UTC');
+  });
+
+  it("shows the chosen zone", () => {
+    const html = renderToStaticMarkup(
+      <TimezoneCombobox {...baseProps} value="Africa/Dar_es_Salaam" />,
+    );
+
+    expect(html).toContain("Africa/Dar es Salaam (UTC+3)");
+  });
+});
