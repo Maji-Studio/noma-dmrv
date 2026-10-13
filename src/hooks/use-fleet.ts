@@ -41,6 +41,7 @@ import { certificationKeys } from "./use-certification";
 import { chainOfCustodyKeys } from "./use-chain-of-custody";
 import { deliveryKeys } from "./use-deliveries";
 import { entityKeys, invalidateEntityTypeQueries } from "./entity-query-keys";
+import { patchArrayListCacheByExactKeyWithSavedRow } from "./list-cache-utils";
 import { feedstockKeys } from "./use-feedstocks";
 import { productionIncidentKeys } from "./use-production-incidents";
 import { productionRunKeys } from "./use-production-runs";
@@ -94,11 +95,27 @@ const TO_OPTION = {
   }),
 } satisfies { [K in FleetKind]: (record: FleetRecords[K]) => EntityOption };
 
-/** Show a saved record's new name in every open picker straight away. */
-function seedSavedRecord<K extends FleetKind>(queryClient: QueryClient, kind: K, record: FleetRecords[K]) {
+/**
+ * Install a saved record, with the version the server wrote, in the settings
+ * list (which hands rows to Edit and Delete), its detail cache and every open
+ * picker, before the invalidation refetches them.
+ */
+export function applySavedFleetRecord<K extends FleetKind>(
+  queryClient: QueryClient,
+  kind: K,
+  record: FleetRecords[K],
+) {
   const toOption = TO_OPTION[kind] as (saved: FleetRecords[K]) => EntityOption;
+  patchArrayListCacheByExactKeyWithSavedRow<FleetRecords[K]>(queryClient, fleetKeys.list(kind), record);
   queryClient.setQueryData(entityKeys.detail(kind, record.id), toOption(record));
   queryClient.setQueryData(fleetKeys.detail(kind, record.id), record);
+}
+
+/** Drop a deleted record from the settings list before the refetch. */
+export function removeDeletedFleetRecord(queryClient: QueryClient, kind: FleetKind, id: string) {
+  queryClient.setQueryData<{ id: string }[]>(fleetKeys.list(kind), (old) =>
+    old?.filter((record) => record.id !== id),
+  );
 }
 
 async function unwrap<T>(pending: Promise<ActionResult<T>>): Promise<T> {
@@ -167,29 +184,32 @@ function useFleetMutation<K extends FleetKind, TInput, TData>(
 
 export function useUpdateVehicle() {
   return useFleetMutation("vehicle", (input: UpdateVehicleInput) => updateVehicleFn(input), (client, saved) =>
-    seedSavedRecord(client, "vehicle", saved));
+    applySavedFleetRecord(client, "vehicle", saved));
 }
 
 export function useDeleteVehicle() {
-  return useFleetMutation("vehicle", (input: DeleteVehicleInput) => deleteVehicleFn(input));
+  return useFleetMutation("vehicle", (input: DeleteVehicleInput) => deleteVehicleFn(input), (client, deleted) =>
+    removeDeletedFleetRecord(client, "vehicle", deleted.id));
 }
 
 export function useUpdateDriver() {
   return useFleetMutation("driver", (input: UpdateDriverInput) => updateDriverFn(input), (client, saved) =>
-    seedSavedRecord(client, "driver", saved));
+    applySavedFleetRecord(client, "driver", saved));
 }
 
 export function useDeleteDriver() {
-  return useFleetMutation("driver", (input: DeleteDriverInput) => deleteDriverFn(input));
+  return useFleetMutation("driver", (input: DeleteDriverInput) => deleteDriverFn(input), (client, deleted) =>
+    removeDeletedFleetRecord(client, "driver", deleted.id));
 }
 
 export function useUpdateOperator() {
   return useFleetMutation("operator", (input: UpdateOperatorInput) => updateOperatorFn(input), (client, saved) =>
-    seedSavedRecord(client, "operator", saved));
+    applySavedFleetRecord(client, "operator", saved));
 }
 
 export function useDeleteOperator() {
-  return useFleetMutation("operator", (input: DeleteOperatorInput) => deleteOperatorFn(input));
+  return useFleetMutation("operator", (input: DeleteOperatorInput) => deleteOperatorFn(input), (client, deleted) =>
+    removeDeletedFleetRecord(client, "operator", deleted.id));
 }
 
 /** Refresh after a quick-add create from the settings list. */
