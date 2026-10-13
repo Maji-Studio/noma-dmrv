@@ -48,13 +48,29 @@ export const TIMEZONE_ENTRIES: readonly TimezoneEntry[] = [
   UTC_ENTRY,
 ].sort((a, b) => a.id.localeCompare(b.id));
 
-const VALID_TIMEZONE_IDS: ReadonlySet<string> = new Set(
-  TIMEZONE_ENTRIES.map((entry) => entry.id),
-);
+/** Every IANA id (canonical or alias, case-sensitive) -> the entry it belongs to. */
+const ENTRY_BY_ID: ReadonlyMap<string, TimezoneEntry> = (() => {
+  const map = new Map<string, TimezoneEntry>();
+  // Groups overlap (Nairobi's lists Dar_es_Salaam), so aliases go in first and
+  // a canonical id always overwrites an alias of another entry.
+  for (const entry of TIMEZONE_ENTRIES) {
+    for (const alias of entry.aliases) map.set(alias, entry);
+  }
+  for (const entry of TIMEZONE_ENTRIES) map.set(entry.id, entry);
+  return map;
+})();
 
-/** True for an id the picker can offer (its canonical form, case-sensitive). */
+/**
+ * The entry a stored id belongs to. A valid alias ("Australia/Melbourne" under
+ * "Australia/Sydney") resolves to its entry; the stored value is never rewritten.
+ */
+export function findTimezoneEntry(value: unknown): TimezoneEntry | undefined {
+  return typeof value === "string" ? ENTRY_BY_ID.get(value) : undefined;
+}
+
+/** True for any IANA id the catalogue knows, canonical or alias. */
 export function isValidIanaTimezone(value: unknown): value is string {
-  return typeof value === "string" && VALID_TIMEZONE_IDS.has(value);
+  return findTimezoneEntry(value) !== undefined;
 }
 
 /** Lowercase, accent-free, punctuation collapsed to single spaces. */

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { formatTimezoneLabel } from "@/lib/date-utils";
 import {
   countryCodeFromText,
+  findTimezoneEntry,
   isValidIanaTimezone,
   orderWithSuggestions,
   searchTimezones,
@@ -21,6 +22,15 @@ describe("isValidIanaTimezone", () => {
     for (const zone of ["Africa/Dar_es_Salaam", "Asia/Kathmandu", "Pacific/Chatham", "UTC"]) {
       expect(isValidIanaTimezone(zone)).toBe(true);
     }
+  });
+
+  it("accepts aliases that tzdb folds into another entry", () => {
+    for (const zone of ["Australia/Melbourne", "Asia/Calcutta", "Etc/UTC"]) {
+      expect(isValidIanaTimezone(zone)).toBe(true);
+    }
+    expect(findTimezoneEntry("Australia/Melbourne")?.id).toBe("Australia/Sydney");
+    expect(findTimezoneEntry("Asia/Calcutta")?.id).toBe("Asia/Kolkata");
+    expect(ianaTimezoneSchema().parse("Australia/Melbourne")).toBe("Australia/Melbourne");
   });
 
   it("rejects unknown, mis-cased, empty and non-string values", () => {

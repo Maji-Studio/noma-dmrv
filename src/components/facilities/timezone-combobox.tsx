@@ -12,7 +12,7 @@ import { cn } from "@/lib/utils";
 import {
   orderWithSuggestions,
   searchTimezones,
-  TIMEZONE_ENTRIES,
+  findTimezoneEntry,
   timezonesForCountry,
   type TimezoneEntry,
 } from "@/lib/timezones";
@@ -72,7 +72,7 @@ export function TimezoneCombobox({
   "aria-invalid": ariaInvalid,
 }: TimezoneComboboxProps) {
   const [query, setQuery] = useState("");
-  const selectedEntry = TIMEZONE_ENTRIES.find((entry) => entry.id === value);
+  const selectedEntry = findTimezoneEntry(value);
   const selectedOption = selectedEntry ? toOption(selectedEntry) : null;
   const suggested = timezonesForCountry(country);
   const suggestedIds = new Set(suggested.map((entry) => entry.id));

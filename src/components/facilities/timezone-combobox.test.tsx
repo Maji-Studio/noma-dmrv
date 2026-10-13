@@ -25,4 +25,12 @@ describe("TimezoneCombobox", () => {
 
     expect(html).toContain("Africa/Dar es Salaam (UTC+3)");
   });
+
+  it("shows a stored alias as selected", () => {
+    const html = renderToStaticMarkup(
+      <TimezoneCombobox {...baseProps} value="Australia/Melbourne" />,
+    );
+
+    expect(html).toContain("Australia/Sydney");
+  });
 });
