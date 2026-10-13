@@ -50,7 +50,7 @@ const subjects = {
       code: `E2E-VERSION-PR-${f.tag}`,
       facilityId: f.facility.id,
       reactorId: f.runs[0].reactorId,
-      status: "draft",
+      status: "running",
       startTime: new Date(STOCK_TIME),
       endTime: null,
       feedstockDraws: [],

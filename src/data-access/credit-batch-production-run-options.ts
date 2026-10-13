@@ -30,7 +30,6 @@ import { assertCreditBatchProductionWindow } from "./credit-batch-production-win
 import { productionRunDateExpr } from "./production-runs/date-expr";
 
 const CREDIT_BATCH_PREVIEW_PRODUCTION_RUN_STATUSES = [
-  "draft",
   "running",
   COMPLETED_PRODUCTION_RUN_STATUS,
 ] as const;

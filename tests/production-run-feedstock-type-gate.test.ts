@@ -4,6 +4,7 @@ import { eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import {
   createProductionRun,
+  updateProductionRun,
   getProductionRunById,
 } from "@/data-access/production-runs";
 import { getEntities } from "@/data-access/entities";
@@ -181,7 +182,7 @@ beforeAll(async () => {
   });
 
   // These fixtures share one reactor and are torn down only in afterAll, so each
-  // run needs its own non-overlapping window or the reactor-overlap guard (#259)
+  // run needs its own start and the first run must be closed before the next, or (#259)
   // would preempt the feedstock-type assertions being tested here.
   let runWindowSeq = 0;
   function baseRunInput(codeSuffix: string, feedstockStorageLocationId: string) {
@@ -189,13 +190,12 @@ beforeAll(async () => {
     runWindowSeq++;
     const pad = (n: number) => String(n).padStart(2, "0");
     const startTime = new Date(`2026-01-15T${pad(startHour)}:00:00Z`);
-    const endTime = new Date(`2026-01-15T${pad(startHour + 2)}:00:00Z`);
     return {
       code: `PR-PRG-${codeSuffix}-${tag}`,
       facilityId,
       reactorId,
       startTime,
-      endTime,
+      endTime: null,
       feedstockDraws: [{ storageLocationId: feedstockStorageLocationId, wetMassKg: 50 }],
       feedstockMoisturePercent: 20,
     };
@@ -207,6 +207,10 @@ beforeAll(async () => {
       baseRunInput("ALLOW", pyrolysisBinId),
     );
     createdRunIds.push(run.id);
+    expect(run.status).toBe("running");
+    await updateProductionRun(makeTestOrgContext(TEST_USER_ID), run.id, {
+      expectedVersion: run.version, status: "failed", endTime: new Date("2026-01-15T10:00:00Z"),
+    });
 
     expect(run.feedstockDraws).toEqual([
       expect.objectContaining({

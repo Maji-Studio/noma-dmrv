@@ -9,9 +9,9 @@ export const DRY_MASS_BALANCE_MESSAGE =
 
 export const COMPLETE_OUTPUT_MOISTURE_MESSAGE = "Enter biochar moisture for a complete run.";
 export const COMPLETE_OUTPUT_BIN_MESSAGE = "Select a biochar output bin for a complete run.";
+export const RUNNING_END_FORBIDDEN_MESSAGE = "Choose Complete or clear the end time for a Running run.";
 
 export const PRODUCTION_RUN_STATUSES = [
-  "draft",
   "running",
   COMPLETED_PRODUCTION_RUN_STATUS,
   "failed",
@@ -19,6 +19,17 @@ export const PRODUCTION_RUN_STATUSES = [
 ] as const;
 
 export type ProductionRunStatus = (typeof PRODUCTION_RUN_STATUSES)[number];
+
+export const PRODUCTION_RUN_CREATE_STATUSES = ["running", "complete"] as const;
+export const PRODUCTION_RUN_CREATE_STATUS_MESSAGE =
+  "A new production run can only start as Running or Complete.";
+
+export function assertProductionRunCreateStatus(status: ProductionRunStatus): void {
+  if (PRODUCTION_RUN_CREATE_STATUSES.some((allowed) => allowed === status)) return;
+  throw new DomainError("validation_failed", PRODUCTION_RUN_CREATE_STATUS_MESSAGE, {
+    issues: [{ path: ["status"], code: "validation_failed", message: PRODUCTION_RUN_CREATE_STATUS_MESSAGE }],
+  });
+}
 
 type TerminalProductionRunStatus = Extract<
   ProductionRunStatus,
@@ -74,7 +85,6 @@ export type ProductionRunOutcomeViolation =
   | { code: "dry-mass-balance-exceeded" };
 
 const ALLOWED_TRANSITIONS: Record<ProductionRunStatus, readonly ProductionRunStatus[]> = {
-  draft: ["draft", "running", "complete", "cancelled"],
   running: ["running", "complete", "failed", "cancelled"],
   complete: ["complete", "running"],
   failed: ["failed", "running"],
@@ -232,7 +242,9 @@ export function assertProductionRunOutcome(
     case "cancellation-reason-required":
       throw new SafeError("A cancellation reason is required");
     case "running-end-forbidden":
-      throw new SafeError("A running run cannot have an end time");
+      throw new DomainError("validation_failed", RUNNING_END_FORBIDDEN_MESSAGE, {
+        issues: [{ path: ["endTime"], code: "validation_failed", message: RUNNING_END_FORBIDDEN_MESSAGE }],
+      });
     case "terminal-end-required":
       throw new SafeError(`A ${violation.status} run needs an end time`);
     case "feedstock-required": {
