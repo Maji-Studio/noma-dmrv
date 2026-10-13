@@ -9,8 +9,8 @@
  * (tests/documents-fn.test.ts) deliberately do NOT — those inject a fake
  * provider. This proves the real chain: credentials, region/endpoint,
  * path-style addressing, bucket permissions, and the presigned PUT/GET
- * round-trip all line up. It does NOT test browser CORS (that only matters
- * for the cross-origin PUT from the app); for that, upload via the UI.
+ * round-trip all line up. Checks browser upload CORS with an OPTIONS
+ * preflight from NEXT_PUBLIC_APP_URL and the actual PUT response.
  *
  * Refuses to run against local-fs — a round-trip there is meaningless. Set
  * STORAGE_PROVIDER=s3-compatible plus the STORAGE_* credentials. Locally
@@ -22,7 +22,9 @@
  * smoke debris is trivially identifiable if a run dies before cleanup.
  */
 import { randomUUID } from "node:crypto";
+import { pathToFileURL } from "node:url";
 import { config } from "dotenv";
+import { smokeCorsOrigin, assertUploadCors } from "./storage-cors-core";
 
 config({ path: ".env.local" });
 
@@ -32,7 +34,7 @@ const SMOKE_CONTENT_TYPE = "text/plain";
 const SMOKE_MAX_BYTES = 1024;
 const PRESIGN_TTL_SECONDS = 120;
 
-async function main(): Promise<void> {
+export async function runStorageSmoke(): Promise<void> {
   // Defer imports until env is loaded so env.ts validation sees the values.
   const { getStorageProvider, buildStorageKey } = await import(
     "../src/lib/storage"
@@ -48,6 +50,10 @@ async function main(): Promise<void> {
     process.exit(2);
   }
 
+  const origin = smokeCorsOrigin(process.env.NEXT_PUBLIC_APP_URL ?? "", Boolean(process.env.CI));
+  if (origin === null) {
+    console.log("SKIP CORS     → local HTTP loopback origin; storage round-trip only");
+  }
   console.log(`Storage provider: ${provider.name} (bucket=${provider.bucket})`);
 
   const key = buildStorageKey({
@@ -65,6 +71,7 @@ async function main(): Promise<void> {
   console.log(`Probe key: ${key}`);
 
   let uploaded = false;
+  const corsFailures: string[] = [];
   try {
     // 1. Mint presigned PUT and upload.
     const upload = await provider.createUploadUrl({
@@ -74,9 +81,19 @@ async function main(): Promise<void> {
       expiresInSeconds: PRESIGN_TTL_SECONDS,
     });
     console.log(`PUT target: ${safeUrlSummary(upload.url)}`);
+    if (origin !== null) {
+      try {
+        await assertUploadCors(upload.url, origin);
+        console.log("OK  CORS     → app-origin PUT preflight accepted");
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Storage CORS preflight failed";
+        corsFailures.push(message);
+        console.error(message);
+      }
+    }
     const putRes = await fetchOrFail("PUT", upload.url, {
       method: upload.method,
-      headers: upload.headers,
+      headers: { ...upload.headers, ...(origin === null ? {} : { Origin: origin }) },
       body,
     });
     if (!putRes.ok) {
@@ -84,6 +101,12 @@ async function main(): Promise<void> {
       fail(`PUT failed: ${putRes.status} ${putRes.statusText}${detail}`);
     }
     uploaded = true;
+    const allowedOrigin = putRes.headers.get("access-control-allow-origin");
+    if (origin !== null && allowedOrigin !== origin && allowedOrigin !== "*") {
+      const message = "PUT response does not allow the configured app origin through CORS.";
+      corsFailures.push(message);
+      console.error(message);
+    }
     console.log(`OK  PUT      → ${putRes.status} (${expectedBytes} bytes)`);
 
     // 2. HEAD — the same gate confirmUpload() relies on.
@@ -128,6 +151,9 @@ async function main(): Promise<void> {
     console.log(`OK  DELETE   → object gone (HEAD 404)`);
 
     console.log("\nOK — storage round-trip passed.");
+    if (corsFailures.length > 0) {
+      fail(`Storage CORS checks failed: ${corsFailures.join("; ")}`);
+    }
   } catch (err) {
     // Best-effort cleanup so a mid-run failure doesn't leave debris.
     if (uploaded) {
@@ -141,7 +167,7 @@ async function main(): Promise<void> {
       }
     }
     console.error(err instanceof Error ? err.message : String(err));
-    process.exit(1);
+    process.exitCode = 1;
   }
 }
 
@@ -195,7 +221,9 @@ function formatError(err: unknown): string {
   return details.join(" ");
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  runStorageSmoke().catch((err) => {
+    console.error(err);
+    process.exitCode = 1;
+  });
+}

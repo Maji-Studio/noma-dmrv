@@ -569,7 +569,9 @@ helpers and numeric/mass/ratio constants — see [forms.md](./forms.md)) ·
 `workflow_dispatch`) · `migration-gate.yml` (blocks schema drift) ·
 `enforce-main-source.yml` (branch-protection: `main` only from `staging`) ·
 `e2e.yml` and `e2e-live.yml` (Playwright, see [testing.md](./testing.md)) ·
-`isometric-health.yml` and `storage-health.yml` (daily read-only pings) ·
+`isometric-health.yml` and `storage-health.yml` (daily health checks; storage
+writes and deletes a probe object, and its opt-in `repair_cors` dispatch updates
+bucket CORS settings) ·
 `claude.yml` and `.coderabbit.yaml` (AI review).
 
 CI secrets come from 1Password via `1password/load-secrets-action` plus the
