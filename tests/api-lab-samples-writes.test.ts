@@ -58,12 +58,16 @@ describe("lab sample create", { timeout: TIMEOUT_MS }, () => {
     expect(JSON.stringify(audits[0])).not.toContain(WRITE_SAMPLED_AT);
   });
 
-  it("omits warnings when the write has no ratio to calculate and nothing to add", async () => {
+  it("answers with certification warnings but no calculated-ratio notice when hydrogen and moisture are missing", async () => {
     const response = await postLabSample(a, labSampleBody(a, { totalHydrogenPercent: undefined, moistureContentPercent: undefined }));
     expect(response.status).toBe(201);
     const body = await response.json();
     expect(body.data.hToCOrgRatio).toBeNull();
-    expect((body.warnings ?? []).some((warning: string) => warning.startsWith("H/C_org calculated"))).toBe(false);
+    expect(body.warnings).toEqual(expect.arrayContaining([
+      expect.stringMatching(/has no total hydrogen, so H\/C_org cannot be calculated/),
+      expect.stringMatching(/has no moisture content/),
+    ]));
+    expect(body.warnings.some((warning: string) => warning.startsWith("H/C_org calculated"))).toBe(false);
   });
 
   it("reads a facility-local time in the credit batch facility's zone", async () => {
@@ -293,6 +297,80 @@ describe("lab sample update", { timeout: TIMEOUT_MS }, () => {
       await expectProblem(await patchLabSample(a, saved.row.id, { labName: "No" }, '"9.1"', "", {}, key), 403, "missing_scope");
     }
     expect(await readRestLabSample(a, saved.row.id)).toEqual(saved);
+  });
+});
+
+describe("lab sample keyed replays", { timeout: TIMEOUT_MS }, () => {
+  const keyed = (key: string) => ({ "idempotency-key": key });
+
+  it("replays a keyed PATCH with its original status, body, ETag and headers, and writes nothing more", async () => {
+    const saved = await seedRestLabSample(a);
+    const key = randomUUID();
+    const original = await patchLabSample(a, saved.row.id, { labName: "Keyed" }, saved.etag, "", keyed(key));
+    expect(original.status).toBe(200);
+    const originalText = await original.text();
+    const replay = await patchLabSample(a, saved.row.id, { labName: "Keyed" }, saved.etag, "", keyed(key));
+    expect(replay.status).toBe(200);
+    expect(replay.headers.get("idempotent-replayed")).toBe("true");
+    expect(replay.headers.get("etag")).toBe('"2.1"');
+    expect(await replay.text()).toBe(originalText);
+    expect(await labSampleRows(a)).toMatchObject([{ version: 2, labName: "Keyed" }]);
+    expect(await labSampleAudits(a)).toHaveLength(2);
+  });
+
+  it("still replays after the sample was edited again, without touching the newer row", async () => {
+    const saved = await seedRestLabSample(a);
+    const key = randomUUID();
+    const original = await patchLabSample(a, saved.row.id, { labName: "First" }, saved.etag, "", keyed(key));
+    const originalText = await original.text();
+    expect((await patchLabSample(a, saved.row.id, { labName: "Second" }, '"2.1"')).status).toBe(200);
+    const replay = await patchLabSample(a, saved.row.id, { labName: "First" }, saved.etag, "", keyed(key));
+    expect(replay.status).toBe(200);
+    expect(replay.headers.get("idempotent-replayed")).toBe("true");
+    expect(replay.headers.get("etag")).toBe('"2.1"');
+    expect(await replay.text()).toBe(originalText);
+    expect(await labSampleRows(a)).toMatchObject([{ version: 3, labName: "Second" }]);
+    expect(await labSampleAudits(a)).toHaveLength(3);
+  });
+
+  it("refuses a key reused with another body, another target or another precondition", async () => {
+    const first = await seedRestLabSample(a);
+    const second = await seedRestLabSample(a);
+    const key = randomUUID();
+    expect((await patchLabSample(a, first.row.id, { labName: "One" }, first.etag, "", keyed(key))).status).toBe(200);
+    await expectProblem(await patchLabSample(a, first.row.id, { labName: "Other" }, first.etag, "", keyed(key)), 422, "idempotency_key_reused");
+    await expectProblem(await patchLabSample(a, second.row.id, { labName: "One" }, second.etag, "", keyed(key)), 422, "idempotency_key_reused");
+    expect(await labSampleRows(a)).toMatchObject(expect.arrayContaining([expect.objectContaining({ id: second.row.id, version: 1, labName: null })]));
+    expect(await labSampleAudits(a)).toHaveLength(3);
+  });
+
+  it("replays a keyed DELETE as 204 after the sample is gone, without a second audit row", async () => {
+    const saved = await seedRestLabSample(a);
+    const key = randomUUID();
+    const original = await deleteLabSample(a, saved.row.id, saved.etag, "", undefined, a.deleteKey, keyed(key));
+    expect(original.status).toBe(204);
+    const replay = await deleteLabSample(a, saved.row.id, saved.etag, "", undefined, a.deleteKey, keyed(key));
+    expect(replay.status).toBe(204);
+    expect(replay.headers.get("idempotent-replayed")).toBe("true");
+    expect(await replay.text()).toBe("");
+    expect(await labSampleRows(a)).toEqual([]);
+    expect((await labSampleAudits(a)).filter((row) => row.operationId === "delete_lab_sample")).toHaveLength(1);
+  });
+
+  it("isolates one key across credentials and organizations", async () => {
+    const key = randomUUID();
+    const first = await postLabSample(a, labSampleBody(a), key);
+    const otherCredential = await postLabSample(a, labSampleBody(a), key, "", a.writeOnlyKey);
+    const otherOrganization = await postLabSample(b, labSampleBody(b), key);
+    for (const response of [first, otherCredential, otherOrganization]) {
+      expect(response.status).toBe(201);
+      expect(response.headers.has("idempotent-replayed")).toBe(false);
+    }
+    expect(await labSampleRows(a)).toHaveLength(2);
+    expect(await labSampleRows(b)).toHaveLength(1);
+    const replay = await postLabSample(a, labSampleBody(a), key);
+    expect(replay.headers.get("idempotent-replayed")).toBe("true");
+    expect(await labSampleRows(a)).toHaveLength(2);
   });
 });
 
