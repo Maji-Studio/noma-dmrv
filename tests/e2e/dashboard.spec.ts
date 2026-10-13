@@ -52,6 +52,9 @@ test.describe("Dashboard (Flow Hero)", () => {
     await expect(page.getByRole("heading", { name: "Dashboard" })).toBeVisible();
     await expect(page.getByText(seededData.facility.name).first()).toBeVisible();
 
+    await expect(page.getByRole("region", { name: "Getting started" })).toHaveCount(0);
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+
     // 4-stat KPI band
     const kpis = page.getByTestId("dashboard-kpis");
     await expect(kpis).toBeVisible();
@@ -100,7 +103,7 @@ test.describe("Dashboard (Flow Hero)", () => {
 
     try {
       await db.transaction(async (tx) => {
-        await tx.insert(facilities).values({
+        await tx.insert(facilities).values({ timezone: "UTC",
           id: facilityId,
           organizationId: DEC_ORG_ID,
           code: `E2E-DASH-GAP-${tag}`,
@@ -182,6 +185,14 @@ test.describe("Dashboard (Flow Hero)", () => {
         ],
       );
       await page.goto(`/dashboard?facility=${facilityId}`);
+      const strip = page.getByRole("region", { name: "Getting started" });
+      await expect(strip.getByRole("button", { name: "Register reactor" })).toBeVisible();
+      await strip.getByRole("button", { name: "Register reactor" }).click();
+      const reactorSheet = page.getByRole("dialog", { name: "Create reactor" });
+      await expect(reactorSheet).toBeVisible();
+      await reactorSheet.getByRole("button", { name: "Cancel", exact: true }).click();
+      await expect(reactorSheet).not.toBeVisible();
+      await expect(page).toHaveURL(new RegExp(`/dashboard\\?facility=${facilityId}`));
       const structuralGaps = page.getByTestId("structural-gap-list");
       await expect(structuralGaps.getByText("Feedstock GPS missing")).toBeVisible();
       await expect(

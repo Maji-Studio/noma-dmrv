@@ -168,7 +168,9 @@ shadow. Do not add one to a control; elevation is border and paper (above).
 
 The entity select popover separates options with spacing, a hover fill and a
 selected fill, not per-row rules, and uses Phosphor icons. The search box and
-the "Add new" row are part of the same list, not boxed apart. Give the trigger
+the "Edit <name>" and "Add new" footer rows are part of the same menu, not boxed apart.
+All menu rows have a minimum 44px touch target. The portalled menu flips to fit
+the available viewport; touch opens it without focusing search. Give the trigger
 the `FormField` id (`FormEntitySelect` does) so the field label names it.
 
 ---
@@ -491,6 +493,12 @@ restore for free.
 - Width tokens: `sm` 400px (confirmations) · `md` 560px (default: forms,
   wizards) · `lg` 720px (dense forms) · `xl` 880px (rich content). All are
   full-width below `sm`.
+- **`FormDialog`** (`src/components/ui/form-dialog.tsx`) wraps `Modal` for
+  dismissible forms. It shares `DiscardChangesDialog` with `EntitySideSheet`.
+  Forms pass their RHF `control` and submitting state to `FormActions`; each
+  form reports separately, so saving keys cannot clear an unlinked project
+  draft in the same registry dialog. Cancel, Escape, backdrop and the close
+  button all warn before discarding and hold while a save is pending.
 - **`dismissOnClickOutside={false}`** for multi-step workflows where a stray
   backdrop click would discard in-progress work. Close button and ESC stay live.
 - **`dismissible={false}`** only while an irreversible request is active. It
@@ -513,14 +521,16 @@ Three ways to pick one of a few options. Choose by what the choice does.
 |---|---|---|
 | `ChoiceCardGroup` | The choice has a consequence the operator should read before picking: 2 to 6 options, each with a one-line caption and optionally a small drawing | evidence method, GIS boundary entry, stock mode |
 | `SegmentedControl` | Short, equal options that read as a mode: 2 to 5, labels only | loss / count, storage type, run status, severity, order packaging |
-| `FormSelect` | Everything else: long or dynamic lists, secondary fields | timezone, currency, category |
+| `FormSelect` | Hard-coded lists and secondary enum fields | currency, category, units |
+| `EntitySelect` / `FormEntitySelect` | Lists of user data, with search from six options | storage bins, customer locations, deliveries, registry projects and templates |
 
 A one-option enum is a fixed value, not a control.
 
 Both controls are native radios in a `fieldset` with an `sr-only` legend, so
 the browser gives one tab stop and arrow keys that move and select. Do not add
 `role`, `tabIndex` or key handlers. The selected option carries a check glyph
-plus a heavier border (not colour alone; both survive forced-colors). Wire them
+plus a heavier border (not colour alone; both survive forced-colors).
+Unselected segments are bordered too, so they read as clickable. Wire them
 like `FormSelect` (`{...register("field")}`) or controlled
 (`value` + `onValueChange`). Inside a `FormField`, give the control the same
 `id` and pass `legend` for the accessible name: the visible label stays
@@ -565,7 +575,7 @@ product, credit batch, sample, members, invitations). They are decoration
   keep Phosphor until a drawing exists. The filtered branch of the same empty state keeps
   its Phosphor icon, so the `icon` prop switches with the title. Error states,
   filtered states and nested `padding="sm"` empties never get a drawing.
-- Onboarding: the welcome step and the setup-in-progress state.
+- Onboarding: the setup-in-progress state. The dashboard guide carries welcome copy in its header.
 
 Everything else (buttons, table rows, KPI cards, nav) stays on Phosphor.
 
@@ -580,8 +590,7 @@ The stock mode art (`stock-mode-art.tsx`) is the one older exception, wider and
 with tinted grains.
 
 **Motion.** Hovering the host plays a short loop: the choice card's label, or
-any element with the `illo-host` class. `EmptyState` and the onboarding welcome
-step are hosts. Keyboard focus inside the host plays it too, and a disabled card
+any element with the `illo-host` class. `EmptyState` is a host. Keyboard focus inside the host plays it too, and a disabled card
 stays still. Wrap the moving part in `<Motion kind="…">`. The kinds are `bob`,
 `rise`, `flicker`, `sway`, `pop`, `drop`, `lift`, `draw` (give the path
 `pathLength={1}`) and `stamp`. The dotted ground scrolls on its own. `delay`

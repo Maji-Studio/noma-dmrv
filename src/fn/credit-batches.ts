@@ -1,9 +1,11 @@
 "use server";
 
+import { withAction } from "./with-action";
+
 import { z } from "zod";
 import type { ActionResult } from "@/types/actions";
 import { requireOrgContext } from "@/lib/auth/server";
-import { toActionError } from "@/lib/errors";
+import { SafeError, toActionError } from "@/lib/errors";
 import { logger, sanitizeErrorMessage } from "@/lib/log";
 import { creditBatches } from "@/db/schema";
 import { withAutoCode } from "@/data-access/code-generator";
@@ -171,8 +173,7 @@ export async function createCreditBatchFn(
 export async function updateCreditBatchFn(
   data: z.infer<typeof updateCreditBatchSchema>
 ): Promise<ActionResult<SavedCreditBatch>> {
-  try {
-    const ctx = await requireOrgContext();
+  const result = await withAction(async (ctx) => {
 
     const validated = updateCreditBatchSchema.parse(data);
     const { creditBatchId, ...updateData } = validated;
@@ -180,7 +181,7 @@ export async function updateCreditBatchFn(
     // Check credit batch exists
     const existing = await getCreditBatchById(ctx, creditBatchId);
     if (!existing) {
-      return { success: false, error: "Credit batch not found" };
+      throw new SafeError("Credit batch not found");
     }
 
     // Check for duplicate code if code is being updated
@@ -191,33 +192,16 @@ export async function updateCreditBatchFn(
         creditBatchId
       );
       if (codeExists) {
-        return {
-          success: false,
-          error: `Credit batch code "${updateData.code}" already exists`,
-        };
+        throw new SafeError(`Credit batch code "${updateData.code}" already exists`);
       }
     }
 
     const creditBatch = await updateCreditBatchData(ctx, creditBatchId, updateData);
-    // The update is committed. As with create, its accounting roll-up runs
-    // after that commit and can fail on its own; the operator is told what is
-    // saved rather than that nothing is (issue #797).
-    return creditBatch.previewAvailable
-      ? { success: true, data: creditBatch }
-      : { success: true, data: creditBatch, warning: SAVED_DETAILS_UNAVAILABLE };
-  } catch (error) {
-    logCreditBatchError("Failed to update credit batch", error);
-    if (error instanceof z.ZodError) {
-      return {
-        success: false,
-        error: formatZodActionError(error),
-      };
-    }
-    return {
-      success: false,
-      error: toActionError(error, "Failed to update credit batch"),
-    };
-  }
+    return creditBatch;
+  }, { fallbackMessage: "Failed to update credit batch", log: { message: "Failed to update credit batch" } });
+  return result.success && !result.data.previewAvailable
+    ? { ...result, warning: SAVED_DETAILS_UNAVAILABLE }
+    : result;
 }
 
 /**
@@ -226,30 +210,17 @@ export async function updateCreditBatchFn(
 export async function deleteCreditBatchFn(
   data: z.infer<typeof deleteCreditBatchSchema>
 ): Promise<ActionResult<void>> {
-  try {
-    const ctx = await requireOrgContext();
+  return withAction(async (ctx) => {
 
     const validated = deleteCreditBatchSchema.parse(data);
 
     // Check credit batch exists
     const existing = await getCreditBatchById(ctx, validated.creditBatchId);
     if (!existing) {
-      return { success: false, error: "Credit batch not found" };
+      throw new SafeError("Credit batch not found");
     }
 
-    await deleteCreditBatchData(ctx, validated.creditBatchId);
-    return { success: true, data: undefined };
-  } catch (error) {
-    logCreditBatchError("Failed to delete credit batch", error);
-    if (error instanceof z.ZodError) {
-      return {
-        success: false,
-        error: formatZodActionError(error),
-      };
-    }
-    return {
-      success: false,
-      error: toActionError(error, "Failed to delete credit batch"),
-    };
-  }
+    await deleteCreditBatchData(ctx, validated.creditBatchId, validated.expectedVersion);
+    return;
+  }, { fallbackMessage: "Failed to delete credit batch", log: { message: "Failed to delete credit batch" } });
 }

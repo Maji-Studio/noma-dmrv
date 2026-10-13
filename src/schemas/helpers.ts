@@ -15,6 +15,23 @@ import { numberBoundsOf, publishedJsonSchemas } from "./published-json-schema";
  */
 export const emptyToNull = z.literal("").transform((): null => null);
 
+/**
+ * A UUID in canonical lowercase. Either case validates, as the published
+ * `uuid` format allows, and PostgreSQL matches either, but rows come back
+ * lowercase, so an id compared as a string after a read, or hashed into an
+ * idempotency fingerprint, must arrive lowercase too. The overwrite leaves
+ * the published JSON Schema unchanged. Existing chains with their own
+ * messages (`z.string().min(1, ...).uuid(...)`) end in `.toLowerCase()`
+ * instead: piping them into this schema would drop `format: uuid` from the
+ * published contract. New schemas use this helper.
+ */
+export function uuidSchema(message?: string) {
+  return z.uuid(message).toLowerCase();
+}
+
+/** 24-hour wall-clock time, HH:MM, with zero-padded hours and minutes. */
+export const LOCAL_TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
+
 // ============================================
 // GPS Coordinate Schemas
 // ============================================
@@ -437,6 +454,14 @@ export function calendarDateSchema(message = INVALID_CALENDAR_DATE_MESSAGE) {
   return schema;
 }
 
+/** Clearable calendar date: omitted stays omitted; an empty input clears it. */
+export function optionalCalendarDateSchema() {
+  return z.preprocess(
+    (value) => value === "" ? null : value,
+    calendarDateSchema().optional().nullable(),
+  );
+}
+
 /**
  * Required date field fed by `<input type="date">` ("YYYY-MM-DD").
  *
@@ -507,15 +532,12 @@ export function stockEventInstantSchema(message = "Enter the date and time.") {
 // Expected-version (optimistic concurrency)
 // ============================================
 
-/**
- * The `updatedAt` an edit form loaded, echoed back so the updater can refuse a
- * save built on a stale read (issue #768). Optional on purpose: payloads that
- * never carried a version — quick-add, imports, older clients — still save.
- *
- * `z.coerce.date()` because the value crosses the server-action boundary and
- * may arrive as an ISO string.
- */
-export const expectedUpdatedAtSchema = z.coerce.date().optional();
+const EXPECTED_VERSION_MESSAGE = "Reload this record before saving.";
+
+/** Required integer row version loaded with the record, without coercion. */
+export const expectedVersionSchema = z.number({ error: EXPECTED_VERSION_MESSAGE })
+  .int({ error: EXPECTED_VERSION_MESSAGE })
+  .positive({ error: EXPECTED_VERSION_MESSAGE });
 
 /** Preprocess form string values to int | null. Empty/whitespace strings become null. Rejects partial parses like "12abc". */
 export const toIntOrNull = (v: unknown): unknown => {

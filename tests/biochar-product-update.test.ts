@@ -1,6 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
-const mockUpdateBiocharProduct = vi.fn();
+const mockRunOperationInProcess = vi.fn();
 
 vi.mock("@/lib/auth/server", () => ({
   requireOrgContext: vi.fn().mockResolvedValue({
@@ -12,15 +12,18 @@ vi.mock("@/lib/auth/server", () => ({
 }));
 
 vi.mock("@/data-access/biochar-products", () => ({
-  createBiocharProduct: vi.fn(),
   deleteBiocharProduct: vi.fn(),
   getBiocharProducts: vi.fn(),
   getBiocharProductById: vi.fn(),
-  updateBiocharProduct: (...args: unknown[]) => mockUpdateBiocharProduct(...args),
 }));
 
-vi.mock("@/data-access/code-generator", () => ({
-  withAutoCode: vi.fn(),
+// The action runs `update_biochar_product` in process; the runner is mocked.
+vi.mock("@/lib/operations/runner", () => ({
+  runOperationInProcess: (...args: unknown[]) => mockRunOperationInProcess(...args),
+}));
+vi.mock("@/lib/operations/biochar-products", () => ({
+  makeBiocharProduct: { id: "make_biochar_product" },
+  updateBiocharProduct: { id: "update_biochar_product" },
 }));
 
 import { updateBiocharProductFn } from "@/fn/biochar-products";
@@ -28,8 +31,8 @@ import { updateBiocharProductFn } from "@/fn/biochar-products";
 const PRODUCT_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 
 beforeEach(() => {
-  mockUpdateBiocharProduct.mockReset();
-  mockUpdateBiocharProduct.mockResolvedValue({
+  mockRunOperationInProcess.mockReset();
+  mockRunOperationInProcess.mockResolvedValue({
     id: PRODUCT_ID,
     code: "BP-001",
     facilityId: "fac-1",
@@ -38,19 +41,21 @@ beforeEach(() => {
 });
 
 /**
- * These tests prove the fn is wired to the composition helper correctly.
+ * These tests prove the fn is wired to the composition helper correctly and
+ * hands the result to the update operation as its `composition`.
  * The helper's tri-state semantics are unit-tested in `biochar-composition.test.ts`.
  */
 describe("updateBiocharProductFn composition handling", () => {
   it("omitting ingredientBins preserves existing composition (no composition key in payload)", async () => {
-    await updateBiocharProductFn({
+    await updateBiocharProductFn({ expectedVersion: 1,
       productId: PRODUCT_ID,
       massKg: 100,
     });
 
-    expect(mockUpdateBiocharProduct).toHaveBeenCalledOnce();
-    const passedData = mockUpdateBiocharProduct.mock.calls[0][2];
+    expect(mockRunOperationInProcess).toHaveBeenCalledOnce();
+    const passedData = mockRunOperationInProcess.mock.calls[0][2];
     expect(passedData).not.toHaveProperty("composition");
+    expect(passedData).toMatchObject({ biocharProductId: PRODUCT_ID, expectedVersion: 1, massKg: 100 });
   });
 
   it("explicit ingredientBins array writes composition", async () => {
@@ -65,24 +70,24 @@ describe("updateBiocharProductFn composition handling", () => {
       },
     ];
 
-    await updateBiocharProductFn({
+    await updateBiocharProductFn({ expectedVersion: 1,
       productId: PRODUCT_ID,
       ingredientBins: bins,
     });
 
-    expect(mockUpdateBiocharProduct).toHaveBeenCalledOnce();
-    const passedData = mockUpdateBiocharProduct.mock.calls[0][2];
+    expect(mockRunOperationInProcess).toHaveBeenCalledOnce();
+    const passedData = mockRunOperationInProcess.mock.calls[0][2];
     expect(passedData.composition).toEqual({ ingredients: bins });
   });
 
   it("explicit empty ingredientBins array clears composition", async () => {
-    await updateBiocharProductFn({
+    await updateBiocharProductFn({ expectedVersion: 1,
       productId: PRODUCT_ID,
       ingredientBins: [],
     });
 
-    expect(mockUpdateBiocharProduct).toHaveBeenCalledOnce();
-    const passedData = mockUpdateBiocharProduct.mock.calls[0][2];
+    expect(mockRunOperationInProcess).toHaveBeenCalledOnce();
+    const passedData = mockRunOperationInProcess.mock.calls[0][2];
     expect(passedData.composition).toEqual({});
   });
 });

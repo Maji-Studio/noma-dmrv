@@ -71,6 +71,7 @@ describe("feedstock delivery dates", () => {
   it("does not shift a date entered with an offset into the next UTC day", () => {
     const result = updateFeedstockSchema.safeParse({
       feedstockId: FEEDSTOCK_ID,
+      expectedVersion: 1,
       deliveryDate: "2026-10-06T23:00:00-07:00",
     });
     expect(result.success).toBe(false);
@@ -79,6 +80,7 @@ describe("feedstock delivery dates", () => {
   it("stores the calendar day it was given", () => {
     const parsed = updateFeedstockSchema.parse({
       feedstockId: FEEDSTOCK_ID,
+      expectedVersion: 1,
       deliveryDate: "2026-10-06",
     });
     expect(parsed.deliveryDate?.toISOString()).toBe("2026-10-06T00:00:00.000Z");

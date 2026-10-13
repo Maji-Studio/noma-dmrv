@@ -99,7 +99,7 @@ async function createFixture(): Promise<string> {
   const runId = crypto.randomUUID().slice(0, FIXTURE_UUID_SUFFIX_LENGTH);
   const [facility] = await db
     .insert(facilities)
-    .values({
+    .values({ timezone: "UTC",
       organizationId: TEST_ORG_ID,
       name: `GGS Finalization Facility ${runId}`,
       code: `FAC-GF-${runId}`,

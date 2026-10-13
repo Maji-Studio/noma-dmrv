@@ -7,3 +7,4 @@
  */
 export { SettingsConsole } from "./settings-console";
 export { OrganizationDefaultsForm } from "./organization-defaults-form";
+export { FleetSettings } from "./fleet-settings";

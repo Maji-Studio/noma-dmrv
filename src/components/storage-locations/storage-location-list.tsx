@@ -7,6 +7,8 @@
  * already facility-scoped, so the facility is not repeated per bin.
  */
 "use client";
+import { StaleVersionError, toDeleteErrorMessage, toArchiveRestoreErrorMessage } from "@/lib/stale-version";
+
 
 import { ServerError } from "@/components/forms";
 import { SelectFacilityEmptyState } from "@/components/navigation";
@@ -57,7 +59,7 @@ export function StorageLocationList() {
   const [reconcileKind, setReconcileKind] = useState<"loss" | "count">("count");
   const [reconcilingBin, setReconcilingBin] =
     useState<StorageLocationWithFacility | null>(null);
-  const [deletingStorageLocationId, setDeletingStorageLocationId] = useState<string | null>(null);
+  const [deletingBin, setDeletingBin] = useState<StorageLocationWithFacility | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const sort = parseBinSortValue(sortValue);
@@ -95,47 +97,48 @@ export function StorageLocationList() {
     setCurrentPage,
   });
 
-  const handleDelete = (id: string) => setDeletingStorageLocationId(id);
+  const handleDelete = (id: string) => setDeletingBin((storageLocationsData?.items ?? []).find((row) => row.id === id) ?? null);
 
   const handleArchive = async (storageLocationId: string) => {
+    const bin = storageLocations.find((row) => row.id === storageLocationId);
+    if (!bin) return;
     setDeleteError(null);
     try {
-      await archiveStorageLocation.mutateAsync(storageLocationId);
+      await archiveStorageLocation.mutateAsync({ storageLocationId, expectedVersion: bin.version });
       toast.success(
         "Storage bin archived. Restore it from the archived view.",
       );
     } catch (error) {
       setDeleteError(
-        error instanceof Error
-          ? error.message
-          : "The storage bin was not archived. Try again.",
+        toArchiveRestoreErrorMessage(error, `Storage bin ${bin.code}`, "archive", "The storage bin was not archived. Try again."),
       );
     }
   };
 
   const handleRestore = async (storageLocationId: string) => {
+    const bin = storageLocations.find((row) => row.id === storageLocationId);
+    if (!bin) return;
     setDeleteError(null);
     try {
-      await restoreStorageLocation.mutateAsync(storageLocationId);
+      await restoreStorageLocation.mutateAsync({ storageLocationId, expectedVersion: bin.version });
       toast.success("Storage bin restored");
     } catch (error) {
       setDeleteError(
-        error instanceof Error
-          ? error.message
-          : "The storage bin was not restored. Try again.",
+        toArchiveRestoreErrorMessage(error, `Storage bin ${bin.code}`, "restore", "The storage bin was not restored. Try again."),
       );
     }
   };
 
   const handleDeleteConfirm = async () => {
-    if (!deletingStorageLocationId) return;
+    if (!deletingBin) return;
     setDeleteError(null);
     try {
-      await deleteStorageLocation.mutateAsync(deletingStorageLocationId);
-      setDeletingStorageLocationId(null);
+      await deleteStorageLocation.mutateAsync({ storageLocationId: deletingBin.id, expectedVersion: deletingBin.version });
+      setDeletingBin(null);
       toast.success("Storage bin deleted.");
     } catch (error) {
-      setDeleteError(error instanceof Error ? error.message : "Storage bin was not deleted. Try again.");
+      if (error instanceof StaleVersionError) setDeletingBin(null);
+      setDeleteError(toDeleteErrorMessage(error, `Storage bin ${deletingBin.code}`, "Storage bin was not deleted. Try again."));
     }
   };
 
@@ -244,17 +247,17 @@ export function StorageLocationList() {
         onRecordLoss={(bin) => openReconcile(bin, "loss")}
       />
 
-      {deleteError && !deletingStorageLocationId && (
+      {deleteError && !deletingBin && (
         <ServerError message={deleteError} />
       )}
 
       <DeleteConfirmDialog
-        isOpen={!!deletingStorageLocationId}
+        isOpen={!!deletingBin}
         title="Delete storage bin"
         message="Permanently delete this unused storage bin? Bins with stock or operational history must be archived instead."
         onConfirm={handleDeleteConfirm}
         onCancel={() => {
-          setDeletingStorageLocationId(null);
+          setDeletingBin(null);
           setDeleteError(null);
         }}
         isPending={deleteStorageLocation.isPending}

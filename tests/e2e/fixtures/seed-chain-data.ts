@@ -65,7 +65,7 @@ export async function seedChainData(
 
     await db.transaction(async (tx) => {
       // 1. Facility (needed by storage locations, biochar product, orders, etc.)
-      await tx.insert(schema.facilities).values({
+      await tx.insert(schema.facilities).values({ timezone: "UTC",
         organizationId: DEC_ORG_ID,
         id: facilityId,
         code: `E2E-FAC-${testRunId}`,
@@ -207,7 +207,7 @@ export async function seedChainData(
         name: `E2E Seed Vehicle ${testRunId}`,
         identifier: `TZ-${testRunId}`,
         vehicleType: "truck",
-        fuelType: "diesel",
+        fuelType: "Diesel",
         fuelConsumptionLPerKm: 0.25,
         modelYear: 2022,
       });

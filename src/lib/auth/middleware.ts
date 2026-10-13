@@ -31,7 +31,7 @@ const AUTH_ROUTES = ["/login", "/forgot-password"];
  * unverified-email refusal applies. Exact paths only: `/api/mcpx` and
  * `/api/mcp/anything` stay behind the session.
  */
-const MACHINE_CLIENT_ROUTES = new Set(["/api/mcp"]);
+const MACHINE_CLIENT_ROUTES = new Set(["/api/mcp", "/api/cron/purge-api-records"]);
 
 /**
  * Check if path matches any of the given routes
@@ -57,7 +57,7 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.next();
   }
 
-  if (MACHINE_CLIENT_ROUTES.has(pathname)) {
+  if (MACHINE_CLIENT_ROUTES.has(pathname) || pathname === "/api/v1" || pathname.startsWith("/api/v1/")) {
     return NextResponse.next();
   }
 

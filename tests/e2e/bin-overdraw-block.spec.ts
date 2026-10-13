@@ -36,7 +36,8 @@ const DELIVERIES_URL = "/deliveries";
 const RUN_DATE = "2025-06-15";
 const RUN_START_TIME = "08:00";
 const RUN_END_TIME = "12:00";
-const DELIVERY_DATE = "2027-06-16";
+// After RUN_DATE and in the past: delivery corrections refuse future times (decision 56).
+const DELIVERY_DATE = "2025-06-16";
 
 const BIOCHAR_BIN_STOCK_KG = "100";
 const ORDER_QUANTITY_KG = "200000";
@@ -349,14 +350,7 @@ async function createOrder(page: Page, seededData: SeededChainData, quantityKg =
     seededData.customer.id,
     seededData.customer.name,
   );
-  await page.waitForSelector(
-    'select[name="customerLocationId"]:not([disabled])',
-    { timeout: 8000 },
-  );
-  await page.selectOption(
-    'select[name="customerLocationId"]',
-    seededData.customerLocation.id,
-  );
+  await selectEntity(page, "Customer location", seededData.customerLocation.id, seededData.customerLocation.name);
   await page.selectOption('select[name="packaging"]', "loose");
   await page.fill('input[name="quantityKg"]', quantityKg);
   await selectEntity(
@@ -384,7 +378,7 @@ async function openDeliveredDeliveryForm(
 
   await page.fill('input[name="deliveryDate"]', `${DELIVERY_DATE}T12:00`);
   await selectEntityByText(page, "Order", seededData.customer.name);
-  await page.selectOption('select[name="storageLocationId"]', seededData.productStorageLocation.id);
+  await selectEntity(page, "Actual source bin", seededData.productStorageLocation.id, seededData.productStorageLocation.name);
   await page.fill('input[name="deliveredWetMassKg"]', wetMassKg);
   await fillStockMoisture(page, "delivery", "10");
 }

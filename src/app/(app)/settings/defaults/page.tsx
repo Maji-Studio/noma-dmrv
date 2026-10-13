@@ -8,6 +8,7 @@
  */
 import { notFound, redirect } from "next/navigation";
 import { SettingsConsole, OrganizationDefaultsForm } from "@/components/settings";
+import { canOwnApiKey } from "@/lib/auth/api-scopes";
 import { getOrgContext } from "@/lib/auth/server";
 import { readActiveOrganization } from "@/lib/read-models";
 
@@ -34,6 +35,7 @@ export default async function OrganizationDefaultsPage() {
           : "Set how new records start out for your organization."
       }
       canManageDefaults={canManage}
+      canManageApiKeys={canOwnApiKey(ctx.orgRole)}
       isPlatformAdmin={ctx.isPlatformAdmin}
     >
       <OrganizationDefaultsForm />

@@ -1,3 +1,5 @@
+import { labLogisticsVersion } from "./helpers/lab-logistics-version";
+import { productionVersion } from "./helpers/production-version";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
@@ -88,7 +90,7 @@ describe("bin reconciliation integrity", { timeout: CONCURRENCY_TEST_TIMEOUT_MS 
     await db.update(storageLocations).set({ formulationId: f.recipe.id }).where(eq(storageLocations.id, f.bin.id));
     const product = await postProduct(f, { formulationId: f.recipe.id, massKg: 100, composition: { ingredients: [{ formulationIngredientId: f.ingredient.id, feedstockTypeId: f.ingredientType.id, storageLocationId: bin.id, massKg: 30, moistureContentPercent: 0 }] } });
     const [deletion, stockTake] = await Promise.allSettled([
-      deleteBiocharProduct(f.ctx, product.id),
+      deleteBiocharProduct(f.ctx, product.id, await productionVersion(f.ctx, "biocharProducts", product.id)),
       recordStockTakeMovement(f.ctx, { storageLocationId: bin.id, lane: "feedstock", countedMassKg: 50, countedWetMassKg: 50, moistureRatioUsed: 0, reason: "E2E concurrent count" }),
     ]);
     expect(deletion.status).toBe("rejected"); expect(stockTake.status).toBe("fulfilled");
@@ -102,7 +104,7 @@ describe("bin reconciliation integrity", { timeout: CONCURRENCY_TEST_TIMEOUT_MS 
     const runCode = `PR-TAKE-RUN-${tag}`;
     const [facility] = await db
       .insert(facilities)
-      .values({
+      .values({ timezone: "UTC",
         organizationId: TEST_ORG_ID,
         code: `FAC-TAKE-RUN-${tag}`,
         name: `Stock Take Run Facility ${tag}`,
@@ -180,7 +182,8 @@ describe("bin reconciliation integrity", { timeout: CONCURRENCY_TEST_TIMEOUT_MS 
         signalWriteBarrierReady();
         await releaseWriteBarrierPromise;
       });
-      await writeBarrierReady;
+      // A failed lock acquisition must reach cleanup instead of leaving readiness pending.
+      await Promise.race([writeBarrierReady, writeBarrierTransaction]);
 
       concurrentResults = Promise.allSettled([
         recordStockTakeFn({
@@ -347,7 +350,7 @@ describe("bin reconciliation integrity", { timeout: CONCURRENCY_TEST_TIMEOUT_MS 
   it("rejects changing a used order formulation without moving delivery provenance", async () => {
     const f = await postedFixture(); const delivery = await postDelivery(f, 60);
     const before = await db.select().from(outputStockAllocations).where(eq(outputStockAllocations.deliveryId, delivery.id));
-    await expect(updateOrder(f.ctx, f.order.id, { formulationId: f.recipe.id })).rejects.toThrow(delivery.code);
+    await expect(updateOrder(f.ctx, f.order.id, { expectedVersion: await labLogisticsVersion(f.ctx, "orders", f.order.id), formulationId: f.recipe.id })).rejects.toThrow(delivery.code);
     expect(await db.select().from(outputStockAllocations).where(eq(outputStockAllocations.deliveryId, delivery.id))).toEqual(before);
   });
 
@@ -357,8 +360,8 @@ describe("bin reconciliation integrity", { timeout: CONCURRENCY_TEST_TIMEOUT_MS 
     const input = { facilityId: f.facility.id, storageLocationId: f.bin.id, occurredAt: "2026-09-14T12:00:00.000Z", kind: "delivery" as const, wetMassKg: 80, moisturePercent: 0, correctsMovementId: allocation.movementId };
     const preview = await previewOutputStock(f.ctx, input);
     const results = await Promise.allSettled([
-      postOutputStock(f.ctx, { ...input, basisFingerprint: preview.basisFingerprint, idempotencyKey: crypto.randomUUID(), reason: "E2E correction race" }),
-      updateOrder(f.ctx, f.order.id, { quantityKg: 70 }),
+      postOutputStock(f.ctx, { ...input, expectedProductVersions: preview.expectedProductVersions, basisFingerprint: preview.basisFingerprint, idempotencyKey: crypto.randomUUID(), reason: "E2E correction race" }),
+      updateOrder(f.ctx, f.order.id, { expectedVersion: await labLogisticsVersion(f.ctx, "orders", f.order.id), quantityKg: 70 }),
     ]);
     expect(results.filter(result => result.status === "fulfilled")).toHaveLength(1);
     expect(results.filter(result => result.status === "rejected")).toHaveLength(1);

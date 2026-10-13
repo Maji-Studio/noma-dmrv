@@ -1,3 +1,4 @@
+import { expectedVersionSchema } from "./helpers";
 /**
  * Production Samples Zod Schemas
  * Validation schemas for in-process field measurements during pyrolysis runs
@@ -45,6 +46,7 @@ export type CreateProductionSampleData = z.infer<
 >;
 
 export const updateProductionSampleSchema = z.object({
+  expectedVersion: expectedVersionSchema,
   productionSampleId: z.string().uuid("Choose a valid in-process measurement."),
   ...productionSampleFormSchema.shape,
 });
@@ -53,5 +55,8 @@ export type UpdateProductionSampleData = z.infer<
 >;
 
 export const deleteProductionSampleSchema = z.object({
+  expectedVersion: expectedVersionSchema,
   productionSampleId: z.string().uuid("Choose a valid in-process measurement."),
 });
+
+export type DeleteProductionSampleData = z.infer<typeof deleteProductionSampleSchema>;

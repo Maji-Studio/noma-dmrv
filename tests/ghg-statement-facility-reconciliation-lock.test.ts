@@ -142,7 +142,7 @@ async function createFixture(): Promise<Fixture> {
   const externalProjectId = `prj_ggs_lock_${runId}`;
   const [facility] = await db
     .insert(facilities)
-    .values({
+    .values({ timezone: "UTC",
       organizationId: TEST_ORG_ID,
       name: `GGS Lock Facility ${runId}`,
       code: `FAC-GL-${runId}`,

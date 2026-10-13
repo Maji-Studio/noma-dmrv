@@ -30,6 +30,7 @@ NEXT_PUBLIC_APP_URL="op://Environment Variables/noma-dmrv env local/NEXT_PUBLIC_
 # Better Auth + admin bootstrap
 # -----------------------------------------------------------------------------
 BETTER_AUTH_SECRET="op://Environment Variables/noma-dmrv env local/BETTER_AUTH_SECRET"
+CRON_SECRET="op://Environment Variables/noma-dmrv env local/CRON_SECRET"
 ADMIN_EMAIL="op://Environment Variables/noma-dmrv env local/ADMIN_EMAIL"
 ADMIN_PASSWORD="op://Environment Variables/noma-dmrv env local/ADMIN_PASSWORD"
 ALLOW_SELF_SIGNUP="op://Environment Variables/noma-dmrv env local/ALLOW_SELF_SIGNUP"

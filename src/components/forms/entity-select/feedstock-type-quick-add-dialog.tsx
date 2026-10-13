@@ -5,6 +5,9 @@
  */
 "use client";
 
+import type { EntityEditRecords } from "@/hooks/use-entity-edit-record";
+import { FeedstockTypeEditFormDialog } from "./entity-edit-forms";
+
 import { createFeedstockTypeFn } from "@/fn/quick-add";
 import { FeedstockTypeForm } from "@/components/feedstock-types/feedstock-type-form";
 import type { FeedstockTypeFormData, FeedstockTypeUsage } from "@/schemas/feedstock-types";
@@ -13,16 +16,17 @@ import { QuickAddDialogShell } from "./quick-add-dialog-shell";
 import type { EntityOption } from "./types";
 
 interface FeedstockTypeQuickAddDialogProps {
+  feedstockType?: EntityEditRecords["feedstockType"];
   isOpen: boolean;
   onClose: () => void;
-  onSuccess: (entity: EntityOption) => void;
+  onSuccess?: (entity: EntityOption) => void;
   defaultUsage?: FeedstockTypeUsage;
 }
 
-export function FeedstockTypeQuickAddDialog({
+function FeedstockTypeCreateDialog({
   isOpen,
   onClose,
-  onSuccess,
+  onSuccess = () => undefined,
   defaultUsage,
 }: FeedstockTypeQuickAddDialogProps) {
   const hint =
@@ -63,7 +67,14 @@ export function FeedstockTypeQuickAddDialog({
         defaultUsage={defaultUsage}
         lockUsage={Boolean(defaultUsage)}
         hint={hint}
+        stickyActions={false}
+        guardDialogCancel
       />
     </QuickAddDialogShell>
   );
+}
+
+export function FeedstockTypeQuickAddDialog(props: FeedstockTypeQuickAddDialogProps) {
+  if (props.feedstockType) return <FeedstockTypeEditFormDialog record={props.feedstockType} isOpen={props.isOpen} onClose={props.onClose} />;
+  return <FeedstockTypeCreateDialog {...props} />;
 }

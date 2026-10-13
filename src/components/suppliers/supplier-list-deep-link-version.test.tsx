@@ -68,7 +68,7 @@ vi.mock("./supplier-form", () => ({
 }));
 
 function supplierAt(updatedAt: Date) {
-  return { id: SUPPLIER_ID, code: "SUP-26-001", name: "Supplier", updatedAt, locationCount: 0 };
+  return { version: updatedAt === OPENED_AT ? 1 : 2, id: SUPPLIER_ID, code: "SUP-26-001", name: "Supplier", updatedAt, locationCount: 0 };
 }
 
 describe("SupplierList deep-linked edit", () => {
@@ -98,7 +98,7 @@ describe("SupplierList deep-linked edit", () => {
     });
 
     expect(harness.update).toHaveBeenCalledWith(
-      expect.objectContaining({ supplierId: SUPPLIER_ID, expectedUpdatedAt: OPENED_AT }),
+      expect.objectContaining({ supplierId: SUPPLIER_ID, expectedVersion: 1}),
     );
     renderer?.unmount();
   });

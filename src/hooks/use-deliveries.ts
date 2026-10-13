@@ -1,3 +1,5 @@
+import { StaleVersionError, throwActionError } from "@/lib/stale-version";
+import { patchListCachesWithSavedRow } from "./list-cache-utils";
 import { outputStockKeys } from "./use-output-stock";
 /**
  * Deliveries React Query Hooks
@@ -21,10 +23,12 @@ import type {
   CreateDeliveryData,
   DeliveryFilterData,
   UpdateDeliveryData,
+  DeleteDeliveryData,
 } from "@/schemas/deliveries";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { invalidateStockEntityQueries } from "./entity-query-keys";
+import { biocharProductKeys } from "./use-biochar-products";
 import type { MutationCallbacks } from "./types";
 import { certificationKeys } from "./use-certification";
 import { dashboardOverviewKeys } from "./use-dashboard-overview";
@@ -151,6 +155,12 @@ export function useCreateDelivery(
       await callbacks?.onMutate?.(variables);
     },
     onSuccess: async (data, variables) => {
+      for (const row of data.savedProducts) {
+        patchListCachesWithSavedRow(queryClient, biocharProductKeys.lists(), row);
+        queryClient.setQueryData(biocharProductKeys.detail(row.id), (old: object | undefined) => old ? { ...old, ...row } : old);
+      }
+      void queryClient.invalidateQueries({ queryKey: biocharProductKeys.lists() });
+      void queryClient.invalidateQueries({ queryKey: biocharProductKeys.details() });
       // Invalidate all delivery lists
       queryClient.invalidateQueries({ queryKey: deliveryKeys.lists() });
       // Invalidate stats
@@ -188,7 +198,7 @@ export function useUpdateDelivery(
     mutationFn: async (data: UpdateDeliveryData) => {
       const result = await updateDeliveryFn(data);
       if (!result.success) {
-        throw new Error(result.error);
+        throwActionError(result);
       }
       return result.data;
     },
@@ -248,8 +258,10 @@ export function useUpdateDelivery(
       return { previousDelivery, previousLists };
     },
     onSuccess: async (data, variables) => {
+      patchListCachesWithSavedRow(queryClient, deliveryKeys.lists(), data);
       // Update cache with actual server data
       queryClient.setQueryData(deliveryKeys.detail(data.id), data);
+      queryClient.setQueryData(deliveryKeys.detailWithRelations(data.id), (old: DeliveryWithRelations | undefined) => old ? { ...old, ...data } : old);
 
       // Invalidate to ensure consistency
       queryClient.invalidateQueries({
@@ -304,18 +316,19 @@ export function useUpdateDelivery(
 /**
  * Hook to delete a delivery
  */
-export function useDeleteDelivery(callbacks?: MutationCallbacks<void, string>) {
+export function useDeleteDelivery(callbacks?: MutationCallbacks<void, DeleteDeliveryData>) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (deliveryId: string) => {
-      const result = await deleteDeliveryFn({ deliveryId });
+    mutationFn: async (variables: DeleteDeliveryData) => {
+      const result = await deleteDeliveryFn(variables);
       if (!result.success) {
-        throw new Error(result.error);
+        throwActionError(result);
       }
       return;
     },
-    onMutate: async (deliveryId) => {
+    onMutate: async (variables) => {
+      const { deliveryId } = variables;
       // Cancel outgoing refetches
       await queryClient.cancelQueries({
         queryKey: deliveryKeys.lists(),
@@ -341,11 +354,12 @@ export function useDeleteDelivery(callbacks?: MutationCallbacks<void, string>) {
         });
       });
 
-      await callbacks?.onMutate?.(deliveryId);
+      await callbacks?.onMutate?.(variables);
 
       return { previousDelivery, previousLists };
     },
-    onSuccess: async (_, deliveryId) => {
+    onSuccess: async (_, variables) => {
+      const { deliveryId } = variables;
       // Remove specific delivery from cache
       queryClient.removeQueries({ queryKey: deliveryKeys.detail(deliveryId) });
       queryClient.removeQueries({
@@ -360,9 +374,10 @@ export function useDeleteDelivery(callbacks?: MutationCallbacks<void, string>) {
       void queryClient.invalidateQueries({ queryKey: outputStockKeys.all });
       invalidateStockEntityQueries(queryClient, "delivery");
 
-      await callbacks?.onSuccess?.(undefined, deliveryId);
+      await callbacks?.onSuccess?.(undefined, variables);
     },
-    onError: async (error, deliveryId, context) => {
+    onError: async (error, variables, context) => {
+      const { deliveryId } = variables;
       void queryClient.invalidateQueries({ queryKey: outputStockKeys.all });
       // Rollback to previous values on error
       if (context) {
@@ -385,12 +400,16 @@ export function useDeleteDelivery(callbacks?: MutationCallbacks<void, string>) {
         });
       }
 
-      await callbacks?.onError?.(error, deliveryId);
+      if (error instanceof StaleVersionError) {
+        queryClient.invalidateQueries({ queryKey: deliveryKeys.lists() });
+        queryClient.invalidateQueries({ queryKey: deliveryKeys.detail(deliveryId) });
+      }
+      await callbacks?.onError?.(error, variables);
     },
-    onSettled: async (data, error, deliveryId) => {
+    onSettled: async (data, error, variables) => {
       queryClient.invalidateQueries({ queryKey: deliveryKeys.lists() });
 
-      await callbacks?.onSettled?.(data, error, deliveryId);
+      await callbacks?.onSettled?.(data, error, variables);
     },
   });
 }

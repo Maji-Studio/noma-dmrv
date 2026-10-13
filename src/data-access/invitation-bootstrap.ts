@@ -121,6 +121,8 @@ export async function createInvitedAccount(input: {
         emailVerified: true,
       },
       {
+        // The account-create hook replaces this placeholder with the user ID
+        // generated inside createOAuthUser's transaction (Better Auth 1.7).
         accountId: email,
         providerId: "credential",
         password: input.passwordHash,

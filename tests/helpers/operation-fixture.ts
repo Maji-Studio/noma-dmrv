@@ -9,6 +9,10 @@ import { Pool } from "pg";
 import { db } from "@/db";
 import {
   apiIdempotencyRecords,
+  reactors,
+  productionRuns,
+  productionRunFeedstockDraws,
+  productionRunFeedstocks,
   facilities,
   feedstocks,
   feedstockTypes,
@@ -31,23 +35,25 @@ export interface IntakeFixture {
   input: (wetMassKg?: number) => Record<string, unknown>;
 }
 
-export async function createIntakeFixture(label: string): Promise<IntakeFixture> {
+export async function createIntakeFixture(
+  label: string, executor: Pick<typeof db, "insert"> = db,
+): Promise<IntakeFixture> {
   const tag = crypto.randomUUID().slice(0, 8);
   const organizationId = `org_op_${label}_${tag}`;
-  await db.insert(organizations).values({
+  await executor.insert(organizations).values({
     id: organizationId,
     name: `Operation ${label} ${tag}`,
     slug: `operation-${label}-${tag}`.toLowerCase(),
   });
-  const [facility] = await db
+  const [facility] = await executor
     .insert(facilities)
-    .values({ organizationId, code: `FAC-${tag}`, name: `Intake Facility ${tag}` })
+    .values({ timezone: "UTC", organizationId, code: `FAC-${tag}`, name: `Intake Facility ${tag}` })
     .returning({ id: facilities.id });
-  const [supplier] = await db
+  const [supplier] = await executor
     .insert(suppliers)
     .values({ organizationId, code: `SUP-${tag}`, name: `Wood Chip Supplier ${tag}` })
     .returning({ id: suppliers.id });
-  const [feedstockType] = await db
+  const [feedstockType] = await executor
     .insert(feedstockTypes)
     .values({
       organizationId,
@@ -57,7 +63,7 @@ export async function createIntakeFixture(label: string): Promise<IntakeFixture>
       usage: "pyrolysis" as const,
     })
     .returning({ id: feedstockTypes.id });
-  const [bin] = await db
+  const [bin] = await executor
     .insert(storageLocations)
     .values({
       organizationId,
@@ -102,6 +108,10 @@ export async function feedstockCount(fixture: IntakeFixture): Promise<number> {
 
 export async function removeIntakeFixture(fixture: IntakeFixture): Promise<void> {
   const organizationId = fixture.ctx.organizationId;
+  await db.delete(productionRunFeedstocks).where(eq(productionRunFeedstocks.organizationId, organizationId));
+  await db.delete(productionRunFeedstockDraws).where(eq(productionRunFeedstockDraws.organizationId, organizationId));
+  await db.delete(productionRuns).where(eq(productionRuns.organizationId, organizationId));
+  await db.delete(reactors).where(eq(reactors.organizationId, organizationId));
   await db.delete(transportLegs).where(eq(transportLegs.organizationId, organizationId));
   await db.delete(feedstocks).where(eq(feedstocks.organizationId, organizationId));
   await db.delete(storageLocations).where(eq(storageLocations.organizationId, organizationId));
@@ -121,4 +131,20 @@ export function createTestPool(max: number): Pool {
     max,
     lock_timeout: DEFAULT_DB_POOL_LOCK_TIMEOUT_MS,
   });
+}
+
+/** A run-ready facility; intake itself is exercised through the feedstock operation. */
+export async function createProductionRunFixture(label: string): Promise<IntakeFixture & { reactorId: string }> {
+  const fixture = await createIntakeFixture(label);
+  await db.update(storageLocations).set({ feedstockTypeId: fixture.feedstockTypeId })
+    .where(eq(storageLocations.organizationId, fixture.ctx.organizationId));
+  return { ...fixture, reactorId: await addFixtureReactor(fixture, label) };
+}
+
+export async function addFixtureReactor(fixture: IntakeFixture, label: string): Promise<string> {
+  const [reactor] = await db.insert(reactors).values({
+    organizationId: fixture.ctx.organizationId, facilityId: fixture.facilityId,
+    code: `R-${label}`, identifier: `Reactor ${label}`, reactorType: "auger",
+  }).returning({ id: reactors.id });
+  return reactor.id;
 }

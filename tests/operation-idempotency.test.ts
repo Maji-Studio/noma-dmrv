@@ -233,6 +233,7 @@ describe("runner idempotency", { timeout: SUITE_TIMEOUT_MS }, () => {
     const idempotency = idempotencyFor(crypto.randomUUID());
     const operation: Operation<typeof logFeedstockDelivery.input, null | undefined> = {
       ...logFeedstockDelivery,
+      describe: undefined,
       execute: async (scope, input) => {
         await logFeedstockDelivery.execute(scope, input);
         return result;

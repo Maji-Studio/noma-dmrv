@@ -7,7 +7,9 @@ PostgreSQL + Drizzle ORM for the multi-tenant, facility-scoped MRV domain. Cover
 The app **is multi-tenant** ([ADR 0010](./adr/0010-shared-schema-org-column-tenancy.md)):
 every MRV/domain table carries `organizationId NOT NULL`. Better Auth
 infrastructure (`users`, sessions, accounts, verifications, organizations,
-members, invitations) follows its own identity/membership relationships, and
+members, invitations) follows its own identity/membership relationships.
+`api_keys.reference_id` is the plugin's organization id; its management table
+`api_key_owners` carries `organization_id` and an independent integer `version`.
 `geo_route_cache` is the explicit organization-neutral cache. These exceptions
 are not examples for new domain tables. Domain tenancy is enforced in
 `src/data-access/`, not by the route layer.
@@ -20,9 +22,36 @@ are not examples for new domain tables. Domain tenancy is enforced in
 - `userId` columns are attribution, not a boundary. Do not access the DB from UI or hooks — go through `fn/` then `data-access/`.
 - Related helpers in `utils.ts`: `assertSameOrg`, `requireOrgFacility`.
 
+## API infrastructure tables
+
+`src/db/schema/api.ts` also defines:
+
+- `api_audit_events`: organization-scoped, value-free API write effects and
+  actor/credential/request ids. Inserts use the operation's transaction.
+- `api_rate_limit_buckets`: system seam keyed by IP hash, credential or
+  organization and access type. It intentionally has no `organization_id`;
+  request guards debit it outside business transactions.
+- `organization_api_access`: one Platform Admin policy row per organization,
+  with enabled state and change attribution. A missing row means enabled.
+  Credential resolution and cross-organization administration are explicit
+  privileged seams, marked `// org-scope-ok:` in data-access. Owners/Admins
+  without Platform Admin access cannot administer this policy.
+
+The purge helpers are system seams that delete expired idempotency records and
+idle buckets across organizations. These waivers do not relax ordinary
+org-scoped reads or audit inserts.
+
 ## Row-Level Guards
 
 Frozen/locked rows are protected by dedicated modules in `src/data-access/`, not by DB constraints alone: `bin-stock-guards.ts`, `lock-bin-stocks.ts`, the `*-stock-locks.ts` family (`biochar-product`, `delivery`, `formulation`, `order`, `production-run`), `facility-durability-lock.ts`, `certification-lineage-guards.ts`, `unique-name-guards.ts`. A fresh `db.update()` that skips these silently bypasses the freeze — route mutations through the guarded helpers.
+
+API production-run reads select the run and its explicit draws in one statement,
+so their row version and draw masses share a statement snapshot. The public run
+representation carries reference IDs; clients resolve codes and facility zones
+through lookups. Its strong ETag covers the run version and representation
+revision. Feedstock edits change bin stock and their own version, but do not
+rewrite the run's measured moisture, draws or batch allocations and do not bump
+the run version. A change to the run itself bumps its version.
 
 ## Numeric Column Families
 
@@ -167,6 +196,7 @@ the stamps. `NULL` = active.
 - **Grandchildren have no own column** (samples, readings, applications, transport legs, …) — they hide transitively through their archived parent (applications filter via `deliveries.archived_at` in joins).
 - **Certifier mirror tables are unstamped for `archived_at`** (`certifier_projects`, `certifier_ghg_statements`, `certifier_removals`) — they mirror registry state and hide transitively. They are **not** unscoped: each carries `organizationId NOT NULL` plus the composite FK to `facilities`, and still requires the org filter. Archiving a facility with registry submissions is allowed with a warning (`getFacilityArchiveImpact.hasRegistrySubmissions`), never blocked.
 - **Writes reject archived parents**: child creates/moves check the facility with `isNull(facilities.archivedAt)` and fail with "Facility not found or archived".
+- **Lab sample writes** reject an archived credit batch (create, update, move; reads and delete still work). They read the batch after locking it, in the order certification artifacts, credit batches by id, sample (`src/data-access/samples/write-scope.ts`). `archiveFacility` locks the facility's credit batches in id order before its bulk update so it cannot deadlock against a sample move.
 - **Codes stay reserved** while archived (uniqueness checks ignore archive state) so restore can't collide.
 
 Stamped tables: `facilities`, `reactors`, `storage_locations`, `feedstock_deliveries`, `feedstocks`, `production_runs`, `biochar_products`, `orders`, `deliveries`, `credit_batches`, `stockpile_events`, `power_procurement_evidence` (migration `drizzle/0041_outgoing_paper_doll.sql`).

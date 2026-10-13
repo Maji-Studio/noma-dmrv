@@ -16,6 +16,7 @@
  * - Project names: LIKE 'E2E Test Project%'
  */
 import { Pool } from "pg";
+import { DEC_ORG_ID } from "@/db/org-defaults";
 import { isLocalDatabaseHost } from "../helpers/throwaway-database";
 
 export default async function globalTeardown() {
@@ -48,6 +49,14 @@ export default async function globalTeardown() {
 
     try {
       await client.query("BEGIN");
+
+      // API-key specs use the seeded organization and the shared name prefixes.
+      // Deleting the plugin row cascades to api_key_owners, even if its user is gone.
+      await client.query(`
+        DELETE FROM api_keys
+        WHERE reference_id = $1
+          AND (name LIKE 'E2E %' OR name LIKE 'UI %' OR name LIKE 'Chain %')
+      `, [DEC_ORG_ID]);
 
       // Freeze fixture lineage before deleting parents. UI-created codes are automatic.
       await client.query(`CREATE TEMP TABLE e2e_scope_facilities ON COMMIT DROP AS SELECT id FROM facilities WHERE code LIKE 'E2E-%' OR name LIKE 'UI %' OR name LIKE 'Chain %' OR name LIKE 'Duplicate Test %'`);

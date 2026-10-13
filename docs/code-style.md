@@ -17,7 +17,8 @@ conventions) · [testing.md](./testing.md) (E2E) · [../TEMPLATE_USAGE.md](../TE
 - Component exports are **PascalCase**; hook and plain-function exports are **camelCase**.
 - **1000-line cap** per file, enforced as an ESLint `max-lines` **error**, so an oversized
   file fails `pnpm lint` and CI. Exempt and never to be "fixed" by splitting: `src/lib/isometric/generated/**` and
-  `src/db/seed-data.ts` (see `eslint.config.mjs`).
+  `src/db/seed-data.ts` (see `eslint.config.mjs`). The generated OpenAPI snapshot `openapi/v1.json` is also
+  exempt (Kenji, 2026-10-12): it is pretty-printed at a 1000-character line width and grows with the contract.
 - Feature folders under `src/components/<feature>/` are **flat** with a barrel `index.ts`
   — no `components/` / `dialogs/` / `hooks/` subfolders, even for large features
   (`src/components/credit-batches/` is the reference).
@@ -25,6 +26,8 @@ conventions) · [testing.md](./testing.md) (E2E) · [../TEMPLATE_USAGE.md](../TE
 - **Colocated unit tests:** `*.test.ts` / `*.test.tsx` sit beside the code they test under
   `src/` (vitest, `environment: "node"`, see `vitest.config.ts`). Add one by default for
   schemas and pure logic — E2E is not a substitute.
+
+DOM and portal component tests: see [testing.md](./testing.md).
 
 ## Auth & org scoping — the most violated convention here
 
@@ -54,8 +57,9 @@ action the browser can call with any arguments, so it must never accept an
 `isPlatformAdmin`), a raw `organizationId`/`orgId`, a `db`/`tx` handle, or a
 `...args: Parameters<…>` passthrough, and it must not apply `requireOrgRole` /
 `requireOrgScope` to anything but the `withAction` callback's context. Put
-trusted-context code in a directive-free module (conventionally
-`src/fn/**/*-core.ts`). `pnpm check:server-action-exports` enforces this with
+trusted-context code in a directive-free module: `src/lib/operations/` for
+migrated writes, `src/lib/read-models/` for reads, or a legacy core under
+src/fn/**/*-core.ts. `pnpm check:server-action-exports` enforces this with
 the TypeScript type checker and has **no** waiver: fix the export instead.
 
 ## Style

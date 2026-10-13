@@ -25,6 +25,9 @@ export {
 } from "./queries";
 
 export {
+  createProductionRunInTransaction,
+  updateProductionRunInTransaction,
+  deleteProductionRunInTransaction,
   createProductionRun,
   updateProductionRun,
   deleteProductionRun,

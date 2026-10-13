@@ -1,5 +1,7 @@
 "use server";
 
+import { withAction } from "./with-action";
+
 /**
  * Facilities Server Actions
  * Server-side functions for facility CRUD operations
@@ -30,27 +32,9 @@ import {
 } from "@/data-access/code-generator";
 import { facilities as facilitiesTable } from "@/db/schema";
 import {
-  type ActionFailure,
   formatZodActionError,
-  toActionFailure,
   toLoggedActionError,
 } from "./action-errors";
-
-/**
- * Failure shape for the write paths. Unlike the read helper below it keeps an
- * `ActionConflictError`'s `conflict`, so the form can tell an expected-version
- * refusal from an ordinary save failure and hold on to the operator's draft.
- */
-function facilityActionFailure(
-  error: unknown,
-  fallbackMessage: string,
-  op: string,
-): ActionFailure {
-  return toActionFailure(error, {
-    fallbackMessage,
-    log: { message: "facility action failed", context: { op } },
-  });
-}
 
 function facilityActionError(
   error: unknown,
@@ -160,13 +144,12 @@ export async function createFacilityFn(
 export async function updateFacilityFn(
   data: z.infer<typeof updateFacilitySchema>
 ): Promise<ActionResult<Facility>> {
-  try {
-    const ctx = await requireOrgContext();
+  return withAction(async (ctx) => {
 
     const validated = updateFacilitySchema.parse(data);
 
     const facility = await updateFacility(ctx, validated.facilityId, {
-      expectedUpdatedAt: validated.expectedUpdatedAt,
+      expectedVersion: validated.expectedVersion,
       code: validated.code,
       name: validated.name,
       country: validated.country,
@@ -180,10 +163,8 @@ export async function updateFacilityFn(
       durabilityOption: validated.durabilityOption,
     });
 
-    return { success: true, data: facility };
-  } catch (error) {
-    return facilityActionFailure(error, "Failed to update facility", "facility:update");
-  }
+    return facility;
+  }, { fallbackMessage: "Failed to update facility", log: { message: "facility action failed", context: { op: "facility:update" } } });
 }
 
 // ============================================
@@ -219,29 +200,13 @@ export async function getFacilityArchiveImpactFn(
 export async function archiveFacilityFn(
   data: z.infer<typeof archiveFacilitySchema>
 ): Promise<ActionResult<Facility>> {
-  try {
-    const ctx = await requireOrgContext();
+  return withAction(async (ctx) => {
 
     const validated = archiveFacilitySchema.parse(data);
-    const facility = await archiveFacility(ctx, validated.facilityId);
+    const facility = await archiveFacility(ctx, validated.facilityId, validated.expectedVersion);
 
-    return { success: true, data: facility };
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return {
-        success: false,
-        error: formatZodActionError(error),
-      };
-    }
-    return {
-      success: false,
-      error: facilityActionError(
-        error,
-        "Failed to archive facility",
-        "facility:archive",
-      ),
-    };
-  }
+    return facility;
+  }, { fallbackMessage: "Failed to archive facility", log: { message: "facility action failed", context: { op: "facility:archive" } } });
 }
 
 /**
@@ -250,27 +215,11 @@ export async function archiveFacilityFn(
 export async function restoreFacilityFn(
   data: z.infer<typeof restoreFacilitySchema>
 ): Promise<ActionResult<Facility>> {
-  try {
-    const ctx = await requireOrgContext();
+  return withAction(async (ctx) => {
 
     const validated = restoreFacilitySchema.parse(data);
-    const facility = await restoreFacility(ctx, validated.facilityId);
+    const facility = await restoreFacility(ctx, validated.facilityId, validated.expectedVersion);
 
-    return { success: true, data: facility };
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return {
-        success: false,
-        error: formatZodActionError(error),
-      };
-    }
-    return {
-      success: false,
-      error: facilityActionError(
-        error,
-        "Failed to restore facility",
-        "facility:restore",
-      ),
-    };
-  }
+    return facility;
+  }, { fallbackMessage: "Failed to restore facility", log: { message: "facility action failed", context: { op: "facility:restore" } } });
 }

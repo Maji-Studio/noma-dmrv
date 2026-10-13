@@ -160,6 +160,15 @@ Pure starter residue; org scoping came later via ADR 0010.
 
 ## Architecture
 
+### Rendered API reference (`api/rendered-reference`, opened 2026-10-08)
+
+- **Anchor:** `src/lib/api/openapi/document.ts:buildOpenApiDocument` and
+  `src/app/api/v1/openapi.json/route.ts:GET` publish the machine-readable contract.
+- **Deferred:** Plan section 4 also calls for an adjacent rendered HTML reference.
+  Choose the renderer and hosting path, then render this same document without
+  maintaining a second contract.
+- **Resolve via:** A documentation-surface follow-up after the public v1 contract.
+
 ### Auto-fill sample chemistry from an uploaded lab report (`samples/coa-autofill`, opened 2026-07-02)
 
 - Parse an uploaded COA/lab-report PDF to pre-fill the sample form's ~30
@@ -211,8 +220,7 @@ Pure starter residue; org scoping came later via ADR 0010.
 ### Registry picker needs approved Puro Earth / CSI logo assets (`onboarding/registry-picker-logos`, opened 2026-07-22)
 
 - The archived onboarding plan
-  ([`2026-07-21-onboarding.md`](./archive/plans/2026-07-21-onboarding.md)) asks the wizard's
-  registry step to show Puro Earth and CSI greyed **with their logos**.
+  ([`2026-07-21-onboarding.md`](./archive/plans/2026-07-21-onboarding.md)) asks the registry picker to show Puro Earth and CSI greyed **with their logos**.
   `src/components/certification/registry-picker.tsx` deliberately renders styled
   text wordmarks instead: we hold no approved logo files, and bundling
   unofficial reproductions of third-party registry branding is worse than no
@@ -263,38 +271,143 @@ Pure starter residue; org scoping came later via ADR 0010.
   carry a client-supplied operation id the server records and a retry can look
   up, or whether the retry-and-duplicate risk stays with the operator.
 
-### Eleven edit forms still save without an expected-version check (`architecture/expected-version-gaps`, opened 2026-09-17)
+### An operation that awaits non-database work keeps its request past the deadline (`architecture/operation-callback-deadline`, opened 2026-10-07)
 
-- **Rule:** every updater behind an edit form checks `expectedUpdatedAt`
-  (`src/data-access/expected-version.ts:assertExpectedVersion`) and every edit
-  form sends it, so a save built on a stale cached row is refused
-  ([architecture.md](./architecture.md#expected-version-checks-on-edit-forms)).
-- **Observed:** the check is implemented for facility, feedstock, storage
-  location, customer (+ location), supplier (+ location), application and
-  production run. These edit-form updaters do not accept or check the field
-  (some lock their row, some do not):
-  `src/data-access/reactors.ts:updateReactor`,
-  `src/data-access/formulations.ts:updateFormulation`,
-  `src/data-access/credit-batches.ts:updateCreditBatch`,
-  `src/data-access/biochar-products.ts:updateBiocharProduct`,
-  `src/data-access/samples.ts:updateSample`,
-  `src/data-access/orders.ts:updateOrder`,
-  `src/data-access/feedstock-types.ts:updateFeedstockType`,
-  `src/data-access/delivery-output-writes.ts:updateDelivery`,
-  `src/data-access/transport-legs.ts:updateTransportLeg`,
-  `src/data-access/production-incidents.ts:updateProductionIncident`,
-  `src/data-access/production-samples.ts:updateProductionSample`. Their edit
-  sheets (`src/components/<entity>/<entity>-list.tsx`,
-  `src/components/transport-legs/transport-legs-editor.tsx`,
-  `src/components/production-runs/production-incident-table.tsx`,
-  `src/components/production-runs/production-sample-table.tsx`) call the
-  matching `useUpdate*` hook without a version.
-- **Resolve via:** add `expectedUpdatedAt` to each updater's schema and input,
-  lock the row and call `assertExpectedVersion` after the locked read, send
-  `updatedAt` from the edit sheet, re-throw through `throwActionError`
-  (`src/lib/stale-version.ts`), and add each updater to the parametrised
-  expected-version spec in `tests/`. One PR per entity family is fine; delete
-  this entry when that spec covers all of them.
+- `runOwnedTransaction` (`src/data-access/owned-transaction.ts`) arms
+  `transaction_timeout`, but PostgreSQL ends only the session, not the
+  JavaScript callback. If an operation's `execute` awaited a slow external call
+  after its last query, the request and its checked-out client would wait for
+  that call, past the deadline. Today no operation does: external effects run
+  in after-commit hooks or are enqueued in the transaction (plan section 4).
+  **To resolve:** if an operation ever needs external work inside its
+  transaction, race the callback against the deadline and keep the client out
+  of the pool until the callback settles; until then keep `execute` database-only.
+
+### Run writers, feedstock edits and output postings lock in different orders (`data/lock-order`, opened 2026-10-09)
+
+- `src/data-access/production-runs/mutations.ts:updateProductionRunInTransaction`
+  and `src/data-access/production-runs/delete.ts:deleteProductionRunInTransaction`
+  lock bins before the run row and certification lineage. Feedstock edits in
+  `src/data-access/feedstocks.ts:updateFeedstockInTransaction` lock the intake
+  row and lineage before bins, leaving a run-versus-feedstock deadlock cycle.
+- Moving run rows and lineage ahead of bins would introduce other inversions:
+  - `src/data-access/credit-batch-membership.ts:lockCreditBatchForUpdate` takes
+    the process scope before artifacts. Run attachment through
+    `updateProductionRunInTransaction` can already hold artifact locks before
+    requesting that scope.
+  - `src/data-access/output-stock-post.ts:withOutputStockPosting` takes bins
+    before lineage or allocation foreign-key KEY SHARE locks on runs. A run
+    writer holding its row or lineage while waiting for a bin would reverse
+    this order.
+  - `src/data-access/production-runs/feedstock-draws.ts:replaceProductionRunFeedstockDraws`
+    inserts allocations into `productionRunFeedstocks`, taking foreign-key KEY
+    SHARE locks on intake rows. Prelocking prospective lineage on run create
+    can wait on `updateFeedstockInTransaction`, which already holds the intake
+    row and waits on lineage.
+- Run writers retain bins before rows and best-effort attachment. A global
+  order must coordinate every writer, including implicit foreign-key locks.
+- **Mitigation today:** `src/lib/operations/runner.ts:runOperation` retries the
+  whole transaction a bounded number of times, with jitter, on deadlocks
+  (40P01), serialization failures (40001) and operation lock-timeout aborts
+  (55P03) before COMMIT, within the original deadline. Claims and writes roll
+  back together. Exhausted attempts answer the retryable
+  `concurrent_write_retry`; claim-lock waits answer `idempotency_in_progress`;
+  spent deadlines answer `deadline_exceeded`.
+  `src/data-access/owned-transaction.ts:runOwnedTransaction` rethrows COMMIT
+  failures with SQLSTATE class 23 or 40, maps 25P04 to `deadline_exceeded`, and
+  reports other COMMIT failures as `outcome_unknown`. The runner does not retry
+  COMMIT failures. This does not establish a global order or add retries to
+  callers that bypass the runner.
+- Output-stock postings and product creates now run inside the runner's
+  transaction (`record_output_stock_movement`, `make_biochar_product`,
+  `update_biochar_product`), so they get the bounded retry above. Their bin lock
+  order is unchanged, so the inversions listed here still apply to them.
+- **Resolve via:** a cross-writer lock inventory, a documented order covering
+  process scopes, artifacts, bins, parent rows and foreign keys, and
+  deterministic races for run create/update/delete against intake edits, batch
+  updates and output postings. Keep the runner retry even after the known
+  inversions are removed.
+
+### Production-run readings and incidents are not on the API (`api/production-run-readings-incidents`, opened 2026-10-09)
+
+- Production runs expose start, update and delete only. The readings batch from
+  [data-entry API plan section 8](./plans/2026-10-06-data-entry-api.md#8-batches-and-offline-design-now-build-later)
+  and incident endpoints are deferred by decision 39. The existing seams are
+  `src/lib/operations/production-runs.ts:startProductionRun`,
+  `src/data-access/production-runs/readings.ts:getProductionRunReadings` and
+  `src/fn/production-incidents.ts:createProductionIncidentFn`.
+- Incident time (`src/schemas/production-incidents.ts:productionIncidentFormSchema.incidentTime`)
+  still reads any string through `new Date(value)`, so a time without an offset
+  takes the server's zone. Lab sample `samplingTime` moved onto
+  `offsetInstantSchema` in Phase 5a.
+- **Resolve via:** a scoped follow-up defining readings batch size, per-item
+  outcomes and externalId replay semantics, plus incident operations,
+  permissions, representations and outcome/BOLA tests. Reuse the reading import
+  core and the shared operation runner before registering REST routes or MCP
+  tools. Move incident time onto the shared instant helpers in the same change,
+  with schema tests proving the parsing.
+
+### Output-stock corrections are not on the API (`api/stock-corrections`, opened 2026-10-12)
+
+- Decision 50 in the [data-entry API plan](./plans/2026-10-06-data-entry-api.md#13-decisions-kenji-2026-10-06)
+  keeps corrections UI-only. `record_output_stock_movement` publishes
+  `loss | count` and ignores `correctsMovementId`; the UI passes it through
+  `src/fn/output-stock.ts:postOutputStockFn`. Movement history is readable at
+  `GET /storage-locations/{id}/stock-movements`.
+- **Resolve via:** a decision on scope (a destructive `stock-corrections:write`
+  granted per key, any-of admission shared by REST and MCP listing,
+  registration and rate-limit classification), delivery corrections, and
+  tests for ordinary-only, correction-only, both and neither credentials.
+
+### Sub-bin stock is not readable on the API (`api/sub-bin-reads`, opened 2026-10-12)
+
+- Split output bins expose no sub-bin or remaining-stock read. A loss with
+  `sources` names production-run layers that clients find through runs and
+  movement history, without seeing what each layer still holds. Decision 55
+  deferred it.
+- **Next after Phase 5a** (round 7 Q58, its own PR). Design: one consistent
+  snapshot and one evaluation instant for the whole projection, deterministic
+  serialization, ETag = hash of the published body (distinct from
+  `basisFingerprint`), and defined behaviour for archived, null, ordering and
+  size limits.
+- **Resolve via:** a stock-bearing read model whose ETag is that body hash
+  rather than the storage-location version, then a REST path
+  (`GET /storage-locations/{idOrCode}/stock`) and an MCP tool (`get_bin_stock`).
+
+### A multi-sample create must not assume one credit batch or one sampling time (`api/multi-sample-create`, opened 2026-10-13)
+
+- Round 7 Q49 kept `POST /lab-samples` and `record_lab_sample` single
+  (`src/lib/operations/lab-samples.ts:recordLabSample`). Kenji's note: saving
+  several samples at once should be possible, but they usually come from
+  different production dates. See the batches topic in plan
+  [section 8](./plans/2026-10-06-data-entry-api.md#8-batches-and-offline-design-now-build-later).
+- **Resolve via:** a multi-sample endpoint whose items each carry their own
+  `creditBatchId` and `samplingTime`, with one idempotency key and audit effect
+  for the whole body, results in request order and pointers
+  `/samples/{index}/...`. Do not copy the earlier one-batch draft.
+
+### Transport-leg update and delete read their parent outside the transaction (`data/transport-leg-parent-reads`, opened 2026-10-13)
+
+- `src/data-access/transport-legs.ts:updateTransportLeg` and
+  `deleteTransportLeg` read the leg's parent through the global `db` before
+  their transaction. Only `createTransportLeg` was moved under the sample lock
+  scope (artifacts, credit batches in id order, then sample) in Phase 5a. A
+  sample deleted or reassigned in between is not seen by the pre-read, and the
+  global read can self-deadlock when the pool size is 1.
+- **Resolve via:** take the same lock scope and re-resolve the parent inside the
+  transaction for update and delete, with create-vs-delete and update-vs-delete
+  tests in both orders.
+
+### No keyset index backs the API list orderings (`data/api-keyset-list-indexes`, opened 2026-10-13)
+
+- Every API list orders by `(createdAt, id)` within an organization
+  (`src/data-access/api-lab-samples.ts`, `src/data-access/api-credit-batches.ts`,
+  and the feedstock, production-run and product lists). No list table has an
+  `(organization_id, created_at, id)` index; `src/db/schema/production.ts`
+  indexes `production_runs` by facility only, and `samples` by credit batch and
+  sampling time.
+- Fine at pilot volumes. **Resolve via:** measure a list at realistic volume,
+  then add one covering index per list table in a single migration.
 
 ### Registry credentials can be replaced but not removed (`certification/credential-removal`, opened 2026-07-28)
 
@@ -572,6 +685,36 @@ companion inherits this file's schema, invariants, and resolution rules.
   `ISOMETRIC_DEMO_TEMPLATE_ID` in the workflow and restore the third category to
   the assertion (S).
 
+### The app requires TGA for 1,000-year durability but the module never mentions it (`isometric/tga-1000-year-requirement`, opened 2026-10-13, `needs-registry-check`)
+
+- **Observed:** `src/data-access/samples/write-scope.ts` refuses a 1,000-year
+  lab sample without TGA reactive or residual carbon, and readiness requires it
+  for submission. Biochar Agricultural Soils module v1.1 (Option 2) names R0 and
+  the fraction passing the 2% benchmark, and never mentions TGA.
+- The same text says proponents "should report a set of at least 500
+  measurements of R0" per sample. That is a "should", so
+  `src/lib/certification/sample-entry-warnings.ts` only warns below
+  `R0_MEASUREMENTS_PER_SAMPLE_GUIDANCE`; it does not block submission (round 7
+  Q53).
+- **Resolve via:** check the module text and the registry's accepted evidence
+  through the Isometric MCP server (`how_to`, then the protocol tools). Then
+  keep, relax or replace the TGA requirement and record the outcome in
+  [`docs/isometric/changes.md`](./isometric/changes.md).
+
+### Unsampled batches with incidental Samples may still submit an H/C_org mean (`isometric/unsampled-incidental-chemistry`, opened 2026-10-13)
+
+- The durability gates skip chemistry checks when a credit batch's stored
+  `sampling` choice is `unsampled` (`src/lib/certification/durability-submission-gates.ts`),
+  but `buildPerBatchDurabilityData` (`src/lib/isometric/utils/durability-aggregation.ts`)
+  marks a batch sampled whenever any Sample carries a usable H/C_org. An
+  unsampled batch with an incidental Sample could therefore send an H/C_org mean
+  the gates never judged.
+- Not live today: `assertSupportedDurabilityConfiguration` refuses everything
+  but sampled 1,000-year submissions.
+- **Resolve via:** before enabling 200-year or unsampled submission, make the
+  aggregation follow the stored `sampling` choice and add a test with an
+  incidental Sample on an unsampled batch.
+
 Audit follow-ups opened 2026-05-25 are in [open-questions-audit-follow-ups.md](./open-questions-audit-follow-ups.md).
 
 ## Product bins & formulations
@@ -760,232 +903,7 @@ Tooling and dependency upgrade deferrals are tracked in
 
 ## QA 2026-07-21 remediation follow-ups (opened 2026-07-21)
 
-Product decisions deferred from the staging UX audit + Isometric integration
-remediation PR (archived ledgers:
-[`2026-07-21-staging-ux-audit.md`](./archive/qa/2026-07-21-staging-ux-audit.md) and
-[`2026-07-21-staging-isometric-integration.md`](./archive/qa/2026-07-21-staging-isometric-integration.md)).
-The PR shipped the
-Layer-1 fixes (named exclusion clocks, structured Removal setup gaps, removed
-inert lifecycle badge, typed archive confirmation, Method-B baseline lower
-bound); these are the decisions it deliberately did not make.
-
-### Are future-dated samples legitimate planned records? (`samples/future-dates`)
-
-- The remediation labels future-dated samples everywhere ("N future-dated —
-  counted from <date>") but does not block them at entry: the QA synthetic
-  chains themselves are future-dated, and the audit left block-vs-label as an
-  open decision.
-- **Resolve via:** decide whether sample entry should reject sampling times
-  after "now" (with an explicit planned-samples workflow if planning is a real
-  need), then enforce in `src/schemas/samples` + data-access (S).
-
-### Who owns the Credit Batch lifecycle? (`credit-batches/lifecycle`)
-
-- `credit_batches.status` still defaults every row to `pending` with no
-  transition path; the badge/filter were removed from the UI rather than
-  wired to anything. The enum (draft/pending/verified/issued/rejected) remains
-  in the schema and the dashboard's "period ended · awaiting verification"
-  attention item still keys on `status = 'pending'`.
-- **Resolve via:** define the lifecycle's owner (local readiness vs Isometric
-  submission/verification/issuance webhooks) and its transitions, then either
-  drive the column from that machine and restore the badge, or drop the column
-  (M).
-
-### Blueprint-key gaps: operator-fixable or admin diagnostic? (`certification/blueprint-key-gaps`)
-
-- The Removal wizard now names unresolved template blueprint keys instead of
-  issuing the false link/template instruction, but the copy can only say "ask
-  an administrator" — there is no in-app control that resolves a blueprint
-  mapping.
-- **Resolve via:** decide whether blueprint resolution belongs in Certification
-  Settings (operator-facing) or stays an admin/support escalation; if the
-  former, build the mapping surface (M).
-
-### Archive governance for registry-submitted lineages (`facilities/archive-governance`)
-
-- Archiving a facility with submitted Removals/GHG statements now requires the
-  typed facility code plus a warning, but is still allowed for any admin. The
-  audit proposed an admin-only governed path (reason, audit event, external
-  IDs) for submitted lineages.
-- **Resolve via:** decide whether submitted-lineage archive needs a separate
-  governed workflow or the typed-code gate suffices pre-launch (S).
-
-### Grouped cert-gap counts vs missing-field counts (`certification/gap-count-wording`)
-
-- One grouped "cert gap" can contain several missing fields (e.g. telemetry +
-  three photo roles). The counts are consistent across surfaces, but the
-  wording never says "1 gap group · 4 missing fields".
-- **Resolve via:** pick one convention (group count with expanded field list,
-  or field count everywhere) and apply it to the card tag, health strip, and
-  Removal wizard copy (S).
-
-### Zoneless date/time construction outside the production-run form (`dates/zoneless-instants`)
-
-- F-2 anchored the production-run start/end combiner to the facility timezone,
-  but the same bug class survives elsewhere. `fn/production-incidents` and
-  `fn/production-samples` parse a zoneless `"YYYY-MM-DDTHH:mm"` string with
-  `new Date(...)` on the **server**, so the stored instant depends on the server
-  process timezone; `data-access/production-runs/overlap` formats conflict
-  messages in that same zone; and `productionRunDateExpr` casts `start_time` to
-  a **UTC** calendar day rather than the facility day, so a near-midnight run
-  can land in the wrong cohort date. Display counterparts in
-  `production-incident-form`, `production-sample-form` and
-  `components/samples/sample-form` render in the browser zone (the
-  production-run side sheet was moved to the facility zone on 2026-07-25).
-  Output stock events (placement, delivery, loss, count) follow the facility
-  zone since 2026-09-29 (`EventTimeInput`, `formatFacilityDateTime`).
-- **Resolve via:** decide one project-wide rule — instants are constructed and
-  rendered in the facility zone, date-only values stay pinned to UTC (issue #46)
-  — then apply it to the remaining sites and add a lint or test guard so a
-  zoneless `new Date(string)` cannot reappear (M).
-
-### Operator-initiated GHG statements are still refused on a shared project (`certification/shared-project-statement-create`)
-
-- ADR 0023 scoped registry statement identity per organization + facility, so a
-  re-pointed project no longer locks the new facility out on **sync**. But
-  `assertDedicatedGhgStatementProject` still refuses operator-initiated creates
-  while a project is shared across facilities, so the unlocked path is the
-  sequential one (A imports → project re-points → B imports its own row).
-  Whether two facilities on one live project should be able to create statements
-  concurrently is unanswered — the guard was deliberately kept.
-- **Resolve via:** confirm with Isometric whether one project may carry
-  concurrent per-site statements for the same period; if yes, replace the guard
-  with per-facility period scoping, if no, keep it and say so in the copy (M).
-
-### Should CERT-field rules vary by pinned protocol version? (`certification/version-flexible-cert-fields`)
-
-- The project is pinned to Biochar Production and Storage **v1.1** + Isometric
-  Standard **v1.7** (Certify project settings), while the registry's latest
-  certified line is v1.3 + Standard v2.1. `CERTIFY_FIELD_REGISTRY`
-  (`src/lib/certification/certify-field-registry.ts`) is version-agnostic.
-- Verified 2026-07-27 against registry content: for transport evidence the
-  versions are identical (both run on Transportation module v1.1 — same per-leg
-  required records, same mapped-distance allowance; delivery proof-of-delivery
-  lives at v1.1 §8.3.1.1/§8.3.1.2 vs v1.3 §8.4). The first real divergence is
-  the per-handoff custody-documentation clause (soil-environments v1.3 §8.8),
-  which has **no counterpart** in agricultural-soils v1.1 — that, plus the
-  dropped `custody_handoffs` table (migration 0037), becomes a genuine P0 only
-  on a v1.2+ upgrade.
-- Complication: Standard v1.7 mandates minor-version adoption "at the following
-  verification", Standard v2.1 abolishes forced upgrades until crediting-period
-  renewal. Which regime binds this project needs confirmation from Isometric.
-- **Resolve via:** ask Isometric which Standard governs upgrades for this
-  project; defer version-keyed registry entries until a concrete v1.2+ adoption
-  date exists, then key new-in-version requirements (custody handoffs) on the
-  pinned version (M).
-
-### Storage board cannot sort bins by on-hand mass (`storage/sort-by-on-hand-mass`)
-
-- The board's sort control (`BIN_SORT_OPTIONS` in
-  `src/components/storage-locations/bin-display.ts`) offers only keys that
-  resolve in SQL before LIMIT/OFFSET, so the order it shows holds across pages.
-  "Most/least on hand" is missing from that list, and it is the sort an operator
-  asks for first when deciding where to put a delivery.
-- It is missing because on-hand mass is not a column. `binCurrentMassKg` reads
-  the enriched row, and that enrichment runs **after** pagination: feedstock
-  stock comes from `deriveLaneStock` (aggregates over feedstocks, production-run
-  draws, product ingredients and feedstock bin movements), and biochar and
-  product bin stock comes from the dry-biochar FIFO layers
-  (`getOutputBinStocks`, ADR 0029). Sorting on it means replicating both
-  inside the paginated query.
-- Sorting the page in the client is not a substitute: it would order the twenty
-  rows already fetched, so a nearly-full bin on page 3 would never rise to
-  page 1. The board deliberately does no client-side re-sort for this reason.
-- `lastActivityAt` shows the tractable shape of the fix — a correlated scalar
-  subquery in `src/data-access/storage-location-activity.ts`, pinned by
-  `tests/storage-location-activity-sort.test.ts`.
-- **Resolve via:** express per-bin on-hand mass as one correlated subquery (or a
-  materialised per-bin stock view) that `getStorageLocations` can ORDER BY, then
-  add the option and extend the activity-sort test to cover it (M).
-
-### Report-document attachment is check-then-insert (`certification/attach-report-document-race`)
-
-- `attachReportDocument` (`src/data-access/certification.ts`) dedupes by
-  selecting an existing `documents` row for the same
-  `(organizationId, entityType, entityId, fileUrl)` before inserting, so two
-  concurrent submits of the same external report URL can both miss and write
-  duplicate ledger rows.
-- The obvious fix is a unique constraint on that tuple plus
-  `onConflictDoNothing`. It is deferred because `documents` is shared by the
-  entity workflows and the generic `createDocument` path: constraining it would
-  also stop an operator attaching the same external URL twice to one entity
-  with different descriptions, which no one has asked for.
-- Impact today is a duplicate ledger row on an org-admin-gated, rate-limited
-  action; the generated-report path does not go through this function at all,
-  since it reuses the report's own `documentId`.
-- **Resolve via:** decide whether same-URL-per-entity duplicates are ever valid
-  for any document type. If not, add the partial unique index (`fileUrl is not
-  null`) and switch the insert to an upsert (S).
-
-### Reconciled production batches are claimed on the supplier reference alone (`certification/production-batch-remote-drift`)
-
-- `ensureProductionBatchesForCreditBatches`
-  (`src/fn/certification/production-batches.ts`) claims an orphaned remote
-  Production Batch when `findProductionBatchBySupplierRef` matches the stable
-  `nm-ptb-…` reference, then journals the LOCALLY computed mass, window and
-  payload hash. Facility, feedstock types, kind, dates and mass on the remote
-  record are never compared, so a remote record created from different figures
-  is adopted as if it matched.
-- The same asymmetry applies after registration: drift between the registered
-  payload and current local data is recorded as a sync event and logged, never
-  applied, because `POST /production_batches` has no PATCH counterpart (verified
-  against the Certify OpenAPI snapshot: `/production_batches` exposes GET/POST,
-  `/production_batches/{id}` GET/DELETE only).
-- Deferred rather than fixed because the only remedies are a remote-vs-local
-  payload diff on every reconcile (a reconciliation engine for a path that
-  fires on crash recovery), or DELETE-and-recreate, which discards a registry
-  record verifiers may already reference.
-- **Resolve via:** decide whether a mismatched remote Production Batch should
-  block submission and be resolved by hand in Isometric, or be re-created after
-  a DELETE. If blocking, compare the reconciled record's mass/window/facility
-  and surface a conflict instead of claiming it (S).
-
-### A zero-dry-mass chain passes every readiness surface and fails only at the registry POST (`certification/zero-dry-mass-late-gate`)
-
-- Verified on staging 2026-08-05 (issue #630 negative case): a production run
-  completed with 100 kg wet biochar at 100% moisture (0 kg dry) flows through
-  product creation, delivery, application ("Ready"), the credit batch's "All
-  batch data checks passed", and the pre-submit review's "Ready to submit,
-  9 checks passed" — which simultaneously displays "You are sending 0.0 t".
-- The only gate is `buildCreateProductionBatchRequest`
-  (`src/lib/isometric/production-batches.ts`), whose `totalDryMassKg <= 0`
-  branch fails the "Sending durability measurements" step with an actionable
-  operator message. Fail-closed held: no ProductionBatch and no Removal reached
-  the registry. But the gate fires AFTER the 15 monitored-input datapoint POSTs
-  succeeded, so a refused submission leaves orphan datapoints in the registry.
-- Root enabler: run completion validates positive WET output only
-  (`complete-output-required` in `src/lib/production-runs/lifecycle.ts`) and a
-  moisture of 100% is accepted, so 0 kg dry is legally reachable. The
-  `runsMissingDryMass` (NULL dry mass) branch in
-  `buildProductionBatchSubmission` (`src/fn/certification/production-batches.ts`)
-  is unreachable from the UI — batch
-  membership requires `complete` runs and `complete` requires wet output — so
-  that branch is defence-in-depth only.
-- **Resolve via:** decide which layers should also know. Candidates, roughly
-  independent: (a) a readiness/pre-submit check that every member run has dry
-  mass > 0, so the 9-check review catches it; (b) bound moisture below 100 or
-  require dry mass > 0 at run completion; (c) run the pure production-batch
-  payload validation before any datapoint POST so a refused submission leaves
-  zero registry residue (S each).
-
-### Where the certification lock falls, and what "Request amendment" does (`certification/amendment-flow`)
-
-- Server-side enforcement exists and is tested
-  (`assertCanMutateCertifiedLineage`,
-  `tests/certification-lineage-guards.test.ts`); the UI carries an interim
-  lock affordance (`isRemovalStatusLocked` drives the credit-batch menu and
-  sheet lock plus the dropped-claimed-run warning).
-- Interim state: the UI says "amend the Removal with the registry" without
-  offering a flow. The UI predicate (derived status kinds) is deliberately
-  looser than the server predicate (`BLOCKING_SUBMISSION_STATUSES`, where a
-  stale draft submission still blocks), so an edge-case operator can reach a
-  server rejection the UI did not preempt.
-- **Resolve via:** DEC carbon team + Isometric decide where the lock falls
-  per lifecycle state and what an amendment request does (registry API or
-  operational process). Then align the two predicates and replace the locked
-  Edit affordance with the amendment entry point (M). Per project memory,
-  verify any Isometric requirement verbatim before building a gate.
-  Follow-up issue: #687.
+See [QA follow-up questions](./open-questions-qa.md) for these unresolved findings.
 
 ## Promotion #682 review follow-ups (opened 2026-08-14)
 
@@ -1085,3 +1003,15 @@ operational tradeoff, and this is not a registry requirement we verified.
 
 ## Design review 2026-08-13 follow-ups (opened 2026-08-14)
 
+
+## API credential lifecycle follow-ups
+
+- Deliver the decided 14-day expiry notices and owner-removal notices to
+  organization admins when the scheduled-job/notification infrastructure lands
+  (data-entry API plan, decisions 8 and 13). The credential foundation records
+  expiry and revocation but sends no notices. Pointers: `src/db/schema/api-keys.ts:apiKeys.expiresAt` and `src/data-access/api-credential-auth.ts:disableOwnerApiKeys`.
+- Staging cron gap: Vercel Cron does not run on Preview deployments. Staging
+  relies on the claim path deleting expired idempotency records lazily, and
+  idle rate-limit buckets are not purged on schedule. If record growth ever
+  matters, add a scheduled GitHub Actions call to the secret-authenticated
+  purge route. Pointer: `src/app/api/cron/purge-api-records/route.ts:GET`.

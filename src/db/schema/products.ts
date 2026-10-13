@@ -28,6 +28,7 @@ export const formulations = pgTable(
   'formulations',
   {
     id: uuid('id').primaryKey().defaultRandom(),
+    version: integer('version').notNull().default(1),
     organizationId: text('organization_id')
       .notNull()
       .references(() => organizations.id),
@@ -92,6 +93,7 @@ export const formulationIngredients = pgTable(
 
 export const biocharProducts = pgTable('biochar_products', {
   id: uuid('id').primaryKey().defaultRandom(),
+    version: integer('version').notNull().default(1),
   organizationId: text('organization_id')
     .notNull()
     .references(() => organizations.id),
@@ -305,6 +307,8 @@ export const biocharProductSourceAllocationsRelations = relations(
 export type Formulation = InferSelectModel<typeof formulations>;
 export type FormulationIngredient = InferSelectModel<typeof formulationIngredients>;
 export type BiocharProduct = InferSelectModel<typeof biocharProducts>;
+/** A product as writes return it: the stock posting sequence is internal ordering, and a bigint does not serialize. */
+export type BiocharProductRecord = Omit<BiocharProduct, "stockPostingSequence">;
 export type BiocharProductSourceAllocation = InferSelectModel<
   typeof biocharProductSourceAllocations
 >;

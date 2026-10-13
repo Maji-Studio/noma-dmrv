@@ -42,6 +42,22 @@ describe.each([
 });
 
 describe.each([
+  ["supplier", supplierFormSource],
+  ["customer", customerFormSource],
+])("%s pending location management", (_entity, source) => {
+  it("offers an edit action for locations added before the party is saved", () => {
+    expect(source).toContain("setEditingLocationIndex(index)");
+    expect(source).toContain("aria-label={`Edit ${");
+  });
+
+  it("prefills the dialog and replaces the selected pending location", () => {
+    expect(source).toContain("location={editingLocation}");
+    expect(source).toContain("onUpdate(editingLocationIndex,");
+    expect(source).toContain('editingLocation ? "Edit location" : "Add location"');
+  });
+});
+
+describe.each([
   ["supplier", supplierLocationFormSource],
   ["customer", customerLocationFormSource],
 ])("%s location dialog submission", (_entity, source) => {

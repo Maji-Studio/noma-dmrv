@@ -1,5 +1,5 @@
 import { relations, sql } from 'drizzle-orm';
-import { check, doublePrecision, foreignKey, pgTable, text, timestamp, unique, uniqueIndex, uuid, real, jsonb } from 'drizzle-orm/pg-core';
+import { integer, check, doublePrecision, foreignKey, pgTable, text, timestamp, unique, uniqueIndex, uuid, real, jsonb } from 'drizzle-orm/pg-core';
 import { outputStockMode, storageLocationType, durabilityOption } from './common';
 import { organizations } from './auth';
 
@@ -11,6 +11,7 @@ export const facilities = pgTable(
   'facilities',
   {
     id: uuid('id').primaryKey().defaultRandom(),
+    version: integer('version').notNull().default(1),
     organizationId: text('organization_id')
       .notNull()
       .references(() => organizations.id),
@@ -19,7 +20,7 @@ export const facilities = pgTable(
     location: text('location'),
     gpsLatitude: doublePrecision('gps_latitude'),
     gpsLongitude: doublePrecision('gps_longitude'),
-    timezone: text('timezone').notNull().default('UTC'),
+    timezone: text('timezone').notNull(),
     country: text('country').notNull().default('UNKNOWN'),
     address: text('address'),
     contactEmail: text('contact_email'),
@@ -74,6 +75,7 @@ export const reactors = pgTable(
   'reactors',
   {
     id: uuid('id').primaryKey().defaultRandom(),
+    version: integer('version').notNull().default(1),
     organizationId: text('organization_id')
       .notNull()
       .references(() => organizations.id),
@@ -119,6 +121,7 @@ export const storageLocations = pgTable(
   'storage_locations',
   {
     id: uuid('id').primaryKey().defaultRandom(),
+    version: integer('version').notNull().default(1),
     organizationId: text('organization_id')
       .notNull()
       .references(() => organizations.id),

@@ -12,6 +12,7 @@ vi.hoisted(() => {
   process.env.DB_POOL_MAX = "1";
 });
 
+import { pgErrorCode, PG_TRANSACTION_TIMEOUT } from "@/db/errors";
 import { db } from "@/db";
 import { storageLocations, suppliers } from "@/db/schema";
 import { DomainError } from "@/lib/operations/errors";
@@ -30,6 +31,9 @@ const NO_SELF_WAIT_MS = 3_000;
 const SHORT_DEADLINE_MS = 400;
 const QUEUED_ANSWER_SLACK_MS = 300;
 const SETTLE_MS = 150;
+const SHORT_STATEMENT_SECONDS = 0.05;
+const SHORT_STATEMENT_COUNT = 20;
+const SAVEPOINT_SLEEP_SECONDS = 2;
 const FEEDSTOCK_CODE = /^FS-\d{2}-\d{3,}$/;
 
 let fixture: IntakeFixture;
@@ -184,12 +188,14 @@ describe("operation runner at pool size 1", { timeout: SUITE_TIMEOUT_MS }, () =>
     expect(await supplierNamed(name)).toBeUndefined();
   });
 
-  it("rolls back short statements that together overrun the budget, before COMMIT", async () => {
-    const name = `Many short ${crypto.randomUUID()}`;
-    const error = await expectDomainError(
+  it("classifies a timeout inside a savepoint and leaves the pool usable", async () => {
+    const name = `Savepoint overrun ${crypto.randomUUID()}`;
+    await expectDomainError(
       runOperation(
         supplierThen(name, async (tx) => {
-          for (let i = 0; i < 12; i++) await tx.execute(sql`select pg_sleep(0.05)`);
+          await tx.transaction(async (sp) => {
+            await sp.execute(sql`select pg_sleep(${SAVEPOINT_SLEEP_SECONDS})`);
+          });
         }),
         fixture.ctx,
         {},
@@ -197,7 +203,34 @@ describe("operation runner at pool size 1", { timeout: SUITE_TIMEOUT_MS }, () =>
       ),
       "deadline_exceeded",
     );
-    expect(error.message).toContain("before saving");
+    expect(await supplierNamed(name)).toBeUndefined();
+
+    const nextName = `After savepoint timeout ${crypto.randomUUID()}`;
+    await runOperation(supplierThen(nextName, async () => undefined), fixture.ctx, {});
+    expect(await supplierNamed(nextName)).toBeDefined();
+  });
+
+  it("server terminates short statements that together exceed the transaction budget", async () => {
+    let completed = 0;
+    const name = `Many short ${crypto.randomUUID()}`;
+    const error = await expectDomainError(
+      runOperation(
+        supplierThen(name, async (tx) => {
+          for (let i = 0; i < SHORT_STATEMENT_COUNT; i++) {
+            await tx.execute(sql`select pg_sleep(${SHORT_STATEMENT_SECONDS})`);
+            completed++;
+          }
+        }),
+        fixture.ctx,
+        {},
+        { deadlineMs: SHORT_DEADLINE_MS },
+      ),
+      "deadline_exceeded",
+    );
+    expect(error.message).toContain("while saving");
+    // The cause also preserves an asynchronous timeout between statements.
+    expect(pgErrorCode(error)).toBe(PG_TRANSACTION_TIMEOUT);
+    expect(completed).toBeLessThan(SHORT_STATEMENT_COUNT);
     expect(await supplierNamed(name)).toBeUndefined();
   });
 

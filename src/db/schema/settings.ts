@@ -13,10 +13,11 @@
  * operator weaken a certification gate from a form. Those stay constants; see
  * `docs/archive/plans/2026-07-28-admin-settings-ia-research.md` for the full triage.
  *
- * Every column is NOT NULL with a default matching the literal it replaces, and
- * `DEFAULT_ORGANIZATION_SETTINGS` (`@/config/organization-settings`) mirrors
- * them for organizations with no row yet. A read never returns null, so no
- * consumer has to decide what a missing default means.
+ * Every column except `default_timezone` is NOT NULL with a default matching
+ * the literal it replaces, and `DEFAULT_ORGANIZATION_SETTINGS`
+ * (`@/config/organization-settings`) mirrors them for organizations with no row
+ * yet. `default_timezone` is nullable with no default: null means the
+ * organization has not chosen a zone, so none is assumed.
  *
  * One row per organization — the unique index is what makes the upsert an
  * upsert.
@@ -45,7 +46,7 @@ export const organizationSettings = pgTable(
      */
     defaultCountry: text("default_country"),
     /** IANA zone. Wrong values silently shift sampling-day attribution. */
-    defaultTimezone: text("default_timezone").notNull().default("UTC"),
+    defaultTimezone: text("default_timezone"),
     defaultEvidenceMethod: applicationEvidenceMethod("default_evidence_method")
       .notNull()
       .default("location"),

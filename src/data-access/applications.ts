@@ -1,3 +1,4 @@
+import { assertRowVersion, nextVersion } from "./row-version";
 import { db, type DbTransaction } from "@/db";
 import { numericAggregate } from "@/db/aggregate";
 import {
@@ -56,7 +57,6 @@ import { SafeError } from "@/lib/errors";
 import { parseGisBoundary } from "@/schemas/gis-boundary";
 import { applicationEvidenceGapCountSql } from "./application-evidence-sql";
 import { assertCanMutateCertifiedLineage } from "./certification-lineage-guards";
-import { assertExpectedVersion } from "./expected-version";
 import { reconcileUnassignedCreditBatchApplicationSlices } from "./credit-batch-application-slices";
 import { inDeliveryCreditBatchLineage } from "./credit-batch-lineage-filter";
 import { retireDocumentsForEntities } from "./documents";
@@ -449,6 +449,7 @@ export async function getApplications(
       co2eStoredTonnes: applications.co2eStoredTonnes,
       createdAt: applications.createdAt,
       updatedAt: applications.updatedAt,
+      version: applications.version,
       customerName: customers.name,
       locationName: customerLocations.name,
       durabilityOption: facilities.durabilityOption,
@@ -687,6 +688,13 @@ export async function updateApplication(
   requireOrgScope(ctx);
 
   return db.transaction(async (tx) => {
+    // Lock delivery parents before their application and allocation children.
+    const [snapshot] = await tx.select({ deliveryId: applications.deliveryId }).from(applications)
+      .where(and(eq(applications.id, id), eq(applications.organizationId, ctx.organizationId)));
+    if (!snapshot) throw new SafeError("Application not found");
+    await tx.select({ id: deliveries.id }).from(deliveries)
+      .where(and(eq(deliveries.organizationId, ctx.organizationId), inArray(deliveries.id, [...new Set([snapshot.deliveryId, data.deliveryId ?? snapshot.deliveryId])].sort())))
+      .orderBy(deliveries.id).for("update");
     const [existingApplication] = await tx
       .select()
       .from(applications)
@@ -696,15 +704,12 @@ export async function updateApplication(
     if (!existingApplication) {
       throw new SafeError("Application not found");
     }
-    assertExpectedVersion({
+    assertRowVersion({
       entity: APPLICATION_CONFLICT_ENTITY,
       id,
-      expectedUpdatedAt: data.expectedUpdatedAt,
-      actualUpdatedAt: existingApplication.updatedAt,
+      expectedVersion: data.expectedVersion,
+      actualVersion: existingApplication.version,
     });
-    await tx.select({ id: deliveries.id }).from(deliveries)
-      .where(and(eq(deliveries.organizationId, ctx.organizationId), inArray(deliveries.id, [...new Set([existingApplication.deliveryId, data.deliveryId ?? existingApplication.deliveryId])].sort())))
-      .orderBy(deliveries.id).for("update");
 
     await assertCanMutateCertifiedLineage(
       ctx,
@@ -819,7 +824,7 @@ export async function updateApplication(
 
     const [application] = await tx
       .update(applications)
-      .set(updateData)
+      .set({ ...updateData, version: nextVersion(applications.version) })
       .where(and(eq(applications.id, id), eq(applications.organizationId, ctx.organizationId)))
       .returning();
 
@@ -836,12 +841,18 @@ export async function updateApplication(
 /**
  * Delete an application
  */
-export async function deleteApplication(ctx: OrgContext, id: string): Promise<void> {
+export async function deleteApplication(ctx: OrgContext, id: string, expectedVersion: number): Promise<void> {
   requireOrgScope(ctx);
 
   await db.transaction(async (tx) => {
+    // Lock delivery parents before their application and allocation children.
+    const [snapshot] = await tx.select({ deliveryId: applications.deliveryId }).from(applications)
+      .where(and(eq(applications.id, id), eq(applications.organizationId, ctx.organizationId)));
+    if (!snapshot) throw new SafeError("Application not found");
+    await tx.select({ id: deliveries.id }).from(deliveries)
+      .where(and(eq(deliveries.id, snapshot.deliveryId), eq(deliveries.organizationId, ctx.organizationId))).for("update");
     const [existing] = await tx
-      .select({ id: applications.id, deliveryId: applications.deliveryId })
+      .select({ id: applications.id, version: applications.version, deliveryId: applications.deliveryId })
       .from(applications)
       .where(and(eq(applications.id, id), eq(applications.organizationId, ctx.organizationId)))
       .for("update");
@@ -849,8 +860,7 @@ export async function deleteApplication(ctx: OrgContext, id: string): Promise<vo
     if (!existing) {
       throw new SafeError("Application not found");
     }
-    await tx.select({ id: deliveries.id }).from(deliveries)
-      .where(and(eq(deliveries.id, existing.deliveryId), eq(deliveries.organizationId, ctx.organizationId))).for("update");
+    assertRowVersion({ entity: "application", id, expectedVersion, actualVersion: existing.version });
 
     await assertCanMutateCertifiedLineage(
       ctx,

@@ -109,29 +109,7 @@ export function ProductionIncidentForm({
           </FormField>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-16">
-          <FormField
-            id="incident-operatorId"
-            label="Operator"
-            error={errors.operatorId?.message}
-          >
-            <Controller
-              name="operatorId"
-              control={control}
-              render={({ field }) => (
-                <EntitySelect
-                  id="incident-operatorId"
-                  entityType="operator"
-                  value={field.value ?? ""}
-                  onChange={field.onChange}
-                  placeholder="Select operator..."
-                  disabled={isSubmitting}
-                  error={!!errors.operatorId}
-                />
-              )}
-            />
-          </FormField>
-
+        <div className="grid grid-cols-1 gap-x-16 gap-y-16">
           <FormField
             id="incident-reactorId"
             label="Reactor"
@@ -144,12 +122,36 @@ export function ProductionIncidentForm({
                 <EntitySelect
                   id="incident-reactorId"
                   entityType="reactor"
+                  allowEdit
                   value={field.value ?? ""}
                   onChange={field.onChange}
                   placeholder="Select reactor..."
                   disabled={isSubmitting}
                   error={!!errors.reactorId}
                   filterBy={facilityId ? { facilityId } : undefined}
+                />
+              )}
+            />
+          </FormField>
+
+          <FormField
+            id="incident-operatorId"
+            label="Operator"
+            error={errors.operatorId?.message}
+          >
+            <Controller
+              name="operatorId"
+              control={control}
+              render={({ field }) => (
+                <EntitySelect
+                  id="incident-operatorId"
+                  entityType="operator"
+                  allowEdit
+                  value={field.value ?? ""}
+                  onChange={field.onChange}
+                  placeholder="Select operator..."
+                  disabled={isSubmitting}
+                  error={!!errors.operatorId}
                 />
               )}
             />

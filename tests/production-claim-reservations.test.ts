@@ -88,7 +88,7 @@ async function createFixture(): Promise<Fixture> {
   return db.transaction(async (tx) => {
     const [facility] = await tx
       .insert(facilities)
-      .values({
+      .values({ timezone: "UTC",
         organizationId: TEST_ORG_ID,
         code: `FAC-PCR-${tag}`,
         name: `PCR Facility ${tag}`,

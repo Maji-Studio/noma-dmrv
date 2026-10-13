@@ -6,6 +6,8 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@/hooks/use-transport-legs", () => ({
+  // Read by use-fleet through the entity-select quick-add dialogs.
+  transportLegKeys: { all: ["transportLegs"] },
   useCreateTransportLeg: () => ({ isPending: false }),
   useDeleteTransportLeg: () => ({ isPending: false }),
   useUpdateTransportLeg: () => ({ isPending: false }),

@@ -224,92 +224,95 @@ export function TransportLegForm({
             disabled={isSubmitting}
           />
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-16">
-          <DistanceCalcField
-            id="distanceKm"
-            label="Distance"
-            // Every leg counts its round trip; show what the entry counts.
-            cue={oneWayDistanceCue(distanceKm, ONE_WAY_CUE)}
-            required
-            certifyRequired={isTransportLegCertifyField("distanceKm")}
-            certifyStatus={certStatus("distanceKm")}
-            error={errors.distanceKm?.message}
-            disabled={isSubmitting}
-            // The provenance select next to this field is the source UI.
-            showSourceBadge={false}
-            distanceKm={distanceKm}
-            distanceSource={distanceSource}
-            onDistanceChange={(km, source) => {
-              distanceKmField.onChange(km);
-              // CALC always claims map_estimate; a hand edit only degrades a
-              // map estimate — an explicit manual or legacy document value survives.
-              const nextSource = nextTransportDistanceSource(source, distanceSource);
-              if (nextSource) distanceSourceField.onChange(nextSource);
-            }}
-            origin={originPoint}
-            destination={destinationPoint}
-            originLabel="origin position"
-            destinationLabel="destination position"
-          />
-          <FormField
-            id="distanceSource"
-            label="Distance source"
-            error={errors.distanceSource?.message}
-            certifyRequired={isTransportLegCertifyField("distanceSource")}
-            certifyStatus={certStatus("distanceSource")}
-          >
-            <FormSelect
+          <div className="grid grid-cols-1 gap-16">
+            <FormField
               id="distanceSource"
-              options={distanceSourceOptions}
-              error={!!errors.distanceSource}
-              {...distanceSourceField}
-              value={distanceSourceField.value ?? "manual"}
-            />
-          </FormField>
-          {/* Road is the only method the registry accepts, so it is a fixed
-              value: shown as text, still submitted through the hidden input. */}
-          <FormField id="transportMethodType-value" label="Transport method">
-            <output
-              id="transportMethodType-value"
-              className="block body-medium"
-              data-testid="transportMethodType-value"
+              label="Distance source"
+              error={errors.distanceSource?.message}
+              certifyRequired={isTransportLegCertifyField("distanceSource")}
+              certifyStatus={certStatus("distanceSource")}
             >
-              {formatTransportMethod(transportMethod)}
-            </output>
-          </FormField>
-          <input type="hidden" {...register("transportMethodType")} />
-          <FormField
-            id="loadMassKg"
-            label="Load mass"
-            unit="kg"
-            required
-            error={errors.loadMassKg?.message}
-            helperText="Mass moved on this leg. Used to weight transport emissions."
-            certifyRequired={isTransportLegCertifyField("loadMassKg")}
-            certifyStatus={certStatus("loadMassKg")}
-          >
-            <FormInput
+              <FormSelect
+                id="distanceSource"
+                options={distanceSourceOptions}
+                error={!!errors.distanceSource}
+                {...distanceSourceField}
+                value={distanceSourceField.value ?? "manual"}
+              />
+            </FormField>
+            <DistanceCalcField
+              id="distanceKm"
+              label="Distance"
+              // Every leg counts its round trip; show what the entry counts.
+              cue={oneWayDistanceCue(distanceKm, ONE_WAY_CUE)}
+              required
+              certifyRequired={isTransportLegCertifyField("distanceKm")}
+              certifyStatus={certStatus("distanceKm")}
+              error={errors.distanceKm?.message}
+              disabled={isSubmitting}
+              // The provenance select above this field is the source UI.
+              showSourceBadge={false}
+              distanceKm={distanceKm}
+              distanceSource={distanceSource}
+              onDistanceChange={(km, source) => {
+                distanceKmField.onChange(km);
+                // CALC always claims map_estimate; a hand edit only degrades a
+                // map estimate — an explicit manual or legacy document value survives.
+                const nextSource = nextTransportDistanceSource(source, distanceSource);
+                if (nextSource) distanceSourceField.onChange(nextSource);
+              }}
+              origin={originPoint}
+              destination={destinationPoint}
+              originLabel="origin position"
+              destinationLabel="destination position"
+            />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-16">
+            {/* Road is the only method the registry accepts, so it is a fixed
+                value: shown as text, still submitted through the hidden input. */}
+            <FormField id="transportMethodType-value" label="Transport method">
+              <output
+                id="transportMethodType-value"
+                className="block body-medium"
+                data-testid="transportMethodType-value"
+              >
+                {formatTransportMethod(transportMethod)}
+              </output>
+            </FormField>
+            <input type="hidden" {...register("transportMethodType")} />
+            <FormField
               id="loadMassKg"
-              type="number"
-              step="any"
-              min={MIN_LOAD_MASS_KG}
-              error={!!errors.loadMassKg}
-              {...register("loadMassKg")}
-            />
-          </FormField>
-          <FormField
-            id="vehicleType"
-            label="Vehicle type"
-            error={errors.vehicleType?.message}
-            helperText="Selects the Isometric component emission factor."
-          >
-            <FormInput
+              label="Load mass"
+              unit="kg"
+              required
+              error={errors.loadMassKg?.message}
+              helperText="Mass moved on this leg. Used to weight transport emissions."
+              certifyRequired={isTransportLegCertifyField("loadMassKg")}
+              certifyStatus={certStatus("loadMassKg")}
+            >
+              <FormInput
+                id="loadMassKg"
+                type="number"
+                step="any"
+                min={MIN_LOAD_MASS_KG}
+                error={!!errors.loadMassKg}
+                {...register("loadMassKg")}
+              />
+            </FormField>
+            <FormField
               id="vehicleType"
-              placeholder="e.g. Class 8 heavy-duty truck"
-              error={!!errors.vehicleType}
-              {...register("vehicleType")}
-            />
-          </FormField>
+              label="Vehicle type"
+              error={errors.vehicleType?.message}
+              helperText="Selects the Isometric component emission factor."
+            >
+              <FormInput
+                id="vehicleType"
+                placeholder="e.g. Class 8 heavy-duty truck"
+                error={!!errors.vehicleType}
+                {...register("vehicleType")}
+              />
+            </FormField>
           </div>
         </div>
       </FormSection>

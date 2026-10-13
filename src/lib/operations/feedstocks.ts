@@ -1,35 +1,75 @@
-/**
- * Feedstock intake operations (data-entry API plan, Phase 0 pilot).
- *
- * `log_feedstock_delivery` is the compound, stock-moving create the plan
- * proves the runner on: feedstock rows, bin allocations, the derived
- * transport leg and the bin's first-use type lock, all in the runner's
- * transaction. The UI action still calls `createFeedstock`, which runs the
- * same body in a transaction of its own; Phase 1 moves the action onto this
- * operation.
- */
-
 import {
   createFeedstockInTransaction,
+  updateFeedstockInTransaction,
+  deleteFeedstockInTransaction,
+  type FeedstockWithRelations,
   type CreateFeedstockResult,
 } from "@/data-access/feedstocks";
 import { resolveDistanceSource } from "@/schemas/distance-source";
-import { createFeedstockSchema } from "@/schemas/feedstocks";
+import { processPendingStorageObjectDeletions } from "@/data-access/storage-object-deletions";
+import { createFeedstockSchema, updateFeedstockSchema, deleteFeedstockSchema } from "@/schemas/feedstocks";
 import type { Operation } from "./runner";
+import { withFeedstockErrors } from "@/lib/feedstock-domain-errors";
+
+/** Names of the fields the request supplied; the target id and precondition are not changes. */
+function changedFields(input: object): string[] {
+  return Object.entries(input)
+    .filter(([key, value]) => value !== undefined && key !== "expectedVersion" && key !== "feedstockId")
+    .map(([key]) => key).sort();
+}
 
 export const logFeedstockDelivery: Operation<
   typeof createFeedstockSchema,
   CreateFeedstockResult
 > = {
   id: "log_feedstock_delivery",
+  describe: (input, output) => ({
+    outcome: "created", entityType: "feedstock", entityIds: output.feedstocks.map((item) => item.id),
+    versionBefore: null, versionAfter: output.feedstocks[0]?.version ?? null,
+    changedFields: changedFields(input),
+  }),
   input: createFeedstockSchema,
   supportsDryRun: true,
-  execute: ({ ctx, tx }, data) =>
-    createFeedstockInTransaction(ctx, tx, {
+  execute: ({ ctx, tx, snapshotStock }, data) =>
+    withFeedstockErrors(() => createFeedstockInTransaction(ctx, tx, {
       ...data,
       transportDistanceSource: resolveDistanceSource(
         data.transportDistanceKm,
         data.transportDistanceSource,
       ),
-    }),
+    }, snapshotStock)),
+};
+
+export const updateFeedstock: Operation<typeof updateFeedstockSchema, FeedstockWithRelations> = {
+  id: "update_feedstock",
+  describe: (input, output) => ({
+    outcome: "updated", entityType: "feedstock", entityIds: [output.id],
+    versionBefore: input.expectedVersion, versionAfter: output.version,
+    changedFields: changedFields(input),
+  }),
+  input: updateFeedstockSchema,
+  supportsDryRun: true,
+  execute: async ({ ctx, tx, afterCommit, snapshotStock }, { feedstockId, transportDistanceKm, transportDistanceSource, ...updateData }) => {
+    const result = await withFeedstockErrors(() => updateFeedstockInTransaction(ctx, tx, feedstockId, {
+      ...updateData,
+      transportDistanceKm,
+      transportDistanceSource: resolveDistanceSource(transportDistanceKm, transportDistanceSource),
+    }, snapshotStock));
+    afterCommit(async () => { await processPendingStorageObjectDeletions(ctx); });
+    return result;
+  },
+};
+
+export const deleteFeedstock: Operation<typeof deleteFeedstockSchema, void> = {
+  id: "delete_feedstock",
+  describe: (input) => ({
+    outcome: "deleted", entityType: "feedstock", entityIds: [input.feedstockId],
+    versionBefore: input.expectedVersion, versionAfter: null, changedFields: [],
+  }),
+  input: deleteFeedstockSchema,
+  supportsDryRun: true,
+  execute: async ({ ctx, tx, afterCommit, snapshotStock }, { feedstockId, expectedVersion }) => {
+    await withFeedstockErrors(() => deleteFeedstockInTransaction(ctx, tx, feedstockId, expectedVersion, snapshotStock));
+    afterCommit(async () => { await processPendingStorageObjectDeletions(ctx); });
+  },
 };

@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import { createFeedstockSchema, updateFeedstockSchema } from "@/schemas/feedstocks";
 import { createProductionRunSchema } from "@/schemas/production-runs";
+import { recordLabSampleInput, updateLabSampleApiInput } from "@/schemas/lab-sample-input";
 import {
   MASS_INPUT_MAX_KG,
   MASS_KG_INPUT_STEP,
+  RATIO_INPUT_MAX,
   STORED_PERCENT_INPUT_STEP,
   optionalPositiveNumber,
   requiredPositiveMassKgSchema,
@@ -15,7 +17,7 @@ import { toOperationJsonSchema, type JsonSchema } from "./json-schema";
 function contract(schema: z.ZodType): JsonSchema {
   return JSON.parse(
     JSON.stringify(toOperationJsonSchema(schema), (key, value) =>
-      key === "pattern" || key === "$schema" ? undefined : value,
+      key === "description" || key === "pattern" || key === "$schema" ? undefined : value,
     ),
   );
 }
@@ -62,6 +64,12 @@ describe("toOperationJsonSchema: shared helpers", () => {
       properties: { at: { type: "string", format: "date-time" } },
       required: ["at"],
     });
+  });
+
+  it("preserves schema descriptions when publishing calendar dates and instants", () => {
+    const schema = createFeedstockSchema.shape.deliveryDate;
+    expect(toOperationJsonSchema(schema)).toMatchObject({ format: "date", description: schema.description });
+    expect(toOperationJsonSchema(z.date().describe("Recorded instant, RFC 3339."))).toMatchObject({ format: "date-time", description: "Recorded instant, RFC 3339." });
   });
 
   it("is deterministic", () => {
@@ -112,12 +120,12 @@ describe("toOperationJsonSchema: feedstock intake", () => {
     });
   });
 
-  it("publishes the update contract with only the id required", () => {
+  it("publishes the update contract with the id and version required", () => {
     expect(contract(updateFeedstockSchema)).toEqual({
       type: "object",
       properties: {
         feedstockId: UUID,
-        expectedUpdatedAt: { type: "string", format: "date-time" },
+        expectedVersion: { type: "integer", exclusiveMinimum: 0, maximum: Number.MAX_SAFE_INTEGER },
         facilityId: UUID,
         deliveryDate: { type: "string", format: "date" },
         supplierId: UUID,
@@ -137,7 +145,7 @@ describe("toOperationJsonSchema: feedstock intake", () => {
         overrideJustification: { anyOf: [TEXT_2000, { type: "null" }] },
         notes: { anyOf: [TEXT_2000, { type: "null" }] },
       },
-      required: ["feedstockId"],
+      required: ["feedstockId", "expectedVersion"],
     });
   });
 });
@@ -191,5 +199,54 @@ describe("toOperationJsonSchema: production run", () => {
       default: "draft",
       enum: ["draft", "running", "complete", "failed", "cancelled"],
     });
+  });
+});
+
+describe("toOperationJsonSchema: lab sample", () => {
+  const created = contract(recordLabSampleInput);
+  const createProperties = created.properties as Record<string, JsonSchema>;
+  const patched = contract(updateLabSampleApiInput);
+  const patchProperties = patched.properties as Record<string, JsonSchema>;
+  const NULLABLE_PERCENT = { minimum: 0, maximum: 100, anyOf: [{ type: "number" }, { type: "null" }] };
+
+  it("requires the batch, sampling time and both carbon figures, and nothing else", () => {
+    expect(created.required).toEqual(["creditBatchId", "samplingTime", "totalCarbonPercent", "organicCarbonPercent"]);
+    expect(created.additionalProperties).toBe(false);
+    expect(patched.required).toBeUndefined();
+    expect(patched.additionalProperties).toBe(false);
+  });
+
+  it("publishes neither the calculated H/C_org nor the form-only and file fields", () => {
+    for (const field of ["hToCOrgRatio", "durabilityOption", "nutrientClaimEnabled", "r0HistogramFileUrl", "tgaThermogramFileUrl", "arsenicMgKg", "sampleCode"]) {
+      expect(createProperties).not.toHaveProperty(field);
+      expect(patchProperties).not.toHaveProperty(field);
+    }
+    expect(createProperties).not.toHaveProperty("code");
+    expect(patchProperties.code).toEqual({ type: "string", minLength: 1, maxLength: 50 });
+  });
+
+  it("publishes ids, instants, calendar dates and bounded numbers", () => {
+    expect(createProperties.creditBatchId).toEqual(UUID);
+    expect(patchProperties.creditBatchId).toEqual(UUID);
+    expect(createProperties.samplingTime.anyOf).toEqual([
+      { type: "string", format: "date-time" },
+      expect.objectContaining({ type: "object", required: ["date", "time"], additionalProperties: false }),
+    ]);
+    expect(createProperties.analysisDate).toEqual({ anyOf: [{ type: "string", format: "date" }, { type: "null" }] });
+    expect(createProperties.totalCarbonPercent).toEqual({ type: "number", minimum: 0, maximum: 100 });
+    expect(patchProperties.totalCarbonPercent).toEqual({ type: "number", minimum: 0, maximum: 100 });
+    expect(createProperties.totalHydrogenPercent).toEqual(NULLABLE_PERCENT);
+    expect(patchProperties.totalHydrogenPercent).toEqual(NULLABLE_PERCENT);
+    expect(createProperties.oToCOrgRatio).toEqual({ minimum: 0, maximum: RATIO_INPUT_MAX, anyOf: [{ type: "number" }, { type: "null" }] });
+    expect(createProperties.r0MeasurementCount).toEqual({ anyOf: [{ type: "integer", minimum: 0, maximum: 2_147_483_647 }, { type: "null" }] });
+  });
+
+  it("says the carbon figures are dry basis and the reconciliation checks excess only", () => {
+    const described = toOperationJsonSchema(recordLabSampleInput).properties as Record<string, JsonSchema>;
+    for (const field of ["totalCarbonPercent", "organicCarbonPercent", "inorganicCarbonPercent"]) {
+      expect(described[field].description).toContain("dry basis");
+    }
+    expect(described.organicCarbonPercent.description).toContain("a shortfall is not checked");
+    expect(described.oToCOrgRatio.description).toContain("Stored only when totalOxygenPercent is absent");
   });
 });

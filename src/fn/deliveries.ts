@@ -15,6 +15,7 @@ import {
   getDeliveries as getDeliveriesData,
   getDeliveryWithRelations as getDeliveryWithRelationsData,
   updateDelivery,
+  type CreatedDelivery,
   type DeliveryDetail,
   type PaginatedDeliveries,
 } from "@/data-access/deliveries";
@@ -162,7 +163,7 @@ export async function getDeliveryStatsFn(
  */
 export async function createDeliveryFn(
   data: z.infer<typeof createDeliverySchema>
-): Promise<ActionResult<Delivery>> {
+): Promise<ActionResult<CreatedDelivery>> {
   return withAction(async (ctx) => {
     const delivery = await withAutoCode(
       ctx,
@@ -214,12 +215,12 @@ export async function createDeliveryFn(
 export async function updateDeliveryFn(
   data: z.infer<typeof updateDeliverySchema>
 ): Promise<ActionResult<Delivery>> {
-  try {
-    const ctx = await requireOrgContext();
+  return withAction(async (ctx) => {
 
     const validated = updateDeliverySchema.parse(data);
 
     const delivery = await updateDelivery(ctx, validated.deliveryId, {
+      expectedVersion: validated.expectedVersion,
       code: validated.code,
       orderId: validated.orderId,
       facilityId: validated.facilityId,
@@ -238,23 +239,8 @@ export async function updateDeliveryFn(
       distanceNote: validated.distanceNote || null,
     });
 
-    return { success: true, data: delivery };
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return {
-        success: false,
-        error: formatZodActionError(error),
-      };
-    }
-    return {
-      success: false,
-      error: deliveryActionError(
-        error,
-        "Failed to update delivery",
-        "delivery:update",
-      ),
-    };
-  }
+    return delivery;
+  }, { fallbackMessage: "Failed to update delivery", log: { message: "delivery action failed", context: { op: "delivery:update" } } });
 }
 
 // ============================================
@@ -267,27 +253,11 @@ export async function updateDeliveryFn(
 export async function deleteDeliveryFn(
   data: z.infer<typeof deleteDeliverySchema>
 ): Promise<ActionResult<void>> {
-  try {
-    const ctx = await requireOrgContext();
+  return withAction(async (ctx) => {
 
     const validated = deleteDeliverySchema.parse(data);
-    await deleteDelivery(ctx, validated.deliveryId);
+    await deleteDelivery(ctx, validated.deliveryId, validated.expectedVersion);
 
-    return { success: true, data: undefined };
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return {
-        success: false,
-        error: formatZodActionError(error),
-      };
-    }
-    return {
-      success: false,
-      error: deliveryActionError(
-        error,
-        "Failed to delete delivery",
-        "delivery:delete",
-      ),
-    };
-  }
+    return;
+  }, { fallbackMessage: "Failed to delete delivery", log: { message: "delivery action failed", context: { op: "delivery:delete" } } });
 }

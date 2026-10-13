@@ -562,7 +562,7 @@ describe("supplier mutations keep the EntitySelect caches fresh", () => {
     });
 
     await act(async () => {
-      await capturedMutation?.mutateAsync(createdSupplier.id);
+      await capturedMutation?.mutateAsync({ supplierId: createdSupplier.id, expectedVersion: 1 });
     });
 
     expect(queryClient.getQueryData(detailKey)).toBeUndefined();

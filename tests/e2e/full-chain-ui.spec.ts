@@ -538,14 +538,7 @@ test.describe("Full Chain UI Smoke Test", () => {
       await selectEntityById(page, "Customer", seededData.customer.id, seededData.customer.name);
 
       // Wait for cascading customer location select
-      await page.waitForSelector(
-        'select[name="customerLocationId"]:not([disabled])',
-        { timeout: 8000 }
-      );
-      await page.selectOption(
-        'select[name="customerLocationId"]',
-        seededData.customerLocation.id
-      );
+      await selectEntityById(page, "Customer location", seededData.customerLocation.id, seededData.customerLocation.name);
 
       // Orders select a formulation without reserving a bin.
       await selectEntityById(
@@ -580,7 +573,7 @@ test.describe("Full Chain UI Smoke Test", () => {
 
       // Select the first available order (FormEntitySelect, not a native <select>)
       await selectFirstEntity(page, "Order");
-      await page.selectOption('select[name="storageLocationId"]', seededData.productStorageLocation.id);
+      await selectEntityById(page, "Actual source bin", seededData.productStorageLocation.id, seededData.productStorageLocation.name);
 
       await page.fill('input[name="deliveredWetMassKg"]', "95");
       await fillStockMoisture(page, "delivery", "10");
@@ -604,13 +597,7 @@ test.describe("Full Chain UI Smoke Test", () => {
       await page.fill('input[name="applicationDate"]', today);
 
       // Select first delivery
-      const deliverySelect = page.locator('select[name="deliveryId"]');
-      const deliveryOptions = deliverySelect.locator("option:not([value=''])");
-      await expect(deliveryOptions.first()).toBeAttached({ timeout: 8000 });
-      const deliveryValue = await deliveryOptions.first().getAttribute("value");
-      if (deliveryValue) {
-        await deliverySelect.selectOption(deliveryValue);
-      }
+      await selectFirstEntity(page, "Delivery");
 
       await page.fill('input[name="biocharAppliedTons"]', "50");
       await page.fill('input[name="fieldSizeHa"]', "2");

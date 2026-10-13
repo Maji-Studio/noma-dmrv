@@ -100,7 +100,10 @@ dashboard. The script picks the rule by `VERCEL_PROJECT_ID` and builds whenever 
 cannot tell: an unknown project, no previous deployment, or a previous commit
 outside Vercel's shallow clone (a branch that merged in many staging commits).
 Because both projects read it, any key added to the root `vercel.json` (crons,
-functions, headers) applies to the site as well as the app.
+functions, headers) applies to the site as well as the app. The daily API purge cron
+(`/api/cron/purge-api-records`) therefore also fires against the site's production
+deployment, which answers 404; Vercel logs the failed invocation and nothing else
+happens.
 
 | Environment | App | Site |
 | --- | --- | --- |

@@ -1,3 +1,5 @@
+import { labLogisticsVersion } from "./helpers/lab-logistics-version";
+import { productionVersion } from "./helpers/production-version";
 import { insertOutputApplicationFixture } from "./helpers/output-contract-fixtures";
 import { deleteOutputApplicationFixtures } from "./helpers/output-contract-fixtures";
 import { outputProductFixtureValues, outputOrderFixtureValues, insertOutputDeliveryFixture, deleteOutputDeliveryFixtures, deleteOutputProductFixtures, deleteOutputFacilityFixtures } from "./helpers/output-contract-fixtures";
@@ -92,11 +94,11 @@ beforeAll(async () => {
   // Create two facilities
   const [fA] = await db
     .insert(facilities)
-    .values({ organizationId: TEST_ORG_ID, name: `Test Facility A ${runId}`, code: `TFA-VAL-${runId}` })
+    .values({ timezone: "UTC", organizationId: TEST_ORG_ID, name: `Test Facility A ${runId}`, code: `TFA-VAL-${runId}` })
     .returning({ id: facilities.id });
   const [fB] = await db
     .insert(facilities)
-    .values({ organizationId: TEST_ORG_ID, name: `Test Facility B ${runId}`, code: `TFB-VAL-${runId}` })
+    .values({ timezone: "UTC", organizationId: TEST_ORG_ID, name: `Test Facility B ${runId}`, code: `TFB-VAL-${runId}` })
     .returning({ id: facilities.id });
   facilityA = fA;
   facilityB = fB;
@@ -648,7 +650,7 @@ describe("Credit Batch Production-Run Validation", () => {
     // Try to change facilityId to B without updating productionRunIds.
     // Existing membership points to facility A runs — should fail against facility B.
     await expect(
-      updateCreditBatch(makeTestOrgContext(TEST_USER_ID), batch.id, {
+      updateCreditBatch(makeTestOrgContext(TEST_USER_ID), batch.id, { expectedVersion: await labLogisticsVersion(makeTestOrgContext(TEST_USER_ID), "creditBatches", batch.id),
         facilityId: facilityB.id,
       })
     ).rejects.toThrow("does not belong to the selected facility");
@@ -689,7 +691,7 @@ describe("Credit Batch Production-Run Validation", () => {
 
     // Try to update with a production run from facility B.
     await expect(
-      updateCreditBatch(makeTestOrgContext(TEST_USER_ID), batch.id, {
+      updateCreditBatch(makeTestOrgContext(TEST_USER_ID), batch.id, { expectedVersion: await labLogisticsVersion(makeTestOrgContext(TEST_USER_ID), "creditBatches", batch.id),
         productionRunIds: [runInFacilityB.id],
       })
     ).rejects.toThrow("does not belong to the selected facility");
@@ -750,7 +752,7 @@ describe("Credit Batch Production-Run Validation", () => {
         return result.rows[0]?.waiting ?? false;
       }, { timeout: CONCURRENCY_BARRIER_TIMEOUT_MS }).toBe(true);
 
-      reopenPromise = updateProductionRun(ctx, concurrencyRunInFacilityA.id, {
+      reopenPromise = updateProductionRun(ctx, concurrencyRunInFacilityA.id, { expectedVersion: await productionVersion(ctx, "productionRuns", concurrencyRunInFacilityA.id),
         status: "running",
         endTime: null,
       });

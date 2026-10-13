@@ -1,3 +1,4 @@
+import { masterDataVersion } from "./helpers/master-data-version";
 import { randomUUID } from "node:crypto";
 import { afterEach, describe, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
@@ -25,8 +26,8 @@ async function twoBatches() {
   return { ...f, p1, p2 };
 }
 type Fixture = Awaited<ReturnType<typeof twoBatches>>;
-const setMode = (f: Fixture, stockMode: "split" | "mix", mergedAt?: Date) =>
-  updateStorageLocation(f.ctx, f.bin.id, { stockMode, mergedAt });
+const setMode = async (f: Fixture, stockMode: "split" | "mix", mergedAt?: Date) =>
+  updateStorageLocation(f.ctx, f.bin.id, { expectedVersion: await masterDataVersion(f.ctx, "storageLocations", f.bin.id), stockMode, mergedAt });
 const allocationsOf = async (movementId: string) => (await db.select().from(outputStockAllocations).where(eq(outputStockAllocations.movementId, movementId)))
   .map(a => ({ layer: a.biocharProductId, dry: a.dryMassKg, policy: a.basisSnapshot.policy, reading: a.basisSnapshot.readingPercent }));
 async function mixDelivery(f: Fixture, wetMassKg: number, moisturePercent: number) {
@@ -115,14 +116,17 @@ describe("mix bin draws in PostgreSQL", () => {
   it("refuses to switch to split while a movement is recorded for later than now", async () => {
     const f = await twoBatches();
     await setMode(f, "mix", new Date("2026-09-12T00:00:00.000Z"));
-    await postMeasurement(f, { kind: "count", wetMassKg: 0, moisturePercent: null, occurredAt: new Date(Date.now() + 86_400_000).toISOString() });
+    const count = await postMeasurement(f, { kind: "count", wetMassKg: 0, moisturePercent: null });
+    // Future movements are refused since decision 56; one saved before that still guards the switch.
+    await db.update(binMovements).set({ occurredAt: new Date(Date.now() + 86_400_000) })
+      .where(and(eq(binMovements.organizationId, f.ctx.organizationId), eq(binMovements.id, count.movementId)));
     await expect(setMode(f, "split")).rejects.toThrow(/^This bin has a movement recorded for .*Switch it to split after that time\.$/);
   });
 
   it("changes a never-stocked bin's mode without leaving a movement", async () => {
     const f = await postedStockFixture({ stockKg: 0 });
     fixtures.push(f);
-    expect((await updateStorageLocation(f.ctx, f.bin.id, { stockMode: "mix", mergedAt: new Date() })).stockMode).toBe("mix");
+    expect((await updateStorageLocation(f.ctx, f.bin.id, { expectedVersion: await masterDataVersion(f.ctx, "storageLocations", f.bin.id), stockMode: "mix", mergedAt: new Date() })).stockMode).toBe("mix");
     expect(await db.select().from(binMovements).where(eq(binMovements.storageLocationId, f.bin.id))).toEqual([]);
   });
 

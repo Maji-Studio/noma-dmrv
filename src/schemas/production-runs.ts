@@ -9,7 +9,7 @@ import {
   emptyToNull,
   MASS_INPUT_MAX_KG,
   massKgSchema,
-  expectedUpdatedAtSchema,
+  expectedVersionSchema,
   optionalDateOnly,
   optionalStoredPercent,
   PG_INTEGER_MAX,
@@ -18,6 +18,7 @@ import {
   storedPercentSchema,
   toIntOrNull,
   toNumberOrNull,
+  uuidSchema,
 } from "./helpers";
 import {
   allowedProductionRunStatusesFrom,
@@ -29,7 +30,7 @@ import {
 import {
   AmbiguousLocalTimeError,
   combineDateAndTime,
-  DEFAULT_FACILITY_TIMEZONE,
+  UNKNOWN_FACILITY_TIMEZONE,
   formatLocalDate,
   NonexistentLocalTimeError,
 } from "@/lib/date-utils";
@@ -141,7 +142,7 @@ export const productionRunFeedstockDrawSchema = z.object({
           : "Choose a valid source bin.",
     })
     .min(1, "Select a source bin.")
-    .uuid("Choose a valid source bin."),
+    .uuid("Choose a valid source bin.").toLowerCase(),
   wetMassKg: requiredPositiveMassKgSchema(
     "Enter wet mass.",
     "Wet mass must be a number.",
@@ -300,7 +301,7 @@ const productionRunFormObject = z.object({
  * input — it is a property of the facility, and putting it on the wire would
  * let a client override how its own times are interpreted. Callers that hold a
  * facility (the form) pass its zone; the exported {@link productionRunFormSchema}
- * binds {@link DEFAULT_FACILITY_TIMEZONE} for the server-action path, where the
+ * binds {@link UNKNOWN_FACILITY_TIMEZONE} for the server-action path, where the
  * start/end values have already been combined into `Date` instants by the
  * client and the zone is therefore never consulted.
  */
@@ -439,7 +440,7 @@ export function makeProductionRunFormSchema(
  * {@link makeProductionRunFormSchema} for why the zone defaults here.
  */
 export const productionRunFormSchema = makeProductionRunFormSchema(
-  DEFAULT_FACILITY_TIMEZONE,
+  UNKNOWN_FACILITY_TIMEZONE,
 );
 
 function rejectLegacyFeedstockFields(
@@ -486,17 +487,17 @@ export const createProductionRunSchema = productionRunFormSchema.refine(
  * All fields optional except productionRunId
  */
 export const updateProductionRunSchema = z.object({
-  productionRunId: z.string().uuid("Choose a valid production run."),
+  productionRunId: uuidSchema("Choose a valid production run."),
   code: z
     .string()
     .min(1)
     .max(50)
     .regex(/^[A-Z0-9-]+$/)
     .optional(),
-  facilityId: z.string().uuid().optional(),
-  reactorId: z.string().uuid().optional(),
+  facilityId: uuidSchema().optional(),
+  reactorId: uuidSchema().optional(),
   status: z.enum(productionRunStatuses).optional(),
-  expectedUpdatedAt: expectedUpdatedAtSchema,
+  expectedVersion: expectedVersionSchema,
   cancellationReason: z.string().max(CANCELLATION_REASON_MAX_LENGTH).nullable().optional(),
   startTime: z.union([
     z.date(),
@@ -523,7 +524,7 @@ export const updateProductionRunSchema = z.object({
       return date;
     }),
   ]).optional(),
-  operatorId: emptyToNull.or(z.string().uuid()).nullable().optional(),
+  operatorId: emptyToNull.or(uuidSchema()).nullable().optional(),
   feedstockDraws: productionRunFeedstockDrawsSchema.optional(),
   feedstockWetMassKg: massKgSchema().positive().optional().nullable(),
   feedstockMoisturePercent: storedPercentSchema()
@@ -543,15 +544,16 @@ export const updateProductionRunSchema = z.object({
     .max(100)
     .optional()
     .nullable(),
-  biocharStorageLocationId: emptyToNull.or(z.string().uuid()).nullable().optional(),
-  feedstockStorageLocationId: emptyToNull.or(z.string().uuid()).nullable().optional(),
+  biocharStorageLocationId: emptyToNull.or(uuidSchema()).nullable().optional(),
+  feedstockStorageLocationId: emptyToNull.or(uuidSchema()).nullable().optional(),
 }).superRefine(rejectLegacyFeedstockFields);
 
 /**
  * Schema for deleting a production run
  */
 export const deleteProductionRunSchema = z.object({
-  productionRunId: z.string().uuid("Choose a valid production run."),
+  expectedVersion: expectedVersionSchema,
+  productionRunId: uuidSchema("Choose a valid production run."),
 });
 
 // ============================================
@@ -624,3 +626,5 @@ export function formatProductionRunStatus(status: ProductionRunStatus): string {
   };
   return labels[status];
 }
+
+export type DeleteProductionRunData = z.infer<typeof deleteProductionRunSchema>;

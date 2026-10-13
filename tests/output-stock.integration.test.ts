@@ -1,3 +1,4 @@
+import { labLogisticsVersion } from "./helpers/lab-logistics-version";
 import { withProductStockFingerprint } from "./helpers/product-stock-preview-fixture";
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -34,12 +35,12 @@ async function fixture() {
   const order = await createOrder(f.ctx, { code: `E2E-FIFO-O-${f.tag}`, facilityId: f.facility.id, customerId: f.customer.id, formulationId: f.recipe.id, orderDate: new Date('2026-09-12'), quantityKg: 5000, packaging: 'loose' });
   const input = { storageLocationId: f.bin.id, facilityId: f.facility.id, occurredAt: '2026-09-14T12:00:00.000Z', kind: 'delivery' as const, wetMassKg: 2000, moisturePercent: 30 };
   const preview = await previewOutputStock(f.ctx, input);
-  const deliveryInput = { code: `E2E-FIFO-D-${f.tag}`, orderId: order.id, facilityId: f.facility.id, deliveryDate: new Date('2026-09-14T12:00:00.000Z'), storageLocationId: f.bin.id, deliveredWetMassKg: 2000, moistureContentPercent: 30, idempotencyKey: randomUUID(), basisFingerprint: preview.basisFingerprint };
+  const deliveryInput = { code: `E2E-FIFO-D-${f.tag}`, orderId: order.id, facilityId: f.facility.id, deliveryDate: new Date('2026-09-14T12:00:00.000Z'), storageLocationId: f.bin.id, deliveredWetMassKg: 2000, moistureContentPercent: 30, idempotencyKey: randomUUID(), expectedProductVersions: preview.expectedProductVersions, basisFingerprint: preview.basisFingerprint };
   return { ...f, order, input, preview, deliveryInput };
 }
 async function post(f: { ctx: Awaited<ReturnType<typeof fixture>>['ctx'] }, input: OutputStockPreviewInput) {
   const preview = await previewOutputStock(f.ctx, input);
-  return postOutputStock(f.ctx, { ...input, basisFingerprint: preview.basisFingerprint, idempotencyKey: randomUUID(), reason: 'E2E measured stock' });
+  return postOutputStock(f.ctx, { ...input, expectedProductVersions: preview.expectedProductVersions, basisFingerprint: preview.basisFingerprint, idempotencyKey: randomUUID(), reason: 'E2E measured stock' });
 }
 describe('output FIFO transactions', () => {
   it('posts A900+B250, conserves wet/run sums and retries without duplicate effects', async () => {
@@ -59,8 +60,8 @@ describe('output FIFO transactions', () => {
       expect(a.basisSnapshot.solidsKg).toBeTruthy();
     }
     await expect(createDelivery(f.ctx, { ...f.deliveryInput, deliveredWetMassKg: 1900 })).rejects.toThrow('different values');
-    await expect(updateDelivery(f.ctx, delivery.id, { deliveredWetMassKg: 1900 })).rejects.toThrow('Correct entry');
-    await expect(deleteDelivery(f.ctx, delivery.id)).rejects.toThrow('history');
+    await expect(updateDelivery(f.ctx, delivery.id, { expectedVersion: await labLogisticsVersion(f.ctx, "deliveries", delivery.id), deliveredWetMassKg: 1900 })).rejects.toThrow('Correct entry');
+    await expect(deleteDelivery(f.ctx, delivery.id, await labLogisticsVersion(f.ctx, "deliveries", delivery.id))).rejects.toThrow('history');
     const [recorded] = await db.select({ wet: sql<number>`sum(${biocharProducts.massKg})`.mapWith(Number) }).from(biocharProducts).where(eq(biocharProducts.storageLocationId, f.bin.id));
     expect(recorded.wet).toBe(2500);
   });
@@ -68,7 +69,7 @@ describe('output FIFO transactions', () => {
     const f = await fixture();
     const loss = { ...f.input, kind: 'loss' as const, wetMassKg: 1000 };
     const preview = await previewOutputStock(f.ctx, loss);
-    const results = await Promise.allSettled([createDelivery(f.ctx, f.deliveryInput), postOutputStock(f.ctx, { ...loss, reason: 'E2E competing loss', idempotencyKey: randomUUID(), basisFingerprint: preview.basisFingerprint })]);
+    const results = await Promise.allSettled([createDelivery(f.ctx, f.deliveryInput), postOutputStock(f.ctx, { ...loss, reason: 'E2E competing loss', idempotencyKey: randomUUID(), expectedProductVersions: preview.expectedProductVersions, basisFingerprint: preview.basisFingerprint })]);
     expect(results.filter(r => r.status === 'fulfilled')).toHaveLength(1);
     expect(results.filter(r => r.status === 'rejected')).toHaveLength(1);
     await expect(createDelivery(f.ctx, { ...f.deliveryInput, idempotencyKey: randomUUID() })).rejects.toThrow();

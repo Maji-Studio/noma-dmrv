@@ -1,3 +1,4 @@
+import { DomainError, type DomainIssue } from "@/lib/domain-errors";
 import { SafeError } from "@/lib/errors";
 import { dryOutputExceedsDryInput } from "@/lib/calculations/mass-dry";
 
@@ -109,7 +110,10 @@ export function assertProductionRunTransition(
   to: ProductionRunStatus,
 ): void {
   if (ALLOWED_TRANSITIONS[from].includes(to)) return;
-  throw new SafeError(`Production run cannot move from ${from} to ${to}`);
+  const message = `Production run cannot move from ${from} to ${to}`;
+  throw new DomainError("validation_failed", message, {
+    issues: [{ path: ["status"], code: "validation_failed", message }],
+  });
 }
 
 export function getProductionRunOutcomeViolations(
@@ -192,7 +196,12 @@ export function assertProductionRunOutcome(
   } = {},
 ): void {
   const violations = getProductionRunOutcomeViolations(input);
-  const violation = MUTATION_VIOLATION_PRIORITY
+  // Missing terminal input is actionable before comparing dry masses derived
+  // from an empty draw list. Keep consumed-mass refusal ordering unchanged.
+  const priority = input.feedstock.basis === "form-inputs"
+    ? ["end-not-after-start", "feedstock-required", ...MUTATION_VIOLATION_PRIORITY] as const
+    : MUTATION_VIOLATION_PRIORITY;
+  const violation = priority
     .filter((code) => !options.only || options.only.includes(code))
     .map((code) => violations.find((candidate) => candidate.code === code))
     .find((candidate) => candidate !== undefined);
@@ -210,8 +219,19 @@ export function assertProductionRunOutcome(
       throw new SafeError("A running run cannot have an end time");
     case "terminal-end-required":
       throw new SafeError(`A ${violation.status} run needs an end time`);
-    case "feedstock-required":
+    case "feedstock-required": {
+      if (input.feedstock.basis === "form-inputs") {
+        const issues: DomainIssue[] = [];
+        if (!(input.feedstock.drawCount || input.feedstock.storageLocationId)) {
+          issues.push({ path: ["feedstockDraws"], code: "validation_failed", message: "Add at least one feedstock source." });
+        }
+        if (input.feedstockMoisturePercent == null) {
+          issues.push({ path: ["feedstockMoisturePercent"], code: "validation_failed", message: "Enter feedstock moisture." });
+        }
+        if (issues.length) throw new DomainError("validation_failed", issues[0].message, { issues });
+      }
       throw new SafeError(`A ${violation.status} run must consume feedstock`);
+    }
     case "complete-output-required":
       throw new SafeError("A complete run must record positive biochar output");
   }

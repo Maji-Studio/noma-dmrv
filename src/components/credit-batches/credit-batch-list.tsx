@@ -1,3 +1,6 @@
+"use client";
+
+import { toDeleteErrorMessage } from "@/lib/stale-version";
 /**
  * CreditBatchList component
  * Card grid layout with operational filters, pagination, and a derived
@@ -9,7 +12,6 @@
  * `?batch=<id>`, mirroring the production-run list) — there is no separate
  * detail page; `/credit-batches/[id]` redirects here.
  */
-"use client";
 
 import { useEffect, useRef, useState } from "react";
 import { parseAsString, useQueryState } from "nuqs";
@@ -131,6 +133,7 @@ export function CreditBatchList({
     mode: SideSheetMode;
   } | null>(null);
   const [deletingBatchId, setDeletingBatchId] = useState<string | null>(null);
+  const [deletingVersion, setDeletingVersion] = useState<number | null>(null);
 
   // Error state
   const [createError, setCreateError] = useState<string | null>(null);
@@ -288,6 +291,7 @@ export function CreditBatchList({
       void sampling;
       const result = await updateCreditBatch.mutateAsync({
         creditBatchId: sideSheet.entity.id,
+        expectedVersion: sideSheet.entity.version,
         ...mutableData,
       });
       if (result.success) {
@@ -311,23 +315,24 @@ export function CreditBatchList({
     }
   };
 
-  const handleDelete = (batchId: string) => setDeletingBatchId(batchId);
+  const handleDelete = (batchId: string) => {
+    const row = (creditBatches ?? []).find((item) => item.id === batchId);
+    if (!row) return;
+    setDeletingVersion(row.version);
+    setDeletingBatchId(batchId);
+  };
 
   const handleDeleteConfirm = async () => {
-    if (!deletingBatchId) return;
+    if (!deletingBatchId || deletingVersion === null) return;
     try {
-      const result = await deleteCreditBatch.mutateAsync(deletingBatchId);
-      if (result.success) {
-        if (focusedBatchId === deletingBatchId) {
-          void setFocusedBatchId(null);
-          setSideSheet(null);
-        }
-        toast.success("Credit batch deleted.");
-      } else {
-        toast.error(result.error || "Credit batch was not deleted. Try again.");
+      await deleteCreditBatch.mutateAsync({ creditBatchId: deletingBatchId, expectedVersion: deletingVersion });
+      if (focusedBatchId === deletingBatchId) {
+        void setFocusedBatchId(null);
+        setSideSheet(null);
       }
-    } catch {
-      toast.error("Credit batch was not deleted. Try again.");
+      toast.success("Credit batch deleted.");
+    } catch (error) {
+      toast.error(toDeleteErrorMessage(error, "Credit batch", "Credit batch was not deleted. Try again."));
     }
     setDeletingBatchId(null);
   };

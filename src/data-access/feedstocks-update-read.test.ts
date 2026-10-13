@@ -1,5 +1,5 @@
 /**
- * `updateFeedstock` must never describe a saved feedstock as missing (issue
+ * `updateFeedstockInTransaction` must never describe a saved feedstock as missing (issue
  * #769). Its enrichment read runs through the transaction that wrote the row,
  * so a read that fails rolls the update back rather than answering "Feedstock
  * not found" for a feedstock that is in fact saved.
@@ -30,7 +30,7 @@ vi.mock("./transport-legs", () => ({
 }));
 vi.mock("./documents", () => ({ retireDocumentsForEntities: vi.fn() }));
 
-import { updateFeedstock } from "./feedstocks";
+import { updateFeedstockInTransaction } from "./feedstocks";
 
 const ctx: OrgContext = {
   organizationId: "org",
@@ -42,6 +42,7 @@ const ctx: OrgContext = {
 const FEEDSTOCK_ID = "feedstock";
 const STORED_ROW = {
   id: FEEDSTOCK_ID,
+  version: 1,
   status: "available",
   storageLocationId: "bin",
   facilityId: "facility",
@@ -83,39 +84,34 @@ function makeTx(enrichment: { rows: unknown[] } | { error: Error }) {
   };
 }
 
-function runInTransaction(tx: DbTransaction) {
-  vi.spyOn(db, "transaction").mockImplementation(async (callback) =>
-    (callback as (t: DbTransaction) => Promise<unknown>)(tx),
-  );
-  // The pre-check that the feedstock exists is the one read that predates the
-  // transaction; everything after it must go through `tx`.
-  return vi
-    .spyOn(db, "select")
-    .mockImplementation(() => selectReturning({ rows: [STORED_ROW] }) as never);
+function watchGlobalReads() {
+  return vi.spyOn(db, "select").mockImplementation(() => {
+    throw new Error("Feedstock writers must read through tx");
+  });
 }
 
 afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe("updateFeedstock", () => {
+describe("updateFeedstockInTransaction", () => {
   it("reads the updated feedstock back through its own transaction", async () => {
     const tx = makeTx({ rows: [ENRICHED_ROW] });
-    const globalRead = runInTransaction(tx);
+    const globalRead = watchGlobalReads();
 
     await expect(
-      updateFeedstock(ctx, FEEDSTOCK_ID, { notes: "checked" }),
+      updateFeedstockInTransaction(ctx, tx, FEEDSTOCK_ID, { expectedVersion: 1, notes: "checked" }),
     ).resolves.toEqual(ENRICHED_ROW);
     expect(tx.update).toHaveBeenCalled();
-    // Only the existence pre-check may use the pool.
-    expect(globalRead).toHaveBeenCalledTimes(1);
+    // Every read, including the locked existence check, stays on tx.
+    expect(globalRead).not.toHaveBeenCalled();
   });
 
   it("does not report a failed read as a feedstock that was not found", async () => {
     const tx = makeTx({ error: READ_FAILURE });
-    runInTransaction(tx);
+    watchGlobalReads();
 
-    const result = updateFeedstock(ctx, FEEDSTOCK_ID, { notes: "checked" });
+    const result = updateFeedstockInTransaction(ctx, tx, FEEDSTOCK_ID, { expectedVersion: 1, notes: "checked" });
 
     await expect(result).rejects.toThrow(READ_FAILURE);
     await expect(result).rejects.not.toThrow("Feedstock not found");

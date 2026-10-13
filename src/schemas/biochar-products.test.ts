@@ -56,7 +56,7 @@ describe("biochar product ingredient mass schemas", () => {
 
   it("attaches an update-schema dry-mass overage to the dry-mass field", () => {
     const result = updateBiocharProductSchema.safeParse({
-      productId: PRODUCT_ID,
+      productId: PRODUCT_ID, expectedVersion: 1,
       ingredientBins: [ingredientBin(20, 21)],
     });
 
@@ -84,7 +84,7 @@ describe("biochar product ingredient mass schemas", () => {
       ingredientBins: [ingredientBin(20, 20)],
     }],
     ["update", updateBiocharProductSchema, {
-      productId: PRODUCT_ID,
+      productId: PRODUCT_ID, expectedVersion: 1,
       ingredientBins: [ingredientBin(20, 20)],
     }],
   ])("accepts valid %s ingredient masses", (_variant, schema, input) => {
@@ -103,7 +103,7 @@ describe("biochar product ingredient mass schemas", () => {
       ingredientBins: [ingredientBin(20, 18), ingredientBin(10, 9)],
     }],
     ["update", updateBiocharProductSchema, {
-      productId: PRODUCT_ID,
+      productId: PRODUCT_ID, expectedVersion: 1,
       ingredientBins: [ingredientBin(20, 18), ingredientBin(10, 9)],
     }],
   ])("rejects duplicate %s formulation ingredients", (_variant, schema, input) => {

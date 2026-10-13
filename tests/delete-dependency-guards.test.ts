@@ -1,3 +1,5 @@
+import { labLogisticsVersion } from "./helpers/lab-logistics-version";
+import { masterDataVersion } from "./helpers/master-data-version";
 import { insertOutputApplicationFixture } from "./helpers/output-contract-fixtures";
 import { deleteOutputApplicationFixtures } from "./helpers/output-contract-fixtures";
 import { deleteOutputFacilityFixtures, outputProductFixtureValues, outputOrderFixtureValues, deleteOutputProductFixtures, insertOutputDeliveryFixture, deleteOutputDeliveryFixtures } from "./helpers/output-contract-fixtures";
@@ -27,7 +29,7 @@ describe("delete dependency guards", () => {
     const fixture = await db.transaction(async (tx) => {
       const [facility] = await tx
         .insert(facilities)
-        .values({ organizationId: TEST_ORG_ID, code: `FAC-DDG-SL-${tag}`, name: `DDG Storage Facility ${tag}` })
+        .values({ timezone: "UTC", organizationId: TEST_ORG_ID, code: `FAC-DDG-SL-${tag}`, name: `DDG Storage Facility ${tag}` })
         .returning({ id: facilities.id });
       const [feedstockType] = await tx
         .insert(feedstockTypes)
@@ -73,10 +75,10 @@ describe("delete dependency guards", () => {
 
     try {
       await expect(
-        deleteStorageLocation(makeTestOrgContext(TEST_USER_ID), fixture.storageLocationId),
+        deleteStorageLocation(makeTestOrgContext(TEST_USER_ID), fixture.storageLocationId, await masterDataVersion(makeTestOrgContext(TEST_USER_ID), "storageLocations", fixture.storageLocationId)),
       ).rejects.toThrowError(SafeError);
       await expect(
-        deleteStorageLocation(makeTestOrgContext(TEST_USER_ID), fixture.storageLocationId),
+        deleteStorageLocation(makeTestOrgContext(TEST_USER_ID), fixture.storageLocationId, await masterDataVersion(makeTestOrgContext(TEST_USER_ID), "storageLocations", fixture.storageLocationId)),
       ).rejects.toThrow(/feedstock batches/);
     } finally {
       await db.transaction(async (tx) => {
@@ -97,7 +99,7 @@ describe("delete dependency guards", () => {
     const fixture = await db.transaction(async (tx) => {
       const [facility] = await tx
         .insert(facilities)
-        .values({ organizationId: TEST_ORG_ID, code: `FAC-DDG-CU-${tag}`, name: `DDG Customer Facility ${tag}` })
+        .values({ timezone: "UTC", organizationId: TEST_ORG_ID, code: `FAC-DDG-CU-${tag}`, name: `DDG Customer Facility ${tag}` })
         .returning({ id: facilities.id });
       const [customer] = await tx
         .insert(customers)
@@ -130,7 +132,7 @@ describe("delete dependency guards", () => {
     });
 
     try {
-      await expect(deleteCustomer(makeTestOrgContext(TEST_USER_ID), fixture.customerId)).rejects.toThrow(
+      await expect(deleteCustomer(makeTestOrgContext(TEST_USER_ID), fixture.customerId, await masterDataVersion(makeTestOrgContext(TEST_USER_ID), "customers", fixture.customerId))).rejects.toThrow(
         /orders/,
       );
     } finally {
@@ -148,7 +150,7 @@ describe("delete dependency guards", () => {
     const fixture = await db.transaction(async (tx) => {
       const [facility] = await tx
         .insert(facilities)
-        .values({ organizationId: TEST_ORG_ID, code: `FAC-DDG-DL-${tag}`, name: `DDG Delivery Facility ${tag}` })
+        .values({ timezone: "UTC", organizationId: TEST_ORG_ID, code: `FAC-DDG-DL-${tag}`, name: `DDG Delivery Facility ${tag}` })
         .returning({ id: facilities.id });
       const [customer] = await tx
         .insert(customers)
@@ -209,7 +211,7 @@ describe("delete dependency guards", () => {
     });
 
     try {
-      await expect(deleteDelivery(makeTestOrgContext(TEST_USER_ID), fixture.deliveryId)).rejects.toThrow(
+      await expect(deleteDelivery(makeTestOrgContext(TEST_USER_ID), fixture.deliveryId, await labLogisticsVersion(makeTestOrgContext(TEST_USER_ID), "deliveries", fixture.deliveryId))).rejects.toThrow(
         /Posted deliveries retain their history/,
       );
     } finally {

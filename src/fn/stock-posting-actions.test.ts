@@ -1,12 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { conflictCode } from "@/lib/conflict-ref";
+import { DomainError } from "@/lib/domain-errors";
 import { ActionConflictError } from "@/lib/errors";
 import type { OrgContext } from "@/lib/auth/server";
 
-const mocks = vi.hoisted(() => ({ auth: vi.fn(), create: vi.fn(), autoCode: vi.fn(), log: vi.fn() }));
+const mocks = vi.hoisted(() => ({ auth: vi.fn(), create: vi.fn(), autoCode: vi.fn(), log: vi.fn(), run: vi.fn() }));
 vi.mock("@/lib/auth/server", () => ({ requireOrgContext: mocks.auth }));
 vi.mock("@/lib/log", () => ({ logger: { error: mocks.log }, sanitizeErrorMessage: () => "sanitized" }));
-vi.mock("@/data-access/biochar-products", () => ({ createBiocharProduct: mocks.create }));
+vi.mock("@/data-access/biochar-products", () => ({}));
+// Products run `make_biochar_product` in process; the runner is mocked and the
+// operation itself runs against the database in tests/operation-biochar-products.test.ts.
+vi.mock("@/lib/operations/runner", () => ({ runOperationInProcess: mocks.run }));
+vi.mock("@/lib/operations/biochar-products", () => ({ makeBiocharProduct: { id: "make_biochar_product" }, updateBiocharProduct: { id: "update_biochar_product" } }));
 vi.mock("@/data-access/deliveries", () => ({ createDelivery: mocks.create }));
 vi.mock("@/data-access/delivery-stats", () => ({}));
 vi.mock("@/data-access/utils", () => ({}));
@@ -25,17 +30,17 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.auth.mockResolvedValue(ctx);
   mocks.create.mockReset();
+  mocks.run.mockReset();
   mocks.autoCode.mockImplementation(async (_ctx, _prefix, _table, _column, code, create) => create(code ?? "BP-001"));
 });
 
 for (const action of [
-  { name: "product", call: () => createBiocharProductFn(product), invalid: () => createBiocharProductFn({ ...product, formulationId: "invalid" }), prefix: "BP", code: undefined, fallback: "Biochar product was not created. Try again.", log: "biochar product action failed", op: "biochar-product:create" },
   { name: "delivery", call: () => createDeliveryFn(delivery), invalid: () => createDeliveryFn({ ...delivery, storageLocationId: "invalid" }), prefix: "DL", code: "DL-001", fallback: "Delivery was not created. Try again.", log: "delivery action failed", op: "delivery:create" },
 ]) describe(`${action.name} posting boundary`, () => {
   it("preserves typed stale-bin conflicts", async () => {
     const conflict = { entity: "storageLocation", id, code: conflictCode("BIN-001") };
     mocks.create.mockRejectedValue(new ActionConflictError("Stock changed. Review the refreshed preview.", conflict));
-    expect(await action.call()).toEqual({ success: false, error: "Stock changed. Review the refreshed preview.", conflict });
+    expect(await action.call()).toEqual({ success: false, error: "Stock changed. Review the refreshed preview.", code: "conflict", conflict });
     expect(mocks.log).not.toHaveBeenCalled();
   });
   it("preserves success, authenticated context and auto-code delegation", async () => {
@@ -81,21 +86,65 @@ describe("delivery split-bin sources", () => {
   });
 });
 
+describe("product posting boundary", () => {
+  const saved = { id, code: "BP-26-001" };
+  const created = { product: saved, basisFingerprint: "product-basis" };
+
+  it("runs make_biochar_product with the biochar as weighed, the form's fingerprint and request key", async () => {
+    mocks.run.mockResolvedValue(created);
+    expect(await createBiocharProductFn(product)).toEqual({ success: true, data: saved });
+    expect(mocks.run).toHaveBeenCalledWith({ id: "make_biochar_product" }, ctx, {
+      facilityId: id, formulationId: id, placedAt: product.placedAt, status: "testing", sourceBiocharStorageLocationId: id, storageLocationId: id,
+      biocharWetMassKg: 100, biocharMoisturePercent: 20, waterAddedKg: 0, densityKgM3: null, ingredients: [],
+      basisFingerprint: "stale-basis", idempotencyKey: "stable-key",
+    });
+  });
+  it("hands the operation the biochar only: the blend less every recorded ingredient", async () => {
+    mocks.run.mockResolvedValue(created);
+    const ingredient = { formulationIngredientId: id, feedstockTypeId: id, feedstockTypeName: "Compost", feedstockTypeCategory: "compost", storageLocationId: id, massKg: 20.125, moistureContentPercent: 30 };
+    await createBiocharProductFn({ ...product, massKg: 120.125, ingredientBins: [ingredient] });
+    expect(mocks.run.mock.calls[0][2]).toMatchObject({ biocharWetMassKg: 100, ingredients: [{ formulationIngredientId: id, storageLocationId: id, wetMassKg: 20.125, moisturePercent: 30 }] });
+  });
+  it("keeps the bin conflict when the stock basis moved", async () => {
+    const conflict = { entity: "storageLocation", id, code: conflictCode("BIN-001") };
+    mocks.run.mockRejectedValue(new DomainError("stock_basis_changed", "Stock changed since this preview. Refresh the preview and try again.", { conflict }));
+    expect(await createBiocharProductFn(product)).toEqual({ success: false, error: "Stock changed since this preview. Refresh the preview and try again.", code: "stock_basis_changed", conflict });
+    expect(mocks.log).not.toHaveBeenCalled();
+  });
+  it("validates before running the operation, and refuses a blend with no biochar", async () => {
+    expect(await createBiocharProductFn({ ...product, formulationId: "invalid" })).toMatchObject({ success: false });
+    const allIngredient = { formulationIngredientId: id, feedstockTypeId: id, feedstockTypeName: "Compost", feedstockTypeCategory: "compost", massKg: 100, moistureContentPercent: 30 };
+    expect(await createBiocharProductFn({ ...product, ingredientBins: [allIngredient] })).toEqual({ success: false, error: "A product requires positive source biochar." });
+    expect(mocks.run).not.toHaveBeenCalled();
+  });
+  it("requires organization authentication", async () => {
+    mocks.auth.mockRejectedValue(new Error("No session"));
+    expect(await createBiocharProductFn(product)).toMatchObject({ success: false });
+    expect(mocks.run).not.toHaveBeenCalled();
+  });
+  it("preserves safe fallback and log context", async () => {
+    mocks.run.mockRejectedValue(new Error("internal failure"));
+    expect(await createBiocharProductFn(product)).toEqual({ success: false, error: "Biochar product was not created. Try again." });
+    expect(mocks.log).toHaveBeenCalledWith(expect.objectContaining({ op: "biochar-product:create" }), "biochar product action failed");
+  });
+});
+
 describe("product creation split-bin sources", () => {
   const r1 = "00000000-0000-4000-8000-000000000004";
   const r2 = "00000000-0000-4000-8000-000000000005";
   // A split biochar bin carries a reading per sub-bin instead of one biochar moisture.
   const splitProduct = { ...product, moistureContentPercent: undefined };
 
-  it("hands the ordered run readings to the writer in place of one moisture", async () => {
+  it("hands the ordered run readings to the operation in place of one moisture", async () => {
     const sources = [{ layerId: r2, moisturePercent: 20 }, { layerId: r1, moisturePercent: 10 }];
-    mocks.create.mockResolvedValue({ id, code: "BP-001" });
+    mocks.run.mockResolvedValue({ product: { id, code: "BP-001" }, basisFingerprint: "basis" });
     expect(await createBiocharProductFn({ ...splitProduct, sources })).toMatchObject({ success: true });
-    expect(mocks.create).toHaveBeenCalledWith(ctx, expect.objectContaining({ sources, moistureContentPercent: null }));
+    expect(mocks.run.mock.calls[0][2]).toMatchObject({ sources });
+    expect(mocks.run.mock.calls[0][2]).not.toHaveProperty("biocharMoisturePercent");
   });
   it("refuses a run listed twice, and a draw with neither moisture nor readings, before posting", async () => {
     expect(await createBiocharProductFn({ ...splitProduct, sources: [{ layerId: r1, moisturePercent: 20 }, { layerId: r1, moisturePercent: 25 }] })).toMatchObject({ success: false });
     expect(await createBiocharProductFn(splitProduct)).toMatchObject({ success: false });
-    expect(mocks.create).not.toHaveBeenCalled();
+    expect(mocks.run).not.toHaveBeenCalled();
   });
 });

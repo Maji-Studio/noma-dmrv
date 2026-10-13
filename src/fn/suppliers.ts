@@ -1,5 +1,7 @@
 "use server";
 
+import { withAction } from "./with-action";
+
 /**
  * Suppliers Server Actions
  * Server-side functions for supplier CRUD operations
@@ -38,27 +40,9 @@ import {
 import { resolveDistanceSource } from "@/schemas/distance-source";
 import type { ActionResult } from "@/types/actions";
 import {
-  type ActionFailure,
   formatZodActionError,
-  toActionFailure,
   toLoggedActionError,
 } from "./action-errors";
-
-/**
- * Failure shape for the write paths. Unlike the read helper below it keeps an
- * `ActionConflictError`'s `conflict`, so the form can tell an expected-version
- * refusal from an ordinary save failure and hold on to the operator's draft.
- */
-function supplierActionFailure(
-  error: unknown,
-  fallbackMessage: string,
-  op: string,
-): ActionFailure {
-  return toActionFailure(error, {
-    fallbackMessage,
-    log: { message: "supplier action failed", context: { op } },
-  });
-}
 
 function supplierActionError(
   error: unknown,
@@ -270,13 +254,12 @@ export async function createSupplierWithLocationsFn(
 export async function updateSupplierFn(
   data: z.infer<typeof updateSupplierSchema>
 ): Promise<ActionResult<Supplier>> {
-  try {
-    const ctx = await requireOrgContext();
+  return withAction(async (ctx) => {
 
     const validated = updateSupplierSchema.parse(data);
 
     const supplier = await updateSupplier(ctx, validated.supplierId, {
-      expectedUpdatedAt: validated.expectedUpdatedAt,
+      expectedVersion: validated.expectedVersion,
       code: validated.code,
       name: validated.name,
       location: validated.location,
@@ -294,10 +277,8 @@ export async function updateSupplierFn(
       ),
     });
 
-    return { success: true, data: supplier };
-  } catch (error) {
-    return supplierActionFailure(error, "Failed to update supplier", "supplier:update");
-  }
+    return supplier;
+  }, { fallbackMessage: "Failed to update supplier", log: { message: "supplier action failed", context: { op: "supplier:update" } } });
 }
 
 // ============================================
@@ -310,29 +291,13 @@ export async function updateSupplierFn(
 export async function deleteSupplierFn(
   data: z.infer<typeof deleteSupplierSchema>
 ): Promise<ActionResult<void>> {
-  try {
-    const ctx = await requireOrgContext();
+  return withAction(async (ctx) => {
 
     const validated = deleteSupplierSchema.parse(data);
-    await deleteSupplier(ctx, validated.supplierId);
+    await deleteSupplier(ctx, validated.supplierId, validated.expectedVersion);
 
-    return { success: true, data: undefined };
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return {
-        success: false,
-        error: formatZodActionError(error),
-      };
-    }
-    return {
-      success: false,
-      error: supplierActionError(
-        error,
-        "Failed to delete supplier",
-        "supplier:delete",
-      ),
-    };
-  }
+    return undefined;
+  }, { fallbackMessage: "Failed to delete supplier", log: { message: "supplier action failed", context: { op: "supplier:delete" } } });
 }
 
 // ============================================
@@ -411,13 +376,12 @@ export async function createSupplierLocationFn(
 export async function updateSupplierLocationFn(
   data: z.infer<typeof updateSupplierLocationSchema>
 ): Promise<ActionResult<SupplierLocation>> {
-  try {
-    const ctx = await requireOrgContext();
+  return withAction(async (ctx) => {
 
     const validated = updateSupplierLocationSchema.parse(data);
 
     const location = await updateSupplierLocation(ctx, validated.locationId, {
-      expectedUpdatedAt: validated.expectedUpdatedAt,
+      expectedVersion: validated.expectedVersion,
       name: validated.name || null,
       country: validated.country,
       stateRegion: validated.stateRegion || null,
@@ -433,36 +397,18 @@ export async function updateSupplierLocationFn(
       isDefault: validated.isDefault,
     });
 
-    return { success: true, data: location };
-  } catch (error) {
-    return supplierActionFailure(error, "Failed to update supplier location", "supplier-location:update");
-  }
+    return location;
+  }, { fallbackMessage: "Failed to update supplier location", log: { message: "supplier-location action failed", context: { op: "supplier-location:update" } } });
 }
 
 export async function deleteSupplierLocationFn(
   data: z.infer<typeof deleteSupplierLocationSchema>
 ): Promise<ActionResult<void>> {
-  try {
-    const ctx = await requireOrgContext();
+  return withAction(async (ctx) => {
 
     const validated = deleteSupplierLocationSchema.parse(data);
-    await deleteSupplierLocation(ctx, validated.locationId);
+    await deleteSupplierLocation(ctx, validated.locationId, validated.expectedVersion);
 
-    return { success: true, data: undefined };
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return {
-        success: false,
-        error: formatZodActionError(error),
-      };
-    }
-    return {
-      success: false,
-      error: supplierActionError(
-        error,
-        "Failed to delete supplier location",
-        "supplier-location:delete",
-      ),
-    };
-  }
+    return undefined;
+  }, { fallbackMessage: "Failed to delete supplier location", log: { message: "supplier-location action failed", context: { op: "supplier-location:delete" } } });
 }

@@ -23,6 +23,7 @@ import {
 } from "@/lib/certification/durability-batch-summary";
 import type { ValueWithStdDev } from "@/lib/isometric/utils/durability-aggregation";
 import { MISSING_VALUE } from "@/lib/copy-utils";
+import { describeUnpairedHToCSamples } from "@/lib/certification/durability-submission-gates";
 
 type Tone = "ok" | "wait" | "bad" | "off";
 
@@ -100,7 +101,18 @@ function eligibilityChip(
   hasUsableReplicates: boolean,
 ): { tone: Tone; icon: React.ReactNode; label: string; hint: string } {
   const thresholds = `H/C_org below ${DURABILITY_ELIGIBILITY_CEILINGS.hToC} and O/C_org below ${DURABILITY_ELIGIBILITY_CEILINGS.oToC}`;
+  const unpaired = eligibility.unpairedHToCSampleCodes;
 
+  // A passing paired verdict is not ready while an H/C_org reaches the
+  // submitted mean without its O/C_org: the submission gate blocks (round 7 Q54).
+  if (eligibility.eligible === true && unpaired.length > 0) {
+    return {
+      tone: "wait",
+      icon: undefined,
+      label: "Chemistry incomplete",
+      hint: `This batch has ${describeUnpairedHToCSamples(unpaired)}`,
+    };
+  }
   if (eligibility.eligible === true) {
     return {
       tone: "ok",

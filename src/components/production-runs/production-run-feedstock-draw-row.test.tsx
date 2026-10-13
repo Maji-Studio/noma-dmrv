@@ -30,9 +30,8 @@ vi.mock("@/hooks/use-stock-availability", () => ({
   useStockAvailability: () => ({ data: availability }),
 }));
 
-vi.mock("@/components/storage-locations/storage-bin-actions", () => ({
-  StorageBinActions: () => null,
-}));
+
+vi.mock("@/components/ui/toast", () => ({ useToast: () => ({ error: vi.fn() }) }));
 
 import { ProductionRunFeedstockDrawRow } from "./production-run-feedstock-draw-row";
 

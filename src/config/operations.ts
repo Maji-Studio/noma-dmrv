@@ -5,6 +5,12 @@
  * request always answers before the platform kills it.
  */
 
+/** Total transaction attempts, including the initial attempt. */
+export const OPERATION_MAX_ATTEMPTS = 3;
+/** Uniform jitter between these bounds before a fresh transaction. */
+export const OPERATION_RETRY_MIN_DELAY_MS = 10;
+export const OPERATION_RETRY_MAX_DELAY_MS = 50;
+
 /** Whole-operation budget: pool acquisition, every statement and the commit. */
 export const OPERATION_DEADLINE_MS = 10_000;
 
@@ -24,5 +30,9 @@ export const IDEMPOTENCY_RETRY_AFTER_SECONDS = 1;
  */
 export const IDEMPOTENCY_RETENTION_DAYS = 7;
 
-/** Version of the stored outcome shape; bump with a compatibility mapper. */
-export const IDEMPOTENCY_OUTCOME_SCHEMA_VERSION = 1;
+/** Version of the stored outcome shape; older versions cannot be replayed. */
+export const IDEMPOTENCY_OUTCOME_SCHEMA_VERSION = 2;
+
+/** Rows removed per autocommit statement by the daily purge. */
+export const API_RECORD_PURGE_BATCH_SIZE = 1_000;
+export const CRON_SECRET_MIN_LENGTH = 32;

@@ -4,12 +4,12 @@
  * `conflict` so the hook can re-throw it as `StaleVersionError` and the edit
  * sheet can keep the operator's draft (issue #768); an overlap keeps the run
  * it collides with (#259); anything unexpected is logged and replaced by the
- * fallback. The data-access layer is mocked; the guards themselves run
+ * fallback. The operation runner is mocked; the guards themselves run
  * against the database in tests/expected-version-blanket.test.ts.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { conflictCode } from "@/lib/conflict-ref";
-import { ActionConflictError } from "@/lib/errors";
+import { DomainError } from "@/lib/domain-errors";
 import {
   STALE_VERSION_CONFLICT_CODE,
   STALE_VERSION_MESSAGE,
@@ -17,8 +17,7 @@ import {
 
 const mocks = vi.hoisted(() => ({
   requireOrgContext: vi.fn(),
-  updateProductionRun: vi.fn(),
-  deleteProductionRun: vi.fn(),
+  runOperationInProcess: vi.fn(),
   loggerError: vi.fn(),
 }));
 
@@ -35,27 +34,17 @@ vi.mock("@/data-access/code-generator", () => ({
   withAutoCode: vi.fn(),
 }));
 
-vi.mock("@/data-access/production-runs", async () => {
-  const { SafeError } = await import("@/lib/errors");
-  class ProductionRunOverlapError extends SafeError {
-    readonly conflict: { entity: string; id: string; code: string };
-    constructor(message: string, conflict: { entity: string; id: string; code: string }) {
-      super(message);
-      this.name = "ProductionRunOverlapError";
-      this.conflict = conflict;
-    }
-  }
-  class ProductionRunDependencyError extends ProductionRunOverlapError {}
-  return {
-    createProductionRun: vi.fn(),
-    deleteProductionRun: mocks.deleteProductionRun,
-    getProductionRunById: vi.fn(),
-    getProductionRunReadings: vi.fn(),
-    updateProductionRun: mocks.updateProductionRun,
-    ProductionRunOverlapError,
-    ProductionRunDependencyError,
-  };
-});
+vi.mock("@/lib/operations/runner", () => ({
+  runOperationInProcess: mocks.runOperationInProcess,
+}));
+vi.mock("@/lib/operations/production-runs", () => ({
+  startProductionRun: { id: "start_production_run" },
+  updateProductionRun: { id: "update_production_run" },
+  deleteProductionRun: { id: "delete_production_run" },
+}));
+vi.mock("@/data-access/production-runs", () => ({
+  getProductionRunById: vi.fn(), getProductionRunReadings: vi.fn(),
+}));
 
 vi.mock("@/lib/log", () => ({
   logger: { error: mocks.loggerError, child: () => ({ error: mocks.loggerError }) },
@@ -63,12 +52,10 @@ vi.mock("@/lib/log", () => ({
     error instanceof Error ? error.message : String(error),
 }));
 
-import { ProductionRunOverlapError } from "@/data-access/production-runs";
 import { deleteProductionRunFn, updateProductionRunFn } from "./production-runs";
 
 const RUN_ID = "00000000-0000-4000-8000-000000000001";
 const OTHER_RUN_ID = "00000000-0000-4000-8000-000000000002";
-const OPENED_AT = new Date("2026-09-01T10:00:00.000Z");
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -82,23 +69,23 @@ beforeEach(() => {
 
 describe("updateProductionRunFn", () => {
   it("keeps the stale-version conflict on a refused save", async () => {
-    mocks.updateProductionRun.mockRejectedValue(
-      new ActionConflictError(STALE_VERSION_MESSAGE, {
+    mocks.runOperationInProcess.mockRejectedValue(
+      new DomainError("stale_version", STALE_VERSION_MESSAGE, { conflict: {
         entity: "productionRun",
         id: RUN_ID,
         code: STALE_VERSION_CONFLICT_CODE,
-      }),
+      } }),
     );
 
-    const result = await updateProductionRunFn({
+    const result = await updateProductionRunFn({ expectedVersion: 1,
       productionRunId: RUN_ID,
-      expectedUpdatedAt: OPENED_AT,
       feedingRateKgHr: 10,
     });
 
     expect(result).toEqual({
       success: false,
       error: STALE_VERSION_MESSAGE,
+      code: "stale_version",
       conflict: {
         entity: "productionRun",
         id: RUN_ID,
@@ -109,27 +96,28 @@ describe("updateProductionRunFn", () => {
   });
 
   it("keeps the overlapping run on an overlap refusal", async () => {
-    mocks.updateProductionRun.mockRejectedValue(
-      new ProductionRunOverlapError("Overlaps PR-002.", {
+    mocks.runOperationInProcess.mockRejectedValue(
+      new DomainError("conflict", "Overlaps PR-002.", { conflict: {
         entity: "productionRun",
         id: OTHER_RUN_ID,
         code: conflictCode("PR-002"),
-      }),
+      } }),
     );
 
-    const result = await updateProductionRunFn({ productionRunId: RUN_ID });
+    const result = await updateProductionRunFn({ expectedVersion: 1, productionRunId: RUN_ID });
 
     expect(result).toEqual({
       success: false,
       error: "Overlaps PR-002.",
+      code: "conflict",
       conflict: { entity: "productionRun", id: OTHER_RUN_ID, code: "PR-002" },
     });
   });
 
   it("logs an unexpected failure and answers with the fallback", async () => {
-    mocks.updateProductionRun.mockRejectedValue(new Error("connection reset"));
+    mocks.runOperationInProcess.mockRejectedValue(new Error("connection reset"));
 
-    const result = await updateProductionRunFn({ productionRunId: RUN_ID });
+    const result = await updateProductionRunFn({ expectedVersion: 1, productionRunId: RUN_ID });
 
     expect(result).toEqual({
       success: false,
@@ -142,25 +130,32 @@ describe("updateProductionRunFn", () => {
   });
 
   it("answers invalid input with the field message before touching data", async () => {
-    const result = await updateProductionRunFn({
+    const result = await updateProductionRunFn({ expectedVersion: 1,
       productionRunId: "not-a-uuid",
     });
 
     expect(result).toEqual({
       success: false,
       error: "Choose a valid production run.",
+      code: "validation_failed",
+      issues: [{
+        path: ["productionRunId"],
+        code: "invalid_format",
+        message: "Choose a valid production run.",
+        meta: { format: "uuid" },
+      }],
     });
-    expect(mocks.updateProductionRun).not.toHaveBeenCalled();
+    expect(mocks.runOperationInProcess).not.toHaveBeenCalled();
     expect(mocks.loggerError).not.toHaveBeenCalled();
   });
 });
 
 describe("deleteProductionRunFn", () => {
   it("reports a committed delete", async () => {
-    mocks.deleteProductionRun.mockResolvedValue(undefined);
+    mocks.runOperationInProcess.mockResolvedValue(undefined);
 
     await expect(
-      deleteProductionRunFn({ productionRunId: RUN_ID }),
+      deleteProductionRunFn({ expectedVersion: 1, productionRunId: RUN_ID }),
     ).resolves.toEqual({ success: true, data: undefined });
   });
 });

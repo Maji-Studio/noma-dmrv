@@ -170,7 +170,7 @@ function FactorsForm({
         facilityId,
         // The version this form opened on; null when it opened on no row, so a
         // concurrent first save is refused instead of overwritten.
-        expectedUpdatedAt: factors?.updatedAt ?? null,
+        expectedVersion: factors?.version ?? null,
       });
       toast.success("Emission factors saved.");
     } catch (error) {

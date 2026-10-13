@@ -4,6 +4,7 @@
  * Includes query keys, mutations, optimistic updates, and cache invalidation
  */
 
+import { orderKeys } from "./use-orders";
 import {
   keepPreviousData,
   type QueryClient,
@@ -41,8 +42,8 @@ import {
 } from "@/fn/customers";
 
 import type { MutationCallbacks, OptimisticUpdateOptions } from "./types";
-import { patchListCachesWithSavedRow } from "./list-cache-utils";
-import { throwActionError } from "@/lib/stale-version";
+import { patchArrayListCacheByExactKeyWithSavedRow, patchListCachesWithSavedRow } from "./list-cache-utils";
+import { throwActionError, StaleVersionError } from "@/lib/stale-version";
 import { customerKeys } from "./customer-query-keys";
 import { entityKeys, invalidateEntityTypeQueries } from "./entity-query-keys";
 
@@ -56,6 +57,7 @@ const customerLocationKeys = {
 };
 
 const CUSTOMER_ENTITY_TYPE = "customer" as const;
+const CUSTOMER_LOCATION_ENTITY_TYPE = "customerLocation" as const;
 
 /**
  * Seed the customer detail cache and the EntitySelect caches so the order form
@@ -90,7 +92,7 @@ export function useCustomers(filters?: Partial<CustomerFilterData>) {
     queryFn: async () => {
       const result = await getCustomersFn(filters);
       if (!result.success) {
-        throw new Error(result.error);
+        throwActionError(result);
       }
       return result.data;
     },
@@ -112,7 +114,7 @@ export function useCustomerWithRelations(customerId: string, enabled = true) {
     queryFn: async () => {
       const result = await getCustomerWithRelationsFn(customerId);
       if (!result.success) {
-        throw new Error(result.error);
+        throwActionError(result);
       }
       return result.data;
     },
@@ -130,7 +132,7 @@ export function useCustomerLocations(customerId: string, enabled = true) {
     queryFn: async () => {
       const result = await getCustomerLocationsFn(customerId);
       if (!result.success) {
-        throw new Error(result.error);
+        throwActionError(result);
       }
       return result.data;
     },
@@ -156,7 +158,7 @@ export function useCreateCustomer(
     mutationFn: async (data: CreateCustomerData) => {
       const result = await createCustomerFn(data);
       if (!result.success) {
-        throw new Error(result.error);
+        throwActionError(result);
       }
       return result.data;
     },
@@ -198,7 +200,7 @@ export function useCreateCustomerWithLocations(
     mutationFn: async (data: CreateCustomerWithLocationsData) => {
       const result = await createCustomerWithLocationsFn(data);
       if (!result.success) {
-        throw new Error(result.error);
+        throwActionError(result);
       }
       return result.data;
     },
@@ -221,6 +223,7 @@ export function useCreateCustomerWithLocations(
           location,
         );
       }
+      invalidateEntityTypeQueries(queryClient, CUSTOMER_LOCATION_ENTITY_TYPE);
 
       await callbacks?.onSuccess?.(data, variables);
     },
@@ -352,6 +355,9 @@ export function useUpdateCustomer(
         });
       }
 
+      if (error instanceof StaleVersionError) {
+        void queryClient.invalidateQueries({ queryKey: customerKeys.all });
+      }
       await callbacks?.onError?.(error, variables);
     },
     onSettled: async (data, error, variables) => {
@@ -371,23 +377,24 @@ export function useUpdateCustomer(
  * Supports optimistic updates for immediate UI feedback
  */
 export function useDeleteCustomer(
-  callbacks?: MutationCallbacks<void, string>,
+  callbacks?: MutationCallbacks<void, { customerId: string; expectedVersion: number }>,
   options?: OptimisticUpdateOptions
 ) {
   const queryClient = useQueryClient();
   const { optimistic = true } = options ?? {};
 
   return useMutation({
-    mutationFn: async (customerId: string) => {
-      const result = await deleteCustomerFn({ customerId });
+    mutationFn: async (variables: { customerId: string; expectedVersion: number }) => {
+      const result = await deleteCustomerFn(variables);
       if (!result.success) {
-        throw new Error(result.error);
+        throwActionError(result);
       }
       return;
     },
-    onMutate: async (customerId) => {
+    onMutate: async (variables) => {
+      const customerId = variables.customerId;
       if (!optimistic) {
-        await callbacks?.onMutate?.(customerId);
+        await callbacks?.onMutate?.(variables);
         return;
       }
 
@@ -416,12 +423,13 @@ export function useDeleteCustomer(
         });
       });
 
-      await callbacks?.onMutate?.(customerId);
+      await callbacks?.onMutate?.(variables);
 
       // Return context with snapshots for rollback
       return { previousCustomer, previousLists };
     },
-    onSuccess: async (_, customerId) => {
+    onSuccess: async (_, variables) => {
+      const customerId = variables.customerId;
       // Remove specific customer from cache
       queryClient.removeQueries({ queryKey: customerKeys.detail(customerId) });
       queryClient.removeQueries({
@@ -438,9 +446,11 @@ export function useDeleteCustomer(
       });
       invalidateEntityTypeQueries(queryClient, CUSTOMER_ENTITY_TYPE);
 
-      await callbacks?.onSuccess?.(undefined, customerId);
+      await callbacks?.onSuccess?.(undefined, variables);
     },
-    onError: async (error, customerId, context) => {
+    onError: async (error, variables, context) => {
+      if (error instanceof StaleVersionError) void queryClient.invalidateQueries({ queryKey: customerKeys.all });
+      const customerId = variables.customerId;
       // Rollback to previous values on error
       if (optimistic && context) {
         const { previousCustomer, previousLists } = context as {
@@ -462,13 +472,13 @@ export function useDeleteCustomer(
         });
       }
 
-      await callbacks?.onError?.(error, customerId);
+      await callbacks?.onError?.(error, variables);
     },
-    onSettled: async (data, error, customerId) => {
-      // Refetch lists to ensure consistency
+    onSettled: async (data, error, variables) => {
+            // Refetch lists to ensure consistency
       queryClient.invalidateQueries({ queryKey: customerKeys.lists() });
 
-      await callbacks?.onSettled?.(data, error, customerId);
+      await callbacks?.onSettled?.(data, error, variables);
     },
   });
 }
@@ -493,7 +503,7 @@ export function useCreateCustomerLocation(
     mutationFn: async (data: CreateCustomerLocationData) => {
       const result = await createCustomerLocationFn(data);
       if (!result.success) {
-        throw new Error(result.error);
+        throwActionError(result);
       }
       return result.data;
     },
@@ -514,6 +524,9 @@ export function useCreateCustomerLocation(
 
       // Pre-populate the detail cache
       queryClient.setQueryData(customerLocationKeys.detail(data.id), data);
+      invalidateEntityTypeQueries(queryClient, CUSTOMER_LOCATION_ENTITY_TYPE);
+
+      queryClient.invalidateQueries({ queryKey: orderKeys.selects() });
 
       await callbacks?.onSuccess?.(data, variables);
     },
@@ -546,8 +559,10 @@ export function useUpdateCustomerLocation(
       await callbacks?.onMutate?.(variables);
     },
     onSuccess: async (data, variables) => {
+      patchArrayListCacheByExactKeyWithSavedRow<CustomerLocation>(queryClient, customerKeys.locations(data.customerId), data);
       // Update cache with actual server data
       queryClient.setQueryData(customerLocationKeys.detail(data.id), data);
+      invalidateEntityTypeQueries(queryClient, CUSTOMER_LOCATION_ENTITY_TYPE);
 
       // Invalidate customer locations list
       queryClient.invalidateQueries({
@@ -558,9 +573,15 @@ export function useUpdateCustomerLocation(
         queryKey: customerKeys.detailWithRelations(data.customerId),
       });
 
+      queryClient.invalidateQueries({ queryKey: orderKeys.selects() });
+
       await callbacks?.onSuccess?.(data, variables);
     },
     onError: async (error, variables) => {
+      if (error instanceof StaleVersionError) {
+        void queryClient.invalidateQueries({ queryKey: customerKeys.all });
+        void queryClient.invalidateQueries({ queryKey: customerLocationKeys.all });
+      }
       await callbacks?.onError?.(error, variables);
     },
     onSettled: async (data, error, variables) => {
@@ -574,26 +595,29 @@ export function useUpdateCustomerLocation(
  */
 export function useDeleteCustomerLocation(
   customerId: string,
-  callbacks?: MutationCallbacks<void, string>
+  callbacks?: MutationCallbacks<void, { locationId: string; expectedVersion: number }>
 ) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (locationId: string) => {
-      const result = await deleteCustomerLocationFn({ locationId });
+    mutationFn: async (variables: { locationId: string; expectedVersion: number }) => {
+      const result = await deleteCustomerLocationFn(variables);
       if (!result.success) {
-        throw new Error(result.error);
+        throwActionError(result);
       }
       return;
     },
-    onMutate: async (locationId) => {
-      await callbacks?.onMutate?.(locationId);
+    onMutate: async (variables) => {
+      await callbacks?.onMutate?.(variables);
     },
-    onSuccess: async (_, locationId) => {
+    onSuccess: async (_, variables) => {
+      const locationId = variables.locationId;
       // Remove from cache
       queryClient.removeQueries({
         queryKey: customerLocationKeys.detail(locationId),
       });
+      queryClient.removeQueries({ queryKey: entityKeys.detail(CUSTOMER_LOCATION_ENTITY_TYPE, locationId) });
+      invalidateEntityTypeQueries(queryClient, CUSTOMER_LOCATION_ENTITY_TYPE);
       // Invalidate customer locations list
       queryClient.invalidateQueries({
         queryKey: customerKeys.locations(customerId),
@@ -605,13 +629,16 @@ export function useDeleteCustomerLocation(
       // Invalidate customer lists (location count changed)
       queryClient.invalidateQueries({ queryKey: customerKeys.lists() });
 
-      await callbacks?.onSuccess?.(undefined, locationId);
+      queryClient.invalidateQueries({ queryKey: orderKeys.selects() });
+
+      await callbacks?.onSuccess?.(undefined, variables);
     },
-    onError: async (error, locationId) => {
-      await callbacks?.onError?.(error, locationId);
+    onError: async (error, variables) => {
+      if (error instanceof StaleVersionError) void queryClient.invalidateQueries({ queryKey: customerKeys.all });
+      await callbacks?.onError?.(error, variables);
     },
-    onSettled: async (data, error, locationId) => {
-      await callbacks?.onSettled?.(data, error, locationId);
+    onSettled: async (data, error, variables) => {
+      await callbacks?.onSettled?.(data, error, variables);
     },
   });
 }

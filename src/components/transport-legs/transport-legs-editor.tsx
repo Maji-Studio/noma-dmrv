@@ -1,5 +1,7 @@
 "use client";
 
+import { toDeleteErrorMessage } from "@/lib/stale-version";
+
 import { useState } from "react";
 import { PencilSimpleIcon, PlusIcon, TrashIcon } from "@phosphor-icons/react/dist/ssr";
 import { Button } from "@/components/ui";
@@ -96,7 +98,7 @@ export function TransportLegsEditor({
 
   const [dialog, setDialog] = useState<TransportLegDialogState>({ open: false });
   const [deleteTarget, setDeleteTarget] = useState<
-    { savedId: string } | { deferredIndex: number } | null
+    { savedId: string; expectedVersion: number } | { deferredIndex: number } | null
   >(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -136,7 +138,7 @@ export function TransportLegsEditor({
         dialog.leg &&
         isSavedTransportLeg(dialog.leg)
       ) {
-        await updateMutation.mutateAsync({ id: dialog.leg.id, ...data });
+        await updateMutation.mutateAsync({ id: dialog.leg.id, expectedVersion: dialog.leg.version, ...data });
         toast.success("Transport leg updated");
       } else {
         await createMutation.mutateAsync({ ...data, entityType, entityId });
@@ -163,12 +165,12 @@ export function TransportLegsEditor({
     }
 
     try {
-      await deleteMutation.mutateAsync({ id: deleteTarget.savedId });
+      await deleteMutation.mutateAsync({ id: deleteTarget.savedId, expectedVersion: deleteTarget.expectedVersion });
       toast.success("Transport leg deleted");
       setDeleteTarget(null);
     } catch (err) {
       setDeleteError(
-        err instanceof Error ? err.message : "Transport leg was not deleted. Try again.",
+        toDeleteErrorMessage(err, "Transport leg", "Transport leg was not deleted. Try again."),
       );
     }
   };
@@ -213,7 +215,7 @@ export function TransportLegsEditor({
             icon: <TrashIcon size={MENU_ICON_PX} />,
             onSelect: () =>
               setDeleteTarget(
-                isSavedTransportLeg(leg) ? { savedId: leg.id } : { deferredIndex: index },
+                isSavedTransportLeg(leg) ? { savedId: leg.id, expectedVersion: leg.version } : { deferredIndex: index },
               ),
             disabled: controlsDisabled,
           },

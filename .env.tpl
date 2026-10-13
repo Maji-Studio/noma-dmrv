@@ -30,6 +30,7 @@ NEXT_PUBLIC_APP_URL="op://Environment Variables/noma-dmrv env staging/NEXT_PUBLI
 # Better Auth (Authentication)
 # -----------------------------------------------------------------------------
 BETTER_AUTH_SECRET="op://Environment Variables/noma-dmrv env staging/BETTER_AUTH_SECRET"
+CRON_SECRET="op://Environment Variables/noma-dmrv env staging/CRON_SECRET"
 
 # -----------------------------------------------------------------------------
 # Resend (Email Service)

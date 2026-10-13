@@ -48,7 +48,7 @@ export function OrganizationRosterRow({
             </span>
           )}
         </div>
-        {actions && <div className="flex items-center gap-8">{actions}</div>}
+        {actions && <div className="flex max-w-full flex-wrap items-center gap-8">{actions}</div>}
       </div>
       {details}
     </li>
