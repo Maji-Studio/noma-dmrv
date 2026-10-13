@@ -5,6 +5,7 @@
 export * from "./button";
 export * from "./card";
 export * from "./data-table";
+export * from "./default-location-badge";
 export * from "./dropdown-menu";
 export * from "./empty-state";
 export * from "./input";

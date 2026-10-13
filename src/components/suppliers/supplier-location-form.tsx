@@ -32,9 +32,28 @@ import { resolveLocationCountry } from "@/lib/location-defaults";
 // Component
 // ============================================
 
+/** Fields the form pre-fills from: a saved location or a pending one. */
+export type SupplierLocationInitialValues = Pick<SupplierLocation, "country"> &
+  Partial<
+    Pick<
+      SupplierLocation,
+      | "name"
+      | "stateRegion"
+      | "city"
+      | "gpsLatitude"
+      | "gpsLongitude"
+      | "address"
+      | "distanceFromFacilityKm"
+      | "distanceSource"
+      | "isDefault"
+    >
+  >;
+
 interface SupplierLocationFormProps {
   /** Existing location data for editing (undefined for create mode) */
-  location?: SupplierLocation;
+  location?: SupplierLocationInitialValues;
+  /** Start "default" checked for a new location (the party's first). */
+  initialIsDefault?: boolean;
   /** Prefix field IDs when the form opens above another form with overlapping IDs. */
   idPrefix?: string;
   /** Form submission handler */
@@ -55,6 +74,7 @@ function fieldId(idPrefix: string | undefined, fieldName: string): string {
 
 export function SupplierLocationForm({
   location,
+  initialIsDefault = false,
   idPrefix,
   onSubmit,
   onCancel,
@@ -63,6 +83,8 @@ export function SupplierLocationForm({
   submitLabel,
 }: SupplierLocationFormProps) {
   const isEditMode = !!location;
+  // The default moves only by setting another location as default.
+  const isCurrentDefault = location?.isDefault === true;
   const { defaults: organizationDefaults } = useOrganizationDefaultValues();
   const defaultValues = {
     name: location?.name ?? "",
@@ -77,7 +99,7 @@ export function SupplierLocationForm({
     address: location?.address ?? "",
     distanceFromFacilityKm: location?.distanceFromFacilityKm ?? undefined,
     distanceSource: location?.distanceSource ?? null,
-    isDefault: location?.isDefault ?? false,
+    isDefault: location?.isDefault ?? initialIsDefault,
   };
 
   const {
@@ -280,21 +302,28 @@ export function SupplierLocationForm({
           />
         </div>
 
-        <label
-          htmlFor={defaultId}
-          className="flex items-center gap-12 cursor-pointer"
-        >
-          <input
-            type="checkbox"
-            id={defaultId}
-            className="h-[18px] w-[18px] border border-[var(--color-border-primary)] accent-[var(--clr-dark-purple)] cursor-pointer"
-            disabled={isSubmitting}
-            {...register("isDefault")}
-          />
-          <span className="body-medium text-[var(--color-text-primary)]">
-            Set as default source location
-          </span>
-        </label>
+        <div className="flex flex-col gap-4">
+          <label
+            htmlFor={defaultId}
+            className="flex items-center gap-12 cursor-pointer"
+          >
+            <input
+              type="checkbox"
+              id={defaultId}
+              className="h-[18px] w-[18px] border border-[var(--color-border-primary)] accent-[var(--clr-dark-purple)] cursor-pointer"
+              disabled={isSubmitting || isCurrentDefault}
+              {...register("isDefault")}
+            />
+            <span className="body-medium text-[var(--color-text-primary)]">
+              Set as default source location
+            </span>
+          </label>
+          {isCurrentDefault ? (
+            <p className="body-caption text-[var(--color-text-tertiary)]">
+              To change the default, set another location as default.
+            </p>
+          ) : null}
+        </div>
       </FormSection>
 
       <FormActions

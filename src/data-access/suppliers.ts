@@ -713,7 +713,7 @@ export async function updateSupplierLocation(
     if (!parent) throw new SafeError("Supplier not found");
 
     const [locked] = await tx
-      .select({ version: supplierLocations.version })
+      .select({ version: supplierLocations.version, isDefault: supplierLocations.isDefault })
       .from(supplierLocations)
       .where(
         and(
@@ -725,6 +725,10 @@ export async function updateSupplierLocation(
 
     if (!locked) {
       throw new SafeError("Supplier location not found");
+    }
+    // The default moves only by setting another location as default.
+    if (locked.isDefault && locationData.isDefault === false) {
+      locationData.isDefault = true;
     }
     assertRowVersion({
       entity: SUPPLIER_LOCATION_CONFLICT_ENTITY,
@@ -777,7 +781,16 @@ export async function deleteSupplierLocation(
   expectedVersion: number
 ): Promise<void> {
   requireOrgScope(ctx);
+  const { supplierId } = await ensureSupplierLocationExists(ctx, locationId);
   return db.transaction(async (tx) => {
+    // Serialize location writers with parent deletion before locking children,
+    // matching create/update. A lock alone does not change the supplier's version.
+    const [parent] = await tx.select({ id: suppliers.id })
+      .from(suppliers)
+      .where(and(eq(suppliers.id, supplierId), eq(suppliers.organizationId, ctx.organizationId)))
+      .for("no key update");
+    if (!parent) throw new SafeError("Supplier not found");
+
     const [versioned] = await tx.select({ version: supplierLocations.version })
       .from(supplierLocations)
       .where(and(eq(supplierLocations.id, locationId), eq(supplierLocations.organizationId, ctx.organizationId)))
@@ -793,10 +806,38 @@ export async function deleteSupplierLocation(
           eq(supplierLocations.organizationId, ctx.organizationId),
         ),
       )
-      .returning({ id: supplierLocations.id });
+      .returning({
+        id: supplierLocations.id,
+        supplierId: supplierLocations.supplierId,
+        isDefault: supplierLocations.isDefault,
+      });
 
     if (deleted.length === 0) {
       throw new SafeError("Supplier location not found");
+    }
+
+    // Deleting the default promotes the first remaining location (in list
+    // order) so a supplier with locations always has a default.
+    const [gone] = deleted;
+    if (gone.isDefault) {
+      const [next] = await tx
+        .select({ id: supplierLocations.id })
+        .from(supplierLocations)
+        .where(
+          and(
+            eq(supplierLocations.supplierId, gone.supplierId),
+            eq(supplierLocations.organizationId, ctx.organizationId),
+          ),
+        )
+        .orderBy(...SUPPLIER_LOCATION_ORDER)
+        .limit(1)
+        .for("update");
+      if (next) {
+        await tx
+          .update(supplierLocations)
+          .set({ version: nextVersion(supplierLocations.version), isDefault: true, updatedAt: new Date() })
+          .where(and(eq(supplierLocations.id, next.id), eq(supplierLocations.organizationId, ctx.organizationId)));
+      }
     }
 
   });

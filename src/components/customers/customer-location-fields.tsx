@@ -28,6 +28,8 @@ type CustomerLocationFormApi = UseFormReturn<
 interface CustomerLocationFieldsProps {
   form: CustomerLocationFormApi;
   isSubmitting?: boolean;
+  /** The edited location is the party's default; it stays checked until another is set. */
+  isCurrentDefault?: boolean;
   idPrefix?: string;
   certStatus?: (fieldName: string) => CertFieldStatus;
 }
@@ -39,6 +41,7 @@ function fieldId(idPrefix: string | undefined, fieldName: string): string {
 export function CustomerLocationFields({
   form,
   isSubmitting = false,
+  isCurrentDefault = false,
   idPrefix,
   certStatus = () => "neutral",
 }: CustomerLocationFieldsProps) {
@@ -249,21 +252,28 @@ export function CustomerLocationFields({
           />
         </div>
 
-        <label
-          htmlFor={defaultId}
-          className="flex items-center gap-12 cursor-pointer"
-        >
-          <input
-            type="checkbox"
-            id={defaultId}
-            className="h-[18px] w-[18px] border border-[var(--color-border-primary)] accent-[var(--clr-dark-purple)] cursor-pointer"
-            disabled={isSubmitting}
-            {...register("isDefault")}
-          />
-          <span className="body-medium text-[var(--color-text-primary)]">
-            Set as default destination
-          </span>
-        </label>
+        <div className="flex flex-col gap-4">
+          <label
+            htmlFor={defaultId}
+            className="flex items-center gap-12 cursor-pointer"
+          >
+            <input
+              type="checkbox"
+              id={defaultId}
+              className="h-[18px] w-[18px] border border-[var(--color-border-primary)] accent-[var(--clr-dark-purple)] cursor-pointer"
+              disabled={isSubmitting || isCurrentDefault}
+              {...register("isDefault")}
+            />
+            <span className="body-medium text-[var(--color-text-primary)]">
+              Set as default destination
+            </span>
+          </label>
+          {isCurrentDefault ? (
+            <p className="body-caption text-[var(--color-text-tertiary)]">
+              To change the default, set another location as default.
+            </p>
+          ) : null}
+        </div>
       </FormSection>
     </>
   );

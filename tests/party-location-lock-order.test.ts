@@ -2,8 +2,8 @@ import { and, eq, sql } from "drizzle-orm";
 import { beforeAll, describe, expect, it } from "vitest";
 import { db } from "@/db";
 import { customers, customerLocations, suppliers, supplierLocations, facilities, feedstockTypes, feedstocks } from "@/db/schema";
-import { createSupplierLocation, deleteSupplier, updateSupplierLocation } from "@/data-access/suppliers";
-import { createCustomerLocation, deleteCustomer, updateCustomerLocation } from "@/data-access/customers";
+import { createSupplierLocation, deleteSupplier, deleteSupplierLocation, updateSupplierLocation } from "@/data-access/suppliers";
+import { createCustomerLocation, deleteCustomer, deleteCustomerLocation, updateCustomerLocation } from "@/data-access/customers";
 import { SafeError } from "@/lib/errors";
 import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
 
@@ -40,7 +40,10 @@ describe.each(["supplier", "customer"] as const)("%s location parent-first locks
     const update = () => kind === "supplier"
       ? updateSupplierLocation(ctx, location.id, { expectedVersion: location.version, isDefault: true })
       : updateCustomerLocation(ctx, location.id, { expectedVersion: location.version, isDefault: true });
-    const remove = () => kind === "supplier"
+    const deleteLocation = () => kind === "supplier"
+      ? deleteSupplierLocation(ctx, location.id, location.version)
+      : deleteCustomerLocation(ctx, location.id, location.version);
+    const deleteParent = () => kind === "supplier"
       ? deleteSupplier(ctx, parent.id, parent.version)
       : deleteCustomer(ctx, parent.id, parent.version);
     const readParent = () => db.select().from(parents).where(and(eq(parents.id, parent.id), eq(parents.organizationId, TEST_ORG_ID)));
@@ -55,10 +58,10 @@ describe.each(["supplier", "customer"] as const)("%s location parent-first locks
       }
       await db.delete(parents).where(and(eq(parents.id, parent.id), eq(parents.organizationId, TEST_ORG_ID)));
     };
-    return { parent, location, create, update, remove, readParent, readChildren, cleanup };
+    return { parent, location, create, update, deleteLocation, deleteParent, readParent, readChildren, cleanup };
   }
 
-  it.each(["create", "update"] as const)("queues deletion behind a %s that is waiting for a child", async (operation) => {
+  it.each(["create", "update", "deleteLocation"] as const)("queues parent deletion behind a %s that is waiting for a child", async (operation) => {
     const f = await fixture();
     let write: Promise<PromiseSettledResult<unknown>[]> | undefined;
     let deletion: Promise<PromiseSettledResult<void>[]> | undefined;
@@ -76,7 +79,7 @@ describe.each(["supplier", "customer"] as const)("%s location parent-first locks
           return waiting.length;
         }, { timeout: BARRIER_TIMEOUT_MS }).toBe(1);
         expect((await f.readParent())[0].version).toBe(INITIAL_VERSION);
-        deletion = Promise.allSettled([f.remove()]);
+        deletion = Promise.allSettled([f.deleteParent()]);
         // This fails on child-first code: delete owns the parent instead of
         // waiting for the writer. No timing sleep stands in for a lock barrier.
         await expect.poll(async () => (await blockedBy(writerPid)).length,
@@ -89,6 +92,12 @@ describe.each(["supplier", "customer"] as const)("%s location parent-first locks
         expect(await f.readParent()).toEqual([]);
         expect(await f.readChildren()).toEqual([]);
       } else {
+        if (operation === "deleteLocation") {
+          // The writer removed the only location, so the guard no longer applies.
+          expect(outcome).toEqual({ status: "fulfilled", value: undefined });
+          expect(await f.readParent()).toEqual([]);
+          return;
+        }
         expect(outcome.status).toBe("rejected");
         if (outcome.status !== "rejected") throw new Error("Expected location guard");
         expect(outcome.reason).toBeInstanceOf(SafeError);
@@ -161,7 +170,7 @@ describe.each(["supplier", "customer"] as const)("%s location parent-first locks
           .where(and(eq(parents.id, f.parent.id), eq(parents.organizationId, TEST_ORG_ID))).for("update");
         const backend = await tx.execute<{ pid: number }>(sql`select pg_backend_pid() as pid`);
         const pid = backend.rows[0].pid;
-        deletion = Promise.allSettled([f.remove()]);
+        deletion = Promise.allSettled([f.deleteParent()]);
         await expect.poll(async () => (await blockedBy(pid)).length,
           { timeout: BARRIER_TIMEOUT_MS }).toBe(1);
         creation = Promise.allSettled([f.create()]);

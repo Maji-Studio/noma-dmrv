@@ -17,6 +17,8 @@ import { requireOrgScope } from "./utils";
 export const SUPPLIER_LOCATION_ORDER = [
   desc(supplierLocations.isDefault),
   asc(supplierLocations.createdAt),
+  // Locations created together share a timestamp; keep list and promotion identical.
+  asc(supplierLocations.id),
 ];
 
 /**
