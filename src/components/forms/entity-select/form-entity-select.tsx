@@ -66,7 +66,7 @@ interface FormEntitySelectProps<
    * // Multiple dependencies: bin clears when feedstock type OR facility changes
    * <FormEntitySelect dependsOn={[watchedFeedstockTypeId, watchedFacilityId]} ... />
    */
-  dependsOn?: string | null | (string | null | undefined)[];
+  dependsOn?: EntitySelectProps["dependsOn"];
   /** Empty-list hint naming the upstream prerequisite (see EntitySelectProps). */
   emptyHint?: EntitySelectProps["emptyHint"];
   /** Also available when selection is locked with selectionLocked. */
@@ -136,6 +136,7 @@ export function FormEntitySelect<
         createLabel={createLabel}
         onCreateNew={onCreateNew}
         filterBy={filterBy}
+        dependsOn={dependsOn}
         excludeIds={excludeIds}
         autoSelectSingle={autoSelectSingle ?? required}
         alwaysShowSearch={alwaysShowSearch}

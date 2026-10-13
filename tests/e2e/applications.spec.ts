@@ -9,6 +9,7 @@
 import type { Page } from "@playwright/test";
 import { test, expect, type SeededChainData } from "./fixtures";
 import {
+  expectNoEntityOptions,
   selectEntity,
   selectFirstCreditBatchProductionRun,
   selectFirstEntity,
@@ -239,9 +240,7 @@ test.describe("Application + Credit Batch UI CRUD", () => {
     await page.waitForLoadState("networkidle");
     await page.click('button:has-text("New application")');
     await waitForSideSheet(page);
-    await page.locator("#deliveryId").click();
-    await expect(page.getByTestId("entity-select-listbox").getByRole("option")).toHaveCount(0);
-    await page.locator("#deliveryId").press("Escape");
+    await expectNoEntityOptions(page, "Delivery");
     await page.locator('[role="dialog"]').getByRole("button", { name: "Create application", exact: true }).click();
     await expect(page.locator("#deliveryId-error")).toBeVisible();
     await expect(page.locator('[role="dialog"]')).toBeVisible();

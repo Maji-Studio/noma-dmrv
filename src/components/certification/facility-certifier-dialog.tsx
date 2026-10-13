@@ -10,11 +10,11 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { FormDialogContext } from "@/components/ui/form-dialog-context";
 import { FormDialog } from "@/components/ui/form-dialog";
 import {
+  EntitySelect,
   FormActions,
   FormField,
   FormInput,
 } from "@/components/forms";
-import { EntitySelect } from "@/components/forms/entity-select/entity-select";
 import { useToast } from "@/components/ui/toast";
 import {
   saveMappingSchema,
@@ -295,7 +295,7 @@ export function FacilityCertifierForm({
               optionLabel="Removal template"
               placeholder="No default"
               options={templateOptions}
-              error={templatesError ?? !!errors.defaultRemovalTemplateId}
+              error={(templateOptions.length === 0 ? templatesError : null) ?? !!errors.defaultRemovalTemplateId}
               isLoading={templatesLoading}
               disabled={!watchedProjectId || templatesLoading}
               value={templateField.value ?? ""}

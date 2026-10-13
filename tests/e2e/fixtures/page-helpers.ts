@@ -199,6 +199,22 @@ export async function selectFirstEntity(page: Page, fieldLabel: string) {
   await page.locator('[role="option"][data-testid^="entity-option-"]:not([aria-disabled="true"])').first().click();
 }
 
+/** Open a field's portalled menu and verify it has no entity options. */
+export async function expectNoEntityOptions(page: Page, fieldLabel: string) {
+  const dialog = page.locator('[role="dialog"]');
+  const label = dialog.locator("label").filter({ hasText: fieldLabel }).first();
+  const fieldContainer = label.locator(
+    "xpath=ancestor::div[.//*[@data-testid='entity-select-trigger']][1]"
+  );
+
+  const trigger = fieldContainer.getByTestId("entity-select-trigger");
+  await trigger.click();
+  await expect(trigger).toHaveAttribute("aria-expanded", "true");
+  const listbox = page.getByTestId("entity-select-listbox");
+  await expect(listbox.locator('[data-testid^="entity-option-"]')).toHaveCount(0);
+  await trigger.press("Escape");
+}
+
 export async function selectFirstCreditBatchProductionRun(
   page: Page,
   feedstockType: { id: string; name: string },

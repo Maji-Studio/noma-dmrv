@@ -83,6 +83,8 @@ interface EntitySelectBaseProps {
   onCreateNew?: () => void;
   /** Filter options (e.g., facilityId for filtering reactors by facility) */
   filterBy?: Record<string, string>;
+  /** Upstream source value(s); changes re-enable automatic selection after a user clear. */
+  dependsOn?: string | null | (string | null | undefined)[];
   /**
    * Option ids to hide from the list — e.g. blend materials already picked on
    * other formulation lines, so each material can only be chosen once. The

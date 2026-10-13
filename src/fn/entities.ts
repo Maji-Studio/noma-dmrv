@@ -9,6 +9,7 @@ import { getEntities, getEntityById } from "@/data-access/entities";
 import { requireOrgFacility } from "@/data-access/utils";
 import type { ActionResult } from "@/types/actions";
 import { z } from "zod";
+import { uuidSchema } from "@/schemas/helpers";
 import { withAction } from "./with-action";
 
 const ENTITY_TYPES = [
@@ -35,12 +36,17 @@ const searchEntitiesSchema = z
     limit: z.number().int().positive().max(MAX_SEARCH_LIMIT).optional(),
   })
   .superRefine((data, ctx) => {
-    if (data.filterBy?.customerId !== undefined && !z.uuid().safeParse(data.filterBy.customerId).success) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["filterBy", "customerId"],
-        message: "The customer filter is invalid. Select a customer and try again.",
-      });
+    if (data.filterBy?.customerId !== undefined) {
+      const customerId = uuidSchema().safeParse(data.filterBy.customerId);
+      if (customerId.success) {
+        data.filterBy.customerId = customerId.data;
+      } else {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["filterBy", "customerId"],
+          message: "The customer filter is invalid. Select a customer and try again.",
+        });
+      }
     }
     // filterBy is a free-form record; facilityId feeds the org-scope guard
     // and uuid-typed query filters, so a blank/malformed value must be a

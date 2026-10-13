@@ -51,7 +51,6 @@ export function useEntityById(
   // part of the query key so two callers with different exclusions never
   // share a cached figure.
   filterBy?: Record<string, string>,
-  enabled = true,
 ) {
   return useQuery({
     queryKey: entityKeys.detail(entityType, id, filterBy),
@@ -64,6 +63,6 @@ export function useEntityById(
       return result.data;
     },
     staleTime: ENTITY_DETAIL_STALE_TIME_MS,
-    enabled: enabled && !!id,
+    enabled: !!id,
   });
 }

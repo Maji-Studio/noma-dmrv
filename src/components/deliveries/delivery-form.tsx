@@ -340,10 +340,12 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
           name="storageLocationId"
           label="Actual source bin"
           entityType="storageLocation"
+          allowEdit
           placeholder="Select matching source bin..."
           required
           autoSelectSingle={false}
-          disabled={isSubmitting || isEditMode}
+          disabled={isSubmitting}
+          selectionLocked={isEditMode}
           filterBy={formFacilityId && selectedOrder?.formulationId ? {
             facilityId: formFacilityId,
             type: "product_bin",

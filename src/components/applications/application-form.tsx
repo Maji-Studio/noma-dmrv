@@ -21,9 +21,8 @@ import { useController, useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import type { z } from "zod";
 import { PackageIcon, MapPinIcon, FileIcon, MapTrifoldIcon, ThermometerIcon } from "@phosphor-icons/react/dist/ssr";
-import { FormField, FormInput, FormSelect, FormSection, FormSpine, FormActions, makeCertFieldStatus } from "@/components/forms";
+import { EntitySelect, FormField, FormInput, FormSelect, FormSection, FormSpine, FormActions, makeCertFieldStatus } from "@/components/forms";
 import { ResolvedErrorRevalidator } from "@/components/forms";
-import { EntitySelect } from "@/components/forms/entity-select/entity-select";
 import { ProductCompositionPreview } from "@/components/ui/product-composition-preview";
 import {
   applicationFormSchema,

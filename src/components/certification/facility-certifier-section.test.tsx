@@ -22,7 +22,9 @@ vi.mock("@/components/ui/toast", () => ({
 
 vi.mock("@/components/forms", async () => {
   const { forwardRef } = await import("react");
+  const { EntitySelect } = await import("@/components/forms/entity-select/entity-select");
   return {
+    EntitySelect,
     FormActions: ({
       submitDisabled,
       submitLabel,

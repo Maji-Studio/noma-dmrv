@@ -11,6 +11,7 @@ import {
   useEffectEvent,
   useId,
   type KeyboardEvent,
+  type FocusEvent,
   type Dispatch,
   type SetStateAction,
 } from "react";
@@ -205,6 +206,7 @@ function EntitySelectView({
   createLabel,
   onCreateNew,
   filterBy,
+  dependsOn,
   excludeIds,
   autoSelectSingle = false,
   alwaysShowSearch = false,
@@ -237,6 +239,13 @@ function EntitySelectView({
   const triggerRef = useRef<HTMLButtonElement>(null);
   const recoveryLinkRef = useRef<HTMLAnchorElement>(null);
   const openedWithTouch = useRef(false);
+  const blurNotified = useRef(false);
+  const userClearedSource = useRef<string | null>(null);
+  const optionsSource = JSON.stringify([
+    entityType,
+    dependsOn,
+    Object.entries(filterBy ?? {}).sort(([a], [b]) => a.localeCompare(b)),
+  ]);
   const entitySelectId = useId();
   const listboxId = `${entitySelectId}-listbox`;
   const remainingMassId = `${entitySelectId}-remaining-mass`;
@@ -308,10 +317,27 @@ function EntitySelectView({
     !isLocal && value && !selectedOption && isSelectedEntityPending,
   );
 
-  const closeMenu = () => {
+  const isInsidePicker = (target: EventTarget | null) => target instanceof Node && (
+    containerRef.current?.contains(target) || popupRef.current?.contains(target)
+  );
+  const notifyBlur = () => {
+    if (blurNotified.current) return;
+    blurNotified.current = true;
+    onBlur?.();
+  };
+  const closeMenu = (dismissed = false) => {
+    if (isOpen && (dismissed || !isInsidePicker(document.activeElement))) notifyBlur();
     setIsOpen(false);
     setSearchQuery("");
     setHighlightedId(null);
+  };
+  const handlePickerBlur = (event: FocusEvent<HTMLElement>) => {
+    if (isInsidePicker(event.relatedTarget)) return;
+    // A pointer press on a non-focusable row can blur to the body before
+    // its click selects the value. Let selection or dismissal finish first.
+    if (isOpen && !event.relatedTarget) return;
+    notifyBlur();
+    closeMenu();
   };
   const handleCreatedEntity = (entity: EntityOption) => {
     onChange(entity.id);
@@ -372,7 +398,7 @@ function EntitySelectView({
     function handlePointerDown(event: PointerEvent) {
       if (!containerRef.current?.contains(event.target as Node) &&
           !popupRef.current?.contains(event.target as Node)) {
-        closeMenuFromEffect();
+        closeMenuFromEffect(true);
       }
     }
     document.addEventListener("pointerdown", handlePointerDown);
@@ -387,17 +413,19 @@ function EntitySelectView({
 
   // Auto-select when there is exactly one option and no current value
   useEffect(() => {
-    if (autoSelectSingle && !disabled && !selectionLocked && !value && options.length === 1 && !options[0].disabled && !isLoading && !fetchError && !searchQuery) {
+    if (userClearedSource.current !== optionsSource) userClearedSource.current = null;
+    if (autoSelectSingle && userClearedSource.current === null && !disabled && !selectionLocked && !value && options.length === 1 && !options[0].disabled && !isLoading && !fetchError && !searchQuery) {
       onChange(options[0].id);
     }
-  }, [autoSelectSingle, disabled, selectionLocked, value, options, isLoading, fetchError, searchQuery, onChange]);
+  }, [autoSelectSingle, disabled, selectionLocked, value, options, isLoading, fetchError, searchQuery, onChange, optionsSource]);
 
   const activateRow = (row: SelectRow) => {
     if (row.kind === "option" && row.option.disabled) return;
-    closeMenu();
     triggerRef.current?.focus();
+    closeMenu();
     switch (row.kind) {
       case "none":
+        userClearedSource.current = optionsSource;
         onChange("");
         break;
       case "option":
@@ -413,6 +441,8 @@ function EntitySelectView({
   };
   const handleClear = (event: React.MouseEvent) => {
     event.stopPropagation();
+    userClearedSource.current = optionsSource;
+    triggerRef.current?.focus();
     onChange("");
   };
 
@@ -435,6 +465,7 @@ function EntitySelectView({
       if (["ArrowDown", "ArrowUp", "Enter", " "].includes(e.key)) {
         e.preventDefault();
         openedWithTouch.current = false;
+        blurNotified.current = false;
         setIsOpen(true);
         setHighlightedId(e.key === "ArrowUp" ? selectableRows.at(-1)?.id ?? null : null);
       }
@@ -461,11 +492,11 @@ function EntitySelectView({
         if (isOpen) {
           e.preventDefault();
           e.stopPropagation();
-          closeMenu();
           // Escape may fire from the search input, which unmounts on
           // close — return focus to the trigger so keyboard users are
           // not dropped onto the document body.
           triggerRef.current?.focus();
+          closeMenu(true);
         }
         break;
       case "Tab":
@@ -482,18 +513,23 @@ function EntitySelectView({
   };
 
   const handleToggle = () => {
-    if (isOpen) closeMenu();
-    else if (!triggerDisabled) setIsOpen(true);
+    if (isOpen) closeMenu(true);
+    else if (!triggerDisabled) {
+      blurNotified.current = false;
+      setIsOpen(true);
+    }
   };
 
   const defaultPlaceholder = `Select ${entityLabel}...`;
   const defaultCreateLabel = `Add new ${entityLabel}`;
 
   return (
-    <Popover.Root open={isOpen} onOpenChange={(open) => { if (!open) closeMenu(); }}>
+    <Popover.Root open={isOpen} onOpenChange={(open) => { if (!open) closeMenu(true); }}>
       <div
         ref={containerRef}
         className={cn("relative", className)}
+        onFocus={(event) => { if (!isInsidePicker(event.relatedTarget)) blurNotified.current = false; }}
+        onBlur={handlePickerBlur}
       >
         {/* Trigger */}
         <div className="relative flex items-center">
@@ -504,7 +540,6 @@ function EntitySelectView({
             onClick={handleToggle}
             onPointerDown={(event) => { openedWithTouch.current = event.pointerType === "touch"; }}
             onKeyDown={handleKeyDown}
-            onBlur={onBlur}
             disabled={triggerDisabled}
             role="combobox"
             aria-readonly={selectionLocked || undefined}
@@ -661,18 +696,6 @@ function EntitySelectView({
                             rel="noopener noreferrer"
                             onKeyDown={(event) => {
                               if (event.key === "Tab" || event.key === "Escape") handleKeyDown(event);
-                            }}
-                            onBlur={(e) => {
-                              // Tab is allowed to land here (see handleKeyDown), so
-                              // closing falls to the link itself once focus leaves
-                              // the component; otherwise aria-expanded stays stale.
-                              if (
-                                !containerRef.current?.contains(
-                                  e.relatedTarget as Node | null,
-                                )
-                              ) {
-                                closeMenu();
-                              }
                             }}
                             className="flex min-h-44 w-full items-center gap-8 px-12 py-8 body-small font-medium text-[var(--color-interaction)] transition-colors hover:bg-[var(--color-background-medium)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-interaction)]"
                           >

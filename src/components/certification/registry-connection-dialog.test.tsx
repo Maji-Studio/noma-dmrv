@@ -18,6 +18,8 @@ const mocks = vi.hoisted(() => ({
   configured: true,
   saveKeys: vi.fn(),
   saveMapping: vi.fn(),
+  templatesError: null as Error | null,
+  liveTemplates: true,
 }));
 vi.mock("@/hooks/use-certifier-credentials", () => ({
   useOrgCertifierCredentialsStatus: () => ({ data: { configured: mocks.configured, accessTokenLast4: "Uwhl" }, isLoading: false }),
@@ -32,7 +34,7 @@ vi.mock("@/hooks/use-certification", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/hooks/use-certification")>()),
   useFacilityCertifierMapping: () => ({ data: loaderData, isLoading: false }),
   useDeleteFacilityCertifierMapping: () => ({ mutateAsync: vi.fn(), isPending: false }),
-  useIsometricProjectTemplates: () => ({ data: [{ id: "tpl_test", display_name: "Test template", credit_type: "REMOVAL" }], isLoading: false }),
+  useIsometricProjectTemplates: () => ({ data: mocks.liveTemplates ? [{ id: "tpl_test", display_name: "Test template", credit_type: "REMOVAL" }] : undefined, isLoading: false, error: mocks.templatesError }),
   useSaveFacilityCertifierMapping: () => ({ mutateAsync: mocks.saveMapping, isPending: false }),
 }));
 
@@ -44,6 +46,9 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.configured = true;
   loaderData.mapping = null;
+  loaderData.availableTemplates = [];
+  mocks.templatesError = null;
+  mocks.liveTemplates = true;
   mocks.saveKeys.mockResolvedValue({ verification: { ok: true, message: "Connection tested." } });
   mocks.saveMapping.mockResolvedValue({});
 });
@@ -75,6 +80,21 @@ async function dismiss() { await click("Close"); }
 async function submit(index: number) {
   await act(async () => { fireEvent.submit(document.querySelectorAll("form")[index]); });
 }
+
+it.each(["live", "loader"])("keeps retained %s templates selectable after a query error", async (source) => {
+  mocks.templatesError = new Error("Background refetch failed");
+  mocks.liveTemplates = source === "live";
+  if (source === "loader") loaderData.availableTemplates = [{
+    id: "tpl_test", display_name: "Test template", credit_type: "REMOVAL",
+  } as FacilityCertifierMapping["availableTemplates"][number]];
+  await mount();
+  await select("Isometric project", "Test project: prj_test");
+  await select("Default Removal template", "Test template: tpl_test");
+  expect(screen.queryByText("Error loading options")).toBeNull();
+  await change("externalFacilityId", "fcl_test");
+  await submit(1);
+  await waitFor(() => expect(mocks.saveMapping).toHaveBeenCalledWith(expect.objectContaining({ defaultRemovalTemplateId: "tpl_test" })));
+});
 
 describe("registry connection dialog", () => {
   it("masks saved keys and hides both save and link until there is work to do", async () => {

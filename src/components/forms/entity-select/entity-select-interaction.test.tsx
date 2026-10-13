@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { EntitySelect } from "./entity-select";
 import { FormEntitySelect } from "./form-entity-select";
@@ -7,6 +7,9 @@ import { useForm } from "react-hook-form";
 import { Modal } from "@/components/ui/modal/modal";
 import type { EntityOption } from "./types";
 import { ENTITY_SEARCH_LIMIT } from "@/config/forms";
+import { useState } from "react";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 
 const state = vi.hoisted(() => ({ permissionChecks: 0, dialogMounts: [] as string[], listEnabled: [] as boolean[], detailIds: [] as (string | undefined)[], options: [] as EntityOption[], loading: false, canManage: false, error: null as Error | null }));
 vi.mock("@/hooks/use-entities", () => ({
@@ -65,6 +68,117 @@ function LockedFormPicker() {
   const { control } = useForm({ defaultValues: { binId: "one" } });
   return <FormEntitySelect control={control} name="binId" label="Storage bin" entityType="storageLocation" selectionLocked onEditSelected={vi.fn()} />;
 }
+
+const requiredPickerSchema = z.object({ binId: z.string().min(1, "Select a storage bin.") });
+function TouchedFormPicker({ alwaysShowSearch }: { alwaysShowSearch: boolean }) {
+  const { control } = useForm({
+    defaultValues: { binId: "" },
+    resolver: zodResolver(requiredPickerSchema),
+    mode: "onTouched",
+  });
+  return <>
+    <FormEntitySelect control={control} name="binId" label="Storage bin" entityType="storageLocation" required autoSelectSingle={false} alwaysShowSearch={alwaysShowSearch} />
+    <button type="button">Outside picker</button>
+  </>;
+}
+
+describe("EntitySelect touched validation", () => {
+  it("notifies blur after clearing a focused prefilled closed picker and moving outside", () => {
+    const blur = vi.fn(); const change = vi.fn();
+    function PrefilledPicker() {
+      const [value, setValue] = useState<string | undefined>("one");
+      return <EntitySelect options={state.options} value={value} onChange={(next) => { setValue(next); change(next); }} onBlur={blur} />;
+    }
+    render(<><PrefilledPicker /><button type="button">Outside picker</button></>);
+    expect(trigger().getAttribute("aria-expanded")).toBe("false");
+    const clear = screen.getByTestId("entity-select-clear");
+    act(() => clear.focus());
+    expect(document.activeElement).toBe(clear);
+    fireEvent.click(clear);
+    expect(change).toHaveBeenCalledExactlyOnceWith("");
+    expect(screen.queryByTestId("entity-select-clear")).toBeNull();
+    expect(blur).not.toHaveBeenCalled();
+    act(() => screen.getByRole("button", { name: "Outside picker" }).focus());
+    expect(blur).toHaveBeenCalledOnce();
+  });
+
+  it.each([false, true])("does not validate while opening or picking with the mouse (search: %s)", async (alwaysShowSearch) => {
+    render(<TouchedFormPicker alwaysShowSearch={alwaysShowSearch} />);
+    act(() => trigger().focus());
+    open();
+    if (alwaysShowSearch) await waitFor(() => expect(document.activeElement).toBe(screen.getByTestId("entity-select-search")));
+    expect(screen.queryByRole("alert")).toBeNull();
+    const option = screen.getByTestId("entity-option-two");
+    fireEvent.pointerDown(option);
+    // A non-focusable option sends focus to the body before its click.
+    await act(async () => { (document.activeElement as HTMLElement).blur(); });
+    expect(screen.queryByRole("alert")).toBeNull();
+    await act(async () => { fireEvent.click(option); });
+    expect(trigger().textContent).toBe("South bin");
+    expect(screen.queryByRole("alert")).toBeNull();
+    await act(async () => { screen.getByRole("button", { name: "Outside picker" }).focus(); });
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it.each([
+    { dismissal: "Escape", search: false }, { dismissal: "Escape", search: true },
+    { dismissal: "outside", search: false }, { dismissal: "outside", search: true },
+  ])("validates an empty picker dismissed by $dismissal (search: $search)", async ({ dismissal, search }) => {
+    render(<TouchedFormPicker alwaysShowSearch={search} />);
+    act(() => trigger().focus()); open();
+    if (search) await waitFor(() => expect(document.activeElement).toBe(screen.getByTestId("entity-select-search")));
+    expect(screen.queryByRole("alert")).toBeNull();
+    if (dismissal === "Escape") key("Escape");
+    else fireEvent.pointerDown(screen.getByRole("button", { name: "Outside picker" }));
+    expect((await screen.findByRole("alert")).textContent).toBe("Select a storage bin.");
+    expect(screen.queryByTestId("entity-select-listbox")).toBeNull();
+  });
+
+  it("notifies direct callers only when focus leaves the trigger and portal", async () => {
+    const blur = vi.fn();
+    render(<><EntitySelect options={state.options} onChange={vi.fn()} onBlur={blur} alwaysShowSearch /><button type="button">Outside picker</button></>);
+    act(() => trigger().focus()); open();
+    const search = await screen.findByTestId("entity-select-search");
+    await waitFor(() => expect(document.activeElement).toBe(search));
+    expect(blur).not.toHaveBeenCalled();
+    act(() => trigger().focus());
+    act(() => search.focus());
+    expect(blur).not.toHaveBeenCalled();
+    act(() => screen.getByRole("button", { name: "Outside picker" }).focus());
+    expect(blur).toHaveBeenCalledOnce();
+    expect(screen.queryByTestId("entity-select-listbox")).toBeNull();
+  });
+});
+
+function AutoSelectPicker({ dependsOn, filterBy }: { dependsOn?: string; filterBy?: Record<string, string> }) {
+  const [value, setValue] = useState<string | undefined>("");
+  return <EntitySelect options={[state.options[0]]} value={value} onChange={setValue} autoSelectSingle dependsOn={dependsOn} filterBy={filterBy} noneOption={{ label: "None" }} />;
+}
+
+describe("EntitySelect automatic selection after clear", () => {
+  it.each(["clear", "none"])("keeps a user %s until dependsOn changes", async (method) => {
+    const view = render(<AutoSelectPicker dependsOn="customer-one" />);
+    await waitFor(() => expect(trigger().textContent).toBe("North bin"));
+    if (method === "clear") fireEvent.click(screen.getByTestId("entity-select-clear"));
+    else { open(); fireEvent.click(screen.getByTestId("entity-select-none")); }
+    expect(trigger().textContent).toBe("None");
+    view.rerender(<AutoSelectPicker dependsOn="customer-one" />);
+    open(); key("Escape");
+    expect(trigger().textContent).toBe("None");
+    view.rerender(<AutoSelectPicker dependsOn="customer-two" />);
+    await waitFor(() => expect(trigger().textContent).toBe("North bin"));
+  });
+
+  it("resets on changed filter values, rather than a new filter object", async () => {
+    const view = render(<AutoSelectPicker filterBy={{ customerId: "one", facilityId: "facility" }} />);
+    await waitFor(() => expect(trigger().textContent).toBe("North bin"));
+    fireEvent.click(screen.getByTestId("entity-select-clear"));
+    view.rerender(<AutoSelectPicker filterBy={{ facilityId: "facility", customerId: "one" }} />);
+    expect(trigger().textContent).toBe("None");
+    view.rerender(<AutoSelectPicker filterBy={{ customerId: "two", facilityId: "facility" }} />);
+    await waitFor(() => expect(trigger().textContent).toBe("North bin"));
+  });
+});
 
 describe("EntitySelect menu interactions", () => {
   it.each([{ value: undefined, edit: true }, { value: "one", edit: false }])("requires selection and callback: %s", ({ value, edit }) => {

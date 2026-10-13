@@ -24,8 +24,7 @@ import { useId, useState } from "react";
 import Link from "next/link";
 import { Button, Modal } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
-import { FormField, FormInput, ServerError } from "@/components/forms";
-import { EntitySelect } from "@/components/forms/entity-select/entity-select";
+import { EntitySelect, FormField, FormInput, ServerError } from "@/components/forms";
 import {
   useFacilityCertifierMapping,
   useFacilityCertifierSummary,
