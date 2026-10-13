@@ -11,6 +11,9 @@ import { outputStockWriteTools } from "./output-stock-tools";
 import { readTools } from "./read-tools";
 
 const mocks = vi.hoisted(() => ({ run: vi.fn(), readProduct: vi.fn() }));
+vi.mock("@/data-access/samples", () => ({}));
+vi.mock("@/lib/read-models/api-lab-samples", () => ({ readApiLabSample: vi.fn(), readApiLabSampleList: vi.fn() }));
+vi.mock("@/lib/read-models/api-credit-batches", () => ({ readApiCreditBatch: vi.fn(), readApiCreditBatchList: vi.fn() }));
 vi.mock("@/lib/operations/runner", () => ({ runOperation: mocks.run }));
 vi.mock("@/data-access/biochar-product-references", () => ({}));
 vi.mock("@/data-access/biochar-product-create", () => ({}));

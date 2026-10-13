@@ -17,6 +17,9 @@ import { readVehicleListFromInput } from "@/lib/api/vehicles-queries";
 import { readDriverListFromInput } from "@/lib/api/drivers-queries";
 import { readFeedstockListFromInput, readFeedstock } from "@/lib/api/feedstock-queries";
 import { readBiocharProductListFromInput, readBiocharProduct } from "@/lib/api/biochar-products-queries";
+import { readLabSampleListFromInput, readLabSample } from "@/lib/api/lab-samples-queries";
+import { readCreditBatchListFromInput } from "@/lib/api/credit-batches-queries";
+import { labSampleRepresentationSchema } from "@/lib/representations/lab-samples";
 import { readFormulationListFromInput } from "@/lib/api/formulations-queries";
 import { readOutputStockMovementListFromInput } from "@/lib/api/output-stock-movements-queries";
 import { biocharProductRepresentationSchema } from "@/lib/representations/biochar-products";
@@ -28,7 +31,7 @@ import { feedstockRepresentationSchema } from "@/lib/representations/feedstocks"
 import { supplierLocationRepresentationSchema } from "@/lib/representations/supplier-locations";
 import { readDescriptions } from "@/lib/operations/read-descriptions";
 import { parseQueryInput } from "@/lib/api/query";
-import { UNTRUSTED_TEXT, FEEDSTOCK_UNITS, FEEDSTOCK_DATES, BIOCHAR_PRODUCT_MASS } from "@/lib/operations/agent-guidance";
+import { UNTRUSTED_TEXT, LAB_SAMPLE_TIMES, LAB_SAMPLE_UNITS, FEEDSTOCK_UNITS, FEEDSTOCK_DATES, BIOCHAR_PRODUCT_MASS } from "@/lib/operations/agent-guidance";
 
 type ResourcePath = keyof typeof resourceQueries;
 
@@ -59,7 +62,7 @@ const guidance: Record<ResourcePath, string> = {
   feedstocks: `Call whoami first for facility ids. ${FEEDSTOCK_UNITS} ${FEEDSTOCK_DATES}`,
   "biochar-products": `Call whoami first for facility ids. Filter by facilityId, formulationId, status or storageLocationId. ${BIOCHAR_PRODUCT_MASS}`,
   formulations: "Each formulation lists its lines as { id, feedstockTypeId, ratio }. Pass a line id as formulationIngredientId in make_biochar_product.",
-  "lab-samples": "Filter by creditBatchId or facilityId; sampledFrom and sampledBefore take RFC 3339 instants with an explicit offset.",
+  "lab-samples": `Filter by creditBatchId or facilityId; sampledFrom and sampledBefore take RFC 3339 instants with an explicit offset. Samples of archived credit batches are not listed. ${LAB_SAMPLE_UNITS}`,
   "credit-batches": "Call whoami first for facility ids. A lab sample belongs to one credit batch; the batch's facility sets its durability tier and time zone.",
 };
 
@@ -124,6 +127,16 @@ export const readTools: ReadTool[] = [
   findTool("drivers", resourceQueries["drivers"].list, readDriverListFromInput),
   findTool("biochar-products", resourceQueries["biochar-products"].list, readBiocharProductListFromInput),
   findTool("formulations", resourceQueries["formulations"].list, readFormulationListFromInput),
+  findTool("lab-samples", resourceQueries["lab-samples"].list, readLabSampleListFromInput),
+  findTool("credit-batches", resourceQueries["credit-batches"].list, readCreditBatchListFromInput),
+  defineRead({ name: "get_lab_sample", summarize: (body) => {
+    const data = body.data as z.infer<typeof labSampleRepresentationSchema>;
+    return `Lab sample ${data.code}, version ${data.version}.`;
+  }, scope: "lab-samples:read",
+    description: `${readDescriptions.get} Call find_lab_samples first for an id or code. Pass version as expectedVersion to update_lab_sample or delete_lab_sample. ${LAB_SAMPLE_TIMES} ${LAB_SAMPLE_UNITS}`,
+    input: resourceQueries["lab-samples"].get.extend({ idOrCode: z.string().describe("Lab sample UUID or exact code.") }),
+    output: itemEnvelopeSchema(labSampleRepresentationSchema),
+  }, async (ctx, { idOrCode }) => ({ data: await readLabSample(ctx, idOrCode) })),
   defineRead({ name: "find_supplier_locations", summarize: listSummary("supplier location", "supplier locations"), scope: "suppliers:read",
     description: `${readDescriptions.supplierLocations} Call find_suppliers first for the supplier UUID in supplierId. Coordinates are WGS 84 decimal degrees.`,
     input: supplierLocationListSchema.extend({ supplierId: uuidSchema().describe("Supplier identifier, UUID, from find_suppliers.") }),

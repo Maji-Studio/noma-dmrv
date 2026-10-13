@@ -52,7 +52,7 @@ export async function mutateLabSampleResponse(request: Request, context: ApiRout
   const key = readIdempotencyKey(request, false);
   const options = {
     audit: { requestId, credentialId: ctx.credentialId, transport: "rest" as const },
-    dryRun, deadlineMs: remainingDeadlineMs(deadlineAt),
+    dryRun,
     idempotency: key ? { credentialId: ctx.credentialId, key, target: id, precondition: precondition! } : undefined,
   };
   return withCurrentOnStale(ctx, id, async () => {
@@ -63,7 +63,7 @@ export async function mutateLabSampleResponse(request: Request, context: ApiRout
       // spreading them into a silently successful empty patch.
       const input = body !== null && typeof body === "object" && !Array.isArray(body)
         ? { ...body, labSampleId: id, expectedVersion: version } : body;
-      const result = await runOperation(representationCheckedUpdate(id, revision), ctx, input, options);
+      const result = await runOperation(representationCheckedUpdate(id, revision), ctx, input, { ...options, deadlineMs: remainingDeadlineMs(deadlineAt) });
       const responseBody = labSampleBody(result.data);
       if (!dryRun) headers.set("ETag", labSampleEtag(responseBody.data));
       if (result.replayed) headers.set("Idempotent-Replayed", "true");
@@ -75,7 +75,7 @@ export async function mutateLabSampleResponse(request: Request, context: ApiRout
       rejectUnknownFields(body, deleteContract);
       if (!deleteBodySchema.safeParse(body).success) throw new DomainError("validation_failed", "DELETE accepts only an empty JSON object.");
     }
-    const result = await runOperation(representationCheckedDelete(id, revision), ctx, { labSampleId: id, expectedVersion: version }, options);
+    const result = await runOperation(representationCheckedDelete(id, revision), ctx, { labSampleId: id, expectedVersion: version }, { ...options, deadlineMs: remainingDeadlineMs(deadlineAt) });
     if (result.replayed) headers.set("Idempotent-Replayed", "true");
     if (dryRun && result.data) {
       headers.set("Dry-Run", "true");
