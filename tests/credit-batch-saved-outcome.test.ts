@@ -100,7 +100,7 @@ beforeAll(async () => {
   const runId = Date.now().toString(36);
   const [facility] = await db
     .insert(facilities)
-    .values({
+    .values({ timezone: "UTC",
       organizationId: TEST_ORG_ID,
       name: `Saved-Outcome Facility ${runId}`,
       code: `FAC-SO-${runId}`,

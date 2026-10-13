@@ -67,7 +67,7 @@ async function createDeleteFixture(runId: string): Promise<DeleteFixture> {
 
   const [facility] = await db
     .insert(facilities)
-    .values({ organizationId: TEST_ORG_ID, name: `Delete Test Facility ${runId}`, code: `FAC-DEL-${runId}` })
+    .values({ timezone: "UTC", organizationId: TEST_ORG_ID, name: `Delete Test Facility ${runId}`, code: `FAC-DEL-${runId}` })
     .returning({ id: facilities.id });
 
   const [productionProcess] = await db

@@ -37,7 +37,7 @@ describe("updateProductionRun terminal to running", () => {
       const tag = crypto.randomUUID().slice(0, 8).toUpperCase();
       const [facility] = await db
         .insert(facilities)
-        .values({
+        .values({ timezone: "UTC",
           organizationId: TEST_ORG_ID,
           code: `FAC-REOPEN-${tag}`,
           name: `Reopen Facility ${tag}`,

@@ -23,7 +23,7 @@ async function createFixture(runId: string): Promise<FeedstockStockFixture> {
   return db.transaction(async (tx) => {
     const [facility] = await tx
       .insert(facilities)
-      .values({
+      .values({ timezone: "UTC",
         organizationId: TEST_ORG_ID,
         code: `FAC-FS-STOCK-${runId}`,
         name: `Feedstock Stock Facility ${runId}`,

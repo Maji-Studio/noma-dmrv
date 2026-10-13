@@ -124,7 +124,7 @@ async function seedDeliveryChain(
 
   const [facility] = await dbc
     .insert(facilities)
-    .values({ organizationId: TEST_ORG_ID, name: `Gap Facility ${runId}`, code: `FAC-GAP-${runId}` })
+    .values({ timezone: "UTC", organizationId: TEST_ORG_ID, name: `Gap Facility ${runId}`, code: `FAC-GAP-${runId}` })
     .returning({ id: facilities.id });
 
   const [productionProcess] = await dbc

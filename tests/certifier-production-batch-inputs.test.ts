@@ -40,7 +40,7 @@ describe("getProductionBatchRegistryInputs", () => {
     await ensureTestOrg();
     const [facility] = await db
       .insert(facilities)
-      .values({
+      .values({ timezone: "UTC",
         organizationId: TEST_ORG_ID,
         code: `FAC-PTB-${tag}`,
         name: `Production Batch Input Facility ${tag}`,

@@ -5,6 +5,7 @@ import {
   latitudeSchema,
   longitudeSchema,
 } from "./helpers";
+import { ianaTimezoneSchema, requiredTimezoneSchema } from "./timezone";
 
 // ============================================
 // Constants and Enums
@@ -16,49 +17,6 @@ import {
 export const durabilityOptions = ["200_year", "1000_year"] as const;
 
 export type DurabilityOption = (typeof durabilityOptions)[number];
-
-/**
- * Common timezone identifiers (IANA timezone database)
- * Subset of most commonly used timezones for biochar facilities
- */
-export const timezones = [
-  // Africa
-  "Africa/Nairobi",
-  "Africa/Dar_es_Salaam",
-  "Africa/Lagos",
-  "Africa/Johannesburg",
-  "Africa/Cairo",
-  "Africa/Casablanca",
-  // Americas
-  "America/New_York",
-  "America/Chicago",
-  "America/Denver",
-  "America/Los_Angeles",
-  "America/Sao_Paulo",
-  "America/Mexico_City",
-  // Asia
-  "Asia/Tokyo",
-  "Asia/Shanghai",
-  "Asia/Singapore",
-  "Asia/Dubai",
-  "Asia/Kolkata",
-  "Asia/Jakarta",
-  // Europe
-  "Europe/London",
-  "Europe/Paris",
-  "Europe/Berlin",
-  "Europe/Amsterdam",
-  "Europe/Zurich",
-  "Europe/Stockholm",
-  // Oceania
-  "Australia/Sydney",
-  "Australia/Melbourne",
-  "Pacific/Auckland",
-  // UTC
-  "UTC",
-] as const;
-
-export type Timezone = (typeof timezones)[number];
 
 // ============================================
 // Address Validation Schema
@@ -150,10 +108,7 @@ const facilityFormBaseSchema = z.object({
   // Authoritative durability tier for the facility (ADR 0021) — inherited by
   // its credit batches and samples. 1000-year is the go-forward default.
   durabilityOption: z.enum(durabilityOptions).default("1000_year"),
-  timezone: z.preprocess(
-    (v) => (v === "" ? undefined : v),
-    z.enum(timezones, { message: "Timezone is required" })
-  ),
+  timezone: requiredTimezoneSchema(),
 });
 
 export const facilityFormSchema =
@@ -191,7 +146,7 @@ export const updateFacilitySchema = z.object({
   contactEmail: z.string().email().max(255).optional().nullable().or(z.literal("")),
   contactPhone: z.string().max(30).optional().nullable().or(z.literal("")),
   durabilityOption: z.enum(durabilityOptions).optional(),
-  timezone: z.enum(timezones).optional(),
+  timezone: ianaTimezoneSchema().optional(),
 }).superRefine(gpsPairSuperRefine);
 
 /**
@@ -232,7 +187,7 @@ export const facilityFilterSchema = z.object({
   durabilityOption: z.enum(durabilityOptions).optional(),
 
   // Filter by timezone
-  timezone: z.enum(timezones).optional(),
+  timezone: ianaTimezoneSchema().optional(),
 
   // GPS bounding box for geographic filtering
   bounds: z

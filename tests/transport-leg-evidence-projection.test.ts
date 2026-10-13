@@ -39,7 +39,7 @@ describe("getTransportLegsWithEvidenceForEntities — biochar delivery evidence"
 
     const [facility] = await db
       .insert(facilities)
-      .values({
+      .values({ timezone: "UTC",
         organizationId: TEST_ORG_ID,
         code: `FAC-TEP-${tag}`,
         name: `TEP Facility ${tag}`,

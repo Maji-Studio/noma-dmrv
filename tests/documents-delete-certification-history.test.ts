@@ -78,7 +78,7 @@ afterEach(() => {
 async function createFixture(tag: string) {
   const [facility] = await db
     .insert(facilities)
-    .values({
+    .values({ timezone: "UTC",
       organizationId: TEST_ORG_ID,
       code: `FAC-DEL-SRC-${tag}`,
       name: `Document source deletion facility ${tag}`,

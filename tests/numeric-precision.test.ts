@@ -52,7 +52,7 @@ describe("numeric precision round-trips (issue #280)", () => {
     await withRollback(async (tx) => {
       const [facility] = await tx
         .insert(facilities)
-        .values({ organizationId: TEST_ORG_ID, code: `FAC-NUM-${runId}`, name: `Numeric Facility ${runId}` })
+        .values({ timezone: "UTC", organizationId: TEST_ORG_ID, code: `FAC-NUM-${runId}`, name: `Numeric Facility ${runId}` })
         .returning({ id: facilities.id });
 
       const [bin] = await tx
@@ -126,7 +126,7 @@ describe("numeric precision round-trips (issue #280)", () => {
     await withRollback(async (tx) => {
       const [facility] = await tx
         .insert(facilities)
-        .values({
+        .values({ timezone: "UTC",
           organizationId: TEST_ORG_ID,
           code: `FAC-NUM-AP-${runId}`,
           name: `Numeric App Facility ${runId}`,

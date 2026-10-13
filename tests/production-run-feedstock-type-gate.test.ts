@@ -34,7 +34,7 @@ describe("createProductionRun — feedstock type usage gate", () => {
 beforeAll(async () => {
     const [facility] = await db
       .insert(facilities)
-      .values({ organizationId: TEST_ORG_ID, code: `FAC-PRG-${tag}`, name: `PRG Facility ${tag}` })
+      .values({ timezone: "UTC", organizationId: TEST_ORG_ID, code: `FAC-PRG-${tag}`, name: `PRG Facility ${tag}` })
       .returning({ id: facilities.id });
     facilityId = facility.id;
 

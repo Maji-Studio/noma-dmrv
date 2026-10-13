@@ -60,7 +60,7 @@ describe("production-run wet feedstock stock", () => {
 
     const [facility] = await db
       .insert(facilities)
-      .values({
+      .values({ timezone: "UTC",
         organizationId: TEST_ORG_ID,
         code: `FAC-WET-${tag}`,
         name: `Wet Stock Facility ${tag}`,

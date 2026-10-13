@@ -26,7 +26,7 @@ async function fixture({ unclaimedBin = false } = {}) {
   const tag = randomUUID();
   const ctx = { ...makeTestOrgContext(), organizationId: `master-version-${tag}` };
   await db.insert(organizations).values({ id: ctx.organizationId, name: "Version test", slug: `master-version-${tag}` });
-  const [facility] = await db.insert(facilities).values({ organizationId: ctx.organizationId, code: `FAC-${tag}`, name: `Facility ${tag}`, country: "Tanzania" }).returning();
+  const [facility] = await db.insert(facilities).values({ timezone: "UTC", organizationId: ctx.organizationId, code: `FAC-${tag}`, name: `Facility ${tag}`, country: "Tanzania" }).returning();
   const [reactor] = await db.insert(reactors).values({ organizationId: ctx.organizationId, facilityId: facility.id, code: `REA-${tag}`, identifier: "Reactor", reactorType: "batch" }).returning();
   const [feedstockType] = await db.insert(feedstockTypes).values({ organizationId: ctx.organizationId, code: `FST-${tag}`, name: "Feedstock type", category: "forestry", usage: "pyrolysis" }).returning();
   const [bin] = await db.insert(storageLocations).values({ organizationId: ctx.organizationId, facilityId: facility.id, code: `BIN-${tag}`, name: "Bin", type: "feedstock_bin", feedstockTypeId: unclaimedBin ? null : feedstockType.id }).returning();

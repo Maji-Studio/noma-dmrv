@@ -35,7 +35,7 @@ import {
   transportLegs,
 } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
-import { DEFAULT_FACILITY_TIMEZONE, formatFacilityDate, formatUtcDate } from "@/lib/date-utils";
+import { UNKNOWN_FACILITY_TIMEZONE, formatFacilityDate, formatUtcDate } from "@/lib/date-utils";
 import type {
   EnergyFeedstockInput,
   EnergyInputs,
@@ -86,9 +86,9 @@ export async function getEnergyInputs(
     .from(facilities)
     .where(and(eq(facilities.id, facilityId), eq(facilities.organizationId, orgId)));
   if (!facility) {
-    return { timeZone: DEFAULT_FACILITY_TIMEZONE, inputs: EMPTY_INPUTS };
+    return { timeZone: UNKNOWN_FACILITY_TIMEZONE, inputs: EMPTY_INPUTS };
   }
-  const timeZone = facility.timezone || DEFAULT_FACILITY_TIMEZONE;
+  const timeZone = facility.timezone;
   const dayOf = (instant: Date) => formatFacilityDate(instant, timeZone);
   const deliveryColumns = await getDeliveryColumnAvailability();
 

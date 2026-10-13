@@ -8,11 +8,13 @@
 import { SafeError } from "@/lib/errors";
 
 /**
- * Fallback IANA zone when a facility's timezone cannot be resolved. Mirrors the
- * `facilities.timezone` column default (`src/db/schema/facilities.ts`) so a
- * missing facility row and a facility that never set a zone behave identically.
+ * Zone used when a facility cannot be resolved (absent from the loaded list, or
+ * deleted): to display times and to read times entered against it. The UI says
+ * so through {@link facilityTimeHelperText}. It is not a default: every
+ * facility stores its own zone (`facilities.timezone` is required, with no
+ * default), and this value is never written to a facility.
  */
-export const DEFAULT_FACILITY_TIMEZONE = "UTC";
+export const UNKNOWN_FACILITY_TIMEZONE = "UTC";
 
 /** Shapes {@link combineDateAndTime} accepts for its two halves. */
 const DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
@@ -196,23 +198,23 @@ export function formatTimezoneLabel(
 
 /**
  * Resolve a facility's IANA zone from a facility list. Returns
- * {@link DEFAULT_FACILITY_TIMEZONE} when the facility is unknown — e.g. an edit
+ * {@link UNKNOWN_FACILITY_TIMEZONE} when the facility is unknown — e.g. an edit
  * form opened for a run whose facility is not in the current context list.
  */
 export function resolveFacilityTimezone(
   facilities: readonly { id: string; timezone: string }[],
   facilityId: string | null | undefined
 ): string {
-  if (!facilityId) return DEFAULT_FACILITY_TIMEZONE;
+  if (!facilityId) return UNKNOWN_FACILITY_TIMEZONE;
   return (
     facilities.find((facility) => facility.id === facilityId)?.timezone ??
-    DEFAULT_FACILITY_TIMEZONE
+    UNKNOWN_FACILITY_TIMEZONE
   );
 }
 
 /**
  * Always-visible cue naming the zone entered times are read in. A facility
- * missing from the list falls back to {@link DEFAULT_FACILITY_TIMEZONE}, and the
+ * missing from the list falls back to {@link UNKNOWN_FACILITY_TIMEZONE}, and the
  * cue says so rather than applying the fallback silently (QA F-2).
  */
 export function facilityTimeHelperText(
@@ -323,7 +325,7 @@ export class AmbiguousLocalTimeError extends SafeError {
  * instead of 05:00Z, and the telemetry importer — which clips CSV rows to the
  * stored run window — then discarded the readings that fell outside the shifted
  * hour with no error. A defaulted zone is exactly what made that invisible, so
- * callers must name the zone (use {@link DEFAULT_FACILITY_TIMEZONE} explicitly
+ * callers must name the zone (use {@link UNKNOWN_FACILITY_TIMEZONE} explicitly
  * when there is genuinely nothing better).
  *
  * ## DST policy — a wall clock is not always exactly one instant

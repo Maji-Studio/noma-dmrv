@@ -85,7 +85,7 @@ async function createFixture(runId: string): Promise<ActivitySortFixture> {
   return db.transaction(async (tx) => {
     const [facility] = await tx
       .insert(facilities)
-      .values({
+      .values({ timezone: "UTC",
         organizationId: TEST_ORG_ID,
         code: `FAC-ACT-${runId}`,
         name: `Activity Sort Facility ${runId}`,

@@ -72,6 +72,7 @@
     "@turf/rewind": "7.3.5",
     "@turf/truncate": "7.3.5",
     "@vercel/functions": "^3.9.7",
+    "@vvo/tzdb": "^6.198.0",
     "@xyflow/react": "^12.10.1",
     "better-auth": "1.7.7",
     "class-variance-authority": "^0.7.1",

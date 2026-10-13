@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   createFacilitySchema,
+  facilityFilterSchema,
   facilityFormSchema,
   quickAddFacilitySchema,
   updateFacilitySchema,
@@ -27,6 +28,38 @@ describe("facility schemas", () => {
         ]),
       );
     }
+  });
+
+  it("accepts any IANA zone on the full list, not just the old short list", () => {
+    const result = facilityFormSchema.safeParse({
+      ...baseFacilityInput,
+      timezone: "Asia/Kathmandu",
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects a timezone that is not a known IANA zone on every path", () => {
+    const timezone = "Mars/Olympus";
+    const id = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee";
+
+    expect(
+      facilityFormSchema.safeParse({ ...baseFacilityInput, timezone }).success,
+    ).toBe(false);
+    expect(
+      updateFacilitySchema.safeParse({ expectedVersion: 1, facilityId: id, timezone })
+        .success,
+    ).toBe(false);
+    expect(facilityFilterSchema.safeParse({ timezone }).success).toBe(false);
+    expect(facilityFilterSchema.safeParse({ timezone: "Africa/Nairobi" }).success).toBe(
+      true,
+    );
+  });
+
+  it("treats an empty timezone as missing, not as UTC", () => {
+    const result = facilityFormSchema.safeParse({ ...baseFacilityInput, timezone: "" });
+
+    expect(result.success).toBe(false);
   });
 
   it("accepts a valid facility timezone", () => {

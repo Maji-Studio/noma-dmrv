@@ -24,7 +24,7 @@ describe("quick-add storage-location atomicity", () => {
     const name = `Quick Add Enrichment Failure ${tag}`;
     const [facility] = await db
       .insert(facilities)
-      .values({
+      .values({ timezone: "UTC",
         organizationId: TEST_ORG_ID,
         code: `FAC-QA-FAIL-${tag}`,
         name: `Quick Add Enrichment Failure Facility ${tag}`,

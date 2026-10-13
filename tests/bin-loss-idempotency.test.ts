@@ -65,7 +65,7 @@ async function seedFeedstockBin() {
 
   const [facility] = await db
     .insert(facilities)
-    .values({
+    .values({ timezone: "UTC",
       organizationId,
       code: `E2E-LOSS-F-${tag}`,
       name: `E2E Loss facility ${tag}`,

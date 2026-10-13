@@ -40,7 +40,7 @@ async function seed(fixture: LookupFixture) {
   const organizationId = fixture.ctx.organizationId;
   for (let index = 0; index < ROW_COUNT; index++) {
     const shared = { organizationId, code: `${PREFIX}${index}`, name: `MCP name ${index}` };
-    await db.insert(facilities).values(shared);
+    await db.insert(facilities).values({ ...shared, timezone: "UTC" });
     await db.insert(suppliers).values(shared);
     await db.insert(feedstockTypes).values({ ...shared, category: "forestry", usage: "pyrolysis" });
     await db.insert(storageLocations).values({ ...shared, facilityId: fixture.facilityId, type: "feedstock_bin" });

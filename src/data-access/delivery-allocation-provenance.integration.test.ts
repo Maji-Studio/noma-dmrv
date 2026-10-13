@@ -56,7 +56,7 @@ describe.skipIf(!available)("saved provenance PostgreSQL consumer queries", () =
     tx = executor as unknown as DbTransaction;
     vi.spyOn(db, "transaction").mockImplementation(async callback => callback(tx));
     vi.spyOn(db, "select").mockImplementation(executor.select.bind(executor));
-    await executor.insert(schema.facilities).values({ ...org, id: ids.facility, code: "F", name: "Fixture" });
+    await executor.insert(schema.facilities).values({ timezone: "UTC", ...org, id: ids.facility, code: "F", name: "Fixture" });
     await executor.insert(schema.storageLocations).values({ ...org, id: ids.bin, facilityId: ids.facility, code: "BIN", name: "Fixture bin", type: "product_bin" });
     await executor.insert(schema.productionRuns).values(["A", "B"].map(label => ({ ...org, id: ids[`run${label}`], facilityId: ids.facility, code: `R${label}`, reactorId: randomUUID(), status: "complete" as const, biocharDryMassKg: 1000 })));
     await executor.insert(schema.formulations).values({ ...org, id: ids.formulation, code: "FORM", name: "Fixture pure", biocharRatio: 1 });

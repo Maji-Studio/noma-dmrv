@@ -30,7 +30,7 @@ import {
 import {
   AmbiguousLocalTimeError,
   combineDateAndTime,
-  DEFAULT_FACILITY_TIMEZONE,
+  UNKNOWN_FACILITY_TIMEZONE,
   formatLocalDate,
   NonexistentLocalTimeError,
 } from "@/lib/date-utils";
@@ -301,7 +301,7 @@ const productionRunFormObject = z.object({
  * input — it is a property of the facility, and putting it on the wire would
  * let a client override how its own times are interpreted. Callers that hold a
  * facility (the form) pass its zone; the exported {@link productionRunFormSchema}
- * binds {@link DEFAULT_FACILITY_TIMEZONE} for the server-action path, where the
+ * binds {@link UNKNOWN_FACILITY_TIMEZONE} for the server-action path, where the
  * start/end values have already been combined into `Date` instants by the
  * client and the zone is therefore never consulted.
  */
@@ -440,7 +440,7 @@ export function makeProductionRunFormSchema(
  * {@link makeProductionRunFormSchema} for why the zone defaults here.
  */
 export const productionRunFormSchema = makeProductionRunFormSchema(
-  DEFAULT_FACILITY_TIMEZONE,
+  UNKNOWN_FACILITY_TIMEZONE,
 );
 
 function rejectLegacyFeedstockFields(

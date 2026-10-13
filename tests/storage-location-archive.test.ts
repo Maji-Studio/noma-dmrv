@@ -56,7 +56,7 @@ async function createStorageArchiveFixture({
   return db.transaction(async (tx) => {
     const [facility] = await tx
       .insert(facilities)
-      .values({
+      .values({ timezone: "UTC",
         organizationId: TEST_ORG_ID,
         code: `FAC-SLA-${tag}`,
         name: `Storage Archive Facility ${tag}`,

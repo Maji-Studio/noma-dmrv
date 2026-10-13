@@ -12,7 +12,7 @@ import type { OrgContext } from "@/lib/auth/server";
 import { SafeError } from '@/lib/errors';
 import { and, eq, isNull, or, sql } from "drizzle-orm";
 import { formatFacilityDateTime } from "@/lib/format-utils";
-import { DEFAULT_FACILITY_TIMEZONE } from "@/lib/date-utils";
+import { UNKNOWN_FACILITY_TIMEZONE } from "@/lib/date-utils";
 import { isCountMovementSql } from "../output-stock-count";
 import { requireOrgScope } from "../utils";
 
@@ -34,7 +34,7 @@ export async function getProductionRunDependentProduct(
     const [run] = await tx.select({ timezone: facilities.timezone }).from(productionRuns)
       .innerJoin(facilities, and(eq(facilities.id, productionRuns.facilityId), eq(facilities.organizationId, ctx.organizationId)))
       .where(and(eq(productionRuns.organizationId, ctx.organizationId), eq(productionRuns.id, productionRunId)));
-    return formatFacilityDateTime(value, run?.timezone ?? DEFAULT_FACILITY_TIMEZONE);
+    return formatFacilityDateTime(value, run?.timezone ?? UNKNOWN_FACILITY_TIMEZONE);
   };
   const [count] = await tx.select({ reason: binMovements.reason, at: binMovements.occurredAt }).from(binMovements)
     .innerJoin(productionRuns, and(eq(productionRuns.organizationId, ctx.organizationId), eq(productionRuns.id, productionRunId), eq(productionRuns.biocharStorageLocationId, binMovements.storageLocationId)))

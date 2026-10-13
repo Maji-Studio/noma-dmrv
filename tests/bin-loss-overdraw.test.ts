@@ -49,7 +49,7 @@ describe("bin loss stock guard", () => {
     const fixture = await db.transaction(async (tx) => {
       const [facility] = await tx
         .insert(facilities)
-        .values({
+        .values({ timezone: "UTC",
           organizationId: TEST_ORG_ID,
           code: `FAC-LOSS-${tag}`,
           name: `Loss Guard Facility ${tag}`,

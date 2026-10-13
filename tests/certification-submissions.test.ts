@@ -90,7 +90,7 @@ async function createFixture(
   const externalProjectId = `prj_claim_${runId}`;
   const [facility] = await db
     .insert(facilities)
-    .values({
+    .values({ timezone: "UTC",
       organizationId: TEST_ORG_ID,
       name: `Claim Test Facility ${runId}`,
       code: `FAC-CL-${runId}`,

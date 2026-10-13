@@ -10,8 +10,8 @@
  */
 import { z } from "zod";
 import { applicationEvidenceMethods } from "./applications";
-import { timezones } from "./facilities";
 import { packagingTypes } from "./orders";
+import { optionalTimezoneSchema } from "./timezone";
 
 const MAX_ORGANIZATION_COUNTRY_LENGTH = 100;
 
@@ -30,7 +30,8 @@ export const organizationSettingsFormSchema = z.object({
     )
     .transform((value) => value || null)
     .nullable(),
-  defaultTimezone: z.enum(timezones),
+  /** Optional: an organization may have no deliberate default. */
+  defaultTimezone: optionalTimezoneSchema(),
   defaultEvidenceMethod: z.enum(applicationEvidenceMethods),
   defaultPackaging: z.enum(packagingTypes),
 });

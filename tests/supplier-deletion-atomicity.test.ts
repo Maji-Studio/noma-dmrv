@@ -26,7 +26,7 @@ beforeEach(async () => {
     { organizationId: TEST_ORG_ID, supplierId, country: "Switzerland", city: "Zurich", isDefault: true },
     { organizationId: TEST_ORG_ID, supplierId, country: "France", city: "Lyon" },
   ]).returning();
-  const [facility] = await db.insert(facilities).values({ organizationId: TEST_ORG_ID, code: `FAC-${tag}`, name: `Audit facility ${tag}` }).returning();
+  const [facility] = await db.insert(facilities).values({ timezone: "UTC", organizationId: TEST_ORG_ID, code: `FAC-${tag}`, name: `Audit facility ${tag}` }).returning();
   facilityId = facility.id;
   const [type] = await db.insert(feedstockTypes).values({ organizationId: TEST_ORG_ID, code: `FT-${tag}`, name: `Audit type ${tag}`, category: "forestry" }).returning();
   feedstockTypeId = type.id;

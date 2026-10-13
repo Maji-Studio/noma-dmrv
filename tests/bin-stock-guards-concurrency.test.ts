@@ -35,7 +35,7 @@ describe("bin stock guard concurrency (issue #423)", () => {
   beforeAll(async () => {
     const [facility] = await db
       .insert(facilities)
-      .values({
+      .values({ timezone: "UTC",
         organizationId: TEST_ORG_ID,
         code: `FAC-DRAW-${tag}`,
         name: `Concurrent Draw Facility ${tag}`,

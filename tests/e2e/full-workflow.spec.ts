@@ -107,7 +107,7 @@ async function createFullWorkflowData(): Promise<TestWorkflowData> {
     };
 
     // 1. Create facility (infrastructure foundation)
-    await tx.insert(schema.facilities).values({
+    await tx.insert(schema.facilities).values({ timezone: "UTC",
         organizationId: DEC_ORG_ID,
       id: ids.facility,
       code: codes.facility,

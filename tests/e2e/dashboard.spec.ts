@@ -100,7 +100,7 @@ test.describe("Dashboard (Flow Hero)", () => {
 
     try {
       await db.transaction(async (tx) => {
-        await tx.insert(facilities).values({
+        await tx.insert(facilities).values({ timezone: "UTC",
           id: facilityId,
           organizationId: DEC_ORG_ID,
           code: `E2E-DASH-GAP-${tag}`,

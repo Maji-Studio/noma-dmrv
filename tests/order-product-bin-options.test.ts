@@ -28,7 +28,7 @@ describe("order product-bin options", () => {
     const fixture = await db.transaction(async (tx) => {
       const [facility] = await tx
         .insert(facilities)
-        .values({
+        .values({ timezone: "UTC",
           organizationId: TEST_ORG_ID,
           code: `FAC-OPB-${tag}`,
           name: `Order Product Bin Facility ${tag}`,

@@ -68,16 +68,19 @@ async function createFixture(): Promise<Fixture> {
       .values([
         {
           organizationId: TEST_ORG_ID,
+          timezone: "UTC",
           code: `FAC-SRA-${tag}`,
           name: `Storage Reference Atomicity Facility ${tag}`,
         },
         {
           organizationId: TEST_ORG_ID,
+          timezone: "UTC",
           code: `FAC-SRA-TARGET-${tag}`,
           name: `Storage Reference Atomicity Target ${tag}`,
         },
         {
           organizationId: TEST_ORG_ID,
+          timezone: "UTC",
           code: `FAC-SRA-ARCH-${tag}`,
           name: `Archived Storage Reference Facility ${tag}`,
           archivedAt: new Date(),
