@@ -56,6 +56,18 @@ beforeEach(() => {
 });
 
 describe("EntityEditDialog", () => {
+  it.each(["feedstockType", "reactor", "order"] as const)("opens archived %s read-only without a save action", (type) => {
+    loaded();
+    mocks.query.data = { ...record, code: "ARCH-1", identifier: "Reactor 1", archivedAt: new Date() };
+    render(dialog(type));
+    expect(screen.getByRole("status").textContent).toContain("is archived and read-only");
+    expect(screen.getByText("ARCH-1")).toBeTruthy();
+    expect(screen.getByText("Fresh record")).toBeTruthy();
+    expect(screen.getByText("Reactor 1")).toBeTruthy();
+    expect(screen.queryByRole("form")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Save changes" })).toBeNull();
+    expect(mocks.update).not.toHaveBeenCalled();
+  });
   it.each(types)("loads %s fresh before rendering its edit surface", (type) => {
     mocks.query.data = { ...record, name: "Cached" };
     const view = render(dialog(type));

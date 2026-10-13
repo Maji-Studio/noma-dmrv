@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import { useEntityEditRecord, type EditableEntityType, type EntityEditRecords } from "@/hooks/use-entity-edit-record";
 import { useToast } from "@/components/ui/toast";
 import { Skeleton } from "@/components/ui/loading-skeleton";
+import { Notice } from "@/components/ui/notice";
+import { DetailSpine } from "@/components/ui/detail-panel";
 import { Button } from "@/components/ui/button";
 import { ServerError } from "../server-error";
 import { QuickAddDialogShell } from "./quick-add-dialog-shell";
@@ -60,6 +62,23 @@ function EntityEditSession({ entityType, entityId, onClose }: {
       {query.isError ? <ServerError message={message} action={<Button size="small" onClick={() => void query.refetch()}>Try again</Button>} /> : <Skeleton className="h-320 w-full" />}
     </QuickAddDialogShell>
   );
+
+  // Bins keep their existing full read-only presentation.
+  if (entityType !== "storageLocation" && "archivedAt" in record && record.archivedAt != null) {
+    return (
+      <QuickAddDialogShell isOpen onClose={onClose} title={`View ${ENTITY_TYPE_LABELS[entityType]}`}
+        testId={entityType === "feedstockType" ? "feedstock-type-edit-dialog" : `${entityType}-edit-dialog`}>
+        <div className="space-y-20">
+          <Notice tone="info">This {ENTITY_TYPE_LABELS[entityType]} is archived and read-only.</Notice>
+          <DetailSpine sections={[{ title: "Details", fields: [
+            ...("code" in record ? [{ label: "Code", value: record.code }] : []),
+            ...("name" in record ? [{ label: "Name", value: record.name }] : []),
+            ...("identifier" in record ? [{ label: "Identifier", value: record.identifier }] : []),
+          ] }]} />
+        </div>
+      </QuickAddDialogShell>
+    );
+  }
 
   const props = { isOpen: true, onClose, onSuccess: ignoreCreated };
   switch (entityType) {
