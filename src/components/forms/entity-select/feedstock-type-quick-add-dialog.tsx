@@ -63,6 +63,7 @@ export function FeedstockTypeQuickAddDialog({
         defaultUsage={defaultUsage}
         lockUsage={Boolean(defaultUsage)}
         hint={hint}
+        stickyActions={false}
       />
     </QuickAddDialogShell>
   );

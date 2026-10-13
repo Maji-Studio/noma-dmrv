@@ -148,6 +148,7 @@ vi.mock("@phosphor-icons/react/dist/ssr", () => ({
   InfoIcon: () => null,
   WarningIcon: () => null,
   CheckCircleIcon: () => null,
+  ArrowSquareOutIcon: () => null,
 }));
 
 vi.mock("@/hooks/use-facility-context", () => ({
@@ -232,7 +233,9 @@ describe("FeedstockTypeForm Isometric gate transitions", () => {
 
     const selectedMarkup = renderForm({ onSubmit });
 
-    expect(selectedMarkup).toContain("Selected from Isometric");
+    // The selected catalogue row is the only selection display on this tab.
+    expect(selectedMarkup).not.toContain("Selected from Isometric");
+    expect(selectedMarkup).toContain('id="isometric-category"');
     expect(selectedMarkup).not.toContain("Category is required");
   });
 

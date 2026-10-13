@@ -404,7 +404,7 @@ export function FeedstockTypeList({ canManage }: FeedstockTypeListProps) {
     facilityId,
   });
   const detailSections = sideSheetEntity
-    ? feedstockTypeSheetSections(sideSheetEntity, showSampling && facilityId ? { facilityId, canManage } : null)
+    ? feedstockTypeSheetSections(sideSheetEntity, showSampling && facilityId ? { facilityId, canManage } : null, certifierSummary.data?.isProduction ?? false)
     : undefined;
 
   return (
