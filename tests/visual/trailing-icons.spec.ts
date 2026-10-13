@@ -12,6 +12,8 @@ const VIEWPORTS = [{ width: 1440, height: 900 }, { width: 390, height: 844 }];
 const TEST_TIMEOUT_MS = 240_000;
 const TOUCH_TARGET_PX = 44;
 const CHEVRON_CLICK_INSET_PX = 20;
+// The Clear hit area ends exactly where the chevron starts; allow subpixel layout rounding.
+const EDGE_TOUCH_TOLERANCE_PX = 1;
 const MIDPOINT_DIVISOR = 2;
 
 test.skip(process.env.FORM_CAPTURE !== "1", "Opt-in: set FORM_CAPTURE=1.");
@@ -39,12 +41,15 @@ test("trailing icons keep their edge inset and independent click targets", async
     await trigger.click();
     await page.locator('[role="option"]:not([aria-disabled="true"])').first().click();
     await expect(clear).toBeVisible();
+    // The chevron rotates back when the menu closes; a mid-rotation box is wider than the glyph.
+    await expect(trigger).toHaveAttribute("aria-expanded", "false");
+    await expect(trigger.locator("[data-trailing-icon]")).toHaveCSS("rotate", "none");
     const hitBox = (await clear.boundingBox())!;
     expect(hitBox.width).toBe(TOUCH_TARGET_PX);
     expect(hitBox.height).toBe(TOUCH_TARGET_PX);
     const caret = (await trigger.locator("[data-trailing-icon]").boundingBox())!;
     const x = (await clear.locator("svg").boundingBox())!;
-    expect(hitBox.x + hitBox.width).toBeLessThanOrEqual(caret.x);
+    expect(hitBox.x + hitBox.width).toBeLessThanOrEqual(caret.x + EDGE_TOUCH_TOLERANCE_PX);
     expect(x.x + x.width).toBeLessThan(caret.x);
 
     // Click the chevron with a value present: the Clear hit area must not steal it.
@@ -52,6 +57,8 @@ test("trailing icons keep their edge inset and independent click targets", async
     await trigger.click({ position: { x: box.width - CHEVRON_CLICK_INSET_PX, y: box.height / MIDPOINT_DIVISOR } });
     await expect(trigger).toHaveAttribute("aria-expanded", "true");
     await page.keyboard.press("Escape");
+    await expect(trigger).toHaveAttribute("aria-expanded", "false");
+    await expect(trigger.locator("[data-trailing-icon]")).toHaveCSS("rotate", "none");
     geometry = await page.evaluate(measureFormGeometry, { kind: "sheet" as const, mode: "form" as const, nativePickerIcons: await measureNativePickerIcons(page) });
     expect(geometry.trailingIcons.find((icon) => icon.field === "reactorId")).toMatchObject({ state: "filled", valid: true });
     for (const [type, value] of [["date", "2026-10-13"], ["time", "08:35"]]) {
@@ -66,6 +73,8 @@ test("trailing icons keep their edge inset and independent click targets", async
   }
 
   const product = MANIFEST.find((item) => item.id === "product.create")!;
+  // Facility hydration is read from the sidebar, which is hidden at mobile width.
+  await page.setViewportSize(VIEWPORTS[0]);
   const productRoot = await product.open(page, ctx);
   if (typeof productRoot === "string") throw new Error(productRoot);
   await root.evaluate((el) => el.removeAttribute("data-capture-root")).catch(() => undefined);
