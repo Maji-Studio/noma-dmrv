@@ -41,13 +41,9 @@ For every finding: **verify it against the actual code first**, fix only valid o
 
 ## Model Selection
 
-Shared across all projects in `~/.claude/model-selection.md` (imported by the global `~/.claude/CLAUDE.md`; source: `shared-agent-skills/policies/model-selection.md`). Change the shared policy with the `update-model-policy` skill, not here; the project override below takes precedence in this repo.
+Shared across all projects in `~/.claude/model-selection.md` (imported by the global `~/.claude/CLAUDE.md`; source: `shared-agent-skills/policies/model-selection.md`). Change the shared policy with the `update-model-policy` skill, not here.
 
-**Project override (Kenji's request, 2026-10-07): implementation in this repo goes to Codex, not Claude agents.**
-
-- **gpt-6-astra** (`medium`) implements the hard parts: org scoping, auth and tenancy, schema changes and migrations, the Chain-of-Custody DAG, energy/emissions accounting, the Isometric Certify integration, and anything that changes credit quantities.
-- **gpt-6.1-sol** (`high`) implements routine work (CRUD wiring that follows `TEMPLATE_USAGE.md`, forms, UI pages, copy, tests) and cross-checks every astra diff with `codex-review`. Astra reviews sol's larger diffs in turn, and any sol diff that touches `data-access/` or auth, so each change gets the other model's eyes.
-- Claude scopes each task, writes the self-contained prompt, inspects the diff, runs `pnpm lint`, `pnpm typecheck` and the relevant tests, and commits. Follow the `codex-implementation` skill (its repo constraints are this repo's); for astra runs swap in `-m gpt-6-astra -c 'model_reasoning_effort="medium"'`. Run Codex in the task's worktree (`scripts/worktree.sh new`), never the main checkout. Run `codex exec … < /dev/null` when backgrounded, or it hangs on "Reading additional input from stdin".
+Run Codex (reviews, cross-checks) in the task's worktree, never the main checkout. Launch a backgrounded `codex exec` with `- < prompt.md` or `< /dev/null`, or it hangs on "Reading additional input from stdin".
 
 ## Docs Index — read the target BEFORE doing the work (docs are NOT auto-indexed)
 

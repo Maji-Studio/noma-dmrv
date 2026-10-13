@@ -26,6 +26,7 @@ function summary(): DurabilityBatchSummary {
       oToCorgMean: 0.1,
       hToCWithinThreshold: true,
       oToCWithinThreshold: true,
+      unpairedHToCSampleCodes: [],
     },
     submitted: {
       hToCorg: null,
@@ -55,5 +56,24 @@ describe("DurabilityReadinessSignals", () => {
     expect(html).not.toContain('data-icon="error"');
     expect(html).not.toContain("future-dated");
     expect(html).not.toContain("Method-B baseline");
+  });
+
+  it("does not read eligible while an H/C_org is submitted without its O/C_org", () => {
+    const base = summary();
+    const html = renderToStaticMarkup(
+      <DurabilityReadinessSignals
+        summary={{
+          ...base,
+          eligibility: {
+            ...base.eligibility,
+            unpairedHToCSampleCodes: ["SAM-4"],
+          },
+        }}
+      />,
+    );
+
+    expect(html).not.toContain("Chemistry eligible");
+    expect(html).toContain("Chemistry incomplete");
+    expect(html).not.toContain('data-icon="check"');
   });
 });
