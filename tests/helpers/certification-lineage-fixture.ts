@@ -386,30 +386,28 @@ export async function withLineageFixture<T>(
   }
 }
 
-/** Resolve once another backend waits on an advisory lock `heldByPid` holds. */
-export async function waitForAdvisoryLockWait(heldByPid: number): Promise<void> {
+/** Resolve once `waiters` backends wait on an advisory lock `heldByPid` holds. */
+export async function waitForAdvisoryLockWait(heldByPid: number, waiters = 1): Promise<void> {
   await expect
     .poll(
       async () => {
-        const result = await db.execute<{ waiting: boolean }>(sql`
-          select exists (
-            select 1
-            from pg_locks waiting
-            join pg_locks held
-              on held.locktype = waiting.locktype
-             and held.database is not distinct from waiting.database
-             and held.classid is not distinct from waiting.classid
-             and held.objid is not distinct from waiting.objid
-             and held.objsubid is not distinct from waiting.objsubid
-            where waiting.locktype = 'advisory'
-              and not waiting.granted
-              and held.granted
-              and held.pid = ${heldByPid}
-          ) as waiting
+        const result = await db.execute<{ waiting: number }>(sql`
+          select count(*)::int as waiting
+          from pg_locks waiting
+          join pg_locks held
+            on held.locktype = waiting.locktype
+           and held.database is not distinct from waiting.database
+           and held.classid is not distinct from waiting.classid
+           and held.objid is not distinct from waiting.objid
+           and held.objsubid is not distinct from waiting.objsubid
+          where waiting.locktype = 'advisory'
+            and not waiting.granted
+            and held.granted
+            and held.pid = ${heldByPid}
         `);
-        return result.rows[0]?.waiting ?? false;
+        return result.rows[0]?.waiting ?? 0;
       },
       { timeout: CONCURRENCY_BARRIER_TIMEOUT_MS },
     )
-    .toBe(true);
+    .toBeGreaterThanOrEqual(waiters);
 }

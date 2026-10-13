@@ -127,15 +127,15 @@ export async function getOperatorFn(input: unknown): Promise<ActionResult<Operat
 
 export async function updateOperatorFn(input: unknown): Promise<ActionResult<Operator>> {
   return withAction((ctx) => {
-    const { operatorId, ...data } = updateOperatorSchema.parse(input);
-    return updateOperator(ctx, operatorId, data);
+    const { operatorId, expectedVersion, ...data } = updateOperatorSchema.parse(input);
+    return updateOperator(ctx, operatorId, data, expectedVersion);
   }, { fallbackMessage: "The operator was not saved. Try again." });
 }
 
 export async function deleteOperatorFn(input: unknown): Promise<ActionResult<{ id: string }>> {
   return withAction(async (ctx) => {
-    const { operatorId } = deleteOperatorSchema.parse(input);
-    await deleteOperator(ctx, operatorId);
+    const { operatorId, expectedVersion } = deleteOperatorSchema.parse(input);
+    await deleteOperator(ctx, operatorId, expectedVersion);
     return { id: operatorId };
   }, { fallbackMessage: "The operator was not deleted. Try again." });
 }

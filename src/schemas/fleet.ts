@@ -2,8 +2,6 @@
  * Server action schemas for editing and deleting vehicles, drivers and
  * operators. Each update carries the same fields as its quick-add create, so
  * the quick-add dialog can save either way.
- *
- * Operators have no row version, so their writes carry no expectedVersion.
  */
 
 import { z } from "zod";
@@ -56,13 +54,16 @@ export const deleteDriverSchema = driverIdSchema.extend({
 
 export const updateOperatorSchema = operatorQuickAddSchema.extend({
   operatorId: uuidSchema(OPERATOR_ID_MESSAGE),
+  expectedVersion: expectedVersionSchema,
 }).transform((data) => ({
   ...data,
   credentials: blankToNull(data.credentials),
   contactPhone: blankToNull(data.contactPhone),
 }));
 
-export const deleteOperatorSchema = operatorIdSchema;
+export const deleteOperatorSchema = operatorIdSchema.extend({
+  expectedVersion: expectedVersionSchema,
+});
 
 export type UpdateVehicleInput = z.input<typeof updateVehicleSchema>;
 export type UpdateVehicleData = z.output<typeof updateVehicleSchema>;

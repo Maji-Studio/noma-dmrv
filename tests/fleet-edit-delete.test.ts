@@ -47,7 +47,6 @@ const LEG_DISTANCE_KM = 40;
 const LEG_LOAD_KG = 1_000;
 const ORIGINAL_MODEL_YEAR = 2018;
 const LOCKED_COPY = "is locked by a certification submission.";
-const WAITER_POLL_TIMEOUT_MS = 5_000;
 const SECOND_INTAKE_WET_KG = 500;
 
 const createdVehicleIds: string[] = [];
@@ -126,8 +125,8 @@ async function withFleetFixture(
 }
 
 
-/** A second intake in the same lineage (same production run), on no vehicle. */
-async function insertSecondIntake(fixture: LineageFixture) {
+/** A second intake, on no vehicle; in the same lineage (same production run) unless `linkToRun` is false. */
+async function insertSecondIntake(fixture: LineageFixture, linkToRun = true) {
   const [first] = await db.select().from(feedstocks).where(eq(feedstocks.id, fixture.feedstockId));
   const [second] = await db.insert(feedstocks).values({
     organizationId: TEST_ORG_ID,
@@ -140,12 +139,14 @@ async function insertSecondIntake(fixture: LineageFixture) {
     massWetKg: SECOND_INTAKE_WET_KG,
     moistureContentPercent: 10,
   }).returning();
-  await db.insert(productionRunFeedstocks).values({
-    organizationId: TEST_ORG_ID,
-    productionRunId: fixture.productionRunId,
-    feedstockId: second.id,
-    wetMassUsedKg: SECOND_INTAKE_WET_KG,
-  });
+  if (linkToRun) {
+    await db.insert(productionRunFeedstocks).values({
+      organizationId: TEST_ORG_ID,
+      productionRunId: fixture.productionRunId,
+      feedstockId: second.id,
+      wetMassUsedKg: SECOND_INTAKE_WET_KG,
+    });
+  }
   return second;
 }
 
@@ -153,24 +154,6 @@ async function deleteSecondIntake(feedstockId: string) {
   await db.delete(productionRunFeedstocks).where(eq(productionRunFeedstocks.feedstockId, feedstockId));
   await db.delete(transportLegs).where(eq(transportLegs.entityId, feedstockId));
   await db.delete(feedstocks).where(eq(feedstocks.id, feedstockId));
-}
-
-/** Resolve once `count` backends wait on an advisory lock `heldByPid` holds. */
-async function waitForAdvisoryWaiters(heldByPid: number, count: number) {
-  await expect.poll(async () => {
-    const result = await db.execute<{ waiters: number }>(sql`
-      select count(*)::int as waiters
-      from pg_locks waiting
-      join pg_locks held
-        on held.locktype = waiting.locktype
-       and held.objid is not distinct from waiting.objid
-       and held.classid is not distinct from waiting.classid
-       and held.objsubid is not distinct from waiting.objsubid
-      where waiting.locktype = 'advisory' and not waiting.granted
-        and held.granted and held.pid = ${heldByPid}
-    `);
-    return result.rows[0]?.waiters ?? 0;
-  }, { timeout: WAITER_POLL_TIMEOUT_MS }).toBeGreaterThanOrEqual(count);
 }
 
 async function batchCode(batchId: string) {
@@ -236,8 +219,8 @@ describe("org scoping", () => {
     await expect(deleteVehicle(otherCtx, vehicle.id, vehicle.version)).rejects.toThrow("Vehicle was not found.");
     await expect(updateDriver(otherCtx, driver.id, { name: "Hijacked" }, driver.version)).rejects.toThrow("Driver was not found.");
     await expect(deleteDriver(otherCtx, driver.id, driver.version)).rejects.toThrow("Driver was not found.");
-    await expect(updateOperator(otherCtx, operator.id, { name: "Hijacked" })).rejects.toThrow("Operator was not found.");
-    await expect(deleteOperator(otherCtx, operator.id)).rejects.toThrow("Operator was not found.");
+    await expect(updateOperator(otherCtx, operator.id, { name: "Hijacked" }, operator.version)).rejects.toThrow("Operator was not found.");
+    await expect(deleteOperator(otherCtx, operator.id, operator.version)).rejects.toThrow("Operator was not found.");
 
     expect((await getVehicle(ctx, vehicle.id))?.name).toBe(vehicle.name);
     expect((await getDriver(ctx, driver.id))?.name).toBe(driver.name);
@@ -266,9 +249,14 @@ describe("metadata edits", () => {
     expect(updated.fuelConsumptionLPerKm).toBeCloseTo(0.3);
   });
 
-  it("refuses a stale vehicle or driver save", async () => {
+  it("refuses a stale vehicle, driver or operator save and delete", async () => {
     const vehicle = await insertVehicle();
     const driver = await insertDriver();
+    const operator = await insertOperator();
+    await expect(updateOperator(ctx, operator.id, { name: "Stale" }, operator.version + 1))
+      .rejects.toThrow(STALE_VERSION_MESSAGE);
+    await expect(deleteOperator(ctx, operator.id, operator.version + 1))
+      .rejects.toThrow(STALE_VERSION_MESSAGE);
     await expect(updateVehicle(ctx, vehicle.id, vehicleEdit(vehicle, { name: "Stale" }), vehicle.version + 1))
       .rejects.toThrow(STALE_VERSION_MESSAGE);
     await expect(updateDriver(ctx, driver.id, { name: "Stale" }, driver.version + 1))
@@ -289,8 +277,8 @@ describe("metadata edits", () => {
     const savedDriver = await updateDriver(ctx, driver.id, { name: "Asha", licenseNumber: "LIC-9", contactPhone: null }, driver.version);
     expect(savedDriver).toMatchObject({ name: "Asha", licenseNumber: "LIC-9", version: driver.version + 1 });
 
-    const savedOperator = await updateOperator(ctx, operator.id, { name: "Baraka", credentials: "Kiln lead" });
-    expect(savedOperator).toMatchObject({ name: "Baraka", credentials: "Kiln lead" });
+    const savedOperator = await updateOperator(ctx, operator.id, { name: "Baraka", credentials: "Kiln lead" }, operator.version);
+    expect(savedOperator).toMatchObject({ name: "Baraka", credentials: "Kiln lead", version: operator.version + 1 });
   });
 });
 
@@ -302,7 +290,7 @@ describe("delete guard", () => {
 
     await deleteVehicle(ctx, vehicle.id, vehicle.version);
     await deleteDriver(ctx, driver.id, driver.version);
-    await deleteOperator(ctx, operator.id);
+    await deleteOperator(ctx, operator.id, operator.version);
 
     expect(await getVehicle(ctx, vehicle.id)).toBeNull();
     expect(await getDriver(ctx, driver.id)).toBeNull();
@@ -324,7 +312,7 @@ describe("delete guard", () => {
       await expect(deleteDriver(ctx, driver.id, driver.version)).rejects.toThrow(
         `Driver ${driver.code} was not deleted because 1 delivery uses it.`,
       );
-      await expect(deleteOperator(ctx, operator.id)).rejects.toThrow(
+      await expect(deleteOperator(ctx, operator.id, operator.version)).rejects.toThrow(
         "This operator was not deleted because 1 production run uses it.",
       );
 
@@ -469,10 +457,10 @@ describe("vehicle type change", () => {
         const save = db.transaction((tx) =>
           updateFeedstockInTransaction(ctx, tx, second.id, { expectedVersion: second.version, vehicleId: vehicle.id }));
         void save.catch(() => undefined);
-        await waitForAdvisoryWaiters(holderPid, 1);
+        await waitForAdvisoryLockWait(holderPid, 1);
         const edit = updateVehicle(ctx, vehicle.id, vehicleEdit(vehicle, { vehicleType: "tractor" }), vehicle.version);
         void edit.catch(() => undefined);
-        await waitForAdvisoryWaiters(holderPid, 2);
+        await waitForAdvisoryLockWait(holderPid, 2);
         releaseArtifact();
         await holder;
 
@@ -488,5 +476,79 @@ describe("vehicle type change", () => {
         await deleteSecondIntake(second.id);
       }
     }, "none");
+  });
+  it("lets a production run add a draw from an intake the edit has locked", async () => {
+    await withFleetFixture(async (fixture) => {
+      const vehicle = await insertVehicle();
+      await useVehicleOnFeedstock(fixture, vehicle);
+
+      let continueRun = () => {};
+      let signalLocked!: (pid: number) => void;
+      const locked = new Promise<number>((resolve) => { signalLocked = resolve; });
+      const proceed = new Promise<void>((resolve) => { continueRun = resolve; });
+      // Stands in for a production-run update: it holds the lineage's
+      // certification lock, then inserts a feedstock draw row, whose foreign
+      // key takes KEY SHARE on the intake the vehicle edit has locked.
+      const run = db.transaction(async (tx) => {
+        await acquireCertificationArtifactLocksSorted(tx, [
+          { provider: "isometric", localEntityType: "removal", localEntityId: fixture.removalId },
+        ]);
+        const backend = await tx.execute<{ pid: number }>(sql`select pg_backend_pid() as pid`);
+        signalLocked(backend.rows[0]?.pid ?? 0);
+        await proceed;
+        await tx.insert(productionRunFeedstocks).values({
+          organizationId: TEST_ORG_ID,
+          productionRunId: fixture.productionRunId,
+          feedstockId: fixture.feedstockId,
+          wetMassUsedKg: SECOND_INTAKE_WET_KG,
+        });
+      });
+      void run.catch(() => undefined);
+
+      try {
+        const runPid = await locked;
+        const edit = updateVehicle(ctx, vehicle.id, vehicleEdit(vehicle, { vehicleType: "tractor" }), vehicle.version);
+        void edit.catch(() => undefined);
+        await waitForAdvisoryLockWait(runPid, 1);
+        continueRun();
+
+        const [ran, edited] = await Promise.allSettled([run, edit]);
+        expect(ran.status, String((ran as PromiseRejectedResult).reason)).toBe("fulfilled");
+        expect(edited.status, String((edited as PromiseRejectedResult).reason)).toBe("fulfilled");
+        expect((await getVehicle(ctx, vehicle.id))?.vehicleType).toBe("tractor");
+      } finally {
+        continueRun();
+        await run.catch(() => undefined);
+      }
+    }, "none");
+  });
+  it("moves a model year onto legs outside a submitted credit batch only", async () => {
+    await withFleetFixture(async (fixture) => {
+      const vehicle = await insertVehicle();
+      await useVehicleOnFeedstock(fixture, vehicle);
+      const loose = await insertSecondIntake(fixture, false);
+      try {
+        await db.update(feedstocks).set({ vehicleId: vehicle.id }).where(eq(feedstocks.id, loose.id));
+        await db.insert(transportLegs).values({
+          organizationId: TEST_ORG_ID,
+          entityType: "feedstock",
+          entityId: loose.id,
+          isDerived: true,
+          distanceKm: LEG_DISTANCE_KM,
+          transportMethodType: "road",
+          vehicleType: vehicle.vehicleType,
+          modelYear: vehicle.modelYear,
+          loadMassKg: LEG_LOAD_KG,
+        });
+
+        await updateVehicle(ctx, vehicle.id, vehicleEdit(vehicle, { modelYear: 2023 }), vehicle.version);
+
+        expect((await derivedLeg(fixture.feedstockId)).modelYear).toBe(ORIGINAL_MODEL_YEAR);
+        expect((await derivedLeg(loose.id)).modelYear).toBe(2023);
+      } finally {
+        await db.update(feedstocks).set({ vehicleId: null }).where(eq(feedstocks.id, loose.id));
+        await deleteSecondIntake(loose.id);
+      }
+    });
   });
 });

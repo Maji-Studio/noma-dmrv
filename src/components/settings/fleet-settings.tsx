@@ -124,7 +124,7 @@ function OperatorSection() {
         recordLabel={(operator) => `Operator ${operator.name}`}
         onAdd={() => setDialog({ isOpen: true, record: null })}
         onEdit={(operator) => setDialog({ isOpen: true, record: operator })}
-        onDelete={(operator) => remove.mutateAsync({ operatorId: operator.id })}
+        onDelete={(operator) => remove.mutateAsync({ operatorId: operator.id, expectedVersion: operator.version })}
         isDeleting={remove.isPending}
       />
       <OperatorQuickAddDialog

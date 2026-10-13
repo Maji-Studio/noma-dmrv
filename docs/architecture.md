@@ -180,7 +180,7 @@ consumes current stock under bin locks and bumps its affected products as an
 internal side effect. Facility archive and restore bump descendant runs and
 products without child preconditions.
 
-Vehicle and driver edits and deletes check integer row versions (`src/data-access/vehicles.ts`, `src/data-access/drivers.ts`). Operators have no row version, so operator edits are last write wins.
+Vehicles, drivers and operators use integer row versions for edits and deletes (`src/data-access/vehicles.ts`, `drivers.ts`, `operators.ts`).
 
 Successful saves and corrections merge returned versions into every list cache
 that supplies edit sheets before invalidation. Stale deletes refresh the list
@@ -224,9 +224,9 @@ record (`vehicle`, `driver`, `operator`), or render `FleetEditDialog` with
 with the new name. Deletes refuse while any record references the row and name
 where it is used (`src/data-access/fleet-usage.ts`). A vehicle's type is
 copied onto each feedstock intake's derived transport leg, so a type or model
-year edit refreshes those leg snapshots in the same transaction; a type change
+year edit refreshes those leg snapshots in the same transaction. A type change
 is refused, naming the credit batch, while a submitted credit batch holds an
-intake or delivery that uses the vehicle (decision 2026-10-13, issue #945).
+intake or delivery that uses the vehicle.
 
 ### Structured logging — `@/lib/log` (server-only)
 

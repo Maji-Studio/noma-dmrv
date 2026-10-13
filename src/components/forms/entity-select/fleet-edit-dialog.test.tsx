@@ -61,6 +61,7 @@ const vehicle: Vehicle = {
 };
 
 const operator: Operator = {
+  version: 2,
   id: "3b1f8f0e-5d1c-4a3e-8f61-7c2b9d4e0a21",
   organizationId: "org-1",
   name: "Asha",
@@ -262,6 +263,7 @@ describe("FleetEditDialog", () => {
     await submit();
     expect(mocks.updateOperator).toHaveBeenCalledWith({
       operatorId: operator.id,
+      expectedVersion: 2,
       name: "Asha",
       credentials: "Kiln lead",
       contactPhone: null,

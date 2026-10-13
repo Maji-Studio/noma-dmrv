@@ -13,9 +13,11 @@ import { and, asc, eq, inArray, ne } from "drizzle-orm";
 import { db, type DbTransaction } from "@/db";
 import { isPgForeignKeyViolation, isPgUniqueViolation } from "@/db/errors";
 import {
+  creditBatchProductionRuns,
   creditBatches,
   deliveries,
   feedstocks,
+  productionRunFeedstocks,
   transportLegs,
   vehicles,
   type Vehicle,
@@ -28,7 +30,6 @@ import {
   formatVehicleTypeLockMessage,
 } from "@/lib/fleet/messages";
 import {
-  getCertifiedLineage,
   getLockedCertifiedLineageForTargetSet,
   isSubmittedLineageRow,
   type LockedCertifiedLineageRow,
@@ -110,7 +111,10 @@ async function vehicleReferences(
     .from(feedstocks)
     .where(and(eq(feedstocks.vehicleId, vehicleId), eq(feedstocks.organizationId, ctx.organizationId)))
     .orderBy(asc(feedstocks.id));
-  const feedstockRows = await (lockFeedstocks ? feedstockQuery.for("update") : feedstockQuery);
+  // NO KEY UPDATE still excludes a concurrent save or delete of these rows,
+  // but not the KEY SHARE a foreign-key insert takes (a production run adding
+  // a feedstock draw while it holds the lineage's certification locks).
+  const feedstockRows = await (lockFeedstocks ? feedstockQuery.for("no key update") : feedstockQuery);
   const deliveryRows = await tx
     .select({ id: deliveries.id })
     .from(deliveries)
@@ -157,19 +161,35 @@ async function lockedVehicle(
   return locked;
 }
 
-/** Feedstocks whose own lineage has no submitted credit batch. */
+/**
+ * Feedstocks in `feedstockIds` that no submitted credit batch holds. A
+ * feedstock belongs to a batch through the batch's production runs, the same
+ * path its certified lineage takes, so the submitted batches from the locked
+ * set-wide lineage decide it without another lineage read.
+ */
 async function unsubmittedFeedstocks(
   ctx: OrgContext,
   tx: DbTransaction,
   feedstockIds: readonly string[],
+  submittedBatchIds: readonly string[],
 ): Promise<string[]> {
-  const unsubmitted: string[] = [];
-  for (const feedstockId of feedstockIds) {
-    // The artifact locks are already held by the set-wide lineage lock.
-    const lineage = await getCertifiedLineage(ctx, tx, { entityType: "feedstock", entityId: feedstockId });
-    if (!lineage.some(isSubmittedLineageRow)) unsubmitted.push(feedstockId);
-  }
-  return unsubmitted;
+  const held = await tx
+    .selectDistinct({ feedstockId: productionRunFeedstocks.feedstockId })
+    .from(productionRunFeedstocks)
+    .innerJoin(
+      creditBatchProductionRuns,
+      and(
+        eq(creditBatchProductionRuns.productionRunId, productionRunFeedstocks.productionRunId),
+        eq(creditBatchProductionRuns.organizationId, ctx.organizationId),
+      ),
+    )
+    .where(and(
+      inArray(productionRunFeedstocks.feedstockId, [...feedstockIds]),
+      inArray(creditBatchProductionRuns.creditBatchId, [...submittedBatchIds]),
+      eq(productionRunFeedstocks.organizationId, ctx.organizationId),
+    ));
+  const submitted = new Set(held.map((row) => row.feedstockId));
+  return feedstockIds.filter((id) => !submitted.has(id));
 }
 
 async function throwVehicleTypeLocked(
@@ -241,7 +261,12 @@ async function updateVehicleOnce(
     ? []
     : submitted.length === 0
       ? references.feedstockIds
-      : await unsubmittedFeedstocks(ctx, tx, references.feedstockIds);
+      : await unsubmittedFeedstocks(
+        ctx,
+        tx,
+        references.feedstockIds,
+        submitted.map((row) => row.creditBatchId),
+      );
 
   const [duplicate] = await tx
     .select({ id: vehicles.id })

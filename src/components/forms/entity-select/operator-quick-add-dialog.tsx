@@ -59,7 +59,11 @@ export function OperatorQuickAddDialog({
     if (!operator) return;
     setEditError(null);
     try {
-      await update.mutateAsync({ ...toOperatorPayload(data), operatorId: operator.id });
+      await update.mutateAsync({
+        ...toOperatorPayload(data),
+        operatorId: operator.id,
+        expectedVersion: operator.version,
+      });
       onClose();
     } catch (error) {
       setEditError(toSaveErrorMessage(error, OPERATOR_NOT_SAVED));
