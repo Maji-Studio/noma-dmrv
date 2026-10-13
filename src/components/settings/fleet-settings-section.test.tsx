@@ -45,9 +45,14 @@ function query(data: Row[] | undefined, overrides: Partial<UseQueryResult<Row[]>
   return { data, isLoading: false, isError: false, refetch: vi.fn(), ...overrides } as unknown as UseQueryResult<Row[]>;
 }
 
-async function render(props: { data?: Row[]; onDelete?: (row: Row) => Promise<unknown>; onEdit?: (row: Row) => void; onAdd?: () => void }) {
-  await act(async () => {
-    tree = create(
+type RenderProps = { data?: Row[]; onDelete?: (row: Row) => Promise<unknown>; onEdit?: (row: Row) => void; onAdd?: () => void };
+
+async function render(props: RenderProps) {
+  await act(async () => { tree = create(section(props)); });
+}
+
+function section(props: RenderProps) {
+  return (
       <FleetSettingsSection<Row>
         title="Vehicles"
         noun="vehicle"
@@ -61,9 +66,8 @@ async function render(props: { data?: Row[]; onDelete?: (row: Row) => Promise<un
         onEdit={props.onEdit ?? vi.fn()}
         onDelete={props.onDelete ?? vi.fn().mockResolvedValue(undefined)}
         isDeleting={false}
-      />,
-    );
-  });
+      />
+  );
 }
 
 beforeAll(() => {
@@ -112,6 +116,27 @@ describe("FleetSettingsSection", () => {
     await act(async () => button("Delete Feedstock truck").props.onClick());
     await act(async () => { button("Delete").props.onClick(); });
     expect(text(tree.root)).toContain("Vehicle VEH-001 was not deleted. It changed since the list loaded.");
+  });
+
+  it("retries a stale delete with the row version the list refreshed to", async () => {
+    const onDelete = vi.fn()
+      .mockRejectedValueOnce(
+        new StaleVersionError(STALE_VERSION_MESSAGE, { entity: "vehicle", id: row.id, code: STALE_VERSION_CONFLICT_CODE }),
+      )
+      .mockResolvedValueOnce(undefined);
+    type VersionedRow = Row & { version: number };
+    const loaded: VersionedRow = { ...row, version: 1 };
+    const refreshed: VersionedRow = { ...row, version: 2 };
+    await render({ data: [loaded], onDelete });
+    await act(async () => button("Delete Feedstock truck").props.onClick());
+    await act(async () => { button("Delete").props.onClick(); });
+
+    // The hook's invalidation refetches the list with the newer version.
+    await act(async () => tree.update(section({ data: [refreshed], onDelete })));
+    await act(async () => { button("Delete").props.onClick(); });
+
+    expect(onDelete).toHaveBeenLastCalledWith(refreshed);
+    expect(tree.root.findAllByProps({ role: "dialog" })).toHaveLength(0);
   });
 
   it("confirms a delete and closes the dialog", async () => {

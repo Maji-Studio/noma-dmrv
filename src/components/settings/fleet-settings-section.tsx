@@ -53,12 +53,15 @@ export function FleetSettingsSection<T extends { id: string }>({
   isDeleting,
 }: FleetSectionProps<T>) {
   const toast = useToast();
-  const [deleting, setDeleting] = useState<T | null>(null);
+  // Held by id and read from the list, so a stale refusal's list refresh
+  // rebinds the confirmation to the row's new version for the next attempt.
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState("");
+  const deleting = query.data?.find((record) => record.id === deletingId) ?? null;
 
   const closeDelete = () => {
     if (isDeleting) return;
-    setDeleting(null);
+    setDeletingId(null);
     setDeleteError("");
   };
 
@@ -68,7 +71,7 @@ export function FleetSettingsSection<T extends { id: string }>({
     try {
       await onDelete(deleting);
       toast.success(`${recordLabel(deleting)} deleted.`);
-      setDeleting(null);
+      setDeletingId(null);
     } catch (error) {
       setDeleteError(
         toDeleteErrorMessage(error, recordLabel(deleting), `${recordLabel(deleting)} was not deleted. Try again.`),
@@ -127,7 +130,7 @@ export function FleetSettingsSection<T extends { id: string }>({
                     variant="destructive"
                     size="small"
                     aria-label={`Delete ${primary(record)}`}
-                    onClick={() => setDeleting(record)}
+                    onClick={() => setDeletingId(record.id)}
                   >
                     Delete
                   </Button>
