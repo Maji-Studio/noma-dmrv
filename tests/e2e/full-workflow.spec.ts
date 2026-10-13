@@ -177,7 +177,7 @@ async function createFullWorkflowData(): Promise<TestWorkflowData> {
       name: `E2E Test Vehicle ${testRunId}`,
       identifier: `Vehicle-${testRunId}`,
       vehicleType: "truck",
-      fuelType: "diesel",
+      fuelType: "Diesel",
       fuelConsumptionLPerKm: 0.3,
       modelYear: 2020,
     });

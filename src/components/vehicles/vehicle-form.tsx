@@ -11,6 +11,7 @@ import {
   VEHICLE_TYPE_OPTIONS,
   FUEL_TYPE_OPTIONS,
   lPerKmToLPer100Km,
+  selectOptionsForStoredValue,
   type VehicleFormData,
 } from "@/schemas/vehicles";
 import type { Vehicle } from "@/db/schema/logistics";
@@ -33,6 +34,8 @@ export function VehicleForm({
   submitLabel,
 }: VehicleFormProps) {
   const isEditMode = !!vehicle;
+  const vehicleTypeField = selectOptionsForStoredValue(VEHICLE_TYPE_OPTIONS, vehicle?.vehicleType, { ignoreCase: false });
+  const fuelTypeField = selectOptionsForStoredValue(FUEL_TYPE_OPTIONS, vehicle?.fuelType, { ignoreCase: true });
 
   const {
     register,
@@ -44,8 +47,8 @@ export function VehicleForm({
     defaultValues: {
       name: vehicle?.name ?? "",
       identifier: vehicle?.identifier ?? "",
-      vehicleType: vehicle?.vehicleType ?? "",
-      fuelType: vehicle?.fuelType ?? "",
+      vehicleType: vehicleTypeField.value,
+      fuelType: fuelTypeField.value,
       fuelConsumptionLPer100Km: vehicle?.fuelConsumptionLPerKm
         ? lPerKmToLPer100Km(vehicle.fuelConsumptionLPerKm)
         : undefined,
@@ -99,7 +102,7 @@ export function VehicleForm({
             placeholder="Select type..."
             disabled={isSubmitting}
             error={!!errors.vehicleType}
-            options={VEHICLE_TYPE_OPTIONS}
+            options={vehicleTypeField.options}
             {...register("vehicleType")}
           />
         </FormField>
@@ -114,7 +117,7 @@ export function VehicleForm({
             placeholder="Select fuel..."
             disabled={isSubmitting}
             error={!!errors.fuelType}
-            options={FUEL_TYPE_OPTIONS}
+            options={fuelTypeField.options}
             {...register("fuelType")}
           />
         </FormField>

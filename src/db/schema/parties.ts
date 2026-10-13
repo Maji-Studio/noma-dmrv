@@ -236,6 +236,7 @@ export const drivers = pgTable('drivers', {
 // ============================================
 
 export const operators = pgTable('operators', {
+  version: integer('version').notNull().default(1),
   id: uuid('id').primaryKey().defaultRandom(),
   organizationId: text('organization_id')
     .notNull()
