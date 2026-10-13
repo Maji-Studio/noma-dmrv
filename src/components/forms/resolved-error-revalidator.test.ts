@@ -29,6 +29,7 @@ const productionRunValues: ProductionRunInput = {
   feedstockWetMassKg: 3000,
   feedstockMoisturePercent: 15,
   biocharOutputKg: 1000,
+  biocharStorageLocationId: "44444444-4444-4444-8444-444444444444",
   biocharMoisturePercent: 10,
 };
 

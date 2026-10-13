@@ -17,7 +17,7 @@ import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-o
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { inArray } from "drizzle-orm";
 import { db } from "@/db";
-import { facilities, reactors } from "@/db/schema/facilities";
+import { facilities, reactors, storageLocations } from "@/db/schema/facilities";
 import { feedstockTypes, feedstocks } from "@/db/schema/feedstock";
 import {
   productionRuns,
@@ -122,6 +122,10 @@ beforeAll(async () => {
     .returning({ id: feedstocks.id });
   createdIds.feedstocks.push(feedstock.id);
 
+  const [outputBin] = await db.insert(storageLocations).values({
+    organizationId: TEST_ORG_ID, facilityId: facility.id, code: `BIN-SC-OUT-${suffix}`,
+    name: `E2E Sample output ${suffix}`, type: "biochar_bin",
+  }).returning();
   const [run] = await db
     .insert(productionRuns)
     .values({
@@ -132,7 +136,8 @@ beforeAll(async () => {
       reactorId: reactor.id,
       startTime: new Date("2025-06-10T08:00:00Z"),
       endTime: new Date("2025-06-10T12:00:00Z"),
-      biocharDryMassKg: 4000,
+      biocharStorageLocationId: outputBin.id, biocharMoisturePercent: 0,
+      biocharOutputKg: 4000, biocharDryMassKg: 4000,
     })
     .returning({ id: productionRuns.id });
   createdIds.productionRuns.push(run.id);
@@ -195,6 +200,7 @@ afterAll(async () => {
         .where(inArray(feedstocks.id, createdIds.feedstocks));
     }
     if (createdIds.facilities.length > 0) {
+      await tx.delete(storageLocations).where(inArray(storageLocations.facilityId, createdIds.facilities));
       await tx
         .delete(productionProcesses)
         .where(inArray(productionProcesses.facilityId, createdIds.facilities));

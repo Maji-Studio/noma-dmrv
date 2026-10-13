@@ -165,10 +165,15 @@ export async function seedFeedstockDraw(
     organizationId: org, facilityId: fixture.facilityId,
     code: "R-FEEDSTOCK-SUITE", identifier: "Feedstock suite reactor", reactorType: "auger",
   }).returning();
+  const [outputBin] = await db.insert(storageLocations).values({
+    organizationId: org, facilityId: fixture.facilityId, code: "OUT-FEEDSTOCK-SUITE",
+    name: "E2E Feedstock suite output", type: "biochar_bin",
+  }).returning();
   const wetMassKg = allocations.reduce((sum, allocation) => sum + allocation.wetMassUsedKg, 0);
   const [run] = await db.insert(productionRuns).values({
     organizationId: org, facilityId: fixture.facilityId, reactorId: reactor.id,
     code: "PR-FEEDSTOCK-SUITE", status: "complete",
+    biocharStorageLocationId: outputBin.id, biocharMoisturePercent: 0,
     startTime: new Date("2026-10-06T10:00:00Z"), endTime: new Date("2026-10-06T11:00:00Z"),
     feedstockStorageLocationId: fixture.binId, feedstockWetMassKg: wetMassKg,
   }).returning();

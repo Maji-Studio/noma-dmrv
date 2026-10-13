@@ -1,3 +1,4 @@
+import { createProductionRunOutputBin } from "./helpers/production-run-output-bin";
 import { countQueries } from "./helpers/query-counter";
 /**
  * Round-trip budget for the dashboard's startup reads. Each number below is
@@ -18,6 +19,7 @@ import {
   productionProcesses,
   productionRuns,
   reactors,
+  storageLocations,
 } from "@/db/schema";
 import { getDashboardOverview } from "@/data-access/dashboard-overview";
 import { getOnboardingStatus } from "@/data-access/onboarding";
@@ -72,6 +74,7 @@ beforeAll(async () => {
     .insert(reactors)
     .values({ organizationId: TEST_ORG_ID, facilityId: facility.id, code: `QB-R-${tag}`, identifier: `Query budget ${tag}`, reactorType: "fixed-bed" })
     .returning({ id: reactors.id });
+  const outputBinId = await createProductionRunOutputBin(TEST_ORG_ID, facility.id);
   const runs = await db
     .insert(productionRuns)
     .values(
@@ -81,6 +84,7 @@ beforeAll(async () => {
         reactorId: reactor.id,
         code: `QB-PR${n}-${tag}`,
         status: "complete" as const,
+        biocharStorageLocationId: outputBinId, biocharMoisturePercent: 0,
         startTime: new Date(`2026-07-0${n + 1}T08:00:00Z`),
         endTime: new Date(`2026-07-0${n + 1}T16:00:00Z`),
         feedstockMassDryKg: 1_000 * (n + 1),
@@ -142,6 +146,7 @@ afterAll(async () => {
   await db.delete(creditBatches).where(inArray(creditBatches.id, fixture.batchIds));
   await db.delete(feedstocks).where(inArray(feedstocks.id, fixture.feedstockIds));
   await db.delete(productionRuns).where(inArray(productionRuns.id, fixture.runIds));
+  await db.delete(storageLocations).where(eq(storageLocations.facilityId, fixture.facilityId));
   await db.delete(productionProcesses).where(eq(productionProcesses.id, fixture.processId));
   await db.delete(reactors).where(eq(reactors.id, fixture.reactorId));
   await db.delete(feedstockTypes).where(eq(feedstockTypes.id, fixture.feedstockTypeId));

@@ -1,3 +1,4 @@
+import { createProductionRunOutputBin } from "./helpers/production-run-output-bin";
 import { labLogisticsVersion } from "./helpers/lab-logistics-version";
 import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
 /**
@@ -21,7 +22,7 @@ import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-o
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
-import { facilities, reactors } from "@/db/schema/facilities";
+import { facilities, reactors, storageLocations } from "@/db/schema/facilities";
 import { feedstockTypes, feedstocks } from "@/db/schema/feedstock";
 import {
   productionRuns,
@@ -190,6 +191,7 @@ beforeAll(async () => {
     .returning({ id: feedstocks.id });
   createdIds.feedstocks.push(feedstock.id);
 
+  const outputBinId = await createProductionRunOutputBin(TEST_ORG_ID, facilityId);
   const runRows = await db
     .insert(productionRuns)
     .values(
@@ -211,6 +213,7 @@ beforeAll(async () => {
         reactorId: reactor.id,
         startTime: new Date(`${date}T08:00:00Z`),
         endTime: tag === "reC" ? null : new Date(`${date}T12:00:00Z`),
+        biocharStorageLocationId: outputBinId, biocharMoisturePercent: 0,
         biocharDryMassKg: 4000,
       })),
     )
@@ -275,6 +278,7 @@ afterAll(async () => {
         .where(inArray(feedstocks.id, createdIds.feedstocks));
     }
     if (createdIds.facilities.length > 0) {
+      await tx.delete(storageLocations).where(inArray(storageLocations.facilityId, createdIds.facilities));
       // createCreditBatch find-or-creates a production_processes row per
       // (facility, feedstockType) — untracked, so clear it by facility.
       await tx
@@ -402,6 +406,7 @@ describe("Server-side 1000-year evidence guard — batch tier is source of truth
       .returning({ id: feedstocks.id });
     createdIds.feedstocks.push(tier1000Feedstock.id);
 
+    const outputBinId = await createProductionRunOutputBin(TEST_ORG_ID, tier1000Facility.id);
     const [kRun] = await db
       .insert(productionRuns)
       .values({
@@ -409,6 +414,7 @@ describe("Server-side 1000-year evidence guard — batch tier is source of truth
         code: `PR-SL-k-tier1000-${suffix}`,
         facilityId: tier1000Facility.id,
         status: "complete",
+        biocharStorageLocationId: outputBinId, biocharMoisturePercent: 0,
         reactorId: tier1000Reactor.id,
         startTime: new Date("2025-06-20T08:00:00Z"),
         endTime: new Date("2025-06-20T12:00:00Z"),

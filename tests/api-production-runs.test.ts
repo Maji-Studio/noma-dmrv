@@ -273,7 +273,7 @@ describe("production run review regressions", { timeout: TIMEOUT_MS }, () => {
   it.each([{ biocharOutputKg: 300 }, { feedingRateKgHr: 100 }])("refuses edits to terminal runs without feedstock: %j", async (body) => {
     const saved = await create({ ...productionRunInput(a), feedstockDraws: [], feedstockMoisturePercent: null });
     await db.update(productionRuns).set({ status: "complete", endTime: new Date("2026-10-06T11:00:00Z"),
-      biocharOutputKg: 200, biocharMoisturePercent: 2 }).where(eq(productionRuns.id, saved.row.id));
+      biocharOutputKg: 200, biocharMoisturePercent: 2, biocharStorageLocationId: a.outputBinId }).where(eq(productionRuns.id, saved.row.id));
     const refusal = await problem(await patch(saved.row.id, body, saved.etag), 422, "validation_failed");
     expect(refusal.errors).toContainEqual(expect.objectContaining({ pointer: "/feedstockDraws" }));
     expect(await rows()).toMatchObject([{ version: 1, biocharOutputKg: 200 }]);
@@ -281,7 +281,7 @@ describe("production run review regressions", { timeout: TIMEOUT_MS }, () => {
 
   it("rejects terminal create without draws or moisture using the form field messages", async () => {
     const body = { ...productionRunInput(a), status: "complete", endTime: "2026-10-06T11:00:00Z",
-      biocharOutputKg: 200, biocharMoisturePercent: 2, feedstockMoisturePercent: null, feedstockDraws: [] };
+      biocharOutputKg: 200, biocharMoisturePercent: 2, biocharStorageLocationId: a.outputBinId, feedstockMoisturePercent: null, feedstockDraws: [] };
     const refusal = await problem(await POST(request("POST", "", body, { "idempotency-key": randomUUID() })), 422, "validation_failed");
     expect(refusal.errors).toEqual(expect.arrayContaining([
       expect.objectContaining({ pointer: "/feedstockDraws", detail: "Add at least one feedstock source." }),
@@ -299,7 +299,7 @@ describe("production run review regressions", { timeout: TIMEOUT_MS }, () => {
 
   it.each(["complete", "failed"])("requires moisture and draws when PATCH makes a run %s", async (status) => {
     const saved = await create({ ...productionRunInput(a), feedstockMoisturePercent: null });
-    const terminal = { status, endTime: "2026-10-06T11:00:00Z", biocharOutputKg: 200, biocharMoisturePercent: 2 };
+    const terminal = { status, endTime: "2026-10-06T11:00:00Z", biocharOutputKg: 200, biocharMoisturePercent: 2, biocharStorageLocationId: a.outputBinId };
     const refusal = await problem(await patch(saved.row.id, terminal, saved.etag), 422, "validation_failed");
     expect(refusal.errors).toContainEqual(expect.objectContaining({ pointer: "/feedstockMoisturePercent", detail: "Enter feedstock moisture." }));
     const noDraws = await problem(await patch(saved.row.id, { ...terminal, feedstockMoisturePercent: 20, feedstockDraws: [] }, saved.etag), 422, "validation_failed");

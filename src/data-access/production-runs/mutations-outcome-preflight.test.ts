@@ -27,7 +27,7 @@ it("requires moisture on API-shaped terminal creation before writing", async () 
   await expect(createProductionRunInTransaction(ctx, state.tx, {
     code: "PR-26-001", facilityId: "facility", reactorId: "reactor", status: "complete", startTime: START, endTime: END,
     feedstockDraws: [{ storageLocationId: BIN_ID, wetMassKg: DRAW_KG }],
-    biocharOutputKg: OUTPUT_KG, biocharMoisturePercent: 0,
+    biocharOutputKg: OUTPUT_KG, biocharMoisturePercent: 0, biocharStorageLocationId: BIN_ID,
   }, { now: NOW })).rejects.toMatchObject({ code: "validation_failed", issues: [
     { path: ["feedstockMoisturePercent"], message: "Enter feedstock moisture." },
   ] });
@@ -49,7 +49,7 @@ describe("merged terminal update prerequisites", () => {
 
   it.each(["complete", "failed"] as const)("cannot clear the moisture of an existing %s run", async (status) => {
     const state = preflightTransaction([[{ id: "run", facilityId: "facility", reactorId: "reactor", status,
-      startTime: START, endTime: END, feedstockWetMassKg: DRAW_KG, feedstockMoisturePercent: 20, biocharOutputKg: OUTPUT_KG }],
+      startTime: START, endTime: END, feedstockWetMassKg: DRAW_KG, feedstockMoisturePercent: 20, biocharStorageLocationId: BIN_ID, biocharMoisturePercent: 0, biocharOutputKg: OUTPUT_KG }],
     [{ storageLocationId: BIN_ID }]]);
     await expect(updateProductionRunInTransaction(ctx, state.tx, "run", {
       expectedVersion: 1, feedstockMoisturePercent: null,
@@ -64,7 +64,7 @@ it("reports the missing source field even when terminal output exceeds an empty 
   const state = preflightTransaction([[{ id: "facility", archivedAt: null }], [{ id: "reactor", facilityId: "facility" }]]);
   await expect(createProductionRunInTransaction(ctx, state.tx, {
     code: "PR-26-001", facilityId: "facility", reactorId: "reactor", status: "complete", startTime: START, endTime: END,
-    feedstockDraws: [], feedstockMoisturePercent: 20, biocharOutputKg: OUTPUT_KG, biocharMoisturePercent: 0,
+    feedstockDraws: [], feedstockMoisturePercent: 20, biocharOutputKg: OUTPUT_KG, biocharMoisturePercent: 0, biocharStorageLocationId: BIN_ID,
   }, { now: NOW })).rejects.toMatchObject({ code: "validation_failed", issues: [
     { path: ["feedstockDraws"], message: "Add at least one feedstock source." },
   ] });
@@ -89,4 +89,15 @@ it.each(["complete", "failed"] as const)("refuses output edits on %s without fee
     { path: ["feedstockDraws"] }, { path: ["feedstockMoisturePercent"] },
   ] });
   expect(state.update).not.toHaveBeenCalled();
+});
+
+
+it.each(["biocharStorageLocationId", "biocharMoisturePercent"] as const)("refuses complete creation without %s before writing", async (field) => {
+  const state = preflightTransaction([[{ id: "facility", archivedAt: null }], [{ id: "reactor", facilityId: "facility" }]]);
+  await expect(createProductionRunInTransaction(ctx, state.tx, {
+    code: "PR-26-001", facilityId: "facility", reactorId: "reactor", status: "complete", startTime: START, endTime: END,
+    feedstockDraws: [{ storageLocationId: BIN_ID, wetMassKg: DRAW_KG }], feedstockMoisturePercent: 20,
+    biocharOutputKg: OUTPUT_KG, biocharMoisturePercent: 0, biocharStorageLocationId: BIN_ID, [field]: null,
+  }, { now: NOW })).rejects.toMatchObject({ code: "validation_failed", issues: [{ path: [field] }] });
+  expect(state.insert).not.toHaveBeenCalled();
 });

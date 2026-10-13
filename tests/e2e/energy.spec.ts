@@ -39,6 +39,7 @@ test.describe("Energy page", () => {
         dieselGensetLiters: 4,
         preprocessingFuelLiters: 2,
         electricityKwh: 24,
+        biocharStorageLocationId: seededData.biocharStorageLocation.id,
         biocharOutputKg: 300,
         biocharMoisturePercent: 10,
         biocharDryMassKg: 270,

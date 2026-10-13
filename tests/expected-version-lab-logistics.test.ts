@@ -219,6 +219,10 @@ async function seedFixture(): Promise<Fixture> {
       })
       .returning({ id: reactors.id });
 
+    const [outputBin] = await tx.insert(storageLocations).values({
+      organizationId, facilityId: facility.id, code: `E2E-EXVB-OUT-${tag}`,
+      name: `E2E Lab logistics output ${tag}`, type: "biochar_bin",
+    }).returning();
     const [productionRun] = await tx
       .insert(productionRuns)
       .values({
@@ -228,6 +232,8 @@ async function seedFixture(): Promise<Fixture> {
         reactorId: reactor.id,
         startTime: RUN_START,
         endTime: RUN_END,
+        biocharStorageLocationId: outputBin.id, biocharMoisturePercent: 0,
+        biocharOutputKg: RUN_DRY_OUTPUT_KG,
         biocharDryMassKg: RUN_DRY_OUTPUT_KG,
         status: "complete",
       })

@@ -74,6 +74,8 @@ const PREFLIGHT_OUTCOME_VIOLATIONS = [
   "end-not-after-start",
   "dry-mass-balance-exceeded",
   "feedstock-required",
+  "complete-output-bin-required",
+  "complete-output-moisture-required",
 ] as const;
 
 /**
@@ -187,6 +189,7 @@ export async function createProductionRunInTransaction(
       endTimePresent: data.endTime !== null,
       cancellationReason: data.cancellationReason,
       biocharOutputKg: data.biocharOutputKg,
+      biocharStorageLocationId: data.biocharStorageLocationId,
       biocharMoisturePercent: data.biocharMoisturePercent,
       feedstockWetMassKg,
       feedstockMoisturePercent: data.feedstockMoisturePercent,
@@ -292,6 +295,7 @@ export async function createProductionRunInTransaction(
       endTime: data.endTime,
       endTimePresent: data.endTime !== null,
       biocharOutputKg: data.biocharOutputKg ?? null,
+      biocharStorageLocationId: data.biocharStorageLocationId,
       biocharMoisturePercent: data.biocharMoisturePercent,
       feedstockWetMassKg,
       feedstockMoisturePercent: data.feedstockMoisturePercent,
@@ -512,6 +516,7 @@ export async function updateProductionRunInTransaction(
           ? data.cancellationReason
           : existing.cancellationReason,
       biocharOutputKg: effectiveBiocharWet,
+      biocharStorageLocationId: data.biocharStorageLocationId !== undefined ? data.biocharStorageLocationId : existing.biocharStorageLocationId,
       biocharMoisturePercent: effectiveBiocharMoisture,
       feedstockWetMassKg: effectiveWetMass,
       feedstockMoisturePercent: effectiveMoisture,
@@ -630,6 +635,7 @@ export async function updateProductionRunInTransaction(
         endTimePresent: lockedTargetEndTime !== null,
         cancellationReason: lockedTargetCancellationReason,
         biocharOutputKg: lockedTargetBiocharOutput,
+        biocharStorageLocationId: data.biocharStorageLocationId !== undefined ? data.biocharStorageLocationId : locked.biocharStorageLocationId,
         biocharMoisturePercent:
           data.biocharMoisturePercent !== undefined
             ? data.biocharMoisturePercent
@@ -798,6 +804,7 @@ export async function updateProductionRunInTransaction(
       endTime: lockedTargetEndTime,
       endTimePresent: lockedTargetEndTime !== null,
       biocharOutputKg: lockedTargetBiocharOutput,
+      biocharStorageLocationId: effectiveBiocharStorageId,
       biocharMoisturePercent:
         data.biocharMoisturePercent !== undefined
           ? data.biocharMoisturePercent

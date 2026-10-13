@@ -161,7 +161,7 @@ export function buildOpenApiDocument() {
       { ...problemResponses([...WRITE_ERRORS, 412, 413, 415, 428]), ...runPreconditionResponse,
         "200": jsonResponse("Updated production run or dry-run representation. ETag is absent on dry runs.", publishOutput(stockWriteEnvelopeSchema(productionRunRepresentationSchema)), { ...etagHeader, ...writeHeaders }) },
       [targetParameter(true), ...queryParameters(mutationQuerySchema), ifMatchParameter, idempotencyParameter(false)]),
-    requestBody: requestBody(runPatchInput, { status: "complete", endTime: "2026-10-08T11:00:00Z", biocharOutputKg: 500, biocharMoisturePercent: 2 }),
+    requestBody: requestBody(runPatchInput, { status: "complete", endTime: "2026-10-08T11:00:00Z", biocharOutputKg: 500, biocharMoisturePercent: 2, biocharStorageLocationId: "f5ce7f12-464d-4a52-a3c3-fba01dbe9b8e" }),
   };
   paths["/production-runs/{idOrCode}"].delete = {
     ...privateOperation("delete_production_run", "production-runs:delete", "Delete by UUID using a strong If-Match and return drawn stock. Dependencies may refuse deletion. Dry runs roll back and return the deleted representation and stockEffects. A supplied body must be an empty JSON object.",
