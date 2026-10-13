@@ -13,6 +13,7 @@ import type { Driver } from "@/db/schema";
 import type { DriverFormData } from "@/schemas/drivers";
 import { useQuickAddSubmit } from "@/hooks/use-quick-add-submit";
 import { useUpdateDriver } from "@/hooks/use-fleet";
+import { useOpenSnapshot } from "@/hooks/use-open-snapshot";
 import { toSaveErrorMessage } from "@/lib/stale-version";
 import { QuickAddDialogShell, stopSubmitBubbling } from "./quick-add-dialog-shell";
 import type { EntityOption } from "./types";
@@ -40,7 +41,7 @@ export function DriverQuickAddDialog({
   isOpen,
   onClose,
   onSuccess,
-  driver,
+  driver: driverProp,
 }: DriverQuickAddDialogProps) {
   const create = useQuickAddSubmit<DriverFormData>({
     entityType: "driver",
@@ -48,6 +49,9 @@ export function DriverQuickAddDialog({
     onSuccess: (entity) => onSuccess?.(entity),
     onClose,
   });
+  // Hold the opened record and its version still while the dialog is open,
+  // so a refetch cannot remount the form and drop the draft.
+  const { snapshot: driver, sessionKey } = useOpenSnapshot(isOpen, driverProp);
   const update = useUpdateDriver();
   const [editError, setEditError] = useState<string | null>(null);
 
@@ -82,7 +86,7 @@ export function DriverQuickAddDialog({
     >
       <div className="contents" onSubmit={stopSubmitBubbling}>
         <DriverForm
-          key={driver ? `${driver.id}:${driver.version}` : "new"}
+          key={sessionKey}
           driver={driver ?? undefined}
           onSubmit={isEdit ? handleEdit : create.handleSubmit}
           onCancel={onClose}

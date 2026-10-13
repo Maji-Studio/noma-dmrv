@@ -2,6 +2,7 @@ import { act, create, type ReactTestInstance, type ReactTestRenderer } from "rea
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { FormEvent, ReactNode } from "react";
 import type { Operator, Vehicle } from "@/db/schema";
+import { StaleVersionError, STALE_VERSION_CONFLICT_CODE, STALE_VERSION_MESSAGE } from "@/lib/stale-version";
 
 const mocks = vi.hoisted(() => ({
   record: { data: undefined as unknown, isError: false, refetch: vi.fn() },
@@ -154,6 +155,45 @@ describe("FleetEditDialog", () => {
 
     expect(onClose).not.toHaveBeenCalled();
     expect(text(tree.root)).toContain(refusal);
+  });
+
+  it("keeps the draft and the loaded version when a stale save refetches the record", async () => {
+    mocks.updateVehicle.mockRejectedValueOnce(new StaleVersionError(STALE_VERSION_MESSAGE, {
+      entity: "vehicle", id: vehicle.id, code: STALE_VERSION_CONFLICT_CODE,
+    }));
+    const dialog = () => <FleetEditDialog kind="vehicle" entityId={vehicle.id} isOpen onClose={vi.fn()} />;
+    await act(async () => { tree = create(dialog()); });
+    await act(async () => {
+      const name = tree.root.findAllByType("input").find((node) => node.props.id === "name")!;
+      await name.props.onChange({ target: { name: "name", value: "Draft name" } });
+    });
+    await submit();
+
+    // The hook's invalidation refetches a newer row while the dialog is open.
+    mocks.record = { data: { ...vehicle, name: "Saved elsewhere", version: 4 }, isError: false, refetch: vi.fn() };
+    await act(async () => tree.update(dialog()));
+
+    expect(text(tree.root)).toContain(STALE_VERSION_MESSAGE);
+    await submit();
+    expect(mocks.updateVehicle).toHaveBeenLastCalledWith(expect.objectContaining({
+      name: "Draft name",
+      expectedVersion: 3,
+    }));
+  });
+
+  it("loads the latest record when the dialog opens again", async () => {
+    const dialog = (isOpen: boolean) => (
+      <FleetEditDialog kind="vehicle" entityId={vehicle.id} isOpen={isOpen} onClose={vi.fn()} />
+    );
+    await act(async () => { tree = create(dialog(true)); });
+    await act(async () => tree.update(dialog(false)));
+    mocks.record = { data: { ...vehicle, name: "Saved elsewhere", version: 4 }, isError: false, refetch: vi.fn() };
+    await act(async () => tree.update(dialog(true)));
+    await submit();
+    expect(mocks.updateVehicle).toHaveBeenLastCalledWith(expect.objectContaining({
+      name: "Saved elsewhere",
+      expectedVersion: 4,
+    }));
   });
 
   it("edits an operator without a row version", async () => {

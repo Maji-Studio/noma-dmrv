@@ -15,6 +15,7 @@ import { lPer100KmToLPerKm, type VehicleFormData } from "@/schemas/vehicles";
 import type { VehicleQuickAddData } from "@/schemas/quick-add";
 import { useQuickAddSubmit } from "@/hooks/use-quick-add-submit";
 import { useUpdateVehicle } from "@/hooks/use-fleet";
+import { useOpenSnapshot } from "@/hooks/use-open-snapshot";
 import { toSaveErrorMessage } from "@/lib/stale-version";
 import { QuickAddDialogShell, stopSubmitBubbling } from "./quick-add-dialog-shell";
 import type { EntityOption } from "./types";
@@ -52,7 +53,7 @@ export function VehicleQuickAddDialog({
   isOpen,
   onClose,
   onSuccess,
-  vehicle,
+  vehicle: vehicleProp,
 }: VehicleQuickAddDialogProps) {
   const create = useQuickAddSubmit<VehicleFormData>({
     entityType: "vehicle",
@@ -60,6 +61,9 @@ export function VehicleQuickAddDialog({
     onSuccess: (entity) => onSuccess?.(entity),
     onClose,
   });
+  // Hold the opened record and its version still while the dialog is open,
+  // so a refetch cannot remount the form and drop the draft.
+  const { snapshot: vehicle, sessionKey } = useOpenSnapshot(isOpen, vehicleProp);
   const update = useUpdateVehicle();
   const [editError, setEditError] = useState<string | null>(null);
 
@@ -98,7 +102,7 @@ export function VehicleQuickAddDialog({
       )}
       <div className="contents" onSubmit={stopSubmitBubbling}>
         <VehicleForm
-          key={vehicle ? `${vehicle.id}:${vehicle.version}` : "new"}
+          key={sessionKey}
           vehicle={vehicle ?? undefined}
           onSubmit={isEdit ? handleEdit : create.handleSubmit}
           onCancel={onClose}

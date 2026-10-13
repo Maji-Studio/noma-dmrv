@@ -13,6 +13,7 @@ import type { Operator } from "@/db/schema";
 import type { OperatorFormData } from "@/schemas/operators";
 import { useQuickAddSubmit } from "@/hooks/use-quick-add-submit";
 import { useUpdateOperator } from "@/hooks/use-fleet";
+import { useOpenSnapshot } from "@/hooks/use-open-snapshot";
 import { toSaveErrorMessage } from "@/lib/stale-version";
 import { QuickAddDialogShell, stopSubmitBubbling } from "./quick-add-dialog-shell";
 import type { EntityOption } from "./types";
@@ -40,7 +41,7 @@ export function OperatorQuickAddDialog({
   isOpen,
   onClose,
   onSuccess,
-  operator,
+  operator: operatorProp,
 }: OperatorQuickAddDialogProps) {
   const create = useQuickAddSubmit<OperatorFormData>({
     entityType: "operator",
@@ -48,6 +49,9 @@ export function OperatorQuickAddDialog({
     onSuccess: (entity) => onSuccess?.(entity),
     onClose,
   });
+  // Hold the opened record and its version still while the dialog is open,
+  // so a refetch cannot remount the form and drop the draft.
+  const { snapshot: operator, sessionKey } = useOpenSnapshot(isOpen, operatorProp);
   const update = useUpdateOperator();
   const [editError, setEditError] = useState<string | null>(null);
 
@@ -78,7 +82,7 @@ export function OperatorQuickAddDialog({
     >
       <div className="contents" onSubmit={stopSubmitBubbling}>
         <OperatorForm
-          key={operator ? `${operator.id}:${operator.updatedAt.valueOf()}` : "new"}
+          key={sessionKey}
           operator={operator ?? undefined}
           onSubmit={isEdit ? handleEdit : create.handleSubmit}
           onCancel={onClose}
