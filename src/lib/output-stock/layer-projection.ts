@@ -60,6 +60,8 @@ function isResolvedDryKg(dryKg: string | null): dryKg is string {
 function unresolvedRunMessage(run: CompletedRunRow): string {
   if (isResolvedDryKg(run.dryKg)) return `Production run ${run.code} has no end time. Add the end time to that run, then try again.`;
   if (!run.endTime) return `Production run ${run.code} has no dry biochar mass and no end time. Add the biochar wet mass, moisture and end time to that run, then try again.`;
+  // Zero is a measurement, not an absence: the wet mass and moisture are there.
+  if (run.dryKg != null && Number(run.dryKg) === 0) return `Production run ${run.code} has zero dry biochar mass. Check its biochar wet mass and moisture, then try again.`;
   return `Production run ${run.code} has no dry biochar mass. Add the biochar wet mass and moisture to that run, then try again.`;
 }
 

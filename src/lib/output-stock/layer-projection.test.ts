@@ -22,6 +22,12 @@ describe('biochar layers', () => {
     );
   });
 
+  it('says the dry biochar mass is zero rather than missing', () => {
+    expect(() => projectBiocharLayers({ runs: [{ ...run, dryKg: '0.000' }], ...noRows })).toThrow(
+      'Production run PR-0042 has zero dry biochar mass. Check its biochar wet mass and moisture, then try again.',
+    );
+  });
+
   it.each([null, 'NaN', 'Infinity', '0'])('treats run dry mass %s as unresolved', dryKg => {
     expect(() => projectBiocharLayers({ runs: [{ ...run, dryKg }], ...noRows })).toThrow(UnresolvedOutputStockError);
   });
