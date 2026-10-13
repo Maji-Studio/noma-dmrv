@@ -66,6 +66,34 @@ function activeTestId() {
   return document.getElementById(trigger().getAttribute("aria-activedescendant")!)?.getAttribute("data-testid");
 }
 
+describe("EntitySelect trailing icons", () => {
+  it.each([
+    { value: "", disabled: false, selectionLocked: false, padding: "pr-36", hasClear: false },
+    { value: "one", disabled: false, selectionLocked: false, padding: "pr-72", hasClear: true },
+    { value: "one", disabled: true, selectionLocked: false, padding: "pr-36", hasClear: false },
+    { value: "one", disabled: false, selectionLocked: true, padding: "pr-36", hasClear: false },
+  ])("reserves $padding with value '$value', disabled $disabled, locked $selectionLocked", ({ value, disabled, selectionLocked, padding, hasClear }) => {
+    render(<EntitySelect options={state.options} value={value} disabled={disabled} selectionLocked={selectionLocked} onChange={vi.fn()} />);
+    const field = trigger();
+    const caret = field.querySelector("[data-trailing-icon]");
+
+    expect(field.getAttribute("data-has-value")).toBe(String(Boolean(value)));
+    expect(field.classList.contains("px-12")).toBe(true);
+    expect(field.classList.contains(padding)).toBe(true);
+    expect(field.classList.contains("pr-80")).toBe(false);
+    for (const className of ["absolute", "right-12", "size-16", "pointer-events-none"])
+      expect(caret?.classList.contains(className)).toBe(true);
+    expect(field.parentElement?.classList.contains("relative")).toBe(true);
+
+    const clear = screen.queryByTestId("entity-select-clear");
+    if (hasClear) {
+      expect(clear).not.toBeNull();
+      for (const className of ["absolute", "right-28", "h-44", "w-44", "justify-end", "pr-8"])
+        expect(clear?.classList.contains(className)).toBe(true);
+    } else expect(clear).toBeNull();
+  });
+});
+
 function LockedFormPicker() {
   const { control } = useForm({ defaultValues: { binId: "one" } });
   return <FormEntitySelect control={control} name="binId" label="Storage bin" entityType="storageLocation" selectionLocked onEditSelected={vi.fn()} />;

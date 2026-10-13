@@ -24,6 +24,7 @@ import path from "node:path";
 import type { Browser, Locator, Page } from "@playwright/test";
 import { test, expect, type CaptureSession } from "./form-capture-fixture";
 import { measureFormGeometry, type Geometry } from "./form-geometry";
+import { measureNativePickerIcons } from "./native-picker-geometry";
 import {
   diffR1,
   evaluateGeometry,
@@ -124,11 +125,14 @@ async function captureState(page: Page, surface: Surface, root: Locator, state: 
   await settle(page, root);
   await dismissToasts(page);
   await markRoot(page, root);
-  const geometry = await page.evaluate(measureFormGeometry, { kind: surface.kind, mode: surface.mode });
+  const nativePickerIcons = await measureNativePickerIcons(page);
+  const geometry = await page.evaluate(measureFormGeometry, { kind: surface.kind, mode: surface.mode, nativePickerIcons });
   const { violations, failures } = evaluateGeometry(geometry, surface.mode);
+  failures.push(...geometry.trailingIcons.filter((icon) => !icon.valid).map((icon) => `${icon.field} (${icon.state}): trailing icon inset ${icon.rightInset ?? "unmeasured"}, expected 12px +/- 1px from the padding-box edge`));
   const png = `${surface.id}__${state}__${viewport.width}x${viewport.height}.png`;
   await screenshot(page, surface, root, path.join(outDir, png), mask);
   record.states.push({ state, viewport: `${viewport.width}x${viewport.height}`, png, geometry, violations, failures });
+  expect.soft(geometry.trailingIcons.filter((icon) => !icon.valid), "Trailing icons must sit 12px (+/- 1px) from the padding-box edge").toEqual([]);
   return geometry;
 }
 

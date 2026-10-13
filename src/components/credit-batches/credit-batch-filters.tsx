@@ -5,6 +5,7 @@ import {
   XIcon,
 } from "@phosphor-icons/react/dist/ssr";
 import { Button } from "@/components/ui/button";
+import { TEMPORAL_INPUT_CLASSES } from "@/components/ui/input";
 
 export type CreditBatchReadinessFilter = "all" | "needs_attention" | "ready";
 
@@ -33,7 +34,7 @@ interface CreditBatchFiltersProps {
 const SELECT_CLASS =
   "h-40 border border-[var(--color-border-primary)] bg-[var(--color-background-white)] px-12 body-small cursor-pointer";
 const DATE_CLASS =
-  "h-40 border border-[var(--color-border-primary)] bg-[var(--color-background-white)] px-10 body-small focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)]";
+  `h-40 border border-[var(--color-border-primary)] bg-[var(--color-background-white)] px-12 body-small focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)] ${TEMPORAL_INPUT_CLASSES}`;
 
 export function CreditBatchFilters({
   search,
@@ -74,7 +75,7 @@ export function CreditBatchFilters({
             onChange={(event) => onSearchChange(event.target.value)}
             placeholder="Search by batch code or feedstock..."
             aria-label="Search credit batches"
-            className="h-40 w-full border border-[var(--color-border-primary)] bg-[var(--color-background-white)] pl-36 pr-12 body-small placeholder:text-[var(--color-text-tertiary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)]"
+            className="h-40 w-full border border-[var(--color-border-primary)] bg-[var(--color-background-white)] pl-36 pr-12 body-small placeholder:text-[var(--color-text-tertiary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)] [&::-webkit-search-cancel-button]:mx-0"
           />
         </div>
 
