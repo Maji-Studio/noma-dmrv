@@ -1,0 +1,97 @@
+/**
+ * Operators Data Access Layer: list, read, edit and delete.
+ *
+ * Creation stays in `quick-add.ts`. An operator names who ran a production
+ * run, logged an incident or took an in-process measurement; it never reaches
+ * a calculation, so every field is always editable. Operators carry no row
+ * version, so edits are last write wins.
+ */
+
+import { and, asc, eq } from "drizzle-orm";
+import { db } from "@/db";
+import { isPgForeignKeyViolation } from "@/db/errors";
+import { operators, type Operator } from "@/db/schema";
+import type { OrgContext } from "@/lib/auth/server";
+import { DomainError } from "@/lib/domain-errors";
+import { formatFleetDeleteBlocker } from "@/lib/fleet/messages";
+import { countOperatorUsage } from "./fleet-usage";
+import { requireOrgScope } from "./utils";
+
+const OPERATOR_NOT_FOUND = "Operator not found";
+const OPERATOR_FK_CONSTRAINTS = [
+  "incident_reports_operator_id_operators_id_fk",
+  "production_runs_operator_id_operators_id_fk",
+  "production_samples_sampled_by_id_operators_id_fk",
+] as const;
+const OPERATOR_IN_USE =
+  "Operator was not deleted because production records still use it. Choose another operator on those records, or keep this one.";
+
+export interface UpdateOperatorData {
+  name: string;
+  credentials?: string | null;
+  contactPhone?: string | null;
+}
+
+export async function listOperators(ctx: OrgContext): Promise<Operator[]> {
+  requireOrgScope(ctx);
+  return db
+    .select()
+    .from(operators)
+    .where(eq(operators.organizationId, ctx.organizationId))
+    .orderBy(asc(operators.name), asc(operators.id));
+}
+
+export async function getOperator(ctx: OrgContext, operatorId: string): Promise<Operator | null> {
+  requireOrgScope(ctx);
+  const [operator] = await db
+    .select()
+    .from(operators)
+    .where(and(eq(operators.id, operatorId), eq(operators.organizationId, ctx.organizationId)));
+  return operator ?? null;
+}
+
+export async function updateOperator(
+  ctx: OrgContext,
+  operatorId: string,
+  data: UpdateOperatorData,
+): Promise<Operator> {
+  requireOrgScope(ctx);
+  const [updated] = await db
+    .update(operators)
+    .set({
+      name: data.name,
+      credentials: data.credentials ?? null,
+      contactPhone: data.contactPhone ?? null,
+      updatedAt: new Date(),
+    })
+    .where(and(eq(operators.id, operatorId), eq(operators.organizationId, ctx.organizationId)))
+    .returning();
+  if (!updated) throw new DomainError("not_found", OPERATOR_NOT_FOUND);
+  return updated;
+}
+
+export async function deleteOperator(ctx: OrgContext, operatorId: string): Promise<void> {
+  requireOrgScope(ctx);
+  try {
+    await db.transaction(async (tx) => {
+      const [locked] = await tx
+        .select({ id: operators.id })
+        .from(operators)
+        .where(and(eq(operators.id, operatorId), eq(operators.organizationId, ctx.organizationId)))
+        .for("update");
+      if (!locked) throw new DomainError("not_found", OPERATOR_NOT_FOUND);
+
+      const blocker = formatFleetDeleteBlocker("operator", null, await countOperatorUsage(ctx, tx, operatorId));
+      if (blocker) throw new DomainError("conflict", blocker);
+
+      await tx
+        .delete(operators)
+        .where(and(eq(operators.id, operatorId), eq(operators.organizationId, ctx.organizationId)));
+    });
+  } catch (error) {
+    if (OPERATOR_FK_CONSTRAINTS.some((constraint) => isPgForeignKeyViolation(error, constraint))) {
+      throw new DomainError("conflict", OPERATOR_IN_USE);
+    }
+    throw error;
+  }
+}

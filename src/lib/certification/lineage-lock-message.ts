@@ -7,7 +7,8 @@ export type CertificationLineageLockEntityType =
   | "order"
   | "biocharProduct"
   | "feedstock"
-  | "transportLeg";
+  | "transportLeg"
+  | "vehicle";
 
 export type CertificationLineageMutation = "create" | "update" | "delete";
 
@@ -21,6 +22,7 @@ const ENTITY_LABELS: Record<CertificationLineageLockEntityType, string> = {
   biocharProduct: "biochar product",
   feedstock: "feedstock",
   transportLeg: "transport leg",
+  vehicle: "vehicle",
 };
 
 interface CertificationLineageLockMessageInput {
