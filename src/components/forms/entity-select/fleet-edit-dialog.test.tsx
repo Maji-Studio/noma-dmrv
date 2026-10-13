@@ -1,11 +1,11 @@
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import type { FormEvent, ReactNode } from "react";
+import type { FormEvent, ReactElement, ReactNode } from "react";
 import type { Operator, Vehicle } from "@/db/schema";
 import { StaleVersionError, STALE_VERSION_CONFLICT_CODE, STALE_VERSION_MESSAGE } from "@/lib/stale-version";
 
 const mocks = vi.hoisted(() => ({
-  record: { data: undefined as unknown, isError: false, refetch: vi.fn() },
+  record: { data: undefined as unknown, dataUpdatedAt: 0, isError: false, refetch: vi.fn() },
   updateVehicle: vi.fn(),
   updateDriver: vi.fn(),
   updateOperator: vi.fn(),
@@ -88,9 +88,46 @@ beforeAll(() => {
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 });
 
+let fetchClock = 0;
+let element: (isOpen: boolean) => ReactElement;
+
+/** A read of `data` lands: React Query bumps `dataUpdatedAt` on every fetch. */
+function landRead(data: unknown) {
+  fetchClock += 1;
+  mocks.record = { data, dataUpdatedAt: fetchClock, isError: false, refetch: vi.fn() };
+}
+
+async function rerender(isOpen: boolean) {
+  await act(async () => tree.update(element(isOpen)));
+}
+
+/** Mount closed with a cached row (if any), open, then land the opening read. */
+async function openOn(dialog: typeof element, cached: unknown, fresh: unknown) {
+  element = dialog;
+  if (cached !== undefined) landRead(cached);
+  else mocks.record = { data: undefined, dataUpdatedAt: 0, isError: false, refetch: vi.fn() };
+  await act(async () => { tree = create(element(false)); });
+  await rerender(true);
+  landRead(fresh);
+  await rerender(true);
+}
+
+function vehicleDialog(onClose = vi.fn()) {
+  return function renderVehicleDialog(isOpen: boolean) {
+    return <FleetEditDialog kind="vehicle" entityId={vehicle.id} isOpen={isOpen} onClose={onClose} />;
+  };
+}
+
+async function typeName(value: string) {
+  await act(async () => {
+    const name = tree.root.findAllByType("input").find((node) => node.props.id === "name")!;
+    await name.props.onChange({ target: { name: "name", value } });
+  });
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.record = { data: vehicle, isError: false, refetch: vi.fn() };
+  fetchClock = 0;
   mocks.updateVehicle.mockResolvedValue({ ...vehicle, version: 4 });
   mocks.updateOperator.mockResolvedValue(operator);
 });
@@ -108,9 +145,7 @@ describe("isFleetKind", () => {
 describe("FleetEditDialog", () => {
   it("opens the vehicle in the quick-add dialog and saves an update with the loaded version", async () => {
     const onClose = vi.fn();
-    await act(async () => {
-      tree = create(<FleetEditDialog kind="vehicle" entityId={vehicle.id} isOpen onClose={onClose} />);
-    });
+    await openOn(vehicleDialog(onClose), undefined, vehicle);
     expect(text(tree.root)).toContain("Edit vehicle");
 
     // Submitting untouched proves every field was pre-filled from the record.
@@ -129,15 +164,43 @@ describe("FleetEditDialog", () => {
     expect(onClose).toHaveBeenCalledOnce();
   });
 
+  it("waits for the opening read instead of editing a cached older row", async () => {
+    const newer = { ...vehicle, name: "Saved elsewhere", version: 4 };
+    element = vehicleDialog();
+    landRead(vehicle);
+    await act(async () => { tree = create(element(false)); });
+    await rerender(true);
+    // The cached row is on screen only as a loading state, never as the form.
+    expect(tree.root.findAllByType("form")).toHaveLength(0);
+
+    landRead(newer);
+    await rerender(true);
+    await submit();
+    expect(mocks.updateVehicle).toHaveBeenLastCalledWith(expect.objectContaining({
+      name: "Saved elsewhere",
+      expectedVersion: 4,
+    }));
+  });
+
+  it("selects the fuel type option for a value stored in another case", async () => {
+    await openOn(vehicleDialog(), undefined, { ...vehicle, fuelType: "diesel" });
+    await submit();
+    expect(mocks.updateVehicle).toHaveBeenLastCalledWith(expect.objectContaining({ fuelType: "Diesel" }));
+  });
+
+  it("keeps a stored fuel type that matches no option", async () => {
+    await openOn(vehicleDialog(), undefined, { ...vehicle, fuelType: "LPG" });
+    await submit();
+    expect(mocks.updateVehicle).toHaveBeenLastCalledWith(expect.objectContaining({ fuelType: "LPG" }));
+  });
+
   it("does not submit the entry form it is nested in", async () => {
     const outerSubmit = vi.fn();
-    await act(async () => {
-      tree = create(
-        <form onSubmit={outerSubmit}>
-          <FleetEditDialog kind="vehicle" entityId={vehicle.id} isOpen onClose={vi.fn()} />
-        </form>,
-      );
-    });
+    await openOn((isOpen) => (
+      <form onSubmit={outerSubmit}>
+        <FleetEditDialog kind="vehicle" entityId={vehicle.id} isOpen={isOpen} onClose={vi.fn()} />
+      </form>
+    ), undefined, vehicle);
     const wrapper = tree.root.findAll((node) => node.type === "div" && typeof node.props.onSubmit === "function")[0];
     const stopPropagation = vi.fn();
     wrapper.props.onSubmit({ stopPropagation });
@@ -148,9 +211,7 @@ describe("FleetEditDialog", () => {
     const refusal = "Credit batch CB-26-001 uses this vehicle's type. Keep the type, or add a new vehicle for the new type.";
     mocks.updateVehicle.mockRejectedValueOnce(new Error(refusal));
     const onClose = vi.fn();
-    await act(async () => {
-      tree = create(<FleetEditDialog kind="vehicle" entityId={vehicle.id} isOpen onClose={onClose} />);
-    });
+    await openOn(vehicleDialog(onClose), undefined, vehicle);
     await submit();
 
     expect(onClose).not.toHaveBeenCalled();
@@ -161,17 +222,13 @@ describe("FleetEditDialog", () => {
     mocks.updateVehicle.mockRejectedValueOnce(new StaleVersionError(STALE_VERSION_MESSAGE, {
       entity: "vehicle", id: vehicle.id, code: STALE_VERSION_CONFLICT_CODE,
     }));
-    const dialog = () => <FleetEditDialog kind="vehicle" entityId={vehicle.id} isOpen onClose={vi.fn()} />;
-    await act(async () => { tree = create(dialog()); });
-    await act(async () => {
-      const name = tree.root.findAllByType("input").find((node) => node.props.id === "name")!;
-      await name.props.onChange({ target: { name: "name", value: "Draft name" } });
-    });
+    await openOn(vehicleDialog(), undefined, vehicle);
+    await typeName("Draft name");
     await submit();
 
     // The hook's invalidation refetches a newer row while the dialog is open.
-    mocks.record = { data: { ...vehicle, name: "Saved elsewhere", version: 4 }, isError: false, refetch: vi.fn() };
-    await act(async () => tree.update(dialog()));
+    landRead({ ...vehicle, name: "Saved elsewhere", version: 4 });
+    await rerender(true);
 
     expect(text(tree.root)).toContain(STALE_VERSION_MESSAGE);
     await submit();
@@ -182,13 +239,12 @@ describe("FleetEditDialog", () => {
   });
 
   it("loads the latest record when the dialog opens again", async () => {
-    const dialog = (isOpen: boolean) => (
-      <FleetEditDialog kind="vehicle" entityId={vehicle.id} isOpen={isOpen} onClose={vi.fn()} />
-    );
-    await act(async () => { tree = create(dialog(true)); });
-    await act(async () => tree.update(dialog(false)));
-    mocks.record = { data: { ...vehicle, name: "Saved elsewhere", version: 4 }, isError: false, refetch: vi.fn() };
-    await act(async () => tree.update(dialog(true)));
+    await openOn(vehicleDialog(), undefined, vehicle);
+    await rerender(false);
+    await rerender(true);
+    expect(tree.root.findAllByType("form")).toHaveLength(0);
+    landRead({ ...vehicle, name: "Saved elsewhere", version: 4 });
+    await rerender(true);
     await submit();
     expect(mocks.updateVehicle).toHaveBeenLastCalledWith(expect.objectContaining({
       name: "Saved elsewhere",
@@ -196,11 +252,12 @@ describe("FleetEditDialog", () => {
     }));
   });
 
-  it("edits an operator without a row version", async () => {
-    mocks.record = { data: operator, isError: false, refetch: vi.fn() };
-    await act(async () => {
-      tree = create(<FleetEditDialog kind="operator" entityId={operator.id} isOpen onClose={vi.fn()} />);
-    });
+  it("edits an operator from the fresh read, not a cached row", async () => {
+    await openOn(
+      (isOpen) => <FleetEditDialog kind="operator" entityId={operator.id} isOpen={isOpen} onClose={vi.fn()} />,
+      { ...operator, credentials: "Old credentials" },
+      operator,
+    );
     expect(text(tree.root)).toContain("Edit operator");
     await submit();
     expect(mocks.updateOperator).toHaveBeenCalledWith({
@@ -212,8 +269,7 @@ describe("FleetEditDialog", () => {
   });
 
   it("shows a retry while the record cannot be loaded", async () => {
-    const refetch = vi.fn();
-    mocks.record = { data: undefined, isError: true, refetch };
+    mocks.record = { data: undefined, dataUpdatedAt: 0, isError: true, refetch: vi.fn() };
     await act(async () => {
       tree = create(<FleetEditDialog kind="driver" entityId="driver-1" isOpen onClose={vi.fn()} />);
     });
