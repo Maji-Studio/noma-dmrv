@@ -212,6 +212,7 @@ export function OrderForm({
             name="customerId"
             label="Customer"
             entityType="customer"
+            allowEdit
             placeholder="Select customer..."
             disabled={isSubmitting}
             required
@@ -255,7 +256,7 @@ export function OrderForm({
         icon={<PackageIcon size={14} weight="bold" />}
         fields={["formulationId", "quantityKg", "packaging"]}
       >
-        <FormEntitySelect control={control} name="formulationId" label="Formulation" entityType="formulation" placeholder="Select formulation..." required disabled={isSubmitting} />
+        <FormEntitySelect control={control} name="formulationId" label="Formulation" entityType="formulation" allowEdit placeholder="Select formulation..." required disabled={isSubmitting} />
 
         <div className="grid grid-cols-1 gap-x-16 gap-y-20">
           <FormField
