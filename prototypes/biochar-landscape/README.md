@@ -30,6 +30,8 @@ Select a station to focus, use Next stage to move through the process, and Overv
 
 ## Where to edit
 
+Editable modules stay flat in `src/`. Source artwork and elevation data live in `src/assets/`; generated, versioned lighting data live in `src/bakes/`. Bake commands update those files in place.
+
 | Change | Source |
 | --- | --- |
 | Station placement, truck orientation, lane paths | `src/composition-state.ts` |
@@ -70,11 +72,11 @@ Baking uses 12 hemisphere samples and directional visibility, not a full path-tr
 
 ## Assets and portability
 
-- Official MAJI logo: `src/maji-logo.svg`, supplied design-system asset.
+- Official MAJI logo: `src/assets/maji-logo.svg`, supplied design-system asset.
 - GT Flexa fonts: embedded at build time from the repository's `src/styles/fonts` directory.
-- Sunset environment: `src/sunset.hdr`, supplied local Zürich miniature reference. City-specific lightmaps are not reused.
-- `src/illustrated-sprites.png`: generated botanical/cloud atlas from this design exploration. Trees now use geometry; clouds still use the atlas.
-- `src/elevation-sample.json`: Mapzen/Tilezen Terrarium tile `10/613/521`, northern Tanzania, artistically rescaled. This is an explanatory landscape, not a surveyed site plan.
+- Sunset environment: `src/assets/sunset.hdr`, supplied local Zürich miniature reference. City-specific lightmaps are not reused.
+- `src/assets/illustrated-sprites.png`: generated botanical/cloud atlas from this design exploration. Trees now use geometry; clouds still use the atlas.
+- `src/assets/elevation-sample.json`: Mapzen/Tilezen Terrarium tile `10/613/521`, northern Tanzania, artistically rescaled. This is an explanatory landscape, not a surveyed site plan.
 
 The prototype package and lockfile are isolated from the application. Main-app TypeScript and ESLint exclude this directory; run the prototype's `check` command explicitly. Generated HTML and `node_modules` stay local.
 

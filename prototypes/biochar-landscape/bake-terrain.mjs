@@ -18,5 +18,5 @@ for(let j=0;j<=LAND.segmentsZ;j++)for(let i=0;i<=LAND.segmentsX;i++){
  for(const offset of [-.035,0,.035]){let visible=1;for(let distance=.75;distance<46;distance+=1.5){const terrain=elevation(x+sunDirection[0]*distance,z+sunDirection[1]*distance);if(terrain>y+Math.tan(sunAngle+offset)*distance+.14){visible=0;break}}sun+=visible/3}
  baked.push(Math.round((1-occlusion/12)*1000)/1000,Math.round(sun*1000)/1000,Math.round(bounce/12*1000)/1000);
 }
-await writeFile(path.join(root,'src/terrain-light-bake.json'),JSON.stringify({method:'12-direction horizon AO; 3-sample 24-degree sunset visibility; warm one-bounce approximation',values:baked}));
+await writeFile(path.join(root,'src/bakes/terrain-light-bake.json'),JSON.stringify({method:'12-direction horizon AO; 3-sample 24-degree sunset visibility; warm one-bounce approximation',values:baked}));
 console.log(`Baked ${baked.length/3} terrain vertices. No runtime ray marching.`);

@@ -1,5 +1,5 @@
 // Northern Tanzania DEM, artistically rescaled as continuous rolling terrain.
-import sample from './elevation-sample.json';
+import sample from './assets/elevation-sample.json';
 export const LAND = { width: 180, depth: 160, segmentsX: 256, segmentsZ: 224 };
 const MIN_ELEVATION = 687, RELIEF_RANGE = 1777, RELIEF_HEIGHT = 25;
 export const smooth = (a: number, b: number, x: number) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };

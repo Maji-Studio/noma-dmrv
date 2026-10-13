@@ -3,7 +3,7 @@ import { useEffect } from 'react';
 import { useLoader, useThree } from '@react-three/fiber';
 import { HDRLoader } from 'three/examples/jsm/loaders/HDRLoader.js';
 import * as THREE from 'three';
-import sunset from './sunset.hdr';
+import sunset from './assets/sunset.hdr';
 const LIGHTING = { environment: .8, rotation: -96, exposure: 1.2 };
 export function MiniatureLighting() {
     const texture = useLoader(HDRLoader, sunset);

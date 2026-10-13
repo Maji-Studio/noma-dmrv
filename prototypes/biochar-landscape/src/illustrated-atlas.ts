@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import atlasUrl from './illustrated-sprites.png';
+import atlasUrl from './assets/illustrated-sprites.png';
 const SIZE = 1254;
 // Pixel bounds preserve each hand-drawn silhouette; no runtime background removal.
 const REGIONS = [

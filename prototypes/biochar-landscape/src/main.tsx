@@ -7,7 +7,7 @@ import { STEPS, VARIANTS, type Variant } from './process-data';
 import './styles.css';
 import { PALETTE_STUDIES, type PaletteStudy } from './palette-study';
 import { SHADING_STUDIES, readShading, type ShadingMode } from './shading-state';
-import majiLogo from './maji-logo.svg';
+import majiLogo from './assets/maji-logo.svg';
 const ATLAS_VARIANT: Variant = 'A';
 function Icon({ type }: {
     type: 'left' | 'right' | 'expand' | 'reset' | 'plus' | 'minus' | 'close';

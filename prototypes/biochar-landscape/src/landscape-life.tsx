@@ -2,7 +2,6 @@ import { REMODELLED, ROUTE_POINTS, COMPOSITION, STATION_YAWS, SITE_SIZES } from 
 import { useEffect, useRef } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
-import { PALETTE } from './model-kit';
 import { elevation } from './terrain-height';
 import { STEPS } from './process-data';
 const FRAME_MS = 1000 / 24;
@@ -16,10 +15,7 @@ const ATLAS_ROUTES = [
 ];
 const ROUTES = REMODELLED ? ROUTE_POINTS.map(points => new THREE.CatmullRomCurve3(points.map(p => new THREE.Vector3(...p)), false, 'catmullrom', .15)) : ATLAS_ROUTES;
 const CONTACT_VERTEX = `varying vec2 vUv;void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}`;
-const CONTACT_FRAGMENT = `varying vec2 vUv;uniform vec3 ink;void main(){vec2 p=(vUv-.5)*2.;float shade=pow(max(0.,1.-dot(p,p)),2.);gl_FragColor=vec4(ink,shade*.20);}`;
 const SIZES = REMODELLED ? SITE_SIZES : [[16, 13], [12, 5], [15, 9], [13, 11], [12, 5], [22, 15]];
-/** Soft analytic contact shading: no render targets, shadow passes, or texture downloads. */
-export function Grounding() { return <>{STEPS.map((stage, i) => <mesh key={i} position={[stage.position[0] + .7, stage.position[1] + .035, stage.position[2] + .5]} rotation={[-Math.PI / 2, 0, 0]} renderOrder={1}><planeGeometry args={[SIZES[i][0] * 1.3, SIZES[i][1] * 1.3]}/><shaderMaterial vertexShader={CONTACT_VERTEX} fragmentShader={CONTACT_FRAGMENT} uniforms={{ ink: { value: new THREE.Color(PALETTE.purple) } }} transparent depthWrite={false}/></mesh>)}</>; }
 const FOCUS_FRAGMENT = `varying vec2 vUv;uniform vec2 size;uniform vec3 rose;
 void main(){vec2 p=vUv*size;vec2 width=max(fwidth(p),vec2(.001));vec2 line=1.-smoothstep(width*.35,width*1.25,abs(fract(p)-.5));float grid=max(line.x,line.y);vec2 edge=min(vUv,1.-vUv)*size;float fade=smoothstep(0.,.6,min(edge.x,edge.y));gl_FragColor=vec4(rose,(.065+grid*.20)*fade);
 #include <colorspace_fragment>
