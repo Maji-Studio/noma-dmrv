@@ -11,6 +11,7 @@ import { ENTITY_SEARCH_LIMIT } from "@/config/forms";
 import { useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+import { STRICT_FORMULATION_MATCH } from "@/schemas/biochar-products";
 
 const state = vi.hoisted(() => ({ permissionChecks: 0, dialogMounts: [] as string[], listEnabled: [] as boolean[], detailIds: [] as (string | undefined)[], options: [] as EntityOption[], loading: false, canManage: false, error: null as Error | null }));
 vi.mock("@/hooks/use-entities", () => ({
@@ -639,7 +640,7 @@ describe("EntitySelect caller-owned options", () => {
     rerender(<EntitySelect options={[]} onChange={vi.fn()} loadError={new Error("Unavailable")} />);
     expect(screen.queryByTestId("entity-select-empty")).toBeNull();
     rerender(<EntitySelect options={[]} onChange={vi.fn()} />);
-    expect(screen.getByTestId("entity-select-empty").textContent).toBe("No option records yet.");
+    expect(screen.getByTestId("entity-select-empty").textContent).toBe("No matching option records.");
     expect(screen.getByTestId("entity-select-empty").getAttribute("role")).toBe("presentation");
     expect(screen.queryAllByRole("option")).toHaveLength(0);
   });
@@ -647,9 +648,20 @@ describe("EntitySelect caller-owned options", () => {
   it.each(["storage bin", "credit batch", "feedstock", "Removal template", "Isometric project"])("names the empty record type (%s) and keeps search-miss guidance", (optionLabel) => {
     render(<EntitySelect options={[]} optionLabel={optionLabel} onChange={vi.fn()} alwaysShowSearch />);
     open();
-    expect(screen.getByTestId("entity-select-empty").textContent).toBe(`No ${optionLabel} records yet.`);
+    expect(screen.getByTestId("entity-select-empty").textContent).toBe(`No matching ${optionLabel} records.`);
     fireEvent.change(screen.getByTestId("entity-select-search"), { target: { value: "missing" } });
     expect(screen.getByTestId("entity-select-empty").textContent).toBe("No matches. Change or clear your search.");
+  });
+
+  it.each([
+    { filterBy: { facilityId: "facility", formulationMatch: STRICT_FORMULATION_MATCH } },
+    { excludeIds: ["one", "two"] },
+  ])("describes an empty filtered list without claiming no records exist: %j", (filters) => {
+    if ("filterBy" in filters) state.options = [];
+    render(<EntitySelect entityType="storageLocation" onChange={vi.fn()} {...filters} />);
+    open();
+    expect(screen.getByTestId("entity-select-empty").textContent).toBe("No matching storage bin records.");
+    expect(screen.queryAllByRole("option")).toHaveLength(0);
   });
 
   it.each([5, 6])("uses the shared search threshold for local options (%i)", (count) => {

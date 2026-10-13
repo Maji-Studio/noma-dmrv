@@ -710,7 +710,7 @@ function EntitySelectView({
                       </li>
                     ) : (
                       <li role="presentation" data-testid="entity-select-empty" className="px-16 py-12 text-[var(--text-s)] text-[var(--color-text-tertiary)]">
-                        {searchQuery.length > 0 ? "No matches. Change or clear your search." : `No ${entityLabel} records yet.`}
+                        {searchQuery.length > 0 ? "No matches. Change or clear your search." : `No matching ${entityLabel} records.`}
                       </li>
                     )
                   ) : null)}
