@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   assertProductionRunOutcome,
+  assertProductionRunCreateStatus,
   assertProductionRunTransition,
   DRY_MASS_BALANCE_MESSAGE,
   getProductionRunOutcomeViolations,
@@ -32,12 +33,19 @@ function makeOutcomeInput(
 }
 
 describe("production-run lifecycle", () => {
+  it.each(["running", "complete"] as const)("allows %s on create", (status) => {
+    expect(() => assertProductionRunCreateStatus(status)).not.toThrow();
+  });
+
+  it.each(["failed", "cancelled"] as const)("refuses %s on create independently of saved-run transitions", (status) => {
+    expect(() => assertProductionRunTransition("running", status)).not.toThrow();
+    expect(() => assertProductionRunCreateStatus(status)).toThrow("A new production run can only start as Running or Complete.");
+  });
+
   it.each([
-    ["draft", "running"],
-    ["draft", "complete"],
-    ["draft", "cancelled"],
     ["running", "complete"],
     ["running", "failed"],
+    ["running", "cancelled"],
     ["complete", "running"],
     ["failed", "running"],
     ["cancelled", "cancelled"],
@@ -46,7 +54,6 @@ describe("production-run lifecycle", () => {
   });
 
   it.each([
-    ["draft", "failed"],
     ["complete", "cancelled"],
     ["failed", "complete"],
     ["cancelled", "running"],
@@ -185,7 +192,7 @@ describe("production-run lifecycle", () => {
       expect(() => assertProductionRunOutcome(makeOutcomeInput({ biocharMoisturePercent: 0 }))).not.toThrow();
     });
 
-    it.each(["draft", "running", "failed", "cancelled"] as const)("allows missing output bin and moisture when %s", (status) => {
+    it.each(["running", "failed", "cancelled"] as const)("allows missing output bin and moisture when %s", (status) => {
       const terminal = status === "failed";
       const input = makeOutcomeInput({ status, endTime: terminal ? END_TIME : null, endTimePresent: terminal,
         cancellationReason: "Recorded in error", biocharStorageLocationId: null, biocharMoisturePercent: null });
@@ -277,7 +284,6 @@ describe("production-run lifecycle", () => {
 
     it.each([
       makeOutcomeInput(),
-      makeOutcomeInput({ status: "draft", endTime: null, endTimePresent: false }),
       makeOutcomeInput({ status: "running", endTime: null, endTimePresent: false }),
       makeOutcomeInput({
         status: "cancelled",
@@ -299,7 +305,7 @@ describe("production-run lifecycle", () => {
       ],
       [{ biocharOutputKg: 0 }, "positive biochar output"],
       [{ endTime: null, endTimePresent: false }, "needs an end time"],
-      [{ status: "running" }, "cannot have an end time"],
+      [{ status: "running" }, "Choose Complete or clear the end time for a Running run."],
       [
         {
           status: "cancelled",

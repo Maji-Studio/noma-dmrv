@@ -57,7 +57,7 @@ async function main(): Promise<void> {
   const { createSupplier } = await import("@/data-access/suppliers");
   const { createFeedstockType } = await import("@/data-access/feedstock-types");
   const { createReactor } = await import("@/data-access/reactors");
-  const { startProductionRun } = await import("@/lib/operations/production-runs");
+  const { startProductionRun, updateProductionRun } = await import("@/lib/operations/production-runs");
   const { productionRunEtag } = await import("@/lib/api/representation-etags");
   const { createStorageLocation } = await import("@/data-access/storage-locations");
   const { createFormulation } = await import("@/data-access/formulations");
@@ -123,15 +123,19 @@ async function main(): Promise<void> {
     totalWetMassKg: INTAKE_WET_MASS_KG, moisturePercent: INTAKE_MOISTURE_PERCENT,
     allocations: [{ storageLocationId: runBin.id, allocatedWetMassKg: INTAKE_WET_MASS_KG }],
   });
-  // A closed draft window in the past. hooks.py builds its seeded create from a
+  // A failed run with a closed window in the past. hooks.py builds its seeded create from a
   // later window on the same reactor, so the overlap guard does not refuse it.
   const now = Date.now();
-  const run = (await runOperation(startProductionRun, ctx, {
-    facilityId: facility.id, reactorId: reactor.id, status: "draft",
+  const startedRun = (await runOperation(startProductionRun, ctx, {
+    facilityId: facility.id, reactorId: reactor.id, status: "running",
     startTime: new Date(now - SEEDED_RUN_START_HOURS_AGO * MS_PER_HOUR).toISOString(),
-    endTime: new Date(now - SEEDED_RUN_END_HOURS_AGO * MS_PER_HOUR).toISOString(),
+    endTime: null,
     feedstockDraws: [{ storageLocationId: runBin.id, wetMassKg: RUN_DRAW_WET_MASS_KG }],
     feedstockMoisturePercent: INTAKE_MOISTURE_PERCENT,
+  })).data;
+  const run = (await runOperation(updateProductionRun, ctx, {
+    productionRunId: startedRun.id, expectedVersion: startedRun.version, status: "failed",
+    endTime: new Date(now - SEEDED_RUN_END_HOURS_AGO * MS_PER_HOUR).toISOString(),
   })).data;
   // Biochar side. Bin and formulation names are unique per facility.
   const biocharBin = await createStorageLocation(ctx, {
@@ -150,7 +154,7 @@ async function main(): Promise<void> {
     biocharMoisturePercent: BIOCHAR_MOISTURE_PERCENT,
   })).data;
   // One month at most (credit_batches_isometric_max_one_month); the completed run
-  // joins by id. The draft run is not complete, so the batch ignores it.
+  // joins by id. The failed run is not complete, so the batch ignores it.
   const creditBatch = await createCreditBatch(ctx, {
     code: "FUZZ-CB", facilityId: facility.id, feedstockTypeId: feedstockType.id,
     startDate: new Date(now - BATCH_WINDOW_DAYS_BACK * MS_PER_DAY), endDate: new Date(now),

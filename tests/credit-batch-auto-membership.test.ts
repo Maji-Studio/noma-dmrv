@@ -366,18 +366,18 @@ describe("credit batch automatic production-run membership", () => {
     });
     productionRunIds.push(running.id);
 
-    const draft = await createProductionRun(ctx, {
-      code: `PR-CBAM-DRAFT-${tag}`,
+    const secondRunning = await createProductionRun(ctx, {
+      code: `PR-CBAM-SECOND-RUNNING-${tag}`,
       facilityId,
       reactorId: cohortGuardReactorId,
-      status: "draft",
+      status: "running",
       startTime: new Date("2024-02-16T08:00:00.000Z"),
-      endTime: new Date("2024-02-16T12:00:00.000Z"),
+      endTime: null,
       feedstockWetMassKg: 100,
       feedstockMoisturePercent: 20,
       feedstockStorageLocationId: storageLocationId,
     });
-    productionRunIds.push(draft.id);
+    productionRunIds.push(secondRunning.id);
 
     const previewRuns = await getCreditBatchProductionRunOptions(ctx, {
       facilityId,
@@ -387,13 +387,14 @@ describe("credit batch automatic production-run membership", () => {
     });
     expect(
       previewRuns
-        .filter((run) => run.id === running.id || run.id === draft.id)
+        .filter((run) => run.id === running.id || run.id === secondRunning.id)
         .map((run) => run.status)
         .sort(),
-    ).toEqual(["draft", "running"]);
+    ).toEqual(["running", "running"]);
 
-    await updateProductionRun(ctx, draft.id, { expectedVersion: await productionVersion(ctx, "productionRuns", draft.id),
+    await updateProductionRun(ctx, secondRunning.id, { expectedVersion: await productionVersion(ctx, "productionRuns", secondRunning.id),
       status: "complete",
+      endTime: new Date("2024-02-16T12:00:00.000Z"),
       biocharStorageLocationId, biocharOutputKg: 30,
       biocharMoisturePercent: 20,
     });
@@ -420,7 +421,7 @@ describe("credit batch automatic production-run membership", () => {
         creditBatchId: creditBatchProductionRuns.creditBatchId,
       })
       .from(creditBatchProductionRuns)
-      .where(eq(creditBatchProductionRuns.productionRunId, draft.id));
+      .where(eq(creditBatchProductionRuns.productionRunId, secondRunning.id));
     expect(directCompletionMembership?.creditBatchId).toBe(batch.id);
     expect(await labLogisticsVersion(ctx, "creditBatches", batch.id)).toBe(batch.version + AUTO_ATTACHED_RUN_COUNT);
     await expect(updateCreditBatch(ctx, batch.id, { expectedVersion: batch.version, siteManagementNotes: "Stale before run completion" })).rejects.toMatchObject({ code: "stale_version" });

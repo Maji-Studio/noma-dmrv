@@ -1,3 +1,4 @@
+import { addFixtureReactor } from "./helpers/operation-fixture";
 import { randomUUID } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
@@ -185,7 +186,7 @@ describe("production run REST outcomes", { timeout: TIMEOUT_MS }, () => {
 
   it("lists newest first with facility, reactor, status and code filters and bound cursors", async () => {
     const first = await create();
-    const second = await create({ ...productionRunInput(a, false), status: "cancelled", cancellationReason: "Not started", endTime: "2026-10-06T11:00:00Z" });
+    const second = await createCancelled();
     const firstPage = await (await LIST(request("GET", "?limit=1"))).json();
     expect(firstPage.data.map((row: { id: string }) => row.id)).toEqual([second.row.id]);
     const nextPage = await (await LIST(request("GET", `?limit=1&cursor=${firstPage.nextCursor}`))).json();
@@ -244,10 +245,10 @@ describe("production run REST outcomes", { timeout: TIMEOUT_MS }, () => {
 describe("production run review regressions", { timeout: TIMEOUT_MS }, () => {
   it("returns a duplicate PATCH code as a conflict with its field pointer", async () => {
     const first = await create();
-    const second = await create({ ...productionRunInput(a, false), status: "cancelled", cancellationReason: "Not started", endTime: "2026-10-06T11:00:00Z" });
+    const second = await createCancelled();
     const refusal = await problem(await patch(second.row.id, { code: first.row.code }, second.etag), 409, "conflict");
     expect(refusal.errors).toContainEqual(expect.objectContaining({ pointer: "/code", code: "conflict" }));
-    expect(await rows()).toEqual(expect.arrayContaining([expect.objectContaining({ id: second.row.id, code: second.row.code, version: 1 })]));
+    expect(await rows()).toEqual(expect.arrayContaining([expect.objectContaining({ id: second.row.id, code: second.row.code, version: 2 })]));
   });
 
   it("coerces numeric strings on create and PATCH, and clears optional numbers", async () => {
@@ -263,8 +264,8 @@ describe("production run review regressions", { timeout: TIMEOUT_MS }, () => {
     expect(await binWetStock(a)).toBe(3600);
   });
 
-  it("refuses a failed create with the status pointer", async () => {
-    const refusal = await problem(await POST(request("POST", "", { ...productionRunInput(a), status: "failed" },
+  it.each(["failed", "cancelled"])("refuses a %s create with the status pointer", async (status) => {
+    const refusal = await problem(await POST(request("POST", "", { ...productionRunInput(a), status },
       { "idempotency-key": randomUUID() })), 422, "validation_failed");
     expect(refusal.errors).toContainEqual(expect.objectContaining({ pointer: "/status" }));
     expect(await rows()).toHaveLength(0);
@@ -336,11 +337,21 @@ describe("production run review regressions", { timeout: TIMEOUT_MS }, () => {
     const [facility] = await db.insert(facilities).values({ timezone: "UTC", organizationId: a.ctx.organizationId, code: "OTHER", name: "Other facility" }).returning();
     const [bin] = await db.insert(storageLocations).values({ organizationId: a.ctx.organizationId, facilityId: facility.id,
       code: "OTHER-OUTPUT", name: "Other output", type: "biochar_bin" }).returning();
+    const reactorId = await addFixtureReactor(a, `output-validation-${randomUUID()}`);
     for (const biocharStorageLocationId of [a.binId, bin.id]) {
       await problem(await patch(saved.row.id, { biocharStorageLocationId }, saved.etag), 422, "validation_failed");
-      await problem(await POST(request("POST", "", { ...productionRunInput(a), status: "draft", startTime: "2026-10-05T10:00:00Z", endTime: "2026-10-05T11:00:00Z", biocharStorageLocationId },
+      await problem(await POST(request("POST", "", { ...productionRunInput(a), reactorId, status: "running", startTime: "2026-10-05T10:00:00Z", endTime: null, biocharStorageLocationId },
         { "idempotency-key": randomUUID() })), 422, "validation_failed");
     }
     expect(await rows()).toMatchObject([{ id: saved.row.id, version: 1 }]);
   });
 });
+
+
+async function createCancelled() {
+  const reactorId = await addFixtureReactor(a, `cancel-${randomUUID()}`);
+  const saved = await create({ ...productionRunInput(a, false), reactorId });
+  const response = await patch(saved.row.id, { status: "cancelled", cancellationReason: "Not started" }, saved.etag);
+  expect(response.status).toBe(200);
+  return { ...saved, row: (await response.json()).data, etag: response.headers.get("etag")! };
+}

@@ -564,7 +564,6 @@ export async function getProductionRunStats(
     totalFeedstockWetKg: Number(feedstockStats.totalFeedstockWetKg) || 0,
     runningCount: statusMap["running"] ?? 0,
     completedCount: statusMap["complete"] ?? 0,
-    draftCount: statusMap["draft"] ?? 0,
   };
 }
 

@@ -23,9 +23,10 @@ diesel against. Production runs are the membership primitive for a
 1:1 with a Removal.
 
 **Production run status**:
-The run's lifecycle: *draft* → *running* → a terminal outcome. Operators
-entering an already-finished run may move directly from *draft* to *complete*;
-*running* remains available for a run that is actively in progress.
+New runs default to *Running*. Operators may create an already-finished run
+as *Complete* with its end time, feedstock and biochar output recorded.
+Missing completion fields prevent saving. *Failed* and *Cancelled* are actions
+on a saved run; neither is available on create.
 *Complete* — the batch finished and its core quantities (feedstock
 consumed, biochar output) are recorded. *Failed* — the run physically
 happened and consumed feedstock but did not produce usable biochar;

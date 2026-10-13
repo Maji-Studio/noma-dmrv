@@ -37,7 +37,7 @@ export const productionRuns = pgTable(
     code: text('code').notNull(), // e.g., "PR-2025-043"
     facilityId: uuid('facility_id')
       .notNull(),
-    status: productionRunStatus('status').default('draft').notNull(),
+    status: productionRunStatus('status').default('running').notNull(),
     cancellationReason: text('cancellation_reason'),
 
     // --- Overview ---

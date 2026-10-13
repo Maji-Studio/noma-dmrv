@@ -11,7 +11,7 @@ const id = "00000000-0000-4000-8000-000000000001";
 it("describes the created run with its returned version and only decoded field names", () => {
   const input = startProductionRun.input.parse({
     facilityId: id, reactorId: id, startTime: new Date("2026-01-01T10:00:00Z"),
-    status: "draft", cancellationReason: "private note",
+    status: "running", cancellationReason: "private note",
   });
   const effect = startProductionRun.describe!(input, { id, version: 1 } as ProductionRunWithRelations);
   expect(effect).toEqual({

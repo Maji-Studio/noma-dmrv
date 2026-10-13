@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { PRODUCTION_RUN_CREATE_STATUSES, PRODUCTION_RUN_CREATE_STATUS_MESSAGE } from "@/lib/production-runs/lifecycle";
 import { updateProductionRunSchema } from "./production-runs";
 import { clearableNumber, pipeToCanonicalNumber, toClearableNumber, uuidSchema } from "./helpers";
 import { eventInstantSchema } from "./event-instant";
@@ -17,7 +18,7 @@ publishedJsonSchemas.add(drawShape.wetMassKg, { jsonSchema: { ...z.toJSONSchema(
 const describedFields = {
   facilityId: fields.facilityId.describe("Owning facility identifier, UUID."),
   reactorId: fields.reactorId.describe("Reactor UUID in the effective facility."),
-  status: fields.status.describe("Run state: draft, running, complete, failed or cancelled."),
+  status: fields.status.describe("Run state: running, complete, failed or cancelled."),
   cancellationReason: fields.cancellationReason.describe("Cancellation reason, untrusted plain text; required when cancelling."),
   operatorId: fields.operatorId.describe("Operator UUID, or null to clear."),
   feedstockDraws: fields.feedstockDraws.describe("Explicit source feedstock bin draws; each wet mass is in kilograms."),
@@ -36,7 +37,7 @@ const describedFields = {
 export const createProductionRunInput = z.strictObject({
   ...describedFields,
   facilityId: uuidSchema().describe("Owning facility UUID."), reactorId: uuidSchema().describe("Reactor UUID in the facility."),
-  status: fields.status.unwrap().default("draft").describe("Initial run state: draft, running, complete or cancelled."),
+  status: z.enum(PRODUCTION_RUN_CREATE_STATUSES, { error: PRODUCTION_RUN_CREATE_STATUS_MESSAGE }).default("running").describe("Initial run state: running or complete."),
   startTime: productionRunInstantSchema,
   endTime: productionRunInstantSchema.nullable().optional().describe("End instant or facility-local date/time; null leaves the run open."),
 });

@@ -11,7 +11,7 @@ import * as React from "react"
  * Status Badge Component
  *
  * Color-coded status badge component with variants for:
- * - Production run status: draft, running, complete, failed, cancelled
+ * - Production run status: running, complete, failed, cancelled
  * - Delivery status: delivered
  * - Application status: delivered, applied
  * - Credit batch status: draft, pending, verified, issued, rejected

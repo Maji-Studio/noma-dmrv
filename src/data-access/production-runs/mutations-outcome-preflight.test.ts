@@ -22,6 +22,16 @@ function preflightTransaction(responses: unknown[][]) {
   return { tx, insert, update };
 }
 
+it.each(["running", undefined] as const)("refuses a closed %s create before writing with an endTime pointer", async (status) => {
+  const state = preflightTransaction([[{ id: "facility", archivedAt: null }], [{ id: "reactor", facilityId: "facility" }]]);
+  await expect(createProductionRunInTransaction(ctx, state.tx, {
+    code: "PR-26-001", facilityId: "facility", reactorId: "reactor", status, startTime: START, endTime: END,
+  }, { now: NOW })).rejects.toMatchObject({ code: "validation_failed", issues: [
+    { path: ["endTime"], message: "Choose Complete or clear the end time for a Running run." },
+  ] });
+  expect(state.insert).not.toHaveBeenCalled();
+});
+
 it("requires moisture on API-shaped terminal creation before writing", async () => {
   const state = preflightTransaction([[{ id: "facility", archivedAt: null }], [{ id: "reactor", facilityId: "facility" }]]);
   await expect(createProductionRunInTransaction(ctx, state.tx, {
@@ -81,10 +91,10 @@ it("reports the missing source field even when terminal output exceeds an empty 
   expect(state.insert).not.toHaveBeenCalled();
 });
 
-it("refuses API-shaped failed creation before writing with a status pointer", async () => {
+it.each(["failed", "cancelled"] as const)("refuses API-shaped %s creation before writing with a status pointer", async (status) => {
   const state = preflightTransaction([[{ id: "facility", archivedAt: null }], [{ id: "reactor", facilityId: "facility" }]]);
   await expect(createProductionRunInTransaction(ctx, state.tx, {
-    code: "PR-26-001", facilityId: "facility", reactorId: "reactor", status: "failed", startTime: START, endTime: END,
+    code: "PR-26-001", facilityId: "facility", reactorId: "reactor", status, startTime: START, endTime: END, cancellationReason: "Recorded in error",
     feedstockDraws: [{ storageLocationId: BIN_ID, wetMassKg: DRAW_KG }], feedstockMoisturePercent: 20,
   }, { now: NOW })).rejects.toMatchObject({ code: "validation_failed", issues: [{ path: ["status"] }] });
   expect(state.insert).not.toHaveBeenCalled();

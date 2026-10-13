@@ -87,7 +87,6 @@ export interface ProductionRunStats {
   totalFeedstockWetKg: number;
   runningCount: number;
   completedCount: number;
-  draftCount: number;
 }
 
 export interface ProductionRunReadingRecord {

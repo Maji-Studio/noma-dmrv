@@ -17,7 +17,6 @@ import type { ProductionRunWithRelations } from "@/data-access/production-runs";
 
 const STATUS_ICON_PX = 14;
 const STATUS_ICONS: Record<ProductionRunStatus, ReactNode> = {
-  draft: <WarningIcon size={STATUS_ICON_PX} weight="fill" />,
   running: <ClockIcon size={STATUS_ICON_PX} weight="fill" />,
   complete: <CheckCircleIcon size={STATUS_ICON_PX} weight="fill" />,
   failed: <WarningIcon size={STATUS_ICON_PX} weight="fill" />,

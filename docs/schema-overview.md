@@ -41,6 +41,12 @@ products each carry a required integer `version`, initially 1. Every row update
 increments it atomically, including archive cascades and product stock effects.
 Edit and delete commands must send the loaded version.
 
+Production run status is `running | complete | failed | cancelled`. Migration
+`0133_run_status_no_draft` dropped `draft` without a backfill, so it fails on a
+database that still holds draft runs: delete those rows or reset the database
+first (`pnpm db:reset` locally; shared staging uses the manual reset workflow
+in [database.md](./database.md), announced first).
+
 ## API bookkeeping
 
 All four tables live in `src/db/schema/api.ts`:

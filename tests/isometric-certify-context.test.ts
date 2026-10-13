@@ -332,12 +332,12 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
   // non-complete member run should not occur; if one ever does (legacy rows,
   // a future membership path), routing must still point at Production Runs.
   it("defensively routes a batch whose only member runs are incomplete to Production Runs", async () => {
-    mockNormalizedLineageFacts({ "pr-draft": "draft" });
+    mockNormalizedLineageFacts({ "pr-running": "running" });
     mockedGetCreditBatch.mockResolvedValue({
       id: CREDIT_BATCH_ID,
       code: "CB-1",
       facilityId: FACILITY_ID,
-      productionRunIds: ["pr-draft"],
+      productionRunIds: ["pr-running"],
       durabilityOption: "200_year",
     } as unknown as Awaited<ReturnType<typeof getCreditBatchById>>);
     mockedGetMapping.mockResolvedValue(null);

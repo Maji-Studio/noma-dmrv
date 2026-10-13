@@ -196,8 +196,8 @@ describe("toOperationJsonSchema: production run", () => {
   it("publishes the status enum", () => {
     expect(properties.status).toEqual({
       type: "string",
-      default: "draft",
-      enum: ["draft", "running", "complete", "failed", "cancelled"],
+      default: "running",
+      enum: ["running", "complete"],
     });
   });
 });

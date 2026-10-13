@@ -97,7 +97,7 @@ it.each([
 ])("fails a complete chain with incorrect %s", (field) => {
   const state = completeSnapshot();
   if (field === "reactor") state.runs[0].reactorId = "other";
-  if (field === "status") state.runs[0].status = "draft";
+  if (field === "status") state.runs[0].status = "complete";
   if (field === "facility") state.runs[0].facilityId = "other";
   if (field === "date") state.runs[0].startTime = "2026-10-09T10:00:00Z";
   if (field === "invalid-date") state.runs[0].startTime = "invalid";
@@ -118,7 +118,7 @@ it.each(["reactor", "status", "duplicate", "moisture", "stock"])("fails the mass
   state.runs.push(run);
   state.audits.push({ transport: "mcp", operationId: "start_production_run" });
   if (field === "reactor") state.runs[0].reactorId = "other";
-  if (field === "status") state.runs[0].status = "draft";
+  if (field === "status") state.runs[0].status = "complete";
   if (field === "duplicate") state.runs.push({ ...run, id: "run-2" });
   if (field === "moisture") state.feedstocks[0].moistureContentPercent = null;
   if (field === "stock") state.bins[1].afterWetKg = 0;
