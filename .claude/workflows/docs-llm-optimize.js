@@ -191,7 +191,7 @@ Structural proposals deliberately NOT applied (report these, do not act on them)
 ${JSON.stringify(proposals.map((p) => ({ doc: p.doc, verdict: p.proposal.verdict, mergeTarget: p.proposal.mergeTarget })), null, 2)}
 
 Do four things, editing files as needed:
-1. **Dangling links** — every relative markdown link in \`docs/*.md\`, \`CLAUDE.md\` and \`GLOSSARY.md\` must resolve to a file that exists. Fix or remove the ones that don't.
+1. **Dangling links** — every relative markdown link in \`docs/*.md\`, \`.claude/CLAUDE.md\` and \`GLOSSARY.md\` must resolve to a file that exists. Fix or remove the ones that don't.
 2. **Cross-doc duplication** — where two docs now explain the same thing, keep the better one and replace the other with a link. Pick the owner by topic, not by length.
 3. **Docs index** — the "Docs Index" section of \`.claude/CLAUDE.md\` is the entry point for every lookup. Make each line's trigger condition accurate for what its doc now actually contains. Keep it the same terse format. Do not restructure the rest of CLAUDE.md.
 4. **Entry paragraphs** — confirm each doc opens with its one-paragraph "what this covers / when to read it". Add it where missing.
