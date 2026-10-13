@@ -29,6 +29,7 @@ import {
   RUNNING_END_FORBIDDEN_MESSAGE,
   getProductionRunOutcomeViolations,
   PRODUCTION_RUN_STATUSES,
+  statusCountsAsPhysicalProduction,
   type ProductionRunStatus,
 } from "@/lib/production-runs/lifecycle";
 import {
@@ -440,7 +441,7 @@ export function makeProductionRunFormSchema(
           break;
         case "running-end-forbidden":
           // The submit handler clears the saved end when reopening a physical run.
-          if (savedStatus === "complete" || savedStatus === "failed") break;
+          if (savedStatus && statusCountsAsPhysicalProduction(savedStatus)) break;
           ctx.addIssue({
             code: z.ZodIssueCode.custom,
             path: ["endTime"],
