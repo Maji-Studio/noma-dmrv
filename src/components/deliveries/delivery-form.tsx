@@ -30,6 +30,7 @@ import { useOutputDrawDraft } from "@/hooks/use-output-draw-draft";
 import { useSubBinDraw } from "@/hooks/use-sub-bin-draw";
 import { SubBinDrawField } from "@/components/storage-locations/sub-bin-draw-field";
 import type { EntityFocusTarget } from "@/lib/entity-deep-link";
+import { STRICT_FORMULATION_MATCH } from "@/schemas/biochar-products";
 import { deliveryFormSchema, type DeliveryFormData } from "@/schemas/deliveries";
 import {
   DISTANCE_SOURCE_LABELS,
@@ -365,8 +366,8 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
             facilityId: formFacilityId,
             type: "product_bin",
             formulationId: selectedOrder.formulationId,
-            formulationMatch: "strict",
-          } : { formulationMatch: "strict" }}
+            formulationMatch: STRICT_FORMULATION_MATCH,
+          } : { formulationMatch: STRICT_FORMULATION_MATCH }}
         />
       </FormSection>
 

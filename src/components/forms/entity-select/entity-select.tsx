@@ -201,6 +201,7 @@ function EntitySelectView({
   disabled = false,
   selectionLocked = false,
   error = false,
+  loadError,
   className,
   allowCreate = false,
   createLabel,
@@ -265,7 +266,7 @@ function EntitySelectView({
 
   const isLocal = suppliedOptions !== undefined;
   const isLoading = isLocal ? suppliedLoading : queryLoading;
-  const fetchError = isLocal ? (error instanceof Error ? error : null) : queryError;
+  const fetchError = isLocal ? (loadError ?? null) : queryError;
   const entityLabel = optionLabel ?? (entityType ? ENTITY_TYPE_LABELS[entityType] : "option");
   const sourceOptions = suppliedOptions ?? fetchedOptions;
   const normalizedSearch = searchQuery.trim().toLowerCase();
@@ -682,7 +683,7 @@ function EntitySelectView({
                     // Explain WHY the list is empty and link the upstream fix; a
                     // search miss keeps the plain "no match" reading instead.
                     emptyHint && searchQuery.length === 0 ? (
-                      <li>
+                      <li role="presentation" data-testid="entity-select-empty">
                         <p className="px-12 py-10 body-small text-[var(--color-text-tertiary)]">
                           {emptyHint.message}
                         </p>
@@ -707,7 +708,11 @@ function EntitySelectView({
                           </a>
                         )}
                       </li>
-                    ) : null
+                    ) : (
+                      <li role="presentation" data-testid="entity-select-empty" className="px-16 py-12 text-[var(--text-s)] text-[var(--color-text-tertiary)]">
+                        {searchQuery.length > 0 ? "No matches. Change or clear your search." : `No matching ${entityLabel} records.`}
+                      </li>
+                    )
                   ) : null)}
                   {rows.map((row) => (
                     <EntitySelectRow
