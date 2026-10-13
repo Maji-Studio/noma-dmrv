@@ -144,6 +144,19 @@ describe("EntitySelect menu interactions", () => {
     expect(edit).not.toHaveBeenCalled();
   });
 
+  it("does not open Edit on Enter when a search has no matches", async () => {
+    const change = vi.fn(); const edit = vi.fn();
+    render(<EntitySelect entityType="storageLocation" value="one" onChange={change} onEditSelected={edit} alwaysShowSearch />);
+    open();
+    const search = screen.getByTestId("entity-select-search");
+    await waitFor(() => expect(document.activeElement).toBe(search));
+    fireEvent.change(search, { target: { value: "zzz" } });
+    await waitFor(() => expect(screen.queryByTestId("entity-option-two")).toBeNull());
+    key("Enter");
+    expect(edit).not.toHaveBeenCalled();
+    expect(change).not.toHaveBeenCalled();
+  });
+
   it.each(["Home", "End"])("leaves %s to the search input's native caret behavior", async (navigationKey) => {
     const change = vi.fn();
     render(<EntitySelect entityType="storageLocation" value="one" onChange={change} onEditSelected={vi.fn()} alwaysShowSearch />);
@@ -253,6 +266,7 @@ describe("EntitySelect menu interactions", () => {
   it("scrolls the action by id when an empty hint precedes it", () => {
     state.options = [];
     render(<EntitySelect entityType="storageLocation" onChange={vi.fn()} onCreateNew={vi.fn()} emptyHint={{ message: "Create a bin first" }} />); open();
+    key("ArrowDown");
     expect(activeTestId()).toBe("entity-select-create");
     expect(scroll.mock.contexts.at(-1)).toBe(screen.getByTestId("entity-select-create"));
   });

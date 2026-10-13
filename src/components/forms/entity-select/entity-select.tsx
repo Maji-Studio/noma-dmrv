@@ -262,7 +262,11 @@ export function EntitySelect({
   if (!disabled && !selectionLocked && shouldShowCreateAction) {
     rows.push({ id: `${entitySelectId}-create`, kind: "create" });
   }
-  const activeRow = rows.find((row) => row.id === highlightedId) ?? rows[0];
+  // Without an explicit highlight, Enter picks the first entity (or None),
+  // never Edit or Add new; a locked picker only has its Edit row.
+  const activeRow = rows.find((row) => row.id === highlightedId)
+    ?? rows.find((row) => row.kind === "option" || row.kind === "none")
+    ?? (selectionLocked ? rows[0] : undefined);
   const activeId = isOpen ? activeRow?.id : undefined;
   const showSearch = !disabled && !selectionLocked && !hideSearch &&
     (alwaysShowSearch || searchQuery.length > 0 || options.length > SELECT_SEARCH_MIN_OPTIONS);
@@ -464,7 +468,7 @@ export function EntitySelect({
               onClick={handleClear}
               aria-label="Clear selection"
               data-testid="entity-select-clear"
-              className="absolute right-[22px] h-44 w-44 hover:bg-[var(--color-background-medium)] text-[var(--color-text-tertiary)] hover:text-[var(--color-text-primary)]"
+              className="absolute right-20 h-44 w-44 hover:bg-[var(--color-background-medium)] text-[var(--color-text-tertiary)] hover:text-[var(--color-text-primary)]"
             >
               <XIcon aria-hidden weight="bold" className="size-16" />
             </Button>
