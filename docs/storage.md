@@ -238,9 +238,11 @@ Legacy telemetry import and registry submission modules remain in the codebase
 for historical experiments. They are not called by the operator readings-file
 upload.
 
-## CORS (production buckets only)
+## CORS (deployed buckets)
 
-The browser PUT is cross-origin, so DO Spaces / S3 must allow it:
+The browser PUT is cross-origin, so DO Spaces / S3 must allow the exact
+`NEXT_PUBLIC_APP_URL` origin. Domain changes require updating bucket CORS too;
+allowing an old marketing/app hostname does not cover the new app subdomain:
 
 ```json
 [
@@ -253,6 +255,16 @@ The browser PUT is cross-origin, so DO Spaces / S3 must allow it:
 ]
 ```
 
+Run `pnpm storage:cors` to check the configured app origin.
+`pnpm storage:cors --apply` repairs the upload rule for that exact HTTPS origin
+and preserves existing rules for other applications sharing the bucket. This
+administrative command needs bucket CORS read/write permission; it does not
+change object ACLs or make files public. On staging, dispatch **Storage health**
+with `repair_cors=true` to load the staging settings from 1Password, apply the
+repair, and verify the real storage round-trip. Scheduled health runs never
+change bucket configuration. If the storage key lacks CORS administration
+permission, a bucket administrator must apply the rule through the control panel.
+
 DO Spaces: *Spaces → Settings → CORS Configurations*. AWS S3: bucket
 *Permissions → CORS*. local-fs needs none — `/api/storage-local/...` is
 same-origin.
@@ -264,8 +276,10 @@ the configured bucket — presigned PUT → HEAD → signed GET byte-for-byte �
 HEAD 404 — covering exactly what the unit-test fakes deliberately don't:
 credentials, region/endpoint, path-style addressing, bucket permissions. It
 refuses to run against `local-fs` (exit 2), runs daily against staging via
-`.github/workflows/storage-health.yml`, and **does not test browser CORS** — only a
-real cross-origin PUT from the app exercises that.
+`.github/workflows/storage-health.yml`, and checks the browser PUT preflight for
+the configured app origin plus the actual PUT response CORS header. This catches
+stale origin allowlists as well as credential and storage failures. A full UI
+walkthrough remains separate.
 
 Unit coverage lives in `tests/documents-*.test.ts` and `tests/*storage*.test.ts`
 (plus `tests/parent-document-retirement.test.ts`). Conventions:

@@ -7,8 +7,8 @@ name: Storage health
 # GET (byte-for-byte) → DELETE → HEAD(404), cleaning up its own probe object.
 #
 # This is the coverage the unit tests deliberately skip — they inject a fake
-# provider. It does NOT test browser CORS (only the cross-origin PUT from the
-# app exercises that). No noma DB, no app boot.
+# provider. Checks browser CORS for the configured app origin too.
+# No noma DB, no app boot.
 #
 # Storage secrets come from 1Password via the "Load storage secrets" step:
 #   op://Environment Variables/noma-dmrv env staging/{STORAGE_PROVIDER,
@@ -29,6 +29,18 @@ on:
     # the 09:17 Isometric health ping.
     - cron: "33 9 * * *"
   workflow_dispatch:
+    inputs:
+      repair_cors:
+        description: "Allow the exact staging app origin to upload (preserves existing bucket CORS rules)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: staging-storage-health
+  cancel-in-progress: false
 
 # 1Password CLI installed by load-secrets-action. Pinned so a new CLI release
 # cannot change secret loading unannounced; bump it deliberately (docs/security.md).
@@ -45,7 +57,6 @@ jobs:
       # enum) at import time. The storage round-trip never uses these.
       NODE_ENV: test
       DATABASE_URL: postgres://smoke:smoke@localhost:5432/smoke
-      NEXT_PUBLIC_APP_URL: https://staging.example.com
       BETTER_AUTH_SECRET: ci-storage-smoke-placeholder-secret-unused-0000
     steps:
       - name: Checkout code
@@ -65,6 +76,7 @@ jobs:
           version: ${{ env.OP_CLI_VERSION }}
         env:
           OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
+          NEXT_PUBLIC_APP_URL: op://Environment Variables/noma-dmrv env staging/NEXT_PUBLIC_APP_URL
           STORAGE_PROVIDER: op://Environment Variables/noma-dmrv env staging/STORAGE_PROVIDER
           STORAGE_BUCKET: op://Environment Variables/noma-dmrv env staging/STORAGE_BUCKET
           STORAGE_REGION: op://Environment Variables/noma-dmrv env staging/STORAGE_REGION
@@ -88,6 +100,10 @@ jobs:
       - name: Install dependencies
         if: ${{ env.LOAD_OP_SECRETS == 'true' }}
         run: pnpm install --frozen-lockfile
+
+      - name: Repair staging app-origin CORS (explicit dispatch only)
+        if: ${{ env.LOAD_OP_SECRETS == 'true' && github.event_name == 'workflow_dispatch' && inputs.repair_cors }}
+        run: pnpm storage:cors --apply
 
       - name: Storage round-trip smoke (staging bucket)
         if: ${{ env.LOAD_OP_SECRETS == 'true' }}

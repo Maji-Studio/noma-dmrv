@@ -9,8 +9,8 @@
  * (tests/documents-fn.test.ts) deliberately do NOT — those inject a fake
  * provider. This proves the real chain: credentials, region/endpoint,
  * path-style addressing, bucket permissions, and the presigned PUT/GET
- * round-trip all line up. It does NOT test browser CORS (that only matters
- * for the cross-origin PUT from the app); for that, upload via the UI.
+ * round-trip all line up. Checks browser upload CORS with an OPTIONS
+ * preflight from NEXT_PUBLIC_APP_URL and the actual PUT response.
  *
  * Refuses to run against local-fs — a round-trip there is meaningless. Set
  * STORAGE_PROVIDER=s3-compatible plus the STORAGE_* credentials. Locally
@@ -23,6 +23,7 @@
  */
 import { randomUUID } from "node:crypto";
 import { config } from "dotenv";
+import { appOrigin, assertUploadCors } from "./storage-cors-core";
 
 config({ path: ".env.local" });
 
@@ -48,6 +49,7 @@ async function main(): Promise<void> {
     process.exit(2);
   }
 
+  const origin = appOrigin(process.env.NEXT_PUBLIC_APP_URL ?? "");
   console.log(`Storage provider: ${provider.name} (bucket=${provider.bucket})`);
 
   const key = buildStorageKey({
@@ -74,9 +76,11 @@ async function main(): Promise<void> {
       expiresInSeconds: PRESIGN_TTL_SECONDS,
     });
     console.log(`PUT target: ${safeUrlSummary(upload.url)}`);
+    await assertUploadCors(upload.url, origin);
+    console.log("OK  CORS     → app-origin PUT preflight accepted");
     const putRes = await fetchOrFail("PUT", upload.url, {
       method: upload.method,
-      headers: upload.headers,
+      headers: { ...upload.headers, Origin: origin },
       body,
     });
     if (!putRes.ok) {
@@ -84,6 +88,10 @@ async function main(): Promise<void> {
       fail(`PUT failed: ${putRes.status} ${putRes.statusText}${detail}`);
     }
     uploaded = true;
+    const allowedOrigin = putRes.headers.get("access-control-allow-origin");
+    if (allowedOrigin !== origin && allowedOrigin !== "*") {
+      fail("PUT response does not allow the configured app origin through CORS.");
+    }
     console.log(`OK  PUT      → ${putRes.status} (${expectedBytes} bytes)`);
 
     // 2. HEAD — the same gate confirmUpload() relies on.
