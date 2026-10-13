@@ -272,7 +272,7 @@ A `SectionLabel` title over a `space-y-16` field stack, with a `pt-16` hairline 
 
 - **`space-y-20`** — all side-sheet forms (top-level `<form>`), sectioned or not. `FormSection` owns intra-section rhythm; nothing else sets section spacing.
 - **`space-y-24`** — full-page and auth forms only.
-- Field grids inside sections: `grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-20`.
+- Field grids inside sections: `grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-20` for inputs only; a dropdown gets its own `grid-cols-1` row (see the dropdown rule above).
 - Controls in a field-grid row top-align independently. `FormField`'s fixed
   `min-h-24` label row keeps one-line labels level; a wrapped label still shifts
   only its own control down. Do not "fix" that with per-field label heights,
