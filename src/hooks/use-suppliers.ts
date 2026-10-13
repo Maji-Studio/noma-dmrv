@@ -6,6 +6,7 @@
 
 import {
   keepPreviousData,
+  queryOptions,
   type QueryClient,
   useMutation,
   useQuery,
@@ -102,8 +103,8 @@ export function useSuppliers(filters?: Partial<SupplierFilterData>) {
 /**
  * Hook to fetch a single supplier by ID
  */
-export function useSupplier(supplierId: string, enabled = true) {
-  return useQuery({
+export function supplierQueryOptions(supplierId: string) {
+  return queryOptions({
     queryKey: supplierKeys.detail(supplierId),
     queryFn: async () => {
       const result = await getSupplierByIdFn(supplierId);
@@ -112,8 +113,15 @@ export function useSupplier(supplierId: string, enabled = true) {
       }
       return result.data;
     },
-    enabled: enabled && !!supplierId,
+    enabled: !!supplierId,
     staleTime: SUPPLIER_DETAIL_STALE_TIME_MS,
+  });
+}
+
+export function useSupplier(supplierId: string, enabled = true) {
+  return useQuery({
+    ...supplierQueryOptions(supplierId),
+    enabled: enabled && !!supplierId,
   });
 }
 
