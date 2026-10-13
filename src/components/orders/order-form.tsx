@@ -213,7 +213,6 @@ export function OrderForm({
             name="customerLocationId"
             label="Customer location"
             entityType="customerLocation"
-            allowEdit={!!selectedLocation && !!selectedCustomerId}
             onEditSelected={selectedLocation && selectedCustomerId
               ? () => setEditingLocation({ customerId: selectedCustomerId, location: selectedLocation })
               : undefined}
