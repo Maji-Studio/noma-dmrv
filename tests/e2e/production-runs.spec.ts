@@ -687,6 +687,11 @@ test.describe("Production Run lifecycle (#254)", () => {
     const dialog = page.locator('[role="dialog"]');
     await dialog.locator('input[name="endDate"]').fill("2025-02-05");
     await dialog.locator('input[name="endTime"]').fill("12:00");
+    // A Running run cannot keep an end time; the field says so until the status changes.
+    await dialog.locator('input[name="endTime"]').blur();
+    await expect(
+      dialog.getByText("Choose Complete or clear the end time for a Running run."),
+    ).toBeVisible();
     // A failed run needs a source bin, moisture %, and wet mass to compute
     // consumed feedstock (same guard as a complete run) — the lifecycle
     // schema rejects the status change without them.
