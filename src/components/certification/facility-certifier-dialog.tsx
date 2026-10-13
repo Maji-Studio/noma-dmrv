@@ -297,7 +297,8 @@ export function FacilityCertifierForm({
               optionLabel="Removal template"
               placeholder="No default"
               options={templateOptions}
-              error={(templateOptions.length === 0 ? templatesError : null) ?? !!errors.defaultRemovalTemplateId}
+              loadError={templateOptions.length === 0 ? templatesError : null}
+              error={!!errors.defaultRemovalTemplateId}
               isLoading={templatesLoading}
               disabled={!watchedProjectId || templatesLoading}
               value={templateField.value ?? ""}

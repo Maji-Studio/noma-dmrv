@@ -26,7 +26,9 @@ import { useForm, useWatch } from "react-hook-form";
 import { CustomerLocationDetails } from "./customer-location-details";
 import { MatchingOutputBins } from "./matching-output-bins";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { CustomerLocationDialog } from "@/components/customers/customer-location-dialog";
+import type { EditableCustomerLocation } from "@/components/customers/customer-location-form";
 
 // ============================================
 // Constants for select options
@@ -78,6 +80,7 @@ export function OrderForm({
   submitLabel,
 }: OrderFormProps) {
   const isEditMode = !!order;
+  const [editingLocation, setEditingLocation] = useState<{ customerId: string; location: EditableCustomerLocation } | null>(null);
   const { facilityId: contextFacilityId, facilities } = useFacilityContext();
   // Organization operating defaults seed create mode only; an existing record
   // always wins. Warmed once per session in FacilityProvider, so this is a
@@ -154,6 +157,7 @@ export function OrderForm({
   });
 
   return (
+    <>
     <form onSubmit={handleFormSubmit} className="space-y-20">
       <FormSpine control={control}>
       {/* Order Information */}
@@ -209,6 +213,9 @@ export function OrderForm({
             name="customerLocationId"
             label="Customer location"
             entityType="customerLocation"
+            onEditSelected={selectedLocation && selectedCustomerId
+              ? () => setEditingLocation({ customerId: selectedCustomerId, location: selectedLocation })
+              : undefined}
             placeholder={selectedCustomerId ? "Select location..." : "Select a customer first"}
             disabled={isSubmitting || !selectedCustomerId}
             filterBy={selectedCustomerId ? { customerId: selectedCustomerId } : undefined}
@@ -283,5 +290,15 @@ export function OrderForm({
         defaultSubmitLabel={defaultSubmitLabel}
       />
     </form>
+    {editingLocation && (
+      <CustomerLocationDialog
+        isOpen
+        onClose={() => setEditingLocation(null)}
+        customerId={editingLocation.customerId}
+        location={editingLocation.location}
+        facility={formFacility}
+      />
+    )}
+    </>
   );
 }

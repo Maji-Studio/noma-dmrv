@@ -11,6 +11,7 @@ import { ENTITY_SEARCH_LIMIT } from "@/config/forms";
 import { useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+import { STRICT_FORMULATION_MATCH } from "@/schemas/biochar-products";
 
 const state = vi.hoisted(() => ({ permissionChecks: 0, dialogMounts: [] as string[], listEnabled: [] as boolean[], detailIds: [] as (string | undefined)[], options: [] as EntityOption[], loading: false, canManage: false, error: null as Error | null }));
 vi.mock("@/hooks/use-entities", () => ({
@@ -525,7 +526,7 @@ describe("EntitySelect caller-owned options", () => {
     expect(change).not.toHaveBeenCalled();
     rerender(<EntitySelect options={[]} value={value} selectedLabel={selectedLabel} placeholder={placeholder} onChange={change} isLoading />);
     expect(trigger().textContent).toBe(expected);
-    rerender(<EntitySelect options={[]} value={value} selectedLabel={selectedLabel} placeholder={placeholder} onChange={change} error={new Error("Registry unavailable")} />);
+    rerender(<EntitySelect options={[]} value={value} selectedLabel={selectedLabel} placeholder={placeholder} onChange={change} loadError={new Error("Registry unavailable")} />);
     expect(trigger().textContent).toBe(expected);
     expect(state.listEnabled).toEqual([]);
     expect(state.detailIds).toEqual([]);
@@ -609,8 +610,57 @@ describe("EntitySelect caller-owned options", () => {
     open();
     expect(screen.getByText("Loading...")).toBeTruthy();
     expect(screen.queryAllByRole("option")).toHaveLength(0);
-    rerender(<EntitySelect options={localOptions} onChange={vi.fn()} error={new Error("Registry unavailable")} />);
+    rerender(<EntitySelect options={localOptions} onChange={vi.fn()} loadError={new Error("Registry unavailable")} />);
     expect(screen.getByText("Error loading options")).toBeTruthy();
+    expect(screen.queryAllByRole("option")).toHaveLength(0);
+  });
+
+  it("keeps a valid optional field neutral when its list fails to load", () => {
+    const loadError = new Error("Registry unavailable");
+    const view = (invalid: boolean) => (
+      <FormField id="optional-template" label="Default template" error={invalid ? "Select a template." : undefined}>
+        <EntitySelect id="optional-template" options={[]} onChange={vi.fn()} loadError={loadError} error={invalid} />
+      </FormField>
+    );
+    const { rerender } = render(view(false));
+    open();
+    expect(screen.getByText("Error loading options")).toBeTruthy();
+    expect(trigger().getAttribute("aria-invalid")).not.toBe("true");
+    expect(trigger().className).not.toContain("border-[var(--color-signal-red)]");
+    expect(trigger().className).toContain("border-[var(--color-border-secondary)]");
+    rerender(view(true));
+    expect(trigger().getAttribute("aria-invalid")).toBe("true");
+    expect(trigger().className).toContain("border-[var(--color-signal-red)]");
+  });
+
+  it("renders the resolved empty state only after loading succeeds", () => {
+    const { rerender } = render(<EntitySelect options={[]} onChange={vi.fn()} isLoading />);
+    open();
+    expect(screen.queryByTestId("entity-select-empty")).toBeNull();
+    rerender(<EntitySelect options={[]} onChange={vi.fn()} loadError={new Error("Unavailable")} />);
+    expect(screen.queryByTestId("entity-select-empty")).toBeNull();
+    rerender(<EntitySelect options={[]} onChange={vi.fn()} />);
+    expect(screen.getByTestId("entity-select-empty").textContent).toBe("No matching option records.");
+    expect(screen.getByTestId("entity-select-empty").getAttribute("role")).toBe("presentation");
+    expect(screen.queryAllByRole("option")).toHaveLength(0);
+  });
+
+  it.each(["storage bin", "Isometric project"])("names the empty record type (%s) and keeps search-miss guidance", (optionLabel) => {
+    render(<EntitySelect options={[]} optionLabel={optionLabel} onChange={vi.fn()} alwaysShowSearch />);
+    open();
+    expect(screen.getByTestId("entity-select-empty").textContent).toBe(`No matching ${optionLabel} records.`);
+    fireEvent.change(screen.getByTestId("entity-select-search"), { target: { value: "missing" } });
+    expect(screen.getByTestId("entity-select-empty").textContent).toBe("No matches. Change or clear your search.");
+  });
+
+  it.each([
+    { filterBy: { facilityId: "facility", formulationMatch: STRICT_FORMULATION_MATCH } },
+    { excludeIds: ["one", "two"] },
+  ])("describes an empty filtered list without claiming no records exist: %j", (filters) => {
+    if ("filterBy" in filters) state.options = [];
+    render(<EntitySelect entityType="storageLocation" onChange={vi.fn()} {...filters} />);
+    open();
+    expect(screen.getByTestId("entity-select-empty").textContent).toBe("No matching storage bin records.");
     expect(screen.queryAllByRole("option")).toHaveLength(0);
   });
 
