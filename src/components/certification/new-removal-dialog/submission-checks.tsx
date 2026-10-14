@@ -75,10 +75,13 @@ function fixLinksFor(
     case "transportUniformity":
     case "transport":
       if (!check.transportCategory) return [];
-      return [batchHealthFixLinkFor({
-        key: "transport",
-        fixTarget: transportRepairDestination(check.transportCategory),
-      }, facilityId)];
+      return [{
+        ...batchHealthFixLinkFor({
+          key: "transport",
+          fixTarget: transportRepairDestination(check.transportCategory),
+        }, facilityId),
+        label: `Review ${check.transportCategory} transport`,
+      }];
     case "durability":
       return [
         { label: "Review Samples", href: `/samples?facility=${facilityId}` },

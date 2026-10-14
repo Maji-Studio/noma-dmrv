@@ -154,6 +154,7 @@ describe("enrichWithTransportLegs", () => {
       feedstock: [
         { ...leg(50, 1000), entityType: "feedstock" as const, isDerived: true, vehicleType: "truck", modelYear: 2020 },
         { ...leg(100, 1000), entityType: "feedstock" as const, isDerived: true, vehicleType: "tractor", modelYear: null },
+        { ...leg(25, 1000), entityType: "feedstock" as const, originName: "Farm A", destinationName: "Plant Gate" },
       ],
       biochar: [],
       sample: [],
@@ -178,13 +179,14 @@ describe("enrichWithTransportLegs", () => {
     expect(readiness.advisories).toEqual([]);
     expect(readiness.transportVehicleAdvisories).toEqual([
       "Feedstock transport uses more than one vehicle type. Check that the removal template's transport factor covers every vehicle used.",
+      "Feedstock transport has 1 leg without a vehicle type (Farm A to Plant Gate). Record the vehicle type on each leg when it is known.",
       "Feedstock transport has different or unrecorded model years. Check that the removal template's transport factor covers every vehicle used.",
     ]);
     expect(buildRemovalRequirementsChecklist(facts).filter((check) => check.key === "transportUniformity")).toEqual([
       expect.objectContaining({ status: "met" }),
     ]);
     const enriched = enrichWithTransportLegs(baseAgg, legs);
-    expect(enriched.feedstockTransportMassDistanceTonneKm).toBe(300);
+    expect(enriched.feedstockTransportMassDistanceTonneKm).toBe(350);
     // removal-submission-build blocks on this warning array, never the advisories.
     expect(enriched.warnings).toEqual([]);
   });

@@ -156,16 +156,27 @@ describe("aggregateTransportMassDistance", () => {
       expect(transportVehicleAdvisories([
         leg("01", { entityType, vehicleType: null }),
       ], "Transport")).toEqual([
-        "Transport transport has legs with no vehicle type recorded. The Transportation module asks for the vehicle type of every leg.",
+        "Transport transport has 1 leg without a vehicle type (01). Record the vehicle type on each leg when it is known.",
       ]);
     },
   );
+
+  it("names only legs missing a vehicle type, with route and ID labels", () => {
+    expect(transportVehicleAdvisories([
+      leg("01", { vehicleType: null, originName: "Farm A", destinationName: "Plant Gate" }),
+      leg("02", { vehicleType: null, originName: "Farm B" }),
+      leg("03"),
+      leg("04", { vehicleType: null, entityType: "biochar", isDerived: true }),
+    ], "Feedstock")).toEqual([
+      "Feedstock transport has 2 legs without a vehicle type (Farm A to Plant Gate, 02). Record the vehicle type on each leg when it is known.",
+    ]);
+  });
 
   it("still reports a missing vehicle type on derived feedstock legs", () => {
     expect(transportVehicleAdvisories([
       leg("01", { vehicleType: null, isDerived: true }),
     ], "Feedstock")).toEqual([
-      "Feedstock transport has legs with no vehicle type recorded. The Transportation module asks for the vehicle type of every leg.",
+      "Feedstock transport has 1 leg without a vehicle type (01). Record the vehicle type on each leg when it is known.",
     ]);
   });
 

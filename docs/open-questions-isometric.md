@@ -339,6 +339,7 @@ itself is **built and enforced** — see the invariants section,
 
 - **Bound road factor covers the lightest vehicle**
   (`isometric/transport-fleet-factor-coverage`, `needs-registry-check`).
+  - **Tracking issue:** [#1017](https://github.com/Maji-Studio/noma-dmrv/issues/1017).
   - **Anchor:** `src/lib/isometric/utils/aggregation.ts:transportVehicleAdvisories`.
   - **Open condition:** the template's bound road factor must cover the lightest
     vehicle actually used, which has the highest emissions per tonne-km.

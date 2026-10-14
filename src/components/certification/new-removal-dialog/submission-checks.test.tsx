@@ -39,13 +39,16 @@ function withUnmet(
 
 describe("SubmissionChecks", () => {
   it.each([
-    ["feedstock", "/feedstocks"], ["biochar", "/deliveries"], ["sample", "/samples"],
-  ] as const)("links %s transport blockers to their repair list", (category, path) => {
+    ["feedstock", "/feedstocks", "Review feedstock transport"],
+    ["biochar", "/deliveries", "Review biochar transport"],
+    ["sample", "/samples", "Review sample transport"],
+  ] as const)("links %s transport blockers to their repair list", (category, path, label) => {
     const html = renderToStaticMarkup(<SubmissionChecks
       checks={withUnmet("transportUniformity", { transportCategory: category })}
       facilityId="facility-1"
     />);
     expect(html).toContain(`href="${path}?facility=facility-1"`);
+    expect(html).toContain(`>${label}</a>`);
   });
 
   it("renders every category and repair link when transport keys repeat", () => {

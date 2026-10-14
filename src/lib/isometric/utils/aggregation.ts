@@ -121,6 +121,12 @@ function getMixedTransportFactorWarning(
   return null;
 }
 
+function transportLegLabel(leg: TransportLeg): string {
+  return leg.originName && leg.destinationName
+    ? `${leg.originName} to ${leg.destinationName}`
+    : leg.id;
+}
+
 /** Vehicle records never block aggregation or select the template's factor. */
 export function transportVehicleAdvisories(
   legs: TransportLeg[],
@@ -135,11 +141,12 @@ export function transportVehicleAdvisories(
     );
   }
   // Delivery-derived biochar legs have no vehicle input. Manual legs do.
-  if (legs.some((leg) =>
+  const missingVehicleTypeLegs = legs.filter((leg) =>
     leg.vehicleType == null && !(leg.isDerived && leg.entityType === "biochar"),
-  )) {
+  );
+  if (missingVehicleTypeLegs.length > 0) {
     advisories.push(
-      `${categoryLabel} transport has legs with no vehicle type recorded. The Transportation module asks for the vehicle type of every leg.`,
+      `${categoryLabel} transport has ${formatCount(missingVehicleTypeLegs.length, "leg")} without a vehicle type (${missingVehicleTypeLegs.map(transportLegLabel).join(", ")}). Record the vehicle type on each leg when it is known.`,
     );
   }
   // Only derived feedstock legs copy a fleet model year; manual forms have
@@ -169,11 +176,7 @@ export function aggregateTransportMassDistance(
     (leg) => leg.loadMassKg == null || leg.loadMassKg <= 0,
   );
   if (missingMassLegs.length > 0) {
-    const missingMassLegLabels = missingMassLegs.map((leg) =>
-      leg.originName && leg.destinationName
-        ? `${leg.originName} to ${leg.destinationName}`
-        : leg.id,
-    );
+    const missingMassLegLabels = missingMassLegs.map(transportLegLabel);
     return {
       massDistanceTonneKm: null,
       warning: `${categoryLabel} transport has ${formatCount(missingMassLegs.length, "leg")} without a load mass (${missingMassLegLabels.join(", ")}). Record a load mass for each leg before submitting.`,
