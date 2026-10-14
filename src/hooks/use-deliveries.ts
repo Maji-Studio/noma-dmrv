@@ -33,7 +33,7 @@ import { creditBatchKeys } from "./credit-batch-query-keys";
 import { chainOfCustodyKeys } from "./use-chain-of-custody";
 import { orderKeys } from "./use-orders";
 import { storageLocationKeys } from "./use-storage-locations";
-import type { MutationCallbacks } from "./types";
+import { unwrap, type MutationCallbacks } from "./types";
 import { certificationKeys } from "./use-certification";
 import { dashboardOverviewKeys } from "./use-dashboard-overview";
 
@@ -79,13 +79,7 @@ export function useDeliveries(
 ) {
   return useQuery({
     queryKey: deliveryKeys.list(filters),
-    queryFn: async () => {
-      const result = await getDeliveriesFn(filters);
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-      return result.data;
-    },
+    queryFn: async () => unwrap(await getDeliveriesFn(filters)),
     staleTime: 30000, // 30 seconds
     enabled: options?.enabled,
   });
@@ -97,13 +91,7 @@ export function useDeliveries(
 export function useDeliveryWithRelations(deliveryId: string, enabled = true) {
   return useQuery({
     queryKey: deliveryKeys.detailWithRelations(deliveryId),
-    queryFn: async () => {
-      const result = await getDeliveryWithRelationsFn(deliveryId);
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-      return result.data;
-    },
+    queryFn: async () => unwrap(await getDeliveryWithRelationsFn(deliveryId)),
     enabled: enabled && !!deliveryId,
     staleTime: 30000,
   });
@@ -123,13 +111,7 @@ export function useDeliveryStats(
 ) {
   return useQuery({
     queryKey: deliveryKeys.stats(filters),
-    queryFn: async () => {
-      const result = await getDeliveryStatsFn(filters);
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-      return result.data;
-    },
+    queryFn: async () => unwrap(await getDeliveryStatsFn(filters)),
     staleTime: 30000,
     enabled: options?.enabled,
   });
@@ -148,13 +130,7 @@ export function useCreateDelivery(
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (data: CreateDeliveryData) => {
-      const result = await createDeliveryFn(data);
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-      return result.data;
-    },
+    mutationFn: async (data: CreateDeliveryData) => unwrap(await createDeliveryFn(data)),
     onMutate: async (variables) => {
       await callbacks?.onMutate?.(variables);
     },

@@ -18,7 +18,7 @@ import type {
   UpdateTransportLegData,
 } from "@/schemas/transport-legs";
 import type { TransportLeg } from "@/db/schema";
-import type { MutationCallbacks } from "./types";
+import { unwrap, type MutationCallbacks } from "./types";
 import { dashboardOverviewKeys } from "./use-dashboard-overview";
 import { certificationKeys } from "./use-certification";
 
@@ -45,11 +45,7 @@ export function useTransportLegsForEntity(
     queryKey: transportLegKeys.byEntity(entityType, entityId ?? ""),
     queryFn: async (): Promise<TransportLegWithEvidence[]> => {
       if (!entityId) return [];
-      const result = await getTransportLegsForEntityFn({ entityType, entityId });
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-      return result.data;
+      return unwrap(await getTransportLegsForEntityFn({ entityType, entityId }));
     },
     enabled: options?.enabled !== false && !!entityId,
     staleTime: 30000,
@@ -65,13 +61,8 @@ export function useCreateTransportLeg(
 ) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (input: CreateTransportLegData): Promise<TransportLeg> => {
-      const result = await createTransportLegFn(input);
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-      return result.data;
-    },
+    mutationFn: async (input: CreateTransportLegData): Promise<TransportLeg> =>
+      unwrap(await createTransportLegFn(input)),
     onSuccess: async (data, variables) => {
       await queryClient.invalidateQueries({
         queryKey: transportLegKeys.byEntity(
