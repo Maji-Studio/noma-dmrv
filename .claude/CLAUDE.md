@@ -55,6 +55,7 @@ Run Codex (reviews, cross-checks) in the task's worktree, never the main checkou
 - Before **writing code** → `docs/code-style.md` — naming/file conventions, the org-scoping seam + waiver syntax, React Compiler rules (no manual memo, avoid `useEffect`), local gates.
 - Before **any test** work → `docs/testing.md` — fixtures, `.env.test`, E2E naming prefixes, `db:reset` on dup keys.
 - Before **writing a server action or data-access query** → `docs/architecture.md` — `withAction()`, `OrgContext`, `ActionResult` (+ `conflict`), React Query key factories, facility context, CI/CD.
+- Before **REST/MCP API** work (routes, scopes, idempotency, If-Match, MCP tools) → `docs/api.md`.
 - Before **env / secrets / tenancy** work → `docs/security.md` — env inventory is `envSchema`, fail-closed prod gates, 1Password items differ.
 - **Auth guards, route protection, org context** → `docs/auth.md` — owns the guard vocabulary (redirect-vs-throw, `requireOrgScope` vs `requireAuth`).
 - **Database** (org-scoping contract, migrations, numeric families, row-level guards) → `docs/database.md`; **table-by-table map** → `docs/schema-overview.md`.

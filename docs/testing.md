@@ -115,7 +115,8 @@ with no distance override and at most 10 tool calls. `delivery-missing-moisture`
 requires no saved changes and a final request for moisture; a dry run is allowed.
 `delivery-split-bin` seeds two products with different placement times and moistures.
 It requires no committed delivery and either a delivery clarification or a completed
-stock read followed by a dry run and a request for moisture readings. Historical
+stock read followed by a dry run and a request for moisture readings. A dry-run
+delivery attempt requires a request for readings; the preview alone cannot pass. Historical
 moisture estimates can inform a preview but cannot supply missing operator readings
 for a commit, even if the server refuses it. Each case has its own organization and cleanup.
 
@@ -147,7 +148,11 @@ intake, a reactor and a closed production run through the operation runner (the 
 draws from its own second bin, so the feedstock cases keep their stock). For
 biochar it adds a completed run with output in a biochar bin, a product bin, a Pure
 and a blended formulation, one product placed from that stock and one loss, all
-through the operations. Bin and formulation names are unique per facility. The key
+through the operations. It also creates a customer and location with one-way
+distance, two large orders and a 0.1 kg delivery on the product bin through the
+runner. The second order stays delivery-free for DELETE. The private fixture
+exports the delivery id, code and ETag alongside the order fields.
+Bin and formulation names are unique per facility. The key
 has all current scopes, including delete.
 Its private JSON file contains the key and fixture ids; never upload that file.
 
@@ -162,7 +167,11 @@ API_FUZZ_BASE_URL=http://127.0.0.1:3100/api/v1 pnpm api:fuzz
 
 The hooks give the product and stock-movement operations seeded examples: a dry-run
 product create on the seeded bins, a product PATCH with its ETag, and a dry-run loss
-on the biochar bin, each with an `Idempotency-Key`. `hooks.test.py` checks them
+on the biochar bin. Creates carry `Idempotency-Key`; PATCH uses `If-Match`.
+Delivery examples read the seeded row, dry-run a 0.1 kg create with a past instant
+and measured moisture, and dry-run a metadata-only PATCH with its ETag. These
+examples must return 2xx and leave stock and order balance available for repeats.
+`hooks.test.py` checks them
 offline; run it with `uvx --from "schemathesis==4.29.3" python scripts/api-fuzz/hooks.test.py`.
 
 Fuzzing writes and deletes data, so use only a throwaway fixture organization.

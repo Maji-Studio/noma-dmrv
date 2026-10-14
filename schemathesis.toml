@@ -255,3 +255,14 @@ include-operation-id = "delete_order"
 [operations.parameters]
 "path.idOrCode" = "${API_FUZZ_DELETE_ORDER_ID}"
 "header.If-Match" = "${API_FUZZ_DELETE_ORDER_ETAG}"
+
+[[operations]]
+include-operation-id = "get_delivery"
+[operations.parameters]
+"path.idOrCode" = "${API_FUZZ_DELIVERY_ID}"
+
+[[operations]]
+include-operation-id = "update_delivery"
+[operations.parameters]
+"path.idOrCode" = "${API_FUZZ_DELIVERY_ID}"
+"header.If-Match" = "${API_FUZZ_DELIVERY_ETAG}"
