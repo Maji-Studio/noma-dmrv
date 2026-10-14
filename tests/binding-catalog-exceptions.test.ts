@@ -112,7 +112,7 @@ const PRE_638_SELECTION = {
 };
 
 const PRE_638_DIESEL_ERROR =
-  "The pyrolysis diesel component is not recognized. Rename it in Isometric to one of these names: \"generator diesel usage\", \"startup diesel usage\".";
+  "The pyrolysis diesel component is not recognized. Rename it in Isometric to one of these names: \"Generator diesel usage\", \"Startup diesel usage\".";
 
 const PRE_638_SEQUESTRATION_BINDINGS = {
   "biochar_sequestration_1000_year_f_durable_max": {

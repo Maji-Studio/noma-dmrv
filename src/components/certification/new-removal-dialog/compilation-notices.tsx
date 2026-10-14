@@ -1,3 +1,4 @@
+import { MultilineDetail } from "../multiline-detail";
 import { Notice } from "@/components/ui/notice";
 
 interface CompilationBlockersProps {
@@ -20,7 +21,7 @@ export function CompilationBlockers({
     <Notice tone="error" title={showHeading ? "Compilation blocked" : undefined}>
       <ul className="list-disc pl-16">
         {blockers.map((blocker) => (
-          <li key={blocker}>{blocker}</li>
+          <li key={blocker}><MultilineDetail>{blocker}</MultilineDetail></li>
         ))}
       </ul>
     </Notice>

@@ -41,6 +41,7 @@ const facilityFacts = {
   defaultTemplate: null,
   missingDefaultTemplateId: null,
   blueprintsForTemplate: [],
+  unbindableTemplateInputs: [],
   unresolvedBlueprintKeys: [],
   requiredTransportCategories: [],
 } as FacilityCertifierFacts;

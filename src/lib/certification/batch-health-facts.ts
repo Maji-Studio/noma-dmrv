@@ -71,7 +71,8 @@ function isFacilitySetupComplete(ctx: RemovalCertifyContext): boolean {
     !!ctx.mapping &&
     !!ctx.defaultTemplate &&
     !ctx.missingDefaultTemplateId &&
-    ctx.unresolvedBlueprintKeys.length === 0
+    ctx.unresolvedBlueprintKeys.length === 0 &&
+    ctx.unbindableTemplateInputs.length === 0
   );
 }
 

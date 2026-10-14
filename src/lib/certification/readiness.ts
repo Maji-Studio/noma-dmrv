@@ -11,6 +11,7 @@
  * (`templateResolved` + `analyzeCoverage` + `submitReady`), now extracted and
  * unit-tested — Stage 4 migrates the panel/pre-flight onto it.
  */
+import { formatUnbindableTemplateInputsText, type UnbindableTemplateInput } from "@/lib/isometric/template-binding-coverage";
 
 import {
   BLOCKING_SUBMISSION_STATUSES,
@@ -59,6 +60,7 @@ export interface RemovalReadinessFacts {
   missingDefaultTemplateId: string | null;
   /** Template blueprint keys with no matching component blueprint. */
   unresolvedBlueprintKeys: string[];
+  unbindableTemplateInputs: UnbindableTemplateInput[];
   /** Declared pyrolysis feedstock types missing their Isometric registry id. */
   feedstockTypeMappingGaps: FeedstockTypeMappingGap[];
   /** Production runs resolved from member-batch lineage — false ⇒ nothing to submit. */
@@ -169,6 +171,9 @@ function templateBlockerReason(facts: RemovalReadinessFacts): string | null {
     const n = facts.unresolvedBlueprintKeys.length;
     return `Template references ${n} unresolved blueprint${n === 1 ? "" : "s"}`;
   }
+  if (facts.unbindableTemplateInputs.length > 0) {
+    return formatUnbindableTemplateInputsText(facts.unbindableTemplateInputs);
+  }
   return null;
 }
 
@@ -176,7 +181,8 @@ function templateResolvesCleanly(facts: RemovalReadinessFacts): boolean {
   return (
     facts.hasDefaultTemplate &&
     !facts.missingDefaultTemplateId &&
-    facts.unresolvedBlueprintKeys.length === 0
+    facts.unresolvedBlueprintKeys.length === 0 &&
+    facts.unbindableTemplateInputs.length === 0
   );
 }
 
