@@ -53,10 +53,12 @@ code today; breaking one compiles cleanly and fails silently.
   exception is out of scope until a real case needs it.
 - **`sReflectanceFraction` is stored 0–1 but captured as a percentage.** The
   form converts on entry and clears the field on a durability-mode switch
-  (`src/components/samples/sample-form.tsx`); `src/schemas/samples.ts` makes it
-  *conditionally required* for 1000-year durability. A well-meaning edit that
-  drops the conversion or the conditional puts a 100× error into a
-  credit-bearing input.
+  (`src/components/samples/sample-form.tsx`). It is optional at save and
+  required at submission for sampled 1,000-year credit batches by the replicate
+  gate (`evaluateSampled1000YearReplicates` in
+  `src/lib/certification/durability-1000-replicates.ts`, called by
+  `src/fn/certification/durability-readiness.ts`). Dropping the percentage-to-fraction
+  conversion puts a 100× error into a credit-bearing input.
 
 ## Schema
 

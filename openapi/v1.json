@@ -1142,7 +1142,7 @@
                   "randomReflectanceR0Percent": {"anyOf": [{"type": "number"}, {"type": "null"}], "description": "Mean random reflectance R0 in percent (ISO 7404-5). Required on a credit batch whose facility claims 1,000-year durability.", "maximum": 100, "minimum": 0},
                   "reactiveCarbonPercent": {"anyOf": [{"type": "number"}, {"type": "null"}], "description": "TGA reactive carbon in percent. On a 1,000-year credit batch, this or residualCarbonPercent is required.", "maximum": 100, "minimum": 0},
                   "residualCarbonPercent": {"anyOf": [{"type": "number"}, {"type": "null"}], "description": "TGA non-reactive (residual) carbon in percent. On a 1,000-year credit batch, this or reactiveCarbonPercent is required.", "maximum": 100, "minimum": 0},
-                  "sReflectanceFraction": {"anyOf": [{"type": "number"}, {"type": "null"}], "description": "Fraction of this sample's R0 readings at or above 2%, 0 to 1. Required on a credit batch whose facility claims 1,000-year durability.", "maximum": 1, "minimum": 0},
+                  "sReflectanceFraction": {"anyOf": [{"type": "number"}, {"type": "null"}], "description": "Fraction of this sample's R0 readings at or above 2%, 0 to 1. Optional when saving; every Sample on a sampled 1,000-year credit batch needs it before a Removal can be submitted.", "maximum": 1, "minimum": 0},
                   "saltContentGPerKg": {"anyOf": [{"type": "number"}, {"type": "null"}], "description": "Salt content in grams per kilogram.", "maximum": 1000, "minimum": 0},
                   "samplingTime": {
                     "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -1266,7 +1266,7 @@
                   "randomReflectanceR0Percent": {"anyOf": [{"type": "number"}, {"type": "null"}], "description": "Mean random reflectance R0 in percent (ISO 7404-5). Required on a credit batch whose facility claims 1,000-year durability.", "maximum": 100, "minimum": 0},
                   "reactiveCarbonPercent": {"anyOf": [{"type": "number"}, {"type": "null"}], "description": "TGA reactive carbon in percent. On a 1,000-year credit batch, this or residualCarbonPercent is required.", "maximum": 100, "minimum": 0},
                   "residualCarbonPercent": {"anyOf": [{"type": "number"}, {"type": "null"}], "description": "TGA non-reactive (residual) carbon in percent. On a 1,000-year credit batch, this or reactiveCarbonPercent is required.", "maximum": 100, "minimum": 0},
-                  "sReflectanceFraction": {"anyOf": [{"type": "number"}, {"type": "null"}], "description": "Fraction of this sample's R0 readings at or above 2%, 0 to 1. Required on a credit batch whose facility claims 1,000-year durability.", "maximum": 1, "minimum": 0},
+                  "sReflectanceFraction": {"anyOf": [{"type": "number"}, {"type": "null"}], "description": "Fraction of this sample's R0 readings at or above 2%, 0 to 1. Optional when saving; every Sample on a sampled 1,000-year credit batch needs it before a Removal can be submitted.", "maximum": 1, "minimum": 0},
                   "saltContentGPerKg": {"anyOf": [{"type": "number"}, {"type": "null"}], "description": "Salt content in grams per kilogram.", "maximum": 1000, "minimum": 0},
                   "samplingTime": {
                     "$schema": "https://json-schema.org/draft/2020-12/schema",

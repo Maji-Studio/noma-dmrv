@@ -29,6 +29,7 @@ import {
 } from "@/db/schema";
 import { eq, inArray } from "drizzle-orm";
 import { chooseRunStatus } from "./helpers/run-status";
+import { formatFacilityWallClock } from "@/lib/date-utils";
 
 const FIRST_FEEDSTOCK_DRAW_WET_MASS_SELECTOR =
   'input[name="feedstockDraws.0.wetMassKg"]';
@@ -311,6 +312,11 @@ test.describe("Production Run + Sample UI CRUD", () => {
 
     const sampleDialog = page.locator('[role="dialog"]');
     await selectEntity(page, "Credit Batch", batch.id, batch.code);
+    const samplingTime = sampleDialog.locator('input[name="samplingTime"]');
+    await expect(samplingTime).toBeEnabled();
+    await expect(samplingTime).toHaveValue("");
+    // This fixture's facility uses UTC; sample within its current batch window.
+    await samplingTime.fill(formatFacilityWallClock(new Date(), "UTC"));
 
     // Fill some carbon analysis data
     await page.fill('input[name="totalCarbonPercent"]', "75");

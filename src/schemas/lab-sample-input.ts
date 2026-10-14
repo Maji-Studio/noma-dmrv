@@ -62,7 +62,7 @@ const DESCRIPTIONS = {
   saltContentGPerKg: "Salt content in grams per kilogram.",
   oToCOrgRatio: `Atomic O/C_org ratio as the laboratory reported it, 0 to ${RATIO_INPUT_MAX}. Stored only when totalOxygenPercent is absent; with oxygen, O/C_org is calculated and this value is not used.`,
   randomReflectanceR0Percent: `Mean random reflectance R0 in percent (ISO 7404-5). ${TIER_1000}`,
-  sReflectanceFraction: `Fraction of this sample's R0 readings at or above 2%, 0 to 1. ${TIER_1000}`,
+  sReflectanceFraction: "Fraction of this sample's R0 readings at or above 2%, 0 to 1. Optional when saving; every Sample on a sampled 1,000-year credit batch needs it before a Removal can be submitted.",
   r0MeasurementCount: "Number of R0 readings behind randomReflectanceR0Percent.",
   r0AnalysisDate: "Date of the R0 analysis, YYYY-MM-DD.",
   reactiveCarbonPercent: `TGA reactive carbon in percent. On a 1,000-year credit batch, this or residualCarbonPercent is required.`,

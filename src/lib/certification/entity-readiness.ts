@@ -1,4 +1,5 @@
 import {
+  certifyFieldConditionApplies,
   getCertifyFieldDescriptors,
   type CertifyEntityKind,
   type CertifyFieldDescriptor,
@@ -44,22 +45,6 @@ function isPresent(value: unknown): boolean {
   if (typeof value === "string") return value.trim().length > 0;
   if (typeof value === "number") return Number.isFinite(value);
   return true;
-}
-
-function conditionApplies(
-  descriptor: CertifyFieldDescriptor,
-  entity: EntityReadinessRecord,
-): boolean {
-  if (!descriptor.condition) return true;
-  if ("allOf" in descriptor.condition) {
-    return descriptor.condition.allOf.every(
-      (condition) =>
-        fieldValue(entity, condition.field) === condition.equals,
-    );
-  }
-  return (
-    fieldValue(entity, descriptor.condition.field) === descriptor.condition.equals
-  );
 }
 
 function descriptorFields(descriptor: CertifyFieldDescriptor): readonly string[] {
@@ -166,7 +151,7 @@ export function deriveEntityCertifyReadiness(
   }
 
   for (const descriptor of getCertifyFieldDescriptors(entityKind)) {
-    if (!conditionApplies(descriptor, entity)) continue;
+    if (!certifyFieldConditionApplies(descriptor, entity)) continue;
     if (descriptorSatisfied(descriptor, entity)) continue;
     gaps.push(fieldGap(descriptor));
   }
