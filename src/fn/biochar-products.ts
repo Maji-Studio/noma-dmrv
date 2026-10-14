@@ -16,7 +16,6 @@ import type { BiocharProductRecord } from "@/db/schema";
 import { z } from "zod";
 
 import { requireOrgFacility } from "@/data-access/utils";
-import { requireOrgContext } from "@/lib/auth/server";
 import { deriveSourceBiocharMassKg, toCompositionJsonb } from "@/lib/biochar-composition/composition";
 import { SafeError } from "@/lib/errors";
 import { makeBiocharProduct, updateBiocharProduct } from "@/lib/operations/biochar-products";
@@ -29,23 +28,10 @@ import {
 } from "@/schemas/biochar-products";
 import { withAction } from "./with-action";
 import type { ActionResult } from "@/types/actions";
-import {
-  formatZodActionError,
-  toLoggedActionError,
-} from "./action-errors";
+
+const LOG_MESSAGE = "biochar product action failed";
 
 const ZERO_SOURCE_BIOCHAR_MESSAGE = "A product requires positive source biochar.";
-
-function biocharProductActionError(
-  error: unknown,
-  fallbackMessage: string,
-  op: string,
-): string {
-  return toLoggedActionError(error, fallbackMessage, {
-    message: "biochar product action failed",
-    context: { op },
-  });
-}
 
 // ============================================
 // Biochar Product List/Query Operations
@@ -57,9 +43,7 @@ function biocharProductActionError(
 export async function getBiocharProductsFn(
   filters?: Partial<z.infer<typeof biocharProductFilterSchema>>
 ): Promise<ActionResult<PaginatedBiocharProducts>> {
-  try {
-    const ctx = await requireOrgContext();
-
+  return withAction(async (ctx) => {
     const validatedFilters = filters
       ? biocharProductFilterSchema.parse(filters)
       : undefined;
@@ -68,23 +52,12 @@ export async function getBiocharProductsFn(
     }
     const products = await getBiocharProductsData(ctx, validatedFilters);
 
-    return { success: true, data: products };
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return {
-        success: false,
-        error: formatZodActionError(error, "Invalid filter parameters"),
-      };
-    }
-    return {
-      success: false,
-      error: biocharProductActionError(
-        error,
-        "Failed to load biochar products",
-        "biochar-product:list",
-      ),
-    };
-  }
+    return products;
+  }, {
+    fallbackMessage: "Failed to load biochar products",
+    zodErrorPrefix: "Invalid filter parameters",
+    log: { message: LOG_MESSAGE, context: { op: "biochar-product:list" } },
+  });
 }
 
 /**
@@ -93,21 +66,13 @@ export async function getBiocharProductsFn(
 export async function getBiocharProductByIdFn(
   productId: string
 ): Promise<ActionResult<BiocharProductWithRelations>> {
-  try {
-    const ctx = await requireOrgContext();
-
+  return withAction(async (ctx) => {
     const product = await getBiocharProductByIdData(ctx, productId);
-    return { success: true, data: product };
-  } catch (error) {
-    return {
-      success: false,
-      error: biocharProductActionError(
-        error,
-        "Failed to load biochar product",
-        "biochar-product:get",
-      ),
-    };
-  }
+    return product;
+  }, {
+    fallbackMessage: "Failed to load biochar product",
+    log: { message: LOG_MESSAGE, context: { op: "biochar-product:get" } },
+  });
 }
 
 // ============================================
@@ -153,7 +118,7 @@ export async function createBiocharProductFn(
     return created.product;
   }, {
     fallbackMessage: "Failed to create biochar product",
-    log: { message: "biochar product action failed", context: { op: "biochar-product:create" } },
+    log: { message: LOG_MESSAGE, context: { op: "biochar-product:create" } },
   });
 }
 
@@ -190,7 +155,7 @@ export async function updateBiocharProductFn(
     });
   }, {
     fallbackMessage: "Failed to update biochar product",
-    log: { message: "biochar product action failed", context: { op: "biochar-product:update" } },
+    log: { message: LOG_MESSAGE, context: { op: "biochar-product:update" } },
   });
 }
 
@@ -211,6 +176,6 @@ export async function deleteBiocharProductFn(
     return;
   }, {
     fallbackMessage: "Failed to delete biochar product",
-    log: { message: "biochar product action failed", context: { op: "biochar-product:delete" } },
+    log: { message: LOG_MESSAGE, context: { op: "biochar-product:delete" } },
   });
 }

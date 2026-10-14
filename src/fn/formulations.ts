@@ -22,7 +22,6 @@ import {
   type FormulationWithIngredients,
   type PaginatedFormulations,
 } from "@/data-access/formulations";
-import { requireOrgContext } from "@/lib/auth/server";
 import {
   createFormulationSchema,
   deleteFormulationSchema,
@@ -30,21 +29,8 @@ import {
   formulationFilterSchema,
 } from "@/schemas/formulations";
 import type { ActionResult } from "@/types/actions";
-import {
-  formatZodActionError,
-  toLoggedActionError,
-} from "./action-errors";
 
-function formulationActionError(
-  error: unknown,
-  fallbackMessage: string,
-  op: string,
-): string {
-  return toLoggedActionError(error, fallbackMessage, {
-    message: "formulation action failed",
-    context: { op },
-  });
-}
+const LOG_MESSAGE = "formulation action failed";
 
 // ============================================
 // Formulation List/Query Operations
@@ -56,31 +42,18 @@ function formulationActionError(
 export async function getFormulationsFn(
   filters?: Partial<z.infer<typeof formulationFilterSchema>>
 ): Promise<ActionResult<PaginatedFormulations>> {
-  try {
-    const ctx = await requireOrgContext();
-
+  return withAction(async (ctx) => {
     const validatedFilters = filters
       ? formulationFilterSchema.parse(filters)
       : undefined;
     const formulations = await getFormulationsData(ctx, validatedFilters);
 
-    return { success: true, data: formulations };
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return {
-        success: false,
-        error: formatZodActionError(error, "Invalid filter parameters"),
-      };
-    }
-    return {
-      success: false,
-      error: formulationActionError(
-        error,
-        "Failed to load formulations",
-        "formulation:list",
-      ),
-    };
-  }
+    return formulations;
+  }, {
+    fallbackMessage: "Failed to load formulations",
+    zodErrorPrefix: "Invalid filter parameters",
+    log: { message: LOG_MESSAGE, context: { op: "formulation:list" } },
+  });
 }
 
 /**
@@ -89,21 +62,13 @@ export async function getFormulationsFn(
 export async function getFormulationByIdFn(
   formulationId: string
 ): Promise<ActionResult<FormulationWithIngredients>> {
-  try {
-    const ctx = await requireOrgContext();
-
+  return withAction(async (ctx) => {
     const formulation = await getFormulationByIdData(ctx, formulationId);
-    return { success: true, data: formulation };
-  } catch (error) {
-    return {
-      success: false,
-      error: formulationActionError(
-        error,
-        "Failed to load formulation",
-        "formulation:get",
-      ),
-    };
-  }
+    return formulation;
+  }, {
+    fallbackMessage: "Failed to load formulation",
+    log: { message: LOG_MESSAGE, context: { op: "formulation:get" } },
+  });
 }
 
 // ============================================
@@ -116,9 +81,7 @@ export async function getFormulationByIdFn(
 export async function createFormulationFn(
   data: z.infer<typeof createFormulationSchema>
 ): Promise<ActionResult<FormulationWithIngredients>> {
-  try {
-    const ctx = await requireOrgContext();
-
+  return withAction(async (ctx) => {
     const validated = createFormulationSchema.parse(data);
 
     const formulation = await withAutoCode(
@@ -141,23 +104,11 @@ export async function createFormulationFn(
       CODE_CONFLICT_MESSAGES.formulation,
     );
 
-    return { success: true, data: formulation };
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return {
-        success: false,
-        error: formatZodActionError(error),
-      };
-    }
-    return {
-      success: false,
-      error: formulationActionError(
-        error,
-        "Failed to create formulation",
-        "formulation:create",
-      ),
-    };
-  }
+    return formulation;
+  }, {
+    fallbackMessage: "Failed to create formulation",
+    log: { message: LOG_MESSAGE, context: { op: "formulation:create" } },
+  });
 }
 
 // ============================================
@@ -187,7 +138,7 @@ export async function updateFormulationFn(
     });
 
     return formulation;
-  }, { fallbackMessage: "Failed to update formulation", log: { message: "formulation action failed", context: { op: "formulation:update" } } });
+  }, { fallbackMessage: "Failed to update formulation", log: { message: LOG_MESSAGE, context: { op: "formulation:update" } } });
 }
 
 // ============================================
@@ -206,5 +157,5 @@ export async function deleteFormulationFn(
     await deleteFormulation(ctx, validated.formulationId, validated.expectedVersion);
 
     return undefined;
-  }, { fallbackMessage: "Failed to delete formulation", log: { message: "formulation action failed", context: { op: "formulation:delete" } } });
+  }, { fallbackMessage: "Failed to delete formulation", log: { message: LOG_MESSAGE, context: { op: "formulation:delete" } } });
 }

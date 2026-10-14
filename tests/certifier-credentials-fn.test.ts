@@ -211,7 +211,7 @@ describe("setOrgCertifierCredentialsFn", () => {
       clientSecret: CLIENT_SECRET,
     });
 
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       success: false,
       error: "That is the placeholder for a stored key, not a key.",
     });
@@ -223,7 +223,7 @@ describe("setOrgCertifierCredentialsFn", () => {
       organizationId: ORGANIZATION_ID,
     });
 
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       success: false,
       error: "Enter an access token or a client secret to save.",
     });

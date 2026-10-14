@@ -21,7 +21,6 @@ import {
   updateReactor,
   type PaginatedReactors,
 } from "@/data-access/reactors";
-import { requireOrgContext } from "@/lib/auth/server";
 import {
   createReactorSchema,
   deleteReactorSchema,
@@ -29,23 +28,10 @@ import {
   reactorFilterSchema,
 } from "@/schemas/reactors";
 import type { ActionResult } from "@/types/actions";
-import {
-  formatZodActionError,
-  toLoggedActionError,
-} from "./action-errors";
 import { getReactorById } from "@/data-access/reactors";
 import { uuidSchema } from "@/schemas/helpers";
 
-function reactorActionError(
-  error: unknown,
-  fallbackMessage: string,
-  op: string,
-): string {
-  return toLoggedActionError(error, fallbackMessage, {
-    message: "reactor action failed",
-    context: { op },
-  });
-}
+const LOG_MESSAGE = "reactor action failed";
 
 // ============================================
 // List/Query Operations
@@ -57,9 +43,7 @@ function reactorActionError(
 export async function getReactorsFn(
   filters?: Partial<z.infer<typeof reactorFilterSchema>>
 ): Promise<ActionResult<PaginatedReactors>> {
-  try {
-    const ctx = await requireOrgContext();
-
+  return withAction(async (ctx) => {
     const validatedFilters = filters
       ? reactorFilterSchema.parse(filters)
       : undefined;
@@ -68,23 +52,12 @@ export async function getReactorsFn(
     }
     const reactors = await getReactorsData(ctx, validatedFilters);
 
-    return { success: true, data: reactors };
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return {
-        success: false,
-        error: formatZodActionError(error, "Invalid filter parameters"),
-      };
-    }
-    return {
-      success: false,
-      error: reactorActionError(
-        error,
-        "Failed to load reactors",
-        "reactor:list",
-      ),
-    };
-  }
+    return reactors;
+  }, {
+    fallbackMessage: "Failed to load reactors",
+    zodErrorPrefix: "Invalid filter parameters",
+    log: { message: LOG_MESSAGE, context: { op: "reactor:list" } },
+  });
 }
 
 // ============================================
@@ -97,9 +70,7 @@ export async function getReactorsFn(
 export async function createReactorFn(
   data: z.infer<typeof createReactorSchema>
 ): Promise<ActionResult<Reactor>> {
-  try {
-    const ctx = await requireOrgContext();
-
+  return withAction(async (ctx) => {
     const validated = createReactorSchema.parse(data);
 
     const reactor = await withAutoCode(
@@ -120,23 +91,11 @@ export async function createReactorFn(
       CODE_CONFLICT_MESSAGES.reactor,
     );
 
-    return { success: true, data: reactor };
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return {
-        success: false,
-        error: formatZodActionError(error),
-      };
-    }
-    return {
-      success: false,
-      error: reactorActionError(
-        error,
-        "Failed to create reactor",
-        "reactor:create",
-      ),
-    };
-  }
+    return reactor;
+  }, {
+    fallbackMessage: "Failed to create reactor",
+    log: { message: LOG_MESSAGE, context: { op: "reactor:create" } },
+  });
 }
 
 // ============================================
@@ -164,7 +123,7 @@ export async function updateReactorFn(
     });
 
     return reactor;
-  }, { fallbackMessage: "Failed to update reactor", log: { message: "reactor action failed", context: { op: "reactor:update" } } });
+  }, { fallbackMessage: "Failed to update reactor", log: { message: LOG_MESSAGE, context: { op: "reactor:update" } } });
 }
 
 // ============================================
@@ -183,7 +142,7 @@ export async function deleteReactorFn(
     await deleteReactor(ctx, validated.reactorId, validated.expectedVersion);
 
     return undefined;
-  }, { fallbackMessage: "Failed to delete reactor", log: { message: "reactor action failed", context: { op: "reactor:delete" } } });
+  }, { fallbackMessage: "Failed to delete reactor", log: { message: LOG_MESSAGE, context: { op: "reactor:delete" } } });
 }
 
 export async function getReactorByIdFn(id: string) {
