@@ -89,11 +89,13 @@ Every server action uses `withAction`; do not hand-roll
 log message and `op` via `log`, the operator-facing fallback via
 `fallbackMessage`, and a Zod prefix via `zodErrorPrefix`. Use `mapError` for
 `SafeError` subclasses needing a `field` or fixed message. Failures retain the
-wrapper's `code`, `issues` and `conflict` fields. Two kinds of catch stay:
+wrapper's `code`, `issues` and `conflict` fields. Three kinds of catch stay:
 actions without an active org (platform admin, invitation bootstrap,
-organization switching), because `withAction` always resolves one; and inner
+organization switching), because `withAction` always resolves one; inner
 catches outside the action's boundary (a best-effort follow-up after a commit,
-a rollback or release, or translating a library error into a `SafeError`).
+a rollback or release, or translating a library error into a `SafeError`); and
+actions that surface a library's own error message that is not a `SafeError`
+(the Better Auth member and invitation actions in `organizations.ts`).
 
 ```typescript
 export async function createItem(input: CreateItem) {
