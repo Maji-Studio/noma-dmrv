@@ -188,30 +188,33 @@ export const CERTIFY_FIELD_REGISTRY: Record<
   ],
   sample: [
     {
+      // durability-readiness.ts runs the 1,000-year replicate gate only for sampled batches.
       key: "totalCarbonPercent",
       label: "Total carbon",
       kind: "entered",
       condition: {
         allOf: [
           { field: "durabilityOption", equals: "1000_year" },
-          { field: "sampling", notEquals: "unsampled" },
+          { field: "sampling", equals: "sampled" },
         ],
         label: "sampled 1,000-year durability",
       },
     },
     {
+      // Same sampled 1,000-year replicate gate in durability-readiness.ts as total carbon.
       key: "inorganicCarbonPercent",
       label: "Measured inorganic carbon",
       kind: "entered",
       condition: {
         allOf: [
           { field: "durabilityOption", equals: "1000_year" },
-          { field: "sampling", notEquals: "unsampled" },
+          { field: "sampling", equals: "sampled" },
         ],
         label: "sampled 1,000-year durability",
       },
     },
     {
+      // durability-submission-gates.ts skips chemistry only for explicit unsampled batches.
       key: "organicCarbonPercent",
       label: "Organic carbon",
       kind: "entered",
@@ -219,6 +222,7 @@ export const CERTIFY_FIELD_REGISTRY: Record<
       mappings: [mapping("weightedOrganicCarbonPercent")],
     },
     {
+      // durability-submission-gates.ts skips chemistry only for explicit unsampled batches.
       key: "hToCOrgRatio",
       label: "H:Corg ratio",
       kind: "entered",
@@ -237,10 +241,9 @@ export const CERTIFY_FIELD_REGISTRY: Record<
     },
     {
       // Like H:Corg, Soil Module §3.3 Table 2 checks pooled mean H/C_org < 0.5
-      // AND O/C_org < 0.2 on every tier. Both ratios are required on sampled
-      // batches: missing oxygen cannot count toward the §8.3.1 ≥3 usable
+      // AND O/C_org < 0.2 on every tier. Missing oxygen cannot count toward the §8.3.1 ≥3 usable
       // replicates (QA 2026-07-25 F-6). durability-submission-gates.ts skips
-      // unsampled batches, so their incidental Samples are outside this gate.
+      // only explicit unsampled batches, including their incidental Samples.
       key: "oToCOrgRatio",
       label: "O:Corg ratio",
       kind: "entered",
@@ -248,6 +251,7 @@ export const CERTIFY_FIELD_REGISTRY: Record<
       mappings: [mapping("weightedOToCorgRatio")],
     },
     {
+      // assertBatchTierEvidence requires either TGA measurement at save for every 1,000-year batch.
       key: "tgaNonReactiveCarbonData",
       label: "TGA non-reactive carbon data",
       kind: "entered",
@@ -264,6 +268,7 @@ export const CERTIFY_FIELD_REGISTRY: Record<
       },
     },
     {
+      // assertBatchTierEvidence requires mean R₀ at save for every 1,000-year batch.
       key: "randomReflectanceR0Percent",
       label: "R0 reflectance",
       kind: "entered",
@@ -274,13 +279,14 @@ export const CERTIFY_FIELD_REGISTRY: Record<
       },
     },
     {
+      // Same sampled 1,000-year replicate gate in durability-readiness.ts as TC and IC.
       key: "sReflectanceFraction",
       label: "R₀ readings at or above 2%",
       kind: "entered",
       condition: {
         allOf: [
           { field: "durabilityOption", equals: "1000_year" },
-          { field: "sampling", notEquals: "unsampled" },
+          { field: "sampling", equals: "sampled" },
         ],
         label: "sampled 1,000-year durability",
       },

@@ -147,7 +147,6 @@ export function resolveSamplingTimeForBatch(value: EventInstant, batch: LockedSa
 
 export interface SampleTierEvidence {
   randomReflectanceR0Percent: number | null;
-  sReflectanceFraction: number | null;
   reactiveCarbonPercent: number | null;
   residualCarbonPercent: number | null;
 }

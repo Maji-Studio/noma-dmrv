@@ -26,9 +26,17 @@ describe("Sample certification descriptor scope", () => {
     ["200_year", "sampled", false],
     ["200_year", "unsampled", false],
     [null, "sampled", false],
-  ])("requires s_fraction only for sampled 1,000-year evidence (%s, %s)", (durabilityOption, sampling, required) => {
+    ["1000_year", null, false],
+    ["1000_year", undefined, false],
+    ["200_year", null, false],
+    ["200_year", undefined, false],
+  ])("requires TC, IC and s_fraction only for sampled 1,000-year evidence (%s, %s)", (durabilityOption, sampling, required) => {
     const readiness = deriveEntityCertifyReadiness("sample", { durabilityOption, sampling });
-    expect(readiness.gaps.some((gap) => gap.key === "sReflectanceFraction")).toBe(required);
+    for (const key of ["totalCarbonPercent", "inorganicCarbonPercent", "sReflectanceFraction"]) {
+      expect(readiness.gaps.some((gap) => gap.key === key), key).toBe(required);
+    }
+    expect(readiness.gaps.filter((gap) => chemistryKeys.includes(gap.key)).map((gap) => gap.key))
+      .toEqual(sampling !== "unsampled" ? chemistryKeys : []);
   });
 
   it("continues blocking certification when a saved Sample has no s_fraction", () => {

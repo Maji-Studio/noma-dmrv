@@ -19,11 +19,12 @@ describe("formatSamplingTime", () => {
 });
 
 describe("Sample read-view certification chips", () => {
-  it("shows missing chemistry chips on a legacy batchless Sample", () => {
+  it.each([null, undefined])("shows chemistry gaps without replicate chips on a legacy batchless Sample (sampling %s)", (sampling) => {
     const sample = {
-      id: "sample", creditBatchId: null, sampling: null, durabilityOption: null,
+      id: "sample", creditBatchId: null, sampling, durabilityOption: "1000_year",
       samplingTime: new Date("2026-09-10T08:00:00Z"), facilityTimezone: "UTC",
       organicCarbonPercent: null, hToCOrgRatio: null, oToCOrgRatio: null,
+      randomReflectanceR0Percent: 2.4, sReflectanceFraction: null,
       nutrientClaimEnabled: false,
     } as unknown as SampleWithRelations;
     const fields = sampleSheetSections(sample).flatMap((section) => section.fields);
@@ -31,6 +32,8 @@ describe("Sample read-view certification chips", () => {
       const field = fields.find((field) => field.label === label)!;
       expect(renderToStaticMarkup(<DetailField {...field} />)).toContain('data-cert-field="missing"');
     }
+    const reflectance = fields.find((field) => field.label === "R₀ readings ≥ 2%")!;
+    expect(renderToStaticMarkup(<DetailField {...reflectance} />)).not.toContain("data-cert-field");
   });
 
   it.each([
@@ -40,13 +43,15 @@ describe("Sample read-view certification chips", () => {
     { durabilityOption: "1000_year", sampling: "unsampled", chemistryRequired: false },
     { durabilityOption: "200_year", sampling: null, chemistryRequired: true },
     { durabilityOption: "1000_year", sampling: null, chemistryRequired: true },
+    { durabilityOption: "200_year", sampling: undefined, chemistryRequired: true },
+    { durabilityOption: "1000_year", sampling: undefined, chemistryRequired: true },
   ] as const)("matches the form's conditions for $sampling $durabilityOption batches", ({ durabilityOption, sampling, chemistryRequired }) => {
     const sample = {
       id: "sample", creditBatchCode: "CB-1", samplingTime: new Date("2026-09-10T08:00:00Z"),
       facilityTimezone: "UTC", durabilityOption, sampling,
       organicCarbonPercent: 75, hToCOrgRatio: 0.24, oToCOrgRatio: 0.06,
       sReflectanceFraction: 0.9, nutrientClaimEnabled: false,
-    } as SampleWithRelations;
+    } as unknown as SampleWithRelations;
     const fields = sampleSheetSections(sample).flatMap((section) => section.fields);
     for (const label of ["Organic carbon", "H:C org ratio", "O:C org ratio"]) {
       const field = fields.find((field) => field.label === label)!;
@@ -58,7 +63,7 @@ describe("Sample read-view certification chips", () => {
     if (durabilityOption === "1000_year") {
       const markup = renderToStaticMarkup(<DetailField {...reflectance!} />);
       expect(markup).toContain("90%");
-      expect(markup.includes('data-cert-field="satisfied"')).toBe(chemistryRequired);
+      expect(markup.includes('data-cert-field="satisfied"')).toBe(sampling === "sampled");
     } else {
       expect(reflectance).toBeUndefined();
     }

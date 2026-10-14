@@ -260,7 +260,7 @@ describe("deriveEntityCertifyReadiness", () => {
     expect(readiness).toEqual({ state: "ready", gaps: [], warnings: [] });
   });
 
-  it.each([null, undefined])("keeps chemistry gaps when sampling is %s", (sampling) => {
+  it.each([null, undefined])("keeps chemistry gaps without replicate gaps when sampling is %s", (sampling) => {
     for (const durabilityOption of ["200_year", "1000_year"]) {
       const readiness = deriveEntityCertifyReadiness("sample", {
         sampling,
@@ -269,11 +269,9 @@ describe("deriveEntityCertifyReadiness", () => {
         residualCarbonPercent: 85,
       });
       expect(readiness.state).toBe("incomplete");
-      expect(readiness.gaps.map((gap) => gap.key)).toEqual(
-        durabilityOption === "1000_year"
-          ? ["totalCarbonPercent", "inorganicCarbonPercent", "organicCarbonPercent", "hToCOrgRatio", "oToCOrgRatio", "sReflectanceFraction"]
-          : ["organicCarbonPercent", "hToCOrgRatio", "oToCOrgRatio"],
-      );
+      expect(readiness.gaps.map((gap) => gap.key)).toEqual([
+        "organicCarbonPercent", "hToCOrgRatio", "oToCOrgRatio",
+      ]);
     }
   });
 
@@ -506,7 +504,7 @@ describe("isCertifyFormField", () => {
         expect(isCertifyEntityField("sample", field, context), field).toBe(chemistryRequired);
       }
       for (const field of ["totalCarbonPercent", "inorganicCarbonPercent", "sReflectanceFraction"]) {
-        const required = chemistryRequired && durabilityOption === "1000_year";
+        const required = sampling === "sampled" && durabilityOption === "1000_year";
         expect(isCertifyFormField("sample", field, context), field).toBe(required);
         expect(isCertifyEntityField("sample", field, context), field).toBe(required);
       }

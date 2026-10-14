@@ -10,7 +10,6 @@ const evidence = {
   randomReflectanceR0Percent: 2.4,
   reactiveCarbonPercent: null,
   residualCarbonPercent: 65,
-  sReflectanceFraction: null,
 };
 
 describe("assertBatchTierEvidence", () => {
