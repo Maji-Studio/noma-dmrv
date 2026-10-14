@@ -292,6 +292,26 @@ afterAll(async () => {
 });
 
 describe("certifier Biochar Application data access", () => {
+  it("loads delivery distance facts and the order destination for readiness", async () => {
+    const ctx = makeTestOrgContext();
+    await db.update(customerLocations).set({ distanceFromFacilityKm: 12 }).where(eq(customerLocations.id, ids.location));
+    await db.update(deliveries).set({ distanceKmOverride: 7 }).where(eq(deliveries.id, ids.delivery));
+    try {
+      expect(await getBiocharApplicationRegistryInputs(ctx, [ids.application])).toEqual([
+        expect.objectContaining({ customerLocationId: ids.location, deliveryStatus: "delivered", distanceKmOverride: 7, locationDistanceKm: 12 }),
+      ]);
+      await db.update(orders).set({ customerLocationId: null }).where(eq(orders.id, ids.order));
+      expect(await getBiocharApplicationRegistryInputs(ctx, [ids.application])).toEqual([
+        expect.objectContaining({ customerLocationId: null, locationDistanceKm: null, distanceKmOverride: 7 }),
+      ]);
+      expect(await getBiocharApplicationRegistryInputs(foreignCtx, [ids.application])).toEqual([]);
+    } finally {
+      await db.update(orders).set({ customerLocationId: ids.location }).where(eq(orders.id, ids.order));
+      await db.update(customerLocations).set({ distanceFromFacilityKm: null }).where(eq(customerLocations.id, ids.location));
+      await db.update(deliveries).set({ distanceKmOverride: null }).where(eq(deliveries.id, ids.delivery));
+    }
+  });
+
   it("loads operator facts and journals identity only within the active organization", async () => {
     const ctx = makeTestOrgContext();
     await expect(

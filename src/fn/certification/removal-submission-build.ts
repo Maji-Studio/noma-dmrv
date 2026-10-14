@@ -636,6 +636,9 @@ export async function buildRemovalSubmissionBuild(args: {
     hasDurabilityComponents,
   } = args.prepared;
 
+  if (ctx.submissionLineageBlockers?.length) {
+    throw new SafeError(`Removal submission blocked:\n${ctx.submissionLineageBlockers.join("\n")}`);
+  }
   assertEntityReadinessGapsResolved(ctx.entityReadinessGaps);
   assertSequestrationTemplateBindings(defaultTemplate);
 

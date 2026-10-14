@@ -11,6 +11,7 @@ import { EntityCertifyReadinessBadge } from "@/components/certification/entity-c
 import { ServerError } from "@/components/forms";
 import { SelectFacilityEmptyState } from "@/components/navigation";
 import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
+import { InfoHint } from "@/components/ui/tooltip";
 import { DataTable } from "@/components/ui/data-table";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
@@ -38,7 +39,7 @@ import {
 } from "@/hooks/use-list-pagination";
 import { APPLICATION_DEEP_LINK_PARAM } from "@/lib/application-links";
 import { APPLICATION_EVIDENCE_RULE_SPEC } from "@/lib/certification/application-evidence";
-import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readiness";
+import { deriveEntityCertifyReadiness, REMOVAL_FIELD_CHECK_SCOPE } from "@/lib/certification/entity-readiness";
 import { MISSING_VALUE } from "@/lib/copy-utils";
 import { parseExactIdFilter } from "@/lib/exact-id-filter";
 import { formatDate, formatDateRange } from "@/lib/format-utils";
@@ -157,10 +158,17 @@ function createColumns(
     },
     {
       id: "certifyReadiness",
-      header: "Certification",
+      header: () => (
+        <span className="inline-flex items-center gap-4">
+          Certification
+          <InfoHint label="More about certification">{REMOVAL_FIELD_CHECK_SCOPE}</InfoHint>
+        </span>
+      ),
       cell: ({ row }) => (
         <EntityCertifyReadinessBadge
           readiness={deriveEntityCertifyReadiness("application", row.original)}
+          readyLabel="Fields complete"
+          readinessNoun="application fields"
         />
       ),
     },

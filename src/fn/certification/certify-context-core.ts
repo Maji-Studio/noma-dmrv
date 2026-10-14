@@ -1,3 +1,5 @@
+import { buildSubmissionLineageBlockers, collectFeedstockCodes } from "./certify-lineage-blockers";
+import { hasDurabilityMeasurementComponents, durabilityConfigurationBlockers } from "@/lib/certification/submission-readiness";
 import { allowsPeriodInputStub } from "@/lib/isometric/datapoint-mapping";
 import { findUnbindableTemplateInputs, type UnbindableTemplateInput } from "@/lib/isometric/template-binding-coverage";
 import type { OrgContext } from "@/lib/auth/server";
@@ -149,6 +151,8 @@ export interface RemovalCertifyContext {
   // Compact labels from the per-entity certifier-readiness layer; the submit
   // pipeline gates on this same list, so [] means entity-ready.
   entityReadinessGaps: string[];
+  submissionLineageBlockers?: string[];
+  durabilityConfigurationBlockers?: string[];
   entityReadinessIssues?: import("@/lib/certification/batch-health").BatchEntityReadinessIssue[];
   // Fail-closed durability sampling/eligibility blockers (D3) — the EXACT list
   // the submit pipeline blocks on, so readiness predicts the gate. [] ⇒ ready.
@@ -256,6 +260,7 @@ interface RemovalScope {
     productionEmissionsClaimedByRemovalId: string | null;
   })[];
   lineages: ChainOfCustodyData[];
+  feedstockCodes: Record<string, string>;
 }
 
 function completedRunIds(runs: BatchLineageRunFact[]): string[] {
@@ -310,6 +315,7 @@ function resolveSingleBatchScope(
     facilityId: batch.facilityId,
     removalId: null,
     removal: null,
+    feedstockCodes: collectFeedstockCodes(lineageFacts.runs),
     memberBatches: [
       {
         ...toMemberCreditBatch(accounting),
@@ -392,6 +398,9 @@ export async function resolveScopeForRemoval(
     removalId,
     removal,
     memberBatches,
+    feedstockCodes: collectFeedstockCodes(
+      Object.values(accountingByBatch).flatMap((accounting) => accounting.lineageFacts.runs),
+    ),
     lineages: [
       ...new Map(
         lineages.map((lineage) => [
@@ -664,6 +673,8 @@ export async function buildRemovalContext(
       productionReadinessGap,
       entityReadinessGaps: [],
       durabilityGateBlockers,
+      durabilityConfigurationBlockers: hasDurabilityMeasurementComponents(facilityFacts.defaultTemplate)
+      ? durabilityConfigurationBlockers(batchesWithSamples) : [],
       // No applications and no runs resolved ⇒ no date to be in the future.
       futureDatedMeasurements: [],
       submissionWarnings: [
@@ -723,6 +734,11 @@ export async function buildRemovalContext(
   });
   const transportLegs = await loadTransportLegsByCategory(orgCtx, entityIds);
   const transportCoverage = buildTransportCoverage(transportLegs, entityIds);
+  const submissionLineageBlockers = buildSubmissionLineageBlockers(
+    lineages,
+    transportCoverage.feedstock.missingEntityIds ?? [],
+    scope.feedstockCodes,
+  );
   const entityReadiness = await buildCertifyEntityReadiness({
     runs,
     batchesWithSamples,
@@ -760,8 +776,11 @@ export async function buildRemovalContext(
     hasSubmittableRuns: runs.length > 0 && !productionReadinessGap,
     productionReadinessGap,
     entityReadinessGaps: entityReadiness.gaps,
+    submissionLineageBlockers,
     entityReadinessIssues: entityReadiness.issues,
     durabilityGateBlockers,
+    durabilityConfigurationBlockers: hasDurabilityMeasurementComponents(facilityFacts.defaultTemplate)
+      ? durabilityConfigurationBlockers(batchesWithSamples) : [],
     futureDatedMeasurements: collectFutureDatedMeasurements({
       runs,
       samples: batchesWithSamples.flatMap((batch) => batch.samples),
@@ -825,8 +844,10 @@ function projectUiContext(
     hasSubmittableRuns: ctx.hasSubmittableRuns,
     productionReadinessGap: ctx.productionReadinessGap,
     entityReadinessGaps: ctx.entityReadinessGaps,
+    submissionLineageBlockers: ctx.submissionLineageBlockers,
     entityReadinessIssues: ctx.entityReadinessIssues ?? [],
     durabilityGateBlockers: ctx.durabilityGateBlockers,
+    durabilityConfigurationBlockers: ctx.durabilityConfigurationBlockers,
     futureDatedMeasurements: ctx.futureDatedMeasurements,
     submissionWarnings: ctx.submissionWarnings,
     supportingDocuments: ctx.supportingDocuments,

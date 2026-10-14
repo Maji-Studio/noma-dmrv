@@ -251,6 +251,7 @@ describe("deriveEntityCertifyReadiness", () => {
       status: "complete",
       massWetKg: 1500,
       transportDistanceKm: 25,
+      hasUsableTransportLeg: true,
       transportDistanceSource: "document",
       transportEvidenceDocumentCount: 1,
     });
@@ -263,6 +264,7 @@ describe("deriveEntityCertifyReadiness", () => {
       status: "complete",
       massWetKg: null,
       transportDistanceKm: 25,
+      hasUsableTransportLeg: true,
       transportDistanceSource: "document",
       transportEvidenceDocumentCount: 1,
     });
@@ -278,6 +280,7 @@ describe("deriveEntityCertifyReadiness", () => {
       status: "complete",
       massWetKg: 1500,
       transportDistanceKm: 25,
+      hasUsableTransportLeg: true,
       transportDistanceSource: "manual",
       transportEvidenceDocumentCount: 1,
     });
@@ -389,6 +392,7 @@ describe("deriveEntityCertifyReadiness", () => {
         status: "complete",
         massWetKg: 1500,
         transportDistanceKm: 25,
+      hasUsableTransportLeg: true,
         transportDistanceSource: "manual",
         transportEvidenceDocumentCount: 0,
       },
@@ -461,7 +465,7 @@ describe("deriveEntityCertifyReadiness", () => {
 describe("isCertifyFormField", () => {
   it("badges entered descriptors by their key", () => {
     expect(isCertifyFormField("delivery", "deliveredWetMassKg")).toBe(true);
-    expect(isCertifyFormField("application", "soilTemperatureC")).toBe(true);
+    expect(isCertifyFormField("application", "soilTemperatureC")).toBe(false);
     expect(isCertifyFormField("customerLocation", "distanceFromFacilityKm")).toBe(true);
   });
 
@@ -503,5 +507,31 @@ describe("isCertifyEntityField", () => {
   it("ignores non-certification detail fields", () => {
     expect(isCertifyEntityField("delivery", "distanceKmOverride")).toBe(false);
     expect(isCertifyEntityField("feedstock", "notes")).toBe(false);
+  });
+});
+
+
+describe("non-walked entity copy", () => {
+  it("treats a missing 200-year site temperature as advisory", () => {
+    const result = deriveEntityCertifyReadiness("application", { biocharAppliedTons: 1, durabilityOption: "200_year", soilTemperatureC: null });
+    expect(result.state).toBe("ready");
+    expect(result.gaps).toEqual([]);
+    expect(result.warnings).toContainEqual(expect.objectContaining({ key: "soilTemperatureC", detail: expect.stringContaining("facility reference") }));
+  });
+  it.each(["feedstock", "delivery", "application", "supplier", "supplierLocation", "customerLocation"] as const)("does not claim %s fields block certification", (kind) => {
+    const result = deriveEntityCertifyReadiness(kind, {});
+    expect(result.gaps.map((gap) => gap.detail).join(" ")).not.toContain("to certify");
+  });
+});
+
+
+describe("feedstock transport usability", () => {
+  it.each([0, -1, NaN, Infinity, null])("keeps unusable distance %s incomplete", (transportDistanceKm) => {
+    const readiness = deriveEntityCertifyReadiness("feedstock", {
+      status: "complete", massWetKg: 100, transportDistanceKm,
+      hasUsableTransportLeg: false,
+      transportDistanceSource: "manual",
+    });
+    expect(readiness.gaps).toContainEqual(expect.objectContaining({ key: "transportLeg" }));
   });
 });

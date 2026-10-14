@@ -1,3 +1,4 @@
+import { toRemovalReadinessFacts } from "@/lib/certification/readiness-facts";
 import { makeTestOrgContext } from "./helpers/test-org";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
@@ -633,7 +634,7 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
     expect(result.runSummary.runCount).toBe(0);
   });
 
-  it("populates removal-level transportCoverage by walking the application lineage", async () => {
+  it.each(["carbon_rich_substance_sequestration", "biochar_sequestration_200_year_c_org"])("populates lineage coverage and scopes durability refusals for %s", async (storageKey) => {
     mockedGetCreditBatch.mockResolvedValue({
       id: CREDIT_BATCH_ID,
       facilityId: FACILITY_ID,
@@ -643,20 +644,21 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
       mapping({ defaultRemovalTemplateId: "rvt_resolved" }),
     );
     mockedListProjects.mockResolvedValue([project(EXTERNAL_PROJECT_ID)]);
-    mockedListTemplates.mockResolvedValue([template("rvt_resolved")]);
+    mockedListTemplates.mockResolvedValue([template("rvt_resolved", [storageKey])]);
     mockedListBlueprints.mockResolvedValue([]);
 
     mockedGetLineage.mockResolvedValue({
       facility: { id: FACILITY_ID, code: "F", name: "F" },
       application: {
+        code: "AP-MISSING",
         applicationDate: new Date("2026-01-20T00:00:00Z"),
       } as never,
-      delivery: {} as never,
+      delivery: { code: "DL-MISSING", status: "delivered", customerLocationId: null } as never,
       order: null,
       biocharProduct: { id: "bp-1" } as never,
       productionRun: { id: "pr-1" } as never,
       reactor: null,
-      feedstocks: [{ id: "fs-1" } as never, { id: "fs-2" } as never],
+      feedstocks: [{ id: "fs-1" } as never, { id: "fs-2", code: "FS-MISSING" } as never],
       warnings: [],
     } as Awaited<ReturnType<typeof getChainOfCustodyData>>);
     mockedGetRuns.mockResolvedValue([
@@ -704,6 +706,13 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
       CREDIT_BATCH_ID,
     );
 
+    expect(result.submissionLineageBlockers).toEqual(expect.arrayContaining([
+      expect.stringContaining("Feedstock FS-MISSING"),
+      expect.stringContaining("Application AP-MISSING has no customer location"),
+      expect.stringContaining("Delivery DL-MISSING has no positive transport distance"),
+    ]));
+    expect(toRemovalReadinessFacts(result).submissionLineageBlockers).toEqual(result.submissionLineageBlockers);
+    expect(result.durabilityConfigurationBlockers).toEqual(storageKey === "carbon_rich_substance_sequestration" ? [] : ["200-year Removals cannot be submitted yet. Wait for support to confirm registry availability."]);
     const coverage = result.transportCoverage;
     expect(coverage.feedstock.count).toBe(3);
     expect(coverage.feedstock.entityIds.sort()).toEqual(["fs-1", "fs-2"]);

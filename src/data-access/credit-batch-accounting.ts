@@ -7,6 +7,7 @@ import {
   creditBatchProductionRuns,
   creditBatches,
   deliveries,
+  customerLocations,
   facilities,
   feedstockDeliveries,
   feedstockTypes,
@@ -53,6 +54,7 @@ import {
   eq,
   inArray,
   isNull,
+  or,
   sql,
 } from "drizzle-orm";
 import type {
@@ -188,6 +190,9 @@ async function loadLineageWithExecutor(
           deliveryId: deliveries.id,
           deliveryCode: deliveries.code,
           deliveryStatus: deliveries.status,
+          distanceKmOverride: deliveries.distanceKmOverride,
+          locationDistanceKm: customerLocations.distanceFromFacilityKm,
+          customerLocationId: customerLocations.id,
           deliveryDate: deliveries.deliveryDate,
           deliveryWetMassKg: deliveries.deliveredWetMassKg,
           deliveryMassDryKg: deliveries.massDryKg,
@@ -235,6 +240,13 @@ async function loadLineageWithExecutor(
             eq(orders.organizationId, ctx.organizationId),
           ),
         )
+        .leftJoin(customerLocations, and(
+          or(
+            eq(customerLocations.id, deliveries.customerLocationId),
+            and(isNull(deliveries.customerLocationId), eq(customerLocations.id, orders.customerLocationId)),
+          ),
+          eq(customerLocations.organizationId, ctx.organizationId),
+        ))
         .innerJoin(applicationOutputAllocations, and(
           eq(applicationOutputAllocations.applicationId, applications.id),
           eq(applicationOutputAllocations.organizationId, ctx.organizationId),
@@ -350,7 +362,7 @@ async function loadLineageWithExecutor(
       sourceAllocation: { productionRunId: effectiveRunId, allocatedWetMassKg: Number(row.allocatedWetMassKg), allocatedDryMassKg: Number(row.allocatedDryMassKg) },
       soilTemperatureC: row.soilTemperatureC,
       facility: { id: row.facilityId, code: row.facilityCode, name: row.facilityName },
-      delivery: { id: row.deliveryId, code: row.deliveryCode, status: row.deliveryStatus, deliveryDate: row.deliveryDate, deliveredWetMassKg: row.deliveryWetMassKg, massDryKg: row.deliveryMassDryKg },
+      delivery: { id: row.deliveryId, code: row.deliveryCode, status: row.deliveryStatus, deliveryDate: row.deliveryDate, deliveredWetMassKg: row.deliveryWetMassKg, massDryKg: row.deliveryMassDryKg, distanceKmOverride: row.distanceKmOverride, locationDistanceKm: row.locationDistanceKm, customerLocationId: row.customerLocationId },
       order: row.orderId ? { id: row.orderId, code: row.orderCode!, orderDate: row.orderDate!, quantityKg: row.orderQuantityKg } : null,
       biocharProduct: { id: row.productId, code: row.productCode, status: row.productStatus, productionDate: row.productionDate, massKg: row.productMassKg, moistureContentPercent: row.productMoisturePercent, formulationName: row.formulationName, linkedProductionRunId: effectiveRunId },
     };

@@ -1,3 +1,4 @@
+import { missingFeedstockTransportIds } from "@/lib/certification/submission-readiness";
 import production from "../../../tests/fixtures/isometric/production-template-2026-07-03.json";
 import type { components as RegistryComponents } from "@/lib/isometric/generated/certify";
 import * as ghgEntry from "@/lib/isometric/transformers/ghg-entry";
@@ -302,6 +303,28 @@ describe("buildRemovalSubmissionBuild", () => {
       sources.collectCandidateSourceDocumentsForRemoval,
     ).not.toHaveBeenCalled();
     expect(sources.resolveSourceBindingCandidates).not.toHaveBeenCalled();
+  });
+
+  it("blocks a missing feedstock leg before preparing registry inputs", async () => {
+    const missing = missingFeedstockTransportIds(["FS-1", "FS-2"], [
+      { entityId: "FS-1", distanceKm: 10, loadMassKg: 100 },
+    ]);
+    const ctx = {
+      entityReadinessGaps: [],
+      submissionLineageBlockers: missing.map((id) => `Feedstock ${id} has no usable transport leg.`),
+    } as unknown as RemovalSubmissionContext;
+    await expect(buildRemovalSubmissionBuild({
+      orgCtx: TEST_ORG_CONTEXT,
+      removalId: "rem-missing-feedstock",
+      ctx,
+      prepared: {
+        defaultTemplate: { groups: [] } as never,
+        blueprintsByKey: new Map(),
+        externalProjectId: "prj-test",
+        allowPeriodInputStub: false,
+        hasDurabilityComponents: false,
+      },
+    })).rejects.toThrow("Removal submission blocked:\nFeedstock FS-2 has no usable transport leg.");
   });
 
   it("builds the Safety margin from dry mass with the Inventory Source attached", async () => {

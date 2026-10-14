@@ -107,7 +107,7 @@ type BatchHealthCheckBase = Omit<
 
 export interface BatchTransportFact {
   category: TransportCategory;
-  /** At least one transport leg present for this category in the batch lineage. */
+  /** Required category coverage, including every lineage feedstock. */
   present: boolean;
 }
 
@@ -133,6 +133,8 @@ export interface BatchHealthFacts {
    * operator resolves them from the batch's cards before grouping.
    */
   entityReadinessGaps: string[];
+  submissionLineageBlockers?: string[];
+  durabilityConfigurationBlockers?: string[];
   /** The same gaps grouped by the one workflow where each issue is resolved. */
   entityReadinessIssues?: BatchEntityReadinessIssue[];
   /** The batch's application lineage resolves at least one production run. */
@@ -415,6 +417,21 @@ function entityReadinessChecks(facts: BatchHealthFacts): BatchHealthCheckBase[] 
   }];
 }
 
+function submissionChecks(facts: BatchHealthFacts): BatchHealthCheckBase[] {
+  return [
+    { blockers: facts.submissionLineageBlockers, fixTarget: "sourceData" as const },
+    { blockers: facts.durabilityConfigurationBlockers, fixTarget: "batchDetails" as const },
+  ].flatMap(({ blockers, fixTarget }) => blockers?.length ? [{
+    key: "entityReadiness" as const,
+    issueKey: `submission-${fixTarget}`,
+    label: "Submission requirements complete",
+    requirementLabel: "Resolve submission blockers",
+    status: "unmet" as const,
+    detail: [...new Set(blockers)].join(MERGED_CHECK_SEPARATOR),
+    fixTarget,
+  }] : []);
+}
+
 /**
  * Folds a batch's data-completeness facts into one verdict + an itemised
  * checklist. A batch is "ready" (selectable into a removal) when no `unmet`
@@ -435,6 +452,7 @@ export function deriveBatchHealth(facts: BatchHealthFacts): BatchHealth {
       productionCheck(facts),
       transportCheck(facts),
       ...entityReadinessChecks(facts),
+      ...submissionChecks(facts),
     ].map(withRequirementMeta),
   );
   const issueCount = checks.filter((c) => c.status === "unmet").length;

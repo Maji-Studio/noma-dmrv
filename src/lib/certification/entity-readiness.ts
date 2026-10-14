@@ -26,10 +26,22 @@ export type EntityCertifyWarning = Omit<EntityCertifyGap, "kind">;
 
 export type EntityReadinessRecord = object;
 
+export const REMOVAL_FIELD_CHECK_SCOPE =
+  "These pills check local fields. Removal submission also checks production runs, Samples, transport legs, delivery distances and the order’s customer location.";
+
 const TERMINAL_STATUS_BY_ENTITY: Partial<Record<CertifyEntityKind, string[]>> = {
   productionRun: ["complete"],
   feedstock: ["complete"],
   delivery: ["delivered"],
+};
+
+const FIELD_PURPOSE_BY_ENTITY: Partial<Record<CertifyEntityKind, string>> = {
+  feedstock: "feedstock transport calculations",
+  delivery: "biochar transport calculations",
+  application: "applied biochar accounting",
+  supplier: "the default feedstock transport distance",
+  supplierLocation: "the default feedstock transport distance",
+  customerLocation: "the default delivery transport distance",
 };
 
 function fieldValue(
@@ -96,7 +108,10 @@ function descriptorSatisfied(
   );
 }
 
-function fieldGap(descriptor: CertifyFieldDescriptor): EntityCertifyGap {
+function fieldGap(
+  descriptor: CertifyFieldDescriptor,
+  entityKind: CertifyEntityKind,
+): EntityCertifyGap {
   const fields =
     descriptor.satisfaction?.mode === "anyOf" ||
     descriptor.satisfaction?.mode === "allOf"
@@ -104,8 +119,11 @@ function fieldGap(descriptor: CertifyFieldDescriptor): EntityCertifyGap {
       : descriptor.satisfaction?.mode === "equals"
         ? [descriptor.satisfaction.field]
         : descriptorFields(descriptor);
-  const requirement =
-    descriptor.condition != null
+  const requirement = descriptor.key === "transportDistanceProvenance"
+    ? "Transport distance provenance records how the distance was obtained"
+    : FIELD_PURPOSE_BY_ENTITY[entityKind]
+    ? `${descriptor.label} feeds ${FIELD_PURPOSE_BY_ENTITY[entityKind]}`
+    : descriptor.condition != null
       ? `${descriptor.label} is required for ${descriptor.condition.label}`
       : `${descriptor.label} is required to certify`;
 
@@ -133,7 +151,11 @@ function lifecycleGap(
     key: "lifecycleState",
     label: "Lifecycle state",
     fields: ["status"],
-    detail: `Status must be ${terminalStates.join(" or ")} to certify`,
+    detail: entityKind === "productionRun"
+      ? `Status must be ${terminalStates.join(" or ")} to certify`
+      : entityKind === "feedstock"
+        ? "Complete the feedstock material record"
+        : `Status must be ${terminalStates.join(" or ")} for transport accounting`,
   };
 }
 
@@ -143,10 +165,6 @@ export function deriveEntityCertifyReadiness(
   lifecycleState?: string | null,
 ): EntityCertifyReadiness {
   const gaps: EntityCertifyGap[] = [];
-  // No entity kind produces warnings today: application evidence was the only
-  // producer and it stopped being a readiness concern. The channel is kept as
-  // the seam for the next non-blocking entity warning, so a warning can be
-  // surfaced without re-threading it through every caller.
   const warnings: EntityCertifyWarning[] = [];
   const effectiveLifecycleState =
     lifecycleState ?? (fieldValue(entity, "status") as string | null | undefined);
@@ -168,7 +186,11 @@ export function deriveEntityCertifyReadiness(
   for (const descriptor of getCertifyFieldDescriptors(entityKind)) {
     if (!conditionApplies(descriptor, entity)) continue;
     if (descriptorSatisfied(descriptor, entity)) continue;
-    gaps.push(fieldGap(descriptor));
+    if (descriptor.advisory) {
+      warnings.push({ ...fieldGap(descriptor, entityKind), detail: descriptor.advisory });
+    } else {
+      gaps.push(fieldGap(descriptor, entityKind));
+    }
   }
 
   return {

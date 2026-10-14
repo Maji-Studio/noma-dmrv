@@ -65,6 +65,7 @@ export interface CertifyFieldDescriptor {
   condition?: CertifyFieldCondition;
   satisfaction?: CertifyFieldSatisfaction;
   mappings?: readonly CertifySourceMapping[];
+  advisory?: string;
 }
 
 export const AGGREGATED_PRODUCTION_DATA_KEYS = [
@@ -300,13 +301,13 @@ export const CERTIFY_FIELD_REGISTRY: Record<
       key: "transportLeg",
       label: "Feedstock transport leg",
       kind: "derived",
-      // The derived leg's distance resolves form override → supplier default
-      // location → supplier-level distance; badge the form-side override.
+      // Any usable leg covers this feedstock, including a manually recorded leg.
       formFields: ["transportDistanceKm"],
       satisfaction: {
-        mode: "anyOf",
-        fields: ["transportDistanceKm"],
-        label: "Transport distance",
+        mode: "equals",
+        field: "hasUsableTransportLeg",
+        value: true,
+        label: "Usable transport leg",
       },
       mappings: [mapping("feedstockTransportMassDistanceTonneKm")],
     },
@@ -316,7 +317,7 @@ export const CERTIFY_FIELD_REGISTRY: Record<
       kind: "derived",
       satisfaction: {
         mode: "anyOf",
-        fields: ["transportDistanceSource"],
+        fields: ["transportDistanceSource", "transportLegDistanceSource"],
         label: "Transport distance provenance",
       },
     },
@@ -371,14 +372,9 @@ export const CERTIFY_FIELD_REGISTRY: Record<
       kind: "derived",
     },
     {
-      // Soil temperature feeds ONLY the 200-year (Woolf 2021) durable fraction;
-      // 1000-year removals derive durability from petrographic reflectance +
-      // TGA non-reactive carbon and never submit it (ADR 0021). The condition
-      // scopes the certify marker/readiness gap to 200-year facilities so a
-      // 1000-year application is not mis-flagged for a missing soil temperature.
-      // `durabilityOption` is join-derived onto the application row in
-      // data-access/applications.ts.
+      // Site values are advisory; submission uses the facility reference.
       key: "soilTemperatureC",
+      advisory: "Record the site annual average for comparison with the facility reference temperature. Submission uses the facility reference.",
       label: "Soil temperature",
       kind: "entered",
       condition: {
@@ -459,7 +455,8 @@ export function isCertifyFormField(
   entityKind: CertifyEntityKind,
   fieldName: string,
 ): boolean {
-  return CERTIFY_FIELD_REGISTRY[entityKind].some((field) => {
+  return getCertifyFieldDescriptors(entityKind).some((field) => {
+    if (field.advisory) return false;
     // Derived descriptors badge only the explicitly-named form inputs that
     // feed the derivation; entered descriptors default to their own key.
     const formFields =
@@ -472,7 +469,8 @@ export function isCertifyEntityField(
   entityKind: CertifyEntityKind,
   fieldName: string,
 ): boolean {
-  return CERTIFY_FIELD_REGISTRY[entityKind].some((field) => {
+  return getCertifyFieldDescriptors(entityKind).some((field) => {
+    if (field.advisory) return false;
     const satisfactionFields =
       field.satisfaction?.mode === "anyOf" ||
       field.satisfaction?.mode === "allOf"

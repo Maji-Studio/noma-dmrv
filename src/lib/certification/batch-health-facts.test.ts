@@ -8,6 +8,32 @@ import { collectFeedstockTypeMappingGaps } from "./feedstock-type-mapping";
 import { STORED_CO2E_PREVIEW_REVERIFICATION_GAP } from "./preview-gaps";
 
 describe("toBatchHealthFacts", () => {
+  const readyContext = {
+    memberBatches: [{ id: "batch-1", durabilityGateBlockers: [], facilityEmissionsGateBlockers: [] }],
+    mapping: {}, defaultTemplate: {}, missingDefaultTemplateId: null,
+    unresolvedBlueprintKeys: [], unbindableTemplateInputs: [],
+    hasSubmittableRuns: true, entityReadinessGaps: [], entityReadinessIssues: [],
+    requiredTransportCategories: ["feedstock"],
+    transportCoverage: { feedstock: { count: 1, missingEntityIds: [] } },
+  } as unknown as RemovalCertifyContext;
+
+  it.each(["submissionLineageBlockers", "durabilityConfigurationBlockers"] as const)("includes %s in batch health", (key) => {
+    const health = deriveBatchHealth(toBatchHealthFacts({ ...readyContext, [key]: ["Resolve this submission blocker."] }, "batch-1"));
+    expect(health.state).toBe("incomplete");
+    expect(health.checks.some((check) => check.detail?.includes("Resolve this submission blocker."))).toBe(true);
+  });
+
+  it("does not let one feedstock leg cover a second feedstock", () => {
+    const ctx = { ...readyContext, transportCoverage: {
+      ...readyContext.transportCoverage,
+      feedstock: { ...readyContext.transportCoverage.feedstock, missingEntityIds: ["fs-2"] },
+    } };
+    expect(deriveBatchHealth(toBatchHealthFacts(readyContext, "batch-1")).state).toBe("ready");
+    const health = deriveBatchHealth(toBatchHealthFacts(ctx, "batch-1"));
+    expect(health.state).toBe("incomplete");
+    expect(health.checks).toContainEqual(expect.objectContaining({ key: "transport", status: "unmet" }));
+  });
+
   it("filters the lineage sentinel without suppressing independent sample evidence", () => {
     const ctx = {
       memberBatches: [
