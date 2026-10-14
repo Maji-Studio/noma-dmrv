@@ -1,8 +1,8 @@
 "use client";
 
-import { FormField, PositionPicker } from "@/components/forms";
+import { FormField } from "@/components/forms/form-field";
+import { PositionPicker, type PositionValue } from "@/components/forms/position-picker";
 import { SegmentedControl } from "@/components/forms/segmented-control";
-import type { PositionValue } from "@/components/forms";
 
 export type FieldPositionMode = "derive" | "manual";
 

@@ -569,7 +569,8 @@ helpers and numeric/mass/ratio constants — see [forms.md](./forms.md)) ·
 
 ## CI/CD
 
-`.github/workflows/`: `ci.yml` (lint/typecheck/build) · `migrate.yml`
+`.github/workflows/`: `ci.yml` (lint/typecheck/build, Vitest in two shards) ·
+`migrate.yml`
 (auto-migrate on schema push to `main`/`staging`; manual reset/seed via
 `workflow_dispatch`) · `migration-gate.yml` (blocks schema drift) ·
 `enforce-main-source.yml` (branch-protection: `main` only from `staging`) ·
@@ -578,6 +579,14 @@ helpers and numeric/mass/ratio constants — see [forms.md](./forms.md)) ·
 writes and deletes a probe object, and its opt-in `repair_cors` dispatch updates
 bucket CORS settings) ·
 `claude.yml` and `.coderabbit.yaml` (AI review).
+
+`ci.yml` restores ESLint's content cache (`.cache/eslint`) and TypeScript's
+incremental state (`.cache/typecheck.tsbuildinfo`). Cache keys include OS,
+Node major, dependencies/check configuration, the tracked route-file paths,
+and commit SHA; restore prefixes retain all but SHA. Route paths invalidate
+the filesystem-dependent Next link rule. ESLint caches per file, so adding
+type-aware or cross-file rules requires dropping the cache or widening its
+key. See [testing.md](./testing.md) for local cache cleanup.
 
 CI secrets come from 1Password via `1password/load-secrets-action` plus the
 `OP_SERVICE_ACCOUNT_TOKEN` repo secret; only `CLAUDE_CODE_OAUTH_TOKEN` remains a
