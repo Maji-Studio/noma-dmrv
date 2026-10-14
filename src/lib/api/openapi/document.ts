@@ -12,8 +12,9 @@ import { createFeedstockSchema, updateFeedstockSchema } from "@/schemas/feedstoc
 import type { JsonSchema } from "@/lib/operations/json-schema";
 import { problemSchema } from "../problem-schema";
 import { mutationQuerySchema } from "../query";
-import { outputStockMovementListSchema, supplierLocationListSchema } from "../query-schemas";
+import { facilityLookupGetSchema, outputStockMovementListSchema, supplierLocationListSchema } from "../query-schemas";
 import { outputStockMovementRepresentationSchema } from "@/lib/representations/output-stock-movements";
+import { outputBinStockRepresentationSchema } from "@/lib/representations/output-bin-stock";
 import { supplierLocationRepresentationSchema } from "@/lib/representations/supplier-locations";
 import { meRepresentationSchema } from "@/lib/representations/me";
 import { feedstockRepresentationSchema } from "@/lib/representations/feedstocks";
@@ -22,7 +23,7 @@ import { resources } from "./resources";
 import { operationInput, privateOperation, requestBody, type Paths } from "./operation-kit";
 import { addBiocharWritePaths } from "./biochar-writes";
 import { addLabSampleWritePaths } from "./lab-sample-writes";
-import { outputSchema, queryParameters, targetParameter, idempotencyParameter, ifMatchParameter, privateHeaders, requestIdHeader, etagHeader, writeHeaders, locationHeader, problemResponses, jsonResponse, headerComponents, problemResponseComponents } from "./transport";
+import { outputSchema, queryParameters, targetParameter, idempotencyParameter, ifMatchParameter, privateHeaders, requestIdHeader, etagHeader, stockEtagHeader, writeHeaders, locationHeader, problemResponses, jsonResponse, headerComponents, problemResponseComponents } from "./transport";
 
 const READ_ERRORS = [400, 401, 403, 429, 500];
 const WRITE_ERRORS = [400, 401, 403, 404, 409, 422, 429, 500, 503];
@@ -36,6 +37,7 @@ export function buildOpenApiDocument() {
   const representations: Record<string, z.ZodType> = Object.fromEntries(published.map((resource) => [resource.singular, resource.schema]));
   representations.supplier_location = supplierLocationRepresentationSchema;
   representations.output_stock_movement = outputStockMovementRepresentationSchema;
+  representations.output_bin_stock = outputBinStockRepresentationSchema;
   representations.me = meRepresentationSchema;
   representations.stockEffects = stockEffectsSchema;
   const publishOutput = (schema: z.ZodType) => outputSchema(schema, representations);
@@ -103,6 +105,11 @@ export function buildOpenApiDocument() {
     "find_output_stock_movements", "biochar-products:read", readDescriptions.outputStockMovements,
     { ...problemResponses([...READ_ERRORS, 404, 422]), "200": jsonResponse("Movement page.", publishOutput(listEnvelopeSchema(outputStockMovementRepresentationSchema, "newest posting first"))) },
     [targetParameter(), ...queryParameters(outputStockMovementListSchema)],
+  ) };
+  paths["/storage-locations/{idOrCode}/stock"] = { get: privateOperation(
+    "get_bin_stock", "biochar-products:read", readDescriptions.outputBinStock,
+    { ...problemResponses([...READ_ERRORS, 404, 422]), "200": jsonResponse("Current output bin stock.", publishOutput(itemEnvelopeSchema(outputBinStockRepresentationSchema)), stockEtagHeader) },
+    [targetParameter(), ...queryParameters(facilityLookupGetSchema)],
   ) };
   paths["/me"] = { get: privateOperation("whoami", undefined, readDescriptions.whoami,
     { ...problemResponses([401, 403, 404, 429, 500]), "200": jsonResponse("Credential context.", publishOutput(itemEnvelopeSchema(meRepresentationSchema))) }) };

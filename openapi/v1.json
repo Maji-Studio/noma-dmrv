@@ -284,6 +284,60 @@
         "required": ["organization", "facilities", "role", "scopes", "credential"],
         "type": "object"
       },
+      "output_bin_stock": {
+        "additionalProperties": false,
+        "properties": {
+          "archivedAt": {"anyOf": [{"format": "date-time", "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$", "type": "string"}, {"type": "null"}], "description": "Archive instant in UTC, RFC 3339, or null for a live bin."},
+          "code": {"description": "Human-readable bin code.", "type": "string"},
+          "facilityId": {"description": "Owning facility identifier, UUID.", "format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"},
+          "formulationId": {"anyOf": [{"format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"}, {"type": "null"}], "description": "Formulation claimed by a product bin, UUID; null for a biochar bin or an unclaimed product bin."},
+          "status": {"description": "Whether the saved facts resolve the bin stock.", "enum": ["resolved", "unresolved"], "type": "string"},
+          "stockMode": {"description": "Current bin layout; a mix pile has one moisture estimate in totals.", "enum": ["split", "mix"], "type": "string"},
+          "storageLocationId": {"description": "Biochar or product bin identifier, UUID.", "format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"},
+          "subBins": {
+            "description": "Held layers, oldest placement first, then posting order and layer id. Mix layers have null wet mass, moisture and basis. Empty when unresolved.",
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "code": {"description": "Human-readable production run or biochar product code.", "type": "string"},
+                "dryBiocharKg": {"description": "Dry biochar in kilograms, rounded to 3 decimal places.", "type": "number"},
+                "estimatedMoisturePercent": {"anyOf": [{"type": "number"}, {"type": "null"}], "description": "Estimated moisture as percent of wet mass, rounded to 2 decimal places, or null when unavailable."},
+                "estimatedWetKg": {"anyOf": [{"type": "number"}, {"type": "null"}], "description": "Estimated wet kilograms, rounded to 3 decimal places, or null when unavailable."},
+                "layerId": {"description": "Held run or product UUID accepted by a split-bin loss in sources[].layerId.", "format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"},
+                "layerKind": {"description": "Record that established this layer.", "enum": ["production_run", "biochar_product"], "type": "string"},
+                "moistureBasis": {"anyOf": [{"additionalProperties": false, "properties": {"at": {"description": "Moisture basis instant in UTC, RFC 3339.", "format": "date-time", "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$", "type": "string"}, "source": {"description": "A stock count reading or the mass recorded when the layer entered the bin.", "enum": ["reading", "recorded"], "type": "string"}}, "required": ["source", "at"], "type": "object"}, {"type": "null"}], "description": "Source and instant of the moisture estimate, or null when unavailable."},
+                "placedAt": {"description": "Placement instant in UTC, RFC 3339.", "format": "date-time", "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$", "type": "string"},
+                "solidsKg": {"description": "Dry biochar and ingredient solids in kilograms, rounded to 3 decimal places.", "type": "number"}
+              },
+              "required": ["layerId", "layerKind", "code", "placedAt", "dryBiocharKg", "solidsKg", "estimatedWetKg", "estimatedMoisturePercent", "moistureBasis"],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "totals": {
+            "anyOf": [
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "dryBiocharKg": {"description": "Dry biochar in kilograms, rounded to 3 decimal places.", "type": "number"},
+                  "estimatedMoisturePercent": {"anyOf": [{"type": "number"}, {"type": "null"}], "description": "Estimated moisture as percent of wet mass, rounded to 2 decimal places, or null when unavailable."},
+                  "estimatedWetKg": {"anyOf": [{"type": "number"}, {"type": "null"}], "description": "Estimated wet kilograms, rounded to 3 decimal places, or null when unavailable."},
+                  "moistureBasis": {"anyOf": [{"additionalProperties": false, "properties": {"at": {"description": "Moisture basis instant in UTC, RFC 3339.", "format": "date-time", "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$", "type": "string"}, "source": {"description": "A stock count reading or the mass recorded when the layer entered the bin.", "enum": ["reading", "recorded"], "type": "string"}}, "required": ["source", "at"], "type": "object"}, {"type": "null"}], "description": "Source and instant of the moisture estimate, or null when unavailable."},
+                  "solidsKg": {"description": "Dry biochar and ingredient solids in kilograms, rounded to 3 decimal places.", "type": "number"}
+                },
+                "required": ["dryBiocharKg", "solidsKg", "estimatedWetKg", "estimatedMoisturePercent", "moistureBasis"],
+                "type": "object"
+              },
+              {"type": "null"}
+            ],
+            "description": "Figures for the whole bin, or null when unresolved. An empty resolved bin holds zero kilograms."
+          },
+          "type": {"description": "Output material lane of the bin.", "enum": ["biochar_bin", "product_bin"], "type": "string"},
+          "unresolvedReason": {"anyOf": [{"type": "string"}, {"type": "null"}], "description": "Fixed explanation when stock cannot be resolved, or null when resolved."}
+        },
+        "required": ["storageLocationId", "code", "type", "facilityId", "archivedAt", "formulationId", "stockMode", "status", "unresolvedReason", "totals", "subBins"],
+        "type": "object"
+      },
       "output_stock_movement": {
         "additionalProperties": false,
         "properties": {
@@ -1434,6 +1488,28 @@
         "parameters": [{"description": "Resource UUID or exact human-readable code.", "in": "path", "name": "idOrCode", "required": true, "schema": {"type": "string"}}, {"description": "Receiving facility filter, UUID.", "in": "query", "name": "facilityId", "required": false, "schema": {"description": "Receiving facility filter, UUID.", "format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"}}],
         "responses": {"200": {"content": {"application/json": {"schema": {"additionalProperties": false, "properties": {"data": {"$ref": "#/components/schemas/storage_location", "description": "Resource representation."}}, "required": ["data"], "type": "object"}}}, "description": "Resource representation.", "headers": {"ETag": {"$ref": "#/components/headers/ETag"}, "RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}}, "400": {"$ref": "#/components/responses/Problem400"}, "401": {"$ref": "#/components/responses/Problem401"}, "403": {"$ref": "#/components/responses/Problem403"}, "404": {"$ref": "#/components/responses/Problem404"}, "429": {"$ref": "#/components/responses/Problem429"}, "500": {"$ref": "#/components/responses/Problem500"}},
         "x-required-scope": "storage-locations:read"
+      }
+    },
+    "/storage-locations/{idOrCode}/stock": {
+      "get": {
+        "description": "Read current stock in one biochar or product bin by UUID or exact code, optionally narrowed by facilityId. Archived bins remain readable; a feedstock bin answers 422. Unresolved stock answers 200 with a fixed explanation and no figures. Kilograms publish to 3 decimal places and percent to 2. A split-bin loss names layerIds from this answer in sources; a mix-bin loss takes no sources. The REST ETag says whether published stock changed between two reads; it is not a reservation. A loss's optimistic check stays the dry run's basisFingerprint. Required scope: biochar-products:read.",
+        "operationId": "get_bin_stock",
+        "parameters": [{"description": "Resource UUID or exact human-readable code.", "in": "path", "name": "idOrCode", "required": true, "schema": {"type": "string"}}, {"description": "Receiving facility filter, UUID.", "in": "query", "name": "facilityId", "required": false, "schema": {"description": "Receiving facility filter, UUID.", "format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"}}],
+        "responses": {
+          "200": {
+            "content": {"application/json": {"schema": {"additionalProperties": false, "properties": {"data": {"$ref": "#/components/schemas/output_bin_stock", "description": "Resource representation."}}, "required": ["data"], "type": "object"}}},
+            "description": "Current output bin stock.",
+            "headers": {"ETag": {"description": "Hash of the published stock. It says whether stock changed between two reads; it is not a reservation. A loss's optimistic check stays the dry run's basisFingerprint.", "schema": {"description": "Hash of the published stock. It says whether stock changed between two reads; it is not a reservation. A loss's optimistic check stays the dry run's basisFingerprint.", "pattern": "^\"sha256-[A-Za-z0-9_-]{43}\"$", "type": "string"}}, "RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}
+          },
+          "400": {"$ref": "#/components/responses/Problem400"},
+          "401": {"$ref": "#/components/responses/Problem401"},
+          "403": {"$ref": "#/components/responses/Problem403"},
+          "404": {"$ref": "#/components/responses/Problem404"},
+          "422": {"$ref": "#/components/responses/Problem422"},
+          "429": {"$ref": "#/components/responses/Problem429"},
+          "500": {"$ref": "#/components/responses/Problem500"}
+        },
+        "x-required-scope": "biochar-products:read"
       }
     },
     "/storage-locations/{idOrCode}/stock-movements": {

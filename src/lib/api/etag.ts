@@ -25,6 +25,8 @@ export function representationEtag(version: number, revision: number): string {
  * when every published value matches. It is a read validator, not a version:
  * it never matches `STRONG_ETAG_PATTERN`, so `parseIfMatch` refuses it.
  */
+export const BODY_HASH_ETAG_PATTERN = /^"sha256-[A-Za-z0-9_-]{43}"$/;
+
 export function bodyHashEtag(revision: number, data: unknown): string {
   return `"sha256-${createHash("sha256").update(canonicalJson({ revision, data })).digest("base64url")}"`;
 }

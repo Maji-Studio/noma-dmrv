@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bodyHashEtag, parseIfMatch, representationEtag, STRONG_ETAG_PATTERN } from "./etag";
+import { BODY_HASH_ETAG_PATTERN, bodyHashEtag, parseIfMatch, representationEtag, STRONG_ETAG_PATTERN } from "./etag";
 
 describe("strong representation ETags", () => {
   it("round-trips version and representation revision", () => {
@@ -31,7 +31,7 @@ describe("body hash ETags", () => {
   const data = { storageLocationId: "bin", totals: { dryBiocharKg: 1.5, estimatedWetKg: null }, subBins: [{ layerId: "a" }, { layerId: "b" }] };
 
   it("is a strong sha256 tag of the revision and body", () => {
-    expect(bodyHashEtag(1, data)).toMatch(/^"sha256-[A-Za-z0-9_-]{43}"$/);
+    expect(bodyHashEtag(1, data)).toMatch(BODY_HASH_ETAG_PATTERN);
     expect(bodyHashEtag(1, data)).toBe(bodyHashEtag(1, structuredClone(data)));
     expect(bodyHashEtag(2, data)).not.toBe(bodyHashEtag(1, data));
   });

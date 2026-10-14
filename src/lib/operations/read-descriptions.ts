@@ -4,5 +4,6 @@ export const readDescriptions = {
   "get": "Read a stable resource representation by UUID or exact code; archived lookups remain readable.",
   "supplierLocations": "List supplier source locations by parent UUID only. Search matches a literal name prefix; the cursor also binds the parent.",
   "outputStockMovements": "List the stock movements posted on one biochar or product bin by bin UUID or code, newest posting first. Read-only history: draws, losses, counts, deliveries and corrections. A feedstock bin answers 422. Cursors bind the organization and bin; no totals.",
+  "outputBinStock": "Read current stock in one biochar or product bin by UUID or exact code, optionally narrowed by facilityId. Archived bins remain readable; a feedstock bin answers 422. Unresolved stock answers 200 with a fixed explanation and no figures. Kilograms publish to 3 decimal places and percent to 2. A split-bin loss names layerIds from this answer in sources; a mix-bin loss takes no sources. The REST ETag says whether published stock changed between two reads; it is not a reservation. A loss's optimistic check stays the dry run's basisFingerprint.",
   "whoami": "Read the credential organization, active facilities, local today dates and localTime wall clocks, role, scopes and safe credential metadata."
 } as const;

@@ -51,10 +51,13 @@ class HarnessTests(unittest.TestCase):
             operation = result.ok()
             cases = ExamplesGenerator(operation=operation, as_strategy_kwargs={}, feedback=FeedbackSources(), fill_missing=False)
             seeded.extend(case for case in cases if case.meta.phase.data.description.startswith("Seeded fixture"))
-        # 23 by-id targets (the stock-movement create is one of them), the feedstock
+        # 24 by-id targets (the stock-movement create is one of them), the feedstock
         # create and its oversize twin, the run create, the product create, the
         # lab sample create.
-        self.assertEqual(len(seeded), 28)
+        self.assertEqual(len(seeded), 29)
+        stock = next(case for case in seeded if case.operation.label == "GET /storage-locations/{idOrCode}/stock")
+        self.assertEqual(stock.path_parameters, {"idOrCode": FIXTURE_ID})
+        self.assertTrue(stock.meta.generation.mode.is_positive)
         create = next(case for case in seeded if case.operation.label == "POST /feedstocks" and case.meta.generation.mode.is_positive)
         self.assertEqual(create.query, {"dryRun": "true"})
         self.assertTrue(create.headers["Idempotency-Key"])

@@ -31,6 +31,7 @@ vi.mock("@/data-access/biochar-product-update", () => ({}));
 vi.mock("@/data-access/biochar-product-record", () => ({}));
 vi.mock("@/data-access/output-stock-post", () => ({}));
 vi.mock("@/data-access/api-output-stock-movements", () => ({ requireApiOutputBin: vi.fn() }));
+vi.mock("@/data-access/api-output-bin-stock", () => ({ readApiOutputBinStock: vi.fn() }));
 vi.mock("@/lib/read-models/api-biochar-products", () => ({ readApiBiocharProduct: vi.fn(), readApiBiocharProductList: vi.fn() }));
 vi.mock("@/lib/read-models/api-formulations", () => ({ readApiFormulation: vi.fn(), readApiFormulationList: vi.fn() }));
 vi.mock("@/lib/read-models/api-output-stock-movements", () => ({ readApiOutputStockMovement: vi.fn(), readApiOutputStockMovementList: vi.fn() }));
@@ -114,7 +115,8 @@ describe("authenticated MCP read route", () => {
     for (const [key, value] of Object.entries(rateHeaders)) expect(response.headers.get(key)).toBe(value);
     expect(response.headers.get("x-request-id")).toBeTruthy();
     const { result } = await body(response);
-    expect(result.tools).toHaveLength(32);
+    expect(result.tools).toHaveLength(33);
+    expect(result.tools.find((tool: { name: string }) => tool.name === "get_bin_stock")).toMatchObject({ annotations: { readOnlyHint: true } });
     expect(result.tools.filter((tool: { name: string }) => !["log_feedstock_delivery", "update_feedstock", "delete_feedstock", "start_production_run", "update_production_run", "delete_production_run", "make_biochar_product", "update_biochar_product", "record_output_stock_movement", "record_lab_sample", "update_lab_sample", "delete_lab_sample"].includes(tool.name)).every((tool: { annotations: { readOnlyHint: boolean } }) => tool.annotations.readOnlyHint)).toBe(true);
     const find = result.tools.find((tool: { name: string }) => tool.name === "find_feedstocks");
     expect(find.inputSchema.additionalProperties).toBe(false);
@@ -249,7 +251,9 @@ it("publishes the same input fields and constraints as the matching OpenAPI para
   for (const tool of result.tools.filter((tool: { annotations: { readOnlyHint: boolean } }) => tool.annotations.readOnlyHint)) {
     const operation = operations.find((candidate) => candidate.operationId === tool.name)!;
     const parameters = operation.parameters as { name: string; required: boolean; schema: Record<string, unknown> }[];
-    const argumentName = (name: string) => tool.name === "find_supplier_locations" && name === "idOrCode" ? "supplierId" : name;
+    const argumentName = (name: string) => name === "idOrCode"
+      ? tool.name === "find_supplier_locations" ? "supplierId" : tool.name === "get_bin_stock" ? "storageLocation" : name
+      : name;
     expect(Object.keys(tool.inputSchema.properties).sort()).toEqual(parameters.map((parameter) => argumentName(parameter.name)).sort());
     for (const parameter of parameters) {
       const schema = { ...parameter.schema };

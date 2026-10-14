@@ -22,6 +22,8 @@ import { readCreditBatchListFromInput } from "@/lib/api/credit-batches-queries";
 import { labSampleRepresentationSchema } from "@/lib/representations/lab-samples";
 import { readFormulationListFromInput } from "@/lib/api/formulations-queries";
 import { readOutputStockMovementListFromInput } from "@/lib/api/output-stock-movements-queries";
+import { readOutputBinStockFromInput } from "@/lib/api/output-bin-stock-queries";
+import { outputBinStockRepresentationSchema } from "@/lib/representations/output-bin-stock";
 import { biocharProductRepresentationSchema } from "@/lib/representations/biochar-products";
 import { outputStockMovementRepresentationSchema } from "@/lib/representations/output-stock-movements";
 import { readApiMe } from "@/lib/read-models/api-me";
@@ -105,6 +107,15 @@ function findTool<K extends ResourcePath, S extends z.ZodType>(path: K, list: S,
 }
 
 export const readTools: ReadTool[] = [
+  defineRead({ name: "get_bin_stock", scope: "biochar-products:read",
+    summarize: (body) => {
+      const data = body.data as z.infer<typeof outputBinStockRepresentationSchema>;
+      return data.status === "resolved" ? `Bin ${data.code} stock read.` : `Bin ${data.code} stock is unknown. ${data.unresolvedReason}`;
+    },
+    description: `${readDescriptions.outputBinStock} Call find_storage_locations first for storageLocation.`,
+    input: resourceQueries["storage-locations"].get.extend({ storageLocation: z.string().describe("Biochar or product bin UUID or exact code, from find_storage_locations.") }),
+    output: itemEnvelopeSchema(outputBinStockRepresentationSchema),
+  }, (ctx, { storageLocation, ...input }) => readOutputBinStockFromInput(ctx, input, storageLocation)),
   defineRead({ name: "get_production_run", scope: "production-runs:read",
     summarize: (body) => { const row = body.data as { code: string; version: number }; return `Production run ${row.code}, version ${row.version}.`; },
     description: `${readDescriptions.get} Call find_production_runs first for an id or code. ${PRODUCTION_RUN_GUIDANCE}`,

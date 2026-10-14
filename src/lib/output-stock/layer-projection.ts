@@ -15,8 +15,8 @@ export type UnresolvedStockReason = (typeof UNRESOLVED_STOCK_REASONS)[number];
 /** The fixed sentence a published stock read gives for each reason; it names no record. */
 export const UNRESOLVED_STOCK_SENTENCES: Record<UnresolvedStockReason, string> = {
   run_incomplete: 'A production run in this bin has no dry biochar mass or end time. Complete the production run to read the bin stock.',
-  product_placement_missing: 'A biochar product in this bin has no placement time. Set when the product was placed to read the bin stock.',
-  ingredient_mass_invalid: 'A biochar product in this bin has an ingredient mass that is not a valid amount. Correct the product composition to read the bin stock.',
+  product_placement_missing: "A biochar product in this bin has no placement time. Set the product's placement time to read the bin stock.",
+  ingredient_mass_invalid: 'A biochar product in this bin has an ingredient mass that cannot be used. Correct the ingredient mass to read the bin stock.',
   ingredient_snapshot_mismatch: 'A biochar product in this bin has saved ingredient dry solids that do not match its composition. The bin stock cannot be read until the product is repaired.',
 };
 

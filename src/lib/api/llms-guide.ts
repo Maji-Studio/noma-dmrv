@@ -26,6 +26,7 @@ export const biocharStockGuide = `## Biochar products and bin stock
 
 - ${BIOCHAR_PRODUCT_MASS}
 - Losses and counts are posted on a biochar or product bin. ${OUTPUT_STOCK_COUNT}
+- Read GET /storage-locations/{idOrCode}/stock or get_bin_stock (biochar-products:read) for current stock. A split-bin loss names returned layerIds in sources; a mix-bin loss takes no sources. The stock ETag says whether published stock changed between reads; it is not a reservation. The write check stays the dry run's basisFingerprint.
 - ${OUTPUT_STOCK_TIMES}
 - ${OUTPUT_STOCK_BASIS}
 - ${OUTPUT_STOCK_NO_CORRECTIONS}
