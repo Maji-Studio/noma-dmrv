@@ -13,10 +13,12 @@ import { CERT_REQUIREMENT_META } from "./requirement-labels";
 function checkFor(
   checks: RemovalRequirementCheck[],
   key: RemovalRequirementKey,
+  category?: TransportCoverageFact["category"],
 ): RemovalRequirementCheck {
-  const found = checks.find((c) => c.key === key);
-  if (!found) throw new Error(`no requirement check for ${key}`);
-  return found;
+  const matches = checks.filter((c) => c.key === key &&
+    (category === undefined || c.transportCategory === category));
+  if (matches.length !== 1) throw new Error(`expected one requirement check for ${key}`);
+  return matches[0];
 }
 
 // A fully-ready removal: linked, template clean, runs present, all required
@@ -35,8 +37,8 @@ function ready(
     feedstockTypeMappingGaps: [],
     hasSubmittableRuns: true,
     requiredTransport: [
-      { category: "feedstock", count: 2, hasAggregationWarning: false },
-      { category: "biochar", count: 1, hasAggregationWarning: false },
+      { category: "feedstock", count: 2, aggregationWarning: null },
+      { category: "biochar", count: 1, aggregationWarning: null },
     ],
     ...overrides,
   };
@@ -120,6 +122,7 @@ describe("deriveRemovalReadiness — blocked: linkage & template", () => {
       state: "blocked",
       reasons: ["Organization Isometric credentials are not configured"],
       advisories: [],
+      transportVehicleAdvisories: [],
     });
   });
 
@@ -156,7 +159,7 @@ describe("deriveRemovalReadiness — blocked: linkage & template", () => {
     // Template not clean ⇒ required transport unknown ⇒ no transport reasons,
     // even though coverage is empty.
     const empty: TransportCoverageFact[] = [
-      { category: "feedstock", count: 0, hasAggregationWarning: false },
+      { category: "feedstock", count: 0, aggregationWarning: null },
     ];
     const r = deriveRemovalReadiness(
       ready({ hasDefaultTemplate: false, requiredTransport: empty }),
@@ -170,8 +173,8 @@ describe("deriveRemovalReadiness — blocked: transport coverage", () => {
     const r = deriveRemovalReadiness(
       ready({
         requiredTransport: [
-          { category: "feedstock", count: 0, hasAggregationWarning: false },
-          { category: "biochar", count: 1, hasAggregationWarning: false },
+          { category: "feedstock", count: 0, aggregationWarning: null },
+          { category: "biochar", count: 1, aggregationWarning: null },
         ],
       }),
     );
@@ -183,7 +186,7 @@ describe("deriveRemovalReadiness — blocked: transport coverage", () => {
     const r = deriveRemovalReadiness(
       ready({
         requiredTransport: [
-          { category: "biochar", count: 3, hasAggregationWarning: true },
+          { category: "biochar", count: 3, aggregationWarning: "Biochar transport legs use different transport modes. Check the recorded modes against the removal template." },
         ],
       }),
     );
@@ -195,9 +198,9 @@ describe("deriveRemovalReadiness — blocked: transport coverage", () => {
     const r = deriveRemovalReadiness(
       ready({
         requiredTransport: [
-          { category: "feedstock", count: 0, hasAggregationWarning: false },
-          { category: "biochar", count: 2, hasAggregationWarning: true },
-          { category: "sample", count: 1, hasAggregationWarning: false },
+          { category: "feedstock", count: 0, aggregationWarning: null },
+          { category: "biochar", count: 2, aggregationWarning: "Biochar transport legs use different transport modes. Check the recorded modes against the removal template." },
+          { category: "sample", count: 1, aggregationWarning: null },
         ],
       }),
     );
@@ -268,7 +271,7 @@ describe("deriveRemovalReadiness — blocked: no data", () => {
       ready({
         hasSubmittableRuns: false,
         requiredTransport: [
-          { category: "feedstock", count: 0, hasAggregationWarning: false },
+          { category: "feedstock", count: 0, aggregationWarning: null },
         ],
       }),
     );
@@ -292,6 +295,7 @@ describe("evidence mirroring advisory", () => {
       state: "ready",
       reasons: [],
       advisories: [],
+      transportVehicleAdvisories: [],
     });
   });
 
@@ -299,11 +303,13 @@ describe("evidence mirroring advisory", () => {
     const facts = ready({
       supportingDocumentCount: 4,
       mirroredDocumentCount: 0,
+      transportVehicleAdvisories: ["Feedstock vehicle evidence note"],
     });
 
     const readiness = deriveRemovalReadiness(facts);
     expect(readiness.state).toBe("ready");
     expect(readiness.reasons).toEqual([]);
+    expect(readiness.transportVehicleAdvisories).toEqual(["Feedstock vehicle evidence note"]);
     expect(readiness.advisories).toEqual([
       "4 files are sent automatically when you submit",
     ]);
@@ -322,6 +328,7 @@ describe("evidence mirroring advisory", () => {
     expect(deriveRemovalReadiness(facts)).toMatchObject({
       state: "ready",
       advisories: ["6 of 9 files are sent automatically when you submit"],
+      transportVehicleAdvisories: [],
     });
     const wizardEvidence = buildRemovalRequirementsChecklist(facts).find(
       (check) => check.key === "evidence",
@@ -354,6 +361,7 @@ describe("evidence mirroring advisory", () => {
     expect(deriveRemovalReadiness(facts)).toMatchObject({
       state: "ready",
       advisories: [],
+      transportVehicleAdvisories: [],
     });
     expect(
       buildRemovalRequirementsChecklist(facts).some(
@@ -423,8 +431,8 @@ describe("buildRemovalRequirementsChecklist — row semantics", () => {
     const checks = buildRemovalRequirementsChecklist(
       ready({
         requiredTransport: [
-          { category: "feedstock", count: 0, hasAggregationWarning: false },
-          { category: "biochar", count: 2, hasAggregationWarning: true },
+          { category: "feedstock", count: 0, aggregationWarning: null },
+          { category: "biochar", count: 2, aggregationWarning: "Biochar transport legs use different transport modes. Check the recorded modes against the removal template." },
         ],
       }),
     );
@@ -436,9 +444,34 @@ describe("buildRemovalRequirementsChecklist — row semantics", () => {
     expect(checkFor(checks, "transportUniformity")).toMatchObject({
       key: "transportUniformity",
       status: "unmet",
-      detail: "Mixed method or factor across biochar transport legs",
+      detail: "Biochar transport legs use different transport modes. Check the recorded modes against the removal template.",
     });
   });
+
+  it.each(["transport", "transportUniformity"] as const)(
+    "preserves every category for %s checks",
+    (key) => {
+      const categories = ["feedstock", "biochar", "sample"] as const;
+      const checks = buildRemovalRequirementsChecklist(ready({
+        requiredTransport: categories.map((category) => ({
+          category,
+          count: key === "transport" ? 0 : 1,
+          aggregationWarning: key === "transport" ? null : `${category} aggregation warning`,
+        })),
+      }));
+      expect(checks.filter((check) => check.key === key)).toHaveLength(categories.length);
+      expect(() => checkFor(checks, key)).toThrow("expected one requirement check");
+      for (const category of categories) {
+        expect(checkFor(checks, key, category)).toMatchObject({
+          status: "unmet",
+          transportCategory: category,
+          detail: key === "transport"
+            ? `Missing ${category} transport legs`
+            : `${category} aggregation warning`,
+        });
+      }
+    },
+  );
 
   it("flags missing production data", () => {
     const checks = buildRemovalRequirementsChecklist(
@@ -534,13 +567,13 @@ describe("buildRemovalRequirementsChecklist — wizard facility-level subset", (
     const checks = buildRemovalRequirementsChecklist(
       ready({
         requiredTransport: [
-          { category: "biochar", count: 2, hasAggregationWarning: true },
+          { category: "biochar", count: 2, aggregationWarning: "Biochar transport legs use different transport modes. Check the recorded modes against the removal template." },
         ],
       }),
     );
     const uniformity = checkFor(checks, "transportUniformity");
     expect(uniformity.status).toBe("unmet");
-    expect(uniformity.detail).toContain("biochar");
+    expect(uniformity.detail).toContain("Biochar");
   });
 
   it("does NOT flag uniformity for a missing leg — that's the batch's concern", () => {
@@ -549,7 +582,7 @@ describe("buildRemovalRequirementsChecklist — wizard facility-level subset", (
     const checks = buildRemovalRequirementsChecklist(
       ready({
         requiredTransport: [
-          { category: "biochar", count: 0, hasAggregationWarning: false },
+          { category: "biochar", count: 0, aggregationWarning: null },
         ],
       }),
     );
@@ -733,5 +766,17 @@ describe("canRegroupRemoval", () => {
     for (const local of ["rejected", "superseded"] as const) {
       expect(canRegroupRemoval({ local, lockInFlight: false })).toBe(true);
     }
+  });
+});
+
+
+describe("vehicle advisories", () => {
+  it("keeps readiness and transport uniformity met", () => {
+    const advisory = "Feedstock transport uses more than one vehicle type.";
+    const facts = ready({ transportVehicleAdvisories: [advisory] });
+    expect(deriveRemovalReadiness(facts)).toMatchObject({
+      state: "ready", reasons: [], advisories: [], transportVehicleAdvisories: [advisory],
+    });
+    expect(checkFor(buildRemovalRequirementsChecklist(facts), "transportUniformity").status).toBe("met");
   });
 });

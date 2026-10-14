@@ -1,3 +1,4 @@
+import { transportVehicleAdvisories } from "@/lib/isometric/utils/aggregation";
 import {
   aggregateTransportMassDistance,
   collectTransportEntityIds,
@@ -17,9 +18,10 @@ export interface TransportCoverageBucket {
   legIds: string[];
   firstLegEntityId: string | null;
   // Non-null when at least one leg fails the per-leg uniformity or completeness
-  // checks. Pooling several batches raises the chance of a mixed method/factor,
+  // checks. Pooling several batches raises the chance of a mixed method/mode,
   // so the panel surfaces the warning before submission.
   aggregationWarning: string | null;
+  vehicleAdvisories: string[];
 }
 
 export interface TransportCoverage {
@@ -63,6 +65,7 @@ export function buildTransportCoverage(
 ): TransportCoverage {
   return {
     feedstock: {
+      vehicleAdvisories: transportVehicleAdvisories(legs.feedstock, "Feedstock"),
       count: legs.feedstock.length,
       entityIds: entityIds.feedstockIds,
       legIds: legs.feedstock.map((leg) => leg.id),
@@ -73,6 +76,7 @@ export function buildTransportCoverage(
       ).warning,
     },
     biochar: {
+      vehicleAdvisories: transportVehicleAdvisories(legs.biochar, "Biochar"),
       count: legs.biochar.length,
       entityIds: entityIds.biocharProductIds,
       legIds: legs.biochar.map((leg) => leg.id),
@@ -83,6 +87,7 @@ export function buildTransportCoverage(
       ).warning,
     },
     sample: {
+      vehicleAdvisories: transportVehicleAdvisories(legs.sample, "Sample"),
       count: legs.sample.length,
       entityIds: entityIds.sampleIds,
       legIds: legs.sample.map((leg) => leg.id),
@@ -102,6 +107,7 @@ export const EMPTY_TRANSPORT_COVERAGE: TransportCoverage = {
     legIds: [],
     firstLegEntityId: null,
     aggregationWarning: null,
+    vehicleAdvisories: [],
   },
   biochar: {
     count: 0,
@@ -109,6 +115,7 @@ export const EMPTY_TRANSPORT_COVERAGE: TransportCoverage = {
     legIds: [],
     firstLegEntityId: null,
     aggregationWarning: null,
+    vehicleAdvisories: [],
   },
   sample: {
     count: 0,
@@ -116,5 +123,6 @@ export const EMPTY_TRANSPORT_COVERAGE: TransportCoverage = {
     legIds: [],
     firstLegEntityId: null,
     aggregationWarning: null,
+    vehicleAdvisories: [],
   },
 };

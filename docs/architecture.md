@@ -233,11 +233,11 @@ The vehicle, driver and operator quick-add dialogs also edit: pass the loaded
 record (`vehicle`, `driver`, `operator`), or render `EntityEditDialog` with
 `{ entityType, entityId, isOpen, onClose }` to load it by id. A save seeds the picker's entity cache
 with the new name. Deletes refuse while any record references the row and name
-where it is used (`src/data-access/fleet-usage.ts`). A vehicle's type is
-copied onto each feedstock intake's derived transport leg, so a type or model
-year edit refreshes those leg snapshots in the same transaction. A type change
-is refused, naming the credit batch, while a submitted credit batch holds an
-intake or delivery that uses the vehicle.
+where it is used (`src/data-access/fleet-usage.ts`). A vehicle's type and model year are
+copied onto each feedstock intake's derived transport leg as evidence. Edits to
+either field refresh only unsubmitted legs in the same transaction. Submitted
+legs keep their snapshot. Delivery references are not included in the vehicle
+edit lookup.
 
 ### Structured logging — `@/lib/log` (server-only)
 

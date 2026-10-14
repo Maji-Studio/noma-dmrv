@@ -1,3 +1,7 @@
+import { buildTransportCoverage } from "@/fn/certification/certify-transport-coverage";
+import type { RemovalCertifyContext } from "@/fn/certification/certify-context";
+import { toRemovalReadinessFacts } from "@/lib/certification/readiness-facts";
+import { buildRemovalRequirementsChecklist, deriveRemovalReadiness } from "@/lib/certification/readiness";
 import { describe, expect, it } from "vitest";
 import { TEST_ORG_ID } from "./helpers/test-org";
 import type { TransportLeg } from "@/db/schema";
@@ -11,7 +15,7 @@ import {
 // Minimal-shape TransportLeg builder. Only the columns the aggregator reads are
 // populated. The emission factor is NOT stored on legs (it lives on the
 // Isometric `mass_distance_based_ci_emissions` blueprint as a fixed input), so
-// the aggregator only needs distance, load mass, and the factor-selecting
+// the aggregator only needs distance, load mass, and the method and mode
 // fields — and sums each leg's distance × load-mass (tonne·km) so Certify's
 // `mass_distance × factor` equals the per-leg sum (Transportation v1.1 §5).
 function leg(distanceKm: number, loadMassKg: number | null): TransportLeg {
@@ -95,17 +99,16 @@ describe("aggregateTransportMassDistance", () => {
     );
   });
 
-  it("warns when legs mix transport-factor fields (different method)", () => {
+  it("warns when legs mix transport modes", () => {
     // Collapsing to one mass_distance scalar is only valid when every leg
-    // shares the fields that select the blueprint's emission factor. A
-    // differing transportMethodType (e.g. rail) carries a different factor and
-    // cannot be summed into one tonne·km value — surface a warning instead.
+    // shares a transport mode. Different modes cannot be summed into the
+    // single value sent to a template component.
     const result = aggregateTransportMassDistance(
       [leg(50, 1000), { ...leg(100, 1000), transportMethodType: "rail" }],
       "Feedstock",
     );
     expect(result.massDistanceTonneKm).toBeNull();
-    expect(result.warning).toMatch(/mix factor fields/);
+    expect(result.warning).toBe("Feedstock transport legs use different transport modes. Check the recorded modes against the removal template.");
   });
 
   it("handles zero-distance legs cleanly", () => {
@@ -145,6 +148,110 @@ describe("enrichWithTransportLegs", () => {
     sourceProductionRunIds: ["pr_1"],
     warnings: [],
   };
+
+  it("carries mixed-vehicle advisories through coverage and readiness without submit blockers", () => {
+    const legs = {
+      feedstock: [
+        { ...leg(50, 1000), entityType: "feedstock" as const, isDerived: true, vehicleType: "truck", modelYear: 2020 },
+        { ...leg(100, 1000), entityType: "feedstock" as const, isDerived: true, vehicleType: "tractor", modelYear: null },
+        { ...leg(25, 1000), entityType: "feedstock" as const, originName: "Farm A", destinationName: "Plant Gate" },
+      ],
+      biochar: [],
+      sample: [],
+    };
+    const coverage = buildTransportCoverage(legs, {
+      feedstockIds: [], biocharProductIds: [], sampleIds: [],
+    });
+    const facts = toRemovalReadinessFacts({
+      latestSubmission: null,
+      hasOrgCredentials: true,
+      mapping: {},
+      defaultTemplate: {},
+      missingDefaultTemplateId: null,
+      unresolvedBlueprintKeys: [],
+      hasSubmittableRuns: true,
+      supportingDocuments: { total: 0, mirrored: 0 },
+      requiredTransportCategories: ["feedstock"],
+      transportCoverage: coverage,
+    } as unknown as RemovalCertifyContext);
+    const readiness = deriveRemovalReadiness(facts);
+    expect(readiness.state).toBe("ready");
+    expect(readiness.advisories).toEqual([]);
+    expect(readiness.transportVehicleAdvisories).toEqual([
+      "Feedstock transport uses more than one vehicle type. Check that the removal template's transport factor covers every vehicle used.",
+      "Feedstock transport has 1 leg without a vehicle type (Farm A to Plant Gate). Record the vehicle type on each leg when it is known.",
+      "Feedstock transport has different or unrecorded model years. Check that the removal template's transport factor covers every vehicle used.",
+    ]);
+    expect(buildRemovalRequirementsChecklist(facts).filter((check) => check.key === "transportUniformity")).toEqual([
+      expect.objectContaining({ status: "met" }),
+    ]);
+    const enriched = enrichWithTransportLegs(baseAgg, legs);
+    expect(enriched.feedstockTransportMassDistanceTonneKm).toBe(350);
+    // removal-submission-build blocks on this warning array, never the advisories.
+    expect(enriched.warnings).toEqual([]);
+  });
+
+  it.each([false, true])("omits vehicle advisories for delivery-derived biochar legs (manual leg: %s)", (includeManual) => {
+    const legs = {
+      feedstock: [],
+      biochar: [
+        { ...leg(50, 1000), isDerived: true },
+        { ...leg(100, 1000), isDerived: true },
+        ...(includeManual ? [{ ...leg(25, 1000), vehicleType: "truck" }] : []),
+      ],
+      sample: [],
+    };
+    const coverage = buildTransportCoverage(legs, {
+      feedstockIds: [], biocharProductIds: ["ent_test"], sampleIds: [],
+    });
+    const facts = toRemovalReadinessFacts({
+      latestSubmission: null,
+      hasOrgCredentials: true,
+      mapping: {},
+      defaultTemplate: {},
+      missingDefaultTemplateId: null,
+      unresolvedBlueprintKeys: [],
+      hasSubmittableRuns: true,
+      supportingDocuments: { total: 0, mirrored: 0 },
+      requiredTransportCategories: ["biochar"],
+      transportCoverage: coverage,
+    } as unknown as RemovalCertifyContext);
+    expect(coverage.biochar.vehicleAdvisories).toEqual([]);
+    expect(facts.transportVehicleAdvisories).toEqual([]);
+    const readiness = deriveRemovalReadiness(facts);
+    expect(readiness.state).toBe("ready");
+    expect(readiness.transportVehicleAdvisories).toEqual([]);
+    const enriched = enrichWithTransportLegs(baseAgg, legs);
+    expect(enriched.biocharTransportMassDistanceTonneKm).toBe(includeManual ? 350 : 300);
+    expect(enriched.warnings).toEqual([]);
+  });
+
+  it("omits mixed sample vehicles when the template has no sample component", () => {
+    const coverage = buildTransportCoverage({
+      feedstock: [], biochar: [],
+      sample: [{ ...leg(10, 100), vehicleType: "truck" }, { ...leg(20, 100), vehicleType: "van" }],
+    }, { feedstockIds: [], biocharProductIds: [], sampleIds: [] });
+    expect(coverage.sample.vehicleAdvisories).toHaveLength(1);
+    const facts = toRemovalReadinessFacts({
+      latestSubmission: null, supportingDocuments: { total: 0, mirrored: 0 },
+      requiredTransportCategories: ["feedstock", "biochar"], transportCoverage: coverage,
+    } as unknown as RemovalCertifyContext);
+    expect(facts.transportVehicleAdvisories).toEqual([]);
+  });
+
+  it("preserves the missing-mass warning and repair category in readiness", () => {
+    const warning = aggregateTransportMassDistance([leg(10, null)], "Biochar").warning;
+    const checks = buildRemovalRequirementsChecklist({
+      local: null, lockInFlight: false, missingDefaultTemplateId: null,
+      hasMapping: true, hasOrgCredentials: true, hasDefaultTemplate: true,
+      unresolvedBlueprintKeys: [], feedstockTypeMappingGaps: [], hasSubmittableRuns: true,
+      requiredTransport: [{ category: "biochar", count: 1, aggregationWarning: warning }],
+    });
+    expect(checks.find((check) => check.key === "transportUniformity")).toMatchObject({
+      status: "unmet", transportCategory: "biochar",
+      detail: "Biochar transport has 1 leg without a load mass (tl_10_null). Record a load mass for each leg before submitting.",
+    });
+  });
 
   it("populates all three transport fields with mass-distance (tonne·km)", () => {
     const enriched = enrichWithTransportLegs(baseAgg, {

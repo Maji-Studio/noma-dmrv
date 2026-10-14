@@ -163,7 +163,7 @@ export function RemovalDetailSheet({
     readiness: summary.readiness,
   });
   const submissionWarningNotes = buildSubmissionWarningNotes(
-    summary.submissionWarnings,
+    [...summary.submissionWarnings, ...(summary.readiness?.transportVehicleAdvisories ?? [])],
   );
   // The workflow may only be (re)entered while something still needs doing:
   // `ready` (submit it) or `blocked` (resolve preconditions). A `submitted`

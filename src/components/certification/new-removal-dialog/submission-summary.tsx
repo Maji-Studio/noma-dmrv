@@ -276,6 +276,10 @@ export function SubmissionSummary({
         <SubmissionChecks checks={checks} facilityId={facilityId} />
       )}
 
+      {factsInput.readiness.transportVehicleAdvisories.map((advisory) => (
+        <Notice key={advisory} tone="warning">{advisory}</Notice>
+      ))}
+
       {facts.warnings.length > 0 && (
         <Notice tone="warning" title="Submission notes">
           <CompilationWarnings warnings={facts.warnings} />
