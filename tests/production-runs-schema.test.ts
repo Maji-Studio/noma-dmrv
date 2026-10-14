@@ -42,11 +42,36 @@ const completeProductionRunInput = {
   biocharOutputKg: 10,
 };
 
+describe("running end time validation", () => {
+  it.each([
+    ["form", productionRunFormSchema],
+    ["create", createProductionRunSchema],
+  ] as const)("points %s users to Complete or clearing the end time", (_name, schema) => {
+    const input = {
+      ...completeProductionRunInput,
+      status: "running",
+      feedstockWetMassKg: undefined,
+      feedstockStorageLocationId: undefined,
+    };
+    const result = schema.safeParse(input);
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues).toContainEqual(expect.objectContaining({
+        path: ["endTime"],
+        message: "Choose Complete or clear the end time for a Running run.",
+      }));
+    }
+    expect(schema.safeParse({ ...input, status: "complete" }).success).toBe(true);
+    expect(schema.safeParse({ ...input, endTime: "" }).success).toBe(true);
+  });
+});
+
 describe("production run action feedstock contract", () => {
   it("rejects legacy feedstock fields on create", () => {
     const result = createProductionRunSchema.safeParse({
       ...validProductionRunInput,
-      status: "draft",
+      status: "running",
     });
 
     expect(result.success).toBe(false);
@@ -132,7 +157,7 @@ describe("productionRunFormSchema mass balance", () => {
 });
 
 describe("productionRunFormSchema terminal feedstock requirements", () => {
-  it.each(["draft", "running", "cancelled"] as const)(
+  it.each(["running", "cancelled"] as const)(
     "ignores the untouched starter draw for a %s run",
     (status) => {
       const result = productionRunFormSchema.safeParse({
@@ -503,5 +528,26 @@ describe("productionRunFilterSchema", () => {
     const result = productionRunFilterSchema.parse({ creditBatchId });
 
     expect(result.creditBatchId).toBe(creditBatchId);
+  });
+});
+
+
+describe("complete run output requirements", () => {
+  it.each([null, undefined, ""])("reports inline output errors for empty values: %s", (missing) => {
+    const result = productionRunFormSchema.safeParse({ ...completeProductionRunInput,
+      biocharStorageLocationId: missing, biocharMoisturePercent: missing });
+    expect(result.success).toBe(false);
+    if (!result.success) expect(result.error.issues).toEqual(expect.arrayContaining([
+      expect.objectContaining({ path: ["biocharStorageLocationId"], message: "Select a biochar output bin for a complete run." }),
+      expect.objectContaining({ path: ["biocharMoisturePercent"], message: "Enter biochar moisture for a complete run." }),
+    ]));
+  });
+  it("accepts zero biochar moisture", () => {
+    expect(productionRunFormSchema.safeParse({ ...completeProductionRunInput, biocharMoisturePercent: 0 }).success).toBe(true);
+  });
+  it.each(["running", "failed", "cancelled"])("allows empty output for %s", (status) => {
+    expect(productionRunFormSchema.safeParse({ ...completeProductionRunInput, status,
+      endTime: status === "running" ? undefined : completeProductionRunInput.endTime,
+      cancellationReason: "Recorded in error", biocharStorageLocationId: null, biocharMoisturePercent: null }).success).toBe(true);
   });
 });

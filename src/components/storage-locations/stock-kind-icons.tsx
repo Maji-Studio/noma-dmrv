@@ -14,6 +14,7 @@ import {
 
 /** One icon per kind of stock movement, shared by every history list. Decorative: the kind title says it. */
 const STOCK_KIND_ICONS: Record<string, ComponentType<ComponentProps<typeof ScalesIcon>>> = {
+  intake: ArrowDownIcon,
   delivery: ArrowDownIcon,
   production_draw: ArrowUpIcon,
   product_draw: ArrowUpIcon,

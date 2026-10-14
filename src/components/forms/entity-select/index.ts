@@ -10,7 +10,6 @@ export { QuickAddDialog, useQuickAddDialog } from "./quick-add-dialog";
 export { DriverQuickAddDialog } from "./driver-quick-add-dialog";
 export { OperatorQuickAddDialog } from "./operator-quick-add-dialog";
 export { VehicleQuickAddDialog } from "./vehicle-quick-add-dialog";
-export { FleetEditDialog, isFleetKind, type FleetEditDialogProps } from "./fleet-edit-dialog";
 export { FeedstockTypeQuickAddDialog } from "./feedstock-type-quick-add-dialog";
 export { StorageLocationQuickAddDialog } from "./storage-location-quick-add-dialog";
 export { SupplierQuickAddDialog } from "./supplier-quick-add-dialog";
@@ -21,3 +20,5 @@ export type {
   QuickAddDialogProps,
   UseEntityOptionsParams,
 } from "./types";
+
+export type { EntityEditDialogProps } from "./entity-edit-dialog";

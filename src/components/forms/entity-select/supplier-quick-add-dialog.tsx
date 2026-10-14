@@ -29,13 +29,13 @@ import type { EntityOption } from "./types";
 interface SupplierQuickAddDialogProps {
   isOpen: boolean;
   onClose: () => void;
-  onSuccess: (entity: EntityOption) => void;
+  onSuccess?: (entity: EntityOption) => void;
 }
 
 export function SupplierQuickAddDialog({
   isOpen,
   onClose,
-  onSuccess,
+  onSuccess = () => undefined,
 }: SupplierQuickAddDialogProps) {
   const [error, setError] = useState<string | null>(null);
   const activePayloadRef = useRef<CreateSupplierWithLocationsData | null>(null);
@@ -207,6 +207,7 @@ export function SupplierQuickAddDialog({
           errorMessage={error ?? undefined}
           submitLabel={`Create ${entityLabel}`}
           sticky={false}
+          guardDialogCancel
         />
       </form>
     </QuickAddDialogShell>

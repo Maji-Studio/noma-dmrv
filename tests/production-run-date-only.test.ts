@@ -25,7 +25,7 @@ describe("production run start-date handling", () => {
       facilityId: FACILITY_ID,
       startDate: RUN_DATE,
       reactorId: REACTOR_ID,
-      status: "draft",
+      status: "running",
       startTime: "10:00",
     });
 
@@ -40,7 +40,7 @@ describe("production run start-date handling", () => {
       facilityId: FACILITY_ID,
       startDate: "2026-02-31",
       reactorId: REACTOR_ID,
-      status: "draft",
+      status: "running",
       startTime: "10:00",
     });
 
@@ -56,8 +56,8 @@ describe("production run window validation", () => {
     startTime: "08:00",
   };
 
-  it("accepts an open run (no end time) in draft", () => {
-    const parsed = createProductionRunSchema.safeParse({ ...base, status: "draft" });
+  it("accepts an open run (no end time) in running", () => {
+    const parsed = createProductionRunSchema.safeParse({ ...base, status: "running" });
     expect(parsed.success).toBe(true);
   });
 
@@ -83,6 +83,8 @@ describe("production run window validation", () => {
       }],
       feedstockMoisturePercent: 10,
       biocharOutputKg: 20,
+      biocharMoisturePercent: 0,
+      biocharStorageLocationId: "44444444-4444-4444-8444-444444444444",
     });
     expect(parsed.success).toBe(true);
   });
@@ -135,5 +137,25 @@ describe("runWindowsConflict predicate", () => {
     expect(
       runWindowsConflict({ start: t(4), end: t(6) }, { start: t(8), end: null }),
     ).toBe(false);
+  });
+});
+
+describe("production run create status rule", () => {
+  const input = { facilityId: FACILITY_ID, reactorId: REACTOR_ID, startDate: RUN_DATE, startTime: "08:00" };
+  it("defaults to Running", () => {
+    expect(createProductionRunSchema.parse(input).status).toBe("running");
+  });
+  it.each(["failed", "cancelled"])("refuses %s on create", (status) => {
+    const result = createProductionRunSchema.safeParse({ ...input, status, cancellationReason: "Recorded in error" });
+    expect(result.success).toBe(false);
+    if (!result.success) expect(result.error.issues).toContainEqual(expect.objectContaining({ path: ["status"] }));
+  });
+  it("names missing end time and biochar output when Complete is requested", () => {
+    const result = createProductionRunSchema.safeParse({ ...input, status: "complete" });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues).toContainEqual(expect.objectContaining({ path: ["endTime"], message: expect.stringContaining("end date and time") }));
+      expect(result.error.issues).toContainEqual(expect.objectContaining({ path: ["biocharOutputKg"], message: expect.stringContaining("biochar output") }));
+    }
   });
 });

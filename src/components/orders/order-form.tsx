@@ -10,7 +10,6 @@ import { numericValue } from "@/lib/form-utils";
 import { FormActions, FormEntitySelect, FormField, FormInput, FormSection, FormSpine } from "@/components/forms";
 import { FormSelect } from "@/components/forms/form-select";
 import type { Order } from "@/db/schema";
-import { useClearOnDependencyChange } from "@/hooks/use-clear-on-dependency-change";
 import { useCustomerLocations } from "@/hooks/use-customers";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { useOrganizationDefaultValues } from "@/hooks/use-organization-settings";
@@ -27,7 +26,9 @@ import { useForm, useWatch } from "react-hook-form";
 import { CustomerLocationDetails } from "./customer-location-details";
 import { MatchingOutputBins } from "./matching-output-bins";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { CustomerLocationDialog } from "@/components/customers/customer-location-dialog";
+import type { EditableCustomerLocation } from "@/components/customers/customer-location-form";
 
 // ============================================
 // Constants for select options
@@ -79,6 +80,7 @@ export function OrderForm({
   submitLabel,
 }: OrderFormProps) {
   const isEditMode = !!order;
+  const [editingLocation, setEditingLocation] = useState<{ customerId: string; location: EditableCustomerLocation } | null>(null);
   const { facilityId: contextFacilityId, facilities } = useFacilityContext();
   // Organization operating defaults seed create mode only; an existing record
   // always wins. Warmed once per session in FacilityProvider, so this is a
@@ -130,11 +132,6 @@ export function OrderForm({
   // Get customer locations for selected customer
   const customerLocations = customerLocationsData ?? [];
 
-  const locationOptions = customerLocations.map((l: { id: string; name: string | null }) => ({
-    value: l.id,
-    label: l.name ?? "Unnamed location",
-  }));
-
   // Details panel data for the selected location (issue #196). The facility
   // resolves from the form's own facilityId so edit mode shows the order's
   // facility even when the global selector points elsewhere.
@@ -153,19 +150,6 @@ export function OrderForm({
     }
   }, [contextFacilityId, order?.facilityId, setValue, getValues]);
 
-  // Clear stale location when customer changes (skips initial mount so
-  // edit-mode defaults survive)
-  useClearOnDependencyChange(watchedCustomerId, () =>
-    setValue("customerLocationId", "")
-  );
-
-  // Auto-select location when customer has exactly one
-  useEffect(() => {
-    if (customerLocationsData?.length === 1 && !getValues("customerLocationId")) {
-      setValue("customerLocationId", customerLocationsData[0].id);
-    }
-  }, [customerLocationsData, setValue, getValues]);
-
   const defaultSubmitLabel = isEditMode ? "Update order" : "Create order";
 
   const handleFormSubmit = handleSubmit((data) => {
@@ -173,6 +157,7 @@ export function OrderForm({
   });
 
   return (
+    <>
     <form onSubmit={handleFormSubmit} className="space-y-20">
       <FormSpine control={control}>
       {/* Order Information */}
@@ -206,12 +191,13 @@ export function OrderForm({
         icon={<StorefrontIcon size={14} weight="bold" />}
         fields={["customerId", "customerLocationId"]}
       >
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
+        <div className="grid grid-cols-1 gap-x-16 gap-y-20">
           <FormEntitySelect
             control={control}
             name="customerId"
             label="Customer"
             entityType="customer"
+            allowEdit
             placeholder="Select customer..."
             disabled={isSubmitting}
             required
@@ -221,24 +207,21 @@ export function OrderForm({
             autoSelectSingle={false}
           />
 
-          <FormField
+          <FormEntitySelect
             id="customerLocationId"
+            control={control}
+            name="customerLocationId"
             label="Customer location"
-            error={errors.customerLocationId?.message}
-          >
-            <FormSelect
-              id="customerLocationId"
-              placeholder={
-                selectedCustomerId
-                  ? "Select location..."
-                  : "Select a customer first"
-              }
-              disabled={isSubmitting || !selectedCustomerId}
-              error={!!errors.customerLocationId}
-              options={locationOptions}
-              {...register("customerLocationId")}
-            />
-          </FormField>
+            entityType="customerLocation"
+            onEditSelected={selectedLocation && selectedCustomerId
+              ? () => setEditingLocation({ customerId: selectedCustomerId, location: selectedLocation })
+              : undefined}
+            placeholder={selectedCustomerId ? "Select location..." : "Select a customer first"}
+            disabled={isSubmitting || !selectedCustomerId}
+            filterBy={selectedCustomerId ? { customerId: selectedCustomerId } : undefined}
+            dependsOn={watchedCustomerId}
+            autoSelectSingle
+          />
         </div>
 
         {selectedLocation && (
@@ -255,9 +238,24 @@ export function OrderForm({
         icon={<PackageIcon size={14} weight="bold" />}
         fields={["formulationId", "quantityKg", "packaging"]}
       >
-        <FormEntitySelect control={control} name="formulationId" label="Formulation" entityType="formulation" placeholder="Select formulation..." required disabled={isSubmitting} />
+        <FormEntitySelect control={control} name="formulationId" label="Formulation" entityType="formulation" allowEdit placeholder="Select formulation..." required disabled={isSubmitting} />
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
+        <div className="grid grid-cols-1 gap-x-16 gap-y-20">
+          <FormField
+            id="packaging"
+            label="Packaging"
+            error={errors.packaging?.message}
+            required
+          >
+            <FormSelect
+              id="packaging"
+              disabled={isSubmitting}
+              error={!!errors.packaging}
+              options={packagingOptions}
+              {...register("packaging")}
+            />
+          </FormField>
+
           <FormField
             id="quantityKg"
             label="Requested wet mass (kg)"
@@ -276,23 +274,8 @@ export function OrderForm({
               })}
             />
           </FormField>
-
-          <FormField
-            id="packaging"
-            label="Packaging"
-            error={errors.packaging?.message}
-            required
-          >
-            <FormSelect
-              id="packaging"
-              disabled={isSubmitting}
-              error={!!errors.packaging}
-              options={packagingOptions}
-              {...register("packaging")}
-            />
-          </FormField>
         </div>
-        {/* Right after the wet mass and packaging row, so the operator
+        {/* Right after the wet mass field, so the operator
             compares the request with what the matching bins hold. */}
         <MatchingOutputBins facilityId={watchedFacilityId || ""} formulationId={watchedFormulationId || ""} />
       </FormSection>
@@ -307,5 +290,15 @@ export function OrderForm({
         defaultSubmitLabel={defaultSubmitLabel}
       />
     </form>
+    {editingLocation && (
+      <CustomerLocationDialog
+        isOpen
+        onClose={() => setEditingLocation(null)}
+        customerId={editingLocation.customerId}
+        location={editingLocation.location}
+        facility={formFacility}
+      />
+    )}
+    </>
   );
 }

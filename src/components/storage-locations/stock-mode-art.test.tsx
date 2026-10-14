@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { stockModeOptions } from "./stock-mode-art";
+import { renderToStaticMarkup } from "react-dom/server";
+import { DrawOrderArt, drawOrderOptions, stockModeOptions } from "./stock-mode-art";
 
 describe("stockModeOptions", () => {
   it("offers Split and Mix with a caption per bin type", () => {
@@ -20,4 +21,16 @@ describe("stockModeOptions", () => {
       for (const option of stockModeOptions(type)) expect(option.description).not.toMatch(/[–—]/);
     }
   });
+});
+
+it("shows dated decorative bays with the chosen first bay empty at rest", () => {
+  expect(drawOrderOptions.map(option => option.title)).toEqual(["Oldest first", "Newest first"]);
+  for (const order of ["oldest_first", "newest_first"] as const) {
+    const markup = renderToStaticMarkup(<DrawOrderArt order={order} />);
+    expect(markup).toContain('aria-hidden="true"');
+    expect(markup.match(/stock-draw-first/g)).toHaveLength(1);
+    const bayClasses = [...markup.matchAll(/class="(stock-draw-first|stock-draw-waiting)"/g)].map(match => match[1]);
+    expect(bayClasses[order === "oldest_first" ? 0 : 2]).toBe("stock-draw-first");
+    expect([...markup.matchAll(/>(\d+ Oct)<\/text>/g)].map(match => match[1])).toEqual(["01 Oct", "02 Oct", "03 Oct"]);
+  }
 });

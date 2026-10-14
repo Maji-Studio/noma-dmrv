@@ -3,12 +3,12 @@
  * Mix: one bin holding the same three batches blended. Decorative: the card
  * hides the art slot from assistive tech. The loop that plays on hover and focus
  * lives in globals.css under "Stock mode art" (class names here
- * must match it); without motion the art shows its full, settled state.
+ * must match it); without motion the art shows its settled state.
  */
 
 import type { ReactNode } from "react";
-import type { OutputStockMode } from "@/lib/output-stock/stock-mode";
-import { OUTPUT_STOCK_MODE_DESCRIPTIONS, outputStockModes, type OutputBinType } from "@/schemas/storage-locations";
+import { OUTPUT_DRAW_ORDERS, type OutputDrawOrder, type OutputStockMode } from "@/lib/output-stock/stock-mode";
+import { OUTPUT_DRAW_ORDER_LABELS, OUTPUT_STOCK_MODE_DESCRIPTIONS, outputStockModes, type OutputBinType } from "@/schemas/storage-locations";
 
 const ART_WIDTH = 112;
 const ART_HEIGHT = 44;
@@ -44,6 +44,12 @@ const GRAIN_STEP_Y = 4.6;
 const GRAIN_ROWS = 6;
 /** Rows at the top leave with a draw. */
 const DRAWN_ROWS = 2;
+
+const DRAW_DATES = ["01 Oct", "02 Oct", "03 Oct"] as const;
+const DRAW_DATE_Y = 5;
+const DRAW_DATE_SIZE = 6;
+const DRAW_FIRST_INDEX = 0;
+const DRAW_LAST_INDEX = SPLIT_TONES.length - 1;
 
 type Tone = (typeof SPLIT_TONES)[number];
 
@@ -96,7 +102,7 @@ function Grains({ grains }: { grains: ReturnType<typeof grainGrid> }) {
   ));
 }
 
-function StockArt({ mode, children }: { mode: "split" | "mix"; children: ReactNode }) {
+function StockArt({ mode, children }: { mode: "split" | "mix" | "draw"; children: ReactNode }) {
   return (
     <svg
       className={`stock-art stock-art-${mode}`}
@@ -174,3 +180,29 @@ export function stockModeOptions(type: OutputBinType) {
     description: OUTPUT_STOCK_MODE_DESCRIPTIONS[type][mode],
   }));
 }
+
+/** Dated bays stay chronological; the first bay drawn is empty in the settled picture. */
+export function DrawOrderArt({ order }: { order: OutputDrawOrder }) {
+  const first = order === "oldest_first" ? DRAW_FIRST_INDEX : DRAW_LAST_INDEX;
+  return (
+    <StockArt mode="draw">
+      {SPLIT_TONES.map((tone, index) => (
+        <g key={tone}>
+          <text x={splitBinX(index) + SPLIT_BIN_WIDTH / 2} y={DRAW_DATE_Y} textAnchor="middle"
+            fontSize={DRAW_DATE_SIZE} fill="currentColor" stroke="none">{DRAW_DATES[index]}</text>
+          <g className={index === first ? "stock-draw-first" : "stock-draw-waiting"}>
+            <Grains grains={grainGrid(splitBinX(index), SPLIT_BIN_WIDTH, SPLIT_COLUMNS, () => tone, false)} />
+          </g>
+          <path d={binPath(splitBinX(index), SPLIT_BIN_WIDTH)} />
+        </g>
+      ))}
+    </StockArt>
+  );
+}
+
+export const drawOrderOptions = OUTPUT_DRAW_ORDERS.map((order) => ({
+  value: order,
+  title: OUTPUT_DRAW_ORDER_LABELS[order],
+  description: order === "oldest_first" ? "Empty the earliest batch first." : "Empty the latest batch first.",
+  art: <DrawOrderArt order={order} />,
+}));

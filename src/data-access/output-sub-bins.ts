@@ -15,7 +15,7 @@ import { getOutputStockHistory } from './output-stock-history';
 import { requireOrgScope } from './utils';
 
 /**
- * The sub-bins a bin holds at `occurredAt` (now when omitted), oldest first, with the bin's mode then, each with its
+ * The sub-bins a bin holds at `occurredAt` (now when omitted), in the bin's default draw order, with the bin's mode then, each with its
  * own moisture estimate and latest movements. A correction reads them as they
  * were before the entry it replaces, so the operator can re-choose them. When
  * the correction itself is refused, the bin's current sub-bins still show: the
@@ -47,10 +47,13 @@ export async function getOutputSubBins(ctx: OrgContext, raw: OutputSubBinsInput,
   });
   if (unresolved) throw unresolved;
   const history = await getOutputStockHistory(ctx, bin.id, tx);
+  // A split bin lists its sub-bins in its default draw order; the API stock read stays oldest first.
+  const subBins = stock.stockMode === 'split' && bin.drawOrder === 'newest_first' ? [...stock.subBins].reverse() : stock.subBins;
   return {
+    drawOrder: bin.drawOrder,
     // A merged bin was split before its merge, so a draw timed then still picks sub-bins.
     stockMode: stock.stockMode,
-    subBins: stock.subBins.map(subBin => ({
+    subBins: subBins.map(subBin => ({
       layerId: subBin.layerId, code: subBin.code ?? subBin.layerId, placedAt: subBin.placedAt,
       dryMassKg: rationalToNumber(subBin.dryBiocharKg), solidsKg: rationalToNumber(subBin.solidsKg),
       wetEstimateKg: subBin.estimatedWetKg ? rationalToNumber(subBin.estimatedWetKg) : null,

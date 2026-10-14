@@ -26,7 +26,7 @@ import {
   deleteCreditBatch,
   updateCreditBatch,
 } from "@/data-access/credit-batches";
-import { updateDelivery } from "@/data-access/deliveries";
+import { updateDelivery } from "@/lib/operations/deliveries";
 import { updateFeedstockInTransaction } from "@/data-access/feedstocks";
 import { updateOrder } from "@/data-access/orders";
 import {
@@ -551,7 +551,7 @@ it("commits a run status update and feedstock edit on the same lineage and bin w
       type: "feedstock_bin", feedstockTypeId: fixture.feedstockTypeId }).returning();
     const [run] = await db.insert(productionRuns).values({ organizationId: TEST_ORG_ID,
       facilityId: fixture.facilityId, reactorId: fixture.reactorId, code: `LOCK-${fixture.productionRunId}`,
-      status: "draft", startTime: new Date("2026-06-18T08:00:00Z"),
+      status: "running", startTime: new Date("2026-06-18T08:00:00Z"),
       feedstockWetMassKg: DRAW_WET_KG, feedstockMoisturePercent: 10 }).returning();
     await db.update(feedstocks).set({ storageLocationId: bin.id, status: "complete", massWetKg: INITIAL_WET_KG })
       .where(eq(feedstocks.id, fixture.feedstockId));
@@ -590,14 +590,14 @@ it("commits a run status update and feedstock edit on the same lineage and bin w
         execute: async ({ tx }) => {
           runAttempts++;
           return updateProductionRunInTransaction(ctx, tx, run.id,
-            { expectedVersion: run.version, status: "running" });
+            { expectedVersion: run.version, status: "cancelled", cancellationReason: "Recorded in error" });
         },
       }, ctx, {}, { pool, deadlineMs: RACE_DEADLINE_MS });
       const [edited, updated] = await Promise.all([editing, updating]);
       expect(edited.data.massWetKg).toBe(EDITED_WET_KG);
-      expect(updated).toMatchObject({ data: { status: "running", version: run.version + 1 } });
+      expect(updated).toMatchObject({ data: { status: "cancelled", version: run.version + 1 } });
       expect(feedstockAttempts + runAttempts).toBeGreaterThan(2);
-      expect((await db.select().from(productionRuns).where(eq(productionRuns.id, run.id)))[0].status).toBe("running");
+      expect((await db.select().from(productionRuns).where(eq(productionRuns.id, run.id)))[0].status).toBe("cancelled");
       expect((await db.select().from(feedstocks).where(eq(feedstocks.id, fixture.feedstockId)))[0].massWetKg).toBe(EDITED_WET_KG);
     } finally {
       await Promise.allSettled([editing, ...(updating ? [updating] : [])]);

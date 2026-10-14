@@ -23,7 +23,6 @@ import { useFieldArray, useForm, useWatch, Controller, type Resolver } from "rea
 import { getRunConflict, type RunConflict } from "@/lib/production-runs/overlap-conflict";
 import { FactoryIcon, PlantIcon, LightningIcon, PackageIcon, PlusIcon } from "@phosphor-icons/react/dist/ssr";
 import { FormField, FormInput, FormTextarea, MassMoistureFields, MoistureField, FormActions, FormError, FormSection, FormSpine, ResolvedErrorRevalidator, makeCertFieldStatus, type CertFieldStatus } from "@/components/forms";
-import { StorageBinActions } from "@/components/storage-locations/storage-bin-actions";
 import { Button } from "@/components/ui/button";
 import { ProductionReadingsField } from "./production-readings-field";
 import { SegmentedControl } from "@/components/forms/segmented-control";
@@ -46,6 +45,7 @@ import {
 } from "./production-run-mass-balance";
 import {
   allowedProductionRunStatusesFrom,
+  PRODUCTION_RUN_CREATE_STATUSES,
   shouldClearProductionRunEndTime,
   shouldIncludeProductionRunEndTime,
 } from "@/lib/production-runs/lifecycle";
@@ -111,8 +111,10 @@ export function ProductionRunForm({
 }: ProductionRunFormProps) {
   const formId = useId();
   const isEditMode = !!productionRun;
-  const transitionFrom = (productionRun?.status as ProductionRunStatus) ?? "draft";
-  const statusOptions = allowedProductionRunStatusesFrom(transitionFrom).map(
+  const transitionFrom = (productionRun?.status as ProductionRunStatus) ?? "running";
+  const statusOptions = (isEditMode
+    ? allowedProductionRunStatusesFrom(transitionFrom)
+    : PRODUCTION_RUN_CREATE_STATUSES).map(
     (status) => ({ value: status, label: formatProductionRunStatus(status) }),
   );
   const { facilityId: contextFacilityId, facilities } = useFacilityContext();
@@ -122,7 +124,7 @@ export function ProductionRunForm({
   const defaultValues = {
     facilityId: productionRun?.facilityId || contextFacilityId || "",
     reactorId: productionRun?.reactorId ?? "",
-    status: (productionRun?.status as ProductionRunStatus) ?? "draft",
+    status: (productionRun?.status as ProductionRunStatus) ?? "running",
     cancellationReason: productionRun?.cancellationReason ?? "",
     ...productionRunTimingDefaults(
       productionRun,
@@ -164,6 +166,7 @@ export function ProductionRunForm({
     (
       buildProductionRunResolver(
         resolveFacilityTimezone(facilities, values.facilityId),
+        productionRun?.status,
       ) as unknown as Resolver<
         ProductionRunFormValues,
         unknown,
@@ -414,7 +417,7 @@ export function ProductionRunForm({
           </FormField>
         )}
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
+        <div className="grid grid-cols-1 gap-x-16 gap-y-20">
           <FormField id="reactorId" label="Reactor" error={errors.reactorId?.message} required>
             <Controller
               name="reactorId"
@@ -423,6 +426,7 @@ export function ProductionRunForm({
                 <EntitySelect
                   id="reactorId"
                   entityType="reactor"
+                  allowEdit
                   value={field.value}
                   onChange={field.onChange}
                   placeholder="Select a reactor..."
@@ -443,6 +447,7 @@ export function ProductionRunForm({
                 <EntitySelect
                   id="operatorId"
                   entityType="operator"
+                  allowEdit
                   value={field.value || undefined}
                   onChange={field.onChange}
                   placeholder="Select operator..."
@@ -603,7 +608,6 @@ export function ProductionRunForm({
         ))}
 
 
-
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <MoistureField
             id="feedstockMoisturePercent"
@@ -663,6 +667,7 @@ export function ProductionRunForm({
         <FormField
           id="biocharStorageLocationId"
           label="Biochar storage bin"
+          required={watchedStatus === "complete"}
           error={errors.biocharStorageLocationId?.message}
         >
           <Controller
@@ -672,6 +677,7 @@ export function ProductionRunForm({
               <EntitySelect
                 id="biocharStorageLocationId"
                 entityType="storageLocation"
+                allowEdit
                 value={field.value || undefined}
                 onChange={field.onChange}
                 disabled={isSubmitting || !watchedFacilityId}
@@ -679,7 +685,6 @@ export function ProductionRunForm({
                 filterBy={watchedFacilityId ? { facilityId: watchedFacilityId, type: "biochar_bin" } : undefined}
                 allowCreate={!!watchedFacilityId}
                 onCreateNew={() => biocharBinDialog.open()}
-                trailingActions={<StorageBinActions storageLocationId={field.value} />}
               />
             )}
           />
@@ -692,6 +697,7 @@ export function ProductionRunForm({
           moisturePercent={watchedBiocharMoisture}
           wet={{
             id: "biocharOutputKg",
+            required: watchedStatus === "complete",
             error: biocharOutputError,
             warning: massBalanceFeedback.wetWarning,
             disabled: isSubmitting,
@@ -702,6 +708,7 @@ export function ProductionRunForm({
           }}
           moisture={{
             id: "biocharMoisturePercent",
+            required: watchedStatus === "complete",
             error: errors.biocharMoisturePercent?.message,
             disabled: isSubmitting,
             placeholder: "e.g. 1.5",

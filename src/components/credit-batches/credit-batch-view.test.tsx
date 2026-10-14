@@ -184,7 +184,7 @@ describe("credit batch CO₂e stored", () => {
 });
 
 describe("credit batch production-run preview", () => {
-  it("labels draft and running previews without labeling completed members", () => {
+  it("labels running previews without labeling completed members", () => {
     const creditBatch = {
       id: "batch-1",
       code: "CB-26-001",
@@ -201,7 +201,6 @@ describe("credit batch production-run preview", () => {
     const sections = creditBatchSheetSections({
       creditBatch,
       productionRuns: [
-        makeRun("draft", 1),
         makeRun("running", 2),
         makeRun("complete", 3),
       ],
@@ -219,9 +218,8 @@ describe("credit batch production-run preview", () => {
     expect(html).not.toContain("PR-26-001");
     expect(html).not.toContain("PR-26-002");
     expect(html).not.toContain("PR-26-003");
-    expect(html).toContain("May 13, 2026");
+    expect(html).toContain("May 14, 2026");
     expect(html).toContain("Moshi Raw Biochar Curing Pad");
-    expect(html).toContain("Draft");
     expect(html).toContain("Running");
     expect(html).not.toContain('data-status="complete"');
   });

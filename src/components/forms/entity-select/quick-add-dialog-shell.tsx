@@ -1,13 +1,14 @@
 /**
  * Quick Add Dialog Shell
  * Generic dialog wrapper for nested entity creation and editing. Composes the shared
- * `Modal` primitive (chrome, centering, focus, backdrop, ESC) and adds an
+ * `FormDialog` primitive (chrome, centering, focus, backdrop, ESC) and adds an
  * inset header around the embedded form.
  */
 "use client";
 
 import { useId, type SyntheticEvent } from "react";
-import { Modal, type ModalWidth } from "@/components/ui";
+import type { ModalWidth } from "@/components/ui/modal";
+import { FormDialog } from "@/components/ui/form-dialog";
 
 /**
  * A dialog renders through a portal but still sits inside the entry form in
@@ -46,7 +47,7 @@ export function QuickAddDialogShell({
   const titleId = useId();
 
   return (
-    <Modal
+    <FormDialog
       isOpen={isOpen}
       onClose={onClose}
       onOpen={onOpen}
@@ -68,10 +69,10 @@ export function QuickAddDialogShell({
         </div>
 
         {/* Form content */}
-        <div className="p-24 flex flex-col gap-24">
+        <div className="p-24 flex flex-col gap-24" onSubmit={stopSubmitBubbling}>
           {children}
         </div>
       </div>
-    </Modal>
+    </FormDialog>
   );
 }

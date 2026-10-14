@@ -8,8 +8,12 @@ import { getDeliveryAllocationProvenance } from "@/data-access/delivery-allocati
 import { createDelivery } from "@/data-access/delivery-output-writes";
 import { getOutputStockHistory } from "@/data-access/output-stock-history";
 import { previewOutputStock } from "@/data-access/output-stock-operations";
+import { getOutputSubBins } from "@/data-access/output-sub-bins";
+import { postOutputStock } from "@/data-access/output-stock-post";
+import { updateStorageLocation } from "@/data-access/storage-locations";
+import { updateDelivery } from "@/lib/operations/deliveries";
 import { SafeError } from "@/lib/errors";
-import { cleanupPostedStock, postedStockFixture, postMeasurement, postProduct, STOCK_DATE, STOCK_TIME } from "./helpers/posted-output-stock-fixture";
+import { cleanupPostedStock, postedStockFixture, postMeasurement, postProduct, deliveryInput, STOCK_DATE, STOCK_TIME } from "./helpers/posted-output-stock-fixture";
 
 const fixtures: Awaited<ReturnType<typeof postedStockFixture>>[] = [];
 afterEach(async () => { for (const f of fixtures.splice(0)) await cleanupPostedStock(f); });
@@ -26,6 +30,40 @@ const allocationsOf = (movementId: string) => db.select().from(outputStockAlloca
   .where(eq(outputStockAllocations.movementId, movementId)).orderBy(outputStockAllocations.createdAt);
 
 describe("split bin draws in PostgreSQL", () => {
+  it("uses a newest-first bin default without manual order in previews and saved allocations", async () => {
+    const f = await splitBin();
+    const updated = await updateStorageLocation(f.ctx, f.bin.id, { drawOrder: "newest_first", expectedVersion: f.bin.version });
+    expect(updated.version).toBe(f.bin.version + 1);
+    await expect(updateStorageLocation(f.ctx, f.bin.id, { drawOrder: "oldest_first", expectedVersion: f.bin.version })).rejects.toMatchObject({ code: "stale_version" });
+    const subBins = await getOutputSubBins(f.ctx, { facilityId: f.facility.id, storageLocationId: f.bin.id, occurredAt: STOCK_TIME });
+    expect(subBins.drawOrder).toBe("newest_first");
+    expect(subBins.subBins.map(s => s.layerId)).toEqual([f.p2.id, f.p1.id]);
+    const preview = await previewOutputStock(f.ctx, { facilityId: f.facility.id, storageLocationId: f.bin.id,
+      occurredAt: STOCK_TIME, kind: "loss", wetMassKg: 100, moisturePercent: 0 });
+    expect(preview.allocations.map(a => a.layerId)).toEqual([f.p2.id]);
+    const loss = await postMeasurement(f, { kind: "loss", wetMassKg: 100, moisturePercent: 0 });
+    expect(await allocationsOf(loss.movementId)).toMatchObject([{ biocharProductId: f.p2.id, dryMassKg: "100.000",
+      basisSnapshot: { policy: "lifo", defaultDrawOrder: "newest_first", order: null } }]);
+  });
+
+  it("draws a delivery newest first without manual sources", async () => {
+    const f = await splitBin();
+    await updateStorageLocation(f.ctx, f.bin.id, { drawOrder: "newest_first", expectedVersion: f.bin.version });
+    const delivery = await createDelivery(f.ctx, await deliveryInput(f, 100));
+    const rows = await db.select().from(outputStockAllocations).where(eq(outputStockAllocations.deliveryId, delivery.id));
+    expect(rows).toMatchObject([{ biocharProductId: f.p2.id, basisSnapshot: { policy: "lifo", defaultDrawOrder: "newest_first" } }]);
+  });
+
+  it("refuses a stale preview after the bin default changes", async () => {
+    const f = await splitBin();
+    const input = { facilityId: f.facility.id, storageLocationId: f.bin.id, occurredAt: STOCK_TIME,
+      kind: "loss" as const, wetMassKg: 100, moisturePercent: 0 };
+    const preview = await previewOutputStock(f.ctx, input);
+    await updateStorageLocation(f.ctx, f.bin.id, { drawOrder: "newest_first", expectedVersion: f.bin.version });
+    await expect(postOutputStock(f.ctx, { ...input, reason: "E2E stale default", idempotencyKey: randomUUID(),
+      expectedProductVersions: preview.expectedProductVersions, basisFingerprint: preview.basisFingerprint })).rejects.toMatchObject({ message: "Stock changed since this preview. Refresh the preview and try again.", conflict: { entity: "storageLocation", id: f.bin.id } });
+  });
+
   it("saves one allocation per sub-bin with its own reading, in the operator's order", async () => {
     const f = await splitBin();
     // P2 first: 300 / 0.80 = 375 kg wet empties it; the other 125 kg wet at 25% takes 93.75 kg from P1.
@@ -53,7 +91,7 @@ describe("split bin draws in PostgreSQL", () => {
     const untick = await previewOutputStock(f.ctx, { ...base, wetMassKg: 300, sources: [{ layerId: f.p2.id, moisturePercent: 20 }, { layerId: f.p1.id, moisturePercent: 25 }] });
     expect(untick.blockingMessage).toBe(`This load is used up before it reaches ${f.p1.code}. Untick ${f.p1.code}.`);
     const overdraw = await previewOutputStock(f.ctx, { ...base, wetMassKg: 500, sources: [{ layerId: f.p1.id, moisturePercent: 0 }] });
-    expect(overdraw.blockingMessage).toBe(`This load holds more dry solids than ${f.p1.code} holds by the records. Reconcile stock first.`);
+    expect(overdraw.blockingMessage).toBe(`This load holds more dry solids than ${f.p1.code} holds by the records. Check the mass and moisture in the source record.`);
   });
 
   it("starts a correction from the saved order and readings and lets the operator change them", async () => {
@@ -79,7 +117,7 @@ describe("split bin draws in PostgreSQL", () => {
     expect((await previewOutputStock(f.ctx, correction)).blockingMessage).toBeNull();
     // Oldest first takes P1, but it would have split differently with P2 restored.
     await postMeasurement(f, { kind: "loss", wetMassKg: 100 });
-    expect((await previewOutputStock(f.ctx, correction)).blockingMessage).toMatch(/Correction blocked by a later stock loss/);
+    expect((await previewOutputStock(f.ctx, correction)).blockingMessage).toMatch(/Correction blocked by a later lost mass/);
   });
 
   it("feeds applications from a split delivery and then locks its correction", async () => {
@@ -95,6 +133,12 @@ describe("split bin draws in PostgreSQL", () => {
     const blocked = await previewOutputStock(f.ctx, { facilityId: f.facility.id, storageLocationId: f.bin.id, occurredAt: STOCK_TIME, kind: "delivery", wetMassKg: 400,
       correctsMovementId: allocation.movementId, sources });
     expect(blocked.blockingMessage).toMatch(/Correction blocked by application/);
+    // The history locks the applied delivery up front, so its form can still save other fields.
+    const history = await getOutputStockHistory(f.ctx, f.bin.id);
+    expect(history.find(entry => entry.deliveryId === delivery.id)).toMatchObject({ editLockedReason: `Locked because application E2E-SPLIT-AP-${f.tag} uses this delivery.` });
+    const [current] = await db.select().from(deliveries).where(eq(deliveries.id, delivery.id));
+    const saved = await updateDelivery(f.ctx, delivery.id, { expectedVersion: current.version, distanceNote: "Route note" });
+    expect(saved).toMatchObject({ distanceNote: "Route note", deliveredWetMassKg: 500, savedProducts: [] });
   });
 
   it("keeps provenance for a last sub-bin reached by less than half a gram of dry solids", async () => {
@@ -137,7 +181,11 @@ describe("split bin draws in PostgreSQL", () => {
 
   it("refuses a sub-bin order on a mix bin", async () => {
     const f = await splitBin();
-    await db.update(storageLocations).set({ stockMode: "mix" }).where(and(eq(storageLocations.id, f.bin.id), eq(storageLocations.organizationId, f.ctx.organizationId)));
+    await db.update(storageLocations).set({ stockMode: "mix", drawOrder: "newest_first" }).where(and(eq(storageLocations.id, f.bin.id), eq(storageLocations.organizationId, f.ctx.organizationId)));
+    const loss = await postMeasurement(f, { kind: "loss", wetMassKg: 70, moisturePercent: 0 });
+    const rows = await allocationsOf(loss.movementId);
+    expect(rows.map(a => [a.biocharProductId, a.dryMassKg]).sort()).toEqual([[f.p1.id, "40.000"], [f.p2.id, "30.000"]].sort());
+    for (const row of rows) expect(row.basisSnapshot).toMatchObject({ policy: "pro_rata", defaultDrawOrder: null });
     await expect(previewOutputStock(f.ctx, { facilityId: f.facility.id, storageLocationId: f.bin.id, occurredAt: STOCK_TIME, kind: "loss", wetMassKg: 10,
       sources: [{ layerId: f.p1.id, moisturePercent: 10 }] })).rejects.toThrow(SafeError);
   });

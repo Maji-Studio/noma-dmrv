@@ -83,7 +83,7 @@ export function ProductionSampleForm({
       {/* Sample info */}
       <FormSection title="Sample info" divider={false}>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-16">
+        <div className="grid grid-cols-1 gap-x-16 gap-y-16">
           <FormField
             id="timestamp"
             label="Timestamp"
@@ -111,6 +111,7 @@ export function ProductionSampleForm({
                 <EntitySelect
                   id="production-sample-sampledById"
                   entityType="operator"
+                  allowEdit
                   value={field.value ?? ""}
                   onChange={field.onChange}
                   placeholder="Select operator..."

@@ -7,13 +7,18 @@ import { customerKeys } from "./customer-query-keys";
 import type {
   CreateCustomerWithLocationsData,
   UpdateCustomerData,
+  CreateCustomerLocationData,
+  UpdateCustomerLocationData,
 } from "@/schemas/customers";
-import type { Customer } from "@/db/schema";
+import type { Customer, CustomerLocation } from "@/db/schema";
 
 const mocks = vi.hoisted(() => ({
   createCustomerWithLocationsFn: vi.fn(),
   updateCustomerFn: vi.fn(),
   deleteCustomerFn: vi.fn(),
+  createCustomerLocationFn: vi.fn(),
+  updateCustomerLocationFn: vi.fn(),
+  deleteCustomerLocationFn: vi.fn(),
 }));
 
 vi.mock("@/fn/customers", () => ({
@@ -23,13 +28,16 @@ vi.mock("@/fn/customers", () => ({
   getCustomersFn: vi.fn(),
   getCustomerWithRelationsFn: vi.fn(),
   getCustomerLocationsFn: vi.fn(),
-  createCustomerLocationFn: vi.fn(),
-  updateCustomerLocationFn: vi.fn(),
-  deleteCustomerLocationFn: vi.fn(),
+  createCustomerLocationFn: mocks.createCustomerLocationFn,
+  updateCustomerLocationFn: mocks.updateCustomerLocationFn,
+  deleteCustomerLocationFn: mocks.deleteCustomerLocationFn,
 }));
 
 import {
   useCreateCustomerWithLocations,
+  useCreateCustomerLocation,
+  useUpdateCustomerLocation,
+  useDeleteCustomerLocation,
   useDeleteCustomer,
   useUpdateCustomer,
 } from "./use-customers";
@@ -41,10 +49,15 @@ const customer = {
   cropType: "Maize",
 } as Customer;
 
+const location = { id: "location-1", customerId: customer.id, name: "North field" } as CustomerLocation;
+
 type CreateMutation = ReturnType<typeof useCreateCustomerWithLocations>;
 type UpdateMutation = ReturnType<typeof useUpdateCustomer>;
 type DeleteMutation = ReturnType<typeof useDeleteCustomer>;
-type AnyMutation = CreateMutation | UpdateMutation | DeleteMutation;
+type CreateLocationMutation = ReturnType<typeof useCreateCustomerLocation>;
+type UpdateLocationMutation = ReturnType<typeof useUpdateCustomerLocation>;
+type DeleteLocationMutation = ReturnType<typeof useDeleteCustomerLocation>;
+type AnyMutation = CreateMutation | UpdateMutation | DeleteMutation | CreateLocationMutation | UpdateLocationMutation | DeleteLocationMutation;
 
 function Harness({
   useMutationHook,
@@ -106,12 +119,16 @@ beforeAll(() => {
 });
 
 beforeEach(() => {
+  vi.clearAllMocks();
+  mocks.createCustomerLocationFn.mockResolvedValue({ success: true, data: location });
+  mocks.updateCustomerLocationFn.mockResolvedValue({ success: true, data: location });
+  mocks.deleteCustomerLocationFn.mockResolvedValue({ success: true });
   mocks.createCustomerWithLocationsFn.mockReset();
   mocks.updateCustomerFn.mockReset();
   mocks.deleteCustomerFn.mockReset();
   mocks.createCustomerWithLocationsFn.mockResolvedValue({
     success: true,
-    data: { customer, locations: [] },
+    data: { customer, locations: [location] },
   });
   mocks.updateCustomerFn.mockResolvedValue({ success: true, data: customer });
   mocks.deleteCustomerFn.mockResolvedValue({ success: true, data: undefined });
@@ -122,6 +139,8 @@ describe("customer mutations keep the EntitySelect caches fresh", () => {
     const queryClient = newQueryClient();
     const listKey = entityKeys.list("customer");
     queryClient.setQueryData(listKey, []);
+    const locationListKey = entityKeys.list("customerLocation", "", { customerId: customer.id });
+    queryClient.setQueryData(locationListKey, []);
 
     const { mutation, renderer } = await renderMutation(
       queryClient,
@@ -146,6 +165,7 @@ describe("customer mutations keep the EntitySelect caches fresh", () => {
       name: customer.name,
       subtitle: customer.cropType,
     });
+    expect(queryClient.getQueryState(locationListKey)?.isInvalidated).toBe(true);
     expect(queryClient.getQueryState(listKey)?.isInvalidated).toBe(true);
 
     await act(async () => renderer?.unmount());
@@ -197,6 +217,50 @@ describe("customer mutations keep the EntitySelect caches fresh", () => {
     expect(queryClient.getQueryData(detailKey)).toBeUndefined();
     expect(queryClient.getQueryState(listKey)?.isInvalidated).toBe(true);
 
+    await act(async () => renderer?.unmount());
+    queryClient.clear();
+  });
+});
+
+
+describe("customer location mutations refresh the new picker", () => {
+  it.each(["create", "update"] as const)("invalidates location search and details after %s", async (operation) => {
+    const queryClient = newQueryClient();
+    const listKey = entityKeys.list("customerLocation", "North", { customerId: customer.id });
+    const detailKey = entityKeys.detail("customerLocation", location.id);
+    queryClient.setQueryData(listKey, [location]);
+    queryClient.setQueryData(customerKeys.locations(customer.id), [{ ...location, name: "Old name" }]);
+    queryClient.setQueryData(detailKey, { ...location, name: "Old name" });
+    const { mutation, renderer } = await renderMutation(queryClient, operation === "create" ? useCreateCustomerLocation : useUpdateCustomerLocation);
+    await act(async () => {
+      if (operation === "create") {
+        await (mutation as CreateLocationMutation).mutateAsync({ customerId: customer.id, name: location.name } as CreateCustomerLocationData);
+      } else {
+        await (mutation as UpdateLocationMutation).mutateAsync({ locationId: location.id, name: location.name, expectedVersion: 1 } as UpdateCustomerLocationData);
+      }
+    });
+    expect(queryClient.getQueryState(listKey)?.isInvalidated).toBe(true);
+    expect(queryClient.getQueryState(detailKey)?.isInvalidated).toBe(true);
+    expect(queryClient.getQueryState(customerKeys.locations(customer.id))?.isInvalidated).toBe(true);
+    if (operation === "update") {
+      expect(queryClient.getQueryData(customerKeys.locations(customer.id))).toEqual([location]);
+    }
+    await act(async () => renderer?.unmount());
+    queryClient.clear();
+  });
+
+  it("drops deleted locations from the detail cache and refreshes search", async () => {
+    const queryClient = newQueryClient();
+    const listKey = entityKeys.list("customerLocation", "", { customerId: customer.id });
+    const detailKey = entityKeys.detail("customerLocation", location.id);
+    queryClient.setQueryData(listKey, [location]);
+    queryClient.setQueryData(detailKey, location);
+    const { mutation, renderer } = await renderMutation(queryClient, () => useDeleteCustomerLocation(customer.id));
+    await act(async () => {
+      await (mutation as DeleteLocationMutation).mutateAsync({ locationId: location.id, expectedVersion: 1 });
+    });
+    expect(queryClient.getQueryData(detailKey)).toBeUndefined();
+    expect(queryClient.getQueryState(listKey)?.isInvalidated).toBe(true);
     await act(async () => renderer?.unmount());
     queryClient.clear();
   });

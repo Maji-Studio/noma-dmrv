@@ -9,8 +9,8 @@ const mocks = vi.hoisted(() => ({ create: vi.fn() }));
 vi.mock("@/fn/quick-add", () => ({ createFeedstockTypeFn: mocks.create }));
 vi.mock("./quick-add-dialog-shell", () => ({ QuickAddDialogShell: ({ children }: { children: ReactNode }) => <div>{children}</div> }));
 vi.mock("@/components/feedstock-types/feedstock-type-form", () => ({
-  FeedstockTypeForm: ({ onSubmit, errorMessage }: { onSubmit: (data: FeedstockTypeFormData) => Promise<void>; errorMessage?: string }) => (
-    <form onSubmit={(event) => { event.preventDefault(); void onSubmit(selection); }}><p>{errorMessage}</p></form>
+  FeedstockTypeForm: ({ onSubmit, errorMessage, guardDialogCancel }: { guardDialogCancel?: boolean; onSubmit: (data: FeedstockTypeFormData) => Promise<void>; errorMessage?: string }) => (
+    <form data-guard-dialog-cancel={guardDialogCancel} onSubmit={(event) => { event.preventDefault(); void onSubmit(selection); }}><p>{errorMessage}</p></form>
   ),
 }));
 import { FeedstockTypeQuickAddDialog } from "./feedstock-type-quick-add-dialog";
@@ -35,6 +35,7 @@ describe("feedstock type quick-add payload", () => {
     await act(async () => {
       renderer = create(<QueryClientProvider client={queryClient}><FeedstockTypeQuickAddDialog isOpen onClose={onClose} onSuccess={onSuccess} /></QueryClientProvider>);
     });
+    expect(renderer!.root.findByType("form").props["data-guard-dialog-cancel"]).toBe(true);
     await act(async () => { await renderer.root.findByType("form").props.onSubmit({ preventDefault: () => undefined }); });
     const expected = { ...selection, name: "Selected feedstock", description: "Description", isometricFeedstockTypeId: "ft_selected" };
     expect(mocks.create).toHaveBeenCalledWith(expected);

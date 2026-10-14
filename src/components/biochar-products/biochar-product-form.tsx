@@ -18,7 +18,6 @@ import {
   useQuickAddDialog,
 } from "@/components/forms/entity-select";
 import { StockChangeLabel } from "@/components/storage-locations/stock-change-label";
-import { StorageBinActions } from "@/components/storage-locations/storage-bin-actions";
 import { ActionableFocusTarget } from "@/components/ui/actionable-focus-target";
 import { ProductCompositionPreview } from "@/components/ui/product-composition-preview";
 import type { BiocharProductWithRelations } from "@/data-access/biochar-products";
@@ -421,6 +420,7 @@ export function BiocharProductForm({
               <EntitySelect
                 id="sourceBiocharStorageLocationId"
                 entityType="storageLocation"
+                allowEdit
                 value={field.value || ""}
                 onChange={field.onChange}
                 placeholder="Select a biochar bin..."
@@ -431,7 +431,8 @@ export function BiocharProductForm({
                     available={sourcePreviewFresh}
                   />
                 )}
-                disabled={isSubmitting || isEditMode}
+                disabled={isSubmitting}
+                selectionLocked={isEditMode}
                 error={!!fieldState.error}
                 filterBy={{
                   ...(selectedFacilityId
@@ -447,7 +448,6 @@ export function BiocharProductForm({
                     : "/storage-locations",
                   linkLabel: "Open storage bins",
                 }}
-                trailingActions={<StorageBinActions storageLocationId={field.value} />}
               />
             )}
           />
@@ -528,9 +528,11 @@ export function BiocharProductForm({
               <EntitySelect
                 id="formulationId"
                 entityType="formulation"
+                allowEdit
                 value={field.value || ""}
                 onChange={field.onChange}
-                disabled={isSubmitting || isEditMode}
+                disabled={isSubmitting}
+                selectionLocked={isEditMode}
                 error={!!fieldState.error}
               />
             )}
@@ -607,6 +609,7 @@ export function BiocharProductForm({
               <EntitySelect
                 id="storageLocationId"
                 entityType="storageLocation"
+                allowEdit
                 value={field.value || ""}
                 onChange={field.onChange}
                 placeholder="Select a product bin..."
@@ -626,7 +629,6 @@ export function BiocharProductForm({
                 }}
                 allowCreate
                 onCreateNew={() => storageLocationDialog.open()}
-                trailingActions={<StorageBinActions storageLocationId={field.value} />}
               />
             )}
           />

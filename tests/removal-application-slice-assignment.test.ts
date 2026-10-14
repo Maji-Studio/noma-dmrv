@@ -95,6 +95,7 @@ describe("Removal Application-slice assignment", () => {
           reactorId: reactor.id,
           code: `RAS-PR${number}-${tag}`,
           status: "complete" as const,
+          biocharStorageLocationId: sourceBin.id, biocharMoisturePercent: 0,
           startTime: new Date(`2026-04-0${number}T08:00:00Z`),
           endTime: new Date(`2026-04-0${number}T12:00:00Z`),
           biocharDryMassKg: 100,

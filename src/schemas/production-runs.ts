@@ -21,10 +21,15 @@ import {
   uuidSchema,
 } from "./helpers";
 import {
-  allowedProductionRunStatusesFrom,
+  PRODUCTION_RUN_CREATE_STATUSES,
+  PRODUCTION_RUN_CREATE_STATUS_MESSAGE,
   DRY_MASS_BALANCE_MESSAGE,
+  COMPLETE_OUTPUT_BIN_MESSAGE,
+  COMPLETE_OUTPUT_MOISTURE_MESSAGE,
+  RUNNING_END_FORBIDDEN_MESSAGE,
   getProductionRunOutcomeViolations,
   PRODUCTION_RUN_STATUSES,
+  statusCountsAsPhysicalProduction,
   type ProductionRunStatus,
 } from "@/lib/production-runs/lifecycle";
 import {
@@ -216,7 +221,7 @@ const productionRunFormObject = z.object({
   reactorId: z.string().min(1, "Select a reactor.").uuid("Choose a valid reactor."),
 
   // Status
-  status: z.enum(productionRunStatuses).default("draft"),
+  status: z.enum(productionRunStatuses).default("running"),
   cancellationReason: z.string().max(CANCELLATION_REASON_MAX_LENGTH).optional().or(z.literal("")),
 
   // Timing — explicit date + time pairs. The run's start (date + time) is
@@ -308,6 +313,7 @@ const productionRunFormObject = z.object({
 export function makeProductionRunFormSchema(
   timeZone: string,
   now: () => Date = () => new Date(),
+  savedStatus?: ProductionRunStatus,
 ) {
   return productionRunFormObject.superRefine((data, ctx) => {
     const start = resolveInstant(data.startDate, data.startTime, timeZone);
@@ -364,6 +370,7 @@ export function makeProductionRunFormSchema(
       endTimePresent: endPresent,
       cancellationReason: data.cancellationReason,
       biocharOutputKg: data.biocharOutputKg,
+      biocharStorageLocationId: data.biocharStorageLocationId,
       biocharMoisturePercent: data.biocharMoisturePercent,
       feedstockWetMassKg: totalFeedstockWetMassKg,
       feedstockMoisturePercent: data.feedstockMoisturePercent,
@@ -388,6 +395,12 @@ export function makeProductionRunFormSchema(
             path: ["endTime"],
             message: `A ${violation.status} run needs an end date and time.`,
           });
+          break;
+        case "complete-output-bin-required":
+          ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["biocharStorageLocationId"], message: COMPLETE_OUTPUT_BIN_MESSAGE });
+          break;
+        case "complete-output-moisture-required":
+          ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["biocharMoisturePercent"], message: COMPLETE_OUTPUT_MOISTURE_MESSAGE });
           break;
         case "complete-output-required":
           ctx.addIssue({
@@ -427,8 +440,13 @@ export function makeProductionRunFormSchema(
           });
           break;
         case "running-end-forbidden":
-          // Pre-existing adapter divergence: the mutation rejects this state,
-          // while the form schema has historically allowed it.
+          // The submit handler clears the saved end when reopening a physical run.
+          if (savedStatus && statusCountsAsPhysicalProduction(savedStatus)) break;
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["endTime"],
+            message: RUNNING_END_FORBIDDEN_MESSAGE,
+          });
           break;
       }
     }
@@ -473,14 +491,9 @@ function rejectLegacyFeedstockFields(
 /**
  * Schema for creating a production run (server action)
  */
-export const createProductionRunSchema = productionRunFormSchema.refine(
-  (data) => allowedProductionRunStatusesFrom("draft").includes(data.status),
-  {
-    path: ["status"],
-    message:
-      "A new production run can only start as Draft, Running, Complete, or Cancelled.",
-  },
-).superRefine(rejectLegacyFeedstockFields);
+export const createProductionRunSchema = productionRunFormSchema.safeExtend({
+  status: z.enum(PRODUCTION_RUN_CREATE_STATUSES, { error: PRODUCTION_RUN_CREATE_STATUS_MESSAGE }).default("running"),
+}).superRefine(rejectLegacyFeedstockFields);
 
 /**
  * Schema for updating a production run (server action)
@@ -618,7 +631,6 @@ export type ProductionRunFilterData = z.infer<typeof productionRunFilterSchema>;
  */
 export function formatProductionRunStatus(status: ProductionRunStatus): string {
   const labels: Record<ProductionRunStatus, string> = {
-    draft: "Draft",
     running: "Running",
     complete: "Complete",
     failed: "Failed",

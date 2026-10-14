@@ -53,6 +53,7 @@ export interface LineageFixture {
   facilityId: string;
   feedstockId: string;
   feedstockBinId: string;
+  biocharBinId: string;
   feedstockTypeId: string;
   productionProcessId: string;
   ghgStatementId: string | null;
@@ -126,6 +127,10 @@ export async function createLineageFixture(
       })
       .returning({ id: productionProcesses.id });
 
+    const [biocharBin] = await tx.insert(storageLocations).values({
+      organizationId: TEST_ORG_ID, facilityId: facility.id, code: `BIN-CLG-OUT-${tag}`,
+      name: `E2E Lineage output ${tag}`, type: "biochar_bin",
+    }).returning();
     const [productionRun] = await tx
       .insert(productionRuns)
       .values({
@@ -133,15 +138,16 @@ export async function createLineageFixture(
         code: `PR-CLG-${tag}`,
         facilityId: facility.id,
         startTime: new Date("2026-06-13T08:00:00Z"),
-        endTime: new Date("2026-06-13T12:00:00Z"),
+        endTime: blockingVia === "none" ? null : new Date("2026-06-13T12:00:00Z"),
         reactorId: reactor.id,
         feedstockWetMassKg: 1_000,
         feedstockMoisturePercent: 10,
         feedstockMassDryKg: 900,
+        biocharStorageLocationId: biocharBin.id,
         biocharOutputKg: 300,
         biocharMoisturePercent: 5,
         biocharDryMassKg: 285,
-        status: blockingVia === "none" ? "draft" : "complete",
+        status: blockingVia === "none" ? "running" : "complete",
       })
       .returning({ id: productionRuns.id });
 
@@ -298,6 +304,7 @@ export async function createLineageFixture(
       facilityId: facility.id,
       feedstockId: feedstock.id,
       feedstockBinId: feedstockBin.id,
+      biocharBinId: biocharBin.id,
       feedstockTypeId: feedstockType.id,
       productionProcessId: productionProcess.id,
       ghgStatementId,
@@ -368,6 +375,7 @@ export async function cleanupLineageFixture(fixture: LineageFixture): Promise<vo
     await tx
       .delete(productionRuns)
       .where(eq(productionRuns.id, fixture.productionRunId));
+    await tx.delete(storageLocations).where(eq(storageLocations.id, fixture.biocharBinId));
     await tx.delete(reactors).where(eq(reactors.id, fixture.reactorId));
     await tx.delete(customers).where(eq(customers.id, fixture.customerId));
     await deleteOutputFacilityFixtures(tx, eq(facilities.id, fixture.facilityId));

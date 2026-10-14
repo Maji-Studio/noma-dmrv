@@ -23,7 +23,7 @@ it("reuses pagination and exact-code schemas for production runs and reactors", 
   const id = "df2795a4-886b-4a89-bbdd-532c6b1b8e45";
   expect(parseApiQuery(request(`?facilityId=${id}&reactorId=${id}&status=running&code=PR-26-0001&limit=2`), productionRunListSchema))
     .toEqual({ facilityId: id, reactorId: id, status: "running", code: "PR-26-0001", limit: 2 });
-  for (const query of ["?status=completed", "?reactorId=bad", "?q=run&q=other", `?q=${"x".repeat(API_QUERY_MAX_LENGTH + 1)}`, "?status=draft&status=running", "?limit=201"]) {
+  for (const query of ["?status=completed", "?reactorId=bad", "?q=run&q=other", `?q=${"x".repeat(API_QUERY_MAX_LENGTH + 1)}`, "?status=complete&status=running", "?limit=201"]) {
     expect(() => parseApiQuery(request(query), productionRunListSchema)).toThrow(expect.objectContaining({ code: "invalid_query" }));
   }
 });

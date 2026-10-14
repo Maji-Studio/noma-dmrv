@@ -349,7 +349,8 @@ async function createFullWorkflowData(): Promise<TestWorkflowData> {
       feedstockTypeId: ids.feedstockType,
     });
 
-    // 20. Create credit batch (links facility, single feedstock per ADR 0016)
+    // 20. Create credit batch (links facility, single feedstock per ADR 0016).
+    // Credit batches retain Draft independently of production run status.
     await tx.insert(schema.creditBatches).values({
         organizationId: DEC_ORG_ID,
       id: ids.creditBatch,

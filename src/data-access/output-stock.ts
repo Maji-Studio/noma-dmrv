@@ -46,7 +46,7 @@ async function readLayerRows(ctx: OrgContext, bins: readonly OutputBinRef[], rea
   const biocharBinIds = bins.filter(bin => bin.type === 'biochar_bin').map(bin => bin.id);
   const productBinIds = bins.filter(bin => bin.type === 'product_bin').map(bin => bin.id);
   const [runs, biocharSources, products, effects] = await Promise.all([
-    biocharBinIds.length ? reader.select({ id: productionRuns.id, binId: productionRuns.biocharStorageLocationId, facilityId: productionRuns.facilityId, archivedAt: productionRuns.archivedAt,
+    biocharBinIds.length ? reader.select({ id: productionRuns.id, code: productionRuns.code, binId: productionRuns.biocharStorageLocationId, facilityId: productionRuns.facilityId, archivedAt: productionRuns.archivedAt,
       endTime: productionRuns.endTime, dryKg: sql<string | null>`${productionRuns.biocharDryMassKg}::text`, postingSequence: productionRuns.stockPostingSequence })
       .from(productionRuns).where(and(eq(productionRuns.organizationId, ctx.organizationId), inArray(productionRuns.biocharStorageLocationId, biocharBinIds), eq(productionRuns.status, COMPLETED_PRODUCTION_RUN_STATUS)))
       .orderBy(asc(productionRuns.stockPostingSequence), asc(productionRuns.id)) : [],

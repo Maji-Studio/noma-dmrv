@@ -43,7 +43,8 @@ import {
 import { createCreditBatch, updateCreditBatch, deleteCreditBatch } from "@/data-access/credit-batches";
 import { updateSample, deleteSample } from "@/data-access/samples";
 import { updateOrder, deleteOrder } from "@/data-access/orders";
-import { updateDelivery, deleteDelivery } from "@/data-access/delivery-output-writes";
+import { deleteDelivery } from "@/data-access/delivery-output-writes";
+import { updateDelivery } from "@/lib/operations/deliveries";
 import { createTransportLeg, updateTransportLeg, deleteTransportLeg, syncFeedstockTransportLeg } from "@/data-access/transport-legs";
 import { archiveFacility, restoreFacility } from "@/data-access/facilities";
 import { masterDataVersion } from "./helpers/master-data-version";
@@ -219,6 +220,10 @@ async function seedFixture(): Promise<Fixture> {
       })
       .returning({ id: reactors.id });
 
+    const [outputBin] = await tx.insert(storageLocations).values({
+      organizationId, facilityId: facility.id, code: `E2E-EXVB-OUT-${tag}`,
+      name: `E2E Lab logistics output ${tag}`, type: "biochar_bin",
+    }).returning();
     const [productionRun] = await tx
       .insert(productionRuns)
       .values({
@@ -228,6 +233,8 @@ async function seedFixture(): Promise<Fixture> {
         reactorId: reactor.id,
         startTime: RUN_START,
         endTime: RUN_END,
+        biocharStorageLocationId: outputBin.id, biocharMoisturePercent: 0,
+        biocharOutputKg: RUN_DRY_OUTPUT_KG,
         biocharDryMassKg: RUN_DRY_OUTPUT_KG,
         status: "complete",
       })

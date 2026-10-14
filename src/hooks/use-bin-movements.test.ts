@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 // The hook module pulls in the server action barrel; the mapping under test is
 // pure, so stub the actions rather than loading the server layer.
 vi.mock("@/fn/bin-movements", () => ({
-  getBinMovementsFn: vi.fn(),
+  getFeedstockBinStockFn: vi.fn(),
   recordLossFn: vi.fn(),
   recordStockTakeFn: vi.fn(),
 }));

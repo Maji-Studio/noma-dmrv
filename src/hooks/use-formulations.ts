@@ -1,3 +1,4 @@
+import { invalidateEntityTypeQueries } from "./entity-query-keys";
 import { throwActionError, StaleVersionError } from "@/lib/stale-version";
 /**
  * Formulations React Query Hooks
@@ -5,7 +6,7 @@ import { throwActionError, StaleVersionError } from "@/lib/stale-version";
  * Includes query keys, mutations, optimistic updates, and cache invalidation
  */
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { queryOptions, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
   FormulationFilterData,
   CreateFormulationData,
@@ -30,7 +31,7 @@ import type { MutationCallbacks, OptimisticUpdateOptions } from "./types";
 // Query Keys
 // ============================================
 
-const formulationKeys = {
+export const formulationKeys = {
   all: ["formulations"] as const,
   lists: () => [...formulationKeys.all, "list"] as const,
   list: (filters?: Partial<FormulationFilterData>) =>
@@ -41,6 +42,8 @@ const formulationKeys = {
   codeCheck: (code: string, excludeId?: string) =>
     [...formulationKeys.all, "codeCheck", code, excludeId] as const,
 };
+
+const FORMULATION_DETAIL_STALE_TIME_MS = 30_000;
 
 // ============================================
 // Formulation Query Hooks
@@ -66,8 +69,8 @@ export function useFormulations(filters?: Partial<FormulationFilterData>) {
 /**
  * Hook to fetch a single formulation by ID
  */
-export function useFormulation(formulationId: string, enabled = true) {
-  return useQuery({
+export function formulationQueryOptions(formulationId: string) {
+  return queryOptions({
     queryKey: formulationKeys.detail(formulationId),
     queryFn: async () => {
       const result = await getFormulationByIdFn(formulationId);
@@ -76,8 +79,15 @@ export function useFormulation(formulationId: string, enabled = true) {
       }
       return result.data;
     },
+    enabled: !!formulationId,
+    staleTime: FORMULATION_DETAIL_STALE_TIME_MS,
+  });
+}
+
+export function useFormulation(formulationId: string, enabled = true) {
+  return useQuery({
+    ...formulationQueryOptions(formulationId),
     enabled: enabled && !!formulationId,
-    staleTime: 30000,
   });
 }
 
@@ -106,6 +116,7 @@ export function useCreateFormulation(
       await callbacks?.onMutate?.(variables);
     },
     onSuccess: async (data, variables) => {
+      invalidateEntityTypeQueries(queryClient, "formulation");
       // Invalidate all formulation lists
       queryClient.invalidateQueries({ queryKey: formulationKeys.lists() });
       // Invalidate options for dropdowns
@@ -208,6 +219,8 @@ export function useUpdateFormulation(
       return { previousFormulation, previousLists };
     },
     onSuccess: async (data, variables) => {
+      invalidateEntityTypeQueries(queryClient, "formulation");
+      invalidateEntityTypeQueries(queryClient, "order");
       // Update cache with actual server data
       queryClient.setQueryData(formulationKeys.detail(data.id), data);
       patchListCachesWithSavedRow<FormulationWithIngredients>(queryClient, formulationKeys.lists(), data);

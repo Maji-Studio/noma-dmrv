@@ -8,19 +8,24 @@ import {
   useState,
   useRef,
   useEffect,
-  useCallback,
+  useEffectEvent,
   useId,
-  useMemo,
   type KeyboardEvent,
+  type FocusEvent,
+  type Dispatch,
+  type SetStateAction,
 } from "react";
 import {
   ArrowSquareOutIcon,
   CaretDownIcon,
   MagnifyingGlassIcon,
-  PlusIcon,
   SpinnerIcon,
   XIcon,
 } from "@phosphor-icons/react/dist/ssr";
+import { Popover } from "@base-ui/react/popover";
+import dynamic from "next/dynamic";
+import { isEditableEntityType, useCanManageFeedstockTypes } from "@/hooks/use-entity-edit-record";
+import { ENTITY_SEARCH_LIMIT, SELECT_SEARCH_MIN_OPTIONS } from "@/config/forms";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useEntityOptions, useEntityById } from "@/hooks/use-entities";
@@ -34,22 +39,17 @@ import { OperatorQuickAddDialog } from "./operator-quick-add-dialog";
 import { ENTITY_TYPE_LABELS } from "./entity-labels";
 import { formatRemainingMass } from "./remaining-mass";
 
-export function EntityOptionText({ option }: { option: EntityOption }) {
-  return (
-    <>
-      <span className="block truncate text-[var(--text-s)] text-[var(--color-text-primary)]">
-        {option.name}
-      </span>
-      {option.subtitle && (
-        <span className="block body-small text-[var(--color-text-secondary)] mt-2">
-          {option.subtitle}
-        </span>
-      )}
-    </>
-  );
-}
+import { EntitySelectRow, type SelectRow } from "./entity-select-row";
+export { EntityOptionText } from "./entity-select-row";
 
-const SEARCH_VISIBILITY_THRESHOLD = 5;
+const EntityEditDialog = dynamic(() => import("./entity-edit-dialog").then((module) => module.EntityEditDialog));
+
+const MENU_SIDE_OFFSET = 4;
+const MENU_COLLISION_PADDING = 8;
+
+function shouldFocusSearch(showSearch: boolean, openedWithTouch: boolean) {
+  return showSearch && !openedWithTouch && window.matchMedia("(pointer: fine)").matches;
+}
 
 export function shouldRenderCreateAction({
   allowCreate,
@@ -101,80 +101,61 @@ function getFeedstockTypeDefaultUsage(filterBy?: Record<string, string>) {
   return usage === "pyrolysis" || usage === "blend" ? usage : undefined;
 }
 
-export function EntitySelect({
-  id,
-  entityType,
-  value,
-  onChange,
-  placeholder,
-  disabled = false,
-  error = false,
-  className,
-  allowCreate = false,
-  createLabel,
-  onCreateNew,
-  filterBy,
-  excludeIds,
-  autoSelectSingle = false,
-  alwaysShowSearch = false,
-  hideSearch = false,
-  showRemainingMass = true,
-  showRemainingDryMass = true,
-  formatSelectedLabel,
-  emptyHint,
-  noneOption,
-  trailingActions,
-  "aria-describedby": ariaDescribedBy,
-  "aria-invalid": ariaInvalid,
-}: EntitySelectProps) {
+interface PickerState {
+  isOpen: boolean;
+  setIsOpen: Dispatch<SetStateAction<boolean>>;
+  searchQuery: string;
+  setSearchQuery: Dispatch<SetStateAction<string>>;
+}
+
+interface EntityQueryData {
+  fetchedOptions: EntityOption[];
+  listDataUpdatedAt: number;
+  queryLoading: boolean;
+  queryError: Error | null;
+  selectedEntity: EntityOption | null | undefined;
+  detailDataUpdatedAt: number;
+  isSelectedEntityPending: boolean;
+}
+
+export function EntitySelect(props: EntitySelectProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [highlightedIndex, setHighlightedIndex] = useState(0);
-  const [isDriverDialogOpen, setIsDriverDialogOpen] = useState(false);
-  const [isOperatorDialogOpen, setIsOperatorDialogOpen] = useState(false);
-  const [isVehicleDialogOpen, setIsVehicleDialogOpen] = useState(false);
-  const [isFeedstockTypeDialogOpen, setIsFeedstockTypeDialogOpen] = useState(false);
-  const [isFormulationDialogOpen, setIsFormulationDialogOpen] = useState(false);
+  const pickerState = { isOpen, setIsOpen, searchQuery, setSearchQuery };
 
-  const containerRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
-  const listboxRef = useRef<HTMLUListElement>(null);
-  const triggerRef = useRef<HTMLButtonElement>(null);
-  const entitySelectId = useId();
-  const listboxId = `${entitySelectId}-listbox`;
-  const remainingMassId = `${entitySelectId}-remaining-mass`;
-  const selectedLabelId = `${entitySelectId}-selected`;
+  // Separate components keep query hooks unconditional in server mode and
+  // let caller-owned lists render without a QueryClientProvider.
+  return props.options !== undefined
+    ? <EntitySelectView {...props} {...pickerState} />
+    : props.entityType === "feedstockType" && props.allowEdit
+      ? <FeedstockTypeSelect {...props} {...pickerState} />
+      : <ServerEntitySelect {...props} {...pickerState} />;
+}
 
-  // Debounce search for better performance
+type ServerEntitySelectProps = Extract<EntitySelectProps, { options?: undefined }> & PickerState;
+
+function FeedstockTypeSelect(props: ServerEntitySelectProps) {
+  const canManage = useCanManageFeedstockTypes();
+  return <ServerEntitySelect {...props} allowEdit={canManage} onEditSelected={canManage ? props.onEditSelected : undefined} />;
+}
+
+function ServerEntitySelect(props: ServerEntitySelectProps) {
+  const { entityType, filterBy, disabled, selectionLocked, isOpen, autoSelectSingle, value, searchQuery } = props;
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const onEditSelected = props.onEditSelected ?? (props.allowEdit && isEditableEntityType(entityType) ? () => setIsEditOpen(true) : undefined);
   const debouncedSearch = useDebounce(searchQuery, 200);
-
-  // Fetch options based on search
-  // Also fetch eagerly when autoSelectSingle is enabled (to detect single-option case)
   const {
     data: fetchedOptions = [],
     dataUpdatedAt: listDataUpdatedAt,
-    isLoading,
-    error: fetchError,
+    isLoading: queryLoading,
+    error: queryError,
   } = useEntityOptions({
     entityType,
     search: debouncedSearch,
     filterBy,
-    enabled: !disabled && (isOpen || (autoSelectSingle && !value)),
+    enabled: !disabled && !selectionLocked && (isOpen || (!!autoSelectSingle && !value)),
   });
-
-  // Hide already-picked options (e.g. blend materials chosen on other lines),
-  // but never hide the current selection so it stays visible in its own field.
-  const options =
-    excludeIds && excludeIds.length > 0
-      ? fetchedOptions.filter(
-          (option) => option.id === value || !excludeIds.includes(option.id)
-        )
-      : fetchedOptions;
-
-  // Fetch selected entity details. Derivation-affecting filters (the order
-  // exclusion behind remaining-stock figures) must reach the detail fetch
-  // too, or the caption's "freshest source wins" rule would mix an excluded
-  // list figure with an unexcluded detail figure.
+  // Stock derivation filters must match between list and detail queries.
   const detailFilterBy = filterBy?.excludeOrderId
     ? { excludeOrderId: filterBy.excludeOrderId }
     : undefined;
@@ -184,12 +165,133 @@ export function EntitySelect({
     isPending: isSelectedEntityPending,
   } = useEntityById(entityType, value, detailFilterBy);
 
+  return (
+    <>
+      <EntitySelectView
+        {...props}
+        onEditSelected={onEditSelected}
+        queryData={{
+          fetchedOptions,
+          listDataUpdatedAt,
+          queryLoading,
+          queryError,
+          selectedEntity,
+          detailDataUpdatedAt,
+          isSelectedEntityPending,
+        }}
+      />
+      {isEditOpen && isEditableEntityType(entityType) && (
+        <EntityEditDialog entityType={entityType} entityId={value} isOpen={isEditOpen} onClose={() => setIsEditOpen(false)} />
+      )}
+    </>
+  );
+}
+
+function EntitySelectView({
+  id,
+  entityType,
+  options: suppliedOptions,
+  optionLabel,
+  isLoading: suppliedLoading = false,
+  value,
+  selectedLabel,
+  onChange,
+  onBlur,
+  placeholder,
+  disabled = false,
+  selectionLocked = false,
+  error = false,
+  loadError,
+  className,
+  allowCreate = false,
+  createLabel,
+  onCreateNew,
+  filterBy,
+  dependsOn,
+  excludeIds,
+  autoSelectSingle = false,
+  alwaysShowSearch = false,
+  hideSearch = false,
+  showRemainingMass = true,
+  showRemainingDryMass = true,
+  formatSelectedLabel,
+  emptyHint,
+  noneOption,
+  onEditSelected,
+  editLabel,
+  "aria-describedby": ariaDescribedBy,
+  "aria-invalid": ariaInvalid,
+  isOpen,
+  setIsOpen,
+  searchQuery,
+  setSearchQuery,
+  queryData,
+}: EntitySelectProps & PickerState & { queryData?: EntityQueryData }) {
+  const [highlightedId, setHighlightedId] = useState<string | null>(null);
+  const [isDriverDialogOpen, setIsDriverDialogOpen] = useState(false);
+  const [isOperatorDialogOpen, setIsOperatorDialogOpen] = useState(false);
+  const [isVehicleDialogOpen, setIsVehicleDialogOpen] = useState(false);
+  const [isFeedstockTypeDialogOpen, setIsFeedstockTypeDialogOpen] = useState(false);
+  const [isFormulationDialogOpen, setIsFormulationDialogOpen] = useState(false);
+  const isQuickAddDialogOpen = isDriverDialogOpen || isOperatorDialogOpen ||
+    isVehicleDialogOpen || isFeedstockTypeDialogOpen || isFormulationDialogOpen;
+
+  const containerRef = useRef<HTMLDivElement>(null);
+  const popupRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const recoveryLinkRef = useRef<HTMLAnchorElement>(null);
+  const openedWithTouch = useRef(false);
+  const blurNotified = useRef(false);
+  const userClearedSource = useRef<string | null>(null);
+  const optionsSource = JSON.stringify([
+    entityType,
+    dependsOn,
+    Object.entries(filterBy ?? {}).sort(([a], [b]) => a.localeCompare(b)),
+  ]);
+  const entitySelectId = useId();
+  const listboxId = `${entitySelectId}-listbox`;
+  const remainingMassId = `${entitySelectId}-remaining-mass`;
+  const selectedLabelId = `${entitySelectId}-selected`;
+
+  const {
+    fetchedOptions = [],
+    listDataUpdatedAt = 0,
+    queryLoading = false,
+    queryError = null,
+    selectedEntity,
+    detailDataUpdatedAt = 0,
+    isSelectedEntityPending = false,
+  } = queryData ?? {};
+
+  const isLocal = suppliedOptions !== undefined;
+  const isLoading = isLocal ? suppliedLoading : queryLoading;
+  const fetchError = isLocal ? (loadError ?? null) : queryError;
+  const entityLabel = optionLabel ?? (entityType ? ENTITY_TYPE_LABELS[entityType] : "option");
+  const sourceOptions = suppliedOptions ?? fetchedOptions;
+  const normalizedSearch = searchQuery.trim().toLowerCase();
+  const searchedOptions = isLocal && normalizedSearch
+    ? sourceOptions.filter((option) =>
+        [option.name, option.code, option.subtitle].some((text) => text?.toLowerCase().includes(normalizedSearch)))
+    : sourceOptions;
+  const showMoreResults = !isLocal && !isLoading && !fetchError && fetchedOptions.length >= ENTITY_SEARCH_LIMIT;
+
+  // Hide already-picked options (e.g. blend materials chosen on other lines),
+  // but never hide the current selection so it stays visible in its own field.
+  const options =
+    excludeIds && excludeIds.length > 0
+      ? searchedOptions.filter(
+          (option) => option.id === value || !excludeIds.includes(option.id)
+        )
+      : searchedOptions;
+
   const listedOption = options.find((option) => option.id === value);
   const selectedOption =
-    selectedEntity?.id === value ? selectedEntity : listedOption;
+    isLocal ? suppliedOptions.find((option) => option.id === value)
+      : selectedEntity?.id === value ? selectedEntity : listedOption;
   const displayText = selectedOption
     ? (formatSelectedLabel ? formatSelectedLabel(selectedOption) : selectedOption.name)
-    : "";
+    : isLocal && value ? selectedLabel || value : "";
   // Identity remains detail-first, but stock is derived data: use whichever
   // query most recently succeeded. dataUpdatedAt intentionally survives a
   // failed refetch, so retained detail data cannot mask a fresher list result.
@@ -197,7 +299,7 @@ export function EntitySelect({
     ? selectFreshRemainingMass({
         listedOption,
         listDataUpdatedAt,
-        selectedEntity,
+        selectedEntity: isLocal ? selectedOption : selectedEntity,
         detailDataUpdatedAt,
         value,
       })
@@ -215,34 +317,44 @@ export function EntitySelect({
   // Only while the by-ID fetch is unresolved — once it settles without a
   // match (deleted or inaccessible entity) the ordinary placeholder returns.
   const isSelectionLoading = Boolean(
-    value && !selectedOption && isSelectedEntityPending,
+    !isLocal && value && !selectedOption && isSelectedEntityPending,
   );
 
-  const handleCreatedEntity = useCallback(
-    (entity: EntityOption) => {
-      onChange(entity.id);
-      setIsOpen(false);
-      setSearchQuery("");
-    },
-    [onChange]
+  const isInsidePicker = (target: EventTarget | null) => target instanceof Node && (
+    containerRef.current?.contains(target) || popupRef.current?.contains(target)
   );
-
-  const defaultCreateAction = useMemo(() => {
-    switch (entityType) {
-      case "driver":
-        return () => setIsDriverDialogOpen(true);
-      case "operator":
-        return () => setIsOperatorDialogOpen(true);
-      case "vehicle":
-        return () => setIsVehicleDialogOpen(true);
-      case "feedstockType":
-        return () => setIsFeedstockTypeDialogOpen(true);
-      case "formulation":
-        return () => setIsFormulationDialogOpen(true);
-      default:
-        return undefined;
-    }
-  }, [entityType]);
+  const notifyBlur = () => {
+    if (blurNotified.current) return;
+    blurNotified.current = true;
+    onBlur?.();
+  };
+  const closeMenu = (dismissed = false) => {
+    if (isOpen && (dismissed || !isInsidePicker(document.activeElement))) notifyBlur();
+    setIsOpen(false);
+    setSearchQuery("");
+    setHighlightedId(null);
+  };
+  const handlePickerBlur = (event: FocusEvent<HTMLElement>) => {
+    // Opening quick-add moves focus outside the picker without touching it.
+    if (isQuickAddDialogOpen || isInsidePicker(event.relatedTarget)) return;
+    // A pointer press on a non-focusable row can blur to the body before
+    // its click selects the value. Let selection or dismissal finish first.
+    if (isOpen && !event.relatedTarget) return;
+    notifyBlur();
+    closeMenu();
+  };
+  const handleCreatedEntity = (entity: EntityOption) => {
+    onChange(entity.id);
+    closeMenu();
+  };
+  const createActions = {
+    driver: () => setIsDriverDialogOpen(true),
+    operator: () => setIsOperatorDialogOpen(true),
+    vehicle: () => setIsVehicleDialogOpen(true),
+    feedstockType: () => setIsFeedstockTypeDialogOpen(true),
+    formulation: () => setIsFormulationDialogOpen(true),
+  };
+  const defaultCreateAction = isLocal ? undefined : createActions[entityType as keyof typeof createActions];
 
   const resolvedCreateAction = onCreateNew ?? defaultCreateAction;
   const hasCreateAction = Boolean(resolvedCreateAction);
@@ -254,94 +366,95 @@ export function EntitySelect({
     optionCount: options.length,
   });
 
-  // The none row only participates while the list is unsearched: a search is
-  // a lookup for a real entity, not a way to reach "none".
-  const showNoneOption = Boolean(noneOption) && searchQuery.length === 0;
-  const noneOffset = showNoneOption ? 1 : 0;
+  const canEdit = Boolean(value && selectedOption && onEditSelected);
+  const triggerDisabled = disabled || (selectionLocked && !canEdit);
+  const rows: SelectRow[] = [];
+  if (!disabled && !selectionLocked) {
+    if (noneOption && !searchQuery) {
+      rows.push({ id: `${entitySelectId}-none`, kind: "none" });
+    }
+    if (!isLoading && !fetchError) {
+      rows.push(...options.map((option): SelectRow => ({
+        id: `${entitySelectId}-option-${option.id}`,
+        kind: "option",
+        option,
+      })));
+    }
+  }
+  if (canEdit) rows.push({ id: `${entitySelectId}-edit`, kind: "edit" });
+  if (!disabled && !selectionLocked && shouldShowCreateAction) {
+    rows.push({ id: `${entitySelectId}-create`, kind: "create" });
+  }
+  const selectableRows = rows.filter((row) => row.kind !== "option" || !row.option.disabled);
+  // Without an explicit highlight, Enter picks the first entity (or None),
+  // never Edit or Add new; a locked picker only has its Edit row.
+  const activeRow = selectableRows.find((row) => row.id === highlightedId)
+    ?? selectableRows.find((row) => row.kind === "option" || row.kind === "none")
+    ?? (selectionLocked ? selectableRows[0] : undefined);
+  const activeId = isOpen ? activeRow?.id : undefined;
+  const showSearch = !disabled && !selectionLocked && !hideSearch &&
+    (alwaysShowSearch || searchQuery.length > 0 || showMoreResults || options.length > SELECT_SEARCH_MIN_OPTIONS);
 
-  // Clamp highlighted index when options change
-  const maxHighlightedIndex =
-    noneOffset + options.length + (shouldShowCreateAction ? 1 : 0) - 1;
-  const clampedHighlightedIndex = Math.min(
-    Math.max(0, highlightedIndex),
-    Math.max(0, maxHighlightedIndex),
-  );
-  const showSearch =
-    !hideSearch &&
-    (alwaysShowSearch ||
-      searchQuery.length > 0 ||
-      options.length > SEARCH_VISIBILITY_THRESHOLD);
+  const closeMenuFromEffect = useEffectEvent(closeMenu);
 
-  // Close dropdown when clicking outside
+  // Portalled content counts as inside the picker for pointer dismissal.
   useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (
-        containerRef.current &&
-        !containerRef.current.contains(event.target as Node)
-      ) {
-        setIsOpen(false);
-        setSearchQuery("");
+    function handlePointerDown(event: PointerEvent) {
+      if (!containerRef.current?.contains(event.target as Node) &&
+          !popupRef.current?.contains(event.target as Node)) {
+        closeMenuFromEffect(true);
       }
     }
-
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => document.removeEventListener("pointerdown", handlePointerDown);
   }, []);
 
-  // Focus input when dropdown opens and search is visible
   useEffect(() => {
-    if (isOpen && showSearch && inputRef.current) {
-      inputRef.current.focus();
+    if (isOpen && shouldFocusSearch(showSearch, openedWithTouch.current)) {
+      inputRef.current?.focus();
     }
   }, [isOpen, showSearch]);
 
-  // Scroll highlighted option into view
-  useEffect(() => {
-    if (isOpen && listboxRef.current) {
-      const highlightedElement = listboxRef.current.children[
-        clampedHighlightedIndex
-      ] as HTMLElement;
-      if (highlightedElement) {
-        highlightedElement.scrollIntoView({ block: "nearest" });
-      }
-    }
-  }, [clampedHighlightedIndex, isOpen]);
-
   // Auto-select when there is exactly one option and no current value
   useEffect(() => {
-    if (autoSelectSingle && !disabled && !value && options.length === 1 && !isLoading) {
+    if (userClearedSource.current !== optionsSource) userClearedSource.current = null;
+    if (autoSelectSingle && userClearedSource.current === null && !disabled && !selectionLocked && !value && options.length === 1 && !options[0].disabled && !isLoading && !fetchError && !searchQuery) {
       onChange(options[0].id);
     }
-  }, [autoSelectSingle, disabled, value, options, isLoading, onChange]);
+  }, [autoSelectSingle, disabled, selectionLocked, value, options, isLoading, fetchError, searchQuery, onChange, optionsSource]);
 
-  const handleSelect = useCallback(
-    (option: EntityOption) => {
-      onChange(option.id);
-      setIsOpen(false);
-      setSearchQuery("");
-    },
-    [onChange]
-  );
-
-  const handleSelectNone = () => {
-    onChange("");
-    setIsOpen(false);
-    setSearchQuery("");
+  const activateRow = (row: SelectRow) => {
+    if (row.kind === "option" && row.option.disabled) return;
+    triggerRef.current?.focus();
+    closeMenu();
+    switch (row.kind) {
+      case "none":
+        userClearedSource.current = optionsSource;
+        onChange("");
+        break;
+      case "option":
+        onChange(row.option.id);
+        break;
+      case "edit":
+        onEditSelected?.();
+        break;
+      case "create":
+        resolvedCreateAction?.();
+        break;
+    }
   };
-
-  const handleClear = useCallback(
-    (e: React.MouseEvent) => {
-      e.stopPropagation();
-      onChange("");
-    },
-    [onChange]
-  );
+  const handleClear = (event: React.MouseEvent) => {
+    event.stopPropagation();
+    userClearedSource.current = optionsSource;
+    triggerRef.current?.focus();
+    onChange("");
+  };
 
   // The empty-state renders a recovery link (`emptyHint.href`) only when the
   // list is genuinely empty (not loading/errored, no active search). While it's
-  // showing, Tab must NOT close the dropdown — that would unmount the link before
-  // focus could land on it, leaving it keyboard-unreachable.
+  // showing, forward Tab explicitly enters the portal before the next form field.
   const showEmptyStateRecoveryLink =
+    !disabled && !selectionLocked &&
     !isLoading &&
     !fetchError &&
     options.length === 0 &&
@@ -349,349 +462,316 @@ export function EntitySelect({
     !!emptyHint?.href;
 
   const handleKeyDown = (
-    e: KeyboardEvent<HTMLInputElement | HTMLButtonElement>,
+    e: KeyboardEvent<HTMLInputElement | HTMLButtonElement | HTMLAnchorElement>,
   ) => {
-    const optionCount =
-      noneOffset + options.length + (shouldShowCreateAction ? 1 : 0);
-
+    if (triggerDisabled) return;
+    if (!isOpen) {
+      if (["ArrowDown", "ArrowUp", "Enter", " "].includes(e.key)) {
+        e.preventDefault();
+        openedWithTouch.current = false;
+        blurNotified.current = false;
+        setIsOpen(true);
+        setHighlightedId(e.key === "ArrowUp" ? selectableRows.at(-1)?.id ?? null : null);
+      }
+      return;
+    }
+    const index = selectableRows.findIndex((row) => row.id === activeRow?.id);
     switch (e.key) {
       case "ArrowDown":
-        e.preventDefault();
-        setHighlightedIndex((prev) => Math.min(prev + 1, optionCount - 1));
-        break;
       case "ArrowUp":
+      case "Home":
+      case "End": {
+        if ((e.key === "Home" || e.key === "End") && e.currentTarget === inputRef.current) break;
         e.preventDefault();
-        setHighlightedIndex((prev) => Math.max(prev - 1, 0));
+        const next = e.key === "Home" ? 0 : e.key === "End" ? selectableRows.length - 1
+          : Math.max(0, Math.min(selectableRows.length - 1, index + (e.key === "ArrowDown" ? 1 : -1)));
+        setHighlightedId(selectableRows[next]?.id ?? null);
         break;
+      }
       case "Enter":
         e.preventDefault();
-        if (showNoneOption && clampedHighlightedIndex === 0) {
-          handleSelectNone();
-        } else if (
-          clampedHighlightedIndex === noneOffset + options.length &&
-          shouldShowCreateAction &&
-          resolvedCreateAction
-        ) {
-          // Create new option selected
-          resolvedCreateAction();
-          setIsOpen(false);
-          setSearchQuery("");
-        } else if (options[clampedHighlightedIndex - noneOffset]) {
-          handleSelect(options[clampedHighlightedIndex - noneOffset]);
-        }
+        if (activeRow) activateRow(activeRow);
         break;
       case "Escape":
         if (isOpen) {
           e.preventDefault();
           e.stopPropagation();
-          setIsOpen(false);
-          setSearchQuery("");
           // Escape may fire from the search input, which unmounts on
           // close — return focus to the trigger so keyboard users are
           // not dropped onto the document body.
           triggerRef.current?.focus();
+          closeMenu(true);
         }
         break;
       case "Tab":
-        // Let Tab move focus to the empty-state recovery link instead of
-        // closing (unmounting) the dropdown out from under it.
-        if (!showEmptyStateRecoveryLink) {
-          setIsOpen(false);
-          setSearchQuery("");
-        }
+        if (popupRef.current?.contains(e.currentTarget)) {
+          e.preventDefault();
+          closeMenu();
+          triggerRef.current?.focus();
+        } else if (showEmptyStateRecoveryLink && !e.shiftKey) {
+          e.preventDefault();
+          recoveryLinkRef.current?.focus();
+        } else closeMenu();
         break;
     }
   };
 
-  const handleToggle = useCallback(() => {
-    if (!disabled) {
-      setIsOpen((prev) => !prev);
+  const handleToggle = () => {
+    if (isOpen) closeMenu(true);
+    else if (!triggerDisabled) {
+      blurNotified.current = false;
+      setIsOpen(true);
     }
-  }, [disabled]);
+  };
 
-  const defaultPlaceholder = `Select ${ENTITY_TYPE_LABELS[entityType] || entityType}...`;
-  const defaultCreateLabel = `Add new ${ENTITY_TYPE_LABELS[entityType] || entityType}`;
+  const defaultPlaceholder = `Select ${entityLabel}...`;
+  const defaultCreateLabel = `Add new ${entityLabel}`;
 
-  const select = (
-    <div
-      ref={containerRef}
-      className={cn("relative", trailingActions ? "min-w-0 flex-1" : className)}
-    >
-      {/* Trigger */}
-      <div className="relative flex items-center">
-        <button
-          type="button"
-          ref={triggerRef}
-          id={id}
-          onClick={handleToggle}
-          onKeyDown={handleKeyDown}
-          disabled={disabled}
-          role="combobox"
-          aria-haspopup="listbox"
-          aria-expanded={isOpen}
-          aria-controls={listboxId}
-          // A wrapping FormField passes its id so its <label htmlFor> names the
-          // trigger; without one the placeholder is the only name available.
-          aria-label={id ? undefined : placeholder || defaultPlaceholder}
-          aria-describedby={triggerDescribedBy}
-          aria-invalid={ariaInvalid}
-          data-testid="entity-select-trigger"
-          className={cn(
-            "flex h-40 w-full items-center justify-between gap-2 border bg-[var(--color-background-white)] px-12 text-[var(--text-s)] transition-all",
-            "focus-visible:outline-none focus-visible:border-[var(--color-interaction)] focus-visible:ring-1 focus-visible:ring-[var(--color-interaction)]",
-            error
-              ? "border-[var(--color-signal-red)]"
-              : "border-[var(--color-border-secondary)]",
-            disabled
-              ? "cursor-not-allowed opacity-50"
-              : "cursor-pointer hover:border-[var(--color-interaction)]",
-            value && !disabled ? "pr-[72px]" : "pr-[40px]"
+  return (
+    <Popover.Root open={isOpen} onOpenChange={(open) => { if (!open) closeMenu(true); }}>
+      <div
+        ref={containerRef}
+        className={cn("relative", className)}
+        onFocus={(event) => { if (!isInsidePicker(event.relatedTarget)) blurNotified.current = false; }}
+        onBlur={handlePickerBlur}
+      >
+        {/* Trigger */}
+        <div className="relative flex items-center">
+          <button
+            type="button"
+            ref={triggerRef}
+            id={id}
+            onClick={handleToggle}
+            onPointerDown={(event) => { openedWithTouch.current = event.pointerType === "touch"; }}
+            onKeyDown={handleKeyDown}
+            disabled={triggerDisabled}
+            role="combobox"
+            aria-readonly={selectionLocked || undefined}
+            aria-haspopup="listbox"
+            aria-expanded={isOpen}
+            aria-controls={listboxId}
+            aria-activedescendant={activeId}
+            // A wrapping FormField passes its id so its <label htmlFor> names the
+            // trigger; without one the placeholder is the only name available.
+            aria-label={id ? undefined : placeholder || defaultPlaceholder}
+            aria-describedby={triggerDescribedBy}
+            aria-invalid={ariaInvalid}
+            data-testid="entity-select-trigger"
+            data-has-value={Boolean(value)}
+            className={cn(
+              "flex h-40 w-full items-center justify-between gap-2 border bg-[var(--color-background-white)] px-12 text-[var(--text-s)] transition-all",
+              "focus-visible:outline-none focus-visible:border-[var(--color-interaction)] focus-visible:ring-1 focus-visible:ring-[var(--color-interaction)]",
+              error
+                ? "border-[var(--color-signal-red)]"
+                : "border-[var(--color-border-secondary)]",
+              triggerDisabled
+                ? "cursor-not-allowed opacity-50"
+                : selectionLocked
+                  ? "cursor-pointer opacity-50"
+                  : "cursor-pointer hover:border-[var(--color-interaction)]",
+              value && !disabled && !selectionLocked ? "pr-72" : "pr-36"
+            )}
+          >
+            <span
+              id={selectedLabelId}
+              className={cn(
+                "min-w-0 flex-1 truncate text-left",
+                (value && !isSelectionLoading) || (!value && noneOption)
+                  ? "text-[var(--color-text-primary)]"
+                  : "text-[var(--color-text-tertiary)]"
+              )}
+            >
+              {displayText ||
+                (!value && noneOption
+                  ? noneOption.label
+                  : isSelectionLoading
+                    ? "Loading selection…"
+                    : placeholder || defaultPlaceholder)}
+            </span>
+            <CaretDownIcon
+              aria-hidden
+              data-trailing-icon=""
+              weight="bold"
+              className={cn(
+                "pointer-events-none absolute right-12 size-16 shrink-0 text-[var(--color-text-tertiary)] transition-transform",
+                isOpen && "rotate-180"
+              )}
+            />
+          </button>
+          {value && !disabled && !selectionLocked && (
+            <Button
+              variant="noOutline"
+              size="icon"
+              onClick={handleClear}
+              aria-label="Clear selection"
+              data-testid="entity-select-clear"
+              // The hit area ends where the chevron starts; align the X toward
+              // that edge with an 8px gap, keeping all 44px clickable.
+              className="absolute right-28 h-44 w-44 justify-end pr-8 hover:bg-[var(--color-background-medium)] text-[var(--color-text-tertiary)] hover:text-[var(--color-text-primary)]"
+            >
+              <XIcon aria-hidden weight="bold" className="size-16" />
+            </Button>
           )}
-        >
-          <span
-            id={selectedLabelId}
-            className={cn(
-              "min-w-0 flex-1 truncate text-left",
-              (value && !isSelectionLoading) || (!value && noneOption)
-                ? "text-[var(--color-text-primary)]"
-                : "text-[var(--color-text-tertiary)]"
-            )}
+        </div>
+
+        {remainingMass && (
+          <p
+            id={remainingMassId}
+            className="body-caption text-[var(--color-text-tertiary)] mt-4"
           >
-            {displayText ||
-              (!value && noneOption
-                ? noneOption.label
-                : isSelectionLoading
-                  ? "Loading selection…"
-                  : placeholder || defaultPlaceholder)}
-          </span>
-          <CaretDownIcon
-            aria-hidden
-            weight="bold"
-            className={cn(
-              "size-16 shrink-0 text-[var(--color-text-tertiary)] transition-transform",
-              isOpen && "rotate-180"
-            )}
-          />
-        </button>
-        {value && !disabled && (
-          <Button
-            variant="noOutline"
-            size="icon"
-            onClick={handleClear}
-            aria-label="Clear selection"
-            data-testid="entity-select-clear"
-            className="absolute right-[32px] h-24 w-24 hover:bg-[var(--color-background-medium)] text-[var(--color-text-tertiary)] hover:text-[var(--color-text-primary)]"
-          >
-            <XIcon aria-hidden weight="bold" className="size-16" />
-          </Button>
+            {formatRemainingMass(remainingMass, showRemainingDryMass)}
+          </p>
+        )}
+
+        {/* Dropdown */}
+        {isOpen && (
+          <Popover.Portal>
+            <Popover.Positioner
+              anchor={triggerRef}
+              sideOffset={MENU_SIDE_OFFSET}
+              collisionPadding={MENU_COLLISION_PADDING}
+              className="z-[var(--z-layer-popover)] w-[var(--anchor-width)]"
+            >
+              <Popover.Popup
+                ref={popupRef}
+                initialFocus={() => shouldFocusSearch(showSearch, openedWithTouch.current) ? inputRef.current : false}
+                finalFocus={false}
+                role="presentation"
+                className="flex max-h-[var(--available-height)] flex-col overflow-hidden bg-[var(--paper)] [border:var(--hair)]"
+              >
+                {/* Search input */}
+                {showSearch && (
+                  <div className="shrink-0 p-8">
+                    <div className="relative">
+                      <MagnifyingGlassIcon aria-hidden weight="bold" className="absolute left-12 top-1/2 -translate-y-1/2 size-16 text-[var(--color-text-tertiary)]" />
+                      <input
+                        ref={inputRef}
+                        role="combobox"
+                        aria-expanded={isOpen}
+                        aria-controls={listboxId}
+                        aria-activedescendant={activeId}
+                        type="text"
+                        value={searchQuery}
+                        onChange={(e) => {
+                          setSearchQuery(e.target.value);
+                          setHighlightedId(null);
+                        }}
+                        onKeyDown={handleKeyDown}
+                        placeholder={`Search ${entityLabel}...`}
+                        aria-label={`Search ${entityLabel}`}
+                        data-testid="entity-select-search"
+                        className="w-full h-[40px] pl-36 pr-12 border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] text-[var(--text-s)] placeholder:text-[var(--color-text-tertiary)] focus:outline-none focus:border-[var(--color-interaction)] focus:ring-1 focus:ring-[var(--color-interaction)]"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Options list */}
+                <ul
+                  id={listboxId}
+                  role="listbox"
+                  aria-label={`${entityLabel} options`}
+                  data-testid="entity-select-listbox"
+                  className="min-h-0 overflow-y-auto"
+                >
+                  {!disabled && !selectionLocked && (isLoading ? (
+                    <li className="flex items-center justify-center gap-2 px-16 py-12 text-[var(--color-text-tertiary)]">
+                      <SpinnerIcon aria-hidden weight="bold" className="size-16 animate-spin" />
+                      <span className="text-[var(--text-s)]">Loading...</span>
+                    </li>
+                  ) : fetchError ? (
+                    <li className="px-16 py-12 text-[var(--text-s)] text-[var(--color-signal-red)]">
+                      Error loading options
+                    </li>
+                  ) : options.length === 0 ? (
+                    // Explain WHY the list is empty and link the upstream fix; a
+                    // search miss keeps the plain "no match" reading instead.
+                    emptyHint && searchQuery.length === 0 ? (
+                      <li role="presentation" data-testid="entity-select-empty">
+                        <p className="px-12 py-10 body-small text-[var(--color-text-tertiary)]">
+                          {emptyHint.message}
+                        </p>
+                        {/*
+                          The fix reads as a row, not an inline link: full-width, its
+                          own hover background, and a 44px hit target, so it is reachable the
+                          same way an option is.
+                        */}
+                        {emptyHint.href && (
+                          <a
+                            ref={recoveryLinkRef}
+                            href={emptyHint.href}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onKeyDown={(event) => {
+                              if (event.key === "Tab" || event.key === "Escape") handleKeyDown(event);
+                            }}
+                            className="flex min-h-44 w-full items-center gap-8 px-12 py-8 body-small font-medium text-[var(--color-interaction)] transition-colors hover:bg-[var(--color-background-medium)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-interaction)]"
+                          >
+                            <ArrowSquareOutIcon aria-hidden size={16} weight="bold" />
+                            {emptyHint.linkLabel ?? "Open prerequisite"}
+                          </a>
+                        )}
+                      </li>
+                    ) : (
+                      <li role="presentation" data-testid="entity-select-empty" className="px-16 py-12 text-[var(--text-s)] text-[var(--color-text-tertiary)]">
+                        {searchQuery.length > 0 ? "No matches. Change or clear your search." : `No matching ${entityLabel} records.`}
+                      </li>
+                    )
+                  ) : null)}
+                  {rows.map((row) => (
+                    <EntitySelectRow
+                      key={row.id}
+                      row={row}
+                      active={activeId === row.id}
+                      value={value}
+                      noneOption={noneOption}
+                      editLabel={editLabel ?? `Edit ${selectedOption?.name}`}
+                      createLabel={createLabel || defaultCreateLabel}
+                      onActivate={() => activateRow(row)}
+                      onHighlight={() => setHighlightedId(row.id)}
+                    />
+                  ))}
+                  {!disabled && !selectionLocked && showMoreResults && (
+                    <li role="presentation" data-testid="entity-select-more-results" className="px-12 py-8 body-caption text-[var(--color-text-tertiary)]">
+                      More results may be available. Refine your search.
+                    </li>
+                  )}
+                </ul>
+              </Popover.Popup>
+            </Popover.Positioner>
+          </Popover.Portal>
         )}
       </div>
-
-      {remainingMass && (
-        <p
-          id={remainingMassId}
-          className="body-caption text-[var(--color-text-tertiary)] mt-4"
-        >
-          {formatRemainingMass(remainingMass, showRemainingDryMass)}
-        </p>
+      {!isLocal && (
+        <>
+          <DriverQuickAddDialog
+            isOpen={isDriverDialogOpen}
+            onClose={() => setIsDriverDialogOpen(false)}
+            onSuccess={handleCreatedEntity}
+          />
+          <OperatorQuickAddDialog
+            isOpen={isOperatorDialogOpen}
+            onClose={() => setIsOperatorDialogOpen(false)}
+            onSuccess={handleCreatedEntity}
+          />
+          <VehicleQuickAddDialog
+            isOpen={isVehicleDialogOpen}
+            onClose={() => setIsVehicleDialogOpen(false)}
+            onSuccess={handleCreatedEntity}
+          />
+          <FeedstockTypeQuickAddDialog
+            isOpen={isFeedstockTypeDialogOpen}
+            onClose={() => setIsFeedstockTypeDialogOpen(false)}
+            onSuccess={handleCreatedEntity}
+            defaultUsage={getFeedstockTypeDefaultUsage(filterBy)}
+          />
+          <FormulationQuickAddDialog
+            isOpen={isFormulationDialogOpen}
+            onClose={() => setIsFormulationDialogOpen(false)}
+            onSuccess={handleCreatedEntity}
+          />
+        </>
       )}
-
-      {/* Dropdown */}
-      {isOpen && (
-        <div
-          className="absolute z-[var(--z-layer-popover)] mt-4 w-full bg-[var(--paper)] [border:var(--hair)]"
-          role="presentation"
-        >
-          {/* Search input */}
-          {showSearch && (
-            <div className="p-8">
-              <div className="relative">
-                <MagnifyingGlassIcon aria-hidden weight="bold" className="absolute left-12 top-1/2 -translate-y-1/2 size-16 text-[var(--color-text-tertiary)]" />
-                <input
-                  ref={inputRef}
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                  placeholder={`Search ${ENTITY_TYPE_LABELS[entityType] || entityType}...`}
-                  aria-label={`Search ${ENTITY_TYPE_LABELS[entityType] || entityType}`}
-                  data-testid="entity-select-search"
-                  className="w-full h-[40px] pl-36 pr-12 border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] text-[var(--text-s)] placeholder:text-[var(--color-text-tertiary)] focus:outline-none focus:border-[var(--color-interaction)] focus:ring-1 focus:ring-[var(--color-interaction)]"
-                />
-              </div>
-            </div>
-          )}
-
-          {/* Options list */}
-          <ul
-            id={listboxId}
-            ref={listboxRef}
-            role="listbox"
-            aria-label={`${ENTITY_TYPE_LABELS[entityType] || entityType} options`}
-            data-testid="entity-select-listbox"
-            className="max-h-[280px] overflow-y-auto"
-          >
-            {showNoneOption && noneOption && (
-              <li
-                role="option"
-                aria-selected={!value}
-                data-testid="entity-select-none"
-                onClick={handleSelectNone}
-                onMouseEnter={() => setHighlightedIndex(0)}
-                className={cn(
-                  "px-12 py-8 cursor-pointer transition-colors",
-                  clampedHighlightedIndex === 0 &&
-                    "bg-[var(--color-background-medium)]",
-                  !value && "bg-[var(--color-background-interaction-light)]"
-                )}
-              >
-                <span className="block truncate text-[var(--text-s)] text-[var(--color-text-primary)]">
-                  {noneOption.label}
-                </span>
-                {noneOption.subtitle && (
-                  <span className="block body-small text-[var(--color-text-secondary)] mt-2">
-                    {noneOption.subtitle}
-                  </span>
-                )}
-              </li>
-            )}
-            {isLoading ? (
-              <li className="flex items-center justify-center gap-2 px-16 py-12 text-[var(--color-text-tertiary)]">
-                <SpinnerIcon aria-hidden weight="bold" className="size-16 animate-spin" />
-                <span className="text-[var(--text-s)]">Loading...</span>
-              </li>
-            ) : fetchError ? (
-              <li className="px-16 py-12 text-[var(--text-s)] text-[var(--color-signal-red)]">
-                Error loading options
-              </li>
-            ) : options.length === 0 ? (
-              // Explain WHY the list is empty and link the upstream fix; a
-              // search miss keeps the plain "no match" reading instead.
-              emptyHint && searchQuery.length === 0 ? (
-                <li>
-                  <p className="px-12 py-10 body-small text-[var(--color-text-tertiary)]">
-                    {emptyHint.message}
-                  </p>
-                  {/*
-                    The fix reads as a row, not an inline link: full-width, its
-                    own hover background, and a 44px hit target, so it is reachable the
-                    same way an option is.
-                  */}
-                  {emptyHint.href && (
-                    <a
-                      href={emptyHint.href}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      onBlur={(e) => {
-                        // Tab is allowed to land here (see handleKeyDown), so
-                        // closing falls to the link itself once focus leaves
-                        // the component; otherwise aria-expanded stays stale.
-                        if (
-                          !containerRef.current?.contains(
-                            e.relatedTarget as Node | null,
-                          )
-                        ) {
-                          setIsOpen(false);
-                          setSearchQuery("");
-                        }
-                      }}
-                      className="flex min-h-44 w-full items-center gap-8 px-12 py-8 body-small font-medium text-[var(--color-interaction)] transition-colors hover:bg-[var(--color-background-medium)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-interaction)]"
-                    >
-                      <ArrowSquareOutIcon aria-hidden size={16} weight="bold" />
-                      {emptyHint.linkLabel ?? "Open prerequisite"}
-                    </a>
-                  )}
-                </li>
-              ) : null
-            ) : (
-              options.map((option, index) => (
-                <li
-                  key={option.id}
-                  role="option"
-                  aria-selected={option.id === value}
-                  data-testid={`entity-option-${option.id}`}
-                  onClick={() => handleSelect(option)}
-                  onMouseEnter={() => setHighlightedIndex(index + noneOffset)}
-                  className={cn(
-                    "px-12 py-8 cursor-pointer transition-colors",
-                    index + noneOffset === clampedHighlightedIndex &&
-                      "bg-[var(--color-background-medium)]",
-                    option.id === value &&
-                      "bg-[var(--color-background-interaction-light)]"
-                  )}
-                >
-                  <EntityOptionText option={option} />
-                </li>
-              ))
-            )}
-
-            {/* Quick-add option */}
-            {shouldShowCreateAction && resolvedCreateAction && (
-              <li
-                role="option"
-                aria-selected={false}
-                data-testid="entity-select-create"
-                onClick={() => {
-                  resolvedCreateAction();
-                  setIsOpen(false);
-                  setSearchQuery("");
-                }}
-                onMouseEnter={() =>
-                  setHighlightedIndex(noneOffset + options.length)
-                }
-                className={cn(
-                  "mt-4 flex items-center gap-8 px-12 py-8 cursor-pointer text-[var(--color-interaction)] hover:bg-[var(--color-background-medium)] transition-colors",
-                  clampedHighlightedIndex === noneOffset + options.length &&
-                    "bg-[var(--color-background-medium)]"
-                )}
-              >
-                <PlusIcon aria-hidden weight="bold" className="size-16" />
-                <span className="text-[var(--text-s)]">
-                  {createLabel || defaultCreateLabel}
-                </span>
-              </li>
-            )}
-          </ul>
-        </div>
-      )}
-
-      <DriverQuickAddDialog
-        isOpen={isDriverDialogOpen}
-        onClose={() => setIsDriverDialogOpen(false)}
-        onSuccess={handleCreatedEntity}
-      />
-      <OperatorQuickAddDialog
-        isOpen={isOperatorDialogOpen}
-        onClose={() => setIsOperatorDialogOpen(false)}
-        onSuccess={handleCreatedEntity}
-      />
-      <VehicleQuickAddDialog
-        isOpen={isVehicleDialogOpen}
-        onClose={() => setIsVehicleDialogOpen(false)}
-        onSuccess={handleCreatedEntity}
-      />
-      <FeedstockTypeQuickAddDialog
-        isOpen={isFeedstockTypeDialogOpen}
-        onClose={() => setIsFeedstockTypeDialogOpen(false)}
-        onSuccess={handleCreatedEntity}
-        defaultUsage={getFeedstockTypeDefaultUsage(filterBy)}
-      />
-      <FormulationQuickAddDialog
-        isOpen={isFormulationDialogOpen}
-        onClose={() => setIsFormulationDialogOpen(false)}
-        onSuccess={handleCreatedEntity}
-      />
-    </div>
-  );
-
-  if (!trailingActions) return select;
-
-  // Actions sit outside the select's own box, so the dropdown and the stock
-  // caption keep the trigger's width.
-  return (
-    <div className={cn("flex items-start gap-8", className)}>
-      {select}
-      {trailingActions}
-    </div>
+    </Popover.Root>
   );
 }

@@ -12,6 +12,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { getStorageLocations } from "@/data-access/storage-locations";
+import { previewOutputStock } from "@/data-access/output-stock-operations";
 import { facilities } from "@/db/schema/facilities";
 import { productionRuns, reactors, storageLocations } from "@/db/schema";
 import { COMPLETED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
@@ -24,6 +25,7 @@ interface Fixture {
   reactorId: string;
   binId: string;
   runId: string;
+  runCode: string;
 }
 
 let fixture: Fixture | null = null;
@@ -79,15 +81,17 @@ beforeAll(async () => {
         startTime: new Date("2026-06-01T08:00:00Z"),
         endTime: new Date("2026-06-01T12:00:00Z"),
         biocharStorageLocationId: bin.id,
+        biocharMoisturePercent: 0,
         biocharDryMassKg: null,
       })
-      .returning({ id: productionRuns.id });
+      .returning({ id: productionRuns.id, code: productionRuns.code });
 
     return {
       facilityId: facility.id,
       reactorId: reactor.id,
       binId: bin.id,
       runId: run.id,
+      runCode: run.code,
     };
   });
 });
@@ -101,6 +105,20 @@ afterAll(async () => {
 });
 
 describe("storage location list with an unresolved output bin", () => {
+  it.each(["production_draw", "loss"] as const)("names the run to repair when previewing a %s", async (kind) => {
+    const { facilityId, binId, runCode } = requireFixture();
+    await expect(previewOutputStock(makeTestOrgContext(), {
+      storageLocationId: binId,
+      facilityId,
+      occurredAt: "2026-06-02T12:00:00.000Z",
+      kind,
+      wetMassKg: 1,
+      moisturePercent: 0,
+    })).rejects.toThrow(
+      `Production run ${runCode} has no dry biochar mass. Add the biochar wet mass and moisture to that run, then try again.`,
+    );
+  });
+
   it("still returns, with the bin and its lane total unavailable", async () => {
     const { facilityId, binId } = requireFixture();
     const result = await getStorageLocations(makeTestOrgContext(), {

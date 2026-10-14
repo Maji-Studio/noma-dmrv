@@ -201,7 +201,7 @@ test("gallery delivery and application create read edit", async ({ adminPage: pa
   await page.getByRole("button", { name: "New delivery", exact: true }).click();
   await page.locator("#deliveryDate").fill(FIFO_BROWSER_TIME);
   await selectEntity(page, "Order", f.order.id, f.order.code);
-  await page.locator("#storageLocationId").selectOption(f.bin.id);
+  await selectEntity(page, "Actual source bin", f.bin.id, f.bin.name);
   await page.locator("#deliveredWetMassKg").fill("2500");
   await fillStockMoisture(page, "delivery", "15");
   // The blocker renders once, under the wet-mass field, never a second time inside the preview.
@@ -229,7 +229,7 @@ test("gallery delivery and application create read edit", async ({ adminPage: pa
   await navigate(page, "applications", f.facility);
   await page.getByRole("button", { name: "New application", exact: true }).click();
   await page.locator("#applicationDate").fill(DATE);
-  await page.locator("#deliveryId").selectOption(delivery.id);
+  await selectEntity(page, "Delivery", delivery.id, delivery.code);
   await page.locator("#biocharAppliedTons").fill("1000");
   await page.locator("#fieldSizeHa").fill("1");
   await page.locator("#fieldIdentifier").fill("E2E Demonstration plot A");
@@ -317,32 +317,22 @@ test("gallery production run create read edit credit batch and sample read", asy
   await pairs(page, "sample-read", ["Transport"]);
 });
 
-test("gallery output bin reconciliation loss and correction", async ({ adminPage: page, testUsers }) => {
+test("gallery output bin lost mass and history", async ({ adminPage: page, testUsers }) => {
   const f = await seedOutputStockBrowserFixture(testUsers.admin.id, true);
   await bin(page, f);
-  await page.getByRole("button", { name: "Reconcile stock", exact: true }).click();
-  await fillStock(page, "600", "E2E stock count: drying only, no dry biochar loss.");
-  await pairs(page, "output-bin-reconciliation", ["Stock preview", "Reason"]);
-  await page.getByRole("button", { name: "Reconcile stock", exact: true }).last().click();
-  await expect(page.getByRole("dialog")).toHaveCount(0);
-  await bin(page, f);
-  await page.getByRole("button", { name: "Record loss", exact: true }).click();
+  await page.getByRole("button", { name: "Adjust stock", exact: true }).click();
   await fillStock(page, "120", "E2E spill during loading.");
   await pairs(page, "output-bin-loss", ["Stock preview", "Reason"]);
-  await page.getByRole("button", { name: "Record loss", exact: true }).last().click();
+  await page.getByRole("button", { name: "Save lost mass", exact: true }).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await bin(page, f);
-  await page.getByRole("button", { name: "Stock history", exact: true }).first().click();
+  await page.getByRole("button", { name: "History", exact: true }).click();
   const history = page.getByRole("dialog", { name: "Stock history", exact: true });
-  await history.locator("article").filter({ hasText: "E2E spill during loading." }).getByRole("button", { name: "Correct entry" }).click();
-  await fillStock(page, "12", "E2E corrected spill after scale ticket review.");
-  await pairs(page, "output-stock-correction", ["Proposed replacement", "Stock preview"], "Stock history");
-  await history.getByRole("button", { name: "Save correction", exact: true }).click();
-  await expect(history.getByText("E2E corrected spill after scale ticket review.", { exact: true }).first()).toBeVisible();
+  await history.locator("details").filter({ hasText: "E2E spill during loading." }).locator("summary").click();
   for (const viewport of VIEWPORTS) {
     await page.setViewportSize(viewport);
     await scrollTop(history);
-    await capture(page, `output-stock-correction-saved-${viewport.width}-history`);
+    await capture(page, `output-stock-lost-mass-${viewport.width}-history`);
   }
 });
 

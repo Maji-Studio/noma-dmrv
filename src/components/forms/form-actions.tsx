@@ -14,6 +14,7 @@ import {
   type FieldValues,
 } from "react-hook-form";
 import { Button } from "@/components/ui";
+import { FormDialogContext } from "@/components/ui/form-dialog-context";
 import { cn } from "@/lib/utils";
 import {
   useSideSheetActions,
@@ -49,6 +50,8 @@ interface FormActionsProps<
   /** Rendered under `errorMessage`: detail about the records the refusal named. */
   errorAction?: React.ReactNode;
   submitLabel?: string;
+  showSubmit?: boolean;
+  submitVariant?: React.ComponentProps<typeof Button>["variant"];
   submittingLabel?: string;
   defaultSubmitLabel?: string;
   /** Context-specific label for the secondary action. */
@@ -64,6 +67,8 @@ interface FormActionsProps<
   formId?: string;
   /** Sticky footer (default) — disable for nested inline forms. */
   sticky?: boolean;
+  /** Route Cancel through FormDialog even for a non-sticky dialog footer. */
+  guardDialogCancel?: boolean;
   /** Use `button` when actions render inside an owning parent form. */
   submitType?: "submit" | "button";
   /** Click handler for a non-submit action button. */
@@ -81,12 +86,15 @@ export function FormActions<
   errorMessage,
   errorAction,
   submitLabel,
+  showSubmit = true,
+  submitVariant = "primary",
   submittingLabel = "Saving...",
   defaultSubmitLabel = "Save",
   cancelLabel = "Cancel",
   submitDisabled = false,
   formId,
   sticky = true,
+  guardDialogCancel = sticky,
   submitType = "submit",
   onSubmitClick,
 }: FormActionsProps<TFieldValues, TContext, TTransformed>) {
@@ -94,21 +102,28 @@ export function FormActions<
   // sheet (edit -> back to read view, create -> guarded close) so every sheet
   // form behaves the same without per-list wiring. The caller's `onCancel`
   // still owns *presence*: no handler, no Cancel button. Nested inline forms
-  // (sticky={false}) and forms inside a Modal (context barrier) keep the
-  // caller-supplied handler.
+  // (sticky={false}) keep the caller-supplied handler by default.
+  // Dialog footers can opt into its guard independently of sticky layout.
   const sheetActions = useSideSheetActions();
+  const dialogActions = React.useContext(FormDialogContext);
   const inSheet = sticky && sheetActions !== null;
+  const inDialog = guardDialogCancel && dialogActions !== null;
   const handleCancel = onCancel
     ? inSheet
       ? sheetActions.cancel
-      : onCancel
+      : inDialog
+        ? dialogActions.cancel
+        : onCancel
     : undefined;
   return (
     <>
+      {control && dialogActions && (
+        <DialogFormBridge control={control} actions={dialogActions} busy={isSubmitting} />
+      )}
       {control && inSheet && (
         <SheetDirtyBridge control={control} reportDirty={sheetActions.reportDirty} />
       )}
-    <div
+    {(showSubmit || handleCancel || errorMessage) && <div
       ref={sticky ? reserveStickyFooterSpace : undefined}
       className={cn(
         "flex flex-col gap-16 border-t border-[var(--color-border-secondary)]",
@@ -123,22 +138,22 @@ export function FormActions<
     >
       <ServerError message={errorMessage} action={errorAction} />
       <div className="flex items-center justify-start gap-16">
-        <Button
+        {showSubmit && <Button
           type={submitType}
-          variant="primary"
+          variant={submitVariant}
           form={formId}
           onClick={onSubmitClick}
           disabled={isSubmitting || submitDisabled}
         >
           {isSubmitting ? submittingLabel : submitLabel ?? defaultSubmitLabel}
-        </Button>
+        </Button>}
         {handleCancel && (
           <Button type="button" variant="default" onClick={handleCancel} disabled={isSubmitting}>
             {cancelLabel}
           </Button>
         )}
       </div>
-    </div>
+    </div>}
     </>
   );
 }
@@ -195,5 +210,23 @@ function SheetDirtyBridge<
   React.useEffect(() => {
     reportDirty(isDirty);
   }, [isDirty, reportDirty]);
+  return null;
+}
+
+/** RHF state is synchronized into the dialog's imperative dismissal guard. */
+function DialogFormBridge<TFieldValues extends FieldValues, TContext, TTransformed>({
+  control,
+  actions,
+  busy,
+}: {
+  control: Control<TFieldValues, TContext, TTransformed>;
+  actions: NonNullable<React.ContextType<typeof FormDialogContext>>;
+  busy: boolean;
+}) {
+  const { isDirty, isSubmitting } = useFormState({ control });
+  React.useEffect(() => {
+    actions.report(control, { dirty: isDirty, busy: busy || isSubmitting });
+    return () => actions.report(control, null);
+  }, [actions, control, isDirty, busy, isSubmitting]);
   return null;
 }

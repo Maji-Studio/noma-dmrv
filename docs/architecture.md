@@ -36,8 +36,13 @@ components (UI)
   output-stock movement and lab sample writes use this layer (`make_biochar_product`,
   `update_biochar_product`, `record_output_stock_movement`, `record_lab_sample`,
   `update_lab_sample`, `delete_lab_sample`). UI product deletes
-  stay off the runner. UI delivery corrections use the runner through
-  `record_output_stock_movement` but stay off the API (decision 50).
+  stay off the runner. Lost mass form edits run `record_output_stock_movement`
+  with the unpublished `requireLatestCorrection` option. Delivery updates run
+  the UI-only `update_posted_delivery` operation: the delivery row, stock
+  correction and transport legs share its transaction. Both use the shared
+  stock writer with a strict latest-entry check. These UI options and the
+  delivery operation are not published in REST/MCP. The native correction
+  contract stays dependency-based.
 - The runner owns the transaction. Data-access ...InTransaction(ctx, tx, ...)
   functions and the helpers they call read and write only through `tx`,
   including reference checks and result enrichment. After-commit hooks run
@@ -219,8 +224,8 @@ change via `dependsOn` (backed by the standalone `useClearOnDependencyChange`).
 See [forms.md](./forms.md).
 
 The vehicle, driver and operator quick-add dialogs also edit: pass the loaded
-record (`vehicle`, `driver`, `operator`), or render `FleetEditDialog` with
-`{ kind, entityId }` to load it by id. A save seeds the picker's entity cache
+record (`vehicle`, `driver`, `operator`), or render `EntityEditDialog` with
+`{ entityType, entityId, isOpen, onClose }` to load it by id. A save seeds the picker's entity cache
 with the new name. Deletes refuse while any record references the row and name
 where it is used (`src/data-access/fleet-usage.ts`). A vehicle's type is
 copied onto each feedstock intake's derived transport leg, so a type or model
@@ -569,7 +574,9 @@ helpers and numeric/mass/ratio constants — see [forms.md](./forms.md)) ·
 `workflow_dispatch`) · `migration-gate.yml` (blocks schema drift) ·
 `enforce-main-source.yml` (branch-protection: `main` only from `staging`) ·
 `e2e.yml` and `e2e-live.yml` (Playwright, see [testing.md](./testing.md)) ·
-`isometric-health.yml` and `storage-health.yml` (daily read-only pings) ·
+`isometric-health.yml` and `storage-health.yml` (daily health checks; storage
+writes and deletes a probe object, and its opt-in `repair_cors` dispatch updates
+bucket CORS settings) ·
 `claude.yml` and `.coderabbit.yaml` (AI review).
 
 CI secrets come from 1Password via `1password/load-secrets-action` plus the

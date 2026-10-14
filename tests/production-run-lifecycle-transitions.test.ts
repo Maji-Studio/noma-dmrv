@@ -1,8 +1,9 @@
+import { createProductionRunOutputBin } from "./helpers/production-run-output-bin";
 import { productionVersion } from "./helpers/production-version";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { inArray } from "drizzle-orm";
 import { db } from "@/db";
-import { facilities, productionRuns, reactors } from "@/db/schema";
+import { facilities, productionRuns, reactors, storageLocations } from "@/db/schema";
 import { updateProductionRun } from "@/data-access/production-runs";
 import {
   ensureTestOrg,
@@ -12,6 +13,7 @@ import {
 
 describe("updateProductionRun terminal to running", () => {
   const createdRunIds: string[] = [];
+  const createdBinIds: string[] = [];
   const createdReactorIds: string[] = [];
   const createdFacilityIds: string[] = [];
 
@@ -23,6 +25,7 @@ describe("updateProductionRun terminal to running", () => {
         .delete(productionRuns)
         .where(inArray(productionRuns.id, createdRunIds));
     }
+    if (createdBinIds.length > 0) await db.delete(storageLocations).where(inArray(storageLocations.id, createdBinIds));
     if (createdReactorIds.length > 0) {
       await db.delete(reactors).where(inArray(reactors.id, createdReactorIds));
     }
@@ -57,6 +60,8 @@ describe("updateProductionRun terminal to running", () => {
         .returning({ id: reactors.id });
       createdReactorIds.push(reactor.id);
 
+      const outputBinId = await createProductionRunOutputBin(TEST_ORG_ID, facility.id);
+      createdBinIds.push(outputBinId);
       const [run] = await db
         .insert(productionRuns)
         .values({
@@ -65,6 +70,7 @@ describe("updateProductionRun terminal to running", () => {
           reactorId: reactor.id,
           code: `PR-REOPEN-${tag}`,
           status,
+          biocharStorageLocationId: outputBinId, biocharMoisturePercent: 0,
           startTime: new Date("2026-07-01T08:00:00Z"),
           endTime: new Date("2026-07-01T10:00:00Z"),
         })
