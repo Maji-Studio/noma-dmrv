@@ -97,6 +97,7 @@ catches outside the action's boundary (a best-effort follow-up after a commit,
 a rollback or release, or translating a library error into a `SafeError`); and
 actions that surface a library's own error message that is not a `SafeError`
 (the Better Auth member and invitation actions in `organizations.ts`).
+`pnpm check:action-boundaries` enforces this rule and holds the allowlist.
 
 ```typescript
 export async function createItem(input: CreateItem) {
@@ -327,6 +328,13 @@ runtime.
   detail routes are the reference.
 - No `"use cache"`, no Cache Components — React Query owns all caching. See
   [modern-patterns.md](./modern-patterns.md).
+
+### Hook ActionResult unwrapping
+
+Hooks unwrap an `ActionResult` with `unwrap()` from `src/hooks/types.ts`.
+The only exception is a hook that reads `field`, `conflict` or `warning`, or
+returns something other than `result.data`; typed errors go through
+`throwActionError`. `pnpm check:action-boundaries` enforces this rule.
 
 ### Authenticated read transport
 
