@@ -79,7 +79,7 @@ export async function getStorageLocationFn(
       const validated = getStorageLocationSchema.parse(data);
       return getStorageLocationWithFacility(ctx, validated.storageLocationId);
     },
-    { fallbackMessage: "Failed to load storage bin", log: { message: "server action failed", context: { op: "storage-location:get" } } },
+    { fallbackMessage: "Failed to load storage bin", log: { message: LOG_MESSAGE, context: { op: "storage-location:get" } } },
   );
 }
 
@@ -179,7 +179,7 @@ export async function archiveStorageLocationFn(
       const validated = archiveStorageLocationSchema.parse(data);
       return archiveStorageLocation(ctx, validated.storageLocationId, validated.expectedVersion);
     },
-    { fallbackMessage: "Failed to archive storage bin", log: { message: "server action failed", context: { op: "storage-location:archive" } } },
+    { fallbackMessage: "Failed to archive storage bin", log: { message: LOG_MESSAGE, context: { op: "storage-location:archive" } } },
   );
 }
 
@@ -194,7 +194,7 @@ export async function restoreStorageLocationFn(
       const validated = restoreStorageLocationSchema.parse(data);
       return restoreStorageLocation(ctx, validated.storageLocationId, validated.expectedVersion);
     },
-    { fallbackMessage: "Failed to restore storage bin", log: { message: "server action failed", context: { op: "storage-location:restore" } } },
+    { fallbackMessage: "Failed to restore storage bin", log: { message: LOG_MESSAGE, context: { op: "storage-location:restore" } } },
   );
 }
 

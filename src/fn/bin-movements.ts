@@ -106,6 +106,6 @@ export async function recordLossFn(
 /** The pooled feedstock stock card and its complete movement history. */
 export async function getFeedstockBinStockFn(storageLocationId: string) {
   return withAction(async (ctx) => getFeedstockBinStock(ctx, uuidSchema().parse(storageLocationId)), {
-    log: { message: "server action failed", context: { op: "bin-movement:stock" } },
+    log: { message: LOG_MESSAGE, context: { op: "bin-movement:stock" } },
   });
 }

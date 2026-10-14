@@ -31,6 +31,7 @@ import { SAVED_DETAILS_UNAVAILABLE } from "@/lib/copy-utils";
 class CreditBatchNotFoundError extends SafeError {}
 
 const MAX_BATCH_PREVIEWS = 50;
+const CREDIT_BATCH_NOT_FOUND = "Credit batch not found";
 
 /**
  * Get credit batch by ID
@@ -41,7 +42,7 @@ export async function getCreditBatchByIdFn(
   return withAction(async (ctx) => {
     const creditBatch = await getCreditBatchById(ctx, id);
     if (!creditBatch) {
-      throw new CreditBatchNotFoundError("Credit batch not found");
+      throw new CreditBatchNotFoundError(CREDIT_BATCH_NOT_FOUND);
     }
 
     return creditBatch;
@@ -50,7 +51,7 @@ export async function getCreditBatchByIdFn(
     log: { message: "Failed to get credit batch", context: { op: "credit-batch:get" } },
     mapError: (error) =>
       error instanceof CreditBatchNotFoundError
-        ? { success: false as const, error: "Credit batch not found" }
+        ? { success: false as const, error: CREDIT_BATCH_NOT_FOUND }
         : undefined,
   });
 }
