@@ -14,6 +14,7 @@ import {
   ENTITY_LIST_STALE_TIME_MS,
   entityKeys,
 } from "./entity-query-keys";
+import { unwrap } from "@/hooks/types";
 
 /**
  * Hook to search and load entity options
@@ -24,17 +25,14 @@ export function useEntityOptions(params: UseEntityOptionsParams) {
 
   return useQuery({
     queryKey: entityKeys.list(entityType, search, filterBy),
-    queryFn: async () => {
-      const result = await searchEntitiesFn({
-        entityType,
-        search,
-        filterBy,
-      });
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-      return result.data;
-    },
+    queryFn: async () =>
+      unwrap(
+        await searchEntitiesFn({
+          entityType,
+          search,
+          filterBy,
+        }),
+      ),
     staleTime: ENTITY_LIST_STALE_TIME_MS,
     enabled,
   });
@@ -56,11 +54,7 @@ export function useEntityById(
     queryKey: entityKeys.detail(entityType, id, filterBy),
     queryFn: async () => {
       if (!id) return null;
-      const result = await getEntityByIdFn(entityType, id, filterBy);
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-      return result.data;
+      return unwrap(await getEntityByIdFn(entityType, id, filterBy));
     },
     staleTime: ENTITY_DETAIL_STALE_TIME_MS,
     enabled: !!id,

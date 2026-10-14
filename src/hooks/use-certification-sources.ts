@@ -19,6 +19,7 @@ import type {
   MirrorDocumentToSourceInput,
 } from "@/schemas/certification-sources";
 import { certificationKeys } from "./use-certification";
+import { unwrap } from "@/hooks/types";
 
 const SOURCES_STALE_MS = 30_000;
 
@@ -78,9 +79,7 @@ export function useCandidateDocumentsForRemoval(
     staleTime: SOURCES_STALE_MS,
     queryFn: async () => {
       if (!removalId) return null;
-      const result = await loadCandidateDocumentsForRemoval({ removalId });
-      if (!result.success) throw new Error(result.error);
-      return result.data;
+      return unwrap(await loadCandidateDocumentsForRemoval({ removalId }));
     },
   });
 }
@@ -88,11 +87,8 @@ export function useCandidateDocumentsForRemoval(
 export function useRefreshInterruptedRemovalEvidence(removalId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (submissionId: string) => {
-      const result = await refreshInterruptedRemovalEvidence({ removalId, submissionId });
-      if (!result.success) throw new Error(result.error);
-      return result.data;
-    },
+    mutationFn: async (submissionId: string) =>
+      unwrap(await refreshInterruptedRemovalEvidence({ removalId, submissionId })),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: certificationKeys.all }),
   });
 }

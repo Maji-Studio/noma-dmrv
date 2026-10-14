@@ -28,7 +28,7 @@ import type {
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { invalidateStockEntityQueries } from "./entity-query-keys";
-import type { MutationCallbacks, OptimisticUpdateOptions } from "./types";
+import { unwrap, type MutationCallbacks, type OptimisticUpdateOptions } from "./types";
 
 // ============================================
 // Query Keys
@@ -59,13 +59,7 @@ export function useBiocharProducts(
 ) {
   return useQuery({
     queryKey: biocharProductKeys.list(filters),
-    queryFn: async () => {
-      const result = await getBiocharProductsFn(filters);
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-      return result.data;
-    },
+    queryFn: async () => unwrap(await getBiocharProductsFn(filters)),
     staleTime: 30000, // 30 seconds
     enabled: options?.enabled,
   });
@@ -77,13 +71,7 @@ export function useBiocharProducts(
 export function useBiocharProduct(productId: string, enabled = true) {
   return useQuery({
     queryKey: biocharProductKeys.detail(productId),
-    queryFn: async () => {
-      const result = await getBiocharProductByIdFn(productId);
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-      return result.data;
-    },
+    queryFn: async () => unwrap(await getBiocharProductByIdFn(productId)),
     enabled: enabled && !!productId,
     staleTime: 30000,
   });
@@ -103,13 +91,8 @@ export function useCreateBiocharProduct(
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (data: CreateBiocharProductData) => {
-      const result = await createBiocharProductFn(data);
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-      return result.data;
-    },
+    mutationFn: async (data: CreateBiocharProductData) =>
+      unwrap(await createBiocharProductFn(data)),
     onMutate: async (variables) => {
       await callbacks?.onMutate?.(variables);
     },

@@ -19,7 +19,7 @@ import {
   deleteProductionSampleFn,
 } from "@/fn/production-samples";
 import { productionRunKeys } from "@/hooks/use-production-runs";
-import type { MutationCallbacks } from "./types";
+import { unwrap, type MutationCallbacks } from "./types";
 
 // ============================================
 // Query Keys
@@ -44,9 +44,7 @@ export function useProductionSamples(productionRunId: string | undefined) {
     queryKey: productionSampleKeys.list(productionRunId ?? ""),
     queryFn: async () => {
       if (!productionRunId) return [];
-      const result = await getProductionSamplesFn(productionRunId);
-      if (!result.success) throw new Error(result.error);
-      return result.data;
+      return unwrap(await getProductionSamplesFn(productionRunId));
     },
     enabled: !!productionRunId,
     staleTime: 30_000,
@@ -69,11 +67,8 @@ export function useCreateProductionSample(
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (data: CreateProductionSampleData) => {
-      const result = await createProductionSampleFn(data);
-      if (!result.success) throw new Error(result.error);
-      return result.data;
-    },
+    mutationFn: async (data: CreateProductionSampleData) =>
+      unwrap(await createProductionSampleFn(data)),
     onSuccess: (data, variables) => {
       queryClient.invalidateQueries({
         queryKey: productionSampleKeys.list(variables.productionRunId),

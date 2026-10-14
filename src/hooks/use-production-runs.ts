@@ -41,7 +41,7 @@ import { invalidateOnboardingProgress } from "@/hooks/use-onboarding";
 import { ProductionRunConflictError } from "@/lib/production-runs/overlap-conflict";
 import { StaleVersionError, isStaleVersionFailure, throwActionError } from "@/lib/stale-version";
 
-import type { MutationCallbacks, OptimisticUpdateOptions } from "./types";
+import { unwrap, type MutationCallbacks, type OptimisticUpdateOptions } from "./types";
 import { invalidateStockEntityQueries } from "./entity-query-keys";
 
 const EXACT_ID_CHUNK_SIZE = 100;
@@ -112,11 +112,7 @@ export function useProductionRuns(
   const results = useQueries({
     queries: requests.map((request) => ({
       queryKey: productionRunKeys.list(request),
-      queryFn: async ({ signal }) => {
-        const result = await getProductionRunsRead(request, { signal });
-        if (!result.success) throw new Error(result.error);
-        return result.data;
-      },
+      queryFn: async ({ signal }) => unwrap(await getProductionRunsRead(request, { signal })),
       staleTime: 30000,
       enabled: options?.enabled,
     })),
@@ -144,13 +140,7 @@ export function useProductionRuns(
 export function useProductionRun(productionRunId: string, enabled = true) {
   return useQuery({
     queryKey: productionRunKeys.detail(productionRunId),
-    queryFn: async () => {
-      const result = await getProductionRunByIdFn(productionRunId);
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-      return result.data;
-    },
+    queryFn: async () => unwrap(await getProductionRunByIdFn(productionRunId)),
     enabled: enabled && !!productionRunId,
     retry: false,
     staleTime: 30000,
@@ -163,13 +153,7 @@ export function useProductionRun(productionRunId: string, enabled = true) {
 export function useProductionRunStats(facilityId?: string, enabled = true) {
   return useQuery({
     queryKey: productionRunKeys.stats(facilityId),
-    queryFn: async ({ signal }) => {
-      const result = await getProductionRunStatsRead(facilityId, { signal });
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-      return result.data;
-    },
+    queryFn: async ({ signal }) => unwrap(await getProductionRunStatsRead(facilityId, { signal })),
     enabled,
     staleTime: 30000,
   });
@@ -184,13 +168,7 @@ export function useProductionRunReadings(
 ) {
   return useQuery({
     queryKey: productionRunKeys.readings(productionRunId),
-    queryFn: async () => {
-      const result = await getProductionRunReadingsFn(productionRunId);
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-      return result.data;
-    },
+    queryFn: async () => unwrap(await getProductionRunReadingsFn(productionRunId)),
     enabled: enabled && !!productionRunId,
     staleTime: 30000,
   });
