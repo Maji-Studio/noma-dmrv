@@ -398,7 +398,7 @@ Decided 2026-10-09 (supervisor decision during Phase 4s, from the first Schemath
 Decided 2026-10-09 (supervisor decision during Phase 4a review):
 
 48. **Production-run responses carry UTC instants and reference ids only**, without facility codes or the facility time zone. A joined mutable field would change the response body under an unchanged strong ETag. Clients read the zone from `/facilities` or `whoami`.
-49. **The operation runner retries operations aborted before COMMIT** with a deadlock (40P01), serialization failure (40001) or lock timeout (55P03), up to a fixed attempt cap within the original deadline. Exhausted retries answer the retryable `concurrent_write_retry` (409). Claim-lock waits still answer `idempotency_in_progress`, and an exhausted deadline answers `deadline_exceeded`. See `data/lock-order` in [open questions](../open-questions.md#run-writers-feedstock-edits-and-output-postings-lock-in-different-orders-datalock-order-opened-2026-10-09).
+49. **The operation runner retries operations aborted before COMMIT** with a deadlock (40P01), serialization failure (40001) or lock timeout (55P03), up to a fixed attempt cap within the original deadline. Exhausted retries answer the retryable `concurrent_write_retry` (409). Claim-lock waits still answer `idempotency_in_progress`, and an exhausted deadline answers `deadline_exceeded`. See `data/lock-order` in [open questions](../open-questions-architecture.md#run-writers-feedstock-edits-and-output-postings-lock-in-different-orders-datalock-order-opened-2026-10-09).
 
 Decided 2026-10-12 (Kenji, round 6, Phase 4b):
 
@@ -649,7 +649,7 @@ The output-bin stock read on REST and MCP. Decisions 69 to 72 record the round 8
 
 **Verification:** full suite 7,135 passed. `pnpm eval:mcp` passes all seven cases. In the new stock case (5/10 calls) the agent read `get_bin_stock`, previewed the loss with PR-12's `layerId`, saved nothing and asked for the lost material's moisture.
 
-**Follow-ups:** projection cost grows with bin history (`data/output-stock-projection-cost` in [open questions](../open-questions.md#output-stock-projection-cost-grows-with-bin-history-dataoutput-stock-projection-cost-opened-2026-10-14)). The `ingredient_snapshot_mismatch` sentence says "until the product is repaired" because the repair path is not settled (`data/product-ingredient-snapshot-repair` in [open questions](../open-questions.md#product-ingredient-snapshot-repair-has-no-operator-action-dataproduct-ingredient-snapshot-repair-opened-2026-10-14)).
+**Follow-ups:** projection cost grows with bin history (`data/output-stock-projection-cost` in [open questions](../open-questions-architecture.md#output-stock-projection-cost-grows-with-bin-history-dataoutput-stock-projection-cost-opened-2026-10-14)). The `ingredient_snapshot_mismatch` sentence says "until the product is repaired" because the repair path is not settled (`data/product-ingredient-snapshot-repair` in [open questions](../open-questions-architecture.md#product-ingredient-snapshot-repair-has-no-operator-action-dataproduct-ingredient-snapshot-repair-opened-2026-10-14)).
 
 ## 21. Phase 5b-1 results (2026-10-14)
 
@@ -673,9 +673,4 @@ Customer and location lookups, orders and the order balance read on REST and MCP
 
 **Verification for commit 6:** 22 offline hook tests pass with Schemathesis 4.29.3. `pnpm typecheck` passes; `pnpm lint` passes with 14 warnings in untouched files. Shell syntax and diff whitespace checks pass. Local Schemathesis on a migrated throwaway database: 5,363 cases, 0 failures. The first run found two bugs, both fixed in this commit: a quantity of 5e-324 reached the `real` column and answered 500 (order quantity now has a 0.001 kg minimum), and the shared calendar-date check refused real dates in years 1 to 99.
 
-**Follow-ups:** move each item into `docs/open-questions.md` after that file is split; it is at its 1000-line cap.
-
-- Validate or sign keyset cursor positions across every reader that uses `lookupPosition`, with a test per reader. A re-encoded cursor with a foreign or unknown `position.id` currently returns 200 with an empty or shifted page instead of 404. The binding covers organization, resource and filters, but not the position. No rows leak.
-- Fix the order list and read view's browser-zone date formatting (`order-list.tsx:62`, `order-read-sections.tsx:36`), which shows the previous day west of UTC. The form fix is already in commit 1.
-- Decide with Kenji whether to migrate `orders.quantity_kg` from `real`. It cannot preserve 0.001 kg steps above about 16,777 kg; this phase changes no column type.
-- Give `positiveMassKgSchema` a 0.001 kg minimum for every caller. Zod's `multipleOf(0.001)` passes denormal values such as 5e-324: feedstock total, allocation and PATCH wet mass can then be stored as zero (`src/schemas/feedstocks.ts:70,110,173`); run draws and product source mass are refused with a typed 422. Orders already have the minimum.
+Follow-ups are tracked in [`api/keyset-cursor-position`](../open-questions-architecture.md#keyset-cursors-accept-foreign-or-unknown-positions-apikeyset-cursor-position-opened-2026-10-14), [`orders/order-date-display`](../open-questions-architecture.md#order-dates-display-the-previous-day-west-of-utc-ordersorder-date-display-opened-2026-10-14), [`orders/quantity-real-column`](../open-questions.md#order-quantity-loses-gram-precision-at-large-masses-ordersquantity-real-column-opened-2026-10-14) and [`api/mass-input-minimum`](../open-questions-architecture.md#positive-mass-inputs-can-be-stored-as-zero-apimass-input-minimum-opened-2026-10-14).
