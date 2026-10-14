@@ -108,9 +108,8 @@ export async function saveFacilityCertifierMapping(
   return withAction(async (orgCtx) => {
     requireOrgRole(orgCtx, "admin");
     const parsed = saveMappingSchema.parse(input);
-    // certifier_projects.facilityId has no FK to facilities(id), so an org
-    // admin could otherwise insert a row pairing their organizationId with a
-    // foreign facility UUID (cross-org squatting on externalFacilityId).
+    // Check facility ownership before registry reads. The composite FK and
+    // upsert organization guard also enforce it at the persistence boundary.
     await requireOrgFacility(orgCtx, parsed.facilityId);
 
     if (
