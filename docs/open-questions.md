@@ -360,20 +360,13 @@ Pure starter residue; org scoping came later via ADR 0010.
   registration and rate-limit classification), delivery corrections, and
   tests for ordinary-only, correction-only, both and neither credentials.
 
-### Sub-bin stock is not readable on the API (`api/sub-bin-reads`, opened 2026-10-12)
+### Output stock projection cost grows with bin history (`data/output-stock-projection-cost`, opened 2026-10-14)
 
-- Split output bins expose no sub-bin or remaining-stock read. A loss with
-  `sources` names production-run layers that clients find through runs and
-  movement history, without seeing what each layer still holds. Decision 55
-  deferred it.
-- **Next after Phase 5a** (round 7 Q58, its own PR). Design: one consistent
-  snapshot and one evaluation instant for the whole projection, deterministic
-  serialization, ETag = hash of the published body (distinct from
-  `basisFingerprint`), and defined behaviour for archived, null, ordering and
-  size limits.
-- **Resolve via:** a stock-bearing read model whose ETag is that body hash
-  rather than the storage-location version, then a REST path
-  (`GET /storage-locations/{idOrCode}/stock`) and an MCP tool (`get_bin_stock`).
+- Every stock reader (posting, UI and API) reads all of a bin's rows before
+  counting held layers, so cost grows with bin history. No cap or paging was
+  added to the [stock read](./output-stock.md#api-stock-read).
+- **Resolve via:** a held-layer index or a materialized balance if a real bin
+  gets slow.
 
 ### A multi-sample create must not assume one credit batch or one sampling time (`api/multi-sample-create`, opened 2026-10-13)
 

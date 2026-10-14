@@ -120,6 +120,29 @@ key fails. Delivery corrections also lock the delivery before checking for
 applications. Posted product and delivery measurements cannot be silently edited
 or deleted through ordinary CRUD forms.
 
+## API stock read
+
+`GET /api/v1/storage-locations/{idOrCode}/stock` and MCP `get_bin_stock`
+return the same current stock body, under `biochar-products:read`. An optional
+`facilityId` narrows the lookup. Only biochar and product bins answer, including
+archived bins; a feedstock bin returns 422 `validation_failed`.
+
+`subBins` lists held layers with their run or product code and the `layerId`
+a split-bin loss takes in `sources`. Mix bins still list each layer's dry
+biochar and solids, but per-layer `estimatedWetKg`, `estimatedMoisturePercent`
+and `moistureBasis` are null. The pile's wet and moisture figures are in
+`totals`, because a mix pile has one moisture.
+
+Unresolved stock returns 200 with `status: "unresolved"`, a fixed sentence in
+`unresolvedReason`, `totals: null` and `subBins: []`. A resolved empty bin has
+zero mass totals. Kilograms round to 3 decimal places and percentages to 2.
+The read includes stock figures only. Use `find_output_stock_movements` for
+history and the product detail read for source runs.
+
+See [architecture.md](./architecture.md#output-bin-stock-read) for the snapshot
+and ETag contract. A read reserves no stock; use the loss dry run's
+`basisFingerprint` for its optimistic check.
+
 ## Code and verification
 
 The pure planner lives in `src/lib/output-stock/`. Scoped projections, preview,

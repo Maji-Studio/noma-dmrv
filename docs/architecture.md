@@ -775,6 +775,19 @@ name search and coordinates in decimal degrees. Its cursor also binds the
 supplier ID; a missing or foreign supplier returns 404, including when it has
 no locations. Supplier locations have no code or archive column.
 
+### Output-bin stock read
+
+`GET /api/v1/storage-locations/{idOrCode}/stock` and MCP `get_bin_stock`
+share the app picker's projection. The whole read uses one repeatable read,
+read only snapshot: the bin lookup runs first, then the server captures one
+instant for the projection. The published body carries no evaluation instant.
+
+The REST ETag is `"sha256-..."` over the published body and representation
+revision. It is a read validator, not a reservation or a write precondition.
+A loss's optimistic check stays the dry run's `basisFingerprint`.
+See [output-stock.md](./output-stock.md#api-stock-read) for bins, figures and
+unresolved stock.
+
 ### Public API contract
 
 Published UUID inputs accept either case and are lowercased before the operation
