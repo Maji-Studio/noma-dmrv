@@ -6,7 +6,7 @@ import { and, eq, sql } from 'drizzle-orm';
 import { db } from '@/db';
 import { biocharProducts, binMovements, outputStockAllocations, outputStockRunAllocations, storageLocations, productionRuns, deliveries } from '@/db/schema';
 import { createBiocharProduct } from '@/data-access/biochar-product-create';
-import { createOrder } from '@/data-access/orders';
+import { createOrderInTransaction } from '@/data-access/orders';
 import { getDeliveryAllocationProvenance } from '@/data-access/delivery-allocation-provenance';
 import { createDelivery, deleteDelivery } from '@/data-access/delivery-output-writes';
 import { updateDelivery } from '@/lib/operations/deliveries';
@@ -34,7 +34,7 @@ async function fixture() {
     const product = await createBiocharProduct(f.ctx, productInput);
     expect((await createBiocharProduct(f.ctx, productInput)).id).toBe(product.id);
   }
-  const order = await createOrder(f.ctx, { code: `E2E-FIFO-O-${f.tag}`, facilityId: f.facility.id, customerId: f.customer.id, formulationId: f.recipe.id, orderDate: new Date('2026-09-12'), quantityKg: 5000, packaging: 'loose' });
+  const order = await db.transaction(tx => createOrderInTransaction(f.ctx, tx, { code: `E2E-FIFO-O-${f.tag}`, facilityId: f.facility.id, customerId: f.customer.id, formulationId: f.recipe.id, orderDate: new Date('2026-09-12'), quantityKg: 5000, packaging: 'loose' }));
   const input = { storageLocationId: f.bin.id, facilityId: f.facility.id, occurredAt: '2026-09-14T12:00:00.000Z', kind: 'delivery' as const, wetMassKg: 2000, moisturePercent: 30 };
   const preview = await previewOutputStock(f.ctx, input);
   const deliveryInput = { code: `E2E-FIFO-D-${f.tag}`, orderId: order.id, facilityId: f.facility.id, deliveryDate: new Date('2026-09-14T12:00:00.000Z'), storageLocationId: f.bin.id, deliveredWetMassKg: 2000, moistureContentPercent: 30, idempotencyKey: randomUUID(), expectedProductVersions: preview.expectedProductVersions, basisFingerprint: preview.basisFingerprint };
@@ -116,7 +116,7 @@ describe('output FIFO transactions', () => {
     expect((await previewOutputStock(f.ctx, { ...f.input, occurredAt: '2026-09-10T12:00:00.000Z', wetMassKg: 1500, moisturePercent: 15 })).blockingMessage).toMatch(/Not enough dry biochar/);
     await expect(previewOutputStock({ ...f.ctx, organizationId: 'other-org' }, f.input)).rejects.toThrow('not found');
     const bins = await db.insert(storageLocations).values(Array.from({ length: 24 }, (_, i) => ({ organizationId: f.ctx.organizationId, facilityId: f.facility.id, code: `E2E-FIFO-E${i}-${f.tag}`, name: `E2E Empty ${i} ${f.tag}`, type: 'product_bin' as const, formulationId: f.pure.id }))).returning();
-    const emptyOrder = await createOrder(f.ctx, { code: `E2E-FIFO-EMPTY-${f.tag}`, facilityId: f.facility.id, customerId: f.customer.id, formulationId: f.pure.id, orderDate: new Date('2026-09-14'), quantityKg: 100, packaging: 'loose' });
+    const emptyOrder = await db.transaction(tx => createOrderInTransaction(f.ctx, tx, { code: `E2E-FIFO-EMPTY-${f.tag}`, facilityId: f.facility.id, customerId: f.customer.id, formulationId: f.pure.id, orderDate: new Date('2026-09-14'), quantityKg: 100, packaging: 'loose' }));
     expect(emptyOrder.formulationId).toBe(f.pure.id);
     expect(await getMatchingOutputBins(f.ctx, { facilityId: f.facility.id, formulationId: f.pure.id })).toHaveLength(bins.length);
     await expect(createDelivery(f.ctx, { ...f.deliveryInput, orderId: emptyOrder.id, deliveredWetMassKg: 50 })).rejects.toThrow('matching');
@@ -181,7 +181,7 @@ describe('output FIFO transactions', () => {
       products.push(await createBiocharProduct(f.ctx, await withProductStockFingerprint(f.ctx, { code: `E2E-FIFO-TINY-P${index}-${f.tag}`, facilityId: f.facility.id, formulationId: f.pure.id, placedAt: input.occurredAt,
         sourceBiocharStorageLocationId: f.source.id, storageLocationId: bin.id, massKg, moistureContentPercent: 0, waterAddedKg: 0, composition: {}, idempotencyKey: randomUUID() })));
     }
-    const order = await createOrder(f.ctx, { code: `E2E-FIFO-TINY-O-${f.tag}`, facilityId: f.facility.id, customerId: f.customer.id, formulationId: f.pure.id, orderDate: new Date('2026-09-14'), quantityKg: 1, packaging: 'loose' });
+    const order = await db.transaction(tx => createOrderInTransaction(f.ctx, tx, { code: `E2E-FIFO-TINY-O-${f.tag}`, facilityId: f.facility.id, customerId: f.customer.id, formulationId: f.pure.id, orderDate: new Date('2026-09-14'), quantityKg: 1, packaging: 'loose' }));
     let lastDelivery;
     for (const [index, wet, moisture] of [[0, 0.001, 40], [1, 0.004, 60]] as const) {
       const input = { storageLocationId: bin.id, facilityId: f.facility.id, occurredAt: '2026-09-14T12:00:00.000Z', kind: 'delivery' as const, wetMassKg: wet, moisturePercent: moisture };

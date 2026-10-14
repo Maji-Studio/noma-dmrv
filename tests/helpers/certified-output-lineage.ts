@@ -4,7 +4,7 @@ import {
   applicationOutputAllocations, applications, certificationSubmissions, certifierRemovals, creditBatchApplications, creditBatchProductionRuns,
   creditBatches, deliveries, feedstocks, productionProcesses,
 } from "@/db/schema";
-import { createOrder } from "@/data-access/orders";
+import { createOrderInTransaction } from "@/data-access/orders";
 import type { seedOutputStockParents } from "./output-stock-fixture";
 
 type Parents = Awaited<ReturnType<typeof seedOutputStockParents>>;
@@ -41,8 +41,8 @@ export async function certifyOutputLineage(f: Parents, lineage: CertifiedOutputL
   const organizationId = f.ctx.organizationId;
   const suffix = `${f.tag}-${lineage.runId.slice(0, 4)}`;
   const [intake] = await db.select({ feedstockTypeId: feedstocks.feedstockTypeId }).from(feedstocks).where(eq(feedstocks.organizationId, organizationId));
-  const order = await createOrder(f.ctx, { code: `E2E-OSL-O-${suffix}`, facilityId: f.facility.id, customerId: f.customer.id,
-    formulationId: f.pure.id, orderDate: new Date(LINEAGE_TIME), quantityKg: DELIVERED_KG, packaging: "loose" });
+  const order = await db.transaction(tx => createOrderInTransaction(f.ctx, tx, { code: `E2E-OSL-O-${suffix}`, facilityId: f.facility.id, customerId: f.customer.id,
+    formulationId: f.pure.id, orderDate: new Date(LINEAGE_TIME), quantityKg: DELIVERED_KG, packaging: "loose" }));
   const [delivery] = await db.insert(deliveries).values({ organizationId, code: `E2E-OSL-D-${suffix}`, facilityId: f.facility.id, orderId: order.id,
     storageLocationId: lineage.deliveryBinId ?? f.bin.id, deliveryDate: new Date(LINEAGE_TIME), status: "delivered", deliveredWetMassKg: DELIVERED_KG, massDryKg: DELIVERED_KG }).returning();
   const [application] = await db.insert(applications).values({ organizationId, code: `E2E-OSL-A-${suffix}`, deliveryId: delivery.id,

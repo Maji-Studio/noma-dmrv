@@ -3,8 +3,9 @@ import { sumNumeric } from "@/db/aggregate";
 import { deliveries, orders } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import { deliveryOrderBalanceMessage } from "@/lib/delivery-order-balance";
+import { orderQuantityBelowAllocated } from "@/lib/order-domain-errors";
 import { SafeError } from "@/lib/errors";
-import { formatStockMinimumKg, isStockOverdraw } from "@/lib/stock-overdraw";
+import { isStockOverdraw } from "@/lib/stock-overdraw";
 import { and, eq, isNull, ne } from "drizzle-orm";
 import { requireOrgScope } from "./utils";
 
@@ -45,9 +46,7 @@ export async function assertOrderQuantityCoversAllocations(
     params.orderId,
   );
   if (isStockOverdraw(allocatedWetKg, params.orderQuantityKg)) {
-    throw new SafeError(
-      `Order quantity cannot be less than the ${formatStockMinimumKg(allocatedWetKg)} already allocated to deliveries.`,
-    );
+    throw orderQuantityBelowAllocated(allocatedWetKg);
   }
 }
 
