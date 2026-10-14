@@ -9,12 +9,21 @@ describe("parseCalendarDate", () => {
     ["2026-10-06", "2026-10-06T00:00:00.000Z"],
     ["2024-02-29", "2024-02-29T00:00:00.000Z"],
     ["2026-12-31", "2026-12-31T00:00:00.000Z"],
+    ["0020-02-29", "0020-02-29T00:00:00.000Z"],
+    ["2000-02-29", "2000-02-29T00:00:00.000Z"],
+    ["0001-01-01", "0001-01-01T00:00:00.000Z"],
+    ["0099-12-31", "0099-12-31T00:00:00.000Z"],
+    ["9999-12-31", "9999-12-31T00:00:00.000Z"],
   ])("decodes %s to UTC midnight", (value, iso) => {
     expect(parseCalendarDate(value)?.toISOString()).toBe(iso);
   });
 
   it.each([
     "2026-02-31",
+    "0021-02-29",
+    "1900-02-29",
+    "0000-01-01",
+    "10000-01-01",
     "2026-02-29",
     "2026-13-01",
     "2026-00-10",
@@ -31,6 +40,21 @@ describe("parseCalendarDate", () => {
 
 describe("calendarDateSchema", () => {
   const schema = calendarDateSchema();
+
+  it.each(["0020-02-29", "2000-02-29", "0001-01-01", "9999-12-31"])("decodes and revalidates %s", value => {
+    const date = schema.parse(value);
+    expect(date.toISOString()).toBe(`${value}T00:00:00.000Z`);
+    expect(schema.parse(date)).toEqual(date);
+  });
+
+  it.each(["0021-02-29", "1900-02-29", "0000-01-01", "10000-01-01"])("rejects %s as a string and rejects decoded Dates outside the year range", value => {
+    expect(schema.safeParse(value).success).toBe(false);
+    if (value === "0000-01-01" || value === "10000-01-01") {
+      const date = new Date(0);
+      date.setUTCFullYear(Number(value.split("-")[0]), 0, 1);
+      expect(schema.safeParse(date).success).toBe(false);
+    }
+  });
 
   it("round-trips a business date regardless of the server's time zone", () => {
     const decoded = schema.parse("2026-10-06");

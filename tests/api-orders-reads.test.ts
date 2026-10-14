@@ -101,6 +101,19 @@ describe("order REST reads", { timeout: READ_TIMEOUT_MS }, () => {
     await lookupProblem(await balance(first.id, a.key, "?facilityId=" + a.facility.id), 400, "invalid_query");
   });
 
+  it("accepts early calendar dates and rejects impossible leap days in both bounds", async () => {
+    for (const date of ["0020-02-29", "0001-01-01", "2000-02-29"]) {
+      const response = await list(`?orderedFrom=${date}&orderedBefore=${date}`);
+      expect(response.status).toBe(200);
+      expect(await ids(response)).toEqual([]);
+    }
+    for (const field of ["orderedFrom", "orderedBefore"]) {
+      for (const date of ["0021-02-29", "1900-02-29"]) {
+        await lookupProblem(await list(`?${field}=${date}`), 400, "invalid_query");
+      }
+    }
+  });
+
   it("hides archived orders from lists but serves direct and balance reads", async () => {
     await archiveReadOrder(a, first.id);
     expect(await ids(await list())).toEqual([other.id, second.id]);

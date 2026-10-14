@@ -7,6 +7,7 @@ import { apiAuditEvents, apiIdempotencyRecords, organizationSettings, orders } f
 import { createApiKey } from "@/data-access/api-keys";
 import { API_KEY_DEFAULT_EXPIRY_SECONDS } from "@/config/api-keys";
 import { orderRepresentationSchema } from "@/lib/representations/orders";
+import { MASS_KG_INPUT_STEP, MASS_MIN_KG_MESSAGE } from "@/schemas/helpers";
 import { orderInput } from "./helpers/order-operation-fixture";
 import { removeApiOrderReadFixture, insertReadDelivery, archiveReadOrder } from "./helpers/api-order-read-fixture";
 import { createApiOrderWriteFixture, postOrder as post, patchOrder as patch, deleteOrder as remove, readRestOrder as read } from "./helpers/api-order-write-fixture";
@@ -51,6 +52,20 @@ const records = (f: Fixture) => db.select().from(apiIdempotencyRecords).where(eq
 const audits = (f: Fixture) => db.select().from(apiAuditEvents).where(eq(apiAuditEvents.organizationId, f.ctx.organizationId));
 
 describe("order POST", { timeout: TIMEOUT_MS }, () => {
+  it("refuses quantities below one input step with 422, including dry runs", async () => {
+    for (const query of ["", "?dryRun=true"]) {
+      for (const quantityKg of [5e-324, 0.0009]) {
+        const body = await problem(await post(a, orderInput(a, { quantityKg }), randomUUID(), query), 422, "validation_failed", "/quantityKg");
+        expect(body.errors).toContainEqual(expect.objectContaining({ pointer: "/quantityKg", detail: MASS_MIN_KG_MESSAGE }));
+      }
+    }
+    expect(await rows(a)).toEqual([]);
+    expect(await records(a)).toEqual([]);
+    expect(await audits(a)).toEqual([]);
+    expect((await post(a, orderInput(a, { quantityKg: MASS_KG_INPUT_STEP }), randomUUID(), "?dryRun=true")).status).toBe(200);
+    expect(await rows(a)).toEqual([]);
+  });
+
   it("returns the stored representation, Location and the GET ETag, using the organization packaging default", async () => {
     await db.insert(organizationSettings).values({ organizationId: a.ctx.organizationId, defaultPackaging: "bagged" });
     const response = await post(a);
@@ -99,6 +114,16 @@ describe("order POST", { timeout: TIMEOUT_MS }, () => {
 });
 
 describe("order PATCH", { timeout: TIMEOUT_MS }, () => {
+  it("refuses subnormal and below-step quantities without changing the order", async () => {
+    const order = await saved();
+    for (const query of ["", "?dryRun=true"]) {
+      for (const quantityKg of [5e-324, 0.0009]) {
+        await problem(await patch(a, order.id, { quantityKg }, INITIAL_ETAG, null, query), 422, "validation_failed", "/quantityKg");
+      }
+    }
+    expect((await read(a, order.id)).row).toEqual(order);
+  });
+
   it.each(["orderId", "expectedVersion", "bogus"])("refuses %s as an unknown field", async (field) => {
     const order = await saved();
     const refusal = await problem(await patch(a, order.id, { [field]: 1 }, INITIAL_ETAG, null), 422, "validation_failed");

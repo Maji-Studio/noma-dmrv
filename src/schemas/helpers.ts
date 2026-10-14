@@ -278,9 +278,9 @@ export const MASS_MAX_TONNES_MESSAGE = `Must be ${MASS_INPUT_MAX_TONNES.toLocale
 /**
  * Smallest mass either exact-numeric family can persist. `massKg`
  * (`numeric(14,3)`) and `tonnes` (`numeric(14,6)`) both resolve to one gram,
- * so a smaller positive entry rounds to a stored zero. The capped family's
- * `multipleOf` guard already enforces this; schemas that cannot use it
- * (entered in kg, stored in tonnes) bound on these instead of `.positive()`.
+ * so a smaller positive entry rounds to a stored zero. Use an explicit
+ * minimum when inputs must not round down to zero: the `multipleOf` check can
+ * accept subnormal numbers. Tonne inputs use the tonne bound instead.
  */
 export const MASS_MIN_KG_MESSAGE = `Must be at least ${MASS_KG_INPUT_STEP} kg`;
 export const MASS_MIN_TONNES_MESSAGE = `Must be at least ${MASS_TONNES_INPUT_STEP} tonnes`;
@@ -323,10 +323,12 @@ export function requiredPositiveMassKgSchema(
   requiredMessage = "Mass is required",
   invalidMessage = "Mass must be a number",
   positiveMessage = "Mass must be greater than 0",
+  minimum?: { value: number; message: string },
 ) {
+  const canonical = positiveMassKgSchema(positiveMessage);
   return pipeToCanonicalNumber(
     requiredNumber(requiredMessage, invalidMessage),
-    positiveMassKgSchema(positiveMessage),
+    minimum ? canonical.min(minimum.value, minimum.message) : canonical,
   );
 }
 
@@ -401,6 +403,8 @@ export const clearableDefaultSoilTemperature = pipeToCanonicalNumber(
 // ============================================
 
 const DAY_MS = 86_400_000;
+const CALENDAR_MIN_YEAR = 1;
+const CALENDAR_MAX_YEAR = 9999;
 const CALENDAR_DATE_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
 const INVALID_CALENDAR_DATE_MESSAGE = "Enter a valid date.";
 
@@ -415,7 +419,10 @@ export function parseCalendarDate(value: string): Date | null {
   const match = CALENDAR_DATE_PATTERN.exec(value);
   if (!match) return null;
   const [year, month, day] = [Number(match[1]), Number(match[2]), Number(match[3])];
-  const date = new Date(Date.UTC(year, month - 1, day));
+  if (year < CALENDAR_MIN_YEAR || year > CALENDAR_MAX_YEAR) return null;
+  const date = new Date(0);
+  // Date.UTC remaps years 0 through 99 to 1900 through 1999.
+  date.setUTCFullYear(year, month - 1, day);
   if (
     date.getUTCFullYear() !== year ||
     date.getUTCMonth() !== month - 1 ||
@@ -426,8 +433,10 @@ export function parseCalendarDate(value: string): Date | null {
   return date;
 }
 
-function isUtcMidnight(date: Date): boolean {
-  return !isNaN(date.getTime()) && date.getTime() % DAY_MS === 0;
+function isUtcCalendarDay(date: Date): boolean {
+  const year = date.getUTCFullYear();
+  return !isNaN(date.getTime()) && date.getTime() % DAY_MS === 0 &&
+    year >= CALENDAR_MIN_YEAR && year <= CALENDAR_MAX_YEAR;
 }
 
 /**
@@ -438,7 +447,7 @@ function isUtcMidnight(date: Date): boolean {
  */
 export function calendarDateSchema(message = INVALID_CALENDAR_DATE_MESSAGE) {
   const schema = z.union([
-    z.date({ error: message }).refine(isUtcMidnight, message),
+    z.date({ error: message }).refine(isUtcCalendarDay, message),
     z.string({ error: message }).transform((value, ctx): Date => {
       const date = parseCalendarDate(value);
       if (!date) {

@@ -1365,7 +1365,7 @@
                   "formulationId": {"description": "Formulation ordered, UUID. One formulation per order.", "format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"},
                   "orderDate": {"description": "Order business date, YYYY-MM-DD. Any real calendar day is accepted.", "format": "date", "type": "string"},
                   "packaging": {"description": "Packaging: loose or bagged. If omitted on create, the server uses the Organization setting.", "enum": ["loose", "bagged"], "type": "string"},
-                  "quantityKg": {"description": "Requested product mass in wet kg as ordered, greater than 0. An order does not reserve stock.", "exclusiveMinimum": 0, "maximum": 100000000, "multipleOf": 0.001, "type": "number"}
+                  "quantityKg": {"description": "Requested product mass in wet kg as ordered, at least 0.001 kg. An order does not reserve stock.", "maximum": 100000000, "minimum": 0.001, "multipleOf": 0.001, "type": "number"}
                 },
                 "required": ["facilityId", "customerId", "formulationId", "orderDate", "quantityKg"],
                 "type": "object"
@@ -1453,7 +1453,7 @@
                   "formulationId": {"description": "Formulation ordered, UUID. One formulation per order.", "format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"},
                   "orderDate": {"description": "Order business date, YYYY-MM-DD. Any real calendar day is accepted.", "format": "date", "type": "string"},
                   "packaging": {"description": "Loose or bagged. Omit to keep the stored packaging.", "enum": ["loose", "bagged"], "type": "string"},
-                  "quantityKg": {"description": "Requested product mass in wet kg as ordered, greater than 0. An order does not reserve stock.", "exclusiveMinimum": 0, "maximum": 100000000, "multipleOf": 0.001, "type": "number"}
+                  "quantityKg": {"description": "Requested product mass in wet kg as ordered, at least 0.001 kg. An order does not reserve stock.", "maximum": 100000000, "minimum": 0.001, "multipleOf": 0.001, "type": "number"}
                 },
                 "type": "object"
               }

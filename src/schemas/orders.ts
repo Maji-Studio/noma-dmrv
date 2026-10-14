@@ -8,6 +8,8 @@ import {
   calendarDateSchema,
   emptyToNull,
   expectedVersionSchema,
+  MASS_KG_INPUT_STEP,
+  MASS_MIN_KG_MESSAGE,
   positiveMassKgSchema,
   requiredPositiveMassKgSchema,
 } from "@/schemas/helpers";
@@ -43,6 +45,7 @@ export const orderFormSchema = z.object({
     "Quantity is required",
     "Quantity must be a number",
     "Quantity must be greater than 0",
+    { value: MASS_KG_INPUT_STEP, message: MASS_MIN_KG_MESSAGE },
   ),
   packaging: z.enum(packagingTypes, { error: "Packaging type is required" }),
 
@@ -80,7 +83,8 @@ export const updateOrderSchema = z.object({
   customerLocationId: z.string().uuid().optional().nullable(),
   formulationId: z.uuid().optional(),
   orderDate: calendarDateSchema().optional(),
-  quantityKg: positiveMassKgSchema("Quantity must be greater than 0").optional(),
+  quantityKg: positiveMassKgSchema("Quantity must be greater than 0")
+    .min(MASS_KG_INPUT_STEP, MASS_MIN_KG_MESSAGE).optional(),
   packaging: z.enum(packagingTypes).optional(),
 });
 

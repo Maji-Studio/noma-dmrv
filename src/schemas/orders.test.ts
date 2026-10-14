@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MASS_INPUT_MAX_KG } from "./helpers";
+import { MASS_INPUT_MAX_KG, MASS_KG_INPUT_STEP, MASS_MIN_KG_MESSAGE } from "./helpers";
 import { createOrderSchema, orderFormSchema, updateOrderSchema } from "./orders";
 
 const UUID = "11111111-1111-4111-8111-111111111111";
@@ -52,6 +52,15 @@ describe("order schemas", () => {
         expect(schema.safeParse({ ...base, orderDate: "2026-10-14", quantityKg }).error?.issues[0].path).toEqual(["quantityKg"]);
       }
       expect(schema.safeParse({ ...base, orderDate: "2026-10-14", quantityKg: 0 }).error?.issues[0].message).toBe("Quantity must be greater than 0");
+    });
+
+    it(`${label} rejects subnormal quantities and values below one input step`, () => {
+      for (const quantityKg of [5e-324, 0.0009]) {
+        expect(schema.safeParse({ ...base, orderDate: "2026-10-14", quantityKg }).error?.issues).toContainEqual(
+          expect.objectContaining({ path: ["quantityKg"], message: MASS_MIN_KG_MESSAGE }),
+        );
+      }
+      expect(schema.parse({ ...base, orderDate: "2026-10-14", quantityKg: MASS_KG_INPUT_STEP }).quantityKg).toBe(MASS_KG_INPUT_STEP);
     });
 
     it(`${label} decodes real days to UTC midnight and accepts the form's decoded Date`, () => {

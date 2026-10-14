@@ -59,6 +59,14 @@ it("parses all order filters with canonical UUIDs and real calendar bounds", () 
   expect(parseApiQuery(request(`?facilityId=${id.toUpperCase()}&customerId=${id.toUpperCase()}&formulationId=${id.toUpperCase()}&orderedFrom=2024-02-29&orderedBefore=2024-03-01&q=or&code=OR-1`), orderListSchema))
     .toEqual({ limit: API_LIST_DEFAULT_LIMIT, facilityId: id, customerId: id, formulationId: id, orderedFrom: "2024-02-29", orderedBefore: "2024-03-01", q: "or", code: "OR-1" });
   expect(parseApiQuery(request("?orderedFrom=0100-01-01&orderedBefore=9999-12-31"), orderListSchema)).toMatchObject({ orderedFrom: "0100-01-01", orderedBefore: "9999-12-31" });
+  for (const date of ["0020-02-29", "0001-01-01", "2000-02-29"]) {
+    expect(parseApiQuery(request(`?orderedFrom=${date}&orderedBefore=${date}`), orderListSchema)).toMatchObject({ orderedFrom: date, orderedBefore: date });
+  }
+  for (const field of ["orderedFrom", "orderedBefore"]) {
+    for (const date of ["0021-02-29", "1900-02-29"]) {
+      expect(() => parseApiQuery(request(`?${field}=${date}`), orderListSchema)).toThrow(expect.objectContaining({ code: "invalid_query" }));
+    }
+  }
   for (const query of ["?customerId=bad", "?formulationId=bad", "?status=fulfilled", "?orderedFrom=2026-02-29", "?orderedBefore=2026-04-31", "?orderedFrom=0000-01-01", "?orderedBefore=10000-01-01", "?orderedFrom=2026-01-01T00:00:00Z", "?orderedFrom=2026-01-01&orderedFrom=2026-01-02"]) {
     expect(() => parseApiQuery(request(query), orderListSchema)).toThrow(expect.objectContaining({ code: "invalid_query" }));
   }

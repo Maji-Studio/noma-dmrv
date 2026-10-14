@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { rejectUnknownFields } from "@/lib/api/unknown-fields";
 import { toOperationJsonSchema } from "@/lib/operations/json-schema";
-import { MASS_INPUT_MAX_KG } from "./helpers";
+import { MASS_INPUT_MAX_KG, MASS_KG_INPUT_STEP, MASS_MIN_KG_MESSAGE } from "./helpers";
 import { deleteOrderInput, recordOrderInput, updateOrderApiInput, updateOrderInput } from "./order-input";
 
 const ID = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee";
@@ -9,6 +9,16 @@ const create = { facilityId: ID, customerId: ID, formulationId: ID, orderDate: "
 const target = { orderId: ID, expectedVersion: 1 };
 const requiredFields = ["facilityId", "customerId", "formulationId", "orderDate", "quantityKg"];
 const unpublished = ["value", "currency", "status", "organizationId", "version", "archivedAt", "deliveredWetMassKg", "remainingWetMassKg", "fulfillmentStatus", "idempotencyKey"];
+
+it.each([recordOrderInput, updateOrderApiInput, updateOrderInput])("requires at least one input step for order quantity", schema => {
+  const base = schema === recordOrderInput ? create : schema === updateOrderInput ? target : {};
+  for (const quantityKg of [5e-324, 0.0009]) {
+    expect(schema.safeParse({ ...base, quantityKg }).error?.issues).toContainEqual(
+      expect.objectContaining({ path: ["quantityKg"], message: MASS_MIN_KG_MESSAGE }),
+    );
+  }
+  expect(schema.parse({ ...base, quantityKg: MASS_KG_INPUT_STEP }).quantityKg).toBe(MASS_KG_INPUT_STEP);
+});
 
 describe("recordOrderInput", () => {
   it("requires the order facts and leaves packaging for the server to default", () => {
@@ -94,11 +104,12 @@ it("publishes strict objects, descriptions, date and UUID formats, numeric bound
   expect((contract.required as string[]).sort()).toEqual([...requiredFields].sort());
   expect(properties.orderDate).toMatchObject({ type: "string", format: "date" });
   for (const field of ["facilityId", "customerId", "formulationId"]) expect(properties[field]).toMatchObject({ type: "string", format: "uuid" });
-  expect(properties.quantityKg).toMatchObject({ type: "number", exclusiveMinimum: 0, maximum: MASS_INPUT_MAX_KG, multipleOf: 0.001 });
+  expect(properties.quantityKg).toMatchObject({ type: "number", minimum: MASS_KG_INPUT_STEP, maximum: MASS_INPUT_MAX_KG, multipleOf: MASS_KG_INPUT_STEP });
   expect(properties.quantityKg.description).toContain("wet kg as ordered");
   expect(properties.packaging).toMatchObject({ enum: ["loose", "bagged"] });
   expect(properties.packaging).not.toHaveProperty("default");
   const patchProperties = toOperationJsonSchema(updateOrderApiInput).properties as Record<string, Record<string, unknown>>;
+  expect(patchProperties.quantityKg).toMatchObject({ minimum: MASS_KG_INPUT_STEP, multipleOf: MASS_KG_INPUT_STEP });
   expect(patchProperties.packaging.description).toBe("Loose or bagged. Omit to keep the stored packaging.");
   for (const schema of [recordOrderInput, updateOrderApiInput, updateOrderInput, deleteOrderInput]) {
     const json = toOperationJsonSchema(schema);
