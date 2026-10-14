@@ -164,7 +164,7 @@ it("reads bin stock through the shared representation with strict input and one 
   expect(tool.output.parse(body)).toEqual(body);
   expect(tool.summarize(body)).toBe("Bin OB-2 stock read.");
   const unresolved = { data: { ...(body.data as object), status: "unresolved", unresolvedReason: UNRESOLVED_STOCK_SENTENCES.run_incomplete, totals: null } };
-  expect(tool.summarize(unresolved)).toBe(`Bin OB-2 stock is unknown. ${UNRESOLVED_STOCK_SENTENCES.run_incomplete}`);
+  expect(tool.summarize(unresolved)).toBe("Bin OB-2 stock is unknown; unresolvedReason says why.");
   for (const input of [{}, { storageLocation: BIN, at: CLOCK }, { storageLocation: BIN, facilityId: "bad" }]) {
     await expect(async () => tool.execute(context.ctx, input)).rejects.toMatchObject({ code: "invalid_query" });
   }

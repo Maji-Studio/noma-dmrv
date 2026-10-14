@@ -10,7 +10,7 @@ import { and, eq } from "drizzle-orm";
 import { afterEach, describe, expect, it } from "vitest";
 import { db } from "@/db";
 import { biocharProducts, productionRuns, reactors, storageLocations } from "@/db/schema";
-import { readApiOutputBinStock } from "@/data-access/api-output-bin-stock";
+import { findApiOutputBinStock } from "@/data-access/api-output-bin-stock";
 import { requireApiOutputBin } from "@/data-access/api-output-stock-movements";
 import { getOutputSubBins } from "@/data-access/output-sub-bins";
 import { decimal, rational } from "@/lib/output-stock";
@@ -96,7 +96,7 @@ describe("output bin stock read in PostgreSQL", { timeout: TIMEOUT_MS }, () => {
     const f = await fixture();
     await postProduct(f, { massKg: 400 });
     const input = { identifier: { id: f.bin.id } };
-    const before = await readApiOutputBinStock(f.ctx, input);
+    const before = await findApiOutputBinStock(f.ctx, input);
     const settings: Record<string, unknown> = {};
     // Every later query would see the loss outside the snapshot.
     const { result: during, statements } = await onReadConnection({ after: async (statement, send) => {
@@ -104,12 +104,12 @@ describe("output bin stock read in PostgreSQL", { timeout: TIMEOUT_MS }, () => {
       settings.isolation = (await send("show transaction_isolation")).rows?.[0]?.transaction_isolation;
       settings.readOnly = (await send("show transaction_read_only")).rows?.[0]?.transaction_read_only;
       await postMeasurement(f, { kind: "loss", wetMassKg: 10, moisturePercent: 0 });
-    } }, () => readApiOutputBinStock(f.ctx, input));
+    } }, () => findApiOutputBinStock(f.ctx, input));
     expect(statements[0]).toMatch(/^begin/i);
     expect(isBinLookup(statements[1])).toBe(true);
     expect(settings).toEqual({ isolation: "repeatable read", readOnly: "on" });
     expect(during).toEqual(before);
-    const after = await readApiOutputBinStock(f.ctx, input);
+    const after = await findApiOutputBinStock(f.ctx, input);
     expect(after.totals?.dryBiocharKg).toEqual(decimal("390"));
   });
 
@@ -118,7 +118,7 @@ describe("output bin stock read in PostgreSQL", { timeout: TIMEOUT_MS }, () => {
     await postProduct(f, { massKg: 400 });
     const race = placeBeforeLookup(f);
     const input = { identifier: { id: f.bin.id }, ...(withFacility ? { facilityId: f.facility.id } : {}) };
-    const { result: stock, statements } = await onReadConnection({ before: race.before }, () => readApiOutputBinStock(f.ctx, input));
+    const { result: stock, statements } = await onReadConnection({ before: race.before }, () => findApiOutputBinStock(f.ctx, input));
     // The bin lookup fixes the snapshot; an instant taken before it, or a facility check run first, would leave the new product out.
     expect(isBinLookup(statements[1])).toBe(true);
     expect(stock.subBins.map(subBin => subBin.layerId)).toContain(race.placed.id);
@@ -141,17 +141,17 @@ describe("output bin stock read in PostgreSQL", { timeout: TIMEOUT_MS }, () => {
     await postProduct(f, { massKg: 200, placedAt: "2026-09-13T12:00:00.000Z" });
     await postMeasurement(f, { kind: "count", wetMassKg: 1000, moisturePercent: 10 });
     const input = { identifier: { code: f.bin.code } };
-    const ordered = await readApiOutputBinStock(f.ctx, input);
+    const ordered = await findApiOutputBinStock(f.ctx, input);
     expect(ordered.subBins).toHaveLength(3);
-    expect((await onReadConnection({ reverseRows: true }, () => readApiOutputBinStock(f.ctx, input))).result).toEqual(ordered);
-    expect(await readApiOutputBinStock(f.ctx, input)).toEqual(ordered);
+    expect((await onReadConnection({ reverseRows: true }, () => findApiOutputBinStock(f.ctx, input))).result).toEqual(ordered);
+    expect(await findApiOutputBinStock(f.ctx, input)).toEqual(ordered);
   });
 
   it("agrees with the sub-bin picker", async () => {
     const f = await fixture();
     await postProduct(f, { massKg: 400, placedAt: "2026-09-12T12:00:00.000Z" });
     await postProduct(f, { massKg: 300, placedAt: "2026-09-13T12:00:00.000Z" });
-    const stock = await readApiOutputBinStock(f.ctx, { identifier: { id: f.bin.id } });
+    const stock = await findApiOutputBinStock(f.ctx, { identifier: { id: f.bin.id } });
     const picker = await getOutputSubBins(f.ctx, { facilityId: f.facility.id, storageLocationId: f.bin.id });
     expect(picker.subBins.map(subBin => [subBin.layerId, subBin.code, subBin.dryMassKg])).toEqual(stock.subBins.map(subBin => [subBin.layerId, subBin.code, Number(subBin.dryBiocharKg.numerator) / Number(subBin.dryBiocharKg.denominator)]));
     expect(picker.stockMode).toBe(stock.stockMode);
@@ -160,17 +160,17 @@ describe("output bin stock read in PostgreSQL", { timeout: TIMEOUT_MS }, () => {
   it("reports the claimed formulation of a product bin and none for a biochar bin", async () => {
     const f = await fixture();
     await postProduct(f, { massKg: 100 });
-    const product = await readApiOutputBinStock(f.ctx, { identifier: { id: f.bin.id }, facilityId: f.facility.id });
+    const product = await findApiOutputBinStock(f.ctx, { identifier: { id: f.bin.id }, facilityId: f.facility.id });
     expect(product.bin).toMatchObject({ type: "product_bin", formulationId: f.pure.id, archivedAt: null, code: f.bin.code });
     expect(product.subBins[0]).toMatchObject({ layerKind: "biochar_product" });
-    const biochar = await readApiOutputBinStock(f.ctx, { identifier: { id: f.source.id } });
+    const biochar = await findApiOutputBinStock(f.ctx, { identifier: { id: f.source.id } });
     expect(biochar.bin).toMatchObject({ type: "biochar_bin", formulationId: null });
     expect(biochar.subBins.map(subBin => [subBin.layerKind, subBin.code])).toEqual(f.runs.map(run => ["production_run", run.code]));
   });
 
   it("answers an empty bin as resolved with zero totals and no moisture", async () => {
     const f = await fixture();
-    expect(await readApiOutputBinStock(f.ctx, { identifier: { id: f.bin.id } })).toMatchObject({ status: "resolved", unresolvedReason: null, subBins: [],
+    expect(await findApiOutputBinStock(f.ctx, { identifier: { id: f.bin.id } })).toMatchObject({ status: "resolved", unresolvedReason: null, subBins: [],
       totals: { dryBiocharKg: rational(BigInt(0)), solidsKg: rational(BigInt(0)), estimatedWetKg: rational(BigInt(0)), estimatedMoisturePercent: null, moistureBasis: null } });
   });
 
@@ -180,7 +180,7 @@ describe("output bin stock read in PostgreSQL", { timeout: TIMEOUT_MS }, () => {
     const archivedAt = new Date("2026-09-20T00:00:00.000Z");
     await db.update(biocharProducts).set({ archivedAt }).where(eq(biocharProducts.id, product.id));
     await db.update(storageLocations).set({ archivedAt }).where(eq(storageLocations.id, f.bin.id));
-    const stock = await readApiOutputBinStock(f.ctx, { identifier: { id: f.bin.id } });
+    const stock = await findApiOutputBinStock(f.ctx, { identifier: { id: f.bin.id } });
     expect(stock.bin.archivedAt).toBe(archivedAt.toISOString());
     expect(stock.subBins.map(subBin => subBin.layerId)).toEqual([product.id]);
   });
@@ -188,9 +188,9 @@ describe("output bin stock read in PostgreSQL", { timeout: TIMEOUT_MS }, () => {
   it("finds no bin of another organization, by id, by code or through its facility", async () => {
     const f = await fixture();
     const other = await fixture();
-    await expect(readApiOutputBinStock(other.ctx, { identifier: { id: f.bin.id } })).rejects.toMatchObject({ code: "not_found" });
-    await expect(readApiOutputBinStock(other.ctx, { identifier: { code: f.bin.code } })).rejects.toMatchObject({ code: "not_found" });
-    await expect(readApiOutputBinStock(f.ctx, { identifier: { id: f.bin.id }, facilityId: other.facility.id })).rejects.toMatchObject({ code: "not_found" });
+    await expect(findApiOutputBinStock(other.ctx, { identifier: { id: f.bin.id } })).rejects.toMatchObject({ code: "not_found" });
+    await expect(findApiOutputBinStock(other.ctx, { identifier: { code: f.bin.code } })).rejects.toMatchObject({ code: "not_found" });
+    await expect(findApiOutputBinStock(f.ctx, { identifier: { id: f.bin.id }, facilityId: other.facility.id })).rejects.toMatchObject({ code: "not_found" });
   });
 
   it("refuses a feedstock bin as the movement history does", async () => {
@@ -198,7 +198,7 @@ describe("output bin stock read in PostgreSQL", { timeout: TIMEOUT_MS }, () => {
     const [fuel] = await db.select().from(storageLocations).where(and(eq(storageLocations.organizationId, f.ctx.organizationId), eq(storageLocations.type, "feedstock_bin")));
     const expected = await requireApiOutputBin(f.ctx, { id: fuel.id }).then(() => null, (error: unknown) => error);
     expect(expected).toMatchObject({ code: "validation_failed" });
-    await expect(readApiOutputBinStock(f.ctx, { identifier: { id: fuel.id } })).rejects.toEqual(expected);
+    await expect(findApiOutputBinStock(f.ctx, { identifier: { id: fuel.id } })).rejects.toEqual(expected);
   });
 
   describe("unresolved stock", () => {
@@ -209,21 +209,21 @@ describe("output bin stock read in PostgreSQL", { timeout: TIMEOUT_MS }, () => {
       const [reactor] = await db.select().from(reactors).where(eq(reactors.organizationId, f.ctx.organizationId));
       await db.insert(productionRuns).values({ organizationId: f.ctx.organizationId, facilityId: f.facility.id, reactorId: reactor.id, code: `E2E-STOCK-RUN-${f.tag}`,
         status: "complete", startTime: new Date("2026-09-12T08:00:00Z"), endTime: new Date("2026-09-12T12:00:00Z"), biocharStorageLocationId: f.source.id, biocharOutputKg: 100 });
-      expect(await readApiOutputBinStock(f.ctx, { identifier: { id: f.source.id } })).toMatchObject(unresolved("run_incomplete"));
+      expect(await findApiOutputBinStock(f.ctx, { identifier: { id: f.source.id } })).toMatchObject(unresolved("run_incomplete"));
     });
 
     it("answers a product whose composition has an invalid ingredient mass", async () => {
       const f = await fixture();
       const product = await postProduct(f, { massKg: 100 });
       await db.update(biocharProducts).set({ composition: { ingredients: [{ formulationIngredientId: f.ingredient.id, massKg: -1 }] } }).where(eq(biocharProducts.id, product.id));
-      expect(await readApiOutputBinStock(f.ctx, { identifier: { id: f.bin.id } })).toMatchObject(unresolved("ingredient_mass_invalid"));
+      expect(await findApiOutputBinStock(f.ctx, { identifier: { id: f.bin.id } })).toMatchObject(unresolved("ingredient_mass_invalid"));
     });
 
     it("answers a product whose ingredient snapshots do not match its composition", async () => {
       const f = await fixture();
       const product = await postProduct(f, { massKg: 100 });
       await db.update(biocharProducts).set({ composition: { ingredients: [{ formulationIngredientId: f.ingredient.id, massKg: 5 }] } }).where(eq(biocharProducts.id, product.id));
-      expect(await readApiOutputBinStock(f.ctx, { identifier: { id: f.bin.id } })).toMatchObject(unresolved("ingredient_snapshot_mismatch"));
+      expect(await findApiOutputBinStock(f.ctx, { identifier: { id: f.bin.id } })).toMatchObject(unresolved("ingredient_snapshot_mismatch"));
     });
   });
 });

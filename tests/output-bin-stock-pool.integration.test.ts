@@ -7,7 +7,7 @@
 import type { Pool } from "pg";
 import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
 import { db } from "@/db";
-import { readApiOutputBinStock } from "@/data-access/api-output-bin-stock";
+import { findApiOutputBinStock } from "@/data-access/api-output-bin-stock";
 import { getOutputSubBins } from "@/data-access/output-sub-bins";
 import { cleanupPostedStock, postedStockFixture, postMeasurement, postProduct } from "./helpers/posted-output-stock-fixture";
 
@@ -48,9 +48,9 @@ describe("output bin stock reads on a pool of one connection", { timeout: TIMEOU
     expect(beforeCount.map(subBin => [subBin.dryMassKg, subBin.moisturePercent, subBin.basis?.source])).toEqual([[400, 0, "recorded"], [300, 0, "recorded"]]);
     // 700 kg wet at 10% is 630 kg solids: the count takes 70 kg and sets every sub-bin to 10%.
     const count = await postMeasurement(f, { kind: "count", wetMassKg: 700, moisturePercent: 10 });
-    const product = await readApiOutputBinStock(f.ctx, { identifier: { code: f.bin.code }, facilityId: f.facility.id });
+    const product = await findApiOutputBinStock(f.ctx, { identifier: { code: f.bin.code }, facilityId: f.facility.id });
     expect(product).toMatchObject({ status: "resolved", subBins: [{}, {}] });
-    expect((await readApiOutputBinStock(f.ctx, { identifier: { id: f.source.id } })).status).toBe("resolved");
+    expect((await findApiOutputBinStock(f.ctx, { identifier: { id: f.source.id } })).status).toBe("resolved");
     const picker = await subBinsNow();
     expect(picker.subBins[0].recentMovements.length).toBeGreaterThan(0);
     const counted = stockOf(picker);

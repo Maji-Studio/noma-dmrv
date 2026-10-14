@@ -33,9 +33,9 @@ function requireLayerCodes(stock: OutputBinStock<string | null>): OutputBinStock
  * pass a repeatable-read transaction that has not run a statement yet, so the
  * lookup here fixes its snapshot.
  */
-export async function readApiOutputBinStock(ctx: OrgContext, input: ApiOutputBinStockInput, tx?: DbTransaction): Promise<OutputBinStock> {
+export async function findApiOutputBinStock(ctx: OrgContext, input: ApiOutputBinStockInput, tx?: DbTransaction): Promise<OutputBinStock> {
   requireOrgScope(ctx);
-  if (!tx) return withStockSnapshot(snapshot => readApiOutputBinStock(ctx, input, snapshot));
+  if (!tx) return withStockSnapshot(snapshot => findApiOutputBinStock(ctx, input, snapshot));
   const bin = await requireApiOutputBin(ctx, input.identifier, { facilityId: input.facilityId, executor: tx });
   if (!isOutputBinType(bin.type)) throw new Error(`Storage location ${bin.id} is not an output bin`);
   // The lookup fixed the snapshot, so nothing it shows was placed after this instant.

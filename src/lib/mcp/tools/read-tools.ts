@@ -110,7 +110,7 @@ export const readTools: ReadTool[] = [
   defineRead({ name: "get_bin_stock", scope: "biochar-products:read",
     summarize: (body) => {
       const data = body.data as z.infer<typeof outputBinStockRepresentationSchema>;
-      return data.status === "resolved" ? `Bin ${data.code} stock read.` : `Bin ${data.code} stock is unknown. ${data.unresolvedReason}`;
+      return data.status === "resolved" ? `Bin ${data.code} stock read.` : `Bin ${data.code} stock is unknown; unresolvedReason says why.`;
     },
     description: `${readDescriptions.outputBinStock} Call find_storage_locations first for storageLocation.`,
     input: resourceQueries["storage-locations"].get.extend({ storageLocation: z.string().describe("Biochar or product bin UUID or exact code, from find_storage_locations.") }),

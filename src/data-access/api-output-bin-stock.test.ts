@@ -2,7 +2,7 @@ import { beforeEach, expect, it, vi } from 'vitest';
 import type { DbTransaction } from '@/db';
 import { decimal } from '@/lib/output-stock/exact';
 import { projectOutputBinStock } from '@/lib/output-stock/bin-stock-projection';
-import { readApiOutputBinStock } from './api-output-bin-stock';
+import { findApiOutputBinStock } from './api-output-bin-stock';
 
 const mocks = vi.hoisted(() => ({ bin: vi.fn(), read: vi.fn(), snapshot: vi.fn() }));
 vi.mock('./api-output-stock-movements', () => ({ requireApiOutputBin: mocks.bin }));
@@ -30,7 +30,7 @@ it('throws when a held layer has no code in the projection code map', async () =
   });
   expect(stock.subBins).toMatchObject([{ layerId: 'run', code: null }]);
   mocks.read.mockResolvedValue({ stock });
-  await expect(readApiOutputBinStock(ctx, { identifier: { id: bin.id } }))
+  await expect(findApiOutputBinStock(ctx, { identifier: { id: bin.id } }))
     .rejects.toThrow('Output bin bin layer run has no code');
   expect(mocks.bin).toHaveBeenCalledWith(ctx, { id: bin.id }, { facilityId: undefined, executor: tx });
   expect(mocks.read).toHaveBeenCalledWith(ctx, bin, expect.any(String), tx, { includeArchived: false });

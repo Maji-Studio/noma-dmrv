@@ -346,7 +346,7 @@ Pure starter residue; org scoping came later via ADR 0010.
 
 - Every stock reader (posting, UI and API) reads all of a bin's rows before
   counting held layers, so cost grows with bin history. No cap or paging was
-  added to the [stock read](./output-stock.md#api-stock-read).
+  added to the [stock read](./output-stock.md#api-stock-read). Pointer: `src/data-access/output-stock.ts:readOutputBinRows`, `src/data-access/output-bin-stock.ts:readOutputBinStockAt`.
 - **Resolve via:** a held-layer index or a materialized balance if a real bin
   gets slow.
 
