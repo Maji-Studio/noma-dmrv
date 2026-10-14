@@ -147,7 +147,6 @@ export function resolveSamplingTimeForBatch(value: EventInstant, batch: LockedSa
 
 export interface SampleTierEvidence {
   randomReflectanceR0Percent: number | null;
-  sReflectanceFraction: number | null;
   reactiveCarbonPercent: number | null;
   residualCarbonPercent: number | null;
 }
@@ -161,7 +160,6 @@ export function assertBatchTierEvidence(facility: SampleBatchFacility, values: S
   if (facility.durabilityOption !== "1000_year") return;
   if (values.randomReflectanceR0Percent == null) throw sampleTierEvidenceError("randomReflectanceR0Percent");
   if (values.reactiveCarbonPercent == null && values.residualCarbonPercent == null) throw sampleTierEvidenceError("residualCarbonPercent");
-  if (values.sReflectanceFraction == null) throw sampleTierEvidenceError("sReflectanceFraction");
 }
 
 /** How an existing Sample reaches credit batches: directly, and through its legacy run's batch. */

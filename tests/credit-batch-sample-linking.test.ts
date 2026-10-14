@@ -501,7 +501,7 @@ describe("Server-side 1000-year evidence guard — batch tier is source of truth
     expect(sample.sReflectanceFraction).toBe(0.92);
   });
 
-  it("createSample rejects a 1000-year batch sample missing s_fraction", async () => {
+  it("createSample saves a 1000-year batch sample missing s_fraction", async () => {
     const action = createSample(makeTestOrgContext(TEST_USER_ID), {
       sampleCode: `S-SL-NO-S-FRACTION-${Date.now()}`,
       creditBatchId: tier1000BatchId,
@@ -514,7 +514,7 @@ describe("Server-side 1000-year evidence guard — batch tier is source of truth
       createdIds.samples.push(sample.id);
       return sample;
     });
-    await expect(action).rejects.toThrow(/R₀ readings.*2%/);
+    await expect(action).resolves.toMatchObject({ creditBatchId: tier1000BatchId, sReflectanceFraction: null });
   });
 
   it("updateSample rejects moving an evidence-less sample onto a 1000-year batch", async () => {

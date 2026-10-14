@@ -416,12 +416,31 @@ describe("ratios", { timeout: SUITE_TIMEOUT_MS }, () => {
 });
 
 describe("warnings", { timeout: SUITE_TIMEOUT_MS }, () => {
+  it("saves and clears s_fraction on a 1,000-year Sample, warning that certification still needs it", async () => {
+    const f = await fixture({ durabilityOption: "1000_year" });
+    const created = await record(f, { ...TIER_1000_EVIDENCE, sReflectanceFraction: undefined,
+      inorganicCarbonPercent: 3, totalOxygenPercent: 6, r0MeasurementCount: 500 });
+    expect(created.data.sample.sReflectanceFraction).toBeNull();
+    expect(created.data.warnings).toEqual([
+      `Sample ${created.data.sample.sampleCode} is missing the R₀ fraction at or above 2%. A 1,000-year Removal with credit batch ${f.batchA.code} cannot be submitted until every Sample has it.`,
+    ]);
+    const filled = await runOperation(updateLabSample, f.ctx, {
+      labSampleId: created.data.sample.id, expectedVersion: 1, sReflectanceFraction: 0.92,
+    });
+    expect(filled.data.warnings).toEqual([]);
+    const cleared = await runOperation(updateLabSample, f.ctx, {
+      labSampleId: created.data.sample.id, expectedVersion: 2, sReflectanceFraction: null,
+    });
+    expect(cleared.data.sample.sReflectanceFraction).toBeNull();
+    expect(cleared.data.warnings).toEqual(created.data.warnings);
+  });
+
   it("warns on a 1,000-year batch for missing inorganic carbon and under 500 R₀ readings, and still saves", async () => {
     const f = await fixture({ durabilityOption: "1000_year" });
     const created = await record(f, { ...TIER_1000_EVIDENCE, totalOxygenPercent: 6, r0MeasurementCount: 120 });
     const code = created.data.sample.sampleCode;
     expect(created.data.warnings).toEqual([
-      `Sample ${code} has no measured inorganic carbon. A 1,000-year Removal with credit batch ${f.batchA.code} cannot be submitted until every Sample has them.`,
+      `Sample ${code} is missing measured inorganic carbon. A 1,000-year Removal with credit batch ${f.batchA.code} cannot be submitted until every Sample has it.`,
       `Sample ${code} has 120 R₀ measurements. For 1,000-year crediting the biochar module asks for at least 500 per Sample. You can still submit the Removal.`,
     ]);
     const complete = await runOperation(updateLabSample, f.ctx, { labSampleId: created.data.sample.id, expectedVersion: 1, inorganicCarbonPercent: 3, r0MeasurementCount: 500 });
