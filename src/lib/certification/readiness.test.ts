@@ -1,7 +1,7 @@
 import production from "../../../tests/fixtures/isometric/production-template-2026-07-03.json";
 import type { components as RegistryComponents } from "@/lib/isometric/generated/certify";
 import { unsupportedTemplate } from "../../../tests/fixtures/isometric/unsupported-template";
-import { findUnbindableTemplateInputs, formatUnbindableTemplateInputs } from "@/lib/isometric/template-binding-coverage";
+import { findUnbindableTemplateInputs, formatUnbindableTemplateInputsText } from "@/lib/isometric/template-binding-coverage";
 import { describe, expect, it } from "vitest";
 import {
   buildRemovalRequirementsChecklist,
@@ -790,5 +790,5 @@ it.each([unsupportedTemplate(), production as RegistryComponents["schemas"]["Ghg
   const inputs = findUnbindableTemplateInputs(template);
   const result = deriveRemovalReadiness(ready({ unbindableTemplateInputs: inputs }));
   expect(result.state).not.toBe("ready");
-  expect(result.reasons).toContain(formatUnbindableTemplateInputs(inputs));
+  expect(result.reasons).toContain(formatUnbindableTemplateInputsText(inputs));
 });

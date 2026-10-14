@@ -1,7 +1,7 @@
 import production from "../../../tests/fixtures/isometric/production-template-2026-07-03.json";
 import type { components as RegistryComponents } from "@/lib/isometric/generated/certify";
 import { unsupportedTemplate } from "../../../tests/fixtures/isometric/unsupported-template";
-import { findUnbindableTemplateInputs, formatUnbindableTemplateInputs } from "@/lib/isometric/template-binding-coverage";
+import { findUnbindableTemplateInputs, formatUnbindableTemplateInputsText } from "@/lib/isometric/template-binding-coverage";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { RemovalSubmissionContext } from "./certify-context-core";
 
@@ -184,7 +184,7 @@ describe("requirePreparedRemovalSubmission", () => {
 
 it.each([unsupportedTemplate(), production as RegistryComponents["schemas"]["GhgEntryTemplate"]])("blocks preparation with component names and repair guidance", (defaultTemplate) => {
   expect(prepareRemovalSubmission(context({ defaultTemplate }), { isometricEnvironment: "production" }).blockers).toContainEqual({
-    code: "templateUnbindable", message: formatUnbindableTemplateInputs(findUnbindableTemplateInputs(defaultTemplate)),
+    code: "templateUnbindable", message: formatUnbindableTemplateInputsText(findUnbindableTemplateInputs(defaultTemplate)),
   });
 });
 
@@ -194,6 +194,6 @@ it("preserves sandbox stubs without hiding production project-scope blockers", (
   const findings = findUnbindableTemplateInputs(defaultTemplate, { allowPeriodInputStub: true });
   expect(findings).toHaveLength(4);
   expect(result.prepared?.allowPeriodInputStub).toBe(true);
-  expect(result.blockers).toContainEqual({ code: "templateUnbindable", message: formatUnbindableTemplateInputs(findings) });
+  expect(result.blockers).toContainEqual({ code: "templateUnbindable", message: formatUnbindableTemplateInputsText(findings) });
   expect(result.blockers.some((blocker) => blocker.message.includes("project level"))).toBe(false);
 });

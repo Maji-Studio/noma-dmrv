@@ -55,6 +55,7 @@ interface SelectBatchesStepProps {
  */
 export function setupGapCopy(gap: FacilitySetupGap): {
   message: string;
+  lines?: string[];
   action: { label: string; toSettings: true } | null;
 } {
   switch (gap.kind) {
@@ -81,11 +82,14 @@ export function setupGapCopy(gap: FacilitySetupGap): {
         message: `The configured Removal template (${gap.templateId}) is no longer available in the registry. Select another template.`,
         action: { label: "Re-select template in certification settings", toSettings: true },
       };
-    case "template_unbindable":
+    case "template_unbindable": {
+      const { lead, lines } = formatUnbindableTemplateInputs(gap.inputs);
       return {
-        message: formatUnbindableTemplateInputs(gap.inputs),
+        message: lead,
+        lines,
         action: { label: "Review certification settings", toSettings: true },
       };
+    }
     case "blueprint_keys": {
       const labels = gap.keys.map(facilityBlueprintLabel);
       return {
@@ -217,9 +221,14 @@ function IncompleteCard({
                 )}
               </span>
               {check.detail && (
-                <span className="body-caption text-[var(--color-text-tertiary)]">
-                  <span className="whitespace-pre-line">{check.detail}</span>
-                </span>
+                <div className="body-caption text-[var(--color-text-tertiary)]">
+                  {check.detail.split("\n")[0]}
+                  {check.detail.includes("\n") && (
+                    <ul className="list-disc pl-16">
+                      {check.detail.split("\n").slice(1).map((line) => <li key={line}>{line}</li>)}
+                    </ul>
+                  )}
+                </div>
               )}
               {/* New tab: the fix opens alongside so this readiness workspace
                   stays put — the operator resolves the gap and returns here. */}
@@ -303,7 +312,12 @@ export function SelectBatchesStep({
                 )
               }
             >
-              <span className="whitespace-pre-line">{copy.message}</span>
+              {copy.message}
+              {copy.lines && (
+                <ul className="list-disc pl-16">
+                  {copy.lines.map((line) => <li key={line}>{line}</li>)}
+                </ul>
+              )}
             </Notice>
           );
         })}

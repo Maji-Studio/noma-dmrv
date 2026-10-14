@@ -3,9 +3,9 @@ import { describe, expect, it } from "vitest";
 import sandbox from "../../../tests/fixtures/isometric/sandbox-template.json";
 import inventory from "../../../tests/fixtures/isometric-coverage.json";
 import type { components } from "./generated/certify";
-import { findUnbindableTemplateInputs, formatUnbindableTemplateInputs, type UnbindableTemplateInput } from "./template-binding-coverage";
+import { findUnbindableTemplateInputs, formatUnbindableTemplateInputs, formatUnbindableTemplateInputsText, type UnbindableTemplateInput } from "./template-binding-coverage";
 import { lookupInputMapping, lookupPeriodInputTuple } from "./datapoint-mapping";
-import { isSequestrationBlueprintFamily } from "./storage-blueprints";
+import { STORAGE_BLUEPRINTS, isSequestrationBlueprintFamily } from "./storage-blueprints";
 
 type Template = components["schemas"]["GhgEntryTemplate"];
 const template = sandbox as Template;
@@ -23,7 +23,7 @@ describe("template binding coverage", () => {
     expect(findings).toHaveLength(2);
     expect(new Set(findings.map((input) => input.componentId)).size).toBe(2);
     expect(findings.every((input) => input.blueprintKey === "transport" && input.reason === "unmapped")).toBe(true);
-    expect(formatUnbindableTemplateInputs(findings)).toContain("Mass-distance-based CI emissions");
+    expect(formatUnbindableTemplateInputsText(findings)).toContain("Mass-distance-based CI emissions");
     expect(changed).toEqual(unsupportedTemplate());
   });
 
@@ -34,7 +34,7 @@ describe("template binding coverage", () => {
     group.components.push({ ...structuredClone(sample), id: "sample-copy", display_name: "Second sample shipment" });
     const findings = findUnbindableTemplateInputs(copy).filter((input) => input.reason === "ambiguous");
     expect(findings.map((input) => input.reason)).toEqual(["ambiguous", "ambiguous"]);
-    expect(formatUnbindableTemplateInputs(findings)).toContain(`${sample.display_name} and Second sample shipment would both receive the same sample transport mass-distance total`);
+    expect(formatUnbindableTemplateInputsText(findings)).toContain(`${sample.display_name} and Second sample shipment would both receive the same sample transport mass-distance total`);
   });
 
   it("matches the builder lookup precedence for every sandbox input", () => {
@@ -63,7 +63,7 @@ it("names unsupported metered inputs and their component", () => {
   const component = copy.groups.find((group) => group.key === "pyrolysis")!.components[0];
   component.blueprint_key = "metered_energy_based_ci_emissions";
   component.inputs = [{ input_key: "final_readout", type: "monitored", datapoint_id: null, display_name: "Final reading", quantity_kind: "energy" }];
-  expect(formatUnbindableTemplateInputs(findUnbindableTemplateInputs(copy))).toBe(
+  expect(formatUnbindableTemplateInputsText(findUnbindableTemplateInputs(copy))).toBe(
     `The Removal template has 1 component noma cannot submit.\n${component.display_name}: Pick another Removal template or ask support to add the mapping.`,
   );
 });
@@ -74,7 +74,7 @@ it("names unsupported metered inputs and their component", () => {
     component.display_name = "Renamed generator";
     const findings = findUnbindableTemplateInputs(copy);
     expect(findings).toMatchObject([{ reason: "unrecognized-component", componentId: component.id }]);
-    expect(formatUnbindableTemplateInputs(findings)).toContain('Rename it in Isometric to one of these names: "Generator diesel usage", "Startup diesel usage".');
+    expect(formatUnbindableTemplateInputsText(findings)).toContain('Rename it in Isometric to one of these names: "Generator diesel usage", "Startup diesel usage".');
   });
 
   it.each([
@@ -100,12 +100,33 @@ it("names unsupported metered inputs and their component", () => {
     },
   ] as const)("agrees with the number of components for $blueprintKey", ({ singular, plural, ...tuple }) => {
     const input: UnbindableTemplateInput = { ...tuple, componentId: "a", componentDisplayName: "A" };
-    expect(formatUnbindableTemplateInputs([input, input])).toBe(
+    expect(formatUnbindableTemplateInputsText([input, input])).toBe(
       `The Removal template has 1 component noma cannot submit.\nA: ${singular}`,
     );
-    expect(formatUnbindableTemplateInputs([input, { ...input, componentId: "b", componentDisplayName: "B" }])).toBe(
+    expect(formatUnbindableTemplateInputsText([input, { ...input, componentId: "b", componentDisplayName: "B" }])).toBe(
       `The Removal template has 2 components noma cannot submit.\nA and B: ${plural}`,
     );
+  });
+
+  it.each(Object.entries(STORAGE_BLUEPRINTS).filter(([, blueprint]) => blueprint.support !== "bound"))(
+    "leaves gated, deprecated and unsupported storage %s to the existing gates",
+    (blueprintKey) => {
+      const copy = structuredClone(template);
+      const component = copy.groups.flatMap((group) => group.components).find((component) => isSequestrationBlueprintFamily(component.blueprint_key))!;
+      component.blueprint_key = blueprintKey;
+      expect(findUnbindableTemplateInputs(copy)).toEqual([]);
+    },
+  );
+
+  it("separates the Notice lead from instructions and preserves plain-text copy", () => {
+    const inputs = findUnbindableTemplateInputs(unsupportedTemplate());
+    const { lead, lines } = formatUnbindableTemplateInputs(inputs);
+    expect(lead).toBe("The Removal template has 2 components noma cannot submit.");
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toContain("Replace each one");
+    expect(formatUnbindableTemplateInputsText(inputs)).toBe([lead, ...lines].join("\n"));
+    expect(formatUnbindableTemplateInputs([])).toEqual({ lead: "", lines: [] });
+    expect(formatUnbindableTemplateInputsText([])).toBe("");
   });
 
   it("reports unknown monitored storage inputs", () => {
@@ -121,6 +142,6 @@ it("names unsupported metered inputs and their component", () => {
     const component = group.components[0];
     component.display_name = "A";
     group.components.push({ ...structuredClone(component), id: "b", display_name: "B" }, { ...structuredClone(component), id: "c", display_name: "C" });
-    expect(formatUnbindableTemplateInputs(findUnbindableTemplateInputs(copy))).toContain("A, B and C would all receive");
+    expect(formatUnbindableTemplateInputsText(findUnbindableTemplateInputs(copy))).toContain("A, B and C would all receive");
   });
 });

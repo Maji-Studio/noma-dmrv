@@ -11,7 +11,7 @@
  * (`templateResolved` + `analyzeCoverage` + `submitReady`), now extracted and
  * unit-tested — Stage 4 migrates the panel/pre-flight onto it.
  */
-import { formatUnbindableTemplateInputs, type UnbindableTemplateInput } from "@/lib/isometric/template-binding-coverage";
+import { formatUnbindableTemplateInputsText, type UnbindableTemplateInput } from "@/lib/isometric/template-binding-coverage";
 
 import {
   BLOCKING_SUBMISSION_STATUSES,
@@ -172,7 +172,7 @@ function templateBlockerReason(facts: RemovalReadinessFacts): string | null {
     return `Template references ${n} unresolved blueprint${n === 1 ? "" : "s"}`;
   }
   if (facts.unbindableTemplateInputs.length > 0) {
-    return formatUnbindableTemplateInputs(facts.unbindableTemplateInputs);
+    return formatUnbindableTemplateInputsText(facts.unbindableTemplateInputs);
   }
   return null;
 }

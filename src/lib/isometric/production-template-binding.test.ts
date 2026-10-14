@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import production from "../../../tests/fixtures/isometric/production-template-2026-07-03.json";
 import type { components } from "./generated/certify";
-import { findUnbindableTemplateInputs, formatUnbindableTemplateInputs } from "./template-binding-coverage";
+import { findUnbindableTemplateInputs, formatUnbindableTemplateInputsText } from "./template-binding-coverage";
 import { buildCreateDatapointRequest } from "./transformers/datapoint";
 import { assertSequestrationTemplateBindings } from "./transformers/sequestration-binding";
 import type { AggregatedProductionData } from "./utils/aggregation";
@@ -60,14 +60,14 @@ describe("production template binding coverage", () => {
     const findings = findUnbindableTemplateInputs(template);
     expect(findings.map((input) => [input.componentId, input.inputKey, input.reason])).toEqual(expectedFindings);
     for (const finding of findings.filter((input) => input.blueprintKey === "transport")) {
-      expect(formatUnbindableTemplateInputs([finding])).toBe(`The Removal template has 1 component noma cannot submit.\n${finding.componentDisplayName}: Replace it with a Mass-distance-based CI emissions component in Isometric, or pick another Removal template.`);
+      expect(formatUnbindableTemplateInputsText([finding])).toBe(`The Removal template has 1 component noma cannot submit.\n${finding.componentDisplayName}: Replace it with a Mass-distance-based CI emissions component in Isometric, or pick another Removal template.`);
     }
     expect(findings.some((input) => input.componentId === "rtc_1KWKNGJZY1S0HNRT")).toBe(false);
     expect(() => assertSequestrationTemplateBindings(template)).not.toThrow();
   });
 
   it("groups production copy without keys or repeated components and preserves Safety margin", () => {
-    const copy = formatUnbindableTemplateInputs(findUnbindableTemplateInputs(template));
+    const copy = formatUnbindableTemplateInputsText(findUnbindableTemplateInputs(template));
     expect(copy.split("\n")).toEqual([
       "The Removal template has 10 components noma cannot submit.",
       "Biomass transportation to processing site via truck and Biochar transportation to storage site via truck: Replace each one with a Mass-distance-based CI emissions component in Isometric, or pick another Removal template.",

@@ -2,7 +2,7 @@ import production from "../../../tests/fixtures/isometric/production-template-20
 import type { components as RegistryComponents } from "@/lib/isometric/generated/certify";
 import * as ghgEntry from "@/lib/isometric/transformers/ghg-entry";
 import { unsupportedTemplate } from "../../../tests/fixtures/isometric/unsupported-template";
-import { findUnbindableTemplateInputs, formatUnbindableTemplateInputs } from "@/lib/isometric/template-binding-coverage";
+import { findUnbindableTemplateInputs, formatUnbindableTemplateInputsText } from "@/lib/isometric/template-binding-coverage";
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("./source-candidates", async (importOriginal) => ({
@@ -661,7 +661,7 @@ it.each([unsupportedTemplate(), production as RegistryComponents["schemas"]["Ghg
   });
   expect(builder).not.toHaveBeenCalled();
   builder.mockRestore();
-  expect(compiled.blockers).toEqual([formatUnbindableTemplateInputs(findUnbindableTemplateInputs(defaultTemplate))]);
+  expect(compiled.blockers).toEqual([formatUnbindableTemplateInputsText(findUnbindableTemplateInputs(defaultTemplate))]);
   expect(compiled.transportPlan).toBeNull();
   expect(compiled.snapshot).toBeNull();
 });

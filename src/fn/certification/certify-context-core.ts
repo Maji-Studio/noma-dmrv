@@ -1,3 +1,4 @@
+import { allowsPeriodInputStub } from "@/lib/isometric/datapoint-mapping";
 import { findUnbindableTemplateInputs, type UnbindableTemplateInput } from "@/lib/isometric/template-binding-coverage";
 import type { OrgContext } from "@/lib/auth/server";
 import { env } from "@/config/env";
@@ -511,7 +512,7 @@ export async function loadFacilityCertifierFacts(
     missingDefaultTemplateId: null,
     blueprintsForTemplate,
     unresolvedBlueprintKeys,
-    unbindableTemplateInputs: findUnbindableTemplateInputs(defaultTemplate, { allowPeriodInputStub: env.ISOMETRIC_ENVIRONMENT === "sandbox" }),
+    unbindableTemplateInputs: findUnbindableTemplateInputs(defaultTemplate, { allowPeriodInputStub: allowsPeriodInputStub(env.ISOMETRIC_ENVIRONMENT) }),
     requiredTransportCategories:
       deriveRequiredTransportCategories(defaultTemplate),
   };

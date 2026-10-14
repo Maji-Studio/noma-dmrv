@@ -70,6 +70,11 @@ export function componentRenameGuidance(mapping: InputMappingEntry): string {
 // catalog, never this table.
 const PERIOD_INPUT_TUPLES = projectPeriodInputTuples();
 
+/** ADR 0005: only sandbox submissions may use zero stubs for period inputs. */
+export function allowsPeriodInputStub(environment: string | undefined): boolean {
+  return environment === "sandbox";
+}
+
 export function lookupPeriodInputTuple(
   groupKey: string,
   blueprintKey: string,

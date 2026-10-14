@@ -1,5 +1,5 @@
 import { unsupportedTemplate } from "../../../tests/fixtures/isometric/unsupported-template";
-import { findUnbindableTemplateInputs, formatUnbindableTemplateInputs } from "@/lib/isometric/template-binding-coverage";
+import { findUnbindableTemplateInputs, formatUnbindableTemplateInputsText } from "@/lib/isometric/template-binding-coverage";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { OrgContext } from "@/lib/auth/server";
 
@@ -124,7 +124,7 @@ describe("loadRemovalCompilation preparation blockers", () => {
 
   it("deduplicates template blockers from preparation and compilation", async () => {
     const defaultTemplate = unsupportedTemplate();
-    const message = formatUnbindableTemplateInputs(findUnbindableTemplateInputs(defaultTemplate));
+    const message = formatUnbindableTemplateInputsText(findUnbindableTemplateInputs(defaultTemplate));
     vi.mocked(loadRemovalSubmissionContext).mockResolvedValue({ ...baseContext, defaultTemplate } as never);
     vi.mocked(compileRemovalSubmission).mockResolvedValue({ review: { template: { id: defaultTemplate.id } }, blockers: [message], warnings: [], snapshot: null, transportPlan: null } as never);
     const result = await loadRemovalCompilation(FACILITY_ID, REMOVAL_ID);

@@ -1,4 +1,4 @@
-import { getSequestrationInputBinding } from "./transformers/sequestration-binding";
+import { getSequestrationInputBinding, hasExplicitSequestrationBinding } from "./sequestration-input-bindings";
 import type { components } from "./generated/certify";
 import { lookupSourceFact, SEMANTIC_BINDING_CATALOG } from "./semantic-binding-catalog";
 import { isSequestrationBlueprintFamily } from "./storage-blueprints";
@@ -7,6 +7,8 @@ import {
   lookupPeriodInputTuple,
   resolveDatapointSource,
 } from "./datapoint-mapping";
+
+const TRANSPORT_BLUEPRINT_KEY = "transport";
 
 export interface UnbindableTemplateInput {
   groupKey: string;
@@ -45,7 +47,11 @@ export function findUnbindableTemplateInputs(
           reason: "unmapped",
         };
         if (isSequestrationBlueprintFamily(component.blueprint_key)) {
-          if (!getSequestrationInputBinding(component.blueprint_key, input.input_key)) findings.push(target);
+          // Unbound storage blueprints retain their existing tier/durability guidance.
+          if (
+            hasExplicitSequestrationBinding(component.blueprint_key) &&
+            !getSequestrationInputBinding(component.blueprint_key, input.input_key)
+          ) findings.push(target);
           continue;
         }
         if (input.type === "fixed") continue;
@@ -55,7 +61,7 @@ export function findUnbindableTemplateInputs(
         }
         const mapping = lookupInputMapping(group.key, component.blueprint_key, input.input_key);
         if (!mapping) {
-          if (component.blueprint_key !== "transport" || !findings.some((finding) => finding.componentId === component.id)) {
+          if (component.blueprint_key !== TRANSPORT_BLUEPRINT_KEY || !findings.some((finding) => finding.componentId === component.id)) {
             findings.push(target);
           }
           continue;
@@ -108,15 +114,15 @@ function formatInstruction(input: UnbindableTemplateInput, plural = false): stri
     const provenance = source ? lookupSourceFact(source)?.provenance.toLowerCase() : undefined;
     return `receive the same ${provenance ?? "calculated"} total. Keep one of them in the Removal template, or ask support to split them.`;
   }
-  if (input.blueprintKey === "transport") {
+  if (input.blueprintKey === TRANSPORT_BLUEPRINT_KEY) {
     return `Replace ${target} with a Mass-distance-based CI emissions component in Isometric, or pick another Removal template.`;
   }
   return "Pick another Removal template or ask support to add the mapping.";
 }
 
-/** Shared operator copy. Newlines separate the lead and reason instructions. */
-export function formatUnbindableTemplateInputs(inputs: readonly UnbindableTemplateInput[]): string {
-  if (inputs.length === 0) return "";
+/** Shared operator copy with one lead and a list of reason instructions. */
+export function formatUnbindableTemplateInputs(inputs: readonly UnbindableTemplateInput[]): { lead: string; lines: string[] } {
+  if (inputs.length === 0) return { lead: "", lines: [] };
   const components = new Map<string, UnbindableTemplateInput>();
   // Prefer rename guidance over other findings for the same component.
   for (const input of inputs) {
@@ -128,7 +134,8 @@ export function formatUnbindableTemplateInputs(inputs: readonly UnbindableTempla
     const instruction = formatInstruction(input);
     reasons.set(instruction, [...(reasons.get(instruction) ?? []), input]);
   }
-  const lines = [`The Removal template has ${components.size} ${components.size === 1 ? "component" : "components"} noma cannot submit.`];
+  const lead = `The Removal template has ${components.size} ${components.size === 1 ? "component" : "components"} noma cannot submit.`;
+  const lines: string[] = [];
   for (const matches of reasons.values()) {
     const instruction = formatInstruction(matches[0], matches.length > 1);
     const names = listNames(matches.map((input) => input.componentDisplayName));
@@ -136,5 +143,11 @@ export function formatUnbindableTemplateInputs(inputs: readonly UnbindableTempla
       ? `${names} would ${matches.length > 2 ? "all" : "both"} ${instruction}`
       : `${names}: ${instruction}`);
   }
-  return lines.join("\n");
+  return { lead, lines };
+}
+
+/** Plain-text variant for thrown errors and readiness/blocker messages. */
+export function formatUnbindableTemplateInputsText(inputs: readonly UnbindableTemplateInput[]): string {
+  const { lead, lines } = formatUnbindableTemplateInputs(inputs);
+  return [lead, ...lines].join("\n");
 }

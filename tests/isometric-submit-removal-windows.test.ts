@@ -566,7 +566,7 @@ describe("submitRemoval — durability measurement-samples gate (sandbox-only)",
 
     await expect(
       submitRemoval({ orgCtx: makeTestOrgContext(USER_ID), removalId: REMOVAL_ID }),
-    ).rejects.toThrow(/200-year sequestration: Pick another Removal template/);
+    ).rejects.toThrow(/Durability submission is not available in the production registry yet/i);
     // Gated before any aggregation/claim — nothing posted, no ledger row.
     expect(createDatapointFake).not.toHaveBeenCalled();
     expect(storedRows).toHaveLength(0);
@@ -609,7 +609,7 @@ describe("submitRemoval — durability measurement-samples gate (sandbox-only)",
         orgCtx: makeTestOrgContext(USER_ID),
         removalId: REMOVAL_ID,
       }),
-    ).rejects.toThrow(/200-year sequestration: Pick another Removal template/);
+    ).rejects.toThrow(/200-year Removals cannot be submitted yet/i);
 
     expect(isometric.createDatapoint).not.toHaveBeenCalled();
     expect(
