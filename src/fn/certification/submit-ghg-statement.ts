@@ -1,3 +1,4 @@
+import { resolveIsometricClient } from "@/data-access/certifier-credentials";
 import {
   appendSyncEvent,
   attachReportDocument,
@@ -36,7 +37,6 @@ import { SafeError } from "@/lib/errors";
 import {
   describeIsometricApiError,
   getGhgStatement,
-  getIsometricClientForOrg,
   IsometricApiError,
   resubmitGhgStatement,
   sanitizeIsometricErrorBody,
@@ -241,7 +241,7 @@ export async function submitGhgStatementToVerifierCore(args: {
 }): Promise<SubmitGhgStatementResult> {
   const { orgCtx, ghgStatementId, onProgress } = args;
   requireOrgRole(orgCtx, "admin");
-  const client = await getIsometricClientForOrg(orgCtx.organizationId);
+  const client = await resolveIsometricClient(orgCtx);
   const parsed = submitGhgStatementDialogSchema.parse(args.input);
   assertProductionConfirmed(parsed.confirmProduction);
   onProgress?.({ step: "ghg_statement.checking", state: "active" });

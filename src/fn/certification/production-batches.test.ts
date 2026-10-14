@@ -1,4 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("@/data-access/certifier-credentials", () => ({
+  resolveIsometricClient: vi.fn(async () => mocks.client),
+}));
+
 import type { OrgContext } from "@/lib/auth/server";
 import { MASS_COMPARISON_EPSILON_KG } from "@/lib/calculations/mass-dry";
 import type { Logger } from "@/lib/log";
@@ -32,15 +37,6 @@ vi.mock("@/data-access/certifier-production-batches", () => ({
   upsertProductionBatchRegistration: mocks.upsertProductionBatchRegistration,
   replaceMissingProductionBatchRegistration: mocks.replaceMissingProductionBatchRegistration,
 }));
-
-vi.mock("@/lib/isometric/client", async (importOriginal) => {
-  const actual =
-    await importOriginal<typeof import("@/lib/isometric/client")>();
-  return {
-    ...actual,
-    getIsometricClientForOrg: vi.fn(async () => mocks.client),
-  };
-});
 
 vi.mock("./shared", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./shared")>();

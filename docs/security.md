@@ -274,6 +274,16 @@ and live submission **fail closed** when the active organization has no
 credential row. Keep the same key while stored rows exist — rotating it requires
 re-encrypting or replacing every organization's credentials.
 
+Normal registry callers pass their trusted `OrgContext` to
+`resolveIsometricClient(ctx)` in `src/data-access/certifier-credentials.ts`.
+Both the resolver and decrypted getter enforce `requireOrgScope`; the query
+filters on that context's organization and the Isometric provider. There is no
+exported bare-id credential getter or organization factory in the HTTP library.
+The narrow `verifyIsometricCredentialsForOrganization` seam
+checks Platform Admin authority before reading a selected organization's
+credentials and carries an `// org-scope-ok:` waiver. Neither client nor
+plaintext secrets may cross a server-action boundary.
+
 `ISOMETRIC_ACCESS_TOKEN` / `ISOMETRIC_CLIENT_SECRET` are seed/CI-only:
 `db:ensure-admin` seeds the default organization's encrypted row when all three
 values are present, and `isometric-health.yml` uses its dedicated pair through

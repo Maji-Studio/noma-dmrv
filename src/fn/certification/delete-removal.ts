@@ -1,3 +1,4 @@
+import { resolveIsometricClient } from "@/data-access/certifier-credentials";
 import { isRemovalProductionBatchShared } from "@/data-access/removal-production-batch-deletion";
 import { deleteProductionBatch, getProductionBatch, findProductionBatchBySupplierRef } from "@/lib/isometric/production-batches";
 import { deleteMeasurementSample, getMeasurementSample, findMeasurementSampleBySupplierRef } from "@/lib/isometric/measurement-samples";
@@ -21,7 +22,6 @@ import {
   reconcileRemoval,
 } from "@/lib/isometric";
 import {
-  getIsometricClientForOrg,
   IsometricApiError,
   type IsometricClient,
 } from "@/lib/isometric/client";
@@ -118,7 +118,7 @@ export async function deleteRemoval(
   let releasedDocumentMirrors: ReleasedDocumentUpload[];
   try {
     if (claimNeedsRegistryCleanup(claim)) {
-      const client = await getIsometricClientForOrg(orgCtx.organizationId);
+      const client = await resolveIsometricClient(orgCtx);
       await deleteRegistryRecords(orgCtx, client, claim, registry);
     }
     const finalized = await finalizeRemovalDeletion(orgCtx, claim, registry);
@@ -222,7 +222,7 @@ async function deleteReleasedSources(
   const deleted: string[] = [];
   let client: IsometricClient | null = null;
   try {
-    client = await getIsometricClientForOrg(orgCtx.organizationId);
+    client = await resolveIsometricClient(orgCtx);
   } catch (error) {
     log.warn(
       {

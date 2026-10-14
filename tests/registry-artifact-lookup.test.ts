@@ -5,6 +5,10 @@
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+vi.mock("@/data-access/certifier-credentials", async (importOriginal) =>
+  (await import("./fixtures/fake-registry")).fakeCredentialsModule(importOriginal),
+);
+
 vi.mock("@/lib/isometric/client", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/isometric/client")>();
   const { createFakeClientModule } = await import("./fixtures/fake-registry");

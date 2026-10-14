@@ -1,7 +1,7 @@
 "use server";
 
 import { withAutoCode } from "@/data-access/code-generator";
-import { hasCertifierCredentials } from "@/data-access/certifier-credentials";
+import { hasCertifierCredentials, resolveIsometricClient } from "@/data-access/certifier-credentials";
 import {
   FEEDSTOCK_TYPE_MANAGE_ROLE,
   archiveFeedstockType,
@@ -16,7 +16,6 @@ import { feedstockTypes, type FeedstockType } from "@/db/schema";
 import { hasOrgRole, requireOrgRole } from "@/lib/auth/server";
 import { SafeError } from "@/lib/errors";
 import {
-  getIsometricClientForOrg,
   listFeedstockTypes as listIsometricFeedstockTypes,
 } from "@/lib/isometric";
 import {
@@ -100,7 +99,7 @@ export async function importIsometricFeedstockTypeFn(
         "Connect this Organization to Isometric before importing feedstock types.",
       );
     }
-    const client = await getIsometricClientForOrg(ctx.organizationId);
+    const client = await resolveIsometricClient(ctx);
     const catalogue = await listIsometricFeedstockTypes(client);
     const entry = catalogue.find(
       (candidate) => candidate.id === data.isometricFeedstockTypeId,

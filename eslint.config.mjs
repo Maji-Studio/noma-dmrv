@@ -57,6 +57,26 @@ const eslintConfig = defineConfig([
       ],
     },
   },
+  {
+    files: ["src/{fn,app,data-access,hooks,components}/**/*.{ts,tsx}"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: [
+            "@/lib/isometric",
+            "@/lib/isometric/index",
+            "@/lib/isometric/client-env",
+          ].map((name) => ({
+            name,
+            importNames: ["getIsometricClientFromEnv"],
+            message:
+              "Environment credentials are scripts-only. Use resolveIsometricClient(ctx) from '@/data-access/certifier-credentials'.",
+          })),
+        },
+      ],
+    },
+  },
   // Override default ignores of eslint-config-next.
   globalIgnores([
     // Default ignores of eslint-config-next:

@@ -1,6 +1,6 @@
 import type { OrgContext } from "@/lib/auth/server";
 import { env } from "@/config/env";
-import { hasCertifierCredentials } from "@/data-access/certifier-credentials";
+import { hasCertifierCredentials, resolveIsometricClient } from "@/data-access/certifier-credentials";
 import {
   getCertifierProjectByFacility,
   type CertificationSubmissionRow,
@@ -44,7 +44,6 @@ import { attributeSoilTemperatureBlockers } from "@/lib/certification/member-bat
 import { COMPLETED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
 import { SafeError } from "@/lib/errors";
 import {
-  getIsometricClientForOrg,
   listComponentBlueprints,
   listProjects,
   listGhgEntryTemplates,
@@ -456,7 +455,7 @@ export async function loadFacilityCertifierFacts(
     };
   }
 
-  const client = await getIsometricClientForOrg(orgCtx.organizationId);
+  const client = await resolveIsometricClient(orgCtx);
 
   const [projects, templates] = await Promise.all([
     safeListIfConfigured(() => listProjects(client)),

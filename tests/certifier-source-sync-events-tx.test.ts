@@ -25,6 +25,13 @@ import {
   it,
   vi,
 } from "vitest";
+
+vi.mock("@/data-access/certifier-credentials", () => ({
+  resolveIsometricClient: vi.fn(
+      async () => ({}) as import("@/lib/isometric").IsometricClient,
+    ),
+}));
+
 import { and, eq, inArray } from "drizzle-orm";
 
 const TEST_TIMEOUT_MS = 20_000;
@@ -116,9 +123,6 @@ vi.mock("@/lib/isometric", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/isometric")>();
   return {
     ...actual,
-    getIsometricClientForOrg: vi.fn(
-      async () => ({}) as import("@/lib/isometric").IsometricClient,
-    ),
     findSourceBySupplierRef: vi.fn(async () => null),
     requestSignedUploadUrl: vi.fn(),
     createSource: vi.fn(),

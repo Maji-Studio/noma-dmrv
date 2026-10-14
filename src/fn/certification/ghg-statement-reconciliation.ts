@@ -1,3 +1,4 @@
+import { resolveIsometricClient } from "@/data-access/certifier-credentials";
 import { z } from "zod";
 import type { OrgContext } from "@/lib/auth/server";
 import {
@@ -26,7 +27,6 @@ import { SafeError } from "@/lib/errors";
 import {
   getGhgStatement,
   getGhgStatementPeriod,
-  getIsometricClientForOrg,
   listGhgStatementsForProject,
   payloadHash,
   type GhgStatement,
@@ -102,7 +102,7 @@ export async function reconcileGhgStatementsForFacility(
       "Link this facility to an Isometric project before syncing GHG Statements.",
     );
   }
-  const client = await getIsometricClientForOrg(orgCtx.organizationId);
+  const client = await resolveIsometricClient(orgCtx);
   const listedRemotes = await listGhgStatementsForProject(
     client,
     project.externalProjectId,
@@ -249,7 +249,7 @@ export async function listRegistryGhgStatementsForFacility(
       "Link this facility to an Isometric project before syncing GHG Statements.",
     );
   }
-  const client = await getIsometricClientForOrg(orgCtx.organizationId);
+  const client = await resolveIsometricClient(orgCtx);
   const remotes = await listGhgStatementsForProject(
     client,
     project.externalProjectId,

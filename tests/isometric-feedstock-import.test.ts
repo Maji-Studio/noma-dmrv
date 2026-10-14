@@ -29,6 +29,7 @@ vi.mock("@/data-access/certifier-credentials", async (importOriginal) => {
     await importOriginal<typeof import("@/data-access/certifier-credentials")>();
   return {
     ...actual,
+    resolveIsometricClient: vi.fn().mockResolvedValue({}),
     hasCertifierCredentials: vi.fn().mockResolvedValue(true),
   };
 });
@@ -37,7 +38,6 @@ vi.mock("@/lib/isometric", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/isometric")>();
   return {
     ...actual,
-    getIsometricClientForOrg: vi.fn().mockResolvedValue({}),
     listFeedstockTypes: vi.fn().mockResolvedValue([ENTRY]),
   };
 });

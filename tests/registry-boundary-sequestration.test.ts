@@ -1,3 +1,4 @@
+import { resolveIsometricClient } from "@/data-access/certifier-credentials";
 /**
  * Fixture-driven registry boundary for the explicit 1000-year sequestration
  * bind. The real measurement-sample and GHG-entry wrappers run against the
@@ -5,6 +6,10 @@
  * with its successful create arm.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("@/data-access/certifier-credentials", async (importOriginal) =>
+  (await import("./fixtures/fake-registry")).fakeCredentialsModule(importOriginal),
+);
 
 vi.mock("@/lib/isometric/client", async (importOriginal) => {
   const actual =
@@ -63,7 +68,6 @@ import {
 import {
   createDatapoint,
   createGhgEntry,
-  getIsometricClientForOrg,
   type IsometricGhgEntryTemplate,
 } from "@/lib/isometric";
 import type { Logger } from "@/lib/log";
@@ -276,8 +280,8 @@ describe("1000-year sequestration registry boundary", () => {
       label: `Sample sample-boundary-${index + 1}`,
     }));
 
-    const client = await getIsometricClientForOrg(
-      "org-boundary-sequestration",
+    const client = await resolveIsometricClient(
+      makeTestOrgContext("user-boundary-sequestration"),
     );
     const directDatapoints = buildDirectSequestrationDatapoints({
       template: template(),
