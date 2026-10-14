@@ -175,11 +175,14 @@ describe("enrichWithTransportLegs", () => {
     } as unknown as RemovalCertifyContext);
     const readiness = deriveRemovalReadiness(facts);
     expect(readiness.state).toBe("ready");
-    expect(readiness.advisories).toEqual([
+    expect(readiness.advisories).toEqual([]);
+    expect(readiness.transportVehicleAdvisories).toEqual([
       "Feedstock transport uses more than one vehicle type. Check that the removal template's transport factor covers every vehicle used.",
       "Feedstock transport has different or unrecorded model years. Check that the removal template's transport factor covers every vehicle used.",
     ]);
-    expect(buildRemovalRequirementsChecklist(facts).find((check) => check.key === "transportUniformity")?.status).toBe("met");
+    expect(buildRemovalRequirementsChecklist(facts).filter((check) => check.key === "transportUniformity")).toEqual([
+      expect.objectContaining({ status: "met" }),
+    ]);
     const enriched = enrichWithTransportLegs(baseAgg, legs);
     expect(enriched.feedstockTransportMassDistanceTonneKm).toBe(300);
     // removal-submission-build blocks on this warning array, never the advisories.
@@ -240,7 +243,7 @@ describe("enrichWithTransportLegs", () => {
       local: null, lockInFlight: false, missingDefaultTemplateId: null,
       hasMapping: true, hasOrgCredentials: true, hasDefaultTemplate: true,
       unresolvedBlueprintKeys: [], feedstockTypeMappingGaps: [], hasSubmittableRuns: true,
-      requiredTransport: [{ category: "biochar", count: 1, hasAggregationWarning: true, aggregationWarning: warning }],
+      requiredTransport: [{ category: "biochar", count: 1, aggregationWarning: warning }],
     });
     expect(checks.find((check) => check.key === "transportUniformity")).toMatchObject({
       status: "unmet", transportCategory: "biochar",

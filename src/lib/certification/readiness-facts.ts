@@ -46,7 +46,6 @@ export function toRemovalReadinessFacts(
       return {
         category,
         count: bucket.count,
-        hasAggregationWarning: bucket.aggregationWarning !== null,
         aggregationWarning: bucket.aggregationWarning,
       };
     }),

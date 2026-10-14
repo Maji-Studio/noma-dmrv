@@ -276,7 +276,7 @@ export function SubmissionSummary({
         <SubmissionChecks checks={checks} facilityId={facilityId} />
       )}
 
-      {(factsInput.readiness.transportVehicleAdvisories ?? []).map((advisory) => (
+      {factsInput.readiness.transportVehicleAdvisories.map((advisory) => (
         <Notice key={advisory} tone="warning">{advisory}</Notice>
       ))}
 

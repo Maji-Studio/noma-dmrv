@@ -4,6 +4,9 @@ import { formatCount } from "@/lib/copy-utils";
 import { SafeError } from "@/lib/errors";
 import type { ProductionRun, Sample, TransportLeg } from "@/db/schema";
 
+const TRANSPORT_FACTOR_REVIEW =
+  "Check that the removal template's transport factor covers every vehicle used.";
+
 export type ProductionRunWithSamples = ProductionRun & {
   samples: Sample[];
 };
@@ -128,7 +131,7 @@ export function transportVehicleAdvisories(
   const recordedTypes = new Set(legs.flatMap((leg) => leg.vehicleType == null ? [] : [leg.vehicleType]));
   if (recordedTypes.size > 1) {
     advisories.push(
-      `${categoryLabel} transport uses more than one vehicle type. Check that the removal template's transport factor covers every vehicle used.`,
+      `${categoryLabel} transport uses more than one vehicle type. ${TRANSPORT_FACTOR_REVIEW}`,
     );
   }
   // Delivery-derived biochar legs have no vehicle input. Manual legs do.
@@ -136,7 +139,7 @@ export function transportVehicleAdvisories(
     leg.vehicleType == null && !(leg.isDerived && leg.entityType === "biochar"),
   )) {
     advisories.push(
-      `${categoryLabel} transport has legs with no vehicle type recorded. Check that the removal template's transport factor covers every vehicle used.`,
+      `${categoryLabel} transport has legs with no vehicle type recorded. The Transportation module asks for the vehicle type of every leg.`,
     );
   }
   // Only derived feedstock legs copy a fleet model year; manual forms have
@@ -146,7 +149,7 @@ export function transportVehicleAdvisories(
   );
   if (modelYearLegs.some((leg) => leg.modelYear !== modelYearLegs[0].modelYear)) {
     advisories.push(
-      `${categoryLabel} transport has different or unrecorded model years. Check that the removal template's transport factor covers every vehicle used.`,
+      `${categoryLabel} transport has different or unrecorded model years. ${TRANSPORT_FACTOR_REVIEW}`,
     );
   }
   return advisories;

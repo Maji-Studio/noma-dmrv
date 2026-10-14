@@ -41,8 +41,7 @@ export interface TransportCoverageFact {
   /** Transport legs found for this category across the removal's members. */
   count: number;
   /** A per-leg uniformity/completeness warning from aggregation, if any. */
-  hasAggregationWarning: boolean;
-  aggregationWarning?: string | null;
+  aggregationWarning: string | null;
 }
 
 export interface RemovalReadinessFacts {
@@ -99,7 +98,7 @@ export interface RemovalReadiness {
   /** Non-blocking conditions operators should see before submission. */
   advisories: string[];
   /** Vehicle review warnings, separate from automatic evidence work. */
-  transportVehicleAdvisories?: string[];
+  transportVehicleAdvisories: string[];
 }
 
 const NOT_LINKED_REASON = "Facility not linked to an Isometric project";
@@ -185,7 +184,7 @@ function templateResolvesCleanly(facts: RemovalReadinessFacts): boolean {
 function transportGapReasons(required: TransportCoverageFact[]): string[] {
   const missing = required.filter((t) => t.count === 0).map((t) => t.category);
   const incomplete = required
-    .filter((t) => t.count > 0 && t.hasAggregationWarning)
+    .filter((t) => t.count > 0 && t.aggregationWarning !== null)
     .map((t) => t.category);
   const reasons: string[] = [];
   if (missing.length > 0) {
@@ -232,7 +231,7 @@ export function deriveRemovalReadiness(
   facts: RemovalReadinessFacts,
 ): RemovalReadiness {
   const transportVehicleAdvisories = facts.transportVehicleAdvisories ?? [];
-  const advisories = [...evidenceAdvisories(facts), ...transportVehicleAdvisories];
+  const advisories = evidenceAdvisories(facts);
   const advisoryFields = { advisories, transportVehicleAdvisories };
   if (facts.lockInFlight) return { state: "inProgress", reasons: [], ...advisoryFields };
 
@@ -531,7 +530,8 @@ export function buildRemovalRequirementsChecklist(
       }];
     }
     const blocked = facts.requiredTransport.filter(
-      (t) => t.count > 0 && t.hasAggregationWarning,
+      (t): t is TransportCoverageFact & { aggregationWarning: string } =>
+        t.count > 0 && t.aggregationWarning !== null,
     );
     return blocked.length === 0
       ? [{ key: "transportUniformity", label: TRANSPORT_UNIFORMITY_LABEL, status: "met" }]
@@ -540,7 +540,7 @@ export function buildRemovalRequirementsChecklist(
           label: TRANSPORT_UNIFORMITY_LABEL,
           status: "unmet",
           transportCategory: t.category,
-          detail: t.aggregationWarning ?? `Mixed transport method or mode across ${t.category} transport legs`,
+          detail: t.aggregationWarning,
         }));
   })();
 

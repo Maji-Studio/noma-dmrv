@@ -156,7 +156,7 @@ describe("aggregateTransportMassDistance", () => {
       expect(transportVehicleAdvisories([
         leg("01", { entityType, vehicleType: null }),
       ], "Transport")).toEqual([
-        "Transport transport has legs with no vehicle type recorded. Check that the removal template's transport factor covers every vehicle used.",
+        "Transport transport has legs with no vehicle type recorded. The Transportation module asks for the vehicle type of every leg.",
       ]);
     },
   );
@@ -165,7 +165,7 @@ describe("aggregateTransportMassDistance", () => {
     expect(transportVehicleAdvisories([
       leg("01", { vehicleType: null, isDerived: true }),
     ], "Feedstock")).toEqual([
-      "Feedstock transport has legs with no vehicle type recorded. Check that the removal template's transport factor covers every vehicle used.",
+      "Feedstock transport has legs with no vehicle type recorded. The Transportation module asks for the vehicle type of every leg.",
     ]);
   });
 

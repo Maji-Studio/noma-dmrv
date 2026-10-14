@@ -12,6 +12,7 @@ import { WarningIcon } from "@phosphor-icons/react/dist/ssr";
 import { InfoHint } from "@/components/ui/tooltip";
 import type { RemovalRequirementCheck } from "@/lib/certification/readiness";
 import { batchHealthFixLinkFor } from "@/lib/certification/batch-health-links";
+import { transportRepairDestination } from "@/lib/isometric/semantic-binding-catalog";
 import { certificationSettingsHref } from "@/lib/certification/links";
 import {
   buildFeedstockTypeEditDeepLink,
@@ -76,8 +77,7 @@ function fixLinksFor(
       if (!check.transportCategory) return [];
       return [batchHealthFixLinkFor({
         key: "transport",
-        fixTarget: check.transportCategory === "feedstock" ? "feedstocks"
-          : check.transportCategory === "biochar" ? "deliveries" : "labSamples",
+        fixTarget: transportRepairDestination(check.transportCategory),
       }, facilityId)];
     case "durability":
       return [

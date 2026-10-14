@@ -35,7 +35,7 @@ function enrichment(
     submissionInterrupted: false,
     hasFinalizedSubmission: false,
     registryBoundaryOpened: false,
-    readiness: { state: "ready", reasons: [], advisories: [] },
+    readiness: { state: "ready", reasons: [], advisories: [], transportVehicleAdvisories: [] },
     evidenceHealth: null,
     submissionWarnings: [],
     recentSyncEvents: [],

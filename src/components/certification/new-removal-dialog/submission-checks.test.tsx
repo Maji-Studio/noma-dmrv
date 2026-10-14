@@ -48,6 +48,27 @@ describe("SubmissionChecks", () => {
     expect(html).toContain(`href="${path}?facility=facility-1"`);
   });
 
+  it("renders every category and repair link when transport keys repeat", () => {
+    const categories = ["feedstock", "biochar", "sample"] as const;
+    const checks = categories.flatMap((category) =>
+      (["transport", "transportUniformity"] as const).map((key) => ({
+        key,
+        label: "Transport check",
+        requirementLabel: "Transport check",
+        status: "unmet" as const,
+        transportCategory: category,
+        detail: `${category} ${key} needs attention`,
+      })),
+    );
+    const html = renderToStaticMarkup(
+      <SubmissionChecks checks={checks} facilityId="facility-1" />,
+    );
+    for (const check of checks) expect(html).toContain(check.detail);
+    for (const path of ["/feedstocks", "/deliveries", "/samples"]) {
+      expect(html.match(new RegExp(`href="${path}\\?facility=facility-1"`, "g"))).toHaveLength(2);
+    }
+  });
+
   it("lists only what the operator must fix, with passed checks reduced to a count", () => {
     const html = renderToStaticMarkup(
       <SubmissionChecks
