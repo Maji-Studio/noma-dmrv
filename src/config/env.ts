@@ -143,7 +143,7 @@ const envSchema = z.object({
     .optional()
     .default("sandbox"),
   // Comma-separated allowlist of host suffixes the signed-upload flows
-  // (Sources mirror + telemetry) will PUT bytes to. Resolved in
+  // (Sources mirror) will PUT bytes to. Resolved in
   // `uploadHostAllowlist()` in signed-upload.ts: an EMPTY value preserves the
   // built-in defaults (the documented object-storage suffixes plus the S3
   // regional/dualstack patterns). A NON-EMPTY value REPLACES the defaults

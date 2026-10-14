@@ -45,7 +45,7 @@ Application credentials are not environment-only:
   checks through `getIsometricClientFromEnv()`.
 
 External certification writes require organization Admin authorization. This
-includes Removal submission, telemetry submission, GHG Statement create/submit,
+includes Removal submission, GHG Statement create/submit,
 generated-report preparation/approval, Source mirroring, and mapping changes.
 Data access is organization-scoped and resolves the facility from trusted
 lineage. Fine-grained “user may access facility X inside this organization”
@@ -61,7 +61,7 @@ Admin-only.
 Each facility has a provider-aware `certifier_projects` mapping containing the
 external project, default GHG-entry template, protocol metadata, and the
 external facility ID (`fcl_…`). The facility ID is required: production-batch
-registration (issue #630) submits against it, and telemetry uses it too.
+registration (issue #630) submits against it.
 Adopting it for the first time (null to a value) is allowed even when the
 facility already has submissions; changing or clearing an established facility
 ID, or rebinding the project, still requires superseding those submissions.
@@ -384,30 +384,16 @@ and GHG Statement creation where the remote API supports the necessary lookup.
 `src/data-access/certification-submissions.ts` is the internal Postgres-backed
 claim seam.
 
-Telemetry follows ADR 0006 because FileUpload/DataUploadSubmission has no
-supplier-reference discovery contract. It journals FileUpload ID, signed URL
-expiry, upload facts, and DataUploadSubmission ID into `payloadSnapshot` and
-resumes from those stored IDs where possible.
+## Reactor time-series upload
 
-## Telemetry status
+The reactor time-series upload pipeline was removed in issue #987. The approved
+MVP retains the original pressure CSV on each production run and needs no
+registry sensor registration or bulk time-series upload. ADR 0006 is retired;
+the full pipeline can be restored from `archive/reactor-telemetry-upload`
+(staging commit `5b7a252c2`).
 
-The server-side Slice A pipeline is implemented:
-
-- creates/reconciles sensors;
-- writes the Parquet payload;
-- `POST /file-uploads`;
-- uploads bytes to the signed URL;
-- `POST /data-upload-submissions`;
-- reads `/data-upload-submissions/{id}` for status;
-- journals step IDs and uses mapping locks.
-
-Production-run readings are now stored as unchanged `sensor_data` CSV
-documents, and the upload UI does not populate row-level readings.
-
-The UI is not live. `TelemetryPanel` and its hook exist, but the panel is not
-rendered on any current route. There is no usable “Submit Telemetry” button in
-the application. Treat the pipeline as implemented but dark until it is
-re-homed and revalidated against the sandbox.
+The legacy `production_run_readings` table and row importer are retained.
+Operator file upload does not populate row-level readings.
 
 ## Operational checks
 

@@ -153,8 +153,8 @@ design:
   `productionBatchId` wire seam.
 - `src/fn/certification/durability-measurement-samples.ts`: current
   removal-scoped durability representation.
-- `certifier_sensors` and
-  `src/fn/certification/submit-telemetry.ts`: existing sensor/upload seam.
+- Historical sensor/upload seam: `archive/reactor-telemetry-upload` at
+  `5b7a252c2`, removed in #987.
 - Current Readings file flow: the raw CSV is retained unchanged and does not
   populate the canonical row-level readings expected by telemetry submission.
 

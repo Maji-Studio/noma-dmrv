@@ -89,7 +89,7 @@ above. Override locally only if testing against a non-default spec.
 | Observation | Page |
 | --- | --- |
 | **Enum-case mismatch observed.** The page showed measurement-property `quantity_kind`/qualifier values UPPERCASE (`TEMPERATURE`, `PRESSURE`, `MASS_FRACTION`, `COMPOUND_CO2`); a sandbox `POST /sensors` rejected them with a 422 enum violation listing lowercase values. | `user-guides/certify/time-series-data-upload` |
-| **60-second aggregation cap observed.** A sandbox DataUploadSubmission over 60 seconds was rejected with `AggregationPeriodDurationInvalidError`; noma's 60-second pattern lives in `tests/isometric-sandbox.integration.test.ts`. | same page |
+| **60-second aggregation cap observed.** A sandbox DataUploadSubmission over 60 seconds was rejected with `AggregationPeriodDurationInvalidError`; the former test pattern is preserved on `archive/reactor-telemetry-upload` at `5b7a252c2` (retired in #987). | same page |
 | **Biochar pyrolysis reactor support observed despite DAC-only prose.** The OpenAPI enum included `biochar_pyrolysis_reactor_facility_time_series`, and a sandbox probe accepted it. | same page |
 
 ## Quick Refresh Checklist (8 steps)

@@ -1,8 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   decideSubmissionClaim,
-  UPLOAD_URL_SAFETY_MS,
-  type DataUploadResumeSnapshot,
   type SubmissionClaimPolicy,
   type SubmissionClaimRow,
   type SubmissionClaimStatus,
@@ -12,7 +10,6 @@ const NOW = 1_700_000_000_000;
 const LOCK_TTL_MS = 10 * 60 * 1000;
 const HASH = "hash-current";
 const OTHER_HASH = "hash-different";
-const FRESH_UPLOAD_HEADROOM_MS = 60_000;
 
 const SUPERSEDE: SubmissionClaimPolicy = { onSubmittedHashChanged: "supersede" };
 const INVALID: SubmissionClaimPolicy = {
@@ -52,6 +49,52 @@ describe("decideSubmissionClaim", () => {
   });
 
   describe("draft", () => {
+    it("keeps a possible external mutation blocked until the lock TTL expires", () => {
+      const latest = row({
+        lockedAt: new Date(NOW),
+        version: 2,
+        metadata: {
+          lastAttemptOutcome: "interrupted",
+          externalMutation: "possible",
+        },
+      });
+      const input = {
+        latest,
+        payloadHash: HASH,
+        lockTtlMs: LOCK_TTL_MS,
+        policy: SUPERSEDE,
+      };
+
+      expect(decideSubmissionClaim({ ...input, now: NOW })).toEqual({
+        kind: "blocked-in-flight",
+      });
+      expect(decideSubmissionClaim({ ...input, now: NOW + LOCK_TTL_MS - 1 })).toEqual({
+        kind: "blocked-in-flight",
+      });
+      expect(decideSubmissionClaim({ ...input, now: NOW + LOCK_TTL_MS })).toEqual({
+        kind: "resume", resumeRowId: "sub_1", resumeVersion: 2,
+      });
+    });
+
+    it("interrupted + confirmed resumes despite a fresh lock", () => {
+      expect(
+        decideSubmissionClaim({
+          latest: row({
+            lockedAt: new Date(NOW),
+            version: 2,
+            metadata: {
+              lastAttemptOutcome: "interrupted",
+              externalMutation: "confirmed",
+            },
+          }),
+          payloadHash: HASH,
+          now: NOW,
+          lockTtlMs: LOCK_TTL_MS,
+          policy: SUPERSEDE,
+        }),
+      ).toEqual({ kind: "resume", resumeRowId: "sub_1", resumeVersion: 2 });
+    });
+
     it("blocks in-flight when lockedAt is within the TTL", () => {
       const latest = row({
         status: "draft",
@@ -367,332 +410,6 @@ describe("decideSubmissionClaim", () => {
       policy: SUPERSEDE,
     };
     expect(decideSubmissionClaim(input)).toEqual(decideSubmissionClaim(input));
-  });
-
-  // ADR 0006 §4 — DataUploadSubmission resume branch. Stored-ID
-  // reconciliation, not supplier-reference. Each test pairs a stale-lock
-  // draft with a different journaled-step snapshot.
-  describe("dataUpload resume (ADR 0006)", () => {
-    const STALE_LOCK = new Date(NOW - LOCK_TTL_MS);
-
-    function freshInterruptedDraft(
-      overrides: Partial<SubmissionClaimRow> = {},
-    ): SubmissionClaimRow {
-      return row({
-        status: "draft",
-        lockedAt: new Date(NOW),
-        version: 2,
-        metadata: {
-          lastAttemptOutcome: "interrupted",
-          externalMutation: "confirmed",
-        },
-        ...overrides,
-      });
-    }
-
-    function staleDraft(overrides: Partial<SubmissionClaimRow> = {}): SubmissionClaimRow {
-      return row({
-        status: "draft",
-        lockedAt: STALE_LOCK,
-        version: 2,
-        ...overrides,
-      });
-    }
-
-    function snapshot(
-      overrides: Partial<DataUploadResumeSnapshot> = {},
-    ): DataUploadResumeSnapshot {
-      return {
-        dataUploadSubmissionId: null,
-        fileUploadId: null,
-        uploadUrlExpiresAt: null,
-        ...overrides,
-      };
-    }
-
-    it("polls existing submission when dataUploadSubmissionId is journaled", () => {
-      expect(
-        decideSubmissionClaim({
-          latest: staleDraft(),
-          payloadHash: HASH,
-          now: NOW,
-          lockTtlMs: LOCK_TTL_MS,
-          policy: SUPERSEDE,
-          dataUploadResume: snapshot({ dataUploadSubmissionId: "dus_42" }),
-        }),
-      ).toEqual({
-        kind: "resume-poll-existing",
-        resumeRowId: "sub_1",
-        resumeVersion: 2,
-        dataUploadSubmissionId: "dus_42",
-      });
-    });
-
-    it("falls back to externalId when dataUploadSubmissionId is missing but row carries an externalId", () => {
-      expect(
-        decideSubmissionClaim({
-          latest: staleDraft({ externalId: "dus_99" }),
-          payloadHash: HASH,
-          now: NOW,
-          lockTtlMs: LOCK_TTL_MS,
-          policy: SUPERSEDE,
-          dataUploadResume: snapshot(),
-        }),
-      ).toEqual({
-        kind: "resume-poll-existing",
-        resumeRowId: "sub_1",
-        resumeVersion: 2,
-        dataUploadSubmissionId: "dus_99",
-      });
-    });
-
-    it("re-PUTs the existing fileUpload when the signed URL is comfortably fresh", () => {
-      const fresh = new Date(
-        NOW + UPLOAD_URL_SAFETY_MS + FRESH_UPLOAD_HEADROOM_MS,
-      );
-      expect(
-        decideSubmissionClaim({
-          latest: staleDraft(),
-          payloadHash: HASH,
-          now: NOW,
-          lockTtlMs: LOCK_TTL_MS,
-          policy: SUPERSEDE,
-          dataUploadResume: snapshot({
-            fileUploadId: "tfu_1",
-            uploadUrlExpiresAt: fresh,
-          }),
-        }),
-      ).toEqual({
-        kind: "resume-re-put",
-        resumeRowId: "sub_1",
-        resumeVersion: 2,
-        fileUploadId: "tfu_1",
-      });
-    });
-
-    it("treats the FileUpload as an orphan when the URL has expired", () => {
-      const expired = new Date(NOW - 1);
-      expect(
-        decideSubmissionClaim({
-          latest: staleDraft(),
-          payloadHash: HASH,
-          now: NOW,
-          lockTtlMs: LOCK_TTL_MS,
-          policy: SUPERSEDE,
-          dataUploadResume: snapshot({
-            fileUploadId: "tfu_2",
-            uploadUrlExpiresAt: expired,
-          }),
-        }),
-      ).toEqual({
-        kind: "create-new-version",
-        nextVersion: 3,
-        supersedePreviousId: null,
-        reason: "dataupload-orphan-restart",
-      });
-    });
-
-    it("treats sub-threshold URL freshness as expired (avoids racing a 403 mid-PUT)", () => {
-      const subThreshold = new Date(NOW + UPLOAD_URL_SAFETY_MS - 1);
-      expect(
-        decideSubmissionClaim({
-          latest: staleDraft(),
-          payloadHash: HASH,
-          now: NOW,
-          lockTtlMs: LOCK_TTL_MS,
-          policy: SUPERSEDE,
-          dataUploadResume: snapshot({
-            fileUploadId: "tfu_3",
-            uploadUrlExpiresAt: subThreshold,
-          }),
-        }),
-      ).toMatchObject({
-        kind: "create-new-version",
-        reason: "dataupload-orphan-restart",
-      });
-    });
-
-    it("abandons journaled work and starts a new version when the source hash changed", () => {
-      // A fileUpload + fresh URL are journaled, but the readings changed since
-      // (payloadHash differs from the draft's). Reusing the orphaned upload
-      // would PUT new bytes to a URL presigned for the old length, so the
-      // claim must restart instead of resume-re-put.
-      const fresh = new Date(
-        NOW + UPLOAD_URL_SAFETY_MS + FRESH_UPLOAD_HEADROOM_MS,
-      );
-      expect(
-        decideSubmissionClaim({
-          latest: staleDraft(),
-          payloadHash: OTHER_HASH,
-          now: NOW,
-          lockTtlMs: LOCK_TTL_MS,
-          policy: SUPERSEDE,
-          dataUploadResume: snapshot({
-            fileUploadId: "tfu_stale",
-            uploadUrlExpiresAt: fresh,
-          }),
-        }),
-      ).toEqual({
-        kind: "create-new-version",
-        nextVersion: 3,
-        supersedePreviousId: null,
-        reason: "dataupload-orphan-restart",
-      });
-    });
-
-    it("falls through to plain resume when nothing has been journaled", () => {
-      expect(
-        decideSubmissionClaim({
-          latest: staleDraft(),
-          payloadHash: HASH,
-          now: NOW,
-          lockTtlMs: LOCK_TTL_MS,
-          policy: SUPERSEDE,
-          dataUploadResume: snapshot(),
-        }),
-      ).toEqual({ kind: "resume", resumeRowId: "sub_1", resumeVersion: 2 });
-    });
-
-    it("bypasses the TTL for an interrupted draft but still follows its journaled recovery step", () => {
-      const freshUrl = new Date(
-        NOW + UPLOAD_URL_SAFETY_MS + FRESH_UPLOAD_HEADROOM_MS,
-      );
-
-      expect(
-        decideSubmissionClaim({
-          latest: freshInterruptedDraft(),
-          payloadHash: HASH,
-          now: NOW,
-          lockTtlMs: LOCK_TTL_MS,
-          policy: SUPERSEDE,
-          dataUploadResume: snapshot({ dataUploadSubmissionId: "dus_fresh" }),
-        }),
-      ).toMatchObject({
-        kind: "resume-poll-existing",
-        dataUploadSubmissionId: "dus_fresh",
-      });
-      expect(
-        decideSubmissionClaim({
-          latest: freshInterruptedDraft(),
-          payloadHash: HASH,
-          now: NOW,
-          lockTtlMs: LOCK_TTL_MS,
-          policy: SUPERSEDE,
-          dataUploadResume: snapshot({
-            fileUploadId: "tfu_fresh",
-            uploadUrlExpiresAt: freshUrl,
-          }),
-        }),
-      ).toMatchObject({ kind: "resume-re-put", fileUploadId: "tfu_fresh" });
-      expect(
-        decideSubmissionClaim({
-          latest: freshInterruptedDraft(),
-          payloadHash: HASH,
-          now: NOW,
-          lockTtlMs: LOCK_TTL_MS,
-          policy: SUPERSEDE,
-          dataUploadResume: snapshot(),
-        }),
-      ).toMatchObject({ kind: "resume" });
-      expect(
-        decideSubmissionClaim({
-          latest: freshInterruptedDraft(),
-          payloadHash: OTHER_HASH,
-          now: NOW,
-          lockTtlMs: LOCK_TTL_MS,
-          policy: SUPERSEDE,
-          dataUploadResume: snapshot({ dataUploadSubmissionId: "dus_stale" }),
-        }),
-      ).toMatchObject({
-        kind: "create-new-version",
-        reason: "dataupload-orphan-restart",
-      });
-    });
-
-    it("keeps a possible external mutation blocked until the lock TTL expires", () => {
-      expect(
-        decideSubmissionClaim({
-          latest: freshInterruptedDraft({
-            metadata: {
-              lastAttemptOutcome: "interrupted",
-              externalMutation: "possible",
-            },
-          }),
-          payloadHash: HASH,
-          now: NOW,
-          lockTtlMs: LOCK_TTL_MS,
-          policy: SUPERSEDE,
-        }),
-      ).toEqual({ kind: "blocked-in-flight" });
-    });
-
-    it("starts a new version when a remote DataUploadSubmission failed", () => {
-      expect(
-        decideSubmissionClaim({
-          latest: row({
-            status: "rejected",
-            version: 4,
-            externalId: "dus_failed",
-          }),
-          payloadHash: HASH,
-          now: NOW,
-          lockTtlMs: LOCK_TTL_MS,
-          policy: SUPERSEDE,
-          dataUploadResume: snapshot({
-            dataUploadSubmissionId: "dus_failed",
-            remoteStatus: "failed",
-          }),
-        }),
-      ).toEqual({
-        kind: "create-new-version",
-        nextVersion: 5,
-        supersedePreviousId: "sub_1",
-        reason: "dataupload-rejected-restart",
-      });
-    });
-
-    it("starts a new version instead of polling stale rejected telemetry", () => {
-      expect(
-        decideSubmissionClaim({
-          latest: row({
-            status: "rejected",
-            version: 4,
-            externalId: "dus_uncertain",
-          }),
-          payloadHash: OTHER_HASH,
-          now: NOW,
-          lockTtlMs: LOCK_TTL_MS,
-          policy: SUPERSEDE,
-          dataUploadResume: snapshot({
-            dataUploadSubmissionId: "dus_uncertain",
-            remoteStatus: "pending",
-          }),
-        }),
-      ).toEqual({
-        kind: "create-new-version",
-        nextVersion: 5,
-        supersedePreviousId: null,
-        reason: "rejected-hash-changed",
-      });
-    });
-
-    it("polls a journaled submission after a local rejection without an external id", () => {
-      expect(
-        decideSubmissionClaim({
-          latest: row({ status: "rejected", version: 3, externalId: null }),
-          payloadHash: HASH,
-          now: NOW,
-          lockTtlMs: LOCK_TTL_MS,
-          policy: SUPERSEDE,
-          dataUploadResume: snapshot({
-            dataUploadSubmissionId: "dus_journaled",
-          }),
-        }),
-      ).toMatchObject({
-        kind: "resume-poll-existing",
-        dataUploadSubmissionId: "dus_journaled",
-      });
-    });
   });
 
   it("rejects an unknown status at runtime (assertNever guard)", () => {

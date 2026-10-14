@@ -3,7 +3,7 @@
 > **Status: Accepted, delivered** (2026-06-03). Reverses the dual-entry of
 > ADR 0003 (credit-batch Certify panel as a second submit surface). Builds on
 > ADR 0004 (GHG Statement as an independent, period-anchored artifact) and
-> ADR 0006 (telemetry as its own sub-status). Does **not** change the submission
+> ADR 0006 (historical telemetry sub-status, retired in #987). Does **not** change the submission
 > domain model — only where submission lives in the UI and how status is read.
 > **Amendment (2026-06-04) — sidebar nav, no in-page tabs.** The in-page
 > `CertificationTabBar` was removed; the workspace routes were promoted back to
@@ -101,7 +101,7 @@ into that workspace**.
   route under the Certification group (consistent with ADR 0004).
 - **No domain-model change.** Removal-as-submission-unit (ADR 0003) and
   GHG-Statement-as-independent-artifact (ADR 0004) stand. Membership stays
-  Isometric-owned and read-only (ADR 0004); telemetry stays its own sub-status
+  Isometric-owned and read-only (ADR 0004); the telemetry sub-status was removed in #987
   (ADR 0006). What changed is UI topology and the single submit entry point.
 - **The credit-batch panel no longer submits.** Operators submit from the
   workspace through the New-Removal wizard. `useSubmitCreditBatchRemoval` (the

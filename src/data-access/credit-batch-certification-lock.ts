@@ -13,7 +13,7 @@ import { SafeError } from "@/lib/errors";
 import { requireOrgScope } from "./utils";
 
 const CERTIFIER_PROVIDER = "isometric" as const;
-const REMOVAL_SCOPED_SUBMISSION_TYPES = ["removal", "dataUpload"] as const;
+const REMOVAL_SCOPED_SUBMISSION_TYPES = ["removal"] as const;
 
 export class CreditBatchLineageChangedError extends SafeError {
   constructor() {

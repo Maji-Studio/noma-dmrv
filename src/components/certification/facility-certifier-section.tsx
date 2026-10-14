@@ -207,14 +207,14 @@ function CertifierMappingFields({
           {formatDate(mapping.createdAt)}
         </span>
       </Field>
-      <Field label="Isometric facility (telemetry)">
+      <Field label="Isometric facility">
         {mapping.externalFacilityId ? (
           <span className="body-small font-mono">
             {mapping.externalFacilityId}
           </span>
         ) : (
           <span className="body-small text-[var(--color-text-tertiary)]">
-            Not set. Telemetry submission is disabled.
+            {MISSING_VALUE.notSet}. Add the Isometric facility ID to register production batches.
           </span>
         )}
       </Field>

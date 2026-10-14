@@ -276,7 +276,7 @@ itself is **built and enforced** — see the invariants section,
 "user X may access facility Y" check *inside* an org.
 
 - **Current authorization:** irreversible Isometric writes require organization
-  Admin role: Removal submit, telemetry submit, GHG Statement create/submit,
+  Admin role: Removal submit, GHG Statement create/submit,
   Source mirror, report prepare/approve, and mapping changes. The local
   `createRemovalWithBatchesAction` grouping step is facility/org-scoped but is
   not Admin-only because it creates no remote registry resource.
@@ -308,7 +308,7 @@ itself is **built and enforced** — see the invariants section,
   negative tests in `tests/documents-authz.test.ts` against the scoped helper.
 - **Resolve via:** build a real `requireFacilityAccess(ctx, facilityId)` first
   (do not wire calls to a missing helper), then gate every
-  removal/statement/telemetry/mapping accessor on the *resolved*
+  removal/statement/mapping accessor on the *resolved*
   facility, preserve the Admin requirement for remote writes, and audit all `localEntityId`
   accessors in `certifier_sync_events` for the same shape. Also swap
   `resolveEntityFacility` (`src/data-access/transport-legs.ts` — the polymorphic
@@ -385,10 +385,9 @@ itself is **built and enforced** — see the invariants section,
 
 ### Phase 5 Slice B / C deferrals (opened 2026-05-29)
 
-Scoped out of the Phase 5 Slice A design (biochar reactor time-series via
-Parquet — [ADR 0006](./adr/0006-data-upload-submission-idempotency.md)). The
-Slice A server pipeline exists but its UI is dark. Each item below is
-independently shippable when its upstream primitives and operator demand exist.
+The reactor time-series upload was removed in #987 and
+[ADR 0006](./adr/0006-data-upload-submission-idempotency.md) is retired.
+The independent items below require operator demand and registry confirmation.
 
 - **Deleted Storage Location recovery** (`isometric/storage-location-recovery`).
   If an already-journaled remote Storage Location returns 404, noma marks its
@@ -398,13 +397,9 @@ independently shippable when its upstream primitives and operator demand exist.
 
 - **Slice C — `MonitoringSubmission`** (`isometric/phase-5-slice-c`).
   `POST /projects/{project_id}/monitoring_requirements/{id}/submissions` —
-  structured-by-requirement submissions, parallel to the bulk Parquet path.
-  Deferred because it overlaps Slice A's purpose; without operator demand we
-  don't know which is the canonical home for which protocol-mandated
-  measurement. **Resolve via:** ask Isometric directly whether reactor
-  temperature/pressure belongs in `MonitoringSubmission` or
-  `DataUploadSubmission`. If the former, consider whether Slice A's hourly
-  aggregator becomes a `MonitoringSubmission` feeder rather than a Parquet writer.
+  structured-by-requirement submissions. The approved MVP needs no continuous
+  reactor gas telemetry. **Resolve via:** confirm the registry monitoring
+  evidence contract if future operator demand requires a submission path.
 
 ### Isometric Certify API — no facilities LIST endpoint (`isometric/facilities-list-endpoint`, opened 2026-06-10)
 
@@ -413,11 +408,11 @@ independently shippable when its upstream primitives and operator demand exist.
   `GET /facilities`, no `GET /projects/{project_id}/facilities`, no
   `POST /facilities`. The facility id (`fcl_…`) appears only as a stored scalar
   on other resources.
-- **Why it matters:** the facility certifier mapping's "Isometric facility
-  (telemetry)" field (`externalFacilityId`) is therefore a free-text paste —
+- **Why it matters:** the facility certifier mapping's "Isometric facility"
+  field (`externalFacilityId`) is therefore a free-text paste —
   operators create the facility in the Certify UI then hand-copy the id into
-  noma (`facility-certifier-dialog.tsx`). Error-prone (typo → telemetry
-  submitted against the wrong facility), and it is the one mapping field with no
+  noma (`facility-certifier-dialog.tsx`). Error-prone (typo → production batches
+  registered against the wrong facility), and it is the one mapping field with no
   validation against a real list. Creation being UI-only is fine and
   intentional; the gap is purely the missing read.
 - **Resolve via:** when a read endpoint ships (ideally
@@ -640,13 +635,3 @@ Three failure-path gaps, each a surprising mode before a registry write:
   soft/derived gate, so impact is grouping a briefly-regressed batch. **Fix:**
   either re-assert `state === "ready"` inside `createRemovalWithCreditBatches`
   after acquiring locks, or document health as a point-in-time advisory.
-
-### TelemetryPanel orphaned, reactor-telemetry submit dark (`certification/telemetry-panel-orphaned`, opened 2026-06-19)
-
-- `TelemetryPanel` still exists but is not rendered anywhere, so the reactor
-  temperature/pressure → Isometric `DataUploadSubmission` path remains dark.
-  Archive:
-  [`docs/archive/2026-06-19-telemetry-panel-orphaned.md`](./archive/2026-06-19-telemetry-panel-orphaned.md).
-- **Resolve via:** re-home and barrel-export `TelemetryPanel`, then validate the
-  file-upload → signed PUT → data-upload-submission pipeline live on the sandbox
-  before re-surfacing it.

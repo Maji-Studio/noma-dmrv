@@ -1,11 +1,9 @@
 /**
  * SSRF-safe transfer helpers for Isometric presigned upload URLs.
  *
- * Both the Sources mirror (PUT document bytes) and the Phase 5 telemetry
- * pipeline (PUT Parquet bytes) ship local bytes to whatever URL Isometric
- * returns from a `/file-uploads` or source-upload presign. If a malicious or
- * misconfigured API rerouted that URL at an internal address, a naive fetch()
- * would happily exfiltrate the bytes. The allowlist + protocol check + redirect
+ * The Sources mirror sends document bytes to source-upload presigned URLs.
+ * If a malicious or misconfigured API rerouted that URL at an internal address,
+ * a naive fetch() would happily exfiltrate the bytes. The allowlist + protocol check + redirect
  * denial + timeout constrain that surface; this module is the single home for
  * the guard so every signed-URL PUT shares one policy.
  */
@@ -21,9 +19,9 @@ export const UPLOAD_TRANSFER_TIMEOUT_MS = 30_000;
 
 // Hosts the upload flows are allowed to PUT bytes to. Isometric presigns
 // against object storage; the sandbox returns S3-style URLs for source uploads
-// (2026-05-29) and Google Cloud Storage URLs (`X-Goog-*`) for the telemetry
-// file-upload step (ADR 0006). Scoped to the specific storage host families —
-// `.storage.googleapis.com` (the GCS object endpoint), not the broad
+// (2026-05-29). Scoped to the specific storage host families —
+// `.storage.googleapis.com` is retained for Sources presigned uploads (the
+// GCS object endpoint), not the broad
 // `.googleapis.com` (which would also allow every other Google API host).
 // Host set this guard PUTs bytes to. The matching algorithm (suffix +
 // regional/dualstack S3 patterns + env override) is shared with the document

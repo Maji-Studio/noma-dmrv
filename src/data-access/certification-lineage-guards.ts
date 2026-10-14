@@ -42,7 +42,7 @@ export interface CertifiedLineageTarget {
   entityId: string;
 }
 
-const REMOVAL_SCOPED_SUBMISSION_TYPES = ["removal", "dataUpload"] as const;
+const REMOVAL_SCOPED_SUBMISSION_TYPES = ["removal"] as const;
 
 const removalSubmission = alias(
   certificationSubmissions,

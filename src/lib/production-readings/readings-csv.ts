@@ -66,8 +66,7 @@ export interface ParseReadingsCsvResult {
   /**
    * In-window rows kept despite a blank or non-numeric required channel
    * (`temperature_c` or `pressure_bar`). Sensor dropouts (`---`) are legitimate
-   * but the Isometric telemetry aggregator drops those values, so the count is
-   * surfaced instead of hiding behind `inWindowRows`.
+   * so the count is surfaced instead of hiding behind `inWindowRows`.
    */
   invalidRequiredRows: number;
   /**

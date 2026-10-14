@@ -46,10 +46,10 @@ const OUR_CODE = `
 Our implementation — read these to judge whether a requirement is BUILT / GATED:
 - src/lib/isometric/semantic-binding-catalog.ts  (SEMANTIC_BINDING_CATALOG, keyed blueprint_key → input_key → role per group_key: source field/unit/type/bucket for aggregated Datapoints, measurement property/data shape/transform for durability inputs, evidence targets. INPUT_MAPPING in transformers/datapoint.ts and SEQUESTRATION_COMPONENT_INPUT_BINDINGS in transformers/sequestration-binding.ts are projections of it (semantic-binding-projections.ts). This is what we actually SUBMIT.)
 - src/lib/isometric/storage-blueprints.ts  (which sequestration component each durability tier accepts, and its support status)
-- src/lib/isometric/transformers/ghg-entry.ts, measurement-sample.ts, data-upload.ts
+- src/lib/isometric/transformers/ghg-entry.ts, measurement-sample.ts
 - src/lib/isometric/utils/aggregation.ts        (production-run → AggregatedProductionData)
 - src/lib/isometric/utils/durability-aggregation.ts
-- src/db/schema/certification.ts                (certifierProjects, certifierRemovals, certifierGhgStatements, certifierDocumentUploads, certifierSensors)
+- src/db/schema/certification.ts                (certifierProjects, certifierRemovals, certifierGhgStatements, certifierDocumentUploads)
 - src/db/schema/credits.ts                      (creditBatches: samplingMethod, productionProcessId)
 - src/db/schema/production.ts                   (productionRuns.energyConsumption JSONB, productionRunReadings)
 - src/db/schema/production-processes.ts, products.ts, feedstock.ts

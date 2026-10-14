@@ -449,7 +449,7 @@ Statement). Every submission HTTP attempt appends to `certifier_sync_events`
 [0008](./adr/0008-submission-ledger-internal-seam.md). Source and sensor
 creation POST directly and reconcile through separate state.
 
-**Source-data immutability:** once a Removal, telemetry upload, or GHG Statement
+**Source-data immutability:** once a Removal or GHG Statement
 has a blocking ledger row (`draft`, `submitted`, `accepted`), its upstream
 operational records are locked at the data-access boundary. The guard validates
 the Removal's captured application-slice set against the reachable source
@@ -530,9 +530,8 @@ child entities: **Samples** (in-process measurements with file upload) and
 normal presigned flow ([storage.md](./storage.md)).
 The operator UI does not inspect the CSV or import row-level
 `production_run_readings`. Stored files remain openable through the authorized
-`/api/documents/{id}` route and its signed-download flow. Legacy telemetry
-import and registry-submission modules remain separate from this operator
-workflow.
+`/api/documents/{id}` route and its signed-download flow. The legacy row importer remains separate from this operator workflow.
+The reactor registry-upload pipeline was removed in issue #987.
 
 ## Traceability Visualization
 
