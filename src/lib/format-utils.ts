@@ -22,7 +22,7 @@ const FACILITY_DATE_TIME_WITH_OFFSET_FORMAT = "yyyy-MM-dd HH:mm xxx";
 const SAME_YEAR_RANGE_START_FORMAT = "MMM d";
 const KG_PER_TONNE = 1000;
 const CO2E_TONNES_MAX_FRACTION_DIGITS = 3;
-const MASS_KG_MAX_FRACTION_DIGITS = 1;
+export const MASS_KG_MAX_FRACTION_DIGITS = 1;
 const PERCENT_DEFAULT_FRACTION_DIGITS = 1;
 
 type DateValue = string | Date | null | undefined;

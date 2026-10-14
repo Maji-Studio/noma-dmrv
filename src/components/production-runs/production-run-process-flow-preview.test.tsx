@@ -95,6 +95,18 @@ describe("ProcessFlowPreview", () => {
     expect(layoutMassFlow(diagram, FLOW_WIDTH_PX)!.bands.map((band) => band.key)).not.toContain("inflow->biochar-water");
   });
 
+  it("hides the inflow and bin water segment when the water mass rounds to zero", () => {
+    const tinyWaterRun = { ...run, feedstockKg: 500, feedstockDryKg: 400, biocharKg: 300, biocharMoisturePercent: 0.01, biocharDryKg: 299.97 };
+    const diagram = processFlowDiagram(tinyWaterRun)!;
+    const layout = layoutMassFlow(diagram, FLOW_WIDTH_PX)!;
+
+    expect(diagram.inflows).toEqual([]);
+    expect(text(<ProcessFlowPreview {...tinyWaterRun} />)).not.toContain(PROCESS_FLOW_WATER_INFLOW_LABEL);
+    expect(layout.bands.map((band) => band.key)).not.toContain("inflow->biochar-water");
+    expect(layout.nodes[2].segments.find((segment) => segment.id === "biochar-water")?.h).toBe(0);
+    expect(diagram.nodes[2].segments.find((segment) => segment.id === "biochar-dry")?.kg).toBe(tinyWaterRun.biocharDryKg);
+  });
+
   it("keeps the yield arithmetic behind the block's own disclosure", () => {
     const html = renderToStaticMarkup(<ProcessFlowPreview {...run} />);
 
