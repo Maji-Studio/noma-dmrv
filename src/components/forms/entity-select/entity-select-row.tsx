@@ -1,4 +1,5 @@
 import { PencilSimpleIcon, PlusIcon } from "@phosphor-icons/react/dist/ssr";
+import { Combobox } from "@base-ui/react/combobox";
 import { cn } from "@/lib/utils";
 import type { EntityOption, EntitySelectProps } from "./types";
 
@@ -23,42 +24,40 @@ export function EntityOptionText({ option }: { option: EntityOption }) {
 
 interface EntitySelectRowProps {
   row: SelectRow;
-  active: boolean;
   value?: string;
+  highlightActions: boolean;
   noneOption: EntitySelectProps["noneOption"];
   editLabel: string;
   createLabel: string;
-  onActivate: () => void;
-  onHighlight: () => void;
 }
 
 export function EntitySelectRow({
-  row, active, value, noneOption, editLabel, createLabel, onActivate, onHighlight,
+  row, value, noneOption, editLabel, createLabel, highlightActions,
 }: EntitySelectRowProps) {
   const isAction = row.kind === "edit" || row.kind === "create";
   const disabled = row.kind === "option" && row.option.disabled;
   const selected = row.kind === "none" ? !value : row.kind === "option" && row.option.id === value;
+  const className = cn(
+    "min-h-44 px-12 py-8 transition-colors",
+    disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer",
+    isAction && "flex items-center gap-8 text-[var(--color-interaction)]",
+    (!isAction || highlightActions) && "data-[highlighted]:bg-[var(--color-background-medium)]",
+    selected && "bg-[var(--color-background-interaction-light)]",
+  );
+  // Disabled rows stay visible but do not join Combobox's navigation registry.
+  if (disabled && row.kind === "option") return (
+    <li role="option" aria-disabled="true" aria-selected={selected} data-testid={`entity-option-${row.option.id}`} className={className}>
+      <EntityOptionText option={row.option} />
+    </li>
+  );
   return (
-    <li
-      id={row.id}
-      // The portal mounts after the owner's effects. A row ref also scrolls
-      // the initial highlight, including when a hint precedes it in the DOM.
-      ref={(element) => {
-        if (element && active) document.getElementById(row.id)?.scrollIntoView({ block: "nearest" });
-      }}
+    <Combobox.Item
+      render={<li />}
+      value={row}
       role={isAction ? "button" : "option"}
       aria-selected={isAction ? undefined : selected}
-      aria-disabled={disabled || undefined}
       data-testid={row.kind === "option" ? `entity-option-${row.option.id}` : `entity-select-${row.kind}`}
-      onClick={disabled ? undefined : onActivate}
-      onPointerMove={disabled ? undefined : onHighlight}
-      className={cn(
-        "min-h-44 px-12 py-8 transition-colors",
-        disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer",
-        isAction && "flex items-center gap-8 text-[var(--color-interaction)]",
-        active && "bg-[var(--color-background-medium)]",
-        selected && "bg-[var(--color-background-interaction-light)]",
-      )}
+      className={className}
     >
       {row.kind === "option" ? <EntityOptionText option={row.option} /> : row.kind === "none" ? (
         <>
@@ -79,6 +78,6 @@ export function EntitySelectRow({
           </span>
         </>
       )}
-    </li>
+    </Combobox.Item>
   );
 }

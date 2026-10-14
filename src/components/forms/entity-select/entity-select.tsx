@@ -8,7 +8,6 @@ import {
   useState,
   useRef,
   useEffect,
-  useEffectEvent,
   useId,
   type KeyboardEvent,
   type FocusEvent,
@@ -22,7 +21,7 @@ import {
   SpinnerIcon,
   XIcon,
 } from "@phosphor-icons/react/dist/ssr";
-import { Popover } from "@base-ui/react/popover";
+import { Combobox } from "@base-ui/react/combobox";
 import dynamic from "next/dynamic";
 import { isEditableEntityType, useCanManageFeedstockTypes } from "@/hooks/use-entity-edit-record";
 import { ENTITY_SEARCH_LIMIT, SELECT_SEARCH_MIN_OPTIONS } from "@/config/forms";
@@ -227,7 +226,6 @@ function EntitySelectView({
   setSearchQuery,
   queryData,
 }: EntitySelectProps & PickerState & { queryData?: EntityQueryData }) {
-  const [highlightedId, setHighlightedId] = useState<string | null>(null);
   const [isDriverDialogOpen, setIsDriverDialogOpen] = useState(false);
   const [isOperatorDialogOpen, setIsOperatorDialogOpen] = useState(false);
   const [isVehicleDialogOpen, setIsVehicleDialogOpen] = useState(false);
@@ -237,6 +235,9 @@ function EntitySelectView({
     isVehicleDialogOpen || isFeedstockTypeDialogOpen || isFormulationDialogOpen;
 
   const containerRef = useRef<HTMLDivElement>(null);
+  const [listElement, setListElement] = useState<HTMLDivElement | null>(null);
+  const [explicitActionHighlight, setExplicitActionHighlight] = useState(false);
+  const openingNavigationKey = useRef("Home");
   const popupRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -332,7 +333,9 @@ function EntitySelectView({
     if (isOpen && (dismissed || !isInsidePicker(document.activeElement))) notifyBlur();
     setIsOpen(false);
     setSearchQuery("");
-    setHighlightedId(null);
+    setExplicitActionHighlight(false);
+    openingNavigationKey.current = "Home";
+    triggerRef.current?.removeAttribute("aria-activedescendant");
   };
   const handlePickerBlur = (event: FocusEvent<HTMLElement>) => {
     // Opening quick-add moves focus outside the picker without touching it.
@@ -385,35 +388,30 @@ function EntitySelectView({
   if (!disabled && !selectionLocked && shouldShowCreateAction) {
     rows.push({ id: `${entitySelectId}-create`, kind: "create" });
   }
-  const selectableRows = rows.filter((row) => row.kind !== "option" || !row.option.disabled);
-  // Without an explicit highlight, Enter picks the first entity (or None),
-  // never Edit or Add new; a locked picker only has its Edit row.
-  const activeRow = selectableRows.find((row) => row.id === highlightedId)
-    ?? selectableRows.find((row) => row.kind === "option" || row.kind === "none")
-    ?? (selectionLocked ? selectableRows[0] : undefined);
-  const activeId = isOpen ? activeRow?.id : undefined;
   const showSearch = !disabled && !selectionLocked && !hideSearch &&
     (alwaysShowSearch || searchQuery.length > 0 || showMoreResults || options.length > SELECT_SEARCH_MIN_OPTIONS);
 
-  const closeMenuFromEffect = useEffectEvent(closeMenu);
-
-  // Portalled content counts as inside the picker for pointer dismissal.
+  const navigableRows = rows.filter((row) => row.kind !== "option" || !row.option.disabled);
+  const firstSelectableId = rows.find((row) => row.kind === "none" || (row.kind === "option" && !row.option.disabled))?.id
+    ?? (selectionLocked ? rows[0]?.id : undefined);
+  // Initialize Base UI's navigation at the first selectable row, preserving the
+  // picker's Enter default even when opening by pointer or receiving async data.
   useEffect(() => {
-    function handlePointerDown(event: PointerEvent) {
-      if (!containerRef.current?.contains(event.target as Node) &&
-          !popupRef.current?.contains(event.target as Node)) {
-        closeMenuFromEffect(true);
-      }
+    if (isOpen && listElement && (firstSelectableId || openingNavigationKey.current === "End")) {
+      const navigationKey = openingNavigationKey.current;
+      let cancelled = false;
+      const initialize = () => {
+        if (!cancelled && listElement.isConnected) listElement.dispatchEvent(new window.KeyboardEvent("keydown", { key: navigationKey, bubbles: true }));
+      };
+      initialize();
+      // Base UI 1.1.0 floating-ui-react/hooks/useListNavigation.js restores selectedIndex on open; repeat Home after mount.
+      queueMicrotask(() => {
+        initialize();
+        if (!cancelled) openingNavigationKey.current = "Home";
+      });
+      return () => { cancelled = true; };
     }
-    document.addEventListener("pointerdown", handlePointerDown);
-    return () => document.removeEventListener("pointerdown", handlePointerDown);
-  }, []);
-
-  useEffect(() => {
-    if (isOpen && shouldFocusSearch(showSearch, openedWithTouch.current)) {
-      inputRef.current?.focus();
-    }
-  }, [isOpen, showSearch]);
+  }, [isOpen, firstSelectableId, listElement]);
 
   // Auto-select when there is exactly one option and no current value
   useEffect(() => {
@@ -462,52 +460,43 @@ function EntitySelectView({
     !!emptyHint?.href;
 
   const handleKeyDown = (
-    e: KeyboardEvent<HTMLInputElement | HTMLButtonElement | HTMLAnchorElement>,
+    e: KeyboardEvent<HTMLElement> & { preventBaseUIHandler?: () => void },
   ) => {
     if (triggerDisabled) return;
-    if (!isOpen) {
-      if (["ArrowDown", "ArrowUp", "Enter", " "].includes(e.key)) {
-        e.preventDefault();
-        openedWithTouch.current = false;
-        blurNotified.current = false;
-        setIsOpen(true);
-        setHighlightedId(e.key === "ArrowUp" ? selectableRows.at(-1)?.id ?? null : null);
-      }
-      return;
-    }
-    const index = selectableRows.findIndex((row) => row.id === activeRow?.id);
+    if (!isOpen) return;
     switch (e.key) {
-      case "ArrowDown":
-      case "ArrowUp":
       case "Home":
-      case "End": {
-        if ((e.key === "Home" || e.key === "End") && e.currentTarget === inputRef.current) break;
-        e.preventDefault();
-        const next = e.key === "Home" ? 0 : e.key === "End" ? selectableRows.length - 1
-          : Math.max(0, Math.min(selectableRows.length - 1, index + (e.key === "ArrowDown" ? 1 : -1)));
-        setHighlightedId(selectableRows[next]?.id ?? null);
-        break;
-      }
-      case "Enter":
-        e.preventDefault();
-        if (activeRow) activateRow(activeRow);
+      case "End":
+        // Preserve the native-caret contract test: Home/End must leave the input event uncanceled.
+        if (e.currentTarget === inputRef.current) e.preventBaseUIHandler?.();
         break;
       case "Escape":
-        if (isOpen) {
+        e.preventDefault();
+        e.stopPropagation();
+        e.preventBaseUIHandler?.();
+        triggerRef.current?.focus();
+        closeMenu(true);
+        break;
+      case "Enter": {
+        const highlighted = listElement?.querySelector("[data-highlighted]");
+        if (highlighted?.getAttribute("role") === "button" && !explicitActionHighlight && !selectionLocked) {
           e.preventDefault();
-          e.stopPropagation();
-          // Escape may fire from the search input, which unmounts on
-          // close — return focus to the trigger so keyboard users are
-          // not dropped onto the document body.
-          triggerRef.current?.focus();
-          closeMenu(true);
+          e.preventBaseUIHandler?.();
+        } else if (!highlighted) {
+          e.preventDefault();
+          e.preventBaseUIHandler?.();
+          const first = rows.find((row) => row.kind === "none" || (row.kind === "option" && !row.option.disabled))
+            ?? (selectionLocked ? rows[0] : undefined);
+          if (first) activateRow(first);
         }
         break;
+      }
       case "Tab":
+        e.preventBaseUIHandler?.();
         if (popupRef.current?.contains(e.currentTarget)) {
           e.preventDefault();
-          closeMenu();
           triggerRef.current?.focus();
+          closeMenu();
         } else if (showEmptyStateRecoveryLink && !e.shiftKey) {
           e.preventDefault();
           recoveryLinkRef.current?.focus();
@@ -516,19 +505,60 @@ function EntitySelectView({
     }
   };
 
-  const handleToggle = () => {
-    if (isOpen) closeMenu(true);
-    else if (!triggerDisabled) {
-      blurNotified.current = false;
-      setIsOpen(true);
-    }
-  };
-
   const defaultPlaceholder = `Select ${entityLabel}...`;
   const defaultCreateLabel = `Add new ${entityLabel}`;
 
   return (
-    <Popover.Root open={isOpen} onOpenChange={(open) => { if (!open) closeMenu(true); }}>
+    <Combobox.Root<SelectRow>
+      open={isOpen}
+      onOpenChange={(open, details) => {
+        if (!open && details.isCanceled) return;
+        // Clear and the stock caption are siblings of Trigger, but still
+        // belong to this field for pointer dismissal and touched validation.
+        if (!open && details.reason === "outside-press" && isInsidePicker(details.event.target)) {
+          details.cancel();
+          return;
+        }
+        if (open) {
+          blurNotified.current = false;
+          setIsOpen(true);
+        } else {
+          if (details.reason === "escape-key") triggerRef.current?.focus();
+          closeMenu(details.reason !== "item-press");
+        }
+      }}
+      id={entitySelectId}
+      items={navigableRows}
+      value={rows.find((row) => row.kind === "option" && row.option.id === value) ?? null}
+      isItemEqualToValue={(item, selected) => item.id === selected.id}
+      itemToStringValue={(row) => row.kind === "option" ? row.option.id : ""}
+      itemToStringLabel={(row) => row.kind === "option" ? row.option.name : row.kind === "none" ? noneOption?.label ?? "" : ""}
+      onValueChange={(row, details) => {
+        // Action rows participate in navigation, but never become a field value.
+        details.cancel();
+        if (details.reason !== "item-press") return;
+        if (row && (row.kind === "option" || row.kind === "none" || selectionLocked || details.event.type !== "keydown" || explicitActionHighlight)) activateRow(row);
+      }}
+      onItemHighlighted={(_, details) => {
+        // This Base UI version exposes the active descendant on Input and List,
+        // but not Trigger, where touch and searchless pickers retain focus.
+        // Base UI 1.1.0 combobox/item/ComboboxItem.js assigns item ids as `${rootId}-${index}`.
+        if (details.index >= 0) triggerRef.current?.setAttribute("aria-activedescendant", `${entitySelectId}-${details.index}`);
+        else triggerRef.current?.removeAttribute("aria-activedescendant");
+        setExplicitActionHighlight(details.reason === "keyboard" || details.reason === "pointer");
+      }}
+      inputValue={searchQuery}
+      onInputValueChange={(query, details) => {
+        if (details.reason === "input-change") {
+          setExplicitActionHighlight(false);
+          setSearchQuery(query);
+        }
+      }}
+      filter={null}
+      autoHighlight={rows.some((row) => row.kind === "none" || (row.kind === "option" && !row.option.disabled)) || selectionLocked}
+      loopFocus={false}
+      disabled={triggerDisabled}
+    >
       <div
         ref={containerRef}
         className={cn("relative", className)}
@@ -537,20 +567,29 @@ function EntitySelectView({
       >
         {/* Trigger */}
         <div className="relative flex items-center">
-          <button
+          <Combobox.Trigger
             type="button"
             ref={triggerRef}
             id={id}
-            onClick={handleToggle}
             onPointerDown={(event) => { openedWithTouch.current = event.pointerType === "touch"; }}
-            onKeyDown={handleKeyDown}
+            onKeyDown={(event) => {
+              if (!isOpen) {
+                openedWithTouch.current = false;
+                openingNavigationKey.current = event.key === "ArrowUp" ? "End" : "Home";
+              }
+              handleKeyDown(event);
+              // Base UI 1.1.0 combobox/root/AriaCombobox.js wires navigation to Input/List, not Trigger.
+              if (isOpen && !event.defaultPrevented && ["ArrowDown", "ArrowUp", "Home", "End", "Enter"].includes(event.key)) {
+                event.preventDefault();
+                listElement?.dispatchEvent(new window.KeyboardEvent("keydown", { key: event.key, bubbles: true, cancelable: true }));
+              }
+            }}
             disabled={triggerDisabled}
             role="combobox"
             aria-readonly={selectionLocked || undefined}
             aria-haspopup="listbox"
             aria-expanded={isOpen}
             aria-controls={listboxId}
-            aria-activedescendant={activeId}
             // A wrapping FormField passes its id so its <label htmlFor> names the
             // trigger; without one the placeholder is the only name available.
             aria-label={id ? undefined : placeholder || defaultPlaceholder}
@@ -581,12 +620,14 @@ function EntitySelectView({
                   : "text-[var(--color-text-tertiary)]"
               )}
             >
-              {displayText ||
-                (!value && noneOption
-                  ? noneOption.label
-                  : isSelectionLoading
-                    ? "Loading selection…"
-                    : placeholder || defaultPlaceholder)}
+              <Combobox.Value>
+                {displayText ||
+                  (!value && noneOption
+                    ? noneOption.label
+                    : isSelectionLoading
+                      ? "Loading selection…"
+                      : placeholder || defaultPlaceholder)}
+              </Combobox.Value>
             </span>
             <CaretDownIcon
               aria-hidden
@@ -597,7 +638,7 @@ function EntitySelectView({
                 isOpen && "rotate-180"
               )}
             />
-          </button>
+          </Combobox.Trigger>
           {value && !disabled && !selectionLocked && (
             <Button
               variant="noOutline"
@@ -625,14 +666,14 @@ function EntitySelectView({
 
         {/* Dropdown */}
         {isOpen && (
-          <Popover.Portal>
-            <Popover.Positioner
+          <Combobox.Portal>
+            <Combobox.Positioner
               anchor={triggerRef}
               sideOffset={MENU_SIDE_OFFSET}
               collisionPadding={MENU_COLLISION_PADDING}
               className="z-[var(--z-layer-popover)] w-[var(--anchor-width)]"
             >
-              <Popover.Popup
+              <Combobox.Popup
                 ref={popupRef}
                 initialFocus={() => shouldFocusSearch(showSearch, openedWithTouch.current) ? inputRef.current : false}
                 finalFocus={false}
@@ -644,18 +685,12 @@ function EntitySelectView({
                   <div className="shrink-0 p-8">
                     <div className="relative">
                       <MagnifyingGlassIcon aria-hidden weight="bold" className="absolute left-12 top-1/2 -translate-y-1/2 size-16 text-[var(--color-text-tertiary)]" />
-                      <input
+                      <Combobox.Input
                         ref={inputRef}
                         role="combobox"
                         aria-expanded={isOpen}
                         aria-controls={listboxId}
-                        aria-activedescendant={activeId}
                         type="text"
-                        value={searchQuery}
-                        onChange={(e) => {
-                          setSearchQuery(e.target.value);
-                          setHighlightedId(null);
-                        }}
                         onKeyDown={handleKeyDown}
                         placeholder={`Search ${entityLabel}...`}
                         aria-label={`Search ${entityLabel}`}
@@ -667,7 +702,10 @@ function EntitySelectView({
                 )}
 
                 {/* Options list */}
-                <ul
+                <Combobox.List
+                  render={<ul />}
+                  ref={setListElement}
+                  onKeyDown={handleKeyDown}
                   id={listboxId}
                   role="listbox"
                   aria-label={`${entityLabel} options`}
@@ -703,6 +741,7 @@ function EntitySelectView({
                             target="_blank"
                             rel="noopener noreferrer"
                             onKeyDown={(event) => {
+                              if (event.key === "Enter") event.stopPropagation();
                               if (event.key === "Tab" || event.key === "Escape") handleKeyDown(event);
                             }}
                             className="flex min-h-44 w-full items-center gap-8 px-12 py-8 body-small font-medium text-[var(--color-interaction)] transition-colors hover:bg-[var(--color-background-medium)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-interaction)]"
@@ -722,13 +761,11 @@ function EntitySelectView({
                     <EntitySelectRow
                       key={row.id}
                       row={row}
-                      active={activeId === row.id}
+                      highlightActions={explicitActionHighlight || selectionLocked}
                       value={value}
                       noneOption={noneOption}
                       editLabel={editLabel ?? `Edit ${selectedOption?.name}`}
                       createLabel={createLabel || defaultCreateLabel}
-                      onActivate={() => activateRow(row)}
-                      onHighlight={() => setHighlightedId(row.id)}
                     />
                   ))}
                   {!disabled && !selectionLocked && showMoreResults && (
@@ -736,10 +773,10 @@ function EntitySelectView({
                       More results may be available. Refine your search.
                     </li>
                   )}
-                </ul>
-              </Popover.Popup>
-            </Popover.Positioner>
-          </Popover.Portal>
+                </Combobox.List>
+              </Combobox.Popup>
+            </Combobox.Positioner>
+          </Combobox.Portal>
         )}
       </div>
       {!isLocal && (
@@ -772,6 +809,6 @@ function EntitySelectView({
           />
         </>
       )}
-    </Popover.Root>
+    </Combobox.Root>
   );
 }

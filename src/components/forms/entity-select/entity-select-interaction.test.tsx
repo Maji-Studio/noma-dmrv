@@ -18,7 +18,7 @@ vi.mock("@/hooks/use-entities", () => ({
   useEntityOptions: ({ search, enabled }: { search: string; enabled: boolean }) => {
     state.listEnabled.push(enabled);
     return {
-      data: state.options.filter((option) => option.name.toLowerCase().includes(search.toLowerCase())),
+      data: state.options.filter((option) => [option.name, option.code].some((text) => text.toLowerCase().includes(search.toLowerCase()))),
       isLoading: state.loading,
       error: state.error,
     };
@@ -257,6 +257,58 @@ describe("EntitySelect automatic selection after clear", () => {
 });
 
 describe("EntitySelect menu interactions", () => {
+  it("keeps the menu open and untouched when pressing its sibling Clear button", () => {
+    const change = vi.fn(); const blur = vi.fn();
+    render(<EntitySelect options={state.options} value="one" onChange={change} onBlur={blur} />);
+    act(() => trigger().focus()); open();
+    const clear = screen.getByRole("button", { name: "Clear selection" });
+    fireEvent.pointerDown(clear);
+    fireEvent.click(clear);
+    expect(change).toHaveBeenCalledExactlyOnceWith("");
+    expect(trigger().getAttribute("aria-expanded")).toBe("true");
+    expect(blur).not.toHaveBeenCalled();
+  });
+
+  it("opens at the last row with ArrowUp without selecting an action", async () => {
+    const change = vi.fn(); const create = vi.fn();
+    render(<EntitySelect options={state.options} value="one" onChange={change} allowCreate onCreateNew={create} hideSearch />);
+    key("ArrowUp");
+    await waitFor(() => expect(activeTestId()).toBe("entity-select-create"));
+    const action = screen.getByRole("button", { name: "Add new option" });
+    expect(action.hasAttribute("aria-selected")).toBe(false);
+    expect(screen.getAllByRole("option")).toHaveLength(2);
+    key("Enter");
+    expect(create).toHaveBeenCalledOnce();
+    expect(change).not.toHaveBeenCalled();
+    expect(trigger().textContent).toBe("North bin");
+  });
+
+  it("keeps server code matches and a rich selected label while searching", async () => {
+    const change = vi.fn();
+    render(<EntitySelect entityType="storageLocation" value="one" onChange={change} alwaysShowSearch formatSelectedLabel={(option) => <strong>{option.name} (+100 kg wet)</strong>} />);
+    open();
+    const search = screen.getByRole("combobox", { name: "Search storage bin" });
+    await waitFor(() => expect(document.activeElement).toBe(search));
+    fireEvent.change(search, { target: { value: "2" } });
+    await waitFor(() => expect(screen.queryByTestId("entity-option-one")).toBeNull());
+    expect(screen.getByTestId("entity-option-two").textContent).toBe("South bin");
+    expect(trigger().querySelector("strong")?.textContent).toBe("North bin (+100 kg wet)");
+    key("Enter");
+    expect(change).toHaveBeenCalledExactlyOnceWith("two");
+  });
+
+  it("selects with the keyboard when focus is inside the list", () => {
+    const change = vi.fn();
+    render(<EntitySelect options={state.options} onChange={change} hideSearch />);
+    key("ArrowDown");
+    const list = screen.getByRole("listbox", { name: "option options" });
+    act(() => list.focus());
+    fireEvent.keyDown(list, { key: "ArrowDown" });
+    fireEvent.keyDown(list, { key: "Enter" });
+    expect(change).toHaveBeenCalledExactlyOnceWith("two");
+    expect(trigger().getAttribute("aria-expanded")).toBe("false");
+  });
+
   it.each([{ value: undefined, edit: true }, { value: "one", edit: false }])("requires selection and callback: %s", ({ value, edit }) => {
     render(<EntitySelect entityType="storageLocation" value={value} onChange={vi.fn()} onEditSelected={edit ? vi.fn() : undefined} />);
     open();
@@ -333,11 +385,11 @@ describe("EntitySelect menu interactions", () => {
     expect(close).not.toHaveBeenCalled();
   });
 
-  it("walks none, options, edit, create in order and activates Edit", () => {
+  it("walks none, options, edit, create in order and activates Edit", async () => {
     const edit = vi.fn(); const change = vi.fn();
     render(<EntitySelect entityType="storageLocation" value="one" onChange={change} onEditSelected={edit} noneOption={{ label: "None" }} allowCreate onCreateNew={vi.fn()} />);
     key("ArrowDown");
-    expect(activeTestId()).toBe("entity-select-none");
+    await waitFor(() => expect(activeTestId()).toBe("entity-select-none"));
     for (const id of ["entity-option-one", "entity-option-two", "entity-select-edit", "entity-select-create"]) {
       key("ArrowDown"); expect(activeTestId()).toBe(id);
     }
@@ -466,6 +518,17 @@ describe("EntitySelect menu interactions", () => {
     state.options = Array.from({ length: count }, (_, i) => ({ id: String(i), code: String(i), name: `Bin ${i}` }));
     render(<EntitySelect entityType="storageLocation" onChange={vi.fn()} />); open();
     expect(Boolean(screen.queryByTestId("entity-select-search"))).toBe(count === 6);
+  });
+
+  it.each([false, true])("focuses newly loaded search only for a fine pointer (touch: %s)", async (touch) => {
+    finePointer = !touch;
+    const change = vi.fn();
+    const view = render(<EntitySelect options={[]} isLoading onChange={change} />);
+    act(() => trigger().focus()); open();
+    expect(screen.queryByTestId("entity-select-search")).toBeNull();
+    const options = Array.from({ length: 6 }, (_, index) => ({ id: String(index), code: String(index), name: `Bin ${index}` }));
+    view.rerender(<EntitySelect options={options} onChange={change} />);
+    await waitFor(() => expect(document.activeElement).toBe(touch ? trigger() : screen.getByTestId("entity-select-search")));
   });
 
   it.each([{ alwaysShowSearch: true }, { hideSearch: true, alwaysShowSearch: true }])("honors search overrides: %s", (props) => {
@@ -731,4 +794,69 @@ describe("EntitySelect result limit hint", () => {
     expect(screen.getByTestId("entity-select-search")).toBeTruthy();
     expect(screen.queryAllByRole("option")).toHaveLength(0);
   });
+});
+
+
+it("does not select by typeahead on a closed trigger", () => {
+  const change = vi.fn();
+  const view = render(<EntitySelect options={state.options} value="one" onChange={change} />);
+  view.rerender(<EntitySelect options={state.options} value="one" onChange={change} />);
+  act(() => trigger().focus());
+  fireEvent.keyDown(trigger(), { key: "s" });
+  expect(change).not.toHaveBeenCalled();
+  expect(trigger().getAttribute("aria-expanded")).toBe("false");
+  expect(screen.queryByTestId("entity-select-listbox")).toBeNull();
+});
+
+it.each(["edit and create", "create only", "no rows"])("keeps no-match Enter in search with %s", async (setup) => {
+  const change = vi.fn();
+  const edit = vi.fn();
+  const create = vi.fn();
+  const blur = vi.fn();
+  render(<EntitySelect
+    options={state.options}
+    value={setup === "edit and create" ? "one" : undefined}
+    onChange={change}
+    onEditSelected={edit}
+    onCreateNew={setup === "no rows" ? undefined : create}
+    onBlur={blur}
+    allowCreate
+    alwaysShowSearch
+  />);
+  open();
+  const search = screen.getByTestId("entity-select-search");
+  await waitFor(() => expect(document.activeElement).toBe(search));
+  fireEvent.change(search, { target: { value: "zzz" } });
+  fireEvent.keyDown(search, { key: "Enter" });
+  expect(trigger().getAttribute("aria-expanded")).toBe("true");
+  expect(screen.getByTestId("entity-select-listbox")).toBeTruthy();
+  expect(document.activeElement).toBe(search);
+  for (const callback of [change, edit, create, blur]) expect(callback).not.toHaveBeenCalled();
+  for (const testId of ["entity-select-edit", "entity-select-create"]) {
+    const action = screen.queryByTestId(testId);
+    if (action?.hasAttribute("data-highlighted")) {
+      expect(action.className).not.toContain("data-[highlighted]:bg-");
+    }
+  }
+});
+
+it.each([false, true])("preserves recovery-link Enter activation (None row: %s)", async (withNone) => {
+  const change = vi.fn();
+  const blur = vi.fn();
+  render(<EntitySelect
+    options={[]}
+    onChange={change}
+    onBlur={blur}
+    noneOption={withNone ? { label: "None" } : undefined}
+    emptyHint={{ message: "Create a bin first", href: "/storage-locations" }}
+  />);
+  act(() => trigger().focus());
+  key("ArrowDown");
+  fireEvent.keyDown(trigger(), { key: "Tab" });
+  const link = screen.getByRole("link");
+  await waitFor(() => expect(document.activeElement).toBe(link));
+  // jsdom does not navigate on Enter; an uncanceled event preserves native activation.
+  expect(fireEvent.keyDown(link, { key: "Enter" })).toBe(true);
+  expect(change).not.toHaveBeenCalled();
+  expect(blur).not.toHaveBeenCalled();
 });

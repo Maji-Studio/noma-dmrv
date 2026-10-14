@@ -437,7 +437,7 @@ describe("EntitySelect label association", () => {
       renderLabelled().match(/<button[^>]*role="combobox"[^>]*>/)?.[0] ?? "";
 
     expect(trigger).toContain('aria-label="Select reactor"');
-    expect(trigger).not.toContain(" id=");
+    expect(trigger).not.toContain('id="reactor-field"');
   });
 });
 
