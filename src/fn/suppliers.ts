@@ -26,7 +26,8 @@ import {
   deleteSupplierLocation,
   type PaginatedSuppliers,
 } from "@/data-access/suppliers";
-import { SafeError } from "@/lib/errors";
+import { DomainError } from "@/lib/domain-errors";
+import { validationFailed } from "@/lib/operations/errors";
 import {
   createSupplierSchema,
   createSupplierWithLocationsSchema,
@@ -41,6 +42,7 @@ import { resolveDistanceSource } from "@/schemas/distance-source";
 import type { ActionResult } from "@/types/actions";
 
 const LOG_MESSAGE = "supplier action failed";
+const supplierIdSchema = z.string().uuid("Invalid supplier ID");
 
 // ============================================
 // Supplier List/Query Operations
@@ -246,9 +248,11 @@ export async function getSupplierLocationsBySupplierFn(
   supplierId: string
 ): Promise<ActionResult<SupplierLocation[]>> {
   return withAction(async (ctx) => {
-    const parsed = z.string().uuid("Invalid supplier ID").safeParse(supplierId);
+    const parsed = supplierIdSchema.safeParse(supplierId);
     if (!parsed.success) {
-      throw new SafeError(parsed.error.issues[0].message);
+      throw new DomainError("validation_failed", parsed.error.issues[0].message, {
+        issues: validationFailed(parsed.error).issues,
+      });
     }
 
     const locations = await getSupplierLocationsBySupplierData(ctx, supplierId);
