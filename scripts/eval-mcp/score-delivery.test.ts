@@ -176,8 +176,8 @@ it("requires a moisture request after a missing-moisture dry run", () => {
 });
 
 it.each(["Which sub-bin should I use?", "Please confirm the delivery time.", "What is the delivery distance?"])(
-  "accepts a split-bin clarification but still requires moisture in the missing-moisture case: %s", (finalText) => {
-    expect(splitScore(empty(), run([], finalText)).passed).toBe(true);
+  "refuses a clarification without moisture in both missing-reading cases: %s", (finalText) => {
+    expect(splitScore(empty(), run([], finalText)).passed).toBe(false);
     expect(missingScore(empty(), run([], finalText)).passed).toBe(false);
   },
 );

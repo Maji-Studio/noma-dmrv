@@ -6,13 +6,16 @@ import { orderedSourceSchema, MAX_STOCK_ENTRY_ITEMS } from "./output-stock";
 import { optionalDistanceSource } from "./distance-source";
 
 export const DELIVERY_DISTANCE_MESSAGE = "Distance must be greater than 0";
+export const DELIVERY_CODE_MAX_LENGTH = 50;
+export const DELIVERY_CODE_PATTERN = /^[A-Z0-9-]+$/;
+export const DELIVERY_DISTANCE_NOTE_MAX_LENGTH = 500;
 const metadata = {
   driverId: uuidSchema().nullable().optional().describe("Driver UUID; null clears the driver on update."),
   vehicleId: uuidSchema().nullable().optional().describe("Vehicle UUID; null clears the vehicle on update."),
   distanceKmOverride: z.number().finite().positive(DELIVERY_DISTANCE_MESSAGE).nullable().optional()
     .describe("One-way km; the server counts the round trip. Omit to use the location distance."),
   distanceSource: optionalDistanceSource.describe("Distance provenance: map estimate, manual entry or documentary evidence. Documentary provenance may be supplied without an override."),
-  distanceNote: z.string().max(500).nullable().optional().describe("Distance evidence note. Omission preserves it on update; null clears it."),
+  distanceNote: z.string().max(DELIVERY_DISTANCE_NOTE_MAX_LENGTH).nullable().optional().describe("Distance evidence note. Omission preserves it on update; null clears it."),
 };
 
 export const recordDeliveryInput = z.strictObject({
@@ -36,7 +39,7 @@ export const recordDeliveryInput = z.strictObject({
 export type RecordDeliveryInput = z.output<typeof recordDeliveryInput>;
 
 export const updateDeliveryApiInput = z.strictObject({
-  code: z.string().min(1).max(50).regex(/^[A-Z0-9-]+$/).optional().describe("Unique delivery code within the organization."),
+  code: z.string().min(1).max(DELIVERY_CODE_MAX_LENGTH).regex(DELIVERY_CODE_PATTERN).optional().describe("Unique delivery code within the organization."),
   ...metadata,
   expectedVersion: expectedVersionSchema,
 });

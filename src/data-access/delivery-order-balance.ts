@@ -4,6 +4,8 @@ import { sumNumeric } from "@/db/aggregate";
 import { deliveries, orders } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import { deliveryBalanceExceeded, deliveryReferenceNotFound } from "@/lib/delivery-domain-errors";
+import { publishOrderBalanceKg } from "@/lib/delivery-order-balance";
+import { decimal, subtract } from "@/lib/output-stock/exact";
 import { orderQuantityBelowAllocated } from "@/lib/order-domain-errors";
 import { isStockOverdraw } from "@/lib/stock-overdraw";
 import { and, count, eq, isNull, ne, sql } from "drizzle-orm";
@@ -102,7 +104,7 @@ export async function assertDeliveryWithinOrderBalance(
     Number(params.orderQuantityKg) - allocatedWetKg,
   );
   if (isStockOverdraw(params.requestedWetKg, availableKg)) {
-    throw deliveryBalanceExceeded(availableKg, params.requestedWetKg);
+    throw deliveryBalanceExceeded(publishOrderBalanceKg(subtract(decimal(params.orderQuantityKg), decimal(allocatedWetKg))), params.requestedWetKg);
   }
 }
 

@@ -433,6 +433,14 @@ it("publishes delivery write bodies, allocations, preconditions and complete pro
     expect(body.properties).not.toHaveProperty("expectedVersion");
   }
   const post = document.paths["/deliveries"].post;
+  const sharedPreview = (document.components.schemas.Problem.properties as Record<string, JsonSchema>).preview;
+  expect(sharedPreview.properties).not.toHaveProperty("allocations");
+  expect(post.responses["409"]).toMatchObject({ content: { "application/problem+json": { schema: {
+    properties: { preview: { properties: { allocations: { items: {
+      required: ["layerId", "code", "dryBiocharKg", "solidsKg", "wetKg", "moisturePercent", "policy"],
+    } } } } },
+  } } } });
+  expect(document.paths["/deliveries/{idOrCode}"].patch.responses["409"]).toEqual({ $ref: "#/components/responses/Problem409" });
   for (const status of ["200", "201"]) {
     expect(post.responses[status]).toMatchObject({ content: { "application/json": { schema: {
       required: ["data", "warnings", "allocations"], properties: {

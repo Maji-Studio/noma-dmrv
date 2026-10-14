@@ -1,6 +1,5 @@
 import { z } from "zod";
 import { stockEffectsSchema } from "@/lib/representations/stock-effects";
-import { deliveryAllocationSchema } from "@/lib/representations/delivery-writes";
 
 const conflictRefSchema = z.object({
   entity: z.string().describe("Conflicting resource kind, plain text."),
@@ -8,10 +7,9 @@ const conflictRefSchema = z.object({
   code: z.string().describe("Operator-readable conflict label, plain text."),
 });
 
-const stockPreviewSchema = z.object({
+export const stockPreviewSchema = z.object({
   basisFingerprint: z.string().describe("Stock basis of the fresh dry run, opaque string; send it back to write against that stock."),
   stockEffects: stockEffectsSchema,
-  allocations: z.array(deliveryAllocationSchema).optional().describe("Delivery allocations from the fresh dry run, in draw order. Allocation sums can differ from the delivery's 3 decimal place dryBiocharKg in trailing digits."),
 });
 
 /** Wire shape emitted by problemResponse; open metadata carries safe domain limits. */

@@ -110,6 +110,16 @@ describe("delivery stock and order guards", { timeout: DELIVERY_TEST_TIMEOUT_MS 
     expect(refusal.errors).toContainEqual(expect.objectContaining({ meta: { storageLocationId: a.bin.id, measure: "total_solids", availableSolidsKg: 800, requestedSolidsKg: 800.0008, unit: "kg" } }));
     await noWrites();
   });
+  it("publishes a fractional order remainder without float noise and accepts that remainder", async () => {
+    await setOrder(100);
+    expect((await post(a, deliveryInput(a, { deliveredWetMassKg: 66.6 }))).status).toBe(201);
+    const refusal = await problem(await post(a, deliveryInput(a, { deliveredWetMassKg: 33.401 })), 409, "conflict", "/deliveredWetMassKg");
+    expect(refusal.errors).toContainEqual(expect.objectContaining({
+      detail: "Only 33.4 kg remains on this order. Reduce the delivered mass.",
+      meta: { measure: "order_remaining_wet", availableWetKg: 33.4, requestedWetKg: 33.401, unit: "kg" },
+    }));
+    expect((await post(a, deliveryInput(a, { deliveredWetMassKg: 33.4 }))).status).toBe(201);
+  });
   it("refuses sources on a mix bin and missing moisture without sources", async () => {
     await problem(await post(a, deliveryInput(a, { sources: [{ layerId: a.product.id, moisturePercent: 20 }] })), 422, "validation_failed", "/sources");
     await problem(await post(a, deliveryInput(a, { moisturePercent: undefined })), 422, "validation_failed", "/moisturePercent");
@@ -162,6 +172,25 @@ describe("delivery stock and order guards", { timeout: DELIVERY_TEST_TIMEOUT_MS 
     expect(await rows(a)).toEqual(beforeRows);
     expect(await records(a)).toHaveLength(1);
     expect(await audits(a)).toHaveLength(1);
+  });
+  it("allows metadata PATCH on an archived bin but refuses app stock edits at the bin", async () => {
+    const created = await post(a);
+    expect(created.status).toBe(201);
+    const { data } = await created.json();
+    await setBin({ archivedAt: new Date() });
+    const current = await read(a, data.id);
+    const updated = await patch(a, data.id, { distanceNote: "Confirmed route" }, current.etag);
+    expect(updated.status).toBe(200);
+    expect((await updated.json()).data).toMatchObject({ distanceNote: "Confirmed route" });
+    const afterPatch = await read(a, data.id);
+    auth.requireOrgContext.mockResolvedValue(a.ctx);
+    for (const changes of [{ deliveredWetMassKg: 90 }, { moistureContentPercent: 25 }, { sources: [{ layerId: a.product.id, moisturePercent: 20 }] }]) {
+      const result = await updateDeliveryFn({ deliveryId: data.id, expectedVersion: afterPatch.data.version, ...changes });
+      expect(result).toMatchObject({ success: false, code: "validation_failed", issues: [{ path: ["storageLocationId"], code: "validation_failed" }] });
+    }
+    expect(await read(a, data.id)).toEqual(afterPatch);
+    expect(await records(a)).toHaveLength(1);
+    expect(await audits(a)).toHaveLength(2);
   });
   it("rejects create and PATCH on submitted lineage with the correct pointer", async () => {
     await certifyOutputLineage(a, { runId: a.runs[0].id, productId: a.product.id, submitted: true });

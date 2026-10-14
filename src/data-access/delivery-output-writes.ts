@@ -43,6 +43,8 @@ import { assertEventTimesNotFuture } from './future-event-time';
 import { lockActiveFacilityReference } from './facility-reference-guards';
 import { withAutoCodes, withUniqueCodeGuard, CODE_CONFLICT_MESSAGES } from './code-generator';
 
+const AUTO_CODE_COUNT = 1;
+
 export type CreatedDelivery = Delivery & { savedProducts: BiocharProduct[] };
 /** A mass or moisture edit re-posts stock, so the products it touched return with their new versions. */
 export type UpdatedDelivery = Delivery & { savedProducts: BiocharProductRecord[] };
@@ -53,6 +55,16 @@ export interface CreateDeliveryInput extends RecordDeliveryInput {
   code?: string;
 }
 export interface CreateDeliveryOptions extends OutputStockPostingOptions { now?: Date }
+
+async function assertDeliveryTransportReferences(ctx: OrgContext, tx: DbTransaction, data: { driverId?: string | null; vehicleId?: string | null }) {
+  requireOrgScope(ctx);
+  for (const [field, table] of [['driverId', drivers], ['vehicleId', vehicles]] as const) {
+    if (data[field]) {
+      const [reference] = await tx.select({ id: table.id }).from(table).where(and(eq(table.organizationId, ctx.organizationId), eq(table.id, data[field]!)));
+      if (!reference) throw deliveryReferenceNotFound([field], field === 'driverId' ? 'Driver' : 'Vehicle');
+    }
+  }
+}
 
 async function deliveryAllocations(ctx: OrgContext, tx: DbTransaction, movement: PostedOutputRequest) {
   requireOrgScope(ctx);
@@ -92,12 +104,7 @@ export async function createDeliveryInTransaction(ctx: OrgContext, tx: DbTransac
     assertEventTimesNotFuture({ deliveredAt }, { deliveredAt: OUTPUT_STOCK_FUTURE_TIME_MESSAGE }, options.now ?? new Date());
     const [binRead] = await tx.select().from(storageLocations).where(and(eq(storageLocations.organizationId, ctx.organizationId), eq(storageLocations.id, data.storageLocationId)));
     if (!binRead || binRead.archivedAt) throw deliveryReferenceNotFound(['storageLocationId'], 'Source bin');
-    for (const [field, table] of [['driverId', drivers], ['vehicleId', vehicles]] as const) {
-      if (data[field]) {
-        const [reference] = await tx.select({ id: table.id }).from(table).where(and(eq(table.organizationId, ctx.organizationId), eq(table.id, data[field]!)));
-        if (!reference) throw deliveryReferenceNotFound([field], field === 'driverId' ? 'Driver' : 'Vehicle');
-      }
-    }
+    await assertDeliveryTransportReferences(ctx, tx, data);
     const insert = (deliveryCode: string, writeTx: DbTransaction) => withOutputStockPostingInTransaction(ctx, writeTx, {
       input: { storageLocationId: data.storageLocationId, facilityId: orderRead.facilityId, occurredAt: deliveredAt.toISOString(), kind: 'delivery',
         wetMassKg: data.deliveredWetMassKg, moisturePercent: data.moisturePercent, sources: data.sources, basisFingerprint: data.basisFingerprint, idempotencyKey, reason: `Delivery ${deliveryCode}` },
@@ -146,7 +153,7 @@ export async function createDeliveryInTransaction(ctx: OrgContext, tx: DbTransac
     });
     return code
       ? withUniqueCodeGuard(ctx, deliveries, deliveries.code, CODE_CONFLICT_MESSAGES.delivery, () => tx.transaction(savepoint => insert(code, savepoint)))
-      : withAutoCodes(ctx, tx, 'DL', deliveries, deliveries.code, 1, (codes, savepoint) => insert(codes[0], savepoint), CODE_CONFLICT_MESSAGES.delivery);
+      : withAutoCodes(ctx, tx, 'DL', deliveries, deliveries.code, AUTO_CODE_COUNT, (codes, savepoint) => insert(codes[0], savepoint), CODE_CONFLICT_MESSAGES.delivery);
   }, { shortage: ['deliveredWetMassKg'], validation: ['storageLocationId'] });
 }
 
@@ -154,19 +161,14 @@ export async function updateDeliveryInTransaction(ctx: OrgContext, tx: DbTransac
   requireOrgScope(ctx);
   return withUniqueCodeGuard(ctx, deliveries, deliveries.code, CODE_CONFLICT_MESSAGES.delivery, async () => {
     const data = updateDeliverySchema.parse({ ...raw, deliveryId });
-    for (const [field, table] of [['driverId', drivers], ['vehicleId', vehicles]] as const) {
-      if (data[field]) {
-        const [reference] = await tx.select({ id: table.id }).from(table).where(and(eq(table.organizationId, ctx.organizationId), eq(table.id, data[field]!)));
-        if (!reference) throw deliveryReferenceNotFound([field], field === 'driverId' ? 'Driver' : 'Vehicle');
-      }
-    }
+    await assertDeliveryTransportReferences(ctx, tx, data);
     await lockBiocharTransportRouteTopology(ctx, tx);
     const requestKey = data.idempotencyKey ?? randomUUID();
     await lockMovementRequest(ctx, tx, requestKey);
     const [snapshot] = await tx.select().from(deliveries).where(and(eq(deliveries.organizationId, ctx.organizationId), eq(deliveries.id, deliveryId)));
     if (!snapshot || snapshot.archivedAt) throw deliveryReferenceNotFound(['deliveryId'], 'Delivery');
     // Topology, request, bin, artifacts, active facility, delivery.
-    await withFeedstockErrors(() => lockBinStock(ctx, tx, snapshot.storageLocationId), 'not_found', ['deliveryId']);
+    await lockBinStock(ctx, tx, snapshot.storageLocationId, { allowArchived: true });
     await withFeedstockErrors(() => assertCanMutateCertifiedLineage(ctx, tx, { entityType: 'delivery', entityId: deliveryId }, 'update'), 'certification_locked', ['deliveryId']);
     await withFeedstockErrors(() => lockActiveFacilityReference(ctx, tx, snapshot.facilityId), 'not_found', ['deliveryId']);
     const [existing] = await tx.select().from(deliveries).where(and(eq(deliveries.organizationId, ctx.organizationId), eq(deliveries.id, deliveryId))).for('update');
@@ -185,6 +187,9 @@ export async function updateDeliveryInTransaction(ctx: OrgContext, tx: DbTransac
     let savedProducts: BiocharProductRecord[] = [];
     const sourcesChanged = data.sources !== undefined && JSON.stringify(data.sources) !== JSON.stringify(current?.inputSnapshot?.sources);
     if (massChanged || moistureChanged || sourcesChanged) {
+      const [bin] = await tx.select({ archivedAt: storageLocations.archivedAt }).from(storageLocations)
+        .where(and(eq(storageLocations.organizationId, ctx.organizationId), eq(storageLocations.id, existing.storageLocationId)));
+      if (bin?.archivedAt) throw deliveryValidationFailed(['storageLocationId'], 'Source bin is archived. Unarchive it before editing delivery stock.');
       if (!current) throw new SafeError('Posted delivery stock entry not found.');
       await assertLatestOutputMovement(ctx, existing.storageLocationId, current.id, tx);
       if (data.correctsMovementId && data.correctsMovementId !== current.id) throw new SafeError('This delivery was corrected. Reload it before editing its mass.');

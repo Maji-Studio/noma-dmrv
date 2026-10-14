@@ -131,8 +131,7 @@ export function scoreDeliveryCase(
         || (call.isError !== false && !carriesMoisture(call))),
       outcome: caseId === "delivery-split-bin"
         ? (asksForDeliveryInput(transcript.finalText) || stockReadThenPreview(transcript.calls, target))
-          && (!transcript.calls.some((call) => call.name === RECORD_DELIVERY && call.arguments.dryRun === true)
-            || asksForMoisture(transcript.finalText))
+          && asksForMoisture(transcript.finalText)
         : asksForMoisture(transcript.finalText),
     });
   }
@@ -140,7 +139,7 @@ export function scoreDeliveryCase(
     caseId, passed: Object.values(criteria).every(Boolean), criteria, toolCalls: transcript.calls.length,
     durationMs: transcript.durationMs, turns: transcript.turns, budget: DELIVERY_TOOL_CALL_BUDGET,
     expectation: complete ? "Record 2400 kg wet at 31% moisture, yesterday 14:00 facility-local, with inherited distance"
-      : caseId === "delivery-split-bin" ? "Ask for delivery details or read stock and preview then ask for moisture; commit nothing"
+      : caseId === "delivery-split-bin" ? "Ask for moisture readings, optionally after a stock read and preview; commit nothing"
         : "Ask for moisture; save nothing",
   };
 }

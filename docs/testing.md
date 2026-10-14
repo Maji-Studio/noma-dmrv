@@ -114,9 +114,9 @@ yesterday at 14:00 in the facility zone, from the requested order and product bi
 with no distance override and at most 10 tool calls. `delivery-missing-moisture`
 requires no saved changes and a final request for moisture; a dry run is allowed.
 `delivery-split-bin` seeds two products with different placement times and moistures.
-It requires no committed delivery and either a delivery clarification or a completed
-stock read followed by a dry run and a request for moisture readings. A dry-run
-delivery attempt requires a request for readings; the preview alone cannot pass. Historical
+It requires no committed delivery and a request for moisture readings, either as a
+delivery clarification or after a completed stock read followed by a dry run.
+The preview alone cannot pass. Historical
 moisture estimates can inform a preview but cannot supply missing operator readings
 for a commit, even if the server refuses it. Each case has its own organization and cleanup.
 

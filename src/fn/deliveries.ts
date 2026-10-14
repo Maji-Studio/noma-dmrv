@@ -24,6 +24,7 @@ import { requireOrgFacility } from "@/data-access/utils";
 import {
   createDeliverySchema,
   deliveryOperationInput,
+  deliveryOperationFieldAliases,
   deleteDeliverySchema,
   deliveryFilterSchema,
   resolveDeliveryDistanceSource,
@@ -124,9 +125,8 @@ export async function createDeliveryFn(
     } catch (error) {
       if (error instanceof DomainError) {
         throw new DomainError(error.code, error.message, {
-          conflict: error.conflict, blockers: error.blockers, retryable: error.retryable,
-          preview: error.preview, cause: error.cause, retryAfterSeconds: error.retryAfterSeconds,
-          issues: error.issues.map(issue => ({ ...issue, path: issue.path.map((part, index) => index === 0 && part === "deliveredAt" ? "deliveryDate" : index === 0 && part === "moisturePercent" ? "moistureContentPercent" : part) })),
+          ...error,
+          issues: error.issues.map(issue => ({ ...issue, path: issue.path.map((part, index) => index === 0 && typeof part === "string" ? (deliveryOperationFieldAliases as Readonly<Record<string, string>>)[part] ?? part : part) })),
         });
       }
       throw error;

@@ -1,7 +1,6 @@
 import type { ConflictRef } from "@/lib/conflict-ref";
 import { SafeError } from "@/lib/errors";
 import type { StockEffect } from "@/lib/representations/stock-effects";
-import type { DeliveryAllocation } from "@/lib/representations/delivery-writes";
 import { IDEMPOTENCY_RETRY_AFTER_SECONDS } from "@/config/operations";
 
 export type DomainErrorCode =
@@ -36,7 +35,7 @@ export interface DomainIssue {
 export interface StockPreview {
   basisFingerprint: string;
   stockEffects: StockEffect[];
-  allocations?: DeliveryAllocation[];
+  allocations?: unknown[];
 }
 
 interface DomainErrorOptions {

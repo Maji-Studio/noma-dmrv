@@ -9,7 +9,7 @@ import { createDeliveryFn, updateDeliveryFn } from "@/fn/deliveries";
 import { jsonPointer } from "@/lib/api/problem";
 import { BILL_OF_LADING_WARNING } from "@/lib/delivery-guidance";
 import { representDelivery } from "@/lib/representations/deliveries";
-import type { createDeliverySchema, updateDeliverySchema } from "@/schemas/deliveries";
+import { deliveryOperationFieldAliases, type createDeliverySchema, type updateDeliverySchema } from "@/schemas/deliveries";
 import type { z } from "zod";
 import { createApiDeliveryWriteFixture, removeApiDeliveryWriteFixture, deliveryInput, postDelivery, patchDelivery, readDelivery,
   deliveryRows, deliveryRecords, deliveryAudits, DELIVERY_AT, DELIVERY_WET_KG, type ApiDeliveryWriteFixture } from "./helpers/api-delivery-write-fixture";
@@ -121,7 +121,7 @@ const apiRefusal = (output: { code: string; errors?: Refusal["issues"]; issues?:
   code: output.code, issues: (output.errors ?? output.issues ?? []).map(({ pointer, code, meta }) => ({ pointer, code, ...(meta ? { meta } : {}) })),
 });
 /** Normalize only the form's documented field aliases; keep every issue code and metadata value. */
-const actionPointer = (path: (string | number)[]) => jsonPointer(path.map((part, index) => index === 0 && part === "deliveryDate" ? "deliveredAt" : index === 0 && part === "moistureContentPercent" ? "moisturePercent" : part));
+const actionPointer = (path: (string | number)[]) => jsonPointer(path.map((part, index) => index === 0 ? Object.entries(deliveryOperationFieldAliases).find(([, field]) => field === part)?.[0] ?? part : part));
 async function refuse(transport: Transport, changes: Record<string, unknown>, id?: string): Promise<Refusal> {
   const f = fixtures.get(transport)!;
   if (transport === "action") {
