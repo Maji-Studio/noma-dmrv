@@ -28,10 +28,16 @@ RUN_ETAG = '"4.5"'
 PRODUCT_BIN_ID = "33333333-3333-4333-8333-333333333333"
 PRODUCT_ETAG = '"6.7"'
 LAB_SAMPLE_ETAG = '"8.9"'
-TARGET_KINDS = ("FACILITY", "SUPPLIER", "FEEDSTOCK_TYPE", "BIN", "DRIVER", "VEHICLE", "FEEDSTOCK", "REACTOR", "PRODUCTION_RUN", "BIOCHAR_BIN", "BIOCHAR_PRODUCT", "PURE_FORMULATION", "CREDIT_BATCH", "LAB_SAMPLE")
+ORDER_ETAG = '"10.1"'
+DELETE_ORDER_ETAG = '"11.1"'
+DELETE_ORDER_ID = "44444444-4444-4444-8444-444444444444"
+CUSTOMER_LOCATION_ID = "55555555-5555-4555-8555-555555555555"
+TARGET_KINDS = ("FACILITY", "SUPPLIER", "FEEDSTOCK_TYPE", "BIN", "DRIVER", "VEHICLE", "FEEDSTOCK", "REACTOR", "PRODUCTION_RUN", "BIOCHAR_BIN", "BIOCHAR_PRODUCT", "PURE_FORMULATION", "CREDIT_BATCH", "LAB_SAMPLE", "CUSTOMER", "ORDER")
 for kind in TARGET_KINDS:
     os.environ[f"API_FUZZ_{kind}_ID"] = FIXTURE_ID
 os.environ.update(
+    API_FUZZ_ORDER_ETAG=ORDER_ETAG, API_FUZZ_DELETE_ORDER_ETAG=DELETE_ORDER_ETAG,
+    API_FUZZ_DELETE_ORDER_ID=DELETE_ORDER_ID, API_FUZZ_CUSTOMER_LOCATION_ID=CUSTOMER_LOCATION_ID,
     API_FUZZ_BASE_URL="http://localhost/api/v1", API_FUZZ_KEY="offline-placeholder",
     API_FUZZ_FEEDSTOCK_ETAG=FEEDSTOCK_ETAG, API_FUZZ_PRODUCTION_RUN_ETAG=RUN_ETAG, API_FUZZ_RUN_BIN_ID=RUN_BIN_ID,
     API_FUZZ_PRODUCT_BIN_ID=PRODUCT_BIN_ID, API_FUZZ_BIOCHAR_PRODUCT_ETAG=PRODUCT_ETAG, API_FUZZ_LAB_SAMPLE_ETAG=LAB_SAMPLE_ETAG,
@@ -53,10 +59,10 @@ class HarnessTests(unittest.TestCase):
             operation = result.ok()
             cases = ExamplesGenerator(operation=operation, as_strategy_kwargs={}, feedback=FeedbackSources(), fill_missing=False)
             seeded.extend(case for case in cases if case.meta.phase.data.description.startswith("Seeded fixture"))
-        # 24 by-id targets (the stock-movement create is one of them), the feedstock
+        # 30 by-id targets (the stock-movement create is one of them), the feedstock
         # create and its oversize twin, the run create, the product create, the
-        # lab sample create.
-        self.assertEqual(len(seeded), 29)
+        # lab sample create and order create.
+        self.assertEqual(len(seeded), 36)
         stock = next(case for case in seeded if case.operation.label == "GET /storage-locations/{idOrCode}/stock")
         self.assertEqual(stock.path_parameters, {"idOrCode": FIXTURE_ID})
         self.assertTrue(stock.meta.generation.mode.is_positive)
@@ -153,6 +159,39 @@ class HarnessTests(unittest.TestCase):
         self.assertEqual(delete_examples[0].query, {"dryRun": "true"})
         self.assertEqual(delete_examples[0].body, {})
 
+    def test_seeded_order_create_uses_fixture_references_and_calendar_date(self):
+        operation = schema["/orders"]["POST"]
+        cases = ExamplesGenerator(operation=operation, as_strategy_kwargs={}, feedback=FeedbackSources(), fill_missing=False)
+        seeded = [case for case in cases if case.meta.phase.data.description.startswith("Seeded fixture")]
+        self.assertEqual(len(seeded), 1)
+        case = seeded[0]
+        self.assertTrue(case.meta.generation.mode.is_positive)
+        self.assertEqual(case.query, {"dryRun": "true"})
+        self.assertTrue(case.headers["Idempotency-Key"])
+        for field in ("facilityId", "customerId", "formulationId"):
+            self.assertEqual(case.body[field], FIXTURE_ID)
+        self.assertEqual(case.body["customerLocationId"], CUSTOMER_LOCATION_ID)
+        self.assertEqual(case.body["orderDate"], datetime.now(timezone.utc).date().isoformat())
+        self.assertGreater(case.body["quantityKg"], 0)
+        original = operation.definition.raw["requestBody"]["content"]["application/json"]["example"]
+        self.assertNotEqual(original["customerId"], FIXTURE_ID)
+
+    def test_order_patch_and_delete_use_separate_targets_and_etags(self):
+        for method, target, etag, body in (
+            ("PATCH", FIXTURE_ID, ORDER_ETAG, {"packaging": "bagged"}),
+            ("DELETE", DELETE_ORDER_ID, DELETE_ORDER_ETAG, {}),
+        ):
+            operation = schema["/orders/{idOrCode}"][method]
+            examples = []
+            hook("before_add_examples")(HookContext(operation=operation), examples)
+            self.assertEqual(len(examples), 1)
+            case = examples[0]
+            self.assertTrue(case.meta.generation.mode.is_positive)
+            self.assertEqual(case.path_parameters, {"idOrCode": target})
+            self.assertEqual(case.headers["If-Match"], etag)
+            self.assertEqual(case.query, {"dryRun": "true"})
+            self.assertEqual(case.body, body)
+
     def test_seeded_movement_create_pins_the_bin_and_posts_a_recent_loss(self):
         operation = schema["/storage-locations/{idOrCode}/stock-movements"]["POST"]
         cases = ExamplesGenerator(operation=operation, as_strategy_kwargs={}, feedback=FeedbackSources(), fill_missing=False)
@@ -216,7 +255,8 @@ class HarnessTests(unittest.TestCase):
             examples = []
             hook("before_add_examples")(HookContext(operation=operation), examples)
             self.assertEqual(len(examples), 1, operation.label)
-            self.assertEqual(examples[0].path_parameters, {"idOrCode": FIXTURE_ID})
+            target = DELETE_ORDER_ID if operation.label == "DELETE /orders/{idOrCode}" else FIXTURE_ID
+            self.assertEqual(examples[0].path_parameters, {"idOrCode": target})
             if operation.method.upper() == "POST":
                 # The stock-movement create: a dry run with its own key.
                 self.assertEqual(examples[0].query, {"dryRun": "true"})
@@ -227,15 +267,15 @@ class HarnessTests(unittest.TestCase):
             self.assertFalse("If-Match" in for_operation(schema.config, operation=operation).headers)
             if operation.method.upper() in {"PATCH", "DELETE"}:
                 self.assertEqual(examples[0].query, {"dryRun": "true"})
-                etags = {"/production-runs/": RUN_ETAG, "/biochar-products/": PRODUCT_ETAG, "/lab-samples/": LAB_SAMPLE_ETAG}
+                etags = {"/production-runs/": RUN_ETAG, "/biochar-products/": PRODUCT_ETAG, "/lab-samples/": LAB_SAMPLE_ETAG, "/orders/": DELETE_ORDER_ETAG if operation.method.upper() == "DELETE" else ORDER_ETAG}
                 etag = etags.get(next((prefix for prefix in etags if operation.path.startswith(prefix)), ""), FEEDSTOCK_ETAG)
                 self.assertEqual(examples[0].headers["If-Match"], etag)
             count += 1
-        self.assertEqual(count, 24)
+        self.assertEqual(count, 30)
 
     def test_seeded_positive_examples_must_return_2xx(self):
         check = hook("after_load_schema").__globals__["seeded_example_success"]
-        for label in ("GET /feedstocks/{idOrCode}", "GET /production-runs/{idOrCode}", "PATCH /production-runs/{idOrCode}", "GET /biochar-products/{idOrCode}", "PATCH /biochar-products/{idOrCode}", "GET /credit-batches/{idOrCode}", "GET /lab-samples/{idOrCode}", "PATCH /lab-samples/{idOrCode}", "DELETE /lab-samples/{idOrCode}"):
+        for label in ("GET /feedstocks/{idOrCode}", "GET /production-runs/{idOrCode}", "PATCH /production-runs/{idOrCode}", "GET /biochar-products/{idOrCode}", "PATCH /biochar-products/{idOrCode}", "GET /credit-batches/{idOrCode}", "GET /lab-samples/{idOrCode}", "PATCH /lab-samples/{idOrCode}", "DELETE /lab-samples/{idOrCode}", "GET /customers/{idOrCode}", "GET /customers/{idOrCode}/locations", "GET /orders/{idOrCode}", "GET /orders/{idOrCode}/balance", "PATCH /orders/{idOrCode}", "DELETE /orders/{idOrCode}"):
             method, path = label.split(" ")
             operation = schema[path][method]
             examples = []
@@ -246,7 +286,7 @@ class HarnessTests(unittest.TestCase):
             for status in (301, 400, 401, 404, 409, 422, 428, 500):
                 with self.assertRaisesRegex(AssertionError, "must return 2xx"):
                     check(None, SimpleNamespace(status_code=status), case)
-        for label in ("POST /feedstocks", "POST /production-runs", "POST /biochar-products", "POST /lab-samples", "POST /storage-locations/{idOrCode}/stock-movements"):
+        for label in ("POST /feedstocks", "POST /production-runs", "POST /biochar-products", "POST /lab-samples", "POST /orders", "POST /storage-locations/{idOrCode}/stock-movements"):
             method, path = label.split(" ")
             examples = []
             hook("before_add_examples")(HookContext(operation=schema[path][method]), examples)

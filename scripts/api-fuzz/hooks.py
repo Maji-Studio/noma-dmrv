@@ -39,6 +39,8 @@ SEEDED_LOSS_WET_MASS_KG = 1
 SEEDED_LAB_SAMPLE_AGE = timedelta(minutes=30)
 # A real change on a 200-year batch, so the dry run PATCH has something to apply.
 SEEDED_LAB_SAMPLE_PATCH = {"labName": "API fuzz lab"}
+# Seeded orders are loose; changing packaging keeps the large delivery balance intact.
+SEEDED_ORDER_PATCH = {"packaging": "bagged"}
 IDEMPOTENCY_HEADER = "Idempotency-Key"
 IF_MATCH_HEADER = "If-Match"
 SEEDED_TARGETS = {}
@@ -164,6 +166,16 @@ def after_load_schema(ctx, schema):
         )
         SEEDED_CREATE_BODIES["POST /lab-samples"] = sample
     SEEDED_PATCH_BODIES["PATCH /lab-samples/{idOrCode}"] = deepcopy(SEEDED_LAB_SAMPLE_PATCH)
+    customer = SEEDED_TARGETS.get("GET /customers/{idOrCode}")
+    customer_location = os.environ.get("API_FUZZ_CUSTOMER_LOCATION_ID")
+    if facility is not None and pure is not None and customer is not None and customer_location:
+        order = deepcopy(schema["/orders"]["POST"].definition.raw["requestBody"]["content"]["application/json"]["example"])
+        order.update(
+            facilityId=facility, customerId=customer, customerLocationId=customer_location,
+            formulationId=pure, orderDate=datetime.now(timezone.utc).date().isoformat(),
+        )
+        SEEDED_CREATE_BODIES["POST /orders"] = order
+    SEEDED_PATCH_BODIES["PATCH /orders/{idOrCode}"] = deepcopy(SEEDED_ORDER_PATCH)
     # An empty product patch is not a meaningful change, so the dry run sends the published example.
     SEEDED_PATCH_BODIES["PATCH /biochar-products/{idOrCode}"] = deepcopy(
         schema["/biochar-products/{idOrCode}"]["PATCH"].definition.raw["requestBody"]["content"]["application/json"]["example"])

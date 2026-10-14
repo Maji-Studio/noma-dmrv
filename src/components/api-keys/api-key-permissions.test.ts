@@ -22,3 +22,14 @@ it("offers production permissions and defaults new workflow reads on and mutatio
   expect(API_KEY_DEFAULT_SCOPES).not.toContain("lab-samples:delete");
   expect(permissionSummary(["lab-samples:read", "lab-samples:write"])).toBe("Lab samples: Read, Write");
 });
+
+it("defaults customer and order reads on and order mutations off", () => {
+  expect(API_PERMISSION_ROWS).toContainEqual({ entity: "customers", label: "Customers", scopes: ["customers:read"] });
+  expect(API_PERMISSION_ROWS).toContainEqual({ entity: "orders", label: "Orders", scopes: ["orders:read", "orders:write", "orders:delete"] });
+  expect(API_KEY_DEFAULT_SCOPES).toContain("customers:read");
+  expect(API_KEY_DEFAULT_SCOPES).toContain("orders:read");
+  expect(API_KEY_DEFAULT_SCOPES).not.toContain("orders:write");
+  expect(API_KEY_DEFAULT_SCOPES).not.toContain("orders:delete");
+  expect(permissionSummary(["customers:read", "orders:read", "orders:write", "orders:delete"]))
+    .toBe("Customers: Read; Orders: Read, Write, Delete");
+});

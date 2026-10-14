@@ -2,6 +2,22 @@ import { describe, expect, it } from "vitest";
 import { formatCertificationLineageLockMessage } from "./lineage-lock-message";
 
 describe("formatCertificationLineageLockMessage", () => {
+  it("offers an unlocked order when creating a delivery", () => {
+    expect(formatCertificationLineageLockMessage({ mutation: "create", subjectEntityType: "delivery", lineageEntityType: "order" })).toBe(
+      "Cannot create this delivery because the selected order is locked by a certification submission. Select an order that is not locked.",
+    );
+  });
+
+  it.each([
+    ["creditBatch", "a credit batch"], ["productionRun", "a production run"],
+    ["sample", "a sample"], ["application", "an application"], ["delivery", "a delivery"],
+    ["order", "an order"], ["biocharProduct", "a biochar product"], ["feedstock", "a feedstock"],
+    ["transportLeg", "a transport leg"], ["vehicle", "a vehicle"],
+  ] as const)("uses the correct article for a selected %s", (lineageEntityType, phrase) => {
+    const subjectEntityType = lineageEntityType === "delivery" ? "application" : "delivery";
+    expect(formatCertificationLineageLockMessage({ mutation: "create", subjectEntityType, lineageEntityType })).toContain(`Select ${phrase} that is not locked.`);
+  });
+
   it("names an application and its selected locked delivery", () => {
     expect(
       formatCertificationLineageLockMessage({

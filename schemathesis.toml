@@ -87,7 +87,7 @@ expected-statuses = ["2xx", 401, 403, 404, 409, 413, 414, 422, 429, 431, "5xx"]
 # 428 is valid only for the operations that require If-Match. The check has
 # operation-level scope but cannot scope expected statuses by header name.
 [[operations]]
-include-operation-id = ["update_feedstock", "delete_feedstock", "update_production_run", "delete_production_run", "update_biochar_product", "update_lab_sample", "delete_lab_sample"]
+include-operation-id = ["update_feedstock", "delete_feedstock", "update_production_run", "delete_production_run", "update_biochar_product", "update_lab_sample", "delete_lab_sample", "update_order", "delete_order"]
 [operations.checks.missing_required_header]
 expected-statuses = [400, 401, 403, 406, 415, 422, 428]
 
@@ -223,3 +223,35 @@ include-operation-id = "delete_lab_sample"
 [operations.parameters]
 "path.idOrCode" = "${API_FUZZ_LAB_SAMPLE_ID}"
 "header.If-Match" = "${API_FUZZ_LAB_SAMPLE_ETAG}"
+
+[[operations]]
+include-operation-id = "get_customer"
+[operations.parameters]
+"path.idOrCode" = "${API_FUZZ_CUSTOMER_ID}"
+
+[[operations]]
+include-operation-id = "find_customer_locations"
+[operations.parameters]
+"path.idOrCode" = "${API_FUZZ_CUSTOMER_ID}"
+
+[[operations]]
+include-operation-id = "get_order"
+[operations.parameters]
+"path.idOrCode" = "${API_FUZZ_ORDER_ID}"
+
+[[operations]]
+include-operation-id = "get_order_balance"
+[operations.parameters]
+"path.idOrCode" = "${API_FUZZ_ORDER_ID}"
+
+[[operations]]
+include-operation-id = "update_order"
+[operations.parameters]
+"path.idOrCode" = "${API_FUZZ_ORDER_ID}"
+"header.If-Match" = "${API_FUZZ_ORDER_ETAG}"
+
+[[operations]]
+include-operation-id = "delete_order"
+[operations.parameters]
+"path.idOrCode" = "${API_FUZZ_DELETE_ORDER_ID}"
+"header.If-Match" = "${API_FUZZ_DELETE_ORDER_ETAG}"

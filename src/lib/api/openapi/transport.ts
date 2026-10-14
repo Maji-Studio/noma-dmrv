@@ -2,6 +2,7 @@ import { apiScopeRepresentationSchema } from "@/lib/representations/me";
 import { z } from "zod";
 import { API_CURSOR_MAX_LENGTH, API_IDEMPOTENCY_KEY_MAX_LENGTH, API_LIST_DEFAULT_LIMIT, API_LIST_MAX_LIMIT } from "@/config/api-rest";
 import { IDEMPOTENCY_RETENTION_DAYS } from "@/config/operations";
+import { readDescriptions } from "@/lib/operations/read-descriptions";
 import { OUTPUT_BIN_STOCK_ETAG } from "@/lib/operations/agent-guidance";
 import type { JsonSchema } from "@/lib/operations/json-schema";
 import { IDEMPOTENCY_KEY_PATTERN } from "../request-body";
@@ -100,6 +101,10 @@ export const stockEtagHeader = {
   ETag: header(`Hash of the published stock. ${OUTPUT_BIN_STOCK_ETAG}`, {
     type: "string", pattern: BODY_HASH_ETAG_PATTERN.source,
   }),
+};
+export const orderBalanceEtagHeader = {
+  ETag: header(readDescriptions.orderBalance, { type: "string", pattern: BODY_HASH_ETAG_PATTERN.source }),
+  "Cache-Control": header("Private response; do not store the balance.", { type: "string", enum: ["private, no-store"] }),
 };
 export const writeHeaders = headerReferences(writeHeaderDefinitions);
 export const locationHeader = headerReferences(locationDefinition);

@@ -3,6 +3,7 @@ import { join, relative } from "node:path";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import { API_BODY_MAX_BYTES, API_CURSOR_MAX_LENGTH, API_IDEMPOTENCY_KEY_MAX_LENGTH, API_LIST_DEFAULT_LIMIT, API_LIST_MAX_LIMIT, API_QUERY_MAX_LENGTH } from "@/config/api-rest";
+import { recordOrderInput, updateOrderApiInput } from "@/schemas/order-input";
 import { createFeedstockSchema, updateFeedstockSchema } from "@/schemas/feedstocks";
 import { toOperationJsonSchema, type JsonSchema } from "@/lib/operations/json-schema";
 import { buildOpenApiDocument, serializeOpenApiDocument } from "./document";
@@ -52,7 +53,7 @@ it("covers every exported v1 route method, with unique operation ids", () => {
   expect(document.paths["/feedstocks/{idOrCode}"].delete.operationId).toBe("delete_feedstock");
   expect(document.paths["/me"].get.operationId).toBe("whoami");
   expect(document.paths["/suppliers/{idOrCode}/locations"].get.operationId).toBe("find_supplier_locations");
-  for (const [path, singular] of [["feedstocks", "feedstock"], ["facilities", "facility"], ["suppliers", "supplier"], ["feedstock-types", "feedstock_type"], ["storage-locations", "storage_location"], ["vehicles", "vehicle"], ["drivers", "driver"]]) {
+  for (const [path, singular] of [["feedstocks", "feedstock"], ["facilities", "facility"], ["suppliers", "supplier"], ["customers", "customer"], ["orders", "order"], ["feedstock-types", "feedstock_type"], ["storage-locations", "storage_location"], ["vehicles", "vehicle"], ["drivers", "driver"]]) {
     expect(document.paths[`/${path}`].get.operationId).toBe(`find_${path.replaceAll("-", "_")}`);
     expect(document.paths[`/${path}/{idOrCode}`].get.operationId).toBe(`get_${singular}`);
   }
@@ -94,7 +95,7 @@ it("publishes business dates as date, and preserves operation input types and co
 it("publishes pagination and search bounds on every list route", () => {
   const lists = Object.values(document.paths).map((methods) => methods.get)
     .filter((operation) => operation?.operationId.startsWith("find_"));
-  expect(lists).toHaveLength(15);
+  expect(lists).toHaveLength(18);
   for (const operation of lists) {
     const parameters = operation.parameters as { name: string; in: string; required: boolean; schema: JsonSchema }[];
     const query = Object.fromEntries(parameters.filter((parameter) => parameter.in === "query").map((parameter) => [parameter.name, parameter]));
@@ -106,7 +107,7 @@ it("publishes pagination and search bounds on every list route", () => {
       continue;
     }
     if (operation.operationId !== "find_production_runs") expect(query.q).toMatchObject({ required: false, schema: { type: "string", maxLength: API_QUERY_MAX_LENGTH } });
-    if (operation.operationId !== "find_supplier_locations") {
+    if (!["find_supplier_locations", "find_customer_locations"].includes(operation.operationId)) {
       expect(query.code).toMatchObject({ required: false, schema: { type: "string", maxLength: API_QUERY_MAX_LENGTH } });
     }
   }
@@ -225,7 +226,7 @@ it("types current as a feedstock only on feedstock precondition responses", () =
     expect.objectContaining({ properties: { current: expect.objectContaining({ $ref: "#/components/schemas/feedstock" }) }, required: ["current"] }),
   ]);
   for (const [name, response] of Object.entries(document.components.responses)) {
-    if (name === "FeedstockProblem412" || name === "ProductionRunProblem412" || name === "BiocharProductProblem412" || name === "LabSampleProblem412") continue;
+    if (name === "FeedstockProblem412" || name === "ProductionRunProblem412" || name === "BiocharProductProblem412" || name === "LabSampleProblem412" || name === "OrderProblem412") continue;
     expect(response.content["application/problem+json"].schema).toEqual({ $ref: "#/components/schemas/Problem" });
   }
 });
@@ -349,4 +350,60 @@ it("publishes lab sample and credit batch reads with their own scopes, and lab s
   const patchProperties = (patch.requestBody as { content: { "application/json": { schema: { properties: object } } } }).content["application/json"].schema.properties;
   for (const forbidden of ["labSampleId", "expectedVersion", "hToCOrgRatio"]) expect(patchProperties).not.toHaveProperty(forbidden);
   expect(patchProperties).toHaveProperty("creditBatchId");
+});
+
+it("publishes customer, destination, stored order and snapshot balance reads", () => {
+  for (const [path, operationId, scope] of [
+    ["/customers", "find_customers", "customers:read"], ["/customers/{idOrCode}", "get_customer", "customers:read"],
+    ["/customers/{idOrCode}/locations", "find_customer_locations", "customers:read"],
+    ["/orders", "find_orders", "orders:read"], ["/orders/{idOrCode}", "get_order", "orders:read"], ["/orders/{idOrCode}/balance", "get_order_balance", "orders:read"],
+  ]) {
+    if (path !== "/orders" && path !== "/orders/{idOrCode}") expect(Object.keys(document.paths[path])).toEqual(["get"]);
+    expect(document.paths[path].get).toMatchObject({ operationId, "x-required-scope": scope });
+    for (const status of ["400", "401", "403", "429", "500"]) expect(document.paths[path].get.responses).toHaveProperty(status);
+  }
+  expect(document.paths["/orders"].get.responses).toHaveProperty("404");
+  for (const [name, fields] of [
+    ["customer", ["id", "code", "name", "version", "createdAt", "updatedAt"]],
+    ["customer_location", ["id", "customerId", "name", "gpsLatitude", "gpsLongitude", "distanceFromFacilityKm", "distanceSource", "isDefault", "version", "createdAt", "updatedAt"]],
+    ["order", ["id", "code", "version", "facilityId", "customerId", "customerLocationId", "formulationId", "orderDate", "quantityKg", "packaging", "archivedAt", "createdAt", "updatedAt"]],
+    ["order_balance", ["orderId", "quantityKg", "deliveredWetMassKg", "remainingWetMassKg", "fulfillmentStatus"]],
+  ] as const) expect(Object.keys(document.components.schemas[name].properties!).sort()).toEqual([...fields].sort());
+  const op = document.paths["/orders/{idOrCode}/balance"].get;
+  expect(op.parameters?.map((parameter) => (parameter as { name: string }).name)).toEqual(["idOrCode"]);
+  expect(op.responses["200"]).toMatchObject({ headers: { ETag: { schema: { pattern: BODY_HASH_ETAG_PATTERN.source } }, "Cache-Control": { schema: { enum: ["private, no-store"] } } } });
+  expect(document.components.schemas.order.properties).toMatchObject({ orderDate: { type: "string", format: "date" }, quantityKg: { description: expect.stringContaining("32-bit") } });
+  expect(document.components.schemas.storage_location.required).toContain("formulationId");
+  expect(document.paths["/storage-locations"].get.parameters).toEqual(expect.arrayContaining([expect.objectContaining({ name: "type" }), expect.objectContaining({ name: "formulationId" })]));
+});
+
+it("publishes order write bodies, scopes, preconditions and complete problem responses", () => {
+  for (const [path, method, id, scope] of [
+    ["/orders", "post", "record_order", "orders:write"],
+    ["/orders/{idOrCode}", "patch", "update_order", "orders:write"],
+    ["/orders/{idOrCode}", "delete", "delete_order", "orders:delete"],
+  ]) {
+    const operation = document.paths[path][method];
+    expect(operation).toMatchObject({ operationId: id, "x-required-scope": scope });
+    const errors = [400, 401, 403, 404, 409, 413, 415, 422, 429, 500, 503];
+    if (method !== "post") errors.push(412, 428);
+    for (const status of errors) expect(operation.responses).toHaveProperty(String(status));
+    expect(operation.parameters).toContainEqual(expect.objectContaining({ name: "Idempotency-Key", required: method === "post" }));
+    if (method !== "post") {
+      expect(operation.parameters).toContainEqual(expect.objectContaining({ name: "If-Match", required: true }));
+      expect(operation.responses["412"]).toEqual({ $ref: "#/components/responses/OrderProblem412" });
+    }
+  }
+  expect(document.components.schemas.OrderPreconditionProblem.allOf).toContainEqual(expect.objectContaining({
+    properties: { current: expect.objectContaining({ $ref: "#/components/schemas/order" }) }, required: ["current"],
+  }));
+  const bodyOf = (method: string, path = "/orders/{idOrCode}") => (document.paths[path][method].requestBody as {
+    content: { "application/json": { schema: JsonSchema } };
+  }).content["application/json"].schema;
+  for (const [actual, input] of [[bodyOf("post", "/orders"), recordOrderInput], [bodyOf("patch"), updateOrderApiInput]] as const) {
+    const expected = toOperationJsonSchema(input);
+    delete expected.$schema;
+    expect(actual).toEqual(expected);
+  }
+  expect(bodyOf("delete")).toEqual({ type: "object", properties: {}, additionalProperties: false });
 });

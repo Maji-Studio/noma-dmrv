@@ -1,3 +1,5 @@
+import { customerRepresentationSchema } from "@/lib/representations/customers";
+import { orderRepresentationSchema } from "@/lib/representations/orders";
 import { productionRunRepresentationSchema } from "@/lib/representations/production-runs";
 import { reactorRepresentationSchema } from "@/lib/representations/reactors";
 import { facilityRepresentationSchema } from "@/lib/representations/facilities";
@@ -20,6 +22,8 @@ export const resources = ([
   { path: "reactors", singular: "reactor", schema: reactorRepresentationSchema },
   { path: "feedstocks", singular: "feedstock", schema: feedstockRepresentationSchema },
   { path: "facilities", singular: "facility", schema: facilityRepresentationSchema },
+  { path: "customers", singular: "customer", schema: customerRepresentationSchema },
+  { path: "orders", singular: "order", schema: orderRepresentationSchema },
   { path: "suppliers", singular: "supplier", schema: supplierRepresentationSchema },
   { path: "feedstock-types", singular: "feedstock_type", schema: feedstockTypeRepresentationSchema },
   { path: "storage-locations", singular: "storage_location", schema: storageLocationRepresentationSchema },

@@ -1,10 +1,11 @@
+import { storageLocationTypes } from "@/schemas/storage-locations";
 import { PRODUCTION_RUN_STATUSES } from "@/lib/production-runs/lifecycle";
 import { biocharProductStatusValues } from "@/schemas/biochar-products";
 import { creditBatchSamplingChoices, creditBatchStatuses } from "@/schemas/credit-batches";
 import { z } from "zod";
 import { offsetInstantSchema } from "@/schemas/event-instant";
 import { publishedJsonSchemas } from "@/schemas/published-json-schema";
-import { uuidSchema } from "@/schemas/helpers";
+import { parseCalendarDate, uuidSchema } from "@/schemas/helpers";
 import { API_CURSOR_MAX_LENGTH, API_LIST_DEFAULT_LIMIT, API_LIST_MAX_LIMIT, API_QUERY_MAX_LENGTH } from "@/config/api-rest";
 
 import { API_TEXT_PATTERN, API_CURSOR_PATTERN } from "./input-text";
@@ -71,6 +72,22 @@ export const creditBatchListSchema = z.strictObject({
   status: z.enum(creditBatchStatuses).optional().describe("Credit batch status filter."),
   sampling: z.enum(creditBatchSamplingChoices).optional().describe("Credit batch sampling filter."),
 });
+export const customerLocationListSchema = supplierLocationListSchema.extend({
+  q: prefixSchema.describe("Case-insensitive literal prefix search on customer location name."),
+});
+const orderedDateSchema = z.iso.date().refine((value) => parseCalendarDate(value) !== null, "Enter a real calendar date, YYYY-MM-DD.");
+export const orderListSchema = z.strictObject({
+  ...paginationShape, facilityId: facilityIdSchema, code: codeSchema,
+  customerId: uuidSchema().optional().describe("Customer filter, UUID."),
+  formulationId: uuidSchema().optional().describe("Formulation filter, UUID."),
+  q: prefixSchema.describe("Case-insensitive literal prefix search on order code."),
+  orderedFrom: orderedDateSchema.optional().describe("Only orders dated on or after this calendar date, YYYY-MM-DD."),
+  orderedBefore: orderedDateSchema.optional().describe("Only orders dated before this calendar date, YYYY-MM-DD."),
+});
+export const storageLocationListSchema = facilityLookupListSchema.extend({
+  type: z.enum(storageLocationTypes).optional().describe("Material lane filter: feedstock_bin, biochar_bin or product_bin."),
+  formulationId: uuidSchema().optional().describe("Claimed formulation filter, UUID. Matches product bins claimed by this formulation."),
+});
 export const outputStockMovementListSchema = z.strictObject(paginationShape);
 
 /** Shared by REST adapters and the public contract, without handler dependencies. */
@@ -81,9 +98,11 @@ export const resourceQueries = {
   formulations: { list: lookupListSchema, get: lookupGetSchema },
   feedstocks: { list: feedstockListSchema, get: lookupGetSchema },
   facilities: { list: lookupListSchema, get: lookupGetSchema },
+  customers: { list: lookupListSchema, get: lookupGetSchema },
+  orders: { list: orderListSchema, get: lookupGetSchema },
   suppliers: { list: lookupListSchema, get: lookupGetSchema },
   "feedstock-types": { list: lookupListSchema, get: lookupGetSchema },
-  "storage-locations": { list: facilityLookupListSchema, get: facilityLookupGetSchema },
+  "storage-locations": { list: storageLocationListSchema, get: facilityLookupGetSchema },
   vehicles: { list: lookupListSchema, get: lookupGetSchema },
   drivers: { list: lookupListSchema, get: lookupGetSchema },
   "lab-samples": { list: labSampleListSchema, get: lookupGetSchema },

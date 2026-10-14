@@ -5,7 +5,7 @@ import { db } from "@/db";
 import { storageLocations } from "@/db/schema";
 import { createBiocharProduct, type CreateBiocharProductInput } from "@/data-access/biochar-product-create";
 import { createDelivery } from "@/data-access/delivery-output-writes";
-import { createOrder } from "@/data-access/orders";
+import { createOrderInTransaction } from "@/data-access/orders";
 import { previewOutputStock } from "@/data-access/output-stock-operations";
 import { postOutputStock } from "@/data-access/output-stock-post";
 import type { OutputStockPreviewInput } from "@/types/output-stock";
@@ -22,8 +22,8 @@ export async function postedStockFixture(options: { quantityKg?: number; stockKg
   const f = await seedOutputStockParents(db);
   await db.update(storageLocations).set({ formulationId: f.pure.id }).where(eq(storageLocations.id, f.bin.id));
   const product = options.stockKg === 0 ? null : await postProduct(f, { massKg: options.stockKg ?? 1000 });
-  const order = await createOrder(f.ctx, { code: `E2E-STOCK-O-${f.tag}`, facilityId: f.facility.id, customerId: f.customer.id,
-    formulationId: f.pure.id, orderDate: new Date(STOCK_DATE), quantityKg: options.quantityKg ?? 1000, packaging: "loose" });
+  const order = await db.transaction(tx => createOrderInTransaction(f.ctx, tx, { code: `E2E-STOCK-O-${f.tag}`, facilityId: f.facility.id, customerId: f.customer.id,
+    formulationId: f.pure.id, orderDate: new Date(STOCK_DATE), quantityKg: options.quantityKg ?? 1000, packaging: "loose" }));
   return { ...f, product, order };
 }
 

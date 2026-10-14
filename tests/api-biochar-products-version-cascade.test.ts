@@ -7,7 +7,7 @@ import { facilities } from "@/db/schema";
 import { BIOCHAR_PRODUCT_REPRESENTATION_REVISION } from "@/config/api-rest";
 import { archiveFacility } from "@/data-access/facilities";
 import { createDelivery } from "@/data-access/delivery-output-writes";
-import { createOrder } from "@/data-access/orders";
+import { createOrderInTransaction } from "@/data-access/orders";
 import { previewOutputStock } from "@/data-access/output-stock-operations";
 import { createApiProductFixture, expectProblem, removeApiProductFixture, BIOCHAR_MOISTURE_PERCENT, type ApiProductFixture } from "./helpers/api-biochar-product-fixture";
 import {
@@ -27,8 +27,8 @@ afterEach(async () => { await removeApiProductFixture(f); });
 const etagAt = (version: number) => `"${version}.${BIOCHAR_PRODUCT_REPRESENTATION_REVISION}"`;
 
 async function deliverFromProductBin() {
-  const order = await createOrder(f.ctx, { code: `E2E-API-O-${f.tag}`, facilityId: f.facility.id, customerId: f.customer.id,
-    formulationId: f.pure.id, orderDate: new Date(ORDER_DATE), quantityKg: ORDER_QUANTITY_KG, packaging: "loose" });
+  const order = await db.transaction(tx => createOrderInTransaction(f.ctx, tx, { code: `E2E-API-O-${f.tag}`, facilityId: f.facility.id, customerId: f.customer.id,
+    formulationId: f.pure.id, orderDate: new Date(ORDER_DATE), quantityKg: ORDER_QUANTITY_KG, packaging: "loose" }));
   const preview = await previewOutputStock(f.ctx, { facilityId: f.facility.id, storageLocationId: f.pureBin.id, occurredAt: STOCK_TIME,
     kind: "delivery", wetMassKg: DELIVERY_WET_KG, moisturePercent: BIOCHAR_MOISTURE_PERCENT });
   return createDelivery(f.ctx, { code: `E2E-API-D-${f.tag}`, facilityId: f.facility.id, orderId: order.id, storageLocationId: f.pureBin.id,

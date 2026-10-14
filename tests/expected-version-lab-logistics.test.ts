@@ -1,3 +1,4 @@
+import { runOperationInProcess } from "@/lib/operations/runner";
 import { randomUUID } from "node:crypto";
 import { afterEach, describe, expect, it } from "vitest";
 import { eq, sql } from "drizzle-orm";
@@ -42,7 +43,7 @@ import {
 
 import { createCreditBatch, updateCreditBatch, deleteCreditBatch } from "@/data-access/credit-batches";
 import { updateSample, deleteSample } from "@/data-access/samples";
-import { updateOrder, deleteOrder } from "@/data-access/orders";
+import { updateOrder, deleteOrder } from "@/lib/operations/orders";
 import { deleteDelivery } from "@/data-access/delivery-output-writes";
 import { updateDelivery } from "@/lib/operations/deliveries";
 import { createTransportLeg, updateTransportLeg, deleteTransportLeg, syncFeedstockTransportLeg } from "@/data-access/transport-legs";
@@ -83,7 +84,7 @@ interface UpdaterCase {
 }
 const UPDATERS: UpdaterCase[] = [
   { entity: "sample", save: (f, expectedVersion, label) => updateSample(f.ctx, f.ids.sample, { expectedVersion, labName: label }), remove: (f, v) => deleteSample(f.ctx, f.ids.sample, v) },
-  { entity: "order", save: (f, expectedVersion, label) => updateOrder(f.ctx, f.ids.order, { expectedVersion, code: label }), remove: (f, v) => deleteOrder(f.ctx, f.ids.order, v) },
+  { entity: "order", save: (f, expectedVersion, label) => runOperationInProcess(updateOrder, f.ctx, { orderId: f.ids.order, expectedVersion, code: label }), remove: (f, v) => runOperationInProcess(deleteOrder, f.ctx, { orderId: f.ids.order, expectedVersion: v }) },
   { entity: "delivery", save: (f, expectedVersion, label) => updateDelivery(f.ctx, f.ids.delivery, { expectedVersion, code: label }), remove: (f, v) => deleteDelivery(f.ctx, f.ids.delivery, v) },
   { entity: "transportLeg", save: (f, expectedVersion, label) => updateTransportLeg(f.ctx, f.ids.transportLeg, { expectedVersion, originName: label }), remove: (f, v) => deleteTransportLeg(f.ctx, f.ids.transportLeg, v) },
   { entity: "application", save: (f, expectedVersion, label) => updateApplication(f.ctx, f.ids.application, { expectedVersion, fieldIdentifier: label }), remove: (f, v) => deleteApplication(f.ctx, f.ids.application, v) },

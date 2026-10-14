@@ -1,3 +1,5 @@
+import { updateOrder } from "@/lib/operations/orders";
+import { runOperationInProcess } from "@/lib/operations/runner";
 import { labLogisticsVersion } from "./helpers/lab-logistics-version";
 import { masterDataVersion } from "./helpers/master-data-version";
 import { preparePureOutputProductFixture, ensureOutputFixtureActor } from "./helpers/output-contract-fixtures";
@@ -18,7 +20,7 @@ import {
 import { updateCustomerLocation } from "@/data-access/customers";
 import { createDelivery } from "@/data-access/deliveries";
 import { updateDelivery } from "@/lib/operations/deliveries";
-import { updateOrder } from "@/data-access/orders";
+
 import { syncBiocharProductTransportLegs } from "@/data-access/transport-legs";
 import {
   ensureTestOrg,
@@ -456,9 +458,8 @@ describe(
 
       const otherRecipe = await outputProductFixtureValues(db, { organizationId: TEST_ORG_ID, facilityId: fixture.facilityId, code: "unused" });
       await expect(
-        updateOrder(ctx, fixture.orderId, { expectedVersion: await labLogisticsVersion(ctx, "orders", fixture.orderId),
-          formulationId: otherRecipe.formulationId,
-        }),
+        runOperationInProcess(updateOrder, ctx, { orderId: fixture.orderId, expectedVersion: await labLogisticsVersion(ctx, "orders", fixture.orderId),
+          formulationId: otherRecipe.formulationId, }),
       ).rejects.toThrow(
         /Order relationship is used by delivery/,
       );
@@ -510,9 +511,8 @@ describe(
         syncBiocharProductTransportLegs(ctx, tx, [fixture.productIds[0]]),
       );
 
-      await expect(updateOrder(ctx, fixture.orderId, { expectedVersion: await labLogisticsVersion(ctx, "orders", fixture.orderId),
-        customerLocationId: fixture.locationIds[1],
-      })).rejects.toThrow(/Order relationship is used by delivery/);
+      await expect(runOperationInProcess(updateOrder, ctx, { orderId: fixture.orderId, expectedVersion: await labLogisticsVersion(ctx, "orders", fixture.orderId),
+        customerLocationId: fixture.locationIds[1], })).rejects.toThrow(/Order relationship is used by delivery/);
       await updateCustomerLocation(ctx, fixture.locationIds[0], { expectedVersion: await masterDataVersion(ctx, "customerLocations", fixture.locationIds[0]), distanceFromFacilityKm: 60, distanceSource: "manual" });
 
       const [derived] = await db

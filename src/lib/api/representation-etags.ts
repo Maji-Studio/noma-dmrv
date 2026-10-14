@@ -1,3 +1,4 @@
+import { CUSTOMER_REPRESENTATION_REVISION, ORDER_REPRESENTATION_REVISION } from "@/config/api-rest";
 import { BIOCHAR_PRODUCT_REPRESENTATION_REVISION, CREDIT_BATCH_REPRESENTATION_REVISION, FORMULATION_REPRESENTATION_REVISION, LAB_SAMPLE_REPRESENTATION_REVISION, PRODUCTION_RUN_REPRESENTATION_REVISION, REACTOR_REPRESENTATION_REVISION } from "@/config/api-rest";
 import {
   SUPPLIER_REPRESENTATION_REVISION,
@@ -62,4 +63,11 @@ export function labSampleEtag(row: { version: number }): string {
 }
 export function creditBatchEtag(row: { version: number }): string {
   return representationEtag(row.version, CREDIT_BATCH_REPRESENTATION_REVISION);
+}
+
+export function customerEtag(row: { version: number }): string {
+  return representationEtag(row.version, CUSTOMER_REPRESENTATION_REVISION);
+}
+export function orderEtag(row: { version: number }): string {
+  return representationEtag(row.version, ORDER_REPRESENTATION_REVISION);
 }

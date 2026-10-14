@@ -1,9 +1,11 @@
+import { updateOrder } from "@/lib/operations/orders";
+import { runOperationInProcess } from "@/lib/operations/runner";
 import { labLogisticsVersion } from "./helpers/lab-logistics-version";
 import { outputProductFixtureValues, outputOrderFixtureValues, deleteOutputProductFixtures, deleteOutputFacilityFixtures } from "./helpers/output-contract-fixtures";
 import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq, inArray } from "drizzle-orm";
-import { createOrder, updateOrder } from "@/data-access/orders";
+import { createOrderInTransaction } from "@/data-access/orders";
 import { db } from "@/db";
 import { facilities } from "@/db/schema/facilities";
 import { orders } from "@/db/schema/logistics";
@@ -214,51 +216,50 @@ beforeAll(async () => {
 
   it("rejects creating an order with a location from another customer", async () => {
     await expect(
-      createOrder(makeTestOrgContext(TEST_USER_ID), {
+      db.transaction(async tx => createOrderInTransaction(makeTestOrgContext(TEST_USER_ID), tx, {
         code: `OR-OCG-CREATE-${tag}`,
         facilityId,
         customerId: customerAId,
         customerLocationId: locationBId,
-        formulationId: (await db.select().from(biocharProducts).where(eq(biocharProducts.id, productId)))[0].formulationId,
+        formulationId: (await tx.select().from(biocharProducts).where(eq(biocharProducts.id, productId)))[0].formulationId,
         orderDate: new Date("2026-06-13"),
         quantityKg: 100,
         packaging: "loose",
-      }),
+      })),
     ).rejects.toThrow("Delivery location belongs to a different customer");
   });
 
   it("accepts a formulation request before source biochar is available", async () => {
     await expect(
-      createOrder(makeTestOrgContext(TEST_USER_ID), {
+      db.transaction(async tx => createOrderInTransaction(makeTestOrgContext(TEST_USER_ID), tx, {
         code: `OR-OCG-ZERO-${tag}`,
         facilityId,
         customerId: customerAId,
         customerLocationId: locationAId,
-        formulationId: (await db.select().from(biocharProducts).where(eq(biocharProducts.id, zeroBiocharProductId)))[0].formulationId,
+        formulationId: (await tx.select().from(biocharProducts).where(eq(biocharProducts.id, zeroBiocharProductId)))[0].formulationId,
         orderDate: new Date("2026-06-13"),
         quantityKg: 100,
         packaging: "loose",
-      }),
+      })),
     ).resolves.toMatchObject({ packaging: "loose" });
   });
 
   it("rejects changing an order customer while preserving another customer's location", async () => {
     await expect(
-      updateOrder(makeTestOrgContext(TEST_USER_ID), orderId, { expectedVersion: await labLogisticsVersion(makeTestOrgContext(TEST_USER_ID), "orders", orderId), customerId: customerBId }),
+      runOperationInProcess(updateOrder, makeTestOrgContext(TEST_USER_ID), { orderId, expectedVersion: await labLogisticsVersion(makeTestOrgContext(TEST_USER_ID), "orders", orderId), customerId: customerBId }),
     ).rejects.toThrow("Delivery location belongs to a different customer");
   });
 
   it("rejects changing an order location to another customer's location", async () => {
     await expect(
-      updateOrder(makeTestOrgContext(TEST_USER_ID), orderId, { expectedVersion: await labLogisticsVersion(makeTestOrgContext(TEST_USER_ID), "orders", orderId), customerLocationId: locationBId }),
+      runOperationInProcess(updateOrder, makeTestOrgContext(TEST_USER_ID), { orderId, expectedVersion: await labLogisticsVersion(makeTestOrgContext(TEST_USER_ID), "orders", orderId), customerLocationId: locationBId }),
     ).rejects.toThrow("Delivery location belongs to a different customer");
   });
 
   it("updates request metadata without reserving source stock", async () => {
     await expect(
-      updateOrder(makeTestOrgContext(TEST_USER_ID), zeroProductOrderId, { expectedVersion: await labLogisticsVersion(makeTestOrgContext(TEST_USER_ID), "orders", zeroProductOrderId),
-        packaging: "bagged",
-      }),
+      runOperationInProcess(updateOrder, makeTestOrgContext(TEST_USER_ID), { orderId: zeroProductOrderId, expectedVersion: await labLogisticsVersion(makeTestOrgContext(TEST_USER_ID), "orders", zeroProductOrderId),
+        packaging: "bagged", }),
     ).resolves.toMatchObject({ packaging: "bagged" });
   });
 
@@ -267,21 +268,21 @@ beforeAll(async () => {
     // them. Rows that already hold a price must keep it.
     await db.update(orders).set({ value: 500, currency: "KES" }).where(eq(orders.id, zeroProductOrderId));
     await expect(
-      updateOrder(makeTestOrgContext(TEST_USER_ID), zeroProductOrderId, { expectedVersion: await labLogisticsVersion(makeTestOrgContext(TEST_USER_ID), "orders", zeroProductOrderId), packaging: "loose" }),
+      runOperationInProcess(updateOrder, makeTestOrgContext(TEST_USER_ID), { orderId: zeroProductOrderId, expectedVersion: await labLogisticsVersion(makeTestOrgContext(TEST_USER_ID), "orders", zeroProductOrderId), packaging: "loose" }),
     ).resolves.toMatchObject({ packaging: "loose", value: 500, currency: "KES" });
   });
 
   it("creates an order without a price and with the default currency", async () => {
-    const created = await createOrder(makeTestOrgContext(TEST_USER_ID), {
+    const created = await db.transaction(async tx => createOrderInTransaction(makeTestOrgContext(TEST_USER_ID), tx, {
       code: `OR-OCG-NOPRICE-${tag}`,
       facilityId,
       customerId: customerAId,
       customerLocationId: locationAId,
-      formulationId: (await db.select({ f: orders.formulationId }).from(orders).where(eq(orders.id, orderId)))[0].f,
+      formulationId: (await tx.select({ f: orders.formulationId }).from(orders).where(eq(orders.id, orderId)))[0].f,
       orderDate: new Date("2026-06-13"),
       quantityKg: 10,
       packaging: "loose",
-    });
+    }));
     expect(created).toMatchObject({ value: null, currency: "TZS" });
     await db.delete(orders).where(eq(orders.id, created.id));
   });
@@ -339,7 +340,7 @@ beforeAll(async () => {
     const [source] = await db.select().from(biocharProducts).where(eq(biocharProducts.id, concurrentCreateProductId));
     await expect(
       runWhileProductBecomesZero(concurrentCreateProductId, () =>
-        createOrder(makeTestOrgContext(TEST_USER_ID), {
+        db.transaction(async tx => createOrderInTransaction(makeTestOrgContext(TEST_USER_ID), tx, {
           code,
           facilityId,
           customerId: customerAId,
@@ -348,7 +349,7 @@ beforeAll(async () => {
           orderDate: new Date("2026-06-13"),
           quantityKg: 100,
           packaging: "loose",
-        }),
+        })),
       ),
     ).resolves.toMatchObject({ packaging: "loose" });
 
@@ -361,11 +362,7 @@ beforeAll(async () => {
   it("updates request metadata independently of concurrent product stock changes", async () => {
     await expect(
       runWhileProductBecomesZero(concurrentUpdateProductId, async () =>
-        updateOrder(
-          makeTestOrgContext(TEST_USER_ID),
-          concurrentUpdateOrderId,
-          { expectedVersion: await labLogisticsVersion(makeTestOrgContext(TEST_USER_ID), "orders", concurrentUpdateOrderId), packaging: "bagged" },
-        ),
+        runOperationInProcess(updateOrder, makeTestOrgContext(TEST_USER_ID), { orderId: concurrentUpdateOrderId, expectedVersion: await labLogisticsVersion(makeTestOrgContext(TEST_USER_ID), "orders", concurrentUpdateOrderId), packaging: "bagged" }),
       ),
     ).resolves.toMatchObject({ packaging: "bagged" });
 

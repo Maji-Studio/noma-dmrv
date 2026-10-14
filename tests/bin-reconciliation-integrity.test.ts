@@ -1,3 +1,5 @@
+import { updateOrder } from "@/lib/operations/orders";
+import { runOperationInProcess } from "@/lib/operations/runner";
 import { labLogisticsVersion } from "./helpers/lab-logistics-version";
 import { productionVersion } from "./helpers/production-version";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
@@ -22,7 +24,7 @@ import {
   deleteBiocharProduct,
 } from "@/data-access/biochar-products";
 import { createDelivery } from "@/data-access/deliveries";
-import { updateOrder } from "@/data-access/orders";
+
 import { createProductionRun } from "@/data-access/production-runs";
 import {
   ensureTestOrg,
@@ -350,7 +352,7 @@ describe("bin reconciliation integrity", { timeout: CONCURRENCY_TEST_TIMEOUT_MS 
   it("rejects changing a used order formulation without moving delivery provenance", async () => {
     const f = await postedFixture(); const delivery = await postDelivery(f, 60);
     const before = await db.select().from(outputStockAllocations).where(eq(outputStockAllocations.deliveryId, delivery.id));
-    await expect(updateOrder(f.ctx, f.order.id, { expectedVersion: await labLogisticsVersion(f.ctx, "orders", f.order.id), formulationId: f.recipe.id })).rejects.toThrow(delivery.code);
+    await expect(runOperationInProcess(updateOrder, f.ctx, { orderId: f.order.id, expectedVersion: await labLogisticsVersion(f.ctx, "orders", f.order.id), formulationId: f.recipe.id })).rejects.toThrow(delivery.code);
     expect(await db.select().from(outputStockAllocations).where(eq(outputStockAllocations.deliveryId, delivery.id))).toEqual(before);
   });
 
@@ -361,7 +363,7 @@ describe("bin reconciliation integrity", { timeout: CONCURRENCY_TEST_TIMEOUT_MS 
     const preview = await previewOutputStock(f.ctx, input);
     const results = await Promise.allSettled([
       postOutputStock(f.ctx, { ...input, expectedProductVersions: preview.expectedProductVersions, basisFingerprint: preview.basisFingerprint, idempotencyKey: crypto.randomUUID(), reason: "E2E correction race" }),
-      updateOrder(f.ctx, f.order.id, { expectedVersion: await labLogisticsVersion(f.ctx, "orders", f.order.id), quantityKg: 70 }),
+      runOperationInProcess(updateOrder, f.ctx, { orderId: f.order.id, expectedVersion: await labLogisticsVersion(f.ctx, "orders", f.order.id), quantityKg: 70 }),
     ]);
     expect(results.filter(result => result.status === "fulfilled")).toHaveLength(1);
     expect(results.filter(result => result.status === "rejected")).toHaveLength(1);

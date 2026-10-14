@@ -43,11 +43,12 @@ export function formatCertificationLineageLockMessage({
   }
 
   const lineageLabel = ENTITY_LABELS[lineageEntityType];
+  const article = /^[aeiou]/i.test(lineageLabel) ? "an" : "a";
   const relationship =
     lineageRelationship ?? (mutation === "create" ? "selected" : "linked");
   const explanation = `Cannot ${mutation} this ${ENTITY_LABELS[subjectEntityType]} because the ${relationship} ${lineageLabel} is locked by a certification submission.`;
 
   return relationship === "selected"
-    ? `${explanation} Select a ${lineageLabel} that is not locked.`
+    ? `${explanation} Select ${article} ${lineageLabel} that is not locked.`
     : explanation;
 }

@@ -9,6 +9,8 @@ const ENTITY_LABELS: Record<string, string> = {
   feedstocks: "Feedstocks",
   facilities: "Facilities",
   suppliers: "Suppliers",
+  customers: "Customers",
+  orders: "Orders",
   "feedstock-types": "Feedstock types",
   "storage-locations": "Storage bins",
   vehicles: "Vehicles",

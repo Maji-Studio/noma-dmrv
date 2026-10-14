@@ -188,7 +188,7 @@ midnight, because `new Date("YYYY-MM-DD")` parses as **UTC** midnight, which can
 render as the adjacent day and walk a stored date on an edit/save round-trip.
 `z.iso.date()` validates a string but does not produce a `Date`.
 
-Several established application/order/delivery/credit-batch schemas still use
+Several established application/delivery/credit-batch schemas still use
 `z.coerce.date()` while their components protect the default side with
 `formatLocalDate`. Treat those as legacy contracts: do not mass-change their
 output types, but when changing one, trace its component, action, data-access,
