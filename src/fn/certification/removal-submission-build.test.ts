@@ -1,3 +1,6 @@
+import { buildSubmissionLineageBlockers } from "./certify-lineage-blockers";
+import { deriveRequiredTransportCategories } from "./certify-transport-coverage";
+import { missingFeedstockTransportIds } from "@/lib/certification/submission-readiness";
 import production from "../../../tests/fixtures/isometric/production-template-2026-07-03.json";
 import type { components as RegistryComponents } from "@/lib/isometric/generated/certify";
 import * as ghgEntry from "@/lib/isometric/transformers/ghg-entry";
@@ -161,6 +164,7 @@ describe("buildRemovalSubmissionBuild", () => {
       orgCtx: TEST_ORG_CONTEXT,
       removalId: "rem-test-no-sequestration",
       ctx: {
+        submissionLineageBlockers: [],
         entityReadinessGaps: [],
         submissionWarnings: [],
       } as unknown as RemovalSubmissionContext,
@@ -252,8 +256,8 @@ describe("buildRemovalSubmissionBuild", () => {
     ).not.toBe(baseline);
   });
 
-  it("fails closed when entity certification readiness was not evaluated", async () => {
-    const ctx = {} as RemovalSubmissionContext;
+  it.each(["entityReadinessGaps", "submissionLineageBlockers"] as const)("fails closed when %s was not evaluated", async (missing) => {
+    const ctx = { entityReadinessGaps: [], submissionLineageBlockers: [], [missing]: undefined } as unknown as RemovalSubmissionContext;
 
     await expect(
       buildRemovalSubmissionBuild({
@@ -278,6 +282,7 @@ describe("buildRemovalSubmissionBuild", () => {
 
   it("blocks entity certification gaps before preparing registry inputs", async () => {
     const ctx = {
+      submissionLineageBlockers: [],
       entityReadinessGaps: [
         "Application APP-TEST-001: Upload the application logbook",
       ],
@@ -302,6 +307,28 @@ describe("buildRemovalSubmissionBuild", () => {
       sources.collectCandidateSourceDocumentsForRemoval,
     ).not.toHaveBeenCalled();
     expect(sources.resolveSourceBindingCandidates).not.toHaveBeenCalled();
+  });
+
+  it("blocks a missing feedstock leg before preparing registry inputs", async () => {
+    const missing = missingFeedstockTransportIds(["FS-1", "FS-2"], [
+      { entityId: "FS-1", distanceKm: 10, loadMassKg: 100 },
+    ]);
+    const ctx = {
+      entityReadinessGaps: [],
+      submissionLineageBlockers: buildSubmissionLineageBlockers([], missing, { "FS-2": "FS-2" }, ["feedstock"]),
+    } as unknown as RemovalSubmissionContext;
+    await expect(buildRemovalSubmissionBuild({
+      orgCtx: TEST_ORG_CONTEXT,
+      removalId: "rem-missing-feedstock",
+      ctx,
+      prepared: {
+        defaultTemplate: { groups: [] } as never,
+        blueprintsByKey: new Map(),
+        externalProjectId: "prj-test",
+        allowPeriodInputStub: false,
+        hasDurabilityComponents: false,
+      },
+    })).rejects.toThrow("Removal submission blocked:\nFeedstock FS-2 has no usable transport leg.");
   });
 
   it("builds the Safety margin from dry mass with the Inventory Source attached", async () => {
@@ -413,6 +440,7 @@ describe("buildRemovalSubmissionBuild", () => {
       samples: [],
     } as unknown as ProductionRunWithSamples;
     const ctx = {
+      submissionLineageBlockers: [],
       entityReadinessGaps: [],
       lineages: [
         {
@@ -421,7 +449,7 @@ describe("buildRemovalSubmissionBuild", () => {
             code: "APP-001",
             applicationDate: new Date("2026-01-03T00:00:00Z"),
           },
-          delivery: { id: "delivery-1" },
+          delivery: { id: "delivery-1", status: "delivered", customerLocationId: "location-1" },
           productionRun: { id: "run-1" },
           feedstocks: [],
           warnings: [],
@@ -448,6 +476,11 @@ describe("buildRemovalSubmissionBuild", () => {
       memberBatches: [{ id: "batch-1" }],
       facilityReferenceSoilTemperature: null,
     } as unknown as RemovalSubmissionContext;
+    ctx.submissionLineageBlockers = buildSubmissionLineageBlockers(
+      ctx.lineages, ["feedstock-without-leg"], {},
+      deriveRequiredTransportCategories(template),
+    );
+    expect(ctx.submissionLineageBlockers).toEqual([]);
     const sourceCandidate = {
       documentId: "document-inventory",
       sourceId: "source-inventory",

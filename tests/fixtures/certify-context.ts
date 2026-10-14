@@ -87,6 +87,9 @@ export function factsFromMockedLineages(
         status: lineage.delivery.status ?? "complete",
         deliveryDate: lineage.delivery.deliveryDate ?? DEFAULT_FACT_DATE,
         massDryKg: lineage.delivery.massDryKg ?? 100,
+        distanceKmOverride: lineage.delivery.distanceKmOverride ?? null,
+        locationDistanceKm: lineage.delivery.locationDistanceKm ?? null,
+        customerLocationId: lineage.delivery.customerLocationId ?? null,
       },
       order: lineage.order
         ? {
