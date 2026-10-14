@@ -2,7 +2,9 @@
 
 import { LeafIcon } from "@phosphor-icons/react/dist/ssr";
 import type { UseFormRegisterReturn } from "react-hook-form";
-import { FormField, FormInput, FormSection } from "@/components/forms";
+import { FormField } from "@/components/forms/form-field";
+import { FormInput } from "@/components/forms/form-input";
+import { FormSection } from "@/components/forms/form-section";
 import {
   SPINE_SECTION_TAG,
   type SpineMeta,

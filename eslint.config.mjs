@@ -42,6 +42,11 @@ const eslintConfig = defineConfig([
         {
           paths: [
             {
+              // The root loads the whole barrel and dominated unit-test import time; use date-fns/<fn>.
+              name: "date-fns",
+              message: "use date-fns/<fn> subpaths",
+            },
+            {
               name: "@phosphor-icons/react",
               message:
                 "Import icon components from '@phosphor-icons/react/dist/ssr' (hook-free, works in Server Components). Only the `Icon`/`IconProps`/`IconWeight` types come from this entry, and only via `import type`.",

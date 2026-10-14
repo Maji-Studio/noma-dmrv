@@ -10,7 +10,8 @@
  */
 "use client";
 
-import { CompositionCard, CompositionLedger } from "@/components/forms";
+import { CompositionCard } from "@/components/forms/composition-card";
+import { CompositionLedger } from "@/components/forms/composition-ledger";
 import { SourceRunGroups, type SourceRunGroup } from "@/components/forms/source-run-groups";
 import { SegmentBar, SegmentKey, batchAccentFill } from "@/components/ui/segment-bar";
 import type { MassSegment } from "@/components/forms/composition-ledger";

@@ -23,7 +23,7 @@ import {
 } from "@phosphor-icons/react/dist/ssr";
 import { EmptyState } from "@/components/ui/empty-state";
 import { buttonVariants } from "@/components/ui/button";
-import { SectionLabel } from "@/components/forms";
+import { SectionLabel } from "@/components/forms/section-label";
 import { formatDate, formatTonnes } from "@/lib/format-utils";
 import { useBatchDurabilitySummary } from "@/hooks/use-certification";
 import type {

@@ -8,6 +8,9 @@ on:
 permissions:
   contents: read
 
+env:
+  NODE_MAJOR: 22
+
 # Cancel superseded runs on the same ref (e.g. new push to an open PR).
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
@@ -34,7 +37,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 22
+          node-version: ${{ env.NODE_MAJOR }}
           cache: pnpm
 
       - name: Install dependencies
@@ -42,6 +45,28 @@ jobs:
 
       - name: Documentation references
         run: pnpm docs:check
+
+      - name: Hash route file paths
+        id: lint-routes
+        # The Next link rule reads filenames; include paths so identical-content renames invalidate it too.
+        env:
+          CACHE_PREFIX: ${{ runner.os }}-static-node${{ env.NODE_MAJOR }}-v1-${{ hashFiles('pnpm-lock.yaml', 'package.json', 'eslint.config.*', 'tsconfig*.json', '.github/workflows/ci.yml') }}-
+        run: |
+          route_hash=$(git ls-files -z -- app src/app pages src/pages | sha256sum | cut -d ' ' -f 1)
+          echo "prefix=${CACHE_PREFIX}${route_hash}-" >> "$GITHUB_OUTPUT"
+
+      # ESLint caches per file; type-aware or cross-file rules (projectService, import/no-cycle) need the cache dropped or key widened.
+      # Unlike the Turbopack PR seed, ESLint/tsbuildinfo state changes each commit;
+      # these small archives (~1.3 MB + ~2.1 MB) are refreshed per SHA.
+      - name: Restore static check caches
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            .cache/eslint
+            .cache/typecheck.tsbuildinfo
+          key: ${{ steps.lint-routes.outputs.prefix }}${{ github.sha }}
+          restore-keys: |
+            ${{ steps.lint-routes.outputs.prefix }}
 
       - name: Lint
         run: pnpm lint
@@ -117,14 +142,20 @@ jobs:
           "$RUNNER_TEMP/oasdiff/oasdiff" breaking "$base" openapi/v1.json \
             --fail-on ERR --err-ignore openapi/accepted-breaking-changes.txt
 
-  # Full Vitest suite. No secrets — tests/setup.ts fills safe env defaults and
-  # the Isometric sandbox *.integration.test.ts suites self-skip without
+  # Full Vitest suite split by file across matrix shards, each with its own
+  # Postgres service and migrations. No secrets — tests/setup.ts fills safe env
+  # defaults; Isometric sandbox *.integration.test.ts suites self-skip without
   # RUN_ISOMETRIC_SANDBOX_TESTS. A throwaway Postgres service is required
   # because several suites exercise the real `@/db` connection + transactions
   # rather than mocking the data-access layer.
   quality-tests:
+    name: quality-tests (${{ matrix.shard }}/${{ strategy.job-total }})
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
 
     services:
       postgres:
@@ -163,7 +194,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 22
+          node-version: ${{ env.NODE_MAJOR }}
           cache: pnpm
 
       - name: Install dependencies
@@ -173,7 +204,7 @@ jobs:
         run: pnpm db:migrate
 
       - name: Unit tests
-        run: pnpm exec vitest run
+        run: pnpm exec vitest run --shard=${{ matrix.shard }}/${{ strategy.job-total }}
 
   # Production build check. PRs opt into the experimental Turbopack filesystem
   # cache; pushes to main/staging keep it off and exercise the deploy-equivalent
@@ -210,7 +241,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 22
+          node-version: ${{ env.NODE_MAJOR }}
           cache: pnpm
 
       # Cache only Next's incremental compiler data, not the runnable .next

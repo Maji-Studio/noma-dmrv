@@ -13,7 +13,7 @@
 
 import type { ReactNode } from "react";
 import { Button, Modal } from "@/components/ui";
-import { ServerError } from "@/components/forms";
+import { ServerError } from "@/components/forms/server-error";
 import { EnvBanner } from "./env-banner";
 
 interface ConfirmActionDialogProps {

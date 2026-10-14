@@ -177,7 +177,7 @@ Tokens expire after 1 hour. Verify the email was sent, that `NEXT_PUBLIC_APP_URL
 
 ### Type Errors During Build
 
-`rm -rf .next tsconfig.tsbuildinfo`, then `pnpm typecheck` (the first-class script; not `pnpm tsc --noEmit`).
+`rm -rf .next .cache`, then `pnpm typecheck` (the first-class script; not `pnpm tsc --noEmit`).
 
 ### Environment Variables Not Working in Production
 

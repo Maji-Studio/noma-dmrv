@@ -1,4 +1,5 @@
-import { addMonths, isAfter } from "date-fns";
+import { addMonths } from "date-fns/addMonths";
+import { isAfter } from "date-fns/isAfter";
 import { formatUtcDate } from "@/lib/date-utils";
 
 export const CREDIT_BATCH_WINDOW_DESCRIPTION = "one calendar month";
