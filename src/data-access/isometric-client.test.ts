@@ -4,9 +4,8 @@ import type { OrgContext } from "@/lib/auth/server";
 import { certifierCredentials } from "@/db/schema/certification";
 import { IsometricApiError } from "@/lib/isometric/client";
 import {
-  getDecryptedCertifierCredentials,
   resolveIsometricClient,
-  resolveIsometricClientForPlatformAdminCredentialVerification,
+  verifyIsometricCredentialsForOrganization,
 } from "./certifier-credentials";
 
 const mocks = vi.hoisted(() => ({
@@ -52,8 +51,6 @@ describe("organization-scoped Isometric client", () => {
     { ...CTX, organizationId: " " },
   ])("rejects incomplete org scope before reading secrets", async (ctx) => {
     await expect(resolveIsometricClient(ctx)).rejects.toThrow("Unauthorized");
-    await expect(getDecryptedCertifierCredentials(ctx, "isometric"))
-      .rejects.toThrow("Unauthorized");
     expect(mocks.select).not.toHaveBeenCalled();
     expect(mocks.decrypt).not.toHaveBeenCalled();
   });
@@ -96,23 +93,57 @@ describe("organization-scoped Isometric client", () => {
 });
 
 describe("Platform Admin credential verification", () => {
+  it("preserves the not-configured error without making a request", async () => {
+    mocks.limit.mockResolvedValue([]);
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(verifyIsometricCredentialsForOrganization(
+      { ...CTX, orgRole: null, isPlatformAdmin: true }, "org-selected",
+    )).rejects.toMatchObject({ code: "not_configured" });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("propagates registry errors from the credential check", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response("{}", { status: 401 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(verifyIsometricCredentialsForOrganization(
+      { ...CTX, orgRole: null, isPlatformAdmin: true }, "org-selected",
+    )).rejects.toMatchObject({ code: "http", status: 401 });
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
   it("rejects an organization Admin before loading a selected org's secrets", async () => {
-    await expect(resolveIsometricClientForPlatformAdminCredentialVerification(
+    await expect(verifyIsometricCredentialsForOrganization(
       { ...CTX, orgRole: "admin" }, "org-selected",
     )).rejects.toThrow("You can only manage credentials for your active Organization.");
     expect(mocks.select).not.toHaveBeenCalled();
   });
 
   it("still requires complete org scope for a Platform Admin", async () => {
-    await expect(resolveIsometricClientForPlatformAdminCredentialVerification(
+    await expect(verifyIsometricCredentialsForOrganization(
       { ...CTX, organizationId: "", isPlatformAdmin: true }, "org-selected",
     )).rejects.toThrow("Unauthorized");
     expect(mocks.select).not.toHaveBeenCalled();
   });
 
   it("allows a Platform Admin to verify the selected organization", async () => {
-    await resolveIsometricClientForPlatformAdminCredentialVerification(
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      nodes: [{ id: "prj-selected" }],
+      page_info: { has_next_page: false },
+    })));
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(verifyIsometricCredentialsForOrganization(
       { ...CTX, orgRole: null, isPlatformAdmin: true }, "org-selected",
+    )).resolves.toBe(1);
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/projects?"),
+      expect.objectContaining({ method: "GET", headers: expect.objectContaining({
+        Authorization: "Bearer org-token",
+        "X-Client-Secret": "org-secret",
+      }) }),
     );
     expect(mocks.where).toHaveBeenCalledWith(and(
       eq(certifierCredentials.organizationId, "org-selected"),

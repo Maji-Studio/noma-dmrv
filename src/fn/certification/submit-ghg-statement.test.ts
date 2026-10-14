@@ -67,7 +67,7 @@ import { getLatestSubmission } from "@/data-access/certification-submissions";
 import { getCertifierGhgStatementById } from "@/data-access/certifier-ghg-statements";
 import { getFacilityById } from "@/data-access/facilities";
 import * as reports from "@/data-access/ghg-statement-reports";
-import * as isometric from "@/lib/isometric";
+import { getGhgStatement, submitGhgStatement } from "@/lib/isometric";
 import { logger } from "@/lib/log";
 import { issueVerifierReportUrl } from "./ghg-statement-report-core";
 import { submitGhgStatementToVerifierCore } from "./submit-ghg-statement";
@@ -120,15 +120,15 @@ describe("GHG verifier success audit failures", () => {
         ghg_statement_report_url: GENERATED_REPORT_URL,
         submitted_at: "2026-02-01T10:00:00Z",
       });
-      vi.mocked(isometric.getGhgStatement).mockResolvedValueOnce(
+      vi.mocked(getGhgStatement).mockResolvedValueOnce(
         path === "already-applied" ? remoteAfter : remoteBefore,
       ).mockResolvedValue(remoteAfter);
       if (path === "lost-response") {
-        vi.mocked(isometric.submitGhgStatement).mockRejectedValue(
+        vi.mocked(submitGhgStatement).mockRejectedValue(
           new Error("response lost"),
         );
       } else {
-        vi.mocked(isometric.submitGhgStatement).mockResolvedValue(remoteAfter);
+        vi.mocked(submitGhgStatement).mockResolvedValue(remoteAfter);
       }
       vi.mocked(certification.appendSyncEvent).mockRejectedValue(
         new Error("audit insert failed"),
@@ -160,7 +160,7 @@ describe("GHG verifier success audit failures", () => {
         }),
         "failed to record certifier sync event",
       );
-      expect(isometric.submitGhgStatement).toHaveBeenCalledTimes(
+      expect(submitGhgStatement).toHaveBeenCalledTimes(
         path === "already-applied" ? 0 : 1,
       );
       expect(reports.promotePendingVerifierReportToken).toHaveBeenCalledTimes(

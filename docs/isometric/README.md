@@ -65,7 +65,7 @@ Application code uses `resolveIsometricClient(ctx)` from
 `src/data-access/certifier-credentials.ts`. It requires org scope and loads only
 that organization's encrypted credentials. Platform Admin verification of a
 selected organization's saved credentials uses the explicitly guarded
-`resolveIsometricClientForPlatformAdminCredentialVerification(ctx, organizationId)`.
+`verifyIsometricCredentialsForOrganization(ctx, organizationId)`.
 Environment credentials remain an escape hatch for scripts and dedicated health
 checks, parsed by `client-env.ts` without loading app configuration. `client.ts`
 takes explicit credentials and never imports data-access.

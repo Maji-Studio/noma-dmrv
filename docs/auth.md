@@ -50,6 +50,10 @@ The lookup in `src/data-access/ghg-statement-reports.ts` deliberately lacks an
 unguessable bearer token is the authorization boundary. This is the only
 cross-org verifier seam; every authenticated workspace and document read keeps
 normal organization scoping.
+The deliberate `// org-scope-ok:` credential-verification seam,
+`verifyIsometricCredentialsForOrganization(ctx, organizationId)`, checks
+`ctx.isPlatformAdmin` before reading a selected organization's credentials and
+returns only the project count from `listProjects`.
 
 ## Roles and active organization
 

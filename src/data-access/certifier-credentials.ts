@@ -10,6 +10,7 @@ import {
   ISOMETRIC_BASE_URLS,
   type IsometricClient,
 } from "@/lib/isometric/client";
+import { listProjects } from "@/lib/isometric/projects";
 import { requireOrgScope } from "./utils";
 
 type CertifierCredentialRow = typeof certifierCredentials.$inferSelect;
@@ -182,7 +183,7 @@ export async function hasCertifierCredentials(
 }
 
 /** Server-only secrets; never expose the return value to client code. */
-export async function getDecryptedCertifierCredentials(
+async function getDecryptedCertifierCredentials(
   ctx: OrgContext,
   provider: CertifierProvider,
 ): Promise<{ accessToken: string; clientSecret: string } | null> {
@@ -229,10 +230,10 @@ export async function resolveIsometricClient(
 }
 
 // org-scope-ok: Platform Admin verifies stored credentials for a selected organization after saving them.
-export async function resolveIsometricClientForPlatformAdminCredentialVerification(
+export async function verifyIsometricCredentialsForOrganization(
   ctx: OrgContext,
   organizationId: string,
-): Promise<IsometricClient> {
+): Promise<number> {
   requireOrgScope(ctx);
   if (!ctx.isPlatformAdmin) {
     throw new SafeError(
@@ -243,9 +244,10 @@ export async function resolveIsometricClientForPlatformAdminCredentialVerificati
     organizationId,
     "isometric",
   );
-  return createIsometricClient(
+  const client = createIsometricClient(
     credentials
       ? { ...credentials, baseUrl: ISOMETRIC_BASE_URLS[env.ISOMETRIC_ENVIRONMENT] }
       : null,
   );
+  return (await listProjects(client)).length;
 }

@@ -279,7 +279,7 @@ Normal registry callers pass their trusted `OrgContext` to
 Both the resolver and decrypted getter enforce `requireOrgScope`; the query
 filters on that context's organization and the Isometric provider. There is no
 exported bare-id credential getter or organization factory in the HTTP library.
-The narrow `resolveIsometricClientForPlatformAdminCredentialVerification` seam
+The narrow `verifyIsometricCredentialsForOrganization` seam
 checks Platform Admin authority before reading a selected organization's
 credentials and carries an `// org-scope-ok:` waiver. Neither client nor
 plaintext secrets may cross a server-action boundary.

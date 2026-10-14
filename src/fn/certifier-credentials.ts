@@ -5,7 +5,7 @@ import { env } from "@/config/env";
 import {
   getCertifierCredentialsStatus,
   resolveIsometricClient,
-  resolveIsometricClientForPlatformAdminCredentialVerification,
+  verifyIsometricCredentialsForOrganization,
   upsertCertifierCredentials,
   type CertifierCredentialsStatus,
 } from "@/data-access/certifier-credentials";
@@ -112,22 +112,21 @@ async function verifyCertifierCredentials(
   organizationId: string,
 ): Promise<CertifierCredentialsVerification> {
   try {
-    const client =
+    const projectCount =
       organizationId === ctx.organizationId
-        ? await resolveIsometricClient(ctx)
-        : await resolveIsometricClientForPlatformAdminCredentialVerification(
+        ? (await listProjects(await resolveIsometricClient(ctx))).length
+        : await verifyIsometricCredentialsForOrganization(
             ctx,
             organizationId,
           );
-    const projects = await listProjects(client);
     return {
       ok: true,
-      projectCount: projects.length,
+      projectCount,
       message:
-        projects.length === 0
+        projectCount === 0
           ? "Connected to Isometric. This account has no projects yet, so there is nothing to link the facility to."
-          : `Connected to Isometric. ${projects.length} project${
-              projects.length === 1 ? "" : "s"
+          : `Connected to Isometric. ${projectCount} project${
+              projectCount === 1 ? "" : "s"
             } available to link.`,
     };
   } catch (error) {

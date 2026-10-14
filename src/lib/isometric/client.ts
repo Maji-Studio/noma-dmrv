@@ -427,7 +427,4 @@ export function createIsometricClient(
   ) => isometricRequest<T>(credentials, method, path, options));
 }
 
-// Preserve the existing application import surface while credential resolution
-// remains separate from the configuration-free HTTP transport.
-
 export type IsometricEnvironment = keyof typeof ISOMETRIC_BASE_URLS;

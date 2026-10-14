@@ -9,7 +9,7 @@
  * whichever file reads second decrypts with the wrong key and fails with
  * "Encrypted secret authentication failed".
  */
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { ensureTestOrg } from "./helpers/test-org";
 
@@ -19,7 +19,6 @@ import type { OrgContext } from "@/lib/auth/server";
 import {
   deleteCertifierCredentials,
   getCertifierCredentialsStatus,
-  getDecryptedCertifierCredentials,
   upsertCertifierCredentials,
   resolveIsometricClient,
 } from "@/data-access/certifier-credentials";
@@ -28,6 +27,18 @@ import { certifierCredentials } from "@/db/schema/certification";
 const PROVIDER = "isometric" as const;
 const ORG_ID = "org_test_certifier_credentials_lifecycle";
 const SECOND_ORG_ID = "org_test_certifier_credentials_lifecycle_other";
+const fetchMock = vi.fn();
+
+async function expectClientCredentials(accessToken: string, clientSecret: string): Promise<void> {
+  const client = await resolveIsometricClient(makeCtx());
+  await client.get("/projects");
+  expect(fetchMock).toHaveBeenLastCalledWith(expect.any(String), expect.objectContaining({
+    headers: expect.objectContaining({
+      Authorization: `Bearer ${accessToken}`,
+      "X-Client-Secret": clientSecret,
+    }),
+  }));
+}
 
 function makeCtx(orgRole: OrgContext["orgRole"] = "owner"): OrgContext {
   return {
@@ -71,8 +82,12 @@ beforeAll(async () => {
 });
 
 beforeEach(async () => {
+  fetchMock.mockReset().mockImplementation(async () => new Response("{}"));
+  vi.stubGlobal("fetch", fetchMock);
   await clearCredentials();
 });
+
+afterEach(() => vi.unstubAllGlobals());
 
 afterAll(clearCredentials);
 
@@ -96,12 +111,7 @@ describe.sequential("certifier credentials data access", () => {
       accessTokenLast4: "1234",
     });
     expect(initialStatus.updatedAt).toBeInstanceOf(Date);
-    await expect(
-      getDecryptedCertifierCredentials(makeCtx(), PROVIDER)
-    ).resolves.toEqual({
-      accessToken: "initial-access-1234",
-      clientSecret: "initial-client-secret",
-    });
+    await expectClientCredentials("initial-access-1234", "initial-client-secret");
 
     await upsertCertifierCredentials(ctx, {
       organizationId: ORG_ID,
@@ -116,12 +126,7 @@ describe.sequential("certifier credentials data access", () => {
       configured: true,
       accessTokenLast4: "9876",
     });
-    await expect(
-      getDecryptedCertifierCredentials(makeCtx(), PROVIDER)
-    ).resolves.toEqual({
-      accessToken: "rotated-access-9876",
-      clientSecret: "rotated-client-secret",
-    });
+    await expectClientCredentials("rotated-access-9876", "rotated-client-secret");
 
     await deleteCertifierCredentials(ctx, ORG_ID, PROVIDER);
     await expect(
@@ -150,12 +155,7 @@ describe.sequential("certifier credentials data access", () => {
       accessToken: "rotated-access-9876",
     });
 
-    await expect(
-      getDecryptedCertifierCredentials(makeCtx(), PROVIDER)
-    ).resolves.toEqual({
-      accessToken: "rotated-access-9876",
-      clientSecret: "initial-client-secret",
-    });
+    await expectClientCredentials("rotated-access-9876", "initial-client-secret");
 
     await upsertCertifierCredentials(ctx, {
       organizationId: ORG_ID,
@@ -163,12 +163,7 @@ describe.sequential("certifier credentials data access", () => {
       clientSecret: "rotated-client-secret",
     });
 
-    await expect(
-      getDecryptedCertifierCredentials(makeCtx(), PROVIDER)
-    ).resolves.toEqual({
-      accessToken: "rotated-access-9876",
-      clientSecret: "rotated-client-secret",
-    });
+    await expectClientCredentials("rotated-access-9876", "rotated-client-secret");
   });
 
   it("refuses a first save that carries only one key", async () => {
@@ -184,10 +179,10 @@ describe.sequential("certifier credentials data access", () => {
     ).rejects.toThrow(/both the access token and the client secret/i);
   });
 
-  it("returns null from the internal getter when credentials are unconfigured", async () => {
-    await expect(
-      getDecryptedCertifierCredentials(makeCtx(), PROVIDER)
-    ).resolves.toBeNull();
+  it("resolves an unconfigured client without making a request", async () => {
+    const client = await resolveIsometricClient(makeCtx());
+    await expect(client.get("/projects")).rejects.toMatchObject({ code: "not_configured" });
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("resolves only the active organization's credentials, even when another org is configured", async () => {

@@ -14,7 +14,7 @@ vi.mock("@/lib/auth/server", () => ({
 
 vi.mock("@/data-access/certifier-credentials", () => ({
   resolveIsometricClient: vi.fn(),
-  resolveIsometricClientForPlatformAdminCredentialVerification: vi.fn(),
+  verifyIsometricCredentialsForOrganization: vi.fn(),
   upsertCertifierCredentials: vi.fn(),
   getCertifierCredentialsStatus: vi.fn(),
   deleteCertifierCredentials: vi.fn(),
@@ -45,12 +45,13 @@ vi.mock("@/lib/isometric", () => ({
 import {
   getCertifierCredentialsStatus,
   resolveIsometricClient,
-  resolveIsometricClientForPlatformAdminCredentialVerification,
+  verifyIsometricCredentialsForOrganization,
   upsertCertifierCredentials,
 } from "@/data-access/certifier-credentials";
 import { setOrgCertifierCredentialsFn } from "@/fn/certifier-credentials";
 import { requireOrgContext } from "@/lib/auth/server";
 import { listProjects } from "@/lib/isometric";
+import { SafeError } from "@/lib/errors";
 import {
   CERTIFIER_CREDENTIAL_MASK,
   certifierCredentialsRotationSchema,
@@ -117,7 +118,7 @@ describe("setOrgCertifierCredentialsFn", () => {
       provider: "isometric",
     });
     expect(resolveIsometricClient).toHaveBeenCalledWith(ORG_CONTEXT);
-    expect(resolveIsometricClientForPlatformAdminCredentialVerification).not.toHaveBeenCalled();
+    expect(verifyIsometricCredentialsForOrganization).not.toHaveBeenCalled();
     expect(result.success).toBe(true);
     expect(JSON.stringify(result)).not.toContain(ACCESS_TOKEN);
     expect(JSON.stringify(result)).not.toContain(CLIENT_SECRET);
@@ -133,8 +134,8 @@ describe("setOrgCertifierCredentialsFn", () => {
   it("verifies a selected organization's credentials for a Platform Admin", async () => {
     const ctx = { ...ORG_CONTEXT, orgRole: null, isPlatformAdmin: true } as const;
     vi.mocked(requireOrgContext).mockResolvedValue(ctx);
-    vi.mocked(resolveIsometricClientForPlatformAdminCredentialVerification)
-      .mockResolvedValue({} as never);
+    vi.mocked(verifyIsometricCredentialsForOrganization)
+      .mockResolvedValue(1);
     const selectedOrgId = "org_selected";
 
     const result = await setOrgCertifierCredentialsFn({
@@ -145,9 +146,31 @@ describe("setOrgCertifierCredentialsFn", () => {
 
     expect(result.success).toBe(true);
     expect(resolveIsometricClient).not.toHaveBeenCalled();
-    expect(resolveIsometricClientForPlatformAdminCredentialVerification)
+    expect(verifyIsometricCredentialsForOrganization)
       .toHaveBeenCalledWith(ctx, selectedOrgId);
-    expect(listProjects).toHaveBeenCalledOnce();
+    expect(listProjects).not.toHaveBeenCalled();
+    expect(result).toMatchObject({
+      success: true,
+      data: { verification: { ok: true, projectCount: 1 } },
+    });
+  });
+
+  it("does not verify credentials when a non-admin's cross-org save is rejected", async () => {
+    const message = "You can only manage credentials for your active Organization.";
+    vi.mocked(upsertCertifierCredentials).mockRejectedValueOnce(new SafeError(message));
+
+    const result = await setOrgCertifierCredentialsFn({
+      organizationId: "org_selected",
+      accessToken: ACCESS_TOKEN,
+      clientSecret: CLIENT_SECRET,
+    });
+
+    expect(result).toEqual({ success: false, error: message });
+    expect(upsertCertifierCredentials).toHaveBeenCalledOnce();
+    expect(resolveIsometricClient).not.toHaveBeenCalled();
+    expect(verifyIsometricCredentialsForOrganization).not.toHaveBeenCalled();
+    expect(listProjects).not.toHaveBeenCalled();
+    expect(getCertifierCredentialsStatus).not.toHaveBeenCalled();
   });
 
   it("stores the keys even when the connection check fails, and says so", async () => {

@@ -43,7 +43,7 @@ Application credentials are not environment-only:
   `resolveIsometricClient(ctx)` in `src/data-access/certifier-credentials.ts`,
   which calls `requireOrgScope` and filters credentials on `ctx.organizationId`;
 - Platform Admin verification of a selected organization's saved credentials uses
-  `resolveIsometricClientForPlatformAdminCredentialVerification(ctx, organizationId)`
+  `verifyIsometricCredentialsForOrganization(ctx, organizationId)`
   in the same data-access module, with an explicit privilege check and
   `// org-scope-ok:` waiver;
 - environment credentials are retained only for scripts and dedicated health

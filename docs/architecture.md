@@ -443,7 +443,7 @@ The resolver enforces `requireOrgScope`, decrypts credentials filtered on the
 context's organization, and passes them to the pure `createIsometricClient` HTTP
 factory. A missing row keeps the client's existing `not_configured` error.
 Only Platform Admin credential verification can select another organization,
-through `resolveIsometricClientForPlatformAdminCredentialVerification` with an
+through `verifyIsometricCredentialsForOrganization` with an
 explicit privilege check and `// org-scope-ok:` waiver. Scripts and dedicated
 health checks use `client-env.ts`; the HTTP library never imports data-access.
 
