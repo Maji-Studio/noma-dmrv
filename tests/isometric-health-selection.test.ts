@@ -8,7 +8,7 @@ import { load } from "js-yaml";
 
 const root = resolve(import.meta.dirname, "..");
 const healthSuite = "tests/isometric-sandbox-health.integration.test.ts";
-const writeSuite = "tests/registry-write.integration.test.ts";
+const writeSuite = "tests/isometric-sandbox.integration.test.ts";
 const sandboxEnvHelper = "tests/helpers/isometric-sandbox-env.ts";
 const collectionTimeoutMs = 60_000;
 

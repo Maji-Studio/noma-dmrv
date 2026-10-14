@@ -86,6 +86,8 @@ create three independent remote MeasurementSamples.
 
 ### 3. Reactor-monitoring submission route
 
+Resolved 2026-10-13 by #987: the reactor upload was removed (ADR 0006 retired).
+
 Determine the project-appropriate first-party Certify route for mandatory or
 conditional Pyrolysis reactor monitoring under the pinned v1.1 protocol:
 
@@ -153,8 +155,10 @@ design:
   `productionBatchId` wire seam.
 - `src/fn/certification/durability-measurement-samples.ts`: current
   removal-scoped durability representation.
+- `certifier_sensors` and
+  [src/fn/certification/submit-telemetry.ts](https://github.com/Maji-Studio/noma-dmrv/blob/archive/reactor-telemetry-upload/src/fn/certification/submit-telemetry.ts): existing sensor/upload seam.
 - Current Readings file flow: the raw CSV is retained unchanged and does not
-  populate row-level readings; there is no reactor time-series upload (ADR 0006).
+  populate the canonical row-level readings expected by telemetry submission.
 
 Do not redesign these seams unless a cited Isometric contract makes a change
 necessary. Identify contract-to-code gaps without implementing them.
