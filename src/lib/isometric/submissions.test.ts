@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { createIsometricClient } from "./client";
+import { testIsometricClient } from "../../../tests/fixtures/isometric-client";
 import { findGhgEntryBySupplierRef } from "./submissions";
 
 afterEach(() => {
@@ -33,7 +33,7 @@ describe("findGhgEntryBySupplierRef — wire contract (post-2026-06-04 rename)",
     const fetchMock = stubPaginatedFetch([{ id: "rmv_known_1" }]);
 
     const result = await findGhgEntryBySupplierRef(
-      createIsometricClient({ clientSecret: "test-secret", accessToken: "test-token", baseUrl: "https://api.sandbox.isometric.com/mrv/v0" }),
+      testIsometricClient(),
       "nm-rmv-abc-removal-v1",
     );
 
@@ -57,7 +57,7 @@ describe("findGhgEntryBySupplierRef — wire contract (post-2026-06-04 rename)",
     stubPaginatedFetch([]);
 
     const result = await findGhgEntryBySupplierRef(
-      createIsometricClient({ clientSecret: "test-secret", accessToken: "test-token", baseUrl: "https://api.sandbox.isometric.com/mrv/v0" }),
+      testIsometricClient(),
       "nm-rmv-missing-removal-v1",
     );
 
