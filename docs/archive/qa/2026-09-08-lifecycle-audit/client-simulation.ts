@@ -6,7 +6,7 @@ vi.mock("@/config/env", () => ({ env: {
   ISOMETRIC_ENVIRONMENT: "sandbox",
 } }));
 vi.mock("@/lib/log", () => ({ logger: { child: () => ({ debug: vi.fn(), error: vi.fn(), warn: vi.fn() }) } }));
-import { getIsometricClientFromEnv } from "@/lib/isometric/client";
+import { createIsometricClient } from "@/lib/isometric/client";
 
 const BEYOND_REQUEST_TIMEOUT_MS = 60_000;
 afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
@@ -22,7 +22,7 @@ describe("baseline response-body timeout observation", () => {
       signal = options.signal;
       return { ok: true, status: 200, text: () => body };
     }));
-    const pending = getIsometricClientFromEnv().get("/projects").finally(() => { settled = true; });
+    const pending = createIsometricClient({ clientSecret: "audit-placeholder", accessToken: "audit-placeholder", baseUrl: "https://api.sandbox.isometric.com/mrv/v0" }).get("/projects").finally(() => { settled = true; });
     await vi.advanceTimersByTimeAsync(BEYOND_REQUEST_TIMEOUT_MS);
     expect(vi.getTimerCount()).toBe(0);
     expect(signal?.aborted).toBe(false);

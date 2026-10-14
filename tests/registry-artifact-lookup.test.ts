@@ -12,7 +12,7 @@ vi.mock("@/lib/isometric/client", async (importOriginal) => {
 });
 
 import {
-  getIsometricClientFromEnv,
+  createIsometricClient,
   IsometricApiError,
   IsometricPageLimitError,
 } from "@/lib/isometric/client";
@@ -45,7 +45,7 @@ const OTHER_PROJECT_ID = "prj_other";
 const FILLER_RECORDS = 60;
 
 let registry: FakeIsometricRegistry;
-const client = () => getIsometricClientFromEnv();
+const client = () => createIsometricClient(null);
 
 beforeEach(() => {
   registry = installFakeRegistry();

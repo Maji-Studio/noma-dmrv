@@ -1,12 +1,12 @@
-import { env } from "@/config/env";
+import { z } from "zod";
 import { REDACTED } from "./sanitize";
 
 /**
  * Minimal structured server-side logger.
  *
  * Emits newline-delimited JSON to stdout/stderr (which Vercel captures), with
- * level filtering, child bindings, and field redaction. Intentionally
- * dependency-free: pino is the obvious choice, but Next.js 16's Turbopack has an
+ * level filtering, child bindings, and field redaction. No logging-library
+ * dependency: pino is the obvious choice, but Next.js 16's Turbopack has an
  * open, unresolved bug (vercel/next.js#93849) where a `serverExternalPackages`
  * package's hashed alias isn't resolvable at Vercel's serverless runtime —
  * independent of transport config and not catchable by local testing. A ~50-line
@@ -35,7 +35,10 @@ const LEVEL_ORDER: Record<Level, number> = {
 const SILENT = Number.POSITIVE_INFINITY;
 
 const isProd = process.env.NODE_ENV === "production";
-const configured = env.LOG_LEVEL ?? (isProd ? "info" : "debug");
+const configured = z.preprocess(
+  (value) => typeof value === "string" && value.trim() === "" ? undefined : value,
+  z.enum(["trace", "debug", "info", "warn", "error", "fatal", "silent"]).optional(),
+).parse(process.env.LOG_LEVEL) ?? (isProd ? "info" : "debug");
 const threshold = configured === "silent" ? SILENT : LEVEL_ORDER[configured];
 
 // Case-insensitive key match (covers `email`, `Authorization`, `X-Client-Secret`,

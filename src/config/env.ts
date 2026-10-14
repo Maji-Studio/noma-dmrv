@@ -94,14 +94,6 @@ const envSchema = z.object({
     .default("false")
     .transform((val) => val === "true"),
   ADMIN_EMAIL: z.string().email().optional(),
-  // Logging level (pino). Optional; the logger defaults to "info" in
-  // production and "debug" otherwise when this is unset.
-  LOG_LEVEL: z.preprocess(
-    emptyToUndefined,
-    z
-      .enum(["trace", "debug", "info", "warn", "error", "fatal", "silent"])
-      .optional()
-  ),
   DB_POOL_MAX: z.preprocess(
     emptyToUndefined,
     z.coerce.number().int().positive().optional()
@@ -300,7 +292,7 @@ const envSchema = z.object({
   // Production fail-closed: ISOMETRIC_ENVIRONMENT defaults to "sandbox" so
   // local and CI runs need no configuration, but inheriting that default in a
   // real deployment is fail-OPEN. It both selects the registry base URL
-  // (`BASE_URLS` in isometric/client.ts) and enables the sandbox-only
+  // (`ISOMETRIC_BASE_URLS` in isometric/client.ts) and enables the sandbox-only
   // durability measurement-sample POSTs, so an unset value would silently route
   // every registry call to the sandbox. Hermetic CI builds are excepted for
   // the reason documented on `isHermeticCiBuild` above.

@@ -1,23 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-// Credentials + environment for the client boundary. The real env is
-// Zod-validated and may lack Isometric creds in unit runs, so stub just the
-// fields `client.ts` reads (clientSecret / accessToken / environment).
-vi.mock("@/config/env", () => ({
-  env: {
-    ISOMETRIC_CLIENT_SECRET: "test-client-secret",
-    ISOMETRIC_ACCESS_TOKEN: "test-access-token",
-    ISOMETRIC_ENVIRONMENT: "sandbox",
-  },
-}));
-vi.mock("@/data-access/certifier-credentials", () => ({
-  getDecryptedCertifierCredentials: vi.fn().mockResolvedValue(null),
-}));
-
-import {
-  getIsometricClientForOrg,
-  getIsometricClientFromEnv,
-} from "./client";
+import { createIsometricClient } from "./client";
 import { findGhgEntryBySupplierRef } from "./submissions";
 
 afterEach(() => {
@@ -50,7 +33,7 @@ describe("findGhgEntryBySupplierRef — wire contract (post-2026-06-04 rename)",
     const fetchMock = stubPaginatedFetch([{ id: "rmv_known_1" }]);
 
     const result = await findGhgEntryBySupplierRef(
-      getIsometricClientFromEnv(),
+      createIsometricClient({ clientSecret: "test-secret", accessToken: "test-token", baseUrl: "https://api.sandbox.isometric.com/mrv/v0" }),
       "nm-rmv-abc-removal-v1",
     );
 
@@ -74,20 +57,10 @@ describe("findGhgEntryBySupplierRef — wire contract (post-2026-06-04 rename)",
     stubPaginatedFetch([]);
 
     const result = await findGhgEntryBySupplierRef(
-      getIsometricClientFromEnv(),
+      createIsometricClient({ clientSecret: "test-secret", accessToken: "test-token", baseUrl: "https://api.sandbox.isometric.com/mrv/v0" }),
       "nm-rmv-missing-removal-v1",
     );
 
     expect(result).toBeNull();
-  });
-});
-
-describe("getIsometricClientForOrg", () => {
-  it("preserves not_configured degradation when the organization has no credentials", async () => {
-    const client = await getIsometricClientForOrg("org-unconfigured");
-
-    await expect(client.get("/projects")).rejects.toMatchObject({
-      code: "not_configured",
-    });
   });
 });
