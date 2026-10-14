@@ -2,14 +2,14 @@ import type { ReactNode } from "react";
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from "react-test-renderer";
 import { beforeAll, expect, it, vi } from "vitest";
 import { FormDetailControl, FormDetailProvider } from "@/components/forms/form-detail-context";
-import type { OutputStockHistoryEntry, OutputStockPreview } from "@/types/output-stock";
+import type { OutputStockPreview } from "@/types/output-stock";
 
 vi.mock("@/hooks/use-facility-context", () => ({ useFacilityClock: () => ({ timeZone: "UTC", hint: "Facility time: UTC" }) }));
 vi.mock("@/components/ui/tooltip", () => ({ InfoHint: () => null, Tooltip: ({ children }: { children: ReactNode }) => children }));
 
 const state = vi.hoisted(() => ({ blocker: null as string | null }));
 vi.mock("@/hooks/use-output-stock", () => ({
-  useOutputSubBins: () => ({ data: undefined, error: null }),
+  useOutputSubBins: () => ({ data: { stockMode: "mix", subBins: [] }, error: null }),
   useOutputStockBalance: () => ({ data: undefined }),
   usePostOutputStock: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useOutputStockPreview: () => ({ isFetching: false, refetch: vi.fn(), data: {
@@ -26,20 +26,19 @@ function visible(node: ReactTestInstance | string): string {
   return typeof node === "string" ? node : node.props.hidden ? "" : node.children.map(visible).join(" ");
 }
 beforeAll(() => Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true }));
-it("shows correction inputs, the original figures, the stock preview and blockers at both levels, and keeps the calculation Detailed", async () => {
-  const original: OutputStockHistoryEntry = { id: "00000000-0000-4000-8000-000000000001", deliveryId: null, kind: "count", occurredAt: "2026-09-22T12:00:00.000Z", recordedAt: "2026-09-22", actorName: null, reason: "Recorded", correctsMovementId: null, wetMassKg: 0, moisturePercent: null, dryMassKg: 80, beforeDryKg: 80, afterDryKg: 0, allocations: [] };
-  const form = () => <FormDetailProvider scope="correction"><FormDetailControl /><OutputStockForm storageLocationId="00000000-0000-4000-8000-000000000002" facilityId="00000000-0000-4000-8000-000000000003" kind="count" original={original} onCancel={vi.fn()} onRecorded={vi.fn()} /></FormDetailProvider>;
+it("shows lost-mass inputs, the stock preview and blockers at both levels, and keeps the calculation Detailed", async () => {
+  const form = () => <FormDetailProvider scope="loss"><FormDetailControl /><OutputStockForm storageLocationId="00000000-0000-4000-8000-000000000002" facilityId="00000000-0000-4000-8000-000000000003" onCancel={vi.fn()} onRecorded={vi.fn()} /></FormDetailProvider>;
   let renderer!: ReactTestRenderer;
   await act(async () => { renderer = create(form()); });
   const simple = visible(renderer.root);
-  // The original entry's figures and the movement card are decision info.
-  for (const label of ["Stock history", "Source bin", "Dry biochar", "80 kg", "Wet stock in bin, estimate"]) expect(simple).toContain(label);
+  // The wet balance and the movement card are decision info.
+  for (const label of ["Stock history", "Source bin", "Wet stock in bin, estimate"]) expect(simple).toContain(label);
   expect(simple).not.toContain("Dry biochar removed");
-  expect(simple).toContain("Original entry");
+  expect(simple).not.toContain("Original entry");
   expect(simple).toContain("Date and time");
-  expect(simple).toContain("Counted wet mass");
-  expect(simple).toContain("Save correction");
-  state.blocker = "Correction is blocked by a saved application";
+  expect(simple).toContain("Wet mass removed");
+  expect(simple).toContain("Save lost mass");
+  state.blocker = "Not enough stock in this bin";
   await act(async () => renderer.update(form()));
   expect(visible(renderer.root)).toContain(state.blocker);
   await act(async () => renderer.root.findAllByType("input").find(node => node.props.value === "detailed")!.props.onChange());

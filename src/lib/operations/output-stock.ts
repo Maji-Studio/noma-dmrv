@@ -16,7 +16,7 @@ import type { Operation } from "./runner";
 export const GENERATED_MOVEMENT_KEY_PREFIX = "api:";
 
 /** Preconditions and the request key describe how a command was sent, not what it changed. */
-const NOT_CHANGES: ReadonlySet<string> = new Set(["basisFingerprint", "expectedProductVersions", "idempotencyKey", "facilityId"]);
+const NOT_CHANGES: ReadonlySet<string> = new Set(["basisFingerprint", "expectedProductVersions", "idempotencyKey", "facilityId", "requireLatestCorrection"]);
 
 function changedFields(input: object): string[] {
   return Object.entries(input).filter(([key, value]) => value !== undefined && !NOT_CHANGES.has(key)).map(([key]) => key).sort();
@@ -35,7 +35,7 @@ export const recordOutputStockMovement: Operation<typeof recordOutputStockMoveme
   input: recordOutputStockMovementInput,
   supportsDryRun: true,
   describe: (input, output) => describeRecordedMovement(input, output.movementId),
-  execute: ({ ctx, tx, snapshotStock }, { idempotencyKey, occurredAt, facilityId, ...command }) => withOutputStockErrors(async () => {
+  execute: ({ ctx, tx, snapshotStock }, { idempotencyKey, occurredAt, facilityId, requireLatestCorrection, ...command }) => withOutputStockErrors(async () => {
     // The bin supplies the facility and the zone a facility-local time is read in.
     const bin = await readOutputStockBin(ctx, tx, { storageLocationId: command.storageLocationId, facilityId });
     return recordOutputStockMovementInTransaction(ctx, tx, {
@@ -43,7 +43,7 @@ export const recordOutputStockMovement: Operation<typeof recordOutputStockMoveme
       facilityId: bin.facilityId,
       occurredAt: resolveEventInstant(occurredAt, bin.timeZone, ["occurredAt"]).toISOString(),
       idempotencyKey: idempotencyKey ?? `${GENERATED_MOVEMENT_KEY_PREFIX}${randomUUID()}`,
-    }, { snapshotStock });
+    }, { snapshotStock, ...(requireLatestCorrection ? { requireLatestCorrection } : {}) });
   }, {
     // A short sub-bin points at its entry in `sources`; anything else at the mass.
     shortage: (detail) => {

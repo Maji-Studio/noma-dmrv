@@ -24,7 +24,7 @@ import { Notice } from "@/components/ui/notice";
 
 /** The definition the ledger cannot show as a figure. */
 const DELIVERY_STOCK_HINT =
-  "These are the batches this delivery drew, by dry biochar. To change the measured masses, correct the original delivery entry in the storage bin's stock history.";
+  "These are the batches this delivery drew, by dry biochar. Edit mass and moisture in the delivery form while it is the bin's latest stock entry. Saving keeps the original entry and records the corrected values.";
 /** Names the whole in the bar's accessible name and in the ledger's total row. */
 const TOTAL_LABEL = "Dry biochar";
 
