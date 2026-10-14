@@ -150,7 +150,10 @@ describe("deriveEntityCertifyReadiness", () => {
 
   it("does not require 1000-year durability fields for 200-year samples", () => {
     const readiness = deriveEntityCertifyReadiness("sample", {
+      sampling: "sampled",
       durabilityOption: "200_year",
+      totalCarbonPercent: 82,
+      inorganicCarbonPercent: 2,
       organicCarbonPercent: 80,
       hToCOrgRatio: 0.4,
       oToCOrgRatio: 0.15,
@@ -162,14 +165,19 @@ describe("deriveEntityCertifyReadiness", () => {
     expect(readiness).toEqual({ state: "ready", gaps: [], warnings: [] });
   });
 
-  // Both eligibility ratios are universal (§3.3 Table 2), so a sample carrying
+  // Soil Module §3.3 Table 2 checks pooled H/C_org AND O/C_org on every tier.
+  // Both ratios are required on sampled batches, so a Sample carrying
   // only H:Corg must not badge complete — it never counts toward the §8.3.1
   // usable-replicate minimum (QA 2026-07-25 F-6).
+  // durability-submission-gates.ts skips unsampled batches and their chemistry.
   it.each(["200_year", "1000_year"])(
     "reports the O:Corg gap for a %s sample missing the oxygen ratio",
     (durabilityOption) => {
       const readiness = deriveEntityCertifyReadiness("sample", {
+        sampling: "sampled",
         durabilityOption,
+        totalCarbonPercent: 82,
+        inorganicCarbonPercent: 2,
         organicCarbonPercent: 80,
         hToCOrgRatio: 0.4,
         oToCOrgRatio: null,
@@ -193,7 +201,10 @@ describe("deriveEntityCertifyReadiness", () => {
 
   it("requires 1000-year durability fields when the condition applies", () => {
     const readiness = deriveEntityCertifyReadiness("sample", {
+      sampling: "sampled",
       durabilityOption: "1000_year",
+      totalCarbonPercent: 82,
+      inorganicCarbonPercent: 2,
       organicCarbonPercent: 80,
       hToCOrgRatio: 0.4,
       oToCOrgRatio: 0.15,
@@ -212,8 +223,8 @@ describe("deriveEntityCertifyReadiness", () => {
 
   it("reports paired carbon gaps for a sampled 1000-year Sample", () => {
     const readiness = deriveEntityCertifyReadiness("sample", {
-      durabilityOption: "1000_year",
       sampling: "sampled",
+      durabilityOption: "1000_year",
       totalCarbonPercent: null,
       inorganicCarbonPercent: null,
       organicCarbonPercent: 80,
@@ -233,7 +244,10 @@ describe("deriveEntityCertifyReadiness", () => {
 
   it("accepts either reactive or residual carbon for 1000-year samples", () => {
     const readiness = deriveEntityCertifyReadiness("sample", {
+      sampling: "sampled",
       durabilityOption: "1000_year",
+      totalCarbonPercent: 82,
+      inorganicCarbonPercent: 2,
       organicCarbonPercent: 80,
       hToCOrgRatio: 0.4,
       oToCOrgRatio: 0.15,
@@ -244,6 +258,28 @@ describe("deriveEntityCertifyReadiness", () => {
     });
 
     expect(readiness).toEqual({ state: "ready", gaps: [], warnings: [] });
+  });
+
+  it.each([null, undefined])("keeps chemistry gaps without replicate gaps when sampling is %s", (sampling) => {
+    for (const durabilityOption of ["200_year", "1000_year"]) {
+      const readiness = deriveEntityCertifyReadiness("sample", {
+        sampling,
+        durabilityOption,
+        randomReflectanceR0Percent: 1.2,
+        residualCarbonPercent: 85,
+      });
+      expect(readiness.state).toBe("incomplete");
+      expect(readiness.gaps.map((gap) => gap.key)).toEqual([
+        "organicCarbonPercent", "hToCOrgRatio", "oToCOrgRatio",
+      ]);
+    }
+  });
+
+  it.each(["200_year", "1000_year"])("skips chemistry only for an explicitly unsampled %s batch", (durabilityOption) => {
+    expect(deriveEntityCertifyReadiness("sample", {
+      sampling: "unsampled", durabilityOption,
+      randomReflectanceR0Percent: 1.2, residualCarbonPercent: 85,
+    })).toEqual({ state: "ready", gaps: [], warnings: [] });
   });
 
   it("marks a complete feedstock with wet mass ready", () => {
@@ -463,6 +499,26 @@ describe("deriveEntityCertifyReadiness", () => {
 });
 
 describe("isCertifyFormField", () => {
+  it.each(["sampled", "unsampled", null, undefined])("shares Sample conditions with read fields when sampling is %s", (sampling) => {
+    for (const durabilityOption of ["200_year", "1000_year"]) {
+      const context = { sampling, durabilityOption };
+      const chemistryRequired = sampling !== "unsampled";
+      for (const field of ["organicCarbonPercent", "hToCOrgRatio", "totalHydrogenPercent", "oToCOrgRatio"]) {
+        expect(isCertifyFormField("sample", field, context), field).toBe(chemistryRequired);
+        expect(isCertifyEntityField("sample", field, context), field).toBe(chemistryRequired);
+      }
+      for (const field of ["totalCarbonPercent", "inorganicCarbonPercent", "sReflectanceFraction"]) {
+        const required = sampling === "sampled" && durabilityOption === "1000_year";
+        expect(isCertifyFormField("sample", field, context), field).toBe(required);
+        expect(isCertifyEntityField("sample", field, context), field).toBe(required);
+      }
+      for (const field of ["randomReflectanceR0Percent", "reactiveCarbonPercent", "residualCarbonPercent"]) {
+        expect(isCertifyFormField("sample", field, context), field).toBe(durabilityOption === "1000_year");
+        expect(isCertifyEntityField("sample", field, context), field).toBe(durabilityOption === "1000_year");
+      }
+    }
+  });
+
   it("badges entered descriptors by their key", () => {
     expect(isCertifyFormField("delivery", "deliveredWetMassKg")).toBe(true);
     expect(isCertifyFormField("application", "soilTemperatureC")).toBe(false);

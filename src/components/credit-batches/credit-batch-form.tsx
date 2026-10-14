@@ -343,6 +343,7 @@ export function CreditBatchForm({
           <FormField
             id="startDate"
             label="Start date"
+            required
             error={errors.startDate?.message}
           >
             <FormInput
@@ -359,6 +360,7 @@ export function CreditBatchForm({
           <FormField
             id="endDate"
             label="End date"
+            required
             error={errors.endDate?.message}
           >
             <FormInput

@@ -32,19 +32,22 @@ export interface CertifySourceMapping {
   source: AggregatedProductionSource;
 }
 
-export type CertifyFieldCondition =
+type CertifyFieldComparison =
   | {
       field: string;
       equals: string | number | boolean | null;
-      label: string;
+      notEquals?: never;
     }
   | {
-      allOf: readonly {
-        field: string;
-        equals: string | number | boolean | null;
-      }[];
-      label: string;
+      field: string;
+      notEquals: string | number | boolean | null;
+      equals?: never;
     };
+
+export type CertifyFieldCondition = (
+  | CertifyFieldComparison
+  | { allOf: readonly CertifyFieldComparison[] }
+) & { label: string };
 
 export type CertifyFieldSatisfaction =
   | { mode: "field" }
@@ -187,6 +190,7 @@ export const CERTIFY_FIELD_REGISTRY: Record<
   ],
   sample: [
     {
+      // durability-readiness.ts runs the 1,000-year replicate gate only for sampled batches.
       key: "totalCarbonPercent",
       label: "Total carbon",
       kind: "entered",
@@ -199,6 +203,7 @@ export const CERTIFY_FIELD_REGISTRY: Record<
       },
     },
     {
+      // Same sampled 1,000-year replicate gate in durability-readiness.ts as total carbon.
       key: "inorganicCarbonPercent",
       label: "Measured inorganic carbon",
       kind: "entered",
@@ -211,15 +216,19 @@ export const CERTIFY_FIELD_REGISTRY: Record<
       },
     },
     {
+      // durability-submission-gates.ts skips chemistry only for explicit unsampled batches.
       key: "organicCarbonPercent",
       label: "Organic carbon",
       kind: "entered",
+      condition: { field: "sampling", notEquals: "unsampled", label: "sampled batches" },
       mappings: [mapping("weightedOrganicCarbonPercent")],
     },
     {
+      // durability-submission-gates.ts skips chemistry only for explicit unsampled batches.
       key: "hToCOrgRatio",
       label: "H:Corg ratio",
       kind: "entered",
+      condition: { field: "sampling", notEquals: "unsampled", label: "sampled batches" },
       formFields: [
         "totalHydrogenPercent",
         "organicCarbonPercent",
@@ -233,18 +242,18 @@ export const CERTIFY_FIELD_REGISTRY: Record<
       mappings: [mapping("weightedHToCorgRatio")],
     },
     {
-      // Unconditional, like H:Corg: the Soil Module §3.3 Table 2 eligibility
-      // check is universal (pooled mean H/C_org < 0.5 AND O/C_org < 0.2), not
-      // tier-specific. Without this descriptor a sample missing oxygen badged
-      // "chemistry complete" while the usable-replicate gate
-      // (biochar-eligibility.ts, durability-submission-gates.ts) refused to
-      // count it toward the §8.3.1 ≥3 minimum (QA 2026-07-25 F-6).
+      // Like H:Corg, Soil Module §3.3 Table 2 checks pooled mean H/C_org < 0.5
+      // AND O/C_org < 0.2 on every tier. Missing oxygen cannot count toward the §8.3.1 ≥3 usable
+      // replicates (QA 2026-07-25 F-6). durability-submission-gates.ts skips
+      // only explicit unsampled batches, including their incidental Samples.
       key: "oToCOrgRatio",
       label: "O:Corg ratio",
       kind: "entered",
+      condition: { field: "sampling", notEquals: "unsampled", label: "sampled batches" },
       mappings: [mapping("weightedOToCorgRatio")],
     },
     {
+      // assertBatchTierEvidence requires either TGA measurement at save for every 1,000-year batch.
       key: "tgaNonReactiveCarbonData",
       label: "TGA non-reactive carbon data",
       kind: "entered",
@@ -261,6 +270,7 @@ export const CERTIFY_FIELD_REGISTRY: Record<
       },
     },
     {
+      // assertBatchTierEvidence requires mean R₀ at save for every 1,000-year batch.
       key: "randomReflectanceR0Percent",
       label: "R0 reflectance",
       kind: "entered",
@@ -271,13 +281,16 @@ export const CERTIFY_FIELD_REGISTRY: Record<
       },
     },
     {
+      // Same sampled 1,000-year replicate gate in durability-readiness.ts as TC and IC.
       key: "sReflectanceFraction",
       label: "R₀ readings at or above 2%",
       kind: "entered",
       condition: {
-        field: "durabilityOption",
-        equals: "1000_year",
-        label: "1000-year durability",
+        allOf: [
+          { field: "durabilityOption", equals: "1000_year" },
+          { field: "sampling", equals: "sampled" },
+        ],
+        label: "sampled 1,000-year durability",
       },
     },
   ],
@@ -457,9 +470,11 @@ export function getCertifyFieldDescriptor(
 export function isCertifyFormField(
   entityKind: CertifyEntityKind,
   fieldName: string,
+  entity?: object,
 ): boolean {
   return getCertifyFieldDescriptors(entityKind).some((field) => {
     if (field.advisory) return false;
+    if (entity && !certifyFieldConditionApplies(field, entity)) return false;
     // Derived descriptors badge only the explicitly-named form inputs that
     // feed the derivation; entered descriptors default to their own key.
     const formFields =
@@ -471,9 +486,11 @@ export function isCertifyFormField(
 export function isCertifyEntityField(
   entityKind: CertifyEntityKind,
   fieldName: string,
+  entity?: object,
 ): boolean {
   return getCertifyFieldDescriptors(entityKind).some((field) => {
     if (field.advisory) return false;
+    if (entity && !certifyFieldConditionApplies(field, entity)) return false;
     const satisfactionFields =
       field.satisfaction?.mode === "anyOf" ||
       field.satisfaction?.mode === "allOf"
@@ -492,6 +509,24 @@ export function isCertifyEntityField(
 export function certificationDetailField(
   entityKind: CertifyEntityKind,
   fieldName: string,
+  entity?: object,
 ): { certifyRequired: boolean } {
-  return { certifyRequired: isCertifyEntityField(entityKind, fieldName) };
+  return { certifyRequired: isCertifyEntityField(entityKind, fieldName, entity) };
+}
+
+/** Shared applicability rule for readiness and contextual form and detail chips. */
+export function certifyFieldConditionApplies(
+  descriptor: CertifyFieldDescriptor,
+  entity: object,
+): boolean {
+  const values = entity as Record<string, unknown>;
+  if (!descriptor.condition) return true;
+  const applies = (condition: CertifyFieldComparison) =>
+    "notEquals" in condition
+      ? values[condition.field] !== condition.notEquals
+      : values[condition.field] === condition.equals;
+  if ("allOf" in descriptor.condition) {
+    return descriptor.condition.allOf.every(applies);
+  }
+  return applies(descriptor.condition);
 }
