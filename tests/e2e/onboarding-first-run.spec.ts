@@ -5,13 +5,14 @@ import { expect, test } from "./fixtures";
 import { createDirectAuthContext } from "./fixtures/auth-fixtures";
 import { createDbConnection } from "./fixtures/db";
 import * as schema from "@/db/schema";
-import { encryptSecret } from "@/lib/crypto/secrets";
+import { CERTIFIER_VERIFICATION_MESSAGES } from "@/lib/certification/certifier-credentials-verification";
+import { E2E_CERTIFIER_CLIENT_SECRET } from "./fixtures/certifier-credentials";
+import { saveCertifierKeysInAdminDirectory } from "./fixtures/certifier-credentials-ui";
 
 const RUN_TAG = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 const ORG_ID = `e2e-onboarding-org-${RUN_TAG}`;
 const ORG_NAME = `E2E Onboarding Org ${RUN_TAG}`;
 const USER_ID = `e2e-onboarding-owner-${RUN_TAG}`;
-const PROVIDER = "isometric" as const;
 const OWNER = {
   id: USER_ID,
   email: `test-onboarding-owner-${RUN_TAG}@e2e.local`,
@@ -119,17 +120,18 @@ test.describe("First-run onboarding", () => {
       await expect(registry).not.toBeVisible();
       await expect(page).toHaveURL(/\/dashboard(?:[/?#]|$)/);
 
-      // Credential writes verify against live Isometric. Keep this PR-shard
-      // journey hermetic: seed the encrypted row directly, then exercise the
-      // same status UI through the Platform Admin directory, which never mounts
-      // the facility project picker or calls Isometric.
-      await db.insert(schema.certifierCredentials).values({
-        organizationId: ORG_ID,
-        provider: PROVIDER,
-        accessTokenEncrypted: encryptSecret("e2e-onboarding-access-9999"),
-        clientSecretEncrypted: encryptSecret("e2e-onboarding-client-secret"),
+      // Save the keys through the Platform Admin directory so the app server
+      // encrypts them (#1010). The fixture secret cannot form an HTTP header,
+      // so the post-save connection check fails offline and the journey stays
+      // hermetic. Then reload to read the stored status back.
+      const keys = await saveCertifierKeysInAdminDirectory(adminPage, ORG_NAME, {
+        accessToken: "e2e-onboarding-access-9999",
+        clientSecret: E2E_CERTIFIER_CLIENT_SECRET,
       });
-      await adminPage.goto("/admin/organizations");
+      await expect(
+        keys.getByText(CERTIFIER_VERIFICATION_MESSAGES.network, { exact: true }),
+      ).toBeVisible();
+      await adminPage.reload();
       const organization = adminPage
         .getByRole("listitem")
         .filter({ hasText: ORG_NAME });
