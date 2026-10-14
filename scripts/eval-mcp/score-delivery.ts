@@ -38,19 +38,29 @@ const UPDATE_DELIVERY = "mcp__noma__update_delivery";
 const REQUEST_CUE = /\?|\b(?:provide|enter|tell|need|needed|what|specify|supply|confirm|share|send|give)\b/i;
 const NEGATED_CUE = /\b(?:no(?: longer)?|not|don't|do not)\s+(?:\w+\s+){0,2}(?:need|required)|\b(?:isn't|is not|not)\s+(?:needed|required)\b/i;
 const MOISTURE_QUESTION_CUE = /\b(?:what|which|how|provide|enter|tell|specify|supply|confirm|share|send|give)\b/i;
-const MOISTURE_REQUEST_CUE = /\bplease\b.*\b(?:provide|enter|tell|specify|supply|confirm|share|send|give)\b|\b(?:tell|send|give)\s+(?:me|us)\b|\b(?:i|we)\s+need\s+(?:your|you\s+to)\b|^\s*(?:provide|enter|specify|supply|confirm|share)\b/i;
+const MOISTURE_REQUEST_CUE = /\bplease\b.*\b(?:provide|enter|tell|specify|supply|confirm|share|send|give)\b|\b(?:tell|send|give)\s+(?:me|us)\b|\b(?:i|we)\s+need\b|^\s*(?:provide|enter|specify|supply|confirm|share)\b/i;
 const MOISTURE_FACT = /\bmoisture\s+(?:(?:percentage|percent|content|reading|value)\s+)?(?:is|was|=|:)\s*\d+(?:\.\d+)?\s*%/i;
 const SENTENCE_BOUNDARY = /(?<=[.!?;\n])/;
+const REQUEST_LIST = /([^\n]*:[ \t]*\r?\n(?:[ \t]*(?:[-*+]|\d+[.)])[ \t]+[^\n]*(?:\r?\n|$))+)/;
+
+function requestUnits(text: string): string[] {
+  // Keep a colon-led request with its list, so the cue can refer to a later item.
+  return text.split(REQUEST_LIST).flatMap((part) => REQUEST_LIST.test(part)
+    && MOISTURE_REQUEST_CUE.test(part.split("\n", 1)[0]) ? [part] : part.split(SENTENCE_BOUNDARY));
+}
+
+function isMoistureRequest(unit: string): boolean {
+  return /\bmoisture\b/i.test(unit) && !NEGATED_CUE.test(unit) && !MOISTURE_FACT.test(unit)
+    && ((unit.includes("?") && MOISTURE_QUESTION_CUE.test(unit)) || MOISTURE_REQUEST_CUE.test(unit));
+}
 
 function asksForMoisture(text: string): boolean {
-  return text.split(SENTENCE_BOUNDARY).some((sentence) => /\bmoisture\b/i.test(sentence)
-    && !NEGATED_CUE.test(sentence) && !MOISTURE_FACT.test(sentence)
-    && ((sentence.includes("?") && MOISTURE_QUESTION_CUE.test(sentence)) || MOISTURE_REQUEST_CUE.test(sentence)));
+  return requestUnits(text).some(isMoistureRequest);
 }
 
 function asksForDeliveryInput(text: string): boolean {
-  return text.split(SENTENCE_BOUNDARY).some((sentence) => /\bmoisture\b/i.test(sentence)
-    ? asksForMoisture(sentence)
+  return requestUnits(text).some((sentence) => /\bmoisture\b/i.test(sentence)
+    ? isMoistureRequest(sentence)
     : /\b(?:sub[ -]bin|product|source|bin|delivery|order|mass|quantity|time|when|date|distance)\b/i.test(sentence)
       && REQUEST_CUE.test(sentence) && !NEGATED_CUE.test(sentence));
 }

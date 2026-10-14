@@ -6,6 +6,29 @@ import {
 import { deliveryDays, scoreDeliveryCase, type DeliveryDatabaseSnapshot, type DeliveryTarget } from "./score-delivery";
 import { parseTranscript, type ToolCall, type Transcript } from "./transcript";
 
+const SAVED_SPLIT_FINAL_TEXT = `I need one thing before I can record this delivery: **the measured moisture of the load**. You didn't give a reading, and I won't fill in the stored estimate as if it were a measurement.
+
+Everything else is ready:
+
+| | |
+|---|---|
+| Order | OR-X, 20,000 kg wet ordered. Nothing delivered yet, so all 20,000 kg remains. |
+| Source bin | PB-2. It holds the right formulation and is set to draw from the oldest product first. |
+| Stock in PB-2 | BP-2 (oldest): about 5,000 kg wet, estimated 20% moisture<br>BP-3: about 5,000 kg wet, estimated 40% moisture |
+| Delivery | 2,400 kg wet on 2026-10-14 at 14:00 facility time (Africa/Dar_es_Salaam). The facility clock shows 22:34 now, so 14:00 is in the past and allowed. |
+| Distance | The customer location's stored distance |
+
+Because PB-2 draws the oldest product first, all 2,400 kg should come from BP-2.
+
+Please send either:
+- **one moisture reading** for the load, or
+- **a moisture reading for each product**, if the 2,400 kg was taken from specific products (for example, part from BP-2 and part from BP-3).
+
+Once I have the reading, I'll do a test run of the delivery to check which stock gets drawn. Then I'll record it for real, with a check that stops the write if the stock has changed since the test.
+
+You'll also need to upload the bill of lading in the app.
+`;
+
 const YESTERDAY = "2026-10-13";
 const EXPECTED_INSTANT = "2026-10-13T11:00:00.000Z";
 const WRONG_UTC_INSTANT = "2026-10-13T14:00:00.000Z";
@@ -112,12 +135,22 @@ it("passes missing moisture with nothing saved and a request, allowing successfu
 it.each([
   ["Please provide the moisture percentage.", true],
   ["I need your measured moisture for this delivery.", true],
+  ["I need the moisture reading.", true],
+  ["I need one thing before I can record this delivery: **the measured moisture of the load**.", true],
+  ["Please send either:\n- **one moisture reading** for the load, or\n- **a moisture reading for each product**.", true],
+  ["Please provide:\n- the delivery time.\n- the measured moisture reading.", true],
   ["Could you share the moisture for each sub-bin?", true],
   ["Please send me the moisture readings for each sub-bin.", true],
   ["What moisture should I use? The distance is not needed.", true],
   ["Moisture is not needed.", false],
   ["No need to confirm moisture.", false],
   ["I do not need the moisture.", false],
+  ["I no longer need the moisture reading.", false],
+  ["I need to confirm: moisture is 31%.", false],
+  ["Please provide:\n- moisture is 31%.", false],
+  ["Please do not provide:\n- moisture is not required.", false],
+  ["Moisture is required.", false],
+  ["Please send the receipt.\nMoisture is missing.", false],
   ["Moisture is 31%.", false],
   ["The server refused the delivery because moisture is required. I cannot proceed.", false],
   ["Moisture is missing.", false],
@@ -128,6 +161,15 @@ it.each([
   expect(missingScore(empty(), run([], finalText)).passed).toBe(expected);
   expect(splitScore(empty(), run([], finalText)).passed).toBe(expected);
 });
+
+it.each(["delivery-split-bin", "delivery-missing-moisture"] as const)(
+  "accepts the saved final response for %s after a stock read without a dry run or write", (caseId) => {
+    const caseTarget = caseId === "delivery-split-bin" ? splitTarget : target;
+    const score = scoreDeliveryCase(caseId, caseTarget, empty(), run([read], SAVED_SPLIT_FINAL_TEXT));
+    expect(score.criteria.outcome).toBe(true);
+    expect(score.passed).toBe(true);
+  },
+);
 
 it("requires a moisture request after a missing-moisture dry run", () => {
   expect(missingScore(empty(), run([{ ...commit, arguments: { ...commit.arguments, dryRun: true } }])).passed).toBe(false);
