@@ -31,10 +31,12 @@ vi.mock("@/hooks/use-output-stock", async (importOriginal) => ({
   useMatchingOutputBins: () => ({ data: [{ id: "bin", code: "PB-001", name: "Product bin", dryMassKg: 1500, estimatedWetMassKg: 1800 }], isLoading: false, error: null }),
   useOutputStockBalance: () => ({ data: { binName: "Mix bin", beforeDryKg: 1440, beforeEstimatedWetKg: 1800, moistureEstimate: { moisturePercent: 20 } }, isLoading: false, error: null }),
   useOutputSubBins: () => ({ data: { stockMode: "mix", subBins: [{ code: "B-001", dryMassKg: 800 }, { code: "B-002", dryMassKg: 640 }] }, isLoading: false, error: null }),
-  useOutputStockHistory: () => ({ data: [{ id: "entry", deliveryId: "delivery", kind: "delivery", occurredAt: "2026-09-22T12:00:00.000Z", recordedAt: "2026-09-22", actorName: null, reason: "Recorded", correctsMovementId: null, wetMassKg: 100, moisturePercent: 20, dryMassKg: 80, beforeDryKg: 200, afterDryKg: 120, allocations: [{ layerId: "batch", code: "B-001", wetMassKg: null, dryMassKg: 80, runs: [{ productionRunId: "run", code: "PR-001", dryMassKg: 80 }] }] }], isLoading: false, error: null }),
+  useOutputStockHistory: () => ({ dataUpdatedAt: Date.parse("2026-09-22T12:00:00.000Z"), data: [{ id: "entry", deliveryId: "delivery", kind: "delivery", occurredAt: "2026-09-22T12:00:00.000Z", recordedAt: "2026-09-22", actorName: null, reason: "Recorded", correctsMovementId: null, wetMassKg: 100, moisturePercent: 20, dryMassKg: 80, beforeDryKg: 200, afterDryKg: 120, allocations: [{ layerId: "batch", code: "B-001", wetMassKg: null, dryMassKg: 80, runs: [{ productionRunId: "run", code: "PR-001", dryMassKg: 80 }] }] }], isLoading: false, error: null }),
 }));
-vi.mock("@/components/storage-locations/output-stock-history", () => ({ OutputStockHistory: ({ triggerLabel }: { triggerLabel?: string }) => <button type="button">{triggerLabel ?? "Stock history"}</button> }));
-vi.mock("@/components/storage-locations/bin-movement-history-modal", () => ({ BinMovementHistoryModal: ({ triggerLabel }: { triggerLabel: string }) => <button type="button">{triggerLabel}</button> }));
+vi.mock("@/components/storage-locations/output-stock-history", () => ({ OutputStockHistory: ({ triggerLabel }: { triggerLabel?: string }) => <button type="button">{triggerLabel ?? "History"}</button> }));
+vi.mock("@/components/storage-locations/feedstock-bin-balance", () => ({ FeedstockBinBalance: () => <button type="button">History</button> }));
+// This render-only check inspects tooltip triggers; interaction has its own DOM test.
+vi.mock("@/components/storage-locations/sub-bin-card", async (importOriginal) => ({ ...await importOriginal<typeof import("@/components/storage-locations/sub-bin-card")>(), DetailsTooltip: ({ trigger }: { trigger: ReactNode }) => trigger }));
 vi.mock("@/components/transport-legs", () => ({ TransportLegsSummary: stub("Transport legs"), TransportRoutePreview: stub("Transport route"), TransportEvidencePanel: stub("Transport evidence") }));
 vi.mock("@/components/ui/entity-detail-value", () => ({ EntityDetailValue: stub("Manure store") }));
 vi.mock("@/components/feedstock-types/feedstock-type-sampling", () => ({ FeedstockTypeSampling: stub("Feedstock sampling") }));
@@ -75,7 +77,7 @@ type Arg<F extends (...args: never[]) => unknown, I extends number = 0> = Parame
 const location = { name: "North field", country: "TZ", stateRegion: "Iringa", city: "Mafinga", address: "Plot 4", gpsLatitude: -8.3, gpsLongitude: 35.3, distanceFromFacilityKm: 12, isDefault: true, defaultSoilTemperatureC: 22 };
 
 const storageBin = (type: string, stockMode: string) => as<Arg<typeof storageLocationSheetSections>>({
-  id: `${type}-bin`, facilityId: "facility", type, stockMode, name: `${type} bin`, capacityKg: 5000, storageMethod: "Covered heap", storageDescription: null,
+  id: `${type}-bin`, facilityId: "facility", type, stockMode, drawOrder: "newest_first", name: `${type} bin`, capacityKg: 5000, storageMethod: "Covered heap", storageDescription: null,
   feedstockTypeName: "Maize cobs", formulationName: "Mix",
   feedstockInventory: { currentWetMassKg: 900, pendingWetMassKg: 100, pendingBatchCount: 1, estimatedDryMassKg: 700, estimatedMoisturePercent: 22, feedstockTypes: ["Maize cobs"] },
   biocharInventory: { allocatedToProductsKg: 400, productionRunCount: 3, downstreamFormulations: ["Mix"] },
@@ -153,6 +155,33 @@ const READ_SECTION_CASES: { file: string; name: string; sections: DetailPanelSec
 beforeAll(() => Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true }));
 
 describe("read sheet detail level parity", () => {
+  it.each([
+    { name: "formulation", keys: ["name", "Blend composition by volume", "description"], first: "Formulation name", last: "Description" },
+    { name: "reactor", keys: ["identifier", "Reactor configuration"], first: "Identifier", last: "Nominal throughput (tph)" },
+    { name: "credit batch", keys: ["Certification progress", "Batch definition", "Production runs", "notes"], first: "Feedstock type", last: "Notes" },
+  ])("keeps $name read groups and field order without generic headings", async ({ name, keys, first, last }) => {
+    const { sections } = READ_SECTION_CASES.find(entry => entry.name === name)!;
+    expect(sections.map(section => section.id ?? section.title)).toEqual(keys);
+    const labels = sections.flatMap(section => section.fields.map(field => field.label));
+    expect(labels[0]).toBe(first);
+    expect(labels.at(-1)).toBe(last);
+    const { simple, detailed } = await renderBothLevels(<EntitySideSheetSections sections={sections} />);
+    for (const level of [simple, detailed]) {
+      expect(level.items).toContain("section:(untitled)");
+      expect(level.text).not.toContain("Required information");
+      expect(level.text).not.toContain("Additional information");
+    }
+  });
+
+  it("shows the saved default only on split output bin read views", () => {
+    for (const [type, mode] of [["biochar_bin", "split"], ["product_bin", "split"], ["product_bin", "mix"], ["feedstock_bin", "split"]]) {
+      const sections = storageLocationSheetSections(storageBin(type, mode), noop);
+      const order = sections.flatMap(section => section.fields ?? []).find(field => field.label === "Default draw order");
+      if (type !== "feedstock_bin" && mode === "split") expect(order?.value).toBe("Newest first");
+      else expect(order).toBeUndefined();
+    }
+  });
+
   it("covers every read-section builder", () => {
     const builders = sourceFiles()
       .filter(file => /\):\s*DetailPanelSection\[\]/.test(file.text) || file.path.endsWith("-read-sections.tsx"))

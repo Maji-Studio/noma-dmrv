@@ -13,22 +13,22 @@
  * ratio, so the persisted delta and snapshot columns cannot disagree.
  */
 
+import { getFeedstockBinStock } from "@/data-access/feedstock-bin-ledger";
+import { uuidSchema } from "@/schemas/helpers";
+import { withAction } from "./with-action";
 import type { ConflictRef } from "@/lib/conflict-ref";
 import { z } from "zod";
 import { requireOrgContext } from "@/lib/auth/server";
 import {
   createBinMovement,
-  getBinMovements as getBinMovementsData,
   recordStockTakeMovement,
   StockTakeIncreaseError,
-  type BinMovementWithActor,
 } from "@/data-access/bin-movements";
 import type { BinMovement } from "@/db/schema";
 import {
   recordLossSchema,
   recordStockTakeSchema,
 } from "@/schemas/bin-movements";
-import type { ActionResult } from "@/types/actions";
 import { ActionConflictError } from "@/lib/errors";
 import { StockOverdrawError } from "@/data-access/bin-stock-guards";
 import {
@@ -58,29 +58,6 @@ function binMovementActionError(
     message: "bin movement action failed",
     context: { op },
   });
-}
-
-// ============================================
-// Read
-// ============================================
-
-export async function getBinMovementsFn(
-  storageLocationId: string
-): Promise<ActionResult<BinMovementWithActor[]>> {
-  try {
-    const ctx = await requireOrgContext();
-    const movements = await getBinMovementsData(ctx, storageLocationId);
-    return { success: true, data: movements };
-  } catch (error) {
-    return {
-      success: false,
-      error: binMovementActionError(
-        error,
-        "Failed to load reconciliation history",
-        "bin-movement:list"
-      ),
-    };
-  }
 }
 
 // ============================================
@@ -176,4 +153,9 @@ export async function recordLossFn(
       ),
     };
   }
+}
+
+/** The pooled feedstock stock card and its complete movement history. */
+export async function getFeedstockBinStockFn(storageLocationId: string) {
+  return withAction(async (ctx) => getFeedstockBinStock(ctx, uuidSchema().parse(storageLocationId)));
 }

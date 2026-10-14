@@ -54,6 +54,9 @@ const ERROR_WAIT_MS = 1_200;
 /** Lines of a Playwright error kept as a failed surface's reason. */
 const ERROR_MESSAGE_LINES = 2;
 const ANONYMOUS_LOCALE = "en-US";
+const HEADINGLESS_GROUP_SURFACES = /^(formulation|reactor|credit-batch)\.(create|edit|read)$/;
+const REMOVED_SECTION_TITLES = ["Required information", "Additional information"];
+const REMOVED_AUTO_BALANCE_CUE = "Auto-fills the remaining share";
 
 const enabled = process.env.FORM_CAPTURE === "1";
 const label = process.env.FORM_CAPTURE_LABEL ?? "baseline";
@@ -128,6 +131,12 @@ async function captureState(page: Page, surface: Surface, root: Locator, state: 
   const nativePickerIcons = await measureNativePickerIcons(page);
   const geometry = await page.evaluate(measureFormGeometry, { kind: surface.kind, mode: surface.mode, nativePickerIcons });
   const { violations, failures } = evaluateGeometry(geometry, surface.mode);
+  if (HEADINGLESS_GROUP_SURFACES.test(surface.id)) {
+    const remainingTitles = geometry.r1.sectionTitles.filter((title) => REMOVED_SECTION_TITLES.includes(title));
+    failures.push(...remainingTitles.map((title) => `Removed section heading still visible: ${title}`));
+    expect.soft(remainingTitles, "Generic section headings must be absent").toEqual([]);
+    await expect.soft(root.getByText(REMOVED_AUTO_BALANCE_CUE, { exact: true })).toHaveCount(0);
+  }
   failures.push(...geometry.trailingIcons.filter((icon) => !icon.valid).map((icon) => `${icon.field} (${icon.state}): trailing icon inset ${icon.rightInset ?? "unmeasured"}, expected 12px +/- 1px from the padding-box edge`));
   const png = `${surface.id}__${state}__${viewport.width}x${viewport.height}.png`;
   await screenshot(page, surface, root, path.join(outDir, png), mask);

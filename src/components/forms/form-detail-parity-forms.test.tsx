@@ -119,7 +119,7 @@ type FormCase = { file: string; name: string; element: ReactElement; shows?: str
 /** Every sheet form in create mode, with only the props it requires. */
 const CREATE_CASES: FormCase[] = [
   { file: "components/feedstocks/feedstock-form.tsx", name: "feedstock delivery", element: <FeedstockForm onSubmit={noop} /> },
-  { file: "components/storage-locations/output-stock-form.tsx", name: "output stock loss", element: <OutputStockForm storageLocationId="bin" facilityId="facility" kind="loss" onCancel={noop} onRecorded={noop} />, shows: "Preview bin" },
+  { file: "components/storage-locations/output-stock-form.tsx", name: "output stock loss", element: <OutputStockForm storageLocationId="bin" facilityId="facility" onCancel={noop} onRecorded={noop} />, shows: "Preview bin" },
   { file: "components/storage-locations/storage-location-form.tsx", name: "storage bin", element: <StorageLocationForm onSubmit={noop} /> },
   { file: "components/production-runs/production-run-form.tsx", name: "production run", element: <ProductionRunForm onSubmit={noop} /> },
   { file: "components/production-runs/production-incident-form.tsx", name: "production incident", element: <ProductionIncidentForm productionRunId="run" onSubmit={noop} /> },
@@ -151,10 +151,6 @@ const EDIT_CASES: FormCase[] = [
   { file: "components/feedstocks/feedstock-form.tsx", name: "feedstock delivery (edit)", element: <FeedstockForm onSubmit={noop} feedstock={as({
     id: "feedstock", facilityId: "facility", deliveryDate: DAY, supplierId: "supplier", supplierName: "Supplier", feedstockTypeId: "type", feedstockTypeName: "Maize cobs",
     massWetKg: 1000, moistureContentPercent: 20, massDryKg: 800, storageLocationId: "bin", transportDistanceKm: 20, notes: null,
-  })} /> },
-  { file: "components/storage-locations/output-stock-form.tsx", name: "output stock correction (edit)", shows: "Preview bin", element: <OutputStockForm storageLocationId="bin" facilityId="facility" kind="count" onCancel={noop} onRecorded={noop} original={as({
-    id: "00000000-0000-4000-8000-000000000001", deliveryId: null, kind: "count", occurredAt: "2026-09-22T12:00:00.000Z", recordedAt: "2026-09-22", actorName: null, reason: "Recorded",
-    correctsMovementId: null, wetMassKg: 100, moisturePercent: 20, dryMassKg: 80, beforeDryKg: 80, afterDryKg: 0, allocations: [],
   })} /> },
   { file: "components/production-runs/production-run-form.tsx", name: "production run (edit)", element: <ProductionRunForm onSubmit={noop} productionRun={as({
     id: "run", facilityId: "facility", reactorId: "reactor", status: "complete", startTime: DAY, endTime: DAY, feedstockDraws: [{ storageLocationId: "bin", storageLocationName: "Feedstock bin", wetMassKg: 1000 }],
@@ -196,12 +192,60 @@ beforeAll(() => {
 afterAll(() => { vi.unstubAllGlobals(); });
 
 describe("sheet form detail level parity", () => {
+  it.each([
+    ["biochar_bin", "split", true], ["product_bin", "split", true],
+    ["biochar_bin", "mix", false], ["product_bin", "mix", false], ["feedstock_bin", "split", false],
+  ] as const)("shows default draw order only for split output bins (%s, %s)", async (type, stockMode, shown) => {
+    const { simple, detailed } = await renderBothLevels(<StorageLocationForm onSubmit={noop}
+      storageLocation={as({ id: "bin", facilityId: "facility", type, stockMode, drawOrder: "newest_first", name: "Bin" })} />);
+    for (const view of [simple, detailed]) {
+      expect(view.items.includes("field:Default draw order")).toBe(shown);
+      if (shown) {
+        expect(view.text).toContain("Oldest first");
+        expect(view.text).toContain("Newest first");
+      }
+    }
+  });
+
   it("covers every sheet form, or names why a form is not one", () => {
     const forms = sourceFiles().map(file => file.path).filter(path => path.endsWith("-form.tsx"));
     const covered = new Set([...CREATE_CASES, ...EDIT_CASES].map(entry => entry.file));
     expect(forms.filter(path => !covered.has(path) && !(path in NOT_SHEET_FORMS)).sort()).toEqual([]);
     // Every sheet form also has a create case.
     expect(new Set(CREATE_CASES.map(entry => entry.file)).size).toBe(covered.size);
+  });
+
+  it.each([
+    {
+      name: "formulation", file: "components/formulations/formulation-form.tsx",
+      sections: ["section:(untitled)", "section:Blend composition by volume", "section:(untitled)"],
+      createFields: ["field:Formulation name", "field:Volume share", "field:Description"],
+      editFields: ["field:Formulation name", "field:Volume share", "field:Blend material", "field:Volume share", "field:Description"],
+    },
+    {
+      name: "reactor", file: "components/reactors/reactor-form.tsx",
+      sections: ["section:(untitled)", "section:Reactor configuration"],
+      createFields: ["field:Identifier", "field:Reactor type", "field:Nominal throughput (tph)"],
+      editFields: ["field:Identifier", "field:Reactor type", "field:Nominal throughput (tph)"],
+    },
+    {
+      name: "credit batch", file: "components/credit-batches/credit-batch-form.tsx",
+      sections: ["section:Batch definition", "section:(untitled)"],
+      createFields: ["field:Feedstock type", "field:Start date", "field:End date", "field:Notes"],
+      editFields: ["field:Feedstock type", "field:Start date", "field:End date", "field:Notes"],
+    },
+  ])("keeps $name create/edit sections and fields in order without generic headings or the auto-fill cue", async ({ file, sections, createFields, editFields }) => {
+    for (const { cases, fields } of [{ cases: CREATE_CASES, fields: createFields }, { cases: EDIT_CASES, fields: editFields }]) {
+      const formCase = cases.find(entry => entry.file === file)!;
+      const { simple, detailed } = await renderBothLevels(formCase.element);
+      for (const level of [simple, detailed]) {
+        expect(level.items.filter(item => item.startsWith("section:"))).toEqual(sections);
+        expect(level.items.filter(item => item.startsWith("field:"))).toEqual(fields);
+        for (const removed of ["Required information", "Additional information", "Auto-fills the remaining share"]) {
+          expect(level.text).not.toContain(removed);
+        }
+      }
+    }
   });
 
   it.each([...CREATE_CASES, ...EDIT_CASES])("$name form shows the same inputs, sections and actions at both levels", async ({ element, shows }) => {

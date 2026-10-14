@@ -98,7 +98,7 @@ DetailValueSkeleton.displayName = "DetailValueSkeleton";
  * -----------------------------------------------------------------------------------------------*/
 
 interface DetailSectionProps {
-  title: string;
+  title?: string;
   children: React.ReactNode;
   /** Hairline divider above the section (default) — first section disables it. */
   divider?: boolean;
@@ -117,7 +117,7 @@ function DetailSection({
   spine,
   hint,
 }: DetailSectionProps) {
-  const label = <SectionLabel hint={hint}>{title}</SectionLabel>;
+  const label = title != null ? <SectionLabel hint={hint}>{title}</SectionLabel> : null;
 
   if (spine) {
     return (
@@ -129,6 +129,7 @@ function DetailSection({
 
   return (
     <div
+      data-detail-section
       className={cn(
         "flex flex-col gap-16",
         divider && "border-t border-[var(--color-border-tertiary)] pt-16",
@@ -356,9 +357,11 @@ export interface DetailPanelField {
   secondary?: DetailSecondaryValue;
 }
 
-/** One read section. Both detail levels show every section and its fields. */
-export interface DetailPanelSection {
-  title: string;
+/**
+ * One read section. Both detail levels show every section and its fields.
+ * Headingless sections require a stable id; titled sections may key by title.
+ */
+export type DetailPanelSection = {
   /** Explanatory text behind an ⓘ beside the title. */
   hint?: React.ReactNode;
   fields: DetailPanelField[];
@@ -370,7 +373,10 @@ export interface DetailPanelSection {
    * Only Detailed renders it. Never put a field, action or decision info here.
    */
   explanation?: React.ReactNode;
-}
+} & (
+  | { id: string; title?: string }
+  | { id?: string; title: string }
+);
 
 interface DetailSpineProps {
   sections: DetailPanelSection[];
@@ -384,7 +390,7 @@ function DetailSpine({ sections, numbered = false }: DetailSpineProps) {
     <div className={cn("flex flex-col", !numbered && "gap-20")}>
       {sections.map((section, sectionIdx) => (
         <DetailSection
-          key={section.title}
+          key={section.id ?? section.title}
           title={section.title}
           hint={section.hint}
           divider={!numbered && sectionIdx > 0}

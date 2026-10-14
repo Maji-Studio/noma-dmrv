@@ -10,7 +10,7 @@ import type { StorageLocationWithFacility } from "@/data-access/storage-location
 import { useUpdateStorageLocation } from "@/hooks/use-storage-locations";
 import { useToast } from "@/components/ui/toast";
 import { SideSheetActionsContext } from "@/components/ui/entity-side-sheet/side-sheet-context";
-import { DetailSpine } from "@/components/ui/detail-panel";
+import { DetailSpine, type DetailPanelSection } from "@/components/ui/detail-panel";
 import { storageLocationSheetSections } from "@/components/storage-locations/storage-location-read-sections";
 import { toSaveErrorMessage } from "@/lib/stale-version";
 import { createStorageLocationFn } from "@/fn/quick-add";
@@ -67,6 +67,8 @@ export function StorageLocationQuickAddDialog({
         capacityKg: data.capacityKg ?? null,
         feedstockTypeId: data.feedstockTypeId ?? null,
         formulationId: data.formulationId ?? null,
+        stockMode: data.stockMode,
+        drawOrder: data.drawOrder,
       }),
     onSuccess,
     onClose,
@@ -95,7 +97,9 @@ export function StorageLocationQuickAddDialog({
   // Read-only fields retain the bin sheet's labels without its stock actions.
   const readSections = archived && storageLocation
     ? storageLocationSheetSections(storageLocation, () => undefined)
-      .map(({ title, fields }) => ({ title, fields }))
+      .map((section): DetailPanelSection => section.id != null
+        ? { id: section.id, title: section.title, fields: section.fields }
+        : { title: section.title!, fields: section.fields })
     : [];
   const title = storageLocation
     ? archived ? storageLocation.name : `Edit ${storageLocation.name}`

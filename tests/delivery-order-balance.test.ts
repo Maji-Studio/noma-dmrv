@@ -4,7 +4,8 @@ import { afterEach, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { deliveries, outputStockAllocations, orders } from "@/db/schema";
-import { createDelivery, updateDelivery, deleteDelivery } from "@/data-access/deliveries";
+import { createDelivery, deleteDelivery } from "@/data-access/deliveries";
+import { updateDelivery } from "@/lib/operations/deliveries";
 import { createApplication } from "@/data-access/applications";
 import { createOrder, getOrders, updateOrder } from "@/data-access/orders";
 import { getOrderEntityById } from "@/data-access/entities/orders";
@@ -41,8 +42,8 @@ describe("completed delivery order balance", () => {
   it("uses measured shipment moisture to remove dry solids", async () => {
     const f = await fixture(1000); const delivery = await postDelivery(f, 1000, 40);
     expect(delivery.massDryKg).toBe(600);
-    await expect(updateDelivery(f.ctx, delivery.id, { expectedVersion: await labLogisticsVersion(f.ctx, "deliveries", delivery.id), moistureContentPercent: 5 })).rejects.toThrow("Correct entry");
-    expect(await getOutputBinAllLayersDryKg(f.ctx, f.bin.id)).toBe(400);
+    await expect(updateDelivery(f.ctx, delivery.id, { expectedVersion: await labLogisticsVersion(f.ctx, "deliveries", delivery.id), moistureContentPercent: 5 })).resolves.toMatchObject({ massDryKg: 950, moistureContentPercent: 5 });
+    expect(await getOutputBinAllLayersDryKg(f.ctx, f.bin.id)).toBe(50);
   });
   it("closes the exact dry remainder across partial measured deliveries", async () => {
     const f = await fixture(2000);
@@ -71,7 +72,7 @@ describe("completed delivery order balance", () => {
     const f = await fixture(); const delivery = await postDelivery(f, 50);
     await createApplication(f.ctx, { code: `E2E-AP-${f.tag}`, deliveryId: delivery.id, applicationDate: new Date(STOCK_DATE), biocharAppliedTons: 0.025, fieldSizeHa: 1, evidenceMethod: "location" });
     await expect(correction(f, delivery.id, 40)).rejects.toThrow(/application/i);
-    await expect(updateDelivery(f.ctx, delivery.id, { expectedVersion: await labLogisticsVersion(f.ctx, "deliveries", delivery.id), deliveredWetMassKg: 40 })).rejects.toThrow("Correct entry");
+    await expect(updateDelivery(f.ctx, delivery.id, { expectedVersion: await labLogisticsVersion(f.ctx, "deliveries", delivery.id), deliveredWetMassKg: 40 })).rejects.toThrow(/application/i);
   });
   it("allows competing orders without reserving or over-allocating physical stock", async () => {
     const f = await fixture(800);

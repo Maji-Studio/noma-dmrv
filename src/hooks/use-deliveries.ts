@@ -29,6 +29,10 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { invalidateStockEntityQueries } from "./entity-query-keys";
 import { biocharProductKeys } from "./use-biochar-products";
+import { creditBatchKeys } from "./credit-batch-query-keys";
+import { chainOfCustodyKeys } from "./use-chain-of-custody";
+import { orderKeys } from "./use-orders";
+import { storageLocationKeys } from "./use-storage-locations";
 import type { MutationCallbacks } from "./types";
 import { certificationKeys } from "./use-certification";
 import { dashboardOverviewKeys } from "./use-dashboard-overview";
@@ -257,7 +261,17 @@ export function useUpdateDelivery(
 
       return { previousDelivery, previousLists };
     },
-    onSuccess: async (data, variables) => {
+    onSuccess: async ({ savedProducts, ...data }, variables) => {
+      // A mass or moisture edit re-posted stock: merge the products' new versions, then refresh what reads stock.
+      for (const row of savedProducts) {
+        patchListCachesWithSavedRow(queryClient, biocharProductKeys.lists(), row);
+        queryClient.setQueryData(biocharProductKeys.detail(row.id), (old: object | undefined) => old ? { ...old, ...row } : old);
+      }
+      if (savedProducts.length) {
+        for (const key of [biocharProductKeys.all, storageLocationKeys.all, orderKeys.all, creditBatchKeys.all, chainOfCustodyKeys.all]) {
+          void queryClient.invalidateQueries({ queryKey: key });
+        }
+      }
       patchListCachesWithSavedRow(queryClient, deliveryKeys.lists(), data);
       // Update cache with actual server data
       queryClient.setQueryData(deliveryKeys.detail(data.id), data);

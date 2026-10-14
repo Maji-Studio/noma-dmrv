@@ -1,16 +1,12 @@
 /**
- * A split bin's sub-bins: one batch or production run each, kept physically
- * apart. Cards lead with what an operator reads off the heap, wet mass and
- * moisture; dry biochar, solids and the latest movements sit behind the ⓘ.
- * Past `SUB_BIN_CARD_LIMIT` sub-bins the cards become rows, so a long bin stays
- * scannable.
+ * Details shared by split bays, pile bands, chart steps and the draw picker.
  */
 "use client";
 
+import { Button } from "@/components/ui/button";
 import { Tooltip as BaseTooltip } from "@base-ui/react/tooltip";
 import { InfoIcon } from "@phosphor-icons/react/dist/ssr";
-import { useState } from "react";
-import { SUB_BIN_CARD_LIMIT } from "@/config/output-stock";
+import { cloneElement, useState, type MouseEvent, type ReactElement } from "react";
 import { MISSING_VALUE } from "@/lib/copy-utils";
 import { formatFacilityDateTime, formatMassKg } from "@/lib/format-utils";
 import { formatMoisturePercent } from "@/lib/mass-moisture";
@@ -18,7 +14,7 @@ import type { OutputSubBin, SubBinMovement } from "@/types/output-stock";
 import { formatWetEstimate } from "./stock-preview-shared";
 
 const MOVEMENT_LABELS: Record<SubBinMovement["kind"], string> = {
-  added: "Added", removed: "Removed", loss: "Loss reported", count: "Stock count",
+  added: "Added", removed: "Removed", loss: "Lost mass", count: "Stock count",
 };
 
 const TOOLTIP_OFFSET_PX = 6;
@@ -40,48 +36,42 @@ function movementMass(movement: SubBinMovement): string {
   return movement.wetMassKg === null ? `${formatMassKg(Math.abs(movement.dryMassKg))} dry` : `${formatMassKg(Math.abs(movement.wetMassKg))} wet`;
 }
 
+type TapTrigger = ReactElement<{ onClick?: (event: MouseEvent) => void }>;
+
 /**
- * The ⓘ beside a sub-bin: dry biochar, solids, time added and the last
- * movements. Opens on hover and focus like every tooltip, and on tap, since a
- * touch screen has neither.
+ * Dark details opened from `trigger`: on hover and focus like every tooltip,
+ * and on tap, since a touch screen has neither. Labels sit dimmed on the
+ * left so the values lead.
  */
-export function SubBinInfo({ subBin, timeZone }: { subBin: OutputSubBin; timeZone: string }) {
+export function DetailsTooltip({ title, rows, groups = [], trigger }: {
+  title: string;
+  rows: { label: string; value: string }[];
+  /** Further aligned tables under the first, such as latest movements. */
+  groups?: { label: string; rows: { label: string; value: string }[] }[];
+  trigger: TapTrigger;
+}) {
   const [open, setOpen] = useState(false);
+  const toggle = (event: MouseEvent) => { event.preventDefault(); event.stopPropagation(); setOpen(!open); };
+  const table = (items: { label: string; value: string }[], label?: string) => (
+    <dl aria-label={label} className="grid grid-cols-[auto_auto] gap-x-12 gap-y-2 [&_dt]:opacity-70">
+      {items.map((item, index) => (
+        <div key={`${item.label}-${index}`} className="contents">
+          <dt className="tabular-nums">{item.label}</dt><dd className="tabular-nums text-right">{item.value}</dd>
+        </div>
+      ))}
+    </dl>
+  );
   return (
     <BaseTooltip.Provider delay={OPEN_DELAY_MS} closeDelay={CLOSE_DELAY_MS}>
       {/* A press is the tap toggle below; the tooltip's own press-to-close would undo it at once. */}
       <BaseTooltip.Root open={open} onOpenChange={(next, details) => { if (details.reason !== "trigger-press") setOpen(next); }}>
-        <BaseTooltip.Trigger
-          render={
-            <button
-              type="button"
-              aria-label={`${subBin.code} details`}
-              onClick={(event) => { event.preventDefault(); event.stopPropagation(); setOpen(!open); }}
-              className="inline-flex min-w-24 min-h-24 shrink-0 items-center justify-center text-[var(--color-text-tertiary)] hover:text-[var(--color-text-secondary)] cursor-help focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)]"
-            >
-              <InfoIcon size={14} weight="bold" />
-            </button>
-          }
-        />
+        <BaseTooltip.Trigger render={cloneElement(trigger, { onClick: toggle })} />
         <BaseTooltip.Portal>
           <BaseTooltip.Positioner side="top" sideOffset={TOOLTIP_OFFSET_PX} className="z-[var(--z-layer-popover)]">
-            <BaseTooltip.Popup className="max-w-[300px] px-12 py-8 bg-[var(--color-background-dark-strong)] text-[var(--color-background-white)] border border-[var(--color-border-primary)] shadow-[0_4px_16px_var(--color-black-10)] body-caption">
-              {/* One aligned table: the sub-bin's figures, then its latest movements. */}
-              <dl className="grid grid-cols-[auto_auto] gap-x-12 gap-y-2">
-                <dt>Dry biochar</dt><dd className="tabular-nums text-right">{formatMassKg(subBin.dryMassKg)}</dd>
-                <dt>Solids</dt><dd className="tabular-nums text-right">{formatMassKg(subBin.solidsKg)}</dd>
-                <dt>Added</dt><dd className="tabular-nums text-right">{formatFacilityDateTime(subBin.placedAt, timeZone)}</dd>
-              </dl>
-              {subBin.recentMovements.length > 0 && (
-                <dl className="mt-8 grid grid-cols-[auto_auto] gap-x-12 gap-y-2" aria-label="Latest movements">
-                  {subBin.recentMovements.map((movement) => (
-                    <div key={movement.id} className="contents">
-                      <dt className="tabular-nums">{MOVEMENT_LABELS[movement.kind]} {movementMass(movement)}</dt>
-                      <dd className="tabular-nums text-right">{formatFacilityDateTime(movement.occurredAt, timeZone)}</dd>
-                    </div>
-                  ))}
-                </dl>
-              )}
+            <BaseTooltip.Popup className="max-w-[300px] px-12 py-8 bg-[var(--color-background-dark-strong)] text-[var(--color-background-white)] border border-[var(--color-border-primary)] body-caption">
+              <span className="mb-4 block font-medium">{title}</span>
+              {table(rows)}
+              {groups.filter((group) => group.rows.length > 0).map((group) => <div key={group.label} className="mt-8">{table(group.rows, group.label)}</div>)}
             </BaseTooltip.Popup>
           </BaseTooltip.Positioner>
         </BaseTooltip.Portal>
@@ -90,48 +80,34 @@ export function SubBinInfo({ subBin, timeZone }: { subBin: OutputSubBin; timeZon
   );
 }
 
-/** One sub-bin, wet first: code, time added, wet estimate, estimated moisture. */
-export function SubBinCard({ subBin, timeZone }: { subBin: OutputSubBin; timeZone: string }) {
+/** A sub-bin's details: wet estimate, moisture, dry biochar, solids, time added and the last movements. */
+export function SubBinTooltip({ subBin, timeZone, trigger }: { subBin: OutputSubBin; timeZone: string; trigger: TapTrigger }) {
   return (
-    <li className="flex flex-col gap-4 bg-[var(--panel-bg)] [border:var(--panel-border)] px-12 py-10">
-      <div className="flex items-center justify-between gap-8">
-        <span className="body-small font-medium">{subBin.code}</span>
-        <SubBinInfo subBin={subBin} timeZone={timeZone} />
-      </div>
-      <span className="body-caption text-[var(--color-text-tertiary)] tabular-nums">Added {formatFacilityDateTime(subBin.placedAt, timeZone)}</span>
-      <span className="body-small tabular-nums">{subBinWetText(subBin)}</span>
-      <span className="body-caption text-[var(--color-text-secondary)] tabular-nums">Estimated moisture {subBinMoistureText(subBin)}</span>
-    </li>
+    <DetailsTooltip title={subBin.code} trigger={trigger}
+      rows={[
+        { label: "Wet, estimated", value: subBinWetText(subBin) },
+        { label: "Moisture", value: subBinMoistureText(subBin) },
+        { label: "Dry biochar", value: formatMassKg(subBin.dryMassKg) },
+        { label: "Solids", value: formatMassKg(subBin.solidsKg) },
+        { label: "Added", value: formatFacilityDateTime(subBin.placedAt, timeZone) },
+      ]}
+      groups={[{ label: "Latest movements", rows: subBin.recentMovements.map((movement) => ({
+        label: `${MOVEMENT_LABELS[movement.kind]} ${movementMass(movement)}`, value: formatFacilityDateTime(movement.occurredAt, timeZone),
+      })) }]} />
   );
 }
 
-/** One sub-bin as a row, for bins that hold more than the card limit. */
-function SubBinRowItem({ subBin, timeZone }: { subBin: OutputSubBin; timeZone: string }) {
+/** The ⓘ beside a sub-bin row, opening the same details as hovering a bay. */
+export function SubBinInfo({ subBin, timeZone }: { subBin: OutputSubBin; timeZone: string }) {
   return (
-    <li className="grid grid-cols-[minmax(0,1fr)_auto_auto_auto] items-center gap-x-12 py-6">
-      <span className="min-w-0">
-        <span className="block body-small font-medium truncate">{subBin.code}</span>
-        <span className="block body-caption text-[var(--color-text-tertiary)] tabular-nums">Added {formatFacilityDateTime(subBin.placedAt, timeZone)}</span>
-      </span>
-      <span className="body-small tabular-nums text-right">{subBinWetText(subBin)}</span>
-      <span className="body-caption text-[var(--color-text-secondary)] tabular-nums text-right">{subBinMoistureText(subBin)} moisture</span>
-      <SubBinInfo subBin={subBin} timeZone={timeZone} />
-    </li>
-  );
-}
-
-/** A split bin's sub-bins, oldest first: cards up to the limit, rows past it. */
-export function SubBinList({ subBins, timeZone, label }: { subBins: OutputSubBin[]; timeZone: string; label: string }) {
-  if (subBins.length > SUB_BIN_CARD_LIMIT) {
-    return (
-      <ul aria-label={label} className="flex flex-col gap-4">
-        {subBins.map((subBin) => <SubBinRowItem key={subBin.layerId} subBin={subBin} timeZone={timeZone} />)}
-      </ul>
-    );
-  }
-  return (
-    <ul aria-label={label} className="grid grid-cols-1 sm:grid-cols-2 gap-8">
-      {subBins.map((subBin) => <SubBinCard key={subBin.layerId} subBin={subBin} timeZone={timeZone} />)}
-    </ul>
+    <SubBinTooltip subBin={subBin} timeZone={timeZone} trigger={
+      <Button
+        type="button" variant="noOutline" size="icon"
+        aria-label={`${subBin.code} details`}
+        className="inline-flex h-24 w-24 min-w-24 min-h-24 shrink-0 items-center justify-center text-[var(--color-text-tertiary)] hover:text-[var(--color-text-secondary)] cursor-help focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)]"
+      >
+        <InfoIcon size={14} weight="bold" />
+      </Button>
+    } />
   );
 }

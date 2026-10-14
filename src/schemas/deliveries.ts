@@ -22,6 +22,7 @@ import {
   positiveMassKgSchema,
   requiredNumber,
   storedPercentSchema,
+  uuidSchema,
 } from "./helpers";
 import { deliveryDryMassSchema } from "./isometric";
 
@@ -107,6 +108,7 @@ function validateDeliveredWetMass(
  * Base delivery schema without cross-field validation
  */
 const deliveryFormBaseSchema = z.object({
+  correctsMovementId: uuidSchema().optional(),
   // Required fields
   orderId: z.string().min(1, "Select an order.").uuid("Choose a valid order."),
   deliveryDate: z.coerce.date({ error: "Delivery date is required" }),
@@ -184,6 +186,10 @@ export const createDeliverySchema = z.object({
  */
 export const updateDeliverySchema = z.object({
   expectedVersion: expectedVersionSchema,
+  sources: orderedSourcesSchema.optional(),
+  correctsMovementId: uuidSchema().optional(),
+  idempotencyKey: z.string().min(1).optional(),
+  basisFingerprint: z.string().min(1).optional(),
   deliveryId: z.string().uuid("Choose a valid delivery."),
   code: z
     .string()
