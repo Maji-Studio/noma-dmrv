@@ -100,7 +100,7 @@ describe('bin stock projection', () => {
   it('leaves the wet totals unknown when one held layer has no wet basis', () => {
     const stock = projectOutputBinStock(input([old, sameTimeFirst], { bases: [basis(old, '200'), basis(sameTimeFirst, null)] }));
     expect(stock.subBins[1]).toMatchObject({ estimatedWetKg: null, estimatedMoisturePercent: null, moistureBasis: null });
-    expect(stock.totals).toMatchObject({ estimatedWetKg: null, estimatedMoisturePercent: null, moistureBasis: { source: 'recorded', at: T0 } });
+    expect(stock.totals).toMatchObject({ estimatedWetKg: null, estimatedMoisturePercent: null, moistureBasis: null });
   });
 
   it('answers an empty bin as resolved with zero totals and no moisture, as the bins list does', () => {

@@ -131,7 +131,7 @@ export function projectOutputBinStock(input: OutputBinStockInput): ResolvedOutpu
     solidsKg: subBins.reduce((sum, subBin) => add(sum, subBin.solidsKg), ZERO),
     estimatedWetKg: pile?.wetKg ?? null,
     estimatedMoisturePercent: pile?.moisturePercent ?? null,
-    moistureBasis: pile?.basis ?? null,
+    moistureBasis: pile && pile.moisturePercent !== null ? pile.basis : null,
   };
   return { bin: input.bin, stockMode: input.stockMode, status: 'resolved', unresolvedReason: null, totals, subBins };
 }

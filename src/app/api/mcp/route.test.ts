@@ -12,7 +12,7 @@ import { biocharStockGuide, domainGuide, labSampleGuide, llmsGuide } from "@/lib
 
 const MCP_INSTRUCTIONS_MAX_CHARS = 2000;
 
-const mocks = vi.hoisted(() => ({ resolve: vi.fn(), pre: vi.fn(), post: vi.fn(), me: vi.fn(), log: vi.fn(), env: { NODE_ENV: "production", NEXT_PUBLIC_APP_URL: "https://noma.example", API_WRITES_DISABLED: false } }));
+const mocks = vi.hoisted(() => ({ resolve: vi.fn(), pre: vi.fn(), post: vi.fn(), me: vi.fn(), stock: vi.fn(), log: vi.fn(), env: { NODE_ENV: "production", NEXT_PUBLIC_APP_URL: "https://noma.example", API_WRITES_DISABLED: false } }));
 vi.mock("@/data-access/samples", () => ({}));
 vi.mock("@/lib/read-models/api-lab-samples", () => ({ readApiLabSample: vi.fn(), readApiLabSampleList: vi.fn() }));
 vi.mock("@/lib/read-models/api-credit-batches", () => ({ readApiCreditBatch: vi.fn(), readApiCreditBatchList: vi.fn() }));
@@ -31,7 +31,7 @@ vi.mock("@/data-access/biochar-product-update", () => ({}));
 vi.mock("@/data-access/biochar-product-record", () => ({}));
 vi.mock("@/data-access/output-stock-post", () => ({}));
 vi.mock("@/data-access/api-output-stock-movements", () => ({ requireApiOutputBin: vi.fn() }));
-vi.mock("@/data-access/api-output-bin-stock", () => ({ readApiOutputBinStock: vi.fn() }));
+vi.mock("@/lib/read-models/api-output-bin-stock", () => ({ readApiOutputBinStock: mocks.stock }));
 vi.mock("@/lib/read-models/api-biochar-products", () => ({ readApiBiocharProduct: vi.fn(), readApiBiocharProductList: vi.fn() }));
 vi.mock("@/lib/read-models/api-formulations", () => ({ readApiFormulation: vi.fn(), readApiFormulationList: vi.fn() }));
 vi.mock("@/lib/read-models/api-output-stock-movements", () => ({ readApiOutputStockMovement: vi.fn(), readApiOutputStockMovementList: vi.fn() }));
@@ -209,6 +209,22 @@ describe("authenticated MCP read route", () => {
     expect(payload.error).toMatchObject({ code: -32603, message: "The request could not be completed." });
     expect(mocks.log).toHaveBeenCalledWith(expect.objectContaining({ op: "whoami", requestId: response.headers.get("x-request-id") }), expect.any(String));
     expect(JSON.stringify(mocks.log.mock.calls)).not.toContain("private-input-secret");
+  });
+  it.each([
+    ["duplicate posting sequences", new RangeError("Duplicate sequence in stock layers")],
+    ["a held layer without a code", new Error("Output bin bin layer run has no code")],
+  ])("returns an internal error and logs %s for get_bin_stock", async (_finding, error) => {
+    mocks.stock.mockRejectedValue(error);
+    const response = await call("get_bin_stock", { storageLocation: "OB-2" });
+    const payload = await body(response);
+    expect(payload.error).toEqual({ code: ProtocolErrorCode.InternalError, message: "The request could not be completed." });
+    expect(payload.result).toBeUndefined();
+    expect(JSON.stringify(payload)).not.toContain(error.message);
+    expect(mocks.log).toHaveBeenCalledExactlyOnceWith({
+      op: "get_bin_stock", requestId: response.headers.get("x-request-id"),
+      errorName: error instanceof RangeError ? "RangeError" : "Error",
+    }, "API request failed");
+    expect(JSON.stringify(mocks.log.mock.calls)).not.toContain(error.message);
   });
   it("checks the pre-auth deadline inside the tool before reading", async () => {
     vi.useFakeTimers({ toFake: ["Date"] });

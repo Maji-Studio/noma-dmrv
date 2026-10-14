@@ -8,6 +8,8 @@ import { toOperationJsonSchema, type JsonSchema } from "@/lib/operations/json-sc
 import { buildOpenApiDocument, serializeOpenApiDocument } from "./document";
 import { BODY_HASH_ETAG_PATTERN, parseIfMatch, representationEtag, STRONG_ETAG_PATTERN } from "../etag";
 import { IDEMPOTENCY_KEY_PATTERN, readIdempotencyKey } from "../request-body";
+import { OUTPUT_BIN_STOCK_ETAG, OUTPUT_BIN_STOCK_SOURCES } from "@/lib/operations/agent-guidance";
+import { biocharStockGuide } from "../llms-guide";
 
 const document = buildOpenApiDocument();
 const routeRoot = join(process.cwd(), "src/app/api/v1");
@@ -147,8 +149,12 @@ it("publishes output bin stock with a body-hash ETag and only the facility query
   const stock = document.components.schemas.output_bin_stock;
   expect(stock.properties).toHaveProperty("subBins");
   for (const field of ["at", "evaluatedAt", "basisFingerprint", "recentMovements"]) expect(stock.properties).not.toHaveProperty(field);
-  expect(operation.description).toContain("not a reservation");
-  expect(operation.description).toContain("basisFingerprint");
+  for (const guidance of [OUTPUT_BIN_STOCK_ETAG, OUTPUT_BIN_STOCK_SOURCES]) {
+    expect(operation.description).toContain(guidance);
+    expect(biocharStockGuide).toContain(guidance);
+    expect(guidance).not.toMatch(/[–—]/);
+  }
+  expect(response.headers.ETag).toMatchObject({ description: `Hash of the published stock. ${OUTPUT_BIN_STOCK_ETAG}` });
 });
 
 it("accepts an optional empty DELETE object and publishes its body errors", () => {

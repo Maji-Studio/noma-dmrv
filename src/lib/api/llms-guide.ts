@@ -1,7 +1,7 @@
 import { API_IDEMPOTENCY_KEY_MAX_LENGTH, API_LIST_DEFAULT_LIMIT, API_LIST_MAX_LIMIT } from "@/config/api-rest";
 import { API_KEY_LIVE_PREFIX, API_KEY_TEST_PREFIX } from "@/config/api-keys";
 import { IDEMPOTENCY_RETENTION_DAYS } from "@/config/operations";
-import { BIOCHAR_PRODUCT_MASS, FEEDSTOCK_UNITS, LAB_SAMPLE_BATCHES, LAB_SAMPLE_RATIOS, LAB_SAMPLE_TIMES, LAB_SAMPLE_UNITS, LAB_SAMPLE_WARNINGS, OUTPUT_STOCK_BASIS, OUTPUT_STOCK_COUNT, OUTPUT_STOCK_NO_CORRECTIONS, OUTPUT_STOCK_TIMES, PRODUCTION_RUN_GUIDANCE, UNTRUSTED_TEXT } from "@/lib/operations/agent-guidance";
+import { BIOCHAR_PRODUCT_MASS, OUTPUT_BIN_STOCK_ETAG, OUTPUT_BIN_STOCK_SOURCES, FEEDSTOCK_UNITS, LAB_SAMPLE_BATCHES, LAB_SAMPLE_RATIOS, LAB_SAMPLE_TIMES, LAB_SAMPLE_UNITS, LAB_SAMPLE_WARNINGS, OUTPUT_STOCK_BASIS, OUTPUT_STOCK_COUNT, OUTPUT_STOCK_NO_CORRECTIONS, OUTPUT_STOCK_TIMES, PRODUCTION_RUN_GUIDANCE, UNTRUSTED_TEXT } from "@/lib/operations/agent-guidance";
 
 export const domainGuide = `## Feedstock intake
 
@@ -26,7 +26,7 @@ export const biocharStockGuide = `## Biochar products and bin stock
 
 - ${BIOCHAR_PRODUCT_MASS}
 - Losses and counts are posted on a biochar or product bin. ${OUTPUT_STOCK_COUNT}
-- Read GET /storage-locations/{idOrCode}/stock or get_bin_stock (biochar-products:read) for current stock. A split-bin loss names returned layerIds in sources; a mix-bin loss takes no sources. The stock ETag says whether published stock changed between reads; it is not a reservation. The write check stays the dry run's basisFingerprint.
+- Read GET /storage-locations/{idOrCode}/stock or get_bin_stock (biochar-products:read) for current stock. ${OUTPUT_BIN_STOCK_SOURCES} ${OUTPUT_BIN_STOCK_ETAG}
 - ${OUTPUT_STOCK_TIMES}
 - ${OUTPUT_STOCK_BASIS}
 - ${OUTPUT_STOCK_NO_CORRECTIONS}

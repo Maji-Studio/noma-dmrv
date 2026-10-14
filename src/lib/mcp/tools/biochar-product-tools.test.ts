@@ -9,11 +9,10 @@ import { mcpRequestAccess } from "../server";
 import { biocharProductWriteTools } from "./biochar-product-tools";
 import { outputStockWriteTools } from "./output-stock-tools";
 import { readTools } from "./read-tools";
-import { rational } from "@/lib/output-stock/exact";
 import { UNRESOLVED_STOCK_SENTENCES } from "@/lib/output-stock/layer-projection";
 
 const mocks = vi.hoisted(() => ({ run: vi.fn(), readProduct: vi.fn(), readStock: vi.fn() }));
-vi.mock("@/data-access/api-output-bin-stock", () => ({ readApiOutputBinStock: mocks.readStock }));
+vi.mock("@/lib/read-models/api-output-bin-stock", () => ({ readApiOutputBinStock: mocks.readStock }));
 vi.mock("@/data-access/samples", () => ({}));
 vi.mock("@/lib/read-models/api-lab-samples", () => ({ readApiLabSample: vi.fn(), readApiLabSampleList: vi.fn() }));
 vi.mock("@/lib/read-models/api-credit-batches", () => ({ readApiCreditBatch: vi.fn(), readApiCreditBatchList: vi.fn() }));
@@ -156,10 +155,9 @@ it("requires a bin id or code for find_output_stock_movements and rejects contro
 
 it("reads bin stock through the shared representation with strict input and one sentence", async () => {
   const tool = readTools.find((candidate) => candidate.name === "get_bin_stock")!;
-  const zero = rational(BigInt(0));
-  mocks.readStock.mockResolvedValueOnce({ bin: { storageLocationId: BIN, code: "OB-2", type: "biochar_bin", facilityId: ID, archivedAt: null, formulationId: null },
+  mocks.readStock.mockResolvedValueOnce({ data: { storageLocationId: BIN, code: "OB-2", type: "biochar_bin", facilityId: ID, archivedAt: null, formulationId: null,
     stockMode: "split", status: "resolved", unresolvedReason: null, subBins: [],
-    totals: { dryBiocharKg: zero, solidsKg: zero, estimatedWetKg: zero, estimatedMoisturePercent: null, moistureBasis: null } });
+    totals: { dryBiocharKg: 0, solidsKg: 0, estimatedWetKg: 0, estimatedMoisturePercent: null, moistureBasis: null } } });
   const body = await tool.execute(context.ctx, { storageLocation: BIN.toUpperCase(), facilityId: ID.toUpperCase() });
   expect(mocks.readStock).toHaveBeenCalledWith(context.ctx, { identifier: { id: BIN }, facilityId: ID });
   expect(body).toMatchObject({ data: { storageLocationId: BIN, totals: { dryBiocharKg: 0, solidsKg: 0, estimatedWetKg: 0 } } });
