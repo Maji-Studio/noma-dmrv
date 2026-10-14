@@ -3,6 +3,7 @@ export {
   layoutMassFlow,
   type MassFlowDiagram,
   type MassFlowExit,
+  type MassFlowInflow,
   type MassFlowKind,
   type MassFlowLink,
   type MassFlowNode,

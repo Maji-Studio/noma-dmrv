@@ -176,6 +176,11 @@ export function formatMassKg(kg: number | null | undefined, opts?: { digits?: nu
   return `${kg.toLocaleString(undefined, { maximumFractionDigits: opts?.digits ?? MASS_KG_MAX_FRACTION_DIGITS })} kg`;
 }
 
+/** Whether a mass displays as zero at formatMassKg's default precision. */
+export function massKgRoundsToZero(kg: number): boolean {
+  return formatMassKg(kg) === formatMassKg(0);
+}
+
 /**
  * Format a 0–100 percentage for display — one decimal by default, trailing
  * ".0" trimmed, "Not recorded" for null. Lab analytics that need more resolution pass
