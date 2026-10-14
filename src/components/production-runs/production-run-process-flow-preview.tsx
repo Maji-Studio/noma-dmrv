@@ -26,7 +26,7 @@
 import { CompositionCard } from "@/components/forms/composition-card";
 import { DerivedHeadline } from "@/components/forms/derived-headline";
 import { MassFlowSankey, type MassFlowDiagram } from "@/components/ui/mass-flow-sankey";
-import { formatMassKg, formatPercent, MASS_KG_MAX_FRACTION_DIGITS } from "@/lib/format-utils";
+import { formatMassKg, formatPercent, massKgRoundsToZero } from "@/lib/format-utils";
 import { PERCENT_SCALE } from "@/lib/mass-moisture";
 import { StockRows, type StockRow } from "@/components/storage-locations/stock-figures";
 
@@ -119,7 +119,7 @@ export function processFlowDiagram(props: ProcessFlowProps): MassFlowDiagram | n
 
   const feedWaterKg = feedstockKg - feedstockDryKg;
   const biocharWaterKg = biocharKg - biocharDryKg;
-  const showBiocharWater = Number(biocharWaterKg.toFixed(MASS_KG_MAX_FRACTION_DIGITS)) > 0;
+  const showBiocharWater = !massKgRoundsToZero(biocharWaterKg);
   const lossKg = Math.max(0, feedstockDryKg - biocharDryKg);
   return {
     nodes: [

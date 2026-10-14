@@ -22,7 +22,7 @@ const FACILITY_DATE_TIME_WITH_OFFSET_FORMAT = "yyyy-MM-dd HH:mm xxx";
 const SAME_YEAR_RANGE_START_FORMAT = "MMM d";
 const KG_PER_TONNE = 1000;
 const CO2E_TONNES_MAX_FRACTION_DIGITS = 3;
-export const MASS_KG_MAX_FRACTION_DIGITS = 1;
+const MASS_KG_MAX_FRACTION_DIGITS = 1;
 const PERCENT_DEFAULT_FRACTION_DIGITS = 1;
 
 type DateValue = string | Date | null | undefined;
@@ -172,6 +172,11 @@ export function formatMass(kg: number | null | undefined): string {
 export function formatMassKg(kg: number | null | undefined, opts?: { digits?: number }): string {
   if (kg == null || Number.isNaN(kg)) return MISSING_VALUE.notRecorded;
   return `${kg.toLocaleString(undefined, { maximumFractionDigits: opts?.digits ?? MASS_KG_MAX_FRACTION_DIGITS })} kg`;
+}
+
+/** Whether a mass displays as zero at formatMassKg's default precision. */
+export function massKgRoundsToZero(kg: number): boolean {
+  return formatMassKg(kg) === formatMassKg(0);
 }
 
 /**
