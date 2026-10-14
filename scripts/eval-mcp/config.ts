@@ -57,6 +57,24 @@ export const STOCK_CASES = [
   { id: "stock-named-sub-bin-loss", text: `We lost ${STOCK_LOSS_WET_KG} kg wet from run ${STOCK_TARGET_RUN_CODE}'s sub-bin in bin ${STOCK_BIN_CODE}. Record the loss.` },
 ] as const;
 
+export const DELIVERY_TOOL_CALL_BUDGET = 10;
+export const DELIVERY_ORDER_CODE = "OR-X";
+export const DELIVERY_BIN_CODE = "PB-1";
+export const DELIVERY_SPLIT_BIN_CODE = "PB-2";
+export const DELIVERY_WET_MASS_T = 2.4;
+export const DELIVERY_WET_MASS_KG = 2400;
+export const DELIVERY_MOISTURE_PERCENT = 31;
+export const DELIVERY_LOCAL_TIME = "14:00";
+interface DeliveryPromptCodes { orderCode: string; binCode: string }
+const deliveryRequest = ({ orderCode, binCode }: DeliveryPromptCodes) =>
+  `Deliver ${DELIVERY_WET_MASS_T} t wet of order ${orderCode} from ${binCode}`;
+export const DELIVERY_CASES = [
+  { id: "delivery-complete", text: (codes: DeliveryPromptCodes) => `${deliveryRequest(codes)} at ${DELIVERY_MOISTURE_PERCENT}% moisture, yesterday ${DELIVERY_LOCAL_TIME}` },
+  { id: "delivery-missing-moisture", text: (codes: DeliveryPromptCodes) => `${deliveryRequest(codes)}, today ${DELIVERY_LOCAL_TIME}` },
+  { id: "delivery-split-bin", text: (codes: DeliveryPromptCodes) => `${deliveryRequest(codes)}, today ${DELIVERY_LOCAL_TIME}` },
+] as const;
+export type DeliveryCaseId = typeof DELIVERY_CASES[number]["id"];
+
 /** Shared flags are exported so the supervisor can adjust the harness. */
 export const CLAUDE_FLAGS = [
   "--mcp-config", MCP_CONFIG_PLACEHOLDER, "--strict-mcp-config", "--tools", "", "--allowedTools", "mcp__noma",

@@ -96,8 +96,9 @@ Re-run the migrate line after pulling new migrations. A worktree made with
 ## Agent evaluation
 
 `pnpm eval:mcp` runs two feedstock intake requests, two chained production-run
-requests and two lab sample requests (three replicates; a replicate without organic
-carbon) through headless Claude Code and the local MCP server. It needs Docker with the test database schema ready,
+requests, two lab sample requests (three replicates; a replicate without organic
+carbon), a named sub-bin loss request and three delivery requests through headless
+Claude Code and the local MCP server. It needs Docker with the test database schema ready,
 the worktree's `.env.test`, and a logged-in Claude Code subscription. It refuses
 non-test databases, creates a fresh organization and API key per case, and scores
 the stored rows, bin stock, audit transport and tool-call count. Case 2 follows
@@ -107,6 +108,16 @@ either no run or a running run without draws. Any saved draw fails. The complete
 chain requires R1 running today in the facility zone, a 1500 kg wet draw from B2
 and the resulting stock. Required run references and start time come from the
 published contract and grounding tools.
+
+`delivery-complete` requires exactly one delivery of 2400 kg wet at 31% moisture,
+yesterday at 14:00 in the facility zone, from the requested order and product bin,
+with no distance override and at most 10 tool calls. `delivery-missing-moisture`
+requires no saved changes and a final request for moisture; a dry run is allowed.
+`delivery-split-bin` seeds two products with different placement times and moistures.
+It requires no committed delivery and either a delivery clarification or a completed
+stock read followed by a dry run and a request for moisture readings. Historical
+moisture estimates can inform a preview but cannot supply missing operator readings
+for a commit, even if the server refuses it. Each case has its own organization and cleanup.
 
 This is a local check before merge, not a CI gate. Paste its Markdown table into
 the PR. Transcripts, the dev server log, Markdown and JSON scores are saved in
