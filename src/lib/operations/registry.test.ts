@@ -19,6 +19,7 @@ import { operationRegistry } from "./registry";
 const FEEDSTOCK_ID = "11111111-1111-4111-8111-111111111111";
 const INITIAL_VERSION = 1;
 const UPDATE_INPUTS: Record<string, unknown> = {
+  update_order: { orderId: FEEDSTOCK_ID, expectedVersion: INITIAL_VERSION },
   update_production_run: { productionRunId: FEEDSTOCK_ID, expectedVersion: INITIAL_VERSION },
   update_feedstock: { feedstockId: FEEDSTOCK_ID, expectedVersion: INITIAL_VERSION },
   update_biochar_product: { biocharProductId: FEEDSTOCK_ID, expectedVersion: INITIAL_VERSION },

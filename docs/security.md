@@ -128,7 +128,7 @@ Non-obvious semantics only:
 - **Signup is invite-only.** `ALLOW_SELF_SIGNUP` is `false` in every environment
   (`.env.example`, `tests/setup.ts`, both E2E workflows) and public self-signup
   is not a supported configuration for a B2B tenant — the flag is a tunable
-  that is never tuned. See [open-questions.md](./open-questions.md)
+  that is never tuned. See [Architecture open questions](./open-questions-architecture.md#drop-the-allow_self_signup-flag-authdrop-self-signup-flag-opened-2026-07-20)
   (`auth/drop-self-signup-flag`).
 - **`CREDENTIALS_ENCRYPTION_KEY`** — a hard boot requirement in production (see
   Hermetic-CI exception below). Server-only 32-byte hex/base64 key.

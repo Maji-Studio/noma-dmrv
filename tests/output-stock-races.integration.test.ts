@@ -8,7 +8,8 @@ import { applicationOutputAllocations, binMovements, deliveries, outputStockAllo
 import { createApplication } from '@/data-access/applications';
 import { createBiocharProduct } from '@/data-access/biochar-product-create';
 import { createDelivery } from '@/data-access/delivery-output-writes';
-import { createOrder } from '@/data-access/orders';
+import { recordOrder } from '@/lib/operations/orders';
+import { runOperationInProcess } from '@/lib/operations/runner';
 import { previewOutputStock } from '@/data-access/output-stock-operations';
 import { postOutputStock } from '@/data-access/output-stock-post';
 import { updateProductionRun } from '@/data-access/production-runs';
@@ -48,9 +49,9 @@ async function postedTruck() {
     composition: { ingredients: [{ formulationIngredientId: f.ingredient.id, feedstockTypeId: f.ingredientType.id,
       massKg: 500, moistureContentPercent: 60 }] },
   }));
-  const order = await createOrder(f.ctx, {
-    code: `E2E-RACE-O-${f.tag}`, facilityId: f.facility.id, customerId: f.customer.id,
-    formulationId: f.recipe.id, orderDate: new Date('2026-09-12'), quantityKg: 2000, packaging: 'loose',
+  const order = await runOperationInProcess(recordOrder, f.ctx, {
+    facilityId: f.facility.id, customerId: f.customer.id,
+    formulationId: f.recipe.id, orderDate: '2026-09-12', quantityKg: 2000, packaging: 'loose',
   });
   const input = { storageLocationId: f.bin.id, facilityId: f.facility.id, occurredAt: '2026-09-14T12:00:00.000Z',
     kind: 'delivery' as const, wetMassKg: 1000, moisturePercent: 30 };

@@ -1,3 +1,5 @@
+import { updateOrder } from "@/lib/operations/orders";
+import { runOperationInProcess } from "@/lib/operations/runner";
 import { labLogisticsVersion } from "./helpers/lab-logistics-version";
 import { randomUUID } from "node:crypto";
 import { afterEach, describe, expect, it } from "vitest";
@@ -7,7 +9,7 @@ import { deliveries, outputStockAllocations, orders } from "@/db/schema";
 import { createDelivery, deleteDelivery } from "@/data-access/deliveries";
 import { updateDelivery } from "@/lib/operations/deliveries";
 import { createApplication } from "@/data-access/applications";
-import { createOrder, getOrders, updateOrder } from "@/data-access/orders";
+import { createOrderInTransaction, getOrders } from "@/data-access/orders";
 import { getOrderEntityById } from "@/data-access/entities/orders";
 import { getStockAvailability } from "@/data-access/stock-availability";
 import { getOutputBinAllLayersDryKg } from "@/data-access/output-stock";
@@ -76,14 +78,14 @@ describe("completed delivery order balance", () => {
   });
   it("allows competing orders without reserving or over-allocating physical stock", async () => {
     const f = await fixture(800);
-    const other = await createOrder(f.ctx, { code: `E2E-OTHER-${f.tag}`, facilityId: f.facility.id, customerId: f.customer.id, formulationId: f.pure.id, orderDate: new Date(STOCK_DATE), quantityKg: 800, packaging: "loose" });
+    const other = await db.transaction(tx => createOrderInTransaction(f.ctx, tx, { code: `E2E-OTHER-${f.tag}`, facilityId: f.facility.id, customerId: f.customer.id, formulationId: f.pure.id, orderDate: new Date(STOCK_DATE), quantityKg: 800, packaging: "loose" }));
     expect(await getOutputBinAllLayersDryKg(f.ctx, f.bin.id)).toBe(1000);
     await postDelivery(f, 800);
     await expect(postDelivery({ ...f, order: other }, 300)).rejects.toThrow(/Not enough dry biochar/);
   });
   it("locks the order formulation once a completed delivery uses it", async () => {
     const f = await fixture(); const delivery = await postDelivery(f, 50);
-    await expect(updateOrder(f.ctx, f.order.id, { expectedVersion: await labLogisticsVersion(f.ctx, "orders", f.order.id), formulationId: f.recipe.id })).rejects.toThrow(delivery.code);
+    await expect(runOperationInProcess(updateOrder, f.ctx, { orderId: f.order.id, expectedVersion: await labLogisticsVersion(f.ctx, "orders", f.order.id), formulationId: f.recipe.id })).rejects.toThrow(delivery.code);
     expect((await db.select().from(orders).where(eq(orders.id, f.order.id)))[0].formulationId).toBe(f.pure.id);
   });
   it("counts completed trucks toward the remaining commercial order quantity", async () => {
@@ -144,24 +146,24 @@ describe("completed delivery order balance", () => {
   });
   it("serializes an order shrink against a concurrent completed truck", async () => {
     const f = await fixture(); const input = await deliveryInput(f, 60);
-    const results = await Promise.allSettled([updateOrder(f.ctx, f.order.id, { expectedVersion: await labLogisticsVersion(f.ctx, "orders", f.order.id), quantityKg: 50 }), createDelivery(f.ctx, input)]);
+    const results = await Promise.allSettled([runOperationInProcess(updateOrder, f.ctx, { orderId: f.order.id, expectedVersion: await labLogisticsVersion(f.ctx, "orders", f.order.id), quantityKg: 50 }), createDelivery(f.ctx, input)]);
     expect(results.filter(result => result.status === "fulfilled")).toHaveLength(1);
     expect(results.filter(result => result.status === "rejected")).toHaveLength(1);
   });
   it("rejects an order shrink below completed delivery mass", async () => {
     const f = await fixture(); await postDelivery(f, 60);
-    await expect(updateOrder(f.ctx, f.order.id, { expectedVersion: await labLogisticsVersion(f.ctx, "orders", f.order.id), quantityKg: 59 })).rejects.toThrow("60 kg");
-    await expect(updateOrder(f.ctx, f.order.id, { expectedVersion: await labLogisticsVersion(f.ctx, "orders", f.order.id), quantityKg: 60 })).resolves.toMatchObject({ quantityKg: 60 });
+    await expect(runOperationInProcess(updateOrder, f.ctx, { orderId: f.order.id, expectedVersion: await labLogisticsVersion(f.ctx, "orders", f.order.id), quantityKg: 59 })).rejects.toThrow("60 kg");
+    await expect(runOperationInProcess(updateOrder, f.ctx, { orderId: f.order.id, expectedVersion: await labLogisticsVersion(f.ctx, "orders", f.order.id), quantityKg: 60 })).resolves.toMatchObject({ quantityKg: 60 });
   });
   it("rounds the actionable commercial minimum upward for fractional mass", async () => {
     const f = await fixture(); await postDelivery(f, 60.05);
-    await expect(updateOrder(f.ctx, f.order.id, { expectedVersion: await labLogisticsVersion(f.ctx, "orders", f.order.id), quantityKg: 60 })).rejects.toThrow("60.1 kg");
+    await expect(runOperationInProcess(updateOrder, f.ctx, { orderId: f.order.id, expectedVersion: await labLogisticsVersion(f.ctx, "orders", f.order.id), quantityKg: 60 })).rejects.toThrow("60.1 kg");
   });
   it("accepts unchanged stock fields on metadata edits but retains history on delete", async () => {
     const f = await fixture(); const delivery = await postDelivery(f, 60);
     await expect(updateDelivery(f.ctx, delivery.id, { expectedVersion: await labLogisticsVersion(f.ctx, "deliveries", delivery.id), code: `E2E-D-${randomUUID().toUpperCase()}`, orderId: f.order.id, facilityId: f.facility.id,
       storageLocationId: f.bin.id, deliveryDate: new Date(STOCK_TIME), deliveredWetMassKg: 60, moistureContentPercent: 0 })).resolves.toMatchObject({ massDryKg: 60 });
-    await expect(updateOrder(f.ctx, f.order.id, { expectedVersion: await labLogisticsVersion(f.ctx, "orders", f.order.id), quantityKg: 100, formulationId: f.pure.id })).resolves.toMatchObject({ quantityKg: 100 });
+    await expect(runOperationInProcess(updateOrder, f.ctx, { orderId: f.order.id, expectedVersion: await labLogisticsVersion(f.ctx, "orders", f.order.id), quantityKg: 100, formulationId: f.pure.id })).resolves.toMatchObject({ quantityKg: 100 });
     await expect(deleteDelivery(f.ctx, delivery.id, await labLogisticsVersion(f.ctx, "deliveries", delivery.id))).rejects.toThrow("history");
   });
 });

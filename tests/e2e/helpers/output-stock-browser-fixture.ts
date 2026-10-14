@@ -7,7 +7,7 @@ import { applications, biocharProducts, customerLocations, deliveries, orders, p
 import { seedOutputStockParents } from "../../helpers/output-stock-fixture";
 import { db } from "../../../src/db";
 import { createBiocharProduct } from "../../../src/data-access/biochar-product-create";
-import { createOrder } from "../../../src/data-access/orders";
+import { createOrderInTransaction } from "../../../src/data-access/orders";
 import { previewOutputStock } from "../../../src/data-access/output-stock-operations";
 import { createDelivery } from "../../../src/data-access/delivery-output-writes";
 
@@ -52,10 +52,10 @@ export async function seedOutputStockBrowserFixture(userId: string, shipped = fa
       type: "product_bin" as const, formulationId: f.pure.id,
     })),
   ).returning();
-  const order = await createOrder(f.ctx, {
+  const order = await db.transaction(tx => createOrderInTransaction(f.ctx, tx, {
     code: `E2E-FIFO-O-${f.tag}`, facilityId: f.facility.id, customerId: f.customer.id, customerLocationId: location.id,
     formulationId: f.recipe.id, orderDate: new Date(FIFO_BROWSER_DATE), quantityKg: 5000, packaging: "loose",
-  });
+  }));
   let delivery: Awaited<ReturnType<typeof createDelivery>> | undefined;
   if (shipped) {
     const preview = await previewOutputStock(f.ctx, {

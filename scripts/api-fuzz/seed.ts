@@ -32,6 +32,8 @@ const SAMPLE_TOTAL_CARBON_PERCENT = 80;
 const SAMPLE_ORGANIC_CARBON_PERCENT = 78;
 const SAMPLE_INORGANIC_CARBON_PERCENT = 2;
 const SAMPLE_HYDROGEN_PERCENT = 2.5;
+const ORDER_QUANTITY_KG = 10_000;
+const CUSTOMER_DISTANCE_KM = 25;
 const MS_PER_HOUR = 3_600_000;
 const MS_PER_DAY = 24 * MS_PER_HOUR;
 const PRIVATE_FILE_MODE = 0o600;
@@ -63,9 +65,11 @@ async function main(): Promise<void> {
   const { createFormulation } = await import("@/data-access/formulations");
   const { makeBiocharProduct } = await import("@/lib/operations/biochar-products");
   const { recordOutputStockMovement } = await import("@/lib/operations/output-stock");
-  const { biocharProductEtag, creditBatchEtag, labSampleEtag } = await import("@/lib/api/representation-etags");
+  const { biocharProductEtag, creditBatchEtag, labSampleEtag, orderEtag } = await import("@/lib/api/representation-etags");
   const { createCreditBatch } = await import("@/data-access/credit-batches");
   const { recordLabSample } = await import("@/lib/operations/lab-samples");
+  const { createCustomer, createCustomerLocation } = await import("@/data-access/customers");
+  const { recordOrder } = await import("@/lib/operations/orders");
   const { createApiKey } = await import("@/data-access/api-keys");
   const { API_SCOPES } = await import("@/lib/auth/api-scopes");
   const { API_KEY_DEFAULT_EXPIRY_SECONDS } = await import("@/config/api-keys");
@@ -185,6 +189,19 @@ async function main(): Promise<void> {
     occurredAt: new Date(now - LOSS_HOURS_AGO * MS_PER_HOUR).toISOString(),
     wetMassKg: LOSS_WET_MASS_KG, moisturePercent: BIOCHAR_MOISTURE_PERCENT, reason: "API fuzz fixture loss",
   })).data;
+  const customer = await createCustomer(ctx, { code: "FUZZ-CUS", name: FIXTURE_LABEL });
+  const customerLocation = await createCustomerLocation(ctx, {
+    customerId: customer.id, name: FIXTURE_LABEL, country: "FR",
+    distanceFromFacilityKm: CUSTOMER_DISTANCE_KM, distanceSource: "manual", isDefault: true,
+  });
+  const orderInput = {
+    facilityId: facility.id, customerId: customer.id, customerLocationId: customerLocation.id,
+    formulationId: pure.id, orderDate: formatFacilityDate(new Date(now), FACILITY_TIME_ZONE),
+    quantityKg: ORDER_QUANTITY_KG, packaging: "loose" as const,
+  };
+  const order = (await runOperation(recordOrder, ctx, orderInput)).data;
+  // Keep this second order delivery-free when the delivery seed is added in 5b-2.
+  const deleteOrder = (await runOperation(recordOrder, ctx, orderInput)).data;
   const credential = await createApiKey(ctx, {
     name: FIXTURE_LABEL, scopes: [...API_SCOPES], expiresIn: API_KEY_DEFAULT_EXPIRY_SECONDS,
   });
@@ -205,6 +222,11 @@ async function main(): Promise<void> {
     biocharBinId: biocharBin.id, biocharBinCode: biocharBin.code, productBinId: productBin.id,
     pureFormulationId: pure.id, pureFormulationCode: pure.code, blendFormulationId: blend.id, blendFormulationCode: blend.code,
     biocharProductId: product.id, biocharProductCode: product.code, biocharProductEtag: biocharProductEtag(product),
+    customerId: customer.id, customerCode: customer.code,
+    // Customer locations, like supplier locations, have no code column.
+    customerLocationId: customerLocation.id,
+    orderId: order.id, orderCode: order.code, orderEtag: orderEtag(order),
+    deleteOrderId: deleteOrder.id, deleteOrderCode: deleteOrder.code, deleteOrderEtag: orderEtag(deleteOrder),
     lossMovementId: loss.movementId,
     creditBatchId: creditBatch.id, creditBatchCode: creditBatch.code, creditBatchEtag: creditBatchEtag(creditBatch),
     labSampleId: labSample.id, labSampleCode: labSample.sampleCode, labSampleEtag: labSampleEtag(labSample),

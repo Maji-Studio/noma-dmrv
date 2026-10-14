@@ -1,3 +1,5 @@
+import { updateOrder } from "@/lib/operations/orders";
+import { runOperationInProcess } from "@/lib/operations/runner";
 import { z } from "zod";
 import { runOperation } from "@/lib/operations/runner";
 import { waitForBlockedOperations } from "./helpers/operation-barrier";
@@ -28,7 +30,7 @@ import {
 } from "@/data-access/credit-batches";
 import { updateDelivery } from "@/lib/operations/deliveries";
 import { updateFeedstockInTransaction } from "@/data-access/feedstocks";
-import { updateOrder } from "@/data-access/orders";
+
 import {
   deleteProductionRun,
   updateProductionRun,
@@ -463,9 +465,8 @@ describe("certification lineage guards", () => {
   it("rejects order edits once linked to a submitted removal lineage", async () => {
     await withLineageFixture(async (fixture) => {
       await expect(
-        updateOrder(makeTestOrgContext(TEST_USER_ID), fixture.orderId, { expectedVersion: await labLogisticsVersion(makeTestOrgContext(TEST_USER_ID), "orders", fixture.orderId),
-          quantityKg: 301,
-        }),
+        runOperationInProcess(updateOrder, makeTestOrgContext(TEST_USER_ID), { orderId: fixture.orderId, expectedVersion: await labLogisticsVersion(makeTestOrgContext(TEST_USER_ID), "orders", fixture.orderId),
+          quantityKg: 301, }),
       ).rejects.toThrow(LOCKED_COPY);
     });
   });
