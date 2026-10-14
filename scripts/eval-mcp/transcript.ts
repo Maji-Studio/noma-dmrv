@@ -5,6 +5,10 @@ export interface ToolCall {
   name: string;
   arguments: Record<string, unknown>;
   isError?: boolean;
+  /** Only stock reads retain their body, for the layer-grounding oracle. */
+  stockResult?: Record<string, unknown>;
+  /** Number of calls already issued when this read's result arrived. */
+  resultAfterCalls?: number;
 }
 export interface Transcript {
   calls: ToolCall[];
@@ -27,6 +31,23 @@ function resultHasError(value: unknown): boolean {
     try { return resultHasError(JSON.parse(result.text)); } catch { /* Plain result text. */ }
   }
   return Array.isArray(result.content) && result.content.some(resultHasError);
+}
+
+function stockBody(value: unknown): Record<string, unknown> | undefined {
+  if (value == null) return undefined;
+  if (typeof value === "string") {
+    try { return stockBody(JSON.parse(value)); } catch { return undefined; }
+  }
+  if (Array.isArray(value)) {
+    for (const block of value) {
+      const body = stockBody(block);
+      if (body) return body;
+    }
+    return undefined;
+  }
+  const result = object(value);
+  if (typeof object(result.data).storageLocationId === "string") return result;
+  return stockBody(result.structuredContent) ?? stockBody(result.content) ?? stockBody(result.text);
 }
 
 /** Full assistant/user messages, not partial stream deltas, carry tool calls. */
@@ -52,7 +73,13 @@ export function parseTranscript(raw: string, allowIncomplete = false): Transcrip
       }
       if (event.type === "user" && block.type === "tool_result" && typeof block.tool_use_id === "string") {
         const call = callsById.get(block.tool_use_id);
-        if (call) call.isError = resultHasError(block) || resultHasError(event.tool_use_result);
+        if (call) {
+          call.isError = resultHasError(block) || resultHasError(event.tool_use_result);
+          if (call.name === "mcp__noma__get_bin_stock") {
+            call.stockResult = stockBody(event.tool_use_result) ?? stockBody(block.content);
+            call.resultAfterCalls = transcript.calls.length;
+          }
+        }
       }
     }
     if (event.type === "result") {

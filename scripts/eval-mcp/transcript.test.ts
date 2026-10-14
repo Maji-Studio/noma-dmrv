@@ -55,3 +55,15 @@ it("preserves the call count when an interrupted stream ends with a partial even
   expect(parsed.calls).toHaveLength(1);
   expect(parsed.completed).toBe(false);
 });
+
+it.each(["structured", "wrapped-text", "plain-text"])("retains the returned stock envelope from %s content", (shape) => {
+  const body = { data: { storageLocationId: "bin", subBins: [{ layerId: "run", code: "PR-12" }] } };
+  const use = { type: "assistant", message: { content: [{ type: "tool_use", id: "stock", name: "mcp__noma__get_bin_stock", input: {} }] } };
+  const wrapped = { structuredContent: body, content: [{ type: "text", text: "Stock read." }] };
+  const event = shape === "structured"
+    ? { type: "user", message: { content: [{ type: "tool_result", tool_use_id: "stock" }] }, tool_use_result: wrapped }
+    : { type: "user", message: { content: [{ type: "tool_result", tool_use_id: "stock",
+      content: [{ type: "text", text: JSON.stringify(shape === "wrapped-text" ? wrapped : body) }] }] } };
+  const parsed = parseTranscript([use, event].map((value) => JSON.stringify(value)).join("\n"));
+  expect(parsed.calls[0]).toMatchObject({ stockResult: body, resultAfterCalls: 1, isError: false });
+});
