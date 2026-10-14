@@ -11,6 +11,7 @@ import {
   certifierRemovals,
 } from "@/db/schema/certification";
 import { facilities } from "@/db/schema/facilities";
+import { organizations } from "@/db/schema/auth";
 import {
   ensureTestOrg,
   makeTestOrgContext,
@@ -21,6 +22,7 @@ const USER_ID = "test-user-certifier-project-mapping";
 const facilityIds: string[] = [];
 const removalIds: string[] = [];
 const submissionIds: string[] = [];
+const otherOrgIds: string[] = [];
 
 beforeAll(() => ensureTestOrg());
 
@@ -41,6 +43,46 @@ afterAll(async () => {
       .where(eq(certifierProjects.facilityId, facilityId));
     await db.delete(facilities).where(eq(facilities.id, facilityId));
   }
+  if (otherOrgIds.length) {
+    await db.delete(organizations).where(inArray(organizations.id, otherOrgIds));
+  }
+});
+
+describe("upsertCertifierProject organization guard", () => {
+  it("refuses to overwrite another organization's existing mapping", async () => {
+    const facilityId = await createFacility();
+    const ctx = makeTestOrgContext(USER_ID);
+    const original = await upsertCertifierProject(ctx, {
+      facilityId,
+      provider: "isometric",
+      externalProjectId: "prj_org_guard_original",
+      protocolVersion: "1.2",
+    });
+    const otherOrgId = `org_certifier_mapping_${crypto.randomUUID()}`;
+    await db.insert(organizations).values({
+      id: otherOrgId,
+      name: "Certifier Mapping Other Organization",
+      slug: otherOrgId,
+    });
+    otherOrgIds.push(otherOrgId);
+    const otherCtx = { ...ctx, organizationId: otherOrgId };
+
+    await expect(
+      upsertCertifierProject(otherCtx, {
+        facilityId,
+        provider: "isometric",
+        externalProjectId: "prj_org_guard_foreign",
+        protocolVersion: null,
+      }),
+    ).rejects.toThrow(/belongs to another organization/);
+
+    expect(
+      await getCertifierProjectByFacility(ctx, facilityId, "isometric"),
+    ).toEqual(original);
+    expect(
+      await getCertifierProjectByFacility(otherCtx, facilityId, "isometric"),
+    ).toBeNull();
+  });
 });
 
 /**
