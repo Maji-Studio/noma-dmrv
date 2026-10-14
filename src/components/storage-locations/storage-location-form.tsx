@@ -15,7 +15,7 @@ import {
 } from "@/components/forms";
 import { ChoiceCardGroup } from "@/components/forms/choice-card-group";
 import { SegmentedControl } from "@/components/forms/segmented-control";
-import { stockModeOptions } from "./stock-mode-art";
+import { drawOrderOptions, stockModeOptions } from "./stock-mode-art";
 import { FormActions } from "@/components/forms/form-actions";
 import {
   storageLocationFormSchema,
@@ -103,6 +103,7 @@ export function StorageLocationForm({
       feedstockTypeId: storageLocation?.feedstockTypeId ?? defaultFeedstockTypeId ?? "",
       formulationId: storageLocation?.formulationId ?? defaultFormulationId ?? "",
       stockMode: storageLocation?.stockMode ?? "split",
+      drawOrder: storageLocation?.drawOrder ?? "oldest_first",
       mergedAt: "",
       storageMethod: storageLocation?.storageMethod ?? "",
       storageDescription: storageLocation?.storageDescription ?? "",
@@ -255,6 +256,14 @@ export function StorageLocationForm({
             />
           </FormField>
           </div>
+          {watchedStockMode === "split" && (
+            <div className="md:col-span-2">
+              <FormField id="drawOrder" label="Default draw order" hint="Which sub-bin a draw takes first. You can change the order for any draw." error={errors.drawOrder?.message} required>
+                <ChoiceCardGroup id="drawOrder" legend="Default draw order" disabled={isSubmitting}
+                  error={!!errors.drawOrder} stackArt options={drawOrderOptions} {...register("drawOrder")} />
+              </FormField>
+            </div>
+          )}
           {merging && (
             <div className="md:col-span-2"><FormField id="mergedAt" label="Merged at" hint={MERGE_TIME_HINT} error={errors.mergedAt?.message} cue={clock.hint} required>
               <EventTimeInput control={control} name="mergedAt" id="mergedAt" timeZone={clock.timeZone} disabled={isSubmitting} />

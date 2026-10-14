@@ -45,7 +45,8 @@ async function harness(useMutation: () => { mutateAsync: (input: never) => Promi
 
 describe.each(cases)("$entity version caches", testCase => {
   it("merges the saved version into every list before refetch", async () => {
-    mocks.update.mockResolvedValueOnce({ success: true, data: saved });
+    // A delivery update also returns the products its stock correction touched.
+    mocks.update.mockResolvedValueOnce({ success: true, data: testCase.entity === "deliveries" ? { ...saved, savedProducts: [] } : saved });
     const client = new QueryClient();
     const keys = listKeys(testCase.entity);
     const detailKey = [testCase.entity, "detail", ID];
@@ -94,5 +95,19 @@ it("merges corrected delivery versions into cached edit rows", async () => {
   await harness(usePostOutputStock, client, {}, async invoke => {
     await act(async () => { await invoke(); });
     expect(client.getQueryData(key)).toMatchObject({ items: [{ version: SAVED_VERSION }] });
+  });
+});
+
+it("merges the product versions a delivery mass edit returns and keeps them off the delivery", async () => {
+  const product = { id: "44444444-4444-4444-8444-444444444444", version: SAVED_VERSION, code: "BP-1" };
+  mocks.update.mockResolvedValueOnce({ success: true, data: { ...saved, savedProducts: [product] } });
+  const client = new QueryClient();
+  const productKey = ["biocharProducts", "list", "one"];
+  client.setQueryData(productKey, { items: [{ id: product.id, version: INITIAL_VERSION }] });
+  client.setQueryData(["deliveries", "detail", ID], { id: ID, version: INITIAL_VERSION });
+  await harness(useUpdateDelivery, client, { deliveryId: ID, expectedVersion: INITIAL_VERSION }, async invoke => {
+    await act(async () => { await invoke(); });
+    expect(client.getQueryData(productKey)).toMatchObject({ items: [{ version: SAVED_VERSION }] });
+    expect(client.getQueryData(["deliveries", "detail", ID])).not.toHaveProperty("savedProducts");
   });
 });

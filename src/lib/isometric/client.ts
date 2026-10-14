@@ -360,8 +360,11 @@ async function* paginate<T>(
       ...rest,
       query: { ...query, first: pageSize, after },
     });
+    if (!page.page_info) {
+      throw new Error(`Isometric GET ${path} returned a page without page_info`);
+    }
     for (const node of page.nodes ?? []) yield node;
-    if (!page.page_info?.has_next_page) return;
+    if (!page.page_info.has_next_page) return;
     const cursor = page.page_info.end_cursor;
     if (!cursor) {
       throw new Error(

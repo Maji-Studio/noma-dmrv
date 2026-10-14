@@ -38,6 +38,8 @@ vi.mock("@/hooks/use-entities", () => ({
     dataUpdatedAt: 1, isPending: false, isError: false, error: null,
   }),
 }));
+// Base UI interaction is tested in the browser DOM suite; parity needs the trigger only.
+vi.mock("@/components/storage-locations/sub-bin-card", async (importOriginal) => ({ ...await importOriginal<typeof import("@/components/storage-locations/sub-bin-card")>(), DetailsTooltip: ({ trigger }: { trigger: ReactNode }) => trigger }));
 // The bin picker's quick-add dialogs need a query client; none is under test.
 vi.mock("./entity-select/driver-quick-add-dialog", () => ({ DriverQuickAddDialog: () => null }));
 vi.mock("./entity-select/operator-quick-add-dialog", () => ({ OperatorQuickAddDialog: () => null }));
@@ -64,7 +66,7 @@ import { EntitySideSheetSections } from "@/components/ui/entity-side-sheet";
 import { MoistureSplit } from "@/components/ui/moisture-split";
 import { ProductCompositionPreview } from "@/components/ui/product-composition-preview";
 import { OutputStockAvailability, OutputStockPreview } from "@/components/storage-locations/output-stock-preview";
-import { MixPileCard } from "@/components/storage-locations/mix-pile-card";
+import { MixPileBay } from "@/components/storage-locations/sub-bin-bays";
 import { ProcessFlowPreview } from "@/components/production-runs/production-run-process-flow-preview";
 import { ApplicationAllocationShares } from "@/components/applications/application-allocation-shares";
 import { SampleDerivedRatios } from "@/components/samples/sample-derived-ratios";
@@ -181,7 +183,7 @@ const SURFACE_CASES: { name: string; element: ReactElement; blankInSimple?: bool
   { name: "stock availability", element: <OutputStockAvailability binName="Product bin" dryKg={1500} wetEstimate={{ kg: 1800, basis: "Wet mass added less wet mass taken out" }} allocations={[{ layerId: "a", code: "Batch A", wetMassKg: null, dryMassKg: 1500, runs: [] }] as never} /> },
   { name: "matching stock", element: <MatchingOutputBins facilityId="facility" formulationId="formulation" /> },
   { name: "delivery stock", element: <DeliveryStockDetails deliveryId="delivery" storageLocationId="bin" wetMassKg={100} dryMassKg={80} /> },
-  { name: "mix pile", element: <MixPileCard binName="Product bin" wetKg={1800} moisturePercent={20} dryKg={1440} batches={[{ code: "B-001", dryMassKg: 800 }, { code: "B-002", dryMassKg: 640 }] as never} /> },
+  { name: "mix pile", element: <MixPileBay bands={[{ label: "B-001", kg: 800, details: [] }, { label: "B-002", kg: 640, details: [] }, { label: "Water, estimated", kg: 360, category: "existing-water", details: [] }]} /> },
 ];
 
 describe("detail level render parity", () => {
