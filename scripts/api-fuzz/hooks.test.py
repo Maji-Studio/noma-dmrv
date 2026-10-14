@@ -229,7 +229,7 @@ class HarnessTests(unittest.TestCase):
                 etag = etags.get(next((prefix for prefix in etags if operation.path.startswith(prefix)), ""), FEEDSTOCK_ETAG)
                 self.assertEqual(examples[0].headers["If-Match"], etag)
             count += 1
-        self.assertEqual(count, 23)
+        self.assertEqual(count, 24)
 
     def test_seeded_positive_examples_must_return_2xx(self):
         check = hook("after_load_schema").__globals__["seeded_example_success"]
