@@ -241,13 +241,8 @@ export async function verifyIsometricCredentialsForOrganization(
   ctx: OrgContext,
   organizationId: string,
 ): Promise<number> {
-  requireOrgScope(ctx);
-  if (organizationId !== ctx.organizationId && !ctx.isPlatformAdmin) {
-    throw new SafeError(CROSS_ORG_CREDENTIALS_ERROR);
-  }
-  const credentials = organizationId === ctx.organizationId
-    ? await getDecryptedCertifierCredentials(ctx, "isometric")
-    : await loadDecryptedCertifierCredentials(organizationId, "isometric");
+  assertCanManageOrgCredentials(ctx, organizationId);
+  const credentials = await loadDecryptedCertifierCredentials(organizationId, "isometric");
   const client = clientFromCredentials(credentials);
   return (await listProjects(client)).length;
 }

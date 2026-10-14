@@ -48,12 +48,8 @@ It does **not** make the report public by id:
 The lookup in `src/data-access/ghg-statement-reports.ts` deliberately lacks an
 `OrgContext` and carries the exact `// org-scope-ok:` waiver because the
 unguessable bearer token is the authorization boundary. This is the only
-cross-org verifier seam; every authenticated workspace and document read keeps
-normal organization scoping.
-The deliberate `// org-scope-ok:` credential-verification seam,
-`verifyIsometricCredentialsForOrganization(ctx, organizationId)`, checks
-`ctx.isPlatformAdmin` before reading a selected organization's credentials and
-returns only the project count from `listProjects`.
+cross-org lookup in the public verifier report path; every authenticated
+workspace and document read keeps normal organization scoping.
 
 ## Roles and active organization
 
@@ -67,6 +63,12 @@ returns only the project count from `listProjects`.
 - **`allowUserToCreateOrganization: false`** — orgs are created only through the Platform-Admin-guarded server action, which makes the *selected* user the Owner, not the acting admin. `afterCreateOrganization` seeds starter types via `seedOrgDefaults` and deliberately swallows failures rather than wedging the create.
 - **The CLI org-context seam is `runWithCliOrgContext` (`src/lib/cli/org-context.ts`).** A CLI (today the Mafinga seed) has no session, so it runs server actions inside an org context written to an `AsyncLocalStorage` that `resolveOrgContext()` reads first. The seam accepts identity IDs only and verifies them itself: the user must hold `users.role = 'admin'` and the organization must exist, and the context it builds is always Owner plus Platform Admin. It refuses to run when `NODE_ENV=production` without `ALLOW_DEV_BOOTSTRAP=1`. The storage lives in `src/lib/auth/cli-org-context-store.ts` and only that CLI module may write to it, so `src/lib/auth/server.ts` exports the read side alone. **Request code must never import either module**: a request resolves its context from the session.
 - **`users.role` is declared `input: false`** on the Better Auth additionalField, so it can never be set through self-service signup. Role is assigned only by the admin-bootstrap CLI (`src/lib/cli/ensure-admin-core.ts`) or a Platform Admin path.
+
+The deliberate `// org-scope-ok:` credential-verification seam,
+`verifyIsometricCredentialsForOrganization(ctx, organizationId)`, uses the same
+management guard as credential writes: Owners and Admins may verify their active
+organization, and only Platform Admins may verify another organization. It
+returns only the project count from `listProjects`.
 
 ## Server actions
 

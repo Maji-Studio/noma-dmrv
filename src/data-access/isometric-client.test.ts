@@ -18,7 +18,11 @@ const mocks = vi.hoisted(() => ({
 }));
 vi.mock("@/config/env", () => ({ env: mocks.env }));
 vi.mock("@/db", () => ({ db: { select: mocks.select } }));
-vi.mock("@/lib/auth/server", () => ({ requireOrgRole: vi.fn() }));
+vi.mock("@/lib/auth/providers/better-auth-server", () => ({
+  getBetterAuthSession: vi.fn(),
+  mapBetterAuthUser: vi.fn(),
+  signOut: vi.fn(),
+}));
 vi.mock("@/lib/crypto/secrets", () => ({
   decryptSecret: mocks.decrypt,
   encryptSecret: vi.fn(),
@@ -102,7 +106,7 @@ describe("organization credential verification", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     await expect(verifyIsometricCredentialsForOrganization(
-      CTX, CTX.organizationId,
+      { ...CTX, orgRole: "admin" }, CTX.organizationId,
     )).resolves.toBe(1);
     expect(mocks.where).toHaveBeenCalledWith(and(
       eq(certifierCredentials.organizationId, CTX.organizationId),
@@ -144,6 +148,18 @@ describe("organization credential verification", () => {
       { ...CTX, orgRole: "admin" }, "org-selected",
     )).rejects.toThrow("You can only manage credentials for your active Organization.");
     expect(mocks.select).not.toHaveBeenCalled();
+  });
+
+  it("rejects an active-organization member before loading secrets", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(verifyIsometricCredentialsForOrganization(
+      CTX, CTX.organizationId,
+    )).rejects.toThrow("You don't have permission to perform this action.");
+    expect(mocks.select).not.toHaveBeenCalled();
+    expect(mocks.decrypt).not.toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("still requires complete org scope for a Platform Admin", async () => {
