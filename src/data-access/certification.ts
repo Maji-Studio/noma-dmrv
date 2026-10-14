@@ -18,6 +18,7 @@ import { DEFAULT_PROTOCOL_SLUG } from "@/config/certification";
 import {
   GHG_STATEMENT_ENTITY_TYPE,
   REMOVAL_ENTITY_TYPE,
+  REMOVAL_SCOPED_SUBMISSION_TYPES,
 } from "@/lib/isometric/utils/constants";
 import { SafeError } from "@/lib/errors";
 import { pluralize } from "@/lib/copy-utils";
@@ -42,8 +43,8 @@ export interface UpsertCertifierProjectInput {
   protocolSlug?: string;
   protocolVersion?: string | null;
   defaultRemovalTemplateId?: string | null;
-  // Phase 5 Slice A — operator-pasted Isometric facility id (fcl_…).
-  // Optional; required only for telemetry submission.
+  // Operator-pasted Isometric facility id (fcl_…).
+  // Optional registry facility identity for Production Batch registration.
   externalFacilityId?: string | null;
   metadata?: Record<string, unknown> | null;
 }
@@ -121,13 +122,6 @@ export async function listAllFacilitiesLinkedByProvider(
 
 export type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
-// Submission types that pin a facility's certifier mapping through a Removal.
-// Both the Removal itself (ADR 0003) and its telemetry data-upload (ADR 0006)
-// are keyed to `certifierRemovals.id` with `localEntityType='removal'`; a
-// repoint/unlink that orphaned the mapping would strand either one's remote
-// resource, so both must block.
-const REMOVAL_SCOPED_SUBMISSION_TYPES = ["removal", "dataUpload"] as const;
-
 // Exported for the facility archive-with-warning gate (archive stays allowed;
 // the dialog surfaces a warning when registry submissions exist).
 export async function hasBlockingFacilitySubmission(
@@ -137,10 +131,8 @@ export async function hasBlockingFacilitySubmission(
   provider: CertifierProvider,
 ): Promise<boolean> {
   requireOrgScope(ctx);
-  // Two facility-scoped artifacts can pin a mapping: a Removal (ADR 0003,
-  // which also covers its telemetry data-upload per ADR 0006 — both join
-  // through certifierRemovals) and a GHG Statement (ADR 0004). Each carries
-  // facilityId directly — one hop, no lineage walk. Two small probes are
+  // Two facility-scoped artifacts can pin a mapping: a Removal (ADR 0003)
+  // and a GHG Statement (ADR 0004). Each carries facilityId directly — one hop, no lineage walk. Two small probes are
   // clearer than a UNION/OR and let the planner use each artifact's own index.
   const [removalHit, ghgHit] = await Promise.all([
     executor
@@ -243,8 +235,8 @@ export async function upsertCertifierProject(
         .limit(1);
 
       // The Isometric facility id (fcl_…) is a 1:1 anchor — two noma facilities
-      // sharing one would cross-contaminate telemetry. A DB unique constraint
-      // (provider, external_facility_id) is the backstop; this in-transaction
+      // sharing one would cross-contaminate registry production data. The unique
+      // constraint (provider, external_facility_id) is the backstop; this in-transaction
       // probe turns the raw 23505 into a clear, actionable message naming the
       // colliding facility. Projects may still be shared across facilities —
       // only the fcl_ id is locked. Two concurrent upserts can each pass this
@@ -515,8 +507,7 @@ export type CertifierSyncEventRow = typeof certifierSyncEvents.$inferSelect;
 // reads can be refused the moment #372 lands an independent value to compare
 // against. See docs/open-questions.md `security/certification-submit-authz`.
 
-// `removal` covers both Removal and telemetry (dataUpload) submissions (ADR
-// 0006 — both key `localEntityId` to certifierRemovals.id); `ghgStatement`
+// `removal` keys `localEntityId` to certifierRemovals.id; `ghgStatement`
 // resolves through certifierGhgStatements. Both anchor tables carry facilityId.
 //
 // Batched facility lookup for a set of local-entity ids of one type. Returns an
@@ -688,7 +679,7 @@ export async function markSubmissionSubmitted(
     supersedePreviousId?: string | null;
     expectedLockedAt?: Date;
     // §8.6.2: atomically stamp the claiming removal onto its member batches.
-    // Optional because telemetry and GHG-statement callers do not claim.
+    // Optional because GHG-statement callers do not claim.
     productionEmissionsClaim?: { removalId: string; creditBatchIds: string[] };
   },
   callerTx?: Tx,
@@ -827,13 +818,8 @@ export async function markSubmissionRejected(
   await rejectDraftSubmission(ctx, db, id, args);
 }
 
-// Accumulates per-step recovery IDs into `payload_snapshot.journaled`
-// (ADR 0006 §3). The data-upload resume reader (`readResumeSnapshot`) consults
-// `payloadSnapshot.journaled`, so the journal MUST live there, not in
-// `metadata`. Each step deep-merges into the journaled sub-object — a plain
-// top-level `payload_snapshot || {journaled: patch}` would replace the whole
-// journaled object and drop earlier steps' IDs (e.g. step 2 erasing step 1's
-// fileUploadId/uploadUrl), defeating recovery.
+// Deep-merges recovery facts into payload_snapshot.journaled so successive
+// measurement-sample steps retain previously recorded registry identities.
 export async function appendSubmissionJournal(
   ctx: OrgContext,
   id: string,

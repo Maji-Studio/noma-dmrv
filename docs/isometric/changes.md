@@ -1,5 +1,13 @@
 # Isometric Docs Change Log
 
+## 2026-10-13: Reactor time-series upload retired
+
+The reactor time-series upload pipeline was removed in issue #987. The approved
+MVP retains the original pressure CSV on each production run and needs no
+registry sensor registration or bulk time-series upload. ADR 0006 is retired;
+the full pipeline can be restored from `archive/reactor-telemetry-upload`
+(staging commit `5b7a252c2`).
+
 ## 2026-10-13: Lab sample entry warnings and archived batches
 
 - Writing a lab sample (UI or API) returns non-blocking warnings that mirror
@@ -325,9 +333,9 @@
   Before any submit-time Source mirroring can mutate Isometric, noma persists
   the sticky marker under the same Removal and artifact locks, so recovery
   stays fail-closed throughout the pre-ledger external-write window.
-- The legacy telemetry draft claim rechecks that its Removal still exists in
-  the active organization after taking the shared artifact lock. When discard
-  wins the race, telemetry creates no ledger row and performs no registry work.
+- `claimSubmissionDraft` rechecks the Removal under the artifact lock. When
+  discard wins the race, the claim creates no ledger row and performs no
+  registry work (`tests/certification-submissions.test.ts`).
 
 ## 2026-08-16 (whole-batch production-claim concurrency hardening)
 
@@ -841,9 +849,8 @@ applied in Q2 belongs to the Q2 GHG Statement.
   `fn/certification/removal-reporting-window.ts`); `buildCreateGhgEntryRequest` now takes
   an explicit `reportingWindow` instead of the production aggregation. Fails
   closed on an empty lineage list — no fallback to production end anywhere.
-- **`measured_at` (durability measurement samples) and the sensor-telemetry
-  window keep production-run semantics** — `agg.latestEndTime` still feeds
-  them; only the GHG-entry dates, the semantic hash, and the local
+- **`measured_at` (durability measurement samples) keeps production-run
+  semantics** — `agg.latestEndTime` still feeds it; only the GHG-entry dates, the semantic hash, and the local
   `certifier_removals.startedOn/completedOn` stamp moved.
 - **Hash-covered ⇒ supersede:** the new `completedOn` is part of the semantic
   payload hash, so resubmitting an already-submitted removal creates a new

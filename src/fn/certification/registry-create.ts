@@ -22,8 +22,7 @@ import { appendSyncEventBestEffort, ISOMETRIC_PROVIDER } from "./shared";
 //
 // Lives in fn/ (not lib/) because it composes the isometric client calls with
 // data-access ledger/sync-event writes, which data-access must not import.
-// Sources mirroring (signed-URL refresh shape) and telemetry (ADR 0006
-// journaled-step recovery) stay on their own shapes by decision — see
+// Sources mirroring keeps its own signed-URL refresh shape by decision — see
 // docs/archive/plans/2026-06-10-certification-reliability-track.md, Phase 2.
 
 // Registry lookup outcome. "multiple" covers lookups that are not

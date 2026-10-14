@@ -57,7 +57,7 @@ bound); these are the decisions it deliberately did not make.
 
 ### Grouped cert-gap counts vs missing-field counts (`certification/gap-count-wording`)
 
-- One grouped "cert gap" can contain several missing fields (e.g. telemetry +
+- One grouped "cert gap" can contain several missing fields (e.g. readings file +
   three photo roles). The counts are consistent across surfaces, but the
   wording never says "1 gap group · 4 missing fields".
 - **Resolve via:** pick one convention (group count with expanded field list,

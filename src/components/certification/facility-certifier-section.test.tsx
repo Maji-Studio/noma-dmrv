@@ -294,5 +294,6 @@ describe("FacilityCertifierSection", () => {
 
     expect(markup).not.toContain(">Edit<");
     expect(markup).toContain("prj_test");
+    expect(markup).toContain("Not set. Add the Isometric facility ID to register production batches.");
   });
 });

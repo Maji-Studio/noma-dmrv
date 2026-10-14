@@ -111,24 +111,11 @@ inside Removal deletion. Drift is surfaced for operator review. Both
 Storage Location and Biochar Application synchronization follow the configured
 Isometric environment.
 
-## Telemetry operations
-
-| Method and path | Status | Use | Current call site |
-|---|---|---|---|
-| `GET /sensors` | dark | Reconcile sensor by stable reference | `src/lib/isometric/sensors.ts` → `findSensorByReference`; consumer in `src/data-access/certifier-sensors.ts` |
-| `POST /sensors` | dark | Create missing sensor mapping | `src/lib/isometric/sensors.ts` → `createSensor`; consumer in `src/data-access/certifier-sensors.ts` |
-| `POST /file-uploads` | dark | Start Parquet upload | `src/fn/certification/submit-telemetry.ts` |
-| `POST /data-upload-submissions` | dark | Submit the uploaded reactor time series | `src/fn/certification/submit-telemetry.ts` → `postDataUploadSubmission` |
-| `GET /data-upload-submissions/{id}` | dark | Refresh/reconcile processing status | `src/fn/certification/submit-telemetry.ts` → `refreshStatus` |
-
-These operations are wired in server code. The application has no rendered
-Telemetry panel, so operators cannot currently invoke the pipeline through the
-UI.
-
 ## Present in generated types but not wired
 
 The following operation families have no current application call site:
 
+- reactor sensors, file uploads, and bulk time-series submissions;
 - organization identity;
 - monitoring requirements and MonitoringSubmissions;
 - storage units;
@@ -157,7 +144,7 @@ parallel to `certify.d.ts`.
 
    ```bash
    rg -n 'client\.(get|post|patch|delete)|client\.paginate(All)?|findRegistryRecord' \
-     src/lib/isometric src/fn/certification/submit-telemetry.ts
+     src/lib/isometric src/fn/certification
    ```
 
 4. For each claimed wired operation, cite both the HTTP wrapper/direct call and

@@ -11,8 +11,8 @@
  *
  * Strategy: pre-seed `certifier_projects` (and a credit batch +
  * submission for test 2) directly via Drizzle, then drive the UI
- * assertions. The actual link/edit dialog is exercised by
- * `tests/isometric-mapping-lock.test.ts` (unit) and
+ * assertions. Mapping locks, template guards, and artifact anchor re-checks are covered by
+ * `tests/certification-submissions.test.ts` (database-backed), and live reads by
  * `tests/isometric-sandbox-health.integration.test.ts` (live API).
  *
  * `loadFacilityCertifierMapping` always reads from Isometric

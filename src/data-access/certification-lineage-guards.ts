@@ -28,6 +28,7 @@ import {
   type CertificationArtifactLock,
 } from "@/lib/certification/submission-lock";
 import { SafeError } from "@/lib/errors";
+import { REMOVAL_SCOPED_SUBMISSION_TYPES } from "@/lib/isometric/utils/constants";
 import { and, eq, inArray, or, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { requireOrgScope } from "./utils";
@@ -41,8 +42,6 @@ export interface CertifiedLineageTarget {
   entityType: CertifiedLineageEntityType;
   entityId: string;
 }
-
-const REMOVAL_SCOPED_SUBMISSION_TYPES = ["removal", "dataUpload"] as const;
 
 const removalSubmission = alias(
   certificationSubmissions,

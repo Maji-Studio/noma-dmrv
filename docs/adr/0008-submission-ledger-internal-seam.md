@@ -3,7 +3,8 @@
 > **Current status: Accepted and implemented** (reviewed 2026-07-29).
 > `claimSubmissionDraft` lives in
 > `src/data-access/certification-submissions.ts`, and its lock, concurrency,
-> resume, and in-lock re-resolution behavior is covered by the DB-backed
+> resume, template guards, artifact anchor re-checks, and in-lock re-resolution
+> behavior is covered by the DB-backed
 > `tests/certification-submissions.test.ts` suite. The seam remains internal to
 > data access; no port or in-memory adapter was added.
 >
@@ -43,7 +44,7 @@ in-memory ledger adapter.
 - The module is tested **DB-backed against real Postgres** via the existing
   vitest harness (`tests/setup.ts` + `.env.test` `DATABASE_URL`), in the
   per-run fixture style of `tests/applications-mutations.test.ts` /
-  `tests/isometric-mapping-lock.test.ts`.
+  `tests/certification-submissions.test.ts`.
 - For callers, the function itself is the seam: pipeline tests stub
   `claimSubmissionDraft` (a three-variant outcome union) and the hand-rolled
   in-memory ledger fakes are retired, not formalized.

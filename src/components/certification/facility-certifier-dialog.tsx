@@ -124,7 +124,7 @@ export function FacilityCertifierForm({
 
   // When the project changes, clear project-scoped registry identifiers and
   // reset the share acknowledgment. A stale template or facility id from the
-  // previous Isometric project would fail validation or send telemetry to the
+  // previous Isometric project would fail validation or register production batches at the
   // wrong facility, and the ack must be re-confirmed for the new project.
   const handleProjectChange = (value: string | undefined) => {
     const projectId = value ?? "";
@@ -311,7 +311,7 @@ export function FacilityCertifierForm({
             id="externalFacilityId"
             label="Isometric facility ID"
             error={errors.externalFacilityId?.message}
-            hint="Needed to register production batches and submit reactor telemetry. Create the facility in Isometric Certify, then paste its fcl_… ID here."
+            hint="Needed to register production batches. Create the facility in Isometric Certify, then paste its fcl_… ID here."
           >
             <FormInput
               id="externalFacilityId"

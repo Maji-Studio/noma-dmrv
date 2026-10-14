@@ -234,9 +234,8 @@ not a requirement stated verbatim by Isometric Biochar Protocol v1.1. The
 project's approved monitoring method, PDD, or verifier instructions may define
 a different evidence grain or require a separate Certify delivery route.
 
-Legacy telemetry import and registry submission modules remain in the codebase
-for historical experiments. They are not called by the operator readings-file
-upload.
+The legacy row importer and `production_run_readings` remain separate from
+the operator readings-file upload.
 
 ## CORS (deployed buckets)
 

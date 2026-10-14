@@ -227,8 +227,8 @@ export function aggregateProductionRuns(
   let latestEndTime: Date | null = null;
 
   for (const run of runs) {
-    // A run reaching aggregation must be closed — its window feeds the telemetry
-    // period and emission accounting. An open run (NULL end) is a data error
+    // A run reaching aggregation must be closed — its window feeds emission
+    // accounting. An open run (NULL end) is a data error
     // here; fail loudly naming the run rather than substitute a time (#259).
     if (run.endTime == null) {
       throw new SafeError(

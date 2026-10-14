@@ -83,7 +83,7 @@ export async function getProductionRunReadingsImportContext(
 /**
  * Insert parsed readings, skipping any row whose `(production_run_id, timestamp)`
  * already exists (#398). ON CONFLICT DO NOTHING against the unique index — never
- * an upsert: telemetry already published to Isometric must not be silently
+ * an upsert: imported readings are evidence on the run and must not be silently
  * rewritten. Returns the number of rows actually inserted alongside the count of
  * intra-file duplicate timestamps collapsed before insert, so the caller can
  * report rows already in the table ("already imported") separately from

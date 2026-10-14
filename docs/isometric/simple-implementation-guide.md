@@ -159,9 +159,7 @@ stable references where the API supports them. A local
 snapshots and hashes. Same-hash retries reuse or reconcile; changed reviewed
 inputs create a superseding version.
 
-Telemetry is the exception documented by ADR 0006: FileUpload and
-DataUploadSubmission do not expose a supplier-reference recovery path, so noma
-journals returned step IDs into the submission snapshot.
+The raw pressure CSV stays on the production run; there is no reactor time-series upload ([ADR 0006](../adr/0006-data-upload-submission-idempotency.md)).
 
 ## What to verify before changing a claim
 

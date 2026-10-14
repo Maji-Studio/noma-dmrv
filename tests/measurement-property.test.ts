@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-  decodeMeasurementProperty,
   encodeMeasurementProperty,
 } from "@/lib/isometric/utils/measurement-property";
 
@@ -12,10 +11,6 @@ describe("measurement property encoding", () => {
     } as unknown as Parameters<typeof encodeMeasurementProperty>[0]);
 
     expect(encoded).toBe("temperature|");
-    expect(decodeMeasurementProperty(encoded)).toEqual({
-      quantity_kind: "temperature",
-      qualifier: "",
-    });
   });
 
   it("omits only null qualifiers", () => {
