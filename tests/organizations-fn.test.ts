@@ -6,6 +6,8 @@ const mockAcceptInvitation = vi.fn();
 const mockSetActiveOrganization = vi.fn();
 const mockPersistLastActiveOrganization = vi.fn();
 
+vi.mock("@/db", () => ({ db: {} }));
+
 vi.mock("@/lib/auth/better-auth", () => ({
   auth: {
     api: {
@@ -54,17 +56,27 @@ vi.mock("next/headers", () => ({
   cookies: vi.fn().mockResolvedValue({ getAll: () => [] }),
 }));
 
+vi.mock("@/lib/log", () => ({
+  logger: { error: vi.fn() },
+  sanitizeErrorMessage: () => "Unexpected failure.",
+}));
+
 import {
   findMembershipRole,
   findUserIdByEmail,
+  listOrgInvitations,
+  listOrgMembers,
 } from "@/data-access/organizations";
 import {
   acceptInvitationAction,
   createOrganizationAction,
+  listInvitationsFn,
+  listMembersFn,
   setActiveOrganizationAction,
 } from "@/fn/organizations";
 import { getBetterAuthSession } from "@/lib/auth/providers/better-auth-server";
-import { requirePlatformAdmin } from "@/lib/auth/server";
+import { requireOrgContext, requireOrgRole, requirePlatformAdmin, type OrgContext } from "@/lib/auth/server";
+import { logger } from "@/lib/log";
 
 const OWNER_USER_ID = "owner-user-123";
 const VALID_INPUT = {
@@ -72,6 +84,60 @@ const VALID_INPUT = {
   slug: "example-organization",
   ownerEmail: "owner@example.com",
 };
+
+const ORG_CONTEXT: OrgContext = {
+  userId: "user-123",
+  organizationId: "organization-123",
+  orgRole: "admin",
+  isPlatformAdmin: false,
+};
+const ORG_READS = [
+  { name: "members", action: listMembersFn, read: listOrgMembers, message: "Members could not be loaded. Refresh the page and try again.", op: "organization:list-members" },
+  { name: "invitations", action: listInvitationsFn, read: listOrgInvitations, message: "Invitations could not be loaded. Refresh the page and try again.", op: "organization:list-invitations" },
+] as const;
+
+describe("organization reads", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(requireOrgRole).mockReset();
+    vi.mocked(requireOrgContext).mockResolvedValue(ORG_CONTEXT);
+    vi.mocked(listOrgMembers).mockResolvedValue([]);
+    vi.mocked(listOrgInvitations).mockResolvedValue([]);
+  });
+
+  it.each(ORG_READS)("resolves context once and passes it to the $name read", async ({ action, read }) => {
+    expect(await action()).toEqual({ success: true, data: [] });
+    expect(requireOrgContext).toHaveBeenCalledOnce();
+    expect(read).toHaveBeenCalledWith(ORG_CONTEXT);
+  });
+
+  it.each(ORG_READS)("stops the $name read when authentication fails", async ({ action, read }) => {
+    vi.mocked(requireOrgContext).mockRejectedValue(new SafeError("Select an Organization to continue."));
+    expect(await action()).toEqual({ success: false, error: "Select an Organization to continue." });
+    expect(read).not.toHaveBeenCalled();
+    expect(requireOrgRole).not.toHaveBeenCalled();
+    expect(logger.error).not.toHaveBeenCalled();
+  });
+
+  it("requires the admin role before loading invitations", async () => {
+    vi.mocked(requireOrgRole).mockImplementation(() => { throw new SafeError("Admin access is required."); });
+    expect(await listInvitationsFn()).toEqual({ success: false, error: "Admin access is required." });
+    expect(requireOrgRole).toHaveBeenCalledWith(ORG_CONTEXT, "admin");
+    expect(listOrgInvitations).not.toHaveBeenCalled();
+    expect(logger.error).not.toHaveBeenCalled();
+  });
+
+  it("keeps the member read available without an admin role check", async () => {
+    await listMembersFn();
+    expect(requireOrgRole).not.toHaveBeenCalled();
+  });
+
+  it.each(ORG_READS)("preserves $name failure copy and logs its operation", async ({ action, read, message, op }) => {
+    vi.mocked(read).mockRejectedValue(new Error("Unexpected failure."));
+    expect(await action()).toEqual({ success: false, error: message });
+    expect(logger.error).toHaveBeenCalledWith(expect.objectContaining({ op }), "organization action failed");
+  });
+});
 
 describe("createOrganizationAction", () => {
   beforeEach(() => {
