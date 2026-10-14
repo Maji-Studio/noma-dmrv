@@ -84,14 +84,18 @@ components (UI)
 `src/fn/with-action.ts` is canonical. It calls `requireOrgContext()`, injects
 `ctx`, converts distinct `ZodError` issues into readable sentences, and formats
 `ActionResult`.
-It is a preference, not a rule. Use it for new actions. Migrate an existing
-direct wrapper only when the change already rewrites that action's error
-handling (for example to carry a typed `conflict` to its form); do not sweep
-the remaining wrappers, and there is no lint rule for it. Some older entity
-modules still call `requireOrgContext()` and format `ActionResult` in their own
-try/catch; that is acceptable as long as they route unexpected failures through
-the shared safe logging and error conversion helpers rather than returning raw
-`error.message`.
+Every server action uses `withAction`; do not hand-roll
+`try { requireOrgContext() } catch` in new or existing actions. Pass the entity's
+log message and `op` via `log`, the operator-facing fallback via
+`fallbackMessage`, and a Zod prefix via `zodErrorPrefix`. Use `mapError` for
+`SafeError` subclasses needing a `field` or fixed message. Failures retain the
+wrapper's `code`, `issues` and `conflict` fields. Three kinds of catch stay:
+actions without an active org (platform admin, invitation bootstrap,
+organization switching), because `withAction` always resolves one; inner
+catches outside the action's boundary (a best-effort follow-up after a commit,
+a rollback or release, or translating a library error into a `SafeError`); and
+actions that surface a library's own error message that is not a `SafeError`
+(the Better Auth member and invitation actions in `organizations.ts`).
 
 ```typescript
 export async function createItem(input: CreateItem) {
