@@ -151,6 +151,32 @@
         "required": ["id", "name", "createdAt", "updatedAt", "customerId", "gpsLatitude", "gpsLongitude", "distanceFromFacilityKm", "distanceSource", "isDefault", "version"],
         "type": "object"
       },
+      "delivery": {
+        "additionalProperties": false,
+        "properties": {
+          "archivedAt": {"anyOf": [{"format": "date-time", "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$", "type": "string"}, {"type": "null"}], "description": "Archive event instant in UTC (RFC 3339), or null when active or archiving is unsupported."},
+          "code": {"description": "Exact human-readable code, unique within the organization.", "type": "string"},
+          "createdAt": {"description": "Creation event instant in UTC (RFC 3339).", "format": "date-time", "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$", "type": "string"},
+          "deliveredAt": {"description": "Delivery event instant in UTC, RFC 3339.", "format": "date-time", "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$", "type": "string"},
+          "deliveredWetMassKg": {"anyOf": [{"type": "number"}, {"type": "null"}], "description": "Delivered wet product kilograms, stored to 3 decimal places; null when not recorded."},
+          "destinationCustomerLocationId": {"anyOf": [{"format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"}, {"type": "null"}], "description": "Read-only destination override identifier, UUID, or null to use the order destination."},
+          "distanceKmOverride": {"anyOf": [{"type": "number"}, {"type": "null"}], "description": "One-way distance override in kilometres; the server counts the round trip. Null uses the destination distance. Stored as 32-bit floating-point real, about 6 significant decimal digits."},
+          "distanceNote": {"anyOf": [{"type": "string"}, {"type": "null"}], "description": "Distance evidence note, or null when unspecified."},
+          "distanceSource": {"description": "Distance provenance, or null when unspecified. Documentary evidence may be stored without an override.", "enum": ["map_estimate", "manual", "document", null]},
+          "driverId": {"anyOf": [{"format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"}, {"type": "null"}], "description": "Driver identifier, UUID, or null when unspecified."},
+          "dryBiocharKg": {"anyOf": [{"type": "number"}, {"type": "null"}], "description": "Server-derived dry biochar kilograms from the stored dry mass, to 3 decimal places; null when not recorded."},
+          "facilityId": {"description": "Owning facility identifier, UUID.", "format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"},
+          "id": {"description": "Resource identifier, UUID.", "format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"},
+          "moisturePercent": {"anyOf": [{"type": "number"}, {"type": "null"}], "description": "Water as percent of wet mass, stored to 6 decimal places; null when not recorded. The recorded reading, except a split-bin delivery sent with sources, where the server stores the overall (1 minus total solids divided by wet mass) times 100, including ingredient solids."},
+          "orderId": {"description": "Delivered order identifier, UUID.", "format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"},
+          "storageLocationId": {"description": "Source product bin identifier, UUID.", "format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"},
+          "updatedAt": {"description": "Last update event instant in UTC (RFC 3339).", "format": "date-time", "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$", "type": "string"},
+          "vehicleId": {"anyOf": [{"format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"}, {"type": "null"}], "description": "Vehicle identifier, UUID, or null when unspecified."},
+          "version": {"description": "Positive integer row version for concurrency checks.", "exclusiveMinimum": 0, "maximum": 9007199254740991, "type": "integer"}
+        },
+        "required": ["id", "code", "archivedAt", "createdAt", "updatedAt", "version", "facilityId", "orderId", "storageLocationId", "deliveredAt", "deliveredWetMassKg", "moisturePercent", "dryBiocharKg", "driverId", "vehicleId", "distanceKmOverride", "distanceSource", "distanceNote", "destinationCustomerLocationId"],
+        "type": "object"
+      },
       "driver": {
         "additionalProperties": false,
         "properties": {
@@ -312,7 +338,7 @@
           },
           "organization": {"additionalProperties": false, "description": "Organization bound to the authenticated credential.", "properties": {"id": {"description": "Credential-bound organization identifier, opaque string.", "type": "string"}, "name": {"description": "Organization display name, plain text.", "type": "string"}}, "required": ["id", "name"], "type": "object"},
           "role": {"description": "Live organization role: owner owns the organization; admin administers it.", "enum": ["owner", "admin"], "type": "string"},
-          "scopes": {"description": "Credential scopes intersected with the live membership role.", "items": {"description": "Per-resource permission: read lists and retrieves, write creates and updates, delete removes; no wildcards. Additional resource scopes may be introduced in v1.", "type": "string", "x-extensible-enum": ["production-runs:read", "production-runs:write", "production-runs:delete", "reactors:read", "biochar-products:read", "biochar-products:write", "formulations:read", "feedstocks:read", "feedstocks:write", "feedstocks:delete", "facilities:read", "suppliers:read", "feedstock-types:read", "storage-locations:read", "vehicles:read", "drivers:read", "deliveries:write", "customers:read", "orders:read", "orders:write", "orders:delete", "lab-samples:read", "lab-samples:write", "lab-samples:delete", "credit-batches:read"]}, "type": "array"}
+          "scopes": {"description": "Credential scopes intersected with the live membership role.", "items": {"description": "Per-resource permission: read lists and retrieves, write creates and updates, delete removes; no wildcards. Additional resource scopes may be introduced in v1.", "type": "string", "x-extensible-enum": ["production-runs:read", "production-runs:write", "production-runs:delete", "reactors:read", "biochar-products:read", "biochar-products:write", "formulations:read", "feedstocks:read", "feedstocks:write", "feedstocks:delete", "facilities:read", "suppliers:read", "feedstock-types:read", "storage-locations:read", "vehicles:read", "drivers:read", "deliveries:read", "deliveries:write", "customers:read", "orders:read", "orders:write", "orders:delete", "lab-samples:read", "lab-samples:write", "lab-samples:delete", "credit-batches:read"]}, "type": "array"}
         },
         "required": ["organization", "facilities", "role", "scopes", "credential"],
         "type": "object"
@@ -354,6 +380,7 @@
         "properties": {
           "archivedAt": {"anyOf": [{"format": "date-time", "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$", "type": "string"}, {"type": "null"}], "description": "Archive instant in UTC, RFC 3339, or null for a live bin."},
           "code": {"description": "Human-readable bin code.", "type": "string"},
+          "drawOrder": {"description": "Without sources, a split bin draws in this order. Null for a mix bin. Sub-bins remain listed oldest first.", "enum": ["oldest_first", "newest_first", null]},
           "facilityId": {"description": "Owning facility identifier, UUID.", "format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"},
           "formulationId": {"anyOf": [{"format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"}, {"type": "null"}], "description": "Formulation claimed by a product bin, UUID; null for a biochar bin or an unclaimed product bin."},
           "status": {"description": "Whether the saved facts resolve the bin stock.", "enum": ["resolved", "unresolved"], "type": "string"},
@@ -400,7 +427,7 @@
           "type": {"description": "Output material lane of the bin.", "enum": ["biochar_bin", "product_bin"], "type": "string"},
           "unresolvedReason": {"anyOf": [{"type": "string"}, {"type": "null"}], "description": "Fixed explanation when stock cannot be resolved, or null when resolved."}
         },
-        "required": ["storageLocationId", "code", "type", "facilityId", "archivedAt", "formulationId", "stockMode", "status", "unresolvedReason", "totals", "subBins"],
+        "required": ["storageLocationId", "code", "type", "facilityId", "archivedAt", "formulationId", "stockMode", "drawOrder", "status", "unresolvedReason", "totals", "subBins"],
         "type": "object"
       },
       "output_stock_movement": {
@@ -790,6 +817,42 @@
           "500": {"$ref": "#/components/responses/Problem500"}
         },
         "x-required-scope": "customers:read"
+      }
+    },
+    "/deliveries": {
+      "get": {
+        "description": "List a page ordered newest first by (createdAt, id). Cursors bind organization and filters; no totals or include. Lookup lists exclude archived rows where supported. Read stored outbound product delivery fields by UUID or exact code. This is delivery against a customer order, not feedstock intake. Lists hide archived deliveries; direct reads retain them. Drawn products are available through output stock movements. Delivered times are UTC instants. Required scope: deliveries:read.",
+        "operationId": "find_deliveries",
+        "parameters": [
+          {"description": "Page size as a decimal integer string; defaults to 50, maximum 200.", "in": "query", "name": "limit", "required": false, "schema": {"default": 50, "description": "Page size as a decimal integer string; defaults to 50, maximum 200.", "maximum": 200, "minimum": 1, "type": "integer"}},
+          {"description": "Opaque base64url continuation cursor bound to organization, resource and filters. Use only nextCursor from the same list and filters.", "in": "query", "name": "cursor", "required": false, "schema": {"description": "Opaque base64url continuation cursor bound to organization, resource and filters. Use only nextCursor from the same list and filters.", "maxLength": 4096, "minLength": 1, "pattern": "^[A-Za-z0-9_-]+$", "type": "string"}},
+          {"description": "Shipping facility filter, UUID.", "in": "query", "name": "facilityId", "required": false, "schema": {"description": "Shipping facility filter, UUID.", "format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"}},
+          {"description": "Exact human-readable resource code.", "in": "query", "name": "code", "required": false, "schema": {"description": "Exact human-readable resource code.", "maxLength": 255, "pattern": "^[^\\x00-\\x1f\\x7f-\\x9f]*$(?![\\s\\S])", "type": "string"}},
+          {"description": "Order filter, UUID.", "in": "query", "name": "orderId", "required": false, "schema": {"description": "Order filter, UUID.", "format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"}},
+          {"description": "Source product bin filter, UUID.", "in": "query", "name": "storageLocationId", "required": false, "schema": {"description": "Source product bin filter, UUID.", "format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"}},
+          {"description": "Case-insensitive literal prefix search on delivery code.", "in": "query", "name": "q", "required": false, "schema": {"description": "Case-insensitive literal prefix search on delivery code.", "maxLength": 255, "pattern": "^[^\\x00-\\x1f\\x7f-\\x9f]*$(?![\\s\\S])", "type": "string"}},
+          {"description": "Only deliveries at or after this RFC 3339 instant with an explicit offset; encode + as %2B or use Z.", "in": "query", "name": "deliveredFrom", "required": false, "schema": {"description": "Only deliveries at or after this RFC 3339 instant with an explicit offset; encode + as %2B or use Z.", "format": "date-time", "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$", "type": "string"}},
+          {"description": "Only deliveries before this RFC 3339 instant with an explicit offset; encode + as %2B or use Z.", "in": "query", "name": "deliveredBefore", "required": false, "schema": {"description": "Only deliveries before this RFC 3339 instant with an explicit offset; encode + as %2B or use Z.", "format": "date-time", "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$", "type": "string"}}
+        ],
+        "responses": {
+          "200": {"content": {"application/json": {"schema": {"additionalProperties": false, "properties": {"data": {"description": "Page of resources, newest first by (createdAt, id).", "items": {"$ref": "#/components/schemas/delivery"}, "type": "array"}, "nextCursor": {"anyOf": [{"type": "string"}, {"type": "null"}], "description": "Opaque cursor for the next page, or null at the end; keep filters unchanged."}}, "required": ["data", "nextCursor"], "type": "object"}}}, "description": "Resource page.", "headers": {"RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}},
+          "400": {"$ref": "#/components/responses/Problem400"},
+          "401": {"$ref": "#/components/responses/Problem401"},
+          "403": {"$ref": "#/components/responses/Problem403"},
+          "404": {"$ref": "#/components/responses/Problem404"},
+          "429": {"$ref": "#/components/responses/Problem429"},
+          "500": {"$ref": "#/components/responses/Problem500"}
+        },
+        "x-required-scope": "deliveries:read"
+      }
+    },
+    "/deliveries/{idOrCode}": {
+      "get": {
+        "description": "Read stored outbound product delivery fields by UUID or exact code. This is delivery against a customer order, not feedstock intake. Lists hide archived deliveries; direct reads retain them. Drawn products are available through output stock movements. Delivered times are UTC instants. Required scope: deliveries:read.",
+        "operationId": "get_delivery",
+        "parameters": [{"description": "Resource UUID or exact human-readable code.", "in": "path", "name": "idOrCode", "required": true, "schema": {"type": "string"}}],
+        "responses": {"200": {"content": {"application/json": {"schema": {"additionalProperties": false, "properties": {"data": {"$ref": "#/components/schemas/delivery", "description": "Resource representation."}}, "required": ["data"], "type": "object"}}}, "description": "Resource representation.", "headers": {"ETag": {"$ref": "#/components/headers/ETag"}, "RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}}, "400": {"$ref": "#/components/responses/Problem400"}, "401": {"$ref": "#/components/responses/Problem401"}, "403": {"$ref": "#/components/responses/Problem403"}, "404": {"$ref": "#/components/responses/Problem404"}, "429": {"$ref": "#/components/responses/Problem429"}, "500": {"$ref": "#/components/responses/Problem500"}},
+        "x-required-scope": "deliveries:read"
       }
     },
     "/drivers": {
@@ -1803,7 +1866,7 @@
     },
     "/storage-locations/{idOrCode}/stock": {
       "get": {
-        "description": "Read current stock in one biochar or product bin by UUID or exact code, optionally narrowed by facilityId. Archived bins remain readable; a feedstock bin answers 422. Unresolved stock answers 200 with a fixed explanation and no figures. Kilograms publish to 3 decimal places and percent to 2. A split-bin loss names returned layerIds in sources; a mix-bin loss takes no sources. The stock ETag says whether published stock changed between two reads; it is not a reservation. A loss's optimistic check stays the dry run's basisFingerprint. Required scope: biochar-products:read.",
+        "description": "Read current stock in one biochar or product bin by UUID or exact code, optionally narrowed by facilityId. Archived bins remain readable; a feedstock bin answers 422. Unresolved stock answers 200 with a fixed explanation and no figures. Without sources, a split bin draws in drawOrder; mix bins return null. Sub-bins remain listed oldest first. Kilograms publish to 3 decimal places and percent to 2. A split-bin loss names returned layerIds in sources; a mix-bin loss takes no sources. The stock ETag says whether published stock changed between two reads; it is not a reservation. A loss's optimistic check stays the dry run's basisFingerprint. Required scope: biochar-products:read.",
         "operationId": "get_bin_stock",
         "parameters": [{"description": "Resource UUID or exact human-readable code.", "in": "path", "name": "idOrCode", "required": true, "schema": {"type": "string"}}, {"description": "Receiving facility filter, UUID.", "in": "query", "name": "facilityId", "required": false, "schema": {"description": "Receiving facility filter, UUID.", "format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"}}],
         "responses": {

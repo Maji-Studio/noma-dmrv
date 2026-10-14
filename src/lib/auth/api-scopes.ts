@@ -6,7 +6,7 @@ export const API_SCOPES = [
   "feedstocks:read", "feedstocks:write", "feedstocks:delete",
   "facilities:read", "suppliers:read", "feedstock-types:read",
   "storage-locations:read", "vehicles:read", "drivers:read",
-  "deliveries:write",
+  "deliveries:read", "deliveries:write",
   "customers:read", "orders:read", "orders:write", "orders:delete",
   "lab-samples:read", "lab-samples:write", "lab-samples:delete", "credit-batches:read",
 ] as const;

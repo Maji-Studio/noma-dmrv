@@ -44,7 +44,8 @@ import { orderRepresentationSchema } from "@/lib/representations/orders";
 import { orderBalanceRepresentationSchema } from "@/lib/representations/order-balance";
 import { customerLocationRepresentationSchema } from "@/lib/representations/customer-locations";
 
-type ResourcePath = keyof typeof resourceQueries;
+// Delivery tools are introduced separately from the REST reads.
+type ResourcePath = Exclude<keyof typeof resourceQueries, "deliveries">;
 
 const labels: Record<ResourcePath, { singular: string; plural: string }> = {
   "production-runs": { singular: "production run", plural: "production runs" },

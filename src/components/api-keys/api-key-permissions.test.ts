@@ -35,7 +35,8 @@ it("defaults customer and order reads on and order mutations off", () => {
 });
 
 it("keeps delivery writes opt-in and offers no delivery deletion", () => {
-  expect(API_PERMISSION_ROWS).toContainEqual({ entity: "deliveries", label: "Deliveries", scopes: ["deliveries:write"] });
+  expect(API_PERMISSION_ROWS).toContainEqual({ entity: "deliveries", label: "Deliveries", scopes: ["deliveries:read", "deliveries:write"] });
+  expect(API_KEY_DEFAULT_SCOPES).toContain("deliveries:read");
   expect(API_KEY_DEFAULT_SCOPES).not.toContain("deliveries:write");
   expect(permissionSummary(["deliveries:write"])).toBe("Deliveries: Write");
 });

@@ -66,3 +66,9 @@ it("exposes order writes with a separate delete scope", () => {
   expect(getApiMethodEntry("/api/v1/orders")).toMatchObject({ methods: ["GET", "HEAD", "OPTIONS", "POST"], scopes: ["orders:read", "orders:write"] });
   expect(getApiMethodEntry("/api/v1/orders/OR-1")).toMatchObject({ methods: ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH"], scopes: ["orders:read", "orders:write", "orders:delete"] });
 });
+
+it("stages delivery reads without POST, PATCH or DELETE", () => {
+  for (const path of ["/api/v1/deliveries", "/api/v1/deliveries/DL-1"]) {
+    expect(getApiMethodEntry(path)).toMatchObject({ methods: ["GET", "HEAD", "OPTIONS"], scopes: ["deliveries:read"] });
+  }
+});

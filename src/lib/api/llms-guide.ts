@@ -53,6 +53,13 @@ export const orderGuide = `## Customers and orders
 - Find product bins through GET /storage-locations?type=product_bin&formulationId=<UUID>, optionally with facilityId. formulationId is null until a product bin is claimed, and on other bin types.
 `;
 
+export const deliveryGuide = `## Deliveries
+
+- GET /deliveries and /deliveries/{idOrCode} require deliveries:read. ${readDescriptions.deliveries}
+- Read GET /storage-locations/{idOrCode}/stock-movements with biochar-products:read for the drawn products. Filter the returned rows by deliveryId.
+- Bin stock exposes drawOrder: without sources, a split bin draws oldest_first or newest_first; mix bins return null. The sub-bin list stays oldest first.
+`;
+
 export const llmsGuide = `# noma data-entry API v1
 
 Public contract: /api/v1/openapi.json
@@ -62,6 +69,7 @@ ${domainGuide}
 ${biocharStockGuide}
 ${labSampleGuide}
 ${orderGuide}
+${deliveryGuide}
 ## REST requests
 
 - Authenticate private routes with Authorization: Bearer <key> only. Keys start with ${API_KEY_LIVE_PREFIX} or ${API_KEY_TEST_PREFIX}. Cookies and x-api-key do not authenticate.

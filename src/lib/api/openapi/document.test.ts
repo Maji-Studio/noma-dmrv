@@ -53,7 +53,7 @@ it("covers every exported v1 route method, with unique operation ids", () => {
   expect(document.paths["/feedstocks/{idOrCode}"].delete.operationId).toBe("delete_feedstock");
   expect(document.paths["/me"].get.operationId).toBe("whoami");
   expect(document.paths["/suppliers/{idOrCode}/locations"].get.operationId).toBe("find_supplier_locations");
-  for (const [path, singular] of [["feedstocks", "feedstock"], ["facilities", "facility"], ["suppliers", "supplier"], ["customers", "customer"], ["orders", "order"], ["feedstock-types", "feedstock_type"], ["storage-locations", "storage_location"], ["vehicles", "vehicle"], ["drivers", "driver"]]) {
+  for (const [path, singular] of [["feedstocks", "feedstock"], ["facilities", "facility"], ["suppliers", "supplier"], ["customers", "customer"], ["orders", "order"], ["deliveries", "delivery"], ["feedstock-types", "feedstock_type"], ["storage-locations", "storage_location"], ["vehicles", "vehicle"], ["drivers", "driver"]]) {
     expect(document.paths[`/${path}`].get.operationId).toBe(`find_${path.replaceAll("-", "_")}`);
     expect(document.paths[`/${path}/{idOrCode}`].get.operationId).toBe(`get_${singular}`);
   }
@@ -95,7 +95,7 @@ it("publishes business dates as date, and preserves operation input types and co
 it("publishes pagination and search bounds on every list route", () => {
   const lists = Object.values(document.paths).map((methods) => methods.get)
     .filter((operation) => operation?.operationId.startsWith("find_"));
-  expect(lists).toHaveLength(18);
+  expect(lists).toHaveLength(19);
   for (const operation of lists) {
     const parameters = operation.parameters as { name: string; in: string; required: boolean; schema: JsonSchema }[];
     const query = Object.fromEntries(parameters.filter((parameter) => parameter.in === "query").map((parameter) => [parameter.name, parameter]));
@@ -406,4 +406,14 @@ it("publishes order write bodies, scopes, preconditions and complete problem res
     expect(actual).toEqual(expected);
   }
   expect(bodyOf("delete")).toEqual({ type: "object", properties: {}, additionalProperties: false });
+});
+
+it("publishes delivery reads, errors and a strong ETag without writes", () => {
+  for (const [path, operationId] of [["/deliveries", "find_deliveries"], ["/deliveries/{idOrCode}", "get_delivery"]]) {
+    expect(Object.keys(document.paths[path])).toEqual(["get"]);
+    expect(document.paths[path].get).toMatchObject({ operationId, "x-required-scope": "deliveries:read" });
+    for (const status of ["400", "401", "403", "404", "429", "500"]) expect(document.paths[path].get.responses).toHaveProperty(status);
+  }
+  expect(document.paths["/deliveries/{idOrCode}"].get.responses["200"]).toMatchObject({ headers: { ETag: { $ref: "#/components/headers/ETag" } } });
+  expect(document.components.schemas.output_bin_stock.required).toContain("drawOrder");
 });

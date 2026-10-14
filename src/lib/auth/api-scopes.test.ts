@@ -36,7 +36,8 @@ it("allows customer and order scopes without implying reads or deletes from an o
 });
 
 it("offers delivery writes only by explicit scope, with no delete capability", () => {
-  expect(scopesFromPermissions({ deliveries: ["read", "write", "delete"] })).toEqual(["deliveries:write"]);
+  expect(scopesFromPermissions({ deliveries: ["read", "write", "delete"] })).toEqual(["deliveries:read", "deliveries:write"]);
+  expect(hasScope({ scopes: ["deliveries:write"] }, "deliveries:read")).toBe(false);
   expect(hasRoleAndScope({ orgRole: "admin", scopes: [] }, "deliveries:write")).toBe(false);
   expect(hasRoleAndScope({ orgRole: "admin", scopes: ["deliveries:write"] }, "deliveries:write")).toBe(true);
   expect(hasRoleAndScope({ orgRole: "member", scopes: ["deliveries:write"] }, "deliveries:write")).toBe(false);
