@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { DELIVERY_DISTANCE_MESSAGE } from "./delivery-input";
 import {
   deliveryFormSchema,
   resolveDeliveryDistanceSource,
@@ -49,7 +50,8 @@ describe("delivery range validation copy", () => {
 
   it.each([
     ["deliveredWetMassKg", -1, "Wet mass must be at least 0.001 kg"],
-    ["distanceKmOverride", -1, "Distance must be 0 or more"],
+    ["distanceKmOverride", -1, DELIVERY_DISTANCE_MESSAGE],
+    ["distanceKmOverride", 0, DELIVERY_DISTANCE_MESSAGE],
     [
       "moistureContentPercent",
       -1,
