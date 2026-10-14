@@ -1,4 +1,3 @@
-import { env } from "@/config/env";
 import { SafeError } from "@/lib/errors";
 import { logger } from "@/lib/log";
 import type { components } from "./generated/certify";
@@ -20,7 +19,7 @@ export class IsometricApiError extends Error {
   }
 }
 
-const BASE_URLS = {
+export const ISOMETRIC_BASE_URLS = {
   sandbox: "https://api.sandbox.isometric.com/mrv/v0",
   production: "https://api.isometric.com/mrv/v0",
 } as const;
@@ -31,7 +30,7 @@ const BASE_DELAY_MS = 500;
 const MAX_DELAY_MS = 8000;
 const REQUEST_TIMEOUT_MS = 30_000;
 const MAX_RETRY_WAIT_MS = 30_000;
-// Certify's list endpoints cap `first` at 50 (mrv.openapi.json).
+// Certify's list endpoints cap `first` at 50 (Certify OpenAPI).
 const MAX_PAGE_SIZE = 50;
 // 10,000 records at the maximum page size: a list read past this is a
 // runaway walk, not an organization's real registry footprint.
@@ -41,12 +40,6 @@ export interface IsometricRequestOptions {
   query?: Record<string, string | number | boolean | undefined | null>;
   body?: unknown;
   signal?: AbortSignal;
-  headers?: Record<string, string>;
-  /**
-   * Opt in to retrying non-idempotent methods (POST/PATCH). Off by default to
-   * prevent duplicate writes on transient retries.
-   */
-  allowUnsafeRetries?: boolean;
 }
 
 const IDEMPOTENT_METHODS = new Set(["GET", "HEAD", "OPTIONS", "PUT", "DELETE"]);
@@ -55,21 +48,10 @@ function isIdempotentMethod(method: string): boolean {
   return IDEMPOTENT_METHODS.has(method);
 }
 
-interface IsometricCredentials {
+export interface IsometricCredentials {
   clientSecret: string;
   accessToken: string;
   baseUrl: string;
-}
-
-function getCredentialsFromEnv(): IsometricCredentials | null {
-  if (!env.ISOMETRIC_CLIENT_SECRET || !env.ISOMETRIC_ACCESS_TOKEN) {
-    return null;
-  }
-  return {
-    clientSecret: env.ISOMETRIC_CLIENT_SECRET,
-    accessToken: env.ISOMETRIC_ACCESS_TOKEN,
-    baseUrl: BASE_URLS[env.ISOMETRIC_ENVIRONMENT],
-  };
 }
 
 function buildUrl(
@@ -141,7 +123,6 @@ async function isometricRequest<T = unknown>(
     Accept: "application/json",
     "X-Client-Secret": clientSecret,
     Authorization: `Bearer ${accessToken}`,
-    ...options.headers,
   };
 
   const requestBody =
@@ -150,7 +131,7 @@ async function isometricRequest<T = unknown>(
       : typeof options.body === "string"
         ? options.body
         : JSON.stringify(options.body);
-  if (requestBody !== undefined && !headers["Content-Type"]) {
+  if (requestBody !== undefined) {
     headers["Content-Type"] = "application/json";
   }
 
@@ -203,8 +184,7 @@ async function isometricRequest<T = unknown>(
           "network"
         );
       }
-      const canRetry =
-        isIdempotentMethod(method) || options.allowUnsafeRetries === true;
+      const canRetry = isIdempotentMethod(method);
       if (!canRetry || attempt === MAX_ATTEMPTS) {
         log.error(
           { method, path, attempt, code: "network", duration_ms: Date.now() - startedAt },
@@ -251,8 +231,7 @@ async function isometricRequest<T = unknown>(
       }
     }
 
-    const canRetryMethod =
-      isIdempotentMethod(method) || options.allowUnsafeRetries === true;
+    const canRetryMethod = isIdempotentMethod(method);
     const shouldRetry =
       canRetryMethod &&
       RETRYABLE_STATUS.has(response.status) &&
@@ -393,11 +372,6 @@ async function paginateAll<T>(
 type IsometricMethod = "GET" | "POST" | "PATCH" | "DELETE" | "PUT";
 
 export interface IsometricClient {
-  request: <T = unknown>(
-    method: IsometricMethod,
-    path: string,
-    options?: IsometricRequestOptions
-  ) => Promise<T>;
   get: <T = unknown>(path: string, options?: IsometricRequestOptions) => Promise<T>;
   post: <T = unknown>(
     path: string,
@@ -422,7 +396,6 @@ export function createIsometricClientFromTransport(
   request: IsometricTransport
 ): IsometricClient {
   return {
-    request: request as IsometricClient["request"],
     get: <T = unknown>(path: string, options?: IsometricRequestOptions) =>
       request<T>("GET", path, options),
     post: <T = unknown>(
@@ -444,7 +417,7 @@ export function createIsometricClientFromTransport(
   };
 }
 
-function createIsometricClient(
+export function createIsometricClient(
   credentials: IsometricCredentials | null
 ): IsometricClient {
   return createIsometricClientFromTransport(<T>(
@@ -454,34 +427,8 @@ function createIsometricClient(
   ) => isometricRequest<T>(credentials, method, path, options));
 }
 
-export async function getIsometricClientForOrg(
-  organizationId: string
-): Promise<IsometricClient> {
-  const { getDecryptedCertifierCredentials } = await import(
-    "@/data-access/certifier-credentials"
-  );
-  const credentials = await getDecryptedCertifierCredentials(
-    organizationId,
-    "isometric"
-  );
-  return createIsometricClient(
-    credentials
-      ? { ...credentials, baseUrl: BASE_URLS[env.ISOMETRIC_ENVIRONMENT] }
-      : null
-  );
-}
+// Preserve the existing application import surface while credential resolution
+// remains separate from the configuration-free HTTP transport.
+export { getIsometricClientForOrg } from "./client-org";
 
-/**
- * Environment credential escape hatch for scripts and dedicated health checks.
- * Application code must use getIsometricClientForOrg instead.
- */
-export function getIsometricClientFromEnv(): IsometricClient {
-  return createIsometricClient(getCredentialsFromEnv());
-}
-
-export type IsometricEnvironment = (typeof BASE_URLS) extends Record<
-  infer K,
-  string
->
-  ? K
-  : never;
+export type IsometricEnvironment = keyof typeof ISOMETRIC_BASE_URLS;

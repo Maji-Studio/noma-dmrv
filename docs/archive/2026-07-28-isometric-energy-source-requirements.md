@@ -89,9 +89,9 @@ Source: [Isometric Certify — Build an LCA, “Data checks”](https://docs.iso
 
 The generated API contract is consistent with that distinction:
 
-- `CreateDatapointRequest.source_ids` is required but may be an empty array (`src/lib/isometric/generated/mrv.openapi.json:869-947`), allowing draft Datapoints without evidence.
-- `SubmitGhgStatementRequest` contains only `ghg_statement_report_url` (`src/lib/isometric/generated/mrv.openapi.json:6037-6046`).
-- `POST /ghg_statements/{id}/submit` exposes no issue-acknowledgement field (`src/lib/isometric/generated/mrv.openapi.json:8864-8925`).
+- `CreateDatapointRequest.source_ids` is required but may be an empty array ([historical Certify OpenAPI snapshot](https://github.com/Maji-Studio/noma-dmrv/blob/7fa045d9685d0031dd37d7f9ea06b8c0cb160c49/src/lib/isometric/generated/mrv.openapi.json#L869-L947)), allowing draft Datapoints without evidence.
+- `SubmitGhgStatementRequest` contains only `ghg_statement_report_url` ([historical Certify OpenAPI snapshot](https://github.com/Maji-Studio/noma-dmrv/blob/7fa045d9685d0031dd37d7f9ea06b8c0cb160c49/src/lib/isometric/generated/mrv.openapi.json#L6037-L6046)).
+- `POST /ghg_statements/{id}/submit` exposes no issue-acknowledgement field ([historical Certify OpenAPI snapshot](https://github.com/Maji-Studio/noma-dmrv/blob/7fa045d9685d0031dd37d7f9ea06b8c0cb160c49/src/lib/isometric/generated/mrv.openapi.json#L8864-L8925)).
 
 The OpenAPI shape does not prove that the server will accept every otherwise-invalid statement; no submission request was made. It does prove that open issue IDs are not passed as part of the submit request.
 

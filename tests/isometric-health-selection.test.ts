@@ -152,7 +152,8 @@ test("actual summary shell fails for every incomplete required outcome", () => {
 // validation first; no request can be made with this deliberately empty pair.
 test("coverage CLI boots in a clean CI environment and fails closed without registry credentials", () => {
   const coverage = steps.find((step) => step.id === "coverage");
-  assert.ok(coverage?.env);
+  assert.ok(coverage);
+  assert.equal(coverage.env, undefined);
   const directory = mkdtempSync(join(tmpdir(), "isometric-health-coverage-"));
   try {
     mkdirSync(join(directory, "tests/fixtures"), { recursive: true });
@@ -168,7 +169,6 @@ test("coverage CLI boots in a clean CI environment and fails closed without regi
         PATH: process.env.PATH,
         TSX_TSCONFIG_PATH: join(root, "tsconfig.json"),
         ISOMETRIC_ENVIRONMENT: "sandbox",
-        ...coverage.env,
       },
       encoding: "utf8",
       timeout: collectionTimeoutMs,

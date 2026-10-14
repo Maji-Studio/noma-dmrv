@@ -1,20 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("@/config/env", () => ({
-  env: {
-    ISOMETRIC_CLIENT_SECRET: "test-secret",
-    ISOMETRIC_ACCESS_TOKEN: "test-token",
-    ISOMETRIC_ENVIRONMENT: "sandbox",
-  },
-}));
 vi.mock("@/lib/log", () => ({
   logger: { child: () => ({ debug: vi.fn(), warn: vi.fn(), error: vi.fn() }) },
 }));
-import { getIsometricClientFromEnv, IsometricApiError } from "./client";
+import { IsometricApiError } from "./client";
+import { testIsometricClient } from "../../../tests/fixtures/isometric-client";
 
 const DEADLINE_MS = 30_000;
 const fetchMock = vi.fn<typeof fetch>();
-const client = getIsometricClientFromEnv();
+const client = testIsometricClient();
 
 // Fetch resolves when headers arrive, but the stream rejects on abort just
 // like a real fetch Response. No registry requests leave this test process.
@@ -87,7 +81,7 @@ describe("registry response body deadline", () => {
     }), { status: 200 }));
     const outcome = (method === "GET"
       ? client.get("/test")
-      : client.post("/test", {}, { allowUnsafeRetries: true }))
+      : client.post("/test", {}))
       .catch((error: unknown) => error);
     await vi.runAllTimersAsync();
     expect(await outcome).toMatchObject({ code: "network", status: 200 });
@@ -132,10 +126,10 @@ describe("registry response body deadline", () => {
     expect(fetchMock).toHaveBeenCalledOnce();
   });
 
-  it("retains Retry-After reads and explicitly opted-in unsafe retries", async () => {
+  it("retains Retry-After for idempotent reads", async () => {
     fetchMock.mockResolvedValueOnce(new Response("busy", { status: 503, headers: { "retry-after": "1" } }))
       .mockResolvedValueOnce(new Response('{"ok":true}'));
-    const outcome = client.post("/test", {}, { allowUnsafeRetries: true });
+    const outcome = client.get("/test");
     await vi.advanceTimersByTimeAsync(999);
     expect(fetchMock).toHaveBeenCalledOnce();
     await vi.advanceTimersByTimeAsync(1);
