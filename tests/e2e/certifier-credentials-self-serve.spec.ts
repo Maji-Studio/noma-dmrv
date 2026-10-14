@@ -8,6 +8,7 @@ import {
   E2E_CERTIFIER_ACCESS_TOKEN,
   E2E_CERTIFIER_CLIENT_SECRET,
   E2E_CERTIFIER_ROTATED_ACCESS_TOKEN,
+  maskedCertifierAccessToken,
 } from "./fixtures/certifier-credentials";
 import { certifierKeyInput } from "./fixtures/certifier-credentials-ui";
 import { CERTIFIER_VERIFICATION_MESSAGES } from "@/lib/certification/certifier-credentials-verification";
@@ -52,7 +53,7 @@ test.describe("Isometric credentials self-service", () => {
       // The keys live in a modal; a saved key shows only its last characters
       // and a Replace action, never an input holding the secret.
       await organization.getByRole("button", { name: "Isometric keys" }).click();
-      await expect(keys.getByText("••••4321", { exact: false })).toBeVisible();
+      await expect(keys.getByText(maskedCertifierAccessToken(E2E_CERTIFIER_ACCESS_TOKEN), { exact: false })).toBeVisible();
       await expect(keys.getByText("••••••••", { exact: true })).toBeVisible();
       await expect(keys.getByRole("button", { name: "Save and test connection" })).toHaveCount(0);
       await expect(keys.locator('input[type="password"]')).toHaveCount(0);
@@ -61,7 +62,7 @@ test.describe("Isometric credentials self-service", () => {
       await keys.getByRole("button", { name: "Replace access token", exact: true }).click();
       await certifierKeyInput(keys, "Access token").fill(E2E_CERTIFIER_ROTATED_ACCESS_TOKEN);
       await keys.getByRole("button", { name: "Save and test connection" }).click();
-      await expect(keys.getByText("••••9876", { exact: false })).toBeVisible();
+      await expect(keys.getByText(maskedCertifierAccessToken(E2E_CERTIFIER_ROTATED_ACCESS_TOKEN), { exact: false })).toBeVisible();
       await expect(keys.getByRole("button", { name: /^Replace/ })).toHaveCount(2);
       await page.keyboard.press("Escape");
       await expect(keys).not.toBeVisible();
@@ -73,7 +74,7 @@ test.describe("Isometric credentials self-service", () => {
         .getByRole("button", { name: "Isometric keys" })
         .click();
       await expect(
-        page.getByRole("dialog").getByText("••••9876", { exact: false }),
+        page.getByRole("dialog").getByText(maskedCertifierAccessToken(E2E_CERTIFIER_ROTATED_ACCESS_TOKEN), { exact: false }),
       ).toBeVisible();
     } finally {
       // One transaction: the credentials row has no cascade, so it goes
