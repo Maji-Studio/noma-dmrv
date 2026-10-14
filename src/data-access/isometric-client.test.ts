@@ -92,14 +92,39 @@ describe("organization-scoped Isometric client", () => {
   });
 });
 
-describe("Platform Admin credential verification", () => {
-  it("preserves the not-configured error without making a request", async () => {
+describe("organization credential verification", () => {
+  it.each(["sandbox", "production"])("verifies the active organization's credentials at the %s URL without Platform Admin authority", async (environment) => {
+    mocks.env.ISOMETRIC_ENVIRONMENT = environment;
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      nodes: [{ id: "prj-active" }],
+      page_info: { has_next_page: false },
+    })));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(verifyIsometricCredentialsForOrganization(
+      CTX, CTX.organizationId,
+    )).resolves.toBe(1);
+    expect(mocks.where).toHaveBeenCalledWith(and(
+      eq(certifierCredentials.organizationId, CTX.organizationId),
+      eq(certifierCredentials.provider, "isometric"),
+    ));
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining(`https://api.${environment === "sandbox" ? "sandbox." : ""}isometric.com/mrv/v0/projects?`),
+      expect.objectContaining({ method: "GET", headers: expect.objectContaining({
+        Authorization: "Bearer org-token",
+        "X-Client-Secret": "org-secret",
+      }) }),
+    );
+  });
+
+  it.each([CTX.organizationId, "org-selected"])("preserves the not-configured error for %s without making a request", async (organizationId) => {
     mocks.limit.mockResolvedValue([]);
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
 
     await expect(verifyIsometricCredentialsForOrganization(
-      { ...CTX, orgRole: null, isPlatformAdmin: true }, "org-selected",
+      { ...CTX, orgRole: null, isPlatformAdmin: true }, organizationId,
     )).rejects.toMatchObject({ code: "not_configured" });
     expect(fetchMock).not.toHaveBeenCalled();
   });

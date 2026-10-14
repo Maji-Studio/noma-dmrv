@@ -4,7 +4,6 @@ import { z } from "zod";
 import { env } from "@/config/env";
 import {
   getCertifierCredentialsStatus,
-  resolveIsometricClient,
   verifyIsometricCredentialsForOrganization,
   upsertCertifierCredentials,
   type CertifierCredentialsStatus,
@@ -15,10 +14,7 @@ import {
 } from "@/fn/action-errors";
 import { requireOrgContext, type OrgContext } from "@/lib/auth/server";
 import { SafeError, toActionError } from "@/lib/errors";
-import {
-  IsometricApiError,
-  listProjects,
-} from "@/lib/isometric";
+import { IsometricApiError } from "@/lib/isometric";
 import {
   orgCertifierCredentialsTargetSchema,
   setOrgCertifierCredentialsSchema,
@@ -112,13 +108,10 @@ async function verifyCertifierCredentials(
   organizationId: string,
 ): Promise<CertifierCredentialsVerification> {
   try {
-    const projectCount =
-      organizationId === ctx.organizationId
-        ? (await listProjects(await resolveIsometricClient(ctx))).length
-        : await verifyIsometricCredentialsForOrganization(
-            ctx,
-            organizationId,
-          );
+    const projectCount = await verifyIsometricCredentialsForOrganization(
+      ctx,
+      organizationId,
+    );
     return {
       ok: true,
       projectCount,

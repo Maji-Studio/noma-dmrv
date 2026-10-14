@@ -7,13 +7,9 @@ import { resolveIsometricClient } from "@/data-access/certifier-credentials";
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("@/data-access/certifier-credentials", async (importOriginal) => ({
-  ...await importOriginal<typeof import("@/data-access/certifier-credentials")>(),
-  resolveIsometricClient: async () => {
-    const { createIsometricClient } = await import("@/lib/isometric/client");
-    return createIsometricClient(null);
-  },
-}));
+vi.mock("@/data-access/certifier-credentials", async (importOriginal) =>
+  (await import("./fixtures/fake-registry")).fakeCredentialsModule(importOriginal),
+);
 
 vi.mock("@/lib/isometric/client", async (importOriginal) => {
   const actual =

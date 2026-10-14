@@ -1,12 +1,8 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("@/data-access/certifier-credentials", async (importOriginal) => ({
-  ...await importOriginal<typeof import("@/data-access/certifier-credentials")>(),
-  resolveIsometricClient: async () => {
-    const { createIsometricClient } = await import("@/lib/isometric/client");
-    return createIsometricClient(null);
-  },
-}));
+vi.mock("@/data-access/certifier-credentials", async (importOriginal) =>
+  (await import("./fixtures/fake-registry")).fakeCredentialsModule(importOriginal),
+);
 
 import { eq, inArray } from "drizzle-orm";
 import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";

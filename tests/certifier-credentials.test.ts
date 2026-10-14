@@ -194,30 +194,24 @@ describe.sequential("certifier credentials data access", () => {
       accessToken: "other-org-token",
       clientSecret: "other-org-secret",
     });
-    const fetchMock = vi.fn().mockResolvedValue(new Response("{}"));
-    vi.stubGlobal("fetch", fetchMock);
-    try {
-      const unconfigured = await resolveIsometricClient(ctx);
-      await expect(unconfigured.get("/projects")).rejects.toMatchObject({ code: "not_configured" });
-      expect(fetchMock).not.toHaveBeenCalled();
+    const unconfigured = await resolveIsometricClient(ctx);
+    await expect(unconfigured.get("/projects")).rejects.toMatchObject({ code: "not_configured" });
+    expect(fetchMock).not.toHaveBeenCalled();
 
-      await upsertCertifierCredentials(ctx, {
-        organizationId: ORG_ID,
-        provider: PROVIDER,
-        accessToken: "active-org-token",
-        clientSecret: "active-org-secret",
-      });
-      const client = await resolveIsometricClient(ctx);
-      await client.get("/projects");
-      expect(fetchMock).toHaveBeenCalledOnce();
-      expect(fetchMock).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({
-        headers: expect.objectContaining({
-          Authorization: "Bearer active-org-token",
-          "X-Client-Secret": "active-org-secret",
-        }),
-      }));
-    } finally {
-      vi.unstubAllGlobals();
-    }
+    await upsertCertifierCredentials(ctx, {
+      organizationId: ORG_ID,
+      provider: PROVIDER,
+      accessToken: "active-org-token",
+      clientSecret: "active-org-secret",
+    });
+    const client = await resolveIsometricClient(ctx);
+    await client.get("/projects");
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(fetchMock).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({
+      headers: expect.objectContaining({
+        Authorization: "Bearer active-org-token",
+        "X-Client-Secret": "active-org-secret",
+      }),
+    }));
   });
 });

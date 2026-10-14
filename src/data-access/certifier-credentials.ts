@@ -16,6 +16,9 @@ import { requireOrgScope } from "./utils";
 type CertifierCredentialRow = typeof certifierCredentials.$inferSelect;
 type CertifierProvider = CertifierCredentialRow["provider"];
 
+const CROSS_ORG_CREDENTIALS_ERROR =
+  "You can only manage credentials for your active Organization.";
+
 /**
  * Either secret may be omitted to rotate the other one on its own. The stored
  * value is kept for an omitted field, so the settings form can leave a masked
@@ -42,9 +45,7 @@ function assertCanManageOrgCredentials(
   requireOrgScope(ctx);
   if (ctx.isPlatformAdmin) return;
   if (ctx.organizationId !== organizationId) {
-    throw new SafeError(
-      "You can only manage credentials for your active Organization.",
-    );
+    throw new SafeError(CROSS_ORG_CREDENTIALS_ERROR);
   }
   requireOrgRole(ctx, "admin");
 }
@@ -217,11 +218,9 @@ async function loadDecryptedCertifierCredentials(
   };
 }
 
-export async function resolveIsometricClient(
-  ctx: OrgContext,
-): Promise<IsometricClient> {
-  requireOrgScope(ctx);
-  const credentials = await getDecryptedCertifierCredentials(ctx, "isometric");
+function clientFromCredentials(
+  credentials: Awaited<ReturnType<typeof getDecryptedCertifierCredentials>>,
+): IsometricClient {
   return createIsometricClient(
     credentials
       ? { ...credentials, baseUrl: ISOMETRIC_BASE_URLS[env.ISOMETRIC_ENVIRONMENT] }
@@ -229,25 +228,26 @@ export async function resolveIsometricClient(
   );
 }
 
-// org-scope-ok: Platform Admin verifies stored credentials for a selected organization after saving them.
+export async function resolveIsometricClient(
+  ctx: OrgContext,
+): Promise<IsometricClient> {
+  requireOrgScope(ctx);
+  const credentials = await getDecryptedCertifierCredentials(ctx, "isometric");
+  return clientFromCredentials(credentials);
+}
+
+// org-scope-ok: cross-organization credential verification requires Platform Admin authority.
 export async function verifyIsometricCredentialsForOrganization(
   ctx: OrgContext,
   organizationId: string,
 ): Promise<number> {
   requireOrgScope(ctx);
-  if (!ctx.isPlatformAdmin) {
-    throw new SafeError(
-      "You can only manage credentials for your active Organization.",
-    );
+  if (organizationId !== ctx.organizationId && !ctx.isPlatformAdmin) {
+    throw new SafeError(CROSS_ORG_CREDENTIALS_ERROR);
   }
-  const credentials = await loadDecryptedCertifierCredentials(
-    organizationId,
-    "isometric",
-  );
-  const client = createIsometricClient(
-    credentials
-      ? { ...credentials, baseUrl: ISOMETRIC_BASE_URLS[env.ISOMETRIC_ENVIRONMENT] }
-      : null,
-  );
+  const credentials = organizationId === ctx.organizationId
+    ? await getDecryptedCertifierCredentials(ctx, "isometric")
+    : await loadDecryptedCertifierCredentials(organizationId, "isometric");
+  const client = clientFromCredentials(credentials);
   return (await listProjects(client)).length;
 }
