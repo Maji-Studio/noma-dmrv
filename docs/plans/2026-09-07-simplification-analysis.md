@@ -1,7 +1,7 @@
 # Simplification and optimization analysis (2026-09-07)
 
 - **Owner:** Kenji Nguyen
-- **Status:** in progress. Phase A1 of the [rollout plan](./2026-09-07-simplification-rollout-plan.md) (findings 1, 13, 15, 16, 17, 20, 27, the rendering half of 4, appendix A2 and A18) is implemented in PR #740 (`refactor/simplify-a1-dead-code`); file paths below describe the tree as it was when the analysis was written, and paths that no longer exist are marked "deleted in A1".
+- **Status:** in progress. Phase A1 of the [rollout plan](../archive/plans/2026-09-07-simplification-rollout-plan.md) (findings 1, 13, 15, 16, 17, 20, 27, the rendering half of 4, appendix A2 and A18) is implemented in PR #740 (`refactor/simplify-a1-dead-code`); file paths below describe the tree as it was when the analysis was written, and paths that no longer exist are marked "deleted in A1".
 - **Last reviewed:** 2026-09-07 (against branch `codex/fix-submission-progress`)
 
 ## Summary
@@ -158,7 +158,7 @@ All LOC figures are estimates. Where I re-measured, the corrected number is give
 
 ### 9. dead-telemetry-stack (downgraded to an owner decision)
 
-Resolved 2026-10-13 by #987: the reactor upload was removed (ADR 0006 retired).
+Resolved 2026-10-13 by #1000 (closes #987): the reactor upload was removed (ADR 0006 retired).
 
 **Files:** [src/components/certification/telemetry-panel.tsx](https://github.com/Maji-Studio/noma-dmrv/blob/archive/reactor-telemetry-upload/src/components/certification/telemetry-panel.tsx) (164), [src/hooks/use-telemetry-submission.ts](https://github.com/Maji-Studio/noma-dmrv/blob/archive/reactor-telemetry-upload/src/hooks/use-telemetry-submission.ts), [src/fn/certification/submit-telemetry.ts](https://github.com/Maji-Studio/noma-dmrv/blob/archive/reactor-telemetry-upload/src/fn/certification/submit-telemetry.ts) (772), [src/lib/isometric/parquet/writer.ts](https://github.com/Maji-Studio/noma-dmrv/blob/archive/reactor-telemetry-upload/src/lib/isometric/parquet/writer.ts) (132), [tests/isometric-submit-telemetry-retry.test.ts](https://github.com/Maji-Studio/noma-dmrv/blob/archive/reactor-telemetry-upload/tests/isometric-submit-telemetry-retry.test.ts) (527), plus the `hyparquet-writer` dependency and two `TODO(telemetry-migration)` exports in `src/data-access/certification-submissions.ts:806,826`.
 

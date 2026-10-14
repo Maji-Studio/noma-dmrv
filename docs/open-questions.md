@@ -143,6 +143,28 @@ Pure starter residue; org scoping came later via ADR 0010.
 
 ## Architecture
 
+### Simplification rollout follow-ups (`simplification/remaining-decisions`, opened 2026-10-14)
+
+- **A5:** Data-access consolidation is skipped for now. List-query duplication
+  remains in `src/data-access/suppliers.ts:getSuppliers` and peer accessors.
+  Revisit when a list-query bug shows the duplication hurting; add a paging
+  helper when already working in an affected file.
+- **B1:** Keep `/schema` public, gate it to Platform Admins, or delete it? **Anchor:** `src/lib/auth/middleware.ts:PUBLIC_ROUTES`.
+- **B3:** Keep both diagnostic views, only the trace view, or replace the pane with the CLI report? **Anchor:** `src/components/certification/removal-template-diagnostic-panel.tsx`.
+- **B4:** Wire the 12 sample contaminant columns and two protocol constants, or retire them after registry verification? **Anchor:** `src/db/schema/production.ts:samples`, `src/lib/isometric/utils/constants.ts`.
+- **B5:** Batch hub shared facts with per-row retry and polling, or use a blocking facility-wide load? **Anchor:** `src/hooks/use-certification.ts:useRemovalPreflightSummaries`.
+- **B6:** Keep the three submission builds, or use an immutable guarded snapshot? **Anchor:** `src/fn/certification/biochar-application-intents.ts:compileBiocharApplicationIntents`.
+- **B7:** Preserve each existence-check message, or standardize the copy? **Anchor:** `src/data-access/utils.ts:assertSameOrg`.
+- **B8:** Standardize or preserve amber versus red unmet checks, six deep-link toast strings, Escape dismissal, and shared party fields? **Anchor:** `src/components/credit-batches/credit-batch-list.tsx`, `src/components/ui/data-table/index.tsx`.
+- **B9:** Apply the facility phone regex everywhere, or keep entity-specific validation and update nullability? **Anchor:** `src/schemas/facilities.ts:contactPhoneSchema`.
+- **B10:** Keep the archive policy, relocate history, and commit selected QA reports or ignore generated artifacts? **Anchor:** `docs/README.md`, `docs/qa/`.
+- **B11:** Keep the day-boundary compatibility after a read-only sandbox timestamp audit? **Anchor:** `src/fn/certification/production-batches.ts`.
+- **B12:** Delete the two one-off investigation scripts? **Anchor:** `scripts/find-supplier-customer-overlap.ts`, `scripts/isometric-link-demo.ts`.
+- **B13:** Introduce a composite CI action in two stages? **Anchor:** `.github/workflows/ci.yml`, `.github/workflows/migration-gate.yml`.
+- **B14:** Split bin-picker aggregates into two phases only after a measured plan improvement? **Anchor:** `src/data-access/entities/storage-locations.ts`.
+- B2's reactor-upload retirement shipped in #1000 (closes #987). A4's gated appendix A16 extraction was omitted from #743.
+- **Resolve via:** Kenji answers B1 and B3 to B14 above; A5 stays deferred until the list-query trigger above.
+
 ### Rendered API reference (`api/rendered-reference`, opened 2026-10-08)
 
 - **Anchor:** `src/lib/api/openapi/document.ts:buildOpenApiDocument` and
@@ -888,101 +910,8 @@ Tooling and dependency upgrade deferrals are tracked in
 
 See [QA follow-up questions](./open-questions-qa.md) for these unresolved findings.
 
-## Promotion #682 review follow-ups (opened 2026-08-14)
-
-Findings from the multi-agent review of the staging-to-main promotion PR #682
-that were verified real but deliberately not fixed in
-`fix/promotion-682-review-findings` (which fixed the sync-event entity-id type,
-the stale-lock script's entity type, the storage-location lock order, the GHG
-interrupted marker, the interrupted-CAS visibility, PDF number formatting, and
-the shared-project create gate fallback).
-
-### A drifted draft with a confirmed registry write is permanently blocked (`certification/confirmed-drift-dead-end`)
-
-A removal draft that latched `externalMutation: "confirmed"` and later hits a
-payload-hash mismatch is retired by `retireForDrift` in
-`src/fn/certification/removal-submission-freshness.ts` with
-`preserveForReconciliation = true`, which throws before
-`retireStaleSubmissionDraft` can run — and that is the symbol's only caller, so
-`create-new-version` is unreachable for this state. `draft` also blocks
-regrouping. The escape hatch is now `scripts/isometric-clear-stale-lock.ts`
-(fixed to target `localEntityType = 'removal'`), but rejecting a
-confirmed-write draft and re-versioning can double-create registry entries
-because removal supplier refs are version-suffixed (`buildRemovalSupplierRef`).
-**Resolve via:** a deliberate reconcile-or-discard path for
-confirmed-mutation drafts, not the reject-and-reversion the script does.
-
-### First-time Storage Location creates always run the bounded reconcile scan (`certification/storage-location-resumed-scan`)
-
-`createStorageLocationUnderLocks` (`src/fn/certification/storage-locations.ts`)
-passes `resumed: true` unconditionally, so every first create pages through
-`findStorageLocationBySupplierReference`
-(`src/lib/isometric/storage-locations.ts`), which scans at most 50 pages x 20
-records and throws past that. Once a project holds more than 1000 storage
-locations, no new site can be registered. `needs-registry-check`: whether
-`GET /storage_locations` supports server-side filtering by
-`supplier_reference_id`, which would remove the scan entirely.
-
-### Crash-window interruption still loses the confirmed-write marker (`certification/interrupted-marker-crash-window`)
-
-The interrupted markers written by
-`recordClaimedRemovalSubmissionFailureBestEffort`
-(`src/fn/certification/removal-submission-failure.ts`) and the GHG create path
-are in-process best-effort writes inside a `catch`; a SIGTERM/timeout mid-POST
-records nothing. On retry `readRemovalSubmissionExternalMutation` reports
-`"none"`, so payload drift retires the draft without
-`preserveForReconciliation` and the next version re-POSTs datapoints and
-measurement samples under new version-suffixed supplier refs — a duplicate
-GHG entry. **Resolve via:** persisting an attempt-started marker before the
-first registry POST, or reconciling by unversioned keys.
-
-### Order/delivery repoint does not guard the target lineage (`orders/repoint-target-lineage-guard`)
-
-`updateSample` and `updateApplication` call the certification lineage guard on
-the *target* parent when repointing; `updateOrder`
-(`src/data-access/orders.ts`, repointing `biocharProductId`) and
-`updateDelivery` (`src/data-access/deliveries.ts`, repointing `orderId` /
-`biocharProductId`) guard only the entity's current lineage. Repointing an
-order onto a product that belongs to a submitted removal grafts new chain-of-
-custody onto a locked lineage after submission. Pre-existing, not introduced
-by #682.
-
-### Wet-mass allocation attributes draws to depleted intake batches (`feedstock/allocation-original-mass-weights`)
-
-`allocateFeedstockWetMass` (`src/data-access/feedstock-wet-stock.ts`) weights
-by each batch's original `massWetKg`, never remaining mass, so cumulative
-`production_run_feedstocks` attribution to one batch can exceed its intake once
-later batches share the bin. Bin stock stays correct; provenance (credit-batch
-feedstock-type derivation, CoC Sankey) degrades. Carried over verbatim from the
-pre-#676 dry allocator - a known limitation, not a regression.
-
-### Dead legacy feedstock plumbing after multi-bin draws (`production-runs/legacy-feedstock-column`)
-
-`production_runs.feedstock_storage_location_id` is hard-written `null` on
-create and nulled on draw updates (`src/data-access/production-runs/mutations.ts`),
-and `rejectLegacyFeedstockFields` (`src/schemas/production-runs.ts`) rejects
-both legacy fields at the action layer - yet queries still select/join through
-the column and the legacy fallback branches in `createProductionRun` are
-unreachable (one validates a bin it then discards). Same cleanup family:
-`recordStockTakeFn` / `useRecordStockTake` / `recordStockTakeMovement` lost
-their only consumer when #666 deleted `StockTakeForm`, and the `visual`
-null-method facet branch in `src/data-access/applications.ts` is unreachable
-(`evidence_method` is NOT NULL) with a comment that now contradicts the
-`"location"` UI fallback. Pre-production: drop the column and delete the dead
-paths in one follow-up.
-
-### Confirm: unapplied member runs now hard-block removal submission (`certification/unapplied-member-run-blocker`)
-
-PR #660 (titled as gap routing) also made `productionReadinessGapForScope`
-(`src/lib/certification/production-readiness-from-lineage.ts`) return a gap for
-any completed member run with zero applications, and `hasSubmittableRuns` in
-`src/fn/certification/certify-context-core.ts` turns that into a hard blocker
-for the whole Removal. Batch membership is date-window auto-assignment
-(`src/data-access/credit-batch-membership.ts`), and biochar is typically
-applied weeks after production, so a run completed late in a crediting period
-blocks an otherwise-complete batch until its product is applied. The sub-commit
-says deliberate; needs a product confirmation that this is the intended
-operational tradeoff, and this is not a registry requirement we verified.
+Promotion #682 review follow-ups are in
+[open-questions-audit-follow-ups.md](./open-questions-audit-follow-ups.md#promotion-682-review-follow-ups-opened-2026-08-14).
 
 ## Design review 2026-08-13 follow-ups (opened 2026-08-14)
 

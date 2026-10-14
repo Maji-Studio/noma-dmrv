@@ -1,10 +1,10 @@
 # Simplification rollout plan (2026-09-07)
 
 - **Owner:** Kenji Nguyen
-- **Status:** in progress. Approved 2026-09-07. A1 (dead-code sweep) is PR #740; A2 to A6 not started. Phase B is a decision list for the owner.
-- **Last reviewed:** 2026-09-07 (against `origin/staging` at `ecbfb16a`)
+- **Status:** archived after the A2/A3 rollout. Shipped: A1 #740, the withAction seam #741, A6 dead enums #742, A4 small extractions #743 (appendix A16 was omitted because the GHG report folder was in flux), A2 #1007, A3 master data #1006 and operations #1008, and the action-boundary grow-back check for #983. A5 is skipped for now; revisit when a list-query bug shows the duplication hurting. Remaining Phase B owner questions are unanswered (the B2 reactor-upload retirement shipped in #1000 (closes #987)). Deferred work is tracked in [open questions](../../open-questions.md#simplification-rollout-follow-ups-simplificationremaining-decisions-opened-2026-10-14).
+- **Last reviewed:** 2026-10-14 (against `origin/staging` after #1007, #1006 and #1008)
 
-This plan is the review of, and the execution plan for, the [simplification analysis](./2026-09-07-simplification-analysis.md). Two reviewers re-checked that analysis against the code: Claude Fable 5.1 (spot checks of every phase-1 item) and gpt-6-astra at very high reasoning (all 56 findings, read-only). Where the two agreed with each other and with the code, the item is listed below without comment. Where they corrected the analysis, the correction is stated and was verified by hand before it was adopted.
+This plan is the review of, and the execution plan for, the [simplification analysis](../../plans/2026-09-07-simplification-analysis.md). Two reviewers re-checked that analysis against the code: Claude Fable 5.1 (spot checks of every phase-1 item) and gpt-6-astra at very high reasoning (all 56 findings, read-only). Where the two agreed with each other and with the code, the item is listed below without comment. Where they corrected the analysis, the correction is stated and was verified by hand before it was adopted.
 
 ## Review verdict
 
@@ -116,7 +116,7 @@ Each row is one decision, phrased as the question an agent cannot answer from th
 | B13 | 28 | Introduce a composite CI action? It cannot own the checkout, and `migration-gate.yml` checks out a base revision that will not yet contain it. | Yes, in two stages | Workflow diff with unchanged refs, permissions and cache keys |
 | B14 | 21 | Two-phase the bin picker aggregates? | Only with a measured plan improvement | `EXPLAIN` on a seeded local database before and after, on the same file as its A5 projection extraction |
 
-Resolved 2026-10-13 by #987: the reactor upload was removed (ADR 0006 retired).
+Resolved 2026-10-13 by #1000 (closes #987): the reactor upload was removed (ADR 0006 retired).
 
 ## Sequencing
 
