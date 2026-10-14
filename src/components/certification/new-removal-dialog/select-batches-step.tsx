@@ -14,6 +14,7 @@
  */
 "use client";
 
+import { MultilineDetail } from "../multiline-detail";
 import Link from "next/link";
 import { formatUnbindableTemplateInputs } from "@/lib/isometric/template-binding-coverage";
 import {
@@ -222,12 +223,7 @@ function IncompleteCard({
               </span>
               {check.detail && (
                 <div className="body-caption text-[var(--color-text-tertiary)]">
-                  {check.detail.split("\n")[0]}
-                  {check.detail.includes("\n") && (
-                    <ul className="list-disc pl-16">
-                      {check.detail.split("\n").slice(1).map((line) => <li key={line}>{line}</li>)}
-                    </ul>
-                  )}
+                  <MultilineDetail>{check.detail}</MultilineDetail>
                 </div>
               )}
               {/* New tab: the fix opens alongside so this readiness workspace

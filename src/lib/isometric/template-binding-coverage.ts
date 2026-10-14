@@ -1,8 +1,9 @@
 import { getSequestrationInputBinding, hasExplicitSequestrationBinding } from "./sequestration-input-bindings";
 import type { components } from "./generated/certify";
-import { lookupSourceFact, SEMANTIC_BINDING_CATALOG } from "./semantic-binding-catalog";
+import { lookupSourceFact } from "./semantic-binding-catalog";
 import { isSequestrationBlueprintFamily } from "./storage-blueprints";
 import {
+  componentRenameGuidance,
   lookupInputMapping,
   lookupPeriodInputTuple,
   resolveDatapointSource,
@@ -16,6 +17,7 @@ export interface UnbindableTemplateInput {
   componentDisplayName: string;
   blueprintKey: string;
   inputKey: string;
+  takenComponentNames?: string[];
   reason: "unmapped" | "ambiguous" | "project-scope" | "unrecognized-component";
 }
 
@@ -34,6 +36,7 @@ export function findUnbindableTemplateInputs(
   options: { allowPeriodInputStub?: boolean } = {},
 ): UnbindableTemplateInput[] {
   const findings: UnbindableTemplateInput[] = [];
+  const components = template.groups.flatMap((group) => group.components);
   const aggregates = new Map<string, UnbindableTemplateInput[]>();
   for (const group of template.groups) {
     for (const component of group.components) {
@@ -44,6 +47,7 @@ export function findUnbindableTemplateInputs(
           componentDisplayName: component.display_name,
           blueprintKey: component.blueprint_key,
           inputKey: input.input_key,
+          takenComponentNames: components.filter((other) => other.id !== component.id).map((other) => other.display_name),
           reason: "unmapped",
         };
         if (isSequestrationBlueprintFamily(component.blueprint_key)) {
@@ -90,23 +94,20 @@ function listNames(names: string[]): string {
   return `${names.slice(0, -1).join(", ")} and ${names.at(-1)}`;
 }
 
-function formatInstruction(input: UnbindableTemplateInput, plural = false): string {
+function formatInstruction(input: UnbindableTemplateInput, count = 1): string {
+  const plural = count > 1;
   const mapping = lookupInputMapping(input.groupKey, input.blueprintKey, input.inputKey);
   const target = plural ? "each one" : "it";
   if (input.reason === "unrecognized-component" || (input.reason === "project-scope" && mapping?.sourceByComponent)) {
-    const role = SEMANTIC_BINDING_CATALOG[input.blueprintKey]?.[input.inputKey]?.roles[input.groupKey];
-    const expectedNames = Object.keys(
-      role?.strategy === "aggregated-datapoint" && role.disambiguation
-        ? role.disambiguation.sources
-        : mapping?.sourceByComponent ?? {},
-    );
-    const expected = expectedNames.map((name) => `"${name}"`).join(", ");
-    const context = input.reason === "project-scope"
-      ? `${plural ? "These components can" : "This component can"} stay on the Removal only under ${plural ? "their expected names" : "its expected name"}. `
-      : "";
-    return `${context}Rename ${target} in Isometric to ${expectedNames.length === 1 ? expected : `one of these names: ${expected}`}.`;
+    const guidance = mapping && componentRenameGuidance(mapping, { count, takenNames: input.takenComponentNames });
+    if (guidance) {
+      const context = input.reason === "project-scope"
+        ? `${plural ? "These components can" : "This component can"} stay on the Removal only under ${plural ? "their expected names" : "its expected name"}. `
+        : "";
+      return `${context}${guidance}`;
+    }
   }
-  if (input.reason === "project-scope") {
+  if (input.reason === "project-scope" || input.reason === "unrecognized-component") {
     return `Add ${target} as a project component in Isometric, then remove ${plural ? "them" : "it"} from the Removal template.`;
   }
   if (input.reason === "ambiguous") {
@@ -137,7 +138,7 @@ export function formatUnbindableTemplateInputs(inputs: readonly UnbindableTempla
   const lead = `The Removal template has ${components.size} ${components.size === 1 ? "component" : "components"} noma cannot submit.`;
   const lines: string[] = [];
   for (const matches of reasons.values()) {
-    const instruction = formatInstruction(matches[0], matches.length > 1);
+    const instruction = formatInstruction(matches[0], matches.length);
     const names = listNames(matches.map((input) => input.componentDisplayName));
     lines.push(matches[0].reason === "ambiguous"
       ? `${names} would ${matches.length > 2 ? "all" : "both"} ${instruction}`

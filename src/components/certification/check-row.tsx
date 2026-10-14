@@ -8,6 +8,7 @@
  */
 "use client";
 
+import { MultilineDetail } from "./multiline-detail";
 import type { ReactNode } from "react";
 import type { Icon } from "@phosphor-icons/react";
 import Link from "next/link";
@@ -96,12 +97,7 @@ export function CheckRow({
         </span>
         {detail && (
           <div className="body-caption text-[var(--color-text-secondary)]">
-            {typeof detail === "string" ? detail.split("\n")[0] : detail}
-            {typeof detail === "string" && detail.includes("\n") && (
-              <ul className="list-disc pl-16">
-                {detail.split("\n").slice(1).map((line) => <li key={line}>{line}</li>)}
-              </ul>
-            )}
+            <MultilineDetail>{detail}</MultilineDetail>
           </div>
         )}
       </div>

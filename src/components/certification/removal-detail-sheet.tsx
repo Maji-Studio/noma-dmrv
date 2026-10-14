@@ -11,6 +11,7 @@
  */
 "use client";
 
+import { MultilineDetail } from "./multiline-detail";
 import Link from "next/link";
 import { useState } from "react";
 import { Button, buttonVariants } from "@/components/ui";
@@ -101,7 +102,7 @@ function SubmissionStatusSection({
         <Notice tone="warning">
           <ul className="flex flex-col gap-6">
             {status.reasons.map((reason) => (
-              <li key={reason} className="whitespace-pre-line">{reason}</li>
+              <li key={reason}><MultilineDetail>{reason}</MultilineDetail></li>
             ))}
           </ul>
         </Notice>

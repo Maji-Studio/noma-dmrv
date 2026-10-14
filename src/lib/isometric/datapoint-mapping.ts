@@ -1,7 +1,21 @@
 import { SafeError } from "@/lib/errors";
 import type { AggregatedProductionData } from "./utils/aggregation";
-import { normalizeComponentDisplayName, ownValue } from "./semantic-binding-catalog";
+import { normalizeComponentDisplayName, ownValue, SEMANTIC_BINDING_CATALOG } from "./semantic-binding-catalog";
 import { lookupBindingTriple, projectInputMapping, projectPeriodInputTuples, type InputMappingEntry, type InputMappingTable } from "./semantic-binding-projections";
+
+// Keep display copy outside INPUT_MAPPING: its serialized shape determines the
+// mapping revision, which must only change when bindings change.
+const COMPONENT_DISPLAY_NAMES = new Map(
+  Object.values(SEMANTIC_BINDING_CATALOG).flatMap((inputs) =>
+    Object.values(inputs).flatMap((input) =>
+      Object.values(input.roles).flatMap((role) =>
+        role.strategy === "aggregated-datapoint" && role.disambiguation
+          ? Object.keys(role.disambiguation.sources).map((name) => [normalizeComponentDisplayName(name), name] as const)
+          : [],
+      ),
+    ),
+  ),
+);
 
 // Maps (group_key, blueprint_key, input_key) tuples to a noma aggregated
 // source field. A projection of the semantic binding catalog
@@ -49,11 +63,17 @@ export function resolveDatapointSource(
 }
 
 /** Shared rename guidance for the builder and early template coverage. */
-export function componentRenameGuidance(mapping: InputMappingEntry): string {
-  const expected = Object.keys(mapping.sourceByComponent ?? {})
-    .map((name) => `"${name}"`)
-    .join(", ");
-  return `Rename it in Isometric to one of these names: ${expected}.`;
+export function componentRenameGuidance(
+  mapping: InputMappingEntry,
+  { count = 1, takenNames = [] }: { count?: number; takenNames?: readonly string[] } = {},
+): string | undefined {
+  const taken = new Set(takenNames.map(normalizeComponentDisplayName));
+  const names = Object.keys(mapping.sourceByComponent ?? {})
+    .map((name) => COMPONENT_DISPLAY_NAMES.get(name) ?? name)
+    .filter((name) => !taken.has(normalizeComponentDisplayName(name)));
+  if (names.length < count) return undefined;
+  const expected = names.map((name) => `"${name}"`).join(", ");
+  return `Rename ${count > 1 ? "each one" : "it"} in Isometric to ${names.length === 1 ? expected : `one of these names: ${expected}`}.`;
 }
 
 // Tuples that lived in INPUT_MAPPING as `zeroStub: true` families before ADR

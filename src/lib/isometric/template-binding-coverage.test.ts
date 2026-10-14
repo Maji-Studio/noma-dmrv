@@ -74,7 +74,31 @@ it("names unsupported metered inputs and their component", () => {
     component.display_name = "Renamed generator";
     const findings = findUnbindableTemplateInputs(copy);
     expect(findings).toMatchObject([{ reason: "unrecognized-component", componentId: component.id }]);
-    expect(formatUnbindableTemplateInputsText(findings)).toContain('Rename it in Isometric to one of these names: "Generator diesel usage", "Startup diesel usage".');
+    expect(formatUnbindableTemplateInputsText(findings)).toContain('Rename it in Isometric to "Generator diesel usage".');
+  });
+
+  it.each([
+    { name: "Safety margin", groupKey: "miscellaneous", blueprintKey: "mass_based_ci_emissions" },
+    { name: "Generator diesel usage", groupKey: "pyrolysis", blueprintKey: "fuel_usage_by_volume" },
+  ])("does not offer an occupied carve-out name for $name", ({ name, groupKey, blueprintKey }) => {
+    const copy = structuredClone(template);
+    const group = copy.groups.find((group) => group.key === groupKey)!;
+    if (groupKey === "miscellaneous") {
+      group.components.push({
+        ...structuredClone(copy.groups.find((group) => group.key === "pyrolysis")!.components[0]),
+        id: "safety-margin", display_name: name, blueprint_key: blueprintKey,
+        inputs: [{ input_key: "mass", type: "monitored", datapoint_id: null, display_name: "Mass", quantity_kind: "mass" }],
+      });
+    }
+    const existing = group.components.find((component) => component.display_name === name)!;
+    existing.display_name = `  ${name.toUpperCase()}  `;
+    group.components.push({ ...structuredClone(existing), id: "extra", display_name: "Extra component" });
+    const findings = findUnbindableTemplateInputs(copy).filter((input) => input.componentId === "extra");
+    expect(findings.length).toBeGreaterThan(0);
+    expect(findings[0].blueprintKey).toBe(blueprintKey);
+    const text = formatUnbindableTemplateInputsText(findings);
+    expect(text).toContain("Add it as a project component in Isometric, then remove it from the Removal template.");
+    expect(text).not.toContain("Rename");
   });
 
   it.each([
@@ -91,7 +115,7 @@ it("names unsupported metered inputs and their component", () => {
     {
       groupKey: "miscellaneous", blueprintKey: "mass_based_ci_emissions", inputKey: "mass", reason: "project-scope",
       singular: 'This component can stay on the Removal only under its expected name. Rename it in Isometric to "Safety margin".',
-      plural: 'These components can stay on the Removal only under their expected names. Rename each one in Isometric to "Safety margin".',
+      plural: "Add each one as a project component in Isometric, then remove them from the Removal template.",
     },
     {
       groupKey: "pyrolysis", blueprintKey: "fuel_usage_by_volume", inputKey: "volume_of_fuel", reason: "unrecognized-component",
