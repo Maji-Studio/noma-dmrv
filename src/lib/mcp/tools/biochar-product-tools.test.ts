@@ -9,8 +9,10 @@ import { mcpRequestAccess } from "../server";
 import { biocharProductWriteTools } from "./biochar-product-tools";
 import { outputStockWriteTools } from "./output-stock-tools";
 import { readTools } from "./read-tools";
+import { UNRESOLVED_STOCK_SENTENCES } from "@/lib/output-stock/layer-projection";
 
-const mocks = vi.hoisted(() => ({ run: vi.fn(), readProduct: vi.fn() }));
+const mocks = vi.hoisted(() => ({ run: vi.fn(), readProduct: vi.fn(), readStock: vi.fn() }));
+vi.mock("@/lib/read-models/api-output-bin-stock", () => ({ readApiOutputBinStock: mocks.readStock }));
 vi.mock("@/data-access/samples", () => ({}));
 vi.mock("@/lib/read-models/api-lab-samples", () => ({ readApiLabSample: vi.fn(), readApiLabSampleList: vi.fn() }));
 vi.mock("@/lib/read-models/api-credit-batches", () => ({ readApiCreditBatch: vi.fn(), readApiCreditBatchList: vi.fn() }));
@@ -142,11 +144,31 @@ it("re-renders JSONB key order for a replayed product", async () => {
 });
 it("registers the biochar and formulation read tools under their own scopes", () => {
   const expected = [["find_biochar_products", "biochar-products:read"], ["get_biochar_product", "biochar-products:read"],
-    ["find_formulations", "formulations:read"], ["find_output_stock_movements", "biochar-products:read"]];
+    ["find_formulations", "formulations:read"], ["find_output_stock_movements", "biochar-products:read"], ["get_bin_stock", "biochar-products:read"]];
   for (const [name, scope] of expected) expect(readTools.find((tool) => tool.name === name)).toMatchObject({ kind: "read", scope });
 });
 it("requires a bin id or code for find_output_stock_movements and rejects control characters", async () => {
   const tool = readTools.find((candidate) => candidate.name === "find_output_stock_movements")!;
   await expect(async () => tool.execute(context.ctx, {})).rejects.toMatchObject({ status: 400, code: "invalid_query" });
   await expect(async () => tool.execute(context.ctx, { idOrCode: "BIN-\u0000" })).rejects.toMatchObject({ code: "not_found" });
+});
+
+it("reads bin stock through the shared representation with strict input and one sentence", async () => {
+  const tool = readTools.find((candidate) => candidate.name === "get_bin_stock")!;
+  mocks.readStock.mockResolvedValueOnce({ data: { storageLocationId: BIN, code: "OB-2", type: "biochar_bin", facilityId: ID, archivedAt: null, formulationId: null,
+    stockMode: "split", status: "resolved", unresolvedReason: null, subBins: [],
+    totals: { dryBiocharKg: 0, solidsKg: 0, estimatedWetKg: 0, estimatedMoisturePercent: null, moistureBasis: null } } });
+  const body = await tool.execute(context.ctx, { storageLocation: BIN.toUpperCase(), facilityId: ID.toUpperCase() });
+  expect(mocks.readStock).toHaveBeenCalledWith(context.ctx, { identifier: { id: BIN }, facilityId: ID });
+  expect(body).toMatchObject({ data: { storageLocationId: BIN, totals: { dryBiocharKg: 0, solidsKg: 0, estimatedWetKg: 0 } } });
+  expect(tool.output.parse(body)).toEqual(body);
+  expect(tool.summarize(body)).toBe("Bin OB-2 stock read.");
+  const unresolved = { data: { ...(body.data as object), status: "unresolved", unresolvedReason: UNRESOLVED_STOCK_SENTENCES.run_incomplete, totals: null } };
+  expect(tool.summarize(unresolved)).toBe("Bin OB-2 stock is unknown; unresolvedReason says why.");
+  for (const input of [{}, { storageLocation: BIN, at: CLOCK }, { storageLocation: BIN, facilityId: "bad" }]) {
+    await expect(async () => tool.execute(context.ctx, input)).rejects.toMatchObject({ code: "invalid_query" });
+  }
+  await expect(tool.execute(context.ctx, { storageLocation: "OB-\u0000" })).rejects.toMatchObject({ code: "not_found" });
+  expect(tool.description).toContain("mix-bin loss takes no sources");
+  expect(tool.description).toContain("basisFingerprint");
 });

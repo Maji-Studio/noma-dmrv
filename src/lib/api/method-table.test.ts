@@ -38,6 +38,9 @@ it("picks static paths before parameters and accepts only whole nonempty paramet
 });
 
 it("recognizes nested supplier locations, exact public docs, scopes and the v1 boundary", () => {
+  expect(getApiMethodEntry("/api/v1/storage-locations/OB-2/stock")).toMatchObject({
+    path: "/api/v1/storage-locations/{idOrCode}/stock", scopes: ["biochar-products:read"], public: false, methods: ["GET", "HEAD", "OPTIONS"],
+  });
   expect(getApiMethodEntry("/api/v1/suppliers/SUP-1/locations")).toMatchObject({
     path: "/api/v1/suppliers/{idOrCode}/locations", scopes: ["suppliers:read"], public: false,
   });

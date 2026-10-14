@@ -20,7 +20,7 @@ export const outputStockKeys = {
   preview: (input: OutputStockPreviewInput | null) => ["outputStock", "preview", input] as const,
   balance: (storageLocationId: string, facilityId: string, occurredAt?: string) => ["outputStock", "balance", storageLocationId, facilityId, occurredAt ?? "now"] as const,
   history: (id: string) => ["outputStock", "history", id] as const,
-  subBins: (input: SubBinsQueryInput | null) => ["outputStock", "subBins", input] as const,
+  subBins: (input: OutputSubBinsInput | null) => ["outputStock", "subBins", input] as const,
   matching: (facilityId: string, formulationId: string) => ["outputStock", "matching", facilityId, formulationId] as const,
 };
 
@@ -60,21 +60,20 @@ export function useOutputStockBalance(bin: { storageLocationId: string; facility
   });
 }
 
-/** Without `occurredAt` the sub-bins are read as of each fetch, like the bin balance. */
-type SubBinsQueryInput = Omit<OutputSubBinsInput, "occurredAt"> & { occurredAt?: string };
-
 /**
- * A split bin's sub-bins at the entry's time, oldest first. Keeps the last
+ * A split bin's sub-bins at the entry's time, oldest first. Without
+ * `occurredAt` they are read as of each fetch, like the bin balance: the
+ * server takes that instant, so a batch placed just before is never left out. Keeps the last
  * answer for the same bin while the time is edited, so the reading rows do
  * not blink; another bin never shows the last bin's sub-bins.
  */
-export function useOutputSubBins(input: SubBinsQueryInput | null) {
+export function useOutputSubBins(input: OutputSubBinsInput | null) {
   return useQuery({
     queryKey: outputStockKeys.subBins(input),
     enabled: input !== null,
     queryFn: async () => {
       if (!input) throw new Error("Choose a storage bin first.");
-      const result = await getOutputSubBinsFn({ ...input, occurredAt: input.occurredAt ?? new Date().toISOString() });
+      const result = await getOutputSubBinsFn(input);
       if (!result.success) throw new Error(result.error);
       return result.data;
     },

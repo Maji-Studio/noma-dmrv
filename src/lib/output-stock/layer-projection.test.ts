@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { rational, storeRational } from './exact';
-import { BEFORE_LEDGER_SEQUENCE, outputStockBalance, preLedgerWetRemovals, projectBiocharLayers, projectMoistureBases, projectProductLayers, UnresolvedOutputStockError, type AllocationEffectRow, type CompletedRunRow } from './layer-projection';
+import { BEFORE_LEDGER_SEQUENCE, outputStockBalance, preLedgerWetRemovals, projectBiocharLayers, projectMoistureBases, projectProductLayers, UNRESOLVED_STOCK_REASONS, UNRESOLVED_STOCK_SENTENCES, UnresolvedOutputStockError, type AllocationEffectRow, type CompletedRunRow } from './layer-projection';
 
 const run: CompletedRunRow = { id: 'run', code: 'PR-0042', dryKg: '100.000', endTime: new Date('2026-09-01T12:00:00.000Z'), postingSequence: BigInt(1) };
 const noRows = { sources: [], effects: [] };
@@ -156,5 +156,45 @@ describe('moisture bases', () => {
 
   it.each([null, 'NaN', '-1'])('has no recorded basis for wet mass %s', wet => {
     expect(projectMoistureBases([layer], { recordedWetKg: new Map([[run.id, wet]]), ...none })[0].recorded).toBeNull();
+  });
+});
+
+describe('unresolved stock reasons', () => {
+  const product = { id: 'product', placedAt: new Date('2026-09-01T12:00:00.000Z'), postingSequence: BigInt(1) };
+  const products = (composition: unknown, placedAt: Date | null = product.placedAt) => () => projectProductLayers({ products: [{ ...product, placedAt, composition }],
+    sources: [{ productId: 'product', runId: 'run', dryKg: '100.000' }], ingredients: [], effects: [] });
+  const reasonOf = (project: () => unknown) => {
+    try {
+      project();
+    } catch (error) {
+      if (error instanceof UnresolvedOutputStockError) return error;
+      throw error;
+    }
+    throw new Error('Expected unresolved stock');
+  };
+
+  it.each([
+    ['run_incomplete', () => projectBiocharLayers({ runs: [{ ...run, endTime: null }], ...noRows })],
+    ['product_placement_missing', products({}, null)],
+    ['ingredient_mass_invalid', products({ ingredients: [{ formulationIngredientId: 'i', massKg: -1 }] })],
+    ['ingredient_snapshot_mismatch', products({ ingredients: [{ formulationIngredientId: 'i', massKg: 5 }] })],
+  ] as const)('names %s at its throw site', (reason, project) => {
+    const error = reasonOf(project);
+    expect(error.reason).toBe(reason);
+    expect(UNRESOLVED_STOCK_REASONS).toContain(reason);
+  });
+
+  it('keeps the operator message each throw site had', () => {
+    expect(reasonOf(() => projectBiocharLayers({ runs: [{ ...run, dryKg: null }], ...noRows })).message).toBe(`Production run ${run.code} has no dry biochar mass. Add the biochar wet mass and moisture to that run, then try again.`);
+    expect(reasonOf(products({ ingredients: [{ formulationIngredientId: 'i', massKg: 5 }] })).message).toBe('Ingredient dry solids are unresolved');
+  });
+
+  it('gives every reason one fixed public sentence without dashes', () => {
+    for (const reason of UNRESOLVED_STOCK_REASONS) {
+      const sentence = UNRESOLVED_STOCK_SENTENCES[reason];
+      expect(sentence).toMatch(/^[A-Z].*\.$/);
+      expect(sentence).not.toMatch(/[–—]/);
+    }
+    expect(new Set(Object.values(UNRESOLVED_STOCK_SENTENCES)).size).toBe(UNRESOLVED_STOCK_REASONS.length);
   });
 });
