@@ -569,7 +569,8 @@ helpers and numeric/mass/ratio constants — see [forms.md](./forms.md)) ·
 
 ## CI/CD
 
-`.github/workflows/`: `ci.yml` (lint/typecheck/build) · `migrate.yml`
+`.github/workflows/`: `ci.yml` (lint/typecheck/build, Vitest in two shards) ·
+`migrate.yml`
 (auto-migrate on schema push to `main`/`staging`; manual reset/seed via
 `workflow_dispatch`) · `migration-gate.yml` (blocks schema drift) ·
 `enforce-main-source.yml` (branch-protection: `main` only from `staging`) ·

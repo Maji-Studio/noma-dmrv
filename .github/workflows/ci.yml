@@ -141,14 +141,20 @@ jobs:
           "$RUNNER_TEMP/oasdiff/oasdiff" breaking "$base" openapi/v1.json \
             --fail-on ERR --err-ignore openapi/accepted-breaking-changes.txt
 
-  # Full Vitest suite. No secrets — tests/setup.ts fills safe env defaults and
-  # the Isometric sandbox *.integration.test.ts suites self-skip without
+  # Full Vitest suite split by file across two shards, each with its own
+  # Postgres service and migrations. No secrets — tests/setup.ts fills safe env
+  # defaults; Isometric sandbox *.integration.test.ts suites self-skip without
   # RUN_ISOMETRIC_SANDBOX_TESTS. A throwaway Postgres service is required
   # because several suites exercise the real `@/db` connection + transactions
   # rather than mocking the data-access layer.
   quality-tests:
+    name: quality-tests (${{ matrix.shard }}/2)
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
 
     services:
       postgres:
@@ -166,6 +172,7 @@ jobs:
           --health-retries 10
 
     env:
+      UNIT_SHARDS: 2
       # Overrides the tests/setup.ts default so the DB-backed suites reach the
       # service above. vitest sets NODE_ENV=test, so the local-fs storage
       # default and missing secrets are accepted by @/config/env.
@@ -197,7 +204,7 @@ jobs:
         run: pnpm db:migrate
 
       - name: Unit tests
-        run: pnpm exec vitest run
+        run: pnpm exec vitest run --shard=${{ matrix.shard }}/${{ env.UNIT_SHARDS }}
 
   # Production build check. PRs opt into the experimental Turbopack filesystem
   # cache; pushes to main/staging keep it off and exercise the deploy-equivalent
