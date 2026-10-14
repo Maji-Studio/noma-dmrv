@@ -62,8 +62,8 @@ async function seedFormCompleteApplication(
   await page.locator('[role="dialog"]').locator('button:has-text("Create delivery")').click();
   await waitForSideSheetClose(page);
 
-  // Application — every field the shared readiness decision requires for a
-  // 200-year facility EXCEPT evidence: mass (wet + dry) and soil temperature.
+  // Application — every field the application field check requires, with no
+  // evidence: mass (wet + dry), plus the advisory soil temperature.
   await page.goto(`/applications?facility=${seededData.facility.id}`);
   await page.waitForLoadState("networkidle");
   await page.click('button:has-text("New application")');
@@ -76,7 +76,7 @@ async function seedFormCompleteApplication(
   await page.fill('input[name="fieldSizeHa"]', "2");
   await page.fill('input[name="fieldIdentifier"]', fieldIdentifier);
   await page.fill('input[name="cropType"]', "maize");
-  // Soil temperature is a certify requirement for 200-year facilities.
+  // Soil temperature is advisory; submission uses the facility reference.
   await page.fill('input[name="soilTemperatureC"]', "24");
 
   // New applications default to the delivery customer's location. The test
@@ -141,10 +141,10 @@ test.describe("Application evidence does not gate certification", () => {
     await expect(row).toBeVisible({ timeout: 10000 });
 
     await expect(
-      row.locator('[aria-label="Ready for certification"]'),
+      row.locator('[aria-label="Fields complete"]'),
     ).toBeVisible();
     await expect(
-      row.getByRole("button", { name: /Incomplete for certification/ }),
+      row.getByRole("button", { name: /Incomplete application fields/ }),
     ).toHaveCount(0);
 
     // Add qualifying geotagged evidence for all three visual stages, mirroring a
@@ -174,10 +174,10 @@ test.describe("Application evidence does not gate certification", () => {
       hasText: applicationCode,
     });
     await expect(
-      reloadedRow.locator('[aria-label="Ready for certification"]'),
+      reloadedRow.locator('[aria-label="Fields complete"]'),
     ).toBeVisible({ timeout: 10000 });
     await expect(
-      page.getByRole("button", { name: /Incomplete for certification/ }),
+      page.getByRole("button", { name: /Incomplete application fields/ }),
     ).toHaveCount(0);
   });
 });

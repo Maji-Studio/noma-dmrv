@@ -1,3 +1,4 @@
+import { withFeedstockTransportReadiness } from "./feedstock-transport-readiness";
 import type { SnapshotStock } from "./stock-effects";
 /**
  * Feedstock Data Access Layer
@@ -151,6 +152,8 @@ export interface FeedstockWithRelations {
   transportDistanceKm: number | null;
   transportDistanceSource: "map_estimate" | "manual" | "document" | null;
   transportEvidenceDocumentCount: number;
+  hasUsableTransportLeg?: boolean;
+  transportLegDistanceSource?: "map_estimate" | "manual" | "document" | null;
 }
 
 export interface PaginatedFeedstocks {
@@ -377,7 +380,7 @@ export async function getFeedstocks(
     .limit(pageSize)
     .offset(offset);
 
-  return { items, total, page, pageSize, totalPages };
+  return { items: await withFeedstockTransportReadiness(ctx, items), total, page, pageSize, totalPages };
 }
 
 export async function getFeedstockById(
@@ -393,7 +396,8 @@ export async function getFeedstockById(
     throw new DomainError("not_found", "Feedstock not found");
   }
 
-  return item;
+  const [enriched] = await withFeedstockTransportReadiness(ctx, [item], executor);
+  return enriched;
 }
 
 export async function getFeedstockStats(

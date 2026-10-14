@@ -22,6 +22,7 @@
  * reconcile by supplier-ref lookup → audit event / ledger-reject), idempotent on
  * the versioned supplier reference, mirroring the datapoint/removal/sensor flows.
  */
+import { durabilityConfigurationBlockers } from "@/lib/certification/submission-readiness";
 import { resolveIsometricClient } from "@/data-access/certifier-credentials";
 import type { OrgContext } from "@/lib/auth/server";
 import { appendSubmissionJournal } from "@/data-access/certification";
@@ -121,16 +122,8 @@ export interface BuildDurabilityMeasurementSampleSubmissionsArgs {
 export function assertSupportedDurabilityConfiguration(
   batches: Pick<CreditBatchWithSamples, "sampling" | "durabilityOption">[],
 ): void {
-  if (batches.some((batch) => batch.sampling !== "sampled")) {
-    throw new SafeError(
-      "Unsampled Method B Removals cannot be submitted yet. Wait for support to confirm registry availability.",
-    );
-  }
-  if (batches.some((batch) => batch.durabilityOption !== "1000_year")) {
-    throw new SafeError(
-      "200-year Removals cannot be submitted yet. Wait for support to confirm registry availability.",
-    );
-  }
+  const [blocker] = durabilityConfigurationBlockers(batches);
+  if (blocker) throw new SafeError(blocker);
 }
 
 /**
@@ -143,15 +136,6 @@ export function buildDurabilityMeasurementSampleSubmissions(
   args: BuildDurabilityMeasurementSampleSubmissionsArgs,
 ): DurabilityMeasurementSampleSubmission[] {
   assertSupportedDurabilityConfiguration(args.batches);
-  const thousandYearBatches = args.batches.filter(
-    (batch) => batch.durabilityOption === "1000_year",
-  );
-  if (thousandYearBatches.length > 1) {
-    throw new SafeError(
-      "A 1000-year Removal can contain one credit batch. Split these credit batches into separate Removals.",
-    );
-  }
-
   const perBatch = buildPerBatchDurabilityData(
     args.batches,
     args.attributionByRunId,

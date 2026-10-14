@@ -1,3 +1,4 @@
+import { applicationDestinationBlocker, deliveryDistanceBlocker, durabilityConfigurationBlockers } from "./submission-readiness";
 import production from "../../../tests/fixtures/isometric/production-template-2026-07-03.json";
 import type { components as RegistryComponents } from "@/lib/isometric/generated/certify";
 import { unsupportedTemplate } from "../../../tests/fixtures/isometric/unsupported-template";
@@ -791,4 +792,29 @@ it.each([unsupportedTemplate(), production as RegistryComponents["schemas"]["Ghg
   const result = deriveRemovalReadiness(ready({ unbindableTemplateInputs: inputs }));
   expect(result.state).not.toBe("ready");
   expect(result.reasons).toContain(formatUnbindableTemplateInputsText(inputs));
+});
+
+
+describe("readiness matches submission refusals", () => {
+  it.each([
+    { sampling: "unsampled", durabilityOption: "1000_year" },
+    { sampling: "sampled", durabilityOption: "200_year" },
+  ])("blocks unsupported durability $sampling $durabilityOption", (batch) => {
+    const blockers = durabilityConfigurationBlockers([batch]);
+    expect(deriveRemovalReadiness(ready({ durabilityConfigurationBlockers: blockers }))).toMatchObject({ state: "blocked", reasons: blockers });
+  });
+  it("blocks more than one 1000-year credit batch", () => {
+    const batch = { sampling: "sampled", durabilityOption: "1000_year" };
+    const blockers = durabilityConfigurationBlockers([batch, batch]);
+    expect(deriveRemovalReadiness(ready({ durabilityConfigurationBlockers: blockers }))).toMatchObject({ state: "blocked", reasons: blockers });
+  });
+  it.each([
+    "Feedstock FS-2 has no usable transport leg. Record a positive distance and load mass before submitting.",
+    applicationDestinationBlocker({ applicationCode: "AP-1", customerLocationId: null })!,
+    deliveryDistanceBlocker({ deliveryCode: "DL-1", deliveryStatus: "delivered", distanceKmOverride: null, locationDistanceKm: null })!,
+  ])("shows the lineage refusal in readiness and the checklist: %s", (reason) => {
+    const facts = ready({ submissionLineageBlockers: [reason] });
+    expect(deriveRemovalReadiness(facts)).toMatchObject({ state: "blocked", reasons: [reason] });
+    expect(buildRemovalRequirementsChecklist(facts)).toContainEqual(expect.objectContaining({ status: "unmet", detail: reason }));
+  });
 });

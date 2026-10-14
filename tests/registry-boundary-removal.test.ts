@@ -407,6 +407,8 @@ function makeContext(
     },
     requiredTransportCategories: [],
     hasSubmittableRuns: true,
+    submissionLineageBlockers: [],
+    durabilityConfigurationBlockers: [],
     entityReadinessGaps: [],
     // Eligible run, ≥3 in-spec replicates → no D3 blockers (mirrors what
     // buildRemovalContext would precompute; submitRemoval blocks on this field).

@@ -41,6 +41,7 @@ export interface TransportCoverageFact {
   category: TransportCategory;
   /** Transport legs found for this category across the removal's members. */
   count: number;
+  missingEntityIds?: readonly string[];
   /** A per-leg uniformity/completeness warning from aggregation, if any. */
   aggregationWarning: string | null;
 }
@@ -73,6 +74,8 @@ export interface RemovalReadinessFacts {
   transportVehicleAdvisories?: string[];
   /** Compact labels from per-entity certifier-readiness checks. */
   entityReadinessGaps?: string[];
+  /** Shared submission checks for individual feedstocks, orders and deliveries. */
+  submissionLineageBlockers?: string[];
   /** Documents discovered by the same lineage walk as the Sources panel. */
   supportingDocumentCount?: number;
   /** Supporting documents with an existing Isometric Source mirror. */
@@ -83,6 +86,8 @@ export interface RemovalReadinessFacts {
    * eligibility are submission-ready. Surfaced so readiness predicts the gate.
    */
   durabilityGateBlockers?: string[];
+  /** Registry capabilities shared with the measurement-sample builder. */
+  durabilityConfigurationBlockers?: string[];
   /**
    * Production-run ends, Sample times, or application dates that still lie in the
    * future, already phrased as blocker sentences. Computed SERVER-SIDE (this
@@ -188,7 +193,7 @@ function templateResolvesCleanly(facts: RemovalReadinessFacts): boolean {
 
 // Transport-coverage gaps, phrased exactly as the classifier's blocker reasons.
 function transportGapReasons(required: TransportCoverageFact[]): string[] {
-  const missing = required.filter((t) => t.count === 0).map((t) => t.category);
+  const missing = required.filter((t) => t.count === 0 || (t.missingEntityIds?.length ?? 0) > 0).map((t) => t.category);
   const incomplete = required
     .filter((t) => t.count > 0 && t.aggregationWarning !== null)
     .map((t) => t.category);
@@ -262,7 +267,7 @@ export function deriveRemovalReadiness(
     };
   }
 
-  const reasons: string[] = [];
+  const reasons: string[] = [...(facts.submissionLineageBlockers ?? [])];
 
   const templateReason = templateBlockerReason(facts);
   if (templateReason) reasons.push(templateReason);
@@ -307,6 +312,7 @@ export function deriveRemovalReadiness(
   // Durability sampling/eligibility — the same fail-closed gate the submit
   // pipeline throws on (D3). Surfacing it here means a removal can't read
   // "ready" then bounce at submit on an unsampled run or out-of-spec chemistry.
+  reasons.push(...(facts.durabilityConfigurationBlockers ?? []));
   reasons.push(...durabilityBlockerReasons(facts.durabilityGateBlockers ?? []));
 
   return reasons.length > 0
@@ -559,7 +565,7 @@ export function buildRemovalRequirementsChecklist(
       }];
     }
     const missing = facts.requiredTransport
-      .filter((category) => category.count === 0)
+      .filter((category) => category.count === 0 || (category.missingEntityIds?.length ?? 0) > 0)
       .map((category) => category.category);
     return missing.length === 0
       ? [{
@@ -577,7 +583,7 @@ export function buildRemovalRequirementsChecklist(
   })();
 
   const entityReadiness = ((): RemovalRequirementCheckBase => {
-    const gaps = facts.entityReadinessGaps ?? [];
+    const gaps = [...(facts.submissionLineageBlockers ?? []), ...(facts.entityReadinessGaps ?? [])];
     return gaps.length === 0
       ? {
           key: "entityReadiness",
@@ -612,7 +618,7 @@ export function buildRemovalRequirementsChecklist(
     if (!facts.hasSubmittableRuns) {
       return { key: "durability", label: DURABILITY_LABEL, status: "skipped" };
     }
-    const blockers = facts.durabilityGateBlockers ?? [];
+    const blockers = [...(facts.durabilityConfigurationBlockers ?? []), ...(facts.durabilityGateBlockers ?? [])];
     return blockers.length === 0
       ? { key: "durability", label: DURABILITY_LABEL, status: "met" }
       : {

@@ -152,10 +152,15 @@ test.describe("application evidence and certification readiness", () => {
       );
 
       // The applications list badge must agree with the Removal checklist.
+      // The list pill checks the application's own fields, so it reads
+      // "Fields complete" rather than claiming certification.
       await page.goto(`/applications?facility=${facilityId}`);
       const row = page.locator("tr", { hasText: batch.applicationCode });
       await expect(row).toBeVisible({ timeout: COLD_COMPILE_TIMEOUT_MS });
-      await expect(row.getByLabel("Ready for certification")).toBeVisible();
+      await expect(row.getByLabel("Fields complete")).toBeVisible();
+      await expect(
+        row.getByRole("button", { name: /Incomplete application fields/ }),
+      ).toHaveCount(0);
     } finally {
       await batch?.cleanup();
     }

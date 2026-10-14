@@ -292,6 +292,22 @@ afterAll(async () => {
 });
 
 describe("certifier Biochar Application data access", () => {
+  it("loads the order destination within the active organization", async () => {
+    const ctx = makeTestOrgContext();
+    try {
+      expect(await getBiocharApplicationRegistryInputs(ctx, [ids.application])).toEqual([
+        expect.objectContaining({ customerLocationId: ids.location }),
+      ]);
+      await db.update(orders).set({ customerLocationId: null }).where(eq(orders.id, ids.order));
+      expect(await getBiocharApplicationRegistryInputs(ctx, [ids.application])).toEqual([
+        expect.objectContaining({ customerLocationId: null }),
+      ]);
+      expect(await getBiocharApplicationRegistryInputs(foreignCtx, [ids.application])).toEqual([]);
+    } finally {
+      await db.update(orders).set({ customerLocationId: ids.location }).where(eq(orders.id, ids.order));
+    }
+  });
+
   it("loads operator facts and journals identity only within the active organization", async () => {
     const ctx = makeTestOrgContext();
     await expect(

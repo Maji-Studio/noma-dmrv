@@ -1,3 +1,4 @@
+import { missingFeedstockTransportIds } from "@/lib/certification/submission-readiness";
 import { transportVehicleAdvisories } from "@/lib/isometric/utils/aggregation";
 import {
   aggregateTransportMassDistance,
@@ -22,6 +23,7 @@ export interface TransportCoverageBucket {
   // so the panel surfaces the warning before submission.
   aggregationWarning: string | null;
   vehicleAdvisories: string[];
+  missingEntityIds?: string[];
 }
 
 export interface TransportCoverage {
@@ -65,6 +67,7 @@ export function buildTransportCoverage(
 ): TransportCoverage {
   return {
     feedstock: {
+      missingEntityIds: missingFeedstockTransportIds(entityIds.feedstockIds, legs.feedstock),
       vehicleAdvisories: transportVehicleAdvisories(legs.feedstock, "Feedstock"),
       count: legs.feedstock.length,
       entityIds: entityIds.feedstockIds,

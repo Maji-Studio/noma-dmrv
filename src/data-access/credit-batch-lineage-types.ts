@@ -53,6 +53,9 @@ export interface BatchLineageApplicationFact {
     status: string | null;
     deliveryDate: Date;
     deliveredWetMassKg?: number | null;
+    distanceKmOverride?: number | null;
+    locationDistanceKm?: number | null;
+    customerLocationId?: string | null;
     massDryKg: number | null;
   };
   order: {

@@ -6,6 +6,7 @@
  * Includes stat cards, status badges, and EntitySideSheet
  */
 
+import { CertificationScopeHeader } from "@/components/certification/certification-scope-header";
 import { EntityCertifyReadinessBadge } from "@/components/certification/entity-certify-readiness-badge";
 import { ServerError } from "@/components/forms";
 import { SelectFacilityEmptyState } from "@/components/navigation";
@@ -170,7 +171,7 @@ function createColumns(
     },
     {
       id: "certifyReadiness",
-      header: "Certification",
+      header: () => <CertificationScopeHeader />,
       cell: ({ row }) => (
         <EntityCertifyReadinessBadge
           readiness={deriveEntityCertifyReadiness("delivery", row.original)}

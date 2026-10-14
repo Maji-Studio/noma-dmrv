@@ -163,6 +163,7 @@ describe("enrichWithTransportLegs", () => {
       feedstockIds: [], biocharProductIds: [], sampleIds: [],
     });
     const facts = toRemovalReadinessFacts({
+      submissionLineageBlockers: [], durabilityConfigurationBlockers: [],
       latestSubmission: null,
       hasOrgCredentials: true,
       mapping: {},
@@ -206,6 +207,7 @@ describe("enrichWithTransportLegs", () => {
       feedstockIds: [], biocharProductIds: ["ent_test"], sampleIds: [],
     });
     const facts = toRemovalReadinessFacts({
+      submissionLineageBlockers: [], durabilityConfigurationBlockers: [],
       latestSubmission: null,
       hasOrgCredentials: true,
       mapping: {},
@@ -235,6 +237,7 @@ describe("enrichWithTransportLegs", () => {
     }, { feedstockIds: [], biocharProductIds: [], sampleIds: [] });
     expect(coverage.sample.vehicleAdvisories).toHaveLength(1);
     const facts = toRemovalReadinessFacts({
+      submissionLineageBlockers: [], durabilityConfigurationBlockers: [],
       latestSubmission: null, supportingDocuments: { total: 0, mirrored: 0 },
       requiredTransportCategories: ["feedstock", "biochar"], transportCoverage: coverage,
     } as unknown as RemovalCertifyContext);

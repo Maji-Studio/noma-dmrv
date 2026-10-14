@@ -143,6 +143,11 @@ export function batchHealthFixLinkFor(
         href: buildFeedstockTypeEditDeepLink(facilityId, feedstockTypeId),
       };
     }
+    case "orders":
+      return {
+        label: "Review orders",
+        href: `/orders?${query(undefined, false)}`,
+      };
     case "deliveries":
     case "deliveryDistances":
       return {

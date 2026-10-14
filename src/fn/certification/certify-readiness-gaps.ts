@@ -69,8 +69,7 @@ export function buildEntityReadinessResult(
     );
     addIssueRecord(issues, issueConfig, { ...record, missing });
   };
-  // Inert until an entity kind produces warnings again. See the warning channel
-  // note in `deriveEntityCertifyReadiness`.
+  // Preserve non-blocking warnings separately from submission gaps.
   const addEntityWarnings = (
     entityLabel: string,
     readinessWarnings: ReturnType<

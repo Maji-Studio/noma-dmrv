@@ -12,6 +12,7 @@ import {
   creditBatchProductionRuns,
   creditBatches,
   customers,
+  customerLocations,
   certificationSubmissions,
   certifierRemovals,
   deliveries,
@@ -63,9 +64,11 @@ describe("credit batch accounting", () => {
       { organizationId: TEST_ORG_ID, biocharProductId: multiRunProduct.id, productionRunId: runs[1].id, sourceStorageLocationId: sourceBin.id, allocatedWetMassKg: 150, allocatedDryMassKg: 60 },
     ]).returning();
     const [customer] = await db.insert(customers).values({ organizationId: TEST_ORG_ID, code: `LF-C-${tag}`, name: `Lineage ${tag}` }).returning();
-    const ordersRows = await db.insert(orders).values(await outputOrderFixtureValues(db, products.map((product, n) => ({ organizationId: TEST_ORG_ID, facilityId: facility.id, customerId: customer.id, biocharProductId: product.id, code: `LF-O${n}-${tag}`, orderDate: new Date("2026-07-03"), quantityKg: 100, packaging: "loose" as const })))).returning();
+    const [location] = await db.insert(customerLocations).values({ organizationId: TEST_ORG_ID, customerId: customer.id, name: `Lineage destination ${tag}`, distanceFromFacilityKm: 15 }).returning();
+    const [deliveryLocation] = await db.insert(customerLocations).values({ organizationId: TEST_ORG_ID, customerId: customer.id, name: `Legacy delivery destination ${tag}`, distanceFromFacilityKm: 25 }).returning();
+    const ordersRows = await db.insert(orders).values(await outputOrderFixtureValues(db, products.map((product, n) => ({ organizationId: TEST_ORG_ID, facilityId: facility.id, customerId: customer.id, customerLocationId: location.id, biocharProductId: product.id, code: `LF-O${n}-${tag}`, orderDate: new Date("2026-07-03"), quantityKg: 100, packaging: "loose" as const })))).returning();
     const deliveryRows = await insertOutputDeliveryFixture(db, [
-      { organizationId: TEST_ORG_ID, facilityId: facility.id, orderId: ordersRows[1].id, biocharProductId: products[0].id, code: `LF-D1-${tag}`, deliveryDate: new Date("2026-07-04"), deliveredWetMassKg: 1_000, massDryKg: 500 },
+      { organizationId: TEST_ORG_ID, facilityId: facility.id, orderId: ordersRows[1].id, biocharProductId: products[0].id, code: `LF-D1-${tag}`, customerLocationId: deliveryLocation.id, distanceKmOverride: 7, deliveryDate: new Date("2026-07-04"), deliveredWetMassKg: 1_000, massDryKg: 500 },
       { organizationId: TEST_ORG_ID, facilityId: facility.id, orderId: ordersRows[1].id, code: `LF-D2-${tag}`, deliveryDate: new Date("2026-07-04"), deliveredWetMassKg: 2_000, massDryKg: 1_500 },
     ], row => row);
     const appRows = await insertOutputApplicationFixture(db, deliveryRows.map((delivery, n) => ({ organizationId: TEST_ORG_ID, deliveryId: delivery.id, code: `LF-A${n}-${tag}`, applicationDate: new Date(`2026-08-1${n}T00:00:00Z`), biocharAppliedTons: n + 1, biocharAppliedDryTons: n + 0.5 })), row => row);
@@ -91,6 +94,16 @@ describe("credit batch accounting", () => {
       const facts = accounting.lineageFacts;
       const detail = await getCreditBatchById(makeTestOrgContext(), batch.id, { skipPreview: true });
       const chain = await getCreditBatchChainData(makeTestOrgContext(), batch.id);
+      expect(facts.applications.find((application) => application.id === appRows[0].id)?.delivery).toMatchObject({
+        customerLocationId: deliveryLocation.id,
+        locationDistanceKm: 25,
+        distanceKmOverride: 7,
+        status: deliveryRows[0].status,
+      });
+      expect(facts.applications.find((application) => application.id === appRows[1].id)?.delivery).toMatchObject({
+        customerLocationId: location.id, locationDistanceKm: 15,
+      });
+      expect(facts.applications.find((application) => application.id === multiRunApplication.id)?.delivery.customerLocationId).toBeNull();
       expect(facts.productionRunIds).toHaveLength(2);
       expect(facts.runs.map((run) => run.feedstockMassDryKg).sort((a, b) => Number(a) - Number(b))).toEqual([2_400, 4_800]);
       expect(facts.applicationIds).toHaveLength(3);
@@ -302,6 +315,7 @@ describe("credit batch accounting", () => {
       await db.delete(productionRuns).where(inArray(productionRuns.id, runs.map((row) => row.id)));
       await db.delete(productionProcesses).where(eq(productionProcesses.id, process.id));
       await db.delete(reactors).where(eq(reactors.id, reactor.id));
+      await db.delete(customerLocations).where(inArray(customerLocations.id, [location.id, deliveryLocation.id]));
       await db.delete(customers).where(eq(customers.id, customer.id));
       await db.delete(feedstockTypes).where(eq(feedstockTypes.id, feedstockType.id));
       await db.delete(storageLocations).where(eq(storageLocations.id, sourceBin.id));

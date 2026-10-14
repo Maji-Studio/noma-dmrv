@@ -74,6 +74,9 @@ export interface ChainDeliveryLineage {
   status: string | null;
   deliveryDate: Date;
   deliveredWetMassKg?: number | null;
+  distanceKmOverride?: number | null;
+  locationDistanceKm?: number | null;
+  customerLocationId?: string | null;
   massDryKg: number | null;
   href: string;
 }

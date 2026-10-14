@@ -4,6 +4,7 @@
  */
 "use client";
 
+import { CertificationScopeHeader } from "@/components/certification/certification-scope-header";
 import { useEffect, useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { CalendarIcon, PackageIcon, PlusIcon, XIcon } from "@phosphor-icons/react/dist/ssr";
@@ -160,7 +161,7 @@ function createColumns(
     },
     {
       id: "certifyReadiness",
-      header: "Certification",
+      header: () => <CertificationScopeHeader />,
       cell: ({ row }) => (
         <EntityCertifyReadinessBadge
           readiness={deriveEntityCertifyReadiness("feedstock", row.original)}
