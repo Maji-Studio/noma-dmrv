@@ -392,12 +392,13 @@ function EntitySelectView({
     (alwaysShowSearch || searchQuery.length > 0 || showMoreResults || options.length > SELECT_SEARCH_MIN_OPTIONS);
 
   const navigableRows = rows.filter((row) => row.kind !== "option" || !row.option.disabled);
-  const firstSelectableId = rows.find((row) => row.kind === "none" || (row.kind === "option" && !row.option.disabled))?.id
-    ?? (selectionLocked ? rows[0]?.id : undefined);
+  const defaultRow = rows.find((row) => row.kind === "none" || (row.kind === "option" && !row.option.disabled))
+    ?? (selectionLocked ? rows[0] : undefined);
+  const defaultRowId = defaultRow?.id;
   // Initialize Base UI's navigation at the first selectable row, preserving the
   // picker's Enter default even when opening by pointer or receiving async data.
   useEffect(() => {
-    if (isOpen && listElement && (firstSelectableId || openingNavigationKey.current === "End")) {
+    if (isOpen && listElement && (defaultRowId || openingNavigationKey.current === "End")) {
       const navigationKey = openingNavigationKey.current;
       let cancelled = false;
       const initialize = () => {
@@ -411,7 +412,7 @@ function EntitySelectView({
       });
       return () => { cancelled = true; };
     }
-  }, [isOpen, firstSelectableId, listElement]);
+  }, [isOpen, defaultRowId, listElement]);
 
   // Auto-select when there is exactly one option and no current value
   useEffect(() => {
@@ -485,9 +486,7 @@ function EntitySelectView({
         } else if (!highlighted) {
           e.preventDefault();
           e.preventBaseUIHandler?.();
-          const first = rows.find((row) => row.kind === "none" || (row.kind === "option" && !row.option.disabled))
-            ?? (selectionLocked ? rows[0] : undefined);
-          if (first) activateRow(first);
+          if (defaultRow) activateRow(defaultRow);
         }
         break;
       }
@@ -542,8 +541,10 @@ function EntitySelectView({
       onItemHighlighted={(_, details) => {
         // This Base UI version exposes the active descendant on Input and List,
         // but not Trigger, where touch and searchless pickers retain focus.
-        // Base UI 1.1.0 combobox/item/ComboboxItem.js assigns item ids as `${rootId}-${index}`.
-        if (details.index >= 0) triggerRef.current?.setAttribute("aria-activedescendant", `${entitySelectId}-${details.index}`);
+        // Highlight notification precedes the DOM update, so read the indexed
+        // navigable item's real id rather than the previous data-highlighted row.
+        const highlightedId = listElement?.querySelectorAll('[role="option"]:not([aria-disabled="true"]), [role="button"]')[details.index]?.id;
+        if (highlightedId) triggerRef.current?.setAttribute("aria-activedescendant", highlightedId);
         else triggerRef.current?.removeAttribute("aria-activedescendant");
         setExplicitActionHighlight(details.reason === "keyboard" || details.reason === "pointer");
       }}
@@ -555,7 +556,7 @@ function EntitySelectView({
         }
       }}
       filter={null}
-      autoHighlight={rows.some((row) => row.kind === "none" || (row.kind === "option" && !row.option.disabled)) || selectionLocked}
+      autoHighlight={Boolean(defaultRow)}
       loopFocus={false}
       disabled={triggerDisabled}
     >

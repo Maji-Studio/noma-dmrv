@@ -1,6 +1,12 @@
+import { readFileSync } from "node:fs";
 import { renderToStaticMarkup } from "react-dom/server";
 import { FormDetailProvider } from "../form-detail-context";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+
+it("guards the Base UI version used by the EntitySelect navigation adapter", () => {
+  const { version } = JSON.parse(readFileSync("node_modules/@base-ui/react/package.json", "utf8"));
+  expect(version, "Revisit the EntitySelect navigation adapter and its interaction tests before upgrading @base-ui/react.").toBe("1.1.0");
+});
 
 const entityState = vi.hoisted(() => ({
   options: [] as Array<{

@@ -385,6 +385,18 @@ describe("EntitySelect menu interactions", () => {
     expect(close).not.toHaveBeenCalled();
   });
 
+  it("reads the navigable item's DOM id without assuming Base UI's id format", async () => {
+    const options = [{ id: "disabled", code: "0", name: "Unavailable bin", disabled: true }, ...state.options];
+    render(<EntitySelect options={options} onChange={vi.fn()} />);
+    open();
+    await waitFor(() => expect(activeTestId()).toBe("entity-option-one"));
+    const nextOption = screen.getByTestId("entity-option-two");
+    nextOption.id = "custom-option-id";
+    key("ArrowDown");
+    expect(trigger().getAttribute("aria-activedescendant")).toBe(nextOption.id);
+    expect(activeTestId()).toBe("entity-option-two");
+  });
+
   it("walks none, options, edit, create in order and activates Edit", async () => {
     const edit = vi.fn(); const change = vi.fn();
     render(<EntitySelect entityType="storageLocation" value="one" onChange={change} onEditSelected={edit} noneOption={{ label: "None" }} allowCreate onCreateNew={vi.fn()} />);
