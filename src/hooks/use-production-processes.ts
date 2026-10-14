@@ -10,6 +10,7 @@ import type {
   RecordMethodBPrerequisitesInput,
   StartNewProcessInput,
 } from "@/schemas/production-process";
+import { unwrap } from "@/hooks/types";
 
 const productionProcessKeys = {
   all: ["production-processes"] as const,
@@ -24,14 +25,13 @@ export function useMethodBEligibility(
 ) {
   return useQuery({
     queryKey: productionProcessKeys.eligibility(facilityId, feedstockTypeId),
-    queryFn: async () => {
-      const result = await getMethodBEligibilityFn({
-        facilityId,
-        feedstockTypeId,
-      });
-      if (!result.success) throw new Error(result.error);
-      return result.data;
-    },
+    queryFn: async () =>
+      unwrap(
+        await getMethodBEligibilityFn({
+          facilityId,
+          feedstockTypeId,
+        }),
+      ),
     enabled: enabled && Boolean(facilityId && feedstockTypeId),
   });
 }
@@ -39,11 +39,8 @@ export function useMethodBEligibility(
 export function useRecordMethodBPrerequisites() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (input: RecordMethodBPrerequisitesInput) => {
-      const result = await recordMethodBPrerequisitesFn(input);
-      if (!result.success) throw new Error(result.error);
-      return result.data;
-    },
+    mutationFn: async (input: RecordMethodBPrerequisitesInput) =>
+      unwrap(await recordMethodBPrerequisitesFn(input)),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: productionProcessKeys.all }),
   });
 }
@@ -51,11 +48,8 @@ export function useRecordMethodBPrerequisites() {
 export function useStartNewProductionProcess() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (input: StartNewProcessInput) => {
-      const result = await startNewProductionProcessFn(input);
-      if (!result.success) throw new Error(result.error);
-      return result.data;
-    },
+    mutationFn: async (input: StartNewProcessInput) =>
+      unwrap(await startNewProductionProcessFn(input)),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: productionProcessKeys.all }),
   });
 }

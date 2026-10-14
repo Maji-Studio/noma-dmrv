@@ -20,6 +20,7 @@ import { creditBatchKeys } from "@/hooks/use-credit-batches";
 import { certificationKeys, invalidateCertificationReadiness } from "@/hooks/use-certification";
 import type { ApplicationFormData, UpdateApplicationData } from "@/schemas/applications";
 import type { ApplicationListOptions } from "@/data-access/applications";
+import { unwrap } from "@/hooks/types";
 
 const EXACT_ID_CHUNK_SIZE = 100;
 
@@ -61,11 +62,7 @@ export function useApplications(
   const results = useQueries({
     queries: requests.map((request) => ({
       queryKey: applicationKeys.list(request),
-      queryFn: async () => {
-        const result = await getApplicationsFn(request);
-        if (!result.success) throw new Error(result.error);
-        return result.data;
-      },
+      queryFn: async () => unwrap(await getApplicationsFn(request)),
       staleTime: 30000,
       enabled: queryOptions?.enabled,
     })),
@@ -93,13 +90,7 @@ export function useApplicationDeliveryOptions(
 ) {
   return useQuery({
     queryKey: applicationKeys.deliveryOptions(facilityId),
-    queryFn: async () => {
-      const result = await getApplicationDeliveryOptionsFn(facilityId);
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-      return result.data;
-    },
+    queryFn: async () => unwrap(await getApplicationDeliveryOptionsFn(facilityId)),
     staleTime: 30000,
     enabled: options?.enabled,
   });
@@ -196,10 +187,6 @@ export function useApplicationCertificationLock(applicationId?: string) {
   return useQuery({
     queryKey: applicationKeys.certificationLock(applicationId),
     enabled: !!applicationId,
-    queryFn: async () => {
-      const result = await loadApplicationCertificationLock(applicationId!);
-      if (!result.success) throw new Error(result.error);
-      return result.data;
-    },
+    queryFn: async () => unwrap(await loadApplicationCertificationLock(applicationId!)),
   });
 }
