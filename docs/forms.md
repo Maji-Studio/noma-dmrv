@@ -231,7 +231,7 @@ bare wall clock.
 
 ## Components
 
-Leaf and shared components import from `@/components/forms/<file>` because the barrel loads every entity editor, increasing unit-test import cost. Full forms may keep using the `@/components/forms` barrel (`src/components/forms/index.ts`); read it for the full surface and TypeScript prop signatures, with only non-obvious contracts documented here.
+New or touched leaf and shared components should import from `@/components/forms/<file>` because the barrel loads every entity editor, increasing unit-test import cost. Move existing barrel imports in those components as they are edited. Full forms may keep using the `@/components/forms` barrel (`src/components/forms/index.ts`); read it for the full surface and TypeScript prop signatures, with only non-obvious contracts documented here.
 
 - **`FormField`** — three kinds of help, one rule: **the ⓘ holds explanations; a `cue` stays visible only for a unit, a limit or a consequence** the operator needs while typing.
   - `hint` and `helperText` both render behind the ⓘ beside the label (hint first), whatever their length. They also reach screen readers as the control's description. Definitions, examples, "why we ask", plain scope notes ("Seeds new orders.") and typical ranges ("0 to 100% of wet mass", "Only an empty bin can switch to split.") go here.
