@@ -52,9 +52,6 @@ export interface BiocharApplicationRegistryInput {
   fieldSizeHa: number | null;
   deliveryId: string;
   deliveryCode: string;
-  deliveryStatus: string;
-  distanceKmOverride: number | null;
-  locationDistanceKm: number | null;
   deliveredWetMassKg: number | null;
   facilityId: string;
   certifierProjectId: string | null;
@@ -83,9 +80,6 @@ export async function getBiocharApplicationRegistryInputs(
       fieldSizeHa: applications.fieldSizeHa,
       deliveryId: deliveries.id,
       deliveryCode: deliveries.code,
-      deliveryStatus: deliveries.status,
-      distanceKmOverride: deliveries.distanceKmOverride,
-      locationDistanceKm: customerLocations.distanceFromFacilityKm,
       deliveredWetMassKg: deliveries.deliveredWetMassKg,
       facilityId: deliveries.facilityId,
       certifierProjectId: certifierProjects.id,

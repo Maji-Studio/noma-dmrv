@@ -27,7 +27,7 @@ export type EntityCertifyWarning = Omit<EntityCertifyGap, "kind">;
 export type EntityReadinessRecord = object;
 
 export const REMOVAL_FIELD_CHECK_SCOPE =
-  "These pills check local fields. Removal submission also checks production runs, Samples, transport legs, delivery distances and the order’s customer location.";
+  "Fields complete checks this record's own fields. Removal submission also checks production runs, Samples, transport legs, delivery distances and the order’s customer location.";
 
 const TERMINAL_STATUS_BY_ENTITY: Partial<Record<CertifyEntityKind, string[]>> = {
   productionRun: ["complete"],
@@ -119,13 +119,11 @@ function fieldGap(
       : descriptor.satisfaction?.mode === "equals"
         ? [descriptor.satisfaction.field]
         : descriptorFields(descriptor);
-  const requirement = descriptor.key === "transportDistanceProvenance"
-    ? "Transport distance provenance records how the distance was obtained"
-    : FIELD_PURPOSE_BY_ENTITY[entityKind]
+  const requirement = descriptor.gapDetail ?? (FIELD_PURPOSE_BY_ENTITY[entityKind]
     ? `${descriptor.label} feeds ${FIELD_PURPOSE_BY_ENTITY[entityKind]}`
     : descriptor.condition != null
       ? `${descriptor.label} is required for ${descriptor.condition.label}`
-      : `${descriptor.label} is required to certify`;
+      : `${descriptor.label} is required to certify`);
 
   return {
     kind: "field",

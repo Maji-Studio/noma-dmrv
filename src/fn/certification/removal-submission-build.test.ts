@@ -1,3 +1,5 @@
+import { buildSubmissionLineageBlockers } from "./certify-lineage-blockers";
+import { deriveRequiredTransportCategories } from "./certify-transport-coverage";
 import { missingFeedstockTransportIds } from "@/lib/certification/submission-readiness";
 import production from "../../../tests/fixtures/isometric/production-template-2026-07-03.json";
 import type { components as RegistryComponents } from "@/lib/isometric/generated/certify";
@@ -444,7 +446,7 @@ describe("buildRemovalSubmissionBuild", () => {
             code: "APP-001",
             applicationDate: new Date("2026-01-03T00:00:00Z"),
           },
-          delivery: { id: "delivery-1" },
+          delivery: { id: "delivery-1", status: "delivered", customerLocationId: "location-1" },
           productionRun: { id: "run-1" },
           feedstocks: [],
           warnings: [],
@@ -471,6 +473,11 @@ describe("buildRemovalSubmissionBuild", () => {
       memberBatches: [{ id: "batch-1" }],
       facilityReferenceSoilTemperature: null,
     } as unknown as RemovalSubmissionContext;
+    ctx.submissionLineageBlockers = buildSubmissionLineageBlockers(
+      ctx.lineages, ["feedstock-without-leg"], {},
+      deriveRequiredTransportCategories(template),
+    );
+    expect(ctx.submissionLineageBlockers).toEqual([]);
     const sourceCandidate = {
       documentId: "document-inventory",
       sourceId: "source-inventory",

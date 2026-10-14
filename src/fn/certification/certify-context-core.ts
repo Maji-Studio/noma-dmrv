@@ -646,6 +646,8 @@ export async function buildRemovalContext(
             soilTemperatureC: l.application.soilTemperatureC,
           })),
   });
+  const durabilityConfigBlockers = hasDurabilityMeasurementComponents(facilityFacts.defaultTemplate)
+    ? durabilityConfigurationBlockers(batchesWithSamples) : [];
   const durabilityGateBlockers = [
     ...durabilityBatchBlockers,
     ...soilTemperatureGate.blockers,
@@ -673,8 +675,7 @@ export async function buildRemovalContext(
       productionReadinessGap,
       entityReadinessGaps: [],
       durabilityGateBlockers,
-      durabilityConfigurationBlockers: hasDurabilityMeasurementComponents(facilityFacts.defaultTemplate)
-      ? durabilityConfigurationBlockers(batchesWithSamples) : [],
+      durabilityConfigurationBlockers: durabilityConfigBlockers,
       // No applications and no runs resolved ⇒ no date to be in the future.
       futureDatedMeasurements: [],
       submissionWarnings: [
@@ -738,6 +739,7 @@ export async function buildRemovalContext(
     lineages,
     transportCoverage.feedstock.missingEntityIds ?? [],
     scope.feedstockCodes,
+    requiredTransportCategories,
   );
   const entityReadiness = await buildCertifyEntityReadiness({
     runs,
@@ -779,8 +781,7 @@ export async function buildRemovalContext(
     submissionLineageBlockers,
     entityReadinessIssues: entityReadiness.issues,
     durabilityGateBlockers,
-    durabilityConfigurationBlockers: hasDurabilityMeasurementComponents(facilityFacts.defaultTemplate)
-      ? durabilityConfigurationBlockers(batchesWithSamples) : [],
+    durabilityConfigurationBlockers: durabilityConfigBlockers,
     futureDatedMeasurements: collectFutureDatedMeasurements({
       runs,
       samples: batchesWithSamples.flatMap((batch) => batch.samples),

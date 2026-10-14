@@ -634,7 +634,9 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
     expect(result.runSummary.runCount).toBe(0);
   });
 
-  it.each(["carbon_rich_substance_sequestration", "biochar_sequestration_200_year_c_org"])("populates lineage coverage and scopes durability refusals for %s", async (storageKey) => {
+  it.each(["carbon_rich_substance_sequestration", "biochar_sequestration_200_year_c_org"].flatMap((storageKey) =>
+    ([[], ["feedstock"], ["biochar"], ["feedstock", "biochar"]] as const).map((omit) => ({ storageKey, omit })),
+  ))("scopes lineage and durability blockers for $storageKey omitting $omit", async ({ storageKey, omit }) => {
     mockedGetCreditBatch.mockResolvedValue({
       id: CREDIT_BATCH_ID,
       facilityId: FACILITY_ID,
@@ -644,7 +646,9 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
       mapping({ defaultRemovalTemplateId: "rvt_resolved" }),
     );
     mockedListProjects.mockResolvedValue([project(EXTERNAL_PROJECT_ID)]);
-    mockedListTemplates.mockResolvedValue([template("rvt_resolved", [storageKey])]);
+    const resolvedTemplate = template("rvt_resolved", [storageKey]);
+    resolvedTemplate.groups.push(...transportTemplate("rvt_resolved", omit).groups);
+    mockedListTemplates.mockResolvedValue([resolvedTemplate]);
     mockedListBlueprints.mockResolvedValue([]);
 
     mockedGetLineage.mockResolvedValue({
@@ -707,10 +711,10 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
     );
 
     expect(result.submissionLineageBlockers).toEqual(expect.arrayContaining([
-      expect.stringContaining("Feedstock FS-MISSING"),
       expect.stringContaining("Application AP-MISSING has no customer location"),
-      expect.stringContaining("Delivery DL-MISSING has no positive transport distance"),
     ]));
+    expect(result.submissionLineageBlockers?.some((reason) => reason.includes("Feedstock FS-MISSING"))).toBe(!omit.some((category) => category === "feedstock"));
+    expect(result.submissionLineageBlockers?.some((reason) => reason.includes("Delivery DL-MISSING"))).toBe(!omit.some((category) => category === "biochar"));
     expect(toRemovalReadinessFacts(result).submissionLineageBlockers).toEqual(result.submissionLineageBlockers);
     expect(result.durabilityConfigurationBlockers).toEqual(storageKey === "carbon_rich_substance_sequestration" ? [] : ["200-year Removals cannot be submitted yet. Wait for support to confirm registry availability."]);
     const coverage = result.transportCoverage;

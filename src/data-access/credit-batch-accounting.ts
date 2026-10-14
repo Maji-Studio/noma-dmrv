@@ -54,7 +54,6 @@ import {
   eq,
   inArray,
   isNull,
-  or,
   sql,
 } from "drizzle-orm";
 import type {
@@ -241,9 +240,9 @@ async function loadLineageWithExecutor(
           ),
         )
         .leftJoin(customerLocations, and(
-          or(
-            eq(customerLocations.id, deliveries.customerLocationId),
-            and(isNull(deliveries.customerLocationId), eq(customerLocations.id, orders.customerLocationId)),
+          eq(
+            customerLocations.id,
+            sql`coalesce(${deliveries.customerLocationId}, ${orders.customerLocationId})`,
           ),
           eq(customerLocations.organizationId, ctx.organizationId),
         ))

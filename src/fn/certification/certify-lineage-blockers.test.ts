@@ -9,17 +9,17 @@ const lineage = {
 
 describe("submission lineage blockers", () => {
   it("reads destination and delivery distance from the existing lineage facts", () => {
-    expect(buildSubmissionLineageBlockers([lineage, lineage], [], {})).toEqual([
+    expect(buildSubmissionLineageBlockers([lineage, lineage], [], {}, ["biochar"])).toEqual([
       "Application AP-1 has no customer location. Select a customer location on the order before submitting.",
       "Delivery DL-1 has no positive transport distance. Set the customer location distance or a delivery distance override before submitting.",
     ]);
     expect(buildSubmissionLineageBlockers([{
       ...lineage, delivery: { ...lineage.delivery, customerLocationId: "location", locationDistanceKm: 10 },
-    }], [], {})).toEqual([]);
+    }], [], {}, ["biochar"])).toEqual([]);
   });
 
   it("uses a generic noun when the feedstock code is unavailable", () => {
-    const blockers = buildSubmissionLineageBlockers([], ["internal-uuid", "fs-1"], { "fs-1": "FS-1" });
+    const blockers = buildSubmissionLineageBlockers([], ["internal-uuid", "fs-1"], { "fs-1": "FS-1" }, ["feedstock"]);
     expect(blockers[0]).toBe("A feedstock has no usable transport leg. Record a positive distance and load mass before submitting.");
     expect(blockers[1]).toContain("Feedstock FS-1");
     expect(blockers.join(" ")).not.toContain("internal-uuid");

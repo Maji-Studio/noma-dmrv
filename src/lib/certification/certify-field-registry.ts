@@ -66,6 +66,7 @@ export interface CertifyFieldDescriptor {
   satisfaction?: CertifyFieldSatisfaction;
   mappings?: readonly CertifySourceMapping[];
   advisory?: string;
+  gapDetail?: string;
 }
 
 export const AGGREGATED_PRODUCTION_DATA_KEYS = [
@@ -313,6 +314,7 @@ export const CERTIFY_FIELD_REGISTRY: Record<
     },
     {
       key: "transportDistanceProvenance",
+      gapDetail: "Transport distance provenance records how the distance was obtained",
       label: "Transport distance provenance",
       kind: "derived",
       satisfaction: {
