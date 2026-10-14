@@ -25,7 +25,7 @@ these areas; the entry rules and invariants live in
 - **B12:** Delete the two one-off investigation scripts? **Anchor:** `scripts/find-supplier-customer-overlap.ts`, `scripts/isometric-link-demo.ts`.
 - **B13:** Introduce a composite CI action in two stages? **Anchor:** `.github/workflows/ci.yml`, `.github/workflows/migration-gate.yml`.
 - **B14:** Split bin-picker aggregates into two phases only after a measured plan improvement? **Anchor:** `src/data-access/entities/storage-locations.ts:buildInventoryAggregates`.
-- B2's reactor-upload retirement shipped in #1000 (closes #987). A4's gated appendix A16 extraction was omitted from #743.
+- **A4 (appendix A16):** The gated submit-dialog flag and title extraction was omitted from #743. **Anchor:** `src/components/certification/ghg-statement-submit-dialog.tsx:GhgStatementSubmitDialogContent`. **Resolve via:** revisit once the GHG report folder is stable; extract the derivation beside `ghg-statement-workflow-state.ts` with a table-driven test pinning every current output and no label changes.
 - **Resolve via:** Kenji answers B1 and B3 to B14 above; A5 stays deferred until the list-query trigger above.
 
 ### Keyset cursors accept foreign or unknown positions (`api/keyset-cursor-position`, opened 2026-10-14)

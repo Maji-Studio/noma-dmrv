@@ -329,6 +329,13 @@ runtime.
 - No `"use cache"`, no Cache Components — React Query owns all caching. See
   [modern-patterns.md](./modern-patterns.md).
 
+### Hook ActionResult unwrapping
+
+Hooks unwrap an `ActionResult` with `unwrap()` from `src/hooks/types.ts`.
+The only exception is a hook that reads `field`, `conflict` or `warning`, or
+returns something other than `result.data`; typed errors go through
+`throwActionError`. `pnpm check:action-boundaries` enforces this rule.
+
 ### Authenticated read transport
 
 Client React Query reads use ordinary `fetch` against small resource-specific
