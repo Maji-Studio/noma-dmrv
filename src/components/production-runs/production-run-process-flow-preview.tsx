@@ -4,12 +4,12 @@
  *
  * A Sankey from the source bin through the reactor to the destination bin,
  * band thickness in kilograms on one scale, so 4 t in and 1 t out look like
- * it. On the dry basis the feedstock splits into its water, which is driven
- * off before the reactor, and its dry matter, which enters it; the reactor
- * splits the dry matter into the conversion loss (syngas, vapour, ash) and the
- * dry biochar, which runs on to the bin and meets the biochar's own water
- * there. The exits are the run's losses made visible rather than implied by
- * two bars of different length.
+ * it. On the dry basis feedstock water is driven off in the reactor but drawn
+ * as an exit ahead of the reactor column, so the reactor carries dry mass
+ * only. The reactor splits the dry matter into the conversion loss (syngas,
+ * vapour, ash) and the dry biochar, which runs on to the bin and meets water
+ * taken up afterwards, drawn as an inflow there. The exits are the run's losses
+ * made visible rather than implied by two bars of different length.
  *
  * Both bases are honest. When either dry mass is missing the flow falls back
  * to wet mass end to end, with water and conversion loss as one exit, and the
@@ -26,14 +26,16 @@
 import { CompositionCard } from "@/components/forms/composition-card";
 import { DerivedHeadline } from "@/components/forms/derived-headline";
 import { MassFlowSankey, type MassFlowDiagram } from "@/components/ui/mass-flow-sankey";
-import { formatMassKg, formatPercent } from "@/lib/format-utils";
+import { formatMassKg, formatPercent, massKgRoundsToZero } from "@/lib/format-utils";
 import { PERCENT_SCALE } from "@/lib/mass-moisture";
 import { StockRows, type StockRow } from "@/components/storage-locations/stock-figures";
 
 const YIELD_DIGITS = 1;
 
+export const PROCESS_FLOW_WATER_INFLOW_LABEL = "Water taken up";
+
 const PROCESS_FLOW_HINT =
-  "Yield is the biochar leaving the reactor as a share of the feedstock entering it. Dry mass is the basis carbon accounting uses. Conversion loss is the pyrolysis mass not kept in the biochar: syngas, vapour and ash.";
+  "Yield is the biochar leaving the reactor as a share of the feedstock entering it. Dry mass is the basis carbon accounting uses. Conversion loss is the pyrolysis mass not kept in the biochar: syngas, vapour and ash. All feedstock water is driven off in the reactor. Any water in the biochar is taken up afterwards, during quenching or storage.";
 
 const PLACEHOLDERS = {
   source: "Select source bin",
@@ -116,6 +118,8 @@ export function processFlowDiagram(props: ProcessFlowProps): MassFlowDiagram | n
   }
 
   const feedWaterKg = feedstockKg - feedstockDryKg;
+  const biocharWaterKg = biocharKg - biocharDryKg;
+  const showBiocharWater = !massKgRoundsToZero(biocharWaterKg);
   const lossKg = Math.max(0, feedstockDryKg - biocharDryKg);
   return {
     nodes: [
@@ -145,7 +149,7 @@ export function processFlowDiagram(props: ProcessFlowProps): MassFlowDiagram | n
         caption: `${formatMassKg(biocharKg)} wet, ${formatMassKg(biocharDryKg)} dry`,
         segments: [
           { id: "biochar-dry", kg: biocharDryKg, kind: "dry" },
-          { id: "biochar-water", kg: biocharKg - biocharDryKg, kind: "water" },
+          { id: "biochar-water", kg: showBiocharWater ? biocharWaterKg : 0, kind: "addedWater" },
         ],
       },
     ],
@@ -157,6 +161,9 @@ export function processFlowDiagram(props: ProcessFlowProps): MassFlowDiagram | n
       { from: "feed-water", name: "Water driven off", caption: formatMassKg(feedWaterKg) },
       { from: "loss", name: "Conversion loss", caption: formatMassKg(lossKg) },
     ],
+    inflows: showBiocharWater
+      ? [{ to: "biochar-water", name: PROCESS_FLOW_WATER_INFLOW_LABEL, caption: formatMassKg(biocharWaterKg) }]
+      : [],
   };
 }
 

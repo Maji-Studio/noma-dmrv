@@ -700,7 +700,11 @@ from `productFlowSources`), and the product regroups the bands by kind beside
 its node, each part named with its mass and whole-number share ("Dry biochar
 270 kg (45%)"). The production run's process flow uses the same component:
 source bin, reactor, destination bin, with water driven off and conversion loss
-as exits that rise and fade. The Sankey keeps the moisture split's fills (plum
+as exits that rise and fade, and water taken up as an inflow in added-water
+purple. An inflow mirrors an exit: it runs in from the left just under the band
+arriving at a last-column node, fades in as it rises into its segment, and
+carries its label under its faded far end; stop labels step clear of both.
+The Sankey keeps the moisture split's fills (plum
 dry, hatched water, purple added water, entity accents for ingredient solids,
 bands at a lighter tint), draws at the measured container width so labels stay
 14px and 12px on a phone, and keeps every name and figure as HTML text. It is

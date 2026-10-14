@@ -15,6 +15,7 @@ import {
   formatMassKg,
   formatPercent,
   formatTonnes,
+  massKgRoundsToZero,
 } from "./format-utils";
 
 describe("missing-value routing", () => {
@@ -177,5 +178,18 @@ describe("formatMassKg explicit storage precision", () => {
     expect(formatMassKg(125.125, { digits: MASS_KG_STORAGE_DECIMALS })).toBe("125.125 kg");
     expect(formatMassKg(125.125)).toBe("125.1 kg");
     expect(formatMassKg(0.001, { digits: MASS_KG_STORAGE_DECIMALS })).toBe("0.001 kg");
+  });
+});
+
+describe("massKgRoundsToZero", () => {
+  it.each([
+    [0, true],
+    [0.03, true],
+    [0.05, false],
+    [0.06, false],
+    [7.5, false],
+  ])("matches the default mass display for %s kg", (kg, roundsToZero) => {
+    expect(massKgRoundsToZero(kg)).toBe(roundsToZero);
+    expect(formatMassKg(kg) === formatMassKg(0)).toBe(roundsToZero);
   });
 });

@@ -2,7 +2,8 @@
  * MassFlowSankey — where a mass goes, drawn as bands whose thickness is
  * kilograms. Nodes are the stops (a bin, a reactor, a product), segments the
  * kinds of mass a stop holds, bands the mass moving between stops, and exits
- * the mass leaving the process (water driven off, conversion loss). A node
+ * the mass leaving the process (water driven off, conversion loss). Inflows
+ * bring mass in from outside the process, such as water taken up later. A node
  * can name its own parts beside it, as a product does with what it is made
  * of.
  *
