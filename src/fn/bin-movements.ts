@@ -18,7 +18,6 @@ import { uuidSchema } from "@/schemas/helpers";
 import { withAction } from "./with-action";
 import type { ConflictRef } from "@/lib/conflict-ref";
 import { z } from "zod";
-import { requireOrgContext } from "@/lib/auth/server";
 import {
   createBinMovement,
   recordStockTakeMovement,
@@ -29,12 +28,7 @@ import {
   recordLossSchema,
   recordStockTakeSchema,
 } from "@/schemas/bin-movements";
-import { ActionConflictError } from "@/lib/errors";
 import { StockOverdrawError } from "@/data-access/bin-stock-guards";
-import {
-  formatZodActionError,
-  toLoggedActionError,
-} from "./action-errors";
 
 export type RecordLossActionResult =
   | { success: true; data: BinMovement }
@@ -49,17 +43,6 @@ export type RecordStockTakeActionResult =
   | { success: true; data: BinMovement }
   | { success: false; error: string; field?: "countedMassKg" };
 
-function binMovementActionError(
-  error: unknown,
-  fallbackMessage: string,
-  op: string
-): string {
-  return toLoggedActionError(error, fallbackMessage, {
-    message: "bin movement action failed",
-    context: { op },
-  });
-}
-
 // ============================================
 // Create (append-only)
 // ============================================
@@ -67,9 +50,7 @@ function binMovementActionError(
 export async function recordStockTakeFn(
   data: z.infer<typeof recordStockTakeSchema>
 ): Promise<RecordStockTakeActionResult> {
-  try {
-    const ctx = await requireOrgContext();
-
+  return withAction(async (ctx) => {
     const validated = recordStockTakeSchema.parse(data);
 
     const movement = await recordStockTakeMovement(ctx, {
@@ -81,38 +62,21 @@ export async function recordStockTakeFn(
       moistureRatioUsed: validated.moistureRatioUsed ?? null,
     });
 
-    return { success: true, data: movement };
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return {
-        success: false,
-        error: formatZodActionError(error),
-      };
-    }
-    if (error instanceof StockTakeIncreaseError) {
-      return {
-        success: false,
-        error: error.message,
-        field: "countedMassKg",
-      };
-    }
-    return {
-      success: false,
-      error: binMovementActionError(
-        error,
-        "Failed to record stock-take",
-        "bin-movement:stock-take"
-      ),
-    };
-  }
+    return movement;
+  }, {
+    fallbackMessage: "Failed to record stock-take",
+    log: { message: "bin movement action failed", context: { op: "bin-movement:stock-take" } },
+    mapError: (error) =>
+      error instanceof StockTakeIncreaseError
+        ? { success: false as const, error: error.message, field: "countedMassKg" as const }
+        : undefined,
+  });
 }
 
 export async function recordLossFn(
   data: z.infer<typeof recordLossSchema>
 ): Promise<RecordLossActionResult> {
-  try {
-    const ctx = await requireOrgContext();
-
+  return withAction(async (ctx) => {
     const validated = recordLossSchema.parse(data);
 
     const movement = await createBinMovement(ctx, {
@@ -126,33 +90,15 @@ export async function recordLossFn(
       idempotencyKey: validated.idempotencyKey,
     });
 
-    return { success: true, data: movement };
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return {
-        success: false,
-        error: formatZodActionError(error),
-      };
-    }
-    if (error instanceof StockOverdrawError) {
-      return { success: false, error: error.message, field: "lossMassKg" };
-    }
-    if (error instanceof ActionConflictError) {
-      return {
-        success: false,
-        error: error.message,
-        conflict: error.conflict,
-      };
-    }
-    return {
-      success: false,
-      error: binMovementActionError(
-        error,
-        "Failed to record loss",
-        "bin-movement:loss"
-      ),
-    };
-  }
+    return movement;
+  }, {
+    fallbackMessage: "Failed to record loss",
+    log: { message: "bin movement action failed", context: { op: "bin-movement:loss" } },
+    mapError: (error) =>
+      error instanceof StockOverdrawError
+        ? { success: false as const, error: error.message, field: "lossMassKg" as const }
+        : undefined,
+  });
 }
 
 /** The pooled feedstock stock card and its complete movement history. */
