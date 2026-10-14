@@ -19,11 +19,10 @@ type Path = (string | number)[];
 /** Legacy writer copy, shared so the operator prose stays byte-identical. */
 export const SAMPLE_CREDIT_BATCH_NOT_FOUND_MESSAGE = "Credit batch not found";
 
-/** The 1,000-year evidence each Sample needs, keyed by the input that supplies it. */
+/** The 1,000-year evidence each Sample needs at save, keyed by the input that supplies it. */
 export const SAMPLE_TIER_EVIDENCE_MESSAGES = {
   randomReflectanceR0Percent: "R₀ reflectance is required for a Sample on a 1000-year credit batch.",
   residualCarbonPercent: "TGA non-reactive carbon is required for a Sample on a 1000-year credit batch.",
-  sReflectanceFraction: "R₀ readings at or above 2% are required for a Sample on a 1000-year credit batch.",
 } as const;
 
 export const SAMPLE_FUTURE_TIME_MESSAGES = {

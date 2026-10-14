@@ -54,6 +54,17 @@ describe("evaluateSampled1000YearReplicates", () => {
     expect(result.replicates).toHaveLength(2);
   });
 
+  it.each([1, 2])("keeps grammatical blocker copy for %s incomplete Samples", (count) => {
+    const samples = Array.from({ length: count }, (_, index) => sample({
+      id: String(index), total: null, inorganic: null, sFraction: null,
+    }));
+    const result = evaluateSampled1000YearReplicates({ creditBatchCode: "CB-1", samples });
+    const labels = samples.map((sample) => sample.sampleCode).join(", ");
+    expect(result.blockers.slice(0, 3)).toEqual([
+      "total carbon", "measured inorganic carbon", "the R₀ fraction at or above 2%",
+    ].map((measurement) => `Credit batch CB-1 has ${count} ${count === 1 ? "Sample" : "Samples"} missing ${measurement}: ${labels}. Record the measured value on every Sample before submitting a 1,000-year Removal.`));
+  });
+
   it("allows the shared analytical tolerance and rejects larger inorganic excess", () => {
     const withinTolerance = evaluateSampled1000YearReplicates({
       creditBatchCode: "CB-1",

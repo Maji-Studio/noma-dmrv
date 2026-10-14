@@ -73,12 +73,12 @@ export function sampleEntryWarnings(facts: SampleEntryFacts): string[] {
   if (is1000Year && facts.sampling === "sampled") {
     const missing = missingSampled1000YearMeasurements(facts);
     if (missing.length > 0) {
-      warnings.push(`Sample ${facts.sampleCode} has no ${joinWithAnd(missing)}. A 1,000-year Removal with credit batch ${facts.creditBatchCode} cannot be submitted until every Sample has them.`);
+      warnings.push(`Sample ${facts.sampleCode} is missing ${joinWithAnd(missing)}. A 1,000-year Removal with credit batch ${facts.creditBatchCode} cannot be submitted until every Sample has ${missing.length === 1 ? "it" : "them"}.`);
     }
   }
   // Unsampled batches submit through the unsampled blueprint; the gate does not judge their chemistry.
   const ratioWarning = facts.sampling === "sampled" ? missingRatioWarning(facts) : null;
-  if (facts.totalHydrogenPercent == null) {
+  if (facts.sampling === "sampled" && facts.totalHydrogenPercent == null) {
     warnings.push(`Sample ${facts.sampleCode} has no total hydrogen, so H/C_org cannot be calculated. The biochar module requires H/C_org for every production batch (Table 2).`);
   }
   if (facts.moistureContentPercent == null) {

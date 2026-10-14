@@ -27,6 +27,7 @@ function batchWithSamples(
   return {
     id: "00000000-0000-4000-a000-0000000000b1",
     code: "CB-001",
+    sampling: "sampled",
     durabilityOption: "200_year",
     samples,
   } as unknown as CreditBatchWithSamples;
@@ -158,12 +159,10 @@ describe("buildEntityReadinessResult", () => {
     expect(result.warnings).toEqual([]);
   });
 
-  // O:Corg is an UNCONDITIONAL sample descriptor, deliberately symmetric with
-  // H:Corg (Soil Module §3.3 Table 2 checks pooled H/C_org AND O/C_org for every
-  // tier). Readiness walks every sample of every member batch, so one extra
-  // sample without oxygen blocks the batch even when three usable replicates
-  // already satisfy the §8.3.1 minimum. That is the intended fail-closed
-  // behaviour on a registry path, not an accident — this test pins it.
+  // Soil Module §3.3 Table 2 checks pooled H/C_org AND O/C_org on every tier
+  // (QA 2026-07-25 F-6). On sampled batches, an extra Sample without oxygen
+  // blocks even when three usable replicates satisfy the §8.3.1 minimum.
+  // Scope matches durability-submission-gates.ts, which skips unsampled batches.
   it("blocks a batch that already has three usable replicates when an extra sample is missing O:Corg", () => {
     const result = buildEntityReadinessResult(
       [],

@@ -28,7 +28,6 @@ it("keeps the legacy operator copy byte for byte", () => {
   expect(sampleCreditBatchNotFound().message).toBe(new SafeError("Credit batch not found").message);
   expect(sampleTierEvidenceError("randomReflectanceR0Percent").message).toBe("R₀ reflectance is required for a Sample on a 1000-year credit batch.");
   expect(sampleTierEvidenceError("residualCarbonPercent").message).toBe("TGA non-reactive carbon is required for a Sample on a 1000-year credit batch.");
-  expect(sampleTierEvidenceError("sReflectanceFraction").message).toBe("R₀ readings at or above 2% are required for a Sample on a 1000-year credit batch.");
   expect(sampleBeforeBatchWindowError("2026-01-31", { code: "CB-26-001", startDate: "2026-02-01", endDate: "2026-02-28" }).message)
     .toBe("Sample date 2026-01-31 is before credit batch CB-26-001's production window, 2026-02-01 to 2026-02-28. Choose a date within or after the production window.");
   expect(sampleCarbonReconciliationError("organicCarbonPercent").message)
@@ -48,7 +47,6 @@ it("answers a missing or archived credit batch with not_found on /creditBatchId"
 
 it.each([
   ["randomReflectanceR0Percent", sampleTierEvidenceError("randomReflectanceR0Percent")],
-  ["sReflectanceFraction", sampleTierEvidenceError("sReflectanceFraction")],
   ["residualCarbonPercent", sampleTierEvidenceError("residualCarbonPercent")],
   ["organicCarbonPercent", sampleCarbonReconciliationError("organicCarbonPercent")],
   ["inorganicCarbonPercent", sampleCarbonReconciliationError("inorganicCarbonPercent")],

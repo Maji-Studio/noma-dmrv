@@ -23,7 +23,7 @@
  */
 "use client";
 
-import { numericValue, integerValue } from "@/lib/form-utils";
+import { numericValue } from "@/lib/form-utils";
 import { facilityTimeCue } from "@/lib/date-utils";
 import { useFacilityClock, useFacilityContext } from "@/hooks/use-facility-context";
 import { useBatchDurabilitySummary } from "@/hooks/use-certification";
@@ -71,9 +71,6 @@ import {
 // ============================================
 
 const NO_FACILITY_SENTINEL = "__none__";
-
-const isSampleCertifyField = (field: string) =>
-  isCertifyFormField("sample", field);
 
 // ============================================
 // Component
@@ -126,7 +123,7 @@ export function SampleForm({
   const defaultValues = {
       creditBatchId: preselectedCreditBatchId || sample?.creditBatchId || "",
       // An instant; EventTimeInput shows it on the batch facility's clock.
-      samplingTime: (sample?.samplingTime ? new Date(sample.samplingTime) : new Date()).toISOString(),
+      samplingTime: sample?.samplingTime ? new Date(sample.samplingTime).toISOString() : "",
       labName: sample?.labName ?? "",
       labAccreditation: sample?.labAccreditation ?? "",
       analysisDate: sample?.analysisDate ?? "",
@@ -147,7 +144,7 @@ export function SampleForm({
       hToCOrgRatio: sample?.hToCOrgRatio ?? undefined,
       // A ratio calculated from saved oxygen is not a lab figure; the preview shows it.
       oToCOrgRatio: labOToCOrgRatioDefault(sample),
-      durabilityOption: sample?.durabilityOption ?? "200_year",
+      durabilityOption: null as SampleFormData["durabilityOption"],
       randomReflectanceR0Percent: sample?.randomReflectanceR0Percent ?? undefined,
       sReflectanceFraction: sample?.sReflectanceFraction ?? undefined,
       r0MeasurementCount: sample?.r0MeasurementCount ?? undefined,
@@ -221,9 +218,7 @@ export function SampleForm({
     cue: facilityTimeCue,
   });
   useEffect(() => {
-    if (batchDurabilityOption) {
-      setValue("durabilityOption", batchDurabilityOption);
-    }
+    setValue("durabilityOption", batchDurabilityOption ?? null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [batchDurabilityOption]);
 
@@ -266,6 +261,9 @@ export function SampleForm({
   });
 
   const is1000Year = watchedDurabilityOption === "1000_year";
+  const certifyContext = { sampling: batchSummary?.sampling, durabilityOption: watchedDurabilityOption };
+  const isSampleCertifyField = (field: string) =>
+    isCertifyFormField("sample", field, certifyContext);
   const liveCarbonErrors = getSampleCarbonReconciliationErrors({
     totalCarbonPercent: watchedTotalCarbonPercent,
     organicCarbonPercent: watchedOrganicCarbonPercent,
@@ -490,7 +488,7 @@ export function SampleForm({
                   unit="%"
                   error={errors.totalCarbonPercent?.message}
                   required
-                  certifyRequired={is1000Year && isSampleCertifyField("totalCarbonPercent")}
+                  certifyRequired={isSampleCertifyField("totalCarbonPercent")}
                   certifyStatus={certStatus("totalCarbonPercent")}
                 >
                   <FormInput
@@ -534,7 +532,7 @@ export function SampleForm({
                   label="Inorganic carbon"
                   unit="%"
                   error={inorganicCarbonError}
-                  certifyRequired={is1000Year && isSampleCertifyField("inorganicCarbonPercent")}
+                  certifyRequired={isSampleCertifyField("inorganicCarbonPercent")}
                   certifyStatus={certStatus("inorganicCarbonPercent")}
                 >
                   <FormInput
@@ -740,7 +738,7 @@ export function SampleForm({
               {/* The durability tier is the credit batch's declared choice —
                   shown here (it decides which analyses follow), never edited. */}
               <p className="body-caption text-[var(--color-text-secondary)]">
-                {watchedCreditBatchId
+                {watchedCreditBatchId && watchedDurabilityOption
                   ? `${formatDurabilityOption(watchedDurabilityOption)} durability, inherited from the selected credit batch.`
                   : "The durability tier is inherited from the selected credit batch."}
               </p>
@@ -800,7 +798,6 @@ export function SampleForm({
                     id="sReflectanceFraction"
                     label="R₀ readings ≥ 2%"
                     unit="%"
-                    required
                     helperText="Share of ISO 7404-5 reflectance readings meeting the 1000-year threshold."
                     error={errors.sReflectanceFraction?.message}
                     certifyRequired={isSampleCertifyField("sReflectanceFraction")}
@@ -845,9 +842,7 @@ export function SampleForm({
                       placeholder="e.g., 100"
                       disabled={isSubmitting}
                       error={!!errors.r0MeasurementCount}
-                      {...register("r0MeasurementCount", {
-                        setValueAs: integerValue,
-                      })}
+                      {...register("r0MeasurementCount")}
                     />
                   </FormField>
                 </div>

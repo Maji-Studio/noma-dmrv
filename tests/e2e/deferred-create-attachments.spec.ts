@@ -166,6 +166,11 @@ test.describe("Deferred create attachments", () => {
     const parentDialog = page.getByRole("dialog", { name: "Create Sample" });
 
     await selectFirstEntity(page, "Credit Batch");
+    const samplingTime = parentDialog.locator('input[name="samplingTime"]');
+    await expect(samplingTime).toBeEnabled();
+    await expect(samplingTime).toHaveValue("");
+    // This fixture's facility uses UTC.
+    await samplingTime.fill(new Date().toISOString().slice(0, 16));
     await page.fill('input[name="totalCarbonPercent"]', "75");
     await page.fill('input[name="organicCarbonPercent"]', "70");
 

@@ -17,11 +17,29 @@ describe("sampleEntryWarnings", () => {
   it("names the measurements the submission gate blocks on, by the gate's own rule", () => {
     const missing = { ...complete, inorganicCarbonPercent: null, sReflectanceFraction: null };
     expect(sampleEntryWarnings(missing)).toEqual([
-      "Sample SAM-26-001 has no measured inorganic carbon and the R₀ fraction at or above 2%. A 1,000-year Removal with credit batch CB-26-001 cannot be submitted until every Sample has them.",
+      "Sample SAM-26-001 is missing measured inorganic carbon and the R₀ fraction at or above 2%. A 1,000-year Removal with credit batch CB-26-001 cannot be submitted until every Sample has them.",
     ]);
     // The gate blocks a batch made of this Sample for the same two measurements.
     const gate = evaluateSampled1000YearReplicates({ creditBatchCode: "CB-26-001", samples: [{ id: "s1", ...missing }] });
-    expect(gate.blockers.join(" ")).toMatch(/missing measured inorganic carbon.*missing the R₀ fraction at or above 2%/);
+    expect(gate.blockers).toEqual(expect.arrayContaining([
+      "Credit batch CB-26-001 has 1 Sample missing measured inorganic carbon: SAM-26-001. Record the measured value on every Sample before submitting a 1,000-year Removal.",
+      "Credit batch CB-26-001 has 1 Sample missing the R₀ fraction at or above 2%: SAM-26-001. Record the measured value on every Sample before submitting a 1,000-year Removal.",
+    ]));
+  });
+
+  it.each([
+    { fields: ["totalCarbonPercent"], measurements: "total carbon", pronoun: "it" },
+    { fields: ["inorganicCarbonPercent"], measurements: "measured inorganic carbon", pronoun: "it" },
+    { fields: ["sReflectanceFraction"], measurements: "the R₀ fraction at or above 2%", pronoun: "it" },
+    { fields: ["totalCarbonPercent", "inorganicCarbonPercent"], measurements: "total carbon and measured inorganic carbon", pronoun: "them" },
+    { fields: ["totalCarbonPercent", "sReflectanceFraction"], measurements: "total carbon and the R₀ fraction at or above 2%", pronoun: "them" },
+    { fields: ["inorganicCarbonPercent", "sReflectanceFraction"], measurements: "measured inorganic carbon and the R₀ fraction at or above 2%", pronoun: "them" },
+    { fields: ["totalCarbonPercent", "inorganicCarbonPercent", "sReflectanceFraction"], measurements: "total carbon, measured inorganic carbon and the R₀ fraction at or above 2%", pronoun: "them" },
+  ])("uses grammatical copy when missing $measurements", ({ fields, measurements, pronoun }) => {
+    const missing = Object.fromEntries(fields.map((field) => [field, null]));
+    expect(sampleEntryWarnings({ ...complete, ...missing })).toEqual([
+      `Sample SAM-26-001 is missing ${measurements}. A 1,000-year Removal with credit batch CB-26-001 cannot be submitted until every Sample has ${pronoun}.`,
+    ]);
   });
 
   it("does not warn on 1,000-year measurements for an unsampled batch or a 200-year batch", () => {
@@ -69,6 +87,15 @@ describe("sampleEntryWarnings", () => {
     expect(warnings).toHaveLength(2);
     expect(warnings[0]).toMatch(/^Sample SAM-26-001 has no total hydrogen/);
     expect(warnings[1]).toBe("Sample SAM-26-001 has no H/C_org, so it is not one of the 3 Samples with complete H/C_org and O/C_org results credit batch CB-26-001 needs before submitting.");
-    expect(sampleEntryWarnings({ ...noHydrogen, sampling: "unsampled" })).toHaveLength(1);
+    expect(sampleEntryWarnings({ ...noHydrogen, sampling: "unsampled" })).toEqual([]);
+  });
+
+  it("keeps the moisture warning on unsampled batches without warning on their incidental chemistry", () => {
+    expect(sampleEntryWarnings({ ...complete, durabilityOption: "200_year", sampling: "unsampled",
+      organicCarbonPercent: null, totalHydrogenPercent: null, hToCOrgRatio: null, oToCOrgRatio: null,
+      moistureContentPercent: null,
+    })).toEqual([
+      "Sample SAM-26-001 has no moisture content. The biochar module requires moisture for every production batch (Table 2).",
+    ]);
   });
 });

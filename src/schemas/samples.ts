@@ -17,6 +17,7 @@ import {
   RATIO_INPUT_MAX,
   RATIO_MAX_MESSAGE,
   requiredNumber,
+  toIntOrNull,
 } from "./helpers";
 
 // ============================================
@@ -25,6 +26,7 @@ import {
 
 const PERCENT_RANGE_MESSAGE = "Enter a value from 0 to 100";
 const NON_NEGATIVE_NUMBER_MESSAGE = "Must be a non-negative number";
+const R0_MEASUREMENT_COUNT_INTEGER_MESSAGE = "Enter a whole number of readings.";
 const PH_MIN = 0;
 const PH_MAX = 14;
 const PH_RANGE_MESSAGE = `Must be between ${PH_MIN} and ${PH_MAX}`;
@@ -255,22 +257,17 @@ export const sampleFormSchema = z
     // Not user-selected: the form derives it from the chosen credit batch's
     // declared tier (issue #309) and keeps it in form state so the conditional
     // 1000-year validation below still applies.
-    durabilityOption: z.enum(["200_year", "1000_year"]).default("200_year"),
+    durabilityOption: z.enum(["200_year", "1000_year"]).nullable().default(null),
 
     // R₀ reflectance (required for 1000-year)
     randomReflectanceR0Percent: optionalPercentInput,
     // Proportion of the sample's ISO 7404-5 R₀ readings at or above 2%.
     // Stored/submitted as 0–1; the form presents it as a percentage.
     sReflectanceFraction: optionalFraction,
-    r0MeasurementCount: z.union([
-      z.number().int().min(0).max(PG_INTEGER_MAX, "Measurement count is too large"),
-      z.string()
-        .transform((val) => (val === "" ? null : parseInt(val, 10)))
-        .pipe(
-          z.number().int().min(0).max(PG_INTEGER_MAX, "Measurement count is too large").nullable(),
-        ),
-      z.null(),
-    ]).optional().nullable(),
+    r0MeasurementCount: z.preprocess(
+      toIntOrNull,
+      z.number({ error: R0_MEASUREMENT_COUNT_INTEGER_MESSAGE }).int(R0_MEASUREMENT_COUNT_INTEGER_MESSAGE).min(0).max(PG_INTEGER_MAX, "Measurement count is too large").nullable(),
+    ).optional(),
     r0AnalysisDate: optionalCalendarDateSchema(),
     r0HistogramFileUrl: z.string().max(2000).optional().nullable().or(z.literal("")),
 
@@ -298,15 +295,6 @@ export const sampleFormSchema = z
           code: z.ZodIssueCode.custom,
           path: ["randomReflectanceR0Percent"],
           message: "R₀ reflectance is required for 1000-year durability",
-        });
-      }
-
-      if (value.sReflectanceFraction == null) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ["sReflectanceFraction"],
-          message:
-            "R₀ readings at or above 2% are required for 1000-year durability",
         });
       }
 
@@ -384,7 +372,7 @@ export const updateSampleSchema = z.object({
   saltContentGPerKg: samplePhysicalNumber("saltContentGPerKg").optional().nullable(),
   hToCOrgRatio: nonNegativeRatio.optional().nullable(),
   oToCOrgRatio: nonNegativeRatio.optional().nullable(),
-  durabilityOption: z.enum(["200_year", "1000_year"]).optional(),
+  durabilityOption: z.enum(["200_year", "1000_year"]).nullable().optional(),
   randomReflectanceR0Percent: percentNumber.optional().nullable(),
   sReflectanceFraction: z.number().min(0).max(1).optional().nullable(),
   r0MeasurementCount: z.number().int().min(0).max(PG_INTEGER_MAX, "Measurement count is too large").optional().nullable(),
