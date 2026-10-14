@@ -643,6 +643,10 @@ test.describe("Full Chain UI Smoke Test", () => {
 
       // Select the credit batch created above
       await selectFirstEntity(page, "Credit Batch");
+      const samplingTime = page.locator('input[name="samplingTime"]');
+      await expect(samplingTime).toBeEnabled();
+      await expect(samplingTime).toHaveValue("");
+      await samplingTime.fill(`${productionRunDate}T12:00`);
 
       // Fill carbon data
       await page.fill('input[name="totalCarbonPercent"]', "75");

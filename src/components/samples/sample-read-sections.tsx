@@ -28,6 +28,7 @@ export function formatSamplingTime(sample: Pick<SampleWithRelations, "samplingTi
 }
 
 export function sampleSheetSections(sample: SampleWithRelations): DetailPanelSection[] {
+  const certificationContext = { sampling: sample.sampling, durabilityOption: sample.durabilityOption };
   return [
     {
       title: "Sample information",
@@ -45,7 +46,7 @@ export function sampleSheetSections(sample: SampleWithRelations): DetailPanelSec
       title: "Lab analysis",
       fields: [
         { label: "Total carbon", value: formatLabPercent(sample.totalCarbonPercent) },
-        { label: "Organic carbon", ...certificationDetailField("sample", "organicCarbonPercent"), value: formatLabPercent(sample.organicCarbonPercent) },
+        { label: "Organic carbon", ...certificationDetailField("sample", "organicCarbonPercent", certificationContext), value: formatLabPercent(sample.organicCarbonPercent) },
         { label: "Inorganic carbon", value: formatLabPercent(sample.inorganicCarbonPercent) },
         { label: "Ash content", value: formatLabPercent(sample.ashContentPercent) },
         { label: "Hydrogen", value: formatLabPercent(sample.totalHydrogenPercent) },
@@ -67,16 +68,16 @@ export function sampleSheetSections(sample: SampleWithRelations): DetailPanelSec
       title: "Stability ratios",
       fields: [
         { label: "Inherited durability", value: formatDurabilityOption(sample.durabilityOption) },
-        { label: "H:C org ratio", ...certificationDetailField("sample", "hToCOrgRatio"), value: sample.hToCOrgRatio?.toFixed(RATIO_DIGITS) ?? null },
-        { label: "O:C org ratio", ...certificationDetailField("sample", "oToCOrgRatio"), value: sample.oToCOrgRatio?.toFixed(RATIO_DIGITS) ?? null },
+        { label: "H:C org ratio", ...certificationDetailField("sample", "hToCOrgRatio", certificationContext), value: sample.hToCOrgRatio?.toFixed(RATIO_DIGITS) ?? null },
+        { label: "O:C org ratio", ...certificationDetailField("sample", "oToCOrgRatio", certificationContext), value: sample.oToCOrgRatio?.toFixed(RATIO_DIGITS) ?? null },
       ],
     },
     ...(sample.durabilityOption === "1000_year" ? [
       {
         title: "1000-year durability · R₀ reflectance",
         fields: [
-          { label: "Mean random reflectance R₀", ...certificationDetailField("sample", "randomReflectanceR0Percent"), value: formatLabPercent(sample.randomReflectanceR0Percent) },
-          { label: "R₀ readings ≥ 2%", ...certificationDetailField("sample", "sReflectanceFraction"), value: sample.sReflectanceFraction == null ? null : formatLabPercent(sample.sReflectanceFraction * PERCENT_SCALE) },
+          { label: "Mean random reflectance R₀", ...certificationDetailField("sample", "randomReflectanceR0Percent", certificationContext), value: formatLabPercent(sample.randomReflectanceR0Percent) },
+          { label: "R₀ readings ≥ 2%", ...certificationDetailField("sample", "sReflectanceFraction", certificationContext), value: sample.sReflectanceFraction == null ? null : formatLabPercent(sample.sReflectanceFraction * PERCENT_SCALE) },
           { label: "Measurement count", value: sample.r0MeasurementCount },
           { label: "R₀ analysis date", value: formatDate(sample.r0AnalysisDate) },
         ],
@@ -84,8 +85,8 @@ export function sampleSheetSections(sample: SampleWithRelations): DetailPanelSec
       {
         title: "TGA non-reactive carbon",
         fields: [
-          { label: "Reactive carbon", ...certificationDetailField("sample", "reactiveCarbonPercent"), value: formatLabPercent(sample.reactiveCarbonPercent) },
-          { label: "Residual carbon", ...certificationDetailField("sample", "residualCarbonPercent"), value: formatLabPercent(sample.residualCarbonPercent) },
+          { label: "Reactive carbon", ...certificationDetailField("sample", "reactiveCarbonPercent", certificationContext), value: formatLabPercent(sample.reactiveCarbonPercent) },
+          { label: "Residual carbon", ...certificationDetailField("sample", "residualCarbonPercent", certificationContext), value: formatLabPercent(sample.residualCarbonPercent) },
           { label: "TGA analysis date", value: formatDate(sample.tgaAnalysisDate) },
         ],
       },

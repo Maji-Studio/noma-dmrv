@@ -212,12 +212,14 @@ export const CERTIFY_FIELD_REGISTRY: Record<
       key: "organicCarbonPercent",
       label: "Organic carbon",
       kind: "entered",
+      condition: { field: "sampling", equals: "sampled", label: "sampled batches" },
       mappings: [mapping("weightedOrganicCarbonPercent")],
     },
     {
       key: "hToCOrgRatio",
       label: "H:Corg ratio",
       kind: "entered",
+      condition: { field: "sampling", equals: "sampled", label: "sampled batches" },
       formFields: [
         "totalHydrogenPercent",
         "organicCarbonPercent",
@@ -231,15 +233,15 @@ export const CERTIFY_FIELD_REGISTRY: Record<
       mappings: [mapping("weightedHToCorgRatio")],
     },
     {
-      // Unconditional, like H:Corg: the Soil Module §3.3 Table 2 eligibility
-      // check is universal (pooled mean H/C_org < 0.5 AND O/C_org < 0.2), not
-      // tier-specific. Without this descriptor a sample missing oxygen badged
-      // "chemistry complete" while the usable-replicate gate
-      // (biochar-eligibility.ts, durability-submission-gates.ts) refused to
-      // count it toward the §8.3.1 ≥3 minimum (QA 2026-07-25 F-6).
+      // Like H:Corg, Soil Module §3.3 Table 2 checks pooled mean H/C_org < 0.5
+      // AND O/C_org < 0.2 on every tier. Both ratios are required on sampled
+      // batches: missing oxygen cannot count toward the §8.3.1 ≥3 usable
+      // replicates (QA 2026-07-25 F-6). durability-submission-gates.ts skips
+      // unsampled batches, so their incidental Samples are outside this gate.
       key: "oToCOrgRatio",
       label: "O:Corg ratio",
       kind: "entered",
+      condition: { field: "sampling", equals: "sampled", label: "sampled batches" },
       mappings: [mapping("weightedOToCorgRatio")],
     },
     {
@@ -273,9 +275,11 @@ export const CERTIFY_FIELD_REGISTRY: Record<
       label: "R₀ readings at or above 2%",
       kind: "entered",
       condition: {
-        field: "durabilityOption",
-        equals: "1000_year",
-        label: "1000-year durability",
+        allOf: [
+          { field: "durabilityOption", equals: "1000_year" },
+          { field: "sampling", equals: "sampled" },
+        ],
+        label: "sampled 1,000-year durability",
       },
     },
   ],
@@ -471,8 +475,10 @@ export function isCertifyFormField(
 export function isCertifyEntityField(
   entityKind: CertifyEntityKind,
   fieldName: string,
+  entity?: object,
 ): boolean {
   return CERTIFY_FIELD_REGISTRY[entityKind].some((field) => {
+    if (entity && !certifyFieldConditionApplies(field, entity)) return false;
     const satisfactionFields =
       field.satisfaction?.mode === "anyOf" ||
       field.satisfaction?.mode === "allOf"
@@ -491,6 +497,22 @@ export function isCertifyEntityField(
 export function certificationDetailField(
   entityKind: CertifyEntityKind,
   fieldName: string,
+  entity?: object,
 ): { certifyRequired: boolean } {
-  return { certifyRequired: isCertifyEntityField(entityKind, fieldName) };
+  return { certifyRequired: isCertifyEntityField(entityKind, fieldName, entity) };
+}
+
+/** Shared applicability rule for readiness and contextual detail chips. */
+export function certifyFieldConditionApplies(
+  descriptor: CertifyFieldDescriptor,
+  entity: object,
+): boolean {
+  const values = entity as Record<string, unknown>;
+  if (!descriptor.condition) return true;
+  if ("allOf" in descriptor.condition) {
+    return descriptor.condition.allOf.every(
+      (condition) => values[condition.field] === condition.equals,
+    );
+  }
+  return values[descriptor.condition.field] === descriptor.condition.equals;
 }
