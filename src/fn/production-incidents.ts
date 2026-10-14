@@ -43,7 +43,7 @@ export async function getProductionIncidentsFn(
     return incidents;
   }, {
     fallbackMessage: LOAD_FAILURE,
-    log: { message: "production incident action failed", context: { op: "production-incident:list" } },
+    log: { message: "getProductionIncidentsFn failed", context: { op: "production-incident:list" } },
     mapError: (error) => {
       if (error instanceof InvalidProductionRunInputError) {
         return { success: false as const, error: INVALID_INPUT };
@@ -78,7 +78,7 @@ export async function createProductionIncidentFn(
     return incident;
   }, {
     fallbackMessage: CREATE_FAILURE,
-    log: { message: "production incident action failed", context: { op: "production-incident:create" } },
+    log: { message: "createProductionIncidentFn failed", context: { op: "production-incident:create" } },
     mapError: (error) =>
       error instanceof SafeError
         ? { success: false as const, error: CREATE_FAILURE }
@@ -113,7 +113,7 @@ export async function updateProductionIncidentFn(
     return incident;
   }, {
     fallbackMessage: "Production incident was not saved. Try again.",
-    log: { message: "updateProductionIncidentFn failed" },
+    log: { message: "updateProductionIncidentFn failed", context: { op: "production-incident:update" } },
   });
 }
 
@@ -127,6 +127,6 @@ export async function deleteProductionIncidentFn(
     return;
   }, {
     fallbackMessage: "Failed to delete production incident",
-    log: { message: "deleteProductionIncidentFn failed" },
+    log: { message: "deleteProductionIncidentFn failed", context: { op: "production-incident:delete" } },
   });
 }

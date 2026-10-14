@@ -166,7 +166,7 @@ export async function updateCreditBatchFn(
 
     const creditBatch = await updateCreditBatchData(ctx, creditBatchId, updateData);
     return creditBatch;
-  }, { fallbackMessage: "Failed to update credit batch", log: { message: "Failed to update credit batch" } });
+  }, { fallbackMessage: "Failed to update credit batch", log: { message: "Failed to update credit batch", context: { op: "credit-batch:update" } } });
   return result.success && !result.data.previewAvailable
     ? { ...result, warning: SAVED_DETAILS_UNAVAILABLE }
     : result;
@@ -190,5 +190,5 @@ export async function deleteCreditBatchFn(
 
     await deleteCreditBatchData(ctx, validated.creditBatchId, validated.expectedVersion);
     return;
-  }, { fallbackMessage: "Failed to delete credit batch", log: { message: "Failed to delete credit batch" } });
+  }, { fallbackMessage: "Failed to delete credit batch", log: { message: "Failed to delete credit batch", context: { op: "credit-batch:delete" } } });
 }

@@ -129,6 +129,8 @@ export async function importProductionRunReadingsFromDocumentFn(
       }
       throw error;
     }
+  }, {
+    log: { message: "server action failed", context: { op: "production-run-reading-import:import" } },
   });
 }
 

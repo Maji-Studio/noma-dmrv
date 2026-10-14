@@ -30,6 +30,8 @@ import {
 } from "@/schemas/bin-movements";
 import { StockOverdrawError } from "@/data-access/bin-stock-guards";
 
+const LOG_MESSAGE = "bin movement action failed";
+
 export type RecordLossActionResult =
   | { success: true; data: BinMovement }
   | {
@@ -65,7 +67,7 @@ export async function recordStockTakeFn(
     return movement;
   }, {
     fallbackMessage: "Failed to record stock-take",
-    log: { message: "bin movement action failed", context: { op: "bin-movement:stock-take" } },
+    log: { message: LOG_MESSAGE, context: { op: "bin-movement:stock-take" } },
     mapError: (error) =>
       error instanceof StockTakeIncreaseError
         ? { success: false as const, error: error.message, field: "countedMassKg" as const }
@@ -93,7 +95,7 @@ export async function recordLossFn(
     return movement;
   }, {
     fallbackMessage: "Failed to record loss",
-    log: { message: "bin movement action failed", context: { op: "bin-movement:loss" } },
+    log: { message: LOG_MESSAGE, context: { op: "bin-movement:loss" } },
     mapError: (error) =>
       error instanceof StockOverdrawError
         ? { success: false as const, error: error.message, field: "lossMassKg" as const }
@@ -103,5 +105,7 @@ export async function recordLossFn(
 
 /** The pooled feedstock stock card and its complete movement history. */
 export async function getFeedstockBinStockFn(storageLocationId: string) {
-  return withAction(async (ctx) => getFeedstockBinStock(ctx, uuidSchema().parse(storageLocationId)));
+  return withAction(async (ctx) => getFeedstockBinStock(ctx, uuidSchema().parse(storageLocationId)), {
+    log: { message: "server action failed", context: { op: "bin-movement:stock" } },
+  });
 }

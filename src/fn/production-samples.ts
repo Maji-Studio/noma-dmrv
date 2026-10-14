@@ -52,7 +52,7 @@ export async function getProductionSamplesFn(
     return samples;
   }, {
     fallbackMessage: LOAD_FAILURE,
-    log: { message: "production sample action failed", context: { op: "production-sample:list" } },
+    log: { message: "getProductionSamplesFn failed", context: { op: "production-sample:list" } },
     mapError: (error) => {
       if (error instanceof InvalidProductionRunInputError) {
         return { success: false as const, error: INVALID_INPUT };
@@ -106,7 +106,7 @@ export async function createProductionSampleFn(
     return sample;
   }, {
     fallbackMessage: CREATE_FAILURE,
-    log: { message: "production sample action failed", context: { op: "production-sample:create" } },
+    log: { message: "createProductionSampleFn failed", context: { op: "production-sample:create" } },
     mapError: (error) =>
       error instanceof SafeError
         ? { success: false as const, error: CREATE_FAILURE }
@@ -149,7 +149,7 @@ export async function updateProductionSampleFn(
     return sample;
   }, {
     fallbackMessage: "In-process measurement was not saved. Try again.",
-    log: { message: "updateProductionSampleFn failed" },
+    log: { message: "updateProductionSampleFn failed", context: { op: "production-sample:update" } },
   });
 }
 
@@ -170,6 +170,6 @@ export async function deleteProductionSampleFn(
     return;
   }, {
     fallbackMessage: "In-process measurement was not deleted. Try again.",
-    log: { message: "deleteProductionSampleFn failed" },
+    log: { message: "deleteProductionSampleFn failed", context: { op: "production-sample:delete" } },
   });
 }

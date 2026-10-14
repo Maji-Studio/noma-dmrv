@@ -35,6 +35,8 @@ import {
 import type { ActionResult } from "@/types/actions";
 import { withAction } from "./with-action";
 
+const LOG_MESSAGE = "storage bin action failed";
+
 // ============================================
 // List/Query Operations
 // ============================================
@@ -61,7 +63,7 @@ export async function getStorageLocationsFn(
   }, {
     fallbackMessage: "Failed to load storage bins",
     zodErrorPrefix: "Invalid filter parameters",
-    log: { message: "storage bin action failed", context: { op: "storage-location:list" } },
+    log: { message: LOG_MESSAGE, context: { op: "storage-location:list" } },
   });
 }
 
@@ -77,7 +79,7 @@ export async function getStorageLocationFn(
       const validated = getStorageLocationSchema.parse(data);
       return getStorageLocationWithFacility(ctx, validated.storageLocationId);
     },
-    { fallbackMessage: "Failed to load storage bin" },
+    { fallbackMessage: "Failed to load storage bin", log: { message: "server action failed", context: { op: "storage-location:get" } } },
   );
 }
 
@@ -120,7 +122,7 @@ export async function createStorageLocationFn(
     return storageLocation;
   }, {
     fallbackMessage: "Failed to create storage bin",
-    log: { message: "storage bin action failed", context: { op: "storage-location:create" } },
+    log: { message: LOG_MESSAGE, context: { op: "storage-location:create" } },
   });
 }
 
@@ -159,7 +161,7 @@ export async function updateStorageLocationFn(
     );
 
     return storageLocation;
-  }, { fallbackMessage: "Failed to update storage bin", log: { message: "storage bin action failed", context: { op: "storage-location:update" } } });
+  }, { fallbackMessage: "Failed to update storage bin", log: { message: LOG_MESSAGE, context: { op: "storage-location:update" } } });
 }
 
 // ============================================
@@ -177,7 +179,7 @@ export async function archiveStorageLocationFn(
       const validated = archiveStorageLocationSchema.parse(data);
       return archiveStorageLocation(ctx, validated.storageLocationId, validated.expectedVersion);
     },
-    { fallbackMessage: "Failed to archive storage bin" },
+    { fallbackMessage: "Failed to archive storage bin", log: { message: "server action failed", context: { op: "storage-location:archive" } } },
   );
 }
 
@@ -192,7 +194,7 @@ export async function restoreStorageLocationFn(
       const validated = restoreStorageLocationSchema.parse(data);
       return restoreStorageLocation(ctx, validated.storageLocationId, validated.expectedVersion);
     },
-    { fallbackMessage: "Failed to restore storage bin" },
+    { fallbackMessage: "Failed to restore storage bin", log: { message: "server action failed", context: { op: "storage-location:restore" } } },
   );
 }
 
@@ -212,5 +214,5 @@ export async function deleteStorageLocationFn(
     await deleteStorageLocation(ctx, validated.storageLocationId, validated.expectedVersion);
 
     return undefined;
-  }, { fallbackMessage: "Failed to delete storage bin", log: { message: "storage bin action failed", context: { op: "storage-location:delete" } } });
+  }, { fallbackMessage: "Failed to delete storage bin", log: { message: LOG_MESSAGE, context: { op: "storage-location:delete" } } });
 }
