@@ -160,7 +160,10 @@ describe("delivery action field mapping and partial notes", () => {
     const result = await updateDeliveryFn({ deliveryId: id, expectedVersion: 1 });
     expect(result).toEqual({ success: false, error: message, code: "certification_locked", issues });
     if (result.success) throw new Error("Expected a lineage refusal");
-    try { throwDeliveryActionError(result); }
+    try {
+      throwDeliveryActionError(result);
+      expect.fail("Expected the action refusal to throw");
+    }
     catch (error) {
       expect(error).toMatchObject({ message, issues });
       expect(deliveryActionFieldIssues(error, ["deliveryDate", "deliveredWetMassKg"])).toBeUndefined();

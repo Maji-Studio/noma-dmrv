@@ -16,7 +16,11 @@ it("shows a source bin not_found refusal on the source bin field", () => {
 it("keeps typed field issues when the action is thrown by the hook", () => {
   const issues = [{ path: ["deliveryDate"], code: "validation_failed", message: "Enter a time at or before now." }];
   try { throwDeliveryActionError({ success: false, error: issues[0].message, issues }); }
-  catch (error) { expect(deliveryActionIssues(error)).toEqual(issues); }
+  catch (error) {
+    expect(deliveryActionIssues(error)).toEqual(issues);
+    return;
+  }
+  expect.fail("Expected the action refusal to throw");
 });
 
 const renderedFields = ["deliveryDate", "deliveredWetMassKg"] as const;

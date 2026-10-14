@@ -102,9 +102,14 @@ export async function seedDeliveryFixture(caseId: DeliveryCaseId, now = new Date
       target: { facilityId: fixture.facilityId, timeZone: FACILITY_TIME_ZONE, orderId: order.id, orderCode: order.code, binId: bin.id, binCode: bin.code },
       seededMovementIds: (await db.select({ id: binMovements.id }).from(binMovements).where(eq(binMovements.organizationId, org))).map(({ id }) => id),
     };
-  } catch {
-    await cleanupDeliveryFixture(fixture);
-    throw new Error(`Could not seed delivery evaluation organization ${org}. Check the test database schema and auth configuration.`);
+  } catch (error) {
+    const failure = new Error(`Could not seed delivery evaluation organization ${org}. Check the test database schema and auth configuration.`, { cause: error });
+    try {
+      await cleanupDeliveryFixture(fixture);
+    } catch (cleanupError) {
+      throw new AggregateError([error, cleanupError], failure.message, { cause: error });
+    }
+    throw failure;
   }
 }
 

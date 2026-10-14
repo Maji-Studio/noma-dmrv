@@ -1,7 +1,7 @@
 import { ALLOCATION_POLICIES } from "@/lib/output-stock/planner";
 import { z } from "zod";
 import { deliveryRepresentationSchema } from "./deliveries";
-import { guidedWriteEnvelopeSchema, stockBasisWriteEnvelopeSchema } from "./envelopes";
+import { itemEnvelopeSchema, stockBasisWriteEnvelopeSchema } from "./envelopes";
 
 export const deliveryAllocationSchema = z.object({
   layerId: z.uuid().describe("Drawn product layer identifier, from the bin stock read."),
@@ -19,4 +19,4 @@ export const deliveryCreateEnvelopeSchema = stockBasisWriteEnvelopeSchema(delive
   warnings: z.array(z.string()).describe("Non-blocking guidance to upload the bill of lading in the app."),
   allocations: z.array(deliveryAllocationSchema).describe("Products drawn, in draw order, on committed creates and dry runs. Allocation sums can differ from the delivery's 3 decimal place dryBiocharKg in trailing digits."),
 });
-export const deliveryUpdateEnvelopeSchema = guidedWriteEnvelopeSchema(deliveryRepresentationSchema);
+export const deliveryUpdateEnvelopeSchema = itemEnvelopeSchema(deliveryRepresentationSchema);
