@@ -7,6 +7,7 @@ import { organizations } from "@/db/schema/auth";
 import {
   E2E_CERTIFIER_ACCESS_TOKEN,
   E2E_CERTIFIER_CLIENT_SECRET,
+  E2E_CERTIFIER_ORG_ID_PREFIX,
   E2E_CERTIFIER_ROTATED_ACCESS_TOKEN,
   maskedCertifierAccessToken,
 } from "./fixtures/certifier-credentials";
@@ -20,7 +21,7 @@ test.describe("Isometric credentials self-service", () => {
     // Never replace the shared org's keys, even temporarily: @live specs can
     // run alongside this file. Only the app server encrypts the new org's keys.
     const tag = randomUUID();
-    const organizationId = `e2e-credentials-org-${tag}`;
+    const organizationId = `${E2E_CERTIFIER_ORG_ID_PREFIX}${tag}`;
     const organizationName = `E2E Credentials Org ${tag}`;
     const { db, pool } = createDbConnection();
 

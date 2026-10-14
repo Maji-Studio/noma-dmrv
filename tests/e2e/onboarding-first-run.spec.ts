@@ -6,13 +6,17 @@ import { createDirectAuthContext } from "./fixtures/auth-fixtures";
 import { createDbConnection } from "./fixtures/db";
 import * as schema from "@/db/schema";
 import { CERTIFIER_VERIFICATION_MESSAGES } from "@/lib/certification/certifier-credentials-verification";
-import { E2E_CERTIFIER_CLIENT_SECRET } from "./fixtures/certifier-credentials";
+import {
+  E2E_CERTIFIER_CLIENT_SECRET,
+  maskedCertifierAccessToken,
+} from "./fixtures/certifier-credentials";
 import { saveCertifierKeysInAdminDirectory } from "./fixtures/certifier-credentials-ui";
 
 const RUN_TAG = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 const ORG_ID = `e2e-onboarding-org-${RUN_TAG}`;
 const ORG_NAME = `E2E Onboarding Org ${RUN_TAG}`;
 const USER_ID = `e2e-onboarding-owner-${RUN_TAG}`;
+const ACCESS_TOKEN = "e2e-onboarding-access-9999";
 const OWNER = {
   id: USER_ID,
   email: `test-onboarding-owner-${RUN_TAG}@e2e.local`,
@@ -125,7 +129,7 @@ test.describe("First-run onboarding", () => {
       // so the post-save connection check fails offline and the journey stays
       // hermetic. Then reload to read the stored status back.
       const keys = await saveCertifierKeysInAdminDirectory(adminPage, ORG_NAME, {
-        accessToken: "e2e-onboarding-access-9999",
+        accessToken: ACCESS_TOKEN,
         clientSecret: E2E_CERTIFIER_CLIENT_SECRET,
       });
       await expect(
@@ -139,7 +143,7 @@ test.describe("First-run onboarding", () => {
       await expect(organization.getByText("Keys saved")).toBeVisible();
       await organization.getByRole("button", { name: "Isometric keys" }).click();
       await expect(
-        adminPage.getByRole("dialog").getByText("••••9999", { exact: false }),
+        adminPage.getByRole("dialog").getByText(maskedCertifierAccessToken(ACCESS_TOKEN), { exact: false }),
       ).toBeVisible();
 
       await expect(guide.getByText("Build your first traceability chain")).toBeVisible();

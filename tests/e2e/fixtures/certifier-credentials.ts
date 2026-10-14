@@ -2,6 +2,7 @@ import { maskedSecretDisplay } from "@/schemas/organizations";
 
 const CERTIFIER_ACCESS_TOKEN_SUFFIX_LENGTH = 4;
 
+export const E2E_CERTIFIER_ORG_ID_PREFIX = "e2e-credentials-org-";
 export const E2E_CERTIFIER_ACCESS_TOKEN = "e2e-org-admin-access-4321";
 export const E2E_CERTIFIER_ROTATED_ACCESS_TOKEN = "e2e-org-admin-access-9876";
 
