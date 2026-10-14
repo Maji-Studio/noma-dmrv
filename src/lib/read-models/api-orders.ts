@@ -1,3 +1,4 @@
+import type { Executor } from "@/data-access/utils";
 import type { ApiOrderFilters } from "@/data-access/api-orders";
 import { findApiOrder, listApiOrders } from "@/data-access/api-orders";
 import type { ApiLookupIdentifier } from "@/data-access/api-lookup-filters";
@@ -9,6 +10,6 @@ export function readApiOrderList(ctx: OrgContext, query: ReadListQuery<ApiOrderF
   return readListPage(ctx, query, listApiOrders, representOrder);
 }
 
-export async function readApiOrder(ctx: OrgContext, identifier: ApiLookupIdentifier) {
-  return representOrder(await findApiOrder(ctx, identifier));
+export async function readApiOrder(ctx: OrgContext, identifier: ApiLookupIdentifier, executor?: Executor) {
+  return representOrder(await findApiOrder(ctx, identifier, executor));
 }

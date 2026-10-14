@@ -18,3 +18,8 @@ it("uses revision 2 for the production run representation with reference IDs", (
 it("uses revision 3 for storage locations with a formulation claim", () => {
   expect(storageLocationEtag({ version: 7 })).toBe('"7.3"');
 });
+
+it("keeps order read and write tags on the same representation revision", () => {
+  expect(orderEtag({ version: 1 })).toBe('"1.1"');
+  expect(orderEtag({ version: 2 })).toBe('"2.1"');
+});

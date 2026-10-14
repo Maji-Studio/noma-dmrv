@@ -56,8 +56,13 @@ it("recognizes nested supplier locations, exact public docs, scopes and the v1 b
   expect(isV1ApiPath("/facilities")).toBe(false);
 });
 
-it("exposes only GET, HEAD and OPTIONS for orders, balances and customer destinations", () => {
-  for (const path of ["/orders", "/orders/OR-1", "/orders/OR-1/balance", "/customers", "/customers/CU-1", "/customers/CU-1/locations"]) {
+it("exposes only GET, HEAD and OPTIONS for balances and customer destinations", () => {
+  for (const path of ["/orders/OR-1/balance", "/customers", "/customers/CU-1", "/customers/CU-1/locations"]) {
     expect(getApiMethodEntry(`/api/v1${path}`)).toMatchObject({ public: false, methods: ["GET", "HEAD", "OPTIONS"], scopes: [path.startsWith("/orders") ? "orders:read" : "customers:read"] });
   }
+});
+
+it("exposes order writes with a separate delete scope", () => {
+  expect(getApiMethodEntry("/api/v1/orders")).toMatchObject({ methods: ["GET", "HEAD", "OPTIONS", "POST"], scopes: ["orders:read", "orders:write"] });
+  expect(getApiMethodEntry("/api/v1/orders/OR-1")).toMatchObject({ methods: ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH"], scopes: ["orders:read", "orders:write", "orders:delete"] });
 });

@@ -1,6 +1,7 @@
 import { apiRoute } from "@/lib/api/route";
 import { readOrder } from "@/lib/api/orders-queries";
 import { orderEtag } from "@/lib/api/representation-etags";
+import { mutateOrderResponse } from "@/lib/api/orders-mutations";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -11,3 +12,8 @@ export const GET = apiRoute<Params>("api.v1.orders.get", "orders:read", async (r
   headers.set("ETag", orderEtag(data));
   return Response.json({ data }, { headers });
 });
+
+export const PATCH = apiRoute<Params>("api.v1.orders.update", "orders:write", (request, context, { idOrCode }) =>
+  mutateOrderResponse(request, context, idOrCode, "PATCH"));
+export const DELETE = apiRoute<Params>("api.v1.orders.delete", "orders:delete", (request, context, { idOrCode }) =>
+  mutateOrderResponse(request, context, idOrCode, "DELETE"));

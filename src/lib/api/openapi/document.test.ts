@@ -3,6 +3,7 @@ import { join, relative } from "node:path";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import { API_BODY_MAX_BYTES, API_CURSOR_MAX_LENGTH, API_IDEMPOTENCY_KEY_MAX_LENGTH, API_LIST_DEFAULT_LIMIT, API_LIST_MAX_LIMIT, API_QUERY_MAX_LENGTH } from "@/config/api-rest";
+import { recordOrderInput, updateOrderApiInput } from "@/schemas/order-input";
 import { createFeedstockSchema, updateFeedstockSchema } from "@/schemas/feedstocks";
 import { toOperationJsonSchema, type JsonSchema } from "@/lib/operations/json-schema";
 import { buildOpenApiDocument, serializeOpenApiDocument } from "./document";
@@ -225,7 +226,7 @@ it("types current as a feedstock only on feedstock precondition responses", () =
     expect.objectContaining({ properties: { current: expect.objectContaining({ $ref: "#/components/schemas/feedstock" }) }, required: ["current"] }),
   ]);
   for (const [name, response] of Object.entries(document.components.responses)) {
-    if (name === "FeedstockProblem412" || name === "ProductionRunProblem412" || name === "BiocharProductProblem412" || name === "LabSampleProblem412") continue;
+    if (name === "FeedstockProblem412" || name === "ProductionRunProblem412" || name === "BiocharProductProblem412" || name === "LabSampleProblem412" || name === "OrderProblem412") continue;
     expect(response.content["application/problem+json"].schema).toEqual({ $ref: "#/components/schemas/Problem" });
   }
 });
@@ -351,13 +352,13 @@ it("publishes lab sample and credit batch reads with their own scopes, and lab s
   expect(patchProperties).toHaveProperty("creditBatchId");
 });
 
-it("publishes customer, destination, stored order and snapshot balance reads only", () => {
+it("publishes customer, destination, stored order and snapshot balance reads", () => {
   for (const [path, operationId, scope] of [
     ["/customers", "find_customers", "customers:read"], ["/customers/{idOrCode}", "get_customer", "customers:read"],
     ["/customers/{idOrCode}/locations", "find_customer_locations", "customers:read"],
     ["/orders", "find_orders", "orders:read"], ["/orders/{idOrCode}", "get_order", "orders:read"], ["/orders/{idOrCode}/balance", "get_order_balance", "orders:read"],
   ]) {
-    expect(Object.keys(document.paths[path])).toEqual(["get"]);
+    if (path !== "/orders" && path !== "/orders/{idOrCode}") expect(Object.keys(document.paths[path])).toEqual(["get"]);
     expect(document.paths[path].get).toMatchObject({ operationId, "x-required-scope": scope });
     for (const status of ["400", "401", "403", "429", "500"]) expect(document.paths[path].get.responses).toHaveProperty(status);
   }
@@ -374,4 +375,35 @@ it("publishes customer, destination, stored order and snapshot balance reads onl
   expect(document.components.schemas.order.properties).toMatchObject({ orderDate: { type: "string", format: "date" }, quantityKg: { description: expect.stringContaining("32-bit") } });
   expect(document.components.schemas.storage_location.required).toContain("formulationId");
   expect(document.paths["/storage-locations"].get.parameters).toEqual(expect.arrayContaining([expect.objectContaining({ name: "type" }), expect.objectContaining({ name: "formulationId" })]));
+});
+
+it("publishes order write bodies, scopes, preconditions and complete problem responses", () => {
+  for (const [path, method, id, scope] of [
+    ["/orders", "post", "record_order", "orders:write"],
+    ["/orders/{idOrCode}", "patch", "update_order", "orders:write"],
+    ["/orders/{idOrCode}", "delete", "delete_order", "orders:delete"],
+  ]) {
+    const operation = document.paths[path][method];
+    expect(operation).toMatchObject({ operationId: id, "x-required-scope": scope });
+    const errors = [400, 401, 403, 404, 409, 413, 415, 422, 429, 500, 503];
+    if (method !== "post") errors.push(412, 428);
+    for (const status of errors) expect(operation.responses).toHaveProperty(String(status));
+    expect(operation.parameters).toContainEqual(expect.objectContaining({ name: "Idempotency-Key", required: method === "post" }));
+    if (method !== "post") {
+      expect(operation.parameters).toContainEqual(expect.objectContaining({ name: "If-Match", required: true }));
+      expect(operation.responses["412"]).toEqual({ $ref: "#/components/responses/OrderProblem412" });
+    }
+  }
+  expect(document.components.schemas.OrderPreconditionProblem.allOf).toContainEqual(expect.objectContaining({
+    properties: { current: expect.objectContaining({ $ref: "#/components/schemas/order" }) }, required: ["current"],
+  }));
+  const bodyOf = (method: string, path = "/orders/{idOrCode}") => (document.paths[path][method].requestBody as {
+    content: { "application/json": { schema: JsonSchema } };
+  }).content["application/json"].schema;
+  for (const [actual, input] of [[bodyOf("post", "/orders"), recordOrderInput], [bodyOf("patch"), updateOrderApiInput]] as const) {
+    const expected = toOperationJsonSchema(input);
+    delete expected.$schema;
+    expect(actual).toEqual(expected);
+  }
+  expect(bodyOf("delete")).toEqual({ type: "object", properties: {}, additionalProperties: false });
 });

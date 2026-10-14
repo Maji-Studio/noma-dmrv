@@ -47,6 +47,7 @@ export const orderGuide = `## Customers and orders
 
 - GET /customers and /customers/{idOrCode} require customers:read and return ids, codes and names without contact fields. GET /customers/{idOrCode}/locations accepts a parent UUID or code and returns destinations with GPS and one-way distance. The server counts the round trip.
 - GET /orders and /orders/{idOrCode} require orders:read. ${readDescriptions.orders} Quantity is requested wet product mass in kilograms, stored with 32-bit floating-point precision (about 6 significant decimal digits). Large quantities do not preserve 0.001 kg steps.
+- POST /orders requires orders:write and an Idempotency-Key, including dry runs. PATCH /orders/{id} requires orders:write and If-Match. Omitted fields stay unchanged; customerLocationId null clears. Relationships freeze once any delivery exists. DELETE requires orders:delete and If-Match, and only works without deliveries, including archived deliveries. All writes accept ?dryRun=true. Quantity is requested wet kg, packaging defaults to the organization setting, and orderDate is a calendar date.
 - GET /orders/{idOrCode}/balance requires orders:read. ${readDescriptions.orderBalance}
 - Find product bins through GET /storage-locations?type=product_bin&formulationId=<UUID>, optionally with facilityId. formulationId is null until a product bin is claimed, and on other bin types.
 `;
