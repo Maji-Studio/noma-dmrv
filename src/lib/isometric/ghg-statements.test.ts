@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 
-import { createIsometricClient } from "./client";
+import { testIsometricClient } from "../../../tests/fixtures/isometric-client";
 import {
   getGhgStatementPeriod,
   listGhgStatementsForProject,
@@ -41,7 +41,7 @@ describe("GHG statement registry discovery", () => {
 
     await expect(
       listGhgStatementsForProject(
-        createIsometricClient({ clientSecret: "test-secret", accessToken: "test-token", baseUrl: "https://api.sandbox.isometric.com/mrv/v0" }),
+        testIsometricClient(),
         "prj_target",
       ),
     ).resolves.toMatchObject([{ id: "ggs_first" }, { id: "ggs_second" }]);

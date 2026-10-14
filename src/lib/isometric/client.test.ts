@@ -3,11 +3,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("@/lib/log", () => ({
   logger: { child: () => ({ debug: vi.fn(), warn: vi.fn(), error: vi.fn() }) },
 }));
-import { createIsometricClient, IsometricApiError } from "./client";
+import { IsometricApiError } from "./client";
+import { testIsometricClient } from "../../../tests/fixtures/isometric-client";
 
 const DEADLINE_MS = 30_000;
 const fetchMock = vi.fn<typeof fetch>();
-const client = createIsometricClient({ clientSecret: "test-secret", accessToken: "test-token", baseUrl: "https://api.sandbox.isometric.com/mrv/v0" });
+const client = testIsometricClient();
 
 // Fetch resolves when headers arrive, but the stream rejects on abort just
 // like a real fetch Response. No registry requests leave this test process.
