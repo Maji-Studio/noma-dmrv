@@ -115,8 +115,7 @@ export function ReactorForm({
 
   return (
     <form onSubmit={handleFormSubmit} className="space-y-20">
-      {/* Required Fields Section */}
-      <FormSection title="Required information" divider={false}>
+      <FormSection divider={false}>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <FormField
             id="identifier"

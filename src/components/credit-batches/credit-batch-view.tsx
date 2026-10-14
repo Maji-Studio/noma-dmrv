@@ -360,7 +360,7 @@ export function creditBatchSheetSections({
       ),
     },
     {
-      title: "Additional information",
+      id: "notes",
       fields: [{ label: "Notes", value: creditBatch.siteManagementNotes }],
     },
   ];

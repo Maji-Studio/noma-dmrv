@@ -1,4 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
+import { useState } from "react";
+import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { describe, expect, it } from "vitest";
 import { MISSING_VALUE } from "@/lib/copy-utils";
 import { DetailField, DetailSpine } from "./index";
@@ -253,6 +255,36 @@ describe("DetailField certification status", () => {
 });
 
 describe("DetailSpine", () => {
+  it("keeps headingless fields and their divider without an empty title row", () => {
+    const markup = renderToStaticMarkup(
+      <DetailSpine sections={[
+        { id: "name", fields: [{ label: "Name", value: "Mix" }] },
+        { id: "description", fields: [{ label: "Description", value: "Soil blend" }] },
+      ]} />,
+    );
+    expect(markup).not.toContain("<h3");
+    expect(markup.match(/border-t /g)).toHaveLength(1);
+    expect(markup.indexOf("Name")).toBeLessThan(markup.indexOf("Description"));
+  });
+
+  it("preserves each headingless section's content state when sections reorder", async () => {
+    Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
+    function StatefulContent({ name }: { name: string }) {
+      const [initialName] = useState(name);
+      return <span>{name}:{initialName}</span>;
+    }
+    const sections = ["name", "description"].map(id => ({
+      id, fields: [], content: <StatefulContent name={id} />,
+    }));
+    let renderer!: ReactTestRenderer;
+    await act(async () => { renderer = create(<DetailSpine sections={sections} />); });
+    await act(async () => { renderer.update(<DetailSpine sections={[...sections].reverse()} />); });
+    const markup = JSON.stringify(renderer.toJSON());
+    expect(markup).toContain('["description",":","description"]');
+    expect(markup).toContain('["name",":","name"]');
+    await act(async () => { renderer.unmount(); });
+  });
+
   it("renders a contiguous passive step rail with shared spine chrome", () => {
     const markup = renderToStaticMarkup(
       <DetailSpine
