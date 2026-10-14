@@ -155,6 +155,77 @@ describe("findActionBoundarySites", () => {
     expect(findActionBoundarySites(source, "src/fn/with-action.ts")).toEqual([]);
   });
 
+  it("tracks an org-context alias from the auth barrel", () => {
+    const source = `import { requireOrgContext as getCtx } from "@/lib/auth";
+      async function createItem() { await getCtx(); }`;
+    expect(findActionBoundarySites(source, ACTION_FILE)).toEqual([
+      expect.objectContaining({ line: 2, function: "createItem", kind: "org-context" }),
+    ]);
+  });
+
+  it("tracks org-context calls from the auth barrel namespace", () => {
+    const source = `import * as auth from "@/lib/auth";
+      async function createItem() { await auth.requireOrgContext(); await auth.getOrgContext(); }`;
+    expect(findActionBoundarySites(source, ACTION_FILE)).toEqual([
+      expect.objectContaining({ line: 2, function: "createItem", kind: "org-context" }),
+      expect.objectContaining({ line: 2, function: "createItem", kind: "org-context" }),
+    ]);
+  });
+
+  it.each(["../lib/auth/server", "../lib/auth", "../../lib/auth/server", "../../lib/auth"])(
+    "tracks org-context aliases and namespaces from relative import %s",
+    (module) => {
+      const source = `import { getOrgContext as getCtx } from "${module}";
+        import * as auth from "${module}";
+        async function createItem() { await getCtx(); await auth.requireOrgContext(); }`;
+      expect(findActionBoundarySites(source, ACTION_FILE)).toEqual([
+        expect.objectContaining({ line: 3, function: "createItem", kind: "org-context" }),
+        expect.objectContaining({ line: 3, function: "createItem", kind: "org-context" }),
+      ]);
+    },
+  );
+
+  it.each(["./action-errors", "@/fn/action-errors", "../action-errors", "../../fn/action-errors"])(
+    "tracks toActionFailure aliases from %s",
+    (module) => {
+      const source = `import { toActionFailure as fail } from "${module}";
+        function createItem() { return fail(error); }`;
+      expect(findActionBoundarySites(source, ACTION_FILE)).toEqual([
+        expect.objectContaining({ line: 2, function: "createItem", kind: "action-failure" }),
+      ]);
+      expect(findActionBoundarySites(source, "src/fn/with-action.ts")).toEqual([]);
+      expect(findActionBoundarySites(source, "src/fn/action-errors.ts")).toEqual([]);
+    },
+  );
+
+  it.each(["./action-errors", "@/fn/action-errors", "../action-errors", "../../fn/action-errors"])(
+    "tracks toActionFailure namespace calls from %s",
+    (module) => {
+      const source = `import * as errors from "${module}";
+        function createItem() { return errors.toActionFailure(error); }`;
+      expect(findActionBoundarySites(source, ACTION_FILE)).toEqual([
+        expect.objectContaining({ line: 2, function: "createItem", kind: "action-failure" }),
+      ]);
+      expect(findActionBoundarySites(source, "src/fn/with-action.ts")).toEqual([]);
+      expect(findActionBoundarySites(source, "src/fn/action-errors.ts")).toEqual([]);
+    },
+  );
+
+  it("ignores unrelated modules and type-only failure bindings", () => {
+    const source = `import { requireOrgContext as getCtx } from "other/lib/auth";
+      import * as auth from "../lib/auth-client";
+      import { toActionFailure as fail } from "other/action-errors";
+      import * as errors from "./action-errors-other";
+      import type { toActionFailure as typeFail } from "./action-errors";
+      import { type toActionFailure as inlineTypeFail } from "@/fn/action-errors";
+      import type * as typeErrors from "../action-errors";
+      function createItem() {
+        getCtx(); auth.getOrgContext(); fail(error); errors.toActionFailure(error);
+        typeFail(error); inlineTypeFail(error); typeErrors.toActionFailure(error);
+      }`;
+    expect(findActionBoundarySites(source, ACTION_FILE)).toEqual([]);
+  });
+
   it.each([
     'error ? { success: false } : { success: true }',
     'error ? { success: true } : { success: false }',

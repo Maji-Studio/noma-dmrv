@@ -13,7 +13,11 @@ const SOURCE_EXTENSIONS = new Set([".ts", ".tsx"]);
 const TEST_FILE = /\.(?:test|spec)\.tsx?$/;
 const BOUNDARY_FILE = "src/fn/with-action.ts";
 const FAILURE_FILE = "src/fn/action-errors.ts";
-const AUTH_MODULE = "@/lib/auth/server";
+const AUTH_MODULES = new Set(["@/lib/auth/server", "@/lib/auth"]);
+const RELATIVE_AUTH_MODULE = /^\.\.?\/(?:.*\/)?lib\/auth(?:\/server)?$/;
+const FAILURE_MODULES = new Set(["@/fn/action-errors"]);
+const RELATIVE_FAILURE_MODULE = /^\.\.?\/(?:.*\/)?action-errors$/;
+const FAILURE_NAME = "toActionFailure";
 const ORG_CONTEXT_NAMES = new Set(["requireOrgContext", "getOrgContext"]);
 const SITE_KINDS = ["org-context", "catch-failure", "action-failure", "hook-unwrap"] as const;
 const DOC_POINTER = "See docs/architecture.md (withAction).";
@@ -222,17 +226,29 @@ export function findActionBoundarySites(
 
   const orgImports = new Map<string, ts.ImportSpecifier>();
   const orgNamespaces = new Set<string>();
+  const failureImports = new Set<string>();
+  const failureNamespaces = new Set<string>();
   const calledOrgImports = new Set<string>();
   for (const statement of sourceFile.statements) {
     if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier) ||
-      statement.moduleSpecifier.text !== AUTH_MODULE || statement.importClause?.isTypeOnly) continue;
+      statement.importClause?.isTypeOnly) continue;
+    const moduleSpecifier = statement.moduleSpecifier.text;
+    const isAuthModule = AUTH_MODULES.has(moduleSpecifier) || RELATIVE_AUTH_MODULE.test(moduleSpecifier);
+    const isFailureModule = FAILURE_MODULES.has(moduleSpecifier) || RELATIVE_FAILURE_MODULE.test(moduleSpecifier);
+    if (!isAuthModule && !isFailureModule) continue;
     const bindings = statement.importClause?.namedBindings;
-    if (bindings && ts.isNamespaceImport(bindings)) orgNamespaces.add(bindings.name.text);
+    if (bindings && ts.isNamespaceImport(bindings)) {
+      if (isAuthModule) orgNamespaces.add(bindings.name.text);
+      if (isFailureModule) failureNamespaces.add(bindings.name.text);
+    }
     if (bindings && ts.isNamedImports(bindings)) {
       for (const binding of bindings.elements) {
-        if (!binding.isTypeOnly && ORG_CONTEXT_NAMES.has((binding.propertyName ?? binding.name).text)) {
+        if (binding.isTypeOnly) continue;
+        const importedName = (binding.propertyName ?? binding.name).text;
+        if (isAuthModule && ORG_CONTEXT_NAMES.has(importedName)) {
           orgImports.set(binding.name.text, binding);
         }
+        if (isFailureModule && importedName === FAILURE_NAME) failureImports.add(binding.name.text);
       }
     }
   }
@@ -250,8 +266,13 @@ export function findActionBoundarySites(
           if (ts.isIdentifier(callee)) calledOrgImports.add(callee.text);
           report(node, "org-context", `Use withAction instead of calling ${callee.getText()}().`);
         }
-        if (file !== FAILURE_FILE && ts.isIdentifier(callee) && callee.text === "toActionFailure") {
-          report(node, "action-failure", "Use withAction instead of calling toActionFailure().");
+        const directFailure = ts.isIdentifier(callee) &&
+          (callee.text === FAILURE_NAME || failureImports.has(callee.text));
+        const namespacedFailure = ts.isPropertyAccessExpression(callee) &&
+          ts.isIdentifier(callee.expression) && failureNamespaces.has(callee.expression.text) &&
+          callee.name.text === FAILURE_NAME;
+        if (file !== FAILURE_FILE && (directFailure || namespacedFailure)) {
+          report(node, "action-failure", `Use withAction instead of calling ${callee.getText()}().`);
         }
       }
       if (
