@@ -116,6 +116,8 @@ Each row is one decision, phrased as the question an agent cannot answer from th
 | B13 | 28 | Introduce a composite CI action? It cannot own the checkout, and `migration-gate.yml` checks out a base revision that will not yet contain it. | Yes, in two stages | Workflow diff with unchanged refs, permissions and cache keys |
 | B14 | 21 | Two-phase the bin picker aggregates? | Only with a measured plan improvement | `EXPLAIN` on a seeded local database before and after, on the same file as its A5 projection extraction |
 
+Resolved 2026-10-13 by #987: the reactor upload was removed (ADR 0006 retired).
+
 ## Sequencing
 
 A1 and A2 first, in that order, since A2 rewrites sites A1 deletes. A3's seam PR can land in parallel with A2; its per-entity PRs follow. A4 and A6 are independent and can run alongside. A5 last within Phase A. Phase B decisions B1, B7 and B12 are one-liners and unblock the most follow-on work, so ask them first. Nothing in Phase B blocks anything in Phase A.

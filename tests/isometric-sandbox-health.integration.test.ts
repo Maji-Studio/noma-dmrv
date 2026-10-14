@@ -5,7 +5,7 @@
  * `.github/workflows/isometric-health.yml` run), so everything here must be
  * safe to run against the registry every day. Only reads and local request
  * building belong here; anything that POSTs, PUTs or DELETEs goes in
- * tests/isometric-sandbox.integration.test.ts instead.
+ * a separate write-path integration suite instead.
  *
  * Opt-in and fail-closed env gating live in ./helpers/isometric-sandbox-env.ts.
  * `pnpm test:integration` also runs this file.

@@ -355,7 +355,7 @@ function ConnectorBody({
         <FormField
           id="isometric-facility-id"
           label="Isometric facility ID"
-          hint="Needed to register production batches and submit reactor telemetry. Create the facility in Isometric Certify, then paste its fcl_… ID here."
+          hint="Needed to register production batches. Create the facility in Isometric Certify, then paste its fcl_… ID here."
         >
           <FormInput
             id="isometric-facility-id"

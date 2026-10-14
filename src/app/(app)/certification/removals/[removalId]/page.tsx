@@ -1,7 +1,7 @@
 /**
  * Legacy per-removal Sources detail route → redirect.
  *
- * The standalone Sources/telemetry page was absorbed first into the guided
+ * The standalone Sources page was absorbed first into the guided
  * Review flow's Evidence step, then dissolved entirely when that flow was
  * consolidated into the New-Removal wizard (design doc §9): evidence now lives
  * on the credit-batch detail page. Old Sources links redirect to the overview

@@ -118,7 +118,7 @@ against it with a divergence warning.
   temperature via a `biochar_soil` measurement sample (`temperature`). Both resolve to
   datapoints that the `biochar_sequestration_200_year_*` blueprint consumes. noma's generated
   types + `MeasurementProperty` encoder already support this (no type regen); a
-  measurement-samples submission module is net-new (mirror `sensors.ts`).
+  measurement-samples submission module is net-new.
 - **Aggregation is registry-side.** Submit the **list** of per-batch H/C datapoints (each with
   its std-dev from ≥3 replicates); the registry takes the mean (`_c_org`) or Winsorized
   mean + standard error (`_unsampled`). noma does **not** pre-collapse to a mass-weighted

@@ -16,8 +16,6 @@ import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import {
   claimSubmissionDraft,
-  insertDraftSubmissionWithMappingLock,
-  resetSubmissionToDraftWithMappingLock,
   type ClaimOutcome,
   type ClaimSubmissionDraftArgs,
   type MappingClaimGuard,
@@ -246,6 +244,48 @@ async function whileHoldingMappingLock(
 beforeAll(() => ensureTestOrg());
 
 describe("claimSubmissionDraft — create path", () => {
+  it("throws when defaultRemovalTemplateId changed under the lock", async () => {
+    const fixture = await createFixture();
+    await db
+      .update(certifierProjects)
+      .set({ defaultRemovalTemplateId: "rvt_other" })
+      .where(eq(certifierProjects.facilityId, fixture.facilityId));
+
+    await expect(
+      claimSubmissionDraft(
+        makeTestOrgContext(USER_ID),
+        baseArgs(fixture, {
+          guard: {
+            ...fixture.guard,
+            expectedDefaultRemovalTemplateId: "rvt_default",
+          },
+        }),
+      ),
+    ).rejects.toMatchObject({
+      message: expect.stringMatching(/template changed/i),
+    });
+    expect(await listRows(fixture.key)).toHaveLength(0);
+  });
+
+  it("ignores defaultRemovalTemplateId when the guard omits it", async () => {
+    const fixture = await createFixture();
+    await db
+      .update(certifierProjects)
+      .set({ defaultRemovalTemplateId: "rvt_other" })
+      .where(eq(certifierProjects.facilityId, fixture.facilityId));
+
+    // GHG Statement creation omits the template guard. Exercise that same
+    // guard shape with a Removal claim, independently of submission type.
+    expect(fixture.guard).not.toHaveProperty("expectedDefaultRemovalTemplateId");
+    const outcome = await claimSubmissionDraft(
+      makeTestOrgContext(USER_ID),
+      baseArgs(fixture),
+    );
+
+    expect(outcome).toMatchObject({ kind: "claimed", resumed: false });
+    expect(await listRows(fixture.key)).toHaveLength(1);
+  });
+
   it("claims a v=1 draft on first submit and persists the built snapshot", async () => {
     const fixture = await createFixture();
 
@@ -529,46 +569,43 @@ describe("claimSubmissionDraft — concurrency (the GHG drift regression)", () =
     expect(await listRows(fixture.key)).toHaveLength(0);
   });
 
-  it("refuses telemetry continuation when local-draft discard wins the artifact race", async () => {
+  it("refuses a Removal claim when local-draft discard wins the artifact race", async () => {
     const fixture = await createFixture();
     const ctx = makeTestOrgContext(USER_ID);
-    let telemetryContinued = false;
-    let claimPromise!: Promise<unknown>;
+    let claimContinued = false;
+    let claimPromise!: Promise<ClaimOutcome>;
+    let markAnchorRead!: () => void;
+    const anchorRead = new Promise<void>((resolve) => {
+      markAnchorRead = resolve;
+    });
 
     await db.transaction(async (tx) => {
       await acquireFacilityDurabilityLock(ctx, tx, fixture.facilityId);
-      claimPromise = insertDraftSubmissionWithMappingLock(
+      claimPromise = claimSubmissionDraft(
         ctx,
-        {
-          ...fixture.key,
-          submissionType: "dataUpload",
-          version: 1,
-          payloadSnapshot: { semantic: {} },
-          payloadHash: "hash:telemetry",
-        },
-        fixture.guard,
-      ).then((row) => {
-        telemetryContinued = true;
-        return row;
+        baseArgs(fixture, {
+          hashOf: (inputs) => {
+            // Hashing follows the optimistic anchor read. Discard must win
+            // after that read to exercise the re-check under the artifact lock.
+            markAnchorRead();
+            return hashOf(inputs);
+          },
+        }),
+      ).then((outcome) => {
+        claimContinued = true;
+        return outcome;
       });
       claimPromise.catch(() => {});
 
-      // The telemetry claim passes its optimistic anchor read, then parks on
-      // the facility lock. Discard commits before telemetry can take the
-      // shared artifact lock and perform its authoritative anchor re-check.
-      await sleep(PARK_DELAY_MS);
+      await anchorRead;
       await expect(
-        discardLocalRemovalDraft(
-          ctx,
-          fixture.facilityId,
-          fixture.key.localEntityId,
-        ),
+        discardLocalRemovalDraft(ctx, fixture.facilityId, fixture.key.localEntityId),
       ).resolves.toEqual({ releasedSliceCount: 0 });
     });
 
     await expect(claimPromise).rejects.toThrow(/not found in this organization/i);
-    expect(telemetryContinued).toBe(false);
-    expect(await listRows({ ...fixture.key, submissionType: "dataUpload" })).toEqual([]);
+    expect(claimContinued).toBe(false);
+    expect(await listRows(fixture.key)).toEqual([]);
   });
 });
 
@@ -727,46 +764,6 @@ describe("claimSubmissionDraft — resume", () => {
         metadata: { externalMutation: "confirmed", retained: true },
       },
     });
-  });
-
-  it("atomically resets a fresh interrupted telemetry draft exactly once", async () => {
-    const fixture = await createFixture();
-    const telemetryKey = { ...fixture.key, submissionType: "dataUpload" };
-    const seeded = await seedRow(telemetryKey, {
-      version: 1,
-      status: "draft",
-      payloadHash: "hash:v-original",
-      lockedAt: new Date(),
-      metadata: {
-        lastAttemptOutcome: "interrupted",
-        externalMutation: "confirmed",
-      },
-    });
-
-    const attempts = await Promise.allSettled([
-      resetSubmissionToDraftWithMappingLock(
-        makeTestOrgContext(USER_ID),
-        seeded.id,
-        fixture.guard,
-        LOCK_TTL_MS,
-      ),
-      resetSubmissionToDraftWithMappingLock(
-        makeTestOrgContext(USER_ID),
-        seeded.id,
-        fixture.guard,
-        LOCK_TTL_MS,
-      ),
-    ]);
-
-    expect(attempts.filter((attempt) => attempt.status === "fulfilled")).toHaveLength(1);
-    expect(attempts.filter((attempt) => attempt.status === "rejected")).toHaveLength(1);
-    const [stored] = await listRows(telemetryKey);
-    expect(stored).toMatchObject({
-      id: seeded.id,
-      status: "draft",
-      metadata: { externalMutation: "confirmed" },
-    });
-    expect(stored.metadata).not.toHaveProperty("lastAttemptOutcome");
   });
 
   it("resolves to existing — not a draft revert — when the row flips to submitted while parked in the resume path", async () => {

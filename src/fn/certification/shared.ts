@@ -25,11 +25,9 @@ export {
   GHG_STATEMENT_ENTITY_TYPE,
 } from "@/lib/isometric/utils/constants";
 
-// Per-user abuse cap shared by the three registry submit actions
-// (removal / GHG statement / telemetry). Generous enough that no legitimate
-// operator hits it — ADR 0006 idempotency already makes a fast double-submit
-// a no-op, so this only blunts runaway/scripted bursts. `key` is passed
-// per-action so each pipeline is limited independently.
+// Per-user abuse cap for GHG Statement create/submit, Storage Location ensure,
+// and Removal deletion. Blunts runaway/scripted bursts; each action supplies
+// its own `key` so the limits are independent.
 const SUBMIT_RATE_LIMIT_MAX = 5;
 const SUBMIT_RATE_LIMIT_WINDOW_MS = 60_000;
 
@@ -67,8 +65,8 @@ export function assertProductionConfirmed(confirmProduction?: boolean): void {
 }
 
 // Canonical best-effort sync-event recorder for cert/* submit pipelines.
-// Replaces the three near-identical helpers that previously lived in
-// submit-removal.ts, submit-telemetry.ts, and sources.ts. A failed audit-trail
+// Consolidates the helpers that previously lived in
+// submit-removal.ts and sources.ts. A failed audit-trail
 // insert must NEVER unwind a successful submission, so this swallows the
 // error and console.warns with caller-supplied context (e.g. submissionId).
 export async function appendSyncEventBestEffort(
