@@ -260,6 +260,30 @@ describe("deriveEntityCertifyReadiness", () => {
     expect(readiness).toEqual({ state: "ready", gaps: [], warnings: [] });
   });
 
+  it.each([null, undefined])("keeps chemistry gaps when sampling is %s", (sampling) => {
+    for (const durabilityOption of ["200_year", "1000_year"]) {
+      const readiness = deriveEntityCertifyReadiness("sample", {
+        sampling,
+        durabilityOption,
+        randomReflectanceR0Percent: 1.2,
+        residualCarbonPercent: 85,
+      });
+      expect(readiness.state).toBe("incomplete");
+      expect(readiness.gaps.map((gap) => gap.key)).toEqual(
+        durabilityOption === "1000_year"
+          ? ["totalCarbonPercent", "inorganicCarbonPercent", "organicCarbonPercent", "hToCOrgRatio", "oToCOrgRatio", "sReflectanceFraction"]
+          : ["organicCarbonPercent", "hToCOrgRatio", "oToCOrgRatio"],
+      );
+    }
+  });
+
+  it.each(["200_year", "1000_year"])("skips chemistry only for an explicitly unsampled %s batch", (durabilityOption) => {
+    expect(deriveEntityCertifyReadiness("sample", {
+      sampling: "unsampled", durabilityOption,
+      randomReflectanceR0Percent: 1.2, residualCarbonPercent: 85,
+    })).toEqual({ state: "ready", gaps: [], warnings: [] });
+  });
+
   it("marks a complete feedstock with wet mass ready", () => {
     const readiness = deriveEntityCertifyReadiness("feedstock", {
       status: "complete",
@@ -473,6 +497,26 @@ describe("deriveEntityCertifyReadiness", () => {
 });
 
 describe("isCertifyFormField", () => {
+  it.each(["sampled", "unsampled", null, undefined])("shares Sample conditions with read fields when sampling is %s", (sampling) => {
+    for (const durabilityOption of ["200_year", "1000_year"]) {
+      const context = { sampling, durabilityOption };
+      const chemistryRequired = sampling !== "unsampled";
+      for (const field of ["organicCarbonPercent", "hToCOrgRatio", "totalHydrogenPercent", "oToCOrgRatio"]) {
+        expect(isCertifyFormField("sample", field, context), field).toBe(chemistryRequired);
+        expect(isCertifyEntityField("sample", field, context), field).toBe(chemistryRequired);
+      }
+      for (const field of ["totalCarbonPercent", "inorganicCarbonPercent", "sReflectanceFraction"]) {
+        const required = chemistryRequired && durabilityOption === "1000_year";
+        expect(isCertifyFormField("sample", field, context), field).toBe(required);
+        expect(isCertifyEntityField("sample", field, context), field).toBe(required);
+      }
+      for (const field of ["randomReflectanceR0Percent", "reactiveCarbonPercent", "residualCarbonPercent"]) {
+        expect(isCertifyFormField("sample", field, context), field).toBe(durabilityOption === "1000_year");
+        expect(isCertifyEntityField("sample", field, context), field).toBe(durabilityOption === "1000_year");
+      }
+    }
+  });
+
   it("badges entered descriptors by their key", () => {
     expect(isCertifyFormField("delivery", "deliveredWetMassKg")).toBe(true);
     expect(isCertifyFormField("application", "soilTemperatureC")).toBe(true);

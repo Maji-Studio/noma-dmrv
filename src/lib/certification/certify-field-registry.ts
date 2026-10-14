@@ -32,19 +32,22 @@ export interface CertifySourceMapping {
   source: AggregatedProductionSource;
 }
 
-export type CertifyFieldCondition =
+type CertifyFieldComparison =
   | {
       field: string;
       equals: string | number | boolean | null;
-      label: string;
+      notEquals?: never;
     }
   | {
-      allOf: readonly {
-        field: string;
-        equals: string | number | boolean | null;
-      }[];
-      label: string;
+      field: string;
+      notEquals: string | number | boolean | null;
+      equals?: never;
     };
+
+export type CertifyFieldCondition = (
+  | CertifyFieldComparison
+  | { allOf: readonly CertifyFieldComparison[] }
+) & { label: string };
 
 export type CertifyFieldSatisfaction =
   | { mode: "field" }
@@ -191,7 +194,7 @@ export const CERTIFY_FIELD_REGISTRY: Record<
       condition: {
         allOf: [
           { field: "durabilityOption", equals: "1000_year" },
-          { field: "sampling", equals: "sampled" },
+          { field: "sampling", notEquals: "unsampled" },
         ],
         label: "sampled 1,000-year durability",
       },
@@ -203,7 +206,7 @@ export const CERTIFY_FIELD_REGISTRY: Record<
       condition: {
         allOf: [
           { field: "durabilityOption", equals: "1000_year" },
-          { field: "sampling", equals: "sampled" },
+          { field: "sampling", notEquals: "unsampled" },
         ],
         label: "sampled 1,000-year durability",
       },
@@ -212,14 +215,14 @@ export const CERTIFY_FIELD_REGISTRY: Record<
       key: "organicCarbonPercent",
       label: "Organic carbon",
       kind: "entered",
-      condition: { field: "sampling", equals: "sampled", label: "sampled batches" },
+      condition: { field: "sampling", notEquals: "unsampled", label: "sampled batches" },
       mappings: [mapping("weightedOrganicCarbonPercent")],
     },
     {
       key: "hToCOrgRatio",
       label: "H:Corg ratio",
       kind: "entered",
-      condition: { field: "sampling", equals: "sampled", label: "sampled batches" },
+      condition: { field: "sampling", notEquals: "unsampled", label: "sampled batches" },
       formFields: [
         "totalHydrogenPercent",
         "organicCarbonPercent",
@@ -241,7 +244,7 @@ export const CERTIFY_FIELD_REGISTRY: Record<
       key: "oToCOrgRatio",
       label: "O:Corg ratio",
       kind: "entered",
-      condition: { field: "sampling", equals: "sampled", label: "sampled batches" },
+      condition: { field: "sampling", notEquals: "unsampled", label: "sampled batches" },
       mappings: [mapping("weightedOToCorgRatio")],
     },
     {
@@ -277,7 +280,7 @@ export const CERTIFY_FIELD_REGISTRY: Record<
       condition: {
         allOf: [
           { field: "durabilityOption", equals: "1000_year" },
-          { field: "sampling", equals: "sampled" },
+          { field: "sampling", notEquals: "unsampled" },
         ],
         label: "sampled 1,000-year durability",
       },
@@ -462,8 +465,10 @@ export function getCertifyFieldDescriptor(
 export function isCertifyFormField(
   entityKind: CertifyEntityKind,
   fieldName: string,
+  entity?: object,
 ): boolean {
   return CERTIFY_FIELD_REGISTRY[entityKind].some((field) => {
+    if (entity && !certifyFieldConditionApplies(field, entity)) return false;
     // Derived descriptors badge only the explicitly-named form inputs that
     // feed the derivation; entered descriptors default to their own key.
     const formFields =
@@ -502,17 +507,19 @@ export function certificationDetailField(
   return { certifyRequired: isCertifyEntityField(entityKind, fieldName, entity) };
 }
 
-/** Shared applicability rule for readiness and contextual detail chips. */
+/** Shared applicability rule for readiness and contextual form and detail chips. */
 export function certifyFieldConditionApplies(
   descriptor: CertifyFieldDescriptor,
   entity: object,
 ): boolean {
   const values = entity as Record<string, unknown>;
   if (!descriptor.condition) return true;
+  const applies = (condition: CertifyFieldComparison) =>
+    "notEquals" in condition
+      ? values[condition.field] !== condition.notEquals
+      : values[condition.field] === condition.equals;
   if ("allOf" in descriptor.condition) {
-    return descriptor.condition.allOf.every(
-      (condition) => values[condition.field] === condition.equals,
-    );
+    return descriptor.condition.allOf.every(applies);
   }
-  return values[descriptor.condition.field] === descriptor.condition.equals;
+  return applies(descriptor.condition);
 }

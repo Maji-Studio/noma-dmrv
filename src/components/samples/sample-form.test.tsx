@@ -134,14 +134,23 @@ describe("SampleForm defaults and batch hydration", () => {
   });
 });
 
-describe("SampleForm inorganic-carbon CERT chip", () => {
+describe("SampleForm contextual CERT chips", () => {
   it.each([
     ["1000_year", "sampled", true], ["1000_year", "unsampled", false],
     ["200_year", "sampled", false], ["200_year", "unsampled", false],
   ] as const)("follows the descriptor on %s %s batches", (tier, sampling, shown) => {
     loadBatch(tier, sampling);
     const { container } = render(<SampleForm sample={saved} onSubmit={vi.fn()} />);
-    expect(container.querySelector("#inorganicCarbonPercent-cert") !== null).toBe(shown);
+    for (const field of ["totalCarbonPercent", "inorganicCarbonPercent"]) {
+      expect(container.querySelector(`#${field}-cert`) !== null, field).toBe(shown);
+    }
+    for (const field of ["organicCarbonPercent", "totalHydrogenPercent", "oToCOrgRatio"]) {
+      expect(container.querySelector(`#${field}-cert`) !== null, field).toBe(sampling === "sampled");
+    }
+    for (const field of ["randomReflectanceR0Percent", "reactiveCarbonPercent", "residualCarbonPercent"]) {
+      expect(container.querySelector(`#${field}-cert`) !== null, field).toBe(tier === "1000_year");
+    }
+    expect(container.querySelector("#sReflectanceFraction-cert") !== null).toBe(shown);
   });
 
   it.each(["sampled", "unsampled"] as const)("scopes chemistry and s_fraction chips to sampled batches (%s)", (sampling) => {

@@ -19,12 +19,27 @@ describe("formatSamplingTime", () => {
 });
 
 describe("Sample read-view certification chips", () => {
+  it("shows missing chemistry chips on a legacy batchless Sample", () => {
+    const sample = {
+      id: "sample", creditBatchId: null, sampling: null, durabilityOption: null,
+      samplingTime: new Date("2026-09-10T08:00:00Z"), facilityTimezone: "UTC",
+      organicCarbonPercent: null, hToCOrgRatio: null, oToCOrgRatio: null,
+      nutrientClaimEnabled: false,
+    } as unknown as SampleWithRelations;
+    const fields = sampleSheetSections(sample).flatMap((section) => section.fields);
+    for (const label of ["Organic carbon", "H:C org ratio", "O:C org ratio"]) {
+      const field = fields.find((field) => field.label === label)!;
+      expect(renderToStaticMarkup(<DetailField {...field} />)).toContain('data-cert-field="missing"');
+    }
+  });
+
   it.each([
     { durabilityOption: "200_year", sampling: "sampled", chemistryRequired: true },
     { durabilityOption: "1000_year", sampling: "sampled", chemistryRequired: true },
     { durabilityOption: "200_year", sampling: "unsampled", chemistryRequired: false },
     { durabilityOption: "1000_year", sampling: "unsampled", chemistryRequired: false },
-    { durabilityOption: "1000_year", sampling: null, chemistryRequired: false },
+    { durabilityOption: "200_year", sampling: null, chemistryRequired: true },
+    { durabilityOption: "1000_year", sampling: null, chemistryRequired: true },
   ] as const)("matches the form's conditions for $sampling $durabilityOption batches", ({ durabilityOption, sampling, chemistryRequired }) => {
     const sample = {
       id: "sample", creditBatchCode: "CB-1", samplingTime: new Date("2026-09-10T08:00:00Z"),

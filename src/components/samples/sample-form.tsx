@@ -72,9 +72,6 @@ import {
 
 const NO_FACILITY_SENTINEL = "__none__";
 
-const isSampleCertifyField = (field: string) =>
-  isCertifyFormField("sample", field);
-
 // ============================================
 // Component
 // ============================================
@@ -264,9 +261,9 @@ export function SampleForm({
   });
 
   const is1000Year = watchedDurabilityOption === "1000_year";
-  const isSampledBatch = batchSummary?.sampling === "sampled";
-  const isSampleChemistryCertifyField = (field: string) =>
-    isSampledBatch && isSampleCertifyField(field);
+  const certifyContext = { sampling: batchSummary?.sampling, durabilityOption: watchedDurabilityOption };
+  const isSampleCertifyField = (field: string) =>
+    isCertifyFormField("sample", field, certifyContext);
   const liveCarbonErrors = getSampleCarbonReconciliationErrors({
     totalCarbonPercent: watchedTotalCarbonPercent,
     organicCarbonPercent: watchedOrganicCarbonPercent,
@@ -288,7 +285,7 @@ export function SampleForm({
         label="O:C org ratio"
         error={errors.oToCOrgRatio?.message}
         helperText="Enter the lab ratio when the lab reported no oxygen. With O% entered, the ratio is calculated from O% and C_org%."
-        certifyRequired={isSampleChemistryCertifyField("oToCOrgRatio")}
+        certifyRequired={isSampleCertifyField("oToCOrgRatio")}
         certifyStatus={certStatus("oToCOrgRatio")}
       >
         <FormInput
@@ -491,7 +488,7 @@ export function SampleForm({
                   unit="%"
                   error={errors.totalCarbonPercent?.message}
                   required
-                  certifyRequired={is1000Year && isSampleChemistryCertifyField("totalCarbonPercent")}
+                  certifyRequired={isSampleCertifyField("totalCarbonPercent")}
                   certifyStatus={certStatus("totalCarbonPercent")}
                 >
                   <FormInput
@@ -514,7 +511,7 @@ export function SampleForm({
                   error={organicCarbonError}
                   helperText="Basis for the H:Corg / O:Corg eligibility ratios and durable-carbon accounting (both tiers)."
                   required
-                  certifyRequired={isSampleChemistryCertifyField("organicCarbonPercent")}
+                  certifyRequired={isSampleCertifyField("organicCarbonPercent")}
                   certifyStatus={certStatus("organicCarbonPercent")}
                 >
                   <FormInput
@@ -535,7 +532,7 @@ export function SampleForm({
                   label="Inorganic carbon"
                   unit="%"
                   error={inorganicCarbonError}
-                  certifyRequired={is1000Year && isSampleChemistryCertifyField("inorganicCarbonPercent")}
+                  certifyRequired={isSampleCertifyField("inorganicCarbonPercent")}
                   certifyStatus={certStatus("inorganicCarbonPercent")}
                 >
                   <FormInput
@@ -575,7 +572,7 @@ export function SampleForm({
                   label="Hydrogen"
                   unit="%"
                   error={errors.totalHydrogenPercent?.message}
-                  certifyRequired={isSampleChemistryCertifyField("totalHydrogenPercent")}
+                  certifyRequired={isSampleCertifyField("totalHydrogenPercent")}
                   certifyStatus={certStatus("totalHydrogenPercent")}
                 >
                   <FormInput
@@ -756,7 +753,7 @@ export function SampleForm({
                 organicCarbonPercent={(watchedOrganicCarbonPercent as number | null) ?? null}
                 oToCFromLab={ratioPreview.oToCOrgSource === "lab"}
                 error={errors.hToCOrgRatio?.message}
-                certifyRequired={isSampleChemistryCertifyField}
+                certifyRequired={isSampleCertifyField}
                 certifyStatus={certStatus}
               />
 
@@ -803,7 +800,7 @@ export function SampleForm({
                     unit="%"
                     helperText="Share of ISO 7404-5 reflectance readings meeting the 1000-year threshold."
                     error={errors.sReflectanceFraction?.message}
-                    certifyRequired={isSampleChemistryCertifyField("sReflectanceFraction")}
+                    certifyRequired={isSampleCertifyField("sReflectanceFraction")}
                     certifyStatus={certStatus("sReflectanceFraction")}
                   >
                     <Controller
