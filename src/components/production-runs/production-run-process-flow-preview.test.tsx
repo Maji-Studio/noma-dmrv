@@ -7,7 +7,8 @@ import { beforeAll, describe, expect, it, vi } from "vitest";
 // environment does not have; the hint's copy is not what these tests assert.
 vi.mock("@/components/ui/tooltip", () => ({ InfoHint: () => null }));
 import { FormDetailControl, FormDetailProvider } from "@/components/forms/form-detail-context";
-import { processFlowDiagram, ProcessFlowPreview } from "./production-run-process-flow-preview";
+import { layoutMassFlow } from "@/components/ui/mass-flow-sankey";
+import { processFlowDiagram, ProcessFlowPreview, PROCESS_FLOW_WATER_INFLOW_LABEL } from "./production-run-process-flow-preview";
 
 const run = {
   sourceBinName: "Feedstock July",
@@ -20,6 +21,8 @@ const run = {
   biocharDryKg: 45,
   destinationBinName: "Biochar July",
 };
+
+const FLOW_WIDTH_PX = 560;
 
 beforeAll(() => Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true }));
 
@@ -43,6 +46,7 @@ describe("ProcessFlowPreview", () => {
     expect(rendered).toContain("Biochar July 50 kg wet, 45 kg dry");
     expect(rendered).toContain("Water driven off 10 kg");
     expect(rendered).toContain("Conversion loss 45 kg");
+    expect(rendered).toContain(`${PROCESS_FLOW_WATER_INFLOW_LABEL} 5 kg`);
     expect(rendered.indexOf("Feedstock July")).toBeLessThan(rendered.indexOf("Reactor 1"));
     expect(rendered.indexOf("Reactor 1")).toBeLessThan(rendered.indexOf("Biochar July"));
   });
@@ -60,6 +64,35 @@ describe("ProcessFlowPreview", () => {
     ]);
     const masses = Object.fromEntries(diagram!.nodes.flatMap((node) => node.segments.map((segment) => [segment.id, segment.kg])));
     expect(masses).toEqual({ "feed-water": 10, "feed-dry": 90, loss: 45, made: 45, "biochar-dry": 45, "biochar-water": 5 });
+  });
+
+  it("balances wet feedstock plus water taken up against water driven off, conversion loss and wet biochar", () => {
+    const balancedRun = { ...run, feedstockKg: 500, feedstockMoisturePercent: 20, feedstockDryKg: 400, biocharKg: 300, biocharMoisturePercent: 2.5, biocharDryKg: 292.5 };
+    const diagram = processFlowDiagram(balancedRun)!;
+    const rendered = text(<ProcessFlowPreview {...balancedRun} />);
+    const masses = Object.fromEntries(diagram.nodes.flatMap((node) => node.segments.map((segment) => [segment.id, segment.kg])));
+    const waterIn = diagram.inflows!.reduce((total, inflow) => total + masses[inflow.to], 0);
+    const losses = diagram.exits!.reduce((total, exit) => total + masses[exit.from], 0);
+
+    expect(rendered).toContain("500 kg wet, 400 kg dry");
+    expect(rendered).toContain("300 kg wet, 292.5 kg dry");
+    expect(rendered).toContain("Water driven off 100 kg");
+    expect(rendered).toContain("Conversion loss 107.5 kg");
+    expect(rendered).toContain(`${PROCESS_FLOW_WATER_INFLOW_LABEL} 7.5 kg`);
+    expect(waterIn).toBe(7.5);
+    expect(balancedRun.feedstockKg + waterIn).toBe(losses + balancedRun.biocharKg);
+    expect(diagram.inflows).toEqual([{ to: "biochar-water", name: PROCESS_FLOW_WATER_INFLOW_LABEL, caption: "7.5 kg" }]);
+    expect(diagram.nodes[2].segments.find((segment) => segment.id === "biochar-water")?.kind).toBe("addedWater");
+    expect(renderToStaticMarkup(<ProcessFlowPreview {...balancedRun} />)).toContain("var(--color-moisture-added-water)");
+  });
+
+  it.each([0, null])("hides the inflow when dry equals wet, with moisture %s", (biocharMoisturePercent) => {
+    const dryRun = { ...run, biocharDryKg: run.biocharKg, biocharMoisturePercent };
+    const diagram = processFlowDiagram(dryRun)!;
+
+    expect(diagram.inflows).toEqual([]);
+    expect(text(<ProcessFlowPreview {...dryRun} />)).not.toContain(PROCESS_FLOW_WATER_INFLOW_LABEL);
+    expect(layoutMassFlow(diagram, FLOW_WIDTH_PX)!.bands.map((band) => band.key)).not.toContain("inflow->biochar-water");
   });
 
   it("keeps the yield arithmetic behind the block's own disclosure", () => {
@@ -81,11 +114,13 @@ describe("ProcessFlowPreview", () => {
     expect(simple).toContain("50%");
     expect(simple).toContain("Feedstock July");
     expect(simple).toContain("Conversion loss");
+    expect(simple).toContain(PROCESS_FLOW_WATER_INFLOW_LABEL);
     expect(simple).not.toContain("Show calculation");
 
     await act(async () => renderer.root.findAllByType("input").find(node => node.props.value === "detailed")!.props.onChange());
     const detailed = visible(renderer.root);
     expect(detailed).toContain("Feedstock July");
+    expect(detailed).toContain(PROCESS_FLOW_WATER_INFLOW_LABEL);
     expect(detailed).toContain("Show calculation");
     await act(async () => renderer.unmount());
   });
@@ -98,6 +133,7 @@ describe("ProcessFlowPreview", () => {
     expect(rendered).toContain("Water and conversion loss 50 kg");
     expect(rendered).not.toContain("Water driven off");
     expect(rendered).not.toContain("kg dry");
+    expect(rendered).not.toContain(PROCESS_FLOW_WATER_INFLOW_LABEL);
   });
 
   it("falls back to a wet flow when the input dry mass is unresolved", () => {
@@ -106,6 +142,7 @@ describe("ProcessFlowPreview", () => {
     expect(rendered).toContain("Wet yield 50%");
     expect(rendered).toContain("Water and conversion loss 50 kg");
     expect(rendered).not.toContain("kg dry");
+    expect(rendered).not.toContain(PROCESS_FLOW_WATER_INFLOW_LABEL);
   });
 
   it("names the field to fill at every unpicked stop, and renders nothing before the first one", () => {
