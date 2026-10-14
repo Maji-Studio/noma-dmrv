@@ -5,7 +5,7 @@ import { db } from "@/db";
 import { binMovements, deliveries, outputStockAllocations, storageLocations } from "@/db/schema";
 import { createApplication } from "@/data-access/applications";
 import { getDeliveryAllocationProvenance } from "@/data-access/delivery-allocation-provenance";
-import { createDelivery } from "@/data-access/delivery-output-writes";
+import { createDelivery } from "./helpers/create-delivery";
 import { getOutputStockHistory } from "@/data-access/output-stock-history";
 import { previewOutputStock } from "@/data-access/output-stock-operations";
 import { getOutputSubBins } from "@/data-access/output-sub-bins";

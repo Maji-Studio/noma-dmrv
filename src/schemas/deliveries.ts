@@ -1,5 +1,5 @@
 import { offsetInstantSchema } from "./event-instant";
-import { DELIVERY_DISTANCE_MESSAGE } from "./delivery-input";
+import { DELIVERY_DISTANCE_MESSAGE, recordDeliveryInput } from "./delivery-input";
 import { expectedVersionSchema } from "./helpers";
 /**
  * Deliveries Validation Schemas
@@ -288,3 +288,13 @@ export type DeliveryFilterData = z.infer<typeof deliveryFilterSchema>;
 export { deliveryDryMassSchema };
 
 export type DeleteDeliveryData = z.infer<typeof deleteDeliverySchema>;
+
+/** The form's facility mirror is ignored; the order supplies the authoritative facility. */
+export function deliveryOperationInput(data: z.output<typeof createDeliverySchema>): z.input<typeof recordDeliveryInput> & { code?: string; idempotencyKey: string } {
+  return {
+    code: data.code || undefined, idempotencyKey: data.idempotencyKey, orderId: data.orderId, storageLocationId: data.storageLocationId,
+    deliveredAt: data.deliveryDate, deliveredWetMassKg: data.deliveredWetMassKg!, moisturePercent: data.moistureContentPercent,
+    sources: data.sources, basisFingerprint: data.basisFingerprint, driverId: data.driverId, vehicleId: data.vehicleId,
+    distanceKmOverride: data.distanceKmOverride, distanceSource: data.distanceSource, distanceNote: data.distanceNote,
+  };
+}

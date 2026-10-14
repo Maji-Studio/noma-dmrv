@@ -8,7 +8,8 @@ import { biocharProducts, binMovements, outputStockAllocations, outputStockRunAl
 import { createBiocharProduct } from '@/data-access/biochar-product-create';
 import { createOrderInTransaction } from '@/data-access/orders';
 import { getDeliveryAllocationProvenance } from '@/data-access/delivery-allocation-provenance';
-import { createDelivery, deleteDelivery } from '@/data-access/delivery-output-writes';
+import { deleteDelivery } from "@/data-access/delivery-output-writes";
+import { createDelivery } from "./helpers/create-delivery";
 import { updateDelivery } from '@/lib/operations/deliveries';
 import { getOutputStockHistory } from '@/data-access/output-stock-history';
 import { buildStockLevelSeries } from '@/components/storage-locations/stock-level-series';

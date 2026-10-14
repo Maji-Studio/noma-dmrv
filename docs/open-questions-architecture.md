@@ -158,9 +158,10 @@ locks the run row FOR UPDATE before lineage artifacts. Delivery create in
 `src/data-access/delivery-output-writes.ts:createDeliveryInTransaction` holds the
 order's artifacts and then needs FK key-share on the run when `post` in
 `src/data-access/output-stock-post.ts` inserts `outputStockRunAllocations`.
-If both share a not-yet-submitted Removal, this can raise 40P01. The app path
-`createDelivery` uses `db.transaction` and does not retry until Phase 5b-2 commit 2
-moves it onto the runner. Fix the run writer to lock artifacts before the run row.
+If both share a not-yet-submitted Removal, this can raise 40P01. Delivery creates
+now run through the operation runner in both the app and the registered API
+operation, so the whole transaction retries within its deadline. The lock-order
+inversion remains: fix the run writer to lock artifacts before the run row.
 This is part of `data/lock-order` below.
 
 ### Run writers, feedstock edits and output postings lock in different orders (`data/lock-order`, opened 2026-10-09)
@@ -257,7 +258,7 @@ This is part of `data/lock-order` below.
 
 ### A submitted Removal locks an order against further deliveries (`certification/order-lineage-lock`, opened 2026-10-14)
 
-- Round 9 Q69 (decision 78 in the [data-entry API plan](./plans/2026-10-06-data-entry-api.md#13-decisions-kenji-2026-10-06)) keeps the refusal: a new delivery on an order whose earlier delivery is in a submitted Removal is refused (typed `certification_locked` from 5b-2). Long-running partial-delivery orders need a second order today. Pointer: `src/data-access/delivery-output-writes.ts:createDelivery` guards the order through `assertCanMutateCertifiedLineage`.
+- Round 9 Q69 (decision 78 in the [data-entry API plan](./plans/2026-10-06-data-entry-api.md#13-decisions-kenji-2026-10-06)) keeps the refusal: a new delivery on an order whose earlier delivery is in a submitted Removal is refused (typed `certification_locked` from 5b-2). Long-running partial-delivery orders need a second order today. Pointer: `src/data-access/delivery-output-writes.ts:createDeliveryInTransaction` guards the order through `lockCertifiedLineageArtifacts` and `assertLockedLineagesAllowMutation`.
 - **Resolve via:** before allowing further deliveries, check that the derived per-product transport legs of submitted products cannot move. Enforce this in both the app and the API.
 
 ### A multi-sample create must not assume one credit batch or one sampling time (`api/multi-sample-create`, opened 2026-10-13)

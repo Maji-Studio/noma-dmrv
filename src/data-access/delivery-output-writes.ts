@@ -20,7 +20,7 @@ import { db, type DbTransaction } from '@/db';
 import { biocharProducts, outputStockAllocations, deliveries, drivers, facilities, orders, storageLocations, vehicles, type BiocharProduct, type BiocharProductRecord, type Delivery } from '@/db/schema';
 import type { OrgContext } from '@/lib/auth/server';
 import { SafeError } from '@/lib/errors';
-import { createDeliverySchema, updateDeliverySchema, resolveDeliveryDistanceSource } from '@/schemas/deliveries';
+import { updateDeliverySchema, resolveDeliveryDistanceSource } from '@/schemas/deliveries';
 import { and, eq } from 'drizzle-orm';
 import type { z } from 'zod';
 import { assertLockedLineagesAllowMutation, lockCertifiedLineageArtifacts, assertCanMutateCertifiedLineage } from './certification-lineage-guards';
@@ -31,7 +31,7 @@ import { withOutputStockPostingInTransaction, findPostedOutputRequest, OUTPUT_ST
 import { lockMovementRequest } from './bin-movement-requests';
 import { assertLatestOutputMovement } from './output-stock-edit-lock';
 import { lockBiocharTransportRouteTopology, syncBiocharProductTransportLegs } from './transport-legs';
-import { assertSameOrg, requireOrgScope } from './utils';
+import { requireOrgScope } from './utils';
 
 import { recordDeliveryInput, type RecordDeliveryInput } from '@/schemas/delivery-input';
 import { deliveryReferenceNotFound, deliveryValidationFailed } from '@/lib/delivery-domain-errors';
@@ -152,24 +152,16 @@ export async function createDeliveryInTransaction(ctx: OrgContext, tx: DbTransac
   }, { shortage: ['deliveredWetMassKg'], validation: ['storageLocationId'] });
 }
 
-/** The app supplies a facility mirror; the order remains authoritative. */
-export async function createDelivery(ctx: OrgContext, raw: z.input<typeof createDeliverySchema>): Promise<CreatedDelivery> {
-  requireOrgScope(ctx);
-  const data = createDeliverySchema.parse(raw);
-  const { delivery } = await db.transaction(tx => createDeliveryInTransaction(ctx, tx, {
-    code: data.code, idempotencyKey: data.idempotencyKey, orderId: data.orderId, storageLocationId: data.storageLocationId,
-    deliveredAt: data.deliveryDate, deliveredWetMassKg: data.deliveredWetMassKg!, moisturePercent: data.moistureContentPercent,
-    sources: data.sources, basisFingerprint: data.basisFingerprint, driverId: data.driverId, vehicleId: data.vehicleId,
-    distanceKmOverride: data.distanceKmOverride, distanceSource: data.distanceSource, distanceNote: data.distanceNote,
-  }));
-  return delivery;
-}
 export async function updateDeliveryInTransaction(ctx: OrgContext, tx: DbTransaction, deliveryId: string, raw: Omit<z.input<typeof updateDeliverySchema>, 'deliveryId'>): Promise<UpdatedDelivery> {
   requireOrgScope(ctx);
   return withUniqueCodeGuard(ctx, deliveries, deliveries.code, CODE_CONFLICT_MESSAGES.delivery, async () => {
     const data = updateDeliverySchema.parse({ ...raw, deliveryId });
-    if (data.driverId) await withFeedstockErrors(() => assertSameOrg(ctx, drivers, data.driverId!, tx), 'not_found', ['driverId']);
-    if (data.vehicleId) await withFeedstockErrors(() => assertSameOrg(ctx, vehicles, data.vehicleId!, tx), 'not_found', ['vehicleId']);
+    for (const [field, table] of [['driverId', drivers], ['vehicleId', vehicles]] as const) {
+      if (data[field]) {
+        const [reference] = await tx.select({ id: table.id }).from(table).where(and(eq(table.organizationId, ctx.organizationId), eq(table.id, data[field]!)));
+        if (!reference) throw deliveryReferenceNotFound([field], field === 'driverId' ? 'Driver' : 'Vehicle');
+      }
+    }
     await lockBiocharTransportRouteTopology(ctx, tx);
     const requestKey = data.idempotencyKey ?? randomUUID();
     await lockMovementRequest(ctx, tx, requestKey);
@@ -177,7 +169,7 @@ export async function updateDeliveryInTransaction(ctx: OrgContext, tx: DbTransac
     if (!snapshot || snapshot.archivedAt) throw deliveryReferenceNotFound(['deliveryId'], 'Delivery');
     // Topology, request, bin, artifacts, active facility, delivery.
     await withFeedstockErrors(() => lockBinStock(ctx, tx, snapshot.storageLocationId), 'not_found', ['deliveryId']);
-    await assertCanMutateCertifiedLineage(ctx, tx, { entityType: 'delivery', entityId: deliveryId }, 'update');
+    await withFeedstockErrors(() => assertCanMutateCertifiedLineage(ctx, tx, { entityType: 'delivery', entityId: deliveryId }, 'update'), 'certification_locked', ['deliveryId']);
     await withFeedstockErrors(() => lockActiveFacilityReference(ctx, tx, snapshot.facilityId), 'not_found', ['deliveryId']);
     const [existing] = await tx.select().from(deliveries).where(and(eq(deliveries.organizationId, ctx.organizationId), eq(deliveries.id, deliveryId))).for('update');
     if (!existing || existing.archivedAt) throw deliveryReferenceNotFound(['deliveryId'], 'Delivery');

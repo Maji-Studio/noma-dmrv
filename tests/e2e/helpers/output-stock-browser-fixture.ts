@@ -9,7 +9,7 @@ import { db } from "../../../src/db";
 import { createBiocharProduct } from "../../../src/data-access/biochar-product-create";
 import { createOrderInTransaction } from "../../../src/data-access/orders";
 import { previewOutputStock } from "../../../src/data-access/output-stock-operations";
-import { createDelivery } from "../../../src/data-access/delivery-output-writes";
+import { createDelivery } from "../../helpers/create-delivery";
 
 export const FIFO_BROWSER_DATE = "2026-09-14";
 /** Wall clock the browser specs type into date-and-time pickers. */

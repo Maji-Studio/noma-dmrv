@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { outputStockMoistureReadings } from "@/db/schema";
-import { createDelivery } from "@/data-access/delivery-output-writes";
+import { createDelivery } from "./helpers/create-delivery";
 import { getOutputBinStockView } from "@/data-access/output-stock";
 import { getOutputStockHistory } from "@/data-access/output-stock-history";
 import { getOutputSubBins } from "@/data-access/output-sub-bins";

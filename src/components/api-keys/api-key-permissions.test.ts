@@ -33,3 +33,16 @@ it("defaults customer and order reads on and order mutations off", () => {
   expect(permissionSummary(["customers:read", "orders:read", "orders:write", "orders:delete"]))
     .toBe("Customers: Read; Orders: Read, Write, Delete");
 });
+
+it("keeps delivery writes opt-in and offers no delivery deletion", () => {
+  expect(API_PERMISSION_ROWS).toContainEqual({ entity: "deliveries", label: "Deliveries", scopes: ["deliveries:write"] });
+  expect(API_KEY_DEFAULT_SCOPES).not.toContain("deliveries:write");
+  expect(permissionSummary(["deliveries:write"])).toBe("Deliveries: Write");
+});
+
+it("gives every permission row a nonempty label", () => {
+  for (const row of API_PERMISSION_ROWS) {
+    expect(row.label, row.entity).toBeTypeOf("string");
+    expect(row.label.trim(), row.entity).not.toBe("");
+  }
+});

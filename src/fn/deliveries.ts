@@ -7,7 +7,6 @@
 
 import { DomainError } from "@/lib/domain-errors";
 import {
-  createDelivery,
   deleteDelivery,
   getDeliveries as getDeliveriesData,
   getDeliveryWithRelations as getDeliveryWithRelationsData,
@@ -16,7 +15,7 @@ import {
   type PaginatedDeliveries,
   type UpdatedDelivery,
 } from "@/data-access/deliveries";
-import { updateDelivery } from "@/lib/operations/deliveries";
+import { recordDeliveryForUi, updateDelivery } from "@/lib/operations/deliveries";
 import {
   getDeliveryStats as getDeliveryStatsData,
   type DeliveryStats,
@@ -24,11 +23,13 @@ import {
 import { requireOrgFacility } from "@/data-access/utils";
 import {
   createDeliverySchema,
+  deliveryOperationInput,
   deleteDeliverySchema,
   deliveryFilterSchema,
   resolveDeliveryDistanceSource,
   updateDeliverySchema,
 } from "@/schemas/deliveries";
+import { runOperationInProcess } from "@/lib/operations/runner";
 import { withAction } from "./with-action";
 import type { ActionResult } from "@/types/actions";
 import { z } from "zod";
@@ -119,7 +120,7 @@ export async function createDeliveryFn(
   return withAction(async (ctx) => {
     let delivery: CreatedDelivery;
     try {
-      delivery = await createDelivery(ctx, createDeliverySchema.parse(data));
+      ({ delivery } = await runOperationInProcess(recordDeliveryForUi, ctx, deliveryOperationInput(createDeliverySchema.parse(data))));
     } catch (error) {
       if (error instanceof DomainError) {
         throw new DomainError(error.code, error.message, {
