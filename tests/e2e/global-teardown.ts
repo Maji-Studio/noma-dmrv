@@ -14,10 +14,12 @@
  * - User IDs: LIKE 'e2e-%'
  * - User emails: LIKE '%@e2e.local'
  * - Project names: LIKE 'E2E Test Project%'
+ * - Credential fixture organizations: ID LIKE 'e2e-credentials-org-%'
  */
 import { Pool } from "pg";
 import { DEC_ORG_ID } from "@/db/org-defaults";
 import { isLocalDatabaseHost } from "../helpers/throwaway-database";
+import { E2E_CERTIFIER_ORG_ID_PREFIX } from "./fixtures/certifier-credentials";
 
 export default async function globalTeardown() {
   const databaseUrl =
@@ -612,6 +614,17 @@ export default async function globalTeardown() {
 
       // Users
       await client.query(`DELETE FROM users WHERE id LIKE 'e2e-%' OR email LIKE '%@e2e.local'`);
+
+      // Self-service credential fixtures create no memberships or other children.
+      // Credentials must go before their organization (no cascade).
+      await client.query(`
+        DELETE FROM certifier_credentials
+        WHERE organization_id LIKE $1 || '%'
+      `, [E2E_CERTIFIER_ORG_ID_PREFIX]);
+      await client.query(`
+        DELETE FROM organizations
+        WHERE id LIKE $1 || '%'
+      `, [E2E_CERTIFIER_ORG_ID_PREFIX]);
 
       await client.query("COMMIT");
       console.log("[global-teardown] E2E test data cleanup complete.");

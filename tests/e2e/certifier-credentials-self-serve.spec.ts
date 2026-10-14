@@ -1,96 +1,93 @@
-import { and, eq } from "drizzle-orm";
+import { randomUUID } from "node:crypto";
+import { eq } from "drizzle-orm";
 import { expect, test } from "./fixtures";
 import { createDbConnection } from "./fixtures/db";
 import { certifierCredentials } from "@/db/schema/certification";
-import { DEC_ORG_ID, DEC_ORG_NAME } from "@/db/org-defaults";
-import { encryptSecret } from "@/lib/crypto/secrets";
-
-const PROVIDER = "isometric" as const;
-const CLIENT_SECRET = "e2e-org-admin-client-secret";
+import { organizations } from "@/db/schema/auth";
+import {
+  E2E_CERTIFIER_ACCESS_TOKEN,
+  E2E_CERTIFIER_CLIENT_SECRET,
+  E2E_CERTIFIER_ORG_ID_PREFIX,
+  E2E_CERTIFIER_ROTATED_ACCESS_TOKEN,
+  maskedCertifierAccessToken,
+} from "./fixtures/certifier-credentials";
+import { certifierKeyInput } from "./fixtures/certifier-credentials-ui";
+import { CERTIFIER_VERIFICATION_MESSAGES } from "@/lib/certification/certifier-credentials-verification";
 
 test.describe("Isometric credentials self-service", () => {
   test("the admin directory reflects configured and replaced credentials", async ({
     adminPage: page,
   }) => {
-    // The shared dev org may already hold REAL sandbox credentials. Snapshot
-    // the row and restore it afterwards so the test never destroys local state.
-    // Seed through the database, then inspect the Platform Admin directory:
-    // that surface exercises the same credential status/form UI without
-    // mounting the facility project picker or making a real Isometric request.
-    // The server save/rotation behavior is covered hermetically in
-    // tests/certifier-credentials-fn.test.ts.
+    // Never replace the shared org's keys, even temporarily: @live specs can
+    // run alongside this file. Only the app server encrypts the new org's keys.
+    const tag = randomUUID();
+    const organizationId = `${E2E_CERTIFIER_ORG_ID_PREFIX}${tag}`;
+    const organizationName = `E2E Credentials Org ${tag}`;
     const { db, pool } = createDbConnection();
-    const whereOrg = and(
-      eq(certifierCredentials.organizationId, DEC_ORG_ID),
-      eq(certifierCredentials.provider, PROVIDER),
-    );
-    const [original] = await db
-      .select()
-      .from(certifierCredentials)
-      .where(whereOrg)
-      .limit(1);
 
     try {
-      await db
-        .insert(certifierCredentials)
-        .values({
-          organizationId: DEC_ORG_ID,
-          provider: PROVIDER,
-          accessTokenEncrypted: encryptSecret("e2e-org-admin-access-4321"),
-          clientSecretEncrypted: encryptSecret(CLIENT_SECRET),
-        })
-        .onConflictDoUpdate({
-          target: [
-            certifierCredentials.organizationId,
-            certifierCredentials.provider,
-          ],
-          set: {
-            accessTokenEncrypted: encryptSecret("e2e-org-admin-access-4321"),
-            clientSecretEncrypted: encryptSecret(CLIENT_SECRET),
-            updatedAt: new Date(),
-          },
-        });
+      await db.insert(organizations).values({
+        id: organizationId,
+        name: organizationName,
+        slug: `e2e-credentials-${tag}`,
+      });
 
       await page.goto("/admin/organizations");
       const organization = page
         .getByRole("listitem")
-        .filter({ hasText: DEC_ORG_NAME });
+        .filter({ hasText: organizationName });
       await expect(organization).toBeVisible();
+      await expect(organization.getByText("No keys", { exact: true })).toBeVisible();
+      await organization.getByRole("button", { name: "Isometric keys" }).click();
+      const keys = page.getByRole("dialog");
+      await certifierKeyInput(keys, "Access token").fill(E2E_CERTIFIER_ACCESS_TOKEN);
+      await certifierKeyInput(keys, "Client secret").fill(E2E_CERTIFIER_CLIENT_SECRET);
+      await keys.getByRole("button", { name: "Save and test connection" }).click();
+      await expect(keys.getByRole("button", { name: /^Replace/ })).toHaveCount(2);
+      // The fixture secret cannot form an HTTP header, so the check fails
+      // offline as a network error after the keys are stored.
+      await expect(keys.getByText(CERTIFIER_VERIFICATION_MESSAGES.network, { exact: true })).toBeVisible();
+      await page.keyboard.press("Escape");
+      await expect(keys).not.toBeVisible();
+      await page.reload();
       await expect(organization.getByText("Keys saved")).toBeVisible();
       // The keys live in a modal; a saved key shows only its last characters
       // and a Replace action, never an input holding the secret.
       await organization.getByRole("button", { name: "Isometric keys" }).click();
-      const keys = page.getByRole("dialog");
-      await expect(keys.getByText("••••4321", { exact: false })).toBeVisible();
+      await expect(keys.getByText(maskedCertifierAccessToken(E2E_CERTIFIER_ACCESS_TOKEN), { exact: false })).toBeVisible();
       await expect(keys.getByText("••••••••", { exact: true })).toBeVisible();
       await expect(keys.getByRole("button", { name: "Save and test connection" })).toHaveCount(0);
       await expect(keys.locator('input[type="password"]')).toHaveCount(0);
       await expect(keys.getByRole("button", { name: /^Replace/ })).toHaveCount(2);
-      await page.keyboard.press("Escape");
 
-      await db
-        .update(certifierCredentials)
-        .set({
-          accessTokenEncrypted: encryptSecret("e2e-org-admin-access-9876"),
-          updatedAt: new Date(),
-        })
-        .where(whereOrg);
+      await keys.getByRole("button", { name: "Replace access token", exact: true }).click();
+      await certifierKeyInput(keys, "Access token").fill(E2E_CERTIFIER_ROTATED_ACCESS_TOKEN);
+      await keys.getByRole("button", { name: "Save and test connection" }).click();
+      await expect(keys.getByText(maskedCertifierAccessToken(E2E_CERTIFIER_ROTATED_ACCESS_TOKEN), { exact: false })).toBeVisible();
+      await expect(keys.getByRole("button", { name: /^Replace/ })).toHaveCount(2);
+      await page.keyboard.press("Escape");
+      await expect(keys).not.toBeVisible();
       await page.reload();
 
       await page
         .getByRole("listitem")
-        .filter({ hasText: DEC_ORG_NAME })
+        .filter({ hasText: organizationName })
         .getByRole("button", { name: "Isometric keys" })
         .click();
       await expect(
-        page.getByRole("dialog").getByText("••••9876", { exact: false }),
+        page.getByRole("dialog").getByText(maskedCertifierAccessToken(E2E_CERTIFIER_ROTATED_ACCESS_TOKEN), { exact: false }),
       ).toBeVisible();
     } finally {
-      await db.delete(certifierCredentials).where(whereOrg);
-      if (original) {
-        await db.insert(certifierCredentials).values(original);
+      // One transaction: the credentials row has no cascade, so it goes
+      // first, and a failure leaves neither row half-removed.
+      try {
+        await db.transaction(async (tx) => {
+          await tx.delete(certifierCredentials).where(eq(certifierCredentials.organizationId, organizationId));
+          await tx.delete(organizations).where(eq(organizations.id, organizationId));
+        });
+      } finally {
+        await pool.end();
       }
-      await pool.end();
     }
   });
 

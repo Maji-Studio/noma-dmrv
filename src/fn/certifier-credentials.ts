@@ -10,6 +10,10 @@ import {
 import { logActionError } from "@/fn/action-errors";
 import { withAction } from "@/fn/with-action";
 import type { OrgContext } from "@/lib/auth/server";
+import {
+  certifierVerificationFailureMessage,
+  certifierVerificationSuccessMessage,
+} from "@/lib/certification/certifier-credentials-verification";
 import { SafeError } from "@/lib/errors";
 import { IsometricApiError } from "@/lib/isometric";
 import {
@@ -99,38 +103,20 @@ async function verifyCertifierCredentials(
     return {
       ok: true,
       projectCount,
-      message:
-        projectCount === 0
-          ? "Connected to Isometric. This account has no projects yet, so there is nothing to link the facility to."
-          : `Connected to Isometric. ${projectCount} project${
-              projectCount === 1 ? "" : "s"
-            } available to link.`,
+      message: certifierVerificationSuccessMessage(projectCount),
     };
   } catch (error) {
     logActionError(error, {
       message: "isometric credential verification failed",
       context: { organizationId },
     });
-    return { ok: false, message: verificationFailureMessage(error) };
+    return {
+      ok: false,
+      message: certifierVerificationFailureMessage(
+        error instanceof IsometricApiError ? error : null,
+      ),
+    };
   }
-}
-
-function verificationFailureMessage(error: unknown): string {
-  if (!(error instanceof IsometricApiError)) {
-    return "Keys saved, but the connection check could not run. Reload the page to try again.";
-  }
-  if (error.code === "not_configured") {
-    return "Keys saved, but this deployment is not configured to reach Isometric. Ask a Platform Admin to check Diagnostics.";
-  }
-  if (error.code === "network") {
-    return "Keys saved, but Isometric could not be reached. Check the connection, then try again.";
-  }
-  if (error.status === 401 || error.status === 403) {
-    return "Keys saved, but Isometric rejected them. Check the access token and client secret, then save again.";
-  }
-  return `Keys saved, but Isometric returned an error (${
-    error.status ?? "no status code"
-  }). Check the keys, then save again.`;
 }
 
 export async function getOrgCertifierCredentialsStatusFn(
