@@ -52,7 +52,7 @@ it("covers every exported v1 route method, with unique operation ids", () => {
   expect(document.paths["/feedstocks/{idOrCode}"].delete.operationId).toBe("delete_feedstock");
   expect(document.paths["/me"].get.operationId).toBe("whoami");
   expect(document.paths["/suppliers/{idOrCode}/locations"].get.operationId).toBe("find_supplier_locations");
-  for (const [path, singular] of [["feedstocks", "feedstock"], ["facilities", "facility"], ["suppliers", "supplier"], ["feedstock-types", "feedstock_type"], ["storage-locations", "storage_location"], ["vehicles", "vehicle"], ["drivers", "driver"]]) {
+  for (const [path, singular] of [["feedstocks", "feedstock"], ["facilities", "facility"], ["suppliers", "supplier"], ["customers", "customer"], ["orders", "order"], ["feedstock-types", "feedstock_type"], ["storage-locations", "storage_location"], ["vehicles", "vehicle"], ["drivers", "driver"]]) {
     expect(document.paths[`/${path}`].get.operationId).toBe(`find_${path.replaceAll("-", "_")}`);
     expect(document.paths[`/${path}/{idOrCode}`].get.operationId).toBe(`get_${singular}`);
   }
@@ -94,7 +94,7 @@ it("publishes business dates as date, and preserves operation input types and co
 it("publishes pagination and search bounds on every list route", () => {
   const lists = Object.values(document.paths).map((methods) => methods.get)
     .filter((operation) => operation?.operationId.startsWith("find_"));
-  expect(lists).toHaveLength(15);
+  expect(lists).toHaveLength(18);
   for (const operation of lists) {
     const parameters = operation.parameters as { name: string; in: string; required: boolean; schema: JsonSchema }[];
     const query = Object.fromEntries(parameters.filter((parameter) => parameter.in === "query").map((parameter) => [parameter.name, parameter]));
@@ -106,7 +106,7 @@ it("publishes pagination and search bounds on every list route", () => {
       continue;
     }
     if (operation.operationId !== "find_production_runs") expect(query.q).toMatchObject({ required: false, schema: { type: "string", maxLength: API_QUERY_MAX_LENGTH } });
-    if (operation.operationId !== "find_supplier_locations") {
+    if (!["find_supplier_locations", "find_customer_locations"].includes(operation.operationId)) {
       expect(query.code).toMatchObject({ required: false, schema: { type: "string", maxLength: API_QUERY_MAX_LENGTH } });
     }
   }
@@ -349,4 +349,29 @@ it("publishes lab sample and credit batch reads with their own scopes, and lab s
   const patchProperties = (patch.requestBody as { content: { "application/json": { schema: { properties: object } } } }).content["application/json"].schema.properties;
   for (const forbidden of ["labSampleId", "expectedVersion", "hToCOrgRatio"]) expect(patchProperties).not.toHaveProperty(forbidden);
   expect(patchProperties).toHaveProperty("creditBatchId");
+});
+
+it("publishes customer, destination, stored order and snapshot balance reads only", () => {
+  for (const [path, operationId, scope] of [
+    ["/customers", "find_customers", "customers:read"], ["/customers/{idOrCode}", "get_customer", "customers:read"],
+    ["/customers/{idOrCode}/locations", "find_customer_locations", "customers:read"],
+    ["/orders", "find_orders", "orders:read"], ["/orders/{idOrCode}", "get_order", "orders:read"], ["/orders/{idOrCode}/balance", "get_order_balance", "orders:read"],
+  ]) {
+    expect(Object.keys(document.paths[path])).toEqual(["get"]);
+    expect(document.paths[path].get).toMatchObject({ operationId, "x-required-scope": scope });
+    for (const status of ["400", "401", "403", "429", "500"]) expect(document.paths[path].get.responses).toHaveProperty(status);
+  }
+  expect(document.paths["/orders"].get.responses).toHaveProperty("404");
+  for (const [name, fields] of [
+    ["customer", ["id", "code", "name", "version", "createdAt", "updatedAt"]],
+    ["customer_location", ["id", "customerId", "name", "gpsLatitude", "gpsLongitude", "distanceFromFacilityKm", "distanceSource", "isDefault", "version", "createdAt", "updatedAt"]],
+    ["order", ["id", "code", "version", "facilityId", "customerId", "customerLocationId", "formulationId", "orderDate", "quantityKg", "packaging", "archivedAt", "createdAt", "updatedAt"]],
+    ["order_balance", ["orderId", "quantityKg", "deliveredWetMassKg", "remainingWetMassKg", "fulfillmentStatus"]],
+  ] as const) expect(Object.keys(document.components.schemas[name].properties!).sort()).toEqual([...fields].sort());
+  const op = document.paths["/orders/{idOrCode}/balance"].get;
+  expect(op.parameters?.map((parameter) => (parameter as { name: string }).name)).toEqual(["idOrCode"]);
+  expect(op.responses["200"]).toMatchObject({ headers: { ETag: { schema: { pattern: BODY_HASH_ETAG_PATTERN.source } }, "Cache-Control": { schema: { enum: ["private, no-store"] } } } });
+  expect(document.components.schemas.order.properties).toMatchObject({ orderDate: { type: "string", format: "date" }, quantityKg: { description: expect.stringContaining("32-bit") } });
+  expect(document.components.schemas.storage_location.required).toContain("formulationId");
+  expect(document.paths["/storage-locations"].get.parameters).toEqual(expect.arrayContaining([expect.objectContaining({ name: "type" }), expect.objectContaining({ name: "formulationId" })]));
 });

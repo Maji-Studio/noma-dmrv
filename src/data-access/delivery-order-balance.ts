@@ -1,3 +1,4 @@
+import { orderFulfillmentExpression } from "./order-fulfillment-sql";
 import { db, type DbTransaction } from "@/db";
 import { sumNumeric } from "@/db/aggregate";
 import { deliveries, orders } from "@/db/schema";
@@ -6,32 +7,42 @@ import { deliveryOrderBalanceMessage } from "@/lib/delivery-order-balance";
 import { orderQuantityBelowAllocated } from "@/lib/order-domain-errors";
 import { SafeError } from "@/lib/errors";
 import { isStockOverdraw } from "@/lib/stock-overdraw";
-import { and, eq, isNull, ne } from "drizzle-orm";
+import { and, count, eq, isNull, ne, sql } from "drizzle-orm";
 import { requireOrgScope } from "./utils";
 
 type QueryExecutor = typeof db | DbTransaction;
 
-async function deriveAllocatedWetKg(
+export async function readDeliveryOrderAllocation(
   ctx: OrgContext,
   dbOrTx: QueryExecutor,
   orderId: string,
   excludeDeliveryId?: string,
-): Promise<number> {
+  orderQuantityKg?: number,
+  includeArchived = false,
+) {
+  requireOrgScope(ctx);
   const conditions = [
     eq(deliveries.orderId, orderId),
     eq(deliveries.organizationId, ctx.organizationId),
-    isNull(deliveries.archivedAt),
   ];
+  if (!includeArchived) conditions.push(isNull(deliveries.archivedAt));
   if (excludeDeliveryId) {
     conditions.push(ne(deliveries.id, excludeDeliveryId));
   }
 
   const [row] = await dbOrTx
-    .select({ allocatedWetKg: sumNumeric(deliveries.deliveredWetMassKg) })
+    .select({ allocatedWetKg: sumNumeric(deliveries.deliveredWetMassKg), deliveryCount: count(),
+      // Cast back through real, exactly as the app's stored order column is
+      // cast to numeric. Never compute the fulfillment boundary in JS floats.
+      fulfillmentStatus: orderQuantityKg === undefined ? sql<null>`null` : orderFulfillmentExpression(sql`${orderQuantityKg}::real`, count(), sumNumeric(deliveries.deliveredWetMassKg)), })
     .from(deliveries)
     .where(and(...conditions));
 
-  return Number(row?.allocatedWetKg ?? 0);
+  return { allocatedWetKg: Number(row?.allocatedWetKg ?? 0), deliveryCount: row?.deliveryCount ?? 0, fulfillmentStatus: row?.fulfillmentStatus ?? null };
+}
+
+async function deriveAllocatedWetKg(ctx: OrgContext, dbOrTx: QueryExecutor, orderId: string, excludeDeliveryId?: string): Promise<number> {
+  return (await readDeliveryOrderAllocation(ctx, dbOrTx, orderId, excludeDeliveryId)).allocatedWetKg;
 }
 
 export async function assertOrderQuantityCoversAllocations(

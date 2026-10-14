@@ -16,10 +16,8 @@ import {
   type Order
 } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
-import {
-  ORDER_FULFILLED_SHORTFALL_FRACTION,
-  type OrderFulfillmentStatus,
-} from "@/lib/orders/fulfillment";
+import type { OrderFulfillmentStatus } from "@/lib/orders/fulfillment";
+import { orderFulfillmentExpression } from "./order-fulfillment-sql";
 import type { DistanceSourceValue } from "@/schemas/distance-source";
 import type { OrderFilterData } from "@/schemas/orders";
 import { and, asc, count, desc, eq, gte, ilike, isNull, lte, sql, SQL } from "drizzle-orm";
@@ -112,17 +110,7 @@ export async function getOrders(
     .groupBy(deliveries.orderId)
     .as("delivery_agg");
 
-  // The one implementation of order fulfillment: the list rows select it and
-  // the status filter matches on it, so a badge and its filter cannot disagree.
-  // The threshold is exact numeric arithmetic (no float, no rounding):
-  // delivered >= requested x (1 - shortfall fraction).
-  const fulfillmentExpr = sql<OrderFulfillmentStatus>`
-    case
-      when coalesce(${deliveryAgg.total}, 0) = 0 then 'no_deliveries'
-      when coalesce(${deliveryAgg.deliveredWetKg}, 0) >= ${orders.quantityKg}::numeric * (1 - ${ORDER_FULFILLED_SHORTFALL_FRACTION}::numeric) then 'fulfilled'
-      else 'partial'
-    end
-  `;
+  const fulfillmentExpr = orderFulfillmentExpression(orders.quantityKg, deliveryAgg.total, deliveryAgg.deliveredWetKg);
 
   // Build where conditions — archived orders (facility archive cascade) are hidden
   const conditions: SQL[] = [

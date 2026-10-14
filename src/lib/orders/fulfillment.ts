@@ -1,14 +1,11 @@
 /**
- * Order fulfillment status — DERIVED, never stored.
+ * Order fulfillment status: derived, never stored.
  *
  * Orders have no `status` column, and the `delivery_status` enum is only
  * `delivered`, so counting delivered deliveries says nothing: every linked
  * delivery is delivered. Fulfillment is therefore the delivered wet mass
- * against the requested wet mass. The derivation itself is one SQL CASE in
- * `getOrders` (src/data-access/orders.ts), which both the list rows and the
- * status filter read, so the two cannot disagree at a boundary. This module
- * owns the shared vocabulary: the shortfall fraction, the status values, and
- * their display.
+ * against the requested wet mass. This module owns the shared vocabulary,
+ * threshold and display. The server expression lives in data-access/order-fulfillment-sql.
  */
 import type { StatusValue } from "@/components/ui/status-badge";
 

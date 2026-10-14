@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 import { API_QUERY_MAX_LENGTH, API_LIST_DEFAULT_LIMIT, API_LIST_MAX_LIMIT } from "@/config/api-rest";
-import { creditBatchListSchema, feedstockListSchema, labSampleListSchema, productionRunListSchema, resourceQueries } from "./query-schemas";
+import { customerLocationListSchema, orderListSchema, storageLocationListSchema, creditBatchListSchema, feedstockListSchema, labSampleListSchema, productionRunListSchema, resourceQueries } from "./query-schemas";
 import { parseApiQuery } from "./query";
 
 const request = (query: string) => new Request(`https://example.test/api/v1/feedstocks${query}`);
@@ -43,5 +43,32 @@ it("parses credit batch filters against the status and sampling vocabularies", (
     .toEqual({ limit: API_LIST_DEFAULT_LIMIT, status: "pending", sampling: "sampled", code: "CB-1" });
   for (const query of ["?status=archived", "?sampling=maybe", "?creditBatchId=x", "?status=draft&status=pending"]) {
     expect(() => parseApiQuery(request(query), creditBatchListSchema)).toThrow(expect.objectContaining({ code: "invalid_query" }));
+  }
+});
+
+it("parses customer and destination searches and refuses unknown keys", () => {
+  expect(parseApiQuery(request("?q=customer&code=CU-1"), resourceQueries.customers.list)).toEqual({ limit: API_LIST_DEFAULT_LIMIT, q: "customer", code: "CU-1" });
+  expect(parseApiQuery(request("?q=field"), customerLocationListSchema)).toEqual({ limit: API_LIST_DEFAULT_LIMIT, q: "field" });
+  for (const schema of [resourceQueries.customers.list, customerLocationListSchema]) {
+    for (const query of ["?address=x", "?q=a&q=b", "?facilityId=bad"]) expect(() => parseApiQuery(request(query), schema)).toThrow(expect.objectContaining({ code: "invalid_query" }));
+  }
+});
+
+it("parses all order filters with canonical UUIDs and real calendar bounds", () => {
+  const id = "df2795a4-886b-4a89-bbdd-532c6b1b8e45";
+  expect(parseApiQuery(request(`?facilityId=${id.toUpperCase()}&customerId=${id.toUpperCase()}&formulationId=${id.toUpperCase()}&orderedFrom=2024-02-29&orderedBefore=2024-03-01&q=or&code=OR-1`), orderListSchema))
+    .toEqual({ limit: API_LIST_DEFAULT_LIMIT, facilityId: id, customerId: id, formulationId: id, orderedFrom: "2024-02-29", orderedBefore: "2024-03-01", q: "or", code: "OR-1" });
+  expect(parseApiQuery(request("?orderedFrom=0100-01-01&orderedBefore=9999-12-31"), orderListSchema)).toMatchObject({ orderedFrom: "0100-01-01", orderedBefore: "9999-12-31" });
+  for (const query of ["?customerId=bad", "?formulationId=bad", "?status=fulfilled", "?orderedFrom=2026-02-29", "?orderedBefore=2026-04-31", "?orderedFrom=0000-01-01", "?orderedBefore=10000-01-01", "?orderedFrom=2026-01-01T00:00:00Z", "?orderedFrom=2026-01-01&orderedFrom=2026-01-02"]) {
+    expect(() => parseApiQuery(request(query), orderListSchema)).toThrow(expect.objectContaining({ code: "invalid_query" }));
+  }
+});
+
+it("parses storage-location lane and formulation filters", () => {
+  const id = "df2795a4-886b-4a89-bbdd-532c6b1b8e45";
+  expect(parseApiQuery(request(`?type=product_bin&formulationId=${id.toUpperCase()}`), storageLocationListSchema))
+    .toEqual({ limit: API_LIST_DEFAULT_LIMIT, type: "product_bin", formulationId: id });
+  for (const query of ["?type=product", "?formulationId=bad", "?status=active", "?type=biochar_bin&type=product_bin"]) {
+    expect(() => parseApiQuery(request(query), storageLocationListSchema)).toThrow(expect.objectContaining({ code: "invalid_query" }));
   }
 });

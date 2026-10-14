@@ -35,7 +35,8 @@ import { readDescriptions } from "@/lib/operations/read-descriptions";
 import { parseQueryInput } from "@/lib/api/query";
 import { UNTRUSTED_TEXT, LAB_SAMPLE_TIMES, LAB_SAMPLE_UNITS, FEEDSTOCK_UNITS, FEEDSTOCK_DATES, BIOCHAR_PRODUCT_MASS } from "@/lib/operations/agent-guidance";
 
-type ResourcePath = keyof typeof resourceQueries;
+// REST customer and order reads ship before their MCP tools.
+type ResourcePath = Exclude<keyof typeof resourceQueries, "customers" | "orders">;
 
 const labels: Record<ResourcePath, { singular: string; plural: string }> = {
   "production-runs": { singular: "production run", plural: "production runs" },

@@ -1,3 +1,5 @@
+import type { StorageLocationType } from "@/schemas/storage-locations";
+import { findApiFormulation } from "./api-formulations";
 import { and, desc, eq, getTableColumns, isNull } from "drizzle-orm";
 import { db } from "@/db";
 import { storageLocations } from "@/db/schema";
@@ -31,14 +33,19 @@ export async function findApiStorageLocation(ctx: OrgContext, identifier: ApiLoo
   return row;
 }
 
-export async function listApiStorageLocations(ctx: OrgContext, filters: ApiFacilityLookupFilters, limit: number, cursor?: ApiLookupPosition) {
+export interface ApiStorageLocationFilters extends ApiFacilityLookupFilters { type?: StorageLocationType; formulationId?: string }
+
+export async function listApiStorageLocations(ctx: OrgContext, filters: ApiStorageLocationFilters, limit: number, cursor?: ApiLookupPosition) {
   requireOrgScope(ctx);
   await requireApiLookupFacility(ctx, filters.facilityId);
+  if (filters.formulationId) await findApiFormulation(ctx, { id: filters.formulationId });
   return db.select({
     ...getTableColumns(storageLocations), cursorCreatedAt: lookupCursorCreatedAt(storageLocations.createdAt),
   }).from(storageLocations).where(and(
     eq(storageLocations.organizationId, ctx.organizationId),
     isNull(storageLocations.archivedAt),
+    filters.type === undefined ? undefined : eq(storageLocations.type, filters.type),
+    filters.formulationId === undefined ? undefined : eq(storageLocations.formulationId, filters.formulationId),
     filters.facilityId === undefined ? undefined : eq(storageLocations.facilityId, filters.facilityId),
     filters.code === undefined ? undefined : eq(storageLocations.code, filters.code),
     lookupSearch(storageLocations, filters.q), lookupPosition(storageLocations, cursor),
