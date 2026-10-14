@@ -235,8 +235,7 @@ project's approved monitoring method, PDD, or verifier instructions may define
 a different evidence grain or require a separate Certify delivery route.
 
 The legacy row importer and `production_run_readings` remain separate from
-the operator readings-file upload. The reactor registry-upload pipeline was
-removed in issue #987; the raw pressure CSV remains unchanged.
+the operator readings-file upload.
 
 ## CORS (deployed buckets)
 

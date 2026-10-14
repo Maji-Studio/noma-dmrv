@@ -156,10 +156,9 @@ All LOC figures are estimates. Where I re-measured, the corrected number is give
 
 **Rollout note.** Do this before finding 25 (`credit-batch-cluster-oversplit`): removing 150 to 250 lines per parent is what makes the satellite files foldable without breaching the cap.
 
-### 9. dead-telemetry-stack (resolved in #987)
+### 9. dead-telemetry-stack
 
-The owner chose removal on 2026-10-13. The full pipeline is preserved on
-`archive/reactor-telemetry-upload` at `5b7a252c2`; ADR 0006 is retired.
+The raw pressure CSV stays on the production run; there is no reactor time-series upload (ADR 0006).
 
 ### 10. removal-template-diagnostic-cluster
 
@@ -414,7 +413,6 @@ Short reasons so nobody re-proposes these as stated.
 - **Driver and operator quick-add dialogs are byte-identical apart from the noun.** Downgraded. They differ on 34 of 110 lines. The registry still pays for itself, at roughly -270 rather than -350.
 - **17 CI setup blocks across 9 workflows.** Downgraded to 16 blocks across 7 files, saving about 240 lines.
 - **The 12 sample contaminant columns have exactly one reference each.** Downgraded. `arsenicMgKg` is exercised by `tests/numeric-precision.test.ts`, and the delete-or-wire decision belongs to the Isometric module text, not to this codebase.
-- **The telemetry stack required an owner decision.** The owner chose removal in #987. ADR 0006 is retired and points to the preserved archive branch.
 - **The day-boundary production-batch compat is dead because there is no production database.** Downgraded. It guards remote registry state, and it has a test.
 - **knip's unused-export lists are deletion candidates.** Refuted across the board. In every case checked, knip was flagging a barrel re-export line while the symbol was alive via a direct import: `src/components/certification/index.ts` (21 flags, 3 genuinely dead components), `src/lib/isometric/index.ts` (62 flags, mostly deep-imported), `tests/e2e/fixtures/index.ts` (22 flags, several live), the ~19 `*Keys` query-key factories (all used inside their own file), `src/components/ui/slide-over-panel/index.tsx` (9 flags, all consumed through a namespace object), and the `src/schemas` `Delete<Entity>Data` type aliases whose neighbouring `deleteXSchema` values are live. `src/data-access/production-runs/index.ts`'s `assertProductionRunTimesNotFuture` has 11 references; knip is flagging the barrel.
 

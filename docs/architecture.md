@@ -446,7 +446,7 @@ applied identically by `submitRemoval` (one row per Removal, keyed
 Statement). Every submission HTTP attempt appends to `certifier_sync_events`
 (append-only audit; never used for state). See ADR
 [0003](./adr/0003-removal-as-submission-unit.md) and
-[0008](./adr/0008-submission-ledger-internal-seam.md). Source and sensor
+[0008](./adr/0008-submission-ledger-internal-seam.md). Source
 creation POST directly and reconcile through separate state.
 
 **Source-data immutability:** once a Removal or GHG Statement
@@ -531,7 +531,7 @@ normal presigned flow ([storage.md](./storage.md)).
 The operator UI does not inspect the CSV or import row-level
 `production_run_readings`. Stored files remain openable through the authorized
 `/api/documents/{id}` route and its signed-download flow. The legacy row importer remains separate from this operator workflow.
-The reactor registry-upload pipeline was removed in issue #987.
+There is no reactor time-series upload ([ADR 0006](./adr/0006-data-upload-submission-idempotency.md)).
 
 ## Traceability Visualization
 

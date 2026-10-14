@@ -5,6 +5,7 @@
 // modules through a `"use server"` boundary.
 export const ISOMETRIC_PROVIDER = "isometric" as const;
 export const REMOVAL_SUBMISSION_TYPE = "removal" as const;
+export const REMOVAL_SCOPED_SUBMISSION_TYPES = [REMOVAL_SUBMISSION_TYPE] as const;
 // The Removal ledger row is keyed localEntityType='removal', localEntityId=
 // certifierRemovals.id. N credit batches map into one removal.
 export const REMOVAL_ENTITY_TYPE = "removal" as const;

@@ -10,10 +10,10 @@ import { formatCertificationLineageLockMessage } from "@/lib/certification/linea
 import { BLOCKING_SUBMISSION_STATUSES } from "@/lib/certification/status";
 import type { OrgContext } from "@/lib/auth/server";
 import { SafeError } from "@/lib/errors";
+import { REMOVAL_SCOPED_SUBMISSION_TYPES } from "@/lib/isometric/utils/constants";
 import { requireOrgScope } from "./utils";
 
 const CERTIFIER_PROVIDER = "isometric" as const;
-const REMOVAL_SCOPED_SUBMISSION_TYPES = ["removal"] as const;
 
 export class CreditBatchLineageChangedError extends SafeError {
   constructor() {

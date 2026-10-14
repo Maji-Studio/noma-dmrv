@@ -127,13 +127,10 @@ Sizing: (S) small, (M) medium, (L) large.
 
 - Operator upload stores the original CSV unchanged as a `sensor_data` document.
   It does not parse rows, populate `production_run_readings`, or gate on row count.
-- Issue #987 removed the reactor registry-upload pipeline. ADR 0006 is retired
-  and points to `archive/reactor-telemetry-upload` at `5b7a252c2`.
 - The legacy CSV importer, row table, and reading view are retained.
   `getProductionRunReadingsList` has no `.limit`, and the reading table has no
   virtualization.
-- **Resolve via:** decide separately whether these retained row-reading paths
-  are needed. Their retirement is outside #987.
+- **Resolve via:** decide whether these retained row-reading paths are needed.
 
 ### Certification readiness loader lineage fan-out (`perf/overview-lineage-nplus1`) — **deferred**
 

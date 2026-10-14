@@ -386,11 +386,7 @@ claim seam.
 
 ## Reactor time-series upload
 
-The reactor time-series upload pipeline was removed in issue #987. The approved
-MVP retains the original pressure CSV on each production run and needs no
-registry sensor registration or bulk time-series upload. ADR 0006 is retired;
-the full pipeline can be restored from `archive/reactor-telemetry-upload`
-(staging commit `5b7a252c2`).
+The raw pressure CSV stays on the production run; there is no reactor time-series upload ([ADR 0006](../adr/0006-data-upload-submission-idempotency.md)).
 
 The legacy `production_run_readings` table and row importer are retained.
 Operator file upload does not populate row-level readings.

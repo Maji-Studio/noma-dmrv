@@ -82,16 +82,6 @@ above. Override locally only if testing against a non-default spec.
 - No database schema changes included in this docs-only update.
 - If the bump changes schema, validation, or workflow behavior in the app, run `pnpm test:e2e` and keep the relevant Playwright paths green before merge.
 
-## Dated Isometric Docs Observations (2026-07-20)
-
-**Non-authoritative:** re-check each through the Isometric MCP server before use.
-
-| Observation | Page |
-| --- | --- |
-| **Enum-case mismatch observed.** The page showed measurement-property `quantity_kind`/qualifier values UPPERCASE (`TEMPERATURE`, `PRESSURE`, `MASS_FRACTION`, `COMPOUND_CO2`); a sandbox `POST /sensors` rejected them with a 422 enum violation listing lowercase values. | `user-guides/certify/time-series-data-upload` |
-| **60-second aggregation cap observed.** A sandbox DataUploadSubmission over 60 seconds was rejected with `AggregationPeriodDurationInvalidError`; the former test pattern is preserved on `archive/reactor-telemetry-upload` at `5b7a252c2` (retired in #987). | same page |
-| **Biochar pyrolysis reactor support observed despite DAC-only prose.** The OpenAPI enum included `biochar_pyrolysis_reactor_facility_time_series`, and a sandbox probe accepted it. | same page |
-
 ## Quick Refresh Checklist (8 steps)
 1. Pull metadata for pinned slugs.
 2. Update `versions.json`.

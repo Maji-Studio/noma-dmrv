@@ -18,6 +18,7 @@ import { DEFAULT_PROTOCOL_SLUG } from "@/config/certification";
 import {
   GHG_STATEMENT_ENTITY_TYPE,
   REMOVAL_ENTITY_TYPE,
+  REMOVAL_SCOPED_SUBMISSION_TYPES,
 } from "@/lib/isometric/utils/constants";
 import { SafeError } from "@/lib/errors";
 import { pluralize } from "@/lib/copy-utils";
@@ -120,8 +121,6 @@ export async function listAllFacilitiesLinkedByProvider(
 }
 
 export type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
-
-const REMOVAL_SCOPED_SUBMISSION_TYPES = ["removal"] as const;
 
 // Exported for the facility archive-with-warning gate (archive stays allowed;
 // the dialog surfaces a warning when registry submissions exist).

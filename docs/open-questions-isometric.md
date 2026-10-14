@@ -385,8 +385,6 @@ itself is **built and enforced** — see the invariants section,
 
 ### Phase 5 Slice B / C deferrals (opened 2026-05-29)
 
-The reactor time-series upload was removed in #987 and
-[ADR 0006](./adr/0006-data-upload-submission-idempotency.md) is retired.
 The independent items below require operator demand and registry confirmation.
 
 - **Deleted Storage Location recovery** (`isometric/storage-location-recovery`).

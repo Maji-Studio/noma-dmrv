@@ -159,9 +159,7 @@ stable references where the API supports them. A local
 snapshots and hashes. Same-hash retries reuse or reconcile; changed reviewed
 inputs create a superseding version.
 
-The reactor time-series upload pipeline was removed in issue #987. The raw
-pressure CSV remains on the production run. See retired ADR 0006 for the archive
-branch and historical recovery design.
+The raw pressure CSV stays on the production run; there is no reactor time-series upload ([ADR 0006](../adr/0006-data-upload-submission-idempotency.md)).
 
 ## What to verify before changing a claim
 

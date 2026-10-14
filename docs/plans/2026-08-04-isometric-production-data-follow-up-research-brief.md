@@ -153,10 +153,8 @@ design:
   `productionBatchId` wire seam.
 - `src/fn/certification/durability-measurement-samples.ts`: current
   removal-scoped durability representation.
-- Historical sensor/upload seam: `archive/reactor-telemetry-upload` at
-  `5b7a252c2`, removed in #987.
 - Current Readings file flow: the raw CSV is retained unchanged and does not
-  populate the canonical row-level readings expected by telemetry submission.
+  populate row-level readings; there is no reactor time-series upload (ADR 0006).
 
 Do not redesign these seams unless a cited Isometric contract makes a change
 necessary. Identify contract-to-code gaps without implementing them.

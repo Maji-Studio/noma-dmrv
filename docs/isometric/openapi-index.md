@@ -115,7 +115,7 @@ Isometric environment.
 
 The following operation families have no current application call site:
 
-- reactor sensors, file uploads, and bulk time-series submissions (removed in #987);
+- reactor sensors, file uploads, and bulk time-series submissions;
 - organization identity;
 - monitoring requirements and MonitoringSubmissions;
 - storage units;
