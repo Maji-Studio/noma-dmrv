@@ -25,6 +25,7 @@ import type { CreditBatchCo2eStoredPreview } from "@/data-access/credit-batches"
 import { creditBatchKeys } from "./credit-batch-query-keys";
 import { invalidateCertificationReadiness } from "./use-certification";
 import { invalidateOnboardingProgress } from "./use-onboarding";
+import { unwrap } from "@/hooks/types";
 
 export { creditBatchKeys } from "./credit-batch-query-keys";
 
@@ -51,11 +52,7 @@ export function useCreditBatches(facilityId?: string) {
     queryKey: creditBatchKeys.list({ facilityId }),
     queryFn: async ({ signal }) => {
       if (!facilityId) return [];
-      const result = await getCreditBatchesRead(facilityId, { signal });
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-      return result.data;
+      return unwrap(await getCreditBatchesRead(facilityId, { signal }));
     },
     enabled: !!facilityId,
     staleTime: CREDIT_BATCH_STALE_TIME_MS,
@@ -68,13 +65,7 @@ export function useCreditBatches(facilityId?: string) {
 export function useCreditBatch(id: string) {
   return useQuery({
     queryKey: creditBatchKeys.detail(id),
-    queryFn: async () => {
-      const result = await getCreditBatchByIdFn(id);
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-      return result.data;
-    },
+    queryFn: async () => unwrap(await getCreditBatchByIdFn(id)),
     enabled: !!id,
     staleTime: CREDIT_BATCH_STALE_TIME_MS,
   });
@@ -86,11 +77,7 @@ export function useCreditBatchCo2eStoredPreviews(batchIds: string[]) {
   const results = useQueries({
     queries: chunks.map((ids) => ({
       queryKey: creditBatchKeys.previews(ids),
-      queryFn: async () => {
-        const result = await getCo2eStoredPreviewsFn(ids);
-        if (!result.success) throw new Error(result.error);
-        return result.data;
-      },
+      queryFn: async () => unwrap(await getCo2eStoredPreviewsFn(ids)),
       staleTime: CREDIT_BATCH_STALE_TIME_MS,
     })),
   });
@@ -139,16 +126,14 @@ export function useCreditBatchProductionRunOptions(params: {
     ),
     queryFn: async () => {
       if (!facilityId || !startDate || !endDate) return [];
-      const result = await getCreditBatchProductionRunOptionsFn({
-        facilityId,
-        startDate,
-        endDate,
-        includeCreditBatchId,
-      });
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-      return result.data;
+      return unwrap(
+        await getCreditBatchProductionRunOptionsFn({
+          facilityId,
+          startDate,
+          endDate,
+          includeCreditBatchId,
+        }),
+      );
     },
     enabled: !!facilityId && !!startDate && !!endDate,
     staleTime: CREDIT_BATCH_STALE_TIME_MS,

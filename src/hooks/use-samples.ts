@@ -27,7 +27,7 @@ import {
 } from "@/fn/samples";
 import { invalidateCertificationReadiness } from "@/hooks/use-certification";
 
-import type { MutationCallbacks, OptimisticUpdateOptions } from "./types";
+import { unwrap, type MutationCallbacks, type OptimisticUpdateOptions } from "./types";
 
 // ============================================
 // Query Keys
@@ -60,13 +60,7 @@ export function useSamples(
 ) {
   return useQuery({
     queryKey: sampleKeys.list(filters),
-    queryFn: async () => {
-      const result = await getSamplesFn(filters);
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-      return result.data;
-    },
+    queryFn: async () => unwrap(await getSamplesFn(filters)),
     staleTime: 30000, // 30 seconds
     enabled: options?.enabled,
   });
@@ -78,13 +72,7 @@ export function useSamples(
 export function useSample(sampleId: string, enabled = true) {
   return useQuery({
     queryKey: sampleKeys.detail(sampleId),
-    queryFn: async () => {
-      const result = await getSampleByIdFn(sampleId);
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-      return result.data;
-    },
+    queryFn: async () => unwrap(await getSampleByIdFn(sampleId)),
     enabled: enabled && !!sampleId,
     staleTime: 30000,
   });
@@ -100,13 +88,7 @@ export function useSampleStats(
 ) {
   return useQuery({
     queryKey: sampleKeys.stats(creditBatchId, facilityId),
-    queryFn: async () => {
-      const result = await getSampleStatsFn(creditBatchId, facilityId);
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-      return result.data;
-    },
+    queryFn: async () => unwrap(await getSampleStatsFn(creditBatchId, facilityId)),
     enabled,
     staleTime: 30000,
   });
@@ -126,13 +108,7 @@ export function useCreateSample(
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (data: CreateSampleData) => {
-      const result = await createSampleFn(data);
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-      return result.data;
-    },
+    mutationFn: async (data: CreateSampleData) => unwrap(await createSampleFn(data)),
     onMutate: async (variables) => {
       await callbacks?.onMutate?.(variables);
     },

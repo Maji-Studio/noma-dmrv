@@ -25,7 +25,7 @@ import {
 } from "@/fn/feedstocks";
 import { StaleVersionError, throwActionError } from "@/lib/stale-version";
 import { storageLocationKeys } from "./use-storage-locations";
-import type { MutationCallbacks } from "./types";
+import { unwrap, type MutationCallbacks } from "./types";
 import { dashboardOverviewKeys } from "./use-dashboard-overview";
 import { certificationKeys } from "./use-certification";
 import { invalidateOnboardingProgress } from "./use-onboarding";
@@ -59,11 +59,7 @@ export function useFeedstocks(
 ) {
   return useQuery({
     queryKey: feedstockKeys.list(filters),
-    queryFn: async () => {
-      const result = await getFeedstocksFn(filters);
-      if (!result.success) throw new Error(result.error);
-      return result.data;
-    },
+    queryFn: async () => unwrap(await getFeedstocksFn(filters)),
     staleTime: 30000,
     enabled: options?.enabled,
   });
@@ -72,11 +68,7 @@ export function useFeedstocks(
 export function useFeedstock(feedstockId: string, enabled = true) {
   return useQuery({
     queryKey: feedstockKeys.detail(feedstockId),
-    queryFn: async () => {
-      const result = await getFeedstockByIdFn(feedstockId);
-      if (!result.success) throw new Error(result.error);
-      return result.data;
-    },
+    queryFn: async () => unwrap(await getFeedstockByIdFn(feedstockId)),
     enabled: enabled && !!feedstockId,
     staleTime: 30000,
   });
@@ -88,11 +80,7 @@ export function useFeedstockStats(
 ) {
   return useQuery({
     queryKey: feedstockKeys.stats(scope),
-    queryFn: async () => {
-      const result = await getFeedstockStatsFn(scope);
-      if (!result.success) throw new Error(result.error);
-      return result.data;
-    },
+    queryFn: async () => unwrap(await getFeedstockStatsFn(scope)),
     staleTime: 30000,
     enabled: options?.enabled,
   });
@@ -106,11 +94,7 @@ export function useCreateFeedstock(callbacks?: MutationCallbacks<CreateFeedstock
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (data: CreateFeedstockData) => {
-      const result = await createFeedstockFn(data);
-      if (!result.success) throw new Error(result.error);
-      return result.data;
-    },
+    mutationFn: async (data: CreateFeedstockData) => unwrap(await createFeedstockFn(data)),
     onSuccess: async (data, variables) => {
       for (const feedstock of data.feedstocks) {
         queryClient.setQueryData(feedstockKeys.detail(feedstock.id), feedstock);
