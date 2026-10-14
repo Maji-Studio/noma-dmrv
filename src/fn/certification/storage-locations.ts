@@ -4,6 +4,7 @@
  * the explicit sync action call it in the configured Isometric environment.
  */
 
+import { resolveIsometricClient } from "@/data-access/certifier-credentials";
 import {
   getStorageLocationRegistration,
   getStorageLocationRegistryInput,
@@ -16,7 +17,6 @@ import {
 import type { CertifierStorageLocation } from "@/db/schema/certifier-storage-locations";
 import { requireOrgRole, type OrgContext } from "@/lib/auth/server";
 import { SafeError } from "@/lib/errors";
-import { getIsometricClientForOrg } from "@/lib/isometric/client";
 import { isMissingIsometricResource } from "@/lib/isometric/error-utils";
 import {
   buildCreateStorageLocationRequest,
@@ -278,9 +278,7 @@ async function registerStorageLocation(
       },
     });
   }
-  const client = await getIsometricClientForOrg(
-    input.args.orgCtx.organizationId,
-  );
+  const client = await resolveIsometricClient(input.args.orgCtx);
   let registration: CertifierStorageLocation | null = null;
   let createdRemoteDriftReason: string | null = null;
   const createResult = await performRegistryCreate({
@@ -463,7 +461,7 @@ async function reuseStorageLocationRegistration(
   const localDrifted =
     args.currentPayloadHash === null ||
     args.existing.payloadHash !== args.currentPayloadHash;
-  const client = await getIsometricClientForOrg(args.orgCtx.organizationId);
+  const client = await resolveIsometricClient(args.orgCtx);
   let remoteDriftReason: string | null = null;
   try {
     const remote = await getStorageLocation(

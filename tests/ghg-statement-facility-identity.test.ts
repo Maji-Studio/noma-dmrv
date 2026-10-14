@@ -19,6 +19,11 @@
  * tests/registry-boundary-ghg-statement.test.ts.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("@/data-access/certifier-credentials", async (importOriginal) =>
+  (await import("./fixtures/fake-registry")).fakeCredentialsModule(importOriginal),
+);
+
 import { eq, inArray, sql } from "drizzle-orm";
 
 vi.mock("@/lib/isometric/client", async (importOriginal) => {

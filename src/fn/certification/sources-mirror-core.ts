@@ -14,6 +14,7 @@
  * submission mirror below passes a pre-derived candidate, and that path stays
  * private to this module.
  */
+import { resolveIsometricClient } from "@/data-access/certifier-credentials";
 import { requireOrgRole, type OrgContext } from "@/lib/auth/server";
 import { db, type DbTransaction } from "@/db";
 import { acquireMirrorLock } from "@/lib/isometric/utils/source-lock";
@@ -37,7 +38,6 @@ import {
   buildSourceSupplierRef,
   createSource,
   findSourceBySupplierRef,
-  getIsometricClientForOrg,
   requestSignedUploadUrl,
 } from "@/lib/isometric";
 import { getStorageProvider } from "@/lib/storage";
@@ -312,7 +312,7 @@ async function mirrorDerivedCandidate(
         "The stored file does not match this document's record. Re-upload it, then submit again.",
       );
     }
-    const client = await getIsometricClientForOrg(orgCtx.organizationId);
+    const client = await resolveIsometricClient(orgCtx);
 
     // After the pre-flight, these are guaranteed non-null. Lift them into
     // typed locals so the closure passed to db.transaction below carries

@@ -1,5 +1,6 @@
 "use server";
 
+import { resolveIsometricClient } from "@/data-access/certifier-credentials";
 import { env } from "@/config/env";
 import { getLatestSubmission } from "@/data-access/certification-submissions";
 import { getCertifierRemovalById } from "@/data-access/certifier-removals";
@@ -13,7 +14,6 @@ import { SafeError } from "@/lib/errors";
 import {
   getGhgEntry,
   getGhgStatement,
-  getIsometricClientForOrg,
 } from "@/lib/isometric";
 import {
   ISOMETRIC_PROVIDER,
@@ -62,7 +62,7 @@ export async function loadRemovalBreakdown(
       };
     }
 
-    const client = await getIsometricClientForOrg(orgCtx.organizationId);
+    const client = await resolveIsometricClient(orgCtx);
     let ghgEntry: Awaited<ReturnType<typeof getGhgEntry>>;
     try {
       ghgEntry = await getGhgEntry(client, externalId);

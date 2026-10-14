@@ -25,6 +25,7 @@ import * as sources from "@/fn/certification/source-candidates";
 import * as sourcesMirror from "@/fn/certification/sources-mirror-core";
 import { submitRemoval } from "@/fn/certification/submit-removal";
 import { compileRemovalSubmission } from "@/fn/certification/removal-submission-build";
+import { resolveIsometricClient } from "@/data-access/certifier-credentials";
 import * as isometric from "@/lib/isometric";
 import { reviewPayloadHash } from "@/lib/certification/removal-review-hash";
 import { classifyRemovalSourceCandidate } from "@/lib/certification/removal-source-bindings";
@@ -119,7 +120,7 @@ describe("submitRemoval — entity readiness gate", () => {
     expect(
       evidenceLedgers.ensureEvidenceLedgersFromContext,
     ).not.toHaveBeenCalled();
-    expect(isometric.getIsometricClientForOrg).not.toHaveBeenCalled();
+    expect(resolveIsometricClient).not.toHaveBeenCalled();
     expect(storedRows).toHaveLength(0);
   });
 
@@ -142,7 +143,7 @@ describe("submitRemoval — entity readiness gate", () => {
     expect(
       evidenceLedgers.ensureEvidenceLedgersFromContext,
     ).not.toHaveBeenCalled();
-    expect(isometric.getIsometricClientForOrg).not.toHaveBeenCalled();
+    expect(resolveIsometricClient).not.toHaveBeenCalled();
     expect(storedRows).toHaveLength(0);
     expect(attemptSummaryEvents()).toHaveLength(1);
     expect(attemptSummaryEvents()[0]?.[1]).toMatchObject({

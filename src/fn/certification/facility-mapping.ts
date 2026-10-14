@@ -1,5 +1,6 @@
 "use server";
 
+import { resolveIsometricClient } from "@/data-access/certifier-credentials";
 import { env } from "@/config/env";
 import {
   deleteCertifierProject,
@@ -14,7 +15,6 @@ import { requireOrgFacility } from "@/data-access/utils";
 import { requireOrgRole } from "@/lib/auth/server";
 import { SafeError } from "@/lib/errors";
 import {
-  getIsometricClientForOrg,
   IsometricApiError,
   listProjects,
   listGhgEntryTemplates,
@@ -51,7 +51,7 @@ export async function loadFacilityCertifierMapping(
 ): Promise<ActionResult<FacilityCertifierMapping>> {
   return withAction(async (orgCtx) => {
     await requireOrgFacility(orgCtx, facilityId);
-    const client = await getIsometricClientForOrg(orgCtx.organizationId);
+    const client = await resolveIsometricClient(orgCtx);
     const [mapping, projectCatalog, allLinkedFacilities] = await Promise.all([
       getCertifierProjectByFacility(orgCtx, facilityId, ISOMETRIC_PROVIDER),
       listProjectsWithConfiguration(client),
@@ -121,7 +121,7 @@ export async function saveFacilityCertifierMapping(
       );
     }
 
-    const client = await getIsometricClientForOrg(orgCtx.organizationId);
+    const client = await resolveIsometricClient(orgCtx);
     let projects;
     try {
       projects = await listProjects(client);
@@ -182,7 +182,7 @@ export async function loadIsometricProjectTemplates(
   externalProjectId: string,
 ): Promise<ActionResult<IsometricGhgEntryTemplate[]>> {
   return withAction(async (orgCtx) => {
-    const client = await getIsometricClientForOrg(orgCtx.organizationId);
+    const client = await resolveIsometricClient(orgCtx);
     return listGhgEntryTemplates(client, externalProjectId);
   });
 }

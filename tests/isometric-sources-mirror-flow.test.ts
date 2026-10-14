@@ -19,7 +19,13 @@
  * contract. This file is the integration layer: the server action runs for
  * real with data-access / storage / isometric-client boundaries faked.
  */
+import { resolveIsometricClient } from "@/data-access/certifier-credentials";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("@/data-access/certifier-credentials", () => ({
+  resolveIsometricClient: vi.fn(async () => ({} as import("@/lib/isometric").IsometricClient)),
+}));
+
 import { makeTestOrgContext } from "./helpers/test-org";
 
 vi.mock("@/lib/auth/server", () => ({
@@ -74,7 +80,6 @@ vi.mock("@/lib/isometric", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/isometric")>();
   return {
     ...actual,
-    getIsometricClientForOrg: vi.fn(async () => ({} as import("@/lib/isometric").IsometricClient)),
     findSourceBySupplierRef: vi.fn(),
     requestSignedUploadUrl: vi.fn(),
     createSource: vi.fn(),
@@ -548,7 +553,7 @@ describe("mirrorDocumentToSource — orphan recovery", () => {
       expect(result.success).toBe(false);
       if (result.success) return;
       expect(result.error).toMatch(/registry value sources are read-only/i);
-      expect(isometric.getIsometricClientForOrg).not.toHaveBeenCalled();
+      expect(resolveIsometricClient).not.toHaveBeenCalled();
       expect(isometric.findSourceBySupplierRef).not.toHaveBeenCalled();
       expect(isometric.createSource).not.toHaveBeenCalled();
       expect(uploadsDA.insertOrGetDocumentUpload).not.toHaveBeenCalled();
@@ -571,7 +576,7 @@ describe("mirrorDocumentToSource — orphan recovery", () => {
     expect(result.success).toBe(false);
     if (result.success) return;
     expect(result.error).toMatch(/submission is in progress/i);
-    expect(isometric.getIsometricClientForOrg).not.toHaveBeenCalled();
+    expect(resolveIsometricClient).not.toHaveBeenCalled();
     expect(isometric.createSource).not.toHaveBeenCalled();
   });
 
@@ -815,7 +820,7 @@ describe("mirrorDocumentToSource — orphan recovery", () => {
     expect(result.success).toBe(false);
     if (result.success) return;
     expect(result.error).toMatch(/upload has not been confirmed/i);
-    expect(isometric.getIsometricClientForOrg).not.toHaveBeenCalled();
+    expect(resolveIsometricClient).not.toHaveBeenCalled();
     expect(isometric.findSourceBySupplierRef).not.toHaveBeenCalled();
     expect(isometric.createSource).not.toHaveBeenCalled();
     expect(uploadsDA.insertOrGetDocumentUpload).not.toHaveBeenCalled();

@@ -23,6 +23,11 @@ import {
  * Requires a real Postgres (`.env.test`).
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("@/data-access/certifier-credentials", async (importOriginal) =>
+  (await import("./fixtures/fake-registry")).fakeCredentialsModule(importOriginal),
+);
+
 import { and, eq, inArray, sql } from "drizzle-orm";
 vi.mock("@/lib/isometric/client", async (importOriginal) => {
   const actual =

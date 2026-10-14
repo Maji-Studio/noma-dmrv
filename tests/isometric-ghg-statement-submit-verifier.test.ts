@@ -12,6 +12,11 @@
  * terminal-state transition.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("@/data-access/certifier-credentials", () => ({
+  resolveIsometricClient: vi.fn(async () => ({} as import("@/lib/isometric").IsometricClient)),
+}));
+
 import { makeTestOrgContext } from "./helpers/test-org";
 
 import type {
@@ -84,7 +89,6 @@ vi.mock("@/lib/isometric", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/isometric")>();
   return {
     ...actual,
-    getIsometricClientForOrg: vi.fn(async () => ({} as import("@/lib/isometric").IsometricClient)),
     createGhgStatement: vi.fn(),
     getGhgStatement: vi.fn(),
     submitGhgStatement: vi.fn(),

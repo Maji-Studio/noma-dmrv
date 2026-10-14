@@ -40,8 +40,12 @@ Application credentials are not environment-only:
 - Owners/Admins manage their active organization's credentials through
   `src/data-access/certifier-credentials.ts`;
 - application calls construct an organization-specific client with
-  `getIsometricClientForOrg(organizationId)` in `client-org.ts` (re-exported
-  through the existing client and barrel surfaces);
+  `resolveIsometricClient(ctx)` in `src/data-access/certifier-credentials.ts`,
+  which calls `requireOrgScope` and filters credentials on `ctx.organizationId`;
+- Platform Admin verification of a selected organization's saved credentials uses
+  `verifyIsometricCredentialsForOrganization(ctx, organizationId)`
+  in the same data-access module, with an explicit privilege check and
+  `// org-scope-ok:` waiver;
 - environment credentials are retained only for scripts and dedicated health
   checks through `getIsometricClientFromEnv()` in `client-env.ts`, which validates
   only the credential pair and environment selector. The HTTP client accepts
