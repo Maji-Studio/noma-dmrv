@@ -6,11 +6,10 @@ import { db } from "@/db";
 import { apiAuditEvents, apiIdempotencyRecords, organizationSettings, orders } from "@/db/schema";
 import { createApiKey } from "@/data-access/api-keys";
 import { API_KEY_DEFAULT_EXPIRY_SECONDS } from "@/config/api-keys";
-import { POST } from "@/app/api/v1/orders/route";
-import { GET, PATCH, DELETE } from "@/app/api/v1/orders/[idOrCode]/route";
 import { orderRepresentationSchema } from "@/lib/representations/orders";
 import { orderInput } from "./helpers/order-operation-fixture";
-import { createApiOrderReadFixture, removeApiOrderReadFixture, readParams, readRequest, insertReadDelivery, archiveReadOrder } from "./helpers/api-order-read-fixture";
+import { removeApiOrderReadFixture, insertReadDelivery, archiveReadOrder } from "./helpers/api-order-read-fixture";
+import { createApiOrderWriteFixture, postOrder as post, patchOrder as patch, deleteOrder as remove, readRestOrder as read } from "./helpers/api-order-write-fixture";
 import { certifyOutputLineage, cleanupCertifiedOutputLineage } from "./helpers/certified-output-lineage";
 import { uppercaseUuids } from "./helpers/uppercase-uuids";
 
@@ -25,37 +24,15 @@ type Fixture = Awaited<ReturnType<typeof fixture>>;
 let a: Fixture;
 let b: Fixture;
 async function fixture() {
-  const f = await createApiOrderReadFixture();
-  const deleteKey = (await createApiKey(f.ctx, { name: "Order delete fixture", scopes: ["orders:delete"], expiresIn: API_KEY_DEFAULT_EXPIRY_SECONDS })).key;
+  const f = await createApiOrderWriteFixture();
   const secondWriteKey = (await createApiKey(f.ctx, { name: "Order second writer", scopes: ["orders:write"], expiresIn: API_KEY_DEFAULT_EXPIRY_SECONDS })).key;
   const secondDeleteKey = (await createApiKey(f.ctx, { name: "Order second deleter", scopes: ["orders:delete"], expiresIn: API_KEY_DEFAULT_EXPIRY_SECONDS })).key;
-  return { ...f, deleteKey, secondWriteKey, secondDeleteKey };
+  return { ...f, secondWriteKey, secondDeleteKey };
 }
 beforeEach(async () => { a = await fixture(); b = await fixture(); }, TIMEOUT_MS);
 afterEach(async () => {
   for (const f of [a, b]) { await cleanupCertifiedOutputLineage(f.ctx.organizationId); await removeApiOrderReadFixture(f); }
 }, TIMEOUT_MS);
-function request(method: string, path: string, credential: string, body?: unknown, headers: Record<string, string> = {}) {
-  return new Request(`http://localhost:3100/api/v1${path}`, { method,
-    headers: { authorization: `Bearer ${credential}`, ...(body === undefined ? {} : { "content-type": "application/json" }), ...headers },
-    body: body === undefined ? undefined : JSON.stringify(body) });
-}
-function post(f: Fixture, body: unknown = orderInput(f), key: string | null = randomUUID(), query = "", credential = f.writeOnlyKey) {
-  return POST(request("POST", `/orders${query}`, credential, body, key ? { "idempotency-key": key } : {}));
-}
-function patch(f: Fixture, id: string, body: unknown, etag?: string, key?: string, query = "", credential = f.writeOnlyKey) {
-  return PATCH(request("PATCH", `/orders/${id}${query}`, credential, body,
-    { ...(etag ? { "if-match": etag } : {}), ...(key ? { "idempotency-key": key } : {}) }), readParams(id));
-}
-function remove(f: Fixture, id: string, etag?: string, key?: string, query = "", body?: unknown, credential = f.deleteKey) {
-  return DELETE(request("DELETE", `/orders/${id}${query}`, credential, body,
-    { ...(etag ? { "if-match": etag } : {}), ...(key ? { "idempotency-key": key } : {}) }), readParams(id));
-}
-async function read(f: Fixture, id: string) {
-  const response = await GET(readRequest(`/orders/${id}`, f.orderKey), readParams(id));
-  expect(response.status).toBe(200);
-  return { data: (await response.json()).data, etag: response.headers.get("etag") };
-}
 async function saved(f = a) {
   const response = await post(f);
   expect(response.status).toBe(201);
@@ -85,7 +62,7 @@ describe("order POST", { timeout: TIMEOUT_MS }, () => {
     expect(body.data.packaging).toBe("bagged");
     expect(response.headers.get("location")).toBe(`/api/v1/orders/${body.data.id}`);
     expect(response.headers.get("etag")).toBe(INITIAL_ETAG);
-    expect(await read(a, body.data.id)).toEqual({ data: body.data, etag: INITIAL_ETAG });
+    expect(await read(a, body.data.id)).toEqual({ row: body.data, etag: INITIAL_ETAG });
     expect(await audits(a)).toMatchObject([{ operationId: "record_order", outcomeCode: "created", transport: "rest" }]);
   });
   it("requires a key even for dry runs, and never claims a preview key or saves a row", async () => {
@@ -124,22 +101,22 @@ describe("order POST", { timeout: TIMEOUT_MS }, () => {
 describe("order PATCH", { timeout: TIMEOUT_MS }, () => {
   it.each(["orderId", "expectedVersion", "bogus"])("refuses %s as an unknown field", async (field) => {
     const order = await saved();
-    const refusal = await problem(await patch(a, order.id, { [field]: 1 }, INITIAL_ETAG), 422, "validation_failed");
+    const refusal = await problem(await patch(a, order.id, { [field]: 1 }, INITIAL_ETAG, null), 422, "validation_failed");
     expect(refusal.errors).toContainEqual(expect.objectContaining({ pointer: `/${field}`, code: "unknown_field" }));
-    expect((await read(a, order.id)).data).toEqual(order);
+    expect((await read(a, order.id)).row).toEqual(order);
   });
   it("refuses duplicate codes with a code pointer", async () => {
     const first = await saved();
     const second = await saved();
-    await problem(await patch(a, second.id, { code: first.code }, INITIAL_ETAG), 409, "conflict", "/code");
-    expect((await read(a, second.id)).data).toEqual(second);
+    await problem(await patch(a, second.id, { code: first.code }, INITIAL_ETAG, null), 409, "conflict", "/code");
+    expect((await read(a, second.id)).row).toEqual(second);
   });
   it("refuses a delete-only credential before checking target or version", async () => {
     const order = await saved();
     for (const id of [order.id, randomUUID()]) {
-      await problem(await patch(a, id, {}, NEXT_ETAG, undefined, "", a.deleteKey), 403, "missing_scope");
+      await problem(await patch(a, id, {}, NEXT_ETAG, null, "", a.deleteKey), 403, "missing_scope");
     }
-    expect((await read(a, order.id)).data).toEqual(order);
+    expect((await read(a, order.id)).row).toEqual(order);
   });
   it("refuses a key reused with another target or If-Match", async () => {
     const first = await saved();
@@ -149,7 +126,7 @@ describe("order PATCH", { timeout: TIMEOUT_MS }, () => {
     expect((await patch(a, first.id, body, INITIAL_ETAG, key)).status).toBe(200);
     await problem(await patch(a, second.id, body, INITIAL_ETAG, key), 422, "idempotency_key_reused");
     await problem(await patch(a, first.id, body, NEXT_ETAG, key), 422, "idempotency_key_reused");
-    expect((await read(a, second.id)).data).toEqual(second);
+    expect((await read(a, second.id)).row).toEqual(second);
     expect((await audits(a)).filter((row) => row.operationId === "update_order")).toHaveLength(1);
   });
   it("isolates keys across organizations and credentials", async () => {
@@ -164,27 +141,27 @@ describe("order PATCH", { timeout: TIMEOUT_MS }, () => {
       expect(response.status).toBe(200);
       expect(response.headers.has("idempotent-replayed")).toBe(false);
     }
-    expect((await read(a, first.id)).data).toMatchObject({ quantityKg: LATER_KG, version: 3 });
-    expect((await read(b, foreign.id)).data).toMatchObject({ quantityKg: UPDATED_KG, version: 2 });
+    expect((await read(a, first.id)).row).toMatchObject({ quantityKg: LATER_KG, version: 3 });
+    expect((await read(b, foreign.id)).row).toMatchObject({ quantityKg: UPDATED_KG, version: 2 });
     expect((await audits(a)).filter((row) => row.operationId === "update_order")).toHaveLength(2);
     expect((await audits(b)).filter((row) => row.operationId === "update_order")).toHaveLength(1);
   });
   it("requires If-Match, bumps the tag, preserves omitted fields, clears a null location and returns current for stale tags", async () => {
     const order = await saved();
-    await problem(await patch(a, order.id, {}), 428, "precondition_required");
-    const response = await patch(a, order.id, { customerLocationId: null }, INITIAL_ETAG);
+    await problem(await patch(a, order.id, {}, undefined, null), 428, "precondition_required");
+    const response = await patch(a, order.id, { customerLocationId: null }, INITIAL_ETAG, null);
     expect(response.status).toBe(200);
     expect(response.headers.get("etag")).toBe(NEXT_ETAG);
     const body = await response.json();
     expect(body).not.toHaveProperty("warnings");
     const current = body.data;
     expect(current).toMatchObject({ ...order, customerLocationId: null, version: 2, updatedAt: expect.any(String) });
-    expect(await read(a, order.id)).toEqual({ data: current, etag: NEXT_ETAG });
+    expect(await read(a, order.id)).toEqual({ row: current, etag: NEXT_ETAG });
     expect((await audits(a)).filter((row) => row.operationId === "update_order")).toMatchObject([{
       changedFields: ["customerLocationId"], versionBefore: 1, versionAfter: 2,
     }]);
     for (const tag of [INITIAL_ETAG, '"2.99"']) {
-      expect((await problem(await patch(a, order.id, { quantityKg: UPDATED_KG }, tag), 412, "stale_version")).current).toEqual(current);
+      expect((await problem(await patch(a, order.id, { quantityKg: UPDATED_KG }, tag, null), 412, "stale_version")).current).toEqual(current);
     }
   });
   it("rolls back previews and never claims their keys", async () => {
@@ -195,36 +172,36 @@ describe("order PATCH", { timeout: TIMEOUT_MS }, () => {
     expect(response.headers.get("dry-run")).toBe("true");
     expect(response.headers.has("etag")).toBe(false);
     expect((await response.json()).data.quantityKg).toBe(UPDATED_KG);
-    expect((await read(a, order.id)).data).toEqual(order);
+    expect((await read(a, order.id)).row).toEqual(order);
     expect(await records(a)).toHaveLength(count);
   });
   it.each([false, true])("freezes every relationship once a delivery exists (archived: %s)", async (archived) => {
     const order = await saved();
     await insertReadDelivery(a, order.id, ALLOCATED_KG, archived);
     for (const [field, value] of Object.entries({ facilityId: a.otherFacility.id, customerId: a.otherCustomer.id, customerLocationId: null, formulationId: a.pure.id })) {
-      await problem(await patch(a, order.id, { [field]: value }, INITIAL_ETAG), 409, "conflict", `/${field}`);
+      await problem(await patch(a, order.id, { [field]: value }, INITIAL_ETAG, null), 409, "conflict", `/${field}`);
     }
-    expect((await read(a, order.id)).data).toEqual(order);
+    expect((await read(a, order.id)).row).toEqual(order);
   });
   it("returns allocation metadata on a quantity below delivered wet kg", async () => {
     const order = await saved();
     await insertReadDelivery(a, order.id, ALLOCATED_KG);
-    const refusal = await problem(await patch(a, order.id, { quantityKg: BELOW_ALLOCATED_KG }, INITIAL_ETAG), 422, "validation_failed", "/quantityKg");
+    const refusal = await problem(await patch(a, order.id, { quantityKg: BELOW_ALLOCATED_KG }, INITIAL_ETAG, null), 422, "validation_failed", "/quantityKg");
     expect(refusal.errors).toContainEqual(expect.objectContaining({ pointer: "/quantityKg", meta: { allocatedWetKg: ALLOCATED_KG, unit: "kg" } }));
-    expect((await read(a, order.id)).data).toEqual(order);
+    expect((await read(a, order.id)).row).toEqual(order);
   });
   it("refuses archived updates and codes in the path", async () => {
     const order = await saved();
-    await problem(await patch(a, order.code, {}, INITIAL_ETAG), 404, "not_found");
+    await problem(await patch(a, order.code, {}, INITIAL_ETAG, null), 404, "not_found");
     await archiveReadOrder(a, order.id);
-    await problem(await patch(a, order.id, {}, INITIAL_ETAG), 404, "not_found", "/orderId");
+    await problem(await patch(a, order.id, {}, INITIAL_ETAG, null), 404, "not_found", "/orderId");
   });
   it("replays after another edit and archive, and refuses changed keyed payloads", async () => {
     const order = await saved();
     const key = randomUUID();
     const first = await patch(a, order.id, { quantityKg: UPDATED_KG }, INITIAL_ETAG, key);
     const original = await first.text();
-    expect((await patch(a, order.id, { quantityKg: LATER_KG }, NEXT_ETAG)).status).toBe(200);
+    expect((await patch(a, order.id, { quantityKg: LATER_KG }, NEXT_ETAG, null)).status).toBe(200);
     await archiveReadOrder(a, order.id);
     const replay = await patch(a, order.id, { quantityKg: UPDATED_KG }, INITIAL_ETAG, key);
     expect(replay.status).toBe(200);
@@ -232,7 +209,7 @@ describe("order PATCH", { timeout: TIMEOUT_MS }, () => {
     expect(replay.headers.get("etag")).toBe(NEXT_ETAG);
     expect(await replay.text()).toBe(original);
     await problem(await patch(a, order.id, { quantityKg: LATER_KG }, INITIAL_ETAG, key), 422, "idempotency_key_reused");
-    expect((await read(a, order.id)).data.quantityKg).toBe(LATER_KG);
+    expect((await read(a, order.id)).row.quantityKg).toBe(LATER_KG);
     expect(await audits(a)).toHaveLength(3);
   });
 });
@@ -245,7 +222,7 @@ describe("order DELETE", { timeout: TIMEOUT_MS }, () => {
     expect((await remove(a, first.id, INITIAL_ETAG, key)).status).toBe(204);
     await problem(await remove(a, second.id, INITIAL_ETAG, key), 422, "idempotency_key_reused");
     await problem(await remove(a, first.id, NEXT_ETAG, key), 422, "idempotency_key_reused");
-    expect((await read(a, second.id)).data).toEqual(second);
+    expect((await read(a, second.id)).row).toEqual(second);
     expect((await audits(a)).filter((row) => row.operationId === "delete_order")).toHaveLength(1);
   });
   it("isolates keys across organizations and credentials", async () => {
@@ -268,9 +245,9 @@ describe("order DELETE", { timeout: TIMEOUT_MS }, () => {
   });
   it("requires the separate scope and If-Match, validates the body, then deletes and replays as 204", async () => {
     const order = await saved();
-    await problem(await remove(a, order.id, INITIAL_ETAG, undefined, "", undefined, a.writeOnlyKey), 403, "missing_scope");
-    await problem(await remove(a, order.id), 428, "precondition_required");
-    for (const body of [{ force: true }, null, [], "", 1]) await problem(await remove(a, order.id, INITIAL_ETAG, undefined, "", body), 422, "validation_failed");
+    await problem(await remove(a, order.id, INITIAL_ETAG, null, "", undefined, a.writeOnlyKey), 403, "missing_scope");
+    await problem(await remove(a, order.id, undefined, null), 428, "precondition_required");
+    for (const body of [{ force: true }, null, [], "", 1]) await problem(await remove(a, order.id, INITIAL_ETAG, null, "", body), 422, "validation_failed");
     const key = randomUUID();
     expect((await remove(a, order.id, INITIAL_ETAG, key, "", {})).status).toBe(204);
     const replay = await remove(a, order.id, INITIAL_ETAG, key);
@@ -283,13 +260,13 @@ describe("order DELETE", { timeout: TIMEOUT_MS }, () => {
   it.each([false, true])("refuses orders with a delivery (archived: %s)", async (archived) => {
     const order = await saved();
     await insertReadDelivery(a, order.id, ALLOCATED_KG, archived);
-    await problem(await remove(a, order.id, INITIAL_ETAG), 409, "conflict");
+    await problem(await remove(a, order.id, INITIAL_ETAG, null), 409, "conflict");
     expect(await rows(a)).toHaveLength(1);
   });
   it("previews an archived order without deleting it, then allows a committed deletion", async () => {
     const order = await saved();
     await archiveReadOrder(a, order.id);
-    const current = (await read(a, order.id)).data;
+    const current = (await read(a, order.id)).row;
     const key = randomUUID();
     const preview = await remove(a, order.id, INITIAL_ETAG, key, "?dryRun=true");
     expect(preview.status).toBe(200);
@@ -301,9 +278,9 @@ describe("order DELETE", { timeout: TIMEOUT_MS }, () => {
   });
   it("returns current on a stale version or representation revision", async () => {
     const order = await saved();
-    await patch(a, order.id, { quantityKg: UPDATED_KG }, INITIAL_ETAG);
-    const current = (await read(a, order.id)).data;
-    for (const tag of [INITIAL_ETAG, '"2.99"']) expect((await problem(await remove(a, order.id, tag), 412, "stale_version")).current).toEqual(current);
+    await patch(a, order.id, { quantityKg: UPDATED_KG }, INITIAL_ETAG, null);
+    const current = (await read(a, order.id)).row;
+    for (const tag of [INITIAL_ETAG, '"2.99"']) expect((await problem(await remove(a, order.id, tag, null), 412, "stale_version")).current).toEqual(current);
   });
 });
 
@@ -313,10 +290,10 @@ describe("order write BOLA", { timeout: TIMEOUT_MS }, () => {
     for (const [field, foreign] of Object.entries({ facilityId: b.facility.id, customerId: b.customer.id, customerLocationId: b.location.id, formulationId: b.recipe.id })) {
       for (const id of [foreign, randomUUID()]) {
         await problem(await post(a, orderInput(a, { [field]: id })), 404, "not_found", `/${field}`);
-        await problem(await patch(a, order.id, { [field]: id }, INITIAL_ETAG), 404, "not_found", `/${field}`);
+        await problem(await patch(a, order.id, { [field]: id }, INITIAL_ETAG, null), 404, "not_found", `/${field}`);
       }
     }
-    expect((await read(a, order.id)).data).toEqual(order);
+    expect((await read(a, order.id)).row).toEqual(order);
     expect(await rows(a)).toHaveLength(1);
     expect(await rows(b)).toEqual([]);
     expect(await records(a)).toHaveLength(1);
@@ -325,14 +302,14 @@ describe("order write BOLA", { timeout: TIMEOUT_MS }, () => {
   it("refuses foreign targets and codes, and checks scopes before existence", async () => {
     const foreign = await saved(b);
     for (const id of [foreign.id, randomUUID()]) {
-      await problem(await patch(a, id, {}, INITIAL_ETAG), 404, "not_found", "/orderId");
-      await problem(await remove(a, id, INITIAL_ETAG), 404, "not_found", "/orderId");
-      await problem(await patch(a, id, {}, INITIAL_ETAG, undefined, "", a.orderKey), 403, "missing_scope");
-      await problem(await remove(a, id, INITIAL_ETAG, undefined, "", undefined, a.writeOnlyKey), 403, "missing_scope");
+      await problem(await patch(a, id, {}, INITIAL_ETAG, null), 404, "not_found", "/orderId");
+      await problem(await remove(a, id, INITIAL_ETAG, null), 404, "not_found", "/orderId");
+      await problem(await patch(a, id, {}, INITIAL_ETAG, null, "", a.orderKey), 403, "missing_scope");
+      await problem(await remove(a, id, INITIAL_ETAG, null, "", undefined, a.writeOnlyKey), 403, "missing_scope");
     }
-    await problem(await remove(a, foreign.code, INITIAL_ETAG), 404, "not_found");
+    await problem(await remove(a, foreign.code, INITIAL_ETAG, null), 404, "not_found");
     await problem(await post(a, orderInput(b), randomUUID(), "", a.orderKey), 403, "missing_scope");
-    expect((await read(b, foreign.id)).data).toEqual(foreign);
+    expect((await read(b, foreign.id)).row).toEqual(foreign);
     expect(await rows(a)).toEqual([]);
     expect(await audits(a)).toEqual([]);
   });
@@ -346,13 +323,13 @@ describe("order write BOLA", { timeout: TIMEOUT_MS }, () => {
     const patchKey = randomUUID();
     expect((await patch(a, order.id.toUpperCase(), { formulationId: a.recipe.id.toUpperCase() }, INITIAL_ETAG, patchKey)).status).toBe(200);
     expect((await patch(a, order.id, { formulationId: a.recipe.id }, INITIAL_ETAG, patchKey)).headers.get("idempotent-replayed")).toBe("true");
-    expect((await remove(a, order.id.toUpperCase(), NEXT_ETAG)).status).toBe(204);
+    expect((await remove(a, order.id.toUpperCase(), NEXT_ETAG, null)).status).toBe(204);
   });
   it("refuses a same-organization location belonging to a different customer", async () => {
     await problem(await post(a, orderInput(a, { customerId: a.otherCustomer.id })), 422, "validation_failed", "/customerLocationId");
     const order = await saved();
-    await problem(await patch(a, order.id, { customerId: a.otherCustomer.id }, INITIAL_ETAG), 422, "validation_failed", "/customerLocationId");
-    expect((await read(a, order.id)).data).toEqual(order);
+    await problem(await patch(a, order.id, { customerId: a.otherCustomer.id }, INITIAL_ETAG, null), 422, "validation_failed", "/customerLocationId");
+    expect((await read(a, order.id)).row).toEqual(order);
   });
 });
 
@@ -360,8 +337,8 @@ describe("order certification errors", { timeout: TIMEOUT_MS }, () => {
   it("maps the existing lineage lock to 409 with the order pointer", async () => {
     await certifyOutputLineage(a, { runId: a.runs[0].id, submitted: true });
     const [order] = await rows(a);
-    await problem(await patch(a, order.id, { quantityKg: UPDATED_KG }, INITIAL_ETAG), 409, "certification_locked", "/orderId");
-    await problem(await remove(a, order.id, INITIAL_ETAG), 409, "certification_locked", "/orderId");
+    await problem(await patch(a, order.id, { quantityKg: UPDATED_KG }, INITIAL_ETAG, null), 409, "certification_locked", "/orderId");
+    await problem(await remove(a, order.id, INITIAL_ETAG, null), 409, "certification_locked", "/orderId");
     expect(await rows(a)).toEqual([order]);
     expect(await audits(a)).toEqual([]);
   });

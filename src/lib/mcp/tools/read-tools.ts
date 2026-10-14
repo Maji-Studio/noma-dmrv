@@ -7,7 +7,7 @@ import { uuidSchema } from "@/schemas/helpers";
 import type { ApiContext } from "@/lib/auth/api-context";
 import type { ApiScope } from "@/lib/auth/api-scopes";
 import { resources } from "@/lib/api/openapi/resources";
-import { outputStockMovementListSchema, resourceQueries, supplierLocationListSchema } from "@/lib/api/query-schemas";
+import { outputStockMovementListSchema, resourceQueries, supplierLocationListSchema, customerLocationListSchema } from "@/lib/api/query-schemas";
 import { readFacilityListFromInput } from "@/lib/api/facilities-queries";
 import { readSupplierListFromInput } from "@/lib/api/suppliers-queries";
 import { readSupplierLocationListFromInput } from "@/lib/api/supplier-locations-queries";
@@ -33,13 +33,23 @@ import { feedstockRepresentationSchema } from "@/lib/representations/feedstocks"
 import { supplierLocationRepresentationSchema } from "@/lib/representations/supplier-locations";
 import { readDescriptions } from "@/lib/operations/read-descriptions";
 import { parseQueryInput } from "@/lib/api/query";
-import { UNTRUSTED_TEXT, LAB_SAMPLE_TIMES, LAB_SAMPLE_UNITS, FEEDSTOCK_UNITS, FEEDSTOCK_DATES, BIOCHAR_PRODUCT_MASS } from "@/lib/operations/agent-guidance";
+import { UNTRUSTED_TEXT, LAB_SAMPLE_TIMES, LAB_SAMPLE_UNITS, FEEDSTOCK_UNITS, FEEDSTOCK_DATES, BIOCHAR_PRODUCT_MASS, ORDER_GUIDANCE } from "@/lib/operations/agent-guidance";
+import { readCustomerListFromInput } from "@/lib/api/customers-queries";
+import { readCustomerLocationListFromInput } from "@/lib/api/customer-locations-queries";
+import { readOrderListFromInput } from "@/lib/api/orders-queries";
+import { readOrderBalanceFromInput } from "@/lib/api/order-balance-queries";
+import { readApiOrder } from "@/lib/read-models/api-orders";
+import { lookupIdentifier } from "@/lib/api/lookup-query";
+import { orderRepresentationSchema } from "@/lib/representations/orders";
+import { orderBalanceRepresentationSchema } from "@/lib/representations/order-balance";
+import { customerLocationRepresentationSchema } from "@/lib/representations/customer-locations";
 
-// REST customer and order reads ship before their MCP tools.
-type ResourcePath = Exclude<keyof typeof resourceQueries, "customers" | "orders">;
+type ResourcePath = keyof typeof resourceQueries;
 
 const labels: Record<ResourcePath, { singular: string; plural: string }> = {
   "production-runs": { singular: "production run", plural: "production runs" },
+  customers: { singular: "customer", plural: "customers" },
+  orders: { singular: "order", plural: "orders" },
   reactors: { singular: "reactor", plural: "reactors" },
   "facilities": { singular: "facility", plural: "facilities" },
   "suppliers": { singular: "supplier", plural: "suppliers" },
@@ -55,6 +65,8 @@ const labels: Record<ResourcePath, { singular: string; plural: string }> = {
 };
 const guidance: Record<ResourcePath, string> = {
   "production-runs": PRODUCTION_RUN_GUIDANCE,
+  customers: `${readDescriptions.customers} Use the customer id or code with find_customer_locations.`,
+  orders: `${readDescriptions.orders} Call whoami for facility ids. ${ORDER_GUIDANCE}`,
   reactors: "Call whoami first for the run facility. Use the reactor UUID with start_production_run.",
   facilities: "Call whoami first for the credential's active facilities and local dates.",
   suppliers: "Use the supplier id with find_supplier_locations.",
@@ -108,6 +120,26 @@ function findTool<K extends ResourcePath, S extends z.ZodType>(path: K, list: S,
 }
 
 export const readTools: ReadTool[] = [
+  findTool("customers", resourceQueries.customers.list, readCustomerListFromInput),
+  findTool("orders", resourceQueries.orders.list, readOrderListFromInput),
+  defineRead({ name: "find_customer_locations", scope: "customers:read",
+    summarize: listSummary("customer location", "customer locations"),
+    description: `${readDescriptions.customerLocations} Call find_customers first for the customer UUID or exact code in idOrCode. Coordinates are WGS 84 decimal degrees.`,
+    input: customerLocationListSchema.extend({ idOrCode: z.string().describe("Customer UUID or exact code, from find_customers.") }),
+    output: listEnvelopeSchema(customerLocationRepresentationSchema),
+  }, (ctx, { idOrCode, ...input }) => readCustomerLocationListFromInput(ctx, input, idOrCode)),
+  defineRead({ name: "get_order", scope: "orders:read",
+    summarize: (body) => { const row = body.data as z.infer<typeof orderRepresentationSchema>; return `Order ${row.code}, version ${row.version}.`; },
+    description: `${readDescriptions.get} Call find_orders first for an id or code. Pass version as expectedVersion to update_order or delete_order. ${ORDER_GUIDANCE}`,
+    input: resourceQueries.orders.get.extend({ idOrCode: z.string().describe("Order UUID or exact code.") }),
+    output: itemEnvelopeSchema(orderRepresentationSchema),
+  }, async (ctx, { idOrCode }) => ({ data: await readApiOrder(ctx, lookupIdentifier(idOrCode)) })),
+  defineRead({ name: "get_order_balance", scope: "orders:read",
+    summarize: (body) => { const row = body.data as z.infer<typeof orderBalanceRepresentationSchema>; return `Order balance: ${row.remainingWetMassKg} wet kg remaining (${row.fulfillmentStatus}).`; },
+    description: `${readDescriptions.orderBalance} Call find_orders first for an id or code. Call it before recording a delivery.`,
+    input: resourceQueries.orders.get.extend({ idOrCode: z.string().describe("Order UUID or exact code.") }),
+    output: itemEnvelopeSchema(orderBalanceRepresentationSchema),
+  }, (ctx, { idOrCode }) => readOrderBalanceFromInput(ctx, idOrCode)),
   defineRead({ name: "get_bin_stock", scope: "biochar-products:read",
     summarize: (body) => {
       const data = body.data as z.infer<typeof outputBinStockRepresentationSchema>;
