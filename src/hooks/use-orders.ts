@@ -22,7 +22,7 @@ import {
   deleteOrderFn,
 } from "@/fn/orders";
 
-import type { MutationCallbacks } from "./types";
+import { unwrap, type MutationCallbacks } from "./types";
 import { invalidateStockEntityQueries } from "./entity-query-keys";
 
 // ============================================
@@ -58,13 +58,7 @@ export function useOrders(
 ) {
   return useQuery({
     queryKey: orderKeys.list(filters),
-    queryFn: async () => {
-      const result = await getOrdersFn(filters);
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-      return result.data;
-    },
+    queryFn: async () => unwrap(await getOrdersFn(filters)),
     staleTime: 30000, // 30 seconds
     enabled: options?.enabled,
   });
@@ -79,13 +73,7 @@ export function useOrdersForSelect(
 ) {
   return useQuery({
     queryKey: orderKeys.select(facilityId),
-    queryFn: async () => {
-      const result = await getOrdersForSelectFn(facilityId);
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-      return result.data;
-    },
+    queryFn: async () => unwrap(await getOrdersForSelectFn(facilityId)),
     staleTime: 30000,
     enabled: options?.enabled,
   });
@@ -104,13 +92,7 @@ export function useCreateOrder(
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (data: CreateOrderData) => {
-      const result = await createOrderFn(data);
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-      return result.data;
-    },
+    mutationFn: async (data: CreateOrderData) => unwrap(await createOrderFn(data)),
     onMutate: async (variables) => {
       await callbacks?.onMutate?.(variables);
     },

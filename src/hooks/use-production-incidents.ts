@@ -19,7 +19,7 @@ import {
   deleteProductionIncidentFn,
 } from "@/fn/production-incidents";
 import { productionRunKeys } from "@/hooks/use-production-runs";
-import type { MutationCallbacks } from "./types";
+import { unwrap, type MutationCallbacks } from "./types";
 
 export const productionIncidentKeys = {
   all: ["productionIncidents"] as const,
@@ -33,9 +33,7 @@ export function useProductionIncidents(productionRunId: string | undefined) {
     queryKey: productionIncidentKeys.list(productionRunId ?? ""),
     queryFn: async () => {
       if (!productionRunId) return [];
-      const result = await getProductionIncidentsFn(productionRunId);
-      if (!result.success) throw new Error(result.error);
-      return result.data;
+      return unwrap(await getProductionIncidentsFn(productionRunId));
     },
     enabled: !!productionRunId,
     staleTime: 30_000,
@@ -51,11 +49,8 @@ export function useCreateProductionIncident(
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (data: CreateProductionIncidentData) => {
-      const result = await createProductionIncidentFn(data);
-      if (!result.success) throw new Error(result.error);
-      return result.data;
-    },
+    mutationFn: async (data: CreateProductionIncidentData) =>
+      unwrap(await createProductionIncidentFn(data)),
     onSuccess: (data, variables) => {
       queryClient.invalidateQueries({
         queryKey: productionIncidentKeys.list(variables.productionRunId),

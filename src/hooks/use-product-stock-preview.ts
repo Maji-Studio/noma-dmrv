@@ -3,6 +3,7 @@
 import { previewProductStockFn } from '@/fn/product-stock-preview';
 import { outputStockKeys } from './use-output-stock';
 import { useQuery } from '@tanstack/react-query';
+import { unwrap } from './types';
 
 export const productStockPreviewKeys = {
   all: [...outputStockKeys.all, 'productPreview'] as const,
@@ -13,9 +14,7 @@ export function useProductStockPreview(input: Parameters<typeof previewProductSt
   return useQuery({ queryKey: productStockPreviewKeys.preview(input), enabled: input !== null, staleTime: 0, retry: false,
     queryFn: async () => {
       if (!input) throw new Error('Complete product measurements to preview stock.');
-      const result = await previewProductStockFn(input);
-      if (!result.success) throw new Error(result.error);
-      return result.data;
+      return unwrap(await previewProductStockFn(input));
     },
   });
 }

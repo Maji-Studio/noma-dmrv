@@ -70,6 +70,7 @@ import type {
   ApproveGhgStatementReportInput,
 } from "@/schemas/certification";
 import { creditBatchKeys } from "./credit-batch-query-keys";
+import { unwrap } from "@/hooks/types";
 
 // Stale-time policy for certification queries. `LOCKED_REFETCH_INTERVAL_MS`
 // drives the in-flight polling cadence in `useCertifyContextForCreditBatch`
@@ -226,11 +227,7 @@ export function invalidateCertificationReadiness(
 export function useCertificationOverview(facilityId: string, enabled = true) {
   return useQuery({
     queryKey: certificationKeys.overview(facilityId),
-    queryFn: async () => {
-      const result = await loadCertificationOverview(facilityId);
-      if (!result.success) throw new Error(result.error);
-      return result.data;
-    },
+    queryFn: async () => unwrap(await loadCertificationOverview(facilityId)),
     enabled: enabled && !!facilityId,
     staleTime: DEFAULT_STALE_MS,
   });
@@ -243,11 +240,7 @@ export function useRemovalPreflightSummaries(
   const results = useQueries({
     queries: removalIds.map((removalId) => ({
       queryKey: certificationKeys.removalPreflight(facilityId, removalId),
-      queryFn: async () => {
-        const result = await loadRemovalPreflight(facilityId, removalId);
-        if (!result.success) throw new Error(result.error);
-        return result.data;
-      },
+      queryFn: async () => unwrap(await loadRemovalPreflight(facilityId, removalId)),
       enabled: Boolean(facilityId && removalId),
       staleTime: DEFAULT_STALE_MS,
       refetchInterval: (query: {
@@ -283,11 +276,7 @@ export function useRemovalPreflightSummaries(
 export function useRemovalBreakdown(removalId: string, enabled = true) {
   return useQuery({
     queryKey: certificationKeys.removalBreakdown(removalId),
-    queryFn: async () => {
-      const result = await loadRemovalBreakdown(removalId);
-      if (!result.success) throw new Error(result.error);
-      return result.data;
-    },
+    queryFn: async () => unwrap(await loadRemovalBreakdown(removalId)),
     enabled: enabled && !!removalId,
     staleTime: DEFAULT_STALE_MS,
   });
@@ -300,11 +289,7 @@ export function useRemovalBreakdown(removalId: string, enabled = true) {
 export function useRemovalProductionBatches(removalId: string, enabled = true) {
   return useQuery({
     queryKey: certificationKeys.removalProductionBatches(removalId),
-    queryFn: async () => {
-      const result = await loadRemovalProductionBatches(removalId);
-      if (!result.success) throw new Error(result.error);
-      return result.data;
-    },
+    queryFn: async () => unwrap(await loadRemovalProductionBatches(removalId)),
     enabled: enabled && !!removalId,
     staleTime: DEFAULT_STALE_MS,
   });
@@ -315,11 +300,7 @@ export function useRemovalProductionBatches(removalId: string, enabled = true) {
 export function useCertificationHealth() {
   return useQuery({
     queryKey: certificationKeys.health(),
-    queryFn: async () => {
-      const result = await loadCertificationHealth();
-      if (!result.success) throw new Error(result.error);
-      return result.data;
-    },
+    queryFn: async () => unwrap(await loadCertificationHealth()),
     staleTime: PROJECT_TEMPLATES_STALE_MS,
   });
 }
@@ -327,11 +308,7 @@ export function useCertificationHealth() {
 export function useRegistrySourceVisibility() {
   return useQuery({
     queryKey: certificationKeys.registrySourceVisibility(),
-    queryFn: async () => {
-      const result = await loadRegistrySourceVisibility();
-      if (!result.success) throw new Error(result.error);
-      return result.data;
-    },
+    queryFn: async () => unwrap(await loadRegistrySourceVisibility()),
     staleTime: DEFAULT_STALE_MS,
   });
 }
@@ -339,11 +316,8 @@ export function useRegistrySourceVisibility() {
 export function useSaveRegistrySourceVisibility() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (input: RegistrySourceVisibilityInput) => {
-      const result = await saveRegistrySourceVisibility(input);
-      if (!result.success) throw new Error(result.error);
-      return result.data;
-    },
+    mutationFn: async (input: RegistrySourceVisibilityInput) =>
+      unwrap(await saveRegistrySourceVisibility(input)),
     onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: certificationKeys.registrySourceVisibility(),
@@ -358,11 +332,7 @@ export function useFacilityCertifierMapping(
 ) {
   return useQuery({
     queryKey: certificationKeys.facilityMapping(facilityId),
-    queryFn: async () => {
-      const result = await loadFacilityCertifierMapping(facilityId);
-      if (!result.success) throw new Error(result.error);
-      return result.data;
-    },
+    queryFn: async () => unwrap(await loadFacilityCertifierMapping(facilityId)),
     enabled: enabled && !!facilityId,
     staleTime: DEFAULT_STALE_MS,
   });
@@ -379,13 +349,12 @@ export function useFacilityCertifierSummary(
 ) {
   return useQuery({
     queryKey: certificationKeys.facilitySummary(facilityId),
-    queryFn: async ({ signal }) => {
-      const result = await getFacilityCertifierSummaryRead(facilityId, {
-        signal,
-      });
-      if (!result.success) throw new Error(result.error);
-      return result.data;
-    },
+    queryFn: async ({ signal }) =>
+      unwrap(
+        await getFacilityCertifierSummaryRead(facilityId, {
+          signal,
+        }),
+      ),
     enabled: enabled && !!facilityId,
     staleTime: DEFAULT_STALE_MS,
   });
@@ -398,9 +367,7 @@ export function useIsometricProjectTemplates(externalProjectId: string | null) {
       : ["certification", "project-templates", "none"],
     queryFn: async () => {
       if (!externalProjectId) return [];
-      const result = await loadIsometricProjectTemplates(externalProjectId);
-      if (!result.success) throw new Error(result.error);
-      return result.data;
+      return unwrap(await loadIsometricProjectTemplates(externalProjectId));
     },
     enabled: !!externalProjectId,
     staleTime: PROJECT_TEMPLATES_STALE_MS,
@@ -412,11 +379,7 @@ export function useIsometricProjectTemplates(externalProjectId: string | null) {
 export function useIsometricFeedstockTypes(enabled = true) {
   return useQuery({
     queryKey: certificationKeys.feedstockTypes(),
-    queryFn: async () => {
-      const result = await loadIsometricFeedstockTypes();
-      if (!result.success) throw new Error(result.error);
-      return result.data;
-    },
+    queryFn: async () => unwrap(await loadIsometricFeedstockTypes()),
     enabled,
     staleTime: PROJECT_TEMPLATES_STALE_MS,
   });
@@ -425,11 +388,8 @@ export function useIsometricFeedstockTypes(enabled = true) {
 export function useSaveFacilityCertifierMapping() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (input: SaveMappingInput) => {
-      const result = await saveFacilityCertifierMapping(input);
-      if (!result.success) throw new Error(result.error);
-      return result.data;
-    },
+    mutationFn: async (input: SaveMappingInput) =>
+      unwrap(await saveFacilityCertifierMapping(input)),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({
         queryKey: certificationKeys.facilityMapping(variables.facilityId),
@@ -443,11 +403,8 @@ export function useSaveFacilityCertifierMapping() {
 export function useSaveFacilityEmissionConfig() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (input: FacilityEmissionConfigFormData) => {
-      const result = await saveFacilityEmissionConfig(input);
-      if (!result.success) throw new Error(result.error);
-      return result.data;
-    },
+    mutationFn: async (input: FacilityEmissionConfigFormData) =>
+      unwrap(await saveFacilityEmissionConfig(input)),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({
         queryKey: certificationKeys.facilityMapping(variables.facilityId),
@@ -466,11 +423,7 @@ export function useCertifyContextForCreditBatch(
 ) {
   return useQuery({
     queryKey: certificationKeys.certifyContextForCreditBatch(creditBatchId),
-    queryFn: async () => {
-      const result = await loadCertifyContextForCreditBatch(creditBatchId);
-      if (!result.success) throw new Error(result.error);
-      return result.data;
-    },
+    queryFn: async () => unwrap(await loadCertifyContextForCreditBatch(creditBatchId)),
     enabled: enabled && !!creditBatchId,
     staleTime: DEFAULT_STALE_MS,
     refetchInterval: (query) =>
@@ -487,11 +440,7 @@ export function useCertifyContextForCreditBatch(
 export function useBatchHealth(creditBatchId: string, enabled = true) {
   return useQuery({
     queryKey: certificationKeys.batchHealth(creditBatchId),
-    queryFn: async () => {
-      const result = await loadBatchHealth(creditBatchId);
-      if (!result.success) throw new Error(result.error);
-      return result.data;
-    },
+    queryFn: async () => unwrap(await loadBatchHealth(creditBatchId)),
     enabled: enabled && !!creditBatchId,
     staleTime: DEFAULT_STALE_MS,
   });
@@ -510,11 +459,7 @@ export function useBatchDurabilitySummary(
 ) {
   return useQuery({
     queryKey: certificationKeys.batchDurabilitySummary(creditBatchId),
-    queryFn: async () => {
-      const result = await loadCreditBatchDurabilitySummary(creditBatchId);
-      if (!result.success) throw new Error(result.error);
-      return result.data;
-    },
+    queryFn: async () => unwrap(await loadCreditBatchDurabilitySummary(creditBatchId)),
     enabled: enabled && !!creditBatchId,
     staleTime: DEFAULT_STALE_MS,
   });
@@ -547,9 +492,7 @@ export function useCreditBatchHealthSummaries(
       ),
       queryFn: async () => {
         if (!facilityId) return {};
-        const result = await loadCreditBatchHealthSummaries(facilityId, ids);
-        if (!result.success) throw new Error(result.error);
-        return result.data;
+        return unwrap(await loadCreditBatchHealthSummaries(facilityId, ids));
       },
       enabled: !!facilityId,
       staleTime: DEFAULT_STALE_MS,
@@ -582,11 +525,7 @@ export function useRemovalCertifyContext(
       facilityId,
       removalId,
     ),
-    queryFn: async () => {
-      const result = await loadRemovalCertifyContext(facilityId, removalId);
-      if (!result.success) throw new Error(result.error);
-      return result.data;
-    },
+    queryFn: async () => unwrap(await loadRemovalCertifyContext(facilityId, removalId)),
     enabled: enabled && !!facilityId && !!removalId,
     staleTime: DEFAULT_STALE_MS,
     refetchInterval: (query) =>
@@ -601,11 +540,7 @@ export function useRemovalCompilation(
 ) {
   return useQuery({
     queryKey: certificationKeys.removalCompilation(facilityId, removalId),
-    queryFn: async () => {
-      const result = await loadRemovalCompilation(facilityId, removalId);
-      if (!result.success) throw new Error(result.error);
-      return result.data;
-    },
+    queryFn: async () => unwrap(await loadRemovalCompilation(facilityId, removalId)),
     enabled: enabled && !!facilityId && !!removalId,
     staleTime: DEFAULT_STALE_MS,
   });
@@ -617,11 +552,7 @@ export function useRemovalTemplateDiagnostic(
 ) {
   return useQuery({
     queryKey: certificationKeys.removalTemplateDiagnostic(facilityId),
-    queryFn: async () => {
-      const result = await loadRemovalTemplateDiagnostic(facilityId);
-      if (!result.success) throw new Error(result.error);
-      return result.data;
-    },
+    queryFn: async () => unwrap(await loadRemovalTemplateDiagnostic(facilityId)),
     enabled: enabled && !!facilityId,
     staleTime: PROJECT_TEMPLATES_STALE_MS,
   });
@@ -632,11 +563,7 @@ export function useRemovalTemplateDiagnostic(
 export function useRemovalsForFacility(facilityId: string, enabled = true) {
   return useQuery({
     queryKey: certificationKeys.removalsForFacility(facilityId),
-    queryFn: async () => {
-      const result = await loadRemovalsForFacility(facilityId);
-      if (!result.success) throw new Error(result.error);
-      return result.data;
-    },
+    queryFn: async () => unwrap(await loadRemovalsForFacility(facilityId)),
     enabled: enabled && !!facilityId,
     staleTime: DEFAULT_STALE_MS,
   });
@@ -649,11 +576,7 @@ export function useRemovalsForFacility(facilityId: string, enabled = true) {
 export function useSelectableBatches(facilityId: string, enabled = true) {
   return useQuery({
     queryKey: certificationKeys.selectableBatches(facilityId),
-    queryFn: async () => {
-      const result = await loadSelectableBatchesForFacility(facilityId);
-      if (!result.success) throw new Error(result.error);
-      return result.data;
-    },
+    queryFn: async () => unwrap(await loadSelectableBatchesForFacility(facilityId)),
     enabled: enabled && !!facilityId,
     staleTime: DEFAULT_STALE_MS,
   });
@@ -690,11 +613,8 @@ export function useSubmitRemoval() {
 export function useCreateRemovalWithBatches() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (input: CreateRemovalWithBatchesInput) => {
-      const result = await createRemovalWithBatchesAction(input);
-      if (!result.success) throw new Error(result.error);
-      return result.data;
-    },
+    mutationFn: async (input: CreateRemovalWithBatchesInput) =>
+      unwrap(await createRemovalWithBatchesAction(input)),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: certificationKeys.all });
     },
@@ -704,11 +624,7 @@ export function useCreateRemovalWithBatches() {
 export function useDeleteRemoval() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (input: DeleteRemovalInput) => {
-      const result = await deleteRemovalAction(input);
-      if (!result.success) throw new Error(result.error);
-      return result.data;
-    },
+    mutationFn: async (input: DeleteRemovalInput) => unwrap(await deleteRemovalAction(input)),
     onSuccess: () =>
       invalidateCertificationReadiness(queryClient, {
         creditBatchPreviews: true,
@@ -719,11 +635,8 @@ export function useDeleteRemoval() {
 export function useDeleteFacilityCertifierMapping() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (facilityId: string) => {
-      const result = await deleteFacilityCertifierMapping(facilityId);
-      if (!result.success) throw new Error(result.error);
-      return result.data;
-    },
+    mutationFn: async (facilityId: string) =>
+      unwrap(await deleteFacilityCertifierMapping(facilityId)),
     onSuccess: (_data, facilityId) => {
       queryClient.invalidateQueries({
         queryKey: certificationKeys.facilityMapping(facilityId),
@@ -744,11 +657,7 @@ export function useGhgStatementsForFacility(
 ) {
   return useQuery({
     queryKey: certificationKeys.ghgStatementsForFacility(facilityId),
-    queryFn: async () => {
-      const result = await loadGhgStatementsForFacility(facilityId);
-      if (!result.success) throw new Error(result.error);
-      return result.data;
-    },
+    queryFn: async () => unwrap(await loadGhgStatementsForFacility(facilityId)),
     enabled: enabled && !!facilityId,
     staleTime: DEFAULT_STALE_MS,
   });
@@ -765,11 +674,7 @@ export function useRegistryGhgStatementsForFacility(
 ) {
   return useQuery({
     queryKey: certificationKeys.registryGhgStatementsForFacility(facilityId),
-    queryFn: async () => {
-      const result = await loadRegistryGhgStatements(facilityId);
-      if (!result.success) throw new Error(result.error);
-      return result.data;
-    },
+    queryFn: async () => unwrap(await loadRegistryGhgStatements(facilityId)),
     enabled: enabled && !!facilityId,
     staleTime: DEFAULT_STALE_MS,
   });
@@ -778,11 +683,8 @@ export function useRegistryGhgStatementsForFacility(
 export function useSyncGhgStatementsFromRegistry() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (facilityId: string) => {
-      const result = await reconcileGhgStatementsFromRegistry(facilityId);
-      if (!result.success) throw new Error(result.error);
-      return result.data;
-    },
+    mutationFn: async (facilityId: string) =>
+      unwrap(await reconcileGhgStatementsFromRegistry(facilityId)),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: certificationKeys.all });
     },
@@ -794,11 +696,7 @@ export function useSyncGhgStatementsFromRegistry() {
 export function useGhgStatementState(ghgStatementId: string, enabled = true) {
   return useQuery({
     queryKey: certificationKeys.ghgStatementState(ghgStatementId),
-    queryFn: async () => {
-      const result = await loadGhgStatementState(ghgStatementId);
-      if (!result.success) throw new Error(result.error);
-      return result.data;
-    },
+    queryFn: async () => unwrap(await loadGhgStatementState(ghgStatementId)),
     enabled: enabled && !!ghgStatementId,
     staleTime: DEFAULT_STALE_MS,
     refetchInterval: (query) =>
@@ -817,11 +715,7 @@ export function useGhgStatementBreakdown(
 ) {
   return useQuery({
     queryKey: certificationKeys.ghgStatementBreakdown(ghgStatementId),
-    queryFn: async () => {
-      const result = await loadGhgStatementBreakdown(ghgStatementId);
-      if (!result.success) throw new Error(result.error);
-      return result.data;
-    },
+    queryFn: async () => unwrap(await loadGhgStatementBreakdown(ghgStatementId)),
     enabled: enabled && !!ghgStatementId,
     staleTime: DEFAULT_STALE_MS,
   });
@@ -833,11 +727,7 @@ export function useGhgStatementReports(
 ) {
   return useQuery({
     queryKey: certificationKeys.ghgStatementReports(ghgStatementId),
-    queryFn: async () => {
-      const result = await loadGhgStatementReports(ghgStatementId);
-      if (!result.success) throw new Error(result.error);
-      return result.data;
-    },
+    queryFn: async () => unwrap(await loadGhgStatementReports(ghgStatementId)),
     enabled: enabled && !!ghgStatementId,
     staleTime: DEFAULT_STALE_MS,
   });
@@ -846,11 +736,8 @@ export function useGhgStatementReports(
 export function usePrepareGhgStatementReport() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (input: PrepareGhgStatementReportInput) => {
-      const result = await prepareGhgStatementReport(input);
-      if (!result.success) throw new Error(result.error);
-      return result.data;
-    },
+    mutationFn: async (input: PrepareGhgStatementReportInput) =>
+      unwrap(await prepareGhgStatementReport(input)),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: certificationKeys.all });
     },
@@ -860,11 +747,8 @@ export function usePrepareGhgStatementReport() {
 export function useApproveGhgStatementReport() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (input: ApproveGhgStatementReportInput) => {
-      const result = await approveGhgStatementReport(input);
-      if (!result.success) throw new Error(result.error);
-      return result.data;
-    },
+    mutationFn: async (input: ApproveGhgStatementReportInput) =>
+      unwrap(await approveGhgStatementReport(input)),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: certificationKeys.all });
     },
@@ -878,11 +762,7 @@ export function useOpenRemovalsForFacility(
 ) {
   return useQuery({
     queryKey: certificationKeys.openRemovalsForFacility(facilityId),
-    queryFn: async () => {
-      const result = await loadOpenRemovalsForFacility(facilityId);
-      if (!result.success) throw new Error(result.error);
-      return result.data;
-    },
+    queryFn: async () => unwrap(await loadOpenRemovalsForFacility(facilityId)),
     enabled: enabled && !!facilityId,
     staleTime: DEFAULT_STALE_MS,
   });
@@ -892,11 +772,8 @@ export function useOpenRemovalsForFacility(
 export function useCreateGhgStatement() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (input: CreateGhgStatementInput) => {
-      const result = await createGhgStatementDraft(input);
-      if (!result.success) throw new Error(result.error);
-      return result.data;
-    },
+    mutationFn: async (input: CreateGhgStatementInput) =>
+      unwrap(await createGhgStatementDraft(input)),
     onSuccess: () =>
       queryClient.invalidateQueries({ queryKey: certificationKeys.all }),
   });
@@ -932,11 +809,8 @@ export function useSubmitGhgStatementToVerifier() {
 export function useRefreshGhgStatementStatus() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (submissionId: string) => {
-      const result = await refreshGhgStatementStatus(submissionId);
-      if (!result.success) throw new Error(result.error);
-      return result.data;
-    },
+    mutationFn: async (submissionId: string) =>
+      unwrap(await refreshGhgStatementStatus(submissionId)),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: certificationKeys.all });
     },

@@ -10,6 +10,7 @@ import {
 import { productionRunKeys } from "@/hooks/use-production-runs";
 import { productionRunReadingKeys } from "@/hooks/use-production-run-readings";
 import { invalidateCertificationReadiness } from "@/hooks/use-certification";
+import { unwrap } from "@/hooks/types";
 
 export function useImportProductionRunReadings() {
   const queryClient = useQueryClient();
@@ -17,13 +18,12 @@ export function useImportProductionRunReadings() {
   return useMutation({
     mutationFn: async (
       documentId: string,
-    ): Promise<ProductionRunReadingsImportResult> => {
-      const result = await importProductionRunReadingsFromDocumentFn({
-        documentId,
-      });
-      if (!result.success) throw new Error(result.error);
-      return result.data;
-    },
+    ): Promise<ProductionRunReadingsImportResult> =>
+      unwrap(
+        await importProductionRunReadingsFromDocumentFn({
+          documentId,
+        }),
+      ),
     onSuccess: (data) => {
       queryClient.invalidateQueries({
         queryKey: productionRunKeys.lists(),

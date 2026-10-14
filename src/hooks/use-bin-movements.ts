@@ -22,6 +22,7 @@ import type {
 } from "@/schemas/bin-movements";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { invalidateStockEntityQueries } from "./entity-query-keys";
+import { unwrap } from "@/hooks/types";
 
 /** Client-side carrier for a structured loss action field error. */
 export class RecordLossFieldError extends Error {
@@ -132,11 +133,7 @@ export function useRecordLoss() {
 export function useFeedstockBinStock(storageLocationId: string, enabled = true) {
   return useQuery({
     queryKey: feedstockBinStockKeys.detail(storageLocationId),
-    queryFn: async () => {
-      const result = await getFeedstockBinStockFn(storageLocationId);
-      if (!result.success) throw new Error(result.error);
-      return result.data;
-    },
+    queryFn: async () => unwrap(await getFeedstockBinStockFn(storageLocationId)),
     enabled: enabled && !!storageLocationId,
   });
 }

@@ -12,7 +12,7 @@ import {
 } from "@/fn/production-run-readings";
 import { productionRunKeys } from "@/hooks/use-production-runs";
 import { invalidateCertificationReadiness } from "@/hooks/use-certification";
-import type { MutationCallbacks } from "./types";
+import { unwrap, type MutationCallbacks } from "./types";
 
 // ============================================
 // Query Keys
@@ -35,16 +35,13 @@ export function useProductionRunReadings(
 ) {
   return useQuery({
     queryKey: productionRunReadingKeys.list(productionRunId, facilityId),
-    queryFn: async () => {
-      const result = await getProductionRunReadingsListFn(
-        productionRunId,
-        facilityId
-      );
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-      return result.data;
-    },
+    queryFn: async () =>
+      unwrap(
+        await getProductionRunReadingsListFn(
+          productionRunId,
+          facilityId
+        ),
+      ),
     staleTime: 30000,
   });
 }

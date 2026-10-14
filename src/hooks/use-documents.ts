@@ -10,6 +10,7 @@ import {
   type RequestUploadResult,
 } from "@/fn/documents";
 import type { DocumentVisibility } from "@/schemas/documents";
+import { unwrap } from "./types";
 import { feedstockKeys } from "./use-feedstocks";
 import { deliveryKeys } from "./use-deliveries";
 import { dashboardOverviewKeys } from "./use-dashboard-overview";
@@ -90,9 +91,7 @@ export function useDocumentsForEntity(
     enabled: !!entityId && options?.enabled !== false,
     queryFn: async () => {
       if (!entityId) return [];
-      const res = await getDocumentsForEntity(entityType, entityId);
-      if (!res.success) throw new Error(res.error);
-      return res.data;
+      return unwrap(await getDocumentsForEntity(entityType, entityId));
     },
   });
 }
@@ -101,22 +100,14 @@ export function useRequestUpload() {
   return useMutation({
     mutationFn: async (
       input: Parameters<typeof requestUpload>[0]
-    ): Promise<RequestUploadResult> => {
-      const res = await requestUpload(input);
-      if (!res.success) throw new Error(res.error);
-      return res.data;
-    },
+    ): Promise<RequestUploadResult> => unwrap(await requestUpload(input)),
   });
 }
 
 export function useConfirmUpload() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (documentId: string) => {
-      const res = await confirmUpload({ documentId });
-      if (!res.success) throw new Error(res.error);
-      return res.data;
-    },
+    mutationFn: async (documentId: string) => unwrap(await confirmUpload({ documentId })),
     onSuccess: (row) => {
       qc.invalidateQueries({
         queryKey: documentKeys.forEntity(row.entityType, row.entityId),
@@ -132,11 +123,7 @@ export function useSetDocumentVisibility(invalidateKey?: readonly unknown[]) {
     mutationFn: async (input: {
       documentId: string;
       visibility: DocumentVisibility;
-    }) => {
-      const res = await setDocumentVisibility(input);
-      if (!res.success) throw new Error(res.error);
-      return res.data;
-    },
+    }) => unwrap(await setDocumentVisibility(input)),
     onSuccess: () => {
       if (invalidateKey) qc.invalidateQueries({ queryKey: invalidateKey });
     },
@@ -149,11 +136,7 @@ export function useDeleteDocument(
 ) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (documentId: string) => {
-      const res = await deleteDocument({ documentId });
-      if (!res.success) throw new Error(res.error);
-      return res.data;
-    },
+    mutationFn: async (documentId: string) => unwrap(await deleteDocument({ documentId })),
     onSuccess: () => {
       if (invalidateKey) qc.invalidateQueries({ queryKey: invalidateKey });
       if (owner) invalidateDeletedDocumentOwner(qc, owner);
