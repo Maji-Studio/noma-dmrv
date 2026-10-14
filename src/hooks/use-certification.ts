@@ -53,7 +53,6 @@ import { getFacilityCertifierSummaryRead } from "@/lib/read-api/client";
 import type { RemovalSubmissionResult } from "@/fn/certification/submit-removal";
 import type { SubmitGhgStatementResult } from "@/fn/certification/submit-ghg-statement";
 import {
-  isSubmissionStreamStalledError,
   streamCertificationSubmission,
 } from "@/lib/certification/submission-progress-client";
 import type { SubmissionProgressUpdate } from "@/lib/certification/submission-progress";
@@ -923,10 +922,8 @@ export function useSubmitGhgStatementToVerifier() {
     },
     onSuccess: () =>
       queryClient.invalidateQueries({ queryKey: certificationKeys.all }),
-    onError: (error) => {
-      if (isSubmissionStreamStalledError(error)) {
-        queryClient.invalidateQueries({ queryKey: certificationKeys.all });
-      }
+    onError: () => {
+      queryClient.invalidateQueries({ queryKey: certificationKeys.all });
     },
   });
 }

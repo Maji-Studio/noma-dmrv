@@ -342,8 +342,15 @@ export async function upsertCertifierProject(
             metadata: values.metadata,
             updatedAt: sql`now()`,
           },
+          setWhere: eq(certifierProjects.organizationId, ctx.organizationId),
         })
         .returning();
+      // A false `setWhere` means another organization owns the row, so nothing is updated and `returning()` is empty.
+      if (!row) {
+        throw new Error(
+          `Certifier project mapping for facility ${input.facilityId} belongs to another organization`,
+        );
+      }
       return row;
     });
 
