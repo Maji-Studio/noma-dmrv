@@ -95,7 +95,7 @@ export function StorageLocationQuickAddDialog({
   // Read-only fields retain the bin sheet's labels without its stock actions.
   const readSections = archived && storageLocation
     ? storageLocationSheetSections(storageLocation, () => undefined)
-      .map(({ title, fields }) => ({ title, fields }))
+      .map((section) => ({ ...section, content: undefined, explanation: undefined, hint: undefined }))
     : [];
   const title = storageLocation
     ? archived ? storageLocation.name : `Edit ${storageLocation.name}`

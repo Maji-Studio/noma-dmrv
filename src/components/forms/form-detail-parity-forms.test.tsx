@@ -204,6 +204,39 @@ describe("sheet form detail level parity", () => {
     expect(new Set(CREATE_CASES.map(entry => entry.file)).size).toBe(covered.size);
   });
 
+  it.each([
+    {
+      name: "formulation", file: "components/formulations/formulation-form.tsx",
+      sections: ["section:(untitled)", "section:Blend composition by volume", "section:(untitled)"],
+      createFields: ["field:Formulation name", "field:Volume share", "field:Description"],
+      editFields: ["field:Formulation name", "field:Volume share", "field:Blend material", "field:Volume share", "field:Description"],
+    },
+    {
+      name: "reactor", file: "components/reactors/reactor-form.tsx",
+      sections: ["section:(untitled)", "section:Reactor configuration"],
+      createFields: ["field:Identifier", "field:Reactor type", "field:Nominal throughput (tph)"],
+      editFields: ["field:Identifier", "field:Reactor type", "field:Nominal throughput (tph)"],
+    },
+    {
+      name: "credit batch", file: "components/credit-batches/credit-batch-form.tsx",
+      sections: ["section:Batch definition", "section:(untitled)"],
+      createFields: ["field:Feedstock type", "field:Start date", "field:End date", "field:Notes"],
+      editFields: ["field:Feedstock type", "field:Start date", "field:End date", "field:Notes"],
+    },
+  ])("keeps $name create/edit sections and fields in order without generic headings or the auto-fill cue", async ({ file, sections, createFields, editFields }) => {
+    for (const { cases, fields } of [{ cases: CREATE_CASES, fields: createFields }, { cases: EDIT_CASES, fields: editFields }]) {
+      const formCase = cases.find(entry => entry.file === file)!;
+      const { simple, detailed } = await renderBothLevels(formCase.element);
+      for (const level of [simple, detailed]) {
+        expect(level.items.filter(item => item.startsWith("section:"))).toEqual(sections);
+        expect(level.items.filter(item => item.startsWith("field:"))).toEqual(fields);
+        for (const removed of ["Required information", "Additional information", "Auto-fills the remaining share"]) {
+          expect(level.text).not.toContain(removed);
+        }
+      }
+    }
+  });
+
   it.each([...CREATE_CASES, ...EDIT_CASES])("$name form shows the same inputs, sections and actions at both levels", async ({ element, shows }) => {
     const { simple, detailed } = await renderBothLevels(element);
     expect(simple.items.some(item => item.startsWith("input:"))).toBe(true);

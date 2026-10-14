@@ -5,7 +5,7 @@
  * Form sections:
  * 1. Batch definition — feedstock, startDate, endDate
  * 2. Production cohort — automatic production runs in the production window
- * 3. Additional information — notes always trail the operational fields
+ * 3. Notes always trail the operational fields
  * Facility durability and registry/accounting values are intentionally absent:
  * neither is a batch input.
  */
@@ -411,7 +411,7 @@ export function CreditBatchForm({
       )}
 
       {/* Free-form notes trail the operational inputs and their live preview. */}
-      <FormSection title="Additional information">
+      <FormSection>
         <FormField
           id="siteManagementNotes"
           label="Notes"
