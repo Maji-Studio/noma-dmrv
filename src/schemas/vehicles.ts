@@ -99,7 +99,7 @@ export const vehicleFormSchema = z.object({
     .string()
     .max(50, "Identifier must be less than 50 characters")
     .optional(),
-  // Required: the only vehicle field that drives the certified emission factor.
+  // Required fleet record requested by the Transportation module, not a factor selector.
   vehicleType: z
     .string()
     .min(1, "Vehicle type is required")
@@ -116,7 +116,7 @@ export const vehicleFormSchema = z.object({
     .max(1000, "Fuel consumption seems too high")
     .optional()
     .nullable(),
-  // Optional: a not-yet-submitted factor-uniformity hedge, not a certified input.
+  // Optional Transportation module record copied onto feedstock legs for evidence.
   modelYear: z
     .number()
     .int("Model year must be a whole number")

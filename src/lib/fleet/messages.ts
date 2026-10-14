@@ -6,7 +6,6 @@
  */
 
 import { formatCount } from "@/lib/copy-utils";
-import { formatCertificationLineageLockMessage } from "@/lib/certification/lineage-lock-message";
 
 export type FleetKind = "vehicle" | "driver" | "operator";
 
@@ -16,9 +15,6 @@ export interface FleetUsage {
   plural: string;
   count: number;
 }
-
-/** Credit batch codes named in a blocked type change before "and N more". */
-export const MAX_NAMED_CREDIT_BATCHES = 3;
 
 const FLEET_NOUN: Record<FleetKind, string> = {
   vehicle: "vehicle",
@@ -59,24 +55,4 @@ export function formatFleetDeleteBlocker(
   );
   const verb = total === 1 ? "uses" : "use";
   return `${subject(kind, code)} was not deleted because ${counts} ${verb} it. Choose another ${FLEET_NOUN[kind]} on those records, or keep this one.`;
-}
-
-/**
- * Refusal for changing a vehicle's type while a submitted credit batch holds a
- * record that uses it. Names the batches so the operator knows which one.
- */
-export function formatVehicleTypeLockMessage(batchCodes: readonly string[]): string {
-  const lock = formatCertificationLineageLockMessage({
-    mutation: "update",
-    subjectEntityType: "vehicle",
-    lineageEntityType: "creditBatch",
-  });
-  const unique = [...new Set(batchCodes)].sort();
-  const named = unique.slice(0, MAX_NAMED_CREDIT_BATCHES);
-  const remaining = unique.length - named.length;
-  const list = remaining > 0
-    ? `${named.join(", ")} and ${remaining} more`
-    : joinWithAnd(named);
-  const batches = unique.length === 1 ? `Credit batch ${list} uses` : `Credit batches ${list} use`;
-  return `${lock} ${batches} this vehicle's type. Keep the type, or add a new vehicle for the new type.`;
 }

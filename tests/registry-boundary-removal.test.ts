@@ -366,6 +366,7 @@ function makeContext(
     legIds: [],
     firstLegEntityId: null,
     aggregationWarning: null,
+    vehicleAdvisories: [],
   };
   return {
     facilityId: fixture.facilityId,

@@ -86,7 +86,7 @@ vi.mock("@/lib/certification/readiness", () => ({
   deriveRemovalReadiness: () => ({
     state: "ready",
     reasons: [],
-    advisories: [],
+    advisories: [], transportVehicleAdvisories: [],
   }),
 }));
 

@@ -84,7 +84,7 @@ function readiness(
   state: RemovalReadiness["state"],
   reasons: string[] = [],
 ): RemovalReadiness {
-  return { state, reasons, advisories: [] };
+  return { state, reasons, advisories: [], transportVehicleAdvisories: [] };
 }
 
 function facts(overrides: Partial<SubmissionFactsInput> = {}) {

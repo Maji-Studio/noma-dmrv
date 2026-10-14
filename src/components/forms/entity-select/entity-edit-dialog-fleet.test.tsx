@@ -211,8 +211,8 @@ describe("EntityEditDialog", () => {
     expect(stopPropagation).toHaveBeenCalledOnce();
   });
 
-  it("keeps the dialog open and shows the refusal when the type is locked", async () => {
-    const refusal = "Credit batch CB-26-001 uses this vehicle's type. Keep the type, or add a new vehicle for the new type.";
+  it("keeps the dialog open and shows a server refusal", async () => {
+    const refusal = "A vehicle with this name already exists";
     mocks.updateVehicle.mockRejectedValueOnce(new Error(refusal));
     const onClose = vi.fn();
     await openOn(vehicleDialog(onClose), undefined, vehicle);

@@ -73,6 +73,8 @@ function render(overrides: {
   ctx?: RemovalCertifyContext;
   checks?: RemovalRequirementCheck[];
   facilityName?: string;
+  advisories?: string[];
+  transportVehicleAdvisories?: string[];
 } = {}) {
   return renderToStaticMarkup(
     <SubmissionSummary
@@ -83,13 +85,26 @@ function render(overrides: {
       isCompilationLoading={false}
       compilationError={null}
       checks={overrides.checks ?? PASSING_CHECKS}
-      readiness={{ state: "ready", reasons: [], advisories: [] }}
+      readiness={{ state: "ready", reasons: [], advisories: overrides.advisories ?? [], transportVehicleAdvisories: overrides.transportVehicleAdvisories ?? [] }}
       rejectionMessage={null}
     />,
   );
 }
 
 describe("SubmissionSummary", () => {
+  it("does not render automatic evidence work as a warning", () => {
+    const html = render({ advisories: ["3 files are sent automatically when you submit"] });
+    expect(html).not.toContain("3 files are sent automatically when you submit");
+    expect(html).toBe(render());
+  });
+
+  it("shows vehicle advisories without adding a blocker", () => {
+    const html = render({ transportVehicleAdvisories: ["Feedstock transport uses more than one vehicle type."] });
+    expect(html).toContain("Feedstock transport uses more than one vehicle type.");
+    expect(html).toContain('role="status"');
+    expect(html).not.toContain("What to fix");
+  });
+
   it("states the tonnage exactly once, as the subject of the panel", () => {
     const html = render();
 

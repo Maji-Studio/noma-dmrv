@@ -73,8 +73,8 @@ const baseTransportLegShape = {
   // boundary — explicit/manual legs own their distance and its source).
   distanceSource: optionalDistanceSource,
 
-  // Transport details. Vehicle type is metadata that maps to the Isometric
-  // component's emission factor (Eq. 3) — optional, not a blocker.
+  // Vehicle type and model year are Transportation module records, retained in
+  // the evidence ledger. The emission factor is a fixed template input.
   transportMethodType: z
     .enum(transportMethods, { error: () => "Transport method is required" })
     .default("road"),

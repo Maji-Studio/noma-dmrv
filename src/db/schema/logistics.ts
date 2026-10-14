@@ -45,12 +45,12 @@ export const vehicles = pgTable('vehicles', {
   // (distance-based, Eq. 3). Optional so a vehicle can be recorded with just a
   // name + type. See vehicleType note below.
   identifier: text('identifier'),
-  // Required: selects the Isometric component emission factor (Eq. 3); the only
-  // vehicle field the certified transport calc actually depends on.
+  // Required fleet record requested by the Transportation module.
+  // The emission factor is a fixed template input, not selected by this type.
   vehicleType: text('vehicle_type').notNull(), // e.g., "truck", "tractor"
   fuelType: text('fuel_type'), // e.g., "Diesel" — metadata only
   fuelConsumptionLPerKm: real('fuel_consumption_l_per_km'), // e.g., 0.3 L/km — metadata only, never submitted
-  modelYear: integer('model_year'), // factor-uniformity hedge, not submitted
+  modelYear: integer('model_year'), // Transportation module record copied onto feedstock legs
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 }, (table) => [
@@ -237,7 +237,7 @@ export const transportLegs = pgTable(
 
     // --- Transport Details ---
     transportMethodType: transportMethod('transport_method').notNull(), // road | rail | ship | pipeline | aircraft
-    vehicleType: text('vehicle_type'), // e.g., "Class 8 heavy-duty truck" — selects the Isometric component EF (Eq. 3)
+    vehicleType: text('vehicle_type'), // e.g., "Class 8 heavy-duty truck" — Transportation module record, retained in the evidence ledger
     modelYear: integer('model_year'),
 
     // --- Load Details (Isometric: Distance-Based Method, Eq. 3 — W_j, the cargo mass) ---

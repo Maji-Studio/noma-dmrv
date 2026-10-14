@@ -1,12 +1,9 @@
 /**
  * Vehicles Data Access Layer: list, read, edit and delete.
  *
- * Creation stays in `quick-add.ts`. A vehicle's type selects the Isometric
- * emission factor (Transportation v1.1 Eq. 3). Each feedstock intake's derived
- * transport leg copies the type and model year when it is synced, so an edit
- * to either refreshes those snapshots in the same transaction. A type change
- * is refused while a submitted credit batch holds any record that uses the
- * vehicle (decision 2026-10-13, issue #945).
+ * Creation stays in `quick-add.ts`. Feedstock legs copy vehicle type and model
+ * year as Transportation module records. Editing either refreshes unsubmitted
+ * legs in the same transaction; submitted legs retain their evidence snapshot.
  */
 
 import { and, asc, eq, inArray, ne } from "drizzle-orm";
@@ -14,8 +11,6 @@ import { db, type DbTransaction } from "@/db";
 import { isPgForeignKeyViolation, isPgUniqueViolation } from "@/db/errors";
 import {
   creditBatchProductionRuns,
-  creditBatches,
-  deliveries,
   feedstocks,
   productionRunFeedstocks,
   transportLegs,
@@ -23,12 +18,8 @@ import {
   type Vehicle,
 } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
-import { conflictCode } from "@/lib/conflict-ref";
 import { DomainError } from "@/lib/domain-errors";
-import {
-  formatFleetDeleteBlocker,
-  formatVehicleTypeLockMessage,
-} from "@/lib/fleet/messages";
+import { formatFleetDeleteBlocker } from "@/lib/fleet/messages";
 import {
   getLockedCertifiedLineageForTargetSet,
   isSubmittedLineageRow,
@@ -91,11 +82,10 @@ export async function getVehicle(ctx: OrgContext, vehicleId: string): Promise<Ve
 
 interface VehicleReferences {
   feedstockIds: string[];
-  deliveryIds: string[];
 }
 
 /**
- * The intakes and deliveries that use the vehicle. With `lockFeedstocks`, the
+ * The intakes that use the vehicle. With `lockFeedstocks`, the
  * intake rows are locked in id order: a feedstock save locks its own row
  * before it resyncs its leg, so holding them means no concurrent save can
  * write the old type back after this edit commits.
@@ -115,20 +105,14 @@ async function vehicleReferences(
   // but not the KEY SHARE a foreign-key insert takes (a production run adding
   // a feedstock draw while it holds the lineage's certification locks).
   const feedstockRows = await (lockFeedstocks ? feedstockQuery.for("no key update") : feedstockQuery);
-  const deliveryRows = await tx
-    .select({ id: deliveries.id })
-    .from(deliveries)
-    .where(and(eq(deliveries.vehicleId, vehicleId), eq(deliveries.organizationId, ctx.organizationId)))
-    .orderBy(asc(deliveries.id));
   return {
     feedstockIds: feedstockRows.map((row) => row.id),
-    deliveryIds: deliveryRows.map((row) => row.id),
   };
 }
 
 function sameReferences(a: VehicleReferences, b: VehicleReferences): boolean {
   const same = (x: string[], y: string[]) => x.length === y.length && x.every((id, index) => id === y[index]);
-  return same(a.feedstockIds, b.feedstockIds) && same(a.deliveryIds, b.deliveryIds);
+  return same(a.feedstockIds, b.feedstockIds);
 }
 
 /**
@@ -192,24 +176,6 @@ async function unsubmittedFeedstocks(
   return feedstockIds.filter((id) => !submitted.has(id));
 }
 
-async function throwVehicleTypeLocked(
-  ctx: OrgContext,
-  tx: DbTransaction,
-  creditBatchIds: readonly string[],
-): Promise<never> {
-  const batches = await tx
-    .select({ id: creditBatches.id, code: creditBatches.code })
-    .from(creditBatches)
-    .where(and(inArray(creditBatches.id, [...creditBatchIds]), eq(creditBatches.organizationId, ctx.organizationId)))
-    .orderBy(asc(creditBatches.code));
-  const [first] = batches;
-  throw new DomainError(
-    "certification_locked",
-    formatVehicleTypeLockMessage(batches.map((batch) => batch.code)),
-    first ? { conflict: { entity: "creditBatch", id: first.id, code: conflictCode(first.code) } } : {},
-  );
-}
-
 /**
  * One attempt at the edit. Lock order, shared with every feedstock and
  * delivery save: record rows, then certification artifact locks, then the
@@ -238,7 +204,7 @@ async function updateVehicleOnce(
   let submitted: LockedCertifiedLineageRow[] = [];
   if (snapshotChanged) {
     references = await vehicleReferences(ctx, tx, vehicleId, true);
-    const lineage = await getLockedCertifiedLineageForTargetSet(ctx, tx, references);
+    const lineage = await getLockedCertifiedLineageForTargetSet(ctx, tx, { ...references, deliveryIds: [] });
     submitted = lineage.filter(isSubmittedLineageRow);
   }
 
@@ -252,11 +218,7 @@ async function updateVehicleOnce(
     throw new VehicleReferencesChangedError();
   }
 
-  if (typeChanged && submitted.length > 0) {
-    await throwVehicleTypeLocked(ctx, tx, submitted.map((row) => row.creditBatchId));
-  }
-  // A model year edit is metadata: it saves, and only legs outside a
-  // submitted credit batch follow it.
+  // Type and model year edits refresh only legs outside submitted credit batches.
   const refreshLegs = !references
     ? []
     : submitted.length === 0

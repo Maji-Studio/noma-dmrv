@@ -481,6 +481,7 @@ export function makeContext(
         legIds: [],
         firstLegEntityId: null,
         aggregationWarning: null,
+        vehicleAdvisories: [],
       },
       biochar: {
         count: 0,
@@ -488,6 +489,7 @@ export function makeContext(
         legIds: [],
         firstLegEntityId: null,
         aggregationWarning: null,
+        vehicleAdvisories: [],
       },
       sample: {
         count: 0,
@@ -495,6 +497,7 @@ export function makeContext(
         legIds: [],
         firstLegEntityId: null,
         aggregationWarning: null,
+        vehicleAdvisories: [],
       },
     },
     requiredTransportCategories: [],

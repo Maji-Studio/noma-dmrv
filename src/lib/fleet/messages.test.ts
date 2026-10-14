@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   formatFleetDeleteBlocker,
-  formatVehicleTypeLockMessage,
   joinWithAnd,
 } from "./messages";
 
@@ -33,25 +32,6 @@ describe("formatFleetDeleteBlocker", () => {
     ).toBe(
       "This operator was not deleted because 1 production run uses it. Choose another operator on those records, or keep this one.",
     );
-  });
-});
-
-describe("formatVehicleTypeLockMessage", () => {
-  it("names the one submitted credit batch", () => {
-    expect(formatVehicleTypeLockMessage(["CB-26-001"])).toBe(
-      "Cannot update this vehicle because the linked credit batch is locked by a certification submission. Credit batch CB-26-001 uses this vehicle's type. Keep the type, or add a new vehicle for the new type.",
-    );
-  });
-
-  it("dedupes, sorts and caps the named batches", () => {
-    const message = formatVehicleTypeLockMessage([
-      "CB-26-004",
-      "CB-26-001",
-      "CB-26-003",
-      "CB-26-001",
-      "CB-26-002",
-    ]);
-    expect(message).toContain("Credit batches CB-26-001, CB-26-002, CB-26-003 and 1 more use this vehicle's type.");
   });
 });
 

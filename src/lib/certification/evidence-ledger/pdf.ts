@@ -313,9 +313,8 @@ function apparatus(model: LedgerModel): ReactElement {
     t(styles.noteH, "Method note"),
     t(styles.noteBody,
       "Each leg's contribution is distance × mass, summed per category into the single " +
-      "mass and distance value prepared for Isometric Certify. The emission factor (per the " +
-      "Transportation module's component for the declared mode and vehicle class) is applied " +
-      "by the registry, not in this ledger. noma prepares distance and mass; Certify computes " +
+      "mass and distance value prepared for Isometric Certify. The removal template's fixed transport factor is applied " +
+      "by the registry. Vehicle type and model year are Transportation module records. noma prepares distance and mass; Certify computes " +
       "the sum of (distance × mass) over legs, times that factor. This sheet shows the " +
       "per-leg breakdown behind each prepared value. The per-leg bills of lading remain attached " +
       "as Sources on the Removal." +

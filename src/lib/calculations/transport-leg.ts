@@ -40,7 +40,7 @@ export interface DeriveTransportLegInput {
   origin: TransportPartyRef | null;
   /** Destination partner (feedstock: facility). */
   destination: TransportPartyRef | null;
-  /** Vehicle supplies the vehicle type (maps to the Isometric component EF). */
+  /** Vehicle supplies type and model year for the Transportation module records. */
   vehicle: { vehicleType?: string | null; modelYear?: number | null } | null;
   /** Cargo mass moved on the leg (Eq. 3, W_j), kg. */
   loadMassKg?: number | null;

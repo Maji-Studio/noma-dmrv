@@ -1,14 +1,13 @@
 /**
  * Editing and deleting vehicles, drivers and operators (issue #945), against
- * the real test database: org scoping, the delete guard, and the vehicle type
- * lock while a submitted credit batch uses the vehicle.
+ * the real test database: org scoping, the delete guard, and the vehicle evidence
+ * snapshots while a submitted credit batch uses the vehicle.
  */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
   certificationSubmissions,
-  creditBatches,
   deliveries,
   drivers,
   feedstocks,
@@ -46,7 +45,6 @@ const otherCtx: OrgContext = {
 const LEG_DISTANCE_KM = 40;
 const LEG_LOAD_KG = 1_000;
 const ORIGINAL_MODEL_YEAR = 2018;
-const LOCKED_COPY = "is locked by a certification submission.";
 const SECOND_INTAKE_WET_KG = 500;
 
 const createdVehicleIds: string[] = [];
@@ -154,11 +152,6 @@ async function deleteSecondIntake(feedstockId: string) {
   await db.delete(productionRunFeedstocks).where(eq(productionRunFeedstocks.feedstockId, feedstockId));
   await db.delete(transportLegs).where(eq(transportLegs.entityId, feedstockId));
   await db.delete(feedstocks).where(eq(feedstocks.id, feedstockId));
-}
-
-async function batchCode(batchId: string) {
-  const [batch] = await db.select({ code: creditBatches.code }).from(creditBatches).where(eq(creditBatches.id, batchId));
-  return batch.code;
 }
 
 async function derivedLeg(feedstockId: string) {
@@ -337,33 +330,24 @@ describe("vehicle type change", () => {
     }, "none");
   });
 
-  it("refuses a type change while a submitted credit batch uses the vehicle, naming the batch", async () => {
+  it("allows a type change while preserving the submitted feedstock leg", async () => {
     await withFleetFixture(async (fixture) => {
       const vehicle = await insertVehicle();
       await useVehicleOnFeedstock(fixture, vehicle);
-      const code = await batchCode(fixture.batchId);
-
-      const refusal = updateVehicle(ctx, vehicle.id, vehicleEdit(vehicle, { vehicleType: "tractor" }), vehicle.version);
-      await expect(refusal).rejects.toThrow(LOCKED_COPY);
-      await expect(refusal).rejects.toThrow(`Credit batch ${code} uses this vehicle's type.`);
-      await expect(refusal).rejects.toMatchObject({
-        code: "certification_locked",
-        conflict: { entity: "creditBatch", id: fixture.batchId, code },
-      });
-
-      expect((await getVehicle(ctx, vehicle.id))?.vehicleType).toBe("truck");
+      await updateVehicle(ctx, vehicle.id, vehicleEdit(vehicle, { vehicleType: "tractor" }), vehicle.version);
+      expect((await getVehicle(ctx, vehicle.id))?.vehicleType).toBe("tractor");
       expect((await derivedLeg(fixture.feedstockId)).vehicleType).toBe("truck");
     });
   });
 
-  it("refuses a type change when a delivery in a submitted credit batch uses the vehicle", async () => {
+  it("allows a type change when a delivery in a submitted credit batch uses the vehicle", async () => {
     await withFleetFixture(async (fixture) => {
       const vehicle = await insertVehicle();
       await db.update(deliveries).set({ vehicleId: vehicle.id }).where(eq(deliveries.id, fixture.deliveryId));
 
       await expect(
         updateVehicle(ctx, vehicle.id, vehicleEdit(vehicle, { vehicleType: "van" }), vehicle.version),
-      ).rejects.toThrow(LOCKED_COPY);
+      ).resolves.toMatchObject({ vehicleType: "van" });
     });
   });
 
@@ -384,7 +368,7 @@ describe("vehicle type change", () => {
     });
   });
 
-  it("waits for a concurrent submission and then refuses the type change", async () => {
+  it("waits for a concurrent submission and then preserves the submitted leg", async () => {
     await withFleetFixture(async (fixture) => {
       const vehicle = await insertVehicle();
       await useVehicleOnFeedstock(fixture, vehicle);
@@ -418,12 +402,12 @@ describe("vehicle type change", () => {
       try {
         const submitterPid = await locked;
         const typeChange = updateVehicle(ctx, vehicle.id, vehicleEdit(vehicle, { vehicleType: "tractor" }), vehicle.version);
-        const refusal = expect(typeChange).rejects.toThrow(LOCKED_COPY);
+        const saved = expect(typeChange).resolves.toMatchObject({ vehicleType: "tractor" });
         await waitForAdvisoryLockWait(submitterPid);
         releaseSubmit();
         await submitter;
-        await refusal;
-        expect((await getVehicle(ctx, vehicle.id))?.vehicleType).toBe("truck");
+        await saved;
+        expect((await derivedLeg(fixture.feedstockId)).vehicleType).toBe("truck");
       } finally {
         releaseSubmit();
         await submitter.catch(() => undefined);
@@ -522,7 +506,7 @@ describe("vehicle type change", () => {
       }
     }, "none");
   });
-  it("moves a model year onto legs outside a submitted credit batch only", async () => {
+  it("moves type and model year onto legs outside a submitted credit batch only", async () => {
     await withFleetFixture(async (fixture) => {
       const vehicle = await insertVehicle();
       await useVehicleOnFeedstock(fixture, vehicle);
@@ -541,10 +525,10 @@ describe("vehicle type change", () => {
           loadMassKg: LEG_LOAD_KG,
         });
 
-        await updateVehicle(ctx, vehicle.id, vehicleEdit(vehicle, { modelYear: 2023 }), vehicle.version);
+        await updateVehicle(ctx, vehicle.id, vehicleEdit(vehicle, { vehicleType: "tractor", modelYear: 2023 }), vehicle.version);
 
-        expect((await derivedLeg(fixture.feedstockId)).modelYear).toBe(ORIGINAL_MODEL_YEAR);
-        expect((await derivedLeg(loose.id)).modelYear).toBe(2023);
+        expect(await derivedLeg(fixture.feedstockId)).toMatchObject({ vehicleType: "truck", modelYear: ORIGINAL_MODEL_YEAR });
+        expect(await derivedLeg(loose.id)).toMatchObject({ vehicleType: "tractor", modelYear: 2023 });
       } finally {
         await db.update(feedstocks).set({ vehicleId: null }).where(eq(feedstocks.id, loose.id));
         await deleteSecondIntake(loose.id);
