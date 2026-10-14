@@ -268,8 +268,7 @@ export function FormulationForm({
   return (
     <form onSubmit={handleFormSubmit} className="space-y-20">
       <ResolvedErrorRevalidator control={control} trigger={trigger} />
-      {/* Required Fields Section */}
-      <FormSection title="Required information" divider={false}>
+      <FormSection divider={false}>
         <FormField
           id="name"
           label="Formulation name"
@@ -328,9 +327,6 @@ export function FormulationForm({
                   label="Volume share"
                   unit="%"
                   error={errors.biocharPercent?.message}
-                  cue={
-                    autoBalance ? "Auto-fills the remaining share" : undefined
-                  }
                 >
                   <FormInput
                     id="biocharPercent"
@@ -476,7 +472,7 @@ export function FormulationForm({
       </FormSection>
 
       {/* Description Section */}
-      <FormSection title="Additional information">
+      <FormSection>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <div className="md:col-span-2">
             <FormField

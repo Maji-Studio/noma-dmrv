@@ -270,6 +270,10 @@ A `SectionLabel` title over a `space-y-16` field stack, with a `pt-16` hairline 
 
 - `divider` (default `true`) — the first section of a plain form passes `divider={false}`. **`divider` is ignored entirely inside a `FormSpine`**, which owns its own rail chrome; that is why the spine example below omits it.
 - `hint` / `certifyRequired` forward to `SectionLabel`; `actions` adds right-aligned header chrome (an "Add" button, a badge).
+- Omit `title` for a group whose field labels already identify it. The section
+  keeps its divider and field spacing without an empty heading row. Read views
+  mirror this: a `DetailPanelSection` without a title requires a stable `id`
+  for its React key. Titled sections may also supply an `id`.
 
 ### Vertical rhythm
 

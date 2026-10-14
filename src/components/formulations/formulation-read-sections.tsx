@@ -31,7 +31,7 @@ export function formulationSheetSections(formulation: FormulationWithIngredients
 
   return [
     {
-      title: "Required information",
+      id: "name",
       fields: [
         { label: "Formulation name", value: formulation.name },
       ],
@@ -53,7 +53,7 @@ export function formulationSheetSections(formulation: FormulationWithIngredients
       ) : undefined,
     },
     {
-      title: "Additional information",
+      id: "description",
       fields: [{ label: "Description", value: formulation.description }],
     },
   ];

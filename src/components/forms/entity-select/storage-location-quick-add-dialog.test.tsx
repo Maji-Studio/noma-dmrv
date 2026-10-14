@@ -4,6 +4,8 @@ import { useForm } from "react-hook-form";
 import { FormActions } from "@/components/forms/form-actions";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SideSheetActionsContext, useSideSheetActions } from "@/components/ui/entity-side-sheet/side-sheet-context";
+import * as detailPanel from "@/components/ui/detail-panel";
+import * as storageLocationReadSections from "@/components/storage-locations/storage-location-read-sections";
 import type { StorageLocationWithFacility } from "@/data-access/storage-locations";
 import type { StorageLocationFormData } from "@/schemas/storage-locations";
 import { StorageLocationQuickAddDialog } from "./storage-location-quick-add-dialog";
@@ -91,6 +93,22 @@ describe("StorageLocationQuickAddDialog edit mode", () => {
     expect(screen.queryByText("Reconcile stock")).toBeNull();
     expect(screen.queryByText("Record loss")).toBeNull();
     expect(mocks.update).not.toHaveBeenCalled();
+  });
+  it("passes only section identifiers, labels and fields to the archived dialog", () => {
+    const fields = [{ label: "Bin name", value: bin.name }];
+    const sections: (detailPanel.DetailPanelSection & { actions: string })[] = [
+      { id: "headingless", fields, actions: "Record loss" },
+      { id: "storage", title: "Storage details", fields, actions: "Record loss" },
+      { title: "Inventory", fields, content: "Reconcile stock", hint: "Stock hint", explanation: "Stock calculation", actions: "Record loss" },
+    ];
+    vi.spyOn(storageLocationReadSections, "storageLocationSheetSections").mockReturnValueOnce(sections);
+    const spine = vi.spyOn(detailPanel, "DetailSpine");
+    render(<StorageBinEditDialog bin={{ ...bin, archivedAt: new Date() }} close={vi.fn()} />);
+    expect(spine.mock.lastCall?.[0].sections).toStrictEqual([
+      { id: "headingless", title: undefined, fields },
+      { id: "storage", title: "Storage details", fields },
+      { title: "Inventory", fields },
+    ]);
   });
   it("keeps the form open on a save failure", async () => {
     mocks.update.mockRejectedValue(new Error("Save refused")); const close = vi.fn();

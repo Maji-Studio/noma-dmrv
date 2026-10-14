@@ -100,6 +100,8 @@ export function measureFormGeometry(args: MeasureArgs): Geometry {
   const LITERAL_CAPS_MIN_LETTERS = 4;
   /** SectionLabel, the FormSection/DetailSection title (section-label.tsx). */
   const SECTION_TITLE = "h3.body-small.font-medium";
+  /** Plain section wrappers, including groups with no heading. */
+  const SECTION_ROOT = "[data-form-section], [data-detail-section]";
 
   const root = document.querySelector("[data-capture-root]") as HTMLElement | null;
   if (!root) throw new Error("No [data-capture-root] element to measure.");
@@ -250,7 +252,7 @@ export function measureFormGeometry(args: MeasureArgs): Geometry {
     else if (isFormActionsRow(el) || insideFormActions(el)) allowed = "form-actions";
     else if (el.closest("section[aria-label]") && el.querySelector(":scope > [data-presentation-control]")) allowed = "composition-action-row";
     // design-system.md keeps the hairline between plain FormSection/DetailSection blocks.
-    else if (top && !bottom && el.querySelector(`:scope > ${SECTION_TITLE}, :scope > div > ${SECTION_TITLE}`)) allowed = "section-divider";
+    else if (top && !bottom && (el.matches(SECTION_ROOT) || el.querySelector(`:scope > ${SECTION_TITLE}, :scope > div > ${SECTION_TITLE}`))) allowed = "section-divider";
     const text = clean((el as HTMLElement).innerText);
     if (top) lineItems.push({ side: "top", element: describe(el), text, allowed });
     if (bottom) lineItems.push({ side: "bottom", element: describe(el), text, allowed });
@@ -277,8 +279,9 @@ export function measureFormGeometry(args: MeasureArgs): Geometry {
   };
 
   const titles = Array.from(body.querySelectorAll<HTMLElement>(SECTION_TITLE)).filter(isVisible);
-  const sectionRoots: HTMLElement[] = [];
+  const sectionRoots = Array.from(body.querySelectorAll<HTMLElement>(SECTION_ROOT)).filter(isVisible);
   for (const title of titles) {
+    if (title.closest(SECTION_ROOT)) continue;
     let node: HTMLElement = title;
     while (node.parentElement && node.parentElement !== body) {
       const parent: HTMLElement = node.parentElement;
@@ -291,14 +294,16 @@ export function measureFormGeometry(args: MeasureArgs): Geometry {
     }
     if (!sectionRoots.includes(node)) sectionRoots.push(node);
   }
+  sectionRoots.sort((a, b) => a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1);
   const sectionName = (el: Element) => {
     const title = el.matches(SECTION_TITLE) ? el : el.querySelector(SECTION_TITLE);
-    return title ? ownText(title) : describe(el);
+    const label = title ?? el.querySelector("label, span.body-small");
+    return label ? ownText(label) : describe(el);
   };
 
   const gaps: GapItem[] = [];
   const round = (value: number) => Math.round(value * 10) / 10;
-  // The space above each section: from whatever renders before it to its title row.
+  // The space above each section, whether it starts with a title or a field.
   for (const next of sectionRoots) {
     let prev = next.previousElementSibling;
     while (prev && !isVisible(prev)) prev = prev.previousElementSibling;

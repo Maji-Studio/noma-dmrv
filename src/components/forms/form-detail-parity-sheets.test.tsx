@@ -155,6 +155,24 @@ const READ_SECTION_CASES: { file: string; name: string; sections: DetailPanelSec
 beforeAll(() => Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true }));
 
 describe("read sheet detail level parity", () => {
+  it.each([
+    { name: "formulation", keys: ["name", "Blend composition by volume", "description"], first: "Formulation name", last: "Description" },
+    { name: "reactor", keys: ["identifier", "Reactor configuration"], first: "Identifier", last: "Nominal throughput (tph)" },
+    { name: "credit batch", keys: ["Certification progress", "Batch definition", "Production runs", "notes"], first: "Feedstock type", last: "Notes" },
+  ])("keeps $name read groups and field order without generic headings", async ({ name, keys, first, last }) => {
+    const { sections } = READ_SECTION_CASES.find(entry => entry.name === name)!;
+    expect(sections.map(section => section.id ?? section.title)).toEqual(keys);
+    const labels = sections.flatMap(section => section.fields.map(field => field.label));
+    expect(labels[0]).toBe(first);
+    expect(labels.at(-1)).toBe(last);
+    const { simple, detailed } = await renderBothLevels(<EntitySideSheetSections sections={sections} />);
+    for (const level of [simple, detailed]) {
+      expect(level.items).toContain("section:(untitled)");
+      expect(level.text).not.toContain("Required information");
+      expect(level.text).not.toContain("Additional information");
+    }
+  });
+
   it("shows the saved default only on split output bin read views", () => {
     for (const [type, mode] of [["biochar_bin", "split"], ["product_bin", "split"], ["product_bin", "mix"], ["feedstock_bin", "split"]]) {
       const sections = storageLocationSheetSections(storageBin(type, mode), noop);
