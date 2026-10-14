@@ -516,6 +516,29 @@ Decided 2026-10-13 (Kenji, round 8, PR C). These answers override the earlier ro
 71. **Unresolved stock answers 200 as stock unknown** (Q62). The body has a fixed reason sentence, `totals: null` and no sub-bins. Kenji noted that a finished run's dry biochar mass will become required. Staging #960, commit `4cb221b94` ("require output bin and moisture on completed runs"), now requires output kg, output bin and moisture on completion, from which dry mass is derived. The unresolved run path remains for older data; no new completion rule is needed here.
 72. **The read carries stock figures only** (Q63). No recent movements or product source runs. Use movement history and the product detail read for those.
 
+Decided 2026-10-14 (Kenji, round 9, Phase 5b).
+
+73. **Phase 5b ships as two PRs** (Q64). 5b-1 `feat/api-orders` ships customer and customer location lookups, orders, the order balance read, and storage-location `formulationId` with `type` and `formulationId` filters. 5b-2 `feat/api-deliveries` follows. They are not stacked; shared files in 5b-2 integrate after rebasing on merged 5b-1.
+74. **Orders and deliveries keep their plain names** (Q65). 5b-1 ships `/orders` and `record_order`; 5b-2 ships `/deliveries`, `record_delivery` and `deliveredAt`. Descriptions distinguish a product delivery from feedstock intake (`log_feedstock_delivery`).
+75. **Order balance is a separate read** (Q66). 5b-1 ships `GET /orders/{id}/balance` and `get_order_balance`, with `{ orderId, quantityKg, deliveredWetMassKg, remainingWetMassKg, fulfillmentStatus }` from one snapshot and an ETag hashing the published body, as in decision 67. The order body carries stored fields only (decision 48); delivery writes in 5b-2 do not bump the order version.
+76. **The stock read carries the bin's draw order** (Q67). 5b-2 commit 3 adds `drawOrder: "oldest_first" | "newest_first" | null` to `get_bin_stock`, null for mix bins, and raises its representation revision to 2. Sub-bins stay listed oldest first.
+77. **Customer lookup excludes contact details** (Q68). 5b-1 returns customers as `{ id, code, name, version, createdAt, updatedAt }` and locations with `{ id, customerId, name, gpsLatitude, gpsLongitude, distanceFromFacilityKm, distanceSource, isDefault, version, createdAt, updatedAt }`. Distance is one-way km. No email, phone, address or soil temperature is published.
+78. **A submitted Removal locks the order against new deliveries** (Q69). 5b-2 keeps the app's refusal as typed `certification_locked` with a pointer. 5b-1 commit 1 records `certification/order-lineage-lock` in [open questions](../open-questions.md): allowing further deliveries needs a check that derived per-product transport legs of submitted products cannot move, in the app and the API. Long-running partial-delivery orders need a second order today.
+79. **Delivery previews and saved results show the drawn products** (Q70). 5b-2 returns `allocations[]` with `layerId`, product `code`, `dryBiocharKg`, `solidsKg`, `wetKg`, `moisturePercent` and `policy` on dry run and write. Bin-level `stockEffects` stays unchanged. Tool descriptions keep the promise that the dry run shows which products will be drawn.
+
+Confirmed without another question:
+
+- Delivery mass and moisture fixes in 5b-2 follow decisions 50, 54 and 68; the API does not expose corrections.
+- The optional `basisFingerprint` and stale-fingerprint 409 `stock_basis_changed` with a fresh preview in 5b-2 follow decisions 45 and 53.
+
+80. **Orders have their own delete scope and deliveries have no delete.** 5b-1 ships `orders:delete`, off by default as in decisions 4 and 66, and deletion works only while the order has no deliveries, including archived deliveries. 5b-2 adds no delivery DELETE route or delete scope.
+81. **Future delivery times are refused in the app and the API.** 5b-2 extends decision 56 to `deliveredAt`, closing the app's delivery-create gap. An instant equal to now is allowed.
+82. **A distance override must be greater than zero.** 5b-2 enforces this in the app and the API. Inputs remain one-way km and the server counts the round trip. Omit `distanceKmOverride` to use the customer location's distance; zero no longer silently falls back to it.
+83. **Archive rules apply at each write.** 5b-1 extends decision 65: order create on an archived facility and PATCH on an archived order or facility are refused; an archived order with no deliveries may still be deleted. 5b-2 refuses delivery create on an archived order or facility and PATCH on an archived delivery or facility. Archive refusals answer 404 `not_found` with a pointer, as feedstocks and lab samples do. Archived orders and deliveries remain readable.
+84. **Delivery evidence stays in app uploads until the field application phase.** 5b-1 keeps order uploads in the app; 5b-2 keeps receipts, bills of lading and delivery photos there too. A delivery with no bill of lading receives a non-blocking warning in 5b-2.
+85. **One delivery is recorded per request and its facility comes from the order.** 5b-2 publishes no delivery `facilityId`. The single-create pattern follows decision 58.
+86. **The shared app paths get copy and omitted-field fixes.** 5b-1 commit 1 fixes "Select a order" to "Select an order", choosing the article for every lineage label. 5b-2 fixes delivery edits so an omitted `distanceNote` keeps the stored note.
+
 ## 17. Phase 3 results (2026-10-09)
 
 Two PRs: 3a #933 (representations in `src/lib/representations/`, `/api/mcp` on API keys, `whoami` and the read tools) and 3b (the three feedstock write tools, the domain prompt and the agent evaluation). The section 10 exit criteria are met: three-way parity (`tests/api-feedstocks-parity.test.ts`) and the agent evaluation below.

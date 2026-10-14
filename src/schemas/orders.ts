@@ -1,4 +1,3 @@
-import { expectedVersionSchema } from "./helpers";
 /**
  * Orders Validation Schemas
  * Zod schemas for order forms, server actions, and filtering
@@ -6,9 +5,11 @@ import { expectedVersionSchema } from "./helpers";
 
 import { orderFulfillmentStatuses } from "@/lib/orders/fulfillment";
 import {
+  calendarDateSchema,
   emptyToNull,
-  MASS_INPUT_MAX_KG,
-  MASS_MAX_KG_MESSAGE,
+  expectedVersionSchema,
+  positiveMassKgSchema,
+  requiredPositiveMassKgSchema,
 } from "@/schemas/helpers";
 import { z } from "zod";
 
@@ -37,12 +38,12 @@ export const orderFormSchema = z.object({
   customerId: z.string().min(1, "Select a customer.").uuid("Choose a valid customer."),
   customerLocationId: emptyToNull.or(z.string().uuid("Choose a valid customer location.")).optional().nullable(),
   formulationId: z.string().min(1, "Select a formulation.").pipe(z.uuid("Choose a valid formulation.")),
-  orderDate: z.coerce.date({ error: "Order date is required" }),
-  quantityKg: z
-    .number({ error: "Quantity is required" })
-    .min(0.01, "Quantity must be greater than 0")
-    .max(MASS_INPUT_MAX_KG, MASS_MAX_KG_MESSAGE)
-    .finite("Quantity must be a valid number"),
+  orderDate: calendarDateSchema(),
+  quantityKg: requiredPositiveMassKgSchema(
+    "Quantity is required",
+    "Quantity must be a number",
+    "Quantity must be greater than 0",
+  ),
   packaging: z.enum(packagingTypes, { error: "Packaging type is required" }),
 
   // Price and currency are not collected (open-questions `orders/pricing`).
@@ -78,8 +79,8 @@ export const updateOrderSchema = z.object({
   customerId: z.string().uuid().optional(),
   customerLocationId: z.string().uuid().optional().nullable(),
   formulationId: z.uuid().optional(),
-  orderDate: z.coerce.date().optional(),
-  quantityKg: z.number().min(0.01).max(MASS_INPUT_MAX_KG, MASS_MAX_KG_MESSAGE).finite().optional(),
+  orderDate: calendarDateSchema().optional(),
+  quantityKg: positiveMassKgSchema("Quantity must be greater than 0").optional(),
   packaging: z.enum(packagingTypes).optional(),
 });
 

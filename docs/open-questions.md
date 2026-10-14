@@ -344,18 +344,18 @@ Pure starter residue; org scoping came later via ADR 0010.
 
 ### Output stock projection cost grows with bin history (`data/output-stock-projection-cost`, opened 2026-10-14)
 
-- Every stock reader (posting, UI and API) reads all of a bin's rows before
-  counting held layers, so cost grows with bin history. No cap or paging was
-  added to the [stock read](./output-stock.md#api-stock-read). Pointer: `src/data-access/output-stock.ts:readOutputBinRows`, `src/data-access/output-bin-stock.ts:readOutputBinStockAt`.
-- **Resolve via:** a held-layer index or a materialized balance if a real bin
-  gets slow.
+- Every stock reader (posting, UI and API) reads all of a bin's rows before counting held layers, so cost grows with bin history. No cap or paging was added to the [stock read](./output-stock.md#api-stock-read). Pointer: `src/data-access/output-stock.ts:readOutputBinRows`, `src/data-access/output-bin-stock.ts:readOutputBinStockAt`.
+- **Resolve via:** a held-layer index or a materialized balance if a real bin gets slow.
 
 ### Product ingredient snapshot repair has no operator action (`data/product-ingredient-snapshot-repair`, opened 2026-10-14)
 
-- The stock read's `ingredient_snapshot_mismatch` answer gives no action an
-  operator can take. No repair path exists for a product whose saved ingredient
-  dry solids disagree with its composition. Pointer: `src/lib/output-stock/layer-projection.ts:UNRESOLVED_STOCK_SENTENCES.ingredient_snapshot_mismatch`.
+- The stock read's `ingredient_snapshot_mismatch` answer gives no action an operator can take. No repair path exists for a product whose saved ingredient dry solids disagree with its composition. Pointer: `src/lib/output-stock/layer-projection.ts:UNRESOLVED_STOCK_SENTENCES.ingredient_snapshot_mismatch`.
 - **Resolve via:** settle the repair action, then name it in the stock read's sentence.
+
+### A submitted Removal locks an order against further deliveries (`certification/order-lineage-lock`, opened 2026-10-14)
+
+- Round 9 Q69 (decision 78 in the [data-entry API plan](./plans/2026-10-06-data-entry-api.md#13-decisions-kenji-2026-10-06)) keeps the refusal: a new delivery on an order whose earlier delivery is in a submitted Removal is refused (typed `certification_locked` from 5b-2). Long-running partial-delivery orders need a second order today. Pointer: `src/data-access/delivery-output-writes.ts:createDelivery` guards the order through `assertCanMutateCertifiedLineage`.
+- **Resolve via:** before allowing further deliveries, check that the derived per-product transport legs of submitted products cannot move. Enforce this in both the app and the API.
 
 ### A multi-sample create must not assume one credit batch or one sampling time (`api/multi-sample-create`, opened 2026-10-13)
 
