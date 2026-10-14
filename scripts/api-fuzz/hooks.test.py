@@ -10,13 +10,15 @@ from unittest.mock import Mock, patch
 import schemathesis
 from hypothesis import given, settings
 from schemathesis.config import SchemathesisConfig
+from schemathesis.core.parameters import ParameterLocation
 from schemathesis.generation import GenerationMode
 from schemathesis.generation.drivers import ExamplesGenerator
 from schemathesis.generation.feedback import FeedbackSources
-from schemathesis.generation.meta import CaseMetadata, GenerationInfo, PhaseInfo, CoverageScenario
+from schemathesis.generation.meta import CaseMetadata, ComponentInfo, GenerationInfo, PhaseInfo, CoverageScenario, StatefulPhaseData, TestPhase
 from schemathesis.generation.overrides import for_operation
 from schemathesis.hooks import GLOBAL_HOOK_DISPATCHER, HookContext
 from schemathesis.specs.openapi.coverage._operation import iter_coverage_cases
+from schemathesis.specs.openapi.checks import missing_required_header, negative_data_rejection, positive_data_acceptance
 
 FIXTURE_ID = "11111111-1111-4111-8111-111111111111"
 FIXTURE_NOW = datetime(2026, 10, 9, tzinfo=timezone.utc)
@@ -51,10 +53,13 @@ class HarnessTests(unittest.TestCase):
             operation = result.ok()
             cases = ExamplesGenerator(operation=operation, as_strategy_kwargs={}, feedback=FeedbackSources(), fill_missing=False)
             seeded.extend(case for case in cases if case.meta.phase.data.description.startswith("Seeded fixture"))
-        # 23 by-id targets (the stock-movement create is one of them), the feedstock
+        # 24 by-id targets (the stock-movement create is one of them), the feedstock
         # create and its oversize twin, the run create, the product create, the
         # lab sample create.
-        self.assertEqual(len(seeded), 28)
+        self.assertEqual(len(seeded), 29)
+        stock = next(case for case in seeded if case.operation.label == "GET /storage-locations/{idOrCode}/stock")
+        self.assertEqual(stock.path_parameters, {"idOrCode": FIXTURE_ID})
+        self.assertTrue(stock.meta.generation.mode.is_positive)
         create = next(case for case in seeded if case.operation.label == "POST /feedstocks" and case.meta.generation.mode.is_positive)
         self.assertEqual(create.query, {"dryRun": "true"})
         self.assertTrue(create.headers["Idempotency-Key"])
@@ -226,7 +231,7 @@ class HarnessTests(unittest.TestCase):
                 etag = etags.get(next((prefix for prefix in etags if operation.path.startswith(prefix)), ""), FEEDSTOCK_ETAG)
                 self.assertEqual(examples[0].headers["If-Match"], etag)
             count += 1
-        self.assertEqual(count, 23)
+        self.assertEqual(count, 24)
 
     def test_seeded_positive_examples_must_return_2xx(self):
         check = hook("after_load_schema").__globals__["seeded_example_success"]
@@ -283,6 +288,66 @@ class HarnessTests(unittest.TestCase):
         patch._meta = kept._meta
         hook("before_call")(HookContext(operation=patch.operation), patch)
         self.assertNotIn("Idempotency-Key", patch.headers)
+
+    def test_dropped_required_if_match_is_negative_in_stateful_calls(self):
+        for result in schema.get_all_operations():
+            operation = result.ok()
+            if not any(parameter.name == "If-Match" and parameter.is_required for parameter in operation.headers):
+                continue
+            for mode in GenerationMode:
+                for headers, tracked in (({}, True), (None, True), ({}, False), ({"if-match": FEEDSTOCK_ETAG}, True)):
+                    if mode.is_negative and not tracked:
+                        continue
+                    with self.subTest(operation=operation.label, mode=mode, headers=headers, tracked=tracked):
+                        metadata = CaseMetadata(
+                            generation=GenerationInfo(time=0, mode=mode),
+                            components={ParameterLocation.HEADER: ComponentInfo(mode=mode)} if tracked else {},
+                            phase=PhaseInfo(name=TestPhase.STATEFUL, data=StatefulPhaseData(
+                                description=None, parameter=None, parameter_location=None, location=None,
+                            )),
+                        )
+                        case = operation.Case(path_parameters={"idOrCode": FIXTURE_ID}, headers=headers, body={}, _meta=metadata)
+                        response = SimpleNamespace(status_code=428)
+                        # Exercise Case.call's hook dispatch and metadata freezing without HTTP.
+                        with patch.object(type(schema.transport), "send", return_value=response) as send:
+                            self.assertIs(case.call(), response)
+                        send.assert_called_once()
+                        self.assertEqual(dict(case.headers), headers or {})
+                        expected = mode if headers else GenerationMode.NEGATIVE
+                        self.assertEqual(case.meta.generation.mode, expected)
+                        self.assertEqual(case.meta.components[ParameterLocation.HEADER].mode, expected)
+                        ctx = SimpleNamespace(config=schema.config.checks_config_for(operation=operation, phase="stateful"))
+                        if not headers:
+                            self.assertIsNone(positive_data_acceptance(ctx, response, case))
+                            self.assertIsNone(negative_data_rejection(ctx, response, case))
+                            with self.assertRaises(AssertionError):
+                                negative_data_rejection(ctx, SimpleNamespace(status_code=200), case)
+                        elif mode.is_positive:
+                            with self.assertRaises(AssertionError):
+                                positive_data_acceptance(ctx, response, case)
+
+        read = schema["/feedstocks/{idOrCode}"]["GET"].Case(headers={})
+        read._meta = CaseMetadata(generation=GenerationInfo(time=0, mode=GenerationMode.POSITIVE), components={}, phase=PhaseInfo.coverage(CoverageScenario.DEFAULT_POSITIVE_TEST, "offline test"))
+        hook("before_call")(HookContext(operation=read.operation), read)
+        self.assertTrue(read.meta.generation.mode.is_positive)
+
+    def test_missing_if_match_coverage_still_requires_rejection(self):
+        operation = schema["/feedstocks/{idOrCode}"]["PATCH"]
+        cases = iter_coverage_cases(
+            operation=operation, generation_modes=list(GenerationMode),
+            generate_duplicate_query_parameters=False, unexpected_methods=set(),
+            generation_config=schema.config.generation,
+        )
+        case = next(case for case in cases if case.meta.phase.data.parameter == "If-Match" and case.meta.phase.data.scenario == CoverageScenario.MISSING_PARAMETER)
+        metadata = case.meta
+        hook("before_call")(HookContext(operation=operation), case)
+        self.assertIs(case.meta, metadata)
+        self.assertTrue(case.meta.generation.mode.is_negative)
+        self.assertNotIn("If-Match", case.headers)
+        ctx = SimpleNamespace(config=schema.config.checks_config_for(operation=operation, phase="coverage"))
+        self.assertIsNone(missing_required_header(ctx, SimpleNamespace(status_code=428), case))
+        with self.assertRaises(AssertionError):
+            missing_required_header(ctx, SimpleNamespace(status_code=200), case)
 
     @settings(max_examples=5, database=None, deadline=None)
     @given(schema["/facilities"]["GET"].as_strategy(generation_mode=GenerationMode.POSITIVE))

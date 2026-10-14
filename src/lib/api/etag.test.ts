@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseIfMatch, representationEtag } from "./etag";
+import { BODY_HASH_ETAG_PATTERN, bodyHashEtag, parseIfMatch, representationEtag, STRONG_ETAG_PATTERN } from "./etag";
 
 describe("strong representation ETags", () => {
   it("round-trips version and representation revision", () => {
@@ -25,4 +25,34 @@ it("publishes a pattern that covers exactly the positive safe integer bounds", a
     expect(STRONG_ETAG_PATTERN.test(tag)).toBe(false);
     expect(() => parseIfMatch(tag)).toThrow();
   }
+});
+
+describe("body hash ETags", () => {
+  const data = { storageLocationId: "bin", totals: { dryBiocharKg: 1.5, estimatedWetKg: null }, subBins: [{ layerId: "a" }, { layerId: "b" }] };
+
+  it("is a strong sha256 tag of the revision and body", () => {
+    expect(bodyHashEtag(1, data)).toMatch(BODY_HASH_ETAG_PATTERN);
+    expect(bodyHashEtag(1, data)).toBe(bodyHashEtag(1, structuredClone(data)));
+    expect(bodyHashEtag(2, data)).not.toBe(bodyHashEtag(1, data));
+  });
+
+  it("ignores key order and keeps array order", () => {
+    const reordered = { subBins: data.subBins, totals: { estimatedWetKg: null, dryBiocharKg: 1.5 }, storageLocationId: "bin" };
+    expect(bodyHashEtag(1, reordered)).toBe(bodyHashEtag(1, data));
+    expect(bodyHashEtag(1, { ...data, subBins: [...data.subBins].reverse() })).not.toBe(bodyHashEtag(1, data));
+  });
+
+  it("changes with any published value, null included", () => {
+    expect(bodyHashEtag(1, { ...data, totals: { dryBiocharKg: 1.5, estimatedWetKg: 0 } })).not.toBe(bodyHashEtag(1, data));
+  });
+
+  it("is never a version tag, so If-Match refuses it", () => {
+    const tag = bodyHashEtag(1, data);
+    expect(STRONG_ETAG_PATTERN.test(tag)).toBe(false);
+    expect(() => parseIfMatch(tag)).toThrow(expect.objectContaining({ status: 400, code: "invalid_etag" }));
+  });
+
+  it("refuses a body that has no canonical JSON", () => {
+    expect(() => bodyHashEtag(1, { value: Number.NaN })).toThrow();
+  });
 });
