@@ -33,6 +33,29 @@ export function isHermeticCiBuildFor(appUrl: string): boolean {
   );
 }
 
+export const isometricClientSecretSchema = z.preprocess(
+  emptyToUndefined,
+  z.string().min(1).optional(),
+);
+export const isometricAccessTokenSchema = isometricClientSecretSchema;
+
+export function refineIsometricCredentialPair(
+  data: {
+    ISOMETRIC_CLIENT_SECRET?: string;
+    ISOMETRIC_ACCESS_TOKEN?: string;
+  },
+  ctx: z.RefinementCtx,
+  issue = {
+    path: ["ISOMETRIC_CLIENT_SECRET"],
+    message:
+      "ISOMETRIC_CLIENT_SECRET and ISOMETRIC_ACCESS_TOKEN are seed/CI-only and must either both be set or both be omitted",
+  },
+): void {
+  if (!!data.ISOMETRIC_CLIENT_SECRET !== !!data.ISOMETRIC_ACCESS_TOKEN) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, ...issue });
+  }
+}
+
 export function refineIsometricEnvironment(
   nodeEnv: string | undefined,
   appUrl: string,

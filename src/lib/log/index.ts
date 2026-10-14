@@ -1,3 +1,4 @@
+import { emptyToUndefined } from "@/config/env-validation";
 import { z } from "zod";
 import { REDACTED } from "./sanitize";
 
@@ -22,22 +23,19 @@ import { REDACTED } from "./sanitize";
  * Prefer passing IDs (userId, removalId) over PII regardless — redact is the
  * backstop, not the primary control.
  */
-type Level = "trace" | "debug" | "info" | "warn" | "error" | "fatal";
+const LEVELS = ["trace", "debug", "info", "warn", "error", "fatal"] as const;
+type Level = (typeof LEVELS)[number];
 
-const LEVEL_ORDER: Record<Level, number> = {
-  trace: 10,
-  debug: 20,
-  info: 30,
-  warn: 40,
-  error: 50,
-  fatal: 60,
-};
+const LEVEL_STEP = 10;
+const LEVEL_ORDER = Object.fromEntries(
+  LEVELS.map((level, index) => [level, (index + 1) * LEVEL_STEP]),
+) as Record<Level, number>;
 const SILENT = Number.POSITIVE_INFINITY;
 
 const isProd = process.env.NODE_ENV === "production";
 const configured = z.preprocess(
-  (value) => typeof value === "string" && value.trim() === "" ? undefined : value,
-  z.enum(["trace", "debug", "info", "warn", "error", "fatal", "silent"]).optional(),
+  emptyToUndefined,
+  z.enum([...LEVELS, "silent"]).optional(),
 ).parse(process.env.LOG_LEVEL) ?? (isProd ? "info" : "debug");
 const threshold = configured === "silent" ? SILENT : LEVEL_ORDER[configured];
 

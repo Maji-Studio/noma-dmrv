@@ -1,4 +1,11 @@
-import { emptyToUndefined, isHermeticCiBuildFor, refineIsometricEnvironment } from "@/config/env-validation";
+import {
+  emptyToUndefined,
+  isHermeticCiBuildFor,
+  isometricAccessTokenSchema,
+  isometricClientSecretSchema,
+  refineIsometricCredentialPair,
+  refineIsometricEnvironment,
+} from "@/config/env-validation";
 import { CRON_SECRET_MIN_LENGTH } from "@/config/operations";
 import { z } from "zod";
 import { isValidCredentialsEncryptionKey } from "@/lib/crypto/secrets";
@@ -81,14 +88,8 @@ const envSchema = z.object({
   ),
 
   // Isometric Certify API (optional — boot must stay clean without these)
-  ISOMETRIC_CLIENT_SECRET: z.preprocess(
-    emptyToUndefined,
-    z.string().min(1).optional()
-  ),
-  ISOMETRIC_ACCESS_TOKEN: z.preprocess(
-    emptyToUndefined,
-    z.string().min(1).optional()
-  ),
+  ISOMETRIC_CLIENT_SECRET: isometricClientSecretSchema,
+  ISOMETRIC_ACCESS_TOKEN: isometricAccessTokenSchema,
   CREDENTIALS_ENCRYPTION_KEY: z.preprocess(
     emptyToUndefined,
     z
@@ -184,17 +185,7 @@ const envSchema = z.object({
     });
   }
 
-  const hasIsometricSecret = !!data.ISOMETRIC_CLIENT_SECRET;
-  const hasIsometricToken = !!data.ISOMETRIC_ACCESS_TOKEN;
-
-  if (hasIsometricSecret !== hasIsometricToken) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["ISOMETRIC_CLIENT_SECRET"],
-      message:
-        "ISOMETRIC_CLIENT_SECRET and ISOMETRIC_ACCESS_TOKEN are seed/CI-only and must either both be set or both be omitted",
-    });
-  }
+  refineIsometricCredentialPair(data, ctx);
 
   // Storage provider gates
   if (data.STORAGE_PROVIDER === "s3-compatible") {

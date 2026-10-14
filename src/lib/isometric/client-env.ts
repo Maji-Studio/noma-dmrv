@@ -1,4 +1,9 @@
-import { emptyToUndefined, refineIsometricEnvironment } from "@/config/env-validation";
+import {
+  isometricAccessTokenSchema,
+  isometricClientSecretSchema,
+  refineIsometricCredentialPair,
+  refineIsometricEnvironment,
+} from "@/config/env-validation";
 import { z } from "zod";
 import {
   createIsometricClient,
@@ -6,18 +11,15 @@ import {
   type IsometricClient,
 } from "./client";
 
-const optionalSecret = z.preprocess(
-  emptyToUndefined,
-  z.string().min(1).optional(),
-);
 const clientEnvSchema = z.object({
-  ISOMETRIC_CLIENT_SECRET: optionalSecret,
-  ISOMETRIC_ACCESS_TOKEN: optionalSecret,
+  ISOMETRIC_CLIENT_SECRET: isometricClientSecretSchema,
+  ISOMETRIC_ACCESS_TOKEN: isometricAccessTokenSchema,
   ISOMETRIC_ENVIRONMENT: z.enum(["sandbox", "production"]).default("sandbox"),
-}).refine(
-  (value) => !!value.ISOMETRIC_CLIENT_SECRET === !!value.ISOMETRIC_ACCESS_TOKEN,
-  { message: "ISOMETRIC_CLIENT_SECRET and ISOMETRIC_ACCESS_TOKEN must either both be set or both be omitted" },
-).superRefine((_, ctx) => {
+}).superRefine((data, ctx) => {
+  refineIsometricCredentialPair(data, ctx, {
+    path: [],
+    message: "ISOMETRIC_CLIENT_SECRET and ISOMETRIC_ACCESS_TOKEN must either both be set or both be omitted",
+  });
   refineIsometricEnvironment(
     process.env.NODE_ENV,
     process.env.NEXT_PUBLIC_APP_URL ?? "",

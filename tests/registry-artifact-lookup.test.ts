@@ -12,7 +12,6 @@ vi.mock("@/lib/isometric/client", async (importOriginal) => {
 });
 
 import {
-  createIsometricClient,
   IsometricApiError,
   IsometricPageLimitError,
 } from "@/lib/isometric/client";
@@ -39,13 +38,15 @@ import {
   type FakeIsometricRegistry,
 } from "./fixtures/fake-registry";
 
+import { testIsometricClient } from "./fixtures/isometric-client";
+
 const PROJECT_ID = "prj_fake";
 const OTHER_PROJECT_ID = "prj_other";
 // More than one fake page (50), so every lookup crosses a cursor.
 const FILLER_RECORDS = 60;
 
 let registry: FakeIsometricRegistry;
-const client = () => createIsometricClient(null);
+const client = testIsometricClient;
 
 beforeEach(() => {
   registry = installFakeRegistry();
