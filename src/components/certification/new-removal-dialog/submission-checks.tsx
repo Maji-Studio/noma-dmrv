@@ -11,6 +11,8 @@ import Link from "next/link";
 import { WarningIcon } from "@phosphor-icons/react/dist/ssr";
 import { InfoHint } from "@/components/ui/tooltip";
 import type { RemovalRequirementCheck } from "@/lib/certification/readiness";
+import { batchHealthFixLinkFor } from "@/lib/certification/batch-health-links";
+import { transportRepairDestination } from "@/lib/isometric/semantic-binding-catalog";
 import { certificationSettingsHref } from "@/lib/certification/links";
 import {
   buildFeedstockTypeEditDeepLink,
@@ -30,7 +32,7 @@ interface SubmissionChecksProps {
 function fixLinksFor(
   check: Pick<
     RemovalRequirementCheck,
-    "key" | "fixTarget" | "fixTargetId"
+    "key" | "fixTarget" | "fixTargetId" | "transportCategory"
   >,
   facilityId: string,
 ): { label: string; href: string }[] {
@@ -72,9 +74,14 @@ function fixLinksFor(
       return [];
     case "transportUniformity":
     case "transport":
-      return [
-        { label: "Open deliveries", href: `/deliveries?facility=${facilityId}` },
-      ];
+      if (!check.transportCategory) return [];
+      return [{
+        ...batchHealthFixLinkFor({
+          key: "transport",
+          fixTarget: transportRepairDestination(check.transportCategory),
+        }, facilityId),
+        label: `Review ${check.transportCategory} transport`,
+      }];
     case "durability":
       return [
         { label: "Review Samples", href: `/samples?facility=${facilityId}` },
@@ -198,7 +205,7 @@ export function SubmissionChecks({
       </div>
       <ul className="flex flex-col gap-12">
         {attentionChecks.map((check) => (
-          <CheckRow key={check.key} check={check} facilityId={facilityId} />
+          <CheckRow key={`${check.key}-${check.transportCategory ?? ""}`} check={check} facilityId={facilityId} />
         ))}
       </ul>
     </section>

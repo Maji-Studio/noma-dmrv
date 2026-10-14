@@ -10,6 +10,7 @@
  */
 "use client";
 
+import { MultilineDetail } from "../multiline-detail";
 import Link from "next/link";
 import {
   ArrowSquareOutIcon,
@@ -175,7 +176,7 @@ export function SubmissionSummary({
         <Notice tone="error">
           <ul className="list-disc pl-16">
             {facts.blockers.map((blocker) => (
-              <li key={blocker}>{blocker}</li>
+              <li key={blocker}><MultilineDetail>{blocker}</MultilineDetail></li>
             ))}
           </ul>
         </Notice>
@@ -275,6 +276,10 @@ export function SubmissionSummary({
       {facts.checksAttention > 0 && (
         <SubmissionChecks checks={checks} facilityId={facilityId} />
       )}
+
+      {factsInput.readiness.transportVehicleAdvisories.map((advisory) => (
+        <Notice key={advisory} tone="warning">{advisory}</Notice>
+      ))}
 
       {facts.warnings.length > 0 && (
         <Notice tone="warning" title="Submission notes">

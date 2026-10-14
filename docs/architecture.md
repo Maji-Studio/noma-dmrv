@@ -97,6 +97,7 @@ catches outside the action's boundary (a best-effort follow-up after a commit,
 a rollback or release, or translating a library error into a `SafeError`); and
 actions that surface a library's own error message that is not a `SafeError`
 (the Better Auth member and invitation actions in `organizations.ts`).
+`pnpm check:action-boundaries` enforces this rule and holds the allowlist.
 
 ```typescript
 export async function createItem(input: CreateItem) {
@@ -232,11 +233,11 @@ The vehicle, driver and operator quick-add dialogs also edit: pass the loaded
 record (`vehicle`, `driver`, `operator`), or render `EntityEditDialog` with
 `{ entityType, entityId, isOpen, onClose }` to load it by id. A save seeds the picker's entity cache
 with the new name. Deletes refuse while any record references the row and name
-where it is used (`src/data-access/fleet-usage.ts`). A vehicle's type is
-copied onto each feedstock intake's derived transport leg, so a type or model
-year edit refreshes those leg snapshots in the same transaction. A type change
-is refused, naming the credit batch, while a submitted credit batch holds an
-intake or delivery that uses the vehicle.
+where it is used (`src/data-access/fleet-usage.ts`). A vehicle's type and model year are
+copied onto each feedstock intake's derived transport leg as evidence. Edits to
+either field refresh only unsubmitted legs in the same transaction. Submitted
+legs keep their snapshot. Delivery references are not included in the vehicle
+edit lookup.
 
 ### Structured logging — `@/lib/log` (server-only)
 
@@ -327,6 +328,13 @@ runtime.
   detail routes are the reference.
 - No `"use cache"`, no Cache Components — React Query owns all caching. See
   [modern-patterns.md](./modern-patterns.md).
+
+### Hook ActionResult unwrapping
+
+Hooks unwrap an `ActionResult` with `unwrap()` from `src/hooks/types.ts`.
+The only exception is a hook that reads `field`, `conflict` or `warning`, or
+returns something other than `result.data`; typed errors go through
+`throwActionError`. `pnpm check:action-boundaries` enforces this rule.
 
 ### Authenticated read transport
 

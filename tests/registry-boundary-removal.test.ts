@@ -366,6 +366,7 @@ function makeContext(
     legIds: [],
     firstLegEntityId: null,
     aggregationWarning: null,
+    vehicleAdvisories: [],
   };
   return {
     facilityId: fixture.facilityId,
@@ -378,6 +379,7 @@ function makeContext(
     defaultTemplate: makeTemplate(),
     missingDefaultTemplateId: null,
     blueprintsForTemplate: makeBlueprints(),
+    unbindableTemplateInputs: [],
     unresolvedBlueprintKeys: [],
     memberBatches: [{
       id: fixture.creditBatchId,

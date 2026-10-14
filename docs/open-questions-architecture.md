@@ -6,6 +6,28 @@ these areas; the entry rules and invariants live in
 
 ## Architecture
 
+### Simplification rollout follow-ups (`simplification/remaining-decisions`, opened 2026-10-14)
+
+- **A5:** Data-access consolidation is skipped for now. List-query duplication
+  remains in `src/data-access/suppliers.ts:getSuppliers` and peer accessors.
+  Revisit when a list-query bug shows the duplication hurting; add a paging
+  helper when already working in an affected file.
+- **B1:** Keep `/schema` public, gate it to Platform Admins, or delete it? **Anchor:** `src/lib/auth/middleware.ts:PUBLIC_ROUTES`.
+- **B3:** Keep both diagnostic views, only the trace view, or replace the pane with the CLI report? **Anchor:** `src/components/certification/removal-template-diagnostic-panel.tsx:RemovalTemplateDiagnosticPanel`.
+- **B4:** Wire the 12 sample contaminant columns and two protocol constants, or retire them after registry verification? **Anchor:** `src/db/schema/production.ts:samples`, `src/lib/isometric/utils/constants.ts`.
+- **B5:** Batch hub shared facts with per-row retry and polling, or use a blocking facility-wide load? **Anchor:** `src/hooks/use-certification.ts:useRemovalPreflightSummaries`.
+- **B6:** Keep the three submission builds, or use an immutable guarded snapshot? **Anchor:** `src/fn/certification/biochar-application-intents.ts:compileBiocharApplicationIntents`.
+- **B7:** Preserve each existence-check message, or standardize the copy? **Anchor:** `src/data-access/utils.ts:assertSameOrg`.
+- **B8:** Standardize or preserve amber versus red unmet checks, six deep-link toast strings, Escape dismissal, and shared party fields? **Anchor:** `src/components/credit-batches/credit-batch-list.tsx:CreditBatchList`, `src/components/ui/data-table/index.tsx:DataTableColumnVisibility`.
+- **B9:** Apply the facility phone regex everywhere, or keep entity-specific validation and update nullability? **Anchor:** `src/schemas/facilities.ts:contactPhoneSchema`.
+- **B10:** Keep the archive policy, relocate history, and commit selected QA reports or ignore generated artifacts? **Anchor:** `docs/README.md`, `docs/qa/`.
+- **B11:** Keep the day-boundary compatibility after a read-only sandbox timestamp audit? **Anchor:** `src/fn/certification/production-batches.ts:matchesLegacyDateBoundPayloadHash`.
+- **B12:** Delete the two one-off investigation scripts? **Anchor:** `scripts/find-supplier-customer-overlap.ts`, `scripts/isometric-link-demo.ts`.
+- **B13:** Introduce a composite CI action in two stages? **Anchor:** `.github/workflows/ci.yml`, `.github/workflows/migration-gate.yml`.
+- **B14:** Split bin-picker aggregates into two phases only after a measured plan improvement? **Anchor:** `src/data-access/entities/storage-locations.ts:buildInventoryAggregates`.
+- **A4 (appendix A16):** The gated submit-dialog flag and title extraction was omitted from #743. **Anchor:** `src/components/certification/ghg-statement-submit-dialog.tsx:GhgStatementSubmitDialogContent`. **Resolve via:** revisit once the GHG report folder is stable; extract the derivation beside `ghg-statement-workflow-state.ts` with a table-driven test pinning every current output and no label changes.
+- **Resolve via:** Kenji answers B1 and B3 to B14 above; A5 stays deferred until the list-query trigger above.
+
 ### Keyset cursors accept foreign or unknown positions (`api/keyset-cursor-position`, opened 2026-10-14)
 
 - **Anchor:** `src/lib/api/cursor.ts:decodeCursor` and
@@ -522,4 +544,3 @@ Merged 2026-07-20 with the former `transport/storage-topology` — one question.
 - **Resolve via:** if a second ledger ever gains a checksum or a stored-artifact
   verification gate, move the canonicalizer next to `renderLedgerToBuffer` and
   apply it to every ledger rather than copying it (S).
-

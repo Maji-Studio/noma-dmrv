@@ -454,6 +454,7 @@ export function makeContext(
     defaultTemplate: makeTemplate(),
     missingDefaultTemplateId: null,
     blueprintsForTemplate: makeBlueprints(),
+    unbindableTemplateInputs: [],
     unresolvedBlueprintKeys: [],
     memberBatches: [{
       id: CREDIT_BATCH_ID,
@@ -481,6 +482,7 @@ export function makeContext(
         legIds: [],
         firstLegEntityId: null,
         aggregationWarning: null,
+        vehicleAdvisories: [],
       },
       biochar: {
         count: 0,
@@ -488,6 +490,7 @@ export function makeContext(
         legIds: [],
         firstLegEntityId: null,
         aggregationWarning: null,
+        vehicleAdvisories: [],
       },
       sample: {
         count: 0,
@@ -495,6 +498,7 @@ export function makeContext(
         legIds: [],
         firstLegEntityId: null,
         aggregationWarning: null,
+        vehicleAdvisories: [],
       },
     },
     requiredTransportCategories: [],

@@ -101,7 +101,7 @@ describe("deriveRemovalWorkflowStatus", () => {
       local: null,
       lockInFlight: false,
       enrichmentStatus: "available",
-      readiness: { state: "ready", reasons: [], advisories: [] },
+      readiness: { state: "ready", reasons: [], advisories: [], transportVehicleAdvisories: [] },
     });
 
     expect(status).toMatchObject({
@@ -120,7 +120,7 @@ describe("deriveRemovalWorkflowStatus", () => {
       readiness: {
         state: "blocked",
         reasons: ["Add the missing delivery document"],
-        advisories: [],
+        advisories: [], transportVehicleAdvisories: [],
       },
     });
 
@@ -158,7 +158,7 @@ describe("deriveRemovalWorkflowStatus", () => {
       local: "rejected",
       lockInFlight: false,
       enrichmentStatus: "available",
-      readiness: { state: "ready", reasons: [], advisories: [] },
+      readiness: { state: "ready", reasons: [], advisories: [], transportVehicleAdvisories: [] },
     });
 
     expect(status).toMatchObject({
@@ -179,7 +179,7 @@ describe("deriveRemovalWorkflowStatus", () => {
       readiness: {
         state: "blocked",
         reasons: ["Add the missing delivery document"],
-        advisories: [],
+        advisories: [], transportVehicleAdvisories: [],
       },
     });
 
@@ -212,7 +212,7 @@ describe("deriveRemovalWorkflowStatus", () => {
       lockInFlight: true,
       submissionInterrupted: true,
       enrichmentStatus: "available",
-      readiness: { state: "ready", reasons: [], advisories: [] },
+      readiness: { state: "ready", reasons: [], advisories: [], transportVehicleAdvisories: [] },
     });
 
     expect(status).toMatchObject({
@@ -232,7 +232,7 @@ describe("deriveRemovalWorkflowStatus", () => {
       lockInFlight: false,
       submissionInterrupted: true,
       enrichmentStatus: "available",
-      readiness: { state: "ready", reasons: [], advisories: [] },
+      readiness: { state: "ready", reasons: [], advisories: [], transportVehicleAdvisories: [] },
     });
 
     expect(status).toMatchObject({
@@ -268,7 +268,7 @@ describe("deriveRemovalWorkflowStatus", () => {
       readiness: {
         state: "blocked",
         reasons: ["Add the missing delivery document"],
-        advisories: [],
+        advisories: [], transportVehicleAdvisories: [],
       },
     });
 
@@ -284,7 +284,7 @@ describe("deriveRemovalWorkflowStatus", () => {
       local: "superseded",
       lockInFlight: false,
       enrichmentStatus: "available",
-      readiness: { state: "ready", reasons: [], advisories: [] },
+      readiness: { state: "ready", reasons: [], advisories: [], transportVehicleAdvisories: [] },
     });
 
     expect(status).toMatchObject({

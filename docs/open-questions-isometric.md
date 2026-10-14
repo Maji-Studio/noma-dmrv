@@ -337,6 +337,36 @@ itself is **built and enforced** — see the invariants section,
 
 ### Transport-leg compliance follow-ups (opened 2026-05-13)
 
+- **Bound road factor covers the lightest vehicle**
+  (`isometric/transport-fleet-factor-coverage`, `needs-registry-check`).
+  - **Tracking issue:** [#1017](https://github.com/Maji-Studio/noma-dmrv/issues/1017).
+  - **Anchor:** `src/lib/isometric/utils/aggregation.ts:transportVehicleAdvisories`.
+  - **Open condition:** the template's bound road factor must cover the lightest
+    vehicle actually used, which has the highest emissions per tonne-km.
+    Mixed vehicle types are advisory only; fleet records do not establish GVW
+    classes or prove coverage. See the [#961 factor findings](https://github.com/Maji-Studio/noma-dmrv/issues/961#issuecomment-6171802000).
+  - **Resolve via:** confirm the fleet GVW classes for each transport category
+    and the active template's bound GLEC row with the operator and registry.
+    If needed, rebind `carbon_intensity` to the lightest class's GLEC row and
+    document the exact row in its Source.
+
+- **Vehicle snapshots after submitted lineage is released**
+  (`isometric/transport-released-lineage-snapshots`, **deferred**).
+  - **Anchor:** `src/data-access/vehicles.ts:updateVehicleOnce`.
+  - **Gap:** type and model-year edits skip feedstock legs in submitted
+    lineage. If that lineage later becomes rejected or superseded and is
+    regrouped, the derived legs can retain the old type and model year.
+    Rebuilding submission inputs reads those stored legs; it does not refresh
+    them from the fleet record.
+  - **Resolve via:** a dedicated lifecycle change that refreshes member
+    feedstocks with `src/data-access/transport-legs.ts:syncFeedstockTransportLeg`
+    only after checking that no other submitted lineage still holds them.
+    Preserve the feedstock/artifact/vehicle lock order and test an edit while
+    submitted followed by release/regroup for both fields. There is no common
+    refresh hook today: `rejectDraftSubmission` and
+    `retireStaleSubmissionDraft` only transition drafts, while
+    `createRemovalWithCreditBatches` assigns application slices without rebuilding legs.
+
 - **Per-leg evidence model deferred** (`isometric/transport-v1.1-evidence`).
   - Isometric Transportation v1.1 §6 + Appendix 1 require: emission-factor
     source citation, factor vintage by mode (road ≤3 y, ship/air ≤5 y,
@@ -362,7 +392,7 @@ itself is **built and enforced** — see the invariants section,
 - **Mixed-mode transport** (`isometric/transport-mixed-mode`) — **deferred.** One
     `mass_distance` component carries one emission factor, so rail/ship legs
     (different EF) cannot be summed into a road tonne·km scalar — today they
-    trip the mixed-factor warning and block submission. Supporting them needs
+    hit the "different transport modes" blocker when combined with road legs. Supporting them needs
     per-mode component instances. Out of scope while the transport UI is
     road-only; re-raise when a non-road mode is enterable.
 
@@ -633,3 +663,16 @@ Three failure-path gaps, each a surprising mode before a registry write:
   soft/derived gate, so impact is grouping a briefly-regressed batch. **Fix:**
   either re-assert `state === "ready"` inside `createRemovalWithCreditBatches`
   after acquiring locks, or document health as a point-in-time advisory.
+
+### Early template coverage does not validate all builder metadata (`isometric/template-binding-metadata`)
+
+- **Anchor**: `src/lib/isometric/template-binding-coverage.ts:findUnbindableTemplateInputs`.
+- **Known late failures**: quantity-kind or compatible-unit mismatch against the
+  blueprint, a monitored input absent from its blueprint, and a fixed input with
+  no bound Datapoint ID still fail in the builder rather than early coverage.
+- **Current handling**: the builder remains fail-closed. Facility facts have
+  `blueprintsForTemplate`, but coverage is also called from preparation and
+  compilation. Sharing the builder's metadata validation across all three paths
+  needs a separate extraction and consistent blueprint handling.
+- **To resolve**: extract that validation, pass resolved blueprints through every
+  coverage caller, and test each refusal before registry writes.

@@ -11,6 +11,7 @@
  */
 "use client";
 
+import { MultilineDetail } from "./multiline-detail";
 import Link from "next/link";
 import { useState } from "react";
 import { Button, buttonVariants } from "@/components/ui";
@@ -101,7 +102,7 @@ function SubmissionStatusSection({
         <Notice tone="warning">
           <ul className="flex flex-col gap-6">
             {status.reasons.map((reason) => (
-              <li key={reason}>{reason}</li>
+              <li key={reason}><MultilineDetail>{reason}</MultilineDetail></li>
             ))}
           </ul>
         </Notice>
@@ -163,7 +164,7 @@ export function RemovalDetailSheet({
     readiness: summary.readiness,
   });
   const submissionWarningNotes = buildSubmissionWarningNotes(
-    summary.submissionWarnings,
+    [...summary.submissionWarnings, ...(summary.readiness?.transportVehicleAdvisories ?? [])],
   );
   // The workflow may only be (re)entered while something still needs doing:
   // `ready` (submit it) or `blocked` (resolve preconditions). A `submitted`
