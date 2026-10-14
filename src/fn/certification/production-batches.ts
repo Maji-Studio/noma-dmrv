@@ -33,6 +33,7 @@
  * verification.
  */
 
+import { resolveIsometricClient } from "@/data-access/certifier-credentials";
 import {
   getProductionBatchRegistrations,
   getProductionBatchRegistryInputs,
@@ -44,7 +45,6 @@ import {
 import type { OrgContext } from "@/lib/auth/server";
 import { MASS_COMPARISON_EPSILON_KG } from "@/lib/calculations/mass-dry";
 import { SafeError } from "@/lib/errors";
-import { getIsometricClientForOrg } from "@/lib/isometric/client";
 import {
   buildCreateProductionBatchRequest,
   buildLegacyProductionBatchDisplayName,
@@ -200,7 +200,7 @@ export async function ensureProductionBatchesForCreditBatches(
     existingRows.map((row) => [row.creditBatchId, row]),
   );
 
-  const client = await getIsometricClientForOrg(args.orgCtx.organizationId);
+  const client = await resolveIsometricClient(args.orgCtx);
 
   // Live identities retain their registered payload; missing identities require
   // current validated facts and supplier-reference reconciliation before POST.

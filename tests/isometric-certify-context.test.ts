@@ -45,6 +45,7 @@ vi.mock("@/data-access/certification", () => ({
 }));
 
 vi.mock("@/data-access/certifier-credentials", () => ({
+  resolveIsometricClient: vi.fn(async () => ({} as import("@/lib/isometric").IsometricClient)),
   hasCertifierCredentials: vi.fn(),
 }));
 
@@ -80,7 +81,6 @@ vi.mock("@/lib/isometric", async () => {
     await vi.importActual<typeof import("@/lib/isometric")>("@/lib/isometric");
   return {
     ...actual,
-    getIsometricClientForOrg: vi.fn(async () => ({} as import("@/lib/isometric").IsometricClient)),
     listProjects: vi.fn(),
     listGhgEntryTemplates: vi.fn(),
     listComponentBlueprints: vi.fn(),

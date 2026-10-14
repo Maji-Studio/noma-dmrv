@@ -4,6 +4,7 @@ import { z } from "zod";
 import { env } from "@/config/env";
 import {
   getCertifierCredentialsStatus,
+  verifyIsometricCredentialsForOrganization,
   upsertCertifierCredentials,
   type CertifierCredentialsStatus,
 } from "@/data-access/certifier-credentials";
@@ -11,13 +12,9 @@ import {
   formatZodActionError,
   logActionError,
 } from "@/fn/action-errors";
-import { requireOrgContext } from "@/lib/auth/server";
+import { requireOrgContext, type OrgContext } from "@/lib/auth/server";
 import { SafeError, toActionError } from "@/lib/errors";
-import {
-  getIsometricClientForOrg,
-  IsometricApiError,
-  listProjects,
-} from "@/lib/isometric";
+import { IsometricApiError } from "@/lib/isometric";
 import {
   orgCertifierCredentialsTargetSchema,
   setOrgCertifierCredentialsSchema,
@@ -93,7 +90,7 @@ export async function setOrgCertifierCredentialsFn(
       // verification only reports whether the stored keys work right now.
       const [status, verification] = await Promise.all([
         getCertifierCredentialsStatus(ctx, values.organizationId, PROVIDER),
-        verifyCertifierCredentials(values.organizationId),
+        verifyCertifierCredentials(ctx, values.organizationId),
       ]);
       return { status, verification };
     },
@@ -107,19 +104,22 @@ export async function setOrgCertifierCredentialsFn(
  * needs next, so a pass here means the next step will work.
  */
 async function verifyCertifierCredentials(
+  ctx: OrgContext,
   organizationId: string,
 ): Promise<CertifierCredentialsVerification> {
   try {
-    const client = await getIsometricClientForOrg(organizationId);
-    const projects = await listProjects(client);
+    const projectCount = await verifyIsometricCredentialsForOrganization(
+      ctx,
+      organizationId,
+    );
     return {
       ok: true,
-      projectCount: projects.length,
+      projectCount,
       message:
-        projects.length === 0
+        projectCount === 0
           ? "Connected to Isometric. This account has no projects yet, so there is nothing to link the facility to."
-          : `Connected to Isometric. ${projects.length} project${
-              projects.length === 1 ? "" : "s"
+          : `Connected to Isometric. ${projectCount} project${
+              projectCount === 1 ? "" : "s"
             } available to link.`,
     };
   } catch (error) {

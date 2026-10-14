@@ -33,6 +33,7 @@ import * as durabilitySamples from "@/fn/certification/durability-measurement-sa
 import * as evidenceLedgers from "@/fn/certification/ensure-evidence-ledgers";
 import * as protocolPreflight from "@/fn/certification/protocol-version-preflight";
 import { submitRemoval } from "@/fn/certification/submit-removal";
+import { resolveIsometricClient } from "@/data-access/certifier-credentials";
 import * as isometric from "@/lib/isometric";
 import * as sourceVerification from "@/lib/isometric/source-binding-verification";
 
@@ -508,7 +509,7 @@ describe("submitRemoval — reporting window anchored to application date (issue
     expect(
       protocolPreflight.checkProtocolVersionAtSubmit,
     ).not.toHaveBeenCalled();
-    expect(isometric.getIsometricClientForOrg).not.toHaveBeenCalled();
+    expect(resolveIsometricClient).not.toHaveBeenCalled();
     expect(isometric.createDatapoint).not.toHaveBeenCalled();
     expect(isometric.createGhgEntry).not.toHaveBeenCalled();
     expect(storedRows).toHaveLength(0);

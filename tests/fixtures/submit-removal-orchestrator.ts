@@ -1,5 +1,9 @@
 import { beforeEach, vi } from "vitest";
 
+vi.mock("@/data-access/certifier-credentials", () => ({
+  resolveIsometricClient: vi.fn(async () => isometricClientFake),
+}));
+
 import type {
   CertificationSubmissionRow,
   CertifierProjectRow,
@@ -113,15 +117,13 @@ vi.mock("@/lib/isometric", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/isometric")>();
   return {
     ...actual,
-    getIsometricClientForOrg: vi.fn(async () => ({} as import("@/lib/isometric").IsometricClient)),
     createDatapoint: vi.fn(),
     createGhgEntry: vi.fn(),
     reconcileDatapoint: vi.fn(),
     reconcileRemoval: vi.fn(),
   };
 });
-// The production-batch step (#630) resolves its client from the client module
-// directly, not the barrel above, so the HTTP boundary is faked here too.
+// All orchestrator steps share the client returned by the credential resolver.
 const isometricClientFake = vi.hoisted(() => ({
   get: vi.fn(),
   post: vi.fn(),
@@ -129,14 +131,6 @@ const isometricClientFake = vi.hoisted(() => ({
   paginate: vi.fn(),
   paginateAll: vi.fn(),
 }));
-vi.mock("@/lib/isometric/client", async (importOriginal) => {
-  const actual =
-    await importOriginal<typeof import("@/lib/isometric/client")>();
-  return {
-    ...actual,
-    getIsometricClientForOrg: vi.fn(async () => isometricClientFake),
-  };
-});
 // The Phase 3 measurement-samples flag is a build-time const (false while the
 // two sandbox confirms are pending). Tests that exercise the durability path
 // expose it through a mutable getter and stub the POST-ing submitter.

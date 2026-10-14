@@ -21,9 +21,9 @@
  * passed through from the actual module so `instanceof` checks in
  * `performRegistryCreate` keep working.
  *
- * This module must NOT import `@/lib/isometric/client` at runtime (the mock
+ * This module must NOT statically import `@/lib/isometric/client` (the mock
  * factory imports this file while that module is being replaced) — only
- * type-only imports are allowed.
+ * type-only imports are allowed at module scope.
  *
  * Failure injection per request: `failNext(route, mode)` where mode is
  *  - "reject-before-commit" — the server never created the record; throws an
@@ -791,8 +791,21 @@ export function createFakeClientModule(actual: ClientModule): ClientModule {
 
   return {
     ...actual,
-    getIsometricClientForOrg: async () => client,
     createIsometricClient: () => client,
+  };
+}
+
+export async function fakeCredentialsModule(
+  importOriginal: <T>() => Promise<T>,
+): Promise<typeof import("@/data-access/certifier-credentials")> {
+  const actual = await importOriginal<typeof import("@/data-access/certifier-credentials")>();
+  return {
+    ...actual,
+    resolveIsometricClient: async () => {
+      // Pair with createFakeClientModule, whose factory ignores null credentials.
+      const { createIsometricClient } = await import("@/lib/isometric/client");
+      return createIsometricClient(null);
+    },
   };
 }
 

@@ -1,4 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("@/data-access/certifier-credentials", () => ({
+  resolveIsometricClient: vi.fn(async () => ({ fake: true })),
+}));
+
 import type { OrgContext } from "@/lib/auth/server";
 import type { RemovalDeletionClaim } from "@/data-access/certifier-removal-deletion";
 
@@ -56,10 +61,6 @@ vi.mock("@/lib/isometric", () => ({
   findBiocharApplicationBySupplierReference:
     state.findBiocharApplicationBySupplierReference,
   reconcileRemoval: state.reconcileRemoval,
-}));
-vi.mock("@/lib/isometric/client", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/lib/isometric/client")>()),
-  getIsometricClientForOrg: vi.fn(async () => ({ fake: true })),
 }));
 vi.mock("./shared", () => ({
   appendSyncEventBestEffort: state.appendSyncEvent,

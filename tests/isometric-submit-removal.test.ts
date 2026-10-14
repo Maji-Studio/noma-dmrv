@@ -49,6 +49,7 @@ import * as biocharApplications from "@/fn/certification/biochar-applications";
 import * as protocolPreflight from "@/fn/certification/protocol-version-preflight";
 import { submitRemoval } from "@/fn/certification/submit-removal";
 import { compileRemovalSubmission } from "@/fn/certification/removal-submission-build";
+import { resolveIsometricClient } from "@/data-access/certifier-credentials";
 import * as isometric from "@/lib/isometric";
 
 function makeChangedProductionContext() {
@@ -225,7 +226,7 @@ describe("submitRemoval — happy path", () => {
       protocolPreflight.checkProtocolVersionAtSubmit,
     ).mock.invocationCallOrder[0];
     expect(protocolCheckOrder).toBeLessThan(
-      vi.mocked(isometric.getIsometricClientForOrg).mock.invocationCallOrder[0],
+      vi.mocked(resolveIsometricClient).mock.invocationCallOrder[0],
     );
     expect(
       evidenceLedgers.ensureEvidenceLedgersFromContext,

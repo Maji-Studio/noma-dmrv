@@ -438,6 +438,16 @@ use the streaming route.
 The one non-obvious rule: **`lib/isometric/` is pure** — no DB, no auth, no
 `ActionResult`.
 
+Application orchestration resolves the client through
+`resolveIsometricClient(ctx)` in `src/data-access/certifier-credentials.ts`.
+The resolver enforces `requireOrgScope`, decrypts credentials filtered on the
+context's organization, and passes them to the pure `createIsometricClient` HTTP
+factory. A missing row keeps the client's existing `not_configured` error.
+Only Platform Admin credential verification can select another organization,
+through `verifyIsometricCredentialsForOrganization` with an
+explicit privilege check and `// org-scope-ok:` waiver. Scripts and dedicated
+health checks use `client-env.ts`; the HTTP library never imports data-access.
+
 **Idempotency:** Removal and GHG-Statement submission POSTs run through
 `certification_submissions` as both lock and ledger — `lockedAt` blocks
 concurrent in-flight retries, `payloadHash` (canonical-JSON sha256) identifies
