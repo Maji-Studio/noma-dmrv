@@ -1,8 +1,8 @@
 # Simplification and optimization analysis (2026-09-07)
 
 - **Owner:** Kenji Nguyen
-- **Status:** in progress. Phase A1 of the [rollout plan](../archive/plans/2026-09-07-simplification-rollout-plan.md) (findings 1, 13, 15, 16, 17, 20, 27, the rendering half of 4, appendix A2 and A18) is implemented in PR #740 (`refactor/simplify-a1-dead-code`); file paths below describe the tree as it was when the analysis was written, and paths that no longer exist are marked "deleted in A1".
-- **Last reviewed:** 2026-09-07 (against branch `codex/fix-submission-progress`)
+- **Status:** archived. Historical analysis; delivery is recorded in the [archived rollout plan](./2026-09-07-simplification-rollout-plan.md). Remaining decisions are tracked in [Simplification rollout follow-ups](../../open-questions-architecture.md#simplification-rollout-follow-ups-simplificationremaining-decisions-opened-2026-10-14). File paths below describe the tree when the analysis was written; paths that no longer exist are marked "deleted in A1".
+- **Last reviewed:** 2026-10-14 (archival handoff; original analysis against branch `codex/fix-submission-progress` on 2026-09-07)
 
 ## Summary
 
