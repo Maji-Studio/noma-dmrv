@@ -19,7 +19,9 @@ export async function findApiOrderBalance(ctx: OrgContext, identifier: ApiLookup
   requireOrgScope(ctx);
   return db.transaction(async (tx) => {
     const order = await findApiOrder(ctx, identifier, tx);
-    const allocation = await readDeliveryOrderAllocation(ctx, tx, order.id, undefined, order.quantityKg, order.archivedAt !== null);
+    const allocation = await readDeliveryOrderAllocation(ctx, tx, order.id, {
+      orderQuantityKg: order.quantityKg, includeArchived: order.archivedAt !== null,
+    });
     if (allocation.fulfillmentStatus === null) throw new Error("Order balance has no fulfillment status");
     const deliveredKg = decimal(allocation.allocatedWetKg);
     return {

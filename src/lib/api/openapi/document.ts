@@ -28,6 +28,11 @@ import { addOrderWritePaths } from "./order-writes";
 import { addLabSampleWritePaths } from "./lab-sample-writes";
 import { outputSchema, queryParameters, targetParameter, idempotencyParameter, ifMatchParameter, privateHeaders, requestIdHeader, etagHeader, stockEtagHeader, orderBalanceEtagHeader, writeHeaders, locationHeader, problemResponses, jsonResponse, headerComponents, problemResponseComponents } from "./transport";
 
+const resourceReadDescriptions: Partial<Record<(typeof resources)[number]["path"], { list: string; get: string }>> = {
+  orders: { list: `${readDescriptions.list} ${readDescriptions.orders}`, get: readDescriptions.orders },
+  customers: { list: `${readDescriptions.list} ${readDescriptions.customers}`, get: readDescriptions.customers },
+};
+
 const READ_ERRORS = [400, 401, 403, 429, 500];
 const WRITE_ERRORS = [400, 401, 403, 404, 409, 422, 429, 500, 503];
 const JSON_INDENT = 2;
@@ -98,13 +103,13 @@ export function buildOpenApiDocument() {
   for (const resource of published) {
     paths[`/${resource.path}`] = { get: privateOperation(
       `find_${resource.path.replaceAll("-", "_")}`, resource.scope,
-      resource.path === "orders" ? `${readDescriptions.list} ${readDescriptions.orders}` : resource.path === "customers" ? `${readDescriptions.list} ${readDescriptions.customers}` : readDescriptions.list,
+      resourceReadDescriptions[resource.path]?.list ?? readDescriptions.list,
       { ...problemResponses("facilityId" in resource.queries.list.shape ? [...READ_ERRORS, 404] : READ_ERRORS),
         "200": jsonResponse("Resource page.", publishOutput(listEnvelopeSchema(resource.schema))) },
       queryParameters(resource.queries.list),
     ) };
     paths[`/${resource.path}/{idOrCode}`] = { get: privateOperation(
-      `get_${resource.singular}`, resource.scope, resource.path === "orders" ? readDescriptions.orders : resource.path === "customers" ? readDescriptions.customers : readDescriptions.get,
+      `get_${resource.singular}`, resource.scope, resourceReadDescriptions[resource.path]?.get ?? readDescriptions.get,
       { ...problemResponses([...READ_ERRORS, 404]), "200": jsonResponse("Resource representation.", publishOutput(itemEnvelopeSchema(resource.schema)), etagHeader) },
       [targetParameter(), ...queryParameters(resource.queries.get)],
     ) };

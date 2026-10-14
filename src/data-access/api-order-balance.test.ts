@@ -27,14 +27,14 @@ it("reads the order first and the allocation through the same read-only repeatab
   expect(mocks.scope).toHaveBeenCalledWith(ctx);
   expect(mocks.transaction).toHaveBeenCalledWith(expect.any(Function), { isolationLevel: "repeatable read", accessMode: "read only" });
   expect(mocks.order).toHaveBeenCalledWith(ctx, { id }, tx);
-  expect(mocks.allocation).toHaveBeenCalledWith(ctx, tx, id, undefined, 100, false);
+  expect(mocks.allocation).toHaveBeenCalledWith(ctx, tx, id, { orderQuantityKg: 100, includeArchived: false });
   expect(mocks.order.mock.invocationCallOrder[0]).toBeLessThan(mocks.allocation.mock.invocationCallOrder[0]);
 });
 
 it("includes archived deliveries only when the order is archived", async () => {
   mocks.order.mockResolvedValue({ id, quantityKg: 100, archivedAt: new Date("2026-10-01T00:00:00Z") });
   expect(await findApiOrderBalance(ctx, { id })).toMatchObject({ deliveredWetMassKg: 25, remainingWetMassKg: 75 });
-  expect(mocks.allocation).toHaveBeenCalledWith(ctx, tx, id, undefined, 100, true);
+  expect(mocks.allocation).toHaveBeenCalledWith(ctx, tx, id, { orderQuantityKg: 100, includeArchived: true });
 });
 
 it("publishes decimal subtraction without float noise and accepts that remainder in the write-side check", async () => {

@@ -16,11 +16,10 @@ export async function readDeliveryOrderAllocation(
   ctx: OrgContext,
   dbOrTx: QueryExecutor,
   orderId: string,
-  excludeDeliveryId?: string,
-  orderQuantityKg?: number,
-  includeArchived = false,
+  options: { excludeDeliveryId?: string; orderQuantityKg?: number; includeArchived?: boolean } = {},
 ) {
   requireOrgScope(ctx);
+  const { excludeDeliveryId, orderQuantityKg, includeArchived = false } = options;
   const conditions = [
     eq(deliveries.orderId, orderId),
     eq(deliveries.organizationId, ctx.organizationId),
@@ -42,7 +41,7 @@ export async function readDeliveryOrderAllocation(
 }
 
 async function deriveAllocatedWetKg(ctx: OrgContext, dbOrTx: QueryExecutor, orderId: string, excludeDeliveryId?: string): Promise<number> {
-  return (await readDeliveryOrderAllocation(ctx, dbOrTx, orderId, excludeDeliveryId)).allocatedWetKg;
+  return (await readDeliveryOrderAllocation(ctx, dbOrTx, orderId, { excludeDeliveryId })).allocatedWetKg;
 }
 
 export async function assertOrderQuantityCoversAllocations(
