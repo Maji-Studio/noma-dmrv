@@ -9,6 +9,8 @@ import { writeTools as allWriteTools } from "./write-tools";
 
 const writeTools = allWriteTools.filter((tool) => tool.scope.startsWith("feedstocks:"));
 
+vi.mock("@/data-access/delivery-output-writes", () => ({}));
+vi.mock("@/lib/read-models/api-deliveries", () => ({ readApiDelivery: vi.fn(), readApiDeliveryList: vi.fn() }));
 vi.mock("@/data-access/orders", () => ({}));
 vi.mock("@/data-access/organization-settings", () => ({}));
 vi.mock("@/data-access/transport-legs", () => ({}));
@@ -144,4 +146,8 @@ it("includes order writes under the existing write inventory", () => {
   expect(allWriteTools.filter((tool) => tool.scope.startsWith("orders:")).map((tool) => [tool.name, tool.scope])).toEqual([
     ["record_order", "orders:write"], ["update_order", "orders:write"], ["delete_order", "orders:delete"],
   ]);
+});
+
+it("includes delivery writes in the inventory", () => {
+  expect(allWriteTools.filter(tool => tool.scope === "deliveries:write").map(tool => tool.name)).toEqual(["record_delivery", "update_delivery"]);
 });

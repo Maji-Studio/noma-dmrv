@@ -1,3 +1,4 @@
+import { deliveryWriteTools } from "./delivery-tools";
 import { controls, parseControls, writeOptions } from "./write-controls";
 import { productionRunWriteTools } from "./production-run-tools";
 import { biocharProductWriteTools } from "./biochar-product-tools";
@@ -89,6 +90,7 @@ export const writeTools: WriteTool[] = [
   ...outputStockWriteTools,
   ...labSampleWriteTools,
   ...orderWriteTools,
+  ...deliveryWriteTools,
 ];
 
 async function mutate(context: ApiRouteContext, raw: unknown, kind: "update" | "delete") {

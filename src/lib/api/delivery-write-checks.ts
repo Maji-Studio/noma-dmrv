@@ -1,3 +1,4 @@
+import { BILL_OF_LADING_WARNING } from "@/lib/delivery-guidance";
 import type { ApiContext } from "@/lib/auth/api-context";
 import { DELIVERY_REPRESENTATION_REVISION } from "@/config/api-rest";
 import { DomainError } from "@/lib/domain-errors";
@@ -10,7 +11,6 @@ import { deliveryAllocationSchema } from "@/lib/representations/delivery-writes"
 import { recordDeliveryInput } from "@/schemas/delivery-input";
 import { ApiHttpError } from "./http-error";
 
-const BILL_OF_LADING_WARNING = "No bill of lading is uploaded. Upload the bill of lading in the app.";
 type RecordedDelivery = Awaited<ReturnType<typeof recordDelivery.execute>>;
 interface DeliveryWriteOutput { delivery: DeliveryRepresentation; warnings: string[] }
 export interface DeliveryCreateOutput extends DeliveryWriteOutput {
