@@ -2,6 +2,7 @@
 
 import { useQuery, type QueryClient } from "@tanstack/react-query";
 import { getOnboardingStatusRead } from "@/lib/read-api/client";
+import { unwrap } from "@/hooks/types";
 
 const ONBOARDING_STATUS_STALE_TIME_MS = 30_000;
 
@@ -40,13 +41,8 @@ export function useOnboardingStatus(
 ) {
   return useQuery({
     queryKey: onboardingKeys.status(facilityId, organizationId),
-    queryFn: async ({ signal }) => {
-      const result = await getOnboardingStatusRead({ facilityId }, { signal });
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-      return result.data;
-    },
+    queryFn: async ({ signal }) =>
+      unwrap(await getOnboardingStatusRead({ facilityId }, { signal })),
     enabled: organizationId !== null,
     staleTime: ONBOARDING_STATUS_STALE_TIME_MS,
     // Keep browser-back and route-cache restores honest even if a write came

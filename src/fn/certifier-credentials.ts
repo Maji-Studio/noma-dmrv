@@ -1,6 +1,5 @@
 "use server";
 
-import { z } from "zod";
 import { env } from "@/config/env";
 import {
   getCertifierCredentialsStatus,
@@ -8,12 +7,10 @@ import {
   upsertCertifierCredentials,
   type CertifierCredentialsStatus,
 } from "@/data-access/certifier-credentials";
-import {
-  formatZodActionError,
-  logActionError,
-} from "@/fn/action-errors";
-import { requireOrgContext, type OrgContext } from "@/lib/auth/server";
-import { SafeError, toActionError } from "@/lib/errors";
+import { logActionError } from "@/fn/action-errors";
+import { withAction } from "@/fn/with-action";
+import type { OrgContext } from "@/lib/auth/server";
+import { SafeError } from "@/lib/errors";
 import { IsometricApiError } from "@/lib/isometric";
 import {
   orgCertifierCredentialsTargetSchema,
@@ -21,33 +18,13 @@ import {
 } from "@/schemas/organizations";
 import type { ActionResult } from "@/types/actions";
 
+const LOG_MESSAGE = "certifier credentials action failed";
+
 const PROVIDER = "isometric" as const;
 
 function organizationIdForLog(input: unknown): string | undefined {
   const result = orgCertifierCredentialsTargetSchema.safeParse(input);
   return result.success ? result.data.organizationId : undefined;
-}
-
-async function toCredentialsResult<T>(
-  organizationId: string | undefined,
-  operation: () => Promise<T>,
-  fallbackMessage: string,
-): Promise<ActionResult<T>> {
-  try {
-    return { success: true, data: await operation() };
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return {
-        success: false,
-        error: formatZodActionError(error),
-      };
-    }
-    logActionError(error, {
-      message: "certifier credentials action failed",
-      context: organizationId ? { organizationId } : undefined,
-    });
-    return { success: false, error: toActionError(error, fallbackMessage) };
-  }
 }
 
 /**
@@ -73,10 +50,8 @@ export async function setOrgCertifierCredentialsFn(
   input: unknown,
 ): Promise<ActionResult<SetCertifierCredentialsResult>> {
   const organizationId = organizationIdForLog(input);
-  return toCredentialsResult(
-    organizationId,
-    async () => {
-      const ctx = await requireOrgContext();
+  return withAction(
+    async (ctx) => {
       const values = setOrgCertifierCredentialsSchema.parse(input);
       if (!env.CREDENTIALS_ENCRYPTION_KEY) {
         throw new SafeError(
@@ -94,7 +69,16 @@ export async function setOrgCertifierCredentialsFn(
       ]);
       return { status, verification };
     },
-    "Failed to save Isometric credentials.",
+    {
+      fallbackMessage: "Failed to save Isometric credentials.",
+      log: {
+        message: LOG_MESSAGE,
+        context: {
+          op: "certifier-credentials:set",
+          ...(organizationId ? { organizationId } : {}),
+        },
+      },
+    },
   );
 }
 
@@ -153,14 +137,21 @@ export async function getOrgCertifierCredentialsStatusFn(
   input: unknown,
 ): Promise<ActionResult<CertifierCredentialsStatus>> {
   const organizationId = organizationIdForLog(input);
-  return toCredentialsResult(
-    organizationId,
-    async () => {
-      const ctx = await requireOrgContext();
+  return withAction(
+    async (ctx) => {
       const values = orgCertifierCredentialsTargetSchema.parse(input);
       return getCertifierCredentialsStatus(ctx, values.organizationId, PROVIDER);
     },
-    "Failed to load Isometric credential status.",
+    {
+      fallbackMessage: "Failed to load Isometric credential status.",
+      log: {
+        message: LOG_MESSAGE,
+        context: {
+          op: "certifier-credentials:status",
+          ...(organizationId ? { organizationId } : {}),
+        },
+      },
+    },
   );
 }
 

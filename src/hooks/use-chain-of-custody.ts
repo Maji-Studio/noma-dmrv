@@ -10,6 +10,7 @@ import {
   getCreditBatchChainFn,
   getCreditBatchChainGeoFn,
 } from "@/fn/chain-of-custody";
+import { unwrap } from "@/hooks/types";
 
 const STALE_TIME_MS = 30_000;
 
@@ -35,13 +36,7 @@ export const chainOfCustodyKeys = {
 export function useChainOfCustody(applicationId: string | null) {
   return useQuery({
     queryKey: chainOfCustodyKeys.detail(applicationId ?? ""),
-    queryFn: async () => {
-      const result = await getChainOfCustodyFn(applicationId!);
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-      return result.data;
-    },
+    queryFn: async () => unwrap(await getChainOfCustodyFn(applicationId!)),
     enabled: !!applicationId,
     staleTime: STALE_TIME_MS,
   });
@@ -50,13 +45,7 @@ export function useChainOfCustody(applicationId: string | null) {
 export function useChainOfCustodyGeo(applicationId: string | null) {
   return useQuery({
     queryKey: chainOfCustodyKeys.geo(applicationId ?? ""),
-    queryFn: async () => {
-      const result = await getChainOfCustodyGeoFn(applicationId!);
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-      return result.data;
-    },
+    queryFn: async () => unwrap(await getChainOfCustodyGeoFn(applicationId!)),
     enabled: !!applicationId,
     staleTime: STALE_TIME_MS,
   });
@@ -65,13 +54,7 @@ export function useChainOfCustodyGeo(applicationId: string | null) {
 export function useApplicationTrail(applicationId: string | null) {
   return useQuery({
     queryKey: chainOfCustodyKeys.trail(applicationId ?? ""),
-    queryFn: async () => {
-      const result = await getApplicationTrailFn(applicationId!);
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-      return result.data;
-    },
+    queryFn: async () => unwrap(await getApplicationTrailFn(applicationId!)),
     enabled: !!applicationId,
     staleTime: STALE_TIME_MS,
   });
@@ -80,13 +63,7 @@ export function useApplicationTrail(applicationId: string | null) {
 export function useCreditBatchChain(creditBatchId: string | null) {
   return useQuery({
     queryKey: chainOfCustodyKeys.batch(creditBatchId ?? ""),
-    queryFn: async () => {
-      const result = await getCreditBatchChainFn(creditBatchId!);
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-      return result.data;
-    },
+    queryFn: async () => unwrap(await getCreditBatchChainFn(creditBatchId!)),
     enabled: !!creditBatchId,
     staleTime: STALE_TIME_MS,
   });
@@ -98,16 +75,13 @@ export function useCreditBatchChainGeo(
 ) {
   return useQuery({
     queryKey: chainOfCustodyKeys.batchGeo(creditBatchId ?? "", productionRunId),
-    queryFn: async () => {
-      const result = await getCreditBatchChainGeoFn(
-        creditBatchId!,
-        productionRunId
-      );
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-      return result.data;
-    },
+    queryFn: async () =>
+      unwrap(
+        await getCreditBatchChainGeoFn(
+          creditBatchId!,
+          productionRunId
+        ),
+      ),
     enabled: !!creditBatchId,
     staleTime: STALE_TIME_MS,
   });

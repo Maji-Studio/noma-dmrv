@@ -14,6 +14,7 @@ import { deliveryKeys } from "./use-deliveries";
 import { storageLocationKeys } from "./use-storage-locations";
 import { certificationKeys } from "./use-certification";
 import { dashboardOverviewKeys } from "./use-dashboard-overview";
+import { unwrap } from "@/hooks/types";
 
 export const outputStockKeys = {
   all: ["outputStock"] as const,
@@ -30,9 +31,7 @@ export function useOutputStockPreview(input: OutputStockPreviewInput | null) {
     enabled: input !== null,
     queryFn: async () => {
       if (!input) throw new Error("Choose a storage bin first.");
-      const result = await previewOutputStockFn(input);
-      if (!result.success) throw new Error(result.error);
-      return result.data;
+      return unwrap(await previewOutputStockFn(input));
     },
     staleTime: 0,
     retry: false,
@@ -51,9 +50,7 @@ export function useOutputStockBalance(bin: { storageLocationId: string; facility
     enabled: bin !== null,
     queryFn: async () => {
       if (!bin) throw new Error("Choose a storage bin first.");
-      const result = await previewOutputStockFn({ ...bin, occurredAt: occurredAt ?? new Date().toISOString(), kind: "count", wetMassKg: 0, moisturePercent: null });
-      if (!result.success) throw new Error(result.error);
-      return result.data;
+      return unwrap(await previewOutputStockFn({ ...bin, occurredAt: occurredAt ?? new Date().toISOString(), kind: "count", wetMassKg: 0, moisturePercent: null }));
     },
     staleTime: 0,
     retry: false,
@@ -73,9 +70,7 @@ export function useOutputSubBins(input: OutputSubBinsInput | null) {
     enabled: input !== null,
     queryFn: async () => {
       if (!input) throw new Error("Choose a storage bin first.");
-      const result = await getOutputSubBinsFn(input);
-      if (!result.success) throw new Error(result.error);
-      return result.data;
+      return unwrap(await getOutputSubBinsFn(input));
     },
     placeholderData: (previous, previousQuery) => previousQuery?.queryKey[2]?.storageLocationId === input?.storageLocationId ? previous : undefined,
     retry: false,
@@ -86,11 +81,7 @@ export function useMatchingOutputBins(facilityId: string, formulationId: string,
   return useQuery({
     queryKey: outputStockKeys.matching(facilityId, formulationId),
     enabled: enabled && !!facilityId && !!formulationId,
-    queryFn: async () => {
-      const result = await getMatchingOutputBinsFn({ facilityId, formulationId });
-      if (!result.success) throw new Error(result.error);
-      return result.data;
-    },
+    queryFn: async () => unwrap(await getMatchingOutputBinsFn({ facilityId, formulationId })),
   });
 }
 
@@ -98,11 +89,7 @@ export function useOutputStockHistory(storageLocationId: string, enabled = true)
   return useQuery({
     queryKey: outputStockKeys.history(storageLocationId),
     enabled: enabled && !!storageLocationId,
-    queryFn: async () => {
-      const result = await getOutputStockHistoryFn(storageLocationId);
-      if (!result.success) throw new Error(result.error);
-      return result.data;
-    },
+    queryFn: async () => unwrap(await getOutputStockHistoryFn(storageLocationId)),
   });
 }
 
