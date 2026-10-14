@@ -8,7 +8,6 @@ import type { ActionResult } from "@/types/actions";
 import { type Application, applications } from "@/db/schema/application";
 import { withAutoCode } from "@/data-access/code-generator";
 import { requireOrgFacility } from "@/data-access/utils";
-import { requireOrgContext } from "@/lib/auth/server";
 import {
   getApplications as getApplicationsData,
   getApplicationById,
@@ -27,23 +26,8 @@ import {
   updateApplicationSchema,
   deleteApplicationSchema,
 } from "@/schemas/applications";
-import {
-  formatZodActionError,
-  toLoggedActionError,
-} from "./action-errors";
 
 const MAX_APPLICATION_LIST_SIZE = 100;
-
-function applicationActionError(
-  error: unknown,
-  fallbackMessage: string,
-  op: string,
-): string {
-  return toLoggedActionError(error, fallbackMessage, {
-    message: "application action failed",
-    context: { op },
-  });
-}
 
 const getApplicationsOptionsSchema = z.object({
   page: z.number().int().min(1).optional(),
@@ -62,33 +46,27 @@ const getApplicationsOptionsSchema = z.object({
 export async function getApplicationsFn(
   options?: ApplicationListOptions,
 ): Promise<ActionResult<{ items: ApplicationListItem[]; total: number; page: number; pageSize: number; totalPages: number }>> {
-  try {
-    const ctx = await requireOrgContext();
-
-    const validatedOptions = getApplicationsOptionsSchema.parse(options);
+  return withAction(async (ctx) => {
+    const parsedOptions = getApplicationsOptionsSchema.safeParse(options);
+    if (!parsedOptions.success) {
+      throw new SafeError("Applications could not be loaded. Refresh the page and try again.");
+    }
+    const validatedOptions = parsedOptions.data;
     if (validatedOptions?.facilityId) {
       await requireOrgFacility(ctx, validatedOptions.facilityId);
     }
     const result = await getApplicationsData(ctx, validatedOptions);
-    return { success: true, data: result };
-  } catch (error) {
-    return {
-      success: false,
-      error: applicationActionError(
-        error,
-        "Failed to get applications",
-        "application:list",
-      ),
-    };
-  }
+    return result;
+  }, {
+    fallbackMessage: "Failed to get applications",
+    log: { message: "application action failed", context: { op: "application:list" } },
+  });
 }
 
 export async function getApplicationDeliveryOptionsFn(
   facilityId?: string
 ): Promise<ActionResult<Awaited<ReturnType<typeof getApplicationDeliveryOptionsData>>>> {
-  try {
-    const ctx = await requireOrgContext();
-
+  return withAction(async (ctx) => {
     const validatedFacilityId = facilityId
       ? z.string().uuid().parse(facilityId)
       : undefined;
@@ -96,17 +74,11 @@ export async function getApplicationDeliveryOptionsFn(
       await requireOrgFacility(ctx, validatedFacilityId);
     }
     const deliveries = await getApplicationDeliveryOptionsData(ctx, validatedFacilityId);
-    return { success: true, data: deliveries };
-  } catch (error) {
-    return {
-      success: false,
-      error: applicationActionError(
-        error,
-        "Failed to load application deliveries",
-        "application:delivery-options",
-      ),
-    };
-  }
+    return deliveries;
+  }, {
+    fallbackMessage: "Failed to load application deliveries",
+    log: { message: "application action failed", context: { op: "application:delivery-options" } },
+  });
 }
 
 /**
@@ -115,9 +87,7 @@ export async function getApplicationDeliveryOptionsFn(
 export async function createApplicationFn(
   data: z.infer<typeof createApplicationSchema>
 ): Promise<ActionResult<Application>> {
-  try {
-    const ctx = await requireOrgContext();
-
+  return withAction(async (ctx) => {
     const validated = createApplicationSchema.parse(data);
 
     const application = await withAutoCode(
@@ -129,23 +99,11 @@ export async function createApplicationFn(
       (code) => createApplicationData(ctx, { ...validated, code })
     );
 
-    return { success: true, data: application };
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return {
-        success: false,
-        error: formatZodActionError(error),
-      };
-    }
-    return {
-      success: false,
-      error: applicationActionError(
-        error,
-        "Failed to create application",
-        "application:create",
-      ),
-    };
-  }
+    return application;
+  }, {
+    fallbackMessage: "Failed to create application",
+    log: { message: "application action failed", context: { op: "application:create" } },
+  });
 }
 
 /**

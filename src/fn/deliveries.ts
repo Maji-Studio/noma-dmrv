@@ -26,7 +26,6 @@ import {
 } from "@/data-access/delivery-stats";
 import { requireOrgFacility } from "@/data-access/utils";
 import { deliveries as deliveriesTable, type Delivery } from "@/db/schema";
-import { requireOrgContext } from "@/lib/auth/server";
 import {
   createDeliverySchema,
   deleteDeliverySchema,
@@ -37,21 +36,6 @@ import {
 import { withAction } from "./with-action";
 import type { ActionResult } from "@/types/actions";
 import { z } from "zod";
-import {
-  formatZodActionError,
-  toLoggedActionError,
-} from "./action-errors";
-
-function deliveryActionError(
-  error: unknown,
-  fallbackMessage: string,
-  op: string,
-): string {
-  return toLoggedActionError(error, fallbackMessage, {
-    message: "delivery action failed",
-    context: { op },
-  });
-}
 
 const deliveryStatsFilterSchema = z.object({
   facilityId: z.string().uuid().optional(),
@@ -70,9 +54,7 @@ const deliveryStatsFilterSchema = z.object({
 export async function getDeliveriesFn(
   filters?: Partial<z.infer<typeof deliveryFilterSchema>>
 ): Promise<ActionResult<PaginatedDeliveries>> {
-  try {
-    const ctx = await requireOrgContext();
-
+  return withAction(async (ctx) => {
     const validatedFilters = filters
       ? deliveryFilterSchema.parse(filters)
       : undefined;
@@ -81,23 +63,12 @@ export async function getDeliveriesFn(
     }
     const deliveries = await getDeliveriesData(ctx, validatedFilters);
 
-    return { success: true, data: deliveries };
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return {
-        success: false,
-        error: formatZodActionError(error, "Invalid filter parameters"),
-      };
-    }
-    return {
-      success: false,
-      error: deliveryActionError(
-        error,
-        "Failed to load deliveries",
-        "delivery:list",
-      ),
-    };
-  }
+    return deliveries;
+  }, {
+    fallbackMessage: "Failed to load deliveries",
+    zodErrorPrefix: "Invalid filter parameters",
+    log: { message: "delivery action failed", context: { op: "delivery:list" } },
+  });
 }
 
 /**
@@ -106,21 +77,13 @@ export async function getDeliveriesFn(
 export async function getDeliveryWithRelationsFn(
   deliveryId: string
 ): Promise<ActionResult<DeliveryDetail>> {
-  try {
-    const ctx = await requireOrgContext();
-
+  return withAction(async (ctx) => {
     const delivery = await getDeliveryWithRelationsData(ctx, deliveryId);
-    return { success: true, data: delivery };
-  } catch (error) {
-    return {
-      success: false,
-      error: deliveryActionError(
-        error,
-        "Failed to load delivery details",
-        "delivery:detail",
-      ),
-    };
-  }
+    return delivery;
+  }, {
+    fallbackMessage: "Failed to load delivery details",
+    log: { message: "delivery action failed", context: { op: "delivery:detail" } },
+  });
 }
 
 /**
@@ -134,25 +97,17 @@ export async function getDeliveryStatsFn(
     toDate?: Date;
   }
 ): Promise<ActionResult<DeliveryStats>> {
-  try {
-    const ctx = await requireOrgContext();
-
+  return withAction(async (ctx) => {
     const validatedFilters = deliveryStatsFilterSchema.parse(filters);
     if (validatedFilters?.facilityId) {
       await requireOrgFacility(ctx, validatedFilters.facilityId);
     }
     const stats = await getDeliveryStatsData(ctx, validatedFilters);
-    return { success: true, data: stats };
-  } catch (error) {
-    return {
-      success: false,
-      error: deliveryActionError(
-        error,
-        "Failed to load delivery stats",
-        "delivery:stats",
-      ),
-    };
-  }
+    return stats;
+  }, {
+    fallbackMessage: "Failed to load delivery stats",
+    log: { message: "delivery action failed", context: { op: "delivery:stats" } },
+  });
 }
 
 // ============================================

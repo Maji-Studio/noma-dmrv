@@ -6,6 +6,7 @@ import { withAction } from "./with-action";
  * Server-side functions for in-process sample CRUD operations
  */
 
+import { SafeError } from "@/lib/errors";
 import { z } from "zod";
 import { productionSamples } from "@/db/schema";
 import { withAutoCode } from "@/data-access/code-generator";
@@ -16,20 +17,20 @@ import {
   deleteProductionSample,
   type ProductionSampleWithRelations,
 } from "@/data-access/production-samples";
-import { requireOrgContext } from "@/lib/auth/server";
 import {
   createProductionSampleSchema,
   updateProductionSampleSchema,
   deleteProductionSampleSchema,
 } from "@/schemas/production-samples";
 import type { ActionResult } from "@/types/actions";
-import { formatZodActionError } from "./action-errors";
+
+const LOAD_FAILURE = "In-process measurements could not be loaded. Refresh the page and try again.";
+const CREATE_FAILURE = "In-process measurement was not created. Check the form.";
+const INVALID_INPUT = "Invalid input";
 
 const productionRunIdSchema = z.string().uuid("Production run is required");
 
-function logServerError(context: string, error: unknown): void {
-  console.error(`[production-samples] ${context}`, error);
-}
+class InvalidProductionRunInputError extends SafeError {}
 
 // ============================================
 // List Operations
@@ -41,24 +42,26 @@ function logServerError(context: string, error: unknown): void {
 export async function getProductionSamplesFn(
   productionRunId: string
 ): Promise<ActionResult<ProductionSampleWithRelations[]>> {
-  try {
-    const ctx = await requireOrgContext();
-
+  return withAction(async (ctx) => {
     const validatedProductionRunId = productionRunIdSchema.safeParse(productionRunId);
     if (!validatedProductionRunId.success) {
-      return { success: false, error: "Invalid input" };
+      throw new InvalidProductionRunInputError(INVALID_INPUT);
     }
 
     const samples = await getProductionSamplesData(ctx, validatedProductionRunId.data);
-    return { success: true, data: samples };
-  } catch (error) {
-    logServerError("getProductionSamplesFn failed", error);
-    return {
-      success: false,
-      error:
-        "In-process measurements could not be loaded. Refresh the page and try again.",
-    };
-  }
+    return samples;
+  }, {
+    fallbackMessage: LOAD_FAILURE,
+    log: { message: "getProductionSamplesFn failed", context: { op: "production-sample:list" } },
+    mapError: (error) => {
+      if (error instanceof InvalidProductionRunInputError) {
+        return { success: false as const, error: INVALID_INPUT };
+      }
+      return error instanceof SafeError
+        ? { success: false as const, error: LOAD_FAILURE }
+        : undefined;
+    },
+  });
 }
 
 // ============================================
@@ -71,9 +74,7 @@ export async function getProductionSamplesFn(
 export async function createProductionSampleFn(
   data: z.infer<typeof createProductionSampleSchema>
 ): Promise<ActionResult<ProductionSampleWithRelations>> {
-  try {
-    const ctx = await requireOrgContext();
-
+  return withAction(async (ctx) => {
     const validated = createProductionSampleSchema.parse(data);
 
     const sample = await withAutoCode(
@@ -98,24 +99,19 @@ export async function createProductionSampleFn(
           sampledById: validated.sampledById ?? null,
           notes: validated.notes ?? null,
         });
-      }
+      },
+      CREATE_FAILURE,
     );
 
-    return { success: true, data: sample };
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return {
-        success: false,
-        error: formatZodActionError(error),
-      };
-    }
-    logServerError("createProductionSampleFn failed", error);
-    return {
-      success: false,
-      error:
-        "In-process measurement was not created. Check the form.",
-    };
-  }
+    return sample;
+  }, {
+    fallbackMessage: CREATE_FAILURE,
+    log: { message: "createProductionSampleFn failed", context: { op: "production-sample:create" } },
+    mapError: (error) =>
+      error instanceof SafeError
+        ? { success: false as const, error: CREATE_FAILURE }
+        : undefined,
+  });
 }
 
 // ============================================
@@ -153,7 +149,7 @@ export async function updateProductionSampleFn(
     return sample;
   }, {
     fallbackMessage: "In-process measurement was not saved. Try again.",
-    log: { message: "updateProductionSampleFn failed" },
+    log: { message: "updateProductionSampleFn failed", context: { op: "production-sample:update" } },
   });
 }
 
@@ -174,6 +170,6 @@ export async function deleteProductionSampleFn(
     return;
   }, {
     fallbackMessage: "In-process measurement was not deleted. Try again.",
-    log: { message: "deleteProductionSampleFn failed" },
+    log: { message: "deleteProductionSampleFn failed", context: { op: "production-sample:delete" } },
   });
 }

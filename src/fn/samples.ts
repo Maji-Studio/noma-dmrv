@@ -17,7 +17,6 @@ import {
   type SampleWithRelations,
   type SampleStats,
 } from "@/data-access/samples";
-import { requireOrgContext } from "@/lib/auth/server";
 import { deleteLabSample, recordLabSample, updateLabSample } from "@/lib/operations/lab-samples";
 import { runOperationInProcess } from "@/lib/operations/runner";
 import {
@@ -27,21 +26,6 @@ import {
   sampleFilterSchema,
 } from "@/schemas/samples";
 import type { ActionResult } from "@/types/actions";
-import {
-  formatZodActionError,
-  toLoggedActionError,
-} from "./action-errors";
-
-function sampleActionError(
-  error: unknown,
-  fallbackMessage: string,
-  op: string,
-): string {
-  return toLoggedActionError(error, fallbackMessage, {
-    message: "sample action failed",
-    context: { op },
-  });
-}
 
 /** Keep the per-operation log context the legacy actions emitted. */
 function logFor(op: string) {
@@ -58,9 +42,7 @@ function logFor(op: string) {
 export async function getSamplesFn(
   filters?: Partial<z.infer<typeof sampleFilterSchema>>
 ): Promise<ActionResult<PaginatedSamples>> {
-  try {
-    const ctx = await requireOrgContext();
-
+  return withAction(async (ctx) => {
     const validatedFilters = filters
       ? sampleFilterSchema.parse(filters)
       : undefined;
@@ -69,23 +51,12 @@ export async function getSamplesFn(
     }
     const samples = await getSamplesData(ctx, validatedFilters);
 
-    return { success: true, data: samples };
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return {
-        success: false,
-        error: formatZodActionError(error, "Invalid filter parameters"),
-      };
-    }
-    return {
-      success: false,
-      error: sampleActionError(
-        error,
-        "Failed to load samples",
-        "sample:list",
-      ),
-    };
-  }
+    return samples;
+  }, {
+    fallbackMessage: "Failed to load samples",
+    zodErrorPrefix: "Invalid filter parameters",
+    log: logFor("sample:list"),
+  });
 }
 
 /**
@@ -94,21 +65,13 @@ export async function getSamplesFn(
 export async function getSampleByIdFn(
   sampleId: string
 ): Promise<ActionResult<SampleWithRelations>> {
-  try {
-    const ctx = await requireOrgContext();
-
+  return withAction(async (ctx) => {
     const sample = await getSampleByIdData(ctx, sampleId);
-    return { success: true, data: sample };
-  } catch (error) {
-    return {
-      success: false,
-      error: sampleActionError(
-        error,
-        "Failed to load sample",
-        "sample:get",
-      ),
-    };
-  }
+    return sample;
+  }, {
+    fallbackMessage: "Failed to load sample",
+    log: logFor("sample:get"),
+  });
 }
 
 /**
@@ -118,9 +81,7 @@ export async function getSampleStatsFn(
   creditBatchId?: string,
   facilityId?: string,
 ): Promise<ActionResult<SampleStats>> {
-  try {
-    const ctx = await requireOrgContext();
-
+  return withAction(async (ctx) => {
     const validatedCreditBatchId = creditBatchId
       ? z.string().uuid().parse(creditBatchId)
       : undefined;
@@ -135,17 +96,11 @@ export async function getSampleStatsFn(
       validatedCreditBatchId,
       validatedFacilityId,
     );
-    return { success: true, data: stats };
-  } catch (error) {
-    return {
-      success: false,
-      error: sampleActionError(
-        error,
-        "Failed to load sample stats",
-        "sample:stats",
-      ),
-    };
-  }
+    return stats;
+  }, {
+    fallbackMessage: "Failed to load sample stats",
+    log: logFor("sample:stats"),
+  });
 }
 
 // ============================================
