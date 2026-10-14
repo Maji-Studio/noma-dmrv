@@ -47,9 +47,9 @@ beforeEach(() => {
 });
 afterEach(() => { cleanup(); client.clear(); });
 
-async function open() {
+async function open(record = delivery) {
   const save = vi.fn();
-  const view = render(<QueryClientProvider client={client}><DeliveryForm delivery={delivery} onSubmit={save} /></QueryClientProvider>);
+  const view = render(<QueryClientProvider client={client}><DeliveryForm delivery={record} onSubmit={save} /></QueryClientProvider>);
   const reading = await screen.findByRole("spinbutton", { name: /^P1 moisture/ });
   await waitFor(() => expect((reading as HTMLInputElement).value).toBe("20"));
   return { save, reading, form: view.container.querySelector("form")!, button: screen.getByRole("button", { name: "Update delivery" }) };
@@ -96,4 +96,10 @@ it("allows a metadata-only save without requesting a stock correction preview", 
   await act(async () => { fireEvent.submit(form); });
   expect(save).toHaveBeenCalledWith(expect.objectContaining({ deliveredWetMassKg: 100, moistureContentPercent: 20, sources: undefined, correctsMovementId: undefined }), expect.any(Function));
   expect(state.preview).not.toHaveBeenCalled();
+});
+
+it("clears a legacy zero distance override when saving a metadata edit", async () => {
+  const { save, form } = await open({ ...delivery, distanceKmOverride: 0, distanceSource: "manual", distanceNote: "Legacy override note" });
+  await act(async () => { fireEvent.submit(form); });
+  expect(save).toHaveBeenCalledWith(expect.objectContaining({ distanceKmOverride: null, distanceNote: "" }), expect.any(Function));
 });

@@ -22,7 +22,8 @@ import type { OrgContext } from '@/lib/auth/server';
 import { SafeError } from '@/lib/errors';
 import { updateDeliverySchema, resolveDeliveryDistanceSource } from '@/schemas/deliveries';
 import { and, eq } from 'drizzle-orm';
-import type { z } from 'zod';
+import { z } from 'zod';
+import { ALLOCATION_POLICIES } from '@/lib/output-stock/planner';
 import { assertLockedLineagesAllowMutation, lockCertifiedLineageArtifacts, assertCanMutateCertifiedLineage } from './certification-lineage-guards';
 import { lockDeliveryOrderAndAssertBalance } from './delivery-order-balance';
 import { lockBinStock } from './lock-bin-stocks';
@@ -44,6 +45,7 @@ import { lockActiveFacilityReference } from './facility-reference-guards';
 import { withAutoCodes, withUniqueCodeGuard, CODE_CONFLICT_MESSAGES } from './code-generator';
 
 const AUTO_CODE_COUNT = 1;
+const allocationPolicySchema = z.enum(ALLOCATION_POLICIES);
 
 export type CreatedDelivery = Delivery & { savedProducts: BiocharProduct[] };
 /** A mass or moisture edit re-posts stock, so the products it touched return with their new versions. */
@@ -76,7 +78,7 @@ async function deliveryAllocations(ctx: OrgContext, tx: DbTransaction, movement:
     dryBiocharKg: Number(row.dryMassKg), solidsKg: rationalToNumber(readRational(row.basisSnapshot.solidsKg)),
     wetKg: row.wetMassKg === null ? null : Number(row.wetMassKg),
     moisturePercent: row.basisSnapshot.readingPercent == null ? null : Number(row.basisSnapshot.readingPercent),
-    policy: row.basisSnapshot.policy as "fifo" | "lifo" | "pro_rata" | "operator_order" }));
+    policy: allocationPolicySchema.parse(row.basisSnapshot.policy) }));
 }
 
 async function replayDelivery(ctx: OrgContext, tx: DbTransaction, movement: PostedOutputRequest) {
@@ -148,6 +150,9 @@ export async function createDeliveryInTransaction(ctx: OrgContext, tx: DbTransac
         const [facility] = await writeTx.select({ archivedAt: facilities.archivedAt }).from(facilities)
           .where(and(eq(facilities.organizationId, ctx.organizationId), eq(facilities.id, orderRead.facilityId)));
         if (facility?.archivedAt) throw deliveryReferenceNotFound(['orderId'], 'Order facility');
+        const [bin] = await writeTx.select({ archivedAt: storageLocations.archivedAt }).from(storageLocations)
+          .where(and(eq(storageLocations.organizationId, ctx.organizationId), eq(storageLocations.id, data.storageLocationId)));
+        if (bin?.archivedAt) throw deliveryReferenceNotFound(['storageLocationId'], 'Source bin');
       }
       throw error;
     });

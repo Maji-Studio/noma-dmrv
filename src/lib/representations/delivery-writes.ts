@@ -1,3 +1,4 @@
+import { ALLOCATION_POLICIES } from "@/lib/output-stock/planner";
 import { z } from "zod";
 import { deliveryRepresentationSchema } from "./deliveries";
 import { guidedWriteEnvelopeSchema, stockBasisWriteEnvelopeSchema } from "./envelopes";
@@ -9,7 +10,7 @@ export const deliveryAllocationSchema = z.object({
   solidsKg: z.number().describe("Total solids kilograms drawn, including ingredient solids, from the exact rational truncated to 12 decimal places."),
   wetKg: z.number().nullable().describe("Wet kilograms drawn at the supplied moisture reading, at 3 decimal places from the stored allocation."),
   moisturePercent: z.number().nullable().describe("Measured water as percent of wet mass for this draw, at up to 6 decimal places from the supplied reading."),
-  policy: z.enum(["fifo", "lifo", "pro_rata", "operator_order"]).describe("Draw policy: oldest first, newest first, mixed proportions, or the supplied source order."),
+  policy: z.enum(ALLOCATION_POLICIES).describe("Draw policy: oldest first, newest first, mixed proportions, or the supplied source order."),
 });
 export type DeliveryAllocation = z.infer<typeof deliveryAllocationSchema>;
 

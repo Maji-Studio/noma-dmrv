@@ -117,7 +117,7 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
     storageLocationId: delivery?.storageLocationId ?? "",
     driverId: delivery?.driverId ?? undefined,
     vehicleId: delivery?.vehicleId ?? undefined,
-    distanceKmOverride: delivery?.distanceKmOverride ?? undefined,
+    distanceKmOverride: delivery?.distanceKmOverride === 0 ? null : delivery?.distanceKmOverride ?? undefined,
     distanceSource: delivery?.distanceSource ?? null,
     distanceNote: delivery?.distanceNote ?? "",
   };

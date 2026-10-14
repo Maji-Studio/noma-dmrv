@@ -12,6 +12,9 @@ import { db } from "@/db";
 import { deliveries, orders, binMovements, creditBatchApplications, apiAuditEvents, apiIdempotencyRecords, type Delivery } from "@/db/schema";
 import { createDeliveryInTransaction, updateDeliveryInTransaction } from "@/data-access/delivery-output-writes";
 import { updateOrderInTransaction } from "@/data-access/orders";
+import { createApiDeliveryWriteFixture, removeApiDeliveryWriteFixture, postDelivery, deliveryProblem, DELIVERY_AT } from "./helpers/api-delivery-write-fixture";
+import { archiveStorageLocation } from "@/data-access/storage-locations";
+import { storageLocations } from "@/db/schema";
 import { archiveFacility } from "@/data-access/facilities";
 import { recordOutputStockMovementInTransaction } from "@/data-access/output-stock-post";
 import { createDeliveryFixture } from "./helpers/delivery-create-fixture";
@@ -112,6 +115,24 @@ describe("delivery create races on separate connections", { timeout: 15000 }, ()
     expect(a).toHaveProperty("value");
     if (deliveryFirst) expect(b).toHaveProperty("value");
     else expect(b).toMatchObject({ error: { code: "not_found", issues: [{ path: ["orderId"] }] } });
+  });
+  it("returns 404 at the source bin when archive commits while create waits", async () => {
+    const f = await createApiDeliveryWriteFixture();
+    try {
+      await db.transaction(tx => recordOutputStockMovementInTransaction(f.ctx, tx, {
+        storageLocationId: f.bin.id, facilityId: f.facility.id, kind: "count", occurredAt: DELIVERY_AT,
+        wetMassKg: 0, moisturePercent: 20, reason: "E2E empty before archive", idempotencyKey: randomUUID(),
+      }));
+      const [bin] = await db.select().from(storageLocations).where(eq(storageLocations.id, f.bin.id));
+      const [archive, create] = await race(
+        () => archiveStorageLocation(f.ctx, f.bin.id, bin.version),
+        () => postDelivery(f),
+      );
+      expect(archive).toHaveProperty("value");
+      expect(create).toHaveProperty("value");
+      if ("value" in create) await deliveryProblem(create.value, 404, "not_found", "/storageLocationId");
+      expect(await db.select().from(deliveries).where(eq(deliveries.organizationId, f.ctx.organizationId))).toHaveLength(0);
+    } finally { await removeApiDeliveryWriteFixture(f); }
   });
   it.each([true, false])("serializes delivery update and archive, update first: %s", async updateFirst => {
     const f = await fixture();
