@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { OutputBinStock, OutputBinStockTotals } from "@/lib/output-stock/bin-stock-projection";
+import { OUTPUT_DRAW_ORDERS, type OutputDrawOrder } from "@/lib/output-stock/stock-mode";
 import { UNRESOLVED_STOCK_SENTENCES } from "@/lib/output-stock/layer-projection";
 import { publishKg, publishPercent } from "@/lib/output-stock/stock-precision";
 
@@ -23,6 +24,7 @@ export const outputBinStockRepresentationSchema = z.object({
   archivedAt: z.iso.datetime().nullable().describe("Archive instant in UTC, RFC 3339, or null for a live bin."),
   formulationId: z.uuid().nullable().describe("Formulation claimed by a product bin, UUID; null for a biochar bin or an unclaimed product bin."),
   stockMode: z.enum(["split", "mix"]).describe("Current bin layout; a mix pile has one moisture estimate in totals."),
+  drawOrder: z.literal([...OUTPUT_DRAW_ORDERS, null]).describe("Without sources, a split bin draws in this order. Null for a mix bin. Sub-bins remain listed oldest first."),
   status: z.enum(["resolved", "unresolved"]).describe("Whether the saved facts resolve the bin stock."),
   unresolvedReason: z.string().nullable().describe("Fixed explanation when stock cannot be resolved, or null when resolved."),
   totals: z.object(figuresShape).nullable().describe("Figures for the whole bin, or null when unresolved. An empty resolved bin holds zero kilograms."),
@@ -46,9 +48,9 @@ function representFigures(figures: OutputBinStockTotals) {
 }
 
 /** Publish exact stock once, without an evaluation instant that changes between unchanged reads. */
-export function representOutputBinStock(stock: OutputBinStock): OutputBinStockRepresentation {
+export function representOutputBinStock(stock: OutputBinStock & { drawOrder: OutputDrawOrder | null }): OutputBinStockRepresentation {
   return outputBinStockRepresentationSchema.parse({
-    ...stock.bin, stockMode: stock.stockMode, status: stock.status,
+    ...stock.bin, drawOrder: stock.drawOrder, stockMode: stock.stockMode, status: stock.status,
     unresolvedReason: stock.status === "unresolved" ? UNRESOLVED_STOCK_SENTENCES[stock.unresolvedReason] : null,
     totals: stock.totals === null ? null : representFigures(stock.totals),
     subBins: stock.subBins.map((layer) => ({

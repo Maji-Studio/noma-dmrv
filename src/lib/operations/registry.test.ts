@@ -14,11 +14,13 @@ vi.mock("@/data-access/storage-object-deletions", () => ({
   processPendingStorageObjectDeletions: vi.fn(),
 }));
 
-import { operationRegistry } from "./registry";
+import { getOperation, operationRegistry } from "./registry";
+import { recordDeliveryForUi } from "./deliveries";
 
 const FEEDSTOCK_ID = "11111111-1111-4111-8111-111111111111";
 const INITIAL_VERSION = 1;
 const UPDATE_INPUTS: Record<string, unknown> = {
+  update_delivery: { deliveryId: FEEDSTOCK_ID, expectedVersion: INITIAL_VERSION },
   update_order: { orderId: FEEDSTOCK_ID, expectedVersion: INITIAL_VERSION },
   update_production_run: { productionRunId: FEEDSTOCK_ID, expectedVersion: INITIAL_VERSION },
   update_feedstock: { feedstockId: FEEDSTOCK_ID, expectedVersion: INITIAL_VERSION },
@@ -43,5 +45,22 @@ describe.each(Object.entries(operationRegistry))("registry operation %s", (key, 
         }
       }
     });
+  }
+});
+
+it("publishes delivery create and metadata PATCH, keeping corrections and custom create fields private", () => {
+  const record = getOperation("record_delivery");
+  const update = getOperation("update_delivery");
+  expect(record?.supportsDryRun).toBe(true);
+  expect(update?.supportsDryRun).toBe(true);
+  expect(recordDeliveryForUi.id).toBe("record_posted_delivery");
+  expect(getOperation(recordDeliveryForUi.id)).toBeUndefined();
+  expect(getOperation("update_posted_delivery")).toBeUndefined();
+  expect(getOperation("delete_delivery")).toBeUndefined();
+  const input = { orderId: FEEDSTOCK_ID, storageLocationId: FEEDSTOCK_ID, deliveredAt: "2026-09-14T12:00:00Z", deliveredWetMassKg: 100, moisturePercent: 20 };
+  expect(record?.input.safeParse(input).success).toBe(true);
+  for (const field of ["idempotencyKey", "code"]) expect(record?.input.safeParse({ ...input, [field]: "custom" }).success).toBe(false);
+  for (const field of ["deliveredWetMassKg", "moisturePercent", "sources", "deliveredAt", "orderId", "storageLocationId", "idempotencyKey", "correctsMovementId"]) {
+    expect(update?.input.safeParse({ deliveryId: FEEDSTOCK_ID, expectedVersion: INITIAL_VERSION, [field]: null }).success).toBe(false);
   }
 });

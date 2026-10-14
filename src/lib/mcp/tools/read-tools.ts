@@ -1,3 +1,6 @@
+import { readDeliveryListFromInput } from "@/lib/api/deliveries-queries";
+import { readApiDelivery } from "@/lib/read-models/api-deliveries";
+import { deliveryRepresentationSchema } from "@/lib/representations/deliveries";
 import { readProductionRunListFromInput, readProductionRun } from "@/lib/api/production-runs-queries";
 import { readReactorListFromInput } from "@/lib/api/reactors-queries";
 import { productionRunRepresentationSchema } from "@/lib/representations/production-runs";
@@ -49,6 +52,7 @@ type ResourcePath = keyof typeof resourceQueries;
 const labels: Record<ResourcePath, { singular: string; plural: string }> = {
   "production-runs": { singular: "production run", plural: "production runs" },
   customers: { singular: "customer", plural: "customers" },
+  deliveries: { singular: "delivery", plural: "deliveries" },
   orders: { singular: "order", plural: "orders" },
   reactors: { singular: "reactor", plural: "reactors" },
   "facilities": { singular: "facility", plural: "facilities" },
@@ -66,6 +70,7 @@ const labels: Record<ResourcePath, { singular: string; plural: string }> = {
 const guidance: Record<ResourcePath, string> = {
   "production-runs": PRODUCTION_RUN_GUIDANCE,
   customers: `${readDescriptions.customers} Use the customer id or code with find_customer_locations.`,
+  deliveries: `${readDescriptions.deliveries} Filter by shipping facilityId, orderId, storageLocationId, code or q; deliveredFrom is inclusive and deliveredBefore exclusive, with explicit offsets.`,
   orders: `${readDescriptions.orders} Call whoami for facility ids. ${ORDER_GUIDANCE}`,
   reactors: "Call whoami first for the run facility. Use the reactor UUID with start_production_run.",
   facilities: "Call whoami first for the credential's active facilities and local dates.",
@@ -120,6 +125,13 @@ function findTool<K extends ResourcePath, S extends z.ZodType>(path: K, list: S,
 }
 
 export const readTools: ReadTool[] = [
+  findTool("deliveries", resourceQueries.deliveries.list, readDeliveryListFromInput),
+  defineRead({ name: "get_delivery", scope: "deliveries:read",
+    summarize: (body) => { const row = body.data as z.infer<typeof deliveryRepresentationSchema>; return `Delivery ${row.code}, version ${row.version}.`; },
+    description: `${readDescriptions.get} Call find_deliveries first for an id or code. Pass version as expectedVersion to update_delivery. Read drawn products through find_output_stock_movements with biochar-products:read, using the storageLocationId and matching deliveryId in the returned rows. ${readDescriptions.deliveries}`,
+    input: resourceQueries.deliveries.get.extend({ idOrCode: z.string().describe("Delivery UUID or exact code.") }),
+    output: itemEnvelopeSchema(deliveryRepresentationSchema),
+  }, async (ctx, { idOrCode }) => ({ data: await readApiDelivery(ctx, lookupIdentifier(idOrCode)) })),
   findTool("customers", resourceQueries.customers.list, readCustomerListFromInput),
   findTool("orders", resourceQueries.orders.list, readOrderListFromInput),
   defineRead({ name: "find_customer_locations", scope: "customers:read",

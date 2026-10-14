@@ -14,6 +14,11 @@
       "scope": ["src/**", "tests/**"]
     },
     {
+      "path": "docs/api.md",
+      "description": "REST and MCP authentication, shared operations, resource contracts, and API fuzzing context.",
+      "scope": ["src/lib/api/**", "src/app/api/**", "src/lib/mcp/**", "src/lib/operations/**", "openapi/**", "scripts/api-fuzz/**"]
+    },
+    {
       "path": "docs/security.md",
       "description": "Authentication, safe error handling, PII logging, environment, and credential rules.",
       "scope": ["src/**", "tests/**", ".github/**"]

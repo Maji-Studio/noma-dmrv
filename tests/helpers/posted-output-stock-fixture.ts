@@ -4,7 +4,7 @@ import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { storageLocations } from "@/db/schema";
 import { createBiocharProduct, type CreateBiocharProductInput } from "@/data-access/biochar-product-create";
-import { createDelivery } from "@/data-access/delivery-output-writes";
+import { createDelivery } from "./create-delivery";
 import { createOrderInTransaction } from "@/data-access/orders";
 import { previewOutputStock } from "@/data-access/output-stock-operations";
 import { postOutputStock } from "@/data-access/output-stock-post";

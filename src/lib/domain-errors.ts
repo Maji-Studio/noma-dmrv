@@ -35,6 +35,7 @@ export interface DomainIssue {
 export interface StockPreview {
   basisFingerprint: string;
   stockEffects: StockEffect[];
+  allocations?: unknown[];
 }
 
 interface DomainErrorOptions {

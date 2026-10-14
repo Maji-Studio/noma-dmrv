@@ -11,7 +11,11 @@ import { toActionFailure } from "@/fn/action-errors";
 
 /** REST's `errors` become MCP `issues`; HTTP metadata does not cross transports. */
 export const toolErrorSchema = problemSchema.pick({ code: true, detail: true, retryable: true, conflict: true, blockers: true, current: true, preview: true })
-  .extend({ issues: problemSchema.shape.errors });
+  .extend({
+    issues: problemSchema.shape.errors,
+    // Preserve operation-specific preview details when translating REST errors.
+    preview: problemSchema.shape.preview.unwrap().loose().optional().describe(problemSchema.shape.preview.description!),
+  });
 
 export function toolSuccess(structuredContent: Record<string, unknown>, text: string) {
   return { content: [{ type: "text" as const, text }], structuredContent };

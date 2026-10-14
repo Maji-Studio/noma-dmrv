@@ -149,3 +149,20 @@ describe("output bin stock REST and MCP", { timeout: TIMEOUT_MS }, () => {
     expect(await call(a.source.id, a.key, { at: ARCHIVED_AT })).toMatchObject({ isError: true, structuredContent: { code: "invalid_query" } });
   });
 });
+
+it("reports current split draw policy, null for mix, and changes the stock ETag with policy", async () => {
+  const oldest = await stock(a.source.id);
+  const oldestBody = (await oldest.json()).data;
+  expect(oldestBody.drawOrder).toBe("oldest_first");
+  await db.update(storageLocations).set({ drawOrder: "newest_first" })
+    .where(and(eq(storageLocations.id, a.source.id), eq(storageLocations.organizationId, a.ctx.organizationId)));
+  const newest = await stock(a.source.id);
+  const newestBody = (await newest.json()).data;
+  expect(newestBody.drawOrder).toBe("newest_first");
+  expect(newestBody.subBins).toEqual(oldestBody.subBins);
+  expect(newest.headers.get("etag")).not.toBe(oldest.headers.get("etag"));
+  expect((await call(a.source.id)).structuredContent.data.drawOrder).toBe("newest_first");
+  await db.update(storageLocations).set({ stockMode: "mix" })
+    .where(and(eq(storageLocations.id, a.bin.id), eq(storageLocations.organizationId, a.ctx.organizationId)));
+  expect((await (await stock(a.bin.id)).json()).data.drawOrder).toBeNull();
+}, TIMEOUT_MS);

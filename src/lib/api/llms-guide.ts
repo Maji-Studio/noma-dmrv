@@ -53,6 +53,17 @@ export const orderGuide = `## Customers and orders
 - Find product bins through GET /storage-locations?type=product_bin&formulationId=<UUID>, optionally with facilityId. formulationId is null until a product bin is claimed, and on other bin types.
 `;
 
+export const deliveryGuide = `## Deliveries
+
+- GET /deliveries and /deliveries/{idOrCode} require deliveries:read. ${readDescriptions.deliveries}
+- POST /deliveries requires deliveries:write and an Idempotency-Key, including dry runs. It sends finished product from a product bin to a customer against an order and deducts from the bin. Feedstock intake uses POST /feedstocks. Read orders, matching product bins and bin stock first. Masses are wet kg; moisture is percent of wet mass. On create it is the reading; with sources, each source carries its own reading and the server stores the overall (1 minus solids divided by wet mass) times 100, including ingredient solids. deliveredAt resolves in the order facility time zone and cannot be in the future. Distances are one-way km; the server counts the round trip. distanceKmOverride must be above 0; omit it to use the customer location distance.
+- All delivery writes accept ?dryRun=true and answer 200 for previews. A create dry run shows the products drawn in allocations plus stockEffects and basisFingerprint. Pass that basisFingerprint on the real write; a stale basis answers 409 stock_basis_changed with a fresh stock preview when available. Committed creates answer 201 with Location, ETag and allocations. The non-blocking warning asks you to upload the bill of lading in the app.
+- PATCH /deliveries/{id} requires deliveries:write and If-Match, UUID only. Only code, driverId, vehicleId and distance metadata can change. Omission preserves fields; null clears clearable fields. Use an optional Idempotency-Key to recover a lost response after later edits. PATCH adds no bill-of-lading warning. Mass, moisture and time corrections stay in the app. Deliveries cannot be deleted.
+- Read GET /storage-locations/{idOrCode}/stock-movements with biochar-products:read for the drawn products. Filter the returned rows by deliveryId.
+- MCP: find_deliveries and get_delivery use deliveries:read; record_delivery and update_delivery use deliveries:write. requestKey is required except on dry runs; update needs expectedVersion from get_delivery. Call find_orders, get_order_balance for remaining wet kg, find_storage_locations with type=product_bin and the order formulationId, then get_bin_stock for drawOrder and sub-bins. This is not log_feedstock_delivery. Never invent moisture readings; ask the operator. Top-level moisturePercent is ignored with sources. deliveredAt also accepts { date, time }. Read drawn products with find_output_stock_movements (biochar-products:read).
+- Bin stock exposes drawOrder: without sources, a split bin draws oldest_first or newest_first; mix bins return null. The sub-bin list stays oldest first.
+`;
+
 export const llmsGuide = `# noma data-entry API v1
 
 Public contract: /api/v1/openapi.json
@@ -62,6 +73,7 @@ ${domainGuide}
 ${biocharStockGuide}
 ${labSampleGuide}
 ${orderGuide}
+${deliveryGuide}
 ## REST requests
 
 - Authenticate private routes with Authorization: Bearer <key> only. Keys start with ${API_KEY_LIVE_PREFIX} or ${API_KEY_TEST_PREFIX}. Cookies and x-api-key do not authenticate.
