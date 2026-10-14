@@ -52,6 +52,10 @@ function shouldFocusSearch(showSearch: boolean, openedWithTouch: boolean) {
   return showSearch && !openedWithTouch && window.matchMedia("(pointer: fine)").matches;
 }
 
+function isSelectableRow(row: SelectRow) {
+  return row.kind === "option" || row.kind === "none";
+}
+
 export function shouldRenderCreateAction({
   allowCreate,
   hasCreateAction,
@@ -239,6 +243,7 @@ function EntitySelectView({
   const containerRef = useRef<HTMLDivElement>(null);
   const [listElement, setListElement] = useState<HTMLDivElement | null>(null);
   const [explicitActionHighlight, setExplicitActionHighlight] = useState(false);
+  const actionRowsArmed = explicitActionHighlight || selectionLocked;
   const openingNavigationKey = useRef("Home");
   const popupRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -393,6 +398,14 @@ function EntitySelectView({
   const showSearch = !disabled && !selectionLocked && !hideSearch &&
     (alwaysShowSearch || searchQuery.length > 0 || showMoreResults || options.length > SELECT_SEARCH_MIN_OPTIONS);
 
+  // Async options can reveal search after Base UI's initial focus has settled.
+  // Only transfer focus if the operator is still waiting on the trigger.
+  useEffect(() => {
+    if (isOpen && shouldFocusSearch(showSearch, openedWithTouch.current) && document.activeElement === triggerRef.current) {
+      inputRef.current?.focus();
+    }
+  }, [isOpen, showSearch]);
+
   const navigableRows = rows.filter((row) => row.kind !== "option" || !row.option.disabled);
   const defaultRow = rows.find((row) => row.kind === "none" || (row.kind === "option" && !row.option.disabled))
     ?? (selectionLocked ? rows[0] : undefined);
@@ -486,7 +499,7 @@ function EntitySelectView({
         break;
       case "Enter": {
         const highlighted = listElement?.querySelector("[data-highlighted]");
-        if (highlighted?.getAttribute("role") === "button" && !explicitActionHighlight && !selectionLocked) {
+        if (highlighted?.getAttribute("role") === "button" && !actionRowsArmed) {
           e.preventDefault();
           e.preventBaseUIHandler?.();
         } else if (!highlighted) {
@@ -542,14 +555,15 @@ function EntitySelectView({
         // Action rows participate in navigation, but never become a field value.
         details.cancel();
         if (details.reason !== "item-press") return;
-        if (row && (row.kind === "option" || row.kind === "none" || selectionLocked || details.event.type !== "keydown" || explicitActionHighlight)) activateRow(row, details.event.type !== "keydown");
+        const byPointer = details.event.type !== "keydown";
+        if (row && (isSelectableRow(row) || actionRowsArmed || byPointer)) activateRow(row, byPointer);
       }}
       onItemHighlighted={(_, details) => {
         // This Base UI version exposes the active descendant on Input and List,
         // but not Trigger, where touch and searchless pickers retain focus.
         // Highlight notification precedes the DOM update, so read the indexed
         // navigable item's real id rather than the previous data-highlighted row.
-        const highlightedId = listElement?.querySelectorAll('[role="option"]:not([aria-disabled="true"]), [role="button"]')[details.index]?.id;
+        const highlightedId = listElement?.querySelectorAll("[data-entity-select-item]")[details.index]?.id;
         if (highlightedId) triggerRef.current?.setAttribute("aria-activedescendant", highlightedId);
         else triggerRef.current?.removeAttribute("aria-activedescendant");
         setExplicitActionHighlight(details.reason === "keyboard" || details.reason === "pointer");
@@ -768,7 +782,7 @@ function EntitySelectView({
                     <EntitySelectRow
                       key={row.id}
                       row={row}
-                      highlightActions={explicitActionHighlight || selectionLocked}
+                      highlightActions={actionRowsArmed}
                       value={value}
                       noneOption={noneOption}
                       editLabel={editLabel ?? `Edit ${selectedOption?.name}`}

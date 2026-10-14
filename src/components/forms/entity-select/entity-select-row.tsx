@@ -53,6 +53,7 @@ export function EntitySelectRow({
   );
   return (
     <Combobox.Item
+      data-entity-select-item=""
       render={<li />}
       value={row}
       role={isAction ? "button" : "option"}

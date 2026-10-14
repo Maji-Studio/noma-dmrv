@@ -588,10 +588,28 @@ describe("EntitySelect menu interactions", () => {
     const change = vi.fn();
     const view = render(<EntitySelect options={[]} isLoading onChange={change} />);
     act(() => trigger().focus()); open();
+    // Let the popup's initial-focus microtasks finish before the query resolves.
+    await act(async () => {});
+    expect(document.activeElement).toBe(trigger());
     expect(screen.queryByTestId("entity-select-search")).toBeNull();
     const options = Array.from({ length: 6 }, (_, index) => ({ id: String(index), code: String(index), name: `Bin ${index}` }));
     view.rerender(<EntitySelect options={options} onChange={change} />);
     await waitFor(() => expect(document.activeElement).toBe(touch ? trigger() : screen.getByTestId("entity-select-search")));
+  });
+
+  it("does not steal focus from the list when loaded options reveal search", async () => {
+    const change = vi.fn();
+    const view = render(<EntitySelect options={[]} isLoading onChange={change} />);
+    act(() => trigger().focus()); open();
+    await act(async () => {});
+    const list = screen.getByTestId("entity-select-listbox");
+    act(() => list.focus());
+    expect(document.activeElement).toBe(list);
+    const options = Array.from({ length: 6 }, (_, index) => ({ id: String(index), code: String(index), name: `Bin ${index}` }));
+    view.rerender(<EntitySelect options={options} onChange={change} />);
+    await act(async () => {});
+    expect(screen.getByTestId("entity-select-search")).toBeTruthy();
+    expect(document.activeElement).toBe(list);
   });
 
   it.each([{ alwaysShowSearch: true }, { hideSearch: true, alwaysShowSearch: true }])("honors search overrides: %s", (props) => {
