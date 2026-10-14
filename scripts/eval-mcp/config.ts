@@ -45,6 +45,18 @@ export const LAB_CASES = [
   { id: "lab-missing-organic", text: `log a lab sample for credit batch ${LAB_BATCH_CODE}, taken yesterday at ${LAB_SAMPLING_LOCAL_TIME}: total carbon ${LAB_INCOMPLETE_REPLICATE.totalCarbonPercent}%, hydrogen ${LAB_INCOMPLETE_REPLICATE.hydrogenPercent}%, moisture ${LAB_INCOMPLETE_REPLICATE.moisturePercent}%, dry basis` },
 ] as const;
 
+export const STOCK_BIN_CODE = "OB-2";
+export const STOCK_TARGET_RUN_CODE = "PR-12";
+export const STOCK_LOSS_WET_KG = 200;
+/** Target the newer layer so FIFO or choosing the first row cannot pass. */
+export const STOCK_RUNS = [
+  { code: "PR-11", start: "2026-09-09T08:00:00Z", end: "2026-09-09T12:00:00Z", wetKg: 1000, moisturePercent: 10, dryKg: 900 },
+  { code: STOCK_TARGET_RUN_CODE, start: "2026-09-11T08:00:00Z", end: "2026-09-11T12:00:00Z", wetKg: 750, moisturePercent: 20, dryKg: 600 },
+] as const;
+export const STOCK_CASES = [
+  { id: "stock-named-sub-bin-loss", text: `We lost ${STOCK_LOSS_WET_KG} kg wet from run ${STOCK_TARGET_RUN_CODE}'s sub-bin in bin ${STOCK_BIN_CODE}. Record the loss.` },
+] as const;
+
 /** Shared flags are exported so the supervisor can adjust the harness. */
 export const CLAUDE_FLAGS = [
   "--mcp-config", MCP_CONFIG_PLACEHOLDER, "--strict-mcp-config", "--tools", "", "--allowedTools", "mcp__noma",
