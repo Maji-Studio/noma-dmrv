@@ -622,7 +622,8 @@ test.describe("createDelivery order-balance guard", () => {
     await createOrder(page, seededData, "100");
     await openDeliveredDeliveryForm(page, seededData, "101");
     await submitDeliveryCreate(page);
-    await expect(page.getByRole("alert").filter({ hasText: /order/i })).toBeVisible();
+    await expect(page.locator("#deliveredWetMassKg-error")).toContainText("Only 100 kg remains on this order");
+    await expect(page.locator('[role="alert"]:not(#deliveredWetMassKg-error)').filter({ hasText: /order/i })).toHaveCount(0);
     await expect(page.locator('[role="dialog"]')).toBeVisible();
     await page.fill('input[name="deliveredWetMassKg"]', "100");
     await submitDeliveryCreate(page);

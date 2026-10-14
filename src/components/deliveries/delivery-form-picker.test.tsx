@@ -58,6 +58,7 @@ function wrapper({ children }: { children: ReactNode }) {
 beforeEach(() => {
   client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity }, mutations: { retry: false } } });
   state.distance = 12;
+  state.locked = false;
   vi.clearAllMocks();
   state.save.mockImplementation(async () => {
     state.distance = 34;
@@ -130,4 +131,29 @@ it("locks delivery mass and moisture with the newer-stock reason", () => {
   expect(screen.getByRole("spinbutton", { name: /Biochar product wet mass/ }).hasAttribute("disabled")).toBe(true);
   expect(screen.getByRole("spinbutton", { name: /^Biochar product moisture/ }).hasAttribute("disabled")).toBe(true);
   expect(screen.getByText("Locked because newer stock entries were recorded on this bin after it.")).toBeTruthy();
+});
+
+it("shows typed server refusals beside the delivery field", async () => {
+  const validDelivery = { ...delivery, orderId: "00000000-0000-4000-8000-000000000001", storageLocationId: "00000000-0000-4000-8000-000000000002" };
+  const onSubmit = vi.fn((_data, onError) => onError(Object.assign(new Error("Refused"), { issues: [{ path: ["deliveryDate"], code: "validation_failed", message: "Enter a time at or before now." }] })));
+  const { container } = render(<DeliveryForm delivery={validDelivery} onSubmit={onSubmit} />, { wrapper });
+  fireEvent.submit(container.querySelector("form")!);
+  expect(await screen.findByText("Enter a time at or before now.")).toBeTruthy();
+});
+
+it("refuses a typed zero distance with the server's message", async () => {
+  render(<DeliveryForm delivery={delivery} onSubmit={vi.fn()} />, { wrapper });
+  fireEvent.change(screen.getByRole("spinbutton", { name: /One-way distance/ }), { target: { value: "0" } });
+  expect(await screen.findByText("Distance must be greater than 0")).toBeTruthy();
+});
+
+it("reports a handled mass refusal and focuses its field", async () => {
+  const validDelivery = { ...delivery, orderId: "00000000-0000-4000-8000-000000000001", storageLocationId: "00000000-0000-4000-8000-000000000002" };
+  const onSubmit = vi.fn((_data, onError) => {
+    expect(onError(Object.assign(new Error("Refused"), { issues: [{ path: ["deliveredWetMassKg"], code: "conflict", message: "Only 100 kg remains on this order." }] }))).toBe(true);
+  });
+  const { container } = render(<DeliveryForm delivery={validDelivery} onSubmit={onSubmit} />, { wrapper });
+  fireEvent.submit(container.querySelector("form")!);
+  await screen.findByText("Only 100 kg remains on this order.");
+  expect(document.activeElement).toBe(screen.getByRole("spinbutton", { name: /Biochar product wet mass/ }));
 });

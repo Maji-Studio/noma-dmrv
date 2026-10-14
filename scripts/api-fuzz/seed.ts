@@ -33,6 +33,8 @@ const SAMPLE_ORGANIC_CARBON_PERCENT = 78;
 const SAMPLE_INORGANIC_CARBON_PERCENT = 2;
 const SAMPLE_HYDROGEN_PERCENT = 2.5;
 const ORDER_QUANTITY_KG = 10_000;
+const DELIVERY_WET_MASS_KG = 0.1;
+const DELIVERY_HOURS_AGO = 1;
 const CUSTOMER_DISTANCE_KM = 25;
 const MS_PER_HOUR = 3_600_000;
 const MS_PER_DAY = 24 * MS_PER_HOUR;
@@ -63,12 +65,14 @@ async function main(): Promise<void> {
   const { productionRunEtag } = await import("@/lib/api/representation-etags");
   const { createStorageLocation } = await import("@/data-access/storage-locations");
   const { createFormulation } = await import("@/data-access/formulations");
+  const { readApiBiocharProduct } = await import("@/lib/read-models/api-biochar-products");
   const { makeBiocharProduct } = await import("@/lib/operations/biochar-products");
   const { recordOutputStockMovement } = await import("@/lib/operations/output-stock");
-  const { biocharProductEtag, creditBatchEtag, labSampleEtag, orderEtag } = await import("@/lib/api/representation-etags");
+  const { biocharProductEtag, creditBatchEtag, labSampleEtag, orderEtag, deliveryEtag } = await import("@/lib/api/representation-etags");
   const { createCreditBatch } = await import("@/data-access/credit-batches");
   const { recordLabSample } = await import("@/lib/operations/lab-samples");
   const { createCustomer, createCustomerLocation } = await import("@/data-access/customers");
+  const { recordDelivery } = await import("@/lib/operations/deliveries");
   const { recordOrder } = await import("@/lib/operations/orders");
   const { createApiKey } = await import("@/data-access/api-keys");
   const { API_SCOPES } = await import("@/lib/auth/api-scopes");
@@ -200,8 +204,16 @@ async function main(): Promise<void> {
     quantityKg: ORDER_QUANTITY_KG, packaging: "loose" as const,
   };
   const order = (await runOperation(recordOrder, ctx, orderInput)).data;
-  // Keep this second order delivery-free when the delivery seed is added in 5b-2.
+  // Keep a second order delivery-free for the DELETE dry run.
   const deleteOrder = (await runOperation(recordOrder, ctx, orderInput)).data;
+  // Leave almost all of the product's 5 wet kg for repeated small dry runs.
+  const delivery = (await runOperation(recordDelivery, ctx, {
+    orderId: order.id, storageLocationId: productBin.id,
+    deliveredAt: new Date(now - DELIVERY_HOURS_AGO * MS_PER_HOUR).toISOString(),
+    deliveredWetMassKg: DELIVERY_WET_MASS_KG, moisturePercent: BIOCHAR_MOISTURE_PERCENT,
+  })).data.delivery;
+  // Delivery posting bumps the product version; PATCH must use its current ETag.
+  const currentProduct = await readApiBiocharProduct(ctx, { id: product.id });
   const credential = await createApiKey(ctx, {
     name: FIXTURE_LABEL, scopes: [...API_SCOPES], expiresIn: API_KEY_DEFAULT_EXPIRY_SECONDS,
   });
@@ -221,11 +233,12 @@ async function main(): Promise<void> {
     supplierLocationId: supplierLocation.id,
     biocharBinId: biocharBin.id, biocharBinCode: biocharBin.code, productBinId: productBin.id,
     pureFormulationId: pure.id, pureFormulationCode: pure.code, blendFormulationId: blend.id, blendFormulationCode: blend.code,
-    biocharProductId: product.id, biocharProductCode: product.code, biocharProductEtag: biocharProductEtag(product),
+    biocharProductId: product.id, biocharProductCode: product.code, biocharProductEtag: biocharProductEtag(currentProduct),
     customerId: customer.id, customerCode: customer.code,
     // Customer locations, like supplier locations, have no code column.
     customerLocationId: customerLocation.id,
     orderId: order.id, orderCode: order.code, orderEtag: orderEtag(order),
+    deliveryId: delivery.id, deliveryCode: delivery.code, deliveryEtag: deliveryEtag(delivery),
     deleteOrderId: deleteOrder.id, deleteOrderCode: deleteOrder.code, deleteOrderEtag: orderEtag(deleteOrder),
     lossMovementId: loss.movementId,
     creditBatchId: creditBatch.id, creditBatchCode: creditBatch.code, creditBatchEtag: creditBatchEtag(creditBatch),

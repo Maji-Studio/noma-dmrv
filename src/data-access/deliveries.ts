@@ -457,10 +457,7 @@ export async function getDeliveryWithRelations(
 }
 
 // ============================================
-// Create Operations
+// Mutation exports
 // ============================================
 
-/**
- * Create a new delivery
- */
-export { createDelivery, deleteDelivery, type CreatedDelivery, type UpdatedDelivery } from './delivery-output-writes';
+export { deleteDelivery, type CreatedDelivery, type UpdatedDelivery } from './delivery-output-writes';

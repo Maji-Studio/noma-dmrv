@@ -1,4 +1,5 @@
-import { StaleVersionError, throwActionError } from "@/lib/stale-version";
+import { throwDeliveryActionError } from "@/lib/delivery-action-errors";
+import { StaleVersionError } from "@/lib/stale-version";
 import { patchListCachesWithSavedRow } from "./list-cache-utils";
 import { outputStockKeys } from "./use-output-stock";
 /**
@@ -130,7 +131,11 @@ export function useCreateDelivery(
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (data: CreateDeliveryData) => unwrap(await createDeliveryFn(data)),
+    mutationFn: async (data: CreateDeliveryData) => {
+      const result = await createDeliveryFn(data);
+      if (!result.success) throwDeliveryActionError(result);
+      return result.data;
+    },
     onMutate: async (variables) => {
       await callbacks?.onMutate?.(variables);
     },
@@ -178,7 +183,7 @@ export function useUpdateDelivery(
     mutationFn: async (data: UpdateDeliveryData) => {
       const result = await updateDeliveryFn(data);
       if (!result.success) {
-        throwActionError(result);
+        throwDeliveryActionError(result);
       }
       return result.data;
     },
@@ -313,7 +318,7 @@ export function useDeleteDelivery(callbacks?: MutationCallbacks<void, DeleteDeli
     mutationFn: async (variables: DeleteDeliveryData) => {
       const result = await deleteDeliveryFn(variables);
       if (!result.success) {
-        throwActionError(result);
+        throwDeliveryActionError(result);
       }
       return;
     },

@@ -5,12 +5,8 @@
  * Server-side functions for delivery CRUD operations
  */
 
+import { DomainError } from "@/lib/domain-errors";
 import {
-  CODE_CONFLICT_MESSAGES,
-  withAutoCode,
-} from "@/data-access/code-generator";
-import {
-  createDelivery,
   deleteDelivery,
   getDeliveries as getDeliveriesData,
   getDeliveryWithRelations as getDeliveryWithRelationsData,
@@ -19,20 +15,22 @@ import {
   type PaginatedDeliveries,
   type UpdatedDelivery,
 } from "@/data-access/deliveries";
-import { updateDelivery } from "@/lib/operations/deliveries";
+import { recordDeliveryForUi, updateDelivery } from "@/lib/operations/deliveries";
 import {
   getDeliveryStats as getDeliveryStatsData,
   type DeliveryStats,
 } from "@/data-access/delivery-stats";
 import { requireOrgFacility } from "@/data-access/utils";
-import { deliveries as deliveriesTable, type Delivery } from "@/db/schema";
 import {
   createDeliverySchema,
+  deliveryOperationInput,
+  deliveryOperationFieldAliases,
   deleteDeliverySchema,
   deliveryFilterSchema,
   resolveDeliveryDistanceSource,
   updateDeliverySchema,
 } from "@/schemas/deliveries";
+import { runOperationInProcess } from "@/lib/operations/runner";
 import { withAction } from "./with-action";
 import type { ActionResult } from "@/types/actions";
 import { z } from "zod";
@@ -121,38 +119,18 @@ export async function createDeliveryFn(
   data: z.infer<typeof createDeliverySchema>
 ): Promise<ActionResult<CreatedDelivery>> {
   return withAction(async (ctx) => {
-    const delivery = await withAutoCode(
-      ctx,
-      "DL",
-      deliveriesTable,
-      deliveriesTable.code,
-      data.code,
-      async (code) => {
-        const validated = createDeliverySchema.parse({ ...data, code });
-        return createDelivery(ctx, {
-          code,
-          orderId: validated.orderId,
-          facilityId: validated.facilityId,
-          deliveryDate: validated.deliveryDate,
-          storageLocationId: validated.storageLocationId,
-          idempotencyKey: validated.idempotencyKey,
-          basisFingerprint: validated.basisFingerprint,
-          driverId: validated.driverId ?? null,
-          vehicleId: validated.vehicleId ?? null,
-          status: validated.status,
-          deliveredWetMassKg: validated.deliveredWetMassKg ?? null,
-          moistureContentPercent: validated.moistureContentPercent,
-          sources: validated.sources,
-          distanceKmOverride: validated.distanceKmOverride ?? null,
-          distanceSource: resolveDeliveryDistanceSource(
-            validated.distanceKmOverride ?? null,
-            validated.distanceSource,
-          ),
-          distanceNote: validated.distanceNote || null,
+    let delivery: CreatedDelivery;
+    try {
+      ({ delivery } = await runOperationInProcess(recordDeliveryForUi, ctx, deliveryOperationInput(createDeliverySchema.parse(data))));
+    } catch (error) {
+      if (error instanceof DomainError) {
+        throw new DomainError(error.code, error.message, {
+          ...error,
+          issues: error.issues.map(issue => ({ ...issue, path: issue.path.map((part, index) => index === 0 && typeof part === "string" ? (deliveryOperationFieldAliases as Readonly<Record<string, string>>)[part] ?? part : part) })),
         });
-      },
-      CODE_CONFLICT_MESSAGES.delivery,
-    );
+      }
+      throw error;
+    }
 
     return delivery;
   }, {
@@ -196,7 +174,7 @@ export async function updateDeliveryFn(
         validated.distanceKmOverride,
         validated.distanceSource,
       ),
-      distanceNote: validated.distanceNote || null,
+      distanceNote: validated.distanceNote === "" ? null : validated.distanceNote,
     });
 
     return delivery;

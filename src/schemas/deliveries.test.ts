@@ -1,10 +1,22 @@
 import { describe, expect, it } from "vitest";
+import { DELIVERY_CODE_MAX_LENGTH, DELIVERY_DISTANCE_MESSAGE, DELIVERY_DISTANCE_NOTE_MAX_LENGTH, updateDeliveryApiInput } from "./delivery-input";
 import {
   deliveryFormSchema,
+  updateDeliverySchema,
   resolveDeliveryDistanceSource,
 } from "./deliveries";
 
 const ORDER_ID = "00000000-0000-4000-8000-000000000001";
+
+it("keeps app and API delivery code and distance note limits aligned", () => {
+  const input = { deliveryId: ORDER_ID, expectedVersion: 1 };
+  for (const schema of [updateDeliverySchema, updateDeliveryApiInput]) {
+    expect(schema.safeParse({ ...(schema === updateDeliverySchema ? input : { expectedVersion: 1 }), code: "A".repeat(DELIVERY_CODE_MAX_LENGTH), distanceNote: "a".repeat(DELIVERY_DISTANCE_NOTE_MAX_LENGTH) }).success).toBe(true);
+    for (const changes of [{ code: "A".repeat(DELIVERY_CODE_MAX_LENGTH + 1) }, { code: "lowercase" }, { distanceNote: "a".repeat(DELIVERY_DISTANCE_NOTE_MAX_LENGTH + 1) }]) {
+      expect(schema.safeParse({ ...(schema === updateDeliverySchema ? input : { expectedVersion: 1 }), ...changes }).success).toBe(false);
+    }
+  }
+});
 
 describe("resolveDeliveryDistanceSource", () => {
   it("persists trip-specific Document provenance without a distance override", () => {
@@ -49,7 +61,8 @@ describe("delivery range validation copy", () => {
 
   it.each([
     ["deliveredWetMassKg", -1, "Wet mass must be at least 0.001 kg"],
-    ["distanceKmOverride", -1, "Distance must be 0 or more"],
+    ["distanceKmOverride", -1, DELIVERY_DISTANCE_MESSAGE],
+    ["distanceKmOverride", 0, DELIVERY_DISTANCE_MESSAGE],
     [
       "moistureContentPercent",
       -1,

@@ -41,6 +41,10 @@ SEEDED_LAB_SAMPLE_AGE = timedelta(minutes=30)
 SEEDED_LAB_SAMPLE_PATCH = {"labName": "API fuzz lab"}
 # Seeded orders are loose; changing packaging keeps the large delivery balance intact.
 SEEDED_ORDER_PATCH = {"packaging": "bagged"}
+# After the seeded delivery (1 hour ago), well within its remaining stock.
+SEEDED_DELIVERY_AGE = timedelta(minutes=30)
+SEEDED_DELIVERY_WET_MASS_KG = 0.1
+SEEDED_DELIVERY_PATCH = {"distanceNote": "API fuzz delivery note"}
 IDEMPOTENCY_HEADER = "Idempotency-Key"
 IF_MATCH_HEADER = "If-Match"
 SEEDED_TARGETS = {}
@@ -176,6 +180,15 @@ def after_load_schema(ctx, schema):
         )
         SEEDED_CREATE_BODIES["POST /orders"] = order
     SEEDED_PATCH_BODIES["PATCH /orders/{idOrCode}"] = deepcopy(SEEDED_ORDER_PATCH)
+    order_id = SEEDED_TARGETS.get("GET /orders/{idOrCode}")
+    if order_id is not None and product_bin:
+        SEEDED_CREATE_BODIES["POST /deliveries"] = {
+            "orderId": order_id, "storageLocationId": product_bin,
+            "deliveredAt": (datetime.now(timezone.utc) - SEEDED_DELIVERY_AGE).isoformat(timespec="seconds"),
+            "deliveredWetMassKg": SEEDED_DELIVERY_WET_MASS_KG,
+            "moisturePercent": SEEDED_BIOCHAR_MOISTURE_PERCENT,
+        }
+    SEEDED_PATCH_BODIES["PATCH /deliveries/{idOrCode}"] = deepcopy(SEEDED_DELIVERY_PATCH)
     # An empty product patch is not a meaningful change, so the dry run sends the published example.
     SEEDED_PATCH_BODIES["PATCH /biochar-products/{idOrCode}"] = deepcopy(
         schema["/biochar-products/{idOrCode}"]["PATCH"].definition.raw["requestBody"]["content"]["application/json"]["example"])

@@ -49,6 +49,7 @@ export async function runWithStockBasisPreview<Input extends z.ZodType, Output>(
   input: unknown,
   options: StockBasisPreviewOptions,
   basisOf: (data: Jsonified<Output>) => string | undefined,
+  allocationsOf?: (data: Jsonified<Output>) => NonNullable<DomainError["preview"]>["allocations"],
 ): Promise<OperationResult<Output>> {
   const { deadlineAt, ...runOptions } = options;
   if (remainingMs(deadlineAt) <= 0) throw deadlineExceeded("before starting");
@@ -62,7 +63,10 @@ export async function runWithStockBasisPreview<Input extends z.ZodType, Output>(
     try {
       const fresh = await runOperation(operation, ctx, withoutBasis(input), { pool: runOptions.pool, dryRun: true, deadlineMs });
       const basisFingerprint = basisOf(fresh.data);
-      if (basisFingerprint && fresh.stockEffects) preview = { basisFingerprint, stockEffects: fresh.stockEffects };
+      if (basisFingerprint && fresh.stockEffects) preview = {
+        basisFingerprint, stockEffects: fresh.stockEffects,
+        ...(allocationsOf ? { allocations: allocationsOf(fresh.data) } : {}),
+      };
     } catch (previewError) {
       // The original conflict is still true and still actionable without a preview.
       if (!(previewError instanceof DomainError) || shouldLogDomainError(previewError)) {

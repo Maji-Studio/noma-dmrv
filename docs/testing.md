@@ -96,8 +96,9 @@ Re-run the migrate line after pulling new migrations. A worktree made with
 ## Agent evaluation
 
 `pnpm eval:mcp` runs two feedstock intake requests, two chained production-run
-requests and two lab sample requests (three replicates; a replicate without organic
-carbon) through headless Claude Code and the local MCP server. It needs Docker with the test database schema ready,
+requests, two lab sample requests (three replicates; a replicate without organic
+carbon), a named sub-bin loss request and three delivery requests through headless
+Claude Code and the local MCP server. It needs Docker with the test database schema ready,
 the worktree's `.env.test`, and a logged-in Claude Code subscription. It refuses
 non-test databases, creates a fresh organization and API key per case, and scores
 the stored rows, bin stock, audit transport and tool-call count. Case 2 follows
@@ -107,6 +108,17 @@ either no run or a running run without draws. Any saved draw fails. The complete
 chain requires R1 running today in the facility zone, a 1500 kg wet draw from B2
 and the resulting stock. Required run references and start time come from the
 published contract and grounding tools.
+
+`delivery-complete` requires exactly one delivery of 2400 kg wet at 31% moisture,
+yesterday at 14:00 in the facility zone, from the requested order and product bin,
+with no distance override and at most 10 tool calls. `delivery-missing-moisture`
+requires no saved changes and a final request for moisture; a dry run is allowed.
+`delivery-split-bin` seeds two products with different placement times and moistures.
+It requires no committed delivery and a request for moisture readings, either as a
+delivery clarification or after a completed stock read followed by a dry run.
+The preview alone cannot pass. Historical
+moisture estimates can inform a preview but cannot supply missing operator readings
+for a commit, even if the server refuses it. Each case has its own organization and cleanup.
 
 This is a local check before merge, not a CI gate. Paste its Markdown table into
 the PR. Transcripts, the dev server log, Markdown and JSON scores are saved in
@@ -136,7 +148,11 @@ intake, a reactor and a closed production run through the operation runner (the 
 draws from its own second bin, so the feedstock cases keep their stock). For
 biochar it adds a completed run with output in a biochar bin, a product bin, a Pure
 and a blended formulation, one product placed from that stock and one loss, all
-through the operations. Bin and formulation names are unique per facility. The key
+through the operations. It also creates a customer and location with one-way
+distance, two large orders and a 0.1 kg delivery on the product bin through the
+runner. The second order stays delivery-free for DELETE. The private fixture
+exports the delivery id, code and ETag alongside the order fields.
+Bin and formulation names are unique per facility. The key
 has all current scopes, including delete.
 Its private JSON file contains the key and fixture ids; never upload that file.
 
@@ -151,7 +167,11 @@ API_FUZZ_BASE_URL=http://127.0.0.1:3100/api/v1 pnpm api:fuzz
 
 The hooks give the product and stock-movement operations seeded examples: a dry-run
 product create on the seeded bins, a product PATCH with its ETag, and a dry-run loss
-on the biochar bin, each with an `Idempotency-Key`. `hooks.test.py` checks them
+on the biochar bin. Creates carry `Idempotency-Key`; PATCH uses `If-Match`.
+Delivery examples read the seeded row, dry-run a 0.1 kg create with a past instant
+and measured moisture, and dry-run a metadata-only PATCH with its ETag. These
+examples must return 2xx and leave stock and order balance available for repeats.
+`hooks.test.py` checks them
 offline; run it with `uvx --from "schemathesis==4.29.3" python scripts/api-fuzz/hooks.test.py`.
 
 Fuzzing writes and deletes data, so use only a throwaway fixture organization.

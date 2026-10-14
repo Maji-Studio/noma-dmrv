@@ -3,7 +3,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { assertThrowawayTestDatabase, resolveTestDatabaseUrl } from "../../tests/helpers/throwaway-database";
-import { CASES, EVAL_PORT, LAB_CASES, STOCK_CASES } from "./config";
+import { CASES, DELIVERY_CASES, EVAL_PORT, LAB_CASES, STOCK_CASES } from "./config";
 import { runClaude } from "./claude";
 import type { ManagedProcess } from "./process";
 import { markdownReport, scoreCase, type CaseScore } from "./score";
@@ -14,6 +14,8 @@ import type { EvalFixture } from "./fixture";
 import type { LabEvalFixture } from "./fixture-lab";
 import type { StockEvalFixture } from "./fixture-stock";
 import { scoreStockCase } from "./score-stock";
+import type { DeliveryEvalFixture } from "./fixture-delivery";
+import { scoreDeliveryCase } from "./score-delivery";
 
 async function main(): Promise<void> {
   const keep = process.argv.includes("--keep");
@@ -49,6 +51,7 @@ async function main(): Promise<void> {
   const fixtures: EvalFixture[] = [];
   const labFixtures: LabEvalFixture[] = [];
   const stockFixtures: StockEvalFixture[] = [];
+  const deliveryFixtures: DeliveryEvalFixture[] = [];
   // Every seeded organization, so cleanup covers all case families.
   const organizations: { id: string; remove: () => Promise<void> }[] = [];
   const keys: string[] = [];
@@ -59,6 +62,7 @@ async function main(): Promise<void> {
     const fixtureModule = await import("./fixture");
     const labModule = await import("./fixture-lab");
     const stockModule = await import("./fixture-stock");
+    const deliveryModule = await import("./fixture-delivery");
     const { seedFixture, fixtureTarget, readSnapshot, evaluationExpectation, evaluationRunRequirements } = fixtureModule;
     const expectation = evaluationExpectation();
     console.log(`Case 2 expectation: ${expectation}.`);
@@ -85,6 +89,13 @@ async function main(): Promise<void> {
       stockFixtures.push(fixture);
       keys.push(fixture.key);
       organizations.push({ id: fixture.ctx.organizationId, remove: () => stockModule.cleanupStockFixture(fixture) });
+    }
+    for (const testCase of DELIVERY_CASES) {
+      controller.signal.throwIfAborted();
+      const fixture = await deliveryModule.seedDeliveryFixture(testCase.id);
+      deliveryFixtures.push(fixture);
+      keys.push(fixture.key);
+      organizations.push({ id: fixture.ctx.organizationId, remove: () => deliveryModule.cleanupDeliveryFixture(fixture) });
     }
     const server = startServer(process.cwd(), runDirectory, process.env, keys);
     children.add(server);
@@ -122,6 +133,18 @@ async function main(): Promise<void> {
       const score = scoreStockCase(testCase.id, fixture.target, snapshot, run.transcript);
       scores.push(score);
       results.push({ ...score, organizationId: fixture.ctx.organizationId, target: fixture.target, snapshot, ...run });
+    }
+    for (const [index, testCase] of DELIVERY_CASES.entries()) {
+      controller.signal.throwIfAborted();
+      const fixture = deliveryFixtures[index];
+      const startedAt = new Date();
+      const run = await runClaude(testCase.id, testCase.text(fixture.target), fixture.key, baseUrl, runDirectory,
+        controller.signal, (child) => children.add(child), (child) => children.delete(child));
+      const target = deliveryModule.deliveryTarget(fixture, startedAt, new Date());
+      const snapshot = await deliveryModule.readDeliverySnapshot(fixture);
+      const score = scoreDeliveryCase(testCase.id, target, snapshot, run.transcript);
+      scores.push(score);
+      results.push({ ...score, organizationId: fixture.ctx.organizationId, target, snapshot, ...run });
     }
     if (scores.some((score) => !score.passed)) process.exitCode = 1;
   } finally {

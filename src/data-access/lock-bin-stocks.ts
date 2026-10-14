@@ -16,6 +16,7 @@ export async function lockBinStock(
   ctx: OrgContext,
   tx: DbTransaction,
   storageLocationId: string,
+  options: { allowArchived?: boolean } = {},
 ): Promise<void> {
   requireOrgScope(ctx);
   const lockKey = `${BIN_STOCK_LOCK_SCOPE}:${ctx.organizationId}:${storageLocationId}`;
@@ -33,8 +34,9 @@ export async function lockBinStock(
     );
   // Some stock flows deliberately use a product ID as a fallback advisory-lock
   // key when no physical bin exists. The caller validates missing rows; an
-  // actual archived bin must never accept a stock write.
-  if (bin?.archivedAt) {
+  // actual archived bin must never accept a stock write. Metadata-only callers
+  // may allow archives and must guard stock changes separately under this lock.
+  if (bin?.archivedAt && !options.allowArchived) {
     throw new SafeError("Storage bin not found or archived");
   }
 }

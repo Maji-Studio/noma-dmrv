@@ -156,7 +156,7 @@ it("requires a bin id or code for find_output_stock_movements and rejects contro
 it("reads bin stock through the shared representation with strict input and one sentence", async () => {
   const tool = readTools.find((candidate) => candidate.name === "get_bin_stock")!;
   mocks.readStock.mockResolvedValueOnce({ data: { storageLocationId: BIN, code: "OB-2", type: "biochar_bin", facilityId: ID, archivedAt: null, formulationId: null,
-    stockMode: "split", status: "resolved", unresolvedReason: null, subBins: [],
+    stockMode: "split", drawOrder: "oldest_first", status: "resolved", unresolvedReason: null, subBins: [],
     totals: { dryBiocharKg: 0, solidsKg: 0, estimatedWetKg: 0, estimatedMoisturePercent: null, moistureBasis: null } } });
   const body = await tool.execute(context.ctx, { storageLocation: BIN.toUpperCase(), facilityId: ID.toUpperCase() });
   expect(mocks.readStock).toHaveBeenCalledWith(context.ctx, { identifier: { id: BIN }, facilityId: ID });

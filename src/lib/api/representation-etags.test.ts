@@ -1,8 +1,8 @@
 import { expect, it } from "vitest";
-import { driverEtag, facilityEtag, feedstockEtag, feedstockTypeEtag, storageLocationEtag, supplierEtag, vehicleEtag, productionRunEtag, biocharProductEtag, formulationEtag, labSampleEtag, creditBatchEtag, customerEtag, orderEtag } from "./representation-etags";
+import { driverEtag, facilityEtag, feedstockEtag, feedstockTypeEtag, storageLocationEtag, supplierEtag, vehicleEtag, productionRunEtag, biocharProductEtag, formulationEtag, labSampleEtag, creditBatchEtag, customerEtag, orderEtag, deliveryEtag } from "./representation-etags";
 
 it("builds strong ETags from row version and representation revision", () => {
-  for (const etag of [driverEtag, feedstockEtag, feedstockTypeEtag, supplierEtag, vehicleEtag, biocharProductEtag, formulationEtag, labSampleEtag, creditBatchEtag, customerEtag, orderEtag]) {
+  for (const etag of [driverEtag, feedstockEtag, feedstockTypeEtag, supplierEtag, vehicleEtag, biocharProductEtag, formulationEtag, labSampleEtag, creditBatchEtag, customerEtag, orderEtag, deliveryEtag]) {
     expect(etag({ version: 7 })).toBe('"7.1"');
   }
 });
@@ -22,4 +22,9 @@ it("uses revision 3 for storage locations with a formulation claim", () => {
 it("keeps order read and write tags on the same representation revision", () => {
   expect(orderEtag({ version: 1 })).toBe('"1.1"');
   expect(orderEtag({ version: 2 })).toBe('"2.1"');
+});
+
+it("keeps delivery read and write tags on the same representation revision", () => {
+  expect(deliveryEtag({ version: 2 })).toBe('"2.1"');
+  expect(deliveryEtag({ version: 3 })).toBe('"3.1"');
 });

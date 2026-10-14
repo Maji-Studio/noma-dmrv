@@ -7,7 +7,7 @@ import { DeliveryList } from "./delivery-list";
 const DELIVERY_ID = "6f1c4d3a-0f2b-4d6a-9f1e-0a1b2c3d4e5f";
 const FACILITY_ID = "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d";
 
-type SubmitHandler = (data: Record<string, unknown>) => Promise<void>;
+type SubmitHandler = (data: Record<string, unknown>, onError: (error: unknown) => boolean) => Promise<void>;
 type ModeChange = (mode: "view" | "edit" | "create") => void;
 
 const harness = vi.hoisted(() => ({
@@ -134,7 +134,7 @@ describe("DeliveryList deep-linked sheet", () => {
     expect(harness.sheet).toEqual({ open: true, mode: "edit" });
 
     await act(async () => {
-      await harness.onSubmit?.({ distanceNote: "Updated" });
+      await harness.onSubmit?.({ distanceNote: "Updated" }, () => false);
     });
     await act(async () => {
       renderer?.update(<DeliveryList />);
@@ -160,7 +160,7 @@ describe("DeliveryList deep-linked sheet", () => {
     expect(harness.sheet.mode).toBe("edit");
 
     await act(async () => {
-      await harness.onSubmit?.({ distanceNote: "Updated" });
+      await harness.onSubmit?.({ distanceNote: "Updated" }, () => false);
     });
     await act(async () => {
       renderer?.update(<DeliveryList />);
@@ -182,14 +182,14 @@ describe("DeliveryList deep-linked sheet", () => {
     harness.delivery = { ...DELIVERY, version: DELIVERY.version + 1 };
     await act(async () => { renderer?.update(<DeliveryList />); });
     const draft = { distanceNote: "Unsaved draft" };
-    await act(async () => { await harness.onSubmit?.(draft); });
+    await act(async () => { await harness.onSubmit?.(draft, () => false); });
     expect(harness.update).toHaveBeenCalledWith(expect.objectContaining({ ...draft, deliveryId: DELIVERY_ID, expectedVersion: DELIVERY.version }));
     expect(harness.sheet).toEqual({ open: true, mode: "edit" });
     expect(harness.query.delivery).toBe(DELIVERY_ID);
     expect(harness.formError).toBe(STALE_VERSION_MESSAGE);
     expect(harness.formDelivery?.version).toBe(DELIVERY.version);
     // A retry must retain the same precondition too.
-    await act(async () => { await harness.onSubmit?.(draft); });
+    await act(async () => { await harness.onSubmit?.(draft, () => false); });
     expect(harness.update).toHaveBeenLastCalledWith(expect.objectContaining({ expectedVersion: DELIVERY.version }));
     renderer?.unmount();
   });

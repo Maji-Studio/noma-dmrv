@@ -1,3 +1,5 @@
+import { offsetInstantSchema } from "./event-instant";
+import { DELIVERY_CODE_MAX_LENGTH, DELIVERY_CODE_PATTERN, DELIVERY_DISTANCE_MESSAGE, DELIVERY_DISTANCE_NOTE_MAX_LENGTH, recordDeliveryInput } from "./delivery-input";
 import { expectedVersionSchema } from "./helpers";
 /**
  * Deliveries Validation Schemas
@@ -7,6 +9,7 @@ import { expectedVersionSchema } from "./helpers";
 
 import {
   DELIVERED_WET_MASS_RANGE_MESSAGE,
+  DELIVERED_WET_MASS_MIN_KG,
   DELIVERED_WET_MASS_REQUIRED_MESSAGE,
   hasStorableDeliveredWetMass,
 } from "@/lib/delivery-wet-mass";
@@ -55,10 +58,10 @@ export function resolveDeliveryDistanceSource(
 // ============================================
 
 const optionalNumber = z.number().finite().optional().nullable();
-const DISTANCE_RANGE_MESSAGE = "Distance must be 0 or more";
+const deliveryInstantSchema = z.union([z.date(), offsetInstantSchema().transform(value => new Date(value))], { error: issue => issue.input === "" || issue.input == null ? "Delivery date is required" : undefined });
 const optionalWetMassKg = positiveMassKgSchema(
   DELIVERED_WET_MASS_RANGE_MESSAGE,
-)
+).min(DELIVERED_WET_MASS_MIN_KG, DELIVERED_WET_MASS_RANGE_MESSAGE)
   .optional()
   .nullable();
 const requiredProductMoisturePercent = requiredNumber(
@@ -69,17 +72,17 @@ const requiredProductMoisturePercent = requiredNumber(
     .min(0, "Moisture content must be 0% or more")
     .lt(100, "Moisture must be below 100%"),
 );
-const optionalNote = z.string().max(500, "Note must be less than 500 characters").optional().nullable().or(z.literal(""));
+const optionalNote = z.string().max(DELIVERY_DISTANCE_NOTE_MAX_LENGTH, `Note must be less than ${DELIVERY_DISTANCE_NOTE_MAX_LENGTH} characters`).optional().nullable().or(z.literal(""));
 
 function validateDistanceOverride(
   value: { distanceKmOverride?: number | null },
   ctx: z.RefinementCtx
 ) {
-  if (value.distanceKmOverride != null && value.distanceKmOverride < 0) {
+  if (value.distanceKmOverride != null && value.distanceKmOverride <= 0) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       path: ["distanceKmOverride"],
-      message: DISTANCE_RANGE_MESSAGE,
+      message: DELIVERY_DISTANCE_MESSAGE,
     });
   }
 }
@@ -111,7 +114,7 @@ const deliveryFormBaseSchema = z.object({
   correctsMovementId: uuidSchema().optional(),
   // Required fields
   orderId: z.string().min(1, "Select an order.").uuid("Choose a valid order."),
-  deliveryDate: z.coerce.date({ error: "Delivery date is required" }),
+  deliveryDate: deliveryInstantSchema,
 
   // Optional fields
   storageLocationId: z.uuid(),
@@ -154,11 +157,11 @@ export const createDeliverySchema = z.object({
   code: z
     .string()
     .min(1, "Delivery code is required")
-    .max(50)
-    .regex(/^[A-Z0-9-]+$/),
+    .max(DELIVERY_CODE_MAX_LENGTH)
+    .regex(DELIVERY_CODE_PATTERN).or(z.literal("")).default(""),
   orderId: z.string().min(1, "Select an order.").uuid("Choose a valid order."),
   facilityId: z.string().min(1, "Select a facility.").uuid("Choose a valid facility."),
-  deliveryDate: z.coerce.date(),
+  deliveryDate: deliveryInstantSchema,
   storageLocationId: z.uuid(),
   idempotencyKey: z.string().min(1),
   basisFingerprint: z.string().min(1),
@@ -194,12 +197,12 @@ export const updateDeliverySchema = z.object({
   code: z
     .string()
     .min(1)
-    .max(50)
-    .regex(/^[A-Z0-9-]+$/)
+    .max(DELIVERY_CODE_MAX_LENGTH)
+    .regex(DELIVERY_CODE_PATTERN)
     .optional(),
   orderId: z.string().uuid().optional(),
   facilityId: z.string().uuid().optional(),
-  deliveryDate: z.coerce.date().optional(),
+  deliveryDate: deliveryInstantSchema.optional(),
   storageLocationId: z.uuid().optional(),
   driverId: emptyToNull.or(z.string().uuid()).nullable().optional(),
   vehicleId: emptyToNull.or(z.string().uuid()).nullable().optional(),
@@ -285,3 +288,18 @@ export type DeliveryFilterData = z.infer<typeof deliveryFilterSchema>;
 export { deliveryDryMassSchema };
 
 export type DeleteDeliveryData = z.infer<typeof deleteDeliverySchema>;
+
+export const deliveryOperationFieldAliases = {
+  deliveredAt: "deliveryDate",
+  moisturePercent: "moistureContentPercent",
+} as const;
+
+/** The form's facility mirror is ignored; the order supplies the authoritative facility. */
+export function deliveryOperationInput(data: z.output<typeof createDeliverySchema>): z.input<typeof recordDeliveryInput> & { code?: string; idempotencyKey: string } {
+  return {
+    code: data.code || undefined, idempotencyKey: data.idempotencyKey, orderId: data.orderId, storageLocationId: data.storageLocationId,
+    deliveredAt: data[deliveryOperationFieldAliases.deliveredAt], deliveredWetMassKg: data.deliveredWetMassKg!, moisturePercent: data[deliveryOperationFieldAliases.moisturePercent],
+    sources: data.sources, basisFingerprint: data.basisFingerprint, driverId: data.driverId, vehicleId: data.vehicleId,
+    distanceKmOverride: data.distanceKmOverride, distanceSource: data.distanceSource, distanceNote: data.distanceNote,
+  };
+}

@@ -29,13 +29,15 @@ PRODUCT_BIN_ID = "33333333-3333-4333-8333-333333333333"
 PRODUCT_ETAG = '"6.7"'
 LAB_SAMPLE_ETAG = '"8.9"'
 ORDER_ETAG = '"10.1"'
+DELIVERY_ETAG = '"12.1"'
 DELETE_ORDER_ETAG = '"11.1"'
 DELETE_ORDER_ID = "44444444-4444-4444-8444-444444444444"
 CUSTOMER_LOCATION_ID = "55555555-5555-4555-8555-555555555555"
-TARGET_KINDS = ("FACILITY", "SUPPLIER", "FEEDSTOCK_TYPE", "BIN", "DRIVER", "VEHICLE", "FEEDSTOCK", "REACTOR", "PRODUCTION_RUN", "BIOCHAR_BIN", "BIOCHAR_PRODUCT", "PURE_FORMULATION", "CREDIT_BATCH", "LAB_SAMPLE", "CUSTOMER", "ORDER")
+TARGET_KINDS = ("FACILITY", "SUPPLIER", "FEEDSTOCK_TYPE", "BIN", "DRIVER", "VEHICLE", "FEEDSTOCK", "REACTOR", "PRODUCTION_RUN", "BIOCHAR_BIN", "BIOCHAR_PRODUCT", "PURE_FORMULATION", "CREDIT_BATCH", "LAB_SAMPLE", "CUSTOMER", "ORDER", "DELIVERY")
 for kind in TARGET_KINDS:
     os.environ[f"API_FUZZ_{kind}_ID"] = FIXTURE_ID
 os.environ.update(
+    API_FUZZ_DELIVERY_ETAG=DELIVERY_ETAG,
     API_FUZZ_ORDER_ETAG=ORDER_ETAG, API_FUZZ_DELETE_ORDER_ETAG=DELETE_ORDER_ETAG,
     API_FUZZ_DELETE_ORDER_ID=DELETE_ORDER_ID, API_FUZZ_CUSTOMER_LOCATION_ID=CUSTOMER_LOCATION_ID,
     API_FUZZ_BASE_URL="http://localhost/api/v1", API_FUZZ_KEY="offline-placeholder",
@@ -59,10 +61,10 @@ class HarnessTests(unittest.TestCase):
             operation = result.ok()
             cases = ExamplesGenerator(operation=operation, as_strategy_kwargs={}, feedback=FeedbackSources(), fill_missing=False)
             seeded.extend(case for case in cases if case.meta.phase.data.description.startswith("Seeded fixture"))
-        # 30 by-id targets (the stock-movement create is one of them), the feedstock
+        # 32 by-id targets (the stock-movement create is one of them), the feedstock
         # create and its oversize twin, the run create, the product create, the
-        # lab sample create and order create.
-        self.assertEqual(len(seeded), 36)
+        # lab sample create, order create and delivery create.
+        self.assertEqual(len(seeded), 39)
         stock = next(case for case in seeded if case.operation.label == "GET /storage-locations/{idOrCode}/stock")
         self.assertEqual(stock.path_parameters, {"idOrCode": FIXTURE_ID})
         self.assertTrue(stock.meta.generation.mode.is_positive)
@@ -192,6 +194,31 @@ class HarnessTests(unittest.TestCase):
             self.assertEqual(case.query, {"dryRun": "true"})
             self.assertEqual(case.body, body)
 
+    def test_seeded_delivery_create_and_patch_are_small_metadata_safe_dry_runs(self):
+        operation = schema["/deliveries"]["POST"]
+        cases = ExamplesGenerator(operation=operation, as_strategy_kwargs={}, feedback=FeedbackSources(), fill_missing=False)
+        seeded = [case for case in cases if case.meta.phase.data.description.startswith("Seeded fixture")]
+        self.assertEqual(len(seeded), 1)
+        case = seeded[0]
+        self.assertTrue(case.meta.generation.mode.is_positive)
+        self.assertEqual(case.query, {"dryRun": "true"})
+        self.assertTrue(case.headers["Idempotency-Key"])
+        self.assertEqual(case.body["orderId"], FIXTURE_ID)
+        self.assertEqual(case.body["storageLocationId"], PRODUCT_BIN_ID)
+        self.assertEqual(case.body["deliveredWetMassKg"], 0.1)
+        self.assertEqual(case.body["moisturePercent"], 10)
+        delivered = datetime.fromisoformat(case.body["deliveredAt"])
+        self.assertIsNotNone(delivered.utcoffset())
+        self.assertLess(abs(datetime.now(timezone.utc) - delivered - timedelta(minutes=30)), timedelta(minutes=5))
+        examples = []
+        hook("before_add_examples")(HookContext(operation=schema["/deliveries/{idOrCode}"]["PATCH"]), examples)
+        self.assertEqual(len(examples), 1)
+        patch_case = examples[0]
+        self.assertEqual(patch_case.path_parameters, {"idOrCode": FIXTURE_ID})
+        self.assertEqual(patch_case.headers["If-Match"], DELIVERY_ETAG)
+        self.assertEqual(patch_case.query, {"dryRun": "true"})
+        self.assertEqual(patch_case.body, {"distanceNote": "API fuzz delivery note"})
+
     def test_seeded_movement_create_pins_the_bin_and_posts_a_recent_loss(self):
         operation = schema["/storage-locations/{idOrCode}/stock-movements"]["POST"]
         cases = ExamplesGenerator(operation=operation, as_strategy_kwargs={}, feedback=FeedbackSources(), fill_missing=False)
@@ -267,15 +294,15 @@ class HarnessTests(unittest.TestCase):
             self.assertFalse("If-Match" in for_operation(schema.config, operation=operation).headers)
             if operation.method.upper() in {"PATCH", "DELETE"}:
                 self.assertEqual(examples[0].query, {"dryRun": "true"})
-                etags = {"/production-runs/": RUN_ETAG, "/biochar-products/": PRODUCT_ETAG, "/lab-samples/": LAB_SAMPLE_ETAG, "/orders/": DELETE_ORDER_ETAG if operation.method.upper() == "DELETE" else ORDER_ETAG}
+                etags = {"/deliveries/": DELIVERY_ETAG, "/production-runs/": RUN_ETAG, "/biochar-products/": PRODUCT_ETAG, "/lab-samples/": LAB_SAMPLE_ETAG, "/orders/": DELETE_ORDER_ETAG if operation.method.upper() == "DELETE" else ORDER_ETAG}
                 etag = etags.get(next((prefix for prefix in etags if operation.path.startswith(prefix)), ""), FEEDSTOCK_ETAG)
                 self.assertEqual(examples[0].headers["If-Match"], etag)
             count += 1
-        self.assertEqual(count, 30)
+        self.assertEqual(count, 32)
 
     def test_seeded_positive_examples_must_return_2xx(self):
         check = hook("after_load_schema").__globals__["seeded_example_success"]
-        for label in ("GET /feedstocks/{idOrCode}", "GET /production-runs/{idOrCode}", "PATCH /production-runs/{idOrCode}", "GET /biochar-products/{idOrCode}", "PATCH /biochar-products/{idOrCode}", "GET /credit-batches/{idOrCode}", "GET /lab-samples/{idOrCode}", "PATCH /lab-samples/{idOrCode}", "DELETE /lab-samples/{idOrCode}", "GET /customers/{idOrCode}", "GET /customers/{idOrCode}/locations", "GET /orders/{idOrCode}", "GET /orders/{idOrCode}/balance", "PATCH /orders/{idOrCode}", "DELETE /orders/{idOrCode}"):
+        for label in ("GET /feedstocks/{idOrCode}", "GET /production-runs/{idOrCode}", "PATCH /production-runs/{idOrCode}", "GET /biochar-products/{idOrCode}", "PATCH /biochar-products/{idOrCode}", "GET /credit-batches/{idOrCode}", "GET /lab-samples/{idOrCode}", "PATCH /lab-samples/{idOrCode}", "DELETE /lab-samples/{idOrCode}", "GET /deliveries/{idOrCode}", "PATCH /deliveries/{idOrCode}", "GET /customers/{idOrCode}", "GET /customers/{idOrCode}/locations", "GET /orders/{idOrCode}", "GET /orders/{idOrCode}/balance", "PATCH /orders/{idOrCode}", "DELETE /orders/{idOrCode}"):
             method, path = label.split(" ")
             operation = schema[path][method]
             examples = []
@@ -286,7 +313,7 @@ class HarnessTests(unittest.TestCase):
             for status in (301, 400, 401, 404, 409, 422, 428, 500):
                 with self.assertRaisesRegex(AssertionError, "must return 2xx"):
                     check(None, SimpleNamespace(status_code=status), case)
-        for label in ("POST /feedstocks", "POST /production-runs", "POST /biochar-products", "POST /lab-samples", "POST /orders", "POST /storage-locations/{idOrCode}/stock-movements"):
+        for label in ("POST /feedstocks", "POST /production-runs", "POST /biochar-products", "POST /lab-samples", "POST /orders", "POST /deliveries", "POST /storage-locations/{idOrCode}/stock-movements"):
             method, path = label.split(" ")
             examples = []
             hook("before_add_examples")(HookContext(operation=schema[path][method]), examples)

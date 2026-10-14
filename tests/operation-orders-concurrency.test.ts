@@ -9,7 +9,7 @@ import { deleteFormulation } from "@/data-access/formulations";
 import { SafeError } from "@/lib/errors";
 import { orderHasDeliveries } from "@/lib/order-domain-errors";
 import { archiveFacility } from "@/data-access/facilities";
-import { createDelivery } from "@/data-access/delivery-output-writes";
+import { createDelivery } from "./helpers/create-delivery";
 import { lockBiocharTransportRouteTopology } from "@/data-access/transport-legs";
 import { recordOrder, updateOrder, deleteOrder } from "@/lib/operations/orders";
 import { runOperation, runOperationInProcess } from "@/lib/operations/runner";

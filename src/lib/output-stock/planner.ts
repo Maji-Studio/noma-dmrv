@@ -30,7 +30,11 @@ export interface OrderedSource { layerId: string; moisturePercent: Decimal }
  * every layer present in proportion to its remaining solids (ADR 0030). A split
  * bin's sub-bin order is the `ordered` request, not a policy.
  */
-export type DrawPolicy = 'fifo' | 'lifo' | 'pro_rata';
+export const DRAW_POLICIES = ['fifo', 'lifo', 'pro_rata'] as const;
+export type DrawPolicy = typeof DRAW_POLICIES[number];
+export const OPERATOR_ORDER_POLICY = 'operator_order';
+export const ALLOCATION_POLICIES = [...DRAW_POLICIES, OPERATOR_ORDER_POLICY] as const;
+export type AllocationPolicy = typeof ALLOCATION_POLICIES[number];
 /** The policy a mix draw's allocations are saved with; the credit hold matches on it. */
 export const PRO_RATA_POLICY = 'pro_rata' satisfies DrawPolicy;
 

@@ -1,3 +1,4 @@
+import { OPERATOR_ORDER_POLICY } from '@/lib/output-stock/planner';
 import { assertRowVersion, nextVersion } from "./row-version";
 import { db, type DbTransaction } from '@/db';
 import { biocharProducts, binMovements, deliveries, facilities, outputStockAllocations, outputStockMoistureReadings, outputStockRunAllocations, storageLocations, type BiocharProductRecord, type Delivery } from '@/db/schema';
@@ -178,7 +179,7 @@ async function persistOutputStock(ctx: OrgContext, tx: DbTransaction, input: Sto
       moisturePercent: postedMoisturePercent(prepared), actorId: ctx.userId, payloadHash, targetBiocharProductId: options.targetBiocharProductId, deliveryId: options.deliveryId ?? correction?.deliveryId, discrepancySolidsKg: storeRational(plan.discrepancySolidsKg), preview },
     outputDryDeltaKg: kilograms(-grams(plan.drawnDryKg)), balanceBeforeDryKg: kilograms(beforeGrams), balanceAfterDryKg: kilograms(beforeGrams - grams(plan.drawnDryKg)), correctsMovementId: correction?.original.id ?? null }).returning();
   // Every allocation records how it was drawn, so provenance never needs the planner again.
-  const policy = prepared.sources ? 'operator_order' : prepared.policy;
+  const policy = prepared.sources ? OPERATOR_ORDER_POLICY : prepared.policy;
   const order = prepared.sources?.map(source => source.layerId) ?? null;
   let cumulativeWet = rational(BigInt(0));
   let allocatedWetGrams = BigInt(0);

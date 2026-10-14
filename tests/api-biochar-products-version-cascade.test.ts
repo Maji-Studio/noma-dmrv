@@ -6,7 +6,7 @@ import { db } from "@/db";
 import { facilities } from "@/db/schema";
 import { BIOCHAR_PRODUCT_REPRESENTATION_REVISION } from "@/config/api-rest";
 import { archiveFacility } from "@/data-access/facilities";
-import { createDelivery } from "@/data-access/delivery-output-writes";
+import { createDelivery } from "./helpers/create-delivery";
 import { createOrderInTransaction } from "@/data-access/orders";
 import { previewOutputStock } from "@/data-access/output-stock-operations";
 import { createApiProductFixture, expectProblem, removeApiProductFixture, BIOCHAR_MOISTURE_PERCENT, type ApiProductFixture } from "./helpers/api-biochar-product-fixture";

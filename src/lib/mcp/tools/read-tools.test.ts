@@ -3,7 +3,7 @@ import type { ApiContext } from "@/lib/auth/api-context";
 import { resourceQueries } from "@/lib/api/query-schemas";
 import { readTools } from "./read-tools";
 
-const mocks = vi.hoisted(() => ({ customers: vi.fn(), locations: vi.fn(), orders: vi.fn(), order: vi.fn(), balance: vi.fn() }));
+const mocks = vi.hoisted(() => ({ customers: vi.fn(), locations: vi.fn(), orders: vi.fn(), order: vi.fn(), balance: vi.fn(), deliveries: vi.fn(), delivery: vi.fn() }));
 // No reader can connect to the database in this contract suite.
 vi.mock("@/db", () => ({ db: {} }));
 vi.mock("@/lib/api/customers-queries", () => ({ readCustomerListFromInput: mocks.customers }));
@@ -12,10 +12,14 @@ vi.mock("@/lib/api/orders-queries", () => ({ readOrderListFromInput: mocks.order
 vi.mock("@/lib/read-models/api-orders", () => ({ readApiOrder: mocks.order }));
 vi.mock("@/lib/api/order-balance-queries", () => ({ readOrderBalanceFromInput: mocks.balance }));
 
+vi.mock("@/lib/api/deliveries-queries", () => ({ readDeliveryListFromInput: mocks.deliveries }));
+vi.mock("@/lib/read-models/api-deliveries", () => ({ readApiDelivery: mocks.delivery }));
+
 const ID = "df2795a4-886b-4a89-bbdd-532c6b1b8e45";
 const ctx = { organizationId: "org" } as ApiContext;
 const named = (name: string) => readTools.find((tool) => tool.name === name)!;
 const INVENTORY = [
+  ["find_deliveries", "deliveries:read"], ["get_delivery", "deliveries:read"],
   ["find_customers", "customers:read"], ["find_customer_locations", "customers:read"],
   ["find_orders", "orders:read"], ["get_order", "orders:read"], ["get_order_balance", "orders:read"],
 ] as const;
@@ -79,4 +83,30 @@ it("describes balance freshness, reservation limits and delivery grounding", () 
   expect(named("get_order_balance").description).toContain("not a reservation");
   expect(named("get_order_balance").description).toContain("Call it before recording a delivery");
   expect(named("get_order").description).toContain("expectedVersion");
+});
+
+it("shares delivery filters and detail representations with REST", async () => {
+  const filters = { facilityId: ID, orderId: ID, storageLocationId: ID, q: "DL", code: "DL-1", deliveredFrom: "2026-09-01T00:00:00Z", deliveredBefore: "2026-10-01T00:00:00Z", limit: 1, cursor: "cursor" };
+  expect(named("find_deliveries").input).toBe(resourceQueries.deliveries.list);
+  mocks.deliveries.mockResolvedValue({ data: [], nextCursor: null });
+  expect(await named("find_deliveries").execute(ctx, filters)).toEqual({ data: [], nextCursor: null });
+  expect(mocks.deliveries).toHaveBeenCalledExactlyOnceWith(ctx, filters);
+  mocks.delivery.mockResolvedValue({ code: "DL-1", version: 2 });
+  expect(await named("get_delivery").execute(ctx, { idOrCode: ID.toUpperCase() })).toEqual({ data: { code: "DL-1", version: 2 } });
+  expect(mocks.delivery).toHaveBeenCalledWith(ctx, { id: ID });
+  await named("get_delivery").execute(ctx, { idOrCode: "DL-1" });
+  expect(mocks.delivery).toHaveBeenLastCalledWith(ctx, { code: "DL-1" });
+});
+it("gives shared delivery list summaries and names the drawn-product tool and scope", () => {
+  expect(named("find_deliveries").summarize({ data: [], nextCursor: null })).toBe("0 deliveries.");
+  expect(named("find_deliveries").summarize({ data: [{}], nextCursor: "cursor" })).toBe("1 delivery. More results: pass nextCursor.");
+  expect(named("get_delivery").summarize({ data: { code: "DL-1", version: 2 } })).toBe("Delivery DL-1, version 2.");
+  expect(named("get_delivery").description).toContain("find_output_stock_movements");
+  expect(named("get_delivery").description).toContain("biochar-products:read");
+});
+it("rejects invalid delivery filters before the reader", async () => {
+  for (const args of [{ deliveredFrom: "2026-09-01" }, { deliveredBefore: "2026-09-01T12:00:00" }, { unknown: true }]) {
+    await expect(Promise.resolve().then(() => named("find_deliveries").execute(ctx, args))).rejects.toMatchObject({ code: "invalid_query" });
+  }
+  expect(mocks.deliveries).not.toHaveBeenCalled();
 });

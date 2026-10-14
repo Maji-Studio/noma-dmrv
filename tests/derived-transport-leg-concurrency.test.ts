@@ -18,7 +18,7 @@ import {
   transportLegs,
 } from "@/db/schema";
 import { updateCustomerLocation } from "@/data-access/customers";
-import { createDelivery } from "@/data-access/deliveries";
+import { createDelivery } from "./helpers/create-delivery";
 import { updateDelivery } from "@/lib/operations/deliveries";
 
 import { syncBiocharProductTransportLegs } from "@/data-access/transport-legs";

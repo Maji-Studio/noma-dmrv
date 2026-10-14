@@ -1,6 +1,7 @@
 import type { DbTransaction } from '@/db';
 import type { OrgContext } from '@/lib/auth/server';
 import type { OutputBinStock } from '@/lib/output-stock/bin-stock-projection';
+import type { OutputDrawOrder } from '@/lib/output-stock/stock-mode';
 import { isOutputBinType } from '@/schemas/storage-locations';
 import type { ApiLookupIdentifier } from './api-lookup-filters';
 import { requireApiOutputBin } from './api-output-stock-movements';
@@ -33,7 +34,7 @@ function requireLayerCodes(stock: OutputBinStock<string | null>): OutputBinStock
  * pass a repeatable-read transaction that has not run a statement yet, so the
  * lookup here fixes its snapshot.
  */
-export async function findApiOutputBinStock(ctx: OrgContext, input: ApiOutputBinStockInput, tx?: DbTransaction): Promise<OutputBinStock> {
+export async function findApiOutputBinStock(ctx: OrgContext, input: ApiOutputBinStockInput, tx?: DbTransaction): Promise<OutputBinStock & { drawOrder: OutputDrawOrder | null }> {
   requireOrgScope(ctx);
   if (!tx) return withStockSnapshot(snapshot => findApiOutputBinStock(ctx, input, snapshot));
   const bin = await requireApiOutputBin(ctx, input.identifier, { facilityId: input.facilityId, executor: tx });
@@ -41,5 +42,5 @@ export async function findApiOutputBinStock(ctx: OrgContext, input: ApiOutputBin
   // The lookup fixed the snapshot, so nothing it shows was placed after this instant.
   const at = new Date().toISOString();
   const { stock } = await readOutputBinStockAt(ctx, { ...bin, type: bin.type }, at, tx, { includeArchived: bin.archivedAt != null });
-  return requireLayerCodes(stock);
+  return { ...requireLayerCodes(stock), drawOrder: stock.stockMode === 'split' ? bin.drawOrder : null };
 }

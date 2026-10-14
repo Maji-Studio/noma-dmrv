@@ -84,6 +84,14 @@ export const orderListSchema = z.strictObject({
   orderedFrom: orderedDateSchema.optional().describe("Only orders dated on or after this calendar date, YYYY-MM-DD."),
   orderedBefore: orderedDateSchema.optional().describe("Only orders dated before this calendar date, YYYY-MM-DD."),
 });
+export const deliveryListSchema = z.strictObject({
+  ...paginationShape, facilityId: facilityIdSchema.describe("Shipping facility filter, UUID."), code: codeSchema,
+  orderId: uuidSchema().optional().describe("Order filter, UUID."),
+  storageLocationId: uuidSchema().optional().describe("Source product bin filter, UUID."),
+  q: prefixSchema.describe("Case-insensitive literal prefix search on delivery code."),
+  deliveredFrom: offsetInstantSchema().optional().describe("Only deliveries at or after this RFC 3339 instant with an explicit offset; encode + as %2B or use Z."),
+  deliveredBefore: offsetInstantSchema().optional().describe("Only deliveries before this RFC 3339 instant with an explicit offset; encode + as %2B or use Z."),
+});
 export const storageLocationListSchema = facilityLookupListSchema.extend({
   type: z.enum(storageLocationTypes).optional().describe("Material lane filter: feedstock_bin, biochar_bin or product_bin."),
   formulationId: uuidSchema().optional().describe("Claimed formulation filter, UUID. Matches product bins claimed by this formulation."),
@@ -99,6 +107,7 @@ export const resourceQueries = {
   feedstocks: { list: feedstockListSchema, get: lookupGetSchema },
   facilities: { list: lookupListSchema, get: lookupGetSchema },
   customers: { list: lookupListSchema, get: lookupGetSchema },
+  deliveries: { list: deliveryListSchema, get: lookupGetSchema },
   orders: { list: orderListSchema, get: lookupGetSchema },
   suppliers: { list: lookupListSchema, get: lookupGetSchema },
   "feedstock-types": { list: lookupListSchema, get: lookupGetSchema },

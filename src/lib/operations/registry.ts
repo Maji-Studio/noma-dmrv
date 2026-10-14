@@ -1,3 +1,4 @@
+import { recordDelivery, updateDeliveryOperation } from "./deliveries";
 import { recordOrder, updateOrder, deleteOrder } from "./orders";
 import { startProductionRun, updateProductionRun, deleteProductionRun } from "./production-runs";
 import { logFeedstockDelivery, updateFeedstock, deleteFeedstock } from "./feedstocks";
@@ -7,6 +8,8 @@ import { recordLabSample, updateLabSample, deleteLabSample } from "./lab-samples
 
 /** Explicit write allowlist. Existing read models become the read side later. */
 export const operationRegistry = {
+  record_delivery: recordDelivery,
+  update_delivery: updateDeliveryOperation,
   record_order: recordOrder,
   update_order: updateOrder,
   delete_order: deleteOrder,

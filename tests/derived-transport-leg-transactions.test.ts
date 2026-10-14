@@ -21,10 +21,8 @@ import {
   transportLegs,
 } from "@/db/schema";
 import { updateCustomerLocation } from "@/data-access/customers";
-import {
-  createDelivery,
-  deleteDelivery,
-} from "@/data-access/deliveries";
+import { deleteDelivery } from "@/data-access/deliveries";
+import { createDelivery } from "./helpers/create-delivery";
 import { updateDelivery } from "@/lib/operations/deliveries";
 import {
   createFeedstockInTransaction,

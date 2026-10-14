@@ -1,18 +1,11 @@
 import { db } from "@/db";
 import type { OrgContext } from "@/lib/auth/server";
-import { decimal, GRAMS_PER_KG, kilograms, subtract, type Rational } from "@/lib/output-stock/exact";
+import { decimal, subtract } from "@/lib/output-stock/exact";
+import { publishOrderBalanceKg } from "@/lib/delivery-order-balance";
 import type { ApiLookupIdentifier } from "./api-lookup-filters";
 import { findApiOrder } from "./api-orders";
 import { readDeliveryOrderAllocation } from "./delivery-order-balance";
 import { requireOrgScope } from "./utils";
-
-const ZERO = BigInt(0);
-
-/** Clamp deficits and truncate exact decimals to grams so a published remainder never overdraws. */
-function publishOrderBalanceKg(value: Rational): number {
-  const grams = value.numerator > ZERO ? value.numerator * GRAMS_PER_KG / value.denominator : ZERO;
-  return Number(kilograms(grams));
-}
 
 /** Quantity and deliveries share one snapshot; archived orders include cascade-archived deliveries. */
 export async function findApiOrderBalance(ctx: OrgContext, identifier: ApiLookupIdentifier) {

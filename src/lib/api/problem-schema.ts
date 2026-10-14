@@ -7,7 +7,7 @@ const conflictRefSchema = z.object({
   code: z.string().describe("Operator-readable conflict label, plain text."),
 });
 
-const stockPreviewSchema = z.object({
+export const stockPreviewSchema = z.object({
   basisFingerprint: z.string().describe("Stock basis of the fresh dry run, opaque string; send it back to write against that stock."),
   stockEffects: stockEffectsSchema,
 });

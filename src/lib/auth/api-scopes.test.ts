@@ -30,7 +30,15 @@ it("uses the plugin JSON storage format and shared stored permission decoder", (
 
 it("allows customer and order scopes without implying reads or deletes from an order write", () => {
   expect(API_SCOPES).toEqual(expect.arrayContaining(["customers:read", "orders:read", "orders:write", "orders:delete"]));
-  expect(API_SCOPES.some((scope) => scope.startsWith("deliveries:"))).toBe(false);
+
   expect(hasScope({ scopes: ["orders:write"] }, "orders:read")).toBe(false);
   expect(hasScope({ scopes: ["orders:write"] }, "orders:delete")).toBe(false);
+});
+
+it("offers delivery writes only by explicit scope, with no delete capability", () => {
+  expect(scopesFromPermissions({ deliveries: ["read", "write", "delete"] })).toEqual(["deliveries:read", "deliveries:write"]);
+  expect(hasScope({ scopes: ["deliveries:write"] }, "deliveries:read")).toBe(false);
+  expect(hasRoleAndScope({ orgRole: "admin", scopes: [] }, "deliveries:write")).toBe(false);
+  expect(hasRoleAndScope({ orgRole: "admin", scopes: ["deliveries:write"] }, "deliveries:write")).toBe(true);
+  expect(hasRoleAndScope({ orgRole: "member", scopes: ["deliveries:write"] }, "deliveries:write")).toBe(false);
 });

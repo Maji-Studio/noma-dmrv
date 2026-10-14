@@ -8,7 +8,8 @@ import { biocharProducts, binMovements, outputStockAllocations, outputStockRunAl
 import { createBiocharProduct } from '@/data-access/biochar-product-create';
 import { createOrderInTransaction } from '@/data-access/orders';
 import { getDeliveryAllocationProvenance } from '@/data-access/delivery-allocation-provenance';
-import { createDelivery, deleteDelivery } from '@/data-access/delivery-output-writes';
+import { deleteDelivery } from "@/data-access/delivery-output-writes";
+import { createDelivery } from "./helpers/create-delivery";
 import { updateDelivery } from '@/lib/operations/deliveries';
 import { getOutputStockHistory } from '@/data-access/output-stock-history';
 import { buildStockLevelSeries } from '@/components/storage-locations/stock-level-series';
@@ -119,7 +120,7 @@ describe('output FIFO transactions', () => {
     const emptyOrder = await db.transaction(tx => createOrderInTransaction(f.ctx, tx, { code: `E2E-FIFO-EMPTY-${f.tag}`, facilityId: f.facility.id, customerId: f.customer.id, formulationId: f.pure.id, orderDate: new Date('2026-09-14'), quantityKg: 100, packaging: 'loose' }));
     expect(emptyOrder.formulationId).toBe(f.pure.id);
     expect(await getMatchingOutputBins(f.ctx, { facilityId: f.facility.id, formulationId: f.pure.id })).toHaveLength(bins.length);
-    await expect(createDelivery(f.ctx, { ...f.deliveryInput, orderId: emptyOrder.id, deliveredWetMassKg: 50 })).rejects.toThrow('matching');
+    await expect(createDelivery(f.ctx, { ...f.deliveryInput, orderId: emptyOrder.id, deliveredWetMassKg: 50 })).rejects.toThrow('Source bin holds another formulation.');
   });
   it('reduces a loss on its original run after an older intake, with no debit to the late run', async () => {
     const f = await seedOutputStockParents(db);

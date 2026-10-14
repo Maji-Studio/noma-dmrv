@@ -1,3 +1,4 @@
+import { DomainError } from '@/lib/domain-errors';
 import { db, type DbTransaction } from '@/db';
 import { binMovements, biocharProducts, formulations, productionRuns, storageLocations } from '@/db/schema';
 import type { OrgContext } from '@/lib/auth/server';
@@ -46,7 +47,7 @@ export async function prepareOutputStock(ctx: OrgContext, raw: OutputStockPrevie
   const modeChanges = await getStockModeChanges(ctx, bin.id, reader);
   const stockMode = stockModeAt(bin.stockMode, modeChanges, input.occurredAt);
   const policy = resolveDrawPolicy(stockMode, bin.drawOrder);
-  if (sources && stockMode !== 'split') throw new SafeError('Only a split bin takes a sub-bin order.');
+  if (sources && stockMode !== 'split') throw new DomainError('validation_failed', 'Only a split bin takes a sub-bin order.', { issues: [{ path: ['sources'], code: 'validation_failed', message: 'Only a split bin takes a sub-bin order.' }] });
   if (!sources && input.moisturePercent == null && !(input.kind === 'count' && input.wetMassKg === 0)) throw new SafeError('Enter the measured moisture.');
   // Reducing a loss restores its own saved provenance, even after a late intake.
   // An eligible delivery correction may intentionally use the newly known FIFO.

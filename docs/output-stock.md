@@ -81,8 +81,10 @@ The mode is timed. Switching a split bin to mix posts a `merge` movement at
 back to split needs an empty bin and posts a `split` movement. `stockModeAt`
 reads this timeline, so every entry, including a later correction, is planned in
 the mode in force at its own time, and no correction crosses a later switch to
-split. An entry timed before saved mix removals lists them in its preview
-(`calculatedWithout`); their saved shares stay.
+split. Every output-stock command refuses `sources` on a bin that is mix at
+the command instant with 422 `validation_failed` at `/sources`. An entry timed
+before saved mix removals lists them in its preview (`calculatedWithout`); their
+saved shares stay.
 
 Mix-drawn applications (a delivery from a mix bin, or a product made from a mix
 biochar bin) are held out of credit-batch slices while
@@ -94,7 +96,11 @@ biochar bin) are held out of credit-batch slices while
 An order records a formulation and requested wet amount. It reserves no product
 or bin stock. A completed delivery records its actual source bin, physical time,
 measured wet mass, and moisture. Its immutable layer and run allocations determine
-its dry biochar total. Legacy storage-inventory rows are not a stock ledger.
+its dry biochar total. Future delivery times are refused in both the app and API.
+REST/MCP create previews and committed creates expose the drawn product allocations;
+PATCH changes metadata only. Mass and moisture corrections stay in the app.
+See [delivery API contracts](./api.md#deliveries-on-rest-and-mcp).
+Legacy storage-inventory rows are not a stock ledger.
 
 Applications take proportional shares of the saved truck allocation. They do not
 repeat the planner against the bin. Saved shares feed batch accounting, certification
@@ -194,6 +200,9 @@ return the same current stock body, under `biochar-products:read`. An optional
 `facilityId` narrows the lookup. Only biochar and product bins answer, including
 archived bins; a feedstock bin returns 422 `validation_failed`.
 
+Representation revision 2 includes `drawOrder` (`oldest_first` or
+`newest_first` for split bins, null for mix). `subBins` stays oldest first.
+
 `subBins` lists held layers with their run or product code and the `layerId`
 a split-bin loss takes in `sources`. Mix bins still list each layer's dry
 biochar and solids, but per-layer `estimatedWetKg`, `estimatedMoisturePercent`
@@ -206,7 +215,7 @@ zero mass totals. Kilograms round to 3 decimal places and percentages to 2.
 The read includes stock figures only. Use `find_output_stock_movements` for
 history and the product detail read for source runs.
 
-See [architecture.md](./architecture.md#output-bin-stock-read) for the snapshot
+See [api.md](./api.md#output-bin-stock-read) for the snapshot
 and ETag contract. A read reserves no stock; use the loss dry run's
 `basisFingerprint` for its optimistic check.
 
