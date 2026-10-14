@@ -23,7 +23,6 @@ import {
   type PaginatedStorageLocations,
   type StorageLocationWithFacility,
 } from "@/data-access/storage-locations";
-import { requireOrgContext } from "@/lib/auth/server";
 import {
   archiveStorageLocationSchema,
   createStorageLocationSchema,
@@ -34,22 +33,7 @@ import {
   storageLocationFilterSchema,
 } from "@/schemas/storage-locations";
 import type { ActionResult } from "@/types/actions";
-import {
-  formatZodActionError,
-  toLoggedActionError,
-} from "./action-errors";
 import { withAction } from "./with-action";
-
-function storageLocationActionError(
-  error: unknown,
-  fallbackMessage: string,
-  op: string,
-): string {
-  return toLoggedActionError(error, fallbackMessage, {
-    message: "storage bin action failed",
-    context: { op },
-  });
-}
 
 // ============================================
 // List/Query Operations
@@ -61,9 +45,7 @@ function storageLocationActionError(
 export async function getStorageLocationsFn(
   filters?: Partial<z.infer<typeof storageLocationFilterSchema>>
 ): Promise<ActionResult<PaginatedStorageLocations>> {
-  try {
-    const ctx = await requireOrgContext();
-
+  return withAction(async (ctx) => {
     const validatedFilters = filters
       ? storageLocationFilterSchema.parse(filters)
       : undefined;
@@ -75,23 +57,12 @@ export async function getStorageLocationsFn(
       validatedFilters
     );
 
-    return { success: true, data: storageLocations };
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return {
-        success: false,
-        error: formatZodActionError(error, "Invalid filter parameters"),
-      };
-    }
-    return {
-      success: false,
-      error: storageLocationActionError(
-        error,
-        "Failed to load storage bins",
-        "storage-location:list",
-      ),
-    };
-  }
+    return storageLocations;
+  }, {
+    fallbackMessage: "Failed to load storage bins",
+    zodErrorPrefix: "Invalid filter parameters",
+    log: { message: "storage bin action failed", context: { op: "storage-location:list" } },
+  });
 }
 
 /**
@@ -120,9 +91,7 @@ export async function getStorageLocationFn(
 export async function createStorageLocationFn(
   data: z.infer<typeof createStorageLocationSchema>
 ): Promise<ActionResult<StorageLocation>> {
-  try {
-    const ctx = await requireOrgContext();
-
+  return withAction(async (ctx) => {
     const validated = createStorageLocationSchema.parse(data);
 
     const storageLocation = await withAutoCode(
@@ -148,23 +117,11 @@ export async function createStorageLocationFn(
       CODE_CONFLICT_MESSAGES.storageLocation,
     );
 
-    return { success: true, data: storageLocation };
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return {
-        success: false,
-        error: formatZodActionError(error),
-      };
-    }
-    return {
-      success: false,
-      error: storageLocationActionError(
-        error,
-        "Failed to create storage bin",
-        "storage-location:create",
-      ),
-    };
-  }
+    return storageLocation;
+  }, {
+    fallbackMessage: "Failed to create storage bin",
+    log: { message: "storage bin action failed", context: { op: "storage-location:create" } },
+  });
 }
 
 // ============================================
