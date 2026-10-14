@@ -42,6 +42,7 @@ const eslintConfig = defineConfig([
         {
           paths: [
             {
+              // The root loads the whole barrel and dominated unit-test import time; use date-fns/<fn>.
               name: "date-fns",
               message: "use date-fns/<fn> subpaths",
             },
