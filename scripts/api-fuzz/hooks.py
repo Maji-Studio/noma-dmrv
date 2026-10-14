@@ -8,7 +8,7 @@ from uuid import uuid4
 import schemathesis
 from schemathesis.core.parameters import ParameterLocation
 from schemathesis.generation import GenerationMode
-from schemathesis.generation.meta import CaseMetadata, ExamplesPhaseData, GenerationInfo, PhaseInfo, TestPhase
+from schemathesis.generation.meta import CaseMetadata, ComponentInfo, ExamplesPhaseData, GenerationInfo, PhaseInfo, TestPhase
 from schemathesis.specs.openapi.checks import status_code_conformance
 
 TRANSPORT_REJECTIONS = frozenset({414, 431})
@@ -40,6 +40,7 @@ SEEDED_LAB_SAMPLE_AGE = timedelta(minutes=30)
 # A real change on a 200-year batch, so the dry run PATCH has something to apply.
 SEEDED_LAB_SAMPLE_PATCH = {"labName": "API fuzz lab"}
 IDEMPOTENCY_HEADER = "Idempotency-Key"
+IF_MATCH_HEADER = "If-Match"
 SEEDED_TARGETS = {}
 SEEDED_ETAGS = {}
 SEEDED_CREATE_BODIES = {}
@@ -218,6 +219,17 @@ def before_call(ctx, case, **kwargs):
         if not any(name.lower() == IDEMPOTENCY_HEADER.lower() for name in headers):
             headers[IDEMPOTENCY_HEADER] = str(uuid4())
             case.headers = headers
+    # Stateful links in 4.29.3 can also drop a required If-Match. The request
+    # violates the schema, so judge it as negative without guessing a live ETag.
+    meta = case.meta
+    if meta is not None and meta.generation.mode.is_positive and any(
+        parameter.name.lower() == IF_MATCH_HEADER.lower() and parameter.is_required
+        for parameter in case.operation.headers
+    ) and not any(name.lower() == IF_MATCH_HEADER.lower() for name in (case.headers or {})):
+        meta.generation.mode = GenerationMode.NEGATIVE
+        meta.components[ParameterLocation.HEADER] = ComponentInfo(mode=GenerationMode.NEGATIVE)
+        # Track the header component even if the generator omitted its metadata.
+        meta.update_validated_hash(ParameterLocation.HEADER, case._hash_container(case.headers))
 
 
 def requires_idempotency_key(operation):

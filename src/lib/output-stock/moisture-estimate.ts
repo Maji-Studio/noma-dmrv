@@ -1,4 +1,4 @@
-import { add, compare, decimal, divide, rational, rationalToNumber, subtract, type Rational } from './exact';
+import { add, compare, decimal, divide, multiply, rational, rationalToNumber, subtract, type Rational } from './exact';
 import { layerRemainingSolidsKg, type OutputStockRequest, type planOutputStock } from './planner';
 
 const PERCENT = 100;
@@ -95,6 +95,24 @@ function layerWet(layer: LayerMoistureBasis): { wetKg: Rational; fraction: Ratio
   return { wetKg: compare(wetKg, ZERO) > BigInt(0) ? wetKg : ZERO, fraction: start.fraction, basis: start.basis };
 }
 
+/** A stock estimate in exact figures; `estimateStock` converts it for display. */
+export interface ExactStockEstimate {
+  solidsKg: Rational;
+  wetKg: Rational | null;
+  moisturePercent: Rational | null;
+  basis: MoistureBasis | null;
+}
+
+/**
+ * True when `next` is a more recent basis than `current`. At one instant a
+ * reading beats a recorded basis; two bases equal in both are the same value,
+ * so the choice never depends on the order layers arrive in.
+ */
+function isLaterBasis(next: MoistureBasis, current: MoistureBasis | null): boolean {
+  if (!current || next.at > current.at) return true;
+  return next.at === current.at && next.source === 'reading' && current.source === 'recorded';
+}
+
 /**
  * The stock of the layers placed by `at`. Wet mass is each layer's wet mass
  * in minus wet mass out, so a removal of 300 kg from 500 kg leaves 200 kg
@@ -103,7 +121,7 @@ function layerWet(layer: LayerMoistureBasis): { wetKg: Rational; fraction: Ratio
  * mass still shows. Estimated moisture is each layer's kept moisture, weighted
  * by its remaining solids, so a pro-rata mix removal leaves it unchanged.
  */
-export function estimateStock(layers: readonly LayerMoistureBasis[], at: string): StockEstimate {
+export function estimateStockExact(layers: readonly LayerMoistureBasis[], at: string): ExactStockEstimate {
   let solids = ZERO;
   let wet: Rational | null = ZERO;
   let solidsAtMoisture: Rational | null = ZERO;
@@ -115,10 +133,18 @@ export function estimateStock(layers: readonly LayerMoistureBasis[], at: string)
     if (!known) { wet = null; solidsAtMoisture = null; continue; }
     if (wet) wet = add(wet, known.wetKg);
     if (solidsAtMoisture) solidsAtMoisture = add(solidsAtMoisture, divide(layer.remainingSolidsKg, known.fraction));
-    if (!basis || known.basis.at > basis.at) basis = known.basis;
+    if (isLaterBasis(known.basis, basis)) basis = known.basis;
   }
-  const moisture = solidsAtMoisture && solidsAtMoisture.numerator > BigInt(0) ? toNumber(subtract(rational(BigInt(1)), divide(solids, solidsAtMoisture))) * PERCENT : null;
-  return { solidsKg: toNumber(solids), wetKg: wet ? toNumber(wet) : null, moisturePercent: moisture, basis };
+  const moisture = solidsAtMoisture && solidsAtMoisture.numerator > BigInt(0)
+    ? multiply(subtract(rational(BigInt(1)), divide(solids, solidsAtMoisture)), rational(BigInt(PERCENT))) : null;
+  return { solidsKg: solids, wetKg: wet, moisturePercent: moisture, basis };
+}
+
+/** `estimateStockExact` as display numbers. */
+export function estimateStock(layers: readonly LayerMoistureBasis[], at: string): StockEstimate {
+  const exact = estimateStockExact(layers, at);
+  return { solidsKg: toNumber(exact.solidsKg), wetKg: exact.wetKg ? toNumber(exact.wetKg) : null,
+    moisturePercent: exact.moisturePercent ? toNumber(divide(exact.moisturePercent, rational(BigInt(PERCENT)))) * PERCENT : null, basis: exact.basis };
 }
 
 /** A reading a posting records on one layer, with the solids the layer holds right after it. */

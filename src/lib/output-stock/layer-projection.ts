@@ -8,8 +8,24 @@ import { add, decimal, grams, GRAMS_PER_KG, kilograms, rational, readRational, s
 import type { LayerMoistureBasis } from './moisture-estimate';
 import { planOutputStock, type OutputStockLayer } from './planner';
 
+/** Why a bin's layers do not resolve: one reason per place the projection gives up. */
+export const UNRESOLVED_STOCK_REASONS = ['run_incomplete', 'product_placement_missing', 'ingredient_mass_invalid', 'ingredient_snapshot_mismatch'] as const;
+export type UnresolvedStockReason = (typeof UNRESOLVED_STOCK_REASONS)[number];
+
+/** The fixed sentence a published stock read gives for each reason; it names no record. */
+export const UNRESOLVED_STOCK_SENTENCES: Record<UnresolvedStockReason, string> = {
+  run_incomplete: 'A production run in this bin has no end time, or no dry biochar mass above zero. Check its biochar wet mass, moisture and end time to read the bin stock.',
+  product_placement_missing: "A biochar product in this bin has no placement time. Set the product's placement time to read the bin stock.",
+  ingredient_mass_invalid: 'A biochar product in this bin has an ingredient mass that cannot be used. Correct the ingredient mass to read the bin stock.',
+  ingredient_snapshot_mismatch: 'A biochar product in this bin has saved ingredient dry solids that do not match its composition. The bin stock cannot be read until the product is repaired.',
+};
+
 /** A layer's saved facts are incomplete; readers show the bin as unavailable. */
-export class UnresolvedOutputStockError extends SafeError {}
+export class UnresolvedOutputStockError extends SafeError {
+  constructor(readonly reason: UnresolvedStockReason, message: string) {
+    super(message);
+  }
+}
 
 /** One saved output-stock allocation with its per-run split, as the allocation projection returns it. */
 export interface AllocationEffectRow {
@@ -82,7 +98,7 @@ export function projectBiocharLayers(rows: { runs: readonly CompletedRunRow[]; s
     }
     return false;
   }).map(run => {
-    if (!run.endTime || !isResolvedDryKg(run.dryKg)) throw new UnresolvedOutputStockError(unresolvedRunMessage(run));
+    if (!run.endTime || !isResolvedDryKg(run.dryKg)) throw new UnresolvedOutputStockError('run_incomplete', unresolvedRunMessage(run));
     const sourceDraw = preLedger.filter(s => s.runId === run.id).reduce((sum, s) => sum + grams(s.dryKg), BigInt(0));
     const runEffects = effects.filter(e => e.productionRunId === run.id);
     const ledgerDraw = runEffects.reduce((sum, e) => sum + gramsSigned(e.dryMassKg), BigInt(0));
@@ -102,15 +118,15 @@ export function projectBiocharLayers(rows: { runs: readonly CompletedRunRow[]; s
  */
 export function projectProductLayers(rows: { products: readonly ProductRow[]; sources: readonly SourceDrawRow[]; ingredients: readonly IngredientSnapshotRow[]; effects: readonly AllocationEffectRow[] }): OutputStockLayer[] {
   return rows.products.map(product => {
-    if (!product.placedAt) throw new UnresolvedOutputStockError('Product placement time is unresolved');
+    if (!product.placedAt) throw new UnresolvedOutputStockError('product_placement_missing', 'Product placement time is unresolved');
     const snapshotIngredients = rows.ingredients.filter(i => i.biocharProductId === product.id);
     const composition = (product.composition ?? {}) as { ingredients?: { formulationIngredientId: string; massKg: number }[] };
     const ingredientLines = composition.ingredients ?? [];
-    if (ingredientLines.some(i => !Number.isFinite(i.massKg) || i.massKg < 0)) throw new UnresolvedOutputStockError('Ingredient dry solids are unresolved');
+    if (ingredientLines.some(i => !Number.isFinite(i.massKg) || i.massKg < 0)) throw new UnresolvedOutputStockError('ingredient_mass_invalid', 'Ingredient dry solids are unresolved');
     const positiveIngredients = ingredientLines.filter(i => i.massKg > 0);
     if (positiveIngredients.length !== snapshotIngredients.length || positiveIngredients.some(line =>
       snapshotIngredients.filter(snapshot => snapshot.formulationIngredientId === line.formulationIngredientId).length !== 1,
-    )) throw new UnresolvedOutputStockError('Ingredient dry solids are unresolved');
+    )) throw new UnresolvedOutputStockError('ingredient_snapshot_mismatch', 'Ingredient dry solids are unresolved');
     const layerEffects = rows.effects.filter(e => e.allocation.biocharProductId === product.id);
     const allocations = uniqueAllocations(layerEffects);
     const runs = rows.sources.filter(s => s.productId === product.id).map(source => ({ productionRunId: source.runId, establishedDryKg: source.dryKg,

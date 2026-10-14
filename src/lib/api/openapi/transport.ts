@@ -2,10 +2,11 @@ import { apiScopeRepresentationSchema } from "@/lib/representations/me";
 import { z } from "zod";
 import { API_CURSOR_MAX_LENGTH, API_IDEMPOTENCY_KEY_MAX_LENGTH, API_LIST_DEFAULT_LIMIT, API_LIST_MAX_LIMIT } from "@/config/api-rest";
 import { IDEMPOTENCY_RETENTION_DAYS } from "@/config/operations";
+import { OUTPUT_BIN_STOCK_ETAG } from "@/lib/operations/agent-guidance";
 import type { JsonSchema } from "@/lib/operations/json-schema";
 import { IDEMPOTENCY_KEY_PATTERN } from "../request-body";
 import { API_CURSOR_PATTERN } from "../input-text";
-import { STRONG_ETAG_PATTERN } from "../etag";
+import { BODY_HASH_ETAG_PATTERN, STRONG_ETAG_PATTERN } from "../etag";
 
 export function outputSchema(schema: z.ZodType, representations: Record<string, z.ZodType> = {}): JsonSchema {
   const root: z.core.$ZodType = schema;
@@ -95,6 +96,11 @@ function headerReferences(definitions: Record<string, unknown>) {
 export const privateHeaders = headerReferences(privateHeaderDefinitions);
 export const requestIdHeader = { "X-Request-Id": privateHeaders["X-Request-Id"] };
 export const etagHeader = headerReferences(etagDefinition);
+export const stockEtagHeader = {
+  ETag: header(`Hash of the published stock. ${OUTPUT_BIN_STOCK_ETAG}`, {
+    type: "string", pattern: BODY_HASH_ETAG_PATTERN.source,
+  }),
+};
 export const writeHeaders = headerReferences(writeHeaderDefinitions);
 export const locationHeader = headerReferences(locationDefinition);
 

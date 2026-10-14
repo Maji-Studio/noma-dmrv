@@ -1,34 +1,17 @@
 # Open Questions
 
-**What this covers:** every deferred decision, known-but-unfixed defect, and
-question waiting on an external party (Isometric, a stakeholder, an operator
-sandbox run). **When to read it:** before starting work in an area, to find out
-what is deliberately unbuilt there and why — and before "fixing" something that
-looks broken, because it may be a recorded decision.
+**What this covers:** every deferred decision, known-but-unfixed defect, and question waiting on an external party (Isometric, a stakeholder, an operator sandbox run). **When to read it:** before starting work in an area, to find out what is deliberately unbuilt there and why, and before "fixing" something that looks broken, because it may be a recorded decision.
 
 Two rules bind this file:
 
-1. **An entry leaves only when the issue is provably resolved** — not when it
-   goes stale. Record the resolution in the owning doc (an ADR under
-   [`docs/adr/`](./adr/), [`docs/isometric/changes.md`](./isometric/changes.md),
-   or the relevant feature doc) and delete the entry.
-2. **Every claim carries a code pointer** — a module path, not a line number
-   (line numbers rot). If you can't point at the code, the claim isn't
-   verifiable and doesn't belong here.
+1. **An entry leaves only when the issue is provably resolved**, not when it goes stale. Record the resolution in the owning doc (an ADR under [`docs/adr/`](./adr/), [`docs/isometric/changes.md`](./isometric/changes.md), or the relevant feature doc) and delete the entry.
+2. **Every claim carries a code pointer**, a module path, not a line number (line numbers rot). If you can't point at the code, the claim isn't verifiable and doesn't belong here.
 
 Deferred work lives here, never as a `TODO` in code.
 
-**Anchor every entry on a `file:symbol` it depends on.** This file's recurring
-failure mode is entries whose code was renamed or deleted underneath them
-(`safeAppendSyncEvent`, `deleteDocumentsForEntity`,
-`insertDraftSubmissionWithMappingLockAndLocks` — all gone, all still cited here
-for weeks). A named symbol makes a rename break the entry visibly under grep;
-prose alone rots silently.
+**Anchor every entry on a `file:symbol` it depends on.** This file's recurring failure mode is entries whose code was renamed or deleted underneath them (`safeAppendSyncEvent`, `deleteDocumentsForEntity`, `insertDraftSubmissionWithMappingLockAndLocks`, all gone, all still cited here for weeks). A named symbol makes a rename break the entry visibly under grep; prose alone rots silently.
 
-**`needs-registry-check`** marks a question that must be answered by the
-Isometric MCP server (`how_to`, then the protocol/OpenAPI tools) or a sandbox
-probe — **never** from `docs/isometric/*`, which are non-authoritative local
-summaries. Do not close one of these from a local doc.
+**`needs-registry-check`** marks a question that must be answered by the Isometric MCP server (`how_to`, then the protocol/OpenAPI tools) or a sandbox probe, **never** from `docs/isometric/*`, which are non-authoritative local summaries. Do not close one of these from a local doc.
 
 ## Invariants an LLM must not violate
 
@@ -359,20 +342,20 @@ Pure starter residue; org scoping came later via ADR 0010.
   registration and rate-limit classification), delivery corrections, and
   tests for ordinary-only, correction-only, both and neither credentials.
 
-### Sub-bin stock is not readable on the API (`api/sub-bin-reads`, opened 2026-10-12)
+### Output stock projection cost grows with bin history (`data/output-stock-projection-cost`, opened 2026-10-14)
 
-- Split output bins expose no sub-bin or remaining-stock read. A loss with
-  `sources` names production-run layers that clients find through runs and
-  movement history, without seeing what each layer still holds. Decision 55
-  deferred it.
-- **Next after Phase 5a** (round 7 Q58, its own PR). Design: one consistent
-  snapshot and one evaluation instant for the whole projection, deterministic
-  serialization, ETag = hash of the published body (distinct from
-  `basisFingerprint`), and defined behaviour for archived, null, ordering and
-  size limits.
-- **Resolve via:** a stock-bearing read model whose ETag is that body hash
-  rather than the storage-location version, then a REST path
-  (`GET /storage-locations/{idOrCode}/stock`) and an MCP tool (`get_bin_stock`).
+- Every stock reader (posting, UI and API) reads all of a bin's rows before
+  counting held layers, so cost grows with bin history. No cap or paging was
+  added to the [stock read](./output-stock.md#api-stock-read). Pointer: `src/data-access/output-stock.ts:readOutputBinRows`, `src/data-access/output-bin-stock.ts:readOutputBinStockAt`.
+- **Resolve via:** a held-layer index or a materialized balance if a real bin
+  gets slow.
+
+### Product ingredient snapshot repair has no operator action (`data/product-ingredient-snapshot-repair`, opened 2026-10-14)
+
+- The stock read's `ingredient_snapshot_mismatch` answer gives no action an
+  operator can take. No repair path exists for a product whose saved ingredient
+  dry solids disagree with its composition. Pointer: `src/lib/output-stock/layer-projection.ts:UNRESOLVED_STOCK_SENTENCES.ingredient_snapshot_mismatch`.
+- **Resolve via:** settle the repair action, then name it in the stock read's sentence.
 
 ### A multi-sample create must not assume one credit batch or one sampling time (`api/multi-sample-create`, opened 2026-10-13)
 

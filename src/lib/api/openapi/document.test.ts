@@ -6,8 +6,10 @@ import { API_BODY_MAX_BYTES, API_CURSOR_MAX_LENGTH, API_IDEMPOTENCY_KEY_MAX_LENG
 import { createFeedstockSchema, updateFeedstockSchema } from "@/schemas/feedstocks";
 import { toOperationJsonSchema, type JsonSchema } from "@/lib/operations/json-schema";
 import { buildOpenApiDocument, serializeOpenApiDocument } from "./document";
-import { parseIfMatch, representationEtag, STRONG_ETAG_PATTERN } from "../etag";
+import { BODY_HASH_ETAG_PATTERN, parseIfMatch, representationEtag, STRONG_ETAG_PATTERN } from "../etag";
 import { IDEMPOTENCY_KEY_PATTERN, readIdempotencyKey } from "../request-body";
+import { OUTPUT_BIN_STOCK_ETAG, OUTPUT_BIN_STOCK_SOURCES } from "@/lib/operations/agent-guidance";
+import { biocharStockGuide } from "../llms-guide";
 
 const document = buildOpenApiDocument();
 const routeRoot = join(process.cwd(), "src/app/api/v1");
@@ -132,6 +134,27 @@ it("requires preconditions and requires create idempotency with possible respons
   expect(response("/formulations/{idOrCode}").headers).toHaveProperty("ETag");
   expect(Object.keys(document.paths["/storage-locations/{idOrCode}/stock-movements"].get.responses).sort()).toEqual(["200", "400", "401", "403", "404", "422", "429", "500"]);
   expect(document.paths["/storage-locations/{idOrCode}/stock-movements"].get["x-required-scope"]).toBe("biochar-products:read");
+});
+
+it("publishes output bin stock with a body-hash ETag and only the facility query", () => {
+  const operation = document.paths["/storage-locations/{idOrCode}/stock"].get;
+  expect(operation).toMatchObject({ operationId: "get_bin_stock", "x-required-scope": "biochar-products:read" });
+  expect(Object.keys(operation.responses).sort()).toEqual(["200", "400", "401", "403", "404", "422", "429", "500"]);
+  expect(operation.parameters?.map((parameter) => (parameter as { name: string }).name)).toEqual(["idOrCode", "facilityId"]);
+  const response = operation.responses["200"] as { headers: Record<string, unknown>; content: object };
+  const pattern = BODY_HASH_ETAG_PATTERN.source;
+  expect(response.headers).toMatchObject({ ETag: { schema: { type: "string", pattern } } });
+  expect(response.headers.ETag).not.toHaveProperty("$ref");
+  expect(document.components.headers.ETag.schema).toMatchObject({ pattern: STRONG_ETAG_PATTERN.source });
+  const stock = document.components.schemas.output_bin_stock;
+  expect(stock.properties).toHaveProperty("subBins");
+  for (const field of ["at", "evaluatedAt", "basisFingerprint", "recentMovements"]) expect(stock.properties).not.toHaveProperty(field);
+  for (const guidance of [OUTPUT_BIN_STOCK_ETAG, OUTPUT_BIN_STOCK_SOURCES]) {
+    expect(operation.description).toContain(guidance);
+    expect(biocharStockGuide).toContain(guidance);
+    expect(guidance).not.toMatch(/[–—]/);
+  }
+  expect(response.headers.ETag).toMatchObject({ description: `Hash of the published stock. ${OUTPUT_BIN_STOCK_ETAG}` });
 });
 
 it("accepts an optional empty DELETE object and publishes its body errors", () => {

@@ -31,10 +31,14 @@ function allocationLink(ctx: OrgContext, column: "delivery_id" | "target_biochar
   )`;
 }
 
-/** The output bin whose history is read: foreign is 404, a feedstock bin is a 422. */
-export async function requireApiOutputBin(ctx: OrgContext, identifier: ApiLookupIdentifier) {
+/**
+ * The output bin whose history or stock is read: foreign is 404, a feedstock
+ * bin is a 422. `facilityId` narrows the lookup as `?facilityId=` does; a
+ * snapshot read passes its transaction as `executor`.
+ */
+export async function requireApiOutputBin(ctx: OrgContext, identifier: ApiLookupIdentifier, options: { facilityId?: string; executor?: Executor } = {}) {
   requireOrgScope(ctx);
-  const bin = await findApiStorageLocation(ctx, identifier);
+  const bin = await findApiStorageLocation(ctx, identifier, options.facilityId, options.executor);
   if (bin.type === "feedstock_bin") throw new DomainError("validation_failed", FEEDSTOCK_BIN_MESSAGE, {
     issues: [{ path: ["storageLocationId"], code: "validation_failed", message: FEEDSTOCK_BIN_MESSAGE }],
   });

@@ -404,7 +404,7 @@ Decided 2026-10-12 (Kenji, round 6, Phase 4b):
 52. **Product create takes the parts, not the blend:** `biocharWetMassKg` as weighed, `biocharMoisturePercent`, `waterAddedKg` (required) and `ingredients[]` with wet mass and moisture each. The server derives the stored blend `massKg` exactly as the form does.
 53. **Stock movements take an optional `basisFingerprint` and no `expectedProductVersions`.** A stale fingerprint answers 409 `stock_basis_changed` with `preview`. Named exception to the version rule: without a fingerprint, a stock command acts on current stock under the bin lock.
 54. **Delivery corrections stay off the API** (moot under decision 50).
-55. **Discovery reads:** `GET /formulations[/{idOrCode}]` with lines `{ id, feedstockTypeId, ratio }` (scope `formulations:read`, on by default) and `find_formulations`; `GET /storage-locations/{id}/stock-movements` (scope `biochar-products:read`, read-only) and `find_output_stock_movements`. Sub-bin reads are deferred (`api/sub-bin-reads`).
+55. **Discovery reads:** `GET /formulations[/{idOrCode}]` with lines `{ id, feedstockTypeId, ratio }` (scope `formulations:read`, on by default) and `find_formulations`; `GET /storage-locations/{id}/stock-movements` (scope `biochar-products:read`, read-only) and `find_output_stock_movements`. Sub-bin reads shipped in [PR C](#20-pr-c-results-2026-10-14).
 56. **Future event times are refused** for product `placedAt` and movement `occurredAt`, in the app and the API, as for runs (`src/data-access/production-runs/future-time.ts`). Backdating stays allowed.
 
 ## 14. What review changed
@@ -506,8 +506,15 @@ Decided 2026-10-13 (Kenji, round 7, Phase 5a). The numbering continues from deci
 64. **Batch edits that move the window past existing samples are allowed** (Q55). Readiness flags samples before the new window (submission already blocks them); there is no batch-edit refusal.
 65. **Create, update and move are refused on an archived credit batch** (Q56), in the app and the API. Reads still work. Delete is not named in the answer and stays allowed.
 66. **`lab-samples:delete` is off by default** (Q57). PATCH accepts `code` and a move to another credit batch.
-67. **The sub-bin stock read is its own follow-up PR after 5a** (Q58). It is the next item from `api/sub-bin-reads`, designed as in the Phase 5a spec: one consistent snapshot and one evaluation instant, deterministic serialization, ETag = hash of the published body.
+67. **The sub-bin stock read is its own follow-up PR after 5a** (Q58). It shipped in [PR C](#20-pr-c-results-2026-10-14), designed as in the Phase 5a spec: one consistent snapshot and one evaluation instant, deterministic serialization, ETag = hash of the published body.
 68. **Stock corrections stay UI-only** (Q59). They stay in the backlog as `api/stock-corrections`.
+
+Decided 2026-10-13 (Kenji, round 8, PR C). These answers override the earlier round 8 placeholders.
+
+69. **Only output bins answer the stock read** (Q60). Biochar and product bins answer; a feedstock bin returns 422 `validation_failed`.
+70. **Mix bins show runs plus one pile moisture** (Q61). Held layers carry dry biochar and solids; each layer's wet mass, moisture and basis are null. The pile's figures are in `totals`.
+71. **Unresolved stock answers 200 as stock unknown** (Q62). The body has a fixed reason sentence, `totals: null` and no sub-bins. Kenji noted that a finished run's dry biochar mass will become required. Staging #960, commit `4cb221b94` ("require output bin and moisture on completed runs"), now requires output kg, output bin and moisture on completion, from which dry mass is derived. The unresolved run path remains for older data; no new completion rule is needed here.
+72. **The read carries stock figures only** (Q63). No recent movements or product source runs. Use movement history and the product detail read for those.
 
 ## 17. Phase 3 results (2026-10-09)
 
@@ -550,7 +557,7 @@ Biochar products and output-stock movements on REST and MCP, in seven commits. D
 
 **Fuzzing:** Phase 4b adds no new harness mechanism beyond examples that pin both a path id and a create body (the movement POST). A stale `deliveryDate` assertion in `hooks.test.py` was fixed because the hook binds the real clock.
 
-**Not changed:** stock corrections (`api/stock-corrections`), sub-bin stock reads (`api/sub-bin-reads`) and case-insensitive UUIDs (`api/uuid-case`) are in [open questions](../open-questions.md). The product delete and the `data/lock-order` inversions are unchanged.
+**Not changed:** stock corrections (`api/stock-corrections`) and case-insensitive UUIDs (`api/uuid-case`) are in [open questions](../open-questions.md). The product delete and the `data/lock-order` inversions are unchanged.
 
 ## 19. Phase 5a results (2026-10-13)
 
@@ -595,4 +602,25 @@ Lab samples and the credit batch lookup on REST and MCP, in seven commits on `fe
 **Fuzzing:** local Schemathesis run against a production build, 4,582 cases, 0 failures. With the new operations, Schemathesis 4.29.3 handed the fuzzing phase a positive create without its required `Idempotency-Key` (lab samples and production runs); `hooks.py` now supplies the key on positive cases, and the coverage phase still sends the missing-header case.
 **Agent evaluation:** `pnpm eval:mcp` passes all six cases on the second run: lab-complete 6/8 calls, lab-missing-organic 2/8. On the first run the Phase 4 case chained-complete went over its budget (11/10) after three supplier searches; the rerun used 7.
 
-**Follow-ups:** the Q54 eligibility fix (#948), then the sub-bin stock read PR (decision 67). Photo autofill is issue #329. A multi-sample create and stock corrections are in [open questions](../open-questions.md).
+**Follow-ups:** the Q54 eligibility fix (#948). The sub-bin stock read shipped in [PR C](#20-pr-c-results-2026-10-14) (decision 67). Photo autofill is issue #329. A multi-sample create and stock corrections are in [open questions](../open-questions.md).
+
+## 20. PR C results (2026-10-14)
+
+The output-bin stock read on REST and MCP. Decisions 69 to 72 record the round 8 answers.
+
+**What shipped:**
+
+1. Data layer: one repeatable read, read only snapshot, with the bin lookup first and the evaluation instant captured after it. The app picker and API use the same deterministic stock projection.
+2. REST and MCP: `GET /api/v1/storage-locations/{idOrCode}/stock` and `get_bin_stock`, with output-only lookup, held layers, mix pile totals, fixed unresolved reasons and published precision. The REST ETag hashes the published body and representation revision; the body carries no evaluation instant. It validates reads and reserves no stock. Losses still use the dry run's `basisFingerprint`.
+3. Docs and one MCP evaluation case: a loss from a named run's sub-bin in a split bin with two run layers. The scorer requires a stock read before any loss attempt, rejects invented layer ids, and accepts a committed loss from the named layer or a question with nothing saved.
+
+**Behaviour changes:**
+
+- The app picker uses the server's now, captured after the bin lookup, when no entry time is supplied.
+- Mix bins have null per-layer wet mass, moisture and basis. The pile's figures remain in totals.
+
+**Reviews:** gpt-6.1-sol implemented commits 2 and 3. gpt-6.1-sol and gpt-6-astra reviewed commit 1, gpt-6-astra and Opus commit 2, gpt-6-astra commit 3. Commit 3's two P2 scorer findings (an errored stock read counted as a read, date and reason questions not recognized) were fixed. No P1 or P2 findings remain.
+
+**Verification:** full suite 7,135 passed. `pnpm eval:mcp` passes all seven cases. In the new stock case (5/10 calls) the agent read `get_bin_stock`, previewed the loss with PR-12's `layerId`, saved nothing and asked for the lost material's moisture.
+
+**Follow-ups:** projection cost grows with bin history (`data/output-stock-projection-cost` in [open questions](../open-questions.md#output-stock-projection-cost-grows-with-bin-history-dataoutput-stock-projection-cost-opened-2026-10-14)). The `ingredient_snapshot_mismatch` sentence says "until the product is repaired" because the repair path is not settled (`data/product-ingredient-snapshot-repair` in [open questions](../open-questions.md#product-ingredient-snapshot-repair-has-no-operator-action-dataproduct-ingredient-snapshot-repair-opened-2026-10-14)).

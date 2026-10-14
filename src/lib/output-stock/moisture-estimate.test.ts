@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { decimal } from './exact';
+import { decimal, rational } from './exact';
 import { BEFORE_LEDGER_SEQUENCE } from './layer-projection';
-import { estimateStock, planReadings, planWetRemovals, withMovement, type LayerMoistureBasis } from './moisture-estimate';
+import { estimateStock, estimateStockExact, planReadings, planWetRemovals, withMovement, type LayerMoistureBasis } from './moisture-estimate';
 import { planOutputStock, type OutputStockLayer } from './planner';
 
 const T0 = '2026-09-01T08:00:00.000Z';
@@ -62,6 +62,36 @@ function stockLayer(id: string, solidsKg: string, sequence: number): OutputStock
   return { id, placedAt: T0, postingSequence: BigInt(sequence), establishedDryBiocharKg: solidsKg, ingredientDrySolidsKg: '0', remainingDryBiocharKg: solidsKg,
     runs: [{ productionRunId: id, establishedDryKg: solidsKg, remainingDryKg: solidsKg }] };
 }
+
+describe('estimate basis and exact figures', () => {
+  // B-0419 entered at T1 with its recorded wet mass; B-0412 was counted at the same instant.
+  const recorded = layer('B-0419', '980', '637', T1);
+  const counted = layer('B-0412', '1240', '843.2', T0, { readings: [{ moisturePercent: 30, solidsKg: decimal('843.2'), occurredAt: T1, sequence: BigInt(2) }] });
+
+  it('prefers a reading to a recorded basis at the same instant, whatever the layer order', () => {
+    expect(estimateStock([recorded, counted], NOW).basis).toEqual({ source: 'reading', at: T1 });
+    expect(estimateStock([counted, recorded], NOW).basis).toEqual({ source: 'reading', at: T1 });
+  });
+
+  it('still takes the later basis over the source', () => {
+    const later = layer('B-0420', '100', '70', NOW);
+    expect(estimateStock([later, counted], NOW).basis).toEqual({ source: 'recorded', at: NOW });
+  });
+
+  it('keeps the figures exact until a caller converts them', () => {
+    const exact = estimateStockExact([layer('B-0412', '1240', '843.2'), layer('B-0419', '980', '637')], NOW);
+    expect(exact.wetKg).toEqual(decimal('2220'));
+    expect(exact.solidsKg).toEqual(decimal('1480.2'));
+    // 1 − 1480.2 ÷ 2220, as a percent.
+    expect(exact.moisturePercent).toEqual(rational(BigInt(739800), BigInt(22200)));
+    const rounded = estimateStock([layer('B-0412', '1240', '843.2'), layer('B-0419', '980', '637')], NOW);
+    expect(rounded.moisturePercent).toBeCloseTo(33.3243, 3);
+  });
+
+  it('gives no wet mass, moisture or basis when no layer holds stock', () => {
+    expect(estimateStockExact([layer('spent', '10', '0')], NOW)).toEqual({ solidsKg: rational(BigInt(0)), wetKg: rational(BigInt(0)), moisturePercent: null, basis: null });
+  });
+});
 
 describe('removals keep the bin moisture', () => {
   // 500 kg wet at 40%: 300 kg dry biochar.

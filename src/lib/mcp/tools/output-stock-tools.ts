@@ -17,7 +17,7 @@ export const outputStockWriteTools: WriteTool[] = [
   {
     kind: "write", name: "record_output_stock_movement", scope: "biochar-products:write", input: recordInput, output: recordOutput,
     annotations: { readOnlyHint: false, openWorldHint: false, idempotentHint: true, destructiveHint: true },
-    description: `Record a loss or a count on a biochar or product bin, by bin UUID. A loss is wet mass that left the bin. Call whoami and find_storage_locations first. ${OUTPUT_STOCK_GUIDANCE} ${REQUEST_KEY_RULE} ${STOCK_EFFECTS_RULE} ${UNTRUSTED_TEXT}`,
+    description: `Record a loss or a count on a biochar or product bin, by bin UUID. A loss is wet mass that left the bin. Call whoami and find_storage_locations first. For a split-bin loss, take sources[].layerId from get_bin_stock. ${OUTPUT_STOCK_GUIDANCE} ${REQUEST_KEY_RULE} ${STOCK_EFFECTS_RULE} ${UNTRUSTED_TEXT}`,
     async execute(context, raw) {
       const { input, dryRun, requestKey } = parseControls(raw, recordContract);
       const bin = (input as { storageLocationId?: unknown } | null)?.storageLocationId;
