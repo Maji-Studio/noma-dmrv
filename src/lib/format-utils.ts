@@ -10,7 +10,9 @@
  * rule lives with the vocabulary in `@/lib/copy-utils`.
  */
 
-import { format, isValid, parseISO } from "date-fns";
+import { format } from "date-fns/format";
+import { isValid } from "date-fns/isValid";
+import { parseISO } from "date-fns/parseISO";
 import { countedRoundTripKm } from "@/lib/calculations/round-trip";
 import { MISSING_VALUE } from "@/lib/copy-utils";
 import { formatFacilityTime, parseLocalDateString, SHORT_MONTH_NAMES } from "@/lib/date-utils";
