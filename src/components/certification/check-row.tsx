@@ -95,7 +95,7 @@ export function CheckRow({
           {whyDetail && <InfoHint label="Why is this required?">{whyDetail}</InfoHint>}
         </span>
         {detail && (
-          <div className="body-caption text-[var(--color-text-secondary)]">
+          <div className="whitespace-pre-line body-caption text-[var(--color-text-secondary)]">
             {detail}
           </div>
         )}

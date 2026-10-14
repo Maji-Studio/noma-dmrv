@@ -175,7 +175,7 @@ export function SubmissionSummary({
         <Notice tone="error">
           <ul className="list-disc pl-16">
             {facts.blockers.map((blocker) => (
-              <li key={blocker}>{blocker}</li>
+              <li key={blocker} className="whitespace-pre-line">{blocker}</li>
             ))}
           </ul>
         </Notice>

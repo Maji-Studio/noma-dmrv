@@ -454,6 +454,7 @@ export function makeContext(
     defaultTemplate: makeTemplate(),
     missingDefaultTemplateId: null,
     blueprintsForTemplate: makeBlueprints(),
+    unbindableTemplateInputs: [],
     unresolvedBlueprintKeys: [],
     memberBatches: [{
       id: CREDIT_BATCH_ID,

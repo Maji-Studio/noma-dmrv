@@ -101,7 +101,7 @@ function SubmissionStatusSection({
         <Notice tone="warning">
           <ul className="flex flex-col gap-6">
             {status.reasons.map((reason) => (
-              <li key={reason}>{reason}</li>
+              <li key={reason} className="whitespace-pre-line">{reason}</li>
             ))}
           </ul>
         </Notice>

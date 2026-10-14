@@ -1,3 +1,4 @@
+import { findUnbindableTemplateInputs, type UnbindableTemplateInput } from "@/lib/isometric/template-binding-coverage";
 import type { OrgContext } from "@/lib/auth/server";
 import { env } from "@/config/env";
 import { hasCertifierCredentials, resolveIsometricClient } from "@/data-access/certifier-credentials";
@@ -128,6 +129,7 @@ export interface RemovalCertifyContext {
   missingDefaultTemplateId: string | null;
   blueprintsForTemplate: IsometricComponentBlueprint[];
   unresolvedBlueprintKeys: string[];
+  unbindableTemplateInputs: UnbindableTemplateInput[];
   memberBatches: MemberCreditBatch[];
   emissionsLedger: RemovalLedgerPreview;
   feedstockTypeMappingGaps: FeedstockTypeMappingGap[];
@@ -414,6 +416,7 @@ export interface FacilityCertifierFacts {
   missingDefaultTemplateId: string | null;
   blueprintsForTemplate: IsometricComponentBlueprint[];
   unresolvedBlueprintKeys: string[];
+  unbindableTemplateInputs: UnbindableTemplateInput[];
   requiredTransportCategories: TransportCategory[];
 }
 
@@ -426,6 +429,7 @@ const UNRESOLVED_FACILITY_FACTS: Omit<
   missingDefaultTemplateId: null,
   blueprintsForTemplate: [],
   unresolvedBlueprintKeys: [],
+  unbindableTemplateInputs: [],
   requiredTransportCategories: [],
 };
 
@@ -507,6 +511,7 @@ export async function loadFacilityCertifierFacts(
     missingDefaultTemplateId: null,
     blueprintsForTemplate,
     unresolvedBlueprintKeys,
+    unbindableTemplateInputs: findUnbindableTemplateInputs(defaultTemplate, { allowPeriodInputStub: env.ISOMETRIC_ENVIRONMENT === "sandbox" }),
     requiredTransportCategories:
       deriveRequiredTransportCategories(defaultTemplate),
   };
@@ -525,7 +530,8 @@ export async function buildRemovalContext(
     facilityFacts.mapping &&
     facilityFacts.defaultTemplate &&
     !facilityFacts.missingDefaultTemplateId &&
-    facilityFacts.unresolvedBlueprintKeys.length === 0
+    facilityFacts.unresolvedBlueprintKeys.length === 0 &&
+    facilityFacts.unbindableTemplateInputs.length === 0
       ? collectFeedstockTypeMappingGaps(memberBatches)
       : [];
   // §8.6.2 claim state per member batch (issue #349) — kept off
@@ -809,6 +815,7 @@ function projectUiContext(
     missingDefaultTemplateId: ctx.missingDefaultTemplateId,
     blueprintsForTemplate: ctx.blueprintsForTemplate,
     unresolvedBlueprintKeys: ctx.unresolvedBlueprintKeys,
+    unbindableTemplateInputs: ctx.unbindableTemplateInputs,
     memberBatches: ctx.memberBatches,
     emissionsLedger: buildRemovalLedgerPreview(ctx),
     feedstockTypeMappingGaps: ctx.feedstockTypeMappingGaps,

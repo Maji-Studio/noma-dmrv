@@ -20,7 +20,7 @@ export function CompilationBlockers({
     <Notice tone="error" title={showHeading ? "Compilation blocked" : undefined}>
       <ul className="list-disc pl-16">
         {blockers.map((blocker) => (
-          <li key={blocker}>{blocker}</li>
+          <li key={blocker} className="whitespace-pre-line">{blocker}</li>
         ))}
       </ul>
     </Notice>

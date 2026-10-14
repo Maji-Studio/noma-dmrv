@@ -15,6 +15,7 @@
 "use client";
 
 import Link from "next/link";
+import { formatUnbindableTemplateInputs } from "@/lib/isometric/template-binding-coverage";
 import {
   ArrowSquareOutIcon,
   CaretDownIcon,
@@ -79,6 +80,11 @@ export function setupGapCopy(gap: FacilitySetupGap): {
       return {
         message: `The configured Removal template (${gap.templateId}) is no longer available in the registry. Select another template.`,
         action: { label: "Re-select template in certification settings", toSettings: true },
+      };
+    case "template_unbindable":
+      return {
+        message: formatUnbindableTemplateInputs(gap.inputs),
+        action: { label: "Review certification settings", toSettings: true },
       };
     case "blueprint_keys": {
       const labels = gap.keys.map(facilityBlueprintLabel);
@@ -212,7 +218,7 @@ function IncompleteCard({
               </span>
               {check.detail && (
                 <span className="body-caption text-[var(--color-text-tertiary)]">
-                  {check.detail}
+                  <span className="whitespace-pre-line">{check.detail}</span>
                 </span>
               )}
               {/* New tab: the fix opens alongside so this readiness workspace
@@ -284,7 +290,7 @@ export function SelectBatchesStep({
           return (
             <Notice
               key={gap.kind}
-              tone="warning"
+              tone={gap.kind === "template_unbindable" ? "error" : "warning"}
               action={
                 copy.action && (
                   <Link
@@ -297,7 +303,7 @@ export function SelectBatchesStep({
                 )
               }
             >
-              {copy.message}
+              <span className="whitespace-pre-line">{copy.message}</span>
             </Notice>
           );
         })}

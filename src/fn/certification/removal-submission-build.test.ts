@@ -1,3 +1,8 @@
+import production from "../../../tests/fixtures/isometric/production-template-2026-07-03.json";
+import type { components as RegistryComponents } from "@/lib/isometric/generated/certify";
+import * as ghgEntry from "@/lib/isometric/transformers/ghg-entry";
+import { unsupportedTemplate } from "../../../tests/fixtures/isometric/unsupported-template";
+import { findUnbindableTemplateInputs, formatUnbindableTemplateInputs } from "@/lib/isometric/template-binding-coverage";
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("./source-candidates", async (importOriginal) => ({
@@ -135,6 +140,7 @@ describe("buildRemovalSubmissionBuild", () => {
         defaultTemplate: {
           id: "rvt-test",
           display_name: "Test template",
+          groups: [],
         } as never,
         blueprintsByKey: new Map(),
         externalProjectId: "prj-test",
@@ -255,7 +261,7 @@ describe("buildRemovalSubmissionBuild", () => {
         removalId: "rem-test-missing-readiness",
         ctx,
         prepared: {
-          defaultTemplate: {} as never,
+          defaultTemplate: { groups: [] } as never,
           blueprintsByKey: new Map(),
           externalProjectId: "prj-test-missing-readiness",
           allowPeriodInputStub: false,
@@ -283,7 +289,7 @@ describe("buildRemovalSubmissionBuild", () => {
         removalId: "rem-test-1",
         ctx,
         prepared: {
-          defaultTemplate: {} as never,
+          defaultTemplate: { groups: [] } as never,
           blueprintsByKey: new Map(),
           externalProjectId: "prj-test-1",
           allowPeriodInputStub: false,
@@ -645,4 +651,17 @@ describe("buildRemovalSubmissionBuild", () => {
       );
     expect(directSFractionDatapoints).toHaveLength(0);
   });
+});
+
+it.each([unsupportedTemplate(), production as RegistryComponents["schemas"]["GhgEntryTemplate"]])("stops compilation before building a GHG entry for unbindable inputs", async (defaultTemplate) => {
+  const builder = vi.spyOn(ghgEntry, "buildCreateGhgEntryRequest");
+  const compiled = await compileRemovalSubmission({
+    orgCtx: TEST_ORG_CONTEXT, removalId: "blocked-removal", ctx: {} as RemovalSubmissionContext,
+    prepared: { defaultTemplate, blueprintsByKey: new Map(), externalProjectId: "project", allowPeriodInputStub: false, hasDurabilityComponents: true },
+  });
+  expect(builder).not.toHaveBeenCalled();
+  builder.mockRestore();
+  expect(compiled.blockers).toEqual([formatUnbindableTemplateInputs(findUnbindableTemplateInputs(defaultTemplate))]);
+  expect(compiled.transportPlan).toBeNull();
+  expect(compiled.snapshot).toBeNull();
 });

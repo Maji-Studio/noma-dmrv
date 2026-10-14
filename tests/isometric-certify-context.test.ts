@@ -244,6 +244,7 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
       defaultTemplate: null,
       missingDefaultTemplateId: null,
       blueprintsForTemplate: [],
+      unbindableTemplateInputs: [],
       unresolvedBlueprintKeys: [],
     });
     expect(mockedListProjects).not.toHaveBeenCalled();

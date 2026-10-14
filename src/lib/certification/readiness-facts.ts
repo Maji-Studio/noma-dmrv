@@ -30,6 +30,7 @@ export function toRemovalReadinessFacts(
     hasDefaultTemplate: !!ctx.defaultTemplate,
     missingDefaultTemplateId: ctx.missingDefaultTemplateId,
     unresolvedBlueprintKeys: ctx.unresolvedBlueprintKeys,
+    unbindableTemplateInputs: ctx.unbindableTemplateInputs,
     feedstockTypeMappingGaps: ctx.feedstockTypeMappingGaps ?? [],
     hasSubmittableRuns: ctx.hasSubmittableRuns,
     productionReadinessGap: ctx.productionReadinessGap ?? null,

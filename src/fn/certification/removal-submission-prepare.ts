@@ -14,6 +14,7 @@
  * durability configuration, member batches) stay in `submit-removal.ts`. The
  * client readiness verdict stays in `lib/certification/readiness.ts` (ADR 0007).
  */
+import { findUnbindableTemplateInputs, formatUnbindableTemplateInputs } from "@/lib/isometric/template-binding-coverage";
 import { env } from "@/config/env";
 import { SafeError } from "@/lib/errors";
 import type {
@@ -38,6 +39,7 @@ export const REMOVAL_PREPARATION_BLOCKERS = {
     "The facility's default template is not a REMOVAL template. Rebind a REMOVAL template in facility settings before submitting.",
   templateOutOfDate:
     "The registry template is out of date. Refresh the facility link in settings before submitting.",
+  templateUnbindable: "The Removal template has inputs noma cannot fill.",
   emptyTemplate:
     "The default Removal template has no fields to submit. Choose another template in facility settings.",
   durabilityUnavailable: DURABILITY_SUBMISSION_UNAVAILABLE_MESSAGE,
@@ -131,6 +133,8 @@ export function prepareRemovalSubmission(
     ),
   );
   const blockers: RemovalPreparationBlocker[] = [];
+  const isometricEnvironment = options.isometricEnvironment ?? env.ISOMETRIC_ENVIRONMENT;
+  const unbindable = findUnbindableTemplateInputs(defaultTemplate, { allowPeriodInputStub: isometricEnvironment === "sandbox" });
   // The template lives on Isometric and can change credit_type after binding;
   // a REDUCTION template must never mislabel a GHG entry.
   if (defaultTemplate.credit_type !== "REMOVAL") {
@@ -138,6 +142,9 @@ export function prepareRemovalSubmission(
   }
   if (ctx.unresolvedBlueprintKeys.length > 0) {
     blockers.push(blocker("templateOutOfDate"));
+  }
+  if (unbindable.length > 0) {
+    blockers.push({ code: "templateUnbindable", message: formatUnbindableTemplateInputs(unbindable) });
   }
   if (defaultTemplate.groups.length === 0) {
     blockers.push(blocker("emptyTemplate"));
@@ -147,8 +154,6 @@ export function prepareRemovalSubmission(
   if (hasDurabilityComponents && !DURABILITY_MEASUREMENT_SAMPLES_ENABLED) {
     blockers.push(blocker("durabilityUnavailable"));
   }
-  const isometricEnvironment =
-    options.isometricEnvironment ?? env.ISOMETRIC_ENVIRONMENT;
   return {
     blockers,
     prepared: {

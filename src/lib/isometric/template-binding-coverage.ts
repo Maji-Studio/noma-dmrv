@@ -1,0 +1,140 @@
+import { getSequestrationInputBinding } from "./transformers/sequestration-binding";
+import type { components } from "./generated/certify";
+import { lookupSourceFact, SEMANTIC_BINDING_CATALOG } from "./semantic-binding-catalog";
+import { isSequestrationBlueprintFamily } from "./storage-blueprints";
+import {
+  lookupInputMapping,
+  lookupPeriodInputTuple,
+  resolveDatapointSource,
+} from "./datapoint-mapping";
+
+export interface UnbindableTemplateInput {
+  groupKey: string;
+  componentId: string;
+  componentDisplayName: string;
+  blueprintKey: string;
+  inputKey: string;
+  reason: "unmapped" | "ambiguous" | "project-scope" | "unrecognized-component";
+}
+
+function aggregateKey(input: UnbindableTemplateInput): string {
+  const mapping = lookupInputMapping(input.groupKey, input.blueprintKey, input.inputKey);
+  const source = mapping && resolveDatapointSource(mapping, input.componentDisplayName);
+  return JSON.stringify([input.blueprintKey, input.inputKey, source]);
+}
+
+/** Mirrors resolveTemplateInputs and the datapoint builder's mapping precedence.
+ * Storage inputs use the shared sequestration bindings; project-scope inputs follow the sandbox
+ * stub policy. Coverage includes production inputs a later claim can omit.
+ */
+export function findUnbindableTemplateInputs(
+  template: components["schemas"]["GhgEntryTemplate"],
+  options: { allowPeriodInputStub?: boolean } = {},
+): UnbindableTemplateInput[] {
+  const findings: UnbindableTemplateInput[] = [];
+  const aggregates = new Map<string, UnbindableTemplateInput[]>();
+  for (const group of template.groups) {
+    for (const component of group.components) {
+      for (const input of component.inputs) {
+        const target: UnbindableTemplateInput = {
+          groupKey: group.key,
+          componentId: component.id,
+          componentDisplayName: component.display_name,
+          blueprintKey: component.blueprint_key,
+          inputKey: input.input_key,
+          reason: "unmapped",
+        };
+        if (isSequestrationBlueprintFamily(component.blueprint_key)) {
+          if (!getSequestrationInputBinding(component.blueprint_key, input.input_key)) findings.push(target);
+          continue;
+        }
+        if (input.type === "fixed") continue;
+        if (lookupPeriodInputTuple(group.key, component.blueprint_key, input.input_key, component.display_name)) {
+          if (!options.allowPeriodInputStub) findings.push({ ...target, reason: "project-scope" });
+          continue;
+        }
+        const mapping = lookupInputMapping(group.key, component.blueprint_key, input.input_key);
+        if (!mapping) {
+          if (component.blueprint_key !== "transport" || !findings.some((finding) => finding.componentId === component.id)) {
+            findings.push(target);
+          }
+          continue;
+        }
+        let key: string;
+        try {
+          key = aggregateKey(target);
+        } catch {
+          findings.push({ ...target, reason: "unrecognized-component" });
+          continue;
+        }
+        const matches = aggregates.get(key) ?? [];
+        matches.push({ ...target, reason: "ambiguous" });
+        aggregates.set(key, matches);
+      }
+    }
+  }
+  for (const matches of aggregates.values()) {
+    if (new Set(matches.map((input) => input.componentId)).size > 1) findings.push(...matches);
+  }
+  return findings;
+}
+
+function listNames(names: string[]): string {
+  if (names.length < 2) return names[0] ?? "";
+  return `${names.slice(0, -1).join(", ")} and ${names.at(-1)}`;
+}
+
+function formatInstruction(input: UnbindableTemplateInput, plural = false): string {
+  const mapping = lookupInputMapping(input.groupKey, input.blueprintKey, input.inputKey);
+  const target = plural ? "each one" : "it";
+  if (input.reason === "unrecognized-component" || (input.reason === "project-scope" && mapping?.sourceByComponent)) {
+    const role = SEMANTIC_BINDING_CATALOG[input.blueprintKey]?.[input.inputKey]?.roles[input.groupKey];
+    const expectedNames = Object.keys(
+      role?.strategy === "aggregated-datapoint" && role.disambiguation
+        ? role.disambiguation.sources
+        : mapping?.sourceByComponent ?? {},
+    );
+    const expected = expectedNames.map((name) => `"${name}"`).join(", ");
+    const context = input.reason === "project-scope"
+      ? `${plural ? "These components can" : "This component can"} stay on the Removal only under ${plural ? "their expected names" : "its expected name"}. `
+      : "";
+    return `${context}Rename ${target} in Isometric to ${expectedNames.length === 1 ? expected : `one of these names: ${expected}`}.`;
+  }
+  if (input.reason === "project-scope") {
+    return `Add ${target} as a project component in Isometric, then remove ${plural ? "them" : "it"} from the Removal template.`;
+  }
+  if (input.reason === "ambiguous") {
+    const source = mapping && resolveDatapointSource(mapping, input.componentDisplayName);
+    const provenance = source ? lookupSourceFact(source)?.provenance.toLowerCase() : undefined;
+    return `receive the same ${provenance ?? "calculated"} total. Keep one of them in the Removal template, or ask support to split them.`;
+  }
+  if (input.blueprintKey === "transport") {
+    return `Replace ${target} with a Mass-distance-based CI emissions component in Isometric, or pick another Removal template.`;
+  }
+  return "Pick another Removal template or ask support to add the mapping.";
+}
+
+/** Shared operator copy. Newlines separate the lead and reason instructions. */
+export function formatUnbindableTemplateInputs(inputs: readonly UnbindableTemplateInput[]): string {
+  if (inputs.length === 0) return "";
+  const components = new Map<string, UnbindableTemplateInput>();
+  // Prefer rename guidance over other findings for the same component.
+  for (const input of inputs) {
+    const mapping = lookupInputMapping(input.groupKey, input.blueprintKey, input.inputKey);
+    if (!components.has(input.componentId) || mapping?.sourceByComponent) components.set(input.componentId, input);
+  }
+  const reasons = new Map<string, UnbindableTemplateInput[]>();
+  for (const input of components.values()) {
+    const instruction = formatInstruction(input);
+    reasons.set(instruction, [...(reasons.get(instruction) ?? []), input]);
+  }
+  const lines = [`The Removal template has ${components.size} ${components.size === 1 ? "component" : "components"} noma cannot submit.`];
+  for (const matches of reasons.values()) {
+    const instruction = formatInstruction(matches[0], matches.length > 1);
+    const names = listNames(matches.map((input) => input.componentDisplayName));
+    lines.push(matches[0].reason === "ambiguous"
+      ? `${names} would ${matches.length > 2 ? "all" : "both"} ${instruction}`
+      : `${names}: ${instruction}`);
+  }
+  return lines.join("\n");
+}

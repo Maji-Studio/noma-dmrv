@@ -1,0 +1,480 @@
+{
+  "id": "rvt_1KWKNGJZY1S0T112",
+  "supplier_reference_id": null,
+  "display_name": "Removal Template 2026-07-03",
+  "project_id": "prj_1K6G4S1PJ1S0TR4Z",
+  "credit_type": "REMOVAL",
+  "groups": [
+    {
+      "id": "rtg_1KWKNGJZY1S0DNWQ",
+      "key": "biomass-feedstock-sourcing",
+      "display_name": "Biomass feedstock sourcing",
+      "description": "",
+      "components": []
+    },
+    {
+      "id": "rtg_1KWKNGJZY1S01ARC",
+      "key": "biomass-feedstock-transport",
+      "display_name": "Biomass feedstock transport",
+      "description": "",
+      "components": [
+        {
+          "id": "rtc_1KWKNGJZY1S0D548",
+          "display_name": "Biomass transportation to processing site via truck",
+          "description": null,
+          "blueprint_key": "transport",
+          "inputs": [
+            {
+              "input_key": "carbon_intensity",
+              "type": "fixed",
+              "datapoint_id": "dtp_1KA382H6F1S0B6KY",
+              "display_name": "carbon_intensity",
+              "quantity_kind": "mass_distance_carbon_emission_factor"
+            },
+            {
+              "input_key": "distance",
+              "type": "monitored",
+              "datapoint_id": null,
+              "display_name": "distance",
+              "quantity_kind": "distance"
+            },
+            {
+              "input_key": "mass",
+              "type": "monitored",
+              "datapoint_id": null,
+              "display_name": "mass",
+              "quantity_kind": "mass"
+            }
+          ],
+          "ghg_entry_template_id": "rvt_1KWKNGJZY1S0T112",
+          "ghg_entry_template_component_group_id": "rtg_1KWKNGJZY1S01ARC"
+        }
+      ]
+    },
+    {
+      "id": "rtg_1KWKNGJZY1S0MZM1",
+      "key": "biomass-feedstock-processing",
+      "display_name": "Biomass feedstock processing",
+      "description": "",
+      "components": []
+    },
+    {
+      "id": "rtg_1KWKNGJZY1S08MFP",
+      "key": "pyrolysis",
+      "display_name": "Pyrolysis",
+      "description": "",
+      "components": [
+        {
+          "id": "rtc_1KWKNGJZY1S00SZX",
+          "display_name": "Generator diesel usage",
+          "description": null,
+          "blueprint_key": "fuel_usage_by_volume",
+          "inputs": [
+            {
+              "input_key": "fuel_combustion_carbon_intensity",
+              "type": "fixed",
+              "datapoint_id": "dtp_1KA3HT7491S0N36B",
+              "display_name": "fuel_combustion_carbon_intensity",
+              "quantity_kind": "volume_carbon_emission_factor"
+            },
+            {
+              "input_key": "volume_of_fuel",
+              "type": "monitored",
+              "datapoint_id": null,
+              "display_name": "volume_of_fuel",
+              "quantity_kind": "volume"
+            }
+          ],
+          "ghg_entry_template_id": "rvt_1KWKNGJZY1S0T112",
+          "ghg_entry_template_component_group_id": "rtg_1KWKNGJZY1S08MFP"
+        },
+        {
+          "id": "rtc_1KWKNGJZY1S0MEVJ",
+          "display_name": "Metered electricity use emissions",
+          "description": null,
+          "blueprint_key": "metered_energy_based_ci_emissions",
+          "inputs": [
+            {
+              "input_key": "carbon_intensity",
+              "type": "fixed",
+              "datapoint_id": "dtp_1KA3BZ3A61S0BBWB",
+              "display_name": "carbon_intensity",
+              "quantity_kind": "energy_carbon_emission_factor"
+            },
+            {
+              "input_key": "final_readout",
+              "type": "monitored",
+              "datapoint_id": null,
+              "display_name": "final_readout",
+              "quantity_kind": "energy"
+            },
+            {
+              "input_key": "initial_readout",
+              "type": "monitored",
+              "datapoint_id": null,
+              "display_name": "initial_readout",
+              "quantity_kind": "energy"
+            }
+          ],
+          "ghg_entry_template_id": "rvt_1KWKNGJZY1S0T112",
+          "ghg_entry_template_component_group_id": "rtg_1KWKNGJZY1S08MFP"
+        },
+        {
+          "id": "rtc_1KWKNGJZY1S083Q7",
+          "display_name": "Startup diesel usage",
+          "description": null,
+          "blueprint_key": "fuel_usage_by_volume",
+          "inputs": [
+            {
+              "input_key": "fuel_combustion_carbon_intensity",
+              "type": "fixed",
+              "datapoint_id": "dtp_1KA3HT7491S0N36B",
+              "display_name": "fuel_combustion_carbon_intensity",
+              "quantity_kind": "volume_carbon_emission_factor"
+            },
+            {
+              "input_key": "volume_of_fuel",
+              "type": "monitored",
+              "datapoint_id": null,
+              "display_name": "volume_of_fuel",
+              "quantity_kind": "volume"
+            }
+          ],
+          "ghg_entry_template_id": "rvt_1KWKNGJZY1S0T112",
+          "ghg_entry_template_component_group_id": "rtg_1KWKNGJZY1S08MFP"
+        }
+      ]
+    },
+    {
+      "id": "rtg_1KWKNGJZY1S0W9BB",
+      "key": "direct-emissions",
+      "display_name": "Direct emissions",
+      "description": "",
+      "components": [
+        {
+          "id": "rtc_1KWKNGJZY1S0VRJW",
+          "display_name": "Pyrolyzer CO emissions",
+          "description": null,
+          "blueprint_key": "ghg_direct_emissions",
+          "inputs": [
+            {
+              "input_key": "concentration",
+              "type": "monitored",
+              "datapoint_id": null,
+              "display_name": "concentration",
+              "quantity_kind": "mass_concentration"
+            },
+            {
+              "input_key": "global_warming_potential",
+              "type": "fixed",
+              "datapoint_id": "dtp_1KA41HTTD1S0SJVN",
+              "display_name": "global_warming_potential",
+              "quantity_kind": "dimensionless"
+            },
+            {
+              "input_key": "mass_flow",
+              "type": "monitored",
+              "datapoint_id": null,
+              "display_name": "mass_flow",
+              "quantity_kind": "mass_flow_rate"
+            }
+          ],
+          "ghg_entry_template_id": "rvt_1KWKNGJZY1S0T112",
+          "ghg_entry_template_component_group_id": "rtg_1KWKNGJZY1S0W9BB"
+        },
+        {
+          "id": "rtc_1KWKNGJZY1S0FDEH",
+          "display_name": "Pyrolyzer CH4 emissions",
+          "description": null,
+          "blueprint_key": "ghg_direct_emissions",
+          "inputs": [
+            {
+              "input_key": "concentration",
+              "type": "monitored",
+              "datapoint_id": null,
+              "display_name": "concentration",
+              "quantity_kind": "mass_concentration"
+            },
+            {
+              "input_key": "global_warming_potential",
+              "type": "fixed",
+              "datapoint_id": "dtp_1KA41DG2E1S0WBYD",
+              "display_name": "global_warming_potential",
+              "quantity_kind": "dimensionless"
+            },
+            {
+              "input_key": "mass_flow",
+              "type": "monitored",
+              "datapoint_id": null,
+              "display_name": "mass_flow",
+              "quantity_kind": "mass_flow_rate"
+            }
+          ],
+          "ghg_entry_template_id": "rvt_1KWKNGJZY1S0T112",
+          "ghg_entry_template_component_group_id": "rtg_1KWKNGJZY1S0W9BB"
+        }
+      ]
+    },
+    {
+      "id": "rtg_1KWKNGJZY1S0FY70",
+      "key": "biochar-processing",
+      "display_name": "Biochar processing",
+      "description": "",
+      "components": []
+    },
+    {
+      "id": "rtg_1KWKNGJZY1S03K2N",
+      "key": "biochar-transport",
+      "display_name": "Biochar transport",
+      "description": "",
+      "components": [
+        {
+          "id": "rtc_1KWKNGJZY1S032A6",
+          "display_name": "Biochar transportation to storage site via truck",
+          "description": null,
+          "blueprint_key": "transport",
+          "inputs": [
+            {
+              "input_key": "carbon_intensity",
+              "type": "fixed",
+              "datapoint_id": "dtp_1KA3YYVS91S0BPD5",
+              "display_name": "carbon_intensity",
+              "quantity_kind": "mass_distance_carbon_emission_factor"
+            },
+            {
+              "input_key": "distance",
+              "type": "monitored",
+              "datapoint_id": null,
+              "display_name": "distance",
+              "quantity_kind": "distance"
+            },
+            {
+              "input_key": "mass",
+              "type": "monitored",
+              "datapoint_id": null,
+              "display_name": "mass",
+              "quantity_kind": "mass"
+            }
+          ],
+          "ghg_entry_template_id": "rvt_1KWKNGJZY1S0T112",
+          "ghg_entry_template_component_group_id": "rtg_1KWKNGJZY1S03K2N"
+        }
+      ]
+    },
+    {
+      "id": "rtg_1KWKNGJZY1S0Q7YA",
+      "key": "biochar-storage",
+      "display_name": "Biochar storage",
+      "description": "",
+      "components": []
+    },
+    {
+      "id": "rtg_1KWKNGJZY1S0AWSZ",
+      "key": "co2-stored",
+      "display_name": "CO2 stored",
+      "description": "",
+      "components": [
+        {
+          "id": "rtc_1KWKNGJZY1S0PQ5V",
+          "display_name": "CO2 stored from biochar application",
+          "description": null,
+          "blueprint_key": "carbon_rich_substance_sequestration",
+          "inputs": [
+            {
+              "input_key": "carbon_content",
+              "type": "monitored",
+              "datapoint_id": null,
+              "display_name": "carbon_content",
+              "quantity_kind": "dimensionless"
+            },
+            {
+              "input_key": "product_mass",
+              "type": "monitored",
+              "datapoint_id": null,
+              "display_name": "product_mass",
+              "quantity_kind": "mass"
+            }
+          ],
+          "ghg_entry_template_id": "rvt_1KWKNGJZY1S0T112",
+          "ghg_entry_template_component_group_id": "rtg_1KWKNGJZY1S0AWSZ"
+        }
+      ]
+    },
+    {
+      "id": "rtg_1KWKNGJZY1S0YHNM",
+      "key": "sampling-required-for-mrv",
+      "display_name": "Sampling required for MRV",
+      "description": "",
+      "components": [
+        {
+          "id": "rtc_1KWKNGJZY1S0AC1G",
+          "display_name": "Laboratory analysis electricity use",
+          "description": null,
+          "blueprint_key": "grid_electricity_use",
+          "inputs": [
+            {
+              "input_key": "electricity_use",
+              "type": "monitored",
+              "datapoint_id": null,
+              "display_name": "electricity_use",
+              "quantity_kind": "energy"
+            },
+            {
+              "input_key": "grid_carbon_intensity",
+              "type": "fixed",
+              "datapoint_id": "dtp_1KA6B4FE41S01SCW",
+              "display_name": "grid_carbon_intensity",
+              "quantity_kind": "energy_carbon_emission_factor"
+            }
+          ],
+          "ghg_entry_template_id": "rvt_1KWKNGJZY1S0T112",
+          "ghg_entry_template_component_group_id": "rtg_1KWKNGJZY1S0YHNM"
+        },
+        {
+          "id": "rtc_1KWKNGJZY1S0Y0X5",
+          "display_name": "Sampling consumables",
+          "description": null,
+          "blueprint_key": "mass_based_ci_emissions",
+          "inputs": [
+            {
+              "input_key": "carbon_intensity",
+              "type": "fixed",
+              "datapoint_id": "dtp_1KA6B1DQJ1S0CCZD",
+              "display_name": "carbon_intensity",
+              "quantity_kind": "mass_carbon_emission_factor"
+            },
+            {
+              "input_key": "mass",
+              "type": "monitored",
+              "datapoint_id": null,
+              "display_name": "mass",
+              "quantity_kind": "mass"
+            }
+          ],
+          "ghg_entry_template_id": "rvt_1KWKNGJZY1S0T112",
+          "ghg_entry_template_component_group_id": "rtg_1KWKNGJZY1S0YHNM"
+        },
+        {
+          "id": "rtc_1KWKNGJZY1S0HNRT",
+          "display_name": "Mass-distance-based CI emissions samples to EU",
+          "description": null,
+          "blueprint_key": "mass_distance_based_ci_emissions",
+          "inputs": [
+            {
+              "input_key": "carbon_intensity",
+              "type": "fixed",
+              "datapoint_id": "dtp_1KSEYKF561S0B52C",
+              "display_name": "carbon_intensity",
+              "quantity_kind": "mass_distance_carbon_emission_factor"
+            },
+            {
+              "input_key": "mass_distance",
+              "type": "monitored",
+              "datapoint_id": null,
+              "display_name": "mass_distance",
+              "quantity_kind": "mass_distance"
+            }
+          ],
+          "ghg_entry_template_id": "rvt_1KWKNGJZY1S0T112",
+          "ghg_entry_template_component_group_id": "rtg_1KWKNGJZY1S0YHNM"
+        }
+      ]
+    },
+    {
+      "id": "rtg_1KWKNGJZY1S0J6H9",
+      "key": "staff-travel",
+      "display_name": "Staff travel",
+      "description": "",
+      "components": [
+        {
+          "id": "rtc_1KWKNGJZY1S05AMF",
+          "display_name": "Staff travel flights",
+          "description": null,
+          "blueprint_key": "distance_based_ci_emissions",
+          "inputs": [
+            {
+              "input_key": "carbon_intensity",
+              "type": "fixed",
+              "datapoint_id": "dtp_1KSEYZX4Z1S0291N",
+              "display_name": "carbon_intensity",
+              "quantity_kind": "distance_carbon_emission_factor"
+            },
+            {
+              "input_key": "distance",
+              "type": "monitored",
+              "datapoint_id": null,
+              "display_name": "distance",
+              "quantity_kind": "distance"
+            }
+          ],
+          "ghg_entry_template_id": "rvt_1KWKNGJZY1S0T112",
+          "ghg_entry_template_component_group_id": "rtg_1KWKNGJZY1S0J6H9"
+        },
+        {
+          "id": "rtc_1KWKNGJZY1S0RZG4",
+          "display_name": "Staff travel local",
+          "description": null,
+          "blueprint_key": "distance_based_ci_emissions",
+          "inputs": [
+            {
+              "input_key": "carbon_intensity",
+              "type": "fixed",
+              "datapoint_id": "dtp_1KSEYXK5Z1S0A3HE",
+              "display_name": "carbon_intensity",
+              "quantity_kind": "distance_carbon_emission_factor"
+            },
+            {
+              "input_key": "distance",
+              "type": "monitored",
+              "datapoint_id": null,
+              "display_name": "distance",
+              "quantity_kind": "distance"
+            }
+          ],
+          "ghg_entry_template_id": "rvt_1KWKNGJZY1S0T112",
+          "ghg_entry_template_component_group_id": "rtg_1KWKNGJZY1S0J6H9"
+        }
+      ]
+    },
+    {
+      "id": "rtg_1KWKNGJZY1S05VCY",
+      "key": "surveys",
+      "display_name": "Surveys",
+      "description": "",
+      "components": []
+    },
+    {
+      "id": "rtg_1KWKNGJZY1S0SG8K",
+      "key": "miscellaneous",
+      "display_name": "Miscellaneous",
+      "description": "",
+      "components": [
+        {
+          "id": "rtc_1KWKNGJZY1S0CMBS",
+          "display_name": "Mass-based CI emissions",
+          "description": null,
+          "blueprint_key": "mass_based_ci_emissions",
+          "inputs": [
+            {
+              "input_key": "carbon_intensity",
+              "type": "fixed",
+              "datapoint_id": "dtp_1KRK2ZTWE1S0AD72",
+              "display_name": "carbon_intensity",
+              "quantity_kind": "mass_carbon_emission_factor"
+            },
+            {
+              "input_key": "mass",
+              "type": "monitored",
+              "datapoint_id": null,
+              "display_name": "mass",
+              "quantity_kind": "mass"
+            }
+          ],
+          "ghg_entry_template_id": "rvt_1KWKNGJZY1S0T112",
+          "ghg_entry_template_component_group_id": "rtg_1KWKNGJZY1S0SG8K"
+        }
+      ]
+    }
+  ],
+  "_note": "Normalized from supplied read-only production GraphQL snapshot. GraphQL has no REST group keys; assumed by sandbox display-name match: Biomass feedstock sourcing -> biomass-feedstock-sourcing (display-name match); Biomass feedstock transport -> biomass-feedstock-transport (display-name match); Biomass feedstock processing -> biomass-feedstock-processing (display-name match); Pyrolysis -> pyrolysis (display-name match); Direct emissions -> direct-emissions (display-name match); Biochar processing -> biochar-processing (display-name match); Biochar transport -> biochar-transport (display-name match); Biochar storage -> biochar-storage (display-name match); CO2 stored -> co2-stored (display-name match, CO₂ stored in sandbox); Sampling required for MRV -> sampling-required-for-mrv (display-name match); Staff travel -> staff-travel (display-name match); Surveys -> surveys (display-name match); Miscellaneous -> miscellaneous (display-name match). No datapoint values were fetched or invented. Input display names use input keys and quantity kinds are inferred REST metadata, not observed in the condensed snapshot; descriptions and supplier reference were unavailable. Component and group display names preserve the supplied transcription (ASCII CO2/CH4)."
+}
