@@ -62,7 +62,10 @@ candidate list is exhaustive.
 - Certification workspace UI: `src/components/certification/`
 
 Application code must use `getIsometricClientForOrg()`. Environment credentials
-remain only an escape hatch for scripts and dedicated health checks.
+remain only an escape hatch for scripts and dedicated health checks, parsed by
+`client-env.ts` without loading app configuration. `client.ts` takes explicit
+credentials; the existing organization factory lives in `client-org.ts` and
+loads app configuration and credential data-access only when called.
 
 ## Reading order
 

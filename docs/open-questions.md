@@ -865,7 +865,7 @@ selectors. See [`docs/testing.md`](./testing.md).
 
 ### Hermetic local stub for the Isometric client (`testing/isometric-stub`)
 
-- `BASE_URLS` in `src/lib/isometric/client.ts` is hardcoded, so the `@live`
+- `ISOMETRIC_BASE_URLS` in `src/lib/isometric/client.ts` is hardcoded, so the `@live`
   specs only run against the real sandbox; devs without
   `ISOMETRIC_DEMO_PROJECT_ID` silently skip them — which is how the
   Settings/mapping specs drifted unnoticed.

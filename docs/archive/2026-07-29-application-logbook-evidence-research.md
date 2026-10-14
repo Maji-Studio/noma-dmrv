@@ -110,7 +110,7 @@ taxonomy does not make the underlying records dispensable.
    biochar-application creation time.
    [Isometric Certify API: POST biochar application](https://docs.isometric.com/api-reference/certify/post-biochar-application);
    repository snapshot:
-   [`src/lib/isometric/generated/mrv.openapi.json`](../../src/lib/isometric/generated/mrv.openapi.json)
+   [historical Certify OpenAPI snapshot](https://github.com/Maji-Studio/noma-dmrv/blob/7fa045d9685d0031dd37d7f9ea06b8c0cb160c49/src/lib/isometric/generated/mrv.openapi.json)
 
 ## Requirement by lifecycle stage
 

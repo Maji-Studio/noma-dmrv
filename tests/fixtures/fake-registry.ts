@@ -792,7 +792,7 @@ export function createFakeClientModule(actual: ClientModule): ClientModule {
   return {
     ...actual,
     getIsometricClientForOrg: async () => client,
-    getIsometricClientFromEnv: () => client,
+    createIsometricClient: () => client,
   };
 }
 

@@ -1,6 +1,6 @@
+export { getIsometricClientFromEnv } from "./client-env";
 export {
   getIsometricClientForOrg,
-  getIsometricClientFromEnv,
   IsometricApiError,
   type IsometricClient,
   type IsometricRequestOptions,

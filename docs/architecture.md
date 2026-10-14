@@ -238,7 +238,8 @@ intake or delivery that uses the vehicle.
 `logger.info({ userId, removalId }, "msg")`; `logger.child(bindings)` merges
 bindings into every record. Import only from `fn/`, `data-access/`, the
 isometric client boundary, and `src/db/index.ts` — never a client component.
-NDJSON out, level via `LOG_LEVEL`. Redacts
+NDJSON out, level via `LOG_LEVEL`, validated by the logger itself without loading
+app configuration. Redacts
 `email`/`token`/`secret`/`authorization` keys at any depth — a backstop, not a
 license to log PII. The in-house implementation replaces pino because of a
 Turbopack/Vercel runtime bug.

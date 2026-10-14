@@ -40,9 +40,12 @@ Application credentials are not environment-only:
 - Owners/Admins manage their active organization's credentials through
   `src/data-access/certifier-credentials.ts`;
 - application calls construct an organization-specific client with
-  `getIsometricClientForOrg(organizationId)`;
+  `getIsometricClientForOrg(organizationId)` in `client-org.ts` (re-exported
+  through the existing client and barrel surfaces);
 - environment credentials are retained only for scripts and dedicated health
-  checks through `getIsometricClientFromEnv()`.
+  checks through `getIsometricClientFromEnv()` in `client-env.ts`, which validates
+  only the credential pair and environment selector. The HTTP client accepts
+  credentials explicitly and does not read app configuration.
 
 External certification writes require organization Admin authorization. This
 includes Removal submission, GHG Statement create/submit,

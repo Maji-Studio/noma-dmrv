@@ -1,13 +1,15 @@
+import {
+  emptyToUndefined,
+  isHermeticCiBuildFor,
+  isometricAccessTokenSchema,
+  isometricClientSecretSchema,
+  refineIsometricCredentialPair,
+  refineIsometricEnvironment,
+} from "@/config/env-validation";
 import { CRON_SECRET_MIN_LENGTH } from "@/config/operations";
 import { z } from "zod";
 import { isValidCredentialsEncryptionKey } from "@/lib/crypto/secrets";
 
-const emptyToUndefined = (value: unknown) =>
-  typeof value === "string" && value.trim() === "" ? undefined : value;
-
-const LOCAL_APP_HOSTS = new Set(["localhost", "127.0.0.1", "::1"]);
-const LOCAL_APP_PROTOCOLS = new Set(["http:", "https:"]);
-const HERMETIC_CI_MARKER = "true";
 const DIGITALOCEAN_SPACES_REGIONS = new Set([
   "nyc1",
   "nyc2",
@@ -32,32 +34,6 @@ function isValidStoragePrefix(value: string): boolean {
     return false;
   }
   return value.split("/").every((segment) => segment !== ".");
-}
-
-function isLocalAppUrl(value: string): boolean {
-  try {
-    const url = new URL(value);
-    if (!LOCAL_APP_PROTOCOLS.has(url.protocol)) return false;
-    const hostname = url.hostname.replace(/^\[(.*)\]$/, "$1");
-    return LOCAL_APP_HOSTS.has(hostname);
-  } catch {
-    return false;
-  }
-}
-
-// Hermetic-CI exception shared by the production fail-closed gates in the
-// schema below. ci.yml and e2e.yml compile production bundles against
-// localhost with placeholder config by design (e2e.yml runs `pnpm build &&
-// pnpm start` with GEO_PROVIDER=stub and no real secrets). Requiring the
-// explicit marker, CI flag, and an HTTP(S) loopback URL keeps live CI workflows
-// and every real deployment out of this exception.
-function isHermeticCiBuildFor(appUrl: string): boolean {
-  const isCI = ["1", "true"].includes((process.env.CI ?? "").toLowerCase());
-  return (
-    process.env.NOMA_HERMETIC_CI === HERMETIC_CI_MARKER &&
-    isCI &&
-    isLocalAppUrl(appUrl)
-  );
 }
 
 /**
@@ -94,14 +70,6 @@ const envSchema = z.object({
     .default("false")
     .transform((val) => val === "true"),
   ADMIN_EMAIL: z.string().email().optional(),
-  // Logging level (pino). Optional; the logger defaults to "info" in
-  // production and "debug" otherwise when this is unset.
-  LOG_LEVEL: z.preprocess(
-    emptyToUndefined,
-    z
-      .enum(["trace", "debug", "info", "warn", "error", "fatal", "silent"])
-      .optional()
-  ),
   DB_POOL_MAX: z.preprocess(
     emptyToUndefined,
     z.coerce.number().int().positive().optional()
@@ -120,14 +88,8 @@ const envSchema = z.object({
   ),
 
   // Isometric Certify API (optional — boot must stay clean without these)
-  ISOMETRIC_CLIENT_SECRET: z.preprocess(
-    emptyToUndefined,
-    z.string().min(1).optional()
-  ),
-  ISOMETRIC_ACCESS_TOKEN: z.preprocess(
-    emptyToUndefined,
-    z.string().min(1).optional()
-  ),
+  ISOMETRIC_CLIENT_SECRET: isometricClientSecretSchema,
+  ISOMETRIC_ACCESS_TOKEN: isometricAccessTokenSchema,
   CREDENTIALS_ENCRYPTION_KEY: z.preprocess(
     emptyToUndefined,
     z
@@ -223,17 +185,7 @@ const envSchema = z.object({
     });
   }
 
-  const hasIsometricSecret = !!data.ISOMETRIC_CLIENT_SECRET;
-  const hasIsometricToken = !!data.ISOMETRIC_ACCESS_TOKEN;
-
-  if (hasIsometricSecret !== hasIsometricToken) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["ISOMETRIC_CLIENT_SECRET"],
-      message:
-        "ISOMETRIC_CLIENT_SECRET and ISOMETRIC_ACCESS_TOKEN are seed/CI-only and must either both be set or both be omitted",
-    });
-  }
+  refineIsometricCredentialPair(data, ctx);
 
   // Storage provider gates
   if (data.STORAGE_PROVIDER === "s3-compatible") {
@@ -297,27 +249,7 @@ const envSchema = z.object({
     });
   }
 
-  // Production fail-closed: ISOMETRIC_ENVIRONMENT defaults to "sandbox" so
-  // local and CI runs need no configuration, but inheriting that default in a
-  // real deployment is fail-OPEN. It both selects the registry base URL
-  // (`BASE_URLS` in isometric/client.ts) and enables the sandbox-only
-  // durability measurement-sample POSTs, so an unset value would silently route
-  // every registry call to the sandbox. Hermetic CI builds are excepted for
-  // the reason documented on `isHermeticCiBuild` above.
-  // `data` already carries the default, so only the raw value distinguishes
-  // "explicitly sandbox" from "never set".
-  if (
-    data.NODE_ENV === "production" &&
-    !isHermeticCiBuild &&
-    !process.env.ISOMETRIC_ENVIRONMENT
-  ) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["ISOMETRIC_ENVIRONMENT"],
-      message:
-        "ISOMETRIC_ENVIRONMENT must be set explicitly in production (sandbox or production) - the sandbox default is not safe to inherit.",
-    });
-  }
+  refineIsometricEnvironment(data.NODE_ENV, data.NEXT_PUBLIC_APP_URL, ctx);
 
   // Production fail-closed: certifier-credential encryption must be possible
   // from boot, not discovered broken on the first credential write/read.

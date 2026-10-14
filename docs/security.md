@@ -89,7 +89,9 @@ integer columns.
 
 ## Environment Variables
 
-**Canonical list: the `envSchema` object in `src/config/env.ts`.** Templates:
+**App environment list: the `envSchema` object in `src/config/env.ts`.**
+The logger validates `LOG_LEVEL` locally; standalone Isometric scripts and health
+checks validate their credential pair and environment in `src/lib/isometric/client-env.ts`. Templates:
 `.env.local.tpl` (local 1Password item) and `.env.tpl` (staging item → Vercel
 sync). The app refuses to boot on an invalid or missing required var.
 
@@ -147,6 +149,9 @@ Non-obvious semantics only:
 
 Read directly from `process.env`, **not** validated by `env.ts`:
 
+- `LOG_LEVEL` — validated in `src/lib/log/index.ts`: `trace`, `debug`, `info`,
+  `warn`, `error`, `fatal`, or `silent`. Unset/blank defaults to `info` in
+  production and `debug` otherwise; invalid values are rejected.
 - `NOMA_HERMETIC_CI` — the literal `"true"` marks only the production-bundle
   builds in `ci.yml` and the hermetic PR Playwright workflow. Live sandbox
   workflows and deployments must not set it.
