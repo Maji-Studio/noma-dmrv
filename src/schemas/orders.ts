@@ -10,7 +10,6 @@ import {
   expectedVersionSchema,
   MASS_KG_INPUT_STEP,
   MASS_MIN_KG_MESSAGE,
-  positiveMassKgSchema,
   requiredPositiveMassKgSchema,
 } from "@/schemas/helpers";
 import { z } from "zod";
@@ -25,6 +24,13 @@ import { z } from "zod";
 export const packagingTypes = ["loose", "bagged"] as const;
 
 export type PackagingType = (typeof packagingTypes)[number];
+
+export const orderQuantityKgSchema = requiredPositiveMassKgSchema(
+  "Quantity is required",
+  "Quantity must be a number",
+  "Quantity must be greater than 0",
+  { value: MASS_KG_INPUT_STEP, message: MASS_MIN_KG_MESSAGE },
+);
 
 // ============================================
 // Order Form Schema (Client-side validation)
@@ -41,12 +47,7 @@ export const orderFormSchema = z.object({
   customerLocationId: emptyToNull.or(z.string().uuid("Choose a valid customer location.")).optional().nullable(),
   formulationId: z.string().min(1, "Select a formulation.").pipe(z.uuid("Choose a valid formulation.")),
   orderDate: calendarDateSchema(),
-  quantityKg: requiredPositiveMassKgSchema(
-    "Quantity is required",
-    "Quantity must be a number",
-    "Quantity must be greater than 0",
-    { value: MASS_KG_INPUT_STEP, message: MASS_MIN_KG_MESSAGE },
-  ),
+  quantityKg: orderQuantityKgSchema,
   packaging: z.enum(packagingTypes, { error: "Packaging type is required" }),
 
   // Price and currency are not collected (open-questions `orders/pricing`).
@@ -83,8 +84,7 @@ export const updateOrderSchema = z.object({
   customerLocationId: z.string().uuid().optional().nullable(),
   formulationId: z.uuid().optional(),
   orderDate: calendarDateSchema().optional(),
-  quantityKg: positiveMassKgSchema("Quantity must be greater than 0")
-    .min(MASS_KG_INPUT_STEP, MASS_MIN_KG_MESSAGE).optional(),
+  quantityKg: orderQuantityKgSchema.optional(),
   packaging: z.enum(packagingTypes).optional(),
 });
 

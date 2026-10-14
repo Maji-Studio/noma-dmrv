@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { calendarDateSchema, expectedVersionSchema, MASS_KG_INPUT_STEP, MASS_MIN_KG_MESSAGE, requiredPositiveMassKgSchema, uuidSchema } from "./helpers";
-import { packagingTypes, updateOrderSchema } from "./orders";
+import { calendarDateSchema, expectedVersionSchema, MASS_KG_INPUT_STEP, uuidSchema } from "./helpers";
+import { orderQuantityKgSchema, packagingTypes, updateOrderSchema } from "./orders";
 
 const fields = {
   facilityId: uuidSchema().describe("Facility the order is placed at, UUID. Must be active."),
@@ -8,8 +8,7 @@ const fields = {
   customerLocationId: uuidSchema().nullable().optional().describe("Customer location UUID for the destination, or null for no location. Must belong to the customer."),
   formulationId: uuidSchema().describe("Formulation ordered, UUID. One formulation per order."),
   orderDate: calendarDateSchema().describe("Order business date, YYYY-MM-DD. Any real calendar day is accepted."),
-  quantityKg: requiredPositiveMassKgSchema("Quantity is required", "Quantity must be a valid number", "Quantity must be greater than 0",
-    { value: MASS_KG_INPUT_STEP, message: MASS_MIN_KG_MESSAGE })
+  quantityKg: orderQuantityKgSchema
     .describe(`Requested product mass in wet kg as ordered, at least ${MASS_KG_INPUT_STEP} kg. An order does not reserve stock.`),
   packaging: z.enum(packagingTypes).optional().describe("Packaging: loose or bagged. If omitted on create, the server uses the Organization setting."),
 };

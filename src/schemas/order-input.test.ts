@@ -3,12 +3,35 @@ import { rejectUnknownFields } from "@/lib/api/unknown-fields";
 import { toOperationJsonSchema } from "@/lib/operations/json-schema";
 import { MASS_INPUT_MAX_KG, MASS_KG_INPUT_STEP, MASS_MIN_KG_MESSAGE } from "./helpers";
 import { deleteOrderInput, recordOrderInput, updateOrderApiInput, updateOrderInput } from "./order-input";
+import { orderFormSchema, updateOrderSchema } from "./orders";
 
 const ID = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee";
 const create = { facilityId: ID, customerId: ID, formulationId: ID, orderDate: "2026-10-14", quantityKg: 100.125 };
 const target = { orderId: ID, expectedVersion: 1 };
 const requiredFields = ["facilityId", "customerId", "formulationId", "orderDate", "quantityKg"];
 const unpublished = ["value", "currency", "status", "organizationId", "version", "archivedAt", "deliveredWetMassKg", "remainingWetMassKg", "fulfillmentStatus", "idempotencyKey"];
+
+it.each([
+  ["form", orderFormSchema],
+  ["action PATCH", updateOrderSchema],
+  ["API create", recordOrderInput],
+  ["API PATCH", updateOrderApiInput],
+  ["operation PATCH", updateOrderInput],
+] as const)("uses the shared quantity messages for %s", (_label, schema) => {
+  const base = schema === orderFormSchema ? { ...create, packaging: "loose" }
+    : schema === recordOrderInput ? create : schema === updateOrderApiInput ? {} : target;
+  for (const [quantityKg, message] of [
+    ["", "Quantity is required"],
+    ["12abc", "Quantity must be a number"],
+    [0, "Quantity must be greater than 0"],
+    [5e-324, MASS_MIN_KG_MESSAGE],
+  ] as const) {
+    expect(schema.safeParse({ ...base, quantityKg }).error?.issues).toContainEqual(
+      expect.objectContaining({ path: ["quantityKg"], message }),
+    );
+  }
+  expect(schema.parse({ ...base, quantityKg: "12.125" }).quantityKg).toBe(12.125);
+});
 
 it.each([recordOrderInput, updateOrderApiInput, updateOrderInput])("requires at least one input step for order quantity", schema => {
   const base = schema === recordOrderInput ? create : schema === updateOrderInput ? target : {};

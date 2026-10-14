@@ -5,7 +5,6 @@
 "use client";
 
 import { toDateInputValue } from "@/lib/date-utils";
-import { numericValue } from "@/lib/form-utils";
 
 import { FormActions, FormEntitySelect, FormField, FormInput, FormSection, FormSpine } from "@/components/forms";
 import { FormSelect } from "@/components/forms/form-select";
@@ -267,9 +266,7 @@ export function OrderForm({
               placeholder="e.g., 1000"
               disabled={isSubmitting}
               error={!!errors.quantityKg}
-              {...register("quantityKg", {
-                setValueAs: numericValue,
-              })}
+              {...register("quantityKg")}
             />
           </FormField>
         </div>

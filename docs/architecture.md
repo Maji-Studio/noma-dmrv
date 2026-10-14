@@ -875,7 +875,7 @@ serialization is cached lazily per module instance; the agent guide is a
 module-level string. Each origin response carries a fresh `X-Request-Id`. The short
 agent guide covers discovery, units, local business dates and safe retry behavior.
 The rendered reference remains deferred in
-[open-questions.md](./open-questions.md).
+[Architecture open questions](./open-questions-architecture.md#rendered-api-reference-apirendered-reference-opened-2026-10-08).
 
 Run `pnpm openapi:generate` after a contract change and include `openapi/v1.json`
 in its PR. The colocated generator test compares the exact stable, pretty-printed

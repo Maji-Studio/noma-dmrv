@@ -22,8 +22,9 @@ these areas; the entry rules and invariants live in
   `src/schemas/feedstocks.ts:createFeedstockSchema`, `updateFeedstockSchema`.
 - Zod's `multipleOf(0.001)` passes denormal values such as 5e-324. Feedstock
   total, allocation and PATCH wet mass can then be stored as zero
-  (`src/schemas/feedstocks.ts:70,110,173`). Run draws and product source mass
-  answer 422. Orders have a 0.001 kg minimum since #1005.
+  (`src/schemas/feedstocks.ts` `feedstockFormSchema.totalWetMassKg`,
+  `binAllocationSchema.allocatedWetMassKg` and `updateFeedstockSchema.massWetKg`).
+  Run draws and product source mass answer 422. Orders have a 0.001 kg minimum since #1005.
 - **Resolve via:** give `positiveMassKgSchema` a 0.001 kg minimum for every
   caller, with regression tests for denormals and the minimum.
 
@@ -398,8 +399,8 @@ Merged 2026-07-20 with the former `transport/storage-topology` — one question.
 - **Anchor:** `src/components/orders/order-list.tsx:OrderList` and
   `src/components/orders/order-read-sections.tsx:orderSheetSections`.
 - The order list and read view format `orderDate` in the browser zone and show
-  the previous day west of UTC (`order-list.tsx:62`,
-  `order-read-sections.tsx:36`). The form was fixed in #1005.
+  the previous day west of UTC (`src/components/orders/order-list.tsx` `OrderList` date cell,
+  `src/components/orders/order-read-sections.tsx` `orderSheetSections` date field). The form was fixed in #1005.
 - **Resolve via:** use calendar-date formatting in both views, with regression
   tests in a browser zone west of UTC.
 
