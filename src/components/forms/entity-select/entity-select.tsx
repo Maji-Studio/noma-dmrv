@@ -45,6 +45,8 @@ const EntityEditDialog = dynamic(() => import("./entity-edit-dialog").then((modu
 
 const MENU_SIDE_OFFSET = 4;
 const MENU_COLLISION_PADDING = 8;
+// TypeScript's DOM lib does not declare focusVisible yet; browsers without it ignore it.
+const POINTER_FOCUS: FocusOptions & { focusVisible?: boolean } = { focusVisible: false };
 
 function shouldFocusSearch(showSearch: boolean, openedWithTouch: boolean) {
   return showSearch && !openedWithTouch && window.matchMedia("(pointer: fine)").matches;
@@ -422,9 +424,13 @@ function EntitySelectView({
     }
   }, [autoSelectSingle, disabled, selectionLocked, value, options, isLoading, fetchError, searchQuery, onChange, optionsSource]);
 
-  const activateRow = (row: SelectRow) => {
+  const activateRow = (row: SelectRow, byPointer = false) => {
     if (row.kind === "option" && row.option.disabled) return;
-    triggerRef.current?.focus();
+    // Base UI items cancel pointerdown, so a pointer pick never moves focus and
+    // the trigger would keep or inherit a keyboard focus ring. Drop focus as a
+    // press on a non-focusable row did, and return it without the ring.
+    if (byPointer && document.activeElement instanceof HTMLElement) document.activeElement.blur();
+    triggerRef.current?.focus(byPointer ? POINTER_FOCUS : undefined);
     closeMenu();
     switch (row.kind) {
       case "none":
@@ -536,7 +542,7 @@ function EntitySelectView({
         // Action rows participate in navigation, but never become a field value.
         details.cancel();
         if (details.reason !== "item-press") return;
-        if (row && (row.kind === "option" || row.kind === "none" || selectionLocked || details.event.type !== "keydown" || explicitActionHighlight)) activateRow(row);
+        if (row && (row.kind === "option" || row.kind === "none" || selectionLocked || details.event.type !== "keydown" || explicitActionHighlight)) activateRow(row, details.event.type !== "keydown");
       }}
       onItemHighlighted={(_, details) => {
         // This Base UI version exposes the active descendant on Input and List,

@@ -226,6 +226,57 @@ describe("EntitySelect touched validation", () => {
   });
 });
 
+// Chromium carries :focus-visible over to a scripted focus() from a search
+// input, and an already focused trigger keeps a ring set by earlier typing.
+// jsdom has no :focus-visible, so these tests pin where the trigger's focus
+// comes from and the focusVisible option it is given.
+describe("EntitySelect focus return after a pick", () => {
+  function recordTriggerFocus() {
+    const from: (EventTarget | null)[] = [];
+    trigger().addEventListener("focus", (event) => from.push(event.relatedTarget));
+    return { from, focus: vi.spyOn(trigger(), "focus") };
+  }
+
+  it.each([false, true])("refocuses the trigger from the body after a pointer pick (search: %s)", async (alwaysShowSearch) => {
+    const change = vi.fn(); const blur = vi.fn();
+    render(<EntitySelect options={state.options} onChange={change} onBlur={blur} alwaysShowSearch={alwaysShowSearch} />);
+    act(() => trigger().focus()); open();
+    if (alwaysShowSearch) await waitFor(() => expect(document.activeElement).toBe(screen.getByTestId("entity-select-search")));
+    const focusFrom = recordTriggerFocus();
+    const option = screen.getByTestId("entity-option-two");
+    fireEvent.pointerDown(option);
+    await act(async () => { fireEvent.click(option); });
+    expect(change).toHaveBeenCalledExactlyOnceWith("two");
+    expect(document.activeElement).toBe(trigger());
+    expect(focusFrom.from).toEqual([null]);
+    expect(focusFrom.focus).toHaveBeenCalledWith({ focusVisible: false });
+    expect(blur).not.toHaveBeenCalled();
+  });
+
+  it("moves keyboard focus straight from search to the trigger on Enter", async () => {
+    const change = vi.fn();
+    render(<EntitySelect options={state.options} onChange={change} alwaysShowSearch />);
+    act(() => trigger().focus()); open();
+    const search = await screen.findByTestId("entity-select-search");
+    await waitFor(() => expect(document.activeElement).toBe(search));
+    const focusFrom = recordTriggerFocus();
+    key("ArrowDown"); key("Enter");
+    expect(change).toHaveBeenCalledOnce();
+    expect(document.activeElement).toBe(trigger());
+    expect(focusFrom.from).toEqual([search]);
+    expect(focusFrom.focus).not.toHaveBeenCalledWith({ focusVisible: false });
+  });
+
+  it("keeps the selected tint on a highlighted selected row", () => {
+    render(<EntitySelect options={state.options} value="one" onChange={vi.fn()} />);
+    open();
+    const highlight = "data-[highlighted]:bg-[var(--color-background-medium)]";
+    expect(screen.getByTestId("entity-option-one").className).toContain("bg-[var(--color-background-interaction-light)]");
+    expect(screen.getByTestId("entity-option-one").className).not.toContain(highlight);
+    expect(screen.getByTestId("entity-option-two").className).toContain(highlight);
+  });
+});
+
 function AutoSelectPicker({ dependsOn, filterBy }: { dependsOn?: string; filterBy?: Record<string, string> }) {
   const [value, setValue] = useState<string | undefined>("");
   return <EntitySelect options={[state.options[0]]} value={value} onChange={setValue} autoSelectSingle dependsOn={dependsOn} filterBy={filterBy} noneOption={{ label: "None" }} />;

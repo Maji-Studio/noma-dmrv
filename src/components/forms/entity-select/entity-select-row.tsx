@@ -41,7 +41,8 @@ export function EntitySelectRow({
     "min-h-44 px-12 py-8 transition-colors",
     disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer",
     isAction && "flex items-center gap-8 text-[var(--color-interaction)]",
-    (!isAction || highlightActions) && "data-[highlighted]:bg-[var(--color-background-medium)]",
+    // The selected tint outranks the highlight, as it did before Combobox.
+    (!isAction || highlightActions) && !selected && "data-[highlighted]:bg-[var(--color-background-medium)]",
     selected && "bg-[var(--color-background-interaction-light)]",
   );
   // Disabled rows stay visible but do not join Combobox's navigation registry.
