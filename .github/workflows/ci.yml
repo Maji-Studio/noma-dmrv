@@ -86,6 +86,9 @@ jobs:
       - name: Server-action export check
         run: pnpm check:server-action-exports
 
+      - name: Action-boundary check
+        run: pnpm check:action-boundaries
+
       # Tailwind's spacing scale is an allow-list here (`--spacing-*: initial`),
       # so an off-scale utility compiles to nothing and fails silently at
       # runtime rather than at build time. Nothing else catches it.
