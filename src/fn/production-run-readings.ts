@@ -7,6 +7,7 @@
  * bulk "delete all" used to clear a run before re-importing.
  */
 
+import { withAction } from "./with-action";
 import { z } from "zod";
 import {
   getProductionRunReadingsList as getListData,
@@ -14,11 +15,6 @@ import {
   type ProductionRunReadingWithRelations,
 } from "@/data-access/production-run-readings";
 import { requireOrgFacility } from "@/data-access/utils";
-import { requireOrgContext } from "@/lib/auth/server";
-import {
-  formatZodActionError,
-  toLoggedActionError,
-} from "./action-errors";
 import {
   deleteAllProductionRunReadingsSchema,
   productionRunReadingListFiltersSchema,
@@ -29,9 +25,7 @@ export async function getProductionRunReadingsListFn(
   productionRunId?: string,
   facilityId?: string
 ): Promise<ActionResult<ProductionRunReadingWithRelations[]>> {
-  try {
-    const ctx = await requireOrgContext();
-
+  return withAction(async (ctx) => {
     const filters = productionRunReadingListFiltersSchema.parse({
       productionRunId,
       facilityId,
@@ -41,49 +35,23 @@ export async function getProductionRunReadingsListFn(
     }
 
     const readings = await getListData(ctx, filters.productionRunId, filters.facilityId);
-    return { success: true, data: readings };
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return {
-        success: false,
-        error: formatZodActionError(error),
-      };
-    }
-
-    return {
-      success: false,
-      error: toLoggedActionError(error, "Failed to load readings", {
-        message: "production-run-readings list failed",
-        context: { op: "production-run-readings:list" },
-      }),
-    };
-  }
+    return readings;
+  }, {
+    fallbackMessage: "Failed to load readings",
+    log: { message: "production-run-readings list failed", context: { op: "production-run-readings:list" } },
+  });
 }
 
 export async function deleteAllProductionRunReadingsFn(
   data: z.infer<typeof deleteAllProductionRunReadingsSchema>
 ): Promise<ActionResult<{ deletedCount: number }>> {
-  try {
-    const ctx = await requireOrgContext();
-
+  return withAction(async (ctx) => {
     const validated = deleteAllProductionRunReadingsSchema.parse(data);
     const deletedCount = await deleteAllData(ctx, validated.productionRunId);
 
-    return { success: true, data: { deletedCount } };
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return {
-        success: false,
-        error: formatZodActionError(error),
-      };
-    }
-
-    return {
-      success: false,
-      error: toLoggedActionError(error, "Failed to delete readings", {
-        message: "production-run-readings delete failed",
-        context: { op: "production-run-readings:deleteAll" },
-      }),
-    };
-  }
+    return { deletedCount };
+  }, {
+    fallbackMessage: "Failed to delete readings",
+    log: { message: "production-run-readings delete failed", context: { op: "production-run-readings:deleteAll" } },
+  });
 }
