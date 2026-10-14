@@ -15,6 +15,7 @@
  * overview hint can never disagree on whether a batch is "ready".
  */
 
+import type { SubmissionLineageBlocker } from "./submission-readiness";
 import type { TransportCategory } from "./readiness";
 import {
   defaultProductionReadinessGap,
@@ -40,6 +41,7 @@ export type BatchHealthCheckKey =
 
 export type BatchHealthFixTarget =
   | "batchDetails"
+  | "orders"
   | "deliveries"
   | "deliveryDistances"
   | "feedstocks"
@@ -133,7 +135,7 @@ export interface BatchHealthFacts {
    * operator resolves them from the batch's cards before grouping.
    */
   entityReadinessGaps: string[];
-  submissionLineageBlockers?: string[];
+  submissionLineageBlockers?: SubmissionLineageBlocker[];
   durabilityConfigurationBlockers?: string[];
   /** The same gaps grouped by the one workflow where each issue is resolved. */
   entityReadinessIssues?: BatchEntityReadinessIssue[];
@@ -170,10 +172,6 @@ const TRANSPORT_LABEL = "Transport legs present";
 const ENTITY_READINESS_LABEL = "Entity certifier fields complete";
 const ENTITY_READINESS_PREVIEW_LIMIT = 3;
 const MERGED_CHECK_SEPARATOR = " · ";
-
-function describeCategories(categories: TransportCategory[]): string {
-  return categories.join(", ");
-}
 
 function carbonCheck(facts: BatchHealthFacts): BatchHealthCheckBase {
   const missingInputs = Array.from(
@@ -254,50 +252,50 @@ function feedstockTypeMappingCheck(
   };
 }
 
-function transportCheck(facts: BatchHealthFacts): BatchHealthCheckBase {
+function transportCheck(facts: BatchHealthFacts): BatchHealthCheckBase[] {
   // Transport coverage is derived from application → delivery → product → run
   // lineage. Until that lineage exists, an empty transport result is only a
   // downstream symptom of the production gap and has no honest destination.
   if (!facts.hasSubmittableRuns) {
-    return {
+    return [{
       key: "transport",
       label: TRANSPORT_LABEL,
       status: "skipped",
       detail: "Link production data before reviewing transport coverage",
-    };
+    }];
   }
   // Required categories come from the facility's default template; without a
   // resolved facility setup we cannot know them, so the check is not yet
   // evaluable. The wizard surfaces the facility-setup gap separately, so a
   // `skipped` transport check must NOT block batch readiness.
   if (!facts.facilitySetupComplete) {
-    return {
+    return [{
       key: "transport",
       label: TRANSPORT_LABEL,
       status: "skipped",
       detail: "Complete facility setup to evaluate transport coverage",
-    };
+    }];
   }
   if (facts.requiredTransport.length === 0) {
-    return {
+    return [{
       key: "transport",
       label: TRANSPORT_LABEL,
       status: "met",
       detail: "This template requires no transport legs.",
-    };
+    }];
   }
   const missing = facts.requiredTransport
     .filter((t) => !t.present)
     .map((t) => t.category);
   return missing.length === 0
-    ? { key: "transport", label: TRANSPORT_LABEL, status: "met" }
-    : {
+    ? [{ key: "transport", label: TRANSPORT_LABEL, status: "met" }]
+    : missing.map((category) => ({
         key: "transport",
         label: TRANSPORT_LABEL,
         status: "unmet",
-        detail: `Missing ${describeCategories(missing)} transport legs`,
-        fixTarget: "deliveries",
-      };
+        detail: `Missing ${category} transport legs`,
+        fixTarget: category === "feedstock" ? "feedstocks" : "deliveries",
+      }));
 }
 
 function resolutionDestination(check: BatchHealthCheck): string {
@@ -418,18 +416,27 @@ function entityReadinessChecks(facts: BatchHealthFacts): BatchHealthCheckBase[] 
 }
 
 function submissionChecks(facts: BatchHealthFacts): BatchHealthCheckBase[] {
-  return [
-    { blockers: facts.submissionLineageBlockers, fixTarget: "sourceData" as const },
-    { blockers: facts.durabilityConfigurationBlockers, fixTarget: "batchDetails" as const },
-  ].flatMap(({ blockers, fixTarget }) => blockers?.length ? [{
-    key: "entityReadiness" as const,
-    issueKey: `submission-${fixTarget}`,
+  const lineageChecks: BatchHealthCheckBase[] = (facts.submissionLineageBlockers ?? []).map((blocker) => ({
+    key: blocker.fixTarget === "feedstocks" ? "transport" : "entityReadiness",
+    issueKey: `submission-${blocker.fixTarget}`,
     label: "Submission requirements complete",
     requirementLabel: "Resolve submission blockers",
-    status: "unmet" as const,
+    status: "unmet",
+    detail: blocker.detail,
+    fixTarget: blocker.fixTarget,
+    affectedRecords: [{ ...blocker.record, missing: [blocker.detail] }],
+  }));
+  const blockers = facts.durabilityConfigurationBlockers ?? [];
+  if (blockers.length > 0) lineageChecks.push({
+    key: "entityReadiness",
+    issueKey: "submission-batchDetails",
+    label: "Submission requirements complete",
+    requirementLabel: "Resolve submission blockers",
+    status: "unmet",
     detail: [...new Set(blockers)].join(MERGED_CHECK_SEPARATOR),
-    fixTarget,
-  }] : []);
+    fixTarget: "batchDetails",
+  });
+  return lineageChecks;
 }
 
 /**
@@ -450,7 +457,7 @@ export function deriveBatchHealth(facts: BatchHealthFacts): BatchHealth {
       ...facilityEmissionsChecks(facts),
       feedstockTypeMappingCheck(facts),
       productionCheck(facts),
-      transportCheck(facts),
+      ...transportCheck(facts),
       ...entityReadinessChecks(facts),
       ...submissionChecks(facts),
     ].map(withRequirementMeta),

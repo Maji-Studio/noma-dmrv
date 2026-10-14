@@ -92,8 +92,8 @@ export function toBatchHealthFacts(
         )
       : [],
     entityReadinessGaps: ctx.entityReadinessGaps ?? [],
-    submissionLineageBlockers: ctx.submissionLineageBlockers ?? [],
-    durabilityConfigurationBlockers: ctx.durabilityConfigurationBlockers ?? [],
+    submissionLineageBlockers: ctx.submissionLineageBlockers,
+    durabilityConfigurationBlockers: ctx.durabilityConfigurationBlockers,
     entityReadinessIssues: ctx.entityReadinessIssues ?? [],
     hasSubmittableRuns: ctx.hasSubmittableRuns,
     productionReadinessGap: ctx.productionReadinessGap ?? null,

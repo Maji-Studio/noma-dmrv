@@ -6,11 +6,11 @@
  * Includes stat cards, status badges, and EntitySideSheet
  */
 
+import { CertificationScopeHeader } from "@/components/certification/certification-scope-header";
 import { EntityCertifyReadinessBadge } from "@/components/certification/entity-certify-readiness-badge";
 import { ServerError } from "@/components/forms";
 import { SelectFacilityEmptyState } from "@/components/navigation";
 import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
-import { InfoHint } from "@/components/ui/tooltip";
 import { DataTable } from "@/components/ui/data-table";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
 import { MassPair } from "@/components/ui/mass-pair";
@@ -39,7 +39,7 @@ import {
   useListPagination,
   useReconcileListPage,
 } from "@/hooks/use-list-pagination";
-import { deriveEntityCertifyReadiness, REMOVAL_FIELD_CHECK_SCOPE } from "@/lib/certification/entity-readiness";
+import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readiness";
 import { DELIVERY_DEEP_LINK_PARAM } from "@/lib/delivery-links";
 import { MISSING_VALUE } from "@/lib/copy-utils";
 import {
@@ -171,12 +171,7 @@ function createColumns(
     },
     {
       id: "certifyReadiness",
-      header: () => (
-        <span className="inline-flex items-center gap-4">
-          Certification
-          <InfoHint label="More about certification">{REMOVAL_FIELD_CHECK_SCOPE}</InfoHint>
-        </span>
-      ),
+      header: () => <CertificationScopeHeader />,
       cell: ({ row }) => (
         <EntityCertifyReadinessBadge
           readiness={deriveEntityCertifyReadiness("delivery", row.original)}

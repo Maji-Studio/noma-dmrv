@@ -1,3 +1,4 @@
+import type { SubmissionLineageBlocker } from "@/lib/certification/submission-readiness";
 import { buildSubmissionLineageBlockers, collectFeedstockCodes } from "./certify-lineage-blockers";
 import { hasDurabilityMeasurementComponents, durabilityConfigurationBlockers } from "@/lib/certification/submission-readiness";
 import { allowsPeriodInputStub } from "@/lib/isometric/datapoint-mapping";
@@ -151,8 +152,8 @@ export interface RemovalCertifyContext {
   // Compact labels from the per-entity certifier-readiness layer; the submit
   // pipeline gates on this same list, so [] means entity-ready.
   entityReadinessGaps: string[];
-  submissionLineageBlockers?: string[];
-  durabilityConfigurationBlockers?: string[];
+  submissionLineageBlockers: SubmissionLineageBlocker[];
+  durabilityConfigurationBlockers: string[];
   entityReadinessIssues?: import("@/lib/certification/batch-health").BatchEntityReadinessIssue[];
   // Fail-closed durability sampling/eligibility blockers (D3) — the EXACT list
   // the submit pipeline blocks on, so readiness predicts the gate. [] ⇒ ready.
@@ -674,6 +675,7 @@ export async function buildRemovalContext(
       hasSubmittableRuns: false,
       productionReadinessGap,
       entityReadinessGaps: [],
+      submissionLineageBlockers: [],
       durabilityGateBlockers,
       durabilityConfigurationBlockers: durabilityConfigBlockers,
       // No applications and no runs resolved ⇒ no date to be in the future.

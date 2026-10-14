@@ -535,3 +535,9 @@ describe("feedstock transport usability", () => {
     expect(readiness.gaps).toContainEqual(expect.objectContaining({ key: "transportLeg" }));
   });
 });
+
+it("gives a concrete next action for a missing feedstock transport leg", () => {
+  const readiness = deriveEntityCertifyReadiness("feedstock", { status: "complete", massWetKg: 100 });
+  expect(readiness.gaps.find((gap) => gap.key === "transportLeg")?.detail)
+    .toBe("Record a transport leg with a positive distance and load mass");
+});

@@ -41,6 +41,7 @@ export interface TransportCoverageFact {
   category: TransportCategory;
   /** Transport legs found for this category across the removal's members. */
   count: number;
+  missingEntityIds?: readonly string[];
   /** A per-leg uniformity/completeness warning from aggregation, if any. */
   aggregationWarning: string | null;
 }
@@ -192,7 +193,7 @@ function templateResolvesCleanly(facts: RemovalReadinessFacts): boolean {
 
 // Transport-coverage gaps, phrased exactly as the classifier's blocker reasons.
 function transportGapReasons(required: TransportCoverageFact[]): string[] {
-  const missing = required.filter((t) => t.count === 0).map((t) => t.category);
+  const missing = required.filter((t) => t.count === 0 || (t.missingEntityIds?.length ?? 0) > 0).map((t) => t.category);
   const incomplete = required
     .filter((t) => t.count > 0 && t.aggregationWarning !== null)
     .map((t) => t.category);
@@ -564,7 +565,7 @@ export function buildRemovalRequirementsChecklist(
       }];
     }
     const missing = facts.requiredTransport
-      .filter((category) => category.count === 0)
+      .filter((category) => category.count === 0 || (category.missingEntityIds?.length ?? 0) > 0)
       .map((category) => category.category);
     return missing.length === 0
       ? [{

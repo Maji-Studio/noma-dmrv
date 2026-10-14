@@ -164,6 +164,7 @@ describe("buildRemovalSubmissionBuild", () => {
       orgCtx: TEST_ORG_CONTEXT,
       removalId: "rem-test-no-sequestration",
       ctx: {
+        submissionLineageBlockers: [],
         entityReadinessGaps: [],
         submissionWarnings: [],
       } as unknown as RemovalSubmissionContext,
@@ -255,8 +256,8 @@ describe("buildRemovalSubmissionBuild", () => {
     ).not.toBe(baseline);
   });
 
-  it("fails closed when entity certification readiness was not evaluated", async () => {
-    const ctx = {} as RemovalSubmissionContext;
+  it.each(["entityReadinessGaps", "submissionLineageBlockers"] as const)("fails closed when %s was not evaluated", async (missing) => {
+    const ctx = { entityReadinessGaps: [], submissionLineageBlockers: [], [missing]: undefined } as unknown as RemovalSubmissionContext;
 
     await expect(
       buildRemovalSubmissionBuild({
@@ -281,6 +282,7 @@ describe("buildRemovalSubmissionBuild", () => {
 
   it("blocks entity certification gaps before preparing registry inputs", async () => {
     const ctx = {
+      submissionLineageBlockers: [],
       entityReadinessGaps: [
         "Application APP-TEST-001: Upload the application logbook",
       ],
@@ -313,7 +315,7 @@ describe("buildRemovalSubmissionBuild", () => {
     ]);
     const ctx = {
       entityReadinessGaps: [],
-      submissionLineageBlockers: missing.map((id) => `Feedstock ${id} has no usable transport leg.`),
+      submissionLineageBlockers: buildSubmissionLineageBlockers([], missing, { "FS-2": "FS-2" }, ["feedstock"]),
     } as unknown as RemovalSubmissionContext;
     await expect(buildRemovalSubmissionBuild({
       orgCtx: TEST_ORG_CONTEXT,
@@ -438,6 +440,7 @@ describe("buildRemovalSubmissionBuild", () => {
       samples: [],
     } as unknown as ProductionRunWithSamples;
     const ctx = {
+      submissionLineageBlockers: [],
       entityReadinessGaps: [],
       lineages: [
         {

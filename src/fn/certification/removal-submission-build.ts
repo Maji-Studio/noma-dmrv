@@ -1,3 +1,4 @@
+import type { SubmissionLineageBlocker } from "@/lib/certification/submission-readiness";
 import { findUnbindableTemplateInputs, formatUnbindableTemplateInputsText } from "@/lib/isometric/template-binding-coverage";
 import type { OrgContext } from "@/lib/auth/server";
 import { env } from "@/config/env";
@@ -616,6 +617,15 @@ export function assertEntityReadinessGapsResolved(
   );
 }
 
+export function assertSubmissionLineageResolved(blockers: SubmissionLineageBlocker[] | undefined): void {
+  if (!blockers) {
+    throw new SafeError("The Removal review did not finish. Refresh the review before submitting.");
+  }
+  if (blockers.length > 0) {
+    throw new SafeError(`Removal submission blocked:\n${blockers.map((blocker) => blocker.detail).join("\n")}`);
+  }
+}
+
 export async function buildRemovalSubmissionBuild(args: {
   orgCtx: OrgContext;
   removalId: string;
@@ -636,9 +646,7 @@ export async function buildRemovalSubmissionBuild(args: {
     hasDurabilityComponents,
   } = args.prepared;
 
-  if (ctx.submissionLineageBlockers?.length) {
-    throw new SafeError(`Removal submission blocked:\n${ctx.submissionLineageBlockers.join("\n")}`);
-  }
+  assertSubmissionLineageResolved(ctx.submissionLineageBlockers);
   assertEntityReadinessGapsResolved(ctx.entityReadinessGaps);
   assertSequestrationTemplateBindings(defaultTemplate);
 

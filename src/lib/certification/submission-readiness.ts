@@ -77,3 +77,9 @@ export function missingFeedstockTransportIds(
   );
   return [...new Set(feedstockIds)].filter((id) => !covered.has(id));
 }
+
+export interface SubmissionLineageBlocker {
+  detail: string;
+  fixTarget: "feedstocks" | "deliveryDistances" | "orders" | "deliveries";
+  record: { id: string; code: string };
+}

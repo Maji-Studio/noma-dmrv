@@ -35,9 +35,11 @@ export function toRemovalReadinessFacts(
     hasSubmittableRuns: ctx.hasSubmittableRuns,
     productionReadinessGap: ctx.productionReadinessGap ?? null,
     entityReadinessGaps: ctx.entityReadinessGaps ?? [],
-    submissionLineageBlockers: ctx.submissionLineageBlockers ?? [],
+    submissionLineageBlockers: ctx.submissionLineageBlockers
+      .filter((blocker) => blocker.fixTarget !== "feedstocks")
+      .map((blocker) => blocker.detail),
     durabilityGateBlockers: ctx.durabilityGateBlockers ?? [],
-    durabilityConfigurationBlockers: ctx.durabilityConfigurationBlockers ?? [],
+    durabilityConfigurationBlockers: ctx.durabilityConfigurationBlockers,
     futureDatedMeasurements: ctx.futureDatedMeasurements ?? [],
     supportingDocumentCount: ctx.supportingDocuments.total,
     mirroredDocumentCount: ctx.supportingDocuments.mirrored,
@@ -49,6 +51,7 @@ export function toRemovalReadinessFacts(
       return {
         category,
         count: bucket.count,
+        missingEntityIds: bucket.missingEntityIds,
         aggregationWarning: bucket.aggregationWarning,
       };
     }),

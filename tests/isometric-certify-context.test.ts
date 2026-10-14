@@ -711,11 +711,13 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
     );
 
     expect(result.submissionLineageBlockers).toEqual(expect.arrayContaining([
-      expect.stringContaining("Application AP-MISSING has no customer location"),
+      expect.objectContaining({ detail: expect.stringContaining("Application AP-MISSING has no customer location") }),
     ]));
-    expect(result.submissionLineageBlockers?.some((reason) => reason.includes("Feedstock FS-MISSING"))).toBe(!omit.some((category) => category === "feedstock"));
-    expect(result.submissionLineageBlockers?.some((reason) => reason.includes("Delivery DL-MISSING"))).toBe(!omit.some((category) => category === "biochar"));
-    expect(toRemovalReadinessFacts(result).submissionLineageBlockers).toEqual(result.submissionLineageBlockers);
+    expect(result.submissionLineageBlockers?.some((reason) => reason.detail.includes("Feedstock FS-MISSING"))).toBe(!omit.some((category) => category === "feedstock"));
+    expect(result.submissionLineageBlockers?.some((reason) => reason.detail.includes("Delivery DL-MISSING"))).toBe(!omit.some((category) => category === "biochar"));
+    expect(toRemovalReadinessFacts(result).submissionLineageBlockers).toEqual(
+      result.submissionLineageBlockers.filter((blocker) => blocker.fixTarget !== "feedstocks").map((blocker) => blocker.detail),
+    );
     expect(result.durabilityConfigurationBlockers).toEqual(storageKey === "carbon_rich_substance_sequestration" ? [] : ["200-year Removals cannot be submitted yet. Wait for support to confirm registry availability."]);
     const coverage = result.transportCoverage;
     expect(coverage.feedstock.count).toBe(3);

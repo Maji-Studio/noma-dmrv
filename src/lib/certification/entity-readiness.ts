@@ -35,6 +35,11 @@ const TERMINAL_STATUS_BY_ENTITY: Partial<Record<CertifyEntityKind, string[]>> = 
   delivery: ["delivered"],
 };
 
+const LIFECYCLE_DETAIL_BY_ENTITY: Partial<Record<CertifyEntityKind, string>> = {
+  feedstock: "Complete the feedstock material record",
+  delivery: "Set status to delivered for transport accounting",
+};
+
 const FIELD_PURPOSE_BY_ENTITY: Partial<Record<CertifyEntityKind, string>> = {
   feedstock: "feedstock transport calculations",
   delivery: "biochar transport calculations",
@@ -120,7 +125,7 @@ function fieldGap(
         ? [descriptor.satisfaction.field]
         : descriptorFields(descriptor);
   const requirement = descriptor.gapDetail ?? (FIELD_PURPOSE_BY_ENTITY[entityKind]
-    ? `${descriptor.label} feeds ${FIELD_PURPOSE_BY_ENTITY[entityKind]}`
+    ? `Record ${descriptor.label.toLowerCase()} for ${FIELD_PURPOSE_BY_ENTITY[entityKind]}`
     : descriptor.condition != null
       ? `${descriptor.label} is required for ${descriptor.condition.label}`
       : `${descriptor.label} is required to certify`);
@@ -149,11 +154,8 @@ function lifecycleGap(
     key: "lifecycleState",
     label: "Lifecycle state",
     fields: ["status"],
-    detail: entityKind === "productionRun"
-      ? `Status must be ${terminalStates.join(" or ")} to certify`
-      : entityKind === "feedstock"
-        ? "Complete the feedstock material record"
-        : `Status must be ${terminalStates.join(" or ")} for transport accounting`,
+    detail: LIFECYCLE_DETAIL_BY_ENTITY[entityKind] ??
+      `Status must be ${terminalStates.join(" or ")} to certify`,
   };
 }
 

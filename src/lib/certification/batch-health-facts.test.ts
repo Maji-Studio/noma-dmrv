@@ -2,40 +2,70 @@ import { describe, expect, it } from "vitest";
 import type { RemovalCertifyContext } from "@/fn/certification/certify-context";
 import { deriveBatchHealth } from "./batch-health";
 import { carbonGapLabels, toBatchHealthFacts } from "./batch-health-facts";
-import { deriveRemovalReadiness } from "./readiness";
+import { batchHealthFixLinkFor } from "./batch-health-links";
+import { buildSubmissionLineageBlockers } from "@/fn/certification/certify-lineage-blockers";
+import { buildRemovalRequirementsChecklist, deriveRemovalReadiness } from "./readiness";
 import { toRemovalReadinessFacts } from "./readiness-facts";
 import { collectFeedstockTypeMappingGaps } from "./feedstock-type-mapping";
 import { STORED_CO2E_PREVIEW_REVERIFICATION_GAP } from "./preview-gaps";
 
 describe("toBatchHealthFacts", () => {
   const readyContext = {
+    submissionLineageBlockers: [], durabilityConfigurationBlockers: [],
     memberBatches: [{ id: "batch-1", durabilityGateBlockers: [], facilityEmissionsGateBlockers: [] }],
+    latestSubmission: null, hasOrgCredentials: true, supportingDocuments: { total: 0, mirrored: 0 },
     mapping: {}, defaultTemplate: {}, missingDefaultTemplateId: null,
     unresolvedBlueprintKeys: [], unbindableTemplateInputs: [],
     hasSubmittableRuns: true, entityReadinessGaps: [], entityReadinessIssues: [],
     requiredTransportCategories: ["feedstock"],
-    transportCoverage: { feedstock: { count: 1, missingEntityIds: [] } },
+    transportCoverage: { feedstock: { count: 1, missingEntityIds: [], aggregationWarning: null, vehicleAdvisories: [] } },
   } as unknown as RemovalCertifyContext;
 
-  it.each(["submissionLineageBlockers", "durabilityConfigurationBlockers"] as const)("includes %s in batch health", (key) => {
-    const health = deriveBatchHealth(toBatchHealthFacts({ ...readyContext, [key]: ["Resolve this submission blocker."] }, "batch-1"));
+  it("includes durability configuration blockers in batch health", () => {
+    const health = deriveBatchHealth(toBatchHealthFacts({ ...readyContext, durabilityConfigurationBlockers: ["Resolve this submission blocker."] }, "batch-1"));
     expect(health.state).toBe("incomplete");
     expect(health.checks.some((check) => check.detail?.includes("Resolve this submission blocker."))).toBe(true);
   });
 
+  it.each([
+    ["orders", "/orders?"],
+    ["deliveryDistances", "/deliveries?"],
+  ] as const)("routes %s blockers to the resolving workflow", (fixTarget, path) => {
+    const health = deriveBatchHealth(toBatchHealthFacts({ ...readyContext, submissionLineageBlockers: [{
+      detail: "Resolve this submission blocker.", fixTarget, record: { id: "record-1", code: "RE-1" },
+    }] }, "batch-1"));
+    const check = health.checks.find((check) => check.status === "unmet")!;
+    expect(health.issueCount).toBe(1);
+    expect(check.fixTarget).toBe(fixTarget);
+    expect(batchHealthFixLinkFor(check, "facility-1").href).toContain(path);
+  });
+
   it("does not let one feedstock leg cover a second feedstock", () => {
-    const ctx = { ...readyContext, transportCoverage: {
+    const ctx = { ...readyContext,
+      submissionLineageBlockers: buildSubmissionLineageBlockers([], ["fs-2"], { "fs-2": "FS-2" }, ["feedstock"]),
+      transportCoverage: {
       ...readyContext.transportCoverage,
       feedstock: { ...readyContext.transportCoverage.feedstock, missingEntityIds: ["fs-2"] },
     } };
     expect(deriveBatchHealth(toBatchHealthFacts(readyContext, "batch-1")).state).toBe("ready");
     const health = deriveBatchHealth(toBatchHealthFacts(ctx, "batch-1"));
     expect(health.state).toBe("incomplete");
+    expect(health.issueCount).toBe(1);
+    const check = health.checks.find((check) => check.status === "unmet")!;
+    expect(check.affectedRecords?.[0].id).toBe("fs-2");
+    expect(batchHealthFixLinkFor(check, "facility-1").href).toContain("feedstock=fs-2");
+    const removalFacts = toRemovalReadinessFacts(ctx);
+    expect(deriveRemovalReadiness(removalFacts)).toMatchObject({ state: "blocked", reasons: ["Missing feedstock transport legs"] });
+    const checklist = buildRemovalRequirementsChecklist(removalFacts);
+    expect(checklist.filter((check) => check.status === "unmet")).toEqual([
+      expect.objectContaining({ key: "transport", transportCategory: "feedstock" }),
+    ]);
     expect(health.checks).toContainEqual(expect.objectContaining({ key: "transport", status: "unmet" }));
   });
 
   it("filters the lineage sentinel without suppressing independent sample evidence", () => {
     const ctx = {
+      submissionLineageBlockers: [], durabilityConfigurationBlockers: [],
       memberBatches: [
         {
           id: "batch-1",
@@ -106,6 +136,7 @@ describe("toBatchHealthFacts", () => {
       },
     ];
     const ctx = {
+      submissionLineageBlockers: [], durabilityConfigurationBlockers: [],
       memberBatches,
       feedstockTypeMappingGaps:
         collectFeedstockTypeMappingGaps(memberBatches),
@@ -161,6 +192,7 @@ describe("toBatchHealthFacts", () => {
       },
     ];
     const ctx = {
+      submissionLineageBlockers: [], durabilityConfigurationBlockers: [],
       memberBatches,
       feedstockTypeMappingGaps:
         collectFeedstockTypeMappingGaps(memberBatches),
@@ -188,6 +220,7 @@ describe("toBatchHealthFacts", () => {
 
   it("does not apply feedstock mapping gaps before a facility is linked", () => {
     const ctx = {
+      submissionLineageBlockers: [], durabilityConfigurationBlockers: [],
       memberBatches: [
         {
           id: "batch-1",
@@ -229,6 +262,7 @@ describe("toBatchHealthFacts", () => {
 
   it("treats a fresh interrupted Removal lock as immediately reclaimable", () => {
     const ctx = {
+      submissionLineageBlockers: [], durabilityConfigurationBlockers: [],
       latestSubmission: {
         status: "draft",
         lockedAt: new Date(),

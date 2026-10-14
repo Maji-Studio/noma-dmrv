@@ -300,6 +300,7 @@ export const CERTIFY_FIELD_REGISTRY: Record<
     },
     {
       key: "transportLeg",
+      gapDetail: "Record a transport leg with a positive distance and load mass",
       label: "Feedstock transport leg",
       kind: "derived",
       // Any usable leg covers this feedstock, including a manually recorded leg.
@@ -314,7 +315,7 @@ export const CERTIFY_FIELD_REGISTRY: Record<
     },
     {
       key: "transportDistanceProvenance",
-      gapDetail: "Transport distance provenance records how the distance was obtained",
+      gapDetail: "Record how the transport distance was obtained",
       label: "Transport distance provenance",
       kind: "derived",
       satisfaction: {

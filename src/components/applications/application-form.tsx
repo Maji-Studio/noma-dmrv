@@ -652,7 +652,8 @@ export function ApplicationForm({
             id="soilTemperatureC"
             label="Soil temperature (°C)"
             error={errors.soilTemperatureC?.message}
-            cue="Optional site annual average. Submission uses the facility reference temperature."
+            cue="Annual average for this application site"
+            hint="Submission uses the facility reference temperature."
             aside={<span className="body-caption text-[var(--color-text-secondary)]">Advisory</span>}
           >
             <FormInput
