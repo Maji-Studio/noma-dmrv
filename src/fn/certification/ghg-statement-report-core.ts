@@ -7,6 +7,7 @@
  * Session-authenticated actions live in `./ghg-statement-reports`; the
  * submission pipeline (`./submit-ghg-statement`) calls this module directly.
  */
+import { resolveIsometricClient } from "@/data-access/certifier-credentials";
 import versions from "../../../docs/isometric/versions.json";
 import type { OrgContext } from "@/lib/auth/server";
 import {
@@ -33,7 +34,6 @@ import { SafeError } from "@/lib/errors";
 import {
   getGhgEntry,
   getGhgStatement,
-  getIsometricClientForOrg,
 } from "@/lib/isometric";
 import {
   GHG_STATEMENT_ENTITY_TYPE,
@@ -101,7 +101,7 @@ export async function loadLiveReportFacts(
     throw new SafeError("Create the GHG Statement before generating its report.");
   }
 
-  const client = await getIsometricClientForOrg(orgCtx.organizationId);
+  const client = await resolveIsometricClient(orgCtx);
   const remoteStatement = await getGhgStatement(
     client,
     statementSubmission.externalId,

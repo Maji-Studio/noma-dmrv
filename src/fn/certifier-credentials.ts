@@ -4,6 +4,8 @@ import { z } from "zod";
 import { env } from "@/config/env";
 import {
   getCertifierCredentialsStatus,
+  resolveIsometricClient,
+  resolveIsometricClientForPlatformAdminCredentialVerification,
   upsertCertifierCredentials,
   type CertifierCredentialsStatus,
 } from "@/data-access/certifier-credentials";
@@ -11,10 +13,9 @@ import {
   formatZodActionError,
   logActionError,
 } from "@/fn/action-errors";
-import { requireOrgContext } from "@/lib/auth/server";
+import { requireOrgContext, type OrgContext } from "@/lib/auth/server";
 import { SafeError, toActionError } from "@/lib/errors";
 import {
-  getIsometricClientForOrg,
   IsometricApiError,
   listProjects,
 } from "@/lib/isometric";
@@ -93,7 +94,7 @@ export async function setOrgCertifierCredentialsFn(
       // verification only reports whether the stored keys work right now.
       const [status, verification] = await Promise.all([
         getCertifierCredentialsStatus(ctx, values.organizationId, PROVIDER),
-        verifyCertifierCredentials(values.organizationId),
+        verifyCertifierCredentials(ctx, values.organizationId),
       ]);
       return { status, verification };
     },
@@ -107,10 +108,17 @@ export async function setOrgCertifierCredentialsFn(
  * needs next, so a pass here means the next step will work.
  */
 async function verifyCertifierCredentials(
+  ctx: OrgContext,
   organizationId: string,
 ): Promise<CertifierCredentialsVerification> {
   try {
-    const client = await getIsometricClientForOrg(organizationId);
+    const client =
+      organizationId === ctx.organizationId
+        ? await resolveIsometricClient(ctx)
+        : await resolveIsometricClientForPlatformAdminCredentialVerification(
+            ctx,
+            organizationId,
+          );
     const projects = await listProjects(client);
     return {
       ok: true,

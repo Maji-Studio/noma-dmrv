@@ -1,9 +1,15 @@
 import { and, eq, sql } from "drizzle-orm";
+import { env } from "@/config/env";
 import { db } from "@/db";
 import { certifierCredentials } from "@/db/schema/certification";
 import { requireOrgRole, type OrgContext } from "@/lib/auth/server";
 import { decryptSecret, encryptSecret } from "@/lib/crypto/secrets";
 import { SafeError } from "@/lib/errors";
+import {
+  createIsometricClient,
+  ISOMETRIC_BASE_URLS,
+  type IsometricClient,
+} from "@/lib/isometric/client";
 import { requireOrgScope } from "./utils";
 
 type CertifierCredentialRow = typeof certifierCredentials.$inferSelect;
@@ -175,15 +181,17 @@ export async function hasCertifierCredentials(
   return Boolean(row);
 }
 
-/**
- * SERVER-ONLY INTERNAL CREDENTIAL BOUNDARY.
- *
- * This deliberately has no auth/context parameter because Batch 2's
- * organization-scoped Isometric client factory calls it after resolving the
- * organization from trusted server-side domain data. Never call it from a
- * `fn/` action or expose its return value to client code.
- */
+/** Server-only secrets; never expose the return value to client code. */
 export async function getDecryptedCertifierCredentials(
+  ctx: OrgContext,
+  provider: CertifierProvider,
+): Promise<{ accessToken: string; clientSecret: string } | null> {
+  requireOrgScope(ctx);
+  return loadDecryptedCertifierCredentials(ctx.organizationId, provider);
+}
+
+// org-scope-ok: private lookup shared by the scoped getter and guarded Platform Admin verification.
+async function loadDecryptedCertifierCredentials(
   organizationId: string,
   provider: CertifierProvider
 ): Promise<{ accessToken: string; clientSecret: string } | null> {
@@ -206,4 +214,38 @@ export async function getDecryptedCertifierCredentials(
     accessToken: decryptSecret(row.accessTokenEncrypted),
     clientSecret: decryptSecret(row.clientSecretEncrypted),
   };
+}
+
+export async function resolveIsometricClient(
+  ctx: OrgContext,
+): Promise<IsometricClient> {
+  requireOrgScope(ctx);
+  const credentials = await getDecryptedCertifierCredentials(ctx, "isometric");
+  return createIsometricClient(
+    credentials
+      ? { ...credentials, baseUrl: ISOMETRIC_BASE_URLS[env.ISOMETRIC_ENVIRONMENT] }
+      : null,
+  );
+}
+
+// org-scope-ok: Platform Admin verifies stored credentials for a selected organization after saving them.
+export async function resolveIsometricClientForPlatformAdminCredentialVerification(
+  ctx: OrgContext,
+  organizationId: string,
+): Promise<IsometricClient> {
+  requireOrgScope(ctx);
+  if (!ctx.isPlatformAdmin) {
+    throw new SafeError(
+      "You can only manage credentials for your active Organization.",
+    );
+  }
+  const credentials = await loadDecryptedCertifierCredentials(
+    organizationId,
+    "isometric",
+  );
+  return createIsometricClient(
+    credentials
+      ? { ...credentials, baseUrl: ISOMETRIC_BASE_URLS[env.ISOMETRIC_ENVIRONMENT] }
+      : null,
+  );
 }

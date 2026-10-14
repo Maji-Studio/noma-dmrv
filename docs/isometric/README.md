@@ -61,11 +61,14 @@ candidate list is exhaustive.
   `src/lib/certification/removal-source-bindings.ts`
 - Certification workspace UI: `src/components/certification/`
 
-Application code must use `getIsometricClientForOrg()`. Environment credentials
-remain only an escape hatch for scripts and dedicated health checks, parsed by
-`client-env.ts` without loading app configuration. `client.ts` takes explicit
-credentials; the existing organization factory lives in `client-org.ts` and
-loads app configuration and credential data-access only when called.
+Application code uses `resolveIsometricClient(ctx)` from
+`src/data-access/certifier-credentials.ts`. It requires org scope and loads only
+that organization's encrypted credentials. Platform Admin verification of a
+selected organization's saved credentials uses the explicitly guarded
+`resolveIsometricClientForPlatformAdminCredentialVerification(ctx, organizationId)`.
+Environment credentials remain an escape hatch for scripts and dedicated health
+checks, parsed by `client-env.ts` without loading app configuration. `client.ts`
+takes explicit credentials and never imports data-access.
 
 ## Reading order
 

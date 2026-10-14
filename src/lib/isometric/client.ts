@@ -429,6 +429,5 @@ export function createIsometricClient(
 
 // Preserve the existing application import surface while credential resolution
 // remains separate from the configuration-free HTTP transport.
-export { getIsometricClientForOrg } from "./client-org";
 
 export type IsometricEnvironment = keyof typeof ISOMETRIC_BASE_URLS;

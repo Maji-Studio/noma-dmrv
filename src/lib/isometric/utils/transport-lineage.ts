@@ -1,5 +1,10 @@
-import type { ChainOfCustodyData } from "@/data-access/chain-of-custody";
 import type { CreditBatchDurabilityInput } from "./durability-aggregation";
+
+type TransportLineageInput = {
+  feedstocks: Array<{ id: string }>;
+  biocharProduct: { id: string } | null;
+  products?: Array<{ product: { id: string } }>;
+};
 
 export interface TransportEntityIdsByCategory {
   feedstockIds: string[];
@@ -8,7 +13,7 @@ export interface TransportEntityIdsByCategory {
 }
 
 export function collectTransportEntityIds(
-  lineages: ChainOfCustodyData[],
+  lineages: TransportLineageInput[],
   // Sample transport legs hang off the batch-pooled lab Samples (issue #309:
   // a sample anchors on its credit batch, so runs no longer carry them).
   batchesWithSamples: CreditBatchDurabilityInput[],

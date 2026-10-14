@@ -1,4 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("@/data-access/certifier-credentials", () => ({
+  resolveIsometricClient: vi.fn(),
+}));
+
 import type { CertificationSubmissionRow } from "@/data-access/certification";
 import type { GhgStatementReportRow } from "@/data-access/ghg-statement-reports";
 import { hashVerifierToken } from "@/lib/certification/ghg-statement-report/verifier-url";
@@ -52,7 +57,6 @@ vi.mock("./ghg-statement-report-core", () => ({
 }));
 vi.mock("@/lib/isometric", async (importOriginal) => ({
   ...await importOriginal<typeof import("@/lib/isometric")>(),
-  getIsometricClientForOrg: vi.fn(),
   getGhgStatement: vi.fn(),
   submitGhgStatement: vi.fn(),
   resubmitGhgStatement: vi.fn(),

@@ -1,3 +1,4 @@
+import { resolveIsometricClient } from "@/data-access/certifier-credentials";
 import type { OrgContext } from "@/lib/auth/server";
 import type { CertificationSubmissionRow } from "@/data-access/certification";
 import {
@@ -13,7 +14,6 @@ import { logger, type Logger } from "@/lib/log";
 import {
   createDatapoint,
   createGhgEntry,
-  getIsometricClientForOrg,
   payloadHash,
   reconcileDatapoint,
   reconcileRemoval,
@@ -246,7 +246,7 @@ async function submitRemovalCore(
     assertProductionConfirmed(confirmProduction);
     assertDefaultRemovalTemplateConfigured(ctx.mapping.defaultRemovalTemplateId);
     attempt.externalMutation = "confirmed";
-    const client = await getIsometricClientForOrg(orgCtx.organizationId);
+    const client = await resolveIsometricClient(orgCtx);
     onProgress?.({ step: "removal.checking_data", state: "complete" });
     onProgress?.({ step: "removal.creating", state: "reused" });
     await recoverSubmittedRemoval({
@@ -383,7 +383,7 @@ async function submitRemovalCore(
     mapping: ctx.mapping,
     log,
   });
-  const client = await getIsometricClientForOrg(orgCtx.organizationId);
+  const client = await resolveIsometricClient(orgCtx);
 
   // Everything below may create or update Isometric Sources before the
   // submission ledger draft exists. Persist that the registry boundary is

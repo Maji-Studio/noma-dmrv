@@ -13,6 +13,8 @@ vi.mock("@/lib/auth/server", () => ({
 }));
 
 vi.mock("@/data-access/certifier-credentials", () => ({
+  resolveIsometricClient: vi.fn(),
+  resolveIsometricClientForPlatformAdminCredentialVerification: vi.fn(),
   upsertCertifierCredentials: vi.fn(),
   getCertifierCredentialsStatus: vi.fn(),
   deleteCertifierCredentials: vi.fn(),
@@ -26,7 +28,6 @@ vi.mock("@/fn/action-errors", async (importOriginal) => ({
 // Saving is also the connection test, so the action calls Isometric with the
 // keys it just stored. The registry itself is out of scope here.
 vi.mock("@/lib/isometric", () => ({
-  getIsometricClientForOrg: vi.fn(),
   listProjects: vi.fn(),
   IsometricApiError: class IsometricApiError extends Error {
     constructor(
@@ -43,11 +44,13 @@ vi.mock("@/lib/isometric", () => ({
 
 import {
   getCertifierCredentialsStatus,
+  resolveIsometricClient,
+  resolveIsometricClientForPlatformAdminCredentialVerification,
   upsertCertifierCredentials,
 } from "@/data-access/certifier-credentials";
 import { setOrgCertifierCredentialsFn } from "@/fn/certifier-credentials";
 import { requireOrgContext } from "@/lib/auth/server";
-import { getIsometricClientForOrg, listProjects } from "@/lib/isometric";
+import { listProjects } from "@/lib/isometric";
 import {
   CERTIFIER_CREDENTIAL_MASK,
   certifierCredentialsRotationSchema,
@@ -72,8 +75,8 @@ beforeEach(() => {
     accessTokenLast4: "1234",
     updatedAt: new Date("2026-07-11T10:00:00.000Z"),
   });
-  vi.mocked(getIsometricClientForOrg).mockResolvedValue(
-    {} as Awaited<ReturnType<typeof getIsometricClientForOrg>>,
+  vi.mocked(resolveIsometricClient).mockResolvedValue(
+    {} as Awaited<ReturnType<typeof resolveIsometricClient>>,
   );
   vi.mocked(listProjects).mockResolvedValue([
     { id: "prj_1" },
@@ -113,6 +116,8 @@ describe("setOrgCertifierCredentialsFn", () => {
       clientSecret: CLIENT_SECRET,
       provider: "isometric",
     });
+    expect(resolveIsometricClient).toHaveBeenCalledWith(ORG_CONTEXT);
+    expect(resolveIsometricClientForPlatformAdminCredentialVerification).not.toHaveBeenCalled();
     expect(result.success).toBe(true);
     expect(JSON.stringify(result)).not.toContain(ACCESS_TOKEN);
     expect(JSON.stringify(result)).not.toContain(CLIENT_SECRET);
@@ -123,6 +128,26 @@ describe("setOrgCertifierCredentialsFn", () => {
         verification: { ok: true, projectCount: 1 },
       },
     });
+  });
+
+  it("verifies a selected organization's credentials for a Platform Admin", async () => {
+    const ctx = { ...ORG_CONTEXT, orgRole: null, isPlatformAdmin: true } as const;
+    vi.mocked(requireOrgContext).mockResolvedValue(ctx);
+    vi.mocked(resolveIsometricClientForPlatformAdminCredentialVerification)
+      .mockResolvedValue({} as never);
+    const selectedOrgId = "org_selected";
+
+    const result = await setOrgCertifierCredentialsFn({
+      organizationId: selectedOrgId,
+      accessToken: ACCESS_TOKEN,
+      clientSecret: CLIENT_SECRET,
+    });
+
+    expect(result.success).toBe(true);
+    expect(resolveIsometricClient).not.toHaveBeenCalled();
+    expect(resolveIsometricClientForPlatformAdminCredentialVerification)
+      .toHaveBeenCalledWith(ctx, selectedOrgId);
+    expect(listProjects).toHaveBeenCalledOnce();
   });
 
   it("stores the keys even when the connection check fails, and says so", async () => {

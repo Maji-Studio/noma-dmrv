@@ -22,12 +22,12 @@
  * reconcile by supplier-ref lookup → audit event / ledger-reject), idempotent on
  * the versioned supplier reference, mirroring the datapoint/removal/sensor flows.
  */
+import { resolveIsometricClient } from "@/data-access/certifier-credentials";
 import type { OrgContext } from "@/lib/auth/server";
 import { appendSubmissionJournal } from "@/data-access/certification";
 import type { CreditBatchWithSamples } from "@/data-access/credit-batch-samples";
 import { env } from "@/config/env";
 import type { Logger } from "@/lib/log";
-import { getIsometricClientForOrg } from "@/lib/isometric/client";
 import type { IsometricClient } from "@/lib/isometric/client";
 import { patchDatapoint } from "@/lib/isometric/submissions";
 import {
@@ -424,7 +424,7 @@ export function applyProductionBatchIds(
 export async function submitDurabilityMeasurementSamples(
   args: SubmitDurabilityMeasurementSamplesArgs,
 ): Promise<SubmitDurabilityMeasurementSamplesResult> {
-  const client = await getIsometricClientForOrg(args.orgCtx.organizationId);
+  const client = await resolveIsometricClient(args.orgCtx);
   let journaledSamples = readJournaledMeasurementSamples(
     args.submissionRow.payloadSnapshot,
   );
