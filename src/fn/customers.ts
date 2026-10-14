@@ -26,7 +26,6 @@ import {
   type CustomerDetail,
   type CreatedCustomerWithLocations,
 } from "@/data-access/customers";
-import { requireOrgContext } from "@/lib/auth/server";
 import {
   createCustomerSchema,
   createCustomerWithLocationsSchema,
@@ -40,22 +39,9 @@ import {
 import { resolveDistanceSource } from "@/schemas/distance-source";
 import type { DistanceSourceValue } from "@/schemas/distance-source";
 import type { ActionResult } from "@/types/actions";
-import {
-  formatZodActionError,
-  toLoggedActionError,
-} from "./action-errors";
 import { withAction } from "./with-action";
 
-function customerActionError(
-  error: unknown,
-  fallbackMessage: string,
-  op: string,
-): string {
-  return toLoggedActionError(error, fallbackMessage, {
-    message: "customer action failed",
-    context: { op },
-  });
-}
+const LOG_MESSAGE = "customer action failed";
 
 // ============================================
 // Customer List/Query Operations
@@ -67,31 +53,18 @@ function customerActionError(
 export async function getCustomersFn(
   filters?: Partial<z.infer<typeof customerFilterSchema>>
 ): Promise<ActionResult<PaginatedCustomers>> {
-  try {
-    const ctx = await requireOrgContext();
-
+  return withAction(async (ctx) => {
     const validatedFilters = filters
       ? customerFilterSchema.parse(filters)
       : undefined;
     const customers = await getCustomersData(ctx, validatedFilters);
 
-    return { success: true, data: customers };
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return {
-        success: false,
-        error: formatZodActionError(error, "Invalid filter parameters"),
-      };
-    }
-    return {
-      success: false,
-      error: customerActionError(
-        error,
-        "Failed to load customers",
-        "customer:list",
-      ),
-    };
-  }
+    return customers;
+  }, {
+    fallbackMessage: "Failed to load customers",
+    zodErrorPrefix: "Invalid filter parameters",
+    log: { message: LOG_MESSAGE, context: { op: "customer:list" } },
+  });
 }
 
 /**
@@ -100,21 +73,13 @@ export async function getCustomersFn(
 export async function getCustomerWithRelationsFn(
   customerId: string
 ): Promise<ActionResult<CustomerDetail>> {
-  try {
-    const ctx = await requireOrgContext();
-
+  return withAction(async (ctx) => {
     const customer = await getCustomerWithRelationsData(ctx, customerId);
-    return { success: true, data: customer };
-  } catch (error) {
-    return {
-      success: false,
-      error: customerActionError(
-        error,
-        "Failed to load customer details",
-        "customer:detail",
-      ),
-    };
-  }
+    return customer;
+  }, {
+    fallbackMessage: "Failed to load customer details",
+    log: { message: LOG_MESSAGE, context: { op: "customer:detail" } },
+  });
 }
 
 /**
@@ -143,21 +108,13 @@ export async function getCustomerLocationsFn(
     }>
   >
 > {
-  try {
-    const ctx = await requireOrgContext();
-
+  return withAction(async (ctx) => {
     const locations = await getCustomerLocationsData(ctx, customerId);
-    return { success: true, data: locations };
-  } catch (error) {
-    return {
-      success: false,
-      error: customerActionError(
-        error,
-        "Failed to load customer locations",
-        "customer:locations",
-      ),
-    };
-  }
+    return locations;
+  }, {
+    fallbackMessage: "Failed to load customer locations",
+    log: { message: LOG_MESSAGE, context: { op: "customer:locations" } },
+  });
 }
 
 // ============================================
@@ -170,9 +127,7 @@ export async function getCustomerLocationsFn(
 export async function createCustomerFn(
   data: z.infer<typeof createCustomerSchema>
 ): Promise<ActionResult<Customer>> {
-  try {
-    const ctx = await requireOrgContext();
-
+  return withAction(async (ctx) => {
     const validated = createCustomerSchema.parse(data);
 
     const customer = await withAutoCode(
@@ -193,23 +148,11 @@ export async function createCustomerFn(
       CODE_CONFLICT_MESSAGES.customer,
     );
 
-    return { success: true, data: customer };
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return {
-        success: false,
-        error: formatZodActionError(error),
-      };
-    }
-    return {
-      success: false,
-      error: customerActionError(
-        error,
-        "Failed to create customer",
-        "customer:create",
-      ),
-    };
-  }
+    return customer;
+  }, {
+    fallbackMessage: "Failed to create customer",
+    log: { message: LOG_MESSAGE, context: { op: "customer:create" } },
+  });
 }
 
 /**
@@ -265,7 +208,7 @@ export async function createCustomerWithLocationsFn(
       fallbackMessage:
         "The customer and its locations were not created. Try again.",
       log: {
-        message: "customer action failed",
+        message: LOG_MESSAGE,
         context: { op: "customer:create-with-locations" },
       },
     },
@@ -297,7 +240,7 @@ export async function updateCustomerFn(
     });
 
     return customer;
-  }, { fallbackMessage: "Failed to update customer", log: { message: "customer action failed", context: { op: "customer:update" } } });
+  }, { fallbackMessage: "Failed to update customer", log: { message: LOG_MESSAGE, context: { op: "customer:update" } } });
 }
 
 // ============================================
@@ -316,7 +259,7 @@ export async function deleteCustomerFn(
     await deleteCustomer(ctx, validated.customerId, validated.expectedVersion);
 
     return undefined;
-  }, { fallbackMessage: "Failed to delete customer", log: { message: "customer action failed", context: { op: "customer:delete" } } });
+  }, { fallbackMessage: "Failed to delete customer", log: { message: LOG_MESSAGE, context: { op: "customer:delete" } } });
 }
 
 // ============================================
@@ -329,9 +272,7 @@ export async function deleteCustomerFn(
 export async function createCustomerLocationFn(
   data: z.infer<typeof createCustomerLocationSchema>
 ): Promise<ActionResult<CustomerLocation>> {
-  try {
-    const ctx = await requireOrgContext();
-
+  return withAction(async (ctx) => {
     const validated = createCustomerLocationSchema.parse(data);
 
     const location = await createCustomerLocation(ctx, {
@@ -353,23 +294,11 @@ export async function createCustomerLocationFn(
       isDefault: validated.isDefault,
     });
 
-    return { success: true, data: location };
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return {
-        success: false,
-        error: formatZodActionError(error),
-      };
-    }
-    return {
-      success: false,
-      error: customerActionError(
-        error,
-        "Failed to create customer location",
-        "customer-location:create",
-      ),
-    };
-  }
+    return location;
+  }, {
+    fallbackMessage: "Failed to create customer location",
+    log: { message: LOG_MESSAGE, context: { op: "customer-location:create" } },
+  });
 }
 
 /**
@@ -406,7 +335,7 @@ export async function updateCustomerLocationFn(
     });
 
     return location;
-  }, { fallbackMessage: "Failed to update customer location", log: { message: "customer action failed", context: { op: "customer-location:update" } } });
+  }, { fallbackMessage: "Failed to update customer location", log: { message: LOG_MESSAGE, context: { op: "customer-location:update" } } });
 }
 
 /**
@@ -421,5 +350,5 @@ export async function deleteCustomerLocationFn(
     await deleteCustomerLocation(ctx, validated.locationId, validated.expectedVersion);
 
     return undefined;
-  }, { fallbackMessage: "Failed to delete customer location", log: { message: "customer action failed", context: { op: "customer-location:delete" } } });
+  }, { fallbackMessage: "Failed to delete customer location", log: { message: LOG_MESSAGE, context: { op: "customer-location:delete" } } });
 }
