@@ -149,7 +149,7 @@ function MemberBatchesCell({ summary }: { summary: RemovalListRow }) {
   );
 }
 
-function StatusCell({ summary }: { summary: RemovalListRow }) {
+export function StatusCell({ summary }: { summary: RemovalListRow }) {
   const status = deriveRemovalWorkflowStatus({
     local: summary.local,
     lockInFlight: summary.lockInFlight,
@@ -157,7 +157,7 @@ function StatusCell({ summary }: { summary: RemovalListRow }) {
     enrichmentStatus: summary.enrichmentStatus,
     readiness: summary.readiness,
   });
-  const firstReason = status.reasons[0];
+  const firstReason = status.reasons[0]?.split("\n")[0];
   const remainingReasonCount = status.reasons.length - 1;
 
   return (

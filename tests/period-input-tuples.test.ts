@@ -14,6 +14,7 @@
 //      from a merge or refactor surfaces immediately.
 
 import { describe, expect, it } from "vitest";
+import { allowsPeriodInputStub } from "@/lib/isometric/datapoint-mapping";
 import { SafeError } from "@/lib/errors";
 import type { components } from "@/lib/isometric/generated/certify";
 import {
@@ -323,4 +324,13 @@ describe("MAPPING_REVISION", () => {
     expect(MAPPING_REVISION).toBe(payloadHash(MAPPING_REVISION_INPUT));
     expect(MAPPING_REVISION).not.toBe(payloadHash(INPUT_MAPPING));
   });
+});
+
+it.each([
+  ["sandbox", true],
+  ["production", false],
+  ["unknown", false],
+  [undefined, false],
+] as const)("allows period-input stubs only in sandbox (%s)", (environment, expected) => {
+  expect(allowsPeriodInputStub(environment)).toBe(expected);
 });

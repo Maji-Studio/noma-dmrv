@@ -10,6 +10,7 @@
  * and where it is fixed. Pure and client-safe: derives only from the
  * facility-certifier facts the server already loads.
  */
+import type { UnbindableTemplateInput } from "@/lib/isometric/template-binding-coverage";
 
 import {
   CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR,
@@ -21,7 +22,8 @@ export type FacilitySetupGap =
   | { kind: "credentials" }
   | { kind: "default_template" }
   | { kind: "template_resolution"; templateId: string }
-  | { kind: "blueprint_keys"; keys: string[] };
+  | { kind: "blueprint_keys"; keys: string[] }
+  | { kind: "template_unbindable"; inputs: UnbindableTemplateInput[] };
 
 export interface FacilitySetupGapFacts {
   hasOrgCredentials: boolean;
@@ -32,6 +34,7 @@ export interface FacilitySetupGapFacts {
   /** Set when a configured default template id no longer resolves remotely. */
   missingDefaultTemplateId: string | null;
   unresolvedBlueprintKeys: string[];
+  unbindableTemplateInputs: UnbindableTemplateInput[];
 }
 
 const BLUEPRINT_OPERATOR_LABELS: Record<string, string> = {
@@ -78,6 +81,9 @@ export function deriveFacilitySetupGaps(
   if (!facts.defaultTemplate) return [{ kind: "default_template" }];
   if (facts.unresolvedBlueprintKeys.length > 0) {
     return [{ kind: "blueprint_keys", keys: facts.unresolvedBlueprintKeys }];
+  }
+  if (facts.unbindableTemplateInputs.length > 0) {
+    return [{ kind: "template_unbindable", inputs: facts.unbindableTemplateInputs }];
   }
   return [];
 }

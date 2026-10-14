@@ -1,3 +1,4 @@
+import { findUnbindableTemplateInputs, formatUnbindableTemplateInputsText } from "@/lib/isometric/template-binding-coverage";
 import type { OrgContext } from "@/lib/auth/server";
 import { env } from "@/config/env";
 import { appliedBiocharFraction } from "@/lib/certification/mass-accounting";
@@ -253,6 +254,16 @@ export async function compileRemovalSubmission(
     allowPendingSources?: boolean;
   },
 ): Promise<CompiledRemovalSubmission> {
+  const unbindable = findUnbindableTemplateInputs(args.prepared.defaultTemplate, { allowPeriodInputStub: args.prepared.allowPeriodInputStub });
+  if (unbindable.length > 0) {
+    return {
+      review: emptyReview(args.prepared.defaultTemplate),
+      transportPlan: null,
+      blockers: [formatUnbindableTemplateInputsText(unbindable)],
+      warnings: [...(args.ctx.submissionWarnings ?? [])],
+      snapshot: null,
+    };
+  }
   if (
     args.ctx.entityReadinessGaps?.length === 0 &&
     !hasSupportedSequestrationComponent(args.prepared.defaultTemplate)

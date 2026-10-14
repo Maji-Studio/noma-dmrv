@@ -663,3 +663,16 @@ Three failure-path gaps, each a surprising mode before a registry write:
   soft/derived gate, so impact is grouping a briefly-regressed batch. **Fix:**
   either re-assert `state === "ready"` inside `createRemovalWithCreditBatches`
   after acquiring locks, or document health as a point-in-time advisory.
+
+### Early template coverage does not validate all builder metadata (`isometric/template-binding-metadata`)
+
+- **Anchor**: `src/lib/isometric/template-binding-coverage.ts:findUnbindableTemplateInputs`.
+- **Known late failures**: quantity-kind or compatible-unit mismatch against the
+  blueprint, a monitored input absent from its blueprint, and a fixed input with
+  no bound Datapoint ID still fail in the builder rather than early coverage.
+- **Current handling**: the builder remains fail-closed. Facility facts have
+  `blueprintsForTemplate`, but coverage is also called from preparation and
+  compilation. Sharing the builder's metadata validation across all three paths
+  needs a separate extraction and consistent blueprint handling.
+- **To resolve**: extract that validation, pass resolved blueprints through every
+  coverage caller, and test each refusal before registry writes.

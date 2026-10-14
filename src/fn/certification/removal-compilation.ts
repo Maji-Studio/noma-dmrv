@@ -77,7 +77,7 @@ export async function loadRemovalCompilation(
         batchPreviews.flatMap((preview) => preview?.missingInputs ?? []),
       ),
     ];
-    const blockers = [...preparationBlockers, ...compiled.blockers];
+    const blockers = [...new Set([...preparationBlockers, ...compiled.blockers])];
 
     return {
       review: compiled.review,

@@ -168,6 +168,7 @@ describe("enrichWithTransportLegs", () => {
       mapping: {},
       defaultTemplate: {},
       missingDefaultTemplateId: null,
+      unbindableTemplateInputs: [],
       unresolvedBlueprintKeys: [],
       hasSubmittableRuns: true,
       supportingDocuments: { total: 0, mirrored: 0 },
@@ -210,6 +211,7 @@ describe("enrichWithTransportLegs", () => {
       mapping: {},
       defaultTemplate: {},
       missingDefaultTemplateId: null,
+      unbindableTemplateInputs: [],
       unresolvedBlueprintKeys: [],
       hasSubmittableRuns: true,
       supportingDocuments: { total: 0, mirrored: 0 },
@@ -244,6 +246,7 @@ describe("enrichWithTransportLegs", () => {
     const checks = buildRemovalRequirementsChecklist({
       local: null, lockInFlight: false, missingDefaultTemplateId: null,
       hasMapping: true, hasOrgCredentials: true, hasDefaultTemplate: true,
+      unbindableTemplateInputs: [],
       unresolvedBlueprintKeys: [], feedstockTypeMappingGaps: [], hasSubmittableRuns: true,
       requiredTransport: [{ category: "biochar", count: 1, aggregationWarning: warning }],
     });

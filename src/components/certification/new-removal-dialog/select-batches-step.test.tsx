@@ -1,3 +1,5 @@
+import { unsupportedTemplate } from "../../../../tests/fixtures/isometric/unsupported-template";
+import { findUnbindableTemplateInputs, formatUnbindableTemplateInputs } from "@/lib/isometric/template-binding-coverage";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import type { SelectableBatch } from "@/fn/certification";
@@ -131,4 +133,15 @@ describe("setupGapCopy", () => {
     expect(copy.message).not.toContain("biochar_sequestration_1000_year");
     expect(copy.action?.label).toBe("Review certification settings");
   });
+});
+
+it("renders the unbindable component guidance and settings action", () => {
+  const inputs = findUnbindableTemplateInputs(unsupportedTemplate());
+  const html = renderToStaticMarkup(<SelectBatchesStep batches={[]} facilitySetupGaps={[{ kind: "template_unbindable", inputs }]} facilityId="facility-1" selectedIds={new Set()} onToggle={() => {}} isLoading={false} isError={false} />);
+  const { lead, lines } = formatUnbindableTemplateInputs(inputs);
+  expect(html).toContain(lead);
+  expect(html).toContain('<ul class="list-disc pl-16">');
+  for (const line of lines) expect(html).toContain(`<li>${line}</li>`);
+  expect(html).not.toContain('class="whitespace-pre-line"');
+  expect(html).toContain("Review certification settings");
 });

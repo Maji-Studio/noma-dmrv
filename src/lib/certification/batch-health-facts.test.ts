@@ -33,6 +33,7 @@ describe("toBatchHealthFacts", () => {
       mapping: {},
       defaultTemplate: {},
       missingDefaultTemplateId: null,
+      unbindableTemplateInputs: [],
       unresolvedBlueprintKeys: [],
       requiredTransportCategories: [],
       transportCoverage: {
@@ -94,6 +95,7 @@ describe("toBatchHealthFacts", () => {
       mapping: {},
       defaultTemplate: {},
       missingDefaultTemplateId: null,
+      unbindableTemplateInputs: [],
       unresolvedBlueprintKeys: [],
       requiredTransportCategories: [],
       transportCoverage: {
@@ -143,6 +145,7 @@ describe("toBatchHealthFacts", () => {
       mapping: {},
       defaultTemplate: {},
       missingDefaultTemplateId: null,
+      unbindableTemplateInputs: [],
       unresolvedBlueprintKeys: [],
       requiredTransportCategories: [],
       transportCoverage: {
@@ -182,6 +185,7 @@ describe("toBatchHealthFacts", () => {
       mapping: null,
       defaultTemplate: null,
       missingDefaultTemplateId: null,
+      unbindableTemplateInputs: [],
       unresolvedBlueprintKeys: [],
       requiredTransportCategories: [],
       transportCoverage: {
@@ -212,6 +216,7 @@ describe("toBatchHealthFacts", () => {
       mapping: {},
       defaultTemplate: {},
       missingDefaultTemplateId: null,
+      unbindableTemplateInputs: [],
       unresolvedBlueprintKeys: [],
       hasSubmittableRuns: true,
       productionReadinessGap: null,

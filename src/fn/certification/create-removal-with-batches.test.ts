@@ -1,3 +1,5 @@
+import { unsupportedTemplate } from "../../../tests/fixtures/isometric/unsupported-template";
+import { findUnbindableTemplateInputs } from "@/lib/isometric/template-binding-coverage";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createRemovalWithBatchesAction } from "./create-removal-with-batches";
 
@@ -50,8 +52,21 @@ describe("createRemovalWithBatchesAction", () => {
       mapping: null,
       defaultTemplate: null,
       missingDefaultTemplateId: null,
+      unbindableTemplateInputs: [],
       unresolvedBlueprintKeys: [],
     });
+  });
+
+  it("rejects unbindable templates before grouping batches", async () => {
+    mocks.loadFacilityCertifierFacts.mockResolvedValue({
+      hasOrgCredentials: true, mapping: {}, defaultTemplate: unsupportedTemplate(),
+      missingDefaultTemplateId: null, unresolvedBlueprintKeys: [],
+      unbindableTemplateInputs: findUnbindableTemplateInputs(unsupportedTemplate()),
+    });
+    const result = await createRemovalWithBatchesAction({ facilityId: FACILITY_ID, creditBatchIds: [CREDIT_BATCH_ID] });
+    expect(result.success).toBe(false);
+    expect(mocks.buildCreditBatchContexts).not.toHaveBeenCalled();
+    expect(mocks.createRemovalWithCreditBatches).not.toHaveBeenCalled();
   });
 
   it("rejects incomplete facility setup before grouping any batches", async () => {

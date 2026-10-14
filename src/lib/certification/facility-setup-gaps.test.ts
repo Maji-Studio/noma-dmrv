@@ -1,3 +1,5 @@
+import { unsupportedTemplate } from "../../../tests/fixtures/isometric/unsupported-template";
+import { findUnbindableTemplateInputs } from "@/lib/isometric/template-binding-coverage";
 import { describe, expect, it } from "vitest";
 import {
   deriveFacilitySetupGaps,
@@ -10,6 +12,7 @@ const COMPLETE = {
   mapping: { id: "map_1" },
   defaultTemplate: { id: "rvt_1" },
   missingDefaultTemplateId: null,
+  unbindableTemplateInputs: [],
   unresolvedBlueprintKeys: [] as string[],
 };
 
@@ -92,4 +95,9 @@ describe("facilityBlueprintLabel", () => {
       "future blueprint key",
     );
   });
+});
+
+it("reports unbindable inputs after blueprint resolution", () => {
+  const inputs = findUnbindableTemplateInputs(unsupportedTemplate());
+  expect(deriveFacilitySetupGaps({ ...COMPLETE, unbindableTemplateInputs: inputs })).toEqual([{ kind: "template_unbindable", inputs }]);
 });

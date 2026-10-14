@@ -1,13 +1,15 @@
+import {
+  SEQUESTRATION_COMPONENT_INPUT_BINDINGS,
+  getSequestrationInputBinding,
+  hasExplicitSequestrationBinding,
+} from "../sequestration-input-bindings";
 import { SafeError } from "@/lib/errors";
 import { MINIMUM_REPLICATES_PER_BATCH } from "@/lib/calculations/biochar-eligibility";
 import type { components } from "../generated/certify";
 import { buildRemovalSupplierRef } from "../utils/supplier-ref";
 import { encodeMeasurementProperty } from "../utils/measurement-property";
-import { ownValue } from "../semantic-binding-catalog";
 import {
   lookupMeasurementSampleTransform,
-  projectSequestrationInputBindings,
-  type SequestrationBindingTable,
   type SequestrationInputBinding,
 } from "../semantic-binding-projections";
 import {
@@ -16,6 +18,12 @@ import {
   isSequestrationBlueprintFamily,
   LEGACY_SEQUESTRATION_BLUEPRINT_KEY,
 } from "../storage-blueprints";
+
+export {
+  SEQUESTRATION_COMPONENT_INPUT_BINDINGS,
+  getSequestrationInputBinding,
+  hasExplicitSequestrationBinding,
+} from "../sequestration-input-bindings";
 
 export type { SequestrationInputBinding };
 
@@ -59,21 +67,6 @@ export interface DirectSequestrationDatapoint {
 }
 
 /**
- * Explicit component-input bindings for the storage components noma submits:
- * a projection of the semantic binding catalog's measurement-sample roles.
- * Each input declares whether the GHG entry consumes a datapoint returned by a
- * measurement sample or a direct datapoint posted by the removal orchestrator.
- */
-export const SEQUESTRATION_COMPONENT_INPUT_BINDINGS: SequestrationBindingTable =
-  projectSequestrationInputBindings();
-
-export function hasExplicitSequestrationBinding(
-  blueprintKey: string,
-): boolean {
-  return ownValue(SEQUESTRATION_COMPONENT_INPUT_BINDINGS, blueprintKey) !== undefined;
-}
-
-/**
  * Configuration-time guard for newly selected templates. Historical snapshots
  * remain readable, but operators cannot bind a deprecated or unsupported
  * Method-B 1,000-year component as the facility default.
@@ -96,14 +89,6 @@ export function assertSequestrationTemplateSelectable(
       );
     }
   }
-}
-
-export function getSequestrationInputBinding(
-  blueprintKey: string,
-  inputKey: string,
-): SequestrationInputBinding | null {
-  const blueprintBinding = ownValue(SEQUESTRATION_COMPONENT_INPUT_BINDINGS, blueprintKey);
-  return (blueprintBinding && ownValue(blueprintBinding.inputs, inputKey)) ?? null;
 }
 
 /** Applies the transform the active binding declares. */

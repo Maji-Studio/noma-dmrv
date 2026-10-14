@@ -1,3 +1,7 @@
+import production from "../../../tests/fixtures/isometric/production-template-2026-07-03.json";
+import type { components as RegistryComponents } from "@/lib/isometric/generated/certify";
+import { unsupportedTemplate } from "../../../tests/fixtures/isometric/unsupported-template";
+import { findUnbindableTemplateInputs, formatUnbindableTemplateInputsText } from "@/lib/isometric/template-binding-coverage";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { RemovalSubmissionContext } from "./certify-context-core";
 
@@ -29,7 +33,7 @@ function template(
     credit_type: "REMOVAL",
     groups: [
       {
-        components: [{ id: "cmp-1", blueprint_key: "electricity_grid" }],
+        components: [{ id: "cmp-1", blueprint_key: "electricity_grid", inputs: [] }],
       },
     ],
     ...overrides,
@@ -57,6 +61,13 @@ function codes(input: PreparationInput) {
 describe("prepareRemovalSubmission", () => {
   beforeEach(() => {
     flags.durabilityEnabled = true;
+  });
+
+  it("prioritizes template type and blueprint resolution before coverage", () => {
+    const defaultTemplate = unsupportedTemplate();
+    defaultTemplate.credit_type = "REDUCTION";
+    expect(codes(context({ defaultTemplate, unresolvedBlueprintKeys: ["retired"] })).slice(0, 3))
+      .toEqual(["notRemovalTemplate", "templateOutOfDate", "templateUnbindable"]);
   });
 
   it("returns the bundle every build and compile takes", () => {
@@ -134,7 +145,7 @@ describe("prepareRemovalSubmission", () => {
   it("blocks durability templates while measurement samples are unavailable", () => {
     const durabilityTemplate = template({
       groups: [
-        { components: [{ id: "cmp-seq", blueprint_key: SEQUESTRATION_KEY }] },
+        { components: [{ id: "cmp-seq", blueprint_key: SEQUESTRATION_KEY, inputs: [] }] },
       ],
     } as never);
     expect(
@@ -169,4 +180,20 @@ describe("requirePreparedRemovalSubmission", () => {
       "prj-1",
     );
   });
+});
+
+it.each([unsupportedTemplate(), production as RegistryComponents["schemas"]["GhgEntryTemplate"]])("blocks preparation with component names and repair guidance", (defaultTemplate) => {
+  expect(prepareRemovalSubmission(context({ defaultTemplate }), { isometricEnvironment: "production" }).blockers).toContainEqual({
+    code: "templateUnbindable", message: formatUnbindableTemplateInputsText(findUnbindableTemplateInputs(defaultTemplate)),
+  });
+});
+
+it("preserves sandbox stubs without hiding production project-scope blockers", () => {
+  const defaultTemplate = production as RegistryComponents["schemas"]["GhgEntryTemplate"];
+  const result = prepareRemovalSubmission(context({ defaultTemplate }), { isometricEnvironment: "sandbox" });
+  const findings = findUnbindableTemplateInputs(defaultTemplate, { allowPeriodInputStub: true });
+  expect(findings).toHaveLength(4);
+  expect(result.prepared?.allowPeriodInputStub).toBe(true);
+  expect(result.blockers).toContainEqual({ code: "templateUnbindable", message: formatUnbindableTemplateInputsText(findings) });
+  expect(result.blockers.some((blocker) => blocker.message.includes("project level"))).toBe(false);
 });
