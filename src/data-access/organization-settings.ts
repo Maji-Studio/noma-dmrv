@@ -8,7 +8,7 @@
  * defaults that every member's forms need.
  */
 import { eq } from "drizzle-orm";
-import { db } from "@/db";
+import { db, type DbTransaction } from "@/db";
 import { organizationSettings } from "@/db/schema/settings";
 import {
   DEFAULT_ORGANIZATION_SETTINGS,
@@ -22,9 +22,10 @@ export type { OrganizationDefaults };
 
 export async function getOrganizationDefaults(
   ctx: OrgContext,
+  executor: Pick<DbTransaction, "select"> = db,
 ): Promise<OrganizationDefaults> {
   requireOrgScope(ctx);
-  const [row] = await db
+  const [row] = await executor
     .select({
       defaultCountry: organizationSettings.defaultCountry,
       defaultTimezone: organizationSettings.defaultTimezone,

@@ -33,9 +33,10 @@ components (UI)
   The action shape is `withAction((ctx) => runOperationInProcess(op, ctx, input))`.
   `src/lib/operations/registry.ts` is the explicit allowlist of exposed
   operations; its keys match operation ids. Feedstock, production-run, biochar-product and
-  output-stock movement and lab sample writes use this layer (`make_biochar_product`,
+  output-stock movement, lab sample and order writes use this layer (`make_biochar_product`,
   `update_biochar_product`, `record_output_stock_movement`, `record_lab_sample`,
-  `update_lab_sample`, `delete_lab_sample`). UI product deletes
+  `update_lab_sample`, `delete_lab_sample`, `record_order`, `update_order`,
+  `delete_order`). UI product deletes
   stay off the runner. Lost mass form edits run `record_output_stock_movement`
   with the unpublished `requireLatestCorrection` option. Delivery updates run
   the UI-only `update_posted_delivery` operation: the delivery row, stock
@@ -806,6 +807,41 @@ name search and coordinates in decimal degrees. Its cursor also binds the
 supplier ID; a missing or foreign supplier returns 404, including when it has
 no locations. Supplier locations have no code or archive column.
 
+### Customers and orders on REST and MCP
+
+`GET /api/v1/customers`, `/{idOrCode}` and `/{idOrCode}/locations` use
+`customers:read`. Customer representations exclude email, phone and address;
+locations include coordinates and one-way distance. Orders expose list and
+id-or-code reads under `orders:read`. Both read scopes are on by default.
+Storage locations expose `formulationId` at representation revision 3 and
+accept `type` and `formulationId` list filters.
+
+`src/lib/operations/orders.ts` shares create, update and delete between app
+actions and REST/MCP. `POST /api/v1/orders` and `PATCH /api/v1/orders/{id}`
+need opt-in `orders:write`; DELETE needs the separate `orders:delete`, off by
+default. PATCH and DELETE take UUIDs and `If-Match`. Packaging defaults from
+organization settings inside the transaction after replay. Order writes lock
+topology, sorted facilities, a supplied formulation, the order and lineage,
+then key-share locks on the customer and location,
+skipping locks they do not need. Code generation holds topology. Delete takes
+topology, order and lineage. Archive refusals are 404 `not_found`; an archived
+order without deliveries can still be deleted. Storage deletion drains after
+commit, never on dry runs.
+
+The order body contains stored fields only. `GET /api/v1/orders/{idOrCode}/balance`
+and `get_order_balance` use one repeatable-read snapshot for ordered, delivered
+and remaining wet kilograms and fulfillment status. Archived orders include
+archived deliveries. Remaining mass rounds down to the gram and clamps at zero.
+The REST ETag hashes the body and representation revision. Delivery writes do
+not bump the order version, and orders reserve no stock.
+
+MCP exposes `find_customers`, `find_customer_locations`, `find_orders`,
+`get_order`, `get_order_balance`, `record_order`, `update_order` and
+`delete_order`. Reads share REST readers; writes share its operations and
+idempotency records. Update and delete require `expectedVersion`. Committed
+MCP deletion returns `{ deleted: { id, code } }`; dry runs return the order
+that would be deleted.
+
 ### Output-bin stock read
 
 `GET /api/v1/storage-locations/{idOrCode}/stock` and MCP `get_bin_stock`
@@ -844,7 +880,7 @@ serialization is cached lazily per module instance; the agent guide is a
 module-level string. Each origin response carries a fresh `X-Request-Id`. The short
 agent guide covers discovery, units, local business dates and safe retry behavior.
 The rendered reference remains deferred in
-[open-questions.md](./open-questions.md).
+[Architecture open questions](./open-questions-architecture.md#rendered-api-reference-apirendered-reference-opened-2026-10-08).
 
 Run `pnpm openapi:generate` after a contract change and include `openapi/v1.json`
 in its PR. The colocated generator test compares the exact stable, pretty-printed

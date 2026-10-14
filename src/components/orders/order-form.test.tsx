@@ -103,6 +103,55 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("OrderForm product details", () => {
+  it("requires an empty quantity and submits a typed quantity as a number", async () => {
+    const submit = vi.fn();
+    const client = new QueryClient();
+    render(<QueryClientProvider client={client}>
+      <OrderForm order={{
+        id: "order-1", facilityId: "22222222-2222-4222-8222-222222222222",
+        customerId: "33333333-3333-4333-8333-333333333333", customerLocationId: null,
+        formulationId: "44444444-4444-4444-8444-444444444444",
+        orderDate: new Date("2026-09-01T00:00:00Z"), quantityKg: 1000, packaging: "loose",
+      } as Order} onSubmit={submit} />
+    </QueryClientProvider>);
+    const quantity = screen.getByRole("spinbutton", { name: /^Requested wet mass/ });
+    fireEvent.change(quantity, { target: { value: "" } });
+    fireEvent.submit(quantity.closest("form")!);
+    await screen.findByText("Quantity is required");
+    expect(submit).not.toHaveBeenCalled();
+
+    fireEvent.change(quantity, { target: { value: "12.125" } });
+    fireEvent.submit(quantity.closest("form")!);
+    await waitFor(() => expect(submit).toHaveBeenCalledWith(expect.objectContaining({ quantityKg: 12.125 })));
+    expect(screen.queryByText("Quantity is required")).toBeNull();
+    client.clear();
+  });
+
+  it("keeps the saved business day when the browser is west of UTC and submits a decoded Date", async () => {
+    const originalTimezone = process.env.TZ;
+    const client = new QueryClient();
+    try {
+      process.env.TZ = "America/Los_Angeles";
+      const submit = vi.fn();
+      render(<QueryClientProvider client={client}>
+        <OrderForm order={{
+          id: "order-1", facilityId: "22222222-2222-4222-8222-222222222222",
+          customerId: "33333333-3333-4333-8333-333333333333", customerLocationId: null,
+          formulationId: "44444444-4444-4444-8444-444444444444",
+          orderDate: new Date("2026-09-01T00:00:00Z"), quantityKg: 1000, packaging: "loose",
+        } as Order} onSubmit={submit} />
+      </QueryClientProvider>);
+      const date = screen.getByLabelText(/^Order date/) as HTMLInputElement;
+      expect(date.value).toBe("2026-09-01");
+      fireEvent.submit(date.closest("form")!);
+      await waitFor(() => expect(submit).toHaveBeenCalledWith(expect.objectContaining({ orderDate: new Date("2026-09-01T00:00:00Z") })));
+    } finally {
+      if (originalTimezone === undefined) delete process.env.TZ;
+      else process.env.TZ = originalTimezone;
+      client.clear();
+    }
+  });
+
   it("collects no price or currency", () => {
     const html = renderForm();
 

@@ -9,6 +9,10 @@ import { writeTools as allWriteTools } from "./write-tools";
 
 const writeTools = allWriteTools.filter((tool) => tool.scope.startsWith("feedstocks:"));
 
+vi.mock("@/data-access/orders", () => ({}));
+vi.mock("@/data-access/organization-settings", () => ({}));
+vi.mock("@/data-access/transport-legs", () => ({}));
+vi.mock("@/lib/read-models/api-orders", () => ({ readApiOrder: vi.fn() }));
 vi.mock("@/data-access/samples", () => ({}));
 vi.mock("@/lib/read-models/api-lab-samples", () => ({ readApiLabSample: vi.fn(), readApiLabSampleList: vi.fn() }));
 vi.mock("@/lib/read-models/api-credit-batches", () => ({ readApiCreditBatch: vi.fn(), readApiCreditBatchList: vi.fn() }));
@@ -134,4 +138,10 @@ it.each(writeTools.slice(1))("validates the required expectedVersion for $name",
     code: "validation_failed", issues: [{ path: ["expectedVersion"] }],
   });
   expect(mocks.run).not.toHaveBeenCalled();
+});
+
+it("includes order writes under the existing write inventory", () => {
+  expect(allWriteTools.filter((tool) => tool.scope.startsWith("orders:")).map((tool) => [tool.name, tool.scope])).toEqual([
+    ["record_order", "orders:write"], ["update_order", "orders:write"], ["delete_order", "orders:delete"],
+  ]);
 });

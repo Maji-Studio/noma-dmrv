@@ -4,8 +4,7 @@
  */
 "use client";
 
-import { formatLocalDate } from "@/lib/date-utils";
-import { numericValue } from "@/lib/form-utils";
+import { toDateInputValue } from "@/lib/date-utils";
 
 import { FormActions, FormEntitySelect, FormField, FormInput, FormSection, FormSpine } from "@/components/forms";
 import { FormSelect } from "@/components/forms/form-select";
@@ -104,9 +103,7 @@ export function OrderForm({
       customerId: order?.customerId ?? "",
       customerLocationId: order?.customerLocationId ?? "",
       formulationId: order?.formulationId ?? "",
-      orderDate: order?.orderDate
-        ? formatLocalDate(new Date(order.orderDate))
-        : formatLocalDate(new Date()),
+      orderDate: toDateInputValue(order?.orderDate),
       quantityKg: order?.quantityKg ?? undefined,
       packaging:
         (order?.packaging as PackagingType) ?? orgDefaults.defaultPackaging,
@@ -269,9 +266,7 @@ export function OrderForm({
               placeholder="e.g., 1000"
               disabled={isSubmitting}
               error={!!errors.quantityKg}
-              {...register("quantityKg", {
-                setValueAs: numericValue,
-              })}
+              {...register("quantityKg")}
             />
           </FormField>
         </div>

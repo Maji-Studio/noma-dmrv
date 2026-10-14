@@ -1,3 +1,5 @@
+import { customerLocationRepresentationSchema } from "@/lib/representations/customer-locations";
+import { orderBalanceRepresentationSchema } from "@/lib/representations/order-balance";
 import { createProductionRunInput, updateProductionRunInput } from "@/schemas/production-run-input";
 import { productionRunRepresentationSchema } from "@/lib/representations/production-runs";
 import { PRODUCTION_RUN_GUIDANCE } from "@/lib/operations/agent-guidance";
@@ -12,7 +14,7 @@ import { createFeedstockSchema, updateFeedstockSchema } from "@/schemas/feedstoc
 import type { JsonSchema } from "@/lib/operations/json-schema";
 import { problemSchema } from "../problem-schema";
 import { mutationQuerySchema } from "../query";
-import { facilityLookupGetSchema, outputStockMovementListSchema, supplierLocationListSchema } from "../query-schemas";
+import { customerLocationListSchema, facilityLookupGetSchema, outputStockMovementListSchema, supplierLocationListSchema } from "../query-schemas";
 import { outputStockMovementRepresentationSchema } from "@/lib/representations/output-stock-movements";
 import { outputBinStockRepresentationSchema } from "@/lib/representations/output-bin-stock";
 import { supplierLocationRepresentationSchema } from "@/lib/representations/supplier-locations";
@@ -22,8 +24,14 @@ import { itemEnvelopeSchema, stockWriteEnvelopeSchema, listEnvelopeSchema, feeds
 import { resources } from "./resources";
 import { operationInput, privateOperation, requestBody, type Paths } from "./operation-kit";
 import { addBiocharWritePaths } from "./biochar-writes";
+import { addOrderWritePaths } from "./order-writes";
 import { addLabSampleWritePaths } from "./lab-sample-writes";
-import { outputSchema, queryParameters, targetParameter, idempotencyParameter, ifMatchParameter, privateHeaders, requestIdHeader, etagHeader, stockEtagHeader, writeHeaders, locationHeader, problemResponses, jsonResponse, headerComponents, problemResponseComponents } from "./transport";
+import { outputSchema, queryParameters, targetParameter, idempotencyParameter, ifMatchParameter, privateHeaders, requestIdHeader, etagHeader, stockEtagHeader, orderBalanceEtagHeader, writeHeaders, locationHeader, problemResponses, jsonResponse, headerComponents, problemResponseComponents } from "./transport";
+
+const resourceReadDescriptions: Partial<Record<(typeof resources)[number]["path"], { list: string; get: string }>> = {
+  orders: { list: `${readDescriptions.list} ${readDescriptions.orders}`, get: readDescriptions.orders },
+  customers: { list: `${readDescriptions.list} ${readDescriptions.customers}`, get: readDescriptions.customers },
+};
 
 const READ_ERRORS = [400, 401, 403, 429, 500];
 const WRITE_ERRORS = [400, 401, 403, 404, 409, 422, 429, 500, 503];
@@ -35,6 +43,8 @@ export function buildOpenApiDocument() {
   const paths: Paths = {};
   const published = resources;
   const representations: Record<string, z.ZodType> = Object.fromEntries(published.map((resource) => [resource.singular, resource.schema]));
+  representations.customer_location = customerLocationRepresentationSchema;
+  representations.order_balance = orderBalanceRepresentationSchema;
   representations.supplier_location = supplierLocationRepresentationSchema;
   representations.output_stock_movement = outputStockMovementRepresentationSchema;
   representations.output_bin_stock = outputBinStockRepresentationSchema;
@@ -80,22 +90,40 @@ export function buildOpenApiDocument() {
   responses.LabSampleProblem412 = { ...responses.Problem412,
     content: { "application/problem+json": { schema: { $ref: "#/components/schemas/LabSamplePreconditionProblem" } } },
   };
+  schemas.OrderPreconditionProblem = {
+    allOf: [{ $ref: "#/components/schemas/Problem" }, { type: "object", properties: {
+      current: { $ref: "#/components/schemas/order", description: "Current order after a failed version precondition." },
+    }, required: ["current"] }],
+  };
+  responses.OrderProblem412 = { ...responses.Problem412,
+    content: { "application/problem+json": { schema: { $ref: "#/components/schemas/OrderPreconditionProblem" } } },
+  };
   const runPreconditionResponse = { "412": { $ref: "#/components/responses/ProductionRunProblem412" } };
   const feedstockPreconditionResponse = { "412": { $ref: "#/components/responses/FeedstockProblem412" } };
   for (const resource of published) {
     paths[`/${resource.path}`] = { get: privateOperation(
       `find_${resource.path.replaceAll("-", "_")}`, resource.scope,
-      readDescriptions.list,
+      resourceReadDescriptions[resource.path]?.list ?? readDescriptions.list,
       { ...problemResponses("facilityId" in resource.queries.list.shape ? [...READ_ERRORS, 404] : READ_ERRORS),
         "200": jsonResponse("Resource page.", publishOutput(listEnvelopeSchema(resource.schema))) },
       queryParameters(resource.queries.list),
     ) };
     paths[`/${resource.path}/{idOrCode}`] = { get: privateOperation(
-      `get_${resource.singular}`, resource.scope, readDescriptions.get,
+      `get_${resource.singular}`, resource.scope, resourceReadDescriptions[resource.path]?.get ?? readDescriptions.get,
       { ...problemResponses([...READ_ERRORS, 404]), "200": jsonResponse("Resource representation.", publishOutput(itemEnvelopeSchema(resource.schema)), etagHeader) },
       [targetParameter(), ...queryParameters(resource.queries.get)],
     ) };
   }
+  paths["/customers/{idOrCode}/locations"] = { get: privateOperation(
+    "find_customer_locations", "customers:read", readDescriptions.customerLocations,
+    { ...problemResponses([...READ_ERRORS, 404]), "200": jsonResponse("Customer location page.", publishOutput(listEnvelopeSchema(customerLocationRepresentationSchema))) },
+    [targetParameter(), ...queryParameters(customerLocationListSchema)],
+  ) };
+  paths["/orders/{idOrCode}/balance"] = { get: privateOperation(
+    "get_order_balance", "orders:read", readDescriptions.orderBalance,
+    { ...problemResponses([...READ_ERRORS, 404]), "200": jsonResponse("Order balance snapshot.", publishOutput(itemEnvelopeSchema(orderBalanceRepresentationSchema)), orderBalanceEtagHeader) },
+    [targetParameter()],
+  ) };
   paths["/suppliers/{idOrCode}/locations"] = { get: privateOperation(
     "find_supplier_locations", "suppliers:read", readDescriptions.supplierLocations,
     { ...problemResponses([...READ_ERRORS, 404]), "200": jsonResponse("Supplier location page.", publishOutput(listEnvelopeSchema(supplierLocationRepresentationSchema))) },
@@ -181,6 +209,7 @@ export function buildOpenApiDocument() {
 
   addBiocharWritePaths(paths, { publishOutput, writeErrors: WRITE_ERRORS });
   addLabSampleWritePaths(paths, { publishOutput, writeErrors: WRITE_ERRORS });
+  addOrderWritePaths(paths, { publishOutput, writeErrors: WRITE_ERRORS });
 
   for (const [path, operationId, mediaType, description] of [
     ["/openapi.json", "get_openapi_document", "application/json", "Public OpenAPI 3.1 contract."],
@@ -194,7 +223,7 @@ export function buildOpenApiDocument() {
   }
   return {
     openapi: "3.1.0",
-    info: { title: "noma data-entry API", version: API_VERSION, description: "Organization-scoped feedstock intake, production runs, biochar products, lab samples and read-only lookups, including formulations and output bin stock movement history. Business dates are facility-local YYYY-MM-DD; event times are sent as RFC 3339 with an explicit offset or as facility-local { date, time }, and returned as UTC instants. Additive changes remain in v1; breaking versions use v2 with Deprecation and Sunset headers. Unsupported methods on visible paths return Problem405 with Allow listing supported methods, including automatic HEAD and OPTIONS. Private refusals follow bearer authentication and path visibility checks; unknown or invisible paths return 404 without Allow. Public discovery paths need no credential. This response is a path-level refusal, not a response of a published operation." },
+    info: { title: "noma data-entry API", version: API_VERSION, description: "Organization-scoped feedstock intake, production runs, biochar products, lab samples, orders and balances, and read-only customer and destination lookups, including formulations and output bin stock movement history. Business dates are facility-local YYYY-MM-DD; event times are sent as RFC 3339 with an explicit offset or as facility-local { date, time }, and returned as UTC instants. Additive changes remain in v1; breaking versions use v2 with Deprecation and Sunset headers. Unsupported methods on visible paths return Problem405 with Allow listing supported methods, including automatic HEAD and OPTIONS. Private refusals follow bearer authentication and path visibility checks; unknown or invisible paths return 404 without Allow. Public discovery paths need no credential. This response is a path-level refusal, not a response of a published operation." },
     servers: [{ url: "/api/v1" }], security: [{ bearerAuth: [] }], paths,
     components: { securitySchemes: { bearerAuth: { type: "http", scheme: "bearer", bearerFormat: "API key", description: `Authorization: Bearer <key> only. Keys use ${API_KEY_LIVE_PREFIX} or ${API_KEY_TEST_PREFIX} prefixes and bind exactly one organization; cookies and x-api-key cannot authorize requests.` } }, schemas, headers: headerComponents, responses },
   };

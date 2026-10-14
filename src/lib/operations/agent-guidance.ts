@@ -26,3 +26,5 @@ export const LAB_SAMPLE_RATIOS = "The server always calculates H/C_org from tota
 export const LAB_SAMPLE_BATCHES = "A lab sample is one replicate of one credit batch, and a batch needs at least three replicates for certification. Resolve the batch with find_credit_batches. Archived batches are refused. A batch already in a certified output locks its samples.";
 export const LAB_SAMPLE_WARNINGS = "Warnings in the reply are advice on what a registry submission will still need. They never block the save; relay them to the user.";
 export const LAB_SAMPLE_GUIDANCE = `${LAB_SAMPLE_TIMES} ${LAB_SAMPLE_UNITS} ${LAB_SAMPLE_RATIOS} ${LAB_SAMPLE_BATCHES} ${LAB_SAMPLE_WARNINGS}`;
+
+export const ORDER_GUIDANCE = "Quantity is requested wet product kg as ordered, not a stock reservation. Packaging defaults to the organization setting when omitted on create. orderDate is a calendar date, YYYY-MM-DD. Customer, location, formulation and facility relationships freeze once any delivery exists.";

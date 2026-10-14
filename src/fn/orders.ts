@@ -6,19 +6,12 @@
  */
 
 import {
-  CODE_CONFLICT_MESSAGES,
-  withAutoCode,
-} from "@/data-access/code-generator";
-import {
-  createOrder,
-  deleteOrder,
   getOrders as getOrdersData,
   getOrdersForSelect as getOrdersForSelectData,
-  updateOrder,
   type PaginatedOrders,
 } from "@/data-access/orders";
 import { requireOrgFacility } from "@/data-access/utils";
-import { orders, type Order } from "@/db/schema";
+import { type Order } from "@/db/schema";
 import type { DistanceSourceValue } from "@/schemas/distance-source";
 import {
   createOrderSchema,
@@ -28,6 +21,8 @@ import {
 } from "@/schemas/orders";
 import type { ActionResult } from "@/types/actions";
 import { z } from "zod";
+import { recordOrder, updateOrder, deleteOrder } from "@/lib/operations/orders";
+import { runOperationInProcess } from "@/lib/operations/runner";
 import { withAction } from "./with-action";
 import { getOrderById } from "@/data-access/orders";
 import { uuidSchema } from "@/schemas/helpers";
@@ -102,25 +97,7 @@ export async function createOrderFn(
   return withAction(async (ctx) => {
     const validated = createOrderSchema.parse(data);
 
-    return withAutoCode(
-      ctx,
-      "OR",
-      orders,
-      orders.code,
-      undefined,
-      (code) =>
-        createOrder(ctx, {
-          code,
-          facilityId: validated.facilityId,
-          customerId: validated.customerId,
-          customerLocationId: validated.customerLocationId,
-          formulationId: validated.formulationId,
-          orderDate: validated.orderDate,
-          quantityKg: validated.quantityKg,
-          packaging: validated.packaging,
-        }),
-      CODE_CONFLICT_MESSAGES.order,
-    );
+    return runOperationInProcess(recordOrder, ctx, validated);
   }, { fallbackMessage: "Failed to create order" });
 }
 
@@ -137,17 +114,7 @@ export async function updateOrderFn(
   return withAction(async (ctx) => {
     const validated = updateOrderSchema.parse(data);
 
-    return updateOrder(ctx, validated.orderId, {
-      expectedVersion: validated.expectedVersion,
-      code: validated.code,
-      facilityId: validated.facilityId,
-      customerId: validated.customerId,
-      customerLocationId: validated.customerLocationId,
-      formulationId: validated.formulationId,
-      orderDate: validated.orderDate,
-      quantityKg: validated.quantityKg,
-      packaging: validated.packaging,
-    });
+    return runOperationInProcess(updateOrder, ctx, validated);
   }, { fallbackMessage: "Failed to update order" });
 }
 
@@ -163,7 +130,7 @@ export async function deleteOrderFn(
 ): Promise<ActionResult<void>> {
   return withAction(async (ctx) => {
     const validated = deleteOrderSchema.parse(data);
-    await deleteOrder(ctx, validated.orderId, validated.expectedVersion);
+    await runOperationInProcess(deleteOrder, ctx, validated);
   }, { fallbackMessage: "Failed to delete order" });
 }
 

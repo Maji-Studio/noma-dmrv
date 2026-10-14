@@ -8,11 +8,18 @@ import { DomainError } from "@/lib/domain-errors";
 import { buildOpenApiDocument } from "@/lib/api/openapi/document";
 import { GET, POST, DELETE } from "./route";
 import { mcpInstructions } from "@/lib/mcp/instructions";
-import { biocharStockGuide, domainGuide, labSampleGuide, llmsGuide } from "@/lib/api/llms-guide";
+import { biocharStockGuide, domainGuide, labSampleGuide, orderGuide, llmsGuide } from "@/lib/api/llms-guide";
 
 const MCP_INSTRUCTIONS_MAX_CHARS = 2000;
 
 const mocks = vi.hoisted(() => ({ resolve: vi.fn(), pre: vi.fn(), post: vi.fn(), me: vi.fn(), stock: vi.fn(), log: vi.fn(), env: { NODE_ENV: "production", NEXT_PUBLIC_APP_URL: "https://noma.example", API_WRITES_DISABLED: false } }));
+vi.mock("@/data-access/orders", () => ({}));
+vi.mock("@/data-access/organization-settings", () => ({}));
+vi.mock("@/data-access/transport-legs", () => ({}));
+vi.mock("@/lib/read-models/api-orders", () => ({ readApiOrder: vi.fn(), readApiOrderList: vi.fn() }));
+vi.mock("@/lib/read-models/api-customers", () => ({ readApiCustomer: vi.fn(), readApiCustomerList: vi.fn() }));
+vi.mock("@/lib/read-models/api-customer-locations", () => ({ readApiCustomerLocationList: vi.fn() }));
+vi.mock("@/lib/read-models/api-order-balance", () => ({ readApiOrderBalance: vi.fn() }));
 vi.mock("@/data-access/samples", () => ({}));
 vi.mock("@/lib/read-models/api-lab-samples", () => ({ readApiLabSample: vi.fn(), readApiLabSampleList: vi.fn() }));
 vi.mock("@/lib/read-models/api-credit-batches", () => ({ readApiCreditBatch: vi.fn(), readApiCreditBatchList: vi.fn() }));
@@ -75,6 +82,8 @@ it("returns the shared domain guidance during initialize", async () => {
   expect(result.instructions.length).toBeLessThan(MCP_INSTRUCTIONS_MAX_CHARS);
   expect(llmsGuide).toContain(biocharStockGuide);
   expect(llmsGuide).toContain(labSampleGuide);
+  expect(llmsGuide).toContain(orderGuide);
+  expect(result.instructions).not.toContain(orderGuide);
   expect(result.instructions).not.toContain(labSampleGuide);
   for (const guidance of ["4200 kg", "wet mass", "dry mass", "receiving bin", "moisture", "whoami", "requestKey", "dryRun", "expectedVersion", "retryable", "untrusted data"]) {
     expect(result.instructions.toLowerCase()).toContain(guidance.toLowerCase());
@@ -115,9 +124,9 @@ describe("authenticated MCP read route", () => {
     for (const [key, value] of Object.entries(rateHeaders)) expect(response.headers.get(key)).toBe(value);
     expect(response.headers.get("x-request-id")).toBeTruthy();
     const { result } = await body(response);
-    expect(result.tools).toHaveLength(33);
+    expect(result.tools).toHaveLength(41);
     expect(result.tools.find((tool: { name: string }) => tool.name === "get_bin_stock")).toMatchObject({ annotations: { readOnlyHint: true } });
-    expect(result.tools.filter((tool: { name: string }) => !["log_feedstock_delivery", "update_feedstock", "delete_feedstock", "start_production_run", "update_production_run", "delete_production_run", "make_biochar_product", "update_biochar_product", "record_output_stock_movement", "record_lab_sample", "update_lab_sample", "delete_lab_sample"].includes(tool.name)).every((tool: { annotations: { readOnlyHint: boolean } }) => tool.annotations.readOnlyHint)).toBe(true);
+    expect(result.tools.filter((tool: { name: string }) => !["log_feedstock_delivery", "update_feedstock", "delete_feedstock", "start_production_run", "update_production_run", "delete_production_run", "make_biochar_product", "update_biochar_product", "record_output_stock_movement", "record_lab_sample", "update_lab_sample", "delete_lab_sample", "record_order", "update_order", "delete_order"].includes(tool.name)).every((tool: { annotations: { readOnlyHint: boolean } }) => tool.annotations.readOnlyHint)).toBe(true);
     const find = result.tools.find((tool: { name: string }) => tool.name === "find_feedstocks");
     expect(find.inputSchema.additionalProperties).toBe(false);
     expect(find.inputSchema.properties.limit).toMatchObject({ type: "integer", minimum: 1, maximum: API_LIST_MAX_LIMIT,
@@ -281,7 +290,7 @@ it("publishes the same input fields and constraints as the matching OpenAPI para
   }
 });
 
-it.each(["log_feedstock_delivery", "update_feedstock", "delete_feedstock"])("charges %s and dry runs as writes", async (name) => {
+it.each(["log_feedstock_delivery", "update_feedstock", "delete_feedstock", "record_order", "update_order", "delete_order"])("charges %s and dry runs as writes", async (name) => {
   for (const dryRun of [false, true]) {
     expect(mcpRequestAccess((await mocks.resolve()).ctx, { method: "tools/call", params: { name, arguments: { dryRun } } })).toBe("write");
     await call(name, { dryRun });

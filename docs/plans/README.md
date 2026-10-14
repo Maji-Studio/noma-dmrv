@@ -26,4 +26,4 @@ Active plans:
 - [2026-09-16 Loading speed plan](./2026-09-16-loading-speed-plan.md), proposed, owner Kenji Nguyen. Finish PRs #761-#763, then region move, auth dedupe, dashboard query budget, shell streaming.
 - [2026-10-06 Data-entry API (REST + MCP)](./2026-10-06-data-entry-api.md), in progress, owner Kenji Nguyen. Phase 0 spike done (section 15); Phase 1 foundations next.
 
-The [simplification rollout plan](../archive/plans/2026-09-07-simplification-rollout-plan.md) is archived after A2/A3 shipped. Remaining decisions are in [open questions](../open-questions.md#simplification-rollout-follow-ups-simplificationremaining-decisions-opened-2026-10-14).
+The [simplification rollout plan](../archive/plans/2026-09-07-simplification-rollout-plan.md) is archived after A2/A3 shipped. Remaining decisions are in [open questions](../open-questions-architecture.md#simplification-rollout-follow-ups-simplificationremaining-decisions-opened-2026-10-14).
