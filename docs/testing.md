@@ -52,6 +52,15 @@ inside them, is **silently never run**. Put it in the right directory.
   `tests/visual/form-capture.spec.ts`. `tests/visual/site-capture.spec.ts`
   (`SITE_CAPTURE=1`) does the same for the marketing site's pages, with no sign-in.
 
+## Static check caches
+
+Static checks cache locally: `pnpm lint` uses content-based `.cache/eslint`,
+and `pnpm typecheck` uses `.cache/typecheck.tsbuildinfo`. Delete `.cache/` for
+a cold run. After adding, removing, or renaming route files, delete
+`.cache/eslint` before linting: `@next/next/no-html-link-for-pages` reads the
+route tree, which ESLint's per-file cache cannot detect. CI keys the cache on
+the tracked route-file paths as well as dependency and check configuration.
+
 ## vitest specs are not all unit tests
 
 Many root specs require a **running Postgres** (facilities-durability-guard,

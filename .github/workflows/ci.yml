@@ -43,6 +43,22 @@ jobs:
       - name: Documentation references
         run: pnpm docs:check
 
+      - name: Hash route file paths
+        id: lint-routes
+        # The Next link rule reads filenames; include paths so identical-content renames invalidate it too.
+        run: echo "hash=$(git ls-files -z -- app src/app pages src/pages | sha256sum | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+
+      # ESLint caches per file; type-aware or cross-file rules (projectService, import/no-cycle) need the cache dropped or key widened.
+      - name: Restore static check caches
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            .cache/eslint
+            .cache/typecheck.tsbuildinfo
+          key: ${{ runner.os }}-static-node22-v1-${{ hashFiles('pnpm-lock.yaml', 'package.json', 'eslint.config.*', 'tsconfig*.json', '.github/workflows/ci.yml') }}-${{ steps.lint-routes.outputs.hash }}-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-static-node22-v1-${{ hashFiles('pnpm-lock.yaml', 'package.json', 'eslint.config.*', 'tsconfig*.json', '.github/workflows/ci.yml') }}-${{ steps.lint-routes.outputs.hash }}-
+
       - name: Lint
         run: pnpm lint
 

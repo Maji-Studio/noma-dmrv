@@ -11,7 +11,7 @@
     "dev:manual": "next dev -p 3100",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint",
+    "lint": "eslint --cache --cache-strategy content --cache-location .cache/eslint",
     "docker:up": "docker compose up -d",
     "docker:down": "docker compose down",
     "docker:clean": "docker compose down -v",

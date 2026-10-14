@@ -579,6 +579,14 @@ writes and deletes a probe object, and its opt-in `repair_cors` dispatch updates
 bucket CORS settings) ·
 `claude.yml` and `.coderabbit.yaml` (AI review).
 
+`ci.yml` restores ESLint's content cache (`.cache/eslint`) and TypeScript's
+incremental state (`.cache/typecheck.tsbuildinfo`). Cache keys include OS,
+Node major, dependencies/check configuration, the tracked route-file paths,
+and commit SHA; restore prefixes retain all but SHA. Route paths invalidate
+the filesystem-dependent Next link rule. ESLint caches per file, so adding
+type-aware or cross-file rules requires dropping the cache or widening its
+key. See [testing.md](./testing.md) for local cache cleanup.
+
 CI secrets come from 1Password via `1password/load-secrets-action` plus the
 `OP_SERVICE_ACCOUNT_TOKEN` repo secret; only `CLAUDE_CODE_OAUTH_TOKEN` remains a
 plain Actions secret. See [security.md](./security.md) → Secrets Management.
