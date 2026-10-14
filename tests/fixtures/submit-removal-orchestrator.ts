@@ -550,6 +550,8 @@ export function makeContext(
       warnings: [],
     },
     ...overrides,
+    submissionLineageBlockers: overrides.submissionLineageBlockers ?? [],
+    durabilityConfigurationBlockers: overrides.durabilityConfigurationBlockers ?? [],
     entityReadinessGaps: overrides.entityReadinessGaps ?? [],
     supportingDocuments: overrides.supportingDocuments ?? {
       total: 1,

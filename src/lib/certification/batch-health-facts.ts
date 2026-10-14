@@ -92,13 +92,16 @@ export function toBatchHealthFacts(
         )
       : [],
     entityReadinessGaps: ctx.entityReadinessGaps ?? [],
+    submissionLineageBlockers: ctx.submissionLineageBlockers,
+    durabilityConfigurationBlockers: ctx.durabilityConfigurationBlockers,
     entityReadinessIssues: ctx.entityReadinessIssues ?? [],
     hasSubmittableRuns: ctx.hasSubmittableRuns,
     productionReadinessGap: ctx.productionReadinessGap ?? null,
     facilitySetupComplete,
     requiredTransport: ctx.requiredTransportCategories.map((category) => ({
       category,
-      present: ctx.transportCoverage[category].count > 0,
+      present: ctx.transportCoverage[category].count > 0 &&
+        (ctx.transportCoverage[category].missingEntityIds?.length ?? 0) === 0,
     })),
   };
 }

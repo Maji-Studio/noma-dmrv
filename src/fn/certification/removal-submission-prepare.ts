@@ -22,7 +22,7 @@ import type {
   IsometricComponentBlueprint,
   IsometricGhgEntryTemplate,
 } from "@/lib/isometric";
-import { isSequestrationBlueprintKey } from "@/lib/isometric/storage-blueprints";
+import { hasDurabilityMeasurementComponents } from "@/lib/certification/submission-readiness";
 import type { RemovalSubmissionContext } from "./certify-context-core";
 import {
   DURABILITY_MEASUREMENT_SAMPLES_ENABLED,
@@ -129,11 +129,7 @@ export function prepareRemovalSubmission(
     return { prepared: null, blockers: [blocker("noTemplate")] };
   }
 
-  const hasDurabilityComponents = defaultTemplate.groups.some((group) =>
-    group.components.some((component) =>
-      isSequestrationBlueprintKey(component.blueprint_key),
-    ),
-  );
+  const hasDurabilityComponents = hasDurabilityMeasurementComponents(defaultTemplate);
   const blockers: RemovalPreparationBlocker[] = [];
   const isometricEnvironment = options.isometricEnvironment ?? env.ISOMETRIC_ENVIRONMENT;
   const unbindable = findUnbindableTemplateInputs(defaultTemplate, { allowPeriodInputStub: allowsPeriodInputStub(isometricEnvironment) });

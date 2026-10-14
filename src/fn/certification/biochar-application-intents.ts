@@ -1,3 +1,4 @@
+import { applicationDestinationBlocker } from "@/lib/certification/submission-readiness";
 import { getBiocharApplicationRegistryInputs } from "@/data-access/certifier-biochar-applications";
 import type { OrgContext } from "@/lib/auth/server";
 import { formatUtcDate } from "@/lib/date-utils";
@@ -148,11 +149,8 @@ export async function compileBiocharApplicationIntents(args: {
         `Application ${input.applicationCode} needs a field size greater than 0 ha before submitting.`,
       );
     }
-    if (!input.customerLocationId) {
-      throw new SafeError(
-        `Application ${input.applicationCode} has no customer location. Select a delivery destination before submitting.`,
-      );
-    }
+    const destinationBlocker = applicationDestinationBlocker(input);
+    if (destinationBlocker) throw new SafeError(destinationBlocker);
     if (!input.certifierProjectId || !input.externalProjectId) {
       throw new SafeError(
         `Application ${input.applicationCode} is not linked to an Isometric project. Add the facility mapping under Certification settings before submitting.`,

@@ -72,7 +72,7 @@ export async function syncApplicationStorageLocation(
     if (!input) throw new SafeError("Application not found.");
     if (!input.customerLocationId) {
       throw new SafeError(
-        "Select a customer location on the delivery before synchronizing.",
+        "Select a customer location on the order before synchronizing.",
       );
     }
     const log = logger.child({
@@ -142,7 +142,7 @@ async function loadApplicationStorageLocationSyncForOrg(
       externalStorageLocationId: null,
       lastError: null,
       attemptedAt: null,
-      blocker: "Select a customer location on the delivery before synchronizing.",
+      blocker: "Select a customer location on the order before synchronizing.",
       viewerCanManage,
     };
   }

@@ -653,8 +653,8 @@ export function ApplicationForm({
             label="Soil temperature (°C)"
             error={errors.soilTemperatureC?.message}
             cue="Annual average for this application site"
-            certifyRequired={isApplicationCertifyField("soilTemperatureC")}
-            certifyStatus={certStatus("soilTemperatureC")}
+            hint="Submission uses the facility reference temperature."
+            aside={<span className="body-caption text-[var(--color-text-secondary)]">Advisory</span>}
           >
             <FormInput
               id="soilTemperatureC"
