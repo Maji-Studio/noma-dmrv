@@ -151,6 +151,18 @@ these areas; the entry rules and invariants live in
   transaction, race the callback against the deadline and keep the client out
   of the pool until the callback settles; until then keep `execute` database-only.
 
+### Production run row precedes delivery lineage artifacts (`data/production-run-artifact-order`, opened 2026-10-14)
+
+`updateProductionRunInTransaction` in `src/data-access/production-runs/mutations.ts`
+locks the run row FOR UPDATE before lineage artifacts. Delivery create in
+`src/data-access/delivery-output-writes.ts:createDeliveryInTransaction` holds the
+order's artifacts and then needs FK key-share on the run when `post` in
+`src/data-access/output-stock-post.ts` inserts `outputStockRunAllocations`.
+If both share a not-yet-submitted Removal, this can raise 40P01. The app path
+`createDelivery` uses `db.transaction` and does not retry until Phase 5b-2 commit 2
+moves it onto the runner. Fix the run writer to lock artifacts before the run row.
+This is part of `data/lock-order` below.
+
 ### Run writers, feedstock edits and output postings lock in different orders (`data/lock-order`, opened 2026-10-09)
 
 - `src/data-access/production-runs/mutations.ts:updateProductionRunInTransaction`
@@ -172,6 +184,7 @@ these areas; the entry rules and invariants live in
     SHARE locks on intake rows. Prelocking prospective lineage on run create
     can wait on `updateFeedstockInTransaction`, which already holds the intake
     row and waits on lineage.
+- See [production run artifact order](#production-run-row-precedes-delivery-lineage-artifacts-dataproduction-run-artifact-order-opened-2026-10-14) for the delivery-create cycle.
 - Run writers retain bins before rows and best-effort attachment. A global
   order must coordinate every writer, including implicit foreign-key locks.
 - **Mitigation today:** `src/lib/operations/runner.ts:runOperation` retries the

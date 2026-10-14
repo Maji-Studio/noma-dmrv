@@ -1,3 +1,5 @@
+import { offsetInstantSchema } from "./event-instant";
+import { DELIVERY_DISTANCE_MESSAGE } from "./delivery-input";
 import { expectedVersionSchema } from "./helpers";
 /**
  * Deliveries Validation Schemas
@@ -7,6 +9,7 @@ import { expectedVersionSchema } from "./helpers";
 
 import {
   DELIVERED_WET_MASS_RANGE_MESSAGE,
+  DELIVERED_WET_MASS_MIN_KG,
   DELIVERED_WET_MASS_REQUIRED_MESSAGE,
   hasStorableDeliveredWetMass,
 } from "@/lib/delivery-wet-mass";
@@ -55,10 +58,10 @@ export function resolveDeliveryDistanceSource(
 // ============================================
 
 const optionalNumber = z.number().finite().optional().nullable();
-const DISTANCE_RANGE_MESSAGE = "Distance must be 0 or more";
+const deliveryInstantSchema = z.union([z.date(), offsetInstantSchema().transform(value => new Date(value))], { error: issue => issue.input === "" || issue.input == null ? "Delivery date is required" : undefined });
 const optionalWetMassKg = positiveMassKgSchema(
   DELIVERED_WET_MASS_RANGE_MESSAGE,
-)
+).min(DELIVERED_WET_MASS_MIN_KG, DELIVERED_WET_MASS_RANGE_MESSAGE)
   .optional()
   .nullable();
 const requiredProductMoisturePercent = requiredNumber(
@@ -75,11 +78,11 @@ function validateDistanceOverride(
   value: { distanceKmOverride?: number | null },
   ctx: z.RefinementCtx
 ) {
-  if (value.distanceKmOverride != null && value.distanceKmOverride < 0) {
+  if (value.distanceKmOverride != null && value.distanceKmOverride <= 0) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       path: ["distanceKmOverride"],
-      message: DISTANCE_RANGE_MESSAGE,
+      message: DELIVERY_DISTANCE_MESSAGE,
     });
   }
 }
@@ -111,7 +114,7 @@ const deliveryFormBaseSchema = z.object({
   correctsMovementId: uuidSchema().optional(),
   // Required fields
   orderId: z.string().min(1, "Select an order.").uuid("Choose a valid order."),
-  deliveryDate: z.coerce.date({ error: "Delivery date is required" }),
+  deliveryDate: deliveryInstantSchema,
 
   // Optional fields
   storageLocationId: z.uuid(),
@@ -155,10 +158,10 @@ export const createDeliverySchema = z.object({
     .string()
     .min(1, "Delivery code is required")
     .max(50)
-    .regex(/^[A-Z0-9-]+$/),
+    .regex(/^[A-Z0-9-]+$/).or(z.literal("")).default(""),
   orderId: z.string().min(1, "Select an order.").uuid("Choose a valid order."),
   facilityId: z.string().min(1, "Select a facility.").uuid("Choose a valid facility."),
-  deliveryDate: z.coerce.date(),
+  deliveryDate: deliveryInstantSchema,
   storageLocationId: z.uuid(),
   idempotencyKey: z.string().min(1),
   basisFingerprint: z.string().min(1),
@@ -199,7 +202,7 @@ export const updateDeliverySchema = z.object({
     .optional(),
   orderId: z.string().uuid().optional(),
   facilityId: z.string().uuid().optional(),
-  deliveryDate: z.coerce.date().optional(),
+  deliveryDate: deliveryInstantSchema.optional(),
   storageLocationId: z.uuid().optional(),
   driverId: emptyToNull.or(z.string().uuid()).nullable().optional(),
   vehicleId: emptyToNull.or(z.string().uuid()).nullable().optional(),

@@ -3,9 +3,8 @@ import { db, type DbTransaction } from "@/db";
 import { sumNumeric } from "@/db/aggregate";
 import { deliveries, orders } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
-import { deliveryOrderBalanceMessage } from "@/lib/delivery-order-balance";
+import { deliveryBalanceExceeded, deliveryReferenceNotFound } from "@/lib/delivery-domain-errors";
 import { orderQuantityBelowAllocated } from "@/lib/order-domain-errors";
-import { SafeError } from "@/lib/errors";
 import { isStockOverdraw } from "@/lib/stock-overdraw";
 import { and, count, eq, isNull, ne, sql } from "drizzle-orm";
 import { requireOrgScope } from "./utils";
@@ -103,7 +102,7 @@ export async function assertDeliveryWithinOrderBalance(
     Number(params.orderQuantityKg) - allocatedWetKg,
   );
   if (isStockOverdraw(params.requestedWetKg, availableKg)) {
-    throw new SafeError(deliveryOrderBalanceMessage(availableKg));
+    throw deliveryBalanceExceeded(availableKg, params.requestedWetKg);
   }
 }
 
@@ -126,7 +125,7 @@ export async function lockDeliveryOrderAndAssertBalance(
       eq(orders.organizationId, ctx.organizationId),
     ))
     .for("update");
-  if (!order) throw new SafeError("Order not found");
+  if (!order) throw deliveryReferenceNotFound(["orderId"], "Order");
 
   await assertDeliveryWithinOrderBalance(ctx, tx, {
     ...params,

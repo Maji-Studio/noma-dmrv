@@ -1,15 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({ posting: vi.fn(), post: vi.fn(), select: vi.fn(), sync: vi.fn() }));
+const mocks = vi.hoisted(() => ({ posting: vi.fn(), post: vi.fn(), select: vi.fn(), sync: vi.fn(), transaction: vi.fn(), replay: vi.fn() }));
 // Every I/O seam is mocked; this suite never opens a database connection.
-vi.mock("@/db", () => ({ db: {} }));
-vi.mock("./output-stock-post", () => ({ withOutputStockPosting: mocks.posting }));
+vi.mock("@/db", () => ({ db: { transaction: mocks.transaction } }));
+vi.mock("./output-stock-post", () => ({ withOutputStockPostingInTransaction: mocks.posting, findPostedOutputRequest: mocks.replay, OUTPUT_STOCK_FUTURE_TIME_MESSAGE: "Date and time cannot be in the future." }));
 vi.mock("./utils", () => ({ requireOrgScope: vi.fn(), assertSameOrg: vi.fn() }));
-vi.mock("./certification-lineage-guards", () => ({ assertCanMutateCertifiedLineage: vi.fn() }));
+vi.mock("./certification-lineage-guards", () => ({ assertCanMutateCertifiedLineage: vi.fn(), lockCertifiedLineageArtifacts: vi.fn(), assertLockedLineagesAllowMutation: vi.fn() }));
 vi.mock("./delivery-order-balance", () => ({ lockDeliveryOrderAndAssertBalance: vi.fn() }));
 vi.mock("./lock-bin-stocks", () => ({ lockBinStock: vi.fn() }));
 vi.mock("./output-stock", () => ({ getOutputStockAllocationProjection: vi.fn() }));
 vi.mock("./transport-legs", () => ({ lockBiocharTransportRouteTopology: vi.fn(), syncBiocharProductTransportLegs: mocks.sync }));
+
+vi.mock("./facility-reference-guards", () => ({ lockActiveFacilityReference: vi.fn() }));
 
 import { createDelivery } from "./delivery-output-writes";
 
@@ -26,7 +28,7 @@ const savedProducts = [{ id: "product", version: PRODUCT_VERSION }];
 
 beforeEach(() => {
   vi.resetAllMocks();
-  mocks.post.mockResolvedValue({ preview: { removedDryKg: 90, allocations: [{ layerId: "product" }] }, moisturePercent: 10, savedProducts });
+  mocks.post.mockResolvedValue({ preview: { removedDryKg: 90, allocations: [{ layerId: "product" }] }, moisturePercent: 10, savedProducts, movement: { id: "movement" } });
 });
 
 function transaction(rows: object[][]) {
@@ -38,28 +40,35 @@ function transaction(rows: object[][]) {
     };
     return query;
   });
-  return {
+  const tx = {
+    transaction: async (fn: (tx: unknown) => unknown) => fn(tx),
     select: mocks.select,
     insert: () => ({ values: () => ({ returning: async () => [delivery] }) }),
     update: () => ({ set: () => ({ where: () => ({ returning: async () => [delivery] }) }) }),
   };
+  mocks.transaction.mockImplementation(fn => fn(tx));
+  return tx;
 }
 
 describe("delivery creation saved product rows", () => {
   it("returns the stock posting's bumped rows with the saved delivery without extra reads", async () => {
-    const tx = transaction([[{ id: ID }], [{ id: ID, formulationId: "recipe" }], [{ id: ID, formulationId: "recipe" }]]);
-    mocks.posting.mockImplementation((_ctx, posting) => posting.write(tx, mocks.post));
+    const tx = transaction([[{ id: ID, facilityId: ID }], [{ id: ID, timezone: "UTC" }], [{ id: ID }], [{ timezone: "UTC" }], [{ id: ID, facilityId: ID, formulationId: "recipe" }], [{ id: ID, facilityId: ID, type: "product_bin", formulationId: "recipe" }], []]);
+    mocks.posting.mockImplementation((_ctx, _tx, posting) => posting.write(tx, mocks.post));
     expect(await createDelivery(ctx, input)).toEqual({ ...delivery, savedProducts });
     expect(mocks.post).toHaveBeenCalledWith({ deliveryId: delivery.id });
-    expect(mocks.select).toHaveBeenCalledTimes(3);
+    const posting = mocks.posting.mock.calls[0][2];
+    expect(posting.input.reason).toBe("Delivery DL-001");
+    expect(posting.payload).not.toHaveProperty("code");
+    expect(posting.payload).not.toHaveProperty("reason");
+    expect(mocks.select).toHaveBeenCalledTimes(7);
     expect(mocks.sync).toHaveBeenCalledWith(ctx, tx, [savedProducts[0].id]);
   });
 
   it("returns no saved product rows on replay and does not post stock again", async () => {
-    const tx = transaction([[delivery]]);
-    mocks.posting.mockImplementation((_ctx, posting) => posting.replay(tx, { inputSnapshot: { deliveryId: delivery.id } }));
+    transaction([[delivery], []]);
+    mocks.replay.mockResolvedValue({ id: "movement", inputSnapshot: { deliveryId: delivery.id } });
     expect(await createDelivery(ctx, input)).toEqual({ ...delivery, savedProducts: [] });
-    expect(mocks.select).toHaveBeenCalledTimes(1);
+    expect(mocks.select).toHaveBeenCalledTimes(2);
     expect(mocks.post).not.toHaveBeenCalled();
   });
 });

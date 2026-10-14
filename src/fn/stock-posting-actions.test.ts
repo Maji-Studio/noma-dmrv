@@ -4,7 +4,7 @@ import { DomainError } from "@/lib/domain-errors";
 import { ActionConflictError } from "@/lib/errors";
 import type { OrgContext } from "@/lib/auth/server";
 
-const mocks = vi.hoisted(() => ({ auth: vi.fn(), create: vi.fn(), autoCode: vi.fn(), log: vi.fn(), run: vi.fn() }));
+const mocks = vi.hoisted(() => ({ auth: vi.fn(), create: vi.fn(), autoCode: vi.fn(), log: vi.fn(), run: vi.fn(), update: vi.fn() }));
 vi.mock("@/lib/auth/server", () => ({ requireOrgContext: mocks.auth }));
 vi.mock("@/lib/log", () => ({ logger: { error: mocks.log }, sanitizeErrorMessage: () => "sanitized" }));
 vi.mock("@/data-access/biochar-products", () => ({}));
@@ -13,13 +13,13 @@ vi.mock("@/data-access/biochar-products", () => ({}));
 vi.mock("@/lib/operations/runner", () => ({ runOperationInProcess: mocks.run }));
 vi.mock("@/lib/operations/biochar-products", () => ({ makeBiocharProduct: { id: "make_biochar_product" }, updateBiocharProduct: { id: "update_biochar_product" } }));
 vi.mock("@/data-access/deliveries", () => ({ createDelivery: mocks.create }));
-vi.mock("@/lib/operations/deliveries", () => ({ updateDelivery: vi.fn() }));
+vi.mock("@/lib/operations/deliveries", () => ({ updateDelivery: mocks.update }));
 vi.mock("@/data-access/delivery-stats", () => ({}));
 vi.mock("@/data-access/utils", () => ({}));
 vi.mock("@/db/schema", () => ({ biocharProducts: { code: "code" }, deliveries: { code: "code" } }));
 vi.mock("@/data-access/code-generator", () => ({ withAutoCode: mocks.autoCode, CODE_CONFLICT_MESSAGES: { biocharProduct: "Product code conflict", delivery: "Delivery code conflict" } }));
 import { createBiocharProductFn } from "./biochar-products";
-import { createDeliveryFn } from "./deliveries";
+import { createDeliveryFn, updateDeliveryFn } from "./deliveries";
 
 const id = "00000000-0000-4000-8000-000000000001";
 const ctx: OrgContext = { userId: "user", organizationId: "org", orgRole: "admin", isPlatformAdmin: false };
@@ -44,12 +44,12 @@ for (const action of [
     expect(await action.call()).toEqual({ success: false, error: "Stock changed. Review the refreshed preview.", code: "conflict", conflict });
     expect(mocks.log).not.toHaveBeenCalled();
   });
-  it("preserves success, authenticated context and auto-code delegation", async () => {
+  it("preserves success and delegates code generation to the writer", async () => {
     const saved = { id, code: "SAVED" };
     mocks.create.mockResolvedValue(saved);
     expect(await action.call()).toEqual({ success: true, data: saved });
     expect(mocks.create).toHaveBeenCalledWith(ctx, expect.objectContaining(common));
-    expect(mocks.autoCode).toHaveBeenCalledWith(ctx, action.prefix, expect.anything(), "code", action.code, expect.any(Function), expect.any(String));
+    expect(mocks.autoCode).not.toHaveBeenCalled();
   });
   it("validates before posting", async () => {
     expect(await action.invalid()).toMatchObject({ success: false });
@@ -148,4 +148,29 @@ describe("product creation split-bin sources", () => {
     expect(await createBiocharProductFn(splitProduct)).toMatchObject({ success: false });
     expect(mocks.run).not.toHaveBeenCalled();
   });
+});
+
+
+describe("delivery action field mapping and partial notes", () => {
+  it("maps the future instant issue to deliveryDate", async () => {
+    mocks.create.mockRejectedValue(new DomainError("validation_failed", "Date and time cannot be in the future.", { issues: [{ path: ["deliveredAt"], code: "validation_failed", message: "Date and time cannot be in the future." }] }));
+    expect(await createDeliveryFn(delivery)).toMatchObject({ success: false, issues: [{ path: ["deliveryDate"] }] });
+  });
+  it("keeps an omitted note and lets an empty form field clear it", async () => {
+    mocks.update.mockResolvedValue({ id });
+    await updateDeliveryFn({ deliveryId: id, expectedVersion: 1 });
+    expect(mocks.update).toHaveBeenLastCalledWith(ctx, id, expect.objectContaining({ distanceNote: undefined }));
+    await updateDeliveryFn({ deliveryId: id, expectedVersion: 1, distanceNote: "" });
+    expect(mocks.update).toHaveBeenLastCalledWith(ctx, id, expect.objectContaining({ distanceNote: null }));
+  });
+});
+
+it("preserves preview and unexpected cause when remapping delivery issues", async () => {
+  const preview = { basisFingerprint: "fresh", stockEffects: [] };
+  mocks.create.mockRejectedValue(new DomainError("stock_basis_changed", "Refresh the preview.", {
+    preview, cause: new Error("Unexpected cause"), retryable: true, retryAfterSeconds: 2,
+    issues: [{ path: ["moisturePercent"], code: "validation_failed", message: "Enter moisture." }],
+  }));
+  expect(await createDeliveryFn(delivery)).toMatchObject({ success: false, preview, issues: [{ path: ["moistureContentPercent"] }] });
+  expect(mocks.log).toHaveBeenCalledWith(expect.objectContaining({ op: "delivery:create", errorName: "Error" }), "delivery action failed");
 });

@@ -88,12 +88,12 @@ it("waits for the changed reading's preview before saving the correction", async
   await waitFor(() => expect(button.hasAttribute("disabled")).toBe(false));
   await act(async () => { fireEvent.submit(form); });
   expect(save).toHaveBeenCalledWith(expect.objectContaining({ sources: [{ layerId: ids.a, moisturePercent: 30 }],
-    correctsMovementId: ids.movement, basisFingerprint: "changed-basis" }));
+    correctsMovementId: ids.movement, basisFingerprint: "changed-basis" }), expect.any(Function));
 });
 
 it("allows a metadata-only save without requesting a stock correction preview", async () => {
   const { save, form } = await open();
   await act(async () => { fireEvent.submit(form); });
-  expect(save).toHaveBeenCalledWith(expect.objectContaining({ deliveredWetMassKg: 100, moistureContentPercent: 20, sources: undefined, correctsMovementId: undefined }));
+  expect(save).toHaveBeenCalledWith(expect.objectContaining({ deliveredWetMassKg: 100, moistureContentPercent: 20, sources: undefined, correctsMovementId: undefined }), expect.any(Function));
   expect(state.preview).not.toHaveBeenCalled();
 });

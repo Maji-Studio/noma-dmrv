@@ -279,7 +279,7 @@ export function DeliveryList() {
   const createWithEvidence = useCreateWithEvidence({
     entityType: "delivery",
     entityNoun: "Delivery",
-    executeCreate: async (data: DeliveryFormData) => {
+    executeCreate: async ({ data }: { data: DeliveryFormData; onError: (error: unknown) => boolean }) => {
       if (!contextFacilityId) {
         throw new Error("No facility selected. Select a facility and try again.");
       }
@@ -310,8 +310,8 @@ export function DeliveryList() {
     },
     setError: setFormError,
     setUpdateError: setFormError,
-    getCreateErrorMessage: (error) =>
-      error instanceof Error ? error.message : "Delivery was not created. Check the form.",
+    getCreateErrorMessage: (error, { onError }) =>
+      onError(error) ? null : error instanceof Error ? error.message : "Delivery was not created. Check the form.",
     unresolvedUpdateMessage:
       "Resolve or remove the failed attachments before saving this delivery.",
     openEditOnFailure: (delivery) =>
@@ -386,11 +386,11 @@ export function DeliveryList() {
   ]);
 
   // Handlers
-  const handleCreate = async (data: DeliveryFormData) => {
-    await createWithEvidence.handleCreate(data);
+  const handleCreate = async (data: DeliveryFormData, onError: (error: unknown) => boolean) => {
+    await createWithEvidence.handleCreate({ data, onError });
   };
 
-  const handleUpdate = async (data: DeliveryFormData) => {
+  const handleUpdate = async (data: DeliveryFormData, onError: (error: unknown) => boolean) => {
     if (!displaySideSheet?.entity) return;
     setFormError(null);
     if (createWithEvidence.guardUpdate()) return;
@@ -403,7 +403,9 @@ export function DeliveryList() {
       closeSideSheet();
       toast.success("Delivery updated.");
     } catch (error) {
-      setFormError(error instanceof Error ? error.message : "Delivery was not saved. Try again.");
+      if (!onError(error)) {
+        setFormError(error instanceof Error ? error.message : "Delivery was not saved. Try again.");
+      }
     }
   };
 

@@ -827,6 +827,21 @@ topology, order and lineage. Archive refusals are 404 `not_found`; an archived
 order without deliveries can still be deleted. Storage deletion drains after
 commit, never on dry runs.
 
+Delivery create locks route topology, the movement request key (replay exits),
+sorted advisory bins, the discovered lineage artifact union, the active facility
+FOR SHARE and the order FOR UPDATE with its wet balance, then revalidates lineage
+without locking newly discovered artifacts. It reads the order unlocked first
+for its facility and zone and rechecks that relationship under the row lock.
+Products stay locked by posting after the insert: the facility lock serializes
+archive and restore before their delivery/product/order locks; topology
+serializes order writes, delivery updates and corrections, and sorted bins
+serialize product placement. Application create takes no topology or bin lock:
+`createApplication` locks lineage artifacts first, then the delivery row, then
+FK key-share locks on products and runs. Delivery create also locks artifacts
+first and never locks an existing delivery, so these writers cannot cycle.
+Delivery updates take artifacts before the facility share lock, then the delivery
+row, preserving the same archive ordering.
+
 The order body contains stored fields only. `GET /api/v1/orders/{idOrCode}/balance`
 and `get_order_balance` use one repeatable-read snapshot for ordered, delivered
 and remaining wet kilograms and fulfillment status. Archived orders include

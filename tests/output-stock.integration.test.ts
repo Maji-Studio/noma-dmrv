@@ -119,7 +119,7 @@ describe('output FIFO transactions', () => {
     const emptyOrder = await db.transaction(tx => createOrderInTransaction(f.ctx, tx, { code: `E2E-FIFO-EMPTY-${f.tag}`, facilityId: f.facility.id, customerId: f.customer.id, formulationId: f.pure.id, orderDate: new Date('2026-09-14'), quantityKg: 100, packaging: 'loose' }));
     expect(emptyOrder.formulationId).toBe(f.pure.id);
     expect(await getMatchingOutputBins(f.ctx, { facilityId: f.facility.id, formulationId: f.pure.id })).toHaveLength(bins.length);
-    await expect(createDelivery(f.ctx, { ...f.deliveryInput, orderId: emptyOrder.id, deliveredWetMassKg: 50 })).rejects.toThrow('matching');
+    await expect(createDelivery(f.ctx, { ...f.deliveryInput, orderId: emptyOrder.id, deliveredWetMassKg: 50 })).rejects.toThrow('Source bin holds another formulation.');
   });
   it('reduces a loss on its original run after an older intake, with no debit to the late run', async () => {
     const f = await seedOutputStockParents(db);

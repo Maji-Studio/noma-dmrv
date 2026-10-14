@@ -22,10 +22,10 @@ import {
 } from "./fixtures/page-helpers";
 import { fillStockMoisture } from "./helpers/stock-moisture";
 
-// Sorts ahead of the seeded feedstock/delivery rows (deliveryDate desc), and
-// its list label finds the record this spec created.
-const FUTURE_DATE = "2027-01-15";
-const FUTURE_DATE_LABEL = "Jan 15, 2027";
+// Past, after the seeded product placement, and distinct from seeded row dates.
+// Its list label finds the record this spec created.
+const PAST_DATE = "2026-10-03";
+const PAST_DATE_LABEL = "Oct 3, 2026";
 
 async function createOrderViaUi(page: Page, seededData: SeededChainData) {
   await page.goto(`/orders?facility=${seededData.facility.id}`);
@@ -66,7 +66,7 @@ test.describe("Transport round trip (#852)", () => {
     await expect(dialog.getByText(/trip type/i)).toHaveCount(0);
     await expect(dialog.locator('select[name="transportTripType"]')).toHaveCount(0);
 
-    await page.fill('input[name="deliveryDate"]', FUTURE_DATE);
+    await page.fill('input[name="deliveryDate"]', PAST_DATE);
     await selectEntity(
       page,
       "Supplier",
@@ -98,7 +98,7 @@ test.describe("Transport round trip (#852)", () => {
     // Reopen: the route rail shows the one-way entry with the counted round trip.
     await page.waitForLoadState("networkidle");
     // Target the row by its date: a bare first row can race the re-sort.
-    await page.locator("table tbody tr", { hasText: FUTURE_DATE_LABEL }).first().click();
+    await page.locator("table tbody tr", { hasText: PAST_DATE_LABEL }).first().click();
     await waitForSideSheet(page);
     const feedstockRoute = page
       .locator('[role="dialog"]')
@@ -128,7 +128,7 @@ test.describe("Transport round trip (#852)", () => {
     await expect(dialog.getByText(/trip type/i)).toHaveCount(0);
     await expect(dialog.locator('select[name="tripType"]')).toHaveCount(0);
 
-    await page.fill('input[name="deliveryDate"]', `${FUTURE_DATE}T12:00`);
+    await page.fill('input[name="deliveryDate"]', `${PAST_DATE}T12:00`);
     await selectEntityByText(page, "Order", seededData.customer.name);
     // The seeded customer location is 25 km one way from the facility.
     await expect(
@@ -142,7 +142,7 @@ test.describe("Transport round trip (#852)", () => {
 
     await page.waitForLoadState("networkidle");
     // Target the row by its date: a bare first row can race the re-sort.
-    await page.locator("table tbody tr", { hasText: FUTURE_DATE_LABEL }).first().click();
+    await page.locator("table tbody tr", { hasText: PAST_DATE_LABEL }).first().click();
     await waitForSideSheet(page);
     const deliveryRoute = page
       .locator('[role="dialog"]')

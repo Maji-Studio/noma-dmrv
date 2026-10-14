@@ -5,10 +5,7 @@
  * Server-side functions for delivery CRUD operations
  */
 
-import {
-  CODE_CONFLICT_MESSAGES,
-  withAutoCode,
-} from "@/data-access/code-generator";
+import { DomainError } from "@/lib/domain-errors";
 import {
   createDelivery,
   deleteDelivery,
@@ -25,7 +22,6 @@ import {
   type DeliveryStats,
 } from "@/data-access/delivery-stats";
 import { requireOrgFacility } from "@/data-access/utils";
-import { deliveries as deliveriesTable, type Delivery } from "@/db/schema";
 import {
   createDeliverySchema,
   deleteDeliverySchema,
@@ -121,38 +117,19 @@ export async function createDeliveryFn(
   data: z.infer<typeof createDeliverySchema>
 ): Promise<ActionResult<CreatedDelivery>> {
   return withAction(async (ctx) => {
-    const delivery = await withAutoCode(
-      ctx,
-      "DL",
-      deliveriesTable,
-      deliveriesTable.code,
-      data.code,
-      async (code) => {
-        const validated = createDeliverySchema.parse({ ...data, code });
-        return createDelivery(ctx, {
-          code,
-          orderId: validated.orderId,
-          facilityId: validated.facilityId,
-          deliveryDate: validated.deliveryDate,
-          storageLocationId: validated.storageLocationId,
-          idempotencyKey: validated.idempotencyKey,
-          basisFingerprint: validated.basisFingerprint,
-          driverId: validated.driverId ?? null,
-          vehicleId: validated.vehicleId ?? null,
-          status: validated.status,
-          deliveredWetMassKg: validated.deliveredWetMassKg ?? null,
-          moistureContentPercent: validated.moistureContentPercent,
-          sources: validated.sources,
-          distanceKmOverride: validated.distanceKmOverride ?? null,
-          distanceSource: resolveDeliveryDistanceSource(
-            validated.distanceKmOverride ?? null,
-            validated.distanceSource,
-          ),
-          distanceNote: validated.distanceNote || null,
+    let delivery: CreatedDelivery;
+    try {
+      delivery = await createDelivery(ctx, createDeliverySchema.parse(data));
+    } catch (error) {
+      if (error instanceof DomainError) {
+        throw new DomainError(error.code, error.message, {
+          conflict: error.conflict, blockers: error.blockers, retryable: error.retryable,
+          preview: error.preview, cause: error.cause, retryAfterSeconds: error.retryAfterSeconds,
+          issues: error.issues.map(issue => ({ ...issue, path: issue.path.map((part, index) => index === 0 && part === "deliveredAt" ? "deliveryDate" : index === 0 && part === "moisturePercent" ? "moistureContentPercent" : part) })),
         });
-      },
-      CODE_CONFLICT_MESSAGES.delivery,
-    );
+      }
+      throw error;
+    }
 
     return delivery;
   }, {
@@ -196,7 +173,7 @@ export async function updateDeliveryFn(
         validated.distanceKmOverride,
         validated.distanceSource,
       ),
-      distanceNote: validated.distanceNote || null,
+      distanceNote: validated.distanceNote === "" ? null : validated.distanceNote,
     });
 
     return delivery;

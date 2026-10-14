@@ -5,12 +5,13 @@
  */
 "use client";
 
+import { deliveryActionFieldIssues } from "@/lib/delivery-action-errors";
 import { Notice } from "@/components/ui/notice";
 import { useDeliveryStockEdit } from "@/hooks/use-delivery-stock-edit";
 import { DeliveryStockDetails } from "./delivery-stock-details";
 import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
 import { nullableNumericValue } from "@/lib/form-utils";
-import { useEffect, useId, useState } from "react";
+import { useId, useState } from "react";
 
 import { FormActions, FormEntitySelect, FormField, FormInput, FormSection, FormSpine, FormTextarea, makeCertFieldStatus, MoistureField, ResolvedErrorRevalidator, WetMassField } from "@/components/forms";
 import { EventTimeInput } from "@/components/forms/event-time-input";
@@ -68,7 +69,7 @@ interface DeliveryFormProps {
   /** Existing delivery data for editing (undefined for create mode) */
   delivery?: Delivery;
   /** Form submission handler */
-  onSubmit: (data: DeliveryFormData) => Promise<void> | void;
+  onSubmit: (data: DeliveryFormData, onError: (error: unknown) => boolean) => Promise<void> | void;
   /** Cancel button handler */
   onCancel?: () => void;
   /** Whether the form is currently submitting */
@@ -127,6 +128,7 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
     trigger,
     handleSubmit,
     setValue,
+    setError,
     formState: { errors },
   } = useForm({
     resolver: zodResolver(deliveryFormSchema),
@@ -201,7 +203,7 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
     setDistanceDraft(raw);
     const parsed = parseDistanceDraft(raw);
     if (parsed === undefined) return; // unparseable in-flight text — wait
-    const isOverride = parsed !== null && parsed !== storedDistanceKm;
+    const isOverride = parsed !== null && (parsed <= 0 || parsed !== storedDistanceKm);
     // Keep the render-time resync quiet while editing; a cleared/reverted
     // draft refills from the stored value on blur instead of mid-keystroke.
     setSyncedDistanceKm(isOverride ? parsed : storedDistanceKm);
@@ -273,12 +275,7 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
   const { canSave, submitDisabled: draftSubmitDisabled, basisFingerprint } = gate();
   const submitDisabled = draftSubmitDisabled || (massLocked && massChanged);
   useClearOnDependencyChange(watchOrderId, () => setValue("storageLocationId", ""));
-  const deliveredWetMassError = errors.deliveredWetMassKg?.message ?? stockPreview.data?.blockingMessage ?? undefined;
-
-  const refreshStockPreview = stockPreview.refetch;
-  useEffect(() => {
-    if (errorMessage && !isEditMode) void refreshStockPreview();
-  }, [errorMessage, isEditMode, refreshStockPreview]);
+  const deliveredWetMassError = errors.deliveredWetMassKg?.message ?? errors.sources?.message ?? stockPreview.data?.blockingMessage ?? undefined;
 
   const defaultSubmitLabel = isEditMode ? "Update delivery" : "Create delivery";
 
@@ -288,7 +285,19 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
     // A failed save needs no refetch here: the host reports the error and the
     // mutation hooks invalidate `outputStockKeys.all`, which refreshes this preview.
     await onSubmit({ ...normalized, status: "delivered", idempotencyKey, basisFingerprint: basisFingerprint ?? "pending-preview", correctsMovementId: stockChanged ? openedMovement?.id : undefined,
-      ...(isEditMode && !stockChanged ? { sources: undefined, deliveredWetMassKg: delivery.deliveredWetMassKg, moistureContentPercent: delivery.moistureContentPercent ?? undefined } : {}) } as DeliveryFormData);
+      ...(isEditMode && !stockChanged ? { sources: undefined, deliveredWetMassKg: delivery.deliveredWetMassKg, moistureContentPercent: delivery.moistureContentPercent ?? undefined } : {}) } as DeliveryFormData, (error) => {
+      const issues = deliveryActionFieldIssues(error, [
+        "deliveryDate", "orderId", "storageLocationId", "deliveredWetMassKg",
+        "distanceSource", "distanceKmOverride",
+        ...(massLocked || draw.usesSingleMoisture ? ["moistureContentPercent" as const] : []),
+        ...(distanceKmOverride != null ? ["distanceNote" as const] : []),
+      ] as const);
+      if (!issues) return false;
+      issues.forEach((issue, index) => {
+        setError(issue.field, { type: "server", message: issue.message }, { shouldFocus: index === 0 });
+      });
+      return true;
+    });
   });
 
   // Why the field is empty stays visible (a cue). With a distance there is no

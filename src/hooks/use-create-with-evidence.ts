@@ -44,7 +44,7 @@ interface CreateWithEvidenceChoreographyOptions<
   retainCreatedEntityIds: (entityIds: string[]) => void;
   setFlushing: (isFlushing: boolean) => void;
   setError: (message: string | null) => void;
-  getCreateErrorMessage: (error: unknown) => string;
+  getCreateErrorMessage: (error: unknown, input: TInput) => string | null;
   openEditOnFailure: (entity: TEntity) => void;
   closeOnSuccess: () => void;
   onAfterFlush?: (
@@ -105,7 +105,7 @@ export async function runCreateWithEvidenceChoreography<
     options.closeOnSuccess();
     options.onSuccess(created);
   } catch (error) {
-    options.setError(options.getCreateErrorMessage(error));
+    options.setError(options.getCreateErrorMessage(error, options.input));
   } finally {
     options.setFlushing(false);
   }
@@ -167,7 +167,7 @@ export interface UseCreateWithEvidenceOptions<
   ) => Promise<CreatedWithEvidence<TEntity, TResult>>;
   setError: (message: string | null) => void;
   setUpdateError: (message: string) => void;
-  getCreateErrorMessage: (error: unknown) => string;
+  getCreateErrorMessage: (error: unknown, input: TInput) => string | null;
   unresolvedUpdateMessage: string;
   openEditOnFailure: (entity: TEntity) => void;
   closeOnSuccess: () => void;
