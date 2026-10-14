@@ -1,14 +1,17 @@
 import type { QueryClient } from "@tanstack/react-query";
 import { describe, expect, it, vi } from "vitest";
 import { creditBatchKeys } from "./credit-batch-query-keys";
+import { SubmissionStreamStalledError } from "@/lib/certification/submission-progress-client";
 
 const reactQueryMocks = vi.hoisted(() => ({
   useQueries: vi.fn(),
+  useMutation: vi.fn(),
+  useQueryClient: vi.fn(),
 }));
 
 vi.mock("@tanstack/react-query", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@tanstack/react-query")>();
-  return { ...actual, useQueries: reactQueryMocks.useQueries };
+  return { ...actual, ...reactQueryMocks };
 });
 
 import {
@@ -17,6 +20,7 @@ import {
   getRemovalPreflightRefetchInterval,
   invalidateCertificationReadiness,
   useRemovalPreflightSummaries,
+  useSubmitGhgStatementToVerifier,
 } from "./use-certification";
 
 describe("certificationKeys", () => {
@@ -29,6 +33,27 @@ describe("certificationKeys", () => {
       "facility-1",
       "removal-1",
     ]);
+  });
+});
+
+describe("useSubmitGhgStatementToVerifier", () => {
+  it.each([
+    new Error("Submit failed"),
+    new SubmissionStreamStalledError(),
+  ])("refreshes certification queries after $name", async (error) => {
+    const invalidateQueries = vi.fn().mockResolvedValue(undefined);
+    reactQueryMocks.useQueryClient.mockReturnValue({ invalidateQueries });
+    reactQueryMocks.useMutation.mockClear();
+
+    useSubmitGhgStatementToVerifier();
+
+    const [{ onError }] = reactQueryMocks.useMutation.mock.calls[0] as [{
+      onError: (error: Error) => void;
+    }];
+    await onError(error);
+    expect(invalidateQueries).toHaveBeenCalledExactlyOnceWith({
+      queryKey: certificationKeys.all,
+    });
   });
 });
 

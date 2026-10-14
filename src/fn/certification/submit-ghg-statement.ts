@@ -61,6 +61,7 @@ import {
   issueVerifierReportUrl,
 } from "./ghg-statement-report-core";
 import {
+  appendSyncEventBestEffort,
   assertProductionConfirmed,
   GHG_STATEMENT_ENTITY_TYPE,
   GHG_STATEMENT_SUBMISSION_TYPE,
@@ -411,7 +412,7 @@ export async function submitGhgStatementToVerifierCore(args: {
             submittedToVerifierAt:
               remoteBefore.submitted_at ?? new Date().toISOString(),
           });
-          await appendSyncEvent(orgCtx, {
+          await appendSyncEventBestEffort(orgCtx, {
             provider: ISOMETRIC_PROVIDER,
             entityType: GHG_STATEMENT_ENTITY_TYPE,
             entityId: ghgStatementId,
@@ -424,6 +425,10 @@ export async function submitGhgStatementToVerifierCore(args: {
               submission_attempt_id: submissionAttemptId,
               external_mutation: "confirmed",
             },
+          }, {
+            ghgStatementId,
+            submissionId: submission.id,
+            submissionAttemptId,
           });
           return {
             externalId: initialExternalId,
@@ -550,7 +555,7 @@ export async function submitGhgStatementToVerifierCore(args: {
         if (after && submitApplied) {
           onProgress?.({ step: "ghg_statement.sending", state: "complete" });
           onProgress?.({ step: "ghg_statement.confirming", state: "active" });
-          await appendSyncEvent(orgCtx, {
+          await appendSyncEventBestEffort(orgCtx, {
             provider: ISOMETRIC_PROVIDER,
             entityType: GHG_STATEMENT_ENTITY_TYPE,
             entityId: ghgStatementId,
@@ -564,6 +569,10 @@ export async function submitGhgStatementToVerifierCore(args: {
               submission_attempt_id: submissionAttemptId,
               external_mutation: "confirmed",
             },
+          }, {
+            ghgStatementId,
+            submissionId: submission.id,
+            submissionAttemptId,
           });
           await finalizeSubmitSuccess(after);
           return { externalId: initialExternalId, remoteStatus: after.status };
@@ -608,7 +617,7 @@ export async function submitGhgStatementToVerifierCore(args: {
 
       onProgress?.({ step: "ghg_statement.sending", state: "complete" });
       onProgress?.({ step: "ghg_statement.confirming", state: "active" });
-      await appendSyncEvent(orgCtx, {
+      await appendSyncEventBestEffort(orgCtx, {
         provider: ISOMETRIC_PROVIDER,
         entityType: GHG_STATEMENT_ENTITY_TYPE,
         entityId: ghgStatementId,
@@ -621,6 +630,10 @@ export async function submitGhgStatementToVerifierCore(args: {
           submission_attempt_id: submissionAttemptId,
           external_mutation: "confirmed",
         },
+      }, {
+        ghgStatementId,
+        submissionId: submission.id,
+        submissionAttemptId,
       });
       await finalizeSubmitSuccess(remoteAfter);
       return {
