@@ -23,3 +23,8 @@ it("keeps order read and write tags on the same representation revision", () => 
   expect(orderEtag({ version: 1 })).toBe('"1.1"');
   expect(orderEtag({ version: 2 })).toBe('"2.1"');
 });
+
+it("keeps delivery read and write tags on the same representation revision", () => {
+  expect(deliveryEtag({ version: 2 })).toBe('"2.1"');
+  expect(deliveryEtag({ version: 3 })).toBe('"3.1"');
+});

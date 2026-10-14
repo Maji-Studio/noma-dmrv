@@ -87,7 +87,7 @@ expected-statuses = ["2xx", 401, 403, 404, 409, 413, 414, 422, 429, 431, "5xx"]
 # 428 is valid only for the operations that require If-Match. The check has
 # operation-level scope but cannot scope expected statuses by header name.
 [[operations]]
-include-operation-id = ["update_feedstock", "delete_feedstock", "update_production_run", "delete_production_run", "update_biochar_product", "update_lab_sample", "delete_lab_sample", "update_order", "delete_order"]
+include-operation-id = ["update_feedstock", "delete_feedstock", "update_production_run", "delete_production_run", "update_biochar_product", "update_lab_sample", "delete_lab_sample", "update_order", "delete_order", "update_delivery"]
 [operations.checks.missing_required_header]
 expected-statuses = [400, 401, 403, 406, 415, 422, 428]
 

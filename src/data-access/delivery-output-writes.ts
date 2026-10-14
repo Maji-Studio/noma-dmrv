@@ -91,8 +91,7 @@ export async function createDeliveryInTransaction(ctx: OrgContext, tx: DbTransac
     const deliveredAt = resolveEventInstant(data.deliveredAt, facilityRead.timezone, ['deliveredAt']);
     assertEventTimesNotFuture({ deliveredAt }, { deliveredAt: OUTPUT_STOCK_FUTURE_TIME_MESSAGE }, options.now ?? new Date());
     const [binRead] = await tx.select().from(storageLocations).where(and(eq(storageLocations.organizationId, ctx.organizationId), eq(storageLocations.id, data.storageLocationId)));
-    if (!binRead) throw deliveryReferenceNotFound(['storageLocationId'], 'Source bin');
-    if (binRead.archivedAt) throw deliveryValidationFailed(['storageLocationId'], 'Source bin is archived.');
+    if (!binRead || binRead.archivedAt) throw deliveryReferenceNotFound(['storageLocationId'], 'Source bin');
     for (const [field, table] of [['driverId', drivers], ['vehicleId', vehicles]] as const) {
       if (data[field]) {
         const [reference] = await tx.select({ id: table.id }).from(table).where(and(eq(table.organizationId, ctx.organizationId), eq(table.id, data[field]!)));
@@ -113,8 +112,7 @@ export async function createDeliveryInTransaction(ctx: OrgContext, tx: DbTransac
         if (!order || order.archivedAt) throw deliveryReferenceNotFound(['orderId'], 'Order');
         if (order.facilityId !== orderRead.facilityId) throw deliveryValidationFailed(['orderId'], 'Order facility changed. Refresh and retry.');
         const [bin] = await postingTx.select().from(storageLocations).where(and(eq(storageLocations.organizationId, ctx.organizationId), eq(storageLocations.id, data.storageLocationId)));
-        if (!bin) throw deliveryReferenceNotFound(['storageLocationId'], 'Source bin');
-        if (bin.archivedAt) throw deliveryValidationFailed(['storageLocationId'], 'Source bin is archived.');
+        if (!bin || bin.archivedAt) throw deliveryReferenceNotFound(['storageLocationId'], 'Source bin');
         if (bin.type !== 'product_bin') throw deliveryValidationFailed(['storageLocationId'], 'Choose a product bin.');
         if (bin.facilityId !== order.facilityId) throw deliveryValidationFailed(['storageLocationId'], 'Source bin is in another facility.');
         if (bin.formulationId !== order.formulationId) throw deliveryValidationFailed(['storageLocationId'], 'Source bin holds another formulation.');

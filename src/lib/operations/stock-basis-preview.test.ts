@@ -58,6 +58,16 @@ describe("runWithStockBasisPreview", () => {
     expect(runner.runOperation.mock.calls[1][3].deadlineMs).toBe(DEADLINE_MS - 7_500);
   });
 
+  it("carries delivery allocations from the same fallback dry run", async () => {
+    const allocations = [{ layerId: "layer", code: "P1", dryBiocharKg: 72, solidsKg: 80, wetKg: 100, moisturePercent: 20, policy: "fifo" as const }];
+    const deliveryOperation = { ...operation } as Operation<z.ZodType, { basisFingerprint: string; allocations: typeof allocations }>;
+    runner.runOperation.mockRejectedValueOnce(stale());
+    runner.runOperation.mockResolvedValueOnce({ ...fresh(), data: { basisFingerprint: "fresh", allocations } });
+    await expect(runWithStockBasisPreview(deliveryOperation, ctx, {}, options(), basisOf, data => data.allocations))
+      .rejects.toMatchObject({ preview: { basisFingerprint: "fresh", stockEffects: effects, allocations } });
+    expect(runner.runOperation).toHaveBeenCalledTimes(2);
+  });
+
   it("returns the original conflict, with no preview and no second run, once the deadline is spent", async () => {
     runner.runOperation.mockImplementationOnce(async () => { vi.setSystemTime(NOW + DEADLINE_MS); throw stale(); });
     const failure = await runWithStockBasisPreview(operation, ctx, {}, options(), basisOf).catch((error: unknown) => error);

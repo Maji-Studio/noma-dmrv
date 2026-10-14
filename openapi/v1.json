@@ -5,7 +5,7 @@
       "Dry-Run": {"description": "true when validation and domain guards ran but the transaction rolled back.", "schema": {"description": "true when validation and domain guards ran but the transaction rolled back.", "enum": ["true"], "type": "string"}},
       "ETag": {"description": "Strong row-version and representation-revision tag, for example \"3.1\".", "schema": {"description": "Strong row-version and representation-revision tag, for example \"3.1\".", "pattern": "^\"((?:[1-9]\\d{0,14}|[1-8]\\d{15}|900[0-6]\\d{12}|90070\\d{11}|90071[0-8]\\d{10}|900719[0-8]\\d{9}|9007199[0-1]\\d{8}|90071992[0-4]\\d{7}|900719925[0-3]\\d{6}|9007199254[0-6]\\d{5}|90071992547[0-3]\\d{4}|9007199254740[0-8]\\d{2}|90071992547409[0-8]\\d{1}|9007199254740990\\d{0}|9007199254740991))\\.((?:[1-9]\\d{0,14}|[1-8]\\d{15}|900[0-6]\\d{12}|90070\\d{11}|90071[0-8]\\d{10}|900719[0-8]\\d{9}|9007199[0-1]\\d{8}|90071992[0-4]\\d{7}|900719925[0-3]\\d{6}|9007199254[0-6]\\d{5}|90071992547[0-3]\\d{4}|9007199254740[0-8]\\d{2}|90071992547409[0-8]\\d{1}|9007199254740990\\d{0}|9007199254740991))\"$", "type": "string"}},
       "Idempotent-Replayed": {"description": "true when returning a previously committed outcome.", "schema": {"description": "true when returning a previously committed outcome.", "enum": ["true"], "type": "string"}},
-      "Location": {"description": "Relative URL of the first created feedstock; absent on dry runs.", "schema": {"description": "Relative URL of the first created feedstock; absent on dry runs.", "type": "string"}},
+      "Location": {"description": "Relative URL of the created resource (the first feedstock for split intake); absent on dry runs.", "schema": {"description": "Relative URL of the created resource (the first feedstock for split intake); absent on dry runs.", "type": "string"}},
       "RateLimit-Limit": {"description": "Request capacity of the tightest rate-limit bucket, integer encoded as decimal text.", "schema": {"description": "Request capacity of the tightest rate-limit bucket, integer encoded as decimal text.", "type": "string"}},
       "RateLimit-Remaining": {"description": "Remaining requests in the tightest bucket, integer encoded as decimal text.", "schema": {"description": "Remaining requests in the tightest bucket, integer encoded as decimal text.", "type": "string"}},
       "RateLimit-Reset": {"description": "Seconds until the bucket refills, integer encoded as decimal text.", "schema": {"description": "Seconds until the bucket refills, integer encoded as decimal text.", "type": "string"}},
@@ -15,6 +15,7 @@
     },
     "responses": {
       "BiocharProductProblem412": {"content": {"application/problem+json": {"schema": {"$ref": "#/components/schemas/BiocharProductPreconditionProblem"}}}, "description": "Stale row version or representation revision; current contains the latest representation.", "headers": {"RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}},
+      "DeliveryProblem412": {"content": {"application/problem+json": {"schema": {"$ref": "#/components/schemas/DeliveryPreconditionProblem"}}}, "description": "Stale row version or representation revision; current contains the latest representation.", "headers": {"RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}},
       "FeedstockProblem412": {"content": {"application/problem+json": {"schema": {"$ref": "#/components/schemas/FeedstockPreconditionProblem"}}}, "description": "Stale row version or representation revision; current contains the latest representation.", "headers": {"RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}},
       "LabSampleProblem412": {"content": {"application/problem+json": {"schema": {"$ref": "#/components/schemas/LabSamplePreconditionProblem"}}}, "description": "Stale row version or representation revision; current contains the latest representation.", "headers": {"RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}},
       "OrderProblem412": {"content": {"application/problem+json": {"schema": {"$ref": "#/components/schemas/OrderPreconditionProblem"}}}, "description": "Stale row version or representation revision; current contains the latest representation.", "headers": {"RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}},
@@ -36,6 +37,7 @@
     },
     "schemas": {
       "BiocharProductPreconditionProblem": {"allOf": [{"$ref": "#/components/schemas/Problem"}, {"properties": {"current": {"$ref": "#/components/schemas/biochar_product", "description": "Current biochar product after a failed version precondition."}}, "required": ["current"], "type": "object"}]},
+      "DeliveryPreconditionProblem": {"allOf": [{"$ref": "#/components/schemas/Problem"}, {"properties": {"current": {"$ref": "#/components/schemas/delivery", "description": "Current delivery after a failed version precondition."}}, "required": ["current"], "type": "object"}]},
       "FeedstockPreconditionProblem": {"allOf": [{"$ref": "#/components/schemas/Problem"}, {"properties": {"current": {"$ref": "#/components/schemas/feedstock", "description": "Current feedstock representation after a failed version precondition."}}, "required": ["current"], "type": "object"}]},
       "LabSamplePreconditionProblem": {"allOf": [{"$ref": "#/components/schemas/Problem"}, {"properties": {"current": {"$ref": "#/components/schemas/lab_sample", "description": "Current lab sample after a failed version precondition."}}, "required": ["current"], "type": "object"}]},
       "OrderPreconditionProblem": {"allOf": [{"$ref": "#/components/schemas/Problem"}, {"properties": {"current": {"$ref": "#/components/schemas/order", "description": "Current order after a failed version precondition."}}, "required": ["current"], "type": "object"}]},
@@ -49,7 +51,34 @@
           "detail": {"description": "Actionable plain-text detail; server failures are sanitized.", "type": "string"},
           "errors": {"description": "Input issues; empty for server failures.", "items": {"additionalProperties": false, "properties": {"code": {"description": "Stable field error code.", "type": "string"}, "detail": {"description": "Field correction guidance, plain text.", "type": "string"}, "meta": {"additionalProperties": {}, "description": "Non-sensitive constraint metadata, such as maximum or unit; never rejected values.", "propertyNames": {"type": "string"}, "type": "object"}, "pointer": {"description": "RFC 6901 JSON Pointer to the invalid input; empty string denotes the root.", "type": "string"}}, "required": ["pointer", "code", "detail"], "type": "object"}, "type": "array"},
           "instance": {"description": "Request path, URI reference.", "type": "string"},
-          "preview": {"additionalProperties": false, "description": "Fresh dry run after stock_basis_changed: the current basis fingerprint and stock effects. Absent when no preview could be computed.", "properties": {"basisFingerprint": {"description": "Stock basis of the fresh dry run, opaque string; send it back to write against that stock.", "type": "string"}, "stockEffects": {"$ref": "#/components/schemas/stockEffects", "description": "Changed bin balances inside the dry-run transaction, before rollback. All masses are kilograms."}}, "required": ["basisFingerprint", "stockEffects"], "type": "object"},
+          "preview": {
+            "additionalProperties": false,
+            "description": "Fresh dry run after stock_basis_changed: the current basis fingerprint and stock effects. Absent when no preview could be computed.",
+            "properties": {
+              "allocations": {
+                "description": "Delivery allocations from the fresh dry run, in draw order. Allocation sums can differ from the delivery's 3 decimal place dryBiocharKg in trailing digits.",
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "code": {"description": "Drawn product code.", "type": "string"},
+                    "dryBiocharKg": {"description": "Dry biochar kilograms drawn from this product, at 3 decimal places from the stored allocation.", "type": "number"},
+                    "layerId": {"description": "Drawn product layer identifier, from the bin stock read.", "format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"},
+                    "moisturePercent": {"anyOf": [{"type": "number"}, {"type": "null"}], "description": "Measured water as percent of wet mass for this draw, at up to 6 decimal places from the supplied reading."},
+                    "policy": {"description": "Draw policy: oldest first, newest first, mixed proportions, or the supplied source order.", "enum": ["fifo", "lifo", "pro_rata", "operator_order"], "type": "string"},
+                    "solidsKg": {"description": "Total solids kilograms drawn, including ingredient solids, from the exact rational truncated to 12 decimal places.", "type": "number"},
+                    "wetKg": {"anyOf": [{"type": "number"}, {"type": "null"}], "description": "Wet kilograms drawn at the supplied moisture reading, at 3 decimal places from the stored allocation."}
+                  },
+                  "required": ["layerId", "code", "dryBiocharKg", "solidsKg", "wetKg", "moisturePercent", "policy"],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "basisFingerprint": {"description": "Stock basis of the fresh dry run, opaque string; send it back to write against that stock.", "type": "string"},
+              "stockEffects": {"$ref": "#/components/schemas/stockEffects", "description": "Changed bin balances inside the dry-run transaction, before rollback. All masses are kilograms."}
+            },
+            "required": ["basisFingerprint", "stockEffects"],
+            "type": "object"
+          },
           "retryable": {"description": "Whether retrying may succeed; retain the same idempotency key.", "type": "boolean"},
           "status": {"description": "HTTP response status code.", "maximum": 9007199254740991, "minimum": -9007199254740991, "type": "integer"},
           "title": {"description": "Short HTTP status title, plain text.", "type": "string"},
@@ -844,6 +873,134 @@
           "500": {"$ref": "#/components/responses/Problem500"}
         },
         "x-required-scope": "deliveries:read"
+      },
+      "post": {
+        "description": "Record one delivery with a generated code. A delivery sends finished product from a product bin to a customer against an order and deducts from the bin. Feedstock intake uses POST /feedstocks. Masses are wet kg; moisture is percent of wet mass. On create, moisturePercent is the measured reading. moisturePercent is ignored when sources are sent; each source carries its own reading and the stored value is the server-derived overall (1 minus total solids divided by wet mass) times 100, including ingredient solids. Distances are one-way km and the server counts the round trip. distanceKmOverride must be above 0; omit it to use the customer location's distance. deliveredAt is resolved in the order facility's time zone and cannot be in the future; DST gaps and folds are refused. Without sources, a split bin draws in its drawOrder, shown in the bin stock read. The dry run shows which products would be drawn in allocations, also returned on committed creates. Pass the dry run's basisFingerprint on the real write; a stale fingerprint answers 409 stock_basis_changed with a fresh stock preview including allocations when available. Without it the write acts on current stock. Missing, foreign or archived orders and archived order facilities answer 404 not_found at /orderId. Missing, foreign or archived bins answer 404 not_found at /storageLocationId. Missing or foreign drivers and vehicles answer 404 not_found at /driverId and /vehicleId; missing or foreign source products at /sources/i/layerId. Invalid bin type, facility or formulation answers 422 validation_failed at /storageLocationId. Own-org source products in another bin or placed after the delivery answer 422 validation_failed at /sources/i/layerId. Sources on a mix bin answer 422 validation_failed at /sources; missing moisture at /moisturePercent. Future deliveredAt and local DST gaps or folds answer 422 validation_failed at /deliveredAt. Unknown fields answer 422 validation_failed at their field pointer with issue code unknown_field. An order balance overage answers 409 conflict at /deliveredWetMassKg with measure order_remaining_wet, availableWetKg, requestedWetKg and unit kg in issue metadata. Stock overdraw answers 409 insufficient_stock at /deliveredWetMassKg with the bin, measure, availableSolidsKg, requestedSolidsKg and unit kg. Certified order lineage answers 409 certification_locked at /orderId. A stale basisFingerprint answers 409 stock_basis_changed with a fresh preview when available. A non-blocking warning asks you to upload the bill of lading in the app. Idempotency-Key is required, including dry runs. Dry runs roll back and return stockEffects and basisFingerprint; committed creates return Location and ETag. Required scope: deliveries:write.",
+        "operationId": "record_delivery",
+        "parameters": [{"description": "true validates and previews the write then rolls back; false commits the write (default).", "in": "query", "name": "dryRun", "required": false, "schema": {"description": "true validates and previews the write then rolls back; false commits the write (default).", "enum": ["true", "false"], "type": "string"}}, {"description": "Unique key per intended write, 1 to 255 visible ASCII characters. Reuse on retry; credential-scoped, retained for 7 days. Required on every create, including dry runs; a dry run never consumes it. Dry runs never consume or replay keys.", "in": "header", "name": "Idempotency-Key", "required": true, "schema": {"maxLength": 255, "minLength": 1, "pattern": "^[\\x21-\\x7e]+$", "type": "string"}}],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {"deliveredAt": "2026-10-08T09:30:00Z", "deliveredWetMassKg": 2400, "moisturePercent": 31, "orderId": "ea31ace1-5b30-4443-adb4-26b43bfa5599", "storageLocationId": "df0f2a35-884c-4293-8783-31aa9fc5e315"},
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "basisFingerprint": {"description": "Stock basis from the dry run. Send on the real write to refuse it if stock changed.", "minLength": 1, "type": "string"},
+                  "deliveredAt": {
+                    "$schema": "https://json-schema.org/draft/2020-12/schema",
+                    "anyOf": [
+                      {"format": "date-time", "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$", "type": "string"},
+                      {"additionalProperties": false, "properties": {"date": {"description": "Calendar date in the effective facility time zone, YYYY-MM-DD.", "format": "date", "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$", "type": "string"}, "time": {"description": "Facility-local wall time, HH:MM. DST gaps and ambiguous repeated times are refused.", "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$", "type": "string"}}, "required": ["date", "time"], "type": "object"}
+                    ],
+                    "description": "An RFC 3339 instant with explicit offset, or a date/time in the effective facility zone."
+                  },
+                  "deliveredWetMassKg": {"description": "Delivered wet product mass in kilograms.", "maximum": 100000000, "minimum": 0.001, "multipleOf": 0.001, "type": "number"},
+                  "distanceKmOverride": {"anyOf": [{"exclusiveMinimum": 0, "type": "number"}, {"type": "null"}], "description": "One-way km; the server counts the round trip. Omit to use the location distance."},
+                  "distanceNote": {"anyOf": [{"maxLength": 500, "type": "string"}, {"type": "null"}], "description": "Distance evidence note. Omission preserves it on update; null clears it."},
+                  "distanceSource": {"anyOf": [{"description": "Distance evidence: map_estimate is a mapped route, manual is operator-entered, document is documented evidence.", "enum": ["map_estimate", "manual", "document"], "type": "string"}, {"type": "null"}], "description": "Distance provenance: map estimate, manual entry or documentary evidence. Documentary provenance may be supplied without an override."},
+                  "driverId": {"anyOf": [{"format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"}, {"type": "null"}], "description": "Driver UUID; null clears the driver on update."},
+                  "moisturePercent": {"description": "Measured water as percent of wet mass. Required without sources. Ignored when sources are sent; each source carries its own reading and the server stores the overall moisture.", "exclusiveMaximum": 100, "minimum": 0, "multipleOf": 0.000001, "type": "number"},
+                  "orderId": {"description": "Order UUID. The order determines the shipping facility and formulation.", "format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"},
+                  "sources": {"description": "Split-bin products in operator draw order. Get each product layerId from get_bin_stock and supply its measured moisturePercent.", "items": {"additionalProperties": false, "properties": {"layerId": {"description": "Product layerId from get_bin_stock.", "format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"}, "moisturePercent": {"description": "Measured moisture of this sub-bin as percent of wet mass, below 100.", "type": "number"}}, "required": ["layerId", "moisturePercent"], "type": "object"}, "maxItems": 200, "minItems": 1, "type": "array"},
+                  "storageLocationId": {"description": "Source product bin UUID, in the order facility and holding its formulation.", "format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"},
+                  "vehicleId": {"anyOf": [{"format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"}, {"type": "null"}], "description": "Vehicle UUID; null clears the vehicle on update."}
+                },
+                "required": ["orderId", "storageLocationId", "deliveredAt", "deliveredWetMassKg"],
+                "type": "object"
+              }
+            }
+          },
+          "description": "JSON body, maximum 262144 bytes. Unknown properties are rejected.",
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "allocations": {
+                      "description": "Products drawn, in draw order, on committed creates and dry runs. Allocation sums can differ from the delivery's 3 decimal place dryBiocharKg in trailing digits.",
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "code": {"description": "Drawn product code.", "type": "string"},
+                          "dryBiocharKg": {"description": "Dry biochar kilograms drawn from this product, at 3 decimal places from the stored allocation.", "type": "number"},
+                          "layerId": {"description": "Drawn product layer identifier, from the bin stock read.", "format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"},
+                          "moisturePercent": {"anyOf": [{"type": "number"}, {"type": "null"}], "description": "Measured water as percent of wet mass for this draw, at up to 6 decimal places from the supplied reading."},
+                          "policy": {"description": "Draw policy: oldest first, newest first, mixed proportions, or the supplied source order.", "enum": ["fifo", "lifo", "pro_rata", "operator_order"], "type": "string"},
+                          "solidsKg": {"description": "Total solids kilograms drawn, including ingredient solids, from the exact rational truncated to 12 decimal places.", "type": "number"},
+                          "wetKg": {"anyOf": [{"type": "number"}, {"type": "null"}], "description": "Wet kilograms drawn at the supplied moisture reading, at 3 decimal places from the stored allocation."}
+                        },
+                        "required": ["layerId", "code", "dryBiocharKg", "solidsKg", "wetKg", "moisturePercent", "policy"],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "basisFingerprint": {"description": "Dry runs only: the stock basis these effects were computed on, opaque string. Send it as basisFingerprint on the real write to refuse it if stock moved.", "type": "string"},
+                    "data": {"$ref": "#/components/schemas/delivery", "description": "Resource representation."},
+                    "stockEffects": {"$ref": "#/components/schemas/stockEffects", "description": "Changed bin balances inside the dry-run transaction, before rollback. All masses are kilograms."},
+                    "warnings": {"description": "Non-blocking guidance to upload the bill of lading in the app.", "items": {"type": "string"}, "type": "array"}
+                  },
+                  "required": ["data", "warnings", "allocations"],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Dry-run delivery preview with stockEffects, basisFingerprint, allocations and an upload warning. No Location or ETag.",
+            "headers": {"Dry-Run": {"$ref": "#/components/headers/Dry-Run"}, "Idempotent-Replayed": {"$ref": "#/components/headers/Idempotent-Replayed"}, "RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "allocations": {
+                      "description": "Products drawn, in draw order, on committed creates and dry runs. Allocation sums can differ from the delivery's 3 decimal place dryBiocharKg in trailing digits.",
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "code": {"description": "Drawn product code.", "type": "string"},
+                          "dryBiocharKg": {"description": "Dry biochar kilograms drawn from this product, at 3 decimal places from the stored allocation.", "type": "number"},
+                          "layerId": {"description": "Drawn product layer identifier, from the bin stock read.", "format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"},
+                          "moisturePercent": {"anyOf": [{"type": "number"}, {"type": "null"}], "description": "Measured water as percent of wet mass for this draw, at up to 6 decimal places from the supplied reading."},
+                          "policy": {"description": "Draw policy: oldest first, newest first, mixed proportions, or the supplied source order.", "enum": ["fifo", "lifo", "pro_rata", "operator_order"], "type": "string"},
+                          "solidsKg": {"description": "Total solids kilograms drawn, including ingredient solids, from the exact rational truncated to 12 decimal places.", "type": "number"},
+                          "wetKg": {"anyOf": [{"type": "number"}, {"type": "null"}], "description": "Wet kilograms drawn at the supplied moisture reading, at 3 decimal places from the stored allocation."}
+                        },
+                        "required": ["layerId", "code", "dryBiocharKg", "solidsKg", "wetKg", "moisturePercent", "policy"],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "basisFingerprint": {"description": "Dry runs only: the stock basis these effects were computed on, opaque string. Send it as basisFingerprint on the real write to refuse it if stock moved.", "type": "string"},
+                    "data": {"$ref": "#/components/schemas/delivery", "description": "Resource representation."},
+                    "stockEffects": {"$ref": "#/components/schemas/stockEffects", "description": "Changed bin balances inside the dry-run transaction, before rollback. All masses are kilograms."},
+                    "warnings": {"description": "Non-blocking guidance to upload the bill of lading in the app.", "items": {"type": "string"}, "type": "array"}
+                  },
+                  "required": ["data", "warnings", "allocations"],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Delivery committed, or replayed, with allocations and an upload warning.",
+            "headers": {"Dry-Run": {"$ref": "#/components/headers/Dry-Run"}, "ETag": {"$ref": "#/components/headers/ETag"}, "Idempotent-Replayed": {"$ref": "#/components/headers/Idempotent-Replayed"}, "Location": {"$ref": "#/components/headers/Location"}, "RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}
+          },
+          "400": {"$ref": "#/components/responses/Problem400"},
+          "401": {"$ref": "#/components/responses/Problem401"},
+          "403": {"$ref": "#/components/responses/Problem403"},
+          "404": {"$ref": "#/components/responses/Problem404"},
+          "409": {"$ref": "#/components/responses/Problem409"},
+          "413": {"$ref": "#/components/responses/Problem413"},
+          "415": {"$ref": "#/components/responses/Problem415"},
+          "422": {"$ref": "#/components/responses/Problem422"},
+          "429": {"$ref": "#/components/responses/Problem429"},
+          "500": {"$ref": "#/components/responses/Problem500"},
+          "503": {"$ref": "#/components/responses/Problem503"}
+        },
+        "x-required-scope": "deliveries:write"
       }
     },
     "/deliveries/{idOrCode}": {
@@ -853,6 +1010,54 @@
         "parameters": [{"description": "Resource UUID or exact human-readable code.", "in": "path", "name": "idOrCode", "required": true, "schema": {"type": "string"}}],
         "responses": {"200": {"content": {"application/json": {"schema": {"additionalProperties": false, "properties": {"data": {"$ref": "#/components/schemas/delivery", "description": "Resource representation."}}, "required": ["data"], "type": "object"}}}, "description": "Resource representation.", "headers": {"ETag": {"$ref": "#/components/headers/ETag"}, "RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}}, "400": {"$ref": "#/components/responses/Problem400"}, "401": {"$ref": "#/components/responses/Problem401"}, "403": {"$ref": "#/components/responses/Problem403"}, "404": {"$ref": "#/components/responses/Problem404"}, "429": {"$ref": "#/components/responses/Problem429"}, "500": {"$ref": "#/components/responses/Problem500"}},
         "x-required-scope": "deliveries:read"
+      },
+      "patch": {
+        "description": "Update delivery metadata by UUID with a strong If-Match; codes are refused in the path. Only code, driverId, vehicleId, distanceKmOverride, distanceSource and distanceNote can change. Mass, moisture, sources, time, order and bin are unknown keys and answer 422. Omitted fields stay unchanged. Null clears clearable fields; distanceKmOverride null clears its source unless documentary provenance is explicitly supplied. Distances are one-way km; the server counts the round trip. distanceKmOverride must be above 0. Archived deliveries or facilities cannot be updated. Missing or foreign driver and vehicle UUIDs answer 404 with a pointer. Certified lineage and duplicate codes answer 409. Missing If-Match answers 428; stale tags answer 412 with the current representation. Dry runs roll back and return 200 without ETag. An optional Idempotency-Key replays before precondition checks. PATCH does not add the create's bill-of-lading warning. Required scope: deliveries:write.",
+        "operationId": "update_delivery",
+        "parameters": [
+          {"description": "Target identifier, UUID; codes are not accepted on this method.", "in": "path", "name": "idOrCode", "required": true, "schema": {"format": "uuid", "type": "string"}},
+          {"description": "true validates and previews the write then rolls back; false commits the write (default).", "in": "query", "name": "dryRun", "required": false, "schema": {"description": "true validates and previews the write then rolls back; false commits the write (default).", "enum": ["true", "false"], "type": "string"}},
+          {"description": "One strong ETag from the resource read: \"version.revision\", each a positive decimal safe integer (1 to 9007199254740991), without leading zeros, for example \"3.1\". Wildcards and weak tags are refused. A mismatch returns the current representation.", "in": "header", "name": "If-Match", "required": true, "schema": {"pattern": "^\"((?:[1-9]\\d{0,14}|[1-8]\\d{15}|900[0-6]\\d{12}|90070\\d{11}|90071[0-8]\\d{10}|900719[0-8]\\d{9}|9007199[0-1]\\d{8}|90071992[0-4]\\d{7}|900719925[0-3]\\d{6}|9007199254[0-6]\\d{5}|90071992547[0-3]\\d{4}|9007199254740[0-8]\\d{2}|90071992547409[0-8]\\d{1}|9007199254740990\\d{0}|9007199254740991))\\.((?:[1-9]\\d{0,14}|[1-8]\\d{15}|900[0-6]\\d{12}|90070\\d{11}|90071[0-8]\\d{10}|900719[0-8]\\d{9}|9007199[0-1]\\d{8}|90071992[0-4]\\d{7}|900719925[0-3]\\d{6}|9007199254[0-6]\\d{5}|90071992547[0-3]\\d{4}|9007199254740[0-8]\\d{2}|90071992547409[0-8]\\d{1}|9007199254740990\\d{0}|9007199254740991))\"$", "type": "string"}},
+          {"description": "Unique key per intended write, 1 to 255 visible ASCII characters. Reuse on retry; credential-scoped, retained for 7 days. Optional on this method. Dry runs never consume or replay keys.", "in": "header", "name": "Idempotency-Key", "required": false, "schema": {"maxLength": 255, "minLength": 1, "pattern": "^[\\x21-\\x7e]+$", "type": "string"}}
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {"distanceKmOverride": 25, "distanceNote": "Route confirmed by the driver.", "distanceSource": "manual"},
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "code": {"description": "Unique delivery code within the organization.", "maxLength": 50, "minLength": 1, "pattern": "^[A-Z0-9-]+$", "type": "string"},
+                  "distanceKmOverride": {"anyOf": [{"exclusiveMinimum": 0, "type": "number"}, {"type": "null"}], "description": "One-way km; the server counts the round trip. Omit to use the location distance."},
+                  "distanceNote": {"anyOf": [{"maxLength": 500, "type": "string"}, {"type": "null"}], "description": "Distance evidence note. Omission preserves it on update; null clears it."},
+                  "distanceSource": {"anyOf": [{"description": "Distance evidence: map_estimate is a mapped route, manual is operator-entered, document is documented evidence.", "enum": ["map_estimate", "manual", "document"], "type": "string"}, {"type": "null"}], "description": "Distance provenance: map estimate, manual entry or documentary evidence. Documentary provenance may be supplied without an override."},
+                  "driverId": {"anyOf": [{"format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"}, {"type": "null"}], "description": "Driver UUID; null clears the driver on update."},
+                  "vehicleId": {"anyOf": [{"format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"}, {"type": "null"}], "description": "Vehicle UUID; null clears the vehicle on update."}
+                },
+                "type": "object"
+              }
+            }
+          },
+          "description": "JSON body, maximum 262144 bytes. Unknown properties are rejected.",
+          "required": true
+        },
+        "responses": {
+          "200": {"content": {"application/json": {"schema": {"additionalProperties": false, "properties": {"data": {"$ref": "#/components/schemas/delivery", "description": "Resource representation."}, "warnings": {"description": "Non-fatal guidance, plain text: ratios the server calculated, then certification gaps. Absent when there is none.", "items": {"type": "string"}, "type": "array"}}, "required": ["data"], "type": "object"}}}, "description": "Updated delivery or dry-run representation. ETag is absent on dry runs.", "headers": {"Dry-Run": {"$ref": "#/components/headers/Dry-Run"}, "ETag": {"$ref": "#/components/headers/ETag"}, "Idempotent-Replayed": {"$ref": "#/components/headers/Idempotent-Replayed"}, "RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}},
+          "400": {"$ref": "#/components/responses/Problem400"},
+          "401": {"$ref": "#/components/responses/Problem401"},
+          "403": {"$ref": "#/components/responses/Problem403"},
+          "404": {"$ref": "#/components/responses/Problem404"},
+          "409": {"$ref": "#/components/responses/Problem409"},
+          "412": {"$ref": "#/components/responses/DeliveryProblem412"},
+          "413": {"$ref": "#/components/responses/Problem413"},
+          "415": {"$ref": "#/components/responses/Problem415"},
+          "422": {"$ref": "#/components/responses/Problem422"},
+          "428": {"$ref": "#/components/responses/Problem428"},
+          "429": {"$ref": "#/components/responses/Problem429"},
+          "500": {"$ref": "#/components/responses/Problem500"},
+          "503": {"$ref": "#/components/responses/Problem503"}
+        },
+        "x-required-scope": "deliveries:write"
       }
     },
     "/drivers": {

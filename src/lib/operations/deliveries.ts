@@ -15,9 +15,14 @@ function changedFields(input: object): string[] {
   return Object.entries(input).filter(([key, value]) => value !== undefined && !NOT_CHANGES.has(key)).map(([key]) => key).sort();
 }
 
-const describeRecordedDelivery = (input: object, output: { delivery: Delivery }): OperationEffect => ({
+export const describeRecordedDelivery = (input: object, output: { delivery: Pick<Delivery, "id" | "version"> }): OperationEffect => ({
   outcome: "created", entityType: "delivery", entityIds: [output.delivery.id],
   versionBefore: null, versionAfter: output.delivery.version, changedFields: changedFields(input),
+});
+
+export const describeUpdatedDelivery = (input: { expectedVersion: number }, output: Pick<Delivery, "id" | "version">): OperationEffect => ({
+  outcome: "updated", entityType: "delivery", entityIds: [output.id],
+  versionBefore: input.expectedVersion, versionAfter: output.version, changedFields: changedFields(input),
 });
 
 /** Custom codes and stock request keys belong only to the native app path. */
@@ -50,8 +55,7 @@ export const recordDelivery: Operation<typeof recordDeliveryInput, Omit<PostedDe
 const updateDeliveryInput = updateDeliveryApiInput.extend({ deliveryId: uuidSchema() });
 export const updateDeliveryOperation: Operation<typeof updateDeliveryInput, Delivery> = {
   id: "update_delivery", input: updateDeliveryInput, supportsDryRun: true,
-  describe: (input, output) => ({ outcome: "updated", entityType: "delivery", entityIds: [output.id],
-    versionBefore: input.expectedVersion, versionAfter: output.version, changedFields: changedFields(input) }),
+  describe: describeUpdatedDelivery,
   execute: async ({ ctx, tx }, { deliveryId, ...changes }) => {
     const saved = await updateDeliveryInTransaction(ctx, tx, deliveryId, changes);
     const delivery: Partial<typeof saved> = { ...saved };

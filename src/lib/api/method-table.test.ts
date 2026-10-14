@@ -67,8 +67,14 @@ it("exposes order writes with a separate delete scope", () => {
   expect(getApiMethodEntry("/api/v1/orders/OR-1")).toMatchObject({ methods: ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH"], scopes: ["orders:read", "orders:write", "orders:delete"] });
 });
 
-it("stages delivery reads without POST, PATCH or DELETE", () => {
-  for (const path of ["/api/v1/deliveries", "/api/v1/deliveries/DL-1"]) {
-    expect(getApiMethodEntry(path)).toMatchObject({ methods: ["GET", "HEAD", "OPTIONS"], scopes: ["deliveries:read"] });
+it("exposes delivery creates and metadata patches without DELETE", async () => {
+  expect(getApiMethodEntry("/api/v1/deliveries")).toMatchObject({ methods: ["GET", "HEAD", "OPTIONS", "POST"], scopes: ["deliveries:read", "deliveries:write"] });
+  expect(getApiMethodEntry("/api/v1/deliveries/DL-1")).toMatchObject({ methods: ["GET", "HEAD", "OPTIONS", "PATCH"], scopes: ["deliveries:read", "deliveries:write"] });
+  const handlers = { GET: () => Response.json({}), PATCH: () => Response.json({}) };
+  const next = autoImplementMethods(handlers);
+  for (const method of ["DELETE", "POST", "PUT"] as const) {
+    const response = await next[method](new NextRequest("https://example.test/api/v1/deliveries/id", { method }), { params: Promise.resolve({}) });
+    if (!(response instanceof Response)) throw new Error("Next must return a Response.");
+    expect(response.status).toBe(405);
   }
 });

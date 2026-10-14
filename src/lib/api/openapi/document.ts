@@ -25,6 +25,7 @@ import { resources } from "./resources";
 import { operationInput, privateOperation, requestBody, type Paths } from "./operation-kit";
 import { addBiocharWritePaths } from "./biochar-writes";
 import { addOrderWritePaths } from "./order-writes";
+import { addDeliveryWritePaths } from "./delivery-writes";
 import { addLabSampleWritePaths } from "./lab-sample-writes";
 import { outputSchema, queryParameters, targetParameter, idempotencyParameter, ifMatchParameter, privateHeaders, requestIdHeader, etagHeader, stockEtagHeader, orderBalanceEtagHeader, writeHeaders, locationHeader, problemResponses, jsonResponse, headerComponents, problemResponseComponents } from "./transport";
 
@@ -98,6 +99,14 @@ export function buildOpenApiDocument() {
   };
   responses.OrderProblem412 = { ...responses.Problem412,
     content: { "application/problem+json": { schema: { $ref: "#/components/schemas/OrderPreconditionProblem" } } },
+  };
+  schemas.DeliveryPreconditionProblem = {
+    allOf: [{ $ref: "#/components/schemas/Problem" }, { type: "object", properties: {
+      current: { $ref: "#/components/schemas/delivery", description: "Current delivery after a failed version precondition." },
+    }, required: ["current"] }],
+  };
+  responses.DeliveryProblem412 = { ...responses.Problem412,
+    content: { "application/problem+json": { schema: { $ref: "#/components/schemas/DeliveryPreconditionProblem" } } },
   };
   const runPreconditionResponse = { "412": { $ref: "#/components/responses/ProductionRunProblem412" } };
   const feedstockPreconditionResponse = { "412": { $ref: "#/components/responses/FeedstockProblem412" } };
@@ -211,6 +220,7 @@ export function buildOpenApiDocument() {
   addBiocharWritePaths(paths, { publishOutput, writeErrors: WRITE_ERRORS });
   addLabSampleWritePaths(paths, { publishOutput, writeErrors: WRITE_ERRORS });
   addOrderWritePaths(paths, { publishOutput, writeErrors: WRITE_ERRORS });
+  addDeliveryWritePaths(paths, { publishOutput, writeErrors: WRITE_ERRORS });
 
   for (const [path, operationId, mediaType, description] of [
     ["/openapi.json", "get_openapi_document", "application/json", "Public OpenAPI 3.1 contract."],

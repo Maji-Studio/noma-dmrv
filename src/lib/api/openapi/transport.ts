@@ -83,7 +83,7 @@ const writeHeaderDefinitions = {
   "Idempotent-Replayed": header("true when returning a previously committed outcome.", { type: "string", enum: ["true"] }),
   "Dry-Run": header("true when validation and domain guards ran but the transaction rolled back.", { type: "string", enum: ["true"] }),
 };
-const locationDefinition = { Location: header("Relative URL of the first created feedstock; absent on dry runs.") };
+const locationDefinition = { Location: header("Relative URL of the created resource (the first feedstock for split intake); absent on dry runs.") };
 
 export const headerComponents = {
   ...privateHeaderDefinitions, ...etagDefinition, ...writeHeaderDefinitions, ...locationDefinition,

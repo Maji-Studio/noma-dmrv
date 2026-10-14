@@ -1,5 +1,18 @@
 import { expect, it } from "vitest";
 import { deliveryActionFieldIssues, deliveryActionIssues, throwDeliveryActionError } from "./delivery-action-errors";
+import { deliveryReferenceNotFound } from "./delivery-domain-errors";
+
+it("shows a source bin not_found refusal on the source bin field", () => {
+  const refusal = deliveryReferenceNotFound(["storageLocationId"], "Source bin");
+  try { throwDeliveryActionError({ success: false, error: refusal.message, code: refusal.code, issues: refusal.issues }); }
+  catch (error) {
+    expect(deliveryActionFieldIssues(error, ["storageLocationId"])).toEqual([
+      { field: "storageLocationId", message: "Source bin was not found." },
+    ]);
+    return;
+  }
+  expect.fail("Expected the action refusal to throw");
+});
 it("keeps typed field issues when the action is thrown by the hook", () => {
   const issues = [{ path: ["deliveryDate"], code: "validation_failed", message: "Enter a time at or before now." }];
   try { throwDeliveryActionError({ success: false, error: issues[0].message, issues }); }

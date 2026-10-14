@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import { API_BODY_MAX_BYTES, API_CURSOR_MAX_LENGTH, API_IDEMPOTENCY_KEY_MAX_LENGTH, API_LIST_DEFAULT_LIMIT, API_LIST_MAX_LIMIT, API_QUERY_MAX_LENGTH } from "@/config/api-rest";
 import { recordOrderInput, updateOrderApiInput } from "@/schemas/order-input";
+import { recordDeliveryInput, updateDeliveryApiInput } from "@/schemas/delivery-input";
 import { createFeedstockSchema, updateFeedstockSchema } from "@/schemas/feedstocks";
 import { toOperationJsonSchema, type JsonSchema } from "@/lib/operations/json-schema";
 import { buildOpenApiDocument, serializeOpenApiDocument } from "./document";
@@ -226,7 +227,7 @@ it("types current as a feedstock only on feedstock precondition responses", () =
     expect.objectContaining({ properties: { current: expect.objectContaining({ $ref: "#/components/schemas/feedstock" }) }, required: ["current"] }),
   ]);
   for (const [name, response] of Object.entries(document.components.responses)) {
-    if (name === "FeedstockProblem412" || name === "ProductionRunProblem412" || name === "BiocharProductProblem412" || name === "LabSampleProblem412" || name === "OrderProblem412") continue;
+    if (name === "FeedstockProblem412" || name === "ProductionRunProblem412" || name === "BiocharProductProblem412" || name === "LabSampleProblem412" || name === "OrderProblem412" || name === "DeliveryProblem412") continue;
     expect(response.content["application/problem+json"].schema).toEqual({ $ref: "#/components/schemas/Problem" });
   }
 });
@@ -408,12 +409,41 @@ it("publishes order write bodies, scopes, preconditions and complete problem res
   expect(bodyOf("delete")).toEqual({ type: "object", properties: {}, additionalProperties: false });
 });
 
-it("publishes delivery reads, errors and a strong ETag without writes", () => {
+it("publishes delivery reads, errors and a strong ETag", () => {
   for (const [path, operationId] of [["/deliveries", "find_deliveries"], ["/deliveries/{idOrCode}", "get_delivery"]]) {
-    expect(Object.keys(document.paths[path])).toEqual(["get"]);
     expect(document.paths[path].get).toMatchObject({ operationId, "x-required-scope": "deliveries:read" });
     for (const status of ["400", "401", "403", "404", "429", "500"]) expect(document.paths[path].get.responses).toHaveProperty(status);
   }
   expect(document.paths["/deliveries/{idOrCode}"].get.responses["200"]).toMatchObject({ headers: { ETag: { $ref: "#/components/headers/ETag" } } });
   expect(document.components.schemas.output_bin_stock.required).toContain("drawOrder");
+});
+
+it("publishes delivery write bodies, allocations, preconditions and complete problems without DELETE", () => {
+  for (const [path, method, id] of [["/deliveries", "post", "record_delivery"], ["/deliveries/{idOrCode}", "patch", "update_delivery"]]) {
+    const operation = document.paths[path][method];
+    expect(operation).toMatchObject({ operationId: id, "x-required-scope": "deliveries:write" });
+    for (const status of [400, 401, 403, 404, 409, 413, 415, 422, 429, 500, 503, ...(method === "patch" ? [412, 428] : [])]) {
+      expect(operation.responses).toHaveProperty(String(status));
+    }
+    expect(operation.parameters).toContainEqual(expect.objectContaining({ name: "Idempotency-Key", required: method === "post" }));
+    const body = (operation.requestBody as { content: { "application/json": { schema: JsonSchema } } }).content["application/json"].schema;
+    const expected = toOperationJsonSchema(method === "post" ? recordDeliveryInput : updateDeliveryApiInput.omit({ expectedVersion: true }));
+    delete expected.$schema;
+    expect(body).toEqual(expected);
+    expect(body.properties).not.toHaveProperty("expectedVersion");
+  }
+  const post = document.paths["/deliveries"].post;
+  for (const status of ["200", "201"]) {
+    expect(post.responses[status]).toMatchObject({ content: { "application/json": { schema: {
+      required: ["data", "warnings", "allocations"], properties: {
+        allocations: { items: { required: ["layerId", "code", "dryBiocharKg", "solidsKg", "wetKg", "moisturePercent", "policy"] } },
+        stockEffects: expect.any(Object), basisFingerprint: expect.any(Object),
+      },
+    } } } });
+  }
+  const patch = document.paths["/deliveries/{idOrCode}"].patch;
+  expect(patch.parameters).toContainEqual(expect.objectContaining({ name: "If-Match", required: true }));
+  expect(patch.responses["412"]).toEqual({ $ref: "#/components/responses/DeliveryProblem412" });
+  expect(document.components.schemas.DeliveryPreconditionProblem.allOf).toContainEqual(expect.objectContaining({ properties: { current: expect.objectContaining({ $ref: "#/components/schemas/delivery" }) }, required: ["current"] }));
+  expect(document.paths["/deliveries/{idOrCode}"]).not.toHaveProperty("delete");
 });

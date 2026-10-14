@@ -90,12 +90,12 @@ describe("delivery reference refusals and replay", () => {
     await expect(db.transaction(tx => createDeliveryInTransaction(f.ctx, tx, { ...f.input, idempotencyKey: randomUUID() }))).rejects.toMatchObject({ code: "not_found", issues: [{ path: ["orderId"] }] });
   });
   it.each([
-    [{ type: "biochar_bin", formulationId: null }, "product bin"],
-    [{ archivedAt: new Date() }, "archived"],
-  ] as const)("refuses an ineligible own bin: %s", async (change, message) => {
+    [{ type: "biochar_bin", formulationId: null }, "validation_failed", "product bin"],
+    [{ archivedAt: new Date() }, "not_found", "Source bin was not found."],
+  ] as const)("refuses an ineligible own bin: %s", async (change, code, message) => {
     const f = await fixture();
     await db.update(storageLocations).set(change).where(eq(storageLocations.id, f.bin.id));
-    await expect(db.transaction(tx => createDeliveryInTransaction(f.ctx, tx, f.input))).rejects.toMatchObject({ code: "validation_failed", issues: [{ path: ["storageLocationId"], message: expect.stringContaining(message) }] });
+    await expect(db.transaction(tx => createDeliveryInTransaction(f.ctx, tx, f.input))).rejects.toMatchObject({ code, issues: [{ path: ["storageLocationId"], message: expect.stringContaining(message) }] });
   });
   it("returns total-solids shortage metadata", async () => {
     const f = await fixture();
