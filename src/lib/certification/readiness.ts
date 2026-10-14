@@ -42,6 +42,7 @@ export interface TransportCoverageFact {
   count: number;
   /** A per-leg uniformity/completeness warning from aggregation, if any. */
   hasAggregationWarning: boolean;
+  aggregationWarning?: string | null;
 }
 
 export interface RemovalReadinessFacts {
@@ -67,6 +68,8 @@ export interface RemovalReadinessFacts {
   productionReadinessGap?: ProductionReadinessGap | null;
   /** Coverage facts for the template's required transport categories only. */
   requiredTransport: TransportCoverageFact[];
+  /** Non-blocking review of vehicle records across required transport categories. */
+  transportVehicleAdvisories?: string[];
   /** Compact labels from per-entity certifier-readiness checks. */
   entityReadinessGaps?: string[];
   /** Documents discovered by the same lineage walk as the Sources panel. */
@@ -95,6 +98,8 @@ export interface RemovalReadiness {
   reasons: string[];
   /** Non-blocking conditions operators should see before submission. */
   advisories: string[];
+  /** Vehicle review warnings, separate from automatic evidence work. */
+  transportVehicleAdvisories?: string[];
 }
 
 const NOT_LINKED_REASON = "Facility not linked to an Isometric project";
@@ -226,27 +231,29 @@ function evidenceAdvisories(facts: RemovalReadinessFacts): string[] {
 export function deriveRemovalReadiness(
   facts: RemovalReadinessFacts,
 ): RemovalReadiness {
-  const advisories = evidenceAdvisories(facts);
-  if (facts.lockInFlight) return { state: "inProgress", reasons: [], advisories };
+  const transportVehicleAdvisories = facts.transportVehicleAdvisories ?? [];
+  const advisories = [...evidenceAdvisories(facts), ...transportVehicleAdvisories];
+  const advisoryFields = { advisories, transportVehicleAdvisories };
+  if (facts.lockInFlight) return { state: "inProgress", reasons: [], ...advisoryFields };
 
   // Status drives the high end. A latest superseded row is non-terminal: it is
   // a retired attempt for which `claimSubmissionDraft` will mint a fresh
   // version. A removal is done only at submitted (no remote lifecycle exists;
   // see status.ts).
   const status = deriveRemovalStatus({ local: facts.local, lockInFlight: false });
-  if (status.isTerminal) return { state: "submitted", reasons: [], advisories };
+  if (status.isTerminal) return { state: "submitted", reasons: [], ...advisoryFields };
 
   // Not submitted yet (null / draft / rejected) → evaluate preconditions.
   if (!facts.hasMapping) {
     // Without a project link every downstream fact is empty; one clear reason.
-    return { state: "blocked", reasons: [NOT_LINKED_REASON], advisories };
+    return { state: "blocked", reasons: [NOT_LINKED_REASON], ...advisoryFields };
   }
 
   if (!facts.hasOrgCredentials) {
     return {
       state: "blocked",
       reasons: [NO_ORG_CREDENTIALS_REASON],
-      advisories,
+      ...advisoryFields,
     };
   }
 
@@ -298,8 +305,8 @@ export function deriveRemovalReadiness(
   reasons.push(...durabilityBlockerReasons(facts.durabilityGateBlockers ?? []));
 
   return reasons.length > 0
-    ? { state: "blocked", reasons, advisories }
-    : { state: "ready", reasons: [], advisories };
+    ? { state: "blocked", reasons, ...advisoryFields }
+    : { state: "ready", reasons: [], ...advisoryFields };
 }
 
 // ---------------------------------------------------------------------------
@@ -474,6 +481,7 @@ export interface RemovalRequirementCheck {
   fixTarget?: RemovalFixTarget;
   /** Local record to open when the fix target supports an exact edit link. */
   fixTargetId?: string;
+  transportCategory?: TransportCategory;
   status: "met" | "unmet" | "skipped" | "warning";
   /** The blocker text when unmet, or context when met/skipped. */
   detail?: string;
@@ -512,56 +520,54 @@ export function buildRemovalRequirementsChecklist(
   const templateClean =
     credentialsConfigured && templateResolvesCleanly(facts);
 
-  const uniformity = ((): RemovalRequirementCheckBase => {
+  const uniformity = ((): RemovalRequirementCheckBase[] => {
     // Uniformity is only meaningful once the template chain resolves and legs
     // are actually present (presence is the batch's concern, not this step's).
     if (!linked || !templateClean) {
-      return {
+      return [{
         key: "transportUniformity",
         label: TRANSPORT_UNIFORMITY_LABEL,
         status: "skipped",
-      };
+      }];
     }
-    const mixed = facts.requiredTransport
-      .filter((t) => t.count > 0 && t.hasAggregationWarning)
-      .map((t) => t.category);
-    return mixed.length === 0
-      ? {
-          key: "transportUniformity",
-          label: TRANSPORT_UNIFORMITY_LABEL,
-          status: "met",
-        }
-      : {
+    const blocked = facts.requiredTransport.filter(
+      (t) => t.count > 0 && t.hasAggregationWarning,
+    );
+    return blocked.length === 0
+      ? [{ key: "transportUniformity", label: TRANSPORT_UNIFORMITY_LABEL, status: "met" }]
+      : blocked.map((t) => ({
           key: "transportUniformity",
           label: TRANSPORT_UNIFORMITY_LABEL,
           status: "unmet",
-          detail: `Mixed method or factor across ${describeCategories(mixed)} transport legs`,
-        };
+          transportCategory: t.category,
+          detail: t.aggregationWarning ?? `Mixed transport method or mode across ${t.category} transport legs`,
+        }));
   })();
 
-  const transport = ((): RemovalRequirementCheckBase => {
+  const transport = ((): RemovalRequirementCheckBase[] => {
     if (!linked || !templateClean) {
-      return {
+      return [{
         key: "transport",
         label: TRANSPORT_COVERAGE_LABEL,
         status: "skipped",
-      };
+      }];
     }
     const missing = facts.requiredTransport
       .filter((category) => category.count === 0)
       .map((category) => category.category);
     return missing.length === 0
-      ? {
+      ? [{
           key: "transport",
           label: TRANSPORT_COVERAGE_LABEL,
           status: "met",
-        }
-      : {
+        }]
+      : missing.map((category) => ({
           key: "transport",
           label: TRANSPORT_COVERAGE_LABEL,
           status: "unmet",
-          detail: `Missing ${describeCategories(missing)} transport legs`,
-        };
+          transportCategory: category,
+          detail: `Missing ${category} transport legs`,
+        }));
   })();
 
   const entityReadiness = ((): RemovalRequirementCheckBase => {
@@ -647,8 +653,8 @@ export function buildRemovalRequirementsChecklist(
           ? undefined
           : (templateBlockerReason(facts) ?? undefined),
     },
-    transport,
-    uniformity,
+    ...transport,
+    ...uniformity,
     production,
     measurementDatesCheck(facts),
     feedstockTypeMapping,

@@ -120,6 +120,7 @@ describe("deriveRemovalReadiness — blocked: linkage & template", () => {
       state: "blocked",
       reasons: ["Organization Isometric credentials are not configured"],
       advisories: [],
+      transportVehicleAdvisories: [],
     });
   });
 
@@ -292,6 +293,7 @@ describe("evidence mirroring advisory", () => {
       state: "ready",
       reasons: [],
       advisories: [],
+      transportVehicleAdvisories: [],
     });
   });
 
@@ -322,6 +324,7 @@ describe("evidence mirroring advisory", () => {
     expect(deriveRemovalReadiness(facts)).toMatchObject({
       state: "ready",
       advisories: ["6 of 9 files are sent automatically when you submit"],
+      transportVehicleAdvisories: [],
     });
     const wizardEvidence = buildRemovalRequirementsChecklist(facts).find(
       (check) => check.key === "evidence",
@@ -354,6 +357,7 @@ describe("evidence mirroring advisory", () => {
     expect(deriveRemovalReadiness(facts)).toMatchObject({
       state: "ready",
       advisories: [],
+      transportVehicleAdvisories: [],
     });
     expect(
       buildRemovalRequirementsChecklist(facts).some(
@@ -436,7 +440,7 @@ describe("buildRemovalRequirementsChecklist — row semantics", () => {
     expect(checkFor(checks, "transportUniformity")).toMatchObject({
       key: "transportUniformity",
       status: "unmet",
-      detail: "Mixed method or factor across biochar transport legs",
+      detail: "Mixed transport method or mode across biochar transport legs",
     });
   });
 
@@ -733,5 +737,17 @@ describe("canRegroupRemoval", () => {
     for (const local of ["rejected", "superseded"] as const) {
       expect(canRegroupRemoval({ local, lockInFlight: false })).toBe(true);
     }
+  });
+});
+
+
+describe("vehicle advisories", () => {
+  it("keeps readiness and transport uniformity met", () => {
+    const advisory = "Feedstock transport uses more than one vehicle type.";
+    const facts = ready({ transportVehicleAdvisories: [advisory] });
+    expect(deriveRemovalReadiness(facts)).toMatchObject({
+      state: "ready", reasons: [], advisories: [advisory], transportVehicleAdvisories: [advisory],
+    });
+    expect(checkFor(buildRemovalRequirementsChecklist(facts), "transportUniformity").status).toBe("met");
   });
 });

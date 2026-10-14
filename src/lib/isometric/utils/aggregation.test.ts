@@ -5,6 +5,7 @@ import type { TransportLeg } from "@/db/schema";
 import {
   aggregateProductionRuns,
   aggregateTransportMassDistance,
+  transportVehicleAdvisories,
   type ProductionRunWithSamples,
 } from "./aggregation";
 
@@ -94,7 +95,7 @@ describe("aggregateTransportMassDistance", () => {
     );
 
     expect(result.massDistanceTonneKm).toBeNull();
-    expect(result.warning).toContain("00000000-0000-0000-0000-000000000003");
+    expect(result.warning).toBe("Feedstock transport has 1 leg without a load mass (00000000-0000-0000-0000-000000000003). Record a load mass for each leg before submitting.");
   });
 
   it("identifies a leg missing load mass by its named route", () => {
@@ -109,20 +110,87 @@ describe("aggregateTransportMassDistance", () => {
       "Feedstock",
     );
 
-    expect(result.warning).toContain("Farm A to Plant Gate");
+    expect(result.warning).toBe("Feedstock transport has 1 leg without a load mass (Farm A to Plant Gate). Record a load mass for each leg before submitting.");
   });
 
-  it("returns null and warns when legs mix factor fields", () => {
+  it.each([
+    { vehicleType: "tractor" },
+    { modelYear: 2020 },
+    { vehicleType: "tractor", modelYear: 2020 },
+  ])("aggregates mixed vehicle records with advisories: %j", (overrides) => {
+    const legs = [leg("01", { isDerived: true }), leg("02", { isDerived: true, ...overrides })];
+    const result = aggregateTransportMassDistance(legs, "Feedstock");
+    expect(result.massDistanceTonneKm).toBe(4);
+    expect(result.warning).toBeNull();
+    expect(transportVehicleAdvisories(legs, "Feedstock")).toEqual([
+      ...(overrides.vehicleType ? ["Feedstock transport uses more than one vehicle type. Check that the removal template's transport factor covers every vehicle used."] : []),
+      ...(overrides.modelYear ? ["Feedstock transport has different or unrecorded model years. Check that the removal template's transport factor covers every vehicle used."] : []),
+    ]);
+  });
+
+  it.each([
+    { transportMethodType: "rail" },
+    // Defensive check for inconsistent persisted data outside the current enum.
+    { calculationMethodType: "energy_usage" as TransportLeg["calculationMethodType"] },
+    { loadMassKg: null },
+    { loadMassKg: 0 },
+    { loadMassKg: -1 },
+  ] satisfies Partial<TransportLeg>[])("still blocks incompatible methods, modes or missing mass: %j", (overrides) => {
     const result = aggregateTransportMassDistance(
-      [
-        leg("00000000-0000-0000-0000-000000000004", { modelYear: null }),
-        leg("00000000-0000-0000-0000-000000000005", { modelYear: 2020 }),
-      ],
+      [leg("01"), leg("02", { vehicleType: "tractor", ...overrides })],
       "Feedstock",
     );
-
     expect(result.massDistanceTonneKm).toBeNull();
-    expect(result.warning).toContain("mix factor");
+    expect(result.warning).toBe(
+      "transportMethodType" in overrides
+        ? "Feedstock transport legs use different transport modes. Check the recorded modes against the removal template."
+        : "calculationMethodType" in overrides
+          ? "Feedstock transport legs use different calculation methods. Check the recorded methods against the removal template."
+          : "Feedstock transport has 1 leg without a load mass (02). Record a load mass for each leg before submitting.",
+    );
+  });
+
+  it.each(["feedstock", "biochar", "sample"] as const)(
+    "still reports missing vehicle types on manual %s legs",
+    (entityType) => {
+      expect(transportVehicleAdvisories([
+        leg("01", { entityType, vehicleType: null }),
+      ], "Transport")).toEqual([
+        "Transport transport has legs with no vehicle type recorded. Check that the removal template's transport factor covers every vehicle used.",
+      ]);
+    },
+  );
+
+  it("still reports a missing vehicle type on derived feedstock legs", () => {
+    expect(transportVehicleAdvisories([
+      leg("01", { vehicleType: null, isDerived: true }),
+    ], "Feedstock")).toEqual([
+      "Feedstock transport has legs with no vehicle type recorded. Check that the removal template's transport factor covers every vehicle used.",
+    ]);
+  });
+
+  it.each(["feedstock", "biochar", "sample"] as const)(
+    "does not treat a manual %s leg's absent model year as unrecorded",
+    (entityType) => {
+      expect(transportVehicleAdvisories([
+        leg("01", { entityType, isDerived: false }),
+        leg("02", { isDerived: true, modelYear: 2020 }),
+      ], "Feedstock")).toEqual([]);
+    },
+  );
+
+  it("keeps comparing recorded model years on manual legs", () => {
+    expect(transportVehicleAdvisories([
+      leg("01", { modelYear: 2020 }),
+      leg("02", { modelYear: 2021 }),
+    ], "Feedstock")).toEqual([
+      "Feedstock transport has different or unrecorded model years. Check that the removal template's transport factor covers every vehicle used.",
+    ]);
+  });
+
+  it("has no vehicle advisory for empty or matching records", () => {
+    expect(transportVehicleAdvisories([], "Sample")).toEqual([]);
+    expect(transportVehicleAdvisories([leg("01"), leg("02")], "Feedstock")).toEqual([]);
   });
 
   it("reports all legs missing load mass in one warning", () => {
@@ -135,11 +203,8 @@ describe("aggregateTransportMassDistance", () => {
     );
 
     expect(result.massDistanceTonneKm).toBeNull();
-    expect(result.warning).toContain(
-      "00000000-0000-0000-0000-000000000001",
-    );
-    expect(result.warning).toContain(
-      "00000000-0000-0000-0000-000000000002",
+    expect(result.warning).toBe(
+      "Feedstock transport has 2 legs without a load mass (00000000-0000-0000-0000-000000000001, 00000000-0000-0000-0000-000000000002). Record a load mass for each leg before submitting.",
     );
   });
 });

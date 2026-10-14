@@ -91,52 +91,65 @@ export function isAppliedScopedSource(
 // Aggregates a category's transport legs into a single mass-distance
 // (tonne·km) = Σⱼ(distⱼ × massⱼ) — the value Certify's
 // `mass_distance_based_ci_emissions` blueprint multiplies by its fixed
-// emission factor. Summing per-leg contributions IS the mass-weighting, and is
-// exact only when every leg shares that factor (Isometric Transportation v1.1
-// §5). The factor is NOT stored on our legs — it lives on the blueprint — so a
-// category whose legs differ on the fields that select the factor cannot be
-// collapsed into one scalar and surfaces a warning instead.
+// emission factor, a fixed template input. Vehicle type and model year are
+// Transportation module records, not factor selectors. Mixed methods or modes
+// still block aggregation; mixed vehicle records produce a separate advisory.
 //
 // Returns:
 //   { massDistanceTonneKm }  — Σⱼ(distⱼ × massⱼ); null when empty / blocked
-//   { warning }              — missing load mass, mixed method/factor, or null
+//   { warning }              — missing load mass, mixed method/mode, or null
 export interface TransportAggregationResult {
   massDistanceTonneKm: number | null;
   warning: string | null;
-}
-
-const TRANSPORT_FACTOR_FIELDS = [
-  "calculationMethodType",
-  "transportMethodType",
-  "vehicleType",
-  "modelYear",
-] as const satisfies readonly (keyof TransportLeg)[];
-type TransportFactorField = (typeof TRANSPORT_FACTOR_FIELDS)[number];
-
-function formatFactorValue(value: TransportLeg[TransportFactorField]): string {
-  return value == null ? "unset" : String(value);
 }
 
 function getMixedTransportFactorWarning(
   legs: TransportLeg[],
   categoryLabel: string,
 ): string | null {
-  if (legs.length === 0) return null;
-
   const first = legs[0];
-  for (const leg of legs) {
-    for (const field of TRANSPORT_FACTOR_FIELDS) {
-      if (leg[field] !== first[field]) {
-        return (
-          `${categoryLabel} transport legs mix factor fields ` +
-          `(${field}: ${formatFactorValue(first[field])} vs ${formatFactorValue(leg[field])}); ` +
-          "submit separately or unify transport method and vehicle fields."
-        );
-      }
-    }
+  if (!first) return null;
+  if (legs.some((leg) => leg.calculationMethodType !== first.calculationMethodType)) {
+    return `${categoryLabel} transport legs use different calculation methods. Check the recorded methods against the removal template.`;
   }
-
+  if (legs.some((leg) => leg.transportMethodType !== first.transportMethodType)) {
+    return `${categoryLabel} transport legs use different transport modes. Check the recorded modes against the removal template.`;
+  }
   return null;
+}
+
+/** Vehicle records never block aggregation or select the template's factor. */
+export function transportVehicleAdvisories(
+  legs: TransportLeg[],
+  categoryLabel: string,
+): string[] {
+  if (legs.length === 0) return [];
+  const advisories: string[] = [];
+  const recordedTypes = new Set(legs.flatMap((leg) => leg.vehicleType == null ? [] : [leg.vehicleType]));
+  if (recordedTypes.size > 1) {
+    advisories.push(
+      `${categoryLabel} transport uses more than one vehicle type. Check that the removal template's transport factor covers every vehicle used.`,
+    );
+  }
+  // Delivery-derived biochar legs have no vehicle input. Manual legs do.
+  if (legs.some((leg) =>
+    leg.vehicleType == null && !(leg.isDerived && leg.entityType === "biochar"),
+  )) {
+    advisories.push(
+      `${categoryLabel} transport has legs with no vehicle type recorded. Check that the removal template's transport factor covers every vehicle used.`,
+    );
+  }
+  // Only derived feedstock legs copy a fleet model year; manual forms have
+  // no year input. Keep comparing any recorded years, including snapshots.
+  const modelYearLegs = legs.filter((leg) =>
+    leg.modelYear != null || (leg.isDerived && leg.entityType === "feedstock"),
+  );
+  if (modelYearLegs.some((leg) => leg.modelYear !== modelYearLegs[0].modelYear)) {
+    advisories.push(
+      `${categoryLabel} transport has different or unrecorded model years. Check that the removal template's transport factor covers every vehicle used.`,
+    );
+  }
+  return advisories;
 }
 
 export function aggregateTransportMassDistance(

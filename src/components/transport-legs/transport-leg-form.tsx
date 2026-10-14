@@ -304,7 +304,7 @@ export function TransportLegForm({
               id="vehicleType"
               label="Vehicle type"
               error={errors.vehicleType?.message}
-              helperText="Selects the Isometric component emission factor."
+              helperText="Recorded for Transportation module evidence. The removal template uses a fixed transport factor."
             >
               <FormInput
                 id="vehicleType"

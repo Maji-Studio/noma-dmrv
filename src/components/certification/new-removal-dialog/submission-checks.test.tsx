@@ -38,6 +38,16 @@ function withUnmet(
 }
 
 describe("SubmissionChecks", () => {
+  it.each([
+    ["feedstock", "/feedstocks"], ["biochar", "/deliveries"], ["sample", "/samples"],
+  ] as const)("links %s transport blockers to their repair list", (category, path) => {
+    const html = renderToStaticMarkup(<SubmissionChecks
+      checks={withUnmet("transportUniformity", { transportCategory: category })}
+      facilityId="facility-1"
+    />);
+    expect(html).toContain(`href="${path}?facility=facility-1"`);
+  });
+
   it("lists only what the operator must fix, with passed checks reduced to a count", () => {
     const html = renderToStaticMarkup(
       <SubmissionChecks

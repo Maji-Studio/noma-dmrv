@@ -38,12 +38,16 @@ export function toRemovalReadinessFacts(
     futureDatedMeasurements: ctx.futureDatedMeasurements ?? [],
     supportingDocumentCount: ctx.supportingDocuments.total,
     mirroredDocumentCount: ctx.supportingDocuments.mirrored,
+    transportVehicleAdvisories: ctx.requiredTransportCategories.flatMap(
+      (category) => ctx.transportCoverage[category].vehicleAdvisories,
+    ),
     requiredTransport: ctx.requiredTransportCategories.map((category) => {
       const bucket = ctx.transportCoverage[category];
       return {
         category,
         count: bucket.count,
         hasAggregationWarning: bucket.aggregationWarning !== null,
+        aggregationWarning: bucket.aggregationWarning,
       };
     }),
   };
