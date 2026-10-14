@@ -80,7 +80,12 @@ describe("findActionBoundarySites", () => {
       }});
     }`;
     expect(findActionBoundarySites(source, HOOK_FILE)).toEqual([
-      expect.objectContaining({ file: HOOK_FILE, line: 4, function: "useCreateItem" }),
+      expect.objectContaining({
+        file: HOOK_FILE,
+        line: 4,
+        function: "useCreateItem",
+        message: expect.stringContaining("docs/architecture.md#hook-actionresult-unwrapping"),
+      }),
     ]);
   });
 
@@ -274,6 +279,56 @@ describe("findActionBoundarySites", () => {
     ]);
     expect(findActionBoundarySites(source, "src/fn/with-action.ts")).toEqual([]);
     expect(findActionBoundarySites(source, "src/fn/action-errors.ts")).toEqual([]);
+  });
+
+  it.each([
+    'function mapFailure(error: unknown) { return { success: false, error }; }',
+    'const mapFailure = (error: unknown) => { return { success: false, error }; };',
+    'const mapFailure = function (error: unknown) { return { success: false, error }; };',
+    'const mapFailure = (error: unknown) => ({ success: false, error });',
+    'function mapFailure(error: unknown) { if (error) return { success: true }; const failure = { success: false, error }; return failure; }',
+    'function mapFailure(error: unknown) { return error ? { success: true } : { success: false, error }; }',
+  ])("flags a private failure mapper returned from a catch inside withAction: %s", (mapper) => {
+    const source = `export async function createItem() {
+      return withAction(async (ctx) => {
+        try { return await create(ctx); }
+        catch (error) { return mapFailure(error); }
+      });
+    }
+    ${mapper}`;
+    expect(findActionBoundarySites(source, ACTION_FILE)).toEqual([
+      expect.objectContaining({ line: 4, function: "createItem", kind: "catch-failure" }),
+    ]);
+  });
+
+  it("ignores nested callback failures in a helper's success return", () => {
+    const source = `function mapResult(error: unknown) {
+      const nested = () => { return { success: false, error }; };
+      function other() { return { success: false, error }; }
+      return { success: true, data: null };
+    }
+    async function createItem() { try {} catch (error) { return mapResult(error); } }`;
+    expect(findActionBoundarySites(source, ACTION_FILE)).toEqual([]);
+  });
+
+  it("resolves helpers in their enclosing block without following shadowed or imported names", () => {
+    const source = `import { importedFailure } from "./other";
+      function mapFailure(error: unknown) { return { success: false, error }; }
+      async function shadowedParameter(mapFailure: Function) {
+        try {} catch (error) { return mapFailure(error); }
+      }
+      async function shadowedLocal() {
+        const mapFailure = externalMapper;
+        try {} catch (error) { return mapFailure(error); }
+      }
+      async function imported() { try {} catch (error) { return importedFailure(error); } }
+      async function createItem() {
+        const localFailure = (error: unknown) => ({ success: false, error });
+        try {} catch (error) { return localFailure(error); }
+      }`;
+    expect(findActionBoundarySites(source, ACTION_FILE)).toEqual([
+      expect.objectContaining({ line: 13, function: "createItem", kind: "catch-failure" }),
+    ]);
   });
 
   it.each([

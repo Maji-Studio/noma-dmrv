@@ -51,6 +51,8 @@ import {
   orgRoleSchema,
 } from "@/schemas/organizations";
 
+const LOG_MESSAGE = "organization action failed";
+
 /**
  * Run a body producing an ActionResult, mapping thrown errors. SafeError and
  * Better Auth APIError messages are surfaced; everything else falls back to a
@@ -88,7 +90,7 @@ async function toWarnableResult<T>(
     if (apiMessage) {
       return { success: false, error: apiMessage };
     }
-    logActionError(error, { message: "organization action failed" });
+    logActionError(error, { message: LOG_MESSAGE });
     return { success: false, error: toActionError(error, fallback) };
   }
 }
@@ -117,7 +119,7 @@ function buildAcceptUrl(invitationId: string): string {
 export async function listMembersFn(): Promise<ActionResult<OrgMemberRow[]>> {
   return withAction(async (ctx) => listOrgMembers(ctx), {
     fallbackMessage: "Failed to load members.",
-    log: { message: "organization action failed", context: { op: "organization:list-members" } },
+    log: { message: LOG_MESSAGE, context: { op: "organization:list-members" } },
   });
 }
 
@@ -129,7 +131,7 @@ export async function listInvitationsFn(): Promise<
     return listOrgInvitations(ctx);
   }, {
     fallbackMessage: "Failed to load invitations.",
-    log: { message: "organization action failed", context: { op: "organization:list-invitations" } },
+    log: { message: LOG_MESSAGE, context: { op: "organization:list-invitations" } },
   });
 }
 

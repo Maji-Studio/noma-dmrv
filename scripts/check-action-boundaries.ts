@@ -20,7 +20,13 @@ const RELATIVE_FAILURE_MODULE = /^\.\.?\/(?:.*\/)?action-errors$/;
 const FAILURE_NAME = "toActionFailure";
 const ORG_CONTEXT_NAMES = new Set(["requireOrgContext", "getOrgContext"]);
 const SITE_KINDS = ["org-context", "catch-failure", "action-failure", "hook-unwrap"] as const;
-const DOC_POINTER = "See docs/architecture.md (withAction).";
+const ACTION_DOC_POINTER = "See docs/architecture.md (withAction).";
+const DOC_POINTER: Record<ActionBoundaryKind, string> = {
+  "org-context": ACTION_DOC_POINTER,
+  "catch-failure": ACTION_DOC_POINTER,
+  "action-failure": ACTION_DOC_POINTER,
+  "hook-unwrap": "See docs/architecture.md#hook-actionresult-unwrapping.",
+};
 
 export type ActionBoundaryKind = typeof SITE_KINDS[number];
 
@@ -189,6 +195,45 @@ function isReturnedFailure(expression: ts.Expression, returned: ts.ReturnStateme
   return false;
 }
 
+function localFunctionBody(call: ts.CallExpression): ts.ConciseBody | undefined {
+  const callee = unwrapExpression(call.expression);
+  if (!ts.isIdentifier(callee)) return undefined;
+  for (let scope = call.parent; scope; scope = scope.parent) {
+    if (ts.isFunctionLike(scope) && scope.parameters.some((parameter) =>
+      ts.isIdentifier(parameter.name) && parameter.name.text === callee.text,
+    )) return undefined;
+    if (ts.isCatchClause(scope) && scope.variableDeclaration?.name.getText() === callee.text) return undefined;
+    if (!ts.isBlock(scope) && !ts.isSourceFile(scope)) continue;
+    for (const statement of scope.statements) {
+      if (ts.isFunctionDeclaration(statement) && statement.name?.text === callee.text) return statement.body;
+      if (!ts.isVariableStatement(statement)) continue;
+      for (const declaration of statement.declarationList.declarations) {
+        if (!ts.isIdentifier(declaration.name) || declaration.name.text !== callee.text) continue;
+        const initializer = declaration.initializer && unwrapExpression(declaration.initializer);
+        return (statement.declarationList.flags & ts.NodeFlags.Const) && initializer &&
+          (ts.isArrowFunction(initializer) || ts.isFunctionExpression(initializer))
+          ? initializer.body : undefined;
+      }
+    }
+  }
+  return undefined;
+}
+
+/** Follow one local helper; its nested callbacks do not return to the catch. */
+function isLocalFailureCall(expression: ts.Expression): boolean {
+  const value = unwrapExpression(expression);
+  if (!ts.isCallExpression(value)) return false;
+  const body = localFunctionBody(value);
+  if (!body) return false;
+  if (!ts.isBlock(body)) return isFailureLiteral(body);
+  const hasFailureReturn = (node: ts.Node): boolean => {
+    if (ts.isFunctionLike(node)) return false;
+    if (ts.isReturnStatement(node)) return !!node.expression && isReturnedFailure(node.expression, node);
+    return ts.forEachChild(node, hasFailureReturn) ?? false;
+  };
+  return hasFailureReturn(body);
+}
+
 function containsErrorAccess(node: ts.Node): boolean {
   if (ts.isPropertyAccessExpression(node) && node.name.text === "error") return true;
   if (ts.isElementAccessExpression(node) && node.argumentExpression) {
@@ -220,7 +265,7 @@ export function findActionBoundarySites(
       line: sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile)).line + 1,
       function: enclosingFunction(node),
       kind,
-      message: `${message} ${DOC_POINTER}`,
+      message: `${message} ${DOC_POINTER[kind]}`,
     });
   };
 
@@ -277,7 +322,8 @@ export function findActionBoundarySites(
       }
       if (
         ts.isReturnStatement(node) && node.expression &&
-        returnedFromCatch(node) && isReturnedFailure(node.expression, node)
+        returnedFromCatch(node) &&
+        (isReturnedFailure(node.expression, node) || isLocalFailureCall(node.expression))
       ) {
         report(node, "catch-failure", "Use withAction instead of returning a hand-built ActionResult failure from catch.");
       }
@@ -331,7 +377,7 @@ export function checkActionBoundaries(
           line: 1,
           function: entry.function,
           kind,
-          message: `Stale allowlist entry (${kind}): expected ${expected} site(s), found ${actual}. ${entry.reason} ${DOC_POINTER}`,
+          message: `Stale allowlist entry (${kind}): expected ${expected} site(s), found ${actual}. ${entry.reason} ${DOC_POINTER[kind]}`,
         });
       }
     }
