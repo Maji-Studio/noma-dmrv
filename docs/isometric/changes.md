@@ -1,5 +1,12 @@
 # Isometric Docs Change Log
 
+## 2026-10-15: Certification status changes recorded as activity (#1038)
+
+Certification status transitions are recorded in `activity_events` in the same
+transaction as the ledger write. Events retain raw local and remote statuses,
+the submission version, and the triggering actor. Registry refreshes use the
+registry source and the registry's own time for that transition (submission time only for AWAITING_VERIFICATION, issue time for CREDITS_ISSUED); unchanged statuses add no event.
+
 ## 2026-10-15: Transport justification, bin typing and readings import (#942 q11, q22, q25)
 
 - **q11:** Distance-method fallback justification, including why energy-usage

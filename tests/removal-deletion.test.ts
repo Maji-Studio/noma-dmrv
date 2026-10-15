@@ -1,3 +1,5 @@
+import { activityEvents } from "@/db/schema/activity";
+import { listEntityActivity } from "@/data-access/activity-events";
 import { deleteOutputFacilityFixtures } from "./helpers/output-contract-fixtures";
 import { createRemovalDeletionFixture, insertLedgerRow, type Fixture } from "./helpers/removal-deletion-fixture";
 import { REMOVAL_DELETION_LEASE_KEY } from "@/lib/certification/removal-deletion-lease";
@@ -107,6 +109,10 @@ afterAll(async () => {
       .where(inArray(creditBatches.id, createdBatchIds));
   }
   if (createdRemovalIds.length > 0) {
+    await db.delete(activityEvents).where(and(
+      eq(activityEvents.organizationId, TEST_ORG_ID),
+      inArray(activityEvents.entityId, createdRemovalIds),
+    ));
     await db
       .delete(certificationSubmissions)
       .where(inArray(certificationSubmissions.localEntityId, createdRemovalIds));
@@ -233,6 +239,14 @@ describe("deleteRemoval", () => {
     expect(await removalExists(fixture.removalId)).toBe(false);
     const row = await ledgerRow(submissionId);
     expect(row.status).toBe("rejected");
+    const history = await listEntityActivity(makeTestOrgContext(), "removal", fixture.removalId);
+    expect(history).toHaveLength(1);
+    expect(history[0]).toMatchObject({
+      action: "status_changed", fromStatus: "draft", toStatus: "rejected",
+      fromRemote: null, toRemote: null, source: "form", registryAt: null,
+      actorUserId: makeTestOrgContext().userId,
+      submissionRef: { provider: "isometric", submissionType: "removal", submissionId, version: SUBMISSION_VERSION },
+    });
     expect(row.lockedAt).toBeNull();
     expect(row.externalId).toBe(entry.id);
     const metadata = row.metadata as Record<string, unknown>;

@@ -1,3 +1,4 @@
+import { withCertificationStatusActivity } from "./certification-status-activity";
 import { nextVersion } from "./row-version";
 import { REMOVAL_DELETION_LEASE_KEY, hasFreshRemovalDeletionLease, removalDeletionLeaseTimestamp } from "@/lib/certification/removal-deletion-lease";
 import { removalOwnedMeasurements, type RemovalOwnedMeasurement } from "@/lib/certification/removal-deletion-artifacts";
@@ -609,20 +610,22 @@ export async function finalizeRemovalDeletion(
           releasedDocumentMirrors,
         },
       });
-      await tx
-        .update(certificationSubmissions)
-        .set({
-          status: DELETED_LEDGER_STATUS,
-          lockedAt: null,
-          metadata: sql`(coalesce(${certificationSubmissions.metadata}, '{}'::jsonb) - ${SUBMISSION_METADATA_KEYS.lastError}::text - ${SUBMISSION_METADATA_KEYS.lastAttemptOutcome}::text - ${SUBMISSION_METADATA_KEYS.externalMutation}::text) || ${deletionPatch}::jsonb`,
-          updatedAt: sql`now()`,
-        })
-        .where(
-          and(
-            inArray(certificationSubmissions.id, claim.submissionIds),
-            eq(certificationSubmissions.organizationId, ctx.organizationId),
-          ),
-        );
+      await withCertificationStatusActivity(ctx, claim.submissionIds, async (tx) => {
+        await tx
+          .update(certificationSubmissions)
+          .set({
+            status: DELETED_LEDGER_STATUS,
+            lockedAt: null,
+            metadata: sql`(coalesce(${certificationSubmissions.metadata}, '{}'::jsonb) - ${SUBMISSION_METADATA_KEYS.lastError}::text - ${SUBMISSION_METADATA_KEYS.lastAttemptOutcome}::text - ${SUBMISSION_METADATA_KEYS.externalMutation}::text) || ${deletionPatch}::jsonb`,
+            updatedAt: sql`now()`,
+          })
+          .where(
+            and(
+              inArray(certificationSubmissions.id, claim.submissionIds),
+              eq(certificationSubmissions.organizationId, ctx.organizationId),
+            ),
+          );
+      }, tx);
 
       await tx
         .update(creditBatches)

@@ -1,3 +1,4 @@
+import { withCertificationStatusActivity, type CertificationActivityOrigin } from "./certification-status-activity";
 import { nextVersion } from "./row-version";
 import { and, desc, eq, inArray, isNull, ne, or, sql } from "drizzle-orm";
 import { db } from "@/db";
@@ -683,6 +684,7 @@ export async function markSubmissionSubmitted(
     productionEmissionsClaim?: { removalId: string; creditBatchIds: string[] };
   },
   callerTx?: Tx,
+  origin?: CertificationActivityOrigin,
 ): Promise<void> {
   requireOrgScope(ctx);
   const run = async (tx: Tx): Promise<void> => {
@@ -731,7 +733,7 @@ export async function markSubmissionSubmitted(
       );
     }
   };
-  await (callerTx ? run(callerTx) : db.transaction(run));
+  await withCertificationStatusActivity(ctx, [id, ...(args.supersedePreviousId ? [args.supersedePreviousId] : [])], run, callerTx, origin);
 }
 
 // §8.6.2 claim stamp (issue #349, ADR 0020). Guarded UPDATE (IS NULL OR =
@@ -792,22 +794,24 @@ export async function retireStaleSubmissionDraft(
   args: { reason: string },
 ): Promise<void> {
   requireOrgScope(ctx);
-  await db
-    .update(certificationSubmissions)
-    .set({
-      status: "superseded",
-      supersededAt: sql`now()`,
-      lockedAt: null,
-      updatedAt: sql`now()`,
-      metadata: sql`coalesce(${certificationSubmissions.metadata}, '{}'::jsonb) || jsonb_build_object('retiredReason', ${args.reason}::text)`,
-    })
-    .where(
-      and(
-        eq(certificationSubmissions.id, id),
-        eq(certificationSubmissions.status, "draft"),
-        eq(certificationSubmissions.organizationId, ctx.organizationId),
-      ),
-    );
+  await withCertificationStatusActivity(ctx, [id], async (tx) => {
+    await tx
+      .update(certificationSubmissions)
+      .set({
+        status: "superseded",
+        supersededAt: sql`now()`,
+        lockedAt: null,
+        updatedAt: sql`now()`,
+        metadata: sql`coalesce(${certificationSubmissions.metadata}, '{}'::jsonb) || jsonb_build_object('retiredReason', ${args.reason}::text)`,
+      })
+      .where(
+        and(
+          eq(certificationSubmissions.id, id),
+          eq(certificationSubmissions.status, "draft"),
+          eq(certificationSubmissions.organizationId, ctx.organizationId),
+        ),
+      );
+  });
 }
 
 export async function markSubmissionRejected(
@@ -815,7 +819,8 @@ export async function markSubmissionRejected(
   id: string,
   args: { errorMessage: string; expectedLockedAt?: Date },
 ): Promise<void> {
-  await rejectDraftSubmission(ctx, db, id, args);
+  requireOrgScope(ctx);
+  await db.transaction((tx) => rejectDraftSubmission(ctx, tx, id, args));
 }
 
 // Deep-merges recovery facts into payload_snapshot.journaled so successive
@@ -847,15 +852,18 @@ export async function updateSubmissionMetadata(
   id: string,
   patch: Record<string, unknown>,
   tx?: Tx,
+  origin?: CertificationActivityOrigin,
 ): Promise<void> {
   requireOrgScope(ctx);
-  await (tx ?? db)
-    .update(certificationSubmissions)
-    .set({
-      metadata: sql`coalesce(${certificationSubmissions.metadata}, '{}'::jsonb) || ${JSON.stringify(patch)}::jsonb`,
-      updatedAt: sql`now()`,
-    })
-    .where(and(eq(certificationSubmissions.id, id), eq(certificationSubmissions.organizationId, ctx.organizationId)));
+  await withCertificationStatusActivity(ctx, [id], async (executor) => {
+    await executor
+      .update(certificationSubmissions)
+      .set({
+        metadata: sql`coalesce(${certificationSubmissions.metadata}, '{}'::jsonb) || ${JSON.stringify(patch)}::jsonb`,
+        updatedAt: sql`now()`,
+      })
+      .where(and(eq(certificationSubmissions.id, id), eq(certificationSubmissions.organizationId, ctx.organizationId)));
+  }, tx, origin);
 }
 
 export async function setSubmissionTerminalStatus(
@@ -866,17 +874,20 @@ export async function setSubmissionTerminalStatus(
     metadataPatch?: Record<string, unknown>;
   },
   tx?: Tx,
+  origin?: CertificationActivityOrigin,
 ): Promise<void> {
   requireOrgScope(ctx);
-  await (tx ?? db)
-    .update(certificationSubmissions)
-    .set({
-      status: args.status,
-      lockedAt: null,
-      metadata: sql`coalesce(${certificationSubmissions.metadata}, '{}'::jsonb) || ${JSON.stringify(args.metadataPatch ?? {})}::jsonb`,
-      updatedAt: sql`now()`,
-    })
-    .where(and(eq(certificationSubmissions.id, id), eq(certificationSubmissions.organizationId, ctx.organizationId)));
+  await withCertificationStatusActivity(ctx, [id], async (executor) => {
+    await executor
+      .update(certificationSubmissions)
+      .set({
+        status: args.status,
+        lockedAt: null,
+        metadata: sql`coalesce(${certificationSubmissions.metadata}, '{}'::jsonb) || ${JSON.stringify(args.metadataPatch ?? {})}::jsonb`,
+        updatedAt: sql`now()`,
+      })
+      .where(and(eq(certificationSubmissions.id, id), eq(certificationSubmissions.organizationId, ctx.organizationId)));
+  }, tx, origin);
 }
 
 export async function clearTerminalStatusForResubmit(
@@ -884,17 +895,20 @@ export async function clearTerminalStatusForResubmit(
   id: string,
   args: { metadataPatch?: Record<string, unknown> } = {},
   tx?: Tx,
+  origin?: CertificationActivityOrigin,
 ): Promise<void> {
   requireOrgScope(ctx);
-  await (tx ?? db)
-    .update(certificationSubmissions)
-    .set({
-      status: "submitted",
-      lockedAt: null,
-      metadata: sql`coalesce(${certificationSubmissions.metadata}, '{}'::jsonb) || ${JSON.stringify(args.metadataPatch ?? {})}::jsonb`,
-      updatedAt: sql`now()`,
-    })
-    .where(and(eq(certificationSubmissions.id, id), eq(certificationSubmissions.organizationId, ctx.organizationId)));
+  await withCertificationStatusActivity(ctx, [id], async (executor) => {
+    await executor
+      .update(certificationSubmissions)
+      .set({
+        status: "submitted",
+        lockedAt: null,
+        metadata: sql`coalesce(${certificationSubmissions.metadata}, '{}'::jsonb) || ${JSON.stringify(args.metadataPatch ?? {})}::jsonb`,
+        updatedAt: sql`now()`,
+      })
+      .where(and(eq(certificationSubmissions.id, id), eq(certificationSubmissions.organizationId, ctx.organizationId)));
+  }, tx, origin);
 }
 
 export async function attachReportDocument(

@@ -1,3 +1,5 @@
+import { ghgStatusRegistryAt } from "@/lib/isometric/utils/ghg-status-registry-at";
+import type { CertificationActivityOrigin } from "./certification-status-activity";
 import { db } from "@/db";
 import type { OrgContext } from "@/lib/auth/server";
 import {
@@ -25,6 +27,10 @@ export async function applyGhgRemoteState(
   remote: GhgStatement,
   extraMetadata: Record<string, unknown> = {},
   tx?: Tx,
+  origin: CertificationActivityOrigin = {
+    source: "registry",
+    registryAt: ghgStatusRegistryAt(remote),
+  },
 ): Promise<void> {
   requireOrgScope(ctx);
   const metadataPatch = { ...remoteMetadata(remote), ...extraMetadata };
@@ -34,6 +40,7 @@ export async function applyGhgRemoteState(
       submission.id,
       { status: "accepted", metadataPatch },
       tx,
+      origin,
     );
     return;
   }
@@ -43,6 +50,7 @@ export async function applyGhgRemoteState(
       submission.id,
       { status: "rejected", metadataPatch },
       tx,
+      origin,
     );
     return;
   }
@@ -56,10 +64,11 @@ export async function applyGhgRemoteState(
       submission.id,
       { metadataPatch },
       tx,
+      origin,
     );
     return;
   }
-  await updateSubmissionMetadata(ctx, submission.id, metadataPatch, tx);
+  await updateSubmissionMetadata(ctx, submission.id, metadataPatch, tx, origin);
 }
 
 export async function reconcileGhgStatementRemoteState(
