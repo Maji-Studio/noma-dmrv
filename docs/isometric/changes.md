@@ -1,5 +1,12 @@
 # Isometric Docs Change Log
 
+## 2026-10-15: Certification status changes recorded as activity (#1038)
+
+Certification status transitions are recorded in `activity_events` in the same
+transaction as the ledger write. Events retain raw local and remote statuses,
+the submission version, and the triggering actor. Registry refreshes use the
+registry source and the registry's own time for that transition (submission time only for AWAITING_VERIFICATION, issue time for CREDITS_ISSUED); unchanged statuses add no event.
+
 ## 2026-10-15: Transport justification, bin typing and readings import (#942 q11, q22, q25)
 
 - **q11:** Distance-method fallback justification, including why energy-usage
@@ -24,6 +31,23 @@
 - Decision #942 q6 keeps validation lab results outside noma. The unreachable
   Sample heavy-metal, PAH, PCB and dioxin/furan columns are removed. No submitted
   value or certification mapping changes.
+
+## 2026-10-15: Required facility and party-location data (#1012, #942 q15)
+
+Facility GPS is required to save by the q15 product decision. Supplier and
+customer locations retain required GPS on update, customer location names
+are required in storage, and countries have no placeholder default. Supplier
+and customer creates require at least one location. Recorded site distances
+must be positive. Supplier-level GPS, distance and the obsolete supplier
+Certify badge are removed; feedstock transport uses the default supplier
+location. These are entry invariants, not a change to registry calculations.
+
+## 2026-10-15: Facility and feedstock setup rules aligned (#1012)
+
+- Facility registry links require an external facility ID in storage and setup readiness, matching save and Production Batch submission.
+- The unused genset energy yield is removed. Diesel continues to submit by volume through `fuel_usage_by_volume` (#319).
+- Reference soil temperature has a CERT marker only for 200-year facilities, matching the submission gate. Pyrolysis feedstock types have a registry-mapping marker; blend types remain internal-only.
+- Reactor types and feedstock categories are constrained to the supported values. Feedstock usage must be supplied explicitly. Reactors with production runs cannot move between facilities.
 
 ## 2026-10-15: Optional TGA and mean reflectance (#942 q3, #1016)
 

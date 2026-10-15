@@ -9,7 +9,9 @@ import {
   facilities,
   storageObjectDeletions,
 } from "@/db/schema";
-import { deleteDocumentWithCertificationSafety } from "@/data-access/documents";
+import { deleteDocumentApp } from "@/lib/operations/documents";
+import { runOperationInProcess } from "@/lib/operations/runner";
+const deleteViaApp = (ctx: Parameters<typeof runOperationInProcess>[1], documentId: string) => runOperationInProcess(deleteDocumentApp, ctx, { documentId, expectedVersion: 1 });
 import { processPendingStorageObjectDeletions } from "@/data-access/storage-object-deletions";
 import { __setStorageProviderForTests } from "@/lib/storage";
 import type {
@@ -17,7 +19,7 @@ import type {
   PresignedUpload,
   StorageProvider,
 } from "@/lib/storage";
-import {
+import { TEST_SITE_POSITION,
   ensureTestOrg,
   makeTestOrgContext,
   TEST_ORG_ID,
@@ -44,6 +46,8 @@ class DeleteSafetyStorageProvider implements StorageProvider {
   async getObject(): Promise<never> {
     throw new Error("Not used by document deletion tests");
   }
+
+  async readObjectBounded(): Promise<never> { throw new Error("Not used by this test"); }
 
   async headObject(key: string): Promise<ObjectHead | null> {
     return this.objects.has(key)
@@ -78,7 +82,7 @@ afterEach(() => {
 async function createFixture(tag: string) {
   const [facility] = await db
     .insert(facilities)
-    .values({ timezone: "UTC",
+    .values({ ...TEST_SITE_POSITION, timezone: "UTC",
       organizationId: TEST_ORG_ID,
       code: `FAC-DEL-SRC-${tag}`,
       name: `Document source deletion facility ${tag}`,
@@ -145,13 +149,13 @@ describe("owning-document certification safety", () => {
     const fixture = await createFixture(crypto.randomUUID().slice(0, 8));
 
     try {
-      const deleted = await deleteDocumentWithCertificationSafety(
+      const deleted = await deleteViaApp(
         makeTestOrgContext(TEST_USER_ID),
         fixture.documentId,
       );
 
       expect(deleted?.id).toBe(fixture.documentId);
-      expect(provider.deleteCalls).toEqual([fixture.storageKey]);
+      expect(provider.deleteCalls).toContain(fixture.storageKey);
       expect(provider.objects.has(fixture.storageKey)).toBe(false);
       expect(
         await db
@@ -175,7 +179,7 @@ describe("owning-document certification safety", () => {
     provider.failKey = fixture.storageKey;
 
     try {
-      const deleted = await deleteDocumentWithCertificationSafety(
+      const deleted = await deleteViaApp(
         makeTestOrgContext(TEST_USER_ID),
         fixture.documentId,
       );
@@ -203,11 +207,11 @@ describe("owning-document certification safety", () => {
         .update(storageObjectDeletions)
         .set({ lastAttemptAt: RETRY_BACKOFF_ELAPSED_AT })
         .where(eq(storageObjectDeletions.storageKey, fixture.storageKey));
-      expect(
-        await processPendingStorageObjectDeletions(
-          makeTestOrgContext(TEST_USER_ID),
-        ),
-      ).toEqual({ completed: 1, failed: 0 });
+      await processPendingStorageObjectDeletions(makeTestOrgContext(TEST_USER_ID));
+      const [completed] = await db.select().from(storageObjectDeletions)
+        .where(eq(storageObjectDeletions.storageKey, fixture.storageKey));
+      expect(completed.completedAt).toBeInstanceOf(Date);
+      expect(completed.lastErrorCode).toBeNull();
       expect(provider.objects.has(fixture.storageKey)).toBe(false);
     } finally {
       await cleanupFixture(fixture);
@@ -239,7 +243,7 @@ describe("owning-document certification safety", () => {
 
     try {
       await expect(
-        deleteDocumentWithCertificationSafety(
+        deleteViaApp(
           makeTestOrgContext(TEST_USER_ID),
           fixture.documentId,
         ),
@@ -286,7 +290,7 @@ describe("owning-document certification safety", () => {
 
     try {
       await expect(
-        deleteDocumentWithCertificationSafety(
+        deleteViaApp(
           makeTestOrgContext(TEST_USER_ID),
           fixture.documentId,
         ),
@@ -332,7 +336,7 @@ describe("owning-document certification safety", () => {
 
     try {
       await expect(
-        deleteDocumentWithCertificationSafety(
+        deleteViaApp(
           makeTestOrgContext(TEST_USER_ID),
           fixture.documentId,
         ),

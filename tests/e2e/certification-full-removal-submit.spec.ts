@@ -24,8 +24,8 @@
  */
 import { expect, test } from "./fixtures";
 import {
-  DEFAULT_FACILITY_EMISSION_CONFIG,
   SANDBOX_PROJECT_ID,
+  SANDBOX_FACILITY_ID,
   type SeededMapping,
   type SeededReadyBatch,
   fetchSubmittableSandboxRemovalTemplate,
@@ -53,7 +53,7 @@ const RUN_LIVE_SUBMIT = process.env.E2E_LIVE_SUBMIT === "1";
 test.describe("Certification — full New-Removal submit", { tag: "@live" }, () => {
   test.skip(
     !SANDBOX_PROJECT_ID,
-    "requires Isometric sandbox creds (ISOMETRIC_DEMO_PROJECT_ID)",
+    "requires an Isometric sandbox project ID (ISOMETRIC_DEMO_PROJECT_ID)",
   );
 
   test("create → requirements → (opt-in) submit a ready batch", async ({
@@ -87,9 +87,8 @@ test.describe("Certification — full New-Removal submit", { tag: "@live" }, () 
 
     const mapping: SeededMapping = await seedCertifierMapping(facilityId, {
       externalProjectId: projectId,
+      externalFacilityId: SANDBOX_FACILITY_ID || undefined,
       defaultRemovalTemplateId: defaultRemovalTemplate?.id,
-      // A live submit reads these; harmless for the committed (no-submit) path.
-      emissionConfig: DEFAULT_FACILITY_EMISSION_CONFIG,
     });
 
     // The sandbox project's only fully-bound template is the 1000-year one;
@@ -168,11 +167,11 @@ test.describe("Certification — full New-Removal submit", { tag: "@live" }, () 
         timeout: COLD_COMPILE_TIMEOUT_MS,
       });
 
-      if (!RUN_LIVE_SUBMIT) {
+      if (!RUN_LIVE_SUBMIT || !SANDBOX_FACILITY_ID) {
         test.info().annotations.push({
           type: "note",
           description:
-            "Live submit skipped (set E2E_LIVE_SUBMIT=1 to POST to the sandbox registry).",
+            "Live submit skipped (requires E2E_LIVE_SUBMIT=1 and ISOMETRIC_DEMO_FACILITY_ID to POST to the sandbox registry).",
         });
         return;
       }

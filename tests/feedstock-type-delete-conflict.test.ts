@@ -19,7 +19,7 @@ import { productionProcesses } from "@/db/schema/production-processes";
 import { formulationIngredients, formulations } from "@/db/schema/products";
 import { deleteFeedstockType } from "@/data-access/feedstock-types";
 import { ActionConflictError } from "@/lib/errors";
-import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
+import { TEST_SITE_POSITION, ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
 
 const ctx = makeTestOrgContext();
 const runId = Date.now().toString(36);
@@ -35,6 +35,7 @@ async function insertFeedstockType(tag: string): Promise<string> {
   const [row] = await db
     .insert(feedstockTypes)
     .values({
+      usage: "pyrolysis",
       organizationId: TEST_ORG_ID,
       name: `Delete-Conflict ${tag} ${runId}`,
       code: `FT-DC-${tag}-${runId}`,
@@ -80,7 +81,7 @@ describe("deleteFeedstockType conflict", () => {
     const code = `FAC-DC-${runId}`;
     const [facility] = await db
       .insert(facilities)
-      .values({ timezone: "UTC", organizationId: TEST_ORG_ID, name: `Delete-Conflict ${runId}`, code })
+      .values({ ...TEST_SITE_POSITION, timezone: "UTC", organizationId: TEST_ORG_ID, name: `Delete-Conflict ${runId}`, code })
       .returning({ id: facilities.id });
     createdIds.facilities.push(facility.id);
     const [process] = await db

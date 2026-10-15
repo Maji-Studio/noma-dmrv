@@ -12,7 +12,6 @@ import {
   withAutoCode,
 } from "@/data-access/code-generator";
 import {
-  createCustomer,
   createCustomerWithLocations,
   deleteCustomer,
   getCustomers as getCustomersData,
@@ -27,7 +26,6 @@ import {
   type CreatedCustomerWithLocations,
 } from "@/data-access/customers";
 import {
-  createCustomerSchema,
   createCustomerWithLocationsSchema,
   deleteCustomerSchema,
   updateCustomerSchema,
@@ -91,12 +89,12 @@ export async function getCustomerLocationsFn(
   ActionResult<
     Array<{
       id: string;
-      name: string | null;
+      name: string;
       country: string;
       stateRegion: string | null;
       city: string | null;
-      gpsLatitude: number | null;
-      gpsLongitude: number | null;
+      gpsLatitude: number;
+      gpsLongitude: number;
       address: string | null;
       distanceFromFacilityKm: number | null;
       distanceSource: DistanceSourceValue | null;
@@ -121,45 +119,7 @@ export async function getCustomerLocationsFn(
 // Customer Create Operations
 // ============================================
 
-/**
- * Create a new customer
- */
-export async function createCustomerFn(
-  data: z.infer<typeof createCustomerSchema>
-): Promise<ActionResult<Customer>> {
-  return withAction(async (ctx) => {
-    const validated = createCustomerSchema.parse(data);
-
-    const customer = await withAutoCode(
-      ctx,
-      "CUS",
-      customers,
-      customers.code,
-      undefined,
-      (code) =>
-        createCustomer(ctx, {
-          code,
-          name: validated.name,
-          cropType: validated.cropType || null,
-          address: validated.address || null,
-          contactEmail: validated.contactEmail || null,
-          contactPhone: validated.contactPhone || null,
-        }),
-      CODE_CONFLICT_MESSAGES.customer,
-    );
-
-    return customer;
-  }, {
-    fallbackMessage: "Failed to create customer",
-    log: { message: LOG_MESSAGE, context: { op: "customer:create" } },
-  });
-}
-
-/**
- * Create a customer together with the locations captured on its create form.
- * One transaction: a location that fails rolls the customer back, so the form
- * never reports a failure over a half-saved customer.
- */
+/** Create the customer and its locations in one transaction; any failure rolls back both. */
 export async function createCustomerWithLocationsFn(
   data: z.infer<typeof createCustomerWithLocationsSchema>
 ): Promise<ActionResult<CreatedCustomerWithLocations>> {

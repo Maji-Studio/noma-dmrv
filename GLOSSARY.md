@@ -39,8 +39,7 @@ _Avoid_: void (old name for cancelled), aborted.
 
 **Genset energy**:
 Electricity produced by an on-site diesel generator. Operators measure
-the diesel consumed in **litres**; genset energy in kWh is derived from
-litres via a per-facility conversion yield.
+the diesel consumed in **litres**, submitted to the registry by volume.
 _Avoid_: generator power, backup power.
 
 **Readings file**:
@@ -50,9 +49,8 @@ rows into structured readings within the run window.
 _Avoid_: sensor dump, log file, reactor-day file, channel mapping.
 
 **Emission estimate**:
-A per-facility configured value (genset yield, default soil
-temperature) used to derive submission data noma does not
-measure directly. Distinct from a measured value.
+A per-facility configured value (reference soil temperature) used to derive
+submission data noma does not measure directly. Distinct from a measured value.
 
 **Emission factor**:
 kg CO₂e per unit of recorded activity (litre of diesel, kWh of grid
@@ -576,8 +574,8 @@ _Avoid_: treating a routed distance as a measurement.
 The provenance of a stored distance — `map_estimate` (routed via the
 map's routing service), `manual` (hand-entered), or `document`
 (bill-of-lading / weigh-ticket backed). Lives wherever a distance can be
-written (supplier, customer location, transport leg) and is inherited by
-a derived leg from its supplier/customer default. Orthogonal to a leg's
+written (supplier location, customer location, transport leg) and is inherited by
+a derived leg from its supplier-location/customer-location default. Orthogonal to a leg's
 `isDerived` flag. Without a configured routing key there is no
 `map_estimate` path — distance entry stays manual.
 
@@ -700,5 +698,5 @@ _Avoid_: teammate, seat.
 - "energy" was used for both grid electricity and **genset energy** —
   resolved: they are distinct inputs with distinct carbon intensities.
 - "diesel" conflated genset diesel and startup/plant diesel — resolved:
-  genset diesel is accounted as **genset energy** (kWh); startup diesel
-  stays volume-based (litres).
+  genset and startup diesel are recorded separately in litres and submitted
+  by volume.

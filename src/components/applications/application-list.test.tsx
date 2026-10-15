@@ -11,7 +11,6 @@ vi.mock("@/hooks/use-facility-context", () => ({
   useFacilityContext: () => ({ facilityId: null, selectedFacility: null }),
 }));
 vi.mock("@/hooks/use-applications", () => ({
-  useApplicationCertificationLock: () => ({ data: false }),
   useApplications: () => ({
     data: { items: [], total: 0 },
     isLoading: false,
@@ -21,6 +20,10 @@ vi.mock("@/hooks/use-applications", () => ({
   useCreateApplication: () => ({ isPending: false, mutateAsync: vi.fn() }),
   useUpdateApplication: () => ({ isPending: false, mutateAsync: vi.fn() }),
   useDeleteApplication: () => ({ isPending: false, mutateAsync: vi.fn() }),
+}));
+vi.mock("@/hooks/use-record-certification-lock", () => ({
+  useRecordCertificationLock: () => ({ data: false }),
+  useIsRecordCertificationLocked: () => false,
 }));
 vi.mock("@/hooks/use-file-upload", () => ({
   useFileUpload: () => ({ upload: vi.fn() }),

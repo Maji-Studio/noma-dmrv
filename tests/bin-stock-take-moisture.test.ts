@@ -14,7 +14,7 @@ import {
   recordStockTakeMovement,
   StockTakeIncreaseError,
 } from "@/data-access/bin-movements";
-import {
+import { TEST_SITE_POSITION,
   ensureTestOrg,
   makeTestOrgContext,
   TEST_ORG_ID,
@@ -56,7 +56,7 @@ describe("feedstock stock-take moisture integrity", () => {
     const ctx = makeTestOrgContext(TEST_USER_ID);
     const [facility] = await db
       .insert(facilities)
-      .values({ timezone: "UTC",
+      .values({ ...TEST_SITE_POSITION, timezone: "UTC",
         organizationId: TEST_ORG_ID,
         code: `FAC-STOCK-MOIST-${tag}`,
         name: `Stock Moisture Facility ${tag}`,
@@ -65,6 +65,7 @@ describe("feedstock stock-take moisture integrity", () => {
     const [feedstockType] = await db
       .insert(feedstockTypes)
       .values({
+        usage: "pyrolysis",
         organizationId: TEST_ORG_ID,
         code: `FT-STOCK-MOIST-${tag}`,
         name: `Stock Moisture Feedstock ${tag}`,

@@ -1,4 +1,4 @@
-import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
+import { TEST_SITE_POSITION, ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
@@ -35,7 +35,7 @@ describe("createProductionRun — feedstock type usage gate", () => {
 beforeAll(async () => {
     const [facility] = await db
       .insert(facilities)
-      .values({ timezone: "UTC", organizationId: TEST_ORG_ID, code: `FAC-PRG-${tag}`, name: `PRG Facility ${tag}` })
+      .values({ ...TEST_SITE_POSITION, timezone: "UTC", organizationId: TEST_ORG_ID, code: `FAC-PRG-${tag}`, name: `PRG Facility ${tag}` })
       .returning({ id: facilities.id });
     facilityId = facility.id;
 
@@ -69,7 +69,7 @@ beforeAll(async () => {
         organizationId: TEST_ORG_ID,
         code: `FT-PRG-B-${tag}`,
         name: `PRG Blend ${tag}`,
-        category: "ingredient",
+        category: "compost",
         usage: "blend",
       })
       .returning({ id: feedstockTypes.id });

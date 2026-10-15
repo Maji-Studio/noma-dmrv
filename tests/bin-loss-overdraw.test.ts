@@ -9,7 +9,7 @@ import {
   storageLocations,
   users,
 } from "@/db/schema";
-import { ensureTestOrg, TEST_ORG_ID } from "./helpers/test-org";
+import { TEST_SITE_POSITION, ensureTestOrg, TEST_ORG_ID } from "./helpers/test-org";
 
 const TEST_USER_ID = "test-user-bin-loss-overdraw";
 const AVAILABLE_STOCK_KG = 400;
@@ -49,7 +49,7 @@ describe("bin loss stock guard", () => {
     const fixture = await db.transaction(async (tx) => {
       const [facility] = await tx
         .insert(facilities)
-        .values({ timezone: "UTC",
+        .values({ ...TEST_SITE_POSITION, timezone: "UTC",
           organizationId: TEST_ORG_ID,
           code: `FAC-LOSS-${tag}`,
           name: `Loss Guard Facility ${tag}`,
@@ -58,6 +58,7 @@ describe("bin loss stock guard", () => {
       const [feedstockType] = await tx
         .insert(feedstockTypes)
         .values({
+          usage: "pyrolysis",
           organizationId: TEST_ORG_ID,
           code: `FT-LOSS-${tag}`,
           name: `Loss Guard Feedstock ${tag}`,

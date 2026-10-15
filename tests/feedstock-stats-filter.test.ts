@@ -3,7 +3,7 @@ import { eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import { facilities, feedstocks, feedstockTypes } from "@/db/schema";
 import { getFeedstockStats } from "@/data-access/feedstocks";
-import {
+import { TEST_SITE_POSITION,
   ensureTestOrg,
   makeTestOrgContext,
   TEST_ORG_ID,
@@ -16,7 +16,7 @@ describe("getFeedstockStats", () => {
     const tag = crypto.randomUUID().slice(0, 8).toUpperCase();
     const [facility] = await db
       .insert(facilities)
-      .values({ timezone: "UTC",
+      .values({ ...TEST_SITE_POSITION, timezone: "UTC",
         organizationId: TEST_ORG_ID,
         code: `FS-STATS-F-${tag}`,
         name: `Feedstock Stats Facility ${tag}`,
@@ -26,12 +26,14 @@ describe("getFeedstockStats", () => {
       .insert(feedstockTypes)
       .values([
         {
+          usage: "pyrolysis",
           organizationId: TEST_ORG_ID,
           code: `FS-STATS-A-${tag}`,
           name: `Feedstock Stats A ${tag}`,
           category: "forestry",
         },
         {
+          usage: "pyrolysis",
           organizationId: TEST_ORG_ID,
           code: `FS-STATS-B-${tag}`,
           name: `Feedstock Stats B ${tag}`,

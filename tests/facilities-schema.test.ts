@@ -3,7 +3,6 @@ import {
   createFacilitySchema,
   facilityFilterSchema,
   facilityFormSchema,
-  quickAddFacilitySchema,
   updateFacilitySchema,
 } from "@/schemas/facilities";
 
@@ -11,6 +10,8 @@ const baseFacilityInput = {
   name: "Moshi Biochar Production Center",
   country: "Tanzania",
   durabilityOption: "200_year",
+  gpsLatitude: -3.3349,
+  gpsLongitude: 37.3404,
 };
 
 describe("facility schemas", () => {
@@ -71,10 +72,6 @@ describe("facility schemas", () => {
     expect(result.success).toBe(true);
   });
 
-  // `facilityFormSchema` and `updateFacilitySchema` are the live request paths.
-  // `quickAddFacilitySchema` is exported but currently unwired; it is covered
-  // so the country rule cannot drift apart from the live ones before a surface
-  // adopts it.
   const countryEntryPaths = [
     {
       name: "facilityFormSchema",
@@ -90,14 +87,6 @@ describe("facility schemas", () => {
       schema: updateFacilitySchema,
       withCountry: (country: string) => ({
         facilityId: "55555555-5555-4555-8555-555555555555", expectedVersion: 1,
-        country,
-      }),
-    },
-    {
-      name: "quickAddFacilitySchema",
-      schema: quickAddFacilitySchema,
-      withCountry: (country: string) => ({
-        name: "Moshi Biochar Production Center",
         country,
       }),
     },
@@ -134,6 +123,7 @@ describe("facility schemas", () => {
       ...baseFacilityInput,
       timezone: "Africa/Nairobi",
       gpsLatitude: -3.3349,
+      gpsLongitude: undefined,
     });
 
     expect(result.success).toBe(false);
@@ -142,41 +132,17 @@ describe("facility schemas", () => {
         expect.arrayContaining([
           expect.objectContaining({
             path: ["gpsLongitude"],
-            message: "Longitude is required when a latitude is entered.",
+            message: "Longitude is required",
           }),
         ]),
       );
     }
   });
 
-  it("allows clearing both GPS coordinates through the update action", () => {
-    const result = updateFacilitySchema.safeParse({ expectedVersion: 1,
-      facilityId: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
-      gpsLatitude: null,
-      gpsLongitude: null,
-    });
-
-    expect(result.success).toBe(true);
-  });
-
-  it("rejects clearing only one GPS coordinate through the update action", () => {
-    const result = updateFacilitySchema.safeParse({ expectedVersion: 1,
-      facilityId: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
-      gpsLatitude: null,
-      gpsLongitude: 37.3404,
-    });
-
-    expect(result.success).toBe(false);
-    if (!result.success) {
-      expect(result.error.issues).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({
-            path: ["gpsLatitude"],
-            message: "Latitude is required when a longitude is entered.",
-          }),
-        ]),
-      );
-    }
+  it("rejects clearing both GPS coordinates through the update action", () => {
+    expect(updateFacilitySchema.safeParse({ expectedVersion: 1,
+      facilityId: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee", gpsLatitude: null, gpsLongitude: null,
+    }).success).toBe(false);
   });
 
   it("does not allow clearing timezone through the update action", () => {

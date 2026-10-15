@@ -87,6 +87,12 @@ the run version. A change to the run itself bumps its version.
 
 ## Schema Shape
 
+Facilities and supplier/customer locations store required GPS coordinates and
+an explicitly supplied country, with no country default. Customer location
+names are required. Suppliers store neither GPS nor transport distance; these
+belong to supplier locations. Tightening these constraints requires valid rows
+in development/staging before migration; there is no automatic backfill.
+
 Source of truth: `src/db/schema/*.ts`, exported through `src/db/schema/index.ts`. Area-by-area breakdown: [`schema-overview.md`](./schema-overview.md). Shared domain enums live in `common.ts`.
 
 Schema defaults and create/update defaults must stay aligned, especially for JSONB columns.

@@ -6,12 +6,9 @@ import { facilities } from "@/db/schema/facilities";
 import { productionRuns, samples } from "@/db/schema/production";
 import type { Sample } from "@/db/schema";
 import type { CreditBatchDurabilityInput } from "@/lib/isometric/utils/durability-aggregation";
-import { DURABILITY_TIER_FALLBACK } from "@/schemas/credit-batches";
 import type { CreditBatchSampling } from "@/schemas/credit-batches";
 import { requireOrgScope } from "./utils";
 import { getBatchesWithLabReports } from "./sample-document-evidence";
-
-const FALLBACK_FACILITY_TIMEZONE = "UTC";
 
 /**
  * A credit batch's durability inputs as loaded from the DB: its lab Samples
@@ -63,7 +60,7 @@ export async function getCreditBatchesWithSamples(
       facilityTimezone: facilities.timezone,
     })
     .from(creditBatches)
-    .leftJoin(facilities, and(eq(creditBatches.facilityId, facilities.id), eq(facilities.organizationId, ctx.organizationId)))
+    .innerJoin(facilities, and(eq(creditBatches.facilityId, facilities.id), eq(facilities.organizationId, ctx.organizationId)))
     .where(and(inArray(creditBatches.id, ids), eq(creditBatches.organizationId, ctx.organizationId)));
   if (batchRows.length === 0) return [];
 
@@ -122,10 +119,9 @@ export async function getCreditBatchesWithSamples(
     creditBatchCode: batch.code,
     startDate: batch.startDate,
     endDate: batch.endDate,
-    facilityTimezone:
-      batch.facilityTimezone ?? FALLBACK_FACILITY_TIMEZONE,
+    facilityTimezone: batch.facilityTimezone,
     sampling: batch.sampling,
-    durabilityOption: batch.durabilityOption ?? DURABILITY_TIER_FALLBACK,
+    durabilityOption: batch.durabilityOption,
     runs: runsByBatch.get(batch.id) ?? [],
     samples: samplesByBatch.get(batch.id) ?? [],
   }));

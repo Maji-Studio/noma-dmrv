@@ -9,7 +9,10 @@
 import type { Page } from "@playwright/test";
 import { test, expect, type SeededChainData } from "./fixtures";
 import {
+  ACTION_LABEL_PREFIX,
   expectNoEntityOptions,
+  getCreatedActionCode,
+  getListedActionCodes,
   selectEntity,
   selectFirstCreditBatchProductionRun,
   selectFirstEntity,
@@ -28,6 +31,7 @@ async function createProductionRunForCreditBatch(
 ) {
   await page.goto(`/production-runs?facility=${seededData.facility.id}`);
   await page.waitForLoadState("networkidle");
+  const existingRunCodes = await getListedActionCodes(page);
 
   await page.click('button:has-text("New production run")');
   await waitForSideSheet(page);
@@ -63,15 +67,18 @@ async function createProductionRunForCreditBatch(
     .locator('button:has-text("Create production run")')
     .click();
   await waitForSideSheetClose(page);
+  const createdRunCode = await getCreatedActionCode(page, existingRunCodes);
 
   // A post-create list refetch can re-render the row and detach the menu's
   // "Edit" item mid-click, so retry the open->Edit sequence instead of waiting
   // for network idle (CI dev servers may never settle within budget).
   await expect(async () => {
     await page
-      .locator("tbody tr")
-      .first()
-      .getByRole("button", { name: /Actions for/ })
+      .locator("tbody")
+      .getByRole("button", {
+        name: `${ACTION_LABEL_PREFIX}${createdRunCode}`,
+        exact: true,
+      })
       .click({ timeout: 5000 });
     await page.getByRole("menuitem", { name: "Edit" }).click({ timeout: 5000 });
   }).toPass({ timeout: 30000 });

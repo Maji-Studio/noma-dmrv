@@ -70,6 +70,7 @@ test.describe("Facility ↔ Isometric project mapping", { tag: "@live" }, () => 
       await db.transaction(async (tx) => {
         await tx.insert(schema.certifierProjects).values([
           {
+            externalFacilityId: `fcl_test_${facilityF1.id}`,
             organizationId: DEC_ORG_ID,
             facilityId: facilityF1.id,
             provider: "isometric",
@@ -79,6 +80,7 @@ test.describe("Facility ↔ Isometric project mapping", { tag: "@live" }, () => 
             defaultRemovalTemplateId: null,
           },
           {
+            externalFacilityId: `fcl_test_${facilityF2.id}`,
             organizationId: DEC_ORG_ID,
             facilityId: facilityF2.id,
             provider: "isometric",
@@ -140,7 +142,8 @@ test.describe("Facility ↔ Isometric project mapping", { tag: "@live" }, () => 
     try {
       await db.transaction(async (tx) => {
         await tx.insert(schema.certifierProjects).values({
-        organizationId: DEC_ORG_ID,
+          externalFacilityId: `fcl_test_${facility.id}`,
+          organizationId: DEC_ORG_ID,
           facilityId: facility.id,
           provider: "isometric",
           externalProjectId: sandboxProjectId,
