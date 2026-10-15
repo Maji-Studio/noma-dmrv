@@ -1,3 +1,5 @@
+import { type ActivityScope, recordDocumentActivity } from "./write-activity";
+import type { ActivityEventInput } from "./activity-events";
 import { and, desc, eq, getTableColumns, inArray, isNull, or, sql } from "drizzle-orm";
 import type { OrgContext } from "@/lib/auth/server";
 import { db, type DbTransaction } from "@/db";
@@ -63,6 +65,7 @@ export type NewDocumentRow = typeof documents.$inferInsert;
 export interface DocumentEntityRef {
   entityType: DocumentEntityType;
   entityId: string;
+  activityScopes?: ActivityScope[];
 }
 
 const DOCUMENT_ENTITY_LABELS: Record<DocumentEntityType, string> = {
@@ -415,8 +418,11 @@ export async function insertDocument(
   input: Omit<NewDocumentRow, "organizationId">
 ): Promise<DocumentRow> {
   requireOrgScope(ctx);
-  const [row] = await db.insert(documents).values({ ...input, organizationId: ctx.organizationId }).returning();
-  return row;
+  return db.transaction(async (tx) => {
+    const [row] = await tx.insert(documents).values({ ...input, organizationId: ctx.organizationId }).returning();
+    await recordDocumentActivity(ctx, tx, row, "created");
+    return row;
+  });
 }
 
 export async function updateDocument(
@@ -438,11 +444,14 @@ export async function deleteDocumentRow(
   id: string
 ): Promise<DocumentRow | null> {
   requireOrgScope(ctx);
-  const [row] = await db
-    .delete(documents)
-    .where(and(eq(documents.id, id), eq(documents.organizationId, ctx.organizationId)))
-    .returning();
-  return row ?? null;
+  return db.transaction(async (tx) => {
+    const [row] = await tx.select().from(documents)
+      .where(and(eq(documents.id, id), eq(documents.organizationId, ctx.organizationId))).for("update");
+    if (!row) return null;
+    await recordDocumentActivity(ctx, tx, row, "deleted");
+    await tx.delete(documents).where(and(eq(documents.id, id), eq(documents.organizationId, ctx.organizationId)));
+    return row;
+  });
 }
 
 const MIRRORED_DOCUMENT_BLOCKS_PARENT_DELETE_MESSAGE =
@@ -581,6 +590,7 @@ export async function deleteDocumentWithCertificationSafety(
       });
     }
 
+    await recordDocumentActivity(ctx, tx, row, "deleted");
     const [deleted] = await tx
       .delete(documents)
       .where(
@@ -615,6 +625,7 @@ export async function retireDocumentsForEntities(
   ctx: OrgContext,
   tx: DbTransaction,
   entities: readonly DocumentEntityRef[],
+  source: ActivityEventInput["source"] = "form",
 ): Promise<void> {
   requireOrgScope(ctx);
   if (entities.length === 0) return;
@@ -699,6 +710,8 @@ export async function retireDocumentsForEntities(
   }
 
   for (const document of ownedDocuments) {
+    const owner = uniqueEntities.find(entity => entity.entityType === document.entityType && entity.entityId === document.entityId);
+    await recordDocumentActivity(ctx, tx, document, "deleted", owner?.activityScopes, source);
     if (!document.storageKey) continue;
     if (!document.storageProvider || !document.storageBucket) {
       throw new Error("Stored document is missing its provider or bucket");

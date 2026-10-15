@@ -180,6 +180,7 @@ export async function deleteProductionRunInTransaction(
     ...productionIncidents.map((incident) => ({
       entityType: "production_incident" as const,
       entityId: incident.id,
+      activityScopes: [{ productionRunId }],
     })),
   ]);
 

@@ -69,11 +69,43 @@ export default async function globalTeardown() {
       await client.query(`CREATE TEMP TABLE e2e_scope_deliveries ON COMMIT DROP AS SELECT id FROM deliveries WHERE code LIKE 'E2E-%' OR facility_id IN (SELECT id FROM e2e_scope_facilities) OR storage_location_id IN (SELECT id FROM e2e_scope_bins) OR order_id IN (SELECT id FROM e2e_scope_orders) OR id IN (SELECT delivery_id FROM output_stock_allocations WHERE biochar_product_id IN (SELECT id FROM e2e_scope_products))`);
       await client.query(`CREATE TEMP TABLE e2e_scope_applications ON COMMIT DROP AS SELECT id FROM applications WHERE code LIKE 'E2E-%' OR delivery_id IN (SELECT id FROM e2e_scope_deliveries) OR id IN (SELECT application_id FROM application_output_allocations WHERE biochar_product_id IN (SELECT id FROM e2e_scope_products) OR production_run_id IN (SELECT id FROM e2e_scope_runs))`);
       await client.query(`CREATE TEMP TABLE e2e_scope_output_allocations ON COMMIT DROP AS SELECT id FROM output_stock_allocations WHERE source_storage_location_id IN (SELECT id FROM e2e_scope_bins) OR biochar_product_id IN (SELECT id FROM e2e_scope_products) OR target_biochar_product_id IN (SELECT id FROM e2e_scope_products) OR delivery_id IN (SELECT id FROM e2e_scope_deliveries) OR production_run_id IN (SELECT id FROM e2e_scope_runs)`);
+      await client.query(`CREATE TEMP TABLE e2e_scope_credit_batches ON COMMIT DROP AS SELECT id FROM credit_batches WHERE code LIKE 'E2E-%' OR facility_id IN (SELECT id FROM e2e_scope_facilities)`);
+      await client.query(`CREATE TEMP TABLE e2e_scope_feedstocks ON COMMIT DROP AS SELECT id FROM feedstocks WHERE code LIKE 'E2E-%' OR facility_id IN (SELECT id FROM e2e_scope_facilities) OR feedstock_delivery_id IN (SELECT id FROM feedstock_deliveries WHERE code LIKE 'E2E-%' OR facility_id IN (SELECT id FROM e2e_scope_facilities))`);
+      await client.query(`CREATE TEMP TABLE e2e_scope_samples ON COMMIT DROP AS SELECT id FROM samples WHERE sample_code LIKE 'E2E-%' OR production_run_id IN (SELECT id FROM e2e_scope_runs) OR credit_batch_id IN (SELECT id FROM e2e_scope_credit_batches)`);
+      await client.query(`
+        CREATE TEMP TABLE e2e_scope_transport_legs ON COMMIT DROP AS
+        SELECT id FROM transport_legs
+        WHERE (entity_type = 'feedstock' AND entity_id IN (SELECT id FROM e2e_scope_feedstocks))
+           OR (entity_type = 'biochar' AND entity_id IN (SELECT id FROM e2e_scope_products))
+           OR (entity_type = 'sample' AND entity_id IN (SELECT id FROM e2e_scope_samples))
+      `);
+      await client.query(`
+        CREATE TEMP TABLE e2e_scope_documents ON COMMIT DROP AS
+        SELECT id FROM documents
+        WHERE (entity_type = 'credit_batch' AND entity_id IN (SELECT id FROM e2e_scope_credit_batches))
+           OR (entity_type = 'production_run' AND entity_id IN (SELECT id FROM e2e_scope_runs))
+           OR (entity_type = 'biochar_product' AND entity_id IN (SELECT id FROM e2e_scope_products))
+           OR (entity_type = 'application' AND entity_id IN (SELECT id FROM e2e_scope_applications))
+           OR (entity_type = 'delivery' AND entity_id IN (SELECT id FROM e2e_scope_deliveries))
+           OR (entity_type = 'order' AND entity_id IN (SELECT id FROM e2e_scope_orders))
+           OR (entity_type = 'feedstock' AND entity_id IN (SELECT id FROM e2e_scope_feedstocks))
+           OR (entity_type = 'sample' AND entity_id IN (SELECT id FROM e2e_scope_samples))
+           OR (entity_type = 'transport_leg' AND entity_id IN (SELECT id FROM e2e_scope_transport_legs))
+           OR (entity_type = 'facility' AND entity_id IN (SELECT id FROM e2e_scope_facilities))
+           OR (entity_type = 'reactor' AND entity_id IN (SELECT id FROM reactors WHERE code LIKE 'E2E-%' OR identifier LIKE 'UI %' OR identifier LIKE 'Chain %' OR facility_id IN (SELECT id FROM e2e_scope_facilities)))
+           OR (entity_type = 'production_incident' AND entity_id IN (SELECT id FROM incident_reports WHERE production_run_id IN (SELECT id FROM e2e_scope_runs)))
+           OR (entity_type = 'production_sample' AND entity_id IN (SELECT id FROM production_samples WHERE production_run_id IN (SELECT id FROM e2e_scope_runs)))
+           OR (entity_type = 'feedstock_delivery' AND entity_id IN (SELECT id FROM feedstock_deliveries WHERE code LIKE 'E2E-%' OR facility_id IN (SELECT id FROM e2e_scope_facilities)))
+      `);
       // Sweep actorless and UI-created fixture history too.
       await client.query(`
         DELETE FROM activity_events
         WHERE actor_user_id LIKE 'e2e-%'
            OR facility_id IN (SELECT id FROM e2e_scope_facilities)
+           OR credit_batch_id IN (SELECT id FROM e2e_scope_credit_batches)
+           OR (entity_type = 'credit_batch' AND entity_id IN (SELECT id::text FROM e2e_scope_credit_batches))
+           OR (entity_type = 'document' AND entity_id IN (SELECT id::text FROM e2e_scope_documents))
+           OR (entity_type = 'transport_leg' AND entity_id IN (SELECT id::text FROM e2e_scope_transport_legs))
            OR production_run_id IN (SELECT id FROM e2e_scope_runs)
            OR (entity_type = 'production_run' AND entity_id IN (SELECT id::text FROM e2e_scope_runs))
            OR (entity_type = 'biochar_product' AND entity_id IN (SELECT id::text FROM e2e_scope_products))

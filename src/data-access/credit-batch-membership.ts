@@ -1,3 +1,5 @@
+import { requireOrgScope } from "./utils";
+import { recordMembershipActivity } from "./write-activity";
 import { assertRowVersion, nextVersion } from "./row-version";
 /**
  * Credit Batch Membership Rules
@@ -571,6 +573,7 @@ export async function attachProductionRunToMatchingCreditBatch(
   tx: DbTransaction,
   productionRunId: string,
 ): Promise<string | null> {
+  requireOrgScope(ctx);
   const [run] = await tx
     .select({
       id: productionRuns.id,
@@ -708,5 +711,6 @@ export async function attachProductionRunToMatchingCreditBatch(
     .set({ version: nextVersion(creditBatches.version), updatedAt: new Date() })
     .where(and(eq(creditBatches.id, batch.id), eq(creditBatches.organizationId, ctx.organizationId)));
 
+  await recordMembershipActivity(ctx, tx, batch.id, [], [productionRunId], { source: "system" });
   return batch.id;
 }

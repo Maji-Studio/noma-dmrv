@@ -1,3 +1,4 @@
+import { insertDocument } from "./documents";
 import { nextVersion } from "./row-version";
 import { and, desc, eq, inArray, isNull, ne, or, sql } from "drizzle-orm";
 import { db } from "@/db";
@@ -922,10 +923,7 @@ export async function attachReportDocument(
     .orderBy(desc(documents.createdAt))
     .limit(1);
   if (existing) return existing;
-  const [row] = await db
-    .insert(documents)
-    .values({
-      organizationId: ctx.organizationId,
+  return insertDocument(ctx, {
       entityType: "ghgStatement",
       entityId: args.submissionId,
       documentType: "pdf",
@@ -937,9 +935,7 @@ export async function attachReportDocument(
         ...(args.metadata ?? {}),
       } as Record<string, unknown>,
       createdBy: ctx.userId,
-    })
-    .returning();
-  return row;
+  });
 }
 
 function deriveFileName(reportUrl: string): string {

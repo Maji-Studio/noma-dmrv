@@ -27,6 +27,14 @@ beforeEach(() => {
   });
 });
 describe("shared operation runner", () => {
+  it.each(["form", "rest", "mcp"] as const)("passes %s source to nested writers", async source => {
+    const execute = vi.fn(operation.execute);
+    const op = { ...operation, execute, describe: () => ({ outcome: "updated", entityType: "labSample", entityIds: ["sample-id"], versionBefore: 1, versionAfter: 2, changedFields: [] }) } satisfies Operation<typeof operation.input, { date: Date; amount: number }>;
+    if (source === "form") await runOperationInProcess(op, ctx, { amount: 1 });
+    else await runOperation(op, ctx, { amount: 1 }, { audit: { transport: source, requestId: "request-id", credentialId: "credential-id" } });
+    expect(execute.mock.calls[0][0].source).toBe(source);
+  });
+
   it("snapshots through the writer transaction only on dry runs", async () => {
     const bin = { storageLocationId: "bin", storageLocationCode: "B-1", stockKind: "feedstock_bin", balance: { wetKg: 100, dryKg: 70 } };
     const savepoint = {} as OperationScope["tx"];

@@ -84,8 +84,8 @@ export const deleteLabSample: Operation<typeof deleteLabSampleInput, void> = {
     outcome: "deleted", entityType: ENTITY_TYPE, entityIds: [input.labSampleId],
     versionBefore: input.expectedVersion, versionAfter: null, changedFields: [],
   }),
-  execute: async ({ ctx, tx, afterCommit }, { labSampleId, expectedVersion }) => {
-    await withSampleErrors(() => deleteSampleInTransaction(ctx, tx, labSampleId, expectedVersion));
+  execute: async ({ ctx, tx, source, afterCommit }, { labSampleId, expectedVersion }) => {
+    await withSampleErrors(() => deleteSampleInTransaction(ctx, tx, labSampleId, expectedVersion, source));
     // Retired documents queue their storage deletions; drain them only once committed.
     afterCommit(async () => { await processPendingStorageObjectDeletions(ctx); });
   },

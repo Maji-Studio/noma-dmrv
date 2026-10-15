@@ -65,6 +65,24 @@ values throw.
 `Date`; `occurred_at` defaults to insert time (`clock_timestamp()`), and reads
 order by `occurred_at` then unique `sequence`, newest first.
 
+Non-runner application, credit-batch, membership, document and transport-leg
+writers append activity in the same transaction as their writes. A record spanning
+several batches emits one event per batch, including both former and current
+batches when an application moves. Membership changes emit a batch update per
+changed run and a run update with the former batch ID on detach, so each event
+retains its run scope and the run retains its history.
+Automatic cohort attachment uses `system` with no actor; derived transport writes
+retain the initiating actor. Document events keep only the document ID, applicable
+batch/run IDs and a `document:<document_type>:<owner_type>:<owner_uuid>` reason
+code containing controlled type keys and the owning record ID.
+They never copy filenames, URLs, storage keys or descriptions. Parent deletes
+capture ownership before removing the rows needed to resolve it.
+
+`src/data-access/activity-coverage.test.ts` discovers modules throughout
+`src/data-access/` that write the covered tables and fails on unlisted modules or
+unclassified write exports. Document metadata updates,
+reference data, energy, readings and incidents are outside this activity scope.
+
 ## Row-Level Guards
 
 Frozen/locked rows are protected by dedicated modules in `src/data-access/`, not by DB constraints alone: `bin-stock-guards.ts`, `lock-bin-stocks.ts`, the `*-stock-locks.ts` family (`biochar-product`, `delivery`, `formulation`, `order`, `production-run`), `facility-durability-lock.ts`, `certification-lineage-guards.ts`, `unique-name-guards.ts`. A fresh `db.update()` that skips these silently bypasses the freeze — route mutations through the guarded helpers.

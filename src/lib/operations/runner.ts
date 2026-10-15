@@ -50,6 +50,7 @@ export interface OperationScope {
   snapshotStock?: SnapshotStock;
   ctx: OrgContext;
   tx: DbTransaction;
+  source?: "form" | "rest" | "mcp";
   /** Work to trigger after the real commit; never after a dry run or rollback. */
   afterCommit: (hook: () => Promise<void> | void) => void;
 }
@@ -263,7 +264,7 @@ async function runOperationCore<Input extends z.ZodType, Output, Result>(
         const snapshotStock: SnapshotStock | undefined = dryRun ? async (writerTx, ids) => {
           before = await readStockBalances(ctx, writerTx, ids);
         } : undefined;
-        const output = await operation.execute({ ctx, tx, snapshotStock, afterCommit: (hook) => hooks.push(hook) }, decoded);
+        const output = await operation.execute({ ctx, tx, source: options.audit?.transport ?? "form", snapshotStock, afterCommit: (hook) => hooks.push(hook) }, decoded);
         const stockEffects = before ? diffStockBalances(before, await readStockBalances(ctx, tx, before.map((bin) => bin.storageLocationId))) : undefined;
         const effect = operation.describe?.(decoded, output);
         const result = represent(output);
