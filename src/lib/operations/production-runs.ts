@@ -109,7 +109,7 @@ export const deleteProductionRun: Operation<typeof deleteProductionRunSchema, vo
     versionBefore: input.expectedVersion, versionAfter: null, changedFields: [],
   }),
   execute: async ({ ctx, tx, source, afterCommit, snapshotStock, activity }, { productionRunId, expectedVersion }) => {
-    const run = await withProductionRunErrors(() => deleteProductionRunInTransaction(ctx, tx, productionRunId, expectedVersion, snapshotStock, source));
+    const run = await withProductionRunErrors(() => deleteProductionRunInTransaction(ctx, tx, productionRunId, expectedVersion, source, snapshotStock));
     activity.link({ facilityId: run.facilityId });
     afterCommit(async () => { await processPendingStorageObjectDeletions(ctx); });
   },

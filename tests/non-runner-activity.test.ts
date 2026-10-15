@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { activityEvents, applications, creditBatches, creditBatchProductionRuns, documents, productionRuns, samples, transportLegs, biocharProducts, biocharProductSourceAllocations, vehicles, feedstocks, outputStockAllocations, outputStockRunAllocations, binMovements, deliveries } from "@/db/schema";
+import { activityEvents, applications, creditBatches, creditBatchProductionRuns, documents, productionRuns, samples, transportLegs, biocharProducts, biocharProductSourceAllocations, vehicles, feedstocks, outputStockAllocations, outputStockRunAllocations, binMovements, deliveries, applicationOutputAllocations } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import * as activity from "@/data-access/activity-events";
 import { createApplication, updateApplication, deleteApplication } from "@/data-access/applications";
@@ -25,6 +25,12 @@ import { updateVehicle } from "@/data-access/vehicles";
 import { resolveWriteActivityScopes } from "@/data-access/write-activity";
 import { deleteLabSample } from "@/lib/operations/lab-samples";
 
+const LEG_DISTANCE_KM = 10;
+const UPDATED_LEG_DISTANCE_KM = 20;
+const DERIVED_LEG_DISTANCE_KM = 10.1;
+const LEG_LOAD_MASS_KG = 100;
+const SAMPLE_TOTAL_CARBON_PERCENT = 80;
+const SAMPLE_ORGANIC_CARBON_PERCENT = 75;
 const INITIAL_MODEL_YEAR = 2020;
 const UPDATED_MODEL_YEAR = 2024;
 const APPLICATION_TONNES = 0.01;
@@ -60,7 +66,15 @@ function documentInput(entityType = "credit_batch", entityId = fixture.batch.id)
   return { entityType, entityId, documentType: "pdf" as const, fileName: PRIVATE_FILENAME, fileUrl: "https://example.invalid/evidence.pdf" };
 }
 function legInput() {
-  return { entityType: "feedstock" as const, entityId: fixture.feedstock.id, distanceKm: 10, loadMassKg: 100, transportMethodType: "road" as const };
+  return { entityType: "feedstock" as const, entityId: fixture.feedstock.id, distanceKm: LEG_DISTANCE_KM, loadMassKg: LEG_LOAD_MASS_KG, transportMethodType: "road" as const };
+}
+async function insertSample() {
+  const [sample] = await db.insert(samples).values({
+    organizationId: ctx.organizationId, creditBatchId: fixture.batch.id,
+    sampleCode: "ACT-SAMPLE", samplingTime: ACTIVITY_FIXTURE_DATE,
+    totalCarbonPercent: SAMPLE_TOTAL_CARBON_PERCENT, organicCarbonPercent: SAMPLE_ORGANIC_CARBON_PERCENT,
+  }).returning();
+  return sample;
 }
 function events(entityType: Parameters<typeof activity.listEntityActivity>[1], id: string) {
   return activity.listEntityActivity(ctx, entityType, id);
@@ -161,12 +175,12 @@ it("records a batch membership event per changed run so each event can be swept 
 it("records legacy document create/delete without any filename", async () => {
   const deleteWriter = deleteDocumentRow;
   const document = await insertDocument(ctx, documentInput());
-  await deleteWriter(ctx, document.id);
+  await deleteWriter(ctx, document.id, "form");
   const rows = await events("document", document.id);
   expect(rows.map(row => row.action)).toEqual(["deleted", "created"]);
   for (const row of rows) expect(row).toMatchObject({ creditBatchId: fixture.batch.id, reasonCode: `document:pdf:credit_batch:${fixture.batch.id}`, changedFields: [] });
   expect(JSON.stringify(rows, (_, value) => typeof value === "bigint" ? String(value) : value)).not.toContain(PRIVATE_FILENAME);
-  expect(await deleteWriter(ctx, document.id)).toBeNull();
+  expect(await deleteWriter(ctx, document.id, "form")).toBeNull();
   expect(await events("document", document.id)).toHaveLength(2);
 });
 
@@ -181,7 +195,7 @@ it("records document retirement in its caller's transaction", async () => {
 
 it("records transport-leg create/update/delete once with batch lineage", async () => {
   const created = await createTransportLeg(ctx, legInput());
-  const updated = await updateTransportLeg(ctx, created.id, { expectedVersion: created.version, distanceKm: 20 });
+  const updated = await updateTransportLeg(ctx, created.id, { expectedVersion: created.version, distanceKm: UPDATED_LEG_DISTANCE_KM });
   await deleteTransportLeg(ctx, updated.id, updated.version);
   const rows = await events("transport_leg", created.id);
   expect(rows.map(row => row.action)).toEqual(["deleted", "updated", "created"]);
@@ -190,7 +204,7 @@ it("records transport-leg create/update/delete once with batch lineage", async (
 });
 
 it("records sample-owned transport and its documents against the sample's batch", async () => {
-  const [sample] = await db.insert(samples).values({ organizationId: ctx.organizationId, creditBatchId: fixture.batch.id, sampleCode: "ACT-SAMPLE", samplingTime: ACTIVITY_FIXTURE_DATE, totalCarbonPercent: 80, organicCarbonPercent: 75 }).returning();
+  const sample = await insertSample();
   const leg = await createTransportLeg(ctx, { ...legInput(), entityType: "sample", entityId: sample.id });
   const document = await insertDocument(ctx, documentInput("transport_leg", leg.id));
   expect((await events("transport_leg", leg.id))[0].creditBatchId).toBe(fixture.batch.id);
@@ -209,16 +223,15 @@ it("records cascade transport deletes and document retirement with captured owne
 });
 
 it("upserts identical derived syncs without events and records changed fields on a real update", async () => {
-  const initialDistanceKm = 10.1;
-  await db.transaction(tx => syncFeedstockTransportLeg(ctx, tx, fixture.feedstock.id, { distanceKm: initialDistanceKm }));
+  await db.transaction(tx => syncFeedstockTransportLeg(ctx, tx, fixture.feedstock.id, { distanceKm: DERIVED_LEG_DISTANCE_KM }));
   const [leg] = await db.select().from(transportLegs).where(eq(transportLegs.organizationId, ctx.organizationId));
-  await db.transaction(tx => syncFeedstockTransportLeg(ctx, tx, fixture.feedstock.id, { distanceKm: initialDistanceKm }));
+  await db.transaction(tx => syncFeedstockTransportLeg(ctx, tx, fixture.feedstock.id, { distanceKm: DERIVED_LEG_DISTANCE_KM }));
   expect(await events("transport_leg", leg.id)).toHaveLength(1);
   const [unchanged] = await db.select().from(transportLegs).where(eq(transportLegs.id, leg.id));
   expect(unchanged.version).toBe(leg.version + 1);
   expect(unchanged.updatedAt.getTime()).toBeGreaterThanOrEqual(leg.updatedAt.getTime());
   expect({ ...unchanged, version: leg.version, updatedAt: leg.updatedAt }).toEqual(leg);
-  await db.transaction(tx => syncFeedstockTransportLeg(ctx, tx, fixture.feedstock.id, { distanceKm: 20 }));
+  await db.transaction(tx => syncFeedstockTransportLeg(ctx, tx, fixture.feedstock.id, { distanceKm: UPDATED_LEG_DISTANCE_KM }));
   await db.transaction(tx => syncFeedstockTransportLeg(ctx, tx, fixture.feedstock.id, { distanceKm: null }));
   const rows = await events("transport_leg", leg.id);
   expect(rows.map(row => row.action)).toEqual(["deleted", "updated", "created"]);
@@ -227,7 +240,7 @@ it("upserts identical derived syncs without events and records changed fields on
 });
 
 it.each(["form", "rest", "mcp", "script"] as const)("preserves %s source through lab-sample leg and document deletion", async source => {
-  const [sample] = await db.insert(samples).values({ organizationId: ctx.organizationId, creditBatchId: fixture.batch.id, sampleCode: "ACT-SAMPLE", samplingTime: ACTIVITY_FIXTURE_DATE, totalCarbonPercent: 80, organicCarbonPercent: 75 }).returning();
+  const sample = await insertSample();
   const leg = await createTransportLeg(ctx, { ...legInput(), entityType: "sample", entityId: sample.id });
   const sampleDocument = await insertDocument(ctx, documentInput("sample", sample.id));
   const legDocument = await insertDocument(ctx, documentInput("transport_leg", leg.id));
@@ -316,7 +329,7 @@ it("rolls back legacy document deletion and activity on failure", async () => {
     await original(...args);
     throw FAILURE;
   });
-  await expect(writer(ctx, saved.id)).rejects.toBe(FAILURE);
+  await expect(writer(ctx, saved.id, "form")).rejects.toBe(FAILURE);
   expect(await allEvents()).toEqual(before);
   const [stored] = await db.select().from(documents).where(eq(documents.id, saved.id));
   expect(stored).toEqual(saved);
@@ -331,7 +344,7 @@ it.each(["update", "delete"] as const)("rolls back transport %s and its activity
     throw FAILURE;
   });
   await expect(action === "update"
-    ? updateTransportLeg(ctx, saved.id, { expectedVersion: saved.version, distanceKm: 20 })
+    ? updateTransportLeg(ctx, saved.id, { expectedVersion: saved.version, distanceKm: UPDATED_LEG_DISTANCE_KM })
     : deleteTransportLeg(ctx, saved.id, saved.version)).rejects.toBe(FAILURE);
   expect(await allEvents()).toEqual(before);
   const [stored] = await db.select().from(transportLegs).where(eq(transportLegs.id, saved.id));
@@ -386,8 +399,7 @@ it("records exactly one document event for each app upload request, confirm and 
 });
 
 it("records one sample deletion and one attached-document deletion through the app runner", async () => {
-  const [sample] = await db.insert(samples).values({ organizationId: ctx.organizationId, creditBatchId: fixture.batch.id,
-    sampleCode: "ACT-SAMPLE", samplingTime: ACTIVITY_FIXTURE_DATE, totalCarbonPercent: 80, organicCarbonPercent: 75 }).returning();
+  const sample = await insertSample();
   const document = await insertDocument(ctx, documentInput("sample", sample.id));
   await runOperationInProcess(deleteLabSample, ctx, { labSampleId: sample.id, expectedVersion: sample.version });
   const deleted = (await allEvents()).filter(row => row.action === "deleted");
@@ -434,7 +446,7 @@ it("rolls back certification-safe app deletion and activity on recording failure
 
 
 it.each(["rest", "mcp", "script"] as const)("records derived document retirement as system when a %s update clears the leg", async source => {
-  await db.transaction(tx => syncFeedstockTransportLeg(ctx, tx, fixture.feedstock.id, { distanceKm: 10 }));
+  await db.transaction(tx => syncFeedstockTransportLeg(ctx, tx, fixture.feedstock.id, { distanceKm: LEG_DISTANCE_KM }));
   const [leg] = await db.select().from(transportLegs).where(eq(transportLegs.organizationId, ctx.organizationId));
   const document = await insertDocument(ctx, documentInput("transport_leg", leg.id));
   const input = { feedstockId: fixture.feedstock.id, expectedVersion: fixture.feedstock.version, transportDistanceKm: null };
@@ -464,7 +476,7 @@ it("records only affected batch visibility changes on facility archive and resto
 it("records vehicle snapshot refreshes as system leg updates with batch and run scope", async () => {
   const [vehicle] = await db.insert(vehicles).values({ organizationId: ctx.organizationId, code: "ACT-VEHICLE", name: "Activity vehicle", vehicleType: "truck", modelYear: INITIAL_MODEL_YEAR }).returning();
   await db.update(feedstocks).set({ vehicleId: vehicle.id }).where(eq(feedstocks.id, fixture.feedstock.id));
-  await db.transaction(tx => syncFeedstockTransportLeg(ctx, tx, fixture.feedstock.id, { distanceKm: 10 }));
+  await db.transaction(tx => syncFeedstockTransportLeg(ctx, tx, fixture.feedstock.id, { distanceKm: LEG_DISTANCE_KM }));
   const [leg] = await db.select().from(transportLegs).where(eq(transportLegs.organizationId, ctx.organizationId));
   const updated = await updateVehicle(ctx, vehicle.id, { name: vehicle.name, vehicleType: "van", modelYear: UPDATED_MODEL_YEAR }, vehicle.version);
   const rows = await events("transport_leg", leg.id);
@@ -500,4 +512,39 @@ it("excludes fully reversed product shares from delivery and order activity scop
     const document = await insertDocument(ctx, documentInput(type, id));
     expect(await events("document", document.id)).toMatchObject([{ creditBatchId: nextBatch.id, productionRunId: nextRun.id }]);
   }
+});
+
+it("excludes zero-mass application shares in another batch from activity ownership", async () => {
+  const application = await createApplication(ctx, applicationInput());
+  const [nextRun] = await db.insert(productionRuns).values({ ...fixture.run, id: crypto.randomUUID(), code: "ACT-RUN-ZERO", startTime: NEXT_RUN_START, endTime: NEXT_ACTIVITY_DATE }).returning();
+  const [nextBatch] = await db.insert(creditBatches).values({ ...fixture.batch, id: crypto.randomUUID(), code: "ACT-CB-ZERO", startDate: "2026-02-01", endDate: "2026-02-28" }).returning();
+  await db.insert(creditBatchProductionRuns).values({ organizationId: ctx.organizationId, creditBatchId: nextBatch.id, productionRunId: nextRun.id });
+  await db.insert(applicationOutputAllocations).values({
+    organizationId: ctx.organizationId, applicationId: application.id, deliveryId: fixture.delivery.id,
+    biocharProductId: fixture.product.id, productionRunId: nextRun.id, wetMassKg: "0", dryMassKg: "0",
+  });
+  const document = await insertDocument(ctx, documentInput("application", application.id));
+  expect(await events("document", document.id)).toMatchObject([
+    { creditBatchId: fixture.batch.id, productionRunId: fixture.run.id },
+  ]);
+  expect(await events("document", document.id)).toHaveLength(1);
+});
+
+it("retires failed delivery uploads with no allocations and records unscoped activity", async () => {
+  const [delivery] = await db.insert(deliveries).values({ ...fixture.delivery, id: crypto.randomUUID(), code: "ACT-DL-NO-ALLOCATIONS" }).returning();
+  const document = await runOperationInProcess(requestDocumentUploadApp, ctx, {
+    entityType: "delivery", entityId: delivery.id, documentType: "pdf", fileName: PRIVATE_FILENAME,
+    contentType: "application/pdf", sizeBytes: DOCUMENT_SIZE_BYTES, storageProvider: "local-fs", storageBucket: "local-fs",
+  });
+  const now = new Date();
+  await db.update(documents).set({ uploadExpiresAt: new Date(now.getTime() - DOCUMENT_UPLOAD_GRACE_MS - RETENTION_BOUNDARY_OFFSET_MS) })
+    .where(eq(documents.id, document.id));
+  await db.transaction(tx => expireDocumentUploadsInTransaction(tx, now, [ctx.organizationId]));
+  await db.update(documents).set({ updatedAt: new Date(now.getTime() - DOCUMENT_FAILED_RETENTION_MS - RETENTION_BOUNDARY_OFFSET_MS) })
+    .where(eq(documents.id, document.id));
+  expect(await db.transaction(tx => retireFailedDocumentUploadsInTransaction(tx, now, [ctx.organizationId]))).toBe(1);
+  expect(await db.select().from(documents).where(eq(documents.id, document.id))).toEqual([]);
+  expect((await events("document", document.id)).filter(row => row.action === "deleted")).toMatchObject([
+    { source: "system", actorUserId: null, creditBatchId: null, productionRunId: null },
+  ]);
 });

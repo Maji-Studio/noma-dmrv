@@ -398,7 +398,7 @@ export async function insertDocument(
   requireOrgScope(ctx);
   return db.transaction(async (tx) => {
     const [row] = await tx.insert(documents).values({ ...input, organizationId: ctx.organizationId }).returning();
-    await recordDocumentActivity(ctx, tx, row, "created");
+    await recordDocumentActivity(ctx, tx, row, "created", { source: "form" });
     return row;
   });
 }
@@ -406,15 +406,15 @@ export async function insertDocument(
 export async function deleteDocumentRow(
   ctx: OrgContext,
   id: string,
+  source: ActivityEventInput["source"],
   tx?: DbTransaction,
-  source: ActivityEventInput["source"] = "form",
 ): Promise<DocumentRow | null> {
   requireOrgScope(ctx);
-  if (!tx) return db.transaction(writerTx => deleteDocumentRow(ctx, id, writerTx, source));
+  if (!tx) return db.transaction(writerTx => deleteDocumentRow(ctx, id, source, writerTx));
   const [row] = await tx.select().from(documents)
     .where(and(eq(documents.id, id), eq(documents.organizationId, ctx.organizationId))).for("update");
   if (!row) return null;
-  await recordDocumentActivity(ctx, tx, row, "deleted", undefined, source);
+  await recordDocumentActivity(ctx, tx, row, "deleted", { source });
   await tx.delete(documents).where(and(eq(documents.id, id), eq(documents.organizationId, ctx.organizationId)));
   return row;
 }
@@ -588,7 +588,7 @@ export async function retireDocumentsForEntities(
 
   for (const document of ownedDocuments) {
     const owner = uniqueEntities.find(entity => entity.entityType === document.entityType && entity.entityId === document.entityId);
-    await recordDocumentActivity(ctx, tx, document, "deleted", owner?.activityScopes, source, actorUserId);
+    await recordDocumentActivity(ctx, tx, document, "deleted", { scopes: owner?.activityScopes, source, actorUserId });
     await enqueueDocumentKeys(ctx, tx, document);
   }
 

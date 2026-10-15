@@ -369,7 +369,7 @@ export async function updateOrderInTransaction(ctx: OrgContext, tx: DbTransactio
   });
 }
 
-export async function deleteOrderInTransaction(ctx: OrgContext, tx: DbTransaction, input: { orderId: string; expectedVersion: number }, source: ActivityEventInput["source"] = "form"): Promise<Order> {
+export async function deleteOrderInTransaction(ctx: OrgContext, tx: DbTransaction, input: { orderId: string; expectedVersion: number }, source: ActivityEventInput["source"]): Promise<Order> {
   requireOrgScope(ctx);
   const { orderId, expectedVersion } = input;
   await lockBiocharTransportRouteTopology(ctx, tx);

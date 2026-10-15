@@ -56,7 +56,7 @@ export interface OperationScope {
   activity: OperationActivity;
   ctx: OrgContext;
   tx: DbTransaction;
-  source?: ActivityEventInput["source"];
+  source: ActivityEventInput["source"];
   /** Work to trigger after the real commit; never after a dry run or rollback. */
   afterCommit: (hook: () => Promise<void> | void) => void;
 }

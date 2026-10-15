@@ -250,6 +250,7 @@ describe("ensureDurabilityEvidenceLedgerSourceFromContext", () => {
     expect(deleteDocumentRow).toHaveBeenCalledWith(
       makeTestOrgContext(USER),
       "doc-old",
+      "form",
     );
   });
 
@@ -265,6 +266,7 @@ describe("ensureDurabilityEvidenceLedgerSourceFromContext", () => {
     expect(deleteDocumentRow).toHaveBeenCalledWith(
       makeTestOrgContext(USER),
       "doc-old",
+      "form",
     );
     expect(deleteObject).toHaveBeenCalledWith("durability-evidence/old.pdf");
   });

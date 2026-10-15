@@ -1,3 +1,5 @@
+import { recordActivity } from "./activity-events";
+import { toActivityEntityType } from "@/lib/activity-entity-type";
 import { hasFreshRemovalDeletionLease } from "@/lib/certification/removal-deletion-lease";
 import { assertNoRemovalBatchDeletion } from "./removal-production-batch-deletion";
 import { and, asc, desc, eq, exists, gte, inArray, isNull, or, sql } from "drizzle-orm";
@@ -532,6 +534,11 @@ export async function createRemovalWithCreditBatches(
       );
     }
 
+    for (const creditBatchId of new Set(slices.map(slice => slice.creditBatchId))) await recordActivity(ctx, tx, {
+      entityType: toActivityEntityType("credit_batch"), entityId: creditBatchId, creditBatchId,
+      action: "updated", source: "form", changedFields: ["removalAssignment"],
+    });
+
     return removal.id;
   });
 }
@@ -668,7 +675,7 @@ export async function discardLocalRemovalDraft(
           eq(creditBatchApplications.organizationId, ctx.organizationId),
         ),
       )
-      .returning({ id: creditBatchApplications.id });
+      .returning({ id: creditBatchApplications.id, creditBatchId: creditBatchApplications.creditBatchId });
 
     const [deleted] = await tx
       .delete(certifierRemovals)
@@ -683,6 +690,11 @@ export async function discardLocalRemovalDraft(
     if (!deleted) {
       throw new SafeError(DISCARD_REMOVAL_ERROR);
     }
+
+    for (const creditBatchId of new Set(released.map(slice => slice.creditBatchId))) await recordActivity(ctx, tx, {
+      entityType: toActivityEntityType("credit_batch"), entityId: creditBatchId, creditBatchId,
+      action: "updated", source: "form", changedFields: ["removalAssignment"],
+    });
 
     logger.info(
       { removalId, releasedSliceCount: released.length },

@@ -2,7 +2,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import ts from "typescript";
 import { describe, expect, it } from "vitest";
 
-type Coverage = { status: "covered" } | { status: "runner"; operations: string[] } | { status: "exempt"; reason: string };
+type Coverage = { status: "direct" } | { status: "runner"; operations: string[] } | { status: "exempt"; reason: string };
 
 // Explicit inventory includes wrappers, cascades and derived writers. Discovery
 // below scans the whole data-access tree so new modules cannot bypass it.
@@ -16,11 +16,11 @@ const ACTIVITY_COVERAGE = {
   "facilities.ts": {
     createFacility: { status: "exempt", reason: "Facility reference-data lifecycle has no entity activity type." },
     updateFacility: { status: "exempt", reason: "Facility reference-data edits have no entity activity type." },
-    archiveFacility: { status: "covered" },
-    restoreFacility: { status: "covered" },
+    archiveFacility: { status: "direct" },
+    restoreFacility: { status: "direct" },
   },
   "vehicles.ts": {
-    updateVehicle: { status: "covered" },
+    updateVehicle: { status: "direct" },
     deleteVehicle: { status: "exempt", reason: "Vehicle reference-data deletion leaves transport leg snapshots unchanged." },
   },
   "production-run-reading-imports.ts": {
@@ -28,36 +28,36 @@ const ACTIVITY_COVERAGE = {
     recordReadingsImportOutcome: { status: "exempt", reason: "Import outcome metadata is internal bookkeeping; document lifecycle is recorded separately." },
   },
   "production-claim-reservations.ts": {
-    reserveProductionEmissionsClaims: { status: "exempt", reason: "Registry claim reservation activity is deferred; see docs/open-questions.md." },
-    rejectSubmissionAndReleaseProductionClaims: { status: "exempt", reason: "Registry claim release activity is deferred; see docs/open-questions.md." },
+    reserveProductionEmissionsClaims: { status: "direct" },
+    rejectSubmissionAndReleaseProductionClaims: { status: "direct" },
   },
   "certifier-removals.ts": {
-    createRemovalWithCreditBatches: { status: "exempt", reason: "Removal slice assignment activity is deferred; see docs/open-questions.md." },
-    discardLocalRemovalDraft: { status: "exempt", reason: "Removal slice release activity is deferred; see docs/open-questions.md." },
+    createRemovalWithCreditBatches: { status: "direct" },
+    discardLocalRemovalDraft: { status: "direct" },
     markRemovalSubmissionExternalMutationPossible: { status: "exempt", reason: "External mutation markers are internal retry bookkeeping; status transitions record lifecycle activity." },
     updateRemovalDates: { status: "exempt", reason: "Removal date edit activity is deferred; see docs/open-questions.md." },
     updateRemovalSourceBindingVerification: { status: "exempt", reason: "Registry source verification is internal submission bookkeeping." },
   },
   "certifier-removal-deletion.ts": {
-    finalizeRemovalDeletion: { status: "covered" },
+    finalizeRemovalDeletion: { status: "direct" },
   },
   "applications.ts": {
-    createApplication: { status: "covered" },
-    updateApplication: { status: "covered" },
-    deleteApplication: { status: "covered" },
+    createApplication: { status: "direct" },
+    updateApplication: { status: "direct" },
+    deleteApplication: { status: "direct" },
   },
   "credit-batches.ts": {
-    createCreditBatch: { status: "covered" },
-    updateCreditBatch: { status: "covered" },
-    deleteCreditBatch: { status: "covered" },
+    createCreditBatch: { status: "direct" },
+    updateCreditBatch: { status: "direct" },
+    deleteCreditBatch: { status: "direct" },
   },
   "credit-batch-membership.ts": {
-    attachProductionRunToMatchingCreditBatch: { status: "covered" },
+    attachProductionRunToMatchingCreditBatch: { status: "direct" },
   },
   "documents.ts": {
-    insertDocument: { status: "covered" },
-    deleteDocumentRow: { status: "covered" },
-    retireDocumentsForEntities: { status: "covered" },
+    insertDocument: { status: "direct" },
+    deleteDocumentRow: { status: "direct" },
+    retireDocumentsForEntities: { status: "direct" },
   },
   "document-writes.ts": {
     requestDocumentUploadInTransaction: { status: "runner", operations: ["request_document_upload", "request_document_upload_app"] },
@@ -76,8 +76,8 @@ const ACTIVITY_COVERAGE = {
   },
   "document-upload-sweep.ts": {
     expireDocumentUploadsInTransaction: { status: "exempt", reason: "Abandoned pending-upload bookkeeping, outside operator document edits." },
-    retireFailedDocumentUploadsInTransaction: { status: "covered" },
-    sweepDocumentUploads: { status: "covered" },
+    retireFailedDocumentUploadsInTransaction: { status: "direct" },
+    sweepDocumentUploads: { status: "direct" },
   },
   "document-storage-deletions.ts": {
     enqueueDocumentKeys: { status: "exempt", reason: "Storage cleanup queue only; the initiating document writer records activity." },
@@ -94,7 +94,7 @@ const ACTIVITY_COVERAGE = {
     deleteOrderInTransaction: { status: "runner", operations: ["delete_order"] },
   },
   "certification-status-activity.ts": {
-    withCertificationStatusActivity: { status: "covered" },
+    withCertificationStatusActivity: { status: "direct" },
   },
   "production-incidents.ts": {
     createProductionIncident: { status: "exempt", reason: "Incident records have no entity activity type; their document retirements are covered." },
@@ -115,26 +115,26 @@ const ACTIVITY_COVERAGE = {
   },
   "certification.ts": {
     upsertCertifierProject: { status: "exempt", reason: "Registry project mappings are reference configuration without an entity activity type." },
-    markSubmissionSubmitted: { status: "covered" },
-    retireStaleSubmissionDraft: { status: "covered" },
-    markSubmissionRejected: { status: "covered" },
-    setSubmissionTerminalStatus: { status: "covered" },
-    attachReportDocument: { status: "covered" },
+    markSubmissionSubmitted: { status: "direct" },
+    retireStaleSubmissionDraft: { status: "direct" },
+    markSubmissionRejected: { status: "direct" },
+    setSubmissionTerminalStatus: { status: "direct" },
+    attachReportDocument: { status: "direct" },
     updateFacilityEmissionConfig: { status: "exempt", reason: "Facility energy configuration has no entity activity type." },
     deleteCertifierProject: { status: "exempt", reason: "Registry project mapping deletion changes reference configuration without an entity activity type." },
-    updateSubmissionMetadata: { status: "covered" },
+    updateSubmissionMetadata: { status: "direct" },
   },
   "ghg-statement-reports.ts": {
-    insertPreparedGhgStatementReport: { status: "covered" },
+    insertPreparedGhgStatementReport: { status: "direct" },
   },
   "transport-legs.ts": {
-    createTransportLeg: { status: "covered" },
-    updateTransportLeg: { status: "covered" },
-    deleteTransportLeg: { status: "covered" },
-    deleteTransportLegsForEntity: { status: "covered" },
-    syncFeedstockTransportLeg: { status: "covered" },
-    syncBiocharProductTransportLegs: { status: "covered" },
-    syncBiocharLegsForCustomerLocation: { status: "covered" },
+    createTransportLeg: { status: "direct" },
+    updateTransportLeg: { status: "direct" },
+    deleteTransportLeg: { status: "direct" },
+    deleteTransportLegsForEntity: { status: "direct" },
+    syncFeedstockTransportLeg: { status: "direct" },
+    syncBiocharProductTransportLegs: { status: "direct" },
+    syncBiocharLegsForCustomerLocation: { status: "direct" },
   },
 } satisfies Record<string, Record<string, Coverage>>;
 

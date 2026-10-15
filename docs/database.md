@@ -74,6 +74,7 @@ app document deletes. App document visibility and evidence classification edits
 also use the runner. No-op descriptions, repeated confirmations, dry runs and idempotent
 replays add no events. The runner computes one source for both its own event and
 nested writers: audited transport, then the trusted `script` override, then `form`.
+Runner-reached transactional and cascade writers require an explicit source.
 
 Application, credit-batch, membership and transport-leg writers append activity
 directly in their write transaction. A record spanning several batches emits one
@@ -85,7 +86,17 @@ retain the initiating actor, including document retirements when a derived leg
 is cleared. Identical derived syncs still upsert and bump the leg version without
 emitting activity. Vehicle snapshot refreshes record derived leg updates with
 source `system`; facility archive/restore records each affected batch update.
-Delivery and order scopes use net saved provenance, excluding fully reversed shares.
+Application scopes exclude shares with zero wet and dry mass. Delivery and order
+scopes use net saved provenance, excluding fully reversed shares and deliveries
+without allocation layers. If saved delivery provenance raises `SafeError`, direct
+activity records one unscoped event so invalid lineage cannot block a write or the
+failed-upload sweep. Unexpected errors still propagate.
+
+Removal slice assignment/release and production-claim reservation/release record
+one value-free batch update per affected batch in the write transaction, using
+`removalAssignment`, `productionClaimReservation` and `productionClaim` field names.
+Removal deletion combines these changes into one event per batch; local draft
+discard records the released slice assignments.
 
 Legacy certification reports and evidence ledgers use `insertDocument` and
 `deleteDocumentRow`, which record directly. Parent deletion uses
@@ -105,8 +116,8 @@ removing the rows needed to resolve it.
 
 `src/data-access/activity-coverage.test.ts` discovers modules throughout
 `src/data-access/` that write the covered tables and fails on unlisted modules or
-unclassified write exports. Its inventory distinguishes direct recording,
-runner coverage with operation IDs, and reasoned exemptions. Certification status
+unclassified write exports. Its inventory distinguishes `direct` recording,
+`runner` coverage with operation IDs, and reasoned `exempt` entries. Certification status
 transitions use `certification-status-activity.ts`. Reference data, energy,
 readings and incidents are outside this activity scope.
 

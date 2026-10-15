@@ -37,8 +37,8 @@ export async function deleteProductionRunInTransaction(
   tx: DbTransaction,
   productionRunId: string,
   expectedVersion: number,
+  source: ActivityEventInput["source"],
   snapshotStock?: SnapshotStock,
-  source: ActivityEventInput["source"] = "form",
 ): Promise<{ facilityId: string }> {
   requireOrgScope(ctx);
 
@@ -191,6 +191,6 @@ export async function deleteProductionRunInTransaction(
 
 export async function deleteProductionRun(ctx: OrgContext, id: string, expectedVersion: number): Promise<void> {
   requireOrgScope(ctx);
-  await db.transaction((tx) => deleteProductionRunInTransaction(ctx, tx, id, expectedVersion));
+  await db.transaction((tx) => deleteProductionRunInTransaction(ctx, tx, id, expectedVersion, "form"));
   await processPendingStorageObjectDeletions(ctx);
 }

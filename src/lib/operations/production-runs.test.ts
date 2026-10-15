@@ -10,7 +10,7 @@ vi.mock("@/db", () => ({ db: {} }));
 import { startProductionRun, updateProductionRun } from "./production-runs";
 const id = "00000000-0000-4000-8000-000000000001";
 const otherId = "00000000-0000-4000-8000-000000000002";
-const scope = { ctx: { organizationId: id, userId: id, orgRole: "owner", isPlatformAdmin: false }, tx: {} as OperationScope["tx"], activity: createOperationActivity(), afterCommit: vi.fn() } satisfies OperationScope;
+const scope = { source: "form", ctx: { organizationId: id, userId: id, orgRole: "owner", isPlatformAdmin: false }, tx: {} as OperationScope["tx"], activity: createOperationActivity(), afterCommit: vi.fn() } satisfies OperationScope;
 const local = { date: "2026-01-01", time: "10:00" };
 beforeEach(() => {
   vi.clearAllMocks();

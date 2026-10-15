@@ -5,6 +5,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import {
+  activityEvents,
   applications,
   biocharProductSourceAllocations,
   biocharProducts,
@@ -225,6 +226,13 @@ describe("Removal Application-slice assignment", () => {
       secondRemovalId = await createRemovalWithCreditBatches(ctx, facility.id, [
         batches[1].id,
       ]);
+      const assignmentEvents = await db.select().from(activityEvents)
+        .where(inArray(activityEvents.creditBatchId, batches.map(batch => batch.id)));
+      expect(assignmentEvents).toHaveLength(batches.length);
+      for (const batch of batches) expect(assignmentEvents).toContainEqual(expect.objectContaining({
+        entityType: "credit_batch", entityId: batch.id, creditBatchId: batch.id,
+        action: "updated", changedFields: ["removalAssignment"], source: "form", actorUserId: ctx.userId,
+      }));
       const separatelyAssigned = await db
         .select({
           creditBatchId: creditBatchApplications.creditBatchId,
@@ -248,6 +256,16 @@ describe("Removal Application-slice assignment", () => {
         discardLocalRemovalDraft(ctx, facility.id, secondRemovalId),
       ).resolves.toEqual({ releasedSliceCount: 1 });
       secondRemovalId = null;
+      const releasedEvents = await db.select().from(activityEvents)
+        .where(inArray(activityEvents.creditBatchId, batches.map(batch => batch.id)));
+      for (const batch of batches) {
+        const history = releasedEvents.filter(event => event.creditBatchId === batch.id);
+        expect(history).toHaveLength(2);
+        for (const event of history) expect(event).toMatchObject({
+          entityType: "credit_batch", entityId: batch.id, action: "updated",
+          changedFields: ["removalAssignment"], source: "form", actorUserId: ctx.userId,
+        });
+      }
 
       await db
         .update(facilities)
@@ -414,6 +432,9 @@ describe("Removal Application-slice assignment", () => {
       expect(retainedAudit).toHaveLength(1);
       removalId = null;
     } finally {
+      await db.delete(activityEvents).where(inArray(activityEvents.creditBatchId, [
+        ...batches.map(batch => batch.id), ...(laterBatchId ? [laterBatchId] : []),
+      ]));
       if (ghgStatementId) {
         if (removalId) {
           await db

@@ -728,8 +728,8 @@ export async function deleteFeedstockInTransaction(
   tx: DbTransaction,
   feedstockId: string,
   expectedVersion: number,
+  source: ActivityEventInput["source"],
   snapshotStock?: SnapshotStock,
-  source: ActivityEventInput["source"] = "form",
 ): Promise<{ facilityId: string }> {
   requireOrgScope(ctx);
 

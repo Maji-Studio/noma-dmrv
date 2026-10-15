@@ -30,7 +30,7 @@ export async function deleteSampleInTransaction(
   tx: DbTransaction,
   sampleId: string,
   expectedVersion: number,
-  source: ActivityEventInput["source"] = "form",
+  source: ActivityEventInput["source"],
 ): Promise<DeletedSampleLinks> {
   requireOrgScope(ctx);
   const links = await readSampleLinks(ctx, tx, sampleId);

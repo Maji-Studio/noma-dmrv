@@ -58,7 +58,7 @@ export async function retireFailedDocumentUploadsInTransaction(tx: DbTransaction
     await enqueuePromotionCandidates(sweepContext(row.organizationId), tx, row);
     // Do not acquire owner locks after the document lock.
     // org-scope-ok: cron sweep uses the locked row organization and the existing scoped delete helper.
-    await deleteDocumentRow(sweepContext(row.organizationId), row.id, tx, "system");
+    await deleteDocumentRow(sweepContext(row.organizationId), row.id, "system", tx);
   }
   return rows.length;
 }

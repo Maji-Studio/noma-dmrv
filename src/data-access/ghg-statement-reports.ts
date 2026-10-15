@@ -273,7 +273,7 @@ export async function insertPreparedGhgStatementReport(
         createdBy: ctx.userId,
       })
       .returning();
-    await recordDocumentActivity(ctx, tx, document, "created");
+    await recordDocumentActivity(ctx, tx, document, "created", { source: "form" });
     const [report] = await tx
       .insert(certifierGhgStatementReports)
       .values({
