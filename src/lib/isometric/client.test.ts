@@ -7,6 +7,8 @@ import { IsometricApiError } from "./client";
 import { testIsometricClient } from "../../../tests/fixtures/isometric-client";
 
 const DEADLINE_MS = 30_000;
+// Mirrors client.ts MAX_RETRY_WAIT_MS.
+const RETRY_WAIT_CAP_MS = 30_000;
 const fetchMock = vi.fn<typeof fetch>();
 const client = testIsometricClient();
 
@@ -46,11 +48,11 @@ describe("registry response body deadline", () => {
   it.each([408, 425, 429, 500, 502, 503, 504])("caps %i read retries and Retry-After waits", async (status) => {
     fetchMock.mockImplementation(async () => new Response("busy", { status, headers: { "retry-after": "999999" } }));
     const outcome = client.get("/test").catch((error: unknown) => error);
-    await vi.advanceTimersByTimeAsync(29_999);
+    await vi.advanceTimersByTimeAsync(RETRY_WAIT_CAP_MS - 1);
     expect(fetchMock).toHaveBeenCalledOnce();
     await vi.advanceTimersByTimeAsync(1);
     expect(fetchMock).toHaveBeenCalledTimes(2);
-    await vi.advanceTimersByTimeAsync(30_000);
+    await vi.advanceTimersByTimeAsync(RETRY_WAIT_CAP_MS);
     expect(await outcome).toMatchObject({ code: "http", status });
     expect(fetchMock).toHaveBeenCalledTimes(3);
     expect(vi.getTimerCount()).toBe(0);

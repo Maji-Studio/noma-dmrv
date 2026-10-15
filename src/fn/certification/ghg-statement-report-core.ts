@@ -113,7 +113,7 @@ export async function loadLiveReportFacts(
   const readFailureMessage =
     `GHG Statement ${statementSubmission.externalId} could not be read from Isometric. Try again shortly.`;
   const readFailure = new DomainError(
-    "deadline_exceeded",
+    "registry_unavailable",
     readFailureMessage,
     { retryable: true },
   );

@@ -77,10 +77,12 @@ import { DomainError } from "@/lib/domain-errors";
 import { withAction } from "../with-action";
 
 const CALL_TIMEOUT_MS = 30_000;
+const SLOW_READ_LATENCY_MS = CALL_TIMEOUT_MS - 1_000;
 const READ_DEADLINE_MS = 60_000;
 const READ_PER_ENTRY_MS = 5_000;
 const READ_MAX_DEADLINE_MS = 300_000;
 const READ_CONCURRENCY = 4;
+const SIBLING_ENTRY_COUNT = 12;
 // client.ts: MAX_ATTEMPTS and BASE_DELAY_MS, with Math.random fixed at 1.
 const CLIENT_MAX_ATTEMPTS = 3;
 const CLIENT_BASE_DELAY_MS = 500;
@@ -220,7 +222,7 @@ describe("report preparation registry budget", () => {
     fetchMock.mockImplementation(async (url, init) => {
       const index = Number(String(url).split("entry-").at(-1));
       if (index >= STALL_AFTER_ENTRY_COUNT) return stalledFetch(url, init);
-      await new Promise((resolve) => setTimeout(resolve, CALL_TIMEOUT_MS - 1_000));
+      await new Promise((resolve) => setTimeout(resolve, SLOW_READ_LATENCY_MS));
       return Response.json(remoteEntry(`entry-${index}`));
     });
     const outcome = prepare();
@@ -228,7 +230,7 @@ describe("report preparation registry budget", () => {
     expect(warn).not.toHaveBeenCalled();
     await vi.advanceTimersByTimeAsync(1);
     await vi.advanceTimersByTimeAsync(FETCH_ABORT_SETTLEMENT_MS);
-    expect(await outcome).toMatchObject({ success: false, code: "deadline_exceeded" });
+    expect(await outcome).toMatchObject({ success: false, code: "registry_unavailable" });
     expect(warn).toHaveBeenCalledOnce();
     expectReleasedWithoutReport();
   });
@@ -285,7 +287,7 @@ describe("report preparation registry budget", () => {
   it.each([400, 503])("cancels sibling entry reads after a %i failure and starts no queued reads", async (status) => {
     fetchMock.mockResolvedValueOnce(Response.json(makeRemoteStatement({
       pending_total_co2e_removed_kg: 1,
-      ghg_entry_ids: Array.from({ length: 12 }, (_, index) => `entry-${index}`),
+      ghg_entry_ids: Array.from({ length: SIBLING_ENTRY_COUNT }, (_, index) => `entry-${index}`),
     })));
     fetchMock.mockImplementation(async (url, init) => {
       if (String(url).endsWith("/entry-0")) return new Response("unavailable", { status });
@@ -319,31 +321,31 @@ describe("report preparation registry budget", () => {
   it.each(["statement", "entries"])("stops stalled %s reads at the shared deadline and releases the locks", async (phase) => {
     if (phase === "entries") {
       fetchMock.mockImplementationOnce(async () => {
-        await new Promise((resolve) => setTimeout(resolve, CALL_TIMEOUT_MS - 1_000));
+        await new Promise((resolve) => setTimeout(resolve, SLOW_READ_LATENCY_MS));
         return Response.json(makeRemoteStatement({
         pending_total_co2e_removed_kg: 1,
-        ghg_entry_ids: Array.from({ length: 12 }, (_, index) => `entry-${index}`),
+        ghg_entry_ids: Array.from({ length: SIBLING_ENTRY_COUNT }, (_, index) => `entry-${index}`),
         }));
       });
     }
     fetchMock.mockImplementation(stalledFetch);
     let settled = false;
     const outcome = prepare().then((result) => { settled = true; return result; });
-    const deadlineMs = READ_DEADLINE_MS + (phase === "entries" ? 12 * READ_PER_ENTRY_MS : 0);
+    const deadlineMs = READ_DEADLINE_MS + (phase === "entries" ? SIBLING_ENTRY_COUNT * READ_PER_ENTRY_MS : 0);
     await vi.advanceTimersByTimeAsync(deadlineMs - 1);
     expect(settled).toBe(false);
-    expect(fetchMock).toHaveBeenCalledTimes(phase === "statement" ? 2 : 13);
+    expect(fetchMock).toHaveBeenCalledTimes(phase === "statement" ? 2 : SIBLING_ENTRY_COUNT + 1);
     await vi.advanceTimersByTimeAsync(1);
     await vi.advanceTimersByTimeAsync(FETCH_ABORT_SETTLEMENT_MS);
     expect(settled).toBe(true);
     expect(await outcome).toMatchObject({
       success: false,
-      code: "deadline_exceeded",
+      code: "registry_unavailable",
       error: retryMessage,
     });
     expectReleasedWithoutReport();
     await vi.advanceTimersByTimeAsync(READ_DEADLINE_MS);
-    expect(fetchMock).toHaveBeenCalledTimes(phase === "statement" ? 2 : 13);
+    expect(fetchMock).toHaveBeenCalledTimes(phase === "statement" ? 2 : SIBLING_ENTRY_COUNT + 1);
     expect(warn).toHaveBeenCalledOnce();
   });
 
@@ -354,11 +356,11 @@ describe("report preparation registry budget", () => {
     await vi.advanceTimersByTimeAsync(CALL_TIMEOUT_MS + FETCH_ABORT_SETTLEMENT_MS);
     expect(fetchMock).toHaveBeenCalledOnce();
     expect(locks.artifactHeld).toBe(true);
-    await vi.advanceTimersByTimeAsync(499);
+    await vi.advanceTimersByTimeAsync(CLIENT_BASE_DELAY_MS - 1);
     expect(fetchMock).toHaveBeenCalledOnce();
     await vi.advanceTimersByTimeAsync(1);
     expect(fetchMock).toHaveBeenCalledTimes(2);
-    await vi.advanceTimersByTimeAsync(1000);
+    await vi.advanceTimersByTimeAsync(CLIENT_BASE_DELAY_MS * 2);
     expect(await outcome).toEqual({
       success: false,
       code: "registry_unavailable",
