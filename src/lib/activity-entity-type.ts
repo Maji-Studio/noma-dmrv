@@ -23,3 +23,8 @@ export function toActivityDocumentOwnerType(value: string): string {
   if (value === "ghgStatementReport" || value === "ghg_statement_report") return "ghg_statement_report";
   return toActivityEntityType(value);
 }
+
+/** Preserve document ownership in activity without copying file details. */
+export function documentActivityReasonCode(document: { documentType: string; entityType: string; entityId: string }): string {
+  return `document:${document.documentType}:${toActivityDocumentOwnerType(document.entityType)}:${document.entityId}`;
+}

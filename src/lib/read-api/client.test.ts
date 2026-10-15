@@ -410,3 +410,31 @@ describe("authenticated read client", () => {
     });
   });
 });
+
+it("decodes activity timestamps, preserving null registry time and the opaque cursor", async () => {
+  const { getCreditBatchActivityRead } = await import("./client");
+  const fetchMock = vi.fn().mockResolvedValue(Response.json({ success: true, data: {
+    items: [{ id: RUN_ID, occurredAt: "2026-10-15T10:00:00.123Z", registryAt: null }], nextCursor: "opaque",
+  } }));
+  vi.stubGlobal("fetch", fetchMock);
+  try {
+    const result = await getCreditBatchActivityRead({ creditBatchId: RUN_ID, cursor: "previous", limit: 5 });
+    expect(result).toMatchObject({ success: true, data: { nextCursor: "opaque", items: [{ occurredAt: new Date("2026-10-15T10:00:00.123Z"), registryAt: null }] } });
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/reads/credit-batches/activity");
+  } finally { vi.unstubAllGlobals(); }
+});
+
+it("decodes summary latest timestamps and preserves an empty summary", async () => {
+  const { getCreditBatchActivitySummaryRead } = await import("./client");
+  const fetchMock = vi.fn().mockResolvedValueOnce(Response.json({ success: true, data: {
+    total: 1, counts: [{ entityType: "document", action: "deleted", count: 1 }],
+    latest: { occurredAt: "2026-10-15T10:00:00.123Z", registryAt: null, actor: null, record: { label: null, deleted: true } },
+  } })).mockResolvedValueOnce(Response.json({ success: true, data: { total: 0, counts: [], latest: null } }));
+  vi.stubGlobal("fetch", fetchMock);
+  try {
+    expect(await getCreditBatchActivitySummaryRead({ creditBatchId: RUN_ID })).toMatchObject({ success: true,
+      data: { total: 1, latest: { occurredAt: new Date("2026-10-15T10:00:00.123Z"), registryAt: null } } });
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/reads/credit-batches/activity/summary");
+    expect(await getCreditBatchActivitySummaryRead({ creditBatchId: RUN_ID })).toEqual({ success: true, data: { total: 0, counts: [], latest: null } });
+  } finally { vi.unstubAllGlobals(); }
+});

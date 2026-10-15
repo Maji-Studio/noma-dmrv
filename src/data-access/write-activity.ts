@@ -2,7 +2,7 @@ import { and, eq, gt, inArray, or } from "drizzle-orm";
 import type { DbTransaction } from "@/db";
 import { applicationOutputAllocations, biocharProductSourceAllocations, creditBatchProductionRuns, deliveries, incidentReports, productionRunFeedstocks, productionSamples, samples, transportLegs } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
-import { toActivityDocumentOwnerType, toActivityEntityType } from "@/lib/activity-entity-type";
+import { documentActivityReasonCode, toActivityEntityType } from "@/lib/activity-entity-type";
 import { SafeError } from "@/lib/errors";
 import { deliveryProductAllocations, getDeliveryAllocationProvenance } from "./delivery-allocation-provenance";
 import { recordActivity, type ActivityEventInput } from "./activity-events";
@@ -114,11 +114,10 @@ export async function recordDocumentActivity(
   options: { source: ActivityEventInput["source"]; scopes?: ActivityScope[]; actorUserId?: ActivityEventInput["actorUserId"] },
 ): Promise<void> {
   requireOrgScope(ctx);
-  const ownerType = toActivityDocumentOwnerType(document.entityType);
   const { source, actorUserId, scopes } = options;
   const resolvedScopes = scopes ?? await resolveWriteActivityScopes(ctx, tx, document.entityType, document.entityId);
   await recordScopedWriteActivity(ctx, tx, {
     entityType: toActivityEntityType("document"), entityId: document.id, action, source, actorUserId,
-    reasonCode: `document:${document.documentType}:${ownerType}:${document.entityId}`,
+    reasonCode: documentActivityReasonCode(document),
   }, resolvedScopes);
 }

@@ -320,6 +320,7 @@ describe("UI document activity", { timeout: TIMEOUT_MS }, () => {
     expect(events.map(event => event.action)).toEqual(["created", "updated", "updated", "deleted"]);
     for (const event of events) expect(event).toMatchObject({
       entityType: "document", entityId: document.id, source: "form",
+      reasonCode: `document:pdf:${entityType}:${entityId}`,
       productionRunId: entityType === "production_run" ? entityId : null,
       creditBatchId: entityType === "credit_batch" ? entityId : null,
     });

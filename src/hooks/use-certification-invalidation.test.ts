@@ -1,3 +1,4 @@
+import { activityKeys } from "./activity-query-keys";
 import type { QueryClient } from "@tanstack/react-query";
 import { describe, expect, it, vi } from "vitest";
 import { creditBatchKeys } from "./credit-batch-query-keys";
@@ -120,13 +121,14 @@ describe("getRemovalPreflightRefetchInterval", () => {
 });
 
 describe("invalidateCertificationReadiness", () => {
-  it("invalidates certification projections only by default", async () => {
+  it("invalidates certification and activity projections by default", async () => {
     const invalidateQueries = vi.fn().mockResolvedValue(undefined);
     const queryClient = { invalidateQueries } as unknown as QueryClient;
 
     await invalidateCertificationReadiness(queryClient);
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: activityKeys.all });
 
-    expect(invalidateQueries).toHaveBeenCalledTimes(1);
+    expect(invalidateQueries).toHaveBeenCalledTimes(2);
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: certificationKeys.all,
     });
@@ -140,7 +142,7 @@ describe("invalidateCertificationReadiness", () => {
       creditBatchPreviews: true,
     });
 
-    expect(invalidateQueries).toHaveBeenCalledTimes(3);
+    expect(invalidateQueries).toHaveBeenCalledTimes(4);
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: certificationKeys.all,
     });
