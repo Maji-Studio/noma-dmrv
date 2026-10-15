@@ -981,6 +981,13 @@
       "when": 1792055146038,
       "tag": "0139_drop_price_and_sale_columns",
       "breakpoints": true
+    },
+    {
+      "idx": 140,
+      "version": "7",
+      "when": 1792061252667,
+      "tag": "0140_activity_events",
+      "breakpoints": true
     }
   ]
 }

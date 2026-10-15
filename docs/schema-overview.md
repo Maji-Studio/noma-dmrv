@@ -14,6 +14,7 @@ migrations, and soft-delete semantics live in [`database.md`](./database.md).
 | Auth, orgs, members, invitations | `src/db/schema/auth.ts` |
 | API credentials (`api_keys`) and management records (`api_key_owners`) | `src/db/schema/api-keys.ts` |
 | API bookkeeping (`api_idempotency_records`, `api_audit_events`, `api_rate_limit_buckets`, `organization_api_access`) | `src/db/schema/api.ts` |
+| Activity history (`activity_events`) | `src/db/schema/activity.ts` |
 | Facilities, reactors, storage locations | `src/db/schema/facilities.ts` |
 | Suppliers, customers, their locations, drivers, operators | `src/db/schema/parties.ts` |
 | Feedstock deliveries, types, feedstocks | `src/db/schema/feedstock.ts` |
@@ -80,6 +81,18 @@ All four tables live in `src/db/schema/api.ts`:
 | `api_rate_limit_buckets` | Token balance and refill time per bucket key. Organization-neutral system seam for hashed-IP, credential and organization budgets; no org column. |
 | `organization_api_access` | Organization primary key, enabled flag, changing user id and time. Missing row means on. Credential lookup and Platform Admin directory/toggle are privileged seams; non-Platform-Admins cannot administer it. |
 
+## Activity history
+
+`activity_events` stores org-scoped, value-free entity changes, status
+transitions and actor/source attribution. The caller's transaction owns each
+insert; reads order by `occurred_at` then unique `sequence`, newest first.
+Only the organization has a foreign key (cascading on delete); entity references
+survive deletes. Entity types use canonical snake_case names from
+`ACTIVITY_ENTITY_TYPES`; `bin_movement` identifies `bin_movements` rows.
+`src/lib/activity-entity-type.ts` maps existing runner/certification aliases to
+these names and rejects unknown values. See the full vocabulary and mapper
+contract in [database.md](./database.md#activity-events).
+
 ## Invariants and traps
 
 - **Multi-tenancy.** Every MRV/domain table carries a NOT NULL
@@ -121,7 +134,8 @@ All four tables live in `src/db/schema/api.ts`:
 - **`facility_emission_factors` holds display-only estimate factors**, one row per facility (unique on `facility_id`, composite FK to `facilities(id, organization_id)`): kg CO₂e per litre of diesel, per kWh of grid electricity and per tonne-km of road freight, plus a source note. All three are NOT NULL, so a row is complete or absent; no row means the Energy page shows activity only. They feed no submission; Isometric applies its own template factors ([ADR 0031](./adr/0031-operator-energy-estimates.md), [ADR 0018](./adr/0018-isometric-owns-project-emissions.md)).
 - **Integer row versions** start at 1 on feedstocks and editable master data: facilities, reactors, storage locations, suppliers and supplier locations, customers and customer locations, formulations, feedstock types, vehicles, drivers, operators, and facility emission factors. Every writer increments the affected row; edit and delete payloads carry the loaded version ([architecture.md](./architecture.md#expected-version-checks-on-edit-forms)).
 - **Soft delete** via nullable `archived_at` on `facilities` and its operational descendants — see [`database.md`](./database.md) → "Soft Delete — Facility Archive".
-- **All domain enums** are in `src/db/schema/common.ts` — read the file, not a sample.
+- **Shared domain enums** live in `src/db/schema/common.ts`; the activity entity
+  allowlist lives beside `activity_events` in `src/db/schema/activity.ts`.
 
 ## Auth account columns
 

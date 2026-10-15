@@ -41,6 +41,28 @@ The purge helpers are system seams that delete expired idempotency records and
 idle buckets across organizations. These waivers do not relax ordinary
 org-scoped reads or audit inserts.
 
+## Activity events
+
+`activity_events` is append-only by convention: its data-access module exports
+no update or delete. There is no append-only trigger because it would prevent
+E2E teardown. Writes use the caller's transaction and reads enforce org scope.
+The organization FK cascades like sibling tables because no organization-delete
+path exists and test fixtures delete organizations. Entity, facility, credit-batch,
+production-run and actor references have no FKs, so history survives record
+deletion as tombstones. V1 stores field names only, never field
+values, alongside status transitions and attribution.
+
+`ACTIVITY_ENTITY_TYPES` in `src/db/schema/activity.ts` allows only canonical
+snake_case names: `removal`, `ghg_statement`, `production_run`, `biochar_product`,
+`lab_sample`, `order`, `delivery`, `application`, `credit_batch`, `document`,
+`transport_leg`, `feedstock`, and `bin_movement`. The pure
+`toActivityEntityType` mapper in `src/lib/activity-entity-type.ts` preserves these
+names and maps existing runner/certification spellings (`productionRun`,
+`biocharProduct`, `labSample`, `binMovement`, `ghgStatement`) to them; unknown
+values throw. Runner and certification callers do not use the mapper yet.
+`occurred_at` and `registry_at` use millisecond precision to match JavaScript
+`Date`; reads order by `occurred_at` then unique `sequence`, newest first.
+
 ## Row-Level Guards
 
 Frozen/locked rows are protected by dedicated modules in `src/data-access/`, not by DB constraints alone: `bin-stock-guards.ts`, `lock-bin-stocks.ts`, the `*-stock-locks.ts` family (`biochar-product`, `delivery`, `formulation`, `order`, `production-run`), `facility-durability-lock.ts`, `certification-lineage-guards.ts`, `unique-name-guards.ts`. A fresh `db.update()` that skips these silently bypasses the freeze — route mutations through the guarded helpers.
