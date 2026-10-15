@@ -364,7 +364,15 @@ Coverage includes server uploads, real HTTP presigned PUT and GET, metadata,
 `getObject` bytes/content type, deletion, missing objects and wrong credentials.
 The deadline case forwards a real MinIO response through a loopback proxy that
 stalls its body, then checks that the named `getObject` deadline aborts the
-connection. It takes the full storage read timeout to run.
+connection after headers and the first byte arrive. It injects a one-second
+timeout through the S3-compatible provider's optional `getObject` timeout
+parameter, asserts `get_object_timeout` within five seconds, and keeps a
+15-second test budget. The production default remains 30 seconds.
+The current presigner does not sign the Content-Type header: MinIO accepts a
+different Content-Type on PUT and stores the supplied type. The suite asserts
+that behavior; document confirmation enforces the declared MIME separately.
+A PUT signed in the past with an elapsed TTL returns 403 (`Request has expired`)
+and creates no object.
 Presigned PUT does not cap upload size (`maxBytes` is not enforced by the PUT),
 and `putObject` has no size cap. The adapter enforces `maxBytes` when
 `readObjectBounded` reads the object back, rejecting oversized objects with

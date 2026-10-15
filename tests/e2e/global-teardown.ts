@@ -18,7 +18,7 @@
  */
 import { Pool } from "pg";
 import { DEC_ORG_ID } from "@/db/org-defaults";
-import { isLocalHost } from "../helpers/throwaway-database";
+import { isLocalHost } from "../helpers/local-host";
 import { E2E_CERTIFIER_ORG_ID_PREFIX } from "./fixtures/certifier-credentials";
 
 export default async function globalTeardown() {

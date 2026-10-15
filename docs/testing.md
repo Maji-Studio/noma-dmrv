@@ -71,7 +71,9 @@ defaults `DATABASE_URL`. Without `pnpm docker:up` database-backed specs fail
 with a raw connection error that looks nothing like "you forgot the database".
 CI runs Vitest in two file shards, each with its own Postgres service,
 schema migrations and disposable MinIO service. See [storage.md](./storage.md#testing)
-for the `MINIO_TEST_*` suite and local configuration.
+for the `MINIO_TEST_*` suite and local configuration. Its stalled-body regression
+uses a one-second injected read deadline; production keeps the 30-second default.
+Presigned policy cases cover Content-Type substitution and expired PUT URLs.
 
 ### Vitest only runs against a throwaway database
 
@@ -316,7 +318,8 @@ spec that creates a table it doesn't yet sweep.
 - `playwright.config.ts` **throws** unless `NEXT_PUBLIC_APP_URL` resolves to
   localhost/127.0.0.1 — deliberate, so E2E can never point at staging or production.
 - `global-teardown.ts` aborts against any DB that is not on a local host (the shared
-  `isLocalHost` in `tests/helpers/throwaway-database.ts`). Locally
+  `isLocalHost` in `tests/helpers/local-host.ts`, also used by the Vitest DB
+  guard and disposable MinIO suite). Locally
   it sweeps the dev DB the server uses, by prefix only. It defaults `DATABASE_URL` to
   `…/app_template_test`, so a misconfigured run tears down the *wrong DB name* rather than
   erroring — set `DATABASE_URL` explicitly.

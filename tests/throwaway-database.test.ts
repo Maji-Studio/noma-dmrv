@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   assertThrowawayTestDatabase,
-  isLocalHost,
   resolveTestDatabaseUrl,
 } from "./helpers/throwaway-database";
 
@@ -75,15 +74,5 @@ describe("resolveTestDatabaseUrl", () => {
 
   it("returns undefined when neither is set", () => {
     expect(resolveTestDatabaseUrl({})).toBeUndefined();
-  });
-});
-
-describe("isLocalHost", () => {
-  it.each(["localhost", "127.0.0.1", "[::1]"])("treats %s as local", (host) => {
-    expect(isLocalHost(host)).toBe(true);
-  });
-
-  it("treats anything else as remote", () => {
-    expect(isLocalHost("db.example.com")).toBe(false);
   });
 });

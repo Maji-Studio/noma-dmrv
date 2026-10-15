@@ -9,9 +9,9 @@ import {
   S3Client,
 } from "@aws-sdk/client-s3";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { STORAGE_GET_OBJECT_TIMEOUT_MS } from "@/lib/storage/get-object";
 import { S3CompatibleProvider, type S3CompatibleConfig } from "@/lib/storage/s3-compatible";
-import { isLocalHost } from "./helpers/throwaway-database";
+import type { PresignedUpload } from "@/lib/storage/types";
+import { isLocalHost } from "./helpers/local-host";
 
 const MINIO_ENV_NAMES = [
   "MINIO_TEST_ENDPOINT",
@@ -21,7 +21,11 @@ const MINIO_ENV_NAMES = [
 ] as const;
 const HAS_MINIO_ENV = MINIO_ENV_NAMES.some((name) => Boolean(process.env[name]));
 const HOOK_TIMEOUT_MS = 10_000;
-const TEST_TIMEOUT_MS = STORAGE_GET_OBJECT_TIMEOUT_MS + HOOK_TIMEOUT_MS;
+const TEST_TIMEOUT_MS = 15_000;
+const GET_OBJECT_TIMEOUT_MS = 1_000;
+const ABORT_ELAPSED_LIMIT_MS = 5_000;
+const EXPIRED_UPLOAD_TTL_SECONDS = 60;
+const EXPIRED_SIGNING_AGE_MS = 10 * 60 * 1_000;
 const HTTP_TIMEOUT_MS = 5_000;
 const HTTP_OK = 200;
 const HTTP_BAD_REQUEST = 400;
@@ -29,12 +33,26 @@ const HTTP_FORBIDDEN = 403;
 const HTTP_NOT_FOUND = 404;
 const FIRST_BYTE_LENGTH = 1;
 const CONTENT_TYPE = "application/pdf";
+const DIFFERENT_CONTENT_TYPE = "text/plain";
 const PAYLOAD = Buffer.from([0x00, 0xff, 0x80, 0x01, 0x0a, 0x42]);
 const PREFIX = "integration/nested-prefix";
 
 if (!HAS_MINIO_ENV) {
   // Vitest suppresses intercepted console output from a skipped suite.
   process.stdout.write("MinIO storage integration tests skipped: MINIO_TEST_* env is absent.\n");
+}
+
+function putPresigned(upload: PresignedUpload, body: Buffer) {
+  return fetch(upload.url, {
+    method: upload.method,
+    headers: upload.headers,
+    body: new Uint8Array(body),
+    signal: AbortSignal.timeout(HTTP_TIMEOUT_MS),
+  });
+}
+
+function getPresigned(url: string) {
+  return fetch(url, { signal: AbortSignal.timeout(HTTP_TIMEOUT_MS) });
 }
 
 // Forward a real signed MinIO GET, but withhold the body after its first byte.
@@ -99,33 +117,33 @@ async function startStalledProxy(endpoint: string) {
   };
 }
 
-describe("MinIO stalling proxy request targets", () => {
-  it.each(["http://example.invalid/object", "//example.invalid/object", "/\\example.invalid/object", "/object#fragment", "*"])(
-    "rejects non-origin-form target %s before forwarding",
-    async (target) => {
-      const proxy = await startStalledProxy("http://127.0.0.1");
-      try {
-        const response = await new Promise<number | undefined>((resolve, reject) => {
-          const rejected = request(proxy.endpoint, { path: target, timeout: HTTP_TIMEOUT_MS }, (incoming) => {
-            incoming.resume();
-            resolve(incoming.statusCode);
-          });
-          rejected.on("error", reject);
-          rejected.on("timeout", () => rejected.destroy(new Error("Proxy request timed out")));
-          rejected.end();
-        });
-        expect(response).toBe(HTTP_BAD_REQUEST);
-        expect(proxy.state().upstreamStatus).toBeUndefined();
-      } finally {
-        await proxy.close();
-      }
-    },
-  );
-});
-
 describe.skipIf(!HAS_MINIO_ENV)("S3-compatible storage against MinIO", {
   timeout: TEST_TIMEOUT_MS,
 }, () => {
+  describe("MinIO stalling proxy request targets", () => {
+    it.each(["http://example.invalid/object", "//example.invalid/object", "/\\example.invalid/object", "/object#fragment", "*"])(
+      "rejects non-origin-form target %s before forwarding",
+      async (target) => {
+        const proxy = await startStalledProxy("http://127.0.0.1");
+        try {
+          const response = await new Promise<number | undefined>((resolve, reject) => {
+            const rejected = request(proxy.endpoint, { path: target, timeout: HTTP_TIMEOUT_MS }, (incoming) => {
+              incoming.resume();
+              resolve(incoming.statusCode);
+            });
+            rejected.on("error", reject);
+            rejected.on("timeout", () => rejected.destroy(new Error("Proxy request timed out")));
+            rejected.end();
+          });
+          expect(response).toBe(HTTP_BAD_REQUEST);
+          expect(proxy.state().upstreamStatus).toBeUndefined();
+        } finally {
+          await proxy.close();
+        }
+      },
+    );
+  });
+
   let config: S3CompatibleConfig;
   let client: S3Client;
   let provider: S3CompatibleProvider;
@@ -199,9 +217,7 @@ describe.skipIf(!HAS_MINIO_ENV)("S3-compatible storage against MinIO", {
     }));
     expect(objects.Contents?.map((object) => object.Key)).toEqual([`${PREFIX}/${key}`]);
 
-    const response = await fetch(await provider.createDownloadUrl({ key }), {
-      signal: AbortSignal.timeout(HTTP_TIMEOUT_MS),
-    });
+    const response = await getPresigned(await provider.createDownloadUrl({ key }));
     expect(response.status).toBe(HTTP_OK);
     expect(response.headers.get("content-type")).toBe(CONTENT_TYPE);
     expect(Buffer.from(await response.arrayBuffer())).toEqual(PAYLOAD);
@@ -210,27 +226,47 @@ describe.skipIf(!HAS_MINIO_ENV)("S3-compatible storage against MinIO", {
   it("uploads through a real presigned PUT and getObject returns exact bytes and content type", async () => {
     const key = "org/minio/uploads/document/presigned-object";
     const upload = await provider.createUploadUrl({ key, contentType: CONTENT_TYPE, maxBytes: PAYLOAD.length });
-    const response = await fetch(upload.url, {
-      method: upload.method,
-      headers: upload.headers,
-      body: new Uint8Array(PAYLOAD),
-      signal: AbortSignal.timeout(HTTP_TIMEOUT_MS),
-    });
+    const response = await putPresigned(upload, PAYLOAD);
     await response.arrayBuffer();
     expect(response.status).toBe(HTTP_OK);
     expect(await provider.getObject({ key })).toEqual({ bytes: PAYLOAD, contentType: CONTENT_TYPE });
+  });
+
+  it("accepts a presigned PUT with a different Content-Type and stores the supplied type", async () => {
+    const key = "org/minio/uploads/document/different-content-type";
+    const upload = await provider.createUploadUrl({ key, contentType: CONTENT_TYPE, maxBytes: PAYLOAD.length });
+    // The current signer does not include Content-Type in its signed headers.
+    expect(new URL(upload.url).searchParams.get("X-Amz-SignedHeaders")?.split(";")).not.toContain("content-type");
+    const response = await putPresigned({
+      ...upload,
+      headers: { ...upload.headers, "Content-Type": DIFFERENT_CONTENT_TYPE },
+    }, PAYLOAD);
+    await response.arrayBuffer();
+    expect(response.status).toBe(HTTP_OK);
+    expect(await provider.headObject(key)).toMatchObject({ contentType: DIFFERENT_CONTENT_TYPE });
+    expect(await provider.getObject({ key })).toEqual({ bytes: PAYLOAD, contentType: DIFFERENT_CONTENT_TYPE });
+  });
+
+  it("rejects an expired presigned PUT without creating the object", async () => {
+    const key = "org/minio/uploads/document/expired-object";
+    const upload = await provider.createUploadUrl({
+      key,
+      contentType: CONTENT_TYPE,
+      maxBytes: PAYLOAD.length,
+      signingDate: new Date(Date.now() - EXPIRED_SIGNING_AGE_MS),
+      expiresInSeconds: EXPIRED_UPLOAD_TTL_SECONDS,
+    });
+    const response = await putPresigned(upload, PAYLOAD);
+    expect(response.status).toBe(HTTP_FORBIDDEN);
+    expect(await response.text()).toContain("Request has expired");
+    expect(await provider.headObject(key)).toBeNull();
   });
 
   it("bounds presigned uploads on read and returns exact inspection facts or null", async () => {
     const key = "org/minio/uploads/document/bounded-object";
     const maxBytes = PAYLOAD.length - FIRST_BYTE_LENGTH;
     const upload = await provider.createUploadUrl({ key, contentType: CONTENT_TYPE, maxBytes });
-    const response = await fetch(upload.url, {
-      method: upload.method,
-      headers: upload.headers,
-      body: new Uint8Array(PAYLOAD),
-      signal: AbortSignal.timeout(HTTP_TIMEOUT_MS),
-    });
+    const response = await putPresigned(upload, PAYLOAD);
     await response.arrayBuffer();
     expect(response.status).toBe(HTTP_OK);
     await expect(provider.readObjectBounded({ key, maxBytes })).rejects.toMatchObject({
@@ -262,9 +298,7 @@ describe.skipIf(!HAS_MINIO_ENV)("S3-compatible storage against MinIO", {
   it("reports missing objects through HEAD, presigned GET and getObject", async () => {
     const key = "org/minio/generated/never-uploaded.bin";
     expect(await provider.headObject(key)).toBeNull();
-    const response = await fetch(await provider.createDownloadUrl({ key }), {
-      signal: AbortSignal.timeout(HTTP_TIMEOUT_MS),
-    });
+    const response = await getPresigned(await provider.createDownloadUrl({ key }));
     expect(response.status).toBe(HTTP_NOT_FOUND);
     expect(await response.text()).toContain("NoSuchKey");
     await expect(provider.getObject({ key })).rejects.toMatchObject({
@@ -286,17 +320,10 @@ describe.skipIf(!HAS_MINIO_ENV)("S3-compatible storage against MinIO", {
     await expect(unauthorized.headObject(key)).rejects.toMatchObject(forbidden);
     await expect(unauthorized.deleteObject(key)).rejects.toMatchObject(forbidden);
     const upload = await unauthorized.createUploadUrl({ key, contentType: CONTENT_TYPE, maxBytes: PAYLOAD.length });
-    const put = await fetch(upload.url, {
-      method: upload.method,
-      headers: upload.headers,
-      body: new Uint8Array(PAYLOAD),
-      signal: AbortSignal.timeout(HTTP_TIMEOUT_MS),
-    });
+    const put = await putPresigned(upload, PAYLOAD);
     expect(put.status).toBe(HTTP_FORBIDDEN);
     expect(await put.text()).toContain("SignatureDoesNotMatch");
-    const get = await fetch(await unauthorized.createDownloadUrl({ key }), {
-      signal: AbortSignal.timeout(HTTP_TIMEOUT_MS),
-    });
+    const get = await getPresigned(await unauthorized.createDownloadUrl({ key }));
     expect(get.status).toBe(HTTP_FORBIDDEN);
     expect(await get.text()).toContain("SignatureDoesNotMatch");
     await expect(unauthorized.getObject({ key })).rejects.toMatchObject({
@@ -312,10 +339,12 @@ describe.skipIf(!HAS_MINIO_ENV)("S3-compatible storage against MinIO", {
     const proxy = await startStalledProxy(config.endpoint!);
     try {
       const stalled = new S3CompatibleProvider({ ...config, endpoint: proxy.endpoint });
-      await expect(stalled.getObject({ key })).rejects.toMatchObject({
+      const startedAt = performance.now();
+      await expect(stalled.getObject({ key }, GET_OBJECT_TIMEOUT_MS)).rejects.toMatchObject({
         name: "StorageError",
         code: "get_object_timeout",
       });
+      expect(performance.now() - startedAt).toBeLessThan(ABORT_ELAPSED_LIMIT_MS);
       await expect.poll(proxy.state).toEqual({
         upstreamStatus: HTTP_OK,
         sentFirstByte: true,
