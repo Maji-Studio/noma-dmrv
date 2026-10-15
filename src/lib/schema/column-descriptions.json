@@ -400,7 +400,7 @@
   },
   "transport_legs": {
     "id": "Unique transport leg identifier",
-    "entity_type": "Parent entity type (delivery, sample, etc.)",
+    "entity_type": "Parent entity type (feedstock, biochar or sample)",
     "entity_id": "FK to the parent entity record",
     "origin_gps_latitude": "Origin latitude in decimal degrees",
     "origin_gps_longitude": "Origin longitude in decimal degrees",

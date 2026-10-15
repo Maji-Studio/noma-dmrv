@@ -157,7 +157,8 @@ describe("feedstock baseline observations", () => {
 });
 
 describe("supplier deletion baseline observation", () => {
-  it("F08: a restrictive FK failure leaves the supplier but deletes its locations", async () => {
+  // The original F08 scenario used the retired feedstock_deliveries table and no longer reproduces.
+  it.skip("F08: a restrictive FK failure leaves the supplier but deletes its locations", async () => {
     const f = await fixture();
     const [supplier] = await db.insert(suppliers).values({ organizationId: TEST_ORG_ID,
       code: `AUD-${crypto.randomUUID()}`, name: `Audit ${crypto.randomUUID()}` }).returning();

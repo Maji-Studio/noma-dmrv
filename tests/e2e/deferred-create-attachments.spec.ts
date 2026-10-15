@@ -216,7 +216,14 @@ test.describe("Deferred create attachments", () => {
     });
     await expect(sampleDialog.getByText("12 km").first()).toBeVisible();
     await expect(sampleDialog.getByText("reflectance-histogram.pdf")).toBeVisible();
-    await expect(sampleDialog.getByText("Reflectance histogram", { exact: false })).toBeVisible();
+    const histogramEntry = sampleDialog.getByRole("listitem").filter({
+      has: page.getByText("reflectance-histogram.pdf", { exact: true }),
+    });
+    await expect(histogramEntry.getByText(/^Reflectance histogram ·/)).toBeVisible();
+    const labReportEntry = sampleDialog.getByRole("listitem").filter({
+      has: page.getByText("lab-report-deferred.pdf", { exact: true }),
+    });
+    await expect(labReportEntry.getByText(/^Lab report ·/)).toBeVisible();
     await expect(
       sampleDialog.getByLabel("Delete lab-report-deferred.pdf"),
     ).toHaveCount(0);
