@@ -43,20 +43,20 @@ function validateEvidence(data: Parameters<typeof applicationEvidenceStateSchema
   const result = applicationEvidenceStateSchema.safeParse(data);
   if (!result.success) throw validationFailed(new z.ZodError(result.error.issues.map(issue => ({ ...issue, path: issue.path[0] === "gpsLongitude" ? ["gpsLatitude"] : issue.path }))));
 }
-/** Recompute envelope measurements here; a future raw-GeoJSON input joins this seam. */
-function normalizeBoundary(value: RecordApplicationInput["gisBoundary"]) {
+/** Recompute envelope measurements here. */
+function reparseBoundaryEnvelope(value: RecordApplicationInput["gisBoundary"]) {
   if (value == null) return null;
   try { return parseGisBoundary(value); } catch (error) {
     if (error instanceof z.ZodError) throw validationFailed(new z.ZodError(error.issues.map(issue => ({ ...issue, path: ["gisBoundary", ...issue.path] }))));
     throw error;
   }
 }
-function writableDelivery(scope: Scope, deliveryId: string, date: Date) {
+function writableDelivery(scope: Scope, deliveryId: string, date: Date, checkFutureDate = true) {
   const delivery = scope.deliveries.find(row => row.id === deliveryId);
   const facility = scope.facilities.find(row => row.id === delivery?.facilityId);
   if (!delivery || !facility || delivery.archivedAt || facility.archivedAt) throw applicationNotFound("delivery");
   if (delivery.status !== "delivered") throw applicationRefusal("validation_failed", "deliveryId", `Delivery ${delivery.code} is not marked as delivered. Mark it as delivered before recording an application.`);
-  assertApplicationDate(date, delivery.deliveryDate, facility.timezone, delivery.code);
+  assertApplicationDate(date, delivery.deliveryDate, facility.timezone, delivery.code, checkFutureDate ? new Date() : null);
   return delivery;
 }
 function assertMutableSlices(scope: Scope, mutation: "update" | "delete") {
@@ -88,7 +88,7 @@ export async function createApplicationInTransaction(ctx: OrgContext, tx: DbTran
     biocharAppliedTons: kgToTonnes(input.appliedWetMassKg), biocharAppliedDryTons, fieldSizeHa: input.fieldSizeHa,
     fieldIdentifier: optionalText(input.fieldIdentifier), cropType: optionalText(input.cropType), applicationMethodType: input.applicationMethod ?? null,
     evidenceMethod: input.evidenceMethod, gpsLatitude: input.gpsLatitude ?? null, gpsLongitude: input.gpsLongitude ?? null,
-    gisBoundary: normalizeBoundary(input.gisBoundary), soilTemperatureSource: input.soilTemperatureSource ?? null, soilTemperatureC: input.soilTemperatureC ?? null,
+    gisBoundary: reparseBoundaryEnvelope(input.gisBoundary), soilTemperatureSource: input.soilTemperatureSource ?? null, soilTemperatureC: input.soilTemperatureC ?? null,
   }).returning();
   await saveShares(ctx, tx, application);
   await reconcileUnassignedCreditBatchApplicationSlices(ctx, tx, { applicationIds: [application.id] });
@@ -103,7 +103,8 @@ export async function updateApplicationInTransaction(ctx: OrgContext, tx: DbTran
   if (scope.deliveries.some(row => row.archivedAt) || scope.facilities.some(row => row.archivedAt)) throw applicationNotFound("delivery");
   const patch = Object.fromEntries(Object.entries(input).filter(([, value]) => value !== undefined));
   const merged = { ...existing, ...patch };
-  const delivery = writableDelivery(scope, merged.deliveryId, merged.applicationDate);
+  const delivery = writableDelivery(scope, merged.deliveryId, merged.applicationDate, input.applicationDate !== undefined);
+  if (merged.evidenceMethod === "visual" && existing.evidenceMethod !== "visual") throw applicationRefusal("validation_failed", "evidenceMethod", "This evidence method is not available yet.");
   validateEvidence(merged, merged.fieldSizeHa, existing.code);
   const massChanged = (input.deliveryId !== undefined && input.deliveryId !== existing.deliveryId) || (input.appliedWetMassKg !== undefined && massGrams(input.appliedWetMassKg) !== massGrams(tonnesToKg(existing.biocharAppliedTons)));
   if (massChanged) assertMutableSlices(scope, "update");
@@ -112,7 +113,7 @@ export async function updateApplicationInTransaction(ctx: OrgContext, tx: DbTran
     ...(input.fieldIdentifier !== undefined ? { fieldIdentifier: optionalText(input.fieldIdentifier) } : {}),
     ...(input.cropType !== undefined ? { cropType: optionalText(input.cropType) } : {}),
     ...(applicationMethod !== undefined ? { applicationMethodType: applicationMethod } : {}),
-    ...(input.gisBoundary !== undefined ? { gisBoundary: normalizeBoundary(input.gisBoundary) } : {}),
+    ...(input.gisBoundary !== undefined ? { gisBoundary: reparseBoundaryEnvelope(input.gisBoundary) } : {}),
     ...(massChanged ? { biocharAppliedTons: appliedWetMassKg === undefined ? existing.biocharAppliedTons : kgToTonnes(appliedWetMassKg), biocharAppliedDryTons: await dryMass(ctx, tx, delivery, appliedWetMassKg ?? tonnesToKg(existing.biocharAppliedTons), existing.id) } : {}),
   };
   const [application] = await withUniqueCodeGuard(ctx, applications, applications.code, `Application code "${input.code}" already exists`, () => tx.update(applications).set(data).where(and(eq(applications.organizationId, ctx.organizationId), eq(applications.id, existing.id))).returning());

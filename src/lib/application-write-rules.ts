@@ -1,5 +1,5 @@
 import { allocateTrackedDryBiocharKg } from "./biochar-mass-accounting";
-import { massGrams, splitGrams, GRAMS_PER_KG } from "@/data-access/delivery-allocation-math";
+import { massGrams, splitGrams, GRAMS_PER_KG } from "./calculations/gram-allocation";
 import { checkDeliveryCapacity } from "./calculations/delivery-inventory";
 import { kgToTonnes } from "./calculations/unit-conversions";
 import { formatFacilityDate, formatUtcDate } from "./date-utils";
@@ -32,8 +32,8 @@ export function resolveApplicationDryMassTons(input: {
   const allocated = splitGrams(cumulative, [dry, wet - dry])[0];
   return kgToTonnes(Math.max(0, allocated - massGrams(input.alreadyAppliedDryKg)) / GRAMS_PER_KG);
 }
-export function assertApplicationDate(date: Date, deliveredAt: Date, zone: string, deliveryCode: string, now = new Date()): void {
+export function assertApplicationDate(date: Date, deliveredAt: Date, zone: string, deliveryCode: string, now: Date | null = new Date()): void {
   const day = formatUtcDate(date);
   if (day < formatFacilityDate(deliveredAt, zone)) throw applicationRefusal("validation_failed", "applicationDate", `Application date cannot be before the delivery date of ${deliveryCode}`);
-  if (day > formatFacilityDate(now, zone)) throw applicationRefusal("validation_failed", "applicationDate", "Application date is in the future. Choose today or an earlier date.");
+  if (now !== null && day > formatFacilityDate(now, zone)) throw applicationRefusal("validation_failed", "applicationDate", "Application date is in the future. Choose today or an earlier date.");
 }

@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
-import { apiAuditEvents, apiIdempotencyRecords, activityEvents, deliveries, members, apiKeys } from "@/db/schema";
+import { apiAuditEvents, apiIdempotencyRecords, activityEvents, applications, deliveries, members, apiKeys } from "@/db/schema";
 import { createApiKey } from "@/data-access/api-keys";
 import { API_KEY_DEFAULT_EXPIRY_SECONDS } from "@/config/api-keys";
 import { createApplicationFn, updateApplicationFn, deleteApplicationFn } from "@/fn/applications";
@@ -213,4 +213,17 @@ it("refuses submitted lineage updates and deletes equally", async () => {
     equalAcross(deletes); expect(deletes[0].code).toBe("certification_locked");
     expect((await readRestApplication(locked, lineage.applicationId)).body).toEqual(current.body);
   } finally { await cleanupLineageFixture(lineage); await db.delete(apiKeys).where(eq(apiKeys.id, credential.id)); await db.delete(members).where(eq(members.id, memberId)); }
+}, TIMEOUT);
+
+it("saves a full app form on a legacy visual application without GPS or boundary", async () => {
+  const f = fixtures.get("action")!;
+  const made = await create("action", f);
+  await db.update(applications).set({ evidenceMethod: "visual", gpsLatitude: null, gpsLongitude: null, gisBoundary: null }).where(eq(applications.id, made.data.id));
+  auth.requireOrgContext.mockResolvedValue(f.ctx);
+  const result = await updateApplicationFn({
+    ...applicationInput(f), applicationId: made.data.id, expectedVersion: made.data.version,
+    applicationDate: new Date("2025-07-08"), evidenceMethod: "visual", gpsLatitude: null, gpsLongitude: null,
+    gisBoundary: null, applicationMethod: null, soilTemperatureC: null, soilTemperatureSource: null, cropType: "Beans",
+  });
+  expect(result).toMatchObject({ success: true, data: { cropType: "Beans", evidenceMethod: "visual", gpsLatitude: null, gpsLongitude: null, gisBoundary: null } });
 }, TIMEOUT);

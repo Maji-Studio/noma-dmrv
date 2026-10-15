@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { calendarDateSchema, expectedVersionSchema, MASS_KG_INPUT_STEP, MASS_MIN_KG_MESSAGE, positiveMassKgSchema, uuidSchema } from "./helpers";
+import { calendarDateSchema, expectedVersionSchema, latitudeSchema, longitudeSchema, MASS_KG_INPUT_STEP, MASS_MIN_KG_MESSAGE, positiveMassKgSchema, uuidSchema } from "./helpers";
 import { applicationEvidenceStateSchema, applicationMethods, soilTemperatureSources } from "./applications";
 import { gisBoundarySchema } from "./gis-boundary";
 import { FIELD_SIZE_MAX_MESSAGE, FIELD_SIZE_MIN_MESSAGE, FIELD_SIZE_POSITIVE_MESSAGE, MAX_FIELD_SIZE_HA, MIN_FIELD_SIZE_HA } from "@/lib/application-field-size";
@@ -17,14 +17,14 @@ const fields = {
   fieldIdentifier: z.string().max(MAX_FIELD_IDENTIFIER_LENGTH).nullable().optional().describe("Field or parcel identifier; null for none."),
   cropType: z.string().max(MAX_CROP_TYPE_LENGTH).nullable().optional().describe("Crop type; null for none."),
   applicationMethod: z.enum(applicationMethods).describe("Spreading method: manual or mechanical.").nullable().optional().describe("Spreading method; null for none."),
-  evidenceMethod: z.enum(["location", "boundary", "visual"]).refine(value => value !== "visual", "This evidence method is not available yet.").describe("Evidence method: location requires GPS; boundary requires GeoJSON. Visual is not available yet."),
-  gpsLatitude: z.number().min(-90).max(90).nullable().optional().describe("Latitude in decimal degrees; provide both GPS coordinates. Never invent GPS."),
-  gpsLongitude: z.number().min(-180).max(180).nullable().optional().describe("Longitude in decimal degrees; provide both GPS coordinates."),
+  evidenceMethod: z.enum(["location", "boundary", "visual"]).describe("Evidence method: location requires GPS; boundary requires GeoJSON. Visual is not available yet."),
+  gpsLatitude: latitudeSchema.describe("Latitude in decimal degrees; provide both GPS coordinates. Never invent GPS."),
+  gpsLongitude: longitudeSchema.describe("Longitude in decimal degrees; provide both GPS coordinates."),
   gisBoundary: gisBoundarySchema.nullable().optional(),
   soilTemperatureSource: z.enum(soilTemperatureSources).describe("Temperature provenance: baseline or global_database.").nullable().optional().describe("Soil temperature provenance; null for none."),
   soilTemperatureC: z.number().min(MIN_SOIL_TEMPERATURE_C).max(MAX_SOIL_TEMPERATURE_C).nullable().optional().describe("Annual average soil temperature in degrees Celsius; null for none."),
 };
-export const recordApplicationInput = z.strictObject({ ...fields, evidenceMethod: fields.evidenceMethod.default("location") }).superRefine((data, ctx) => {
+export const recordApplicationInput = z.strictObject({ ...fields, evidenceMethod: fields.evidenceMethod.refine(value => value !== "visual", "This evidence method is not available yet.").default("location") }).superRefine((data, ctx) => {
   // An omitted location pair is resolved inside the operation; the writer validates the final state.
   if (data.evidenceMethod === "location" && data.gpsLatitude === undefined && data.gpsLongitude === undefined) return;
   const result = applicationEvidenceStateSchema.safeParse(data);

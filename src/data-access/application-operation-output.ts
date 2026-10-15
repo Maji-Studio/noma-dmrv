@@ -6,7 +6,7 @@ import { deliveryApplicationBalanceFields } from "./delivery-application-balance
 import { MIX_BIN_CREDIT_HOLD_NOTICE, FACILITY_REFERENCE_TEMPERATURE_NOTICE } from "@/lib/application-guidance";
 import { getApplicationAllocationShares } from "./delivery-allocation-provenance";
 import { getMixBinHeldApplicationIds } from "./mix-bin-credit-hold";
-import { getApplicationSiteDefaults } from "./application-site-defaults";
+import { getApplicationSiteDefaults, usesSiteSoilTemperature } from "./application-site-defaults";
 import { requireOrgScope } from "./utils";
 
 /** Call only while holding the application's delivery write lock. */
@@ -24,7 +24,7 @@ export async function getApplicationOperationOutput(ctx: OrgContext, tx: DbTrans
   const site = await getApplicationSiteDefaults(ctx, tx, application.deliveryId);
   const warnings: string[] = [];
   if (held.has(application.id)) warnings.push(MIX_BIN_CREDIT_HOLD_NOTICE);
-  if (site?.durabilityOption === "200_year" && application.soilTemperatureC === null) warnings.push(FACILITY_REFERENCE_TEMPERATURE_NOTICE);
+  if (usesSiteSoilTemperature(site) && application.soilTemperatureC === null) warnings.push(FACILITY_REFERENCE_TEMPERATURE_NOTICE);
   return {
     application,
     allocations: shares.map(({ biocharProductId, productCode, productionRunId, productionRunCode, wetMassKg, dryMassKg }) => ({

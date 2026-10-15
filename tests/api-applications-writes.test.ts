@@ -7,6 +7,7 @@ import { afterEach, beforeEach, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { applications, apiAuditEvents, activityEvents, deliveries, documents, productionProcesses, creditBatches, creditBatchApplications, members, apiKeys } from "@/db/schema";
+import { saveApplicationOutputAllocations } from "@/data-access/delivery-allocation-provenance";
 import { createApiKey } from "@/data-access/api-keys";
 import { API_KEY_DEFAULT_EXPIRY_SECONDS } from "@/config/api-keys";
 import * as collection from "@/app/api/v1/applications/route";
@@ -263,4 +264,29 @@ it("PATCH and DELETE dry runs leave audit and activity rows unchanged", async ()
   expect(await audits()).toEqual(beforeAudits);
   expect(await activities()).toEqual(beforeActivities);
   expect((await read(first.data.id)).headers.get("etag")).toBe(first.tag);
+}, TIMEOUT);
+
+it("refuses switching to visual but allows crop edits on legacy visual rows", async () => {
+  const first = await saved();
+  await problem(await patch(first.data.id, { evidenceMethod: "visual" }, first.tag), 422, "validation_failed", "/evidenceMethod");
+  await db.update(applications).set({ evidenceMethod: "visual", gpsLatitude: null, gpsLongitude: null }).where(eq(applications.id, first.data.id));
+  const response = await patch(first.data.id, { cropType: "Maize" }, first.tag);
+  expect(response.status).toBe(200);
+  expect((await response.json()).data).toMatchObject({ cropType: "Maize", evidenceMethod: "visual" });
+}, TIMEOUT);
+
+it("allows crop edits on a stored future application date but validates supplied dates", async () => {
+  const [legacy] = await db.insert(applications).values({
+    organizationId: f.ctx.organizationId, deliveryId: chain.deliveryIds[0], code: `AP-${randomUUID()}`,
+    applicationDate: new Date("2099-01-01"), biocharAppliedTons: 0.1, biocharAppliedDryTons: 0.08,
+    fieldSizeHa: 3, evidenceMethod: "location", gpsLatitude: 1, gpsLongitude: 2,
+  }).returning();
+  await db.transaction(tx => saveApplicationOutputAllocations(f.ctx, tx, legacy));
+  const current = await read(legacy.id);
+  const response = await patch(legacy.id, { cropType: "Maize" }, current.headers.get("etag")!);
+  expect(response.status).toBe(200);
+  expect((await response.json()).data).toMatchObject({ cropType: "Maize", applicationDate: "2099-01-01" });
+  for (const applicationDate of ["2099-01-01", "2025-07-04"]) {
+    await problem(await patch(legacy.id, { applicationDate }, response.headers.get("etag")!), 422, "validation_failed", "/applicationDate");
+  }
 }, TIMEOUT);

@@ -4,6 +4,8 @@ import type { OrgContext } from "@/lib/auth/server";
 import { KG_PER_TONNE } from "@/lib/calculations/unit-conversions";
 import { requireOrgScope } from "./utils";
 
+const GRAM_SCALE = 3;
+
 /** Exact numeric arithmetic shared by the balance, discovery filter and writer outcomes. */
 export function deliveryApplicationBalanceFields(ctx: OrgContext) {
   requireOrgScope(ctx);
@@ -14,6 +16,6 @@ export function deliveryApplicationBalanceFields(ctx: OrgContext) {
   return {
     appliedWetMassKg: sql<number>`${wet}`.mapWith(Number),
     appliedDryBiocharKg: sql<number>`${dry}`.mapWith(Number),
-    remainingWetMassKg: sql<number>`trunc(greatest(0::numeric, ${deliveries.deliveredWetMassKg}::numeric - ${wet}), 3)`.mapWith(Number),
+    remainingWetMassKg: sql<number>`trunc(greatest(0::numeric, ${deliveries.deliveredWetMassKg}::numeric - ${wet}), ${GRAM_SCALE})`.mapWith(Number),
   };
 }

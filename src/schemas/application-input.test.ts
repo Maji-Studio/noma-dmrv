@@ -34,3 +34,14 @@ it("defers an omitted GPS pair to site defaults but refuses partial and null loc
   expect(recordApplicationInput.safeParse({ ...input, gpsLatitude: undefined }).success).toBe(false);
   expect(recordApplicationInput.safeParse({ ...input, gpsLatitude: null, gpsLongitude: null }).success).toBe(false);
 });
+
+it("accepts visual on update for the writer to compare with the saved method", () => {
+  expect(updateApplicationInput.safeParse({ applicationId: input.deliveryId, expectedVersion: 1, evidenceMethod: "visual" }).success).toBe(true);
+});
+
+it.each([
+  ["gpsLatitude", 91, "Latitude must be between -90 and 90"],
+  ["gpsLongitude", 181, "Longitude must be between -180 and 180"],
+])("uses shared GPS copy for %s", (field, value, message) => {
+  expect(updateApplicationInput.safeParse({ applicationId: input.deliveryId, expectedVersion: 1, [field]: value }).error?.issues[0].message).toBe(message);
+});

@@ -1,3 +1,4 @@
+import { roundKg } from "@/lib/calculations/mass-dry";
 import { z } from "zod";
 import type { Application } from "@/db/schema";
 import { tonnesToKg } from "@/lib/calculations/unit-conversions";
@@ -71,8 +72,8 @@ export function representApplicationBoundary(boundary: GisBoundary) {
 export function representApplication(row: ApplicationRepresentationInput): ApplicationRepresentation {
   return applicationRepresentationSchema.parse({ ...row, ...lookupInstants(row),
     applicationDate: new Date(row.applicationDate).toISOString().slice(0, "YYYY-MM-DD".length),
-    appliedWetMassKg: Number(tonnesToKg(row.biocharAppliedTons).toFixed(3)),
-    dryBiocharKg: Number(tonnesToKg(row.biocharAppliedDryTons).toFixed(3)),
+    appliedWetMassKg: roundKg(tonnesToKg(row.biocharAppliedTons)),
+    dryBiocharKg: roundKg(tonnesToKg(row.biocharAppliedDryTons)),
     applicationMethod: row.applicationMethodType,
     gisBoundary: row.gisBoundary ? applicationBoundarySummary(row.gisBoundary) : null,
     allocations: row.allocations.map(({ biocharProductId, productionRunId, wetMassKg, dryMassKg }) => ({

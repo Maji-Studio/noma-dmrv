@@ -30,3 +30,16 @@ export async function getApplicationSiteDefaults(ctx: OrgContext, tx: DbTransact
     .where(and(eq(deliveries.id, deliveryId), eq(deliveries.organizationId, ctx.organizationId)));
   return sites.at(0) ?? null;
 }
+
+type ApplicationSiteDefaults = NonNullable<Awaited<ReturnType<typeof getApplicationSiteDefaults>>>;
+
+export function usesSiteSoilTemperature(site: Pick<ApplicationSiteDefaults, "durabilityOption"> | null): boolean {
+  return site?.durabilityOption === "200_year";
+}
+
+export function resolveSiteSoilTemperatureDefault(site: ApplicationSiteDefaults | null): { temperatureC: number; origin: "customer_location" | "facility" } | null {
+  if (!usesSiteSoilTemperature(site)) return null;
+  if (site?.defaultSoilTemperatureC != null) return { temperatureC: site.defaultSoilTemperatureC, origin: "customer_location" };
+  if (site?.facilityDefaultSoilTemperatureC != null) return { temperatureC: site.facilityDefaultSoilTemperatureC, origin: "facility" };
+  return null;
+}

@@ -1,4 +1,4 @@
-import { getApplicationSiteDefaults } from "@/data-access/application-site-defaults";
+import { getApplicationSiteDefaults, resolveSiteSoilTemperatureDefault } from "@/data-access/application-site-defaults";
 import type { ApplicationOperationOutput } from "@/data-access/application-operation-output";
 import { SOIL_TEMPERATURE_SOURCE_GLOBAL } from "@/lib/application-guidance";
 import { CODE_CONFLICT_MESSAGES, withAutoCodes } from "@/data-access/code-generator";
@@ -33,12 +33,12 @@ export const recordApplication: Operation<typeof recordApplicationInput, Applica
       resolved.gpsLongitude = site.gpsLongitude;
       warnings.push(`GPS copied from customer location ${site.customerLocationName}.`);
     }
-    const temperature = site?.defaultSoilTemperatureC ?? site?.facilityDefaultSoilTemperatureC;
-    if (site?.durabilityOption !== "1000_year" && input.soilTemperatureC === undefined && input.soilTemperatureSource === undefined && temperature != null) {
-      resolved.soilTemperatureC = temperature;
+    const temperature = resolveSiteSoilTemperatureDefault(site);
+    if (input.soilTemperatureC === undefined && input.soilTemperatureSource === undefined && temperature != null) {
+      resolved.soilTemperatureC = temperature.temperatureC;
       resolved.soilTemperatureSource = SOIL_TEMPERATURE_SOURCE_GLOBAL;
-      warnings.push(site?.defaultSoilTemperatureC != null
-        ? `Soil temperature copied from customer location ${site.customerLocationName}.`
+      warnings.push(temperature.origin === "customer_location"
+        ? `Soil temperature copied from customer location ${site?.customerLocationName}.`
         : "Soil temperature copied from the facility default.");
     }
     const saved = await withAutoCodes(ctx, tx, "AP", applications, applications.code, AUTO_CODE_COUNT,

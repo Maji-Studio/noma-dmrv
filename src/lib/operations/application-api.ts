@@ -13,7 +13,7 @@ function validated<T extends z.ZodType>(schema: T, value: unknown): z.output<T> 
   if (!result.success) throw validationFailed(result.error);
   return result.data;
 }
-function normalizeBoundary(value: unknown) {
+function normalizeRawBoundary(value: unknown) {
   if (value === null || value === undefined) return value;
   const fail = (message: string): never => { throw new DomainError("validation_failed", message, {
     issues: [{ path: ["gisBoundary"], code: "validation_failed", message }],
@@ -34,10 +34,10 @@ function normalizeBoundary(value: unknown) {
 export const recordApplicationApi: Operation<typeof recordApplicationApiInput, ApplicationOperationOutput> = {
   ...recordApplication, input: recordApplicationApiInput,
   describe: (input, output) => describeRecordedApplication(input, output.application),
-  execute: (scope, input) => recordApplication.execute(scope, validated(recordApplicationInput, { ...input, gisBoundary: normalizeBoundary(input.gisBoundary) })),
+  execute: (scope, input) => recordApplication.execute(scope, validated(recordApplicationInput, { ...input, gisBoundary: normalizeRawBoundary(input.gisBoundary) })),
 };
 export const updateApplicationApi: Operation<typeof updateApplicationApiOperationInput, ApplicationOperationOutput> = {
   ...updateApplication, input: updateApplicationApiOperationInput,
   describe: (input, output) => describeUpdatedApplication(input, output.application),
-  execute: (scope, input) => updateApplication.execute(scope, validated(updateApplicationInput, { ...input, gisBoundary: normalizeBoundary(input.gisBoundary) })),
+  execute: (scope, input) => updateApplication.execute(scope, validated(updateApplicationInput, { ...input, gisBoundary: normalizeRawBoundary(input.gisBoundary) })),
 };

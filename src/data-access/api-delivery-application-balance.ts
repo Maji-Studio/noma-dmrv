@@ -5,7 +5,7 @@ import type { OrgContext } from "@/lib/auth/server";
 import type { ApiLookupIdentifier } from "./api-lookup-filters";
 import { findApiDelivery } from "./api-deliveries";
 import { deliveryApplicationBalanceFields } from "./delivery-application-balance";
-import { getApplicationSiteDefaults } from "./application-site-defaults";
+import { getApplicationSiteDefaults, resolveSiteSoilTemperatureDefault } from "./application-site-defaults";
 import { facilityTimestampDateExpr } from "./output-stock-dates";
 import { requireOrgScope } from "./utils";
 
@@ -19,12 +19,11 @@ export async function findApiDeliveryApplicationBalance(ctx: OrgContext, identif
     }).from(deliveries).innerJoin(facilities, and(eq(facilities.id, deliveries.facilityId), eq(facilities.organizationId, ctx.organizationId)))
       .where(and(eq(deliveries.organizationId, ctx.organizationId), eq(deliveries.id, delivery.id)));
     const site = await getApplicationSiteDefaults(ctx, tx, delivery.id);
-    const usesTemperature = site?.durabilityOption !== "1000_year";
-    const temperature = usesTemperature ? site?.defaultSoilTemperatureC ?? site?.facilityDefaultSoilTemperatureC ?? null : null;
+    const temperature = resolveSiteSoilTemperatureDefault(site);
     return { deliveryId: delivery.id, deliveredWetMassKg: delivery.deliveredWetMassKg, dryBiocharKg: delivery.massDryKg,
       ...balance, site: { customerLocationId: site?.customerLocationId ?? null, gpsLatitude: site?.gpsLatitude ?? null,
-        gpsLongitude: site?.gpsLongitude ?? null, defaultSoilTemperatureC: temperature,
-        soilTemperatureDefault: temperature === null ? null : site?.defaultSoilTemperatureC != null ? "customer_location" as const : "facility" as const },
+        gpsLongitude: site?.gpsLongitude ?? null, defaultSoilTemperatureC: temperature?.temperatureC ?? null,
+        soilTemperatureDefault: temperature?.origin ?? null },
     };
   }, { isolationLevel: "repeatable read", accessMode: "read only" });
 }

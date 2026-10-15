@@ -1,4 +1,4 @@
-import { GRAMS_PER_KG } from "@/lib/output-stock/exact";
+import { roundKg } from "@/lib/calculations/mass-dry";
 import { KG_PER_TONNE } from "@/lib/calculations/unit-conversions";
 import { UNKNOWN_FACILITY_TIMEZONE } from "@/lib/date-utils";
 import { formatDayString, formatFacilityDay, formatMassKg } from "@/lib/format-utils";
@@ -105,7 +105,7 @@ export function applicationTonsToKg(value: number | null | undefined): number | 
     return null;
   }
 
-  return Math.round(value * KG_PER_TONNE * Number(GRAMS_PER_KG)) / Number(GRAMS_PER_KG);
+  return roundKg(value * KG_PER_TONNE);
 }
 
 /** Kept as a named re-export so the application surfaces keep one import site. */

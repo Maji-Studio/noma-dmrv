@@ -536,12 +536,5 @@ function normalizeGeoJsonInput({
 }
 
 export function normalizeGeoJson(input: NormalizeGeoJsonInput): NormalizeGeoJsonResult {
-  try {
-    return normalizeGeoJsonInput(input);
-  } catch {
-    return {
-      ok: false,
-      error: "The GeoJSON structure is not valid. Check the geometry and coordinates and try again.",
-    };
-  }
+  return normalizeGeoJsonInput(input);
 }

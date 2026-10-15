@@ -440,12 +440,9 @@ it("refuses nonfinite JSON coordinates without throwing", () => {
   expect(normalizeGeoJson({ source: "api", text: '{"type":"Polygon","coordinates":[[[0,0],[1e400,0],[1,1],[0,0]]]}' })).toMatchObject({ ok: false, error: expect.any(String) });
 });
 
-it("returns a plain failure if normalization unexpectedly throws", () => {
+it("propagates unexpected normalization errors", () => {
   vi.mocked(turfRewind.rewind).mockImplementationOnce(() => {
     throw new TypeError("Internal geometry failure");
   });
-  expect(normalize(polygonFeature())).toEqual({
-    ok: false,
-    error: "The GeoJSON structure is not valid. Check the geometry and coordinates and try again.",
-  });
+  expect(() => normalize(polygonFeature())).toThrow(new TypeError("Internal geometry failure"));
 });
