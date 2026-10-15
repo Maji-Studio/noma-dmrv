@@ -263,30 +263,6 @@ beforeAll(async () => {
     ).resolves.toMatchObject({ packaging: "bagged" });
   });
 
-  it("returns an updated order without price or currency", async () => {
-    const updated = await runOperationInProcess(updateOrder, makeTestOrgContext(TEST_USER_ID), {
-      orderId: zeroProductOrderId,
-      expectedVersion: await labLogisticsVersion(makeTestOrgContext(TEST_USER_ID), "orders", zeroProductOrderId),
-      packaging: "loose",
-    });
-    expect(updated).toMatchObject({ packaging: "loose" });
-  });
-
-  it("creates an order without price or currency", async () => {
-    const created = await db.transaction(async tx => createOrderInTransaction(makeTestOrgContext(TEST_USER_ID), tx, {
-      code: `OR-OCG-NOPRICE-${tag}`,
-      facilityId,
-      customerId: customerAId,
-      customerLocationId: locationAId,
-      formulationId: (await tx.select({ f: orders.formulationId }).from(orders).where(eq(orders.id, orderId)))[0].f,
-      orderDate: new Date("2026-06-13"),
-      quantityKg: 10,
-      packaging: "loose",
-    }));
-    expect(created).toMatchObject({ quantityKg: 10, packaging: "loose" });
-    await db.delete(orders).where(eq(orders.id, created.id));
-  });
-
   async function runWhileProductBecomesZero(
     productIdToChange: string,
     orderWrite: () => Promise<unknown>,

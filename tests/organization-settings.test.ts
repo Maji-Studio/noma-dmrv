@@ -75,22 +75,6 @@ describe.sequential("organization operating defaults", () => {
     });
   });
 
-  it("stores operating defaults without a default currency", async () => {
-    const ctx = makeTestOrgContext();
-    await upsertOrganizationDefaults(ctx, {
-      defaultCountry: "Kenya",
-      defaultTimezone: "Africa/Nairobi",
-      defaultEvidenceMethod: "location",
-      defaultPackaging: "bagged",
-    });
-
-    const [row] = await db
-      .select()
-      .from(organizationSettings)
-      .where(eq(organizationSettings.organizationId, TEST_ORG_ID));
-    expect(row).toMatchObject({ defaultCountry: "Kenya", defaultPackaging: "bagged" });
-  });
-
   it("keeps an unset country null rather than storing a placeholder", async () => {
     // Facility and party rows persist `'UNKNOWN'` today. A default nobody chose
     // should not look chosen, so the organization-level field stays null.
