@@ -28,9 +28,9 @@ export function buildSubmissionLineageBlockers(
   for (const { application, delivery, order } of lineages) {
     const proof = deliveryProofBlocker({
       deliveryCode: delivery.code,
-      proofOfDeliveryCount: delivery.proofOfDeliveryCount ?? 0,
+      proofOfDeliveryCount: delivery.proofOfDeliveryCount,
     });
-    if (proof) blockers.push({ proofOfDeliveryOnly: true, detail: proof, fixTarget: "deliveries", record: { id: delivery.id, code: delivery.code } });
+    if (proof) blockers.push({ detail: proof, fixTarget: "deliveryEvidence", record: { id: delivery.id, code: delivery.code } });
     const destination = applicationDestinationBlocker({
       applicationCode: application.code,
       // The lineage projection resolves this from the order destination.

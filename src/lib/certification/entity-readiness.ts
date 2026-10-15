@@ -155,7 +155,7 @@ export function deriveEntityCertifyReadiness(
   if (entityKind === "delivery") {
     const detail = deliveryProofBlocker({
       deliveryCode: String(fieldValue(entity, "code") ?? ""),
-      proofOfDeliveryCount: Number(fieldValue(entity, "proofOfDeliveryCount") ?? 0),
+      proofOfDeliveryCount: Number(fieldValue(entity, "proofOfDeliveryCount")),
     });
     if (detail) gaps.push({ kind: "field", key: "proofOfDelivery", label: "Proof of delivery", fields: [], detail });
   }

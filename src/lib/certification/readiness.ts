@@ -75,8 +75,6 @@ export interface RemovalReadinessFacts {
   transportVehicleAdvisories?: string[];
   /** Compact labels from per-entity certifier-readiness checks. */
   entityReadinessGaps?: string[];
-  /** Shared submission checks for individual feedstocks, orders and deliveries. */
-  submissionLineageBlockers?: string[];
   /** Structured submission checks with affected records and fix targets. */
   submissionLineageIssues?: SubmissionLineageBlocker[];
   /** Documents discovered by the same lineage walk as the Sources panel. */
@@ -270,7 +268,7 @@ export function deriveRemovalReadiness(
     };
   }
 
-  const reasons: string[] = [...(facts.submissionLineageBlockers ?? [])];
+  const reasons: string[] = [...(facts.submissionLineageIssues?.map((issue) => issue.detail) ?? [])];
 
   const templateReason = templateBlockerReason(facts);
   if (templateReason) reasons.push(templateReason);
@@ -587,7 +585,7 @@ export function buildRemovalRequirementsChecklist(
   })();
 
   const entityReadiness = ((): RemovalRequirementCheckBase => {
-    const gaps = [...(facts.submissionLineageBlockers ?? []), ...(facts.entityReadinessGaps ?? [])];
+    const gaps = [...(facts.submissionLineageIssues?.map((issue) => issue.detail) ?? []), ...(facts.entityReadinessGaps ?? [])];
     return gaps.length === 0
       ? {
           key: "entityReadiness",

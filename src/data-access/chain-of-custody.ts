@@ -29,6 +29,7 @@ import type {
   BatchLineageRunFact,
 } from "./credit-batch-accounting";
 import { productionRunDateExpr } from "./production-runs/date-expr";
+import { getDeliveryProofCounts } from "./delivery-proof";
 import { requireOrgScope } from "./utils";
 
 export const CHAIN_HREFS = {
@@ -78,7 +79,7 @@ export interface ChainDeliveryLineage {
   locationDistanceKm?: number | null;
   /** Resolved from the delivery's order. */
   customerLocationId?: string | null;
-  proofOfDeliveryCount?: number;
+  proofOfDeliveryCount: number;
   massDryKg: number | null;
   href: string;
 }
@@ -308,6 +309,7 @@ export async function getChainOfCustodyData(
       allocatedWetMassKg: shares.reduce((n, a) => n + Number(a.wetMassKg), 0),
       allocatedDryMassKg: shares.reduce((n, a) => n + Number(a.dryMassKg), 0) });
   }
+  const proofCounts = await getDeliveryProofCounts(ctx, [applicationRow.deliveryId]);
   const biocharProduct = products.length === 1 ? products[0].product : null;
   const sources = products.flatMap(p => p.sources);
   const singleSource = sources.length === 1 ? sources[0] : null;
@@ -350,6 +352,7 @@ export async function getChainOfCustodyData(
       href: "/applications",
     },
     delivery: {
+      proofOfDeliveryCount: proofCounts.get(applicationRow.deliveryId) ?? 0,
       id: applicationRow.deliveryId,
       code: applicationRow.deliveryCode,
       status: applicationRow.deliveryStatus,

@@ -57,7 +57,7 @@ export interface BatchLineageApplicationFact {
     locationDistanceKm?: number | null;
     /** Resolved from the delivery's order, not a delivery-owned field. */
     customerLocationId?: string | null;
-    proofOfDeliveryCount?: number;
+    proofOfDeliveryCount: number;
     massDryKg: number | null;
   };
   order: {

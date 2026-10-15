@@ -4,6 +4,7 @@ import { outputProductFixtureValues, outputOrderFixtureValues, insertOutputDeliv
 import { beforeAll, describe, expect, it } from "vitest";
 import { eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
+import { getChainOfCustodyData } from "@/data-access/chain-of-custody";
 import {
   applications,
   biocharProductSourceAllocations,
@@ -98,6 +99,10 @@ describe("credit batch accounting", () => {
       const facts = accounting.lineageFacts;
       const detail = await getCreditBatchById(makeTestOrgContext(), batch.id, { skipPreview: true });
       const chain = await getCreditBatchChainData(makeTestOrgContext(), batch.id);
+      for (const [index, application] of appRows.entries()) {
+        const applicationChain = await getChainOfCustodyData(makeTestOrgContext(), application.id);
+        expect(applicationChain.delivery.proofOfDeliveryCount).toBe(index === 0 ? 1 : 0);
+      }
       expect(facts.applications.find((application) => application.id === appRows[0].id)?.delivery).toMatchObject({
         customerLocationId: location.id,
         locationDistanceKm: 15,

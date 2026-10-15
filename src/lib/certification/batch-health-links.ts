@@ -53,7 +53,7 @@ export function resolveBatchHealthFixTarget(
 export function batchHealthFixLinkFor(
   // Only the key + explicit fixTarget drive the link — narrower than the full
   // check so callers (and tests) needn't construct unrelated fields.
-  check: Pick<BatchHealthCheck, "key" | "fixTarget" | "affectedRecords" | "proofOfDeliveryOnly">,
+  check: Pick<BatchHealthCheck, "key" | "fixTarget" | "affectedRecords">,
   facilityId: string,
   creditBatchId?: string,
 ): BatchHealthFixLink {
@@ -148,14 +148,15 @@ export function batchHealthFixLinkFor(
         label: "Review orders",
         href: `/orders?${query(undefined, false)}`,
       };
-    case "deliveries":
-      if (affectedCount === 1 && check.proofOfDeliveryOnly) return {
+    case "deliveryEvidence":
+      if (affectedCount === 1) return {
         label: `Review ${check.affectedRecords![0].code} evidence`,
         href: buildEntityDeepLink({
           path: "/deliveries", facilityId, entityQueryKey: "delivery",
           entityId: affectedIds[0], focus: ENTITY_FOCUS_TARGETS.transportEvidence,
         }),
       };
+    case "deliveries":
     case "deliveryDistances":
       return {
         label: "Review deliveries",

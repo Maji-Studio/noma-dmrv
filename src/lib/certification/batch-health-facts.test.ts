@@ -30,6 +30,7 @@ describe("toBatchHealthFacts", () => {
   it.each([
     ["orders", "/orders?"],
     ["deliveries", "/deliveries?"],
+    ["deliveryEvidence", "/deliveries?"],
     ["deliveryDistances", "/deliveries?"],
   ] as const)("routes %s blockers to the resolving workflow", (fixTarget, path) => {
     const health = deriveBatchHealth(toBatchHealthFacts({ ...readyContext, submissionLineageBlockers: [{

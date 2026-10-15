@@ -52,7 +52,7 @@ function fixLinksFor(
   switch (check.key) {
     case "entityReadiness": {
       const links = (check.lineageIssues ?? []).slice(0, ENTITY_READINESS_CHECK_DISPLAY_LIMIT).map((issue) => batchHealthFixLinkFor({
-        key: "entityReadiness", fixTarget: issue.fixTarget, proofOfDeliveryOnly: issue.proofOfDeliveryOnly,
+        key: "entityReadiness", fixTarget: issue.fixTarget,
         affectedRecords: [{ ...issue.record, missing: [issue.detail] }],
       }, facilityId));
       return [...new Map(links.map((link) => [link.href, link])).values()];

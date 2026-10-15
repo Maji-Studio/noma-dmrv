@@ -40,7 +40,7 @@ export interface DeliveryWithRelations extends Delivery {
   effectiveDistanceKm: number | null;
   effectiveDistanceSource: "map_estimate" | "manual" | "document" | null;
   transportEvidenceDocumentCount: number;
-  proofOfDeliveryCount?: number;
+  proofOfDeliveryCount: number;
 }
 
 export interface PaginatedDeliveries {

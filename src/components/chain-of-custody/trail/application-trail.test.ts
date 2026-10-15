@@ -19,6 +19,7 @@ function lineage(): ChainOfCustodyData {
       href: "/applications",
     },
     delivery: {
+      proofOfDeliveryCount: 1,
       id: "delivery-1",
       code: "DL-1",
       status: "delivered",

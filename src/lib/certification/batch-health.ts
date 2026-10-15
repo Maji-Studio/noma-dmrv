@@ -43,6 +43,7 @@ export type BatchHealthFixTarget =
   | "batchDetails"
   | "orders"
   | "deliveries"
+  | "deliveryEvidence"
   | "deliveryDistances"
   | "feedstocks"
   | "feedstockTypes"
@@ -80,8 +81,6 @@ export interface BatchHealthCheck {
   issueKey?: string;
   /** Records that must be fixed in this check's single destination. */
   affectedRecords?: BatchHealthAffectedRecord[];
-  /** True only when every constituent check is a delivery proof gap. */
-  proofOfDeliveryOnly?: boolean;
 }
 
 export interface BatchHealthAffectedRecord {
@@ -303,6 +302,7 @@ function transportCheck(facts: BatchHealthFacts): BatchHealthCheckBase[] {
 function resolutionDestination(check: BatchHealthCheck): string {
   switch (check.fixTarget) {
     case "deliveries":
+    case "deliveryEvidence":
     case "deliveryDistances":
       return "deliveries";
     case "productionRuns":
@@ -364,7 +364,11 @@ function mergeUnmetChecksByDestination(
     const existing = merged[existingIndex];
     merged[existingIndex] = {
       ...existing,
-      proofOfDeliveryOnly: existing.proofOfDeliveryOnly === true && check.proofOfDeliveryOnly === true,
+      fixTarget: destination === "deliveries"
+        ? existing.fixTarget === "deliveryEvidence" && check.fixTarget === "deliveryEvidence"
+          ? "deliveryEvidence"
+          : "deliveries"
+        : existing.fixTarget,
       label: mergeCheckText(existing.label, check.label) ?? existing.label,
       requirementLabel:
         mergeCheckText(existing.requirementLabel, check.requirementLabel) ??
@@ -426,7 +430,6 @@ function submissionChecks(facts: BatchHealthFacts): BatchHealthCheckBase[] {
     requirementLabel: "Resolve submission blockers",
     status: "unmet",
     detail: blocker.detail,
-    proofOfDeliveryOnly: blocker.proofOfDeliveryOnly,
     fixTarget: blocker.fixTarget,
     affectedRecords: [{ ...blocker.record, missing: [blocker.detail] }],
   }));

@@ -33,9 +33,8 @@ describe("submission lineage blockers", () => {
   it("requires proof on every delivery even without transport categories, deduplicating applications", () => {
     const missing = { ...lineage, delivery: { ...lineage.delivery, customerLocationId: "location", proofOfDeliveryCount: 0 } };
     expect(buildSubmissionLineageBlockers([missing, { ...missing, application: { ...missing.application, id: "app-2", code: "AP-2" } }], [], {}, [])).toEqual([{
-      proofOfDeliveryOnly: true,
       detail: "Delivery DL-1 has no proof of delivery. Attach a delivery receipt, bill of lading or delivery photo before submitting.",
-      fixTarget: "deliveries", record: { id: "delivery-1", code: "DL-1" },
+      fixTarget: "deliveryEvidence", record: { id: "delivery-1", code: "DL-1" },
     }]);
   });
 
@@ -43,7 +42,7 @@ describe("submission lineage blockers", () => {
     const covered = { ...lineage, delivery: { ...lineage.delivery, customerLocationId: "location" } };
     const missing = { ...covered, delivery: { ...covered.delivery, id: "delivery-2", code: "DL-2", proofOfDeliveryCount: 0 } };
     expect(buildSubmissionLineageBlockers([covered, missing], [], {}, [])).toMatchObject([
-      { fixTarget: "deliveries", record: { id: "delivery-2", code: "DL-2" } },
+      { fixTarget: "deliveryEvidence", record: { id: "delivery-2", code: "DL-2" } },
     ]);
   });
 });

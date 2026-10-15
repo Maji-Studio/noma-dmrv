@@ -39,7 +39,6 @@ export function toRemovalReadinessFacts(
     productionReadinessGap: ctx.productionReadinessGap ?? null,
     entityReadinessGaps: ctx.entityReadinessGaps ?? [],
     submissionLineageIssues,
-    submissionLineageBlockers: submissionLineageIssues.map((b) => b.detail),
     durabilityGateBlockers: ctx.durabilityGateBlockers ?? [],
     durabilityConfigurationBlockers: ctx.durabilityConfigurationBlockers,
     futureDatedMeasurements: ctx.futureDatedMeasurements ?? [],

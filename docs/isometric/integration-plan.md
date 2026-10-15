@@ -301,8 +301,7 @@ is not confirmed, so no production-live Method-B submission is claimed.
 
 ## Sources and evidence
 
-Proof of delivery is a Removal-readiness requirement (issue #1015, q12),
-reversing the retained-records-do-not-block policy for Delivery proof only.
+Proof of delivery is a Removal-readiness requirement (#942 q12).
 Each delivery in the Removal lineage needs at least one delivery-owned,
 `uploaded` document classified as `delivery_receipt`, `bill_of_lading` or
 `photo`. A pending upload with a storage key is not proof. Weighbridge tickets
