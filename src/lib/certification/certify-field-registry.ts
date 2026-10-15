@@ -363,13 +363,9 @@ export const CERTIFY_FIELD_REGISTRY: Record<
   // descriptors drive form/detail badges and the list readiness pills.
   delivery: [
     {
-      // The biochar product wet mass is the submitted value. It becomes the
-      // auto-derived biochar distribution leg's load mass
-      // (data-access/transport-legs.ts → syncLockedBiocharProductTransportLeg).
       key: "deliveredWetMassKg",
       label: "Biochar product wet mass",
       kind: "entered",
-      mappings: [mapping("biocharTransportMassDistanceTonneKm")],
     },
   ],
   application: [
@@ -378,9 +374,12 @@ export const CERTIFY_FIELD_REGISTRY: Record<
     // dry biochar is allocated proportionally from the selected delivery's
     // tracked dry biochar. Delivery moisture is independent evidence.
     {
+      // Frozen applied wet mass feeds delivery transport via
+      // data-access/biochar-delivery-transport.ts → loadBiocharDeliveryTransportLegs.
       key: "biocharAppliedTons",
       label: "Biochar product applied",
       kind: "entered",
+      mappings: [mapping("biocharTransportMassDistanceTonneKm")],
     },
     {
       key: "biocharAppliedDryTons",

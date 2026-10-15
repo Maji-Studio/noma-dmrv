@@ -437,7 +437,7 @@ export async function teardownWizardRemovalForBatch(
 //     come from samples, NOT the credit batch's own `hToCorgRatio` column
 //     (lab-grade `samples`, not `production_samples` — see
 //     `getProductionRunsWithSamples`);
-//   • uniform `distance_based` transport legs for feedstock / biochar / sample,
+//   • distance-based feedstock / sample legs; biochar inherits the delivery distance,
 //     so whichever categories the facility's default template requires are
 //     present AND aggregate cleanly (extra legs for unrequired categories are
 //     harmless — coverage is only checked for required ones).
@@ -495,7 +495,6 @@ export async function seedUngroupedReadyBatchWithChain(
     creditBatch: crypto.randomUUID(),
     productionProcess: crypto.randomUUID(),
     feedstockTransportLeg: crypto.randomUUID(),
-    biocharTransportLeg: crypto.randomUUID(),
     sampleTransportLeg: crypto.randomUUID(),
     feedstockTransportDocument: crypto.randomUUID(),
     biocharTransportDocument: crypto.randomUUID(),
@@ -824,10 +823,6 @@ export async function seedUngroupedReadyBatchWithChain(
           ...leg(id.feedstockTransportLeg, "feedstock", refs.feedstockId),
           distanceSource: "document" as const,
         },
-        {
-          ...leg(id.biocharTransportLeg, "biochar", id.biocharProduct),
-          distanceSource: "document" as const,
-        },
         ...(withLabAndRun
           ? [leg(id.sampleTransportLeg, "sample", id.samples[0])]
           : []),
@@ -900,7 +895,6 @@ export async function seedUngroupedReadyBatchWithChain(
             .where(
               inArray(schema.transportLegs.id, [
                 id.feedstockTransportLeg,
-                id.biocharTransportLeg,
                 id.sampleTransportLeg,
               ]),
             );

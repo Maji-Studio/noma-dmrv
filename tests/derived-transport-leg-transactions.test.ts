@@ -1,3 +1,9 @@
+import { createApplication } from "@/data-access/applications";
+import { getChainOfCustodyData } from "@/data-access/chain-of-custody";
+import { loadTransportLegsByCategory } from "@/fn/certification/shared";
+import { deleteOutputApplicationFixtures } from "./helpers/output-contract-fixtures";
+import { loadBiocharDeliveryTransportLegs } from "@/data-access/biochar-delivery-transport";
+import { aggregateBiocharTransportMassDistance } from "@/lib/isometric/utils/aggregation";
 import { labLogisticsVersion } from "./helpers/lab-logistics-version";
 import { masterDataVersion } from "./helpers/master-data-version";
 import { preparePureOutputProductFixture, ensureOutputFixtureActor } from "./helpers/output-contract-fixtures";
@@ -7,6 +13,7 @@ import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import {
+  applications,
   biocharProducts,
   customerLocations,
   customers,
@@ -52,6 +59,7 @@ describe("derived transport-leg transaction boundaries", () => {
     biocharProductIds: [] as string[],
     orderIds: [] as string[],
     deliveryIds: [] as string[],
+    applicationIds: [] as string[],
   };
 
   beforeAll(async () => { await ensureTestOrg(); await ensureOutputFixtureActor(ctx); });
@@ -73,6 +81,9 @@ describe("derived transport-leg transaction boundaries", () => {
     ];
     if (entityIds.length > 0) {
       await db.delete(transportLegs).where(inArray(transportLegs.entityId, entityIds));
+    }
+    if (created.applicationIds.length > 0) {
+      await deleteOutputApplicationFixtures(db, inArray(applications.id, created.applicationIds));
     }
     if (created.deliveryIds.length > 0) {
       await deleteOutputDeliveryFixtures(db, inArray(deliveries.id, created.deliveryIds));
@@ -486,7 +497,7 @@ describe("derived transport-leg transaction boundaries", () => {
           biocharProductId: firstProduct.id,
           code: `OR-DIST-A-${tag}`,
           orderDate: new Date("2026-07-18T00:00:00Z"),
-          quantityKg: 100,
+          quantityKg: 200,
           packaging: "bagged" as const,
         },
         {
@@ -507,12 +518,32 @@ describe("derived transport-leg transaction boundaries", () => {
     const sources = await Promise.all([firstProduct, secondProduct].map(product => preparePureOutputProductFixture(db, product.id)));
     async function postDelivery(index: number, orderId: string) {
       const preview = await previewOutputStock(ctx, { kind: "delivery", facilityId: facility.id, storageLocationId: sources[index].storageLocationId, occurredAt: "2026-07-19T12:00:00.000Z", wetMassKg: 100, moisturePercent: 0 });
-      const delivery = await createDelivery(ctx, { code: `DL-DIST-${index}-${tag}`, orderId, facilityId: facility.id, storageLocationId: sources[index].storageLocationId, deliveryDate: new Date("2026-07-19T12:00:00.000Z"), deliveredWetMassKg: 100, moistureContentPercent: 0, basisFingerprint: preview.basisFingerprint, idempotencyKey: crypto.randomUUID() });
+      const delivery = await createDelivery(ctx, { code: `DL-DIST-${index}-${crypto.randomUUID().toUpperCase()}`, orderId, facilityId: facility.id, storageLocationId: sources[index].storageLocationId, deliveryDate: new Date("2026-07-19T12:00:00.000Z"), deliveredWetMassKg: 100, moistureContentPercent: 0, basisFingerprint: preview.basisFingerprint, idempotencyKey: crypto.randomUUID() });
       created.deliveryIds.push(delivery.id);
       return delivery;
     }
     const delivery = await postDelivery(0, firstOrder.id);
-    await postDelivery(1, secondOrder.id);
+    const secondDelivery = await postDelivery(1, secondOrder.id);
+    const selectedApplicationIds: string[] = [];
+    for (const deliveryId of [delivery.id, secondDelivery.id]) {
+      const application = await createApplication(ctx, {
+        code: `AP-DIST-${crypto.randomUUID().toUpperCase()}`,
+        deliveryId, applicationDate: new Date("2026-07-20T12:00:00.000Z"),
+        biocharAppliedTons: 0.025, fieldSizeHa: 1,
+      });
+      created.applicationIds.push(application.id);
+      selectedApplicationIds.push(application.id);
+    }
+    const slices = [{ deliveryId: delivery.id, loadMassKg: 25 }, { deliveryId: secondDelivery.id, loadMassKg: 25 }];
+    const removalTransport = async () => {
+      // Live application lineages exercise route edits here. Frozen Removal
+      // ownership and masses are covered in biochar-removal-transport.test.ts.
+      const lineages = await Promise.all(selectedApplicationIds.map(id => getChainOfCustodyData(ctx, id)));
+      const legs = await loadTransportLegsByCategory(ctx, { feedstockIds: [], biocharProductIds: [firstProduct.id, secondProduct.id], sampleIds: [] }, lineages, ["biochar"]);
+      return aggregateBiocharTransportMassDistance(legs.biochar).massDistanceTonneKm;
+    };
+    expect(await removalTransport()).toBe(4);
+
 
     await db.insert(transportLegs).values({
       organizationId: TEST_ORG_ID,
@@ -557,6 +588,7 @@ describe("derived transport-leg transaction boundaries", () => {
         eq(transportLegs.isDerived, true),
       ));
     expect(updatedDerived.distanceKm).toBe(80);
+    expect(await removalTransport()).toBe(5);
 
     await updateCustomerLocation(ctx, firstLocation.id, { expectedVersion: await masterDataVersion(ctx, "customerLocations", firstLocation.id),
       distanceFromFacilityKm: 40,
@@ -570,6 +602,7 @@ describe("derived transport-leg transaction boundaries", () => {
         eq(transportLegs.isDerived, true),
       ));
     expect(firstDerived).toEqual([{ distanceKm: 40 }]);
+    expect(await removalTransport()).toBe(6);
 
     await expect(deleteDelivery(ctx, delivery.id, await labLogisticsVersion(ctx, "deliveries", delivery.id))).rejects.toThrow(/retain their history/);
     const remainingLegs = await db
@@ -586,7 +619,31 @@ describe("derived transport-leg transaction boundaries", () => {
       { entityId: secondProduct.id, isDerived: true },
     ]));
     expect(remainingLegs).toHaveLength(3);
+    const laterDelivery = await postDelivery(0, firstOrder.id);
+    await updateDelivery(ctx, laterDelivery.id, {
+      expectedVersion: await labLogisticsVersion(ctx, "deliveries", laterDelivery.id),
+      distanceKmOverride: 100,
+    });
+    expect(await removalTransport()).toBe(6);
+    await expect(loadBiocharDeliveryTransportLegs({ ...ctx, organizationId: "foreign-org" }, slices)).rejects.toThrow(/could not be loaded/);
+    await updateCustomerLocation(ctx, secondLocation.id, {
+      expectedVersion: await masterDataVersion(ctx, "customerLocations", secondLocation.id),
+      distanceFromFacilityKm: null,
+    });
+    // An incomplete unrelated delivery cannot poison the selected first delivery.
+    const firstOnly = await loadBiocharDeliveryTransportLegs(ctx, [slices[0]]);
+    expect(aggregateBiocharTransportMassDistance(firstOnly).massDistanceTonneKm).toBe(2);
+    const incomplete = await loadBiocharDeliveryTransportLegs(ctx, slices);
+    expect(incomplete).toHaveLength(2);
+    expect(aggregateBiocharTransportMassDistance(incomplete)).toMatchObject({
+      massDistanceTonneKm: null, warning: expect.stringContaining("distance"),
+    });
 
+    // The later delivery's override would keep the product leg alive; clear it first.
+    await updateDelivery(ctx, laterDelivery.id, {
+      expectedVersion: await labLogisticsVersion(ctx, "deliveries", laterDelivery.id),
+      distanceKmOverride: null,
+    });
     const [retiringLeg] = await db.select({ id: transportLegs.id })
       .from(transportLegs)
       .where(and(

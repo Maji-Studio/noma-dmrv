@@ -510,7 +510,6 @@ export function makeContext(
     runSummary: {
       runCount: 1,
       totalBiocharOutputKg: biocharMassKg,
-      deliveryBiocharOutputKg: biocharMassKg,
       appliedDryKg: biocharMassKg,
     },
     latestSubmission: latest,

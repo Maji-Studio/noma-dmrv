@@ -46,7 +46,6 @@ const RUN_SUMMARY = {
   runCount: 1,
   appliedDryKg: 1_000,
   totalBiocharOutputKg: 2_000,
-  deliveryBiocharOutputKg: 2_000,
 } satisfies RemovalRunSummary;
 
 describe("buildRemovalLedgerPreview", () => {

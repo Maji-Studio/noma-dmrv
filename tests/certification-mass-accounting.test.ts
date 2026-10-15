@@ -2,7 +2,7 @@
  * buildMassAccounting tests
  *
  * One lineage/run walk produces both the Review-flow `runSummary` (distinct run
- * count, global biochar output, delivery-attributable output, and applied dry
+ * count, global biochar output, and applied dry
  * mass) and the submit pipeline's per-run `attributionByRunId` fraction.
  * Pinning both here is what stops the Review summary and the submit payload from
  * drifting (ADR 0003). `appliedDryKg` comes from the lineages (tonnes → kg),
@@ -13,7 +13,6 @@ import { describe, expect, it } from "vitest";
 import type { ChainOfCustodyData } from "@/data-access/chain-of-custody";
 import type { ProductionRunWithSamples } from "@/lib/isometric/utils/aggregation";
 import {
-  appliedBiocharFraction,
   buildMassAccounting,
   EMPTY_RUN_SUMMARY,
 } from "@/lib/certification/mass-accounting";
@@ -47,7 +46,6 @@ describe("buildMassAccounting — runSummary", () => {
     );
     expect(runSummary.runCount).toBe(2);
     expect(runSummary.totalBiocharOutputKg).toBe(3000);
-    expect(runSummary.deliveryBiocharOutputKg).toBe(3000);
   });
 
   it("totals applied dry mass from the lineages, converting tonnes to kg", () => {
@@ -130,33 +128,12 @@ describe("buildMassAccounting — attributionByRunId", () => {
     expect(attributionByRunId.get("a")).toBe(0);
   });
 
-  it("keeps unapplied production output out of the delivery denominator", () => {
+  it("includes unapplied production output without increasing applied mass", () => {
     const { runSummary } = buildMassAccounting(
       [lineage("applied", 0.05)],
       [run("applied", 100), run("unapplied", 900)],
     );
     expect(runSummary.totalBiocharOutputKg).toBe(1_000);
-    expect(runSummary.deliveryBiocharOutputKg).toBe(100);
-    expect(appliedBiocharFraction(runSummary)).toBe(0.5);
-  });
-});
-
-// §8.6.2 delivery bucket (issue #349, ADR 0020): the ONE shared removal-wide
-// fraction — the submitted biochar-transport scalar and the evidence-ledger
-// PDF's "× applied share" line both derive from it.
-describe("appliedBiocharFraction", () => {
-  it("is appliedDryKg over deliveryBiocharOutputKg", () => {
-    expect(
-      appliedBiocharFraction({
-        runCount: 1,
-        totalBiocharOutputKg: 1000,
-        deliveryBiocharOutputKg: 1000,
-        appliedDryKg: 400,
-      }),
-    ).toBe(0.4);
-  });
-
-  it("falls back to full attribution (1) when output is zero", () => {
-    expect(appliedBiocharFraction(EMPTY_RUN_SUMMARY)).toBe(1);
+    expect(runSummary.appliedDryKg).toBe(50);
   });
 });

@@ -222,3 +222,12 @@ only for a single product or source. DAG nodes retain physical entity IDs while
 allocated edges sum their contributing source shares. The Sankey retains full
 run quantities as context, labels selected product quantities as allocated
 biochar, and does not present the rest of a run as a current stock balance.
+
+Removal biochar transport uses these saved application wet shares, grouped by
+contributing delivery, with each delivery's current distance and the mandatory
+round-trip factor. Submission, previews and transport evidence-ledger subtotals
+share the same calculation. Product-wide derived transport legs remain useful
+for product views but are not Removal accounting inputs. Later deliveries do
+not change an earlier Removal's applied load; customer-location distance edits
+update every later transport read, including submitted Removals. The submitted
+payload snapshot itself remains immutable.

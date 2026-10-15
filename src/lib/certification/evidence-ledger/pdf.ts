@@ -34,10 +34,6 @@ const GAP = 8;
 // ── Number formatting (DM Mono, tabular) ─────────────────────────────────────
 const nf2 = (n: number): string =>
   n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-// 4dp for the applied-biochar share so the printed operands trace the scaled
-// subtotal without hiding the fraction behind 2dp rounding.
-const nf4 = (n: number): string =>
-  n.toLocaleString("en-US", { minimumFractionDigits: 4, maximumFractionDigits: 4 });
 const nfi = (n: number): string => n.toLocaleString("en-US");
 
 // Chrome (page, masthead, claim frame, section head, table frame, apparatus,
@@ -219,10 +215,6 @@ function ledgerSection(cat: LedgerCategory): ReactElement {
     t([styles.thText, { width: COL.tkm, textAlign: "right", paddingLeft: GAP }], "t·km"),
   );
   const rows = cat.legs.map((leg, i) => legRow(leg, i === cat.legs.length - 1));
-  // §8.6.2 delivery bucket (ADR 0020): a scaled category shows its arithmetic
-  // explicitly — raw leg sum, × applied share, then the submitted subtotal —
-  // so the per-leg rows still reconcile to the registry scalar. ("§" avoided
-  // in rendered text: the bundled font subset may lack the glyph, like U+2192.)
   const footRow = (
     label: string,
     value: string,
@@ -257,39 +249,7 @@ function ledgerSection(cat: LedgerCategory): ReactElement {
             { ...operandRow, ...stackedRow },
           ),
         ];
-  const foot = cat.scaling
-    ? v({}, {},
-        ...roundingRows,
-        footRow(
-          `Leg sum: ${cat.key} · ${formatCount(cat.legs.length, "leg")}`,
-          nf2(cat.scaling.rawSubtotalTkm),
-          "t·km",
-          operandRow,
-        ),
-        footRow(
-          "× applied share: delivery emissions · Biochar Protocol 8.6.2",
-          `× ${nf4(cat.scaling.appliedFraction)}`,
-          null,
-          { ...operandRow, ...stackedRow },
-        ),
-        ...(cat.scaling.displayAdjustmentTkm == null
-          ? []
-          : [
-              footRow(
-                "Scaling adjustment: displayed values to submission value",
-                nf2(cat.scaling.displayAdjustmentTkm),
-                "t·km",
-                { ...operandRow, ...stackedRow },
-              ),
-            ]),
-        footRow(
-          `Subtotal: ${cat.key} · submission value`,
-          nf2(cat.subtotalTkm),
-          "t·km",
-          stackedRow,
-        ),
-      )
-    : roundingRows.length > 0
+  const foot = roundingRows.length > 0
       ? v({}, {},
           ...roundingRows,
           footRow(
@@ -307,8 +267,7 @@ function ledgerSection(cat: LedgerCategory): ReactElement {
   return v(styles.section, {}, header, v(styles.table, {}, th, ...rows, foot));
 }
 
-function apparatus(model: LedgerModel): ReactElement {
-  const hasScaling = model.categories.some((c) => c.scaling);
+function apparatus(): ReactElement {
   const note = v(styles.noteCol, {},
     t(styles.noteH, "Method note"),
     t(styles.noteBody,
@@ -317,12 +276,7 @@ function apparatus(model: LedgerModel): ReactElement {
       "by the registry. Vehicle type and model year are Transportation module records. noma prepares distance and mass; Certify computes " +
       "the sum of (distance × mass) over legs, times that factor. This sheet shows the " +
       "per-leg breakdown behind each prepared value. The per-leg bills of lading remain attached " +
-      "as Sources on the Removal." +
-      (hasScaling
-        ? " Biochar distribution is delivery-bucket scoped under Biochar Protocol 8.6.2. " +
-          "The prepared value is the leg sum × the applied-biochar share, shown explicitly " +
-          "in that category's subtotal."
-        : ""),
+      "as Sources on the Removal.",
     ),
   );
   const legendRow = (k: string, d: string) =>
@@ -364,7 +318,7 @@ function buildDocument(model: LedgerModel): ReactElement {
       masthead(model),
       claimBand(model),
       ...sections,
-      apparatus(model),
+      apparatus(),
       footer(model),
     ),
   );

@@ -405,7 +405,7 @@ export async function resolveScopeForRemoval(
     lineages: [
       ...new Map(
         lineages.map((lineage) => [
-          `${lineage.application.id}:${lineage.productionRun?.id ?? "missing"}`,
+          `${lineage.application.id}:${lineage.biocharProduct?.id ?? "missing"}:${lineage.productionRun?.id ?? "missing"}`,
           lineage,
         ]),
       ).values(),
@@ -735,7 +735,7 @@ export async function buildRemovalContext(
     memberBatches: scope.memberBatches,
     requiredTransportCategories: facilityFacts.requiredTransportCategories,
   });
-  const transportLegs = await loadTransportLegsByCategory(orgCtx, entityIds);
+  const transportLegs = await loadTransportLegsByCategory(orgCtx, entityIds, lineages, requiredTransportCategories);
   const transportCoverage = buildTransportCoverage(transportLegs, entityIds);
   const submissionLineageBlockers = buildSubmissionLineageBlockers(
     lineages,

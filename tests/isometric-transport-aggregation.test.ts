@@ -8,6 +8,7 @@ import type { TransportLeg } from "@/db/schema";
 import { ROUND_TRIP_DISTANCE_FACTOR } from "@/lib/calculations/round-trip";
 import {
   aggregateTransportMassDistance,
+  aggregateBiocharTransportMassDistance,
   enrichWithTransportLegs,
   type AggregatedProductionData,
 } from "@/lib/isometric/utils/aggregation";
@@ -119,6 +120,39 @@ describe("aggregateTransportMassDistance", () => {
     );
     expect(result.massDistanceTonneKm).toBe(200);
     expect(result.warning).toBeNull();
+  });
+});
+
+describe("aggregateBiocharTransportMassDistance", () => {
+  it("counts 25 kg applied from a 50 kg delivery at 10 km as 0.5 tonne-km, regardless of the 100 kg produced", () => {
+    expect(aggregateBiocharTransportMassDistance([leg(10, 25)]))
+      .toEqual({ massDistanceTonneKm: 0.5, warning: null });
+  });
+
+  it("sums two delivery slices at their own distances using wet mass", () => {
+    expect(aggregateBiocharTransportMassDistance([leg(10, 25), leg(30, 40)]))
+      .toEqual({ massDistanceTonneKm: 2.9, warning: null });
+  });
+
+  it.each([0, -1, NaN, Infinity])("names only affected deliveries for unusable distance %s", (distanceKm) => {
+    expect(aggregateBiocharTransportMassDistance([
+      { ...leg(10, 25), originName: "Facility", destinationName: "DL-1: Site A" },
+      { ...leg(distanceKm, 40), originName: "Facility", destinationName: "DL-2: Site B" },
+      { ...leg(0, 20), originName: "Facility", destinationName: "DL-3: Site C" },
+    ])).toEqual({
+      massDistanceTonneKm: null,
+      warning: "Biochar transport has 2 deliveries without a positive distance (Facility to DL-2: Site B, Facility to DL-3: Site C). Record a positive distance for each delivery before submitting.",
+    });
+  });
+
+  it.each([null, 0, -1, NaN, Infinity])("names the affected delivery for unusable wet mass %s", (loadMassKg) => {
+    expect(aggregateBiocharTransportMassDistance([
+      { ...leg(10, 25), originName: "Facility", destinationName: "DL-1: Site A" },
+      { ...leg(10, loadMassKg), originName: "Facility", destinationName: "DL-2: Site B" },
+    ])).toEqual({
+      massDistanceTonneKm: null,
+      warning: "Biochar transport has 1 leg without a load mass (Facility to DL-2: Site B). Record a load mass for each leg before submitting.",
+    });
   });
 });
 
@@ -362,9 +396,9 @@ describe("enrichWithTransportLegs", () => {
   });
 
   // §8.6.2 buckets (issue #349, ADR 0020): biochar transport is the DELIVERY
-  // bucket and scales with the applied share; feedstock/sample transport are
+  // bucket and carries attributed wet loads; feedstock/sample transport are
   // PRODUCTION-bucket and always sum whole.
-  it("scales the biochar mass-distance by the applied-biochar fraction", () => {
+  it("counts already-attributed delivery loads without a second share factor", () => {
     const enriched = enrichWithTransportLegs(
       baseAgg,
       {
@@ -372,12 +406,11 @@ describe("enrichWithTransportLegs", () => {
         biochar: [roundTripLeg(10, 1000)], // 10 t·km
         sample: [],
       },
-      { appliedBiocharFraction: 0.4 },
     );
-    expect(enriched.biocharTransportMassDistanceTonneKm).toBeCloseTo(4);
+    expect(enriched.biocharTransportMassDistanceTonneKm).toBeCloseTo(10);
   });
 
-  it("leaves feedstock and sample mass-distance unscaled at a fraction below 1", () => {
+  it("leaves feedstock and sample mass-distance unscaled", () => {
     const enriched = enrichWithTransportLegs(
       baseAgg,
       {
@@ -385,16 +418,15 @@ describe("enrichWithTransportLegs", () => {
         biochar: [roundTripLeg(10, 1000)], // 10 t·km
         sample: [roundTripLeg(10, 500), roundTripLeg(30, 500)], // 20 t·km
       },
-      { appliedBiocharFraction: 0.4 },
     );
     // PRODUCTION-bucket categories stay whole.
     expect(enriched.feedstockTransportMassDistanceTonneKm).toBe(50);
     expect(enriched.sampleTransportMassDistanceTonneKm).toBe(20);
-    // Only the DELIVERY-bucket biochar category scales.
-    expect(enriched.biocharTransportMassDistanceTonneKm).toBeCloseTo(4);
+    // The DELIVERY bucket is already attributed.
+    expect(enriched.biocharTransportMassDistanceTonneKm).toBeCloseTo(10);
   });
 
-  it("defaults to the full biochar mass-distance when no option is passed", () => {
+  it("sums biochar legs without a share factor", () => {
     const enriched = enrichWithTransportLegs(baseAgg, {
       feedstock: [],
       biochar: [roundTripLeg(10, 1000)],
@@ -403,23 +435,7 @@ describe("enrichWithTransportLegs", () => {
     expect(enriched.biocharTransportMassDistanceTonneKm).toBe(10);
   });
 
-  it("clamps an out-of-range applied-biochar fraction into [0, 1]", () => {
-    const legs = {
-      feedstock: [],
-      biochar: [roundTripLeg(10, 1000)], // 10 t·km
-      sample: [],
-    };
-    const above = enrichWithTransportLegs(baseAgg, legs, {
-      appliedBiocharFraction: 1.5,
-    });
-    expect(above.biocharTransportMassDistanceTonneKm).toBe(10);
-    const below = enrichWithTransportLegs(baseAgg, legs, {
-      appliedBiocharFraction: -0.5,
-    });
-    expect(below.biocharTransportMassDistanceTonneKm).toBe(0);
-  });
-
-  it("keeps a null biochar mass-distance null under a fraction", () => {
+  it("keeps missing biochar legs null", () => {
     const enriched = enrichWithTransportLegs(
       baseAgg,
       {
@@ -427,7 +443,6 @@ describe("enrichWithTransportLegs", () => {
         biochar: [], // no legs ⇒ null (fails closed at submit)
         sample: [],
       },
-      { appliedBiocharFraction: 0.4 },
     );
     expect(enriched.biocharTransportMassDistanceTonneKm).toBeNull();
   });

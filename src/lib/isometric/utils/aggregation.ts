@@ -1,3 +1,4 @@
+import { positiveOrNull } from "@/lib/calculations/transport-leg";
 import { countedRoundTripKm } from "@/lib/calculations/round-trip";
 import { kgToTonnes } from "@/lib/calculations/unit-conversions";
 import { formatCount } from "@/lib/copy-utils";
@@ -140,7 +141,7 @@ export function transportVehicleAdvisories(
       `${categoryLabel} transport uses more than one vehicle type. ${TRANSPORT_FACTOR_REVIEW}`,
     );
   }
-  // Delivery-derived biochar legs have no vehicle input. Manual legs do.
+  // Delivery-derived biochar legs have no vehicle input. Feedstock and sample legs do.
   const missingVehicleTypeLegs = legs.filter((leg) =>
     leg.vehicleType == null && !(leg.isDerived && leg.entityType === "biochar"),
   );
@@ -173,7 +174,7 @@ export function aggregateTransportMassDistance(
   // Every leg needs a load mass to contribute distⱼ × massⱼ. A leg without it
   // would silently drop its tonne·km, under-counting transport emissions.
   const missingMassLegs = legs.filter(
-    (leg) => leg.loadMassKg == null || leg.loadMassKg <= 0,
+    (leg) => positiveOrNull(leg.loadMassKg) == null,
   );
   if (missingMassLegs.length > 0) {
     const missingMassLegLabels = missingMassLegs.map(transportLegLabel);
@@ -204,6 +205,20 @@ export function aggregateTransportMassDistance(
       kgToTonnes(leg.loadMassKg as number);
   }
   return { massDistanceTonneKm, warning: null };
+}
+
+/** Shared biochar calculation for submission, coverage and evidence-ledger totals. */
+export function aggregateBiocharTransportMassDistance(legs: TransportLeg[]): TransportAggregationResult {
+  const checked = aggregateTransportMassDistance(legs, "Biochar");
+  if (checked.warning || !legs.length) return checked;
+  const missingDistanceLegs = legs.filter((leg) => positiveOrNull(leg.distanceKm) == null);
+  if (missingDistanceLegs.length > 0) {
+    return {
+      massDistanceTonneKm: null,
+      warning: `Biochar transport has ${formatCount(missingDistanceLegs.length, "delivery", "deliveries")} without a positive distance (${missingDistanceLegs.map(transportLegLabel).join(", ")}). Record a positive distance for each delivery before submitting.`,
+    };
+  }
+  return checked;
 }
 
 // Clamps a per-run attribution factor into [0, 1]. A removal can only count
@@ -340,6 +355,7 @@ export function aggregateProductionRuns(
 
 export interface TransportLegsByCategory {
   feedstock: TransportLeg[];
+  /** Removal-scoped delivery rows carrying immutable applied wet loads. */
   biochar: TransportLeg[];
   sample: TransportLeg[];
 }
@@ -349,18 +365,13 @@ export interface TransportLegsByCategory {
 // (mixed methods/factors, missing per-leg data) are appended to
 // `agg.warnings`, which the submission pipeline short-circuits on.
 //
-// `options.appliedBiocharFraction` scales the biochar category ONLY — biochar
-// transport is the DELIVERY bucket (§8.6.2, ADR 0020) and counts the applied
-// share; feedstock/sample legs are PRODUCTION-bucket and stay whole. An
-// omitted option means factor 1 via clampFactor's null default.
+// Biochar legs already carry the Removal's immutable wet application slices.
 export function enrichWithTransportLegs(
   agg: AggregatedProductionData,
   legs: TransportLegsByCategory,
-  options?: { appliedBiocharFraction?: number },
 ): AggregatedProductionData {
-  const deliveryFactor = clampFactor(options?.appliedBiocharFraction);
   const feedstock = aggregateTransportMassDistance(legs.feedstock, "Feedstock");
-  const biochar = aggregateTransportMassDistance(legs.biochar, "Biochar");
+  const biochar = aggregateBiocharTransportMassDistance(legs.biochar);
   const sample = aggregateTransportMassDistance(legs.sample, "Sample");
   const newWarnings = [
     feedstock.warning,
@@ -371,10 +382,7 @@ export function enrichWithTransportLegs(
   return {
     ...agg,
     feedstockTransportMassDistanceTonneKm: feedstock.massDistanceTonneKm,
-    biocharTransportMassDistanceTonneKm:
-      biochar.massDistanceTonneKm == null
-        ? null
-        : biochar.massDistanceTonneKm * deliveryFactor,
+    biocharTransportMassDistanceTonneKm: biochar.massDistanceTonneKm,
     // Sample shipment is optional, so an empty category collapses to 0 (a
     // true "no sample transport" value); feedstock/biochar stay null when
     // empty so a forgotten required leg fails closed at submit. A blocked
