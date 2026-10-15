@@ -13,7 +13,7 @@ export const activityEvents = pgTable("activity_events", {
   id: uuid("id").primaryKey().defaultRandom(),
   organizationId: text("organization_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),
   facilityId: uuid("facility_id"),
-  occurredAt: timestamp("occurred_at", { withTimezone: true, precision: 3 }).notNull().defaultNow(),
+  occurredAt: timestamp("occurred_at", { withTimezone: true, precision: 3 }).notNull().default(sql`clock_timestamp()`),
   sequence: bigserial("sequence", { mode: "bigint" }).notNull().unique(),
   entityType: text("entity_type", { enum: ACTIVITY_ENTITY_TYPES }).notNull(),
   entityId: text("entity_id").notNull(),

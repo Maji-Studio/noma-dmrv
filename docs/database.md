@@ -62,7 +62,8 @@ names and maps existing runner/certification spellings (`productionRun`,
 `biocharProduct`, `labSample`, `binMovement`, `ghgStatement`) to them; unknown
 values throw.
 `occurred_at` and `registry_at` use millisecond precision to match JavaScript
-`Date`; reads order by `occurred_at` then unique `sequence`, newest first.
+`Date`; `occurred_at` defaults to insert time (`clock_timestamp()`), and reads
+order by `occurred_at` then unique `sequence`, newest first.
 
 ## Row-Level Guards
 

@@ -284,6 +284,8 @@ export const ACTIVITY_ENTITY_TYPES = [
 export const ACTIVITY_ACTIONS = ["created", "updated", "deleted", "status_changed"] as const;
 export const ACTIVITY_SOURCES = ["form", "rest", "mcp", "registry", "system", "script"] as const;
 export const ACTORLESS_ACTIVITY_SOURCES = ["system", "registry", "script"] as const;
+// Registry events default to the triggering user.
+export const DEFAULT_ACTORLESS_ACTIVITY_SOURCES = ["system", "script"] as const;
 
 export type ActivityEntityType = (typeof ACTIVITY_ENTITY_TYPES)[number];
 

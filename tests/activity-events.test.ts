@@ -1,6 +1,7 @@
 /** Database contracts for transaction-owned, organization-scoped activity history. */
 import { afterEach, beforeEach, expect, it } from "vitest";
-import { eq, inArray } from "drizzle-orm";
+import { setTimeout as delay } from "node:timers/promises";
+import { eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { ACTORLESS_ACTIVITY_SOURCES, activityEvents, facilities, organizations } from "@/db/schema";
 import { listEntityActivity, recordActivity, type ActivityEventInput } from "@/data-access/activity-events";
@@ -8,6 +9,7 @@ import type { OrgContext } from "@/lib/auth/server";
 
 const EVENT_TIME = new Date("2026-10-15T10:00:00Z");
 const NEWER_EVENT_TIME = new Date("2026-10-15T11:00:00Z");
+const TRANSACTION_START_GAP_MS = 10;
 const organizationIds: string[] = [];
 let ctx: OrgContext;
 let otherCtx: OrgContext;
@@ -107,6 +109,21 @@ it("orders newest first, breaking equal timestamps by descending sequence", asyn
   expect(rows[1].occurredAt).toEqual(rows[2].occurredAt);
   expect(rows[1].sequence).toBeGreaterThan(rows[2].sequence);
   expect(await listEntityActivity(ctx, "delivery", entityId, { limit: 1 })).toEqual([rows[0]]);
+});
+
+it("orders overlapping transactions by event insert time rather than transaction start", async () => {
+  await db.transaction(async (t1) => {
+    await t1.execute(sql`select 1`);
+    // Keep transaction start times distinct at the column's millisecond precision.
+    await delay(TRANSACTION_START_GAP_MS);
+    // T1 stays open while T2 records its event and commits on another connection.
+    await db.transaction((t2) => recordActivity(ctx, t2, event({ action: "created" })));
+    await recordActivity(ctx, t1, event({ action: "updated" }));
+  });
+
+  const rows = await listEntityActivity(ctx, "delivery", entityId);
+  expect(rows.map((row) => row.action)).toEqual(["updated", "created"]);
+  expect(rows[0].sequence).toBeGreaterThan(rows[1].sequence);
 });
 
 it.each(ACTORLESS_ACTIVITY_SOURCES)("allows an explicit null actor for %s", async (source) => {

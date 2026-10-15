@@ -1,5 +1,5 @@
 {
-  "id": "b1b87a17-3358-47c7-b1e2-4240036e324f",
+  "id": "6f630ac6-079b-4420-bd70-e63e9dd9f40e",
   "prevId": "5b837c4a-63f0-4279-8efb-a0218aee0032",
   "version": "7",
   "dialect": "postgresql",
@@ -32,7 +32,7 @@
           "type": "timestamp (3) with time zone",
           "primaryKey": false,
           "notNull": true,
-          "default": "now()"
+          "default": "clock_timestamp()"
         },
         "sequence": {
           "name": "sequence",

@@ -2,7 +2,7 @@ CREATE TABLE "activity_events" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"organization_id" text NOT NULL,
 	"facility_id" uuid,
-	"occurred_at" timestamp (3) with time zone DEFAULT now() NOT NULL,
+	"occurred_at" timestamp (3) with time zone DEFAULT clock_timestamp() NOT NULL,
 	"sequence" bigserial NOT NULL,
 	"entity_type" text NOT NULL,
 	"entity_id" text NOT NULL,
