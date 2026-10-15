@@ -193,7 +193,7 @@ Operators can fill every line of the target Removal template ("LCA based templat
 **Also in this PR**
 - Split `certify-context-core.ts` before extending it.
 - Folds #639, #642 (drift tests over fingerprinted fixtures) and #626.
-- Fixtures: `tests/fixtures/isometric/cula-template-2026-10-15.json` (captured through the MCP read or the sandbox copy), the 2026-07-03 production fixture and the sandbox 29 Jul template.
+- Fixtures: a new Cula fixture in `tests/fixtures/isometric/`, captured through the MCP read or the sandbox copy, the 2026-07-03 production fixture and the sandbox 29 Jul template.
 
 ### 4.3 Line states and one preflight gate (PR 2)
 
