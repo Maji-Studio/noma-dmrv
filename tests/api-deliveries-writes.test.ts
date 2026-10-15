@@ -3,7 +3,9 @@ import { randomUUID } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { deliveries } from "@/db/schema";
+import { apiIdempotencyRecords, deliveries } from "@/db/schema";
+import { POST as MCP } from "@/app/api/mcp/route";
+import { rpc, rpcBody } from "./helpers/mcp";
 import { guardApiMethod } from "@/lib/api/method-not-allowed";
 import { deliveryRepresentationSchema } from "@/lib/representations/deliveries";
 import { createApiDeliveryWriteFixture, removeApiDeliveryWriteFixture, postDelivery as post, patchDelivery as patch, readDelivery as read,
@@ -269,3 +271,40 @@ describe("delivery write tenant boundaries", { timeout: DELIVERY_TEST_TIMEOUT_MS
     expect(await read(a, first.data.id)).toEqual(first);
   });
 });
+
+
+it.each(["create", "update"] as const)("replays a pre-revision-bump %s outcome with its original ETag", async operation => {
+  const key = randomUUID();
+  const input = deliveryInput(a);
+  const first = await saved();
+  const changes = { distanceNote: "Original edit" };
+  const send = () => operation === "create" ? post(a, input, key) : patch(a, first.data.id, changes, first.etag, key);
+  const response = await send();
+  expect(response.status).toBe(operation === "create" ? 201 : 200);
+  const body = await response.json();
+  const record = (await records(a)).find(row => row.idempotencyKey === key)!;
+  const outcome = record.outcome as { kind: string; data: { representationRevision?: number; delivery: Record<string, unknown> } };
+  expect(outcome.data.representationRevision).toBe(2);
+  delete outcome.data.representationRevision;
+  outcome.data.delivery.destinationCustomerLocationId = null;
+  await db.update(apiIdempotencyRecords).set({ outcome }).where(and(
+    eq(apiIdempotencyRecords.organizationId, a.ctx.organizationId), eq(apiIdempotencyRecords.id, record.id),
+  ));
+  const replay = await send();
+  expect(replay.status).toBe(response.status);
+  expect(replay.headers.get("idempotent-replayed")).toBe("true");
+  expect(replay.headers.get("etag")).toBe(`"${body.data.version}.1"`);
+  const legacyBody = { ...body, data: { ...body.data, destinationCustomerLocationId: null } };
+  expect(await replay.json()).toEqual(legacyBody);
+  const mcpReplay = await rpcBody(await MCP(rpc(a.writeKey, "tools/call", {
+    name: operation === "create" ? "record_delivery" : "update_delivery",
+    arguments: { ...(operation === "create" ? input : { ...changes, deliveryId: first.data.id, expectedVersion: first.data.version }), requestKey: key },
+  })));
+  expect(mcpReplay.result.isError).toBeUndefined();
+  expect(mcpReplay.result.structuredContent).toEqual(legacyBody);
+  const current = await read(a, body.data.id);
+  expect(current.etag).toBe(`"${body.data.version}.2"`);
+  expect(current.data.destinationCustomerLocationId).not.toBeNull();
+  expect(await records(a)).toHaveLength(2);
+  expect(await audits(a)).toHaveLength(2);
+}, DELIVERY_TEST_TIMEOUT_MS);

@@ -437,7 +437,7 @@ describe(
       }
     });
 
-    it("keeps inherited delivery legs unchanged when an order repoint is rejected", async () => {
+    it("keeps the order formulation and inherited delivery legs unchanged when a formulation repoint is rejected", async () => {
       const fixture = await createFixture("REPOINT", [20], 3);
       await createDelivered(
         fixture,
@@ -445,13 +445,14 @@ describe(
         fixture.productIds[0],
         100,
       );
-      const second = await createDelivered(
+      await createDelivered(
         fixture,
         "REPOINT-SECOND",
         fixture.productIds[2],
         50,
       );
 
+      const [orderBefore] = await db.select().from(orders).where(eq(orders.id, fixture.orderId));
       const otherRecipe = await outputProductFixtureValues(db, { organizationId: TEST_ORG_ID, facilityId: fixture.facilityId, code: "unused" });
       await expect(
         runOperationInProcess(updateOrder, ctx, { orderId: fixture.orderId, expectedVersion: await labLogisticsVersion(ctx, "orders", fixture.orderId),
@@ -478,11 +479,8 @@ describe(
       ]));
       expect(legs.find((leg) => leg.entityId === fixture.productIds[1])).toBeUndefined();
 
-      const [secondAfter] = await db
-        .select({ orderId: deliveries.orderId })
-        .from(deliveries)
-        .where(eq(deliveries.id, second.id));
-      expect(secondAfter.orderId).toBe(fixture.orderId);
+      const [orderAfter] = await db.select().from(orders).where(eq(orders.id, fixture.orderId));
+      expect(orderAfter).toEqual(orderBefore);
     });
 
     it("keeps same-product deliveries at other destinations when a customer location changes", async () => {
