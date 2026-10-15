@@ -105,11 +105,22 @@ export async function assertDocumentOwnerWritable(ctx: OrgContext, tx: DbTransac
     throw error;
   }
 }
+async function discoverOwner(ctx: OrgContext, tx: DbTransaction, entityType: string, entityId: string): Promise<OwnerLink[]> {
+  if (!DOCUMENT_ENTITY_TYPES.includes(entityType as DocumentEntityType)) throw documentNotFound("entityId");
+  return discover(ctx, tx, entityType as DocumentEntityType, entityId);
+}
+/**
+ * The lineage targets the document writers lock for this owner, unlocked and
+ * archive-blind, for advisory reads. Owners without lineage return none.
+ */
+export async function documentOwnerLineageTargets(ctx: OrgContext, tx: DbTransaction, entityType: string, entityId: string): Promise<CertifiedLineageTarget[]> {
+  requireOrgScope(ctx);
+  return targetsFor(ctx, tx, await discoverOwner(ctx, tx, entityType, entityId));
+}
 /** Preparation only. The locked writer repeats this decision after storage inspection. */
 export async function inspectDocumentOwner(ctx: OrgContext, tx: DbTransaction, entityType: string, entityId: string): Promise<boolean> {
   requireOrgScope(ctx);
-  if (!DOCUMENT_ENTITY_TYPES.includes(entityType as DocumentEntityType)) throw documentNotFound("entityId");
-  const links = await discover(ctx, tx, entityType as DocumentEntityType, entityId);
+  const links = await discoverOwner(ctx, tx, entityType, entityId);
   if (links.some((link) => link.archived)) throw documentNotFound(OWNER_FIELDS[entityType as DocumentEntityType]);
   for (const target of await targetsFor(ctx, tx, links)) if ((await getCertifiedLineage(ctx, tx, target)).some(isSubmittedLineageRow)) return true;
   return false;

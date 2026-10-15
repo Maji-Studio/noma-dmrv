@@ -5,6 +5,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { FormField, FormFileUpload, ServerError } from "@/components/forms";
 import { FailedDeferredAttachments } from "@/components/forms/failed-deferred-attachments";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
+import { Notice } from "@/components/ui/notice";
 import { useToast } from "@/components/ui/toast";
 import { applicationKeys } from "@/hooks/use-applications";
 import type { UseDeferredAttachmentsResult } from "@/hooks/use-deferred-attachments";
@@ -13,11 +14,13 @@ import {
   useDeleteDocument,
   useDocumentsForEntity,
 } from "@/hooks/use-documents";
+import { useIsRecordCertificationLocked } from "@/hooks/use-record-certification-lock";
 import {
   APPLICATION_VISUAL_EVIDENCE_DOCUMENT_TYPE,
   isApplicationEvidenceDocumentReady,
   isApplicationIsometricSourceDocumentType,
 } from "@/lib/certification/application-evidence";
+import { RECORD_FILES_LOCKED_MESSAGE } from "@/lib/certification/lineage-lock-message";
 import type { DocumentEntityType } from "@/schemas/documents";
 import { ApplicationEvidenceDocumentList } from "./application-evidence-document-list";
 import {
@@ -28,9 +31,6 @@ import {
 const ENTITY_TYPE = "application" satisfies DocumentEntityType;
 /** The consequence of saving straight away stays visible as the cue. */
 const UPLOAD_CUE = "Uploads are saved immediately. Closing does not discard them.";
-/** The rest of the explanation waits behind the ⓘ. */
-const UPLOAD_NOTE =
-  "Evidence added after submission is excluded from the saved attempt until a new evidence review.";
 const SUPPORTING_EVIDENCE_ACCEPT = "image/*,application/pdf,.pdf";
 
 interface ApplicationSupportingEvidencePanelProps {
@@ -44,10 +44,13 @@ export function ApplicationSupportingEvidencePanel({
   applicationId,
   disabled = false,
   deferredAttachments,
-  readOnly = false,
+  readOnly: readOnlyProp = false,
 }: ApplicationSupportingEvidencePanelProps) {
   const toast = useToast();
   const queryClient = useQueryClient();
+  // A submitted lineage freezes the files: download stays, changes are hidden.
+  const locked = useIsRecordCertificationLocked(ENTITY_TYPE, applicationId);
+  const readOnly = readOnlyProp || locked;
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const { data: docs, isLoading, error } = useDocumentsForEntity(
@@ -135,6 +138,7 @@ export function ApplicationSupportingEvidencePanel({
 
   return (
     <div className="flex flex-col gap-16">
+      {locked && <Notice tone="info">{RECORD_FILES_LOCKED_MESSAGE}</Notice>}
       {(error || errorMessage) && (
         <ServerError
           message={
@@ -165,13 +169,12 @@ export function ApplicationSupportingEvidencePanel({
           id={uploadId}
           label="Images and PDFs"
           cue={applicationId ? UPLOAD_CUE : undefined}
-          helperText={applicationId ? UPLOAD_NOTE : undefined}
         >
           {upload}
         </FormField>
       )}
 
-      {!readOnly && applicationId && deferredAttachments && (
+      {!readOnlyProp && applicationId && deferredAttachments && (
         <FailedDeferredAttachments
           attachments={deferredAttachments.attachments}
           onRetry={async (key) => {
@@ -184,6 +187,7 @@ export function ApplicationSupportingEvidencePanel({
           }}
           onRemove={deferredAttachments.remove}
           disabled={disabled}
+          retryable={!locked}
         />
       )}
 

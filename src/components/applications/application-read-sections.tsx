@@ -109,6 +109,9 @@ export function applicationSheetSections(application: ApplicationListItem, conte
       ],
       content: (
         <ApplicationEvidencePanel
+          applicationId={application.id}
+          // The Supporting evidence panel below carries the sheet's one lock notice.
+          hideLockNotice
           mode={(application.evidenceMethod ?? "location") as ApplicationEvidenceMethod}
           boundary={application.gisBoundary ?? null}
           readOnly
@@ -117,7 +120,8 @@ export function applicationSheetSections(application: ApplicationListItem, conte
     },
     {
       title: "Supporting evidence",
-      fields: context.lock.data ? [{ label: "Certification", value: "Application fields are locked by certification. Supporting uploads are saved separately; including new evidence requires a Removal evidence review." }] : context.lock.isPending ? [{ label: "Certification", value: "Checking whether Application fields can be edited." }] : [],
+      // Once locked, the panel's own notice explains the section.
+      fields: context.lock.isPending ? [{ label: "Certification", value: "Checking whether Application fields can be edited." }] : [],
       content: (
         <>
           {context.lock.error && (

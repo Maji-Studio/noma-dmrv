@@ -9,6 +9,7 @@ import {
 import { ServerError } from "@/components/forms";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { EmptyState } from "@/components/ui/empty-state";
+import { Notice } from "@/components/ui/notice";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 import { formatFileSize } from "@/lib/format-utils";
@@ -17,6 +18,8 @@ import {
   useDeleteDocument,
   useDocumentsForEntity,
 } from "@/hooks/use-documents";
+import { useIsRecordCertificationLocked } from "@/hooks/use-record-certification-lock";
+import { RECORD_FILES_LOCKED_MESSAGE } from "@/lib/certification/lineage-lock-message";
 import type { DocumentEntityType } from "@/schemas/documents";
 import { InfoHint } from "@/components/ui/tooltip";
 import { TRANSPORT_EVIDENCE_HINTS } from "./transport-evidence-hints";
@@ -64,13 +67,17 @@ interface TransportEvidenceDocumentsProps {
  * Evidence upload + list for a stable lineage entity or a saved manual
  * transport leg. The document layer keeps the same evidence controls across
  * all three supported owners; deliveries add receipt and photo classifications.
+ * Once the owner's lineage is submitted (a leg follows its parent), the files
+ * stay downloadable and every change control is hidden.
  */
 export function TransportEvidenceDocuments({
   entityType,
   entityId,
-  readOnly = false,
+  readOnly: readOnlyProp = false,
 }: TransportEvidenceDocumentsProps) {
   const toast = useToast();
+  const locked = useIsRecordCertificationLocked(entityType, entityId);
+  const readOnly = readOnlyProp || locked;
   const { data: docs, isLoading, error } = useDocumentsForEntity(
     entityType,
     entityId,
@@ -102,6 +109,7 @@ export function TransportEvidenceDocuments({
 
   return (
     <div className="flex flex-col gap-12">
+      {locked && <Notice tone="info">{RECORD_FILES_LOCKED_MESSAGE}</Notice>}
       {error && (
         <ServerError
           message={

@@ -11,6 +11,7 @@ import { FormFileUpload } from "@/components/forms/form-file-upload";
 import { FailedDeferredAttachments } from "@/components/forms/failed-deferred-attachments";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { Button } from "@/components/ui/button";
+import { Notice } from "@/components/ui/notice";
 import { useToast } from "@/components/ui/toast";
 import { formatFileSize } from "@/lib/format-utils";
 import {
@@ -18,13 +19,15 @@ import {
   useDeleteDocument,
   useDocumentsForEntity,
 } from "@/hooks/use-documents";
+import { useIsRecordCertificationLocked } from "@/hooks/use-record-certification-lock";
+import { RECORD_FILES_LOCKED_MESSAGE } from "@/lib/certification/lineage-lock-message";
 import type { DocumentEntityType, DocumentType } from "@/schemas/documents";
 import { isProductionReadingsCsvFormat } from "@/schemas/documents";
 import type { UseDeferredAttachmentsResult } from "@/hooks/use-deferred-attachments";
 
 interface ProductionReadingsDocumentsProps {
   productionRunId?: string;
-  /** View mode hides the upload control and delete actions. */
+  /** View mode hides the upload control and delete actions; so does a submitted lineage. */
   readOnly?: boolean;
   deferredAttachments?: UseDeferredAttachmentsResult;
   disabled?: boolean;
@@ -59,11 +62,13 @@ export function isUploadedReadingsDocument(document: {
  */
 export function ProductionReadingsDocuments({
   productionRunId,
-  readOnly = false,
+  readOnly: readOnlyProp = false,
   deferredAttachments,
   disabled = false,
 }: ProductionReadingsDocumentsProps) {
   const toast = useToast();
+  const locked = useIsRecordCertificationLocked(ENTITY_TYPE, productionRunId);
+  const readOnly = readOnlyProp || locked;
   const { data: docs, isLoading, error } = useDocumentsForEntity(
     ENTITY_TYPE,
     productionRunId,
@@ -134,8 +139,10 @@ export function ProductionReadingsDocuments({
           onRetry={handleDeferredRetry}
           onRemove={deferredAttachments.remove}
           disabled={disabled}
+          retryable={!locked}
         />
       )}
+      {locked && <Notice tone="info">{RECORD_FILES_LOCKED_MESSAGE}</Notice>}
       <header className="flex items-center justify-between">
         <span className="body-caption text-[var(--color-text-tertiary)]">
           {uploadedDocs.length} {uploadedDocs.length === 1 ? "file" : "files"}
@@ -222,17 +229,19 @@ export function ProductionReadingsDocuments({
       )}
 
       {deleteError && <ServerError message={deleteError} />}
-      <DeleteConfirmDialog
-        isOpen={!!deletingId}
-        title="Delete readings file"
-        message="Are you sure you want to delete this readings file? The file will be removed from storage."
-        onConfirm={handleDeleteConfirm}
-        onCancel={() => {
-          setDeletingId(null);
-          setDeleteError(null);
-        }}
-        isPending={deleteMutation.isPending}
-      />
+      {!readOnly && (
+        <DeleteConfirmDialog
+          isOpen={!!deletingId}
+          title="Delete readings file"
+          message="Are you sure you want to delete this readings file? The file will be removed from storage."
+          onConfirm={handleDeleteConfirm}
+          onCancel={() => {
+            setDeletingId(null);
+            setDeleteError(null);
+          }}
+          isPending={deleteMutation.isPending}
+        />
+      )}
     </section>
   );
 }

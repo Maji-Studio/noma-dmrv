@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { SPINE_SECTION_TAG, type SpineMeta } from "@/components/forms/form-spine";
 import { TransportLegsEditor } from "@/components/transport-legs";
 import type { UseDeferredAttachmentsResult } from "@/hooks/use-deferred-attachments";
+import { useIsRecordCertificationLocked } from "@/hooks/use-record-certification-lock";
 import { formatLegDistanceKm } from "@/lib/format-utils";
 import type { TransportLegFormData } from "@/schemas/transport-legs";
 import type { SampleWithRelations } from "@/data-access/samples";
@@ -51,15 +52,19 @@ export function SampleEvidenceSection({
   isSubmitting = false,
   __spine,
 }: SampleTrailingSectionProps) {
+  const locked = useIsRecordCertificationLocked("sample", isEditMode ? sample?.id : undefined);
   return (
     <FormSection
       title="Evidence & documents"
       icon={<PaperclipIcon size={14} weight="bold" />}
       __spine={__spine}
     >
-      <p className="body-small text-[var(--color-text-secondary)]">
-        Upload the lab report here. You can still submit the Removal without it.
-      </p>
+      {/* The panel explains a locked sample itself; this cue would contradict it. */}
+      {!locked && (
+        <p className="body-small text-[var(--color-text-secondary)]">
+          Upload the lab report here. You can still submit the Removal without it.
+        </p>
+      )}
       {isEditMode && sample ? (
         <div className="flex flex-col gap-12">
           {deferredAttachments && (
@@ -71,6 +76,7 @@ export function SampleEvidenceSection({
               }
               onRemove={onRemoveAttachment ?? deferredAttachments.remove}
               disabled={isSubmitting}
+              retryable={!locked}
             />
           )}
           <SampleDocumentsPanel sampleId={sample.id} />
