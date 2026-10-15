@@ -7,6 +7,8 @@ import {
   REMOVAL_ID,
   USER_ID,
   fakeExternalIds,
+  isometricClientFake,
+  makeBatchesWithSamples,
   makeContext,
   makeFreshScope,
   newLedgerRow,
@@ -20,6 +22,78 @@ import * as certifyContext from "@/fn/certification/certify-context-core";
 import * as removalsDA from "@/data-access/certifier-removals";
 import { submitRemoval } from "@/fn/certification/submit-removal";
 import * as isometric from "@/lib/isometric";
+import { SafeError } from "@/lib/errors";
+import { buildMassAccounting } from "@/lib/certification/mass-accounting";
+
+const CHANGED_RUN_OUTPUT_MASS_KG = 500;
+const CHANGED_FEEDSTOCK_MASS_KG = 5000;
+const CHANGED_ORGANIC_CARBON_PERCENT = 75;
+const ORIGINAL_ORGANIC_CARBON_FRACTION = 0.8;
+const CHANGED_PRODUCTION_START = "2026-01-02T00:00:00.000Z";
+const CHANGED_APPLICATION_DATE = "2026-04-06T00:00:00.000Z";
+const SOURCE_DRIFT_MESSAGE =
+  "Removal source data changed while preparing this submission. The stale draft was retired; reload and submit again.";
+
+function makePayloadDriftContext() {
+  // Grafted carbon_content / feedstock_mass stand in for any chemistry- or mass-bound input; production 200-year templates bind total_carbon_contents / inorganic_carbon_contents instead.
+  const ctx = makeContext();
+  const template = ctx.defaultTemplate!;
+  const storageGroup = template.groups[0];
+  const storageComponent = storageGroup.components[0];
+  const massInput = storageComponent.inputs[0];
+  const storageBlueprint = ctx.blueprintsForTemplate[0];
+  const massBlueprintInput = storageBlueprint.inputs[0];
+  return {
+    ...ctx,
+    defaultTemplate: {
+      ...template,
+      groups: [
+        {
+          ...storageGroup,
+          components: [{
+            ...storageComponent,
+            inputs: [massInput, {
+              ...massInput,
+              input_key: "carbon_content",
+              display_name: "Organic carbon content",
+              quantity_kind: "dimensionless" as const,
+            }],
+          }],
+        },
+        {
+          ...storageGroup,
+          id: "grp-feedstock",
+          key: "biomass-feedstock-transport",
+          display_name: "Feedstock transport",
+          components: [{
+            ...storageComponent,
+            id: "rtc-feedstock-mass",
+            ghg_entry_template_component_group_id: "grp-feedstock",
+            blueprint_key: "specific_volume_based_emissions",
+            display_name: "Feedstock mass",
+            inputs: [{ ...massInput, input_key: "feedstock_mass" }],
+          }],
+        },
+      ],
+    },
+    blueprintsForTemplate: [
+      {
+        ...storageBlueprint,
+        inputs: [massBlueprintInput, {
+          ...massBlueprintInput,
+          input_key: "carbon_content",
+          quantity_kind: "dimensionless" as const,
+          compatible_unit: "dimensionless",
+        }],
+      },
+      {
+        ...storageBlueprint,
+        key: "specific_volume_based_emissions",
+        inputs: [{ ...massBlueprintInput, input_key: "feedstock_mass" }],
+      },
+    ],
+  } satisfies certifyContext.RemovalSubmissionContext;
+}
 
 // ---------------------------------------------------------------------------
 // Issue #349 / ADR 0020 — §8.6.2 production-emissions front-loading. A credit
@@ -373,6 +447,124 @@ describe("submitRemoval — production-emissions claim gate (§8.6.2, issue #349
       }),
     );
     expect(ledger.markSubmissionSubmitted).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    {
+      label: "member production run biochar dry output mass",
+      drift: (ctx: ReturnType<typeof makePayloadDriftContext>) => {
+        const runs = ctx.runs.map((run) => ({
+          ...run,
+          biocharDryMassKg: CHANGED_RUN_OUTPUT_MASS_KG,
+        }));
+        return {
+          ...ctx,
+          runs,
+          batchesWithSamples: makeBatchesWithSamples(runs),
+          ...buildMassAccounting(ctx.lineages, runs),
+        };
+      },
+    },
+    {
+      label: "member production run feedstock mass",
+      drift: (ctx: ReturnType<typeof makePayloadDriftContext>) => ({
+        ...ctx,
+        runs: ctx.runs.map((run) => ({
+          ...run,
+          feedstockMassDryKg: CHANGED_FEEDSTOCK_MASS_KG,
+        })),
+      }),
+    },
+    {
+      label: "credit-batch Sample organic carbon chemistry",
+      drift: (ctx: ReturnType<typeof makePayloadDriftContext>) => ({
+        ...ctx,
+        batchesWithSamples: ctx.batchesWithSamples.map((batch) => ({
+          ...batch,
+          samples: batch.samples.map((sample) => ({
+            ...sample,
+            organicCarbonPercent: CHANGED_ORGANIC_CARBON_PERCENT,
+          })),
+        })),
+      }),
+    },
+    {
+      label: "reporting-window production start",
+      drift: (ctx: ReturnType<typeof makePayloadDriftContext>) => ({
+        ...ctx,
+        runs: ctx.runs.map((run) => ({
+          ...run,
+          startTime: new Date(CHANGED_PRODUCTION_START),
+        })),
+      }),
+    },
+    {
+      label: "reporting-window latest application date",
+      drift: (ctx: ReturnType<typeof makePayloadDriftContext>) => ({
+        ...ctx,
+        lineages: ctx.lineages.map((lineage) => ({
+          ...lineage,
+          application: {
+            ...lineage.application,
+            applicationDate: new Date(CHANGED_APPLICATION_DATE),
+          },
+        })),
+      }),
+    },
+  ])("retires the draft before any POST when $label drifts after context load", async ({ drift }) => {
+    const original = makePayloadDriftContext();
+    const fresh = drift(original);
+    // All lineage IDs, claim state and frozen application masses stay stable.
+    // Only the claimed-draft semantic rebuild can detect these edits.
+    expect(fresh.memberBatchClaims).toEqual(original.memberBatchClaims);
+    expect(fresh.runs.map((run) => run.id)).toEqual([PRODUCTION_RUN_ID]);
+    expect(fresh.batchesWithSamples.flatMap((batch) =>
+      batch.samples.map((sample) => sample.id),
+    )).toEqual(original.batchesWithSamples.flatMap((batch) =>
+      batch.samples.map((sample) => sample.id),
+    ));
+    vi.mocked(certifyContext.loadRemovalSubmissionContext)
+      .mockResolvedValueOnce(original)
+      .mockImplementation(async () => {
+        // The second context read occurs after snapshot insertion, before POST.
+        expect(storedRows).toHaveLength(1);
+        expect(storedRows[0].status).toBe("draft");
+        return fresh;
+      });
+    const createDatapointFake = vi.fn(fakeExternalIds("dp"));
+    const createGhgEntryFake = vi.fn(fakeExternalIds("rmv"));
+    vi.mocked(isometric.createDatapoint).mockImplementation(createDatapointFake as never);
+    vi.mocked(isometric.createGhgEntry).mockImplementation(createGhgEntryFake as never);
+
+    const attempt = submitRemoval({
+      orgCtx: makeTestOrgContext(USER_ID),
+      removalId: REMOVAL_ID,
+    });
+    await expect(attempt).rejects.toThrow(SafeError);
+    await expect(attempt).rejects.toThrow(SOURCE_DRIFT_MESSAGE);
+
+    expect(certifyContext.loadRemovalSubmissionContext).toHaveBeenCalledTimes(2);
+    expect(storedRows).toHaveLength(1);
+    expect(storedRows[0]).toMatchObject({ status: "superseded", lockedAt: null });
+    expect(storedRows[0].payloadSnapshot).toMatchObject({
+      semantic: {
+        startedOn: "2026-01-01T00:00:00.000Z",
+        completedOn: "2026-04-05T00:00:00.000Z",
+        inputs: expect.arrayContaining([
+          expect.objectContaining({ inputKey: "feedstock_mass", value: original.runs[0].feedstockMassDryKg }),
+          expect.objectContaining({ inputKey: "carbon_content", value: ORIGINAL_ORGANIC_CARBON_FRACTION }),
+        ]),
+      },
+    });
+    expect(ledger.retireStaleSubmissionDraft).toHaveBeenCalledWith(
+      makeTestOrgContext(USER_ID),
+      storedRows[0].id,
+      expect.objectContaining({ reason: expect.stringContaining("semantic payload drift") }),
+    );
+    expect(createDatapointFake).not.toHaveBeenCalled();
+    expect(createGhgEntryFake).not.toHaveBeenCalled();
+    expect(ledger.markSubmissionSubmitted).not.toHaveBeenCalled();
+    expect(isometricClientFake.post).not.toHaveBeenCalled();
   });
 });
 
