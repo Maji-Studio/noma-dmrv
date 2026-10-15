@@ -436,6 +436,45 @@ class HarnessTests(unittest.TestCase):
                 with self.assertRaises(AssertionError):
                     positive_data_acceptance(ctx, SimpleNamespace(status_code=400), case)
 
+    def test_decimal_artifact_ignores_non_json_bodies(self):
+        missing_body = schema["/orders"]["POST"].Case().body
+        bodies = (b"raw body", missing_body, {"nested": [b"raw body"]}, {"nested": (1,)}, {1: "value"})
+        for body in bodies:
+            with self.subTest(body=body):
+                case = self.order_quantity_case(FLOAT_MULTIPLE_OF_ARTIFACT, GenerationMode.NEGATIVE)
+                case = case.operation.Case(body=body, media_type="application/json", _meta=case._meta)
+                helper = hook("before_call").__globals__["body_has_decimal_multiple_of_artifact"]
+                self.assertFalse(helper(case))
+                hook("before_call")(HookContext(operation=case.operation), case)
+                self.assertIs(case.body, body)
+                self.assertTrue(case.meta.components[ParameterLocation.BODY].mode.is_negative)
+                self.assertTrue(case.meta.generation.mode.is_negative)
+
+    def test_decimal_artifact_ignores_non_json_media_type(self):
+        case = self.order_quantity_case(FLOAT_MULTIPLE_OF_ARTIFACT, GenerationMode.NEGATIVE)
+        case.media_type = "text/plain"
+        body = dict(case.body)
+        helper = hook("before_call").__globals__["body_has_decimal_multiple_of_artifact"]
+        with patch.object(case.operation.body[0], "media_type", case.media_type):
+            self.assertFalse(helper(case))
+            hook("before_call")(HookContext(operation=case.operation), case)
+        self.assertEqual(case.body, body)
+        self.assertTrue(case.meta.components[ParameterLocation.BODY].mode.is_negative)
+        self.assertTrue(case.meta.generation.mode.is_negative)
+
+    def test_decimal_artifact_ignores_validator_exceptions(self):
+        case = self.order_quantity_case(FLOAT_MULTIPLE_OF_ARTIFACT, GenerationMode.NEGATIVE)
+        helper = hook("before_call").__globals__["body_has_decimal_multiple_of_artifact"]
+        for error in (ValueError("unsupported value"), RuntimeError("validator failed")):
+            with self.subTest(error=error):
+                validator = Mock()
+                validator.is_valid.side_effect = error
+                with patch.object(schema.adapter, "jsonschema_validator_cls", return_value=validator):
+                    self.assertFalse(helper(case))
+                    hook("before_call")(HookContext(operation=case.operation), case)
+                self.assertTrue(case.meta.components[ParameterLocation.BODY].mode.is_negative)
+                self.assertTrue(case.meta.generation.mode.is_negative)
+
     def test_decimal_artifact_does_not_hide_other_schema_violations(self):
         mutations = (
             lambda case: case.body.update(quantityKg=0.0005),

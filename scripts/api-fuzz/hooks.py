@@ -8,6 +8,7 @@ from uuid import uuid4
 
 import schemathesis
 from schemathesis.core.jsonschema import FANCY_REGEX_OPTIONS
+from schemathesis.core.media_types import is_json
 from schemathesis.core.parameters import ParameterLocation
 from schemathesis.generation import GenerationMode
 from schemathesis.generation.meta import CaseMetadata, ComponentInfo, ExamplesPhaseData, GenerationInfo, PhaseInfo, TestPhase
@@ -284,14 +285,28 @@ def body_has_decimal_multiple_of_artifact(case):
                 raise ValueError("Not an exact decimal multiple")
             artifact |= isinstance(value, float) and self.divisor != self.divisor.to_integral_value()
 
-    for alternative in case.operation.body:
-        if alternative.media_type == case.media_type:
-            validator = case.operation.schema.adapter.jsonschema_validator_cls(
-                alternative.validation_schema, validate_formats=True, offline=True,
-                pattern_options=FANCY_REGEX_OPTIONS, keywords={"multipleOf": DecimalMultipleOf},
-            )
-            return validator.is_valid(case.body) and artifact
+    try:
+        if not case.media_type or not is_json(case.media_type) or not is_json_value(case.body):
+            return False
+        for alternative in case.operation.body:
+            if alternative.media_type == case.media_type:
+                validator = case.operation.schema.adapter.jsonschema_validator_cls(
+                    alternative.validation_schema, validate_formats=True, offline=True,
+                    pattern_options=FANCY_REGEX_OPTIONS, keywords={"multipleOf": DecimalMultipleOf},
+                )
+                return validator.is_valid(case.body) and artifact
+    except Exception:
+        # This optional correction must leave unrecognized negative cases intact.
+        return False
     return False
+
+
+def is_json_value(value):
+    if type(value) is dict:
+        return all(type(key) is str and is_json_value(item) for key, item in value.items())
+    if type(value) is list:
+        return all(is_json_value(item) for item in value)
+    return value is None or type(value) in (str, int, float, bool)
 
 
 def requires_idempotency_key(operation):
