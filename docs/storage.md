@@ -365,10 +365,13 @@ Coverage includes server uploads, real HTTP presigned PUT and GET, metadata,
 The deadline case forwards a real MinIO response through a loopback proxy that
 stalls its body, then checks that the named `getObject` deadline aborts the
 connection. It takes the full storage read timeout to run.
-The adapter does not enforce an upload size limit: presigned PUT ignores
-`maxBytes`, and `putObject` has no size cap. There is therefore no adapter-level
-oversized-upload rejection test. Document confirmation enforces the application
-upload policy described above.
+Presigned PUT does not cap upload size (`maxBytes` is not enforced by the PUT),
+and `putObject` has no size cap. The adapter enforces `maxBytes` when
+`readObjectBounded` reads the object back, rejecting oversized objects with
+`StorageError` code `object_too_large`. The suite covers this rejection, an
+exact-limit read (bytes, size, SHA-256 and content type), and a missing-key read
+returning `null`. Document confirmation uses this bounded read to enforce the
+application upload policy described above.
 
 `pnpm storage:smoke` (`scripts/storage-smoke.ts`) does a real round-trip against
 the configured bucket — presigned PUT → HEAD → signed GET byte-for-byte → DELETE →

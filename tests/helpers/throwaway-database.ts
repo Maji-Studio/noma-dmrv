@@ -14,8 +14,8 @@ const THROWAWAY_NAME = /(^|_)(test|e2e)(_|$)/;
 /** pg lets these query parameters override the URL's host and database. */
 const TARGET_OVERRIDE_PARAMS = ["host", "hostaddr", "database", "dbname"];
 
-/** Shared with tests/e2e/global-teardown.ts so both guards agree on "local". */
-export function isLocalDatabaseHost(hostname: string): boolean {
+/** Shared by the database guards and disposable MinIO tests. */
+export function isLocalHost(hostname: string): boolean {
   return LOCAL_HOSTS.has(hostname);
 }
 
@@ -43,7 +43,7 @@ export function assertThrowawayTestDatabase(databaseUrl: string): void {
     // Fall through: an unparseable URL is not a throwaway database.
   }
 
-  if (isLocalDatabaseHost(host) && THROWAWAY_NAME.test(dbName) && !overridesTarget) return;
+  if (isLocalHost(host) && THROWAWAY_NAME.test(dbName) && !overridesTarget) return;
 
   throw new Error(
     `Vitest refuses database "${dbName || "(unparseable URL)"}" on host "${host || "?"}"` +

@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { once } from "node:events";
 import { createServer, request } from "node:http";
 import {
@@ -11,6 +11,7 @@ import {
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { STORAGE_GET_OBJECT_TIMEOUT_MS } from "@/lib/storage/get-object";
 import { S3CompatibleProvider, type S3CompatibleConfig } from "@/lib/storage/s3-compatible";
+import { isLocalHost } from "./helpers/throwaway-database";
 
 const MINIO_ENV_NAMES = [
   "MINIO_TEST_ENDPOINT",
@@ -19,11 +20,11 @@ const MINIO_ENV_NAMES = [
   "MINIO_TEST_SECRET_ACCESS_KEY",
 ] as const;
 const HAS_MINIO_ENV = MINIO_ENV_NAMES.some((name) => Boolean(process.env[name]));
-const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
 const HOOK_TIMEOUT_MS = 10_000;
 const TEST_TIMEOUT_MS = STORAGE_GET_OBJECT_TIMEOUT_MS + HOOK_TIMEOUT_MS;
 const HTTP_TIMEOUT_MS = 5_000;
 const HTTP_OK = 200;
+const HTTP_BAD_REQUEST = 400;
 const HTTP_FORBIDDEN = 403;
 const HTTP_NOT_FOUND = 404;
 const FIRST_BYTE_LENGTH = 1;
@@ -39,11 +40,27 @@ if (!HAS_MINIO_ENV) {
 // Forward a real signed MinIO GET, but withhold the body after its first byte.
 // Keep the signed Host header intact when forwarding through the loopback proxy.
 async function startStalledProxy(endpoint: string) {
+  const minio = new URL(endpoint);
   let upstreamStatus: number | undefined;
   let sentFirstByte = false;
   let clientClosed = false;
   const server = createServer((incoming, outgoing) => {
-    const upstream = request(new URL(incoming.url!, endpoint), {
+    const target = incoming.url;
+    if (!target || !/^\/(?![/\\])[^\\#]*$/.test(target)) {
+      outgoing.writeHead(HTTP_BAD_REQUEST).end();
+      return;
+    }
+    const upstreamUrl = new URL(minio.origin);
+    const queryIndex = target.indexOf("?");
+    upstreamUrl.pathname = queryIndex === -1 ? target : target.slice(0, queryIndex);
+    upstreamUrl.search = queryIndex === -1 ? "" : target.slice(queryIndex);
+    expect(upstreamUrl.origin).toBe(minio.origin);
+    // Only path/search come from the request; connection coordinates stay fixed.
+    const upstream = request({
+      protocol: minio.protocol,
+      hostname: minio.hostname.replace(/^\[|\]$/g, ""),
+      port: minio.port,
+      path: upstreamUrl.pathname + upstreamUrl.search,
       headers: incoming.headers,
       timeout: HTTP_TIMEOUT_MS,
     }, (response) => {
@@ -82,6 +99,30 @@ async function startStalledProxy(endpoint: string) {
   };
 }
 
+describe("MinIO stalling proxy request targets", () => {
+  it.each(["http://example.invalid/object", "//example.invalid/object", "/\\example.invalid/object", "/object#fragment", "*"])(
+    "rejects non-origin-form target %s before forwarding",
+    async (target) => {
+      const proxy = await startStalledProxy("http://127.0.0.1");
+      try {
+        const response = await new Promise<number | undefined>((resolve, reject) => {
+          const rejected = request(proxy.endpoint, { path: target, timeout: HTTP_TIMEOUT_MS }, (incoming) => {
+            incoming.resume();
+            resolve(incoming.statusCode);
+          });
+          rejected.on("error", reject);
+          rejected.on("timeout", () => rejected.destroy(new Error("Proxy request timed out")));
+          rejected.end();
+        });
+        expect(response).toBe(HTTP_BAD_REQUEST);
+        expect(proxy.state().upstreamStatus).toBeUndefined();
+      } finally {
+        await proxy.close();
+      }
+    },
+  );
+});
+
 describe.skipIf(!HAS_MINIO_ENV)("S3-compatible storage against MinIO", {
   timeout: TEST_TIMEOUT_MS,
 }, () => {
@@ -95,7 +136,7 @@ describe.skipIf(!HAS_MINIO_ENV)("S3-compatible storage against MinIO", {
     }
     const endpoint = new URL(process.env.MINIO_TEST_ENDPOINT!);
     if (
-      endpoint.protocol !== "http:" || !LOOPBACK_HOSTS.has(endpoint.hostname) ||
+      endpoint.protocol !== "http:" || !isLocalHost(endpoint.hostname) ||
       endpoint.username || endpoint.password || endpoint.pathname !== "/" ||
       endpoint.search || endpoint.hash
     ) {
@@ -178,6 +219,34 @@ describe.skipIf(!HAS_MINIO_ENV)("S3-compatible storage against MinIO", {
     await response.arrayBuffer();
     expect(response.status).toBe(HTTP_OK);
     expect(await provider.getObject({ key })).toEqual({ bytes: PAYLOAD, contentType: CONTENT_TYPE });
+  });
+
+  it("bounds presigned uploads on read and returns exact inspection facts or null", async () => {
+    const key = "org/minio/uploads/document/bounded-object";
+    const maxBytes = PAYLOAD.length - FIRST_BYTE_LENGTH;
+    const upload = await provider.createUploadUrl({ key, contentType: CONTENT_TYPE, maxBytes });
+    const response = await fetch(upload.url, {
+      method: upload.method,
+      headers: upload.headers,
+      body: new Uint8Array(PAYLOAD),
+      signal: AbortSignal.timeout(HTTP_TIMEOUT_MS),
+    });
+    await response.arrayBuffer();
+    expect(response.status).toBe(HTTP_OK);
+    await expect(provider.readObjectBounded({ key, maxBytes })).rejects.toMatchObject({
+      name: "StorageError",
+      code: "object_too_large",
+    });
+    expect(await provider.readObjectBounded({ key, maxBytes: PAYLOAD.length })).toEqual({
+      bytes: PAYLOAD,
+      sizeBytes: PAYLOAD.length,
+      sha256: createHash("sha256").update(PAYLOAD).digest("hex"),
+      contentType: CONTENT_TYPE,
+    });
+    expect(await provider.readObjectBounded({
+      key: "org/minio/uploads/document/missing-bounded-object",
+      maxBytes: PAYLOAD.length,
+    })).toBeNull();
   });
 
   it("deletes an object and subsequent reads report it missing", async () => {
