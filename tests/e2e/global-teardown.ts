@@ -70,7 +70,7 @@ export default async function globalTeardown() {
       await client.query(`CREATE TEMP TABLE e2e_scope_applications ON COMMIT DROP AS SELECT id FROM applications WHERE code LIKE 'E2E-%' OR delivery_id IN (SELECT id FROM e2e_scope_deliveries) OR id IN (SELECT application_id FROM application_output_allocations WHERE biochar_product_id IN (SELECT id FROM e2e_scope_products) OR production_run_id IN (SELECT id FROM e2e_scope_runs))`);
       await client.query(`CREATE TEMP TABLE e2e_scope_output_allocations ON COMMIT DROP AS SELECT id FROM output_stock_allocations WHERE source_storage_location_id IN (SELECT id FROM e2e_scope_bins) OR biochar_product_id IN (SELECT id FROM e2e_scope_products) OR target_biochar_product_id IN (SELECT id FROM e2e_scope_products) OR delivery_id IN (SELECT id FROM e2e_scope_deliveries) OR production_run_id IN (SELECT id FROM e2e_scope_runs)`);
       await client.query(`CREATE TEMP TABLE e2e_scope_credit_batches ON COMMIT DROP AS SELECT id FROM credit_batches WHERE code LIKE 'E2E-%' OR facility_id IN (SELECT id FROM e2e_scope_facilities)`);
-      await client.query(`CREATE TEMP TABLE e2e_scope_feedstocks ON COMMIT DROP AS SELECT id FROM feedstocks WHERE code LIKE 'E2E-%' OR facility_id IN (SELECT id FROM e2e_scope_facilities) OR feedstock_delivery_id IN (SELECT id FROM feedstock_deliveries WHERE code LIKE 'E2E-%' OR facility_id IN (SELECT id FROM e2e_scope_facilities))`);
+      await client.query(`CREATE TEMP TABLE e2e_scope_feedstocks ON COMMIT DROP AS SELECT id FROM feedstocks WHERE code LIKE 'E2E-%' OR facility_id IN (SELECT id FROM e2e_scope_facilities)`);
       await client.query(`CREATE TEMP TABLE e2e_scope_samples ON COMMIT DROP AS SELECT id FROM samples WHERE sample_code LIKE 'E2E-%' OR production_run_id IN (SELECT id FROM e2e_scope_runs) OR credit_batch_id IN (SELECT id FROM e2e_scope_credit_batches)`);
       await client.query(`
         CREATE TEMP TABLE e2e_scope_transport_legs ON COMMIT DROP AS
@@ -95,7 +95,6 @@ export default async function globalTeardown() {
            OR (entity_type = 'reactor' AND entity_id IN (SELECT id FROM reactors WHERE code LIKE 'E2E-%' OR identifier LIKE 'UI %' OR identifier LIKE 'Chain %' OR facility_id IN (SELECT id FROM e2e_scope_facilities)))
            OR (entity_type = 'production_incident' AND entity_id IN (SELECT id FROM incident_reports WHERE production_run_id IN (SELECT id FROM e2e_scope_runs)))
            OR (entity_type = 'production_sample' AND entity_id IN (SELECT id FROM production_samples WHERE production_run_id IN (SELECT id FROM e2e_scope_runs)))
-           OR (entity_type = 'feedstock_delivery' AND entity_id IN (SELECT id FROM feedstock_deliveries WHERE code LIKE 'E2E-%' OR facility_id IN (SELECT id FROM e2e_scope_facilities)))
       `);
       // Sweep actorless and UI-created fixture history too.
       await client.query(`
