@@ -537,7 +537,6 @@ export function buildCo2eStoredPreview(
               : [],
           })
         : computeApplicationCo2eStored({
-            durabilityOption: batch.durabilityOption,
             dryMassTonnes: application?.biocharAppliedDryTons ?? null,
             soilTemperatureC: application?.soilTemperatureC ?? null,
             hToCorgRatio: chemistry.weightedHToCorgRatio,

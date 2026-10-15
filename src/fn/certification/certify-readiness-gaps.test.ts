@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { ProductionRunWithSamples } from "@/lib/isometric/utils/aggregation";
+import type { ProductionRunForCertification } from "@/lib/isometric/utils/aggregation";
 import type { CreditBatchWithSamples } from "@/data-access/credit-batch-samples";
 import type { TransportLeg } from "@/db/schema";
 import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readiness";
@@ -37,7 +37,7 @@ function productionRun(
   id: string,
   code: string,
   electricityKwh: number | null,
-): ProductionRunWithSamples {
+): ProductionRunForCertification {
   return {
     id,
     code,
@@ -52,7 +52,7 @@ function productionRun(
     preprocessingFuelLiters: 3,
     electricityKwh,
     samples: [],
-  } as unknown as ProductionRunWithSamples;
+  } as unknown as ProductionRunForCertification;
 }
 
 describe("buildEntityReadinessResult", () => {

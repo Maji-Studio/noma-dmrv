@@ -135,9 +135,9 @@ describe("lab sample writers race", { timeout: SUITE_TIMEOUT_MS }, () => {
     const [first, second] = await queueOnBatch(f, createFirst ? [create, removeBatch] : [removeBatch, create]);
     expect(first.ok).toBe(true);
     if (createFirst) {
-      // Batch deletion unlinks the sample it found, as it always has.
-      expect(second.ok).toBe(true);
-      expect(await sampleRows(f)).toMatchObject([{ creditBatchId: null }]);
+      // A saved Sample keeps its batch; deletion must refuse.
+      expect(second.ok).toBe(false);
+      expect(await sampleRows(f)).toMatchObject([{ creditBatchId: f.batchA.id }]);
     } else {
       expect(second).toMatchObject({ ok: false, error: { code: "not_found", message: BATCH_NOT_FOUND } });
       expect(await sampleRows(f)).toEqual([]);

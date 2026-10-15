@@ -18,7 +18,7 @@
 
 import { and, eq, inArray } from "drizzle-orm";
 import type { DbTransaction } from "@/db";
-import { creditBatches, creditBatchProductionRuns, facilities, samples } from "@/db/schema";
+import { creditBatches, facilities, samples } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import { formatFacilityDate } from "@/lib/date-utils";
 import { withFeedstockErrors } from "@/lib/feedstock-domain-errors";
@@ -71,11 +71,11 @@ function asCertificationLocked<T>(work: () => Promise<T>): Promise<T> {
   return withFeedstockErrors(work, "certification_locked");
 }
 
-/** Steps 1 to 4 above. `creditBatchIds` may hold nulls (legacy batchless rows) and repeats. */
+/** Steps 1 to 4 above. `creditBatchIds` may hold omitted update targets and repeats. */
 export async function lockSampleWriteScope(
   ctx: OrgContext,
   tx: DbTransaction,
-  args: { lineage: CertifiedLineageCheck[]; creditBatchIds: (string | null | undefined)[]; sampleId?: string },
+  args: { lineage: CertifiedLineageCheck[]; creditBatchIds: (string | undefined)[]; sampleId?: string },
 ): Promise<SampleWriteScope> {
   requireOrgScope(ctx);
   const lockedKeys = await asCertificationLocked(() => lockCertifiedLineageArtifacts(ctx, tx, args.lineage.map((check) => check.target)));
@@ -162,49 +162,31 @@ export function assertBatchTierEvidence(facility: SampleBatchFacility, values: S
   if (values.reactiveCarbonPercent == null && values.residualCarbonPercent == null) throw sampleTierEvidenceError("residualCarbonPercent");
 }
 
-/** How an existing Sample reaches credit batches: directly, and through its legacy run's batch. */
+/** The credit batch an existing Sample characterises. */
 export interface SampleLinks {
-  creditBatchId: string | null;
-  productionRunId: string | null;
-  /** Every batch the Sample's certification lineage can follow, direct and legacy fallback. */
+  creditBatchId: string;
   lineageBatchIds: string[];
 }
 
-async function lineageBatchIds(ctx: OrgContext, tx: DbTransaction, link: { creditBatchId: string | null; productionRunId: string | null }): Promise<string[]> {
-  requireOrgScope(ctx);
-  const ids = link.creditBatchId ? [link.creditBatchId] : [];
-  if (link.productionRunId) {
-    const runBatches = await tx.select({ creditBatchId: creditBatchProductionRuns.creditBatchId }).from(creditBatchProductionRuns)
-      .where(and(eq(creditBatchProductionRuns.productionRunId, link.productionRunId), eq(creditBatchProductionRuns.organizationId, ctx.organizationId)));
-    ids.push(...runBatches.map((row) => row.creditBatchId));
-  }
-  return [...new Set(ids)];
-}
-
-/**
- * Unlocked read of the batches to lock for an existing Sample. The lineage
- * guard follows the legacy run link as a fallback (`certification-lineage-guards.ts`),
- * so the run's batch is locked too, not only the direct one.
- */
+/** Unlocked read of the Sample's batch, to lock before locking the Sample. */
 export async function readSampleLinks(ctx: OrgContext, tx: DbTransaction, sampleId: string): Promise<SampleLinks | undefined> {
   requireOrgScope(ctx);
-  const [link] = await tx.select({ creditBatchId: samples.creditBatchId, productionRunId: samples.productionRunId }).from(samples)
+  const [link] = await tx.select({ creditBatchId: samples.creditBatchId }).from(samples)
     .where(and(eq(samples.id, sampleId), eq(samples.organizationId, ctx.organizationId)));
-  return link && { ...link, lineageBatchIds: await lineageBatchIds(ctx, tx, link) };
+  return link && { ...link, lineageBatchIds: [link.creditBatchId] };
 }
 
 /**
  * After the locks: the locked Sample still has the links that were read, and
- * every batch they reach is held. A changed link is a stale version; a run
- * that joined another batch meanwhile is a lineage change, refused rather than
- * locked late.
+ * its batch is held. A changed batch link is a stale version; a missing
+ * batch lock is a lineage change, refused rather than locked late.
  */
 export async function assertSampleLinksHeld(ctx: OrgContext, tx: DbTransaction, scope: SampleWriteScope, sampleId: string, read: SampleLinks): Promise<void> {
   requireOrgScope(ctx);
   const locked = scope.sample;
   if (!locked) return;
-  if (locked.creditBatchId !== read.creditBatchId || locked.productionRunId !== read.productionRunId) throw staleRowVersion("sample", sampleId);
-  const reached = await lineageBatchIds(ctx, tx, locked);
+  if (locked.creditBatchId !== read.creditBatchId) throw staleRowVersion("sample", sampleId);
+  const reached = [locked.creditBatchId];
   if (reached.some((id) => !scope.lockedBatchIds.has(id))) {
     await asCertificationLocked(async () => { throw new CertificationLineageChangedError(); });
   }

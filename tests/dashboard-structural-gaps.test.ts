@@ -343,6 +343,7 @@ beforeAll(async () => {
         },
         {
           organizationId: TEST_ORG_ID,
+          creditBatchId: activeBatch.id,
           productionRunId: activeRun.id,
           sampleCode: `S-DG-RUN-${tag}`,
           samplingTime: new Date("2026-07-06T10:00:00Z"),
@@ -366,6 +367,7 @@ beforeAll(async () => {
         },
         {
           organizationId: TEST_ORG_ID,
+          creditBatchId: excludedBatch.id,
           productionRunId: cancelledRun.id,
           sampleCode: `S-DG-CANCELLED-RUN-${tag}`,
           samplingTime: new Date("2026-07-09T10:00:00Z"),
@@ -373,6 +375,7 @@ beforeAll(async () => {
         },
         {
           organizationId: TEST_ORG_ID,
+          creditBatchId: archivedBatch.id,
           productionRunId: archivedRun.id,
           sampleCode: `S-DG-ARCHIVED-RUN-${tag}`,
           samplingTime: new Date("2026-07-10T10:00:00Z"),

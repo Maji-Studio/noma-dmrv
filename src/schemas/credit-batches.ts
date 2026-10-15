@@ -51,9 +51,7 @@ export const DURABILITY_TIER_FALLBACK: DurabilityOption = "1000_year";
  * Form sections:
  * 1. Overview — code, facilityId, startDate, endDate, status
  * 2. Production cohort — productionRunIds (membership via credit_batch_production_runs)
- * 3. Durability — durabilityOption toggle (200-year vs 1000-year) with conditional fields
- * 4. GHG Accounting — buffer pool % (CO2e figures are derived/registry-owned)
- * 5. Verification — registry (applied weight is derived)
+ * 3. Site management — siteManagementNotes
  */
 export const creditBatchFormSchema = z
   .object({
@@ -74,69 +72,7 @@ export const creditBatchFormSchema = z
       .array(z.string().uuid())
       .default([]),
 
-    // === Section 3: Durability ===
-    // The tier is NOT a batch input — it is inherited from the facility
-    // (ADR 0021) and shown read-only on the form. The tier-specific evidence
-    // fields below gate on the facility tier.
-
-    // 200-year durability fields
-    hToCorgRatio: z
-      .number()
-      .min(0, "H:Corg ratio must be positive")
-      .max(1, "H:Corg ratio must be at most 1")
-      .optional()
-      .nullable(),
-
-    // 1000-year durability fields
-    meanRandomReflectancePercent: z
-      .number()
-      .min(0, "Reflectance must be positive")
-      .max(100, "Reflectance must be at most 100%")
-      .optional()
-      .nullable(),
-    stdRandomReflectance: z
-      .number()
-      .min(0, "Standard deviation must be positive")
-      .optional()
-      .nullable(),
-    meanNonReactiveCarbonPercent: z
-      .number()
-      .min(0, "Non-reactive carbon must be positive")
-      .max(100, "Non-reactive carbon must be at most 100%")
-      .optional()
-      .nullable(),
-    stdNonReactiveCarbonPercent: z
-      .number()
-      .min(0, "Standard deviation must be positive")
-      .optional()
-      .nullable(),
-
-    // Calculated durability fraction (output)
-    fDurableCalculated: z
-      .number()
-      .min(0)
-      .max(0.95)
-      .optional()
-      .nullable(),
-
-    // === Section 4: GHG Accounting ===
-    // CO2e stored/emissions/counterfactual are derived or registry-owned
-    // (issue #285, ADR 0018) — no longer form inputs.
-    bufferPoolPercent: z
-      .number()
-      .min(2, "Buffer pool must be at least 2%")
-      .max(20, "Buffer pool must be at most 20%")
-      .optional()
-      .nullable(),
-
-    // === Section 5: Verification ===
-    registry: z
-      .string()
-      .max(100, "Registry must be less than 100 characters")
-      .optional()
-      .or(z.literal("")),
-
-    // === Site Management ===
+    // === Section 3: Site management ===
     siteManagementNotes: z
       .string()
       .max(2000, "Notes must be less than 2000 characters")
@@ -188,15 +124,6 @@ export const updateCreditBatchSchema = z.object({
   productionRunIds: z
     .array(z.string().uuid())
     .optional(),
-  // durabilityOption is inherited from the facility (ADR 0021), not a batch field.
-  hToCorgRatio: z.number().min(0).max(1).optional().nullable(),
-  meanRandomReflectancePercent: z.number().min(0).max(100).optional().nullable(),
-  stdRandomReflectance: z.number().min(0).optional().nullable(),
-  meanNonReactiveCarbonPercent: z.number().min(0).max(100).optional().nullable(),
-  stdNonReactiveCarbonPercent: z.number().min(0).optional().nullable(),
-  fDurableCalculated: z.number().min(0).max(0.95).optional().nullable(),
-  bufferPoolPercent: z.number().min(2).max(20).optional().nullable(),
-  registry: z.string().max(100).optional().nullable(),
   siteManagementNotes: z.string().max(2000).optional().nullable(),
   sampling: z.never({ error: "Sampling cannot be changed after creation" }).optional(),
 });

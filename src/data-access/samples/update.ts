@@ -2,7 +2,7 @@ import { and, eq } from "drizzle-orm";
 import type { DbTransaction } from "@/db";
 import { samples } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
-import { SampleFieldError, sampleNotFound } from "@/lib/sample-domain-errors";
+import { sampleNotFound } from "@/lib/sample-domain-errors";
 import type { CertifiedLineageCheck } from "../certification-lineage-guards";
 import { assertRowVersion, nextVersion } from "../row-version";
 import { requireOrgScope } from "../utils";
@@ -15,7 +15,6 @@ import {
   requireWritableBatch, resolveSamplingTimeForBatch,
 } from "./write-scope";
 
-const LEGACY_LOCAL_TIME_MESSAGE = "This Sample has no credit batch, so it has no facility clock. Enter the sampling time with a time zone offset.";
 
 /**
  * Update a lab Sample inside the caller's transaction. Every check runs on
@@ -51,30 +50,22 @@ export async function updateSampleInTransaction(
   // so this only fires for a caller that already held the newer version.
   await assertSampleLinksHeld(ctx, tx, scope, sampleId, links);
   // Moving off an archived batch is a write on it too (round 7 Q56).
-  if (moving && locked.creditBatchId) requireWritableBatch(scope, locked.creditBatchId);
+  if (moving) requireWritableBatch(scope, locked.creditBatchId);
 
   const effective = mergeOverLocked(locked, request);
   assertCarbonReconciliation(effective, {});
   const ratios = derivedRatioColumns(effective);
 
-  // Legacy batchless rows keep their batch-free behaviour until moved onto a batch.
   const creditBatchId = request.creditBatchId ?? locked.creditBatchId;
+  const batch = requireWritableBatch(scope, creditBatchId);
+  const facility = await readSampleBatchFacility(ctx, tx, batch);
+  // Only a new time or move re-checks the window; readiness flags stored samples.
   let samplingTime: Date | undefined;
-  let warnings: string[] = [];
-  if (creditBatchId) {
-    const batch = requireWritableBatch(scope, creditBatchId);
-    const facility = await readSampleBatchFacility(ctx, tx, batch);
-    // Only a new time or a move re-checks the window: a batch edit that moved
-    // the window past a stored sample stays allowed and is flagged by readiness (Q55).
-    if (request.samplingTime !== undefined || moving) {
-      samplingTime = resolveSamplingTimeForBatch(request.samplingTime ?? locked.samplingTime, batch, facility);
-    }
-    assertBatchTierEvidence(facility, effective);
-    warnings = entryWarnings(effective, ratios.columns, batch, facility);
-  } else if (request.samplingTime !== undefined) {
-    // No batch, so no facility clock: only an instant can be placed.
-    samplingTime = resolveLegacySamplingTime(request.samplingTime);
+  if (request.samplingTime !== undefined || moving) {
+    samplingTime = resolveSamplingTimeForBatch(request.samplingTime ?? locked.samplingTime, batch, facility);
   }
+  assertBatchTierEvidence(facility, effective);
+  const warnings = entryWarnings(effective, ratios.columns, batch, facility);
   if (request.samplingTime !== undefined && samplingTime) assertSamplingTimeNotFuture(samplingTime, options.now ?? new Date());
 
   await tx.update(samples).set({
@@ -95,11 +86,4 @@ export async function updateSampleInTransaction(
     notices: ratios.notices,
     warnings,
   };
-}
-
-function resolveLegacySamplingTime(value: NonNullable<UpdateSampleRequest["samplingTime"]>): Date {
-  if (value instanceof Date) return value;
-  if (typeof value === "string") return new Date(value);
-  // A facility-local time needs a batch facility's zone; a batchless legacy row has none.
-  throw new SampleFieldError(LEGACY_LOCAL_TIME_MESSAGE, "samplingTime");
 }

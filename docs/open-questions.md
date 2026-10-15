@@ -83,8 +83,7 @@ definitions from git history (schema files just before `0037`).
 - **`reversal_risk_assessments`** — Appendix I reversal risk → buffer-pool %.
   Also dropped `credit_batches.reversal_risk_assessment_id` and the
   `land_tenure_type` / `soil_erosion_risk` / `climate_volatility_risk` /
-  `natural_disaster_risk` / `operator_track_record` enums. Today
-  `credit_batches.buffer_pool_percent` is entered directly.
+  `natural_disaster_risk` / `operator_track_record` enums. The registry owns the risk score and buffer contribution.
 - **`ghg_materiality_assessments`** — SSR-emissions-vs-net-removals materiality
   (<1%) per credit batch.
 - **`feedstock_sc_assessments`** — per-feedstock sustainability-criteria
@@ -109,9 +108,7 @@ Pure starter residue; org scoping came later via ADR 0010.
 
 ### Lab-characterization chemistry kept `real` in the numeric conversion (`schema/samples-chemistry-precision`, opened 2026-07-03)
 
-- **Decision (PR #342, issue #280):** the real→numeric conversion moved
-  `h_to_c_org_ratio` and the heavy-metal/contaminant panel to exact `numeric`,
-  but `total_carbon_percent` / `inorganic_carbon_percent` /
+- **Decision (PR #342, issue #280):** `h_to_c_org_ratio` uses exact `numeric`, while `total_carbon_percent` / `inorganic_carbon_percent` /
   `organic_carbon_percent` / `random_reflectance_r0_percent` intentionally stay
   `real` (`src/db/schema/production.ts`) — even though `organic_carbon_percent`
   feeds CO₂e-stored math. Rationale: float4 relative error (~1e-7) is far below

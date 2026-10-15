@@ -1,5 +1,17 @@
 # Isometric Docs Change Log
 
+## 2026-10-15: Samples require a credit batch; unused characterization columns removed
+
+- Issue #1016 makes every lab Sample belong to one credit batch and removes
+  run-only attachment and membership-driven reattachment. Batches with Samples
+  must have those Samples moved or deleted before the batch can be deleted.
+- The unused histogram/thermogram URL columns and batch-level durability,
+  buffer percentage and registry columns are removed. Lab evidence uses the
+  document slots; live 1,000-year accounting continues to use sample replicates.
+- Decision #942 q6 keeps validation lab results outside noma. The unreachable
+  Sample heavy-metal, PAH, PCB and dioxin/furan columns are removed. No submitted
+  value or certification mapping changes.
+
 ## 2026-10-15: Proof of delivery required before submission (#942 q12)
 
 - Reverses the 2026-07-29 retained-records stance for proof of delivery:

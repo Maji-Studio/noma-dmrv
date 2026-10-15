@@ -34,11 +34,9 @@ export interface SampleOptionalFields {
   sReflectanceFraction?: number | null;
   r0MeasurementCount?: number | null;
   r0AnalysisDate?: Date | null;
-  r0HistogramFileUrl?: string | null;
   reactiveCarbonPercent?: number | null;
   residualCarbonPercent?: number | null;
   tgaAnalysisDate?: Date | null;
-  tgaThermogramFileUrl?: string | null;
   phosphorusPercent?: number | null;
   potassiumPercent?: number | null;
   magnesiumPercent?: number | null;
@@ -80,8 +78,8 @@ const PASS_THROUGH_FIELDS = [
   "labName", "labAccreditation", "weightGrams", "volumeMl", "inorganicCarbonPercent",
   "totalHydrogenPercent", "totalNitrogenPercent", "totalOxygenPercent", "totalSulfurPercent",
   "ashContentPercent", "moistureContentPercent", "bulkDensityKgPerM3", "ph", "saltContentGPerKg",
-  "randomReflectanceR0Percent", "sReflectanceFraction", "r0MeasurementCount", "r0HistogramFileUrl",
-  "reactiveCarbonPercent", "residualCarbonPercent", "tgaThermogramFileUrl",
+  "randomReflectanceR0Percent", "sReflectanceFraction", "r0MeasurementCount",
+  "reactiveCarbonPercent", "residualCarbonPercent",
   "phosphorusPercent", "potassiumPercent", "magnesiumPercent", "calciumPercent", "ironPercent",
 ] as const satisfies readonly (keyof SampleOptionalFields)[];
 

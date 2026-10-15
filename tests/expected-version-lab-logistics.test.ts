@@ -437,15 +437,15 @@ it("facility archive and restore bump orders, deliveries and credit batches", as
   await restoreFacility(f.ctx, f.facilityId, await masterDataVersion(f.ctx, "facilities", f.facilityId));
   for (const [i, entity] of entities.entries()) expect(await version(f, entity)).toBe(opened[i] + VERSION_INCREMENT * CASCADE_TRANSITIONS);
 });
-it("membership edits and batch deletion bump linked samples", async () => {
+it("membership edits preserve linked samples and batch deletion refuses them", async () => {
   const f = await fixture(); const opened = await version(f, "sample");
   const saved = await updateCreditBatch(f.ctx, f.ids.creditBatch, { expectedVersion: await version(f, "creditBatch"), productionRunIds: [] });
-  expect(await version(f, "sample")).toBeGreaterThan(opened);
+  expect(await version(f, "sample")).toBe(opened);
   const [sample] = await db.select().from(samples).where(eq(samples.id, f.ids.sample));
-  expect(sample.creditBatchId).toBeNull();
-  const relinked = await updateSample(f.ctx, sample.id, { expectedVersion: sample.version, creditBatchId: f.ids.creditBatch });
-  await deleteCreditBatch(f.ctx, f.ids.creditBatch, saved.version);
-  expect(await version(f, "sample")).toBe(relinked.version + VERSION_INCREMENT);
+  expect(sample.creditBatchId).toBe(f.ids.creditBatch);
+  await expect(deleteCreditBatch(f.ctx, f.ids.creditBatch, saved.version))
+    .rejects.toThrow("Delete or move this credit batch's Samples before deleting it.");
+  expect(await version(f, "sample")).toBe(opened);
 });
 it("derived transport upserts bump the existing row", async () => {
   const f = await fixture();

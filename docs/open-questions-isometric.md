@@ -529,10 +529,9 @@ The independent items below require operator demand and registry confirmation.
 
 - **Per-column upload-URL field migration** (`storage/phase-2`). *(Misfiled — a
   storage concern sitting inside the Isometric section; move on next touch.)*
-  Four plain-text URL columns survive: `r0HistogramFileUrl` and
-  `tgaThermogramFileUrl` (`src/db/schema/production.ts`), `photoUrl` (same file,
-  `production_samples`), and `registryUrl` (`src/db/schema/feedstock.ts`).
-  (`plc_data_file_url` and `emissions.source_url` no longer exist.)
+  Two plain-text URL columns remain: `photoUrl`
+  (`src/db/schema/production.ts`, `production_samples`) and `registryUrl`
+  (`src/db/schema/feedstock.ts`).
   Phase 2 plan: add a `*_document_id` FK alongside each, backfill via UI, drop
   the URL column — routing all uploaded evidence through the single `documents`
   table (one audit trail, one storage-key convention, one visibility model, see

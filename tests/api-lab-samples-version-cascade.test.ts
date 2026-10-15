@@ -1,18 +1,10 @@
 /**
  * Real handlers, credentials and Postgres. Written for reviewer execution; never run by the implementation agent.
  *
- * Every writer outside the sample endpoints that changes `samples.credit_batch_id`
- * also bumps `samples.version`, so a sample's ETag stops matching and an old
- * If-Match is refused with the current representation (spec section 1,
- * "Versions and cascades").
+ * Batch membership edits preserve sample identity; only a Sample write moves it.
  */
 import { afterEach, describe, expect, it } from "vitest";
-import { db } from "@/db";
-import { creditBatchProductionRuns, samples } from "@/db/schema";
-import { and, eq } from "drizzle-orm";
-import { LAB_SAMPLE_REPRESENTATION_REVISION } from "@/config/api-rest";
-import { attachProductionRunToMatchingCreditBatch } from "@/data-access/credit-batch-membership";
-import { createCreditBatch, deleteCreditBatch, updateCreditBatch } from "@/data-access/credit-batches";
+import { deleteCreditBatch, updateCreditBatch } from "@/data-access/credit-batches";
 import { createApiLabFixture, expectProblem, insertApiSample, removeApiLabFixture, type ApiLabFixture } from "./helpers/api-lab-sample-fixture";
 import { labLogisticsVersion } from "./helpers/lab-logistics-version";
 import { patchLabSample, readRestLabSample, seedRestLabSample } from "./helpers/api-lab-sample-write-fixture";
@@ -20,12 +12,8 @@ import { patchLabSample, readRestLabSample, seedRestLabSample } from "./helpers/
 const TIMEOUT_MS = 60_000;
 const SAMPLED_AT = "2026-09-11T08:00:00.000Z";
 const CREATED_AT = "2026-10-01T10:00:00.000Z";
-const LATER_WINDOW = { startDate: new Date("2026-09-10T00:00:00.000Z"), endDate: new Date("2026-09-30T00:00:00.000Z") };
-/** Batch A ends before run 2 (September 11), so a second batch can claim it without overlapping. */
-const EARLY_WINDOW = { startDate: "2026-09-01", endDate: "2026-09-09" };
 const fixtures: ApiLabFixture[] = [];
 afterEach(async () => { for (const f of fixtures.splice(0)) await removeApiLabFixture(f); }, TIMEOUT_MS);
-const etagAt = (version: number) => `"${version}.${LAB_SAMPLE_REPRESENTATION_REVISION}"`;
 
 async function fixture(options: Parameters<typeof createApiLabFixture>[0] = {}) {
   const f = await createApiLabFixture(options);
@@ -33,64 +21,27 @@ async function fixture(options: Parameters<typeof createApiLabFixture>[0] = {}) 
   return f;
 }
 
-/** A batch for run 2 that does not overlap batch A's early window (see `EARLY_WINDOW`). */
-async function laterBatch(f: ApiLabFixture, runIds: string[]) {
-  return createCreditBatch(f.ctx, {
-    code: `CB-VC-${f.tag}`, facilityId: f.facility.id, feedstockTypeId: f.feedstockTypeId, ...LATER_WINDOW, productionRunIds: runIds,
-  });
-}
-
-interface Cascade {
-  /** Batch A's window; the default September window contains run 2, which the attach case needs. */
-  window?: typeof EARLY_WINDOW;
-  /** Seeds a sample, runs one outside writer, and says where the sample should point afterwards. */
-  run: (f: ApiLabFixture) => Promise<{ sampleId: string; creditBatchId: string | null }>;
-}
-
-const cascades: [string, Cascade][] = [
-  ["createCreditBatch linking a run's samples", { window: EARLY_WINDOW, run: async (f) => {
-    const legacy = await insertApiSample(f, { code: `SAM-VC-1-${f.tag}`, creditBatchId: null, productionRunId: f.runs[1].id, samplingTime: SAMPLED_AT, createdAt: CREATED_AT });
-    const batch = await laterBatch(f, [f.runs[1].id]);
-    return { sampleId: legacy.id, creditBatchId: batch.id };
-  } }],
-  ["updateCreditBatch dropping a run from the batch", { window: EARLY_WINDOW, run: async (f) => {
-    const linked = await insertApiSample(f, { code: `SAM-VC-2-${f.tag}`, creditBatchId: f.batchA.id, productionRunId: f.runs[0].id, samplingTime: SAMPLED_AT, createdAt: CREATED_AT });
-    await updateCreditBatch(f.ctx, f.batchA.id, { expectedVersion: await labLogisticsVersion(f.ctx, "creditBatches", f.batchA.id), productionRunIds: [] });
-    return { sampleId: linked.id, creditBatchId: null };
-  } }],
-  ["updateCreditBatch adding a run to the batch", { window: EARLY_WINDOW, run: async (f) => {
-    await db.delete(creditBatchProductionRuns).where(and(eq(creditBatchProductionRuns.creditBatchId, f.batchA.id), eq(creditBatchProductionRuns.organizationId, f.ctx.organizationId)));
-    const legacy = await insertApiSample(f, { code: `SAM-VC-3-${f.tag}`, creditBatchId: null, productionRunId: f.runs[0].id, samplingTime: SAMPLED_AT, createdAt: CREATED_AT });
-    await updateCreditBatch(f.ctx, f.batchA.id, { expectedVersion: await labLogisticsVersion(f.ctx, "creditBatches", f.batchA.id), productionRunIds: [f.runs[0].id] });
-    return { sampleId: legacy.id, creditBatchId: f.batchA.id };
-  } }],
-  ["deleteCreditBatch clearing the link", { window: EARLY_WINDOW, run: async (f) => {
-    const batch = await laterBatch(f, []);
-    const linked = await insertApiSample(f, { code: `SAM-VC-4-${f.tag}`, creditBatchId: batch.id, samplingTime: SAMPLED_AT, createdAt: CREATED_AT });
-    await deleteCreditBatch(f.ctx, batch.id, await labLogisticsVersion(f.ctx, "creditBatches", batch.id));
-    return { sampleId: linked.id, creditBatchId: null };
-  } }],
-  ["attaching a completed run to its matching batch", { run: async (f) => {
-    const legacy = await insertApiSample(f, { code: `SAM-VC-5-${f.tag}`, creditBatchId: null, productionRunId: f.runs[1].id, samplingTime: SAMPLED_AT, createdAt: CREATED_AT });
-    await db.transaction((tx) => attachProductionRunToMatchingCreditBatch(f.ctx, tx, f.runs[1].id));
-    return { sampleId: legacy.id, creditBatchId: f.batchA.id };
-  } }],
-];
-
 describe("lab sample version cascades", { timeout: TIMEOUT_MS }, () => {
-  it.each(cascades)("%s bumps the sample version and ETag, and its old If-Match is stale", async (_name, cascade) => {
-    // Run 2 stays free of any batch so the writers above can claim it.
-    const f = await fixture({ withSecondBatch: false, window: cascade.window });
-    const { sampleId, creditBatchId } = await cascade.run(f);
-    const [row] = await db.select({ version: samples.version }).from(samples).where(and(eq(samples.id, sampleId), eq(samples.organizationId, f.ctx.organizationId)));
-    const current = await readRestLabSample(f, sampleId);
-    expect(current.row.creditBatchId).toBe(creditBatchId);
-    expect(current.row.version).toBe(row.version);
-    expect(current.row.version).toBeGreaterThan(1);
-    expect(current.etag).toBe(etagAt(current.row.version));
-    const stale = await expectProblem(await patchLabSample(f, sampleId, { labName: "Stale" }, etagAt(1)), 412, "stale_version");
-    expect(stale.current).toEqual(current.row);
-    expect((await readRestLabSample(f, sampleId)).row.labName).toBeNull();
+  it("membership edits preserve the sample's batch, version and ETag", async () => {
+    const f = await fixture();
+    const linked = await insertApiSample(f, { code: `SAM-VC-${f.tag}`, creditBatchId: f.batchA.id,
+      productionRunId: f.runs[0].id, samplingTime: SAMPLED_AT, createdAt: CREATED_AT });
+    const before = await readRestLabSample(f, linked.id);
+    await updateCreditBatch(f.ctx, f.batchA.id, {
+      expectedVersion: await labLogisticsVersion(f.ctx, "creditBatches", f.batchA.id), productionRunIds: [],
+    });
+    const after = await readRestLabSample(f, linked.id);
+    expect(after.row).toEqual(before.row);
+    expect(after.etag).toBe(before.etag);
+  });
+
+  it("refuses to delete a batch while it has Samples", async () => {
+    const f = await fixture();
+    const saved = await seedRestLabSample(f);
+    await expect(deleteCreditBatch(f.ctx, f.batchA.id,
+      await labLogisticsVersion(f.ctx, "creditBatches", f.batchA.id)))
+      .rejects.toThrow("Delete or move this credit batch's Samples before deleting it.");
+    expect((await readRestLabSample(f, saved.row.id)).row).toEqual(saved.row);
   });
 
   it("a sample PATCH that moves the sample bumps the version once and invalidates its own tag", async () => {

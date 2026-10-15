@@ -124,7 +124,7 @@ describe("createCreditBatchFn", () => {
 });
 
 describe("updateCreditBatchFn", () => {
-  const updateInput = { expectedVersion: 1, creditBatchId: BATCH_ID, hToCorgRatio: 0.5 };
+  const updateInput = { expectedVersion: 1, creditBatchId: BATCH_ID, siteManagementNotes: "Updated notes" };
 
   beforeEach(() => {
     mocks.getCreditBatchById.mockResolvedValue({ id: BATCH_ID, code: "CB-001" });
