@@ -6,9 +6,6 @@
  * Applied. Every loss is an explicit labeled exit, never hidden by
  * normalizing column widths:
  *
- *   - ineligible feedstock exits the feedstock column (the >25% Isometric
- *     cap made visible — derived from the lineage's run-feedstock allocations
- *     whose feedstock is flagged `eligibilityStatus = 'ineligible'`);
  *   - conversion loss (pyrolysis syngas/vapour/ash — expected physics, not an
  *     error) exits at the production runs;
  *   - output never bagged into a lot exits between runs and lots;
@@ -46,7 +43,6 @@ export interface SankeyColumn {
 }
 
 export type SankeyExitKey =
-  | "ineligible_feedstock"
   | "conversion_loss"
   | "unallocated_output"
   | "in_storage";
@@ -88,7 +84,6 @@ export interface SankeyLineage {
     id: string;
     /** Wet allocation. Converted proportionally against run dry mass below. */
     wetMassUsedKg: number | null;
-    eligibilityStatus: "eligible" | "ineligible" | "conditional" | null;
   }[];
   /** Multi-run product provenance; absent on legacy one-run payloads. */
   sources?: {
@@ -132,11 +127,6 @@ export function buildBatchSankey(
   const lotById = new Map<string, NonNullable<SankeyLineage["biocharProduct"]>>();
   const feedstockIds = new Set<string>();
   const applicationIds = new Set<string>();
-  // Wet allocations are traceability facts. The Sankey itself remains dry, so
-  // their eligibility shares are applied to each run's derived dry input.
-  const wetAllocationsByRunId = new Map<string, number>();
-  const ineligibleWetAllocationsByRunId = new Map<string, number>();
-
   let appliedKg = 0;
   for (const lineage of lineages) {
     applicationIds.add(lineage.application.id);
@@ -153,25 +143,6 @@ export function buildBatchSankey(
     for (const source of sources) {
       const productionRun = source.productionRun;
       runById.set(productionRun.id, productionRun);
-      if (!wetAllocationsByRunId.has(productionRun.id)) {
-        wetAllocationsByRunId.set(
-          productionRun.id,
-          source.feedstocks.reduce(
-            (sum, feedstock) => sum + (feedstock.wetMassUsedKg ?? 0),
-            0,
-          ),
-        );
-        ineligibleWetAllocationsByRunId.set(
-          productionRun.id,
-          source.feedstocks.reduce(
-            (sum, feedstock) =>
-              feedstock.eligibilityStatus === "ineligible"
-                ? sum + (feedstock.wetMassUsedKg ?? 0)
-                : sum,
-            0,
-          ),
-        );
-      }
       for (const feedstock of source.feedstocks) {
         feedstockIds.add(feedstock.id);
       }
@@ -207,27 +178,8 @@ export function buildBatchSankey(
       0;
   }
 
-  // The ineligible exit can never carry more than the column it leaves from.
-  const rawIneligibleKg = Math.max(0, Array.from(runById.values()).reduce(
-    (sum, run) => {
-      const totalWetKg = wetAllocationsByRunId.get(run.id) ?? 0;
-      const ineligibleWetKg =
-        ineligibleWetAllocationsByRunId.get(run.id) ?? 0;
-      return totalWetKg > 0 && run.feedstockMassDryKg != null
-        ? sum + run.feedstockMassDryKg * (ineligibleWetKg / totalWetKg)
-        : sum;
-    },
-    0,
-  ));
-  const ineligibleKg = Math.min(rawIneligibleKg, feedstockInKg);
-  if (rawIneligibleKg > feedstockInKg + EXIT_EPSILON_KG) {
-    warnings.push(
-      "Recorded ineligible feedstock mass exceeds the lineage's total feedstock input.",
-    );
-  }
-
   const conversionLoss = residual(
-    feedstockInKg - ineligibleKg,
+    feedstockInKg,
     runOutputKg,
     "Production-run biochar output exceeds the feedstock mass entering the runs.",
   );
@@ -248,15 +200,6 @@ export function buildBatchSankey(
   if (inStorage.warning) warnings.push(inStorage.warning);
 
   const exits: SankeyExit[] = [];
-  if (ineligibleKg > EXIT_EPSILON_KG) {
-    exits.push({
-      key: "ineligible_feedstock",
-      label: "Ineligible feedstock",
-      fromColumn: "feedstock",
-      massKg: ineligibleKg,
-      tone: "alert",
-    });
-  }
   if (conversionLoss.value > EXIT_EPSILON_KG) {
     exits.push({
       key: "conversion_loss",

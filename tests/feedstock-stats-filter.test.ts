@@ -1,3 +1,4 @@
+import { feedstockFixtureValues, cleanupFeedstockFixtureParents } from "./helpers/feedstock-fixture";
 import { beforeAll, describe, expect, it } from "vitest";
 import { eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
@@ -43,7 +44,7 @@ describe("getFeedstockStats", () => {
       .returning({ id: feedstockTypes.id });
     const stocks = await db
       .insert(feedstocks)
-      .values([
+      .values(await feedstockFixtureValues(db, [
         {
           organizationId: TEST_ORG_ID,
           facilityId: facility.id,
@@ -64,7 +65,7 @@ describe("getFeedstockStats", () => {
           massDryKg: 120,
           moistureContentPercent: 40,
         },
-      ])
+      ]))
       .returning({ id: feedstocks.id });
 
     try {
@@ -84,6 +85,7 @@ describe("getFeedstockStats", () => {
       await db
         .delete(feedstocks)
         .where(inArray(feedstocks.id, stocks.map((stock) => stock.id)));
+      await cleanupFeedstockFixtureParents(db);
       await db
         .delete(feedstockTypes)
         .where(inArray(feedstockTypes.id, types.map((type) => type.id)));

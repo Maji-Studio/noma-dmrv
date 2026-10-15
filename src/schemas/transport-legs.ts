@@ -5,11 +5,12 @@ import { expectedVersionSchema } from "./helpers";
 // `transport_legs_distance_based_requirements` (load mass present).
 
 import { z } from "zod";
+import { modelYearSchema } from "./model-year";
 import { optionalDistanceSource } from "./distance-source";
 import {
   latitudeSchema,
   longitudeSchema,
-  optionalPositiveNumber,
+  toNumberOrNull,
   requiredPositiveMassKgSchema,
   toNumberOrUndefined,
 } from "./helpers";
@@ -79,7 +80,7 @@ const baseTransportLegShape = {
     .enum(transportMethods, { error: () => "Transport method is required" })
     .default("road"),
   vehicleType: z.string().trim().max(255).optional().nullable(),
-  modelYear: optionalPositiveNumber,
+  modelYear: z.preprocess(toNumberOrNull, modelYearSchema),
 
   // Cargo mass moved on this leg (Eq. 3, W_j) — required on every leg so the
   // Certify aggregator can mass-weight distance across a category.
@@ -93,10 +94,6 @@ const baseTransportLegShape = {
   calculationMethodType: z
     .enum(emissionsCalculationMethods)
     .default("distance_based"),
-
-  // Documentation (Isometric §6 verification evidence — optional, attachable later).
-  billOfLading: z.string().trim().max(255).optional().nullable(),
-  weighScaleTicketRef: z.string().trim().max(255).optional().nullable(),
 };
 
 // ============================================

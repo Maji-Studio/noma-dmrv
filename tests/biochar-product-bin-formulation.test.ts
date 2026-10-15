@@ -1,3 +1,4 @@
+import { feedstockFixtureValues } from "./helpers/feedstock-fixture";
 import { masterDataVersion } from "./helpers/master-data-version";
 import { productionVersion } from "./helpers/production-version";
 import { randomUUID } from "node:crypto";
@@ -28,9 +29,9 @@ async function ingredientBin(f: Fixture, wetKg = 100, moisture = 20, typeId = f.
   return bin;
 }
 async function intake(f: Fixture, binId: string, wetKg: number, moisture: number, date = "2026-09-01") {
-  const [row] = await db.insert(feedstocks).values({ organizationId: f.ctx.organizationId, facilityId: f.facility.id,
+  const [row] = await db.insert(feedstocks).values(await feedstockFixtureValues(db, { organizationId: f.ctx.organizationId, facilityId: f.facility.id,
     code: `E2E-INTAKE-${randomUUID()}`, status: "complete", feedstockTypeId: f.ingredientType.id, storageLocationId: binId,
-    massWetKg: wetKg, massDryKg: wetKg * (1 - moisture / 100), moistureContentPercent: moisture, deliveryDate: new Date(date) }).returning();
+    massWetKg: wetKg, massDryKg: wetKg * (1 - moisture / 100), moistureContentPercent: moisture, deliveryDate: new Date(date) })).returning();
   return row;
 }
 /** The operator measures every ingredient; 20% matches the default intake below. */

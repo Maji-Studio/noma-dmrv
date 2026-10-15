@@ -1,3 +1,4 @@
+import { feedstockFixtureValues, cleanupFeedstockFixtureParents } from "./helpers/feedstock-fixture";
 import { postedStockFixture, postDelivery, postMeasurement, cleanupPostedStock } from "./helpers/posted-output-stock-fixture";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import { eq } from "drizzle-orm";
@@ -95,7 +96,7 @@ describe("bin reconciliation stock-take integrity", () => {
       .returning({ id: storageLocations.id });
     const [feedstock] = await db
       .insert(feedstocks)
-      .values({
+      .values(await feedstockFixtureValues(db, {
         organizationId: TEST_ORG_ID,
         facilityId: facility.id,
         feedstockTypeId: feedstockType.id,
@@ -105,7 +106,7 @@ describe("bin reconciliation stock-take integrity", () => {
         massDryKg: 100,
         massWetKg: 100,
         moistureContentPercent: 0,
-      })
+      }))
       .returning({ id: feedstocks.id });
 
     try {
@@ -133,6 +134,7 @@ describe("bin reconciliation stock-take integrity", () => {
         .delete(binMovements)
         .where(eq(binMovements.storageLocationId, bin.id));
       await db.delete(feedstocks).where(eq(feedstocks.id, feedstock.id));
+      await cleanupFeedstockFixtureParents(db);
       await db.delete(storageLocations).where(eq(storageLocations.id, bin.id));
       await db
         .delete(feedstockTypes)
