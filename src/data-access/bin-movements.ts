@@ -1,3 +1,6 @@
+import { DomainError } from "@/lib/domain-errors";
+import { OUTPUT_STOCK_FUTURE_TIME_MESSAGE } from "./output-stock-post";
+import { getFeedstockBinStock } from "./feedstock-bin-ledger";
 import { assertEventTimesNotFuture } from "./future-event-time";
 /**
  * Bin Movements Data Access Layer (issue #194)
@@ -221,7 +224,7 @@ export async function createBinMovement(
   }
   assertEventTimesNotFuture(
     { occurredAt: input.occurredAt },
-    { occurredAt: "Date and time cannot be in the future. Enter a time at or before now." },
+    { occurredAt: OUTPUT_STOCK_FUTURE_TIME_MESSAGE },
     new Date(),
   );
   const payload = {
@@ -258,6 +261,20 @@ export async function createBinMovement(
       const requested = Math.abs(input.massDeltaKg);
       if (isOverdraw(requested, available)) {
         throw overdrawError(input.lane);
+      }
+      const stock = await getFeedstockBinStock(ctx, input.storageLocationId, tx);
+      const occurredAt = input.occurredAt.toISOString();
+      let availableAtTime = 0;
+      for (const entry of stock.entries) {
+        if (entry.occurredAt <= occurredAt) availableAtTime = entry.afterWetKg;
+      }
+      // Saved adjustments are deltas, so the loss also reduces every later balance.
+      if (isOverdraw(requested, availableAtTime) || stock.entries.some(entry =>
+        entry.occurredAt > occurredAt && isOverdraw(requested, entry.afterWetKg))) {
+        const message = "Not enough wet feedstock at this time or after a later movement. Check the date and time or reduce the loss.";
+        throw new DomainError("validation_failed", message, {
+          issues: [{ path: ["occurredAt"], code: "validation_failed", message }],
+        });
       }
     }
     return createBinMovementInTransaction(ctx, tx, {

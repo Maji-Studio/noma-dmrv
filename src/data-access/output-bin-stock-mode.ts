@@ -7,7 +7,7 @@ import { formatFacilityDateTime } from '@/lib/format-utils';
 import { grams, kilograms, layersHoldMaterial } from '@/lib/output-stock';
 import { outputStockEventLabel } from '@/lib/output-stock/labels';
 import { stockModeAt, type OutputStockMode, type StockModeChange } from '@/lib/output-stock/stock-mode';
-import { isOutputBinType, type StorageLocationType } from '@/schemas/storage-locations';
+import { MERGE_TIME_REQUIRED_MESSAGE, isOutputBinType, type StorageLocationType } from '@/schemas/storage-locations';
 import { and, desc, eq, inArray, isNotNull } from 'drizzle-orm';
 import { requestFingerprint } from './bin-movement-requests';
 import { getBiocharOutputStockLayers, getProductOutputStockLayers } from './output-stock';
@@ -51,7 +51,7 @@ export async function applyStockModeChange(ctx: OrgContext, tx: DbTransaction, e
   const target = next.stockMode ?? existing.stockMode;
   if (target === existing.stockMode) return target;
   if (target === 'mix' && (!next.mergedAt || !Number.isFinite(next.mergedAt.getTime()))) {
-    throw new SafeError('Enter when the batches were merged.');
+    throw new SafeError(MERGE_TIME_REQUIRED_MESSAGE);
   }
   // A bin changes type only while it holds nothing (the identity guard sees to
   // that), so there is no pile to merge or sort.

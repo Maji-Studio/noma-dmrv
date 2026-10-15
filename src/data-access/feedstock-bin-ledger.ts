@@ -22,33 +22,33 @@ const round = (kg: number) => Math.round(kg * MASS_DECIMALS) / MASS_DECIMALS;
  * their own batches. Draws without batch records are estimated pro rata over
  * stock present at each entry; dry composition uses each intake's dry-to-wet ratio.
  */
-export async function getFeedstockBinStock(ctx: OrgContext, storageLocationId: string): Promise<FeedstockBinStock> {
+export async function getFeedstockBinStock(ctx: OrgContext, storageLocationId: string, reader: Pick<typeof db, 'select'> = db): Promise<FeedstockBinStock> {
   requireOrgScope(ctx);
-  const [bin] = await db.select({ type: storageLocations.type, facilityId: storageLocations.facilityId }).from(storageLocations)
+  const [bin] = await reader.select({ type: storageLocations.type, facilityId: storageLocations.facilityId }).from(storageLocations)
     .where(and(eq(storageLocations.organizationId, ctx.organizationId), eq(storageLocations.id, storageLocationId)));
   if (!bin) throw new SafeError('Storage bin not found');
   if (bin.type !== 'feedstock_bin') throw new SafeError('This bin does not hold feedstock');
 
   const [batches, runDraws, products, movements, batchDraws] = await Promise.all([
-    db.select({ id: feedstocks.id, code: feedstocks.code, deliveryDate: feedstocks.deliveryDate, createdAt: feedstocks.createdAt,
+    reader.select({ id: feedstocks.id, code: feedstocks.code, deliveryDate: feedstocks.deliveryDate, createdAt: feedstocks.createdAt,
       wetKg: feedstocks.massWetKg, dryKg: feedstocks.massDryKg, moisturePercent: feedstocks.moistureContentPercent })
       .from(feedstocks)
       .where(and(eq(feedstocks.organizationId, ctx.organizationId), eq(feedstocks.storageLocationId, storageLocationId), eq(feedstocks.status, 'complete'))),
-    db.select({ id: productionRunFeedstockDraws.id, sourceId: productionRuns.id, wetKg: productionRunFeedstockDraws.wetMassKg, code: productionRuns.code,
+    reader.select({ id: productionRunFeedstockDraws.id, sourceId: productionRuns.id, wetKg: productionRunFeedstockDraws.wetMassKg, code: productionRuns.code,
       startTime: productionRuns.startTime, createdAt: productionRunFeedstockDraws.createdAt })
       .from(productionRunFeedstockDraws)
       .innerJoin(productionRuns, and(eq(productionRuns.id, productionRunFeedstockDraws.productionRunId), eq(productionRuns.organizationId, ctx.organizationId)))
       .where(and(eq(productionRunFeedstockDraws.organizationId, ctx.organizationId), eq(productionRunFeedstockDraws.storageLocationId, storageLocationId),
         ne(productionRuns.status, CANCELLED_PRODUCTION_RUN_STATUS))),
-    db.select({ id: biocharProducts.id, code: biocharProducts.code, placedAt: biocharProducts.placedAt, createdAt: biocharProducts.createdAt,
+    reader.select({ id: biocharProducts.id, code: biocharProducts.code, placedAt: biocharProducts.placedAt, createdAt: biocharProducts.createdAt,
       composition: biocharProducts.composition })
       .from(biocharProducts)
       .where(and(eq(biocharProducts.organizationId, ctx.organizationId), eq(biocharProducts.facilityId, bin.facilityId))),
-    db.select({ movement: binMovements, actorName: users.name }).from(binMovements)
+    reader.select({ movement: binMovements, actorName: users.name }).from(binMovements)
       .leftJoin(users, eq(users.id, binMovements.createdBy))
       .where(and(eq(binMovements.organizationId, ctx.organizationId), eq(binMovements.storageLocationId, storageLocationId),
         eq(binMovements.lane, 'feedstock'), inArray(binMovements.movementType, ['loss', 'adjustment']))),
-    db.select({ feedstockId: productionRunFeedstocks.feedstockId, wetKg: productionRunFeedstocks.wetMassUsedKg, productionRunId: productionRunFeedstocks.productionRunId })
+    reader.select({ feedstockId: productionRunFeedstocks.feedstockId, wetKg: productionRunFeedstocks.wetMassUsedKg, productionRunId: productionRunFeedstocks.productionRunId })
       .from(productionRunFeedstocks)
       .innerJoin(feedstocks, and(eq(feedstocks.id, productionRunFeedstocks.feedstockId), eq(feedstocks.organizationId, ctx.organizationId)))
       .innerJoin(productionRuns, and(eq(productionRuns.id, productionRunFeedstocks.productionRunId), eq(productionRuns.organizationId, ctx.organizationId)))
@@ -78,7 +78,7 @@ export async function getFeedstockBinStock(ctx: OrgContext, storageLocationId: s
       moisturePercent: m.moistureRatioUsed === null ? null : Number(m.moistureRatioUsed) * PERCENT })),
   ].sort((a, b) => a.occurredAt.localeCompare(b.occurredAt) || a.recordedAt.localeCompare(b.recordedAt) || a.id.localeCompare(b.id));
 
-  const intakeById = new Map(batches.map(batch => [batch.id, { id: batch.id, wetKg: Number(batch.wetKg ?? 0), dryKg: batch.dryKg === null ? null : Number(batch.dryKg) }]));
+  const intakeById = new Map(batches.map(batch => [batch.id, { id: batch.id, wetKg: Number(batch.wetKg), dryKg: Number(batch.dryKg) }]));
   const drawsByRun = new Map<string, { feedstockId: string; wetKg: number }[]>();
   for (const draw of batchDraws) {
     const shares = drawsByRun.get(draw.productionRunId) ?? [];
@@ -89,7 +89,6 @@ export async function getFeedstockBinStock(ctx: OrgContext, storageLocationId: s
     intake: draft.kind === 'intake' ? intakeById.get(draft.id) : undefined,
     draws: draft.kind === 'run_draw' && draft.sourceId ? drawsByRun.get(draft.sourceId) : undefined,
   })));
-  const missingDryBasis = batches.some(batch => batch.dryKg === null || (Number(batch.dryKg) > 0 && !(Number(batch.wetKg) > 0)));
   let wetKg = 0;
   const entries = drafts.map((draft, index): FeedstockLedgerEntry => {
     const beforeWetKg = round(wetKg);
@@ -99,12 +98,12 @@ export async function getFeedstockBinStock(ctx: OrgContext, storageLocationId: s
 
   const currentWetKg = round(wetKg);
   const shares = new Map(replay.batches.map(batch => [batch.id, batch]));
-  const pile = batches.filter(b => Number(b.wetKg ?? 0) > 0)
+  const pile = batches.filter(b => Number(b.wetKg) > 0)
     .sort((a, b) => a.deliveryDate.getTime() - b.deliveryDate.getTime()
       || a.createdAt.getTime() - b.createdAt.getTime() || a.id.localeCompare(b.id))
     .map(b => ({ id: b.id, code: b.code, receivedAt: b.deliveryDate.toISOString(),
       wetKg: shares.get(b.id)?.wetKg ?? 0,
-      intakeWetKg: Number(b.wetKg), dryKg: missingDryBasis || b.dryKg === null ? null : shares.get(b.id)?.dryKg ?? null, moisturePercent: b.moisturePercent === null ? null : Number(b.moisturePercent) }));
-  if (entries.length && !missingDryBasis) entries[entries.length - 1].estimatedDryKg = round(pile.reduce((sum, batch) => sum + (batch.dryKg ?? 0), 0));
-  return { currentWetKg, missingDryBasis, entries, batches: pile };
+      intakeWetKg: Number(b.wetKg), dryKg: shares.get(b.id)?.dryKg ?? null, moisturePercent: b.moisturePercent === null ? null : Number(b.moisturePercent) }));
+  if (entries.length) entries[entries.length - 1].estimatedDryKg = round(pile.reduce((sum, batch) => sum + (batch.dryKg ?? 0), 0));
+  return { currentWetKg, missingDryBasis: false, entries, batches: pile };
 }

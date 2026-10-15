@@ -8,7 +8,7 @@
  */
 
 import type { db } from "@/db";
-import { countRows, numericAggregate, sumNumeric } from "@/db/aggregate";
+import { numericAggregate, sumNumeric } from "@/db/aggregate";
 import {
   binMovements,
   biocharProducts,
@@ -23,7 +23,6 @@ import {
   and,
   eq,
   inArray,
-  lte,
   ne,
   sql,
 } from "drizzle-orm";
@@ -110,13 +109,6 @@ export async function deriveLaneStock(
           totalWet: sumNumeric(
             feedstocks.massWetKg,
             sql`${feedstocks.status} = 'complete'`,
-          ),
-          missingWetMassCount: countRows(
-            and(
-              eq(feedstocks.status, "complete"),
-              sql`${feedstocks.massDryKg} > 0`,
-              lte(feedstocks.massWetKg, 0),
-            ),
           ),
         })
         .from(feedstocks)
@@ -236,7 +228,6 @@ export async function deriveLaneStock(
       },
     ]),
   );
-  const missingWetBasisByLocation = new Set<string>();
 
   for (const row of intakeRows) {
     const stock = row.storageLocationId
@@ -245,9 +236,6 @@ export async function deriveLaneStock(
     if (stock) {
       stock.feedstockIntakeDryKg = row.total;
       stock.feedstockIntakeWetKg = row.totalWet;
-      if (row.missingWetMassCount > 0) {
-        missingWetBasisByLocation.add(stock.storageLocationId);
-      }
     }
   }
   for (const row of runConsumptionRows) {
@@ -283,8 +271,7 @@ export async function deriveLaneStock(
     stock.feedstockEstimatedDryKg =
       stock.feedstockStockWetKg === 0
         ? 0
-        : stock.feedstockIntakeWetKg > 0 &&
-            !missingWetBasisByLocation.has(stock.storageLocationId)
+        : stock.feedstockIntakeWetKg > 0
           ? stock.feedstockStockWetKg *
             (stock.feedstockIntakeDryKg / stock.feedstockIntakeWetKg)
           : null;

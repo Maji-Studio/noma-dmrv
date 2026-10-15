@@ -10,7 +10,7 @@ import {
   storageLocations,
   users,
 } from "@/db/schema";
-import { ensureTestOrg, TEST_ORG_ID } from "./helpers/test-org";
+import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
 
 const TEST_USER_ID = "test-user-bin-loss-overdraw";
 const AVAILABLE_STOCK_KG = 400;
@@ -29,6 +29,7 @@ vi.mock("@/lib/auth/server", async (importOriginal) => {
   };
 });
 
+import { getFeedstockBinStock } from "@/data-access/feedstock-bin-ledger";
 import { recordLossFn } from "@/fn/bin-movements";
 
 beforeAll(async () => {
@@ -45,7 +46,13 @@ beforeAll(async () => {
 });
 
 describe("bin loss stock guard", () => {
-  it("rejects an overdraw without a row and accepts an exact-stock loss", async () => {
+  it.each([
+    "current stock",
+    "before intake",
+    "future time",
+    "valid earlier loss",
+    "later negative balance",
+  ])("guards %s", async (scenario) => {
     const tag = crypto.randomUUID().slice(0, 8).toUpperCase();
     const fixture = await db.transaction(async (tx) => {
       const [facility] = await tx
@@ -85,6 +92,7 @@ describe("bin loss stock guard", () => {
           storageLocationId: storageLocation.id,
           code: `FS-LOSS-${tag}`,
           status: "complete",
+          deliveryDate: new Date("2025-01-02T00:00:00.000Z"),
           massDryKg: AVAILABLE_STOCK_KG,
           massWetKg: AVAILABLE_STOCK_KG,
         }))
@@ -99,6 +107,47 @@ describe("bin loss stock guard", () => {
     });
 
     try {
+      const loss = (occurredAt: string, lossMassKg: number) => recordLossFn({
+        storageLocationId: fixture.storageLocationId, lane: "feedstock",
+        idempotencyKey: crypto.randomUUID(), reason: "Event-time stock regression",
+        occurredAt, lossMassKg,
+      });
+      if (scenario === "before intake" || scenario === "future time") {
+        const time = scenario === "before intake" ? "2025-01-01T00:00:00.000Z" : "2999-01-01T00:00:00.000Z";
+        expect(await loss(time, AVAILABLE_STOCK_KG)).toMatchObject({
+          success: false, issues: [{ path: ["occurredAt"] }],
+        });
+      } else if (scenario === "valid earlier loss") {
+        const halfStock = AVAILABLE_STOCK_KG / 2;
+        expect(await loss("2025-01-04T00:00:00.000Z", halfStock)).toMatchObject({ success: true });
+        expect(await loss("2025-01-03T00:00:00.000Z", halfStock)).toMatchObject({ success: true });
+        const stock = await getFeedstockBinStock(makeTestOrgContext(TEST_USER_ID), fixture.storageLocationId);
+        expect(stock.entries.map(entry => entry.afterWetKg)).toEqual([AVAILABLE_STOCK_KG, halfStock, 0]);
+        return;
+      } else if (scenario === "later negative balance") {
+        // A later refill restores current stock but cannot fund the earlier loss.
+        expect(await loss("2025-01-04T00:00:00.000Z", AVAILABLE_STOCK_KG)).toMatchObject({ success: true });
+        await db.insert(feedstocks).values(await feedstockFixtureValues(db, {
+          organizationId: TEST_ORG_ID, facilityId: fixture.facilityId,
+          feedstockTypeId: fixture.feedstockTypeId, storageLocationId: fixture.storageLocationId,
+          code: `E2E-REFILL-${tag}`, status: "complete",
+          deliveryDate: new Date("2025-01-05T00:00:00.000Z"),
+          massDryKg: AVAILABLE_STOCK_KG, massWetKg: AVAILABLE_STOCK_KG,
+        }));
+        expect(await loss("2025-01-03T00:00:00.000Z", AVAILABLE_STOCK_KG)).toMatchObject({
+          success: false, issues: [{ path: ["occurredAt"] }],
+        });
+        const movements = await db.select().from(binMovements)
+          .where(eq(binMovements.storageLocationId, fixture.storageLocationId));
+        expect(movements).toHaveLength(1);
+        return;
+      }
+      if (scenario === "before intake" || scenario === "future time") {
+        const movements = await db.select().from(binMovements)
+          .where(eq(binMovements.storageLocationId, fixture.storageLocationId));
+        expect(movements).toHaveLength(0);
+        return;
+      }
       const rejected = await recordLossFn({
         storageLocationId: fixture.storageLocationId,
         lane: "feedstock",
@@ -140,7 +189,7 @@ describe("bin loss stock guard", () => {
       await db.delete(binMovements).where(
         eq(binMovements.storageLocationId, fixture.storageLocationId),
       );
-      await db.delete(feedstocks).where(eq(feedstocks.id, fixture.feedstockId));
+      await db.delete(feedstocks).where(eq(feedstocks.storageLocationId, fixture.storageLocationId));
       await cleanupFeedstockFixtureParents(db);
       await db
         .delete(storageLocations)

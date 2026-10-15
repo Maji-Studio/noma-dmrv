@@ -22,6 +22,8 @@ ALTER TABLE "feedstocks" DROP COLUMN "baseline_description";--> statement-breakp
 ALTER TABLE "feedstocks" DROP COLUMN "eligibility_status";--> statement-breakpoint
 ALTER TABLE "transport_legs" DROP COLUMN "bill_of_lading";--> statement-breakpoint
 ALTER TABLE "transport_legs" DROP COLUMN "weigh_scale_ticket_ref";--> statement-breakpoint
+-- Kenji 2026-10-15: feedstock-lane losses never stored an event time; keep the time the ledger already used.
+UPDATE "bin_movements" SET "occurred_at" = "created_at" AT TIME ZONE 'UTC' WHERE "lane" = 'feedstock' AND "movement_type" = 'loss' AND "occurred_at" IS NULL;--> statement-breakpoint
 ALTER TABLE "bin_movements" ADD CONSTRAINT "bin_movements_feedstock_loss_time" CHECK ("bin_movements"."lane" <> 'feedstock' or "bin_movements"."movement_type" <> 'loss' or "bin_movements"."occurred_at" is not null);--> statement-breakpoint
 ALTER TABLE "feedstocks" ADD CONSTRAINT "feedstocks_mass_dry_lte_wet" CHECK ("feedstocks"."mass_dry_kg" <= "feedstocks"."mass_wet_kg");--> statement-breakpoint
 ALTER TABLE "feedstocks" ADD CONSTRAINT "feedstocks_moisture_content_percent_range" CHECK (("feedstocks"."moisture_content_percent" >= 0 and "feedstocks"."moisture_content_percent" < 100));--> statement-breakpoint

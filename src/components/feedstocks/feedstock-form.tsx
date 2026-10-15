@@ -6,6 +6,7 @@
  */
 "use client";
 
+import { INTAKE_MOISTURE_RANGE_HELPER } from "@/lib/mass-moisture";
 import type { ReactNode } from "react";
 import { useEffect, useId, useState } from "react";
 import { useForm, useWatch, useFieldArray, type FieldError } from "react-hook-form";
@@ -661,7 +662,7 @@ export function FeedstockForm({
             }}
             moisture={{
               id: "moisturePercent",
-              rangeHelperText: "At least 0 and below 100% of wet mass",
+              rangeHelperText: INTAKE_MOISTURE_RANGE_HELPER,
               error: errors.moisturePercent?.message,
               required: true,
               disabled: isSubmitting,

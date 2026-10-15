@@ -1,3 +1,4 @@
+import { INTAKE_MOISTURE_RANGE_HELPER } from "@/lib/mass-moisture";
 import { renderToStaticMarkup } from "react-dom/server";
 import { useEffect, type ReactNode } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
@@ -113,8 +114,8 @@ it("lets intake replace the inclusive moisture range helper", () => {
     wetMassKg={100}
     moisturePercent={10}
     wet={{ id: "wet", registration: registration("wet") }}
-    moisture={{ id: "moisture", registration: registration("moisture"), rangeHelperText: "At least 0 and below 100% of wet mass" }}
+    moisture={{ id: "moisture", registration: registration("moisture"), rangeHelperText: INTAKE_MOISTURE_RANGE_HELPER }}
   />);
-  expect(html).toContain("At least 0 and below 100% of wet mass");
+  expect(html).toContain(INTAKE_MOISTURE_RANGE_HELPER);
   expect(html).not.toContain("0 to 100% of wet mass");
 });

@@ -8,6 +8,7 @@ import { outputStockKeys } from "./use-output-stock";
  */
 
 import { feedstockBinStockKeys } from "./feedstock-bin-stock-keys";
+import type { DomainIssue } from "@/lib/domain-errors";
 import type { ConflictRef } from "@/lib/conflict-ref";
 import {
   getFeedstockBinStockFn,
@@ -26,9 +27,9 @@ import { unwrap } from "@/hooks/types";
 
 /** Client-side carrier for a structured loss action field error. */
 export class RecordLossFieldError extends Error {
-  readonly field: "lossMassKg";
+  readonly field: "lossMassKg" | "occurredAt";
 
-  constructor(message: string, field: "lossMassKg") {
+  constructor(message: string, field: "lossMassKg" | "occurredAt") {
     super(message);
     this.name = "RecordLossFieldError";
     this.field = field;
@@ -59,8 +60,11 @@ export class RecordLossConflictError extends Error {
 export function throwRecordLossError(result: {
   error: string;
   field?: "lossMassKg";
+  issues?: DomainIssue[];
   conflict?: RecordLossConflict;
 }): never {
+  const timeIssue = result.issues?.find(issue => issue.path[0] === "occurredAt");
+  if (timeIssue) throw new RecordLossFieldError(timeIssue.message, "occurredAt");
   if (result.field) {
     throw new RecordLossFieldError(result.error, result.field);
   }

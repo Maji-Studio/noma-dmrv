@@ -88,6 +88,7 @@ function LossForm({
     control,
     trigger,
     setValue,
+    setError,
     formState: { errors },
   } = useForm({
     resolver: zodResolver(recordLossFormSchema),
@@ -131,6 +132,10 @@ function LossForm({
       onRecorded?.();
     } catch (error) {
       if (error instanceof RecordLossFieldError) {
+        if (error.field === "occurredAt") {
+          setError("occurredAt", { type: "server", message: error.message }, { shouldFocus: true });
+          return;
+        }
         setFieldServerError({
           message: error.message,
           lossMassKg: values.lossMassKg,

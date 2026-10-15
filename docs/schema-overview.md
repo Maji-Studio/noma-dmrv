@@ -73,6 +73,17 @@ left by the old batch-delete and membership-edit paths. Delete those rows or
 run `pnpm db:reset` locally; shared staging uses the manual reset workflow in
 [database.md](./database.md), announced first.
 
+Migration `0143_feedstock_intake_required_fields` makes the five intake columns
+`feedstocks.delivery_date`, `supplier_id`, `mass_wet_kg`,
+`moisture_content_percent`, and `storage_location_id` NOT NULL, requires moisture
+below 100%, and adds a CHECK requiring `bin_movements.occurred_at` for
+feedstock-lane losses. It drops intake GPS, CO2e, source-region, counterfactual,
+market-leakage, baseline and eligibility columns (and the eligibility enum),
+transport-leg bill-of-lading and weigh-scale reference columns, and the bin
+supplier-reference column. It fails on rows that violate the new requirements;
+there is no backfill. Run `pnpm db:reset` locally; shared staging uses the manual
+reset workflow in [database.md](./database.md), announced first.
+
 Production starts have no database time default. Physical feedstock sources
 live only in `production_run_feedstock_draws`; the run stores their total wet
 mass. Database CHECKs keep run moisture at or above 0% and below 100%.

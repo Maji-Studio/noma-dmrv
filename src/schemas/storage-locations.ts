@@ -111,7 +111,8 @@ export function isOutputBinType(type: StorageLocationType | undefined | null): t
 const MIX_OUTPUT_BIN_MESSAGE = "Only biochar and product bins can hold one mixed pile.";
 
 /** When a split bin's batches were merged into one pile; empty until the operator picks one. */
-const mergedAtSchema = stockEventInstantSchema("Enter when the batches were merged.").or(z.literal("")).nullable().optional();
+export const MERGE_TIME_REQUIRED_MESSAGE = "Enter when the batches were merged.";
+const mergedAtSchema = stockEventInstantSchema(MERGE_TIME_REQUIRED_MESSAGE).or(z.literal("")).nullable().optional();
 
 const FORMULATION_PRODUCT_BIN_MESSAGE =
   "A formulation can only be assigned to a product bin";
