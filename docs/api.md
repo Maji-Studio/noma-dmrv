@@ -42,11 +42,36 @@ samples on archived batches from lists and still serve them by id.
 
 ### Operation effects and API bookkeeping
 
+Document upload requests use the registered `request_document_upload` operation.
+Its output is the document representation, including the declared file name,
+size, MIME type and SHA-256, without storage locations or signed URLs. After
+both a first response and a replay, adapters call `mintDocumentUploadCapability`
+outside idempotency. It renews a pending upload under the document write locks
+and signs a PUT within that lease. An unavailable upload returns no link and
+plain-text guidance; the historical representation stays the same.
+
+REST and MCP confirmation share `confirmDocumentUpload`. Its client input
+contains only owner type, owner id and document id. The facts-carrying runner
+operation remains unregistered. Uploaded and failed retries read stored state
+without storage I/O. Refusals commit before the shared `mapConfirmOutcome`
+maps them to a problem: 422 `validation_failed`, or 409 `certification_locked`.
+A failed retry is 409 `conflict` with the stored reason; a missing document or
+owner mismatch is 404 `not_found`.
+
+Two named exceptions apply to this state-machine command:
+
+- **E1:** confirmation ignores `Idempotency-Key` and keeps no idempotency record.
+- **E2:** confirmation takes no `If-Match` or expected version. The declaration
+  is immutable and the row lock serializes its pending-to-uploaded or
+  pending-to-failed transition.
+
 `src/lib/operations/runner.ts:Operation` optionally supplies `describe(input,
 output)`, which returns `src/lib/operation-effect.ts:OperationEffect`: outcome
 code (`created`, `updated`, `deleted`), entity type and ids, versions before and
 after, and changed field names. It contains no field values. The runner returns
-this transport-neutral effect alongside data.
+this transport-neutral effect alongside data. A state-machine operation can
+return no effect when its outcome changes no entity, so a gone confirmation
+writes no audit event.
 
 Dry-run stock writes also return `stockEffects` beside `data`. The runner supplies
 an optional `OperationScope.snapshotStock` observer, passed to transaction writers.

@@ -74,12 +74,13 @@ export class S3CompatibleProvider implements StorageProvider {
       Key: this.physicalKey(args.key),
       ContentType: args.contentType,
     });
-    const url = await getSignedUrl(this.client, cmd, { expiresIn: ttl });
+    const signingDate = args.signingDate ?? new Date(Date.now());
+    const url = await getSignedUrl(this.client, cmd, { expiresIn: ttl, signingDate });
     return {
       url,
       method: "PUT",
       headers: { "Content-Type": args.contentType },
-      expiresAt: new Date(Date.now() + ttl * 1000),
+      expiresAt: new Date(signingDate.getTime() + ttl * 1000),
     };
   }
 

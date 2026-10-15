@@ -57,7 +57,8 @@ export async function requestDocumentUploadInTransaction(ctx: OrgContext, tx: Db
     fileName: data.fileName, fileSizeBytes: data.sizeBytes, mimeType: data.contentType,
     capturedAt: data.capturedAt ? new Date(data.capturedAt) : null, description: data.description ?? null, createdBy: ctx.userId,
     // Keep the immutable declaration separate from the inspected columns.
-    metadata: { ...buildDocumentMetadata(data), uploadDeclaration: { sizeBytes: data.sizeBytes, contentType: data.contentType, sha256: data.sha256 ?? null } },
+    metadata: { ...buildDocumentMetadata(data), uploadDeclaration: { sizeBytes: data.sizeBytes, contentType: data.contentType, sha256: data.sha256 ?? null,
+      gpsLatitude: data.gpsLatitude ?? null, gpsLongitude: data.gpsLongitude ?? null } },
   }).returning();
   return row;
 }
@@ -81,7 +82,7 @@ function bindingsMatch(row: DocumentRow, facts: InspectedUploadFacts): boolean {
 async function cleanupFinal(ctx: OrgContext, tx: DbTransaction, facts: InspectedUploadFacts, liveKey?: string | null) {
   if (facts.finalKey && facts.finalKey !== liveKey) await enqueueStorageObjectDeletion(ctx, tx, { storageProvider: facts.provider, storageBucket: facts.bucket, storageKey: facts.finalKey });
 }
-export async function confirmDocumentUploadInTransaction(ctx: OrgContext, tx: DbTransaction, facts: InspectedUploadFacts): Promise<ConfirmOutcome> {
+export async function confirmDocumentUploadInTransaction(ctx: OrgContext, tx: DbTransaction, facts: InspectedUploadFacts): Promise<ConfirmOutcome & { transitioned?: boolean }> {
   requireOrgScope(ctx);
   const discovered = await readDocumentForWrite(ctx, tx, facts.documentId);
   if (!discovered) { await cleanupFinal(ctx, tx, facts); return { kind: "gone" }; }
@@ -95,7 +96,7 @@ export async function confirmDocumentUploadInTransaction(ctx: OrgContext, tx: Db
   if (!row || row.entityType !== discovered.entityType || row.entityId !== discovered.entityId || !bindingsMatch(row, facts)) { await cleanupFinal(ctx, tx, facts, row?.uploadStatus === "uploaded" ? row.storageKey : null); return { kind: "gone" }; }
   if (row.uploadStatus === "uploaded") {
     await cleanupFinal(ctx, tx, facts, row.storageKey);
-    return facts.finalKey && facts.finalKey !== row.storageKey ? { kind: "gone" } : { kind: "uploaded", document: row };
+    return facts.finalKey && facts.finalKey !== row.storageKey ? { kind: "gone" } : { kind: "uploaded", document: row, transitioned: false };
   }
   if (row.uploadStatus !== "pending") { await cleanupFinal(ctx, tx, facts); return { kind: "gone" }; }
   let reason = facts.refusal;
@@ -125,5 +126,5 @@ export async function confirmDocumentUploadInTransaction(ctx: OrgContext, tx: Db
     await cleanupFinal(ctx, tx, facts);
     return { kind: "refused", reason, pointer, message, document: saved };
   }
-  return { kind: "uploaded", document: saved };
+  return { kind: "uploaded", document: saved, transitioned: true };
 }

@@ -22,6 +22,11 @@ export async function prepareDocumentUpload(ctx: OrgContext, documentId: string,
     const reason = metadataRecord(metadataRecord(row.metadata).uploadFailure).reason;
     throw new DomainError("conflict", "This file is no longer waiting for confirmation. Upload it again.", { issues: [{ path: ["documentId"], code: typeof reason === "string" ? reason : "failed", message: "This file is no longer waiting for confirmation. Upload it again." }] });
   }
+  return preparePendingDocumentUpload(ctx, row, provider, deadlineAt);
+}
+
+/** Prepare a row whose pending state was already checked by the caller. */
+export async function preparePendingDocumentUpload(ctx: OrgContext, row: DocumentRow, provider: StorageProvider | undefined, deadlineAt: number): Promise<Extract<PreparedDocumentUpload, { kind: "prepared" }>> {
   const facts = uploadFactsFor(row);
   if (!facts.uploadKey || !Number.isSafeInteger(facts.sizeBytes) || facts.sizeBytes <= 0) throw new DomainError("conflict", "The document is not available in storage. Upload the file again.");
   if (await inspectUploadOwner(ctx, row)) return { kind: "prepared", facts: { ...facts, refusal: "certification_locked" } };

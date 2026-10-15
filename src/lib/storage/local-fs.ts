@@ -113,7 +113,7 @@ export class LocalFsProvider implements StorageProvider {
     if (!isUploadKey(args.key)) throw new StorageError("Only upload keys may be presigned", "unsafe_upload_key");
     const cap = Math.min(args.maxBytes, this.globalMaxBytes);
     const ttl = args.expiresInSeconds ?? DEFAULT_UPLOAD_TTL_SECONDS;
-    const expiresAt = new Date(Date.now() + ttl * 1000);
+    const expiresAt = new Date((args.signingDate?.getTime() ?? Date.now()) + ttl * 1000);
     const token = signLocalFsToken(this.signingSecret, {
       k: args.key,
       m: "PUT",

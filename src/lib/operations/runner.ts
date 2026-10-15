@@ -56,13 +56,13 @@ export interface OperationScope {
   afterCommit: (hook: () => Promise<void> | void) => void;
 }
 
-export interface Operation<Input extends z.ZodType, Output> {
+export interface Operation<Input extends z.ZodType, Output, Effect extends OperationEffect | undefined = OperationEffect> {
   /** Stable id, shared with the REST `operationId` and the MCP tool name. */
   id: string;
   input: Input;
   /** False for operations with irreversible external effects. */
   supportsDryRun: boolean;
-  describe?: (input: z.output<Input>, output: Output) => OperationEffect;
+  describe?: (input: z.output<Input>, output: Output) => Effect;
   execute: (scope: OperationScope, input: z.output<Input>) => Promise<Output>;
 }
 
@@ -174,7 +174,7 @@ async function runAfterCommitHooks(
  * transaction, and return the committed (or dry-run) result.
  */
 export async function runOperation<Input extends z.ZodType, Output>(
-  operation: Operation<Input, Output>,
+  operation: Operation<Input, Output, OperationEffect | undefined>,
   ctx: OrgContext,
   input: unknown,
   options: RunOptions = {},
@@ -184,7 +184,7 @@ export async function runOperation<Input extends z.ZodType, Output>(
 
 /** Native results for server actions; replay and previews are JSON-only contracts. */
 export async function runOperationInProcess<Input extends z.ZodType, Output>(
-  operation: Operation<Input, Output>,
+  operation: Operation<Input, Output, OperationEffect | undefined>,
   ctx: OrgContext,
   input: unknown,
   options: Pick<RunOptions, "deadlineMs" | "pool"> & {
@@ -212,7 +212,7 @@ export async function runOperationInProcess<Input extends z.ZodType, Output>(
 }
 
 async function runOperationCore<Input extends z.ZodType, Output, Result>(
-  operation: Operation<Input, Output>,
+  operation: Operation<Input, Output, OperationEffect | undefined>,
   ctx: OrgContext,
   input: unknown,
   options: RunOptions,

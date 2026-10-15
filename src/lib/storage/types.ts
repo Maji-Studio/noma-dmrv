@@ -15,6 +15,8 @@ export interface CreateUploadUrlArgs {
   key: string;
   contentType: string;
   maxBytes: number;
+  /** Fixed instant used for signing and expiry so the URL stays within its lease. */
+  signingDate?: Date;
   expiresInSeconds?: number;
 }
 
