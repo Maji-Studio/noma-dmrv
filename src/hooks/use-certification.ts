@@ -4,6 +4,7 @@
  * submission flow (N credit batches → 1 Isometric Removal — ADR 0003).
  */
 
+import { activityKeys } from "./activity-query-keys";
 import {
   type QueryClient,
   useMutation,
@@ -205,12 +206,14 @@ export const certificationKeys = {
     [...certificationKeys.all, "registry-source-visibility"] as const,
 };
 
-/** Refresh cached readiness and, when relevant, derived CO₂e previews. */
+/** Refresh cached readiness and activity and, when relevant, derived CO₂e previews. */
 export function invalidateCertificationReadiness(
   queryClient: QueryClient,
   options?: { creditBatchPreviews?: boolean },
 ) {
   const invalidations = [
+    // Readiness-affecting mutations also change the batch activity history.
+    queryClient.invalidateQueries({ queryKey: activityKeys.all }),
     queryClient.invalidateQueries({ queryKey: certificationKeys.all }),
   ];
   if (options?.creditBatchPreviews) {

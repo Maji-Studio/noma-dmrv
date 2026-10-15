@@ -108,9 +108,11 @@ Failed-upload retention deletes also use `deleteDocumentRow`, with source `syste
 and no actor. Lease renewal, promotion cleanup metadata and pending-upload expiry
 are internal upload bookkeeping and do not emit activity.
 
-Direct document events keep only the document ID, applicable batch/run IDs and a
+Direct and runner document events keep only the document ID, applicable batch/run IDs and a
 `document:<document_type>:<owner_type>:<owner_uuid>` reason code containing
-controlled type keys and the owning record ID. Events never copy filenames,
+controlled type keys and the owning record ID. Both paths use the shared
+`documentActivityReasonCode` helper for every owner type, including document
+creation, updates and deletion. Events never copy filenames,
 URLs, storage keys or descriptions. Parent deletes capture ownership before
 removing the rows needed to resolve it.
 
@@ -120,6 +122,23 @@ unclassified write exports. Its inventory distinguishes `direct` recording,
 `runner` coverage with operation IDs, and reasoned `exempt` entries. Certification status
 transitions use `certification-status-activity.ts`. Reference data, energy,
 readings and incidents are outside this activity scope.
+
+The batch activity list and summary share one membership predicate: an explicit
+link to the requested batch, or a null batch link with a current member-run link
+or current member record identity. An explicit link to another batch never matches,
+including copies of fanned-out edits and membership events. Member identities
+come from `loadCreditBatchRollups` (including
+run forwards), lab samples, owned documents and transport legs. Removal and GHG
+Statement identities follow the application slice tables; multi-run stock movements
+follow saved output allocations. These identity matches
+recover best-effort links, including events written before membership existed;
+explicit batch links preserve detach and deletion history. One event-page query
+uses bound ID arrays and OR predicates, so overlapping matches do not duplicate
+rows. Pages order by descending millisecond timestamp and sequence, with a
+validated opaque cursor. Record labels and actor names resolve in batches at
+read time; missing records are tombstones, unknown types have generic labels,
+and documents never expose filenames. The summary counts every matching event by
+entity type and action and resolves the latest event with the same labels and actors.
 
 ## Row-Level Guards
 
