@@ -143,24 +143,6 @@
     "createdAt": "Timestamp when the record was created",
     "updatedAt": "Timestamp of last modification"
   },
-  "feedstock_deliveries": {
-    "id": "Unique feedstock delivery identifier",
-    "code": "Human-readable delivery code",
-    "facility_id": "FK to the receiving facility",
-    "status": "Current delivery lifecycle status",
-    "delivery_date": "Date the biomass was received",
-    "supplier_id": "FK to the supplier who provided the feedstock",
-    "driver_id": "FK to the driver who transported the delivery",
-    "vehicle_id": "FK to the vehicle used for transport",
-    "gps_latitude": "Latitude at point of delivery",
-    "gps_longitude": "Longitude at point of delivery",
-    "feedstock_type_id": "FK to the feedstock type classification",
-    "wet_mass_kg": "Total delivered wet mass in kilograms (including moisture)",
-    "moisture_percent": "Moisture content at delivery as percentage",
-    "notes": "Free-text delivery notes",
-    "createdAt": "Timestamp when the record was created",
-    "updatedAt": "Timestamp of last modification"
-  },
   "feedstock_types": {
     "id": "Unique feedstock type identifier",
     "code": "Human-readable type code",
@@ -179,7 +161,6 @@
     "code": "Human-readable feedstock batch code",
     "facility_id": "FK to the facility holding this feedstock",
     "status": "Availability status (available, consumed, etc.)",
-    "feedstock_delivery_id": "FK to the originating delivery",
     "delivery_date": "Date the feedstock was received",
     "supplier_id": "FK to the original supplier",
     "feedstock_type_id": "FK to the feedstock type classification",
@@ -419,7 +400,7 @@
   },
   "transport_legs": {
     "id": "Unique transport leg identifier",
-    "entity_type": "Parent entity type (delivery, feedstock_delivery, etc.)",
+    "entity_type": "Parent entity type (delivery, sample, etc.)",
     "entity_id": "FK to the parent entity record",
     "origin_gps_latitude": "Origin latitude in decimal degrees",
     "origin_gps_longitude": "Origin longitude in decimal degrees",

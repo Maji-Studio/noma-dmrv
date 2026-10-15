@@ -49,13 +49,12 @@ it("keeps generated ledger and GHG report writers available on submitted lineage
   }
 });
 
-it.each(["transport_leg", "production_incident", "production_sample", "order", "biochar_product", "credit_batch", "feedstock_delivery"] as const)("maps %s evidence to its lineage, allowing drafts and refusing submitted evidence", async (entityType) => {
+it.each(["transport_leg", "production_incident", "production_sample", "order", "biochar_product", "credit_batch"] as const)("maps %s evidence to its lineage, allowing drafts and refusing submitted evidence", async (entityType) => {
   const schema = await import("@/db/schema");
   const { cleanupDocumentUploads } = await import("./helpers/document-upload-cleanup");
   const fixture = await createLineageFixture("none");
   const ids: string[] = [];
   let childId: string | undefined;
-  let supplierId: string | undefined;
   const tag = crypto.randomUUID();
   await db.insert(users).values({ id: ctx.userId, email: "document-test@example.test" }).onConflictDoNothing();
   try {
@@ -66,10 +65,6 @@ it.each(["transport_leg", "production_incident", "production_sample", "order", "
       const [row] = await db.insert(schema.incidentReports).values({ organizationId: ctx.organizationId, productionRunId: fixture.productionRunId, incidentTime: new Date(), description: "Test incident", severity: "low" }).returning(); entityId = childId = row.id;
     } else if (entityType === "production_sample") {
       const [row] = await db.insert(schema.productionSamples).values({ organizationId: ctx.organizationId, productionRunId: fixture.productionRunId, timestamp: new Date() }).returning(); entityId = childId = row.id;
-    } else if (entityType === "feedstock_delivery") {
-      const [supplier] = await db.insert(schema.suppliers).values({ organizationId: ctx.organizationId, code: tag, name: "Lineage supplier" }).returning(); supplierId = supplier.id;
-      const [row] = await db.insert(schema.feedstockDeliveries).values({ organizationId: ctx.organizationId, facilityId: fixture.facilityId, supplierId, code: tag, deliveryDate: new Date() }).returning(); entityId = childId = row.id;
-      await db.update(schema.feedstocks).set({ feedstockDeliveryId: row.id }).where(eq(schema.feedstocks.id, fixture.feedstockId));
     } else entityId = { order: fixture.orderId, biochar_product: fixture.productId, credit_batch: fixture.batchId }[entityType];
     const input = { entityType, entityId, documentType: "pdf" as const, fileName: "report.pdf", contentType: "application/pdf", sizeBytes: 8, storageProvider: "local-fs", storageBucket: "local-fs" };
     const row = await db.transaction((tx) => requestDocumentUploadInTransaction(ctx, tx, input)); ids.push(row.id);
@@ -80,11 +75,6 @@ it.each(["transport_leg", "production_incident", "production_sample", "order", "
     await cleanupDocumentUploads(ctx, ids);
     if (childId && entityType === "production_incident") await db.delete(schema.incidentReports).where(eq(schema.incidentReports.id, childId));
     if (childId && entityType === "production_sample") await db.delete(schema.productionSamples).where(eq(schema.productionSamples.id, childId));
-    if (childId && entityType === "feedstock_delivery") {
-      await db.update(schema.feedstocks).set({ feedstockDeliveryId: null }).where(eq(schema.feedstocks.id, fixture.feedstockId));
-      await db.delete(schema.feedstockDeliveries).where(eq(schema.feedstockDeliveries.id, childId));
-    }
-    if (supplierId) await db.delete(schema.suppliers).where(eq(schema.suppliers.id, supplierId));
     await cleanupLineageFixture(fixture);
   }
 });

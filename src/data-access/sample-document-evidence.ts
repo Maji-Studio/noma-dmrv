@@ -33,3 +33,24 @@ export async function getBatchesWithLabReports(
     return batchId ? [batchId] : [];
   }));
 }
+
+/** Histogram evidence belongs only to a Sample. Pending and failed uploads never count. */
+export async function getBatchesWithReflectanceHistograms(
+  ctx: OrgContext,
+  batchIds: string[],
+  reader: DbTransaction | typeof db = db,
+): Promise<Set<string>> {
+  requireOrgScope(ctx);
+  if (batchIds.length === 0) return new Set();
+  const rows = await reader.select({ creditBatchId: samples.creditBatchId })
+    .from(documents)
+    .innerJoin(samples, and(eq(documents.entityId, samples.id), eq(samples.organizationId, ctx.organizationId)))
+    .where(and(
+      eq(documents.organizationId, ctx.organizationId),
+      eq(documents.entityType, "sample"),
+      eq(documents.uploadStatus, "uploaded"),
+      eq(documents.documentType, "reflectance_histogram"),
+      inArray(samples.creditBatchId, batchIds),
+    ));
+  return new Set(rows.map((row) => row.creditBatchId));
+}

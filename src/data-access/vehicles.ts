@@ -35,7 +35,6 @@ const VEHICLE_NAME_TAKEN = "A vehicle with this name already exists";
 const VEHICLE_NOT_FOUND = "Vehicle not found";
 const VEHICLE_FK_CONSTRAINTS = [
   "deliveries_vehicle_id_vehicles_id_fk",
-  "feedstock_deliveries_vehicle_id_vehicles_id_fk",
   "feedstocks_vehicle_id_vehicles_id_fk",
 ] as const;
 /** Restarts when records move onto or off the vehicle mid-edit. */

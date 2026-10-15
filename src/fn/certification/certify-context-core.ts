@@ -624,6 +624,7 @@ export async function buildRemovalContext(
   const memberBatchesWithDurability = memberBatches.map((batch) => ({
     ...batch,
     hasLabReport: batchesWithSamples.find((sampleBatch) => sampleBatch.creditBatchId === batch.id)?.hasLabReport,
+    hasReflectanceHistogram: batchesWithSamples.find((sampleBatch) => sampleBatch.creditBatchId === batch.id)?.hasReflectanceHistogram,
     durabilityGateBlockers:
       durabilityBatchData.blockersByBatchId[batch.id] ?? [],
   }));

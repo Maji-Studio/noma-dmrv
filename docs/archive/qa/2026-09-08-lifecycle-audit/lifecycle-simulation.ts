@@ -3,7 +3,7 @@ import { feedstockFixtureValues, cleanupFeedstockFixtureParents } from "../../..
 import { beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
-import { facilities, feedstockTypes, storageLocations, binMovements, feedstocks, suppliers, supplierLocations, feedstockDeliveries } from "@/db/schema";
+import { facilities, feedstockTypes, storageLocations, binMovements, feedstocks, suppliers, supplierLocations } from "@/db/schema";
 import { updateStorageLocation } from "@/data-access/storage-locations";
 import { getStorageLocationLaneSummary } from "@/data-access/storage-location-lane-summary";
 import { createFeedstockType as quickCreateFeedstockType } from "@/data-access/quick-add";
@@ -163,16 +163,17 @@ describe("supplier deletion baseline observation", () => {
       code: `AUD-${crypto.randomUUID()}`, name: `Audit ${crypto.randomUUID()}` }).returning();
     await db.insert(supplierLocations).values({ ...TEST_SITE_POSITION, organizationId: TEST_ORG_ID,
       supplierId: supplier.id, name: "Disposable source location", country: "CHE" });
-    const [delivery] = await db.insert(feedstockDeliveries).values({ organizationId: TEST_ORG_ID,
+    const [delivery] = await db.insert(feedstocks).values(await feedstockFixtureValues(db, { organizationId: TEST_ORG_ID,
       code: `AUD-${crypto.randomUUID()}`, facilityId: f.facility.id, supplierId: supplier.id,
-      deliveryDate: new Date("2026-09-01T12:00:00Z") }).returning();
+      feedstockTypeId: f.type.id, storageLocationId: f.bin.id, massDryKg: BIN_STOCK_KG,
+      deliveryDate: new Date("2026-09-01T12:00:00Z") })).returning();
     try {
       await expect(deleteSupplier(context, supplier.id, supplier.version)).rejects.toThrow();
       expect(await db.select().from(suppliers).where(eq(suppliers.id, supplier.id))).toHaveLength(1);
       expect(await db.select().from(supplierLocations).where(eq(supplierLocations.supplierId, supplier.id))).toHaveLength(0);
       console.log("F08: delete rejected by feedstock_deliveries FK; supplier remains; locations were deleted");
     } finally {
-      await db.delete(feedstockDeliveries).where(eq(feedstockDeliveries.id, delivery.id));
+      await db.delete(feedstocks).where(eq(feedstocks.id, delivery.id));
       await db.delete(supplierLocations).where(eq(supplierLocations.supplierId, supplier.id));
       await db.delete(suppliers).where(eq(suppliers.id, supplier.id));
       await cleanup(f);

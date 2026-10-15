@@ -22,16 +22,18 @@ import { useIsRecordCertificationLocked } from "@/hooks/use-record-certification
 import { RECORD_FILES_LOCKED_MESSAGE } from "@/lib/certification/lineage-lock-message";
 import type {
   DocumentEntityType,
-  DocumentType,
   DocumentVisibility,
 } from "@/schemas/documents";
+
+import { DOCUMENT_UPLOAD_MAX_MB } from "@/lib/documents/upload-policy";
+import { DOCUMENT_TYPE_LABELS } from "@/schemas/documents";
+import { SampleDocumentTypePicker, type SampleDocumentType } from "./sample-document-type-picker";
 
 interface SampleDocumentsPanelProps {
   sampleId: string;
   readOnly?: boolean;
 }
 
-const SAMPLE_DOC_TYPE: DocumentType = "lab_report";
 const ENTITY_TYPE = "sample" satisfies DocumentEntityType;
 
 export function SampleDocumentsPanel({
@@ -39,6 +41,7 @@ export function SampleDocumentsPanel({
   readOnly: readOnlyProp = false,
 }: SampleDocumentsPanelProps) {
   const toast = useToast();
+  const [documentType, setDocumentType] = useState<SampleDocumentType>("lab_report");
   const canChangeVisibility = useCanChangeDocumentVisibility();
   // A submitted lineage freezes the files: download stays, changes are hidden.
   const locked = useIsRecordCertificationLocked(ENTITY_TYPE, sampleId);
@@ -119,7 +122,7 @@ export function SampleDocumentsPanel({
         <p className="body-small text-[var(--color-text-secondary)]">
           {readOnly
             ? "No documents attached yet."
-            : "No documents attached yet. Upload a lab report below."}
+            : "No documents attached yet. Upload a lab report or reflectance histogram below."}
         </p>
       ) : (
         <ul className="flex flex-col gap-8">
@@ -138,7 +141,7 @@ export function SampleDocumentsPanel({
                   {doc.fileName}
                 </span>
                 <span className="body-caption text-[var(--color-text-tertiary)]">
-                  {doc.documentType} · {formatFileSize(doc.fileSizeBytes)} · {doc.visibility}
+                  {DOCUMENT_TYPE_LABELS[doc.documentType]} · {formatFileSize(doc.fileSizeBytes)} · {doc.visibility}
                 </span>
               </div>
               <a
@@ -198,19 +201,22 @@ export function SampleDocumentsPanel({
       )}
 
       {!readOnly && (
-        <FormField id={`sample-${sampleId}-documents-upload`} label="Lab report">
-          <FormFileUpload
-            id={`sample-${sampleId}-documents-upload`}
-            accept="image/*,.pdf,.csv,.xlsx"
-            multiple
-            maxSizeMb={50}
-            entityType={ENTITY_TYPE}
-            entityId={sampleId}
-            documentType={SAMPLE_DOC_TYPE}
-            onUploaded={() => setUploadError(null)}
-            onUploadError={(err) => setUploadError(err)}
-          />
-        </FormField>
+        <div className="space-y-12">
+          <SampleDocumentTypePicker id={`sample-${sampleId}`} value={documentType} onChange={setDocumentType} />
+          <FormField id={`sample-${sampleId}-documents-upload`} label={DOCUMENT_TYPE_LABELS[documentType]}>
+            <FormFileUpload
+              id={`sample-${sampleId}-documents-upload`}
+              accept="image/*,.pdf,.csv,.xls,.xlsx"
+              multiple
+              maxSizeMb={DOCUMENT_UPLOAD_MAX_MB}
+              entityType={ENTITY_TYPE}
+              entityId={sampleId}
+              documentType={documentType}
+              onUploaded={() => setUploadError(null)}
+              onUploadError={(err) => setUploadError(err)}
+            />
+          </FormField>
+        </div>
       )}
 
       {deleteError && <ServerError message={deleteError} />}

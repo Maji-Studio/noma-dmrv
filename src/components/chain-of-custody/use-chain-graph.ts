@@ -354,7 +354,6 @@ function buildSourceNodes(sources: ChainSourceLineage[]): LineageGraphNode[] {
     const details: LineageDetailRow[] = [];
     addRow(details, "Type", feedstock.feedstockTypeName);
     addRow(details, "Supplier", feedstock.supplierName);
-    addRow(details, "Inbound", feedstock.feedstockDeliveryCode);
     addRow(details, "Wet allocation", formatKg(feedstock.wetMassUsedKg));
     addRow(details, "Intake dry mass", formatKg(feedstock.massDryKg));
 

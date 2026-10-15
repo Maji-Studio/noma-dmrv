@@ -17,7 +17,7 @@ migrations, and soft-delete semantics live in [`database.md`](./database.md).
 | Activity history (`activity_events`) | `src/db/schema/activity.ts` |
 | Facilities, reactors, storage locations | `src/db/schema/facilities.ts` |
 | Suppliers, customers, their locations, drivers, operators | `src/db/schema/parties.ts` |
-| Feedstock deliveries, types, feedstocks | `src/db/schema/feedstock.ts` |
+| Feedstock types and feedstocks | `src/db/schema/feedstock.ts` |
 | Production runs, readings, samples, incidents, run↔physical-bin draw ledger, run↔feedstock provenance junction | `src/db/schema/production.ts` |
 | Production processes (epochs + Method-B prerequisites) | `src/db/schema/production-processes.ts` |
 | Formulations, ingredients, biochar products | `src/db/schema/products.ts` |
@@ -207,3 +207,10 @@ the version in the same statement. UI commands require the loaded version; see
 [expected-version checks](./architecture.md#expected-version-checks-on-edit-forms).
 Sample `analysis_date`, `r0_analysis_date`, and `tga_analysis_date` are calendar
 `date` columns; `sampling_time` remains a timestamp instant.
+
+The intake shipment table and its nullable feedstock reference are retired.
+`feedstocks` owns intake and transport facts; split intakes use `deliveryGroupId`.
+Documents no longer accept the retired shipment owner. `documents.entity_type`
+is unconstrained text, so there is no owner enum or CHECK to change.
+`documentation_type` includes `reflectance_histogram`, uploaded only to Samples
+through the app.

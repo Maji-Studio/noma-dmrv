@@ -138,12 +138,6 @@ const TABLE_META: Record<string, TableMeta> = {
     summary: "Production/reactor operator records.",
     useCases: ["Operational accountability", "Run and Sample attribution"],
   },
-  feedstock_deliveries: {
-    area: "Feedstock",
-    modulePath: "src/db/schema/feedstock.ts",
-    summary: "Incoming biomass shipment records.",
-    useCases: ["Receiving workflows", "Transport emissions inputs"],
-  },
   feedstock_types: {
     area: "Feedstock",
     modulePath: "src/db/schema/feedstock.ts",

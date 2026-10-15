@@ -197,14 +197,7 @@ test.describe("Full Chain UI Smoke Test", () => {
                 .from(schema.feedstocks)
                 .where(inArray(schema.feedstocks.facilityId, facilityIds))
             : [];
-          const feedstockDeliveryRows = facilityIds.length
-            ? await tx
-                .select({ id: schema.feedstockDeliveries.id })
-                .from(schema.feedstockDeliveries)
-                .where(inArray(schema.feedstockDeliveries.facilityId, facilityIds))
-            : [];
           const feedstockIds = feedstocksByFacility.map((f) => f.id);
-          const feedstockDeliveryIds = feedstockDeliveryRows.map((fd) => fd.id);
 
           const biocharProductsByFacility = facilityIds.length
             ? await tx
@@ -240,7 +233,6 @@ test.describe("Full Chain UI Smoke Test", () => {
             ...applicationIds,
             ...creditBatchIds,
             ...feedstockIds,
-            ...feedstockDeliveryIds,
             ...biocharProductIds,
             ...storageLocationIds,
           ]);
@@ -337,11 +329,6 @@ test.describe("Full Chain UI Smoke Test", () => {
             await cleanupFeedstockFixtureParents(tx);
           }
 
-          if (feedstockDeliveryIds.length) {
-            await tx
-              .delete(schema.feedstockDeliveries)
-              .where(inArray(schema.feedstockDeliveries.id, feedstockDeliveryIds));
-          }
 
           if (reactorIds.length) {
             await tx

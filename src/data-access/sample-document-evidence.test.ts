@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { getBatchesWithLabReports } from "./sample-document-evidence";
+import { getBatchesWithLabReports, getBatchesWithReflectanceHistograms } from "./sample-document-evidence";
 import { db } from "@/db";
 import { documents } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
@@ -41,4 +41,17 @@ describe("getBatchesWithLabReports", () => {
     expect(select).toHaveBeenCalledTimes(1);
   });
 
+});
+
+it("counts uploaded histogram documents on org-scoped Samples only", async () => {
+  const queries: unknown[] = [];
+  const results = [[{ creditBatchId: "batch-a" }]];
+  vi.mocked(db.select).mockImplementation(() => ({
+    from: () => ({ innerJoin() { return this; }, where: (query: unknown) => { queries.push(query); return Promise.resolve(results.shift()); } }),
+  }) as unknown as ReturnType<typeof db.select>);
+  expect(await getBatchesWithReflectanceHistograms(ctx, ["batch-a", "batch-b"])).toEqual(new Set(["batch-a"]));
+  const dialect = new PgDialect();
+  const evidence = dialect.sqlToQuery(queries[queries.length - 1] as Parameters<typeof dialect.sqlToQuery>[0]);
+  expect(evidence.params).toEqual(expect.arrayContaining(["org-a", "uploaded", "reflectance_histogram", "sample", "batch-a", "batch-b"]));
+  expect(evidence.params).not.toContain("credit_batch");
 });
