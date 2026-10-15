@@ -28,6 +28,7 @@ export function buildSubmissionLineageBlockers(
   for (const { application, delivery, order } of lineages) {
     const destination = applicationDestinationBlocker({
       applicationCode: application.code,
+      // The lineage projection resolves this from the order destination.
       customerLocationId: delivery.customerLocationId ?? null,
     });
     if (destination) blockers.push({

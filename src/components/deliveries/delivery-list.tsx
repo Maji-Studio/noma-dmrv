@@ -80,7 +80,6 @@ function deliveryDetailToRelations(
     orderCode: delivery.order?.code ?? null,
     facilityName: delivery.facility?.name ?? null,
     customerName: delivery.customerName,
-    biocharProductCode: delivery.biocharProduct?.code ?? null,
     driverName: delivery.driver?.name ?? null,
     vehicleName: delivery.vehicle?.name ?? null,
   };
@@ -300,7 +299,6 @@ export function DeliveryList() {
         facilityGpsLongitude: null,
         destinationGpsLatitude: null,
         destinationGpsLongitude: null,
-        biocharProductCode: null,
         driverName: null,
         vehicleName: null,
         effectiveDistanceKm: null,

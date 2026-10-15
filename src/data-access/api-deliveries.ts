@@ -1,6 +1,6 @@
 import { and, desc, eq, getTableColumns, gte, isNull, lt } from "drizzle-orm";
 import { db } from "@/db";
-import { deliveries } from "@/db/schema";
+import { deliveries, orders } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import { DomainError } from "@/lib/domain-errors";
 import { requireOrgScope, type Executor } from "./utils";
@@ -15,7 +15,8 @@ export interface ApiDeliveryFilters {
 /** Archived deliveries remain readable by id or code. */
 export async function findApiDelivery(ctx: OrgContext, identifier: ApiLookupIdentifier, executor: Executor = db) {
   requireOrgScope(ctx);
-  const [row] = await executor.select().from(deliveries).where(and(
+  const [row] = await executor.select({ ...getTableColumns(deliveries), orderCustomerLocationId: orders.customerLocationId }).from(deliveries)
+    .leftJoin(orders, and(eq(orders.id, deliveries.orderId), eq(orders.organizationId, ctx.organizationId))).where(and(
     eq(deliveries.organizationId, ctx.organizationId),
     "id" in identifier ? eq(deliveries.id, identifier.id) : eq(deliveries.code, identifier.code),
   )).limit(1);
@@ -30,7 +31,8 @@ export async function listApiDeliveries(ctx: OrgContext, filters: ApiDeliveryFil
   await requireApiLookupFacility(ctx, filters.facilityId);
   if (filters.orderId) await findApiOrder(ctx, { id: filters.orderId });
   if (filters.storageLocationId) await findApiStorageLocation(ctx, { id: filters.storageLocationId });
-  return db.select({ ...getTableColumns(deliveries), cursorCreatedAt: lookupCursorCreatedAt(deliveries.createdAt) }).from(deliveries).where(and(
+  return db.select({ ...getTableColumns(deliveries), orderCustomerLocationId: orders.customerLocationId, cursorCreatedAt: lookupCursorCreatedAt(deliveries.createdAt) }).from(deliveries)
+    .leftJoin(orders, and(eq(orders.id, deliveries.orderId), eq(orders.organizationId, ctx.organizationId))).where(and(
     eq(deliveries.organizationId, ctx.organizationId), isNull(deliveries.archivedAt),
     filters.facilityId === undefined ? undefined : eq(deliveries.facilityId, filters.facilityId),
     filters.orderId === undefined ? undefined : eq(deliveries.orderId, filters.orderId),

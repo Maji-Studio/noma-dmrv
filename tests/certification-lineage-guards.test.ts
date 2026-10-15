@@ -47,7 +47,6 @@ import {
   certifierGhgStatements,
   certifierRemovals,
   creditBatchProductionRuns,
-  deliveries,
   feedstocks,
   orders,
   productionRunFeedstocks,
@@ -163,10 +162,6 @@ describe("certification lineage guards", () => {
           .update(orders)
           .set({ formulationId: (await db.select().from(biocharProducts).where(eq(biocharProducts.id, unrelatedProduct.id)))[0].formulationId })
           .where(eq(orders.id, fixture.orderId));
-        await db
-          .update(deliveries)
-          .set({ biocharProductId: null })
-          .where(eq(deliveries.id, fixture.deliveryId));
 
         await expect(
           updateProductionRun(
@@ -176,10 +171,6 @@ describe("certification lineage guards", () => {
           ),
         ).rejects.toThrow(LOCKED_COPY);
       } finally {
-        await db
-          .update(deliveries)
-          .set({ biocharProductId: fixture.productId })
-          .where(eq(deliveries.id, fixture.deliveryId));
         await db
           .update(orders)
           .set({ formulationId: (await db.select().from(biocharProducts).where(eq(biocharProducts.id, fixture.productId)))[0].formulationId })

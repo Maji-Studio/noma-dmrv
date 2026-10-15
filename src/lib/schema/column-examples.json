@@ -444,8 +444,6 @@
     "delivery_date": "2025-06-15",
     "status": "completed",
     "order_id": "ord_001",
-    "customer_location_id": "csl_001",
-    "biochar_product_id": "bp_001",
     "storage_location_id": "stl_001",
     "moisture_content_percent": 3.8,
     "delivered_wet_mass_kg": 520,

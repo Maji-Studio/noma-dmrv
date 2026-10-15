@@ -55,6 +55,7 @@ export interface BatchLineageApplicationFact {
     deliveredWetMassKg?: number | null;
     distanceKmOverride?: number | null;
     locationDistanceKm?: number | null;
+    /** Resolved from the delivery's order, not a delivery-owned field. */
     customerLocationId?: string | null;
     massDryKg: number | null;
   };
