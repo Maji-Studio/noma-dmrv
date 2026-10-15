@@ -1,19 +1,20 @@
-import type { z } from "zod";
+import { z } from "zod";
 import { getCreditBatchActivitySummary, listCreditBatchActivity } from "@/data-access/credit-batch-activity";
 import { uuidSchema } from "@/schemas/helpers";
 import type { OrgContext } from "@/lib/auth/server";
 import { activityPageOptionsSchema } from "@/lib/activity-pagination";
+import { activityFiltersSchema } from "@/lib/activity-filters";
 
-const inputSchema = activityPageOptionsSchema.extend({
+const summaryInputSchema = z.object({
   creditBatchId: uuidSchema("Choose a valid credit batch."),
 });
-const summaryInputSchema = inputSchema.pick({ creditBatchId: true });
+const inputSchema = activityPageOptionsSchema.extend(summaryInputSchema.shape).extend(activityFiltersSchema.shape);
 export type CreditBatchActivityInput = z.input<typeof inputSchema>;
 export type CreditBatchActivitySummaryInput = z.input<typeof summaryInputSchema>;
 
 export async function readCreditBatchActivity(ctx: OrgContext, input: unknown) {
-  const { creditBatchId, ...options } = inputSchema.parse(input);
-  return listCreditBatchActivity(ctx, creditBatchId, options);
+  const { creditBatchId, action, entityType, ...options } = inputSchema.parse(input);
+  return listCreditBatchActivity(ctx, creditBatchId, options, { action, entityType });
 }
 
 export async function readCreditBatchActivitySummary(ctx: OrgContext, input: unknown) {

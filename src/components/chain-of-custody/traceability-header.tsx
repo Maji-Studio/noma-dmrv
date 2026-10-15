@@ -48,6 +48,8 @@ export interface TraceabilityHeaderProps {
   onSelectBatch: (batchId: string) => void;
   anchor: "application" | "batch" | "none";
   runOptions: RunPickerOption[];
+  /** The run filter narrows lineage readings; Activity covers the whole batch. */
+  showRunFilter?: boolean;
   selectedRunId: string | null;
   onRunChange: (runId: string | undefined) => void;
   runFilterDisabled: boolean;
@@ -73,6 +75,7 @@ export function TraceabilityHeader({
   onSelectBatch,
   anchor,
   runOptions,
+  showRunFilter = true,
   selectedRunId,
   onRunChange,
   runFilterDisabled,
@@ -102,7 +105,7 @@ export function TraceabilityHeader({
         onSelect={onSelectBatch}
       />
 
-      {anchor === "batch" ? (
+      {anchor === "batch" && showRunFilter ? (
         <div className="min-w-0 shrink-0" data-testid="chain-run-select">
           <RunPicker
             runs={runOptions}
