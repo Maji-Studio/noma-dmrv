@@ -12,6 +12,7 @@
  * "Should" is guidance, so the R₀ count never blocks submission.
  */
 
+import { isCertifyEntityField } from "./certify-field-registry";
 import { sampleDocumentWarnings } from "./sample-document-warnings";
 import type { CreditBatchSampling } from "@/schemas/credit-batches";
 import { MINIMUM_REPLICATES_PER_BATCH } from "@/lib/calculations/biochar-eligibility";
@@ -83,7 +84,7 @@ export function sampleEntryWarnings(facts: SampleEntryFacts): string[] {
   if (facts.sampling === "sampled" && facts.totalHydrogenPercent == null) {
     warnings.push(`Sample ${facts.sampleCode} has no total hydrogen, so H/C_org cannot be calculated. The biochar module requires H/C_org for every production batch (Table 2).`);
   }
-  if (facts.sampling === "sampled" && facts.moistureContentPercent == null) {
+  if (isCertifyEntityField("sample", "moistureContentPercent", facts) && facts.moistureContentPercent == null) {
     warnings.push(`Sample ${facts.sampleCode} is missing moisture content. A Removal with credit batch ${facts.creditBatchCode} cannot be submitted until every Sample has it.`);
   }
   if (ratioWarning) warnings.push(ratioWarning);

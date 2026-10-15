@@ -21,9 +21,8 @@ import { getTransportLegsWithEvidenceForEntities } from "@/data-access/transport
 import {
   loadCertifyContextForCreditBatchForUser,
 } from "@/fn/certification/certify-context-core";
-import type { ProductionRunStatus } from "@/lib/production-runs/lifecycle";
 import {
-  factsFromMockedLineages,
+  mockNormalizedLineageFacts,
 } from "./fixtures/certify-context";
 
 vi.mock("@/data-access/credit-batches", () => ({
@@ -98,57 +97,12 @@ const mockedGetLegs = vi.mocked(getTransportLegsWithEvidenceForEntities);
 const USER_ID = "user-1";
 const CREDIT_BATCH_ID = "cb-1";
 const FACILITY_ID = "fac-1";
-function mockNormalizedLineageFacts(
-  memberRunStatusById: Record<string, ProductionRunStatus> = {},
-): void {
-  mockedLoadAccounting.mockImplementation(async (ctx, batchIds) => {
-    const entries = await Promise.all(
-      batchIds.map(async (batchId) => {
-        const batch = await mockedGetCreditBatch(ctx, batchId, {
-          skipPreview: true,
-        });
-        const productionRunIds = batch?.productionRunIds ?? [];
-        const applicationIds = productionRunIds.includes("pr-1")
-          ? ["app-1"]
-          : [];
-        const lineages = await Promise.all(
-          applicationIds.map((applicationId) =>
-            mockedGetLineage(ctx, applicationId),
-          ),
-        );
-        const lineageFacts = factsFromMockedLineages(
-          batchId,
-          productionRunIds,
-          lineages,
-          memberRunStatusById,
-        );
-        return [
-          batchId,
-          {
-            batch: {
-              ...batch,
-              id: batchId,
-              code: batch?.code ?? "CB-1",
-              facilityId: batch?.facilityId ?? FACILITY_ID,
-              durabilityOption: batch?.durabilityOption ?? "200_year",
-              productionEmissionsClaimedByRemovalId:
-                batch?.productionEmissionsClaimedByRemovalId ?? null,
-            },
-            lineageFacts,
-            appliedWeightTons: lineageFacts.appliedWeightTons,
-          },
-        ] as const;
-      }),
-    );
-    return Object.fromEntries(entries) as never;
-  });
-}
 
 describe("credit batch gates without applications", () => {
   beforeEach(() => {
     vi.resetAllMocks();
     vi.mocked(loadBiocharDeliveryTransportLegs).mockResolvedValue([]);
-    mockNormalizedLineageFacts();
+    mockNormalizedLineageFacts(mockedLoadAccounting, mockedGetCreditBatch, mockedGetLineage);
     mockedHasCredentials.mockResolvedValue(true);
     mockedGetCreditBatchRemovalId.mockResolvedValue(null);
     mockedGetCreditBatch.mockResolvedValue({

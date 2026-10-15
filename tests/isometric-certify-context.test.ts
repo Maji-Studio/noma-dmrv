@@ -30,9 +30,8 @@ import {
 import {
   loadCertifyContextForCreditBatchForUser,
 } from "@/fn/certification/certify-context-core";
-import type { ProductionRunStatus } from "@/lib/production-runs/lifecycle";
 import {
-  factsFromMockedLineages,
+  mockNormalizedLineageFacts,
   satisfiedVisualEvidenceDocuments,
   transportTemplate,
 } from "./fixtures/certify-context";
@@ -113,51 +112,6 @@ const USER_ID = "user-1";
 const CREDIT_BATCH_ID = "cb-1";
 const FACILITY_ID = "fac-1";
 const EXTERNAL_PROJECT_ID = "prj_test";
-function mockNormalizedLineageFacts(
-  memberRunStatusById: Record<string, ProductionRunStatus> = {},
-): void {
-  mockedLoadAccounting.mockImplementation(async (ctx, batchIds) => {
-    const entries = await Promise.all(
-      batchIds.map(async (batchId) => {
-        const batch = await mockedGetCreditBatch(ctx, batchId, {
-          skipPreview: true,
-        });
-        const productionRunIds = batch?.productionRunIds ?? [];
-        const applicationIds = productionRunIds.includes("pr-1")
-          ? ["app-1"]
-          : [];
-        const lineages = await Promise.all(
-          applicationIds.map((applicationId) =>
-            mockedGetLineage(ctx, applicationId),
-          ),
-        );
-        const lineageFacts = factsFromMockedLineages(
-          batchId,
-          productionRunIds,
-          lineages,
-          memberRunStatusById,
-        );
-        return [
-          batchId,
-          {
-            batch: {
-              ...batch,
-              id: batchId,
-              code: batch?.code ?? "CB-1",
-              facilityId: batch?.facilityId ?? FACILITY_ID,
-              durabilityOption: batch?.durabilityOption ?? "200_year",
-              productionEmissionsClaimedByRemovalId:
-                batch?.productionEmissionsClaimedByRemovalId ?? null,
-            },
-            lineageFacts,
-            appliedWeightTons: lineageFacts.appliedWeightTons,
-          },
-        ] as const;
-      }),
-    );
-    return Object.fromEntries(entries) as never;
-  });
-}
 
 function mapping(
   overrides: Partial<CertifierProjectRow> = {},
@@ -217,7 +171,7 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
   beforeEach(() => {
     vi.resetAllMocks();
     vi.mocked(loadBiocharDeliveryTransportLegs).mockResolvedValue([]);
-    mockNormalizedLineageFacts();
+    mockNormalizedLineageFacts(mockedLoadAccounting, mockedGetCreditBatch, mockedGetLineage);
     mockedHasCredentials.mockResolvedValue(true);
     mockedGetCreditBatchRemovalId.mockResolvedValue(null);
     mockedGetCreditBatch.mockResolvedValue({
@@ -292,7 +246,7 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
   // non-complete member run should not occur; if one ever does (legacy rows,
   // a future membership path), routing must still point at Production Runs.
   it("defensively routes a batch whose only member runs are incomplete to Production Runs", async () => {
-    mockNormalizedLineageFacts({ "pr-running": "running" });
+    mockNormalizedLineageFacts(mockedLoadAccounting, mockedGetCreditBatch, mockedGetLineage, { "pr-running": "running" });
     mockedGetCreditBatch.mockResolvedValue({
       id: CREDIT_BATCH_ID,
       code: "CB-1",
@@ -705,7 +659,7 @@ describe("requiredTransportCategories", () => {
   beforeEach(() => {
     vi.resetAllMocks();
     vi.mocked(loadBiocharDeliveryTransportLegs).mockResolvedValue([]);
-    mockNormalizedLineageFacts();
+    mockNormalizedLineageFacts(mockedLoadAccounting, mockedGetCreditBatch, mockedGetLineage);
     mockedHasCredentials.mockResolvedValue(true);
     mockedGetCreditBatch.mockResolvedValue({
       id: CREDIT_BATCH_ID,

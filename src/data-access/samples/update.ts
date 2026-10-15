@@ -5,12 +5,11 @@ import type { OrgContext } from "@/lib/auth/server";
 import { SampleFieldError, sampleNotFound } from "@/lib/sample-domain-errors";
 import type { CertifiedLineageCheck } from "../certification-lineage-guards";
 import { assertRowVersion, nextVersion } from "../row-version";
-import { getBatchesWithLabReports } from "../sample-document-evidence";
 import { requireOrgScope } from "../utils";
 import { assertCarbonReconciliation } from "./carbon-reconciliation";
 import { assertSamplingTimeNotFuture } from "./future-time";
 import { getSampleById } from "./sample-by-id";
-import { derivedRatioColumns, entryWarnings, mergeOverLocked, optionalColumns, type SampleWriteResult, type UpdateSampleRequest } from "./write-values";
+import { derivedRatioColumns, batchEntryWarnings, mergeOverLocked, optionalColumns, type SampleWriteResult, type UpdateSampleRequest } from "./write-values";
 import {
   assertSampleLinksHeld, lockSampleWriteScope, readSampleBatchFacility, readSampleLinks,
   requireWritableBatch, resolveSamplingTimeForBatch, type LockedSampleBatch, type SampleBatchFacility,
@@ -94,8 +93,7 @@ export async function updateSampleInTransaction(
     sample: await getSampleById(ctx, sampleId, tx),
     notices: ratios.notices,
     warnings: warningScope
-      ? entryWarnings(effective, ratios.columns, warningScope.batch, warningScope.facility,
-        (await getBatchesWithLabReports(ctx, [warningScope.batch.id], tx)).has(warningScope.batch.id))
+      ? await batchEntryWarnings(ctx, tx, effective, ratios.columns, warningScope.batch, warningScope.facility)
       : [],
   };
 }
