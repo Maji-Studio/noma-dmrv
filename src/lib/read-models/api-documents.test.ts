@@ -6,7 +6,7 @@ import type { OrgContext } from "@/lib/auth/server";
 const database = vi.hoisted(() => ({ rows: [] as unknown[][], queries: [] as unknown[], current: [] as unknown[] }));
 vi.mock("@/db", () => {
   const chain = {
-    from: () => chain, leftJoin: () => chain,
+    from: () => chain, leftJoin: () => chain, innerJoin: () => chain,
     where: (condition: unknown) => { database.queries.push(condition); return chain; },
     orderBy: () => chain,
     limit: async () => database.current,
