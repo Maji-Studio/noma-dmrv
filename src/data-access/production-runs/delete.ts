@@ -37,7 +37,7 @@ export async function deleteProductionRunInTransaction(
   productionRunId: string,
   expectedVersion: number,
   snapshotStock?: SnapshotStock,
-): Promise<void> {
+): Promise<{ facilityId: string }> {
   requireOrgScope(ctx);
 
   // Verify run exists
@@ -68,6 +68,7 @@ export async function deleteProductionRunInTransaction(
   const [locked] = await tx
     .select({
       id: productionRuns.id,
+      facilityId: productionRuns.facilityId,
       version: productionRuns.version,
       biocharOutputKg: productionRuns.biocharOutputKg,
       biocharStorageLocationId: productionRuns.biocharStorageLocationId,
@@ -182,7 +183,7 @@ export async function deleteProductionRunInTransaction(
       entityId: incident.id,
     })),
   ]);
-
+  return { facilityId: locked.facilityId };
 }
 
 export async function deleteProductionRun(ctx: OrgContext, id: string, expectedVersion: number): Promise<void> {

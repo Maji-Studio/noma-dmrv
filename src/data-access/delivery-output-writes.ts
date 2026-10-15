@@ -81,7 +81,13 @@ async function deliveryAllocations(ctx: OrgContext, tx: DbTransaction, movement:
     policy: allocationPolicySchema.parse(row.basisSnapshot.policy) }));
 }
 
-async function replayDelivery(ctx: OrgContext, tx: DbTransaction, movement: PostedOutputRequest) {
+interface PostedDelivery {
+  delivery: CreatedDelivery;
+  basisFingerprint: string;
+  allocations: Awaited<ReturnType<typeof deliveryAllocations>>;
+}
+
+async function replayDelivery(ctx: OrgContext, tx: DbTransaction, movement: PostedOutputRequest): Promise<PostedDelivery> {
   requireOrgScope(ctx);
   const [delivery] = await tx.select().from(deliveries).where(and(eq(deliveries.organizationId, ctx.organizationId), eq(deliveries.id, String(movement.inputSnapshot?.deliveryId))));
   if (!delivery) throw deliveryReferenceNotFound(['orderId'], 'Posted delivery');
@@ -89,7 +95,7 @@ async function replayDelivery(ctx: OrgContext, tx: DbTransaction, movement: Post
 }
 
 /** All reference reads and code-generation savepoints use the caller's connection. */
-export async function createDeliveryInTransaction(ctx: OrgContext, tx: DbTransaction, raw: CreateDeliveryInput, options: CreateDeliveryOptions = {}) {
+export async function createDeliveryInTransaction(ctx: OrgContext, tx: DbTransaction, raw: CreateDeliveryInput, options: CreateDeliveryOptions = {}): Promise<PostedDelivery> {
   requireOrgScope(ctx);
   const { code, idempotencyKey, ...facts } = raw;
   const data = recordDeliveryInput.parse(facts);
@@ -97,7 +103,10 @@ export async function createDeliveryInTransaction(ctx: OrgContext, tx: DbTransac
   return withOutputStockErrors(async () => {
     await lockBiocharTransportRouteTopology(ctx, tx);
     const committed = await findPostedOutputRequest(ctx, tx, { idempotencyKey, payload, storageLocationId: data.storageLocationId });
-    if (committed) return replayDelivery(ctx, tx, committed);
+    if (committed) {
+      options.onReplay?.();
+      return replayDelivery(ctx, tx, committed);
+    }
     const [orderRead] = await tx.select().from(orders).where(and(eq(orders.organizationId, ctx.organizationId), eq(orders.id, data.orderId)));
     if (!orderRead || orderRead.archivedAt) throw deliveryReferenceNotFound(['orderId'], 'Order');
     const [facilityRead] = await tx.select().from(facilities).where(and(eq(facilities.organizationId, ctx.organizationId), eq(facilities.id, orderRead.facilityId)));

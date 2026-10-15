@@ -69,6 +69,8 @@ export interface OutputStockPosting<T> {
 }
 
 export interface OutputStockPostingOptions {
+  /** Called when a request key returns its committed result without writing. */
+  onReplay?: () => void;
   /** Dry-run observer: called once, after every bin lock and before any write. */
   snapshotStock?: SnapshotStock;
 }
@@ -85,7 +87,10 @@ export async function withOutputStockPostingInTransaction<T>(ctx: OrgContext, tx
   const { input, payload = input } = posting;
   if (posting.locksTransportRoutes) await lockBiocharTransportRouteTopology(ctx, tx);
   const existing = await findPostedOutputRequest(ctx, tx, { idempotencyKey: input.idempotencyKey, payload, storageLocationId: input.storageLocationId });
-  if (existing) return posting.replay(tx, existing);
+  if (existing) {
+    options.onReplay?.();
+    return posting.replay(tx, existing);
+  }
   const binIds = [input.storageLocationId, ...(posting.additionalBinIds ?? [])];
   await lockBinStocks(ctx, tx, binIds);
   // One snapshot of every locked bin, so no affected bin is missing from the effects.

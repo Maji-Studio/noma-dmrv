@@ -1,3 +1,4 @@
+import { createOperationActivity } from "@/lib/operations/activity-links";
 import { waitForBlockedOperations } from "./helpers/operation-barrier";
 import { cleanupDocumentUploads } from "./helpers/document-upload-cleanup";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
@@ -212,7 +213,7 @@ it.each(["refusal", "expiry"] as const)("app, REST and MCP preserve the stored r
       locked.release(); await commit.promise;
     });
     await locked.promise;
-    const scope = (tx: Parameters<typeof confirmDocumentUploadApp.execute>[0]["tx"]) => ({ ctx, tx, afterCommit: vi.fn() });
+    const scope = (tx: Parameters<typeof confirmDocumentUploadApp.execute>[0]["tx"]) => ({ ctx, tx, activity: createOperationActivity(), afterCommit: vi.fn() });
     const losing = database.transaction(async (tx) => transport === "app"
       ? confirmDocumentUploadApp.execute(scope(tx), facts)
       : confirmInspectedDocumentUpload.execute(scope(tx), facts));

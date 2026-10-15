@@ -2,7 +2,7 @@ import type { ApiContext } from "@/lib/auth/api-context";
 import { LAB_SAMPLE_REPRESENTATION_REVISION } from "@/config/api-rest";
 import { DomainError } from "@/lib/domain-errors";
 import {
-  deleteLabSample, describeRecordedLabSample, describeUpdatedLabSample, recordLabSample, updateLabSample,
+  deleteLabSample, describeDeletedLabSample, describeRecordedLabSample, describeUpdatedLabSample, recordLabSample, updateLabSample,
 } from "@/lib/operations/lab-samples";
 import type { Operation } from "@/lib/operations/runner";
 import { readApiLabSample } from "@/lib/read-models/api-lab-samples";
@@ -62,7 +62,7 @@ export function representationCheckedUpdate(id: string, revision: number): Opera
 export function representationCheckedDelete(id: string, revision: number): Operation<typeof deleteLabSampleInput, LabSampleRepresentation> {
   return {
     ...deleteLabSample,
-    describe: (input) => deleteLabSample.describe!(input, undefined),
+    describe: describeDeletedLabSample,
     execute: async (scope, input) => {
       const row = await checkRepresentation(scope, id, revision);
       await deleteLabSample.execute(scope, input);

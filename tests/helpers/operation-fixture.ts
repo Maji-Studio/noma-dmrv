@@ -10,6 +10,7 @@ import { eq } from "drizzle-orm";
 import { Pool } from "pg";
 import { db } from "@/db";
 import {
+  activityEvents,
   apiIdempotencyRecords,
   reactors,
   productionRuns,
@@ -110,6 +111,7 @@ export async function feedstockCount(fixture: IntakeFixture): Promise<number> {
 
 export async function removeIntakeFixture(fixture: IntakeFixture): Promise<void> {
   const organizationId = fixture.ctx.organizationId;
+  await db.delete(activityEvents).where(eq(activityEvents.organizationId, organizationId));
   await db.delete(productionRunFeedstocks).where(eq(productionRunFeedstocks.organizationId, organizationId));
   await db.delete(productionRunFeedstockDraws).where(eq(productionRunFeedstockDraws.organizationId, organizationId));
   await db.delete(productionRuns).where(eq(productionRuns.organizationId, organizationId));
