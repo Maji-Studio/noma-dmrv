@@ -1,4 +1,4 @@
-import type { IsometricClient } from "./client";
+import type { IsometricClient, IsometricRequestOptions } from "./client";
 import { findRegistryRecord } from "./find-record";
 import type { components } from "./generated/certify";
 
@@ -47,8 +47,12 @@ export function deleteGhgEntry(client: IsometricClient, id: string): Promise<voi
 // detailed Sequestrations/Activities component split lives behind
 // `/ghg_entries/{id}/component_attributions`; this entry-level read carries the
 // netted figures we surface in the removal breakdown card.
-export function getGhgEntry(client: IsometricClient, id: string): Promise<GhgEntry> {
-  return client.get<GhgEntry>(`/ghg_entries/${id}`);
+export function getGhgEntry(
+  client: IsometricClient,
+  id: string,
+  options?: IsometricRequestOptions,
+): Promise<GhgEntry> {
+  return client.get<GhgEntry>(`/ghg_entries/${id}`, options);
 }
 
 export function getDatapoint(
