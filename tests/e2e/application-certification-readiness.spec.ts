@@ -113,9 +113,14 @@ async function expectRemovalReadyWithoutApplicationEvidence(
     `/credit-batches/${batch.creditBatchId}?facility=${facilityId}`,
   );
   const checklist = page.getByTestId("batch-health-strip");
+  // The fixture links a fake registry project, so the batch stays unpinned
+  // (plan 2026-10-15 §4.2). That template check is the only open issue.
+  await expect(checklist.getByText("1 issue open")).toBeVisible({
+    timeout: COLD_COMPILE_TIMEOUT_MS,
+  });
   await expect(
-    checklist.getByText("All batch data checks passed"),
-  ).toBeVisible({ timeout: COLD_COMPILE_TIMEOUT_MS });
+    checklist.getByText("Choose a Removal template for this credit batch."),
+  ).toBeVisible();
   await expect(
     checklist.getByText("Application evidence", { exact: true }),
   ).toHaveCount(0);

@@ -1,3 +1,4 @@
+import { normalizeTemplateDefinition, resolveLineSources } from "../src/lib/isometric/template-observations";
 /**
  * Isometric coverage check (ADR 0005 scope rules / ADR 0018, Plan §7 / B1).
  *
@@ -192,7 +193,9 @@ async function main(): Promise<void> {
     }
 
     // Each group + component + input is one tuple to cover.
+    const lineSources = resolveLineSources({ definition: normalizeTemplateDefinition(template) });
     type Tuple = {
+      componentId: string;
       group: string;
       blueprint: string;
       component: string;
@@ -207,6 +210,7 @@ async function main(): Promise<void> {
             group: group.key,
             blueprint: component.blueprint_key,
             component: component.display_name,
+            componentId: component.id,
             input: rtcInput.input_key,
           });
         }
@@ -226,7 +230,7 @@ async function main(): Promise<void> {
         t.group,
         t.blueprint,
         t.input,
-        t.component,
+        lineSources[t.componentId],
       );
       if (periodTuple) {
         const allowlistKey = periodInputAllowlistKey(t);
@@ -261,7 +265,7 @@ async function main(): Promise<void> {
         continue;
       }
       try {
-        resolveDatapointSource(mapping, t.component);
+        resolveDatapointSource(mapping, lineSources[t.componentId]);
       } catch (err) {
         console.error(
           `  ✗ invalid component mapping: ${t.group}/${t.blueprint}/${t.input} (${t.component}): ${err instanceof Error ? err.message : err}`,

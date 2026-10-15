@@ -21,7 +21,7 @@ import {
 import { facilities } from "@/db/schema/facilities";
 import { samples } from "@/db/schema/production";
 import { feedstockTypes } from "@/db/schema/feedstock";
-import { certifierRemovals } from "@/db/schema/certification";
+import { certifierRemovals, certifierProjects } from "@/db/schema/certification";
 import {
   DURABILITY_TIER_FALLBACK,
   type CreateCreditBatchData,
@@ -138,14 +138,19 @@ async function resolveCreditBatchCertifier(
   ctx: OrgContext,
   executor: DbTransaction,
   facilityId: string
-): Promise<"isometric" | null> {
+): Promise<{ provider: "isometric" | null; removalTemplateId: string | null }> {
+  requireOrgScope(ctx);
   const provider = await getFacilityCertifierWithExecutor(ctx, executor, facilityId);
   if (provider && provider !== "isometric") {
-    throw new SafeError(
-      "Credit batches currently support only Isometric certifier mappings."
-    );
+    throw new SafeError("Credit batches currently support only Isometric certifier mappings.");
   }
-  return provider === "isometric" ? "isometric" : null;
+  if (!provider) return { provider: null, removalTemplateId: null };
+  const [project] = await executor.select({ removalTemplateId: certifierProjects.defaultRemovalTemplateId })
+    .from(certifierProjects).where(and(
+      eq(certifierProjects.organizationId, ctx.organizationId), eq(certifierProjects.facilityId, facilityId),
+      eq(certifierProjects.provider, provider),
+    )).limit(1);
+  return { provider, removalTemplateId: project?.removalTemplateId ?? null };
 }
 
 /**
@@ -381,7 +386,7 @@ export async function createCreditBatch(
       startDate: batchData.startDate,
       endDate: batchData.endDate,
     });
-    const certifier = await resolveCreditBatchCertifier(ctx, tx, batchData.facilityId);
+    const { provider: certifier, removalTemplateId } = await resolveCreditBatchCertifier(ctx, tx, batchData.facilityId);
     const feedstockTypeId = batchData.feedstockTypeId;
     const process = await findOrCreateProductionProcess(
       ctx,
@@ -426,6 +431,7 @@ export async function createCreditBatch(
         startDate: formatUtcDate(batchData.startDate),
         endDate: formatUtcDate(batchData.endDate),
         certifier,
+        removalTemplateId,
         sampling,
         siteManagementNotes: batchData.siteManagementNotes || null,
       })
@@ -631,7 +637,10 @@ export async function updateCreditBatch(
       excludeCreditBatchId: id,
     });
 
-    attemptUpdateData.certifier = await resolveCreditBatchCertifier(ctx, tx, targetFacilityId);
+    const targetCertifier = await resolveCreditBatchCertifier(ctx, tx, targetFacilityId);
+    attemptUpdateData.certifier = targetCertifier.provider;
+    const facilityChanged = targetFacilityId !== existingBatch.facilityId;
+    if (facilityChanged) attemptUpdateData.removalTemplateId = targetCertifier.removalTemplateId;
 
     if (resolvedProductionRunIds !== undefined) {
       await validateProductionRunIds(
@@ -700,6 +709,7 @@ export async function updateCreditBatch(
     const changedFields = Object.keys(updateFields).filter(
       field => field !== "expectedVersion" && updateFields[field as keyof typeof updateFields] !== undefined,
     );
+    if (facilityChanged) changedFields.push("removalTemplateId");
     const membershipChanged = shouldRefreshMembership && await recordMembershipActivity(
       ctx, tx, id, currentProductionRunIds, resolvedProductionRunIds ?? [], { changedFields },
     );

@@ -10,6 +10,7 @@ const FEEDSTOCK_TYPES_PATH = "/feedstock-types";
 export const ENTITY_FOCUS_TARGETS = {
   transportRoute: "transport-route",
   transportEvidence: "transport-evidence",
+  removalTemplate: "removal-template",
 } as const;
 
 export type EntityFocusTarget =

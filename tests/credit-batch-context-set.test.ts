@@ -35,6 +35,7 @@ const BATCH_IDS = Array.from(
 const FACILITY_ID = "facility-1";
 
 const facilityFacts = {
+  templatesById: {}, removalTemplateIds: [],
   hasOrgCredentials: true,
   mapping: null,
   project: null,

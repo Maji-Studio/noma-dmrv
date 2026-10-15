@@ -1,7 +1,8 @@
 import type { ActivityEntityType } from "@/db/schema/common";
 import type { ActivityEventInput } from "@/data-access/activity-events";
+import { documentActivityReasonCode } from "@/lib/activity-entity-type";
 
-type ActivityLinks = Pick<ActivityEventInput, "facilityId" | "productionRunId" | "creditBatchId">;
+type ActivityLinks = Pick<ActivityEventInput, "facilityId" | "productionRunId" | "creditBatchId" | "reasonCode">;
 
 /** Private to one execution attempt; never included in business results. */
 export function createOperationActivity() {
@@ -40,7 +41,8 @@ export function singleProductionRunId(ids: readonly (string | null | undefined)[
   return unique.length === 1 ? unique[0] : undefined;
 }
 
-export function linkDocumentActivity(activity: OperationActivity, document: { entityType: string; entityId: string }) {
+export function linkDocumentActivity(activity: OperationActivity, document: { documentType: string; entityType: string; entityId: string }) {
+  activity.link({ reasonCode: documentActivityReasonCode(document) });
   if (document.entityType === "production_run") activity.link({ productionRunId: document.entityId });
   if (document.entityType === "credit_batch") activity.link({ creditBatchId: document.entityId });
 }

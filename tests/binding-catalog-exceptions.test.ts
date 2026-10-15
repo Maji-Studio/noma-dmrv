@@ -1,3 +1,4 @@
+import type { LineContract } from "@/lib/isometric/template-observations/line-sources";
 /**
  * Parity for the exceptional removal-template bindings (#638): storage
  * components, measurement-sample inputs, component disambiguation and the
@@ -34,7 +35,6 @@ import {
 } from "@/lib/isometric/transformers/datapoint";
 import type { CertificationSubmissionRow } from "@/data-access/certification";
 import {
-  PYROLYSIS_DIESEL_SPLIT,
   SAFETY_MARGIN_CARVE_OUT,
   SEMANTIC_BINDING_CATALOG,
   type SemanticBindingCatalog,
@@ -111,8 +111,7 @@ const PRE_638_SELECTION = {
   "unsampled": "biochar_sequestration_200_year_unsampled"
 };
 
-const PRE_638_DIESEL_ERROR =
-  "The pyrolysis diesel component is not recognized. Rename it in Isometric to one of these names: \"Generator diesel usage\", \"Startup diesel usage\".";
+
 
 const PRE_638_SEQUESTRATION_BINDINGS = {
   "biochar_sequestration_1000_year_f_durable_max": {
@@ -342,18 +341,15 @@ describe("measurement-sample bindings", () => {
 describe("component disambiguation", () => {
   it("fails closed on an unrecognised pyrolysis diesel component with the same message", () => {
     const diesel = lookupInputMapping("pyrolysis", "fuel_usage_by_volume", "volume_of_fuel")!;
-    expect(() => resolveDatapointSource(diesel, "Diesel")).toThrow(PRE_638_DIESEL_ERROR);
+    expect(() => resolveDatapointSource(diesel, { scope: "operating", entryPolicy: "none", origin: "reviewed" } satisfies LineContract)).toThrow("Review the Removal template lines in Certification settings.");
   });
 
   it("resolves the diesel split and the Safety margin through their named rules", () => {
     const diesel = lookupInputMapping("pyrolysis", "fuel_usage_by_volume", "volume_of_fuel")!;
-    for (const [name, source] of Object.entries(PYROLYSIS_DIESEL_SPLIT.sources)) {
-      expect(resolveDatapointSource(diesel, name)).toBe(source);
-    }
+    expect(resolveDatapointSource(diesel, { scope: "operating", automaticSource: "run-genset-diesel", entryPolicy: "additive", origin: "reviewed" })).toBe("totalGensetDieselLitres");
+    expect(resolveDatapointSource(diesel, { scope: "operating", automaticSource: "run-startup-diesel", entryPolicy: "additive", origin: "reviewed" })).toBe("totalStartupDieselLitres");
     const margin = lookupInputMapping("miscellaneous", "mass_based_ci_emissions", "mass")!;
-    for (const [name, source] of Object.entries(SAFETY_MARGIN_CARVE_OUT.sources)) {
-      expect(resolveDatapointSource(margin, name)).toBe(source);
-    }
+    expect(resolveDatapointSource(margin, { scope: "operating", automaticSource: "safety-margin", entryPolicy: "none", origin: "reviewed" })).toBe("totalBiocharDryMassKg");
   });
 
   it("rejects an evidence target on a component the role does not name", () => {
@@ -398,6 +394,7 @@ describe("Source evidence targets", () => {
             groupKey,
             componentBlueprintKey,
             componentDisplayName: componentDisplayName || undefined,
+            ...(componentDisplayName.trim().toLowerCase() === "safety margin" ? { lineContract: { scope: "operating" as const, automaticSource: "safety-margin" as const, entryPolicy: "none" as const, origin: "reviewed" as const } } : {}),
             inputKey,
           }),
         ];

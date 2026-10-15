@@ -1,3 +1,4 @@
+import { DOCUMENT_ENTITY_TYPES } from "@/schemas/documents";
 import { expect, it } from "vitest";
 import { createOperationActivity, linkDocumentActivity, singleProductionRunId } from "./activity-links";
 
@@ -32,7 +33,7 @@ it("links a single source run and leaves mixed sources unlinked", () => {
 
 it.each([["production_run", "productionRunId"], ["credit_batch", "creditBatchId"]] as const)("links documents owned by %s", (entityType, key) => {
   const activity = createOperationActivity();
-  linkDocumentActivity(activity, { entityType, entityId: ID });
+  linkDocumentActivity(activity, { documentType: "pdf", entityType, entityId: ID });
   expect(activity.links("document", "document-id")[key]).toBe(ID);
 });
 
@@ -45,4 +46,10 @@ it("fans one entity out to each distinct scope over its shared links", () => {
     { facilityId: FACILITY_ID, creditBatchId: undefined, productionRunId: "other-run" },
   ]);
   expect(activity.scopedLinks("application", "other")).toEqual([{ facilityId: FACILITY_ID, creditBatchId: undefined, productionRunId: undefined }]);
+});
+
+it.each(DOCUMENT_ENTITY_TYPES)("preserves the reason code for %s document owners", entityType => {
+  const activity = createOperationActivity();
+  linkDocumentActivity(activity, { documentType: "pdf", entityType, entityId: ID });
+  expect(activity.links("document", "document-id").reasonCode).toBe(`document:pdf:${entityType}:${ID}`);
 });
