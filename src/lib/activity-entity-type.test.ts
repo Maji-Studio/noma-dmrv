@@ -1,7 +1,7 @@
 import { expect, it } from "vitest";
 import { toActivityEntityType } from "@/lib/activity-entity-type";
 import { GHG_STATEMENT_ENTITY_TYPE } from "@/lib/isometric/utils/constants";
-import { ACTIVITY_ENTITY_TYPES, isActivityEntityType } from "./schema/activity";
+import { ACTIVITY_ENTITY_TYPES, isActivityEntityType } from "@/db/schema/common";
 
 it.each(ACTIVITY_ENTITY_TYPES)("accepts the canonical activity entity type %s", (value) => {
   expect(isActivityEntityType(value)).toBe(true);

@@ -1,5 +1,5 @@
 {
-  "id": "2964cf2d-d692-48fe-b060-0a8e28f1a1b4",
+  "id": "b1b87a17-3358-47c7-b1e2-4240036e324f",
   "prevId": "5b837c4a-63f0-4279-8efb-a0218aee0032",
   "version": "7",
   "dialect": "postgresql",
@@ -251,6 +251,21 @@
             "id"
           ],
           "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "activity_events_facility_id_organization_id_facilities_id_organization_id_fk": {
+          "name": "activity_events_facility_id_organization_id_facilities_id_organization_id_fk",
+          "tableFrom": "activity_events",
+          "tableTo": "facilities",
+          "columnsFrom": [
+            "facility_id",
+            "organization_id"
+          ],
+          "columnsTo": [
+            "id",
+            "organization_id"
+          ],
+          "onDelete": "no action",
           "onUpdate": "no action"
         }
       },

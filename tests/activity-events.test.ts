@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, expect, it } from "vitest";
 import { eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
-import { ACTORLESS_ACTIVITY_SOURCES, activityEvents, organizations } from "@/db/schema";
+import { ACTORLESS_ACTIVITY_SOURCES, activityEvents, facilities, organizations } from "@/db/schema";
 import { listEntityActivity, recordActivity, type ActivityEventInput } from "@/data-access/activity-events";
 import type { OrgContext } from "@/lib/auth/server";
 
@@ -20,6 +20,16 @@ async function createContext(): Promise<OrgContext> {
   return { organizationId, userId: `activity_user_${crypto.randomUUID()}`, orgRole: "owner", isPlatformAdmin: false };
 }
 
+async function createFacility(context: OrgContext): Promise<string> {
+  const [facility] = await db.insert(facilities).values({
+    organizationId: context.organizationId,
+    code: `activity_${crypto.randomUUID()}`,
+    name: "Activity fixture",
+    timezone: "UTC",
+  }).returning({ id: facilities.id });
+  return facility.id;
+}
+
 beforeEach(async () => {
   entityId = crypto.randomUUID();
   ctx = await createContext();
@@ -28,7 +38,8 @@ beforeEach(async () => {
 
 afterEach(async () => {
   if (organizationIds.length) {
-    // The organization FK cascades to its activity rows.
+    await db.delete(activityEvents).where(inArray(activityEvents.organizationId, organizationIds));
+    await db.delete(facilities).where(inArray(facilities.organizationId, organizationIds));
     await db.delete(organizations).where(inArray(organizations.id, organizationIds));
     organizationIds.length = 0;
   }
@@ -38,11 +49,11 @@ function event(overrides: Partial<ActivityEventInput> = {}): ActivityEventInput 
   return { entityType: "delivery", entityId, action: "created", source: "form", ...overrides };
 }
 
-it("stamps the context organization and default actor, with value-free defaults", async () => {
-  await db.transaction((tx) => recordActivity(ctx, tx, event()));
+it.each(["form", "rest", "mcp", "registry"] as const)("stamps the context organization and default actor for %s, with value-free defaults", async (source) => {
+  await db.transaction((tx) => recordActivity(ctx, tx, event({ source })));
   const rows = await listEntityActivity(ctx, "delivery", entityId);
   expect(rows).toHaveLength(1);
-  expect(rows[0]).toMatchObject({ organizationId: ctx.organizationId, actorUserId: ctx.userId, changedFields: [] });
+  expect(rows[0]).toMatchObject({ organizationId: ctx.organizationId, facilityId: null, actorUserId: ctx.userId, changedFields: [] });
   expect(rows[0].occurredAt).toBeInstanceOf(Date);
   expect(typeof rows[0].sequence).toBe("bigint");
 });
@@ -103,11 +114,24 @@ it.each(ACTORLESS_ACTIVITY_SOURCES)("allows an explicit null actor for %s", asyn
   expect((await listEntityActivity(ctx, "delivery", entityId))[0].actorUserId).toBeNull();
 });
 
+it.each(["system", "script"] as const)("defaults the actor to null for %s", async (source) => {
+  await db.transaction((tx) => recordActivity(ctx, tx, event({ source })));
+  expect((await listEntityActivity(ctx, "delivery", entityId))[0].actorUserId).toBeNull();
+});
+
 it("preserves an explicit actor and unlinked entity references", async () => {
-  const input = event({ actorUserId: "activity_other_user", facilityId: crypto.randomUUID(),
+  const input = event({ actorUserId: "activity_other_user", facilityId: await createFacility(ctx),
     creditBatchId: crypto.randomUUID(), productionRunId: crypto.randomUUID() });
   await db.transaction((tx) => recordActivity(ctx, tx, input));
   expect((await listEntityActivity(ctx, "delivery", entityId))[0]).toMatchObject(input);
+});
+
+it("rejects a facility from another organization at the database boundary", async () => {
+  const facilityId = await createFacility(otherCtx);
+  await expect(db.insert(activityEvents).values({ ...event({ facilityId }),
+    organizationId: ctx.organizationId, actorUserId: ctx.userId }))
+    .rejects.toMatchObject({ cause: { code: "23503" } });
+  expect(await listEntityActivity(ctx, "delivery", entityId)).toEqual([]);
 });
 
 it("rejects status changes without a local or remote target at the database boundary", async () => {

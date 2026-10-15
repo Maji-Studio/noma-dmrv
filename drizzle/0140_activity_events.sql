@@ -30,6 +30,7 @@ CREATE TABLE "activity_events" (
 );
 --> statement-breakpoint
 ALTER TABLE "activity_events" ADD CONSTRAINT "activity_events_organization_id_organizations_id_fk" FOREIGN KEY ("organization_id") REFERENCES "public"."organizations"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "activity_events" ADD CONSTRAINT "activity_events_facility_id_organization_id_facilities_id_organization_id_fk" FOREIGN KEY ("facility_id","organization_id") REFERENCES "public"."facilities"("id","organization_id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 CREATE INDEX "activity_events_org_entity_occurred_sequence_idx" ON "activity_events" USING btree ("organization_id","entity_type","entity_id","occurred_at","sequence");--> statement-breakpoint
 CREATE INDEX "activity_events_org_batch_occurred_sequence_idx" ON "activity_events" USING btree ("organization_id","credit_batch_id","occurred_at","sequence");--> statement-breakpoint
 CREATE INDEX "activity_events_org_occurred_idx" ON "activity_events" USING btree ("organization_id","occurred_at");

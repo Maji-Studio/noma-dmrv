@@ -1,37 +1,13 @@
 /**
  * Append-only activity history, value-free in v1: changed fields hold names only.
  * Written inside the caller's transaction. Entity references have no FKs so
- * history survives deletes as tombstones; only the organization owns the rows.
+ * history survives deletes as tombstones. Facilities are scoped to the organization.
  */
 import { sql } from "drizzle-orm";
-import { bigserial, check, index, jsonb, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { bigserial, check, foreignKey, index, jsonb, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { organizations } from "./auth";
-
-export const ACTIVITY_ENTITY_TYPES = [
-  "removal",
-  "ghg_statement",
-  "production_run",
-  "biochar_product",
-  "lab_sample",
-  "order",
-  "delivery",
-  "application",
-  "credit_batch",
-  "document",
-  "transport_leg",
-  "feedstock",
-  "bin_movement",
-] as const;
-
-export const ACTIVITY_ACTIONS = ["created", "updated", "deleted", "status_changed"] as const;
-export const ACTIVITY_SOURCES = ["form", "rest", "mcp", "registry", "system", "script"] as const;
-export const ACTORLESS_ACTIVITY_SOURCES = ["system", "registry", "script"] as const;
-
-export type ActivityEntityType = (typeof ACTIVITY_ENTITY_TYPES)[number];
-
-export function isActivityEntityType(value: string): value is ActivityEntityType {
-  return ACTIVITY_ENTITY_TYPES.some((entityType) => entityType === value);
-}
+import { ACTIVITY_ACTIONS, ACTIVITY_ENTITY_TYPES, ACTIVITY_SOURCES, ACTORLESS_ACTIVITY_SOURCES } from "./common";
+import { facilities } from "./facilities";
 
 export const activityEvents = pgTable("activity_events", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -62,6 +38,10 @@ export const activityEvents = pgTable("activity_events", {
   registryAt: timestamp("registry_at", { withTimezone: true, precision: 3 }),
   reasonCode: text("reason_code"),
 }, (table) => [
+  foreignKey({
+    columns: [table.facilityId, table.organizationId],
+    foreignColumns: [facilities.id, facilities.organizationId],
+  }),
   index("activity_events_org_entity_occurred_sequence_idx").on(
     table.organizationId, table.entityType, table.entityId, table.occurredAt, table.sequence,
   ),
