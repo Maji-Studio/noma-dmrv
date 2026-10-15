@@ -2,7 +2,7 @@
 
 - **Owner:** Kenji Nguyen
 - **Status:** proposed; decisions settled 2026-10-15, no implementation yet
-- **Last reviewed:** 2026-10-15, against `staging` @ `d34135911`; adversarial review by gpt-6-astra the same day (§9)
+- **Last reviewed:** 2026-10-15, against `staging` @ `d34135911`; reviews on PR #1057 (§9)
 - **Decision record:** [ADR 0032](../adr/0032-per-batch-emissions-entries-bound-to-template-lines.md) and §2 below are authoritative. Provenance only: the raw answers to two question rounds were collected on an external decisions page.
 
 This plan authorizes no registry changes and no production submissions. Template re-authoring in Isometric is tracked separately in #1020.
@@ -36,7 +36,7 @@ Operators can fill every line of the target Removal template ("LCA based templat
 | Sample shipping | Entered per line. Sample transport legs are hidden in the app, API and MCP, and stop feeding Removals. There is no production data to keep. Sample labs are deferred. |
 | Lab electricity, consumables | Typed per batch with evidence. |
 | Project-wide flight | Goes on one batch the operator picks. |
-| Empty lines | Shown as "0 so far" on the batch sheet. In the Removal flow, one confirmation covers all empty lines and records a zero per line. |
+| Empty lines | Shown as "Not recorded" on the batch sheet (`docs/ux-writing.md`, missing values; Kenji, 2026-10-15, replacing "0 so far"). They show 0 only once confirmed. In the Removal flow, one confirmation covers all empty lines and records a zero per line. |
 | Extra fuel or electricity | Added on top of the run figures. The form shows the run total and the earlier entries, and the sum is sent. |
 | Meter readings | While a template asks for readings, the operator enters both. The form follows the template: two fields if it has two inputs, one if it has one. |
 | Late entries | Go on the next Removal from the same batch. If none is left, they go on the facility's next Removal covering their date (§7, deferred to #1059). |
@@ -136,14 +136,20 @@ Operators can fill every line of the target Removal template ("LCA based templat
 | `removalTemplateId`, `componentId`, `inputShape`, `lineRule` | The binding. `lineRule` is `additive` or `single`. |
 | `observationId` | The template observation the entry was written against |
 | `kind` | `value` or `zero`. `zero` is written only by the Removal-flow confirmation. |
-| `occurredOn` | Date in the facility time zone. Not before the batch start date, not in the future. |
+| `confirmedForRemovalId` | Set only on `zero` rows: the draft Removal whose confirmation wrote it. Separate from the sent claim. |
+| `occurredOn` | Date in the facility time zone. Not before the batch start date, not in the future. The entry window (§4.5) starts at the same date, so every accepted date has a Removal that can carry it. |
 | `note`, `createdBy`, timestamps | |
 | `version` | Concurrency only: bumped by every write, claims included |
 | `contentRevision` | Bumped only by changes that alter what would be sent: values, date, binding or evidence |
 | `deletedAt` | Tombstone. A sent entry is never hard-deleted. |
 | `sentByRemovalId`, `sendReservedBySubmissionId` | Entry claim |
 
-- Partial unique index on `(creditBatchId, removalTemplateId, componentId)` where `lineRule = 'single'`, `kind = 'value'` and `deletedAt` is null. A confirmed zero belongs to the Removal that confirmed it: it is written with that Removal's claim and is unique per `(Removal, componentId)`.
+- Partial unique index on `(creditBatchId, removalTemplateId, componentId)` where `lineRule = 'single'`, `kind = 'value'` and `deletedAt` is null.
+- **Confirmed zeros** belong to the draft Removal that confirmed them, through `confirmedForRemovalId`, never through the pool of eligible entries:
+  - unique per `(confirmedForRemovalId, creditBatchId, componentId)` where `deletedAt` is null; a multi-batch Removal writes one zero per member batch and line;
+  - reservation, stamping and retries carry them like that Removal's other entries;
+  - releasing an attempt keeps them on the draft; deleting the draft, or superseding it, tombstones them; they never return to the pool, so no other Removal can send them;
+  - adding a value entry to a line tombstones that line's zeros on every unsubmitted draft that owns one.
 - On a follow-up Removal of the same batch, a `single` line whose value an earlier Removal already sent counts as sent, not empty. It is omitted like a production component (ADR 0020) and needs no zero confirmation.
 
 **`emission_entry_values`**
@@ -203,7 +209,7 @@ Operators can fill every line of the target Removal template ("LCA based templat
 **Two pure functions**
 - `deriveBatchEmissionLines(batchFacts)` is for the batch sheet and the Emissions page. Per line it returns a state, the batch-wide automatic figure, the entries and the total:
   - `filled`
-  - `empty` ("0 so far")
+  - `empty` ("Not recorded")
   - `missingEvidence` (certification blocker)
   - `needsReview`
   - `needsSetup`
@@ -229,6 +235,7 @@ Operators can fill every line of the target Removal template ("LCA based templat
 - Energy becomes Emissions in the sidebar and the page title. `/energy` redirects to `/emissions`.
 - Module names (`src/lib/energy`, `energyKeys`, `fn/energy`) stay.
 - Update `tests/e2e/energy.spec.ts`, `mobile-responsive.spec.ts`, the visual capture route, `GLOSSARY.md` and the settings copy.
+- `GLOSSARY.md` gains **Emissions entry** (_Avoid_: activity) in this PR. PR 4 adds **Recorded zero** (distinct from the sandbox zero stub) and amends **Credit batch** and **Removal** for per-entry claims.
 
 **Per-batch view**
 - The batch filter and period preset move into the URL (#841).
@@ -242,7 +249,7 @@ Operators can fill every line of the target Removal template ("LCA based templat
 
 **Batch sheet**
 - A self-fetching Emissions panel in `viewModeChildren`, between production runs and notes.
-- It shows the lines still at "0 so far" or missing a file, and links to the Emissions page filtered to the batch.
+- It shows the lines still "Not recorded" or missing a file, and links to the Emissions page filtered to the batch.
 
 **Sample legs** (behind the activation gate, §5)
 - Hide the sample form Transport step (`SampleTransportSection`) and the sample read summary.
@@ -264,13 +271,14 @@ Operators can fill every line of the target Removal template ("LCA based templat
 - `omitProductionComponents` keeps a production component on a follow-up Removal when it has entries to send, and sends only those.
 
 **Which entries a Removal sends**
-- Only a Removal that can still take contributions is a contender: a draft that has not been submitted, or a Removal whose correction window is open (Corrections, below). A submitted Removal's manifest is frozen.
-- The window of a Removal starts at the earliest production start among its member batches.
+- Only a Removal that can still take contributions is a contender: a draft that has not been submitted, or a Removal whose correction window is open (Corrections, below). A submitted Removal's manifest is frozen otherwise.
+- A Removal in an open correction window takes edits to the entries it sent, and new entries dated in its window. While the window is open it ranks before drafts for those entries, because the correction is why it reopened.
+- The entry window of a Removal is date-granular: from the earliest batch start date among its member batches to its latest application date. Application dates are calendar dates as entered (stored at UTC midnight, `resolveRemovalReportingWindow` in `src/fn/certification/removal-reporting-window.ts`) and are compared as dates, never shifted by a time zone. `occurredOn` is the facility-local date. The reporting window sent to Isometric is unchanged.
 - An entry is eligible for a Removal when all of these hold:
   - it belongs to a member batch;
   - it is not deleted;
   - it is unclaimed or claimed by this Removal;
-  - its `occurredOn` falls in the Removal's window (production start to its latest application, both converted with the facility time zone as `startedOn` and `completedOn` are).
+  - its `occurredOn` falls in the Removal's entry window.
 - Several Removals of one batch can have overlapping windows. One deterministic rule picks the owner of each eligible entry:
   - an existing live reservation or claim wins;
   - otherwise the eligible Removal with the earliest window end, then the earliest draft creation, then the lowest id.
@@ -313,8 +321,9 @@ Operators can fill every line of the target Removal template ("LCA based templat
 - Submit stays blocked until confirmed.
 
 **Sample legs**
-- `sampleTransportMassDistanceTonneKm` leaves aggregation, the catalog, `certify-field-registry.ts`, transport coverage, readiness and dashboard gaps.
-- This resolves `isometric/sample-transport-template-drift`.
+- `sampleTransportMassDistanceTonneKm` leaves aggregation, the catalog, `certify-field-registry.ts`, transport coverage, readiness and dashboard gaps, behind the activation gate.
+- Drop the sample row from `docs/isometric/sandbox-template-authoring.md`, record the change in `docs/isometric/changes.md`, and update the assertion in `tests/isometric-sandbox-health.integration.test.ts`.
+- `isometric/sample-transport-template-drift` is resolved when the gate is switched on, not when PR 4 merges.
 
 **Corrections**
 - "Correction needed" is derived, not stored, and only inside an open correction window: the snapshot's contribution manifest differs from the current entries.
@@ -345,9 +354,9 @@ Kenji's round 2 note asks to reopen general edits when Isometric pushes a submis
 | 2 | Line-state functions, typed blockers, one preflight gate, coverage alignment | #640, #641, #645 | gpt-6-astra |
 | 3 | Entry tables, data-access and fn, Emissions rename and per-batch view, forms, batch panel, sample-leg UI hidden | #841, #973 | Server: gpt-6.1-sol. UI: Opus agent with the frontend-design skill. |
 | 4 | Contributions and claims, reservation, guard, snapshot and trigger, evidence targets, Lines sent step, sample-leg aggregation removed, corrections after push-back | #291 | gpt-6-astra, reviewed with pr-review-suite |
-| 5 | Lineage unlock on push-back | #687 item 1 | gpt-6-astra, after PR 4 |
+| 5 | Lineage unlock on push-back | #687 item 1 | gpt-6-astra, after PR 4 and the app-wide lock predicate |
 
-**Merge order:** 1, then 2, then 3, then 4. PR 3's server half can be developed next to PR 2 but merges after it. The app-wide lock predicate (§4.6) is a prerequisite of PR 4's Corrections part; if it has not landed when the rest of PR 4 is ready, the Corrections part moves to PR 5.
+**Merge order:** 1, then 2, then 3, then 4. PR 3's server half can be developed next to PR 2 but merges after it. The app-wide lock predicate (§4.6) is a prerequisite of PR 4's Corrections part; if it has not landed when the rest of PR 4 is ready, the Corrections part moves to PR 5, which waits for it too. The first real submission waits for Corrections.
 
 **Activation gate:** one server-side flag, `EMISSIONS_ENTRIES_ENABLED`, read through `envSchema` and off by default. It covers entry UI, API and MCP availability, and the sample-leg retirement, including PR 4's removal of sample legs from aggregation and the catalog. PR 3 merges with it off, and it is switched on only once PR 4 is deployed. With it off, sample legs keep working as today.
 
@@ -356,18 +365,19 @@ Kenji's round 2 note asks to reopen general edits when Isometric pushes a submis
 - Every Codex prompt bans database commands.
 - Merges need Kenji's explicit OK.
 
-**Known gap until PR 4:** the edited sandbox template has two sample shipping lines on one source, and noma flags them as `ambiguous`. Sandbox Removals, including the nightly `certification-full-removal-submit.spec.ts` that #1054 un-skipped, stop at "2 components noma cannot submit" until PR 1 and PR 4 land.
+**Known gap until the gate is on:** the edited sandbox template has two sample shipping lines. Before PR 1 they share one source and noma flags them as `ambiguous`; from PR 1 they have no automatic source and stay unfillable until entries exist. Sandbox Removals, including the nightly `certification-full-removal-submit.spec.ts` that #1054 un-skipped, stop at "components noma cannot submit" until PR 4 lands and `EMISSIONS_ENTRIES_ENABLED` is on in the sandbox and nightly environments.
 
 **Before the first real submission**
 - #1020 re-authoring is done, and the bootstrap mapping covers the new component IDs.
 - The Cula fixture is captured.
 - Production is read through a read-only key and matches the fixture.
+- `EMISSIONS_ENTRIES_ENABLED` is on in the sandbox and nightly environments.
 - A full rehearsal against the sandbox "Dark Earth Carbon Template (15 Oct)": entries with files, confirmed zeros, a follow-up Removal, and a correction after a statement fails verification.
 
 **Tests**
 - Unit tests:
   - normalization, both fingerprints and the comparison (reordering is a no-op);
-  - line rules and contributions, including mixed production ownership, entry-only follow-ups, overlapping windows, backdated entries, dates after the last application, a 1000-year batch reaching a second Removal through later applications, and the refused two-batch `single` grouping.
+  - line rules and contributions, including an entry dated on the application day in a facility west of UTC, an entry dated on the batch start date, the zero lifecycle (release, draft deletion, a value added after a zero), mixed production ownership, entry-only follow-ups, overlapping windows, backdated entries, dates after the last application, a 1000-year batch reaching a second Removal through later applications, and the refused two-batch `single` grouping.
 - Real-DB tests:
   - the entry and production reservation race;
   - rollback on mutation-free and ambiguous failures;
@@ -406,43 +416,4 @@ Decided by Kenji on 2026-10-15, and deferred to #1059, after PR 4:
 
 ## 9. Review log
 
-gpt-6-astra reviewed this plan adversarially against the code on 2026-10-15. It made 15 findings, four of them P0. All were verified and accepted; the sections above already include the fixes.
-
-| Finding | Severity | Fix in |
-|---|---|---|
-| Supersede dropped self-claimed entries | P0 | §4.5: an entry counts when unclaimed or claimed by this Removal; retries use the frozen set |
-| Reservation did not cover edits, evidence or partial failure | P0 | §4.5 Reservation and claims |
-| Automatic delivery and stored sources were gated on the production claim | P0 | §4.5 What a Removal sends |
-| Two batches' `single` entries could be summed one input at a time | P0 | §4.5: refused in v1 |
-| No per-Removal ownership or window boundaries | P1 | §4.3 `deriveRemovalEmissionContributions`; §4.5 eligibility |
-| One version counter for concurrency and content | P1 | §4.1 `contentRevision`, tombstones; §4.5 manifest |
-| Fingerprint inputs missing; array order | P1 | §4.1 normalization and enrichment |
-| Component IDs cannot explain their meaning | P1 | §4.2 bootstrap, carry-forward, assignment in review |
-| Batch pin not wired through compilation | P1 | §4.2 Batch pinning |
-| Evidence targets keyed by name | P1 | §4.5 Evidence binding |
-| An entry existing on a line released the guard | P1 | §4.5 Guard; `lineSources` |
-| Correction unlock unsynchronized | P1 | §4.5 Corrections; §4.6 |
-| PR order let sample shipping go unsent | P1 | §4.4, §4.5, §5 merge order |
-| Schema and file-size details | P1 | §4.1 general rules; §3; PR 1 and PR 4 splits |
-| Factual wording in §3 | P2 | §3 |
-
-Round 2 (the same day) rated 9 findings fixed and 6 partly fixed, and added one new P1:
-
-- **Partly fixed, now closed:**
-  - membership writers and attempt takeover (§4.5);
-  - one entry-contender rule (§4.5);
-  - complete enrichment, deprecation and unit handling (§4.1);
-  - compatibility before re-stamping (§4.2);
-  - unpinned batches (§4.2);
-  - an activation gate covering entries and sample legs (§5).
-- **New P1, closed:** the line contract made automatic sources and entries exclusive, which would block diesel top-ups. It is now scope, automatic source and entry policy (§4.2).
-
-Per the two-round cap, there is no third round.
-
-The PR review suite on #1057 (Codex gpt-6-astra and Claude Opus) added five design fixes, all verified against the code and folded in:
-
-- the reopen trigger needs a recorded verifier submission, since a newly created statement is already DRAFT with its ledger row submitted (§4.5 Corrections);
-- only unsubmitted Removals, or one with an open correction window, take new entries (§4.5);
-- entry evidence follows the entry lock (§4.1 Evidence);
-- the `single` index covers values only, and confirmed zeros belong to their Removal (§4.1);
-- the app-wide lock predicate is a prerequisite of PR 4's Corrections part (§5).
+gpt-6-astra reviewed this plan twice on 2026-10-15, and the PR review suite reviewed it twice on #1057. Every accepted finding is folded into the sections above; the finding-by-finding record is on PR #1057.
