@@ -18,6 +18,9 @@ const expectedActionStatuses = {
   forbidden: 403,
   reference_not_found: 422,
   reference_ambiguous: 422,
+  registry_not_configured: 409,
+  registry_read_refused: 422,
+  registry_unavailable: 503,
   deadline_exceeded: 500,
   outcome_unknown: 500,
   idempotency_in_progress: 409,
@@ -143,6 +146,12 @@ it("exposes exhausted concurrent writes as a retryable 409", async () => {
   const response = actionFailureResponse({ success: false, code: "concurrent_write_retry", error: "Retry shortly." }, "/api/v1/production-runs", "request");
   expect(response.status).toBe(409);
   expect(await response.json()).toMatchObject({ code: "concurrent_write_retry", retryable: true });
+});
+
+it("exposes unavailable registry reads as a retryable 503", async () => {
+  const response = actionFailureResponse({ success: false, code: "registry_unavailable", error: "Retry shortly." }, "/api/v1/me", "request");
+  expect(response.status).toBe(503);
+  expect(await response.json()).toMatchObject({ code: "registry_unavailable", retryable: true });
 });
 
 it("renders a changed stock basis as a non-retryable 409 with the bin and the fresh preview", async () => {

@@ -8,8 +8,8 @@ export function createTestApplication(ctx: OrgContext, input: Omit<RecordApplica
   return db.transaction(tx => createApplicationInTransaction(ctx, tx, { gpsLatitude: 0, gpsLongitude: 0, ...input, evidenceMethod: input.evidenceMethod ?? "location" }).then(result => result.application));
 }
 export function updateTestApplication(ctx: OrgContext, applicationId: string, input: Omit<UpdateApplicationInput, "applicationId">) {
-  return db.transaction(tx => updateApplicationInTransaction(ctx, tx, { ...input, applicationId }).then(result => result.application));
+  return db.transaction(tx => updateApplicationInTransaction(ctx, tx, { ...input, applicationId }).then(({ output }) => output.application));
 }
 export function deleteTestApplication(ctx: OrgContext, applicationId: string, expectedVersion: number) {
-  return db.transaction(tx => deleteApplicationInTransaction(ctx, tx, { applicationId, expectedVersion }));
+  return db.transaction(tx => deleteApplicationInTransaction(ctx, tx, { applicationId, expectedVersion }, "form").then(() => undefined));
 }

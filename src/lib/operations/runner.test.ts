@@ -28,6 +28,16 @@ beforeEach(() => {
   });
 });
 describe("shared operation runner", () => {
+  it.each(["form", "rest", "mcp", "script"] as const)("passes %s source to nested writers and uses it for runner activity", async source => {
+    const execute = vi.fn(operation.execute);
+    const op = { ...operation, execute, describe: () => ({ outcome: "updated", entityType: "labSample", entityIds: ["sample-id"], versionBefore: 1, versionAfter: 2, changedFields: [] }) } satisfies Operation<typeof operation.input, { date: Date; amount: number }>;
+    if (source === "form") await runOperationInProcess(op, ctx, { amount: 1 });
+    else if (source === "script") await runOperation(op, ctx, { amount: 1 }, { activitySource: source });
+    else await runOperation(op, ctx, { amount: 1 }, { audit: { transport: source, requestId: "request-id", credentialId: "credential-id" } });
+    expect(execute.mock.calls[0][0].source).toBe(source);
+    expect(activity.mock.calls[0][2].source).toBe(source);
+  });
+
   const effect = { outcome: "created" as const, entityType: "productionRun", entityIds: ["run-a", "run-b"], versionBefore: null, versionAfter: 1, changedFields: ["amount"] };
   const described = { ...operation, describe: () => effect };
   const auditOptions = { transport: "rest" as const, credentialId: "credential", requestId: "request" };

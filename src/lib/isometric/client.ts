@@ -48,6 +48,12 @@ function isIdempotentMethod(method: string): boolean {
   return IDEMPOTENT_METHODS.has(method);
 }
 
+export function isRetryableIsometricReadError(error: IsometricApiError): boolean {
+  return error.code === "network" ||
+    (error.code === "http" && error.status !== undefined &&
+      RETRYABLE_STATUS.has(error.status));
+}
+
 export interface IsometricCredentials {
   clientSecret: string;
   accessToken: string;

@@ -31,7 +31,7 @@ const tx = { tx: true } as unknown as OperationScope["tx"];
 const savepoint = { savepoint: true };
 const snapshotStock = vi.fn();
 let activity = createOperationActivity();
-const scope: OperationScope = { ctx, tx, snapshotStock, activity, afterCommit: vi.fn() };
+const scope: OperationScope = { ctx, tx, source: "form", snapshotStock, activity, afterCommit: vi.fn() };
 const line = { id: LINE_ID, feedstockTypeId: "type", feedstockTypeName: "Compost", feedstockTypeCategory: "compost", ratio: 0.2 };
 const blended = {
   facilityId: FACILITY_ID, formulationId: RECIPE_ID, placedAt: "2026-09-14T12:00:00Z", sourceBiocharStorageLocationId: SOURCE_ID,

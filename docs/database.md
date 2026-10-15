@@ -60,10 +60,66 @@ snake_case names: `removal`, `ghg_statement`, `production_run`, `biochar_product
 `toActivityEntityType` mapper in `src/lib/activity-entity-type.ts` preserves these
 names and maps existing runner/certification spellings (`productionRun`,
 `biocharProduct`, `labSample`, `binMovement`, `ghgStatement`) to them; unknown
-values throw.
+values throw. Document owner normalization lives in the same module, preserves
+valid document-only owner types (including `ghg_statement_report`), and rejects
+unknown owners.
 `occurred_at` and `registry_at` use millisecond precision to match JavaScript
 `Date`; `occurred_at` defaults to insert time (`clock_timestamp()`), and reads
 order by `occurred_at` then unique `sequence`, newest first.
+
+The operation runner appends activity from `describe()` in its write transaction.
+This covers feedstock intake, production runs, products, stock movements, lab
+samples, orders, deliveries, app/API document requests and confirmations, and
+app document deletes. App document visibility and evidence classification edits
+also use the runner. No-op descriptions, repeated confirmations, dry runs and idempotent
+replays add no events. The runner computes one source for both its own event and
+nested writers: audited transport, then the trusted `script` override, then `form`.
+Runner-reached transactional and cascade writers require an explicit source.
+
+Application, credit-batch, membership and transport-leg writers append activity
+directly in their write transaction. A record spanning several batches emits one
+event per batch, including both former and current batches when an application
+moves. Membership changes emit a batch update per changed run and a run update
+with the former batch ID on detach, so each event retains its run scope.
+Automatic cohort attachment uses `system` with no actor; derived transport writes
+retain the initiating actor, including document retirements when a derived leg
+is cleared. Identical derived syncs still upsert and bump the leg version without
+emitting activity. Vehicle snapshot refreshes record derived leg updates with
+source `system`; facility archive/restore records each affected batch update.
+Application scopes exclude shares with zero wet and dry mass. Delivery and order
+scopes use net saved provenance, excluding fully reversed shares and deliveries
+without allocation layers. If saved delivery provenance raises `SafeError`, direct
+activity records one unscoped event so invalid lineage cannot block a write or the
+failed-upload sweep. Unexpected errors still propagate.
+
+Removal slice assignment/release and production-claim reservation/release record
+one value-free batch update per affected batch in the write transaction, using
+`removalAssignment`, `productionClaimReservation` and `productionClaim` field names.
+Removal deletion combines these changes into one event per batch; local draft
+discard records the released slice assignments.
+
+Legacy certification reports and evidence ledgers use `insertDocument` and
+`deleteDocumentRow`, which record directly. Parent deletion uses
+`retireDocumentsForEntities` to record each retired document with captured owner
+links and the initiating source. These child events accompany the runner's parent
+event. Runner document operations use separate transactional writers and record
+only through `describe()`, so each document action has one recording path.
+Failed-upload retention deletes also use `deleteDocumentRow`, with source `system`
+and no actor. Lease renewal, promotion cleanup metadata and pending-upload expiry
+are internal upload bookkeeping and do not emit activity.
+
+Direct document events keep only the document ID, applicable batch/run IDs and a
+`document:<document_type>:<owner_type>:<owner_uuid>` reason code containing
+controlled type keys and the owning record ID. Events never copy filenames,
+URLs, storage keys or descriptions. Parent deletes capture ownership before
+removing the rows needed to resolve it.
+
+`src/data-access/activity-coverage.test.ts` discovers modules throughout
+`src/data-access/` that write the covered tables and fails on unlisted modules or
+unclassified write exports. Its inventory distinguishes `direct` recording,
+`runner` coverage with operation IDs, and reasoned `exempt` entries. Certification status
+transitions use `certification-status-activity.ts`. Reference data, energy,
+readings and incidents are outside this activity scope.
 
 ## Row-Level Guards
 

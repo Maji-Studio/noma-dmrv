@@ -440,6 +440,7 @@ describe("parent document retirement", () => {
             makeTestOrgContext(TEST_USER_ID),
             tx,
             [{ entityType: "reactor", entityId: fixture.reactorId }],
+            "form",
           );
           throw new Error("Injected failure after outbox enqueue");
         }),

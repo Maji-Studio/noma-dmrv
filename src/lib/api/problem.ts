@@ -11,6 +11,7 @@ export const ACTION_STATUS = {
   validation_failed: 422, not_found: 404, stale_version: 412,
   concurrent_write_retry: 409, conflict: 409, certification_locked: 409, insufficient_stock: 409, stock_basis_changed: 409,
   forbidden: 403, reference_not_found: 422, reference_ambiguous: 422,
+  registry_not_configured: 409, registry_read_refused: 422, registry_unavailable: 503,
   deadline_exceeded: 500, outcome_unknown: 500, idempotency_in_progress: 409,
   idempotency_key_reused: 422, key_already_used: 409, replay_unavailable: 409,
 } satisfies Record<DomainErrorCode, number>;
@@ -82,7 +83,7 @@ export function actionFailureResponse(failure: ActionFailure, instance: string, 
   return problemResponse({
     status: failure.code ? ACTION_STATUS[failure.code] : 500,
     code, detail: failure.error, instance, requestId,
-    retryable: retry?.retryable || ["deadline_exceeded", "outcome_unknown", "idempotency_in_progress", "concurrent_write_retry"].includes(code),
+    retryable: retry?.retryable || ["deadline_exceeded", "outcome_unknown", "idempotency_in_progress", "concurrent_write_retry", "registry_unavailable"].includes(code),
     retryAfterSeconds: retry?.retryAfterSeconds ?? (code === "idempotency_in_progress" ? IDEMPOTENCY_RETRY_AFTER_SECONDS : undefined),
     errors: failure.issues?.map((issue) => ({
       pointer: jsonPointer(issue.path),

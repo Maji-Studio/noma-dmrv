@@ -39,7 +39,7 @@ import { runOwnedTransaction } from "@/data-access/owned-transaction";
 import { deadlineExceeded, idempotencyInProgress } from "@/lib/domain-errors";
 import type { Jsonified } from "./jsonified";
 import { writeApiAuditEvent } from "@/data-access/api-audit-events";
-import { recordActivity } from "@/data-access/activity-events";
+import { recordActivity, type ActivityEventInput } from "@/data-access/activity-events";
 import { toActivityEntityType } from "@/lib/activity-entity-type";
 import { createOperationActivity, type OperationActivity } from "./activity-links";
 import type { OperationEffect } from "@/lib/operation-effect";
@@ -57,6 +57,7 @@ export interface OperationScope {
   activity: OperationActivity;
   ctx: OrgContext;
   tx: DbTransaction;
+  source: ActivityEventInput["source"];
   /** Work to trigger after the real commit; never after a dry run or rollback. */
   afterCommit: (hook: () => Promise<void> | void) => void;
 }
@@ -228,6 +229,7 @@ async function runOperationCore<Input extends z.ZodType, Output, Result>(
 ): Promise<{ data: Result; effect?: OperationEffect; stockEffects?: StockEffects; dryRun: boolean; replayed: boolean }> {
   const deadlineAt = Date.now() + (options.deadlineMs ?? OPERATION_DEADLINE_MS);
   const dryRun = options.dryRun ?? false;
+  const source: ActivityEventInput["source"] = options.audit?.transport ?? options.activitySource ?? "form";
   const { idempotency } = options;
   if (dryRun && !operation.supportsDryRun) {
     throw new DomainError("validation_failed", "This operation does not offer a dry run.");
@@ -274,21 +276,23 @@ async function runOperationCore<Input extends z.ZodType, Output, Result>(
           before = await readStockBalances(ctx, writerTx, ids);
         } : undefined;
         const activity = createOperationActivity();
-        const output = await operation.execute({ ctx, tx, activity, deadlineAt, snapshotStock, afterCommit: (hook) => hooks.push(hook) }, decoded);
+        const output = await operation.execute({ ctx, tx, source, activity, deadlineAt, snapshotStock, afterCommit: (hook) => hooks.push(hook) }, decoded);
         const stockEffects = before ? diffStockBalances(before, await readStockBalances(ctx, tx, before.map((bin) => bin.storageLocationId))) : undefined;
         const effect = activity.skipped ? undefined : operation.describe?.(decoded, output) ?? undefined;
         const result = represent(output);
         if (!dryRun && effect) {
           const entityType = toActivityEntityType(effect.entityType);
           for (const entityId of effect.entityIds) {
-            await recordActivity(ctx, tx, {
-              action: effect.outcome, entityType, entityId,
-              changedFields: effect.changedFields,
-              source: options.audit?.transport ?? options.activitySource ?? "form",
-              credentialId: options.audit?.credentialId,
-              requestId: options.audit?.requestId,
-              ...activity.links(entityType, entityId),
-            });
+            for (const links of activity.scopedLinks(entityType, entityId)) {
+              await recordActivity(ctx, tx, {
+                action: effect.outcome, entityType, entityId,
+                changedFields: effect.changedFields,
+                source,
+                credentialId: options.audit?.credentialId,
+                requestId: options.audit?.requestId,
+                ...links,
+              });
+            }
           }
           if (options.audit) {
             await writeApiAuditEvent(ctx, tx, { ...options.audit, operationId: operation.id, effect });

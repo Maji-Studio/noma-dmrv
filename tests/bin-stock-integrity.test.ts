@@ -346,7 +346,7 @@ describe("feedstock writes cannot drive a bin lane negative", () => {
     const f = await fixture();
     const lossBlocker = await recordLoss(f, LOSS_WET_KG);
 
-    await expect(db.transaction((tx) => deleteFeedstockInTransaction(f.ctx, tx, f.feedstockId, 1))).rejects.toMatchObject({
+    await expect(db.transaction((tx) => deleteFeedstockInTransaction(f.ctx, tx, f.feedstockId, 1, "form"))).rejects.toMatchObject({
       name: "DomainError",
       code: "insufficient_stock",
       message: negativeStockDeleteMessage(f),

@@ -94,8 +94,8 @@ export const deleteLabSample: Operation<typeof deleteLabSampleInput, void> = {
   input: deleteLabSampleInput,
   supportsDryRun: true,
   describe: describeDeletedLabSample,
-  execute: async ({ ctx, tx, afterCommit, activity }, { labSampleId, expectedVersion }) => {
-    const links = await withSampleErrors(() => deleteSampleInTransaction(ctx, tx, labSampleId, expectedVersion));
+  execute: async ({ ctx, tx, source, afterCommit, activity }, { labSampleId, expectedVersion }) => {
+    const links = await withSampleErrors(() => deleteSampleInTransaction(ctx, tx, labSampleId, expectedVersion, source));
     // Retired documents queue their storage deletions; drain them only once committed.
     afterCommit(async () => { await processPendingStorageObjectDeletions(ctx); });
     activity.link({ facilityId: links.facilityId, creditBatchId: links.creditBatchId, productionRunId: links.productionRunId });

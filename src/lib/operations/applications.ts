@@ -4,6 +4,7 @@ import { SOIL_TEMPERATURE_SOURCE_GLOBAL } from "@/lib/application-guidance";
 import { CODE_CONFLICT_MESSAGES, withAutoCodes } from "@/data-access/code-generator";
 import { createApplicationInTransaction, updateApplicationInTransaction, deleteApplicationInTransaction } from "@/data-access/application-writes";
 import { processPendingStorageObjectDeletions } from "@/data-access/storage-object-deletions";
+import { resolveWriteActivityScopes } from "@/data-access/write-activity";
 import { applications, type Application } from "@/db/schema";
 import { recordApplicationInput, updateApplicationInput, deleteApplicationInput, type RecordApplicationInput, type UpdateApplicationInput } from "@/schemas/application-input";
 import type { OperationEffect } from "@/lib/operation-effect";
@@ -23,7 +24,7 @@ export const describeUpdatedApplication = (input: UpdateApplicationInput, output
 export const recordApplication: Operation<typeof recordApplicationInput, ApplicationOperationOutput> = {
   id: "record_application", input: recordApplicationInput, supportsDryRun: true,
   describe: (input, output) => describeRecordedApplication(input, output.application),
-  execute: async ({ ctx, tx }, input) => {
+  execute: async ({ ctx, tx, activity }, input) => {
     const site = await getApplicationSiteDefaults(ctx, tx, input.deliveryId);
     const resolved = { ...input };
     const warnings: string[] = [];
@@ -42,6 +43,7 @@ export const recordApplication: Operation<typeof recordApplicationInput, Applica
     }
     const saved = await withAutoCodes(ctx, tx, "AP", applications, applications.code, AUTO_CODE_COUNT,
       ([code], savepoint) => createApplicationInTransaction(ctx, savepoint, { ...resolved, code }), CODE_CONFLICT_MESSAGES.application);
+    activity.scope(saved.application.id, await resolveWriteActivityScopes(ctx, tx, "application", saved.application.id));
     return { ...saved, warnings: [...warnings, ...saved.warnings] };
   },
 };
@@ -49,15 +51,19 @@ export const recordApplication: Operation<typeof recordApplicationInput, Applica
 export const updateApplication: Operation<typeof updateApplicationInput, ApplicationOperationOutput> = {
   id: "update_application", input: updateApplicationInput, supportsDryRun: true,
   describe: (input, output) => describeUpdatedApplication(input, output.application),
-  execute: ({ ctx, tx }, input) => updateApplicationInTransaction(ctx, tx, input),
+  execute: async ({ ctx, tx, activity }, input) => {
+    const { output, activityScopes } = await updateApplicationInTransaction(ctx, tx, input);
+    activity.scope(output.application.id, activityScopes);
+    return output;
+  },
 };
 
 export const deleteApplication: Operation<typeof deleteApplicationInput, void> = {
   id: "delete_application", input: deleteApplicationInput, supportsDryRun: true,
   describe: (input) => ({ outcome: "deleted", entityType: "application", entityIds: [input.applicationId],
     versionBefore: input.expectedVersion, versionAfter: null, changedFields: [] }),
-  execute: async ({ ctx, tx, afterCommit }, input) => {
-    await deleteApplicationInTransaction(ctx, tx, input);
+  execute: async ({ ctx, tx, source, activity, afterCommit }, input) => {
+    activity.scope(input.applicationId, await deleteApplicationInTransaction(ctx, tx, input, source));
     afterCommit(async () => { await processPendingStorageObjectDeletions(ctx); });
   },
 };

@@ -291,7 +291,7 @@ describe("ensureTransportEvidenceLedgerSourceFromContext", () => {
       "isometric",
       "doc-old",
     );
-    expect(deleteDocumentRow).toHaveBeenCalledWith(makeTestOrgContext(USER), "doc-old");
+    expect(deleteDocumentRow).toHaveBeenCalledWith(makeTestOrgContext(USER), "doc-old", "form");
     expect(deleteObject).toHaveBeenCalledWith("transport-evidence/old-hash.pdf");
   });
 
@@ -319,7 +319,7 @@ describe("ensureTransportEvidenceLedgerSourceFromContext", () => {
       "isometric",
       "doc-old",
     );
-    expect(deleteDocumentRow).toHaveBeenCalledWith(makeTestOrgContext(USER), "doc-old");
+    expect(deleteDocumentRow).toHaveBeenCalledWith(makeTestOrgContext(USER), "doc-old", "form");
   });
 
   it("fails closed when an empty-ledger retirement cannot remove the stale mapping", async () => {

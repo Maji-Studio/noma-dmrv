@@ -35,3 +35,14 @@ it.each([["production_run", "productionRunId"], ["credit_batch", "creditBatchId"
   linkDocumentActivity(activity, { entityType, entityId: ID });
   expect(activity.links("document", "document-id")[key]).toBe(ID);
 });
+
+it("fans one entity out to each distinct scope over its shared links", () => {
+  const activity = createOperationActivity();
+  activity.link({ facilityId: FACILITY_ID });
+  activity.scope(ID, [{ creditBatchId: BATCH_ID, productionRunId: RUN_ID }, { creditBatchId: BATCH_ID, productionRunId: RUN_ID }, { productionRunId: "other-run" }]);
+  expect(activity.scopedLinks("application", ID)).toEqual([
+    { facilityId: FACILITY_ID, creditBatchId: BATCH_ID, productionRunId: RUN_ID },
+    { facilityId: FACILITY_ID, creditBatchId: undefined, productionRunId: "other-run" },
+  ]);
+  expect(activity.scopedLinks("application", "other")).toEqual([{ facilityId: FACILITY_ID, creditBatchId: undefined, productionRunId: undefined }]);
+});

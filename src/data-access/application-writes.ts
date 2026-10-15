@@ -29,6 +29,8 @@ import { massGrams } from "./delivery-allocation-math";
 import { nextVersion } from "./row-version";
 import { getApplicationOperationOutput, getApplicationRemainingWetMassKg } from "./application-operation-output";
 import { requireOrgScope } from "./utils";
+import { resolveWriteActivityScopes, type ActivityScope } from "./write-activity";
+import type { ActivityEventInput } from "./activity-events";
 
 const IMMUTABLE_CREDIT_BATCH_STATUSES = new Set<string>(["verified", "issued"]);
 type Scope = Awaited<ReturnType<typeof lockApplicationWriteScope>>;
@@ -97,6 +99,7 @@ export async function updateApplicationInTransaction(ctx: OrgContext, tx: DbTran
   const { applicationId, expectedVersion, appliedWetMassKg, applicationMethod, ...fields } = input;
   const scope = await lockApplicationWriteScope(ctx, tx, { applicationId, expectedVersion, deliveryId: fields.deliveryId, mutation: "update" });
   const existing = scope.application!;
+  const previousActivityScopes = await resolveWriteActivityScopes(ctx, tx, "application", existing.id);
   if (scope.deliveries.some(row => row.archivedAt) || scope.facilities.some(row => row.archivedAt)) throw applicationNotFound("delivery");
   const patch = Object.fromEntries(Object.entries(input).filter(([, value]) => value !== undefined));
   const merged = { ...existing, ...patch };
@@ -115,18 +118,23 @@ export async function updateApplicationInTransaction(ctx: OrgContext, tx: DbTran
   const [application] = await withUniqueCodeGuard(ctx, applications, applications.code, `Application code "${input.code}" already exists`, () => tx.update(applications).set(data).where(and(eq(applications.organizationId, ctx.organizationId), eq(applications.id, existing.id))).returning());
   if (massChanged) await saveShares(ctx, tx, application);
   await reconcileUnassignedCreditBatchApplicationSlices(ctx, tx, { applicationIds: [application.id] });
-  return getApplicationOperationOutput(ctx, tx, application, remainingBefore);
+  const output = await getApplicationOperationOutput(ctx, tx, application, remainingBefore);
+  // A repoint records under the batches it leaves and the ones it joins.
+  return { output, activityScopes: [...previousActivityScopes, ...await resolveWriteActivityScopes(ctx, tx, "application", application.id)] };
 }
-export async function deleteApplicationInTransaction(ctx: OrgContext, tx: DbTransaction, input: DeleteApplicationInput): Promise<void> {
+/** Returns the activity scopes resolved before the shares are deleted. */
+export async function deleteApplicationInTransaction(ctx: OrgContext, tx: DbTransaction, input: DeleteApplicationInput, source: ActivityEventInput["source"]): Promise<ActivityScope[]> {
   requireOrgScope(ctx);
   const scope = await lockApplicationWriteScope(ctx, tx, { ...input, mutation: "delete" });
   assertMutableSlices(scope, "delete");
   const blocking = scope.batches.filter(batch => IMMUTABLE_CREDIT_BATCH_STATUSES.has(batch.status));
   if (blocking.length) throw applicationRefusal("certification_locked", "applicationId", `Cannot delete application linked to verified or issued credit batches: ${blocking.map(batch => batch.code).join(", ")}`);
   const id = input.applicationId;
+  const activityScopes = await resolveWriteActivityScopes(ctx, tx, "application", id);
   await tx.delete(creditBatchApplications).where(and(eq(creditBatchApplications.organizationId, ctx.organizationId), eq(creditBatchApplications.applicationId, id)));
   await tx.delete(soilTemperatureMeasurements).where(and(eq(soilTemperatureMeasurements.organizationId, ctx.organizationId), eq(soilTemperatureMeasurements.applicationId, id)));
   await tx.delete(applicationOutputAllocations).where(and(eq(applicationOutputAllocations.organizationId, ctx.organizationId), eq(applicationOutputAllocations.applicationId, id)));
-  await retireDocumentsForEntities(ctx, tx, [{ entityType: "application", entityId: id }]);
+  await retireDocumentsForEntities(ctx, tx, [{ entityType: "application", entityId: id, activityScopes }], source);
   await tx.delete(applications).where(and(eq(applications.organizationId, ctx.organizationId), eq(applications.id, id)));
+  return activityScopes;
 }

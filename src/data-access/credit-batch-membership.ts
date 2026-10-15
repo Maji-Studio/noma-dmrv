@@ -1,3 +1,4 @@
+import { recordMembershipActivity } from "./write-activity";
 /**
  * Explicit credit-batch create, update and delete lock sequence:
  * 1. Discover the batch (update/delete), current/prospective runs and artifacts
@@ -656,6 +657,7 @@ export async function attachProductionRunToMatchingCreditBatch(
   tx: DbTransaction,
   productionRunId: string,
 ): Promise<string | null> {
+  requireOrgScope(ctx);
   const [run] = await tx
     .select({
       id: productionRuns.id,
@@ -795,5 +797,6 @@ export async function attachProductionRunToMatchingCreditBatch(
     .set({ version: nextVersion(creditBatches.version), updatedAt: new Date() })
     .where(and(eq(creditBatches.id, batch.id), eq(creditBatches.organizationId, ctx.organizationId)));
 
+  await recordMembershipActivity(ctx, tx, batch.id, [], [productionRunId], { source: "system" });
   return batch.id;
 }
