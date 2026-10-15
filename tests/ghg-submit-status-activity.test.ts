@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { activityEvents, certificationSubmissions, certifierGhgStatements, facilities, organizations } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import type { GhgStatement } from "@/lib/isometric";
+import { TEST_SITE_POSITION } from "./helpers/test-org";
 
 // Keep ledger reads, status writes, and activity persistence real; stub the
 // registry and unrelated report/session-lock dependencies of the submit core.
@@ -44,6 +45,7 @@ beforeEach(async () => {
   await db.insert(organizations).values({ id, name: "Submit activity fixture", slug: id });
   facilityId = crypto.randomUUID();
   await db.insert(facilities).values({
+    ...TEST_SITE_POSITION,
     id: facilityId, organizationId: id, code: "ACTIVITY-TEST",
     name: "Submit activity facility", timezone: "UTC",
   });
