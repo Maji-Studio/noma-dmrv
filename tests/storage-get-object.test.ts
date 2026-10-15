@@ -76,6 +76,23 @@ describe.each(PROVIDERS)("$name getObject", ({ create }) => {
   });
 
   it.each([
+    0,
+    NaN,
+    Infinity,
+    -1,
+    1.5,
+    STORAGE_GET_OBJECT_TIMEOUT_MS + 1,
+  ])("rejects invalid timeout %s before fetching or scheduling a deadline", async (timeoutMs) => {
+    vi.useFakeTimers();
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+
+    await expect(create().getObject({ key: STORAGE_KEY }, timeoutMs)).rejects.toThrow(RangeError);
+
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it.each([
     { label: "default", timeoutMs: undefined, deadlineMs: STORAGE_GET_OBJECT_TIMEOUT_MS },
     { label: "custom", timeoutMs: SHORT_TIMEOUT_MS, deadlineMs: SHORT_TIMEOUT_MS },
   ])("aborts stalled reads at the $label deadline and clears the timer", async ({ timeoutMs, deadlineMs }) => {

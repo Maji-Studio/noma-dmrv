@@ -9,6 +9,16 @@ export async function fetchStoredObject(
   url: string,
   timeoutMs = STORAGE_GET_OBJECT_TIMEOUT_MS,
 ): Promise<StoredObject> {
+  if (
+    !Number.isInteger(timeoutMs) ||
+    timeoutMs <= 0 ||
+    timeoutMs > STORAGE_GET_OBJECT_TIMEOUT_MS
+  ) {
+    throw new RangeError(
+      `Storage getObject timeout must be an integer between 1 and ${STORAGE_GET_OBJECT_TIMEOUT_MS} ms`,
+    );
+  }
+
   const controller = new AbortController();
   const timer = setTimeout(
     () => controller.abort(),
