@@ -17,7 +17,7 @@ const linked = {
 
 function isometricField(feedstockType: FeedstockType, isProduction: boolean) {
   const field = feedstockTypeSheetSections(feedstockType, null, isProduction)[0].fields.find(
-    (f) => f.label === "Isometric feedstock ID",
+    (f) => f.label === "Isometric feedstock type",
   );
   return field?.value;
 }

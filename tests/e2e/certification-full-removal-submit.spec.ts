@@ -52,8 +52,8 @@ const RUN_LIVE_SUBMIT = process.env.E2E_LIVE_SUBMIT === "1";
 // runs --grep-invert @live) and exercised by the nightly e2e-live workflow.
 test.describe("Certification — full New-Removal submit", { tag: "@live" }, () => {
   test.skip(
-    !SANDBOX_PROJECT_ID || !SANDBOX_FACILITY_ID,
-    "requires Isometric sandbox project and facility IDs (ISOMETRIC_DEMO_PROJECT_ID, ISOMETRIC_DEMO_FACILITY_ID)",
+    !SANDBOX_PROJECT_ID,
+    "requires an Isometric sandbox project ID (ISOMETRIC_DEMO_PROJECT_ID)",
   );
 
   test("create → requirements → (opt-in) submit a ready batch", async ({
@@ -87,7 +87,7 @@ test.describe("Certification — full New-Removal submit", { tag: "@live" }, () 
 
     const mapping: SeededMapping = await seedCertifierMapping(facilityId, {
       externalProjectId: projectId,
-      externalFacilityId: SANDBOX_FACILITY_ID,
+      externalFacilityId: SANDBOX_FACILITY_ID || undefined,
       defaultRemovalTemplateId: defaultRemovalTemplate?.id,
     });
 
@@ -167,11 +167,11 @@ test.describe("Certification — full New-Removal submit", { tag: "@live" }, () 
         timeout: COLD_COMPILE_TIMEOUT_MS,
       });
 
-      if (!RUN_LIVE_SUBMIT) {
+      if (!RUN_LIVE_SUBMIT || !SANDBOX_FACILITY_ID) {
         test.info().annotations.push({
           type: "note",
           description:
-            "Live submit skipped (set E2E_LIVE_SUBMIT=1 to POST to the sandbox registry).",
+            "Live submit skipped (requires E2E_LIVE_SUBMIT=1 and ISOMETRIC_DEMO_FACILITY_ID to POST to the sandbox registry).",
         });
         return;
       }

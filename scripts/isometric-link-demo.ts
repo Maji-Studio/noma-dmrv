@@ -19,6 +19,7 @@ config({ path: ".env.local" });
 const DEMO_EXTERNAL_PROJECT_ID = "prj_1K5F2F6SN1S0ZKDQ";
 const DEMO_PROJECT_NAME = "Dark Earth Carbon Ltd's Biochar Demo Project";
 const BOOTSTRAP_ORGANIZATION_ID = "org_dark_earth_carbon";
+const FACILITY_ID_PREFIX = "fcl_";
 
 async function main(): Promise<void> {
   const { db } = await import("../src/db");
@@ -65,9 +66,13 @@ async function main(): Promise<void> {
     process.exit(0);
   }
 
-  const externalFacilityId = process.env.ISOMETRIC_DEMO_FACILITY_ID;
-  if (!externalFacilityId?.trim()) {
+  const externalFacilityId = process.env.ISOMETRIC_DEMO_FACILITY_ID?.trim();
+  if (!externalFacilityId) {
     console.error("Set ISOMETRIC_DEMO_FACILITY_ID before linking a facility.");
+    process.exit(1);
+  }
+  if (!externalFacilityId.startsWith(FACILITY_ID_PREFIX)) {
+    console.error(`ISOMETRIC_DEMO_FACILITY_ID must start with ${FACILITY_ID_PREFIX}.`);
     process.exit(1);
   }
 

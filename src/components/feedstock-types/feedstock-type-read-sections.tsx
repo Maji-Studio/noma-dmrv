@@ -3,6 +3,7 @@ import type { DetailPanelSection } from "@/components/ui/detail-panel";
 import type { FeedstockType } from "@/db/schema";
 import { IsometricLink } from "@/components/certification/isometric-link";
 import { isometricRegistry } from "@/lib/isometric/links";
+import { certificationDetailField } from "@/lib/certification/certify-field-registry";
 import { FeedstockTypeSampling } from "./feedstock-type-sampling";
 
 /** "wood_chips" → "Wood Chips". */
@@ -36,7 +37,8 @@ export function feedstockTypeSheetSections(
         { label: "Usage", value: feedstockType.usage === "blend" ? "Blend" : "Pyrolysis" },
         { label: "State", value: feedstockType.archivedAt ? "Archived" : "Active" },
         {
-          label: "Isometric feedstock ID",
+          label: "Isometric feedstock type",
+          ...certificationDetailField("feedstockType", "isometricFeedstockTypeId", feedstockType),
           value: feedstockType.isometricFeedstockTypeId ? (
             <span className="inline-flex items-center gap-4">
               <span className="font-mono">{feedstockType.isometricFeedstockTypeId}</span>
