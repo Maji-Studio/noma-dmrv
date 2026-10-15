@@ -211,6 +211,7 @@ Operators can fill every line of the target Removal template ("LCA based templat
 **Typed blockers**
 - `RemovalBlocker {code, message, fixTarget, lineRef?}` replaces strings for emissions.
 - Existing string reasons are wrapped with `code: "legacy"` and migrated as they are touched.
+- The set keeps every existing fix target, including `deliveryEvidence` (proof of delivery, #1035; `submission-readiness.ts`, `certify-lineage-blockers.ts`), the Sample moisture descriptor gap (#1048, through entity readiness gaps) and `durabilityConfigurationBlockers` (#1024, computed once in `certify-context-core.ts`).
 - A new batch-health check key and fix target `emissions` go into both exhaustive switches (`resolutionDestination`, `batch-health-links.ts`).
 
 **Coverage**
@@ -218,7 +219,7 @@ Operators can fill every line of the target Removal template ("LCA based templat
 
 **Folds and coordination**
 - Folds #641, #640 (dropped facts become `needsReview`) and #645 (`evaluateRemovalBlockers` as the single preflight gate).
-- Coordinate with #1016, which moves the durability refusals into readiness.
+- #1016's readiness-vs-submission predicates are merged (#1024), and its owner has no open readiness or submit work. PR 2 builds on them.
 
 ### 4.4 Entries and the Emissions page (PR 3)
 
@@ -247,7 +248,9 @@ Operators can fill every line of the target Removal template ("LCA based templat
 - The aggregation change waits for PR 4 (§4.5), so sample shipping is never unsent between PRs.
 
 **Activity and #973**
-- Entry create, update and delete call `recordActivity` with entity type `emission_entry`.
+- Entry create, update and delete record activity under a new entity type `emission_entry`. Add it to `ACTIVITY_ENTITY_TYPES` (`src/db/schema/common.ts`) and to the DB CHECK, with a migration.
+- Writes that go through the operation runner are recorded by the runner from `describe()` (#1040), so they must not call `recordActivity` as well. Other writers call it in the same transaction.
+- Activity events carry only field names, never values, and set `creditBatchId`.
 - A credit batch spans at most a month, so a batch-level fuel or electricity entry is the monthly bulk entry. #973 closes with this PR.
 
 ### 4.5 Submission, snapshots and claims (PR 4)
@@ -325,6 +328,7 @@ Operators can fill every line of the target Removal template ("LCA based templat
 Kenji's round 2 note asks to reopen general edits when Isometric pushes a submission back, as before submission.
 
 - **Change:** under the same conditions as §4.5 Corrections, unlock the lineage guard for the rest of the lineage, not only entries. Resubmitting relocks it.
+- **Ownership:** the app-wide edit-lock rule (Open, In use, Sent) being drafted in a parallel session owns the lock predicates (`BLOCKING_SUBMISSION_STATUSES`, `REMOVAL_LOCK_BY_KIND`). PR 4 and PR 5 call that rule's predicate rather than adding their own.
 - **Shared lineage:** a record that also backs a verified Removal stays locked.
 - **Sync:** status comes from the refresh paths and from the scheduled registry sync of #1047 once it exists.
 - **Prerequisite:** none from Isometric, since Kenji decided the trigger on 2026-10-15. Folds item 1 of #687.
@@ -347,6 +351,8 @@ Kenji's round 2 note asks to reopen general edits when Isometric pushes a submis
 - Claude verifies each PR, commits, and runs E2E in the PR's worktree (`scripts/worktree.sh`).
 - Every Codex prompt bans database commands.
 - Merges need Kenji's explicit OK.
+
+**Known gap until PR 4:** the edited sandbox template has two sample shipping lines on one source, and noma flags them as `ambiguous`. Sandbox Removals, including the nightly `certification-full-removal-submit.spec.ts` that #1054 un-skipped, stop at "2 components noma cannot submit" until PR 1 and PR 4 land.
 
 **Before the first real submission**
 - #1020 re-authoring is done, and the bootstrap mapping covers the new component IDs.
