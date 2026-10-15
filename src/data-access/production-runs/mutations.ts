@@ -109,6 +109,22 @@ async function validateBiocharStorageLocation(
   if (loc.type !== "biochar_bin") throw new SafeError("Selected storage bin is not a biochar bin");
 }
 
+/** Recheck the reactor after the facility lock, serializing against facility moves. */
+async function lockReactorFacilityReference(
+  ctx: OrgContext,
+  tx: DbTransaction,
+  reactorId: string,
+  facilityId: string,
+): Promise<void> {
+  requireOrgScope(ctx);
+  const [reactor] = await tx.select({ facilityId: reactors.facilityId })
+    .from(reactors)
+    .where(and(eq(reactors.id, reactorId), eq(reactors.organizationId, ctx.organizationId)))
+    .for("share");
+  if (!reactor) throw runReferenceNotFound("Reactor not found", ["reactorId"]);
+  if (reactor.facilityId !== facilityId) throw new SafeError("Reactor does not belong to the selected facility");
+}
+
 /**
  * Create a new production run with bin-based feedstock allocation
  */
@@ -208,6 +224,7 @@ export async function createProductionRunInTransaction(
   let run: typeof productionRuns.$inferSelect;
   try {
     await lockActiveFacilityReference(ctx, tx, data.facilityId);
+    await lockReactorFacilityReference(ctx, tx, data.reactorId, data.facilityId);
 
     await lockBinStocks(ctx, tx, [
       ...feedstockDraws.map((draw) => draw.storageLocationId),
@@ -504,6 +521,10 @@ export async function updateProductionRunInTransaction(
       async () => {
     if (data.facilityId !== undefined) {
       await lockActiveFacilityReference(ctx, tx, data.facilityId);
+    }
+
+    if (effectiveReactorId && (data.reactorId !== undefined || data.facilityId !== undefined)) {
+      await lockReactorFacilityReference(ctx, tx, effectiveReactorId, targetFacilityId);
     }
 
     await lockProductionRunUpdateStock(

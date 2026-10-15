@@ -9,7 +9,7 @@ import { DEPRECATED_SEQUESTRATION_BLUEPRINT_1000_YEAR } from "@/lib/isometric/st
 
 const COMPLETE = {
   hasOrgCredentials: true,
-  mapping: { id: "map_1" },
+  mapping: { id: "map_1", externalFacilityId: "fcl_1" },
   defaultTemplate: { id: "rvt_1" },
   missingDefaultTemplateId: null,
   unbindableTemplateInputs: [],
@@ -52,6 +52,14 @@ describe("deriveFacilitySetupGaps", () => {
         defaultTemplate: null,
       }),
     ).toEqual([{ kind: "credentials" }]);
+  });
+
+  it.each([null, "", "   ", undefined])("reports a missing external facility id (%s) before template gaps", (externalFacilityId) => {
+    expect(deriveFacilitySetupGaps({
+      ...COMPLETE,
+      mapping: { externalFacilityId },
+      defaultTemplate: null,
+    })).toEqual([{ kind: "external_facility_id" }]);
   });
 
   it("reports an unset default template", () => {

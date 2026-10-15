@@ -17,19 +17,12 @@
 
 ## Feedstock eligibility
 
-Feedstock attributes and eligibility labels exist, and credit-batch lineage is
-loaded set-wise through
-`src/data-access/credit-batch-accounting.ts`. That module is the canonical
-place for credit-batch roll-ups; old stored summary columns must not be
-reintroduced.
-
-What is still missing is the decision record: one valid EC1-EC12 path, one of
-EC13-EC14, EC15, and the Reporting-Period >25% cap. Counterfactual quantities
-exist, but their dated validity and reassessment lifecycle do not.
-
-Implementation rule: store the evidence and facts that cannot be derived;
-derive mass fractions and pass/fail outcomes from current lineage. Do not store
-an unversioned boolean as the only compliance record.
+Feedstock eligibility, counterfactual and market-leakage evidence is maintained
+outside noma (#942 q8). Intake rows do not store eligibility labels or these
+parameters, and the mass balance does not draw an ineligible-feedstock exit.
+BFA v1.2.3 Appendix 3 gives FSC Mix and Controlled Wood sourcing recommendations,
+not a general 25% ineligible-biomass cap. See the source-linked
+[requirements shortlist](./requirements-shortlist.md).
 
 ## Production batches and sampling
 
@@ -122,9 +115,12 @@ Transport legs carry method, one-way distance, mass, factor, and evidence
 references. Aggregation counts every leg as a round trip (×2 of the one-way
 distance) and submits mass-distance by transport category.
 
+The justification for using the distance method when energy-usage data is
+unavailable lives in the PDD, outside noma (#942 q11). See the
+[recorded decision](./schema-mapping.md).
+
 Current gaps include:
 
-- proof that the energy-usage method was unavailable;
 - mandatory record types rather than “any one document”;
 - gross/tare and scale calibration support;
 - vehicle class/year and factor source/vintage.

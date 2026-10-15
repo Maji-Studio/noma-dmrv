@@ -89,6 +89,8 @@ repeats.
 |---|---|
 | Optional finite number, empty → `null` | `optionalNumber` |
 | Optional non-negative number | `optionalPositiveNumber` |
+| Optional strictly positive site distance, omitted or empty → `null` | `optionalLocationDistance` |
+| Clearable strictly positive site distance, omitted stays `undefined` | `clearableLocationDistance` |
 | Optional 0–100 percent | `optionalPercent` |
 | Required number with friendly messages | `requiredNumber(requiredMsg, invalidMsg)` |
 | Raw preprocessor, empty → `null` | `toNumberOrNull` |
@@ -125,7 +127,7 @@ The same trap in reverse is `value ?? undefined` in a submit handler or a
 `setValue` call: pass the `null` through instead.
 
 **Update schemas use the `clearable*` family; create and whole-form schemas
-keep `optionalNumber` / `optionalPositiveNumber`.** `toNumberOrNull` folds
+keep `optionalNumber` / `optionalPositiveNumber` / `optionalLocationDistance`.** `toNumberOrNull` folds
 omitted into cleared, which is right when every field is present (a create, or
 a form that always submits the whole record) and wrong for an `update*Schema`,
 where an absent key must not overwrite a column. `toClearableNumber` keeps
@@ -137,8 +139,7 @@ folding to `null` wiped a manual distance on every unrelated edit.
 **The server derives values it owns rather than trusting the patch.** Feedstock
 dry mass is derived from the *effective* wet mass and moisture (patch value
 falling back to the stored row) inside the same locked transaction, so a
-moisture-only edit yields the right dry mass. A client-sent `massDryKg` is
-advisory and is refused when it disagrees materially with the derivation.
+moisture-only edit yields the right dry mass. `massDryKg` is not a PATCH input.
 Cross-field rules work the same way: `updateFeedstockType` re-validates the
 merged category/usage pair against the stored row, because a refine on the
 patch alone never fires when only one half of the pair is present.
@@ -150,6 +151,12 @@ Masses are backed by `numeric(14,3)` columns. A hand-rolled `z.number().positive
 Same reasoning for `PG_INTEGER_MAX` on integer columns, and `RATIO_INPUT_MAX` (9.999999) for ratio fields backed by `numeric(7,6)` whose domain exceeds `[0, 1]` (H:C org, O:C org). True 0–1 fractions keep their own `.max(1)`.
 
 ### GPS coordinates
+
+Facilities, supplier locations and customer locations require a GPS pair to
+save. Updates may omit the pair to preserve it, but cannot clear it or supply
+only one coordinate. Supplier and customer creation requires at least one
+location. Their optional one-way site distances must be greater than zero
+when entered; empty values clear the distance.
 
 `latitudeSchema` / `longitudeSchema` (optional, nullable) and `requiredLatitudeSchema` / `requiredLongitudeSchema` (with the required-vs-invalid message distinction built in) all expect a **number**, so form schemas wrap them:
 

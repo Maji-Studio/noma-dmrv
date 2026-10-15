@@ -7,7 +7,9 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { eq, inArray } from "drizzle-orm";
 import { markSubmissionSubmitted } from "@/data-access/certification";
 import { markSubmissionInterrupted } from "@/data-access/certification-submissions";
-import { deleteDocumentWithCertificationSafety } from "@/data-access/documents";
+import { deleteDocumentApp } from "@/lib/operations/documents";
+import { runOperationInProcess } from "@/lib/operations/runner";
+const deleteViaApp = (ctx: Parameters<typeof runOperationInProcess>[1], documentId: string) => runOperationInProcess(deleteDocumentApp, ctx, { documentId, expectedVersion: 1 });
 import { requestRemovalEvidenceRefresh } from "@/data-access/removal-evidence-refresh";
 import {
   rejectSubmissionAndReleaseProductionClaims,
@@ -25,7 +27,7 @@ import {
 } from "@/db/schema";
 import { LOCK_TTL_MS } from "@/lib/isometric/utils/lock";
 import { SUBMISSION_EXTERNAL_MUTATIONS } from "@/lib/certification/submission-metadata";
-import {
+import { TEST_SITE_POSITION,
   ensureTestOrg,
   makeTestOrgContext,
   TEST_ORG_ID,
@@ -40,6 +42,7 @@ const createdSubmissionIds: string[] = [];
 const POST_EXPIRY_OFFSET_MS = 1_000;
 
 interface Fixture {
+  facilityId: string;
   batchId: string;
   removalAId: string;
   removalBId: string;
@@ -88,7 +91,7 @@ async function createFixture(): Promise<Fixture> {
   return db.transaction(async (tx) => {
     const [facility] = await tx
       .insert(facilities)
-      .values({ timezone: "UTC",
+      .values({ ...TEST_SITE_POSITION, timezone: "UTC",
         organizationId: TEST_ORG_ID,
         code: `FAC-PCR-${tag}`,
         name: `PCR Facility ${tag}`,
@@ -142,6 +145,7 @@ async function createFixture(): Promise<Fixture> {
       .returning({ id: creditBatches.id });
     createdBatchIds.push(batch.id);
     return {
+      facilityId: facility.id,
       batchId: batch.id,
       removalAId: removalA.id,
       removalBId: removalB.id,
@@ -201,7 +205,7 @@ describe("production-emissions claim reservations", () => {
     const draft = await insertDraft(fixture.removalAId, 1);
     const ctx = makeTestOrgContext(TEST_USER_ID);
     const args = { removalId: fixture.removalAId, submissionId: draft.id };
-    const [document] = await db.insert(documents).values({ organizationId: TEST_ORG_ID, fileUrl: "https://example.com/evidence.pdf", documentType: "pdf", entityType: "application", entityId: fixture.removalAId, fileName: "reviewed-evidence.pdf", mimeType: "application/pdf" }).returning();
+    const [document] = await db.insert(documents).values({ organizationId: TEST_ORG_ID, fileUrl: "https://example.com/evidence.pdf", documentType: "pdf", entityType: "facility", entityId: fixture.facilityId, fileName: "reviewed-evidence.pdf", mimeType: "application/pdf" }).returning();
     const reconcile = vi.fn(async () => [{ documentId: document.id }]);
     await expect(requestRemovalEvidenceRefresh(ctx, args, reconcile)).rejects.toThrow("Only an interrupted attempt");
     expect(reconcile).not.toHaveBeenCalled();
@@ -216,7 +220,7 @@ describe("production-emissions claim reservations", () => {
     expect(saved.payloadSnapshot).toEqual({ fixture: "production-claim-reservation" });
     expect(saved.status).toBe("draft");
     expect(saved.metadata).toMatchObject({ evidenceRefreshCandidates: [{ documentId: document.id }] });
-    await expect(deleteDocumentWithCertificationSafety(ctx, document.id)).rejects.toThrow("reviewed certification evidence");
+    await expect(deleteViaApp(ctx, document.id)).rejects.toThrow("reviewed certification evidence");
     await db.update(certificationSubmissions).set({ externalId: "rmv-already-created" }).where(eq(certificationSubmissions.id, draft.id));
     await expect(requestRemovalEvidenceRefresh(ctx, args, reconcile)).rejects.toThrow("Only an interrupted attempt");
     expect(reconcile).toHaveBeenCalledTimes(1);
@@ -228,9 +232,9 @@ describe("production-emissions claim reservations", () => {
     const draft = await insertDraft(fixture.removalAId, 1);
     const ctx = makeTestOrgContext(TEST_USER_ID);
     await db.update(certificationSubmissions).set({ metadata: { lastAttemptOutcome: "interrupted", externalMutation: "none" } }).where(eq(certificationSubmissions.id, draft.id));
-    const [document] = await db.insert(documents).values({ organizationId: TEST_ORG_ID, fileUrl: "https://example.com/evidence.pdf", documentType: "pdf", entityType: "application", entityId: fixture.removalAId, fileName: "review-race.pdf" }).returning();
+    const [document] = await db.insert(documents).values({ organizationId: TEST_ORG_ID, fileUrl: "https://example.com/evidence.pdf", documentType: "pdf", entityType: "facility", entityId: fixture.facilityId, fileName: "review-race.pdf" }).returning();
     await expect(requestRemovalEvidenceRefresh(ctx, { removalId: fixture.removalAId, submissionId: draft.id }, async () => {
-      await deleteDocumentWithCertificationSafety(ctx, document.id);
+      await deleteViaApp(ctx, document.id);
       return [{ documentId: document.id }];
     })).rejects.toThrow();
     const [saved] = await db.select().from(certificationSubmissions).where(eq(certificationSubmissions.id, draft.id));

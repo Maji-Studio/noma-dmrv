@@ -1,3 +1,4 @@
+import { feedstockFixtureValues, cleanupFeedstockFixtureParents } from "./helpers/feedstock-fixture";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
@@ -14,7 +15,7 @@ import {
   recordStockTakeMovement,
   StockTakeIncreaseError,
 } from "@/data-access/bin-movements";
-import {
+import { TEST_SITE_POSITION,
   ensureTestOrg,
   makeTestOrgContext,
   TEST_ORG_ID,
@@ -56,7 +57,7 @@ describe("feedstock stock-take moisture integrity", () => {
     const ctx = makeTestOrgContext(TEST_USER_ID);
     const [facility] = await db
       .insert(facilities)
-      .values({ timezone: "UTC",
+      .values({ ...TEST_SITE_POSITION, timezone: "UTC",
         organizationId: TEST_ORG_ID,
         code: `FAC-STOCK-MOIST-${tag}`,
         name: `Stock Moisture Facility ${tag}`,
@@ -65,6 +66,7 @@ describe("feedstock stock-take moisture integrity", () => {
     const [feedstockType] = await db
       .insert(feedstockTypes)
       .values({
+        usage: "pyrolysis",
         organizationId: TEST_ORG_ID,
         code: `FT-STOCK-MOIST-${tag}`,
         name: `Stock Moisture Feedstock ${tag}`,
@@ -84,7 +86,7 @@ describe("feedstock stock-take moisture integrity", () => {
       .returning({ id: storageLocations.id });
     const [feedstock] = await db
       .insert(feedstocks)
-      .values({
+      .values(await feedstockFixtureValues(db, {
         organizationId: TEST_ORG_ID,
         facilityId: facility.id,
         feedstockTypeId: feedstockType.id,
@@ -94,7 +96,7 @@ describe("feedstock stock-take moisture integrity", () => {
         massDryKg: 100,
         massWetKg: 125,
         moistureContentPercent: 20,
-      })
+      }))
       .returning({ id: feedstocks.id });
 
     try {
@@ -159,7 +161,7 @@ describe("feedstock stock-take moisture integrity", () => {
         createBinMovement(ctx, {
           storageLocationId: bin.id,
           lane: "feedstock",
-          movementType: "adjustment",
+          movementType: "adjustment", occurredAt: new Date("2026-10-15T10:00:00Z"),
           idempotencyKey: crypto.randomUUID(),
           massDeltaKg: 1,
           reason: "Generic movement caller cannot bypass stock-take checks",
@@ -167,6 +169,21 @@ describe("feedstock stock-take moisture integrity", () => {
       ).rejects.toThrow(
         /^Check the source record, or record Lost mass if stock was lost\.$/,
       );
+
+      const futureTime = new Date();
+      futureTime.setFullYear(futureTime.getFullYear() + 1);
+      await expect(createBinMovement(ctx, {
+        storageLocationId: bin.id,
+        lane: "feedstock",
+        movementType: "loss",
+        occurredAt: futureTime,
+        idempotencyKey: crypto.randomUUID(),
+        massDeltaKg: -1,
+        reason: "Future loss must not change stock",
+      })).rejects.toMatchObject({
+        code: "validation_failed",
+        issues: [{ path: ["occurredAt"], code: "validation_failed", message: "Date and time cannot be in the future. Enter a time at or before now." }],
+      });
 
       const preciseSnapshot = await recordStockTakeFn({
         storageLocationId: bin.id,
@@ -192,6 +209,7 @@ describe("feedstock stock-take moisture integrity", () => {
         .delete(binMovements)
         .where(eq(binMovements.storageLocationId, bin.id));
       await db.delete(feedstocks).where(eq(feedstocks.id, feedstock.id));
+      await cleanupFeedstockFixtureParents(db);
       await db.delete(storageLocations).where(eq(storageLocations.id, bin.id));
       await db
         .delete(feedstockTypes)

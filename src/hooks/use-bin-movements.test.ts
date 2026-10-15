@@ -28,6 +28,15 @@ describe("throwRecordLossError", () => {
     ).toThrow(RecordLossFieldError);
   });
 
+  it("maps a loss-time validation issue to occurredAt", () => {
+    expect(() => throwRecordLossError({
+      error: "Loss was not saved",
+      issues: [{ path: ["occurredAt"], code: "validation_failed", message: "Check the date and time" }],
+    })).toThrow(expect.objectContaining({
+      name: "RecordLossFieldError", field: "occurredAt", message: "Check the date and time",
+    }));
+  });
+
   it("carries the conflict payload so the form can rotate its key", () => {
     try {
       throwRecordLossError({ error: "Key reused", conflict });

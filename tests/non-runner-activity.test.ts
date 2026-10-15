@@ -7,14 +7,24 @@ import * as activity from "@/data-access/activity-events";
 import { createApplication, updateApplication, deleteApplication } from "@/data-access/applications";
 import { createCreditBatch, updateCreditBatch, deleteCreditBatch } from "@/data-access/credit-batches";
 import { attachProductionRunToMatchingCreditBatch } from "@/data-access/credit-batch-membership";
-import { insertDocument, deleteDocumentRow, deleteDocumentWithCertificationSafety, retireDocumentsForEntities } from "@/data-access/documents";
+import { insertDocument, deleteDocumentRow, retireDocumentsForEntities } from "@/data-access/documents";
+import { __setStorageProviderForTests } from "@/lib/storage";
+import { RetirementStorageProvider } from "./helpers/document-retirement";
+import { DOCUMENT_FAILED_RETENTION_MS, DOCUMENT_UPLOAD_GRACE_MS } from "@/config/documents";
+import { expireDocumentUploadsInTransaction, retireFailedDocumentUploadsInTransaction } from "@/data-access/document-upload-sweep";
+import { uploadFactsFor } from "@/data-access/document-writes";
 import { createTransportLeg, updateTransportLeg, deleteTransportLeg, deleteTransportLegsForEntity, syncFeedstockTransportLeg } from "@/data-access/transport-legs";
 import { ACTIVITY_FIXTURE_DATE, cleanupActivityWriteFixture, createActivityWriteFixture } from "./helpers/activity-write-fixture";
 
 import { insertOutputDeliveryFixture } from "./helpers/output-contract-fixtures";
+import { runOperation, runOperationInProcess } from "@/lib/operations/runner";
+import { requestDocumentUploadApp, confirmDocumentUploadApp, deleteDocumentApp } from "@/lib/operations/documents";
 import { deleteLabSample } from "@/lib/operations/lab-samples";
 
 const APPLICATION_TONNES = 0.01;
+const DOCUMENT_SIZE_BYTES = 8;
+const SHA256_HEX_LENGTH = 64;
+const RETENTION_BOUNDARY_OFFSET_MS = 1;
 const NEXT_ACTIVITY_DATE = new Date("2026-02-10T10:00:00Z");
 const NEXT_RUN_START = new Date("2026-02-10T09:00:00Z");
 const OTHER_RUN_START = new Date("2026-01-10T08:00:00Z");
@@ -26,10 +36,12 @@ let fixture: Awaited<ReturnType<typeof createActivityWriteFixture>>;
 beforeEach(async () => {
   ctx = { organizationId: `activity-writes-${crypto.randomUUID()}`, userId: `activity-actor-${crypto.randomUUID()}`, orgRole: "owner", isPlatformAdmin: false };
   fixture = await createActivityWriteFixture(ctx);
+  __setStorageProviderForTests(new RetirementStorageProvider());
 });
 afterEach(async () => {
   vi.restoreAllMocks();
-  if (ctx) await cleanupActivityWriteFixture(ctx.organizationId);
+  __setStorageProviderForTests(null);
+  if (ctx) await cleanupActivityWriteFixture(ctx);
 });
 
 function applicationInput() {
@@ -135,7 +147,8 @@ it("records a batch membership event per changed run so each event can be swept 
   }
 });
 
-it.each([deleteDocumentRow, deleteDocumentWithCertificationSafety])("records document create/delete without any filename using %s", async deleteWriter => {
+it("records legacy document create/delete without any filename", async () => {
+  const deleteWriter = deleteDocumentRow;
   const document = await insertDocument(ctx, documentInput());
   await deleteWriter(ctx, document.id);
   const rows = await events("document", document.id);
@@ -200,14 +213,20 @@ it("skips identical derived syncs and records only changed fields on a real upda
   for (const row of rows) expect(row).toMatchObject({ source: "system", actorUserId: ctx.userId, creditBatchId: fixture.batch.id });
 });
 
-it.each(["rest", "mcp"] as const)("preserves %s source through lab-sample leg and document deletion", async source => {
+it.each(["form", "rest", "mcp", "script"] as const)("preserves %s source through lab-sample leg and document deletion", async source => {
   const [sample] = await db.insert(samples).values({ organizationId: ctx.organizationId, creditBatchId: fixture.batch.id, sampleCode: "ACT-SAMPLE", samplingTime: ACTIVITY_FIXTURE_DATE, totalCarbonPercent: 80, organicCarbonPercent: 75 }).returning();
   const leg = await createTransportLeg(ctx, { ...legInput(), entityType: "sample", entityId: sample.id });
   const sampleDocument = await insertDocument(ctx, documentInput("sample", sample.id));
   const legDocument = await insertDocument(ctx, documentInput("transport_leg", leg.id));
-  await db.transaction(tx => deleteLabSample.execute({ ctx, tx, source, afterCommit: () => {} }, { labSampleId: sample.id, expectedVersion: sample.version }));
+  const input = { labSampleId: sample.id, expectedVersion: sample.version };
+  if (source === "form") await runOperationInProcess(deleteLabSample, ctx, input);
+  else if (source === "script") await runOperation(deleteLabSample, ctx, input, { activitySource: source });
+  else await runOperation(deleteLabSample, ctx, input, { audit: { transport: source, requestId: crypto.randomUUID(), credentialId: crypto.randomUUID() } });
+  expect(await events("lab_sample", sample.id)).toMatchObject([
+    { action: "deleted", source, actorUserId: source === "script" ? null : ctx.userId, creditBatchId: fixture.batch.id },
+  ]);
   for (const [type, id] of [["transport_leg", leg.id], ["document", sampleDocument.id], ["document", legDocument.id]] as const) {
-    expect((await events(type, id))[0]).toMatchObject({ action: "deleted", source, actorUserId: ctx.userId, creditBatchId: fixture.batch.id });
+    expect((await events(type, id))[0]).toMatchObject({ action: "deleted", source, actorUserId: source === "script" ? null : ctx.userId, creditBatchId: fixture.batch.id });
   }
 });
 
@@ -275,7 +294,8 @@ it.each(["update", "delete"] as const)("rolls back batch %s, membership and acti
   expect(await db.select().from(creditBatchProductionRuns).where(eq(creditBatchProductionRuns.organizationId, ctx.organizationId))).toHaveLength(1);
 });
 
-it.each([deleteDocumentRow, deleteDocumentWithCertificationSafety])("rolls back document deletion and activity on failure with %s", async writer => {
+it("rolls back legacy document deletion and activity on failure", async () => {
+  const writer = deleteDocumentRow;
   const saved = await insertDocument(ctx, documentInput());
   const before = await allEvents();
   const original = activity.recordActivity;
@@ -327,4 +347,74 @@ it("rolls back document retirement with a failed parent transaction", async () =
   })).rejects.toBe(FAILURE);
   expect(await allEvents()).toEqual(before);
   expect(await db.select().from(documents).where(eq(documents.id, saved.id))).toHaveLength(1);
+});
+
+it("records exactly one document event for each app upload request, confirm and delete", async () => {
+  const declaration = {
+    entityType: "credit_batch", entityId: fixture.batch.id, documentType: "pdf", fileName: PRIVATE_FILENAME,
+    contentType: "application/pdf", sizeBytes: DOCUMENT_SIZE_BYTES, sha256: "a".repeat(SHA256_HEX_LENGTH), storageProvider: "local-fs", storageBucket: "local-fs",
+  };
+  const document = await runOperationInProcess(requestDocumentUploadApp, ctx, declaration);
+  expect((await events("document", document.id)).map(row => row.action)).toEqual(["created"]);
+  const facts = { ...uploadFactsFor(document), finalKey: `org/${ctx.organizationId}/evidence/${document.id}`,
+    inspectedSha256: declaration.sha256, inspectedSizeBytes: declaration.sizeBytes, inspectedContentType: declaration.contentType };
+  const confirmed = await runOperationInProcess(confirmDocumentUploadApp, ctx, facts);
+  expect(confirmed).toMatchObject({ kind: "uploaded", transitioned: true });
+  if (confirmed.kind !== "uploaded") throw new Error("Document confirmation failed");
+  expect((await events("document", document.id)).map(row => row.action)).toEqual(["updated", "created"]);
+  await runOperationInProcess(confirmDocumentUploadApp, ctx, facts);
+  expect(await events("document", document.id)).toHaveLength(2);
+  await runOperationInProcess(deleteDocumentApp, ctx, { documentId: document.id, expectedVersion: confirmed.document.version });
+  const rows = await events("document", document.id);
+  expect(rows.map(row => row.action)).toEqual(["deleted", "updated", "created"]);
+  for (const row of rows) expect(row).toMatchObject({ entityType: "document", source: "form", creditBatchId: fixture.batch.id });
+  const serialized = JSON.stringify(rows, (_key, value) => typeof value === "bigint" ? String(value) : value);
+  for (const value of [PRIVATE_FILENAME, declaration.sha256, facts.finalKey]) expect(serialized).not.toContain(value);
+});
+
+it("records one sample deletion and one attached-document deletion through the app runner", async () => {
+  const [sample] = await db.insert(samples).values({ organizationId: ctx.organizationId, creditBatchId: fixture.batch.id,
+    sampleCode: "ACT-SAMPLE", samplingTime: ACTIVITY_FIXTURE_DATE, totalCarbonPercent: 80, organicCarbonPercent: 75 }).returning();
+  const document = await insertDocument(ctx, documentInput("sample", sample.id));
+  await runOperationInProcess(deleteLabSample, ctx, { labSampleId: sample.id, expectedVersion: sample.version });
+  const deleted = (await allEvents()).filter(row => row.action === "deleted");
+  expect(deleted).toHaveLength(2);
+  expect(deleted).toEqual(expect.arrayContaining([
+    expect.objectContaining({ entityType: "lab_sample", entityId: sample.id, creditBatchId: fixture.batch.id, source: "form" }),
+    expect.objectContaining({ entityType: "document", entityId: document.id, creditBatchId: fixture.batch.id, source: "form" }),
+  ]));
+});
+
+it("records failed-upload retention as system in the sweep transaction without duplicate expiry events", async () => {
+  const document = await runOperationInProcess(requestDocumentUploadApp, ctx, {
+    entityType: "credit_batch", entityId: fixture.batch.id, documentType: "pdf", fileName: PRIVATE_FILENAME,
+    contentType: "application/pdf", sizeBytes: DOCUMENT_SIZE_BYTES, storageProvider: "local-fs", storageBucket: "local-fs",
+  });
+  const expiredAt = new Date(Date.now() - DOCUMENT_UPLOAD_GRACE_MS - RETENTION_BOUNDARY_OFFSET_MS);
+  await db.update(documents).set({ uploadExpiresAt: expiredAt }).where(eq(documents.id, document.id));
+  const now = new Date();
+  await db.transaction(tx => expireDocumentUploadsInTransaction(tx, now, [ctx.organizationId]));
+  expect((await events("document", document.id)).map(row => row.action)).toEqual(["created"]);
+  await db.update(documents).set({ updatedAt: new Date(now.getTime() - DOCUMENT_FAILED_RETENTION_MS - RETENTION_BOUNDARY_OFFSET_MS) })
+    .where(eq(documents.id, document.id));
+  await db.transaction(tx => retireFailedDocumentUploadsInTransaction(tx, now, [ctx.organizationId]));
+  await db.transaction(tx => retireFailedDocumentUploadsInTransaction(tx, now, [ctx.organizationId]));
+  const rows = await events("document", document.id);
+  expect(rows).toHaveLength(2);
+  expect(rows[0]).toMatchObject({ action: "deleted", source: "system", actorUserId: null, creditBatchId: fixture.batch.id });
+});
+
+it("rolls back certification-safe app deletion and activity on recording failure", async () => {
+  const saved = await insertDocument(ctx, documentInput());
+  const before = await allEvents();
+  const original = activity.recordActivity;
+  vi.spyOn(activity, "recordActivity").mockImplementationOnce(async (...args) => {
+    await original(...args);
+    throw FAILURE;
+  });
+  await expect(runOperationInProcess(deleteDocumentApp, ctx, { documentId: saved.id, expectedVersion: saved.version }))
+    .rejects.toBe(FAILURE);
+  expect(await allEvents()).toEqual(before);
+  const [stored] = await db.select().from(documents).where(eq(documents.id, saved.id));
+  expect(stored).toEqual(saved);
 });

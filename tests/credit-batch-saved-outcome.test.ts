@@ -1,5 +1,5 @@
 import { labLogisticsVersion } from "./helpers/lab-logistics-version";
-import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
+import { TEST_SITE_POSITION, ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
 /**
  * DB-backed contract for the two outcomes of a credit-batch write (issues
  * #769, #797): the row commits first, and the accounting roll-up that
@@ -99,7 +99,7 @@ beforeAll(async () => {
   const runId = Date.now().toString(36);
   const [facility] = await db
     .insert(facilities)
-    .values({ timezone: "UTC",
+    .values({ ...TEST_SITE_POSITION, timezone: "UTC",
       organizationId: TEST_ORG_ID,
       name: `Saved-Outcome Facility ${runId}`,
       code: `FAC-SO-${runId}`,
@@ -110,6 +110,7 @@ beforeAll(async () => {
   const [feedstockType] = await db
     .insert(feedstockTypes)
     .values({
+      usage: "pyrolysis",
       organizationId: TEST_ORG_ID,
       name: `Saved-Outcome Woodchips ${runId}`,
       code: `FT-SO-${runId}`,

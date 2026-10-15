@@ -30,14 +30,17 @@ export const logFeedstockDelivery: Operation<
   }),
   input: createFeedstockSchema,
   supportsDryRun: true,
-  execute: ({ ctx, tx, snapshotStock }, data) =>
-    withFeedstockErrors(() => createFeedstockInTransaction(ctx, tx, {
+  execute: async ({ ctx, tx, snapshotStock, activity }, data) => {
+    const result = await withFeedstockErrors(() => createFeedstockInTransaction(ctx, tx, {
       ...data,
       transportDistanceSource: resolveDistanceSource(
         data.transportDistanceKm,
         data.transportDistanceSource,
       ),
-    }, snapshotStock)),
+    }, snapshotStock));
+    for (const row of result.feedstocks) activity.link({ facilityId: row.facilityId }, row.id);
+    return result;
+  },
 };
 
 export const updateFeedstock: Operation<typeof updateFeedstockSchema, FeedstockWithRelations> = {
@@ -49,13 +52,14 @@ export const updateFeedstock: Operation<typeof updateFeedstockSchema, FeedstockW
   }),
   input: updateFeedstockSchema,
   supportsDryRun: true,
-  execute: async ({ ctx, tx, afterCommit, snapshotStock }, { feedstockId, transportDistanceKm, transportDistanceSource, ...updateData }) => {
+  execute: async ({ ctx, tx, afterCommit, snapshotStock, activity }, { feedstockId, transportDistanceKm, transportDistanceSource, ...updateData }) => {
     const result = await withFeedstockErrors(() => updateFeedstockInTransaction(ctx, tx, feedstockId, {
       ...updateData,
       transportDistanceKm,
       transportDistanceSource: resolveDistanceSource(transportDistanceKm, transportDistanceSource),
     }, snapshotStock));
     afterCommit(async () => { await processPendingStorageObjectDeletions(ctx); });
+    activity.link({ facilityId: result.facilityId });
     return result;
   },
 };
@@ -68,8 +72,9 @@ export const deleteFeedstock: Operation<typeof deleteFeedstockSchema, void> = {
   }),
   input: deleteFeedstockSchema,
   supportsDryRun: true,
-  execute: async ({ ctx, tx, afterCommit, snapshotStock }, { feedstockId, expectedVersion }) => {
-    await withFeedstockErrors(() => deleteFeedstockInTransaction(ctx, tx, feedstockId, expectedVersion, snapshotStock));
+  execute: async ({ ctx, tx, source, afterCommit, snapshotStock, activity }, { feedstockId, expectedVersion }) => {
+    const row = await withFeedstockErrors(() => deleteFeedstockInTransaction(ctx, tx, feedstockId, expectedVersion, snapshotStock, source));
+    activity.link({ facilityId: row.facilityId });
     afterCommit(async () => { await processPendingStorageObjectDeletions(ctx); });
   },
 };

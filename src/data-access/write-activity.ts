@@ -67,7 +67,7 @@ export async function recordScopedWriteActivity(
   ctx: OrgContext, tx: DbTransaction, event: ActivityEventInput, scopes: ActivityScope[],
 ): Promise<void> {
   requireOrgScope(ctx);
-  for (const scope of scopes) await recordActivity(ctx, tx, { ...event, ...scope });
+  for (const scope of scopes) await recordActivity(ctx, tx, { ...event, ...scope, entityType: toActivityEntityType(event.entityType) });
 }
 
 export async function recordMembershipActivity(
@@ -87,7 +87,7 @@ export async function recordMembershipActivity(
   if (changed.length === 0) return false;
   // Batch create/delete already records its lifecycle; edits record membership here.
   if (options.recordBatchEvent !== false) for (const productionRunId of changed) await recordActivity(ctx, tx, {
-    entityType: "credit_batch", entityId: creditBatchId, creditBatchId, productionRunId,
+    entityType: toActivityEntityType("credit_batch"), entityId: creditBatchId, creditBatchId, productionRunId,
     action: "updated", changedFields: ["production_runs", ...(options.changedFields ?? [])], source, actorUserId,
   });
   for (const productionRunId of changed) await recordActivity(ctx, tx, {
@@ -111,7 +111,7 @@ export async function recordDocumentActivity(
       : document.entityType === "ghgStatementReport" ? "ghg_statement_report" : "other");
   const resolvedScopes = scopes ?? await resolveWriteActivityScopes(ctx, tx, document.entityType, document.entityId);
   await recordScopedWriteActivity(ctx, tx, {
-    entityType: "document", entityId: document.id, action, source,
+    entityType: toActivityEntityType("document"), entityId: document.id, action, source,
     reasonCode: `document:${document.documentType}:${ownerType}:${document.entityId}`,
   }, resolvedScopes);
 }

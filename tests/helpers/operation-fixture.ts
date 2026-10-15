@@ -1,3 +1,5 @@
+import { cleanupFeedstockFixtureParents } from "./feedstock-fixture";
+import { TEST_SITE_POSITION } from "./test-org";
 /**
  * A dedicated organization with one facility ready for feedstock intake, for
  * the operation-runner suites. Its own organization keeps generated feedstock
@@ -8,6 +10,7 @@ import { eq } from "drizzle-orm";
 import { Pool } from "pg";
 import { db } from "@/db";
 import {
+  activityEvents,
   apiIdempotencyRecords,
   reactors,
   productionRuns,
@@ -47,7 +50,7 @@ export async function createIntakeFixture(
   });
   const [facility] = await executor
     .insert(facilities)
-    .values({ timezone: "UTC", organizationId, code: `FAC-${tag}`, name: `Intake Facility ${tag}` })
+    .values({ ...TEST_SITE_POSITION, timezone: "UTC", organizationId, code: `FAC-${tag}`, name: `Intake Facility ${tag}` })
     .returning({ id: facilities.id });
   const [supplier] = await executor
     .insert(suppliers)
@@ -108,12 +111,14 @@ export async function feedstockCount(fixture: IntakeFixture): Promise<number> {
 
 export async function removeIntakeFixture(fixture: IntakeFixture): Promise<void> {
   const organizationId = fixture.ctx.organizationId;
+  await db.delete(activityEvents).where(eq(activityEvents.organizationId, organizationId));
   await db.delete(productionRunFeedstocks).where(eq(productionRunFeedstocks.organizationId, organizationId));
   await db.delete(productionRunFeedstockDraws).where(eq(productionRunFeedstockDraws.organizationId, organizationId));
   await db.delete(productionRuns).where(eq(productionRuns.organizationId, organizationId));
   await db.delete(reactors).where(eq(reactors.organizationId, organizationId));
   await db.delete(transportLegs).where(eq(transportLegs.organizationId, organizationId));
   await db.delete(feedstocks).where(eq(feedstocks.organizationId, organizationId));
+  await cleanupFeedstockFixtureParents(db);
   await db.delete(storageLocations).where(eq(storageLocations.organizationId, organizationId));
   await db.delete(feedstockTypes).where(eq(feedstockTypes.organizationId, organizationId));
   await db.delete(suppliers).where(eq(suppliers.organizationId, organizationId));

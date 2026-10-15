@@ -1,3 +1,4 @@
+import type { ActivityEventInput } from "./activity-events";
 import { withFeedstockTransportReadiness } from "./feedstock-transport-readiness";
 import type { SnapshotStock } from "./stock-effects";
 /**
@@ -27,10 +28,8 @@ import type {
 import type { OrgContext } from "@/lib/auth/server";
 import { assertSameOrg, requireOrgScope, type Executor } from "./utils";
 import {
-  computeClampedDryMass,
   deriveMassDryKg,
   exceedsMassWithTolerance,
-  MASS_COMPARISON_EPSILON_KG,
 } from "@/lib/calculations/mass-dry";
 import {
   deleteTransportLegsForEntity,
@@ -54,8 +53,6 @@ const FEEDSTOCK_INTAKE_BIN_TYPES = ["feedstock_bin"] as const;
 const FEEDSTOCK_CONFLICT_ENTITY = "feedstock";
 const ALLOCATION_OVERAGE_JUSTIFICATION_MESSAGE =
   "Enter a justification when allocated wet mass exceeds the declared delivery mass";
-const DRY_MASS_DISAGREEMENT_MESSAGE =
-  "Feedstock was not saved because its mass values disagree. Review wet mass and moisture.";
 
 function isFeedstockIntakeBinType(type: string): boolean {
   return FEEDSTOCK_INTAKE_BIN_TYPES.some((binType) => binType === type);
@@ -124,19 +121,17 @@ export interface FeedstockWithRelations {
   facilityId: string;
   status: "missing_data" | "complete";
   // Delivery fields
-  deliveryDate: Date | null;
-  supplierId: string | null;
+  deliveryDate: Date;
+  supplierId: string;
   vehicleId: string | null;
-  gpsLatitude: number | null;
-  gpsLongitude: number | null;
   deliveryGroupId: string | null;
   overrideJustification: string | null;
   // Material fields
   feedstockTypeId: string;
   massDryKg: number;
-  massWetKg: number | null;
-  moistureContentPercent: number | null;
-  storageLocationId: string | null;
+  massWetKg: number;
+  moistureContentPercent: number;
+  storageLocationId: string;
   notes: string | null;
   createdAt: Date;
   updatedAt: Date;
@@ -182,8 +177,6 @@ export interface CreateFeedstockInput {
   deliveryDate: Date;
   supplierId: string;
   vehicleId?: string | null;
-  gpsLatitude?: number | null;
-  gpsLongitude?: number | null;
   feedstockTypeId: string;
   totalWetMassKg: number;
   moisturePercent: number;
@@ -199,13 +192,10 @@ export interface UpdateFeedstockInput {
   deliveryDate?: Date;
   supplierId?: string;
   vehicleId?: string | null;
-  gpsLatitude?: number | null;
-  gpsLongitude?: number | null;
   feedstockTypeId?: string;
-  massDryKg?: number;
-  massWetKg?: number | null;
-  moistureContentPercent?: number | null;
-  storageLocationId?: string | null;
+  massWetKg?: number;
+  moistureContentPercent?: number;
+  storageLocationId?: string;
   overrideJustification?: string | null;
   notes?: string | null;
   transportDistanceKm?: number | null;
@@ -232,8 +222,6 @@ const feedstockSelectFields = {
   deliveryDate: feedstocks.deliveryDate,
   supplierId: feedstocks.supplierId,
   vehicleId: feedstocks.vehicleId,
-  gpsLatitude: feedstocks.gpsLatitude,
-  gpsLongitude: feedstocks.gpsLongitude,
   deliveryGroupId: feedstocks.deliveryGroupId,
   overrideJustification: feedstocks.overrideJustification,
   feedstockTypeId: feedstocks.feedstockTypeId,
@@ -537,8 +525,6 @@ export async function createFeedstockInTransaction(
             deliveryDate: data.deliveryDate,
             supplierId: data.supplierId,
             vehicleId: data.vehicleId ?? null,
-            gpsLatitude: data.gpsLatitude ?? null,
-            gpsLongitude: data.gpsLongitude ?? null,
             deliveryGroupId,
             overrideJustification: data.overrideJustification || null,
             // Material fields
@@ -645,10 +631,7 @@ export async function updateFeedstockInTransaction(
   // Derive before anything reads the new masses: the status, the stock-lane
   // check, and the write below must all see the same dry figure.
   const derivedMassDryKg = resolveFeedstockDryMass(locked, feedstockData);
-  const effectiveChanges =
-    derivedMassDryKg === undefined
-      ? feedstockData
-      : { ...feedstockData, massDryKg: derivedMassDryKg };
+  const effectiveChanges = { ...feedstockData, massDryKg: derivedMassDryKg };
 
   const status = determineFeedstockStatus({ ...locked, ...effectiveChanges });
   const routeAnchorChanged =
@@ -746,12 +729,14 @@ export async function deleteFeedstockInTransaction(
   feedstockId: string,
   expectedVersion: number,
   snapshotStock?: SnapshotStock,
-): Promise<void> {
+  source: ActivityEventInput["source"] = "form",
+): Promise<{ facilityId: string }> {
   requireOrgScope(ctx);
 
   const [locked] = await tx
     .select({
       id: feedstocks.id,
+      facilityId: feedstocks.facilityId,
       version: feedstocks.version,
       status: feedstocks.status,
       storageLocationId: feedstocks.storageLocationId,
@@ -805,6 +790,7 @@ export async function deleteFeedstockInTransaction(
     tx,
     "feedstock",
     feedstockId,
+    source,
   );
   const result = await tx
     .delete(feedstocks)
@@ -824,7 +810,8 @@ export async function deleteFeedstockInTransaction(
   await retireDocumentsForEntities(ctx, tx, [
     { entityType: "feedstock", entityId: feedstockId },
     ...transportLegDocuments,
-  ]);
+  ], source);
+  return { facilityId: locked.facilityId };
 }
 
 // ============================================
@@ -835,53 +822,21 @@ export async function deleteFeedstockInTransaction(
 // Helpers
 // ============================================
 
-/**
- * Dry mass is server-owned. It is always the effective wet mass carried through
- * the effective moisture, so a moisture-only patch re-derives it instead of
- * leaving yesterday's figure in place, and the three mass columns can never
- * drift apart (100 wet / 50 % / 90 dry used to save).
- *
- * A client-supplied `massDryKg` is advisory: `createFeedstock` derives its own
- * from `deriveMassDryKg`, and the edit form sends the same derivation, so a
- * value that disagrees means a stale or hand-built payload and is refused
- * rather than silently overwritten. Returns `undefined` when there is nothing
- * to derive from (a legacy row with no wet mass or moisture), leaving the
- * caller's own value untouched.
- */
+/** Derive dry mass from the locked row and the supplied wet mass or moisture. */
 function resolveFeedstockDryMass(
-  stored: { massWetKg: number | null; moistureContentPercent: number | null },
-  patch: {
-    massWetKg?: number | null;
-    moistureContentPercent?: number | null;
-    massDryKg?: number;
-  },
-): number | undefined {
-  const effectiveWetKg =
-    patch.massWetKg !== undefined ? patch.massWetKg : stored.massWetKg;
-  const effectiveMoisturePercent =
-    patch.moistureContentPercent !== undefined
-      ? patch.moistureContentPercent
-      : stored.moistureContentPercent;
-
-  const derivedKg = computeClampedDryMass(
-    effectiveWetKg,
-    effectiveMoisturePercent,
+  stored: { massWetKg: number; moistureContentPercent: number },
+  patch: { massWetKg?: number; moistureContentPercent?: number },
+): number {
+  return deriveMassDryKg(
+    patch.massWetKg ?? stored.massWetKg,
+    patch.moistureContentPercent ?? stored.moistureContentPercent,
   );
-  if (derivedKg === null) return patch.massDryKg;
-
-  if (
-    patch.massDryKg !== undefined &&
-    Math.abs(patch.massDryKg - derivedKg) > MASS_COMPARISON_EPSILON_KG
-  ) {
-    throw new SafeError(DRY_MASS_DISAGREEMENT_MESSAGE);
-  }
-  return derivedKg;
 }
 
 function determineFeedstockStatus(data: {
   feedstockTypeId?: string | null;
   massDryKg?: number | null;
-  massWetKg?: number | null;
+  massWetKg?: number;
 }): "missing_data" | "complete" {
   if (
     data.feedstockTypeId &&

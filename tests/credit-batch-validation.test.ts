@@ -1,10 +1,11 @@
+import { feedstockFixtureValues, cleanupFeedstockFixtureParents } from "./helpers/feedstock-fixture";
 import { createProductionRunOutputBin } from "./helpers/production-run-output-bin";
 import { labLogisticsVersion } from "./helpers/lab-logistics-version";
 import { productionVersion } from "./helpers/production-version";
 import { insertOutputApplicationFixture } from "./helpers/output-contract-fixtures";
 import { deleteOutputApplicationFixtures } from "./helpers/output-contract-fixtures";
 import { outputProductFixtureValues, outputOrderFixtureValues, deleteOutputOrderFixtures, insertOutputDeliveryFixture, deleteOutputDeliveryFixtures, deleteOutputProductFixtures, deleteOutputFacilityFixtures } from "./helpers/output-contract-fixtures";
-import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
+import { TEST_SITE_POSITION, ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
 /**
  * Credit Batch Production-Run Validation Tests
  *
@@ -95,11 +96,11 @@ beforeAll(async () => {
   // Create two facilities
   const [fA] = await db
     .insert(facilities)
-    .values({ timezone: "UTC", organizationId: TEST_ORG_ID, name: `Test Facility A ${runId}`, code: `TFA-VAL-${runId}` })
+    .values({ ...TEST_SITE_POSITION, timezone: "UTC", organizationId: TEST_ORG_ID, name: `Test Facility A ${runId}`, code: `TFA-VAL-${runId}` })
     .returning({ id: facilities.id });
   const [fB] = await db
     .insert(facilities)
-    .values({ timezone: "UTC", organizationId: TEST_ORG_ID, name: `Test Facility B ${runId}`, code: `TFB-VAL-${runId}` })
+    .values({ ...TEST_SITE_POSITION, timezone: "UTC", organizationId: TEST_ORG_ID, name: `Test Facility B ${runId}`, code: `TFB-VAL-${runId}` })
     .returning({ id: facilities.id });
   facilityA = fA;
   facilityB = fB;
@@ -253,6 +254,7 @@ beforeAll(async () => {
   const [primaryType] = await db
     .insert(feedstockTypes)
     .values({
+      usage: "pyrolysis",
       organizationId: TEST_ORG_ID,
       name: `Validation Woodchips ${runId}`,
       code: `FT-VAL-W-${runId}`,
@@ -262,6 +264,7 @@ beforeAll(async () => {
   const [secondaryType] = await db
     .insert(feedstockTypes)
     .values({
+      usage: "pyrolysis",
       organizationId: TEST_ORG_ID,
       name: `Validation Coffee Husk ${runId}`,
       code: `FT-VAL-C-${runId}`,
@@ -273,33 +276,33 @@ beforeAll(async () => {
 
   const [feedstockAPrimary] = await db
     .insert(feedstocks)
-    .values({
+    .values(await feedstockFixtureValues(db, {
       organizationId: TEST_ORG_ID,
       code: `FS-VAL-A-W-${runId}`,
       facilityId: facilityA.id,
       feedstockTypeId: primaryType.id,
       massDryKg: 3000,
-    })
+    }))
     .returning({ id: feedstocks.id });
   const [feedstockASecondary] = await db
     .insert(feedstocks)
-    .values({
+    .values(await feedstockFixtureValues(db, {
       organizationId: TEST_ORG_ID,
       code: `FS-VAL-A-C-${runId}`,
       facilityId: facilityA.id,
       feedstockTypeId: secondaryType.id,
       massDryKg: 1500,
-    })
+    }))
     .returning({ id: feedstocks.id });
   const [feedstockBPrimary] = await db
     .insert(feedstocks)
-    .values({
+    .values(await feedstockFixtureValues(db, {
       organizationId: TEST_ORG_ID,
       code: `FS-VAL-B-W-${runId}`,
       facilityId: facilityB.id,
       feedstockTypeId: primaryType.id,
       massDryKg: 2800,
-    })
+    }))
     .returning({ id: feedstocks.id });
   createdIds.feedstocks.push(
     feedstockAPrimary.id,
@@ -464,6 +467,7 @@ afterAll(async () => {
       await tx
         .delete(feedstocks)
         .where(inArray(feedstocks.id, createdIds.feedstocks));
+      await cleanupFeedstockFixtureParents(tx);
     }
     if (createdIds.reactors.length > 0) {
       await tx
@@ -496,6 +500,7 @@ afterAll(async () => {
         .where(inArray(feedstockTypes.id, createdIds.feedstockTypes));
     }
   });
+  await cleanupFeedstockFixtureParents(db);
 });
 
 

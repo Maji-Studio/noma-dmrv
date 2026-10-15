@@ -1,3 +1,4 @@
+import type { ActivityEventInput } from "./activity-events";
 import { assertRowVersion, nextVersion, staleRowVersion } from "./row-version";
 /**
  * Orders Data Access Layer
@@ -368,7 +369,7 @@ export async function updateOrderInTransaction(ctx: OrgContext, tx: DbTransactio
   });
 }
 
-export async function deleteOrderInTransaction(ctx: OrgContext, tx: DbTransaction, input: { orderId: string; expectedVersion: number }): Promise<void> {
+export async function deleteOrderInTransaction(ctx: OrgContext, tx: DbTransaction, input: { orderId: string; expectedVersion: number }, source: ActivityEventInput["source"] = "form"): Promise<Order> {
   requireOrgScope(ctx);
   const { orderId, expectedVersion } = input;
   await lockBiocharTransportRouteTopology(ctx, tx);
@@ -381,7 +382,8 @@ export async function deleteOrderInTransaction(ctx: OrgContext, tx: DbTransactio
     .where(and(eq(deliveries.orderId, orderId), eq(deliveries.organizationId, ctx.organizationId)));
   if (delivery) throw orderHasDeliveries();
   await tx.delete(orders).where(and(eq(orders.id, orderId), eq(orders.organizationId, ctx.organizationId)));
-  await retireDocumentsForEntities(ctx, tx, [{ entityType: "order", entityId: orderId }]);
+  await retireDocumentsForEntities(ctx, tx, [{ entityType: "order", entityId: orderId }], source);
+  return existing;
 }
 
 // ============================================

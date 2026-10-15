@@ -1,3 +1,4 @@
+import { feedstockFixtureValues, cleanupFeedstockFixtureParents } from "./helpers/feedstock-fixture";
 import { updateOrder } from "@/lib/operations/orders";
 import { runOperationInProcess } from "@/lib/operations/runner";
 import { labLogisticsVersion } from "./helpers/lab-logistics-version";
@@ -26,7 +27,7 @@ import {
 import { createDelivery } from "./helpers/create-delivery";
 
 import { createProductionRun } from "@/data-access/production-runs";
-import {
+import { TEST_SITE_POSITION,
   ensureTestOrg,
   makeTestOrgContext,
   TEST_ORG_ID,
@@ -87,8 +88,8 @@ describe("bin reconciliation integrity", { timeout: CONCURRENCY_TEST_TIMEOUT_MS 
     const f = await postedFixture(0);
     const [bin] = await db.insert(storageLocations).values({ organizationId: f.ctx.organizationId, facilityId: f.facility.id,
       code: `E2E-ING-${f.tag}`, name: `E2E Ingredient ${f.tag}`, type: "feedstock_bin", feedstockTypeId: f.ingredientType.id }).returning();
-    await db.insert(feedstocks).values({ organizationId: f.ctx.organizationId, facilityId: f.facility.id, code: `E2E-FS-${f.tag}`,
-      status: "complete", storageLocationId: bin.id, feedstockTypeId: f.ingredientType.id, massWetKg: 100, massDryKg: 100, moistureContentPercent: 0, deliveryDate: new Date("2026-09-01") });
+    await db.insert(feedstocks).values(await feedstockFixtureValues(db, { organizationId: f.ctx.organizationId, facilityId: f.facility.id, code: `E2E-FS-${f.tag}`,
+      status: "complete", storageLocationId: bin.id, feedstockTypeId: f.ingredientType.id, massWetKg: 100, massDryKg: 100, moistureContentPercent: 0, deliveryDate: new Date("2026-09-01") }));
     await db.update(storageLocations).set({ formulationId: f.recipe.id }).where(eq(storageLocations.id, f.bin.id));
     const product = await postProduct(f, { formulationId: f.recipe.id, massKg: 100, composition: { ingredients: [{ formulationIngredientId: f.ingredient.id, feedstockTypeId: f.ingredientType.id, storageLocationId: bin.id, massKg: 30, moistureContentPercent: 0 }] } });
     const [deletion, stockTake] = await Promise.allSettled([
@@ -106,7 +107,7 @@ describe("bin reconciliation integrity", { timeout: CONCURRENCY_TEST_TIMEOUT_MS 
     const runCode = `PR-TAKE-RUN-${tag}`;
     const [facility] = await db
       .insert(facilities)
-      .values({ timezone: "UTC",
+      .values({ ...TEST_SITE_POSITION, timezone: "UTC",
         organizationId: TEST_ORG_ID,
         code: `FAC-TAKE-RUN-${tag}`,
         name: `Stock Take Run Facility ${tag}`,
@@ -145,7 +146,7 @@ describe("bin reconciliation integrity", { timeout: CONCURRENCY_TEST_TIMEOUT_MS 
       .returning({ id: storageLocations.id });
     const [feedstock] = await db
       .insert(feedstocks)
-      .values({
+      .values(await feedstockFixtureValues(db, {
         organizationId: TEST_ORG_ID,
         facilityId: facility.id,
         feedstockTypeId: feedstockType.id,
@@ -155,7 +156,7 @@ describe("bin reconciliation integrity", { timeout: CONCURRENCY_TEST_TIMEOUT_MS 
         massDryKg: INITIAL_FEEDSTOCK_DRY_MASS_KG,
         massWetKg: INITIAL_FEEDSTOCK_DRY_MASS_KG,
         moistureContentPercent: 0,
-      })
+      }))
       .returning({ id: feedstocks.id });
 
     let releaseWriteBarrier = () => {};
@@ -301,6 +302,7 @@ describe("bin reconciliation integrity", { timeout: CONCURRENCY_TEST_TIMEOUT_MS 
         .delete(binMovements)
         .where(eq(binMovements.storageLocationId, bin.id));
       await db.delete(feedstocks).where(eq(feedstocks.id, feedstock.id));
+      await cleanupFeedstockFixtureParents(db);
       await db.delete(storageLocations).where(eq(storageLocations.id, bin.id));
       await db
         .delete(feedstockTypes)

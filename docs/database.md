@@ -18,7 +18,7 @@ are not examples for new domain tables. Domain tenancy is enforced in
 - There is **no `requireAuth()` in this layer** — `requireAuth` is a route guard (`src/lib/auth/server.ts`), called once in `src/app/(app)/layout.tsx`. A data-access function relying on it is an unscoped cross-tenant read.
 - `organizationId` is **always stamped server-side** from the session's active organization and **never accepted from client input** or a Zod payload. Taking it as an action parameter is privilege escalation.
 - The column is **deliberately denormalized** onto child tables even though it is derivable through the parent facility. Never "simplify" a child query into a join through `facilities` to obtain org — that is the missed-join leak class that already bit `getSupplierOptions`.
-- Facility-scoped tables use a **composite foreign key** `(facility_id, organization_id) → (facilities.id, facilities.organization_id)` as the DB-level backstop against pointing at another org's facility. New facility-scoped tables must replicate it, not a plain FK to `facilities.id`.
+- Facility-scoped tables use a **composite foreign key** `(facility_id, organization_id) → (facilities.id, facilities.organization_id)` as the DB-level backstop against pointing at another org's facility. New facility-scoped tables must replicate it, not a plain FK to `facilities.id`. `activity_events.facility_id` is a deliberate exception documented in [ADR 0033](./adr/0033-activity-events-facility-without-fk.md).
 - `userId` columns are attribution, not a boundary. Do not access the DB from UI or hooks — go through `fn/` then `data-access/`.
 - Related helpers in `utils.ts`: `assertSameOrg`, `requireOrgFacility`.
 
@@ -47,8 +47,8 @@ org-scoped reads or audit inserts.
 no update or delete. There is no append-only trigger because it would prevent
 E2E teardown. Writes use the caller's transaction and reads enforce org scope.
 The organization FK cascades like sibling tables because no organization-delete
-path exists and test fixtures delete organizations. The nullable facility reference
-uses the same-organization composite FK. Entity, credit-batch, production-run and
+path exists and test fixtures delete organizations. The nullable `facility_id`
+has no FK under the exception documented in [ADR 0033](./adr/0033-activity-events-facility-without-fk.md). Entity, credit-batch, production-run and
 actor references have no FKs, so history survives record
 deletion as tombstones. V1 stores field names only, never field
 values, alongside status transitions and attribution.
@@ -65,23 +65,44 @@ values throw.
 `Date`; `occurred_at` defaults to insert time (`clock_timestamp()`), and reads
 order by `occurred_at` then unique `sequence`, newest first.
 
-Non-runner application, credit-batch, membership, document and transport-leg
-writers append activity in the same transaction as their writes. A record spanning
-several batches emits one event per batch, including both former and current
-batches when an application moves. Membership changes emit a batch update per
-changed run and a run update with the former batch ID on detach, so each event
-retains its run scope and the run retains its history.
+The operation runner appends activity from `describe()` in its write transaction.
+This covers feedstock intake, production runs, products, stock movements, lab
+samples, orders, deliveries, app/API document requests and confirmations, and
+app document deletes. App document visibility and evidence classification edits
+also use the runner. No-op descriptions, repeated confirmations, dry runs and idempotent
+replays add no events. The runner computes one source for both its own event and
+nested writers: audited transport, then the trusted `script` override, then `form`.
+
+Application, credit-batch, membership and transport-leg writers append activity
+directly in their write transaction. A record spanning several batches emits one
+event per batch, including both former and current batches when an application
+moves. Membership changes emit a batch update per changed run and a run update
+with the former batch ID on detach, so each event retains its run scope.
 Automatic cohort attachment uses `system` with no actor; derived transport writes
-retain the initiating actor. Document events keep only the document ID, applicable
-batch/run IDs and a `document:<document_type>:<owner_type>:<owner_uuid>` reason
-code containing controlled type keys and the owning record ID.
-They never copy filenames, URLs, storage keys or descriptions. Parent deletes
-capture ownership before removing the rows needed to resolve it.
+retain the initiating actor.
+
+Legacy certification reports and evidence ledgers use `insertDocument` and
+`deleteDocumentRow`, which record directly. Parent deletion uses
+`retireDocumentsForEntities` to record each retired document with captured owner
+links and the initiating source. These child events accompany the runner's parent
+event. Runner document operations use separate transactional writers and record
+only through `describe()`, so each document action has one recording path.
+Failed-upload retention deletes also use `deleteDocumentRow`, with source `system`
+and no actor. Lease renewal, promotion cleanup metadata and pending-upload expiry
+are internal upload bookkeeping and do not emit activity.
+
+Direct document events keep only the document ID, applicable batch/run IDs and a
+`document:<document_type>:<owner_type>:<owner_uuid>` reason code containing
+controlled type keys and the owning record ID. Events never copy filenames,
+URLs, storage keys or descriptions. Parent deletes capture ownership before
+removing the rows needed to resolve it.
 
 `src/data-access/activity-coverage.test.ts` discovers modules throughout
 `src/data-access/` that write the covered tables and fails on unlisted modules or
-unclassified write exports. Document metadata updates,
-reference data, energy, readings and incidents are outside this activity scope.
+unclassified write exports. Its inventory distinguishes direct recording,
+runner coverage with operation IDs, and reasoned exemptions. Certification status
+transitions use `certification-status-activity.ts`. Reference data, energy,
+readings and incidents are outside this activity scope.
 
 ## Row-Level Guards
 
@@ -104,6 +125,12 @@ the run version. A change to the run itself bumps its version.
 - Over-precision now fails loudly with a Postgres `numeric field overflow` rather than rounding silently.
 
 ## Schema Shape
+
+Facilities and supplier/customer locations store required GPS coordinates and
+an explicitly supplied country, with no country default. Customer location
+names are required. Suppliers store neither GPS nor transport distance; these
+belong to supplier locations. Tightening these constraints requires valid rows
+in development/staging before migration; there is no automatic backfill.
 
 Source of truth: `src/db/schema/*.ts`, exported through `src/db/schema/index.ts`. Area-by-area breakdown: [`schema-overview.md`](./schema-overview.md). Shared domain enums live in `common.ts`.
 

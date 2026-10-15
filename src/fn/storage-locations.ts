@@ -156,7 +156,6 @@ export async function updateStorageLocationFn(
         mergedAt: validated.mergedAt ? new Date(validated.mergedAt) : undefined,
         storageMethod: validated.storageMethod,
         storageDescription: validated.storageDescription,
-        supplierReferenceId: validated.supplierReferenceId,
       }
     );
 

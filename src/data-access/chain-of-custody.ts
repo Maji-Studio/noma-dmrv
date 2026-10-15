@@ -137,8 +137,6 @@ export interface ChainFeedstockLineage {
   deliveryDate: Date | null;
   massDryKg: number | null;
   wetMassUsedKg: number | null;
-  /** Drives the Sankey's derived ineligible-feedstock exit (issue #285). */
-  eligibilityStatus: "eligible" | "ineligible" | "conditional" | null;
   supplierName: string | null;
   feedstockTypeName: string | null;
   feedstockDeliveryCode: string | null;
@@ -500,7 +498,6 @@ async function getFeedstocksForRuns(
       deliveryDate: feedstocks.deliveryDate,
       massDryKg: feedstocks.massDryKg,
       wetMassUsedKg: productionRunFeedstocks.wetMassUsedKg,
-      eligibilityStatus: feedstocks.eligibilityStatus,
       supplierName: suppliers.name,
       feedstockTypeName: feedstockTypes.name,
       feedstockDeliveryCode: feedstockDeliveries.code,

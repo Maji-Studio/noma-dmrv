@@ -1,5 +1,7 @@
 "use client";
 
+import { MODEL_YEAR_MIN, MODEL_YEAR_MAX } from "@/schemas/model-year";
+
 import { useController, useForm, useWatch } from "react-hook-form";
 import { ArrowRightIcon } from "@phosphor-icons/react/dist/ssr";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -69,8 +71,6 @@ function legToFormDefaults(
     modelYear: leg?.modelYear ?? null,
     loadMassKg: leg?.loadMassKg ?? null,
     calculationMethodType: "distance_based" as const,
-    billOfLading: leg?.billOfLading ?? "",
-    weighScaleTicketRef: leg?.weighScaleTicketRef ?? "",
   };
 }
 
@@ -312,6 +312,9 @@ export function TransportLegForm({
                 error={!!errors.vehicleType}
                 {...register("vehicleType")}
               />
+            </FormField>
+            <FormField id="modelYear" label="Model year" error={errors.modelYear?.message}>
+              <FormInput id="modelYear" type="number" min={MODEL_YEAR_MIN} max={MODEL_YEAR_MAX} step="1" error={!!errors.modelYear} {...register("modelYear")} />
             </FormField>
           </div>
         </div>

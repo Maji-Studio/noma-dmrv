@@ -99,15 +99,17 @@ Non-obvious semantics only:
 
 - **`CRON_SECRET`** — at least 32 characters; required for `NODE_ENV=production`
   builds and runtimes, including staging, except hermetic CI. Optional in
-  development/test. The daily 03:00 UTC Vercel cron
-  calls exactly `/api/cron/purge-api-records` with a bearer secret, compared in
+  development/test. The daily Vercel crons call `/api/cron/purge-api-records` at 03:00 UTC
+  and `/api/cron/sweep-document-uploads` at 03:15 UTC with a bearer secret, compared in
   constant time. An unconfigured route returns 503; invalid credentials return
-  an empty 401. It purges expired idempotency records and buckets idle for a day
-  in bounded batches and logs counts only. It lives in all three
+  an empty 401. The purge removes expired idempotency records and buckets idle for a day.
+  The sweep expires abandoned uploads, retires old failed rows and drains queued
+  object deletions. Both use bounded batches and log counts only. It lives in all three
   1Password items (local, staging, production); `pnpm env:vercel` syncs the
   staging and production values to Vercel Preview and Production.
   [Vercel invokes cron jobs only on Production deployments](https://vercel.com/docs/cron-jobs/quickstart),
-  so staging (Preview) never purges on schedule. Its idempotency claim path
+  so neither runs on staging (Preview). The site Production deployment answers
+  404 to both routes. Staging's idempotency claim path
   deletes expired records lazily when their keys are reused; idle rate-limit
   buckets have no scheduled staging cleanup.
 - **`API_WRITES_DISABLED`** — `true` or `false`, defaults to `false`. API write
@@ -363,5 +365,7 @@ omit registry credentials.
 API writes with runner audit context record operation and principal IDs, entity
 IDs, outcome, versions, and decoded input field names only. Audit inserts share
 the business transaction. Failed writes, dry runs, replays, and UI server actions
-do not add events. Stored idempotency outcome schema v2 includes effect metadata;
+do not add API audit rows. Runner writes with a non-null effect also land in
+`activity_events` in the same transaction, including UI server actions, with
+field names only and source attribution. Stored idempotency outcome schema v2 includes effect metadata;
 older outcomes answer `replay_unavailable` without a compatibility mapper.

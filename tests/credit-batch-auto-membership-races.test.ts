@@ -1,3 +1,4 @@
+import { feedstockFixtureValues, cleanupFeedstockFixtureParents } from "./helpers/feedstock-fixture";
 import { createProductionRunOutputBin } from "./helpers/production-run-output-bin";
 import { beforeAll, describe, expect, it } from "vitest";
 import { eq, sql } from "drizzle-orm";
@@ -43,12 +44,12 @@ async function fixture() {
     feedstockTypeId: tracked.createdFeedstockTypeIds[0],
     code: `BIN-RACE-${f.runId}`, name: `Race ${f.runId}`, type: "feedstock_bin",
   }).returning();
-  const [stock] = await db.insert(feedstocks).values({
+  const [stock] = await db.insert(feedstocks).values(await feedstockFixtureValues(db, {
     organizationId: TEST_ORG_ID, facilityId: f.facilityId,
     feedstockTypeId: tracked.createdFeedstockTypeIds[0], storageLocationId: bin.id,
     code: `FS-RACE-${f.runId}`, status: "complete",
     massDryKg: FEEDSTOCK_DRY_KG, massWetKg: FEEDSTOCK_WET_KG, moistureContentPercent: MOISTURE_PERCENT,
-  }).returning();
+  })).returning();
   const outputBinId = await createProductionRunOutputBin(TEST_ORG_ID, f.facilityId);
   const run = await createProductionRun(ctx, {
     code: `PR-RACE-${f.runId}`, facilityId: f.facilityId, reactorId: reactor.id,
@@ -75,6 +76,7 @@ async function fixture() {
       await db.delete(certifierProjects).where(eq(certifierProjects.id, f.certifierProjectId));
       await db.delete(productionProcesses).where(eq(productionProcesses.facilityId, f.facilityId));
       await db.delete(feedstocks).where(eq(feedstocks.id, stock.id));
+      await cleanupFeedstockFixtureParents(db);
       await db.delete(storageLocations).where(eq(storageLocations.id, bin.id));
       await db.delete(storageLocations).where(eq(storageLocations.id, outputBinId));
       await db.delete(reactors).where(eq(reactors.id, reactor.id));

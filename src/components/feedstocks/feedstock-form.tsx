@@ -6,6 +6,7 @@
  */
 "use client";
 
+import { INTAKE_MOISTURE_RANGE_HELPER } from "@/lib/mass-moisture";
 import type { ReactNode } from "react";
 import { useEffect, useId, useState } from "react";
 import { useForm, useWatch, useFieldArray, type FieldError } from "react-hook-form";
@@ -122,13 +123,7 @@ export function FeedstockForm({
 
   const defaultValues = {
     facilityId: feedstock?.facilityId ?? contextFacilityId ?? "",
-    // New records default to today. Legacy records without a delivery date
-    // must stay empty in edit mode so the form matches read mode and a save
-    // cannot silently introduce today's date.
-    deliveryDate:
-      feedstock && !feedstock.deliveryDate
-        ? undefined
-        : toDateInputValue(feedstock?.deliveryDate ?? null),
+    deliveryDate: toDateInputValue(feedstock?.deliveryDate ?? null),
     supplierId: feedstock?.supplierId ?? "",
     vehicleId: feedstock?.vehicleId ?? "",
     transportDistanceKm: undefined as number | undefined,
@@ -207,8 +202,8 @@ export function FeedstockForm({
 
   const defaultStorageBinType = "feedstock_bin";
 
-  // Transport distance autofills from the existing leg (edit) or the stored
-  // level — the supplier's DEFAULT location, else the supplier-level distance —
+  // Transport distance autofills from the existing leg (edit) or the supplier's
+  // default location,
   // mirroring the server's priority resolution. The suggestion carries its
   // provenance along; hand-editing flips it to manual.
   const { data: selectedSupplier } = useSupplier(watchedSupplierId, !!watchedSupplierId);
@@ -220,11 +215,11 @@ export function FeedstockForm({
     supplierLocationList?.find((location) => location.isDefault) ?? null;
   const { data: watchedFacility } = useFacility(watchedFacilityId ?? "");
   // Same rule as the saved leg (syncFeedstockTransportLeg): the default
-  // location's coordinates when it has both, else the supplier's.
+  // location supplies the coordinates.
   const supplierRoutePoint =
     defaultSupplierLocation?.gpsLatitude != null && defaultSupplierLocation.gpsLongitude != null
       ? { lat: defaultSupplierLocation.gpsLatitude, lng: defaultSupplierLocation.gpsLongitude }
-      : { lat: selectedSupplier?.gpsLatitude, lng: selectedSupplier?.gpsLongitude };
+      : { lat: undefined, lng: undefined };
   const { data: existingLegs } = useTransportLegsForEntity("feedstock", feedstock?.id ?? "", {
     enabled: isEditMode,
   });
@@ -239,12 +234,11 @@ export function FeedstockForm({
   );
   const storedDistanceKm =
     defaultSupplierLocation?.distanceFromFacilityKm ??
-    selectedSupplier?.distanceToFacilityKm ??
     null;
   const storedDistanceSource =
     defaultSupplierLocation?.distanceFromFacilityKm != null
       ? defaultSupplierLocation.distanceSource
-      : (selectedSupplier?.distanceSource ?? null);
+      : null;
   const supplierAnchorChanged =
     isEditMode && watchedSupplierId !== feedstock?.supplierId;
   const suggestedDistanceKm = isEditMode && !supplierAnchorChanged
@@ -548,8 +542,8 @@ export function FeedstockForm({
                 certifyStatus={transportDistanceCertStatus}
                 helperText={
                   storedDistanceKm != null
-                    ? "Autofilled from the supplier. Override if this delivery took a different route."
-                    : "Set a one-way distance on the supplier (or its default location) to autofill this."
+                    ? "Autofilled from the supplier's default location. Override if this delivery took a different route."
+                    : "Set a one-way distance on the supplier's default location to autofill this."
                 }
               >
                 <div>
@@ -667,6 +661,7 @@ export function FeedstockForm({
             }}
             moisture={{
               id: "moisturePercent",
+              rangeHelperText: INTAKE_MOISTURE_RANGE_HELPER,
               error: errors.moisturePercent?.message,
               required: true,
               disabled: isSubmitting,

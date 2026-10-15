@@ -1,3 +1,4 @@
+import { TEST_SITE_POSITION } from "./helpers/test-org";
 /** Real handlers, credentials and Postgres. Written for reviewer execution; never run by the implementation agent. */
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { and, eq, sql } from "drizzle-orm";
@@ -151,7 +152,7 @@ describe("lab sample reads", { timeout: TIMEOUT_MS }, () => {
   });
 
   it("uses the batch facility even when provenance points to another facility", async () => {
-    const [other] = await db.insert(facilities).values({ timezone: "UTC", organizationId: a.ctx.organizationId, code: `E2E-LAB-F2-${a.tag}`, name: `E2E Lab F2 ${a.tag}` }).returning();
+    const [other] = await db.insert(facilities).values({ ...TEST_SITE_POSITION, timezone: "UTC", organizationId: a.ctx.organizationId, code: `E2E-LAB-F2-${a.tag}`, name: `E2E Lab F2 ${a.tag}` }).returning();
     const moved = await insertApiSample(a, {
       code: `SAM-API-MOVED-${a.tag}`, creditBatchId: a.batchA.id, productionRunId: a.runs[0].id, samplingTime: FIRST_SAMPLED, createdAt: "2026-10-01T14:00:00.000Z",
     });

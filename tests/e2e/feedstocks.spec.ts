@@ -1,3 +1,4 @@
+import { cleanupFeedstockFixtureParents } from "../helpers/feedstock-fixture";
 /**
  * Feedstocks E2E Tests
  *
@@ -30,7 +31,7 @@ test.describe("Feedstock UI CRUD", () => {
       organizationId: DEC_ORG_ID,
       code: `E2E-FST-BLEND-${suffix}`,
       name: `E2E Blend Material ${suffix}`,
-      category: "compost",
+      category: "compost" as const,
       usage: "blend" as const,
     };
     const { db, pool } = createDbConnection();
@@ -182,6 +183,7 @@ test.describe("Feedstock UI CRUD", () => {
       try {
         await db.delete(schema.transportLegs).where(eq(schema.transportLegs.entityId, id));
         await db.delete(schema.feedstocks).where(eq(schema.feedstocks.id, id));
+        await cleanupFeedstockFixtureParents(db);
       } finally {
         await pool.end();
       }

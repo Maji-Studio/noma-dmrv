@@ -30,7 +30,6 @@ import {
   aggregateDistributionLegs,
   deriveTransportLeg,
   isDerivedLegPersistable,
-  positiveOrNull,
   resolveDeliveryTransportRoute,
   type DerivedTransportLeg,
 } from "@/lib/calculations/transport-leg";
@@ -572,10 +571,6 @@ export async function syncFeedstockTransportLeg(
   const [row] = await tx
     .select({
       supplierName: suppliers.name,
-      supplierGpsLatitude: suppliers.gpsLatitude,
-      supplierGpsLongitude: suppliers.gpsLongitude,
-      supplierDistanceToFacilityKm: suppliers.distanceToFacilityKm,
-      supplierDistanceSource: suppliers.distanceSource,
       locationName: supplierLocations.name,
       locationGpsLatitude: supplierLocations.gpsLatitude,
       locationGpsLongitude: supplierLocations.gpsLongitude,
@@ -617,14 +612,8 @@ export async function syncFeedstockTransportLeg(
     throw new SafeError("Feedstock not found");
   }
 
-  const locationDistance = positiveOrNull(row.locationDistanceFromFacilityKm);
-  const storedDistanceKm = locationDistance ?? row.supplierDistanceToFacilityKm;
-  const storedDistanceSource =
-    locationDistance != null
-      ? row.locationDistanceSource
-      : row.supplierDistanceSource;
-  const locationHasGps =
-    row.locationGpsLatitude != null && row.locationGpsLongitude != null;
+  const storedDistanceKm = row.locationDistanceFromFacilityKm;
+  const storedDistanceSource = row.locationDistanceSource;
   const preserveExistingDistance =
     distanceOverride?.distanceKm === undefined &&
     distanceOverride?.resetDistanceToRoute !== true;
@@ -638,8 +627,8 @@ export async function syncFeedstockTransportLeg(
   const derived = deriveTransportLeg({
     origin: {
       name: row.locationName ?? row.supplierName,
-      gpsLatitude: locationHasGps ? row.locationGpsLatitude : row.supplierGpsLatitude,
-      gpsLongitude: locationHasGps ? row.locationGpsLongitude : row.supplierGpsLongitude,
+      gpsLatitude: row.locationGpsLatitude,
+      gpsLongitude: row.locationGpsLongitude,
     },
     destination: {
       name: row.facilityName,

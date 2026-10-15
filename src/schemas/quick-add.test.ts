@@ -39,3 +39,16 @@ describe("supplierQuickAddSchema", () => {
     }
   });
 });
+
+import { vehicleQuickAddSchema } from "./quick-add";
+
+
+describe("vehicleQuickAddSchema fuel consumption", () => {
+  const vehicle = { name: "Truck", vehicleType: "truck" };
+  it.each([0, -1])("rejects %s litres per kilometre", (fuelConsumptionLPerKm) => {
+    expect(vehicleQuickAddSchema.safeParse({ ...vehicle, fuelConsumptionLPerKm }).success).toBe(false);
+  });
+  it.each([undefined, null, 0.25])("accepts omitted, cleared or positive consumption (%s)", (fuelConsumptionLPerKm) => {
+    expect(vehicleQuickAddSchema.safeParse({ ...vehicle, fuelConsumptionLPerKm }).success).toBe(true);
+  });
+});

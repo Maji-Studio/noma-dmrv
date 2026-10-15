@@ -1,4 +1,5 @@
 import { insertDocument } from "./documents";
+import { withCertificationStatusActivity, type CertificationActivityOrigin } from "./certification-status-activity";
 import { nextVersion } from "./row-version";
 import { and, desc, eq, inArray, isNull, ne, or, sql } from "drizzle-orm";
 import { db } from "@/db";
@@ -45,8 +46,7 @@ export interface UpsertCertifierProjectInput {
   protocolVersion?: string | null;
   defaultRemovalTemplateId?: string | null;
   // Operator-pasted Isometric facility id (fcl_…).
-  // Optional registry facility identity for Production Batch registration.
-  externalFacilityId?: string | null;
+  externalFacilityId: string;
   metadata?: Record<string, unknown> | null;
 }
 
@@ -188,7 +188,7 @@ const CERTIFIER_EXTERNAL_FACILITY_CONSTRAINT =
   "certifier_projects_provider_external_facility_unique";
 
 async function withExternalFacilityConflictGuard<T>(
-  externalFacilityId: string | null,
+  externalFacilityId: string,
   fn: () => Promise<T>,
 ): Promise<T> {
   try {
@@ -216,9 +216,13 @@ export async function upsertCertifierProject(
     protocolSlug: input.protocolSlug ?? DEFAULT_PROTOCOL_SLUG,
     protocolVersion: input.protocolVersion ?? null,
     defaultRemovalTemplateId: input.defaultRemovalTemplateId ?? null,
-    externalFacilityId: input.externalFacilityId ?? null,
+    externalFacilityId: input.externalFacilityId,
     metadata: input.metadata ?? null,
   };
+
+  if (!values.externalFacilityId.trim()) {
+    throw new SafeError("Set an Isometric facility ID before saving the facility link.");
+  }
 
   const runUpsert = () =>
     db.transaction(async (tx) => {
@@ -243,45 +247,36 @@ export async function upsertCertifierProject(
       // only the fcl_ id is locked. Two concurrent upserts can each pass this
       // probe (each row-locks only its own facility), so the DB constraint
       // still fires for one — withExternalFacilityConflictGuard catches it.
-      if (values.externalFacilityId) {
-        const [collision] = await tx
-          .select({
-            code: facilities.code,
-            name: facilities.name,
-          })
-          .from(certifierProjects)
-          .innerJoin(facilities, and(eq(certifierProjects.facilityId, facilities.id), eq(facilities.organizationId, ctx.organizationId)))
-          .where(
-            and(
-              eq(certifierProjects.provider, input.provider),
-              eq(
-                certifierProjects.externalFacilityId,
-                values.externalFacilityId,
-              ),
-              ne(certifierProjects.facilityId, input.facilityId),
-              eq(certifierProjects.organizationId, ctx.organizationId),
+      const [collision] = await tx
+        .select({
+          code: facilities.code,
+          name: facilities.name,
+        })
+        .from(certifierProjects)
+        .innerJoin(facilities, and(eq(certifierProjects.facilityId, facilities.id), eq(facilities.organizationId, ctx.organizationId)))
+        .where(
+          and(
+            eq(certifierProjects.provider, input.provider),
+            eq(
+              certifierProjects.externalFacilityId,
+              values.externalFacilityId,
             ),
-          )
-          .limit(1);
-        if (collision) {
-          throw new SafeError(
-            `Isometric facility ID ${values.externalFacilityId} is already linked to ${collision.code}: ${collision.name}. Each Isometric facility maps to one noma facility.`,
-          );
-        }
+            ne(certifierProjects.facilityId, input.facilityId),
+            eq(certifierProjects.organizationId, ctx.organizationId),
+          ),
+        )
+        .limit(1);
+      if (collision) {
+        throw new SafeError(
+          `Isometric facility ID ${values.externalFacilityId} is already linked to ${collision.code}: ${collision.name}. Each Isometric facility maps to one noma facility.`,
+        );
       }
 
-      // Adopting a facility id for the first time (null -> fcl_...) stays
-      // allowed even while submissions exist: none of them referenced any
-      // facility id, so there is no registry lineage to contradict, and
-      // production-batch registration (issue #630) cannot start until the id
-      // is set. Only rebinding away from an established identifier (project
-      // change, or a non-null facility id changing or clearing) requires
-      // superseding the submissions first.
+      // Rebinding either registry identifier requires superseding blocking submissions first.
       const mappingIdentifiersChanged =
         existing &&
         (existing.externalProjectId !== values.externalProjectId ||
-          (existing.externalFacilityId !== null &&
-            existing.externalFacilityId !== values.externalFacilityId));
+          existing.externalFacilityId !== values.externalFacilityId);
       if (mappingIdentifiersChanged) {
         const blocked = await hasBlockingFacilitySubmission(
           ctx,
@@ -361,17 +356,13 @@ export async function upsertCertifierProject(
 export interface FacilityEmissionConfigInput {
   facilityId: string;
   provider?: CertifierProvider;
-  // Vestigial local estimate since issue #319 (diesel submits by volume) —
-  // optional so a facility with no genset can save the soil-temp fields.
-  gensetEnergyYieldKwhPerLitre?: number | null;
   defaultSoilTemperatureC?: number | null;
   defaultSoilTemperatureSource?: string | null;
 }
 
 // Updates only the emission-config columns on an existing
-// certifier_projects row: the genset energy yield plus the reference
-// soil-temperature value + its dataset citation. ADR 0015 dropped the three
-// stage-split columns. The facility must already be linked to an Isometric
+// certifier_projects row: the reference soil-temperature value and its dataset
+// citation. ADR 0015 dropped the three stage-split columns. The facility must already be linked to an Isometric
 // project — the config has no meaning otherwise.
 export async function updateFacilityEmissionConfig(
   ctx: OrgContext,
@@ -382,7 +373,6 @@ export async function updateFacilityEmissionConfig(
   const [row] = await db
     .update(certifierProjects)
     .set({
-      gensetEnergyYieldKwhPerLitre: input.gensetEnergyYieldKwhPerLitre ?? null,
       defaultSoilTemperatureC: input.defaultSoilTemperatureC ?? null,
       defaultSoilTemperatureSource: input.defaultSoilTemperatureSource ?? null,
       updatedAt: sql`now()`,
@@ -684,6 +674,7 @@ export async function markSubmissionSubmitted(
     productionEmissionsClaim?: { removalId: string; creditBatchIds: string[] };
   },
   callerTx?: Tx,
+  origin?: CertificationActivityOrigin,
 ): Promise<void> {
   requireOrgScope(ctx);
   const run = async (tx: Tx): Promise<void> => {
@@ -732,7 +723,7 @@ export async function markSubmissionSubmitted(
       );
     }
   };
-  await (callerTx ? run(callerTx) : db.transaction(run));
+  await withCertificationStatusActivity(ctx, [id, ...(args.supersedePreviousId ? [args.supersedePreviousId] : [])], run, callerTx, origin);
 }
 
 // §8.6.2 claim stamp (issue #349, ADR 0020). Guarded UPDATE (IS NULL OR =
@@ -793,22 +784,24 @@ export async function retireStaleSubmissionDraft(
   args: { reason: string },
 ): Promise<void> {
   requireOrgScope(ctx);
-  await db
-    .update(certificationSubmissions)
-    .set({
-      status: "superseded",
-      supersededAt: sql`now()`,
-      lockedAt: null,
-      updatedAt: sql`now()`,
-      metadata: sql`coalesce(${certificationSubmissions.metadata}, '{}'::jsonb) || jsonb_build_object('retiredReason', ${args.reason}::text)`,
-    })
-    .where(
-      and(
-        eq(certificationSubmissions.id, id),
-        eq(certificationSubmissions.status, "draft"),
-        eq(certificationSubmissions.organizationId, ctx.organizationId),
-      ),
-    );
+  await withCertificationStatusActivity(ctx, [id], async (tx) => {
+    await tx
+      .update(certificationSubmissions)
+      .set({
+        status: "superseded",
+        supersededAt: sql`now()`,
+        lockedAt: null,
+        updatedAt: sql`now()`,
+        metadata: sql`coalesce(${certificationSubmissions.metadata}, '{}'::jsonb) || jsonb_build_object('retiredReason', ${args.reason}::text)`,
+      })
+      .where(
+        and(
+          eq(certificationSubmissions.id, id),
+          eq(certificationSubmissions.status, "draft"),
+          eq(certificationSubmissions.organizationId, ctx.organizationId),
+        ),
+      );
+  });
 }
 
 export async function markSubmissionRejected(
@@ -816,7 +809,8 @@ export async function markSubmissionRejected(
   id: string,
   args: { errorMessage: string; expectedLockedAt?: Date },
 ): Promise<void> {
-  await rejectDraftSubmission(ctx, db, id, args);
+  requireOrgScope(ctx);
+  await db.transaction((tx) => rejectDraftSubmission(ctx, tx, id, args));
 }
 
 // Deep-merges recovery facts into payload_snapshot.journaled so successive
@@ -848,15 +842,18 @@ export async function updateSubmissionMetadata(
   id: string,
   patch: Record<string, unknown>,
   tx?: Tx,
+  origin?: CertificationActivityOrigin,
 ): Promise<void> {
   requireOrgScope(ctx);
-  await (tx ?? db)
-    .update(certificationSubmissions)
-    .set({
-      metadata: sql`coalesce(${certificationSubmissions.metadata}, '{}'::jsonb) || ${JSON.stringify(patch)}::jsonb`,
-      updatedAt: sql`now()`,
-    })
-    .where(and(eq(certificationSubmissions.id, id), eq(certificationSubmissions.organizationId, ctx.organizationId)));
+  await withCertificationStatusActivity(ctx, [id], async (executor) => {
+    await executor
+      .update(certificationSubmissions)
+      .set({
+        metadata: sql`coalesce(${certificationSubmissions.metadata}, '{}'::jsonb) || ${JSON.stringify(patch)}::jsonb`,
+        updatedAt: sql`now()`,
+      })
+      .where(and(eq(certificationSubmissions.id, id), eq(certificationSubmissions.organizationId, ctx.organizationId)));
+  }, tx, origin);
 }
 
 export async function setSubmissionTerminalStatus(
@@ -867,17 +864,20 @@ export async function setSubmissionTerminalStatus(
     metadataPatch?: Record<string, unknown>;
   },
   tx?: Tx,
+  origin?: CertificationActivityOrigin,
 ): Promise<void> {
   requireOrgScope(ctx);
-  await (tx ?? db)
-    .update(certificationSubmissions)
-    .set({
-      status: args.status,
-      lockedAt: null,
-      metadata: sql`coalesce(${certificationSubmissions.metadata}, '{}'::jsonb) || ${JSON.stringify(args.metadataPatch ?? {})}::jsonb`,
-      updatedAt: sql`now()`,
-    })
-    .where(and(eq(certificationSubmissions.id, id), eq(certificationSubmissions.organizationId, ctx.organizationId)));
+  await withCertificationStatusActivity(ctx, [id], async (executor) => {
+    await executor
+      .update(certificationSubmissions)
+      .set({
+        status: args.status,
+        lockedAt: null,
+        metadata: sql`coalesce(${certificationSubmissions.metadata}, '{}'::jsonb) || ${JSON.stringify(args.metadataPatch ?? {})}::jsonb`,
+        updatedAt: sql`now()`,
+      })
+      .where(and(eq(certificationSubmissions.id, id), eq(certificationSubmissions.organizationId, ctx.organizationId)));
+  }, tx, origin);
 }
 
 export async function clearTerminalStatusForResubmit(
@@ -885,17 +885,20 @@ export async function clearTerminalStatusForResubmit(
   id: string,
   args: { metadataPatch?: Record<string, unknown> } = {},
   tx?: Tx,
+  origin?: CertificationActivityOrigin,
 ): Promise<void> {
   requireOrgScope(ctx);
-  await (tx ?? db)
-    .update(certificationSubmissions)
-    .set({
-      status: "submitted",
-      lockedAt: null,
-      metadata: sql`coalesce(${certificationSubmissions.metadata}, '{}'::jsonb) || ${JSON.stringify(args.metadataPatch ?? {})}::jsonb`,
-      updatedAt: sql`now()`,
-    })
-    .where(and(eq(certificationSubmissions.id, id), eq(certificationSubmissions.organizationId, ctx.organizationId)));
+  await withCertificationStatusActivity(ctx, [id], async (executor) => {
+    await executor
+      .update(certificationSubmissions)
+      .set({
+        status: "submitted",
+        lockedAt: null,
+        metadata: sql`coalesce(${certificationSubmissions.metadata}, '{}'::jsonb) || ${JSON.stringify(args.metadataPatch ?? {})}::jsonb`,
+        updatedAt: sql`now()`,
+      })
+      .where(and(eq(certificationSubmissions.id, id), eq(certificationSubmissions.organizationId, ctx.organizationId)));
+  }, tx, origin);
 }
 
 export async function attachReportDocument(
@@ -924,17 +927,17 @@ export async function attachReportDocument(
     .limit(1);
   if (existing) return existing;
   return insertDocument(ctx, {
-      entityType: "ghgStatement",
-      entityId: args.submissionId,
-      documentType: "pdf",
-      fileUrl: args.reportUrl,
-      fileName: deriveFileName(args.reportUrl),
-      description: args.description,
-      metadata: {
-        kind: "external_ghg_statement_report",
-        ...(args.metadata ?? {}),
-      } as Record<string, unknown>,
-      createdBy: ctx.userId,
+    entityType: "ghgStatement",
+    entityId: args.submissionId,
+    documentType: "pdf",
+    fileUrl: args.reportUrl,
+    fileName: deriveFileName(args.reportUrl),
+    description: args.description,
+    metadata: {
+      kind: "external_ghg_statement_report",
+      ...(args.metadata ?? {}),
+    } as Record<string, unknown>,
+    createdBy: ctx.userId,
   });
 }
 

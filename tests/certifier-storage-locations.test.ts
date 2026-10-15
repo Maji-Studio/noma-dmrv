@@ -26,7 +26,7 @@ import {
 } from "@/data-access/certification";
 import { buildCreateStorageLocationRequest } from "@/lib/isometric/storage-locations";
 import type { OrgContext } from "@/lib/auth/server";
-import {
+import { TEST_SITE_POSITION,
   ensureTestOrg,
   makeTestOrgContext,
   TEST_ORG_ID,
@@ -76,7 +76,7 @@ async function createFixture(): Promise<Fixture> {
       .returning({ id: customerLocations.id });
     const [facility] = await tx
       .insert(facilities)
-      .values({ timezone: "UTC",
+      .values({ ...TEST_SITE_POSITION, timezone: "UTC",
         organizationId: TEST_ORG_ID,
         code: `FAC-SLC-${runId}`,
         name: `Storage Location Facility ${runId}`,
@@ -85,6 +85,7 @@ async function createFixture(): Promise<Fixture> {
     const [certifierProject] = await tx
       .insert(certifierProjects)
       .values({
+        externalFacilityId: `fcl_test_${facility.id}`,
         organizationId: TEST_ORG_ID,
         facilityId: facility.id,
         provider: "isometric",
@@ -360,7 +361,7 @@ describe("certifier Storage Location data access", () => {
       const runId = crypto.randomUUID().slice(0, 8);
       const [secondFacility] = await db
         .insert(facilities)
-        .values({ timezone: "UTC",
+        .values({ ...TEST_SITE_POSITION, timezone: "UTC",
           organizationId: TEST_ORG_ID,
           code: `FAC-SLC-P2-${runId}`,
           name: `Storage Location Facility P2 ${runId}`,
@@ -370,6 +371,7 @@ describe("certifier Storage Location data access", () => {
       const [secondProject] = await db
         .insert(certifierProjects)
         .values({
+          externalFacilityId: `fcl_test_${secondFacility.id}`,
           organizationId: TEST_ORG_ID,
           facilityId: secondFacility.id,
           provider: "isometric",
@@ -469,6 +471,7 @@ describe("certifier Storage Location data access", () => {
 
       await expect(
         upsertCertifierProject(ctx, {
+          externalFacilityId: `fcl_test_${fixture.facilityId}`,
           facilityId: fixture.facilityId,
           provider: "isometric",
           externalProjectId: "prj_rebound",
@@ -497,7 +500,7 @@ describe("certifier Storage Location data access", () => {
       const runId = crypto.randomUUID().slice(0, 8);
       const [sharedFacility] = await db
         .insert(facilities)
-        .values({ timezone: "UTC",
+        .values({ ...TEST_SITE_POSITION, timezone: "UTC",
           organizationId: TEST_ORG_ID,
           code: `FAC-SLC-SHARED-${runId}`,
           name: `Storage Location Shared Facility ${runId}`,
@@ -505,6 +508,7 @@ describe("certifier Storage Location data access", () => {
         .returning({ id: facilities.id });
       sharedFacilityId = sharedFacility.id;
       await upsertCertifierProject(ctx, {
+        externalFacilityId: `fcl_test_${sharedFacility.id}`,
         facilityId: sharedFacility.id,
         provider: "isometric",
         externalProjectId: input.externalProjectId,
@@ -529,6 +533,7 @@ describe("certifier Storage Location data access", () => {
 
       await expect(
         upsertCertifierProject(ctx, {
+          externalFacilityId: `fcl_test_${sharedFacility.id}`,
           facilityId: sharedFacility.id,
           provider: "isometric",
           externalProjectId: `prj_rebound_${runId}`,

@@ -1,3 +1,4 @@
+import { TEST_SITE_POSITION } from "./test-org";
 import type { OrgContext } from "@/lib/auth/server";
 import { randomUUID } from "node:crypto";
 import { eq, inArray, type SQL } from "drizzle-orm";
@@ -5,7 +6,7 @@ import { db, type DbTransaction } from "@/db";
 import {
   biocharProducts, biocharProductSourceAllocations, binMovements, deliveries,
   formulations, orders, outputStockAllocations, outputStockMoistureReadings, outputStockRunAllocations,
-  applicationOutputAllocations, applications, customerLocations, facilities, productionRuns,
+  activityEvents, applicationOutputAllocations, applications, customerLocations, facilities, productionRuns,
   reactors, storageLocations, users, productIngredientSnapshots, type Delivery,
 } from "@/db/schema";
 
@@ -99,6 +100,7 @@ async function orderFixture(executor: Executor, input: OrderFixture): Promise<Or
   let customerLocationId = input.customerLocationId;
   if (customerLocationId === undefined) {
     const [location] = await executor.insert(customerLocations).values({
+      ...TEST_SITE_POSITION,
       organizationId: input.organizationId, customerId: input.customerId,
       name: `E2E Order destination ${randomUUID()}`,
     }).returning({ id: customerLocations.id });
@@ -287,6 +289,7 @@ export async function deleteOutputProductFixtures(executor: Executor, predicate:
 
 export async function deleteOutputFacilityFixtures(executor: Executor, predicate: SQL | undefined) {
   const rows = await executor.select({ id: facilities.id }).from(facilities).where(predicate);
+  if (rows.length) await executor.delete(activityEvents).where(inArray(activityEvents.facilityId, rows.map(row => row.id)));
   for (const row of rows) await cleanupOutputFixtureParents(executor, row.id);
   return executor.delete(facilities).where(predicate);
 }

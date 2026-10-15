@@ -6,8 +6,8 @@
 
 | ID | Requirement area | Current state | Completion condition | Status |
 |---|---|---|---|---|
-| `P0-01` | Feedstock EC1-EC15 and >25% ineligible cap | Eligibility flags and read-time mass roll-ups exist; no assessment store or issuance gate | Versioned criterion evidence plus a Reporting-Period cap decision that blocks ineligible issuance | open |
-| `P0-02` | Counterfactual lifecycle | Quantity/category inputs exist | Dated assessment, evidence window, expiry/reassessment, sourcing-change invalidation, and wildfire handling | open |
+| `P0-01` | Feedstock eligibility | Evidence maintained outside noma (#942 q8) | Operator evidence outside the app; no local eligibility gate | external |
+| `P0-02` | Counterfactual lifecycle | Evidence maintained outside noma (#942 q8) | External assessment and evidence; no delivery-level quantity/category store | external |
 | `P0-03` | Method-B enforcement | Process epoch/prerequisites and immutable sampled/unsampled choice are implemented | Confirm the unsampled registry representation and enable it only after sandbox verification | partial |
 | `P0-04` | Pyrolysis-gas calibration/leak testing | Pressure readings exist | Allowed-method record plus calibration/test standard, event, evidence, and submission/readiness gate | open |
 | `P0-05` | Lost-mass accounting | Incident records exist | Auditable incident-to-run/delivery/application adjustment that reduces credited mass | open |
@@ -21,7 +21,7 @@
 | `P0-13` | SSR/materiality assessment | No `ghg_materiality_assessments` | Versioned boundary/materiality assessment and appropriate issuance guard | open |
 | `P0-14` | Reversal risk and buffer | Buffer percentage exists | Questionnaire, versioned score/derivation, events, and reassessment schedule | open |
 | `P0-15` | Embodied emissions | Generic documents only | Reproducible full-lifecycle inventory and complete per-factor records | open |
-| `P0-16` | Transport method hierarchy | Method is stored | Evidence-required fallback from energy usage to distance method | open |
+| `P0-16` | Transport method hierarchy | Method is stored; distance-method justification lives in the PDD (#942 q11) | Maintain the justification in the PDD; no noma field or gate | outside noma |
 | `P0-17` | Transport trip/evidence completeness | Every leg counts its round trip; evidence references are permissive | Required record types and scale calibration (an onward-trip exception needs its own evidence model first) | open |
 | `P0-18` | Transport factor quality | Factor value is stored | Source, vintage, mode/vehicle match, full-fuel-cycle basis, and recency gate | open |
 

@@ -1,3 +1,5 @@
+import { feedstockFixtureValues, cleanupFeedstockFixtureParents } from "./helpers/feedstock-fixture";
+import { TEST_SITE_POSITION } from "./helpers/test-org";
 import { masterDataVersion } from "./helpers/master-data-version";
 /**
  * Bin stock integrity (issue #767).
@@ -106,7 +108,7 @@ async function seedFixture(intakeWetKg = INTAKE_WET_KG): Promise<Fixture> {
 
   const [facility] = await db
     .insert(facilities)
-    .values({ timezone: "UTC",
+    .values({ ...TEST_SITE_POSITION, timezone: "UTC",
       organizationId,
       code: `E2E-BINT-F-${tag}`,
       name: `E2E Bin integrity ${tag}`,
@@ -148,7 +150,7 @@ async function seedFixture(intakeWetKg = INTAKE_WET_KG): Promise<Fixture> {
 
   const [feedstock] = await db
     .insert(feedstocks)
-    .values({
+    .values(await feedstockFixtureValues(db, {
       organizationId,
       code: `E2E-BINT-FS-${tag}`,
       facilityId: facility.id,
@@ -158,7 +160,7 @@ async function seedFixture(intakeWetKg = INTAKE_WET_KG): Promise<Fixture> {
       massWetKg: intakeWetKg,
       moistureContentPercent: MOISTURE_PERCENT,
       storageLocationId: bin.id,
-    })
+    }))
     .returning({ id: feedstocks.id });
 
   return {
@@ -174,7 +176,7 @@ async function seedFixture(intakeWetKg = INTAKE_WET_KG): Promise<Fixture> {
 async function insertOtherFacility(organizationId: string, tag: string): Promise<string> {
   const [facility] = await db
     .insert(facilities)
-    .values({ timezone: "UTC",
+    .values({ ...TEST_SITE_POSITION, timezone: "UTC",
       organizationId,
       code: `E2E-BINT-F2-${tag}-${randomUUID().slice(0, FACILITY_CODE_SUFFIX_LENGTH).toUpperCase()}`,
       name: `E2E Bin integrity other facility ${tag}`,
@@ -184,7 +186,7 @@ async function insertOtherFacility(organizationId: string, tag: string): Promise
 }
 
 async function recordLoss(fixture: Fixture, wetKg: number) {
-  const [movement] = await db.insert(binMovements).values({
+  const [movement] = await db.insert(binMovements).values({ occurredAt: new Date("2026-01-01T00:00:00.000Z"),
     organizationId: fixture.ctx.organizationId,
     storageLocationId: fixture.binId,
     lane: "feedstock",
@@ -225,10 +227,12 @@ async function cleanup(fixture: Fixture): Promise<void> {
       await tx.execute(
         sql`delete from ${sql.identifier(table)} where organization_id = ${organizationId}`,
       );
+      if (table === "feedstocks") await cleanupFeedstockFixtureParents(tx);
     }
     await tx.delete(organizations).where(eq(organizations.id, organizationId));
     await tx.delete(users).where(eq(users.id, fixture.ctx.userId));
   });
+  await cleanupFeedstockFixtureParents(db);
 }
 
 async function readBin(fixture: Fixture) {
@@ -287,7 +291,6 @@ describe("feedstock writes cannot drive a bin lane negative", () => {
     await expect(
       db.transaction((tx) => updateFeedstockInTransaction(f.ctx, tx, f.feedstockId, { expectedVersion: 1,
         massWetKg: REDUCED_BELOW_LOSS_WET_KG,
-        massDryKg: REDUCED_BELOW_LOSS_WET_KG * DRY_RATIO,
       })),
     ).rejects.toMatchObject({
       name: "DomainError",
@@ -333,7 +336,6 @@ describe("feedstock writes cannot drive a bin lane negative", () => {
 
     const saved = await db.transaction((tx) => updateFeedstockInTransaction(f.ctx, tx, f.feedstockId, { expectedVersion: 1,
       massWetKg: REDUCED_TO_ZERO_WET_KG,
-      massDryKg: REDUCED_TO_ZERO_WET_KG * DRY_RATIO,
     }));
 
     expect(saved.massWetKg).toBe(REDUCED_TO_ZERO_WET_KG);
@@ -391,7 +393,6 @@ describe("feedstock writes cannot drive a bin lane negative", () => {
     await expect(
       db.transaction((tx) => updateFeedstockInTransaction(f.ctx, tx, f.feedstockId, { expectedVersion: 1,
         massWetKg: REDUCED_BELOW_LOSS_WET_KG,
-        massDryKg: REDUCED_BELOW_LOSS_WET_KG * DRY_RATIO,
       })),
     ).rejects.toMatchObject({
       name: "DomainError",
@@ -437,7 +438,6 @@ describe("feedstock writes cannot drive a bin lane negative", () => {
     await expect(
       db.transaction((tx) => updateFeedstockInTransaction(f.ctx, tx, f.feedstockId, { expectedVersion: 1,
         massWetKg: REDUCED_BELOW_LOSS_WET_KG,
-        massDryKg: REDUCED_BELOW_LOSS_WET_KG * DRY_RATIO,
       })),
     ).rejects.toMatchObject({
       name: "DomainError",
@@ -459,7 +459,7 @@ describe("feedstock writes cannot drive a bin lane negative", () => {
 
     const withdrawal = db.transaction(async (tx) => {
       await lockBinStock(f.ctx, tx, f.binId);
-      await tx.insert(binMovements).values({
+      await tx.insert(binMovements).values({ occurredAt: new Date("2026-01-01T00:00:00.000Z"),
         organizationId: f.ctx.organizationId,
         storageLocationId: f.binId,
         lane: "feedstock",
@@ -475,7 +475,6 @@ describe("feedstock writes cannot drive a bin lane negative", () => {
     await lockAcquired;
     const reduction = db.transaction((tx) => updateFeedstockInTransaction(f.ctx, tx, f.feedstockId, { expectedVersion: 1,
       massWetKg: REDUCED_BELOW_LOSS_WET_KG,
-      massDryKg: REDUCED_BELOW_LOSS_WET_KG * DRY_RATIO,
     }));
 
     // The reduction cannot read the lane until the withdrawal commits.
@@ -616,7 +615,7 @@ describe("a stocked bin keeps the setup its stock was recorded against", () => {
 
     const withdrawal = db.transaction(async (tx) => {
       await lockBinStock(f.ctx, tx, f.binId);
-      await tx.insert(binMovements).values({
+      await tx.insert(binMovements).values({ occurredAt: new Date("2026-01-01T00:00:00.000Z"),
         organizationId: f.ctx.organizationId,
         storageLocationId: f.binId,
         lane: "feedstock",

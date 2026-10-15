@@ -11,7 +11,7 @@ import type { OperationEffect } from "@/lib/operation-effect";
 import { GENERATED_MOVEMENT_KEY_PREFIX } from "./output-stock";
 import { runOperationInProcess, type Operation } from "./runner";
 
-const NOT_CHANGES = new Set(["basisFingerprint", "idempotencyKey", "deliveryId", "expectedVersion"]);
+const NOT_CHANGES = new Set(["basisFingerprint", "idempotencyKey", "deliveryId", "expectedVersion", "correctsMovementId"]);
 function changedFields(input: object): string[] {
   return Object.entries(input).filter(([key, value]) => value !== undefined && !NOT_CHANGES.has(key)).map(([key]) => key).sort();
 }
@@ -36,9 +36,13 @@ type PostedDelivery = Awaited<ReturnType<typeof createDeliveryInTransaction>>;
 export const recordDeliveryForUi: Operation<typeof recordDeliveryUiInput, PostedDelivery> = {
   id: "record_posted_delivery", input: recordDeliveryUiInput, supportsDryRun: false,
   describe: describeRecordedDelivery,
-  execute: ({ ctx, tx, snapshotStock }, input) => createDeliveryInTransaction(ctx, tx, {
-    ...input, idempotencyKey: input.idempotencyKey ?? `${GENERATED_MOVEMENT_KEY_PREFIX}${randomUUID()}`,
-  }, { snapshotStock }),
+  execute: async ({ ctx, tx, snapshotStock, activity }, input) => {
+    const result = await createDeliveryInTransaction(ctx, tx, {
+      ...input, idempotencyKey: input.idempotencyKey ?? `${GENERATED_MOVEMENT_KEY_PREFIX}${randomUUID()}`,
+    }, { snapshotStock, onReplay: activity.skip });
+    activity.link({ facilityId: result.delivery.facilityId });
+    return result;
+  },
 };
 
 /** Product posting sequences are bigint; the public result contains delivery facts and allocations only. */
@@ -57,8 +61,9 @@ const updateDeliveryInput = updateDeliveryApiInput.extend({ deliveryId: uuidSche
 export const updateDeliveryOperation: Operation<typeof updateDeliveryInput, Delivery> = {
   id: "update_delivery", input: updateDeliveryInput, supportsDryRun: true,
   describe: describeUpdatedDelivery,
-  execute: async ({ ctx, tx, afterCommit }, { deliveryId, ...changes }) => {
+  execute: async ({ ctx, tx, afterCommit, activity }, { deliveryId, ...changes }) => {
     const saved = await updateDeliveryInTransaction(ctx, tx, deliveryId, changes);
+    activity.link({ facilityId: saved.facilityId });
     afterCommit(async () => { await processPendingStorageObjectDeletions(ctx); });
     const delivery: Partial<typeof saved> = { ...saved };
     delete delivery.savedProducts;
@@ -71,8 +76,10 @@ export const updatePostedDelivery: Operation<typeof updateDeliverySchema, Update
   id: "update_posted_delivery",
   input: updateDeliverySchema,
   supportsDryRun: false,
-  execute: async ({ ctx, tx, afterCommit }, { deliveryId, ...changes }) => {
+  describe: describeUpdatedDelivery,
+  execute: async ({ ctx, tx, afterCommit, activity }, { deliveryId, ...changes }) => {
     const saved = await updateDeliveryInTransaction(ctx, tx, deliveryId, changes);
+    activity.link({ facilityId: saved.facilityId });
     afterCommit(async () => { await processPendingStorageObjectDeletions(ctx); });
     return saved;
   },

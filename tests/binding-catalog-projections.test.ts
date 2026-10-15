@@ -42,7 +42,6 @@ const PRE_637_FIELD_SOURCES: Record<string, string[]> = {
   "sample.organicCarbonPercent": ["weightedOrganicCarbonPercent"],
   "sample.hToCOrgRatio": ["weightedHToCorgRatio"],
   "sample.oToCOrgRatio": ["weightedOToCorgRatio"],
-  "feedstock.massWetKg": ["feedstockTransportMassDistanceTonneKm"],
   "feedstock.transportLeg": ["feedstockTransportMassDistanceTonneKm"],
   "transportLeg.distanceKm": [
     "feedstockTransportMassDistanceTonneKm",
@@ -57,7 +56,6 @@ const PRE_637_FIELD_SOURCES: Record<string, string[]> = {
   // #1021: the biochar leg loads each Removal's frozen application slice, not the delivery mass.
   "application.biocharAppliedTons": ["biocharTransportMassDistanceTonneKm"],
   "customerLocation.distanceFromFacilityKm": ["biocharTransportMassDistanceTonneKm"],
-  "supplier.distanceToFacilityKm": ["feedstockTransportMassDistanceTonneKm"],
   "supplierLocation.distanceFromFacilityKm": ["feedstockTransportMassDistanceTonneKm"],
 };
 
@@ -110,13 +108,11 @@ const RESOLVED_FIELD_TUPLES: Record<string, string[]> = {
   "sample.organicCarbonPercent": [
     "co2-stored/carbon_rich_substance_sequestration/carbon_content",
   ],
-  "feedstock.massWetKg": [FEEDSTOCK_MASS_DISTANCE],
   "feedstock.transportLeg": [FEEDSTOCK_MASS_DISTANCE],
   "transportLeg.distanceKm": TRANSPORT_TUPLES,
   "transportLeg.loadMassKg": TRANSPORT_TUPLES,
   "application.biocharAppliedTons": [BIOCHAR_MASS_DISTANCE],
   "customerLocation.distanceFromFacilityKm": [BIOCHAR_MASS_DISTANCE],
-  "supplier.distanceToFacilityKm": [FEEDSTOCK_MASS_DISTANCE],
   "supplierLocation.distanceFromFacilityKm": [FEEDSTOCK_MASS_DISTANCE],
 };
 

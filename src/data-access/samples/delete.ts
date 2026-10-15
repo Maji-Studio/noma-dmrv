@@ -10,6 +10,14 @@ import { deleteTransportLegsForEntity } from "../transport-legs";
 import { requireOrgScope } from "../utils";
 import { assertSampleLinksHeld, lockSampleWriteScope, readSampleLinks } from "./write-scope";
 
+/** Only org-scoped links survive deletion for the operation's activity record. */
+export interface DeletedSampleLinks {
+  id: string;
+  creditBatchId: string;
+  productionRunId: string | null;
+  facilityId: string | undefined;
+}
+
 /**
  * Delete a lab Sample inside the caller's transaction: its transport legs go
  * with it, and its documents (the lab report) and the legs' documents are
@@ -23,7 +31,7 @@ export async function deleteSampleInTransaction(
   sampleId: string,
   expectedVersion: number,
   source: ActivityEventInput["source"] = "form",
-): Promise<void> {
+): Promise<DeletedSampleLinks> {
   requireOrgScope(ctx);
   const links = await readSampleLinks(ctx, tx, sampleId);
   if (!links) throw sampleNotFound();
@@ -35,6 +43,7 @@ export async function deleteSampleInTransaction(
   if (!scope.sample) throw sampleNotFound();
   assertRowVersion({ entity: "sample", id: sampleId, expectedVersion, actualVersion: scope.sample.version });
   assertSampleLinksHeld(scope, sampleId, links);
+  const facilityId = scope.batches.get(scope.sample.creditBatchId)?.facilityId;
 
   const transportLegDocuments = await deleteTransportLegsForEntity(ctx, tx, "sample", sampleId, source);
   const deleted = await tx
@@ -46,4 +55,8 @@ export async function deleteSampleInTransaction(
     { entityType: "sample", entityId: sampleId, activityScopes: [{ creditBatchId: links.creditBatchId, productionRunId: scope.sample.productionRunId }] },
     ...transportLegDocuments,
   ], source);
+  return {
+    id: sampleId, creditBatchId: scope.sample.creditBatchId, productionRunId: scope.sample.productionRunId,
+    facilityId,
+  };
 }

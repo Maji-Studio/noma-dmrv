@@ -1,3 +1,4 @@
+import { feedstockFixtureValues, cleanupFeedstockFixtureParents } from "./helpers/feedstock-fixture";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
@@ -10,7 +11,7 @@ import {
   productionRuns,
 } from "@/db/schema/production";
 import { SafeError } from "@/lib/errors";
-import {
+import { TEST_SITE_POSITION,
   ensureTestOrg,
   makeTestOrgContext,
   TEST_ORG_ID,
@@ -35,7 +36,7 @@ describe("bin stock guard concurrency (issue #423)", () => {
   beforeAll(async () => {
     const [facility] = await db
       .insert(facilities)
-      .values({ timezone: "UTC",
+      .values({ ...TEST_SITE_POSITION, timezone: "UTC",
         organizationId: TEST_ORG_ID,
         code: `FAC-DRAW-${tag}`,
         name: `Concurrent Draw Facility ${tag}`,
@@ -82,7 +83,7 @@ describe("bin stock guard concurrency (issue #423)", () => {
 
     const [feedstock] = await db
       .insert(feedstocks)
-      .values({
+      .values(await feedstockFixtureValues(db, {
         organizationId: TEST_ORG_ID,
         code: `FS-DRAW-${tag}`,
         facilityId,
@@ -91,7 +92,7 @@ describe("bin stock guard concurrency (issue #423)", () => {
         massDryKg: INTAKE_DRY_MASS_KG,
         massWetKg: INITIAL_WET_STOCK_KG,
         storageLocationId,
-      })
+      }))
       .returning({ id: feedstocks.id });
     feedstockId = feedstock.id;
 
@@ -132,6 +133,7 @@ describe("bin stock guard concurrency (issue #423)", () => {
       }
       if (feedstockId) {
         await tx.delete(feedstocks).where(eq(feedstocks.id, feedstockId));
+        await cleanupFeedstockFixtureParents(tx);
       }
       if (storageLocationId) {
         await tx
@@ -150,6 +152,7 @@ describe("bin stock guard concurrency (issue #423)", () => {
         await tx.delete(facilities).where(eq(facilities.id, facilityId));
       }
     });
+    await cleanupFeedstockFixtureParents(db);
   });
 
   it("serializes concurrent draws so committed stock cannot go negative", async () => {

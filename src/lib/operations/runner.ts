@@ -38,6 +38,9 @@ import { runOwnedTransaction } from "@/data-access/owned-transaction";
 import { deadlineExceeded, idempotencyInProgress } from "@/lib/domain-errors";
 import type { Jsonified } from "./jsonified";
 import { writeApiAuditEvent } from "@/data-access/api-audit-events";
+import { recordActivity, type ActivityEventInput } from "@/data-access/activity-events";
+import { toActivityEntityType } from "@/lib/activity-entity-type";
+import { createOperationActivity, type OperationActivity } from "./activity-links";
 import type { OperationEffect } from "@/lib/operation-effect";
 
 export type { OperationEffect } from "@/lib/operation-effect";
@@ -46,22 +49,26 @@ export type { OperationEffect } from "@/lib/operation-effect";
 const API_CONTRACT_VERSION = "v1";
 
 export interface OperationScope {
+  /** Absolute request deadline, including after-commit work. */
+  deadlineAt?: number;
   /** Dry-run observer; once per attempt, after locks, before stock changes. */
   snapshotStock?: SnapshotStock;
+  activity: OperationActivity;
   ctx: OrgContext;
   tx: DbTransaction;
-  source?: "form" | "rest" | "mcp";
+  source?: ActivityEventInput["source"];
   /** Work to trigger after the real commit; never after a dry run or rollback. */
   afterCommit: (hook: () => Promise<void> | void) => void;
 }
 
-export interface Operation<Input extends z.ZodType, Output> {
+export interface Operation<Input extends z.ZodType, Output, Effect extends OperationEffect | undefined = OperationEffect> {
   /** Stable id, shared with the REST `operationId` and the MCP tool name. */
   id: string;
   input: Input;
   /** False for operations with irreversible external effects. */
   supportsDryRun: boolean;
-  describe?: (input: z.output<Input>, output: Output) => OperationEffect;
+  /** Null or undefined describes a no-op, which records no activity or API audit. */
+  describe?: (input: z.output<Input>, output: Output) => Effect | null;
   execute: (scope: OperationScope, input: z.output<Input>) => Promise<Output>;
 }
 
@@ -75,6 +82,8 @@ export interface IdempotencyOptions {
 }
 
 export interface RunOptions {
+  /** Source for trusted callers without an API audit; audited transports take precedence. */
+  activitySource?: "script";
   audit?: { transport: "rest" | "mcp"; requestId: string; credentialId: string; oauthClientId?: string | null };
   dryRun?: boolean;
   idempotency?: IdempotencyOptions;
@@ -173,7 +182,7 @@ async function runAfterCommitHooks(
  * transaction, and return the committed (or dry-run) result.
  */
 export async function runOperation<Input extends z.ZodType, Output>(
-  operation: Operation<Input, Output>,
+  operation: Operation<Input, Output, OperationEffect | undefined>,
   ctx: OrgContext,
   input: unknown,
   options: RunOptions = {},
@@ -183,10 +192,10 @@ export async function runOperation<Input extends z.ZodType, Output>(
 
 /** Native results for server actions; replay and previews are JSON-only contracts. */
 export async function runOperationInProcess<Input extends z.ZodType, Output>(
-  operation: Operation<Input, Output>,
+  operation: Operation<Input, Output, OperationEffect | undefined>,
   ctx: OrgContext,
   input: unknown,
-  options: Pick<RunOptions, "deadlineMs" | "pool"> & {
+  options: Pick<RunOptions, "deadlineMs" | "pool" | "activitySource"> & {
     idempotency?: never;
     dryRun?: never;
   } = {},
@@ -211,7 +220,7 @@ export async function runOperationInProcess<Input extends z.ZodType, Output>(
 }
 
 async function runOperationCore<Input extends z.ZodType, Output, Result>(
-  operation: Operation<Input, Output>,
+  operation: Operation<Input, Output, OperationEffect | undefined>,
   ctx: OrgContext,
   input: unknown,
   options: RunOptions,
@@ -219,6 +228,7 @@ async function runOperationCore<Input extends z.ZodType, Output, Result>(
 ): Promise<{ data: Result; effect?: OperationEffect; stockEffects?: StockEffects; dryRun: boolean; replayed: boolean }> {
   const deadlineAt = Date.now() + (options.deadlineMs ?? OPERATION_DEADLINE_MS);
   const dryRun = options.dryRun ?? false;
+  const source: ActivityEventInput["source"] = options.audit?.transport ?? options.activitySource ?? "form";
   const { idempotency } = options;
   if (dryRun && !operation.supportsDryRun) {
     throw new DomainError("validation_failed", "This operation does not offer a dry run.");
@@ -264,12 +274,26 @@ async function runOperationCore<Input extends z.ZodType, Output, Result>(
         const snapshotStock: SnapshotStock | undefined = dryRun ? async (writerTx, ids) => {
           before = await readStockBalances(ctx, writerTx, ids);
         } : undefined;
-        const output = await operation.execute({ ctx, tx, source: options.audit?.transport ?? "form", snapshotStock, afterCommit: (hook) => hooks.push(hook) }, decoded);
+        const activity = createOperationActivity();
+        const output = await operation.execute({ ctx, tx, source, activity, deadlineAt, snapshotStock, afterCommit: (hook) => hooks.push(hook) }, decoded);
         const stockEffects = before ? diffStockBalances(before, await readStockBalances(ctx, tx, before.map((bin) => bin.storageLocationId))) : undefined;
-        const effect = operation.describe?.(decoded, output);
+        const effect = activity.skipped ? undefined : operation.describe?.(decoded, output) ?? undefined;
         const result = represent(output);
-        if (options.audit && !dryRun && effect) {
-          await writeApiAuditEvent(ctx, tx, { ...options.audit, operationId: operation.id, effect });
+        if (!dryRun && effect) {
+          const entityType = toActivityEntityType(effect.entityType);
+          for (const entityId of effect.entityIds) {
+            await recordActivity(ctx, tx, {
+              action: effect.outcome, entityType, entityId,
+              changedFields: effect.changedFields,
+              source,
+              credentialId: options.audit?.credentialId,
+              requestId: options.audit?.requestId,
+              ...activity.links(entityType, entityId),
+            });
+          }
+          if (options.audit) {
+            await writeApiAuditEvent(ctx, tx, { ...options.audit, operationId: operation.id, effect });
+          }
         }
         if (recordId) {
           await recordIdempotencyOutcome(ctx, tx, recordId, result, effect);

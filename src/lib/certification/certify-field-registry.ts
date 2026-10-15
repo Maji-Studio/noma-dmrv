@@ -12,6 +12,7 @@ import type { AggregatedProductionData } from "@/lib/isometric/utils/aggregation
 export type CertifyEntityKind =
   | "productionRun"
   | "sample"
+  | "feedstockType"
   | "feedstock"
   | "transportLeg"
   | "facilityEmissionConfig"
@@ -272,22 +273,6 @@ export const CERTIFY_FIELD_REGISTRY: Record<
   ],
   feedstock: [
     {
-      // Form field `totalWetMassKg` persists as `massWetKg`; `satisfaction`
-      // checks the entity column while `formFields` drives the form badge.
-      // The wet mass becomes the auto-derived feedstock leg's load mass
-      // (data-access/transport-legs.ts → syncFeedstockTransportLeg).
-      key: "massWetKg",
-      label: "Feedstock wet mass",
-      kind: "entered",
-      formFields: ["totalWetMassKg"],
-      satisfaction: {
-        mode: "anyOf",
-        fields: ["massWetKg"],
-        label: "Feedstock wet mass",
-      },
-      mappings: [mapping("feedstockTransportMassDistanceTonneKm")],
-    },
-    {
       key: "transportLeg",
       gapDetail: "Record a transport leg with a positive distance and load mass",
       label: "Feedstock transport leg",
@@ -328,12 +313,22 @@ export const CERTIFY_FIELD_REGISTRY: Record<
       mappings: transportMassDistanceMappings,
     },
   ],
-  // Issue #319 removed the litres→kWh genset conversion — diesel submits by
-  // volume with the EF bound on the Isometric template, so no facility
-  // emission-config field is emissions-affecting anymore. The genset-yield
-  // column/admin form stay (vestigial local estimate) but carry no certify
-  // badge.
-  facilityEmissionConfig: [],
+  facilityEmissionConfig: [
+    {
+      key: "defaultSoilTemperatureC",
+      label: "Reference soil temperature",
+      kind: "entered",
+      condition: { field: "durabilityOption", equals: "200_year", label: "200-year durability" },
+    },
+  ],
+  feedstockType: [
+    {
+      key: "isometricFeedstockTypeId",
+      label: "Isometric feedstock type",
+      kind: "entered",
+      condition: { field: "usage", equals: "pyrolysis", label: "pyrolysis usage" },
+    },
+  ],
   // The kinds below stay out of the Removal submission's entity-readiness
   // walk (which covers production runs, samples, and transport legs); their
   // descriptors drive form/detail badges and the list readiness pills.
@@ -385,15 +380,7 @@ export const CERTIFY_FIELD_REGISTRY: Record<
       mappings: [mapping("biocharTransportMassDistanceTonneKm")],
     },
   ],
-  supplier: [
-    {
-      // Supplier-level fallback distance for the auto-derived feedstock leg.
-      key: "distanceToFacilityKm",
-      label: "Distance to facility",
-      kind: "entered",
-      mappings: [mapping("feedstockTransportMassDistanceTonneKm")],
-    },
-  ],
+  supplier: [],
   supplierLocation: [
     {
       // Default-location distance — the preferred stored level for the

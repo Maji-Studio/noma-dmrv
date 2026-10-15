@@ -170,7 +170,7 @@ export async function createBiocharProductInTransaction(ctx: OrgContext, tx: DbT
     }
     if (!bin.formulationId) await writeTx.update(storageLocations).set({ version: nextVersion(storageLocations.version), formulationId: data.formulationId, updatedAt: new Date() }).where(and(eq(storageLocations.organizationId, ctx.organizationId), eq(storageLocations.id, bin.id)));
     return { product, basisFingerprint: productBasis.basisFingerprint };
-  } }, { snapshotStock: options.snapshotStock });
+  } }, { snapshotStock: options.snapshotStock, onReplay: options.onReplay });
 }
 
 /** `createBiocharProductInTransaction` in a transaction of its own, without the operation runner. */

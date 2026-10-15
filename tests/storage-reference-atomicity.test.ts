@@ -1,3 +1,4 @@
+import { feedstockFixtureValues, cleanupFeedstockFixtureParents } from "./helpers/feedstock-fixture";
 import { masterDataVersion } from "./helpers/master-data-version";
 import { productionVersion } from "./helpers/production-version";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
@@ -27,7 +28,7 @@ import {
   suppliers,
   transportLegs,
 } from "@/db/schema";
-import {
+import { TEST_SITE_POSITION,
   ensureTestOrg,
   makeTestOrgContext,
   TEST_ORG_ID,
@@ -41,6 +42,7 @@ const ctx = makeTestOrgContext(TEST_USER_ID);
 interface Fixture {
   facilityId: string;
   targetFacilityId: string;
+  targetFeedstockBinId: string;
   archivedFacilityId: string;
   supplierId: string;
   reactorId: string;
@@ -51,7 +53,7 @@ interface Fixture {
   typedFeedstockBinId: string;
   biocharBinId: string;
   existingFeedstockId: string;
-  unlocatedFeedstockId: string;
+  movableFeedstockId: string;
   existingProductionRunId: string;
   tag: string;
 }
@@ -67,18 +69,21 @@ async function createFixture(): Promise<Fixture> {
       .insert(facilities)
       .values([
         {
+          ...TEST_SITE_POSITION,
           organizationId: TEST_ORG_ID,
           timezone: "UTC",
           code: `FAC-SRA-${tag}`,
           name: `Storage Reference Atomicity Facility ${tag}`,
         },
         {
+          ...TEST_SITE_POSITION,
           organizationId: TEST_ORG_ID,
           timezone: "UTC",
           code: `FAC-SRA-TARGET-${tag}`,
           name: `Storage Reference Atomicity Target ${tag}`,
         },
         {
+          ...TEST_SITE_POSITION,
           organizationId: TEST_ORG_ID,
           timezone: "UTC",
           code: `FAC-SRA-ARCH-${tag}`,
@@ -128,7 +133,7 @@ async function createFixture(): Promise<Fixture> {
           organizationId: TEST_ORG_ID,
           code: `FT-SRA-B-${tag}`,
           name: `Storage Reference Atomicity B ${tag}`,
-          category: "agricultural_residue",
+          category: "agricultural",
           usage: "pyrolysis" as const,
         },
       ])
@@ -160,9 +165,14 @@ async function createFixture(): Promise<Fixture> {
         },
       ])
       .returning({ id: storageLocations.id });
-    const [existingFeedstock, unlocatedFeedstock] = await tx
+    const [targetFeedstockBin] = await tx.insert(storageLocations).values({
+      organizationId: TEST_ORG_ID, facilityId: targetFacility.id,
+      code: `BIN-SRA-TARGET-${tag}`, name: `Target feedstock ${tag}`,
+      type: "feedstock_bin", feedstockTypeId: primaryFeedstockType.id,
+    }).returning();
+    const [existingFeedstock, movableFeedstock] = await tx
       .insert(feedstocks)
-      .values([
+      .values(await feedstockFixtureValues(tx, [
         {
           organizationId: TEST_ORG_ID,
           facilityId: facility.id,
@@ -177,15 +187,15 @@ async function createFixture(): Promise<Fixture> {
         {
           organizationId: TEST_ORG_ID,
           facilityId: facility.id,
-          code: `FS-SRA-UNLOCATED-${tag}`,
+          code: `FS-SRA-MOVABLE-${tag}`,
           status: "missing_data",
           feedstockTypeId: primaryFeedstockType.id,
           massDryKg: 0,
           massWetKg: 0,
           moistureContentPercent: 0,
-          storageLocationId: null,
+          storageLocationId: untypedFeedstockBin.id,
         },
-      ])
+      ]))
       .returning({ id: feedstocks.id });
     const [existingProductionRun] = await tx
       .insert(productionRuns)
@@ -203,6 +213,7 @@ async function createFixture(): Promise<Fixture> {
     return {
       facilityId: facility.id,
       targetFacilityId: targetFacility.id,
+      targetFeedstockBinId: targetFeedstockBin.id,
       archivedFacilityId: archivedFacility.id,
       supplierId: supplier.id,
       reactorId: reactor.id,
@@ -213,7 +224,7 @@ async function createFixture(): Promise<Fixture> {
       typedFeedstockBinId: typedFeedstockBin.id,
       biocharBinId: biocharBin.id,
       existingFeedstockId: existingFeedstock.id,
-      unlocatedFeedstockId: unlocatedFeedstock.id,
+      movableFeedstockId: movableFeedstock.id,
       existingProductionRunId: existingProductionRun.id,
       tag,
     };
@@ -277,10 +288,11 @@ afterEach(async () => {
       await db
         .delete(feedstocks)
         .where(inArray(feedstocks.id, testFeedstocks.map((feedstock) => feedstock.id)));
+      await cleanupFeedstockFixtureParents(db);
     }
     await db
       .delete(storageLocations)
-      .where(eq(storageLocations.facilityId, fixture.facilityId));
+      .where(inArray(storageLocations.facilityId, [fixture.facilityId, fixture.targetFacilityId]));
     await db
       .delete(reactors)
       .where(inArray(reactors.id, [fixture.reactorId, fixture.targetReactorId]));
@@ -404,7 +416,7 @@ async function archiveFacilityBeforeReferenceWrite<T>(
     await tx
       .update(storageLocations)
       .set({ archivedAt })
-      .where(eq(storageLocations.facilityId, fixture.facilityId));
+      .where(inArray(storageLocations.facilityId, [fixture.facilityId, fixture.targetFacilityId]));
     await tx
       .update(feedstocks)
       .set({ archivedAt })
@@ -524,11 +536,11 @@ describe(
       expectArchivedReferenceRejected(outcome);
     });
 
-    it("rejects an archived facility when moving an unlocated feedstock", async () => {
+    it("rejects an archived facility when moving a feedstock", async () => {
       const fixture = await createFixture();
 
       await expect(
-        db.transaction((tx) => updateFeedstockInTransaction(ctx, tx, fixture.unlocatedFeedstockId, { expectedVersion: 1,
+        db.transaction((tx) => updateFeedstockInTransaction(ctx, tx, fixture.movableFeedstockId, { expectedVersion: 1,
           facilityId: fixture.archivedFacilityId,
         })),
       ).rejects.toThrow(/not found|archived/i);
@@ -660,7 +672,8 @@ describe(
       const outcome = await archiveFacilityBeforeReferenceWrite(
         fixture,
         () =>
-          db.transaction((tx) => updateFeedstockInTransaction(ctx, tx, fixture.unlocatedFeedstockId, { expectedVersion: 1,
+          db.transaction((tx) => updateFeedstockInTransaction(ctx, tx, fixture.movableFeedstockId, { expectedVersion: 1,
+            storageLocationId: fixture.targetFeedstockBinId,
             facilityId: fixture.targetFacilityId,
           })),
       );
@@ -672,7 +685,7 @@ describe(
           archivedAt: feedstocks.archivedAt,
         })
         .from(feedstocks)
-        .where(eq(feedstocks.id, fixture.unlocatedFeedstockId));
+        .where(eq(feedstocks.id, fixture.movableFeedstockId));
       expect(stored).toMatchObject({ facilityId: fixture.facilityId });
       expect(stored.archivedAt).not.toBeNull();
     });
@@ -780,7 +793,8 @@ describe(
     it("keeps moved rows active when their move wins before source archive", async () => {
       const fixture = await createFixture();
 
-      await db.transaction((tx) => updateFeedstockInTransaction(ctx, tx, fixture.unlocatedFeedstockId, { expectedVersion: 1,
+      await db.transaction((tx) => updateFeedstockInTransaction(ctx, tx, fixture.movableFeedstockId, { expectedVersion: 1,
+        storageLocationId: fixture.targetFeedstockBinId,
         facilityId: fixture.targetFacilityId,
       }));
       await updateProductionRun(ctx, fixture.existingProductionRunId, { expectedVersion: await productionVersion(ctx, "productionRuns", fixture.existingProductionRunId),
@@ -795,7 +809,7 @@ describe(
           archivedAt: feedstocks.archivedAt,
         })
         .from(feedstocks)
-        .where(eq(feedstocks.id, fixture.unlocatedFeedstockId));
+        .where(eq(feedstocks.id, fixture.movableFeedstockId));
       const [storedRun] = await db
         .select({
           facilityId: productionRuns.facilityId,

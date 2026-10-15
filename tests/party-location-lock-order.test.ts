@@ -1,3 +1,4 @@
+import { feedstockFixtureValues, cleanupFeedstockFixtureParents } from "./helpers/feedstock-fixture";
 import { and, eq, sql } from "drizzle-orm";
 import { beforeAll, describe, expect, it } from "vitest";
 import { db } from "@/db";
@@ -5,7 +6,7 @@ import { customers, customerLocations, suppliers, supplierLocations, facilities,
 import { createSupplierLocation, deleteSupplier, deleteSupplierLocation, updateSupplierLocation } from "@/data-access/suppliers";
 import { createCustomerLocation, deleteCustomer, deleteCustomerLocation, updateCustomerLocation } from "@/data-access/customers";
 import { SafeError } from "@/lib/errors";
-import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
+import { TEST_SITE_POSITION, ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
 
 const ctx = makeTestOrgContext();
 const BARRIER_TIMEOUT_MS = 5_000;
@@ -34,8 +35,8 @@ describe.each(["supplier", "customer"] as const)("%s location parent-first locks
       organizationId: TEST_ORG_ID, code: `LOCK-${tag}`, name: `Lock order ${tag}`,
     }).returning();
     const create = () => kind === "supplier"
-      ? createSupplierLocation(ctx, { supplierId: parent.id, country: "CH", isDefault: true })
-      : createCustomerLocation(ctx, { customerId: parent.id, name: "Location", country: "CH", isDefault: true });
+      ? createSupplierLocation(ctx, { ...TEST_SITE_POSITION, country: "CH", supplierId: parent.id, isDefault: true })
+      : createCustomerLocation(ctx, { ...TEST_SITE_POSITION, country: "CH", customerId: parent.id, name: "Location", isDefault: true });
     const location = await create();
     const update = () => kind === "supplier"
       ? updateSupplierLocation(ctx, location.id, { expectedVersion: location.version, isDefault: true })
@@ -116,10 +117,11 @@ describe.each(["supplier", "customer"] as const)("%s location parent-first locks
     async (operation) => {
       const f = await fixture();
       const tag = crypto.randomUUID();
-      const [facility] = await db.insert(facilities).values({ timezone: "UTC",
-        organizationId: TEST_ORG_ID, code: `FAC-${tag}`, name: `Lock facility ${tag}`, country: "CH",
+      const [facility] = await db.insert(facilities).values({ ...TEST_SITE_POSITION, country: "CH", timezone: "UTC",
+        organizationId: TEST_ORG_ID, code: `FAC-${tag}`, name: `Lock facility ${tag}`,
       }).returning();
       const [feedstockType] = await db.insert(feedstockTypes).values({
+        usage: "pyrolysis",
         organizationId: TEST_ORG_ID, code: `FT-${tag}`, name: `Lock feedstock ${tag}`, category: "forestry",
       }).returning();
       let write: Promise<PromiseSettledResult<unknown>[]> | undefined;
@@ -139,11 +141,11 @@ describe.each(["supplier", "customer"] as const)("%s location parent-first locks
           // FOR NO KEY UPDATE admits its FOR KEY SHARE lock immediately.
           const [intake] = await db.transaction(async (insertTx) => {
             await insertTx.execute(sql`select set_config('lock_timeout', ${INTAKE_LOCK_TIMEOUT}, true)`);
-            return insertTx.insert(feedstocks).values({
+            return insertTx.insert(feedstocks).values(await feedstockFixtureValues(insertTx, {
               organizationId: TEST_ORG_ID, code: `FI-${tag}`, facilityId: facility.id,
               supplierId: f.parent.id, feedstockTypeId: feedstockType.id,
               massDryKg: INTAKE_DRY_MASS_KG,
-            }).returning({ id: feedstocks.id });
+            })).returning({ id: feedstocks.id });
           });
           expect(intake.id).toBeTruthy();
           // The writer is still paused: success cannot come from its release.
@@ -153,6 +155,7 @@ describe.each(["supplier", "customer"] as const)("%s location parent-first locks
       } finally {
         await write;
         await db.delete(feedstocks).where(and(eq(feedstocks.supplierId, f.parent.id), eq(feedstocks.organizationId, TEST_ORG_ID)));
+        await cleanupFeedstockFixtureParents(db);
         await db.delete(feedstockTypes).where(and(eq(feedstockTypes.id, feedstockType.id), eq(feedstockTypes.organizationId, TEST_ORG_ID)));
         await db.delete(facilities).where(and(eq(facilities.id, facility.id), eq(facilities.organizationId, TEST_ORG_ID)));
         await f.cleanup();

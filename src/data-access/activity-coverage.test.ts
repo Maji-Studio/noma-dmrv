@@ -2,7 +2,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import ts from "typescript";
 import { describe, expect, it } from "vitest";
 
-type Coverage = { status: "covered" } | { status: "exempt"; reason: string };
+type Coverage = { status: "covered" } | { status: "runner"; operations: string[] } | { status: "exempt"; reason: string };
 
 // Explicit inventory includes wrappers, cascades and derived writers. Discovery
 // below scans the whole data-access tree so new modules cannot bypass it.
@@ -39,7 +39,7 @@ const ACTIVITY_COVERAGE = {
     updateRemovalSourceBindingVerification: { status: "exempt", reason: "Registry source verification is outside #1041." },
   },
   "certifier-removal-deletion.ts": {
-    finalizeRemovalDeletion: { status: "exempt", reason: "Releases claims and slice ownership during registry lifecycle cleanup, outside #1041." },
+    finalizeRemovalDeletion: { status: "covered" },
   },
   "applications.ts": {
     createApplication: { status: "covered" },
@@ -57,9 +57,44 @@ const ACTIVITY_COVERAGE = {
   "documents.ts": {
     insertDocument: { status: "covered" },
     deleteDocumentRow: { status: "covered" },
-    deleteDocumentWithCertificationSafety: { status: "covered" },
     retireDocumentsForEntities: { status: "covered" },
-    updateDocument: { status: "exempt", reason: "Document metadata/upload updates are outside the create/delete scope of #1041." },
+  },
+  "document-writes.ts": {
+    requestDocumentUploadInTransaction: { status: "runner", operations: ["request_document_upload", "request_document_upload_app"] },
+    confirmDocumentUploadInTransaction: { status: "runner", operations: ["confirm_document_upload", "confirm_document_upload_app"] },
+  },
+  "document-mutations.ts": {
+    deleteDocumentInTransaction: { status: "runner", operations: ["delete_document_app"] },
+    setDocumentVisibilityInTransaction: { status: "runner", operations: ["set_document_visibility_app"] },
+    updateApplicationEvidenceMetadataInTransaction: { status: "runner", operations: ["reclassify_application_evidence_app"] },
+  },
+  "document-upload-preparation.ts": {
+    recordDocumentPromotionCandidate: { status: "exempt", reason: "Internal storage cleanup metadata; confirm operations describe the document transition." },
+  },
+  "document-upload-renewal.ts": {
+    renewDocumentUploadInTransaction: { status: "exempt", reason: "Lease bookkeeping only; renewal does not change document content, status or version." },
+  },
+  "document-upload-sweep.ts": {
+    expireDocumentUploadsInTransaction: { status: "exempt", reason: "Abandoned pending-upload bookkeeping, outside operator document edits." },
+    retireFailedDocumentUploadsInTransaction: { status: "covered" },
+    sweepDocumentUploads: { status: "covered" },
+  },
+  "document-storage-deletions.ts": {
+    enqueueDocumentKeys: { status: "exempt", reason: "Storage cleanup queue only; the initiating document writer records activity." },
+    enqueuePromotionCandidates: { status: "exempt", reason: "Storage cleanup queue only; no document entity is changed." },
+  },
+  "feedstocks.ts": {
+    createFeedstockInTransaction: { status: "runner", operations: ["log_feedstock_delivery"] },
+    updateFeedstockInTransaction: { status: "runner", operations: ["update_feedstock"] },
+    deleteFeedstockInTransaction: { status: "runner", operations: ["delete_feedstock"] },
+  },
+  "orders.ts": {
+    createOrderInTransaction: { status: "runner", operations: ["record_order"] },
+    updateOrderInTransaction: { status: "runner", operations: ["update_order"] },
+    deleteOrderInTransaction: { status: "runner", operations: ["delete_order"] },
+  },
+  "certification-status-activity.ts": {
+    withCertificationStatusActivity: { status: "covered" },
   },
   "production-incidents.ts": {
     createProductionIncident: { status: "exempt", reason: "Incidents are outside #1041; their document retirements are covered." },
@@ -72,22 +107,22 @@ const ACTIVITY_COVERAGE = {
     deleteProductionSample: { status: "exempt", reason: "Readings are outside #1041; their document retirements are covered." },
   },
   "samples/delete.ts": {
-    deleteSampleInTransaction: { status: "exempt", reason: "The runner owns Sample activity (#1040); document retirements are covered here." },
+    deleteSampleInTransaction: { status: "runner", operations: ["delete_lab_sample"] },
   },
   "production-runs/delete.ts": {
     deleteProductionRun: { status: "exempt", reason: "Production-run activity belongs to #1040; document retirements are covered here." },
-    deleteProductionRunInTransaction: { status: "exempt", reason: "The runner owns production-run activity (#1040)." },
+    deleteProductionRunInTransaction: { status: "runner", operations: ["delete_production_run"] },
   },
   "certification.ts": {
     upsertCertifierProject: { status: "exempt", reason: "Registry project configuration is outside #1041." },
-    markSubmissionSubmitted: { status: "exempt", reason: "Registry submission/claim lifecycle is outside #1041's batch CRUD/membership scope." },
-    retireStaleSubmissionDraft: { status: "exempt", reason: "Registry submission lifecycle is outside #1041." },
-    markSubmissionRejected: { status: "exempt", reason: "Registry submission lifecycle is outside #1041." },
-    setSubmissionTerminalStatus: { status: "exempt", reason: "Registry submission lifecycle is outside #1041." },
+    markSubmissionSubmitted: { status: "covered" },
+    retireStaleSubmissionDraft: { status: "covered" },
+    markSubmissionRejected: { status: "covered" },
+    setSubmissionTerminalStatus: { status: "covered" },
     attachReportDocument: { status: "covered" },
     updateFacilityEmissionConfig: { status: "exempt", reason: "Energy configuration is outside #1041." },
     deleteCertifierProject: { status: "exempt", reason: "Reference data mappings are outside #1041." },
-    updateSubmissionMetadata: { status: "exempt", reason: "Registry lifecycle writes are separate from document activity." },
+    updateSubmissionMetadata: { status: "covered" },
   },
   "ghg-statement-reports.ts": {
     insertPreparedGhgStatementReport: { status: "covered" },
@@ -149,6 +184,23 @@ function inspectModule(source: string) {
   };
 }
 
+function describedOperationIds(modules: Record<string, string>): Set<string> {
+  const ids = new Set<string>();
+  for (const source of Object.values(modules)) {
+    const file = ts.createSourceFile("operations.ts", source, ts.ScriptTarget.Latest, true);
+    function visit(node: ts.Node) {
+      if (ts.isObjectLiteralExpression(node)) {
+        const id = node.properties.find(property => ts.isPropertyAssignment(property) && property.name.getText(file) === "id");
+        const described = node.properties.some(property => property.name?.getText(file) === "describe");
+        if (described && id && ts.isPropertyAssignment(id) && ts.isStringLiteral(id.initializer)) ids.add(id.initializer.text);
+      }
+      ts.forEachChild(node, visit);
+    }
+    visit(file);
+  }
+  return ids;
+}
+
 function coverageGaps(modules: Record<string, string>, inventory: Inventory): string[] {
   return Object.entries(modules).flatMap(([module, source]) => {
     const inspected = inspectModule(source);
@@ -171,12 +223,17 @@ function readModules(directory: URL, prefix = ""): Record<string, string> {
 describe("activity coverage inventory", () => {
   it("accounts for every module writing covered tables and every exported writer", () => {
     const modules = readModules(new URL("./", import.meta.url));
+    const operations = describedOperationIds(readModules(new URL("../lib/operations/", import.meta.url)));
     expect(coverageGaps(modules, ACTIVITY_COVERAGE)).toEqual([]);
     for (const [module, inventory] of Object.entries(ACTIVITY_COVERAGE)) {
       const { names } = inspectModule(modules[module]);
       for (const [name, coverage] of Object.entries(inventory)) {
         expect(names, `Stale inventory entry: ${module}:${name}`).toContain(name);
         if (coverage.status === "exempt") expect(coverage.reason.trim()).not.toBe("");
+        if (coverage.status === "runner") {
+          expect(coverage.operations.length).toBeGreaterThan(0);
+          for (const id of coverage.operations) expect(operations, `Missing described operation: ${module}:${name}:${id}`).toContain(id);
+        }
       }
     }
   });

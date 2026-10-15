@@ -1,6 +1,7 @@
+import { feedstockFixtureValues, cleanupFeedstockFixtureParents } from "./helpers/feedstock-fixture";
 import { createProductionRunOutputBin } from "./helpers/production-run-output-bin";
 import { labLogisticsVersion } from "./helpers/lab-logistics-version";
-import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
+import { TEST_SITE_POSITION, ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
 /**
  * DB-backed concurrency tests for DB-enforced sample_code uniqueness
  * (issue #395). The `samples_sample_code_unique` index is the sole
@@ -79,7 +80,7 @@ beforeAll(async () => {
 
   const [facility] = await db
     .insert(facilities)
-    .values({ timezone: "UTC",
+    .values({ ...TEST_SITE_POSITION, timezone: "UTC",
       organizationId: TEST_ORG_ID,
       name: `Sample-Code Facility ${suffix}`,
       code: `FAC-SC-${suffix}`,
@@ -103,6 +104,7 @@ beforeAll(async () => {
   const [feedstockType] = await db
     .insert(feedstockTypes)
     .values({
+      usage: "pyrolysis",
       organizationId: TEST_ORG_ID,
       name: `Sample-Code Woodchips ${suffix}`,
       code: `FT-SC-${suffix}`,
@@ -113,13 +115,13 @@ beforeAll(async () => {
 
   const [feedstock] = await db
     .insert(feedstocks)
-    .values({
+    .values(await feedstockFixtureValues(db, {
       organizationId: TEST_ORG_ID,
       code: `FS-SC-${suffix}`,
       facilityId: facility.id,
       feedstockTypeId: feedstockType.id,
       massDryKg: 9000,
-    })
+    }))
     .returning({ id: feedstocks.id });
   createdIds.feedstocks.push(feedstock.id);
 
@@ -194,6 +196,7 @@ afterAll(async () => {
       await tx
         .delete(feedstocks)
         .where(inArray(feedstocks.id, createdIds.feedstocks));
+      await cleanupFeedstockFixtureParents(tx);
     }
     if (createdIds.facilities.length > 0) {
       await tx.delete(storageLocations).where(inArray(storageLocations.facilityId, createdIds.facilities));
@@ -213,6 +216,7 @@ afterAll(async () => {
         .where(inArray(feedstockTypes.id, createdIds.feedstockTypes));
     }
   });
+  await cleanupFeedstockFixtureParents(db);
 });
 
 

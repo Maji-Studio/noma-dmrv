@@ -16,7 +16,6 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@/fn/customers", () => ({
-  createCustomerFn: vi.fn(),
   createCustomerLocationFn: vi.fn(),
   deleteCustomerFn: vi.fn(),
   deleteCustomerLocationFn: vi.fn(),

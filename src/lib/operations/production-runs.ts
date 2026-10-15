@@ -28,10 +28,10 @@ export const startProductionRun: Operation<typeof createProductionRunInput, Prod
     outcome: "created", entityType: "productionRun", entityIds: [output.id],
     versionBefore: null, versionAfter: output.version, changedFields: changedFields(input),
   }),
-  execute: async ({ ctx, tx, snapshotStock }, validated) => {
+  execute: async ({ ctx, tx, snapshotStock, activity }, validated) => {
     const timeZone = hasLocalRunInstant(validated.startTime, validated.endTime)
       ? await readRunFacilityTimeZone(ctx, tx, validated) : undefined;
-    return withProductionRunErrors(() => withAutoCodes(
+    const run = await withProductionRunErrors(() => withAutoCodes(
       ctx, tx, "PR", productionRuns, productionRuns.code, AUTO_CODE_COUNT,
       ([code], savepoint) => createProductionRunInTransaction(ctx, savepoint, {
         code,
@@ -57,6 +57,8 @@ export const startProductionRun: Operation<typeof createProductionRunInput, Prod
       }, { snapshotStock }),
       CODE_CONFLICT_MESSAGES.productionRun,
     ));
+    activity.link({ facilityId: run.facilityId });
+    return run;
   },
 };
 
@@ -68,10 +70,10 @@ export const updateProductionRun: Operation<typeof updateProductionRunInput, Pro
     outcome: "updated", entityType: "productionRun", entityIds: [output.id],
     versionBefore: input.expectedVersion, versionAfter: output.version, changedFields: changedFields(input),
   }),
-  execute: async ({ ctx, tx, snapshotStock }, validated) => {
+  execute: async ({ ctx, tx, snapshotStock, activity }, validated) => {
     const timeZone = hasLocalRunInstant(validated.startTime, validated.endTime)
       ? await readRunFacilityTimeZone(ctx, tx, validated) : undefined;
-    return withProductionRunErrors(() => updateProductionRunInTransaction(ctx, tx, validated.productionRunId, {
+    const run = await withProductionRunErrors(() => updateProductionRunInTransaction(ctx, tx, validated.productionRunId, {
       code: validated.code,
       facilityId: validated.facilityId,
       reactorId: validated.reactorId,
@@ -93,6 +95,8 @@ export const updateProductionRun: Operation<typeof updateProductionRunInput, Pro
       biocharMoisturePercent: validated.biocharMoisturePercent,
       biocharStorageLocationId: validated.biocharStorageLocationId,
     }, { snapshotStock }));
+    activity.link({ facilityId: run.facilityId });
+    return run;
   },
 };
 
@@ -104,8 +108,9 @@ export const deleteProductionRun: Operation<typeof deleteProductionRunSchema, vo
     outcome: "deleted", entityType: "productionRun", entityIds: [input.productionRunId],
     versionBefore: input.expectedVersion, versionAfter: null, changedFields: [],
   }),
-  execute: async ({ ctx, tx, afterCommit, snapshotStock }, { productionRunId, expectedVersion }) => {
-    await withProductionRunErrors(() => deleteProductionRunInTransaction(ctx, tx, productionRunId, expectedVersion, snapshotStock));
+  execute: async ({ ctx, tx, source, afterCommit, snapshotStock, activity }, { productionRunId, expectedVersion }) => {
+    const run = await withProductionRunErrors(() => deleteProductionRunInTransaction(ctx, tx, productionRunId, expectedVersion, snapshotStock, source));
+    activity.link({ facilityId: run.facilityId });
     afterCommit(async () => { await processPendingStorageObjectDeletions(ctx); });
   },
 };

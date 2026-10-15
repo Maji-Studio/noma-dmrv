@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import * as schema from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
+import { TEST_SITE_POSITION } from "./test-org";
 import { outputOrderFixtureValues, outputProductFixtureValues, insertOutputDeliveryFixture } from "./output-contract-fixtures";
 
 export const ACTIVITY_FIXTURE_DATE = new Date("2026-01-10T10:00:00Z");
@@ -15,9 +16,10 @@ export async function createActivityWriteFixture(ctx: OrgContext) {
   await db.insert(schema.organizations).values({
     id: organizationId, name: "Activity writes fixture", slug: organizationId,
   });
+  await db.insert(schema.users).values({ id: ctx.userId, email: `${ctx.userId}@example.test` });
   return db.transaction(async tx => {
     const [facility] = await tx.insert(schema.facilities).values({
-      organizationId, code: "ACT-FAC", name: "Activity writes fixture", timezone: "UTC",
+      ...TEST_SITE_POSITION, organizationId, code: "ACT-FAC", name: "Activity writes fixture", timezone: "UTC",
     }).returning();
     const [feedstockType] = await tx.insert(schema.feedstockTypes).values({
       organizationId, code: "ACT-TYPE", name: "Activity feedstock", category: "forestry", usage: "pyrolysis",
@@ -32,8 +34,12 @@ export async function createActivityWriteFixture(ctx: OrgContext) {
       organizationId, facilityId: facility.id, feedstockTypeId: feedstockType.id,
       code: "ACT-IN", name: "Activity input", type: "feedstock_bin",
     }).returning();
+    const [supplier] = await tx.insert(schema.suppliers).values({
+      organizationId, code: "ACT-SU", name: "Activity supplier",
+    }).returning();
     const [feedstock] = await tx.insert(schema.feedstocks).values({
       organizationId, facilityId: facility.id, feedstockTypeId: feedstockType.id,
+      supplierId: supplier.id, deliveryDate: ACTIVITY_FIXTURE_DATE, moistureContentPercent: FIXTURE_MOISTURE_PERCENT,
       storageLocationId: inputBin.id, code: "ACT-FS", massWetKg: FIXTURE_WET_KG, massDryKg: FIXTURE_DRY_KG,
     }).returning();
     const [run] = await tx.insert(schema.productionRuns).values({
@@ -78,20 +84,22 @@ export async function createActivityWriteFixture(ctx: OrgContext) {
   });
 }
 
-export async function cleanupActivityWriteFixture(organizationId: string) {
-  // Activity must be removed before facilities; all tables are private to this fixture.
+export async function cleanupActivityWriteFixture(ctx: OrgContext) {
+  const { organizationId } = ctx;
+  // All tables are private to this fixture.
   const tables = [
-    schema.activityEvents, schema.documents, schema.storageObjectDeletions, schema.transportLegs,
+    schema.activityEvents, schema.apiAuditEvents, schema.documents, schema.storageObjectDeletions, schema.transportLegs,
     schema.creditBatchApplications, schema.soilTemperatureMeasurements, schema.applicationOutputAllocations, schema.applications,
     schema.outputStockRunAllocations, schema.outputStockAllocations, schema.outputStockMoistureReadings,
     schema.deliveries, schema.orders, schema.productIngredientSnapshots, schema.biocharProductSourceAllocations,
     schema.biocharProducts, schema.binMovements, schema.samples, schema.creditBatchProductionRuns,
     schema.creditBatches, schema.productionProcesses, schema.productionRunFeedstockDraws, schema.productionRunFeedstocks,
     schema.productionRuns, schema.feedstocks, schema.storageLocations, schema.reactors, schema.formulations,
-    schema.customerLocations, schema.customers, schema.feedstockTypes, schema.facilities,
+    schema.customerLocations, schema.customers, schema.suppliers, schema.feedstockTypes, schema.facilities,
   ];
   await db.transaction(async tx => {
     for (const table of tables) await tx.delete(table).where(eq(table.organizationId, organizationId));
     await tx.delete(schema.organizations).where(eq(schema.organizations.id, organizationId));
+    await tx.delete(schema.users).where(eq(schema.users.id, ctx.userId));
   });
 }

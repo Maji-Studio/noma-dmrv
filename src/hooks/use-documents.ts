@@ -2,6 +2,8 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  canChangeDocumentVisibility,
+  updateApplicationEvidenceMetadata,
   confirmUpload,
   deleteDocument,
   getDocumentsForEntity,
@@ -10,13 +12,22 @@ import {
   type RequestUploadResult,
 } from "@/fn/documents";
 import type { DocumentVisibility } from "@/schemas/documents";
-import { unwrap } from "./types";
+import { throwActionError, StaleVersionError } from "@/lib/stale-version";
+import type { ActionResult } from "@/types/actions";
+import type { z } from "zod";
+import type { updateApplicationEvidenceMetadataSchema } from "@/schemas/documents";
+
 import { feedstockKeys } from "./use-feedstocks";
 import { deliveryKeys } from "./use-deliveries";
 import { dashboardOverviewKeys } from "./use-dashboard-overview";
 import { invalidateCertificationReadiness } from "./use-certification";
 import { transportLegKeys } from "./use-transport-legs";
 import { productionRunKeys } from "./use-production-runs";
+
+function unwrap<T>(result: ActionResult<T>): T {
+  if (!result.success) throwActionError(result);
+  return result.data;
+}
 
 function invalidateTransportEvidenceOwner(
   queryClient: ReturnType<typeof useQueryClient>,
@@ -123,7 +134,11 @@ export function useSetDocumentVisibility(invalidateKey?: readonly unknown[]) {
     mutationFn: async (input: {
       documentId: string;
       visibility: DocumentVisibility;
+      expectedVersion: number;
     }) => unwrap(await setDocumentVisibility(input)),
+    onError: (error) => {
+      if (error instanceof StaleVersionError && invalidateKey) qc.invalidateQueries({ queryKey: invalidateKey });
+    },
     onSuccess: () => {
       if (invalidateKey) qc.invalidateQueries({ queryKey: invalidateKey });
     },
@@ -136,10 +151,34 @@ export function useDeleteDocument(
 ) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (documentId: string) => unwrap(await deleteDocument({ documentId })),
+    mutationFn: async (input: { documentId: string; expectedVersion: number }) => unwrap(await deleteDocument(input)),
+    onError: (error) => {
+      if (error instanceof StaleVersionError && invalidateKey) qc.invalidateQueries({ queryKey: invalidateKey });
+    },
     onSuccess: () => {
       if (invalidateKey) qc.invalidateQueries({ queryKey: invalidateKey });
       if (owner) invalidateDeletedDocumentOwner(qc, owner);
+    },
+  });
+}
+
+export function useCanChangeDocumentVisibility() {
+  return useQuery({
+    queryKey: [...documentKeys.all, "canChangeVisibility"],
+    queryFn: async () => unwrap(await canChangeDocumentVisibility()),
+  }).data === true;
+}
+
+export function useReclassifyApplicationEvidence() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: z.infer<typeof updateApplicationEvidenceMetadataSchema> & { expectedVersion: number }) => unwrap(await updateApplicationEvidenceMetadata(input)),
+    onSuccess: (row) => {
+      qc.invalidateQueries({ queryKey: documentKeys.forEntity(row.entityType, row.entityId) });
+      invalidateDocumentOwner(qc, row);
+    },
+    onError: (error) => {
+      if (error instanceof StaleVersionError) qc.invalidateQueries({ queryKey: documentKeys.all });
     },
   });
 }

@@ -1,3 +1,4 @@
+import { feedstockFixtureValues, cleanupFeedstockFixtureParents } from "./feedstock-fixture";
 /**
  * A full certification lineage for one feedstock: production run, credit
  * batch, Removal, and (unless `blockingVia` is "none") a blocking submission.
@@ -42,7 +43,7 @@ import {
   outputOrderFixtureValues,
   outputProductFixtureValues,
 } from "./output-contract-fixtures";
-import { TEST_ORG_ID } from "./test-org";
+import { TEST_SITE_POSITION, TEST_ORG_ID } from "./test-org";
 
 const CONCURRENCY_BARRIER_TIMEOUT_MS = 5_000;
 
@@ -74,7 +75,7 @@ export async function createLineageFixture(
   return db.transaction(async (tx) => {
     const [facility] = await tx
       .insert(facilities)
-      .values({ timezone: "UTC", organizationId: TEST_ORG_ID, code: `FAC-CLG-${tag}`, name: `CLG Facility ${tag}` })
+      .values({ ...TEST_SITE_POSITION, timezone: "UTC", organizationId: TEST_ORG_ID, code: `FAC-CLG-${tag}`, name: `CLG Facility ${tag}` })
       .returning({ id: facilities.id });
 
     const [reactor] = await tx
@@ -84,7 +85,7 @@ export async function createLineageFixture(
         code: `RX-CLG-${tag}`,
         identifier: `CLG Reactor ${tag}`,
         facilityId: facility.id,
-        reactorType: "retort",
+        reactorType: "batch",
       })
       .returning({ id: reactors.id });
 
@@ -106,7 +107,7 @@ export async function createLineageFixture(
 
     const [feedstock] = await tx
       .insert(feedstocks)
-      .values({
+      .values(await feedstockFixtureValues(tx, {
         organizationId: TEST_ORG_ID,
         code: `FS-CLG-${tag}`,
         storageLocationId: feedstockBin.id,
@@ -116,7 +117,7 @@ export async function createLineageFixture(
         massDryKg: 900,
         massWetKg: 1_000,
         moistureContentPercent: 10,
-      })
+      }))
       .returning({ id: feedstocks.id });
 
     const [productionProcess] = await tx
@@ -355,6 +356,7 @@ export async function cleanupLineageFixture(fixture: LineageFixture): Promise<vo
     await tx
       .delete(feedstocks)
       .where(eq(feedstocks.id, fixture.feedstockId));
+    await cleanupFeedstockFixtureParents(tx);
     await tx
       .delete(productionProcesses)
       .where(eq(productionProcesses.id, fixture.productionProcessId));
@@ -381,6 +383,7 @@ export async function cleanupLineageFixture(fixture: LineageFixture): Promise<vo
     await tx.delete(customers).where(eq(customers.id, fixture.customerId));
     await deleteOutputFacilityFixtures(tx, eq(facilities.id, fixture.facilityId));
   });
+  await cleanupFeedstockFixtureParents(db);
 }
 
 export async function withLineageFixture<T>(

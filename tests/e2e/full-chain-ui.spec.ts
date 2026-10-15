@@ -1,3 +1,4 @@
+import { cleanupFeedstockFixtureParents } from "../helpers/feedstock-fixture";
 import { deleteOutputApplicationFixtures, deleteOutputDeliveryFixtures, deleteOutputProductFixtures } from "../helpers/output-contract-fixtures";
 /**
  * Full Chain UI Smoke Test
@@ -25,7 +26,7 @@ import {
 } from "./fixtures/page-helpers";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
-import { eq, ilike, inArray } from "drizzle-orm";
+import { eq, ilike, inArray, or } from "drizzle-orm";
 import * as schema from "../../src/db/schema";
 import { fillStockMoisture } from "./helpers/stock-moisture";
 import { chooseRunStatus } from "./helpers/run-status";
@@ -252,6 +253,13 @@ test.describe("Full Chain UI Smoke Test", () => {
             : [];
           const documentIds = documentRows.map((d) => d.id);
 
+          if (allEntityIds.length) await tx.delete(schema.activityEvents).where(or(
+            facilityIds.length ? inArray(schema.activityEvents.facilityId, facilityIds) : undefined,
+            creditBatchIds.length ? inArray(schema.activityEvents.creditBatchId, creditBatchIds) : undefined,
+            productionRunIds.length ? inArray(schema.activityEvents.productionRunId, productionRunIds) : undefined,
+            allEntityIds.length ? inArray(schema.activityEvents.entityId, [...allEntityIds, ...documentIds]) : undefined,
+          ));
+
           if (documentIds.length) {
             await tx
               .delete(schema.certifierDocumentUploads)
@@ -333,6 +341,7 @@ test.describe("Full Chain UI Smoke Test", () => {
             await tx
               .delete(schema.feedstocks)
               .where(inArray(schema.feedstocks.id, feedstockIds));
+            await cleanupFeedstockFixtureParents(tx);
           }
 
           if (feedstockDeliveryIds.length) {
@@ -374,6 +383,7 @@ test.describe("Full Chain UI Smoke Test", () => {
               .where(inArray(schema.facilities.id, facilityIds));
           }
         });
+        await cleanupFeedstockFixtureParents(db);
       } finally {
         await pool.end();
       }
@@ -396,6 +406,8 @@ test.describe("Full Chain UI Smoke Test", () => {
 
       await page.fill('input[name="name"]', `Chain Facility ${runId}`);
       await page.fill('input[name="country"]', "Tanzania");
+      await page.locator("#gps-latitude").fill("-8.3");
+      await page.locator("#gps-longitude").fill("35.3");
       await facilityDialog
         .getByRole("combobox", { name: "Timezone" })
         .fill("Dar es Salaam");

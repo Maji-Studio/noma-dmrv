@@ -1,3 +1,4 @@
+import { TEST_SITE_POSITION } from "../../tests/helpers/test-org";
 import { randomUUID } from "node:crypto";
 import { writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
@@ -47,13 +48,18 @@ async function main(): Promise<void> {
   // Validate the target before importing anything that initializes DB/auth.
   assertThrowawayTestDatabase(process.env.DATABASE_URL ?? "");
   Object.assign(process.env, { NODE_ENV: process.env.NODE_ENV ?? "test" });
+  // Seed and server must use the same exported root; never fall back to a real bucket.
+  if (process.env.STORAGE_PROVIDER !== "local-fs" || !process.env.STORAGE_LOCAL_FS_ROOT) {
+    throw new Error("Export STORAGE_PROVIDER=local-fs and STORAGE_LOCAL_FS_ROOT=.storage-api-fuzz for both seed and server.");
+  }
   const outputPath = resolve(args[0]);
   const { db } = await import("@/db");
   const { organizations, users, members, facilities } = await import("@/db/schema");
   const { createFacility } = await import("@/data-access/facilities");
   const { createDriver, createVehicle } = await import("@/data-access/quick-add");
   const { feedstockEtag } = await import("@/lib/api/representation-etags");
-  const { runOperation } = await import("@/lib/operations/runner");
+  const { runOperation: runWithOptions } = await import("@/lib/operations/runner");
+  const runOperation: typeof runWithOptions = (operation, ctx, input, options) => runWithOptions(operation, ctx, input, { ...options, activitySource: "script" });
   const { logFeedstockDelivery } = await import("@/lib/operations/feedstocks");
   const { formatFacilityDate } = await import("@/lib/date-utils");
   const { createSupplierLocation } = await import("@/data-access/suppliers");
@@ -94,7 +100,7 @@ async function main(): Promise<void> {
   const ctx = { organizationId, userId, orgRole: "owner" as const, isPlatformAdmin: false };
   // A 200-year facility. Mean R0 and TGA are optional for Samples at either tier.
   const facility = await createFacility(ctx, {
-    code: "FUZZ-FAC", name: FIXTURE_LABEL, country: "FR", timezone: FACILITY_TIME_ZONE,
+    ...TEST_SITE_POSITION, code: "FUZZ-FAC", name: FIXTURE_LABEL, country: "FR", timezone: FACILITY_TIME_ZONE,
     durabilityOption: "200_year",
   });
   const supplier = await createSupplier(ctx, { code: "FUZZ-SUP", name: FIXTURE_LABEL });
@@ -115,7 +121,7 @@ async function main(): Promise<void> {
   });
   const driver = await createDriver(ctx, { code: "FUZZ-DRV", name: FIXTURE_LABEL });
   const vehicle = await createVehicle(ctx, { code: "FUZZ-VEH", name: FIXTURE_LABEL, vehicleType: "truck" });
-  const supplierLocation = await createSupplierLocation(ctx, { supplierId: supplier.id, name: FIXTURE_LABEL, country: "FR" });
+  const supplierLocation = await createSupplierLocation(ctx, { ...TEST_SITE_POSITION, supplierId: supplier.id, name: FIXTURE_LABEL, country: "FR" });
   const intake = await runOperation(logFeedstockDelivery, ctx, {
     facilityId: facility.id, supplierId: supplier.id, feedstockTypeId: feedstockType.id,
     deliveryDate: formatFacilityDate(new Date(), FACILITY_TIME_ZONE),
@@ -194,7 +200,7 @@ async function main(): Promise<void> {
   })).data;
   const customer = await createCustomer(ctx, { code: "FUZZ-CUS", name: FIXTURE_LABEL });
   const customerLocation = await createCustomerLocation(ctx, {
-    customerId: customer.id, name: FIXTURE_LABEL, country: "FR",
+    ...TEST_SITE_POSITION, customerId: customer.id, name: FIXTURE_LABEL, country: "FR",
     distanceFromFacilityKm: CUSTOMER_DISTANCE_KM, distanceSource: "manual", isDefault: true,
   });
   const orderInput = {
@@ -213,6 +219,8 @@ async function main(): Promise<void> {
   })).data.delivery;
   // Delivery posting bumps the product version; PATCH must use its current ETag.
   const currentProduct = await readApiBiocharProduct(ctx, { id: product.id });
+  const { seedDocuments } = await import("./seed-documents");
+  const documents = await seedDocuments(ctx, { delivery: delivery.id, feedstock: feedstock.id, lab_sample: labSample.id }, { activitySource: "script" });
   const credential = await createApiKey(ctx, {
     name: FIXTURE_LABEL, scopes: [...API_SCOPES], expiresIn: API_KEY_DEFAULT_EXPIRY_SECONDS,
   });
@@ -220,6 +228,7 @@ async function main(): Promise<void> {
   // the key is only written to the private JSON file, never to the terminal.
   if (process.env.GITHUB_ACTIONS === "true") console.log(`::add-mask::${credential.key}`);
   await writeFile(outputPath, JSON.stringify({
+    documents,
     key: credential.key, credentialId: credential.id, organizationId, userId,
     facilityId: facility.id, facilityCode: facility.code,
     supplierId: supplier.id, supplierCode: supplier.code,

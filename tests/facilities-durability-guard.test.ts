@@ -1,5 +1,5 @@
 import { masterDataVersion } from "./helpers/master-data-version";
-import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
+import { TEST_SITE_POSITION, ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
 /**
  * DB-backed tests for the durability-tier edit guard on `updateFacility`.
  *
@@ -64,7 +64,7 @@ async function setupFacility(
 ): Promise<FacilityChain> {
   const [facility] = await db
     .insert(facilities)
-    .values({ timezone: "UTC",
+    .values({ ...TEST_SITE_POSITION, timezone: "UTC",
       organizationId: TEST_ORG_ID,
       name: `Durability-Guard ${tag} ${runId}`,
       code: `FAC-DG-${tag}-${runId}`,
@@ -76,6 +76,7 @@ async function setupFacility(
   const [feedstockType] = await db
     .insert(feedstockTypes)
     .values({
+      usage: "pyrolysis",
       organizationId: TEST_ORG_ID,
       name: `Durability-Guard Woodchips ${tag} ${runId}`,
       code: `FT-DG-${tag}-${runId}`,

@@ -1,3 +1,4 @@
+import { feedstockFixtureValues, cleanupFeedstockFixtureParents } from "./helpers/feedstock-fixture";
 import { insertOutputApplicationFixture } from "./helpers/output-contract-fixtures";
 import { deleteOutputApplicationFixtures } from "./helpers/output-contract-fixtures";
 import { outputProductFixtureValues, outputOrderFixtureValues, insertOutputDeliveryFixture, deleteOutputDeliveryFixtures, deleteOutputProductFixtures, deleteOutputFacilityFixtures } from "./helpers/output-contract-fixtures";
@@ -41,7 +42,7 @@ import {
   getCreditBatchChainData,
   getCreditBatchChainGeoData,
 } from "@/data-access/chain-of-custody-batch";
-import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
+import { TEST_SITE_POSITION, ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
 import { NO_LINEAGE_FOR_SELECTED_RUN } from "@/lib/chain-of-custody/copy";
 
 beforeAll(() => ensureTestOrg());
@@ -51,13 +52,13 @@ describe("credit batch accounting", () => {
     const tag = crypto.randomUUID().slice(0, 8);
     const applicationIds: string[] = [];
     const removalIds: string[] = [];
-    const [facility] = await db.insert(facilities).values({ timezone: "UTC", organizationId: TEST_ORG_ID, code: `LF-F-${tag}`, name: `Lineage ${tag}` }).returning();
+    const [facility] = await db.insert(facilities).values({ ...TEST_SITE_POSITION, timezone: "UTC", organizationId: TEST_ORG_ID, code: `LF-F-${tag}`, name: `Lineage ${tag}` }).returning();
     const [sourceBin] = await db.insert(storageLocations).values({ organizationId: TEST_ORG_ID, facilityId: facility.id, code: `LF-SL-${tag}`, name: `Source ${tag}`, type: "biochar_bin" }).returning();
     const [reactor] = await db.insert(reactors).values({ organizationId: TEST_ORG_ID, facilityId: facility.id, code: `LF-R-${tag}`, identifier: `Lineage ${tag}`, reactorType: "fixed-bed" }).returning();
-    const [feedstockType] = await db.insert(feedstockTypes).values({ organizationId: TEST_ORG_ID, code: `LF-FT-${tag}`, name: `Lineage ${tag}`, category: "forestry" }).returning();
+    const [feedstockType] = await db.insert(feedstockTypes).values({ usage: "pyrolysis", organizationId: TEST_ORG_ID, code: `LF-FT-${tag}`, name: `Lineage ${tag}`, category: "forestry" }).returning();
     const [process] = await db.insert(productionProcesses).values({ organizationId: TEST_ORG_ID, facilityId: facility.id, feedstockTypeId: feedstockType.id }).returning();
     const runs = await db.insert(productionRuns).values([1, 2].map((n) => ({ organizationId: TEST_ORG_ID, facilityId: facility.id, reactorId: reactor.id, code: `LF-PR${n}-${tag}`, startTime: new Date(`2026-07-0${n}T10:00:00Z`), feedstockMassDryKg: 2_400 * n, biocharDryMassKg: 100 * n }))).returning();
-    const stocks = await db.insert(feedstocks).values(runs.map((run, n) => ({ organizationId: TEST_ORG_ID, facilityId: facility.id, feedstockTypeId: feedstockType.id, code: `LF-FS${n}-${tag}`, status: "complete" as const, massDryKg: 200, eligibilityStatus: "eligible" as const }))).returning();
+    const stocks = await db.insert(feedstocks).values(await feedstockFixtureValues(db, runs.map((run, n) => ({ organizationId: TEST_ORG_ID, facilityId: facility.id, feedstockTypeId: feedstockType.id, code: `LF-FS${n}-${tag}`, status: "complete" as const, massDryKg: 200 })))).returning();
     await db.insert(productionRunFeedstocks).values(runs.map((run, n) => ({ organizationId: TEST_ORG_ID, productionRunId: run.id, feedstockId: stocks[n].id, wetMassUsedKg: 100 })));
     const products = await db.insert(biocharProducts).values(await outputProductFixtureValues(db, runs.map((run, n) => ({ organizationId: TEST_ORG_ID, facilityId: facility.id, code: `LF-BP${n}-${tag}`, linkedProductionRunId: run.id, massKg: 100 })))).returning();
     const [multiRunProduct] = await db.insert(biocharProducts).values(await outputProductFixtureValues(db, { organizationId: TEST_ORG_ID, facilityId: facility.id, code: `LF-BPM-${tag}`, sourceBiocharStorageLocationId: sourceBin.id, linkedProductionRunId: null, massKg: 400 })).returning();
@@ -66,7 +67,7 @@ describe("credit batch accounting", () => {
       { organizationId: TEST_ORG_ID, biocharProductId: multiRunProduct.id, productionRunId: runs[1].id, sourceStorageLocationId: sourceBin.id, allocatedWetMassKg: 150, allocatedDryMassKg: 60 },
     ]).returning();
     const [customer] = await db.insert(customers).values({ organizationId: TEST_ORG_ID, code: `LF-C-${tag}`, name: `Lineage ${tag}` }).returning();
-    const [location] = await db.insert(customerLocations).values({ organizationId: TEST_ORG_ID, customerId: customer.id, name: `Lineage destination ${tag}`, distanceFromFacilityKm: 15 }).returning();
+    const [location] = await db.insert(customerLocations).values({ ...TEST_SITE_POSITION, organizationId: TEST_ORG_ID, customerId: customer.id, name: `Lineage destination ${tag}`, distanceFromFacilityKm: 15 }).returning();
     const ordersRows = await db.insert(orders).values(await outputOrderFixtureValues(db, products.map((product, n) => ({ organizationId: TEST_ORG_ID, facilityId: facility.id, customerId: customer.id, customerLocationId: location.id, biocharProductId: product.id, code: `LF-O${n}-${tag}`, orderDate: new Date("2026-07-03"), quantityKg: 100, packaging: "loose" as const })))).returning();
     const deliveryRows = await insertOutputDeliveryFixture(db, [
       { organizationId: TEST_ORG_ID, facilityId: facility.id, orderId: ordersRows[1].id, biocharProductId: products[0].id, code: `LF-D1-${tag}`, distanceKmOverride: 7, deliveryDate: new Date("2026-07-04"), deliveredWetMassKg: 1_000, massDryKg: 500 },
@@ -324,6 +325,7 @@ describe("credit batch accounting", () => {
       await deleteOutputProductFixtures(db, inArray(biocharProducts.id, [...products.map((row) => row.id), multiRunProduct.id]));
       await db.delete(productionRunFeedstocks).where(inArray(productionRunFeedstocks.productionRunId, runs.map((row) => row.id)));
       await db.delete(feedstocks).where(inArray(feedstocks.id, stocks.map((row) => row.id)));
+      await cleanupFeedstockFixtureParents(db);
       await db.delete(productionRuns).where(inArray(productionRuns.id, runs.map((row) => row.id)));
       await db.delete(productionProcesses).where(eq(productionProcesses.id, process.id));
       await db.delete(reactors).where(eq(reactors.id, reactor.id));

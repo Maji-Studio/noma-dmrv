@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   recordLossSchema,
+  recordLossFormSchema,
   recordStockTakeSchema,
   stockTakeFormSchema,
 } from "@/schemas/bin-movements";
@@ -64,6 +65,7 @@ describe("loss request key", () => {
     lane: "feedstock",
     reason: "Spoiled load",
     lossMassKg: 12,
+    occurredAt: "2026-10-15T10:00:00.000Z",
   };
 
   it("requires a request key so a resubmitted form replays", () => {
@@ -86,4 +88,14 @@ describe("loss request key", () => {
 
     expect(result.success).toBe(true);
   });
+});
+
+it("requires an explicit loss event instant in both schemas", () => {
+  const loss = { storageLocationId: STORAGE_LOCATION_ID, lane: "feedstock", reason: "Spillage", lossMassKg: 12, idempotencyKey: "loss-time" };
+  for (const schema of [recordLossFormSchema, recordLossSchema]) {
+    for (const occurredAt of [undefined, "", "2026-10-15T10:00"]) {
+      expect(schema.safeParse({ ...loss, occurredAt }).success).toBe(false);
+    }
+    expect(schema.safeParse({ ...loss, occurredAt: "2026-10-15T10:00:00.000Z" }).success).toBe(true);
+  }
 });

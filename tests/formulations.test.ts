@@ -23,7 +23,7 @@ import {
   fromCompositionJsonb,
   reconcileComposition,
 } from "@/lib/biochar-composition";
-import {
+import { TEST_SITE_POSITION,
   ensureTestOrg,
   makeTestOrgContext,
   TEST_ORG_ID,
@@ -58,7 +58,7 @@ describe("updateFormulation ingredient identity", () => {
     const tag = crypto.randomUUID().slice(0, 8).toUpperCase();
     const [facility] = await db
       .insert(facilities)
-      .values({ timezone: "UTC",
+      .values({ ...TEST_SITE_POSITION, timezone: "UTC",
         organizationId: TEST_ORG_ID,
         code: `FAC-FORM-${tag}`,
         name: `Formulation Facility ${tag}`,
@@ -73,14 +73,14 @@ describe("updateFormulation ingredient identity", () => {
           organizationId: TEST_ORG_ID,
           code: `FT-FORM-A-${tag}`,
           name: `Blend A ${tag}`,
-          category: "ingredient",
+          category: "compost",
           usage: "blend",
         },
         {
           organizationId: TEST_ORG_ID,
           code: `FT-FORM-B-${tag}`,
           name: `Blend B ${tag}`,
-          category: "ingredient",
+          category: "compost",
           usage: "blend",
         },
       ])
@@ -178,7 +178,7 @@ describe("formulation unique blend material constraint", () => {
         organizationId: TEST_ORG_ID,
         code: `FT-DUP-${tag}`,
         name: `Blend Dup ${tag}`,
-        category: "ingredient",
+        category: "compost",
         usage: "blend",
       })
       .returning({ id: feedstockTypes.id });

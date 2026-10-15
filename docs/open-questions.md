@@ -13,6 +13,14 @@ Deferred work lives here, never as a `TODO` in code.
 
 **`needs-registry-check`** marks a question that must be answered by the Isometric MCP server (`how_to`, then the protocol/OpenAPI tools) or a sandbox probe, **never** from `docs/isometric/*`, which are non-authoritative local summaries. Do not close one of these from a local doc.
 
+## Feedstock delivery table retirement
+
+Drop `feedstock_deliveries` and `feedstocks.feedstock_delivery_id` after API
+phase 6a rewrites the `feedstock_delivery` document owner
+([#1013](https://github.com/Maji-Studio/noma-dmrv/issues/1013)).
+The retained schema is `src/db/schema/feedstock.ts:feedstockDeliveries` and
+`src/db/schema/feedstock.ts:feedstocks`.
+
 ## Invariants an LLM must not violate
 
 Short, load-bearing rules that this file's entries assume. Each is enforced in
@@ -182,7 +190,7 @@ companion inherits this file's schema, invariants, and resolution rules.
   record the outcome in [`docs/isometric/changes.md`](./isometric/changes.md)
   (M).
 
-### Sample transport is mapped locally but no longer seen in the live template (`isometric/sample-transport-template-drift`, opened 2026-08-21, `needs-registry-check`)
+### One sample transport source cannot fill the template's two sample shipping lines (`isometric/sample-transport-template-drift`, opened 2026-08-21)
 
 - **Observed:** the live sandbox check in
   `tests/isometric-sandbox-health.integration.test.ts` ("resolves every transport
@@ -204,12 +212,19 @@ companion inherits this file's schema, invariants, and resolution rules.
   different template — `pickTransportTemplate` falls back to the first template
   carrying any transport component, and `isometric-health.yml` sets no
   `ISOMETRIC_DEMO_TEMPLATE_ID`.
-- **Resolve via:** inspect the live template (`pnpm tsx scripts/isometric-smoke.ts
-  inspect-template <prj>` or the Isometric MCP server). If sample transport is
-  gone, drop the mapping row and the authoring-doc row and record it in
-  [`docs/isometric/changes.md`](./isometric/changes.md); if it is present, pin
-  `ISOMETRIC_DEMO_TEMPLATE_ID` in the workflow and restore the third category to
-  the assertion (S).
+- **Registry check 2026-10-15:** the sandbox "Dark Earth Carbon Template (29 Jul)"
+  (`rvt_1KS4S43VPSBXA26X`, REST GET) had no component in
+  `sampling-required-for-mrv`. Later that day the template was edited in place
+  as "Dark Earth Carbon Template (15 Oct)" and now has two sample shipping lines
+  (EU, India), as the production template "LCA based template Cula" does. Sample
+  transport is present, but one source cannot fill two lines.
+- **Resolve via:** the [template-driven emissions plan](./plans/2026-10-15-template-driven-emissions.md)
+  §4.5 fills both lines from emissions entries and removes
+  `sampleTransportMassDistanceTonneKm` from
+  `src/lib/isometric/semantic-binding-catalog.ts`, drops the authoring-doc row,
+  records it in [`docs/isometric/changes.md`](./isometric/changes.md) and
+  updates the sandbox-health assertion. The entry leaves when that change is
+  switched on in the sandbox (M).
 
 ### Unsampled batches with incidental Samples may still submit an H/C_org mean (`isometric/unsampled-incidental-chemistry`, opened 2026-10-13)
 
@@ -503,6 +518,7 @@ blocks an otherwise-complete batch until its product is applied. The sub-commit
 says deliberate; needs a product confirmation that this is the intended
 operational tradeoff, and this is not a registry requirement we verified.
 
+
 ## Design review 2026-08-13 follow-ups (opened 2026-08-14)
 
 
@@ -514,6 +530,8 @@ operational tradeoff, and this is not a registry requirement we verified.
   expiry and revocation but sends no notices. Pointers: `src/db/schema/api-keys.ts:apiKeys.expiresAt` and `src/data-access/api-credential-auth.ts:disableOwnerApiKeys`.
 - Staging cron gap: Vercel Cron does not run on Preview deployments. Staging
   relies on the claim path deleting expired idempotency records lazily, and
-  idle rate-limit buckets are not purged on schedule. If record growth ever
-  matters, add a scheduled GitHub Actions call to the secret-authenticated
-  purge route. Pointer: `src/app/api/cron/purge-api-records/route.ts:GET`.
+  idle rate-limit buckets are not purged on schedule. Abandoned uploads and
+  failed-document retention also lack the daily sweep. Both crons run only on
+  Production; the site deployment answers 404 to both. If growth matters, add
+  scheduled GitHub Actions calls to the secret-authenticated
+  `/api/cron/purge-api-records` and `/api/cron/sweep-document-uploads` routes.

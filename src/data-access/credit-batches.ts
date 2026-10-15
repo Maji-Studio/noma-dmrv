@@ -1,3 +1,4 @@
+import { toActivityEntityType } from "@/lib/activity-entity-type";
 import { recordActivity } from "./activity-events";
 import { recordMembershipActivity } from "./write-activity";
 import { assertRowVersion, nextVersion } from "./row-version";
@@ -446,7 +447,7 @@ export async function createCreditBatch(
     });
 
     await recordActivity(ctx, tx, {
-      entityType: "credit_batch", entityId: batch.id, creditBatchId: batch.id,
+      entityType: toActivityEntityType("credit_batch"), entityId: batch.id, creditBatchId: batch.id,
       action: "created", source: "form",
     });
     await recordMembershipActivity(ctx, tx, batch.id, [], runIds, { recordBatchEvent: false });
@@ -763,7 +764,7 @@ export async function updateCreditBatch(
       ctx, tx, id, currentProductionRunIds, resolvedProductionRunIds ?? [], { changedFields },
     );
     if (!membershipChanged) await recordActivity(ctx, tx, {
-      entityType: "credit_batch", entityId: id, creditBatchId: id,
+      entityType: toActivityEntityType("credit_batch"), entityId: id, creditBatchId: id,
       action: "updated", source: "form", changedFields,
     });
 
@@ -816,7 +817,7 @@ export async function deleteCreditBatch(ctx: OrgContext, id: string, expectedVer
 
     await recordMembershipActivity(ctx, tx, id, await readMemberProductionRunIds(ctx, tx, id), [], { recordBatchEvent: false });
     await recordActivity(ctx, tx, {
-      entityType: "credit_batch", entityId: id, creditBatchId: id,
+      entityType: toActivityEntityType("credit_batch"), entityId: id, creditBatchId: id,
       action: "deleted", source: "form",
     });
 

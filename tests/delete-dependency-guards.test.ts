@@ -1,9 +1,10 @@
+import { feedstockFixtureValues, cleanupFeedstockFixtureParents } from "./helpers/feedstock-fixture";
 import { labLogisticsVersion } from "./helpers/lab-logistics-version";
 import { masterDataVersion } from "./helpers/master-data-version";
 import { insertOutputApplicationFixture } from "./helpers/output-contract-fixtures";
 import { deleteOutputApplicationFixtures } from "./helpers/output-contract-fixtures";
 import { deleteOutputFacilityFixtures, outputProductFixtureValues, outputOrderFixtureValues, deleteOutputOrderFixtures, deleteOutputProductFixtures, insertOutputDeliveryFixture, deleteOutputDeliveryFixtures } from "./helpers/output-contract-fixtures";
-import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
+import { TEST_SITE_POSITION, ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
 import { beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { deleteCustomer } from "@/data-access/customers";
@@ -29,7 +30,7 @@ describe("delete dependency guards", () => {
     const fixture = await db.transaction(async (tx) => {
       const [facility] = await tx
         .insert(facilities)
-        .values({ timezone: "UTC", organizationId: TEST_ORG_ID, code: `FAC-DDG-SL-${tag}`, name: `DDG Storage Facility ${tag}` })
+        .values({ ...TEST_SITE_POSITION, timezone: "UTC", organizationId: TEST_ORG_ID, code: `FAC-DDG-SL-${tag}`, name: `DDG Storage Facility ${tag}` })
         .returning({ id: facilities.id });
       const [feedstockType] = await tx
         .insert(feedstockTypes)
@@ -54,7 +55,7 @@ describe("delete dependency guards", () => {
         .returning({ id: storageLocations.id });
       const [feedstock] = await tx
         .insert(feedstocks)
-        .values({
+        .values(await feedstockFixtureValues(tx, {
           organizationId: TEST_ORG_ID,
           code: `FS-DDG-SL-${tag}`,
           facilityId: facility.id,
@@ -62,7 +63,7 @@ describe("delete dependency guards", () => {
           feedstockTypeId: feedstockType.id,
           massDryKg: 80,
           storageLocationId: storageLocation.id,
-        })
+        }))
         .returning({ id: feedstocks.id });
 
       return {
@@ -83,6 +84,7 @@ describe("delete dependency guards", () => {
     } finally {
       await db.transaction(async (tx) => {
         await tx.delete(feedstocks).where(eq(feedstocks.id, fixture.feedstockId));
+        await cleanupFeedstockFixtureParents(tx);
         await tx
           .delete(storageLocations)
           .where(eq(storageLocations.id, fixture.storageLocationId));
@@ -91,6 +93,7 @@ describe("delete dependency guards", () => {
           .where(eq(feedstockTypes.id, fixture.feedstockTypeId));
         await deleteOutputFacilityFixtures(tx, eq(facilities.id, fixture.facilityId));
       });
+      await cleanupFeedstockFixtureParents(db);
     }
   });
 
@@ -99,7 +102,7 @@ describe("delete dependency guards", () => {
     const fixture = await db.transaction(async (tx) => {
       const [facility] = await tx
         .insert(facilities)
-        .values({ timezone: "UTC", organizationId: TEST_ORG_ID, code: `FAC-DDG-CU-${tag}`, name: `DDG Customer Facility ${tag}` })
+        .values({ ...TEST_SITE_POSITION, timezone: "UTC", organizationId: TEST_ORG_ID, code: `FAC-DDG-CU-${tag}`, name: `DDG Customer Facility ${tag}` })
         .returning({ id: facilities.id });
       const [customer] = await tx
         .insert(customers)
@@ -150,7 +153,7 @@ describe("delete dependency guards", () => {
     const fixture = await db.transaction(async (tx) => {
       const [facility] = await tx
         .insert(facilities)
-        .values({ timezone: "UTC", organizationId: TEST_ORG_ID, code: `FAC-DDG-DL-${tag}`, name: `DDG Delivery Facility ${tag}` })
+        .values({ ...TEST_SITE_POSITION, timezone: "UTC", organizationId: TEST_ORG_ID, code: `FAC-DDG-DL-${tag}`, name: `DDG Delivery Facility ${tag}` })
         .returning({ id: facilities.id });
       const [customer] = await tx
         .insert(customers)
@@ -159,10 +162,10 @@ describe("delete dependency guards", () => {
       const [customerLocation] = await tx
         .insert(customerLocations)
         .values({
+          ...TEST_SITE_POSITION,
           organizationId: TEST_ORG_ID,
           customerId: customer.id,
           name: `DDG Delivery Location ${tag}`,
-          country: "Tanzania",
         })
         .returning({ id: customerLocations.id });
       const [product] = await tx

@@ -6,10 +6,10 @@
 
 | Area | Current implementation evidence | Status | Remaining gap |
 |---|---|---|---|
-| Feedstock EC1-EC15 assessment | Ambient feedstock attributes in `src/db/schema/feedstock.ts` | missing | No criterion catalog or per-period assessment store; `feedstock_sc_assessments` was removed |
-| Ineligible biomass mass accounting | Read-time lineage and roll-ups in `src/data-access/credit-batch-accounting.ts`; eligibility flags on feedstocks | partial | No Reporting-Period issuance gate for the >25% rule |
-| Counterfactual storage | Counterfactual category and quantity inputs in `src/db/schema/feedstock.ts` | partial | No dated assessment, expiry, sourcing-change invalidation, or EC14 wildfire lifecycle |
-| Market leakage | Method/result fields on feedstocks | partial | v1.2 EC combination evidence and replacement-emissions structure are missing |
+| Feedstock EC1-EC15 assessment | Evidence maintained outside noma (#942 q8) | external | No local criterion assessment store or eligibility gate |
+| Feedstock eligibility evidence | Maintained outside noma (#942 q8) | external | No intake eligibility flag or ineligible-mass exit; BFA Appendix 3 sourcing recommendations are not a general 25% cap |
+| Counterfactual storage | Evidence maintained outside noma (#942 q8) | external | No delivery-level category, quantity or baseline columns |
+| Market leakage | Evidence maintained outside noma (#942 q8) | external | No delivery-level method or result columns |
 | Production-process sampling | `production_processes` epoch/prerequisites, immutable `credit_batches.sampling`, Method-B checks in current credit-batch paths | partial | Sampled path exists; unsampled registry representation remains sandbox-only/unconfirmed |
 | Credit-batch accounting | `src/data-access/credit-batch-accounting.ts` | implemented | This is the canonical lineage, roll-up, and stored-CO2e preview module; do not reintroduce summary columns |
 | Reactor diagram and gas-loss controls | Reactor specifications; `sensor_data` and calibration-certificate documents (the original readings CSV is retained unchanged) | partial | noma does not inspect or normalize the CSV's pressure values; no explicit diagram version approval or annual calibration/leak-test event model |
@@ -24,7 +24,7 @@
 | Low-carbon procurement | `power_procurement_evidence` in `src/db/schema/compliance.ts` | schema-implemented | No conjunctive EC1-EC5 evaluator, annual intensity roll-up, or claim gate |
 | Electricity/fuel metering | Run-level electricity and three diesel input fields in `src/db/schema/production.ts`; original readings CSV retained as `sensor_data` documents | partial | No queryable hourly electricity meter stream or complete meter/fuel evidence metadata |
 | Registry energy mapping | `src/lib/isometric/semantic-binding-catalog.ts` and `src/lib/isometric/utils/aggregation.ts` | implemented | Electricity is one grid component; diesel uses separate `Generator diesel usage` and `Startup diesel usage` components. Display-name mapping remains an operational coupling |
-| Transportation | Leg method, one-way distance (counted as a round trip), mass, vehicle type/model year, and evidence references in `src/db/schema/logistics.ts` | partial | Vehicle type/model year stay in the evidence ledger; mixed values are advisory. The factor is a fixed template input. Fleet coverage by its value and Source, fallback justification, and per-record-type evidence gates remain open |
+| Transportation | Leg method, one-way distance (counted as a round trip), mass, vehicle type/model year, and evidence references in `src/db/schema/logistics.ts` | partial | Vehicle type/model year stay in the evidence ledger; mixed values are advisory. The factor is a fixed template input. Fleet coverage by the factor and its Source remains open, as do per-record-type evidence gates. Distance-method fallback justification lives in the PDD, outside noma |
 | BCU accounting | None | missing | No BCU schema, retirement, ownership, cap, additionality, or anti-double-count structures |
 | Embodied inventory | Generic documents only | missing | No item/material/equipment inventory or complete factor records |
 | GHG/SSR materiality assessment | None | missing | `ghg_materiality_assessments` does not exist; no issuance gate |

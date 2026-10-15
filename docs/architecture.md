@@ -293,7 +293,9 @@ runtime.
   `/api/ghg-statement-reports/[reportId]`,
   `/api/certification/submissions`, private `/api/reads/*`, bearer-authenticated `/api/v1/*`,
   authenticated `/api/mcp`, and secret-authenticated
-  `/api/cron/purge-api-records`. Documents are
+  `/api/cron/*` routes: `purge-api-records` and `sweep-document-uploads`.
+  Both crons run only on Vercel Production; the site deployment answers 404 to
+  both routes. Documents are
   normally resolved through `getOrgContext()`. The report route is the one
   deliberate public bearer-capability seam: middleware lets it through, then
   the route verifies a per-report token against the stored digest and redirects
@@ -403,6 +405,24 @@ local, and deployed builds remain on the stable default.
 permission checks; pooling defaults are centralized in `src/db/pool-config.ts`
 (`resolveAppPoolConfig`) and applied by `src/db/index.ts`. See
 [database.md](./database.md) and [schema-overview.md](./schema-overview.md).
+
+Document writes discover the owner's lineage target and ancestors unlocked,
+then lock sorted certification artifacts, ancestors `FOR SHARE`, the owner
+`FOR SHARE`, the mirror advisory lock (delete only), and the document
+`FOR UPDATE`. They revalidate parent identity, archive state and lineage after
+locking; a changed parent returns retryable `conflict`, and no new artifact is
+locked after a row. Sample ancestors are their credit batch or legacy run;
+applications use their delivery; internal children use their archive-bearing
+parent. Archive's `NO KEY UPDATE` conflicts with `FOR SHARE`. Parent retirement
+uses owner, mirror, document order; Source mirroring never locks an owner.
+Sample and delivery writers use artifacts before rows. Existing feedstock, order and production-run inversions remain subject to the runner's bounded
+retry. Application update/delete still lock rows before artifacts and do not use the
+runner. They can deadlock with document writes on applications or their deliveries;
+Postgres may abort the non-retried application transaction. Phase 6b commit 1 moves
+application writers onto the runner with artifacts first, as documented in [lock-order follow-up](./open-questions-architecture.md#run-writers-feedstock-edits-and-output-postings-lock-in-different-orders-datalock-order-opened-2026-10-09).
+
+Upload promotion, leases and the privileged expiry sweep are described in
+[Object storage](./storage.md#abandoned-uploads-and-cleanup).
 
 ## Computed Method-B Eligibility (Isometric)
 
@@ -567,7 +587,7 @@ roll-up, `?application=<id>` an application drill-down.
 Batch roll-up merges every member application's rollback, dedupes production
 runs, and exposes **DAG | Map | Sankey**. Drill-down exposes **Lineage | Map |
 Split | Trail**. The Sankey is a dry-mass balance with explicit exits for
-ineligible feedstock, conversion loss, and in-storage mass; no net-CO2e figure
+conversion loss and in-storage mass; no net-CO2e figure
 (registry-owned, ADR [0018](./adr/0018-isometric-owns-project-emissions.md)).
 Anchor model: ADR
 [0011](./adr/0011-credit-batch-anchored-chain-of-custody.md).

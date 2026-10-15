@@ -1002,6 +1002,41 @@
       "when": 1792065725006,
       "tag": "0142_activity_events",
       "breakpoints": true
+    },
+    {
+      "idx": 143,
+      "version": "7",
+      "when": 1792068476828,
+      "tag": "0143_require_party_location_fields",
+      "breakpoints": true
+    },
+    {
+      "idx": 144,
+      "version": "7",
+      "when": 1792070805537,
+      "tag": "0144_document_upload_lease",
+      "breakpoints": true
+    },
+    {
+      "idx": 145,
+      "version": "7",
+      "when": 1792071750440,
+      "tag": "0145_facility_reactor_feedstock_type_rules",
+      "breakpoints": true
+    },
+    {
+      "idx": 146,
+      "version": "7",
+      "when": 1792073485989,
+      "tag": "0146_drop_activity_facility_fk",
+      "breakpoints": true
+    },
+    {
+      "idx": 147,
+      "version": "7",
+      "when": 1792074519013,
+      "tag": "0147_feedstock_intake_required_fields",
+      "breakpoints": true
     }
   ]
 }

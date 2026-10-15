@@ -1,3 +1,6 @@
+import { addDocumentReadPaths } from "./document-reads";
+import { addDocumentWritePaths } from "./document-writes";
+import { documentRepresentationSchema } from "@/lib/representations/documents";
 import { customerLocationRepresentationSchema } from "@/lib/representations/customer-locations";
 import { orderBalanceRepresentationSchema } from "@/lib/representations/order-balance";
 import { createProductionRunInput, updateProductionRunInput } from "@/schemas/production-run-input";
@@ -45,6 +48,7 @@ export function buildOpenApiDocument() {
   const paths: Paths = {};
   const published = resources;
   const representations: Record<string, z.ZodType> = Object.fromEntries(published.map((resource) => [resource.singular, resource.schema]));
+  representations.document = documentRepresentationSchema;
   representations.customer_location = customerLocationRepresentationSchema;
   representations.order_balance = orderBalanceRepresentationSchema;
   representations.supplier_location = supplierLocationRepresentationSchema;
@@ -124,6 +128,7 @@ export function buildOpenApiDocument() {
       [targetParameter(), ...queryParameters(resource.queries.get)],
     ) };
   }
+  addDocumentReadPaths(paths, publishOutput);
   paths["/customers/{idOrCode}/locations"] = { get: privateOperation(
     "find_customer_locations", "customers:read", readDescriptions.customerLocations,
     { ...problemResponses([...READ_ERRORS, 404]), "200": jsonResponse("Customer location page.", publishOutput(listEnvelopeSchema(customerLocationRepresentationSchema))) },
@@ -156,7 +161,7 @@ export function buildOpenApiDocument() {
   (createInput.properties as Record<string, JsonSchema>).allocations.maxItems = API_FEEDSTOCK_MAX_ALLOCATIONS;
   const patchInput = operationInput(updateFeedstockSchema.omit({ feedstockId: true, expectedVersion: true }));
   paths["/feedstocks"].post = {
-    ...privateOperation("log_feedstock_delivery", "feedstocks:write", "Record a wood-chip intake split across receiving bins. Positive wet masses and moisture 0 to 100 are required; allocation overage requires justification. Dry runs roll back, skip external effects and return provisional ids, codes and stock additions. Location and ETag identify the first feedstock on committed responses and are absent on dry runs.",
+    ...privateOperation("log_feedstock_delivery", "feedstocks:write", "Record a wood-chip intake split across receiving bins. Positive wet masses and moisture at least 0 and below 100 are required; allocation overage requires justification. Dry runs roll back, skip external effects and return provisional ids, codes and stock additions. Location and ETag identify the first feedstock on committed responses and are absent on dry runs.",
       { ...problemResponses([...WRITE_ERRORS, 413, 415]),
         "201": jsonResponse("Intake committed, or replayed.", publishOutput(feedstockCreateEnvelopeSchema), { ...etagHeader, ...locationHeader, ...writeHeaders }),
         "200": jsonResponse("Dry-run intake preview.", publishOutput(feedstockCreateEnvelopeSchema), writeHeaders) },
@@ -221,6 +226,7 @@ export function buildOpenApiDocument() {
   addLabSampleWritePaths(paths, { publishOutput, writeErrors: WRITE_ERRORS });
   addOrderWritePaths(paths, { publishOutput, writeErrors: WRITE_ERRORS });
   addDeliveryWritePaths(paths, { publishOutput, writeErrors: WRITE_ERRORS });
+  addDocumentWritePaths(paths, publishOutput);
 
   for (const [path, operationId, mediaType, description] of [
     ["/openapi.json", "get_openapi_document", "application/json", "Public OpenAPI 3.1 contract."],

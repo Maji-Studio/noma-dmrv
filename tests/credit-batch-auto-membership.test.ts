@@ -1,3 +1,4 @@
+import { feedstockFixtureValues, cleanupFeedstockFixtureParents } from "./helpers/feedstock-fixture";
 import { createProductionRunOutputBin } from "./helpers/production-run-output-bin";
 import { labLogisticsVersion } from "./helpers/lab-logistics-version";
 import { productionVersion } from "./helpers/production-version";
@@ -32,7 +33,7 @@ import {
   getProductionRunById,
   updateProductionRun,
 } from "@/data-access/production-runs";
-import {
+import { TEST_SITE_POSITION,
   ensureTestOrg,
   makeTestOrgContext,
   TEST_ORG_ID,
@@ -71,7 +72,7 @@ describe("credit batch automatic production-run membership", () => {
 
     const [facility] = await db
       .insert(facilities)
-      .values({ timezone: "UTC",
+      .values({ ...TEST_SITE_POSITION, timezone: "UTC",
         organizationId: TEST_ORG_ID,
         code: `FAC-CBAM-${tag}`,
         name: `CB auto-membership facility ${tag}`,
@@ -131,7 +132,7 @@ describe("credit batch automatic production-run membership", () => {
 
     const [feedstock] = await db
       .insert(feedstocks)
-      .values({
+      .values(await feedstockFixtureValues(db, {
         organizationId: TEST_ORG_ID,
         code: `FS-CBAM-${tag}`,
         facilityId,
@@ -141,7 +142,7 @@ describe("credit batch automatic production-run membership", () => {
         massWetKg: 2_500,
         moistureContentPercent: 20,
         storageLocationId,
-      })
+      }))
       .returning({ id: feedstocks.id });
     feedstockId = feedstock.id;
 
@@ -172,7 +173,7 @@ describe("credit batch automatic production-run membership", () => {
 
     const [alternateFeedstock] = await db
       .insert(feedstocks)
-      .values({
+      .values(await feedstockFixtureValues(db, {
         organizationId: TEST_ORG_ID,
         code: `FS-CBAM-ALT-${tag}`,
         facilityId,
@@ -182,13 +183,13 @@ describe("credit batch automatic production-run membership", () => {
         massWetKg: 125,
         moistureContentPercent: 20,
         storageLocationId: alternateStorageLocationId,
-      })
+      }))
       .returning({ id: feedstocks.id });
     alternateFeedstockId = alternateFeedstock.id;
 
     const [otherFacility] = await db
       .insert(facilities)
-      .values({ timezone: "UTC",
+      .values({ ...TEST_SITE_POSITION, timezone: "UTC",
         organizationId: TEST_ORG_ID,
         code: `FAC-CBAM-OTHER-${tag}`,
         name: `CB auto-membership other facility ${tag}`,
@@ -224,7 +225,7 @@ describe("credit batch automatic production-run membership", () => {
 
     const [otherFeedstock] = await db
       .insert(feedstocks)
-      .values({
+      .values(await feedstockFixtureValues(db, {
         organizationId: TEST_ORG_ID,
         code: `FS-CBAM-OTHER-${tag}`,
         facilityId: otherFacilityId,
@@ -234,7 +235,7 @@ describe("credit batch automatic production-run membership", () => {
         massWetKg: 125,
         moistureContentPercent: 20,
         storageLocationId: otherStorageLocationId,
-      })
+      }))
       .returning({ id: feedstocks.id });
     otherFeedstockId = otherFeedstock.id;
   });
@@ -297,6 +298,7 @@ describe("credit batch automatic production-run membership", () => {
     if (otherFeedstockId) {
       await db.delete(feedstocks).where(eq(feedstocks.id, otherFeedstockId));
     }
+    await cleanupFeedstockFixtureParents(db);
     if (
       storageLocationId &&
       alternateStorageLocationId &&

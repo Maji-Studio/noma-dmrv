@@ -1,3 +1,4 @@
+import { cleanupFeedstockFixtureParents, feedstockFixtureValues } from "./helpers/feedstock-fixture";
 import { masterDataVersion } from "./helpers/master-data-version";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { eq, sql } from "drizzle-orm";
@@ -6,7 +7,7 @@ import { pgErrorCode } from "@/db/errors";
 import { facilities, feedstockDeliveries, feedstocks, feedstockTypes, organizations, supplierLocations, suppliers } from "@/db/schema";
 import { deleteSupplier } from "@/data-access/suppliers";
 import { SafeError } from "@/lib/errors";
-import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
+import { TEST_SITE_POSITION, ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
 
 const ctx = makeTestOrgContext();
 const CONCURRENCY_BARRIER_TIMEOUT_MS = 5_000;
@@ -23,18 +24,19 @@ beforeEach(async () => {
   const [supplier] = await db.insert(suppliers).values({ organizationId: TEST_ORG_ID, code: `SUP-${tag}`, name: `Audit supplier ${tag}` }).returning();
   supplierId = supplier.id;
   originalLocations = await db.insert(supplierLocations).values([
-    { organizationId: TEST_ORG_ID, supplierId, country: "Switzerland", city: "Zurich", isDefault: true },
-    { organizationId: TEST_ORG_ID, supplierId, country: "France", city: "Lyon" },
+    { ...TEST_SITE_POSITION, country: "Switzerland", organizationId: TEST_ORG_ID, supplierId, city: "Zurich", isDefault: true },
+    { ...TEST_SITE_POSITION, country: "France", organizationId: TEST_ORG_ID, supplierId, city: "Lyon" },
   ]).returning();
-  const [facility] = await db.insert(facilities).values({ timezone: "UTC", organizationId: TEST_ORG_ID, code: `FAC-${tag}`, name: `Audit facility ${tag}` }).returning();
+  const [facility] = await db.insert(facilities).values({ ...TEST_SITE_POSITION, timezone: "UTC", organizationId: TEST_ORG_ID, code: `FAC-${tag}`, name: `Audit facility ${tag}` }).returning();
   facilityId = facility.id;
-  const [type] = await db.insert(feedstockTypes).values({ organizationId: TEST_ORG_ID, code: `FT-${tag}`, name: `Audit type ${tag}`, category: "forestry" }).returning();
+  const [type] = await db.insert(feedstockTypes).values({ usage: "pyrolysis", organizationId: TEST_ORG_ID, code: `FT-${tag}`, name: `Audit type ${tag}`, category: "forestry" }).returning();
   feedstockTypeId = type.id;
 });
 afterEach(async () => {
   vi.restoreAllMocks();
   if (supplierId) {
     await db.delete(feedstocks).where(eq(feedstocks.supplierId, supplierId));
+    await cleanupFeedstockFixtureParents(db);
     await db.delete(feedstockDeliveries).where(eq(feedstockDeliveries.supplierId, supplierId));
     await db.delete(supplierLocations).where(eq(supplierLocations.supplierId, supplierId));
     await db.delete(suppliers).where(eq(suppliers.id, supplierId));
@@ -48,7 +50,7 @@ async function insertReference(kind: "intake" | "delivery") {
   if (kind === "delivery") {
     await db.insert(feedstockDeliveries).values({ ...common, deliveryDate: new Date() });
   } else {
-    await db.insert(feedstocks).values({ ...common, feedstockTypeId, massDryKg: 10 });
+    await db.insert(feedstocks).values(await feedstockFixtureValues(db, { ...common, feedstockTypeId, massDryKg: 10 }));
   }
 }
 async function expectUnchanged() {

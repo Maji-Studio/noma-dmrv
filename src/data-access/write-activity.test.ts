@@ -37,7 +37,7 @@ it("leaves batch lifecycle events to the caller and skips unchanged membership",
   expect(recordActivity).toHaveBeenCalledExactlyOnceWith(ctx, tx, expect.objectContaining({ entityType: "production_run", reasonCode: "detached" }));
 });
 
-it.each(["form", "rest", "mcp"] as const)("records document retirement with %s source and captured ownership", async source => {
+it.each(["form", "rest", "mcp", "script", "system"] as const)("records document retirement with %s source and captured ownership", async source => {
   const document = { id: "document", documentType: "pdf", entityType: "sample", entityId: "sample" };
   const scopes = [{ creditBatchId: "batch", productionRunId: "run" }];
   if (source === "form") await recordDocumentActivity(ctx, tx, document, "deleted", scopes);

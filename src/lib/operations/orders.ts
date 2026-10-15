@@ -22,27 +22,34 @@ export const describeUpdatedOrder = (input: UpdateOrderInput, output: Pick<Order
 export const recordOrder: Operation<typeof recordOrderInput, Order> = {
   id: "record_order", input: recordOrderInput, supportsDryRun: true,
   describe: describeRecordedOrder,
-  execute: async ({ ctx, tx }, input) => {
+  execute: async ({ ctx, tx, activity }, input) => {
     // Resolve live defaults after the runner's idempotency replay, on its connection.
     const packaging = input.packaging ?? (await getOrganizationDefaults(ctx, tx)).defaultPackaging;
     await lockBiocharTransportRouteTopology(ctx, tx);
-    return withAutoCodes(ctx, tx, "OR", orders, orders.code, AUTO_CODE_COUNT,
+    const order = await withAutoCodes(ctx, tx, "OR", orders, orders.code, AUTO_CODE_COUNT,
       ([code], savepoint) => createOrderInTransaction(ctx, savepoint, { ...input, packaging, code }), CODE_CONFLICT_MESSAGES.order);
+    activity.link({ facilityId: order.facilityId });
+    return order;
   },
 };
 
 export const updateOrder: Operation<typeof updateOrderInput, Order> = {
   id: "update_order", input: updateOrderInput, supportsDryRun: true,
   describe: describeUpdatedOrder,
-  execute: ({ ctx, tx }, input) => updateOrderInTransaction(ctx, tx, input),
+  execute: async ({ ctx, tx, activity }, input) => {
+    const order = await updateOrderInTransaction(ctx, tx, input);
+    activity.link({ facilityId: order.facilityId });
+    return order;
+  },
 };
 
 export const deleteOrder: Operation<typeof deleteOrderInput, void> = {
   id: "delete_order", input: deleteOrderInput, supportsDryRun: true,
   describe: (input) => ({ outcome: "deleted", entityType: "order", entityIds: [input.orderId],
     versionBefore: input.expectedVersion, versionAfter: null, changedFields: [] }),
-  execute: async ({ ctx, tx, afterCommit }, input) => {
-    await deleteOrderInTransaction(ctx, tx, input);
+  execute: async ({ ctx, tx, source, afterCommit, activity }, input) => {
+    const order = await deleteOrderInTransaction(ctx, tx, input, source);
+    activity.link({ facilityId: order.facilityId });
     afterCommit(async () => { await processPendingStorageObjectDeletions(ctx); });
   },
 };
