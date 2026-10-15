@@ -63,7 +63,7 @@ export async function createActivityWriteFixture(ctx: OrgContext) {
     });
     const [product] = await tx.insert(schema.biocharProducts).values(await outputProductFixtureValues(tx, {
       organizationId, facilityId: facility.id, code: "ACT-BP", linkedProductionRunId: run.id,
-      productionDate: ACTIVITY_FIXTURE_DATE, sourceBiocharStorageLocationId: outputBin.id,
+      productionDate: ACTIVITY_FIXTURE_DATE.toISOString().slice(0, 10), sourceBiocharStorageLocationId: outputBin.id,
     })).returning();
     await tx.insert(schema.biocharProductSourceAllocations).values({
       organizationId, biocharProductId: product.id, productionRunId: run.id,

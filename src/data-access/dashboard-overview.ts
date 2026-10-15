@@ -278,7 +278,7 @@ export async function getDashboardOverview(
               eq(biocharProducts.facilityId, facilityId),
               isNull(biocharProducts.archivedAt),
               ne(biocharProducts.status, "draft"),
-              ...(fetchStart ? [gte(biocharProducts.productionDate, fetchStart)] : []),
+              ...(fetchStart ? [gte(biocharProducts.productionDate, fetchStart.toISOString().slice(0, 10))] : []),
             ),
           ),
         db
@@ -335,7 +335,8 @@ export async function getDashboardOverview(
     .map((row) => ({ ms: toMs(row.date), row }))
     .filter((p): p is { ms: number; row: (typeof runRows)[number] } => p.ms != null);
   const lotPoints = lotRows
-    .map((row) => ({ ms: toMs(row.productionDate), row }))
+    // Calendar-day totals use UTC midnight, matching run and batch bucketing above.
+    .map((row) => ({ ms: toMs(`${row.productionDate}T00:00:00.000Z`), row }))
     .filter((p): p is { ms: number; row: (typeof lotRows)[number] } => p.ms != null);
   const applicationPoints = applicationRows
     .map((row) => ({ ms: toMs(row.applicationDate), row }))

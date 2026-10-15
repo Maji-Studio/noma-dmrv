@@ -178,7 +178,7 @@ export async function seedChainData(
       });
 
       // 8. Biochar Product (needs facility + formulation)
-      const productionDate = new Date("2025-01-01T00:00:00Z");
+      const productionDate = "2025-01-01";
       await tx.insert(schema.biocharProducts).values(await outputProductFixtureValues(tx, {
         organizationId: DEC_ORG_ID,
         id: biocharProductId,

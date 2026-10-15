@@ -23,7 +23,7 @@ export const biocharProductRepresentationSchema = z.object({
   formulationId: z.uuid().describe("Formulation identifier, UUID; the Pure biochar formulation for an unblended product."),
   status: z.enum(biocharProductStatusValues).describe("Product state: draft, testing, ready or sold."),
   placedAt: z.iso.datetime().describe("Instant the product was mixed and placed, UTC, RFC 3339."),
-  productionDate: z.iso.datetime().describe("Instant of the oldest biochar lot drawn, UTC, RFC 3339."),
+  productionDate: z.iso.date().describe("Production run calendar day of the oldest biochar lot drawn, YYYY-MM-DD."),
   sourceBiocharStorageLocationId: z.uuid().describe("Biochar bin the biochar was drawn from, UUID."),
   storageLocationId: z.uuid().describe("Product bin the blend was placed in, UUID."),
   biocharWetMassKg: z.number().describe("Wet biochar drawn from the source bin as weighed, in kilograms, without ingredients or added water."),
@@ -41,10 +41,10 @@ export type BiocharProductRepresentation = z.infer<typeof biocharProductRepresen
 type Instant = Date | string;
 type IngredientRow = z.infer<typeof ingredientSchema>;
 export type BiocharProductRepresentationInput = Omit<BiocharProductRepresentation,
-  "biocharWetMassKg" | "placedAt" | "productionDate" | "archivedAt" | "createdAt" | "updatedAt"> & {
+  "biocharWetMassKg" | "placedAt" | "archivedAt" | "createdAt" | "updatedAt"> & {
   /** The stored blend: biochar as weighed plus every ingredient, before water. Never published. */
   blendMassKg: number;
-  placedAt: Instant; productionDate: Instant; archivedAt: Instant | null; createdAt: Instant; updatedAt: Instant;
+  placedAt: Instant; archivedAt: Instant | null; createdAt: Instant; updatedAt: Instant;
 };
 
 const instant = (value: Instant) => new Date(value).toISOString();
@@ -63,7 +63,7 @@ export function representBiocharProduct(row: BiocharProductRepresentationInput):
   }));
   return biocharProductRepresentationSchema.parse({
     id: row.id, code: row.code, version: row.version, facilityId: row.facilityId, formulationId: row.formulationId,
-    status: row.status, placedAt: instant(row.placedAt), productionDate: instant(row.productionDate),
+    status: row.status, placedAt: instant(row.placedAt), productionDate: row.productionDate,
     sourceBiocharStorageLocationId: row.sourceBiocharStorageLocationId, storageLocationId: row.storageLocationId,
     biocharWetMassKg: deriveSourceBiocharMassKg(row.blendMassKg, ingredients.map(({ wetMassKg }) => ({ massKg: wetMassKg }))),
     biocharMoisturePercent: row.biocharMoisturePercent, waterAddedKg: row.waterAddedKg, densityKgM3: row.densityKgM3,

@@ -26,7 +26,7 @@ import {
 } from "@/hooks/use-list-pagination";
 import { useCreateOrder, useDeleteOrder, useOrders, useUpdateOrder } from "@/hooks/use-orders";
 import { MISSING_VALUE, pluralize } from "@/lib/copy-utils";
-import { formatDate } from "@/lib/format-utils";
+import { formatCalendarDate } from "@/lib/format-utils";
 import {
   ORDER_FULFILLMENT_DISPLAY,
   orderFulfillmentStatuses,
@@ -59,7 +59,7 @@ function createColumns(
       accessorKey: "orderDate",
       meta: { nowrap: true },
       header: "Date",
-      cell: ({ row }) => <span className="text-[var(--color-text-secondary)]">{formatDate(row.original.orderDate)}</span>,
+      cell: ({ row }) => <span className="text-[var(--color-text-secondary)]">{formatCalendarDate(row.original.orderDate)}</span>,
     },
     {
       id: "customer",

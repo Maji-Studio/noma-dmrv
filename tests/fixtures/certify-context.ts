@@ -155,7 +155,7 @@ export function factsFromMockedLineages(
         code: lineage.biocharProduct?.code ?? `BP-${index + 1}`,
         status: lineage.biocharProduct?.status ?? "complete",
         productionDate:
-          lineage.biocharProduct?.productionDate ?? DEFAULT_FACT_DATE,
+          lineage.biocharProduct?.productionDate ?? DEFAULT_FACT_DATE.toISOString().slice(0, 10),
         massKg: lineage.biocharProduct?.massKg ?? 100,
         moistureContentPercent:
           lineage.biocharProduct?.moistureContentPercent ?? 0,

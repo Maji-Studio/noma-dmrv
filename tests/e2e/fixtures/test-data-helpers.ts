@@ -54,7 +54,7 @@ export interface TestBiocharProduct {
   code: string;
   facilityId: string;
   formulationId: string;
-  productionDate: Date;
+  productionDate: string;
   status: "draft" | "testing" | "ready" | "sold";
   massKg: number;
   moistureContentPercent: number;
@@ -309,7 +309,7 @@ export async function createTestBiocharProduct(
       code: overrides.code || `E2E-BP-${testId.toUpperCase()}`,
       facilityId,
       formulationId,
-      productionDate: overrides.productionDate ?? new Date(),
+      productionDate: overrides.productionDate ?? new Date().toISOString().slice(0, 10),
       status: overrides.status ?? "testing",
       massKg: overrides.massKg ?? 500,
       moistureContentPercent: overrides.moistureContentPercent ?? 10,

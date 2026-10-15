@@ -3,7 +3,7 @@ import { ApplicationAllocationShares } from "./application-allocation-shares";
 import { ServerError } from "@/components/forms";
 import { Button } from "@/components/ui";
 import { certificationDetailField } from "@/lib/certification/certify-field-registry";
-import { formatDate } from "@/lib/format-utils";
+import { formatCalendarDate } from "@/lib/format-utils";
 import { formatApplicationEvidenceMethod, formatApplicationMethod, formatSoilTemperatureSource, type ApplicationEvidenceMethod, type ApplicationMethod, type SoilTemperatureSource } from "@/schemas/applications";
 import { ApplicationEvidencePanel } from "./application-evidence-panel";
 import { ApplicationStorageLocationSync } from "./application-storage-location-sync";
@@ -39,7 +39,7 @@ export function applicationSheetSections(application: ApplicationListItem, conte
     {
       title: "Application details",
       fields: [
-        { label: "Application date", value: formatDate(application.applicationDate) },
+        { label: "Application date", value: formatCalendarDate(application.applicationDate) },
         {
           label: "Delivery source",
           value: context.delivery

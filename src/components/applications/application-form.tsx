@@ -12,7 +12,7 @@
 "use client";
 
 import { nullableNumericValue, numericValue } from "@/lib/form-utils";
-import { formatLocalDate, formatUtcDate } from "@/lib/date-utils";
+import { formatLocalDate, formatUtcDate, toDateInputValue } from "@/lib/date-utils";
 import { formatDayString } from "@/lib/format-utils";
 import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
 
@@ -161,7 +161,7 @@ export function ApplicationForm({
 
   const defaultValues = {
     applicationDate: application?.applicationDate
-      ? formatLocalDate(new Date(application.applicationDate))
+      ? toDateInputValue(application.applicationDate)
       : formatLocalDate(new Date()),
     deliveryId: application?.deliveryId ?? "",
     biocharAppliedTons: applicationTonsToKg(application?.biocharAppliedTons) ?? undefined,
