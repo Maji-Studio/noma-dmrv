@@ -1,3 +1,4 @@
+import { recordApplication, updateApplication, deleteApplication } from "./applications";
 import { recordDelivery, updateDeliveryOperation } from "./deliveries";
 import { recordOrder, updateOrder, deleteOrder } from "./orders";
 import { startProductionRun, updateProductionRun, deleteProductionRun } from "./production-runs";
@@ -9,6 +10,9 @@ import { requestDocumentUpload } from "./document-uploads";
 
 /** Explicit write allowlist. Existing read models become the read side later. */
 export const operationRegistry = {
+  record_application: recordApplication,
+  update_application: updateApplication,
+  delete_application: deleteApplication,
   request_document_upload: requestDocumentUpload,
   record_delivery: recordDelivery,
   update_delivery: updateDeliveryOperation,

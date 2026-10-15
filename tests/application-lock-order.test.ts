@@ -78,7 +78,7 @@ it.each(["update", "delete"] as const)("document upload against application %s i
 it.each(["document", "delete"] as const)("deletable application versus upload, %s first", async firstKind => {
   const f = await postedStockFixture();
   const delivery = await postDelivery(f, 100);
-  const app = await runOperationInProcess(recordApplication, f.ctx, appInput(delivery.id, 10), options);
+  const app = (await runOperationInProcess(recordApplication, f.ctx, appInput(delivery.id, 10), options)).application;
   const docs: string[] = [];
   const barrier = await openOperationBarrier(pool);
   // No Removal exists here. Hold a real parent row before either writer starts.
@@ -172,7 +172,7 @@ it.each(["create", "archive"] as const)("create versus facility archive, %s firs
 
 it("repoint locks both deliveries before a target create checks capacity", async () => {
   const f = await postedStockFixture(); const source = await postDelivery(f, 100); const target = await postDelivery(f, 100);
-  const app = await runOperationInProcess(recordApplication, f.ctx, appInput(source.id, 60), options);
+  const app = (await runOperationInProcess(recordApplication, f.ctx, appInput(source.id, 60), options)).application;
   const ready = gate(); const resume = gate(); const state = { pid: 0 };
   const move = outcome(runOperationInProcess(holdAfterWrite(updateApplication, ready, resume, state), f.ctx, { applicationId: app.id, expectedVersion: 1, deliveryId: target.id }, options));
   await ready.promise;

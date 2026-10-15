@@ -42,3 +42,10 @@ it("offers delivery writes only by explicit scope, with no delete capability", (
   expect(hasRoleAndScope({ orgRole: "admin", scopes: ["deliveries:write"] }, "deliveries:write")).toBe(true);
   expect(hasRoleAndScope({ orgRole: "member", scopes: ["deliveries:write"] }, "deliveries:write")).toBe(false);
 });
+
+it("keeps application scopes independent and role restricted", () => {
+  expect(scopesFromPermissions({ applications: ["read", "write", "delete"] })).toEqual(["applications:read", "applications:write", "applications:delete"]);
+  expect(hasScope({ scopes: ["applications:write"] }, "applications:delete")).toBe(false);
+  expect(hasScope({ scopes: ["applications:write"] }, "applications:read")).toBe(false);
+  expect(hasRoleAndScope({ orgRole: "member", scopes: ["applications:write"] }, "applications:write")).toBe(false);
+});

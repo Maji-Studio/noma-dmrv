@@ -183,5 +183,7 @@ export function useDeleteApplication() {
 
 function applicationOperationInput(data: ApplicationFormData) {
   const { biocharAppliedKg, applicationMethodType, ...fields } = data;
-  return { ...fields, appliedWetMassKg: biocharAppliedKg, applicationMethod: applicationMethodType };
+  return { ...fields, gpsLatitude: fields.gpsLatitude ?? null, gpsLongitude: fields.gpsLongitude ?? null,
+    soilTemperatureC: fields.soilTemperatureC ?? null, soilTemperatureSource: fields.soilTemperatureSource ?? null,
+    appliedWetMassKg: biocharAppliedKg, applicationMethod: applicationMethodType };
 }

@@ -153,7 +153,7 @@ it.each(["application", "membership"] as const)("shared artifact serializes memb
   const membership = firstKind === "membership" ? first : second;
   try {
     try { await waitForBlockedOperations(pool, state.pid, 1); } finally { resume.release(); }
-    expect(await application).toMatchObject({ ok: true, value: { cropType: "Maize", version: 2 } });
+    expect(await application).toMatchObject({ ok: true, value: { application: { cropType: "Maize", version: 2 } } });
     const result = await membership;
     expect(result.ok).toBe(false);
     if (!result.ok) expect(String(result.error)).toContain("Cannot change this credit batch's production membership because its applied mass belongs to a Removal.");
@@ -268,7 +268,7 @@ it.each(["membership", "application"] as const)("batch create covers the deliver
     startDate: new Date("2026-06-01"), endDate: new Date("2026-06-30"), productionRunIds: [f.productionRunId],
   }).then(batch => { f.batchId = batch.id; return batch; });
   const application = (operation = recordApplication) => runOperationInProcess(operation, ctx, command, options)
-    .then(app => { f.applicationId = app.id; return app; });
+    .then(result => { f.applicationId = result.application.id; return result.application; });
   if (firstKind === "membership") pauses.declaration = pause;
   const first = outcome(firstKind === "membership" ? membership() : application(holdAfterWrite(recordApplication, pause)));
   await ready.promise;

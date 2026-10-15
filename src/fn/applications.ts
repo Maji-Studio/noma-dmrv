@@ -76,12 +76,12 @@ export async function getApplicationDeliveryOptionsFn(
 }
 
 export async function createApplicationFn(data: z.input<typeof recordApplicationInput>): Promise<ActionResult<Application>> {
-  return withAction(ctx => runOperationInProcess(recordApplication, ctx, recordApplicationInput.parse(data)), {
+  return withAction(async ctx => (await runOperationInProcess(recordApplication, ctx, recordApplicationInput.parse(data))).application, {
     fallbackMessage: "Failed to create application", log: { message: "application action failed", context: { op: "application:create" } },
   });
 }
 export async function updateApplicationFn(data: z.input<typeof updateApplicationInput>): Promise<ActionResult<Application>> {
-  return withAction(ctx => runOperationInProcess(updateApplication, ctx, updateApplicationInput.parse(data)), {
+  return withAction(async ctx => (await runOperationInProcess(updateApplication, ctx, updateApplicationInput.parse(data))).application, {
     fallbackMessage: "Failed to update application", log: { message: "application action failed", context: { op: "application:update" } },
   });
 }

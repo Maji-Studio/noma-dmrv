@@ -14,17 +14,17 @@ interface ApplicationMutationFixture {
   applicationIds: string[];
 }
 
-export async function createMutationFixture(runId: string): Promise<ApplicationMutationFixture> {
+export async function createMutationFixture(runId: string, organizationId = TEST_ORG_ID): Promise<ApplicationMutationFixture> {
   return db.transaction(async (tx) => {
     const [customer] = await tx
       .insert(customers)
-      .values({ organizationId: TEST_ORG_ID, name: `Application Mutation Customer ${runId}`, code: `CU-AM-${runId}` })
+      .values({ organizationId, name: `Application Mutation Customer ${runId}`, code: `CU-AM-${runId}` })
       .returning({ id: customers.id });
 
     const [customerLocation] = await tx
       .insert(customerLocations)
       .values({
-        organizationId: TEST_ORG_ID,
+        organizationId,
         customerId: customer.id,
         name: `Application Mutation Location ${runId}`,
         country: "Tanzania",
@@ -37,17 +37,17 @@ export async function createMutationFixture(runId: string): Promise<ApplicationM
 
     const [formulation] = await tx
       .insert(formulations)
-      .values({ organizationId: TEST_ORG_ID, name: `Application Mutation Formulation ${runId}`, code: `FM-AM-${runId}` })
+      .values({ organizationId, name: `Application Mutation Formulation ${runId}`, code: `FM-AM-${runId}` })
       .returning({ id: formulations.id });
 
     const [facility] = await tx
       .insert(facilities)
-      .values({ ...TEST_SITE_POSITION, timezone: "UTC", organizationId: TEST_ORG_ID, name: `Application Mutation Facility ${runId}`, code: `FAC-AM-${runId}` })
+      .values({ ...TEST_SITE_POSITION, timezone: "UTC", organizationId, name: `Application Mutation Facility ${runId}`, code: `FAC-AM-${runId}` })
       .returning({ id: facilities.id });
 
     await tx.insert(certifierProjects).values({
       externalFacilityId: `fcl_test_${facility.id}`,
-      organizationId: TEST_ORG_ID,
+      organizationId,
       facilityId: facility.id,
       provider: "isometric",
       externalProjectId: `iso-project-${runId}`,
@@ -57,7 +57,7 @@ export async function createMutationFixture(runId: string): Promise<ApplicationM
     const [product] = await tx
       .insert(biocharProducts)
       .values(await outputProductFixtureValues(tx, {
-        organizationId: TEST_ORG_ID,
+        organizationId,
         code: `BP-AM-${runId}`,
         facilityId: facility.id,
         formulationId: formulation.id,
@@ -67,7 +67,7 @@ export async function createMutationFixture(runId: string): Promise<ApplicationM
     const [order] = await tx
       .insert(orders)
       .values(await outputOrderFixtureValues(tx, {
-        organizationId: TEST_ORG_ID,
+        organizationId,
         code: `OR-AM-${runId}`,
         facilityId: facility.id,
         biocharProductId: product.id,
@@ -81,7 +81,7 @@ export async function createMutationFixture(runId: string): Promise<ApplicationM
 
     const insertedDeliveries = await insertOutputDeliveryFixture(tx, [
         {
-          organizationId: TEST_ORG_ID,
+          organizationId,
           code: `DL-AM-${runId}-A`,
           facilityId: facility.id,
           orderId: order.id,
@@ -92,7 +92,7 @@ export async function createMutationFixture(runId: string): Promise<ApplicationM
           moistureContentPercent: 40,
         },
         {
-          organizationId: TEST_ORG_ID,
+          organizationId,
           code: `DL-AM-${runId}-B`,
           facilityId: facility.id,
           orderId: order.id,

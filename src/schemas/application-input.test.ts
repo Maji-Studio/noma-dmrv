@@ -28,3 +28,9 @@ it("shows sub-gram precision errors on the form mass field", () => {
     path: ["biocharAppliedKg"], message: "Use at most 3 decimal places",
   }));
 });
+
+it("defers an omitted GPS pair to site defaults but refuses partial and null location pairs", () => {
+  expect(recordApplicationInput.safeParse({ ...input, gpsLatitude: undefined, gpsLongitude: undefined }).success).toBe(true);
+  expect(recordApplicationInput.safeParse({ ...input, gpsLatitude: undefined }).success).toBe(false);
+  expect(recordApplicationInput.safeParse({ ...input, gpsLatitude: null, gpsLongitude: null }).success).toBe(false);
+});

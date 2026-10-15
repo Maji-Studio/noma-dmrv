@@ -50,8 +50,8 @@ async function withoutGlobalDb<T>(work: () => Promise<T>): Promise<T> {
   }
 }
 it("updates a code and retires a document without using the global pool", () => fixtureTest(async f => {
-  const app = await runOperationInProcess(recordApplication, ctx, input(f.deliveryIds[0]), options);
-  const saved = await withoutGlobalDb(() => runOperationInProcess(updateApplication, ctx, {
+  const app = (await runOperationInProcess(recordApplication, ctx, input(f.deliveryIds[0]), options)).application;
+  const { application: saved } = await withoutGlobalDb(() => runOperationInProcess(updateApplication, ctx, {
     applicationId: app.id, expectedVersion: app.version, code: `AP-GUARD-${randomUUID().toUpperCase()}`,
   }, options));
   expect(saved.code).not.toBe(app.code);
@@ -60,34 +60,34 @@ it("updates a code and retires a document without using the global pool", () => 
   expect(await db.select().from(documents).where(eq(documents.id, doc.id))).toHaveLength(0);
 }));
 it("uses one connection, converts 4001 kg once, and preserves exact wet/dry shares and remaining grams", () => fixtureTest(async f => {
-  const first = await withoutGlobalDb(() => runOperationInProcess(recordApplication, ctx, input(f.deliveryIds[0]), options));
+  const { application: first } = await withoutGlobalDb(() => runOperationInProcess(recordApplication, ctx, input(f.deliveryIds[0]), options));
   expect(first).toMatchObject({ biocharAppliedTons: 4.001, biocharAppliedDryTons: 3.2008 });
   const shares = await db.select().from(applicationOutputAllocations).where(eq(applicationOutputAllocations.applicationId, first.id));
   expect(shares.reduce((n, row) => n + Math.round(Number(row.wetMassKg) * 1000), 0)).toBe(4001000);
   expect(shares.reduce((n, row) => n + Math.round(Number(row.dryMassKg) * 1000), 0)).toBe(3200800);
   await expect(runOperationInProcess(recordApplication, ctx, input(f.deliveryIds[0], 999.001), options)).rejects.toMatchObject({ code: "conflict", issues: [{ path: ["appliedWetMassKg"], meta: { measure: "delivery_remaining_wet", availableWetKg: 999, requestedWetKg: 999.001, unit: "kg" } }] });
-  const last = await runOperationInProcess(recordApplication, ctx, input(f.deliveryIds[0], 999), options);
+  const last = (await runOperationInProcess(recordApplication, ctx, input(f.deliveryIds[0], 999), options)).application;
   expect(last.biocharAppliedDryTons).toBe(0.7992);
 }));
 it("repoints shares and preserves omitted fields while null clears optional fields", () => fixtureTest(async f => {
-  const first = await runOperationInProcess(recordApplication, ctx, { ...input(f.deliveryIds[0], 1000), cropType: "Maize", fieldIdentifier: "Field A" }, options);
-  const moved = await runOperationInProcess(updateApplication, ctx, { applicationId: first.id, expectedVersion: first.version, deliveryId: f.deliveryIds[1], cropType: null }, options);
+  const first = (await runOperationInProcess(recordApplication, ctx, { ...input(f.deliveryIds[0], 1000), cropType: "Maize", fieldIdentifier: "Field A" }, options)).application;
+  const moved = (await runOperationInProcess(updateApplication, ctx, { applicationId: first.id, expectedVersion: first.version, deliveryId: f.deliveryIds[1], cropType: null }, options)).application;
   expect(moved).toMatchObject({ fieldIdentifier: "Field A", cropType: null, biocharAppliedDryTons: 0.9 });
   const shares = await db.select().from(applicationOutputAllocations).where(eq(applicationOutputAllocations.applicationId, first.id));
   expect(shares.length).toBeGreaterThan(0);
   expect(shares.every(row => row.deliveryId === f.deliveryIds[1])).toBe(true);
-  const originalRemaining = await runOperationInProcess(recordApplication, ctx, input(f.deliveryIds[0], 5000), options);
+  const originalRemaining = (await runOperationInProcess(recordApplication, ctx, input(f.deliveryIds[0], 5000), options)).application;
   expect(originalRemaining.biocharAppliedTons).toBe(5);
 }));
 it("refuses visual, missing boundary on create and merged PATCH, and incomplete merged GPS", () => fixtureTest(async f => {
   await expect(runOperationInProcess(recordApplication, ctx, { ...input(f.deliveryIds[0]), evidenceMethod: "visual" }, options)).rejects.toMatchObject({ code: "validation_failed", issues: [{ path: ["evidenceMethod"] }] });
   await expect(runOperationInProcess(recordApplication, ctx, { ...input(f.deliveryIds[0]), evidenceMethod: "boundary" }, options)).rejects.toMatchObject({ code: "validation_failed", issues: [{ path: ["gisBoundary"] }] });
-  const app = await runOperationInProcess(recordApplication, ctx, { ...input(f.deliveryIds[0]), evidenceMethod: "boundary", gisBoundary: TEST_GIS_BOUNDARY }, options);
+  const app = (await runOperationInProcess(recordApplication, ctx, { ...input(f.deliveryIds[0]), evidenceMethod: "boundary", gisBoundary: TEST_GIS_BOUNDARY }, options)).application;
   await expect(runOperationInProcess(updateApplication, ctx, { applicationId: app.id, expectedVersion: 1, gisBoundary: null }, options)).rejects.toMatchObject({ code: "validation_failed", issues: [{ path: ["gisBoundary"] }] });
   await expect(runOperationInProcess(updateApplication, ctx, { applicationId: app.id, expectedVersion: 1, gpsLatitude: null }, options)).rejects.toMatchObject({ code: "validation_failed" });
 }));
 it.each(["delivery", "facility"] as const)("refuses create and metadata PATCH on archived %s, but permits delete", kind => fixtureTest(async f => {
-  const app = await runOperationInProcess(recordApplication, ctx, input(f.deliveryIds[0]), options);
+  const app = (await runOperationInProcess(recordApplication, ctx, input(f.deliveryIds[0]), options)).application;
   if (kind === "delivery") await db.update(deliveries).set({ archivedAt: new Date() }).where(eq(deliveries.id, f.deliveryIds[0]));
   else await db.update(facilities).set({ archivedAt: new Date() }).where(eq(facilities.id, f.facilityId));
   for (const request of [runOperationInProcess(recordApplication, ctx, input(f.deliveryIds[0], 1), options), runOperationInProcess(updateApplication, ctx, { applicationId: app.id, expectedVersion: 1, cropType: "Maize" }, options)]) await expect(request).rejects.toMatchObject({ code: "not_found", issues: [{ path: ["deliveryId"] }] });
@@ -96,8 +96,8 @@ it.each(["delivery", "facility"] as const)("refuses create and metadata PATCH on
 it("hides foreign deliveries without side effects and reports duplicate codes at /code", () => fixtureTest(async f => {
   await expect(runOperationInProcess(recordApplication, { ...ctx, organizationId: "foreign-org" }, input(f.deliveryIds[0]), options)).rejects.toMatchObject({ code: "not_found", issues: [{ path: ["deliveryId"] }] });
   expect(await db.select().from(applications).where(eq(applications.deliveryId, f.deliveryIds[0]))).toHaveLength(0);
-  const first = await runOperationInProcess(recordApplication, ctx, input(f.deliveryIds[0], 1), options);
-  const second = await runOperationInProcess(recordApplication, ctx, input(f.deliveryIds[0], 1), options);
+  const first = (await runOperationInProcess(recordApplication, ctx, input(f.deliveryIds[0], 1), options)).application;
+  const second = (await runOperationInProcess(recordApplication, ctx, input(f.deliveryIds[0], 1), options)).application;
   await expect(runOperationInProcess(updateApplication, ctx, { applicationId: second.id, expectedVersion: 1, code: first.code }, options)).rejects.toMatchObject({ code: "conflict", issues: [{ path: ["code"] }] });
 }));
 it.each(["America/Los_Angeles", "Asia/Tokyo"])("uses delivery and today calendar days in %s", zone => fixtureTest(async f => {
@@ -107,7 +107,7 @@ it.each(["America/Los_Angeles", "Asia/Tokyo"])("uses delivery and today calendar
     await db.update(facilities).set({ timezone: zone }).where(eq(facilities.id, f.facilityId));
     await db.update(deliveries).set({ deliveryDate: now }).where(eq(deliveries.id, f.deliveryIds[0]));
     const day = zone === "Asia/Tokyo" ? "2025-07-09" : "2025-07-07";
-    const app = await runOperationInProcess(recordApplication, ctx, { ...input(f.deliveryIds[0], 1), applicationDate: day }, options);
+    const app = (await runOperationInProcess(recordApplication, ctx, { ...input(f.deliveryIds[0], 1), applicationDate: day }, options)).application;
     expect(app.applicationDate.toISOString()).toBe(`${day}T00:00:00.000Z`);
     for (const applicationDate of (zone === "Asia/Tokyo" ? ["2025-07-08", "2025-07-10"] : ["2025-07-06", "2025-07-08"])) await expect(runOperationInProcess(recordApplication, ctx, { ...input(f.deliveryIds[0], 1), applicationDate }, options)).rejects.toMatchObject({ code: "validation_failed", issues: [{ path: ["applicationDate"] }] });
   } finally { vi.useRealTimers(); }
@@ -139,7 +139,7 @@ it("allows metadata under a draft Removal and refuses a mass change", async () =
   const f = await createLineageFixture("none");
   try {
     const [app] = await db.select().from(applications).where(and(eq(applications.organizationId, ctx.organizationId), eq(applications.id, f.applicationId)));
-    const saved = await runOperationInProcess(updateApplication, ctx, { applicationId: app.id, expectedVersion: app.version, cropType: "Maize" }, options);
+    const saved = (await runOperationInProcess(updateApplication, ctx, { applicationId: app.id, expectedVersion: app.version, cropType: "Maize" }, options)).application;
     expect(saved.cropType).toBe("Maize");
     await expect(runOperationInProcess(updateApplication, ctx, { applicationId: app.id, expectedVersion: saved.version, appliedWetMassKg: 1 }, options)).rejects.toMatchObject({ code: "certification_locked" });
   } finally { await cleanupLineageFixture(f); }
@@ -147,12 +147,12 @@ it("allows metadata under a draft Removal and refuses a mass change", async () =
 describe.todo("membership races move to artifacts before runs in commit 1b");
 
 it("recovers a forced auto-code collision inside its savepoint", () => fixtureTest(async f => {
-  const existing = await runOperationInProcess(recordApplication, ctx, input(f.deliveryIds[0], 1), options);
+  const existing = (await runOperationInProcess(recordApplication, ctx, input(f.deliveryIds[0], 1), options)).application;
   const original = writers.createApplicationInTransaction;
   const insert = vi.spyOn(writers, "createApplicationInTransaction");
   insert.mockImplementationOnce((context, tx, data) => original(context, tx, { ...data, code: existing.code }));
   try {
-    const saved = await runOperationInProcess(recordApplication, ctx, input(f.deliveryIds[0], 2), options);
+    const saved = (await runOperationInProcess(recordApplication, ctx, input(f.deliveryIds[0], 2), options)).application;
     expect(saved.code).not.toBe(existing.code);
     expect(insert).toHaveBeenCalledTimes(2);
     const apps = await db.select().from(applications).where(eq(applications.deliveryId, f.deliveryIds[0]));
@@ -168,7 +168,7 @@ it("holds mix-bin delivery applications out of unowned credit slices", async () 
     // frozen policy even if the bin's current mode later changes.
     const allocations = await db.select().from(outputStockAllocations).where(eq(outputStockAllocations.deliveryId, f.deliveryId));
     for (const row of allocations) await db.update(outputStockAllocations).set({ basisSnapshot: { ...row.basisSnapshot, policy: PRO_RATA_POLICY } }).where(eq(outputStockAllocations.id, row.id));
-    const app = await runOperationInProcess(recordApplication, ctx, { ...input(f.deliveryId, 1), applicationDate: "2026-06-16" }, options);
+    const app = (await runOperationInProcess(recordApplication, ctx, { ...input(f.deliveryId, 1), applicationDate: "2026-06-16" }, options)).application;
     applicationId = app.id;
     expect(await getMixBinHeldApplicationIds(ctx, db, [app.id])).toEqual(new Set([app.id]));
     expect(await db.select().from(creditBatchApplications).where(eq(creditBatchApplications.applicationId, app.id))).toHaveLength(0);

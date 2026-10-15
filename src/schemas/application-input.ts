@@ -25,6 +25,8 @@ const fields = {
   soilTemperatureC: z.number().min(MIN_SOIL_TEMPERATURE_C).max(MAX_SOIL_TEMPERATURE_C).nullable().optional(),
 };
 export const recordApplicationInput = z.strictObject({ ...fields, evidenceMethod: fields.evidenceMethod.default("location") }).superRefine((data, ctx) => {
+  // An omitted location pair is resolved inside the operation; the writer validates the final state.
+  if (data.evidenceMethod === "location" && data.gpsLatitude === undefined && data.gpsLongitude === undefined) return;
   const result = applicationEvidenceStateSchema.safeParse(data);
   if (!result.success) for (const issue of result.error.issues) ctx.addIssue({ code: "custom", path: issue.path[0] === "gpsLongitude" ? ["gpsLatitude"] : issue.path, message: issue.message });
 });

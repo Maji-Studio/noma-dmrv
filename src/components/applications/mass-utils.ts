@@ -4,7 +4,6 @@ import { UNKNOWN_FACILITY_TIMEZONE } from "@/lib/date-utils";
 import { formatDayString, formatFacilityDay, formatMassKg } from "@/lib/format-utils";
 import { formatWetDryStock } from "@/lib/mass-moisture";
 import { formatRemainingMass } from "@/components/forms/entity-select/remaining-mass";
-import type { SoilTemperatureSource } from "@/schemas/applications";
 import type { DeliveryStatus } from "@/schemas/deliveries";
 import { MISSING_VALUE } from "@/lib/copy-utils";
 import {
@@ -12,9 +11,7 @@ import {
   pickerShowsRemainingStock,
 } from "@/lib/stock-overdraw";
 
-/** The only source a delivery-derived prefill can assert (approved global dataset). */
-export const SOIL_TEMPERATURE_SOURCE_GLOBAL =
-  "global_database" satisfies SoilTemperatureSource;
+import { SOIL_TEMPERATURE_SOURCE_GLOBAL } from "@/lib/application-guidance";
 
 export interface ApplicationDeliveryOption {
   id: string;

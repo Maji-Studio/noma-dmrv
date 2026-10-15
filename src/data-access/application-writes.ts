@@ -27,6 +27,7 @@ import { reconcileUnassignedCreditBatchApplicationSlices } from "./credit-batch-
 import { retireDocumentsForEntities } from "./documents";
 import { massGrams } from "./delivery-allocation-math";
 import { nextVersion } from "./row-version";
+import { getApplicationOperationOutput, getApplicationRemainingWetMassKg } from "./application-operation-output";
 import { requireOrgScope } from "./utils";
 
 const IMMUTABLE_CREDIT_BATCH_STATUSES = new Set<string>(["verified", "issued"]);
@@ -72,13 +73,14 @@ async function saveShares(ctx: OrgContext, tx: DbTransaction, application: Appli
   requireOrgScope(ctx);
   await withFeedstockErrors(() => saveApplicationOutputAllocations(ctx, tx, application), "conflict", ["deliveryId"]);
 }
-export async function createApplicationInTransaction(ctx: OrgContext, tx: DbTransaction, input: RecordApplicationInput & { code: string }): Promise<Application> {
+export async function createApplicationInTransaction(ctx: OrgContext, tx: DbTransaction, input: RecordApplicationInput & { code: string }) {
   requireOrgScope(ctx);
   validateFieldSize(input.fieldSizeHa, input.code);
   const scope = await lockApplicationWriteScope(ctx, tx, { mutation: "create", deliveryId: input.deliveryId });
   const delivery = writableDelivery(scope, input.deliveryId, input.applicationDate);
   validateEvidence(input, input.fieldSizeHa, input.code);
   const biocharAppliedDryTons = await dryMass(ctx, tx, delivery, input.appliedWetMassKg);
+  const remainingBefore = await getApplicationRemainingWetMassKg(ctx, tx, delivery.id);
   const [application] = await tx.insert(applications).values({
     organizationId: ctx.organizationId, code: input.code, status: "applied", deliveryId: input.deliveryId, applicationDate: input.applicationDate,
     biocharAppliedTons: kgToTonnes(input.appliedWetMassKg), biocharAppliedDryTons, fieldSizeHa: input.fieldSizeHa,
@@ -88,9 +90,9 @@ export async function createApplicationInTransaction(ctx: OrgContext, tx: DbTran
   }).returning();
   await saveShares(ctx, tx, application);
   await reconcileUnassignedCreditBatchApplicationSlices(ctx, tx, { applicationIds: [application.id] });
-  return application;
+  return getApplicationOperationOutput(ctx, tx, application, remainingBefore);
 }
-export async function updateApplicationInTransaction(ctx: OrgContext, tx: DbTransaction, input: UpdateApplicationInput): Promise<Application> {
+export async function updateApplicationInTransaction(ctx: OrgContext, tx: DbTransaction, input: UpdateApplicationInput) {
   requireOrgScope(ctx);
   const { applicationId, expectedVersion, appliedWetMassKg, applicationMethod, ...fields } = input;
   const scope = await lockApplicationWriteScope(ctx, tx, { applicationId, expectedVersion, deliveryId: fields.deliveryId, mutation: "update" });
@@ -102,6 +104,7 @@ export async function updateApplicationInTransaction(ctx: OrgContext, tx: DbTran
   validateEvidence(merged, merged.fieldSizeHa, existing.code);
   const massChanged = (input.deliveryId !== undefined && input.deliveryId !== existing.deliveryId) || (input.appliedWetMassKg !== undefined && massGrams(input.appliedWetMassKg) !== massGrams(tonnesToKg(existing.biocharAppliedTons)));
   if (massChanged) assertMutableSlices(scope, "update");
+  const remainingBefore = await getApplicationRemainingWetMassKg(ctx, tx, delivery.id);
   const data = { ...fields, updatedAt: new Date(), version: nextVersion(applications.version),
     ...(input.fieldIdentifier !== undefined ? { fieldIdentifier: optionalText(input.fieldIdentifier) } : {}),
     ...(input.cropType !== undefined ? { cropType: optionalText(input.cropType) } : {}),
@@ -112,7 +115,7 @@ export async function updateApplicationInTransaction(ctx: OrgContext, tx: DbTran
   const [application] = await withUniqueCodeGuard(ctx, applications, applications.code, `Application code "${input.code}" already exists`, () => tx.update(applications).set(data).where(and(eq(applications.organizationId, ctx.organizationId), eq(applications.id, existing.id))).returning());
   if (massChanged) await saveShares(ctx, tx, application);
   await reconcileUnassignedCreditBatchApplicationSlices(ctx, tx, { applicationIds: [application.id] });
-  return application;
+  return getApplicationOperationOutput(ctx, tx, application, remainingBefore);
 }
 export async function deleteApplicationInTransaction(ctx: OrgContext, tx: DbTransaction, input: DeleteApplicationInput): Promise<void> {
   requireOrgScope(ctx);

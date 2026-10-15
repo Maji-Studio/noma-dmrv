@@ -11,6 +11,7 @@
  */
 "use client";
 
+import { FACILITY_REFERENCE_TEMPERATURE_NOTICE } from "@/lib/application-guidance";
 import { nullableNumericValue, numericValue } from "@/lib/form-utils";
 import { formatUtcDate } from "@/lib/date-utils";
 import { formatDayString } from "@/lib/format-utils";
@@ -650,7 +651,7 @@ export function ApplicationForm({
             label="Soil temperature (°C)"
             error={errors.soilTemperatureC?.message}
             cue="Annual average for this application site"
-            hint="Submission uses the facility reference temperature."
+            hint={FACILITY_REFERENCE_TEMPERATURE_NOTICE}
             aside={<span className="body-caption text-[var(--color-text-secondary)]">Advisory</span>}
           >
             <FormInput

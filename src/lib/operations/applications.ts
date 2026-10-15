@@ -1,3 +1,6 @@
+import { getApplicationSiteDefaults } from "@/data-access/application-site-defaults";
+import type { ApplicationOperationOutput } from "@/data-access/application-operation-output";
+import { SOIL_TEMPERATURE_SOURCE_GLOBAL } from "@/lib/application-guidance";
 import { CODE_CONFLICT_MESSAGES, withAutoCodes } from "@/data-access/code-generator";
 import { createApplicationInTransaction, updateApplicationInTransaction, deleteApplicationInTransaction } from "@/data-access/application-writes";
 import { processPendingStorageObjectDeletions } from "@/data-access/storage-object-deletions";
@@ -17,18 +20,35 @@ export const describeRecordedApplication = (input: RecordApplicationInput, outpu
 export const describeUpdatedApplication = (input: UpdateApplicationInput, output: Pick<Application, "id" | "version">): OperationEffect => ({ outcome: "updated", entityType: "application", entityIds: [output.id],
     versionBefore: input.expectedVersion, versionAfter: output.version, changedFields: changedFields(input) });
 
-export const recordApplication: Operation<typeof recordApplicationInput, Application> = {
+export const recordApplication: Operation<typeof recordApplicationInput, ApplicationOperationOutput> = {
   id: "record_application", input: recordApplicationInput, supportsDryRun: true,
-  describe: describeRecordedApplication,
+  describe: (input, output) => describeRecordedApplication(input, output.application),
   execute: async ({ ctx, tx }, input) => {
-    return withAutoCodes(ctx, tx, "AP", applications, applications.code, AUTO_CODE_COUNT,
-      ([code], savepoint) => createApplicationInTransaction(ctx, savepoint, { ...input, code }), CODE_CONFLICT_MESSAGES.application);
+    const site = await getApplicationSiteDefaults(ctx, tx, input.deliveryId);
+    const resolved = { ...input };
+    const warnings: string[] = [];
+    if (input.evidenceMethod === "location" && input.gpsLatitude === undefined && input.gpsLongitude === undefined && site?.gpsLatitude != null && site.gpsLongitude != null) {
+      resolved.gpsLatitude = site.gpsLatitude;
+      resolved.gpsLongitude = site.gpsLongitude;
+      warnings.push(`GPS copied from customer location ${site.customerLocationName}.`);
+    }
+    const temperature = site?.defaultSoilTemperatureC ?? site?.facilityDefaultSoilTemperatureC;
+    if (site?.durabilityOption !== "1000_year" && input.soilTemperatureC === undefined && input.soilTemperatureSource === undefined && temperature != null) {
+      resolved.soilTemperatureC = temperature;
+      resolved.soilTemperatureSource = SOIL_TEMPERATURE_SOURCE_GLOBAL;
+      warnings.push(site?.defaultSoilTemperatureC != null
+        ? `Soil temperature copied from customer location ${site.customerLocationName}.`
+        : "Soil temperature copied from the facility default.");
+    }
+    const saved = await withAutoCodes(ctx, tx, "AP", applications, applications.code, AUTO_CODE_COUNT,
+      ([code], savepoint) => createApplicationInTransaction(ctx, savepoint, { ...resolved, code }), CODE_CONFLICT_MESSAGES.application);
+    return { ...saved, warnings: [...warnings, ...saved.warnings] };
   },
 };
 
-export const updateApplication: Operation<typeof updateApplicationInput, Application> = {
+export const updateApplication: Operation<typeof updateApplicationInput, ApplicationOperationOutput> = {
   id: "update_application", input: updateApplicationInput, supportsDryRun: true,
-  describe: describeUpdatedApplication,
+  describe: (input, output) => describeUpdatedApplication(input, output.application),
   execute: ({ ctx, tx }, input) => updateApplicationInTransaction(ctx, tx, input),
 };
 

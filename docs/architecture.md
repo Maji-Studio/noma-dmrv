@@ -36,7 +36,7 @@ components (UI)
   output-stock movement, lab sample and order writes use this layer (`make_biochar_product`,
   `update_biochar_product`, `record_output_stock_movement`, `record_lab_sample`,
   `update_lab_sample`, `delete_lab_sample`, `record_order`, `update_order`,
-  `delete_order`). Application writes use the unregistered `record_application`,
+  `delete_order`). Application writes use the registered `record_application`,
   `update_application` and `delete_application` operations. UI product deletes
   stay off the runner. Lost mass form edits run `record_output_stock_movement`
   with the unpublished `requireLatestCorrection` option. Delivery updates run
