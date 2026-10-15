@@ -48,7 +48,6 @@ function batch(
     runs: [],
     facilityTimezone: "UTC",
     sampling: "sampled",
-    declaredHToCorgRatio: null,
     durabilityOption: "200_year",
     ...overrides,
   };

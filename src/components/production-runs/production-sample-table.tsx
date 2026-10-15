@@ -173,7 +173,7 @@ export function ProductionSampleTable({
   // NOTE: no certification replicate chip here. These are in-process production
   // samples; the ≥3-replicate / eligibility certification signal is judged on the
   // lab `Sample` records the Certify path actually reads
-  // (`getProductionRunsWithSamples`), not this table — surfacing a `CERT n/3`
+  // (`getCreditBatchesWithSamples`), not this table — surfacing a `CERT n/3`
   // chip off this count would misreport certification coverage.
 
   return (

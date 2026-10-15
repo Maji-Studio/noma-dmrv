@@ -14,6 +14,8 @@ import { toDeleteErrorMessage } from "@/lib/stale-version";
  */
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
+import { ConflictError } from "@/lib/conflict-ref";
 import { parseAsString, useQueryState } from "nuqs";
 import {
   CertificateIcon,
@@ -77,7 +79,7 @@ import { ILLUSTRATION_SIZE, CreditBatchArt } from "@/components/ui/illustrations
 
 const EMPTY_CREDIT_BATCHES: CreditBatchWithRelations[] = [];
 export const CREDIT_BATCH_DELETE_MESSAGE =
-  "Delete this credit batch? This removes the grouping, releases its production runs so they can be grouped again, and clears direct membership from its lab Samples. This cannot be undone.";
+  "Delete this credit batch? This removes the grouping, releases its production runs so they can be grouped again, and cannot be undone. A credit batch with Samples cannot be deleted until its Samples are moved to another credit batch or deleted.";
 
 export function closeCreditBatchCreate(
   clearCreateIntent: () => void,
@@ -138,6 +140,7 @@ export function CreditBatchList({
   // Error state
   const [createError, setCreateError] = useState<string | null>(null);
   const [updateError, setUpdateError] = useState<string | null>(null);
+  const [deleteConflict, setDeleteConflict] = useState<ConflictError | null>(null);
   const createIntent = useOpenCreateIntent({ initialOpen: initialCreate });
 
   const { facilityId: contextFacilityId } = useFacilityContext();
@@ -318,6 +321,7 @@ export function CreditBatchList({
     const row = (creditBatches ?? []).find((item) => item.id === batchId);
     if (!row) return;
     setDeletingVersion(row.version);
+    setDeleteConflict(null);
     setDeletingBatchId(batchId);
   };
 
@@ -331,7 +335,11 @@ export function CreditBatchList({
       }
       toast.success("Credit batch deleted.");
     } catch (error) {
-      toast.error(toDeleteErrorMessage(error, "Credit batch", "Credit batch was not deleted. Try again."));
+      if (error instanceof ConflictError) {
+        setDeleteConflict(error);
+      } else {
+        toast.error(toDeleteErrorMessage(error, "Credit batch", "Credit batch was not deleted. Try again."));
+      }
     }
     setDeletingBatchId(null);
   };
@@ -661,6 +669,20 @@ export function CreditBatchList({
             className="border-t border-[var(--color-border-tertiary)] pt-16 md:px-0"
           />
         </>
+      )}
+
+      {deleteConflict && (
+        <ServerError
+          message={deleteConflict.message}
+          action={deleteConflict.conflict.entity === "sample" && (
+            <Link
+              href={`/samples?${new URLSearchParams({ facility: contextFacilityId ?? "", sample: deleteConflict.conflict.id })}`}
+              className="body-small underline"
+            >
+              Open {deleteConflict.conflict.code}
+            </Link>
+          )}
+        />
       )}
 
       {/* Delete Confirmation Dialog */}

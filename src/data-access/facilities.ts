@@ -475,37 +475,14 @@ export async function getFacilityArchiveImpact(
         ),
       ),
     db.select({ count: count() }).from(creditBatches).where(and(eq(creditBatches.facilityId, facilityId), eq(creditBatches.organizationId, ctx.organizationId))),
-    // Mirror the getSamples read model: a sample's effective facility comes from
-    // EITHER its production-run or its credit-batch parent (schema still allows
-    // run-linked, batchless provenance). An inner join through creditBatchId
-    // alone dropped those rows, undercounting the archive impact. Left-join both
-    // parents and count distinct samples where either facility matches.
     db
       .select({ count: countDistinct(samples.id) })
       .from(samples)
-      .leftJoin(
-        productionRuns,
-        and(
-          eq(samples.productionRunId, productionRuns.id),
-          eq(productionRuns.organizationId, ctx.organizationId),
-        ),
-      )
-      .leftJoin(
-        creditBatches,
-        and(
-          eq(samples.creditBatchId, creditBatches.id),
-          eq(creditBatches.organizationId, ctx.organizationId),
-        ),
-      )
-      .where(
-        and(
-          eq(samples.organizationId, ctx.organizationId),
-          or(
-            eq(productionRuns.facilityId, facilityId),
-            eq(creditBatches.facilityId, facilityId),
-          ),
-        ),
-      ),
+      .innerJoin(creditBatches, and(
+        eq(samples.creditBatchId, creditBatches.id),
+        eq(creditBatches.organizationId, ctx.organizationId),
+      ))
+      .where(and(eq(samples.organizationId, ctx.organizationId), eq(creditBatches.facilityId, facilityId))),
     db.select({ count: count() }).from(stockpileEvents).where(and(eq(stockpileEvents.facilityId, facilityId), eq(stockpileEvents.organizationId, ctx.organizationId))),
     db.select({ count: count() }).from(powerProcurementEvidence).where(and(eq(powerProcurementEvidence.facilityId, facilityId), eq(powerProcurementEvidence.organizationId, ctx.organizationId))),
     hasBlockingFacilitySubmission(ctx, db, facilityId, "isometric"),

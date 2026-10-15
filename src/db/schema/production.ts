@@ -18,7 +18,7 @@ import { organizations } from './auth';
 import { incidentSeverity, productionRunStatus } from './common';
 import { facilities, reactors, storageLocations } from './facilities';
 import { feedstocks } from './feedstock';
-import { fraction, massKg, percent, ppm } from './numeric-families';
+import { fraction, massKg, percent } from './numeric-families';
 import { operators } from './parties';
 
 // ============================================
@@ -205,7 +205,7 @@ export const samples = pgTable('samples', {
   // production batch) — its >=3 replicates' mean/std-dev. Drizzle keeps this
   // free of .references() to avoid a circular schema import with credits.ts;
   // migration 0057 adds the DB foreign key.
-  creditBatchId: uuid('credit_batch_id'),
+  creditBatchId: uuid('credit_batch_id').notNull(),
   // Provenance: which production run the sample was physically drawn from.
   // Nullable — batch biochar can be commingled across runs. (Was the primary
   // link pre-0015; now secondary to creditBatchId.)
@@ -247,22 +247,6 @@ export const samples = pgTable('samples', {
   hToCOrgRatio: fraction('h_to_c_org_ratio'),
   oToCOrgRatio: fraction('o_to_c_org_ratio'),
 
-  // --- Heavy Metals (mg/kg) ---
-  arsenicMgKg: ppm('arsenic_mg_kg'),
-  cadmiumMgKg: ppm('cadmium_mg_kg'),
-  chromiumMgKg: ppm('chromium_mg_kg'),
-  copperMgKg: ppm('copper_mg_kg'),
-  leadMgKg: ppm('lead_mg_kg'),
-  mercuryMgKg: ppm('mercury_mg_kg'),
-  nickelMgKg: ppm('nickel_mg_kg'),
-  zincMgKg: ppm('zinc_mg_kg'),
-
-  // --- Contaminants ---
-  pahTotalMgKg: ppm('pah_total_mg_kg'),
-  pcbTotalMgKg: ppm('pcb_total_mg_kg'),
-  dioxinsNgKg: ppm('dioxins_ng_kg'),
-  furansNgKg: ppm('furans_ng_kg'),
-
   // --- Nutrients (%) ---
   phosphorusPercent: real('phosphorus_percent'),
   potassiumPercent: real('potassium_percent'),
@@ -286,8 +270,6 @@ export const samples = pgTable('samples', {
   sReflectanceFraction: real('s_reflectance_fraction'),
   tgaAnalysisDate: date('tga_analysis_date'),
   r0AnalysisDate: date('r0_analysis_date'),
-  r0HistogramFileUrl: text('r0_histogram_file_url'),
-  tgaThermogramFileUrl: text('tga_thermogram_file_url'),
 
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
@@ -297,8 +279,7 @@ export const samples = pgTable('samples', {
     table.sampleCode
   ),
   index('samples_organization_id_credit_batch_id_sampling_time_idx')
-    .on(table.organizationId, table.creditBatchId, table.samplingTime)
-    .where(sql`${table.creditBatchId} is not null`),
+    .on(table.organizationId, table.creditBatchId, table.samplingTime),
   foreignKey({
     columns: [table.productionRunId, table.organizationId],
     foreignColumns: [productionRuns.id, productionRuns.organizationId],
