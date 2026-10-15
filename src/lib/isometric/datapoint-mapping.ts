@@ -33,7 +33,9 @@ export function lookupInputMapping(
   if (effective.scope !== "operating") return undefined;
   if (effective.automaticSource === "sequestration") return mapping;
   if (effective.automaticSource) return { ...mapping, source: automaticSourceFact(effective.automaticSource), sourceByComponent: undefined };
-  return mapping;
+  // A contract without an automatic source is entry-only; the catalog default
+  // would feed one total to every such line (two sample shipping lines).
+  return undefined;
 }
 
 // Shared triples require an effective automatic contract, including diesel.
@@ -44,7 +46,7 @@ export function resolveDatapointSource(
   const effective = contract && effectiveContract(contract);
   if (effective?.scope === "operating" && effective.automaticSource === "sequestration") return mapping.source;
   if (effective?.scope === "operating" && effective.automaticSource) return automaticSourceFact(effective.automaticSource);
-  if (mapping.sourceByComponent || (contract && effective?.scope !== "operating")) {
+  if (contract || mapping.sourceByComponent) {
     throw new SafeError("Review the Removal template lines in Certification settings.");
   }
   return mapping.source;

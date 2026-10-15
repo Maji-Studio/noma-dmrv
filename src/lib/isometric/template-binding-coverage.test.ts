@@ -58,7 +58,10 @@ describe("contract-based template coverage", () => {
   it("preserves production period guards and sandbox stubs for entry-only lines", () => {
     const value = realTemplate as GhgEntryTemplate;
     expect(coverage(value).some((finding) => finding.reason === "project-scope")).toBe(true);
-    expect(coverage(value, reviewedTemplateSources(value), true)).toEqual([]);
+    // Sandbox stubs period lines only. Sample shipping lines have no automatic
+    // source, so they block instead of each receiving the full sample transport total.
+    const sampleLines = ["rtc_1M4ZRPH1RSBXADG2", "rtc_1M4ZRRN6PSBXHQ7C"];
+    expect(coverage(value, reviewedTemplateSources(value), true).map((finding) => finding.componentId).sort()).toEqual(sampleLines);
   });
   it("blocks forbidden lines even in sandbox", () => {
     const first = template.groups.flatMap((group) => group.components)[0];
