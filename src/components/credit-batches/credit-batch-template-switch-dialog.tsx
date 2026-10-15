@@ -6,6 +6,11 @@
  * The server refuses a switch on a batch a submitted Removal holds, and a stale
  * version; both come back as the form error and the dialog stays open.
  *
+ * Once another template is chosen, the dialog previews its line review: how
+ * many lines need review (they block the batch's Removals until an Owner or
+ * Admin reviews them) or that all are reviewed. The preview informs the choice
+ * and never blocks the switch.
+ *
  * The form sends the batch version it opened on, never a refetched one, so a
  * concurrent switch is refused instead of overwritten (#768). After a stale
  * refusal the choice stays; "Discard changes and reload" is the one way to move
@@ -23,6 +28,7 @@ import { FormDialogContext } from "@/components/ui/form-dialog-context";
 import { useToast } from "@/components/ui/toast";
 import { useSwitchCreditBatchRemovalTemplate } from "@/hooks/use-removal-template-review";
 import type { IsometricGhgEntryTemplate } from "@/lib/isometric";
+import { TemplateReviewPreview } from "./credit-batch-template-review-preview";
 import { getStaleVersionConflict, toSaveErrorMessage } from "@/lib/stale-version";
 import {
   switchRemovalTemplateFormSchema,
@@ -36,7 +42,7 @@ export interface CreditBatchTemplateSwitchDialogProps {
   onClose: () => void;
   /** A stale refusal: refetch the batch so a reload can show its latest values. */
   onStale?: () => void;
-  creditBatch: { id: string; code: string; version: number; removalTemplateId: string | null };
+  creditBatch: { id: string; code: string; facilityId: string; version: number; removalTemplateId: string | null };
   /** The facility default, marked in the list. */
   defaultTemplateId: string | null;
   templates: IsometricGhgEntryTemplate[] | undefined;
@@ -135,7 +141,7 @@ function SwitchTemplateForm({
       <header className="flex flex-col gap-4">
         <h2 id={DIALOG_TITLE_ID} className="title-heading-3">Switch template</h2>
         <p className="body-small text-[var(--color-text-secondary)]">
-          {`Removals for ${creditBatch.code} use this template's lines. Lines that need review block the Removal until an Owner or Admin reviews them.`}
+          {`Removals for ${creditBatch.code} use this template's lines.`}
         </p>
       </header>
 
@@ -160,6 +166,14 @@ function SwitchTemplateForm({
           onBlur={field.onBlur}
         />
       </FormField>
+
+      {!unchanged && !unavailableReason && (
+        <TemplateReviewPreview
+          facilityId={creditBatch.facilityId}
+          removalTemplateId={field.value}
+          creditBatchCode={creditBatch.code}
+        />
+      )}
 
       <FormActions
         control={control}

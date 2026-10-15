@@ -2,6 +2,7 @@
 import type { ReactNode } from "react";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { FormDialogContext } from "@/components/ui/form-dialog-context";
 import { StaleVersionError, STALE_VERSION_CONFLICT_CODE, STALE_VERSION_MESSAGE } from "@/lib/stale-version";
 import { RemovalTemplateReviewPanel } from "./removal-template-review-panel";
 import type { RemovalTemplateReviewEntry } from "./removal-template-review-model";
@@ -193,6 +194,42 @@ describe("RemovalTemplateReviewPanel", () => {
     });
     await act(async () => { fireEvent.click(saveButton()); });
     expect(mocks.mutateAsync).toHaveBeenLastCalledWith(expect.objectContaining({ expectedVersion: 4 }));
+  });
+
+  it("reports a draft as unsaved changes to the surrounding guard until it is undone", async () => {
+    const report = vi.fn();
+    const guard = { report, cancel: vi.fn(), markSaved: vi.fn() };
+    render(
+      <FormDialogContext.Provider value={guard}>
+        <RemovalTemplateReviewPanel facilityId={FACILITY_ID} canManage />
+      </FormDialogContext.Provider>,
+    );
+    expect(report).toHaveBeenLastCalledWith(expect.anything(), { dirty: false, busy: false });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Accept proposal for Startup diesel usage" }));
+    });
+    expect(report).toHaveBeenLastCalledWith(expect.anything(), { dirty: true, busy: false });
+
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Undo changes to Startup diesel usage" })); });
+    expect(report).toHaveBeenLastCalledWith(expect.anything(), { dirty: false, busy: false });
+  });
+
+  it("is clean again after a successful save", async () => {
+    const report = vi.fn();
+    render(
+      <FormDialogContext.Provider value={{ report, cancel: vi.fn(), markSaved: vi.fn() }}>
+        <RemovalTemplateReviewPanel facilityId={FACILITY_ID} canManage />
+      </FormDialogContext.Provider>,
+    );
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Accept proposal for Startup diesel usage" }));
+    });
+    await act(async () => { fireEvent.click(saveButton()); });
+
+    expect(mocks.mutateAsync).toHaveBeenCalled();
+    expect(screen.queryByText("Not saved")).toBeNull();
+    expect(report).toHaveBeenLastCalledWith(expect.anything(), { dirty: false, busy: false });
   });
 
   it("shows a missing template with no lines to review", () => {

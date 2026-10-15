@@ -19,13 +19,24 @@ vi.mock("@/components/forms/entity-select/entity-select", () => ({
     </select>
   ),
 }));
-const mocks = vi.hoisted(() => ({ mutateAsync: vi.fn(), success: vi.fn() }));
+const mocks = vi.hoisted(() => ({ mutateAsync: vi.fn(), success: vi.fn(), preview: vi.fn() }));
 vi.mock("@/components/ui/toast", () => ({ useToast: () => ({ success: mocks.success }) }));
 vi.mock("@/hooks/use-removal-template-review", () => ({
   useSwitchCreditBatchRemovalTemplate: () => ({ mutateAsync: mocks.mutateAsync, isPending: false }),
+  useRemovalTemplateReviewPreview: mocks.preview,
 }));
 
-const BATCH = { id: "33333333-3333-4333-8333-333333333333", code: "CB-26-001", version: 4, removalTemplateId: "rvt_old" };
+const FACILITY_ID = "44444444-4444-4444-8444-444444444444";
+const BATCH = {
+  id: "33333333-3333-4333-8333-333333333333", code: "CB-26-001", facilityId: FACILITY_ID, version: 4, removalTemplateId: "rvt_old",
+};
+
+function previewResult(data: { needsReviewCount: number; enrichmentProblems?: unknown[] }) {
+  return {
+    isPending: false, isError: false, isFetching: false, refetch: vi.fn(),
+    data: { templateId: "rvt_new", lineSourceProblems: [], enrichmentProblems: [], ...data },
+  };
+}
 const TEMPLATES = [
   { id: "rvt_old", display_name: "Removal Template 2026-07-03", credit_type: "REMOVAL" },
   { id: "rvt_new", display_name: "Dark Earth Carbon Template", credit_type: "REMOVAL" },
@@ -38,6 +49,7 @@ beforeEach(() => {
   vi.stubGlobal("matchMedia", vi.fn().mockImplementation(() => ({ matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn() })));
   vi.clearAllMocks();
   mocks.mutateAsync.mockResolvedValue({ ...BATCH, removalTemplateId: "rvt_new", version: 5 });
+  mocks.preview.mockReturnValue(previewResult({ needsReviewCount: 0 }));
 });
 afterEach(() => {
   cleanup();
@@ -72,6 +84,66 @@ describe("CreditBatchTemplateSwitchDialog", () => {
       "Select a template", "Removal Template 2026-07-03", "Dark Earth Carbon Template",
     ]);
     expect((screen.getByRole("button", { name: "Switch template" }) as HTMLButtonElement).disabled).toBe(true);
+    // No preview for the template the batch already uses.
+    expect(mocks.preview).not.toHaveBeenCalled();
+  });
+
+  it("previews how many lines of the chosen template need review without blocking the switch", async () => {
+    mocks.preview.mockReturnValue(previewResult({ needsReviewCount: 2 }));
+    mount();
+    await screen.findByRole("dialog", { name: "Switch template" });
+    await act(async () => {
+      fireEvent.change(document.getElementById("removalTemplateId")!, { target: { value: "rvt_new" } });
+    });
+
+    expect(mocks.preview).toHaveBeenLastCalledWith(FACILITY_ID, "rvt_new", true);
+    expect(screen.getByText("2 lines need review")).toBeTruthy();
+    expect(screen.getByText("Removals for CB-26-001 stay blocked until an Owner or Admin reviews them.")).toBeTruthy();
+    const link = screen.getByRole("link", { name: "Open Removal templates" });
+    expect(link.getAttribute("href")).toContain("section=removal-templates");
+    expect((screen.getByRole("button", { name: "Switch template" }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it("says a template Isometric did not return in full blocks the Removal", async () => {
+    mocks.preview.mockReturnValue(previewResult({
+      needsReviewCount: 0,
+      enrichmentProblems: [{ code: "unknown-enrichment", componentId: "cmp_startup", inputKey: "volume" }],
+    }));
+    mount();
+    await screen.findByRole("dialog", { name: "Switch template" });
+    await act(async () => {
+      fireEvent.change(document.getElementById("removalTemplateId")!, { target: { value: "rvt_new" } });
+    });
+
+    expect(screen.getByText("Template not fully read")).toBeTruthy();
+    expect(screen.getByText(/stay blocked until the template is read in full/)).toBeTruthy();
+  });
+
+  it("confirms a chosen template whose lines are all reviewed", async () => {
+    mount();
+    await screen.findByRole("dialog", { name: "Switch template" });
+    await act(async () => {
+      fireEvent.change(document.getElementById("removalTemplateId")!, { target: { value: "rvt_new" } });
+    });
+
+    expect(screen.getByText("All lines in this template are reviewed.")).toBeTruthy();
+    expect(screen.queryByText(/need review/)).toBeNull();
+    expect(screen.queryByRole("link", { name: "Open Removal templates" })).toBeNull();
+  });
+
+  it("offers a retry when the preview cannot be read and still allows the switch", async () => {
+    const refetch = vi.fn();
+    mocks.preview.mockReturnValue({ isPending: false, isError: true, isFetching: false, refetch, data: undefined });
+    mount();
+    await screen.findByRole("dialog", { name: "Switch template" });
+    await act(async () => {
+      fireEvent.change(document.getElementById("removalTemplateId")!, { target: { value: "rvt_new" } });
+    });
+
+    expect(screen.getByText("This template's lines could not be checked. You can still switch.")).toBeTruthy();
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Try again" })); });
+    expect(refetch).toHaveBeenCalled();
+    expect((screen.getByRole("button", { name: "Switch template" }) as HTMLButtonElement).disabled).toBe(false);
   });
 
   it("switches the pin against the batch version and closes", async () => {

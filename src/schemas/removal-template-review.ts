@@ -17,7 +17,10 @@ export const switchCreditBatchRemovalTemplateSchema = z.object({
 });
 /** The switch dialog's one field; the action adds the batch id and version. */
 export const switchRemovalTemplateFormSchema = switchCreditBatchRemovalTemplateSchema.pick({ removalTemplateId: true });
+/** The line review form: drafts keyed by component id. The card adds the observation and version. */
+export const reviewRemovalTemplateLinesFormSchema = reviewRemovalTemplateLinesSchema.pick({ assignments: true });
 export type ReviewRemovalTemplateLinesInput = z.infer<typeof reviewRemovalTemplateLinesSchema>;
+export type ReviewRemovalTemplateLinesFormValues = z.infer<typeof reviewRemovalTemplateLinesFormSchema>;
 export type SwitchCreditBatchRemovalTemplateInput = z.infer<typeof switchCreditBatchRemovalTemplateSchema>;
 export type SwitchRemovalTemplateFormValues = z.infer<typeof switchRemovalTemplateFormSchema>;
 

@@ -3,8 +3,10 @@
  * facility default, what changed since the last read, whether Isometric
  * returned it in full, and every line grouped as the template groups them.
  *
- * Owners and Admins collect line assignments as a local draft and save them
- * together against the observation and version the first draft was made on.
+ * Owners and Admins collect line assignments as a React Hook Form draft keyed
+ * by component id, so the dialog and sheet unsaved-changes guards see it, and
+ * save them together against the observation and version the first draft was
+ * made on.
  * A refetch never moves that baseline under the draft (#768): a stale save
  * keeps the draft and shows the conflict, and only "Discard changes and reload"
  * drops both and reads the templates again.
@@ -13,6 +15,8 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useController, useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { FormActions } from "@/components/forms";
 import { Button } from "@/components/ui/button";
 import { Notice } from "@/components/ui/notice";
@@ -21,6 +25,10 @@ import { useToast } from "@/components/ui/toast";
 import { useReviewRemovalTemplateLines } from "@/hooks/use-removal-template-review";
 import { MISSING_VALUE } from "@/lib/copy-utils";
 import { getStaleVersionConflict, toSaveErrorMessage } from "@/lib/stale-version";
+import {
+  reviewRemovalTemplateLinesFormSchema,
+  type ReviewRemovalTemplateLinesFormValues,
+} from "@/schemas/removal-template-review";
 import { RawIdentifiers } from "./removal-template-mapping-view";
 import { RemovalTemplateLineRow } from "./removal-template-line-row";
 import {
@@ -72,6 +80,9 @@ interface DraftBaseline {
   version: number;
 }
 
+const EMPTY_DRAFT: ReviewRemovalTemplateLinesFormValues = { assignments: {} };
+const INVALID_DRAFT_MESSAGE = "Some line assignments are not valid. Change them and save again.";
+
 export function RemovalTemplateReviewCard({
   entry,
   facilityId,
@@ -79,11 +90,22 @@ export function RemovalTemplateReviewCard({
   onRetry,
   isRetrying,
 }: RemovalTemplateReviewCardProps) {
-  const [drafts, setDrafts] = useState<Record<string, LineAssignment>>({});
+  const {
+    control,
+    handleSubmit,
+    reset,
+    setError,
+    clearErrors,
+    formState: { errors, isSubmitting },
+  } = useForm<ReviewRemovalTemplateLinesFormValues>({
+    resolver: zodResolver(reviewRemovalTemplateLinesFormSchema),
+    defaultValues: EMPTY_DRAFT,
+  });
+  const { field } = useController({ control, name: "assignments" });
+  const drafts = field.value;
   const [editing, setEditing] = useState<Record<string, boolean>>({});
   const [baseline, setBaseline] = useState<DraftBaseline>();
   const [stale, setStale] = useState(false);
-  const [saveError, setSaveError] = useState<string>();
   const review = useReviewRemovalTemplateLines();
   const toast = useToast();
 
@@ -100,11 +122,10 @@ export function RemovalTemplateReviewCard({
   const headingId = `removal-template-${entry.templateId}`;
 
   const resetDrafts = () => {
-    setDrafts({});
+    reset(EMPTY_DRAFT);
     setEditing({});
     setBaseline(undefined);
     setStale(false);
-    setSaveError(undefined);
   };
 
   const setDraft = (componentId: string, draft: LineAssignment | undefined) => {
@@ -113,35 +134,40 @@ export function RemovalTemplateReviewCard({
     else delete next[componentId];
     if (Object.keys(next).length === 0) {
       // Nothing left to save, so nothing left to check: the next draft starts fresh.
-      setDrafts({});
+      reset(EMPTY_DRAFT);
       setBaseline(undefined);
       setStale(false);
-      setSaveError(undefined);
       return;
     }
-    if (!stale) setSaveError(undefined);
-    setDrafts(next);
+    // A stale refusal stays until the draft is discarded and reloaded.
+    if (!stale) clearErrors();
+    field.onChange(next);
     if (!baseline && entry.observation) {
       setBaseline({ observationId: entry.observation.id, version: entry.observation.version });
     }
   };
 
-  const save = async () => {
-    if (!baseline || pendingCount === 0) return;
-    setSaveError(undefined);
+  const save = async (values: ReviewRemovalTemplateLinesFormValues) => {
+    // A reload after a stale save can drop a line; never send a draft for it.
+    const assignments = Object.fromEntries(Object.entries(values.assignments).filter(([id]) => lineIds.has(id)));
+    if (!baseline || Object.keys(assignments).length === 0) return;
     try {
       await review.mutateAsync({
         observationId: baseline.observationId,
         expectedVersion: baseline.version,
-        assignments: pending,
+        assignments,
       });
       resetDrafts();
       toast.success(`Template lines saved for ${name}.`);
     } catch (error) {
-      setSaveError(toSaveErrorMessage(error, "The template lines were not saved. Try again."));
+      setError("root.serverError", {
+        type: "server",
+        message: toSaveErrorMessage(error, "The template lines were not saved. Try again."),
+      });
       if (getStaleVersionConflict(error)) setStale(true);
     }
   };
+  const saveError = errors.root?.serverError?.message ?? (errors.assignments ? INVALID_DRAFT_MESSAGE : undefined);
 
   const reload = () => {
     resetDrafts();
@@ -184,7 +210,11 @@ export function RemovalTemplateReviewCard({
             Switch the credit batches that use it to another Removal template.
           </Notice>
         ) : (
-          <>
+          <form
+            onSubmit={handleSubmit(save)}
+            noValidate
+            className="flex flex-col gap-16"
+          >
             {notFullyRead && (
               <Notice
                 tone="warning"
@@ -237,13 +267,12 @@ export function RemovalTemplateReviewCard({
 
             {canManage && (
               <FormActions
+                control={control}
                 sticky={false}
-                submitType="button"
-                onSubmitClick={() => void save()}
                 submitVariant="default"
                 submitLabel={pendingCount > 1 ? `Save ${pendingCount} lines` : "Save line"}
                 submittingLabel="Saving…"
-                isSubmitting={review.isPending}
+                isSubmitting={isSubmitting || review.isPending}
                 submitDisabled={pendingCount === 0 || notFullyRead || !baseline || stale}
                 errorMessage={saveError}
                 errorAction={stale ? (
@@ -253,7 +282,7 @@ export function RemovalTemplateReviewCard({
                 ) : undefined}
               />
             )}
-          </>
+          </form>
         )}
 
         <RawIdentifiers
