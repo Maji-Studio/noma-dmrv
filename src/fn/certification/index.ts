@@ -119,3 +119,5 @@ export {
   type CandidateLineageEntity,
   type MirrorResult,
 } from "./sources";
+
+export { loadRemovalTemplateReview, reviewRemovalTemplateLines, switchCreditBatchRemovalTemplate } from "./removal-template-review";

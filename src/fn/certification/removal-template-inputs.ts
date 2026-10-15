@@ -1,3 +1,5 @@
+import { effectiveContract, type LineSources } from "@/lib/isometric/template-observations/line-sources";
+import { ownValue } from "@/lib/isometric/semantic-binding-catalog";
 import { pluralize } from "@/lib/copy-utils";
 import { SafeError } from "@/lib/errors";
 import type {
@@ -35,6 +37,7 @@ export interface ResolvedTemplateInputs {
 
 export function resolveTemplateInputs(args: {
   template: IsometricGhgEntryTemplate;
+  lineSources: LineSources;
   blueprintsByKey: Map<string, IsometricComponentBlueprint>;
   agg: AggregatedProductionData;
   externalProjectId: string;
@@ -45,6 +48,7 @@ export function resolveTemplateInputs(args: {
 }): ResolvedTemplateInputs {
   const {
     template,
+    lineSources,
     blueprintsByKey,
     agg,
     externalProjectId,
@@ -62,6 +66,11 @@ export function resolveTemplateInputs(args: {
 
   for (const group of template.groups) {
     for (const component of group.components) {
+      const lineContract = ownValue(lineSources, component.id);
+      if (!lineContract || effectiveContract(lineContract).scope === "unassigned") {
+        throw new SafeError("Review the Removal template lines in Certification settings.");
+      }
+      if (effectiveContract(lineContract).scope === "forbidden") throw new SafeError("This line belongs at the project level in Isometric.");
       const monitoredMappings = component.inputs
         .filter((input) => input.type === "monitored")
         .map((input) =>
@@ -69,6 +78,7 @@ export function resolveTemplateInputs(args: {
             group.key,
             component.blueprint_key,
             input.input_key,
+            lineContract,
           ),
         )
         .filter((mapping) => mapping != null);
@@ -116,6 +126,7 @@ export function resolveTemplateInputs(args: {
           groupKey: group.key,
           componentBlueprintKey: component.blueprint_key,
           componentDisplayName: component.display_name,
+          lineContract,
           rtcInput,
           blueprintInput,
           agg,

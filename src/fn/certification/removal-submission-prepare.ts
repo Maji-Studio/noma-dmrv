@@ -1,3 +1,5 @@
+import type { LineSources } from "@/lib/isometric/template-observations/line-sources";
+import { REMOVAL_TEMPLATE_BLOCKERS } from "@/lib/certification/removal-template-blockers";
 /**
  * Removal submission preparation: the template and registry-connection gates
  * that Review, submit and the claimed-draft freshness check all share.
@@ -5,7 +7,7 @@
  * `prepareRemovalSubmission` is pure over the org-scoped
  * `RemovalSubmissionContext`. It returns the ordered blockers and, once the
  * project, credentials and template resolve, the bundle every build and compile
- * takes: the default template narrowed to non-null, its blueprint lookup, the
+ * takes: the pinned template narrowed to non-null, its blueprint lookup, the
  * project id, the period-input stub flag and whether the template carries
  * durability components. Review still compiles from a blocked bundle so the
  * operator sees the details; submit and freshness refuse on any blocker.
@@ -33,17 +35,16 @@ export const REMOVAL_PREPARATION_BLOCKERS = {
   noProject: "Link a facility to an Isometric project first.",
   noCredentials:
     "Configure organization Isometric credentials before submitting.",
-  templateNotFound:
-    "The facility's default Removal template was not found in Certify. Refresh the link in facility settings.",
-  noTemplate: "Set a default Removal template before submitting.",
+  ...REMOVAL_TEMPLATE_BLOCKERS,
+  noTemplate: REMOVAL_TEMPLATE_BLOCKERS.unpinnedTemplate,
   notRemovalTemplate:
-    "The facility's default template is not a REMOVAL template. Rebind a REMOVAL template in facility settings before submitting.",
+    "This template is not a Removal template. Choose a Removal template for this credit batch.",
   templateOutOfDate:
     "The registry template is out of date. Refresh the facility link in settings before submitting.",
   // Detailed guidance comes from formatUnbindableTemplateInputs.
   templateUnbindable: "The Removal template has components noma cannot submit.",
   emptyTemplate:
-    "The default Removal template has no fields to submit. Choose another template in facility settings.",
+    "The Removal template has no fields to submit. Choose another template for this credit batch.",
   durabilityUnavailable: DURABILITY_SUBMISSION_UNAVAILABLE_MESSAGE,
 } as const;
 
@@ -56,7 +57,8 @@ export interface RemovalPreparationBlocker {
 }
 
 export interface PreparedRemovalSubmission {
-  defaultTemplate: IsometricGhgEntryTemplate;
+  removalTemplate: IsometricGhgEntryTemplate;
+  lineSources: LineSources;
   blueprintsByKey: Map<string, IsometricComponentBlueprint>;
   externalProjectId: string;
   /**
@@ -69,7 +71,7 @@ export interface PreparedRemovalSubmission {
 }
 
 export interface RemovalSubmissionPreparation {
-  /** Null until the project link, credentials and default template resolve. */
+  /** Null until the project link, credentials and pinned template resolve. */
   prepared: PreparedRemovalSubmission | null;
   blockers: RemovalPreparationBlocker[];
 }
@@ -78,8 +80,9 @@ type PreparationContext = Pick<
   RemovalSubmissionContext,
   | "mapping"
   | "hasOrgCredentials"
-  | "missingDefaultTemplateId"
-  | "defaultTemplate"
+  | "templateBlockers"
+  | "lineSources"
+  | "removalTemplate"
   | "unresolvedBlueprintKeys"
   | "blueprintsForTemplate"
 >;
@@ -121,21 +124,21 @@ export function prepareRemovalSubmission(
       blockers: [connection ?? blocker("noProject")],
     };
   }
-  if (ctx.missingDefaultTemplateId) {
-    return { prepared: null, blockers: [blocker("templateNotFound")] };
+  if (ctx.templateBlockers.length) {
+    return { prepared: null, blockers: ctx.templateBlockers };
   }
-  const defaultTemplate = ctx.defaultTemplate;
-  if (!defaultTemplate) {
+  const removalTemplate = ctx.removalTemplate;
+  if (!removalTemplate) {
     return { prepared: null, blockers: [blocker("noTemplate")] };
   }
 
-  const hasDurabilityComponents = hasDurabilityMeasurementComponents(defaultTemplate);
+  const hasDurabilityComponents = hasDurabilityMeasurementComponents(removalTemplate);
   const blockers: RemovalPreparationBlocker[] = [];
   const isometricEnvironment = options.isometricEnvironment ?? env.ISOMETRIC_ENVIRONMENT;
-  const unbindable = findUnbindableTemplateInputs(defaultTemplate, { allowPeriodInputStub: allowsPeriodInputStub(isometricEnvironment) });
+  const unbindable = findUnbindableTemplateInputs(removalTemplate, { lineSources: ctx.lineSources, allowPeriodInputStub: allowsPeriodInputStub(isometricEnvironment) });
   // The template lives on Isometric and can change credit_type after binding;
   // a REDUCTION template must never mislabel a GHG entry.
-  if (defaultTemplate.credit_type !== "REMOVAL") {
+  if (removalTemplate.credit_type !== "REMOVAL") {
     blockers.push(blocker("notRemovalTemplate"));
   }
   if (ctx.unresolvedBlueprintKeys.length > 0) {
@@ -144,7 +147,7 @@ export function prepareRemovalSubmission(
   if (unbindable.length > 0) {
     blockers.push({ code: "templateUnbindable", message: formatUnbindableTemplateInputsText(unbindable) });
   }
-  if (defaultTemplate.groups.length === 0) {
+  if (removalTemplate.groups.length === 0) {
     blockers.push(blocker("emptyTemplate"));
   }
   // Without the evidence step the required sequestration sources cannot be
@@ -155,7 +158,8 @@ export function prepareRemovalSubmission(
   return {
     blockers,
     prepared: {
-      defaultTemplate,
+      removalTemplate,
+      lineSources: ctx.lineSources,
       blueprintsByKey: new Map(
         ctx.blueprintsForTemplate.map((blueprint) => [blueprint.key, blueprint]),
       ),

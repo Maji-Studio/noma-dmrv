@@ -1,3 +1,4 @@
+import { reviewedTemplateSources } from "./helpers/template-line-sources";
 import { TEST_SITE_POSITION,
   ensureTestOrg,
   makeTestOrgContext,
@@ -377,13 +378,15 @@ function makeContext(
     reportingWindowCompletedOn: null,
     mapping: makeMapping(fixture),
     project: { id: fixture.externalProjectId, name: "Boundary project" } as never,
-    defaultTemplate: makeTemplate(),
-    missingDefaultTemplateId: null,
+    removalTemplate: makeTemplate(),
+    templateBlockers: [],
+    lineSources: reviewedTemplateSources(makeTemplate()),
     blueprintsForTemplate: makeBlueprints(),
     unbindableTemplateInputs: [],
     unresolvedBlueprintKeys: [],
     memberBatches: [{
       id: fixture.creditBatchId,
+      removalTemplateId: makeTemplate().id,
       code: "CB-BD-001",
       startDate: "2026-07-01",
       endDate: "2026-07-31",

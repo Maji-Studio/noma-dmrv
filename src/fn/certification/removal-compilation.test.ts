@@ -1,5 +1,6 @@
+import { reviewedTemplateSources } from "../../../tests/helpers/template-line-sources";
 import { unsupportedTemplate } from "../../../tests/fixtures/isometric/unsupported-template";
-import { findUnbindableTemplateInputs, formatUnbindableTemplateInputsText } from "@/lib/isometric/template-binding-coverage";
+import { findUnbindableTemplateInputs as findCoverage, formatUnbindableTemplateInputsText } from "@/lib/isometric/template-binding-coverage";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { OrgContext } from "@/lib/auth/server";
 
@@ -77,8 +78,9 @@ describe("loadRemovalCompilation preparation blockers", () => {
   const baseContext = {
     mapping: { externalProjectId: "prj-1" },
     hasOrgCredentials: true,
-    missingDefaultTemplateId: null,
-    defaultTemplate: template,
+    templateBlockers: [],
+    lineSources: reviewedTemplateSources(template as unknown as Parameters<typeof reviewedTemplateSources>[0]),
+    removalTemplate: template,
     unbindableTemplateInputs: [],
     unresolvedBlueprintKeys: [],
     blueprintsForTemplate: [],
@@ -106,7 +108,7 @@ describe("loadRemovalCompilation preparation blockers", () => {
     vi.mocked(loadRemovalSubmissionContext).mockResolvedValue({
       ...baseContext,
       hasOrgCredentials: false,
-      defaultTemplate: null,
+      removalTemplate: null,
     } as never);
 
     const result = await loadRemovalCompilation(FACILITY_ID, REMOVAL_ID);
@@ -123,10 +125,10 @@ describe("loadRemovalCompilation preparation blockers", () => {
   });
 
   it("deduplicates template blockers from preparation and compilation", async () => {
-    const defaultTemplate = unsupportedTemplate();
-    const message = formatUnbindableTemplateInputsText(findUnbindableTemplateInputs(defaultTemplate));
-    vi.mocked(loadRemovalSubmissionContext).mockResolvedValue({ ...baseContext, defaultTemplate } as never);
-    vi.mocked(compileRemovalSubmission).mockResolvedValue({ review: { template: { id: defaultTemplate.id } }, blockers: [message], warnings: [], snapshot: null, transportPlan: null } as never);
+    const removalTemplate = unsupportedTemplate();
+    const message = formatUnbindableTemplateInputsText(findUnbindableTemplateInputs(removalTemplate));
+    vi.mocked(loadRemovalSubmissionContext).mockResolvedValue({ ...baseContext, removalTemplate } as never);
+    vi.mocked(compileRemovalSubmission).mockResolvedValue({ review: { template: { id: removalTemplate.id } }, blockers: [message], warnings: [], snapshot: null, transportPlan: null } as never);
     const result = await loadRemovalCompilation(FACILITY_ID, REMOVAL_ID);
     expect(result.success && result.data.blockers.filter((blocker) => blocker === message)).toEqual([message]);
   });
@@ -134,7 +136,7 @@ describe("loadRemovalCompilation preparation blockers", () => {
   it("still compiles a resolved template and lists its gates first", async () => {
     vi.mocked(loadRemovalSubmissionContext).mockResolvedValue({
       ...baseContext,
-      defaultTemplate: { ...template, credit_type: "REDUCTION" },
+      removalTemplate: { ...template, credit_type: "REDUCTION" },
     } as never);
 
     const result = await loadRemovalCompilation(FACILITY_ID, REMOVAL_ID);
@@ -153,3 +155,7 @@ describe("loadRemovalCompilation preparation blockers", () => {
     });
   });
 });
+
+function findUnbindableTemplateInputs(template: Parameters<typeof findCoverage>[0], options: Parameters<typeof findCoverage>[1] = {}) {
+  return findCoverage(template, { lineSources: reviewedTemplateSources(template as unknown as Parameters<typeof reviewedTemplateSources>[0]), ...options });
+}

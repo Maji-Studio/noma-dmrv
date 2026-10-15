@@ -295,7 +295,7 @@ async function submitRemovalCore(
   }
   const prepared = preparation.prepared;
   const {
-    defaultTemplate,
+    removalTemplate,
     blueprintsByKey,
     externalProjectId,
     hasDurabilityComponents,
@@ -319,7 +319,7 @@ async function submitRemovalCore(
   const facilityTier = ctx.batchesWithSamples[0]?.durabilityOption ?? null;
   const tierBlocker = removalTemplateTierCompatibilityBlocker(
     ctx,
-    defaultTemplate,
+    removalTemplate,
   );
   const submitBlockerMessage = firstSubmitBlockerMessage(
     preparation.blockers,
@@ -515,7 +515,7 @@ async function submitRemovalCore(
     buildSnapshot: ({ inputs, nextVersion, supersedePreviousId }) =>
       materializeRemovalSubmissionSnapshot({
         compiled: inputs,
-        template: defaultTemplate,
+        template: removalTemplate,
         externalProjectId,
         removalId,
         nextVersion,
@@ -632,7 +632,7 @@ async function submitRemovalCore(
           row: claimed.row,
           transport,
           fixed: effectiveFixed,
-          template: defaultTemplate,
+          template: removalTemplate,
           blueprintsByKey,
           reportingWindow: {
             startedOn: reportingWindow.startedOn,

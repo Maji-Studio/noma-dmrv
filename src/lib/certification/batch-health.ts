@@ -32,6 +32,7 @@ export type BatchHealthState =
   | "incomplete"; // one or more checks unmet (see `checks`)
 
 export type BatchHealthCheckKey =
+  | "template"
   | "carbon" // carbon & durability lab inputs resolved
   | "facilityEmissions" // facility emission-estimate inputs resolved
   | "feedstockTypeMapping" // declared pyrolysis feedstock type linked to Isometric
@@ -40,6 +41,7 @@ export type BatchHealthCheckKey =
   | "entityReadiness"; // certifier-required entity fields on the batch's own lineage
 
 export type BatchHealthFixTarget =
+  | "certificationTemplates"
   | "batchDetails"
   | "orders"
   | "deliveries"
@@ -151,6 +153,7 @@ export interface BatchHealthFacts {
    * transport coverage is only evaluable once this is true.
    */
   facilitySetupComplete: boolean;
+  templateBlockers?: string[];
   /**
    * Transport coverage for the categories the facility's default template
    * requires. Empty when the template requires none — or when facility setup is
@@ -462,6 +465,9 @@ function submissionChecks(facts: BatchHealthFacts): BatchHealthCheckBase[] {
 export function deriveBatchHealth(facts: BatchHealthFacts): BatchHealth {
   const checks = mergeUnmetChecksByDestination(
     [
+      ...(facts.templateBlockers ?? []).map((message): BatchHealthCheckBase => ({
+        key: "template", label: "Removal template reviewed", status: "unmet", detail: message, fixTarget: "certificationTemplates",
+      })),
       carbonCheck(facts),
       ...facilityEmissionsChecks(facts),
       feedstockTypeMappingCheck(facts),

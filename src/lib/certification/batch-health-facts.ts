@@ -60,14 +60,14 @@ function carbonMissingInputs(
   return Array.from(new Set(member?.durabilityGateBlockers ?? []));
 }
 
-// The facility's project mapping + default template resolve cleanly. Transport
+// The facility project and batch-pinned template resolve cleanly. Transport
 // requirements come from the template, so transport is only evaluable once true
 // (mirrors `templateResolvesCleanly` in readiness.ts, plus the mapping gate).
 function isFacilitySetupComplete(ctx: RemovalCertifyContext): boolean {
   return (
     !!ctx.mapping &&
-    !!ctx.defaultTemplate &&
-    !ctx.missingDefaultTemplateId &&
+    !!ctx.removalTemplate &&
+    !ctx.templateBlockers?.length &&
     ctx.unresolvedBlueprintKeys.length === 0 &&
     ctx.unbindableTemplateInputs.length === 0
   );
@@ -80,6 +80,7 @@ export function toBatchHealthFacts(
   const facilitySetupComplete = isFacilitySetupComplete(ctx);
   const batch = ctx.memberBatches.find((member) => member.id === batchId);
   return {
+    templateBlockers: ctx.templateBlockers?.map((blocker) => blocker.message) ?? [],
     warnings: batch ? sampleDocumentWarnings({ ...batch, creditBatchCode: batch.code }) : [],
     carbonMissingInputs: carbonMissingInputs(ctx, batchId),
     facilityEmissionsBlockers: batch?.facilityEmissionsGateBlockers ?? [],

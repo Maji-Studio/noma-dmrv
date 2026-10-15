@@ -56,10 +56,11 @@ export interface RemovalReadinessFacts {
   hasMapping: boolean;
   /** The organization has encrypted Isometric credentials configured. */
   hasOrgCredentials: boolean;
-  /** The facility's default removal template resolved on Isometric. */
-  hasDefaultTemplate: boolean;
+  /** The member batches' pinned Removal template resolved on Isometric. */
+  hasRemovalTemplate: boolean;
+  templateBlockers?: { code: string; message: string }[];
   /** Set when a configured template id no longer exists on Isometric. */
-  missingDefaultTemplateId: string | null;
+  missingRemovalTemplateId: string | null;
   /** Template blueprint keys with no matching component blueprint. */
   unresolvedBlueprintKeys: string[];
   unbindableTemplateInputs: UnbindableTemplateInput[];
@@ -167,11 +168,12 @@ function describeCategories(categories: TransportCategory[]): string {
 // template chain resolves cleanly. Shared by the classifier and the pre-flight
 // checklist so the two never phrase the same blocker differently.
 function templateBlockerReason(facts: RemovalReadinessFacts): string | null {
-  if (facts.missingDefaultTemplateId) {
-    return `Default removal template ${facts.missingDefaultTemplateId} is no longer available`;
+  if (facts.templateBlockers?.length) return facts.templateBlockers.map((blocker) => blocker.message).join(" ");
+  if (facts.missingRemovalTemplateId) {
+    return "Template no longer exists in Isometric.";
   }
-  if (!facts.hasDefaultTemplate) {
-    return "No default Removal template selected for this facility";
+  if (!facts.hasRemovalTemplate) {
+    return "Choose a Removal template for this credit batch.";
   }
   if (facts.unresolvedBlueprintKeys.length > 0) {
     const n = facts.unresolvedBlueprintKeys.length;
@@ -185,8 +187,9 @@ function templateBlockerReason(facts: RemovalReadinessFacts): string | null {
 
 function templateResolvesCleanly(facts: RemovalReadinessFacts): boolean {
   return (
-    facts.hasDefaultTemplate &&
-    !facts.missingDefaultTemplateId &&
+    facts.hasRemovalTemplate &&
+    !facts.templateBlockers?.length &&
+    !facts.missingRemovalTemplateId &&
     facts.unresolvedBlueprintKeys.length === 0 &&
     facts.unbindableTemplateInputs.length === 0
   );
@@ -519,7 +522,7 @@ function withRequirementMeta(
 /**
  * The New-Removal wizard's requirements step shows only the checks that are NOT
  * a single batch's concern (design doc §3): facility setup (project mapping +
- * default template) and the cross-batch transport uniformity that can only be
+ * pinned template) and the cross-batch transport uniformity that can only be
  * judged once batches are pooled into a removal, plus any production or entity
  * readiness blockers that can appear when an existing removal is resumed.
  * Transport-leg presence remains a batch-health concern. Pure projection of the

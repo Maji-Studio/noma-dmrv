@@ -10,6 +10,7 @@ import type {
 export interface MemberCreditBatch {
   id: string;
   code: string;
+  removalTemplateId: string | null;
   startDate: string;
   endDate: string;
   appliedWeightTons: number;
@@ -33,6 +34,7 @@ export function toMemberCreditBatch(
   return {
     id: batch.id,
     code: batch.code,
+    removalTemplateId: batch.removalTemplateId,
     startDate: batch.startDate,
     endDate: batch.endDate,
     appliedWeightTons: accounting.appliedWeightTons,
@@ -55,6 +57,7 @@ export function toMemberCreditBatchView(
   return {
     id: batch.id,
     code: batch.code,
+    removalTemplateId: batch.removalTemplateId,
     startDate: batch.startDate,
     endDate: batch.endDate,
     appliedWeightTons: batch.appliedWeightTons,

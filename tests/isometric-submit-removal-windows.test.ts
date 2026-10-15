@@ -1,3 +1,4 @@
+import { reviewedTemplateSources } from "./helpers/template-line-sources";
 /**
  * Reporting-window and durability capability tests for `submitRemoval`.
  *
@@ -80,7 +81,8 @@ describe("submitRemoval — reporting window anchored to application date (issue
     const baseContext = makeContext();
     vi.mocked(certifyContext.loadRemovalSubmissionContext).mockResolvedValue({
       ...baseContext,
-      defaultTemplate: makeCombinedTemplate(),
+      removalTemplate: makeCombinedTemplate(),
+      lineSources: reviewedTemplateSources(makeCombinedTemplate()),
       durabilityGateBlockers: [],
       batchesWithSamples: baseContext.batchesWithSamples.map((batch) => ({
         ...batch,
@@ -222,7 +224,8 @@ describe("submitRemoval — reporting window anchored to application date (issue
     const baseContext = makeContext();
     vi.mocked(certifyContext.loadRemovalSubmissionContext).mockResolvedValue({
       ...baseContext,
-      defaultTemplate: makeCombinedTemplate(),
+      removalTemplate: makeCombinedTemplate(),
+      lineSources: reviewedTemplateSources(makeCombinedTemplate()),
       durabilityGateBlockers: [],
       batchesWithSamples: baseContext.batchesWithSamples.map((batch) => ({
         ...batch,
@@ -557,7 +560,8 @@ describe("submitRemoval — durability measurement-samples gate (sandbox-only)",
   it("blocks a template that declares a biochar_sequestration_200_year_* component when the environment targets the live registry", async () => {
     vi.mocked(certifyContext.loadRemovalSubmissionContext).mockResolvedValue({
       ...makeContext(),
-      defaultTemplate: makeSequestrationTemplate(),
+      removalTemplate: makeSequestrationTemplate(),
+      lineSources: reviewedTemplateSources(makeSequestrationTemplate(), { "rtc-seq": { scope: "operating", entryPolicy: "none", origin: "reviewed" } }),
     });
     const createDatapointFake = vi.fn(fakeExternalIds("dp"));
     vi.mocked(isometric.createDatapoint).mockImplementation(
@@ -576,7 +580,8 @@ describe("submitRemoval — durability measurement-samples gate (sandbox-only)",
     const ctx = makeContext();
     vi.mocked(certifyContext.loadRemovalSubmissionContext).mockResolvedValue({
       ...ctx,
-      defaultTemplate: make1000YearSequestrationTemplate(),
+      removalTemplate: make1000YearSequestrationTemplate(),
+      lineSources: reviewedTemplateSources(make1000YearSequestrationTemplate()),
       batchesWithSamples: ctx.batchesWithSamples.map((batch) => ({
         ...batch,
         durabilityOption: "1000_year" as const,
@@ -601,7 +606,8 @@ describe("submitRemoval — durability measurement-samples gate (sandbox-only)",
     setDurabilityMeasurementSamplesEnabled(true);
     vi.mocked(certifyContext.loadRemovalSubmissionContext).mockResolvedValue({
       ...makeContext(),
-      defaultTemplate: makeSequestrationTemplate(),
+      removalTemplate: makeSequestrationTemplate(),
+      lineSources: reviewedTemplateSources(makeSequestrationTemplate(), { "rtc-seq": { scope: "operating", entryPolicy: "none", origin: "reviewed" } }),
     });
 
     await expect(
@@ -629,7 +635,8 @@ describe("submitRemoval — durability measurement-samples gate (sandbox-only)",
     }));
     vi.mocked(certifyContext.loadRemovalSubmissionContext).mockResolvedValue({
       ...ctx,
-      defaultTemplate: make1000YearSequestrationTemplate(),
+      removalTemplate: make1000YearSequestrationTemplate(),
+      lineSources: reviewedTemplateSources(make1000YearSequestrationTemplate()),
       batchesWithSamples: unsampledBatches,
       memberBatches: ctx.memberBatches.map((batch) => ({
         ...batch,

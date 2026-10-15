@@ -1,3 +1,4 @@
+import { effectiveContract, type LineSources } from "@/lib/isometric/template-observations/line-sources";
 import type { IsometricGhgEntryTemplate } from "@/lib/isometric";
 import type { ProductionRunForCertification } from "@/lib/isometric/utils/aggregation";
 
@@ -20,6 +21,7 @@ const DIESEL_UNMAPPED_WARNING =
 
 function templateCarriesRunDiesel(
   template: IsometricGhgEntryTemplate,
+  lineSources: LineSources,
 ): boolean {
   return template.groups.some(
     (group) =>
@@ -27,6 +29,7 @@ function templateCarriesRunDiesel(
       group.components.some(
         (component) =>
           component.blueprint_key === FUEL_USAGE_BY_VOLUME_BLUEPRINT &&
+          ["run-genset-diesel", "run-startup-diesel"].includes(effectiveContract(lineSources[component.id] ?? { scope: "unassigned", entryPolicy: "none", origin: "proposed" }).automaticSource ?? "") &&
           component.inputs.some(
             (input) =>
               input.input_key === VOLUME_OF_FUEL_INPUT_KEY &&
@@ -84,13 +87,14 @@ function buildStraddleWarning(args: {
 //      independent of the template, since it is a property of the lineage
 //      dates alone.
 export function buildSubmissionWarnings(args: {
-  defaultTemplate: IsometricGhgEntryTemplate | null;
+  removalTemplate: IsometricGhgEntryTemplate | null;
+  lineSources: LineSources;
   runs: ProductionRunForCertification[];
   lineages: { application: { applicationDate: Date } }[];
 }): string[] {
-  const { defaultTemplate, runs, lineages } = args;
+  const { removalTemplate, lineSources, runs, lineages } = args;
   const warnings = buildStraddleWarning({ runs, lineages });
-  if (!defaultTemplate || templateCarriesRunDiesel(defaultTemplate)) {
+  if (!removalTemplate || templateCarriesRunDiesel(removalTemplate, lineSources)) {
     return warnings;
   }
   const hasDiesel = runs.some(

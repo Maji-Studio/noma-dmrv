@@ -1,3 +1,4 @@
+import { effectiveContract, type LineContract } from "../template-observations/line-sources";
 import { SafeError } from "@/lib/errors";
 import type { components } from "../generated/certify";
 import type { AggregatedProductionData } from "../utils/aggregation";
@@ -148,11 +149,9 @@ export const MAPPING_REVISION: string = payloadHash(MAPPING_REVISION_INPUT);
 export interface BuildCreateDatapointArgs {
   groupKey: string;
   componentBlueprintKey: string;
-  // Template component display name — the discriminator when one
-  // (group, blueprint, input) triple is declared by more than one component
-  // (see InputMappingEntry.sourceByComponent). Ignored for single-component
-  // triples; omitting it for a shared triple fails closed (never mis-buckets).
+  // Display label for operator messages only.
   componentDisplayName?: string;
+  lineContract?: LineContract;
   rtcInput: GhgEntryTemplateComponentInput;
   blueprintInput: ComponentBlueprintInput;
   agg: AggregatedProductionData;
@@ -181,6 +180,7 @@ export function buildCreateDatapointRequest(
     groupKey,
     componentBlueprintKey,
     componentDisplayName,
+    lineContract,
     rtcInput,
     blueprintInput,
     agg,
@@ -189,6 +189,8 @@ export function buildCreateDatapointRequest(
     sourceIds,
     allowPeriodInputStub,
   } = args;
+  if (lineContract && effectiveContract(lineContract).scope === "forbidden") throw new SafeError("This line belongs at the project level in Isometric.");
+  if (lineContract && effectiveContract(lineContract).scope === "unassigned") throw new SafeError("Review the Removal template lines in Certification settings.");
   const inputKey = rtcInput.input_key;
   const componentLabel =
     componentDisplayName?.trim() &&
@@ -205,7 +207,7 @@ export function buildCreateDatapointRequest(
     groupKey,
     componentBlueprintKey,
     inputKey,
-    componentDisplayName,
+    lineContract,
   );
   if (periodTuple) {
     // Sandbox-only escape hatch. The real fix is removing this input from
@@ -228,23 +230,12 @@ export function buildCreateDatapointRequest(
         type: "REPORTED",
       };
     }
-    const carveOut =
-      lookupInputMapping(groupKey, componentBlueprintKey, inputKey)
-        ?.sourceByComponent;
-    const recognizedCarveOuts = carveOut
-      ? Object.keys(carveOut)
-          .map((name) => `"${name}"`)
-          .join(", ")
-      : null;
     throw new SafeError(
-      `Registry component ${componentLabel} belongs at the project level, so it cannot be submitted with this Removal. Remove it from the Removal template, then add the project emissions in Isometric.` +
-        (recognizedCarveOuts
-          ? ` This registry field can stay at Removal scope only when the component is named ${recognizedCarveOuts}.`
-          : ""),
+      `Registry component ${componentLabel} belongs at the project level, so it cannot be submitted with this Removal. Remove it from the Removal template, then add the project emissions in Isometric.`,
     );
   }
 
-  const mapping = lookupInputMapping(groupKey, componentBlueprintKey, inputKey);
+  const mapping = lookupInputMapping(groupKey, componentBlueprintKey, inputKey, lineContract);
   if (!mapping) {
     throw new RegistryMappingError(
       `Registry component ${componentLabel} is not supported. Ask support to update the registry mapping before submitting.`,
@@ -266,7 +257,7 @@ export function buildCreateDatapointRequest(
     );
   }
 
-  const source = resolveDatapointSource(mapping, componentDisplayName);
+  const source = resolveDatapointSource(mapping, lineContract);
   const raw = agg[source];
   if (raw == null) {
     throw new SafeError(

@@ -1,6 +1,6 @@
 export * from "./types";
 export { normalizeTemplateDefinition } from "./normalize";
-export { canonicalDecimal, canonicalUnit } from "./units";
+export { canonicalDecimal, canonicalUnit, unitsConvertible } from "./units";
 export { enrichmentProblems, isEnrichmentComplete, type EnrichmentProblem } from "./enrichment";
 export { semanticFingerprint, fullFingerprint } from "./fingerprints";
 export { AUTOMATIC_SOURCE_IDS, catalogCandidates, type AutomaticSourceId } from "./catalog-sources";

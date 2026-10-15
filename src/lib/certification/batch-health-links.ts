@@ -10,7 +10,7 @@ import {
   FEEDSTOCK_TYPE_EDIT_LABEL,
 } from "@/lib/entity-deep-link";
 import { sampleCreateHref } from "@/lib/sample-create-intent";
-import { certificationEmissionEstimatesHref } from "./links";
+import { certificationEmissionEstimatesHref, certificationSettingsHref, CERTIFICATION_SETTINGS_TEMPLATE_MAPPING_SECTION } from "./links";
 
 export interface BatchHealthFixLink {
   label: string;
@@ -26,6 +26,8 @@ export function fallbackBatchHealthFixTarget(
   key: BatchHealthCheckKey,
 ): BatchHealthFixTarget {
   switch (key) {
+    case "template":
+      return "certificationTemplates";
     case "carbon":
       // Carbon & durability inputs (organic carbon %, H:Corg ratio) are lab
       // sample measurements — they live on the run's samples, NOT the batch
@@ -71,6 +73,8 @@ export function batchHealthFixLinkFor(
     return params.toString();
   };
   switch (target) {
+    case "certificationTemplates":
+      return { label: "Review Removal templates", href: certificationSettingsHref(facilityId, CERTIFICATION_SETTINGS_TEMPLATE_MAPPING_SECTION) };
     case "batchDetails":
       return {
         label: "Edit details",

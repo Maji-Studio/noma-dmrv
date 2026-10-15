@@ -2,7 +2,7 @@ import { canonicalJson } from "@/lib/canonical-json";
 import { ownValue } from "../semantic-binding-catalog";
 import { fingerprintComponent } from "./fingerprints";
 import { compareIds } from "./normalize";
-import { canonicalUnit } from "./units";
+import { unitsConvertible } from "./units";
 import type { EntryLine, TemplateObservation } from "./types";
 
 export type ComponentChange = "unchanged" | "cosmetic" | "changed" | "removed" | "added";
@@ -41,7 +41,6 @@ export function isEntryCompatible(prev: EntryLine, next: EntryLine): boolean {
     // Every recognized unit within a quantity kind is convertible. Unknown or
     // unread units must be resolved before entries can be confirmed.
     return !!oldValue && !("status" in oldValue) && !!newValue && !("status" in newValue) &&
-      canonicalUnit(input.quantityKind, oldValue.unit) !== undefined &&
-      canonicalUnit(input.quantityKind, newValue.unit) !== undefined;
+      unitsConvertible(input.quantityKind, oldValue.unit, newValue.unit);
   });
 }

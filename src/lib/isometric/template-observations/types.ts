@@ -32,7 +32,7 @@ export interface TemplateDefinition {
 
 /** Monitored inputs have a unit from the blueprint, but no fixed value. */
 export type InputEnrichment =
-  | { unit: string; fixedValue?: string | number | null; deprecated?: boolean }
+  | { unit: string; fixedValue?: string | number | null; deprecated?: boolean | null }
   | { status: "unknown" };
 export type ComponentEnrichment = Record<string, InputEnrichment>;
 export type TemplateEnrichment = Record<string, ComponentEnrichment>;

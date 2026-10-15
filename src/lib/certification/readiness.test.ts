@@ -36,8 +36,8 @@ function ready(
     lockInFlight: false,
     hasMapping: true,
     hasOrgCredentials: true,
-    hasDefaultTemplate: true,
-    missingDefaultTemplateId: null,
+    hasRemovalTemplate: true,
+    missingRemovalTemplateId: null,
     unbindableTemplateInputs: [],
     unresolvedBlueprintKeys: [],
     feedstockTypeMappingGaps: [],
@@ -104,7 +104,7 @@ describe("deriveRemovalReadiness — ready", () => {
 describe("deriveRemovalReadiness — blocked: linkage & template", () => {
   it("blocks with a single reason when the facility is not linked", () => {
     const r = deriveRemovalReadiness(
-      ready({ hasMapping: false, hasDefaultTemplate: false }),
+      ready({ hasMapping: false, hasRemovalTemplate: false }),
     );
     expect(r.state).toBe("blocked");
     expect(r.reasons).toEqual(["Facility not linked to an Isometric project"]);
@@ -115,7 +115,7 @@ describe("deriveRemovalReadiness — blocked: linkage & template", () => {
     const r = deriveRemovalReadiness(
       ready({
         hasMapping: false,
-        hasDefaultTemplate: false,
+        hasRemovalTemplate: false,
         hasSubmittableRuns: false,
       }),
     );
@@ -133,20 +133,19 @@ describe("deriveRemovalReadiness — blocked: linkage & template", () => {
   });
 
   it("blocks when no default template is selected", () => {
-    const r = deriveRemovalReadiness(ready({ hasDefaultTemplate: false }));
+    const r = deriveRemovalReadiness(ready({ hasRemovalTemplate: false }));
     expect(r.state).toBe("blocked");
     expect(r.reasons).toContain(
-      "No default Removal template selected for this facility",
+      "Choose a Removal template for this credit batch.",
     );
   });
 
   it("blocks when the configured template went missing on Isometric", () => {
     const r = deriveRemovalReadiness(
-      ready({ hasDefaultTemplate: false, missingDefaultTemplateId: "tmpl_9" }),
+      ready({ hasRemovalTemplate: false, missingRemovalTemplateId: "tmpl_9" }),
     );
     expect(r.state).toBe("blocked");
-    expect(r.reasons[0]).toContain("tmpl_9");
-    expect(r.reasons[0]).toContain("no longer available");
+    expect(r.reasons[0]).toBe("Template no longer exists in Isometric.");
   });
 
   it("blocks on unresolved blueprint keys with correct pluralisation", () => {
@@ -168,7 +167,7 @@ describe("deriveRemovalReadiness — blocked: linkage & template", () => {
       { category: "feedstock", count: 0, aggregationWarning: null },
     ];
     const r = deriveRemovalReadiness(
-      ready({ hasDefaultTemplate: false, requiredTransport: empty }),
+      ready({ hasRemovalTemplate: false, requiredTransport: empty }),
     );
     expect(r.reasons.some((m) => m.includes("transport"))).toBe(false);
   });
@@ -412,12 +411,12 @@ describe("buildRemovalRequirementsChecklist — row semantics", () => {
 
   it("surfaces the missing-template detail using the shared phrasing", () => {
     const checks = buildRemovalRequirementsChecklist(
-      ready({ hasDefaultTemplate: false, missingDefaultTemplateId: "tmpl_9" }),
+      ready({ hasRemovalTemplate: false, missingRemovalTemplateId: "tmpl_9" }),
     );
     expect(checkFor(checks, "template")).toMatchObject({
       key: "template",
       status: "unmet",
-      detail: "Default removal template tmpl_9 is no longer available",
+      detail: "Template no longer exists in Isometric.",
     });
   });
 
@@ -562,7 +561,7 @@ describe("buildRemovalRequirementsChecklist — wizard facility-level subset", (
 
   it("flags an unresolved template and skips transport uniformity", () => {
     const checks = buildRemovalRequirementsChecklist(
-      ready({ hasDefaultTemplate: false }),
+      ready({ hasRemovalTemplate: false }),
     );
     expect(checkFor(checks, "template").status).toBe("unmet");
     expect(checkFor(checks, "transportUniformity").status).toBe("skipped");

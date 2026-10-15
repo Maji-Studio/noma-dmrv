@@ -121,7 +121,8 @@ describe("submitRemoval — happy path", () => {
       removalId: REMOVAL_ID,
       ctx,
       prepared: {
-        defaultTemplate: ctx.defaultTemplate!,
+        removalTemplate: ctx.removalTemplate!,
+        lineSources: ctx.lineSources,
         blueprintsByKey: new Map(
           ctx.blueprintsForTemplate.map((blueprint) => [
             blueprint.key,
@@ -147,7 +148,8 @@ describe("submitRemoval — happy path", () => {
       removalId: REMOVAL_ID,
       ctx,
       prepared: {
-        defaultTemplate: ctx.defaultTemplate!,
+        removalTemplate: ctx.removalTemplate!,
+        lineSources: ctx.lineSources,
         blueprintsByKey: new Map(
           ctx.blueprintsForTemplate.map((blueprint) => [
             blueprint.key,
@@ -738,7 +740,7 @@ describe("submitRemoval — happy path", () => {
         ...recoveryContext.mapping!,
         defaultRemovalTemplateId: null,
       },
-      defaultTemplate: null,
+      removalTemplate: null,
     });
 
     await expect(
@@ -753,8 +755,8 @@ describe("submitRemoval — happy path", () => {
 
   it("marks absent datapoint and durability work as skipped when reusing a Removal", async () => {
     const fixedOnlyTemplate = {
-      ...makeContext().defaultTemplate!,
-      groups: makeContext().defaultTemplate!.groups.map((group) => ({
+      ...makeContext().removalTemplate!,
+      groups: makeContext().removalTemplate!.groups.map((group) => ({
         ...group,
         components: group.components.map((component) => ({
           ...component,
@@ -768,7 +770,7 @@ describe("submitRemoval — happy path", () => {
     } as IsometricGhgEntryTemplate;
     vi.mocked(certifyContext.loadRemovalSubmissionContext).mockImplementation(
       async () => makeContext(ORIGINAL_BIOCHAR_MASS_KG, {
-        defaultTemplate: fixedOnlyTemplate,
+        removalTemplate: fixedOnlyTemplate,
       }),
     );
     vi.mocked(isometric.createGhgEntry).mockImplementation(

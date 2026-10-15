@@ -6,7 +6,7 @@ import { compareIds } from "./normalize";
 import type { TemplateComponent, TemplateInput } from "./types";
 
 /** Stable persisted IDs. Tuples and group permissions stay in the catalog. */
-const SOURCE_IDS = {
+export const SOURCE_IDS = {
   totalGensetDieselLitres: "run-genset-diesel",
   totalStartupDieselLitres: "run-startup-diesel",
   totalElectricityKwh: "run-electricity",
@@ -72,4 +72,12 @@ export function hasCatalogDisambiguation(blueprintKey: string): boolean {
   return Object.values(bindings ?? {}).some((binding) => Object.values(binding.roles).some((role) =>
     role.strategy === "aggregated-datapoint" && role.disambiguation !== undefined,
   ));
+}
+
+/** The stable contract ID selects a catalog fact, never a display label. */
+export function automaticSourceFact(source: AutomaticSourceId): SourceFactKey {
+  if (source === "safety-margin") return "totalBiocharDryMassKg";
+  const match = Object.entries(SOURCE_IDS).find(([, id]) => id === source);
+  if (!match) throw new Error("Unknown automatic source");
+  return match[0] as SourceFactKey;
 }
