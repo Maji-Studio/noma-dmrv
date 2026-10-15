@@ -13,11 +13,17 @@ lookupContract({
   resource: "facilities", list: FACILITIES_LIST, get: FACILITIES_GET, revision: FACILITY_REPRESENTATION_REVISION,
   seed: async (fixture) => {
     const active = await db.insert(facilities).values(LOOKUP_IDS.map((id, index) => ({
+      country: "Tanzania",
+      gpsLatitude: -8.3,
+      gpsLongitude: 35.3,
       id, organizationId: fixture.ctx.organizationId, code: LOOKUP_CODES[index], name: `Lookup name ${index}`,
       createdAt: sql`${index === 0 ? "2026-10-08 12:00:00.123455" : "2026-10-08 12:00:00.123456"}::timestamp`,
       timezone: "Africa/Dar_es_Salaam",
     }))).returning();
     const [archived] = await db.insert(facilities).values({
+      country: "Tanzania",
+      gpsLatitude: -8.3,
+      gpsLongitude: 35.3,
       organizationId: fixture.ctx.organizationId, code: "LOOKUP-ARCHIVED", name: "Lookup name archived", archivedAt: LOOKUP_ARCHIVE_INSTANT,
       timezone: "Africa/Dar_es_Salaam",
     }).returning();

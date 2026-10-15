@@ -89,6 +89,8 @@ test.describe("First-run onboarding", () => {
       await expect(tierGroup.getByRole("radio", { name: /200-year/i })).toHaveAttribute("aria-disabled", "true");
       await facilitySheet.getByRole("textbox", { name: /facility name/i }).fill(`E2E Onboarding Facility ${RUN_TAG}`);
       await facilitySheet.getByRole("textbox", { name: /^country/i }).fill("Tanzania");
+      await page.locator("#gps-latitude").fill("-8.3");
+      await page.locator("#gps-longitude").fill("35.3");
       await facilitySheet.getByRole("combobox", { name: /timezone/i }).fill("Nairobi");
       await page.getByRole("option", { name: "Africa/Nairobi (UTC+3)" }).click();
       await facilitySheet.getByRole("button", { name: "Create facility", exact: true }).click();

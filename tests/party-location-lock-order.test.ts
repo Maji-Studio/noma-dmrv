@@ -34,8 +34,8 @@ describe.each(["supplier", "customer"] as const)("%s location parent-first locks
       organizationId: TEST_ORG_ID, code: `LOCK-${tag}`, name: `Lock order ${tag}`,
     }).returning();
     const create = () => kind === "supplier"
-      ? createSupplierLocation(ctx, { supplierId: parent.id, country: "CH", isDefault: true })
-      : createCustomerLocation(ctx, { customerId: parent.id, name: "Location", country: "CH", isDefault: true });
+      ? createSupplierLocation(ctx, { gpsLatitude: -8.3, gpsLongitude: 35.3,  supplierId: parent.id, country: "CH", isDefault: true })
+      : createCustomerLocation(ctx, { gpsLatitude: -8.3, gpsLongitude: 35.3,  customerId: parent.id, name: "Location", country: "CH", isDefault: true });
     const location = await create();
     const update = () => kind === "supplier"
       ? updateSupplierLocation(ctx, location.id, { expectedVersion: location.version, isDefault: true })
@@ -116,7 +116,7 @@ describe.each(["supplier", "customer"] as const)("%s location parent-first locks
     async (operation) => {
       const f = await fixture();
       const tag = crypto.randomUUID();
-      const [facility] = await db.insert(facilities).values({ timezone: "UTC",
+      const [facility] = await db.insert(facilities).values({ gpsLatitude: -8.3, gpsLongitude: 35.3,  timezone: "UTC",
         organizationId: TEST_ORG_ID, code: `FAC-${tag}`, name: `Lock facility ${tag}`, country: "CH",
       }).returning();
       const [feedstockType] = await db.insert(feedstockTypes).values({

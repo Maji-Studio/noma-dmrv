@@ -25,7 +25,7 @@ beforeAll(() => ensureTestOrg());
 
 async function fixture() {
   const tag = crypto.randomUUID();
-  const [facility] = await db.insert(facilities).values({ timezone: "UTC",
+  const [facility] = await db.insert(facilities).values({ gpsLatitude: -8.3, gpsLongitude: 35.3,  timezone: "UTC",
     organizationId: TEST_ORG_ID, code: `AUD-${tag}`, name: `Audit ${tag}`, country: "CHE",
   }).returning();
   const [type] = await db.insert(feedstockTypes).values({
@@ -158,7 +158,7 @@ describe("supplier deletion baseline observation", () => {
     const f = await fixture();
     const [supplier] = await db.insert(suppliers).values({ organizationId: TEST_ORG_ID,
       code: `AUD-${crypto.randomUUID()}`, name: `Audit ${crypto.randomUUID()}` }).returning();
-    await db.insert(supplierLocations).values({ organizationId: TEST_ORG_ID,
+    await db.insert(supplierLocations).values({ gpsLatitude: -8.3, gpsLongitude: 35.3,  organizationId: TEST_ORG_ID,
       supplierId: supplier.id, name: "Disposable source location", country: "CHE" });
     const [delivery] = await db.insert(feedstockDeliveries).values({ organizationId: TEST_ORG_ID,
       code: `AUD-${crypto.randomUUID()}`, facilityId: f.facility.id, supplierId: supplier.id,

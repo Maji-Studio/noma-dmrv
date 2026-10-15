@@ -66,7 +66,7 @@ export async function seedDeliveryFixture(caseId: DeliveryCaseId, now = new Date
     await db.update(facilities).set({ timezone: FACILITY_TIME_ZONE, archivedAt: null })
       .where(and(eq(facilities.organizationId, org), eq(facilities.id, fixture.facilityId)));
     const customer = await createCustomer(fixture.ctx, { code: CUSTOMER_CODE, name: "Evaluation customer" });
-    const location = await createCustomerLocation(fixture.ctx, { customerId: customer.id, name: "Evaluation destination",
+    const location = await createCustomerLocation(fixture.ctx, { country: "Tanzania", gpsLatitude: -8.3, gpsLongitude: 35.3,  customerId: customer.id, name: "Evaluation destination",
       isDefault: true, distanceFromFacilityKm: LOCATION_DISTANCE_KM, distanceSource: "manual" });
     const formulation = await createFormulation(fixture.ctx, { code: FORMULATION_CODE, name: "Evaluation pure biochar", biocharRatio: PURE_BIOCHAR_RATIO });
     const source = await createStorageLocation(fixture.ctx, { code: SOURCE_BIN_CODE, name: SOURCE_BIN_CODE,

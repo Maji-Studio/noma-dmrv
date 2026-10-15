@@ -58,7 +58,7 @@ describe("updateFormulation ingredient identity", () => {
     const tag = crypto.randomUUID().slice(0, 8).toUpperCase();
     const [facility] = await db
       .insert(facilities)
-      .values({ timezone: "UTC",
+      .values({ country: "Tanzania", gpsLatitude: -8.3, gpsLongitude: 35.3,  timezone: "UTC",
         organizationId: TEST_ORG_ID,
         code: `FAC-FORM-${tag}`,
         name: `Formulation Facility ${tag}`,

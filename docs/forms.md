@@ -151,6 +151,12 @@ Same reasoning for `PG_INTEGER_MAX` on integer columns, and `RATIO_INPUT_MAX` (9
 
 ### GPS coordinates
 
+Facilities, supplier locations and customer locations require a GPS pair to
+save. Updates may omit the pair to preserve it, but cannot clear it or supply
+only one coordinate. Supplier and customer creation requires at least one
+location. Their optional one-way site distances must be greater than zero
+when entered; empty values clear the distance.
+
 `latitudeSchema` / `longitudeSchema` (optional, nullable) and `requiredLatitudeSchema` / `requiredLongitudeSchema` (with the required-vs-invalid message distinction built in) all expect a **number**, so form schemas wrap them:
 
 ```typescript

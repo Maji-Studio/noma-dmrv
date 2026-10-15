@@ -256,7 +256,6 @@ export async function loadDashboardStructuralGapCounts(
             isNull(supplierLocations.gpsLatitude),
             isNull(supplierLocations.gpsLongitude),
           ),
-          or(isNull(suppliers.gpsLatitude), isNull(suppliers.gpsLongitude)),
         ),
       ),
     // One pass over the facility's legs: each parent type is a left join

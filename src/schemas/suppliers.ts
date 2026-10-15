@@ -6,12 +6,9 @@
 import { z } from "zod";
 import { optionalDistanceSource } from "./distance-source";
 import {
-  clearablePositiveNumber,
+  clearableLocationDistance,
   expectedVersionSchema,
   gpsPairSuperRefine,
-  latitudeSchema,
-  longitudeSchema,
-  optionalPositiveNumber,
   requiredLatitudeSchema,
   requiredLongitudeSchema,
   toNumberOrUndefined,
@@ -35,15 +32,12 @@ export const supplierFormSchema = z.object({
 
   // Location fields
   // General region text only — precise coordinates/distance live per-location
-  // in supplierLocations (mirrors customers). Supplier-level GPS stays optional
-  // for backward compatibility with suppliers created before multi-location.
+  // in supplierLocations (mirrors customers).
   location: z
     .string()
     .max(255, "Location must be less than 255 characters")
     .optional()
     .or(z.literal("")),
-  gpsLatitude: latitudeSchema,
-  gpsLongitude: longitudeSchema,
   address: z
     .string()
     .max(500, "Address must be less than 500 characters")
@@ -75,10 +69,6 @@ export const supplierFormSchema = z.object({
     .optional()
     .or(z.literal("")),
 
-  // Road distance (km) to the delivery facility — autofills a feedstock
-  // transport leg's distance (overridable per delivery).
-  distanceToFacilityKm: optionalPositiveNumber,
-  distanceSource: optionalDistanceSource,
 });
 
 // ============================================
@@ -106,15 +96,11 @@ export const updateSupplierSchema = z.object({
     .optional(),
   name: z.string().trim().min(1).max(255).optional(),
   location: z.string().max(255).optional().nullable().or(z.literal("")),
-  gpsLatitude: latitudeSchema,
-  gpsLongitude: longitudeSchema,
   address: z.string().max(500).optional().nullable().or(z.literal("")),
   contactName: z.string().max(255).optional().nullable().or(z.literal("")),
   contactEmail: z.string().email().max(255).optional().nullable().or(z.literal("")),
   contactPhone: z.string().max(30).optional().nullable().or(z.literal("")),
   sourceRegion: z.string().max(255).optional().nullable().or(z.literal("")),
-  distanceToFacilityKm: clearablePositiveNumber,
-  distanceSource: optionalDistanceSource,
 });
 
 /**
@@ -170,7 +156,7 @@ export const supplierLocationFormSchema = z.object({
   gpsLongitude: z.preprocess(toNumberOrUndefined, requiredLongitudeSchema),
   address: z.string().max(500, "Address must be less than 500 characters").optional().or(z.literal("")),
   // Road distance (km) from this location to the delivery facility.
-  distanceFromFacilityKm: optionalPositiveNumber,
+  distanceFromFacilityKm: clearableLocationDistance,
   distanceSource: optionalDistanceSource,
   // Marks this as the supplier's default source location.
   isDefault: z.boolean().optional().default(false),
@@ -211,13 +197,13 @@ export const updateSupplierLocationSchema = z.object({
   country: z.string().min(1).max(100).optional(),
   stateRegion: z.string().max(100).optional().nullable().or(z.literal("")),
   city: z.string().max(100).optional().nullable().or(z.literal("")),
-  gpsLatitude: latitudeSchema,
-  gpsLongitude: longitudeSchema,
+  gpsLatitude: requiredLatitudeSchema.optional(),
+  gpsLongitude: requiredLongitudeSchema.optional(),
   address: z.string().max(500).optional().nullable().or(z.literal("")),
-  distanceFromFacilityKm: clearablePositiveNumber,
+  distanceFromFacilityKm: clearableLocationDistance,
   distanceSource: optionalDistanceSource,
   isDefault: z.boolean().optional(),
-});
+}).superRefine(gpsPairSuperRefine);
 
 /**
  * Schema for deleting a supplier location

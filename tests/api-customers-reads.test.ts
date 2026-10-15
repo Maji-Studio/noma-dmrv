@@ -29,7 +29,7 @@ beforeEach(async () => {
     .where(and(eq(customers.organizationId, a.ctx.organizationId), eq(customers.id, a.otherCustomer.id)));
   await db.update(customerLocations).set({ createdAt: sql`'2026-10-01 12:00:00.123455'::timestamp`, gpsLatitude: 0, gpsLongitude: 8.5, distanceFromFacilityKm: 20, distanceSource: "document", isDefault: true, address: "hidden", defaultSoilTemperatureC: 25 })
     .where(and(eq(customerLocations.organizationId, a.ctx.organizationId), eq(customerLocations.id, a.location.id)));
-  [extra] = await db.insert(customerLocations).values({ organizationId: a.ctx.organizationId, customerId: a.customer.id, name: `E2E Field ${a.tag}`, createdAt: sql`'2026-10-01 12:00:00.123456'::timestamp` }).returning();
+  [extra] = await db.insert(customerLocations).values({ country: "Tanzania", gpsLatitude: -8.3, gpsLongitude: 35.3,  organizationId: a.ctx.organizationId, customerId: a.customer.id, name: `E2E Field ${a.tag}`, createdAt: sql`'2026-10-01 12:00:00.123456'::timestamp` }).returning();
 }, READ_TIMEOUT_MS);
 afterEach(async () => { await removeApiOrderReadFixture(a); await removeApiOrderReadFixture(b); }, READ_TIMEOUT_MS);
 
@@ -79,7 +79,7 @@ describe("customer and destination REST reads", { timeout: READ_TIMEOUT_MS }, ()
         expect(Object.keys(row).sort()).toEqual(Object.keys(customerLocationRepresentationSchema.shape).sort());
       }
       expect(page.data[1]).toMatchObject({ customerId: a.customer.id, gpsLatitude: 0, gpsLongitude: 8.5, distanceFromFacilityKm: 20, distanceSource: "document", isDefault: true });
-      expect(page.data[0]).toMatchObject({ gpsLatitude: null, gpsLongitude: null, distanceFromFacilityKm: null, distanceSource: null, isDefault: false });
+      expect(page.data[0]).toMatchObject({ gpsLatitude: -8.3, gpsLongitude: 35.3, distanceFromFacilityKm: null, distanceSource: null, isDefault: false });
     }
     expect(await ids(await locations(a.otherCustomer.id))).toEqual([]);
   });

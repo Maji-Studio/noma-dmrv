@@ -99,6 +99,9 @@ async function orderFixture(executor: Executor, input: OrderFixture): Promise<Or
   let customerLocationId = input.customerLocationId;
   if (customerLocationId === undefined) {
     const [location] = await executor.insert(customerLocations).values({
+      country: "Tanzania",
+      gpsLatitude: -8.3,
+      gpsLongitude: 35.3,
       organizationId: input.organizationId, customerId: input.customerId,
       name: `E2E Order destination ${randomUUID()}`,
     }).returning({ id: customerLocations.id });

@@ -106,7 +106,7 @@ async function seedFixture(intakeWetKg = INTAKE_WET_KG): Promise<Fixture> {
 
   const [facility] = await db
     .insert(facilities)
-    .values({ timezone: "UTC",
+    .values({ country: "Tanzania", gpsLatitude: -8.3, gpsLongitude: 35.3,  timezone: "UTC",
       organizationId,
       code: `E2E-BINT-F-${tag}`,
       name: `E2E Bin integrity ${tag}`,
@@ -174,7 +174,7 @@ async function seedFixture(intakeWetKg = INTAKE_WET_KG): Promise<Fixture> {
 async function insertOtherFacility(organizationId: string, tag: string): Promise<string> {
   const [facility] = await db
     .insert(facilities)
-    .values({ timezone: "UTC",
+    .values({ country: "Tanzania", gpsLatitude: -8.3, gpsLongitude: 35.3,  timezone: "UTC",
       organizationId,
       code: `E2E-BINT-F2-${tag}-${randomUUID().slice(0, FACILITY_CODE_SUFFIX_LENGTH).toUpperCase()}`,
       name: `E2E Bin integrity other facility ${tag}`,

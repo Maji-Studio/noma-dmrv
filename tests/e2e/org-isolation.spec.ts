@@ -75,6 +75,8 @@ const test = base.extend<{ orgB: OrgBFixture }>({
           role: "member",
         });
         await tx.insert(schema.facilities).values({
+          gpsLatitude: -8.3,
+          gpsLongitude: 35.3,
           id: ids.facility,
           organizationId: ids.organization,
           code: `ORG-B-FAC-${tag}`,

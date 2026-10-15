@@ -74,7 +74,7 @@ export async function createLineageFixture(
   return db.transaction(async (tx) => {
     const [facility] = await tx
       .insert(facilities)
-      .values({ timezone: "UTC", organizationId: TEST_ORG_ID, code: `FAC-CLG-${tag}`, name: `CLG Facility ${tag}` })
+      .values({ country: "Tanzania", gpsLatitude: -8.3, gpsLongitude: 35.3,  timezone: "UTC", organizationId: TEST_ORG_ID, code: `FAC-CLG-${tag}`, name: `CLG Facility ${tag}` })
       .returning({ id: facilities.id });
 
     const [reactor] = await tx

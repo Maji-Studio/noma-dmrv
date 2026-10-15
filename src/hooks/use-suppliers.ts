@@ -21,7 +21,6 @@ import type {
 
 import type {
   SupplierFilterData,
-  CreateSupplierData,
   CreateSupplierWithLocationsData,
   UpdateSupplierData,
   CreateSupplierLocationData,
@@ -134,12 +133,12 @@ export function useSupplier(supplierId: string, enabled = true) {
  * Supports optional callbacks for custom behavior
  */
 export function useCreateSupplier(
-  callbacks?: MutationCallbacks<Supplier, CreateSupplierData>
+  callbacks?: MutationCallbacks<Supplier, CreateSupplierWithLocationsData>
 ) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (data: CreateSupplierData) => {
+    mutationFn: async (data: CreateSupplierWithLocationsData) => {
       const result = await createSupplierFn(data);
       if (!result.success) {
         throwActionError(result);

@@ -387,15 +387,7 @@ export const CERTIFY_FIELD_REGISTRY: Record<
       mappings: [mapping("biocharTransportMassDistanceTonneKm")],
     },
   ],
-  supplier: [
-    {
-      // Supplier-level fallback distance for the auto-derived feedstock leg.
-      key: "distanceToFacilityKm",
-      label: "Distance to facility",
-      kind: "entered",
-      mappings: [mapping("feedstockTransportMassDistanceTonneKm")],
-    },
-  ],
+  supplier: [],
   supplierLocation: [
     {
       // Default-location distance — the preferred stored level for the

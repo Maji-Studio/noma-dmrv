@@ -38,12 +38,15 @@ beforeAll(async () => {
       { organizationId: otherOrgId, code: "C-1", name: "Foreign customer" },
     ]).returning();
     const [location, unnamed, , foreignLocation] = await tx.insert(customerLocations).values([
-      { organizationId: orgId, customerId: customer.id, name: "North field" },
-      { organizationId: orgId, customerId: customer.id, name: null },
-      { organizationId: orgId, customerId: otherCustomer.id, name: "North field" },
-      { organizationId: otherOrgId, customerId: foreignCustomer.id, name: "North field" },
+      { country: "Tanzania", gpsLatitude: -8.3, gpsLongitude: 35.3,  organizationId: orgId, customerId: customer.id, name: "North field" },
+      { country: "Tanzania", gpsLatitude: -8.3, gpsLongitude: 35.3,  organizationId: orgId, customerId: customer.id, name: "Unnamed site" },
+      { country: "Tanzania", gpsLatitude: -8.3, gpsLongitude: 35.3,  organizationId: orgId, customerId: otherCustomer.id, name: "North field" },
+      { country: "Tanzania", gpsLatitude: -8.3, gpsLongitude: 35.3,  organizationId: otherOrgId, customerId: foreignCustomer.id, name: "North field" },
     ]).returning();
     const [facility] = await tx.insert(facilities).values({
+      country: "Tanzania",
+      gpsLatitude: -8.3,
+      gpsLongitude: 35.3,
       organizationId: orgId, code: "FAC-1", name: "Picker facility", timezone: "UTC",
     }).returning();
     const [formulation, otherFormulation] = await tx.insert(formulations).values([
@@ -95,11 +98,11 @@ describe("customerLocation entity search", () => {
     expect(await getEntityById(ctx, "customerLocation", f.foreignLocationId)).toBeNull();
   });
 
-  it("preserves the unnamed-location label and resolves selections by id", async () => {
+  it("preserves the saved location label and resolves selections by id", async () => {
     const f = requireFixture();
     const options = await getEntities(ctx, { entityType: "customerLocation", filterBy: { customerId: f.customerId } });
     expect(options.map((option) => option.id).sort()).toEqual([f.locationId, f.unnamedId].sort());
-    expect(await getEntityById(ctx, "customerLocation", f.unnamedId)).toEqual({ id: f.unnamedId, code: "", name: "Unnamed location" });
+    expect(await getEntityById(ctx, "customerLocation", f.unnamedId)).toEqual({ id: f.unnamedId, code: "", name: "Unnamed site" });
   });
 
   it("fails closed without a customer or organization scope", async () => {

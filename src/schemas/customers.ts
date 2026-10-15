@@ -7,10 +7,10 @@ import { z } from "zod";
 import { optionalDistanceSource } from "./distance-source";
 import {
   clearableDefaultSoilTemperature,
-  clearablePositiveNumber,
+  clearableLocationDistance,
+  gpsPairSuperRefine,
   defaultSoilTemperatureSchema,
   expectedVersionSchema,
-  optionalPositiveNumber,
   requiredLatitudeSchema as requiredLat,
   requiredLongitudeSchema as requiredLng,
   toNumberOrUndefined,
@@ -41,8 +41,8 @@ const customerLocationDescriptionSchema = z
 // GPS Coordinate Validation
 // ============================================
 
-const optionalLatitudeSchema = requiredLat.nullable().optional();
-const optionalLongitudeSchema = requiredLng.nullable().optional();
+const optionalLatitudeSchema = requiredLat.optional();
+const optionalLongitudeSchema = requiredLng.optional();
 
 // ============================================
 // Customer Form Schema (Client-side validation)
@@ -107,7 +107,7 @@ export const customerLocationFormSchema = z.object({
   gpsLongitude: z.preprocess(toNumberOrUndefined, requiredLng),
   // Operational road distance (km) from the origin facility. Certifier
   // transport is recorded on cargo entities, not deliveries.
-  distanceFromFacilityKm: optionalPositiveNumber,
+  distanceFromFacilityKm: clearableLocationDistance,
   distanceSource: optionalDistanceSource,
   defaultSoilTemperatureC: defaultSoilTemperatureSchema,
   // Marks this as the customer's default destination.
@@ -172,7 +172,7 @@ export const createCustomerLocationSchema = z.object({
   address: customerLocationDescriptionSchema,
   gpsLatitude: z.preprocess(toNumberOrUndefined, requiredLat),
   gpsLongitude: z.preprocess(toNumberOrUndefined, requiredLng),
-  distanceFromFacilityKm: optionalPositiveNumber,
+  distanceFromFacilityKm: clearableLocationDistance,
   distanceSource: optionalDistanceSource,
   defaultSoilTemperatureC: defaultSoilTemperatureSchema,
   isDefault: z.boolean().optional().default(false),
@@ -204,7 +204,7 @@ export const createCustomerWithLocationsSchema = z.object({
       MAX_PENDING_CUSTOMER_LOCATIONS,
       `Add at most ${MAX_PENDING_CUSTOMER_LOCATIONS} locations at a time. Create the customer, then add the rest from its detail page.`,
     )
-    .default([]),
+    .min(1, "At least one location is required"),
 });
 
 /**
@@ -220,11 +220,11 @@ export const updateCustomerLocationSchema = z.object({
   gpsLatitude: optionalLatitudeSchema,
   gpsLongitude: optionalLongitudeSchema,
   address: customerLocationDescriptionSchema,
-  distanceFromFacilityKm: clearablePositiveNumber,
+  distanceFromFacilityKm: clearableLocationDistance,
   distanceSource: optionalDistanceSource,
   defaultSoilTemperatureC: clearableDefaultSoilTemperature,
   isDefault: z.boolean().optional(),
-});
+}).superRefine(gpsPairSuperRefine);
 
 /**
  * Schema for deleting a customer location

@@ -18,10 +18,9 @@ import { seedEntityCache } from "@/components/forms/entity-select/cache-utils";
 import type { EntityOption } from "@/components/forms/entity-select/types";
 import type {
   CustomerFilterData,
-  CreateCustomerData,
+  CreateCustomerWithLocationsData,
   UpdateCustomerData,
   CreateCustomerLocationData,
-  CreateCustomerWithLocationsData,
   UpdateCustomerLocationData,
 } from "@/schemas/customers";
 import type {
@@ -158,12 +157,12 @@ export function useCustomerLocations(customerId: string, enabled = true) {
  * Supports optional callbacks for custom behavior
  */
 export function useCreateCustomer(
-  callbacks?: MutationCallbacks<Customer, CreateCustomerData>
+  callbacks?: MutationCallbacks<Customer, CreateCustomerWithLocationsData>
 ) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (data: CreateCustomerData) => {
+    mutationFn: async (data: CreateCustomerWithLocationsData) => {
       const result = await createCustomerFn(data);
       if (!result.success) {
         throwActionError(result);

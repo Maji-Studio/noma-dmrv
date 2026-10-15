@@ -71,7 +71,7 @@ describe("credit batch automatic production-run membership", () => {
 
     const [facility] = await db
       .insert(facilities)
-      .values({ timezone: "UTC",
+      .values({ country: "Tanzania", gpsLatitude: -8.3, gpsLongitude: 35.3,  timezone: "UTC",
         organizationId: TEST_ORG_ID,
         code: `FAC-CBAM-${tag}`,
         name: `CB auto-membership facility ${tag}`,
@@ -188,7 +188,7 @@ describe("credit batch automatic production-run membership", () => {
 
     const [otherFacility] = await db
       .insert(facilities)
-      .values({ timezone: "UTC",
+      .values({ country: "Tanzania", gpsLatitude: -8.3, gpsLongitude: 35.3,  timezone: "UTC",
         organizationId: TEST_ORG_ID,
         code: `FAC-CBAM-OTHER-${tag}`,
         name: `CB auto-membership other facility ${tag}`,

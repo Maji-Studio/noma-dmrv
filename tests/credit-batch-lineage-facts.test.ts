@@ -51,7 +51,7 @@ describe("credit batch accounting", () => {
     const tag = crypto.randomUUID().slice(0, 8);
     const applicationIds: string[] = [];
     const removalIds: string[] = [];
-    const [facility] = await db.insert(facilities).values({ timezone: "UTC", organizationId: TEST_ORG_ID, code: `LF-F-${tag}`, name: `Lineage ${tag}` }).returning();
+    const [facility] = await db.insert(facilities).values({ country: "Tanzania", gpsLatitude: -8.3, gpsLongitude: 35.3,  timezone: "UTC", organizationId: TEST_ORG_ID, code: `LF-F-${tag}`, name: `Lineage ${tag}` }).returning();
     const [sourceBin] = await db.insert(storageLocations).values({ organizationId: TEST_ORG_ID, facilityId: facility.id, code: `LF-SL-${tag}`, name: `Source ${tag}`, type: "biochar_bin" }).returning();
     const [reactor] = await db.insert(reactors).values({ organizationId: TEST_ORG_ID, facilityId: facility.id, code: `LF-R-${tag}`, identifier: `Lineage ${tag}`, reactorType: "fixed-bed" }).returning();
     const [feedstockType] = await db.insert(feedstockTypes).values({ organizationId: TEST_ORG_ID, code: `LF-FT-${tag}`, name: `Lineage ${tag}`, category: "forestry" }).returning();
@@ -66,7 +66,7 @@ describe("credit batch accounting", () => {
       { organizationId: TEST_ORG_ID, biocharProductId: multiRunProduct.id, productionRunId: runs[1].id, sourceStorageLocationId: sourceBin.id, allocatedWetMassKg: 150, allocatedDryMassKg: 60 },
     ]).returning();
     const [customer] = await db.insert(customers).values({ organizationId: TEST_ORG_ID, code: `LF-C-${tag}`, name: `Lineage ${tag}` }).returning();
-    const [location] = await db.insert(customerLocations).values({ organizationId: TEST_ORG_ID, customerId: customer.id, name: `Lineage destination ${tag}`, distanceFromFacilityKm: 15 }).returning();
+    const [location] = await db.insert(customerLocations).values({ country: "Tanzania", gpsLatitude: -8.3, gpsLongitude: 35.3,  organizationId: TEST_ORG_ID, customerId: customer.id, name: `Lineage destination ${tag}`, distanceFromFacilityKm: 15 }).returning();
     const ordersRows = await db.insert(orders).values(await outputOrderFixtureValues(db, products.map((product, n) => ({ organizationId: TEST_ORG_ID, facilityId: facility.id, customerId: customer.id, customerLocationId: location.id, biocharProductId: product.id, code: `LF-O${n}-${tag}`, orderDate: new Date("2026-07-03"), quantityKg: 100, packaging: "loose" as const })))).returning();
     const deliveryRows = await insertOutputDeliveryFixture(db, [
       { organizationId: TEST_ORG_ID, facilityId: facility.id, orderId: ordersRows[1].id, biocharProductId: products[0].id, code: `LF-D1-${tag}`, distanceKmOverride: 7, deliveryDate: new Date("2026-07-04"), deliveredWetMassKg: 1_000, massDryKg: 500 },

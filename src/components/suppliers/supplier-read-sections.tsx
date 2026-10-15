@@ -57,8 +57,6 @@ export function supplierSheetSections(supplier: SupplierWithRelations, locations
           defaultLocationDistanceKm:
             locations.find((location) => location.isDefault)
               ?.distanceFromFacilityKm ?? null,
-          legacySupplierDistanceKm:
-            supplier.distanceToFacilityKm,
           locationsLoaded:
             locationsQuery.data !== undefined,
         }),

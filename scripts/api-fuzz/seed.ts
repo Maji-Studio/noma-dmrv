@@ -94,6 +94,8 @@ async function main(): Promise<void> {
   const ctx = { organizationId, userId, orgRole: "owner" as const, isPlatformAdmin: false };
   // A 200-year facility. Mean R0 and TGA are optional for Samples at either tier.
   const facility = await createFacility(ctx, {
+    gpsLatitude: -8.3,
+    gpsLongitude: 35.3,
     code: "FUZZ-FAC", name: FIXTURE_LABEL, country: "FR", timezone: FACILITY_TIME_ZONE,
     durabilityOption: "200_year",
   });
@@ -115,7 +117,7 @@ async function main(): Promise<void> {
   });
   const driver = await createDriver(ctx, { code: "FUZZ-DRV", name: FIXTURE_LABEL });
   const vehicle = await createVehicle(ctx, { code: "FUZZ-VEH", name: FIXTURE_LABEL, vehicleType: "truck" });
-  const supplierLocation = await createSupplierLocation(ctx, { supplierId: supplier.id, name: FIXTURE_LABEL, country: "FR" });
+  const supplierLocation = await createSupplierLocation(ctx, { gpsLatitude: -8.3, gpsLongitude: 35.3,  supplierId: supplier.id, name: FIXTURE_LABEL, country: "FR" });
   const intake = await runOperation(logFeedstockDelivery, ctx, {
     facilityId: facility.id, supplierId: supplier.id, feedstockTypeId: feedstockType.id,
     deliveryDate: formatFacilityDate(new Date(), FACILITY_TIME_ZONE),
@@ -194,6 +196,8 @@ async function main(): Promise<void> {
   })).data;
   const customer = await createCustomer(ctx, { code: "FUZZ-CUS", name: FIXTURE_LABEL });
   const customerLocation = await createCustomerLocation(ctx, {
+    gpsLatitude: -8.3,
+    gpsLongitude: 35.3,
     customerId: customer.id, name: FIXTURE_LABEL, country: "FR",
     distanceFromFacilityKm: CUSTOMER_DISTANCE_KM, distanceSource: "manual", isDefault: true,
   });

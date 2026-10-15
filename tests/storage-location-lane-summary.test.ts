@@ -53,7 +53,7 @@ beforeAll(async () => {
   fixture = await db.transaction(async (tx) => {
     const [facility] = await tx
       .insert(facilities)
-      .values({ timezone: "UTC",
+      .values({ country: "Tanzania", gpsLatitude: -8.3, gpsLongitude: 35.3,  timezone: "UTC",
         organizationId: TEST_ORG_ID,
         name: `Lane Facility ${runId}`,
         code: `FAC-LANE-${runId}`,

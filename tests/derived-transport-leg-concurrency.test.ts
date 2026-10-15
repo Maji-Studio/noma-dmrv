@@ -93,7 +93,7 @@ describe(
       const tag = `${tagPrefix}-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
       const [facility] = await db
         .insert(facilities)
-        .values({ timezone: "UTC",
+        .values({ country: "Tanzania", gpsLatitude: -8.3, gpsLongitude: 35.3,  timezone: "UTC",
           organizationId: TEST_ORG_ID,
           code: `FAC-${tag}`,
           name: `Transport Sync Facility ${tag}`,
@@ -115,6 +115,9 @@ describe(
         .insert(customerLocations)
         .values(
           locationDistances.map((distance, index) => ({
+            country: "Tanzania",
+            gpsLatitude: -8.3,
+            gpsLongitude: 35.3,
             organizationId: TEST_ORG_ID,
             customerId: customer.id,
             name: `Transport Sync Site ${tag}-${index}`,

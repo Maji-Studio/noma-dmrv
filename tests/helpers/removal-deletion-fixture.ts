@@ -28,7 +28,7 @@ export async function createRemovalDeletionFixture(tracked: {
   const runId = crypto.randomUUID().slice(0, RUN_ID_LENGTH);
   const [facility] = await db
     .insert(facilities)
-    .values({ timezone: "UTC",
+    .values({ country: "Tanzania", gpsLatitude: -8.3, gpsLongitude: 35.3,  timezone: "UTC",
       organizationId: TEST_ORG_ID,
       name: `Deletion Facility ${runId}`,
       code: `FAC-DEL-${runId}`,

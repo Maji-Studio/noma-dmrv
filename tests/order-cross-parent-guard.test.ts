@@ -36,7 +36,7 @@ beforeAll(async () => {
     const fixture = await db.transaction(async (tx) => {
       const [facility] = await tx
         .insert(facilities)
-        .values({ timezone: "UTC", organizationId: TEST_ORG_ID, code: `FAC-OCG-${tag}`, name: `OCG Facility ${tag}` })
+        .values({ country: "Tanzania", gpsLatitude: -8.3, gpsLongitude: 35.3,  timezone: "UTC", organizationId: TEST_ORG_ID, code: `FAC-OCG-${tag}`, name: `OCG Facility ${tag}` })
         .returning({ id: facilities.id });
       const [product] = await tx
         .insert(biocharProducts)
@@ -88,6 +88,8 @@ beforeAll(async () => {
       const [locationA] = await tx
         .insert(customerLocations)
         .values({
+          gpsLatitude: -8.3,
+          gpsLongitude: 35.3,
           organizationId: TEST_ORG_ID,
           customerId: customerA.id,
           name: `OCG Location A ${tag}`,
@@ -97,6 +99,8 @@ beforeAll(async () => {
       const [locationB] = await tx
         .insert(customerLocations)
         .values({
+          gpsLatitude: -8.3,
+          gpsLongitude: 35.3,
           organizationId: TEST_ORG_ID,
           customerId: customerB.id,
           name: `OCG Location B ${tag}`,

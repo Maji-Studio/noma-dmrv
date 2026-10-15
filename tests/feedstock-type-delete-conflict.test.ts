@@ -80,7 +80,7 @@ describe("deleteFeedstockType conflict", () => {
     const code = `FAC-DC-${runId}`;
     const [facility] = await db
       .insert(facilities)
-      .values({ timezone: "UTC", organizationId: TEST_ORG_ID, name: `Delete-Conflict ${runId}`, code })
+      .values({ country: "Tanzania", gpsLatitude: -8.3, gpsLongitude: 35.3,  timezone: "UTC", organizationId: TEST_ORG_ID, name: `Delete-Conflict ${runId}`, code })
       .returning({ id: facilities.id });
     createdIds.facilities.push(facility.id);
     const [process] = await db

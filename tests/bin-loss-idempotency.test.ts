@@ -65,7 +65,7 @@ async function seedFeedstockBin() {
 
   const [facility] = await db
     .insert(facilities)
-    .values({ timezone: "UTC",
+    .values({ country: "Tanzania", gpsLatitude: -8.3, gpsLongitude: 35.3,  timezone: "UTC",
       organizationId,
       code: `E2E-LOSS-F-${tag}`,
       name: `E2E Loss facility ${tag}`,

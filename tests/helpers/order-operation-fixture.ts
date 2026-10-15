@@ -10,13 +10,13 @@ export async function createOrderFixture() {
   const f = await seedOutputStockParents(db);
   const [otherCustomer] = await db.insert(customers).values({ organizationId: f.ctx.organizationId,
     code: `E2E-OC-${f.tag}`, name: `E2E Other ${f.tag}` }).returning();
-  const [otherFacility] = await db.insert(facilities).values({ organizationId: f.ctx.organizationId,
+  const [otherFacility] = await db.insert(facilities).values({ country: "Tanzania", gpsLatitude: -8.3, gpsLongitude: 35.3,  organizationId: f.ctx.organizationId,
     code: `E2E-OF-${f.tag}`, name: `E2E Other ${f.tag}`, timezone: "UTC" }).returning();
   return { ...f, otherCustomer, otherFacility };
 }
 export type OrderFixture = Awaited<ReturnType<typeof createOrderFixture>>;
 export async function createOrderDestination(f: OrderFixture, customerId = f.customer.id) {
-  const [location] = await db.insert(customerLocations).values({ organizationId: f.ctx.organizationId,
+  const [location] = await db.insert(customerLocations).values({ gpsLatitude: -8.3, gpsLongitude: 35.3,  organizationId: f.ctx.organizationId,
     customerId, name: `E2E Other site ${f.tag}`, country: "CH" }).returning();
   return location;
 }

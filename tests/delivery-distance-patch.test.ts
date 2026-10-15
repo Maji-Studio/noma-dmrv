@@ -16,7 +16,7 @@ afterEach(async () => {
 });
 async function fixture() {
   const f = await createDeliveryFixture(); organizations.push(f.ctx.organizationId);
-  const [location] = await db.insert(customerLocations).values({ organizationId: f.ctx.organizationId, customerId: f.customer.id, name: "E2E Destination", distanceFromFacilityKm: 20, distanceSource: "map_estimate" }).returning();
+  const [location] = await db.insert(customerLocations).values({ country: "Tanzania", gpsLatitude: -8.3, gpsLongitude: 35.3,  organizationId: f.ctx.organizationId, customerId: f.customer.id, name: "E2E Destination", distanceFromFacilityKm: 20, distanceSource: "map_estimate" }).returning();
   await db.update(orders).set({ customerLocationId: location.id }).where(eq(orders.id, f.order.id));
   const created = await db.transaction(tx => createDeliveryInTransaction(f.ctx, tx, { ...f.input, distanceKmOverride: 30, distanceSource: "manual", distanceNote: "Route evidence" }));
   return { ...f, delivery: created.delivery };

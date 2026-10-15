@@ -79,7 +79,7 @@ beforeAll(async () => {
 
   const [facility] = await db
     .insert(facilities)
-    .values({ timezone: "UTC",
+    .values({ country: "Tanzania", gpsLatitude: -8.3, gpsLongitude: 35.3,  timezone: "UTC",
       organizationId: TEST_ORG_ID,
       name: `Sample-Code Facility ${suffix}`,
       code: `FAC-SC-${suffix}`,

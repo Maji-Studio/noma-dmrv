@@ -56,7 +56,7 @@ describe.skipIf(!available)("saved provenance PostgreSQL consumer queries", () =
     tx = executor as unknown as DbTransaction;
     vi.spyOn(db, "transaction").mockImplementation(async callback => callback(tx));
     vi.spyOn(db, "select").mockImplementation(executor.select.bind(executor));
-    await executor.insert(schema.facilities).values({ timezone: "UTC", ...org, id: ids.facility, code: "F", name: "Fixture" });
+    await executor.insert(schema.facilities).values({ country: "Tanzania", gpsLatitude: -8.3, gpsLongitude: 35.3,  timezone: "UTC", ...org, id: ids.facility, code: "F", name: "Fixture" });
     await executor.insert(schema.storageLocations).values({ ...org, id: ids.bin, facilityId: ids.facility, code: "BIN", name: "Fixture bin", type: "product_bin" });
     const [outputBin] = await executor.insert(schema.storageLocations).values({
       ...org, facilityId: ids.facility, code: "OUT", name: "E2E Run output", type: "biochar_bin",

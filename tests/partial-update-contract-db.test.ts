@@ -25,6 +25,7 @@ import {
   organizations,
   storageLocations,
   suppliers,
+  supplierLocations,
   transportLegs,
   users,
 } from "@/db/schema";
@@ -85,7 +86,7 @@ async function seedFixture(): Promise<Fixture> {
 
   const [facility] = await db
     .insert(facilities)
-    .values({ timezone: "UTC",
+    .values({ country: "Tanzania", gpsLatitude: -8.3, gpsLongitude: 35.3,  timezone: "UTC",
       organizationId,
       code: `E2E-PC-F-${tag}`,
       name: `E2E Patch contract ${tag}`,
@@ -109,10 +110,14 @@ async function seedFixture(): Promise<Fixture> {
       organizationId,
       code: `E2E-PC-S-${tag}`,
       name: `E2E Patch contract supplier ${tag}`,
-      distanceToFacilityKm: SUPPLIER_DISTANCE_KM,
-      distanceSource: "manual" as const,
     })
     .returning({ id: suppliers.id });
+
+  await db.insert(supplierLocations).values({
+    organizationId, supplierId: supplier.id, country: "Tanzania",
+    gpsLatitude: -8.3, gpsLongitude: 35.3, isDefault: true,
+    distanceFromFacilityKm: SUPPLIER_DISTANCE_KM, distanceSource: "manual",
+  });
 
   const [bin] = await db
     .insert(storageLocations)
@@ -164,6 +169,7 @@ async function cleanup(fixture: Fixture): Promise<void> {
       "feedstocks",
       "storage_locations",
       "feedstock_types",
+      "supplier_locations",
       "suppliers",
       "facilities",
     ]) {

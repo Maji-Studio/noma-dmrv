@@ -212,7 +212,7 @@ describe("parent document retirement", () => {
     const tag = crypto.randomUUID().slice(0, 8);
     const [facility] = await db
       .insert(facilities)
-      .values({ timezone: "UTC",
+      .values({ country: "Tanzania", gpsLatitude: -8.3, gpsLongitude: 35.3,  timezone: "UTC",
         organizationId: TEST_ORG_ID,
         code: `FAC-DEL-${tag}`,
         name: `Delivery evidence facility ${tag}`,
@@ -229,6 +229,9 @@ describe("parent document retirement", () => {
     const [location] = await db
       .insert(customerLocations)
       .values({
+        country: "Tanzania",
+        gpsLatitude: -8.3,
+        gpsLongitude: 35.3,
         organizationId: TEST_ORG_ID,
         customerId: customer.id,
         name: `Delivery evidence site ${tag}`,
@@ -680,7 +683,7 @@ describe("parent document retirement", () => {
     const tag = crypto.randomUUID().slice(0, 8);
     const [facility] = await db
       .insert(facilities)
-      .values({ timezone: "UTC",
+      .values({ country: "Tanzania", gpsLatitude: -8.3, gpsLongitude: 35.3,  timezone: "UTC",
         organizationId: TEST_ORG_ID,
         code: `FAC-DERIVED-${tag}`,
         name: `Derived leg facility ${tag}`,
@@ -792,7 +795,7 @@ describe("parent document retirement", () => {
     const tag = crypto.randomUUID().slice(0, 8);
     const [facility] = await db
       .insert(facilities)
-      .values({ timezone: "UTC",
+      .values({ country: "Tanzania", gpsLatitude: -8.3, gpsLongitude: 35.3,  timezone: "UTC",
         organizationId: TEST_ORG_ID,
         code: `FAC-NEST-${tag}`,
         name: `Nested evidence facility ${tag}`,

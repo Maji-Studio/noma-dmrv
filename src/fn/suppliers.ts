@@ -9,12 +9,8 @@ import { withAction } from "./with-action";
 
 import { z } from "zod";
 import { type Supplier, type SupplierLocation, suppliers } from "@/db/schema";
+import { withAutoCode } from "@/data-access/code-generator";
 import {
-  CODE_CONFLICT_MESSAGES,
-  withAutoCode,
-} from "@/data-access/code-generator";
-import {
-  createSupplier,
   createSupplierWithLocations,
   deleteSupplier,
   getSuppliers as getSuppliersData,
@@ -29,7 +25,6 @@ import {
 import { DomainError } from "@/lib/domain-errors";
 import { validationFailed } from "@/lib/operations/errors";
 import {
-  createSupplierSchema,
   createSupplierWithLocationsSchema,
   deleteSupplierSchema,
   updateSupplierSchema,
@@ -91,43 +86,9 @@ export async function getSupplierByIdFn(
  * Create a new supplier
  */
 export async function createSupplierFn(
-  data: z.infer<typeof createSupplierSchema>
+  data: z.infer<typeof createSupplierWithLocationsSchema>
 ): Promise<ActionResult<Supplier>> {
-  return withAction(async (ctx) => {
-    const validated = createSupplierSchema.parse(data);
-
-    const supplier = await withAutoCode(
-      ctx,
-      "SUP",
-      suppliers,
-      suppliers.code,
-      undefined,
-      (code) =>
-        createSupplier(ctx, {
-          code,
-          name: validated.name,
-          location: validated.location || null,
-          gpsLatitude: validated.gpsLatitude ?? null,
-          gpsLongitude: validated.gpsLongitude ?? null,
-          address: validated.address || null,
-          contactName: validated.contactName || null,
-          contactEmail: validated.contactEmail || null,
-          contactPhone: validated.contactPhone || null,
-          sourceRegion: validated.sourceRegion || null,
-          distanceToFacilityKm: validated.distanceToFacilityKm ?? null,
-          distanceSource: resolveDistanceSource(
-            validated.distanceToFacilityKm ?? null,
-            validated.distanceSource,
-          ),
-        }),
-      CODE_CONFLICT_MESSAGES.supplier,
-    );
-
-    return supplier;
-  }, {
-    fallbackMessage: "Failed to create supplier",
-    log: { message: LOG_MESSAGE, context: { op: "supplier:create" } },
-  });
+  return createSupplierWithLocationsFn(data);
 }
 
 export async function createSupplierWithLocationsFn(
@@ -147,18 +108,11 @@ export async function createSupplierWithLocationsFn(
           code,
           name: validated.supplier.name,
           location: validated.supplier.location || null,
-          gpsLatitude: validated.supplier.gpsLatitude ?? null,
-          gpsLongitude: validated.supplier.gpsLongitude ?? null,
           address: validated.supplier.address || null,
           contactName: validated.supplier.contactName || null,
           contactEmail: validated.supplier.contactEmail || null,
           contactPhone: validated.supplier.contactPhone || null,
           sourceRegion: validated.supplier.sourceRegion || null,
-          distanceToFacilityKm: validated.supplier.distanceToFacilityKm ?? null,
-          distanceSource: resolveDistanceSource(
-            validated.supplier.distanceToFacilityKm ?? null,
-            validated.supplier.distanceSource,
-          ),
           locations: validated.locations.map((location) => ({
             name: location.name || null,
             country: location.country,
@@ -203,18 +157,11 @@ export async function updateSupplierFn(
       code: validated.code,
       name: validated.name,
       location: validated.location,
-      gpsLatitude: validated.gpsLatitude,
-      gpsLongitude: validated.gpsLongitude,
       address: validated.address,
       contactName: validated.contactName,
       contactEmail: validated.contactEmail,
       contactPhone: validated.contactPhone,
       sourceRegion: validated.sourceRegion,
-      distanceToFacilityKm: validated.distanceToFacilityKm,
-      distanceSource: resolveDistanceSource(
-        validated.distanceToFacilityKm,
-        validated.distanceSource,
-      ),
     });
 
     return supplier;
@@ -275,8 +222,8 @@ export async function createSupplierLocationFn(
       country: validated.country,
       stateRegion: validated.stateRegion || null,
       city: validated.city || null,
-      gpsLatitude: validated.gpsLatitude ?? null,
-      gpsLongitude: validated.gpsLongitude ?? null,
+      gpsLatitude: validated.gpsLatitude,
+      gpsLongitude: validated.gpsLongitude,
       address: validated.address || null,
       distanceFromFacilityKm: validated.distanceFromFacilityKm,
       distanceSource: resolveDistanceSource(

@@ -24,6 +24,8 @@ test.describe("credit batch facility scope", () => {
       const [otherFacility] = await db
         .insert(schema.facilities)
         .values({
+          gpsLatitude: -8.3,
+          gpsLongitude: 35.3,
           organizationId: DEC_ORG_ID,
           code: `FAC-CB-SCOPE-${tag}`,
           name: `Credit Batch Scope Facility ${tag}`,

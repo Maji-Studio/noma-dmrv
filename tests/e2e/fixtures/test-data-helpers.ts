@@ -98,6 +98,9 @@ export async function createTestFacility(
     };
 
     await db.insert(schema.facilities).values({
+      country: "Tanzania",
+      gpsLatitude: -8.3,
+      gpsLongitude: 35.3,
       organizationId: DEC_ORG_ID,
       id: facility.id,
       code: facility.code,

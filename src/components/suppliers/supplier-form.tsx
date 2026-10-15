@@ -151,15 +151,11 @@ export function SupplierForm({
       location: supplier?.location ?? "",
       // Supplier-level coordinates/distance are legacy: preserved on edit but no
       // longer edited here — coordinates now live per source location.
-      gpsLatitude: supplier?.gpsLatitude ?? null,
-      gpsLongitude: supplier?.gpsLongitude ?? null,
       address: supplier?.address ?? "",
       contactName: supplier?.contactName ?? "",
       contactEmail: supplier?.contactEmail ?? "",
       contactPhone: supplier?.contactPhone ?? "",
       sourceRegion: supplier?.sourceRegion ?? "",
-      distanceToFacilityKm: supplier?.distanceToFacilityKm ?? undefined,
-      distanceSource: supplier?.distanceSource ?? null,
     },
   });
 

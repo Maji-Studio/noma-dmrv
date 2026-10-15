@@ -107,7 +107,7 @@ async function createFullWorkflowData(): Promise<TestWorkflowData> {
     };
 
     // 1. Create facility (infrastructure foundation)
-    await tx.insert(schema.facilities).values({ timezone: "UTC",
+    await tx.insert(schema.facilities).values({ gpsLatitude: -8.3, gpsLongitude: 35.3,  timezone: "UTC",
         organizationId: DEC_ORG_ID,
       id: ids.facility,
       code: codes.facility,
@@ -284,6 +284,7 @@ async function createFullWorkflowData(): Promise<TestWorkflowData> {
 
     // 16. Create customer location
     await tx.insert(schema.customerLocations).values({
+        country: "Tanzania",
         organizationId: DEC_ORG_ID,
       id: ids.customerLocation,
       customerId: ids.customer,

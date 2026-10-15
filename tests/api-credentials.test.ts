@@ -477,12 +477,18 @@ it("/me permits an empty scope set and returns only the key organization's facil
   await db.insert(facilities)
     .values([
       {
+        country: "Tanzania",
+        gpsLatitude: -8.3,
+        gpsLongitude: 35.3,
         organizationId: ctx.organizationId,
         code: "A",
         name: "Facility A",
         timezone: "Pacific/Kiritimati",
       },
       {
+        country: "Tanzania",
+        gpsLatitude: -8.3,
+        gpsLongitude: 35.3,
         organizationId: otherOrg,
         code: "B",
         name: "Facility B",

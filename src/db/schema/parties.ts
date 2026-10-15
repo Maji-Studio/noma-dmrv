@@ -19,35 +19,16 @@ export const suppliers = pgTable(
     code: text('code').notNull(),
     name: text('name').notNull(),
     location: text('location'),
-    gpsLatitude: doublePrecision('gps_latitude'),
-    gpsLongitude: doublePrecision('gps_longitude'),
     address: text('address'),
     contactName: text('contact_name'),
     contactEmail: text('contact_email'),
     contactPhone: text('contact_phone'),
     sourceRegion: text('source_region'),
-    // Road distance (km) from this supplier to the delivery facility. Autofills
-    // a feedstock transport leg's distance (overridable). Stored, not computed.
-    distanceToFacilityKm: real('distance_to_facility_km'),
-    // Provenance of distanceToFacilityKm (null when no distance stored).
-    distanceSource: distanceSource('distance_source'),
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },
   (table) => [
     uniqueIndex('suppliers_organization_id_code_unique').on(table.organizationId, table.code),
-    check(
-      'suppliers_gps_latitude_range',
-      sql`${table.gpsLatitude} is null or (${table.gpsLatitude} >= -90 and ${table.gpsLatitude} <= 90)`
-    ),
-    check(
-      'suppliers_gps_longitude_range',
-      sql`${table.gpsLongitude} is null or (${table.gpsLongitude} >= -180 and ${table.gpsLongitude} <= 180)`
-    ),
-    check(
-      'suppliers_distance_to_facility_km_non_negative',
-      sql`${table.distanceToFacilityKm} is null or ${table.distanceToFacilityKm} >= 0`
-    ),
     // Supplier name is unique per organization, case- and whitespace-insensitive
     // (issue #252, ADR 0010). Reuse a retired name by renaming the old record.
     uniqueIndex('suppliers_organization_id_name_unique').on(
@@ -104,12 +85,12 @@ export const customerLocations = pgTable(
     customerId: uuid('customer_id')
       .notNull()
       .references(() => customers.id),
-    name: text('name'),
-    country: text('country').notNull().default('UNKNOWN'),
+    name: text('name').notNull(),
+    country: text('country').notNull(),
     stateRegion: text('state_region'),
     city: text('city'),
-    gpsLatitude: doublePrecision('gps_latitude'),
-    gpsLongitude: doublePrecision('gps_longitude'),
+    gpsLatitude: doublePrecision('gps_latitude').notNull(),
+    gpsLongitude: doublePrecision('gps_longitude').notNull(),
     address: text('address'),
     // Road distance (km) from the origin facility to this customer location.
     // Stored as operational route metadata; certifier transport is recorded on
@@ -172,14 +153,14 @@ export const supplierLocations = pgTable(
       .notNull()
       .references(() => suppliers.id),
     name: text('name'),
-    country: text('country').notNull().default('UNKNOWN'),
+    country: text('country').notNull(),
     stateRegion: text('state_region'),
     city: text('city'),
-    gpsLatitude: doublePrecision('gps_latitude'),
-    gpsLongitude: doublePrecision('gps_longitude'),
+    gpsLatitude: doublePrecision('gps_latitude').notNull(),
+    gpsLongitude: doublePrecision('gps_longitude').notNull(),
     address: text('address'),
     // Road distance (km) from this supplier location to the delivery facility.
-    // Per-location override of the supplier-level default distance.
+    // Default distance for feedstock delivered from this location.
     distanceFromFacilityKm: real('distance_from_facility_km'),
     // Provenance of distanceFromFacilityKm (null when no distance stored).
     distanceSource: distanceSource('distance_source'),

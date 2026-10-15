@@ -56,11 +56,11 @@ async function seedFixture(): Promise<ScopeFixture> {
   return db.transaction(async (tx) => {
     const [facilityA] = await tx
       .insert(facilities)
-      .values({ timezone: "UTC", organizationId: TEST_ORG_ID, code: `FAC-SCP-A-${tag()}`, name: `Scope Facility A ${tag()}` })
+      .values({ country: "Tanzania", gpsLatitude: -8.3, gpsLongitude: 35.3,  timezone: "UTC", organizationId: TEST_ORG_ID, code: `FAC-SCP-A-${tag()}`, name: `Scope Facility A ${tag()}` })
       .returning({ id: facilities.id });
     const [facilityB] = await tx
       .insert(facilities)
-      .values({ timezone: "UTC", organizationId: TEST_ORG_ID, code: `FAC-SCP-B-${tag()}`, name: `Scope Facility B ${tag()}` })
+      .values({ country: "Tanzania", gpsLatitude: -8.3, gpsLongitude: 35.3,  timezone: "UTC", organizationId: TEST_ORG_ID, code: `FAC-SCP-B-${tag()}`, name: `Scope Facility B ${tag()}` })
       .returning({ id: facilities.id });
 
     const [ghgStatementA] = await tx

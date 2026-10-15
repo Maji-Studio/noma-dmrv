@@ -60,7 +60,7 @@ async function createMutationFixture(runId: string): Promise<ApplicationMutation
 
     const [facility] = await tx
       .insert(facilities)
-      .values({ timezone: "UTC", organizationId: TEST_ORG_ID, name: `Application Mutation Facility ${runId}`, code: `FAC-AM-${runId}` })
+      .values({ country: "Tanzania", gpsLatitude: -8.3, gpsLongitude: 35.3,  timezone: "UTC", organizationId: TEST_ORG_ID, name: `Application Mutation Facility ${runId}`, code: `FAC-AM-${runId}` })
       .returning({ id: facilities.id });
 
     await tx.insert(certifierProjects).values({

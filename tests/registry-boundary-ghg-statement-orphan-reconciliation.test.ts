@@ -91,7 +91,7 @@ async function createFixture() {
   const externalProjectId = `prj_ggs_bd_${runId}`;
   const [facility] = await db
     .insert(facilities)
-    .values({ timezone: "UTC",
+    .values({ country: "Tanzania", gpsLatitude: -8.3, gpsLongitude: 35.3,  timezone: "UTC",
       organizationId: TEST_ORG_ID,
       name: `GGS Boundary Facility ${runId}`,
       code: `FAC-GB-${runId}`,

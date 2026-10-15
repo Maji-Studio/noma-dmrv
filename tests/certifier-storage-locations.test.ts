@@ -76,7 +76,7 @@ async function createFixture(): Promise<Fixture> {
       .returning({ id: customerLocations.id });
     const [facility] = await tx
       .insert(facilities)
-      .values({ timezone: "UTC",
+      .values({ country: "Tanzania", gpsLatitude: -8.3, gpsLongitude: 35.3,  timezone: "UTC",
         organizationId: TEST_ORG_ID,
         code: `FAC-SLC-${runId}`,
         name: `Storage Location Facility ${runId}`,
@@ -360,7 +360,7 @@ describe("certifier Storage Location data access", () => {
       const runId = crypto.randomUUID().slice(0, 8);
       const [secondFacility] = await db
         .insert(facilities)
-        .values({ timezone: "UTC",
+        .values({ country: "Tanzania", gpsLatitude: -8.3, gpsLongitude: 35.3,  timezone: "UTC",
           organizationId: TEST_ORG_ID,
           code: `FAC-SLC-P2-${runId}`,
           name: `Storage Location Facility P2 ${runId}`,
@@ -497,7 +497,7 @@ describe("certifier Storage Location data access", () => {
       const runId = crypto.randomUUID().slice(0, 8);
       const [sharedFacility] = await db
         .insert(facilities)
-        .values({ timezone: "UTC",
+        .values({ country: "Tanzania", gpsLatitude: -8.3, gpsLongitude: 35.3,  timezone: "UTC",
           organizationId: TEST_ORG_ID,
           code: `FAC-SLC-SHARED-${runId}`,
           name: `Storage Location Shared Facility ${runId}`,

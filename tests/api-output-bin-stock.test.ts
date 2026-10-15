@@ -139,7 +139,7 @@ describe("output bin stock REST and MCP", { timeout: TIMEOUT_MS }, () => {
     for (const query of ["?at=2026-09-01", "?q=x", "?limit=1", "?facilityId=bad", `?facilityId=${a.facility.id}&facilityId=${a.facility.id}`]) {
       await problem(await stock(a.source.id, query), 400, "invalid_query");
     }
-    const [otherFacility] = await db.insert(facilities).values({ organizationId: a.ctx.organizationId,
+    const [otherFacility] = await db.insert(facilities).values({ country: "Tanzania", gpsLatitude: -8.3, gpsLongitude: 35.3,  organizationId: a.ctx.organizationId,
       code: `E2E-STOCK-F-${a.tag}`, name: `E2E Stock facility ${a.tag}`, timezone: "UTC" }).returning();
     for (const facilityId of [otherFacility.id, b.facility.id, randomUUID()]) {
       await problem(await stock(a.source.id, `?facilityId=${facilityId}`), 404, "not_found");

@@ -47,7 +47,7 @@ export async function createIntakeFixture(
   });
   const [facility] = await executor
     .insert(facilities)
-    .values({ timezone: "UTC", organizationId, code: `FAC-${tag}`, name: `Intake Facility ${tag}` })
+    .values({ country: "Tanzania", gpsLatitude: -8.3, gpsLongitude: 35.3,  timezone: "UTC", organizationId, code: `FAC-${tag}`, name: `Intake Facility ${tag}` })
     .returning({ id: facilities.id });
   const [supplier] = await executor
     .insert(suppliers)

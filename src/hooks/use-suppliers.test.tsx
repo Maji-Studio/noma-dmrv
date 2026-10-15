@@ -11,7 +11,6 @@ import { useEffect, type ReactNode } from "react";
 import { entityKeys } from "./entity-query-keys";
 import { onboardingKeys } from "./use-onboarding";
 import type {
-  CreateSupplierData,
   CreateSupplierWithLocationsData,
   UpdateSupplierData,
 } from "@/schemas/suppliers";
@@ -314,8 +313,9 @@ describe.each([
         } as CreateSupplierWithLocationsData);
       } else {
         await (capturedMutation as CreateMutation).mutateAsync({
-          name: "New Supplier",
-        } as CreateSupplierData);
+          supplier: { name: "New Supplier" },
+          locations: [{ country: "Tanzania", gpsLatitude: 0, gpsLongitude: 0, isDefault: true }],
+        } as CreateSupplierWithLocationsData);
       }
     });
 
@@ -371,8 +371,9 @@ describe("supplier creation onboarding interaction", () => {
     let created: unknown;
     await act(async () => {
       created = await capturedMutation?.mutateAsync({
-        name: "New Supplier",
-      } as CreateSupplierData);
+        supplier: { name: "New Supplier" },
+          locations: [{ country: "Tanzania", gpsLatitude: 0, gpsLongitude: 0, isDefault: true }],
+      } as CreateSupplierWithLocationsData);
     });
 
     expect(created).toEqual(createdSupplier);
@@ -434,8 +435,9 @@ describe("supplier creation onboarding interaction", () => {
     let created: unknown;
     await act(async () => {
       created = await capturedMutation?.mutateAsync({
-        name: "New Supplier",
-      } as CreateSupplierData);
+        supplier: { name: "New Supplier" },
+          locations: [{ country: "Tanzania", gpsLatitude: 0, gpsLongitude: 0, isDefault: true }],
+      } as CreateSupplierWithLocationsData);
     });
 
     expect(created).toEqual(createdSupplier);
@@ -483,8 +485,9 @@ describe("supplier creation onboarding interaction", () => {
     await act(async () => {
       await expect(
         capturedMutation?.mutateAsync({
-          name: "New Supplier",
-        } as CreateSupplierData),
+          supplier: { name: "New Supplier" },
+          locations: [{ country: "Tanzania", gpsLatitude: 0, gpsLongitude: 0, isDefault: true }],
+        } as CreateSupplierWithLocationsData),
       ).rejects.toThrow("Supplier was not created");
     });
 

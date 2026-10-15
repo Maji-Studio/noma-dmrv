@@ -95,11 +95,11 @@ beforeAll(async () => {
   // Create two facilities
   const [fA] = await db
     .insert(facilities)
-    .values({ timezone: "UTC", organizationId: TEST_ORG_ID, name: `Test Facility A ${runId}`, code: `TFA-VAL-${runId}` })
+    .values({ country: "Tanzania", gpsLatitude: -8.3, gpsLongitude: 35.3,  timezone: "UTC", organizationId: TEST_ORG_ID, name: `Test Facility A ${runId}`, code: `TFA-VAL-${runId}` })
     .returning({ id: facilities.id });
   const [fB] = await db
     .insert(facilities)
-    .values({ timezone: "UTC", organizationId: TEST_ORG_ID, name: `Test Facility B ${runId}`, code: `TFB-VAL-${runId}` })
+    .values({ country: "Tanzania", gpsLatitude: -8.3, gpsLongitude: 35.3,  timezone: "UTC", organizationId: TEST_ORG_ID, name: `Test Facility B ${runId}`, code: `TFB-VAL-${runId}` })
     .returning({ id: facilities.id });
   facilityA = fA;
   facilityB = fB;

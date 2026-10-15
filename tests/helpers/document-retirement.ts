@@ -66,7 +66,7 @@ export async function createReactorFixture(
   return db.transaction(async (tx) => {
     const [facility] = await tx
       .insert(facilities)
-      .values({ timezone: "UTC",
+      .values({ country: "Tanzania", gpsLatitude: -8.3, gpsLongitude: 35.3,  timezone: "UTC",
         organizationId,
         code: `FAC-DOC-${tag}`,
         name: `Document retirement facility ${tag}`,

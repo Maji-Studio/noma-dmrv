@@ -17,8 +17,8 @@ describe.each(["supplier", "customer"] as const)("%s location delete keeps a def
       const [parent] = await db.insert(suppliers).values({
         organizationId: TEST_ORG_ID, code: `DEF-${tag}`, name: `Default delete ${tag}`,
       }).returning();
-      const first = await createSupplierLocation(ctx, { supplierId: parent.id, name: "A", country: "CH" });
-      const second = await createSupplierLocation(ctx, { supplierId: parent.id, name: "B", country: "CH" });
+      const first = await createSupplierLocation(ctx, { gpsLatitude: -8.3, gpsLongitude: 35.3,  supplierId: parent.id, name: "A", country: "CH" });
+      const second = await createSupplierLocation(ctx, { gpsLatitude: -8.3, gpsLongitude: 35.3,  supplierId: parent.id, name: "B", country: "CH" });
       return {
         parentId: parent.id, first, second,
         remove: (l: { id: string; version: number }) => deleteSupplierLocation(ctx, l.id, l.version),
@@ -35,8 +35,8 @@ describe.each(["supplier", "customer"] as const)("%s location delete keeps a def
     const [parent] = await db.insert(customers).values({
       organizationId: TEST_ORG_ID, code: `DEF-${tag}`, name: `Default delete ${tag}`,
     }).returning();
-    const first = await createCustomerLocation(ctx, { customerId: parent.id, name: "A", country: "CH", isDefault: true });
-    const second = await createCustomerLocation(ctx, { customerId: parent.id, name: "B", country: "CH" });
+    const first = await createCustomerLocation(ctx, { gpsLatitude: -8.3, gpsLongitude: 35.3,  customerId: parent.id, name: "A", country: "CH", isDefault: true });
+    const second = await createCustomerLocation(ctx, { gpsLatitude: -8.3, gpsLongitude: 35.3,  customerId: parent.id, name: "B", country: "CH" });
     return {
       parentId: parent.id, first, second,
       remove: (l: { id: string; version: number }) => deleteCustomerLocation(ctx, l.id, l.version),
@@ -98,10 +98,14 @@ describe.each(["supplier", "customer"] as const)("%s location delete keeps a def
       for (const id of [ids[1], ids[0]]) {
         if (kind === "supplier") {
           await db.insert(supplierLocations).values({
+            gpsLatitude: -8.3,
+            gpsLongitude: 35.3,
             id, organizationId: TEST_ORG_ID, supplierId: f.parentId, name: "T", country: "CH", createdAt: TIED_AT,
           });
         } else {
           await db.insert(customerLocations).values({
+            gpsLatitude: -8.3,
+            gpsLongitude: 35.3,
             id, organizationId: TEST_ORG_ID, customerId: f.parentId, name: "T", country: "CH", createdAt: TIED_AT,
           });
         }

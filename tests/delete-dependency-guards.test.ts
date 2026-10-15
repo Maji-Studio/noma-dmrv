@@ -29,7 +29,7 @@ describe("delete dependency guards", () => {
     const fixture = await db.transaction(async (tx) => {
       const [facility] = await tx
         .insert(facilities)
-        .values({ timezone: "UTC", organizationId: TEST_ORG_ID, code: `FAC-DDG-SL-${tag}`, name: `DDG Storage Facility ${tag}` })
+        .values({ country: "Tanzania", gpsLatitude: -8.3, gpsLongitude: 35.3,  timezone: "UTC", organizationId: TEST_ORG_ID, code: `FAC-DDG-SL-${tag}`, name: `DDG Storage Facility ${tag}` })
         .returning({ id: facilities.id });
       const [feedstockType] = await tx
         .insert(feedstockTypes)
@@ -99,7 +99,7 @@ describe("delete dependency guards", () => {
     const fixture = await db.transaction(async (tx) => {
       const [facility] = await tx
         .insert(facilities)
-        .values({ timezone: "UTC", organizationId: TEST_ORG_ID, code: `FAC-DDG-CU-${tag}`, name: `DDG Customer Facility ${tag}` })
+        .values({ country: "Tanzania", gpsLatitude: -8.3, gpsLongitude: 35.3,  timezone: "UTC", organizationId: TEST_ORG_ID, code: `FAC-DDG-CU-${tag}`, name: `DDG Customer Facility ${tag}` })
         .returning({ id: facilities.id });
       const [customer] = await tx
         .insert(customers)
@@ -150,7 +150,7 @@ describe("delete dependency guards", () => {
     const fixture = await db.transaction(async (tx) => {
       const [facility] = await tx
         .insert(facilities)
-        .values({ timezone: "UTC", organizationId: TEST_ORG_ID, code: `FAC-DDG-DL-${tag}`, name: `DDG Delivery Facility ${tag}` })
+        .values({ country: "Tanzania", gpsLatitude: -8.3, gpsLongitude: 35.3,  timezone: "UTC", organizationId: TEST_ORG_ID, code: `FAC-DDG-DL-${tag}`, name: `DDG Delivery Facility ${tag}` })
         .returning({ id: facilities.id });
       const [customer] = await tx
         .insert(customers)
@@ -159,6 +159,8 @@ describe("delete dependency guards", () => {
       const [customerLocation] = await tx
         .insert(customerLocations)
         .values({
+          gpsLatitude: -8.3,
+          gpsLongitude: 35.3,
           organizationId: TEST_ORG_ID,
           customerId: customer.id,
           name: `DDG Delivery Location ${tag}`,
