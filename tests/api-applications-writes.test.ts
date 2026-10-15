@@ -78,6 +78,10 @@ it.each(["unknown", "code", "status", "biocharAppliedTons", "dryBiocharKg", "sou
   await problem(await post(input({ [field]: 1 })), 422, "validation_failed", `/${field}`);
   expect(await rows()).toEqual([]);
 }, TIMEOUT);
+// Fuzz found 5e-324 reaching the float4 column as a 500.
+it.each([5e-324, 0.00009, 1e300, 1_000_001])("refuses field size %s outside the stored range at /fieldSizeHa", async fieldSizeHa => {
+  await problem(await post(input({ fieldSizeHa })), 422, "validation_failed", "/fieldSizeHa");
+}, TIMEOUT);
 it("preserves typed capacity, date, reference, archive and unavailable method refusals", async () => {
   const capacity = await problem(await post(input({ appliedWetMassKg: 5000.001 })), 409, "conflict", "/appliedWetMassKg");
   expect(capacity.errors).toContainEqual(expect.objectContaining({ meta: { measure: "delivery_remaining_wet", availableWetKg: 5000, requestedWetKg: 5000.001, unit: "kg" } }));

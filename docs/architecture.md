@@ -50,6 +50,12 @@ components (UI)
   including reference checks and result enrichment. After-commit hooks run
   after a real commit; dry runs roll back and skip them.
   Before COMMIT, deadlocks, serialization failures and operation lock-timeout aborts retry the whole transaction within the deadline, including dry runs; exhausted attempts return retryable `concurrent_write_retry`.
+- Runner activity uses `activity.scope(entityId, scopes)` to record one event per
+  distinct batch/run scope in the write transaction. Application updates retain
+  scopes for both former and current batches; delete captures scopes before
+  removing shares and passes them with the initiating source to document
+  retirement. Sources are `form`, `rest`, `mcp` or a trusted `script` override.
+  Dry runs and idempotent replays emit no activity.
 - `src/lib/read-models/` holds server-only read cores that take an already
   resolved `OrgContext` and return domain data. They are not Server Actions and
   are not exported from a `"use server"` file; the caller authenticates first.
@@ -402,8 +408,8 @@ local, and deployed builds remain on the stable default.
 
 ## Database Boundaries
 
-Application writes use unlocked discovery, sorted lineage artifacts, facilities
-`FOR SHARE`, production runs `FOR SHARE`, credit batches `FOR SHARE`, deliveries
+Application writers share `src/data-access/application-write-scope.ts`: unlocked
+discovery, sorted lineage artifacts, facilities `FOR SHARE`, production runs `FOR SHARE`, credit batches `FOR SHARE`, deliveries
 `FOR UPDATE`, then the application `FOR UPDATE` and its version check. They
 revalidate lineage, parent identity and discovered sets before locking application
 slices `FOR UPDATE` and writing shares, slices or document retirement. Changed
@@ -435,9 +441,10 @@ batch/application locks and implicit slice FK checks, closing cycles C1 and C2.
 Two residual orders remain: membership refresh takes artifacts before runs,
 while production-run writers take runs first; membership takes artifacts before
 process scope, while run auto-attachment takes scope before batch artifacts.
-All three membership writers use the runner's shared bounded transaction retry
-for 40P01, 40001 and 55P03. Production-run writers retain the runner's retry and
-deadline handling. Exhausted attempts return `concurrent_write_retry`.
+All three membership writers use `src/lib/db/transaction-retry.ts`
+(`retryTransaction`, `isRetryableTransactionError`, `transactionRetryDelayMs`),
+shared with the runner, for 40P01, 40001 and 55P03. Production-run writers retain
+the runner's retry and deadline handling. Exhausted attempts return `concurrent_write_retry`.
 
 `src/db/schema/*` defines tables and types; `src/data-access/*` owns queries and
 permission checks; pooling defaults are centralized in `src/db/pool-config.ts`

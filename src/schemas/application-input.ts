@@ -2,7 +2,7 @@ import { z } from "zod";
 import { calendarDateSchema, expectedVersionSchema, MASS_KG_INPUT_STEP, MASS_MIN_KG_MESSAGE, positiveMassKgSchema, uuidSchema } from "./helpers";
 import { applicationEvidenceStateSchema, applicationMethods, soilTemperatureSources } from "./applications";
 import { gisBoundarySchema } from "./gis-boundary";
-import { FIELD_SIZE_POSITIVE_MESSAGE } from "@/lib/application-field-size";
+import { FIELD_SIZE_MAX_MESSAGE, FIELD_SIZE_MIN_MESSAGE, FIELD_SIZE_POSITIVE_MESSAGE, MAX_FIELD_SIZE_HA, MIN_FIELD_SIZE_HA } from "@/lib/application-field-size";
 
 const MIN_SOIL_TEMPERATURE_C = -50;
 const MAX_SOIL_TEMPERATURE_C = 60;
@@ -13,7 +13,7 @@ const fields = {
   deliveryId: uuidSchema().describe("Delivered source delivery UUID."),
   applicationDate: calendarDateSchema().describe("Application calendar date, YYYY-MM-DD, on the delivery facility clock; not before delivery or in the future."),
   appliedWetMassKg: positiveMassKgSchema().min(MASS_KG_INPUT_STEP, MASS_MIN_KG_MESSAGE).describe("Applied wet kilograms of delivered product in 0.001 kg steps. Dry biochar is derived, never supplied."),
-  fieldSizeHa: z.number().positive(FIELD_SIZE_POSITIVE_MESSAGE).describe("Measured field area in hectares. Never invent field size."),
+  fieldSizeHa: z.number().positive(FIELD_SIZE_POSITIVE_MESSAGE).min(MIN_FIELD_SIZE_HA, FIELD_SIZE_MIN_MESSAGE).max(MAX_FIELD_SIZE_HA, FIELD_SIZE_MAX_MESSAGE).describe("Measured field area in hectares. Never invent field size."),
   fieldIdentifier: z.string().max(MAX_FIELD_IDENTIFIER_LENGTH).nullable().optional().describe("Field or parcel identifier; null for none."),
   cropType: z.string().max(MAX_CROP_TYPE_LENGTH).nullable().optional().describe("Crop type; null for none."),
   applicationMethod: z.enum(applicationMethods).describe("Spreading method: manual or mechanical.").nullable().optional().describe("Spreading method; null for none."),

@@ -16,6 +16,10 @@ import {
   FIELD_SIZE_POSITIVE_MESSAGE,
   FIELD_SIZE_REQUIRED_MESSAGE,
   isPositiveApplicationFieldSize,
+  FIELD_SIZE_MAX_MESSAGE,
+  FIELD_SIZE_MIN_MESSAGE,
+  MAX_FIELD_SIZE_HA,
+  MIN_FIELD_SIZE_HA,
 } from "@/lib/application-field-size";
 
 // ============================================
@@ -71,7 +75,9 @@ const positiveFieldSizeHaSchema = requiredNumber(
   FIELD_SIZE_REQUIRED_MESSAGE,
   "Enter a valid field size",
 )
-  .refine(isPositiveApplicationFieldSize, FIELD_SIZE_POSITIVE_MESSAGE);
+  .refine(isPositiveApplicationFieldSize, FIELD_SIZE_POSITIVE_MESSAGE)
+  .refine((value) => value >= MIN_FIELD_SIZE_HA, FIELD_SIZE_MIN_MESSAGE)
+  .refine((value) => value <= MAX_FIELD_SIZE_HA, FIELD_SIZE_MAX_MESSAGE);
 
 function applicationEvidenceSuperRefine(
   data: {

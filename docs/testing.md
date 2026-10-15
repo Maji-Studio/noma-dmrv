@@ -205,14 +205,21 @@ and a blended formulation, one product placed from that stock and one loss, all
 through the operations. It also creates a customer and location with one-way
 distance, two large orders and a 0.1 kg delivery on the product bin through the
 runner. The second order stays delivery-free for DELETE. The private fixture
-exports the delivery id, code and ETag alongside the order fields. Each seeded
+exports the delivery id, code and ETag alongside the order fields. A separate
+supply chain with its own feedstock type, bins and reactor preserves those
+fixtures and creates a 50 kg delivered load on an order with site GPS, then a
+1 kg application with a small normalized boundary, leaving 49 kg. The private
+fixture adds `applicationId`, `applicationCode`, `applicationEtag`,
+`applicationDeliveryId`, `applicationDeliveryCode`, `applicationDate` and its
+GPS pair, plus `applicationDocumentId` for an uploaded photo. The fuzz key
+excludes `applications:delete`. Each seeded application, original
 delivery, feedstock and lab sample also has one uploaded document and one pending
 document. Real upload writers create both, and the uploaded fixture is promoted
 from physical local-fs bytes. Export `STORAGE_PROVIDER=local-fs` and
 `STORAGE_LOCAL_FS_ROOT=.storage-api-fuzz` for both seed and server. The fixture
 includes document ids, owner ids, ETags and the pending representation.
 Bin and formulation names are unique per facility. The key
-has all current scopes, including delete.
+has all current scopes, including the other delete scopes, except `applications:delete`.
 Its private JSON file contains the key and fixture ids; never upload that file.
 
 ```bash
@@ -230,6 +237,12 @@ on the biochar bin. Creates carry `Idempotency-Key`; PATCH uses `If-Match`.
 Delivery examples read the seeded row, dry-run a 0.1 kg create with a past instant
 and measured moisture, and dry-run a metadata-only PATCH with its ETag. These
 examples must return 2xx and leave stock and order balance available for repeats.
+Application examples list, read, fetch the boundary and delivery balance, and
+dry-run a 0.001 kg create using the fixture date and GPS with a fresh key. No
+positive PATCH example is added because the hooks do not chain fresh ETags;
+there is no positive DELETE example or application delete scope. Generated
+application PATCH and DELETE requests expect missing or stale preconditions
+(428 or 412), subject to earlier scope and target denials.
 Document examples list, read and request uploads on those owners, repeat-confirm
 the uploaded fixtures, and expect a content redirect only for fixtures with
 physical objects. The harness does not follow those redirects or PUT bytes.

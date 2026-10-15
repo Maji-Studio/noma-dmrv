@@ -69,18 +69,21 @@ order by `occurred_at` then unique `sequence`, newest first.
 
 The operation runner appends activity from `describe()` in its write transaction.
 This covers feedstock intake, production runs, products, stock movements, lab
-samples, orders, deliveries, app/API document requests and confirmations, and
-app document deletes. App document visibility and evidence classification edits
+samples, orders, deliveries, applications, app/API document requests and
+confirmations, and app document deletes. App document visibility and evidence classification edits
 also use the runner. No-op descriptions, repeated confirmations, dry runs and idempotent
 replays add no events. The runner computes one source for both its own event and
 nested writers: audited transport, then the trusted `script` override, then `form`.
 Runner-reached transactional and cascade writers require an explicit source.
 
-Application, credit-batch, membership and transport-leg writers append activity
-directly in their write transaction. A record spanning several batches emits one
-event per batch, including both former and current batches when an application
-moves. Membership changes emit a batch update per changed run and a run update
-with the former batch ID on detach, so each event retains its run scope.
+Application operations call `activity.scope(entityId, scopes)` in
+`src/lib/operations/activity-links.ts`. The runner emits one event per distinct
+batch/run scope, including both former and current batches when an application
+moves. Delete captures scopes before removing shares and passes them with the
+initiating source to document retirement. Credit-batch, membership and
+transport-leg writers append activity directly in their write transaction.
+Membership changes emit a batch update per changed run and a run update with
+the former batch ID on detach, so each event retains its run scope.
 Automatic cohort attachment uses `system` with no actor; derived transport writes
 retain the initiating actor, including document retirements when a derived leg
 is cleared. Identical derived syncs still upsert and bump the leg version without
@@ -132,6 +135,21 @@ through lookups. Its strong ETag covers the run version and representation
 revision. Feedstock edits change bin stock and their own version, but do not
 rewrite the run's measured moisture, draws or batch allocations and do not bump
 the run version. A change to the run itself bumps its version.
+
+Application writers use `src/data-access/application-write-scope.ts`: unlocked
+discovery, sorted lineage artifacts, facilities `FOR SHARE`, runs `FOR SHARE`,
+batches `FOR SHARE`, deliveries `FOR UPDATE`, application `FOR UPDATE` with its
+version check, revalidation, then application slices `FOR UPDATE` and writes.
+Changed lineage, parent or discovered sets return retryable `conflict` to the
+client; no new locks are taken late. Explicit credit-batch membership takes
+artifacts before facilities and runs, then process scope and batch. Scalar
+edits and delete take no member run locks; late auto-membership acquisition is
+non-blocking `SKIP LOCKED` and refuses a missed row. See
+[Database boundaries](./architecture.md#database-boundaries) for the full order.
+`src/lib/db/transaction-retry.ts` shares the runner's bounded retry policy with
+all three membership transactions. It retries 40P01, 40001 and 55P03; production
+run writers still take runs before artifacts. The residual order is tracked in
+`data/production-run-artifact-order` and `data/lock-order`.
 
 ## Numeric Column Families
 

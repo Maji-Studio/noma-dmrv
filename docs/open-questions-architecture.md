@@ -16,6 +16,15 @@ these areas; the entry rules and invariants live in
   requires a slice for its accounting view.
 - **Follow-up:** align the app page on `inApplicationCreditBatchLineage`.
 
+### Large application boundaries over the API (`api/large-gis-boundary`, opened 2026-10-15)
+
+- REST and MCP bodies cap at 256 KiB (`API_BODY_MAX_BYTES`), while the app accepts
+  raw boundary input up to 768 KiB and normalized geometry up to 512 KiB
+  (`src/config/geo.ts`). Phase 6b accepts raw GeoJSON in the body and serves
+  geometry through the separate boundary read; it does not expand that cap.
+- **Follow-up:** decide whether larger geometry needs its own bounded transfer
+  path. Until then, add larger boundaries in the app and tell API clients so.
+
 ### Simplification rollout follow-ups (`simplification/remaining-decisions`, opened 2026-10-14)
 
 - **A5:** Data-access consolidation is skipped for now. List-query duplication
@@ -200,8 +209,9 @@ artifacts; both use the runner, which retries deadlocks.
 Credit-batch membership refresh is another counterpart: it holds batch
 artifacts before locking current and prospective runs FOR UPDATE, opposite
 production-run writers. Membership create, update and delete now use the same
-bounded transaction retry policy as the runner, so either writer can retry a
-deadlock, serialization failure or lock timeout; exhaustion returns
+bounded transaction retry policy in `src/lib/db/transaction-retry.ts` as the
+runner, so either writer can retry a deadlock, serialization failure or lock
+timeout; exhaustion returns
 `concurrent_write_retry`.
 
 This is part of `data/lock-order` below.
@@ -221,7 +231,8 @@ create; runs stay before process scope to match production-run auto-attachment.
 After scope, newly matching unassigned runs use non-blocking SKIP LOCKED
 acquisition; a missed row returns a typed conflict. Scalar edits and delete do
 not lock runs. Changed artifacts or current membership still refuse with a
-typed conflict. Membership now shares the runner's bounded retry policy.
+typed conflict. Membership now shares the runner's bounded retry policy through
+`src/lib/db/transaction-retry.ts`.
 Production-run auto-attachment retains scope-before-batch-artifacts, opposite
 membership's artifacts-before-scope, as well as run-before-artifacts, opposite
 membership refresh. Both sides retry transaction aborts.

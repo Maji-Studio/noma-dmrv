@@ -13,3 +13,9 @@ it("rejects server owned fields and publishes only operation body fields", () =>
   }
   expect(toOperationJsonSchema(recordApplicationApiInput)).toMatchObject({ additionalProperties: false });
 });
+it.each([5e-324, 0.00009, 1e300, 1_000_001])("rejects field size %s outside the float4-safe range", fieldSizeHa => {
+  expect(recordApplicationApiInput.safeParse({ ...input, fieldSizeHa }).success).toBe(false);
+});
+it.each([0.0001, 1_000_000])("accepts the field size bound %s", fieldSizeHa => {
+  expect(recordApplicationApiInput.safeParse({ ...input, fieldSizeHa }).success).toBe(true);
+});
