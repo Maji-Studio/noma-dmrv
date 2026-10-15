@@ -17,6 +17,7 @@ import { createDbConnection } from "./db";
 
 /** The sandbox project every gated scenario links facilities to. */
 export const SANDBOX_PROJECT_ID = process.env.ISOMETRIC_DEMO_PROJECT_ID;
+export const SANDBOX_FACILITY_ID = process.env.ISOMETRIC_DEMO_FACILITY_ID;
 
 export const CERTIFICATION_PROTOCOL_SLUG = "biochar";
 export const CERTIFICATION_PROTOCOL_VERSION = "1.1";
@@ -30,23 +31,13 @@ export interface SeededMapping {
   cleanup: () => Promise<void>;
 }
 
-/** The per-facility emission-estimate config a live submit needs. */
-export interface FacilityEmissionConfigSeed {
-  gensetEnergyYieldKwhPerLitre: number;
-}
-
-/** Plausible default genset yield for the live create-to-submit path. */
-export const DEFAULT_FACILITY_EMISSION_CONFIG: FacilityEmissionConfigSeed = {
-  gensetEnergyYieldKwhPerLitre: 3,
-};
-
 /** Link a facility to an Isometric project and return its cleanup. */
 export async function seedCertifierMapping(
   facilityId: string,
   opts: {
     externalProjectId: string;
+    externalFacilityId?: string;
     defaultRemovalTemplateId?: string | null;
-    emissionConfig?: FacilityEmissionConfigSeed;
   },
 ): Promise<SeededMapping> {
   const { db, pool } = createDbConnection();
@@ -59,7 +50,7 @@ export async function seedCertifierMapping(
       protocolSlug: CERTIFICATION_PROTOCOL_SLUG,
       protocolVersion: CERTIFICATION_PROTOCOL_VERSION,
       defaultRemovalTemplateId: opts.defaultRemovalTemplateId ?? null,
-      ...(opts.emissionConfig ?? {}),
+      externalFacilityId: opts.externalFacilityId ?? `fcl_e2e_${facilityId.replaceAll("-", "")}`,
     });
   } finally {
     await pool.end();

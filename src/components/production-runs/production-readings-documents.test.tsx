@@ -19,6 +19,10 @@ vi.mock("@/hooks/use-documents", () => ({
   useDocumentsForEntity: (...args: unknown[]) => documentsForEntity(...args),
 }));
 
+vi.mock("@/hooks/use-record-certification-lock", () => ({
+  useIsRecordCertificationLocked: () => false,
+}));
+
 vi.mock("@/components/ui/toast", () => ({
   useToast: () => ({ success: vi.fn() }),
 }));

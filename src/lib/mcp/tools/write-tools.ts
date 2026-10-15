@@ -1,3 +1,5 @@
+import { documentWriteTools } from "./document-tools";
+import type { ToolAccess } from "./tool-access";
 import { deliveryWriteTools } from "./delivery-tools";
 import { controls, parseControls, writeOptions } from "./write-controls";
 import { productionRunWriteTools } from "./production-run-tools";
@@ -27,10 +29,10 @@ const deleteContract = toOperationJsonSchema(deleteInput);
 const itemOutput = stockWriteEnvelopeSchema(feedstockRepresentationSchema);
 const deleteOutput = z.union([itemOutput, z.object({ deleted: z.object({ id: z.uuid(), code: z.string() }) })]);
 
-export interface WriteTool {
+export type WriteTool = ToolAccess & ({ scope: ApiScope } | { visible: NonNullable<ToolAccess["visible"]>; authorize: NonNullable<ToolAccess["authorize"]> }) & {
   kind: "write";
   name: string;
-  scope: ApiScope;
+  scope?: ApiScope;
   description: string;
   input: z.ZodType;
   output: z.ZodType;
@@ -91,6 +93,7 @@ export const writeTools: WriteTool[] = [
   ...labSampleWriteTools,
   ...orderWriteTools,
   ...deliveryWriteTools,
+  ...documentWriteTools,
 ];
 
 async function mutate(context: ApiRouteContext, raw: unknown, kind: "update" | "delete") {

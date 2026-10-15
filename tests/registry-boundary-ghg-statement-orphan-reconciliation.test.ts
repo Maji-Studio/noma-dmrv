@@ -5,7 +5,7 @@ vi.mock("@/data-access/certifier-credentials", async (importOriginal) =>
 );
 
 import { eq, inArray } from "drizzle-orm";
-import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
+import { TEST_SITE_POSITION, ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
 
 vi.mock("@/lib/isometric/client", async (importOriginal) => {
   const actual =
@@ -91,7 +91,7 @@ async function createFixture() {
   const externalProjectId = `prj_ggs_bd_${runId}`;
   const [facility] = await db
     .insert(facilities)
-    .values({ timezone: "UTC",
+    .values({ ...TEST_SITE_POSITION, timezone: "UTC",
       organizationId: TEST_ORG_ID,
       name: `GGS Boundary Facility ${runId}`,
       code: `FAC-GB-${runId}`,
@@ -99,6 +99,7 @@ async function createFixture() {
     .returning({ id: facilities.id });
   createdFacilityIds.push(facility.id);
   await db.insert(certifierProjects).values({
+    externalFacilityId: `fcl_test_${facility.id}`,
     organizationId: TEST_ORG_ID,
     facilityId: facility.id,
     provider: "isometric",

@@ -16,6 +16,7 @@ import {
 import { TRANSPORT_EVIDENCE_HINTS } from "@/components/transport-legs/transport-evidence-hints";
 import type { FeedstockWithRelations } from "@/data-access/feedstocks";
 import type { UseDeferredAttachmentsResult } from "@/hooks/use-deferred-attachments";
+import { useIsRecordCertificationLocked } from "@/hooks/use-record-certification-lock";
 import { ActionableFocusTarget } from "@/components/ui/actionable-focus-target";
 import type { EntityFocusTarget } from "@/lib/entity-deep-link";
 
@@ -43,6 +44,8 @@ export function FeedstockEvidenceSection({
   focusTarget,
   __spine,
 }: FeedstockEvidenceSectionProps) {
+  // The evidence panel shows the lock notice; queued retries must not run either.
+  const locked = useIsRecordCertificationLocked("feedstock", isEditMode ? feedstock?.id : undefined);
   return (
     <FormSection
       title="Transport evidence"
@@ -71,6 +74,7 @@ export function FeedstockEvidenceSection({
                 }
                 onRemove={deferredAttachments.remove}
                 disabled={isSubmitting}
+                retryable={!locked}
               />
             )}
             <TransportEvidencePanel

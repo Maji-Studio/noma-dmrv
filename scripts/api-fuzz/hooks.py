@@ -1,6 +1,8 @@
 """Schemathesis 4.29.3 adaptations for opaque inputs and local HTTP transport."""
 
 import os
+import json
+import requests
 from copy import deepcopy
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal, DecimalException
@@ -50,6 +52,12 @@ SEEDED_DELIVERY_WET_MASS_KG = 0.1
 SEEDED_DELIVERY_PATCH = {"distanceNote": "API fuzz delivery note"}
 IDEMPOTENCY_HEADER = "Idempotency-Key"
 IF_MATCH_HEADER = "If-Match"
+DOCUMENT_CONTENT_DESCRIPTION = "Document fixture content redirect"
+DOCUMENT_PENDING_DESCRIPTION = "Document fixture pending confirm refusal"
+DOCUMENT_SUCCESS_DESCRIPTION = "Document fixture success"
+DOCUMENT_TIMEOUT_SECONDS = 10
+DOCUMENT_FIXTURES = []
+DOCUMENT_PATHS = {"delivery": "deliveries", "feedstock": "feedstocks", "lab_sample": "lab-samples"}
 SEEDED_TARGETS = {}
 SEEDED_ETAGS = {}
 SEEDED_CREATE_BODIES = {}
@@ -76,7 +84,7 @@ def seeded_oversize_rejection(ctx, response, case):
 def seeded_example_success(ctx, response, case):
     # The status allowances for positive data (404, 409, 422, ...) exist for
     # generated cases. A fixture-backed example is built to succeed.
-    if case.meta is not None and case.meta.phase.name == TestPhase.EXAMPLES and case.meta.phase.data.description in SEEDED_SUCCESS_DESCRIPTIONS:
+    if case.meta is not None and case.meta.phase.name == TestPhase.EXAMPLES and case.meta.phase.data.description in SEEDED_SUCCESS_DESCRIPTIONS | {DOCUMENT_SUCCESS_DESCRIPTION}:
         if not 200 <= response.status_code < 300:
             raise AssertionError(f"Seeded positive example for {case.operation.label} must return 2xx, received {response.status_code}.")
 
@@ -100,6 +108,11 @@ def after_load_schema(ctx, schema):
     SEEDED_ETAGS.clear()
     SEEDED_CREATE_BODIES.clear()
     SEEDED_PATCH_BODIES.clear()
+    DOCUMENT_FIXTURES.clear()
+    fixture_path = os.environ.get("API_FUZZ_FIXTURE")
+    if fixture_path:
+        with open(fixture_path, encoding="utf-8") as fixture_file:
+            DOCUMENT_FIXTURES.extend(json.load(fixture_file)["documents"])
     schema.config.parameters.pop("query.cursor", None)
     for result in schema.get_all_operations():
         operation = result.ok()
@@ -200,6 +213,7 @@ def after_load_schema(ctx, schema):
 @schemathesis.hook
 def before_add_examples(ctx, examples):
     operation = ctx.operation
+    add_document_examples(operation, examples)
     target = SEEDED_TARGETS.get(operation.label)
     create_body = SEEDED_CREATE_BODIES.get(operation.label)
     is_create = create_body is not None
@@ -234,7 +248,9 @@ def before_add_examples(ctx, examples):
 
 
 @schemathesis.hook
-def before_call(ctx, case, **kwargs):
+def before_call(ctx, case, kwargs=None):
+    if kwargs is not None and "/documents/" in case.operation.path and case.operation.path.endswith("/content"):
+        kwargs["allow_redirects"] = False
     # No generated string can promise the organization/resource/filter binding.
     # Positive requests start on page one; negative cursor probes remain intact.
     if case.meta is not None and case.meta.generation.mode.is_positive and case.query:
@@ -314,3 +330,67 @@ def requires_idempotency_key(operation):
         parameter.get("in") == "header" and parameter.get("name") == IDEMPOTENCY_HEADER and parameter.get("required")
         for parameter in operation.definition.raw.get("parameters", [])
     )
+
+
+def document_metadata(description, negative=False):
+    return CaseMetadata(
+        generation=GenerationInfo(time=0, mode=GenerationMode.NEGATIVE if negative else GenerationMode.POSITIVE),
+        components={}, phase=PhaseInfo(name=TestPhase.EXAMPLES, data=ExamplesPhaseData(
+            description=description, parameter=None, parameter_location=ParameterLocation.BODY, location=None,
+        )),
+    )
+
+
+def add_document_examples(operation, examples):
+    for fixture in DOCUMENT_FIXTURES:
+        path = "/" + DOCUMENT_PATHS[fixture["ownerType"]] + "/{idOrCode}/documents"
+        if operation.path not in {path, path + "/{documentId}", path + "/{documentId}/content", path + "/{documentId}/confirm"}:
+            continue
+        method = operation.method.upper()
+        if method not in {"GET", "POST"}:
+            continue
+        kwargs = {"path_parameters": {"idOrCode": fixture["ownerId"]},
+                  "_meta": document_metadata(DOCUMENT_SUCCESS_DESCRIPTION)}
+        if "{documentId}" in operation.path:
+            kwargs["path_parameters"]["documentId"] = fixture["uploaded"]["id"]
+        if operation.path.endswith("/content"):
+            if not fixture["uploaded"].get("physicalObject"):
+                continue
+            kwargs["_meta"] = document_metadata(DOCUMENT_CONTENT_DESCRIPTION)
+        if method == "POST":
+            kwargs.update(body={}, media_type="application/json")
+            if operation.path == path:
+                kwargs["headers"] = {IDEMPOTENCY_HEADER: str(uuid4())}
+                kwargs["body"] = {"documentType": fixture["documentType"], "fileName": "fuzz-request.pdf",
+                                  "contentType": "application/pdf", "sizeBytes": 8, "sha256": "a" * 64}
+        examples.append(operation.Case(**kwargs))
+        if operation.path.endswith("/confirm"):
+            negative = deepcopy(kwargs)
+            negative["path_parameters"]["documentId"] = fixture["pending"]["id"]
+            negative["_meta"] = document_metadata(DOCUMENT_PENDING_DESCRIPTION, negative=True)
+            examples.append(operation.Case(**negative))
+
+
+@schemathesis.check
+def seeded_document_content_redirect(ctx, response, case):
+    if case.meta is not None and case.meta.phase.name == TestPhase.EXAMPLES and case.meta.phase.data.description == DOCUMENT_CONTENT_DESCRIPTION:
+        if response.status_code != 302 or not response.headers.get("location"):
+            raise AssertionError("Seeded document content must return a download redirect.")
+        if response.headers.get("cache-control") != ["private, no-store"]:
+            raise AssertionError("Seeded document content must not be cached.")
+
+
+@schemathesis.check
+def seeded_pending_document_unchanged(ctx, response, case):
+    if case.meta is None or case.meta.phase.name != TestPhase.EXAMPLES or case.meta.phase.data.description != DOCUMENT_PENDING_DESCRIPTION:
+        return
+    if response.status_code != 409 or response.json().get("code") != "conflict" or response.json().get("retryable") is not True:
+        raise AssertionError("Pending confirmation without bytes must return retryable 409 conflict.")
+    fixture = next(item for item in DOCUMENT_FIXTURES if item["pending"]["id"] == case.path_parameters["documentId"])
+    path = f"/{DOCUMENT_PATHS[fixture['ownerType']]}/{fixture['ownerId']}/documents/{fixture['pending']['id']}"
+    # Read only the API representation. Never follow storage links or PUT bytes.
+    current = requests.get(os.environ["API_FUZZ_BASE_URL"].rstrip("/") + path,
+                           headers={"Authorization": "Bearer " + os.environ["API_FUZZ_KEY"]},
+                           timeout=DOCUMENT_TIMEOUT_SECONDS, allow_redirects=False)
+    if current.status_code != 200 or current.json().get("data") != fixture["pending"]["data"] or current.headers.get("ETag") != fixture["pending"]["etag"]:
+        raise AssertionError("Pending confirmation changed the seeded document.")

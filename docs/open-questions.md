@@ -503,6 +503,7 @@ blocks an otherwise-complete batch until its product is applied. The sub-commit
 says deliberate; needs a product confirmation that this is the intended
 operational tradeoff, and this is not a registry requirement we verified.
 
+
 ## Design review 2026-08-13 follow-ups (opened 2026-08-14)
 
 
@@ -514,6 +515,8 @@ operational tradeoff, and this is not a registry requirement we verified.
   expiry and revocation but sends no notices. Pointers: `src/db/schema/api-keys.ts:apiKeys.expiresAt` and `src/data-access/api-credential-auth.ts:disableOwnerApiKeys`.
 - Staging cron gap: Vercel Cron does not run on Preview deployments. Staging
   relies on the claim path deleting expired idempotency records lazily, and
-  idle rate-limit buckets are not purged on schedule. If record growth ever
-  matters, add a scheduled GitHub Actions call to the secret-authenticated
-  purge route. Pointer: `src/app/api/cron/purge-api-records/route.ts:GET`.
+  idle rate-limit buckets are not purged on schedule. Abandoned uploads and
+  failed-document retention also lack the daily sweep. Both crons run only on
+  Production; the site deployment answers 404 to both. If growth matters, add
+  scheduled GitHub Actions calls to the secret-authenticated
+  `/api/cron/purge-api-records` and `/api/cron/sweep-document-uploads` routes.

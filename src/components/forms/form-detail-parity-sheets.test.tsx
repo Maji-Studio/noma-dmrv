@@ -1,3 +1,4 @@
+import { TEST_SITE_POSITION } from "../../../tests/helpers/test-org";
 /**
  * Detail level parity for every read sheet: each read-section builder renders
  * through the shared side-sheet spine at Simple, then at Detailed, and must
@@ -75,7 +76,7 @@ const noop = () => undefined;
 const as = <T,>(value: object) => value as unknown as T;
 type Arg<F extends (...args: never[]) => unknown, I extends number = 0> = Parameters<F>[I];
 
-const location = { name: "North field", country: "TZ", stateRegion: "Iringa", city: "Mafinga", address: "Plot 4", gpsLatitude: -8.3, gpsLongitude: 35.3, distanceFromFacilityKm: 12, isDefault: true, defaultSoilTemperatureC: 22 };
+const location = { name: "North field", ...TEST_SITE_POSITION, country: "TZ", stateRegion: "Iringa", city: "Mafinga", address: "Plot 4", distanceFromFacilityKm: 12, isDefault: true, defaultSoilTemperatureC: 22 };
 
 const storageBin = (type: string, stockMode: string) => as<Arg<typeof storageLocationSheetSections>>({
   id: `${type}-bin`, facilityId: "facility", type, stockMode, drawOrder: "newest_first", name: `${type} bin`, capacityKg: 5000, storageMethod: "Covered heap", storageDescription: null,
@@ -116,13 +117,13 @@ const READ_SECTION_CASES: { file: string; name: string; sections: DetailPanelSec
     storageLocationId: "bin", massDryKg: 80, effectiveDistanceKm: 12, distanceKmOverride: 14, distanceNote: "Detour", effectiveDistanceSource: "manual",
   }), FACILITIES) },
   { file: "components/facilities/facility-read-sections.tsx", name: "facility", sections: facilitySheetSections(as({
-    id: "facility", name: "Mafinga", country: "TZ", timezone: "Africa/Dar_es_Salaam", location: "Mafinga", address: null, gpsLatitude: -8.3, gpsLongitude: 35.3,
+    id: "facility", name: "Mafinga", ...TEST_SITE_POSITION, country: "TZ", timezone: "Africa/Dar_es_Salaam", location: "Mafinga", address: null,
     contactEmail: null, contactPhone: null, durabilityOption: "200_year", reactorCount: 2,
     storageSummary: { feedstockBinCount: 2, biocharBinCount: 1, productBinCount: 3 }, inventorySummary: { feedstockWetKg: 1200, biocharKg: 800, productKg: 400 },
   })) },
   { file: "components/feedstock-types/feedstock-type-read-sections.tsx", name: "feedstock type", sections: feedstockTypeSheetSections(as({
-    id: "type", name: "Maize cobs", code: "FT-001", category: "agricultural_residue", usage: "pyrolysis", archivedAt: null, isometricFeedstockTypeId: null, registryUrl: null, description: null,
-  }), { facilityId: "facility", canManage: true }) },
+    id: "type", name: "Maize cobs", code: "FT-001", category: "agricultural", usage: "pyrolysis", archivedAt: null, isometricFeedstockTypeId: null, registryUrl: null, description: null,
+  }), { facilityId: "facility", canManage: true }, true) },
   { file: "components/feedstocks/feedstock-read-sections.tsx", name: "feedstock delivery", sections: feedstockSheetSections(as({
     id: "feedstock", deliveryDate: new Date("2026-08-01"), supplierName: "Supplier", vehiclePlateNumber: "T 123", transportDistanceKm: 20, transportDistanceSource: "supplier_default",
     feedstockTypeName: "Maize cobs", massWetKg: 1000, moistureContentPercent: 20, massDryKg: 800, storageLocationCode: "FB-01", storageLocationName: "Feedstock bin", overrideJustification: null, notes: null,
@@ -137,7 +138,7 @@ const READ_SECTION_CASES: { file: string; name: string; sections: DetailPanelSec
     biocharStorageLocationName: "Biochar bin", biocharOutputKg: 300, biocharMoisturePercent: 10, biocharDryMassKg: 270,
     dieselOperationLiters: 5, dieselGensetLiters: null, preprocessingFuelLiters: null, electricityKwh: 40,
   }), FACILITIES) },
-  { file: "components/reactors/reactor-read-sections.tsx", name: "reactor", sections: reactorSheetSections(as({ identifier: "R-1", reactorType: "kon_tiki", nominalThroughputTph: 0.5 })) },
+  { file: "components/reactors/reactor-read-sections.tsx", name: "reactor", sections: reactorSheetSections(as({ identifier: "R-1", reactorType: "batch", nominalThroughputTph: 0.5 })) },
   { file: "components/samples/sample-read-sections.tsx", name: "sample (1000-year)", sections: sampleSheetSections(as({
     id: "sample", creditBatchCode: "CB-26-001", samplingTime: new Date("2026-09-01T09:00:00Z"), analysisDate: new Date("2026-09-10"), labName: "Lab", labAccreditation: null, volumeMl: 100, weightGrams: 50,
     totalCarbonPercent: 80, organicCarbonPercent: 75, inorganicCarbonPercent: 5, totalHydrogenPercent: 2, totalNitrogenPercent: 1, totalOxygenPercent: 10, totalSulfurPercent: 0.1,
@@ -148,7 +149,7 @@ const READ_SECTION_CASES: { file: string; name: string; sections: DetailPanelSec
   { file: "components/storage-locations/storage-location-read-sections.tsx", name: "storage bin (feedstock)", sections: storageLocationSheetSections(storageBin("feedstock_bin", "fifo"), noop) },
   { file: "components/storage-locations/storage-location-read-sections.tsx", name: "storage bin (mix product)", sections: storageLocationSheetSections(storageBin("product_bin", "mix"), noop) },
   { file: "components/suppliers/supplier-read-sections.tsx", name: "supplier", sections: supplierSheetSections(
-    as({ name: "Supplier", contactName: null, contactEmail: null, contactPhone: null, location: "Mafinga", sourceRegion: "Iringa", address: null, distanceToFacilityKm: 20 }),
+    as({ name: "Supplier", contactName: null, contactEmail: null, contactPhone: null, location: "Mafinga", sourceRegion: "Iringa", address: null }),
     as({ data: [location], isPending: false, isError: false, isFetching: false, refetch: noop }),
   ) },
 ];

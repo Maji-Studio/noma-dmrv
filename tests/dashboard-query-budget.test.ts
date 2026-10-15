@@ -24,14 +24,14 @@ import {
 import { getDashboardOverview } from "@/data-access/dashboard-overview";
 import { getOnboardingStatus } from "@/data-access/onboarding";
 import { deleteOutputFacilityFixtures } from "./helpers/output-contract-fixtures";
-import {
+import { TEST_SITE_POSITION,
   ensureTestOrg,
   makeTestOrgContext,
   TEST_ORG_ID,
 } from "./helpers/test-org";
 
 /** Statements one dashboard overview read may send, with any number of batches. */
-const OVERVIEW_QUERY_BUDGET = 19;
+const OVERVIEW_QUERY_BUDGET = 18;
 /** Statements one onboarding status read may send for a selected facility. */
 const ONBOARDING_QUERY_BUDGET = 2;
 const BATCH_COUNT = 3;
@@ -60,11 +60,11 @@ beforeAll(async () => {
   const tag = crypto.randomUUID().slice(0, 8);
   const [facility] = await db
     .insert(facilities)
-    .values({ timezone: "UTC", organizationId: TEST_ORG_ID, code: `QB-F-${tag}`, name: `Query budget ${tag}` })
+    .values({ ...TEST_SITE_POSITION, timezone: "UTC", organizationId: TEST_ORG_ID, code: `QB-F-${tag}`, name: `Query budget ${tag}` })
     .returning({ id: facilities.id });
   const [feedstockType] = await db
     .insert(feedstockTypes)
-    .values({ organizationId: TEST_ORG_ID, code: `QB-FT-${tag}`, name: `Query budget ${tag}`, category: "forestry" })
+    .values({ usage: "pyrolysis", organizationId: TEST_ORG_ID, code: `QB-FT-${tag}`, name: `Query budget ${tag}`, category: "forestry" })
     .returning({ id: feedstockTypes.id });
   const [process] = await db
     .insert(productionProcesses)

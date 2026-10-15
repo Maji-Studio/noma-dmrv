@@ -23,6 +23,7 @@ import { pureProductBody } from "./helpers/api-biochar-write-fixture";
 import { cleanupOutputStockFixture } from "./helpers/output-stock-cleanup";
 import { createIntakeFixture, removeIntakeFixture, type IntakeFixture } from "./helpers/operation-fixture";
 import { createApiDeliveryWriteFixture, deliveryInput, removeApiDeliveryWriteFixture, type ApiDeliveryWriteFixture } from "./helpers/api-delivery-write-fixture";
+import { TEST_SITE_POSITION } from "./helpers/test-org";
 import { createLabSampleFixture, cleanupLabSampleFixture, type LabSampleFixture } from "./helpers/lab-sample-fixture";
 import { deleteOutputFacilityFixtures } from "./helpers/output-contract-fixtures";
 import { rpc, rpcBody } from "./helpers/mcp";
@@ -164,7 +165,7 @@ describe("product resubmission activity", { timeout: TIMEOUT_MS }, () => {
   it("cleans only activity linked to the selected facility in a shared organization", async () => {
     const fixture = f!;
     const organizationId = fixture.ctx.organizationId;
-    const [other] = await db.insert(facilities).values({ organizationId, code: `E2E-OTHER-${fixture.tag}`, name: "Other fixture", timezone: "UTC" }).returning();
+    const [other] = await db.insert(facilities).values({ ...TEST_SITE_POSITION, organizationId, code: `E2E-OTHER-${fixture.tag}`, name: "Other fixture", timezone: "UTC" }).returning();
     await db.transaction(async tx => {
       for (const facilityId of [fixture.facility.id, other.id, null]) {
         await activityWriter.recordActivity(fixture.ctx, tx, {

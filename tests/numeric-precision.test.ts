@@ -1,6 +1,6 @@
 import { insertOutputApplicationFixture } from "./helpers/output-contract-fixtures";
 import { outputProductFixtureValues, outputOrderFixtureValues, insertOutputDeliveryFixture } from "./helpers/output-contract-fixtures";
-import { ensureTestOrg, TEST_ORG_ID } from "./helpers/test-org";
+import { TEST_SITE_POSITION, ensureTestOrg, TEST_ORG_ID } from "./helpers/test-org";
 /**
  * Issue #280 — credit-bearing values are exact numeric(p,s), not float4.
  *
@@ -53,7 +53,7 @@ describe("numeric precision round-trips (issue #280)", () => {
     await withRollback(async (tx) => {
       const [facility] = await tx
         .insert(facilities)
-        .values({ timezone: "UTC", organizationId: TEST_ORG_ID, code: `FAC-NUM-${runId}`, name: `Numeric Facility ${runId}` })
+        .values({ ...TEST_SITE_POSITION, timezone: "UTC", organizationId: TEST_ORG_ID, code: `FAC-NUM-${runId}`, name: `Numeric Facility ${runId}` })
         .returning({ id: facilities.id });
 
       const [bin] = await tx
@@ -100,12 +100,12 @@ describe("numeric precision round-trips (issue #280)", () => {
 
     await withRollback(async (tx) => {
       const [facility] = await tx.insert(facilities).values({
-        timezone: "UTC", organizationId: TEST_ORG_ID,
+        ...TEST_SITE_POSITION, timezone: "UTC", organizationId: TEST_ORG_ID,
         code: `FAC-NUM-PPM-${runId}`, name: `Numeric PPM Facility ${runId}`,
       }).returning({ id: facilities.id });
       const [feedstockType] = await tx.insert(feedstockTypes).values({
         organizationId: TEST_ORG_ID, code: `FT-NUM-PPM-${runId}`,
-        name: `Numeric PPM Feedstock ${runId}`, category: "forestry",
+        name: `Numeric PPM Feedstock ${runId}`, category: "forestry", usage: "pyrolysis",
       }).returning({ id: feedstockTypes.id });
       const [process] = await tx.insert(productionProcesses).values({
         organizationId: TEST_ORG_ID, facilityId: facility.id, feedstockTypeId: feedstockType.id,
@@ -129,7 +129,7 @@ describe("numeric precision round-trips (issue #280)", () => {
     await withRollback(async (tx) => {
       const [facility] = await tx
         .insert(facilities)
-        .values({ timezone: "UTC",
+        .values({ ...TEST_SITE_POSITION, timezone: "UTC",
           organizationId: TEST_ORG_ID,
           code: `FAC-NUM-AP-${runId}`,
           name: `Numeric App Facility ${runId}`,

@@ -49,6 +49,8 @@ export type { OperationEffect } from "@/lib/operation-effect";
 const API_CONTRACT_VERSION = "v1";
 
 export interface OperationScope {
+  /** Absolute request deadline, including after-commit work. */
+  deadlineAt?: number;
   /** Dry-run observer; once per attempt, after locks, before stock changes. */
   snapshotStock?: SnapshotStock;
   ctx: OrgContext;
@@ -57,14 +59,14 @@ export interface OperationScope {
   afterCommit: (hook: () => Promise<void> | void) => void;
 }
 
-export interface Operation<Input extends z.ZodType, Output> {
+export interface Operation<Input extends z.ZodType, Output, Effect extends OperationEffect | undefined = OperationEffect> {
   /** Stable id, shared with the REST `operationId` and the MCP tool name. */
   id: string;
   input: Input;
   /** False for operations with irreversible external effects. */
   supportsDryRun: boolean;
-  /** Null describes an idempotent no-op, which records no activity or API audit. */
-  describe?: (input: z.output<Input>, output: Output) => OperationEffect | null;
+  /** Null or undefined describes a no-op, which records no activity or API audit. */
+  describe?: (input: z.output<Input>, output: Output) => Effect | null;
   execute: (scope: OperationScope, input: z.output<Input>) => Promise<Output>;
 }
 
@@ -178,7 +180,7 @@ async function runAfterCommitHooks(
  * transaction, and return the committed (or dry-run) result.
  */
 export async function runOperation<Input extends z.ZodType, Output>(
-  operation: Operation<Input, Output>,
+  operation: Operation<Input, Output, OperationEffect | undefined>,
   ctx: OrgContext,
   input: unknown,
   options: RunOptions = {},
@@ -188,7 +190,7 @@ export async function runOperation<Input extends z.ZodType, Output>(
 
 /** Native results for server actions; replay and previews are JSON-only contracts. */
 export async function runOperationInProcess<Input extends z.ZodType, Output>(
-  operation: Operation<Input, Output>,
+  operation: Operation<Input, Output, OperationEffect | undefined>,
   ctx: OrgContext,
   input: unknown,
   options: Pick<RunOptions, "deadlineMs" | "pool"> & {
@@ -216,7 +218,7 @@ export async function runOperationInProcess<Input extends z.ZodType, Output>(
 }
 
 async function runOperationCore<Input extends z.ZodType, Output, Result>(
-  operation: Operation<Input, Output>,
+  operation: Operation<Input, Output, OperationEffect | undefined>,
   ctx: OrgContext,
   input: unknown,
   options: RunOptions,
@@ -269,7 +271,7 @@ async function runOperationCore<Input extends z.ZodType, Output, Result>(
         const snapshotStock: SnapshotStock | undefined = dryRun ? async (writerTx, ids) => {
           before = await readStockBalances(ctx, writerTx, ids);
         } : undefined;
-        const output = await operation.execute({ ctx, tx, snapshotStock, afterCommit: (hook) => hooks.push(hook) }, decoded);
+        const output = await operation.execute({ ctx, tx, deadlineAt, snapshotStock, afterCommit: (hook) => hooks.push(hook) }, decoded);
         const stockEffects = before ? diffStockBalances(before, await readStockBalances(ctx, tx, before.map((bin) => bin.storageLocationId))) : undefined;
         const effect = operation.describe?.(decoded, output) ?? undefined;
         const result = represent(output);

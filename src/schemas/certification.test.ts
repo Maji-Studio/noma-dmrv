@@ -1,7 +1,18 @@
 import { describe, expect, it } from "vitest";
-import { createGhgStatementSchema } from "./certification";
+import { createGhgStatementSchema, saveMappingSchema } from "./certification";
 
 const FACILITY_ID = "3f2b0b3a-3f0e-4a1c-9d4b-0f1a2b3c4d5e";
+
+describe("saveMappingSchema.externalFacilityId", () => {
+  it.each([
+    { value: "", valid: false },
+    { value: "fcl_", valid: false },
+    { value: "prj_demo", valid: false },
+    { value: "fcl_demo", valid: true },
+  ])("validates $value as $valid", ({ value, valid }) => {
+    expect(saveMappingSchema.shape.externalFacilityId.safeParse(value).success).toBe(valid);
+  });
+});
 
 function parseEnd(reportingPeriodEndOn: string) {
   return createGhgStatementSchema.safeParse({
