@@ -44,6 +44,9 @@ export const activityEvents = pgTable("activity_events", {
   index("activity_events_org_batch_occurred_sequence_idx").on(
     table.organizationId, table.creditBatchId, table.occurredAt, table.sequence,
   ),
+  index("activity_events_org_run_occurred_sequence_idx").on(
+    table.organizationId, table.productionRunId, table.occurredAt, table.sequence,
+  ),
   index("activity_events_org_occurred_idx").on(table.organizationId, table.occurredAt),
   check("activity_events_entity_type", sql`${table.entityType} in (${sql.join(
     ACTIVITY_ENTITY_TYPES.map((entityType) => sql.raw(`'${entityType}'`)), sql`, `,

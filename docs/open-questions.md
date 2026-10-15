@@ -30,6 +30,23 @@ Deferred work lives here, never as a `TODO` in code.
   announce unreliably. Fix: a semantic card with a separate record-opening
   button or link beside its controls. It changes every DataTable consumer.
 
+## Activity reads
+
+- `src/data-access/credit-batch-activity-members.ts:loadActivityMembers` resolves
+  unlinked document events from current owner membership. Their reason codes
+  preserve document history after document deletion, but cannot recover owners
+  that have themselves been deleted or detached from the batch.
+- `src/data-access/credit-batch-activity-members.ts:loadActivityMembers` rebuilds
+  batch member IDs using `loadCreditBatchRollups` with run forwards plus several
+  queries for each activity page. Infinite-query refetches therefore rebuild
+  membership once per loaded page. This cost is acceptable for v1.
+- `src/hooks/use-certification.ts:invalidateCertificationReadiness` invalidates
+  `activityKeys.all`. Certification, credit batch (including membership),
+  production run, document, sample, application, production run readings and
+  reading import hooks already call this helper and therefore refresh activity.
+  Transport leg, feedstock, delivery, order and biochar product hooks do not call
+  it; activity invalidation for these hooks remains deferred to #1043.
+
 ## Invariants an LLM must not violate
 
 Short, load-bearing rules that this file's entries assume. Each is enforced in

@@ -16,6 +16,8 @@ const mocks = vi.hoisted(() => ({
   getProductionRuns: vi.fn(),
   getProductionRunStats: vi.fn(),
   getCreditBatches: vi.fn(),
+  listCreditBatchActivity: vi.fn(),
+  getCreditBatchActivitySummary: vi.fn(),
   getCertifierProjectByFacility: vi.fn(),
   listFacilitiesLinkedToExternal: vi.fn(),
   logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn() },
@@ -35,6 +37,7 @@ vi.mock("@/data-access/production-runs", () => ({
   getProductionRuns: mocks.getProductionRuns,
   getProductionRunStats: mocks.getProductionRunStats,
 }));
+vi.mock("@/data-access/credit-batch-activity", () => ({ listCreditBatchActivity: mocks.listCreditBatchActivity, getCreditBatchActivitySummary: mocks.getCreditBatchActivitySummary }));
 vi.mock("@/data-access/credit-batches", () => ({
   getCreditBatches: mocks.getCreditBatches,
 }));
@@ -56,6 +59,8 @@ vi.mock("@/lib/log", () => ({
 
 import type { DomainIssue } from "@/lib/domain-errors";
 import { SafeError } from "@/lib/errors";
+import { POST as activitySummaryRoute } from "./credit-batches/activity/summary/route";
+import { POST as activityRoute } from "./credit-batches/activity/route";
 import { POST as creditBatchesRoute } from "./credit-batches/route";
 import { POST as certifierSummaryRoute } from "./facilities/[facilityId]/certifier-summary/route";
 import { POST as facilitiesRoute } from "./facilities/route";
@@ -124,6 +129,20 @@ interface ReadEndpoint {
 }
 
 const endpoints: Record<string, ReadEndpoint> = {
+  "credit batch activity summary": {
+    ok: () => activitySummaryRoute(post("/api/reads/credit-batches/activity/summary", { creditBatchId: CREDIT_BATCH.id })),
+    data: { total: 0, counts: [], latest: null },
+    badInput: () => activitySummaryRoute(post("/api/reads/credit-batches/activity/summary", { creditBatchId: MALFORMED_ID })),
+    badInputError: "Invalid activity filters: Choose a valid credit batch.",
+    badInputIssues: [{ path: ["creditBatchId"], code: "invalid_format", message: "Choose a valid credit batch.", meta: { format: "uuid" } }],
+  },
+  "credit batch activity": {
+    ok: () => activityRoute(post("/api/reads/credit-batches/activity", { creditBatchId: CREDIT_BATCH.id })),
+    data: { items: [], nextCursor: null },
+    badInput: () => activityRoute(post("/api/reads/credit-batches/activity", { creditBatchId: MALFORMED_ID })),
+    badInputError: "Invalid activity filters: Choose a valid credit batch.",
+    badInputIssues: [{ path: ["creditBatchId"], code: "invalid_format", message: "Choose a valid credit batch.", meta: { format: "uuid" } }],
+  },
   "facility detail": {
     ok: () => facilityRoute(post("/api/reads/facilities"), facilityParams(FACILITY_ID)),
     data: { id: FACILITY_ID, version: FACILITY_VERSION },
@@ -257,6 +276,8 @@ describe.each(Object.entries(endpoints))(
       mocks.getProductionRuns.mockResolvedValue(EMPTY_PAGE);
       mocks.getProductionRunStats.mockResolvedValue(RUN_STATS);
       mocks.getCreditBatches.mockResolvedValue([CREDIT_BATCH]);
+      mocks.getCreditBatchActivitySummary.mockResolvedValue({ total: 0, counts: [], latest: null });
+      mocks.listCreditBatchActivity.mockResolvedValue({ items: [], nextCursor: null });
       mocks.getCertifierProjectByFacility.mockResolvedValue(null);
       mocks.listFacilitiesLinkedToExternal.mockResolvedValue([]);
     });
