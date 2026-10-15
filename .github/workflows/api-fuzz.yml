@@ -130,7 +130,8 @@ jobs:
           exit 1
 
       - name: Run Schemathesis
-        timeout-minutes: 5
+        # 84 operations since Phase 6b; the coverage phase alone takes about four minutes on CI.
+        timeout-minutes: 10
         run: pnpm api:fuzz
 
       - name: Upload Schemathesis report

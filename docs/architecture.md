@@ -36,7 +36,8 @@ components (UI)
   output-stock movement, lab sample and order writes use this layer (`make_biochar_product`,
   `update_biochar_product`, `record_output_stock_movement`, `record_lab_sample`,
   `update_lab_sample`, `delete_lab_sample`, `record_order`, `update_order`,
-  `delete_order`). UI product deletes
+  `delete_order`). Application writes use the registered `record_application`,
+  `update_application` and `delete_application` operations. UI product deletes
   stay off the runner. Lost mass form edits run `record_output_stock_movement`
   with the unpublished `requireLatestCorrection` option. Delivery updates run
   the UI-only `update_posted_delivery` operation: the delivery row, stock
@@ -49,6 +50,12 @@ components (UI)
   including reference checks and result enrichment. After-commit hooks run
   after a real commit; dry runs roll back and skip them.
   Before COMMIT, deadlocks, serialization failures and operation lock-timeout aborts retry the whole transaction within the deadline, including dry runs; exhausted attempts return retryable `concurrent_write_retry`.
+- Runner activity uses `activity.scope(entityId, scopes)` to record one event per
+  distinct batch/run scope in the write transaction. Application updates retain
+  scopes for both former and current batches; delete captures scopes before
+  removing shares and passes them with the initiating source to document
+  retirement. Sources are `form`, `rest`, `mcp` or a trusted `script` override.
+  Dry runs and idempotent replays emit no activity.
 - `src/lib/read-models/` holds server-only read cores that take an already
   resolved `OrgContext` and return domain data. They are not Server Actions and
   are not exported from a `"use server"` file; the caller authenticates first.
@@ -401,6 +408,44 @@ local, and deployed builds remain on the stable default.
 
 ## Database Boundaries
 
+Application writers share `src/data-access/application-write-scope.ts`: unlocked
+discovery, sorted lineage artifacts, facilities `FOR SHARE`, production runs `FOR SHARE`, credit batches `FOR SHARE`, deliveries
+`FOR UPDATE`, then the application `FOR UPDATE` and its version check. They
+revalidate lineage, parent identity and discovered sets before locking application
+slices `FOR UPDATE` and writing shares, slices or document retirement. Changed
+sets return retryable `conflict`; no newly discovered lock is taken late. The
+client retries changed-set conflicts. The runner retries deadlocks (40P01),
+serialization failures (40001) and lock timeouts (55P03), and owns after-commit
+storage draining.
+
+Explicit credit-batch membership create, update and delete discover the batch,
+current/prospective runs and certification artifacts unlocked, then lock sorted
+artifacts, sorted facilities `FOR SHARE`, sorted runs `FOR UPDATE` on create or
+membership refresh, the target production-process advisory scope, and the batch
+`FOR UPDATE` with its version
+check (insert on create). Both artifact helpers use
+`acquireCertificationArtifactLocksSorted` and its global key ordering; create
+has no existing certification lineage to guard. Runs stay before process scope
+because production-run auto-attachment already holds its run when requesting
+that scope. Other process-scope holders never request runs or artifacts.
+Facility shares serialize archive and Removal create before child locks and FK
+checks. Membership revalidates artifacts, member sets and cohort before writing
+links or reconciling slices; changed artifacts or current membership return a
+typed conflict with the existing refresh-and-retry copy. After process scope,
+newly matching unassigned runs use `SKIP LOCKED`: they cannot wait, have no batch
+artifacts, and their facility is already share-locked. A missed row returns a
+typed conflict. Scalar edits and delete take no run locks; batch `FOR UPDATE`
+still serializes with applications' batch `FOR SHARE` before slice writes.
+Applications and membership serialize at artifacts or runs before
+batch/application locks and implicit slice FK checks, closing cycles C1 and C2.
+Two residual orders remain: membership refresh takes artifacts before runs,
+while production-run writers take runs first; membership takes artifacts before
+process scope, while run auto-attachment takes scope before batch artifacts.
+All three membership writers use `src/lib/db/transaction-retry.ts`
+(`retryTransaction`, `isRetryableTransactionError`, `nextRetryDelayOrThrow`),
+shared with the runner, for 40P01, 40001 and 55P03. Production-run writers retain
+the runner's retry and deadline handling. Exhausted attempts return `concurrent_write_retry`.
+
 `src/db/schema/*` defines tables and types; `src/data-access/*` owns queries and
 permission checks; pooling defaults are centralized in `src/db/pool-config.ts`
 (`resolveAppPoolConfig`) and applied by `src/db/index.ts`. See
@@ -416,10 +461,10 @@ applications use their delivery; internal children use their archive-bearing
 parent. Archive's `NO KEY UPDATE` conflicts with `FOR SHARE`. Parent retirement
 uses owner, mirror, document order; Source mirroring never locks an owner.
 Sample and delivery writers use artifacts before rows. Existing feedstock, order and production-run inversions remain subject to the runner's bounded
-retry. Application update/delete still lock rows before artifacts and do not use the
-runner. They can deadlock with document writes on applications or their deliveries;
-Postgres may abort the non-retried application transaction. Phase 6b commit 1 moves
-application writers onto the runner with artifacts first, as documented in [lock-order follow-up](./open-questions-architecture.md#run-writers-feedstock-edits-and-output-postings-lock-in-different-orders-datalock-order-opened-2026-10-09).
+retry. Application writers now use the runner and the artifacts-first sequence
+above, closing their document-write inversion. Membership refresh also takes
+artifacts before runs. The remaining production-run and membership cycles are
+tracked in the [lock-order follow-up](./open-questions-architecture.md#run-writers-feedstock-edits-and-output-postings-lock-in-different-orders-datalock-order-opened-2026-10-09).
 
 Upload promotion, leases and the privileged expiry sweep are described in
 [Object storage](./storage.md#abandoned-uploads-and-cleanup).

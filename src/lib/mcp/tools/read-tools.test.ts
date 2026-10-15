@@ -110,3 +110,15 @@ it("rejects invalid delivery filters before the reader", async () => {
   }
   expect(mocks.deliveries).not.toHaveBeenCalled();
 });
+
+it("publishes remaining application mass discovery with REST's exact filter guidance", async () => {
+  const tool = named("find_deliveries");
+  expect(tool.description).toContain(resourceQueries.deliveries.list.shape.hasRemainingMass.description);
+  for (const hasRemainingMass of ["true", "false"]) {
+    await tool.execute(ctx, { hasRemainingMass });
+    expect(mocks.deliveries).toHaveBeenLastCalledWith(ctx, expect.objectContaining({ hasRemainingMass }));
+  }
+});
+it("appends application reads after the document reads", () => {
+  expect(readTools.slice(-5).map(tool => tool.name)).toEqual(["find_documents", "get_document_download_url", "find_applications", "get_application", "get_delivery_application_balance"]);
+});
