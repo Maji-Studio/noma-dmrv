@@ -235,6 +235,11 @@ describe("nested document REST reads", { timeout: READ_TIMEOUT_MS }, () => {
     const secondOwner = await insertReadDelivery(a, a.owners.delivery.orderId, 10);
     const another = await insert("delivery", { entityId: secondOwner.id });
     const wrongType = await insert("feedstock", { entityId: a.owners.delivery.id });
+    const histogram = await insert("lab_sample", { documentType: "reflectance_histogram" });
+    expect(await ids(await call("lab_sample", "list"))).toEqual([]);
+    for (const kind of ["get", "content"] as const) {
+      await lookupProblem(await call("lab_sample", kind, { documentId: histogram.id }), 404, "not_found");
+    }
     for (const row of [foreign, another, wrongType]) {
       for (const kind of ["get", "content"] as const) await lookupProblem(await call("delivery", kind, { documentId: row.id }), 404, "not_found");
     }

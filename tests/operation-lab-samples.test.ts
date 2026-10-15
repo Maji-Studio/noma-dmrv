@@ -15,7 +15,7 @@ import { and, eq } from "drizzle-orm";
 import type { Pool } from "pg";
 import { db } from "@/db";
 import { creditBatches, documents, facilities, samples, transportLegs } from "@/db/schema";
-import { getBatchesWithLabReports } from "@/data-access/sample-document-evidence";
+import { getBatchesWithLabReports, getBatchesWithReflectanceHistograms } from "@/data-access/sample-document-evidence";
 import { generateNextCodes } from "@/data-access/code-generator";
 import { updateCreditBatch } from "@/data-access/credit-batches";
 import { createTransportLeg } from "@/data-access/transport-legs";
@@ -422,11 +422,34 @@ describe("warnings", { timeout: SUITE_TIMEOUT_MS }, () => {
     }
   });
 
+  it("counts only uploaded, org-scoped histograms on Samples only", async () => {
+    const f = await fixture();
+    const other = await fixture();
+    const sample = (await record(f)).data.sample;
+    const [pending, foreign] = await db.insert(documents).values([
+      { organizationId: f.ctx.organizationId, entityType: "sample", entityId: sample.id,
+        documentType: "reflectance_histogram", fileName: "report.pdf", storageProvider: "local-fs", storageBucket: "local-fs", storageKey: `sample/${sample.id}/report.pdf`, fileUrl: "https://example.test/report.pdf", uploadStatus: "pending" as const },
+      { organizationId: other.ctx.organizationId, entityType: "sample", entityId: sample.id,
+        documentType: "reflectance_histogram", fileName: "report.pdf", fileUrl: "https://example.test/foreign-report.pdf", uploadStatus: "uploaded" as const },
+    ]).returning({ id: documents.id });
+    try {
+      expect(await getBatchesWithReflectanceHistograms(f.ctx, [f.batchA.id])).toEqual(new Set());
+      await db.update(documents).set({ uploadStatus: "uploaded" }).where(and(eq(documents.id, pending.id), eq(documents.organizationId, f.ctx.organizationId)));
+      expect(await getBatchesWithReflectanceHistograms(f.ctx, [f.batchA.id])).toEqual(new Set([f.batchA.id]));
+      await db.update(documents).set({ entityType: "credit_batch", entityId: f.batchA.id }).where(and(eq(documents.id, pending.id), eq(documents.organizationId, f.ctx.organizationId)));
+      expect(await getBatchesWithReflectanceHistograms(f.ctx, [f.batchA.id])).toEqual(new Set());
+    } finally {
+      await db.delete(documents).where(and(eq(documents.id, pending.id), eq(documents.organizationId, f.ctx.organizationId)));
+      await db.delete(documents).where(and(eq(documents.id, foreign.id), eq(documents.organizationId, other.ctx.organizationId)));
+    }
+  });
+
   it("saves and clears s_fraction on a 1,000-year Sample, warning that certification still needs it", async () => {
     const f = await fixture({ durabilityOption: "1000_year" });
     const created = await record(f, { sReflectanceFraction: undefined,
       inorganicCarbonPercent: 3, totalOxygenPercent: 6, r0MeasurementCount: 500 });
     expect(created.data.sample.sReflectanceFraction).toBeNull();
+    expect(created.data.warnings.join(" ")).not.toMatch(/histogram/i);
     expect(created.data.warnings).toEqual([
       missingReport(f),
       `Sample ${created.data.sample.sampleCode} is missing the R₀ fraction at or above 2%. A 1,000-year Removal with credit batch ${f.batchA.code} cannot be submitted until every Sample has it.`,

@@ -143,24 +143,6 @@
     "createdAt": "2025-01-15T08:00:00Z",
     "updatedAt": "2025-01-15T08:00:00Z"
   },
-  "feedstock_deliveries": {
-    "id": "fsd_001",
-    "code": "FSD-2025-0042",
-    "facility_id": "fac_001",
-    "status": "received",
-    "delivery_date": "2025-06-10",
-    "supplier_id": "sup_001",
-    "driver_id": "drv_001",
-    "vehicle_id": "veh_001",
-    "gps_latitude": "-1.2864",
-    "gps_longitude": "36.8172",
-    "feedstock_type_id": "fst_001",
-    "wet_mass_kg": 2800,
-    "moisture_percent": 14.2,
-    "notes": "Clean shell, no contaminants",
-    "createdAt": "2025-06-10T07:30:00Z",
-    "updatedAt": "2025-06-10T09:15:00Z"
-  },
   "feedstock_types": {
     "id": "fst_001",
     "code": "FST-MAC",
@@ -179,7 +161,6 @@
     "code": "FS-2025-0087",
     "facility_id": "fac_001",
     "status": "available",
-    "feedstock_delivery_id": "fsd_001",
     "delivery_date": "2025-06-10",
     "supplier_id": "sup_001",
     "feedstock_type_id": "fst_001",

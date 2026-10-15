@@ -176,12 +176,16 @@ export async function buildRemovalContext(
     blockers: durabilityBatchBlockers,
     warnings: durabilityWarnings,
   } = durabilityBatchData;
-  const memberBatchesWithDurability = memberBatches.map((batch) => ({
-    ...batch,
-    hasLabReport: batchesWithSamples.find((sampleBatch) => sampleBatch.creditBatchId === batch.id)?.hasLabReport,
-    durabilityGateBlockers:
-      durabilityBatchData.blockersByBatchId[batch.id] ?? [],
-  }));
+  const memberBatchesWithDurability = memberBatches.map((batch) => {
+    const sampleBatch = batchesWithSamples.find((sampleBatch) => sampleBatch.creditBatchId === batch.id);
+    return {
+      ...batch,
+      hasLabReport: sampleBatch?.hasLabReport,
+      hasReflectanceHistogram: sampleBatch?.hasReflectanceHistogram,
+      durabilityGateBlockers:
+        durabilityBatchData.blockersByBatchId[batch.id] ?? [],
+    };
+  });
   // The facility reference gates every 200-year member even before applications
   // exist; an empty site list deliberately suppresses site-comparison warnings.
   const facilityReferenceSoilTemperature =

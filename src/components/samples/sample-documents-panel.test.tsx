@@ -43,7 +43,7 @@ vi.mock("@/components/forms", () => ({
   ServerError: ({ message }: { message: string }) => <p>{message}</p>,
 }));
 vi.mock("@/components/forms/form-file-upload", () => ({
-  FormFileUpload: () => <div data-testid="uploader" />,
+  FormFileUpload: ({ documentType }: { documentType: string }) => <div data-testid="uploader" data-document-type={documentType} />,
 }));
 
 import { SampleDocumentsPanel } from "./sample-documents-panel";
@@ -104,4 +104,11 @@ it("sends the listed version on visibility and retains the deletion version whil
   view.rerender(<SampleDocumentsPanel sampleId="sample-1" />);
   fireEvent.click(screen.getByRole("button", { name: "Confirm delete" }));
   await waitFor(() => expect(mocks.remove).toHaveBeenCalledWith({ documentId: "document-1", expectedVersion: 7 }));
+});
+
+it("lets operators choose a reflectance histogram for a Sample upload", () => {
+  mocks.locked = false;
+  render(<SampleDocumentsPanel sampleId="sample-1" />);
+  fireEvent.click(screen.getByRole("radio", { name: "Reflectance histogram" }));
+  expect(screen.getByTestId("uploader").getAttribute("data-document-type")).toBe("reflectance_histogram");
 });

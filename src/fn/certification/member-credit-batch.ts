@@ -19,6 +19,7 @@ export interface MemberCreditBatch {
   durabilityOption: DurabilityOption;
   sampling: CreditBatchSampling;
   hasLabReport?: boolean;
+  hasReflectanceHistogram?: boolean;
   feedstockType: CreditBatchFeedstockTypeFact;
   productionRunCount: number;
   applicationCount: number;
@@ -65,6 +66,7 @@ export function toMemberCreditBatchView(
     durabilityOption: batch.durabilityOption,
     sampling: batch.sampling,
     hasLabReport: batch.hasLabReport,
+    hasReflectanceHistogram: batch.hasReflectanceHistogram,
     feedstockType: batch.feedstockType,
     productionRunCount: batch.productionRunCount,
     applicationCount: batch.applicationCount,

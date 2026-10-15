@@ -1,5 +1,5 @@
 {
-  "id": "9889b5ed-f847-421d-90d4-1897e06a7547",
+  "id": "5549cfa8-5899-44bf-a30f-54b5a92a31f6",
   "prevId": "c5bdc682-3f36-4b9e-a894-2d30f0a7448a",
   "version": "7",
   "dialect": "postgresql",
@@ -4024,208 +4024,6 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.removal_template_observations": {
-      "name": "removal_template_observations",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "organization_id": {
-          "name": "organization_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "provider": {
-          "name": "provider",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "external_project_id": {
-          "name": "external_project_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "external_template_id": {
-          "name": "external_template_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "semantic_fingerprint": {
-          "name": "semantic_fingerprint",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "full_fingerprint": {
-          "name": "full_fingerprint",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "definition": {
-          "name": "definition",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "enrichment": {
-          "name": "enrichment",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "line_sources": {
-          "name": "line_sources",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "reviewed_at": {
-          "name": "reviewed_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "reviewed_by_user_id": {
-          "name": "reviewed_by_user_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "version": {
-          "name": "version",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 1
-        },
-        "first_observed_at": {
-          "name": "first_observed_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "last_observed_at": {
-          "name": "last_observed_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "removal_template_observations_latest_idx": {
-          "name": "removal_template_observations_latest_idx",
-          "columns": [
-            {
-              "expression": "organization_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "provider",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "external_template_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "last_observed_at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "removal_template_observations_organization_id_organizations_id_fk": {
-          "name": "removal_template_observations_organization_id_organizations_id_fk",
-          "tableFrom": "removal_template_observations",
-          "tableTo": "organizations",
-          "columnsFrom": [
-            "organization_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "removal_template_observations_reviewed_by_user_id_users_id_fk": {
-          "name": "removal_template_observations_reviewed_by_user_id_users_id_fk",
-          "tableFrom": "removal_template_observations",
-          "tableTo": "users",
-          "columnsFrom": [
-            "reviewed_by_user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "removal_template_observations_identity_unique": {
-          "name": "removal_template_observations_identity_unique",
-          "nullsNotDistinct": false,
-          "columns": [
-            "organization_id",
-            "provider",
-            "external_template_id",
-            "semantic_fingerprint",
-            "full_fingerprint"
-          ]
-        },
-        "removal_template_observations_id_org_unique": {
-          "name": "removal_template_observations_id_org_unique",
-          "nullsNotDistinct": false,
-          "columns": [
-            "id",
-            "organization_id"
-          ]
-        }
-      },
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
     "public.certifier_biochar_applications": {
       "name": "certifier_biochar_applications",
       "schema": "",
@@ -5615,12 +5413,6 @@
           "primaryKey": false,
           "notNull": true
         },
-        "removal_template_id": {
-          "name": "removal_template_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
         "status": {
           "name": "status",
           "type": "credit_batch_status",
@@ -6995,212 +6787,6 @@
       },
       "isRLSEnabled": false
     },
-    "public.feedstock_deliveries": {
-      "name": "feedstock_deliveries",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "organization_id": {
-          "name": "organization_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "code": {
-          "name": "code",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "facility_id": {
-          "name": "facility_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "status": {
-          "name": "status",
-          "type": "feedstock_status",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'missing_data'"
-        },
-        "delivery_date": {
-          "name": "delivery_date",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "supplier_id": {
-          "name": "supplier_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "vehicle_id": {
-          "name": "vehicle_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "gps_latitude": {
-          "name": "gps_latitude",
-          "type": "double precision",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "gps_longitude": {
-          "name": "gps_longitude",
-          "type": "double precision",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "feedstock_type_id": {
-          "name": "feedstock_type_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "wet_mass_kg": {
-          "name": "wet_mass_kg",
-          "type": "numeric(14, 3)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "moisture_percent": {
-          "name": "moisture_percent",
-          "type": "numeric(9, 6)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "notes": {
-          "name": "notes",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "archived_at": {
-          "name": "archived_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {
-        "feedstock_deliveries_organization_id_organizations_id_fk": {
-          "name": "feedstock_deliveries_organization_id_organizations_id_fk",
-          "tableFrom": "feedstock_deliveries",
-          "tableTo": "organizations",
-          "columnsFrom": [
-            "organization_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "feedstock_deliveries_supplier_id_suppliers_id_fk": {
-          "name": "feedstock_deliveries_supplier_id_suppliers_id_fk",
-          "tableFrom": "feedstock_deliveries",
-          "tableTo": "suppliers",
-          "columnsFrom": [
-            "supplier_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "feedstock_deliveries_vehicle_id_vehicles_id_fk": {
-          "name": "feedstock_deliveries_vehicle_id_vehicles_id_fk",
-          "tableFrom": "feedstock_deliveries",
-          "tableTo": "vehicles",
-          "columnsFrom": [
-            "vehicle_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "feedstock_deliveries_feedstock_type_id_feedstock_types_id_fk": {
-          "name": "feedstock_deliveries_feedstock_type_id_feedstock_types_id_fk",
-          "tableFrom": "feedstock_deliveries",
-          "tableTo": "feedstock_types",
-          "columnsFrom": [
-            "feedstock_type_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "feedstock_deliveries_facility_id_organization_id_facilities_id_organization_id_fk": {
-          "name": "feedstock_deliveries_facility_id_organization_id_facilities_id_organization_id_fk",
-          "tableFrom": "feedstock_deliveries",
-          "tableTo": "facilities",
-          "columnsFrom": [
-            "facility_id",
-            "organization_id"
-          ],
-          "columnsTo": [
-            "id",
-            "organization_id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "feedstock_deliveries_organization_id_code_unique": {
-          "name": "feedstock_deliveries_organization_id_code_unique",
-          "nullsNotDistinct": false,
-          "columns": [
-            "organization_id",
-            "code"
-          ]
-        }
-      },
-      "policies": {},
-      "checkConstraints": {
-        "feedstock_deliveries_gps_latitude_range": {
-          "name": "feedstock_deliveries_gps_latitude_range",
-          "value": "\"feedstock_deliveries\".\"gps_latitude\" is null or (\"feedstock_deliveries\".\"gps_latitude\" >= -90 and \"feedstock_deliveries\".\"gps_latitude\" <= 90)"
-        },
-        "feedstock_deliveries_gps_longitude_range": {
-          "name": "feedstock_deliveries_gps_longitude_range",
-          "value": "\"feedstock_deliveries\".\"gps_longitude\" is null or (\"feedstock_deliveries\".\"gps_longitude\" >= -180 and \"feedstock_deliveries\".\"gps_longitude\" <= 180)"
-        }
-      },
-      "isRLSEnabled": false
-    },
     "public.feedstock_types": {
       "name": "feedstock_types",
       "schema": "",
@@ -7386,12 +6972,6 @@
           "notNull": true,
           "default": "'missing_data'"
         },
-        "feedstock_delivery_id": {
-          "name": "feedstock_delivery_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
         "delivery_date": {
           "name": "delivery_date",
           "type": "timestamp",
@@ -7487,19 +7067,6 @@
           "tableTo": "organizations",
           "columnsFrom": [
             "organization_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "feedstocks_feedstock_delivery_id_feedstock_deliveries_id_fk": {
-          "name": "feedstocks_feedstock_delivery_id_feedstock_deliveries_id_fk",
-          "tableFrom": "feedstocks",
-          "tableTo": "feedstock_deliveries",
-          "columnsFrom": [
-            "feedstock_delivery_id"
           ],
           "columnsTo": [
             "id"
@@ -8009,9 +7576,9 @@
           "name": "deliveries_mass_dry_lte_wet_mass",
           "value": "\"deliveries\".\"mass_dry_kg\" is null or \"deliveries\".\"delivered_wet_mass_kg\" is null or \"deliveries\".\"mass_dry_kg\" <= \"deliveries\".\"delivered_wet_mass_kg\""
         },
-        "deliveries_distance_km_override_non_negative": {
-          "name": "deliveries_distance_km_override_non_negative",
-          "value": "\"deliveries\".\"distance_km_override\" is null or \"deliveries\".\"distance_km_override\" >= 0"
+        "deliveries_distance_km_override_positive": {
+          "name": "deliveries_distance_km_override_positive",
+          "value": "\"deliveries\".\"distance_km_override\" is null or \"deliveries\".\"distance_km_override\" > 0"
         }
       },
       "isRLSEnabled": false
@@ -12956,6 +12523,7 @@
         "bill_of_lading",
         "other_transport_evidence",
         "lab_report",
+        "reflectance_histogram",
         "delivery_receipt",
         "invoice",
         "pdd",
