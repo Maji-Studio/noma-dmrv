@@ -150,6 +150,31 @@ export interface DistributionLegRow {
   locationGpsLongitude: number | null;
 }
 
+/** Resolve a delivery's route before aggregating or attributing its load. */
+export function resolveDeliveryTransportRoute(input: {
+  distanceKmOverride: number | null;
+  distanceSource: DistanceSourceValue | null;
+  location: (TransportPartyRef & {
+    distanceFromFacilityKm: number | null;
+    distanceSource: DistanceSourceValue | null;
+  }) | null;
+}): Omit<DistributionLegRow, "loadMassKg"> {
+  const { location } = input;
+  const override = positiveOrNull(input.distanceKmOverride);
+  return {
+    distanceKm: override ?? location?.distanceFromFacilityKm ?? null,
+    // A delivery can document the stored route without overriding its distance.
+    distanceSource: input.distanceSource === "document"
+      ? "document"
+      : override != null
+        ? (input.distanceSource ?? "manual")
+        : (location?.distanceSource ?? null),
+    locationName: location?.name ?? null,
+    locationGpsLatitude: location?.gpsLatitude ?? null,
+    locationGpsLongitude: location?.gpsLongitude ?? null,
+  };
+}
+
 export interface AggregatedDistributionLeg {
   /** Σ of qualifying deliveries' mass; 0 when none qualify. */
   totalMassKg: number;

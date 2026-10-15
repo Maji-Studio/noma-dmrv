@@ -426,7 +426,7 @@ describe("enrichWithTransportLegs", () => {
     expect(enriched.biocharTransportMassDistanceTonneKm).toBeCloseTo(10);
   });
 
-  it("defaults to the full biochar mass-distance when no option is passed", () => {
+  it("sums biochar legs without a share factor", () => {
     const enriched = enrichWithTransportLegs(baseAgg, {
       feedstock: [],
       biochar: [roundTripLeg(10, 1000)],

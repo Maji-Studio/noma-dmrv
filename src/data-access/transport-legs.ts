@@ -29,6 +29,7 @@ import {
   deriveTransportLeg,
   isDerivedLegPersistable,
   positiveOrNull,
+  resolveDeliveryTransportRoute,
   type DerivedTransportLeg,
 } from "@/lib/calculations/transport-leg";
 import { SafeError } from "@/lib/errors";
@@ -702,13 +703,15 @@ async function syncLockedBiocharProductTransportLeg(
   const rows = await tx
     .select({
       loadMassKg: allocated.wetMassKg,
-      deliveryDistanceKmOverride: deliveries.distanceKmOverride,
-      deliveryDistanceSource: deliveries.distanceSource,
-      locationDistanceKm: customerLocations.distanceFromFacilityKm,
-      locationDistanceSource: customerLocations.distanceSource,
-      locationName: customerLocations.name,
-      locationGpsLatitude: customerLocations.gpsLatitude,
-      locationGpsLongitude: customerLocations.gpsLongitude,
+      distanceKmOverride: deliveries.distanceKmOverride,
+      distanceSource: deliveries.distanceSource,
+      location: {
+        distanceFromFacilityKm: customerLocations.distanceFromFacilityKm,
+        distanceSource: customerLocations.distanceSource,
+        name: customerLocations.name,
+        gpsLatitude: customerLocations.gpsLatitude,
+        gpsLongitude: customerLocations.gpsLongitude,
+      },
     })
     .from(deliveries)
     .innerJoin(allocated, eq(allocated.deliveryId, deliveries.id))
@@ -733,22 +736,10 @@ async function syncLockedBiocharProductTransportLeg(
   // Per delivery: its own distance override (+ source) beats the destination
   // location's stored distance (+ source) — map-integration plan, decision 3.
   const agg = aggregateDistributionLegs(
-    rows.map((row) => {
-      const override = positiveOrNull(row.deliveryDistanceKmOverride);
-      return {
-        loadMassKg: row.loadMassKg,
-        distanceKm: override ?? row.locationDistanceKm,
-        distanceSource:
-          row.deliveryDistanceSource === "document"
-            ? "document"
-            : override != null
-              ? (row.deliveryDistanceSource ?? "manual")
-              : row.locationDistanceSource,
-        locationName: row.locationName,
-        locationGpsLatitude: row.locationGpsLatitude,
-        locationGpsLongitude: row.locationGpsLongitude,
-      };
-    }),
+    rows.map((row) => ({
+      loadMassKg: row.loadMassKg,
+      ...resolveDeliveryTransportRoute(row),
+    })),
   );
 
   const derived = deriveTransportLeg({

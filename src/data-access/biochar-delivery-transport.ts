@@ -1,11 +1,11 @@
 import { db } from "@/db";
-import { customerLocations, deliveries, documents, facilities, orders } from "@/db/schema";
+import { customerLocations, deliveries, facilities, orders } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
-import { deriveTransportLeg } from "@/lib/calculations/transport-leg";
-import { TRANSPORT_EVIDENCE_DOCUMENT_TYPES } from "@/lib/certification/transport-evidence";
+import { deriveTransportLeg, resolveDeliveryTransportRoute } from "@/lib/calculations/transport-leg";
 import { SafeError } from "@/lib/errors";
 import { and, eq, inArray } from "drizzle-orm";
 import type { TransportLegWithEvidence } from "./transport-legs";
+import { transportEvidenceDocumentCount } from "./transport-evidence-projections";
 import { requireOrgScope } from "./utils";
 
 /**
@@ -27,7 +27,9 @@ export async function loadBiocharDeliveryTransportLegs(
       name: facilities.name,
       gpsLatitude: facilities.gpsLatitude,
       gpsLongitude: facilities.gpsLongitude,
-    }, orderLocationId: orders.customerLocationId })
+    }, orderLocationId: orders.customerLocationId,
+    transportEvidenceDocumentCount: transportEvidenceDocumentCount(ctx.organizationId, "delivery", "deliveryId"),
+  })
     .from(deliveries)
     .innerJoin(facilities, and(eq(facilities.id, deliveries.facilityId), eq(facilities.organizationId, ctx.organizationId)))
     .leftJoin(orders, and(eq(orders.id, deliveries.orderId), eq(orders.organizationId, ctx.organizationId)))
@@ -37,30 +39,22 @@ export async function loadBiocharDeliveryTransportLegs(
     const id = delivery.customerLocationId ?? orderLocationId;
     return id ? [id] : [];
   });
-  const [locations, evidence] = await Promise.all([
-    locationIds.length ? db.select().from(customerLocations).where(and(
-      inArray(customerLocations.id, locationIds), eq(customerLocations.organizationId, ctx.organizationId),
-    )) : [],
-    db.select({ entityId: documents.entityId }).from(documents).where(and(
-      eq(documents.organizationId, ctx.organizationId), eq(documents.entityType, "delivery"),
-      inArray(documents.entityId, ids), eq(documents.uploadStatus, "uploaded"),
-      inArray(documents.documentType, [...TRANSPORT_EVIDENCE_DOCUMENT_TYPES]),
-    )),
-  ]);
+  const locations = locationIds.length ? await db.select().from(customerLocations).where(and(
+    inArray(customerLocations.id, locationIds), eq(customerLocations.organizationId, ctx.organizationId),
+  )) : [];
   const locationsById = new Map(locations.map(location => [location.id, location]));
-  const evidenceCounts = new Map<string, number>();
-  for (const document of evidence) {
-    evidenceCounts.set(document.entityId, (evidenceCounts.get(document.entityId) ?? 0) + 1);
-  }
-  return rows.sort((a, b) => a.delivery.id.localeCompare(b.delivery.id)).map(({ delivery, facility, orderLocationId }) => {
+  return rows.sort((a, b) => a.delivery.id.localeCompare(b.delivery.id)).map(({ delivery, facility, orderLocationId, transportEvidenceDocumentCount }) => {
     const location = locationsById.get(delivery.customerLocationId ?? orderLocationId ?? "");
+    const route = resolveDeliveryTransportRoute({ ...delivery, location: location ?? null });
     const derived = deriveTransportLeg({
-      origin: facility, destination: location ?? null, vehicle: null,
+      origin: facility, destination: {
+        name: route.locationName,
+        gpsLatitude: route.locationGpsLatitude,
+        gpsLongitude: route.locationGpsLongitude,
+      }, vehicle: null,
       loadMassKg: massByDelivery.get(delivery.id),
-      distanceKmOverride: delivery.distanceKmOverride,
-      distanceSourceOverride: delivery.distanceSource,
-      storedDistanceKm: location?.distanceFromFacilityKm,
-      storedDistanceSource: location?.distanceSource,
+      storedDistanceKm: route.distanceKm,
+      storedDistanceSource: route.distanceSource,
     });
     return {
       originGpsLatitude: derived.originGpsLatitude,
@@ -78,10 +72,10 @@ export async function loadBiocharDeliveryTransportLegs(
       id: delivery.id, entityId: delivery.id, entityType: "biochar" as const,
       organizationId: ctx.organizationId, version: delivery.version, isDerived: true,
       originName: facility.name,
-      destinationName: `${delivery.code}: ${location?.name ?? "Customer location not set"}`,
+      destinationName: `${delivery.code}: ${route.locationName ?? "Customer location not set"}`,
       billOfLading: null, weighScaleTicketRef: null,
       createdAt: delivery.createdAt, updatedAt: delivery.updatedAt,
-      transportEvidenceDocumentCount: evidenceCounts.get(delivery.id) ?? 0,
+      transportEvidenceDocumentCount,
     };
   });
 }

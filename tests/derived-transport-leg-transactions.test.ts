@@ -536,6 +536,8 @@ describe("derived transport-leg transaction boundaries", () => {
     }
     const slices = [{ deliveryId: delivery.id, loadMassKg: 25 }, { deliveryId: secondDelivery.id, loadMassKg: 25 }];
     const removalTransport = async () => {
+      // Live application lineages exercise route edits here. Frozen Removal
+      // ownership and masses are covered in biochar-removal-transport.test.ts.
       const lineages = await Promise.all(selectedApplicationIds.map(id => getChainOfCustodyData(ctx, id)));
       const legs = await loadTransportLegsByCategory(ctx, { feedstockIds: [], biocharProductIds: [firstProduct.id, secondProduct.id], sampleIds: [] }, lineages, ["biochar"]);
       return aggregateBiocharTransportMassDistance(legs.biochar).massDistanceTonneKm;
@@ -628,7 +630,7 @@ describe("derived transport-leg transaction boundaries", () => {
       expectedVersion: await masterDataVersion(ctx, "customerLocations", secondLocation.id),
       distanceFromFacilityKm: null,
     });
-    // An incomplete unrelated delivery cannot poison the first delivery's Removal.
+    // An incomplete unrelated delivery cannot poison the selected first delivery.
     const firstOnly = await loadBiocharDeliveryTransportLegs(ctx, [slices[0]]);
     expect(aggregateBiocharTransportMassDistance(firstOnly).massDistanceTonneKm).toBe(2);
     const incomplete = await loadBiocharDeliveryTransportLegs(ctx, slices);
