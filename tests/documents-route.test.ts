@@ -45,6 +45,8 @@ class StubProvider implements StorageProvider {
       contentType: "application/octet-stream",
     };
   }
+  async readObjectBounded(): Promise<never> { throw new Error("Not used by this test"); }
+
   async headObject(): Promise<ObjectHead | null> {
     return null;
   }

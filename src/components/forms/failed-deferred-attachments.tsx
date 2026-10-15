@@ -10,6 +10,8 @@ interface FailedDeferredAttachmentsProps {
   onRetry: (key?: string) => Promise<unknown>;
   onRemove: (key: string) => void;
   disabled?: boolean;
+  /** False once the record is certification-locked: failures stay listed, retries go. */
+  retryable?: boolean;
 }
 
 export function FailedDeferredAttachments({
@@ -17,6 +19,7 @@ export function FailedDeferredAttachments({
   onRetry,
   onRemove,
   disabled = false,
+  retryable = true,
 }: FailedDeferredAttachmentsProps) {
   const [retryingKey, setRetryingKey] = useState<string | null>(null);
   const failed = attachments.filter((attachment) => attachment.status === "failed");
@@ -41,16 +44,18 @@ export function FailedDeferredAttachments({
             ? "attachment was not uploaded"
             : "attachments were not uploaded"}
         </p>
-        <Button
-          type="button"
-          variant="weak"
-          size="small"
-          onClick={() => void retry()}
-          disabled={disabled || retryingKey !== null}
-        >
-          <ArrowClockwiseIcon size={14} weight="bold" />
-          Retry uploads
-        </Button>
+        {retryable && (
+          <Button
+            type="button"
+            variant="weak"
+            size="small"
+            onClick={() => void retry()}
+            disabled={disabled || retryingKey !== null}
+          >
+            <ArrowClockwiseIcon size={14} weight="bold" />
+            Retry uploads
+          </Button>
+        )}
       </div>
       <ul className="flex flex-col gap-8">
         {failed.map((attachment) => (
@@ -63,19 +68,24 @@ export function FailedDeferredAttachments({
                 {attachment.file.name}
               </p>
               <p className="body-caption text-[var(--color-status-error)]">
-                {attachment.error ?? "The attachment was not uploaded. Try again."}
+                {attachment.error ??
+                  (retryable
+                    ? "The attachment was not uploaded. Try again."
+                    : "The attachment was not uploaded.")}
               </p>
             </div>
-            <Button
-              type="button"
-              variant="noOutline"
-              size="small"
-              onClick={() => void retry(attachment.key)}
-              disabled={disabled || retryingKey !== null}
-            >
-              <ArrowClockwiseIcon size={14} weight="bold" />
-              Retry
-            </Button>
+            {retryable && (
+              <Button
+                type="button"
+                variant="noOutline"
+                size="small"
+                onClick={() => void retry(attachment.key)}
+                disabled={disabled || retryingKey !== null}
+              >
+                <ArrowClockwiseIcon size={14} weight="bold" />
+                Retry
+              </Button>
+            )}
             <Button
               type="button"
               variant="destructive"

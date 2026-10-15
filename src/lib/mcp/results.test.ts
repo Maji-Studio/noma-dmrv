@@ -52,3 +52,8 @@ it.each(["outcome_unknown", "deadline_exceeded"] as const)("logs %s without a ca
     "API request failed",
   );
 });
+
+it("preserves retryable document conflicts just like REST", async () => {
+  const result = await toolFailure(new DomainError("conflict", "Upload the file again.", { retryable: true }), context, "confirm_document_upload");
+  expect(result).toMatchObject({ isError: true, structuredContent: { code: "conflict", retryable: true } });
+});

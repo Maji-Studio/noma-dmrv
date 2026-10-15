@@ -3,7 +3,7 @@ import type { z } from "zod";
 import type { problemSchema } from "./problem-schema";
 import type { ActionFailure } from "@/fn/action-errors";
 import type { ApiContextDenial } from "@/lib/auth/api-context";
-import type { DomainErrorCode } from "@/lib/domain-errors";
+import type { DomainError, DomainErrorCode } from "@/lib/domain-errors";
 import { IDEMPOTENCY_RETRY_AFTER_SECONDS } from "@/config/operations";
 import type { ApiHttpError } from "./http-error";
 
@@ -77,13 +77,13 @@ export function jsonPointer(path: readonly PropertyKey[]): string {
   return path.length ? `/${path.map((part) => String(part).replaceAll("~", "~0").replaceAll("/", "~1")).join("/")}` : "";
 }
 
-export function actionFailureResponse(failure: ActionFailure, instance: string, requestId: string) {
+export function actionFailureResponse(failure: ActionFailure, instance: string, requestId: string, retry?: Pick<DomainError, "retryable" | "retryAfterSeconds">) {
   const code = failure.code ?? "internal_error";
   return problemResponse({
     status: failure.code ? ACTION_STATUS[failure.code] : 500,
     code, detail: failure.error, instance, requestId,
-    retryable: ["deadline_exceeded", "outcome_unknown", "idempotency_in_progress", "concurrent_write_retry"].includes(code),
-    ...(code === "idempotency_in_progress" ? { retryAfterSeconds: IDEMPOTENCY_RETRY_AFTER_SECONDS } : {}),
+    retryable: retry?.retryable || ["deadline_exceeded", "outcome_unknown", "idempotency_in_progress", "concurrent_write_retry"].includes(code),
+    retryAfterSeconds: retry?.retryAfterSeconds ?? (code === "idempotency_in_progress" ? IDEMPOTENCY_RETRY_AFTER_SECONDS : undefined),
     errors: failure.issues?.map((issue) => ({
       pointer: jsonPointer(issue.path),
       code: issue.code, detail: issue.message, ...(issue.meta ? { meta: issue.meta } : {}),
