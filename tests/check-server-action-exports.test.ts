@@ -9,10 +9,18 @@
  */
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, relative } from "node:path";
 import ts from "typescript";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { checkServerActionExports } from "../scripts/check-server-action-exports";
+import {
+  checkServerActionExports,
+  findServerActionViolations,
+  type ServerActionViolation,
+} from "../scripts/check-server-action-exports";
+
+// The shared build and wrapper case's fresh program can exceed default timeouts under load.
+// Shared setup took about 30 s in a loaded review run; 60 s allows twice that.
+const SHARED_SETUP_TIMEOUT_MS = 60_000;
 
 const FIXTURE_OPTIONS: ts.CompilerOptions = {
   strict: true,
@@ -21,10 +29,9 @@ const FIXTURE_OPTIONS: ts.CompilerOptions = {
   moduleResolution: ts.ModuleResolutionKind.Bundler,
   noEmit: true,
   skipLibCheck: true,
+  // Fixtures use standard library globals, not ambient types from repo dependencies.
+  types: [],
 };
-// Loading the default lib for a fresh program is the slow part.
-// Each case builds its own TypeScript program; shared CI runners can spike well past 30 s.
-const CHECK_TIMEOUT_MS = 120_000;
 
 const SHARED_FILES: Record<string, string> = {
   "auth.ts": `
@@ -557,83 +564,108 @@ function writeFixture(dir: string, actions: string): string[] {
   return [actionsFile, join(dir, "report-core.ts")];
 }
 
-describe("check-server-action-exports", () => {
-  let failingDir: string;
-  let passingDir: string;
-
-  beforeAll(() => {
-    failingDir = mkdtempSync(join(tmpdir(), "server-action-fail-"));
-    passingDir = mkdtempSync(join(tmpdir(), "server-action-pass-"));
-  });
-
-  afterAll(() => {
-    rmSync(failingDir, { recursive: true, force: true });
-    rmSync(passingDir, { recursive: true, force: true });
-  });
-
-  it.each([...REVIEW_BYPASSES, ...DELIBERATE_REJECTIONS])("rejects review case %s at its conversion or invocation", (_name, body, target) => {
-    const dir = mkdtempSync(join(tmpdir(), "server-action-review-"));
-    try {
-      const files = writeFixture(dir, `"use server";
+function reviewSource(body: string): string {
+  return `"use server";
 import { withAction, type OrgContext } from "./auth";
 import { issueUrl, coreObj, Core } from "./report-core";
 export async function action(input: any) { ${body} }
-`);
-      const findings = checkServerActionExports(dir, files, FIXTURE_OPTIONS);
-      expect(findings.filter((finding) => finding.line === 4 && finding.name === target && /call argument|callable provenance/.test(finding.reason)))
-        .toEqual([expect.objectContaining({ reason: expect.stringMatching(/call argument|callable provenance/) })]);
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
-    }
-  }, CHECK_TIMEOUT_MS);
+`;
+}
 
-  it.each(SAFE_REVIEW_CASES)("accepts %s", (_name, body) => {
-    const dir = mkdtempSync(join(tmpdir(), "server-action-safe-review-"));
-    try {
-      const files = writeFixture(dir, `"use server";
-import { withAction, type OrgContext } from "./auth";
-import { issueUrl, coreObj, Core } from "./report-core";
-export async function action(input: any) { ${body} }
-`);
-      expect(checkServerActionExports(dir, files, FIXTURE_OPTIONS)).toEqual([]);
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
-    }
-  }, CHECK_TIMEOUT_MS);
-
-  it.each(EXOTIC_BYPASSES)(
-    "rejects %s",
-    (shape, body, target) => {
-      const dir = mkdtempSync(join(tmpdir(), "server-action-exotic-"));
-      try {
-        if (!target) throw new Error(`Missing exotic assertion target for ${shape}`);
-        const source = `"use server";
+function exoticSource(body: string): string {
+  return `"use server";
 import type { OrgContext } from "./auth";
 import { issueUrl } from "./report-core";
 export async function action(input: any) { ${body} }
 `;
-        const files = writeFixture(dir, source);
-        const line = source.split("\n").findIndex((text) => text.includes(target.line)) + 1;
-        const findings = checkServerActionExports(dir, files, FIXTURE_OPTIONS);
-        expect(findings.filter((finding) => finding.line === line && finding.name === target.node))
-          .toEqual([expect.objectContaining({ reason: expect.stringMatching(/call argument|callable provenance/) })]);
-        if ("only" in target && target.only) expect(findings).toHaveLength(1);
-      } finally {
-        rmSync(dir, { recursive: true, force: true });
-      }
+}
+
+describe("check-server-action-exports", () => {
+  let fixtureDir: string;
+  const fixtures = new Map<string, { dir: string; files: string[] }>();
+  const findings = new Map<string, ServerActionViolation[]>();
+
+  beforeAll(() => {
+    fixtureDir = mkdtempSync(join(tmpdir(), "server-action-exports-"));
+    const sources = [
+      FAILING_ACTIONS, PASSING_ACTIONS, BYPASS_ACTIONS, INLINE_ACTIONS,
+      ...[...REVIEW_BYPASSES, ...DELIBERATE_REJECTIONS, ...SAFE_REVIEW_CASES]
+        .map(([, body]) => reviewSource(body)),
+      ...EXOTIC_BYPASSES.map(([, body]) => exoticSource(body)),
+    ];
+    // Separate directories keep relative imports and module symbols isolated.
+    for (const source of sources) {
+      const dir = mkdtempSync(join(fixtureDir, "case-"));
+      fixtures.set(source, { dir, files: writeFixture(dir, source) });
+    }
+    const rootFiles = [...fixtures.values()].flatMap(({ files }) => files);
+    const program = ts.createProgram({
+      rootNames: rootFiles,
+      options: FIXTURE_OPTIONS,
+    });
+    // One scan also shares the inspector's library-type cache across fixtures.
+    const violations = findServerActionViolations(program, rootFiles, fixtureDir);
+    for (const [source, fixture] of fixtures) {
+      findings.set(source, violations
+        .filter(({ file }) => fixture.files.includes(join(fixtureDir, file)))
+        .map((violation) => ({
+          ...violation,
+          file: relative(fixture.dir, join(fixtureDir, violation.file)),
+        })));
+    }
+  }, SHARED_SETUP_TIMEOUT_MS);
+
+  afterAll(() => {
+    rmSync(fixtureDir, { recursive: true, force: true });
+    fixtures.clear();
+    findings.clear();
+  });
+
+  function checkFixture(source: string) {
+    const violations = findings.get(source);
+    if (!violations) throw new Error("Fixture was not included in the shared program");
+    return violations;
+  }
+
+  it("matches the shared finding through the CLI wrapper", () => {
+    const [, body, target] = EXOTIC_BYPASSES[0];
+    const source = exoticSource(body);
+    const fixture = fixtures.get(source);
+    if (!fixture) throw new Error("Fixture was not included in the shared program");
+    const violations = checkServerActionExports(fixture.dir, fixture.files, FIXTURE_OPTIONS);
+    expect(violations).toEqual(checkFixture(source));
+    expect(violations).toEqual([
+      expect.objectContaining({ name: target.node, reason: expect.stringMatching(/call argument/) }),
+    ]);
+  }, SHARED_SETUP_TIMEOUT_MS);
+
+  it.each([...REVIEW_BYPASSES, ...DELIBERATE_REJECTIONS])("rejects review case %s at its conversion or invocation", (_name, body, target) => {
+    const findings = checkFixture(reviewSource(body));
+    expect(findings.filter((finding) => finding.line === 4 && finding.name === target && /call argument|callable provenance/.test(finding.reason)))
+      .toEqual([expect.objectContaining({ reason: expect.stringMatching(/call argument|callable provenance/) })]);
+  });
+
+  it.each(SAFE_REVIEW_CASES)("accepts %s", (_name, body) => {
+    expect(checkFixture(reviewSource(body))).toEqual([]);
+  });
+
+  it.each(EXOTIC_BYPASSES)(
+    "rejects %s",
+    (shape, body, target) => {
+      if (!target) throw new Error(`Missing exotic assertion target for ${shape}`);
+      const source = exoticSource(body);
+      const line = source.split("\n").findIndex((text) => text.includes(target.line)) + 1;
+      const findings = checkFixture(source);
+      expect(findings.filter((finding) => finding.line === line && finding.name === target.node))
+        .toEqual([expect.objectContaining({ reason: expect.stringMatching(/call argument|callable provenance/) })]);
+      if ("only" in target && target.only) expect(findings).toHaveLength(1);
     },
-    CHECK_TIMEOUT_MS,
   );
 
   it(
     "flags every trusted-context export shape in a \"use server\" module",
     () => {
-      const files = writeFixture(failingDir, FAILING_ACTIONS);
-      const violations = checkServerActionExports(
-        failingDir,
-        files,
-        FIXTURE_OPTIONS,
-      );
+      const violations = checkFixture(FAILING_ACTIONS);
       const byName = new Map(violations.map((v) => [v.name, v.reason]));
 
       expect(byName.get("aliased")).toMatch(/organization context/);
@@ -665,119 +697,92 @@ export async function action(input: any) { ${body} }
       // The directive-free core is never an action, whatever it accepts.
       expect(violations.every((v) => v.file === "actions.ts")).toBe(true);
     },
-    CHECK_TIMEOUT_MS,
   );
 
   it(
     "flags deep, indexed, cast, annotated and aliased context bypasses",
     () => {
-      const bypassDir = mkdtempSync(join(tmpdir(), "server-action-bypass-"));
-      try {
-        const files = writeFixture(bypassDir, BYPASS_ACTIONS);
-        const violations = checkServerActionExports(
-          bypassDir,
-          files,
-          FIXTURE_OPTIONS,
-        );
-        const reasons = (line: number) =>
-          violations.filter((v) => v.line === line).map((v) => v.reason);
-        const lineOf = (needle: string) =>
-          BYPASS_ACTIONS.split("\n").findIndex((l) => l.includes(needle)) + 1;
+      const violations = checkFixture(BYPASS_ACTIONS);
+      const reasons = (line: number) =>
+        violations.filter((v) => v.line === line).map((v) => v.reason);
+      const lineOf = (needle: string) =>
+        BYPASS_ACTIONS.split("\n").findIndex((l) => l.includes(needle)) + 1;
 
-        const byName = new Map(violations.map((v) => [v.name, v.reason]));
-        expect(byName.get("veryDeep")).toMatch(/property "d" property "ctx"/);
-        expect(byName.get("indexed")).toMatch(/index signature/);
-        expect(reasons(lineOf("issueUrl(input as OrgContext"))).toEqual([
-          expect.stringMatching(/type assertion/),
+      const byName = new Map(violations.map((v) => [v.name, v.reason]));
+      expect(byName.get("veryDeep")).toMatch(/property "d" property "ctx"/);
+      expect(byName.get("indexed")).toMatch(/index signature/);
+      expect(reasons(lineOf("issueUrl(input as OrgContext"))).toEqual([
+        expect.stringMatching(/type assertion/),
+      ]);
+      expect(reasons(lineOf("...(input as OrgContext)"))).toEqual([
+        expect.stringMatching(/type assertion/),
+      ]);
+      expect(reasons(lineOf("scope = input as OrgContext"))).toEqual(
+        expect.arrayContaining([expect.stringMatching(/type assertion/)]),
+      );
+      expect(reasons(lineOf("const scope: OrgContext = input"))).toEqual([
+        expect.stringMatching(/annotated local/),
+      ]);
+      expect(reasons(lineOf('check(input, "admin")'))).toEqual([
+        expect.stringMatching(/requireOrgRole\(\) is applied to the parameter "input"/),
+      ]);
+      // An `any` flows into a context slot without any cast.
+      for (const needle of [
+        "issueUrl(JSON.parse(raw), reportId)",
+        'issueUrl(input, "report")',
+        "scopedUrl(wrapped)",
+        "scopedUrl({ scope: input })",
+      ]) {
+        expect(reasons(lineOf(needle))).toEqual([
+          expect.stringMatching(/call argument/),
         ]);
-        expect(reasons(lineOf("...(input as OrgContext)"))).toEqual([
-          expect.stringMatching(/type assertion/),
-        ]);
-        expect(reasons(lineOf("scope = input as OrgContext"))).toEqual(
-          expect.arrayContaining([expect.stringMatching(/type assertion/)]),
-        );
-        expect(reasons(lineOf("const scope: OrgContext = input"))).toEqual([
-          expect.stringMatching(/annotated local/),
-        ]);
-        expect(reasons(lineOf('check(input, "admin")'))).toEqual([
-          expect.stringMatching(/requireOrgRole\(\) is applied to the parameter "input"/),
-        ]);
-        // An `any` flows into a context slot without any cast.
-        for (const needle of [
-          "issueUrl(JSON.parse(raw), reportId)",
-          'issueUrl(input, "report")',
-          "scopedUrl(wrapped)",
-          "scopedUrl({ scope: input })",
-        ]) {
-          expect(reasons(lineOf(needle))).toEqual([
-            expect.stringMatching(/call argument/),
-          ]);
-        }
-        // Indirect calls, generic forwarding, later tuple elements and index
-        // signatures hide the context slot from the contextual type (#877).
-        for (const needle of [
-          'issueUrl(...[input, "report"])',
-          "issueUrl(...args)",
-          'issueUrl.call(undefined, input, "report")',
-          'issueUrl.apply(undefined, [input, "report"])',
-          "issueUrl.bind(undefined, input)",
-          'issueUrl.bind(undefined)(input, "report")',
-          "forwardScope(input)",
-          'pairedUrl(["report", input])',
-          "keyedUrl({ primary: input })",
-          'issueUrl["call"](undefined, input, "report")',
-          'Reflect.apply(issueUrl, undefined, [input, "report"])',
-          'maybeCore?.call(undefined, input, "report")',
-          'trailingScope(["report", "report", input])',
-          "scopes.push(...JSON.parse(raw))",
-          "Reflect.apply(issueUrl, undefined, arguments)",
-          "manyScopes(...input)",
-          'issueUrl.call(...([undefined, input, "report"] as const))',
-        ]) {
-          expect(reasons(lineOf(needle)), needle).toEqual([
-            expect.stringMatching(/call argument/),
-          ]);
-        }
-        // A context parameter of a private helper is checked at its callers.
-        expect(reasons(lineOf('issueUrl(args.scope, "report")'))).toEqual([]);
-      } finally {
-        rmSync(bypassDir, { recursive: true, force: true });
       }
+      // Indirect calls, generic forwarding, later tuple elements and index
+      // signatures hide the context slot from the contextual type (#877).
+      for (const needle of [
+        'issueUrl(...[input, "report"])',
+        "issueUrl(...args)",
+        'issueUrl.call(undefined, input, "report")',
+        'issueUrl.apply(undefined, [input, "report"])',
+        "issueUrl.bind(undefined, input)",
+        'issueUrl.bind(undefined)(input, "report")',
+        "forwardScope(input)",
+        'pairedUrl(["report", input])',
+        "keyedUrl({ primary: input })",
+        'issueUrl["call"](undefined, input, "report")',
+        'Reflect.apply(issueUrl, undefined, [input, "report"])',
+        'maybeCore?.call(undefined, input, "report")',
+        'trailingScope(["report", "report", input])',
+        "scopes.push(...JSON.parse(raw))",
+        "Reflect.apply(issueUrl, undefined, arguments)",
+        "manyScopes(...input)",
+        'issueUrl.call(...([undefined, input, "report"] as const))',
+      ]) {
+        expect(reasons(lineOf(needle)), needle).toEqual([
+          expect.stringMatching(/call argument/),
+        ]);
+      }
+      // A context parameter of a private helper is checked at its callers.
+      expect(reasons(lineOf('issueUrl(args.scope, "report")'))).toEqual([]);
     },
-    CHECK_TIMEOUT_MS,
   );
 
   it(
     "checks guards and parameters inside inline server functions",
     () => {
-      const inlineDir = mkdtempSync(join(tmpdir(), "server-action-inline-"));
-      try {
-        const files = writeFixture(inlineDir, INLINE_ACTIONS);
-        const violations = checkServerActionExports(
-          inlineDir,
-          files,
-          FIXTURE_OPTIONS,
-        );
-        expect(violations.map((v) => [v.name, v.reason])).toEqual([
-          ["inlineGuard", expect.stringMatching(/raw tenant id|organization context/)],
-          ["requireOrgRole", expect.stringMatching(/parameter "form"/)],
-          ["OrgContext", expect.stringMatching(/type assertion/)],
-        ]);
-      } finally {
-        rmSync(inlineDir, { recursive: true, force: true });
-      }
+      const violations = checkFixture(INLINE_ACTIONS);
+      expect(violations.map((v) => [v.name, v.reason])).toEqual([
+        ["inlineGuard", expect.stringMatching(/raw tenant id|organization context/)],
+        ["requireOrgRole", expect.stringMatching(/parameter "form"/)],
+        ["OrgContext", expect.stringMatching(/type assertion/)],
+      ]);
     },
-    CHECK_TIMEOUT_MS,
   );
 
   it(
     "accepts session-resolving actions and type re-exports",
     () => {
-      const files = writeFixture(passingDir, PASSING_ACTIONS);
-      expect(
-        checkServerActionExports(passingDir, files, FIXTURE_OPTIONS),
-      ).toEqual([]);
+      expect(checkFixture(PASSING_ACTIONS)).toEqual([]);
     },
-    CHECK_TIMEOUT_MS,
   );
 });
