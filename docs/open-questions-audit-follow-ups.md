@@ -123,14 +123,22 @@ decision or larger than a review-fix. Execution summary archived in
 [`docs/archive/2026-06-07-whole-repo-audit-snapshot.md`](./archive/2026-06-07-whole-repo-audit-snapshot.md).
 Sizing: (S) small, (M) medium, (L) large.
 
-### Legacy row-reading path (`isometric/structured-telemetry-path`) — **deferred**
+### Structured readings wiring and query bounds (`isometric/structured-telemetry-path`): **deferred**
 
-- Operator upload stores the original CSV unchanged as a `sensor_data` document.
+- **Anchor:** `src/fn/production-run-reading-imports.ts:importProductionRunReadingsFromDocumentFn`
+  and `src/data-access/production-run-readings.ts:getProductionRunReadingsList`.
+- The readings importer is kept (#942 q25, #1014), as recorded in
+  [`isometric/changes.md`](./isometric/changes.md). Its retention is settled.
+- Operator upload (`src/components/production-runs/production-readings-field.tsx`)
+  stores the original CSV unchanged as a `sensor_data` document.
   It does not parse rows, populate `production_run_readings`, or gate on row count.
-- The legacy CSV importer, row table, and reading view are retained.
-  `getProductionRunReadingsList` has no `.limit`, and the reading table has no
-  virtualization.
-- **Resolve via:** decide whether these retained row-reading paths are needed.
+- `src/lib/cli/seed/readings.ts:seedReadings` calls the importer; the hook in
+  `src/hooks/use-production-run-reading-imports.ts` has no mounted operator caller.
+- `getProductionRunReadingsList` has no `.limit`, and
+  `src/components/production-run-readings/production-run-reading-table.tsx:ProductionRunReadingTable`
+  has no virtualization.
+- **Resolve via:** define the operator upload/import flow and bound the readings
+  query and table rendering.
 
 ### Certification readiness loader lineage fan-out (`perf/overview-lineage-nplus1`) — **deferred**
 

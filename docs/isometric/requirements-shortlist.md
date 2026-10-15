@@ -62,7 +62,7 @@
 
 | Requirement | When | Minimum records or computation | Source |
 |---|---|---|---|
-| Use energy usage first; use the distance method only with evidence that energy data is unavailable | Each leg | Method choice and fallback justification | [Transportation v1.1 calculation](https://registry.isometric.com/module/transportation/1.1#calculation-of-transportation-emissions) |
+| Use energy usage first; use the distance method only with evidence that energy data is unavailable | Each leg | Method choice; fallback justification retained in the PDD, outside noma (#942 q11) | [Transportation v1.1 calculation](https://registry.isometric.com/module/transportation/1.1#calculation-of-transportation-emissions) |
 | Default to round trip unless an onward trip is evidenced | Each leg | Every leg counts its round trip (×2 of the one-way distance); no onward-trip exception is modelled | [Transportation v1.1 measurements](https://registry.isometric.com/module/transportation/1.1#measurements-co2esubtransportation-jsub) |
 | For distance legs, retain calibrated weight, bill of lading, post-drop-off, and vehicle records | Each leg | Required record types, vehicle class/year, distance, mass | [Transportation v1.1 required records](https://registry.isometric.com/module/transportation/1.1#required-records--documentation---co2esubtransportation-jsub) |
 | Use cited, full-fuel-cycle, mode-appropriate, recent emission factors | When a factor is selected or refreshed | Source, description, publication date, vehicle/capacity assumptions | [Transportation v1.1 factors](https://registry.isometric.com/module/transportation/1.1#acceptable-emission-factors) |

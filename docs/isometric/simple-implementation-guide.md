@@ -122,9 +122,12 @@ Transport legs carry method, one-way distance, mass, factor, and evidence
 references. Aggregation counts every leg as a round trip (×2 of the one-way
 distance) and submits mass-distance by transport category.
 
+The justification for using the distance method when energy-usage data is
+unavailable lives in the PDD, outside noma (#942 q11). See the
+[recorded decision](./schema-mapping.md).
+
 Current gaps include:
 
-- proof that the energy-usage method was unavailable;
 - mandatory record types rather than “any one document”;
 - gross/tare and scale calibration support;
 - vehicle class/year and factor source/vintage.
