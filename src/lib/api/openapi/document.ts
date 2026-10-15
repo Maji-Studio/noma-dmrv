@@ -1,3 +1,4 @@
+import { addApplicationWritePaths } from "./application-writes";
 import { addDocumentReadPaths } from "./document-reads";
 import { addApplicationReadPaths } from "./application-reads";
 import { applicationBoundaryRepresentationSchema } from "@/lib/representations/applications";
@@ -135,6 +136,7 @@ export function buildOpenApiDocument() {
     ) };
   }
   addApplicationReadPaths(paths, publishOutput);
+  addApplicationWritePaths(paths, { publishOutput, writeErrors: WRITE_ERRORS });
   addDocumentReadPaths(paths, publishOutput);
   paths["/customers/{idOrCode}/locations"] = { get: privateOperation(
     "find_customer_locations", "customers:read", readDescriptions.customerLocations,

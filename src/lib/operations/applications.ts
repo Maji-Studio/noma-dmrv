@@ -6,7 +6,7 @@ import { createApplicationInTransaction, updateApplicationInTransaction, deleteA
 import { processPendingStorageObjectDeletions } from "@/data-access/storage-object-deletions";
 import { resolveWriteActivityScopes } from "@/data-access/write-activity";
 import { applications, type Application } from "@/db/schema";
-import { recordApplicationInput, updateApplicationInput, deleteApplicationInput, type RecordApplicationInput, type UpdateApplicationInput } from "@/schemas/application-input";
+import { recordApplicationInput, updateApplicationInput, deleteApplicationInput } from "@/schemas/application-input";
 import type { OperationEffect } from "@/lib/operation-effect";
 import type { Operation } from "./runner";
 
@@ -16,9 +16,9 @@ function changedFields(input: object): string[] {
   return Object.entries(input).filter(([key, value]) => value !== undefined && !NOT_CHANGES.has(key)).map(([key]) => key).sort();
 }
 
-export const describeRecordedApplication = (input: RecordApplicationInput, output: Pick<Application, "id" | "version">): OperationEffect => ({ outcome: "created", entityType: "application", entityIds: [output.id],
+export const describeRecordedApplication = (input: object, output: Pick<Application, "id" | "version">): OperationEffect => ({ outcome: "created", entityType: "application", entityIds: [output.id],
     versionBefore: null, versionAfter: output.version, changedFields: changedFields(input) });
-export const describeUpdatedApplication = (input: UpdateApplicationInput, output: Pick<Application, "id" | "version">): OperationEffect => ({ outcome: "updated", entityType: "application", entityIds: [output.id],
+export const describeUpdatedApplication = (input: { expectedVersion: number }, output: Pick<Application, "id" | "version">): OperationEffect => ({ outcome: "updated", entityType: "application", entityIds: [output.id],
     versionBefore: input.expectedVersion, versionAfter: output.version, changedFields: changedFields(input) });
 
 export const recordApplication: Operation<typeof recordApplicationInput, ApplicationOperationOutput> = {

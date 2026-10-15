@@ -78,7 +78,7 @@ ${orderGuide}
 ${deliveryGuide}
 ## Applications
 
-Find deliveries with GET /deliveries?hasRemainingMass=true, then read GET /deliveries/{idOrCode}/application-balance first. It returns remaining wet kilograms, the earliest application date and site defaults from one snapshot. Mass is wet kg of delivered product and dry biochar mass is derived by the server. Field size is hectares and applicationDate is a calendar date on the delivery facility's clock. GET /applications and /applications/{idOrCode} require applications:read. Full geometry is a separate read at /applications/{idOrCode}/boundary. Application photos and PDFs use /applications/{idOrCode}/documents with applications:read for reads and applications:write for upload requests and confirmation.
+Find deliveries with GET /deliveries?hasRemainingMass=true, then read GET /deliveries/{idOrCode}/application-balance first. It returns remaining wet kilograms, the earliest application date and site defaults from one snapshot. Mass is wet kg of delivered product and dry biochar mass is derived by the server. Field size is hectares and applicationDate is a calendar date on the delivery facility's clock. GET /applications and /applications/{idOrCode} require applications:read. POST /applications with Idempotency-Key; PATCH and DELETE the UUID path with If-Match from the latest GET. DELETE requires applications:delete. Supply raw WGS 84 GeoJSON under the JSON body cap; add larger boundaries in the app. Never invent field size or GPS. Full geometry is a separate read at /applications/{idOrCode}/boundary. Application photos and PDFs use /applications/{idOrCode}/documents with applications:read for reads and applications:write for upload requests and confirmation.
 
 ## Documents
 

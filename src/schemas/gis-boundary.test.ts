@@ -194,3 +194,8 @@ describe("parseGisBoundary", () => {
     ).toThrow();
   });
 });
+
+it("accepts API boundaries only without a file name", () => {
+  expect(parseGisBoundary({ ...boundary(), source: "api" }).source).toBe("api");
+  expect(() => parseGisBoundary({ ...boundary(), source: "api", fileName: "field.json" })).toThrow();
+});

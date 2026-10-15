@@ -56,7 +56,7 @@ const multiPolygonFeatureSchema = z.object({
 const gisBoundaryEnvelopeSchema = z
   .object({
     version: z.literal(1),
-    source: z.enum(["upload", "paste"]),
+    source: z.enum(["upload", "paste", "api"]),
     fileName: z.string().min(1).max(255).nullable(),
     capturedAt: z.iso.datetime(),
     collection: z.object({
@@ -81,11 +81,11 @@ const gisBoundaryEnvelopeSchema = z
       .max(GEOJSON_MAX_NOTES),
   })
   .superRefine((value, ctx) => {
-    if (value.source === "paste" && value.fileName !== null) {
+    if (value.source !== "upload" && value.fileName !== null) {
       ctx.addIssue({
         code: "custom",
         path: ["fileName"],
-        message: "Pasted boundaries cannot include a file name",
+        message: value.source === "paste" ? "Pasted boundaries cannot include a file name" : "API boundaries cannot include a file name",
       });
     }
     if (value.source === "upload" && value.fileName === null) {

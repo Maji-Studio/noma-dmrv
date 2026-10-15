@@ -47,5 +47,9 @@ it("keeps application scopes independent and role restricted", () => {
   expect(scopesFromPermissions({ applications: ["read", "write", "delete"] })).toEqual(["applications:read", "applications:write", "applications:delete"]);
   expect(hasScope({ scopes: ["applications:write"] }, "applications:delete")).toBe(false);
   expect(hasScope({ scopes: ["applications:write"] }, "applications:read")).toBe(false);
-  expect(hasRoleAndScope({ orgRole: "member", scopes: ["applications:write"] }, "applications:write")).toBe(false);
+  for (const scope of ["applications:write", "applications:delete"] as const) {
+    expect(hasRoleAndScope({ orgRole: "member", scopes: [scope] }, scope)).toBe(false);
+    expect(hasRoleAndScope({ orgRole: "admin", scopes: [] }, scope)).toBe(false);
+    expect(hasRoleAndScope({ orgRole: "admin", scopes: [scope] }, scope)).toBe(true);
+  }
 });

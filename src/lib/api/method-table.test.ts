@@ -93,9 +93,14 @@ it("exposes document requests and keyless confirmations without delete or edit m
   }
 });
 
-it("stages application resources as reads only until the REST write commit", () => {
-  for (const path of ["/applications", "/applications/AP-1", "/applications/AP-1/boundary", "/deliveries/DL-1/application-balance"]) {
+it("publishes application writes while boundary and balance remain read only", () => {
+  for (const path of ["/applications/AP-1/boundary", "/deliveries/DL-1/application-balance"]) {
     expect(getApiMethodEntry(`/api/v1${path}`)).toMatchObject({ methods: ["GET", "HEAD", "OPTIONS"],
       scopes: [path.startsWith("/applications") ? "applications:read" : "deliveries:read"] });
   }
+});
+
+it("includes application create, update and delete in Allow", () => {
+  expect(getApiMethodEntry("/api/v1/applications")?.methods).toEqual(["GET", "HEAD", "OPTIONS", "POST"]);
+  expect(getApiMethodEntry("/api/v1/applications/id")?.methods).toEqual(["DELETE", "GET", "HEAD", "OPTIONS", "PATCH"]);
 });

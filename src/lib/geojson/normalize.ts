@@ -38,6 +38,10 @@ const PROPERTY_ALLOW_LIST = ["name", "description", "reference_id"] as const;
 const WGS84_CRS_PATTERN =
   /(?:EPSG(?::|::|\/)\s*4326|CRS84|WGS\s*84|urn:ogc:def:crs:EPSG:[^:]*:4326)/i;
 
+const MIN_RING_POSITIONS = 4;
+const MIN_POSITION_VALUES = 2;
+const MAX_POSITION_VALUES = 3;
+
 type AreaGeometry = Polygon | MultiPolygon;
 type AreaFeature = GisBoundaryFeature;
 type NormalizeGeoJsonFailure = Extract<
@@ -47,7 +51,7 @@ type NormalizeGeoJsonFailure = Extract<
 
 interface NormalizeGeoJsonInput {
   text: string;
-  source: "upload" | "paste";
+  source: "upload" | "paste" | "api";
   fileName?: string;
 }
 
@@ -342,6 +346,22 @@ function validateCoordinateRanges(
   };
 }
 
+function hasValidAreaStructure(geometry: AreaGeometry): boolean {
+  const polygons: unknown = geometry.type === "Polygon"
+    ? [geometry.coordinates]
+    : geometry.coordinates;
+  return Array.isArray(polygons) && polygons.length > 0 && polygons.every(
+    polygon => Array.isArray(polygon) && polygon.length > 0 && polygon.every(
+      ring => Array.isArray(ring) && ring.length >= MIN_RING_POSITIONS &&
+        ring.every(position => Array.isArray(position) &&
+          position.length >= MIN_POSITION_VALUES && position.length <= MAX_POSITION_VALUES &&
+          position.every(value => typeof value === "number" && Number.isFinite(value))) &&
+        ring[0].length === ring[ring.length - 1].length &&
+        ring[0].every((value: number, index: number) => value === ring[ring.length - 1][index]),
+    ),
+  );
+}
+
 function normalizedCollection(
   features: AreaFeature[],
 ): GisBoundaryCollection {
@@ -389,7 +409,7 @@ function capError(
  * Normalize uploaded or pasted GeoJSON into the application boundary envelope.
  * The caller must run this on the server so capturedAt is server controlled.
  */
-export function normalizeGeoJson({
+function normalizeGeoJsonInput({
   text,
   source,
   fileName,
@@ -456,6 +476,13 @@ export function normalizeGeoJson({
     return { ok: false, error: "The file contains no area geometry." };
   }
 
+  if (!areaFeatures.every(feature => hasValidAreaStructure(feature.geometry))) {
+    return {
+      ok: false,
+      error: "The boundary geometry is not valid. Each polygon needs a closed ring with at least four positions and finite longitude and latitude values. Check the coordinates and try again.",
+    };
+  }
+
   const rangeResult = validateCoordinateRanges(areaFeatures);
   if (!rangeResult.ok) return rangeResult;
   if (rangeResult.longitudeSpan > MAX_LONGITUDE_SPAN_DEGREES) {
@@ -506,4 +533,15 @@ export function normalizeGeoJson({
   }
 
   return { ok: true, boundary: parseGisBoundary(boundary) };
+}
+
+export function normalizeGeoJson(input: NormalizeGeoJsonInput): NormalizeGeoJsonResult {
+  try {
+    return normalizeGeoJsonInput(input);
+  } catch {
+    return {
+      ok: false,
+      error: "The GeoJSON structure is not valid. Check the geometry and coordinates and try again.",
+    };
+  }
 }
