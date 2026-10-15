@@ -1,3 +1,4 @@
+import { ghgStatusRegistryAt } from "@/lib/isometric/utils/ghg-status-registry-at";
 import { resolveIsometricClient } from "@/data-access/certifier-credentials";
 import { z } from "zod";
 import type { OrgContext } from "@/lib/auth/server";
@@ -339,6 +340,7 @@ export async function reconcileRegistryGhgStatement(
           supersedePreviousId: claimed.supersedePreviousId,
         },
         tx,
+        { source: "registry", registryAt: args.remote.status === "AWAITING_VERIFICATION" ? ghgStatusRegistryAt(args.remote) : null },
       );
       submission = await getLatestSubmissionWithExecutor(
         orgCtx,

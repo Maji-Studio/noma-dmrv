@@ -1,3 +1,4 @@
+import { listEntityActivity } from "@/data-access/activity-events";
 import { masterDataVersion } from "./helpers/master-data-version";
 import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
 /**
@@ -660,6 +661,22 @@ describe("claimSubmissionDraft — in-lock re-resolution", () => {
 });
 
 describe("claimSubmissionDraft — resume", () => {
+  it("records rejected to draft when another user retries the same payload", async () => {
+    const fixture = await createFixture("ghgStatement");
+    const seeded = await seedRow(fixture.key, {
+      version: 1, status: "rejected", payloadHash: "hash:v-original",
+    });
+    const retryCtx = makeTestOrgContext("retrying-user");
+    const outcome = await claimSubmissionDraft(retryCtx, baseArgs(fixture));
+    expect(outcome).toMatchObject({ kind: "claimed", resumed: true, row: { id: seeded.id, status: "draft" } });
+    const history = await listEntityActivity(retryCtx, "ghg_statement", seeded.localEntityId);
+    expect(history).toHaveLength(1);
+    expect(history[0]).toMatchObject({
+      fromStatus: "rejected", toStatus: "draft", actorUserId: retryCtx.userId,
+      submissionRef: { submissionId: seeded.id },
+    });
+  });
+
   it("CAS-resumes a TTL-stale draft without calling resolve or buildSnapshot", async () => {
     const fixture = await createFixture();
     const staleLockedAt = new Date(Date.now() - STALE_LOCK_OFFSET_MS);
@@ -704,6 +721,7 @@ describe("claimSubmissionDraft — resume", () => {
     expect(outcome.row.lockedAt!.getTime()).toBeGreaterThan(
       staleLockedAt.getTime(),
     );
+    expect(await listEntityActivity(makeTestOrgContext(USER_ID), "removal", seeded.localEntityId)).toEqual([]);
     // The stored payloadSnapshot stays authoritative on resume.
     expect(resolveCalled).toBe(false);
     expect(buildSnapshotCalled).toBe(false);

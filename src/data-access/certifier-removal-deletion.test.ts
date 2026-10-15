@@ -5,6 +5,9 @@ import type { OrgContext } from "@/lib/auth/server";
 
 const mocks = vi.hoisted(() => ({ transaction: vi.fn(), select: vi.fn(), delete: vi.fn(), update: vi.fn(),
   clear: vi.fn(), locks: vi.fn(), documents: vi.fn() }));
+vi.mock("./certification-status-activity", () => ({
+  withCertificationStatusActivity: async (_ctx: unknown, _ids: string[], write: (tx: unknown) => Promise<void>, tx: unknown) => write(tx),
+}));
 vi.mock("@/db", () => ({ db: mocks }));
 vi.mock("./removal-production-batch-deletion", () => ({ clearDeletedRemovalProductionBatches: mocks.clear }));
 vi.mock("./certifier-document-uploads", () => ({ releaseDocumentUploadsReferencedOnlyBySubmissions: mocks.documents }));

@@ -1,5 +1,10 @@
 # Isometric Docs Change Log
 
+Certification status transitions are recorded in `activity_events` in the same
+transaction as the ledger write. Events retain raw local and remote statuses,
+the submission version, and the triggering actor. Registry refreshes use the
+registry source and supplied timestamps; unchanged statuses add no event.
+
 ## 2026-10-15: Samples require a credit batch; unused characterization columns removed
 
 - Issue #1016 makes every lab Sample belong to one credit batch and removes
