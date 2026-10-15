@@ -28,8 +28,10 @@ import {
   storageLocations,
 } from "@/db/schema";
 import { eq, inArray } from "drizzle-orm";
+import { validateAndSaveMeasurement, validateAndSaveIncident } from "./helpers/production-child-forms";
 import { chooseRunStatus } from "./helpers/run-status";
 import { formatFacilityWallClock } from "@/lib/date-utils";
+import type { ProductionRunStatus } from "@/lib/production-runs/lifecycle";
 
 const FIRST_FEEDSTOCK_DRAW_WET_MASS_SELECTOR =
   'input[name="feedstockDraws.0.wetMassKg"]';
@@ -355,7 +357,7 @@ test.describe("Production Run + Sample UI CRUD", () => {
     await expect(
       sampleDialog.getByRole("heading", { name: "Add in-process measurement" }),
     ).toBeVisible();
-    await sampleDialog.getByRole("button", { name: "Cancel" }).click();
+    await validateAndSaveMeasurement(sampleDialog);
     await expect(sampleDialog).toBeHidden();
     await expect(page.locator('[role="dialog"]')).toHaveCount(1);
 
@@ -368,7 +370,7 @@ test.describe("Production Run + Sample UI CRUD", () => {
         name: "Add production incident",
       }),
     ).toBeVisible();
-    await incidentDialog.getByRole("button", { name: "Cancel" }).click();
+    await validateAndSaveIncident(incidentDialog);
     await expect(incidentDialog).toBeHidden();
     await expect(page.locator('[role="dialog"]')).toHaveCount(1);
     await expect(runSideSheet).toBeVisible();
@@ -386,7 +388,7 @@ async function openRunForm(
     startTime: string;
     endDate?: string;
     endTime?: string;
-    status?: string;
+    status?: ProductionRunStatus;
     recordOutput?: boolean;
   },
 ) {
@@ -533,11 +535,11 @@ test.describe("Production Run lifecycle (#254)", () => {
       "#feedstockDraws-error",
     );
 
-    for (const field of ["biocharStorageLocationId", "biocharOutputKg", "biocharMoisturePercent"]) {
+    for (const field of ["endDate", "endTime", "feedstockMoisturePercent", "biocharStorageLocationId", "biocharOutputKg", "biocharMoisturePercent"]) {
       await expect(dialog.locator(`label[for="${field}"]`)).not.toContainText("Required");
     }
     await chooseRunStatus(dialog, "complete");
-    for (const field of ["biocharStorageLocationId", "biocharOutputKg", "biocharMoisturePercent"]) {
+    for (const field of ["endDate", "endTime", "feedstockMoisturePercent", "biocharStorageLocationId", "biocharOutputKg", "biocharMoisturePercent"]) {
       await expect(dialog.locator(`label[for="${field}"]`)).toContainText("Required");
     }
     await dialog

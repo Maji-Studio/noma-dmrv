@@ -111,7 +111,7 @@ const NOT_SHEET_FORMS: Record<string, string> = {
 
 function ProductionSampleFormHarness() {
   const deferredAttachments = useDeferredAttachments();
-  return <ProductionSampleForm productionRunId="run" onSubmit={noop} deferredAttachments={deferredAttachments} onRetryDeferredAttachment={async () => undefined} onRemoveDeferredAttachment={noop} />;
+  return <ProductionSampleForm facilityId="facility" productionRunId="run" onSubmit={noop} deferredAttachments={deferredAttachments} onRetryDeferredAttachment={async () => undefined} onRemoveDeferredAttachment={noop} />;
 }
 
 type FormCase = { file: string; name: string; element: ReactElement; shows?: string };
@@ -122,7 +122,7 @@ const CREATE_CASES: FormCase[] = [
   { file: "components/storage-locations/output-stock-form.tsx", name: "output stock loss", element: <OutputStockForm storageLocationId="bin" facilityId="facility" onCancel={noop} onRecorded={noop} />, shows: "Preview bin" },
   { file: "components/storage-locations/storage-location-form.tsx", name: "storage bin", element: <StorageLocationForm onSubmit={noop} /> },
   { file: "components/production-runs/production-run-form.tsx", name: "production run", element: <ProductionRunForm onSubmit={noop} /> },
-  { file: "components/production-runs/production-incident-form.tsx", name: "production incident", element: <ProductionIncidentForm productionRunId="run" onSubmit={noop} /> },
+  { file: "components/production-runs/production-incident-form.tsx", name: "production incident", element: <ProductionIncidentForm facilityId="facility" productionRunId="run" onSubmit={noop} /> },
   { file: "components/production-runs/production-sample-form.tsx", name: "production sample", element: <ProductionSampleFormHarness /> },
   // Its stock previews render only once bins are picked, which props cannot preset;
   // the stock blocks themselves are covered in form-detail-parity.test.tsx.

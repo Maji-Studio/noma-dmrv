@@ -118,7 +118,6 @@ async function seedGeoLineage(
         startTime: new Date("2026-02-10T07:00:00.000Z"),
         endTime: new Date("2026-02-10T13:00:00.000Z"),
         reactorId: seededData.reactor.id,
-        feedstockStorageLocationId: seededData.feedstockStorageLocation.id,
         biocharStorageLocationId: seededData.biocharStorageLocation.id,
         feedstockMassDryKg: 1000,
         biocharDryMassKg: 250,

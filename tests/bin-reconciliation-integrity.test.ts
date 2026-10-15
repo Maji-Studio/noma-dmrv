@@ -203,9 +203,8 @@ describe("bin reconciliation integrity", { timeout: CONCURRENCY_TEST_TIMEOUT_MS 
           status: "running",
           startTime: new Date("2026-07-03T08:00:00Z"),
           endTime: null,
-          feedstockWetMassKg: INITIAL_FEEDSTOCK_DRY_MASS_KG,
+          feedstockDraws: [{ storageLocationId: bin.id, wetMassKg: INITIAL_FEEDSTOCK_DRY_MASS_KG }],
           feedstockMoisturePercent: 0,
-          feedstockStorageLocationId: bin.id,
         }),
       ]);
 

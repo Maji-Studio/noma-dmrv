@@ -207,6 +207,14 @@ startTime: formatLocalDateTime(new Date()), // "2026-03-03T14:30" → datetime-l
 
 Timezone fields use `requiredTimezoneSchema()` / `optionalTimezoneSchema()` / `ianaTimezoneSchema()` from `@/schemas/timezone` (the one valid-IANA-zone check, backed by the `@vvo/tzdb` catalogue in `@/lib/timezones`) and the `TimezoneCombobox`, never a hand-listed enum. No timezone has a default: facility fields start empty and required, and the organization default may stay unset.
 
+**Incident and in-process measurement times** use `EventTimeInput` and the
+parent production run's facility clock. Their shared schemas use
+`createEventInstantSchema(<field message>)` so a cleared time gets a plain
+message. Writers resolve `{ date, time }` through
+`resolveEventInstant` with the saved parent run's facility zone. Offset-free
+datetime strings are refused. A measurement needs at least one recorded value
+(zero counts), with the empty-record error on Weight.
+
 **Output stock event times** (product placed, delivery, loss, count) are entered
 and shown on the facility clock, like production runs
 ([output-stock.md](./output-stock.md)). The contract:

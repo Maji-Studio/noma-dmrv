@@ -41,7 +41,6 @@ export interface TrailDocument {
 
 export interface TrailSample {
   id: string;
-  sampleCode: string | null;
   timestamp: Date;
   photoUrl: string | null;
 }
@@ -227,7 +226,6 @@ export async function getApplicationTrailEvidence(
       documents: entityDocuments("production_run", productionRunId),
       samples: (samplesByRun.get(productionRunId) ?? []).map((sample) => ({
         id: sample.id,
-        sampleCode: sample.sampleCode,
         timestamp: sample.timestamp,
         photoUrl: sample.photoUrl,
       })),

@@ -15,7 +15,7 @@ import {
   uuid,
 } from 'drizzle-orm/pg-core';
 import { organizations } from './auth';
-import { electricitySourceCategory, incidentSeverity, productionRunStatus } from './common';
+import { incidentSeverity, productionRunStatus } from './common';
 import { facilities, reactors, storageLocations } from './facilities';
 import { feedstocks } from './feedstock';
 import { fraction, massKg, percent, ppm } from './numeric-families';
@@ -44,7 +44,7 @@ export const productionRuns = pgTable(
     // The run's physical time window. `startTime` is the natural key (with
     // reactor) and its date is the run's calendar date — the standalone `date`
     // column was dropped (issue #259); consumers derive it from `startTime`.
-    startTime: timestamp('start_time').defaultNow().notNull(),
+    startTime: timestamp('start_time').notNull(),
     // NULL = the run has started but not ended yet (an "open" run). A closed
     // run occupies [startTime, endTime); an open run occupies [startTime, ∞).
     endTime: timestamp('end_time'),
@@ -63,18 +63,12 @@ export const productionRuns = pgTable(
     dieselGensetLiters: real('diesel_genset_liters'),
     preprocessingFuelLiters: real('preprocessing_fuel_liters'),
     electricityKwh: real('electricity_kwh'),
-    // Isometric Energy Module §5.3 — EC1–EC5 electricity sourcing category
-    electricitySourceCategory: electricitySourceCategory('electricity_source_category'),
-    lowCarbonPercentage: real('low_carbon_percentage'), // % from renewables/low-carbon grid (0–100)
 
     // --- Biochar Output ---
     biocharOutputKg: massKg('biochar_output_kg'), // Wet mass (recorded value)
     biocharMoisturePercent: percent('biochar_moisture_percent'), // Typically 1-2%, default 0 if unknown
     biocharDryMassKg: massKg('biochar_dry_mass_kg'), // Derived: wetMass * (1 - moisture/100)
     biocharStorageLocationId: uuid('biochar_storage_location_id').references(
-      () => storageLocations.id
-    ),
-    feedstockStorageLocationId: uuid('feedstock_storage_location_id').references(
       () => storageLocations.id
     ),
     feedstockWetMassKg: massKg('feedstock_wet_mass_kg'),
@@ -121,7 +115,7 @@ export const productionRuns = pgTable(
     ),
     check(
       'production_runs_feedstock_moisture_percent_range',
-      sql`${table.feedstockMoisturePercent} is null or (${table.feedstockMoisturePercent} >= 0 and ${table.feedstockMoisturePercent} <= 100)`
+      sql`${table.feedstockMoisturePercent} >= 0 and ${table.feedstockMoisturePercent} < 100`
     ),
     check(
       'production_runs_feedstock_dry_lte_wet',
@@ -129,7 +123,7 @@ export const productionRuns = pgTable(
     ),
     check(
       'production_runs_biochar_moisture_percent_range',
-      sql`${table.biocharMoisturePercent} is null or (${table.biocharMoisturePercent} >= 0 and ${table.biocharMoisturePercent} <= 100)`
+      sql`${table.biocharMoisturePercent} >= 0 and ${table.biocharMoisturePercent} < 100`
     ),
     check(
       'production_runs_biochar_dry_mass_non_negative',
@@ -138,10 +132,6 @@ export const productionRuns = pgTable(
     check(
       'production_runs_biochar_dry_lte_wet',
       sql`${table.biocharOutputKg} is null or ${table.biocharDryMassKg} is null or ${table.biocharDryMassKg} <= ${table.biocharOutputKg}`
-    ),
-    check(
-      'production_runs_low_carbon_percentage_range',
-      sql`${table.lowCarbonPercentage} is null or (${table.lowCarbonPercentage} >= 0 and ${table.lowCarbonPercentage} <= 100)`
     ),
   ]
 );
@@ -329,11 +319,10 @@ export const incidentReports = pgTable('incident_reports', {
   productionRunId: uuid('production_run_id')
     .notNull(),
   incidentTime: timestamp('incident_time').notNull(),
-  incidentDate: timestamp('incident_date').defaultNow().notNull(),
   operatorId: uuid('operator_id').references(() => operators.id),
   reactorId: uuid('reactor_id').references(() => reactors.id),
   description: text('description').notNull(),
-  severity: incidentSeverity('severity'),
+  severity: incidentSeverity('severity').notNull(),
   correctiveActions: text('corrective_actions'),
   notes: text('notes'), // e.g., "Machine running a bit hot"
 
@@ -430,7 +419,6 @@ export const productionSamples = pgTable('production_samples', {
     .references(() => organizations.id),
   productionRunId: uuid('production_run_id')
     .notNull(),
-  sampleCode: text('sample_code'),
   timestamp: timestamp('timestamp').notNull(),
   weightGrams: real('weight_grams'),
   volumeMl: real('volume_ml'),
@@ -446,6 +434,14 @@ export const productionSamples = pgTable('production_samples', {
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 }, (table) => [
   index('production_samples_organization_id_idx').on(table.organizationId),
+  check(
+    'production_samples_weight_grams_non_negative',
+    sql`${table.weightGrams} is null or ${table.weightGrams} >= 0`
+  ),
+  check(
+    'production_samples_volume_ml_non_negative',
+    sql`${table.volumeMl} is null or ${table.volumeMl} >= 0`
+  ),
   foreignKey({
     columns: [table.productionRunId, table.organizationId],
     foreignColumns: [productionRuns.id, productionRuns.organizationId],
@@ -475,11 +471,6 @@ export const productionRunsRelations = relations(
       fields: [productionRuns.biocharStorageLocationId],
       references: [storageLocations.id],
       relationName: 'biocharStorageLocation',
-    }),
-    feedstockStorageLocation: one(storageLocations, {
-      fields: [productionRuns.feedstockStorageLocationId],
-      references: [storageLocations.id],
-      relationName: 'feedstockStorageLocation',
     }),
     samples: many(samples),
     productionSamples: many(productionSamples),

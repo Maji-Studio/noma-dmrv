@@ -11,7 +11,7 @@ const commands = [
   [deleteProductionRunSchema, { productionRunId: ID }],
   [updateProductionIncidentSchema, { productionIncidentId: ID, productionRunId: ID, incidentTime: new Date("2026-09-01T12:00:00Z"), description: "Incident", severity: "low" }],
   [deleteProductionIncidentSchema, { productionIncidentId: ID }],
-  [updateProductionSampleSchema, { productionSampleId: ID, productionRunId: ID, timestamp: "2026-09-01T12:00:00Z" }],
+  [updateProductionSampleSchema, { productionSampleId: ID, productionRunId: ID, timestamp: "2026-09-01T12:00:00Z", weightGrams: 0 }],
   [deleteProductionSampleSchema, { productionSampleId: ID }],
   [updateBiocharProductSchema, { productId: ID }],
   [deleteBiocharProductSchema, { productId: ID }],

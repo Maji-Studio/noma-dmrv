@@ -173,7 +173,7 @@ export async function seedFeedstockDraw(
     code: "PR-FEEDSTOCK-SUITE", status: "complete",
     biocharStorageLocationId: outputBinId, biocharMoisturePercent: 0,
     startTime: new Date("2026-10-06T10:00:00Z"), endTime: new Date("2026-10-06T11:00:00Z"),
-    feedstockStorageLocationId: fixture.binId, feedstockWetMassKg: wetMassKg,
+    feedstockWetMassKg: wetMassKg,
   }).returning();
   await db.insert(productionRunFeedstockDraws).values({
     organizationId: org, productionRunId: run.id, storageLocationId: fixture.binId, wetMassKg,

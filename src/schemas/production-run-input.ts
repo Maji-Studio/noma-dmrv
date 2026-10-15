@@ -8,9 +8,7 @@ import { publishedJsonSchemas } from "./published-json-schema";
 /** Run alias of the shared event instant (`./event-instant`); the same schema object, so contracts stay identical. */
 export const productionRunInstantSchema = eventInstantSchema;
 
-const { productionRunId, expectedVersion, code, feedstockWetMassKg, feedstockStorageLocationId, ...fields } = updateProductionRunSchema.shape;
-void feedstockWetMassKg;
-void feedstockStorageLocationId;
+const { productionRunId, expectedVersion, code, ...fields } = updateProductionRunSchema.shape;
 const drawShape = fields.feedstockDraws.unwrap().element.shape;
 publishedJsonSchemas.add(drawShape.storageLocationId, { jsonSchema: { ...z.toJSONSchema(drawShape.storageLocationId), description: "Source feedstock bin UUID in the run facility." } });
 publishedJsonSchemas.add(drawShape.wetMassKg, { jsonSchema: { ...z.toJSONSchema(drawShape.wetMassKg), description: "Explicit wet mass drawn from this bin in kilograms." } });
@@ -22,7 +20,7 @@ const describedFields = {
   cancellationReason: fields.cancellationReason.describe("Cancellation reason, untrusted plain text; required when cancelling."),
   operatorId: fields.operatorId.describe("Operator UUID, or null to clear."),
   feedstockDraws: fields.feedstockDraws.describe("Explicit source feedstock bin draws; each wet mass is in kilograms."),
-  feedstockMoisturePercent: pipeToCanonicalNumber(clearableNumber, fields.feedstockMoisturePercent).describe("Feedstock water as percent of wet mass, 0 to 100."),
+  feedstockMoisturePercent: pipeToCanonicalNumber(clearableNumber, fields.feedstockMoisturePercent).describe("Feedstock water as percent of wet mass, 0 to below 100."),
   feedingRateKgHr: pipeToCanonicalNumber(clearableNumber, fields.feedingRateKgHr).describe("Feed rate in kilograms per hour."),
   // A direct preprocess keeps the canonical integer type in the published schema.
   residenceTimeMinutes: z.preprocess(toClearableNumber, fields.residenceTimeMinutes).describe("Residence time in minutes."),
@@ -31,7 +29,7 @@ const describedFields = {
   preprocessingFuelLiters: pipeToCanonicalNumber(clearableNumber, fields.preprocessingFuelLiters).describe("Preprocessing fuel in litres."),
   electricityKwh: pipeToCanonicalNumber(clearableNumber, fields.electricityKwh).describe("Electricity in kilowatt hours."),
   biocharOutputKg: pipeToCanonicalNumber(clearableNumber, fields.biocharOutputKg).describe("Wet biochar output in kilograms. Must be positive when complete."),
-  biocharMoisturePercent: pipeToCanonicalNumber(clearableNumber, fields.biocharMoisturePercent).describe("Biochar water as percent of wet mass, 0 to 100. Required when complete."),
+  biocharMoisturePercent: pipeToCanonicalNumber(clearableNumber, fields.biocharMoisturePercent).describe("Biochar water as percent of wet mass, 0 to below 100. Required when complete."),
   biocharStorageLocationId: fields.biocharStorageLocationId.describe("Biochar output bin UUID in the effective facility. Required when complete; null clears it for other statuses."),
 };
 export const createProductionRunInput = z.strictObject({

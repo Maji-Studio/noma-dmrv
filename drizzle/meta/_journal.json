@@ -953,6 +953,13 @@
       "when": 1791965741429,
       "tag": "0135_drop_certifier_sensors",
       "breakpoints": true
+    },
+    {
+      "idx": 136,
+      "version": "7",
+      "when": 1792040340840,
+      "tag": "0136_production_required_fields",
+      "breakpoints": true
     }
   ]
 }

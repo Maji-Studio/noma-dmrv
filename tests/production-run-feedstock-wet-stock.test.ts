@@ -300,18 +300,6 @@ describe("production-run wet feedstock stock", () => {
       await deriveFeedstockWetStockKg(ctx, db, secondaryStorageLocationId),
     ).toBe(300);
 
-    await expect(
-      updateProductionRun(ctx, created.id, { expectedVersion: mixed.version, feedstockWetMassKg: 500 }),
-    ).rejects.toThrow(
-      "This run draws from several bins. Send feedstockDraws to change its feedstock.",
-    );
-    await expect(
-      updateProductionRun(ctx, created.id, { expectedVersion: mixed.version,
-        feedstockStorageLocationId: storageLocationId,
-      }),
-    ).rejects.toThrow(
-      "This run draws from several bins. Send feedstockDraws to change its feedstock.",
-    );
 
     const replaced = await updateProductionRun(ctx, created.id, { expectedVersion: mixed.version,
       feedstockDraws: [

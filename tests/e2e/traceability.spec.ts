@@ -10,6 +10,8 @@ import { DEC_ORG_ID } from "@/db/org-defaults";
 import * as schema from "../../src/db/schema";
 import { test, expect, type SeededChainData } from "./fixtures";
 
+const TRAIL_MEASUREMENT_TIMESTAMP = "2026-03-02T12:00:00.000Z";
+
 const TRACEABILITY_BATCH_STORAGE_PREFIX =
   "noma:traceability:selected-credit-batch";
 
@@ -60,7 +62,6 @@ async function seedApplicationLineage(seededData: SeededChainData) {
         startTime: new Date("2026-02-10T07:00:00.000Z"),
         endTime: new Date("2026-02-10T13:00:00.000Z"),
         reactorId: seededData.reactor.id,
-        feedstockStorageLocationId: seededData.feedstockStorageLocation.id,
         biocharStorageLocationId: seededData.biocharStorageLocation.id,
         feedstockMassDryKg: 1000,
         biocharDryMassKg: 250,
@@ -242,7 +243,6 @@ async function seedBatchChain(seededData: SeededChainData) {
     applicationB: `E2E-BAPB-${suffix}`,
     creditBatch: `E2E-CB-${suffix}`,
     deliveryDocument: `E2E-receipt-${suffix}.pdf`,
-    productionSample: `E2E-PS-${suffix}`,
   };
 
   try {
@@ -256,7 +256,6 @@ async function seedBatchChain(seededData: SeededChainData) {
         startTime: new Date("2026-03-02T07:00:00.000Z"),
         endTime: new Date("2026-03-02T15:00:00.000Z"),
         reactorId: seededData.reactor.id,
-        feedstockStorageLocationId: seededData.feedstockStorageLocation.id,
         biocharStorageLocationId: seededData.biocharStorageLocation.id,
         feedstockMassDryKg: 1000,
         biocharDryMassKg: 300,
@@ -406,8 +405,7 @@ async function seedBatchChain(seededData: SeededChainData) {
         organizationId: DEC_ORG_ID,
         id: ids.productionSample,
         productionRunId: ids.productionRun,
-        sampleCode: codes.productionSample,
-        timestamp: new Date("2026-03-02T12:00:00.000Z"),
+        timestamp: new Date(TRAIL_MEASUREMENT_TIMESTAMP),
         weightGrams: 500,
       });
     });
@@ -842,6 +840,12 @@ test.describe("Traceability Views (credit-batch anchor)", () => {
       })
     ).toBeVisible();
 
+    const measurementTime = await adminPage.evaluate((timestamp) =>
+      new Intl.DateTimeFormat("en-US", {
+        month: "short", day: "numeric", year: "numeric",
+        hour: "2-digit", minute: "2-digit", hourCycle: "h23",
+      }).format(new Date(timestamp)), TRAIL_MEASUREMENT_TIMESTAMP);
+
     // Evidence rows: the delivery document and the production-run sample.
     await expect(
       trail
@@ -851,7 +855,8 @@ test.describe("Traceability Views (credit-batch anchor)", () => {
     await expect(
       trail
         .getByTestId("trail-evidence-sample")
-        .filter({ hasText: batch.codes.productionSample })
+        .filter({ hasText: "In-process measurement" })
+        .filter({ hasText: measurementTime })
     ).toBeVisible();
   });
 });

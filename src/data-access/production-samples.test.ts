@@ -13,6 +13,8 @@ import {
   updateProductionSample,
 } from "./production-samples";
 
+vi.mock("./production-run-event-time", () => ({ resolveProductionRunEventTime: async (_ctx: unknown, _tx: unknown, _id: string, value: Date) => value }));
+
 const ctx: OrgContext = {
   organizationId: "org",
   userId: "user",

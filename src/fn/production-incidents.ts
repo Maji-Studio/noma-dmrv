@@ -63,10 +63,7 @@ export async function createProductionIncidentFn(
 
     const incident = await createProductionIncident(ctx, {
       productionRunId: validated.productionRunId,
-      incidentTime:
-        validated.incidentTime instanceof Date
-          ? validated.incidentTime
-          : new Date(validated.incidentTime),
+      incidentTime: validated.incidentTime,
       operatorId: validated.operatorId ?? null,
       reactorId: validated.reactorId ?? null,
       description: validated.description,
@@ -97,10 +94,7 @@ export async function updateProductionIncidentFn(
       validated.productionIncidentId,
       {
         expectedVersion: validated.expectedVersion,
-        incidentTime:
-          validated.incidentTime instanceof Date
-            ? validated.incidentTime
-            : new Date(validated.incidentTime),
+        incidentTime: validated.incidentTime,
         operatorId: validated.operatorId ?? null,
         reactorId: validated.reactorId ?? null,
         description: validated.description,

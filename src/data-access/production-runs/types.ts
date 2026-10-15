@@ -45,7 +45,6 @@ export interface ProductionRunWithRelations {
   biocharMoisturePercent: number | null;
   biocharDryMassKg: number | null;
   biocharStorageLocationId: string | null;
-  feedstockStorageLocationId: string | null;
   feedstockWetMassKg: number | null;
   feedstockMoisturePercent: number | null;
   feedstockMassDryKg: number | null;
@@ -62,8 +61,6 @@ export interface ProductionRunWithRelations {
   operatorName: string | null;
   biocharStorageLocationCode: string | null;
   biocharStorageLocationName: string | null;
-  feedstockStorageLocationCode: string | null;
-  feedstockStorageLocationName: string | null;
   // M:M feedstocks
   feedstocks: ProductionRunFeedstockWithDetails[];
   // Canonical explicit source-bin withdrawals
