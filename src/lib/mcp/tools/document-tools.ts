@@ -1,6 +1,7 @@
-import { MILLISECONDS_PER_SECOND } from "@/config/api-keys";
+import { documentDownloadUrl } from "@/lib/documents/download-url";
+import { requestDocumentUploadWithCapability } from "@/lib/documents/upload-request";
 import { z } from "zod";
-import { DOCUMENT_CONFIRM_DEADLINE_MS, DOCUMENT_DOWNLOAD_TTL_SECONDS } from "@/config/documents";
+import { DOCUMENT_CONFIRM_DEADLINE_MS } from "@/config/documents";
 import type { ApiContext } from "@/lib/auth/api-context";
 import { ApiHttpError } from "@/lib/api/http-error";
 import { canonicalUuid } from "@/lib/api/canonical-uuid";
@@ -8,22 +9,17 @@ import { lookupIdentifier, readLookupPage } from "@/lib/api/lookup-query";
 import { parseQueryInput } from "@/lib/api/query";
 import { documentListSchema } from "@/lib/api/query-schemas";
 import { rejectUnknownFields } from "@/lib/api/unknown-fields";
-import { remainingDeadlineMs } from "@/lib/api/feedstock-write-checks";
 import { DomainError } from "@/lib/domain-errors";
 import { API_DOCUMENT_OWNERS, API_DOCUMENT_OWNER_TYPES, canAccessOwnerDocuments } from "@/lib/documents/api-owners";
 import { confirmDocumentUpload } from "@/lib/documents/confirm-upload";
 import { mapConfirmOutcome } from "@/lib/documents/confirm-outcome";
-import { mintDocumentUploadCapability } from "@/lib/documents/upload-capability";
-import { requestDocumentUpload } from "@/lib/operations/document-uploads";
 import { validationFailed } from "@/lib/operations/errors";
 import { toOperationJsonSchema } from "@/lib/operations/json-schema";
-import { runOperation } from "@/lib/operations/runner";
 import { DOCUMENT_GUIDANCE, DOCUMENT_TYPE_GUIDANCE } from "@/lib/operations/document-guidance";
-import { documentNotFound, readApiDocument, readApiDocumentList, resolveApiDocumentOwner } from "@/lib/read-models/api-documents";
+import { documentNotFound, readApiDocumentList, resolveApiDocumentOwner } from "@/lib/read-models/api-documents";
 import { documentRepresentationSchema } from "@/lib/representations/documents";
 import { documentUploadEnvelopeSchema } from "@/lib/representations/document-writes";
 import { itemEnvelopeSchema, listEnvelopeSchema } from "@/lib/representations/envelopes";
-import { getStorageProvider } from "@/lib/storage";
 import { requestDocumentUploadBodyInput } from "@/schemas/document-input";
 import type { ReadTool } from "./read-tools";
 import type { WriteTool } from "./write-tools";
@@ -87,11 +83,7 @@ export const documentReadTools: ReadTool[] = [
       const ownerId = await resolveApiDocumentOwner(ctx, ownerType, lookupIdentifier(identifier));
       const documentId = canonicalUuid(documentIdentifier);
       if (!documentId) throw documentNotFound();
-      const row = await readApiDocument(ctx, ownerType, ownerId, documentId);
-      if (row.uploadStatus !== "uploaded" || !row.storageKey) throw documentNotFound();
-      const expiresAt = new Date(Date.now() + DOCUMENT_DOWNLOAD_TTL_SECONDS * MILLISECONDS_PER_SECOND).toISOString();
-      const url = await getStorageProvider().createDownloadUrl({ key: row.storageKey, expiresInSeconds: DOCUMENT_DOWNLOAD_TTL_SECONDS });
-      return { url, expiresAt };
+      return documentDownloadUrl(ctx, ownerType, ownerId, documentId);
     },
     summarize: () => "Download link ready. Use it before expiresAt without the API key.",
   },
@@ -107,10 +99,10 @@ export const documentWriteTools: WriteTool[] = [
       noDryRun(dryRun);
       const parsed = requestInput.omit({ dryRun: true, requestKey: true }).safeParse(input);
       if (!parsed.success) throw validationFailed(parsed.error);
-      const ownerId = canonicalUuid(parsed.data.ownerId) ?? await resolveApiDocumentOwner(context.ctx, parsed.data.ownerType, lookupIdentifier(parsed.data.ownerId));
-      const result = await runOperation(requestDocumentUpload, context.ctx, { ...parsed.data, ownerId }, writeOptions(context, false, requestKey));
-      const capability = await mintDocumentUploadCapability(context.ctx, result.data.id, { deadlineMs: remainingDeadlineMs(context.deadlineAt) });
-      return { ...result, body: { data: result.data, upload: capability.upload, ...(capability.warning ? { warnings: [capability.warning] } : {}) } };
+      const { result, body } = await requestDocumentUploadWithCapability(context.ctx, parsed.data.ownerType, parsed.data.ownerId, parsed.data, {
+        ...writeOptions(context, false, requestKey), deadlineAt: context.deadlineAt,
+      });
+      return { ...result, body };
     },
     summarize: body => body.upload ? "Upload requested. PUT the bytes to upload.url with upload.headers, then call confirm_document_upload."
       : (body.warnings as string[]).join(" "),

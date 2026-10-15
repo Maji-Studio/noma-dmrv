@@ -1,3 +1,4 @@
+import { nextVersion } from "./row-version";
 /**
  * Document write lock order:
  * 1. Discover the owner, lineage target and ancestors without row locks; lock
@@ -26,7 +27,7 @@ import { and, eq } from "drizzle-orm";
 import type { DbTransaction } from "@/db";
 import { documents, storageObjectDeletions } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
-import { DOCUMENT_UPLOAD_LEASE_MS, DOCUMENT_CONFIRM_DEADLINE_MS } from "@/config/documents";
+import { UPLOAD_NOT_PENDING_MESSAGE, DOCUMENT_UPLOAD_LEASE_MS, DOCUMENT_CONFIRM_DEADLINE_MS } from "@/config/documents";
 import { DomainError } from "@/lib/domain-errors";
 import { buildUploadKey } from "@/lib/storage/keys";
 import { buildDocumentMetadata, metadataRecord } from "@/lib/documents/metadata";
@@ -34,7 +35,7 @@ import { REFUSAL_MESSAGES, REFUSAL_POINTERS, type ConfirmOutcome } from "@/lib/d
 import type { UploadRefusalReason } from "@/lib/documents/inspection";
 import { requestUploadSchema, isAllowedMime, isProductionReadingsCsvFormat, maxBytesFor, type RequestUploadInput } from "@/schemas/documents";
 import type { DocumentRow } from "./documents";
-import { assertDocumentOwnerWritable, lockDocumentOwner, readDocumentForWrite } from "./document-write-scope";
+import { changedOwner, assertDocumentOwnerWritable, lockDocumentOwner, readDocumentForWrite } from "./document-write-scope";
 import { enqueueDocumentKeys, enqueuePromotionCandidates } from "./document-storage-deletions";
 import { enqueueStorageObjectDeletion } from "./storage-object-deletions";
 import { requireOrgScope } from "./utils";
@@ -75,7 +76,7 @@ export function uploadFactsFor(row: DocumentRow): InspectedUploadFacts {
     entityType: row.entityType, entityId: row.entityId, documentType: row.documentType,
     contentType: declaration.contentType as string, sizeBytes: declaration.sizeBytes as number, sha256: declaration.sha256 as string | null };
 }
-function bindingsMatch(row: DocumentRow, facts: InspectedUploadFacts): boolean {
+export function bindingsMatch(row: DocumentRow, facts: InspectedUploadFacts): boolean {
   const actual = uploadFactsFor(row);
   return (Object.keys(actual) as (keyof InspectedUploadFacts)[]).every((key) => actual[key] === facts[key]);
 }
@@ -114,17 +115,17 @@ export async function confirmDocumentUploadInTransaction(ctx: OrgContext, tx: Db
     reason = "certification_locked"; pointer = `/${scope.field}`; message = error.message;
   }
   // An advisory preparation refusal cannot override the authoritative locked check.
-  if (reason === "certification_locked" && !message) throw new DomainError("conflict", "Certification lineage changed while it was being locked. Refresh and retry.", { retryable: true });
+  if (reason === "certification_locked" && !message) throw changedOwner();
   if (!reason && (!facts.finalKey || !facts.inspectedSha256 || facts.inspectedSizeBytes === undefined || facts.inspectedContentType === undefined)) throw new Error("Missing inspected upload facts");
   if (!reason) {
     const [queued] = await tx.select({ id: storageObjectDeletions.id }).from(storageObjectDeletions).where(and(
       eq(storageObjectDeletions.organizationId, ctx.organizationId), eq(storageObjectDeletions.storageProvider, facts.provider),
       eq(storageObjectDeletions.storageBucket, facts.bucket), eq(storageObjectDeletions.storageKey, facts.finalKey!),
     )).limit(1);
-    if (queued) throw new DomainError("conflict", "This file is no longer waiting for confirmation. Upload it again.");
+    if (queued) throw new DomainError("conflict", UPLOAD_NOT_PENDING_MESSAGE);
   }
   const [saved] = await tx.update(documents).set({
-    version: row.version + 1, updatedAt: new Date(),
+    version: nextVersion(documents.version), updatedAt: new Date(),
     ...(reason ? { uploadStatus: "failed" as const, metadata: { ...metadataRecord(row.metadata), uploadFailure: { reason } } } : {
       uploadStatus: "uploaded" as const, storageKey: facts.finalKey, checksumSha256: facts.inspectedSha256,
       fileSizeBytes: facts.inspectedSizeBytes, mimeType: facts.inspectedContentType,

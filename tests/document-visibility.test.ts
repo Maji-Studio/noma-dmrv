@@ -11,8 +11,8 @@ it("enforces visibility roles at data access, bumps version and refuses submitte
     const fixture = await createLineageFixture(state);
     const [row] = await db.insert(documents).values({ organizationId: ctx.organizationId, entityType: "sample", entityId: fixture.sampleId, documentType: "pdf", fileName: "report.pdf", fileUrl: "https://example.test/report" }).returning();
     try {
-      await expect(db.transaction((tx) => setDocumentVisibilityInTransaction({ ...ctx, orgRole: "member" }, tx, { documentId: row.id, visibility: "public" }))).rejects.toMatchObject({ code: "forbidden" });
-      const update = () => db.transaction((tx) => setDocumentVisibilityInTransaction({ ...ctx, orgRole: "admin" }, tx, { documentId: row.id, visibility: "public" }));
+      await expect(db.transaction((tx) => setDocumentVisibilityInTransaction({ ...ctx, orgRole: "member" }, tx, { documentId: row.id, expectedVersion: row.version, visibility: "public" }))).rejects.toMatchObject({ code: "forbidden" });
+      const update = () => db.transaction((tx) => setDocumentVisibilityInTransaction({ ...ctx, orgRole: "admin" }, tx, { documentId: row.id, expectedVersion: row.version, visibility: "public" }));
       if (state === "none") expect(await update()).toMatchObject({ version: 2, visibility: "public" });
       else await expect(update()).rejects.toMatchObject({ code: "certification_locked" });
     } finally {

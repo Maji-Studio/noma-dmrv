@@ -1,5 +1,7 @@
 "use client";
 
+import { StaleVersionError, staleDeleteMessage } from "@/lib/stale-version";
+
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { FormField, FormFileUpload, ServerError } from "@/components/forms";
@@ -51,7 +53,9 @@ export function ApplicationSupportingEvidencePanel({
   // A submitted lineage freezes the files: download stays, changes are hidden.
   const locked = useIsRecordCertificationLocked(ENTITY_TYPE, applicationId);
   const readOnly = readOnlyProp || locked;
-  const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<{ id: string; version: number } | null>(null);
+  const deleteId = deleting?.id ?? null;
+  const setDeleteId = (id: string | null) => setDeleting(docs?.find((doc) => doc.id === id) ?? null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const { data: docs, isLoading, error } = useDocumentsForEntity(
     ENTITY_TYPE,
@@ -77,16 +81,16 @@ export function ApplicationSupportingEvidencePanel({
   };
 
   const handleDelete = async () => {
-    if (!deleteId) return;
+    if (!deleting) return;
     setErrorMessage(null);
     try {
-      await deleteMutation.mutateAsync(deleteId);
+      await deleteMutation.mutateAsync({ documentId: deleting.id, expectedVersion: deleting.version });
       invalidateApplicationLists();
       toast.success("Supporting evidence deleted");
       setDeleteId(null);
     } catch (deleteError) {
       setErrorMessage(
-        deleteError instanceof Error
+        deleteError instanceof StaleVersionError ? staleDeleteMessage("Supporting evidence") : deleteError instanceof Error
           ? deleteError.message
           : "The supporting evidence was not deleted. Try again.",
       );

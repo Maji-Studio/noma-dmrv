@@ -1,3 +1,4 @@
+import { UPLOAD_NOT_PENDING_MESSAGE } from "@/config/documents";
 import { documentNotFound } from "@/data-access/document-write-scope";
 import type { DocumentRow } from "@/data-access/documents";
 import { DomainError } from "@/lib/domain-errors";
@@ -22,7 +23,7 @@ const FAILED_UPLOAD_MESSAGES: Record<string, string> = { ...REFUSAL_MESSAGES, ce
 export function failedDocumentUpload(row: DocumentRow): Extract<ApiConfirmOutcome, { kind: "failed" }> {
   const stored = metadataRecord(metadataRecord(row.metadata).uploadFailure).reason;
   const reason = typeof stored === "string" ? stored : "failed";
-  return { kind: "failed", reason, message: Object.hasOwn(FAILED_UPLOAD_MESSAGES, reason) ? FAILED_UPLOAD_MESSAGES[reason] : "This file is no longer waiting for confirmation. Upload it again." };
+  return { kind: "failed", reason, message: Object.hasOwn(FAILED_UPLOAD_MESSAGES, reason) ? FAILED_UPLOAD_MESSAGES[reason] : UPLOAD_NOT_PENDING_MESSAGE };
 }
 /** Called after the runner commits: a refused transition must not roll back. */
 export function documentFromConfirmOutcome(outcome: AppConfirmOutcome): DocumentRow {

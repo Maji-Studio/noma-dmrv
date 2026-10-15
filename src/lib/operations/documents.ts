@@ -20,7 +20,7 @@ export const confirmDocumentUploadApp: Operation<typeof confirmInput, AppConfirm
   id: "confirm_document_upload_app", input: confirmInput, supportsDryRun: false,
   execute: confirmInspectedUpload,
 };
-const deleteInput = deleteDocumentSchema.extend({ expectedVersion: z.number().int().positive().optional() });
+const deleteInput = deleteDocumentSchema.extend({ expectedVersion: z.number().int().positive() });
 export const deleteDocumentApp: Operation<typeof deleteInput, DocumentRow> = {
   id: "delete_document_app", input: deleteInput, supportsDryRun: false,
   execute: async ({ ctx, tx, afterCommit, deadlineAt }, input) => {
@@ -29,11 +29,13 @@ export const deleteDocumentApp: Operation<typeof deleteInput, DocumentRow> = {
     return document;
   },
 };
-export const setDocumentVisibilityApp: Operation<typeof setVisibilitySchema, DocumentRow> = {
-  id: "set_document_visibility_app", input: setVisibilitySchema, supportsDryRun: false,
+const visibilityInput = setVisibilitySchema.extend({ expectedVersion: z.number().int().positive() });
+const reclassifyInput = updateApplicationEvidenceMetadataSchema.safeExtend({ expectedVersion: z.number().int().positive() });
+export const setDocumentVisibilityApp: Operation<typeof visibilityInput, DocumentRow> = {
+  id: "set_document_visibility_app", input: visibilityInput, supportsDryRun: false,
   execute: ({ ctx, tx }, input) => setDocumentVisibilityInTransaction(ctx, tx, input),
 };
-export const reclassifyApplicationEvidenceApp: Operation<typeof updateApplicationEvidenceMetadataSchema, DocumentRow> = {
-  id: "reclassify_application_evidence_app", input: updateApplicationEvidenceMetadataSchema, supportsDryRun: false,
+export const reclassifyApplicationEvidenceApp: Operation<typeof reclassifyInput, DocumentRow> = {
+  id: "reclassify_application_evidence_app", input: reclassifyInput, supportsDryRun: false,
   execute: ({ ctx, tx }, input) => updateApplicationEvidenceMetadataInTransaction(ctx, tx, input),
 };

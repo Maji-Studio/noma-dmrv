@@ -34,6 +34,8 @@ export async function confirmDocumentUpload(ctx: OrgContext, input: unknown, opt
     if (error instanceof DomainError && error.code === "not_found") return { kind: "gone", pointer: "/ownerId" };
     throw error;
   }
+  if (prepared.kind === "uploaded") return { kind: "uploaded", document: representDocument(prepared.document) };
+  if (prepared.kind !== "prepared") return prepared;
   const deadlineMs = deadlineAt - Date.now();
   const outcome = (await runOperation(confirmInspectedDocumentUpload, ctx, { ...prepared.facts, cleanupDeadlineAt: deadlineAt }, {
     audit: options.audit, pool: options.pool, deadlineMs: Math.max(DOCUMENT_CONFIRM_DB_RESERVE_MS, deadlineMs),

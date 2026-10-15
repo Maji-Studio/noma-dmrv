@@ -399,3 +399,42 @@ describe("document REST writes", { timeout: READ_TIMEOUT_MS }, () => {
     }
   });
 });
+
+it.each(["confirm", "delete"] as const)("returns the terminal outcome when %s commits before candidate registration", async (winner) => {
+  const first = await pending();
+  await put(first.upload);
+  let entered!: () => void;
+  let release!: () => void;
+  const reading = new Promise<void>(resolve => { entered = resolve; });
+  const resume = new Promise<void>(resolve => { release = resolve; });
+  const readObject = provider.readObjectBounded.bind(provider);
+  vi.spyOn(provider, "readObjectBounded").mockImplementationOnce(async (input) => {
+    const object = await readObject(input);
+    entered();
+    await resume;
+    return object;
+  });
+  const putObject = vi.spyOn(provider, "putObject");
+  const second = confirm(first.data.id);
+  await reading;
+  let original: unknown;
+  let auditCount = 0;
+  try {
+    if (winner === "confirm") {
+      const response = await confirm(first.data.id);
+      expect(response.status).toBe(200);
+      original = await response.json();
+    } else {
+      const { deleteDocumentInTransaction } = await import("@/data-access/document-mutations");
+      const [row] = await documentRows(a);
+      await db.transaction(tx => deleteDocumentInTransaction(a.ctx, tx, { documentId: row.id, expectedVersion: row.version }));
+    }
+    auditCount = (await documentAudits(a)).length;
+    putObject.mockClear();
+  } finally { release(); }
+  const response = await second;
+  expect(response.status).toBe(winner === "confirm" ? 200 : 404);
+  if (winner === "confirm") expect(await response.json()).toEqual(original);
+  expect(putObject).not.toHaveBeenCalled();
+  expect(await documentAudits(a)).toHaveLength(auditCount);
+}, READ_TIMEOUT_MS);

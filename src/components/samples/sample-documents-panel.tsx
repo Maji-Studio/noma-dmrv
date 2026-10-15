@@ -1,7 +1,7 @@
 "use client";
 
-import { authClient } from "@/lib/auth/client";
-import { useIsAdmin } from "@/hooks/use-is-admin";
+import { StaleVersionError, staleDeleteMessage } from "@/lib/stale-version";
+
 import { useState } from "react";
 import { FileIcon, EyeIcon, EyeSlashIcon, TrashIcon, ArrowSquareOutIcon } from "@phosphor-icons/react/dist/ssr";
 import { FormField, ServerError } from "@/components/forms";
@@ -13,6 +13,7 @@ import { useToast } from "@/components/ui/toast";
 import { formatFileSize } from "@/lib/format-utils";
 import {
   documentKeys,
+  useCanChangeDocumentVisibility,
   useDeleteDocument,
   useDocumentsForEntity,
   useSetDocumentVisibility,
@@ -38,11 +39,7 @@ export function SampleDocumentsPanel({
   readOnly: readOnlyProp = false,
 }: SampleDocumentsPanelProps) {
   const toast = useToast();
-  const isPlatformAdmin = useIsAdmin();
-  const { data: session } = authClient.useSession();
-  const { data: organization } = authClient.useActiveOrganization();
-  const role = organization?.members.find((member) => member.userId === session?.user.id)?.role;
-  const canChangeVisibility = isPlatformAdmin || role === "owner" || role === "admin";
+  const canChangeVisibility = useCanChangeDocumentVisibility();
   // A submitted lineage freezes the files: download stays, changes are hidden.
   const locked = useIsRecordCertificationLocked(ENTITY_TYPE, sampleId);
   const readOnly = readOnlyProp || locked;
@@ -54,16 +51,18 @@ export function SampleDocumentsPanel({
   const setVisibilityMutation = useSetDocumentVisibility(invalidateKey);
   const deleteMutation = useDeleteDocument(invalidateKey, { entityType: ENTITY_TYPE, entityId: sampleId });
 
-  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<{ id: string; version: number } | null>(null);
+  const deletingId = deleting?.id ?? null;
+  const setDeletingId = (id: string | null) => setDeleting(docs?.find((doc) => doc.id === id) ?? null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
 
   const handleToggleVisibility = async (
-    documentId: string,
+    doc: { id: string; version: number },
     next: DocumentVisibility,
   ) => {
     try {
-      await setVisibilityMutation.mutateAsync({ documentId, visibility: next });
+      await setVisibilityMutation.mutateAsync({ documentId: doc.id, visibility: next, expectedVersion: doc.version });
       toast.success(`Document is now ${next}`);
     } catch (err) {
       toast.error(
@@ -73,15 +72,15 @@ export function SampleDocumentsPanel({
   };
 
   const handleDeleteConfirm = async () => {
-    if (!deletingId) return;
+    if (!deleting) return;
     setDeleteError(null);
     try {
-      await deleteMutation.mutateAsync(deletingId);
+      await deleteMutation.mutateAsync({ documentId: deleting.id, expectedVersion: deleting.version });
       toast.success("Document deleted");
       setDeletingId(null);
     } catch (err) {
       setDeleteError(
-        err instanceof Error ? err.message : "Document was not deleted. Try again.",
+        err instanceof StaleVersionError ? staleDeleteMessage("Document") : err instanceof Error ? err.message : "Document was not deleted. Try again.",
       );
     }
   };
@@ -158,7 +157,7 @@ export function SampleDocumentsPanel({
                     size="icon"
                     onClick={() =>
                       handleToggleVisibility(
-                        doc.id,
+                        doc,
                         doc.visibility === "private" ? "public" : "private",
                       )
                     }

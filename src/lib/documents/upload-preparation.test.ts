@@ -19,7 +19,7 @@ const row = { id: "doc", entityType: "facility", entityId: "facility", documentT
   uploadStatus: "pending", uploadStorageKey: "org/org/uploads/doc/key", storageProvider: "local-fs", storageBucket: "local",
   metadata: { uploadDeclaration: { sizeBytes: bytes.length, contentType: "application/pdf", sha256: null } },
 } as DocumentRow;
-beforeEach(() => { vi.clearAllMocks(); mocks.owner.mockResolvedValue(false); });
+beforeEach(() => { vi.clearAllMocks(); mocks.owner.mockResolvedValue(false); mocks.candidate.mockResolvedValue({ kind: "registered" }); });
 afterEach(() => vi.restoreAllMocks());
 it("keeps filenames and signed URLs out of refused-confirm and storage-error logs", async () => {
   const stderr = vi.spyOn(console, "error").mockImplementation(() => {});
@@ -27,7 +27,9 @@ it("keeps filenames and signed URLs out of refused-confirm and storage-error log
   const readObjectBounded = vi.fn().mockResolvedValue({ bytes: Buffer.from("not-a-pdf"), sizeBytes: bytes.length, sha256: "unused", contentType: "application/pdf" });
   const provider = { name: "local-fs", bucket: "local", readObjectBounded } as unknown as StorageProvider;
   const refused = await withAction(async () => {
-    const { facts } = await preparePendingDocumentUpload(ctx, row, provider, Date.now() + DOCUMENT_CONFIRM_DEADLINE_MS);
+    const prepared = await preparePendingDocumentUpload(ctx, row, provider, Date.now() + DOCUMENT_CONFIRM_DEADLINE_MS);
+    if (prepared.kind !== "prepared") throw new Error("Expected prepared");
+    const { facts } = prepared;
     if (!facts.refusal || facts.refusal === "certification_locked") throw new Error("Expected byte refusal");
     return documentFromConfirmOutcome({ kind: "refused", reason: facts.refusal, message: REFUSAL_MESSAGES[facts.refusal], pointer: REFUSAL_POINTERS[facts.refusal], document: row });
   });
@@ -43,8 +45,10 @@ it("keeps filenames and signed URLs out of refused-confirm and storage-error log
 it("commits a promotion candidate before starting PUT", async () => {
   const putObject = vi.fn(async () => { expect(mocks.candidate).toHaveBeenCalledOnce(); });
   const provider = { name: "local-fs", bucket: "local", putObject, readObjectBounded: async () => ({ bytes, sizeBytes: bytes.length, contentType: "application/pdf", sha256: createHash("sha256").update(bytes).digest("hex") }) } as unknown as StorageProvider;
-  const { facts } = await preparePendingDocumentUpload(ctx, row, provider, Date.now() + DOCUMENT_CONFIRM_DEADLINE_MS);
-  expect(mocks.candidate).toHaveBeenCalledWith(ctx, row.id, row.uploadStorageKey, facts.finalKey);
+  const prepared = await preparePendingDocumentUpload(ctx, row, provider, Date.now() + DOCUMENT_CONFIRM_DEADLINE_MS);
+    if (prepared.kind !== "prepared") throw new Error("Expected prepared");
+    const { facts } = prepared;
+  expect(mocks.candidate).toHaveBeenCalledWith(ctx, expect.objectContaining({ documentId: row.id, uploadKey: row.uploadStorageKey }), facts.finalKey);
   expect(putObject).toHaveBeenCalledOnce();
   mocks.candidate.mockRejectedValueOnce(new Error("database unavailable"));
   putObject.mockClear();
@@ -56,4 +60,12 @@ it("returns the stored failure message and code before storage inspection", asyn
   mocks.read.mockResolvedValue({ ...row, uploadStatus: "failed", metadata: { uploadFailure: { reason: "expired" } } });
   await expect(prepareDocumentUpload(ctx, row.id)).rejects.toMatchObject({ code: "conflict", message: "This upload expired. Request a new upload to try again.", issues: [{ path: ["documentId"], code: "expired" }] });
   expect(mocks.owner).not.toHaveBeenCalled();
+});
+
+it.each(["uploaded", "gone", "failed"] as const)("returns a terminal %s candidate without another PUT", async (kind) => {
+  mocks.candidate.mockResolvedValue(kind === "gone" ? { kind } : { kind, document: { ...row, uploadStatus: kind, metadata: { uploadFailure: { reason: "expired" } } } });
+  const putObject = vi.fn();
+  const provider = { name: "local-fs", bucket: "local", putObject, readObjectBounded: async () => ({ bytes, sizeBytes: bytes.length, contentType: "application/pdf", sha256: createHash("sha256").update(bytes).digest("hex") }) } as unknown as StorageProvider;
+  expect(await preparePendingDocumentUpload(ctx, row, provider, Date.now() + DOCUMENT_CONFIRM_DEADLINE_MS)).toMatchObject(kind === "failed" ? { kind, reason: "expired" } : { kind });
+  expect(putObject).not.toHaveBeenCalled();
 });

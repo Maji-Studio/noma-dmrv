@@ -40,6 +40,7 @@ export async function enqueueStorageObjectDeletion(
   });
 }
 
+// org-scope-ok: shared by scoped and cron drains; organizationId comes only from a scoped ctx or stored queue row.
 async function processStorageObjectDeletion(
   organizationId: string,
   id: string,

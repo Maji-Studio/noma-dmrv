@@ -1,7 +1,8 @@
 "use server";
 
+
 import { MILLISECONDS_PER_SECOND } from "@/config/api-keys";
-import { DOCUMENT_CONFIRM_DEADLINE_MS, DOCUMENT_CONFIRM_DB_RESERVE_MS } from "@/config/documents";
+import { UPLOAD_NOT_PENDING_MESSAGE, DOCUMENT_CONFIRM_DEADLINE_MS, DOCUMENT_CONFIRM_DB_RESERVE_MS } from "@/config/documents";
 import { listDocumentsForEntity, type DocumentRow } from "@/data-access/documents";
 import { getStorageProvider } from "@/lib/storage";
 import { DomainError } from "@/lib/domain-errors";
@@ -12,6 +13,7 @@ import { confirmUploadSchema, requestUploadSchema } from "@/schemas/documents";
 import { confirmDocumentUploadApp, deleteDocumentApp, reclassifyApplicationEvidenceApp, requestDocumentUploadApp, setDocumentVisibilityApp } from "@/lib/operations/documents";
 import { runOperationInProcess } from "@/lib/operations/runner";
 import type { ActionResult } from "@/types/actions";
+import { hasOrgRole } from "@/lib/auth/server";
 import { withAction } from "./with-action";
 
 
@@ -29,7 +31,7 @@ export async function requestUpload(input: unknown): Promise<ActionResult<Reques
     const provider = getStorageProvider();
     const row = await runOperationInProcess(requestDocumentUploadApp, ctx, { ...data, storageProvider: provider.name, storageBucket: provider.bucket });
     const expiresInSeconds = Math.floor((row.uploadExpiresAt!.getTime() - Date.now()) / MILLISECONDS_PER_SECOND);
-    if (expiresInSeconds <= 0) throw new DomainError("conflict", "This file is no longer waiting for confirmation. Upload it again.", { retryable: true });
+    if (expiresInSeconds <= 0) throw new DomainError("conflict", UPLOAD_NOT_PENDING_MESSAGE, { retryable: true });
     const presign = await provider.createUploadUrl({ key: row.uploadStorageKey!, contentType: data.contentType, maxBytes: data.sizeBytes, expiresInSeconds });
     return { documentId: row.id, uploadUrl: presign.url, headers: presign.headers, expiresAt: row.uploadExpiresAt!.toISOString(), storageKey: row.uploadStorageKey!, metadata: metadataRecord(row.metadata) };
   });
@@ -39,7 +41,7 @@ export async function confirmUpload(input: unknown): Promise<ActionResult<Docume
     const { documentId } = confirmUploadSchema.parse(input);
     const startedAt = Date.now();
     const prepared = await prepareDocumentUpload(ctx, documentId, undefined, startedAt + DOCUMENT_CONFIRM_DEADLINE_MS);
-    if (prepared.kind === "uploaded") return prepared.document;
+    if (prepared.kind !== "prepared") return documentFromConfirmOutcome(prepared);
     const outcome = await runOperationInProcess(confirmDocumentUploadApp, ctx, { ...prepared.facts, cleanupDeadlineAt: startedAt + DOCUMENT_CONFIRM_DEADLINE_MS }, { deadlineMs: Math.max(DOCUMENT_CONFIRM_DB_RESERVE_MS, DOCUMENT_CONFIRM_DEADLINE_MS - (Date.now() - startedAt)) });
     return documentFromConfirmOutcome(outcome);
   });
@@ -58,4 +60,8 @@ export async function deleteDocument(input: unknown): Promise<ActionResult<{ id:
 }
 export async function getDocumentsForEntity(entityType: string, entityId: string): Promise<ActionResult<DocumentRow[]>> {
   return withAction((ctx) => listDocumentsForEntity(ctx, entityType, entityId));
+}
+
+export async function canChangeDocumentVisibility(): Promise<ActionResult<boolean>> {
+  return withAction(async (ctx) => hasOrgRole(ctx, "admin"));
 }

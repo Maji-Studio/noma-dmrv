@@ -1,8 +1,7 @@
 import { API_DOCUMENT_OWNERS, canAccessOwnerDocuments, type ApiDocumentOwnerType } from "@/lib/documents/api-owners";
 import { documentNotFound, readApiDocument, readApiDocumentList, resolveApiDocumentOwner } from "@/lib/read-models/api-documents";
 import { representDocument } from "@/lib/representations/documents";
-import { getStorageProvider } from "@/lib/storage";
-import { DOCUMENT_DOWNLOAD_TTL_SECONDS } from "@/config/documents";
+import { documentDownloadUrl } from "@/lib/documents/download-url";
 import { apiRoute } from "./route";
 import { apiDenialResponse } from "./problem";
 import { canonicalUuid } from "./canonical-uuid";
@@ -30,15 +29,13 @@ export function documentReadHandler(ownerType: ApiDocumentOwnerType, kind: ReadK
     const ownerId = await resolveApiDocumentOwner(ctx, ownerType, lookupIdentifier(params.idOrCode));
     const documentId = canonicalUuid(params.documentId ?? "");
     if (!documentId) throw documentNotFound();
-    const row = await readApiDocument(ctx, ownerType, ownerId, documentId);
     if (kind === "content") {
-      // Legacy URLs cannot guarantee an expiring capability. Never fall back to public visibility.
-      if (row.uploadStatus !== "uploaded" || !row.storageKey) throw documentNotFound();
-      const location = await getStorageProvider().createDownloadUrl({ key: row.storageKey, expiresInSeconds: DOCUMENT_DOWNLOAD_TTL_SECONDS });
+      const { url: location } = await documentDownloadUrl(ctx, ownerType, ownerId, documentId);
       headers.set("Location", location);
       headers.set("Referrer-Policy", "no-referrer");
       return new Response(null, { status: 302, headers });
     }
+    const row = await readApiDocument(ctx, ownerType, ownerId, documentId);
     const data = representDocument(row);
     const etag = documentEtag(data);
     headers.set("ETag", etag);

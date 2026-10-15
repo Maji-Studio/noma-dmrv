@@ -35,7 +35,7 @@ export function documentOwnerField(type: DocumentEntityType): string { return OW
 export function documentNotFound(field = "documentId"): DomainError {
   return new DomainError("not_found", "Document not found", { issues: [{ path: [field], code: "not_found", message: "Document not found" }] });
 }
-function changedOwner(): DomainError { return new DomainError("conflict", "Certification lineage changed while it was being locked. Refresh and retry.", { retryable: true }); }
+export function changedOwner(): DomainError { return new DomainError("conflict", "Certification lineage changed while it was being locked. Refresh and retry.", { retryable: true }); }
 interface OwnerLink { type: DocumentEntityType; id: string; archived: boolean; parentId: string | null; legacyId: string | null; parentType: string | null }
 async function readOwner(ctx: OrgContext, tx: DbTransaction, type: DocumentEntityType, id: string, lock = false): Promise<OwnerLink | undefined> {
   const spec = OWNERS[type]; const table = spec.table;

@@ -11,7 +11,7 @@ import {
 } from "@/db/schema";
 import { deleteDocumentApp } from "@/lib/operations/documents";
 import { runOperationInProcess } from "@/lib/operations/runner";
-const deleteViaApp = (ctx: Parameters<typeof runOperationInProcess>[1], documentId: string) => runOperationInProcess(deleteDocumentApp, ctx, { documentId });
+const deleteViaApp = (ctx: Parameters<typeof runOperationInProcess>[1], documentId: string) => runOperationInProcess(deleteDocumentApp, ctx, { documentId, expectedVersion: 1 });
 import { processPendingStorageObjectDeletions } from "@/data-access/storage-object-deletions";
 import { __setStorageProviderForTests } from "@/lib/storage";
 import type {

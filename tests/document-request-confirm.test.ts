@@ -66,7 +66,7 @@ it("rejects archived request and confirm but permits delete; rejects foreign own
     await expect(request()).rejects.toMatchObject({ code: "not_found", issues: [{ path: ["facilityId"] }] });
     await expect(prepareDocumentUpload(ctx, row.id, provider)).rejects.toMatchObject({ code: "not_found" });
     const { deleteDocumentInTransaction } = await import("@/data-access/document-mutations");
-    expect(await db.transaction((tx) => deleteDocumentInTransaction(ctx, tx, { documentId: row.id }))).toMatchObject({ id: row.id });
+    expect(await db.transaction((tx) => deleteDocumentInTransaction(ctx, tx, { documentId: row.id, expectedVersion: row.version }))).toMatchObject({ id: row.id });
     await expect(db.transaction((tx) => requestDocumentUploadInTransaction({ ...ctx, organizationId: "foreign-org" }, tx, { entityType: "facility", entityId: facilityId, documentType: "pdf", fileName: "report.pdf", contentType: "application/pdf", sizeBytes: 8, storageProvider: provider.name, storageBucket: provider.bucket }))).rejects.toMatchObject({ code: "not_found" });
   } finally { await db.update(facilities).set({ archivedAt: null }).where(eq(facilities.id, facilityId)); }
 });

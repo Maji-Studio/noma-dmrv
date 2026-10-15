@@ -28,5 +28,12 @@ it.each(["expired", "retired"])("preserves counts and continues after %s fails",
   mocks.transaction.mockRejectedValueOnce(new Error("private storage details")).mockResolvedValueOnce(1);
   const result = await sweepDocumentUploads();
   expect(result).toEqual({ expired: DOCUMENT_SWEEP_BATCH_SIZE, retired: phase === "expired" ? 1 : 0, failedPhases: [phase] });
-  expect(mocks.error).toHaveBeenCalledWith({ phase, expired: DOCUMENT_SWEEP_BATCH_SIZE, retired: 0 }, "Document upload sweep phase failed");
+  expect(mocks.error).toHaveBeenCalledWith({ phase, expired: DOCUMENT_SWEEP_BATCH_SIZE, retired: 0, pgErrorCode: undefined, errorName: "Error" }, "Document upload sweep phase failed");
+});
+
+it("logs only the SQLSTATE and fixed classification for wrapped database failures", async () => {
+  mocks.transaction.mockRejectedValueOnce(new Error("private SQL and parameters", { cause: { code: "23503", detail: "private key" } })).mockResolvedValueOnce(0);
+  await sweepDocumentUploads();
+  expect(mocks.error).toHaveBeenCalledWith({ phase: "expired", expired: 0, retired: 0, pgErrorCode: "23503", errorName: "Error" }, "Document upload sweep phase failed");
+  expect(JSON.stringify(mocks.error.mock.calls)).not.toContain("private");
 });

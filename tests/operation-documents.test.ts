@@ -125,7 +125,7 @@ it.each(["uploaded", "failed", "expired", "deleted", "owner_archived"] as const)
   const { data } = await runOperation(requestDocumentUpload, ctx, input(), { idempotency }); ids.push(data.id);
   if (reason === "uploaded" || reason === "failed") await db.update(documents).set({ uploadStatus: reason }).where(eq(documents.id, data.id));
   if (reason === "expired") await db.update(documents).set({ createdAt: new Date(Date.now() - DOCUMENT_UPLOAD_MAX_LIFETIME_MS) }).where(eq(documents.id, data.id));
-  if (reason === "deleted") await runOperation(deleteDocumentApp, ctx, { documentId: data.id });
+  if (reason === "deleted") await runOperation(deleteDocumentApp, ctx, { documentId: data.id, expectedVersion: data.version });
   if (reason === "owner_archived") await db.update(feedstocks).set({ archivedAt: new Date() }).where(eq(feedstocks.id, fixture.feedstockId));
   const presign = vi.spyOn(provider, "createUploadUrl");
   try {

@@ -1,7 +1,9 @@
+import { nextVersion } from "./row-version";
 import { and, asc, eq, exists, inArray, isNull, lt, or } from "drizzle-orm";
 import { db, type DbTransaction } from "@/db";
 import { documents, storageObjectDeletions } from "@/db/schema";
 import { DOCUMENT_FAILED_RETENTION_MS, DOCUMENT_SWEEP_BATCH_SIZE, DOCUMENT_SWEEP_BUDGET_MS, DOCUMENT_UPLOAD_GRACE_MS } from "@/config/documents";
+import { pgErrorCode } from "@/db/errors";
 import { logger } from "@/lib/log";
 import type { OrgContext } from "@/lib/auth/server";
 import { metadataRecord } from "@/lib/documents/metadata";
@@ -27,7 +29,7 @@ export async function expireDocumentUploadsInTransaction(tx: DbTransaction, now:
     await enqueueDocumentKeys(ctx, tx, row);
     // org-scope-ok: cron sweep mutates only the organization of this locked expired row.
     await tx.update(documents).set({
-      uploadStatus: "failed", version: row.version + 1, updatedAt: now,
+      uploadStatus: "failed", version: nextVersion(documents.version), updatedAt: now,
       metadata: { ...metadataRecord(row.metadata), uploadFailure: { reason: "expired" } },
     }).where(and(eq(documents.id, row.id), eq(documents.organizationId, row.organizationId)));
   }
@@ -75,9 +77,9 @@ export async function sweepDocumentUploads(now = new Date(), organizationIds?: s
         counts[phase] += processed;
         if (processed < DOCUMENT_SWEEP_BATCH_SIZE) break;
       }
-    } catch {
+    } catch (error) {
       failedPhases.push(phase);
-      logger.error({ phase, ...counts }, "Document upload sweep phase failed");
+      logger.error({ phase, ...counts, pgErrorCode: pgErrorCode(error), errorName: error instanceof TypeError ? "TypeError" : error instanceof Error ? "Error" : "Unknown" }, "Document upload sweep phase failed");
     }
   }
   return { ...counts, failedPhases };

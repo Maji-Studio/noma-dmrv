@@ -13,11 +13,11 @@ beforeEach(() => { vi.clearAllMocks(); mocks.read.mockResolvedValue({ id: docume
 it("lets a Platform Admin without membership change visibility", async () => {
   const saved = { id: documentId, visibility: "public", version: 2 };
   const tx = { update: () => ({ set: () => ({ where: () => ({ returning: async () => [saved] }) }) }) } as unknown as DbTransaction;
-  expect(await setDocumentVisibilityInTransaction(ctx, tx, { documentId, visibility: "public" })).toEqual(saved);
+  expect(await setDocumentVisibilityInTransaction(ctx, tx, { documentId, expectedVersion: 1, visibility: "public" })).toEqual(saved);
   expect(mocks.writable).toHaveBeenCalled();
 });
 it("refuses an ordinary member with plain copy before reading or writing", async () => {
-  await expect(setDocumentVisibilityInTransaction({ ...ctx, orgRole: "member", isPlatformAdmin: false }, {} as DbTransaction, { documentId, visibility: "public" })).rejects.toMatchObject({
+  await expect(setDocumentVisibilityInTransaction({ ...ctx, orgRole: "member", isPlatformAdmin: false }, {} as DbTransaction, { documentId, expectedVersion: 1, visibility: "public" })).rejects.toMatchObject({
     code: "forbidden", message: "Only organization owners and admins can change file visibility.",
   });
   expect(mocks.read).not.toHaveBeenCalled();

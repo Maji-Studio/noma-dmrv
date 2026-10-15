@@ -13,7 +13,7 @@ export async function enqueueDocumentKeys(ctx: OrgContext, tx: DbTransaction, do
   for (const storageKey of keys) {
     if (!document.storageProvider || !document.storageBucket) throw new Error("Stored document is missing its provider or bucket");
     await enqueueStorageObjectDeletion(ctx, tx, { storageProvider: document.storageProvider, storageBucket: document.storageBucket, storageKey,
-      notBefore: isUploadKey(storageKey) && document.uploadExpiresAt ? new Date(document.uploadExpiresAt.getTime() + DOCUMENT_UPLOAD_GRACE_MS) : undefined });
+      notBefore: promotionCandidates(document.metadata).includes(storageKey) ? new Date(Date.now() + DOCUMENT_CONFIRM_DEADLINE_MS) : isUploadKey(storageKey) && document.uploadExpiresAt ? new Date(document.uploadExpiresAt.getTime() + DOCUMENT_UPLOAD_GRACE_MS) : undefined });
   }
 }
 

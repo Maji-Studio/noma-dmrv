@@ -1,6 +1,6 @@
 import { beforeEach, expect, it, vi } from "vitest";
 import { makeTestOrgContext } from "./helpers/test-org";
-vi.mock("@/lib/auth/server", () => ({ requireOrgContext: vi.fn() }));
+vi.mock("@/lib/auth/server", async original => ({ ...await original<typeof import("@/lib/auth/server")>(), requireOrgContext: vi.fn() }));
 vi.mock("@/lib/operations/runner", () => ({ runOperationInProcess: vi.fn() }));
 vi.mock("@/lib/documents/upload-preparation", () => ({ prepareDocumentUpload: vi.fn() }));
 vi.mock("@/lib/storage", () => ({ getStorageProvider: vi.fn() }));
@@ -8,7 +8,7 @@ import { requireOrgContext } from "@/lib/auth/server";
 import { runOperationInProcess } from "@/lib/operations/runner";
 import { prepareDocumentUpload } from "@/lib/documents/upload-preparation";
 import { getStorageProvider } from "@/lib/storage";
-import { confirmUpload, requestUpload, deleteDocument, setDocumentVisibility, updateApplicationEvidenceMetadata } from "@/fn/documents";
+import { canChangeDocumentVisibility, confirmUpload, requestUpload, deleteDocument, setDocumentVisibility, updateApplicationEvidenceMetadata } from "@/fn/documents";
 import type { DocumentRow } from "@/data-access/documents";
 const id = "12345678-1234-4234-8234-123456789abc";
 const row = { id, storageKey: "org/org/uploads/doc/key", uploadStorageKey: "org/org/uploads/doc/key", uploadExpiresAt: new Date(Date.now() + 300_000), metadata: {} } as DocumentRow;
@@ -65,4 +65,16 @@ it("floors the runner remainder at the DB reserve after slow preparation", async
     expect(await confirmUpload({ documentId: id })).toMatchObject({ success: true });
     expect(runOperationInProcess).toHaveBeenCalledWith(expect.anything(), expect.anything(), expect.anything(), { deadlineMs: DOCUMENT_CONFIRM_DB_RESERVE_MS });
   } finally { now.mockRestore(); }
+});
+
+it.each([
+  ["owner", false, true], ["admin", false, true], ["member", false, false], [null, true, true],
+] as const)("reads the visibility role floor for role=%s platformAdmin=%s", async (orgRole, isPlatformAdmin, allowed) => {
+  vi.mocked(requireOrgContext).mockResolvedValue({ ...makeTestOrgContext(), orgRole, isPlatformAdmin });
+  expect(await canChangeDocumentVisibility()).toEqual({ success: true, data: allowed });
+});
+it("maps a gone preparation to not_found without running the app operation", async () => {
+  vi.mocked(prepareDocumentUpload).mockResolvedValue({ kind: "gone" });
+  expect(await confirmUpload({ documentId: id })).toMatchObject({ success: false, code: "not_found" });
+  expect(runOperationInProcess).not.toHaveBeenCalled();
 });

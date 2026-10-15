@@ -16,3 +16,5 @@ export const DOCUMENT_SWEEP_BATCH_SIZE = 100;
 // Leave 20 seconds for deletion and 10 seconds for route overhead.
 export const DOCUMENT_SWEEP_BUDGET_MS = 30_000;
 export const DOCUMENT_SWEEP_DRAIN_BUDGET_MS = 20_000;
+
+export const UPLOAD_NOT_PENDING_MESSAGE = "This file is no longer waiting for confirmation. Upload it again.";

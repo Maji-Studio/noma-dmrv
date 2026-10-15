@@ -9,9 +9,9 @@ import { DomainError, deadlineExceeded } from "@/lib/domain-errors";
 import { getDocumentById, type DocumentRow } from "@/data-access/documents";
 import { documentNotFound } from "@/data-access/document-write-scope";
 import { uploadFactsFor, type InspectedUploadFacts } from "@/data-access/document-writes";
-import { failedDocumentUpload } from "@/lib/documents/confirm-outcome";
+import { failedDocumentUpload, type AppConfirmOutcome } from "@/lib/documents/confirm-outcome";
 import { inspectUploadBytes } from "@/lib/documents/inspection";
-export type PreparedDocumentUpload = { kind: "uploaded"; document: DocumentRow } | { kind: "prepared"; facts: InspectedUploadFacts };
+export type PreparedDocumentUpload = Exclude<AppConfirmOutcome, { kind: "refused" }> | { kind: "prepared"; facts: InspectedUploadFacts };
 
 /** External I/O finishes before the runner acquires its transaction connection. */
 export async function prepareDocumentUpload(ctx: OrgContext, documentId: string, provider?: StorageProvider, deadlineAt = Date.now() + DOCUMENT_CONFIRM_DEADLINE_MS): Promise<PreparedDocumentUpload> {
@@ -26,7 +26,7 @@ export async function prepareDocumentUpload(ctx: OrgContext, documentId: string,
 }
 
 /** Prepare a row whose pending state was already checked by the caller. */
-export async function preparePendingDocumentUpload(ctx: OrgContext, row: DocumentRow, provider: StorageProvider | undefined, deadlineAt: number): Promise<Extract<PreparedDocumentUpload, { kind: "prepared" }>> {
+export async function preparePendingDocumentUpload(ctx: OrgContext, row: DocumentRow, provider: StorageProvider | undefined, deadlineAt: number): Promise<PreparedDocumentUpload> {
   const facts = uploadFactsFor(row);
   if (!facts.uploadKey || !Number.isSafeInteger(facts.sizeBytes) || facts.sizeBytes <= 0) throw new DomainError("conflict", "The document is not available in storage. Upload the file again.");
   if (await inspectUploadOwner(ctx, row)) return { kind: "prepared", facts: { ...facts, refusal: "certification_locked" } };
@@ -41,7 +41,9 @@ export async function preparePendingDocumentUpload(ctx: OrgContext, row: Documen
     const refusal = inspectUploadBytes({ entityType: row.entityType, documentType: row.documentType, fileName: row.fileName, contentType: facts.contentType, sizeBytes: facts.sizeBytes, sha256: facts.sha256 ?? undefined }, object);
     if (refusal) return { kind: "prepared", facts: { ...facts, refusal } };
     const finalKey = buildFinalStorageKey({ organizationId: ctx.organizationId, documentId: row.id, entityType: row.entityType, entityId: row.entityId, documentType: row.documentType, fileName: row.fileName, sha256: object.sha256 });
-    await recordDocumentPromotionCandidate(ctx, row.id, facts.uploadKey, finalKey);
+    const candidate = await recordDocumentPromotionCandidate(ctx, facts, finalKey);
+    if (candidate.kind === "failed") return failedDocumentUpload(candidate.document);
+    if (candidate.kind !== "registered") return candidate;
     signal.throwIfAborted();
     await provider.putObject(finalKey, object.bytes, object.contentType, { checksumSha256: object.sha256, signal });
     signal.throwIfAborted();

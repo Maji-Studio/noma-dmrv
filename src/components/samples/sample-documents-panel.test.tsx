@@ -1,16 +1,10 @@
 // @vitest-environment jsdom
 import type { ReactNode } from "react";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { RECORD_FILES_LOCKED_MESSAGE } from "@/lib/certification/lineage-lock-message";
 
-const mocks = vi.hoisted(() => ({ role: "owner" as string | null, platformAdmin: false, locked: false, lockArgs: [] as unknown[][] }));
-
-vi.mock("@/hooks/use-is-admin", () => ({ useIsAdmin: () => mocks.platformAdmin }));
-vi.mock("@/lib/auth/client", () => ({ authClient: {
-  useSession: () => ({ data: { user: { id: "viewer" } } }),
-  useActiveOrganization: () => ({ data: { members: [{ userId: "viewer", role: mocks.role }] } }),
-} }));
+const mocks = vi.hoisted(() => ({ remove: vi.fn(), visibility: vi.fn(), version: 7, role: "owner" as string | null, platformAdmin: false, locked: false, lockArgs: [] as unknown[][] }));
 
 vi.mock("@/hooks/use-record-certification-lock", () => ({
   useIsRecordCertificationLocked: (...args: unknown[]) => {
@@ -19,13 +13,14 @@ vi.mock("@/hooks/use-record-certification-lock", () => ({
   },
 }));
 vi.mock("@/hooks/use-documents", () => ({
+  useCanChangeDocumentVisibility: () => mocks.platformAdmin || ["owner", "admin"].includes(mocks.role ?? ""),
   documentKeys: { forEntity: () => ["documents"] },
-  useDeleteDocument: () => ({ isPending: false }),
-  useSetDocumentVisibility: () => ({ isPending: false }),
+  useDeleteDocument: () => ({ isPending: false, mutateAsync: mocks.remove }),
+  useSetDocumentVisibility: () => ({ isPending: false, mutateAsync: mocks.visibility }),
   useDocumentsForEntity: () => ({
     data: [
       {
-        id: "document-1",
+        id: "document-1", version: mocks.version,
         fileName: "lab.pdf",
         fileSizeBytes: 1000,
         uploadStatus: "uploaded",
@@ -41,7 +36,7 @@ vi.mock("@/components/ui/toast", () => ({
   useToast: () => ({ success: vi.fn(), error: vi.fn() }),
 }));
 vi.mock("@/components/ui/delete-confirm-dialog", () => ({
-  DeleteConfirmDialog: () => null,
+  DeleteConfirmDialog: ({ onConfirm }: { onConfirm: () => void }) => <button onClick={onConfirm}>Confirm delete</button>,
 }));
 vi.mock("@/components/forms", () => ({
   FormField: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
@@ -57,6 +52,8 @@ afterEach(cleanup);
 
 describe("SampleDocumentsPanel certification lock", () => {
   beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.version = 7;
     mocks.role = "owner";
     mocks.platformAdmin = false;
     mocks.locked = false;
@@ -94,4 +91,17 @@ describe("SampleDocumentsPanel certification lock", () => {
     expect(screen.getByRole("button", { name: "Make public" })).toBeTruthy();
     expect(screen.getByTestId("uploader")).toBeTruthy();
   });
+});
+
+it("sends the listed version on visibility and retains the deletion version while the list refreshes", async () => {
+  mocks.version = 7; mocks.role = "owner"; mocks.locked = false;
+  vi.clearAllMocks();
+  const view = render(<SampleDocumentsPanel sampleId="sample-1" />);
+  fireEvent.click(screen.getByRole("button", { name: "Make public" }));
+  await waitFor(() => expect(mocks.visibility).toHaveBeenCalledWith({ documentId: "document-1", expectedVersion: 7, visibility: "public" }));
+  fireEvent.click(screen.getByRole("button", { name: "Delete lab.pdf" }));
+  mocks.version = 8;
+  view.rerender(<SampleDocumentsPanel sampleId="sample-1" />);
+  fireEvent.click(screen.getByRole("button", { name: "Confirm delete" }));
+  await waitFor(() => expect(mocks.remove).toHaveBeenCalledWith({ documentId: "document-1", expectedVersion: 7 }));
 });

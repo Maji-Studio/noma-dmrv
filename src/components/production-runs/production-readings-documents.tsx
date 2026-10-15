@@ -1,5 +1,7 @@
 "use client";
 
+import { StaleVersionError, staleDeleteMessage } from "@/lib/stale-version";
+
 import { useState } from "react";
 import {
   FileIcon,
@@ -83,7 +85,9 @@ export function ProductionReadingsDocuments({
       : undefined,
   );
 
-  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<{ id: string; version: number } | null>(null);
+  const deletingId = deleting?.id ?? null;
+  const setDeletingId = (id: string | null) => setDeleting(docs?.find((doc) => doc.id === id) ?? null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
 
@@ -97,15 +101,15 @@ export function ProductionReadingsDocuments({
   };
 
   const handleDeleteConfirm = async () => {
-    if (!deletingId) return;
+    if (!deleting) return;
     setDeleteError(null);
     try {
-      await deleteMutation.mutateAsync(deletingId);
+      await deleteMutation.mutateAsync({ documentId: deleting.id, expectedVersion: deleting.version });
       toast.success("Readings file deleted");
       setDeletingId(null);
     } catch (err) {
       setDeleteError(
-        err instanceof Error ? err.message : "File was not deleted. Try again.",
+        err instanceof StaleVersionError ? staleDeleteMessage("File") : err instanceof Error ? err.message : "File was not deleted. Try again.",
       );
     }
   };

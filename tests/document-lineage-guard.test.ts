@@ -15,9 +15,9 @@ it.each(["feedstock", "delivery", "sample", "application", "production_run"] as 
   const [row] = await db.insert(documents).values({ organizationId: ctx.organizationId, entityType, entityId, documentType: "pdf", fileName: "report.pdf", storageProvider: "local-fs", storageBucket: "local-fs", storageKey: `org/${ctx.organizationId}/uploads/${entityId}/test`, uploadStorageKey: `org/${ctx.organizationId}/uploads/${entityId}/test`, uploadExpiresAt: new Date(), uploadStatus: "pending", metadata: { uploadDeclaration: { sizeBytes: 8, contentType: "application/pdf", sha256: null } } }).returning();
   try {
     await expect(db.transaction((tx) => requestDocumentUploadInTransaction(ctx, tx, input))).rejects.toMatchObject({ code: "certification_locked" });
-    await expect(db.transaction((tx) => deleteDocumentInTransaction(ctx, tx, { documentId: row.id }))).rejects.toMatchObject({ code: "certification_locked" });
-    await expect(db.transaction((tx) => setDocumentVisibilityInTransaction(ctx, tx, { documentId: row.id, visibility: "public" }))).rejects.toMatchObject({ code: "certification_locked" });
-    await expect(db.transaction((tx) => updateApplicationEvidenceMetadataInTransaction(ctx, tx, { documentId: row.id, applicationLogbookEvidenceType: "inventory" }))).rejects.toMatchObject({ code: "certification_locked" });
+    await expect(db.transaction((tx) => deleteDocumentInTransaction(ctx, tx, { documentId: row.id, expectedVersion: row.version }))).rejects.toMatchObject({ code: "certification_locked" });
+    await expect(db.transaction((tx) => setDocumentVisibilityInTransaction(ctx, tx, { documentId: row.id, expectedVersion: row.version, visibility: "public" }))).rejects.toMatchObject({ code: "certification_locked" });
+    await expect(db.transaction((tx) => updateApplicationEvidenceMetadataInTransaction(ctx, tx, { documentId: row.id, expectedVersion: row.version, applicationLogbookEvidenceType: "inventory" }))).rejects.toMatchObject({ code: "certification_locked" });
     expect(await db.transaction((tx) => confirmDocumentUploadInTransaction(ctx, tx, { ...uploadFactsFor(row), refusal: "certification_locked" }))).toMatchObject({ kind: "refused", reason: "certification_locked", document: { uploadStatus: "failed", version: 2 } });
   } finally {
     await db.delete(storageObjectDeletions).where(and(eq(storageObjectDeletions.organizationId, ctx.organizationId), eq(storageObjectDeletions.storageKey, row.storageKey!)));

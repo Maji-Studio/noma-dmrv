@@ -65,7 +65,7 @@ it.each(["app", "owner"] as const)("cleans promotion after %s deletion wins", as
   let blockerPid = 0;
   const deletion = database.transaction(async (tx) => {
     blockerPid = (await tx.execute<{ pid: number }>(sql`select pg_backend_pid() as pid`)).rows[0].pid;
-    if (mode === "app") await deleteDocumentInTransaction(ctx, tx, { documentId: row.id });
+    if (mode === "app") await deleteDocumentInTransaction(ctx, tx, { documentId: row.id, expectedVersion: row.version });
     else {
       await tx.select().from(schema.facilities).where(eq(schema.facilities.id, owner.id)).for("update");
       await retireDocumentsForEntities(ctx, tx, [{ entityType: "facility", entityId: owner.id }]);
@@ -172,7 +172,7 @@ it.each(["app", "owner", "submit"] as const)("lets confirm commit before a block
     });
     await written.promise;
     const competing = database.transaction(async (tx) => {
-      if (mode === "app") return deleteDocumentInTransaction(ctx, tx, { documentId: row.id });
+      if (mode === "app") return deleteDocumentInTransaction(ctx, tx, { documentId: row.id, expectedVersion: row.version + 1 });
       if (mode === "owner") {
         await tx.select().from(schema.samples).where(eq(schema.samples.id, fixture.sampleId)).for("update");
         await retireDocumentsForEntities(ctx, tx, [{ entityType: "sample", entityId: fixture.sampleId }]);
@@ -190,7 +190,7 @@ it.each(["app", "owner", "submit"] as const)("lets confirm commit before a block
     else expect(saved).toHaveLength(0);
     const finalKeys = await db.select().from(schema.storageObjectDeletions).where(eq(schema.storageObjectDeletions.storageKey, facts.finalKey!));
     if (mode === "submit") expect(finalKeys).toHaveLength(0);
-    else expect(finalKeys).toMatchObject([{ notBefore: null, completedAt: null }]);
+    else expect(finalKeys).toMatchObject([{ notBefore: expect.any(Date), completedAt: null }]);
     const uploads = await db.select().from(schema.storageObjectDeletions).where(eq(schema.storageObjectDeletions.storageKey, row.uploadStorageKey!));
     expect(uploads.length).toBeGreaterThan(0);
     expect(uploads.every((entry) => entry.notBefore && entry.notBefore > row.uploadExpiresAt! && !entry.completedAt)).toBe(true);
@@ -245,7 +245,7 @@ it.each(["sweep", "delete", "owner"] as const)("keeps a candidate durable after 
   const [recorded] = await db.select().from(schema.documents).where(eq(schema.documents.id, row.id));
   expect(recorded).toMatchObject({ uploadStatus: "pending", metadata: { promotionCandidates: [finalKey] } });
   expect(await provider.headObject(finalKey)).not.toBeNull();
-  if (cleanup === "delete") await db.transaction((tx) => deleteDocumentInTransaction(ctx, tx, { documentId: row.id }));
+  if (cleanup === "delete") await db.transaction((tx) => deleteDocumentInTransaction(ctx, tx, { documentId: row.id, expectedVersion: row.version }));
   else if (cleanup === "owner") await db.transaction((tx) => retireDocumentsForEntities(ctx, tx, [{ entityType: "facility", entityId: facilityId }]));
   else {
     await db.update(schema.documents).set({ uploadExpiresAt: new Date(Date.now() - DOCUMENT_UPLOAD_GRACE_MS - 1) }).where(eq(schema.documents.id, row.id));
@@ -264,4 +264,36 @@ it("successful confirm queues prior candidates even when their runner never ran,
   expect(await db.transaction((tx) => confirmDocumentUploadInTransaction(ctx, tx, winner))).toMatchObject({ kind: "uploaded" });
   expect((await db.select().from(schema.storageObjectDeletions).where(eq(schema.storageObjectDeletions.storageKey, abandoned.finalKey!))).length).toBeGreaterThan(0);
   expect(await db.select().from(schema.storageObjectDeletions).where(eq(schema.storageObjectDeletions.storageKey, winner.finalKey!))).toHaveLength(0);
+});
+
+it.each(["app", "owner"] as const)("defers live-key cleanup past an identical late PUT on %s deletion", async (mode) => {
+  const { processPendingStorageObjectDeletions } = await import("@/data-access/storage-object-deletions");
+  const { __setStorageProviderForTests } = await import("@/lib/storage");
+  const row = await pending();
+  await provider.putObject(row.uploadStorageKey!, Buffer.from("%PDF-1.7"), "application/pdf");
+  const first = await prepare(row.id);
+  const entered = barrier(); const resume = barrier();
+  const put = provider.putObject.bind(provider);
+  const latePut = vi.spyOn(provider, "putObject").mockImplementationOnce(async (...args) => {
+    entered.release(); await resume.promise; await put(...args);
+  });
+  const second = prepare(row.id);
+  await entered.promise;
+  __setStorageProviderForTests(provider);
+  try {
+    const confirmed = await db.transaction(tx => confirmDocumentUploadInTransaction(ctx, tx, first));
+    if (confirmed.kind !== "uploaded") throw new Error("Expected uploaded");
+    if (mode === "app") await db.transaction(tx => deleteDocumentInTransaction(ctx, tx, { documentId: row.id, expectedVersion: confirmed.document.version }));
+    else await db.transaction(tx => retireDocumentsForEntities(ctx, tx, [{ entityType: "facility", entityId: row.entityId }]));
+    await processPendingStorageObjectDeletions(ctx);
+    const [queued] = await db.select().from(schema.storageObjectDeletions).where(eq(schema.storageObjectDeletions.storageKey, first.finalKey!));
+    expect(queued.notBefore!.getTime()).toBeGreaterThan(Date.now());
+    expect(queued.completedAt).toBeNull();
+    resume.release(); await second;
+    expect(await provider.headObject(first.finalKey!)).not.toBeNull();
+    // Advance the queue's clock without sleeping through the confirmation budget.
+    await db.update(schema.storageObjectDeletions).set({ notBefore: new Date(0) }).where(eq(schema.storageObjectDeletions.id, queued.id));
+    await processPendingStorageObjectDeletions(ctx);
+    expect(await provider.headObject(first.finalKey!)).toBeNull();
+  } finally { resume.release(); await second; latePut.mockRestore(); __setStorageProviderForTests(null); }
 });
