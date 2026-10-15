@@ -21,15 +21,11 @@ export async function getMatchingOutputBinsFn(input: { facilityId: string; formu
 }
 /** New losses and counts share the API operation; only Lost mass has a stock form edit. */
 export async function postOutputStockFn(input: OutputStockPostInput) {
-  return withAction(async ctx => {
+  return withAction(ctx => {
     const data = outputStockFormPostSchema.parse(input);
-    const result = { ...await (data.correctsMovementId
+    return data.correctsMovementId
       ? correctOutputStockEntry(ctx, data)
-      : runOperationInProcess(recordOutputStockMovement, ctx, data)) };
-    // Posting metadata is internal to the operation's activity record.
-    delete result.replayed;
-    delete result.facilityId;
-    return result;
+      : runOperationInProcess(recordOutputStockMovement, ctx, data);
   });
 }
 export async function getOutputSubBinsFn(input: OutputSubBinsInput) {

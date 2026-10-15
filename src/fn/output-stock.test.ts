@@ -40,7 +40,7 @@ beforeEach(() => {
 describe("postOutputStockFn", () => {
   it("runs the shared operation with the form's preview, fingerprint and request key", async () => {
     const saved = { movementId: "movement", basisFingerprint: "basis", preview: {}, savedProducts: [], savedDeliveries: [] };
-    mocks.runOperationInProcess.mockResolvedValue({ ...saved, replayed: true, facilityId: FACILITY_ID });
+    mocks.runOperationInProcess.mockResolvedValue(saved);
     expect(await postOutputStockFn(command)).toEqual({ success: true, data: saved });
     expect(mocks.runOperationInProcess).toHaveBeenCalledWith({ id: "record_output_stock_movement" }, ctx, expect.objectContaining(command));
   });

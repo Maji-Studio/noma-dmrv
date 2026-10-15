@@ -38,9 +38,9 @@ import { runOwnedTransaction } from "@/data-access/owned-transaction";
 import { deadlineExceeded, idempotencyInProgress } from "@/lib/domain-errors";
 import type { Jsonified } from "./jsonified";
 import { writeApiAuditEvent } from "@/data-access/api-audit-events";
-import { recordActivity, type ActivityEventInput } from "@/data-access/activity-events";
+import { recordActivity } from "@/data-access/activity-events";
 import { toActivityEntityType } from "@/lib/activity-entity-type";
-import { operationActivityLinks } from "./activity-links";
+import { createOperationActivity, type OperationActivity } from "./activity-links";
 import type { OperationEffect } from "@/lib/operation-effect";
 
 export type { OperationEffect } from "@/lib/operation-effect";
@@ -53,6 +53,7 @@ export interface OperationScope {
   deadlineAt?: number;
   /** Dry-run observer; once per attempt, after locks, before stock changes. */
   snapshotStock?: SnapshotStock;
+  activity: OperationActivity;
   ctx: OrgContext;
   tx: DbTransaction;
   /** Work to trigger after the real commit; never after a dry run or rollback. */
@@ -81,7 +82,7 @@ export interface IdempotencyOptions {
 
 export interface RunOptions {
   /** Source for trusted callers without an API audit; audited transports take precedence. */
-  activitySource?: ActivityEventInput["source"];
+  activitySource?: "script";
   audit?: { transport: "rest" | "mcp"; requestId: string; credentialId: string; oauthClientId?: string | null };
   dryRun?: boolean;
   idempotency?: IdempotencyOptions;
@@ -193,7 +194,7 @@ export async function runOperationInProcess<Input extends z.ZodType, Output>(
   operation: Operation<Input, Output, OperationEffect | undefined>,
   ctx: OrgContext,
   input: unknown,
-  options: Pick<RunOptions, "deadlineMs" | "pool"> & {
+  options: Pick<RunOptions, "deadlineMs" | "pool" | "activitySource"> & {
     idempotency?: never;
     dryRun?: never;
   } = {},
@@ -271,9 +272,10 @@ async function runOperationCore<Input extends z.ZodType, Output, Result>(
         const snapshotStock: SnapshotStock | undefined = dryRun ? async (writerTx, ids) => {
           before = await readStockBalances(ctx, writerTx, ids);
         } : undefined;
-        const output = await operation.execute({ ctx, tx, deadlineAt, snapshotStock, afterCommit: (hook) => hooks.push(hook) }, decoded);
+        const activity = createOperationActivity();
+        const output = await operation.execute({ ctx, tx, activity, deadlineAt, snapshotStock, afterCommit: (hook) => hooks.push(hook) }, decoded);
         const stockEffects = before ? diffStockBalances(before, await readStockBalances(ctx, tx, before.map((bin) => bin.storageLocationId))) : undefined;
-        const effect = operation.describe?.(decoded, output) ?? undefined;
+        const effect = activity.skipped ? undefined : operation.describe?.(decoded, output) ?? undefined;
         const result = represent(output);
         if (!dryRun && effect) {
           const entityType = toActivityEntityType(effect.entityType);
@@ -284,7 +286,7 @@ async function runOperationCore<Input extends z.ZodType, Output, Result>(
               source: options.audit?.transport ?? options.activitySource ?? "form",
               credentialId: options.audit?.credentialId,
               requestId: options.audit?.requestId,
-              ...operationActivityLinks(output, entityType, entityId),
+              ...activity.links(entityType, entityId),
             });
           }
           if (options.audit) {

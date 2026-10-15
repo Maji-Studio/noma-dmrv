@@ -1,3 +1,4 @@
+import { createOperationActivity } from "@/lib/operations/activity-links";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { conflictCode } from "@/lib/conflict-ref";
 import { DomainError } from "@/lib/domain-errors";
@@ -29,7 +30,8 @@ const ctx = { organizationId: "org", userId: "user", orgRole: "owner" as const, 
 const tx = { tx: true } as unknown as OperationScope["tx"];
 const savepoint = { savepoint: true };
 const snapshotStock = vi.fn();
-const scope: OperationScope = { ctx, tx, snapshotStock, afterCommit: vi.fn() };
+let activity = createOperationActivity();
+const scope: OperationScope = { ctx, tx, snapshotStock, activity, afterCommit: vi.fn() };
 const line = { id: LINE_ID, feedstockTypeId: "type", feedstockTypeName: "Compost", feedstockTypeCategory: "compost", ratio: 0.2 };
 const blended = {
   facilityId: FACILITY_ID, formulationId: RECIPE_ID, placedAt: "2026-09-14T12:00:00Z", sourceBiocharStorageLocationId: SOURCE_ID,
@@ -41,6 +43,8 @@ const created = { product: { id: PRODUCT_ID, version: 1 }, basisFingerprint: "pr
 
 beforeEach(() => {
   vi.clearAllMocks();
+  activity = createOperationActivity();
+  scope.activity = activity;
   mocks.facility.mockResolvedValue({ id: FACILITY_ID, timeZone: "Africa/Dar_es_Salaam" });
   mocks.lines.mockResolvedValue([line]);
   mocks.create.mockResolvedValue(created);
@@ -54,7 +58,7 @@ describe("make_biochar_product", () => {
     expect(mocks.autoCodes).toHaveBeenCalledWith(ctx, tx, "BP", expect.anything(), expect.anything(), 1, expect.any(Function), "A biochar product with this code already exists");
     const [, writer, data, options] = mocks.create.mock.calls[0];
     expect(writer).toBe(savepoint);
-    expect(options).toEqual({ snapshotStock });
+    expect(options).toEqual({ snapshotStock, onReplay: scope.activity.skip });
     expect(data).toMatchObject({
       code: "BP-26-001", facilityId: FACILITY_ID, placedAt: "2026-09-14T12:00:00.000Z", status: "testing",
       // 100.125 kg biochar and 20.25 kg ingredient, before the 5 kg of water.
@@ -79,7 +83,7 @@ describe("make_biochar_product", () => {
   });
 
   it("returns a form request's committed product before reading the facility or the recipe (api/product-replay-recipe-edit)", async () => {
-    const committed = { ...created, replayed: true as const };
+    const committed = created;
     mocks.committed.mockResolvedValue(committed);
     // Since the first submit the recipe gained a line and the facility was archived.
     mocks.lines.mockResolvedValue([line, { ...line, id: RUN_A }]);
@@ -87,7 +91,7 @@ describe("make_biochar_product", () => {
     const input = makeBiocharProductInput.parse({ ...blended, idempotencyKey: "form-key" });
     const output = await makeBiocharProduct.execute(scope, input);
     expect(output).toEqual(committed);
-    expect(makeBiocharProduct.describe!(input, output)).toBeNull();
+    expect(activity.skipped).toBe(true);
     expect(mocks.facility).not.toHaveBeenCalled();
     expect(mocks.lines).not.toHaveBeenCalled();
     expect(mocks.create).not.toHaveBeenCalled();
@@ -116,11 +120,11 @@ describe("make_biochar_product", () => {
   });
 
   it("describes no effect when the posting seam re-returns a facility-local request", async () => {
-    mocks.create.mockResolvedValue({ ...created, replayed: true });
+    mocks.create.mockImplementation(async (_ctx, _tx, _data, options) => { options.onReplay(); return created; });
     const input = makeBiocharProductInput.parse({ ...blended, idempotencyKey: "local-form-key", placedAt: { date: "2026-09-14", time: "15:00" } });
-    const output = await makeBiocharProduct.execute(scope, input);
+    await makeBiocharProduct.execute(scope, input);
     expect(mocks.committed).not.toHaveBeenCalled();
-    expect(makeBiocharProduct.describe!(input, output)).toBeNull();
+    expect(activity.skipped).toBe(true);
   });
 
   it("records the composition in recipe order, whatever order the lines were sent in", async () => {

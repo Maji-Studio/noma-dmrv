@@ -3,6 +3,8 @@ import { and, eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { db } from "@/db";
 import { activityEvents, apiAuditEvents, facilities, samples } from "@/db/schema";
+import { uploadFactsFor } from "@/data-access/document-writes";
+import { requestDocumentUploadApp, confirmDocumentUploadApp, deleteDocumentApp, setDocumentVisibilityApp } from "@/lib/operations/documents";
 import * as activityWriter from "@/data-access/activity-events";
 import { deleteSampleFn } from "@/fn/samples";
 import { createOrderFn } from "@/fn/orders";
@@ -19,12 +21,14 @@ import { createApiOrderWriteFixture, orderRows, orderRecords, orderAudits, postO
 import { removeApiOrderReadFixture } from "./helpers/api-order-read-fixture";
 import { orderInput } from "./helpers/order-operation-fixture";
 import { createApiProductFixture, type ApiProductFixture } from "./helpers/api-biochar-product-fixture";
-import { pureProductBody } from "./helpers/api-biochar-write-fixture";
+import { pureProductBody, postMovementRest } from "./helpers/api-biochar-write-fixture";
 import { cleanupOutputStockFixture } from "./helpers/output-stock-cleanup";
 import { createIntakeFixture, removeIntakeFixture, type IntakeFixture } from "./helpers/operation-fixture";
 import { createApiDeliveryWriteFixture, deliveryInput, removeApiDeliveryWriteFixture, type ApiDeliveryWriteFixture } from "./helpers/api-delivery-write-fixture";
 import { TEST_SITE_POSITION } from "./helpers/test-org";
 import { createLabSampleFixture, cleanupLabSampleFixture, type LabSampleFixture } from "./helpers/lab-sample-fixture";
+import { createApiLabFixture, type ApiLabFixture } from "./helpers/api-lab-sample-fixture";
+import { deleteLabSample as deleteLabSampleRest, readRestLabSample } from "./helpers/api-lab-sample-write-fixture";
 import { deleteOutputFacilityFixtures } from "./helpers/output-contract-fixtures";
 import { rpc, rpcBody } from "./helpers/mcp";
 
@@ -162,6 +166,26 @@ describe("product resubmission activity", { timeout: TIMEOUT_MS }, () => {
     expect(events[0]).toMatchObject({ entityType: "bin_movement", entityId: first.movementId, facilityId: fixture.facility.id });
   });
 
+  it("keeps stock movement links identical through UI and REST", async () => {
+    const fixture = f!;
+    const { storageLocationId, ...body } = {
+      storageLocationId: fixture.source.id, kind: "loss", occurredAt: "2026-09-12T11:00:00Z",
+      wetMassKg: 10, moisturePercent: 10, reason: "Spilled",
+    };
+    const ui = await runOperationInProcess(recordOutputStockMovement, fixture.ctx, { storageLocationId, ...body });
+    const rest = await postMovementRest(fixture, storageLocationId, body);
+    expect(rest.status).toBe(201);
+    const restRow = (await rest.json()).data;
+    const events = await activity(fixture.ctx.organizationId);
+    expect(events.map(event => event.entityId)).toEqual([ui.movementId, restRow.id]);
+    expect(events.map(event => event.source)).toEqual(["form", "rest"]);
+    const links = events.map(({ facilityId, productionRunId, creditBatchId }) => ({ facilityId, productionRunId, creditBatchId }));
+    expect(links[1]).toEqual(links[0]);
+    expect(links[0]).toEqual({ facilityId: fixture.facility.id, productionRunId: fixture.r1, creditBatchId: null });
+    expect(ui).not.toHaveProperty("facilityId");
+    expect(ui).not.toHaveProperty("replayed");
+  });
+
   it("cleans only activity linked to the selected facility in a shared organization", async () => {
     const fixture = f!;
     const organizationId = fixture.ctx.organizationId;
@@ -218,8 +242,8 @@ describe("delivery resubmission activity", { timeout: TIMEOUT_MS }, () => {
   });
 });
 
-describe("UI lab sample deletion activity", { timeout: TIMEOUT_MS }, () => {
-  let f: LabSampleFixture | undefined;
+describe("lab sample deletion activity", { timeout: TIMEOUT_MS }, () => {
+  let f: ApiLabFixture | undefined;
   afterEach(async () => {
     auth.requireOrgContext.mockReset();
     if (f) {
@@ -229,8 +253,8 @@ describe("UI lab sample deletion activity", { timeout: TIMEOUT_MS }, () => {
     f = undefined;
   });
 
-  it("keeps the deleted sample's batch and facility links while returning void", async () => {
-    f = await createLabSampleFixture({ withSecondBatch: false });
+  it("keeps batch, run and facility links identical through UI and REST deletes", async () => {
+    f = await createApiLabFixture({ withSecondBatch: false });
     const { sample } = await runOperationInProcess(recordLabSample, f.ctx, {
       creditBatchId: f.batchA.id, samplingTime: "2026-09-14T12:00:00Z",
       totalCarbonPercent: 80, organicCarbonPercent: 75,
@@ -238,16 +262,70 @@ describe("UI lab sample deletion activity", { timeout: TIMEOUT_MS }, () => {
     await db.update(samples).set({ productionRunId: f.batchA.runId }).where(and(
       eq(samples.organizationId, f.ctx.organizationId), eq(samples.id, sample.id),
     ));
+    const { sample: restSample } = await runOperationInProcess(recordLabSample, f.ctx, {
+      creditBatchId: f.batchA.id, samplingTime: "2026-09-14T12:00:00Z",
+      totalCarbonPercent: 80, organicCarbonPercent: 75,
+    });
+    await db.update(samples).set({ productionRunId: f.batchA.runId }).where(and(
+      eq(samples.organizationId, f.ctx.organizationId), eq(samples.id, restSample.id),
+    ));
+    const { etag } = await readRestLabSample(f, restSample.id);
     auth.requireOrgContext.mockResolvedValue(f.ctx);
     const result = await deleteSampleFn({ sampleId: sample.id, expectedVersion: sample.version });
     expect(result.success).toBe(true);
     if (!result.success) throw new Error("Sample deletion failed");
     expect(result.data).toBeUndefined();
-    const events = await activity(f.ctx.organizationId);
+    expect((await deleteLabSampleRest(f, restSample.id, etag)).status).toBe(204);
+    const events = (await activity(f.ctx.organizationId)).filter(event => event.action === "deleted");
     expect(events).toHaveLength(2);
-    expect(events[1]).toMatchObject({
+    expect(events[0]).toMatchObject({
       action: "deleted", entityType: "lab_sample", entityId: sample.id, source: "form",
       creditBatchId: f.batchA.id, facilityId: f.facility.id, productionRunId: f.batchA.runId,
     });
+    expect(events[1]).toMatchObject({ entityId: restSample.id, source: "rest" });
+    const links = events.map(({ facilityId, productionRunId, creditBatchId }) => ({ facilityId, productionRunId, creditBatchId }));
+    expect(links[1]).toEqual(links[0]);
+  });
+});
+
+describe("UI document activity", { timeout: TIMEOUT_MS }, () => {
+  let f: LabSampleFixture | undefined;
+  afterEach(async () => {
+    if (f) await cleanupLabSampleFixture(f);
+    f = undefined;
+  });
+
+  it.each(["production_run", "credit_batch"] as const)("records request, confirmation, visibility and deletion with %s owner links", async (entityType) => {
+    f = await createLabSampleFixture({ withSecondBatch: false });
+    const entityId = entityType === "production_run" ? f.batchA.runId : f.batchA.id;
+    const declaration = {
+      entityType, entityId, documentType: "pdf", fileName: "private-evidence.pdf", contentType: "application/pdf",
+      sizeBytes: 8, sha256: "a".repeat(64), storageProvider: "local-fs", storageBucket: "local-fs",
+    };
+    const document = await runOperationInProcess(requestDocumentUploadApp, f.ctx, declaration);
+    const facts = { ...uploadFactsFor(document), finalKey: `org/${f.ctx.organizationId}/evidence/${document.id}`,
+      inspectedSha256: declaration.sha256, inspectedSizeBytes: declaration.sizeBytes, inspectedContentType: declaration.contentType };
+    const confirmed = await runOperationInProcess(confirmDocumentUploadApp, f.ctx, facts);
+    expect(confirmed).toMatchObject({ kind: "uploaded", transitioned: true });
+    if (confirmed.kind !== "uploaded") throw new Error("Document confirmation failed");
+    const repeated = await runOperationInProcess(confirmDocumentUploadApp, f.ctx, facts);
+    expect(repeated).toMatchObject({ kind: "uploaded", transitioned: false });
+    const visible = await runOperationInProcess(setDocumentVisibilityApp, f.ctx, {
+      documentId: document.id, expectedVersion: confirmed.document.version, visibility: "public",
+    });
+    await runOperationInProcess(deleteDocumentApp, f.ctx, { documentId: document.id, expectedVersion: visible.version });
+    const events = await activity(f.ctx.organizationId);
+    expect(events).toHaveLength(4);
+    expect(events.map(event => event.action)).toEqual(["created", "updated", "updated", "deleted"]);
+    for (const event of events) expect(event).toMatchObject({
+      entityType: "document", entityId: document.id, source: "form",
+      productionRunId: entityType === "production_run" ? entityId : null,
+      creditBatchId: entityType === "credit_batch" ? entityId : null,
+    });
+    expect(events[1].changedFields).toEqual(["uploadStatus", "version"]);
+    expect(events[2].changedFields).toEqual(["visibility"]);
+    expect(events[3].changedFields).toEqual([]);
+    const serialized = JSON.stringify(events, (_key, value) => typeof value === "bigint" ? value.toString() : value);
+    for (const value of [declaration.fileName, declaration.sha256, declaration.contentType, facts.finalKey]) expect(serialized).not.toContain(value);
   });
 });

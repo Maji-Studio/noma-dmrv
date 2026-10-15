@@ -1,3 +1,4 @@
+import { createOperationActivity } from "@/lib/operations/activity-links";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { conflictCode } from "@/lib/conflict-ref";
 import { SafeError } from "@/lib/errors";
@@ -16,14 +17,17 @@ const LAYER_B = "00000000-0000-4000-8000-00000000000b";
 const ctx = { organizationId: "org", userId: "user", orgRole: "owner" as const, isPlatformAdmin: false };
 const tx = {} as OperationScope["tx"];
 const snapshotStock = vi.fn();
-const scope: OperationScope = { ctx, tx, snapshotStock, afterCommit: vi.fn() };
+let activity = createOperationActivity();
+const scope: OperationScope = { ctx, tx, snapshotStock, activity, afterCommit: vi.fn() };
 const loss = { storageLocationId: BIN_ID, kind: "loss", occurredAt: "2026-09-14T12:00:00Z", wetMassKg: 10, moisturePercent: 20, reason: "Spilled" };
 const execute = (input: unknown) => recordOutputStockMovement.execute(scope, recordOutputStockMovementInput.parse(input));
 
 beforeEach(() => {
   vi.clearAllMocks();
+  activity = createOperationActivity();
+  scope.activity = activity;
   mocks.readBin.mockResolvedValue({ id: BIN_ID, facilityId: FACILITY_ID, timeZone: "Africa/Dar_es_Salaam" });
-  mocks.record.mockResolvedValue({ movementId: "movement", basisFingerprint: "basis", preview: {}, savedProducts: [], savedDeliveries: [] });
+  mocks.record.mockResolvedValue({ movementId: "movement", basisFingerprint: "basis", preview: { allocations: [] }, savedProducts: [], savedDeliveries: [] });
 });
 
 describe("record_output_stock_movement", () => {
@@ -35,7 +39,7 @@ describe("record_output_stock_movement", () => {
     expect(first).toMatchObject({ facilityId: FACILITY_ID, occurredAt: "2026-09-14T12:00:00.000Z", kind: "loss", wetMassKg: 10 });
     expect(first.idempotencyKey).toMatch(new RegExp(`^${GENERATED_MOVEMENT_KEY_PREFIX}[0-9a-f-]{36}$`));
     expect(second.idempotencyKey).not.toBe(first.idempotencyKey);
-    expect(mocks.record.mock.calls[0][3]).toEqual({ snapshotStock });
+    expect(mocks.record.mock.calls[0][3]).toEqual({ snapshotStock, onReplay: scope.activity.skip });
   });
 
   it("keeps the form's request key, facility, preview versions and fingerprint", async () => {
@@ -46,7 +50,7 @@ describe("record_output_stock_movement", () => {
 
   it("requires the latest correction only when the in-process caller asks for it", async () => {
     await execute({ ...loss, correctsMovementId: LAYER_A, requireLatestCorrection: true });
-    expect(mocks.record.mock.calls[0][3]).toEqual({ snapshotStock, requireLatestCorrection: true });
+    expect(mocks.record.mock.calls[0][3]).toEqual({ snapshotStock, onReplay: scope.activity.skip, requireLatestCorrection: true });
     expect(mocks.record.mock.calls[0][2]).not.toHaveProperty("requireLatestCorrection");
   });
 
@@ -71,9 +75,12 @@ describe("record_output_stock_movement", () => {
   });
 
   it("does not describe an already-posted movement as a new write", async () => {
-    mocks.record.mockResolvedValue({ movementId: "movement", replayed: true });
-    const output = await execute({ ...loss, idempotencyKey: "form-key" });
-    expect(recordOutputStockMovement.describe!(recordOutputStockMovementInput.parse(loss), output)).toBeNull();
+    mocks.record.mockImplementationOnce(async (_ctx, _tx, _input, options) => {
+      options.onReplay();
+      return { movementId: "movement", preview: { allocations: [] } };
+    });
+    await execute({ ...loss, idempotencyKey: "form-key" });
+    expect(activity.skipped).toBe(true);
   });
 
   it("describes the movement it created without preconditions", async () => {

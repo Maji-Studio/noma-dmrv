@@ -26,7 +26,7 @@ import {
 } from "./fixtures/page-helpers";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
-import { eq, ilike, inArray } from "drizzle-orm";
+import { eq, ilike, inArray, or } from "drizzle-orm";
 import * as schema from "../../src/db/schema";
 import { fillStockMoisture } from "./helpers/stock-moisture";
 import { chooseRunStatus } from "./helpers/run-status";
@@ -66,12 +66,6 @@ test.describe("Full Chain UI Smoke Test", () => {
             .from(schema.facilities)
             .where(ilike(schema.facilities.name, `Chain Facility ${runId}%`));
           const facilityIds = chainFacilities.map((f) => f.id);
-
-          if (facilityIds.length) {
-            await tx
-              .delete(schema.activityEvents)
-              .where(inArray(schema.activityEvents.facilityId, facilityIds));
-          }
 
           const chainReactorsByFacility = facilityIds.length
             ? await tx
@@ -258,6 +252,13 @@ test.describe("Full Chain UI Smoke Test", () => {
                 .where(inArray(schema.documents.entityId, allEntityIds))
             : [];
           const documentIds = documentRows.map((d) => d.id);
+
+          if (allEntityIds.length) await tx.delete(schema.activityEvents).where(or(
+            facilityIds.length ? inArray(schema.activityEvents.facilityId, facilityIds) : undefined,
+            creditBatchIds.length ? inArray(schema.activityEvents.creditBatchId, creditBatchIds) : undefined,
+            productionRunIds.length ? inArray(schema.activityEvents.productionRunId, productionRunIds) : undefined,
+            allEntityIds.length ? inArray(schema.activityEvents.entityId, [...allEntityIds, ...documentIds]) : undefined,
+          ));
 
           if (documentIds.length) {
             await tx

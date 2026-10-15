@@ -48,6 +48,37 @@ describe("shared operation runner", () => {
     expect(audit).toHaveBeenCalledTimes((source === "form" || source === "script") ? 0 : 1);
   });
 
+  it("takes links from the core execution and keeps them out of responses and stored outcomes", async () => {
+    claim.mockResolvedValueOnce({ kind: "claimed", recordId: "linked" });
+    const linked = { ...described, execute: async (scope: OperationScope, input: { amount: number }) => {
+      scope.activity.link({ facilityId: "facility" });
+      scope.activity.link({ creditBatchId: "batch" }, "run-a");
+      return operation.execute(scope, input);
+    } };
+    const result = await runOperation(linked, ctx, { amount: 1 }, {
+      audit: auditOptions, idempotency: { credentialId: "credential", key: "linked" },
+    });
+    expect(activity.mock.calls[0][2]).toMatchObject({ facilityId: "facility", productionRunId: "run-a", creditBatchId: "batch" });
+    expect(activity.mock.calls[1][2]).toMatchObject({ facilityId: "facility", productionRunId: "run-b", creditBatchId: undefined });
+    expect(result.data).toEqual({ date: saved.toISOString(), amount: 1 });
+    expect(record).toHaveBeenCalledWith(ctx, tx, "linked", result.data, effect);
+  });
+
+  it("suppresses both event writers and the stored effect on a core replay", async () => {
+    claim.mockResolvedValueOnce({ kind: "claimed", recordId: "re-return" });
+    const replay = { ...described, execute: async (scope: OperationScope, input: { amount: number }) => {
+      scope.activity.skip();
+      return operation.execute(scope, input);
+    } };
+    const result = await runOperation(replay, ctx, { amount: 1 }, {
+      audit: auditOptions, idempotency: { credentialId: "credential", key: "re-return" },
+    });
+    expect(result).not.toHaveProperty("effect");
+    expect(record).toHaveBeenCalledWith(ctx, tx, "re-return", result.data, undefined);
+    expect(activity).not.toHaveBeenCalled();
+    expect(audit).not.toHaveBeenCalled();
+  });
+
   it("keeps the audited transport as the activity source when an override is supplied", async () => {
     await runOperation(described, ctx, { amount: 1 }, { audit: auditOptions, activitySource: "script" });
     expect(activity.mock.calls.every(([, , event]) => event.source === "rest")).toBe(true);

@@ -23,7 +23,7 @@ export async function seedDocumentFixture(fileDirectory: string): Promise<Docume
     const { delivery } = await runOperationInProcess(recordDeliveryForUi, fixture.ctx, {
       code: DOCUMENT_DELIVERY_CODE, orderId: fixture.target.orderId, storageLocationId: fixture.target.binId,
       deliveredAt: new Date().toISOString(), deliveredWetMassKg: DELIVERY_WET_MASS_KG, moisturePercent: DELIVERY_MOISTURE_PERCENT,
-    });
+    }, { activitySource: "script" });
     const file = await writeBillOfLading(fileDirectory);
     const [audits, deliveryRows] = await Promise.all([
       db.select({ id: apiAuditEvents.id }).from(apiAuditEvents).where(eq(apiAuditEvents.organizationId, fixture.ctx.organizationId)),

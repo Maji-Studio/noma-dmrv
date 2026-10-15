@@ -111,11 +111,14 @@ export const makeBiocharProduct: Operation<typeof makeBiocharProductInput, Creat
   id: "make_biochar_product",
   input: makeBiocharProductInput,
   supportsDryRun: true,
-  describe: (input, output) => output.replayed ? null : describeMadeProduct(input, output.product),
+  describe: (input, output) => describeMadeProduct(input, output.product),
   execute: (scope, input) => withOutputStockErrors(async () => {
-    const { ctx, tx, snapshotStock } = scope;
+    const { ctx, tx, snapshotStock, activity } = scope;
     const committed = await findCommittedProduct(scope, input);
-    if (committed) return committed;
+    if (committed) {
+      activity.skip();
+      return committed;
+    }
     // The facility supplies the zone a facility-local placement is read in.
     const facility = await readProductFacility(ctx, tx, input.facilityId);
     const composition = compositionFromLines(input.ingredients, await readProductFormulationLines(ctx, tx, input.formulationId));
@@ -125,8 +128,9 @@ export const makeBiocharProduct: Operation<typeof makeBiocharProductInput, Creat
     const request = productRequest(input, placedAt, idempotencyKey);
     // Each code attempt runs the whole create, posting seam included, in its own savepoint.
     const created = await withAutoCodes(ctx, tx, "BP", biocharProducts, biocharProducts.code, AUTO_CODE_COUNT,
-      ([code], savepoint) => createBiocharProductInTransaction(ctx, savepoint, { code, ...request, composition }, { snapshotStock }),
+      ([code], savepoint) => createBiocharProductInTransaction(ctx, savepoint, { code, ...request, composition }, { snapshotStock, onReplay: activity.skip }),
       CODE_CONFLICT_MESSAGES.biocharProduct);
+    activity.link({ facilityId: created.product.facilityId, productionRunId: created.product.linkedProductionRunId ?? undefined });
     return { ...created, product: toBiocharProductRecord(created.product) };
   }, {
     // A short sub-bin points at its entry in `sources`; a short source bin at the biochar mass.
@@ -147,5 +151,9 @@ export const updateBiocharProduct: Operation<typeof updateBiocharProductInput, B
   input: updateBiocharProductInput,
   supportsDryRun: true,
   describe: (input, output) => describeUpdatedProduct(input, output, input.expectedVersion),
-  execute: ({ ctx, tx }, { biocharProductId, ...changes }) => withOutputStockErrors(async () => toBiocharProductRecord(await updateBiocharProductInTransaction(ctx, tx, biocharProductId, changes))),
+  execute: ({ ctx, tx, activity }, { biocharProductId, ...changes }) => withOutputStockErrors(async () => {
+    const product = toBiocharProductRecord(await updateBiocharProductInTransaction(ctx, tx, biocharProductId, changes));
+    activity.link({ facilityId: product.facilityId, productionRunId: product.linkedProductionRunId ?? undefined });
+    return product;
+  }),
 };

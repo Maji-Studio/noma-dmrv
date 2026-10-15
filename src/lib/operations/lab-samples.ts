@@ -58,11 +58,15 @@ export const recordLabSample: Operation<typeof recordLabSampleInput, SampleWrite
   supportsDryRun: true,
   describe: (input, output) => describeRecordedLabSample(input, output.sample),
   // Each code attempt runs the whole create, locks included, in its own savepoint.
-  execute: ({ ctx, tx }, input) => withSampleErrors(() => withAutoCodes(
-    ctx, tx, SAMPLE_CODE_PREFIX, samples, samples.sampleCode, AUTO_CODE_COUNT,
-    ([sampleCode], savepoint) => createSampleInTransaction(ctx, savepoint, { ...input, sampleCode }),
-    CODE_CONFLICT_MESSAGES.sample,
-  )),
+  execute: async ({ ctx, tx, activity }, input) => {
+    const result = await withSampleErrors(() => withAutoCodes(
+      ctx, tx, SAMPLE_CODE_PREFIX, samples, samples.sampleCode, AUTO_CODE_COUNT,
+      ([sampleCode], savepoint) => createSampleInTransaction(ctx, savepoint, { ...input, sampleCode }),
+      CODE_CONFLICT_MESSAGES.sample,
+    ));
+    activity.link({ creditBatchId: result.sample.creditBatchId, productionRunId: result.sample.productionRunId });
+    return result;
+  },
 };
 
 export const updateLabSample: Operation<typeof updateLabSampleInput, SampleWriteResult> = {
@@ -70,10 +74,14 @@ export const updateLabSample: Operation<typeof updateLabSampleInput, SampleWrite
   input: updateLabSampleInput,
   supportsDryRun: true,
   describe: (input, output) => describeUpdatedLabSample(input, output.sample),
-  execute: ({ ctx, tx }, { labSampleId, code, ...changes }) => withSampleErrors(() => withUniqueCodeGuard(
-    ctx, samples, samples.sampleCode, CODE_CONFLICT_MESSAGES.sample,
-    () => updateSampleInTransaction(ctx, tx, labSampleId, { ...changes, sampleCode: code }),
-  )),
+  execute: async ({ ctx, tx, activity }, { labSampleId, code, ...changes }) => {
+    const result = await withSampleErrors(() => withUniqueCodeGuard(
+      ctx, samples, samples.sampleCode, CODE_CONFLICT_MESSAGES.sample,
+      () => updateSampleInTransaction(ctx, tx, labSampleId, { ...changes, sampleCode: code }),
+    ));
+    activity.link({ creditBatchId: result.sample.creditBatchId, productionRunId: result.sample.productionRunId });
+    return result;
+  },
 };
 
 export const describeDeletedLabSample = (input: DeleteLabSampleInput): OperationEffect => ({
@@ -81,15 +89,15 @@ export const describeDeletedLabSample = (input: DeleteLabSampleInput): Operation
   versionBefore: input.expectedVersion, versionAfter: null, changedFields: [],
 });
 
-export const deleteLabSample: Operation<typeof deleteLabSampleInput, Awaited<ReturnType<typeof deleteSampleInTransaction>>> = {
+export const deleteLabSample: Operation<typeof deleteLabSampleInput, void> = {
   id: "delete_lab_sample",
   input: deleteLabSampleInput,
   supportsDryRun: true,
   describe: describeDeletedLabSample,
-  execute: async ({ ctx, tx, afterCommit }, { labSampleId, expectedVersion }) => {
+  execute: async ({ ctx, tx, afterCommit, activity }, { labSampleId, expectedVersion }) => {
     const links = await withSampleErrors(() => deleteSampleInTransaction(ctx, tx, labSampleId, expectedVersion));
     // Retired documents queue their storage deletions; drain them only once committed.
     afterCommit(async () => { await processPendingStorageObjectDeletions(ctx); });
-    return links;
+    activity.link({ facilityId: links.facilityId, creditBatchId: links.creditBatchId, productionRunId: links.productionRunId });
   },
 };

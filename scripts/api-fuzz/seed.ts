@@ -220,7 +220,7 @@ async function main(): Promise<void> {
   // Delivery posting bumps the product version; PATCH must use its current ETag.
   const currentProduct = await readApiBiocharProduct(ctx, { id: product.id });
   const { seedDocuments } = await import("./seed-documents");
-  const documents = await seedDocuments(ctx, { delivery: delivery.id, feedstock: feedstock.id, lab_sample: labSample.id });
+  const documents = await seedDocuments(ctx, { delivery: delivery.id, feedstock: feedstock.id, lab_sample: labSample.id }, { activitySource: "script" });
   const credential = await createApiKey(ctx, {
     name: FIXTURE_LABEL, scopes: [...API_SCOPES], expiresIn: API_KEY_DEFAULT_EXPIRY_SECONDS,
   });

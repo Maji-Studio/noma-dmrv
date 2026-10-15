@@ -193,6 +193,7 @@ resolved organization/user inside the operation's transaction. UI writes do
 not pass `audit`; dry runs and idempotent replays add no audit row.
 Committed runner writes with a non-null `describe` effect also record value-free
 `activity_events` in that same transaction for UI, REST and MCP calls, with the source identifying the transport.
+The runner records one activity event per entity ID in the effect.
 No-ops, dry runs and idempotent replays add neither kind of event.
 
 Stored outcome v2 is `{ kind: "success", data, effect? }` in

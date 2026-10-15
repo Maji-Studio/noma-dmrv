@@ -45,7 +45,6 @@ export async function assertProductReferencesExist({ ctx, tx }: OperationScope, 
 export interface MadeProductOutput {
   product: BiocharProductRepresentation;
   basisFingerprint: string;
-  replayed?: true;
 }
 
 /**
@@ -57,14 +56,13 @@ export const representationCheckedMake: Operation<typeof makeBiocharProductApiIn
   id: makeBiocharProduct.id,
   input: makeBiocharProductApiInput,
   supportsDryRun: true,
-  describe: (input, output) => output.replayed ? null : describeMadeProduct(input, output.product),
+  describe: (input, output) => describeMadeProduct(input, output.product),
   execute: async (scope, input) => {
     await assertProductReferencesExist(scope, input);
     const created = await makeBiocharProduct.execute(scope, input);
     return {
       product: await readApiBiocharProduct(scope.ctx, { id: created.product.id }, scope.tx),
       basisFingerprint: created.basisFingerprint,
-      ...(created.replayed ? { replayed: created.replayed } : {}),
     };
   },
 };
