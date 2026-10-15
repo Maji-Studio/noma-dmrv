@@ -1,10 +1,10 @@
 /** Customer side-sheet view mode: the sections config for EntitySideSheet. */
 import { buildPartyLocationDetailFields } from "@/components/party-location-detail-fields";
+import { PartyLocationsReadState, type PartyLocationsQueryState } from "@/components/party-locations-read-state";
 import type { DetailPanelSection } from "@/components/ui/detail-panel";
 import type { CustomerWithRelations } from "@/data-access/customers";
-import type { PartyLocationDetail } from "@/components/party-location-detail-fields";
 
-export function customerSheetSections(customer: CustomerWithRelations, locations: PartyLocationDetail[]): DetailPanelSection[] {
+export function customerSheetSections(customer: CustomerWithRelations, locationsQuery: PartyLocationsQueryState): DetailPanelSection[] {
   return [
     {
       title: "Customer",
@@ -18,13 +18,27 @@ export function customerSheetSections(customer: CustomerWithRelations, locations
     },
     {
       title: "Locations",
-      fields: buildPartyLocationDetailFields(locations, {
-        distanceLabel: "Distance from facility (one way)",
-        defaultLabel: "Default destination",
-        positionLabel: "Application site position",
-        descriptionLabel: "Site description",
-        includeSoilTemperature: true,
-      }),
+      fields:
+        locationsQuery.isError && locationsQuery.data === undefined
+          ? []
+          : buildPartyLocationDetailFields(locationsQuery.data ?? [], {
+              distanceLabel: "Distance from facility (one way)",
+              defaultLabel: "Default destination",
+              positionLabel: "Application site position",
+              descriptionLabel: "Site description",
+              includeSoilTemperature: true,
+              pending: locationsQuery.isPending,
+            }),
+      content: (
+        <PartyLocationsReadState
+          partyLabel="Customer"
+          isPending={locationsQuery.isPending}
+          isError={locationsQuery.isError}
+          isRetrying={locationsQuery.isFetching}
+          hasCachedData={locationsQuery.data !== undefined}
+          onRetry={() => void locationsQuery.refetch()}
+        />
+      ),
     },
   ];
 }

@@ -111,7 +111,7 @@ const READ_SECTION_CASES: { file: string; name: string; sections: DetailPanelSec
     fieldSizeHa: 1.5, fieldIdentifier: "Plot 4", cropType: "Maize", applicationMethodType: null, gpsLatitude: -8.3, gpsLongitude: 35.3,
     evidenceMethod: "location", gisBoundary: null, durabilityOption: "200_year", soilTemperatureSource: null, soilTemperatureC: 21,
   }), { delivery: { productBinName: "Product bin", formulationName: "Mix", deliveryDate: new Date("2026-09-01"), deliveryDay: "2026-09-01" }, lock: as({ data: false, isPending: false, error: null, isFetching: false, refetch: noop }), durabilityOption: "200_year" }) },
-  { file: "components/customers/customer-read-sections.tsx", name: "customer", sections: customerSheetSections(as({ name: "Customer", contactEmail: null, contactPhone: "+255", cropType: "Maize", address: null }), [location]) },
+  { file: "components/customers/customer-read-sections.tsx", name: "customer", sections: customerSheetSections(as({ name: "Customer", contactEmail: null, contactPhone: "+255", cropType: "Maize", address: null }), as({ data: [location], isPending: false, isError: false, isFetching: false, refetch: noop })) },
   { file: "components/deliveries/delivery-read-sections.tsx", name: "delivery", sections: deliverySheetSections(as({
     id: "delivery", facilityId: "facility", deliveryDate: new Date("2026-09-01T10:00:00Z"), status: "delivered", orderCode: "OR-001", deliveredWetMassKg: 100, moistureContentPercent: 20,
     storageLocationId: "bin", massDryKg: 80, effectiveDistanceKm: 12, distanceKmOverride: 14, distanceNote: "Detour", effectiveDistanceSource: "manual",

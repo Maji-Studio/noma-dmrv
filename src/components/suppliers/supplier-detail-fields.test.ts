@@ -18,4 +18,10 @@ describe("default supplier location distance", () => {
     expect(buildSupplierDefaultLocationDistanceField({ defaultLocationDistanceKm: null, locationsLoaded: true }))
       .toEqual({ label: "Distance to facility", value: "Not set" });
   });
+  it("settles an errored read as unavailable without discarding cached data", () => {
+    expect(buildSupplierDefaultLocationDistanceField({ defaultLocationDistanceKm: null, locationsLoaded: false, locationsError: true }))
+      .toEqual({ label: "Distance to facility", value: null, emptySituation: "notAvailable" });
+    expect(buildSupplierDefaultLocationDistanceField({ defaultLocationDistanceKm: 7, locationsLoaded: true, locationsError: true }))
+      .toEqual({ label: "Distance to facility", value: "7 km" });
+  });
 });

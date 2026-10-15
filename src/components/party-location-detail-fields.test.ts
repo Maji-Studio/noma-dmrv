@@ -12,6 +12,13 @@ const options = {
 };
 
 describe("buildPartyLocationDetailFields", () => {
+  it("marks every location field pending, including soil temperature and defaults", () => {
+    const fields = buildPartyLocationDetailFields([], { ...options, pending: true });
+
+    expect(fields.length).toBeGreaterThan(0);
+    expect(fields.every(field => field.pending)).toBe(true);
+  });
+
   it("keeps the customer-location form field order and empty values", () => {
     const fields = buildPartyLocationDetailFields([], options);
 
