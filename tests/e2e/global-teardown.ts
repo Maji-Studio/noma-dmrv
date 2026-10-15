@@ -69,6 +69,18 @@ export default async function globalTeardown() {
       await client.query(`CREATE TEMP TABLE e2e_scope_deliveries ON COMMIT DROP AS SELECT id FROM deliveries WHERE code LIKE 'E2E-%' OR facility_id IN (SELECT id FROM e2e_scope_facilities) OR storage_location_id IN (SELECT id FROM e2e_scope_bins) OR order_id IN (SELECT id FROM e2e_scope_orders) OR id IN (SELECT delivery_id FROM output_stock_allocations WHERE biochar_product_id IN (SELECT id FROM e2e_scope_products))`);
       await client.query(`CREATE TEMP TABLE e2e_scope_applications ON COMMIT DROP AS SELECT id FROM applications WHERE code LIKE 'E2E-%' OR delivery_id IN (SELECT id FROM e2e_scope_deliveries) OR id IN (SELECT application_id FROM application_output_allocations WHERE biochar_product_id IN (SELECT id FROM e2e_scope_products) OR production_run_id IN (SELECT id FROM e2e_scope_runs))`);
       await client.query(`CREATE TEMP TABLE e2e_scope_output_allocations ON COMMIT DROP AS SELECT id FROM output_stock_allocations WHERE source_storage_location_id IN (SELECT id FROM e2e_scope_bins) OR biochar_product_id IN (SELECT id FROM e2e_scope_products) OR target_biochar_product_id IN (SELECT id FROM e2e_scope_products) OR delivery_id IN (SELECT id FROM e2e_scope_deliveries) OR production_run_id IN (SELECT id FROM e2e_scope_runs)`);
+      // Sweep actorless and UI-created fixture history too.
+      await client.query(`
+        DELETE FROM activity_events
+        WHERE actor_user_id LIKE 'e2e-%'
+           OR facility_id IN (SELECT id FROM e2e_scope_facilities)
+           OR production_run_id IN (SELECT id FROM e2e_scope_runs)
+           OR (entity_type = 'production_run' AND entity_id IN (SELECT id::text FROM e2e_scope_runs))
+           OR (entity_type = 'biochar_product' AND entity_id IN (SELECT id::text FROM e2e_scope_products))
+           OR (entity_type = 'order' AND entity_id IN (SELECT id::text FROM e2e_scope_orders))
+           OR (entity_type = 'delivery' AND entity_id IN (SELECT id::text FROM e2e_scope_deliveries))
+           OR (entity_type = 'application' AND entity_id IN (SELECT id::text FROM e2e_scope_applications))
+      `);
       await client.query(`DELETE FROM application_output_allocations WHERE application_id IN (SELECT id FROM e2e_scope_applications) OR delivery_id IN (SELECT id FROM e2e_scope_deliveries) OR biochar_product_id IN (SELECT id FROM e2e_scope_products) OR production_run_id IN (SELECT id FROM e2e_scope_runs)`);
       await client.query(`DELETE FROM output_stock_run_allocations WHERE allocation_id IN (SELECT id FROM e2e_scope_output_allocations)`);
       await client.query(`DELETE FROM output_stock_allocations WHERE id IN (SELECT id FROM e2e_scope_output_allocations)`);
