@@ -1,0 +1,48 @@
+// @vitest-environment jsdom
+import { act, cleanup, renderHook } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import type { ReactNode } from "react";
+import { afterEach, expect, it, vi } from "vitest";
+import { activityKeys } from "./activity-query-keys";
+
+const ok = vi.hoisted(() => () => Promise.resolve({ success: true, data: undefined }));
+vi.mock("@/fn/transport-legs", () => ({ deleteTransportLegFn: vi.fn(ok) }));
+vi.mock("@/fn/feedstocks", () => ({ deleteFeedstockFn: vi.fn(ok) }));
+vi.mock("@/fn/deliveries", () => ({ deleteDeliveryFn: vi.fn(ok) }));
+vi.mock("@/fn/orders", () => ({ deleteOrderFn: vi.fn(ok) }));
+vi.mock("@/fn/biochar-products", () => ({ deleteBiocharProductFn: vi.fn(ok) }));
+
+import { useDeleteTransportLeg } from "./use-transport-legs";
+import { useDeleteFeedstock } from "./use-feedstocks";
+import { useDeleteDelivery } from "./use-deliveries";
+import { useDeleteOrder } from "./use-orders";
+import { useDeleteBiocharProduct } from "./use-biochar-products";
+
+afterEach(cleanup);
+
+const BATCH_ID = "11111111-1111-4111-8111-111111111111";
+const RECORD_ID = "22222222-2222-4222-8222-222222222222";
+
+// Each family writes activity on the batches it reaches, so an open batch
+// sheet or Activity segment must refetch after the write.
+it.each([
+  ["transport leg", () => useDeleteTransportLeg("feedstock", RECORD_ID), { id: RECORD_ID, expectedVersion: 1 }],
+  ["feedstock", () => useDeleteFeedstock(), { feedstockId: RECORD_ID, expectedVersion: 1 }],
+  ["delivery", () => useDeleteDelivery(), { deliveryId: RECORD_ID, expectedVersion: 1 }],
+  ["order", () => useDeleteOrder(), { orderId: RECORD_ID, expectedVersion: 1 }],
+  ["biochar product", () => useDeleteBiocharProduct(undefined, { optimistic: false }), { productId: RECORD_ID, expectedVersion: 1 }],
+] as const)("refreshes batch activity after a %s write", async (_family, useHook, variables) => {
+  const client = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
+  client.setQueryData(activityKeys.creditBatchSummary(BATCH_ID), { total: 0, counts: [], latest: null });
+  client.setQueryData(activityKeys.creditBatch(BATCH_ID, 5), { pages: [], pageParams: [] });
+  const { result, unmount } = renderHook(() => useHook(), {
+    wrapper: ({ children }: { children: ReactNode }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>,
+  });
+  await act(async () => {
+    await (result.current.mutateAsync as (input: unknown) => Promise<unknown>)(variables);
+  });
+  expect(client.getQueryState(activityKeys.creditBatchSummary(BATCH_ID))?.isInvalidated).toBe(true);
+  expect(client.getQueryState(activityKeys.creditBatch(BATCH_ID, 5))?.isInvalidated).toBe(true);
+  unmount();
+  client.clear();
+});

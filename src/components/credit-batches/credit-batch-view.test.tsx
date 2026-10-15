@@ -10,6 +10,8 @@ import type {
 } from "@/data-access/credit-batches";
 import { creditBatchSheetSections } from "./credit-batch-view";
 
+// The Activity section fetches its own data; these suites render without a query client.
+vi.mock("@/components/activity", () => ({ CreditBatchActivitySection: () => null }));
 vi.mock("next/link", () => ({ default: ({ children, href, ...props }: { children: ReactNode; href: string }) => <a href={href} {...props}>{children}</a> }));
 // The real InfoHint mounts a floating-ui tooltip, which reads `window` on
 // mount. These suites run in the node environment, so the hint renders as

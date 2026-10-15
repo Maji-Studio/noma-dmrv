@@ -35,7 +35,7 @@ import { chainOfCustodyKeys } from "./use-chain-of-custody";
 import { orderKeys } from "./use-orders";
 import { storageLocationKeys } from "./use-storage-locations";
 import { unwrap, type MutationCallbacks } from "./types";
-import { certificationKeys } from "./use-certification";
+import { invalidateCertificationReadiness } from "./use-certification";
 import { dashboardOverviewKeys } from "./use-dashboard-overview";
 
 // ============================================
@@ -153,7 +153,7 @@ export function useCreateDelivery(
       queryClient.invalidateQueries({ queryKey: dashboardOverviewKeys.all });
       // Delivery writes resync the derived biochar distribution leg and its
       // evidence set, inputs to certification readiness.
-      queryClient.invalidateQueries({ queryKey: certificationKeys.all });
+      void invalidateCertificationReadiness(queryClient);
       void queryClient.invalidateQueries({ queryKey: outputStockKeys.all });
       invalidateStockEntityQueries(queryClient, "delivery");
       // Pre-populate the detail cache with the new delivery
@@ -268,7 +268,7 @@ export function useUpdateDelivery(
       queryClient.invalidateQueries({ queryKey: dashboardOverviewKeys.all });
       // Delivery writes resync the derived biochar distribution leg and its
       // evidence set, inputs to certification readiness.
-      queryClient.invalidateQueries({ queryKey: certificationKeys.all });
+      void invalidateCertificationReadiness(queryClient);
       void queryClient.invalidateQueries({ queryKey: outputStockKeys.all });
       invalidateStockEntityQueries(queryClient, "delivery");
 
@@ -366,7 +366,7 @@ export function useDeleteDelivery(callbacks?: MutationCallbacks<void, DeleteDeli
       queryClient.invalidateQueries({ queryKey: deliveryKeys.statsPrefix() });
       queryClient.invalidateQueries({ queryKey: dashboardOverviewKeys.all });
       // Deleting a delivery shrinks the derived biochar leg's evidence set.
-      queryClient.invalidateQueries({ queryKey: certificationKeys.all });
+      void invalidateCertificationReadiness(queryClient);
       void queryClient.invalidateQueries({ queryKey: outputStockKeys.all });
       invalidateStockEntityQueries(queryClient, "delivery");
 

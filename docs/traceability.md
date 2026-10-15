@@ -1,8 +1,8 @@
 # Traceability
 
 How the Traceability page resolves and renders chain-of-custody: the credit-batch
-roll-up, the single-application drill-down, and the DAG / Map / Sankey / Trail
-readings. Read this before touching anything under
+roll-up, the single-application drill-down, the DAG / Map / Sankey / Trail
+readings, and the batch Activity segment. Read this before touching anything under
 `src/data-access/chain-of-custody*`, `src/lib/chain-of-custody/`, or
 `src/components/chain-of-custody/`. For "why credit-batch anchored" see
 [ADR 0011](adr/0011-credit-batch-anchored-chain-of-custody.md).
@@ -89,7 +89,7 @@ remembered ids fall through; standalone `?application=` deep links stay
 application-only. With both `?batch=` and `?application=` the page is a drill-down
 inside batch context, with a "Batch roll-up" button back.
 
-- **Credit batch (roll-up)** — segments `DAG | Map | Sankey`:
+- **Credit batch (roll-up)** — segments `DAG | Map | Sankey | Activity`:
   - **DAG** — member rollbacks merged into one fan-out, then roll-forwards for
     whatever they lack; nodes/edges dedupe by id so a shared production run
     appears once. Application cards drill down
@@ -102,6 +102,18 @@ inside batch context, with a "Batch roll-up" button back.
     `src/lib/chain-of-custody/sankey.ts`. Rendered on a React Flow canvas; clicking
     a column or exit opens a tooltip with a "See details" link to the backing
     entity route — the Sankey doubles as navigation.
+  - **Activity** (`?view=activity`) — the batch's recorded changes, newest
+    first, from `useCreditBatchActivity` (membership and cardinality:
+    [database.md](database.md#activity-events)). Not a lineage reading: it
+    renders before the roll-up loads, for batches with no runs, and hides the
+    run filter. Filters by kind and record type run server side; the summary
+    counts behind the filter options always cover the whole history. Rows link
+    to the record's side sheet where one exists (a document opens its owner);
+    deleted records are tombstones with no link. Field names only, never
+    values. Empty and complete lists name `ACTIVITY_RECORDING_STARTED_AT`
+    (`src/config/activity.ts`). The credit batch side sheet's Activity section
+    summarizes the same history and links here. Components:
+    `src/components/activity/`.
 - **Application (drill-down)** — segments `Lineage | Map | Split | Trail`:
   - **Trail** — each custody step with its date, mass figure, and what attests it:
     linked documents (polymorphic `documents` — weigh tickets, COAs, lab reports,

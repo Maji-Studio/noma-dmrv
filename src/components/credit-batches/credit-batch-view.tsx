@@ -4,8 +4,10 @@
  * One question drives the order: is this batch ready to become credits, and
  * what needs fixing if not? Certification progress leads, then the batch's
  * identity (mirroring the edit form's section titles), the member production
- * runs closed by the carbon estimate they produce, and notes. The interactive certification checklist and lab-sample
- * panels mount below via `viewModeChildren` because they fetch their own data.
+ * runs closed by the carbon estimate they produce, notes, and the batch's
+ * recorded activity (which fetches its own summary). The interactive
+ * certification checklist and lab-sample panels mount below via
+ * `viewModeChildren` because they fetch their own data.
  */
 import { CompositionCard, DerivedHeadline } from "@/components/forms";
 import Link from "next/link";
@@ -33,6 +35,7 @@ import {
   productionRunDeepLinkHref,
 } from "@/lib/certification/links";
 import { Notice } from "@/components/ui/notice";
+import { CreditBatchActivitySection } from "@/components/activity";
 
 /** Names the figure, so the headline needs no label of its own. */
 const CARBON_ESTIMATE_TITLE = "Carbon estimate, before project emissions";
@@ -362,6 +365,16 @@ export function creditBatchSheetSections({
     {
       id: "notes",
       fields: [{ label: "Notes", value: creditBatch.siteManagementNotes }],
+    },
+    {
+      title: "Activity",
+      fields: [],
+      content: (
+        <CreditBatchActivitySection
+          creditBatchId={creditBatch.id}
+          facilityId={creditBatch.facilityId}
+        />
+      ),
     },
   ];
 }

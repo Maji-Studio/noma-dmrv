@@ -17,6 +17,18 @@ it("fetches cursor pages with cancellation and keeps the activity query fresh", 
   await expect(options.queryFn({ pageParam: "cursor", signal })).resolves.toEqual({ items: [], nextCursor: null });
   expect(mocks.read).toHaveBeenCalledWith({ creditBatchId: "batch", limit: 5, cursor: "cursor" }, { signal });
 });
+it("keys and requests filtered pages separately from the unfiltered list", async () => {
+  useCreditBatchActivity("batch", { limit: 5, filters: { action: "deleted", entityType: "lab_sample" } });
+  const [options] = mocks.useInfiniteQuery.mock.calls.at(-1)!;
+  expect(options.queryKey).toEqual(activityKeys.creditBatch("batch", 5, { action: "deleted", entityType: "lab_sample" }));
+  expect(options.queryKey).not.toEqual(activityKeys.creditBatch("batch", 5));
+  expect(options.queryKey.slice(0, 1)).toEqual(activityKeys.all);
+  mocks.read.mockResolvedValue({ success: true, data: { items: [], nextCursor: null } });
+  await options.queryFn({ pageParam: undefined, signal: undefined });
+  expect(mocks.read).toHaveBeenLastCalledWith(
+    { creditBatchId: "batch", limit: 5, cursor: undefined, action: "deleted", entityType: "lab_sample" }, { signal: undefined },
+  );
+});
 it("disables the query without a batch", () => {
   useCreditBatchActivity("");
   expect(mocks.useInfiniteQuery.mock.calls.at(-1)![0].enabled).toBe(false);

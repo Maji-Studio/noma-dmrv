@@ -90,6 +90,17 @@ it("continues after the last timestamp and sequence despite newer inserts", asyn
   expect(next.items.map(row => row.id)).toEqual([first.id]);
   expect(next.nextCursor).toBeNull();
 });
+it("filters the list by kind and record type while the summary counts everything", async () => {
+  const created = await event({ action: "created" });
+  await event();
+  const run = await event({ entityType: "production_run", entityId: fixture.run.id, productionRunId: fixture.run.id });
+  expect((await listCreditBatchActivity(ctx, fixture.batch.id, {}, { action: "created" })).items.map(row => row.id)).toEqual([created.id]);
+  expect((await listCreditBatchActivity(ctx, fixture.batch.id, {}, { entityType: "production_run" })).items.map(row => row.id)).toEqual([run.id]);
+  expect((await listCreditBatchActivity(ctx, fixture.batch.id, {}, { action: "created", entityType: "production_run" })).items).toEqual([]);
+  expect((await readCreditBatchActivity(ctx, { creditBatchId: fixture.batch.id, action: "created" })).items.map(row => row.id)).toEqual([created.id]);
+  await expect(readCreditBatchActivity(ctx, { creditBatchId: fixture.batch.id, action: "archived" })).rejects.toThrow();
+  expect((await getCreditBatchActivitySummary(ctx, fixture.batch.id)).total).toBe(3);
+});
 it.each(["", "garbage", Buffer.from('{"occurredAt":"invalid","sequence":"1"}').toString("base64url")])("rejects malformed cursor %s", async cursor => {
   await expect(listCreditBatchActivity(ctx, fixture.batch.id, { cursor })).rejects.toThrow("Invalid activity cursor");
 });

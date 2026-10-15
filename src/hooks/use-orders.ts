@@ -24,6 +24,7 @@ import {
 
 import { unwrap, type MutationCallbacks } from "./types";
 import { invalidateStockEntityQueries } from "./entity-query-keys";
+import { activityKeys } from "./activity-query-keys";
 
 // ============================================
 // Query Keys
@@ -100,6 +101,8 @@ export function useCreateOrder(
       // Invalidate all order lists
       queryClient.invalidateQueries({ queryKey: orderKeys.lists() });
       invalidateStockEntityQueries(queryClient, "order");
+      // Order writes record activity on the batches their deliveries reach.
+      void queryClient.invalidateQueries({ queryKey: activityKeys.all });
       // Pre-populate the detail cache with the new order
       queryClient.setQueryData(orderKeys.detail(data.id), data);
 
@@ -197,6 +200,8 @@ export function useUpdateOrder(
       });
       queryClient.invalidateQueries({ queryKey: orderKeys.lists() });
       invalidateStockEntityQueries(queryClient, "order");
+      // Order writes record activity on the batches their deliveries reach.
+      void queryClient.invalidateQueries({ queryKey: activityKeys.all });
 
       await callbacks?.onSuccess?.(data, variables);
     },
@@ -289,6 +294,8 @@ export function useDeleteOrder(callbacks?: MutationCallbacks<void, DeleteOrderDa
       // Invalidate lists for consistency
       queryClient.invalidateQueries({ queryKey: orderKeys.lists() });
       invalidateStockEntityQueries(queryClient, "order");
+      // Order writes record activity on the batches their deliveries reach.
+      void queryClient.invalidateQueries({ queryKey: activityKeys.all });
 
       await callbacks?.onSuccess?.(undefined, variables);
     },

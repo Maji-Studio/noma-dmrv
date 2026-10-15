@@ -1,5 +1,6 @@
 import { and, desc, eq, or, lt, isNull, count, sql } from "drizzle-orm";
 import { activityPageOptionsSchema, decodeActivityCursor, encodeActivityCursor, type ActivityPageOptions } from "@/lib/activity-pagination";
+import { activityFiltersSchema, type ActivityFilters } from "@/lib/activity-filters";
 import { db } from "@/db";
 import { activityEvents, users } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
@@ -30,15 +31,19 @@ function batchActivityPredicate(creditBatchId: string, members: NonNullable<Awai
   );
 }
 
-export async function listCreditBatchActivity(ctx: OrgContext, creditBatchId: string, options: ActivityPageOptions = {}) {
+/** Filters narrow the list only; the summary always counts the whole history. */
+export async function listCreditBatchActivity(ctx: OrgContext, creditBatchId: string, options: ActivityPageOptions = {}, filters: ActivityFilters = {}) {
   requireOrgScope(ctx);
   const { cursor, limit } = activityPageOptionsSchema.parse(options);
+  const { action, entityType } = activityFiltersSchema.parse(filters);
   const after = cursor === undefined ? undefined : decodeActivityCursor(cursor);
   const members = await loadActivityMembers(ctx, creditBatchId);
   if (!members) return { items: [], nextCursor: null };
   const rows = await db.select().from(activityEvents).where(and(
     eq(activityEvents.organizationId, ctx.organizationId),
     after ? or(lt(activityEvents.occurredAt, after.occurredAt), and(eq(activityEvents.occurredAt, after.occurredAt), lt(activityEvents.sequence, after.sequence))) : undefined,
+    action ? eq(activityEvents.action, action) : undefined,
+    entityType ? eq(activityEvents.entityType, entityType) : undefined,
     batchActivityPredicate(creditBatchId, members),
   )).orderBy(desc(activityEvents.occurredAt), desc(activityEvents.sequence)).limit(limit + 1);
   const items = rows.slice(0, limit);
