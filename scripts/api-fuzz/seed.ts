@@ -47,6 +47,10 @@ async function main(): Promise<void> {
   // Validate the target before importing anything that initializes DB/auth.
   assertThrowawayTestDatabase(process.env.DATABASE_URL ?? "");
   Object.assign(process.env, { NODE_ENV: process.env.NODE_ENV ?? "test" });
+  // Seed and server must use the same exported root; never fall back to a real bucket.
+  if (process.env.STORAGE_PROVIDER !== "local-fs" || !process.env.STORAGE_LOCAL_FS_ROOT) {
+    throw new Error("Export STORAGE_PROVIDER=local-fs and STORAGE_LOCAL_FS_ROOT=.storage-api-fuzz for both seed and server.");
+  }
   const outputPath = resolve(args[0]);
   const { db } = await import("@/db");
   const { organizations, users, members, facilities } = await import("@/db/schema");
@@ -213,6 +217,8 @@ async function main(): Promise<void> {
   })).data.delivery;
   // Delivery posting bumps the product version; PATCH must use its current ETag.
   const currentProduct = await readApiBiocharProduct(ctx, { id: product.id });
+  const { seedDocuments } = await import("./seed-documents");
+  const documents = await seedDocuments(ctx, { delivery: delivery.id, feedstock: feedstock.id, lab_sample: labSample.id });
   const credential = await createApiKey(ctx, {
     name: FIXTURE_LABEL, scopes: [...API_SCOPES], expiresIn: API_KEY_DEFAULT_EXPIRY_SECONDS,
   });
@@ -220,6 +226,7 @@ async function main(): Promise<void> {
   // the key is only written to the private JSON file, never to the terminal.
   if (process.env.GITHUB_ACTIONS === "true") console.log(`::add-mask::${credential.key}`);
   await writeFile(outputPath, JSON.stringify({
+    documents,
     key: credential.key, credentialId: credential.id, organizationId, userId,
     facilityId: facility.id, facilityCode: facility.code,
     supplierId: supplier.id, supplierCode: supplier.code,

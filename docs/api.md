@@ -66,6 +66,53 @@ answers retryable 500 `deadline_exceeded`. Submitted records refuse uploads
 with 409 `certification_locked`; submission between request and confirm fails
 the pending upload. Archived records remain readable but refuse new uploads.
 
+The published owners and types are:
+
+| REST owner | MCP `ownerType` | Allowed document types | Scopes |
+|---|---|---|---|
+| `feedstocks` | `feedstock` | `bill_of_lading`, `weighbridge_ticket`, `other_transport_evidence` | `feedstocks:read`, `feedstocks:write` |
+| `deliveries` | `delivery` | `bill_of_lading`, `weighbridge_ticket`, `other_transport_evidence`, `delivery_receipt`, `photo` | `deliveries:read`, `deliveries:write` |
+| `lab-samples` | `lab_sample` | `lab_report` | `lab-samples:read`, `lab-samples:write` |
+
+Applications are reserved for Phase 6b. There is no separate document scope.
+The app retains its internal owner and type table. API uploads stay private.
+
+Under `/api/v1/{owner}/{idOrCode}/documents`:
+
+| Method and suffix | Result |
+|---|---|
+| GET collection | Keyset page, newest first; `documentType` and `uploadStatus` filters, default `uploaded` |
+| GET `/{documentId}` | Document with a strong version and representation-revision ETag |
+| GET `/{documentId}/content` | 302 to a fresh five-minute GET capability, uploaded objects only |
+| POST collection | 201 upload request, required `Idempotency-Key` |
+| POST `/{documentId}/confirm` | 200 confirmed document; 422 committed refusal (409 for certification_locked); 409 conflict on a repeat of a failed upload |
+
+All reads enforce the owner and organization, including content; wrong-owner
+and foreign documents return 404. Content has `Cache-Control: private, no-store`
+and `Referrer-Policy: no-referrer`. Fetch the redirect without the API bearer.
+There is no public-visibility fallback. Legacy URL-only documents can appear
+with unknown content type and size, but have no API content link. Reads do not
+answer 304. Document writes do not bump owner versions or change owner ETags.
+
+MCP exposes `find_documents`, `get_document_download_url`,
+`request_document_upload` and `confirm_document_upload`. Downloads return a
+short-lived URL and expiry. A shell-capable client PUTs bytes separately; no
+MCP tool accepts file bytes. There is no document DELETE route or tool.
+
+Blocking lineage includes draft submission attempts as well as submitted and
+accepted Removal or GHG statement submissions. App upload, confirm, delete,
+reclassification and visibility changes share the refusal; server-generated
+ledgers and reports retain their own writers. A pending confirm that loses the
+submission race commits failure and queues its objects. See
+[storage lifecycle](./storage.md#abandoned-uploads-and-cleanup) for leases,
+promotion and the expiry sweep.
+
+REST problem responses expose `retryable: true` for any retryable domain error,
+including missing upload bytes and a lineage that changes while locks are
+acquired. MCP carries the same flag. A byte inspection refusal is 422
+`validation_failed` and commits the failed state; retrying that failed row
+returns 409 with its stored reason.
+
 ### Operation effects and API bookkeeping
 
 Document upload requests use the registered `request_document_upload` operation.

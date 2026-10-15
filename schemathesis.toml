@@ -29,6 +29,12 @@ enabled = false
 [checks.application_status_code_conformance]
 enabled = true
 
+[checks.seeded_document_content_redirect]
+enabled = true
+
+[checks.seeded_pending_document_unchanged]
+enabled = true
+
 [checks.configured_authentication]
 enabled = true
 
@@ -266,3 +272,9 @@ include-operation-id = "update_delivery"
 [operations.parameters]
 "path.idOrCode" = "${API_FUZZ_DELIVERY_ID}"
 "header.If-Match" = "${API_FUZZ_DELIVERY_ETAG}"
+
+# Document content returns a redirect; the harness never follows storage capabilities.
+[[operations]]
+include-path-regex = "/documents/.*?/content$"
+[operations.checks.positive_data_acceptance]
+expected-statuses = [302, 401, 403, 404, 409, 414, 429, 431, "5xx"]

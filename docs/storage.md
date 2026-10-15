@@ -44,8 +44,9 @@ the real provider.
 
 ## Reads always go through an app route
 
-The client never talks to the bucket except for the one-shot presigned PUT. All
-ordinary reads go through `/api/documents/[id]`; external verifier reads go
+The client never talks to the bucket except for the one-shot presigned PUT. App
+reads go through `/api/documents/[id]`; API reads use the owner-scoped
+`/api/v1/{owner}/{id}/documents/{documentId}/content`; external verifier reads go
 through `/api/ghg-statement-reports/[reportId]?token=…`. Both mint a fresh
 signed GET per request. **The app never embeds signed storage URLs in HTML or
 the DB** — so users never see "URL expired".
@@ -107,8 +108,9 @@ back to `getPublicDocumentById(id)`.
 Non-UUID `id` → 400. A row with neither `storageKey` nor `fileUrl`, or a
 `storageKey` row not yet `uploaded` → 500 / 404 respectively.
 
-Flipping public is a one-row `UPDATE documents SET visibility = 'public'` — no
-provider call, no object copy, portable across providers that don't honor ACLs.
+An Owner or Admin can change visibility through the guarded document writer.
+It checks submitted lineage and increments the document version, without a
+provider call or object copy. API reads have no public-visibility fallback.
 
 ### Verifier capability route
 
@@ -158,6 +160,55 @@ lease plus a ten-minute grace period; final keys have no delay. Parent
 retirement queues both keys. Draining happens after commit and skips future
 `not_before` entries, so a late PUT can only recreate an upload object whose
 cleanup is still pending.
+
+Upload-request replays renew pending leases under the same document row lock
+used by expiry. Each lease lasts five minutes, capped at creation plus
+`DOCUMENT_UPLOAD_MAX_LIFETIME_MS` (one hour). Renewal does not bump the version.
+A replay after that maximum returns the original representation without a PUT
+link. The ten-minute grace is `DOCUMENT_UPLOAD_GRACE_MS`.
+
+### Abandoned uploads and cleanup
+
+`GET /api/cron/sweep-document-uploads` uses the same bearer `CRON_SECRET`
+check and Node runtime as `purge-api-records`. It refuses requests when the
+secret is absent or wrong. `vercel.json` schedules it daily at 03:15 UTC on
+Production, after the API-record purge at 03:00 UTC. It is not a public v1 route.
+
+Each expiry batch locks at most `DOCUMENT_SWEEP_BATCH_SIZE` (100) expired pending
+rows across organizations with `FOR UPDATE SKIP LOCKED`. An upload expires when
+its lease ended more than ten minutes ago. The sweep sets `failed`, stores
+`metadata.uploadFailure = { reason: "expired" }`, increments `version`, and
+queues its keys in the same transaction. Renewal either commits first and is
+skipped by the sweep, or sees the committed failure and cannot renew.
+
+Retention batches remove up to 100 failed rows whose `updatedAt` is older than
+`DOCUMENT_FAILED_RETENTION_MS` (30 days), only when every key has already been
+queued. Completed queue entries also qualify. Thirty days leaves time to
+investigate a failed upload before its declaration disappears. Uploaded evidence
+is never removed by this retention policy. Each phase commits batches in separate
+transactions while full batches remain, sharing a `DOCUMENT_SWEEP_BUDGET_MS`
+(30 seconds) budget. The shared queue drain then processes
+50 entries at a time across organizations within
+`DOCUMENT_SWEEP_DRAIN_BUDGET_MS` (20 seconds), respecting `not_before`, row locks
+and retry backoff. The route allows 60 seconds overall. A failed phase logs its
+counts and allows subsequent phases to run; any failure returns HTTP 500.
+Logs contain counts and ids, never keys, URLs or file names.
+
+Staging is a Vercel Preview deployment and has no cron. Request-path drains
+remain enabled there and in Production, but do not expire abandoned pending
+rows. An optional bucket lifecycle rule can expire old upload objects as a
+backstop. Match only the physical `org/{organizationId}/uploads/` namespaces
+under the deployment prefix, using per-org prefixes or provider-supported
+filters. A literal bucket-root `uploads/` prefix does not match these keys.
+Keep its age comfortably beyond the one-hour maximum lifetime and grace, for
+example seven days; never apply it to final evidence namespaces.
+
+The sweep does not list final objects. A promotion written before a failed
+confirmation transaction can leave a final key with no document reference.
+See `storage/orphaned-final-keys` in
+[architecture open questions](./open-questions-architecture.md).
+
+### Server-generated objects
 
 **2. Server-side `putObject`** — for artifacts the server generates itself:
 transport/durability evidence ledgers

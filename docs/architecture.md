@@ -293,7 +293,9 @@ runtime.
   `/api/ghg-statement-reports/[reportId]`,
   `/api/certification/submissions`, private `/api/reads/*`, bearer-authenticated `/api/v1/*`,
   authenticated `/api/mcp`, and secret-authenticated
-  `/api/cron/purge-api-records`. Documents are
+  `/api/cron/*` routes: `purge-api-records` and `sweep-document-uploads`.
+  Both crons run only on Vercel Production; the site deployment answers 404 to
+  both routes. Documents are
   normally resolved through `getOrgContext()`. The report route is the one
   deliberate public bearer-capability seam: middleware lets it through, then
   the route verifies a per-report token against the stored digest and redirects
@@ -418,6 +420,9 @@ retry. Application update/delete still lock rows before artifacts and do not use
 runner. They can deadlock with document writes on applications or their deliveries;
 Postgres may abort the non-retried application transaction. Phase 6b commit 1 moves
 application writers onto the runner with artifacts first, as documented in [lock-order follow-up](./open-questions-architecture.md#run-writers-feedstock-edits-and-output-postings-lock-in-different-orders-datalock-order-opened-2026-10-09).
+
+Upload promotion, leases and the privileged expiry sweep are described in
+[Object storage](./storage.md#abandoned-uploads-and-cleanup).
 
 ## Computed Method-B Eligibility (Isometric)
 

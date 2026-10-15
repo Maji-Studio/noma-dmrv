@@ -290,6 +290,17 @@ Phase 6b commit 1 moves application writers onto the runner with artifacts first
 - Round 9 Q69 (decision 78 in the [data-entry API plan](./plans/2026-10-06-data-entry-api.md#13-decisions-kenji-2026-10-06)) keeps the refusal: a new delivery on an order whose earlier delivery is in a submitted Removal is refused (typed `certification_locked` from 5b-2). Long-running partial-delivery orders need a second order today. Pointer: `src/data-access/delivery-output-writes.ts:createDeliveryInTransaction` guards the order through `lockCertifiedLineageArtifacts` and `assertLockedLineagesAllowMutation`.
 - **Resolve via:** before allowing further deliveries, check that the derived per-product transport legs of submitted products cannot move. Enforce this in both the app and the API.
 
+### Evidence found after submission (`certification/post-submission-evidence`, opened 2026-10-15)
+
+`src/data-access/document-write-scope.ts:assertDocumentOwnerWritable` refuses
+document changes on blocking submitted lineage, including new receipts, in both
+the app and API. This follows round 10 Q75: affected records must not change
+after submission. A receipt discovered later has nowhere to go except a new
+record. Decide how operators should attach and relate that late evidence without
+changing the submitted record or its certification history. This is a product
+follow-up, not permission to weaken the current guard.
+
+
 ### A multi-sample create must not assume one credit batch or one sampling time (`api/multi-sample-create`, opened 2026-10-13)
 
 - Round 7 Q49 kept `POST /lab-samples` and `record_lab_sample` single
@@ -516,3 +527,25 @@ Merged 2026-07-20 with the former `transport/storage-topology` — one question.
 - **Resolve via:** if a second ledger ever gains a checksum or a stored-artifact
   verification gate, move the canonicalizer next to `renderLedgerToBuffer` and
   apply it to every ledger rather than copying it (S).
+
+### Final objects left by a failed confirmation (`storage/orphaned-final-keys`, opened 2026-10-15)
+
+`src/lib/documents/upload-preparation.ts:preparePendingDocumentUpload` writes
+a content-addressed final object before the runner transaction. A deadline or
+transaction failure followed by a retry with different bytes can leave that
+object without a document row. `src/data-access/document-upload-sweep.ts:sweepDocumentUploads`
+only knows persisted document and queue keys. The storage provider has no object
+listing method, so the sweep cannot cheaply discover these objects.
+
+Choose a durable promotion-intent ledger or a separate inventory reconciliation
+job. Any inventory collector needs an age threshold and protection against
+in-flight confirmations before deleting unreferenced final objects. The upload
+namespace lifecycle rule does not cover final keys.
+
+
+### Index failed-document retention scans (`storage/failed-retention-index`, opened 2026-10-15)
+
+Consider a partial index `documents(updated_at) WHERE upload_status = 'failed'`
+to keep the retention sweep from scanning unrelated documents as the table grows.
+This requires a migration and is deferred from this PR. Measure the retention
+query plan and scan cost before adding it.

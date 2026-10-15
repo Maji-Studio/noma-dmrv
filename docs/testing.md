@@ -189,7 +189,12 @@ and a blended formulation, one product placed from that stock and one loss, all
 through the operations. It also creates a customer and location with one-way
 distance, two large orders and a 0.1 kg delivery on the product bin through the
 runner. The second order stays delivery-free for DELETE. The private fixture
-exports the delivery id, code and ETag alongside the order fields.
+exports the delivery id, code and ETag alongside the order fields. Each seeded
+delivery, feedstock and lab sample also has one uploaded document and one pending
+document. Real upload writers create both, and the uploaded fixture is promoted
+from physical local-fs bytes. Export `STORAGE_PROVIDER=local-fs` and
+`STORAGE_LOCAL_FS_ROOT=.storage-api-fuzz` for both seed and server. The fixture
+includes document ids, owner ids, ETags and the pending representation.
 Bin and formulation names are unique per facility. The key
 has all current scopes, including delete.
 Its private JSON file contains the key and fixture ids; never upload that file.
@@ -209,8 +214,13 @@ on the biochar bin. Creates carry `Idempotency-Key`; PATCH uses `If-Match`.
 Delivery examples read the seeded row, dry-run a 0.1 kg create with a past instant
 and measured moisture, and dry-run a metadata-only PATCH with its ETag. These
 examples must return 2xx and leave stock and order balance available for repeats.
-`hooks.test.py` checks them
-offline; run it with `uvx --from "schemathesis==4.29.3" python scripts/api-fuzz/hooks.test.py`.
+Document examples list, read and request uploads on those owners, repeat-confirm
+the uploaded fixtures, and expect a content redirect only for fixtures with
+physical objects. The harness does not follow those redirects or PUT bytes.
+A separately named pending-confirm example requires retryable 409 `conflict`
+and rereads the document to verify its representation and ETag are unchanged.
+Upload requests use fresh keys and commit pending rows because they have no dry
+run. `hooks.test.py` checks the hook behavior offline; run it with `uvx --from "schemathesis==4.29.3" python scripts/api-fuzz/hooks.test.py`.
 
 Fuzzing writes and deletes data, so use only a throwaway fixture organization.
 For a production bundle, `API_FUZZ_DISABLE_RATE_LIMIT=true` bypasses only API
@@ -229,7 +239,7 @@ has a seeded dry-run example: the published intake body is rebound to fixture
 references and the UTC fixture facility date, with a fresh Idempotency-Key. The
 production run create example is the published body rebound to the fixture facility,
 reactor and run bin, starting one hour ago after the seeded run's window. Every seeded
-positive example (by-id and create) must answer 2xx (`seeded_example_success`); the
+positive JSON example (by-id and create) must answer 2xx (`seeded_example_success`); the
 statuses allowed for generated cases never excuse it.
 Examples do not suppress phase-specific missing-data warnings when generated
 references repeatedly return 404 in coverage or fuzzing. Positive

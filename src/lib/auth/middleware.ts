@@ -31,7 +31,7 @@ const AUTH_ROUTES = ["/login", "/forgot-password"];
  * unverified-email refusal applies. Exact paths only: `/api/mcpx` and
  * `/api/mcp/anything` stay behind the session.
  */
-const MACHINE_CLIENT_ROUTES = new Set(["/api/mcp", "/api/cron/purge-api-records"]);
+const MACHINE_CLIENT_ROUTES = new Set(["/api/mcp", "/api/cron/purge-api-records", "/api/cron/sweep-document-uploads"]);
 
 /**
  * Check if path matches any of the given routes

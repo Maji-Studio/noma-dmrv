@@ -399,10 +399,11 @@ export async function insertDocument(
 
 export async function deleteDocumentRow(
   ctx: OrgContext,
-  id: string
+  id: string,
+  tx: Pick<DbTransaction, "delete"> = db,
 ): Promise<DocumentRow | null> {
   requireOrgScope(ctx);
-  const [row] = await db
+  const [row] = await tx
     .delete(documents)
     .where(and(eq(documents.id, id), eq(documents.organizationId, ctx.organizationId)))
     .returning();
