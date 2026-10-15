@@ -7,7 +7,7 @@ import { CANCELLED_PRODUCTION_RUN_STATUS } from '@/lib/production-runs/lifecycle
 import type { FeedstockBinStock, FeedstockLedgerEntry } from '@/types/feedstock-bin-ledger';
 import { feedstockPileTimeline } from '@/lib/feedstock-pile';
 import { requireOrgScope } from './utils';
-import { combineDateAndTime, formatUtcDate } from '@/lib/date-utils';
+import { formatUtcDate, startOfFacilityDay } from '@/lib/date-utils';
 import { getOutputStockFacilityTimezone } from './output-stock-dates';
 
 const MASS_DECIMALS = 1_000;
@@ -66,10 +66,10 @@ export async function getFeedstockBinStock(ctx: OrgContext, storageLocationId: s
       ingredient.storageLocationId === storageLocationId && typeof ingredient.massKg === 'number' && Number.isFinite(ingredient.massKg) && ingredient.massKg > 0
         ? sum + ingredient.massKg : sum, 0) };
   });
-  // Intake dates encode business days; availability starts at facility-local midnight.
+  // Intake dates encode business days; availability starts at their first valid facility-local instant.
   type Draft = Omit<FeedstockLedgerEntry, 'beforeWetKg' | 'afterWetKg' | 'estimatedDryKg'>;
   const drafts: Draft[] = [
-    ...batches.map((b): Draft => ({ id: b.id, sourceId: b.id, kind: 'intake', occurredAt: combineDateAndTime(formatUtcDate(b.deliveryDate), '00:00', timezone).toISOString(),
+    ...batches.map((b): Draft => ({ id: b.id, sourceId: b.id, kind: 'intake', occurredAt: startOfFacilityDay(formatUtcDate(b.deliveryDate), timezone).toISOString(),
       recordedAt: b.createdAt.toISOString(), actorName: null, code: b.code, reason: '', wetDeltaKg: b.wetKg, countedWetKg: null,
       moisturePercent: b.moisturePercent === null ? null : Number(b.moisturePercent) })),
     ...runDraws.map((d): Draft => ({ id: d.id, sourceId: d.sourceId, kind: 'run_draw', occurredAt: d.startTime.toISOString(), recordedAt: d.createdAt.toISOString(),

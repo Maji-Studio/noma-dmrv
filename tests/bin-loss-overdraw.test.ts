@@ -158,6 +158,29 @@ describe("bin loss stock guard", () => {
     expect(stock.entries.map(entry => entry.afterWetKg)).toEqual([AVAILABLE_STOCK_KG, halfStock, 0]);
   });
 
+  it.each([
+    { timezone: "America/Santiago", day: "2026-09-06", before: "2026-09-06T03:59:59.999Z", start: "2026-09-06T04:00:00.000Z", early: "2026-09-06T04:30:00.000Z" },
+    { timezone: "America/Havana", day: "2026-11-01", before: "2026-11-01T03:59:59.999Z", start: "2026-11-01T04:00:00.000Z", early: "2026-11-01T04:30:00.000Z" },
+  ])("starts intake at the first valid instant of $day in $timezone", async ({ timezone, day, before, start, early }) => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-12-01T12:00:00.000Z"));
+    try {
+      await db.update(facilities).set({ timezone }).where(eq(facilities.id, fixture.facilityId));
+      await db.update(feedstocks).set({ deliveryDate: new Date(`${day}T00:00:00.000Z`) }).where(eq(feedstocks.id, fixture.feedstockId));
+      const ctx = makeTestOrgContext(TEST_USER_ID);
+      const stock = await getFeedstockBinStock(ctx, fixture.storageLocationId);
+      expect(stock.entries).toMatchObject([{ kind: "intake", occurredAt: start, afterWetKg: AVAILABLE_STOCK_KG }]);
+      expect(await loss(before, AVAILABLE_STOCK_KG)).toMatchObject({ success: false, issues: [{ path: ["occurredAt"] }] });
+      expect(await movements()).toHaveLength(0);
+      expect(await loss(early, AVAILABLE_STOCK_KG)).toMatchObject({ success: true });
+      const afterLoss = await getFeedstockBinStock(ctx, fixture.storageLocationId);
+      expect(afterLoss.entries.map(entry => entry.occurredAt)).toEqual([start, early]);
+      expect(afterLoss.currentWetKg).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("guards current stock", async () => {
     const rejected = await recordLossFn({
       storageLocationId: fixture.storageLocationId,
