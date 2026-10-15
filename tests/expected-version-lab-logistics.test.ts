@@ -444,7 +444,7 @@ it("membership edits preserve linked samples and batch deletion refuses them", a
   const [sample] = await db.select().from(samples).where(eq(samples.id, f.ids.sample));
   expect(sample.creditBatchId).toBe(f.ids.creditBatch);
   await expect(deleteCreditBatch(f.ctx, f.ids.creditBatch, saved.version))
-    .rejects.toThrow("Delete or move this credit batch's Samples before deleting it.");
+    .rejects.toThrow("has Samples. Move them to another credit batch or delete them, then delete the batch.");
   expect(await version(f, "sample")).toBe(opened);
 });
 it("derived transport upserts bump the existing row", async () => {
