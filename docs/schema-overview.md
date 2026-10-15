@@ -73,7 +73,7 @@ left by the old batch-delete and membership-edit paths. Delete those rows or
 run `pnpm db:reset` locally; shared staging uses the manual reset workflow in
 [database.md](./database.md), announced first.
 
-Migration `0143_facility_reactor_feedstock_type_rules` makes
+Migration `0144_facility_reactor_feedstock_type_rules` makes
 `certifier_projects.external_facility_id` NOT NULL, drops
 `certifier_projects.genset_energy_yield_kwh_per_litre` and the
 `feedstock_types.usage` default, and adds CHECKs on `reactors.reactor_type` and

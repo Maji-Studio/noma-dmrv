@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { PgDialect, getTableConfig } from "drizzle-orm/pg-core";
 import { certifierProjects } from "@/db/schema/certification";
@@ -7,7 +7,11 @@ import { feedstockTypes } from "@/db/schema/feedstock";
 import { facilityEmissionConfigSchema } from "@/schemas/certification";
 
 const dialect = new PgDialect();
-const migration = readFileSync(new URL("../drizzle/0143_facility_reactor_feedstock_type_rules.sql", import.meta.url), "utf8");
+const MIGRATION_SUFFIX = "_facility_reactor_feedstock_type_rules.sql";
+const drizzleDir = new URL("../drizzle/", import.meta.url);
+const migrationFile = readdirSync(drizzleDir).find((name) => name.endsWith(MIGRATION_SUFFIX));
+if (!migrationFile) throw new Error(`No migration ending in ${MIGRATION_SUFFIX}`);
+const migration = readFileSync(new URL(migrationFile, drizzleDir), "utf8");
 
 describe("master-data schema invariants", () => {
   it.each([
