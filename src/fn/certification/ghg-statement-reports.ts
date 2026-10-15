@@ -42,6 +42,7 @@ import {
   loadLiveReportFacts,
   rebuildGhgStatementReportModel,
 } from "./ghg-statement-report-core";
+import { verifyStoredGhgStatementReport } from "./stored-ghg-statement-report-core";
 import { ISOMETRIC_PROVIDER } from "./shared";
 
 const PDF_MIME_TYPE = "application/pdf";
@@ -218,6 +219,7 @@ export async function approveGhgStatementReport(
         "This report is stale because live inputs changed. Generate and review a new report.",
       );
     }
+    await verifyStoredGhgStatementReport(orgCtx, report);
     const approved = await approveReportRow(orgCtx, {
       reportId: report.id,
       ghgStatementId: report.ghgStatementId,

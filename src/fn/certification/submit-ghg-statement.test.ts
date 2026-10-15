@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/data-access/certifier-credentials", () => ({
   resolveIsometricClient: vi.fn(),
@@ -17,6 +17,7 @@ import {
   STATEMENT_ID,
 } from "../../../tests/fixtures/isometric-ghg-statement";
 
+vi.mock("@/data-access/documents", () => ({ getDocumentById: vi.fn() }));
 vi.mock("@/db", () => ({ db: {} }));
 vi.mock("@/lib/auth/server", () => ({ requireOrgRole: vi.fn() }));
 vi.mock("@/lib/log", () => ({
@@ -62,16 +63,20 @@ vi.mock("@/lib/isometric", async (importOriginal) => ({
   resubmitGhgStatement: vi.fn(),
 }));
 
+import { getDocumentById } from "@/data-access/documents";
+import { __setStorageProviderForTests, StorageError, type StorageProvider } from "@/lib/storage";
 import * as certification from "@/data-access/certification";
 import { getLatestSubmission } from "@/data-access/certification-submissions";
 import { getCertifierGhgStatementById } from "@/data-access/certifier-ghg-statements";
 import { getFacilityById } from "@/data-access/facilities";
 import * as reports from "@/data-access/ghg-statement-reports";
-import { getGhgStatement, submitGhgStatement } from "@/lib/isometric";
+import { getGhgStatement, submitGhgStatement, resubmitGhgStatement } from "@/lib/isometric";
 import { logger } from "@/lib/log";
 import { issueVerifierReportUrl } from "./ghg-statement-report-core";
 import { submitGhgStatementToVerifierCore } from "./submit-ghg-statement";
 
+const CHECKSUM = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad";
+const readObjectBounded = vi.fn<StorageProvider["readObjectBounded"]>();
 const SUBMISSION_ID = "submission-audit-test";
 const orgCtx = {
   userId: "user-audit-test",
@@ -94,10 +99,23 @@ beforeEach(() => {
   vi.mocked(getFacilityById).mockResolvedValue({ code: "F-AUDIT" } as never);
   vi.mocked(reports.getApprovedGhgStatementReport).mockResolvedValue({
     id: REPORT_ID,
+    organizationId: orgCtx.organizationId, version: 1, contentChecksumSha256: CHECKSUM,
     documentId: REPORT_DOCUMENT_ID,
     verifierTokenHash: hashVerifierToken("opaque"),
     pendingVerifierTokenHash: null,
   } as GhgStatementReportRow);
+  vi.mocked(getDocumentById).mockResolvedValue({
+    id: REPORT_DOCUMENT_ID, entityType: "ghgStatementReport", entityId: REPORT_ID,
+    storageProvider: "local-fs", storageBucket: "test", uploadStatus: "uploaded",
+    storageKey: `org/${orgCtx.organizationId}/ghgStatementReport/${REPORT_ID}/pdf/report.pdf`,
+    mimeType: "application/pdf", fileSizeBytes: 3, checksumSha256: CHECKSUM,
+  } as NonNullable<Awaited<ReturnType<typeof getDocumentById>>>);
+  readObjectBounded.mockResolvedValue({ bytes: Buffer.from("abc"), sizeBytes: 3, sha256: CHECKSUM, contentType: "application/pdf" });
+  __setStorageProviderForTests({
+    name: "local-fs", bucket: "test", readObjectBounded,
+    createUploadUrl: vi.fn(), createDownloadUrl: vi.fn(), getObject: vi.fn(),
+    headObject: vi.fn(), deleteObject: vi.fn(), putObject: vi.fn(),
+  });
   vi.mocked(reports.promotePendingVerifierReportToken).mockResolvedValue(true);
   vi.mocked(issueVerifierReportUrl).mockResolvedValue(GENERATED_REPORT_URL);
   vi.mocked(certification.updateSubmissionMetadata).mockImplementation(
@@ -168,4 +186,60 @@ describe("GHG verifier success audit failures", () => {
       );
     },
   );
+});
+
+afterEach(() => __setStorageProviderForTests(null));
+
+describe("stored report verification before registry submission", () => {
+  it.each([
+    ["DRAFT", "ab", "file size"],
+    ["DRAFT", "xyz", "file fingerprint (SHA-256)"],
+    ["FAILED_VERIFICATION", "ab", "file size"],
+    ["FAILED_VERIFICATION", "xyz", "file fingerprint (SHA-256)"],
+  ] as const)("blocks %s with changed bytes %s", async (status, bytes, check) => {
+    vi.mocked(getGhgStatement).mockResolvedValue(makeRemoteStatement({ status }));
+    const remoteAfter = makeRemoteStatement({ status: "AWAITING_VERIFICATION", ghg_statement_report_url: GENERATED_REPORT_URL });
+    vi.mocked(submitGhgStatement).mockResolvedValue(remoteAfter);
+    vi.mocked(resubmitGhgStatement).mockResolvedValue(remoteAfter);
+    readObjectBounded.mockResolvedValue({ bytes: Buffer.from(bytes), sizeBytes: bytes.length, sha256: "changed", contentType: "application/pdf" });
+    await expect(submitGhgStatementToVerifierCore({
+      orgCtx, ghgStatementId: STATEMENT_ID,
+      input: { reportId: REPORT_ID, summaryOfChanges: "Prepared corrected report." },
+    })).rejects.toMatchObject({
+      code: "report_verification_failed",
+      message: `Version 1 of the GHG Statement report failed the ${check} check. Prepare a new report.`,
+    });
+    expect(submitGhgStatement).not.toHaveBeenCalled();
+    expect(resubmitGhgStatement).not.toHaveBeenCalled();
+    expect(issueVerifierReportUrl).not.toHaveBeenCalled();
+    expect(reports.promotePendingVerifierReportToken).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    new StorageError("read timed out", "get_object_timeout"),
+    new TypeError("network failure"),
+    Object.assign(new Error("service unavailable"), { name: "ServiceUnavailable", $metadata: { httpStatusCode: 503 } }),
+  ])("preserves the cause and retryability before any report URL is issued: %s", async (cause) => {
+    vi.mocked(getGhgStatement).mockResolvedValue(makeRemoteStatement({ status: "DRAFT" }));
+    readObjectBounded.mockRejectedValue(cause);
+    await expect(submitGhgStatementToVerifierCore({
+      orgCtx, ghgStatementId: STATEMENT_ID, input: { reportId: REPORT_ID },
+    })).rejects.toMatchObject({ code: "storage_unavailable", retryable: true, cause });
+    expect(submitGhgStatement).not.toHaveBeenCalled();
+    expect(resubmitGhgStatement).not.toHaveBeenCalled();
+    expect(issueVerifierReportUrl).not.toHaveBeenCalled();
+  });
+
+  it.each(["DRAFT", "FAILED_VERIFICATION"] as const)("submits intact stored bytes from %s", async (status) => {
+    vi.mocked(getGhgStatement).mockResolvedValue(makeRemoteStatement({ status }));
+    const remoteAfter = makeRemoteStatement({ status: "AWAITING_VERIFICATION", ghg_statement_report_url: GENERATED_REPORT_URL });
+    vi.mocked(submitGhgStatement).mockResolvedValue(remoteAfter);
+    vi.mocked(resubmitGhgStatement).mockResolvedValue(remoteAfter);
+    await expect(submitGhgStatementToVerifierCore({
+      orgCtx, ghgStatementId: STATEMENT_ID,
+      input: { reportId: REPORT_ID, summaryOfChanges: "Prepared corrected report." },
+    })).resolves.toMatchObject({ remoteStatus: "AWAITING_VERIFICATION" });
+    expect(readObjectBounded).toHaveBeenCalledOnce();
+    expect(status === "DRAFT" ? submitGhgStatement : resubmitGhgStatement).toHaveBeenCalledOnce();
+  });
 });
