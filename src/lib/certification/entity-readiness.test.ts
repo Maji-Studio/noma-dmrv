@@ -201,7 +201,7 @@ describe("deriveEntityCertifyReadiness", () => {
     },
   );
 
-  it("requires 1000-year durability fields when the condition applies", () => {
+  it("requires sReflectanceFraction for a sampled 1000-year Sample", () => {
     const readiness = deriveEntityCertifyReadiness("sample", {
       moistureContentPercent: 10,
       sampling: "sampled",
@@ -244,7 +244,7 @@ describe("deriveEntityCertifyReadiness", () => {
     ]);
   });
 
-  it("accepts either reactive or residual carbon for 1000-year samples", () => {
+  it("marks a sampled 1000-year Sample ready when all required inputs are present", () => {
     const readiness = deriveEntityCertifyReadiness("sample", {
       moistureContentPercent: 10,
       sampling: "sampled",

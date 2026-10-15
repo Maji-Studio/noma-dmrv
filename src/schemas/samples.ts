@@ -255,8 +255,8 @@ export const sampleFormSchema = z
 
     // === Section 7: 1000-Year Durability (conditional) ===
     // Not user-selected: the form derives it from the chosen credit batch's
-    // declared tier (issue #309) and keeps it in form state so the conditional
-    // 1000-year validation below still applies.
+    // declared tier (issue #309) and keeps it in form state for durability
+    // field visibility and certification-readiness indicators.
     durabilityOption: z.enum(["200_year", "1000_year"]).nullable().default(null),
 
     // Optional mean R₀; s_fraction remains a certification input.

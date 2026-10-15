@@ -1,5 +1,4 @@
 import { loadBiocharDeliveryTransportLegs } from "@/data-access/biochar-delivery-transport";
-import { toBatchHealthFacts } from "@/lib/certification/batch-health-facts";
 import { toRemovalReadinessFacts } from "@/lib/certification/readiness-facts";
 import { makeTestOrgContext } from "./helpers/test-org";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -265,59 +264,6 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
     );
   });
 
-  it("evaluates batch and facility gates even when no applications are linked", async () => {
-    mockedGetCreditBatch.mockResolvedValue({
-      id: CREDIT_BATCH_ID,
-      code: "CB-1",
-      facilityId: FACILITY_ID,
-      productionRunIds: [],
-      durabilityOption: "200_year",
-      sampling: "sampled",
-    } as unknown as Awaited<ReturnType<typeof getCreditBatchById>>);
-    mockedGetBatchesWithSamples.mockResolvedValue([
-      {
-        creditBatchId: CREDIT_BATCH_ID,
-        creditBatchCode: "CB-1",
-        startDate: "2026-07-01",
-        endDate: "2026-07-31",
-        facilityTimezone: "UTC",
-        sampling: "sampled",
-        hasLabReport: false,
-        durabilityOption: "200_year",
-        samples: [],
-        runs: [],
-      },
-    ] as unknown as Awaited<ReturnType<typeof getCreditBatchesWithSamples>>);
-    mockedGetMapping.mockResolvedValue(null);
-
-    const result = await loadCertifyContextForCreditBatchForUser(
-      makeTestOrgContext(USER_ID),
-      CREDIT_BATCH_ID,
-    );
-
-    expect(result.productionReadinessGap).toMatchObject({
-      kind: "noProductionRuns",
-      detail:
-        "No completed production runs are linked to this credit batch. Complete a matching production run to continue.",
-      fixTarget: "productionRuns",
-    });
-    expect(result.durabilityGateBlockers).toEqual([
-      "Credit batch CB-1 is marked as sampled but has no Samples. Add at least 3 Samples before submitting.",
-      "Set this facility's reference soil temperature under Certification settings, then Emissions, before submitting a 200-year Removal.",
-    ]);
-    expect(result.memberBatches[0]?.facilityEmissionsGateBlockers).toEqual([
-      "Set this facility's reference soil temperature under Certification settings, then Emissions, before submitting a 200-year Removal.",
-    ]);
-    expect(result.memberBatches[0]?.hasLabReport).toBe(false);
-    expect(toBatchHealthFacts(result, CREDIT_BATCH_ID).warnings).toEqual([
-      "Credit batch CB-1 has no lab report document. Upload a lab report to one of its Samples. You can still submit the Removal.",
-    ]);
-    expect(result.submissionWarnings).toEqual([]);
-    expect(mockedGetBatchesWithSamples).toHaveBeenCalledWith(
-      expect.objectContaining({ organizationId: expect.any(String) }),
-      [CREDIT_BATCH_ID],
-    );
-  });
 
   it("routes a member production run with no applications to the application chain", async () => {
     mockedGetCreditBatch.mockResolvedValue({

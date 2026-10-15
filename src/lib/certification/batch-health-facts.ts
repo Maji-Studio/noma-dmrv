@@ -82,13 +82,11 @@ export function toBatchHealthFacts(
   batchId: string,
 ): BatchHealthFacts {
   const facilitySetupComplete = isFacilitySetupComplete(ctx);
-  const batch = ctx.memberBatches.find((batch) => batch.id === batchId);
+  const batch = ctx.memberBatches.find((member) => member.id === batchId);
   return {
     warnings: batch ? sampleDocumentWarnings({ ...batch, creditBatchCode: batch.code }) : [],
     carbonMissingInputs: carbonMissingInputs(ctx, batchId),
-    facilityEmissionsBlockers:
-      ctx.memberBatches.find((batch) => batch.id === batchId)
-        ?.facilityEmissionsGateBlockers ?? [],
+    facilityEmissionsBlockers: batch?.facilityEmissionsGateBlockers ?? [],
     feedstockTypeMappingGaps: facilitySetupComplete
       ? (ctx.feedstockTypeMappingGaps ?? []).filter(
           (gap) => gap.creditBatchId === batchId,
