@@ -8,7 +8,7 @@ import { preparePureOutputProductFixture, outputProductFixtureValues, outputOrde
  *
  * Tests the complete traceability chain for biochar carbon credit MRV:
  * a. Facility -> Reactor -> Storage Location
- * b. Supplier -> Feedstock Type -> Feedstock Delivery
+ * b. Supplier -> Feedstock Type -> Feedstock
  * c. Production Run (linking feedstocks) -> Sample
  * d. Formulation -> Biochar Product
  * e. Customer -> Order -> Delivery
@@ -43,7 +43,7 @@ interface TestWorkflowData {
   biocharStorageLocation: { id: string; code: string };
   supplier: { id: string; code: string };
   feedstockType: { id: string; code: string };
-  feedstockDelivery: { id: string; code: string };
+  feedstock: { id: string; code: string };
   productionRun: { id: string; code: string };
   sample: { id: string; sampleCode: string };
   formulation: { id: string; code: string };
@@ -73,7 +73,7 @@ async function createFullWorkflowData(): Promise<TestWorkflowData> {
       biocharStorageLocation: `E2E-BST-${testRunId}`,
       supplier: `E2E-SUP-${testRunId}`,
       feedstockType: `E2E-FST-${testRunId}`,
-      feedstockDelivery: `E2E-FSD-${testRunId}`,
+      feedstock: `E2E-FS-${testRunId}`,
       productionRun: `E2E-PRD-${testRunId}`,
       sample: `E2E-SMP-${testRunId}`,
       formulation: `E2E-FOR-${testRunId}`,
@@ -92,7 +92,6 @@ async function createFullWorkflowData(): Promise<TestWorkflowData> {
       biocharStorageLocation: crypto.randomUUID(),
       supplier: crypto.randomUUID(),
       feedstockType: crypto.randomUUID(),
-      feedstockDelivery: crypto.randomUUID(),
       feedstock: crypto.randomUUID(),
       productionRun: crypto.randomUUID(),
       sample: crypto.randomUUID(),
@@ -184,27 +183,13 @@ async function createFullWorkflowData(): Promise<TestWorkflowData> {
       modelYear: 2020,
     });
 
-    // 8. Create feedstock delivery (links supplier, facility, feedstock type)
-    await tx.insert(schema.feedstockDeliveries).values({
-        organizationId: DEC_ORG_ID,
-      id: ids.feedstockDelivery,
-      code: codes.feedstockDelivery,
-      facilityId: ids.facility,
-      deliveryDate: new Date(),
-      supplierId: ids.supplier,
-      feedstockTypeId: ids.feedstockType,
-      wetMassKg: 500,
-      moisturePercent: 15,
-      status: "complete",
-    });
-
-    // 9. Create feedstock (from delivery)
+    // Create feedstock (links supplier, facility and type)
     await tx.insert(schema.feedstocks).values(await feedstockFixtureValues(tx, {
         organizationId: DEC_ORG_ID,
       id: ids.feedstock,
-      code: `E2E-FS-${testRunId}`,
+      code: codes.feedstock,
       facilityId: ids.facility,
-      feedstockDeliveryId: ids.feedstockDelivery,
+      supplierId: ids.supplier,
       feedstockTypeId: ids.feedstockType,
       massDryKg: 425,
       massWetKg: 500,
@@ -382,10 +367,7 @@ async function createFullWorkflowData(): Promise<TestWorkflowData> {
       },
       supplier: { id: ids.supplier, code: codes.supplier },
       feedstockType: { id: ids.feedstockType, code: codes.feedstockType },
-      feedstockDelivery: {
-        id: ids.feedstockDelivery,
-        code: codes.feedstockDelivery,
-      },
+      feedstock: { id: ids.feedstock, code: codes.feedstock },
       productionRun: { id: ids.productionRun, code: codes.productionRun },
       sample: { id: ids.sample, sampleCode: codes.sample },
       formulation: { id: ids.formulation, code: codes.formulation },
@@ -463,17 +445,12 @@ async function cleanupWorkflowData(data: TestWorkflowData): Promise<void> {
       // Feedstocks
       await tx
         .delete(schema.feedstocks)
-        .where(eq(schema.feedstocks.feedstockDeliveryId, data.feedstockDelivery.id));
+        .where(eq(schema.feedstocks.id, data.feedstock.id));
       await cleanupFeedstockFixtureParents(tx);
 
       await tx
         .delete(schema.productionProcesses)
         .where(eq(schema.productionProcesses.facilityId, data.facility.id));
-
-      // Feedstock delivery
-      await tx
-        .delete(schema.feedstockDeliveries)
-        .where(eq(schema.feedstockDeliveries.id, data.feedstockDelivery.id));
 
       // Feedstock type
       await tx
@@ -549,7 +526,7 @@ test.describe("Full E2E Workflow - Database Operations", () => {
     expect(workflowData.storageLocation.id).toBeDefined();
     expect(workflowData.supplier.id).toBeDefined();
     expect(workflowData.feedstockType.id).toBeDefined();
-    expect(workflowData.feedstockDelivery.id).toBeDefined();
+    expect(workflowData.feedstock.id).toBeDefined();
     expect(workflowData.productionRun.id).toBeDefined();
     expect(workflowData.sample.id).toBeDefined();
     expect(workflowData.formulation.id).toBeDefined();
@@ -596,8 +573,8 @@ test.describe("Full E2E Workflow - Database Operations", () => {
     try {
       const [delivery] = await db
         .select()
-        .from(schema.feedstockDeliveries)
-        .where(eq(schema.feedstockDeliveries.id, workflowData.feedstockDelivery.id))
+        .from(schema.feedstocks)
+        .where(eq(schema.feedstocks.id, workflowData.feedstock.id))
         .limit(1);
 
       expect(delivery).toBeDefined();

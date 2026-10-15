@@ -434,30 +434,7 @@ export default async function globalTeardown() {
                    OR name LIKE 'Chain %'
                    OR name LIKE 'Duplicate Test %'
               )
-           OR feedstock_delivery_id IN (
-                SELECT id FROM feedstock_deliveries
-                WHERE code LIKE 'E2E-%'
-                   OR facility_id IN (
-                        SELECT id FROM facilities
-                        WHERE code LIKE 'E2E-%'
-                           OR name LIKE 'UI %'
-                           OR name LIKE 'Chain %'
-                           OR name LIKE 'Duplicate Test %'
-                      )
-              )
-      `);
 
-      // ─── Feedstock deliveries ───
-      await client.query(`
-        DELETE FROM feedstock_deliveries
-        WHERE code LIKE 'E2E-%'
-           OR facility_id IN (
-                SELECT id FROM facilities
-                WHERE code LIKE 'E2E-%'
-                   OR name LIKE 'UI %'
-                   OR name LIKE 'Chain %'
-                   OR name LIKE 'Duplicate Test %'
-              )
       `);
 
       // ─── Formulations ───

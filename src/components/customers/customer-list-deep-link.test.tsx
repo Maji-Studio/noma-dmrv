@@ -8,6 +8,9 @@
  */
 
 import type { ReactNode } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { DetailSpine, type DetailPanelSection } from "@/components/ui/detail-panel";
+import type { PartyLocationDetail } from "@/components/party-location-detail-fields";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { CustomerList } from "./customer-list";
@@ -26,6 +29,14 @@ const harness = vi.hoisted(() => ({
   onModeChange: null as ModeChange | null,
   sheet: { open: false, mode: "view" as string },
   openCreate: null as (() => void) | null,
+  sections: [] as DetailPanelSection[],
+  locationsQuery: {
+    data: undefined as PartyLocationDetail[] | undefined,
+    isPending: false,
+    isError: false,
+    isFetching: false,
+    refetch: vi.fn(),
+  },
 }));
 
 vi.mock("nuqs", () => ({
@@ -48,7 +59,7 @@ vi.mock("@/hooks/use-customers", () => ({
     isSuccess: true,
     isError: false,
   }),
-  useCustomerLocations: () => ({ data: [] }),
+  useCustomerLocations: () => harness.locationsQuery,
   useCreateCustomerWithLocations: () => ({ isPending: false, mutateAsync: harness.create }),
   useUpdateCustomer: () => ({ isPending: false, mutateAsync: harness.update }),
   useDeleteCustomer: () => ({ isPending: false, mutateAsync: vi.fn() }),
@@ -64,7 +75,6 @@ vi.mock("@/hooks/use-open-create-intent", () => ({
   },
 }));
 vi.mock("@/components/ui/toast", () => ({ useToast: () => ({ success: vi.fn(), error: vi.fn() }) }));
-vi.mock("@phosphor-icons/react/dist/ssr", () => ({ UsersIcon: () => null, PlusIcon: () => null, MapTrifoldIcon: () => null }));
 vi.mock("@/components/ui", () => ({
   Button: ({ children }: { children?: ReactNode }) => <button type="button">{children}</button>,
   EmptyState: () => null,
@@ -82,13 +92,14 @@ vi.mock("@/components/ui/entity-side-sheet", () => ({
     mode: string;
     onModeChange: ModeChange;
     children?: ReactNode;
+    sections?: DetailPanelSection[];
   }) => {
+    harness.sections = props.sections ?? [];
     harness.sheet = { open: props.open, mode: props.mode };
     harness.onModeChange = props.onModeChange;
     return props.open ? <div>{props.children}</div> : null;
   },
 }));
-vi.mock("./customer-read-sections", () => ({ customerSheetSections: () => [] }));
 vi.mock("./customer-form", () => ({
   CustomerForm: (props: { onSubmit: SubmitHandler }) => {
     harness.onSubmit = props.onSubmit;
@@ -115,6 +126,40 @@ describe("CustomerList deep-linked sheet", () => {
     harness.create.mockReset().mockResolvedValue(undefined);
     harness.onSubmit = null;
     harness.onModeChange = null;
+    harness.locationsQuery = {
+      data: [], isPending: false, isError: false, isFetching: false, refetch: vi.fn(),
+    };
+  });
+
+  it("shows pending location fields until the saved locations arrive", async () => {
+    harness.locationsQuery.data = undefined;
+    harness.locationsQuery.isPending = true;
+    harness.locationsQuery.isFetching = true;
+    await act(async () => {
+      renderer = create(<CustomerList />);
+    });
+    const locationsHtml = () => renderToStaticMarkup(
+      <DetailSpine sections={harness.sections.filter(section => section.title === "Locations")} />,
+    );
+    expect(locationsHtml()).toContain('data-pending="true"');
+    expect(locationsHtml()).not.toContain("Not recorded");
+
+    harness.locationsQuery.data = [{
+      name: "North field", country: "Tanzania", stateRegion: "Iringa",
+      city: "Mafinga", address: "Plot 4", gpsLatitude: -8.3, gpsLongitude: 35.3,
+      distanceFromFacilityKm: 12, defaultSoilTemperatureC: 24, isDefault: true,
+    }];
+    harness.locationsQuery.isPending = false;
+    harness.locationsQuery.isFetching = false;
+    await act(async () => {
+      renderer?.update(<CustomerList />);
+    });
+    expect(locationsHtml()).not.toContain("data-pending");
+    expect(locationsHtml()).not.toContain("Not recorded");
+    for (const value of ["North field", "Tanzania", "Iringa", "Mafinga", "Plot 4", "-8.3", "35.3", "12 km", "24 °C", "Yes"]) {
+      expect(locationsHtml()).toContain(value);
+    }
+    renderer?.unmount();
   });
 
   it("stays closed after saving an edit opened from a deep link", async () => {

@@ -8,7 +8,7 @@ import type { Sample } from "@/db/schema";
 import type { CreditBatchDurabilityInput } from "@/lib/isometric/utils/durability-aggregation";
 import type { CreditBatchSampling } from "@/schemas/credit-batches";
 import { requireOrgScope } from "./utils";
-import { getBatchesWithLabReports } from "./sample-document-evidence";
+import { getBatchesWithLabReports, getBatchesWithReflectanceHistograms } from "./sample-document-evidence";
 
 /**
  * A credit batch's durability inputs as loaded from the DB: its lab Samples
@@ -20,6 +20,7 @@ import { getBatchesWithLabReports } from "./sample-document-evidence";
  */
 export interface CreditBatchWithSamples extends CreditBatchDurabilityInput {
   hasLabReport?: boolean;
+  hasReflectanceHistogram?: boolean;
   /** ISO date-only production window bounds from the credit-batch row. */
   startDate?: string | null;
   endDate?: string | null;
@@ -113,7 +114,9 @@ export async function getCreditBatchesWithSamples(
   }
 
   const batchesWithReports = await getBatchesWithLabReports(ctx, ids, db, sampleRows);
+  const batchesWithHistograms = await getBatchesWithReflectanceHistograms(ctx, ids, db, sampleRows);
   return batchRows.map((batch) => ({
+    hasReflectanceHistogram: batchesWithHistograms.has(batch.id),
     hasLabReport: batchesWithReports.has(batch.id),
     creditBatchId: batch.id,
     creditBatchCode: batch.code,

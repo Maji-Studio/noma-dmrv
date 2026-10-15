@@ -150,7 +150,7 @@ export function CustomerList() {
         } as const)
       : null;
   const displaySideSheet = sideSheet ?? deepLinkedSideSheet;
-  const { data: sideSheetLocations = [] } = useCustomerLocations(
+  const sideSheetLocationsQuery = useCustomerLocations(
     displaySideSheet?.entity?.id ?? "",
     !!displaySideSheet?.entity,
   );
@@ -413,7 +413,7 @@ export function CustomerList() {
         editLabel="Edit customer"
         sections={
           sideSheetEntity
-            ? customerSheetSections(sideSheetEntity, sideSheetLocations)
+            ? customerSheetSections(sideSheetEntity, sideSheetLocationsQuery)
             : undefined
         }
       >

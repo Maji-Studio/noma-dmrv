@@ -11,7 +11,6 @@ import {
   suppliers,
   supplierLocations,
   feedstocks,
-  feedstockDeliveries,
   type Supplier,
   type SupplierLocation,
 } from "@/db/schema";
@@ -31,13 +30,10 @@ const SUPPLIER_LOCATION_CONFLICT_ENTITY = "supplierLocation";
 
 const SUPPLIER_INTAKE_BLOCKER =
   "Supplier was not deleted because feedstock intakes still use it. Review the linked intakes or keep this supplier.";
-const SUPPLIER_DELIVERY_BLOCKER =
-  "Supplier was not deleted because feedstock deliveries still use it. Review the linked deliveries or keep this supplier.";
 const SUPPLIER_LOCATION_BLOCKER =
   "Cannot delete this supplier because it has linked locations. Refresh and try again.";
 const SUPPLIER_DELETE_CONSTRAINTS = [
   ["feedstocks_supplier_id_suppliers_id_fk", SUPPLIER_INTAKE_BLOCKER],
-  ["feedstock_deliveries_supplier_id_suppliers_id_fk", SUPPLIER_DELIVERY_BLOCKER],
   ["supplier_locations_supplier_id_suppliers_id_fk", SUPPLIER_LOCATION_BLOCKER],
 ] as const;
 
@@ -537,15 +533,6 @@ export async function deleteSupplier(
         ))
         .limit(1);
       if (intake) throw new SafeError(SUPPLIER_INTAKE_BLOCKER);
-      const [delivery] = await tx
-        .select({ id: feedstockDeliveries.id })
-        .from(feedstockDeliveries)
-        .where(and(
-          eq(feedstockDeliveries.supplierId, supplierId),
-          eq(feedstockDeliveries.organizationId, ctx.organizationId),
-        ))
-        .limit(1);
-      if (delivery) throw new SafeError(SUPPLIER_DELIVERY_BLOCKER);
 
       // FKs remain the race backstop after prechecks. Any refusal rolls back
       // every child deletion together with the parent, before error mapping.

@@ -1,16 +1,10 @@
 /** Supplier side-sheet view mode: the sections config for EntitySideSheet. */
-import { buildPartyLocationDetailFields } from "@/components/party-location-detail-fields";
 import { buildSupplierDefaultLocationDistanceField } from "./supplier-detail-fields";
-import { SupplierLocationsReadState } from "./supplier-locations-read-state";
+import { partyLocationsSection, type PartyLocationsQueryState } from "@/components/party-locations-read-state";
 import type { DetailPanelSection } from "@/components/ui/detail-panel";
-import type { UseQueryResult } from "@tanstack/react-query";
 import type { SupplierWithRelations } from "@/data-access/suppliers";
-import type { SupplierLocation } from "@/db/schema";
 
-/** The supplier's locations query, as the sheet reads it. */
-export type SupplierLocationsQueryState = Pick<UseQueryResult<SupplierLocation[]>, "data" | "isPending" | "isError" | "isFetching" | "refetch">;
-
-export function supplierSheetSections(supplier: SupplierWithRelations, locationsQuery: SupplierLocationsQueryState): DetailPanelSection[] {
+export function supplierSheetSections(supplier: SupplierWithRelations, locationsQuery: PartyLocationsQueryState): DetailPanelSection[] {
   const locations = locationsQuery.data ?? [];
   return [
     {
@@ -19,26 +13,11 @@ export function supplierSheetSections(supplier: SupplierWithRelations, locations
         { label: "Supplier name", value: supplier.name },
       ],
     },
-    {
-      title: "Locations",
-      fields:
-        locationsQuery.data === undefined
-          ? []
-          : buildPartyLocationDetailFields(locations, {
-              distanceLabel:
-                "Distance to facility (one way)",
-              defaultLabel: "Default source location",
-              positionLabel: "Source location position",
-            }),
-      content: (
-        <SupplierLocationsReadState
-          isPending={locationsQuery.isPending}
-          isError={locationsQuery.isError}
-          isRetrying={locationsQuery.isFetching}
-          onRetry={() => void locationsQuery.refetch()}
-        />
-      ),
-    },
+    partyLocationsSection("Supplier", supplier.id, locationsQuery, {
+      distanceLabel: "Distance to facility (one way)",
+      defaultLabel: "Default source location",
+      positionLabel: "Source location position",
+    }),
     {
       title: "Contact information",
       fields: [
@@ -59,6 +38,7 @@ export function supplierSheetSections(supplier: SupplierWithRelations, locations
               ?.distanceFromFacilityKm ?? null,
           locationsLoaded:
             locationsQuery.data !== undefined,
+          locationsError: locationsQuery.isError,
         }),
       ],
     },

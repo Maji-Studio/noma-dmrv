@@ -22,14 +22,6 @@ Deferred work lives here, never as a `TODO` in code.
   legacy deletion path without a run event. Route it through the operation runner
   or record on its own transaction; preserve document retirement events.
 
-## Feedstock delivery table retirement
-
-Drop `feedstock_deliveries` and `feedstocks.feedstock_delivery_id` after API
-phase 6a rewrites the `feedstock_delivery` document owner
-([#1013](https://github.com/Maji-Studio/noma-dmrv/issues/1013)).
-The retained schema is `src/db/schema/feedstock.ts:feedstockDeliveries` and
-`src/db/schema/feedstock.ts:feedstocks`.
-
 ## Invariants an LLM must not violate
 
 Short, load-bearing rules that this file's entries assume. Each is enforced in

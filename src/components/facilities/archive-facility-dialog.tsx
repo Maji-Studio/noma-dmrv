@@ -30,7 +30,6 @@ interface ArchiveFacilityDialogProps {
 const IMPACT_LABELS = [
   ["reactorCount", "reactor", "reactors"],
   ["storageLocationCount", "storage bin", "storage bins"],
-  ["feedstockDeliveryCount", "feedstock delivery", "feedstock deliveries"],
   ["feedstockCount", "feedstock batch", "feedstock batches"],
   ["productionRunCount", "production run", "production runs"],
   ["biocharProductCount", "biochar product", "biochar products"],
