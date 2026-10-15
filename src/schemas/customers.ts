@@ -8,6 +8,7 @@ import { optionalDistanceSource } from "./distance-source";
 import {
   clearableDefaultSoilTemperature,
   clearableLocationDistance,
+  optionalLocationDistance,
   gpsPairSuperRefine,
   defaultSoilTemperatureSchema,
   expectedVersionSchema,
@@ -107,7 +108,7 @@ export const customerLocationFormSchema = z.object({
   gpsLongitude: z.preprocess(toNumberOrUndefined, requiredLng),
   // Operational road distance (km) from the origin facility. Certifier
   // transport is recorded on cargo entities, not deliveries.
-  distanceFromFacilityKm: clearableLocationDistance,
+  distanceFromFacilityKm: optionalLocationDistance,
   distanceSource: optionalDistanceSource,
   defaultSoilTemperatureC: defaultSoilTemperatureSchema,
   // Marks this as the customer's default destination.
@@ -172,7 +173,7 @@ export const createCustomerLocationSchema = z.object({
   address: customerLocationDescriptionSchema,
   gpsLatitude: z.preprocess(toNumberOrUndefined, requiredLat),
   gpsLongitude: z.preprocess(toNumberOrUndefined, requiredLng),
-  distanceFromFacilityKm: clearableLocationDistance,
+  distanceFromFacilityKm: optionalLocationDistance,
   distanceSource: optionalDistanceSource,
   defaultSoilTemperatureC: defaultSoilTemperatureSchema,
   isDefault: z.boolean().optional().default(false),

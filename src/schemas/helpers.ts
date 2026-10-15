@@ -218,6 +218,12 @@ export const clearablePositiveNumber = z.preprocess(
   z.number().finite().min(0, "Must be a non-negative number").nullable().optional(),
 );
 
+/** Optional one-way site distance. Omitted and empty values become null. */
+export const optionalLocationDistance = z.preprocess(
+  toNumberOrNull,
+  z.number().finite().positive("Distance must be greater than zero").nullable().optional(),
+);
+
 /** Clearable one-way site distance. Omitted patches preserve the stored value. */
 export const clearableLocationDistance = z.preprocess(
   toClearableNumber,

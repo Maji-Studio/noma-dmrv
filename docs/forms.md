@@ -89,6 +89,8 @@ repeats.
 |---|---|
 | Optional finite number, empty → `null` | `optionalNumber` |
 | Optional non-negative number | `optionalPositiveNumber` |
+| Optional strictly positive site distance, omitted or empty → `null` | `optionalLocationDistance` |
+| Clearable strictly positive site distance, omitted stays `undefined` | `clearableLocationDistance` |
 | Optional 0–100 percent | `optionalPercent` |
 | Required number with friendly messages | `requiredNumber(requiredMsg, invalidMsg)` |
 | Raw preprocessor, empty → `null` | `toNumberOrNull` |
@@ -125,7 +127,7 @@ The same trap in reverse is `value ?? undefined` in a submit handler or a
 `setValue` call: pass the `null` through instead.
 
 **Update schemas use the `clearable*` family; create and whole-form schemas
-keep `optionalNumber` / `optionalPositiveNumber`.** `toNumberOrNull` folds
+keep `optionalNumber` / `optionalPositiveNumber` / `optionalLocationDistance`.** `toNumberOrNull` folds
 omitted into cleared, which is right when every field is present (a create, or
 a form that always submits the whole record) and wrong for an `update*Schema`,
 where an absent key must not overwrite a column. `toClearableNumber` keeps

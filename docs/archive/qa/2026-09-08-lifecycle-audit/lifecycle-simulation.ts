@@ -11,9 +11,8 @@ import { deleteSupplier } from "@/data-access/suppliers";
 import { updateFeedstockInTransaction } from "@/data-access/feedstocks";
 import { updateFacility } from "@/data-access/facility-mutations";
 import { updateFeedstockTypeSchema } from "@/schemas/feedstock-types";
-import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "../../../../tests/helpers/test-org";
+import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID, TEST_SITE_POSITION } from "../../../../tests/helpers/test-org";
 
-const FIXTURE_GPS = { gpsLatitude: -8.3, gpsLongitude: 35.3 } as const;
 const BIN_STOCK_KG = 25;
 const context = makeTestOrgContext();
 const auditUrl = new URL(process.env.DATABASE_URL ?? "postgresql://invalid");
@@ -26,7 +25,7 @@ beforeAll(() => ensureTestOrg());
 
 async function fixture() {
   const tag = crypto.randomUUID();
-  const [facility] = await db.insert(facilities).values({ ...FIXTURE_GPS, timezone: "UTC",
+  const [facility] = await db.insert(facilities).values({ ...TEST_SITE_POSITION, timezone: "UTC",
     organizationId: TEST_ORG_ID, code: `AUD-${tag}`, name: `Audit ${tag}`, country: "CHE",
   }).returning();
   const [type] = await db.insert(feedstockTypes).values({
@@ -159,7 +158,7 @@ describe("supplier deletion baseline observation", () => {
     const f = await fixture();
     const [supplier] = await db.insert(suppliers).values({ organizationId: TEST_ORG_ID,
       code: `AUD-${crypto.randomUUID()}`, name: `Audit ${crypto.randomUUID()}` }).returning();
-    await db.insert(supplierLocations).values({ ...FIXTURE_GPS, organizationId: TEST_ORG_ID,
+    await db.insert(supplierLocations).values({ ...TEST_SITE_POSITION, organizationId: TEST_ORG_ID,
       supplierId: supplier.id, name: "Disposable source location", country: "CHE" });
     const [delivery] = await db.insert(feedstockDeliveries).values({ organizationId: TEST_ORG_ID,
       code: `AUD-${crypto.randomUUID()}`, facilityId: f.facility.id, supplierId: supplier.id,

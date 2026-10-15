@@ -80,7 +80,7 @@ describe("customer and destination REST reads", { timeout: READ_TIMEOUT_MS }, ()
         expect(Object.keys(row).sort()).toEqual(Object.keys(customerLocationRepresentationSchema.shape).sort());
       }
       expect(page.data[1]).toMatchObject({ customerId: a.customer.id, gpsLatitude: 0, gpsLongitude: 8.5, distanceFromFacilityKm: 20, distanceSource: "document", isDefault: true });
-      expect(page.data[0]).toMatchObject({ gpsLatitude: -8.3, gpsLongitude: 35.3, distanceFromFacilityKm: null, distanceSource: null, isDefault: false });
+      expect(page.data[0]).toMatchObject({ gpsLatitude: TEST_SITE_POSITION.gpsLatitude, gpsLongitude: TEST_SITE_POSITION.gpsLongitude, distanceFromFacilityKm: null, distanceSource: null, isDefault: false });
     }
     expect(await ids(await locations(a.otherCustomer.id))).toEqual([]);
   });

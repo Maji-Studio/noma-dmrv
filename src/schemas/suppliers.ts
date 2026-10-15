@@ -7,6 +7,7 @@ import { z } from "zod";
 import { optionalDistanceSource } from "./distance-source";
 import {
   clearableLocationDistance,
+  optionalLocationDistance,
   expectedVersionSchema,
   gpsPairSuperRefine,
   requiredLatitudeSchema,
@@ -156,7 +157,7 @@ export const supplierLocationFormSchema = z.object({
   gpsLongitude: z.preprocess(toNumberOrUndefined, requiredLongitudeSchema),
   address: z.string().max(500, "Address must be less than 500 characters").optional().or(z.literal("")),
   // Road distance (km) from this location to the delivery facility.
-  distanceFromFacilityKm: clearableLocationDistance,
+  distanceFromFacilityKm: optionalLocationDistance,
   distanceSource: optionalDistanceSource,
   // Marks this as the supplier's default source location.
   isDefault: z.boolean().optional().default(false),
