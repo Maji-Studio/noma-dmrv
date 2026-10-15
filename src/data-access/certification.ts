@@ -1,3 +1,4 @@
+import { insertDocument } from "./documents";
 import { withCertificationStatusActivity, type CertificationActivityOrigin } from "./certification-status-activity";
 import { nextVersion } from "./row-version";
 import { and, desc, eq, inArray, isNull, ne, or, sql } from "drizzle-orm";
@@ -925,24 +926,19 @@ export async function attachReportDocument(
     .orderBy(desc(documents.createdAt))
     .limit(1);
   if (existing) return existing;
-  const [row] = await db
-    .insert(documents)
-    .values({
-      organizationId: ctx.organizationId,
-      entityType: "ghgStatement",
-      entityId: args.submissionId,
-      documentType: "pdf",
-      fileUrl: args.reportUrl,
-      fileName: deriveFileName(args.reportUrl),
-      description: args.description,
-      metadata: {
-        kind: "external_ghg_statement_report",
-        ...(args.metadata ?? {}),
-      } as Record<string, unknown>,
-      createdBy: ctx.userId,
-    })
-    .returning();
-  return row;
+  return insertDocument(ctx, {
+    entityType: "ghgStatement",
+    entityId: args.submissionId,
+    documentType: "pdf",
+    fileUrl: args.reportUrl,
+    fileName: deriveFileName(args.reportUrl),
+    description: args.description,
+    metadata: {
+      kind: "external_ghg_statement_report",
+      ...(args.metadata ?? {}),
+    } as Record<string, unknown>,
+    createdBy: ctx.userId,
+  });
 }
 
 function deriveFileName(reportUrl: string): string {

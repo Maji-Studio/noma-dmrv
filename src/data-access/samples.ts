@@ -237,6 +237,6 @@ export async function updateSample(ctx: OrgContext, sampleId: string, data: Upda
 /** Delete a Sample in a transaction of its own, then drain the storage deletions it queued. */
 export async function deleteSample(ctx: OrgContext, sampleId: string, expectedVersion: number): Promise<void> {
   requireOrgScope(ctx);
-  await db.transaction((tx) => deleteSampleInTransaction(ctx, tx, sampleId, expectedVersion));
+  await db.transaction((tx) => deleteSampleInTransaction(ctx, tx, sampleId, expectedVersion, "form"));
   await processPendingStorageObjectDeletions(ctx);
 }

@@ -1,3 +1,5 @@
+import { type ActivityScope, recordDocumentActivity } from "./write-activity";
+import type { ActivityEventInput } from "./activity-events";
 import { enqueueDocumentKeys } from "./document-storage-deletions";
 import { and, desc, eq, getTableColumns, inArray, isNull, or, sql } from "drizzle-orm";
 import type { OrgContext } from "@/lib/auth/server";
@@ -55,6 +57,7 @@ export type NewDocumentRow = typeof documents.$inferInsert;
 export interface DocumentEntityRef {
   entityType: DocumentEntityType;
   entityId: string;
+  activityScopes?: ActivityScope[];
 }
 
 const DOCUMENT_ENTITY_LABELS: Record<DocumentEntityType, string> = {
@@ -377,21 +380,27 @@ export async function insertDocument(
   input: Omit<NewDocumentRow, "organizationId">
 ): Promise<DocumentRow> {
   requireOrgScope(ctx);
-  const [row] = await db.insert(documents).values({ ...input, organizationId: ctx.organizationId }).returning();
-  return row;
+  return db.transaction(async (tx) => {
+    const [row] = await tx.insert(documents).values({ ...input, organizationId: ctx.organizationId }).returning();
+    await recordDocumentActivity(ctx, tx, row, "created", { source: "form" });
+    return row;
+  });
 }
 
 export async function deleteDocumentRow(
   ctx: OrgContext,
   id: string,
-  tx: Pick<DbTransaction, "delete"> = db,
+  source: ActivityEventInput["source"],
+  tx?: DbTransaction,
 ): Promise<DocumentRow | null> {
   requireOrgScope(ctx);
-  const [row] = await tx
-    .delete(documents)
-    .where(and(eq(documents.id, id), eq(documents.organizationId, ctx.organizationId)))
-    .returning();
-  return row ?? null;
+  if (!tx) return db.transaction(writerTx => deleteDocumentRow(ctx, id, source, writerTx));
+  const [row] = await tx.select().from(documents)
+    .where(and(eq(documents.id, id), eq(documents.organizationId, ctx.organizationId))).for("update");
+  if (!row) return null;
+  await recordDocumentActivity(ctx, tx, row, "deleted", { source });
+  await tx.delete(documents).where(and(eq(documents.id, id), eq(documents.organizationId, ctx.organizationId)));
+  return row;
 }
 
 const MIRRORED_DOCUMENT_BLOCKS_PARENT_DELETE_MESSAGE =
@@ -476,6 +485,8 @@ export async function retireDocumentsForEntities(
   ctx: OrgContext,
   tx: DbTransaction,
   entities: readonly DocumentEntityRef[],
+  source: ActivityEventInput["source"],
+  actorUserId?: ActivityEventInput["actorUserId"],
 ): Promise<void> {
   requireOrgScope(ctx);
   if (entities.length === 0) return;
@@ -560,6 +571,8 @@ export async function retireDocumentsForEntities(
   }
 
   for (const document of ownedDocuments) {
+    const owner = uniqueEntities.find(entity => entity.entityType === document.entityType && entity.entityId === document.entityId);
+    await recordDocumentActivity(ctx, tx, document, "deleted", { scopes: owner?.activityScopes, source, actorUserId });
     await enqueueDocumentKeys(ctx, tx, document);
   }
 

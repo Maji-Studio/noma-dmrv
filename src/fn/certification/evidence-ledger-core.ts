@@ -427,7 +427,7 @@ async function retireSupersededLedgers(
     await Promise.all(
       stale.map(async (doc) => {
         await deleteDocumentUploadByDocument(orgCtx, ISOMETRIC_PROVIDER, doc.id);
-        await deleteDocumentRow(orgCtx, doc.id);
+        await deleteDocumentRow(orgCtx, doc.id, "form");
         if (doc.storageKey && doc.storageKey !== keep?.storageKey) {
           // Orphaned bytes are harmless (the row + mapping are gone, so it can
           // never re-enter source_ids); a delete failure must not fail the submit.

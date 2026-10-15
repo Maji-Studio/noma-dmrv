@@ -1,5 +1,6 @@
 import { expect, it } from "vitest";
-import { toActivityEntityType } from "@/lib/activity-entity-type";
+import { toActivityDocumentOwnerType, toActivityEntityType } from "@/lib/activity-entity-type";
+import { DOCUMENT_ENTITY_TYPES } from "@/schemas/documents";
 import { GHG_STATEMENT_ENTITY_TYPE } from "@/lib/isometric/utils/constants";
 import { ACTIVITY_ENTITY_TYPES, isActivityEntityType } from "@/db/schema/common";
 
@@ -25,3 +26,20 @@ it.each(["", "deliveries", "Delivery", " delivery", "unknown_entity", "output_st
     expect(() => toActivityEntityType(value)).toThrow(`Unknown activity entity type: ${value}`);
   },
 );
+
+it.each(DOCUMENT_ENTITY_TYPES)("preserves the supported document owner %s", value => {
+  expect(toActivityDocumentOwnerType(value)).toBe(value);
+});
+
+it.each([
+  ["ghgStatement", "ghg_statement"],
+  ["ghgStatementReport", "ghg_statement_report"],
+  ["ghg_statement_report", "ghg_statement_report"],
+  ["productionRun", "production_run"],
+])("normalizes the document owner %s to %s", (value, canonical) => {
+  expect(toActivityDocumentOwnerType(value)).toBe(canonical);
+});
+
+it("rejects unknown document owners instead of losing ownership to a fallback", () => {
+  expect(() => toActivityDocumentOwnerType("unknown_owner")).toThrow("Unknown activity entity type: unknown_owner");
+});

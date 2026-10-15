@@ -1,3 +1,4 @@
+import { resolveWriteActivityScopes } from "./write-activity";
 import type { EventInstant } from "@/schemas/event-instant";
 import { resolveProductionRunEventTime } from "./production-run-event-time";
 import { assertRowVersion, nextVersion } from "./row-version";
@@ -193,6 +194,7 @@ export async function deleteProductionIncident(
     if (!locked) throw new SafeError("Production incident not found");
     assertRowVersion({ entity: "productionIncident", id, expectedVersion, actualVersion: locked.version });
 
+    const activityScopes = await resolveWriteActivityScopes(ctx, tx, "production_run", locked.productionRunId);
     const rows = await tx
       .delete(incidentReports)
       .where(and(eq(incidentReports.id, id), eq(incidentReports.organizationId, ctx.organizationId)))
@@ -201,8 +203,8 @@ export async function deleteProductionIncident(
       throw new SafeError("Production incident not found");
     }
     await retireDocumentsForEntities(ctx, tx, [
-      { entityType: "production_incident", entityId: id },
-    ]);
+      { entityType: "production_incident", entityId: id, activityScopes },
+    ], "form");
   });
   await processPendingStorageObjectDeletions(ctx);
 }

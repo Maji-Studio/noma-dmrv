@@ -104,6 +104,7 @@ afterAll(async () => {
     await chain.cleanup();
   }
   if (createdBatchIds.length > 0) {
+    await db.delete(activityEvents).where(inArray(activityEvents.creditBatchId, createdBatchIds));
     await db
       .delete(creditBatches)
       .where(inArray(creditBatches.id, createdBatchIds));
@@ -263,6 +264,12 @@ describe("deleteRemoval", () => {
       .from(creditBatches)
       .where(eq(creditBatches.id, fixture.creditBatchId));
     expect(batch.reserved).toBeNull();
+    const batchHistory = await listEntityActivity(makeTestOrgContext(), "credit_batch", fixture.creditBatchId);
+    expect(batchHistory).toHaveLength(1);
+    expect(batchHistory[0]).toMatchObject({
+      creditBatchId: fixture.creditBatchId, action: "updated", source: "form",
+      changedFields: ["productionClaimReservation"], actorUserId: makeTestOrgContext().userId,
+    });
     const events = await db
       .select({
         operation: certifierSyncEvents.operation,
@@ -326,7 +333,10 @@ describe("deleteRemoval", () => {
       status: "draft",
       externalId: entry.id,
       metadata: interruptedMetadata(),
+      reserveBatch: true,
     });
+    await db.update(creditBatches).set({ productionEmissionsClaimedByRemovalId: fixture.removalId })
+      .where(eq(creditBatches.id, fixture.creditBatchId));
     const sampleId = `sample-${fixture.runId}`;
     const measurementReference = buildMeasurementSampleReference({
       removalId: fixture.removalId,
@@ -411,6 +421,13 @@ describe("deleteRemoval", () => {
     expect(await registrationRowsFor(submissionId)).toEqual([]);
     expect(await registrationRowsFor(priorSubmissionId)).toEqual([]);
     expect(await removalExists(fixture.removalId)).toBe(false);
+    const batchHistory = await listEntityActivity(makeTestOrgContext(), "credit_batch", fixture.creditBatchId);
+    expect(batchHistory).toHaveLength(1);
+    expect(batchHistory[0]).toMatchObject({
+      creditBatchId: fixture.creditBatchId, action: "updated", source: "form",
+      changedFields: ["productionClaimReservation", "productionClaim", "removalAssignment"],
+      actorUserId: makeTestOrgContext().userId,
+    });
     const row = await ledgerRow(submissionId);
     expect((row.metadata as { deletion: unknown }).deletion).toMatchObject({
       deletedBiocharApplicationIds: [remoteApplication.id],

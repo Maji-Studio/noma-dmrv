@@ -233,7 +233,7 @@ it("returns 409 expired when a sweep wins against an inspected confirmation", as
   });
   await locked.promise;
   const confirm = database.transaction((tx) => confirmInspectedDocumentUpload.execute({
-    ctx: contexts[0], tx, activity: createOperationActivity(), afterCommit: vi.fn(),
+    ctx: contexts[0], tx, source: "form", activity: createOperationActivity(), afterCommit: vi.fn(),
   }, facts));
   try { await waitForBlockedOperations(pool, blockerPid, 1); } finally { commit.release(); }
   await sweep;

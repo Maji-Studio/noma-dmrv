@@ -1,3 +1,4 @@
+import { resolveWriteActivityScopes } from "./write-activity";
 import type { EventInstant } from "@/schemas/event-instant";
 import { resolveProductionRunEventTime } from "./production-run-event-time";
 import { assertRowVersion, nextVersion } from "./row-version";
@@ -228,6 +229,7 @@ export async function deleteProductionSample(
     if (!locked) throw new SafeError("In-process measurement not found.");
     assertRowVersion({ entity: "productionSample", id, expectedVersion, actualVersion: locked.version });
 
+    const activityScopes = await resolveWriteActivityScopes(ctx, tx, "production_run", locked.productionRunId);
     const rows = await tx
       .delete(productionSamples)
       .where(and(eq(productionSamples.id, id), eq(productionSamples.organizationId, ctx.organizationId)))
@@ -236,8 +238,8 @@ export async function deleteProductionSample(
     throw new SafeError("In-process measurement not found.");
     }
     await retireDocumentsForEntities(ctx, tx, [
-      { entityType: "production_sample", entityId: id },
-    ]);
+      { entityType: "production_sample", entityId: id, activityScopes },
+    ], "form");
   });
   await processPendingStorageObjectDeletions(ctx);
 }

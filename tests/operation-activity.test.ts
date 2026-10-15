@@ -217,7 +217,8 @@ describe("split intake activity", () => {
       { storageLocationId: f.binId, allocatedWetMassKg: wetMassKg },
     ] };
     const result = await runOperationInProcess(logFeedstockDelivery, f.ctx, input);
-    const events = await activity(f.ctx.organizationId);
+    // Derived transport legs record their own system events (#1041).
+    const events = (await activity(f.ctx.organizationId)).filter(event => event.entityType === "feedstock");
     expect(events.map(event => event.entityId).sort()).toEqual(result.feedstocks.map(row => row.id).sort());
     expect(events).toHaveLength(2);
     expect(events.every(event => event.facilityId === f!.facilityId && event.source === "form")).toBe(true);

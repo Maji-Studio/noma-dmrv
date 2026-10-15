@@ -1,3 +1,5 @@
+import { recordActivity } from "./activity-events";
+import { toActivityEntityType } from "@/lib/activity-entity-type";
 import { withCertificationStatusActivity } from "./certification-status-activity";
 import { nextVersion } from "./row-version";
 import { REMOVAL_DELETION_LEASE_KEY, hasFreshRemovalDeletionLease, removalDeletionLeaseTimestamp } from "@/lib/certification/removal-deletion-lease";
@@ -564,6 +566,7 @@ export async function finalizeRemovalDeletion(
 
     await assertLedgerUnchangedSinceClaim(ctx, tx, claim);
 
+    let releasedReservations: { id: string }[] = [];
     let releasedDocumentMirrors: ReleasedDocumentUpload[] = [];
     if (claim.submissionIds.length > 0) {
       // Registration rows go, not just their status: the supplier reference
@@ -627,7 +630,7 @@ export async function finalizeRemovalDeletion(
           );
       }, tx);
 
-      await tx
+      releasedReservations = await tx
         .update(creditBatches)
         .set({ version: nextVersion(creditBatches.version),
           productionEmissionsClaimReservedBySubmissionId: null,
@@ -641,12 +644,13 @@ export async function finalizeRemovalDeletion(
             ),
             eq(creditBatches.organizationId, ctx.organizationId),
           ),
-        );
+        )
+        .returning({ id: creditBatches.id });
     }
 
     if (!claim.submissionIds.length) await clearDeletedRemovalProductionBatches(ctx, claim, registry.productionBatches ?? [], tx);
 
-    await tx
+    const releasedClaims = await tx
       .update(creditBatches)
       .set({ version: nextVersion(creditBatches.version),
         productionEmissionsClaimedByRemovalId: null,
@@ -657,7 +661,8 @@ export async function finalizeRemovalDeletion(
           eq(creditBatches.productionEmissionsClaimedByRemovalId, claim.removalId),
           eq(creditBatches.organizationId, ctx.organizationId),
         ),
-      );
+      )
+      .returning({ id: creditBatches.id });
 
     const released = await tx
       .update(creditBatchApplications)
@@ -668,7 +673,7 @@ export async function finalizeRemovalDeletion(
           eq(creditBatchApplications.organizationId, ctx.organizationId),
         ),
       )
-      .returning({ id: creditBatchApplications.id });
+      .returning({ id: creditBatchApplications.id, creditBatchId: creditBatchApplications.creditBatchId });
 
     const [deleted] = await tx
       .delete(certifierRemovals)
@@ -681,6 +686,21 @@ export async function finalizeRemovalDeletion(
       )
       .returning({ id: certifierRemovals.id });
     if (!deleted) throw new SafeError(REMOVAL_DELETE_CHANGED_ERROR);
+
+    const batchFields = new Map<string, Set<string>>();
+    for (const [ids, field] of [
+      [releasedReservations.map(batch => batch.id), "productionClaimReservation"],
+      [releasedClaims.map(batch => batch.id), "productionClaim"],
+      [released.map(slice => slice.creditBatchId), "removalAssignment"],
+    ] as const) for (const id of ids) {
+      const fields = batchFields.get(id) ?? new Set<string>();
+      fields.add(field);
+      batchFields.set(id, fields);
+    }
+    for (const [creditBatchId, fields] of batchFields) await recordActivity(ctx, tx, {
+      entityType: toActivityEntityType("credit_batch"), entityId: creditBatchId, creditBatchId,
+      action: "updated", source: "form", changedFields: [...fields],
+    });
 
     logger.info(
       {

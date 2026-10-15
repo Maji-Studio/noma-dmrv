@@ -1,3 +1,4 @@
+import type { ActivityEventInput } from "./activity-events";
 import { withFeedstockTransportReadiness } from "./feedstock-transport-readiness";
 import type { SnapshotStock } from "./stock-effects";
 /**
@@ -727,6 +728,7 @@ export async function deleteFeedstockInTransaction(
   tx: DbTransaction,
   feedstockId: string,
   expectedVersion: number,
+  source: ActivityEventInput["source"],
   snapshotStock?: SnapshotStock,
 ): Promise<{ facilityId: string }> {
   requireOrgScope(ctx);
@@ -788,6 +790,7 @@ export async function deleteFeedstockInTransaction(
     tx,
     "feedstock",
     feedstockId,
+    source,
   );
   const result = await tx
     .delete(feedstocks)
@@ -807,7 +810,7 @@ export async function deleteFeedstockInTransaction(
   await retireDocumentsForEntities(ctx, tx, [
     { entityType: "feedstock", entityId: feedstockId },
     ...transportLegDocuments,
-  ]);
+  ], source);
   return { facilityId: locked.facilityId };
 }
 
