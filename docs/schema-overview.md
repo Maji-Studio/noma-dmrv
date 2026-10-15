@@ -47,6 +47,15 @@ database that still holds draft runs: delete those rows or reset the database
 first (`pnpm db:reset` locally; shared staging uses the manual reset workflow
 in [database.md](./database.md), announced first).
 
+Migration `0137_logistics_required_fields` sets `applications.field_size_ha`,
+`deliveries.delivered_wet_mass_kg`, and the five `biochar_products` columns
+(`mass_kg`, `moisture_content_percent`, `water_added_kg`,
+`source_biochar_storage_location_id`, `storage_location_id`) NOT NULL, drops
+the `applications.application_date` and `biochar_products.production_date`
+defaults, and drops `biochar_products.expires_at` without a backfill, so it
+fails on a database that still holds null legacy rows. Run `pnpm db:reset` locally; shared staging
+uses the manual reset workflow in [database.md](./database.md), announced first.
+
 Production starts have no database time default. Physical feedstock sources
 live only in `production_run_feedstock_draws`; the run stores their total wet
 mass. Database CHECKs keep run moisture at or above 0% and below 100%.

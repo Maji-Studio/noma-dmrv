@@ -34,7 +34,7 @@ export const formulations = pgTable(
       .references(() => organizations.id),
     code: text('code').notNull(), // e.g., "BCF-01"
     name: text('name').notNull(), // e.g., "Raw Biochar", "BCF-01 - Organic"
-    biocharRatio: fraction('biochar_ratio'), // Ratio in [0, 1] — primary compliance field (§9.4.2 <50% rule)
+    biocharRatio: fraction('biochar_ratio'), // Recipe biochar share in [0, 1]
     description: text('description'),
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
@@ -100,24 +100,21 @@ export const biocharProducts = pgTable('biochar_products', {
   code: text('code').notNull(), // e.g., "BP-2025-043"
   facilityId: uuid('facility_id')
     .notNull(),
-  productionDate: timestamp('production_date').defaultNow().notNull(),
+  productionDate: timestamp('production_date').notNull(),
   // Actual mixing/placement instant; source productionDate is not a substitute.
   placedAt: timestamp('placed_at', { withTimezone: true }).notNull(),
   stockPostingSequence: bigserial('stock_posting_sequence', { mode: 'bigint' }).notNull(),
   status: biocharProductStatus('status').default('testing').notNull(),
 
   // --- Composition ---
-  // Nullable: a NULL formulation means a pure-biochar product (no amendment blend).
+  // Every product references a recipe, including Pure biochar.
   formulationId: uuid('formulation_id').notNull().references(() => formulations.id),
-  // Snapshot of the formulation's biocharRatio taken when the product is
-  // created (or its formulation reassigned). Stock math and roll-ups read this
-  // snapshot, not the live formulation, so later recipe edits never rewrite an
-  // existing product's biochar-equivalent draw. NULL falls back to the live
-  // formulation ratio (legacy rows), then 1 (pure biochar).
+  // Recipe share snapshot for orientation. Stock accounting uses measured
+  // masses and saved source allocations, not the recipe ratio.
   biocharRatio: fraction('biochar_ratio'),
   // The physical biochar bin selected as this product's source. Per-run
   // provenance for commingled stock is snapshotted in the allocation table.
-  sourceBiocharStorageLocationId: uuid('source_biochar_storage_location_id'),
+  sourceBiocharStorageLocationId: uuid('source_biochar_storage_location_id').notNull(),
   // Compatibility link for legacy single-run consumers. New bin-sourced
   // products populate it only when the mass-weighted allocation contains one
   // run; commingled products resolve through the allocation table.
@@ -125,19 +122,15 @@ export const biocharProducts = pgTable('biochar_products', {
   composition: jsonb('composition').notNull().default(sql`'{}'::jsonb`),
 
   // --- Measurements ---
-  massKg: massKg('mass_kg'),
-  moistureContentPercent: percent('moisture_content_percent'),
+  massKg: massKg('mass_kg').notNull(),
+  moistureContentPercent: percent('moisture_content_percent').notNull(),
   densityKgM3: real('density_kg_m3'),
-  waterAddedKg: massKg('water_added_kg'),
+  waterAddedKg: massKg('water_added_kg').notNull(),
 
   // --- Location ---
-  storageLocationId: uuid('storage_location_id').references(
+  storageLocationId: uuid('storage_location_id').notNull().references(
     () => storageLocations.id
   ),
-
-  // --- Isometric: 12-month stockpiling validity (Soil Storage Module §7.3) ---
-  // Set to productionDate + 12 months. Checked at delivery creation to block expired product.
-  expiresAt: timestamp('expires_at'),
 
   // Stamped by the facility archive cascade; NULL = active
   archivedAt: timestamp('archived_at'),

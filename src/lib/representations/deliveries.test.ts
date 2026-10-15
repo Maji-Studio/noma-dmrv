@@ -19,11 +19,15 @@ it("publishes stored delivery fields with UTC instants and no joined or internal
 });
 
 it("preserves nullable stored masses and the stored distance precision", () => {
-  const data = representDelivery({ ...row, deliveredWetMassKg: null, moistureContentPercent: null, massDryKg: null,
+  const data = representDelivery({ ...row, moistureContentPercent: null, massDryKg: null,
     distanceKmOverride: 123.45679, distanceSource: "document" as const, distanceNote: "Route evidence",
     customerLocationId: id, driverId: id, vehicleId: id, archivedAt: new Date(at) });
-  expect(data).toMatchObject({ deliveredWetMassKg: null, moisturePercent: null, dryBiocharKg: null,
+  expect(data).toMatchObject({ moisturePercent: null, dryBiocharKg: null,
     distanceKmOverride: 123.45679, destinationCustomerLocationId: id, archivedAt: at });
   expect(deliveryRepresentationSchema.shape.moisturePercent.description).toContain("6 decimal places");
   expect(deliveryRepresentationSchema.shape.dryBiocharKg.description).toContain("3 decimal places");
+});
+
+it("requires delivered wet mass", () => {
+  expect(deliveryRepresentationSchema.safeParse({ ...representDelivery(row), deliveredWetMassKg: null }).success).toBe(false);
 });

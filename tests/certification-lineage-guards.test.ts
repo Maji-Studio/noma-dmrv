@@ -142,6 +142,7 @@ describe("certification lineage guards", () => {
         }))
         .returning({ id: biocharProducts.id });
 
+      const [originalProduct] = await db.select().from(biocharProducts).where(eq(biocharProducts.id, fixture.productId));
       try {
         await db.insert(biocharProductSourceAllocations).values({
           organizationId: TEST_ORG_ID,
@@ -195,7 +196,7 @@ describe("certification lineage guards", () => {
           .update(biocharProducts)
           .set({
             linkedProductionRunId: fixture.productionRunId,
-            sourceBiocharStorageLocationId: null,
+            sourceBiocharStorageLocationId: originalProduct.sourceBiocharStorageLocationId,
           })
           .where(eq(biocharProducts.id, fixture.productId));
         await deleteOutputProductFixtures(db, eq(biocharProducts.id, unrelatedProduct.id));

@@ -147,7 +147,6 @@ export async function enrichStorageLocationRows(
     feedstockInventoryRows,
     biocharOutputRows,
     sourceDownstreamProductRows,
-    legacyDownstreamProductRows,
     productInventoryRows,
     productApplicationRows,
     lastActivityRows,
@@ -231,39 +230,6 @@ export async function enrichStorageLocationRows(
             ),
           )
           .groupBy(biocharProducts.sourceBiocharStorageLocationId),
-        tx
-          .select({
-            storageLocationId: productionRuns.biocharStorageLocationId,
-            downstreamFormulations: sql<string | null>`
-              string_agg(
-                DISTINCT COALESCE(${formulations.name}, ${PURE_BIOCHAR_LABEL}),
-                ', '
-              )
-            `,
-          })
-          .from(productionRuns)
-          .innerJoin(
-            biocharProducts,
-            and(
-              eq(biocharProducts.linkedProductionRunId, productionRuns.id),
-              eq(biocharProducts.organizationId, ctx.organizationId),
-            ),
-          )
-          .leftJoin(
-            formulations,
-            and(
-              eq(biocharProducts.formulationId, formulations.id),
-              eq(formulations.organizationId, ctx.organizationId),
-            ),
-          )
-          .where(
-            and(
-              inArray(productionRuns.biocharStorageLocationId, storageLocationIds),
-              eq(productionRuns.organizationId, ctx.organizationId),
-              sql`${biocharProducts.sourceBiocharStorageLocationId} IS NULL`,
-            ),
-          )
-          .groupBy(productionRuns.biocharStorageLocationId),
         tx
           .select({
             storageLocationId: biocharProducts.storageLocationId,
@@ -360,36 +326,6 @@ export async function enrichStorageLocationRows(
             FROM production_runs WHERE organization_id = ${ctx.organizationId} AND biochar_storage_location_id IN (${storageLocationIdsSql})
             UNION ALL
             SELECT
-              pr.biochar_storage_location_id,
-              'out',
-              bp.created_at,
-              ${sourceBiocharMassKgSql(
-                sql.raw("bp.mass_kg"),
-                sql.raw("bp.composition"),
-              )},
-              CASE
-                WHEN bp.mass_kg IS NULL
-                  OR pr.biochar_output_kg IS NULL
-                  OR pr.biochar_output_kg = 0
-                  OR pr.biochar_dry_mass_kg IS NULL
-                THEN NULL
-                ELSE
-                  ${sourceBiocharMassKgSql(
-                    sql.raw("bp.mass_kg"),
-                    sql.raw("bp.composition"),
-                  )}
-                  * pr.biochar_dry_mass_kg
-                  / pr.biochar_output_kg
-              END,
-              COALESCE(f.name, ${PURE_BIOCHAR_LABEL})
-            FROM biochar_products bp
-            JOIN production_runs pr ON bp.linked_production_run_id = pr.id AND pr.organization_id = ${ctx.organizationId}
-            LEFT JOIN formulations f ON bp.formulation_id = f.id AND f.organization_id = ${ctx.organizationId}
-            WHERE bp.organization_id = ${ctx.organizationId}
-              AND bp.source_biochar_storage_location_id IS NULL
-              AND pr.biochar_storage_location_id IN (${storageLocationIdsSql})
-            UNION ALL
-            SELECT
               bp.source_biochar_storage_location_id,
               'out',
               bp.created_at,
@@ -479,7 +415,6 @@ export async function enrichStorageLocationRows(
         [],
         [],
         [],
-        [],
         {
           rows: [] as Array<{
             storage_location_id: string;
@@ -515,10 +450,7 @@ export async function enrichStorageLocationRows(
     biocharOutputRows.map((row) => [row.storageLocationId ?? "", row])
   );
   const downstreamFormulationsByLocation = new Map<string, Set<string>>();
-  for (const allocationRow of [
-    ...legacyDownstreamProductRows,
-    ...sourceDownstreamProductRows,
-  ]) {
+  for (const allocationRow of sourceDownstreamProductRows) {
     if (!allocationRow.storageLocationId) continue;
     const labels =
       downstreamFormulationsByLocation.get(allocationRow.storageLocationId) ??

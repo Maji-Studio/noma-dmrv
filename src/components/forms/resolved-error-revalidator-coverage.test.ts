@@ -6,6 +6,7 @@ const CROSS_FIELD_FORM_FILES = {
   "applications/application-form.tsx": 1,
   "auth/reset-password-form.tsx": 1,
   "auth/set-password-form.tsx": 1,
+  "biochar-products/biochar-product-form.tsx": 1,
   "credit-batches/credit-batch-form.tsx": 1,
   "deliveries/delivery-form.tsx": 1,
   "facilities/facility-form.tsx": 1,

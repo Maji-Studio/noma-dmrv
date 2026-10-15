@@ -165,6 +165,7 @@ async function seedGeoLineage(
       }, row => row);
 
       await insertOutputApplicationFixture(tx, {
+        fieldSizeHa: 1,
         organizationId: DEC_ORG_ID,
         id: ids.application,
         code: codes.application,

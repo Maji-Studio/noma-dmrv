@@ -10,7 +10,7 @@ import {
 } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import { SafeError } from '@/lib/errors';
-import { and, eq, isNull, or, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { formatFacilityDateTime } from "@/lib/format-utils";
 import { UNKNOWN_FACILITY_TIMEZONE } from "@/lib/date-utils";
 import { isCountMovementSql } from "../output-stock-count";
@@ -19,8 +19,7 @@ import { requireOrgScope } from "../utils";
 /**
  * Find one product whose immutable source provenance includes this run.
  *
- * Allocation rows are authoritative for bin-sourced products. The legacy
- * single-run column remains a fallback only for products without a source bin.
+ * Allocation rows are authoritative for product source provenance.
  */
 export async function getProductionRunDependentProduct(
   ctx: OrgContext,
@@ -65,19 +64,7 @@ export async function getProductionRunDependentProduct(
     )
     .where(
       and(
-        or(
-          eq(
-            biocharProductSourceAllocations.productionRunId,
-            productionRunId,
-          ),
-          and(
-            isNull(biocharProducts.sourceBiocharStorageLocationId),
-            eq(
-              biocharProducts.linkedProductionRunId,
-              productionRunId,
-            ),
-          ),
-        ),
+        eq(biocharProductSourceAllocations.productionRunId, productionRunId),
         eq(biocharProducts.organizationId, ctx.organizationId),
       ),
     )

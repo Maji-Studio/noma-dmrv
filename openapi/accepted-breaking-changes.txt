@@ -55,3 +55,11 @@ POST /production-runs the `biocharMoisturePercent` request property's exclusiveM
 POST /production-runs the `feedstockMoisturePercent` request property's exclusiveMaximum was set to `100.00` [request-property-exclusive-max-set]. Setting a bound rejects values the previous contract accepted. If your clients are known to stay within the new limit, lower this check with --severity-levels.
 PATCH /production-runs/{idOrCode} the `biocharMoisturePercent` request property's exclusiveMaximum was set to `100.00` [request-property-exclusive-max-set]. Setting a bound rejects values the previous contract accepted. If your clients are known to stay within the new limit, lower this check with --severity-levels.
 PATCH /production-runs/{idOrCode} the `feedstockMoisturePercent` request property's exclusiveMaximum was set to `100.00` [request-property-exclusive-max-set]. Setting a bound rejects values the previous contract accepted. If your clients are known to stay within the new limit, lower this check with --severity-levels.
+
+# Issue #1015: remove unsupported product expiry; clients must stop reading expiresAt.
+GET /biochar-products removed the required property `data/items/expiresAt` from the response with the `200` status [response-required-property-removed].
+POST /biochar-products removed the required property `data/expiresAt` from the response with the `200` status [response-required-property-removed].
+POST /biochar-products removed the required property `data/expiresAt` from the response with the `201` status [response-required-property-removed].
+GET /biochar-products/{idOrCode} removed the required property `data/expiresAt` from the response with the `200` status [response-required-property-removed].
+PATCH /biochar-products/{idOrCode} removed the required property `data/expiresAt` from the response with the `200` status [response-required-property-removed].
+PATCH /biochar-products/{idOrCode} removed the required property `allOf[subschema #2]/current/expiresAt` from the response with the `412` status [response-required-property-removed]. This compared the `allOf` branches one at a time, so another branch may still guarantee what this one dropped. Run with --flatten-allof to merge the branches and compare what they describe together.

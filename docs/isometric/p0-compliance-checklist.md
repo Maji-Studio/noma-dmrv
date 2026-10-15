@@ -12,7 +12,7 @@
 | `P0-04` | Pyrolysis-gas calibration/leak testing | Pressure readings exist | Allowed-method record plus calibration/test standard, event, evidence, and submission/readiness gate | open |
 | `P0-05` | Lost-mass accounting | Incident records exist | Auditable incident-to-run/delivery/application adjustment that reduces credited mass | open |
 | `P0-06` | Durability submission | Sampled 1,000-year measurement-sample path works in sandbox; 200-year builders exist | Confirm 200-year units/bindings and production availability; retain fail-closed tier/template gates | partial |
-| `P0-07` | Stockpile controls | `stockpile_events` and >12-month exception constraint exist | Operator workflow, duration/control alerts, and readiness/submission integration | partial |
+| `P0-07` | Legacy stockpiling check | `stockpile_events` and >12-month exception constraint exist as a legacy DB check only | Neither pinned Biochar v1.1.1 nor Agricultural Soils v1.1.0 specifies this rule; no protocol completion condition | not applicable |
 | `P0-08` | Point-of-mixing | Ratio/timeline are representable | Irreversibility and fuel-unsuitability attestations before crediting | open |
 | `P0-09` | Custody handoffs | No `custody_handoffs`; custody is reconstructed from lineage/evidence | Decide whether the derived trail suffices; otherwise add a canonical, integrity-checked handoff ledger | open |
 | `P0-10` | Facility electricity intensity | Run-level electricity only | Facility-year roll-up and >200 GWh classification | open |

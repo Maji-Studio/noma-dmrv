@@ -68,17 +68,6 @@ export function storageLocationLastActivityAt(organizationId: string): SQL<Date 
 
       SELECT ${biocharProducts.createdAt}
       FROM ${biocharProducts}
-      JOIN ${productionRuns}
-        ON ${biocharProducts.linkedProductionRunId} = ${productionRuns.id}
-        AND ${productionRuns.organizationId} = ${organizationId}
-      WHERE ${biocharProducts.organizationId} = ${organizationId}
-        AND ${biocharProducts.sourceBiocharStorageLocationId} IS NULL
-        AND ${productionRuns.biocharStorageLocationId} = ${storageLocations.id}
-
-      UNION ALL
-
-      SELECT ${biocharProducts.createdAt}
-      FROM ${biocharProducts}
       WHERE ${biocharProducts.organizationId} = ${organizationId}
         AND ${biocharProducts.storageLocationId} = ${storageLocations.id}
 

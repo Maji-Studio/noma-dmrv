@@ -177,8 +177,6 @@ export async function seedChainData(
 
       // 8. Biochar Product (needs facility + formulation)
       const productionDate = new Date("2025-01-01T00:00:00Z");
-      const expiresAt = new Date();
-      expiresAt.setFullYear(expiresAt.getFullYear() + 1);
       await tx.insert(schema.biocharProducts).values(await outputProductFixtureValues(tx, {
         organizationId: DEC_ORG_ID,
         id: biocharProductId,
@@ -194,7 +192,6 @@ export async function seedChainData(
         massKg: 100000,
         moistureContentPercent: 10,
         productionDate,
-        expiresAt,
       }));
 
       await preparePureOutputProductFixture(tx, biocharProductId);

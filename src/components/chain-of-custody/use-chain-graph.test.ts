@@ -476,18 +476,18 @@ describe("roll-forwards", () => {
     ).toBe("25%");
   });
 
-  it("leaves a drawn total unknown when one run's mass is unknown", () => {
+  it("includes a zero-dry draw in the wet total across runs", () => {
     const first = rollForward("run-1");
     const second = rollForward("run-2");
     first.products = [rollForwardProduct("product-1")];
-    second.products = [{ ...rollForwardProduct("product-1"), drawnDryMassKg: null }];
+    second.products = [{ ...rollForwardProduct("product-1"), drawnDryMassKg: 0 }];
 
     const product = buildRollForwardNodes([first, second]).find(
       (node) => node.id === "biochar-product:product-1",
     );
 
     expect(product?.details).toEqual([
-      { label: "Drawn from runs", value: formatWetDryMass({ wetKg: 1_200, dryKg: null }) },
+      { label: "Drawn from runs", value: formatWetDryMass({ wetKg: 1_200, dryKg: 570 }) },
     ]);
   });
 

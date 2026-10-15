@@ -9,8 +9,6 @@ import {
   and,
   eq,
   exists,
-  isNull,
-  or,
   sql,
   type SQL,
   type SQLWrapper,
@@ -50,19 +48,10 @@ export function inCreditBatchLineage(
       .innerJoin(
         biocharProducts,
         and(
-          or(
-            eq(
-              biocharProducts.id,
-              biocharProductSourceAllocations.biocharProductId,
-            ),
-            and(
-              isNull(biocharProducts.sourceBiocharStorageLocationId),
-              eq(
-                biocharProducts.linkedProductionRunId,
-                creditBatchProductionRuns.productionRunId,
-              ),
-            ),
-          )!,
+          eq(
+            biocharProducts.id,
+            biocharProductSourceAllocations.biocharProductId,
+          ),
           eq(biocharProducts.organizationId, ctx.organizationId),
           eq(biocharProducts.id, biocharProductId),
         ),

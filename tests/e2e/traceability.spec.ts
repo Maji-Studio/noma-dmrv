@@ -109,6 +109,7 @@ async function seedApplicationLineage(seededData: SeededChainData) {
       }, row => row);
 
       await insertOutputApplicationFixture(tx, {
+        fieldSizeHa: 1,
         organizationId: DEC_ORG_ID,
         id: ids.application,
         code: codes.application,
@@ -344,7 +345,8 @@ async function seedBatchChain(seededData: SeededChainData) {
           moistureContentPercent: 0,
         }, row => row);
         await insertOutputApplicationFixture(tx, {
-        organizationId: DEC_ORG_ID,
+          fieldSizeHa: 1,
+          organizationId: DEC_ORG_ID,
           id: member.applicationId,
           code: member.applicationCode,
           deliveryId: member.deliveryId,

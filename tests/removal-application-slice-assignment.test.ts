@@ -154,6 +154,7 @@ describe("Removal Application-slice assignment", () => {
         massDryKg: 300,
       }, row => row);
     const [application] = await insertOutputApplicationFixture(db, {
+      fieldSizeHa: 1,
         organizationId: TEST_ORG_ID,
         deliveryId: delivery.id,
         code: `RAS-A-${tag}`,

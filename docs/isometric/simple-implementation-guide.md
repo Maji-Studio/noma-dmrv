@@ -80,8 +80,10 @@ generation does not make an unavailable registry path available.
 ## Stockpiles, custody, and materiality
 
 `stockpile_events` exists with dates, risk/control fields, and a database check
-requiring an exception reference beyond 12 months. No operator workflow or
-submission gate currently consumes it.
+requiring an exception reference beyond 12 months. This is a legacy DB check
+only, not a requirement of pinned Biochar v1.1.1 or Agricultural Soils v1.1.0.
+Neither specifies a 12-month stockpiling rule. No operator workflow or
+submission gate currently consumes it; that absence is not a protocol compliance gap.
 
 There is no `custody_handoffs` table. The Chain-of-Custody Trail reconstructs
 movement and evidence from domain lineage. That is useful traceability, but it

@@ -701,17 +701,16 @@ export function buildRollForwardGraph(rollForward: ChainRunRollForward): {
 
 /**
  * Every roll-forward card, deduped, with each product's "Drawn from runs"
- * total across member runs. Shared by the DAG merge and the map popups. A
- * mass unknown for any run leaves that basis unknown rather than understated.
+ * total across member runs. Shared by the DAG merge and the map popups.
  */
 export function buildRollForwardNodes(rollForwards: ChainRunRollForward[]): LineageGraphNode[] {
-  const drawnByProductNode = new Map<string, { wetKg: number | null; dryKg: number | null }>();
+  const drawnByProductNode = new Map<string, { wetKg: number; dryKg: number }>();
   for (const rollForward of rollForwards) {
     for (const { product, drawnWetMassKg, drawnDryMassKg } of rollForward.products) {
       const nodeId = `biochar-product:${product.id}`;
       const total = drawnByProductNode.get(nodeId) ?? { wetKg: 0, dryKg: 0 };
-      total.wetKg = total.wetKg == null || drawnWetMassKg == null ? null : total.wetKg + drawnWetMassKg;
-      total.dryKg = total.dryKg == null || drawnDryMassKg == null ? null : total.dryKg + drawnDryMassKg;
+      total.wetKg += drawnWetMassKg;
+      total.dryKg += drawnDryMassKg;
       drawnByProductNode.set(nodeId, total);
     }
   }

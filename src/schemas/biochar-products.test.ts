@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   biocharProductFormSchema,
+  biocharProductEntrySchema,
+  biocharProductFrozenEditSchema,
   updateBiocharProductSchema,
 } from "./biochar-products";
 
@@ -26,6 +28,7 @@ function ingredientBin(massKg: number, massDryKg: number) {
     feedstockTypeCategory: "compost",
     massKg,
     massDryKg,
+    moistureContentPercent: 0,
   };
 }
 
@@ -119,5 +122,50 @@ describe("biochar product ingredient mass schemas", () => {
         ]),
       );
     }
+  });
+});
+
+
+describe("ingredient moisture on the form", () => {
+  const schema = biocharProductFormSchema.shape.ingredientBins;
+  it.each([undefined, null])("requires moisture for a positive ingredient mass (%s)", (moistureContentPercent) => {
+    const result = schema.safeParse([{ ...ingredientBin(20, 18), moistureContentPercent }]);
+    expect(result.success).toBe(false);
+    if (!result.success) expect(result.error.issues).toContainEqual(expect.objectContaining({
+      path: [0, "moistureContentPercent"], message: "Enter the measured moisture for every ingredient added.",
+    }));
+  });
+  it.each([undefined, null, 0, 100])("allows an unused ingredient with moisture %s", (moistureContentPercent) => {
+    expect(schema.safeParse([{ ...ingredientBin(0, 0), moistureContentPercent }]).success).toBe(true);
+  });
+  it.each([0, 100])("accepts measured moisture %s", (moistureContentPercent) => {
+    expect(schema.safeParse([{ ...ingredientBin(20, 0), moistureContentPercent }]).success).toBe(true);
+  });
+});
+
+
+describe("frozen ingredient moisture", () => {
+  it.each([null, undefined])("allows status edits with saved moisture %s while refusing new entries", (moistureContentPercent) => {
+    const ingredientBins = [{ ...ingredientBin(20, 18), moistureContentPercent }];
+    const input = {
+      ...POSTING_FIELDS,
+      facilityId: FACILITY_ID,
+      sourceBiocharStorageLocationId: SOURCE_BIN_ID,
+      storageLocationId: PRODUCT_BIN_ID,
+      massKg: 100,
+      moistureContentPercent: 10,
+      waterAddedKg: 0,
+      status: "ready",
+      ingredientBins,
+    };
+    expect(biocharProductFrozenEditSchema.parse(input).status).toBe("ready");
+    expect(updateBiocharProductSchema.parse({
+      productId: PRODUCT_ID, expectedVersion: 1, status: "ready", ingredientBins,
+    }).ingredientBins?.[0].moistureContentPercent).toBe(moistureContentPercent);
+    const create = biocharProductEntrySchema.safeParse(input);
+    expect(create.success).toBe(false);
+    if (!create.success) expect(create.error.issues).toContainEqual(expect.objectContaining({
+      path: ["ingredientBins", 0, "moistureContentPercent"],
+    }));
   });
 });

@@ -95,12 +95,11 @@ export interface BatchRunForwardProductFact {
   code: string;
   status: string | null;
   productionDate: Date;
-  massKg: number | null;
-  moistureContentPercent: number | null;
+  massKg: number;
+  moistureContentPercent: number;
   formulationName: string | null;
-  /** Null for a legacy lot whose recorded mass or moisture is missing. */
-  drawnWetMassKg: number | null;
-  drawnDryMassKg: number | null;
+  drawnWetMassKg: number;
+  drawnDryMassKg: number;
   deliveries: BatchRunForwardDeliveryFact[];
 }
 

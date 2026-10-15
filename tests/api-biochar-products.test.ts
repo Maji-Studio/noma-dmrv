@@ -1,4 +1,5 @@
 /** Real handlers, credentials and Postgres. Written for reviewer execution; never run by the implementation agent. */
+import { BIOCHAR_PRODUCT_REPRESENTATION_REVISION } from "@/config/api-rest";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
@@ -36,11 +37,11 @@ describe("biochar product reads", { timeout: TIMEOUT_MS }, () => {
       const response = await get(identifier);
       expect(response.status).toBe(200);
       expect(response.headers.get("cache-control")).toBe("private, no-store");
-      expect(response.headers.get("etag")).toBe(`"${pure.version}.1"`);
+      expect(response.headers.get("etag")).toBe(`"${pure.version}.${BIOCHAR_PRODUCT_REPRESENTATION_REVISION}"`);
       const { data: body } = await response.json();
-      const { expiresAt, ...data } = body;
+      const data = body;
       expect(biocharProductRepresentationSchema.parse(body)).toEqual(body);
-      expect(expiresAt === null || typeof expiresAt === "string").toBe(true);
+      expect(body).not.toHaveProperty("expiresAt");
       expect(data).toEqual({
         id: pure.id, code: pure.code, version: pure.version, facilityId: a.facility.id, formulationId: a.pure.id, status: "testing",
         placedAt: FIRST_PLACED_AT, productionDate: expect.any(String),

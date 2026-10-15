@@ -1,8 +1,9 @@
+import { BIOCHAR_PRODUCT_REPRESENTATION_REVISION } from "@/config/api-rest";
 import { expect, it } from "vitest";
 import { driverEtag, facilityEtag, feedstockEtag, feedstockTypeEtag, storageLocationEtag, supplierEtag, vehicleEtag, productionRunEtag, biocharProductEtag, formulationEtag, labSampleEtag, creditBatchEtag, customerEtag, orderEtag, deliveryEtag } from "./representation-etags";
 
 it("builds strong ETags from row version and representation revision", () => {
-  for (const etag of [driverEtag, feedstockEtag, feedstockTypeEtag, supplierEtag, vehicleEtag, biocharProductEtag, formulationEtag, labSampleEtag, creditBatchEtag, customerEtag, orderEtag, deliveryEtag]) {
+  for (const etag of [driverEtag, feedstockEtag, feedstockTypeEtag, supplierEtag, vehicleEtag, formulationEtag, labSampleEtag, creditBatchEtag, customerEtag, orderEtag, deliveryEtag]) {
     expect(etag({ version: 7 })).toBe('"7.1"');
   }
 });
@@ -27,4 +28,8 @@ it("keeps order read and write tags on the same representation revision", () => 
 it("keeps delivery read and write tags on the same representation revision", () => {
   expect(deliveryEtag({ version: 2 })).toBe('"2.1"');
   expect(deliveryEtag({ version: 3 })).toBe('"3.1"');
+});
+
+it("uses the current biochar product representation revision", () => {
+  expect(biocharProductEtag({ version: 7 })).toBe(`"7.${BIOCHAR_PRODUCT_REPRESENTATION_REVISION}"`);
 });

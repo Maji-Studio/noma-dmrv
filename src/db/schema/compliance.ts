@@ -14,10 +14,10 @@ import { facilities } from './facilities';
 import { organizations } from './auth';
 
 // ============================================
-// Stockpile Events - Compliance/duration tracking for stockpiling controls
-// Isometric Protocol: P0-07 stockpiling controls (§7)
+// Stockpile Events - Legacy stockpiling duration check
 // Tracks when material starts/ends stockpiling. Quantity tracked separately in biochar_storage_inventory.
-// DB enforces: >12-month stockpile requires an exception approval reference.
+// Legacy DB check: >12-month stockpile requires an exception approval reference.
+// Not a requirement of pinned Biochar v1.1.1 / Agricultural Soils v1.1.0.
 // ============================================
 
 export const stockpileEvents = pgTable(

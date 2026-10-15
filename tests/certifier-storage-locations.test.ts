@@ -133,6 +133,7 @@ async function createFixture(): Promise<Fixture> {
         massDryKg: 900,
       }, row => ({ id: row.id }));
     const [application] = await insertOutputApplicationFixture(tx, {
+      fieldSizeHa: 1,
         organizationId: TEST_ORG_ID,
         deliveryId: delivery.id,
         code: `AP-SLC-${runId}`,

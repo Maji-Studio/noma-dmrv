@@ -112,7 +112,9 @@ export function ResolvedErrorRevalidator<
   // RHF compares computed outputs by value (including dates and arrays).
   // Validation can publish a fresh values object without changing a field;
   // watching its identity would trigger another validation indefinitely.
-  const values = useWatch({ control, compute: (formValues) => formValues });
+  // Snapshot nested values: RHF can mutate them in place, which would also
+  // mutate the previous computed result and hide an ingredient-field change.
+  const values = useWatch({ control, compute: (formValues) => structuredClone(formValues) });
   const { errors } = useFormState({ control });
   const previousValues = useRef(values);
 
