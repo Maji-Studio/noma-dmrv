@@ -1,6 +1,6 @@
 import { relations, sql } from 'drizzle-orm';
 import { integer, check, doublePrecision, foreignKey, pgTable, text, timestamp, unique, uniqueIndex, uuid, real, jsonb } from 'drizzle-orm/pg-core';
-import { outputDrawOrder, outputStockMode, storageLocationType, durabilityOption } from './common';
+import { REACTOR_TYPES, outputDrawOrder, outputStockMode, storageLocationType, durabilityOption } from './common';
 import { organizations } from './auth';
 
 // ============================================
@@ -84,7 +84,7 @@ export const reactors = pgTable(
     facilityId: uuid('facility_id')
       .notNull(),
     // Isometric Protocol: Reactor design requirements (Section 9.2)
-    reactorType: text('reactor_type').notNull(),
+    reactorType: text('reactor_type', { enum: REACTOR_TYPES }).notNull(),
     // Sampling is not a reactor property; each credit batch stores its own
     // sampled/unsampled choice within a facility/feedstock process (ADR 0022).
     nominalThroughputTph: real('nominal_throughput_tph'),
@@ -95,7 +95,9 @@ export const reactors = pgTable(
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },
   (table) => [
-    check('reactors_reactor_type_valid', sql`${table.reactorType} in ('fixed-bed', 'auger', 'rotary-kiln', 'batch', 'continuous')`),
+    check('reactors_reactor_type_valid', sql`${table.reactorType} in (${sql.join(
+      REACTOR_TYPES.map((reactorType) => sql.raw(`'${reactorType}'`)), sql`, `,
+    )})`),
     unique('reactors_organization_id_code_unique').on(table.organizationId, table.code),
     foreignKey({
       columns: [table.facilityId, table.organizationId],

@@ -9,7 +9,7 @@ export const feedstockTypeRepresentationSchema = z.object({
   usage: z.enum(["pyrolysis", "blend"]).describe("Material use: pyrolysis feedstock or blend ingredient."),
 });
 export type FeedstockTypeRepresentation = z.infer<typeof feedstockTypeRepresentationSchema>;
-export type FeedstockTypeRepresentationInput = Omit<LookupRepresentationInput<FeedstockTypeRepresentation>, "category"> & { category: string };
+export type FeedstockTypeRepresentationInput = LookupRepresentationInput<FeedstockTypeRepresentation>;
 
 export function representFeedstockType(row: FeedstockTypeRepresentationInput): FeedstockTypeRepresentation {
   return feedstockTypeRepresentationSchema.parse({ ...row, ...lookupInstants(row) });

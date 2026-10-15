@@ -1,11 +1,31 @@
 import { randomUUID } from "node:crypto";
-import { afterEach, describe, expect, it } from "vitest";
-import { eq } from "drizzle-orm";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { and, eq } from "drizzle-orm";
+import type { Pool } from "pg";
 import { db } from "@/db";
 import { facilities, organizations, productionRuns, reactors } from "@/db/schema";
 import { createProductionRunInTransaction } from "@/data-access/production-runs";
 import { deleteReactor, updateReactor } from "@/data-access/reactors";
+import { nextVersion } from "@/data-access/row-version";
 import { makeTestOrgContext } from "./helpers/test-org";
+import { createTestPool } from "./helpers/operation-fixture";
+import { openOperationBarrier, waitForBlockedOperations } from "./helpers/operation-barrier";
+
+// Give the bounded lock observer time to prove a writer is waiting.
+const originalLockTimeout = vi.hoisted(() => {
+  const original = process.env.DB_POOL_LOCK_TIMEOUT_MS;
+  process.env.DB_POOL_LOCK_TIMEOUT_MS = "5000";
+  return original;
+});
+const BARRIER_CONNECTIONS = 2;
+let barrierPool: Pool;
+
+beforeAll(() => { barrierPool = createTestPool(BARRIER_CONNECTIONS); });
+afterAll(async () => {
+  await barrierPool.end();
+  if (originalLockTimeout === undefined) delete process.env.DB_POOL_LOCK_TIMEOUT_MS;
+  else process.env.DB_POOL_LOCK_TIMEOUT_MS = originalLockTimeout;
+});
 
 const fixtures: Awaited<ReturnType<typeof fixture>>[] = [];
 
@@ -65,19 +85,67 @@ describe("reactor facility changes", () => {
     expect(edited.identifier).toBe("Renamed reactor");
   });
 
-  it("serializes a move against concurrent production-run creation", async () => {
+  it("waits for a run's reactor share lock, then rejects the move after the run commits", async () => {
     const { ctx, reactor, source, destination } = await seed();
-    const results = await Promise.allSettled([
-      updateReactor(ctx, reactor.id, { expectedVersion: reactor.version, facilityId: destination.id }),
-      db.transaction((tx) => createProductionRunInTransaction(ctx, tx, {
+    const barrier = await openOperationBarrier(barrierPool);
+    let move: Promise<PromiseSettledResult<unknown>[]> | undefined;
+    try {
+      await barrier.tx.select({ id: reactors.id }).from(reactors)
+        .where(and(eq(reactors.id, reactor.id), eq(reactors.organizationId, ctx.organizationId))).for("share");
+      move = Promise.allSettled([
+        updateReactor(ctx, reactor.id, { expectedVersion: reactor.version, facilityId: destination.id }),
+      ]);
+      await waitForBlockedOperations(barrierPool, barrier.pid, 1);
+      await createProductionRunInTransaction(ctx, barrier.tx, {
         code: "PR-RACE", reactorId: reactor.id, facilityId: source.id,
         startTime: new Date("2026-01-01T00:00:00Z"), endTime: null,
-      })),
-    ]);
-    expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
-    const [saved] = await db.select().from(reactors).where(eq(reactors.id, reactor.id));
-    const runs = await db.select().from(productionRuns).where(eq(productionRuns.organizationId, ctx.organizationId));
-    for (const run of runs) expect(run.facilityId).toBe(saved.facilityId);
+      });
+      // The move still cannot acquire the reactor until the run commits.
+      await waitForBlockedOperations(barrierPool, barrier.pid, 1);
+      await barrier.commit();
+      expect((await move)[0]).toMatchObject({
+        status: "rejected", reason: { message: expect.stringContaining("associated production runs") },
+      });
+      const [saved] = await db.select().from(reactors)
+        .where(and(eq(reactors.id, reactor.id), eq(reactors.organizationId, ctx.organizationId)));
+      const runs = await db.select().from(productionRuns).where(eq(productionRuns.organizationId, ctx.organizationId));
+      expect(saved.facilityId).toBe(source.id);
+      expect(runs).toMatchObject([{ facilityId: source.id, reactorId: reactor.id }]);
+    } finally {
+      await barrier.rollback();
+      await move;
+    }
+  });
+
+  it("waits for an uncommitted reactor move, then rejects the run at the old facility", async () => {
+    const { ctx, reactor, source, destination } = await seed();
+    const barrier = await openOperationBarrier(barrierPool);
+    let creation: Promise<PromiseSettledResult<unknown>[]> | undefined;
+    try {
+      await barrier.tx.select({ id: reactors.id }).from(reactors)
+        .where(and(eq(reactors.id, reactor.id), eq(reactors.organizationId, ctx.organizationId))).for("update");
+      await barrier.tx.update(reactors).set({ facilityId: destination.id, version: nextVersion(reactors.version) })
+        .where(and(eq(reactors.id, reactor.id), eq(reactors.organizationId, ctx.organizationId)));
+      creation = Promise.allSettled([
+        db.transaction((tx) => createProductionRunInTransaction(ctx, tx, {
+          code: "PR-RACE", reactorId: reactor.id, facilityId: source.id,
+          startTime: new Date("2026-01-01T00:00:00Z"), endTime: null,
+        })),
+      ]);
+      // The unlocked preflight sees the source facility; the locked recheck waits.
+      await waitForBlockedOperations(barrierPool, barrier.pid, 1);
+      await barrier.commit();
+      expect((await creation)[0]).toMatchObject({
+        status: "rejected", reason: { message: "Reactor does not belong to the selected facility" },
+      });
+      const [saved] = await db.select().from(reactors)
+        .where(and(eq(reactors.id, reactor.id), eq(reactors.organizationId, ctx.organizationId)));
+      expect(saved.facilityId).toBe(destination.id);
+      expect(await db.select().from(productionRuns).where(eq(productionRuns.organizationId, ctx.organizationId))).toEqual([]);
+    } finally {
+      await barrier.rollback();
+      await creation;
+    }
   });
 
   it("does not allow a foreign organization to move the reactor", async () => {

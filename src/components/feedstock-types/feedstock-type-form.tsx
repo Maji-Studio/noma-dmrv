@@ -20,7 +20,6 @@ import {
   feedstockTypeFormSchema,
   BLEND_FEEDSTOCK_CATEGORY_OPTIONS,
   PYROLYSIS_FEEDSTOCK_CATEGORY_OPTIONS,
-  feedstockCategories,
   type FeedstockTypeUsage,
   type FeedstockTypeFormData,
 } from "@/schemas/feedstock-types";
@@ -162,9 +161,7 @@ export function FeedstockTypeForm({
     resolver: zodResolver(feedstockTypeFormSchema),
     defaultValues: {
       name: feedstockType?.name ?? "",
-      category: feedstockType?.category && (feedstockCategories as readonly string[]).includes(feedstockType.category)
-        ? (feedstockType.category as FeedstockTypeFormData["category"])
-        : undefined,
+      category: feedstockType?.category,
       usage: initialFeedstockTypeUsage(feedstockType?.usage, defaultUsage),
       description: feedstockType?.description ?? "",
       // No form field anymore (UI-only removal) — kept in form state so
