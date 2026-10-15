@@ -58,7 +58,8 @@ async function main(): Promise<void> {
   const { createFacility } = await import("@/data-access/facilities");
   const { createDriver, createVehicle } = await import("@/data-access/quick-add");
   const { feedstockEtag } = await import("@/lib/api/representation-etags");
-  const { runOperation } = await import("@/lib/operations/runner");
+  const { runOperation: runWithOptions } = await import("@/lib/operations/runner");
+  const runOperation: typeof runWithOptions = (operation, ctx, input, options) => runWithOptions(operation, ctx, input, { ...options, activitySource: "script" });
   const { logFeedstockDelivery } = await import("@/lib/operations/feedstocks");
   const { formatFacilityDate } = await import("@/lib/date-utils");
   const { createSupplierLocation } = await import("@/data-access/suppliers");
@@ -219,7 +220,7 @@ async function main(): Promise<void> {
   // Delivery posting bumps the product version; PATCH must use its current ETag.
   const currentProduct = await readApiBiocharProduct(ctx, { id: product.id });
   const { seedDocuments } = await import("./seed-documents");
-  const documents = await seedDocuments(ctx, { delivery: delivery.id, feedstock: feedstock.id, lab_sample: labSample.id });
+  const documents = await seedDocuments(ctx, { delivery: delivery.id, feedstock: feedstock.id, lab_sample: labSample.id }, { activitySource: "script" });
   const credential = await createApiKey(ctx, {
     name: FIXTURE_LABEL, scopes: [...API_SCOPES], expiresIn: API_KEY_DEFAULT_EXPIRY_SECONDS,
   });

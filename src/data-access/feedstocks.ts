@@ -728,12 +728,13 @@ export async function deleteFeedstockInTransaction(
   feedstockId: string,
   expectedVersion: number,
   snapshotStock?: SnapshotStock,
-): Promise<void> {
+): Promise<{ facilityId: string }> {
   requireOrgScope(ctx);
 
   const [locked] = await tx
     .select({
       id: feedstocks.id,
+      facilityId: feedstocks.facilityId,
       version: feedstocks.version,
       status: feedstocks.status,
       storageLocationId: feedstocks.storageLocationId,
@@ -807,6 +808,7 @@ export async function deleteFeedstockInTransaction(
     { entityType: "feedstock", entityId: feedstockId },
     ...transportLegDocuments,
   ]);
+  return { facilityId: locked.facilityId };
 }
 
 // ============================================
