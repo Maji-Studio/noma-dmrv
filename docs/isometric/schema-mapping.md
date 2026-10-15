@@ -24,7 +24,7 @@
 | Low-carbon procurement | `power_procurement_evidence` in `src/db/schema/compliance.ts` | schema-implemented | No conjunctive EC1-EC5 evaluator, annual intensity roll-up, or claim gate |
 | Electricity/fuel metering | Run-level electricity and three diesel input fields in `src/db/schema/production.ts`; original readings CSV retained as `sensor_data` documents | partial | No queryable hourly electricity meter stream or complete meter/fuel evidence metadata |
 | Registry energy mapping | `src/lib/isometric/semantic-binding-catalog.ts` and `src/lib/isometric/utils/aggregation.ts` | implemented | Electricity is one grid component; diesel uses separate `Generator diesel usage` and `Startup diesel usage` components. Display-name mapping remains an operational coupling |
-| Transportation | Leg method, one-way distance (counted as a round trip), mass, vehicle type/model year, and evidence references in `src/db/schema/logistics.ts` | partial | Vehicle type/model year stay in the evidence ledger; mixed values are advisory. The factor is a fixed template input. Fleet coverage by its value and Source, fallback justification, and per-record-type evidence gates remain open |
+| Transportation | Leg method, one-way distance (counted as a round trip), mass, vehicle type/model year, and evidence references in `src/db/schema/logistics.ts` | partial | Vehicle type/model year stay in the evidence ledger; mixed values are advisory. The factor is a fixed template input. Fleet coverage by the factor and its Source remains open, as do per-record-type evidence gates. Distance-method fallback justification lives in the PDD, outside noma |
 | BCU accounting | None | missing | No BCU schema, retirement, ownership, cap, additionality, or anti-double-count structures |
 | Embodied inventory | Generic documents only | missing | No item/material/equipment inventory or complete factor records |
 | GHG/SSR materiality assessment | None | missing | `ghg_materiality_assessments` does not exist; no issuance gate |
@@ -34,3 +34,10 @@
 | Safety margin | Named `Safety margin` mapping in `src/lib/isometric/semantic-binding-catalog.ts` | implemented | noma submits removal dry mass only; the fixed carbon intensity and its justification remain registry-owned |
 | GHG Statement report | `certifier_ghg_statement_reports`, `src/fn/certification/ghg-statement-reports.ts` | implemented | Generated data summary is immutable after preparation/approval; external report URL remains supported for project-specific qualitative reports |
 | Reporting window | `src/fn/certification/removal-reporting-window.ts` | partial | End is latest application date; start still uses earliest production start instead of earliest feedstock sourcing |
+
+The distance-method justification is documented in the PDD (decision #942 q11,
+recorded in [#1012](https://github.com/Maji-Studio/noma-dmrv/issues/1012)). It
+explains why energy-usage data is unavailable. noma keeps its distance-based
+transport path without adding a justification field or submission gate. This
+resolves that part of `isometric/transport-v1.1-evidence`; the other transport
+evidence gaps remain open.
