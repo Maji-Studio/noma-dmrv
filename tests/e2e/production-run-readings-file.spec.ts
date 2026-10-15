@@ -60,7 +60,6 @@ async function seedProductionRun(seededData: SeededChainData) {
       startTime: RUN_WINDOW_START,
       endTime: RUN_WINDOW_END,
       reactorId: seededData.reactor.id,
-      feedstockStorageLocationId: seededData.feedstockStorageLocation.id,
       feedstockWetMassKg: 50,
       feedstockMoisturePercent: 15,
       feedstockMassDryKg: 42.5,

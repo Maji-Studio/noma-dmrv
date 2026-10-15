@@ -6,8 +6,9 @@
 
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { nullableNumericValue } from "@/lib/form-utils";
-import { formatLocalDateTime } from "@/lib/date-utils";
+import { ResolvedErrorRevalidator } from "@/components/forms/resolved-error-revalidator";
+import { EventTimeInput } from "@/components/forms/event-time-input";
+import { useFacilityClock } from "@/hooks/use-facility-context";
 import { FormField, FormInput, FormFileUpload, FormActions, FormSection, MoistureField } from "@/components/forms";
 import { EntitySelect } from "@/components/forms/entity-select";
 import { FormTextarea } from "@/components/forms/form-textarea";
@@ -25,6 +26,7 @@ import type { ProductionSampleWithRelations } from "@/data-access/production-sam
 
 interface ProductionSampleFormProps {
   productionRunId: string;
+  facilityId: string;
   sample?: ProductionSampleWithRelations;
   onSubmit: (data: ProductionSampleFormData) => Promise<void> | void;
   onCancel?: () => void;
@@ -37,6 +39,7 @@ interface ProductionSampleFormProps {
 
 export function ProductionSampleForm({
   productionRunId,
+  facilityId,
   sample,
   onSubmit,
   onCancel,
@@ -47,11 +50,13 @@ export function ProductionSampleForm({
   onRemoveDeferredAttachment,
 }: ProductionSampleFormProps) {
   const isEditMode = !!sample;
+  const { timeZone, hint } = useFacilityClock(facilityId);
 
   const {
     register,
     handleSubmit,
     control,
+    trigger,
     formState: { errors },
   } = useForm({
     resolver: zodResolver(productionSampleFormSchema),
@@ -59,7 +64,7 @@ export function ProductionSampleForm({
       const ts = sample?.timestamp ? new Date(sample.timestamp) : new Date();
       return {
       productionRunId,
-      timestamp: formatLocalDateTime(ts),
+      timestamp: ts.toISOString(),
       weightGrams: sample?.weightGrams ?? undefined,
       volumeMl: sample?.volumeMl ?? undefined,
       temperatureC: sample?.temperatureC ?? undefined,
@@ -80,6 +85,7 @@ export function ProductionSampleForm({
 
   return (
     <form className="space-y-20" onSubmit={onFormSubmit}>
+      <ResolvedErrorRevalidator control={control} trigger={trigger} />
       {/* Sample info */}
       <FormSection title="Sample info" divider={false}>
 
@@ -87,15 +93,16 @@ export function ProductionSampleForm({
           <FormField
             id="timestamp"
             label="Timestamp"
+            cue={hint}
             error={errors.timestamp?.message}
             required
           >
-            <FormInput
+            <EventTimeInput
               id="timestamp"
-              type="datetime-local"
+              name="timestamp"
+              control={control}
+              timeZone={timeZone}
               disabled={isSubmitting}
-              error={!!errors.timestamp}
-              {...register("timestamp")}
             />
           </FormField>
 
@@ -140,9 +147,7 @@ export function ProductionSampleForm({
               placeholder="e.g. 250"
               disabled={isSubmitting}
               error={!!errors.weightGrams}
-              {...register("weightGrams", {
-                setValueAs: nullableNumericValue,
-              })}
+              {...register("weightGrams")}
             />
           </FormField>
 
@@ -158,9 +163,7 @@ export function ProductionSampleForm({
               placeholder="e.g. 500"
               disabled={isSubmitting}
               error={!!errors.volumeMl}
-              {...register("volumeMl", {
-                setValueAs: nullableNumericValue,
-              })}
+              {...register("volumeMl")}
             />
           </FormField>
 
@@ -176,9 +179,7 @@ export function ProductionSampleForm({
               placeholder="e.g. 550"
               disabled={isSubmitting}
               error={!!errors.temperatureC}
-              {...register("temperatureC", {
-                setValueAs: nullableNumericValue,
-              })}
+              {...register("temperatureC")}
             />
           </FormField>
         </div>
@@ -194,9 +195,7 @@ export function ProductionSampleForm({
             disabled={isSubmitting}
             placeholder="e.g. 5.2"
             step="any"
-            registration={register("moistureContentPercent", {
-              setValueAs: nullableNumericValue,
-            })}
+            registration={register("moistureContentPercent")}
           />
 
           <FormField
@@ -211,9 +210,7 @@ export function ProductionSampleForm({
               placeholder="e.g. 75.0"
               disabled={isSubmitting}
               error={!!errors.fixedCarbonPercent}
-              {...register("fixedCarbonPercent", {
-                setValueAs: nullableNumericValue,
-              })}
+              {...register("fixedCarbonPercent")}
             />
           </FormField>
 
@@ -229,9 +226,7 @@ export function ProductionSampleForm({
               placeholder="e.g. 15.0"
               disabled={isSubmitting}
               error={!!errors.volatileMatterPercent}
-              {...register("volatileMatterPercent", {
-                setValueAs: nullableNumericValue,
-              })}
+              {...register("volatileMatterPercent")}
             />
           </FormField>
 
@@ -247,9 +242,7 @@ export function ProductionSampleForm({
               placeholder="e.g. 4.8"
               disabled={isSubmitting}
               error={!!errors.ashContentPercent}
-              {...register("ashContentPercent", {
-                setValueAs: nullableNumericValue,
-              })}
+              {...register("ashContentPercent")}
             />
           </FormField>
         </div>

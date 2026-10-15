@@ -1,3 +1,4 @@
+import { chooseRunStatus } from "./helpers/run-status";
 /** Repeatable, local-only PR gallery. Run serially with the isolated 3102 environment. */
 import { mkdir, appendFile } from "node:fs/promises";
 import path from "node:path";
@@ -289,6 +290,7 @@ test("gallery production run create read edit credit batch and sample read", asy
   await selectEntity(page, "Reactor", d.reactor.id, d.reactor.identifier);
   await page.locator("#startDate").fill(DATE);
   await page.locator("#startTime").fill("08:00");
+  await chooseRunStatus(page, "complete");
   await page.locator("#endDate").fill(DATE);
   await page.locator("#endTime").fill("14:00");
   if (await page.locator('input[name="feedstockDraws.0.wetMassKg"]').count() === 0) await page.getByRole("button", { name: "Add source", exact: true }).click();

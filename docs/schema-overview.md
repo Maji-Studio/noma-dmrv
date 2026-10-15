@@ -47,6 +47,13 @@ database that still holds draft runs: delete those rows or reset the database
 first (`pnpm db:reset` locally; shared staging uses the manual reset workflow
 in [database.md](./database.md), announced first).
 
+Production starts have no database time default. Physical feedstock sources
+live only in `production_run_feedstock_draws`; the run stores their total wet
+mass. Run moisture must be below 100%. Incidents store one event instant and
+require severity. In-process measurements have no separate code and require
+at least one measured value; weight and volume are non-negative. Both child
+event times use the parent run's facility clock.
+
 ## API bookkeeping
 
 All four tables live in `src/db/schema/api.ts`:

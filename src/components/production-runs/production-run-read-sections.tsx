@@ -117,8 +117,8 @@ export function productionRunSheetSections(run: ProductionRunWithRelations, faci
       fields: [],
       content: (
         <div className="space-y-20">
-          <ProductionSampleTable productionRunId={run.id} readOnly />
-          <ProductionIncidentTable productionRunId={run.id} readOnly />
+          <ProductionSampleTable facilityId={run.facilityId} productionRunId={run.id} readOnly />
+          <ProductionIncidentTable facilityId={run.facilityId} productionRunId={run.id} readOnly />
         </div>
       ),
     },

@@ -160,7 +160,6 @@ export async function seedGroupedRemovalWithChain(
         biocharMoisturePercent: BIOCHAR_MOISTURE_PCT,
         biocharDryMassKg: BIOCHAR_DRY_MASS_KG,
         biocharStorageLocationId: refs.biocharStorageLocationId,
-        feedstockStorageLocationId: refs.feedstockStorageLocationId,
       });
       await tx.insert(schema.productionRunFeedstocks).values({
         organizationId: DEC_ORG_ID,
@@ -630,7 +629,6 @@ export async function seedUngroupedReadyBatchWithChain(
         dieselGensetLiters: READY_DIESEL_GENSET_L,
         electricityKwh: READY_ELECTRICITY_KWH,
         biocharStorageLocationId: refs.biocharStorageLocationId,
-        feedstockStorageLocationId: refs.feedstockStorageLocationId,
       });
       await tx.insert(schema.documents).values({
         organizationId: DEC_ORG_ID,

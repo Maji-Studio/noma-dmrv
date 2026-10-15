@@ -26,12 +26,13 @@ import {
   type ProductionIncidentFormData,
 } from "@/schemas/production-incidents";
 import type { ProductionIncidentWithRelations } from "@/data-access/production-incidents";
-import { formatDateTime } from "@/lib/format-utils";
+import { formatFacilityDateTime } from "@/lib/format-utils";
+import { useFacilityClock } from "@/hooks/use-facility-context";
 import { MISSING_VALUE } from "@/lib/copy-utils";
 
 interface ProductionIncidentTableProps {
   productionRunId: string;
-  facilityId?: string;
+  facilityId: string;
   defaultReactorId?: string | null;
   defaultOperatorId?: string | null;
   readOnly?: boolean;
@@ -49,6 +50,7 @@ export function ProductionIncidentTable({
   const updateIncident = useUpdateProductionIncident();
   const deleteIncident = useDeleteProductionIncident(productionRunId);
   const toast = useToast();
+  const { timeZone } = useFacilityClock(facilityId);
 
   const [formDialog, setFormDialog] = useState<
     | { open: false }
@@ -155,12 +157,10 @@ export function ProductionIncidentTable({
                   className="border-b border-[var(--color-border-tertiary)] hover:bg-[var(--color-background-medium)]"
                 >
                   <td className="py-8 pr-12 font-medium">
-                    {formatDateTime(incident.incidentTime)}
+                    {formatFacilityDateTime(incident.incidentTime, timeZone)}
                   </td>
                   <td className="py-8 pr-12">
-                    {incident.severity
-                      ? formatProductionIncidentSeverity(incident.severity)
-                      : MISSING_VALUE.notRecorded}
+                    {formatProductionIncidentSeverity(incident.severity)}
                   </td>
                   <td className="py-8 pr-12">
                     {incident.reactorIdentifier ?? MISSING_VALUE.notRecorded}

@@ -855,7 +855,6 @@ describe("parent document retirement", () => {
         organizationId: TEST_ORG_ID,
         productionRunId: run.id,
         incidentTime: new Date("2026-07-01T11:00:00Z"),
-        incidentDate: new Date("2026-07-01T11:00:00Z"),
         description: "Nested evidence test incident",
         severity: "low",
       })

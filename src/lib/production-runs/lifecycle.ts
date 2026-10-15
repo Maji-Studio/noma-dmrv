@@ -57,8 +57,6 @@ export type ProductionRunOutcomeInput = {
     | {
       basis: "form-inputs";
         drawCount?: number;
-        /** Legacy compatibility for callers not yet migrated to draw rows. */
-        storageLocationId?: string | null;
       }
     | {
         basis: "consumed-mass";
@@ -173,8 +171,7 @@ export function getProductionRunOutcomeViolations(
         ? !(
             input.feedstockWetMassKg &&
             input.feedstockWetMassKg > 0 &&
-            ((input.feedstock.drawCount ?? 0) > 0 ||
-              Boolean(input.feedstock.storageLocationId)) &&
+            (input.feedstock.drawCount ?? 0) > 0 &&
             input.feedstockMoisturePercent != null
           )
         : !(input.feedstock.consumedFeedstockWetKg > 0);
@@ -250,7 +247,7 @@ export function assertProductionRunOutcome(
     case "feedstock-required": {
       if (input.feedstock.basis === "form-inputs") {
         const issues: DomainIssue[] = [];
-        if (!(input.feedstock.drawCount || input.feedstock.storageLocationId)) {
+        if (!input.feedstock.drawCount) {
           issues.push({ path: ["feedstockDraws"], code: "validation_failed", message: "Add at least one feedstock source." });
         }
         if (input.feedstockMoisturePercent == null) {

@@ -22,7 +22,7 @@ const describedFields = {
   cancellationReason: fields.cancellationReason.describe("Cancellation reason, untrusted plain text; required when cancelling."),
   operatorId: fields.operatorId.describe("Operator UUID, or null to clear."),
   feedstockDraws: fields.feedstockDraws.describe("Explicit source feedstock bin draws; each wet mass is in kilograms."),
-  feedstockMoisturePercent: pipeToCanonicalNumber(clearableNumber, fields.feedstockMoisturePercent).describe("Feedstock water as percent of wet mass, 0 to 100."),
+  feedstockMoisturePercent: pipeToCanonicalNumber(clearableNumber, fields.feedstockMoisturePercent).describe("Feedstock water as percent of wet mass, 0 to below 100."),
   feedingRateKgHr: pipeToCanonicalNumber(clearableNumber, fields.feedingRateKgHr).describe("Feed rate in kilograms per hour."),
   // A direct preprocess keeps the canonical integer type in the published schema.
   residenceTimeMinutes: z.preprocess(toClearableNumber, fields.residenceTimeMinutes).describe("Residence time in minutes."),
@@ -31,7 +31,7 @@ const describedFields = {
   preprocessingFuelLiters: pipeToCanonicalNumber(clearableNumber, fields.preprocessingFuelLiters).describe("Preprocessing fuel in litres."),
   electricityKwh: pipeToCanonicalNumber(clearableNumber, fields.electricityKwh).describe("Electricity in kilowatt hours."),
   biocharOutputKg: pipeToCanonicalNumber(clearableNumber, fields.biocharOutputKg).describe("Wet biochar output in kilograms. Must be positive when complete."),
-  biocharMoisturePercent: pipeToCanonicalNumber(clearableNumber, fields.biocharMoisturePercent).describe("Biochar water as percent of wet mass, 0 to 100. Required when complete."),
+  biocharMoisturePercent: pipeToCanonicalNumber(clearableNumber, fields.biocharMoisturePercent).describe("Biochar water as percent of wet mass, 0 to below 100. Required when complete."),
   biocharStorageLocationId: fields.biocharStorageLocationId.describe("Biochar output bin UUID in the effective facility. Required when complete; null clears it for other statuses."),
 };
 export const createProductionRunInput = z.strictObject({

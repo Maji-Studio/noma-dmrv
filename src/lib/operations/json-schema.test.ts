@@ -183,7 +183,7 @@ describe("toOperationJsonSchema: production run", () => {
     });
     expect(properties.biocharMoisturePercent).toMatchObject({
       multipleOf: STORED_PERCENT_INPUT_STEP,
-      anyOf: [{ type: "number", minimum: 0, maximum: 100 }, { type: "null" }],
+      anyOf: [{ type: "number", minimum: 0, exclusiveMaximum: 100 }, { type: "null" }],
     });
     expect(properties.residenceTimeMinutes).toEqual({
       anyOf: [

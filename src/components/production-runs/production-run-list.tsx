@@ -627,7 +627,7 @@ export function ProductionRunList() {
         >
           {sideSheetEntity && sideSheetMode === "edit" ? (
             <>
-              <ProductionSampleTable productionRunId={sideSheetEntity.id} />
+              <ProductionSampleTable facilityId={sideSheetEntity.facilityId} productionRunId={sideSheetEntity.id} />
               <ProductionIncidentTable
                 productionRunId={sideSheetEntity.id}
                 facilityId={sideSheetEntity.facilityId}

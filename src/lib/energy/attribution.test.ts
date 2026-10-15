@@ -25,7 +25,6 @@ function run(overrides: Partial<EnergyRunInput> & { id: string }): EnergyRunInpu
     dieselGensetLiters: 20,
     preprocessingFuelLiters: 5,
     electricityKwh: 100,
-    lowCarbonPercentage: null,
     biocharDryMassKg: 900,
     ...overrides,
   };
@@ -72,15 +71,15 @@ describe("buildEnergyBreakdown", () => {
     ]);
   });
 
-  it("estimates diesel and takes the low-carbon share off grid electricity", () => {
+  it("estimates diesel and grid electricity from their configured factors", () => {
     const breakdown = buildEnergyBreakdown(
-      inputs({ runs: [run({ id: "a", lowCarbonPercentage: 40 })] }),
+      inputs({ runs: [run({ id: "a" })] }),
       FACTORS,
       ALL_TIME,
     );
     const { kg, activity } = record(breakdown.records, "a").footprint;
     expect(activity.grid).toBe(100);
-    expect(kg?.grid).toBeCloseTo(100 * 0.5 * 0.6);
+    expect(kg?.grid).toBeCloseTo(100 * 0.5);
     expect(kg?.startup).toBeCloseTo(10 * 2.68);
     expect(kg?.genset).toBeCloseTo(20 * 2.68);
     expect(kg?.preprocessing).toBeCloseTo(5 * 2.68);

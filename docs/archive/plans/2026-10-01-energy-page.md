@@ -57,7 +57,7 @@ factor. A null reading is a **missing reading**, never zero.
 | Startup diesel | `diesel_operation_liters` | diesel | run start (facility day) |
 | Genset diesel | `diesel_genset_liters` | diesel | run start |
 | Preprocessing fuel | `preprocessing_fuel_liters` | diesel | run start |
-| Grid electricity | `electricity_kwh` | grid × (1 − `low_carbon_percentage`/100) | run start |
+| Grid electricity | `electricity_kwh` | grid × configured grid factor | run start |
 | Feedstock transport | feedstock legs, 2 × km × t | road freight | feedstock receipt |
 | Biochar delivery | 2 × effective km × delivered wet t | road freight | delivery date |
 
@@ -111,7 +111,7 @@ does this:
   the customer location's) and its delivered wet mass; either missing is a
   missing reading. In a credit batch's figures it counts by the share of the
   truck's dry mass that came from the batch's runs.
-- **Grid**: a null `low_carbon_percentage` counts as no low-carbon share.
+- **Grid**: recorded electricity uses the configured grid factor.
 - **A run carried by a delivery or application without a dry output** cannot
   be scaled, so each source it would contribute counts as a missing reading
   rather than a guessed share.

@@ -11,11 +11,11 @@ import {
   massKgSchema,
   expectedVersionSchema,
   optionalDateOnly,
-  optionalStoredPercent,
+  optionalStoredMoisture,
   PG_INTEGER_MAX,
   requiredDateOnly,
   requiredPositiveMassKgSchema,
-  storedPercentSchema,
+  storedMoistureSchema,
   toIntOrNull,
   toNumberOrNull,
   uuidSchema,
@@ -276,7 +276,7 @@ const productionRunFormObject = z.object({
       .positive("Wet mass must be a positive number")
       .nullable(),
   ).optional(),
-  feedstockMoisturePercent: optionalStoredPercent,
+  feedstockMoisturePercent: optionalStoredMoisture,
 
   // Processing Parameters (Isometric Protocol Section 9)
   feedingRateKgHr: z.preprocess(toNumberOrNull, z.number().positive("Feeding rate must be positive").nullable()).optional(),
@@ -293,7 +293,7 @@ const productionRunFormObject = z.object({
     toNumberOrNull,
     massKgSchema("Biochar output must be non-negative").nullable(),
   ).optional(),
-  biocharMoisturePercent: optionalStoredPercent,
+  biocharMoisturePercent: optionalStoredMoisture,
   biocharStorageLocationId: emptyToNull.or(z.string().uuid()).nullable().optional(),
   feedstockStorageLocationId: emptyToNull.or(z.string().uuid()).nullable().optional(),
 });
@@ -540,9 +540,7 @@ export const updateProductionRunSchema = z.object({
   operatorId: emptyToNull.or(uuidSchema()).nullable().optional(),
   feedstockDraws: productionRunFeedstockDrawsSchema.optional(),
   feedstockWetMassKg: massKgSchema().positive().optional().nullable(),
-  feedstockMoisturePercent: storedPercentSchema()
-    .min(0)
-    .max(100)
+  feedstockMoisturePercent: storedMoistureSchema()
     .optional()
     .nullable(),
   feedingRateKgHr: z.number().positive().optional().nullable(),
@@ -552,9 +550,7 @@ export const updateProductionRunSchema = z.object({
   preprocessingFuelLiters: z.number().min(0).optional().nullable(),
   electricityKwh: z.number().min(0).optional().nullable(),
   biocharOutputKg: massKgSchema().optional().nullable(),
-  biocharMoisturePercent: storedPercentSchema()
-    .min(0)
-    .max(100)
+  biocharMoisturePercent: storedMoistureSchema()
     .optional()
     .nullable(),
   biocharStorageLocationId: emptyToNull.or(uuidSchema()).nullable().optional(),

@@ -226,7 +226,6 @@ async function createFullWorkflowData(): Promise<TestWorkflowData> {
       biocharDryMassKg: 150,
       biocharMoisturePercent: 0,
       biocharStorageLocationId: ids.biocharStorageLocation,
-      feedstockStorageLocationId: ids.storageLocation,
     });
 
     // 11. Link feedstock to production run

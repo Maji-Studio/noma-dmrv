@@ -137,15 +137,7 @@ export function ProductionRunForm({
             storageLocationId: draw.storageLocationId,
             wetMassKg: draw.wetMassKg,
           }))
-        : productionRun?.feedstockStorageLocationId &&
-            productionRun.feedstockWetMassKg
-          ? [
-              {
-                storageLocationId: productionRun.feedstockStorageLocationId,
-                wetMassKg: productionRun.feedstockWetMassKg,
-              },
-            ]
-          : [{ ...EMPTY_FEEDSTOCK_DRAW }],
+        : [{ ...EMPTY_FEEDSTOCK_DRAW }],
     feedstockMoisturePercent: productionRun?.feedstockMoisturePercent ?? null,
     feedingRateKgHr: productionRun?.feedingRateKgHr ?? null,
     residenceTimeMinutes: productionRun?.residenceTimeMinutes ?? undefined,
@@ -497,6 +489,7 @@ export function ProductionRunForm({
           <FormField
             id="endDate"
             label="End date"
+            required={watchedStatus === "complete" || watchedStatus === "failed"}
             error={errors.endDate?.message}
             helperText="Leave the end blank until the run finishes. For an overnight run, set the next day."
           >
@@ -509,7 +502,7 @@ export function ProductionRunForm({
             />
           </FormField>
 
-          <FormField id="endTime" label="End time" error={errors.endTime?.message}>
+          <FormField id="endTime" label="End time" required={watchedStatus === "complete" || watchedStatus === "failed"} error={errors.endTime?.message}>
             <FormInput
               id="endTime"
               type="time"
@@ -612,6 +605,7 @@ export function ProductionRunForm({
           <MoistureField
             id="feedstockMoisturePercent"
             materialLabel="Feedstock"
+            required={watchedStatus === "complete" || watchedStatus === "failed"}
             error={errors.feedstockMoisturePercent?.message}
             disabled={isSubmitting}
             certifyRequired={isProductionRunCertifyField("feedstockMoisturePercent")}

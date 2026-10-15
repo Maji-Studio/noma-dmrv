@@ -6,8 +6,9 @@
 
 import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { formatLocalDateTime } from "@/lib/date-utils";
-import { FormField, FormInput, FormActions, FormSection } from "@/components/forms";
+import { EventTimeInput } from "@/components/forms/event-time-input";
+import { useFacilityClock } from "@/hooks/use-facility-context";
+import { FormField, FormActions, FormSection } from "@/components/forms";
 import { FormTextarea } from "@/components/forms/form-textarea";
 import { SegmentedControl } from "@/components/forms/segmented-control";
 import { EntitySelect } from "@/components/forms/entity-select";
@@ -26,7 +27,7 @@ const severityOptions = productionIncidentSeverities.map((severity) => ({
 
 interface ProductionIncidentFormProps {
   productionRunId: string;
-  facilityId?: string;
+  facilityId: string;
   defaultReactorId?: string | null;
   defaultOperatorId?: string | null;
   incident?: ProductionIncidentWithRelations;
@@ -48,6 +49,7 @@ export function ProductionIncidentForm({
   errorMessage,
 }: ProductionIncidentFormProps) {
   const isEditMode = !!incident;
+  const { timeZone, hint } = useFacilityClock(facilityId);
 
   const {
     register,
@@ -58,9 +60,7 @@ export function ProductionIncidentForm({
     resolver: zodResolver(productionIncidentFormSchema),
     defaultValues: {
       productionRunId,
-      incidentTime: formatLocalDateTime(
-        incident?.incidentTime ? new Date(incident.incidentTime) : new Date()
-      ),
+      incidentTime: (incident?.incidentTime ? new Date(incident.incidentTime) : new Date()).toISOString(),
       operatorId: incident?.operatorId ?? defaultOperatorId ?? "",
       reactorId: incident?.reactorId ?? defaultReactorId ?? "",
       severity: incident?.severity ?? "low",
@@ -80,15 +80,16 @@ export function ProductionIncidentForm({
           <FormField
             id="incidentTime"
             label="Incident time"
+            cue={hint}
             error={errors.incidentTime?.message}
             required
           >
-            <FormInput
+            <EventTimeInput
               id="incidentTime"
-              type="datetime-local"
+              name="incidentTime"
+              control={control}
+              timeZone={timeZone}
               disabled={isSubmitting}
-              error={!!errors.incidentTime}
-              {...register("incidentTime")}
             />
           </FormField>
 

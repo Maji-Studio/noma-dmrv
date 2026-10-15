@@ -1,3 +1,4 @@
+import { updateProductionRunSchema } from "@/schemas/production-runs";
 import { updateOrder } from "@/lib/operations/orders";
 import { runOperationInProcess } from "@/lib/operations/runner";
 import { z } from "zod";
@@ -89,23 +90,10 @@ describe("certification lineage guards", () => {
     }, "none");
   });
 
-  it("rejects a legacy wet-mass edit when no source bin can be identified", async () => {
-    await withLineageFixture(async (fixture) => {
-      await db.delete(productionRunFeedstockDraws).where(and(
-        eq(productionRunFeedstockDraws.organizationId, TEST_ORG_ID),
-        eq(productionRunFeedstockDraws.productionRunId, fixture.productionRunId),
-      ));
-      await db.update(productionRuns).set({ feedstockStorageLocationId: null }).where(and(
-        eq(productionRuns.organizationId, TEST_ORG_ID), eq(productionRuns.id, fixture.productionRunId),
-      ));
-      await expect(
-        updateProductionRun(
-          makeTestOrgContext(TEST_USER_ID),
-          fixture.productionRunId,
-          { expectedVersion: await productionVersion(makeTestOrgContext(TEST_USER_ID), "productionRuns", fixture.productionRunId), feedstockWetMassKg: 1_100 },
-        ),
-      ).rejects.toThrow("A feedstock source bin is required");
-    }, "none");
+  it("rejects a legacy wet-mass edit at the shared input boundary", () => {
+    expect(updateProductionRunSchema.safeParse({
+      productionRunId: "33333333-3333-4333-8333-333333333333", expectedVersion: 1, feedstockWetMassKg: 1_100,
+    }).success).toBe(false);
   });
 
   it("allows application edits while the lineage has no submitted certification artifact", async () => {

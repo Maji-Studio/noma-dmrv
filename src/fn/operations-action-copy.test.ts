@@ -1,6 +1,4 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { getTableName } from "drizzle-orm";
-import { productionSamples } from "@/db/schema";
 import { SafeError, toActionError } from "@/lib/errors";
 
 const mocks = vi.hoisted(() => ({
@@ -106,18 +104,13 @@ describe("operations action operator copy", () => {
     expect(mocks.list).not.toHaveBeenCalled();
   });
 
-  it("retains the sample create message and conflict metadata when generated-code retries exhaust", async () => {
-    mocks.create.mockRejectedValue({
-      code: "23505",
-      constraint: `${getTableName(productionSamples)}_organization_id_${productionSamples.sampleCode.name}_unique`,
-    });
-    expect(await createProductionSampleFn({ productionRunId: ID, timestamp: "2026-09-01T12:00:00Z" })).toEqual({
+  it("preserves the sample create message without generated-code retries", async () => {
+    mocks.create.mockRejectedValue(new SafeError("The production run is unavailable."));
+    expect(await createProductionSampleFn({ productionRunId: ID, timestamp: "2026-09-01T12:00:00Z", weightGrams: 0 })).toEqual({
       success: false,
       error: SAMPLE_CREATE_FAILURE,
-      code: "conflict",
-      issues: [{ path: ["code"], code: "conflict", message: SAMPLE_CREATE_FAILURE }],
     });
-    expect(mocks.create.mock.calls.length).toBeGreaterThan(1);
+    expect(mocks.create).toHaveBeenCalledOnce();
     expect(mocks.log).not.toHaveBeenCalled();
   });
 });
