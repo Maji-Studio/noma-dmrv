@@ -14,10 +14,10 @@ import type {
   StatusHistoryEntityType,
   SubmissionStatusHistoryEntry,
 } from "@/lib/certification/status-history";
+import { MISSING_VALUE } from "@/lib/copy-utils";
 import { formatDate, formatDateTime } from "@/lib/format-utils";
 
 const EMPTY_ICON_SIZE = 32;
-const ACTOR_UNAVAILABLE = "User not available";
 
 const RECORD_NAME: Record<StatusHistoryEntityType, string> = {
   removal: "Removal",
@@ -46,7 +46,7 @@ export function describeStatusChangeActor(
     return suffix ? `${entry.actorName} (${suffix})` : entry.actorName;
   }
   // The user record is gone or carries no name.
-  if (entry.actorUnavailable) return ACTOR_UNAVAILABLE;
+  if (entry.actorUnavailable) return `Changed by: ${MISSING_VALUE.notAvailable}`;
   return (entry.source && ACTORLESS_SOURCE_LABEL[entry.source]) ?? null;
 }
 
@@ -123,12 +123,19 @@ function StatusHistoryList({ entries }: { entries: SubmissionStatusHistoryEntry[
           <li key={entry.id} className="flex flex-col gap-4 body-caption">
             <div className="flex flex-wrap items-center gap-8">
               <StatusBadge status={entry.value} label={entry.label} size="small" />
-              <time
-                dateTime={new Date(entry.occurredAt).toISOString()}
-                className="text-[var(--color-text-tertiary)]"
-              >
-                {formatDateTime(entry.occurredAt)}
-              </time>
+              {entry.occurredAt ? (
+                <time
+                  dateTime={new Date(entry.occurredAt).toISOString()}
+                  className="text-[var(--color-text-tertiary)]"
+                >
+                  {formatDateTime(entry.occurredAt)}
+                </time>
+              ) : (
+                // Changed before recording began, at a time nothing marks.
+                <span className="text-[var(--color-text-tertiary)]">
+                  {MISSING_VALUE.notAvailable}
+                </span>
+              )}
             </div>
             <p className="body-caption text-[var(--color-text-secondary)] break-words">
               {actor ? `${actor} · ` : ""}Version {entry.version}

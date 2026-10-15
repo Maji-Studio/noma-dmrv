@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { deriveRemovalWorkflowStatus } from "./status";
 import {
   buildSubmissionStatusHistory,
   type StatusHistoryEvent,
@@ -17,7 +18,6 @@ function ledgerRow(overrides: Partial<StatusHistoryLedgerRow> = {}): StatusHisto
     createdAt: day("2026-09-01"),
     submittedAt: null,
     supersededAt: null,
-    updatedAt: day("2026-09-01"),
     ...overrides,
   };
 }
@@ -44,7 +44,7 @@ function event(overrides: Partial<StatusHistoryEvent> & Pick<StatusHistoryEvent,
 const summary = (history: ReturnType<typeof buildSubmissionStatusHistory>) =>
   history.entries.map(({ label, occurredAt, origin, actorName }) => ({
     label,
-    occurredAt: occurredAt.toISOString().slice(0, 10),
+    occurredAt: occurredAt ? occurredAt.toISOString().slice(0, 10) : null,
     origin,
     actorName,
   }));
@@ -56,7 +56,6 @@ describe("buildSubmissionStatusHistory", () => {
     const row = ledgerRow({
       status: "submitted",
       submittedAt: day("2026-09-02"),
-      updatedAt: day("2026-10-16"),
     });
     const resubmit = event({
       occurredAt: day("2026-10-16"),
@@ -92,7 +91,6 @@ describe("buildSubmissionStatusHistory", () => {
       status: "submitted",
       remoteStatus: "DRAFT",
       submittedAt: day("2026-09-02"),
-      updatedAt: day("2026-10-20"),
     });
     const reversal = event({
       occurredAt: day("2026-10-20"),
@@ -118,7 +116,6 @@ describe("buildSubmissionStatusHistory", () => {
       status: "accepted",
       remoteStatus: "VERIFIED",
       submittedAt: day("2026-09-02"),
-      updatedAt: day("2026-10-20"),
     });
     const verified = event({
       occurredAt: day("2026-10-20"),
@@ -132,5 +129,39 @@ describe("buildSubmissionStatusHistory", () => {
     const history = buildSubmissionStatusHistory("ghg_statement", [row], [verified], RECORDING_STARTED_AT);
 
     expect(history.entries.map((entry) => entry.label)).toEqual(["Verified", "In registry", "Draft"]);
+  });
+
+  it("leaves an unrecorded change undated, however often the row was written since", () => {
+    // Verified in August, before recording began; every registry sync since
+    // bumps updatedAt without a status change, so no event exists.
+    const row = ledgerRow({
+      status: "accepted",
+      remoteStatus: "VERIFIED",
+      createdAt: day("2026-08-01"),
+      submittedAt: day("2026-08-02"),
+    });
+
+    const history = buildSubmissionStatusHistory("ghg_statement", [row], [], RECORDING_STARTED_AT);
+
+    expect(summary(history)).toEqual([
+      { label: "Verified", occurredAt: null, origin: "ledger", actorName: null },
+      { label: "In registry", occurredAt: "2026-08-02", origin: "ledger", actorName: null },
+      { label: "Draft", occurredAt: "2026-08-01", origin: "ledger", actorName: null },
+    ]);
+  });
+
+  it("labels a failed Removal the way its badge does", () => {
+    const row = ledgerRow({ status: "rejected", createdAt: day("2026-10-16") });
+    const rejected = event({ occurredAt: day("2026-10-16"), fromStatus: "draft", toStatus: "rejected" });
+    const badge = deriveRemovalWorkflowStatus({
+      local: "rejected",
+      lockInFlight: false,
+      enrichmentStatus: "available",
+      readiness: null,
+    });
+
+    const [newest] = buildSubmissionStatusHistory("removal", [row], [rejected], RECORDING_STARTED_AT).entries;
+
+    expect(newest).toMatchObject({ label: badge.label, value: badge.value, origin: "activity" });
   });
 });

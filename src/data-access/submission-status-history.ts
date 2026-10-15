@@ -51,7 +51,6 @@ export async function listSubmissionStatusHistory(
       createdAt: certificationSubmissions.createdAt,
       submittedAt: certificationSubmissions.submittedAt,
       supersededAt: certificationSubmissions.supersededAt,
-      updatedAt: certificationSubmissions.updatedAt,
     }).from(certificationSubmissions).where(and(
       eq(certificationSubmissions.organizationId, ctx.organizationId),
       eq(certificationSubmissions.submissionType, key.submissionType),
@@ -82,7 +81,6 @@ export async function listSubmissionStatusHistory(
       createdAt: row.createdAt,
       submittedAt: row.submittedAt,
       supersededAt: row.supersededAt,
-      updatedAt: row.updatedAt,
     };
   });
   const events: StatusHistoryEvent[] = eventRows.map((event) => ({

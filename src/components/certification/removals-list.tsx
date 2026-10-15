@@ -169,7 +169,9 @@ export function StatusCell({ summary }: { summary: RemovalListRow }) {
         label={status.label}
       />
       {firstReason && (
-        <span className="inline-flex items-start gap-6 body-caption text-[var(--color-text-secondary)]">
+        // `relative` paints the reason above the badge's expanded hit area,
+        // so pressing it opens the row like any other cell text.
+        <span className="relative inline-flex items-start gap-6 body-caption text-[var(--color-text-secondary)]">
           <WarningIcon
             size={14}
             weight="fill"

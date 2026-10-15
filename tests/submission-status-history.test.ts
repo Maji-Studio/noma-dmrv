@@ -136,7 +136,7 @@ describe("listSubmissionStatusHistory", () => {
     await statusEvent(orgB, { entityId: removalId, occurredAt: at(AFTER_RECORDING, 10), fromStatus: "submitted", toStatus: "rejected", submission: { id: row.id, version: 1 } });
 
     const foreign = await listSubmissionStatusHistory(orgB, "removal", removalId);
-    expect(foreign.entries.map((entry) => entry.label)).toEqual(["Rejected"]);
+    expect(foreign.entries.map((entry) => entry.label)).toEqual(["Submission failed"]);
     expect(foreign.recordingBeganAt).toBeNull();
 
     const own = await listSubmissionStatusHistory(orgA, "removal", removalId);
@@ -148,16 +148,18 @@ describe("listSubmissionStatusHistory", () => {
 
   it("rebuilds a record with no events from the ledger and notes when recording began", async () => {
     const removalId = crypto.randomUUID();
+    // Rejected before recording began; a later write without a status change
+    // moved updatedAt past the ship date. Neither time dates the rejection.
     await ledgerRow(orgA, {
       localEntityId: removalId, version: 1, status: "rejected",
-      createdAt: BEFORE_RECORDING, submittedAt: at(BEFORE_RECORDING, 2), updatedAt: at(BEFORE_RECORDING, 90),
+      createdAt: BEFORE_RECORDING, submittedAt: at(BEFORE_RECORDING, 2), updatedAt: AFTER_RECORDING,
     });
 
     const history = await listSubmissionStatusHistory(orgA, "removal", removalId);
 
     expect(history.recordingBeganAt).toEqual(new Date(CERTIFICATION_STATUS_RECORDING_STARTED_AT));
     expect(history.entries.map(({ label, occurredAt, origin }) => ({ label, occurredAt, origin }))).toEqual([
-      { label: "Rejected", occurredAt: at(BEFORE_RECORDING, 90), origin: "ledger" },
+      { label: "Submission failed", occurredAt: null, origin: "ledger" },
       { label: "Submitted", occurredAt: at(BEFORE_RECORDING, 2), origin: "ledger" },
       { label: "Not submitted", occurredAt: BEFORE_RECORDING, origin: "ledger" },
     ]);

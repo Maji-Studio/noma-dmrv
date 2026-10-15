@@ -10,19 +10,19 @@
  *
  * A ledger timestamp only stands in for a change no event recorded. Both are
  * replayed per ledger version, and the record's status at each step is the
- * status of its highest version, labelled with the same `deriveRemovalStatus`
- * / `deriveStatementStatus` mappers the badge uses, on reduced input (no lock
- * in flight, no pending total). An entry is emitted whenever that label
- * changes. Pure and client-safe.
+ * status of its highest version, labelled the way the badge names it
+ * (`deriveRemovalLifecycleWorkflowStatus` / `deriveStatementStatus`) on
+ * reduced input: no lock in flight, no readiness, no pending total. An entry
+ * is emitted whenever that label changes. Pure and client-safe.
  */
 import type { StatusValue } from "@/components/ui/status-badge";
 import type { ACTIVITY_SOURCES } from "@/db/schema/common";
 import { CERTIFICATION_STATUS_RECORDING_STARTED_AT } from "@/config/certification";
 import { REMOTE_GHG_STATUSES } from "./from-submission";
 import {
-  deriveRemovalStatus,
+  deriveRemovalLifecycleWorkflowStatus,
   deriveStatementStatus,
-  type DerivedStatus,
+  LOCAL_SUBMISSION_STATUSES,
   type LocalSubmissionStatus,
   type RemoteGhgStatus,
 } from "./status";
@@ -41,7 +41,6 @@ export interface StatusHistoryLedgerRow {
   createdAt: Date;
   submittedAt: Date | null;
   supersededAt: Date | null;
-  updatedAt: Date;
 }
 
 /** One `status_changed` activity event, with its actor's display name. */
@@ -62,7 +61,11 @@ export interface StatusHistoryEvent {
 
 export interface SubmissionStatusHistoryEntry {
   id: string;
-  occurredAt: Date;
+  /**
+   * When the record entered this status; null when that is unknown (a change
+   * made before recording began that no ledger timestamp marks).
+   */
+  occurredAt: Date | null;
   /** Ledger version that set the record's status at this step. */
   version: number;
   label: string;
@@ -88,7 +91,10 @@ export interface SubmissionStatusHistory {
 
 interface Transition {
   id: string;
+  /** Sort position. For an undated transition, the last known time before it. */
   at: Date;
+  /** The change happened at an unknown time after `at`. */
+  undated: boolean;
   /** Tiebreak for transitions at the same instant: ledger first, then events. */
   rank: number;
   key: string;
@@ -107,28 +113,23 @@ interface VersionState {
 
 const LEDGER_RANK = 0;
 const EVENT_RANK = 1;
-const LOCAL_STATUSES: readonly LocalSubmissionStatus[] = [
-  "draft",
-  "submitted",
-  "accepted",
-  "rejected",
-  "superseded",
-];
+const UNDATED_RANK = 2;
 
 function asLocalStatus(value: string | null): LocalSubmissionStatus | null {
-  return LOCAL_STATUSES.find((status) => status === value) ?? null;
+  return LOCAL_SUBMISSION_STATUSES.find((status) => status === value) ?? null;
 }
 
 function asRemoteStatus(value: string | null): RemoteGhgStatus | null {
   return REMOTE_GHG_STATUSES.find((status) => status === value) ?? null;
 }
 
+/** Label and color for one replayed state, as the record's badge names it. */
 export function deriveHistoryStatus(
   entityType: StatusHistoryEntityType,
   state: Pick<VersionState, "status" | "remote">,
-): DerivedStatus {
+): { label: string; value: StatusValue } {
   return entityType === "removal"
-    ? deriveRemovalStatus({ local: state.status, lockInFlight: false })
+    ? deriveRemovalLifecycleWorkflowStatus({ local: state.status, lockInFlight: false })
     : deriveStatementStatus({
         local: state.status,
         lockInFlight: false,
@@ -180,6 +181,7 @@ function ledgerTransition(
   return {
     id: `${row.id}:${step}`,
     at,
+    undated: false,
     rank: LEDGER_RANK,
     key: row.id,
     version: row.version,
@@ -194,6 +196,7 @@ function eventTransition(event: StatusHistoryEvent): Transition {
   return {
     id: event.id,
     at: event.occurredAt,
+    undated: false,
     rank: EVENT_RANK,
     key: event.submissionId ?? `version:${event.version ?? 0}`,
     version: event.version ?? 0,
@@ -249,8 +252,10 @@ function latestState(states: Map<string, VersionState>): VersionState | null {
  * Ledger transitions for one row. Creation is never an event, so it always
  * comes from the ledger; `submittedAt` and `supersededAt` only when no event
  * recorded that change. When the row's own replay still ends short of its
- * current status (a change made before recording began), a final step at
- * `updatedAt` brings it level, so the newest entry agrees with the badge.
+ * current status (a change made before recording began), a final undated step
+ * brings it level, so the newest entry agrees with the badge. Its time is
+ * unknown: `updatedAt` moves on every metadata write and registry sync that
+ * leaves the status alone, so it never dates a change.
  */
 function ledgerTransitions(
   entityType: StatusHistoryEntityType,
@@ -279,8 +284,11 @@ function ledgerTransitions(
       deriveHistoryStatus(entityType, current).label
   ) {
     const last = own.at(-1)?.at ?? row.createdAt;
-    const at = row.updatedAt > last ? row.updatedAt : last;
-    transitions.push(ledgerTransition(row, "current", at, row.status, row.remoteStatus));
+    transitions.push({
+      ...ledgerTransition(row, "current", last, row.status, row.remoteStatus),
+      undated: true,
+      rank: UNDATED_RANK,
+    });
   }
   return transitions;
 }
@@ -315,7 +323,7 @@ export function buildSubmissionStatusHistory(
     const event = transition.event;
     entries.push({
       id: transition.id,
-      occurredAt: transition.at,
+      occurredAt: transition.undated ? null : transition.at,
       version: latest.version,
       label: derived.label,
       value: derived.value,
