@@ -44,10 +44,9 @@ litres via a per-facility conversion yield.
 _Avoid_: generator power, backup power.
 
 **Readings file**:
-The original telemetry CSV an operator attaches to a production run.
-noma stores the file unchanged as production-run sensor-data evidence
-and does not inspect its headers, timestamps, run window, sensor values,
-or other contents.
+The original telemetry CSV attached to a production run. noma keeps it
+unchanged as sensor-data evidence; the readings importer can also load its
+rows into structured readings within the run window.
 _Avoid_: sensor dump, log file, reactor-day file, channel mapping.
 
 **Emission estimate**:
@@ -84,11 +83,12 @@ _Avoid_: ingredient, material (the catalog is one thing; usage
 disambiguates).
 
 **Feedstock bin**:
-A storage bin holding a **feedstock type**, chosen at bin creation. What a bin may feed follows from its held
-type's declared usage — pyrolysis-usage stock may enter a production
-run, blend-usage stock may enter a formulation — never from the bin
-itself; an input bin has no kind of its own. Distinct from output bins,
-which hold biochar lots and products.
+A storage bin holding one **feedstock type**, set when the bin is created.
+A bin without a type gets one on its first intake.
+What a bin may feed follows from that type's declared usage:
+pyrolysis-usage stock may enter a production run and blend-usage stock may
+enter a formulation. An input bin has no kind of its own. Distinct from
+output bins, which hold biochar lots and products.
 _Avoid_: ingredient bin as a bin *kind*.
 
 **Feedstock wet stock**:

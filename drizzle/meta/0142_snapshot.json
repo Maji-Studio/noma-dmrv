@@ -1,9 +1,309 @@
 {
-  "id": "704703e0-66b4-4d77-bc40-f75534e65f41",
+  "id": "f7f93ee0-7209-4402-bde2-7b48deca7b9c",
   "prevId": "c9e5d30d-935c-4b7d-8c13-67b6dc4074c7",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
+    "public.activity_events": {
+      "name": "activity_events",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "facility_id": {
+          "name": "facility_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "occurred_at": {
+          "name": "occurred_at",
+          "type": "timestamp (3) with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "clock_timestamp()"
+        },
+        "sequence": {
+          "name": "sequence",
+          "type": "bigserial",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "entity_type": {
+          "name": "entity_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "entity_id": {
+          "name": "entity_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "action": {
+          "name": "action",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "changed_fields": {
+          "name": "changed_fields",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::text[]"
+        },
+        "from_status": {
+          "name": "from_status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "to_status": {
+          "name": "to_status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "from_remote": {
+          "name": "from_remote",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "to_remote": {
+          "name": "to_remote",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "submission_ref": {
+          "name": "submission_ref",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "credit_batch_id": {
+          "name": "credit_batch_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "production_run_id": {
+          "name": "production_run_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "source": {
+          "name": "source",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "actor_user_id": {
+          "name": "actor_user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "credential_id": {
+          "name": "credential_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "request_id": {
+          "name": "request_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "registry_at": {
+          "name": "registry_at",
+          "type": "timestamp (3) with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "reason_code": {
+          "name": "reason_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "activity_events_org_entity_occurred_sequence_idx": {
+          "name": "activity_events_org_entity_occurred_sequence_idx",
+          "columns": [
+            {
+              "expression": "organization_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "entity_type",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "entity_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "occurred_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "sequence",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "activity_events_org_batch_occurred_sequence_idx": {
+          "name": "activity_events_org_batch_occurred_sequence_idx",
+          "columns": [
+            {
+              "expression": "organization_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "credit_batch_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "occurred_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "sequence",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "activity_events_org_occurred_idx": {
+          "name": "activity_events_org_occurred_idx",
+          "columns": [
+            {
+              "expression": "organization_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "occurred_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "activity_events_organization_id_organizations_id_fk": {
+          "name": "activity_events_organization_id_organizations_id_fk",
+          "tableFrom": "activity_events",
+          "tableTo": "organizations",
+          "columnsFrom": [
+            "organization_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "activity_events_facility_id_organization_id_facilities_id_organization_id_fk": {
+          "name": "activity_events_facility_id_organization_id_facilities_id_organization_id_fk",
+          "tableFrom": "activity_events",
+          "tableTo": "facilities",
+          "columnsFrom": [
+            "facility_id",
+            "organization_id"
+          ],
+          "columnsTo": [
+            "id",
+            "organization_id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "activity_events_sequence_unique": {
+          "name": "activity_events_sequence_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "sequence"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "activity_events_entity_type": {
+          "name": "activity_events_entity_type",
+          "value": "\"activity_events\".\"entity_type\" in ('removal', 'ghg_statement', 'production_run', 'biochar_product', 'lab_sample', 'order', 'delivery', 'application', 'credit_batch', 'document', 'transport_leg', 'feedstock', 'bin_movement')"
+        },
+        "activity_events_action": {
+          "name": "activity_events_action",
+          "value": "\"activity_events\".\"action\" in ('created', 'updated', 'deleted', 'status_changed')"
+        },
+        "activity_events_source": {
+          "name": "activity_events_source",
+          "value": "\"activity_events\".\"source\" in ('form', 'rest', 'mcp', 'registry', 'system', 'script')"
+        },
+        "activity_events_actor": {
+          "name": "activity_events_actor",
+          "value": "\"activity_events\".\"actor_user_id\" is not null or \"activity_events\".\"source\" in ('system', 'registry', 'script')"
+        },
+        "activity_events_status_target": {
+          "name": "activity_events_status_target",
+          "value": "\"activity_events\".\"action\" <> 'status_changed' or \"activity_events\".\"to_status\" is not null or \"activity_events\".\"to_remote\" is not null"
+        }
+      },
+      "isRLSEnabled": false
+    },
     "public.api_key_owners": {
       "name": "api_key_owners",
       "schema": "",
@@ -2252,10 +2552,6 @@
       },
       "policies": {},
       "checkConstraints": {
-        "bin_movements_feedstock_loss_time": {
-          "name": "bin_movements_feedstock_loss_time",
-          "value": "\"bin_movements\".\"lane\" <> 'feedstock' or \"bin_movements\".\"movement_type\" <> 'loss' or \"bin_movements\".\"occurred_at\" is not null"
-        },
         "bin_movements_output_contract": {
           "name": "bin_movements_output_contract",
           "value": "\"bin_movements\".\"output_kind\" is null or (\n      \"bin_movements\".\"lane\" in ('biochar', 'product') and \"bin_movements\".\"occurred_at\" is not null\n      and \"bin_movements\".\"idempotency_key\" is not null and length(\"bin_movements\".\"idempotency_key\") > 0\n      and \"bin_movements\".\"basis_fingerprint\" is not null and \"bin_movements\".\"input_snapshot\" is not null\n      and \"bin_movements\".\"balance_before_dry_kg\" >= 0 and \"bin_movements\".\"balance_after_dry_kg\" >= 0\n      and \"bin_movements\".\"balance_before_dry_kg\" is not null and \"bin_movements\".\"balance_after_dry_kg\" is not null\n      and \"bin_movements\".\"output_dry_delta_kg\" is not null\n      and \"bin_movements\".\"balance_after_dry_kg\" = \"bin_movements\".\"balance_before_dry_kg\" + \"bin_movements\".\"output_dry_delta_kg\"\n      and (\"bin_movements\".\"output_kind\" = 'reversal' or \"bin_movements\".\"output_dry_delta_kg\" <= 0)\n      and length(trim(\"bin_movements\".\"reason\")) > 0\n      and (\"bin_movements\".\"output_kind\" not in ('reversal', 'replacement') or \"bin_movements\".\"corrects_movement_id\" is not null)\n    )"
@@ -6317,6 +6613,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "supplier_reference_id": {
+          "name": "supplier_reference_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "feedstock_type_id": {
           "name": "feedstock_type_id",
           "type": "uuid",
@@ -6860,17 +7162,29 @@
           "name": "delivery_date",
           "type": "timestamp",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "supplier_id": {
           "name": "supplier_id",
           "type": "uuid",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "vehicle_id": {
           "name": "vehicle_id",
           "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "gps_latitude": {
+          "name": "gps_latitude",
+          "type": "double precision",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "gps_longitude": {
+          "name": "gps_longitude",
+          "type": "double precision",
           "primaryKey": false,
           "notNull": false
         },
@@ -6896,7 +7210,7 @@
           "name": "mass_wet_kg",
           "type": "numeric(14, 3)",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "mass_dry_kg": {
           "name": "mass_dry_kg",
@@ -6908,13 +7222,76 @@
           "name": "moisture_content_percent",
           "type": "numeric(9, 6)",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
+        },
+        "co2e_feedstock_tons": {
+          "name": "co2e_feedstock_tons",
+          "type": "numeric(14, 6)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "feedstock_source_region": {
+          "name": "feedstock_source_region",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
         },
         "storage_location_id": {
           "name": "storage_location_id",
           "type": "uuid",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
+        },
+        "counterfactual_category": {
+          "name": "counterfactual_category",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "counterfactual_emissions_15_tons": {
+          "name": "counterfactual_emissions_15_tons",
+          "type": "numeric(14, 6)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "counterfactual_storage_50_tons": {
+          "name": "counterfactual_storage_50_tons",
+          "type": "numeric(14, 6)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "market_leakage_method": {
+          "name": "market_leakage_method",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "market_leakage_tons": {
+          "name": "market_leakage_tons",
+          "type": "numeric(14, 6)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "baseline_scenario": {
+          "name": "baseline_scenario",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'unknown'"
+        },
+        "baseline_description": {
+          "name": "baseline_description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "''"
+        },
+        "eligibility_status": {
+          "name": "eligibility_status",
+          "type": "feedstock_eligibility_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false
         },
         "notes": {
           "name": "notes",
@@ -7058,11 +7435,19 @@
         },
         "feedstocks_mass_dry_lte_wet": {
           "name": "feedstocks_mass_dry_lte_wet",
-          "value": "\"feedstocks\".\"mass_dry_kg\" <= \"feedstocks\".\"mass_wet_kg\""
+          "value": "\"feedstocks\".\"mass_wet_kg\" is null or \"feedstocks\".\"mass_dry_kg\" <= \"feedstocks\".\"mass_wet_kg\""
         },
         "feedstocks_moisture_content_percent_range": {
           "name": "feedstocks_moisture_content_percent_range",
-          "value": "(\"feedstocks\".\"moisture_content_percent\" >= 0 and \"feedstocks\".\"moisture_content_percent\" < 100)"
+          "value": "\"feedstocks\".\"moisture_content_percent\" is null or (\"feedstocks\".\"moisture_content_percent\" >= 0 and \"feedstocks\".\"moisture_content_percent\" <= 100)"
+        },
+        "feedstocks_gps_latitude_range": {
+          "name": "feedstocks_gps_latitude_range",
+          "value": "\"feedstocks\".\"gps_latitude\" is null or (\"feedstocks\".\"gps_latitude\" >= -90 and \"feedstocks\".\"gps_latitude\" <= 90)"
+        },
+        "feedstocks_gps_longitude_range": {
+          "name": "feedstocks_gps_longitude_range",
+          "value": "\"feedstocks\".\"gps_longitude\" is null or (\"feedstocks\".\"gps_longitude\" >= -180 and \"feedstocks\".\"gps_longitude\" <= 180)"
         }
       },
       "isRLSEnabled": false
@@ -7792,6 +8177,18 @@
           "primaryKey": false,
           "notNull": true,
           "default": false
+        },
+        "bill_of_lading": {
+          "name": "bill_of_lading",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "weigh_scale_ticket_ref": {
+          "name": "weigh_scale_ticket_ref",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
         },
         "created_at": {
           "name": "created_at",
@@ -12485,6 +12882,15 @@
       "schema": "public",
       "values": [
         "distance_based"
+      ]
+    },
+    "public.feedstock_eligibility_status": {
+      "name": "feedstock_eligibility_status",
+      "schema": "public",
+      "values": [
+        "eligible",
+        "ineligible",
+        "conditional"
       ]
     },
     "public.feedstock_status": {
