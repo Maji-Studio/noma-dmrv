@@ -4,8 +4,10 @@
  * returned it in full, and every line grouped as the template groups them.
  *
  * Owners and Admins collect line assignments as a local draft and save them
- * together against the observation version they loaded. A stale save keeps the
- * draft and reloads the review, the same as every versioned edit form.
+ * together against the observation and version the first draft was made on.
+ * A refetch never moves that baseline under the draft (#768): a stale save
+ * keeps the draft and shows the conflict, and only "Discard changes and reload"
+ * drops both and reads the templates again.
  */
 "use client";
 
@@ -64,6 +66,12 @@ function DeprecationFact({ entry }: { entry: RemovalTemplateReviewEntry }) {
   );
 }
 
+/** The observation a draft was made on; every save of that draft is checked against it. */
+interface DraftBaseline {
+  observationId: string;
+  version: number;
+}
+
 export function RemovalTemplateReviewCard({
   entry,
   facilityId,
@@ -73,6 +81,8 @@ export function RemovalTemplateReviewCard({
 }: RemovalTemplateReviewCardProps) {
   const [drafts, setDrafts] = useState<Record<string, LineAssignment>>({});
   const [editing, setEditing] = useState<Record<string, boolean>>({});
+  const [baseline, setBaseline] = useState<DraftBaseline>();
+  const [stale, setStale] = useState(false);
   const [saveError, setSaveError] = useState<string>();
   const review = useReviewRemovalTemplateLines();
   const toast = useToast();
@@ -89,32 +99,53 @@ export function RemovalTemplateReviewCard({
   const hasEarlierRead = Object.keys(entry.changes).length > 0;
   const headingId = `removal-template-${entry.templateId}`;
 
-  const setDraft = (componentId: string, draft: LineAssignment | undefined) => {
+  const resetDrafts = () => {
+    setDrafts({});
+    setEditing({});
+    setBaseline(undefined);
+    setStale(false);
     setSaveError(undefined);
-    setDrafts((current) => {
-      const next = { ...current };
-      if (draft) next[componentId] = draft;
-      else delete next[componentId];
-      return next;
-    });
+  };
+
+  const setDraft = (componentId: string, draft: LineAssignment | undefined) => {
+    const next = { ...drafts };
+    if (draft) next[componentId] = draft;
+    else delete next[componentId];
+    if (Object.keys(next).length === 0) {
+      // Nothing left to save, so nothing left to check: the next draft starts fresh.
+      setDrafts({});
+      setBaseline(undefined);
+      setStale(false);
+      setSaveError(undefined);
+      return;
+    }
+    if (!stale) setSaveError(undefined);
+    setDrafts(next);
+    if (!baseline && entry.observation) {
+      setBaseline({ observationId: entry.observation.id, version: entry.observation.version });
+    }
   };
 
   const save = async () => {
-    if (!entry.observation || pendingCount === 0) return;
+    if (!baseline || pendingCount === 0) return;
     setSaveError(undefined);
     try {
       await review.mutateAsync({
-        observationId: entry.observation.id,
-        expectedVersion: entry.observation.version,
+        observationId: baseline.observationId,
+        expectedVersion: baseline.version,
         assignments: pending,
       });
-      setDrafts({});
-      setEditing({});
+      resetDrafts();
       toast.success(`Template lines saved for ${name}.`);
     } catch (error) {
       setSaveError(toSaveErrorMessage(error, "The template lines were not saved. Try again."));
-      if (getStaleVersionConflict(error)) onRetry();
+      if (getStaleVersionConflict(error)) setStale(true);
     }
+  };
+
+  const reload = () => {
+    resetDrafts();
+    onRetry();
   };
 
   return (
@@ -189,8 +220,10 @@ export function RemovalTemplateReviewCard({
                         problems={problemMessages(line, entry.lineSourceProblems)}
                         // With no observation every line is unread; the template notice says so once.
                         notFullyRead={!!entry.observation && unreadLines.has(id)}
+                        enrichment={entry.observation?.enrichment[id]}
                         showChange={hasEarlierRead}
-                        canManage={canManage}
+                        // Without a read there is no observation to save against.
+                        canManage={canManage && !!entry.observation}
                         draft={pending[id]}
                         editing={!!editing[id]}
                         onDraftChange={(draft) => setDraft(id, draft)}
@@ -211,8 +244,13 @@ export function RemovalTemplateReviewCard({
                 submitLabel={pendingCount > 1 ? `Save ${pendingCount} lines` : "Save line"}
                 submittingLabel="Saving…"
                 isSubmitting={review.isPending}
-                submitDisabled={pendingCount === 0 || notFullyRead || !entry.observation}
+                submitDisabled={pendingCount === 0 || notFullyRead || !baseline || stale}
                 errorMessage={saveError}
+                errorAction={stale ? (
+                  <Button size="small" variant="weak" busy={isRetrying} onClick={reload}>
+                    Discard changes and reload
+                  </Button>
+                ) : undefined}
               />
             )}
           </>

@@ -8,9 +8,13 @@ import type { useRemovalTemplateReview } from "@/hooks/use-removal-template-revi
 import type { ReviewRemovalTemplateLinesInput } from "@/schemas/removal-template-review";
 import type { AutomaticSourceId } from "@/lib/isometric/template-observations/catalog-sources";
 import type { ComponentChange } from "@/lib/isometric/template-observations/compare";
-import type { LineContract, LineSourceProblem } from "@/lib/isometric/template-observations/line-sources";
-import type { EntryPolicy } from "@/lib/isometric/template-observations/types";
-import { MISSING_VALUE } from "@/lib/copy-utils";
+import {
+  lineNeedsReview as contractNeedsReview,
+  type LineContract,
+  type LineSourceProblem,
+} from "@/lib/isometric/template-observations/line-sources";
+import type { ComponentEnrichment, EntryPolicy, QuantityKind } from "@/lib/isometric/template-observations/types";
+import { humanizeEnum, MISSING_VALUE } from "@/lib/copy-utils";
 
 export type RemovalTemplateReviewEntry = NonNullable<
   ReturnType<typeof useRemovalTemplateReview>["data"]
@@ -84,10 +88,23 @@ export function problemMessages(line: RemovalTemplateReviewLine, problems: reado
     .flatMap((problem) => PROBLEM_COPY[problem.code] ?? []))];
 }
 
-/** Proposed, unassigned or contradictory lines block Removals until reviewed. */
+/**
+ * Proposed, unassigned or contradictory lines block Removals until reviewed.
+ * The server applies the same rule, so only these lines take an assignment.
+ */
 export function lineNeedsReview(line: RemovalTemplateReviewLine, problems: readonly LineSourceProblem[]): boolean {
-  return line.contract.origin === "proposed" || line.contract.scope === "unassigned" ||
-    problems.some((problem) => problem.componentId === line.component.id);
+  return contractNeedsReview(line.component.id, line.contract, problems);
+}
+
+/** `mass_fraction_dry_basis` reads as "Mass fraction dry basis". */
+export function quantityKindLabel(kind: QuantityKind): string {
+  return humanizeEnum(kind);
+}
+
+/** The unit Isometric gave this input, or the not-available token when it gave none. */
+export function inputUnitLabel(enrichment: ComponentEnrichment | undefined, inputKey: string): string {
+  const input = enrichment?.[inputKey];
+  return input && "unit" in input && input.unit ? input.unit : MISSING_VALUE.notAvailable;
 }
 
 /** A proposal can be accepted unchanged only when it names a scope. */

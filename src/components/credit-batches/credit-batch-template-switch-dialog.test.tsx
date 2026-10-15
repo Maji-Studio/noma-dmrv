@@ -4,7 +4,8 @@ import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { EntitySelectProps } from "@/components/forms/entity-select/types";
 import type { IsometricGhgEntryTemplate } from "@/lib/isometric";
-import { CreditBatchTemplateSwitchDialog } from "./credit-batch-template-switch-dialog";
+import { StaleVersionError, STALE_VERSION_CONFLICT_CODE, STALE_VERSION_MESSAGE } from "@/lib/stale-version";
+import { CreditBatchTemplateSwitchDialog, type CreditBatchTemplateSwitchDialogProps } from "./credit-batch-template-switch-dialog";
 
 vi.mock("@/components/ui/tooltip", () => ({
   InfoHint: () => null,
@@ -32,6 +33,7 @@ const TEMPLATES = [
 ] as IsometricGhgEntryTemplate[];
 
 const onClose = vi.fn();
+const onStale = vi.fn();
 beforeEach(() => {
   vi.stubGlobal("matchMedia", vi.fn().mockImplementation(() => ({ matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn() })));
   vi.clearAllMocks();
@@ -42,18 +44,23 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function mount() {
-  render(
+function dialog(creditBatch: CreditBatchTemplateSwitchDialogProps["creditBatch"] = BATCH) {
+  return (
     <CreditBatchTemplateSwitchDialog
       isOpen
       onClose={onClose}
-      creditBatch={BATCH}
+      onStale={onStale}
+      creditBatch={creditBatch}
       defaultTemplateId="rvt_new"
       templates={TEMPLATES}
       templatesLoading={false}
       templatesError={null}
-    />,
+    />
   );
+}
+
+function mount() {
+  return render(dialog());
 }
 
 describe("CreditBatchTemplateSwitchDialog", () => {
@@ -93,5 +100,38 @@ describe("CreditBatchTemplateSwitchDialog", () => {
 
     expect(screen.getByText("This credit batch backs a submitted Removal.")).toBeTruthy();
     expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("keeps the choice on the opened version after a stale refusal until reloaded", async () => {
+    mocks.mutateAsync.mockRejectedValueOnce(new StaleVersionError(STALE_VERSION_MESSAGE, {
+      entity: "credit_batch", id: BATCH.id, code: STALE_VERSION_CONFLICT_CODE,
+    }));
+    const { rerender } = mount();
+    await screen.findByRole("dialog", { name: "Switch template" });
+    await act(async () => {
+      fireEvent.change(document.getElementById("removalTemplateId")!, { target: { value: "rvt_new" } });
+    });
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Switch template" })); });
+
+    expect(screen.getByText(STALE_VERSION_MESSAGE)).toBeTruthy();
+    expect(onStale).toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
+    expect((document.getElementById("removalTemplateId") as HTMLSelectElement).value).toBe("rvt_new");
+
+    // The refetched batch arrives; the draft keeps the version it opened on.
+    rerender(dialog({ ...BATCH, version: 5 }));
+    expect((screen.getByRole("button", { name: "Switch template" }) as HTMLButtonElement).disabled).toBe(true);
+
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Discard changes and reload" })); });
+    expect(screen.queryByText(STALE_VERSION_MESSAGE)).toBeNull();
+    expect((document.getElementById("removalTemplateId") as HTMLSelectElement).value).toBe("rvt_old");
+
+    await act(async () => {
+      fireEvent.change(document.getElementById("removalTemplateId")!, { target: { value: "rvt_new" } });
+    });
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Switch template" })); });
+    expect(mocks.mutateAsync).toHaveBeenLastCalledWith({
+      creditBatchId: BATCH.id, removalTemplateId: "rvt_new", expectedVersion: 5,
+    });
   });
 });

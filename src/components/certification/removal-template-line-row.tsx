@@ -1,7 +1,9 @@
 /**
- * One line of a Removal template in the line review: what the line is, where
- * its figure comes from (scope, automatic figure, emissions entries), and for
- * an Owner or Admin the controls to accept a proposal or assign a contract.
+ * One line of a Removal template in the line review: what the line is, its
+ * inputs with their quantity kind and unit, where its figure comes from (scope,
+ * automatic figure, emissions entries), and for an Owner or Admin the controls
+ * to accept a proposal or assign a contract. Only a line that needs review
+ * takes an assignment; a settled line is read-only, as the server enforces.
  *
  * A line that needs review carries the open-check treatment the credit batch
  * checklist uses (a left rule on the sea wash), so the lines that block a
@@ -16,7 +18,7 @@ import { Notice } from "@/components/ui/notice";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { InfoHint } from "@/components/ui/tooltip";
 import type { AutomaticSourceId } from "@/lib/isometric/template-observations/catalog-sources";
-import type { EntryPolicy } from "@/lib/isometric/template-observations/types";
+import type { ComponentEnrichment, EntryPolicy } from "@/lib/isometric/template-observations/types";
 import { cn } from "@/lib/utils";
 import { RawIdentifiers } from "./removal-template-mapping-view";
 import {
@@ -24,7 +26,9 @@ import {
   canAcceptProposal,
   CHANGE_LABELS,
   ENTRY_POLICY_LABELS,
+  inputUnitLabel,
   ORIGIN_LABELS,
+  quantityKindLabel,
   SCOPE_LABELS,
   SOURCE_LABELS,
   sourceLabel,
@@ -48,6 +52,8 @@ export interface RemovalTemplateLineRowProps {
   problems: string[];
   /** The line has an input Isometric did not return in full. */
   notFullyRead: boolean;
+  /** Units Isometric returned for this line's inputs, keyed by input key. */
+  enrichment: ComponentEnrichment | undefined;
   /** Show the change badge only when an earlier read exists to compare with. */
   showChange: boolean;
   canManage: boolean;
@@ -63,6 +69,31 @@ function ContractValue({ label, children }: { label: string; children: ReactNode
       <dt className="body-caption text-[var(--color-text-tertiary)]">{label}</dt>
       <dd className="body-small text-[var(--color-text-primary)]">{children}</dd>
     </div>
+  );
+}
+
+function LineInputs({ line, enrichment }: { line: RemovalTemplateReviewLine; enrichment: ComponentEnrichment | undefined }) {
+  const headerClass = "body-small px-0 py-2 text-left font-medium text-[var(--color-text-secondary)]";
+  const cellClass = "body-small py-2 align-top text-[var(--color-text-primary)]";
+  return (
+    <table className="w-full table-fixed border-collapse">
+      <thead>
+        <tr>
+          <th scope="col" className={headerClass}>Input</th>
+          <th scope="col" className={headerClass}>Quantity kind</th>
+          <th scope="col" className={headerClass}>Unit</th>
+        </tr>
+      </thead>
+      <tbody>
+        {line.component.inputs.map((input) => (
+          <tr key={input.key}>
+            <td className={cn(cellClass, "break-all pr-8 font-mono")}>{input.key}</td>
+            <td className={cn(cellClass, "pr-8")}>{quantityKindLabel(input.quantityKind)}</td>
+            <td className={cn(cellClass, "break-all")}>{inputUnitLabel(enrichment, input.key)}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
   );
 }
 
@@ -138,6 +169,7 @@ export function RemovalTemplateLineRow({
   needsReview,
   problems,
   notFullyRead,
+  enrichment,
   showChange,
   canManage,
   draft,
@@ -182,7 +214,9 @@ export function RemovalTemplateLineRow({
         </div>
       </div>
 
-      {editing ? (
+      {component.inputs.length > 0 && <LineInputs line={line} enrichment={enrichment} />}
+
+      {editing && needsReview ? (
         <ContractEditor
           line={line}
           idPrefix={idPrefix}
@@ -210,7 +244,7 @@ export function RemovalTemplateLineRow({
         <Notice tone="info">Some inputs on this line could not be read from Isometric.</Notice>
       )}
 
-      {canManage && (
+      {canManage && (needsReview || draft) && (
         <div className="flex flex-wrap items-center gap-8">
           {canAcceptProposal(line) && !draft && (
             <Button
@@ -222,15 +256,17 @@ export function RemovalTemplateLineRow({
               Accept proposal
             </Button>
           )}
-          <Button
-            size="small"
-            variant="weak"
-            aria-label={`${editing ? "Close" : "Change"} ${name}`}
-            aria-expanded={editing}
-            onClick={() => onEditingChange(!editing)}
-          >
-            {editing ? "Close" : "Change"}
-          </Button>
+          {needsReview && (
+            <Button
+              size="small"
+              variant="weak"
+              aria-label={`${editing ? "Close" : "Change"} ${name}`}
+              aria-expanded={editing}
+              onClick={() => onEditingChange(!editing)}
+            >
+              {editing ? "Close" : "Change"}
+            </Button>
+          )}
           {draft && (
             <Button
               size="small"

@@ -38,7 +38,7 @@ function entry(overrides: Record<string, unknown> = {}): RemovalTemplateReviewEn
   return {
     templateId: "rvt_test",
     template: { id: "rvt_test", display_name: "Dark Earth Carbon Template", credit_type: "REMOVAL" },
-    observation: { id: OBSERVATION_ID, version: 3, enrichment: {} },
+    observation: { id: OBSERVATION_ID, version: 3, enrichment: { cmp_startup: { volume: { unit: "L" } } } },
     isDefault: true,
     availability: "listed",
     changes: {},
@@ -104,16 +104,47 @@ describe("RemovalTemplateReviewPanel", () => {
 
   it("assigns a contract through the line controls", async () => {
     render(<RemovalTemplateReviewPanel facilityId={FACILITY_ID} canManage />);
-    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Change Lab electricity" })); });
-    const scope = document.getElementById("rvt_test-cmp_lab-scope") as HTMLSelectElement;
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Change Startup diesel usage" })); });
+    const scope = document.getElementById("rvt_test-cmp_startup-scope") as HTMLSelectElement;
     await act(async () => { fireEvent.change(scope, { target: { value: "forbidden" } }); });
     // Only operating lines take entries, so the policy resets with the scope.
-    expect((document.getElementById("rvt_test-cmp_lab-entries") as HTMLSelectElement).disabled).toBe(true);
+    expect((document.getElementById("rvt_test-cmp_startup-entries") as HTMLSelectElement).disabled).toBe(true);
 
     await act(async () => { fireEvent.click(saveButton()); });
     expect(mocks.mutateAsync).toHaveBeenCalledWith(expect.objectContaining({
-      assignments: { cmp_lab: { scope: "forbidden", entryPolicy: "none" } },
+      assignments: { cmp_startup: { scope: "forbidden", entryPolicy: "none" } },
     }));
+  });
+
+  it("offers assignment only on lines that need review", () => {
+    mocks.data = [entry({
+      lineSourceProblems: [{ code: "ambiguous", componentId: "cmp_lab" }],
+      lines: [
+        ...entry().lines,
+        {
+          component: component("cmp_genset", "Generator diesel usage"), groupKey: "operations", groupName: "Operations",
+          contract: { scope: "operating", automaticSource: "run-genset-diesel", entryPolicy: "additive", origin: "reviewed" },
+          catalogCandidates: ["run-genset-diesel"], allowedEntryPolicies: ["none", "additive"], change: "unchanged",
+        },
+      ],
+    })];
+    render(<RemovalTemplateReviewPanel facilityId={FACILITY_ID} canManage />);
+
+    // Proposed, and settled but with a line source problem.
+    expect(screen.getByRole("button", { name: "Change Startup diesel usage" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Change Lab electricity" })).toBeTruthy();
+    // Settled and reviewed: read-only.
+    expect(screen.queryByRole("button", { name: "Change Generator diesel usage" })).toBeNull();
+  });
+
+  it("shows each input's quantity kind and unit", () => {
+    render(<RemovalTemplateReviewPanel facilityId={FACILITY_ID} canManage />);
+    const startup = screen.getByText("Startup diesel usage").closest("li")!;
+    const lab = screen.getByText("Lab electricity").closest("li")!;
+
+    expect([...startup.querySelectorAll("th")].map((cell) => cell.textContent)).toEqual(["Input", "Quantity kind", "Unit"]);
+    expect([...startup.querySelectorAll("tbody td")].map((cell) => cell.textContent)).toEqual(["volume", "Volume", "L"]);
+    expect([...lab.querySelectorAll("tbody td")].map((cell) => cell.textContent)).toEqual(["volume", "Volume", "Not available"]);
   });
 
   it("disables saving and offers a retry while the template is not fully read", async () => {
@@ -132,19 +163,36 @@ describe("RemovalTemplateReviewPanel", () => {
     expect(mocks.refetch).toHaveBeenCalled();
   });
 
-  it("keeps the draft and reloads after a stale save", async () => {
-    mocks.mutateAsync.mockRejectedValue(new StaleVersionError(STALE_VERSION_MESSAGE, {
+  it("keeps the draft on its loaded version until an explicit reload", async () => {
+    mocks.mutateAsync.mockRejectedValueOnce(new StaleVersionError(STALE_VERSION_MESSAGE, {
       entity: "removal_template_observation", id: OBSERVATION_ID, code: STALE_VERSION_CONFLICT_CODE,
     }));
-    render(<RemovalTemplateReviewPanel facilityId={FACILITY_ID} canManage />);
+    const { rerender } = render(<RemovalTemplateReviewPanel facilityId={FACILITY_ID} canManage />);
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Accept proposal for Startup diesel usage" }));
+    });
+
+    // A refetch lands under the draft: the save still checks the version the draft was made on.
+    mocks.data = [entry({ observation: { id: OBSERVATION_ID, version: 4, enrichment: {} } })];
+    rerender(<RemovalTemplateReviewPanel facilityId={FACILITY_ID} canManage />);
+    await act(async () => { fireEvent.click(saveButton()); });
+    expect(mocks.mutateAsync).toHaveBeenCalledWith(expect.objectContaining({ expectedVersion: 3 }));
+
+    expect(screen.getByText(STALE_VERSION_MESSAGE)).toBeTruthy();
+    expect(screen.getByText("Not saved")).toBeTruthy();
+    expect(mocks.refetch).not.toHaveBeenCalled();
+    expect((saveButton() as HTMLButtonElement).disabled).toBe(true);
+
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Discard changes and reload" })); });
+    expect(mocks.refetch).toHaveBeenCalled();
+    expect(screen.queryByText("Not saved")).toBeNull();
+    expect(screen.queryByText(STALE_VERSION_MESSAGE)).toBeNull();
+
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: "Accept proposal for Startup diesel usage" }));
     });
     await act(async () => { fireEvent.click(saveButton()); });
-
-    expect(screen.getByText(STALE_VERSION_MESSAGE)).toBeTruthy();
-    expect(screen.getByText("Not saved")).toBeTruthy();
-    expect(mocks.refetch).toHaveBeenCalled();
+    expect(mocks.mutateAsync).toHaveBeenLastCalledWith(expect.objectContaining({ expectedVersion: 4 }));
   });
 
   it("shows a missing template with no lines to review", () => {

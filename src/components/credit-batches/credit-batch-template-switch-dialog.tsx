@@ -5,31 +5,36 @@
  *
  * The server refuses a switch on a batch a submitted Removal holds, and a stale
  * version; both come back as the form error and the dialog stays open.
+ *
+ * The form sends the batch version it opened on, never a refetched one, so a
+ * concurrent switch is refused instead of overwritten (#768). After a stale
+ * refusal the choice stays; "Discard changes and reload" is the one way to move
+ * to the latest batch values.
  */
 "use client";
 
-import { useContext } from "react";
+import { useContext, useState } from "react";
 import { useController, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
 import { EntitySelect, FormActions, FormField } from "@/components/forms";
+import { Button } from "@/components/ui/button";
 import { FormDialog } from "@/components/ui/form-dialog";
 import { FormDialogContext } from "@/components/ui/form-dialog-context";
 import { useToast } from "@/components/ui/toast";
 import { useSwitchCreditBatchRemovalTemplate } from "@/hooks/use-removal-template-review";
 import type { IsometricGhgEntryTemplate } from "@/lib/isometric";
 import { getStaleVersionConflict, toSaveErrorMessage } from "@/lib/stale-version";
+import {
+  switchRemovalTemplateFormSchema,
+  type SwitchRemovalTemplateFormValues,
+} from "@/schemas/removal-template-review";
 
 const DIALOG_TITLE_ID = "credit-batch-template-switch-title";
-const switchTemplateFormSchema = z.object({
-  removalTemplateId: z.string().trim().min(1, "Choose a Removal template."),
-});
-type SwitchTemplateFormValues = z.infer<typeof switchTemplateFormSchema>;
 
 export interface CreditBatchTemplateSwitchDialogProps {
   isOpen: boolean;
   onClose: () => void;
-  /** A stale refusal: reload the batch so the next attempt sends its new version. */
+  /** A stale refusal: refetch the batch so a reload can show its latest values. */
   onStale?: () => void;
   creditBatch: { id: string; code: string; version: number; removalTemplateId: string | null };
   /** The facility default, marked in the list. */
@@ -63,12 +68,19 @@ function SwitchTemplateForm({
     control,
     handleSubmit,
     setError,
+    clearErrors,
     reset,
     formState: { errors, isSubmitting },
-  } = useForm<SwitchTemplateFormValues>({
-    resolver: zodResolver(switchTemplateFormSchema),
+  } = useForm<SwitchRemovalTemplateFormValues>({
+    resolver: zodResolver(switchRemovalTemplateFormSchema),
     defaultValues: { removalTemplateId: creditBatch.removalTemplateId ?? "" },
   });
+  // The batch as the dialog opened on it: the save precondition for this draft.
+  const [baseline, setBaseline] = useState(() => ({
+    version: creditBatch.version,
+    removalTemplateId: creditBatch.removalTemplateId ?? "",
+  }));
+  const [stale, setStale] = useState(false);
   const { field } = useController({ control, name: "removalTemplateId" });
   const dialogActions = useContext(FormDialogContext);
   const switchTemplate = useSwitchCreditBatchRemovalTemplate();
@@ -85,21 +97,32 @@ function SwitchTemplateForm({
         ? "Current template"
         : template.id === defaultTemplateId ? "Facility default" : undefined,
     }));
-  const unchanged = field.value === (creditBatch.removalTemplateId ?? "");
+  const unchanged = field.value === baseline.removalTemplateId;
 
-  const onSubmit = async (values: SwitchTemplateFormValues) => {
+  const reloadLatest = () => {
+    const latest = { version: creditBatch.version, removalTemplateId: creditBatch.removalTemplateId ?? "" };
+    setBaseline(latest);
+    setStale(false);
+    reset({ removalTemplateId: latest.removalTemplateId });
+    clearErrors();
+  };
+
+  const onSubmit = async (values: SwitchRemovalTemplateFormValues) => {
     try {
       await switchTemplate.mutateAsync({
         creditBatchId: creditBatch.id,
         removalTemplateId: values.removalTemplateId,
-        expectedVersion: creditBatch.version,
+        expectedVersion: baseline.version,
       });
       reset(values);
       dialogActions?.markSaved(control);
       toast.success(`Removal template switched for ${creditBatch.code}.`);
       onClose();
     } catch (error) {
-      if (getStaleVersionConflict(error)) onStale?.();
+      if (getStaleVersionConflict(error)) {
+        setStale(true);
+        onStale?.();
+      }
       setError("root.serverError", {
         type: "server",
         message: toSaveErrorMessage(error, "The Removal template was not switched. Try again."),
@@ -143,7 +166,12 @@ function SwitchTemplateForm({
         onCancel={onClose}
         isSubmitting={isSubmitting || switchTemplate.isPending}
         errorMessage={errors.root?.serverError?.message}
-        submitDisabled={unchanged}
+        errorAction={stale ? (
+          <Button size="small" variant="weak" onClick={reloadLatest}>
+            Discard changes and reload
+          </Button>
+        ) : undefined}
+        submitDisabled={unchanged || stale}
         submitVariant="default"
         submitLabel="Switch template"
         submittingLabel="Switching…"

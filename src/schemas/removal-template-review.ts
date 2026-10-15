@@ -12,7 +12,10 @@ export const reviewRemovalTemplateLinesSchema = z.object({
   assignments: z.record(z.string().min(1), lineAssignmentSchema),
 });
 export const switchCreditBatchRemovalTemplateSchema = z.object({
-  creditBatchId: z.uuid(), removalTemplateId: z.string().trim().min(1), expectedVersion: z.number().int().positive(),
+  creditBatchId: z.uuid(), removalTemplateId: z.string().trim().min(1, "Choose a Removal template."), expectedVersion: z.number().int().positive(),
 });
+/** The switch dialog's one field; the action adds the batch id and version. */
+export const switchRemovalTemplateFormSchema = switchCreditBatchRemovalTemplateSchema.pick({ removalTemplateId: true });
 export type ReviewRemovalTemplateLinesInput = z.infer<typeof reviewRemovalTemplateLinesSchema>;
 export type SwitchCreditBatchRemovalTemplateInput = z.infer<typeof switchCreditBatchRemovalTemplateSchema>;
+export type SwitchRemovalTemplateFormValues = z.infer<typeof switchRemovalTemplateFormSchema>;
