@@ -161,7 +161,7 @@ const EDIT_CASES: FormCase[] = [
     formulationId: "formulation", storageLocationId: "destination", sourceBiocharStorageLocationId: "source", composition: { ingredients: [] },
   })} /> },
   { file: "components/orders/order-form.tsx", name: "order (edit)", element: <OrderForm onSubmit={noop} order={as({
-    id: "order", facilityId: "facility", customerId: "customer", customerLocationId: "location", formulationId: "formulation", orderDate: DAY, quantityKg: 2000, packaging: "loose", value: 500, currency: "TZS",
+    id: "order", facilityId: "facility", customerId: "customer", customerLocationId: "location", formulationId: "formulation", orderDate: DAY, quantityKg: 2000, packaging: "loose",
   })} /> },
   { file: "components/deliveries/delivery-form.tsx", name: "delivery (edit)", element: <DeliveryForm onSubmit={noop} delivery={as({
     id: "delivery", facilityId: "facility", orderId: "order", storageLocationId: "bin", deliveryDate: DAY, deliveredWetMassKg: 100, moistureContentPercent: 20, status: "delivered",

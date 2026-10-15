@@ -81,7 +81,6 @@ async function makeBatch(month: string, code: string) {
     feedstockTypeId,
     productionRunIds: [],
     hToCorgRatio: H_TO_CORG_BEFORE,
-    currency: "TZS",
   });
   createdBatchIds.push(batch.id);
   return batch;

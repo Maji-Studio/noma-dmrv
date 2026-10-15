@@ -349,7 +349,6 @@ describe("credit batch automatic production-run membership", () => {
       startDate: new Date("2024-02-01T00:00:00.000Z"),
       endDate: new Date("2024-02-28T00:00:00.000Z"),
       productionRunIds: [],
-      currency: "TZS",
     });
     creditBatchIds.push(batch.id);
     expect(batch.productionRunIds).toEqual([]);
@@ -434,7 +433,6 @@ describe("credit batch automatic production-run membership", () => {
       startDate: new Date("2025-01-01T00:00:00.000Z"),
       endDate: new Date("2025-01-31T00:00:00.000Z"),
       productionRunIds: [],
-      currency: "TZS",
     });
     creditBatchIds.push(batch.id);
 
@@ -572,7 +570,6 @@ describe("credit batch automatic production-run membership", () => {
       startDate: new Date("2024-03-01T00:00:00.000Z"),
       endDate: new Date("2024-03-31T00:00:00.000Z"),
       productionRunIds: [],
-      currency: "TZS",
     });
     creditBatchIds.push(batch.id);
 
@@ -623,7 +620,6 @@ describe("credit batch automatic production-run membership", () => {
       startDate: new Date("2024-05-01T00:00:00.000Z"),
       endDate: new Date("2024-05-31T00:00:00.000Z"),
       productionRunIds: [first.id],
-      currency: "TZS",
     });
     creditBatchIds.push(batch.id);
 
@@ -638,7 +634,6 @@ describe("credit batch automatic production-run membership", () => {
       startDate: new Date("2025-02-01T00:00:00.000Z"),
       endDate: new Date("2025-02-28T00:00:00.000Z"),
       productionRunIds: [],
-      currency: "TZS",
     });
     creditBatchIds.push(batch.id);
 
@@ -694,7 +689,6 @@ describe("credit batch automatic production-run membership", () => {
       startDate: new Date("2024-04-01T00:00:00.000Z"),
       endDate: new Date("2024-04-30T00:00:00.000Z"),
       productionRunIds: [],
-      currency: "TZS",
     });
     creditBatchIds.push(batch.id);
 
@@ -782,7 +776,6 @@ describe("credit batch automatic production-run membership", () => {
       startDate: new Date("2024-08-01T00:00:00.000Z"),
       endDate: new Date("2024-08-10T00:00:00.000Z"),
       productionRunIds: [],
-      currency: "TZS",
     });
     const second = await createCreditBatch(ctx, {
       code: `CB-CBAM-OVERLAP-B-${tag}`,
@@ -791,7 +784,6 @@ describe("credit batch automatic production-run membership", () => {
       startDate: new Date("2024-08-20T00:00:00.000Z"),
       endDate: new Date("2024-08-31T00:00:00.000Z"),
       productionRunIds: [],
-      currency: "TZS",
     });
     creditBatchIds.push(first.id, second.id);
 
@@ -803,7 +795,6 @@ describe("credit batch automatic production-run membership", () => {
         startDate: new Date("2024-08-05T00:00:00.000Z"),
         endDate: new Date("2024-08-15T00:00:00.000Z"),
         productionRunIds: [],
-        currency: "TZS",
       }),
     ).rejects.toThrow(
       `This production cohort overlaps credit batch ${first.code}. Use a non-overlapping window for the same facility and feedstock.`,
@@ -826,7 +817,6 @@ describe("credit batch automatic production-run membership", () => {
       startDate: new Date("2024-09-01T00:00:00.000Z"),
       endDate: new Date("2024-09-30T00:00:00.000Z"),
       productionRunIds: [],
-      currency: "TZS",
     });
     creditBatchIds.push(batch.id);
     const run = await createProductionRun(ctx, {
@@ -933,7 +923,6 @@ describe("credit batch automatic production-run membership", () => {
         startDate: new Date("2024-10-01T00:00:00.000Z"),
         endDate: new Date("2024-10-31T00:00:00.000Z"),
         productionRunIds: [],
-        currency: "TZS",
       });
       void createPromise.catch(() => undefined);
       await expect.poll(async () => {

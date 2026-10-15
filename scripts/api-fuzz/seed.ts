@@ -26,7 +26,6 @@ const BLEND_INGREDIENT_RATIO = 0.2;
 // The credit batch covers the completed run's day and the day before, so a sample
 // taken shortly before now is inside its window whatever the clock reads.
 const BATCH_WINDOW_DAYS_BACK = 1;
-const BATCH_CURRENCY = "TZS";
 const SAMPLE_TAKEN_HOURS_AGO = 1;
 const SAMPLE_TOTAL_CARBON_PERCENT = 80;
 const SAMPLE_ORGANIC_CARBON_PERCENT = 78;
@@ -166,7 +165,7 @@ async function main(): Promise<void> {
   const creditBatch = await createCreditBatch(ctx, {
     code: "FUZZ-CB", facilityId: facility.id, feedstockTypeId: feedstockType.id,
     startDate: new Date(now - BATCH_WINDOW_DAYS_BACK * MS_PER_DAY), endDate: new Date(now),
-    productionRunIds: [outputRun.id], currency: BATCH_CURRENCY,
+    productionRunIds: [outputRun.id],
   });
   const labSample = (await runOperation(recordLabSample, ctx, {
     creditBatchId: creditBatch.id,

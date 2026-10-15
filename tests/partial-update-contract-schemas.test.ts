@@ -108,8 +108,8 @@ describe("updateFeedstockSchema transport distance", () => {
   });
 });
 
-describe("updateOrderSchema value", () => {
-  it("no longer accepts a price, so an edit cannot clear or overwrite one", () => {
+describe("updateOrderSchema removed price fields", () => {
+  it("strips removed price keys from an order edit", () => {
     const result = parsed(updateOrderSchema, { expectedVersion: 1,
       orderId: ORDER_ID,
       value: null,

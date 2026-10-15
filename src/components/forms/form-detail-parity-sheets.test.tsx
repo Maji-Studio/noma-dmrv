@@ -88,7 +88,7 @@ const storageBin = (type: string, stockMode: string) => as<Arg<typeof storageLoc
 const READ_SECTION_CASES: { file: string; name: string; sections: DetailPanelSection[] }[] = [
   { file: "components/orders/order-read-sections.tsx", name: "order", sections: orderSheetSections(as({
     id: "order", facilityId: "facility", formulationId: "formulation", formulationName: "Mix", customerName: "Customer", customerLocationName: "North field",
-    orderDate: new Date("2026-09-21"), quantityKg: 2000, packaging: "loose", value: 500, currency: "TZS", fulfillmentStatus: "partial", deliveryCount: 1, deliveredWetMassKg: 1200,
+    orderDate: new Date("2026-09-21"), quantityKg: 2000, packaging: "loose", fulfillmentStatus: "partial", deliveryCount: 1, deliveredWetMassKg: 1200,
   })) },
   { file: "components/biochar-products/product-read-details.tsx", name: "biochar product", sections: productSheetSections(as({
     id: "product", facilityId: "facility", placedAt: "2026-09-21T12:00:00.000Z", massKg: 350, waterAddedKg: 50, moistureContentPercent: 5, sourceAllocatedDryMassKg: 200, densityKgM3: 300,
