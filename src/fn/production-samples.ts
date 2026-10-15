@@ -8,8 +8,6 @@ import { withAction } from "./with-action";
 
 import { SafeError } from "@/lib/errors";
 import { z } from "zod";
-import { productionSamples } from "@/db/schema";
-import { withAutoCode } from "@/data-access/code-generator";
 import {
   getProductionSamples as getProductionSamplesData,
   createProductionSample,
@@ -69,7 +67,7 @@ export async function getProductionSamplesFn(
 // ============================================
 
 /**
- * Create a new production sample with auto-generated sample code
+ * Create a new in-process measurement
  */
 export async function createProductionSampleFn(
   data: z.infer<typeof createProductionSampleSchema>
@@ -77,31 +75,20 @@ export async function createProductionSampleFn(
   return withAction(async (ctx) => {
     const validated = createProductionSampleSchema.parse(data);
 
-    const sample = await withAutoCode(
-      ctx,
-      "PS",
-      productionSamples,
-      productionSamples.sampleCode,
-      undefined,
-      async (sampleCode) => {
-        return createProductionSample(ctx, {
-          sampleCode,
-          productionRunId: validated.productionRunId,
-          timestamp: new Date(validated.timestamp),
-          weightGrams: validated.weightGrams ?? null,
-          volumeMl: validated.volumeMl ?? null,
-          temperatureC: validated.temperatureC ?? null,
-          moistureContentPercent: validated.moistureContentPercent ?? null,
-          fixedCarbonPercent: validated.fixedCarbonPercent ?? null,
-          volatileMatterPercent: validated.volatileMatterPercent ?? null,
-          ashContentPercent: validated.ashContentPercent ?? null,
-          photoUrl: validated.photoUrl || null,
-          sampledById: validated.sampledById ?? null,
-          notes: validated.notes ?? null,
-        });
-      },
-      CREATE_FAILURE,
-    );
+    const sample = await createProductionSample(ctx, {
+      productionRunId: validated.productionRunId,
+      timestamp: validated.timestamp,
+      weightGrams: validated.weightGrams ?? null,
+      volumeMl: validated.volumeMl ?? null,
+      temperatureC: validated.temperatureC ?? null,
+      moistureContentPercent: validated.moistureContentPercent ?? null,
+      fixedCarbonPercent: validated.fixedCarbonPercent ?? null,
+      volatileMatterPercent: validated.volatileMatterPercent ?? null,
+      ashContentPercent: validated.ashContentPercent ?? null,
+      photoUrl: validated.photoUrl || null,
+      sampledById: validated.sampledById ?? null,
+      notes: validated.notes ?? null,
+    });
 
     return sample;
   }, {
@@ -132,7 +119,7 @@ export async function updateProductionSampleFn(
       validated.productionSampleId,
       {
         expectedVersion: validated.expectedVersion,
-        timestamp: new Date(validated.timestamp),
+        timestamp: validated.timestamp,
         weightGrams: validated.weightGrams,
         volumeMl: validated.volumeMl,
         temperatureC: validated.temperatureC,

@@ -6,6 +6,7 @@ import { expectedVersionSchema } from "./helpers";
 
 import { z } from "zod";
 import { emptyToNull } from "./helpers";
+import { createEventInstantSchema } from "./event-instant";
 
 export const productionIncidentSeverities = ["low", "medium", "high"] as const;
 
@@ -20,21 +21,7 @@ export const productionIncidentFormSchema = z.object({
     .string()
     .min(1, "Select a production run.")
     .uuid("Choose a valid production run."),
-  incidentTime: z.union([
-    z.date(),
-    z.string().min(1, "Enter an incident time.").transform((val, ctx) => {
-      if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(val)) return val;
-      const date = new Date(val);
-      if (isNaN(date.getTime())) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: "Enter a valid incident time.",
-        });
-        return z.NEVER;
-      }
-      return date;
-    }),
-  ]),
+  incidentTime: createEventInstantSchema("Enter the incident time."),
   operatorId: emptyToNull.or(z.string().uuid()).nullable().optional(),
   reactorId: emptyToNull.or(z.string().uuid()).nullable().optional(),
   severity: z.enum(productionIncidentSeverities),

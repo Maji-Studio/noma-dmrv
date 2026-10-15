@@ -217,7 +217,6 @@
     "electricity_kwh": 12.5,
     "biochar_output_kg": 720,
     "biochar_storage_location_id": "stl_001",
-    "feedstock_storage_location_id": "stl_002",
     "emission_factors_used": "{\"diesel\": 2.68}",
     "createdAt": "2025-06-12T06:00:00Z",
     "updatedAt": "2025-06-12T15:00:00Z"
@@ -334,7 +333,6 @@
     "id": "inc_001",
     "production_run_id": "pr_001",
     "incident_time": "2025-06-12T10:45:00Z",
-    "incident_date": "2025-06-12",
     "operator_id": "opr_001",
     "reactor_id": "rct_001",
     "description": "Temperature spike above 650C for 3 min",
@@ -354,7 +352,6 @@
   "production_samples": {
     "id": "ps_001",
     "production_run_id": "pr_001",
-    "sample_code": "PS-2025-0031-A",
     "timestamp": "2025-06-12T08:30:00Z",
     "weight_grams": 320,
     "volume_ml": null,

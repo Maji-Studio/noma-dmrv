@@ -502,20 +502,12 @@ later batches share the bin. Bin stock stays correct; provenance (credit-batch
 feedstock-type derivation, CoC Sankey) degrades. Carried over verbatim from the
 pre-#676 dry allocator - a known limitation, not a regression.
 
-### Dead legacy feedstock plumbing after multi-bin draws (`production-runs/legacy-feedstock-column`)
+### Unused stock-take and application facet paths
 
-`production_runs.feedstock_storage_location_id` is hard-written `null` on
-create and nulled on draw updates (`src/data-access/production-runs/mutations.ts`),
-and `rejectLegacyFeedstockFields` (`src/schemas/production-runs.ts`) rejects
-both legacy fields at the action layer - yet queries still select/join through
-the column and the legacy fallback branches in `createProductionRun` are
-unreachable (one validates a bin it then discards). Same cleanup family:
 `recordStockTakeFn` / `useRecordStockTake` / `recordStockTakeMovement` lost
-their only consumer when #666 deleted `StockTakeForm`, and the `visual`
+their only consumer when #666 deleted `StockTakeForm`. The `visual`
 null-method facet branch in `src/data-access/applications.ts` is unreachable
-(`evidence_method` is NOT NULL) with a comment that now contradicts the
-`"location"` UI fallback. Pre-production: drop the column and delete the dead
-paths in one follow-up.
+(`evidence_method` is NOT NULL). Remove these unused paths in a follow-up.
 
 ### Confirm: unapplied member runs now hard-block removal submission (`certification/unapplied-member-run-blocker`)
 

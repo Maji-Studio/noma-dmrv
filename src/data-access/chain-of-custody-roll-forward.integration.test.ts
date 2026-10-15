@@ -55,7 +55,7 @@ describe.skipIf(!available)("run roll-forward PostgreSQL queries", () => {
     const [outputBin] = await executor.insert(schema.storageLocations).values({
       ...org, facilityId: ids.facility, code: "OUT", name: "E2E Run output", type: "biochar_bin",
     }).returning();
-    await executor.insert(schema.productionRuns).values(["run", "outsideRun"].map(key => ({ ...org, id: ids[key], facilityId: ids.facility, code: key, reactorId: randomUUID(), status: "complete" as const, biocharStorageLocationId: outputBin.id, biocharMoisturePercent: 0, biocharOutputKg: 1000, biocharDryMassKg: 1000 })));
+    await executor.insert(schema.productionRuns).values(["run", "outsideRun"].map(key => ({ ...org, id: ids[key], facilityId: ids.facility, code: key, reactorId: randomUUID(), status: "complete" as const, startTime: new Date("2026-01-01T08:00:00Z"), biocharStorageLocationId: outputBin.id, biocharMoisturePercent: 0, biocharOutputKg: 1000, biocharDryMassKg: 1000 })));
     await executor.insert(schema.formulations).values({ ...org, id: ids.formulation, code: "FORM", name: "Fixture pure", biocharRatio: 1 });
     await executor.insert(schema.biocharProducts).values(["shipped", "stocked", "foreign"].map(label => ({ ...org, id: ids[label], facilityId: ids.facility, code: label, formulationId: ids.formulation, placedAt: new Date("2026-01-01T12:00:00.000Z"), productionDate: new Date("2026-01-01"), massKg: 600 })));
     // A legacy lot: no source bin, no allocation row, linked to the run directly.

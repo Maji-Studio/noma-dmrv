@@ -217,7 +217,6 @@
     "electricity_kwh": "Grid or genset electricity consumed in kWh",
     "biochar_output_kg": "Total biochar yield from this run in kg",
     "biochar_storage_location_id": "FK to where biochar output was stored",
-    "feedstock_storage_location_id": "FK to the feedstock bin used for this run",
     "emission_factors_used": "JSON of emission factors applied to this run",
     "createdAt": "Timestamp when the record was created",
     "updatedAt": "Timestamp of last modification"
@@ -334,7 +333,6 @@
     "id": "Unique incident report identifier",
     "production_run_id": "FK to the production run during which the incident occurred",
     "incident_time": "Exact timestamp of the incident",
-    "incident_date": "Calendar date of the incident",
     "operator_id": "FK to the operator on duty during the incident",
     "reactor_id": "FK to the reactor involved in the incident",
     "description": "Narrative description of the incident",
@@ -354,7 +352,6 @@
   "production_samples": {
     "id": "Unique production sample identifier",
     "production_run_id": "FK to the parent production run",
-    "sample_code": "Human-readable in-process sample code",
     "timestamp": "Exact time the sample was taken",
     "weight_grams": "Sample weight in grams",
     "volume_ml": "Sample volume in milliliters",

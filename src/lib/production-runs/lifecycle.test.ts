@@ -209,17 +209,17 @@ describe("production-run lifecycle", () => {
     it.each([
       {
         label: "source bin",
-        formFeedstock: { storageLocationId: null },
+        formFeedstock: { drawCount: 0 },
         overrides: {},
       },
       {
         label: "wet mass",
-        formFeedstock: { storageLocationId: "bin-id" },
+        formFeedstock: { drawCount: 1 },
         overrides: { feedstockWetMassKg: null },
       },
       {
         label: "moisture",
-        formFeedstock: { storageLocationId: "bin-id" },
+        formFeedstock: { drawCount: 1 },
         overrides: { feedstockMoisturePercent: null },
       },
     ] as const)("reports missing form-input feedstock when $label is absent", ({
@@ -242,7 +242,7 @@ describe("production-run lifecycle", () => {
 
     it("distinguishes form inputs from allocated consumption", () => {
       const formInput = makeOutcomeInput({
-        feedstock: { basis: "form-inputs", storageLocationId: null },
+        feedstock: { basis: "form-inputs", drawCount: 0 },
       });
       const consumedMassInput = makeOutcomeInput({
         feedstock: { basis: "consumed-mass", consumedFeedstockWetKg: 100 },

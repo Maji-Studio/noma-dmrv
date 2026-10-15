@@ -245,7 +245,7 @@ function StepEvidence({ evidence }: { evidence: TrailNodeEvidence | undefined })
           />
           <div className="min-w-0">
             <p className="body-small text-[var(--color-text-primary)]">
-              Sample {sample.sampleCode ?? sample.id.slice(0, 8)}
+              In-process measurement
             </p>
             <p className="body-caption text-[var(--color-text-tertiary)]">
               {formatDateTime(sample.timestamp)}

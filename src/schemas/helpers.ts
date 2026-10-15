@@ -251,6 +251,16 @@ export function storedPercentSchema() {
     .multipleOf(STORED_PERCENT_INPUT_STEP, STORED_PERCENT_PRECISION_MESSAGE);
 }
 
+/** Stored moisture must leave a non-zero dry fraction. */
+export function storedMoistureSchema() {
+  return storedPercentSchema().finite().min(0, "Enter 0% or more.").lt(100, "Enter less than 100%.");
+}
+
+export const optionalStoredMoisture = pipeToCanonicalNumber(
+  z.preprocess(toNumberOrNull, storedMoistureSchema().nullable().optional()),
+  storedMoistureSchema().nullable().optional(),
+);
+
 /** Optional 0–100 percent input backed by the exact `numeric(9,6)` family. */
 export const optionalStoredPercent = pipeToCanonicalNumber(
   optionalPercent,

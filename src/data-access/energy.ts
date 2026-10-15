@@ -126,7 +126,6 @@ export async function getEnergyInputs(
         dieselGensetLiters: productionRuns.dieselGensetLiters,
         preprocessingFuelLiters: productionRuns.preprocessingFuelLiters,
         electricityKwh: productionRuns.electricityKwh,
-        lowCarbonPercentage: productionRuns.lowCarbonPercentage,
         biocharDryMassKg: productionRuns.biocharDryMassKg,
       })
       .from(productionRuns)
@@ -301,7 +300,6 @@ export async function getEnergyInputs(
         dieselGensetLiters: run.dieselGensetLiters,
         preprocessingFuelLiters: run.preprocessingFuelLiters,
         electricityKwh: run.electricityKwh,
-        lowCarbonPercentage: run.lowCarbonPercentage,
         biocharDryMassKg: run.biocharDryMassKg,
       })),
       feedstocks: feedstockRows.map((feedstock) => ({

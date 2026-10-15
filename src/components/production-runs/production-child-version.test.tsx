@@ -1,9 +1,10 @@
+vi.mock("@/hooks/use-facility-context", () => ({ useFacilityClock: () => ({ timeZone: "UTC", hint: "Facility time: UTC" }) }));
 import type { ButtonHTMLAttributes, ReactNode } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { STALE_VERSION_CONFLICT_CODE, STALE_VERSION_MESSAGE, StaleVersionError, staleDeleteMessage } from "@/lib/stale-version";
 
-const state = vi.hoisted(() => ({ row: { id: "child", version: 1, incidentTime: new Date("2026-09-01T12:00:00Z"), timestamp: new Date("2026-09-01T12:00:00Z") }, save: vi.fn(), remove: vi.fn(), toast: vi.fn() }));
+const state = vi.hoisted(() => ({ row: { severity: "low", id: "child", version: 1, incidentTime: new Date("2026-09-01T12:00:00Z"), timestamp: new Date("2026-09-01T12:00:00Z") }, save: vi.fn(), remove: vi.fn(), toast: vi.fn() }));
 vi.mock("@/hooks/use-production-incidents", () => ({
   useProductionIncidents: () => ({ data: [state.row] }), useCreateProductionIncident: () => ({}),
   useUpdateProductionIncident: () => ({ mutateAsync: state.save }), useDeleteProductionIncident: () => ({ mutateAsync: state.remove }),
@@ -40,11 +41,11 @@ for (const [label, title, idKey, Component] of [
   describe(label, () => {
     it("keeps the draft and its opening version after a refetch and stale refusal", async () => {
       let renderer!: ReactTestRenderer;
-      await act(async () => { renderer = create(<Component productionRunId="run" />); });
+      await act(async () => { renderer = create(<Component productionRunId="run" facilityId="facility" />); });
       try {
         await act(async () => { renderer.root.findByProps({ "aria-label": `Edit ${label}` }).props.onClick(); });
         state.row = { ...state.row, version: NEW_VERSION };
-        await act(async () => { renderer.update(<Component productionRunId="run" />); });
+        await act(async () => { renderer.update(<Component productionRunId="run" facilityId="facility" />); });
         await act(async () => { await renderer.root.findByProps({ "aria-label": "Save draft" }).props.onClick(); });
         expect(state.save).toHaveBeenCalledWith({ [idKey]: "child", expectedVersion: INITIAL_VERSION, notes: "Operator draft" });
         expect(renderer.root.findByType("form").props["data-error"]).toBe(STALE_VERSION_MESSAGE);
@@ -52,11 +53,11 @@ for (const [label, title, idKey, Component] of [
     });
     it("uses the confirmation's loaded version and explains a stale delete", async () => {
       let renderer!: ReactTestRenderer;
-      await act(async () => { renderer = create(<Component productionRunId="run" />); });
+      await act(async () => { renderer = create(<Component productionRunId="run" facilityId="facility" />); });
       try {
         await act(async () => { renderer.root.findByProps({ "aria-label": `Delete ${label}` }).props.onClick(); });
         state.row = { ...state.row, version: NEW_VERSION };
-        await act(async () => { renderer.update(<Component productionRunId="run" />); });
+        await act(async () => { renderer.update(<Component productionRunId="run" facilityId="facility" />); });
         await act(async () => { await renderer.root.findByProps({ "aria-label": "Confirm delete" }).props.onClick(); });
         expect(state.remove).toHaveBeenCalledWith({ [idKey]: "child", expectedVersion: INITIAL_VERSION });
         expect(state.toast).toHaveBeenCalledWith(staleDeleteMessage(title));

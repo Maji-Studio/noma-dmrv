@@ -225,15 +225,6 @@ export const emissionsCalculationMethod = pgEnum('emissions_calculation_method',
 // Isometric Compliance Enums
 // ============================================
 
-// Electricity sourcing category (Energy Use Accounting Module §5.3, EC1–EC5)
-export const electricitySourceCategory = pgEnum('electricity_source_category', [
-  'ec1_grid_average',
-  'ec2_ppa',
-  'ec3_eac',
-  'ec4_cod',
-  'ec5_direct_connection',
-]);
-
 // Feedstock eligibility status (Biomass Feedstock Accounting Module — >25% ineligible cap)
 export const feedstockEligibilityStatus = pgEnum('feedstock_eligibility_status', [
   'eligible',

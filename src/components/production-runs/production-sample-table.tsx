@@ -24,7 +24,8 @@ import { ProductionSampleForm } from "./production-sample-form";
 import { useCreateWithEvidence } from "@/hooks/use-create-with-evidence";
 import type { ProductionSampleWithRelations } from "@/data-access/production-samples";
 import type { ProductionSampleFormData } from "@/schemas/production-samples";
-import { formatDateTime } from "@/lib/format-utils";
+import { formatFacilityDateTime } from "@/lib/format-utils";
+import { useFacilityClock } from "@/hooks/use-facility-context";
 import { MISSING_VALUE } from "@/lib/copy-utils";
 
 // ============================================
@@ -42,11 +43,13 @@ function formatNum(v: number | null, unit?: string): string {
 
 interface ProductionSampleTableProps {
   productionRunId: string;
+  facilityId: string;
   readOnly?: boolean;
 }
 
 export function ProductionSampleTable({
   productionRunId,
+  facilityId,
   readOnly = false,
 }: ProductionSampleTableProps) {
   const { data: samples, isLoading, error } = useProductionSamples(productionRunId);
@@ -54,6 +57,7 @@ export function ProductionSampleTable({
   const updateSample = useUpdateProductionSample();
   const deleteSample = useDeleteProductionSample(productionRunId);
   const toast = useToast();
+  const { timeZone } = useFacilityClock(facilityId);
 
   const [formDialog, setFormDialog] = useState<
     | { open: false }
@@ -204,7 +208,6 @@ export function ProductionSampleTable({
           <table className="w-full body-small">
             <thead>
               <tr className="border-b border-[var(--color-border-primary)] text-left body-small text-[var(--color-text-secondary)]">
-                <th className="py-8 pr-12 font-medium">Code</th>
                 <th className="py-8 pr-12 font-medium">Time</th>
                 <th className="py-8 pr-12 font-medium">Temp</th>
                 <th className="py-8 pr-12 font-medium">Weight</th>
@@ -222,10 +225,7 @@ export function ProductionSampleTable({
                   key={s.id}
                   className="border-b border-[var(--color-border-tertiary)] hover:bg-[var(--color-background-medium)]"
                 >
-                  <td className="py-8 pr-12 font-medium text-[var(--clr-dark-purple)]">
-                    {s.sampleCode ?? MISSING_VALUE.notRecorded}
-                  </td>
-                  <td className="py-8 pr-12">{formatDateTime(s.timestamp)}</td>
+                  <td className="py-8 pr-12">{formatFacilityDateTime(s.timestamp, timeZone)}</td>
                   <td className="py-8 pr-12">{formatNum(s.temperatureC, "\u00B0C")}</td>
                   <td className="py-8 pr-12">{formatNum(s.weightGrams, "g")}</td>
                   <td className="py-8 pr-12">{formatNum(s.moistureContentPercent, "%")}</td>
@@ -278,6 +278,7 @@ export function ProductionSampleTable({
         >
           {formDialog.open && (
             <ProductionSampleForm
+              facilityId={facilityId}
               key={formDialog.sample?.id ?? "create"}
               productionRunId={productionRunId}
               sample={formDialog.sample}

@@ -216,7 +216,6 @@ async function createFixture(runId: string): Promise<ActivitySortFixture> {
           reactorId: reactor.id,
           startTime: T2_RUN_DRAW,
           feedstockMoisturePercent: 20,
-          feedstockStorageLocationId: binB.id,
           createdAt: T2_RUN_DRAW,
         },
         {

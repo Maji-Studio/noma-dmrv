@@ -24,7 +24,7 @@ const cases = [
   { entity: "productionIncident", update: updateProductionIncidentFn, remove: deleteProductionIncidentFn,
     data: { productionIncidentId: ID, productionRunId: ID, incidentTime: new Date("2026-09-01T12:00:00Z"), description: "Incident", severity: "low" as const, expectedVersion: VERSION } },
   { entity: "productionSample", update: updateProductionSampleFn, remove: deleteProductionSampleFn,
-    data: { productionSampleId: ID, productionRunId: ID, timestamp: "2026-09-01T12:00:00Z", expectedVersion: VERSION } },
+    data: { productionSampleId: ID, productionRunId: ID, timestamp: "2026-09-01T12:00:00Z", weightGrams: 0, expectedVersion: VERSION } },
   { entity: "biocharProduct", update: updateBiocharProductFn, remove: deleteBiocharProductFn,
     data: { productId: ID, expectedVersion: VERSION } },
 ];

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { expectedVersionSchema, massKgSchema, stockEventInstantSchema, storedPercentSchema, uuidSchema } from './helpers';
+import { expectedVersionSchema, massKgSchema, stockEventInstantSchema, storedMoistureSchema, uuidSchema } from './helpers';
 
 const WET_MASS_REQUIRED = 'Enter the wet mass.';
 const MOISTURE_REQUIRED = 'Enter the measured moisture.';
@@ -18,7 +18,7 @@ export const wetMassSchema = () => z
 /** Moisture percent; blank, non-numeric and out-of-range entries get plain messages, not Zod's. */
 export const moistureSchema = () => z
   .number({ error: iss => iss.input == null ? MOISTURE_REQUIRED : 'Enter the moisture as a number.' })
-  .pipe(storedPercentSchema().finite().min(0, 'Enter 0% or more.').lt(100, 'Enter less than 100%.'));
+  .pipe(storedMoistureSchema());
 export const reasonSchema = (max: number) => z
   .string({ error: REASON_REQUIRED })
   .trim()

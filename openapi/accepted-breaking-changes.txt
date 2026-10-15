@@ -49,3 +49,9 @@ POST /production-runs removed the enum value `cancelled` of the request property
 POST /production-runs removed the enum value `draft` of the request property `status` [request-property-enum-value-removed].
 POST /production-runs removed the enum value `failed` of the request property `status` [request-property-enum-value-removed].
 PATCH /production-runs/{idOrCode} removed the enum value `draft` of the request property `status` [request-property-enum-value-removed].
+
+# Issue #1014: run moisture must leave a non-zero dry fraction.
+POST /production-runs the `biocharMoisturePercent` request property's exclusiveMaximum was set to `100.00` [request-property-exclusive-max-set]. Setting a bound rejects values the previous contract accepted. If your clients are known to stay within the new limit, lower this check with --severity-levels.
+POST /production-runs the `feedstockMoisturePercent` request property's exclusiveMaximum was set to `100.00` [request-property-exclusive-max-set]. Setting a bound rejects values the previous contract accepted. If your clients are known to stay within the new limit, lower this check with --severity-levels.
+PATCH /production-runs/{idOrCode} the `biocharMoisturePercent` request property's exclusiveMaximum was set to `100.00` [request-property-exclusive-max-set]. Setting a bound rejects values the previous contract accepted. If your clients are known to stay within the new limit, lower this check with --severity-levels.
+PATCH /production-runs/{idOrCode} the `feedstockMoisturePercent` request property's exclusiveMaximum was set to `100.00` [request-property-exclusive-max-set]. Setting a bound rejects values the previous contract accepted. If your clients are known to stay within the new limit, lower this check with --severity-levels.

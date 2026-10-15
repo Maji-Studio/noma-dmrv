@@ -53,8 +53,8 @@ async function fixture() {
   const run = await createProductionRun(ctx, {
     code: `PR-RACE-${f.runId}`, facilityId: f.facilityId, reactorId: reactor.id,
     status: "running", startTime: new Date("2026-01-15T08:00:00Z"), endTime: null,
-    feedstockWetMassKg: FEEDSTOCK_WET_KG, feedstockMoisturePercent: MOISTURE_PERCENT,
-    feedstockStorageLocationId: bin.id,
+    feedstockMoisturePercent: MOISTURE_PERCENT,
+    feedstockDraws: [{ storageLocationId: bin.id, wetMassKg: FEEDSTOCK_WET_KG }],
   });
   return {
     ...f, run,

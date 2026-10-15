@@ -1,3 +1,5 @@
+import type { EventInstant } from "@/schemas/event-instant";
+import { resolveProductionRunEventTime } from "./production-run-event-time";
 import { assertRowVersion, nextVersion } from "./row-version";
 /**
  * Production Incidents Data Access Layer
@@ -6,7 +8,7 @@ import { assertRowVersion, nextVersion } from "./row-version";
 
 import { and, asc, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { incidentReports, operators, reactors, productionRuns } from "@/db/schema";
+import { incidentReports, operators, reactors } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import { assertSameOrg, requireOrgScope, type Executor } from "./utils";
 import { SafeError } from "@/lib/errors";
@@ -18,11 +20,10 @@ export interface ProductionIncidentWithRelations {
   version: number;
   productionRunId: string;
   incidentTime: Date;
-  incidentDate: Date;
   operatorId: string | null;
   reactorId: string | null;
   description: string;
-  severity: "low" | "medium" | "high" | null;
+  severity: "low" | "medium" | "high";
   correctiveActions: string | null;
   notes: string | null;
   createdAt: Date;
@@ -37,7 +38,6 @@ const incidentSelect = {
   id: incidentReports.id,
   productionRunId: incidentReports.productionRunId,
   incidentTime: incidentReports.incidentTime,
-  incidentDate: incidentReports.incidentDate,
   operatorId: incidentReports.operatorId,
   reactorId: incidentReports.reactorId,
   description: incidentReports.description,
@@ -91,7 +91,7 @@ export async function createProductionIncident(
   ctx: OrgContext,
   data: {
     productionRunId: string;
-    incidentTime: Date;
+    incidentTime: EventInstant;
     operatorId?: string | null;
     reactorId?: string | null;
     description: string;
@@ -105,23 +105,14 @@ export async function createProductionIncident(
   if (data.operatorId) await assertSameOrg(ctx, operators, data.operatorId);
   if (data.reactorId) await assertSameOrg(ctx, reactors, data.reactorId);
 
-  const [run] = await db
-    .select({ id: productionRuns.id })
-    .from(productionRuns)
-    .where(and(eq(productionRuns.id, data.productionRunId), eq(productionRuns.organizationId, ctx.organizationId)));
-
-  if (!run) {
-    throw new SafeError("Production run not found");
-  }
-
   return db.transaction(async (tx) => {
+    const incidentTime = await resolveProductionRunEventTime(ctx, tx, data.productionRunId, data.incidentTime, "incidentTime");
     const [inserted] = await tx
       .insert(incidentReports)
       .values({
         organizationId: ctx.organizationId,
         productionRunId: data.productionRunId,
-        incidentTime: data.incidentTime,
-        incidentDate: data.incidentTime,
+        incidentTime,
         operatorId: data.operatorId ?? null,
         reactorId: data.reactorId ?? null,
         description: data.description,
@@ -142,7 +133,7 @@ export async function updateProductionIncident(
   id: string,
   data: {
     expectedVersion: number;
-    incidentTime?: Date;
+    incidentTime?: EventInstant;
     operatorId?: string | null;
     reactorId?: string | null;
     description?: string;
@@ -160,10 +151,6 @@ export async function updateProductionIncident(
     updatedAt: new Date(),
   };
 
-  if (data.incidentTime !== undefined) {
-    updateData.incidentTime = data.incidentTime;
-    updateData.incidentDate = data.incidentTime;
-  }
   if (data.operatorId !== undefined) updateData.operatorId = data.operatorId;
   if (data.reactorId !== undefined) updateData.reactorId = data.reactorId;
   if (data.description !== undefined) updateData.description = data.description;
@@ -178,6 +165,10 @@ export async function updateProductionIncident(
       .where(and(eq(incidentReports.id, id), eq(incidentReports.organizationId, ctx.organizationId))).for("update");
     if (!locked) throw new SafeError("Production incident not found");
     assertRowVersion({ entity: "productionIncident", id, expectedVersion: data.expectedVersion, actualVersion: locked.version });
+
+    if (data.incidentTime !== undefined) {
+      updateData.incidentTime = await resolveProductionRunEventTime(ctx, tx, locked.productionRunId, data.incidentTime, "incidentTime");
+    }
 
     await tx
       .update(incidentReports)

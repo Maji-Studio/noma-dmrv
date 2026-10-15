@@ -23,7 +23,13 @@ const wireInstant = z.union([offsetInstant, localInstant]).describe("An RFC 3339
  * date-time without an offset is refused. Native Dates are accepted for
  * validated server actions only; the published contract lists the two wire shapes.
  */
-export const eventInstantSchema = z.union([z.date(), offsetInstant, localInstant], { error: EVENT_INSTANT_GUIDANCE })
-  .register(publishedJsonSchemas, { jsonSchema: z.toJSONSchema(wireInstant) });
+export function createEventInstantSchema(requiredMessage = EVENT_INSTANT_GUIDANCE) {
+  const instant = z.union([z.date(), offsetInstant, localInstant], { error: EVENT_INSTANT_GUIDANCE });
+  return z.custom<z.input<typeof instant>>((value) => value !== "", { error: requiredMessage })
+    .pipe(instant)
+    .register(publishedJsonSchemas, { jsonSchema: z.toJSONSchema(wireInstant) });
+}
+
+export const eventInstantSchema = createEventInstantSchema();
 
 export type EventInstant = z.output<typeof eventInstantSchema>;

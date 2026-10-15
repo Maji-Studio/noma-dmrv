@@ -1,3 +1,5 @@
+import type { EventInstant } from "@/schemas/event-instant";
+import { resolveProductionRunEventTime } from "./production-run-event-time";
 import { assertRowVersion, nextVersion } from "./row-version";
 /**
  * Production Samples Data Access Layer
@@ -21,7 +23,6 @@ export interface ProductionSampleWithRelations {
   id: string;
   version: number;
   productionRunId: string;
-  sampleCode: string | null;
   timestamp: Date;
   weightGrams: number | null;
   volumeMl: number | null;
@@ -44,7 +45,6 @@ const sampleSelect = {
   version: productionSamples.version,
   id: productionSamples.id,
   productionRunId: productionSamples.productionRunId,
-  sampleCode: productionSamples.sampleCode,
   timestamp: productionSamples.timestamp,
   weightGrams: productionSamples.weightGrams,
   volumeMl: productionSamples.volumeMl,
@@ -116,8 +116,7 @@ export async function createProductionSample(
   ctx: OrgContext,
   data: {
     productionRunId: string;
-    sampleCode?: string | null;
-    timestamp: Date;
+    timestamp: EventInstant;
     weightGrams?: number | null;
     volumeMl?: number | null;
     temperatureC?: number | null;
@@ -134,13 +133,13 @@ export async function createProductionSample(
   if (data.sampledById) await assertSameOrg(ctx, operators, data.sampledById);
 
   return db.transaction(async (tx) => {
+    const timestamp = await resolveProductionRunEventTime(ctx, tx, data.productionRunId, data.timestamp, "timestamp");
     const [inserted] = await tx
       .insert(productionSamples)
       .values({
         organizationId: ctx.organizationId,
         productionRunId: data.productionRunId,
-        sampleCode: data.sampleCode ?? null,
-        timestamp: data.timestamp,
+        timestamp,
         weightGrams: data.weightGrams ?? null,
         volumeMl: data.volumeMl ?? null,
         temperatureC: data.temperatureC ?? null,
@@ -173,7 +172,7 @@ export async function updateProductionSample(
   id: string,
   data: {
     expectedVersion: number;
-    timestamp?: Date;
+    timestamp?: EventInstant;
     weightGrams?: number | null;
     volumeMl?: number | null;
     temperatureC?: number | null;
@@ -193,12 +192,14 @@ export async function updateProductionSample(
     const [locked] = await tx.select().from(productionSamples)
       .where(and(eq(productionSamples.id, id), eq(productionSamples.organizationId, ctx.organizationId))).for("update");
     if (!locked) throw new SafeError("In-process measurement not found.");
-    const { expectedVersion, ...changes } = data;
+    const { expectedVersion, timestamp, ...changes } = data;
     assertRowVersion({ entity: "productionSample", id, expectedVersion, actualVersion: locked.version });
+    const resolvedTimestamp = timestamp === undefined ? undefined
+      : await resolveProductionRunEventTime(ctx, tx, locked.productionRunId, timestamp, "timestamp");
 
     await tx
       .update(productionSamples)
-      .set({ ...changes, version: nextVersion(productionSamples.version), updatedAt: new Date() })
+      .set({ ...changes, timestamp: resolvedTimestamp, version: nextVersion(productionSamples.version), updatedAt: new Date() })
       .where(and(eq(productionSamples.id, id), eq(productionSamples.organizationId, ctx.organizationId)));
 
     // Read the row back inside the transaction (issue #769): a read that fails

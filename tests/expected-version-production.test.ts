@@ -68,7 +68,7 @@ const subjects = {
       remove: expectedVersion => deleteProductionIncident(f.ctx, row.id, expectedVersion) };
   },
   productionSample: async (f: Awaited<ReturnType<typeof fixture>>): Promise<Subject> => {
-    const row = await createProductionSample(f.ctx, { productionRunId: f.runs[0].id, timestamp: new Date(STOCK_TIME) });
+    const row = await createProductionSample(f.ctx, { productionRunId: f.runs[0].id, timestamp: new Date(STOCK_TIME), weightGrams: FIRST_VALUE });
     return { version: row.version,
       save: (expectedVersion, temperatureC) => updateProductionSample(f.ctx, row.id, { expectedVersion, temperatureC }),
       remove: expectedVersion => deleteProductionSample(f.ctx, row.id, expectedVersion) };

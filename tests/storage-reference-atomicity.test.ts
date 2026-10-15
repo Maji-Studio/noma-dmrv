@@ -555,7 +555,7 @@ describe(
       expectArchivedReferenceRejected(outcome);
     });
 
-    it("locks a supplied feedstock bin for null input mass", async () => {
+    it("locks an explicit feedstock draw source", async () => {
       const fixture = await createFixture();
 
       const outcome = await archiveBeforeReferenceWrite(
@@ -567,9 +567,8 @@ describe(
             reactorId: fixture.reactorId,
             startTime: new Date("2026-07-24T12:00:00Z"),
             endTime: null,
-            feedstockWetMassKg: null,
             feedstockMoisturePercent: null,
-            feedstockStorageLocationId: fixture.typedFeedstockBinId,
+            feedstockDraws: [{ storageLocationId: fixture.typedFeedstockBinId, wetMassKg: 1 }],
           }),
       );
 

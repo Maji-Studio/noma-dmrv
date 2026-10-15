@@ -4,7 +4,6 @@ import {
   makeProductionRunFormSchema,
   productionRunFilterSchema,
   productionRunFormSchema,
-  updateProductionRunSchema,
 } from "@/schemas/production-runs";
 
 const originalTz = process.env.TZ;
@@ -26,9 +25,7 @@ const validProductionRunInput = {
       wetMassKg: 100,
     },
   ],
-  feedstockStorageLocationId: "33333333-3333-4333-8333-333333333333",
   biocharStorageLocationId: "44444444-4444-4444-8444-444444444444",
-  feedstockWetMassKg: 100,
   feedstockMoisturePercent: 20,
   biocharOutputKg: 100,
   biocharMoisturePercent: 5,
@@ -50,8 +47,6 @@ describe("running end time validation", () => {
     const input = {
       ...completeProductionRunInput,
       status: "running",
-      feedstockWetMassKg: undefined,
-      feedstockStorageLocationId: undefined,
     };
     const result = schema.safeParse(input);
 
@@ -64,44 +59,6 @@ describe("running end time validation", () => {
     }
     expect(schema.safeParse({ ...input, status: "complete" }).success).toBe(true);
     expect(schema.safeParse({ ...input, endTime: "" }).success).toBe(true);
-  });
-});
-
-describe("production run action feedstock contract", () => {
-  it("rejects legacy feedstock fields on create", () => {
-    const result = createProductionRunSchema.safeParse({
-      ...validProductionRunInput,
-      status: "running",
-    });
-
-    expect(result.success).toBe(false);
-    if (!result.success) {
-      expect(result.error.issues.map((issue) => issue.path)).toEqual(
-        expect.arrayContaining([
-          ["feedstockWetMassKg"],
-          ["feedstockStorageLocationId"],
-        ]),
-      );
-    }
-  });
-
-  it("rejects legacy feedstock fields on update", () => {
-    const result = updateProductionRunSchema.safeParse({ expectedVersion: 1,
-      productionRunId: "55555555-5555-4555-8555-555555555555",
-      feedstockWetMassKg: 100,
-      feedstockStorageLocationId:
-        "33333333-3333-4333-8333-333333333333",
-    });
-
-    expect(result.success).toBe(false);
-    if (!result.success) {
-      expect(result.error.issues.map((issue) => issue.path)).toEqual(
-        expect.arrayContaining([
-          ["feedstockWetMassKg"],
-          ["feedstockStorageLocationId"],
-        ]),
-      );
-    }
   });
 });
 

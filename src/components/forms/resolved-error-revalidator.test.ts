@@ -25,8 +25,10 @@ const productionRunValues: ProductionRunInput = {
   startTime: "08:00",
   endDate: "2026-07-26",
   endTime: "20:00",
-  feedstockStorageLocationId: "33333333-3333-4333-8333-333333333333",
-  feedstockWetMassKg: 3000,
+  feedstockDraws: [{
+    storageLocationId: "33333333-3333-4333-8333-333333333333",
+    wetMassKg: 3000,
+  }],
   feedstockMoisturePercent: 15,
   biocharOutputKg: 1000,
   biocharStorageLocationId: "44444444-4444-4444-8444-444444444444",

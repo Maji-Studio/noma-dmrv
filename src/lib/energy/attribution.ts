@@ -4,8 +4,7 @@
  *
  * Rules (docs/archive/plans/2026-10-01-energy-page.md, "Sources and attribution"):
  *
- * - kg CO2e = activity x factor. Grid electricity takes the run's low-carbon
- *   share off first. A null reading is a missing reading, never zero.
+ * - kg CO2e = activity x factor. A null reading is a missing reading, never zero.
  * - Feedstock transport is 2 x one-way km x load tonnes per leg, and is split
  *   across the runs that drew the feedstock by wet mass drawn. What no run
  *   drew stays with the feedstock and reaches no credit batch. The factor is
@@ -48,7 +47,6 @@ import type {
   ReadingGapUnit,
 } from "./types";
 
-const PERCENT = 100;
 /** Float residue below this is not a share worth a flow. */
 const SHARE_EPSILON = 1e-9;
 
@@ -99,10 +97,7 @@ function runReadings(
   factors: EnergyFactors | null,
 ): Record<RunSourceKey, Reading | null> {
   const diesel = factors?.dieselKgCo2ePerLitre;
-  const lowCarbonShare =
-    Math.min(Math.max(run.lowCarbonPercentage ?? 0, 0), PERCENT) / PERCENT;
-  const grid =
-    factors == null ? undefined : factors.gridKgCo2ePerKwh * (1 - lowCarbonShare);
+  const grid = factors?.gridKgCo2ePerKwh;
   const read = (value: number | null, factor: number | undefined) =>
     value == null ? null : estimate(value, factor);
   return {

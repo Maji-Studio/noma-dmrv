@@ -28,8 +28,6 @@ export interface EnergyRunInput {
   dieselGensetLiters: number | null;
   preprocessingFuelLiters: number | null;
   electricityKwh: number | null;
-  /** 0 to 100. Null counts as no low-carbon share. */
-  lowCarbonPercentage: number | null;
   biocharDryMassKg: number | null;
 }
 

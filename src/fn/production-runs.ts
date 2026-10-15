@@ -77,8 +77,8 @@ export async function createProductionRunFn(
 ): Promise<ActionResult<ProductionRunWithRelations>> {
   return withAction(
     (ctx) => {
-      const { startDate, endDate, feedstockWetMassKg, feedstockStorageLocationId, ...input } = createProductionRunSchema.parse(data);
-      void startDate; void endDate; void feedstockWetMassKg; void feedstockStorageLocationId;
+      const { startDate, endDate, ...input } = createProductionRunSchema.parse(data);
+      void startDate; void endDate;
       return runOperationInProcess(startProductionRun, ctx, input);
     },
     {
@@ -100,8 +100,7 @@ export async function updateProductionRunFn(
 ): Promise<ActionResult<ProductionRunWithRelations>> {
   return withAction(
     (ctx) => {
-      const { feedstockWetMassKg, feedstockStorageLocationId, ...input } = updateProductionRunSchema.parse(data);
-      void feedstockWetMassKg; void feedstockStorageLocationId;
+      const input = updateProductionRunSchema.parse(data);
       return runOperationInProcess(updateProductionRun, ctx, input);
     },
     {

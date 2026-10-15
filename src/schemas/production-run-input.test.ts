@@ -10,6 +10,21 @@ const inputs = [
   { name: "create", schema: createProductionRunInput, base: { facilityId: id, reactorId: id, startTime: "2026-01-01T10:00:00Z" } },
   { name: "update", schema: updateProductionRunInput, base: { productionRunId: id, expectedVersion: 1 } },
 ];
+it.each(inputs)("rejects legacy feedstock keys as unknown fields for $name", ({ schema, base }) => {
+  const contract = toOperationJsonSchema(schema);
+  for (const [field, value] of [["feedstockStorageLocationId", id], ["feedstockWetMassKg", 100]] as const) {
+    const input = { ...base, [field]: value };
+    const result = schema.safeParse(input);
+    expect(result.success).toBe(false);
+    if (!result.success) expect(result.error.issues).toContainEqual(
+      expect.objectContaining({ code: "unrecognized_keys", keys: [field] }),
+    );
+    expect(() => rejectUnknownFields(input, contract)).toThrow(
+      expect.objectContaining({ issues: [expect.objectContaining({ path: [field] })] }),
+    );
+  }
+});
+
 it.each(inputs)("accepts numeric form encodings and preserves omission for $name", ({ schema, base }) => {
   for (const field of numericFields) {
     const value = field === "residenceTimeMinutes" ? 12 : 12.5;

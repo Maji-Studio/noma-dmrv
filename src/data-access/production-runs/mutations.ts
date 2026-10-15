@@ -125,10 +125,6 @@ export async function createProductionRunInTransaction(
     endTime: Date | null;
     operatorId?: string | null;
     feedstockDraws?: ProductionRunFeedstockDrawInput[];
-    /** @deprecated Compatibility input; converted immediately to one draw. */
-    feedstockWetMassKg?: number | null;
-    /** @deprecated Compatibility input; converted immediately to one draw. */
-    feedstockStorageLocationId?: string | null;
     feedstockMoisturePercent?: number | null;
     feedingRateKgHr?: number | null;
     residenceTimeMinutes?: number | null;
@@ -175,13 +171,7 @@ export async function createProductionRunInTransaction(
 
   const status = data.status ?? "running";
   const feedstockDraws = normalizeProductionRunFeedstockDraws(
-    data.feedstockDraws ??
-      (data.feedstockStorageLocationId && data.feedstockWetMassKg
-        ? [{
-            storageLocationId: data.feedstockStorageLocationId,
-            wetMassKg: data.feedstockWetMassKg,
-          }]
-        : []),
+    data.feedstockDraws ?? [],
   );
   const feedstockWetMassKg = sumProductionRunFeedstockDraws(feedstockDraws);
   assertProductionRunCreateStatus(status);
@@ -221,7 +211,6 @@ export async function createProductionRunInTransaction(
 
     await lockBinStocks(ctx, tx, [
       ...feedstockDraws.map((draw) => draw.storageLocationId),
-      data.feedstockStorageLocationId,
       data.biocharStorageLocationId,
     ]);
 
@@ -238,14 +227,6 @@ export async function createProductionRunInTransaction(
     if (data.biocharStorageLocationId) {
       await validateBiocharStorageLocation(ctx, tx, data.biocharStorageLocationId, data.facilityId, "Biochar");
       await assertRunAdditionAfterSplit(ctx, tx, { status, biocharStorageLocationId: data.biocharStorageLocationId, facilityId: data.facilityId, endTime: data.endTime ?? null });
-    }
-    if (data.feedstockStorageLocationId && feedstockDraws.length === 0) {
-      await validateProductionRunFeedstockDrawSources(
-        ctx,
-        tx,
-        [{ storageLocationId: data.feedstockStorageLocationId }],
-        data.facilityId,
-      );
     }
 
     await options.snapshotStock?.(tx, [...feedstockDraws.map((draw) => draw.storageLocationId), data.biocharStorageLocationId]);
@@ -275,7 +256,6 @@ export async function createProductionRunInTransaction(
         biocharMoisturePercent: data.biocharMoisturePercent ?? null,
         biocharDryMassKg: biocharDryMass,
         biocharStorageLocationId: data.biocharStorageLocationId ?? null,
-        feedstockStorageLocationId: null,
       })
       .returning();
 
@@ -345,10 +325,6 @@ export async function updateProductionRunInTransaction(
     endTime?: Date | null;
     operatorId?: string | null;
     feedstockDraws?: ProductionRunFeedstockDrawInput[];
-    /** @deprecated Compatibility input; converted immediately to draw rows. */
-    feedstockWetMassKg?: number | null;
-    /** @deprecated Compatibility input; converted immediately to draw rows. */
-    feedstockStorageLocationId?: string | null;
     feedstockMoisturePercent?: number | null;
     feedingRateKgHr?: number | null;
     residenceTimeMinutes?: number | null;
@@ -386,41 +362,7 @@ export async function updateProductionRunInTransaction(
   }
   const existingFeedstockStorageLocationIds =
     await getProductionRunFeedstockDrawStorageIds(ctx, tx, productionRunId);
-  let inputFeedstockDraws = data.feedstockDraws;
-  if (
-    inputFeedstockDraws === undefined &&
-    (data.feedstockStorageLocationId !== undefined ||
-      data.feedstockWetMassKg !== undefined)
-  ) {
-    if (existingFeedstockStorageLocationIds.length > 1) {
-      throw new SafeError(
-        "This run draws from several bins. Send feedstockDraws to change its feedstock.",
-      );
-    }
-    const storageLocationId =
-      data.feedstockStorageLocationId !== undefined
-        ? data.feedstockStorageLocationId
-        : existingFeedstockStorageLocationIds.length === 1
-          ? existingFeedstockStorageLocationIds[0]
-          : existing.feedstockStorageLocationId;
-    if (
-      storageLocationId === null &&
-      data.feedstockWetMassKg !== undefined &&
-      data.feedstockWetMassKg !== null
-    ) {
-      throw new SafeError(
-        "A feedstock source bin is required to change the wet mass.",
-      );
-    }
-    const wetMassKg =
-      data.feedstockWetMassKg !== undefined
-        ? data.feedstockWetMassKg
-        : existing.feedstockWetMassKg;
-    inputFeedstockDraws =
-      storageLocationId && wetMassKg && wetMassKg > 0
-        ? [{ storageLocationId, wetMassKg: Number(wetMassKg) }]
-        : [];
-  }
+  const inputFeedstockDraws = data.feedstockDraws;
   const normalizedFeedstockDraws =
     inputFeedstockDraws === undefined
       ? undefined
@@ -499,7 +441,6 @@ export async function updateProductionRunInTransaction(
   if (normalizedFeedstockDraws !== undefined) {
     updateData.feedstockWetMassKg =
       normalizedFeedstockDraws.length > 0 ? effectiveFeedstockWetMassKg : null;
-    updateData.feedstockStorageLocationId = null;
   }
   if (data.feedstockMoisturePercent !== undefined) updateData.feedstockMoisturePercent = data.feedstockMoisturePercent;
 

@@ -151,7 +151,6 @@ export async function getProductionRuns(
 
   // Alias storage locations for biochar and feedstock joins
   const biocharStorage = alias(storageLocations, "biocharStorage");
-  const feedstockStorage = alias(storageLocations, "feedstockStorage");
 
   // Get production runs with all relations in a single query (no N+1 for storage locations)
   const runList = await db
@@ -176,7 +175,6 @@ export async function getProductionRuns(
       biocharMoisturePercent: productionRuns.biocharMoisturePercent,
       biocharDryMassKg: productionRuns.biocharDryMassKg,
       biocharStorageLocationId: productionRuns.biocharStorageLocationId,
-      feedstockStorageLocationId: productionRuns.feedstockStorageLocationId,
       feedstockWetMassKg: productionRuns.feedstockWetMassKg,
       feedstockMoisturePercent: productionRuns.feedstockMoisturePercent,
       feedstockMassDryKg: productionRuns.feedstockMassDryKg,
@@ -194,15 +192,12 @@ export async function getProductionRuns(
       operatorName: operators.name,
       biocharStorageLocationCode: biocharStorage.code,
       biocharStorageLocationName: biocharStorage.name,
-      feedstockStorageLocationCode: feedstockStorage.code,
-      feedstockStorageLocationName: feedstockStorage.name,
     })
     .from(productionRuns)
     .leftJoin(facilities, and(eq(productionRuns.facilityId, facilities.id), eq(facilities.organizationId, ctx.organizationId)))
     .leftJoin(reactors, and(eq(productionRuns.reactorId, reactors.id), eq(reactors.organizationId, ctx.organizationId)))
     .leftJoin(operators, and(eq(productionRuns.operatorId, operators.id), eq(operators.organizationId, ctx.organizationId)))
     .leftJoin(biocharStorage, and(eq(productionRuns.biocharStorageLocationId, biocharStorage.id), eq(biocharStorage.organizationId, ctx.organizationId)))
-    .leftJoin(feedstockStorage, and(eq(productionRuns.feedstockStorageLocationId, feedstockStorage.id), eq(feedstockStorage.organizationId, ctx.organizationId)))
     .where(whereClause)
     .orderBy(orderFn(sortColumn))
     .limit(pageSize)
@@ -289,8 +284,6 @@ export async function getProductionRuns(
       ...run,
       biocharStorageLocationCode: run.biocharStorageLocationCode ?? null,
       biocharStorageLocationName: run.biocharStorageLocationName ?? null,
-      feedstockStorageLocationCode: run.feedstockStorageLocationCode ?? null,
-      feedstockStorageLocationName: run.feedstockStorageLocationName ?? null,
       feedstocks: runFeedstocks,
       feedstockDraws,
       totalFeedstockWetMassKg: feedstockDraws.reduce(
@@ -407,7 +400,6 @@ export async function getProductionRunById(
       biocharMoisturePercent: productionRuns.biocharMoisturePercent,
       biocharDryMassKg: productionRuns.biocharDryMassKg,
       biocharStorageLocationId: productionRuns.biocharStorageLocationId,
-      feedstockStorageLocationId: productionRuns.feedstockStorageLocationId,
       feedstockWetMassKg: productionRuns.feedstockWetMassKg,
       feedstockMoisturePercent: productionRuns.feedstockMoisturePercent,
       feedstockMassDryKg: productionRuns.feedstockMassDryKg,
@@ -444,7 +436,6 @@ export async function getProductionRunById(
     runFeedstocks,
     feedstockDraws,
     biocharStorageLocation,
-    feedstockStorageLocation,
   ] =
     await Promise.all([
       getProductionRunFeedstocks(ctx, productionRunId, executor),
@@ -459,26 +450,12 @@ export async function getProductionRunById(
             .where(and(eq(storageLocations.id, run.biocharStorageLocationId), eq(storageLocations.organizationId, ctx.organizationId)))
             .then(([loc]) => loc ?? null)
         : null,
-      run.feedstockStorageLocationId
-        ? executor
-            .select({
-              code: storageLocations.code,
-              name: storageLocations.name,
-            })
-            .from(storageLocations)
-            .where(and(eq(storageLocations.id, run.feedstockStorageLocationId), eq(storageLocations.organizationId, ctx.organizationId)))
-            .then(([loc]) => loc ?? null)
-        : null,
     ]);
 
   return {
     ...run,
     biocharStorageLocationCode: biocharStorageLocation?.code ?? null,
     biocharStorageLocationName: biocharStorageLocation?.name ?? null,
-    feedstockStorageLocationCode:
-      feedstockStorageLocation?.code ?? null,
-    feedstockStorageLocationName:
-      feedstockStorageLocation?.name ?? null,
     feedstocks: runFeedstocks,
     feedstockDraws,
     totalFeedstockWetMassKg: feedstockDraws.reduce(

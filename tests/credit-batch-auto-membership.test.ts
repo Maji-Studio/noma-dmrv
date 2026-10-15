@@ -29,6 +29,7 @@ import {
 } from "@/data-access/credit-batches";
 import {
   createProductionRun,
+  getProductionRunById,
   updateProductionRun,
 } from "@/data-access/production-runs";
 import {
@@ -360,9 +361,8 @@ describe("credit batch automatic production-run membership", () => {
       status: "running",
       startTime: new Date("2024-02-15T08:00:00.000Z"),
       endTime: null,
-      feedstockWetMassKg: 100,
       feedstockMoisturePercent: 20,
-      feedstockStorageLocationId: storageLocationId,
+      feedstockDraws: [{ storageLocationId: storageLocationId, wetMassKg: 100 }],
     });
     productionRunIds.push(running.id);
 
@@ -373,9 +373,8 @@ describe("credit batch automatic production-run membership", () => {
       status: "running",
       startTime: new Date("2024-02-16T08:00:00.000Z"),
       endTime: null,
-      feedstockWetMassKg: 100,
       feedstockMoisturePercent: 20,
-      feedstockStorageLocationId: storageLocationId,
+      feedstockDraws: [{ storageLocationId: storageLocationId, wetMassKg: 100 }],
     });
     productionRunIds.push(secondRunning.id);
 
@@ -446,9 +445,8 @@ describe("credit batch automatic production-run membership", () => {
       status: "running",
       startTime: new Date("2025-01-15T08:00:00.000Z"),
       endTime: null,
-      feedstockWetMassKg: 100,
       feedstockMoisturePercent: 20,
-      feedstockStorageLocationId: storageLocationId,
+      feedstockDraws: [{ storageLocationId: storageLocationId, wetMassKg: 100 }],
     });
     productionRunIds.push(run.id);
 
@@ -480,12 +478,11 @@ describe("credit batch automatic production-run membership", () => {
         reactorId: productionRuns.reactorId,
         startTime: productionRuns.startTime,
         endTime: productionRuns.endTime,
-        feedstockStorageLocationId:
-          productionRuns.feedstockStorageLocationId,
       })
       .from(productionRuns)
       .where(eq(productionRuns.id, run.id));
 
+    const unchangedDraws = (await getProductionRunById(ctx, run.id)).feedstockDraws;
     const expectLinksAndCohortInputsUnchanged = async () => {
       const [membership] = await db
         .select({
@@ -506,8 +503,6 @@ describe("credit batch automatic production-run membership", () => {
           reactorId: productionRuns.reactorId,
           startTime: productionRuns.startTime,
           endTime: productionRuns.endTime,
-          feedstockStorageLocationId:
-            productionRuns.feedstockStorageLocationId,
         })
         .from(productionRuns)
         .where(eq(productionRuns.id, run.id));
@@ -522,6 +517,7 @@ describe("credit batch automatic production-run membership", () => {
         productionRunId: run.id,
       });
       expect(persistedRun).toEqual(unchangedRun);
+      expect((await getProductionRunById(ctx, run.id)).feedstockDraws).toEqual(unchangedDraws);
       expect(feedstockLinks).toEqual([{ feedstockId }]);
     };
 
@@ -535,7 +531,7 @@ describe("credit batch automatic production-run membership", () => {
 
     await expect(
       updateProductionRun(ctx, run.id, { expectedVersion: edited.version,
-        feedstockStorageLocationId: alternateStorageLocationId,
+        feedstockDraws: [{ storageLocationId: alternateStorageLocationId, wetMassKg: 100 }],
       }),
     ).rejects.toThrow(/cannot be edited outside its declared cohort/i);
     await expectLinksAndCohortInputsUnchanged();
@@ -544,7 +540,7 @@ describe("credit batch automatic production-run membership", () => {
       updateProductionRun(ctx, run.id, { expectedVersion: edited.version,
         facilityId: otherFacilityId,
         reactorId: otherReactorId,
-        feedstockStorageLocationId: otherStorageLocationId, biocharStorageLocationId: otherOutputBinId,
+        feedstockDraws: [{ storageLocationId: otherStorageLocationId, wetMassKg: 100 }], biocharStorageLocationId: otherOutputBinId,
       }),
     ).rejects.toThrow(/cannot be edited outside its declared cohort/i);
     await expectLinksAndCohortInputsUnchanged();
@@ -558,9 +554,8 @@ describe("credit batch automatic production-run membership", () => {
       status: "running",
       startTime: new Date("2024-03-15T08:00:00.000Z"),
       endTime: null,
-      feedstockWetMassKg: 100,
       feedstockMoisturePercent: 20,
-      feedstockStorageLocationId: storageLocationId,
+      feedstockDraws: [{ storageLocationId: storageLocationId, wetMassKg: 100 }],
     });
     productionRunIds.push(running.id);
     await updateProductionRun(ctx, running.id, { expectedVersion: await productionVersion(ctx, "productionRuns", running.id),
@@ -592,9 +587,8 @@ describe("credit batch automatic production-run membership", () => {
       status: "running",
       startTime: new Date("2024-05-10T08:00:00.000Z"),
       endTime: null,
-      feedstockWetMassKg: 100,
       feedstockMoisturePercent: 20,
-      feedstockStorageLocationId: storageLocationId,
+      feedstockDraws: [{ storageLocationId: storageLocationId, wetMassKg: 100 }],
     });
     productionRunIds.push(first.id);
     await updateProductionRun(ctx, first.id, { expectedVersion: await productionVersion(ctx, "productionRuns", first.id),
@@ -611,9 +605,8 @@ describe("credit batch automatic production-run membership", () => {
       status: "running",
       startTime: new Date("2024-05-11T08:00:00.000Z"),
       endTime: null,
-      feedstockWetMassKg: 100,
       feedstockMoisturePercent: 20,
-      feedstockStorageLocationId: storageLocationId,
+      feedstockDraws: [{ storageLocationId: storageLocationId, wetMassKg: 100 }],
     });
     productionRunIds.push(second.id);
     await updateProductionRun(ctx, second.id, { expectedVersion: await productionVersion(ctx, "productionRuns", second.id),
@@ -656,9 +649,8 @@ describe("credit batch automatic production-run membership", () => {
       status: "running",
       startTime: new Date("2025-03-15T08:00:00.000Z"),
       endTime: null,
-      feedstockWetMassKg: 100,
       feedstockMoisturePercent: 20,
-      feedstockStorageLocationId: storageLocationId,
+      feedstockDraws: [{ storageLocationId: storageLocationId, wetMassKg: 100 }],
     });
     productionRunIds.push(run.id);
     await updateProductionRun(ctx, run.id, { expectedVersion: await productionVersion(ctx, "productionRuns", run.id),
@@ -723,9 +715,8 @@ describe("credit batch automatic production-run membership", () => {
       status: "running",
       startTime: new Date("2024-07-10T08:00:00.000Z"),
       endTime: null,
-      feedstockWetMassKg: 100,
       feedstockMoisturePercent: 20,
-      feedstockStorageLocationId: storageLocationId,
+      feedstockDraws: [{ storageLocationId: storageLocationId, wetMassKg: 100 }],
     });
     productionRunIds.push(emptyFeedstockRun.id);
     await updateProductionRun(ctx, emptyFeedstockRun.id, { expectedVersion: await productionVersion(ctx, "productionRuns", emptyFeedstockRun.id),
@@ -742,9 +733,8 @@ describe("credit batch automatic production-run membership", () => {
       status: "running",
       startTime: new Date("2024-07-11T08:00:00.000Z"),
       endTime: null,
-      feedstockWetMassKg: 100,
       feedstockMoisturePercent: 20,
-      feedstockStorageLocationId: storageLocationId,
+      feedstockDraws: [{ storageLocationId: storageLocationId, wetMassKg: 100 }],
     });
     productionRunIds.push(mixedFeedstockRun.id);
     await updateProductionRun(ctx, mixedFeedstockRun.id, { expectedVersion: await productionVersion(ctx, "productionRuns", mixedFeedstockRun.id),
@@ -846,9 +836,8 @@ describe("credit batch automatic production-run membership", () => {
       status: "running",
       startTime: new Date("2024-09-15T08:00:00.000Z"),
       endTime: null,
-      feedstockWetMassKg: 100,
       feedstockMoisturePercent: 20,
-      feedstockStorageLocationId: storageLocationId,
+      feedstockDraws: [{ storageLocationId: storageLocationId, wetMassKg: 100 }],
     });
     productionRunIds.push(run.id);
 
@@ -876,9 +865,8 @@ describe("credit batch automatic production-run membership", () => {
       status: "running",
       startTime: new Date("2024-10-15T08:00:00.000Z"),
       endTime: null,
-      feedstockWetMassKg: 100,
       feedstockMoisturePercent: 20,
-      feedstockStorageLocationId: storageLocationId,
+      feedstockDraws: [{ storageLocationId: storageLocationId, wetMassKg: 100 }],
     });
     productionRunIds.push(running.id);
 

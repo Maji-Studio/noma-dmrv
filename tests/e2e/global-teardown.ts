@@ -63,7 +63,7 @@ export default async function globalTeardown() {
       // Freeze fixture lineage before deleting parents. UI-created codes are automatic.
       await client.query(`CREATE TEMP TABLE e2e_scope_facilities ON COMMIT DROP AS SELECT id FROM facilities WHERE code LIKE 'E2E-%' OR name LIKE 'UI %' OR name LIKE 'Chain %' OR name LIKE 'Duplicate Test %'`);
       await client.query(`CREATE TEMP TABLE e2e_scope_bins ON COMMIT DROP AS SELECT id FROM storage_locations WHERE code LIKE 'E2E-%' OR facility_id IN (SELECT id FROM e2e_scope_facilities)`);
-      await client.query(`CREATE TEMP TABLE e2e_scope_runs ON COMMIT DROP AS SELECT id FROM production_runs WHERE code LIKE 'E2E-%' OR facility_id IN (SELECT id FROM e2e_scope_facilities) OR biochar_storage_location_id IN (SELECT id FROM e2e_scope_bins) OR feedstock_storage_location_id IN (SELECT id FROM e2e_scope_bins) OR reactor_id IN (SELECT id FROM reactors WHERE code LIKE 'E2E-%' OR identifier LIKE 'UI %' OR identifier LIKE 'Chain %')`);
+      await client.query(`CREATE TEMP TABLE e2e_scope_runs ON COMMIT DROP AS SELECT id FROM production_runs WHERE code LIKE 'E2E-%' OR facility_id IN (SELECT id FROM e2e_scope_facilities) OR biochar_storage_location_id IN (SELECT id FROM e2e_scope_bins) OR id IN (SELECT production_run_id FROM production_run_feedstock_draws WHERE storage_location_id IN (SELECT id FROM e2e_scope_bins)) OR reactor_id IN (SELECT id FROM reactors WHERE code LIKE 'E2E-%' OR identifier LIKE 'UI %' OR identifier LIKE 'Chain %')`);
       await client.query(`CREATE TEMP TABLE e2e_scope_products ON COMMIT DROP AS SELECT id FROM biochar_products WHERE code LIKE 'E2E-%' OR facility_id IN (SELECT id FROM e2e_scope_facilities) OR storage_location_id IN (SELECT id FROM e2e_scope_bins) OR source_biochar_storage_location_id IN (SELECT id FROM e2e_scope_bins) OR formulation_id IN (SELECT id FROM formulations WHERE code LIKE 'E2E-%') OR id IN (SELECT biochar_product_id FROM product_ingredient_snapshots WHERE source_storage_location_id IN (SELECT id FROM e2e_scope_bins)) OR linked_production_run_id IN (SELECT id FROM e2e_scope_runs) OR id IN (SELECT biochar_product_id FROM biochar_product_source_allocations WHERE production_run_id IN (SELECT id FROM e2e_scope_runs))`);
       await client.query(`CREATE TEMP TABLE e2e_scope_orders ON COMMIT DROP AS SELECT id FROM orders WHERE code LIKE 'E2E-%' OR formulation_id IN (SELECT id FROM formulations WHERE code LIKE 'E2E-%') OR facility_id IN (SELECT id FROM e2e_scope_facilities)`);
       await client.query(`CREATE TEMP TABLE e2e_scope_deliveries ON COMMIT DROP AS SELECT id FROM deliveries WHERE code LIKE 'E2E-%' OR facility_id IN (SELECT id FROM e2e_scope_facilities) OR storage_location_id IN (SELECT id FROM e2e_scope_bins) OR biochar_product_id IN (SELECT id FROM e2e_scope_products) OR order_id IN (SELECT id FROM e2e_scope_orders) OR id IN (SELECT delivery_id FROM output_stock_allocations WHERE biochar_product_id IN (SELECT id FROM e2e_scope_products))`);
@@ -100,9 +100,7 @@ export default async function globalTeardown() {
                      OR identifier LIKE 'UI %'
                      OR identifier LIKE 'Chain %'
                 )
-             OR feedstock_storage_location_id IN (
-                  SELECT id FROM storage_locations WHERE code LIKE 'E2E-%'
-                )
+             OR id IN (SELECT id FROM e2e_scope_runs)
              OR biochar_storage_location_id IN (
                   SELECT id FROM storage_locations WHERE code LIKE 'E2E-%'
                 )
@@ -147,9 +145,7 @@ export default async function globalTeardown() {
                      OR identifier LIKE 'UI %'
                      OR identifier LIKE 'Chain %'
                 )
-             OR feedstock_storage_location_id IN (
-                  SELECT id FROM storage_locations WHERE code LIKE 'E2E-%'
-                )
+             OR id IN (SELECT id FROM e2e_scope_runs)
              OR biochar_storage_location_id IN (
                   SELECT id FROM storage_locations WHERE code LIKE 'E2E-%'
                 )
@@ -181,9 +177,7 @@ export default async function globalTeardown() {
                            OR identifier LIKE 'UI %'
                            OR identifier LIKE 'Chain %'
                       )
-                   OR feedstock_storage_location_id IN (
-                        SELECT id FROM storage_locations WHERE code LIKE 'E2E-%'
-                      )
+                   OR id IN (SELECT id FROM e2e_scope_runs)
                    OR biochar_storage_location_id IN (
                         SELECT id FROM storage_locations WHERE code LIKE 'E2E-%'
                       )
@@ -209,9 +203,7 @@ export default async function globalTeardown() {
                      OR identifier LIKE 'UI %'
                      OR identifier LIKE 'Chain %'
                 )
-             OR feedstock_storage_location_id IN (
-                  SELECT id FROM storage_locations WHERE code LIKE 'E2E-%'
-                )
+             OR id IN (SELECT id FROM e2e_scope_runs)
              OR biochar_storage_location_id IN (
                   SELECT id FROM storage_locations WHERE code LIKE 'E2E-%'
                 )
@@ -333,9 +325,7 @@ export default async function globalTeardown() {
                        OR identifier LIKE 'UI %'
                        OR identifier LIKE 'Chain %'
                   )
-               OR feedstock_storage_location_id IN (
-                    SELECT id FROM storage_locations WHERE code LIKE 'E2E-%'
-                  )
+               OR id IN (SELECT id FROM e2e_scope_runs)
                OR biochar_storage_location_id IN (
                     SELECT id FROM storage_locations WHERE code LIKE 'E2E-%'
                   )
@@ -359,9 +349,7 @@ export default async function globalTeardown() {
                      OR identifier LIKE 'UI %'
                      OR identifier LIKE 'Chain %'
                 )
-             OR feedstock_storage_location_id IN (
-                  SELECT id FROM storage_locations WHERE code LIKE 'E2E-%'
-                )
+             OR id IN (SELECT id FROM e2e_scope_runs)
              OR biochar_storage_location_id IN (
                   SELECT id FROM storage_locations WHERE code LIKE 'E2E-%'
                 )
@@ -385,9 +373,7 @@ export default async function globalTeardown() {
              OR identifier LIKE 'UI %'
              OR identifier LIKE 'Chain %'
         )
-        OR feedstock_storage_location_id IN (
-          SELECT id FROM storage_locations WHERE code LIKE 'E2E-%'
-        )
+        OR id IN (SELECT id FROM e2e_scope_runs)
         OR biochar_storage_location_id IN (
           SELECT id FROM storage_locations WHERE code LIKE 'E2E-%'
         )

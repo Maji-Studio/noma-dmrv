@@ -61,7 +61,7 @@ describe.skipIf(!available)("saved provenance PostgreSQL consumer queries", () =
     const [outputBin] = await executor.insert(schema.storageLocations).values({
       ...org, facilityId: ids.facility, code: "OUT", name: "E2E Run output", type: "biochar_bin",
     }).returning();
-    await executor.insert(schema.productionRuns).values(["A", "B"].map(label => ({ ...org, id: ids[`run${label}`], facilityId: ids.facility, code: `R${label}`, reactorId: randomUUID(), status: "complete" as const, biocharStorageLocationId: outputBin.id, biocharMoisturePercent: 0, biocharOutputKg: 1000, biocharDryMassKg: 1000 })));
+    await executor.insert(schema.productionRuns).values(["A", "B"].map(label => ({ ...org, id: ids[`run${label}`], facilityId: ids.facility, code: `R${label}`, reactorId: randomUUID(), status: "complete" as const, startTime: new Date("2026-01-01T08:00:00Z"), biocharStorageLocationId: outputBin.id, biocharMoisturePercent: 0, biocharOutputKg: 1000, biocharDryMassKg: 1000 })));
     await executor.insert(schema.formulations).values({ ...org, id: ids.formulation, code: "FORM", name: "Fixture pure", biocharRatio: 1 });
     await executor.insert(schema.biocharProducts).values(["A", "B", "C"].map(label => ({ ...org, id: ids[label], facilityId: ids.facility, code: label, formulationId: ids.formulation, placedAt: new Date("2026-01-01T12:00:00.000Z"), productionDate: new Date("2026-01-01"), massKg: 2500 })));
     await executor.execute(sql`insert into orders (organization_id, id, facility_id, formulation_id, code, order_date, quantity_kg) values (${ctx.organizationId}, ${ids.order}, ${ids.facility}, ${ids.formulation}, 'O', '2026-01-02', 2000)`);
