@@ -12,6 +12,23 @@
   Sample heavy-metal, PAH, PCB and dioxin/furan columns are removed. No submitted
   value or certification mapping changes.
 
+## 2026-10-15: Optional TGA and mean reflectance (#942 q3, #1016)
+
+Kenji resolved `isometric/tga-1000-year-requirement`: TGA reactive/residual
+carbon and mean R₀ are optional when saving and certifying 1,000-year Samples.
+The form, Sample writers and certification descriptors no longer require them.
+The submitted durability tuple still requires total carbon, measured inorganic
+carbon and `sReflectanceFraction` on each sampled 1,000-year Sample. Neither
+TGA nor mean R₀ feeds that tuple. This records the product decision, not a new
+registry verification.
+
+Sample moisture is required for certification on sampled batches (#942 q1),
+but remains optional at save. The existing measurement-sample payload has no
+moisture field mapping; no new registry field was invented.
+
+The one-calendar-month batch cap and 7 °C soil-temperature floor remain noma
+conservative rules (#942 q7), as recorded in ADR 0016. Behavior is unchanged.
+
 ## 2026-10-15: Proof of delivery required before submission (#942 q12)
 
 - Reverses the 2026-07-29 retained-records stance for proof of delivery:
@@ -402,26 +419,6 @@ the full pipeline can be restored from `archive/reactor-telemetry-upload`
 - Noma submits accounting inputs; Isometric remains authoritative for project
   emissions and the net removal result.
 
-## 2026-08-13 (Production Batch physical run windows)
-
-New Isometric Production Batches now submit the earliest member production-run
-start and latest completed member-run end as `started_at` and `ended_at`. These
-are physical instants, matching the checked-in Certify OpenAPI descriptions and
-the existing Production Batch mapping decision, rather than UTC day-boundary
-timestamps derived from the credit batch's date-only window. This keeps every
-member run inside the immutable remote Production Batch, preserves non-zero
-same-day windows, and renders the operator's physical run times consistently in
-positive- and negative-offset facility timezones.
-
-Reconciliation accepts the former UTC day-start/day-end representation for a
-remote batch carrying the same stable supplier reference and otherwise matching
-identity and records that compatibility claim in the sync audit trail. Stored
-payload hashes from that exact legacy representation migrate once to the
-physical-window hash; changes to mass, facility, feedstock, kind, supplier
-reference, or a later physical window still emit drift. Open member runs fail
-before that batch's registry POST.
-The behavior is covered hermetically; fresh sandbox verification is pending.
-
 ## 2026-08-15 (Storage Location and Biochar Application Removal integration)
 
 One customer location represents one reusable agricultural application site per
@@ -485,6 +482,56 @@ false template-admin blocker. Registry confirmation that this replacement
 governs the Protocol v1.1 project and a fresh end-to-end sandbox submission
 remain pending.
 
+## 2026-08-14 (sync-event key widened; stale-lock script re-keyed)
+
+- `certifier_sync_events.entity_id` widened from `uuid` to `text` (migration
+  0108). The column is polymorphic per `entity_type`: local UUIDs for removals,
+  GHG statements, and documents; `nm-slc-*` supplier references (or an
+  `unmapped:*` fallback) for Storage Locations, whose sync events previously
+  failed to insert and crashed the application sync panel on read.
+- `scripts/isometric-clear-stale-lock.ts` now targets the Removal ledger key
+  (`localEntityType='removal'`); it previously queried `creditBatch` and could
+  never find current rows. It refuses to clear a draft whose
+  `metadata.externalMutation` is `possible`/`confirmed` unless
+  `--force-confirmed` is passed, because rejecting such a draft re-versions
+  the supplier references and can duplicate registry entries.
+- GHG statement creates now persist the interrupted marker (`lastError`,
+  `lastAttemptOutcome`, `externalMutation`) when a timeout/5xx may have
+  reached the registry, matching the Removal pipeline.
+
+## Production batch identity readback and recovery
+
+Before binding durability measurements, read the exact persisted ProductionBatch
+ID ([GET Production Batch](https://docs.isometric.com/api-reference/certify/get-production-batch.md)).
+Verify its ID, stable supplier reference and saved facility; a live identity with
+a changed current project/facility mapping blocks submission. Preserve local
+payload-drift reporting and legacy date-hash migration for live same-mapping batches.
+Only a 404 or the provider 400 detail naming exactly the requested missing ID
+permits recovery. Reconcile the stable reference before POST, refuse duplicate
+references, and validate the complete current payload (including supported legacy
+windows). Keep the old journal until confirmation, then replace it with an
+organization/provider/batch/old-ID and row-version compare-and-set. Audit the old
+and new IDs. Other read errors never trigger replacement.
+## 2026-08-13 (Production Batch physical run windows)
+
+New Isometric Production Batches now submit the earliest member production-run
+start and latest completed member-run end as `started_at` and `ended_at`. These
+are physical instants, matching the checked-in Certify OpenAPI descriptions and
+the existing Production Batch mapping decision, rather than UTC day-boundary
+timestamps derived from the credit batch's date-only window. This keeps every
+member run inside the immutable remote Production Batch, preserves non-zero
+same-day windows, and renders the operator's physical run times consistently in
+positive- and negative-offset facility timezones.
+
+Reconciliation accepts the former UTC day-start/day-end representation for a
+remote batch carrying the same stable supplier reference and otherwise matching
+identity and records that compatibility claim in the sync audit trail. Stored
+payload hashes from that exact legacy representation migrate once to the
+physical-window hash; changes to mass, facility, feedstock, kind, supplier
+reference, or a later physical window still emit drift. Open member runs fail
+before that batch's registry POST.
+The behavior is covered hermetically; fresh sandbox verification is pending.
+
 ## 2026-08-13 (measurement Samples preserve local Sample grain)
 
 Sampled 1,000-year submission now creates one Isometric
@@ -518,6 +565,31 @@ continue to derive dry feedstock mass from their recorded wet mass and moisture
 for process calculations and certification inputs. Certification lineage uses
 the wet allocation shares to select contributing intake batches without
 changing the dry-mass values submitted for protocol calculations.
+
+## 2026-08-13 (replacement sampled 1,000-year component implemented locally)
+
+The current sampled component contract is
+`biochar_sequestration_1000_year_f_durable_max`, with paired list inputs
+`total_carbon_contents`, `inorganic_carbon_contents`, and `s_fraction`, plus
+scalar `product_mass`. Every submitted replicate requires directly measured
+inorganic carbon; noma does not derive it from total minus reported organic
+carbon on this path.
+
+The local explanatory preview now mirrors the component: calculate organic
+carbon per replicate as total minus inorganic, average it, calculate raw
+durability as the binomial lower estimate, bound credit-bearing organic carbon
+and durability at zero, cap durability at 0.95, and use the bounded value for
+stored CO2e. Evidence ledgers show the three per-replicate
+values, `s_fraction`, product mass, raw and capped durability, cap status,
+component key, and formula label. Isometric remains authoritative.
+
+The deprecated `biochar_sequestration_1000_year` remains readable and is
+labelled as legacy total-carbon/uncapped semantics. New template selection and
+submission compilation reject it. Production sampled submission remains
+blocked, and unsampled Method B remains unsupported. Protocol v1.1,
+Agricultural Soils module v1.1, and Standard v1.7 pins are unchanged. Isometric
+confirmation and external sandbox-template migration remain outstanding; no
+registry template was changed by this implementation.
 
 ## 2026-08-10 (customer location application evidence)
 
@@ -637,30 +709,75 @@ Earlier implementation notes are archived by date:
 - [`2026-05-26 to 2026-06-08`](../archive/isometric-changes-archive-2026-05-26-to-06-08.md)
 - [`2026-02 to 2026-05-24`](../archive/isometric-changes-archive-2026-02-to-05-24.md)
 
-## 2026-08-13 (replacement sampled 1,000-year component implemented locally)
+## 2026-07-29 (Safety margin mass is a Removal-scope datapoint — named carve-out)
 
-The current sampled component contract is
-`biochar_sequestration_1000_year_f_durable_max`, with paired list inputs
-`total_carbon_contents`, `inorganic_carbon_contents`, and `s_fraction`, plus
-scalar `product_mass`. Every submitted replicate requires directly measured
-inorganic carbon; noma does not derive it from total minus reported organic
-carbon on this path.
+The 29 Jul Removal Template (`Dark Earth Carbon Template (29 Jul)`) added a
+`Safety margin` component under `miscellaneous / mass_based_ci_emissions`.
+Read-only inspection on 2026-07-29 observed its active-template fixed Datapoint
+`dtp_1KS4PMV99SBXX88K` at 20 kgCO2e/metric_ton. That value is registry-owned
+configuration, not a pinned protocol requirement. noma submits nothing for
+`carbon_intensity`; attaching its justification Source is an operator action
+in the registry UI. Its `mass` input is
+`monitored` and previously hit the ADR 0005/0018 PROJECT-scope guard: sandbox
+submitted a 0 kg no-sources stub, production failed closed.
 
-The local explanatory preview now mirrors the component: calculate organic
-carbon per replicate as total minus inorganic, average it, calculate raw
-durability as the binomial lower estimate, bound credit-bearing organic carbon
-and durability at zero, cap durability at 0.95, and use the bounded value for
-stored CO2e. Evidence ledgers show the three per-replicate
-values, `s_fraction`, product mass, raw and capped durability, cap status,
-component key, and formula label. Isometric remains authoritative.
+Because the deduction scales with the exact biochar mass each Removal claims,
+it cannot be amortized as a PROJECT-scope Component. The guard now supports a
+named-component carve-out: `lookupPeriodInputTuple` takes the template
+component display name and releases a period tuple only when the matching
+`INPUT_MAPPING` entry names that component in `sourceByComponent`. The only
+carve-out is `"safety margin"` → `totalBiocharDryMassKg` (dry mass, bucket
+`stored` — the identical attribution basis used by the sequestration
+`product_mass` claims). Every other `miscellaneous` component, and all six
+other period tuples, keep the fail-closed PROJECT-scope behavior; the guard's
+error text now lists the recognized carve-out names so a renamed registry
+component is self-explanatory.
 
-The deprecated `biochar_sequestration_1000_year` remains readable and is
-labelled as legacy total-carbon/uncapped semantics. New template selection and
-submission compilation reject it. Production sampled submission remains
-blocked, and unsampled Method B remains unsupported. Protocol v1.1,
-Agricultural Soils module v1.1, and Standard v1.7 pins are unchanged. Isometric
-confirmation and external sandbox-template migration remain outstanding; no
-registry template was changed by this implementation.
+The Inventory Source rule (application-boundary logbook / weighbridge
+evidence) gained the safety-margin mass as an `additionalIntendedTargets`
+entry with `optionalInTemplate: true` (the two legacy templates declare an
+empty `miscellaneous` group), so the same mass evidence that backs
+`product_mass` now backs the deduction. `scripts/isometric-coverage-check.ts`
+threads component display names through the guard and validates
+`resolveDatapointSource` per tuple, so the nightly health run catches a
+renamed `Safety margin` (or diesel-split) component the same way submit does.
+
+Both `MAPPING_REVISION` and `SOURCE_BINDING_MAPPING_REVISION` changed: a
+resubmission creates a superseding version carrying the real mass. Sandbox
+removals already submitted against the 29 Jul template carry a 0 kg safety
+margin and need a deliberate resubmission. Locked drafts replay their stored
+snapshot by design.
+
+## 2026-07-29 (application evidence is advisory)
+
+- Missing geotagged photos, boundary references, and boundary logbook records
+  no longer block Removal submission.
+- Application evidence remains visible as an advisory warning for operator
+  follow-up and verification.
+- This aligns the submission gate with the pinned agricultural-soils module:
+  application evidence may be retained or supplied voluntarily, but it is not
+  required in the Certify submission payload.
+
+## 2026-07-29 (mass-weighted biochar-bin provenance)
+
+- Biochar products now draw from a biochar bin. Each draw is allocated across
+  every contributing production run in proportion to its remaining wet mass;
+  wet and dry kilograms are stored separately on immutable allocation rows.
+- Certification, Sources discovery, credit-batch accounting, mutation guards,
+  and direct application traceability now follow those allocation rows. A
+  mixed-bin product exposes every contributing run and feedstock instead of
+  presenting one arbitrary production-run code.
+- Seeded products use the same mass-weighted model. The seeded source bin
+  balances from 2,550 kg wet produced to 2,480 kg allocated, 18 kg documented
+  loss, and 52 kg wet remaining.
+## 2026-07-29 (GIS-only removal evidence)
+
+- The unconditional mapped-Source submission requirement is removed. A
+  Removal with only GIS boundary evidence can now be submitted.
+- A `gis_boundary` document on Application lineage is deliberately excluded
+  from the Removal Source binding plan until an Application `source_ids` or
+  equivalent boundary target exists.
+- The partial-mirroring blocker is retained.
 
 ## 2026-07-28 (application boundary evidence binds product mass Sources)
 
@@ -677,6 +794,41 @@ because its Source plan had no intended Inventory target. The correction reuses
 the shared application-evidence taxonomy and preserves exact application →
 credit-batch lineage resolution, Datapoint confirmation, submission journaling,
 and duplicate prevention.
+
+## 2026-07-28 (restore automatic evidence-ledger Sources)
+
+- Removal submission once again materializes the generated transport and
+  durability evidence-ledger PDFs after side-effect-free preflight and before
+  Source mirroring. Generation failures now block submission with an
+  actionable error instead of allowing incomplete registry attribution.
+- Candidate Source discovery includes documents attached to each member credit
+  batch. Generated ledgers remain Removal-scoped through their metadata, so a
+  ledger for another Removal cannot be mirrored or bound accidentally.
+- Transport ledgers bind to each present `mass_distance` input. Durability
+  ledgers bind to the tier-specific measurement-sample inputs, while
+  `product_mass` still requires and retains the Inventory Source as well.
+- Durability ledger generation now covers both the 200-year H/C pathway and
+  the 1000-year carbon-content/reflectance pathway. Content hashes include the
+  durability option, preserving idempotent reuse and safe supersession.
+- Generated ledgers are excluded from the operator review hash because they do
+  not exist until submission, but remain covered by the full immutable
+  submission payload hash.
+- A submitted Removal can be reopened through its resume link. The same
+  compilation and review gates apply: an unchanged payload reuses the existing
+  registry version, while changed reviewed evidence or mappings create a
+  superseding version. Only a live submission lock blocks reopening.
+
+## 2026-07-22 (ADR 0022 — computed Method-B eligibility)
+
+- Removed stored process sampling regime/unlock state and the associated
+  sample-floor/write triggers. A production process now stores only its epoch
+  and an all-or-none prerequisite record.
+- Added immutable `credit_batches.sampling` (`sampled`/`unsampled`). New
+  unsampled batches require an Isometric organization connection, a facility
+  project mapping, recorded prerequisites, and enough eligible sampled-batch
+  samples since the current epoch.
+- Blueprint routing now follows the stored batch choice. Eligibility remains a
+  live decision for new batches and does not rewrite existing ones.
 
 ## 2026-07-10 (1000-year sandbox submission verified end to end)
 
@@ -921,138 +1073,3 @@ which supersedes the journal half of ADR 0005.
   **Sources** field — the registry is the sole system-of-record for period
   emissions (matters most for `pyrolyzer_direct`).
 
-## 2026-07-22 (ADR 0022 — computed Method-B eligibility)
-
-- Removed stored process sampling regime/unlock state and the associated
-  sample-floor/write triggers. A production process now stores only its epoch
-  and an all-or-none prerequisite record.
-- Added immutable `credit_batches.sampling` (`sampled`/`unsampled`). New
-  unsampled batches require an Isometric organization connection, a facility
-  project mapping, recorded prerequisites, and enough eligible sampled-batch
-  samples since the current epoch.
-- Blueprint routing now follows the stored batch choice. Eligibility remains a
-  live decision for new batches and does not rewrite existing ones.
-
-## 2026-07-28 (restore automatic evidence-ledger Sources)
-
-- Removal submission once again materializes the generated transport and
-  durability evidence-ledger PDFs after side-effect-free preflight and before
-  Source mirroring. Generation failures now block submission with an
-  actionable error instead of allowing incomplete registry attribution.
-- Candidate Source discovery includes documents attached to each member credit
-  batch. Generated ledgers remain Removal-scoped through their metadata, so a
-  ledger for another Removal cannot be mirrored or bound accidentally.
-- Transport ledgers bind to each present `mass_distance` input. Durability
-  ledgers bind to the tier-specific measurement-sample inputs, while
-  `product_mass` still requires and retains the Inventory Source as well.
-- Durability ledger generation now covers both the 200-year H/C pathway and
-  the 1000-year carbon-content/reflectance pathway. Content hashes include the
-  durability option, preserving idempotent reuse and safe supersession.
-- Generated ledgers are excluded from the operator review hash because they do
-  not exist until submission, but remain covered by the full immutable
-  submission payload hash.
-- A submitted Removal can be reopened through its resume link. The same
-  compilation and review gates apply: an unchanged payload reuses the existing
-  registry version, while changed reviewed evidence or mappings create a
-  superseding version. Only a live submission lock blocks reopening.
-
-## 2026-07-29 (Safety margin mass is a Removal-scope datapoint — named carve-out)
-
-The 29 Jul Removal Template (`Dark Earth Carbon Template (29 Jul)`) added a
-`Safety margin` component under `miscellaneous / mass_based_ci_emissions`.
-Read-only inspection on 2026-07-29 observed its active-template fixed Datapoint
-`dtp_1KS4PMV99SBXX88K` at 20 kgCO2e/metric_ton. That value is registry-owned
-configuration, not a pinned protocol requirement. noma submits nothing for
-`carbon_intensity`; attaching its justification Source is an operator action
-in the registry UI. Its `mass` input is
-`monitored` and previously hit the ADR 0005/0018 PROJECT-scope guard: sandbox
-submitted a 0 kg no-sources stub, production failed closed.
-
-Because the deduction scales with the exact biochar mass each Removal claims,
-it cannot be amortized as a PROJECT-scope Component. The guard now supports a
-named-component carve-out: `lookupPeriodInputTuple` takes the template
-component display name and releases a period tuple only when the matching
-`INPUT_MAPPING` entry names that component in `sourceByComponent`. The only
-carve-out is `"safety margin"` → `totalBiocharDryMassKg` (dry mass, bucket
-`stored` — the identical attribution basis used by the sequestration
-`product_mass` claims). Every other `miscellaneous` component, and all six
-other period tuples, keep the fail-closed PROJECT-scope behavior; the guard's
-error text now lists the recognized carve-out names so a renamed registry
-component is self-explanatory.
-
-The Inventory Source rule (application-boundary logbook / weighbridge
-evidence) gained the safety-margin mass as an `additionalIntendedTargets`
-entry with `optionalInTemplate: true` (the two legacy templates declare an
-empty `miscellaneous` group), so the same mass evidence that backs
-`product_mass` now backs the deduction. `scripts/isometric-coverage-check.ts`
-threads component display names through the guard and validates
-`resolveDatapointSource` per tuple, so the nightly health run catches a
-renamed `Safety margin` (or diesel-split) component the same way submit does.
-
-Both `MAPPING_REVISION` and `SOURCE_BINDING_MAPPING_REVISION` changed: a
-resubmission creates a superseding version carrying the real mass. Sandbox
-removals already submitted against the 29 Jul template carry a 0 kg safety
-margin and need a deliberate resubmission. Locked drafts replay their stored
-snapshot by design.
-
-## 2026-07-29 (application evidence is advisory)
-
-- Missing geotagged photos, boundary references, and boundary logbook records
-  no longer block Removal submission.
-- Application evidence remains visible as an advisory warning for operator
-  follow-up and verification.
-- This aligns the submission gate with the pinned agricultural-soils module:
-  application evidence may be retained or supplied voluntarily, but it is not
-  required in the Certify submission payload.
-
-## 2026-07-29 (mass-weighted biochar-bin provenance)
-
-- Biochar products now draw from a biochar bin. Each draw is allocated across
-  every contributing production run in proportion to its remaining wet mass;
-  wet and dry kilograms are stored separately on immutable allocation rows.
-- Certification, Sources discovery, credit-batch accounting, mutation guards,
-  and direct application traceability now follow those allocation rows. A
-  mixed-bin product exposes every contributing run and feedstock instead of
-  presenting one arbitrary production-run code.
-- Seeded products use the same mass-weighted model. The seeded source bin
-  balances from 2,550 kg wet produced to 2,480 kg allocated, 18 kg documented
-  loss, and 52 kg wet remaining.
-## 2026-07-29 (GIS-only removal evidence)
-
-- The unconditional mapped-Source submission requirement is removed. A
-  Removal with only GIS boundary evidence can now be submitted.
-- A `gis_boundary` document on Application lineage is deliberately excluded
-  from the Removal Source binding plan until an Application `source_ids` or
-  equivalent boundary target exists.
-- The partial-mirroring blocker is retained.
-
-## 2026-08-14 (sync-event key widened; stale-lock script re-keyed)
-
-- `certifier_sync_events.entity_id` widened from `uuid` to `text` (migration
-  0108). The column is polymorphic per `entity_type`: local UUIDs for removals,
-  GHG statements, and documents; `nm-slc-*` supplier references (or an
-  `unmapped:*` fallback) for Storage Locations, whose sync events previously
-  failed to insert and crashed the application sync panel on read.
-- `scripts/isometric-clear-stale-lock.ts` now targets the Removal ledger key
-  (`localEntityType='removal'`); it previously queried `creditBatch` and could
-  never find current rows. It refuses to clear a draft whose
-  `metadata.externalMutation` is `possible`/`confirmed` unless
-  `--force-confirmed` is passed, because rejecting such a draft re-versions
-  the supplier references and can duplicate registry entries.
-- GHG statement creates now persist the interrupted marker (`lastError`,
-  `lastAttemptOutcome`, `externalMutation`) when a timeout/5xx may have
-  reached the registry, matching the Removal pipeline.
-
-## Production batch identity readback and recovery
-
-Before binding durability measurements, read the exact persisted ProductionBatch
-ID ([GET Production Batch](https://docs.isometric.com/api-reference/certify/get-production-batch.md)).
-Verify its ID, stable supplier reference and saved facility; a live identity with
-a changed current project/facility mapping blocks submission. Preserve local
-payload-drift reporting and legacy date-hash migration for live same-mapping batches.
-Only a 404 or the provider 400 detail naming exactly the requested missing ID
-permits recovery. Reconcile the stable reference before POST, refuse duplicate
-references, and validate the complete current payload (including supported legacy
-windows). Keep the old journal until confirmation, then replace it with an
-organization/provider/batch/old-ID and row-version compare-and-set. Audit the old
-and new IDs. Other read errors never trigger replacement.

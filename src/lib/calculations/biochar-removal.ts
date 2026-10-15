@@ -16,7 +16,7 @@
  *   Eq.2  §5.1.1.2   C_biochar   = Total Carbon − Inorganic Carbon (organic, dry basis)
  *   Eq.3  §5.1.1.3.1 F_durable,200 = min(0.95, 1 − [c + (a + b·ln(T_soil))·H/C_org])
  *                    Table 4: a = −0.383, b = 0.350, c = −0.048
- *                    T_soil floored at 7 °C, rounded to 1 dp; F_durable capped at 0.95.
+ *                    noma floors T_soil at 7 °C (ADR 0016), rounds to 1 dp; F_durable capped at 0.95.
  *
  * All material properties are reported on a DRY BASIS (Module §3.3).
  *
@@ -68,8 +68,8 @@ export const F_DURABLE_MAX = 0.95;
 export const F_DURABLE_1000_CAP = F_DURABLE_MAX;
 
 /**
- * Conservative minimum soil temperature (§5.1.1.3.1). Sites subject to periodic
- * freezing are floored to 7 °C before entering the durability equation.
+ * noma conservative minimum soil temperature, retained by #942 q7 (ADR 0016).
+ * Values below 7 °C are floored before entering the durability equation.
  */
 export const SOIL_TEMPERATURE_FLOOR_C = 7;
 
@@ -281,7 +281,7 @@ export function computeApplicationCo2eStored(
     hToCorgRatio: input.hToCorgRatio,
   });
   if (durability.temperatureFloored) {
-    warnings.push(`Soil temperature floored to ${SOIL_TEMPERATURE_FLOOR_C} °C (§5.1.1.3.1).`);
+    warnings.push(`Soil temperature floored to ${SOIL_TEMPERATURE_FLOOR_C} °C (noma rule).`);
   }
 
   const co2eStoredTonnes = computeCo2eStoredTonnes({

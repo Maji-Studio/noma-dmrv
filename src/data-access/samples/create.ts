@@ -5,9 +5,9 @@ import { requireOrgScope } from "../utils";
 import { assertCarbonReconciliation } from "./carbon-reconciliation";
 import { assertSamplingTimeNotFuture } from "./future-time";
 import { getSampleById } from "./sample-by-id";
-import { derivedRatioColumns, entryWarnings, optionalColumns, type CreateSampleRequest, type EffectiveSampleValues, type SampleWriteResult } from "./write-values";
+import { derivedRatioColumns, batchEntryWarnings, optionalColumns, type CreateSampleRequest, type EffectiveSampleValues, type SampleWriteResult } from "./write-values";
 import {
-  assertBatchTierEvidence, lockSampleWriteScope, readSampleBatchFacility, requireWritableBatch, resolveSamplingTimeForBatch,
+  lockSampleWriteScope, readSampleBatchFacility, requireWritableBatch, resolveSamplingTimeForBatch,
 } from "./write-scope";
 
 /**
@@ -50,7 +50,6 @@ export async function createSampleInTransaction(
     residualCarbonPercent: request.residualCarbonPercent ?? null,
   };
   assertCarbonReconciliation(effective, {});
-  assertBatchTierEvidence(facility, effective);
   const ratios = derivedRatioColumns(effective);
 
   const [created] = await tx
@@ -70,6 +69,6 @@ export async function createSampleInTransaction(
     // Read back inside the transaction, so a failed read never reports a saved sample as missing (issue #769).
     sample: await getSampleById(ctx, created.id, tx),
     notices: ratios.notices,
-    warnings: entryWarnings(effective, ratios.columns, batch, facility),
+    warnings: await batchEntryWarnings(ctx, tx, effective, ratios.columns, batch, facility),
   };
 }

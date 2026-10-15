@@ -9,9 +9,9 @@ import { requireOrgScope } from "../utils";
 import { assertCarbonReconciliation } from "./carbon-reconciliation";
 import { assertSamplingTimeNotFuture } from "./future-time";
 import { getSampleById } from "./sample-by-id";
-import { derivedRatioColumns, entryWarnings, mergeOverLocked, optionalColumns, type SampleWriteResult, type UpdateSampleRequest } from "./write-values";
+import { derivedRatioColumns, batchEntryWarnings, mergeOverLocked, optionalColumns, type SampleWriteResult, type UpdateSampleRequest } from "./write-values";
 import {
-  assertBatchTierEvidence, assertSampleLinksHeld, lockSampleWriteScope, readSampleBatchFacility, readSampleLinks,
+  assertSampleLinksHeld, lockSampleWriteScope, readSampleBatchFacility, readSampleLinks,
   requireWritableBatch, resolveSamplingTimeForBatch,
 } from "./write-scope";
 
@@ -64,8 +64,6 @@ export async function updateSampleInTransaction(
   if (request.samplingTime !== undefined || moving) {
     samplingTime = resolveSamplingTimeForBatch(request.samplingTime ?? locked.samplingTime, batch, facility);
   }
-  assertBatchTierEvidence(facility, effective);
-  const warnings = entryWarnings(effective, ratios.columns, batch, facility);
   if (request.samplingTime !== undefined && samplingTime) assertSamplingTimeNotFuture(samplingTime, options.now ?? new Date());
 
   await tx.update(samples).set({
@@ -84,6 +82,6 @@ export async function updateSampleInTransaction(
     // Read back inside the transaction (issue #769).
     sample: await getSampleById(ctx, sampleId, tx),
     notices: ratios.notices,
-    warnings,
+    warnings: await batchEntryWarnings(ctx, tx, effective, ratios.columns, batch, facility),
   };
 }

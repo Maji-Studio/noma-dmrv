@@ -1,3 +1,4 @@
+import { sampleDocumentWarnings } from "@/lib/certification/sample-document-warnings";
 import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readiness";
 import type {
   BatchEntityReadinessIssue,
@@ -99,6 +100,7 @@ export function buildEntityReadinessResult(
   }
 
   for (const batch of batchesWithSamples) {
+    warnings.push(...sampleDocumentWarnings(batch));
     for (const sample of batch.samples) {
       const readiness = deriveEntityCertifyReadiness("sample", {
         ...sample,

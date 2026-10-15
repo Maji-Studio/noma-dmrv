@@ -28,7 +28,6 @@ import {
   sampleCreditBatchArchived,
   sampleCreditBatchNotFound,
   sampleFacilityZoneMissingError,
-  sampleTierEvidenceError,
 } from "@/lib/sample-domain-errors";
 import type { EventInstant } from "@/schemas/event-instant";
 import {
@@ -140,23 +139,6 @@ export function resolveSamplingTimeForBatch(value: EventInstant, batch: LockedSa
   const samplingDay = formatFacilityDate(samplingTime, timeZone);
   if (samplingDay < batch.startDate) throw sampleBeforeBatchWindowError(samplingDay, batch);
   return samplingTime;
-}
-
-export interface SampleTierEvidence {
-  randomReflectanceR0Percent: number | null;
-  reactiveCarbonPercent: number | null;
-  residualCarbonPercent: number | null;
-}
-
-/**
- * The 1,000-year evidence invariant, judged on the tier of the locked batch's
- * facility, never the form's mirror of it (issue #309, PR #336). The facility
- * tier itself is not locked here; that residual race is tracked separately.
- */
-export function assertBatchTierEvidence(facility: SampleBatchFacility, values: SampleTierEvidence): void {
-  if (facility.durabilityOption !== "1000_year") return;
-  if (values.randomReflectanceR0Percent == null) throw sampleTierEvidenceError("randomReflectanceR0Percent");
-  if (values.reactiveCarbonPercent == null && values.residualCarbonPercent == null) throw sampleTierEvidenceError("residualCarbonPercent");
 }
 
 /** The credit batch an existing Sample characterises. */

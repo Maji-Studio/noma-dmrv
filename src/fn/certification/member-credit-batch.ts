@@ -17,6 +17,7 @@ export interface MemberCreditBatch {
   appliedDryWeightTons: number;
   durabilityOption: DurabilityOption;
   sampling: CreditBatchSampling;
+  hasLabReport?: boolean;
   feedstockType: CreditBatchFeedstockTypeFact;
   productionRunCount: number;
   applicationCount: number;
@@ -60,6 +61,7 @@ export function toMemberCreditBatchView(
     appliedDryWeightTons: batch.appliedDryWeightTons,
     durabilityOption: batch.durabilityOption,
     sampling: batch.sampling,
+    hasLabReport: batch.hasLabReport,
     feedstockType: batch.feedstockType,
     productionRunCount: batch.productionRunCount,
     applicationCount: batch.applicationCount,

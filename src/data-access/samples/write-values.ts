@@ -4,6 +4,10 @@
  * warnings computed from the effective row.
  */
 
+import type { DbTransaction } from "@/db";
+import type { OrgContext } from "@/lib/auth/server";
+import { getBatchesWithLabReports } from "../sample-document-evidence";
+import { requireOrgScope } from "../utils";
 import type { samples } from "@/db/schema";
 import { deriveSampleRatios, type SampleRatioNotice } from "@/lib/calculations/sample-ratios";
 import { sampleEntryWarnings } from "@/lib/certification/sample-entry-warnings";
@@ -155,13 +159,18 @@ export function derivedRatioColumns(values: EffectiveSampleValues) {
 }
 
 /** `ratios` are the saved ones (`derivedRatioColumns`), never the lab O/C_org input in `values`. */
-export function entryWarnings(
+export async function batchEntryWarnings(
+  ctx: OrgContext,
+  tx: DbTransaction,
   values: EffectiveSampleValues,
   ratios: { hToCOrgRatio: number | null; oToCOrgRatio: number | null },
   batch: LockedSampleBatch,
   facility: SampleBatchFacility,
-): string[] {
+): Promise<string[]> {
+  requireOrgScope(ctx);
+  const batchesWithLabReports = await getBatchesWithLabReports(ctx, [batch.id], tx);
   return sampleEntryWarnings({
+    hasLabReport: batchesWithLabReports.has(batch.id),
     ...values,
     hToCOrgRatio: ratios.hToCOrgRatio,
     oToCOrgRatio: ratios.oToCOrgRatio,

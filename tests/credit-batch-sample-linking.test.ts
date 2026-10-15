@@ -425,31 +425,17 @@ describe("Server-side 1000-year evidence guard — batch tier is source of truth
     };
   }
 
-  it("createSample rejects a 1000-year batch sample missing R₀ — regardless of the client-sent tier", async () => {
-    await expect(
-      createSample(makeTestOrgContext(TEST_USER_ID), {
-        sampleCode: `S-SL-NO-R0-${Date.now()}`,
-        creditBatchId: tier1000BatchId,
-        samplingTime: new Date("2025-06-15T10:00:00Z"),
-        totalCarbonPercent: 80,
-        organicCarbonPercent: 78,
-      }),
-    ).rejects.toThrow(/R₀ reflectance is required/);
-  });
-
-  it("createSample rejects a 1000-year batch sample with R₀ but no TGA data", async () => {
-    await expect(
-      createSample(makeTestOrgContext(TEST_USER_ID), {
-        sampleCode: `S-SL-NO-TGA-${Date.now()}`,
-        creditBatchId: tier1000BatchId,
-        samplingTime: new Date("2025-06-15T10:00:00Z"),
-        totalCarbonPercent: 80,
-        organicCarbonPercent: 78,
-        randomReflectanceR0Percent: 2.1,
-      }),
-    ).rejects.toThrow(
-      /TGA non-reactive carbon is required for a Sample on a 1000-year credit batch/,
-    );
+  it("createSample allows missing mean R₀ and TGA on a 1000-year batch", async () => {
+    const sample = await createSample(makeTestOrgContext(TEST_USER_ID), {
+      sampleCode: `S-SL-OPTIONAL-${Date.now()}`,
+      creditBatchId: tier1000BatchId,
+      samplingTime: new Date("2025-06-15T10:00:00Z"),
+      totalCarbonPercent: 80,
+      organicCarbonPercent: 78,
+    });
+    createdIds.samples.push(sample.id);
+    expect(sample.randomReflectanceR0Percent).toBeNull();
+    expect(sample.residualCarbonPercent).toBeNull();
   });
 
   it("createSample accepts a 1000-year batch sample carrying R₀ + TGA evidence", async () => {
@@ -479,15 +465,15 @@ describe("Server-side 1000-year evidence guard — batch tier is source of truth
     await expect(action).resolves.toMatchObject({ creditBatchId: tier1000BatchId, sReflectanceFraction: null });
   });
 
-  it("updateSample rejects moving an evidence-less sample onto a 1000-year batch", async () => {
+  it("updateSample allows moving a Sample without optional evidence onto a 1000-year batch", async () => {
     const sampleId = await makeSample(fromBatchId, `S-SL-TMOVE-${Date.now()}`);
     await expect(
       updateSample(makeTestOrgContext(TEST_USER_ID), sampleId, { expectedVersion: await labLogisticsVersion(makeTestOrgContext(TEST_USER_ID), "samples", sampleId), creditBatchId: tier1000BatchId }),
-    ).rejects.toThrow(/R₀ reflectance is required/);
-    expect(await batchIdOfSample(sampleId)).toBe(fromBatchId);
+    ).resolves.toBeDefined();
+    expect(await batchIdOfSample(sampleId)).toBe(tier1000BatchId);
   });
 
-  it("updateSample rejects nulling out R₀ in place on a 1000-year batch sample", async () => {
+  it("updateSample allows clearing mean R₀ on a 1000-year batch Sample", async () => {
     const sample = await createSample(makeTestOrgContext(TEST_USER_ID), {
       sampleCode: `S-SL-TNULL-${Date.now()}`,
       creditBatchId: tier1000BatchId,
@@ -499,7 +485,7 @@ describe("Server-side 1000-year evidence guard — batch tier is source of truth
       updateSample(makeTestOrgContext(TEST_USER_ID), sample.id, { expectedVersion: await labLogisticsVersion(makeTestOrgContext(TEST_USER_ID), "samples", sample.id),
         randomReflectanceR0Percent: null,
       }),
-    ).rejects.toThrow(/R₀ reflectance is required/);
+    ).resolves.toBeDefined();
   });
 
   it("updateSample still allows unrelated edits on a compliant 1000-year batch sample", async () => {

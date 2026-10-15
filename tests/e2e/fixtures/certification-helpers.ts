@@ -804,6 +804,7 @@ export async function seedUngroupedReadyBatchWithChain(
             samplingTime: new Date(),
             totalCarbonPercent: SAMPLE_TOTAL_CARBON_PCT,
             organicCarbonPercent: SAMPLE_ORGANIC_CARBON_PCT,
+            moistureContentPercent: READY_BIOCHAR_MOISTURE_PCT,
             inorganicCarbonPercent: SAMPLE_INORGANIC_CARBON_PCT,
             hToCOrgRatio: SAMPLE_H_TO_CORG_RATIO,
             oToCOrgRatio: SAMPLE_O_TO_CORG_RATIO,

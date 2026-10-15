@@ -293,7 +293,7 @@ export function resolveConservativeSoilTemperature(
     );
   }
   if (temperatureFloored) {
-    warnings.push(`Soil temperature floored to ${SOIL_TEMPERATURE_FLOOR_C} °C (§5.1.1.3.1).`);
+    warnings.push(`Soil temperature floored to ${SOIL_TEMPERATURE_FLOOR_C} °C (noma rule).`);
   }
 
   return {
@@ -335,7 +335,7 @@ export interface FacilityReferenceSoilTemperature {
 /**
  * Resolve the facility's declared reference soil temperature into the value
  * submitted to the registry: round to one decimal and apply the 7 °C floor
- * (§5.1.1.3.1). Returns null when the facility has no declared value — the
+ * (noma conservative rule, ADR 0016). Returns null when the facility has no declared value — the
  * caller decides whether that is fail-closed (it is, for a 200-year removal that
  * has credit batches to submit) or simply "not yet configured".
  */
@@ -357,7 +357,7 @@ export function resolveFacilityReferenceSoilTemperature(input: {
 
   const warnings: string[] = [];
   if (temperatureFloored) {
-    warnings.push(`Soil temperature floored to ${SOIL_TEMPERATURE_FLOOR_C} °C (§5.1.1.3.1).`);
+    warnings.push(`Soil temperature floored to ${SOIL_TEMPERATURE_FLOOR_C} °C (noma rule).`);
   }
 
   return {
