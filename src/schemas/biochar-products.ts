@@ -23,6 +23,7 @@ import { orderedSourcesSchema } from "./output-stock";
 // Constants
 // ============================================
 
+export const INGREDIENT_MOISTURE_REQUIRED = "Enter the measured moisture for every ingredient added.";
 export const MOISTURE_MIN = 0;
 export const MOISTURE_MAX = 100;
 export const DUPLICATE_FORMULATION_INGREDIENT_MESSAGE =
@@ -79,12 +80,16 @@ const ingredientBinBaseSchema = z.object({
 type IngredientMassFields = {
   massKg: number;
   massDryKg?: number | null;
+  moistureContentPercent?: number | null;
 };
 
 function ingredientDryMassRefinement(
   ingredient: IngredientMassFields,
   ctx: z.RefinementCtx,
 ): void {
+  if (ingredient.massKg > 0 && ingredient.moistureContentPercent == null) {
+    ctx.addIssue({ code: "custom", path: ["moistureContentPercent"], message: INGREDIENT_MOISTURE_REQUIRED });
+  }
   if (
     ingredient.massDryKg == null ||
     ingredient.massDryKg <= ingredient.massKg
@@ -152,7 +157,7 @@ export type IngredientBin = z.infer<typeof ingredientBinFormSchema>;
 export const biocharProductFormSchema = z.object({
   // Required fields
   facilityId: z.string().min(1, "Select a facility.").uuid("Choose a valid facility."),
-  // Optional: empty = pure-biochar product (no amendment blend)
+  // Required even for Pure biochar (no amendment blend).
   formulationId: z.uuid("Choose a valid formulation."),
   placedAt: stockEventInstantSchema("Enter the mixing and placement time."),
   idempotencyKey: z.string().min(1),

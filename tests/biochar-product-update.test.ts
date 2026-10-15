@@ -67,6 +67,7 @@ describe("updateBiocharProductFn composition handling", () => {
         feedstockTypeCategory: "compost",
         ratio: 0.8,
         massKg: 80,
+        moistureContentPercent: 0,
       },
     ];
 

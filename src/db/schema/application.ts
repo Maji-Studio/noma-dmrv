@@ -26,7 +26,7 @@ export const applications = pgTable(
       .notNull()
       .references(() => organizations.id),
     code: text("code").notNull(), // e.g., "AP-2025-043"
-    applicationDate: timestamp("application_date").defaultNow().notNull(),
+    applicationDate: timestamp("application_date").notNull(),
     status: applicationStatus("status").default("applied").notNull(),
 
     // --- Linked Records ---
@@ -48,7 +48,7 @@ export const applications = pgTable(
     gpsLongitude: doublePrecision("gps_longitude"),
 
     // Field details
-    fieldSizeHa: real("field_size_ha"),
+    fieldSizeHa: real("field_size_ha").notNull(),
     cropType: text("crop_type"),
     applicationMethodType: applicationMethod("application_method"), // manual/mechanical
     fieldIdentifier: text("field_identifier"), // Field name/parcel ID

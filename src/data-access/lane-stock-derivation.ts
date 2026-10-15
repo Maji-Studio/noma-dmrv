@@ -29,7 +29,6 @@ import {
   or,
   sql,
 } from "drizzle-orm";
-import { sourceBiocharMassKgSql } from "./biochar-product-source-mass";
 import { requireOrgScope } from "./utils";
 
 export interface LaneStockDerivation {
@@ -76,15 +75,6 @@ export async function deriveLaneStock(
     consumptionConditions.push(ne(productionRuns.id, options.excludeRunId));
   }
 
-  const legacyAllocationConditions = [
-    inArray(
-      productionRuns.biocharStorageLocationId,
-      options.storageLocationIds,
-    ),
-    eq(productionRuns.organizationId, ctx.organizationId),
-    ne(productionRuns.status, CANCELLED_PRODUCTION_RUN_STATUS),
-    isNull(biocharProducts.sourceBiocharStorageLocationId),
-  ];
   const sourceAllocationConditions = [
     inArray(
       biocharProductSourceAllocations.sourceStorageLocationId,
@@ -96,9 +86,6 @@ export async function deriveLaneStock(
     ),
   ];
   if (options.excludeProductId) {
-    legacyAllocationConditions.push(
-      ne(biocharProducts.id, options.excludeProductId),
-    );
     sourceAllocationConditions.push(
       ne(
         biocharProductSourceAllocations.biocharProductId,
@@ -111,7 +98,6 @@ export async function deriveLaneStock(
     intakeRows,
     runConsumptionRows,
     ingredientConsumptionRows,
-    legacyAllocationRows,
     sourceAllocationRows,
     movementRows,
   ] =
@@ -210,31 +196,6 @@ export async function deriveLaneStock(
         ? Promise.resolve([])
         : executor
         .select({
-          storageLocationId: productionRuns.biocharStorageLocationId,
-          total: numericAggregate(
-            sql<number>`COALESCE(SUM(${sourceBiocharMassKgSql(
-              biocharProducts.massKg,
-              biocharProducts.composition,
-            )}), 0)`,
-          ),
-        })
-        .from(productionRuns)
-        .innerJoin(
-          biocharProducts,
-          and(
-            eq(
-              biocharProducts.linkedProductionRunId,
-              productionRuns.id,
-            ),
-            eq(biocharProducts.organizationId, ctx.organizationId),
-          ),
-        )
-        .where(and(...legacyAllocationConditions))
-        .groupBy(productionRuns.biocharStorageLocationId),
-      feedstockOnly
-        ? Promise.resolve([])
-        : executor
-        .select({
           storageLocationId:
             biocharProductSourceAllocations.sourceStorageLocationId,
           total: sumNumeric(
@@ -307,12 +268,6 @@ export async function deriveLaneStock(
     if (stock) {
       stock.feedstockConsumedWetKg += row.totalWet;
     }
-  }
-  for (const row of legacyAllocationRows) {
-    const stock = row.storageLocationId
-      ? byLocation.get(row.storageLocationId)
-      : undefined;
-    if (stock) stock.biocharAllocatedKg += row.total;
   }
   for (const row of sourceAllocationRows) {
     const stock = row.storageLocationId

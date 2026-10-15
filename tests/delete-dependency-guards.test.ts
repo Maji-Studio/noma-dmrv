@@ -192,6 +192,7 @@ describe("delete dependency guards", () => {
           deliveredWetMassKg: 100,
         }, row => ({ id: row.id }));
       const [application] = await insertOutputApplicationFixture(tx, {
+        fieldSizeHa: 1, applicationDate: new Date("2026-06-15T00:00:00Z"),
           organizationId: TEST_ORG_ID,
           code: `AP-DDG-${tag}`,
           deliveryId: delivery.id,

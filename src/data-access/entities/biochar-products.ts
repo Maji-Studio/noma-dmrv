@@ -198,16 +198,9 @@ export async function getBiocharProducts(ctx: OrgContext, params: {
       ),
       0,
     ),
-    // Bin-less (legacy/partial) products stay orderable via their
-    // product-code fallback; products whose bin is archived or not a
-    // product bin stay hidden.
-    or(
-      isNull(biocharProducts.storageLocationId),
-      and(
-        eq(storageLocations.type, "product_bin"),
-        isNull(storageLocations.archivedAt),
-      ),
-    )!,
+    // Products whose bin is archived or not a product bin stay hidden.
+    eq(storageLocations.type, "product_bin"),
+    isNull(storageLocations.archivedAt),
   ];
 
   if (facilityId) {

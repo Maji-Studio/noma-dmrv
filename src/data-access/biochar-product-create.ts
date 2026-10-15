@@ -113,6 +113,8 @@ export async function createBiocharProductInTransaction(ctx: OrgContext, tx: DbT
   const wet = deriveCompositionSourceBiocharMassKg(data.massKg, data.composition);
   if (wet == null || wet <= 0) throw new SafeError('A product requires positive source biochar.');
   const productBinId = data.storageLocationId;
+  const massKg = data.massKg;
+  const waterAddedKg = data.waterAddedKg;
   const input = { storageLocationId: data.sourceBiocharStorageLocationId, facilityId: data.facilityId, occurredAt: data.placedAt,
     kind: 'production_draw' as const, wetMassKg: wet,
     ...(data.sources?.length ? { sources: data.sources } : { moisturePercent: data.moistureContentPercent }),
@@ -141,13 +143,15 @@ export async function createBiocharProductInTransaction(ctx: OrgContext, tx: DbT
     // The production date is the oldest lot drawn, whatever order the operator emptied them in.
     const drawnLayers = prepared.plan.allocations.map(a => prepared.layers.find(l => l.id === a.layerId)!);
     const firstLayer = drawnLayers.reduce((oldest, layer) => layer.placedAt < oldest.placedAt ? layer : oldest);
+    const moistureContentPercent = postedMoisturePercent(prepared);
+    if (moistureContentPercent == null) throw new SafeError('Enter the measured biochar moisture.');
     const [product] = await writeTx.insert(biocharProducts).values({ organizationId: ctx.organizationId, code: data.code, facilityId: data.facilityId,
       formulationId: data.formulationId, biocharRatio: formulation.biocharRatio, placedAt: new Date(data.placedAt),
       productionDate: new Date(firstLayer.placedAt), status: data.status ?? 'testing',
       sourceBiocharStorageLocationId: input.storageLocationId, linkedProductionRunId: prepared.plan.allocations.length === 1 ? firstLayer.id : null,
       // A split draw's biochar moisture is its overall 1 − solids ÷ wet across the sub-bins read.
-      storageLocationId: productBinId, massKg: data.massKg, moistureContentPercent: postedMoisturePercent(prepared), densityKgM3: data.densityKgM3,
-      waterAddedKg: data.waterAddedKg, composition }).returning();
+      storageLocationId: productBinId, massKg, moistureContentPercent, densityKgM3: data.densityKgM3,
+      waterAddedKg, composition }).returning();
     // Post before source snapshots, so the locked read cannot subtract the new
     // product twice. The source plan is checked against its own basis; the
     // movement records the product-wide basis a dry run returned.

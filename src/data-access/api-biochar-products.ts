@@ -28,7 +28,6 @@ function productQuery(ctx: OrgContext, executor: Executor = db) {
     status: biocharProducts.status,
     placedAt: biocharProducts.placedAt,
     productionDate: biocharProducts.productionDate,
-    expiresAt: biocharProducts.expiresAt,
     sourceBiocharStorageLocationId: biocharProducts.sourceBiocharStorageLocationId,
     storageLocationId: biocharProducts.storageLocationId,
     blendMassKg: biocharProducts.massKg,

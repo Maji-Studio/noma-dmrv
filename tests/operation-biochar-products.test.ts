@@ -436,8 +436,10 @@ describe("retries (astra finding 5)", () => {
     let writer: Promise<unknown> | undefined;
     try {
       // Uncommitted, the code still reads as free; the first attempt's insert then waits on this row.
+      // Archived so this code-reservation fixture is not an active stock layer.
       await barrier.tx.insert(biocharProducts).values({ organizationId: f.ctx.organizationId, code: taken, facilityId: f.facility.id,
-        formulationId: f.pure.id, placedAt: new Date(PLACED_AT) });
+        formulationId: f.pure.id, placedAt: new Date(PLACED_AT), productionDate: new Date(PLACED_AT),
+        massKg: 1, moistureContentPercent: 0, waterAddedKg: 0, archivedAt: new Date(PLACED_AT), storageLocationId: f.pureBin.id, sourceBiocharStorageLocationId: f.source.id });
       pending = create();
       await waitForBlockedOperations(barrierPool, barrier.pid, 1);
       // The intervening loss queues on the source bin lock the first attempt holds inside its savepoint.
@@ -456,7 +458,7 @@ describe("retries (astra finding 5)", () => {
     expect(await sourceShares(f, created.product.id)).toEqual([[f.r1, R1_DRY_KG - LOSS_DRY_KG], [f.r2, LOSS_DRY_KG]].sort());
     expect(await sourceStock(f)).toBe(BIN_DRY_KG - LOSS_DRY_KG - R1_DRY_KG);
     const posted = await productsOf(f);
-    expect(posted.filter(p => p.sourceBiocharStorageLocationId).map(p => p.id)).toEqual([created.product.id]);
+    expect(posted.filter(p => !p.archivedAt).map(p => p.id)).toEqual([created.product.id]);
     expect((await movementsOf(f)).map(m => m.outputKind).sort()).toEqual(["loss", "production_draw"]);
     expect(await orphanAllocations(f)).toBe(0);
     const shares = await db.select().from(biocharProductSourceAllocations).where(eq(biocharProductSourceAllocations.organizationId, f.ctx.organizationId));

@@ -147,12 +147,12 @@ export const deliveries = pgTable(
       () => storageLocations.id
     ),
     // Specific product-in-bin record this delivery draws from.
-    // Drives quantityKgRemaining decrement and expiry check at delivery creation.
+    // Legacy inventory reference; current draws use output stock allocations.
     biocharStorageInventoryId: uuid('biochar_storage_inventory_id').references(
       () => biocharStorageInventory.id
     ),
     moistureContentPercent: percent('moisture_content_percent'),
-    deliveredWetMassKg: massKg('delivered_wet_mass_kg'),
+    deliveredWetMassKg: massKg('delivered_wet_mass_kg').notNull(),
     // Server-authoritative dry biochar allocated from the linked product.
     massDryKg: massKg('mass_dry_kg'),
 
@@ -216,7 +216,7 @@ export const transportLegs = pgTable(
       .references(() => organizations.id),
 
     // Polymorphic reference to the entity being transported.
-    entityType: transportEntityType('entity_type').notNull(), // feedstock | biochar | sample | delivery
+    entityType: transportEntityType('entity_type').notNull(), // feedstock | biochar | sample
     entityId: uuid('entity_id').notNull(),
 
     // --- Route Details ---

@@ -208,6 +208,7 @@ async function createApplicationRecord(
   },
 ): Promise<string> {
   const [application] = await insertOutputApplicationFixture(db, {
+      fieldSizeHa: 1,
       organizationId: TEST_ORG_ID,
       code: `AP-DEL-${suffix}`,
       deliveryId: fixture.deliveryId,

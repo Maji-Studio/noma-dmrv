@@ -137,6 +137,7 @@ describe.sequential("energy read", () => {
     const [application] = await db
       .insert(applications)
       .values({
+        fieldSizeHa: 1,
         organizationId: fixture.ctx.organizationId,
         code: `E2E-ENERGY-AP-${fixture.tag}`,
         applicationDate: new Date("2026-09-15"),

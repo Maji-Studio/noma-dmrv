@@ -26,6 +26,7 @@ function ingredientBin(massKg: number, massDryKg: number) {
     feedstockTypeCategory: "compost",
     massKg,
     massDryKg,
+    moistureContentPercent: 0,
   };
 }
 
@@ -119,5 +120,23 @@ describe("biochar product ingredient mass schemas", () => {
         ]),
       );
     }
+  });
+});
+
+
+describe("ingredient moisture on the form", () => {
+  const schema = biocharProductFormSchema.shape.ingredientBins;
+  it.each([undefined, null])("requires moisture for a positive ingredient mass (%s)", (moistureContentPercent) => {
+    const result = schema.safeParse([{ ...ingredientBin(20, 18), moistureContentPercent }]);
+    expect(result.success).toBe(false);
+    if (!result.success) expect(result.error.issues).toContainEqual(expect.objectContaining({
+      path: [0, "moistureContentPercent"], message: "Enter the measured moisture for every ingredient added.",
+    }));
+  });
+  it.each([undefined, null, 0, 100])("allows an unused ingredient with moisture %s", (moistureContentPercent) => {
+    expect(schema.safeParse([{ ...ingredientBin(0, 0), moistureContentPercent }]).success).toBe(true);
+  });
+  it.each([0, 100])("accepts measured moisture %s", (moistureContentPercent) => {
+    expect(schema.safeParse([{ ...ingredientBin(20, 0), moistureContentPercent }]).success).toBe(true);
   });
 });

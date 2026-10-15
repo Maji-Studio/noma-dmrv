@@ -1,4 +1,5 @@
 /** Real handlers, credentials and Postgres. Written for reviewer execution; never run by the implementation agent. */
+import { BIOCHAR_PRODUCT_REPRESENTATION_REVISION } from "@/config/api-rest";
 import { randomUUID } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
@@ -47,7 +48,7 @@ describe("biochar product create", { timeout: TIMEOUT_MS }, () => {
     expect(rest).toEqual({});
     expect(biocharProductRepresentationSchema.parse(data)).toEqual(data);
     expect(response.headers.get("location")).toBe(`/api/v1/biochar-products/${data.id}`);
-    expect(response.headers.get("etag")).toBe('"1.1"');
+    expect(response.headers.get("etag")).toBe(`"1.${BIOCHAR_PRODUCT_REPRESENTATION_REVISION}"`);
     expect(response.headers.has("idempotent-replayed")).toBe(false);
     expect(data).toMatchObject({
       version: 1, status: "testing", facilityId: a.facility.id, formulationId: a.pure.id, placedAt: FIRST_PLACED_AT,
@@ -58,7 +59,7 @@ describe("biochar product create", { timeout: TIMEOUT_MS }, () => {
     for (const field of ["organizationId", "massKg", "composition", "idempotencyKey", "basisFingerprint", "stockPostingSequence"]) expect(data).not.toHaveProperty(field);
     const read = await readRestProduct(a, data.id);
     expect(read.row).toEqual(data);
-    expect(read.etag).toBe('"1.1"');
+    expect(read.etag).toBe(`"1.${BIOCHAR_PRODUCT_REPRESENTATION_REVISION}"`);
     const state = await captureProductWriteState(a);
     expect(state.products).toMatchObject([{ id: data.id, massKg: BIOCHAR_WET_KG, code: data.code }]);
     expect(state.movements).toMatchObject([{ outputKind: "production_draw", storageLocationId: a.source.id }]);
@@ -225,10 +226,10 @@ describe("biochar product update", { timeout: TIMEOUT_MS }, () => {
     const before = await captureProductWriteState(a);
     const response = await patchProductRest(a, saved.row.id, { status: "ready", densityKgM3: DENSITY_KG_M3 }, saved.etag);
     expect(response.status).toBe(200);
-    expect(response.headers.get("etag")).toBe('"2.1"');
+    expect(response.headers.get("etag")).toBe(`"2.${BIOCHAR_PRODUCT_REPRESENTATION_REVISION}"`);
     const { data } = await response.json();
     expect(data).toMatchObject({ id: saved.row.id, version: 2, status: "ready", densityKgM3: DENSITY_KG_M3, code: saved.row.code });
-    expect(await readRestProduct(a, saved.row.id)).toEqual({ row: data, etag: '"2.1"' });
+    expect(await readRestProduct(a, saved.row.id)).toEqual({ row: data, etag: `"2.${BIOCHAR_PRODUCT_REPRESENTATION_REVISION}"` });
     const state = await captureProductWriteState(a);
     expect(state.movements).toEqual(before.movements);
     expect(state.products).toMatchObject([{ id: saved.row.id, version: 2, status: "ready", massKg: BIOCHAR_WET_KG }]);
@@ -237,9 +238,9 @@ describe("biochar product update", { timeout: TIMEOUT_MS }, () => {
       outcomeCode: "updated", transport: "rest", credentialId: a.writeCredentialId, entityIds: [saved.row.id],
       versionBefore: 1, versionAfter: 2, changedFields: ["densityKgM3", "status"],
     });
-    const cleared = await patchProductRest(a, saved.row.id, { densityKgM3: null }, '"2.1"');
+    const cleared = await patchProductRest(a, saved.row.id, { densityKgM3: null }, `"2.${BIOCHAR_PRODUCT_REPRESENTATION_REVISION}"`);
     expect((await cleared.json()).data.densityKgM3).toBeNull();
-    const renamed = await patchProductRest(a, saved.row.id, { code: `${saved.row.code}-X` }, '"3.1"');
+    const renamed = await patchProductRest(a, saved.row.id, { code: `${saved.row.code}-X` }, `"3.${BIOCHAR_PRODUCT_REPRESENTATION_REVISION}"`);
     expect((await renamed.json()).data.code).toBe(`${saved.row.code}-X`);
   });
 
@@ -263,7 +264,7 @@ describe("biochar product update", { timeout: TIMEOUT_MS }, () => {
       const refusal = await expectProblem(await patchProductRest(a, saved.row.id, { status: "sold" }, tag), 412, "stale_version");
       expect(refusal.current).toEqual(current);
     }
-    expect(requiredEtag(await patchProductRest(a, saved.row.id, {}, '"2.1"'))).toBe('"3.1"');
+    expect(requiredEtag(await patchProductRest(a, saved.row.id, {}, `"2.${BIOCHAR_PRODUCT_REPRESENTATION_REVISION}"`))).toBe(`"3.${BIOCHAR_PRODUCT_REPRESENTATION_REVISION}"`);
   });
 
   it.each([
@@ -280,7 +281,7 @@ describe("biochar product update", { timeout: TIMEOUT_MS }, () => {
     const saved = await seedRestProduct(a);
     const other = await seedRestProduct(b);
     for (const id of [saved.row.code, randomUUID(), other.row.id]) {
-      const refusal = await expectProblem(await patchProductRest(a, id, { status: "ready" }, '"1.1"'), 404, "not_found");
+      const refusal = await expectProblem(await patchProductRest(a, id, { status: "ready" }, `"1.${BIOCHAR_PRODUCT_REPRESENTATION_REVISION}"`), 404, "not_found");
       // Both organizations' first product is BP-26-001; `instance` only echoes the path this caller sent.
       const problem = { ...refusal, instance: undefined };
       expect(JSON.stringify(problem)).not.toContain(other.row.code);

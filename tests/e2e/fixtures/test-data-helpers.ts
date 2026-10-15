@@ -55,8 +55,8 @@ export interface TestBiocharProduct {
   formulationId: string;
   productionDate: Date;
   status: "draft" | "testing" | "ready" | "sold";
-  massKg: number | null;
-  moistureContentPercent: number | null;
+  massKg: number;
+  moistureContentPercent: number;
 }
 
 // Database connection helper

@@ -11,6 +11,7 @@ import { nullableNumericValue } from "@/lib/form-utils";
 import { useEffect, useId, useRef, useState, type ComponentProps } from "react";
 
 import { EntitySelect, FormActions, FormField, FormInput, FormSection, FormSpine, MassMoistureFields, StockReconciliationLink } from "@/components/forms";
+import { ResolvedErrorRevalidator } from "@/components/forms/resolved-error-revalidator";
 import { EventTimeInput } from "@/components/forms/event-time-input";
 import { DetailedOnly } from "@/components/forms/form-detail-context";
 import {
@@ -390,6 +391,7 @@ export function BiocharProductForm({
         beginSubmit();
         return handleFormSubmit(event);
       }} className="space-y-20">
+      <ResolvedErrorRevalidator control={control} trigger={form.trigger} />
       <ZeroSourceBiocharWarning
         sourceBiocharMassKg={initialSourceBiocharMassKg}
       />

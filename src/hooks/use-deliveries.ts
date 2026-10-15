@@ -213,6 +213,7 @@ export function useUpdateDelivery(
               ? {
                   ...old,
                   ...variables,
+                  deliveredWetMassKg: variables.deliveredWetMassKg ?? old.deliveredWetMassKg,
                   updatedAt: new Date(),
                 }
               : old

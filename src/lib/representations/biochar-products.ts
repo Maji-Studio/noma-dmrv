@@ -24,12 +24,11 @@ export const biocharProductRepresentationSchema = z.object({
   status: z.enum(biocharProductStatusValues).describe("Product state: draft, testing, ready or sold."),
   placedAt: z.iso.datetime().describe("Instant the product was mixed and placed, UTC, RFC 3339."),
   productionDate: z.iso.datetime().describe("Instant of the oldest biochar lot drawn, UTC, RFC 3339."),
-  expiresAt: z.iso.datetime().nullable().describe("Instant the 12-month stockpiling validity ends, UTC, RFC 3339, or null."),
-  sourceBiocharStorageLocationId: z.uuid().nullable().describe("Biochar bin the biochar was drawn from, UUID, or null."),
-  storageLocationId: z.uuid().nullable().describe("Product bin the blend was placed in, UUID, or null."),
-  biocharWetMassKg: z.number().nullable().describe("Wet biochar drawn from the source bin as weighed, in kilograms, without ingredients or added water."),
-  biocharMoisturePercent: z.number().nullable().describe("Measured biochar moisture as percent of wet mass; the overall figure for a split-bin draw."),
-  waterAddedKg: z.number().nullable().describe("Water added to the blend in kilograms."),
+  sourceBiocharStorageLocationId: z.uuid().describe("Biochar bin the biochar was drawn from, UUID."),
+  storageLocationId: z.uuid().describe("Product bin the blend was placed in, UUID."),
+  biocharWetMassKg: z.number().describe("Wet biochar drawn from the source bin as weighed, in kilograms, without ingredients or added water."),
+  biocharMoisturePercent: z.number().describe("Measured biochar moisture as percent of wet mass; the overall figure for a split-bin draw."),
+  waterAddedKg: z.number().describe("Water added to the blend in kilograms."),
   densityKgM3: z.number().nullable().describe("Bulk density in kilograms per cubic metre, or null."),
   ingredients: z.array(ingredientSchema).describe("Ingredients as mixed, in recipe order, from the snapshot saved with the product."),
   sourceAllocations: z.array(sourceAllocationSchema).describe("Biochar drawn per production run, ordered by run id."),
@@ -42,10 +41,10 @@ export type BiocharProductRepresentation = z.infer<typeof biocharProductRepresen
 type Instant = Date | string;
 type IngredientRow = z.infer<typeof ingredientSchema>;
 export type BiocharProductRepresentationInput = Omit<BiocharProductRepresentation,
-  "biocharWetMassKg" | "placedAt" | "productionDate" | "expiresAt" | "archivedAt" | "createdAt" | "updatedAt"> & {
+  "biocharWetMassKg" | "placedAt" | "productionDate" | "archivedAt" | "createdAt" | "updatedAt"> & {
   /** The stored blend: biochar as weighed plus every ingredient, before water. Never published. */
-  blendMassKg: number | null;
-  placedAt: Instant; productionDate: Instant; expiresAt: Instant | null; archivedAt: Instant | null; createdAt: Instant; updatedAt: Instant;
+  blendMassKg: number;
+  placedAt: Instant; productionDate: Instant; archivedAt: Instant | null; createdAt: Instant; updatedAt: Instant;
 };
 
 const instant = (value: Instant) => new Date(value).toISOString();
@@ -65,7 +64,6 @@ export function representBiocharProduct(row: BiocharProductRepresentationInput):
   return biocharProductRepresentationSchema.parse({
     id: row.id, code: row.code, version: row.version, facilityId: row.facilityId, formulationId: row.formulationId,
     status: row.status, placedAt: instant(row.placedAt), productionDate: instant(row.productionDate),
-    expiresAt: row.expiresAt === null ? null : instant(row.expiresAt),
     sourceBiocharStorageLocationId: row.sourceBiocharStorageLocationId, storageLocationId: row.storageLocationId,
     biocharWetMassKg: deriveSourceBiocharMassKg(row.blendMassKg, ingredients.map(({ wetMassKg }) => ({ massKg: wetMassKg }))),
     biocharMoisturePercent: row.biocharMoisturePercent, waterAddedKg: row.waterAddedKg, densityKgM3: row.densityKgM3,

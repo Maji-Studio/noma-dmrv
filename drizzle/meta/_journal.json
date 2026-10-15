@@ -960,6 +960,13 @@
       "when": 1792040340840,
       "tag": "0136_production_required_fields",
       "breakpoints": true
+    },
+    {
+      "idx": 137,
+      "version": "7",
+      "when": 1792041836184,
+      "tag": "0137_logistics_required_fields",
+      "breakpoints": true
     }
   ]
 }

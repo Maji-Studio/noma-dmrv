@@ -71,10 +71,10 @@ describe("credit batch accounting", () => {
       { organizationId: TEST_ORG_ID, facilityId: facility.id, orderId: ordersRows[1].id, biocharProductId: products[0].id, code: `LF-D1-${tag}`, customerLocationId: deliveryLocation.id, distanceKmOverride: 7, deliveryDate: new Date("2026-07-04"), deliveredWetMassKg: 1_000, massDryKg: 500 },
       { organizationId: TEST_ORG_ID, facilityId: facility.id, orderId: ordersRows[1].id, code: `LF-D2-${tag}`, deliveryDate: new Date("2026-07-04"), deliveredWetMassKg: 2_000, massDryKg: 1_500 },
     ], row => row);
-    const appRows = await insertOutputApplicationFixture(db, deliveryRows.map((delivery, n) => ({ organizationId: TEST_ORG_ID, deliveryId: delivery.id, code: `LF-A${n}-${tag}`, applicationDate: new Date(`2026-08-1${n}T00:00:00Z`), biocharAppliedTons: n + 1, biocharAppliedDryTons: n + 0.5 })), row => row);
+    const appRows = await insertOutputApplicationFixture(db, deliveryRows.map((delivery, n) => ({ fieldSizeHa: 1, organizationId: TEST_ORG_ID, deliveryId: delivery.id, code: `LF-A${n}-${tag}`, applicationDate: new Date(`2026-08-1${n}T00:00:00Z`), biocharAppliedTons: n + 1, biocharAppliedDryTons: n + 0.5 })), row => row);
     const [multiRunOrder] = await db.insert(orders).values(await outputOrderFixtureValues(db, { organizationId: TEST_ORG_ID, facilityId: facility.id, customerId: customer.id, biocharProductId: multiRunProduct.id, code: `LF-OM-${tag}`, orderDate: new Date("2026-07-03"), quantityKg: 400, packaging: "loose" })).returning();
     const [multiRunDelivery] = await insertOutputDeliveryFixture(db, { organizationId: TEST_ORG_ID, facilityId: facility.id, orderId: multiRunOrder.id, biocharProductId: multiRunProduct.id, code: `LF-DM-${tag}`, deliveryDate: new Date("2026-07-04"), deliveredWetMassKg: 4_000, massDryKg: 2_000 }, row => row);
-    const [multiRunApplication] = await insertOutputApplicationFixture(db, { organizationId: TEST_ORG_ID, deliveryId: multiRunDelivery.id, code: `LF-AM-${tag}`, applicationDate: new Date("2026-08-12T00:00:00Z"), biocharAppliedTons: 4, biocharAppliedDryTons: 2 }, row => row);
+    const [multiRunApplication] = await insertOutputApplicationFixture(db, { fieldSizeHa: 1, organizationId: TEST_ORG_ID, deliveryId: multiRunDelivery.id, code: `LF-AM-${tag}`, applicationDate: new Date("2026-08-12T00:00:00Z"), biocharAppliedTons: 4, biocharAppliedDryTons: 2 }, row => row);
     const [batch] = await db.insert(creditBatches).values({ organizationId: TEST_ORG_ID, facilityId: facility.id, feedstockTypeId: feedstockType.id, productionProcessId: process.id, code: `LF-CB-${tag}`, startDate: "2026-07-01", endDate: "2026-07-31" }).returning();
     await db.insert(creditBatchProductionRuns).values(runs.map((run) => ({ organizationId: TEST_ORG_ID, creditBatchId: batch.id, productionRunId: run.id })));
     await db.insert(creditBatchApplications).values([
@@ -219,6 +219,7 @@ describe("credit batch accounting", () => {
         })
       )[batch.id].lineageFacts;
       const [laterApplication] = await insertOutputApplicationFixture(db, {
+          fieldSizeHa: 1,
           organizationId: TEST_ORG_ID,
           deliveryId: deliveryRows[0].id,
           code: `LF-A-LATER-${tag}`,

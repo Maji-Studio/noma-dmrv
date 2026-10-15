@@ -44,7 +44,6 @@ import {
   applicationEvidenceGapWhere,
   feedstocksMissingDataWhere,
   overdueBatchesWhere,
-  productsUnlinkedWhere,
   runsMissingMassWhere,
 } from "./dashboard-attention";
 import {
@@ -531,7 +530,6 @@ export async function getDashboardOverview(
 
 type AttentionKind =
   | "run-mass"
-  | "lot-unlinked"
   | "feedstock-missing"
   | "application-evidence"
   | "batch-pending";
@@ -567,7 +565,6 @@ interface AttentionRow {
 
 const ATTENTION_TITLES: Record<AttentionKind, string> = {
   "run-mass": "Complete run missing mass data",
-  "lot-unlinked": "Production run not linked",
   "feedstock-missing": "Feedstock record missing data",
   "application-evidence": "Application missing evidence",
   "batch-pending": "Period ended · awaiting verification",
@@ -576,7 +573,6 @@ const ATTENTION_TITLES: Record<AttentionKind, string> = {
 /** Flags sort before pending batches; within a kind the branch ordinal holds. */
 const ATTENTION_ORDER: AttentionKind[] = [
   "run-mass",
-  "lot-unlinked",
   "feedstock-missing",
   "application-evidence",
   "batch-pending",
@@ -591,8 +587,6 @@ function attentionHref(
   switch (kind) {
     case "run-mass":
       return productionRunHref(facilityId, id);
-    case "lot-unlinked":
-      return `/biochar-products${facilityQuery}`;
     case "feedstock-missing":
       return `/feedstocks${facilityQuery}`;
     case "application-evidence":
@@ -628,19 +622,6 @@ async function getAttentionItems(
       .from(productionRuns)
       .where(runsMissingMassWhere(orgId, facilityId))
       .orderBy(desc(productionRuns.startTime))
-      .limit(ATTENTION_PER_CHECK),
-    db
-      .select({
-        kind: attentionKind("lot-unlinked"),
-        id: biocharProducts.id,
-        code: biocharProducts.code,
-        dateDay: noDay,
-        dateMs: epochMs(biocharProducts.productionDate),
-        ord: branchOrdinal(desc(biocharProducts.productionDate)),
-      })
-      .from(biocharProducts)
-      .where(productsUnlinkedWhere(orgId, facilityId))
-      .orderBy(desc(biocharProducts.productionDate))
       .limit(ATTENTION_PER_CHECK),
     db
       .select({
