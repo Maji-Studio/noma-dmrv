@@ -39,7 +39,6 @@ import { unionAll } from "drizzle-orm/pg-core";
 import {
   applicationEvidenceGapWhere,
   overdueBatchesWhere,
-  productsUnlinkedWhere,
   runsMissingMassWhere,
 } from "./dashboard-attention";
 import { requireOrgScope } from "./utils";
@@ -199,9 +198,6 @@ async function loadStationAggregates(
   const productAgg = db
     .select({
       total: countRows().as("product_total"),
-      unlinked: countRows(productsUnlinkedWhere(orgId, facilityId)).as(
-        "product_unlinked",
-      ),
     })
     .from(biocharProducts)
     .where(
@@ -288,7 +284,6 @@ async function loadStationAggregates(
       runningRuns: runAgg.running,
       runsMissingMass: runAgg.missingMass,
       productTotal: productAgg.total,
-      productsUnlinked: productAgg.unlinked,
       deliveryTotal: deliveryAgg.total,
       applicationTotal: applicationAgg.total,
       evidenceGaps: applicationAgg.evidenceGaps,
@@ -542,7 +537,6 @@ export async function getDashboardStations(
     runningRuns,
     runsMissingMass,
     productTotal,
-    productsUnlinked,
     deliveryTotal,
     applicationTotal,
     evidenceGaps,
@@ -591,11 +585,8 @@ export async function getDashboardStations(
       name: "Biochar",
       total: productTotal,
       totalLabel: plural(productTotal, "product"),
-      attention: productsUnlinked,
-      reasons:
-        productsUnlinked > 0
-          ? [{ state: "warning", text: `${plural(productsUnlinked, "product")} not linked to a run` }]
-          : [],
+      attention: 0,
+      reasons: [],
       href: facilityHref("/biochar-products", facilityId),
     },
     {

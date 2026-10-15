@@ -11,6 +11,7 @@ import { nullableNumericValue } from "@/lib/form-utils";
 import { useEffect, useId, useRef, useState, type ComponentProps } from "react";
 
 import { EntitySelect, FormActions, FormField, FormInput, FormSection, FormSpine, MassMoistureFields, StockReconciliationLink } from "@/components/forms";
+import { ResolvedErrorRevalidator } from "@/components/forms/resolved-error-revalidator";
 import { EventTimeInput } from "@/components/forms/event-time-input";
 import { DetailedOnly } from "@/components/forms/form-detail-context";
 import {
@@ -42,6 +43,7 @@ import {
 } from "@/lib/stock-overdraw";
 import {
   biocharProductEntrySchema,
+  biocharProductFrozenEditSchema,
   PURE_PRODUCT_BIN_FILTER,
   type BiocharProductFormData,
 } from "@/schemas/biochar-products";
@@ -164,7 +166,7 @@ export function BiocharProductForm({
   const storageLocationDialog = useQuickAddDialog();
 
   const form = useForm({
-    resolver: zodResolver(biocharProductEntrySchema),
+    resolver: zodResolver(hasFrozenSourceAllocation ? biocharProductFrozenEditSchema : biocharProductEntrySchema),
     // onTouched so spine markers can flag errors on blur, not only on submit.
     mode: "onTouched",
     defaultValues: {
@@ -390,6 +392,7 @@ export function BiocharProductForm({
         beginSubmit();
         return handleFormSubmit(event);
       }} className="space-y-20">
+      <ResolvedErrorRevalidator control={control} trigger={form.trigger} />
       <ZeroSourceBiocharWarning
         sourceBiocharMassKg={initialSourceBiocharMassKg}
       />

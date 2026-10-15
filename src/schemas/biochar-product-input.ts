@@ -1,7 +1,7 @@
 import { z } from "zod";
 import {
   biocharProductFormSchema, biocharProductStatusValues, DUPLICATE_FORMULATION_INGREDIENT_MESSAGE,
-  MOISTURE_MAX, MOISTURE_MIN, updateBiocharProductSchema,
+  INGREDIENT_MOISTURE_REQUIRED, MOISTURE_MAX, MOISTURE_MIN, updateBiocharProductSchema,
 } from "./biochar-products";
 import { eventInstantSchema } from "./event-instant";
 import {
@@ -10,7 +10,6 @@ import {
 } from "./helpers";
 import { MAX_STOCK_ENTRY_ITEMS, moistureSchema, orderedSourcesSchema, OUTPUT_STOCK_REQUEST_KEY_MAX_LENGTH } from "./output-stock";
 
-const INGREDIENT_MOISTURE_REQUIRED = "Enter the measured moisture for every ingredient added.";
 const BIOCHAR_MOISTURE_REQUIRED = "Enter the measured biochar moisture, or the sub-bins drawn from a split bin.";
 const BIOCHAR_MOISTURE_OR_SOURCES = "Send the biochar moisture or the sub-bins drawn, not both.";
 

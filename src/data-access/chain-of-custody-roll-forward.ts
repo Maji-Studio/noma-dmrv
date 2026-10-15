@@ -30,8 +30,8 @@ export interface ChainRollForwardDelivery {
 export interface ChainRollForwardProduct {
   product: ChainBiocharProductLineage;
   /** Biochar drawn from the run into this product, on both mass bases. */
-  drawnWetMassKg: number | null;
-  drawnDryMassKg: number | null;
+  drawnWetMassKg: number;
+  drawnDryMassKg: number;
   deliveries: ChainRollForwardDelivery[];
 }
 

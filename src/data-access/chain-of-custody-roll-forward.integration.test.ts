@@ -57,10 +57,11 @@ describe.skipIf(!available)("run roll-forward PostgreSQL queries", () => {
     }).returning();
     await executor.insert(schema.productionRuns).values(["run", "outsideRun"].map(key => ({ ...org, id: ids[key], facilityId: ids.facility, code: key, reactorId: randomUUID(), status: "complete" as const, startTime: new Date("2026-01-01T08:00:00Z"), biocharStorageLocationId: outputBin.id, biocharMoisturePercent: 0, biocharOutputKg: 1000, biocharDryMassKg: 1000 })));
     await executor.insert(schema.formulations).values({ ...org, id: ids.formulation, code: "FORM", name: "Fixture pure", biocharRatio: 1 });
-    await executor.insert(schema.biocharProducts).values(["shipped", "stocked", "foreign"].map(label => ({ ...org, id: ids[label], facilityId: ids.facility, code: label, formulationId: ids.formulation, placedAt: new Date("2026-01-01T12:00:00.000Z"), productionDate: new Date("2026-01-01"), massKg: 600 })));
-    // A legacy lot: no source bin, no allocation row, linked to the run directly.
-    await executor.insert(schema.biocharProducts).values({ ...org, id: ids.legacy, facilityId: ids.facility, code: "legacy", formulationId: ids.formulation, placedAt: new Date("2026-01-01T12:00:00.000Z"), productionDate: new Date("2026-01-01"), massKg: 200, moistureContentPercent: 10, linkedProductionRunId: ids.run });
+    await executor.insert(schema.biocharProducts).values(["shipped", "stocked", "foreign"].map(label => ({ ...org, id: ids[label], facilityId: ids.facility, code: label, formulationId: ids.formulation, placedAt: new Date("2026-01-01T12:00:00.000Z"), productionDate: new Date("2026-01-01"), massKg: 600, moistureContentPercent: 5, waterAddedKg: 0, storageLocationId: ids.bin, sourceBiocharStorageLocationId: outputBin.id })));
+    // A single-run lot retains both its source bin and measured allocation.
+    await executor.insert(schema.biocharProducts).values({ ...org, id: ids.legacy, facilityId: ids.facility, code: "legacy", formulationId: ids.formulation, placedAt: new Date("2026-01-01T12:00:00.000Z"), productionDate: new Date("2026-01-01"), massKg: 200, moistureContentPercent: 10, waterAddedKg: 0, storageLocationId: ids.bin, sourceBiocharStorageLocationId: outputBin.id, linkedProductionRunId: ids.run });
     await executor.insert(schema.biocharProductSourceAllocations).values([
+      { ...org, biocharProductId: ids.legacy, productionRunId: ids.run, sourceStorageLocationId: outputBin.id, allocatedWetMassKg: 200, allocatedDryMassKg: 180 },
       { ...org, biocharProductId: ids.shipped, productionRunId: ids.run, sourceStorageLocationId: ids.bin, allocatedWetMassKg: 600, allocatedDryMassKg: 570 },
       { ...org, biocharProductId: ids.stocked, productionRunId: ids.run, sourceStorageLocationId: ids.bin, allocatedWetMassKg: 300, allocatedDryMassKg: 285 },
       // Another tenant's allocation row: only its org filter keeps it out, since

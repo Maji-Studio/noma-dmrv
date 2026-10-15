@@ -13,7 +13,13 @@ type Executor = typeof db | DbTransaction;
 type ProductValues = typeof biocharProducts.$inferInsert;
 type OrderValues = typeof orders.$inferInsert;
 type DeliveryValues = typeof deliveries.$inferInsert;
-type ProductFixture = Omit<ProductValues, "placedAt" | "formulationId"> & {
+type ProductFixture = Omit<ProductValues, "placedAt" | "productionDate" | "formulationId" | "massKg" | "moistureContentPercent" | "waterAddedKg" | "storageLocationId" | "sourceBiocharStorageLocationId"> & {
+  productionDate?: Date;
+  massKg?: number;
+  moistureContentPercent?: number;
+  waterAddedKg?: number;
+  storageLocationId?: string | null;
+  sourceBiocharStorageLocationId?: string | null;
   placedAt?: Date;
   formulationId?: string | null;
 };
@@ -33,6 +39,7 @@ const ownedFormulations = new Set<string>();
 const GRAMS_PER_KG = 1_000;
 const GRAMS_PER_TONNE = 1_000_000;
 const PERCENT_SCALE = 100;
+const FIXTURE_PRODUCT_MASS_KG = 100;
 
 /** Consumer fixtures declare facts directly; stock writer tests must use preview/post. */
 async function productFixture(executor: Executor, input: ProductFixture): Promise<ProductValues> {
@@ -46,7 +53,28 @@ async function productFixture(executor: Executor, input: ProductFixture): Promis
     ownedFormulations.add(recipe.id);
   }
   const placedAt = input.placedAt ?? (input.productionDate ? new Date(input.productionDate) : FIXTURE_PLACED_AT);
-  return { ...input, formulationId, placedAt };
+  const productionDate = input.productionDate ?? placedAt;
+  const sourceRun = input.linkedProductionRunId
+    ? (await executor.select().from(productionRuns).where(eq(productionRuns.id, input.linkedProductionRunId)))[0]
+    : undefined;
+  let sourceBiocharStorageLocationId = input.sourceBiocharStorageLocationId ?? sourceRun?.biocharStorageLocationId;
+  let storageLocationId = input.storageLocationId;
+  for (const type of ["biochar_bin", "product_bin"] as const) {
+    if (type === "biochar_bin" ? sourceBiocharStorageLocationId : storageLocationId) continue;
+    const [bin] = await executor.insert(storageLocations).values({
+      organizationId: input.organizationId, facilityId: input.facilityId, type,
+      formulationId: type === "product_bin" ? formulationId : null,
+      code: `E2E-BIN-${randomUUID()}`, name: `E2E Product fixture ${randomUUID()}`,
+    }).returning();
+    ownedBins.add(bin.id);
+    if (type === "biochar_bin") sourceBiocharStorageLocationId = bin.id;
+    else storageLocationId = bin.id;
+  }
+  return { ...input, formulationId, placedAt, productionDate,
+    massKg: input.massKg ?? FIXTURE_PRODUCT_MASS_KG, moistureContentPercent: input.moistureContentPercent ?? 0,
+    waterAddedKg: input.waterAddedKg ?? 0,
+    sourceBiocharStorageLocationId: sourceBiocharStorageLocationId!, storageLocationId: storageLocationId!,
+  };
 }
 export function outputProductFixtureValues(executor: Executor, input: ProductFixture): Promise<ProductValues>;
 export function outputProductFixtureValues(executor: Executor, input: ProductFixture[]): Promise<ProductValues[]>;
@@ -298,7 +326,7 @@ export async function preparePureOutputProductFixture(executor: Executor, produc
   const [existing] = await executor.select().from(biocharProductSourceAllocations).where(eq(biocharProductSourceAllocations.biocharProductId, product.id));
   if (existing) return { storageLocationId, formulationId: product.formulationId };
   let run = product.linkedProductionRunId ? (await executor.select().from(productionRuns).where(eq(productionRuns.id, product.linkedProductionRunId)))[0] : undefined;
-  let sourceStorageLocationId = run?.biocharStorageLocationId ?? undefined;
+  let sourceStorageLocationId = run?.biocharStorageLocationId ?? product.sourceBiocharStorageLocationId;
   if (!sourceStorageLocationId) {
     const [sourceBin] = await executor.insert(storageLocations).values({ organizationId: product.organizationId, facilityId: product.facilityId, type: "biochar_bin", code: `E2E-SOURCE-${randomUUID()}`, name: `E2E Source ${randomUUID()}` }).returning();
     ownedBins.add(sourceBin.id);

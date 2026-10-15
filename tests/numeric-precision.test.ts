@@ -158,6 +158,8 @@ describe("numeric precision round-trips (issue #280)", () => {
         .returning({ id: orders.id });
 
       const [delivery] = await insertOutputDeliveryFixture(tx, {
+
+        deliveredWetMassKg: 1000,
           organizationId: TEST_ORG_ID,
           code: `DL-NUM-${runId}`,
           facilityId: facility.id,
@@ -166,6 +168,7 @@ describe("numeric precision round-trips (issue #280)", () => {
         }, row => ({ id: row.id }));
 
       const [inserted] = await insertOutputApplicationFixture(tx, {
+        fieldSizeHa: 1, applicationDate: new Date("2026-06-15T00:00:00Z"),
           organizationId: TEST_ORG_ID,
           code: `AP-NUM-${runId}`,
           deliveryId: delivery.id,

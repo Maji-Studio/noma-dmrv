@@ -400,6 +400,7 @@ beforeAll(async () => {
 
   // Create applications linked to each facility via deliveries
   const [aA] = await insertOutputApplicationFixture(db, {
+      fieldSizeHa: 1,
       organizationId: TEST_ORG_ID,
       code: `AP-VAL-A-${runId}`,
       deliveryId: deliveryA.id,
@@ -408,6 +409,7 @@ beforeAll(async () => {
       biocharAppliedDryTons: 4.5,
     }, row => ({ id: row.id }));
   const [aB] = await insertOutputApplicationFixture(db, {
+      fieldSizeHa: 1,
       organizationId: TEST_ORG_ID,
       code: `AP-VAL-B-${runId}`,
       deliveryId: deliveryB.id,

@@ -9,7 +9,7 @@ export const deliveryRepresentationSchema = z.object({
   orderId: z.uuid().describe("Delivered order identifier, UUID."),
   storageLocationId: z.uuid().describe("Source product bin identifier, UUID."),
   deliveredAt: z.iso.datetime().describe("Delivery event instant in UTC, RFC 3339."),
-  deliveredWetMassKg: z.number().nullable().describe("Delivered wet product kilograms, stored to 3 decimal places; null when not recorded."),
+  deliveredWetMassKg: z.number().describe("Delivered wet product kilograms, stored to 3 decimal places."),
   moisturePercent: z.number().nullable().describe("Water as percent of wet mass, stored to 6 decimal places; null when not recorded. The recorded reading, except a split-bin delivery sent with sources, where the server stores the overall (1 minus total solids divided by wet mass) times 100, including ingredient solids."),
   dryBiocharKg: z.number().nullable().describe("Server-derived dry biochar kilograms from the stored dry mass, to 3 decimal places; null when not recorded."),
   driverId: z.uuid().nullable().describe("Driver identifier, UUID, or null when unspecified."),

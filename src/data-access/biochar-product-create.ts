@@ -15,6 +15,7 @@ import { findPostedOutputRequest, withOutputStockPostingInTransaction, type Outp
 import { postedMoisturePercent } from './output-stock-operations';
 import { requireOrgScope } from './utils';
 
+const BIOCHAR_MOISTURE_REQUIRED = 'Enter the measured biochar moisture.';
 const INGREDIENT_REPLAY_FACTS = ['formulationIngredientId', 'storageLocationId', 'massKg', 'moistureContentPercent'] as const;
 export const PRODUCT_FUTURE_TIME_MESSAGE = 'Placement time cannot be in the future. Enter a time at or before now.';
 
@@ -107,12 +108,14 @@ export async function createBiocharProductInTransaction(ctx: OrgContext, tx: DbT
   if (!data.sourceBiocharStorageLocationId || data.linkedProductionRunId) throw new SafeError('Choose a source biochar bin.');
   if (!data.storageLocationId) throw new SafeError('Choose a product bin.');
   if (data.massKg == null || !Number.isFinite(data.massKg) || data.massKg <= 0) throw new SafeError('Enter a positive wet mass.');
-  if (!data.sources?.length && (data.moistureContentPercent == null || !Number.isFinite(data.moistureContentPercent))) throw new SafeError('Enter the measured biochar moisture.');
+  if (!data.sources?.length && (data.moistureContentPercent == null || !Number.isFinite(data.moistureContentPercent))) throw new SafeError(BIOCHAR_MOISTURE_REQUIRED);
   if (data.waterAddedKg == null || !Number.isFinite(data.waterAddedKg) || data.waterAddedKg < 0) throw new SafeError('Water added must be zero or greater.');
   assertEventTimesNotFuture({ placedAt: new Date(data.placedAt) }, { placedAt: PRODUCT_FUTURE_TIME_MESSAGE }, options.now ?? new Date());
   const wet = deriveCompositionSourceBiocharMassKg(data.massKg, data.composition);
   if (wet == null || wet <= 0) throw new SafeError('A product requires positive source biochar.');
   const productBinId = data.storageLocationId;
+  const massKg = data.massKg;
+  const waterAddedKg = data.waterAddedKg;
   const input = { storageLocationId: data.sourceBiocharStorageLocationId, facilityId: data.facilityId, occurredAt: data.placedAt,
     kind: 'production_draw' as const, wetMassKg: wet,
     ...(data.sources?.length ? { sources: data.sources } : { moisturePercent: data.moistureContentPercent }),
@@ -141,13 +144,15 @@ export async function createBiocharProductInTransaction(ctx: OrgContext, tx: DbT
     // The production date is the oldest lot drawn, whatever order the operator emptied them in.
     const drawnLayers = prepared.plan.allocations.map(a => prepared.layers.find(l => l.id === a.layerId)!);
     const firstLayer = drawnLayers.reduce((oldest, layer) => layer.placedAt < oldest.placedAt ? layer : oldest);
+    const moistureContentPercent = postedMoisturePercent(prepared);
+    if (moistureContentPercent == null) throw new SafeError(BIOCHAR_MOISTURE_REQUIRED);
     const [product] = await writeTx.insert(biocharProducts).values({ organizationId: ctx.organizationId, code: data.code, facilityId: data.facilityId,
       formulationId: data.formulationId, biocharRatio: formulation.biocharRatio, placedAt: new Date(data.placedAt),
       productionDate: new Date(firstLayer.placedAt), status: data.status ?? 'testing',
       sourceBiocharStorageLocationId: input.storageLocationId, linkedProductionRunId: prepared.plan.allocations.length === 1 ? firstLayer.id : null,
       // A split draw's biochar moisture is its overall 1 − solids ÷ wet across the sub-bins read.
-      storageLocationId: productBinId, massKg: data.massKg, moistureContentPercent: postedMoisturePercent(prepared), densityKgM3: data.densityKgM3,
-      waterAddedKg: data.waterAddedKg, composition }).returning();
+      storageLocationId: productBinId, massKg, moistureContentPercent, densityKgM3: data.densityKgM3,
+      waterAddedKg, composition }).returning();
     // Post before source snapshots, so the locked read cannot subtract the new
     // product twice. The source plan is checked against its own basis; the
     // movement records the product-wide basis a dry run returned.

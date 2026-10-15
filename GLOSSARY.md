@@ -582,15 +582,14 @@ a derived leg from its supplier/customer default. Orthogonal to a leg's
 `map_estimate` path — distance entry stays manual.
 
 **Transport evidence**:
-The composite certification requirement for a transported record: its saved
-**Distance source** is `document` and it has at least one successfully uploaded,
-classified file — a bill of lading, weigh-scale ticket, or other transport
-evidence. One accepted file is sufficient; the named document types are
-alternatives, not a checklist. Provenance and evidence remain separate facts:
-uploading a file never changes the saved Distance source, and selecting
-`document` never proves that a file exists. _Avoid_: inferring classification
-from a filename; calling evidence complete from `distance_source=document`
-alone; requiring both a bill of lading and a weigh-scale ticket.
+Retained documents supporting a transported record, such as a bill of lading,
+weigh-scale ticket, or other classified transport file. Uploads are optional
+and do not block certification. The saved **Distance source** and uploaded
+evidence remain separate facts: uploading a file never changes the source,
+and selecting `document` never proves that a file exists. _Avoid_: inferring
+classification from a filename; requiring document provenance and an upload
+as a composite certification gate; requiring both a bill of lading and a
+weigh-scale ticket.
 
 ### Operational oversight
 

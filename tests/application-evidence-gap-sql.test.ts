@@ -218,6 +218,7 @@ async function seedApplicationsAndDocuments(
 
   for (const [index, spec] of APP_SPECS.entries()) {
     const [application] = await insertOutputApplicationFixture(dbc, {
+      fieldSizeHa: 1,
         organizationId: TEST_ORG_ID,
         code: `AP-GAP-${runId}-${index}`,
         deliveryId: chain.deliveryId,

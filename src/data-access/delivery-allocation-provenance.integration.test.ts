@@ -63,7 +63,7 @@ describe.skipIf(!available)("saved provenance PostgreSQL consumer queries", () =
     }).returning();
     await executor.insert(schema.productionRuns).values(["A", "B"].map(label => ({ ...org, id: ids[`run${label}`], facilityId: ids.facility, code: `R${label}`, reactorId: randomUUID(), status: "complete" as const, startTime: new Date("2026-01-01T08:00:00Z"), biocharStorageLocationId: outputBin.id, biocharMoisturePercent: 0, biocharOutputKg: 1000, biocharDryMassKg: 1000 })));
     await executor.insert(schema.formulations).values({ ...org, id: ids.formulation, code: "FORM", name: "Fixture pure", biocharRatio: 1 });
-    await executor.insert(schema.biocharProducts).values(["A", "B", "C"].map(label => ({ ...org, id: ids[label], facilityId: ids.facility, code: label, formulationId: ids.formulation, placedAt: new Date("2026-01-01T12:00:00.000Z"), productionDate: new Date("2026-01-01"), massKg: 2500 })));
+    await executor.insert(schema.biocharProducts).values(["A", "B", "C"].map(label => ({ ...org, id: ids[label], facilityId: ids.facility, code: label, formulationId: ids.formulation, placedAt: new Date("2026-01-01T12:00:00.000Z"), productionDate: new Date("2026-01-01"), massKg: 2500, moistureContentPercent: 0, waterAddedKg: 0, storageLocationId: ids.bin, sourceBiocharStorageLocationId: outputBin.id })));
     await executor.execute(sql`insert into orders (organization_id, id, facility_id, formulation_id, code, order_date, quantity_kg) values (${ctx.organizationId}, ${ids.order}, ${ids.facility}, ${ids.formulation}, 'O', '2026-01-02', 2000)`);
     await executor.insert(schema.deliveries).values({ ...org, id: ids.delivery, facilityId: ids.facility, code: "D", orderId: ids.order, deliveryDate: new Date("2026-01-03"), status: "delivered", storageLocationId: ids.bin, deliveredWetMassKg: 2000, massDryKg: 1150 });
     // Original + reversal + replacement. The unrelated product C nets to zero.
@@ -146,7 +146,8 @@ describe.skipIf(!available)("saved provenance PostgreSQL consumer queries", () =
 
   it("persists repeated partial applications and closes every saved source gram", async () => {
     for (const [wet, dry] of [[0.333333, 0.191667], [0.333333, 0.191667], [0.333334, 0.191666]]) {
-      const [app] = await executor.insert(schema.applications).values({ ...org, id: randomUUID(), code: "PARTIAL", deliveryId: ids.delivery, applicationDate: new Date("2026-01-04"), biocharAppliedTons: wet, biocharAppliedDryTons: dry }).returning();
+      const [app] = await executor.insert(schema.applications).values({
+        fieldSizeHa: 1,  ...org, id: randomUUID(), code: "PARTIAL", deliveryId: ids.delivery, applicationDate: new Date("2026-01-04"), biocharAppliedTons: wet, biocharAppliedDryTons: dry }).returning();
       await saveApplicationOutputAllocations(ctx, tx, app);
       await reconcileUnassignedCreditBatchApplicationSlices(ctx, tx, { applicationIds: [app.id] });
     }
