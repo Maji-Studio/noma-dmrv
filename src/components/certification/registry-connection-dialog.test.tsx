@@ -174,7 +174,7 @@ describe("registry connection dialog", () => {
       id: "mapping-1", organizationId: "org-1", facilityId: FACILITY_ID,
       provider: "isometric", externalProjectId: "prj_test", protocolSlug: "biochar",
       protocolVersion: null, defaultRemovalTemplateId: null,
-      gensetEnergyYieldKwhPerLitre: null, defaultSoilTemperatureC: null,
+      defaultSoilTemperatureC: null,
       defaultSoilTemperatureSource: null, webhookSecret: null,
       externalFacilityId: "fcl_test", metadata: null,
       createdAt: new Date("2026-10-13T00:00:00Z"), updatedAt: new Date("2026-10-13T00:00:00Z"),

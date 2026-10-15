@@ -4,7 +4,7 @@ import { assertRowVersion, nextVersion } from "./row-version";
  * CRUD operations for reactors with auth guards, pagination, and filtering
  */
 
-import { and, asc, desc, eq, ilike, isNull, or, SQL, count } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, inArray, isNull, or, SQL, count } from "drizzle-orm";
 import { db } from "@/db";
 import type { OrgContext } from "@/lib/auth/server";
 import {
@@ -13,7 +13,7 @@ import {
   productionRuns,
   type Reactor,
 } from "@/db/schema";
-import type { ReactorFilterData } from "@/schemas/reactors";
+import { reactorTypes, type ReactorFilterData } from "@/schemas/reactors";
 
 const REACTOR_CONFLICT_ENTITY = "reactor";
 
@@ -89,7 +89,7 @@ export async function getReactors(
   }
 
   if (reactorType) {
-    conditions.push(eq(reactors.reactorType, reactorType));
+    conditions.push(inArray(reactors.reactorType, reactorTypes.filter((type) => type === reactorType)));
   }
 
   const whereClause = and(...conditions);
@@ -245,7 +245,7 @@ export async function createReactor(
     code: string;
     identifier: string;
     facilityId: string;
-    reactorType: string;
+    reactorType: Reactor["reactorType"];
     nominalThroughputTph?: number | null;
     specifications?: Record<string, unknown> | null;
   }
@@ -291,7 +291,7 @@ export async function updateReactor(
     code?: string;
     identifier?: string;
     facilityId?: string;
-    reactorType?: string;
+    reactorType?: Reactor["reactorType"];
     nominalThroughputTph?: number | null;
     specifications?: Record<string, unknown> | null;
   }
@@ -321,6 +321,16 @@ export async function updateReactor(
       throw new SafeError("Reactor not found");
     }
     assertRowVersion({ entity: REACTOR_CONFLICT_ENTITY, id: reactorId, expectedVersion, actualVersion: existing.version });
+
+    if (data.facilityId && data.facilityId !== existing.facilityId) {
+      const [run] = await tx.select({ id: productionRuns.id })
+        .from(productionRuns)
+        .where(and(eq(productionRuns.reactorId, reactorId), eq(productionRuns.organizationId, ctx.organizationId)))
+        .limit(1);
+      if (run) {
+        throw new SafeError("Cannot move a reactor with associated production runs to another facility. Create a reactor at the destination facility instead.");
+      }
+    }
 
     // A rename OR a facility move can collide with the per-facility identifier
     // index, and a code change with the org-scoped code index, so the update

@@ -72,6 +72,7 @@ describe("Removal Application-slice assignment", () => {
     const [feedstockType] = await db
       .insert(feedstockTypes)
       .values({
+        usage: "pyrolysis",
         organizationId: TEST_ORG_ID,
         code: `RAS-FT-${tag}`,
         name: `Removal assignment ${tag}`,

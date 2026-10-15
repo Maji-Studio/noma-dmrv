@@ -221,14 +221,3 @@ export type CreateFacilityData = z.infer<typeof createFacilitySchema>;
 export type UpdateFacilityData = z.infer<typeof updateFacilitySchema>;
 export type ArchiveFacilityData = z.infer<typeof archiveFacilitySchema>;
 export type FacilityFilterData = z.infer<typeof facilityFilterSchema>;
-/**
- * Quick-add facility schema for inline facility creation
- * Minimal required fields for rapid data entry
- */
-export const quickAddFacilitySchema = z.object({
-  name: z.string().trim().min(1, "Facility name is required").max(255),
-  country: countrySchema,
-  location: z.string().max(255).optional().or(z.literal("")),
-});
-
-export type QuickAddFacilityData = z.infer<typeof quickAddFacilitySchema>;

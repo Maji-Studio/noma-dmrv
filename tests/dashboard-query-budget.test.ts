@@ -64,7 +64,7 @@ beforeAll(async () => {
     .returning({ id: facilities.id });
   const [feedstockType] = await db
     .insert(feedstockTypes)
-    .values({ organizationId: TEST_ORG_ID, code: `QB-FT-${tag}`, name: `Query budget ${tag}`, category: "forestry" })
+    .values({ usage: "pyrolysis", organizationId: TEST_ORG_ID, code: `QB-FT-${tag}`, name: `Query budget ${tag}`, category: "forestry" })
     .returning({ id: feedstockTypes.id });
   const [process] = await db
     .insert(productionProcesses)

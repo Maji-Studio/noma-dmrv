@@ -88,12 +88,6 @@ export const certifierProjects = pgTable(
     // Default Certify removal template used when submitting credit batches for this facility.
     defaultRemovalTemplateId: text('default_removal_template_id'),
     // --- Phase 3.7 emission-estimate config (per facility) ---
-    // Diesel-genset electrical yield: kWh produced per litre of genset
-    // diesel. VESTIGIAL since issue #319: diesel submits as litres via
-    // `fuel_usage_by_volume` (EF bound on the Isometric template), so this
-    // yield no longer feeds any submission datapoint. Kept only because
-    // dropping the column is a migration (follow-up ticket).
-    gensetEnergyYieldKwhPerLitre: real('genset_energy_yield_kwh_per_litre'),
     // ADR 0015 removed the three `stage_split_*_pct` columns: energy now
     // submits as one combined measurement point, so there is no per-stage
     // breakdown to apportion.
@@ -118,7 +112,7 @@ export const certifierProjects = pgTable(
     // Operator-pasted Isometric facility ID (`fcl_…`) used by registry
     // Production Batch and measurement-sample registration. Isometric
     // exposes no `POST /facilities`; the operator creates it in Certify.
-    externalFacilityId: text('external_facility_id'),
+    externalFacilityId: text('external_facility_id').notNull(),
     metadata: jsonb('metadata'),
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
@@ -144,8 +138,7 @@ export const certifierProjects = pgTable(
     // A project may be shared across facilities (above), but the Isometric
     // facility id (fcl_…) is the real 1:1 anchor: two noma facilities pointing
     // at the same Isometric facility would cross-contaminate registry production
-    // data. NULL externalFacilityId is allowed for many facilities (Postgres treats NULL
-    // tuples as distinct) — only non-null ids must be unique per provider.
+    // data. Every mapping carries a non-null fcl_ ID, unique per provider.
     unique('certifier_projects_provider_external_facility_unique').on(
       table.provider,
       table.externalFacilityId

@@ -84,7 +84,7 @@ export async function createLineageFixture(
         code: `RX-CLG-${tag}`,
         identifier: `CLG Reactor ${tag}`,
         facilityId: facility.id,
-        reactorType: "retort",
+        reactorType: "batch",
       })
       .returning({ id: reactors.id });
 

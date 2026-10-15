@@ -40,6 +40,7 @@ export async function createRemovalDeletionFixture(tracked: {
   const [project] = await db
     .insert(certifierProjects)
     .values({
+      externalFacilityId: `fcl_test_${facility.id}`,
       organizationId: TEST_ORG_ID,
       facilityId: facility.id,
       provider: "isometric",

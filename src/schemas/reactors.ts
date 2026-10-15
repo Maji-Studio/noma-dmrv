@@ -1,3 +1,4 @@
+import { REACTOR_TYPES as reactorTypes } from "@/db/schema/common";
 import { expectedVersionSchema } from "./helpers";
 import { z } from "zod";
 
@@ -5,16 +6,7 @@ import { z } from "zod";
 // Constants and Enums
 // ============================================
 
-/**
- * Valid reactor types for pyrolysis equipment
- */
-export const reactorTypes = [
-  "fixed-bed",
-  "auger",
-  "rotary-kiln",
-  "batch",
-  "continuous",
-] as const;
+export { reactorTypes };
 
 export type ReactorType = (typeof reactorTypes)[number];
 

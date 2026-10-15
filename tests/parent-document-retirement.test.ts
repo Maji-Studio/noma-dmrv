@@ -691,6 +691,7 @@ describe("parent document retirement", () => {
     const [feedstockType] = await db
       .insert(feedstockTypes)
       .values({
+        usage: "pyrolysis",
         organizationId: TEST_ORG_ID,
         code: `FT-DERIVED-${tag}`,
         name: `Derived leg feedstock ${tag}`,
@@ -803,6 +804,7 @@ describe("parent document retirement", () => {
     const [feedstockType] = await db
       .insert(feedstockTypes)
       .values({
+        usage: "pyrolysis",
         organizationId: TEST_ORG_ID,
         code: `FT-NEST-${tag}`,
         name: `Nested evidence feedstock ${tag}`,

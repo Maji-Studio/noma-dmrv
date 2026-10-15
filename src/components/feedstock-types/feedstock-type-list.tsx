@@ -249,6 +249,8 @@ export function FeedstockTypeList({ canManage }: FeedstockTypeListProps) {
     !!facilityId,
   );
   const hasRegistryConnection = Boolean(certifierSummary.data?.mapping);
+  const hasIsometricCertifier =
+    certifierSummary.data?.mapping?.provider === "isometric";
   const feedstockTypesQuery = useFeedstockTypeList();
   const createFeedstockType = useCreateFeedstockType();
   const updateFeedstockType = useUpdateFeedstockType();
@@ -404,7 +406,12 @@ export function FeedstockTypeList({ canManage }: FeedstockTypeListProps) {
     facilityId,
   });
   const detailSections = sideSheetEntity
-    ? feedstockTypeSheetSections(sideSheetEntity, showSampling && facilityId ? { facilityId, canManage } : null, certifierSummary.data?.isProduction ?? false)
+    ? feedstockTypeSheetSections(
+        sideSheetEntity,
+        showSampling && facilityId ? { facilityId, canManage } : null,
+        hasIsometricCertifier,
+        certifierSummary.data?.isProduction ?? false,
+      )
     : undefined;
 
   return (

@@ -75,6 +75,7 @@ describe("bin reconciliation stock-take integrity", () => {
     const [feedstockType] = await db
       .insert(feedstockTypes)
       .values({
+        usage: "pyrolysis",
         organizationId: TEST_ORG_ID,
         code: `FT-TAKE-${tag}`,
         name: `Stock Take Feedstock ${tag}`,

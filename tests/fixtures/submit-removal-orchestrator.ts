@@ -298,6 +298,7 @@ function makeBlueprints(): IsometricComponentBlueprint[] {
 function makeMapping(): CertifierProjectRow {
   return {
     id: "cert-proj-1",
+    externalFacilityId: EXTERNAL_FACILITY_ID,
     facilityId: FACILITY_ID,
     provider: "isometric",
     externalProjectId: EXTERNAL_PROJECT_ID,
@@ -306,11 +307,6 @@ function makeMapping(): CertifierProjectRow {
     defaultRemovalTemplateId: TEMPLATE_ID,
     webhookSecret: null,
     metadata: null,
-    // Vestigial emission-estimate config: issue #319 removed the litres→kWh
-    // genset conversion (diesel submits by volume, EF template-side), so the
-    // submission path no longer reads this column. Kept in the fixture because
-    // it still exists on CertifierProjectRow.
-    gensetEnergyYieldKwhPerLitre: 3.375,
     defaultSoilTemperatureC: 24.2,
     defaultSoilTemperatureSource: "Test dataset (annual mean)",
     createdAt: new Date(),

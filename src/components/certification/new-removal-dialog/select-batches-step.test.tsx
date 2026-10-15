@@ -145,3 +145,10 @@ it("renders the unbindable component guidance and settings action", () => {
   expect(html).not.toContain('class="whitespace-pre-line"');
   expect(html).toContain("Review certification settings");
 });
+
+
+it("directs a missing external facility ID to certification settings", () => {
+  const copy = setupGapCopy({ kind: "external_facility_id" });
+  expect(copy.message).toContain("Isometric facility ID");
+  expect(copy.action?.toSettings).toBe(true);
+});

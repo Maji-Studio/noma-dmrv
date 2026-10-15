@@ -26,11 +26,11 @@ lookupContract({
     const active = await db.insert(feedstockTypes).values(LOOKUP_IDS.map((id, index) => ({
       id, organizationId: fixture.ctx.organizationId, code: LOOKUP_CODES[index], name: `Lookup name ${index}`,
       createdAt: sql`${index === 0 ? "2026-10-08 12:00:00.123455" : "2026-10-08 12:00:00.123456"}::timestamp`,
-      category: "forestry", usage: "pyrolysis" as const,
+      category: "forestry" as const, usage: "pyrolysis" as const,
     }))).returning();
     const [archived] = await db.insert(feedstockTypes).values({
       organizationId: fixture.ctx.organizationId, code: "LOOKUP-ARCHIVED", name: "Lookup name archived", archivedAt: LOOKUP_ARCHIVE_INSTANT,
-      category: "forestry", usage: "pyrolysis" as const,
+      category: "forestry" as const, usage: "pyrolysis" as const,
     }).returning();
     return { active, archived };
   },

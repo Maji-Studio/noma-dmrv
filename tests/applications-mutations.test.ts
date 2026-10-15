@@ -64,6 +64,7 @@ async function createMutationFixture(runId: string): Promise<ApplicationMutation
       .returning({ id: facilities.id });
 
     await tx.insert(certifierProjects).values({
+      externalFacilityId: `fcl_test_${facility.id}`,
       organizationId: TEST_ORG_ID,
       facilityId: facility.id,
       provider: "isometric",

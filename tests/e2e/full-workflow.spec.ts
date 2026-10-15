@@ -162,6 +162,7 @@ async function createFullWorkflowData(): Promise<TestWorkflowData> {
 
     // 6. Create feedstock type
     await tx.insert(schema.feedstockTypes).values({
+        usage: "pyrolysis",
         organizationId: DEC_ORG_ID,
       id: ids.feedstockType,
       code: codes.feedstockType,

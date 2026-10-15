@@ -34,7 +34,7 @@ describe("formulation lines", { timeout: LOOKUP_SUITE_TIMEOUT_MS }, () => {
     const organizationId = a.ctx.organizationId;
     const [recipe] = await db.insert(formulations).values({ organizationId, code: "FORM-MIX", name: "Mix", biocharRatio: 0.6 }).returning();
     const [pure] = await db.insert(formulations).values({ organizationId, code: "FORM-PURE", name: "Pure biochar", biocharRatio: 1 }).returning();
-    const types = await db.insert(feedstockTypes).values([0, 1].map((index) => ({ organizationId, code: `FT-${randomUUID().slice(0, 6)}-${index}`, name: `Type ${index}`, category: "compost", usage: "blend" as const }))).returning();
+    const types = await db.insert(feedstockTypes).values([0, 1].map((index) => ({ organizationId, code: `FT-${randomUUID().slice(0, 6)}-${index}`, name: `Type ${index}`, category: "compost" as const, usage: "blend" as const }))).returning();
     const lines = await db.insert(formulationIngredients).values([
       { organizationId, formulationId: recipe.id, feedstockTypeId: types[0].id, ratio: 0.1, sortOrder: 1 },
       { organizationId, formulationId: recipe.id, feedstockTypeId: types[1].id, ratio: null, sortOrder: 0 },

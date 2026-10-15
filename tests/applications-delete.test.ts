@@ -58,6 +58,7 @@ async function createDeleteFixture(runId: string): Promise<DeleteFixture> {
   const [feedstockType] = await db
     .insert(feedstockTypes)
     .values({
+      usage: "pyrolysis",
       organizationId: TEST_ORG_ID,
       name: `Delete Test Feedstock ${runId}`,
       code: `FT-DEL-${runId}`,

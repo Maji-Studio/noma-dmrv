@@ -108,6 +108,7 @@ async function createFixture(runId: string): Promise<ActivitySortFixture> {
     const [feedstockType] = await tx
       .insert(feedstockTypes)
       .values({
+        usage: "pyrolysis",
         organizationId: TEST_ORG_ID,
         code: `FST-ACT-${runId}`,
         name: `Activity Sort Type ${runId}`,

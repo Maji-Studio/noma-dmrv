@@ -122,8 +122,8 @@ const READ_SECTION_CASES: { file: string; name: string; sections: DetailPanelSec
     storageSummary: { feedstockBinCount: 2, biocharBinCount: 1, productBinCount: 3 }, inventorySummary: { feedstockWetKg: 1200, biocharKg: 800, productKg: 400 },
   })) },
   { file: "components/feedstock-types/feedstock-type-read-sections.tsx", name: "feedstock type", sections: feedstockTypeSheetSections(as({
-    id: "type", name: "Maize cobs", code: "FT-001", category: "agricultural_residue", usage: "pyrolysis", archivedAt: null, isometricFeedstockTypeId: null, registryUrl: null, description: null,
-  }), { facilityId: "facility", canManage: true }) },
+    id: "type", name: "Maize cobs", code: "FT-001", category: "agricultural", usage: "pyrolysis", archivedAt: null, isometricFeedstockTypeId: null, registryUrl: null, description: null,
+  }), { facilityId: "facility", canManage: true }, true) },
   { file: "components/feedstocks/feedstock-read-sections.tsx", name: "feedstock delivery", sections: feedstockSheetSections(as({
     id: "feedstock", deliveryDate: new Date("2026-08-01"), supplierName: "Supplier", vehiclePlateNumber: "T 123", transportDistanceKm: 20, transportDistanceSource: "supplier_default",
     feedstockTypeName: "Maize cobs", massWetKg: 1000, moistureContentPercent: 20, massDryKg: 800, storageLocationCode: "FB-01", storageLocationName: "Feedstock bin", overrideJustification: null, notes: null,
@@ -138,7 +138,7 @@ const READ_SECTION_CASES: { file: string; name: string; sections: DetailPanelSec
     biocharStorageLocationName: "Biochar bin", biocharOutputKg: 300, biocharMoisturePercent: 10, biocharDryMassKg: 270,
     dieselOperationLiters: 5, dieselGensetLiters: null, preprocessingFuelLiters: null, electricityKwh: 40,
   }), FACILITIES) },
-  { file: "components/reactors/reactor-read-sections.tsx", name: "reactor", sections: reactorSheetSections(as({ identifier: "R-1", reactorType: "kon_tiki", nominalThroughputTph: 0.5 })) },
+  { file: "components/reactors/reactor-read-sections.tsx", name: "reactor", sections: reactorSheetSections(as({ identifier: "R-1", reactorType: "batch", nominalThroughputTph: 0.5 })) },
   { file: "components/samples/sample-read-sections.tsx", name: "sample (1000-year)", sections: sampleSheetSections(as({
     id: "sample", creditBatchCode: "CB-26-001", samplingTime: new Date("2026-09-01T09:00:00Z"), analysisDate: new Date("2026-09-10"), labName: "Lab", labAccreditation: null, volumeMl: 100, weightGrams: 50,
     totalCarbonPercent: 80, organicCarbonPercent: 75, inorganicCarbonPercent: 5, totalHydrogenPercent: 2, totalNitrogenPercent: 1, totalOxygenPercent: 10, totalSulfurPercent: 0.1,

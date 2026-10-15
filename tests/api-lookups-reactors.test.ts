@@ -12,12 +12,12 @@ lookupContract({
   seed: async (fixture) => {
     const active = await db.insert(reactors).values(LOOKUP_IDS.map((id, index) => ({
       id, organizationId: fixture.ctx.organizationId, facilityId: fixture.facilityId,
-      code: LOOKUP_CODES[index], identifier: `Lookup name ${index}`, reactorType: "auger",
+      code: LOOKUP_CODES[index], identifier: `Lookup name ${index}`, reactorType: "auger" as const,
       createdAt: sql`${index === 0 ? "2026-10-08 12:00:00.123455" : "2026-10-08 12:00:00.123456"}::timestamp`,
     }))).returning();
     const [archived] = await db.insert(reactors).values({
       organizationId: fixture.ctx.organizationId, facilityId: fixture.facilityId,
-      code: "LOOKUP-ARCHIVED", identifier: "Lookup name archived", reactorType: "auger", archivedAt: LOOKUP_ARCHIVE_INSTANT,
+      code: "LOOKUP-ARCHIVED", identifier: "Lookup name archived", reactorType: "auger" as const, archivedAt: LOOKUP_ARCHIVE_INSTANT,
     }).returning();
     return { active: active.map((row) => ({ ...row, name: row.identifier })), archived: { ...archived, name: archived.identifier } };
   },

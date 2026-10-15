@@ -42,6 +42,13 @@ must be positive. Supplier-level GPS, distance and the obsolete supplier
 Certify badge are removed; feedstock transport uses the default supplier
 location. These are entry invariants, not a change to registry calculations.
 
+## 2026-10-15: Facility and feedstock setup rules aligned (#1012)
+
+- Facility registry links require an external facility ID in storage and setup readiness, matching save and Production Batch submission.
+- The unused genset energy yield is removed. Diesel continues to submit by volume through `fuel_usage_by_volume` (#319).
+- Reference soil temperature has a CERT marker only for 200-year facilities, matching the submission gate. Pyrolysis feedstock types have a registry-mapping marker; blend types remain internal-only.
+- Reactor types and feedstock categories are constrained to the supported values. Feedstock usage must be supplied explicitly. Reactors with production runs cannot move between facilities.
+
 ## 2026-10-15: Optional TGA and mean reflectance (#942 q3, #1016)
 
 Kenji resolved `isometric/tga-1000-year-requirement`: TGA reactive/residual

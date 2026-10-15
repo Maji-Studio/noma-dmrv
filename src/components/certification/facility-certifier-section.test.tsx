@@ -140,7 +140,7 @@ describe("FacilityCertifierSection", () => {
         externalProjectId: "prj_test",
         protocolSlug: "biochar",
         defaultRemovalTemplateId: null,
-        externalFacilityId: null,
+        externalFacilityId: "",
       } as NonNullable<FacilityCertifierMapping["mapping"]>,
       availableProjects: [
         {
@@ -271,7 +271,7 @@ describe("FacilityCertifierSection", () => {
           externalProjectId: "prj_test",
           protocolSlug: "biochar",
           defaultRemovalTemplateId: null,
-          externalFacilityId: null,
+          externalFacilityId: "",
         },
         availableProjects: [],
         availableTemplates: [],

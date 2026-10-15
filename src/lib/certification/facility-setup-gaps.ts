@@ -20,6 +20,7 @@ import {
 export type FacilitySetupGap =
   | { kind: "project_link" }
   | { kind: "credentials" }
+  | { kind: "external_facility_id" }
   | { kind: "default_template" }
   | { kind: "template_resolution"; templateId: string }
   | { kind: "blueprint_keys"; keys: string[] }
@@ -28,7 +29,7 @@ export type FacilitySetupGap =
 export interface FacilitySetupGapFacts {
   hasOrgCredentials: boolean;
   /** The facility → Isometric project mapping row, or null when unlinked. */
-  mapping: unknown | null;
+  mapping: { externalFacilityId?: string | null } | null;
   /** The cleanly-resolved default removal template, or null. */
   defaultTemplate: unknown | null;
   /** Set when a configured default template id no longer resolves remotely. */
@@ -73,6 +74,9 @@ export function deriveFacilitySetupGaps(
 ): FacilitySetupGap[] {
   if (!facts.hasOrgCredentials) return [{ kind: "credentials" }];
   if (!facts.mapping) return [{ kind: "project_link" }];
+  if (!facts.mapping.externalFacilityId?.trim()) {
+    return [{ kind: "external_facility_id" }];
+  }
   if (facts.missingDefaultTemplateId) {
     return [
       { kind: "template_resolution", templateId: facts.missingDefaultTemplateId },

@@ -107,6 +107,7 @@ export async function seedChainData(
 
       // 3. Feedstock Type
       await tx.insert(schema.feedstockTypes).values({
+        usage: "pyrolysis",
         organizationId: DEC_ORG_ID,
         id: feedstockTypeId,
         code: `E2E-FST-${testRunId}`,

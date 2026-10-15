@@ -76,6 +76,7 @@ async function setupFacility(
   const [feedstockType] = await db
     .insert(feedstockTypes)
     .values({
+      usage: "pyrolysis",
       organizationId: TEST_ORG_ID,
       name: `Durability-Guard Woodchips ${tag} ${runId}`,
       code: `FT-DG-${tag}-${runId}`,

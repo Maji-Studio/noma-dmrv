@@ -264,12 +264,14 @@ describe("registry statement identity is scoped per (organization, facility)", (
     // The shared-project shape migration 0016 deliberately allows.
     await db.insert(certifierProjects).values([
       {
+        externalFacilityId: `fcl_test_${facilityA}`,
         organizationId: TEST_ORG_ID,
         facilityId: facilityA,
         provider: "isometric" as const,
         externalProjectId,
       },
       {
+        externalFacilityId: `fcl_test_${facilityB}`,
         organizationId: TEST_ORG_ID,
         facilityId: facilityB,
         provider: "isometric" as const,
@@ -353,6 +355,7 @@ describe("registry sync after a shared project is re-pointed", () => {
     const facilityA = await createFacility(TEST_ORG_ID, "Prev");
     const facilityB = await createFacility(TEST_ORG_ID, "Next");
     await db.insert(certifierProjects).values({
+      externalFacilityId: `fcl_test_${facilityA}`,
       organizationId: TEST_ORG_ID,
       facilityId: facilityA,
       provider: "isometric",
@@ -391,6 +394,7 @@ describe("registry sync after a shared project is re-pointed", () => {
       .delete(certifierProjects)
       .where(eq(certifierProjects.facilityId, facilityA));
     await db.insert(certifierProjects).values({
+      externalFacilityId: `fcl_test_${facilityB}`,
       organizationId: TEST_ORG_ID,
       facilityId: facilityB,
       provider: "isometric",
@@ -436,12 +440,14 @@ describe("registry sync after a shared project is re-pointed", () => {
     const neighbour = await createFacility(TEST_ORG_ID, "Neighbour");
     await db.insert(certifierProjects).values([
       {
+        externalFacilityId: `fcl_test_${owner}`,
         organizationId: TEST_ORG_ID,
         facilityId: owner,
         provider: "isometric" as const,
         externalProjectId,
       },
       {
+        externalFacilityId: `fcl_test_${neighbour}`,
         organizationId: TEST_ORG_ID,
         facilityId: neighbour,
         provider: "isometric" as const,

@@ -35,6 +35,7 @@ async function insertFeedstockType(tag: string): Promise<string> {
   const [row] = await db
     .insert(feedstockTypes)
     .values({
+      usage: "pyrolysis",
       organizationId: TEST_ORG_ID,
       name: `Delete-Conflict ${tag} ${runId}`,
       code: `FT-DC-${tag}-${runId}`,

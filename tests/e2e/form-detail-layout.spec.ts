@@ -28,7 +28,7 @@ for (const viewport of VIEWPORTS) {
         organizationId: DEC_ORG_ID,
         code: `E2E-FST-DETAIL-${crypto.randomUUID().slice(0, 8)}`,
         name: `E2E Alternative detail material ${crypto.randomUUID().slice(0, 8)}`,
-        category: "wood",
+        category: "forestry",
         usage: "pyrolysis",
       });
     } finally { await pool.end(); }

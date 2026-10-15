@@ -1,5 +1,7 @@
 "use client";
 
+import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
+import { makeCertFieldStatus } from "@/components/forms/cert-field-status";
 import { useState, type KeyboardEvent } from "react";
 import { DatabaseIcon, SealCheckIcon } from "@phosphor-icons/react/dist/ssr";
 import { useForm, useWatch } from "react-hook-form";
@@ -18,7 +20,6 @@ import {
   feedstockTypeFormSchema,
   BLEND_FEEDSTOCK_CATEGORY_OPTIONS,
   PYROLYSIS_FEEDSTOCK_CATEGORY_OPTIONS,
-  feedstockCategories,
   type FeedstockTypeUsage,
   type FeedstockTypeFormData,
 } from "@/schemas/feedstock-types";
@@ -40,6 +41,7 @@ import {
 } from "./feedstock-type-form-logic";
 import { Notice } from "@/components/ui/notice";
 import { IsometricLink } from "@/components/certification/isometric-link";
+import { MISSING_VALUE } from "@/lib/copy-utils";
 import { isometricRegistry } from "@/lib/isometric/links";
 
 // General = the local record (the only editable surface). Isometric =
@@ -101,6 +103,7 @@ export function FeedstockTypeForm({
   guardDialogCancel,
 }: FeedstockTypeFormProps) {
   const isEditMode = !!feedstockType;
+  const certStatus = makeCertFieldStatus(feedstockType);
   const { facilityId } = useFacilityContext();
   const certifierSummary = useFacilityCertifierSummary(
     facilityId ?? "",
@@ -158,9 +161,7 @@ export function FeedstockTypeForm({
     resolver: zodResolver(feedstockTypeFormSchema),
     defaultValues: {
       name: feedstockType?.name ?? "",
-      category: feedstockType?.category && (feedstockCategories as readonly string[]).includes(feedstockType.category)
-        ? (feedstockType.category as FeedstockTypeFormData["category"])
-        : undefined,
+      category: feedstockType?.category,
       usage: initialFeedstockTypeUsage(feedstockType?.usage, defaultUsage),
       description: feedstockType?.description ?? "",
       // No form field anymore (UI-only removal) — kept in form state so
@@ -185,6 +186,10 @@ export function FeedstockTypeForm({
 
   const selectedUsage = useWatch({ control, name: "usage" });
   const selectedName = useWatch({ control, name: "name" });
+  const selectedIsometricId = useWatch({ control, name: "isometricFeedstockTypeId" });
+  const registryMappingRequired = hasIsometricCertifier && isCertifyFormField(
+    "feedstockType", "isometricFeedstockTypeId", { usage: selectedUsage },
+  );
   const categoryOptions =
     selectedUsage === "blend"
       ? BLEND_FEEDSTOCK_CATEGORY_OPTIONS
@@ -326,12 +331,21 @@ export function FeedstockTypeForm({
         >
           {visibleActiveSection === "general" && (
             <div className="space-y-20">
-              {selectedIsometricSummary}
-
-              {showCertifiedFeedstockWarning && (
-                <Notice tone="warning">
-                  {CERTIFIED_FEEDSTOCK_WARNING}
-                </Notice>
+              {registryMappingRequired && (
+                <FormField
+                  id="isometricFeedstockTypeId"
+                  label="Isometric feedstock type"
+                  certifyRequired={registryMappingRequired}
+                  certifyStatus={certStatus("isometricFeedstockTypeId")}
+                >
+                  <output id="isometricFeedstockTypeId" className="body-small">
+                    {selectedIsometricId || MISSING_VALUE.notSet}
+                  </output>
+                  {selectedIsometricSummary}
+                  {showCertifiedFeedstockWarning && (
+                    <Notice tone="warning">{CERTIFIED_FEEDSTOCK_WARNING}</Notice>
+                  )}
+                </FormField>
               )}
 
               <div className="grid grid-cols-1 gap-x-16 gap-y-20">
