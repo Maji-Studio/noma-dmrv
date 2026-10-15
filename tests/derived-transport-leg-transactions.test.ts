@@ -11,13 +11,11 @@ import {
   customerLocations,
   customers,
   deliveries,
-  documents,
   facilities,
   feedstocks,
   feedstockTypes,
   orders,
   storageLocations,
-  storageObjectDeletions,
   supplierLocations,
   suppliers,
   transportLegs,
@@ -25,8 +23,7 @@ import {
 import { updateCustomerLocation } from "@/data-access/customers";
 import { deleteDelivery } from "@/data-access/deliveries";
 import { createDelivery } from "./helpers/create-delivery";
-import { __setStorageProviderForTests } from "@/lib/storage";
-import { RetirementStorageProvider, insertManagedDocument } from "./helpers/document-retirement";
+import { expectDerivedLegEvidenceSwept } from "./helpers/document-retirement";
 import { updateDelivery, updateDeliveryOperation } from "@/lib/operations/deliveries";
 import { runOperationInProcess } from "@/lib/operations/runner";
 import {
@@ -404,35 +401,14 @@ describe("derived transport-leg transaction boundaries", () => {
       eq(transportLegs.entityId, product.id),
       eq(transportLegs.isDerived, true),
     ));
-    const provider = new RetirementStorageProvider();
-    const key = `transport_leg/${leg.id}/pdf/${tag}.pdf`;
-    const documentId = await insertManagedDocument(provider, "transport_leg", leg.id, key);
-    __setStorageProviderForTests(provider);
-
-    try {
+    await expectDerivedLegEvidenceSwept(leg.id, tag, async () => {
       const changes = { expectedVersion: delivery.version, distanceKmOverride: null };
       const updated = operationId === "update_delivery"
         ? await runOperationInProcess(updateDeliveryOperation, ctx, { deliveryId: delivery.id, ...changes })
         : await updateDelivery(ctx, delivery.id, changes);
 
       expect(updated).toMatchObject({ id: delivery.id, distanceKmOverride: null });
-      expect(await db.select().from(transportLegs).where(eq(transportLegs.id, leg.id))).toHaveLength(0);
-      expect(await db.select().from(documents).where(eq(documents.id, documentId))).toHaveLength(0);
-      expect(provider.deleteCalls).toContain(key);
-      expect(provider.objects.has(key)).toBe(false);
-      const [deletion] = await db.select().from(storageObjectDeletions).where(and(
-        eq(storageObjectDeletions.organizationId, ctx.organizationId),
-        eq(storageObjectDeletions.storageKey, key),
-      ));
-      expect(deletion).toMatchObject({ attemptCount: 1, completedAt: expect.any(Date) });
-    } finally {
-      __setStorageProviderForTests(null);
-      await db.delete(documents).where(eq(documents.id, documentId));
-      await db.delete(storageObjectDeletions).where(and(
-        eq(storageObjectDeletions.organizationId, ctx.organizationId),
-        eq(storageObjectDeletions.storageKey, key),
-      ));
-    }
+    });
   });
 
   it("preserves posted source relationships, recomputes location-affected legs and sweeps retired evidence without touching manual legs", async () => {
@@ -618,12 +594,7 @@ describe("derived transport-leg transaction boundaries", () => {
         eq(transportLegs.isDerived, true),
         eq(transportLegs.organizationId, ctx.organizationId),
       ));
-    const provider = new RetirementStorageProvider();
-    const key = `transport_leg/${retiringLeg.id}/pdf/${tag}.pdf`;
-    const documentId = await insertManagedDocument(provider, "transport_leg", retiringLeg.id, key);
-    __setStorageProviderForTests(provider);
-
-    try {
+    await expectDerivedLegEvidenceSwept(retiringLeg.id, tag, async () => {
       // Clearing the only distance retires the derived leg and queues its evidence.
       const updated = await updateCustomerLocation(ctx, firstLocation.id, {
         expectedVersion: await masterDataVersion(ctx, "customerLocations", firstLocation.id),
@@ -631,22 +602,6 @@ describe("derived transport-leg transaction boundaries", () => {
       });
 
       expect(updated).toMatchObject({ id: firstLocation.id, distanceFromFacilityKm: null });
-      expect(await db.select().from(transportLegs).where(eq(transportLegs.id, retiringLeg.id))).toHaveLength(0);
-      expect(await db.select().from(documents).where(eq(documents.id, documentId))).toHaveLength(0);
-      expect(provider.deleteCalls).toContain(key);
-      expect(provider.objects.has(key)).toBe(false);
-      const [deletion] = await db.select().from(storageObjectDeletions).where(and(
-        eq(storageObjectDeletions.organizationId, ctx.organizationId),
-        eq(storageObjectDeletions.storageKey, key),
-      ));
-      expect(deletion).toMatchObject({ attemptCount: 1, completedAt: expect.any(Date) });
-    } finally {
-      __setStorageProviderForTests(null);
-      await db.delete(documents).where(eq(documents.id, documentId));
-      await db.delete(storageObjectDeletions).where(and(
-        eq(storageObjectDeletions.organizationId, ctx.organizationId),
-        eq(storageObjectDeletions.storageKey, key),
-      ));
-    }
+    });
   });
 });
