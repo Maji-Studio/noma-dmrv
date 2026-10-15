@@ -18,3 +18,7 @@ it.each([
 it.each(["AWAITING_VERIFICATION", "CREDITS_ISSUED"] as const)("leaves missing %s timestamps null", (status) => {
   expect(ghgStatusRegistryAt({ status, submitted_at: null, credits_issued_at: null })).toBeNull();
 });
+
+it.each(["AWAITING_VERIFICATION", "CREDITS_ISSUED"] as const)("leaves invalid %s timestamps null", (status) => {
+  expect(ghgStatusRegistryAt({ status, submitted_at: "invalid", credits_issued_at: "invalid" })).toBeNull();
+});

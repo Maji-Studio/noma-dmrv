@@ -27,12 +27,12 @@ export async function applyGhgRemoteState(
   remote: GhgStatement,
   extraMetadata: Record<string, unknown> = {},
   tx?: Tx,
-): Promise<void> {
-  requireOrgScope(ctx);
-  const origin: CertificationActivityOrigin = {
+  origin: CertificationActivityOrigin = {
     source: "registry",
     registryAt: ghgStatusRegistryAt(remote),
-  };
+  },
+): Promise<void> {
+  requireOrgScope(ctx);
   const metadataPatch = { ...remoteMetadata(remote), ...extraMetadata };
   if (remote.status === "VERIFIED" || remote.status === "CREDITS_ISSUED") {
     await setSubmissionTerminalStatus(

@@ -7,5 +7,7 @@ export function ghgStatusRegistryAt(
   const timestamp = remote.status === "AWAITING_VERIFICATION"
     ? remote.submitted_at
     : remote.status === "CREDITS_ISSUED" ? remote.credits_issued_at : null;
-  return timestamp ? new Date(timestamp) : null;
+  if (!timestamp) return null;
+  const date = new Date(timestamp);
+  return Number.isNaN(date.getTime()) ? null : date;
 }

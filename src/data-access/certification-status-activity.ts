@@ -5,12 +5,12 @@ import { certificationSubmissions, certifierRemovals } from "@/db/schema/certifi
 import type { OrgContext } from "@/lib/auth/server";
 import { toActivityEntityType } from "@/lib/activity-entity-type";
 import { SUBMISSION_METADATA_KEYS } from "@/lib/certification/submission-metadata";
-import { recordActivity } from "./activity-events";
+import { recordActivity, type ActivityEventInput } from "./activity-events";
 import { requireOrgScope } from "./utils";
 
 export interface CertificationActivityOrigin {
-  source: "form" | "registry";
-  registryAt?: Date | null;
+  source: Extract<ActivityEventInput["source"], "form" | "registry">;
+  registryAt?: ActivityEventInput["registryAt"];
 }
 
 /** Lock before reading so concurrent writers record the actual predecessor. */
@@ -74,7 +74,7 @@ function remoteStatus(metadata: unknown): string | null {
 async function submissionCreditBatchId(
   ctx: OrgContext,
   tx: DbTransaction,
-  entityType: string,
+  entityType: ActivityEventInput["entityType"],
   entityId: string,
 ): Promise<string | null> {
   requireOrgScope(ctx);

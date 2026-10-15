@@ -1,3 +1,4 @@
+import { activityEvents } from "@/db/schema/activity";
 import { listEntityActivity } from "@/data-access/activity-events";
 import { masterDataVersion } from "./helpers/master-data-version";
 import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
@@ -51,6 +52,10 @@ const createdEntityIds: string[] = [];
 
 afterAll(async () => {
   if (createdEntityIds.length > 0) {
+    await db.delete(activityEvents).where(and(
+      eq(activityEvents.organizationId, TEST_ORG_ID),
+      inArray(activityEvents.entityId, createdEntityIds),
+    ));
     await db
       .delete(certificationSubmissions)
       .where(inArray(certificationSubmissions.localEntityId, createdEntityIds));

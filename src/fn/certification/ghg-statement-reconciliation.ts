@@ -340,7 +340,7 @@ export async function reconcileRegistryGhgStatement(
           supersedePreviousId: claimed.supersedePreviousId,
         },
         tx,
-        { source: "registry", registryAt: args.remote.status === "AWAITING_VERIFICATION" ? ghgStatusRegistryAt(args.remote) : null },
+        { source: "registry", registryAt: ghgStatusRegistryAt(args.remote) },
       );
       submission = await getLatestSubmissionWithExecutor(
         orgCtx,

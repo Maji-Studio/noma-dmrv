@@ -1,3 +1,4 @@
+import { activityEvents } from "@/db/schema/activity";
 import { listEntityActivity } from "@/data-access/activity-events";
 import { deleteOutputFacilityFixtures } from "./helpers/output-contract-fixtures";
 import { createRemovalDeletionFixture, insertLedgerRow, type Fixture } from "./helpers/removal-deletion-fixture";
@@ -108,6 +109,10 @@ afterAll(async () => {
       .where(inArray(creditBatches.id, createdBatchIds));
   }
   if (createdRemovalIds.length > 0) {
+    await db.delete(activityEvents).where(and(
+      eq(activityEvents.organizationId, TEST_ORG_ID),
+      inArray(activityEvents.entityId, createdRemovalIds),
+    ));
     await db
       .delete(certificationSubmissions)
       .where(inArray(certificationSubmissions.localEntityId, createdRemovalIds));
