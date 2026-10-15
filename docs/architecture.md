@@ -642,9 +642,11 @@ The Maji product owner owns triage of `storage-health.yml`, `isometric-health.ym
 must watch repository issues in GitHub and keep issue notifications enabled.
 If response ownership changes, update this section and hand over issue watching.
 
-Failed or cancelled scheduled and manually dispatched runs call
-`scripts/notify-health-failure.mjs` with the runner's preinstalled Node and `gh`.
-Timeouts and manual cancellations both send notifications.
+Failed or cancelled scheduled runs, including timeouts, call the reusable
+`health-failure-notify.yml` workflow, which runs `scripts/notify-health-failure.mjs`
+with the runner's preinstalled Node and `gh`. Manually dispatched runs notify only
+on failure with `force_failure=true`. Other manual runs and manual cancellations
+stay quiet.
 The monitored destination is a `ci-health` issue created by `github-actions[bot]`
 with the exact stable title `CI health failure: <workflow filename>`.
 The notifier ensures the label exists. Keep that label and title unchanged. An open
@@ -672,13 +674,11 @@ or log excerpts belong in the notification.
    notification job itself fails, check its token permissions and GitHub API
    availability, then rerun the failed job.
 
-To prove delivery after the workflow changes are available on a remote ref,
-dispatch any of the three workflows with `force_failure=true` (leave storage's
-`repair_cors=false`). This skips the real health job and fails a small probe with
-no secrets, database work or Playwright. Confirm that the failure issue appears
+To verify delivery, dispatch any of the three workflows with `force_failure=true`
+(leave storage's `repair_cors=false`). This skips the real health job and fails a
+small probe with no secrets, database work or Playwright. Confirm that the failure issue appears
 with all four fields; dispatch again to verify a comment on the same issue.
-Close that issue and dispatch again to verify reopening. Keep the run and issue
-URLs as verification evidence in the change review. Finally dispatch with
+Close that issue and dispatch again to verify reopening. Finally dispatch with
 `force_failure=false`, confirm recovery, and close the issue manually.
 
 ## Output stock

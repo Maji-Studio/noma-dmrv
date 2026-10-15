@@ -176,23 +176,16 @@ jobs:
 
   notify-failure:
     needs: [ping, notification-probe]
-    if: ${{ always() && (contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')) && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
+    if: >-
+      ${{ always() &&
+          ((github.event_name == 'schedule' &&
+            (contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled'))) ||
+           (github.event_name == 'workflow_dispatch' && inputs.force_failure &&
+            contains(needs.*.result, 'failure'))) }}
     permissions:
       contents: read
       issues: write
-    concurrency:
-      group: health-failure-${{ github.workflow }}
-      cancel-in-progress: false
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
-        with:
-          persist-credentials: false
-      - name: Open or reopen the workflow failure issue
-        run: node scripts/notify-health-failure.mjs
-        env:
-          GH_TOKEN: ${{ github.token }}
-          HEALTH_WORKFLOW: isometric-health.yml
-          HEALTH_ENVIRONMENT: staging / Isometric sandbox
+    uses: ./.github/workflows/health-failure-notify.yml
+    with:
+      workflow-file: isometric-health.yml
+      environment: staging / Isometric sandbox
