@@ -39,13 +39,14 @@ Operators can fill every line of the target Removal template ("LCA based templat
 | Empty lines | Shown as "0 so far" on the batch sheet. In the Removal flow, one confirmation covers all empty lines and records a zero per line. |
 | Extra fuel or electricity | Added on top of the run figures. The form shows the run total and the earlier entries, and the sum is sent. |
 | Meter readings | While a template asks for readings, the operator enters both. The form follows the template: two fields if it has two inputs, one if it has one. |
-| Late entries | Go on the next Removal from the same batch. If none can carry them, the last Removal is corrected. That correction is an allocation and waits on Isometric (§7). |
+| Late entries | Go on the next Removal from the same batch. What happens when none can carry them is open (§7). |
 | Evidence | Required, marked as a certification requirement, and the Removal cannot be submitted without it. Recorded zeros are exempt. |
 | #291 chain | Superseded. #639, #640, #641, #642, #893, #626 and #638 are folded in, and #894 is closed. |
 | Testing | Kenji copies Cula into the sandbox (not 1:1). Tests use a fixture of Cula as read on 2026-10-15. A read-only production key is needed before the first real submission. |
 | Naming | "Emissions entry", with an "Add entry" button. "Activity" stays the history log of #1037-#1047. |
 | Durability | Build for both tiers. The Cula facility is 1000-year: one credit batch per Removal (`THOUSAND_YEAR_REMOVAL_BATCH_LIMIT`, `src/data-access/certifier-removals.ts`). |
-| Corrections after push-back | Edits reopen while the Removal's GHG statement is absent, in DRAFT or in FAILED_VERIFICATION. The Removal is marked "correction needed". Resubmitting supersedes it. |
+| Corrections | A submitted Removal is never corrected on noma's initiative. Edits reopen only when Isometric changes the state: a statement fails verification, or a statement noma submitted is back in DRAFT. The Removal is then marked "correction needed", and resubmitting supersedes it (Kenji, 2026-10-15). |
+| Reference template | The sandbox "Dark Earth Carbon Template (15 Oct)" (`rvt_1KS4S43VPSBXA26X`, edited in place) is more correct than Cula. It is the shape #1020 brings production to: 15 components, trucks as mass × distance, single-kWh electricity, the 1000-year storage line, two lab and two sample lines, pyrolyzer CO and CH₄, and staff travel. |
 
 ## 3. What the code tells us
 
@@ -174,7 +175,7 @@ Operators can fill every line of the target Removal template ("LCA based templat
   - an `entryPolicy`: `none`, `additive` or `single`.
 - `single` requires no automatic source.
 - Examples: startup diesel is operating, with run diesel as its automatic source and `additive` entries. Lab electricity is operating, with no automatic source and `additive` entries. A pyrolyzer line is operating, with no automatic source and a `single` entry.
-- **Bootstrap:** a checked-in mapping, keyed by component ID, for the three known templates: Cula, "Removal Template 2026-07-03" and the sandbox "Dark Earth Carbon Template (29 Jul)". The diesel split and the two lab and sample lines are explicit there.
+- **Bootstrap:** a checked-in mapping, keyed by component ID, for the three known templates: the sandbox "Dark Earth Carbon Template (15 Oct)" (the reference), Cula, and "Removal Template 2026-07-03". The diesel split and the two lab and sample lines are explicit there.
 - **Carry forward:** a new observation of the same template keeps the assignments for surviving component IDs.
 - **New component IDs**, for example after the #1020 re-authoring: the change review asks an Owner or Admin to set each contract. The choices are limited to the catalog candidates for its blueprint and the entry policies its shape allows. Until then the line is `unassigned` and blocks. This is one assignment step inside the review, not a general binding editor (#894 stays closed).
 - Two lines may never share an automatic source. That is the existing `ambiguous` reason, now settled by component ID.
@@ -193,7 +194,7 @@ Operators can fill every line of the target Removal template ("LCA based templat
 **Also in this PR**
 - Split `certify-context-core.ts` before extending it.
 - Folds #639, #642 (drift tests over fingerprinted fixtures) and #626.
-- Fixtures: a new Cula fixture in `tests/fixtures/isometric/`, captured through the MCP read or the sandbox copy, the 2026-07-03 production fixture and the sandbox 29 Jul template.
+- Fixtures in `tests/fixtures/isometric/`: the sandbox 15 Oct template (read over sandbox REST on 2026-10-15), a new Cula fixture captured through the MCP read, and the existing 2026-07-03 production fixture.
 
 ### 4.3 Line states and one preflight gate (PR 2)
 
@@ -267,7 +268,7 @@ Operators can fill every line of the target Removal template ("LCA based templat
   - an existing live reservation or claim wins;
   - otherwise the eligible Removal with the earliest window end, then the earliest draft creation, then the lowest id.
   - This rule is only for entry contenders. It does not reuse the production contender ordering (`listProductionClaimDraftContenders`, by reporting quarter).
-- An entry outside every window waits and blocks the batch with "No Removal can carry this entry yet". If the batch is fully applied, it needs a correction (below).
+- An entry outside every window waits and blocks the batch with "No Removal can carry this entry yet". What happens when the batch is fully applied is open (§7).
 - A 200-year Removal grouping two batches that both have an entry on the same `single` line is refused in v1. Paired inputs are never summed one input at a time. Whether Isometric accepts list-shaped inputs (`InputDataShape: LIST`) for these lines is a follow-up.
 
 **Reservation and claims**
@@ -310,22 +311,23 @@ Operators can fill every line of the target Removal template ("LCA based templat
 
 **Corrections**
 - "Correction needed" is derived, not stored: the snapshot's contribution manifest differs from the current entries.
-- Before Isometric answers §7, entries a submitted Removal sent stay locked, as today, and late entries wait.
-- After a yes, edits to sent entries are allowed only when all of these hold:
+- Once a Removal is submitted, the entries it sent stay locked, as today. noma never corrects a submitted Removal on its own initiative.
+- Edits reopen only after Isometric changes the state, and only when all of these hold:
+  - a statement covering the lineage, freshly refreshed, is FAILED_VERIFICATION, or is back in DRAFT after noma submitted it (`ghgStatementSubmissionId` set);
+  - no other statement covering it is AWAITING_VERIFICATION, VERIFIED or CREDITS_ISSUED, and an unknown status fails closed;
   - no submission for the lineage is in flight;
-  - every statement covering it, freshly refreshed, is absent, DRAFT or FAILED_VERIFICATION, failing closed on unknown;
   - the edit runs under the lineage locks of `getLockedCertifiedLineage`, serialized against statement submission.
 - Resubmitting supersedes.
 - `MAPPING_REVISION` bumps once in this PR. Split `src/data-access/certification.ts` before extending it.
 
-### 4.6 Wider amendment flow (PR 5, conditional)
+### 4.6 Wider amendment flow (PR 5)
 
 Kenji's round 2 note asks to reopen general edits when Isometric pushes a submission back, as before submission.
 
-- **Change:** with the same conditions as §4.5 Corrections, unlock the lineage guard for a Removal whose statements are FAILED_VERIFICATION or back in DRAFT. Resubmitting relocks it.
+- **Change:** under the same conditions as §4.5 Corrections, unlock the lineage guard for the rest of the lineage, not only entries. Resubmitting relocks it.
 - **Shared lineage:** a record that also backs a verified Removal stays locked.
 - **Sync:** status comes from the refresh paths and from the scheduled registry sync of #1047 once it exists.
-- **Prerequisite:** Isometric's answer to §7. Folds item 1 of #687.
+- **Prerequisite:** none from Isometric, since Kenji decided the trigger on 2026-10-15. Folds item 1 of #687.
 
 ## 5. Delivery
 
@@ -334,8 +336,8 @@ Kenji's round 2 note asks to reopen general edits when Isometric pushes a submis
 | 1 | Template observations and fingerprints, line sources by component ID with bootstrap and review assignment, batch pinning through compilation, fixtures, split of `certify-context-core.ts` | #639, #642, #626, #638, #893 | gpt-6.1-sol, cross-reviewed by gpt-6-astra |
 | 2 | Line-state functions, typed blockers, one preflight gate, coverage alignment | #640, #641, #645 | gpt-6-astra |
 | 3 | Entry tables, data-access and fn, Emissions rename and per-batch view, forms, batch panel, sample-leg UI hidden | #841, #973 | Server: gpt-6.1-sol. UI: Opus agent with the frontend-design skill. |
-| 4 | Contributions and claims, reservation, guard, snapshot and trigger, evidence targets, Lines sent step, sample-leg aggregation removed, corrections behind §7 | #291 | gpt-6-astra, reviewed with pr-review-suite |
-| 5 | Lineage unlock on push-back | #687 item 1 | after Isometric answers |
+| 4 | Contributions and claims, reservation, guard, snapshot and trigger, evidence targets, Lines sent step, sample-leg aggregation removed, corrections after push-back | #291 | gpt-6-astra, reviewed with pr-review-suite |
+| 5 | Lineage unlock on push-back | #687 item 1 | gpt-6-astra, after PR 4 |
 
 **Merge order:** 1, then 2, then 3, then 4. PR 3's server half can be developed next to PR 2 but merges after it.
 
@@ -350,7 +352,7 @@ Kenji's round 2 note asks to reopen general edits when Isometric pushes a submis
 - #1020 re-authoring is done, and the bootstrap mapping covers the new component IDs.
 - The Cula fixture is captured.
 - Production is read through a read-only key and matches the fixture.
-- A full rehearsal against the sandbox copy: entries with files, confirmed zeros, a follow-up Removal, a correction.
+- A full rehearsal against the sandbox "Dark Earth Carbon Template (15 Oct)": entries with files, confirmed zeros, a follow-up Removal, and a correction after a statement fails verification.
 
 **Tests**
 - Unit tests:
@@ -377,17 +379,19 @@ Kenji's round 2 note asks to reopen general edits when Isometric pushes a submis
 - Project-level components: establishment and end-of-life stay in Isometric.
 - List-shaped inputs for multi-batch `single` lines.
 
-## 7. Question for Isometric (Kenji to send)
+## 7. Open: a late entry when its batch has no Removal left
 
-> Our Removals (biochar, protocol v1.1) cover one credit batch each. An operating emission for a batch, such as a staff flight or lab electricity, is sometimes recorded after that batch's last Removal was submitted. Two questions:
->
-> 1. Is it acceptable to correct and resubmit that Removal with the emission included, given that "CO2eOperations, RP emissions must be attributed to the Reporting Period in which they occur"? Or should the emission go on the next Removal whose reporting period contains its date, even if that is a different batch?
-> 2. Until a Removal's GHG statement is submitted for verification, may we correct and resubmit the Removal? After a statement fails verification, may we correct the Removals in it and resubmit?
+A batch's last Removal is submitted, and then an entry for that batch arrives, such as a flight or lab electricity. That Removal may not be corrected (§2), so the entry has nowhere to go.
+
+- **(a) Wait.** The entry shows "Not sent". It goes out only if Isometric pushes that Removal back.
+- **(b) The next Removal of the facility.** The entry goes on the next Removal of the facility whose window covers its date, even from another batch. The entry keeps its own batch and records which Removal sent it. This matches "CO2eOperations, RP emissions must be attributed to the Reporting Period in which they occur" (Biochar v1.1, https://registry.isometric.com/protocol/biochar/1.1).
+
+The choice is Kenji's. A short confirmation from Isometric is worth having either way.
 
 ## 8. Risks and checks
 
 - **Hash churn.** Entry edits supersede sent Removals. The derived "correction needed" state and the edit window keep this explicit.
-- **Window edge.** An entry dated after its batch's last application has no Removal until §7 is answered. It shows as blocking on the batch, never silently dropped.
+- **Window edge.** An entry dated after its batch's last application has no Removal to go on until §7 is decided. It shows as blocking on the batch, and is never silently dropped.
 - **Additive double count.** It cannot be detected. The form shows the run total, and the batch panel lists run and entry sources side by side.
 - **Template fetch cost.** Observations are written on fetches that already happen. No new polling.
 - **Verify protocol wording verbatim before gating.** The quotes in ADR 0032 came through the MCP; re-read them against https://registry.isometric.com/protocol/biochar/1.1 before PR 4 merges.

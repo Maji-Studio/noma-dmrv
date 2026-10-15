@@ -28,10 +28,10 @@ noma records none of these numbers, so the template cannot be filled. The #291 d
    - Which record or entry fills each line is assigned by component ID. The three known templates are bootstrapped, surviving IDs carry forward, and new IDs are assigned in the review.
    - Each line's reviewed contract states its scope (operating, forbidden or unassigned), an optional automatic source, and its entry policy (none, additive or single). Only operating lines whose policy allows entries accept them.
 7. **Forms per input type, not a form engine.** The supported shapes are fuel volume, electricity, meter readings, mass, distance, mass × distance and gas concentration with mass flow. Any other monitored shape shows "Needs setup" and blocks.
-8. **When an entry is sent.** An entry goes out once, on the first Removal of its batch to reserve it whose reporting window (production start to that Removal's latest application) contains the entry's date. A retry or supersede of that Removal keeps it. If no later Removal can carry it, the batch's last Removal needs a correction. That correction is an allocation, so it waits on Isometric's agreement (plan §7).
-9. **Corrections.** Editing an entry that a Removal has sent marks that Removal "correction needed", and resubmitting supersedes it.
-   - Edits are allowed only while nothing is in flight, and while every GHG statement covering the lineage is absent, in DRAFT or in FAILED_VERIFICATION. Status is freshly read, and unknown fails closed.
-   - Until Isometric agrees (plan §7), sent entries stay locked as today.
+8. **When an entry is sent.** An entry goes out once, on the first Removal of its batch to reserve it whose reporting window (production start to that Removal's latest application) contains the entry's date. A retry or supersede of that Removal keeps it. What happens when no later Removal of the batch can carry it is open (plan §7). A submitted Removal is not corrected for it.
+9. **Corrections only after Isometric changes the state.** noma never corrects a submitted Removal on its own initiative, and the entries it sent stay locked.
+   - Edits reopen when a statement covering the lineage fails verification, or is back in DRAFT after noma submitted it. Status is freshly read; unknown fails closed, and nothing may be in flight.
+   - The edited Removal shows "correction needed", and resubmitting supersedes it.
 
 ## What stays from earlier decisions
 
