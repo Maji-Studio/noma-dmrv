@@ -200,6 +200,7 @@ function makeOpenRemoval(
 function makeMapping(): CertifierProjectRow {
   return {
     id: "cert-proj-1",
+    externalFacilityId: "fcl_test_1",
     facilityId: FACILITY_ID,
     provider: "isometric",
     externalProjectId: EXTERNAL_PROJECT_ID,
@@ -208,7 +209,6 @@ function makeMapping(): CertifierProjectRow {
     defaultRemovalTemplateId: "rvt_1",
     webhookSecret: null,
     metadata: null,
-    gensetEnergyYieldKwhPerLitre: 3.375,
     createdAt: new Date(),
     updatedAt: new Date(),
   } as CertifierProjectRow;

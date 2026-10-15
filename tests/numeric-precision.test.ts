@@ -105,7 +105,7 @@ describe("numeric precision round-trips (issue #280)", () => {
       }).returning({ id: facilities.id });
       const [feedstockType] = await tx.insert(feedstockTypes).values({
         organizationId: TEST_ORG_ID, code: `FT-NUM-PPM-${runId}`,
-        name: `Numeric PPM Feedstock ${runId}`, category: "forestry",
+        name: `Numeric PPM Feedstock ${runId}`, category: "forestry", usage: "pyrolysis",
       }).returning({ id: feedstockTypes.id });
       const [process] = await tx.insert(productionProcesses).values({
         organizationId: TEST_ORG_ID, facilityId: facility.id, feedstockTypeId: feedstockType.id,

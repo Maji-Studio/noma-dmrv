@@ -62,7 +62,7 @@ export const vehicleQuickAddSchema = z.object({
     .nullish(),
   fuelConsumptionLPerKm: z
     .number()
-    .nonnegative("Fuel consumption must be zero or positive")
+    .positive("Fuel consumption must be greater than 0")
     .max(10, "Fuel consumption seems too high")
     .nullish(),
   modelYear: z
