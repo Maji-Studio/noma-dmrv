@@ -112,7 +112,9 @@ export type TransportLegFormData = z.infer<typeof transportLegFormSchema>;
 // ============================================
 
 const entityContextShape = {
-  entityType: z.enum(transportEntityTypes),
+  entityType: z.enum(transportEntityTypes).refine((value): boolean => value !== "biochar", {
+    message: "Biochar transport is derived from deliveries. Edit the delivery distance instead.",
+  }),
   entityId: z.string().uuid("Choose a valid record."),
 };
 

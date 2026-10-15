@@ -4,6 +4,7 @@ import {
   aggregateDistributionLegs,
   deriveTransportLeg,
   isDerivedLegPersistable,
+  resolveDeliveryTransportRoute,
   type DistributionLegRow,
 } from "./transport-leg";
 
@@ -153,6 +154,32 @@ describe("deriveTransportLeg", () => {
     });
     expect(leg.distanceKm).toBe(40);
     expect(leg.distanceSource).toBe("document");
+  });
+});
+
+describe("resolveDeliveryTransportRoute", () => {
+  const location = {
+    name: "Plot A", gpsLatitude: -6.84, gpsLongitude: 39.31,
+    distanceFromFacilityKm: 40, distanceSource: "map_estimate" as const,
+  };
+
+  it("keeps document provenance without a delivery distance override", () => {
+    expect(resolveDeliveryTransportRoute({
+      distanceKmOverride: null, distanceSource: "document", location,
+    })).toEqual({
+      distanceKm: 40, distanceSource: "document", locationName: "Plot A",
+      locationGpsLatitude: -6.84, locationGpsLongitude: 39.31,
+    });
+  });
+
+  it.each([
+    { distanceKmOverride: 62, distanceSource: null, distanceKm: 62, expectedSource: "manual" },
+    { distanceKmOverride: 62, distanceSource: "document", distanceKm: 62, expectedSource: "document" },
+    { distanceKmOverride: null, distanceSource: "manual", distanceKm: 40, expectedSource: "map_estimate" },
+    { distanceKmOverride: 0, distanceSource: null, distanceKm: 40, expectedSource: "map_estimate" },
+  ] as const)("resolves $distanceKmOverride km with source $distanceSource", ({ distanceKmOverride, distanceSource, distanceKm, expectedSource }) => {
+    expect(resolveDeliveryTransportRoute({ distanceKmOverride, distanceSource, location }))
+      .toMatchObject({ distanceKm, distanceSource: expectedSource });
   });
 });
 

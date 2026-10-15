@@ -1,5 +1,5 @@
 import { missingFeedstockTransportIds } from "@/lib/certification/submission-readiness";
-import { transportVehicleAdvisories } from "@/lib/isometric/utils/aggregation";
+import { aggregateBiocharTransportMassDistance, transportVehicleAdvisories } from "@/lib/isometric/utils/aggregation";
 import {
   aggregateTransportMassDistance,
   collectTransportEntityIds,
@@ -84,10 +84,7 @@ export function buildTransportCoverage(
       entityIds: entityIds.biocharProductIds,
       legIds: legs.biochar.map((leg) => leg.id),
       firstLegEntityId: legs.biochar[0]?.entityId ?? null,
-      aggregationWarning: aggregateTransportMassDistance(
-        legs.biochar,
-        "Biochar",
-      ).warning,
+      aggregationWarning: aggregateBiocharTransportMassDistance(legs.biochar).warning,
     },
     sample: {
       vehicleAdvisories: transportVehicleAdvisories(legs.sample, "Sample"),

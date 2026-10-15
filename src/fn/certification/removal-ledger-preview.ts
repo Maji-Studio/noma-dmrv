@@ -1,5 +1,5 @@
 import type { ChainOfCustodyData } from "@/data-access/chain-of-custody";
-import { appliedBiocharFraction, type RemovalRunSummary } from "@/lib/certification/mass-accounting";
+import { type RemovalRunSummary } from "@/lib/certification/mass-accounting";
 import { kgToTonnes } from "@/lib/calculations/unit-conversions";
 import {
   aggregateProductionRuns,
@@ -97,7 +97,6 @@ export function buildRemovalLedgerPreview(args: {
           productionRunIds,
         }),
         args.transportLegs,
-        { appliedBiocharFraction: appliedBiocharFraction(args.runSummary) },
       );
       inputs.push(
         input(

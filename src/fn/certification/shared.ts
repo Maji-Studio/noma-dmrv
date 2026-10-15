@@ -1,3 +1,6 @@
+import { loadBiocharDeliveryTransportLegs } from "@/data-access/biochar-delivery-transport";
+import type { ChainOfCustodyData } from "@/data-access/chain-of-custody";
+import { tonnesToKg } from "@/lib/calculations/unit-conversions";
 import type { OrgContext } from "@/lib/auth/server";
 import { env } from "@/config/env";
 import {
@@ -93,10 +96,19 @@ export async function appendSyncEventBestEffort(
 export async function loadTransportLegsByCategory(
   orgCtx: OrgContext,
   entityIds: TransportEntityIdsByCategory,
+  lineages: ChainOfCustodyData[],
+  requiredTransportCategories: readonly (keyof TransportLegsByCategory)[],
 ): Promise<TransportLegsByCategory> {
   const [feedstock, biochar, sample] = await Promise.all([
     getTransportLegsWithEvidenceForEntities(orgCtx, "feedstock", entityIds.feedstockIds),
-    getTransportLegsWithEvidenceForEntities(orgCtx, "biochar", entityIds.biocharProductIds),
+    // Accounting projects one frozen application × product × source-run slice
+    // per lineage; never recompute its share from mutable product totals.
+    requiredTransportCategories.includes("biochar")
+      ? loadBiocharDeliveryTransportLegs(orgCtx, lineages.map(lineage => ({
+          deliveryId: lineage.delivery.id,
+          loadMassKg: tonnesToKg(lineage.application.biocharAppliedTons ?? 0),
+        })))
+      : [],
     getTransportLegsWithEvidenceForEntities(orgCtx, "sample", entityIds.sampleIds),
   ]);
   return { feedstock, biochar, sample };

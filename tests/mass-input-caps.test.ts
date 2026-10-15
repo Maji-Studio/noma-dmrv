@@ -148,7 +148,7 @@ describe("mass input caps", () => {
 
   it("rejects transport load mass above the shared kg cap", () => {
     const result = createTransportLegSchema.safeParse({
-      entityType: "biochar",
+      entityType: "feedstock",
       entityId: UUID,
       distanceKm: 10,
       transportMethodType: "road",
@@ -171,7 +171,7 @@ describe("mass input caps", () => {
 
   it("accepts transport load mass exactly at the shared kg cap", () => {
     const result = createTransportLegSchema.safeParse({
-      entityType: "biochar",
+      entityType: "feedstock",
       entityId: UUID,
       distanceKm: 10,
       transportMethodType: "road",

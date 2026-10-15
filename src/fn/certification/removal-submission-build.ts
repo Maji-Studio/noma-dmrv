@@ -2,7 +2,6 @@ import type { SubmissionLineageBlocker } from "@/lib/certification/submission-re
 import { findUnbindableTemplateInputs, formatUnbindableTemplateInputsText } from "@/lib/isometric/template-binding-coverage";
 import type { OrgContext } from "@/lib/auth/server";
 import { env } from "@/config/env";
-import { appliedBiocharFraction } from "@/lib/certification/mass-accounting";
 import { SafeError } from "@/lib/errors";
 import { MISSING_VALUE } from "@/lib/copy-utils";
 import {
@@ -708,9 +707,7 @@ export async function buildRemovalSubmissionBuild(args: {
     );
   }
 
-  const transportAgg = enrichWithTransportLegs(baseAgg, ctx.transportLegs, {
-    appliedBiocharFraction: appliedBiocharFraction(ctx.runSummary),
-  });
+  const transportAgg = enrichWithTransportLegs(baseAgg, ctx.transportLegs);
   const transportWarnings = transportAgg.warnings.slice(baseAgg.warnings.length);
   if (transportWarnings.length > 0) {
     throw new SafeError(

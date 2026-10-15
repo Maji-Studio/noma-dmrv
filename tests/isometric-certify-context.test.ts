@@ -1,3 +1,4 @@
+import { loadBiocharDeliveryTransportLegs } from "@/data-access/biochar-delivery-transport";
 import { toRemovalReadinessFacts } from "@/lib/certification/readiness-facts";
 import { makeTestOrgContext } from "./helpers/test-org";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -71,6 +72,10 @@ vi.mock("@/data-access/credit-batch-samples", () => ({
 
 vi.mock("@/data-access/documents", () => ({
   listDocumentsForEntityIds: vi.fn(),
+}));
+
+vi.mock("@/data-access/biochar-delivery-transport", () => ({
+  loadBiocharDeliveryTransportLegs: vi.fn(),
 }));
 
 vi.mock("@/data-access/transport-legs", () => ({
@@ -211,6 +216,7 @@ function blueprint(key: string): IsometricComponentBlueprint {
 describe("loadCertifyContextForCreditBatchForUser", () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    vi.mocked(loadBiocharDeliveryTransportLegs).mockResolvedValue([]);
     mockNormalizedLineageFacts();
     mockedHasCredentials.mockResolvedValue(true);
     mockedGetCreditBatchRemovalId.mockResolvedValue(null);
@@ -705,6 +711,12 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
       return [];
     });
 
+    vi.mocked(loadBiocharDeliveryTransportLegs).mockResolvedValue([{
+      id: "delivery-missing-distance", entityId: "delivery-missing-distance", entityType: "biochar",
+      distanceKm: 0, loadMassKg: 25, isDerived: true,
+      transportMethodType: "road", calculationMethodType: "distance_based",
+    } as never]);
+
     const result = await loadCertifyContextForCreditBatchForUser(
       makeTestOrgContext(USER_ID),
       CREDIT_BATCH_ID,
@@ -722,17 +734,25 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
     const coverage = result.transportCoverage;
     expect(coverage.feedstock.count).toBe(3);
     expect(coverage.feedstock.entityIds.sort()).toEqual(["fs-1", "fs-2"]);
-    expect(coverage.biochar.count).toBe(0);
+    const biocharRequired = !omit.some((category) => category === "biochar");
+    expect(coverage.biochar.count).toBe(biocharRequired ? 1 : 0);
+    if (!biocharRequired) {
+      expect(toRemovalReadinessFacts(result).requiredTransport.map(item => item.category)).not.toContain("biochar");
+    }
+    expect(loadBiocharDeliveryTransportLegs).toHaveBeenCalledTimes(
+      omit.some((category) => category === "biochar") ? 0 : 1,
+    );
     expect(coverage.biochar.entityIds).toEqual(["bp-1"]);
     expect(coverage.sample.count).toBe(1);
     expect(coverage.sample.entityIds.sort()).toEqual(["s-1", "s-2"]);
-    expect(mockedGetLegs).toHaveBeenCalledTimes(3);
+    expect(mockedGetLegs).toHaveBeenCalledTimes(2);
   });
 });
 
 describe("requiredTransportCategories", () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    vi.mocked(loadBiocharDeliveryTransportLegs).mockResolvedValue([]);
     mockNormalizedLineageFacts();
     mockedHasCredentials.mockResolvedValue(true);
     mockedGetCreditBatch.mockResolvedValue({
