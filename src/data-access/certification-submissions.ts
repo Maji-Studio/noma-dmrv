@@ -47,6 +47,7 @@ import {
   assertSubmissionInFacility,
   type CertificationSubmissionRow,
 } from "./certification";
+import { withCertificationStatusActivity } from "./certification-status-activity";
 import { acquireFacilityDurabilityLock } from "./facility-durability-lock";
 import { acquireFacilityCertificationBoundaryLock } from "./facility-certification-boundary-lock";
 import { assertSameOrg, requireOrgScope } from "./utils";
@@ -716,39 +717,43 @@ async function resetSubmissionToDraftCas(
   lockTtlMs: number,
   requireConfirmedInterruptedMarker = false,
 ): Promise<CertificationSubmissionRow | null> {
-  const [row] = await tx
-    .update(certificationSubmissions)
-    .set({
-      status: "draft",
-      lockedAt: sql`date_trunc('milliseconds', clock_timestamp())`,
-      updatedAt: sql`now()`,
-      metadata: sql`coalesce(${certificationSubmissions.metadata}, '{}'::jsonb)
-        - ${SUBMISSION_METADATA_KEYS.lastError}::text
-        - ${SUBMISSION_METADATA_KEYS.lastAttemptOutcome}::text`,
-    })
-    .where(
-      and(
-        eq(certificationSubmissions.id, id),
-        eq(certificationSubmissions.organizationId, ctx.organizationId),
-        requireConfirmedInterruptedMarker
-          ? and(
-              eq(certificationSubmissions.status, "draft"),
-              sql`${certificationSubmissions.metadata} ->> ${SUBMISSION_METADATA_KEYS.lastAttemptOutcome}::text = ${SUBMISSION_ATTEMPT_OUTCOMES.interrupted}`,
-              sql`${certificationSubmissions.metadata} ->> ${SUBMISSION_METADATA_KEYS.externalMutation}::text = ${SUBMISSION_EXTERNAL_MUTATIONS.confirmed}`,
-            )
-          : // A fresh lock blocks resumption whatever the status: a rejected
-            // row carries one only while a Removal deletion is cleaning up
-            // the registry records it may have created.
-            or(
-              isNull(certificationSubmissions.lockedAt),
-              lt(
-                certificationSubmissions.lockedAt,
-                sql`now() - ${lockTtlMs} * interval '1 millisecond'`,
+  let row: CertificationSubmissionRow | null = null;
+  await withCertificationStatusActivity(ctx, [id], async (tx) => {
+    const [updated] = await tx
+      .update(certificationSubmissions)
+      .set({
+        status: "draft",
+        lockedAt: sql`date_trunc('milliseconds', clock_timestamp())`,
+        updatedAt: sql`now()`,
+        metadata: sql`coalesce(${certificationSubmissions.metadata}, '{}'::jsonb)
+          - ${SUBMISSION_METADATA_KEYS.lastError}::text
+          - ${SUBMISSION_METADATA_KEYS.lastAttemptOutcome}::text`,
+      })
+      .where(
+        and(
+          eq(certificationSubmissions.id, id),
+          eq(certificationSubmissions.organizationId, ctx.organizationId),
+          requireConfirmedInterruptedMarker
+            ? and(
+                eq(certificationSubmissions.status, "draft"),
+                sql`${certificationSubmissions.metadata} ->> ${SUBMISSION_METADATA_KEYS.lastAttemptOutcome}::text = ${SUBMISSION_ATTEMPT_OUTCOMES.interrupted}`,
+                sql`${certificationSubmissions.metadata} ->> ${SUBMISSION_METADATA_KEYS.externalMutation}::text = ${SUBMISSION_EXTERNAL_MUTATIONS.confirmed}`,
+              )
+            : // A fresh lock blocks resumption whatever the status: a rejected
+              // row carries one only while a Removal deletion is cleaning up
+              // the registry records it may have created.
+              or(
+                isNull(certificationSubmissions.lockedAt),
+                lt(
+                  certificationSubmissions.lockedAt,
+                  sql`now() - ${lockTtlMs} * interval '1 millisecond'`,
+                ),
               ),
-            ),
-      ),
-    )
-    .returning();
+        ),
+      )
+      .returning();
+    row = updated ?? null;
+  }, tx);
   return row ?? null;
 }
 
