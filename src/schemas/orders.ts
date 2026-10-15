@@ -117,9 +117,6 @@ export const orderFilterSchema = z.object({
   // Filter by customer
   customerId: z.string().uuid().optional(),
 
-  // Narrow to one order: the list's `?order=` deep link reads its row this way
-  orderId: z.string().uuid().optional(),
-
   // Filter by derived fulfillment status (computed from deliveries, not stored)
   status: z.enum(orderFulfillmentStatuses).optional(),
 

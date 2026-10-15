@@ -9,6 +9,7 @@ import { useState } from "react";
 import { ClockCounterClockwiseIcon, FunnelSimpleIcon } from "@phosphor-icons/react/dist/ssr";
 import { Button, EmptyState } from "@/components/ui";
 import { Notice } from "@/components/ui/notice";
+import { DataTable } from "@/components/ui/data-table";
 import { ACTIVITY_LIST_PAGE_SIZE } from "@/config/activity";
 import { ACTIVITY_ACTIONS, ACTIVITY_ENTITY_TYPES } from "@/db/schema/common";
 import { useCreditBatchActivity, useCreditBatchActivitySummary } from "@/hooks/use-credit-batch-activity";
@@ -41,9 +42,8 @@ import {
 
 const EMPTY_ICON_PX = 48;
 const FILTERED_ICON_PX = 40;
-const SELECT_CLASS =
-  "h-44 w-full border border-[var(--color-border-primary)] bg-[var(--color-background-white)] px-12 body-small cursor-pointer " +
-  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)] sm:w-auto sm:min-w-[200px]";
+/** The shared filter select at the 44px touch target, wide enough for counted options. */
+const SELECT_SIZE_CLASS = "h-44 sm:min-w-[200px]";
 
 function FilterSelect({
   label,
@@ -63,12 +63,12 @@ function FilterSelect({
   return (
     <label className="flex flex-col gap-4">
       <span className="body-small font-medium text-[var(--color-text-secondary)]">{label}</span>
-      <select value={value} onChange={(event) => onChange(event.target.value)} className={SELECT_CLASS} data-testid={testId}>
+      <DataTable.FilterSelect value={value} onChange={(event) => onChange(event.target.value)} className={SELECT_SIZE_CLASS} data-testid={testId}>
         <option value={ALL_FILTER_VALUE}>{allLabel}</option>
         {options.map((option) => (
           <option key={option.value} value={option.value}>{activityFilterOptionLabel(option)}</option>
         ))}
-      </select>
+      </DataTable.FilterSelect>
     </label>
   );
 }

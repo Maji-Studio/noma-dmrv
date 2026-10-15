@@ -24,7 +24,7 @@ import {
   useListPagination,
   useReconcileListPage,
 } from "@/hooks/use-list-pagination";
-import { useCreateOrder, useDeleteOrder, useOrders, useUpdateOrder } from "@/hooks/use-orders";
+import { useCreateOrder, useDeleteOrder, useOrderWithRelations, useOrders, useUpdateOrder } from "@/hooks/use-orders";
 import { MISSING_VALUE, pluralize } from "@/lib/copy-utils";
 import { formatDate } from "@/lib/format-utils";
 import {
@@ -186,16 +186,14 @@ export function OrderList() {
     { enabled: !!facilityId },
   );
 
-  // The list row shape (customer, fulfillment) for the deep-linked order, which
-  // may sit on another page or behind a filter.
-  const focusedOrder = useOrders(
-    { orderId: focusedOrderId ?? undefined, page: 1, pageSize: 1 },
-    { enabled: !!focusedOrderId },
-  );
-  const focusedOrderRow = focusedOrder.data?.items[0];
+  // The list row shape (customer, fulfillment) for the deep-linked order, read
+  // by id so an order on another page, behind a filter or archived still opens.
+  const focusedOrder = useOrderWithRelations(focusedOrderId ?? "", !!focusedOrderId);
   const deepLinkedSideSheet =
-    focusedOrderId && focusedOrderRow?.id === focusedOrderId
-      ? ({ entity: focusedOrderRow, mode: "view" } as const)
+    focusedOrderId &&
+    focusedOrder.data?.id === focusedOrderId &&
+    (!facilityId || focusedOrder.data.facilityId === facilityId)
+      ? ({ entity: focusedOrder.data, mode: "view" } as const)
       : null;
   const displaySideSheet = sideSheet ?? deepLinkedSideSheet;
 
@@ -240,8 +238,8 @@ export function OrderList() {
     setFormError(null);
   };
 
-  // Clear a deep-linked `?order=` that cannot be opened (deleted or
-  // cross-org), with the same guard as the customer and credit-batch lists.
+  // Clear a deep-linked `?order=` that cannot be opened (wrong facility,
+  // deleted, or cross-org), with the same guard as the credit-batch list.
   useEffect(() => {
     if (!focusedOrderId) {
       handledInvalidOrderIdRef.current = null;
@@ -249,12 +247,19 @@ export function OrderList() {
     }
     if (focusedOrder.isLoading || focusedOrder.isFetching || focusedOrder.isPending) return;
     if (handledInvalidOrderIdRef.current === focusedOrderId) return;
-    if (focusedOrder.isError || (focusedOrder.isSuccess && !focusedOrder.data.items.some((order) => order.id === focusedOrderId))) {
+    if (focusedOrder.data && facilityId && focusedOrder.data.facilityId !== facilityId) {
+      handledInvalidOrderIdRef.current = focusedOrderId;
+      toast.error("Linked order is not in the selected facility");
+      void setFocusedOrderId(null);
+      return;
+    }
+    if (focusedOrder.isError || (focusedOrder.isSuccess && !focusedOrder.data)) {
       handledInvalidOrderIdRef.current = focusedOrderId;
       toast.error("Linked order could not be opened");
       void setFocusedOrderId(null);
     }
   }, [
+    facilityId,
     focusedOrder.data,
     focusedOrder.isError,
     focusedOrder.isFetching,

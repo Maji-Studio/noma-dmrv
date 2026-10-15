@@ -17,17 +17,22 @@ import {
   activityRecordHref,
   activityRecordLabel,
   activityRecordTypeLabel,
-  activityStatusLabel,
+  activityStatusKey,
   type ActivityItem,
 } from "./activity-display";
 import { ACTIVITY_DELETED_RECORD_LABEL } from "./activity-copy";
+// By file, not the barrel: the chain-of-custody barrel imports this folder.
+import { ChainStatusBadge } from "@/components/chain-of-custody/chain-status-badge";
 
 const TAG_CLASS = "inline-flex h-[20px] shrink-0 items-center border px-6 body-caption-fit font-medium";
 const KIND_TAG_CLASS = `${TAG_CLASS} border-[var(--color-border-secondary)] text-[var(--color-text-secondary)]`;
 const TOMBSTONE_TAG_CLASS = `${TAG_CLASS} border-dashed border-[var(--color-border-primary)] text-[var(--color-text-secondary)]`;
-const STATUS_CLASS = "inline-flex items-center border border-[var(--color-border-tertiary)] px-6 body-caption-fit";
 
-/** Before and after as two blocks with an arrow between them. */
+/**
+ * Before and after as two blocks with an arrow between them. Each block is
+ * the shared status badge, so known statuses keep their colour; unknown
+ * registry statuses fall back to a neutral badge with a readable label.
+ */
 function StatusChange({ label, from, to }: { label: string; from: string | null; to: string | null }) {
   if (!to) return null;
   return (
@@ -35,11 +40,11 @@ function StatusChange({ label, from, to }: { label: string; from: string | null;
       <span>{label}</span>
       {from ? (
         <>
-          <span className={STATUS_CLASS}>{activityStatusLabel(from)}</span>
+          <ChainStatusBadge status={activityStatusKey(from)} />
           <ArrowRightIcon size={12} aria-label="to" className="text-[var(--color-text-tertiary)]" />
         </>
       ) : null}
-      <span className={STATUS_CLASS}>{activityStatusLabel(to)}</span>
+      <ChainStatusBadge status={activityStatusKey(to)} />
     </p>
   );
 }

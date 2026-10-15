@@ -3,14 +3,14 @@ import { runOperationInProcess } from "@/lib/operations/runner";
 import { labLogisticsVersion } from "./helpers/lab-logistics-version";
 import { randomUUID } from "node:crypto";
 import { afterEach, describe, expect, it } from "vitest";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { deliveries, outputStockAllocations, orders } from "@/db/schema";
 import { deleteDelivery } from "@/data-access/deliveries";
 import { createDelivery } from "./helpers/create-delivery";
 import { updateDelivery } from "@/lib/operations/deliveries";
 import { createApplication } from "@/data-access/applications";
-import { createOrderInTransaction, getOrders } from "@/data-access/orders";
+import { createOrderInTransaction, getOrderWithRelationsById, getOrders } from "@/data-access/orders";
 import { getOrderEntityById } from "@/data-access/entities/orders";
 import { getStockAvailability } from "@/data-access/stock-availability";
 import { getOutputBinAllLayersDryKg } from "@/data-access/output-stock";
@@ -95,12 +95,15 @@ describe("completed delivery order balance", () => {
     const listed = (await getOrders(f.ctx, { facilityId: f.order.facilityId, pageSize: 100 })).items.find(order => order.id === f.order.id);
     expect(listed).toMatchObject({ deliveredWetMassKg: 60, fulfillmentStatus: "partial" });
   });
-  it("narrows the list to one order with its derived fields for the ?order= deep link", async () => {
-    const f = await fixture(800); await postDelivery(f, 60);
-    await db.transaction(tx => createOrderInTransaction(f.ctx, tx, { code: `E2E-ONE-${f.tag}`, facilityId: f.facility.id, customerId: f.customer.id, customerLocationId: f.location.id, formulationId: f.pure.id, orderDate: new Date(STOCK_DATE), quantityKg: 100, packaging: "loose" }));
-    const page = await getOrders(f.ctx, { orderId: f.order.id, page: 1, pageSize: 1 });
-    expect(page.total).toBe(1);
-    expect(page.items).toEqual([expect.objectContaining({ id: f.order.id, deliveryCount: 1, fulfillmentStatus: "partial" })]);
+  it("reads one order in the list row shape by id, archived included, while the list hides it", async () => {
+    const f = await fixture(); await postDelivery(f, 60);
+    await db.update(orders).set({ archivedAt: new Date() }).where(and(eq(orders.id, f.order.id), eq(orders.organizationId, f.ctx.organizationId)));
+    const listed = await getOrders(f.ctx, { facilityId: f.order.facilityId, pageSize: 100 });
+    expect(listed.items.map(order => order.id)).not.toContain(f.order.id);
+    await expect(getOrderWithRelationsById(f.ctx, f.order.id)).resolves.toMatchObject({
+      id: f.order.id, facilityId: f.facility.id, archivedAt: expect.any(Date), deliveryCount: 1, deliveredWetMassKg: 60, fulfillmentStatus: "partial",
+    });
+    await expect(getOrderWithRelationsById({ ...f.ctx, organizationId: `foreign-${randomUUID()}` }, f.order.id)).rejects.toThrow("The record could not be found.");
   });
   it("derives fulfillment from delivered wet mass in the list and its status filter", async () => {
     const f = await fixture(); await postDelivery(f, 60);

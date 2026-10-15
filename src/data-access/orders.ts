@@ -71,31 +71,12 @@ import { requireOrgScope } from "./utils";
 // ============================================
 
 /**
- * Get all orders with pagination and filtering
- * Supports search, facility filter, customer filter, status filter, sorting, and pagination
+ * The list row shape: an order with related entity names and its delivery
+ * aggregate (non-archived deliveries), which powers the derived fulfillment
+ * status. Shared by the list and the by-id read so the sheet sees one shape.
  */
-export async function getOrders(
-  ctx: OrgContext,
-  filters?: Partial<OrderFilterData>
-): Promise<PaginatedOrders> {
+function orderRowsQuery(ctx: OrgContext) {
   requireOrgScope(ctx);
-
-  const {
-    search,
-    facilityId,
-    customerId,
-    orderId,
-    status,
-    fromDate,
-    toDate,
-    page = 1,
-    pageSize = 20,
-    sortBy = "orderDate",
-    sortOrder = "desc",
-  } = filters ?? {};
-
-  // Per-order delivery aggregate (non-archived): total count and delivered wet mass.
-  // Powers the derived fulfillment status.
   const deliveryAgg = db
     .select({
       orderId: deliveries.orderId,
@@ -114,6 +95,71 @@ export async function getOrders(
 
   const fulfillmentExpr = orderFulfillmentExpression(orders.quantityKg, deliveryAgg.total, deliveryAgg.deliveredWetKg);
 
+  // org-scope-ok: every caller passes a where clause with the active organization predicate.
+  const selectRows = () => db
+    .select({
+      id: orders.id,
+      organizationId: orders.organizationId,
+      code: orders.code,
+      facilityId: orders.facilityId,
+      customerId: orders.customerId,
+      customerLocationId: orders.customerLocationId,
+      formulationId: orders.formulationId,
+      orderDate: orders.orderDate,
+      quantityKg: orders.quantityKg,
+      packaging: orders.packaging,
+      archivedAt: orders.archivedAt,
+      createdAt: orders.createdAt,
+      updatedAt: orders.updatedAt,
+      version: orders.version,
+      facilityName: facilities.name,
+      customerName: customers.name,
+      customerLocationName: customerLocations.name,
+      formulationName: formulations.name,
+
+      deliveryCount: numericAggregate(
+        sql<number>`coalesce(${deliveryAgg.total}, 0)`,
+      ),
+      deliveredWetMassKg: numericAggregate(
+        sql<number>`coalesce(${deliveryAgg.deliveredWetKg}, 0)`,
+      ),
+      fulfillmentStatus: fulfillmentExpr,
+    })
+    .from(orders)
+    .leftJoin(facilities, and(eq(orders.facilityId, facilities.id), eq(facilities.organizationId, ctx.organizationId)))
+    .leftJoin(customers, and(eq(orders.customerId, customers.id), eq(customers.organizationId, ctx.organizationId)))
+    .leftJoin(customerLocations, and(eq(orders.customerLocationId, customerLocations.id), eq(customerLocations.organizationId, ctx.organizationId)))
+    .leftJoin(formulations, and(eq(orders.formulationId, formulations.id), eq(formulations.organizationId, ctx.organizationId)))
+    .leftJoin(deliveryAgg, eq(orders.id, deliveryAgg.orderId));
+
+  return { deliveryAgg, fulfillmentExpr, selectRows };
+}
+
+/**
+ * Get all orders with pagination and filtering
+ * Supports search, facility filter, customer filter, status filter, sorting, and pagination
+ */
+export async function getOrders(
+  ctx: OrgContext,
+  filters?: Partial<OrderFilterData>
+): Promise<PaginatedOrders> {
+  requireOrgScope(ctx);
+
+  const {
+    search,
+    facilityId,
+    customerId,
+    status,
+    fromDate,
+    toDate,
+    page = 1,
+    pageSize = 20,
+    sortBy = "orderDate",
+    sortOrder = "desc",
+  } = filters ?? {};
+
+  const { deliveryAgg, fulfillmentExpr, selectRows } = orderRowsQuery(ctx);
+
   // Build where conditions — archived orders (facility archive cascade) are hidden
   const conditions: SQL[] = [
     eq(orders.organizationId, ctx.organizationId),
@@ -131,10 +177,6 @@ export async function getOrders(
 
   if (customerId) {
     conditions.push(eq(orders.customerId, customerId));
-  }
-
-  if (orderId) {
-    conditions.push(eq(orders.id, orderId));
   }
 
   if (status) {
@@ -176,41 +218,7 @@ export async function getOrders(
   const offset = (page - 1) * pageSize;
 
   // Get orders with related entity names + delivery aggregate
-  const orderList = await db
-    .select({
-      id: orders.id,
-      organizationId: orders.organizationId,
-      code: orders.code,
-      facilityId: orders.facilityId,
-      customerId: orders.customerId,
-      customerLocationId: orders.customerLocationId,
-      formulationId: orders.formulationId,
-      orderDate: orders.orderDate,
-      quantityKg: orders.quantityKg,
-      packaging: orders.packaging,
-      archivedAt: orders.archivedAt,
-      createdAt: orders.createdAt,
-      updatedAt: orders.updatedAt,
-      version: orders.version,
-      facilityName: facilities.name,
-      customerName: customers.name,
-      customerLocationName: customerLocations.name,
-      formulationName: formulations.name,
-
-      deliveryCount: numericAggregate(
-        sql<number>`coalesce(${deliveryAgg.total}, 0)`,
-      ),
-      deliveredWetMassKg: numericAggregate(
-        sql<number>`coalesce(${deliveryAgg.deliveredWetKg}, 0)`,
-      ),
-      fulfillmentStatus: fulfillmentExpr,
-    })
-    .from(orders)
-    .leftJoin(facilities, and(eq(orders.facilityId, facilities.id), eq(facilities.organizationId, ctx.organizationId)))
-    .leftJoin(customers, and(eq(orders.customerId, customers.id), eq(customers.organizationId, ctx.organizationId)))
-    .leftJoin(customerLocations, and(eq(orders.customerLocationId, customerLocations.id), eq(customerLocations.organizationId, ctx.organizationId)))
-    .leftJoin(formulations, and(eq(orders.formulationId, formulations.id), eq(formulations.organizationId, ctx.organizationId)))
-    .leftJoin(deliveryAgg, eq(orders.id, deliveryAgg.orderId))
+  const orderList = await selectRows()
     .where(whereClause)
     .orderBy(orderFn(sortColumn))
     .limit(pageSize)
@@ -223,6 +231,19 @@ export async function getOrders(
     pageSize,
     totalPages,
   };
+}
+
+/**
+ * One order in the list row shape, archived or not: a detail read must
+ * hydrate archived references (docs/database.md), unlike the list. Backs the
+ * order list's `?order=` deep link.
+ */
+export async function getOrderWithRelationsById(ctx: OrgContext, id: string): Promise<OrderWithRelations> {
+  requireOrgScope(ctx);
+  const [record] = await orderRowsQuery(ctx).selectRows()
+    .where(and(eq(orders.organizationId, ctx.organizationId), eq(orders.id, id)));
+  if (!record) throw new SafeError("The record could not be found.");
+  return record;
 }
 
 /**

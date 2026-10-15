@@ -183,6 +183,13 @@ it("links each record to the facility it lives at now, and a document to its own
   expect(byId.get(documentEvent.id)).toEqual({ label: "Document", deleted: false, facilityId: elsewhere.id });
   expect(byId.get(orphanDocument.id)).toEqual({ label: null, deleted: true, facilityId: null });
 });
+it("reads malformed owner ids in legacy document reason codes as no link instead of failing", async () => {
+  const [document] = await db.insert(documents).values({ organizationId: ctx.organizationId,
+    entityType: "production_run", entityId: fixture.run.id, documentType: "lab_report", fileName: "f.pdf", fileUrl: "https://example.test/f" }).returning();
+  const malformed = await event({ entityType: "document", entityId: document.id, reasonCode: "document:lab_report:production_run:not-a-uuid" });
+  const page = await listCreditBatchActivity(ctx, fixture.batch.id);
+  expect(page.items.find(row => row.id === malformed.id)?.record).toEqual({ label: "Document", deleted: false, facilityId: null });
+});
 it("finds sample transport events even without batch or run links", async () => {
   const [sample] = await db.insert(samples).values({ organizationId: ctx.organizationId, creditBatchId: fixture.batch.id,
     sampleCode: "ACT-TRANSPORT", samplingTime: TIME, totalCarbonPercent: 80, organicCarbonPercent: 75 }).returning();

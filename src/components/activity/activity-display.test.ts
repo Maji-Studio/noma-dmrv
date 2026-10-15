@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { ACTIVITY_ENTITY_TYPES } from "@/db/schema/common";
 import { MISSING_VALUE } from "@/lib/copy-utils";
+import { getStatusState } from "@/lib/status-state";
+import { toBadgeProps } from "@/components/chain-of-custody/chain-status-badge";
 import {
   ACTIVITY_RECORD_TYPE_LABELS,
   ACTIVITY_RECORD_TYPE_ORDER,
@@ -11,7 +13,7 @@ import {
   activityRecordHref,
   activityRecordLabel,
   activityRecordTypeLabel,
-  activityStatusLabel,
+  activityStatusKey,
   humanizeFieldName,
   type ActivityItem,
 } from "./activity-display";
@@ -102,9 +104,10 @@ describe("record names and meanings", () => {
     expect(activityChangeSummary(item())).toBeNull();
   });
 
-  it("reads statuses in sentence case", () => {
-    expect(activityStatusLabel("in_review")).toBe("In review");
-    expect(activityStatusLabel("SUBMITTED")).toBe("Submitted");
+  it("keys statuses into the shared badge vocabulary, with a neutral readable fallback", () => {
+    expect(toBadgeProps(activityStatusKey("VERIFIED"))).toEqual({ status: "verified" });
+    expect(getStatusState(toBadgeProps(activityStatusKey("REJECTED")).status)).toBe("error");
+    expect(toBadgeProps(activityStatusKey("in_review"))).toEqual({ status: "draft", label: "In review" });
   });
 });
 

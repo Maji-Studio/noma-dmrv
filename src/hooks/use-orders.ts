@@ -20,6 +20,7 @@ import {
   createOrderFn,
   updateOrderFn,
   deleteOrderFn,
+  getOrderWithRelationsFn,
 } from "@/fn/orders";
 
 import { unwrap, type MutationCallbacks } from "./types";
@@ -62,6 +63,18 @@ export function useOrders(
     queryFn: async () => unwrap(await getOrdersFn(filters)),
     staleTime: 30000, // 30 seconds
     enabled: options?.enabled,
+  });
+}
+
+/**
+ * One order in the list row shape, archived included (the `?order=` deep link).
+ */
+export function useOrderWithRelations(orderId: string, enabled = true) {
+  return useQuery({
+    queryKey: orderKeys.detailWithRelations(orderId),
+    queryFn: async () => unwrap(await getOrderWithRelationsFn(orderId)),
+    enabled: enabled && !!orderId,
+    staleTime: 30000,
   });
 }
 

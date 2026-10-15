@@ -8,6 +8,7 @@
  * order carries an `E2E-` code.
  */
 import * as crypto from "crypto";
+import { ACTIVITY_LIST_PAGE_SIZE } from "@/config/activity";
 import { DEC_ORG_ID } from "@/db/org-defaults";
 import * as schema from "../../src/db/schema";
 import { test, expect, type SeededChainData } from "./fixtures";
@@ -15,8 +16,7 @@ import { createDbConnection } from "./fixtures/db";
 import { seedCreditBatch } from "./fixtures/seed-chain-data";
 
 const MS_PER_MINUTE = 60_000;
-/** ACTIVITY_LIST_PAGE_SIZE in src/config/activity.ts. */
-const PAGE_SIZE = 25;
+const PAGE_SIZE = ACTIVITY_LIST_PAGE_SIZE;
 const OLDER_ENTRIES = 5;
 const ORDER_QUANTITY_KG = 100;
 

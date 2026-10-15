@@ -17,6 +17,7 @@ import { certificationRemovalsHref, productionRunDeepLinkHref } from "@/lib/cert
 import { creditBatchDeepLinkHref } from "@/lib/credit-batch-links";
 import { deliveryDeepLinkHref } from "@/lib/delivery-links";
 import { orderDeepLinkHref } from "@/lib/order-links";
+import { sampleDetailHref } from "@/lib/sample-create-intent";
 import { documentOwnerActivityType, parseDocumentActivityReasonCode } from "@/lib/activity-entity-type";
 import { humanizeEnum, MISSING_VALUE } from "@/lib/copy-utils";
 import { DRY_MASS_FIELD_LABEL, MOISTURE_FIELD_LABEL, WET_MASS_FIELD_LABEL } from "@/lib/mass-moisture";
@@ -191,9 +192,12 @@ export function activityChangeSummary(item: Pick<ActivityItem, "entityType" | "r
   return null;
 }
 
-/** A status as the operator reads it ("in_review" → "In review"). */
-export function activityStatusLabel(status: string): string {
-  return humanizeEnum(status.toLowerCase());
+/**
+ * A status as the shared status vocabulary keys it. Registry statuses arrive
+ * upper case ("VERIFIED"); local ones are already lower snake case.
+ */
+export function activityStatusKey(status: string): string {
+  return status.toLowerCase();
 }
 
 /**
@@ -225,7 +229,7 @@ export function activityRecordHref(
     case "production_run": return productionRunDeepLinkHref(entityId, facility);
     case "feedstock": return `/feedstocks?${query("feedstock")}`;
     case "biochar_product": return `/biochar-products?${query("biocharProduct")}`;
-    case "lab_sample": return `/samples?${query("sample")}`;
+    case "lab_sample": return sampleDetailHref(facility, entityId);
     case "order": return orderDeepLinkHref(entityId, facility);
     case "delivery": return deliveryDeepLinkHref(entityId, facility);
     case "application": return applicationDeepLinkHref(entityId, facility);

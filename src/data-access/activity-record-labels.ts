@@ -1,4 +1,5 @@
 import { and, eq, sql, type SQL } from "drizzle-orm";
+import { z } from "zod";
 import type { PgTable, AnyPgColumn } from "drizzle-orm/pg-core";
 import { db } from "@/db";
 import { applications, biocharProducts, binMovements, certifierGhgStatements, certifierRemovals, creditBatches, deliveries, documents, feedstocks, orders, productionRuns, samples, transportLegs } from "@/db/schema";
@@ -43,11 +44,20 @@ const sources: Record<string, LabelSource> = {
 export type ActivityRecordLabel = { label: string | null; deleted: boolean; facilityId: string | null };
 type LoadedRecord = { label: string; facilityId: string | null };
 
-/** One org-scoped query per record type: each live record's label and current facility. */
+/** Postgres accepts any 8-4-4-4-12 hex id; anything else would fail the `::uuid[]` cast. */
+const uuidLike = z.guid();
+
+/**
+ * One org-scoped query per record type: each live record's label and current
+ * facility. Ids that are not UUIDs (a malformed legacy reason code, say) are
+ * dropped before the uuid cast and read as missing instead of failing the page.
+ */
 async function loadRecords(ctx: OrgContext, type: string, ids: readonly string[]): Promise<Map<string, LoadedRecord> | null> {
   requireOrgScope(ctx);
   const source = Object.hasOwn(sources, type) ? sources[type] : undefined;
   if (!source) return null;
+  if (source.id.getSQLType() === "uuid") ids = ids.filter(id => uuidLike.safeParse(id).success);
+  if (ids.length === 0) return new Map();
   const facility = source.facility ?? sql<string | null>`null`;
   if (type === "ghg_statement") {
     const statements = await db.select({ id: certifierGhgStatements.id, facilityId: certifierGhgStatements.facilityId,
