@@ -22,7 +22,7 @@ export function addDeliveryWritePaths(paths: Paths, { publishOutput, writeErrors
   const createEnvelope = publishOutput(deliveryCreateEnvelopeSchema);
   paths["/deliveries"].post = {
     ...privateOperation("record_delivery", "deliveries:write",
-      `Record one delivery with a generated code. ${CREATE_GUIDANCE} ${CREATE_ERRORS} A non-blocking warning asks you to upload the bill of lading in the app. Idempotency-Key is required, including dry runs. Dry runs roll back and return stockEffects and basisFingerprint; committed creates return Location and ETag.`,
+      `Record one delivery with a generated code. ${CREATE_GUIDANCE} ${CREATE_ERRORS} A non-blocking warning asks you to upload the bill of lading as a delivery document of type bill_of_lading. Idempotency-Key is required, including dry runs. Dry runs roll back and return stockEffects and basisFingerprint; committed creates return Location and ETag.`,
       {
         ...problemResponses([...writeErrors, 413, 415]),
         "409": {

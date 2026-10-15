@@ -1,15 +1,22 @@
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { CASE_TIMEOUT_MS, CLAUDE_FLAGS, MAX_TRANSCRIPT_BYTES, MCP_CONFIG_PLACEHOLDER, MODEL_FLAG } from "./config";
+import { CASE_TIMEOUT_MS, claudeFlags, MAX_TRANSCRIPT_BYTES, MCP_CONFIG_PLACEHOLDER, MODEL_FLAG } from "./config";
 import { startProcess, type ManagedProcess } from "./process";
 import { parseTranscript, redactKeys, type Transcript } from "./transcript";
 
-export function subscriptionEnvironment(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
-  const childEnv = { ...env };
-  delete childEnv.ANTHROPIC_API_KEY;
-  delete childEnv.ANTHROPIC_AUTH_TOKEN;
-  return childEnv;
+const SUBSCRIPTION_ENVIRONMENT_KEYS = [
+  "PATH", "HOME", "USER", "LOGNAME", "TMPDIR", "LANG", "LC_ALL", "LC_CTYPE", "TERM",
+  "CLAUDE_CONFIG_DIR", "CLAUDE_CODE_OAUTH_TOKEN",
+] as const;
+
+export function subscriptionEnvironment(env: Readonly<Record<string, string | undefined>>): NodeJS.ProcessEnv {
+  const childEnv: Record<string, string | undefined> = {};
+  for (const key of SUBSCRIPTION_ENVIRONMENT_KEYS) {
+    if (env[key] !== undefined) childEnv[key] = env[key];
+  }
+  // Next requires NODE_ENV in ProcessEnv, but the evaluated subprocess intentionally omits it.
+  return childEnv as NodeJS.ProcessEnv;
 }
 
 export interface ClaudeRun { transcript: Transcript; error?: string }
@@ -17,6 +24,7 @@ export interface ClaudeRun { transcript: Transcript; error?: string }
 export async function runClaude(
   caseId: string, text: string, key: string, baseUrl: string, runDirectory: string,
   signal: AbortSignal, register: (child: ManagedProcess) => void, unregister: (child: ManagedProcess) => void,
+  fileDirectory?: string,
 ): Promise<ClaudeRun> {
   const directory = await mkdtemp(join(tmpdir(), "noma-mcp-case-"));
   let child: ManagedProcess | undefined;
@@ -28,15 +36,16 @@ export async function runClaude(
   const abort = () => { failure = "Evaluation interrupted."; if (child) void child.stop().catch(() => {}); };
   try {
     // The only unredacted file is this private, temporary authentication config.
-    // Remove it and Claude's temporary cwd on every exit path, including --keep.
+    // Remove it and its temporary directory on every exit path, including --keep.
     const configFile = join(directory, "mcp-config.json");
     await writeFile(configFile, JSON.stringify({ mcpServers: { noma: {
       type: "http", url: `${baseUrl}/api/mcp`, headers: { Authorization: `Bearer ${key}` },
     } } }), { mode: 0o600 });
     signal.throwIfAborted();
-    const args = ["-p", text, ...CLAUDE_FLAGS.map((flag) => flag === MCP_CONFIG_PLACEHOLDER ? configFile : flag)];
+    const args = ["-p", text, ...claudeFlags(caseId, fileDirectory).map((flag) => flag === MCP_CONFIG_PLACEHOLDER ? configFile : flag)];
     if (process.env.EVAL_MCP_MODEL) args.push(MODEL_FLAG, process.env.EVAL_MCP_MODEL);
-    child = startProcess("claude", args, directory, subscriptionEnvironment(process.env));
+    const workingDirectory = caseId === "delivery-bol-upload" && fileDirectory ? fileDirectory : directory;
+    child = startProcess("claude", args, workingDirectory, subscriptionEnvironment(process.env));
     register(child);
     const consume = (destination: "stdout" | "stderr", chunk: string) => {
       bytes += Buffer.byteLength(chunk);

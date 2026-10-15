@@ -1,5 +1,5 @@
 {
-  "id": "206f978c-0835-412f-bea4-b15d97a28432",
+  "id": "5e7776e0-d908-4575-ab8d-74b7d32ca459",
   "prevId": "ea7eb85a-4423-4e7a-85e2-b64a260c8d5d",
   "version": "7",
   "dialect": "postgresql",
@@ -251,6 +251,21 @@
             "id"
           ],
           "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "activity_events_facility_id_organization_id_facilities_id_organization_id_fk": {
+          "name": "activity_events_facility_id_organization_id_facilities_id_organization_id_fk",
+          "tableFrom": "activity_events",
+          "tableTo": "facilities",
+          "columnsFrom": [
+            "facility_id",
+            "organization_id"
+          ],
+          "columnsTo": [
+            "id",
+            "organization_id"
+          ],
+          "onDelete": "no action",
           "onUpdate": "no action"
         }
       },
@@ -5746,6 +5761,18 @@
           "primaryKey": false,
           "notNull": false
         },
+        "upload_storage_key": {
+          "name": "upload_storage_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "upload_expires_at": {
+          "name": "upload_expires_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
         "file_name": {
           "name": "file_name",
           "type": "text",
@@ -5823,6 +5850,13 @@
           "primaryKey": false,
           "notNull": false
         },
+        "version": {
+          "name": "version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp",
@@ -5886,6 +5920,22 @@
             }
           ],
           "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "documents_pending_upload_expires_idx": {
+          "name": "documents_pending_upload_expires_idx",
+          "columns": [
+            {
+              "expression": "upload_expires_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"documents\".\"upload_status\" = 'pending'",
           "concurrently": false,
           "method": "btree",
           "with": {}
@@ -5989,6 +6039,12 @@
         "last_error_code": {
           "name": "last_error_code",
           "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "not_before": {
+          "name": "not_before",
+          "type": "timestamp",
           "primaryKey": false,
           "notNull": false
         },

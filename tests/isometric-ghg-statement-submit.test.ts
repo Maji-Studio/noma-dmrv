@@ -862,6 +862,7 @@ describe("refreshGhgStatementStatus", () => {
         removalIds: [EXTERNAL_REMOVAL_ID],
       }),
       transaction,
+      { source: "registry", registryAt: null },
     );
   });
 });

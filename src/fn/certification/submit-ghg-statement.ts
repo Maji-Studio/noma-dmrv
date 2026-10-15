@@ -1,3 +1,4 @@
+import { ghgStatusRegistryAt } from "@/lib/isometric/utils/ghg-status-registry-at";
 import { resolveIsometricClient } from "@/data-access/certifier-credentials";
 import {
   appendSyncEvent,
@@ -411,7 +412,7 @@ export async function submitGhgStatementToVerifierCore(args: {
               : {}),
             submittedToVerifierAt:
               remoteBefore.submitted_at ?? new Date().toISOString(),
-          });
+          }, undefined, { source: "form", registryAt: ghgStatusRegistryAt(remoteBefore) });
           await appendSyncEventBestEffort(orgCtx, {
             provider: ISOMETRIC_PROVIDER,
             entityType: GHG_STATEMENT_ENTITY_TYPE,
@@ -505,6 +506,8 @@ export async function submitGhgStatementToVerifierCore(args: {
             lastReportDocumentId: document.id,
             submittedToVerifierAt: new Date().toISOString(),
           },
+          undefined,
+          { source: "form", registryAt: ghgStatusRegistryAt(remote) },
         );
       };
 

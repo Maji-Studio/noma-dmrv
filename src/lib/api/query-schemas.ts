@@ -1,3 +1,4 @@
+import { API_DOCUMENT_OWNERS, type ApiDocumentOwnerType } from "@/lib/documents/api-owners";
 import { storageLocationTypes } from "@/schemas/storage-locations";
 import { PRODUCTION_RUN_STATUSES } from "@/lib/production-runs/lifecycle";
 import { biocharProductStatusValues } from "@/schemas/biochar-products";
@@ -117,3 +118,12 @@ export const resourceQueries = {
   "lab-samples": { list: labSampleListSchema, get: lookupGetSchema },
   "credit-batches": { list: creditBatchListSchema, get: lookupGetSchema },
 };
+
+/** Each nested collection accepts only its owner's published evidence types. */
+export function documentListSchema(ownerType: ApiDocumentOwnerType) {
+  return z.strictObject({
+    ...paginationShape,
+    documentType: z.enum(API_DOCUMENT_OWNERS[ownerType].documentTypes).optional().describe("Evidence type allowed for this record."),
+    uploadStatus: z.enum(["uploaded", "pending", "failed", "all"]).default("uploaded").describe("Upload state filter; defaults to uploaded. Use all to include every state."),
+  });
+}
