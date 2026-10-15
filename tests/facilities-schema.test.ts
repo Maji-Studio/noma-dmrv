@@ -145,6 +145,7 @@ describe("facility schemas", () => {
         expect.arrayContaining([
           expect.objectContaining({
             path: ["gpsLongitude"],
+            message: "Longitude is required",
           }),
         ]),
       );

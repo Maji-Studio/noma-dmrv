@@ -32,7 +32,6 @@ import {
   getCustomersFn,
   getCustomerWithRelationsFn,
   getCustomerLocationsFn,
-  createCustomerFn,
   createCustomerWithLocationsFn,
   updateCustomerFn,
   deleteCustomerFn,
@@ -151,44 +150,6 @@ export function useCustomerLocations(customerId: string, enabled = true) {
 // ============================================
 // Customer Mutation Hooks
 // ============================================
-
-/**
- * Hook to create a new customer
- * Supports optional callbacks for custom behavior
- */
-export function useCreateCustomer(
-  callbacks?: MutationCallbacks<Customer, CreateCustomerWithLocationsData>
-) {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async (data: CreateCustomerWithLocationsData) => {
-      const result = await createCustomerFn(data);
-      if (!result.success) {
-        throwActionError(result);
-      }
-      return result.data;
-    },
-    onMutate: async (variables) => {
-      await callbacks?.onMutate?.(variables);
-    },
-    onSuccess: async (data, variables) => {
-      // Invalidate all customer lists
-      queryClient.invalidateQueries({ queryKey: customerKeys.lists() });
-
-      // Pre-populate the detail cache and the customer pickers
-      seedCreatedCustomerCaches(queryClient, data);
-
-      await callbacks?.onSuccess?.(data, variables);
-    },
-    onError: async (error, variables) => {
-      await callbacks?.onError?.(error, variables);
-    },
-    onSettled: async (data, error, variables) => {
-      await callbacks?.onSettled?.(data, error, variables);
-    },
-  });
-}
 
 /**
  * Hook to create a customer together with the locations captured on its create

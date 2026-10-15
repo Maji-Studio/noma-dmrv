@@ -148,7 +148,7 @@ const READ_SECTION_CASES: { file: string; name: string; sections: DetailPanelSec
   { file: "components/storage-locations/storage-location-read-sections.tsx", name: "storage bin (feedstock)", sections: storageLocationSheetSections(storageBin("feedstock_bin", "fifo"), noop) },
   { file: "components/storage-locations/storage-location-read-sections.tsx", name: "storage bin (mix product)", sections: storageLocationSheetSections(storageBin("product_bin", "mix"), noop) },
   { file: "components/suppliers/supplier-read-sections.tsx", name: "supplier", sections: supplierSheetSections(
-    as({ name: "Supplier", contactName: null, contactEmail: null, contactPhone: null, location: "Mafinga", sourceRegion: "Iringa", address: null, distanceToFacilityKm: 20 }),
+    as({ name: "Supplier", contactName: null, contactEmail: null, contactPhone: null, location: "Mafinga", sourceRegion: "Iringa", address: null }),
     as({ data: [location], isPending: false, isError: false, isFetching: false, refetch: noop }),
   ) },
 ];

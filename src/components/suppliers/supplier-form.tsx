@@ -149,8 +149,6 @@ export function SupplierForm({
     defaultValues: {
       name: supplier?.name ?? "",
       location: supplier?.location ?? "",
-      // Supplier-level coordinates/distance are legacy: preserved on edit but no
-      // longer edited here — coordinates now live per source location.
       address: supplier?.address ?? "",
       contactName: supplier?.contactName ?? "",
       contactEmail: supplier?.contactEmail ?? "",

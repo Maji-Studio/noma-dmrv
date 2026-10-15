@@ -31,7 +31,7 @@ import {
 } from "./helpers/test-org";
 
 /** Statements one dashboard overview read may send, with any number of batches. */
-const OVERVIEW_QUERY_BUDGET = 19;
+const OVERVIEW_QUERY_BUDGET = 18;
 /** Statements one onboarding status read may send for a selected facility. */
 const ONBOARDING_QUERY_BUDGET = 2;
 const BATCH_COUNT = 3;

@@ -544,7 +544,6 @@ describe("dashboard structural certification gaps", () => {
     );
 
     expect(counts).toEqual({
-      missingFacilityGps: 0,
       missingFeedstockGps: 1,
       transportEndpointGpsGaps: 2,
       missingFeedstockGpsSupplierId: fixture.missingGpsSupplierId,
@@ -577,7 +576,6 @@ describe("dashboard structural certification gaps", () => {
     const facilityId = "00000000-0000-4000-8000-000000000001";
     const gaps = buildDashboardStructuralGaps(
       {
-        missingFacilityGps: 0,
         missingFeedstockGps: 0,
         transportEndpointGpsGaps: 1,
         missingFeedstockGpsSupplierId: null,
@@ -606,7 +604,6 @@ describe("dashboard structural certification gaps", () => {
     (entityType, formName) => {
       const gaps = buildDashboardStructuralGaps(
         {
-          missingFacilityGps: 0,
           missingFeedstockGps: 0,
           transportEndpointGpsGaps: 2,
           missingFeedstockGpsSupplierId: null,
@@ -636,7 +633,6 @@ describe("dashboard structural certification gaps", () => {
     );
 
     expect(counts).toEqual({
-      missingFacilityGps: 0,
       missingFeedstockGps: 0,
       transportEndpointGpsGaps: 0,
       missingFeedstockGpsSupplierId: null,

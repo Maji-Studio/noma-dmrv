@@ -21,7 +21,6 @@ import { countRows } from "@/db/aggregate";
 import {
   biocharProducts,
   creditBatches,
-  facilities,
   feedstocks,
   productionRuns,
   samples,
@@ -39,7 +38,6 @@ import {
 } from "@/lib/entity-deep-link";
 
 export interface DashboardStructuralGapCounts {
-  missingFacilityGps: number;
   missingFeedstockGps: number;
   transportEndpointGpsGaps: number;
   missingFeedstockGpsSupplierId: string | null;
@@ -52,7 +50,6 @@ export interface TransportGapTarget {
 }
 
 export type DashboardStructuralGapKey =
-  | "facilityGps"
   | "feedstockGps"
   | "transportEndpointGps";
 
@@ -162,17 +159,6 @@ export function buildDashboardStructuralGaps(
     : `/suppliers${facilityQuery}`;
   return [
     {
-      key: "facilityGps" as const,
-      label: "Facility GPS missing",
-      metadata: structuralGapMetadata(
-        "Facility form",
-        "Location",
-        counts.missingFacilityGps,
-      ),
-      count: counts.missingFacilityGps,
-      href: `/facilities${facilityQuery}`,
-    },
-    {
       key: "feedstockGps" as const,
       label: "Feedstock GPS missing",
       metadata: structuralGapMetadata(
@@ -202,7 +188,7 @@ export function buildDashboardStructuralGaps(
 }
 
 /**
- * Count the three structural certification gaps for one active facility.
+ * Count the structural certification gaps for one active facility.
  * Transport legs are resolved through their polymorphic active parent so an
  * archived feedstock, product, run, or credit batch cannot keep a stale gap
  * alive. Every leg and parent predicate is organization-scoped.
@@ -214,18 +200,7 @@ export async function loadDashboardStructuralGapCounts(
   requireOrgScope(ctx);
 
   const orgId = ctx.organizationId;
-  const [[facilityGps], [feedstockGps], [transportRow]] = await Promise.all([
-    db
-      .select({ count: count() })
-      .from(facilities)
-      .where(
-        and(
-          eq(facilities.id, facilityId),
-          eq(facilities.organizationId, orgId),
-          isNull(facilities.archivedAt),
-          or(isNull(facilities.gpsLatitude), isNull(facilities.gpsLongitude)),
-        ),
-      ),
+  const [[feedstockGps], [transportRow]] = await Promise.all([
     db
       .select({
         count: count(),
@@ -342,7 +317,6 @@ export async function loadDashboardStructuralGapCounts(
   ]);
 
   return {
-    missingFacilityGps: Number(facilityGps?.count ?? 0),
     missingFeedstockGps: Number(feedstockGps?.count ?? 0),
     transportEndpointGpsGaps: transport.endpointGpsGaps,
     missingFeedstockGpsSupplierId: feedstockGps?.supplierId ?? null,

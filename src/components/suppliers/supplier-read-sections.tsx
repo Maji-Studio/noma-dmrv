@@ -1,6 +1,6 @@
 /** Supplier side-sheet view mode: the sections config for EntitySideSheet. */
 import { buildPartyLocationDetailFields } from "@/components/party-location-detail-fields";
-import { buildSupplierFallbackDistanceField } from "./supplier-detail-fields";
+import { buildSupplierDefaultLocationDistanceField } from "./supplier-detail-fields";
 import { SupplierLocationsReadState } from "./supplier-locations-read-state";
 import type { DetailPanelSection } from "@/components/ui/detail-panel";
 import type { UseQueryResult } from "@tanstack/react-query";
@@ -53,7 +53,7 @@ export function supplierSheetSections(supplier: SupplierWithRelations, locations
         { label: "Location", value: supplier.location },
         { label: "Source region", value: supplier.sourceRegion },
         { label: "Address", value: supplier.address },
-        buildSupplierFallbackDistanceField({
+        buildSupplierDefaultLocationDistanceField({
           defaultLocationDistanceKm:
             locations.find((location) => location.isDefault)
               ?.distanceFromFacilityKm ?? null,

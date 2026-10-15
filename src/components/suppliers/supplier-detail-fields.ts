@@ -2,7 +2,7 @@ import type { DetailPanelField } from "@/components/ui/detail-panel";
 import { positiveOrNull } from "@/lib/calculations/transport-leg";
 import { MISSING_VALUE } from "@/lib/copy-utils";
 
-interface SupplierFallbackDistanceInput {
+interface SupplierDefaultLocationDistanceInput {
   defaultLocationDistanceKm: number | null;
   locationsLoaded: boolean;
 }
@@ -10,16 +10,16 @@ interface SupplierFallbackDistanceInput {
 /** Distance recorded on the default supplier location. */
 export function resolveSupplierEffectiveDistanceKm({
   defaultLocationDistanceKm,
-}: Omit<SupplierFallbackDistanceInput, "locationsLoaded">): number | null {
+}: Omit<SupplierDefaultLocationDistanceInput, "locationsLoaded">): number | null {
   return positiveOrNull(defaultLocationDistanceKm);
 }
 
 /** Distance recorded on the default supplier location. */
-export function buildSupplierFallbackDistanceField(
+export function buildSupplierDefaultLocationDistanceField(
   {
     defaultLocationDistanceKm,
     locationsLoaded,
-  }: SupplierFallbackDistanceInput,
+  }: SupplierDefaultLocationDistanceInput,
 ): DetailPanelField {
   if (!locationsLoaded) {
     return {

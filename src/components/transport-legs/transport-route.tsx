@@ -16,7 +16,7 @@ import { buildJourney, type JourneyLegInput } from "./transport-journey-model";
 import { TransportRouteMapButton } from "./transport-route-map";
 import type { TransportLegCertSummary } from "./transport-leg-cert-status";
 
-// Feedstock and biochar legs are auto-derived (supplier distance / delivery
+// Feedstock and biochar legs are auto-derived (supplier default location distance / delivery
 // aggregation); sample → lab stays manual. The visible label is "Route";
 // these name the route for screen readers.
 const DEFAULT_ROUTE_NAMES: Record<TransportEntityTypeValue, string> = {

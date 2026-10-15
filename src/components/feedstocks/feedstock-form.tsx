@@ -207,8 +207,8 @@ export function FeedstockForm({
 
   const defaultStorageBinType = "feedstock_bin";
 
-  // Transport distance autofills from the existing leg (edit) or the stored
-  // level — the supplier's DEFAULT location, else the supplier-level distance —
+  // Transport distance autofills from the existing leg (edit) or the supplier's
+  // default location,
   // mirroring the server's priority resolution. The suggestion carries its
   // provenance along; hand-editing flips it to manual.
   const { data: selectedSupplier } = useSupplier(watchedSupplierId, !!watchedSupplierId);
@@ -547,8 +547,8 @@ export function FeedstockForm({
                 certifyStatus={transportDistanceCertStatus}
                 helperText={
                   storedDistanceKm != null
-                    ? "Autofilled from the supplier. Override if this delivery took a different route."
-                    : "Set a one-way distance on the supplier (or its default location) to autofill this."
+                    ? "Autofilled from the supplier's default location. Override if this delivery took a different route."
+                    : "Set a one-way distance on the supplier's default location to autofill this."
                 }
               >
                 <div>
