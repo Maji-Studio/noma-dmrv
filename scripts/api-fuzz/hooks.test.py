@@ -4,11 +4,13 @@ import json
 import os
 import unittest
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 import schemathesis
 from hypothesis import given, settings
+from requests import Request
 from schemathesis.config import SchemathesisConfig
 from schemathesis.core.parameters import ParameterLocation
 from schemathesis.generation import GenerationMode
@@ -33,6 +35,7 @@ DELIVERY_ETAG = '"12.1"'
 DELETE_ORDER_ETAG = '"11.1"'
 DELETE_ORDER_ID = "44444444-4444-4444-8444-444444444444"
 CUSTOMER_LOCATION_ID = "55555555-5555-4555-8555-555555555555"
+FLOAT_MULTIPLE_OF_ARTIFACT = 330796.723
 TARGET_KINDS = ("FACILITY", "SUPPLIER", "FEEDSTOCK_TYPE", "BIN", "DRIVER", "VEHICLE", "FEEDSTOCK", "REACTOR", "PRODUCTION_RUN", "BIOCHAR_BIN", "BIOCHAR_PRODUCT", "PURE_FORMULATION", "CREDIT_BATCH", "LAB_SAMPLE", "CUSTOMER", "ORDER", "DELIVERY")
 for kind in TARGET_KINDS:
     os.environ[f"API_FUZZ_{kind}_ID"] = FIXTURE_ID
@@ -415,6 +418,90 @@ class HarnessTests(unittest.TestCase):
         self.assertIsNone(missing_required_header(ctx, SimpleNamespace(status_code=428), case))
         with self.assertRaises(AssertionError):
             missing_required_header(ctx, SimpleNamespace(status_code=200), case)
+
+    def test_decimal_multiple_of_artifact_is_positive_after_call(self):
+        operation = schema["/orders"]["POST"]
+        for mode in GenerationMode:
+            with self.subTest(mode=mode):
+                case = self.order_quantity_case(FLOAT_MULTIPLE_OF_ARTIFACT, mode)
+                original = dict(case.body)
+                response = SimpleNamespace(status_code=201)
+                with patch.object(type(schema.transport), "send", return_value=response):
+                    self.assertIs(case.call(), response)
+                self.assertEqual(case.body, original)
+                ctx = SimpleNamespace(config=schema.config.checks_config_for(operation=operation, phase="coverage"))
+                self.assertIsNone(negative_data_rejection(ctx, response, case))
+                self.assertTrue(case.meta.components[ParameterLocation.BODY].mode.is_positive)
+                self.assertTrue(case.meta.generation.mode.is_positive)
+                with self.assertRaises(AssertionError):
+                    positive_data_acceptance(ctx, SimpleNamespace(status_code=400), case)
+
+    def test_decimal_artifact_does_not_hide_other_schema_violations(self):
+        mutations = (
+            lambda case: case.body.update(quantityKg=0.0005),
+            lambda case: case.body.update(quantityKg=0.0015),
+            lambda case: case.body.update(quantityKg=0.0010000000000000002),
+            lambda case: case.body.update(quantityKg=-FLOAT_MULTIPLE_OF_ARTIFACT),
+            lambda case: case.body.update(quantityKg=100000000.001),
+            lambda case: case.body.pop("customerLocationId"),
+            lambda case: case.body.update(customerLocationId="invalid"),
+            lambda case: case.body.update(orderDate="invalid"),
+            lambda case: case.body.update(packaging="invalid"),
+            lambda case: case.body.update(unexpected=True),
+            lambda case: case.headers.clear(),
+            lambda case: case.query.update(dryRun="invalid"),
+        )
+        for mutate in mutations:
+            with self.subTest(mutation=mutate):
+                case = self.order_quantity_case(FLOAT_MULTIPLE_OF_ARTIFACT, GenerationMode.NEGATIVE)
+                mutate(case)
+                # Model the metadata after generation/revalidation for every component.
+                for location in (ParameterLocation.HEADER, ParameterLocation.QUERY):
+                    valid = case._validate_component(location, case.get_container(location), case.operation.schema.adapter.jsonschema_validator_cls)
+                    case._meta.components[location] = ComponentInfo(mode=GenerationMode.POSITIVE if valid else GenerationMode.NEGATIVE)
+                case._init_hashes()
+                response = SimpleNamespace(status_code=201, request=Request(
+                    "POST", "http://localhost/orders", params=case.query, headers=case.headers, json=case.body,
+                ).prepare())
+                with patch.object(type(schema.transport), "send", return_value=response):
+                    case.call()
+                self.assertTrue(case.meta.generation.mode.is_negative)
+                ctx = SimpleNamespace(config=schema.config.checks_config_for(operation=case.operation, phase="coverage"))
+                self.assertIsNone(negative_data_rejection(ctx, SimpleNamespace(status_code=422), case))
+                with self.assertRaises(AssertionError):
+                    negative_data_rejection(ctx, response, case)
+
+    def test_non_multiple_quantities_are_still_generated_as_negative(self):
+        operation = schema["/orders"]["POST"]
+        cases = iter_coverage_cases(
+            operation=operation, generation_modes=list(GenerationMode),
+            generate_duplicate_query_parameters=False, unexpected_methods=set(),
+            generation_config=schema.config.generation,
+        )
+        case = next(case for case in cases if case.meta.phase.data.scenario == CoverageScenario.NOT_MULTIPLE_OF
+                    and isinstance(case.body, dict) and "quantityKg" in case.body
+                    and Decimal(str(case.body["quantityKg"])) % Decimal("0.001") != 0)
+        quantity = case.body["quantityKg"]
+        with patch.object(type(schema.transport), "send", return_value=SimpleNamespace(status_code=201)):
+            case.call()
+        self.assertEqual(case.body["quantityKg"], quantity)
+        self.assertTrue(case.meta.generation.mode.is_negative)
+        ctx = SimpleNamespace(config=schema.config.checks_config_for(operation=operation, phase="coverage"))
+        with self.assertRaises(AssertionError):
+            negative_data_rejection(ctx, SimpleNamespace(status_code=201), case)
+
+    def order_quantity_case(self, quantity, mode):
+        operation = schema["/orders"]["POST"]
+        body = dict(operation.definition.raw["requestBody"]["content"]["application/json"]["example"], quantityKg=quantity)
+        return operation.Case(
+            body=body, media_type="application/json", query={"dryRun": "true"},
+            headers={"Idempotency-Key": FIXTURE_ID},
+            _meta=CaseMetadata(
+                generation=GenerationInfo(time=0, mode=mode),
+                components={ParameterLocation.BODY: ComponentInfo(mode=mode)},
+                phase=PhaseInfo.coverage(CoverageScenario.DEFAULT_POSITIVE_TEST, "Positive test case"),
+            ),
+        )
 
     @settings(max_examples=5, database=None, deadline=None)
     @given(schema["/facilities"]["GET"].as_strategy(generation_mode=GenerationMode.POSITIVE))

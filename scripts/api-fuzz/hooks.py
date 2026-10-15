@@ -3,9 +3,11 @@
 import os
 from copy import deepcopy
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal, DecimalException
 from uuid import uuid4
 
 import schemathesis
+from schemathesis.core.jsonschema import FANCY_REGEX_OPTIONS
 from schemathesis.core.parameters import ParameterLocation
 from schemathesis.generation import GenerationMode
 from schemathesis.generation.meta import CaseMetadata, ComponentInfo, ExamplesPhaseData, GenerationInfo, PhaseInfo, TestPhase
@@ -244,9 +246,15 @@ def before_call(ctx, case, **kwargs):
         if not any(name.lower() == IDEMPOTENCY_HEADER.lower() for name in headers):
             headers[IDEMPOTENCY_HEADER] = str(uuid4())
             case.headers = headers
+    meta = case.meta
+    # Float multipleOf revalidation can label an exact decimal multiple negative.
+    # Correct only that body component; other negative components still reject.
+    if meta is not None and ParameterLocation.BODY in meta.components and meta.components[ParameterLocation.BODY].mode.is_negative and body_has_decimal_multiple_of_artifact(case):
+        meta.components[ParameterLocation.BODY] = ComponentInfo(mode=GenerationMode.POSITIVE)
+        meta.generation.mode = GenerationMode.NEGATIVE if any(info.mode.is_negative for info in meta.components.values()) else GenerationMode.POSITIVE
+        meta.update_validated_hash(ParameterLocation.BODY, case._hash_container(case.body))
     # Stateful links in 4.29.3 can also drop a required If-Match. The request
     # violates the schema, so judge it as negative without guessing a live ETag.
-    meta = case.meta
     if meta is not None and meta.generation.mode.is_positive and any(
         parameter.name.lower() == IF_MATCH_HEADER.lower() and parameter.is_required
         for parameter in case.operation.headers
@@ -255,6 +263,35 @@ def before_call(ctx, case, **kwargs):
         meta.components[ParameterLocation.HEADER] = ComponentInfo(mode=GenerationMode.NEGATIVE)
         # Track the header component even if the generator omitted its metadata.
         meta.update_validated_hash(ParameterLocation.HEADER, case._hash_container(case.headers))
+
+
+def body_has_decimal_multiple_of_artifact(case):
+    artifact = False
+
+    class DecimalMultipleOf:
+        def __init__(self, parent_schema, value, schema_path):
+            self.divisor = Decimal(str(value))
+
+        def validate(self, value):
+            nonlocal artifact
+            if not isinstance(value, (int, float)) or isinstance(value, bool):
+                return
+            try:
+                remainder = Decimal(str(value)) % self.divisor
+            except DecimalException as exc:
+                raise ValueError("Not an exact decimal multiple") from exc
+            if remainder != 0:
+                raise ValueError("Not an exact decimal multiple")
+            artifact |= isinstance(value, float) and self.divisor != self.divisor.to_integral_value()
+
+    for alternative in case.operation.body:
+        if alternative.media_type == case.media_type:
+            validator = case.operation.schema.adapter.jsonschema_validator_cls(
+                alternative.validation_schema, validate_formats=True, offline=True,
+                pattern_options=FANCY_REGEX_OPTIONS, keywords={"multipleOf": DecimalMultipleOf},
+            )
+            return validator.is_valid(case.body) and artifact
+    return False
 
 
 def requires_idempotency_key(operation):
