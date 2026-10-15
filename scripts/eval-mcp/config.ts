@@ -75,9 +75,27 @@ export const DELIVERY_CASES = [
 ] as const;
 export type DeliveryCaseId = typeof DELIVERY_CASES[number]["id"];
 
+export const DOCUMENT_TOOL_CALL_BUDGET = 6;
+export const DOCUMENT_DELIVERY_CODE = "DL-X";
+export const DOCUMENT_CASES = [
+  { id: "delivery-bol-upload", text: ({ filePath, deliveryCode }: { filePath: string; deliveryCode: string }) =>
+    `Attach the bill of lading at ${filePath} to delivery ${deliveryCode}.` },
+] as const;
+
 /** Shared flags are exported so the supervisor can adjust the harness. */
 export const CLAUDE_FLAGS = [
   "--mcp-config", MCP_CONFIG_PLACEHOLDER, "--strict-mcp-config", "--tools", "", "--allowedTools", "mcp__noma",
   "--permission-mode", "dontAsk", "--output-format", "stream-json", "--verbose",
   "--no-session-persistence",
 ];
+
+/** Only the upload case needs the local shell to hash the file and PUT it. */
+export function claudeFlags(caseId: string, fileDirectory?: string): string[] {
+  const flags = [...CLAUDE_FLAGS];
+  if (caseId === "delivery-bol-upload") {
+    flags[flags.indexOf("--tools") + 1] = "Bash";
+    flags[flags.indexOf("--allowedTools") + 1] = "mcp__noma,Bash";
+    if (fileDirectory) flags.push("--add-dir", fileDirectory);
+  }
+  return flags;
+}
