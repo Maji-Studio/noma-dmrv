@@ -260,3 +260,35 @@ export const certificationSubmissionStatus = pgEnum(
 // LCA journal; removed per ADR 0018. The category strings survive as
 // self-contained literals on the project-scope roles of the semantic binding
 // catalog, src/lib/isometric/semantic-binding-catalog.ts.)
+
+// ============================================
+// Activity History
+// ============================================
+
+export const ACTIVITY_ENTITY_TYPES = [
+  "removal",
+  "ghg_statement",
+  "production_run",
+  "biochar_product",
+  "lab_sample",
+  "order",
+  "delivery",
+  "application",
+  "credit_batch",
+  "document",
+  "transport_leg",
+  "feedstock",
+  "bin_movement",
+] as const;
+
+export const ACTIVITY_ACTIONS = ["created", "updated", "deleted", "status_changed"] as const;
+export const ACTIVITY_SOURCES = ["form", "rest", "mcp", "registry", "system", "script"] as const;
+export const ACTORLESS_ACTIVITY_SOURCES = ["system", "registry", "script"] as const;
+// Registry events default to the triggering user.
+export const DEFAULT_ACTORLESS_ACTIVITY_SOURCES = ["system", "script"] as const;
+
+export type ActivityEntityType = (typeof ACTIVITY_ENTITY_TYPES)[number];
+
+export function isActivityEntityType(value: string): value is ActivityEntityType {
+  return ACTIVITY_ENTITY_TYPES.some((entityType) => entityType === value);
+}
