@@ -1,5 +1,5 @@
 import { feedstockFixtureValues, cleanupFeedstockFixtureParents } from "./helpers/feedstock-fixture";
-import { beforeAll, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import {
@@ -46,15 +46,18 @@ beforeAll(async () => {
 });
 
 describe("bin loss stock guard", () => {
-  it.each([
-    "current stock",
-    "before intake",
-    "future time",
-    "valid earlier loss",
-    "later negative balance",
-  ])("guards %s", async (scenario) => {
+  let fixture: { facilityId: string; feedstockTypeId: string; storageLocationId: string; feedstockId: string };
+  const loss = (occurredAt: string, lossMassKg: number) => recordLossFn({
+    storageLocationId: fixture.storageLocationId, lane: "feedstock",
+    idempotencyKey: crypto.randomUUID(), reason: "Event-time stock regression",
+    occurredAt, lossMassKg,
+  });
+  const movements = () => db.select().from(binMovements)
+    .where(eq(binMovements.storageLocationId, fixture.storageLocationId));
+
+  beforeEach(async () => {
     const tag = crypto.randomUUID().slice(0, 8).toUpperCase();
-    const fixture = await db.transaction(async (tx) => {
+    fixture = await db.transaction(async (tx) => {
       const [facility] = await tx
         .insert(facilities)
         .values({ ...TEST_SITE_POSITION, timezone: "UTC",
@@ -105,99 +108,108 @@ describe("bin loss stock guard", () => {
         feedstockId: feedstock.id,
       };
     });
+  });
 
-    try {
-      const loss = (occurredAt: string, lossMassKg: number) => recordLossFn({
-        storageLocationId: fixture.storageLocationId, lane: "feedstock",
-        idempotencyKey: crypto.randomUUID(), reason: "Event-time stock regression",
-        occurredAt, lossMassKg,
-      });
-      if (scenario === "before intake" || scenario === "future time") {
-        const time = scenario === "before intake" ? "2025-01-01T00:00:00.000Z" : "2999-01-01T00:00:00.000Z";
-        expect(await loss(time, AVAILABLE_STOCK_KG)).toMatchObject({
-          success: false, issues: [{ path: ["occurredAt"] }],
-        });
-      } else if (scenario === "valid earlier loss") {
-        const halfStock = AVAILABLE_STOCK_KG / 2;
-        expect(await loss("2025-01-04T00:00:00.000Z", halfStock)).toMatchObject({ success: true });
-        expect(await loss("2025-01-03T00:00:00.000Z", halfStock)).toMatchObject({ success: true });
-        const stock = await getFeedstockBinStock(makeTestOrgContext(TEST_USER_ID), fixture.storageLocationId);
-        expect(stock.entries.map(entry => entry.afterWetKg)).toEqual([AVAILABLE_STOCK_KG, halfStock, 0]);
-        return;
-      } else if (scenario === "later negative balance") {
-        // A later refill restores current stock but cannot fund the earlier loss.
-        expect(await loss("2025-01-04T00:00:00.000Z", AVAILABLE_STOCK_KG)).toMatchObject({ success: true });
-        await db.insert(feedstocks).values(await feedstockFixtureValues(db, {
-          organizationId: TEST_ORG_ID, facilityId: fixture.facilityId,
-          feedstockTypeId: fixture.feedstockTypeId, storageLocationId: fixture.storageLocationId,
-          code: `E2E-REFILL-${tag}`, status: "complete",
-          deliveryDate: new Date("2025-01-05T00:00:00.000Z"),
-          massDryKg: AVAILABLE_STOCK_KG, massWetKg: AVAILABLE_STOCK_KG,
-        }));
-        expect(await loss("2025-01-03T00:00:00.000Z", AVAILABLE_STOCK_KG)).toMatchObject({
-          success: false, issues: [{ path: ["occurredAt"] }],
-        });
-        const movements = await db.select().from(binMovements)
-          .where(eq(binMovements.storageLocationId, fixture.storageLocationId));
-        expect(movements).toHaveLength(1);
-        return;
-      }
-      if (scenario === "before intake" || scenario === "future time") {
-        const movements = await db.select().from(binMovements)
-          .where(eq(binMovements.storageLocationId, fixture.storageLocationId));
-        expect(movements).toHaveLength(0);
-        return;
-      }
-      const rejected = await recordLossFn({
-        storageLocationId: fixture.storageLocationId,
-        lane: "feedstock",
-        idempotencyKey: crypto.randomUUID(),
-        reason: "Overdraw regression check",
-        occurredAt: "2026-10-15T10:00:00.000Z", lossMassKg: OVERDRAW_LOSS_KG,
-      });
+  it.each([
+    { scenario: "before intake", time: "2025-01-01T00:00:00.000Z" },
+    { scenario: "future time", time: "2999-01-01T00:00:00.000Z" },
+  ])("rejects $scenario", async ({ time }) => {
+    expect(await loss(time, AVAILABLE_STOCK_KG)).toMatchObject({
+      success: false, issues: [{ path: ["occurredAt"] }],
+    });
+    expect(await movements()).toHaveLength(0);
+  });
 
-      expect(rejected).toMatchObject({
-        success: false,
-        field: "lossMassKg",
-      });
-      if (!rejected.success) {
-        expect(rejected.error).toBe("Not enough wet feedstock in this bin");
-      }
+  it("accepts a valid earlier loss", async () => {
+    const halfStock = AVAILABLE_STOCK_KG / 2;
+    expect(await loss("2025-01-04T00:00:00.000Z", halfStock)).toMatchObject({ success: true });
+    expect(await loss("2025-01-03T00:00:00.000Z", halfStock)).toMatchObject({ success: true });
+    const stock = await getFeedstockBinStock(makeTestOrgContext(TEST_USER_ID), fixture.storageLocationId);
+    expect(stock.entries.map(entry => entry.afterWetKg)).toEqual([AVAILABLE_STOCK_KG, halfStock, 0]);
+  });
 
-      const rowsAfterRejection = await db
-        .select()
-        .from(binMovements)
-        .where(eq(binMovements.storageLocationId, fixture.storageLocationId));
-      expect(rowsAfterRejection).toHaveLength(0);
+  it("rejects a loss that would make a later balance negative despite a refill", async () => {
+    expect(await loss("2025-01-04T00:00:00.000Z", AVAILABLE_STOCK_KG)).toMatchObject({ success: true });
+    await db.insert(feedstocks).values(await feedstockFixtureValues(db, {
+      organizationId: TEST_ORG_ID, facilityId: fixture.facilityId,
+      feedstockTypeId: fixture.feedstockTypeId, storageLocationId: fixture.storageLocationId,
+      code: `E2E-REFILL-${crypto.randomUUID()}`, status: "complete",
+      deliveryDate: new Date("2025-01-05T00:00:00.000Z"),
+      massDryKg: AVAILABLE_STOCK_KG, massWetKg: AVAILABLE_STOCK_KG,
+    }));
+    expect(await loss("2025-01-03T00:00:00.000Z", AVAILABLE_STOCK_KG)).toMatchObject({
+      success: false, issues: [{ path: ["occurredAt"] }],
+    });
+    expect(await movements()).toHaveLength(1);
+  });
 
-      const accepted = await recordLossFn({
-        storageLocationId: fixture.storageLocationId,
-        lane: "feedstock",
-        idempotencyKey: crypto.randomUUID(),
-        reason: "Exact available stock",
-        occurredAt: "2026-10-15T10:00:00.000Z", lossMassKg: AVAILABLE_STOCK_KG,
-      });
+  it.each([
+    { timezone: "Africa/Dar_es_Salaam", before: "2025-01-01T20:59:59.000Z", midnight: "2025-01-01T21:00:00.000Z", early: "2025-01-01T22:00:00.000Z", later: "2025-01-01T23:00:00.000Z" },
+    { timezone: "America/New_York", before: "2025-01-02T04:59:59.000Z", midnight: "2025-01-02T05:00:00.000Z", early: "2025-01-02T06:00:00.000Z", later: "2025-01-02T07:00:00.000Z" },
+  ])("uses the delivery day in $timezone", async ({ timezone, before, midnight, early, later }) => {
+    await db.update(facilities).set({ timezone }).where(eq(facilities.id, fixture.facilityId));
+    expect(await loss(before, AVAILABLE_STOCK_KG)).toMatchObject({ success: false, issues: [{ path: ["occurredAt"] }] });
+    expect(await movements()).toHaveLength(0);
+    const halfStock = AVAILABLE_STOCK_KG / 2;
+    expect(await loss(later, halfStock)).toMatchObject({ success: true });
+    expect(await loss(early, halfStock)).toMatchObject({ success: true });
+    const stock = await getFeedstockBinStock(makeTestOrgContext(TEST_USER_ID), fixture.storageLocationId);
+    expect(stock.entries.map(entry => entry.occurredAt)).toEqual([midnight, early, later]);
+    expect(stock.entries.map(entry => entry.afterWetKg)).toEqual([AVAILABLE_STOCK_KG, halfStock, 0]);
+  });
 
-      expect(accepted.success).toBe(true);
-      const rowsAfterAcceptance = await db
-        .select()
-        .from(binMovements)
-        .where(eq(binMovements.storageLocationId, fixture.storageLocationId));
-      expect(rowsAfterAcceptance).toHaveLength(1);
-      expect(rowsAfterAcceptance[0].massDeltaKg).toBe(-AVAILABLE_STOCK_KG);
-    } finally {
-      await db.delete(binMovements).where(
-        eq(binMovements.storageLocationId, fixture.storageLocationId),
-      );
-      await db.delete(feedstocks).where(eq(feedstocks.storageLocationId, fixture.storageLocationId));
-      await cleanupFeedstockFixtureParents(db);
-      await db
-        .delete(storageLocations)
-        .where(eq(storageLocations.id, fixture.storageLocationId));
-      await db
-        .delete(feedstockTypes)
-        .where(eq(feedstockTypes.id, fixture.feedstockTypeId));
-      await db.delete(facilities).where(eq(facilities.id, fixture.facilityId));
+  it("guards current stock", async () => {
+    const rejected = await recordLossFn({
+      storageLocationId: fixture.storageLocationId,
+      lane: "feedstock",
+      idempotencyKey: crypto.randomUUID(),
+      reason: "Overdraw regression check",
+      occurredAt: "2025-01-03T10:00:00.000Z", lossMassKg: OVERDRAW_LOSS_KG,
+    });
+
+    expect(rejected).toMatchObject({
+      success: false,
+      field: "lossMassKg",
+    });
+    if (!rejected.success) {
+      expect(rejected.error).toBe("Not enough wet feedstock in this bin");
     }
+
+    const rowsAfterRejection = await db
+      .select()
+      .from(binMovements)
+      .where(eq(binMovements.storageLocationId, fixture.storageLocationId));
+    expect(rowsAfterRejection).toHaveLength(0);
+
+    const accepted = await recordLossFn({
+      storageLocationId: fixture.storageLocationId,
+      lane: "feedstock",
+      idempotencyKey: crypto.randomUUID(),
+      reason: "Exact available stock",
+      occurredAt: "2025-01-03T10:00:00.000Z", lossMassKg: AVAILABLE_STOCK_KG,
+    });
+
+    expect(accepted.success).toBe(true);
+    const rowsAfterAcceptance = await db
+      .select()
+      .from(binMovements)
+      .where(eq(binMovements.storageLocationId, fixture.storageLocationId));
+    expect(rowsAfterAcceptance).toHaveLength(1);
+    expect(rowsAfterAcceptance[0].massDeltaKg).toBe(-AVAILABLE_STOCK_KG);
+  });
+
+  afterEach(async () => {
+    await db.delete(binMovements).where(
+      eq(binMovements.storageLocationId, fixture.storageLocationId),
+    );
+    await db.delete(feedstocks).where(eq(feedstocks.storageLocationId, fixture.storageLocationId));
+    await cleanupFeedstockFixtureParents(db);
+    await db
+      .delete(storageLocations)
+      .where(eq(storageLocations.id, fixture.storageLocationId));
+    await db
+      .delete(feedstockTypes)
+      .where(eq(feedstockTypes.id, fixture.feedstockTypeId));
+    await db.delete(facilities).where(eq(facilities.id, fixture.facilityId));
   });
 });

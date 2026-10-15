@@ -7,6 +7,8 @@ import { CANCELLED_PRODUCTION_RUN_STATUS } from '@/lib/production-runs/lifecycle
 import type { FeedstockBinStock, FeedstockLedgerEntry } from '@/types/feedstock-bin-ledger';
 import { feedstockPileTimeline } from '@/lib/feedstock-pile';
 import { requireOrgScope } from './utils';
+import { combineDateAndTime, formatUtcDate } from '@/lib/date-utils';
+import { getOutputStockFacilityTimezone } from './output-stock-dates';
 
 const MASS_DECIMALS = 1_000;
 const PERCENT = 100;
@@ -28,6 +30,8 @@ export async function getFeedstockBinStock(ctx: OrgContext, storageLocationId: s
     .where(and(eq(storageLocations.organizationId, ctx.organizationId), eq(storageLocations.id, storageLocationId)));
   if (!bin) throw new SafeError('Storage bin not found');
   if (bin.type !== 'feedstock_bin') throw new SafeError('This bin does not hold feedstock');
+
+  const timezone = await getOutputStockFacilityTimezone(ctx, bin.facilityId, reader);
 
   const [batches, runDraws, products, movements, batchDraws] = await Promise.all([
     reader.select({ id: feedstocks.id, code: feedstocks.code, deliveryDate: feedstocks.deliveryDate, createdAt: feedstocks.createdAt,
@@ -62,9 +66,10 @@ export async function getFeedstockBinStock(ctx: OrgContext, storageLocationId: s
       ingredient.storageLocationId === storageLocationId && typeof ingredient.massKg === 'number' && Number.isFinite(ingredient.massKg) && ingredient.massKg > 0
         ? sum + ingredient.massKg : sum, 0) };
   });
+  // Intake dates encode business days; availability starts at facility-local midnight.
   type Draft = Omit<FeedstockLedgerEntry, 'beforeWetKg' | 'afterWetKg' | 'estimatedDryKg'>;
   const drafts: Draft[] = [
-    ...batches.map((b): Draft => ({ id: b.id, sourceId: b.id, kind: 'intake', occurredAt: b.deliveryDate.toISOString(),
+    ...batches.map((b): Draft => ({ id: b.id, sourceId: b.id, kind: 'intake', occurredAt: combineDateAndTime(formatUtcDate(b.deliveryDate), '00:00', timezone).toISOString(),
       recordedAt: b.createdAt.toISOString(), actorName: null, code: b.code, reason: '', wetDeltaKg: b.wetKg, countedWetKg: null,
       moisturePercent: b.moisturePercent === null ? null : Number(b.moisturePercent) })),
     ...runDraws.map((d): Draft => ({ id: d.id, sourceId: d.sourceId, kind: 'run_draw', occurredAt: d.startTime.toISOString(), recordedAt: d.createdAt.toISOString(),
@@ -105,5 +110,5 @@ export async function getFeedstockBinStock(ctx: OrgContext, storageLocationId: s
       wetKg: shares.get(b.id)?.wetKg ?? 0,
       intakeWetKg: Number(b.wetKg), dryKg: shares.get(b.id)?.dryKg ?? null, moisturePercent: b.moisturePercent === null ? null : Number(b.moisturePercent) }));
   if (entries.length) entries[entries.length - 1].estimatedDryKg = round(pile.reduce((sum, batch) => sum + (batch.dryKg ?? 0), 0));
-  return { currentWetKg, missingDryBasis: false, entries, batches: pile };
+  return { currentWetKg, entries, batches: pile };
 }

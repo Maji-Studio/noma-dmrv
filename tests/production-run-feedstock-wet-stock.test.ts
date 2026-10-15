@@ -190,7 +190,6 @@ describe("production-run wet feedstock stock", () => {
   afterAll(async () => {
     await cleanupProductionRuns();
     await db.delete(feedstocks).where(eq(feedstocks.id, secondaryFeedstockId));
-    await cleanupFeedstockFixtureParents(db);
     await db.delete(feedstocks).where(eq(feedstocks.id, feedstockId));
     await cleanupFeedstockFixtureParents(db);
     await db

@@ -163,6 +163,7 @@ async function cleanup(fixture: Fixture): Promise<void> {
     await tx.delete(organizations).where(eq(organizations.id, organizationId));
     await tx.delete(users).where(eq(users.id, fixture.ctx.userId));
   });
+  await cleanupFeedstockFixtureParents(db);
 }
 
 async function readFacility(fixture: Fixture) {

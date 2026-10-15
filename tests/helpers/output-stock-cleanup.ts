@@ -13,4 +13,5 @@ export async function cleanupOutputStockFixture(db: typeof database, organizatio
     await tx.execute(sql`delete from organizations where id = ${organizationId}`);
     await tx.execute(sql`delete from users where id = ${organizationId.replace('org-', 'user-')}`);
   });
+  await cleanupFeedstockFixtureParents(db);
 }

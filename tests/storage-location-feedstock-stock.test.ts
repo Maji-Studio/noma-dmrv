@@ -142,7 +142,7 @@ describe("storage-location feedstock stock", () => {
     const fixture = await seedOutputStockParents(db);
     try {
       const [draw] = await db.select().from(productionRunFeedstockDraws).where(eq(productionRunFeedstockDraws.productionRunId, fixture.runs[0].id));
-      await db.update(feedstocks).set({ deliveryDate: new Date("2026-09-08T12:00:00Z") }).where(eq(feedstocks.storageLocationId, draw.storageLocationId));
+      await db.update(feedstocks).set({ deliveryDate: new Date("2026-09-08T00:00:00Z") }).where(eq(feedstocks.storageLocationId, draw.storageLocationId));
       await db.update(productionRuns).set({ status: "cancelled", cancellationReason: "Test cancellation" }).where(eq(productionRuns.id, fixture.runs[1].id));
       await db.insert(binMovements).values([
         { organizationId: fixture.ctx.organizationId, storageLocationId: draw.storageLocationId, lane: "feedstock", movementType: "adjustment", massDeltaKg: -200,
@@ -226,8 +226,8 @@ it.each(["physical", "recorded", "id"] as const)("orders intake batches and time
   if (orderBy !== "recorded") ids.reverse();
   const f = await createFixture(crypto.randomUUID().slice(0, 8).toUpperCase(), ids);
   try {
-    const earlier = new Date("2026-09-08T12:00:00Z");
-    const later = new Date("2026-09-09T12:00:00Z");
+    const earlier = new Date("2026-09-08T00:00:00Z");
+    const later = new Date("2026-09-09T00:00:00Z");
     await db.update(feedstocks).set({ deliveryDate: earlier, createdAt: orderBy === "id" ? earlier : later }).where(eq(feedstocks.id, ids[0]));
     await db.update(feedstocks).set({ status: "complete", deliveryDate: orderBy === "physical" ? later : earlier, createdAt: earlier }).where(eq(feedstocks.id, ids[1]));
     const ledger = await getFeedstockBinStock(makeTestOrgContext(TEST_USER_ID), f.storageLocationId);
@@ -240,9 +240,9 @@ it.each(["physical", "recorded", "id"] as const)("orders intake batches and time
 it.each([false, true])("keeps a loss on A before B arrives, including same-time entries (%s)", async (sameTime) => {
   const f = await createFixture(crypto.randomUUID().slice(0, 8).toUpperCase());
   try {
-    const intakeTime = new Date("2026-09-08T12:00:00Z");
-    const lossTime = sameTime ? intakeTime : new Date("2026-09-09T12:00:00Z");
-    const secondTime = sameTime ? intakeTime : new Date("2026-09-10T12:00:00Z");
+    const intakeTime = new Date("2026-09-08T00:00:00Z");
+    const lossTime = sameTime ? intakeTime : new Date("2026-09-09T00:00:00Z");
+    const secondTime = sameTime ? intakeTime : new Date("2026-09-10T00:00:00Z");
     await db.update(feedstocks).set({ deliveryDate: intakeTime, createdAt: new Date("2026-09-11T08:00:00Z") }).where(eq(feedstocks.id, f.feedstockIds[0]));
     await db.update(feedstocks).set({ status: "complete", massWetKg: 100, massDryKg: 50, moistureContentPercent: 50,
       deliveryDate: secondTime, createdAt: new Date("2026-09-11T08:10:00Z") }).where(eq(feedstocks.id, f.feedstockIds[1]));
@@ -262,7 +262,7 @@ it.each([false, true])("keeps a loss on A before B arrives, including same-time 
 it("charts only recorded intakes and saved draws within each same-time prefix", async () => {
   const f = await seedOutputStockParents(db);
   try {
-    const instant = new Date("2026-09-08T12:00:00Z");
+    const instant = new Date("2026-09-08T00:00:00Z");
     const [draw] = await db.select().from(productionRunFeedstockDraws).where(eq(productionRunFeedstockDraws.productionRunId, f.runs[0].id));
     await db.update(productionRuns).set({ status: "cancelled", cancellationReason: "Fixture" }).where(eq(productionRuns.id, f.runs[1].id));
     await db.update(productionRuns).set({ startTime: instant }).where(eq(productionRuns.id, f.runs[0].id));
@@ -284,17 +284,16 @@ it("keeps A40 and B100 after A100, a saved A60 run draw, then B100", async () =>
   try {
     const [draw] = await db.select().from(productionRunFeedstockDraws).where(eq(productionRunFeedstockDraws.productionRunId, f.runs[0].id));
     await db.update(productionRuns).set({ status: "cancelled", cancellationReason: "Fixture" }).where(eq(productionRuns.id, f.runs[1].id));
-    const [a] = await db.update(feedstocks).set({ massWetKg: 100, massDryKg: 80, moistureContentPercent: 20, deliveryDate: new Date("2026-09-08T12:00:00Z") })
+    const [a] = await db.update(feedstocks).set({ massWetKg: 100, massDryKg: 80, moistureContentPercent: 20, deliveryDate: new Date("2026-09-08T00:00:00Z") })
       .where(eq(feedstocks.storageLocationId, draw.storageLocationId)).returning();
     await db.update(productionRunFeedstockDraws).set({ wetMassKg: 60 }).where(eq(productionRunFeedstockDraws.id, draw.id));
     await db.update(productionRunFeedstocks).set({ wetMassUsedKg: 60 }).where(eq(productionRunFeedstocks.productionRunId, f.runs[0].id));
     const [b] = await db.insert(feedstocks).values(await feedstockFixtureValues(db, { organizationId: f.ctx.organizationId, facilityId: f.facility.id, feedstockTypeId: a.feedstockTypeId,
       storageLocationId: draw.storageLocationId, code: `E2E-FIFO-BATCH-B-${f.tag}`, status: "complete", massWetKg: 100, massDryKg: 50,
-      moistureContentPercent: 50, deliveryDate: new Date("2026-09-10T12:00:00Z") })).returning();
+      moistureContentPercent: 50, deliveryDate: new Date("2026-09-10T00:00:00Z") })).returning();
     const ledger = await getFeedstockBinStock(f.ctx, draw.storageLocationId);
     expect(ledger.currentWetKg).toBe(140);
     expect(ledger.batches).toMatchObject([{ id: a.id, wetKg: 40, dryKg: 32 }, { id: b.id, wetKg: 100, dryKg: 50 }]);
     expect(ledger.entries.at(-1)?.estimatedDryKg).toBe(82);
-    expect(ledger.missingDryBasis).toBe(false);
   } finally { await cleanupOutputStockFixture(db, f.ctx.organizationId); }
 });

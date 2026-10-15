@@ -289,18 +289,16 @@ describe("credit batch automatic production-run membership", () => {
     }
     if (feedstockId) {
       await db.delete(feedstocks).where(eq(feedstocks.id, feedstockId));
-      await cleanupFeedstockFixtureParents(db);
     }
     if (alternateFeedstockId) {
       await db
         .delete(feedstocks)
         .where(eq(feedstocks.id, alternateFeedstockId));
-      await cleanupFeedstockFixtureParents(db);
     }
     if (otherFeedstockId) {
       await db.delete(feedstocks).where(eq(feedstocks.id, otherFeedstockId));
-      await cleanupFeedstockFixtureParents(db);
     }
+    await cleanupFeedstockFixtureParents(db);
     if (
       storageLocationId &&
       alternateStorageLocationId &&

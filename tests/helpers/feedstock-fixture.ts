@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { and, eq, inArray, notExists } from "drizzle-orm";
-import type { db, DbTransaction } from "@/db";
+import { db, type DbTransaction } from "@/db";
 import { feedstocks, storageLocations, suppliers } from "@/db/schema";
 
 type Executor = typeof db | DbTransaction;
@@ -47,20 +47,30 @@ export async function feedstockFixtureValues(executor: Executor, input: Fixture 
     : completeIntake(executor, input);
 }
 
-/** Call after removing fixture intakes, before deleting their types or facilities. */
+/** Delete before types/facilities; call once with db after commit to forget IDs safely. */
 export async function cleanupFeedstockFixtureParents(executor: Executor) {
   if (ownedBins.size) {
-    const removed = await executor.delete(storageLocations).where(and(
-      inArray(storageLocations.id, [...ownedBins]),
+    const ids = [...ownedBins];
+    await executor.delete(storageLocations).where(and(
+      inArray(storageLocations.id, ids),
       notExists(executor.select({ id: feedstocks.id }).from(feedstocks).where(eq(feedstocks.storageLocationId, storageLocations.id))),
-    )).returning({ id: storageLocations.id });
-    for (const row of removed) ownedBins.delete(row.id);
+    ));
+    if (executor === db) {
+      const remaining = new Set((await db.select({ id: storageLocations.id }).from(storageLocations)
+        .where(inArray(storageLocations.id, ids))).map(row => row.id));
+      for (const id of ids) if (!remaining.has(id)) ownedBins.delete(id);
+    }
   }
   if (ownedSuppliers.size) {
-    const removed = await executor.delete(suppliers).where(and(
-      inArray(suppliers.id, [...ownedSuppliers]),
+    const ids = [...ownedSuppliers];
+    await executor.delete(suppliers).where(and(
+      inArray(suppliers.id, ids),
       notExists(executor.select({ id: feedstocks.id }).from(feedstocks).where(eq(feedstocks.supplierId, suppliers.id))),
-    )).returning({ id: suppliers.id });
-    for (const row of removed) ownedSuppliers.delete(row.id);
+    ));
+    if (executor === db) {
+      const remaining = new Set((await db.select({ id: suppliers.id }).from(suppliers)
+        .where(inArray(suppliers.id, ids))).map(row => row.id));
+      for (const id of ids) if (!remaining.has(id)) ownedSuppliers.delete(id);
+    }
   }
 }
