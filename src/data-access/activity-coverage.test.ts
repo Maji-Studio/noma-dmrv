@@ -51,6 +51,9 @@ const ACTIVITY_COVERAGE = {
     updateCreditBatch: { status: "direct" },
     deleteCreditBatch: { status: "direct" },
   },
+  "credit-batch-removal-template.ts": {
+    switchCreditBatchRemovalTemplate: { status: "direct" },
+  },
   "credit-batch-membership.ts": {
     attachProductionRunToMatchingCreditBatch: { status: "direct" },
   },

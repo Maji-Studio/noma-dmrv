@@ -1,3 +1,6 @@
+import { REMOVAL_TEMPLATE_BLOCKERS } from "@/lib/certification/removal-template-blockers";
+import { effectiveContract, type LineSources } from "@/lib/isometric/template-observations/line-sources";
+import { ownValue } from "@/lib/isometric/semantic-binding-catalog";
 import { pluralize } from "@/lib/copy-utils";
 import { SafeError } from "@/lib/errors";
 import type {
@@ -35,6 +38,7 @@ export interface ResolvedTemplateInputs {
 
 export function resolveTemplateInputs(args: {
   template: IsometricGhgEntryTemplate;
+  lineSources: LineSources;
   blueprintsByKey: Map<string, IsometricComponentBlueprint>;
   agg: AggregatedProductionData;
   externalProjectId: string;
@@ -45,6 +49,7 @@ export function resolveTemplateInputs(args: {
 }): ResolvedTemplateInputs {
   const {
     template,
+    lineSources,
     blueprintsByKey,
     agg,
     externalProjectId,
@@ -62,6 +67,11 @@ export function resolveTemplateInputs(args: {
 
   for (const group of template.groups) {
     for (const component of group.components) {
+      const lineContract = ownValue(lineSources, component.id);
+      if (!lineContract || effectiveContract(lineContract).scope === "unassigned") {
+        throw new SafeError(REMOVAL_TEMPLATE_BLOCKERS.templateLinesNeedReview);
+      }
+      if (effectiveContract(lineContract).scope === "forbidden") throw new SafeError(REMOVAL_TEMPLATE_BLOCKERS.forbiddenLine);
       const monitoredMappings = component.inputs
         .filter((input) => input.type === "monitored")
         .map((input) =>
@@ -69,6 +79,7 @@ export function resolveTemplateInputs(args: {
             group.key,
             component.blueprint_key,
             input.input_key,
+            lineContract,
           ),
         )
         .filter((mapping) => mapping != null);
@@ -116,6 +127,7 @@ export function resolveTemplateInputs(args: {
           groupKey: group.key,
           componentBlueprintKey: component.blueprint_key,
           componentDisplayName: component.display_name,
+          lineContract,
           rtcInput,
           blueprintInput,
           agg,
@@ -151,7 +163,7 @@ export function resolveTemplateInputs(args: {
       new Set(unboundFixedInputs.map((input) => input.component)),
     ).join(", ");
     throw new SafeError(
-      `Removal template "${template.display_name}" has ${unboundFixedInputs.length} fixed ${pluralize(unboundFixedInputs.length, "value")} missing in ${components}. Set each value in the Isometric template editor before submitting.`,
+      `Removal template "${template.display_name}" has ${unboundFixedInputs.length} fixed ${pluralize(unboundFixedInputs.length, "value")} missing in ${components}. ${REMOVAL_TEMPLATE_BLOCKERS.missingFixedDatapoint}`,
     );
   }
 

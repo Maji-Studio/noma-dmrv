@@ -23,6 +23,7 @@ import { StockRows } from "@/components/storage-locations/stock-figures";
 import { formatDate, formatTonnes } from "@/lib/format-utils";
 import { formatWetDryMass, PERCENT_SCALE } from "@/lib/mass-moisture";
 import { CreditBatchLifecycleSteps } from "./credit-batch-lifecycle";
+import { CreditBatchRemovalTemplate } from "./credit-batch-removal-template";
 import { SheetLinkRow, SheetLinkRows } from "./sheet-link-row";
 import { COMPLETED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
 import { MISSING_VALUE } from "@/lib/copy-utils";
@@ -267,6 +268,12 @@ interface CreditBatchSheetSectionsOptions extends CreditBatchRunsContentProps {
   /** Removal/GHG lifecycle summary; undefined while loading or unavailable. */
   healthSummary?: CreditBatchHealthSummary;
   isHealthLoading: boolean;
+  /** Owner or Admin: may switch the batch's Removal template. */
+  canManage?: boolean;
+  /** A submitted Removal holds the batch, so its definition is locked. */
+  locked?: boolean;
+  /** The deep-link focus target the sheet was opened with. */
+  activeFocusTarget?: string | null;
 }
 
 export function creditBatchSheetSections({
@@ -278,6 +285,9 @@ export function creditBatchSheetSections({
   onRetryRuns,
   healthSummary,
   isHealthLoading,
+  canManage = false,
+  locked = false,
+  activeFocusTarget,
 }: CreditBatchSheetSectionsOptions): DetailPanelSection[] {
   const removalId = creditBatch.productionEmissionsClaimedByRemovalId ?? healthSummary?.removalId ?? null;
   const preview = creditBatch.co2eStoredPreview;
@@ -308,6 +318,20 @@ export function creditBatchSheetSections({
               those fields rather than past them. */}
           <span id="batch-details" className="scroll-mt-24" aria-hidden />
         </>
+      ),
+    },
+    {
+      // Read and switched here, never in the edit form: a switch is its own
+      // audited action with its own lock and version checks.
+      title: "Removal template",
+      fields: [],
+      content: (
+        <CreditBatchRemovalTemplate
+          creditBatch={creditBatch}
+          canManage={canManage}
+          locked={locked}
+          activeFocusTarget={activeFocusTarget}
+        />
       ),
     },
     {

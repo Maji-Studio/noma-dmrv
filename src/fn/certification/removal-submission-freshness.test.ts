@@ -69,6 +69,7 @@ describe("assertClaimedRemovalPayloadFresh", () => {
       expect.objectContaining({ prepared: PREPARED }),
     );
     expect(retireClaimedRemovalDraftForDrift).not.toHaveBeenCalled();
+    expect(loadRemovalSubmissionContext).toHaveBeenCalledWith(ORG_CTX, "rem-1", { refreshEnrichment: true });
   });
 
   it("retires the draft when the template stopped being a REMOVAL template", async () => {
