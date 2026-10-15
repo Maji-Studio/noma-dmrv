@@ -152,3 +152,10 @@ it("includes order writes under the existing write inventory", () => {
 it("includes delivery writes in the inventory", () => {
   expect(allWriteTools.filter(tool => tool.scope === "deliveries:write").map(tool => tool.name)).toEqual(["record_delivery", "update_delivery"]);
 });
+
+it("appends application writes after document writes with a separate delete scope", () => {
+  expect(allWriteTools.slice(-5).map(tool => [tool.name, tool.scope])).toEqual([
+    ["request_document_upload", undefined], ["confirm_document_upload", undefined],
+    ["record_application", "applications:write"], ["update_application", "applications:write"], ["delete_application", "applications:delete"],
+  ]);
+});

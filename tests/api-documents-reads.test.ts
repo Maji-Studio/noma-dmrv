@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { and, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { creditBatches, documents, feedstocks, members, productionProcesses, samples } from "@/db/schema";
+import { applications, creditBatches, documents, feedstocks, members, productionProcesses, samples } from "@/db/schema";
 import { createApiKey } from "@/data-access/api-keys";
 import { archiveFacility } from "@/data-access/facilities";
 import { API_KEY_DEFAULT_EXPIRY_SECONDS } from "@/config/api-keys";
@@ -27,6 +27,9 @@ import { GET as deliveryContent } from "@/app/api/v1/deliveries/[idOrCode]/docum
 import { GET as sampleList } from "@/app/api/v1/lab-samples/[idOrCode]/documents/route";
 import { GET as sampleGet } from "@/app/api/v1/lab-samples/[idOrCode]/documents/[documentId]/route";
 import { GET as sampleContent } from "@/app/api/v1/lab-samples/[idOrCode]/documents/[documentId]/content/route";
+import { GET as applicationList } from "@/app/api/v1/applications/[idOrCode]/documents/route";
+import { GET as applicationGet } from "@/app/api/v1/applications/[idOrCode]/documents/[documentId]/route";
+import { GET as applicationContent } from "@/app/api/v1/applications/[idOrCode]/documents/[documentId]/content/route";
 import { lookupProblem } from "./helpers/api-lookups";
 import { createApiOrderReadFixture, insertReadDelivery, insertReadOrder, readRequest, removeApiOrderReadFixture,
   READ_ARCHIVE_AT, READ_TIMEOUT_MS, UNKNOWN_READ_ID } from "./helpers/api-order-read-fixture";
@@ -42,15 +45,19 @@ const routes = {
   feedstock: { list: feedstockList, get: feedstockGet, content: feedstockContent },
   delivery: { list: deliveryList, get: deliveryGet, content: deliveryContent },
   lab_sample: { list: sampleList, get: sampleGet, content: sampleContent },
+  application: { list: applicationList, get: applicationGet, content: applicationContent },
 };
-const ownerTypes = ["feedstock", "delivery", "lab_sample"] as const;
+const ownerTypes = ["feedstock", "delivery", "lab_sample", "application"] as const;
 async function fixture() {
   const f = await createApiOrderReadFixture();
   const key = (await createApiKey(f.ctx, { name: "Document reads", expiresIn: API_KEY_DEFAULT_EXPIRY_SECONDS,
-    scopes: ["feedstocks:read", "deliveries:read", "lab-samples:read"] })).key;
+    scopes: ["feedstocks:read", "deliveries:read", "lab-samples:read", "applications:read"] })).key;
   const [feedstock] = await db.select().from(feedstocks).where(eq(feedstocks.organizationId, f.ctx.organizationId));
   const order = await insertReadOrder(f, `OR-DOC-${f.tag}`);
   const delivery = await insertReadDelivery(f, order.id, 10);
+  const [application] = await db.insert(applications).values({ organizationId: f.ctx.organizationId, code: `AP-DOC-${f.tag}`,
+    deliveryId: delivery.id, applicationDate: new Date("2026-09-16T00:00:00Z"), biocharAppliedTons: 0.001,
+    biocharAppliedDryTons: 0.001, fieldSizeHa: 1, gpsLatitude: 0, gpsLongitude: 0 }).returning();
   const [process] = await db.insert(productionProcesses).values({ organizationId: f.ctx.organizationId,
     facilityId: f.facility.id, feedstockTypeId: feedstock.feedstockTypeId }).returning();
   const [batch] = await db.insert(creditBatches).values({ organizationId: f.ctx.organizationId, facilityId: f.facility.id,
@@ -59,7 +66,7 @@ async function fixture() {
   const [sample] = await db.insert(samples).values({ organizationId: f.ctx.organizationId, creditBatchId: batch.id,
     sampleCode: `LS-DOC-${f.tag}`, samplingTime: new Date(AT),
     totalCarbonPercent: SAMPLE_TOTAL_CARBON_PERCENT, organicCarbonPercent: SAMPLE_ORGANIC_CARBON_PERCENT }).returning();
-  return { ...f, key, batch, owners: { feedstock, delivery, lab_sample: { ...sample, code: sample.sampleCode } } };
+  return { ...f, key, batch, owners: { feedstock, delivery, application, lab_sample: { ...sample, code: sample.sampleCode } } };
 }
 type Fixture = Awaited<ReturnType<typeof fixture>>;
 let a: Fixture;

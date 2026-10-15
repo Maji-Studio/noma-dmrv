@@ -20,6 +20,7 @@ import { recordDeliveryForUi } from "./deliveries";
 const FEEDSTOCK_ID = "11111111-1111-4111-8111-111111111111";
 const INITIAL_VERSION = 1;
 const UPDATE_INPUTS: Record<string, unknown> = {
+  update_application: { applicationId: FEEDSTOCK_ID, expectedVersion: INITIAL_VERSION },
   update_delivery: { deliveryId: FEEDSTOCK_ID, expectedVersion: INITIAL_VERSION },
   update_order: { orderId: FEEDSTOCK_ID, expectedVersion: INITIAL_VERSION },
   update_production_run: { productionRunId: FEEDSTOCK_ID, expectedVersion: INITIAL_VERSION },
@@ -70,4 +71,10 @@ it("publishes only document upload requests, keeping confirm facts, renewal and 
   expect(operation?.supportsDryRun).toBe(false);
   expect(operation?.input.safeParse({ ownerType: "feedstock", ownerId: FEEDSTOCK_ID, documentType: "bill_of_lading", fileName: "receipt.pdf", contentType: "application/pdf", sizeBytes: 8, sha256: "a".repeat(64) }).success).toBe(true);
   for (const id of ["confirm_document_upload", "renew_document_upload", "delete_document", "request_document_upload_app", "confirm_document_upload_app", "delete_document_app"]) expect(getOperation(id)).toBeUndefined();
+});
+
+it("registers application writes with dry run support", () => {
+  for (const id of ["record_application", "update_application", "delete_application"]) {
+    expect(getOperation(id)?.supportsDryRun).toBe(true);
+  }
 });

@@ -2,13 +2,16 @@ import { expect, it } from "vitest";
 import type { OrgRole } from "@/lib/auth/server";
 import { API_DOCUMENT_OWNERS, allowsApiDocumentType, canAccessOwnerDocuments } from "./api-owners";
 
-it("publishes exactly the Phase 6a owner and type table", () => {
-  expect(Object.keys(API_DOCUMENT_OWNERS)).toEqual(["feedstock", "delivery", "lab_sample"]);
+it("publishes the evidence owner and type table including application photos and PDFs", () => {
+  expect(Object.keys(API_DOCUMENT_OWNERS)).toEqual(["feedstock", "delivery", "lab_sample", "application"]);
   expect(API_DOCUMENT_OWNERS.feedstock.documentTypes).toEqual(["bill_of_lading", "weighbridge_ticket", "other_transport_evidence"]);
   expect(API_DOCUMENT_OWNERS.delivery.documentTypes).toEqual(["bill_of_lading", "weighbridge_ticket", "other_transport_evidence", "delivery_receipt", "photo"]);
   expect(API_DOCUMENT_OWNERS.lab_sample).toEqual({ entityType: "sample", path: "lab-samples", documentTypes: ["lab_report"], readScope: "lab-samples:read", writeScope: "lab-samples:write" });
   expect(allowsApiDocumentType("feedstock", "lab_report")).toBe(false);
   expect(allowsApiDocumentType("delivery", "photo")).toBe(true);
+  expect(API_DOCUMENT_OWNERS.application).toEqual({ entityType: "application", path: "applications", documentTypes: ["photo", "pdf"], readScope: "applications:read", writeScope: "applications:write" });
+  for (const type of ["gis_boundary", "weighbridge_ticket", "affidavit"] as const) expect(allowsApiDocumentType("application", type)).toBe(false);
+  expect(canAccessOwnerDocuments({ orgRole: "owner", scopes: ["deliveries:write"] }, "application", "write")).toBe(false);
 });
 
 it.each(Object.entries(API_DOCUMENT_OWNERS))("uses %s owner scopes without implying read or write", (ownerType, owner) => {

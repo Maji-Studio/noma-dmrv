@@ -41,10 +41,10 @@ const ACTIVITY_COVERAGE = {
   "certifier-removal-deletion.ts": {
     finalizeRemovalDeletion: { status: "direct" },
   },
-  "applications.ts": {
-    createApplication: { status: "direct" },
-    updateApplication: { status: "direct" },
-    deleteApplication: { status: "direct" },
+  "application-writes.ts": {
+    createApplicationInTransaction: { status: "runner", operations: ["record_application"] },
+    updateApplicationInTransaction: { status: "runner", operations: ["update_application"] },
+    deleteApplicationInTransaction: { status: "runner", operations: ["delete_application"] },
   },
   "credit-batches.ts": {
     createCreditBatch: { status: "direct" },

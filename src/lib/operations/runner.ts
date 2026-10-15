@@ -24,8 +24,9 @@ import { createHash } from "node:crypto";
 import { z } from "zod";
 import type { Pool } from "pg";
 import type { DbTransaction } from "@/db";
-import { pgErrorCode, PG_LOCK_NOT_AVAILABLE, PG_QUERY_CANCELED, PG_DEADLOCK_DETECTED, PG_SERIALIZATION_FAILURE } from "@/db/errors";
-import { OPERATION_DEADLINE_MS, OPERATION_MAX_ATTEMPTS, OPERATION_RETRY_MIN_DELAY_MS, OPERATION_RETRY_MAX_DELAY_MS } from "@/config/operations";
+import { pgErrorCode, PG_LOCK_NOT_AVAILABLE, PG_QUERY_CANCELED } from "@/db/errors";
+import { OPERATION_DEADLINE_MS, OPERATION_MAX_ATTEMPTS } from "@/config/operations";
+import { isRetryableTransactionError, nextRetryDelayOrThrow } from "@/lib/db/transaction-retry";
 import {
   assertIdempotencyKeyUnused,
   claimIdempotencyKey,
@@ -282,14 +283,16 @@ async function runOperationCore<Input extends z.ZodType, Output, Result>(
         if (!dryRun && effect) {
           const entityType = toActivityEntityType(effect.entityType);
           for (const entityId of effect.entityIds) {
-            await recordActivity(ctx, tx, {
-              action: effect.outcome, entityType, entityId,
-              changedFields: effect.changedFields,
-              source,
-              credentialId: options.audit?.credentialId,
-              requestId: options.audit?.requestId,
-              ...activity.links(entityType, entityId),
-            });
+            for (const links of activity.scopedLinks(entityType, entityId)) {
+              await recordActivity(ctx, tx, {
+                action: effect.outcome, entityType, entityId,
+                changedFields: effect.changedFields,
+                source,
+                credentialId: options.audit?.credentialId,
+                requestId: options.audit?.requestId,
+                ...links,
+              });
+            }
           }
           if (options.audit) {
             await writeApiAuditEvent(ctx, tx, { ...options.audit, operationId: operation.id, effect });
@@ -322,15 +325,9 @@ async function runOperationCore<Input extends z.ZodType, Output, Result>(
         // Claim waits have their own short budget and must remain "still running".
         const claimLockTimeout = failure instanceof DomainError && failure.code === "idempotency_in_progress";
         // Only callback_threw proves COMMIT was never sent and the claim rolled back.
-        if (code === PG_DEADLOCK_DETECTED || code === PG_SERIALIZATION_FAILURE ||
-          (code === PG_LOCK_NOT_AVAILABLE && !claimLockTimeout)) {
+        if (isRetryableTransactionError(failure) && !(code === PG_LOCK_NOT_AVAILABLE && claimLockTimeout)) {
           if (remainingMs(deadlineAt) <= 0) throw deadlineExceeded("while saving");
-          if (attempt === OPERATION_MAX_ATTEMPTS) {
-            throw new DomainError("concurrent_write_retry", "Concurrent changes prevented saving. Retry shortly.", { retryable: true });
-          }
-          const delayMs = OPERATION_RETRY_MIN_DELAY_MS + Math.floor(
-            Math.random() * (OPERATION_RETRY_MAX_DELAY_MS - OPERATION_RETRY_MIN_DELAY_MS + 1),
-          );
+          const delayMs = nextRetryDelayOrThrow(attempt);
           if (remainingMs(deadlineAt) <= delayMs) throw deadlineExceeded("before retrying");
           await new Promise((resolve) => setTimeout(resolve, delayMs));
           if (remainingMs(deadlineAt) <= 0) throw deadlineExceeded("before retrying");

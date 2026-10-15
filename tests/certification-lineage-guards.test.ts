@@ -1,3 +1,4 @@
+import { createTestApplication, deleteTestApplication, updateTestApplication } from "./helpers/application-writers";
 import { updateOrder } from "@/lib/operations/orders";
 import { runOperationInProcess } from "@/lib/operations/runner";
 import { z } from "zod";
@@ -15,11 +16,7 @@ import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-o
 import { waitForAdvisoryLockWait, withLineageFixture } from "./helpers/certification-lineage-fixture";
 import { beforeAll, describe, expect, it } from "vitest";
 import { and, eq, sql } from "drizzle-orm";
-import {
-  createApplication,
-  deleteApplication,
-  updateApplication,
-} from "@/data-access/applications";
+
 import {
   createBiocharProduct,
   updateBiocharProduct,
@@ -90,7 +87,7 @@ describe("certification lineage guards", () => {
 
   it("allows application edits while the lineage has no submitted certification artifact", async () => {
     await withLineageFixture(async (fixture) => {
-      const updated = await updateApplication(makeTestOrgContext(TEST_USER_ID), fixture.applicationId, { expectedVersion: await labLogisticsVersion(makeTestOrgContext(TEST_USER_ID), "applications", fixture.applicationId),
+      const updated = await updateTestApplication(makeTestOrgContext(TEST_USER_ID), fixture.applicationId, { expectedVersion: await labLogisticsVersion(makeTestOrgContext(TEST_USER_ID), "applications", fixture.applicationId),
         fieldIdentifier: "editable-field",
       });
 
@@ -445,14 +442,14 @@ describe("certification lineage guards", () => {
 
   it("rejects a new application on a submitted delivery lineage", async () => {
     await withLineageFixture(async (fixture) => {
-      await expect(createApplication(makeTestOrgContext(TEST_USER_ID), {
+      await expect(createTestApplication(makeTestOrgContext(TEST_USER_ID), {
         code: `AP-LOCKED-${crypto.randomUUID().slice(0, 8).toUpperCase()}`,
         deliveryId: fixture.deliveryId,
         applicationDate: new Date("2026-06-17T00:00:00Z"),
-        biocharAppliedTons: 0.01,
+        appliedWetMassKg: 10,
         fieldSizeHa: 1,
       })).rejects.toThrow(LOCKED_COPY);
-      await expect(updateApplication(makeTestOrgContext(TEST_USER_ID), fixture.applicationId, { expectedVersion: await labLogisticsVersion(makeTestOrgContext(TEST_USER_ID), "applications", fixture.applicationId), fieldSizeHa: 2 })).rejects.toThrow(LOCKED_COPY);
+      await expect(updateTestApplication(makeTestOrgContext(TEST_USER_ID), fixture.applicationId, { expectedVersion: await labLogisticsVersion(makeTestOrgContext(TEST_USER_ID), "applications", fixture.applicationId), fieldSizeHa: 2 })).rejects.toThrow(LOCKED_COPY);
     });
   });
 
@@ -475,7 +472,7 @@ describe("certification lineage guards", () => {
   it("rejects application edits once linked to a submitted removal", async () => {
     await withLineageFixture(async (fixture) => {
       await expect(
-        updateApplication(makeTestOrgContext(TEST_USER_ID), fixture.applicationId, { expectedVersion: await labLogisticsVersion(makeTestOrgContext(TEST_USER_ID), "applications", fixture.applicationId),
+        updateTestApplication(makeTestOrgContext(TEST_USER_ID), fixture.applicationId, { expectedVersion: await labLogisticsVersion(makeTestOrgContext(TEST_USER_ID), "applications", fixture.applicationId),
           fieldIdentifier: "locked-field",
         }),
       ).rejects.toThrow(LOCKED_COPY);
@@ -485,7 +482,7 @@ describe("certification lineage guards", () => {
   it("rejects deleting applications from a submitted removal", async () => {
     await withLineageFixture(async (fixture) => {
       await expect(
-        deleteApplication(makeTestOrgContext(TEST_USER_ID), fixture.applicationId, await labLogisticsVersion(makeTestOrgContext(TEST_USER_ID), "applications", fixture.applicationId)),
+        deleteTestApplication(makeTestOrgContext(TEST_USER_ID), fixture.applicationId, await labLogisticsVersion(makeTestOrgContext(TEST_USER_ID), "applications", fixture.applicationId)),
       ).rejects.toThrow(LOCKED_COPY);
     });
   });

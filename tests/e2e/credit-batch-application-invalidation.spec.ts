@@ -79,7 +79,7 @@ async function createApplicationForLineage(
 
   await page.fill('input[name="applicationDate"]', today);
   await selectFirstEntity(page, "Delivery");
-  await page.fill('input[name="biocharAppliedTons"]', "5000");
+  await page.fill('input[name="biocharAppliedKg"]', "5000");
   await page.fill('input[name="fieldSizeHa"]', "2");
   await page.locator('[role="dialog"]').locator('button:has-text("Create application")').click();
   await waitForSideSheetClose(page);
@@ -105,7 +105,7 @@ test.describe("Credit batch view reflects application mutations (#396)", () => {
     const appliedBiocharMetric = card
       .getByText("Applied biochar", { exact: true })
       .locator("xpath=..");
-    // The applications form's "biocharAppliedTons" input is entered in kg
+    // The applications form's "biocharAppliedKg" input is entered in kg
     // (applicationTonsToKg converts for display) but the schema field — and
     // this rollup — is in tonnes, so 5000 kg in reads back as "5.00 t".
     await expect(
@@ -123,7 +123,7 @@ test.describe("Credit batch view reflects application mutations (#396)", () => {
     await waitForSideSheet(page);
     await page.getByRole("button", { name: "Edit application" }).click();
 
-    await page.fill('input[name="biocharAppliedTons"]', "3000");
+    await page.fill('input[name="biocharAppliedKg"]', "3000");
     await page.locator('[role="dialog"]').locator('button:has-text("Update application")').click();
     await waitForSideSheetClose(page);
 

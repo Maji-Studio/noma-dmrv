@@ -99,3 +99,15 @@ export function claudeFlags(caseId: string, fileDirectory?: string): string[] {
   }
   return flags;
 }
+
+export const APPLICATION_TOOL_CALL_BUDGET = 8;
+export const APPLICATION_SCOPES = ["applications:read", "applications:write", "deliveries:read"];
+export const APPLICATION_CASES = [
+  { id: "application-complete", text: ({ deliveryCode }: { deliveryCode: string }) =>
+    `Applied 1.2 t of ${deliveryCode} yesterday on 3 ha, field North, maize.` },
+  { id: "application-missing-field-size", text: ({ deliveryCode }: { deliveryCode: string }) =>
+    `Applied 1.2 t of ${deliveryCode} yesterday, field North, maize.` },
+  { id: "application-over-capacity", text: ({ deliveryCode }: { deliveryCode: string }) =>
+    `Applied 1.2 t of ${deliveryCode} yesterday on 3 ha, field South, maize.` },
+] as const;
+export type ApplicationCaseId = typeof APPLICATION_CASES[number]["id"];

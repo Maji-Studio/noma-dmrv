@@ -3,7 +3,7 @@ import { mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { assertThrowawayTestDatabase, resolveTestDatabaseUrl } from "../../tests/helpers/throwaway-database";
-import { CASES, DELIVERY_CASES, DOCUMENT_CASES, EVAL_PORT, LAB_CASES, STOCK_CASES } from "./config";
+import { APPLICATION_CASES, CASES, DELIVERY_CASES, DOCUMENT_CASES, EVAL_PORT, LAB_CASES, STOCK_CASES } from "./config";
 import { runClaude } from "./claude";
 import type { ManagedProcess } from "./process";
 import { markdownReport, scoreCase, type CaseScore } from "./score";
@@ -18,6 +18,8 @@ import type { DeliveryEvalFixture } from "./fixture-delivery";
 import { scoreDeliveryCase } from "./score-delivery";
 import type { DocumentEvalFixture } from "./fixture-documents";
 import { scoreDocumentCase } from "./score-documents";
+import type { ApplicationEvalFixture } from "./fixture-applications";
+import { scoreApplicationCase } from "./score-applications";
 
 async function main(): Promise<void> {
   const keep = process.argv.includes("--keep");
@@ -58,6 +60,7 @@ async function main(): Promise<void> {
   const labFixtures: LabEvalFixture[] = [];
   const stockFixtures: StockEvalFixture[] = [];
   const deliveryFixtures: DeliveryEvalFixture[] = [];
+  const applicationFixtures: ApplicationEvalFixture[] = [];
   const documentFixtures: DocumentEvalFixture[] = [];
   // Every seeded organization, so cleanup covers all case families.
   const organizations: { id: string; remove: () => Promise<void> }[] = [];
@@ -70,6 +73,7 @@ async function main(): Promise<void> {
     const labModule = await import("./fixture-lab");
     const stockModule = await import("./fixture-stock");
     const deliveryModule = await import("./fixture-delivery");
+    const applicationModule = await import("./fixture-applications");
     const documentModule = await import("./fixture-documents");
     const { seedFixture, fixtureTarget, readSnapshot, evaluationExpectation, evaluationRunRequirements } = fixtureModule;
     const expectation = evaluationExpectation();
@@ -111,6 +115,13 @@ async function main(): Promise<void> {
       documentFixtures.push(fixture);
       keys.push(fixture.key);
       organizations.push({ id: fixture.ctx.organizationId, remove: () => documentModule.cleanupDocumentFixture(fixture) });
+    }
+    for (const testCase of APPLICATION_CASES) {
+      controller.signal.throwIfAborted();
+      const fixture = await applicationModule.seedApplicationFixture(testCase.id);
+      applicationFixtures.push(fixture);
+      keys.push(fixture.key);
+      organizations.push({ id: fixture.ctx.organizationId, remove: () => applicationModule.cleanupApplicationFixture(fixture) });
     }
     const server = startServer(process.cwd(), runDirectory, process.env, keys);
     children.add(server);
@@ -169,6 +180,17 @@ async function main(): Promise<void> {
         controller.signal, (child) => children.add(child), (child) => children.delete(child), fixture.fileDirectory);
       const snapshot = await documentModule.readDocumentSnapshot(fixture);
       const score = scoreDocumentCase(target, snapshot, run.transcript);
+      scores.push(score);
+      results.push({ ...score, organizationId: fixture.ctx.organizationId, target, snapshot, ...run });
+    }
+    for (const [index, testCase] of APPLICATION_CASES.entries()) {
+      controller.signal.throwIfAborted();
+      const fixture = applicationFixtures[index];
+      const target = fixture.applicationTarget;
+      const run = await runClaude(testCase.id, testCase.text(target), fixture.key, baseUrl, runDirectory,
+        controller.signal, (child) => children.add(child), (child) => children.delete(child));
+      const snapshot = await applicationModule.readApplicationSnapshot(fixture);
+      const score = scoreApplicationCase(testCase.id, target, snapshot, run.transcript);
       scores.push(score);
       results.push({ ...score, organizationId: fixture.ctx.organizationId, target, snapshot, ...run });
     }

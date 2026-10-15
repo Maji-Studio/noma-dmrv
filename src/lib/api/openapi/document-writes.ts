@@ -30,7 +30,7 @@ export function addDocumentWritePaths(paths: Paths, publishOutput: (schema: z.Zo
           ...problemResponses(WRITE_ERRORS),
           "201": jsonResponse("Upload requested, or stored outcome replayed with a newly minted capability or warning.", publishOutput(documentUploadEnvelopeSchema), { ...etagHeader, ...locationHeader, "Idempotent-Replayed": writeHeaders["Idempotent-Replayed"] }),
         }, [targetParameter(), ...noDryRunParameters, { ...idempotencyParameter(true), description: "Required unique key for this upload request. Reuse on retry to recover the stored document with a fresh pending upload capability. No dry run." }]),
-      requestBody: requestBody(operationInput(declaration), { documentType: owner.documentTypes[0], fileName: "receipt.pdf", contentType: "application/pdf", sizeBytes: 8, sha256: "cf9f6d7f6a764f117a86e8e0baaa26e7e0a36f4498aa78f7ff49275d9636fec0" }),
+      requestBody: requestBody(operationInput(declaration), { documentType: ownerType === "application" ? "pdf" : owner.documentTypes[0], fileName: "receipt.pdf", contentType: "application/pdf", sizeBytes: 8, sha256: "cf9f6d7f6a764f117a86e8e0baaa26e7e0a36f4498aa78f7ff49275d9636fec0" }),
     };
     paths[`${base}/{documentId}/confirm`] = { post: {
       ...privateOperation(`confirm_${ownerType}_document_upload`, owner.writeScope,

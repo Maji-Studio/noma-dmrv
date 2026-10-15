@@ -47,3 +47,10 @@ it("gives every permission row a nonempty label", () => {
     expect(row.label.trim(), row.entity).not.toBe("");
   }
 });
+
+it("defaults application reads on and requires opting into mutations", () => {
+  expect(API_PERMISSION_ROWS).toContainEqual({ entity: "applications", label: "Applications", scopes: ["applications:read", "applications:write", "applications:delete"] });
+  expect(API_KEY_DEFAULT_SCOPES).toContain("applications:read");
+  expect(API_KEY_DEFAULT_SCOPES).not.toContain("applications:write");
+  expect(API_KEY_DEFAULT_SCOPES).not.toContain("applications:delete");
+});

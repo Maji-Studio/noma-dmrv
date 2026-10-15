@@ -8,7 +8,7 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { updateApplicationSchema } from "@/schemas/applications";
+import { updateApplicationInput } from "@/schemas/application-input";
 import { updateCustomerLocationSchema } from "@/schemas/customers";
 import { updateFeedstockSchema } from "@/schemas/feedstocks";
 import { updateOrderSchema } from "@/schemas/orders";
@@ -118,27 +118,27 @@ describe("updateOrderSchema removed price fields", () => {
   });
 });
 
-describe("updateApplicationSchema soil temperature", () => {
+describe("updateApplicationInput soil temperature", () => {
   it("separates omitted, cleared and zero", () => {
     expect(
-      parsed(updateApplicationSchema, { expectedVersion: 1, applicationId: APPLICATION_ID })
+      parsed(updateApplicationInput, { expectedVersion: 1, applicationId: APPLICATION_ID })
         .soilTemperatureC,
     ).toBeUndefined();
     expect(
-      parsed(updateApplicationSchema, { expectedVersion: 1,
+      parsed(updateApplicationInput, { expectedVersion: 1,
         applicationId: APPLICATION_ID,
         soilTemperatureC: null,
       }).soilTemperatureC,
     ).toBeNull();
     // Zero °C is a real soil temperature, not a missing one.
     expect(
-      parsed(updateApplicationSchema, { expectedVersion: 1,
+      parsed(updateApplicationInput, { expectedVersion: 1,
         applicationId: APPLICATION_ID,
         soilTemperatureC: 0,
       }).soilTemperatureC,
     ).toBe(0);
     expect(
-      parsed(updateApplicationSchema, { expectedVersion: 1,
+      parsed(updateApplicationInput, { expectedVersion: 1,
         applicationId: APPLICATION_ID,
         soilTemperatureC: 25,
       }).soilTemperatureC,

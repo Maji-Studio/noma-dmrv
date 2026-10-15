@@ -2,6 +2,18 @@ import { expect, it } from "vitest";
 import { API_QUERY_MAX_LENGTH, API_LIST_DEFAULT_LIMIT, API_LIST_MAX_LIMIT } from "@/config/api-rest";
 import { customerLocationListSchema, orderListSchema, storageLocationListSchema, creditBatchListSchema, feedstockListSchema, labSampleListSchema, productionRunListSchema, resourceQueries } from "./query-schemas";
 import { parseApiQuery } from "./query";
+import { applicationListSchema, deliveryListSchema } from "./query-schemas";
+
+it("parses application lineage and calendar filters and delivery remaining mass strictly", () => {
+  const id = "df2795a4-886b-4a89-bbdd-532c6b1b8e45";
+  expect(parseApiQuery(request(`?facilityId=${id.toUpperCase()}&deliveryId=${id}&orderId=${id}&creditBatchId=${id}&evidenceMethod=visual&q=maize&code=AP-1&appliedFrom=2024-02-29&appliedBefore=2024-03-01`), applicationListSchema))
+    .toEqual({ limit: API_LIST_DEFAULT_LIMIT, facilityId: id, deliveryId: id, orderId: id, creditBatchId: id, evidenceMethod: "visual", q: "maize", code: "AP-1", appliedFrom: "2024-02-29", appliedBefore: "2024-03-01" });
+  for (const query of ["?unknown=x", "?appliedFrom=2026-02-29", "?appliedBefore=2026-04-31", "?appliedFrom=0000-01-01", "?appliedBefore=2026-01-01T00:00:00Z", "?evidenceMethod=photo", "?deliveryId=bad", "?q=a&q=b"]) {
+    expect(() => parseApiQuery(request(query), applicationListSchema)).toThrow(expect.objectContaining({ code: "invalid_query" }));
+  }
+  for (const value of ["true", "false"]) expect(parseApiQuery(request(`?hasRemainingMass=${value}`), deliveryListSchema)).toMatchObject({ hasRemainingMass: value });
+  expect(() => parseApiQuery(request("?hasRemainingMass=1"), deliveryListSchema)).toThrow();
+});
 
 const request = (query: string) => new Request(`https://example.test/api/v1/feedstocks${query}`);
 it("preserves feedstock query decoding and strict unknown/repeated parameter rejection", () => {

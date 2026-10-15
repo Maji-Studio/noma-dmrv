@@ -13,6 +13,10 @@ import { documentRepresentationSchema } from "@/lib/representations/documents";
 import { db } from "@/db";
 import { apiRateLimitBuckets, documents, feedstocks, members } from "@/db/schema";
 import { archiveFacility } from "@/data-access/facilities";
+import { createApiKey } from "@/data-access/api-keys";
+import { API_KEY_DEFAULT_EXPIRY_SECONDS } from "@/config/api-keys";
+import { deliveries } from "@/db/schema";
+import { GET as getApplicationDocument } from "@/app/api/v1/applications/[idOrCode]/documents/[documentId]/route";
 import { API_RATE_LIMITS } from "@/config/api-rate-limits";
 import { DOCUMENT_CONFIRM_RETRY_AFTER_SECONDS } from "@/config/documents";
 import { API_BODY_MAX_BYTES } from "@/config/api-rest";
@@ -76,7 +80,54 @@ async function read(documentId: string) {
     { params: Promise.resolve({ idOrCode: a.owners.delivery.id, documentId }) });
 }
 describe("document REST writes", { timeout: READ_TIMEOUT_MS }, () => {
-  it.each(["feedstock", "delivery", "lab_sample"] as const)("requests, uploads and confirms %s evidence", async owner => {
+  it("requires application write scope and accepts only photo and PDF declarations", async () => {
+    const credential = (await createApiKey(a.ctx, { name: "Application documents", expiresIn: API_KEY_DEFAULT_EXPIRY_SECONDS,
+      scopes: ["applications:read", "applications:write"] })).key;
+    const deliveryCredential = (await createApiKey(a.ctx, { name: "Delivery only", expiresIn: API_KEY_DEFAULT_EXPIRY_SECONDS,
+      scopes: ["deliveries:write"] })).key;
+    await problem(await callDocumentWrite(a, "application", "request", { credential: deliveryCredential }), 403, "missing_scope");
+    await problem(await callDocumentWrite(a, "application", "confirm", { credential: deliveryCredential, documentId: UNKNOWN_READ_ID }), 403, "missing_scope");
+    for (const documentType of ["gis_boundary", "weighbridge_ticket", "affidavit"]) {
+      await problem(await callDocumentWrite(a, "application", "request", { credential, body: documentInput("application", { documentType }) }), 422, "validation_failed");
+    }
+    for (const metadata of ["evidenceRole", "logbookEvidenceType"]) {
+      await problem(await callDocumentWrite(a, "application", "request", { credential, body: documentInput("application", { [metadata]: "hidden" }) }), 422, "validation_failed");
+    }
+    const requested = await callDocumentWrite(a, "application", "request", { credential });
+    expect(requested.status).toBe(201);
+    const body = await requested.json();
+    await put(body.upload);
+    expect((await callDocumentWrite(a, "application", "confirm", { credential, documentId: body.data.id })).status).toBe(200);
+    const read = await getApplicationDocument(readRequest(`/applications/${a.owners.application.id}/documents/${body.data.id}`, credential),
+      { params: Promise.resolve({ idOrCode: a.owners.application.id, documentId: body.data.id }) });
+    expect((await read.json()).data).toMatchObject({ ownerType: "application", ownerId: a.owners.application.id, documentType: "pdf", sha256: DOCUMENT_SHA256 });
+  });
+
+  it("refuses application uploads and pending confirmation after delivery or facility archive", async () => {
+    const requested = await callDocumentWrite(a, "application", "request");
+    expect(requested.status).toBe(201);
+    const body = await requested.json();
+    await put(body.upload);
+    await db.update(deliveries).set({ archivedAt: new Date() }).where(eq(deliveries.id, a.owners.delivery.id));
+    await problem(await callDocumentWrite(a, "application", "request"), 404, "not_found");
+    await problem(await callDocumentWrite(a, "application", "confirm", { documentId: body.data.id }), 404, "not_found");
+    await db.update(deliveries).set({ archivedAt: null }).where(eq(deliveries.id, a.owners.delivery.id));
+    await archiveFacility(a.ctx, a.facility.id, a.facility.version);
+    await problem(await callDocumentWrite(a, "application", "request"), 404, "not_found");
+    await problem(await callDocumentWrite(a, "application", "confirm", { documentId: body.data.id }), 404, "not_found");
+  });
+
+  it("refuses application document writes once its lineage is submitted", async () => {
+    const requested = await callDocumentWrite(a, "application", "request");
+    expect(requested.status).toBe(201);
+    const body = await requested.json();
+    await put(body.upload);
+    await submitDocumentDelivery(a, a.owners.application.id);
+    await problem(await callDocumentWrite(a, "application", "request"), 409, "certification_locked");
+    await problem(await callDocumentWrite(a, "application", "confirm", { documentId: body.data.id }), 409, "certification_locked");
+  });
+
+  it.each(["feedstock", "delivery", "lab_sample", "application"] as const)("requests, uploads and confirms %s evidence", async owner => {
     const response = await callDocumentWrite(a, owner, "request", { id: a.owners[owner].code });
     expect(response.status).toBe(201);
     const body = await response.json();
@@ -237,7 +288,7 @@ describe("document REST writes", { timeout: READ_TIMEOUT_MS }, () => {
     expect(await documentRows(a)).toEqual([]);
   });
 
-  it.each(["feedstock", "delivery", "lab_sample"] as const)("checks %s write permission before foreign or unknown owner existence", async owner => {
+  it.each(["feedstock", "delivery", "lab_sample", "application"] as const)("checks %s write permission before foreign or unknown owner existence", async owner => {
     for (const id of [UNKNOWN_READ_ID, b.owners[owner].id]) {
       for (const kind of ["request", "confirm"] as const) {
         await problem(await callDocumentWrite(a, owner, kind, { id, documentId: UNKNOWN_READ_ID, credential: a.key }), 403, "missing_scope");
@@ -387,7 +438,7 @@ describe("document REST writes", { timeout: READ_TIMEOUT_MS }, () => {
     expect(await documentAudits(a)).toHaveLength(1);
   });
 
-  it.each(["feedstocks", "deliveries", "lab-samples"])("keeps DELETE, PATCH and PUT unsupported on every %s document path", async owner => {
+  it.each(["feedstocks", "deliveries", "lab-samples", "applications"])("keeps DELETE, PATCH and PUT unsupported on every %s document path", async owner => {
     for (const suffix of ["", `/${UNKNOWN_READ_ID}`, `/${UNKNOWN_READ_ID}/content`, `/${UNKNOWN_READ_ID}/confirm`]) {
       for (const method of ["DELETE", "PATCH", "PUT"]) {
         const path = `/api/v1/${owner}/${UNKNOWN_READ_ID}/documents${suffix}`;

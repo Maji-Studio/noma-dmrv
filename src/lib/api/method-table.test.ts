@@ -80,7 +80,7 @@ it("exposes delivery creates and metadata patches without DELETE", async () => {
 });
 
 it("exposes document requests and keyless confirmations without delete or edit methods", () => {
-  for (const owner of ["feedstocks", "deliveries", "lab-samples"]) {
+  for (const owner of ["feedstocks", "deliveries", "lab-samples", "applications"]) {
     for (const suffix of ["", "/id", "/id/content"]) {
       expect(getApiMethodEntry(`/api/v1/${owner}/CODE/documents${suffix}`)).toMatchObject({
         methods: suffix ? ["GET", "HEAD", "OPTIONS"] : ["GET", "HEAD", "OPTIONS", "POST"],
@@ -91,4 +91,16 @@ it("exposes document requests and keyless confirmations without delete or edit m
       methods: ["OPTIONS", "POST"], scopes: [`${owner}:write`], public: false,
     });
   }
+});
+
+it("publishes application writes while boundary and balance remain read only", () => {
+  for (const path of ["/applications/AP-1/boundary", "/deliveries/DL-1/application-balance"]) {
+    expect(getApiMethodEntry(`/api/v1${path}`)).toMatchObject({ methods: ["GET", "HEAD", "OPTIONS"],
+      scopes: [path.startsWith("/applications") ? "applications:read" : "deliveries:read"] });
+  }
+});
+
+it("includes application create, update and delete in Allow", () => {
+  expect(getApiMethodEntry("/api/v1/applications")?.methods).toEqual(["GET", "HEAD", "OPTIONS", "POST"]);
+  expect(getApiMethodEntry("/api/v1/applications/id")?.methods).toEqual(["DELETE", "GET", "HEAD", "OPTIONS", "PATCH"]);
 });

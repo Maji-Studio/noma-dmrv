@@ -1,4 +1,5 @@
 import { apiScopeRepresentationSchema } from "@/lib/representations/me";
+import { documentOwnerTypeRepresentationSchema } from "@/lib/representations/documents";
 import { z } from "zod";
 import { API_CURSOR_MAX_LENGTH, API_IDEMPOTENCY_KEY_MAX_LENGTH, API_LIST_DEFAULT_LIMIT, API_LIST_MAX_LIMIT } from "@/config/api-rest";
 import { IDEMPOTENCY_RETENTION_DAYS } from "@/config/operations";
@@ -15,8 +16,8 @@ export function outputSchema(schema: z.ZodType, representations: Record<string, 
   const result: JsonSchema = z.toJSONSchema(schema, {
     io: "output",
     override: ({ zodSchema, jsonSchema }) => {
-      if (zodSchema === apiScopeRepresentationSchema) {
-        // Scopes grow as resources are added. Publish an extensible vocabulary,
+      if (zodSchema === apiScopeRepresentationSchema || zodSchema === documentOwnerTypeRepresentationSchema) {
+        // Scopes and document owners grow as resources are added. Publish an extensible vocabulary,
         // while the runtime Zod enum still enforces the authorization allowlist.
         const wire = jsonSchema as JsonSchema;
         wire["x-extensible-enum"] = wire.enum;

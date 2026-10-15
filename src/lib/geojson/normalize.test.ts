@@ -1,6 +1,9 @@
-import { describe, expect, it } from "vitest";
+import * as turfRewind from "@turf/rewind";
+import { describe, expect, it, vi } from "vitest";
 import { GEOJSON_MAX_FEATURES } from "@/config/geo";
 import { normalizeGeoJson } from "./normalize";
+
+vi.mock("@turf/rewind", { spy: true });
 
 const RING_2D = [
   [37.42, -3.25],
@@ -401,4 +404,45 @@ describe("normalizeGeoJson", () => {
       expect(result.error).toContain(`maximum is ${GEOJSON_MAX_FEATURES}`);
     }
   });
+});
+
+it("normalizes raw API geometry with server capture facts and no file name", () => {
+  const result = normalizeGeoJson({ source: "api", text: JSON.stringify({ type: "Polygon", coordinates: [[[37, -3], [38, -3], [38, -2], [37, -3]]] }) });
+  expect(result).toMatchObject({ ok: true, boundary: { source: "api", fileName: null, capturedAt: expect.any(String), collection: { type: "FeatureCollection" } } });
+});
+
+it.each([
+  { type: "Polygon", coordinates: [] },
+  { type: "Polygon", coordinates: null },
+  { type: "Polygon", coordinates: {} },
+  { type: "Polygon", coordinates: [null] },
+  { type: "Polygon", coordinates: [[]] },
+  { type: "Polygon", coordinates: [[[0, 0], [1, 0], [0, 0]]] },
+  { type: "Polygon", coordinates: [[[0, 0], [1, 0], [1, 1], [0, 1]]] },
+  { type: "Polygon", coordinates: [[[0, 0], ["1", 0], [1, 1], [0, 0]]] },
+  { type: "Polygon", coordinates: [[[0, 0], [null, 0], [1, 1], [0, 0]]] },
+  { type: "Polygon", coordinates: [[[0, 0], [1], [1, 1], [0, 0]]] },
+  { type: "MultiPolygon", coordinates: [] },
+  { type: "MultiPolygon", coordinates: [[]] },
+  { type: "MultiPolygon", coordinates: [[RING_2D], []] },
+  { type: "MultiPolygon", coordinates: null },
+  { type: "Feature", properties: {}, geometry: null },
+  { type: "FeatureCollection", features: null },
+  { type: "FeatureCollection", features: [null] },
+  { type: "GeometryCollection", geometries: [null] },
+])("refuses malformed geometry without throwing: %j", value => {
+  for (const source of ["paste", "upload"] as const) {
+    expect(normalize(value, source)).toMatchObject({ ok: false, error: expect.any(String) });
+  }
+});
+
+it("refuses nonfinite JSON coordinates without throwing", () => {
+  expect(normalizeGeoJson({ source: "api", text: '{"type":"Polygon","coordinates":[[[0,0],[1e400,0],[1,1],[0,0]]]}' })).toMatchObject({ ok: false, error: expect.any(String) });
+});
+
+it("propagates unexpected normalization errors", () => {
+  vi.mocked(turfRewind.rewind).mockImplementationOnce(() => {
+    throw new TypeError("Internal geometry failure");
+  });
+  expect(() => normalize(polygonFeature())).toThrow(new TypeError("Internal geometry failure"));
 });

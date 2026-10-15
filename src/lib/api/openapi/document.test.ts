@@ -25,7 +25,12 @@ function visit(value: unknown, inspect: (node: JsonSchema) => void) {
   if (Array.isArray(value)) return value.forEach((child) => visit(child, inspect));
   const node = value as JsonSchema;
   inspect(node);
-  Object.values(node).forEach((child) => visit(child, inspect));
+  Object.entries(node).forEach(([key, child]) => {
+    // A property map is not a schema, even when GeoJSON gives it a field named properties.
+    if (key === "properties" && child && typeof child === "object" && !Array.isArray(child)) {
+      Object.values(child).forEach((field) => visit(field, inspect));
+    } else visit(child, inspect);
+  });
 }
 
 it("is deterministic and exactly matches the committed contract", () => {
@@ -96,7 +101,7 @@ it("publishes business dates as date, and preserves operation input types and co
 it("publishes pagination and search bounds on every list route", () => {
   const lists = Object.values(document.paths).map((methods) => methods.get)
     .filter((operation) => operation?.operationId.startsWith("find_"));
-  expect(lists).toHaveLength(22);
+  expect(lists).toHaveLength(24);
   for (const operation of lists) {
     const parameters = operation.parameters as { name: string; in: string; required: boolean; schema: JsonSchema }[];
     const query = Object.fromEntries(parameters.filter((parameter) => parameter.in === "query").map((parameter) => [parameter.name, parameter]));
@@ -462,7 +467,7 @@ it("publishes delivery write bodies, allocations, preconditions and complete pro
 });
 
 it("publishes document reads with owner scopes, validators and private expiring redirects", () => {
-  for (const owner of ["feedstocks", "deliveries", "lab-samples"]) {
+  for (const owner of ["feedstocks", "deliveries", "lab-samples", "applications"]) {
     const base = `/${owner}/{idOrCode}/documents`;
     for (const suffix of ["", "/{documentId}", "/{documentId}/content"]) {
       const methods = document.paths[base + suffix];
@@ -484,7 +489,7 @@ it("publishes document reads with owner scopes, validators and private expiring 
 });
 
 it("publishes upload capabilities, keyless confirm and every document write refusal", () => {
-  for (const owner of ["feedstocks", "deliveries", "lab-samples"]) {
+  for (const owner of ["feedstocks", "deliveries", "lab-samples", "applications"]) {
     const base = `/${owner}/{idOrCode}/documents`;
     const request = document.paths[base].post;
     expect(request).toMatchObject({ "x-required-scope": `${owner}:write` });

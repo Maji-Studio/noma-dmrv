@@ -1,3 +1,4 @@
+import { deleteTestApplication } from "./helpers/application-writers";
 import { labLogisticsVersion } from "./helpers/lab-logistics-version";
 import { deleteDocumentInTransaction } from "@/data-access/document-mutations";
 import { deleteOutputFacilityFixtures } from "./helpers/output-contract-fixtures";
@@ -48,7 +49,7 @@ import { facilities } from "@/db/schema/facilities";
 import { feedstockTypes } from "@/db/schema/feedstock";
 import { productionProcesses } from "@/db/schema/production-processes";
 import { withReleasedDocumentMirrorLock } from "@/data-access/certifier-removal-deletion";
-import { deleteApplication } from "@/data-access/applications";
+
 import { deleteDelivery } from "@/data-access/deliveries";
 import { deleteRemoval } from "@/fn/certification/delete-removal";
 import {
@@ -277,7 +278,7 @@ describe("deleteRemoval evidence cleanup", () => {
       ]),
     );
     const ctx = makeTestOrgContext();
-    await expect(deleteApplication(ctx, chain.applicationId, await labLogisticsVersion(ctx, "applications", chain.applicationId))).resolves.toBeUndefined();
+    await expect(deleteTestApplication(ctx, chain.applicationId, await labLogisticsVersion(ctx, "applications", chain.applicationId))).resolves.toBeUndefined();
     await expect(deleteDelivery(ctx, application.deliveryId!, await labLogisticsVersion(ctx, "deliveries", application.deliveryId!))).rejects.toThrow(/Posted deliveries retain their history/);
     await expect(db.transaction((tx) => deleteDocumentInTransaction(ctx, tx, { documentId: deliveryDocumentId, expectedVersion: 1 }))).resolves.toMatchObject({ id: deliveryDocumentId });
     expect(
@@ -319,7 +320,7 @@ describe("deleteRemoval evidence cleanup", () => {
     expect(registry.sources).toHaveLength(1);
     expect(registry.requestCount("DELETE", `/sources/${sharedSourceId}`)).toBe(0);
     await expect(
-      deleteApplication(makeTestOrgContext(), chain.applicationId, await labLogisticsVersion(makeTestOrgContext(), "applications", chain.applicationId)),
+      deleteTestApplication(makeTestOrgContext(), chain.applicationId, await labLogisticsVersion(makeTestOrgContext(), "applications", chain.applicationId)),
     ).rejects.toThrow(/certification provider/);
   });
 

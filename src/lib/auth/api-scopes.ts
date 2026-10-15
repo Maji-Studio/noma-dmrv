@@ -1,6 +1,7 @@
 import type { OrgRole } from "./server";
 
 export const API_SCOPES = [
+  "applications:read", "applications:write", "applications:delete",
   "production-runs:read", "production-runs:write", "production-runs:delete", "reactors:read",
   "biochar-products:read", "biochar-products:write", "formulations:read",
   "feedstocks:read", "feedstocks:write", "feedstocks:delete",

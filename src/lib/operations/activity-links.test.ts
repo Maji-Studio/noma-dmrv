@@ -37,6 +37,17 @@ it.each([["production_run", "productionRunId"], ["credit_batch", "creditBatchId"
   expect(activity.links("document", "document-id")[key]).toBe(ID);
 });
 
+it("fans one entity out to each distinct scope over its shared links", () => {
+  const activity = createOperationActivity();
+  activity.link({ facilityId: FACILITY_ID });
+  activity.scope(ID, [{ creditBatchId: BATCH_ID, productionRunId: RUN_ID }, { creditBatchId: BATCH_ID, productionRunId: RUN_ID }, { productionRunId: "other-run" }]);
+  expect(activity.scopedLinks("application", ID)).toEqual([
+    { facilityId: FACILITY_ID, creditBatchId: BATCH_ID, productionRunId: RUN_ID },
+    { facilityId: FACILITY_ID, creditBatchId: undefined, productionRunId: "other-run" },
+  ]);
+  expect(activity.scopedLinks("application", "other")).toEqual([{ facilityId: FACILITY_ID, creditBatchId: undefined, productionRunId: undefined }]);
+});
+
 it.each(DOCUMENT_ENTITY_TYPES)("preserves the reason code for %s document owners", entityType => {
   const activity = createOperationActivity();
   linkDocumentActivity(activity, { documentType: "pdf", entityType, entityId: ID });

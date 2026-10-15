@@ -5,7 +5,9 @@ export interface ToolCall {
   name: string;
   arguments: Record<string, unknown>;
   isError?: boolean;
-  /** Only stock reads retain their body, for the layer-grounding oracle. */
+  /** Application write warnings and refusal details for the application oracle. */
+  applicationResult?: Record<string, unknown>;
+  /** Stock read body for the layer-grounding oracle. */
   stockResult?: Record<string, unknown>;
   /** Number of calls already issued when this read's result arrived. */
   resultAfterCalls?: number;
@@ -53,6 +55,21 @@ function stockBody(value: unknown): Record<string, unknown> | undefined {
   return stockBody(result.structuredContent) ?? stockBody(result.content) ?? stockBody(result.text);
 }
 
+/** Retain only application write envelopes and problems needed by the oracle. */
+function applicationBody(value: unknown): Record<string, unknown> | undefined {
+  if (value == null) return undefined;
+  if (typeof value === "string") {
+    try { return applicationBody(JSON.parse(value)); } catch { return undefined; }
+  }
+  if (Array.isArray(value)) {
+    for (const item of value) { const body = applicationBody(item); if (body) return body; }
+    return undefined;
+  }
+  const result = object(value);
+  if (Array.isArray(result.warnings) || typeof result.code === "string") return result;
+  return applicationBody(result.structuredContent) ?? applicationBody(result.content) ?? applicationBody(result.text);
+}
+
 /** Full assistant/user messages, not partial stream deltas, carry tool calls. */
 export function parseTranscript(raw: string, allowIncomplete = false): Transcript {
   const transcript: Transcript = { calls: [], finalText: "", turns: null, durationMs: null, completed: false };
@@ -80,6 +97,9 @@ export function parseTranscript(raw: string, allowIncomplete = false): Transcrip
         const call = callsById.get(block.tool_use_id);
         if (call) {
           call.isError = resultHasError(block) || resultHasError(event.tool_use_result);
+          if (call.name === "mcp__noma__record_application") {
+            call.applicationResult = applicationBody(event.tool_use_result) ?? applicationBody(block.content);
+          }
           if (call.name === "mcp__noma__get_bin_stock") {
             call.stockResult = stockBody(event.tool_use_result) ?? stockBody(block.content);
             call.resultAfterCalls = transcript.calls.length;

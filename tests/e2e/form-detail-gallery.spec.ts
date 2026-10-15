@@ -1,3 +1,4 @@
+import { createTestApplication } from "../helpers/application-writers";
 import { chooseRunStatus } from "./helpers/run-status";
 /** Repeatable, local-only PR gallery. Run serially with the isolated 3102 environment. */
 import { mkdir, appendFile } from "node:fs/promises";
@@ -8,7 +9,7 @@ import { test, expect, selectEntity, waitForFacilityHydration } from "./fixtures
 import { seedDurabilityBatch, seedCreditBatch } from "./fixtures/seed-chain-data";
 import { createDbConnection } from "./fixtures/db";
 import { seedOutputStockBrowserFixture, readOutputStockBrowserFixture, FIFO_BROWSER_DATE, FIFO_BROWSER_TIME } from "./helpers/output-stock-browser-fixture";
-import { createApplication } from "../../src/data-access/applications";
+
 import * as schema from "../../src/db/schema";
 import { DEC_ORG_ID } from "../../src/db/org-defaults";
 import { fillStockMoisture } from "./helpers/stock-moisture";
@@ -231,7 +232,7 @@ test("gallery delivery and application create read edit", async ({ adminPage: pa
   await page.getByRole("button", { name: "New application", exact: true }).click();
   await page.locator("#applicationDate").fill(DATE);
   await selectEntity(page, "Delivery", delivery.id, delivery.code);
-  await page.locator("#biocharAppliedTons").fill("1000");
+  await page.locator("#biocharAppliedKg").fill("1000");
   await page.locator("#fieldSizeHa").fill("1");
   await page.locator("#fieldIdentifier").fill("E2E Demonstration plot A");
   await page.locator("#cropType").fill("Maize");
@@ -351,7 +352,7 @@ test("gallery credit batch applied mass context", async ({ adminPage: page, test
     await db.insert(schema.creditBatchProductionRuns).values(f.runs.map(run => ({ organizationId: DEC_ORG_ID, creditBatchId: batch.id, productionRunId: run.id })));
     await db.insert(schema.samples).values([0, 1, 2].map(index => ({ organizationId: DEC_ORG_ID, sampleCode: `E2E-APPLIED-S${index}-${f.tag}`, creditBatchId: batch.id, productionRunId: f.runs[index % 2].id, samplingTime: new Date("2026-09-12T12:00:00Z"), totalCarbonPercent: 80, organicCarbonPercent: 78, hToCOrgRatio: 0.38, oToCOrgRatio: 0.12 })));
   } finally { await pool.end(); }
-  await createApplication(f.ctx, { code: `E2E-APPLIED-${f.tag}`, deliveryId: f.delivery!.id, applicationDate: new Date(DATE), biocharAppliedTons: 1, fieldSizeHa: 1, fieldIdentifier: "E2E Soil plot A", cropType: "Maize", gpsLatitude: -6.8, gpsLongitude: 39.2, applicationMethodType: "mechanical", soilTemperatureSource: "baseline", soilTemperatureC: 25 });
+  await createTestApplication(f.ctx, { code: `E2E-APPLIED-${f.tag}`, deliveryId: f.delivery!.id, applicationDate: new Date(DATE), appliedWetMassKg: 1000, fieldSizeHa: 1, fieldIdentifier: "E2E Soil plot A", cropType: "Maize", gpsLatitude: -6.8, gpsLongitude: 39.2, applicationMethod: "mechanical", soilTemperatureSource: "baseline", soilTemperatureC: 25 });
   await navigate(page, "credit-batches", f.facility);
   await page.getByText(batch.code, { exact: true }).first().click();
   await page.getByRole("radio", { name: "Detailed", exact: true }).locator("..").click();

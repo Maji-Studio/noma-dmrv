@@ -156,7 +156,7 @@ test.describe("Application + Credit Batch UI CRUD", () => {
     await selectFirstEntity(page, "Delivery");
 
     // Fill required and optional fields
-    await page.fill('input[name="biocharAppliedTons"]', "5000");
+    await page.fill('input[name="biocharAppliedKg"]', "5000");
     await expect(
       page.locator('input[name="biocharAppliedDryTons"]'),
     ).toHaveCount(0);
@@ -207,7 +207,7 @@ test.describe("Application + Credit Batch UI CRUD", () => {
     await expect(
       page.locator('input[name="biocharAppliedDryTons"]'),
     ).toHaveCount(0);
-    await page.fill('input[name="biocharAppliedTons"]', "4000");
+    await page.fill('input[name="biocharAppliedKg"]', "4000");
     await page
       .locator('[role="dialog"]')
       .getByRole("button", { name: "Update application" })

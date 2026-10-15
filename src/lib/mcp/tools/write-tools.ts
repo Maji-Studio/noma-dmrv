@@ -1,3 +1,4 @@
+import { applicationWriteTools } from "./application-tools";
 import { documentWriteTools } from "./document-tools";
 import type { ToolAccess } from "./tool-access";
 import { deliveryWriteTools } from "./delivery-tools";
@@ -94,6 +95,7 @@ export const writeTools: WriteTool[] = [
   ...orderWriteTools,
   ...deliveryWriteTools,
   ...documentWriteTools,
+  ...applicationWriteTools,
 ];
 
 async function mutate(context: ApiRouteContext, raw: unknown, kind: "update" | "delete") {

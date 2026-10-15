@@ -1,3 +1,4 @@
+import { createTestApplication } from "./helpers/application-writers";
 import { productionVersion } from "./helpers/production-version";
 import { withProductStockFingerprint } from "./helpers/product-stock-preview-fixture";
 import { randomUUID } from 'node:crypto';
@@ -5,7 +6,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { and, eq, sql } from 'drizzle-orm';
 import { db } from '@/db';
 import { applicationOutputAllocations, binMovements, deliveries, outputStockAllocations, productionRuns } from '@/db/schema';
-import { createApplication } from '@/data-access/applications';
+
 import { createBiocharProduct } from '@/data-access/biochar-product-create';
 import { createDelivery } from "./helpers/create-delivery";
 import { recordOrder } from '@/lib/operations/orders';
@@ -87,9 +88,9 @@ describe('output stock dependency races', () => {
           return result;
         } catch (error) { inserted.reject(error); throw error; }
       }, config));
-    const applicationRequest = createApplication(f.ctx, {
+    const applicationRequest = createTestApplication(f.ctx, {
       code: `E2E-RACE-A-${f.tag}`, deliveryId: f.delivery.id, applicationDate: new Date('2026-09-14'),
-      biocharAppliedTons: 0.5, fieldSizeHa: 1, evidenceMethod: 'visual',
+      appliedWetMassKg: 500, fieldSizeHa: 1, evidenceMethod: 'location',
     });
     // Attach handlers immediately so a broken setup cannot leave an unhandled rejection.
     const applicationResult = applicationRequest.then(value => ({ value }), error => ({ error }));

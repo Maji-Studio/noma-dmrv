@@ -16,6 +16,7 @@ const MAX_RETRIES = 3;
 const RETRY_BACKOFF_BASE_MS = 50;
 
 export const CODE_CONFLICT_MESSAGES = {
+  application: "An application with this code already exists",
   biocharProduct: "A biochar product with this code already exists",
   customer: "A customer with this code already exists",
   delivery: "A delivery with this code already exists",

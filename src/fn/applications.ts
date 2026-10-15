@@ -5,26 +5,20 @@ import { withAction } from "./with-action";
 import { SafeError } from "@/lib/errors";
 import { z } from "zod";
 import type { ActionResult } from "@/types/actions";
-import { type Application, applications } from "@/db/schema/application";
-import { withAutoCode } from "@/data-access/code-generator";
+import { type Application } from "@/db/schema/application";
+import { runOperationInProcess } from "@/lib/operations/runner";
+import { recordApplication, updateApplication, deleteApplication } from "@/lib/operations/applications";
+import { recordApplicationInput, updateApplicationInput, deleteApplicationInput } from "@/schemas/application-input";
 import { requireOrgFacility } from "@/data-access/utils";
 import {
   getApplications as getApplicationsData,
-  getApplicationById,
   getApplicationDeliveryOptions as getApplicationDeliveryOptionsData,
-  createApplication as createApplicationData,
-  updateApplication as updateApplicationData,
-  deleteApplication as deleteApplicationData,
-  applicationCodeExists,
   type ApplicationListItem,
   type ApplicationListOptions,
 } from "@/data-access/applications";
 import {
   applicationEvidenceMethods,
   applicationStatuses,
-  createApplicationSchema,
-  updateApplicationSchema,
-  deleteApplicationSchema,
 } from "@/schemas/applications";
 
 const MAX_APPLICATION_LIST_SIZE = 100;
@@ -81,78 +75,18 @@ export async function getApplicationDeliveryOptionsFn(
   });
 }
 
-/**
- * Create a new application
- */
-export async function createApplicationFn(
-  data: z.infer<typeof createApplicationSchema>
-): Promise<ActionResult<Application>> {
-  return withAction(async (ctx) => {
-    const validated = createApplicationSchema.parse(data);
-
-    const application = await withAutoCode(
-      ctx,
-      "AP",
-      applications,
-      applications.code,
-      undefined,
-      (code) => createApplicationData(ctx, { ...validated, code })
-    );
-
-    return application;
-  }, {
-    fallbackMessage: "Failed to create application",
-    log: { message: "application action failed", context: { op: "application:create" } },
+export async function createApplicationFn(data: z.input<typeof recordApplicationInput>): Promise<ActionResult<Application>> {
+  return withAction(async ctx => (await runOperationInProcess(recordApplication, ctx, recordApplicationInput.parse(data))).application, {
+    fallbackMessage: "Failed to create application", log: { message: "application action failed", context: { op: "application:create" } },
   });
 }
-
-/**
- * Update an application
- */
-export async function updateApplicationFn(
-  data: z.infer<typeof updateApplicationSchema>
-): Promise<ActionResult<Application>> {
-  return withAction(async (ctx) => {
-
-    const validated = updateApplicationSchema.parse(data);
-    const { applicationId, ...updateData } = validated;
-
-    // Check application exists
-    const existing = await getApplicationById(ctx, applicationId);
-    if (!existing) {
-      throw new SafeError("Application not found");
-    }
-
-    // Check for duplicate code if code is being updated
-    if (updateData.code && updateData.code !== existing.code) {
-      const codeExists = await applicationCodeExists(ctx, updateData.code, applicationId);
-      if (codeExists) {
-        throw new SafeError(`Application code "${updateData.code}" already exists`);
-      }
-    }
-
-    const application = await updateApplicationData(ctx, applicationId, updateData);
-    return application;
-  }, { fallbackMessage: "Failed to update application", log: { message: "application action failed", context: { op: "application:update" } } });
+export async function updateApplicationFn(data: z.input<typeof updateApplicationInput>): Promise<ActionResult<Application>> {
+  return withAction(async ctx => (await runOperationInProcess(updateApplication, ctx, updateApplicationInput.parse(data))).application, {
+    fallbackMessage: "Failed to update application", log: { message: "application action failed", context: { op: "application:update" } },
+  });
 }
-
-/**
- * Delete an application
- */
-export async function deleteApplicationFn(
-  data: z.infer<typeof deleteApplicationSchema>
-): Promise<ActionResult<void>> {
-  return withAction(async (ctx) => {
-
-    const validated = deleteApplicationSchema.parse(data);
-
-    // Check application exists
-    const existing = await getApplicationById(ctx, validated.applicationId);
-    if (!existing) {
-      throw new SafeError("Application not found");
-    }
-
-    await deleteApplicationData(ctx, validated.applicationId, validated.expectedVersion);
-    return;
-  }, { fallbackMessage: "Failed to delete application", log: { message: "application action failed", context: { op: "application:delete" } } });
+export async function deleteApplicationFn(data: z.input<typeof deleteApplicationInput>): Promise<ActionResult<void>> {
+  return withAction(ctx => runOperationInProcess(deleteApplication, ctx, deleteApplicationInput.parse(data)), {
+    fallbackMessage: "Failed to delete application", log: { message: "application action failed", context: { op: "application:delete" } },
+  });
 }

@@ -3,18 +3,18 @@ import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { describe, expect, it, vi } from "vitest";
 import { STALE_VERSION_CONFLICT_CODE, STALE_VERSION_MESSAGE, StaleVersionError } from "@/lib/stale-version";
 
-const mocks = vi.hoisted(() => ({ update: vi.fn(), remove: vi.fn(), post: vi.fn() }));
+const mocks = vi.hoisted(() => ({ create: vi.fn(), update: vi.fn(), remove: vi.fn(), post: vi.fn() }));
 vi.mock("@/fn/samples", () => ({ getSamplesFn: vi.fn(), getSampleByIdFn: vi.fn(), getSampleStatsFn: vi.fn(), createSampleFn: vi.fn(), updateSampleFn: mocks.update, deleteSampleFn: mocks.remove }));
 vi.mock("@/fn/orders", () => ({ getOrdersFn: vi.fn(), getOrdersForSelectFn: vi.fn(), createOrderFn: vi.fn(), updateOrderFn: mocks.update, deleteOrderFn: mocks.remove }));
 vi.mock("@/fn/deliveries", () => ({ getDeliveriesFn: vi.fn(), getDeliveryWithRelationsFn: vi.fn(), getDeliveryStatsFn: vi.fn(), createDeliveryFn: vi.fn(), updateDeliveryFn: mocks.update, deleteDeliveryFn: mocks.remove }));
-vi.mock("@/fn/applications", () => ({ getApplicationsFn: vi.fn(), getApplicationDeliveryOptionsFn: vi.fn(), createApplicationFn: vi.fn(), updateApplicationFn: mocks.update, deleteApplicationFn: mocks.remove }));
+vi.mock("@/fn/applications", () => ({ getApplicationsFn: vi.fn(), getApplicationDeliveryOptionsFn: vi.fn(), createApplicationFn: mocks.create, updateApplicationFn: mocks.update, deleteApplicationFn: mocks.remove }));
 vi.mock("@/fn/credit-batches", () => ({ getCreditBatchByIdFn: vi.fn(), getCo2eStoredPreviewsFn: vi.fn(), getCreditBatchProductionRunOptionsFn: vi.fn(), createCreditBatchFn: vi.fn(), updateCreditBatchFn: mocks.update, deleteCreditBatchFn: mocks.remove }));
 vi.mock("@/fn/transport-legs", () => ({ getTransportLegsForEntityFn: vi.fn(), createTransportLegFn: vi.fn(), updateTransportLegFn: mocks.update, deleteTransportLegFn: mocks.remove }));
 vi.mock("@/fn/output-stock", () => ({ postOutputStockFn: mocks.post }));
 import { useUpdateSample, useDeleteSample } from "./use-samples";
 import { useUpdateOrder, useDeleteOrder } from "./use-orders";
 import { useUpdateDelivery, useDeleteDelivery } from "./use-deliveries";
-import { useUpdateApplication, useDeleteApplication } from "./use-applications";
+import { useCreateApplication, useUpdateApplication, useDeleteApplication } from "./use-applications";
 import { useUpdateCreditBatch, useDeleteCreditBatch } from "./use-credit-batches";
 import { useUpdateTransportLeg, useDeleteTransportLeg } from "./use-transport-legs";
 import { usePostOutputStock } from "./use-output-stock";
@@ -109,5 +109,21 @@ it("merges the product versions a delivery mass edit returns and keeps them off 
     await act(async () => { await invoke(); });
     expect(client.getQueryData(productKey)).toMatchObject({ items: [{ version: SAVED_VERSION }] });
     expect(client.getQueryData(["deliveries", "detail", ID])).not.toHaveProperty("savedProducts");
+  });
+});
+
+it("sends cleared application defaults explicitly on create so the operation cannot refill them", async () => {
+  mocks.create.mockResolvedValueOnce({ success: true, data: saved });
+  await harness(useCreateApplication, new QueryClient(), { deliveryId: ID, biocharAppliedKg: 1000 }, async invoke => {
+    await act(async () => { await invoke(); });
+    expect(mocks.create).toHaveBeenLastCalledWith(expect.objectContaining({ appliedWetMassKg: 1000, gpsLatitude: null, gpsLongitude: null, soilTemperatureC: null, soilTemperatureSource: null }));
+  });
+});
+
+it("sends cleared application defaults explicitly so the operation cannot refill them", async () => {
+  mocks.update.mockResolvedValueOnce({ success: true, data: saved });
+  await harness(useUpdateApplication, new QueryClient(), { applicationId: ID, expectedVersion: 1, biocharAppliedKg: 1000 }, async invoke => {
+    await act(async () => { await invoke(); });
+    expect(mocks.update).toHaveBeenLastCalledWith(expect.objectContaining({ appliedWetMassKg: 1000, gpsLatitude: null, gpsLongitude: null, soilTemperatureC: null, soilTemperatureSource: null }));
   });
 });

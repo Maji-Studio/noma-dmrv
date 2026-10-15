@@ -84,6 +84,11 @@ function render({
 }
 
 describe("ApplicationForm stock figure", () => {
+  it("marks the saved applied mass as provided for certification", () => {
+    const html = render();
+    expect(html).toMatch(/for="biocharAppliedKg"(?:(?!data-cert-field)[\s\S])*data-cert-field="satisfied"/);
+  });
+
   it("shows one figure: what is available to this application", () => {
     const html = render();
 

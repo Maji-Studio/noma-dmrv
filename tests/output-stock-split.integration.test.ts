@@ -1,9 +1,10 @@
+import { createTestApplication } from "./helpers/application-writers";
 import { randomUUID } from "node:crypto";
 import { afterEach, describe, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { binMovements, deliveries, outputStockAllocations, storageLocations } from "@/db/schema";
-import { createApplication } from "@/data-access/applications";
+
 import { getDeliveryAllocationProvenance } from "@/data-access/delivery-allocation-provenance";
 import { createDelivery } from "./helpers/create-delivery";
 import { getOutputStockHistory } from "@/data-access/output-stock-history";
@@ -128,7 +129,7 @@ describe("split bin draws in PostgreSQL", () => {
       deliveryDate: new Date(STOCK_TIME), deliveredWetMassKg: 500, sources, idempotencyKey: randomUUID(), basisFingerprint: preview.basisFingerprint });
     const shares = await getDeliveryAllocationProvenance(f.ctx, [delivery.id]);
     expect(shares.reduce((sum, share) => sum + share.dryMassKg, 0)).toBeCloseTo(393.75, 6);
-    await createApplication(f.ctx, { code: `E2E-SPLIT-AP-${f.tag}`, deliveryId: delivery.id, applicationDate: new Date(STOCK_DATE), biocharAppliedTons: 0.1, fieldSizeHa: 1, evidenceMethod: "location" });
+    await createTestApplication(f.ctx, { code: `E2E-SPLIT-AP-${f.tag}`, deliveryId: delivery.id, applicationDate: new Date(STOCK_DATE), appliedWetMassKg: 100, fieldSizeHa: 1, evidenceMethod: "location" });
     const [allocation] = await db.select().from(outputStockAllocations).where(eq(outputStockAllocations.deliveryId, delivery.id));
     const blocked = await previewOutputStock(f.ctx, { facilityId: f.facility.id, storageLocationId: f.bin.id, occurredAt: STOCK_TIME, kind: "delivery", wetMassKg: 400,
       correctsMovementId: allocation.movementId, sources });
@@ -139,6 +140,10 @@ describe("split bin draws in PostgreSQL", () => {
     const [current] = await db.select().from(deliveries).where(eq(deliveries.id, delivery.id));
     const saved = await updateDelivery(f.ctx, delivery.id, { expectedVersion: current.version, distanceNote: "Route note" });
     expect(saved).toMatchObject({ distanceNote: "Route note", deliveredWetMassKg: 500, savedProducts: [] });
+    const second = await createTestApplication(f.ctx, { code: `E2E-SPLIT-AP-SECOND-${f.tag}`, deliveryId: delivery.id, applicationDate: new Date(STOCK_DATE), appliedWetMassKg: 200, fieldSizeHa: 1, evidenceMethod: "location" });
+    expect(second.biocharAppliedTons).toBe(0.2);
+    expect(second.biocharAppliedDryTons).toBe(0.1575);
+
   });
 
   it("keeps provenance for a last sub-bin reached by less than half a gram of dry solids", async () => {

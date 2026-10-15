@@ -188,6 +188,7 @@ The API never promises rollback once `COMMIT` may have reached PostgreSQL. Files
 - **Biochar tools (Phase 4b):** `find_biochar_products`, `get_biochar_product`, `make_biochar_product`, `update_biochar_product`, `find_formulations`, `find_output_stock_movements` and `record_output_stock_movement`, on `biochar-products:read|write` and `formulations:read`. Descriptions tell agents to pass the dry run's `basisFingerprint` to the real write.
 - **Lab sample tools (Phase 5a):** `find_lab_samples`, `get_lab_sample`, `find_credit_batches`, `record_lab_sample`, `update_lab_sample` and `delete_lab_sample`, on `lab-samples:read|write|delete` and `credit-batches:read`. They share REST's operations, idempotency records and `{ data, warnings }` results; the result text says when a ratio was calculated. Update and delete take the sample UUID and an `expectedVersion`.
 - **Delivery tools (Phase 5b-2):** `find_deliveries` and `get_delivery` use `deliveries:read`; `record_delivery` and `update_delivery` use `deliveries:write`. Writes share REST adapters; update requires `expectedVersion`.
+- **Application tools (Phase 6b):** `find_applications`, `get_application`, `record_application`, `update_application` and `delete_application`, on `applications:read|write|delete`. `get_delivery_application_balance` uses `deliveries:read`; `find_deliveries` accepts `hasRemainingMass`. Application documents use the shared tools with `ownerType: application`, for photos and PDFs. Updates and deletes take a UUID and `expectedVersion`.
 - **Customer and order tools (Phase 5b-1):** `find_customers`, `find_customer_locations`, `find_orders`, `get_order`, `get_order_balance`, `record_order`, `update_order` and `delete_order`, on `customers:read` and `orders:read|write|delete`. Writes share REST's operations and idempotency records. Update and delete take the order UUID and `expectedVersion`. A committed delete returns `{ deleted: { id, code } }`; a dry run returns the order that would be deleted.
 - **Grounding tools:** `whoami` (organization, facilities with time zones, current facility date, role, scopes) and `find_*` lookups returning compact `{ id, code, name, facility }`. Get and update tools accept `id` or `code`.
 - **Toolsets by workflow**, in rollout order (`feedstock-intake`, `production`, `lab`, `logistics`, `field-application`, `master-data`), filtered by the credential's scopes. Grow a toolset only when end-to-end agent evaluations of its workflow pass; a tool count is not the gate.
@@ -833,3 +834,114 @@ q10 (order site required) and q27 (price/currency removal) belong to the
 After 6a merges, coordinate with noma-dmrv-e8 on `reflectance_histogram`
 (#942 q9, PR #1048 follow-up); publishing it for API lab samples needs Kenji's
 choice in `API_DOCUMENT_OWNERS`.
+
+## 24. Phase 6b results (2026-10-15)
+
+**Shipped on `feat/api-applications`:** applications on the shared runner,
+REST and MCP; application documents; a separate delivery application balance;
+fuzz fixtures and examples. No Phase 6b migration was needed.
+
+**What shipped, by commit:**
+
+1. Writer move (`673db0f86`): split reads from transaction writers and the
+   shared `application-write-scope.ts`. App actions use unregistered runner
+   operations, savepointed codes, version checks and after-commit cleanup.
+   Fixed application/document lock ordering, archive refusals, calendar dates,
+   field size, Q79 boundary validation and the form's kg naming.
+1b. Membership order (`7b793d88e`): artifacts before facilities and runs, then
+   process scope and batch; revalidate before links and slices. Shared bounded
+   transaction retry covers remaining run and auto-attachment inversions.
+2. Operations (`a51968cf1`): register `record_application`, `update_application`
+   and `delete_application`; scopes and permissions; output contains the
+   application, allocations, target delivery balance and warnings. Q78 copies
+   omitted site defaults on create only. App actions return the application.
+3. Reads (`fd0f0635b`): list, detail and boundary, strong ETags, physical batch
+   lineage filtering, application document owner (photo and PDF), delivery
+   application balance and `hasRemainingMass`. One site query feeds the picker,
+   create defaults and balance. Owner type follows the extensible-enum precedent.
+4. REST writes (`10953e19a`): POST, PATCH and DELETE, idempotency, If-Match,
+   412 with the current representation, raw GeoJSON and additive OpenAPI paths.
+5. MCP (`491673d56`): find, get, record, update and delete applications plus
+   `get_delivery_application_balance`; shared REST write checks and three-way
+   parity. Document tool hints point to `find_applications`.
+6. Agent evals (`e7483dd8c`): complete application, missing field size and
+   over-capacity, with only application read/write and delivery read scopes.
+   The facility zone is chosen per run to align its date with the session.
+   The Q79 Playwright update (`412445797`) pins refusal when clearing a required
+   boundary and verifies the stored geometry survives.
+7. Fuzz and docs: independent supply for a 50 kg delivered load and one 1 kg
+   application, small boundary and uploaded/pending photo fixtures through real
+   writers. Export application id/code/ETag, delivery id/code, date, GPS and
+   uploaded photo id. Hooks add reads and a fresh-key 0.001 kg POST dry run;
+   application PATCH/DELETE join the precondition status list. API, lock-order,
+   activity and testing docs describe the shipped behavior.
+
+**Staging merges:** `019afd56d` brought #1055 (0147), #1060 (0146), #1062,
+#1063 (0148), #1064 and #1057. Two test import conflicts were resolved; the
+supervisor reset/migrated the test database after leftover rows blocked 0147
+and recorded 690 related files passing with OpenAPI in sync. `b594b8b9e` brought
+#1065 and #1066 without a migration. Application activity moved to the runner's
+`activity.scope(entityId, scopes)`, including former/current batches on update
+and pre-delete scopes passed to document retirement. The supervisor recorded
+697 related files passing after that merge.
+
+**Decisions made during implementation:**
+
+- The merged #1021 checkpoint (#1029, `014204888`) derives Removal transport
+  from frozen application slices at read time. Application writes do not change
+  stored transport legs, so they take no transport topology lock.
+- Writers discover unlocked, then lock sorted lineage artifacts, facilities
+  SHARE, runs SHARE, batches SHARE, deliveries UPDATE, application UPDATE and
+  version, revalidate, then lock slices and write. Changed-set conflicts reach
+  the client at `/applicationId` or `/deliveryId`; only 40P01, 40001 and 55P03
+  are retried automatically. The form defaults to the earlier browser/facility
+  today; dates remain UTC-midnight calendar values.
+- Membership keeps non-waiting SKIP LOCKED acquisition of newly completed,
+  unassigned matching runs after process scope. A miss returns conflict.
+  Skipping a busy batch silently was declined. Scalar edits and deletes lock
+  no member runs. `transaction-retry.ts` is shared by the runner and all three
+  membership transactions; it also covers the residual scope/artifact order.
+- Site identity follows `orders.customer_location_id`, after migration 0138
+  removed the delivery override. The transaction helper's certifier-project
+  join is unique by facility/provider. Soil defaults copy only when value and
+  source are both omitted at a non-1000-year facility, with `global_database`
+  provenance. Explicit null stays null and PATCH never fills defaults.
+- `creditBatchId` means physical application lineage, through slices or frozen
+  shares of member runs, including mix-bin held-out applications. The app page
+  still filters through delivery lineage. The balance body hash covers defaults
+  too; `hasRemainingMass=false` finds exhausted deliveries. No API resource
+  answers 304; this is the existing API-wide rule.
+- REST and MCP use `recordApplicationApi` and `updateApplicationApi`; these are
+  the registry entries. Raw geometry is fingerprinted before normalization in
+  execute creates the `source: "api"` envelope. App actions keep envelope-input
+  operations. Malformed polygon structure is refused before turf, including
+  app paste/upload; the app labels API boundaries "Added through the API".
+- Deadlines retain retryable 500 `deadline_exceeded`, not 504. Nullable input
+  descriptions say "null for none". Balance remains under `deliveries:read`.
+  There is no MCP boundary tool; `get_application` points to the REST read.
+- Runner activity emits one event per distinct batch/run scope. Repoints keep
+  former and current scopes; deletes capture them before shares disappear.
+  Activity source follows form, REST, MCP or the trusted script override.
+- Fuzz uses a separate feedstock type and supply chain so the original stock,
+  batch membership and exports stay intact. A 1 kg seeded application leaves
+  49 kg. The key excludes `applications:delete`; no positive DELETE is added.
+  No positive PATCH is added because hooks cannot chain fresh ETags. POST is
+  a dry run so repeated positive examples retain capacity. Schemathesis never
+  PUTs bytes or follows document content redirects.
+
+**Validation and follow-ups:** the supervisor recorded all three application
+evals passing in run 3 (`c6-6b/eval-table.md`) and all seven application
+Playwright specs passing (eight opt-in gallery skips). The pre-existing
+`delivery-split-bin` eval passed in runs 1 and 2 but failed once around facility
+midnight with a scorer wording miss; that remains follow-up work. Final
+post-commit-7 eval results are pending; this task does not rerun them. The
+supervisor must run the new physical seed and Phase 6b fuzz script on the
+throwaway fuzz database. Commit 7's database-free verification is reported in
+the task handoff.
+
+`data/production-run-artifact-order` retains the production-run run-before-artifact
+residual; `data/lock-order` also retains auto-attachment scope/artifact and
+feedstock/bin inversions. The application/document and explicit membership
+cycles are fixed. `api/large-gis-boundary` tracks boundaries above the 256 KiB
+body cap, currently added in the app. `app/application-batch-lineage-filter`
+tracks aligning the app's batch filter with application physical lineage.

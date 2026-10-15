@@ -1,3 +1,4 @@
+import { deleteTestApplication } from "./helpers/application-writers";
 import { labLogisticsVersion } from "./helpers/lab-logistics-version";
 import { insertOutputApplicationFixture } from "./helpers/output-contract-fixtures";
 import { deleteOutputApplicationFixtures } from "./helpers/output-contract-fixtures";
@@ -6,7 +7,7 @@ import { TEST_SITE_POSITION, ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } fr
 import { beforeAll, describe, expect, it } from "vitest";
 import { eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
-import { deleteApplication } from "@/data-access/applications";
+
 import { getCreditBatchById } from "@/data-access/credit-batches";
 import { applications, soilTemperatureMeasurements } from "@/db/schema/application";
 import {
@@ -325,7 +326,7 @@ describe("deleteApplication", () => {
       });
       expect(batchBefore?.appliedWeightTons).toBe(7);
 
-      await deleteApplication(makeTestOrgContext(TEST_USER_ID), deletedApplicationId, await labLogisticsVersion(makeTestOrgContext(TEST_USER_ID), "applications", deletedApplicationId));
+      await deleteTestApplication(makeTestOrgContext(TEST_USER_ID), deletedApplicationId, await labLogisticsVersion(makeTestOrgContext(TEST_USER_ID), "applications", deletedApplicationId));
       fixture.applicationIds = fixture.applicationIds.filter((id) => id !== deletedApplicationId);
       fixture.measurementIds = [];
 
@@ -372,7 +373,7 @@ describe("deleteApplication", () => {
       await createCreditBatchRecord(fixture, runId, "issued");
 
       await expect(
-        deleteApplication(makeTestOrgContext(TEST_USER_ID), applicationId, await labLogisticsVersion(makeTestOrgContext(TEST_USER_ID), "applications", applicationId)),
+        deleteTestApplication(makeTestOrgContext(TEST_USER_ID), applicationId, await labLogisticsVersion(makeTestOrgContext(TEST_USER_ID), "applications", applicationId)),
       ).rejects.toThrow("Cannot delete application linked to verified or issued credit batches");
 
       const [applicationStillPresent] = await db
