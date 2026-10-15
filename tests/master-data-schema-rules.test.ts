@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { PgDialect, getTableConfig } from "drizzle-orm/pg-core";
-import { certifierProjects } from "./certification";
-import { reactors } from "./facilities";
-import { feedstockTypes } from "./feedstock";
+import { certifierProjects } from "@/db/schema/certification";
+import { reactors } from "@/db/schema/facilities";
+import { feedstockTypes } from "@/db/schema/feedstock";
 import { reactorTypes } from "@/schemas/reactors";
 import { feedstockCategories } from "@/schemas/feedstock-types";
 import { facilityEmissionConfigSchema } from "@/schemas/certification";
