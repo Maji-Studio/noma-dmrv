@@ -642,11 +642,11 @@ The Maji product owner owns triage of `storage-health.yml`, `isometric-health.ym
 must watch repository issues in GitHub and keep issue notifications enabled.
 If response ownership changes, update this section and hand over issue watching.
 
-Failed or cancelled scheduled runs, including timeouts, call the reusable
-`health-failure-notify.yml` workflow, which runs `scripts/notify-health-failure.mjs`
-with the runner's preinstalled Node and `gh`. Manually dispatched runs notify only
-on failure with `force_failure=true`. Other manual runs and manual cancellations
-stay quiet.
+Failed or cancelled scheduled runs, including timeouts and a manual cancel of a
+scheduled run, call the reusable `health-failure-notify.yml` workflow, which runs
+`scripts/notify-health-failure.mjs` with the runner's preinstalled Node and `gh`.
+Manually dispatched runs notify only on failure with `force_failure=true`; other
+dispatched runs stay quiet whether they fail or are cancelled.
 The monitored destination is a `ci-health` issue created by `github-actions[bot]`
 with the exact stable title `CI health failure: <workflow filename>`.
 The notifier ensures the label exists. Keep that label and title unchanged. An open
