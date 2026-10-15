@@ -192,7 +192,7 @@ restriction, and vehicles expose their stored identifier/plate and vehicle type.
 
 `GET /api/v1/suppliers/{id}/locations` accepts a supplier UUID only, checks the
 parent's organization before querying its children, and paginates locations with
-name search and coordinates in decimal degrees. Its cursor also binds the
+name search and required coordinates in decimal degrees. Its cursor also binds the
 supplier ID; a missing or foreign supplier returns 404, including when it has
 no locations. Supplier locations have no code or archive column.
 
@@ -200,7 +200,7 @@ no locations. Supplier locations have no code or archive column.
 
 `GET /api/v1/customers`, `/{idOrCode}` and `/{idOrCode}/locations` use
 `customers:read`. Customer representations exclude email, phone and address;
-locations include coordinates and one-way distance. Orders expose list and
+locations include required names and coordinates, plus optional one-way distance. Orders expose list and
 id-or-code reads under `orders:read`. Both read scopes are on by default.
 Storage locations expose `formulationId` at representation revision 3 and
 accept `type` and `formulationId` list filters.

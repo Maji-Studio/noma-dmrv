@@ -97,12 +97,7 @@ async function seedGeoLineage(
   try {
     await db.transaction(async (tx) => {
       if (!withGeo) {
-        // Empty-state scenario: strip every coordinate the chain could
-        // inherit or plot (the per-test facility is not shared).
-        await tx
-          .update(schema.facilities)
-          .set({ gpsLatitude: null, gpsLongitude: null })
-          .where(eq(schema.facilities.id, seededData.facility.id));
+        // Operational records may lack GPS; the required facility pin remains.
         await tx
           .update(schema.feedstocks)
           .set({ gpsLatitude: null, gpsLongitude: null })
@@ -405,7 +400,7 @@ test.describe("Carbon Viewer (traceability geography)", () => {
     ).toBeVisible();
   });
 
-  test("shows the nothing-to-plot empty state when no record carries GPS", async ({
+  test("keeps the facility on the map when operational records lack GPS", async ({
     adminPage: page,
     seededData,
     cleanupTestData,
@@ -421,8 +416,7 @@ test.describe("Carbon Viewer (traceability geography)", () => {
     );
 
     const empty = page.getByTestId("carbon-viewer-empty");
-    await expect(empty).toBeVisible({ timeout: 15000 });
-    await expect(empty).toContainText("Nothing to plot.");
-    await expect(page.getByTestId("carbon-viewer-stage-rail")).toHaveCount(0);
+    await expect(page.getByTestId("carbon-viewer-stage-rail")).toBeVisible({ timeout: 15000 });
+    await expect(empty).toHaveCount(0);
   });
 });

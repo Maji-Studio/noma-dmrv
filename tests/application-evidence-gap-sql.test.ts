@@ -35,7 +35,7 @@ import {
   APPLICATION_EVIDENCE_FIXTURES,
   type ApplicationEvidenceFixture,
 } from "./helpers/application-evidence-fixtures";
-import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
+import { TEST_SITE_POSITION, ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
@@ -124,7 +124,7 @@ async function seedDeliveryChain(
 
   const [facility] = await dbc
     .insert(facilities)
-    .values({ timezone: "UTC", organizationId: TEST_ORG_ID, name: `Gap Facility ${runId}`, code: `FAC-GAP-${runId}` })
+    .values({ ...TEST_SITE_POSITION, timezone: "UTC", organizationId: TEST_ORG_ID, name: `Gap Facility ${runId}`, code: `FAC-GAP-${runId}` })
     .returning({ id: facilities.id });
 
   const [productionProcess] = await dbc

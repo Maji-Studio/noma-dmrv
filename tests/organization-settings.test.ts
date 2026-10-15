@@ -76,8 +76,7 @@ describe.sequential("organization operating defaults", () => {
   });
 
   it("keeps an unset country null rather than storing a placeholder", async () => {
-    // Facility and party rows persist `'UNKNOWN'` today. A default nobody chose
-    // should not look chosen, so the organization-level field stays null.
+    // A default nobody chose should not look chosen, so the field stays null.
     const ctx = makeTestOrgContext();
     await upsertOrganizationDefaults(ctx, {
       ...DEFAULT_ORGANIZATION_SETTINGS,

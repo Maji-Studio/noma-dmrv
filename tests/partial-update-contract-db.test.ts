@@ -1,3 +1,4 @@
+import { TEST_SITE_POSITION } from "./helpers/test-org";
 import { masterDataVersion } from "./helpers/master-data-version";
 /**
  * The partial-update contract against the real database (issue #770).
@@ -25,6 +26,7 @@ import {
   organizations,
   storageLocations,
   suppliers,
+  supplierLocations,
   transportLegs,
   users,
 } from "@/db/schema";
@@ -85,7 +87,7 @@ async function seedFixture(): Promise<Fixture> {
 
   const [facility] = await db
     .insert(facilities)
-    .values({ timezone: "UTC",
+    .values({ ...TEST_SITE_POSITION, timezone: "UTC",
       organizationId,
       code: `E2E-PC-F-${tag}`,
       name: `E2E Patch contract ${tag}`,
@@ -109,10 +111,14 @@ async function seedFixture(): Promise<Fixture> {
       organizationId,
       code: `E2E-PC-S-${tag}`,
       name: `E2E Patch contract supplier ${tag}`,
-      distanceToFacilityKm: SUPPLIER_DISTANCE_KM,
-      distanceSource: "manual" as const,
     })
     .returning({ id: suppliers.id });
+
+  await db.insert(supplierLocations).values({
+    organizationId, supplierId: supplier.id, ...TEST_SITE_POSITION,
+    isDefault: true,
+    distanceFromFacilityKm: SUPPLIER_DISTANCE_KM, distanceSource: "manual",
+  });
 
   const [bin] = await db
     .insert(storageLocations)
@@ -164,6 +170,7 @@ async function cleanup(fixture: Fixture): Promise<void> {
       "feedstocks",
       "storage_locations",
       "feedstock_types",
+      "supplier_locations",
       "suppliers",
       "facilities",
     ]) {

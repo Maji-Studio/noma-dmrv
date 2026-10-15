@@ -95,7 +95,7 @@ export const feedstockFormSchema = z.object({
   // Optional transport
   vehicleId: emptyToNull.or(uuidSchema()).nullable().optional().describe("Vehicle identifier, UUID, or null when unspecified."),
   // Road distance (km) for the feedstock transport leg — autofills from the
-  // supplier's distance-to-facility, overridable per delivery. Both fields are
+  // supplier's default location distance-to-facility, overridable per delivery. Both fields are
   // transient (not feedstock columns) — they flow into the derived transport
   // leg at sync time.
   transportDistanceKm: optionalPositiveNumber.describe("Transport road distance in kilometres; null clears the distance."),
