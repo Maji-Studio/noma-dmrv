@@ -1,5 +1,5 @@
 import { labLogisticsVersion } from "./helpers/lab-logistics-version";
-import { deleteDocumentWithCertificationSafety } from "@/data-access/documents";
+import { deleteDocumentInTransaction } from "@/data-access/document-mutations";
 import { deleteOutputFacilityFixtures } from "./helpers/output-contract-fixtures";
 import { createRemovalDeletionFixture, insertLedgerRow, type Fixture } from "./helpers/removal-deletion-fixture";
 import {
@@ -279,7 +279,7 @@ describe("deleteRemoval evidence cleanup", () => {
     const ctx = makeTestOrgContext();
     await expect(deleteApplication(ctx, chain.applicationId, await labLogisticsVersion(ctx, "applications", chain.applicationId))).resolves.toBeUndefined();
     await expect(deleteDelivery(ctx, application.deliveryId!, await labLogisticsVersion(ctx, "deliveries", application.deliveryId!))).rejects.toThrow(/Posted deliveries retain their history/);
-    await expect(deleteDocumentWithCertificationSafety(ctx, deliveryDocumentId)).resolves.toMatchObject({ id: deliveryDocumentId });
+    await expect(db.transaction((tx) => deleteDocumentInTransaction(ctx, tx, { documentId: deliveryDocumentId, expectedVersion: 1 }))).resolves.toMatchObject({ id: deliveryDocumentId });
     expect(
       await db
         .select({ id: documents.id })

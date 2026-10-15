@@ -17,19 +17,19 @@ describe("S3-compatible storage prefix", () => {
     });
 
     const upload = await provider.createUploadUrl({
-      key: "org/org-1/sample/sample-1/report/file.pdf",
+      key: "org/org-1/uploads/doc-1/upload",
       contentType: "application/pdf",
       maxBytes: 1024,
     });
     const download = await provider.createDownloadUrl({
-      key: "org/org-1/sample/sample-1/report/file.pdf",
+      key: "org/org-1/uploads/doc-1/upload",
     });
 
     expect(new URL(upload.url).pathname).toBe(
-      "/maji/noma-dmrv/staging/org/org-1/sample/sample-1/report/file.pdf"
+      "/maji/noma-dmrv/staging/org/org-1/uploads/doc-1/upload"
     );
     expect(new URL(download).pathname).toBe(
-      "/maji/noma-dmrv/staging/org/org-1/sample/sample-1/report/file.pdf"
+      "/maji/noma-dmrv/staging/org/org-1/uploads/doc-1/upload"
     );
   });
 
@@ -37,13 +37,13 @@ describe("S3-compatible storage prefix", () => {
     const provider = new S3CompatibleProvider(BASE_CONFIG);
 
     const upload = await provider.createUploadUrl({
-      key: "org/org-1/sample/sample-1/report/file.pdf",
+      key: "org/org-1/uploads/doc-1/upload",
       contentType: "application/pdf",
       maxBytes: 1024,
     });
 
     expect(new URL(upload.url).pathname).toBe(
-      "/maji/org/org-1/sample/sample-1/report/file.pdf"
+      "/maji/org/org-1/uploads/doc-1/upload"
     );
   });
 

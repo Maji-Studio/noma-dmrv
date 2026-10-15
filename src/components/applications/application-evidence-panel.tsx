@@ -8,6 +8,9 @@ import {
 } from "@phosphor-icons/react/dist/ssr";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui";
+import { Notice } from "@/components/ui/notice";
+import { useIsRecordCertificationLocked } from "@/hooks/use-record-certification-lock";
+import { RECORD_FILES_LOCKED_MESSAGE } from "@/lib/certification/lineage-lock-message";
 import type { UseDeferredAttachmentsResult } from "@/hooks/use-deferred-attachments";
 import type {
   ApplicationEvidenceMethod,
@@ -46,6 +49,10 @@ const METHOD_OPTIONS = [
 ] as const;
 
 interface ApplicationEvidencePanelProps {
+  /** A saved application; once its lineage is submitted the panel is read-only. */
+  applicationId?: string;
+  /** Set where a sibling panel already shows the lock notice, so a sheet shows it once. */
+  hideLockNotice?: boolean;
   mode: ApplicationEvidenceMethod;
   boundary: GisBoundary | null;
   disabled?: boolean;
@@ -59,12 +66,15 @@ function GisReferenceField({
   boundary,
   disabled,
   readOnly,
+  locked,
   onEdit,
   onRemove,
 }: {
   boundary: GisBoundary | null;
   disabled: boolean;
   readOnly: boolean;
+  /** Edit cannot add a boundary to a submitted application, so do not suggest it. */
+  locked: boolean;
   onEdit: () => void;
   onRemove: () => void;
 }) {
@@ -104,7 +114,7 @@ function GisReferenceField({
       <EmptyState
         icon={<MapTrifoldIcon size={32} weight="bold" />}
         title="No GIS reference"
-        description="Choose Edit to add the field boundary."
+        description={locked ? undefined : "Choose Edit to add the field boundary."}
         padding="sm"
       />
     );
@@ -140,15 +150,19 @@ function GisReferenceField({
 }
 
 export function ApplicationEvidencePanel({
+  applicationId,
+  hideLockNotice = false,
   mode,
   boundary,
   disabled = false,
   deferredAttachments,
-  readOnly = false,
+  readOnly: readOnlyProp = false,
   onModeChange,
   onBoundaryChange,
 }: ApplicationEvidencePanelProps) {
   const [dialogOpen, setDialogOpen] = useState(false);
+  const locked = useIsRecordCertificationLocked("application", applicationId);
+  const readOnly = readOnlyProp || locked;
 
   const clearHeldBoundaryFile = () => {
     for (const attachment of deferredAttachments?.attachments ?? []) {
@@ -179,6 +193,9 @@ export function ApplicationEvidencePanel({
 
   return (
     <div className="flex flex-col gap-16">
+      {locked && !hideLockNotice && (
+        <Notice tone="info">{RECORD_FILES_LOCKED_MESSAGE}</Notice>
+      )}
       {!readOnly && (
         <ChoiceCardGroup
           legend="Evidence method"
@@ -196,6 +213,7 @@ export function ApplicationEvidencePanel({
           boundary={boundary}
           disabled={disabled}
           readOnly={readOnly}
+          locked={locked}
           onEdit={() => setDialogOpen(true)}
           onRemove={removeBoundary}
         />

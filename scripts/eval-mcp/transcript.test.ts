@@ -26,7 +26,7 @@ it("redacts exact issued keys and key-shaped text wherever it occurs", () => {
     .toBe('Bearer [REDACTED]; {"key":"[REDACTED]"}; [REDACTED]');
 });
 
-it("counts repeated calls with different ids but ignores duplicated assistant messages and other tools", () => {
+it("counts repeated MCP calls but keeps Bash separate and ignores duplicated messages", () => {
   const message = { type: "assistant", message: { content: [{ type: "tool_use", id: "a", name: "mcp__noma__whoami", input: {} }] } };
   const second = { type: "assistant", message: { content: [
     { type: "tool_use", id: "b", name: "mcp__noma__whoami", input: {} },
@@ -34,7 +34,16 @@ it("counts repeated calls with different ids but ignores duplicated assistant me
   ] } };
   const parsed = parseTranscript([message, message, second].map((event) => JSON.stringify(event)).join("\n"));
   expect(parsed.calls.map((call) => call.id)).toEqual(["a", "b"]);
+  expect(parsed.shellCalls?.map((call) => call.id)).toEqual(["c"]);
   expect(parsed.completed).toBe(false);
+});
+
+it("redacts local storage capabilities and keys from saved transcripts and shell commands", () => {
+  const url = "http://localhost:3199/api/storage-local/org/org-id/uploads/doc-id/key?token=secret";
+  const raw = JSON.stringify({ command: `curl -T bol.pdf '${url}'`, storageKey: "org/org-id/delivery/id/key.pdf" });
+  expect(redactKeys(raw)).not.toContain(url);
+  expect(redactKeys(raw)).not.toContain("org/org-id");
+  expect(JSON.parse(redactKeys(raw)).command).toContain("[REDACTED_STORAGE_URL]");
 });
 
 it("recognizes MCP isError inside JSON tool content and refuses malformed transcripts", () => {

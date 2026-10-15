@@ -87,14 +87,14 @@ describe("REST proxy carve-out", () => {
 });
 
 describe("cron proxy boundary", () => {
-  it("passes the exact purge route before looking up a session", async () => {
+  it.each(["/api/cron/purge-api-records", "/api/cron/sweep-document-uploads"])("passes %s before looking up a session", async (path) => {
     getSessionMock.mockReset();
     const { updateSession } = await import("@/lib/auth/middleware");
-    const response = await updateSession(new NextRequest("http://localhost/api/cron/purge-api-records"));
+    const response = await updateSession(new NextRequest(`http://localhost${path}`));
     expect(response.status).toBe(200);
     expect(getSessionMock).not.toHaveBeenCalled();
   });
-  it.each(["/api/cron", "/api/cron/purge-api-recordsx", "/api/cron/purge-api-records/", "/api/cron/purge-api-records/child"])("protects %s", async (path) => {
+  it.each(["/api/cron/sweep-document-uploads/", "/api/cron/sweep-document-uploads/child", "/api/cron/sweep-document-uploadsx", "/api/cron", "/api/cron/purge-api-recordsx", "/api/cron/purge-api-records/", "/api/cron/purge-api-records/child"])("protects %s", async (path) => {
     getSessionMock.mockReset();
     getSessionMock.mockResolvedValue(null);
     const { updateSession } = await import("@/lib/auth/middleware");

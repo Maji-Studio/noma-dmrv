@@ -11,7 +11,10 @@ export interface ToolCall {
   resultAfterCalls?: number;
 }
 export interface Transcript {
+  /** Only noma MCP calls count against the case budget. */
   calls: ToolCall[];
+  /** Claude Code's Bash calls are retained separately, including their result flags. */
+  shellCalls?: ToolCall[];
   finalText: string;
   turns: number | null;
   durationMs: number | null;
@@ -66,9 +69,11 @@ export function parseTranscript(raw: string, allowIncomplete = false): Transcrip
     if (Array.isArray(content)) for (const value of content) {
       const block = object(value);
       if (event.type === "assistant" && block.type === "tool_use" && typeof block.name === "string"
-        && block.name.startsWith("mcp__noma__") && typeof block.id === "string" && !callsById.has(block.id)) {
+        && (block.name.startsWith("mcp__noma__") || block.name === "Bash")
+        && typeof block.id === "string" && !callsById.has(block.id)) {
         const call = { id: block.id, name: block.name, arguments: object(block.input) };
-        transcript.calls.push(call);
+        if (block.name === "Bash") (transcript.shellCalls ??= []).push(call);
+        else transcript.calls.push(call);
         callsById.set(call.id, call);
       }
       if (event.type === "user" && block.type === "tool_result" && typeof block.tool_use_id === "string") {
@@ -100,5 +105,7 @@ const KEY_PATTERN = new RegExp(`(?:${escapePattern(API_KEY_LIVE_PREFIX)}|${escap
 
 export function redactKeys(text: string, keys: readonly string[] = []): string {
   for (const key of keys.filter(Boolean)) text = text.split(key).join("[REDACTED]");
-  return text.replace(KEY_PATTERN, "[REDACTED]");
+  return text.replace(KEY_PATTERN, "[REDACTED]")
+    .replace(/https?:\/\/[^\s"'<>\\]*\/api\/storage-local\/[^\s"'<>\\]*/g, "[REDACTED_STORAGE_URL]")
+    .replace(/\borg\/[^\s"'<>\\]+/g, "[REDACTED_STORAGE_KEY]");
 }

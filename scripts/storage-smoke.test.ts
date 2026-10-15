@@ -2,17 +2,19 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { runStorageSmoke } from "./storage-smoke";
 
 const ORIGIN = "https://staging.app.noma.maji.studio";
-const PROBE_KEY = "_smoke/probe/healthcheck/probe.txt";
+const PROBE_KEY = "org/_smoke/uploads/probe/test";
 const mocks = vi.hoisted(() => ({
   createUploadUrl: vi.fn(),
   createDownloadUrl: vi.fn(),
   headObject: vi.fn(),
+  readObjectBounded: vi.fn(),
+  putObject: vi.fn(),
   deleteObject: vi.fn(),
 }));
 
 vi.mock("dotenv", () => ({ config: vi.fn() }));
 vi.mock("../src/lib/storage", () => ({
-  buildStorageKey: () => PROBE_KEY,
+  buildUploadKey: () => PROBE_KEY,
   getStorageProvider: () => ({ name: "s3", bucket: "test-bucket", ...mocks }),
 }));
 
@@ -36,6 +38,8 @@ describe("storage smoke diagnostics", () => {
       ? { size: Buffer.byteLength(body), contentType: "text/plain", etag: "test-etag" }
       : null);
     mocks.deleteObject.mockResolvedValue(undefined);
+    mocks.readObjectBounded.mockImplementation(async () => ({ bytes: Buffer.from(body), sha256: "a".repeat(64) }));
+    mocks.putObject.mockResolvedValue(undefined);
   });
 
   afterEach(() => {
@@ -66,6 +70,7 @@ describe("storage smoke diagnostics", () => {
     await runStorageSmoke();
     expect(mocks.headObject).toHaveBeenCalledTimes(2);
     expect(mocks.createDownloadUrl).toHaveBeenCalledOnce();
+    expect(mocks.putObject).toHaveBeenCalledWith(PROBE_KEY, expect.any(Buffer), "text/plain", { checksumSha256: "a".repeat(64) });
     expect(mocks.deleteObject).toHaveBeenCalledWith(PROBE_KEY);
     expect(console.log).toHaveBeenCalledWith("\nOK — storage round-trip passed.");
     expect(console.error).toHaveBeenCalledWith(expect.stringContaining("Storage CORS checks failed:"));

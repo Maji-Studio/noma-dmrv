@@ -11,6 +11,7 @@ import {
   FEEDSTOCK_TYPE_REPRESENTATION_REVISION,
 } from "@/config/api-rest";
 import { representationEtag } from "./etag";
+import { DOCUMENT_REPRESENTATION_REVISION } from "@/config/api-rest";
 import type { SupplierRepresentation } from "@/lib/representations/suppliers";
 import type { VehicleRepresentation } from "@/lib/representations/vehicles";
 import type { FacilityRepresentation } from "@/lib/representations/facilities";
@@ -75,4 +76,8 @@ export function orderEtag(row: { version: number }): string {
 
 export function deliveryEtag(row: { version: number }): string {
   return representationEtag(row.version, DELIVERY_REPRESENTATION_REVISION);
+}
+
+export function documentEtag(row: { version: number }): string {
+  return representationEtag(row.version, DOCUMENT_REPRESENTATION_REVISION);
 }

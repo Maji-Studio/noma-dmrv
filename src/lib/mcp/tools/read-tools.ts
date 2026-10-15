@@ -1,3 +1,5 @@
+import { documentReadTools } from "./document-tools";
+import type { ToolAccess } from "./tool-access";
 import { readDeliveryListFromInput } from "@/lib/api/deliveries-queries";
 import { readApiDelivery } from "@/lib/read-models/api-deliveries";
 import { deliveryRepresentationSchema } from "@/lib/representations/deliveries";
@@ -86,7 +88,7 @@ const guidance: Record<ResourcePath, string> = {
   "credit-batches": "Call whoami first for facility ids. A lab sample belongs to one credit batch; the batch's facility sets its durability tier and time zone.",
 };
 
-export interface ReadTool {
+export interface ReadTool extends ToolAccess {
   kind: "read";
   name: string;
   summarize: (body: Record<string, unknown>) => string;
@@ -219,4 +221,5 @@ export const readTools: ReadTool[] = [
     input: outputStockMovementListSchema.extend({ idOrCode: z.string().describe("Biochar or product bin UUID or exact code, from find_storage_locations.") }),
     output: listEnvelopeSchema(outputStockMovementRepresentationSchema, "newest posting first"),
   }, (ctx, { idOrCode, ...input }) => readOutputStockMovementListFromInput(ctx, input, idOrCode)),
+  ...documentReadTools,
 ];

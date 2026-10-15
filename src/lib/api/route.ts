@@ -32,6 +32,8 @@ async function admitApiRequest(
 }
 
 interface ApiRouteOptions {
+  /** Named command exceptions may use a longer budget, including authentication. */
+  deadlineMs?: number;
   /** Charge write buckets normally; the handler must enforce the write switch. */
   writesDisabledInHandler?: boolean;
   /** Runs once after authentication, before authenticated rate limiting; the handler receives the returned request. */
@@ -47,7 +49,7 @@ export function apiRoute<Params = Record<string, never>>(
   options: ApiRouteOptions = {},
 ) {
   return async (request: Request, route?: { params: Promise<Params> }): Promise<Response> => {
-    const deadlineAt = Date.now() + OPERATION_DEADLINE_MS;
+    const deadlineAt = Date.now() + (options.deadlineMs ?? OPERATION_DEADLINE_MS);
     const requestId = randomUUID();
     const instance = new URL(request.url).pathname;
     const headers = apiResponseHeaders(requestId);
@@ -91,7 +93,7 @@ export function apiRoute<Params = Record<string, never>>(
           fallbackMessage: "The request could not be completed.", log: { message: "API request failed" },
           logUnexpected: false,
         });
-        return finish(actionFailureResponse(failure, instance, requestId));
+        return finish(actionFailureResponse(failure, instance, requestId, error));
       }
       return finish(unexpectedApiErrorResponse(error, op, instance, requestId));
     }

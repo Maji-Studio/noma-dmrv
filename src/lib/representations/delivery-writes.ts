@@ -16,7 +16,7 @@ export type DeliveryAllocation = z.infer<typeof deliveryAllocationSchema>;
 
 /** Allocations ship on both committed creates and dry runs, in draw order. */
 export const deliveryCreateEnvelopeSchema = stockBasisWriteEnvelopeSchema(deliveryRepresentationSchema).extend({
-  warnings: z.array(z.string()).describe("Non-blocking guidance to upload the bill of lading in the app."),
+  warnings: z.array(z.string()).describe("Non-blocking guidance to upload the bill of lading as a delivery document of type bill_of_lading."),
   allocations: z.array(deliveryAllocationSchema).describe("Products drawn, in draw order, on committed creates and dry runs. Allocation sums can differ from the delivery's 3 decimal place dryBiocharKg in trailing digits."),
 });
 export const deliveryUpdateEnvelopeSchema = itemEnvelopeSchema(deliveryRepresentationSchema);

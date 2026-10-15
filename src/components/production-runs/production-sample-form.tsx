@@ -14,6 +14,9 @@ import { EntitySelect } from "@/components/forms/entity-select";
 import { FormTextarea } from "@/components/forms/form-textarea";
 import { FailedDeferredAttachments } from "@/components/forms/failed-deferred-attachments";
 import type { UseDeferredAttachmentsResult } from "@/hooks/use-deferred-attachments";
+import { useIsRecordCertificationLocked } from "@/hooks/use-record-certification-lock";
+import { Notice } from "@/components/ui/notice";
+import { RECORD_FILES_LOCKED_MESSAGE } from "@/lib/certification/lineage-lock-message";
 import {
   productionSampleFormSchema,
   type ProductionSampleFormData,
@@ -50,6 +53,8 @@ export function ProductionSampleForm({
   onRemoveDeferredAttachment,
 }: ProductionSampleFormProps) {
   const isEditMode = !!sample;
+  // A saved measurement inherits its run's lineage; once submitted its files cannot change.
+  const locked = useIsRecordCertificationLocked("production_sample", sample?.id);
   const { timeZone, hint } = useFacilityClock(facilityId);
 
   const {
@@ -250,6 +255,7 @@ export function ProductionSampleForm({
 
       {/* Documentation */}
       <FormSection title="Documentation">
+        {locked && <Notice tone="info">{RECORD_FILES_LOCKED_MESSAGE}</Notice>}
 
         {isEditMode && (
           <FailedDeferredAttachments
@@ -257,35 +263,38 @@ export function ProductionSampleForm({
             onRetry={onRetryDeferredAttachment}
             onRemove={onRemoveDeferredAttachment}
             disabled={isSubmitting}
+            retryable={!locked}
           />
         )}
 
-        <FormField
-          id="attachments"
-          label="Attachments"
-          helperText="Upload measurement photos or records"
-        >
-          <FormFileUpload
+        {!locked && (
+          <FormField
             id="attachments"
-            accept="image/*,.pdf,.csv,.xlsx"
-            multiple
-            maxSizeMb={50}
-            disabled={isSubmitting}
-            {...(isEditMode
-              ? {
-                  entityType: "production_sample",
-                  entityId: sample.id,
-                  documentType: "lab_report" as const,
-                }
-              : {
-                  deferred: true,
-                  deferredFiles: deferredAttachments.attachments,
-                  onDeferredAdd: (files: File[]) =>
-                    deferredAttachments.add(files, "lab_report"),
-                  onDeferredRemove: deferredAttachments.remove,
-                })}
-          />
-        </FormField>
+            label="Attachments"
+            helperText="Upload measurement photos or records"
+          >
+            <FormFileUpload
+              id="attachments"
+              accept="image/*,.pdf,.csv,.xlsx"
+              multiple
+              maxSizeMb={50}
+              disabled={isSubmitting}
+              {...(isEditMode
+                ? {
+                    entityType: "production_sample",
+                    entityId: sample.id,
+                    documentType: "lab_report" as const,
+                  }
+                : {
+                    deferred: true,
+                    deferredFiles: deferredAttachments.attachments,
+                    onDeferredAdd: (files: File[]) =>
+                      deferredAttachments.add(files, "lab_report"),
+                    onDeferredRemove: deferredAttachments.remove,
+                  })}
+            />
+          </FormField>
+        )}
 
         <FormField id="notes" label="Notes" error={errors.notes?.message}>
           <FormTextarea

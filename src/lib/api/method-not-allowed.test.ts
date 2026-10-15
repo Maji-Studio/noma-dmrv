@@ -52,10 +52,10 @@ it.each(["DELETE", "POST", "PATCH", "PUT", "PROPFIND"])("refuses unsupported %s"
 it("returns the canonical 405 on every published v1 path", async () => {
   mocks.resolve.mockResolvedValue({ ok: true, ctx: { orgRole: "admin", scopes: API_SCOPES } });
   for (const path of Object.keys(buildOpenApiDocument().paths)) {
-    const concrete = `/api/v1${path.replace("{idOrCode}", "CODE-1.png")}`;
+    const concrete = `/api/v1${path.replace(/\{[^}]+\}/g, "CODE-1.png")}`;
     const response = (await guardApiMethod(request(concrete)))!;
     expect(response.status, concrete).toBe(405);
-    expect(response.headers.get("Allow")).toContain("GET");
+    expect(response.headers.get("Allow")).toContain(path.endsWith("/confirm") ? "POST" : "GET");
     expect(await response.json()).toMatchObject({ code: "method_not_allowed", instance: concrete });
   }
 });

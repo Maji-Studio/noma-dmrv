@@ -17,6 +17,10 @@ vi.mock("@/hooks/use-documents", () => ({
 vi.mock("@/hooks/use-applications", () => ({
   applicationKeys: { lists: () => ["applications", "list"] },
 }));
+vi.mock("@/hooks/use-record-certification-lock", () => ({
+  useIsRecordCertificationLocked: () => false,
+}));
+
 vi.mock("@/components/ui/toast", () => ({
   useToast: () => ({ success: vi.fn() }),
 }));

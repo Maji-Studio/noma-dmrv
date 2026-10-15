@@ -22,7 +22,6 @@ import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
 import type { ApplicationListItem } from "@/data-access/applications";
 import {
   applicationKeys,
-  useApplicationCertificationLock,
   useApplicationDeliveryOptions,
   useApplications,
   useCreateApplication,
@@ -33,6 +32,7 @@ import { useCreateWithEvidence } from "@/hooks/use-create-with-evidence";
 import { useCreditBatches } from "@/hooks/use-credit-batches";
 import { useDebounce } from "@/hooks/use-debounce";
 import { useFacilityContext } from "@/hooks/use-facility-context";
+import { useRecordCertificationLock } from "@/hooks/use-record-certification-lock";
 import {
   useListPagination,
   useReconcileListPage,
@@ -264,7 +264,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
     sideSheet ??
     (focusedApplicationItem ? { entity: focusedApplicationItem, mode: "view" as const } : null);
 
-  const applicationLock = useApplicationCertificationLock(displaySideSheet?.entity?.id);
+  const applicationLock = useRecordCertificationLock("application", displaySideSheet?.entity?.id);
 
   // Error state
   const [createError, setCreateError] = useState<string | null>(null);

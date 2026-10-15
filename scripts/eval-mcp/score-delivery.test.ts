@@ -26,7 +26,7 @@ Please send either:
 
 Once I have the reading, I'll do a test run of the delivery to check which stock gets drawn. Then I'll record it for real, with a check that stops the write if the stock has changed since the test.
 
-You'll also need to upload the bill of lading in the app.
+You'll also need to upload the bill of lading as a delivery document of type bill_of_lading.
 `;
 
 const YESTERDAY = "2026-10-13";

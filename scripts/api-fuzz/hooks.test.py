@@ -3,6 +3,8 @@
 import json
 import os
 import unittest
+from tempfile import TemporaryDirectory
+from pathlib import Path
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from types import SimpleNamespace
@@ -47,6 +49,17 @@ os.environ.update(
     API_FUZZ_FEEDSTOCK_ETAG=FEEDSTOCK_ETAG, API_FUZZ_PRODUCTION_RUN_ETAG=RUN_ETAG, API_FUZZ_RUN_BIN_ID=RUN_BIN_ID,
     API_FUZZ_PRODUCT_BIN_ID=PRODUCT_BIN_ID, API_FUZZ_BIOCHAR_PRODUCT_ETAG=PRODUCT_ETAG, API_FUZZ_LAB_SAMPLE_ETAG=LAB_SAMPLE_ETAG,
 )
+document_fixture_directory = TemporaryDirectory()
+document_fixtures = [
+    {"ownerType": owner, "ownerId": FIXTURE_ID,
+     "documentType": "lab_report" if owner == "lab_sample" else "bill_of_lading",
+     "uploaded": {"id": PRODUCT_BIN_ID, "etag": '"2.1"', "physicalObject": True},
+     "pending": {"id": DELETE_ORDER_ID, "etag": '"1.1"', "data": {"id": DELETE_ORDER_ID, "uploadStatus": "pending", "version": 1}}}
+    for owner in ("delivery", "feedstock", "lab_sample")
+]
+document_fixture_path = Path(document_fixture_directory.name) / "fixture.json"
+document_fixture_path.write_text(json.dumps({"documents": document_fixtures}))
+os.environ["API_FUZZ_FIXTURE"] = str(document_fixture_path)
 config = SchemathesisConfig.from_path("schemathesis.toml")
 with patch("datetime.datetime", wraps=datetime) as fixture_clock:
     fixture_clock.now.return_value = FIXTURE_NOW
@@ -58,6 +71,65 @@ def hook(name):
 
 
 class HarnessTests(unittest.TestCase):
+    def document_examples(self, owner="deliveries", suffix="", method="GET"):
+        operation = schema[f"/{owner}/{{idOrCode}}/documents{suffix}"][method]
+        cases = ExamplesGenerator(operation=operation, as_strategy_kwargs={}, feedback=FeedbackSources(), fill_missing=False)
+        return [case for case in cases if case.meta.phase.data.description.startswith("Document fixture")]
+
+    def test_documents_have_seeded_reads_uploads_and_distinct_confirms(self):
+        for owner in ("deliveries", "feedstocks", "lab-samples"):
+            for suffix in ("", "/{documentId}", "/{documentId}/content"):
+                case, = self.document_examples(owner, suffix)
+                self.assertEqual(case.path_parameters["idOrCode"], FIXTURE_ID)
+                self.assertFalse(for_operation(schema.config, operation=case.operation).path_parameters)
+            create, = self.document_examples(owner, method="POST")
+            again, = self.document_examples(owner, method="POST")
+            self.assertNotEqual(create.headers["Idempotency-Key"], again.headers["Idempotency-Key"])
+            self.assertRegex(create.body["sha256"], r"^[a-f0-9]{64}$")
+            self.assertEqual(create.body["sizeBytes"], 8)
+            self.assertFalse(create.query)
+            positive, negative = self.document_examples(owner, "/{documentId}/confirm", "POST")
+            self.assertEqual(positive.path_parameters["documentId"], PRODUCT_BIN_ID)
+            self.assertEqual(negative.path_parameters["documentId"], DELETE_ORDER_ID)
+            self.assertTrue(positive.meta.generation.mode.is_positive)
+            self.assertFalse(negative.meta.generation.mode.is_positive)
+            self.assertFalse(positive.headers)
+            self.assertEqual(positive.body, {})
+            check = hook("after_load_schema").__globals__["seeded_example_success"]
+            check(None, SimpleNamespace(status_code=200), positive)
+            with self.assertRaises(AssertionError):
+                check(None, SimpleNamespace(status_code=409), positive)
+            check(None, SimpleNamespace(status_code=409), negative)
+
+    def test_content_does_not_follow_capabilities_or_require_2xx(self):
+        case, = self.document_examples(suffix="/{documentId}/content")
+        kwargs = {}
+        hook("before_call")(HookContext(operation=case.operation), case, kwargs)
+        self.assertFalse(kwargs["allow_redirects"])
+        check = hook("after_load_schema").__globals__["seeded_document_content_redirect"]
+        check(None, SimpleNamespace(status_code=302, headers={"location": ["http://localhost/object"], "cache-control": ["private, no-store"]}), case)
+        with self.assertRaises(AssertionError):
+            check(None, SimpleNamespace(status_code=404, headers={}), case)
+        fixtures = hook("after_load_schema").__globals__["DOCUMENT_FIXTURES"]
+        with patch.dict(fixtures[0]["uploaded"], {"physicalObject": False}):
+            self.assertEqual(self.document_examples(suffix="/{documentId}/content"), [])
+
+    def test_pending_confirm_requires_retryable_conflict_and_unchanged_read(self):
+        _, case = self.document_examples(suffix="/{documentId}/confirm", method="POST")
+        globals_ = hook("after_load_schema").__globals__
+        check = globals_["seeded_pending_document_unchanged"]
+        response = SimpleNamespace(status_code=409, json=lambda: {"code": "conflict", "retryable": True})
+        current = Mock(status_code=200, headers={"ETag": '"1.1"'})
+        current.json.return_value = {"data": document_fixtures[0]["pending"]["data"]}
+        with patch.object(globals_["requests"], "get", return_value=current) as get:
+            check(None, response, case)
+            self.assertFalse(get.call_args.kwargs["allow_redirects"])
+            current.headers = {"ETag": '"2.1"'}
+            with self.assertRaisesRegex(AssertionError, "changed"):
+                check(None, response, case)
+        with self.assertRaisesRegex(AssertionError, "retryable 409"):
+            check(None, SimpleNamespace(status_code=200), case)
+
     def test_actual_examples_driver_reaches_all_seeded_targets_and_create(self):
         seeded = []
         for result in schema.get_all_operations():
@@ -280,7 +352,7 @@ class HarnessTests(unittest.TestCase):
         count = 0
         for result in schema.get_all_operations():
             operation = result.ok()
-            if "{idOrCode}" not in operation.path:
+            if "{idOrCode}" not in operation.path or "/documents" in operation.path:
                 continue
             examples = []
             hook("before_add_examples")(HookContext(operation=operation), examples)

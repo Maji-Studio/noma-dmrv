@@ -13,16 +13,23 @@ import { toolOutputSchema, toolFailure, toolSuccess, writesDisabledResult } from
 import { mcpInstructions } from "./instructions";
 
 function visibleTools(ctx: ApiContext) {
-  return new Map([...readTools, ...writeTools].filter((tool) => !tool.scope || hasRoleAndScope(ctx, tool.scope))
+  return new Map([...readTools, ...writeTools].filter((tool) => tool.visible ? tool.visible(ctx) : !tool.scope || hasRoleAndScope(ctx, tool.scope))
     .map((tool) => [tool.name, tool]));
 }
 
-export function mcpRequestAccess(ctx: ApiContext, body: unknown): "read" | "write" {
+function requestedTool(ctx: ApiContext, body: unknown) {
   if (!body || typeof body !== "object" || !("method" in body) || body.method !== "tools/call"
     || !("params" in body) || !body.params || typeof body.params !== "object"
-    || !("name" in body.params) || typeof body.params.name !== "string") return "read";
-  const tool = visibleTools(ctx).get(body.params.name);
-  return tool?.kind ?? "read";
+    || !("name" in body.params) || typeof body.params.name !== "string") return undefined;
+  return visibleTools(ctx).get(body.params.name);
+}
+
+export function mcpRequestAccess(ctx: ApiContext, body: unknown): "read" | "write" {
+  return requestedTool(ctx, body)?.kind ?? "read";
+}
+
+export function mcpRequestDeadlineMs(ctx: ApiContext, body: unknown, baseDeadlineMs: number): number {
+  return requestedTool(ctx, body)?.deadlineMs ?? baseDeadlineMs;
 }
 
 export function serveMcp(request: Request, context: ApiRouteContext): Promise<Response> {
@@ -42,6 +49,7 @@ export function serveMcp(request: Request, context: ApiRouteContext): Promise<Re
       if (!tool) throw new ProtocolError(ProtocolErrorCode.InvalidParams, "Unknown tool.");
       try {
         if (Date.now() >= context.deadlineAt) throw deadlineExceeded("before starting");
+        await tool.authorize?.(context.ctx, rpc.params.arguments ?? {});
         if (tool.kind === "write") {
           if (env.API_WRITES_DISABLED) return writesDisabledResult();
           const result = await tool.execute(context, rpc.params.arguments ?? {});

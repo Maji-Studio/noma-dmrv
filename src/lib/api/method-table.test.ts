@@ -18,7 +18,7 @@ it("derives every path and matches Next's actual automatic methods and Allow", a
     if (!(options instanceof Response)) throw new Error("Next OPTIONS must return a Response.");
     expect(entry.methods.join(", ")).toBe(options.headers.get("Allow"));
     if (operations.get) expect(next.HEAD).toBe(handlers.GET);
-    expect(entry.methods).toEqual([...new Set([...Object.keys(operations).map((method) => method.toUpperCase()), "HEAD", "OPTIONS"])].sort());
+    expect(entry.methods).toEqual([...new Set([...Object.keys(operations).map((method) => method.toUpperCase()), ...(operations.get ? ["HEAD"] : []), "OPTIONS"])].sort());
   }
 });
 
@@ -76,5 +76,19 @@ it("exposes delivery creates and metadata patches without DELETE", async () => {
     const response = await next[method](new NextRequest("https://example.test/api/v1/deliveries/id", { method }), { params: Promise.resolve({}) });
     if (!(response instanceof Response)) throw new Error("Next must return a Response.");
     expect(response.status).toBe(405);
+  }
+});
+
+it("exposes document requests and keyless confirmations without delete or edit methods", () => {
+  for (const owner of ["feedstocks", "deliveries", "lab-samples"]) {
+    for (const suffix of ["", "/id", "/id/content"]) {
+      expect(getApiMethodEntry(`/api/v1/${owner}/CODE/documents${suffix}`)).toMatchObject({
+        methods: suffix ? ["GET", "HEAD", "OPTIONS"] : ["GET", "HEAD", "OPTIONS", "POST"],
+        scopes: suffix ? [`${owner}:read`] : [`${owner}:read`, `${owner}:write`], public: false,
+      });
+    }
+    expect(getApiMethodEntry(`/api/v1/${owner}/CODE/documents/id/confirm`)).toMatchObject({
+      methods: ["OPTIONS", "POST"], scopes: [`${owner}:write`], public: false,
+    });
   }
 });

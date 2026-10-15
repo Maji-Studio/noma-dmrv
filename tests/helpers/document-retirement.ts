@@ -42,6 +42,8 @@ export class RetirementStorageProvider implements StorageProvider {
     throw new Error("Not used by retirement tests");
   }
 
+  async readObjectBounded(): Promise<never> { throw new Error("Not used by this test"); }
+
   async headObject(key: string): Promise<ObjectHead | null> {
     return this.objects.has(key)
       ? { size: 1, contentType: "application/pdf", etag: "test" }

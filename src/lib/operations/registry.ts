@@ -5,9 +5,11 @@ import { logFeedstockDelivery, updateFeedstock, deleteFeedstock } from "./feedst
 import { recordOutputStockMovement } from "./output-stock";
 import { makeBiocharProduct, updateBiocharProduct } from "./biochar-products";
 import { recordLabSample, updateLabSample, deleteLabSample } from "./lab-samples";
+import { requestDocumentUpload } from "./document-uploads";
 
 /** Explicit write allowlist. Existing read models become the read side later. */
 export const operationRegistry = {
+  request_document_upload: requestDocumentUpload,
   record_delivery: recordDelivery,
   update_delivery: updateDeliveryOperation,
   record_order: recordOrder,

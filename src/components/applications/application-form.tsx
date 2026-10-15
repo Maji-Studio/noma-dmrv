@@ -590,6 +590,7 @@ export function ApplicationForm({
         fields={["evidenceMethod", "gisBoundary"]}
       >
         <ApplicationEvidencePanel
+          applicationId={application?.id}
           mode={evidenceMethod ?? "location"}
           boundary={gisBoundary ?? null}
           disabled={isSubmitting}

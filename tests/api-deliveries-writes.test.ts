@@ -30,7 +30,7 @@ it("creates a delivery with allocations, an upload warning, Location and the GET
   const body = await response.json();
   expect(deliveryRepresentationSchema.parse(body.data)).toEqual(body.data);
   expect(body.allocations).toMatchObject([{ layerId: a.product.id, code: a.product.code, policy: "pro_rata", wetKg: 100, moisturePercent: 20 }]);
-  expect(body.warnings).toEqual(["No bill of lading is uploaded. Upload the bill of lading in the app."]);
+  expect(body.warnings).toEqual(["No bill of lading is uploaded yet. Upload it as a delivery document of type bill_of_lading."]);
   expect(response.headers.get("location")).toBe(`/api/v1/deliveries/${body.data.id}`);
   expect(await read(a, body.data.id)).toEqual({ data: body.data, etag: response.headers.get("etag") });
   expect(body.data).not.toHaveProperty("savedProducts");

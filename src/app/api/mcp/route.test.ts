@@ -1,3 +1,5 @@
+import { DOCUMENT_GUIDANCE } from "@/lib/operations/document-guidance";
+import { DOCUMENT_CONFIRM_DEADLINE_MS } from "@/config/documents";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { OPERATION_DEADLINE_MS } from "@/config/operations";
 import { API_BODY_MAX_BYTES, API_LIST_DEFAULT_LIMIT, API_LIST_MAX_LIMIT, API_VERSION } from "@/config/api-rest";
@@ -11,6 +13,7 @@ import { mcpInstructions } from "@/lib/mcp/instructions";
 import { biocharStockGuide, domainGuide, labSampleGuide, orderGuide, deliveryGuide, llmsGuide } from "@/lib/api/llms-guide";
 
 const MCP_INSTRUCTIONS_MAX_CHARS = 2000;
+vi.mock("@/db", () => ({ db: {} }));
 
 const mocks = vi.hoisted(() => ({ resolve: vi.fn(), pre: vi.fn(), post: vi.fn(), me: vi.fn(), stock: vi.fn(), log: vi.fn(), env: { NODE_ENV: "production", NEXT_PUBLIC_APP_URL: "https://noma.example", API_WRITES_DISABLED: false } }));
 vi.mock("@/data-access/delivery-output-writes", () => ({}));
@@ -86,6 +89,8 @@ it("returns the shared domain guidance during initialize", async () => {
   expect(llmsGuide).toContain(labSampleGuide);
   expect(llmsGuide).toContain(orderGuide);
   expect(llmsGuide).toContain(deliveryGuide);
+  expect(result.instructions).not.toContain(DOCUMENT_GUIDANCE);
+  expect(llmsGuide).toContain(DOCUMENT_GUIDANCE);
   expect(result.instructions).not.toContain(deliveryGuide);
   expect(result.instructions).not.toContain(orderGuide);
   expect(result.instructions).not.toContain(labSampleGuide);
@@ -128,9 +133,9 @@ describe("authenticated MCP read route", () => {
     for (const [key, value] of Object.entries(rateHeaders)) expect(response.headers.get(key)).toBe(value);
     expect(response.headers.get("x-request-id")).toBeTruthy();
     const { result } = await body(response);
-    expect(result.tools).toHaveLength(45);
-    expect(result.tools.find((tool: { name: string }) => tool.name === "get_bin_stock")).toMatchObject({ annotations: { readOnlyHint: true } });
-    expect(result.tools.filter((tool: { name: string }) => !["log_feedstock_delivery", "update_feedstock", "delete_feedstock", "start_production_run", "update_production_run", "delete_production_run", "make_biochar_product", "update_biochar_product", "record_output_stock_movement", "record_lab_sample", "update_lab_sample", "delete_lab_sample", "record_order", "update_order", "delete_order", "record_delivery", "update_delivery"].includes(tool.name)).every((tool: { annotations: { readOnlyHint: boolean } }) => tool.annotations.readOnlyHint)).toBe(true);
+    expect(result.tools).toHaveLength(49);
+    expect(result.tools[0]).toMatchObject({ annotations: { readOnlyHint: true } });
+    expect(result.tools.filter((tool: { name: string }) => !["request_document_upload", "confirm_document_upload", "log_feedstock_delivery", "update_feedstock", "delete_feedstock", "start_production_run", "update_production_run", "delete_production_run", "make_biochar_product", "update_biochar_product", "record_output_stock_movement", "record_lab_sample", "update_lab_sample", "delete_lab_sample", "record_order", "update_order", "delete_order", "record_delivery", "update_delivery"].includes(tool.name)).every((tool: { annotations: { readOnlyHint: boolean } }) => tool.annotations.readOnlyHint)).toBe(true);
     const find = result.tools.find((tool: { name: string }) => tool.name === "find_feedstocks");
     expect(find.inputSchema.additionalProperties).toBe(false);
     expect(find.inputSchema.properties.limit).toMatchObject({ type: "integer", minimum: 1, maximum: API_LIST_MAX_LIMIT,
@@ -277,7 +282,7 @@ it("serves read results on MCP revision 2026-07-28", async () => {
 it("publishes the same input fields and constraints as the matching OpenAPI parameters", async () => {
   const { result } = await body(await POST(rpc("tools/list")));
   const operations = Object.values(buildOpenApiDocument().paths).flatMap((path) => Object.values(path));
-  for (const tool of result.tools.filter((tool: { annotations: { readOnlyHint: boolean } }) => tool.annotations.readOnlyHint)) {
+  for (const tool of result.tools.filter((tool: { name: string; annotations: { readOnlyHint: boolean } }) => tool.annotations.readOnlyHint && !["find_documents", "get_document_download_url"].includes(tool.name))) {
     const operation = operations.find((candidate) => candidate.operationId === tool.name)!;
     const parameters = operation.parameters as { name: string; required: boolean; schema: Record<string, unknown> }[];
     const argumentName = (name: string) => name === "idOrCode"
@@ -294,7 +299,30 @@ it("publishes the same input fields and constraints as the matching OpenAPI para
   }
 });
 
-it.each(["log_feedstock_delivery", "update_feedstock", "delete_feedstock", "record_order", "update_order", "delete_order", "record_delivery", "update_delivery"])("charges %s and dry runs as writes", async (name) => {
+it("matches find_documents parameters to the delivery OpenAPI list", async () => {
+  const { result } = await body(await POST(rpc("tools/list")));
+  const tool = result.tools.find((tool: { name: string }) => tool.name === "find_documents");
+  const operation = buildOpenApiDocument().paths["/deliveries/{idOrCode}/documents"].get!;
+  const parameters = operation.parameters as { name: string; required: boolean; schema: Record<string, unknown> }[];
+  const argumentName = (name: string) => name === "idOrCode" ? "ownerId" : name;
+  expect(Object.keys(tool.inputSchema.properties).sort()).toEqual(["ownerType", ...parameters.map(parameter => argumentName(parameter.name))].sort());
+  for (const parameter of parameters) {
+    const name = argumentName(parameter.name);
+    expect(tool.inputSchema.required?.includes(name) ?? false).toBe(parameter.required);
+    if (name === "documentType") continue;
+    const schema = { ...parameter.schema };
+    if (name === "limit" || name === "ownerId") delete schema.description;
+    expect(tool.inputSchema.properties[name]).toMatchObject(schema);
+  }
+});
+
+it("returns invalid_query for an invalid document owner type", async () => {
+  expect(await body(await call("find_documents", { ownerType: "invalid", ownerId: "id" }))).toMatchObject({
+    result: { isError: true, structuredContent: { code: "invalid_query", issues: [{ pointer: "/ownerType" }] } },
+  });
+});
+
+it.each(["request_document_upload", "confirm_document_upload", "log_feedstock_delivery", "update_feedstock", "delete_feedstock", "record_order", "update_order", "delete_order", "record_delivery", "update_delivery"])("charges %s and dry runs as writes", async (name) => {
   for (const dryRun of [false, true]) {
     expect(mcpRequestAccess((await mocks.resolve()).ctx, { method: "tools/call", params: { name, arguments: { dryRun } } })).toBe("write");
     await call(name, { dryRun });
@@ -326,8 +354,8 @@ it.each([undefined, "", "a b", "é"])("reports requestKey %j at its argument pat
 it("publishes scoped write hints and optional requestKey", async () => {
   mocks.resolve.mockResolvedValue({ ok: true, ctx: { orgRole: "admin", scopes: ["feedstocks:write"] } });
   const { result } = await body(await POST(rpc("tools/list")));
-  expect(result.tools.map((tool: { name: string }) => tool.name)).toEqual(["whoami", "log_feedstock_delivery", "update_feedstock"]);
-  for (const tool of result.tools.slice(1)) {
+  expect(result.tools.map((tool: { name: string }) => tool.name)).toEqual(["whoami", "log_feedstock_delivery", "update_feedstock", "request_document_upload", "confirm_document_upload"]);
+  for (const tool of result.tools.filter((tool: { name: string }) => ["log_feedstock_delivery", "update_feedstock"].includes(tool.name))) {
     expect(tool.annotations).toEqual({ readOnlyHint: false, openWorldHint: false,
       destructiveHint: tool.name === "update_feedstock", idempotentHint: true });
     expect(tool.inputSchema.required).not.toContain("requestKey");
@@ -340,7 +368,7 @@ it("publishes scoped write hints and optional requestKey", async () => {
 it("keeps write tools hidden for a read-only key", async () => {
   mocks.resolve.mockResolvedValue({ ok: true, ctx: { orgRole: "admin", scopes: ["feedstocks:read"] } });
   const { result } = await body(await POST(rpc("tools/list")));
-  expect(result.tools.map((tool: { name: string }) => tool.name)).toEqual(["whoami", "find_feedstocks", "get_feedstock"]);
+  expect(result.tools.map((tool: { name: string }) => tool.name)).toEqual(["whoami", "find_feedstocks", "get_feedstock", "find_documents", "get_document_download_url"]);
   for (const name of ["log_feedstock_delivery", "update_feedstock", "delete_feedstock"]) {
     const hidden = await body(await call(name));
     expect(mocks.post).toHaveBeenLastCalledWith(expect.anything(), expect.objectContaining({ access: "read" }), null);
@@ -361,4 +389,31 @@ it("publishes the delete annotations", async () => {
   expect(result.tools.find((tool: { name: string }) => tool.name === "delete_feedstock").annotations).toEqual({
     readOnlyHint: false, openWorldHint: false, destructiveHint: true, idempotentHint: true,
   });
+});
+
+it.each([
+  ["confirm_document_upload", DOCUMENT_CONFIRM_DEADLINE_MS],
+  ["request_document_upload", OPERATION_DEADLINE_MS],
+] as const)("gives %s its budget without restarting it after authentication", async (name, budget) => {
+  const resolution = await mocks.resolve();
+  const started = Date.now();
+  let now = started;
+  const AUTH_DELAY_MS = 4_000;
+  const clock = vi.spyOn(Date, "now").mockImplementation(() => now);
+  mocks.resolve.mockImplementation(async () => { now += AUTH_DELAY_MS; return resolution; });
+  try {
+    await call(name, { ownerType: "delivery" });
+    expect(vi.mocked(serveMcp).mock.calls.at(-1)![1].deadlineAt).toBe(started + budget);
+  } finally { clock.mockRestore(); }
+});
+it.each(["request_document_upload", "confirm_document_upload"])("enforces the write switch for %s", async name => {
+  mocks.env.API_WRITES_DISABLED = true;
+  expect(await body(await call(name, { ownerType: "delivery" }))).toMatchObject({
+    result: { isError: true, structuredContent: { code: "api_writes_disabled" } },
+  });
+});
+it("authorizes the selected document owner before executing a visible tool", async () => {
+  mocks.resolve.mockResolvedValue({ ok: true, ctx: { orgRole: "admin", scopes: ["deliveries:read"], organizationId: "org-1" } });
+  const response = await body(await call("find_documents", { ownerType: "feedstock", ownerId: "FS-1" }));
+  expect(response.result).toMatchObject({ isError: true, structuredContent: { code: "missing_scope", issues: [] } });
 });

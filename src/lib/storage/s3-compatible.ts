@@ -1,3 +1,6 @@
+import type { Readable } from "node:stream";
+import { readBoundedStream } from "./bounded-read";
+import { StorageError, type ReadObjectBoundedArgs, type PutObjectOptions } from "./types";
 import {
   S3Client,
   HeadObjectCommand,
@@ -18,7 +21,7 @@ import type {
   GetObjectArgs,
   StoredObject,
 } from "./types";
-import { isSafeStorageKey } from "./keys";
+import { isSafeStorageKey, isUploadKey } from "./keys";
 import { fetchStoredObject } from "./get-object";
 
 const DEFAULT_UPLOAD_TTL_SECONDS = 60 * 5;
@@ -64,18 +67,20 @@ export class S3CompatibleProvider implements StorageProvider {
   }
 
   async createUploadUrl(args: CreateUploadUrlArgs): Promise<PresignedUpload> {
+    if (!isUploadKey(args.key)) throw new StorageError("Only upload keys may be presigned", "unsafe_upload_key");
     const ttl = args.expiresInSeconds ?? DEFAULT_UPLOAD_TTL_SECONDS;
     const cmd = new PutObjectCommand({
       Bucket: this.bucket,
       Key: this.physicalKey(args.key),
       ContentType: args.contentType,
     });
-    const url = await getSignedUrl(this.client, cmd, { expiresIn: ttl });
+    const signingDate = args.signingDate ?? new Date(Date.now());
+    const url = await getSignedUrl(this.client, cmd, { expiresIn: ttl, signingDate });
     return {
       url,
       method: "PUT",
       headers: { "Content-Type": args.contentType },
-      expiresAt: new Date(Date.now() + ttl * 1000),
+      expiresAt: new Date(signingDate.getTime() + ttl * 1000),
     };
   }
 
@@ -91,6 +96,17 @@ export class S3CompatibleProvider implements StorageProvider {
   async getObject(args: GetObjectArgs): Promise<StoredObject> {
     const url = await this.createDownloadUrl(args);
     return fetchStoredObject(url);
+  }
+
+  async readObjectBounded(args: ReadObjectBoundedArgs) {
+    try {
+      const res = await this.client.send(new GetObjectCommand({ Bucket: this.bucket, Key: this.physicalKey(args.key) }), { abortSignal: args.signal });
+      if (!res.Body) return null;
+      return await readBoundedStream(res.Body as Readable, args.maxBytes, res.ContentType ?? "application/octet-stream", args.signal);
+    } catch (error) {
+      if (error instanceof NoSuchKey || error instanceof NotFound || (error as { $metadata?: { httpStatusCode?: number } }).$metadata?.httpStatusCode === 404) return null;
+      throw error;
+    }
   }
 
   async headObject(key: string): Promise<ObjectHead | null> {
@@ -128,15 +144,18 @@ export class S3CompatibleProvider implements StorageProvider {
   async putObject(
     key: string,
     body: Buffer,
-    contentType: string
+    contentType: string,
+    options: PutObjectOptions = {},
   ): Promise<void> {
     await this.client.send(
       new PutObjectCommand({
         Bucket: this.bucket,
         Key: this.physicalKey(key),
         Body: body,
+        ...(options.checksumSha256 ? { ChecksumSHA256: Buffer.from(options.checksumSha256, "hex").toString("base64") } : {}),
         ContentType: contentType,
-      })
+      }),
+      { abortSignal: options.signal }
     );
   }
 

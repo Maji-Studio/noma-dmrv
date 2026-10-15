@@ -1,4 +1,5 @@
 import { OPERATION_DEADLINE_MS } from "@/config/operations";
+import { DOCUMENT_CONFIRM_DEADLINE_MS } from "@/config/documents";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { DomainError } from "@/lib/domain-errors";
 import { ApiHttpError } from "./http-error";
@@ -90,6 +91,25 @@ it.each(["GET", "HEAD", "POST", "PATCH", "DELETE"])("refuses %s before its handl
   for (const [name, value] of Object.entries(rateHeaders)) expect(response.headers.get(name)).toBe(value);
 });
 afterEach(() => vi.useRealTimers());
+
+it("allows the document confirm budget and preserves retryable missing-object guidance", async () => {
+  vi.useFakeTimers({ toFake: ["Date"] });
+  const start = Date.UTC(2026, 9, 15);
+  vi.setSystemTime(start);
+  mocks.resolve.mockImplementation(async () => {
+    vi.setSystemTime(start + OPERATION_DEADLINE_MS);
+    return { ok: true, ctx: { orgRole: "admin", scopes: ["feedstocks:write"] } };
+  });
+  const retryAfterSeconds = 1;
+  const route = apiRoute("test", "feedstocks:write", async (_request, { deadlineAt }) => {
+    expect(deadlineAt).toBe(start + DOCUMENT_CONFIRM_DEADLINE_MS);
+    throw new DomainError("conflict", "Upload the file before confirming.", { retryable: true, retryAfterSeconds });
+  }, { deadlineMs: DOCUMENT_CONFIRM_DEADLINE_MS });
+  const response = await route(request());
+  expect(response.status).toBe(409);
+  expect(response.headers.get("retry-after")).toBe(String(retryAfterSeconds));
+  expect(await response.json()).toMatchObject({ code: "conflict", retryable: true });
+});
 
 
 it("runs pre-auth, credential resolution, post-auth and handler in order", async () => {
