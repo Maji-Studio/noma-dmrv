@@ -61,24 +61,19 @@ S3-compatible PUT, GET, HEAD, DELETE, and `putObject`, but it is never stored in
 the DB. The local-fs provider ignores it entirely. This keeps the logical key
 stable when an environment moves bucket or prefix.
 
-**Ordinary logical key** (stored in `documents.storage_key`, no leading `/`):
+**Browser upload logical keys** (stored without a leading `/`):
 
 ```text
-org/{organizationId}/{entityType}/{entityId}/{documentType}/{ulid}.{ext}
+org/{organizationId}/uploads/{documentId}/{ulid}
+org/{organizationId}/{entityType}/{entityId}/{documentType}/{documentId}-{sha256}.{ext}
 ```
 
-- `buildStorageKey()` builds only the
-  `{entityType}/{entityId}/{documentType}/{ulid}.{ext}` suffix; the owning
-  server action prepends `org/{ctx.organizationId}/`. Never accept the
-  organization segment from client input.
-- Original filename lives in `documents.file_name`, NOT in the key — avoids
-  URL-encoding pain and PII leakage via names like `"Smith - Confidential.pdf"`.
-  ULID sorts by upload time; `entityType`/`entityId` lead within each
-  organization namespace so bucket browsing mirrors app navigation.
-- `buildStorageKey()` (`src/lib/storage/keys.ts`) is the only place keys are
-  built — never construct one by hand. **It may return a key with no extension**:
-  `extractExtension` accepts only `[a-z0-9]{1,12}` and drops anything else, so
-  code that infers content type from the key extension will break.
+`buildUploadKey()` creates the client-writable key. Both providers refuse to
+presign a PUT outside that namespace. `buildFinalStorageKey()` creates the
+server-only key after inspection. The original filename stays in
+`documents.file_name`, never in either key. An unusable filename extension is
+omitted. Legacy uploaded rows keep their existing keys and download normally.
+`buildStorageKey()` remains available for server-generated objects.
 
 **Generated objects use deterministic logical namespaces where idempotent
 reuse matters:**
@@ -141,12 +136,28 @@ route can't be used as an open redirect borrowing the app's domain trust.
 
 ## Write paths
 
-**1. Presigned upload** — `src/fn/documents.ts`: `requestUpload` → client PUT →
-`confirmUpload`. `confirmUpload`'s `headObject` is the **authoritative** size +
-content-type gate and the security boundary; client-side and `requestUpload`-time
-checks are best-effort UX, because presigned PUTs can't reliably enforce
-content-length across S3-compatible providers. On rejection the object is deleted
-immediately and `upload_status` becomes `'failed'`.
+**1. Presigned upload**: `requestUpload` commits a pending row through an
+unregistered app operation, then presigns its upload key for the remaining
+five-minute lease. The immutable size, MIME and optional SHA-256 declaration
+lives in `metadata.uploadDeclaration`. Client PUTs still send only Content-Type.
+`confirmUpload` returns an already uploaded row without storage I/O. A missing
+object returns retryable `conflict` and remains pending. A failed row returns
+`conflict` with its stored failure reason.
+
+Only pending rows undergo a bounded streaming read. The server verifies exact
+size, SHA-256, declared MIME, PDF/image magic bytes and the readings CSV rule,
+then writes the inspected buffer to its final content-addressed key. Storage
+has a 20-second abort budget within the 25-second confirmation deadline.
+The runner revalidates all inspection bindings under the document write locks
+before promoting the row. Refusals are returned outcomes so the failed state
+and deletion queue commit before the action returns an error. Losing confirms
+never delete a winning final key.
+
+All cleanup uses the deletion queue. Upload keys are eligible only after their
+lease plus a ten-minute grace period; final keys have no delay. Parent
+retirement queues both keys. Draining happens after commit and skips future
+`not_before` entries, so a late PUT can only recreate an upload object whose
+cleanup is still pending.
 
 **2. Server-side `putObject`** — for artifacts the server generates itself:
 transport/durability evidence ledgers
@@ -161,10 +172,15 @@ Client orchestration: `src/hooks/use-file-upload.ts` and
 
 ### Write authz and limits
 
-Every documents server action goes through
-`assertCanManageDocumentEntity(ctx, entityType, entityId)` — **the storage layer
-itself has no authz.** `DOCUMENT_ENTITY_TYPES` enumerates what a user-uploaded
-document can hang off.
+Document mutations enforce organization, owner and submitted-lineage checks in
+transaction-aware data-access writers. The lock order is documented in
+[architecture.md](./architecture.md#database-boundaries). Archived owners refuse
+request and confirm; delete remains allowed. Visibility requires an Owner or
+Admin at the data-access boundary and bumps the document version, as does
+application evidence reclassification. Submitted lineage refuses every app
+mutation, including deletion of documents that are not registry Sources.
+Server-generated ledgers and GHG Statement reports retain their own writers.
+The storage layer itself does not perform authorization.
 
 Per-documentType size and MIME rules live in `src/schemas/documents.ts`
 (`UPLOAD_RULES`, `isAllowedMime`, `maxBytesFor`) — read them there, they change.
@@ -172,7 +188,7 @@ All user-uploaded document types currently share a 10 MB cap defined once in
 `src/lib/documents/upload-policy.ts`; UI limits are clamped to that server policy.
 Future file reduction (for example image processing with Sharp) should be a
 preprocessing step that produces the final artifact before `requestUpload`, so
-both the request check and authoritative `confirmUpload` HEAD check apply to the
+both the request check and authoritative `confirmUpload` bounded inspection apply to the
 bytes that are actually retained.
 The local-fs route additionally caps each upload at `min(token cap,
 LOCAL_FS_GLOBAL_MAX_BYTES)` (100 MB) as defense-in-depth.
@@ -194,7 +210,7 @@ status only and cannot be used to change supporting evidence.
 ## Adapter interface
 
 `src/lib/storage/types.ts` defines `StorageProvider` (`name`, `bucket`,
-`createUploadUrl`, `createDownloadUrl`, `getObject`, `headObject`,
+`createUploadUrl`, `createDownloadUrl`, `getObject`, `readObjectBounded`, `headObject`,
 `deleteObject`, `putObject`). `getObject` is the server-side read seam and
 returns the bytes plus a content type. The s3-compatible provider presigns a
 fresh URL and fetches it, refusing redirects, under the timeout in

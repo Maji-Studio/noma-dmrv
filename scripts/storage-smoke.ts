@@ -17,7 +17,7 @@
  * those come from .env.local; in CI they are loaded from 1Password (see
  * .github/workflows/storage-health.yml).
  *
- * Objects are written under a `_smoke/<ulid>/healthcheck/` prefix and
+ * Objects are written under a `org/_smoke/uploads/` prefix and
  * deleted at the end. The prefix is distinct from any real entityType so
  * smoke debris is trivially identifiable if a run dies before cleanup.
  */
@@ -29,17 +29,15 @@ import { smokeCorsOrigin, assertUploadCors } from "./storage-cors-core";
 config({ path: ".env.local" });
 
 const SMOKE_ENTITY_TYPE = "_smoke";
-const SMOKE_DOCUMENT_TYPE = "healthcheck";
 const SMOKE_CONTENT_TYPE = "text/plain";
 const SMOKE_MAX_BYTES = 1024;
 const PRESIGN_TTL_SECONDS = 120;
 
 export async function runStorageSmoke(): Promise<void> {
   // Defer imports until env is loaded so env.ts validation sees the values.
-  const { getStorageProvider, buildStorageKey } = await import(
+  const { getStorageProvider, buildUploadKey } = await import(
     "../src/lib/storage"
   );
-  const { ulid } = await import("ulid");
 
   const provider = getStorageProvider();
   if (provider.name === "local-fs") {
@@ -56,12 +54,7 @@ export async function runStorageSmoke(): Promise<void> {
   }
   console.log(`Storage provider: ${provider.name} (bucket=${provider.bucket})`);
 
-  const key = buildStorageKey({
-    entityType: SMOKE_ENTITY_TYPE,
-    entityId: ulid().toLowerCase(),
-    documentType: SMOKE_DOCUMENT_TYPE,
-    fileName: "probe.txt",
-  });
+  const key = buildUploadKey({ organizationId: SMOKE_ENTITY_TYPE, documentId: randomUUID() });
   // Random token embedded in the body so the GET round-trip proves we read
   // back exactly what we wrote, not a stale or mismatched object.
   const token = randomUUID();
@@ -109,7 +102,7 @@ export async function runStorageSmoke(): Promise<void> {
     }
     console.log(`OK  PUT      → ${putRes.status} (${expectedBytes} bytes)`);
 
-    // 2. HEAD — the same gate confirmUpload() relies on.
+    // 2. HEAD checks metadata; confirmation inspects bounded bytes below.
     const head = await provider.headObject(key);
     if (!head) fail("HEAD returned null immediately after a successful PUT.");
     if (head!.size !== expectedBytes) {
@@ -123,6 +116,13 @@ export async function runStorageSmoke(): Promise<void> {
     console.log(
       `OK  HEAD     → size=${head!.size} type=${head!.contentType} etag=${head!.etag}`,
     );
+
+    const inspected = await provider.readObjectBounded({ key, maxBytes: expectedBytes });
+    if (!inspected || !inspected.bytes.equals(Buffer.from(body))) {
+      fail("Bounded read does not match the uploaded bytes.");
+    }
+    await provider.putObject(key, inspected.bytes, SMOKE_CONTENT_TYPE, { checksumSha256: inspected.sha256 });
+    console.log("OK  INSPECT  → bounded read and checksum-verified PUT");
 
     // 3. Signed GET — verify byte-for-byte round-trip.
     const downloadUrl = await provider.createDownloadUrl({

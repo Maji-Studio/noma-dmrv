@@ -33,6 +33,10 @@ export interface StoredObject {
   contentType: string;
 }
 
+export interface ReadObjectBoundedArgs { key: string; maxBytes: number; signal?: AbortSignal }
+export interface InspectedObject extends StoredObject { sizeBytes: number; sha256: string }
+export interface PutObjectOptions { checksumSha256?: string; signal?: AbortSignal }
+
 export type StorageProviderName = "s3" | "do-spaces" | "local-fs";
 
 export interface StorageProvider {
@@ -46,6 +50,7 @@ export interface StorageProvider {
    * complete object bytes with the response content type.
    */
   getObject(args: GetObjectArgs): Promise<StoredObject>;
+  readObjectBounded(args: ReadObjectBoundedArgs): Promise<InspectedObject | null>;
   headObject(key: string): Promise<ObjectHead | null>;
   deleteObject(key: string): Promise<void>;
   /**
@@ -54,7 +59,7 @@ export interface StorageProvider {
    * PDF) rather than receiving from a browser upload. Overwrites any existing
    * object at `key`.
    */
-  putObject(key: string, body: Buffer, contentType: string): Promise<void>;
+  putObject(key: string, body: Buffer, contentType: string, options?: PutObjectOptions): Promise<void>;
 }
 
 export class StorageError extends Error {

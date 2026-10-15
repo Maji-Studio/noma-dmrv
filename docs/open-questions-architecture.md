@@ -184,9 +184,16 @@ If both share a not-yet-submitted Removal, this can raise 40P01. Delivery create
 now run through the operation runner in both the app and the registered API
 operation, so the whole transaction retries within its deadline. The lock-order
 inversion remains: fix the run writer to lock artifacts before the run row.
+
 This is part of `data/lock-order` below.
 
 ### Run writers, feedstock edits and output postings lock in different orders (`data/lock-order`, opened 2026-10-09)
+
+Application update/delete also take rows before artifacts outside the runner.
+Document writes on applications or their deliveries take artifacts first and can
+deadlock with them; Postgres may abort the non-retried application transaction.
+Phase 6b commit 1 moves application writers onto the runner with artifacts first.
+
 
 - `src/data-access/production-runs/mutations.ts:updateProductionRunInTransaction`
   and `src/data-access/production-runs/delete.ts:deleteProductionRunInTransaction`

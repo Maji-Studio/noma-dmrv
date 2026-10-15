@@ -404,6 +404,21 @@ permission checks; pooling defaults are centralized in `src/db/pool-config.ts`
 (`resolveAppPoolConfig`) and applied by `src/db/index.ts`. See
 [database.md](./database.md) and [schema-overview.md](./schema-overview.md).
 
+Document writes discover the owner's lineage target and ancestors unlocked,
+then lock sorted certification artifacts, ancestors `FOR SHARE`, the owner
+`FOR SHARE`, the mirror advisory lock (delete only), and the document
+`FOR UPDATE`. They revalidate parent identity, archive state and lineage after
+locking; a changed parent returns retryable `conflict`, and no new artifact is
+locked after a row. Sample ancestors are their credit batch or legacy run;
+applications use their delivery; internal children use their archive-bearing
+parent. Archive's `NO KEY UPDATE` conflicts with `FOR SHARE`. Parent retirement
+uses owner, mirror, document order; Source mirroring never locks an owner.
+Sample and delivery writers use artifacts before rows. Existing feedstock, order and production-run inversions remain subject to the runner's bounded
+retry. Application update/delete still lock rows before artifacts and do not use the
+runner. They can deadlock with document writes on applications or their deliveries;
+Postgres may abort the non-retried application transaction. Phase 6b commit 1 moves
+application writers onto the runner with artifacts first, as documented in [lock-order follow-up](./open-questions-architecture.md#run-writers-feedstock-edits-and-output-postings-lock-in-different-orders-datalock-order-opened-2026-10-09).
+
 ## Computed Method-B Eligibility (Isometric)
 
 `production_processes` stores the process epoch and the all-or-none prerequisite

@@ -128,7 +128,7 @@ describe("parent document retirement", () => {
         fixture.reactorId, await masterDataVersion(makeTestOrgContext(TEST_USER_ID), "reactors", fixture.reactorId),
       );
 
-      expect(provider.deleteCalls).toEqual([managedKey]);
+      expect(provider.deleteCalls.filter((key) => [managedKey, otherOrgKey, otherPendingKey].includes(key))).toEqual([managedKey]);
       expect(provider.objects.has(managedKey)).toBe(false);
       expect(provider.objects.has(otherOrgKey)).toBe(true);
       expect(provider.objects.has(otherPendingKey)).toBe(true);

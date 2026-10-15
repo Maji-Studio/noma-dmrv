@@ -16,6 +16,7 @@ interface StorageObjectRef {
   storageProvider: string;
   storageBucket: string;
   storageKey: string;
+  notBefore?: Date;
 }
 
 export interface StorageDeletionRunResult {
@@ -39,6 +40,7 @@ export async function enqueueStorageObjectDeletion(
 async function processStorageObjectDeletion(
   ctx: OrgContext,
   id: string,
+  deadlineAt?: number,
 ): Promise<"completed" | "failed" | "skipped"> {
   return db.transaction(async (tx) => {
     const [entry] = await tx
@@ -49,6 +51,7 @@ async function processStorageObjectDeletion(
           eq(storageObjectDeletions.id, id),
           eq(storageObjectDeletions.organizationId, ctx.organizationId),
           isNull(storageObjectDeletions.completedAt),
+          or(isNull(storageObjectDeletions.notBefore), lte(storageObjectDeletions.notBefore, new Date())),
         ),
       )
       .for("update", { skipLocked: true });
@@ -88,7 +91,25 @@ async function processStorageObjectDeletion(
     try {
       // Provider deletion is idempotent. If the database update below rolls
       // back, a retry safely deletes the already-absent object again.
-      await provider.deleteObject(entry.storageKey);
+      if (deadlineAt === undefined) {
+        await provider.deleteObject(entry.storageKey);
+      } else {
+        const remaining = deadlineAt - Date.now();
+        if (remaining <= 0) return "skipped";
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        try {
+          // A timed-out delete may finish later. Leave the entry retryable;
+          // provider deletion is idempotent and never updates this transaction.
+          await Promise.race([
+            provider.deleteObject(entry.storageKey),
+            new Promise<never>((_, reject) => {
+              timer = setTimeout(() => reject(new Error(STORAGE_DELETE_FAILED)), remaining);
+            }),
+          ]);
+        } finally {
+          clearTimeout(timer);
+        }
+      }
     } catch {
       await tx
         .update(storageObjectDeletions)
@@ -129,8 +150,11 @@ async function processStorageObjectDeletion(
  */
 export async function processPendingStorageObjectDeletions(
   ctx: OrgContext,
+  options?: { budgetMs: number },
 ): Promise<StorageDeletionRunResult> {
   requireOrgScope(ctx);
+  const deadlineAt = options ? Date.now() + options.budgetMs : undefined;
+  if (deadlineAt !== undefined && Date.now() >= deadlineAt) return { completed: 0, failed: 0 };
   try {
     const provider = getStorageProvider();
     const mismatchUpdatedAt = new Date();
@@ -144,6 +168,7 @@ export async function processPendingStorageObjectDeletions(
         and(
           eq(storageObjectDeletions.organizationId, ctx.organizationId),
           isNull(storageObjectDeletions.completedAt),
+          or(isNull(storageObjectDeletions.notBefore), lte(storageObjectDeletions.notBefore, new Date())),
           or(
             ne(storageObjectDeletions.storageProvider, provider.name),
             ne(storageObjectDeletions.storageBucket, provider.bucket),
@@ -176,6 +201,7 @@ export async function processPendingStorageObjectDeletions(
         and(
           eq(storageObjectDeletions.organizationId, ctx.organizationId),
           isNull(storageObjectDeletions.completedAt),
+          or(isNull(storageObjectDeletions.notBefore), lte(storageObjectDeletions.notBefore, new Date())),
           eq(storageObjectDeletions.storageProvider, provider.name),
           eq(storageObjectDeletions.storageBucket, provider.bucket),
           or(
@@ -195,7 +221,8 @@ export async function processPendingStorageObjectDeletions(
       failed: mismatches.length,
     };
     for (const entry of entries) {
-      const outcome = await processStorageObjectDeletion(ctx, entry.id);
+      if (deadlineAt !== undefined && Date.now() >= deadlineAt) break;
+      const outcome = await processStorageObjectDeletion(ctx, entry.id, deadlineAt);
       if (outcome === "completed") result.completed += 1;
       if (outcome === "failed") result.failed += 1;
     }

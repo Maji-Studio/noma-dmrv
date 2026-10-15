@@ -46,6 +46,8 @@ export type { OperationEffect } from "@/lib/operation-effect";
 const API_CONTRACT_VERSION = "v1";
 
 export interface OperationScope {
+  /** Absolute request deadline, including after-commit work. */
+  deadlineAt?: number;
   /** Dry-run observer; once per attempt, after locks, before stock changes. */
   snapshotStock?: SnapshotStock;
   ctx: OrgContext;
@@ -263,7 +265,7 @@ async function runOperationCore<Input extends z.ZodType, Output, Result>(
         const snapshotStock: SnapshotStock | undefined = dryRun ? async (writerTx, ids) => {
           before = await readStockBalances(ctx, writerTx, ids);
         } : undefined;
-        const output = await operation.execute({ ctx, tx, snapshotStock, afterCommit: (hook) => hooks.push(hook) }, decoded);
+        const output = await operation.execute({ ctx, tx, deadlineAt, snapshotStock, afterCommit: (hook) => hooks.push(hook) }, decoded);
         const stockEffects = before ? diffStockBalances(before, await readStockBalances(ctx, tx, before.map((bin) => bin.storageLocationId))) : undefined;
         const effect = operation.describe?.(decoded, output);
         const result = represent(output);
