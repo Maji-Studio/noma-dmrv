@@ -1,3 +1,4 @@
+import { TEST_SITE_POSITION } from "./helpers/test-org";
 import { rationalToNumber, readRational } from "@/lib/output-stock";
 import { recordOutputStockMovementInTransaction } from "@/data-access/output-stock-post";
 import { certifyOutputLineage, cleanupCertifiedOutputLineage } from "./helpers/certified-output-lineage";
@@ -201,7 +202,7 @@ describe("delivery tenant and lineage boundaries", () => {
     await db.update(storageLocations).set({ formulationId: f.pure.id }).where(eq(storageLocations.id, f.bin.id));
     await expect(db.transaction(tx => createDeliveryInTransaction(f.ctx, tx, f.input))).rejects.toMatchObject({ code: "validation_failed", issues: [{ path: ["storageLocationId"], message: expect.stringContaining("formulation") }] });
     await db.update(storageLocations).set({ formulationId: f.recipe.id }).where(eq(storageLocations.id, f.bin.id));
-    const [facility] = await db.insert(facilities).values({ organizationId: f.ctx.organizationId, code: "E2E-OTHER", name: "E2E Other", timezone: "UTC" }).returning();
+    const [facility] = await db.insert(facilities).values({ ...TEST_SITE_POSITION, organizationId: f.ctx.organizationId, code: "E2E-OTHER", name: "E2E Other", timezone: "UTC" }).returning();
     const [bin] = await db.insert(storageLocations).values({ organizationId: f.ctx.organizationId, facilityId: facility.id, code: "E2E-OTHER", name: "E2E Other", type: "product_bin", formulationId: f.recipe.id }).returning();
     await expect(db.transaction(tx => createDeliveryInTransaction(f.ctx, tx, { ...f.input, storageLocationId: bin.id }))).rejects.toMatchObject({ code: "validation_failed", issues: [{ path: ["storageLocationId"], message: expect.stringContaining("facility") }] });
     const [otherBin] = await db.insert(storageLocations).values({ organizationId: f.ctx.organizationId, facilityId: f.facility.id, code: "E2E-EMPTY", name: "E2E Empty", type: "product_bin", formulationId: f.recipe.id }).returning();

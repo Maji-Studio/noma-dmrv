@@ -54,15 +54,11 @@ interface SupplierCreateFields {
   code: string;
   name: string;
   location?: string | null;
-  gpsLatitude?: number | null;
-  gpsLongitude?: number | null;
   address?: string | null;
   contactName?: string | null;
   contactEmail?: string | null;
   contactPhone?: string | null;
   sourceRegion?: string | null;
-  distanceToFacilityKm?: number | null;
-  distanceSource?: DistanceSourceValue | null;
 }
 
 interface SupplierLocationCreateFields {
@@ -70,8 +66,8 @@ interface SupplierLocationCreateFields {
   country: string;
   stateRegion?: string | null;
   city?: string | null;
-  gpsLatitude?: number | null;
-  gpsLongitude?: number | null;
+  gpsLatitude: number;
+  gpsLongitude: number;
   address?: string | null;
   distanceFromFacilityKm?: number | null;
   distanceSource?: DistanceSourceValue | null;
@@ -221,15 +217,11 @@ export async function getSuppliers(
       code: suppliers.code,
       name: suppliers.name,
       location: suppliers.location,
-      gpsLatitude: suppliers.gpsLatitude,
-      gpsLongitude: suppliers.gpsLongitude,
       address: suppliers.address,
       contactName: suppliers.contactName,
       contactEmail: suppliers.contactEmail,
       contactPhone: suppliers.contactPhone,
       sourceRegion: suppliers.sourceRegion,
-      distanceToFacilityKm: suppliers.distanceToFacilityKm,
-      distanceSource: suppliers.distanceSource,
       createdAt: suppliers.createdAt,
       version: suppliers.version,
       updatedAt: suppliers.updatedAt,
@@ -330,15 +322,11 @@ export async function createSupplier(
         code: data.code,
         name: data.name,
         location: data.location ?? null,
-        gpsLatitude: data.gpsLatitude ?? null,
-        gpsLongitude: data.gpsLongitude ?? null,
         address: data.address ?? null,
         contactName: data.contactName ?? null,
         contactEmail: data.contactEmail ?? null,
         contactPhone: data.contactPhone ?? null,
         sourceRegion: data.sourceRegion ?? null,
-        distanceToFacilityKm: data.distanceToFacilityKm ?? null,
-        distanceSource: data.distanceSource ?? null,
       })
       .returning()
   );
@@ -384,15 +372,11 @@ export async function createSupplierWithLocations(
         code: data.code,
         name: data.name,
         location: data.location ?? null,
-        gpsLatitude: data.gpsLatitude ?? null,
-        gpsLongitude: data.gpsLongitude ?? null,
         address: data.address ?? null,
         contactName: data.contactName ?? null,
         contactEmail: data.contactEmail ?? null,
         contactPhone: data.contactPhone ?? null,
         sourceRegion: data.sourceRegion ?? null,
-        distanceToFacilityKm: data.distanceToFacilityKm ?? null,
-        distanceSource: data.distanceSource ?? null,
       })
       .returning();
 
@@ -409,8 +393,8 @@ export async function createSupplierWithLocations(
         country: location.country,
         stateRegion: location.stateRegion ?? null,
         city: location.city ?? null,
-        gpsLatitude: location.gpsLatitude ?? null,
-        gpsLongitude: location.gpsLongitude ?? null,
+        gpsLatitude: location.gpsLatitude,
+        gpsLongitude: location.gpsLongitude,
         address: location.address ?? null,
         distanceFromFacilityKm: location.distanceFromFacilityKm ?? null,
         distanceSource: location.distanceSource ?? null,
@@ -437,15 +421,11 @@ export async function updateSupplier(
     code?: string;
     name?: string;
     location?: string | null;
-    gpsLatitude?: number | null;
-    gpsLongitude?: number | null;
     address?: string | null;
     contactName?: string | null;
     contactEmail?: string | null;
     contactPhone?: string | null;
     sourceRegion?: string | null;
-    distanceToFacilityKm?: number | null;
-    distanceSource?: "map_estimate" | "manual" | "document" | null;
     /** `version` the edit form loaded; refuses a save built on a stale read. */
     expectedVersion: number;
   }
@@ -613,8 +593,8 @@ export async function createSupplierLocation(
     country: string;
     stateRegion?: string | null;
     city?: string | null;
-    gpsLatitude?: number | null;
-    gpsLongitude?: number | null;
+    gpsLatitude: number;
+    gpsLongitude: number;
     address?: string | null;
     distanceFromFacilityKm?: number | null;
     distanceSource?: "map_estimate" | "manual" | "document" | null;
@@ -668,8 +648,8 @@ export async function createSupplierLocation(
         country: data.country,
         stateRegion: data.stateRegion ?? null,
         city: data.city ?? null,
-        gpsLatitude: data.gpsLatitude ?? null,
-        gpsLongitude: data.gpsLongitude ?? null,
+        gpsLatitude: data.gpsLatitude,
+        gpsLongitude: data.gpsLongitude,
         address: data.address ?? null,
         distanceFromFacilityKm: data.distanceFromFacilityKm ?? null,
         distanceSource: data.distanceSource ?? null,
@@ -689,8 +669,8 @@ export async function updateSupplierLocation(
     country?: string;
     stateRegion?: string | null;
     city?: string | null;
-    gpsLatitude?: number | null;
-    gpsLongitude?: number | null;
+    gpsLatitude?: number;
+    gpsLongitude?: number;
     address?: string | null;
     distanceFromFacilityKm?: number | null;
     distanceSource?: "map_estimate" | "manual" | "document" | null;

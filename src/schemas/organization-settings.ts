@@ -16,8 +16,7 @@ const MAX_ORGANIZATION_COUNTRY_LENGTH = 100;
 export const organizationSettingsFormSchema = z.object({
   /**
    * Free text, matching `facilities.country`. An empty input means "we have not
-   * said", which is stored as null rather than as the `'UNKNOWN'` that facility
-   * and party rows persist — a default nobody chose should not look chosen.
+   * said", which is stored as null. A default nobody chose should not look chosen.
    */
   defaultCountry: z
     .string()

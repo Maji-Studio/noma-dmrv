@@ -6,8 +6,8 @@ export const supplierLocationRepresentationSchema = z.object({
   name: z.string().nullable().describe("Source location display name, plain text, or null when unspecified."),
   version: lookupVersion,
   supplierId: z.uuid().describe("Owning supplier identifier, UUID."),
-  gpsLatitude: z.number().nullable().describe("WGS 84 latitude in decimal degrees, or null when unspecified."),
-  gpsLongitude: z.number().nullable().describe("WGS 84 longitude in decimal degrees, or null when unspecified."),
+  gpsLatitude: z.number().describe("WGS 84 latitude in decimal degrees."),
+  gpsLongitude: z.number().describe("WGS 84 longitude in decimal degrees."),
 }).omit({ code: true });
 export type SupplierLocationRepresentation = z.infer<typeof supplierLocationRepresentationSchema>;
 export type SupplierLocationRepresentationInput = LookupRepresentationInput<SupplierLocationRepresentation>;

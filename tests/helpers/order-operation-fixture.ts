@@ -1,3 +1,4 @@
+import { TEST_SITE_POSITION } from "./test-org";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { apiAuditEvents, apiIdempotencyRecords, customerLocations, customers, facilities, documents, organizationSettings, storageObjectDeletions } from "@/db/schema";
@@ -10,14 +11,14 @@ export async function createOrderFixture() {
   const f = await seedOutputStockParents(db);
   const [otherCustomer] = await db.insert(customers).values({ organizationId: f.ctx.organizationId,
     code: `E2E-OC-${f.tag}`, name: `E2E Other ${f.tag}` }).returning();
-  const [otherFacility] = await db.insert(facilities).values({ organizationId: f.ctx.organizationId,
+  const [otherFacility] = await db.insert(facilities).values({ ...TEST_SITE_POSITION, organizationId: f.ctx.organizationId,
     code: `E2E-OF-${f.tag}`, name: `E2E Other ${f.tag}`, timezone: "UTC" }).returning();
   return { ...f, otherCustomer, otherFacility };
 }
 export type OrderFixture = Awaited<ReturnType<typeof createOrderFixture>>;
 export async function createOrderDestination(f: OrderFixture, customerId = f.customer.id) {
-  const [location] = await db.insert(customerLocations).values({ organizationId: f.ctx.organizationId,
-    customerId, name: `E2E Other site ${f.tag}`, country: "CH" }).returning();
+  const [location] = await db.insert(customerLocations).values({ ...TEST_SITE_POSITION, country: "CH", organizationId: f.ctx.organizationId,
+    customerId, name: `E2E Other site ${f.tag}`, }).returning();
   return location;
 }
 export function orderInput(f: OrderFixture, changes: Record<string, unknown> = {}) {

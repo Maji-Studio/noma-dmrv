@@ -130,17 +130,10 @@ describe("createCustomerWithLocations", () => {
     expect(orphanLocations).toHaveLength(0);
   });
 
-  it("creates a customer that has no locations", async () => {
-    const customer = nextCustomer();
-
-    const created = await createCustomerWithLocations(ctx, {
-      customer,
-      locations: [],
-    });
-
-    expect(created.customer.code).toBe(customer.code);
-    expect(created.locations).toHaveLength(0);
-    expect(await getCustomerLocations(ctx, created.customer.id)).toHaveLength(0);
+  it("refuses a customer without locations", async () => {
+    await expect(createCustomerWithLocations(ctx, {
+      customer: nextCustomer(), locations: [],
+    })).rejects.toThrow("At least one location is required");
   });
 
   it("saves two locations with exactly one default", async () => {

@@ -104,8 +104,8 @@ export function FacilityForm({
 
   const defaultSubmitLabel = isEditMode ? "Update facility" : "Create facility";
 
-  const gpsLatitude = watch("gpsLatitude");
-  const gpsLongitude = watch("gpsLongitude");
+  const gpsLatitude = watch("gpsLatitude") as number | null | undefined;
+  const gpsLongitude = watch("gpsLongitude") as number | null | undefined;
   const timezone = watch("timezone") as string | undefined;
   const country = watch("country");
   const durabilityOption = watch("durabilityOption") ?? DEFAULT_DURABILITY_OPTION;
@@ -215,6 +215,7 @@ export function FacilityForm({
       <PositionPicker
         idPrefix="gps"
         label="Facility position"
+        required
         accent="purple"
         latitude={gpsLatitude ?? null}
         longitude={gpsLongitude ?? null}

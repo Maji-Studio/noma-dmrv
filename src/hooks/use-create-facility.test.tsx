@@ -49,7 +49,7 @@ it("keeps facility creation pending for the active list but not country or onboa
     let save!: ReturnType<typeof mutation.mutateAsync>;
     let settled = false;
     await act(async () => {
-      save = mutation.mutateAsync({ name: "E2E Facility", country: "CH", durabilityOption: "200_year", timezone: "UTC" });
+      save = mutation.mutateAsync({ name: "E2E Facility", gpsLatitude: 0, gpsLongitude: 0, country: "CH", durabilityOption: "200_year", timezone: "UTC" });
       void save.then(() => { settled = true; });
       await vi.waitFor(() => expect(listObserver.getCurrentResult().isFetching).toBe(true));
     });

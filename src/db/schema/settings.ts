@@ -37,8 +37,8 @@ export const organizationSettings = pgTable(
 
     /**
      * Nullable on purpose: most organizations work in one country, but "we have
-     * not said" is a real state, and it is not the same as the `'UNKNOWN'` that
-     * facility and party rows persist today.
+     * not said" is a real state. Facility and party locations require an
+     * explicitly supplied country instead.
      */
     defaultCountry: text("default_country"),
     /** IANA zone. Wrong values silently shift sampling-day attribution. */

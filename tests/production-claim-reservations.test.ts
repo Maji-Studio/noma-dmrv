@@ -25,7 +25,7 @@ import {
 } from "@/db/schema";
 import { LOCK_TTL_MS } from "@/lib/isometric/utils/lock";
 import { SUBMISSION_EXTERNAL_MUTATIONS } from "@/lib/certification/submission-metadata";
-import {
+import { TEST_SITE_POSITION,
   ensureTestOrg,
   makeTestOrgContext,
   TEST_ORG_ID,
@@ -88,7 +88,7 @@ async function createFixture(): Promise<Fixture> {
   return db.transaction(async (tx) => {
     const [facility] = await tx
       .insert(facilities)
-      .values({ timezone: "UTC",
+      .values({ ...TEST_SITE_POSITION, timezone: "UTC",
         organizationId: TEST_ORG_ID,
         code: `FAC-PCR-${tag}`,
         name: `PCR Facility ${tag}`,

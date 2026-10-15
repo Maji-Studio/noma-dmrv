@@ -1,6 +1,8 @@
 import type { db, DbTransaction } from "@/db";
 import type { OrgContext } from "@/lib/auth/server";
 
+export const TEST_SITE_POSITION = { country: "Tanzania", gpsLatitude: -8.3, gpsLongitude: 35.3 } as const;
+
 export const TEST_ORG_ID = "org_test_fixtures";
 const TEST_ORG_NAME = "Unit Test Fixtures";
 const TEST_ORG_SLUG = "unit-test-fixtures";

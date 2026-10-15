@@ -22,7 +22,7 @@ import { createDelivery } from "./helpers/create-delivery";
 import { updateDelivery } from "@/lib/operations/deliveries";
 
 import { syncBiocharProductTransportLegs } from "@/data-access/transport-legs";
-import {
+import { TEST_SITE_POSITION,
   ensureTestOrg,
   makeTestOrgContext,
   TEST_ORG_ID,
@@ -93,7 +93,7 @@ describe(
       const tag = `${tagPrefix}-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
       const [facility] = await db
         .insert(facilities)
-        .values({ timezone: "UTC",
+        .values({ ...TEST_SITE_POSITION, timezone: "UTC",
           organizationId: TEST_ORG_ID,
           code: `FAC-${tag}`,
           name: `Transport Sync Facility ${tag}`,
@@ -115,6 +115,7 @@ describe(
         .insert(customerLocations)
         .values(
           locationDistances.map((distance, index) => ({
+            ...TEST_SITE_POSITION,
             organizationId: TEST_ORG_ID,
             customerId: customer.id,
             name: `Transport Sync Site ${tag}-${index}`,

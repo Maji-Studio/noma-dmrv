@@ -21,7 +21,6 @@ import type {
 
 import type {
   SupplierFilterData,
-  CreateSupplierData,
   CreateSupplierWithLocationsData,
   UpdateSupplierData,
   CreateSupplierLocationData,
@@ -34,7 +33,6 @@ import type {
 import {
   getSuppliersFn,
   getSupplierByIdFn,
-  createSupplierFn,
   createSupplierWithLocationsFn,
   updateSupplierFn,
   deleteSupplierFn,
@@ -128,48 +126,6 @@ export function useSupplier(supplierId: string, enabled = true) {
 // ============================================
 // Supplier Mutation Hooks
 // ============================================
-
-/**
- * Hook to create a new supplier
- * Supports optional callbacks for custom behavior
- */
-export function useCreateSupplier(
-  callbacks?: MutationCallbacks<Supplier, CreateSupplierData>
-) {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async (data: CreateSupplierData) => {
-      const result = await createSupplierFn(data);
-      if (!result.success) {
-        throwActionError(result);
-      }
-      return result.data;
-    },
-    onMutate: async (variables) => {
-      await callbacks?.onMutate?.(variables);
-    },
-    onSuccess: async (data, variables) => {
-      seedCreatedSupplierCaches(queryClient, data);
-
-      // Invalidate all supplier lists
-      queryClient.invalidateQueries({ queryKey: supplierKeys.lists() });
-      // Invalidate locations in case a new location was added
-      queryClient.invalidateQueries({ queryKey: supplierKeys.locations() });
-      // Invalidate options for dropdowns
-      queryClient.invalidateQueries({ queryKey: supplierKeys.options() });
-      invalidateOnboardingProgress(queryClient);
-
-      await callbacks?.onSuccess?.(data, variables);
-    },
-    onError: async (error, variables) => {
-      await callbacks?.onError?.(error, variables);
-    },
-    onSettled: async (data, error, variables) => {
-      await callbacks?.onSettled?.(data, error, variables);
-    },
-  });
-}
 
 export function useCreateSupplierWithLocations(
   callbacks?: MutationCallbacks<Supplier, CreateSupplierWithLocationsData>

@@ -4,7 +4,7 @@ import { db } from "@/db";
 import { customers, customerLocations, suppliers, supplierLocations } from "@/db/schema";
 import { createSupplierLocation, deleteSupplierLocation, updateSupplierLocation } from "@/data-access/suppliers";
 import { createCustomerLocation, deleteCustomerLocation, updateCustomerLocation } from "@/data-access/customers";
-import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
+import { TEST_SITE_POSITION, ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
 
 const ctx = makeTestOrgContext();
 
@@ -17,8 +17,8 @@ describe.each(["supplier", "customer"] as const)("%s location delete keeps a def
       const [parent] = await db.insert(suppliers).values({
         organizationId: TEST_ORG_ID, code: `DEF-${tag}`, name: `Default delete ${tag}`,
       }).returning();
-      const first = await createSupplierLocation(ctx, { supplierId: parent.id, name: "A", country: "CH" });
-      const second = await createSupplierLocation(ctx, { supplierId: parent.id, name: "B", country: "CH" });
+      const first = await createSupplierLocation(ctx, { ...TEST_SITE_POSITION, country: "CH", supplierId: parent.id, name: "A", });
+      const second = await createSupplierLocation(ctx, { ...TEST_SITE_POSITION, country: "CH", supplierId: parent.id, name: "B", });
       return {
         parentId: parent.id, first, second,
         remove: (l: { id: string; version: number }) => deleteSupplierLocation(ctx, l.id, l.version),
@@ -35,8 +35,8 @@ describe.each(["supplier", "customer"] as const)("%s location delete keeps a def
     const [parent] = await db.insert(customers).values({
       organizationId: TEST_ORG_ID, code: `DEF-${tag}`, name: `Default delete ${tag}`,
     }).returning();
-    const first = await createCustomerLocation(ctx, { customerId: parent.id, name: "A", country: "CH", isDefault: true });
-    const second = await createCustomerLocation(ctx, { customerId: parent.id, name: "B", country: "CH" });
+    const first = await createCustomerLocation(ctx, { ...TEST_SITE_POSITION, country: "CH", customerId: parent.id, name: "A", isDefault: true });
+    const second = await createCustomerLocation(ctx, { ...TEST_SITE_POSITION, country: "CH", customerId: parent.id, name: "B", });
     return {
       parentId: parent.id, first, second,
       remove: (l: { id: string; version: number }) => deleteCustomerLocation(ctx, l.id, l.version),
@@ -98,11 +98,13 @@ describe.each(["supplier", "customer"] as const)("%s location delete keeps a def
       for (const id of [ids[1], ids[0]]) {
         if (kind === "supplier") {
           await db.insert(supplierLocations).values({
-            id, organizationId: TEST_ORG_ID, supplierId: f.parentId, name: "T", country: "CH", createdAt: TIED_AT,
+            ...TEST_SITE_POSITION, country: "CH",
+            id, organizationId: TEST_ORG_ID, supplierId: f.parentId, name: "T", createdAt: TIED_AT,
           });
         } else {
           await db.insert(customerLocations).values({
-            id, organizationId: TEST_ORG_ID, customerId: f.parentId, name: "T", country: "CH", createdAt: TIED_AT,
+            ...TEST_SITE_POSITION, country: "CH",
+            id, organizationId: TEST_ORG_ID, customerId: f.parentId, name: "T", createdAt: TIED_AT,
           });
         }
       }

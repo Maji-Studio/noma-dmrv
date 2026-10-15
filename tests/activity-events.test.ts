@@ -6,6 +6,7 @@ import { db } from "@/db";
 import { ACTORLESS_ACTIVITY_SOURCES, activityEvents, facilities, organizations } from "@/db/schema";
 import { listEntityActivity, recordActivity, type ActivityEventInput } from "@/data-access/activity-events";
 import type { OrgContext } from "@/lib/auth/server";
+import { TEST_SITE_POSITION } from "./helpers/test-org";
 
 const EVENT_TIME = new Date("2026-10-15T10:00:00Z");
 const NEWER_EVENT_TIME = new Date("2026-10-15T11:00:00Z");
@@ -24,6 +25,7 @@ async function createContext(): Promise<OrgContext> {
 
 async function createFacility(context: OrgContext): Promise<string> {
   const [facility] = await db.insert(facilities).values({
+    ...TEST_SITE_POSITION,
     organizationId: context.organizationId,
     code: `activity_${crypto.randomUUID()}`,
     name: "Activity fixture",

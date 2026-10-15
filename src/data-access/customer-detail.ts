@@ -8,12 +8,12 @@ import { requireOrgScope } from "./utils";
 export interface CustomerDetail extends Customer {
   locations: Array<{
     id: string;
-    name: string | null;
+    name: string;
     country: string;
     stateRegion: string | null;
     city: string | null;
-    gpsLatitude: number | null;
-    gpsLongitude: number | null;
+    gpsLatitude: number;
+    gpsLongitude: number;
     address: string | null;
     distanceFromFacilityKm: number | null;
     distanceSource: DistanceSourceValue | null;

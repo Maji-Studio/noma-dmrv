@@ -27,7 +27,7 @@ import {
 } from "@/db/schema/facilities";
 import { SafeError } from "@/lib/errors";
 import { STALE_VERSION_MESSAGE } from "@/lib/stale-version";
-import {
+import { TEST_SITE_POSITION,
   ensureTestOrg,
   makeTestOrgContext,
   TEST_ORG_ID,
@@ -56,7 +56,7 @@ async function createStorageArchiveFixture({
   return db.transaction(async (tx) => {
     const [facility] = await tx
       .insert(facilities)
-      .values({ timezone: "UTC",
+      .values({ ...TEST_SITE_POSITION, timezone: "UTC",
         organizationId: TEST_ORG_ID,
         code: `FAC-SLA-${tag}`,
         name: `Storage Archive Facility ${tag}`,

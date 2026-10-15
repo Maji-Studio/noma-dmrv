@@ -23,8 +23,8 @@ interface FacilityUpdateData {
   country?: string;
   location?: string | null;
   address?: string | null;
-  gpsLatitude?: number | null;
-  gpsLongitude?: number | null;
+  gpsLatitude?: number;
+  gpsLongitude?: number;
   timezone?: string;
   contactEmail?: string | null;
   contactPhone?: string | null;
@@ -63,8 +63,8 @@ export async function createFacility(
     country: string;
     location?: string | null;
     address?: string | null;
-    gpsLatitude?: number | null;
-    gpsLongitude?: number | null;
+    gpsLatitude: number;
+    gpsLongitude: number;
     timezone: string;
     contactEmail?: string | null;
     contactPhone?: string | null;
@@ -83,8 +83,8 @@ export async function createFacility(
         country: data.country,
         location: data.location ?? null,
         address: data.address ?? null,
-        gpsLatitude: data.gpsLatitude ?? null,
-        gpsLongitude: data.gpsLongitude ?? null,
+        gpsLatitude: data.gpsLatitude,
+        gpsLongitude: data.gpsLongitude,
         timezone: data.timezone,
         contactEmail: data.contactEmail ?? null,
         contactPhone: data.contactPhone ?? null,

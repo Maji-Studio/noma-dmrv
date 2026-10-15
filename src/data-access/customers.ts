@@ -252,12 +252,12 @@ export async function getCustomerLocations(
 ): Promise<
   Array<{
     id: string;
-    name: string | null;
+    name: string;
     country: string;
     stateRegion: string | null;
     city: string | null;
-    gpsLatitude: number | null;
-    gpsLongitude: number | null;
+    gpsLatitude: number;
+    gpsLongitude: number;
     address: string | null;
     distanceFromFacilityKm: number | null;
     distanceSource: DistanceSourceValue | null;
@@ -475,8 +475,8 @@ export async function updateCustomerLocation(
     country?: string;
     stateRegion?: string | null;
     city?: string | null;
-    gpsLatitude?: number | null;
-    gpsLongitude?: number | null;
+    gpsLatitude?: number;
+    gpsLongitude?: number;
     address?: string | null;
     distanceFromFacilityKm?: number | null;
     distanceSource?: "map_estimate" | "manual" | "document" | null;
@@ -493,8 +493,8 @@ export async function updateCustomerLocation(
     country?: string;
     stateRegion?: string | null;
     city?: string | null;
-    gpsLatitude?: number | null;
-    gpsLongitude?: number | null;
+    gpsLatitude?: number;
+    gpsLongitude?: number;
     address?: string | null;
     distanceFromFacilityKm?: number | null;
     distanceSource?: "map_estimate" | "manual" | "document" | null;

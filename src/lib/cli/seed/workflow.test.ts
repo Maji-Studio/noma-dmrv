@@ -27,7 +27,12 @@ vi.mock("@/fn/suppliers", async () => {
 });
 vi.mock("@/fn/customers", async () => {
   const s = await import("@/schemas/customers");
-  return { createCustomerFn: (x: unknown) => action("customer", x, s.createCustomerSchema), createCustomerLocationFn: (x: unknown) => action("customer-location", x, s.createCustomerLocationSchema) };
+  return { createCustomerWithLocationsFn: async (x: unknown) => {
+    const parsed = s.createCustomerWithLocationsSchema.parse(x);
+    const customer = await action("customer", parsed.customer, s.createCustomerSchema);
+    const location = await action("customer-location", { ...parsed.locations[0], customerId: customer.data.id }, s.createCustomerLocationSchema);
+    return { success: true, data: { customer: customer.data, locations: [location.data] } };
+  } };
 });
 vi.mock("@/fn/feedstock-types", async () => {
   const s = await import("@/schemas/feedstock-types");

@@ -80,14 +80,12 @@ describe("customer location site description", () => {
 describe("createCustomerWithLocationsSchema", () => {
   const customerInput = { name: "Kilimanjaro Coffee" };
 
-  it("defaults an omitted locations array to empty", () => {
+  it("rejects an omitted locations array", () => {
     const result = createCustomerWithLocationsSchema.safeParse({
       customer: customerInput,
     });
 
-    expect(result.success).toBe(true);
-    if (!result.success) return;
-    expect(result.data.locations).toEqual([]);
+    expect(result.success).toBe(false);
   });
 
   it("accepts locations without a customer id, which the writer fills in", () => {

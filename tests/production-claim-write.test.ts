@@ -1,4 +1,4 @@
-import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
+import { TEST_SITE_POSITION, ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
 /**
  * DB-backed tests for the §8.6.2 production-emissions claim write inside
  * `markSubmissionSubmitted` (issue #349, ADR 0020).
@@ -88,7 +88,7 @@ async function createFixture(): Promise<Fixture> {
   return db.transaction(async (tx) => {
     const [facility] = await tx
       .insert(facilities)
-      .values({ timezone: "UTC", organizationId: TEST_ORG_ID, code: `FAC-PCW-${tag}`, name: `PCW Facility ${tag}` })
+      .values({ ...TEST_SITE_POSITION, timezone: "UTC", organizationId: TEST_ORG_ID, code: `FAC-PCW-${tag}`, name: `PCW Facility ${tag}` })
       .returning({ id: facilities.id });
     createdFacilityIds.push(facility.id);
 

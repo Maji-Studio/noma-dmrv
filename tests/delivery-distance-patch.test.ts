@@ -1,3 +1,4 @@
+import { TEST_SITE_POSITION } from "./helpers/test-org";
 import { afterEach, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
@@ -16,7 +17,7 @@ afterEach(async () => {
 });
 async function fixture() {
   const f = await createDeliveryFixture(); organizations.push(f.ctx.organizationId);
-  const [location] = await db.insert(customerLocations).values({ organizationId: f.ctx.organizationId, customerId: f.customer.id, name: "E2E Destination", distanceFromFacilityKm: 20, distanceSource: "map_estimate" }).returning();
+  const [location] = await db.insert(customerLocations).values({ ...TEST_SITE_POSITION, organizationId: f.ctx.organizationId, customerId: f.customer.id, name: "E2E Destination", distanceFromFacilityKm: 20, distanceSource: "map_estimate" }).returning();
   await db.update(orders).set({ customerLocationId: location.id }).where(eq(orders.id, f.order.id));
   const created = await db.transaction(tx => createDeliveryInTransaction(f.ctx, tx, { ...f.input, distanceKmOverride: 30, distanceSource: "manual", distanceNote: "Route evidence" }));
   return { ...f, delivery: created.delivery };

@@ -4,10 +4,10 @@ import { lookupFields, lookupInstants, lookupVersion, type LookupRepresentationI
 
 export const customerLocationRepresentationSchema = z.object({
   ...lookupFields,
-  name: z.string().nullable().describe("Customer location display name, plain text, or null when unspecified."),
+  name: z.string().describe("Customer location display name, plain text."),
   customerId: z.uuid().describe("Owning customer identifier, UUID."),
-  gpsLatitude: z.number().nullable().describe("WGS 84 latitude in decimal degrees, or null when unspecified."),
-  gpsLongitude: z.number().nullable().describe("WGS 84 longitude in decimal degrees, or null when unspecified."),
+  gpsLatitude: z.number().describe("WGS 84 latitude in decimal degrees."),
+  gpsLongitude: z.number().describe("WGS 84 longitude in decimal degrees."),
   distanceFromFacilityKm: z.number().nullable().describe("One-way road distance from the facility in kilometres, or null when unspecified. The server counts the round trip."),
   distanceSource: z.literal([...distanceSources, null]).describe("Provenance of the one-way distance, or null when unspecified. The server counts the round trip."),
   isDefault: z.boolean().describe("Whether this is the customer's default destination."),

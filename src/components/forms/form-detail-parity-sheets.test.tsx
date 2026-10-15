@@ -1,3 +1,4 @@
+import { TEST_SITE_POSITION } from "../../../tests/helpers/test-org";
 /**
  * Detail level parity for every read sheet: each read-section builder renders
  * through the shared side-sheet spine at Simple, then at Detailed, and must
@@ -75,7 +76,7 @@ const noop = () => undefined;
 const as = <T,>(value: object) => value as unknown as T;
 type Arg<F extends (...args: never[]) => unknown, I extends number = 0> = Parameters<F>[I];
 
-const location = { name: "North field", country: "TZ", stateRegion: "Iringa", city: "Mafinga", address: "Plot 4", gpsLatitude: -8.3, gpsLongitude: 35.3, distanceFromFacilityKm: 12, isDefault: true, defaultSoilTemperatureC: 22 };
+const location = { name: "North field", ...TEST_SITE_POSITION, country: "TZ", stateRegion: "Iringa", city: "Mafinga", address: "Plot 4", distanceFromFacilityKm: 12, isDefault: true, defaultSoilTemperatureC: 22 };
 
 const storageBin = (type: string, stockMode: string) => as<Arg<typeof storageLocationSheetSections>>({
   id: `${type}-bin`, facilityId: "facility", type, stockMode, drawOrder: "newest_first", name: `${type} bin`, capacityKg: 5000, storageMethod: "Covered heap", storageDescription: null,
@@ -116,7 +117,7 @@ const READ_SECTION_CASES: { file: string; name: string; sections: DetailPanelSec
     storageLocationId: "bin", massDryKg: 80, effectiveDistanceKm: 12, distanceKmOverride: 14, distanceNote: "Detour", effectiveDistanceSource: "manual",
   }), FACILITIES) },
   { file: "components/facilities/facility-read-sections.tsx", name: "facility", sections: facilitySheetSections(as({
-    id: "facility", name: "Mafinga", country: "TZ", timezone: "Africa/Dar_es_Salaam", location: "Mafinga", address: null, gpsLatitude: -8.3, gpsLongitude: 35.3,
+    id: "facility", name: "Mafinga", ...TEST_SITE_POSITION, country: "TZ", timezone: "Africa/Dar_es_Salaam", location: "Mafinga", address: null,
     contactEmail: null, contactPhone: null, durabilityOption: "200_year", reactorCount: 2,
     storageSummary: { feedstockBinCount: 2, biocharBinCount: 1, productBinCount: 3 }, inventorySummary: { feedstockWetKg: 1200, biocharKg: 800, productKg: 400 },
   })) },
@@ -148,7 +149,7 @@ const READ_SECTION_CASES: { file: string; name: string; sections: DetailPanelSec
   { file: "components/storage-locations/storage-location-read-sections.tsx", name: "storage bin (feedstock)", sections: storageLocationSheetSections(storageBin("feedstock_bin", "fifo"), noop) },
   { file: "components/storage-locations/storage-location-read-sections.tsx", name: "storage bin (mix product)", sections: storageLocationSheetSections(storageBin("product_bin", "mix"), noop) },
   { file: "components/suppliers/supplier-read-sections.tsx", name: "supplier", sections: supplierSheetSections(
-    as({ name: "Supplier", contactName: null, contactEmail: null, contactPhone: null, location: "Mafinga", sourceRegion: "Iringa", address: null, distanceToFacilityKm: 20 }),
+    as({ name: "Supplier", contactName: null, contactEmail: null, contactPhone: null, location: "Mafinga", sourceRegion: "Iringa", address: null }),
     as({ data: [location], isPending: false, isError: false, isFetching: false, refetch: noop }),
   ) },
 ];

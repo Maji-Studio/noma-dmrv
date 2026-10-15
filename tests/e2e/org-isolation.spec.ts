@@ -1,3 +1,4 @@
+import { TEST_SITE_POSITION } from "../helpers/test-org";
 import * as crypto from "crypto";
 import { eq } from "drizzle-orm";
 import type { Page } from "@playwright/test";
@@ -75,11 +76,11 @@ const test = base.extend<{ orgB: OrgBFixture }>({
           role: "member",
         });
         await tx.insert(schema.facilities).values({
+          ...TEST_SITE_POSITION,
           id: ids.facility,
           organizationId: ids.organization,
           code: `ORG-B-FAC-${tag}`,
           name: facilityName,
-          country: "Tanzania",
           timezone: "Africa/Dar_es_Salaam",
         });
         await tx.insert(schema.suppliers).values({

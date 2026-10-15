@@ -34,7 +34,7 @@ import type { OrgContext } from "@/lib/auth/server";
 import { buildCreateBiocharApplicationRequest } from "@/lib/isometric/biochar-applications";
 import { buildCreateStorageLocationRequest } from "@/lib/isometric/storage-locations";
 import { payloadHash } from "@/lib/isometric/utils/payload-hash";
-import {
+import { TEST_SITE_POSITION,
   ensureTestOrg,
   makeTestOrgContext,
   TEST_ORG_ID,
@@ -74,7 +74,7 @@ beforeAll(async () => {
   ids.foreignSubmission = foreignSubmission.id;
   const [facility] = await db
     .insert(facilities)
-    .values({ timezone: "UTC",
+    .values({ ...TEST_SITE_POSITION, timezone: "UTC",
       organizationId: TEST_ORG_ID,
       code: `FAC-BCA-${tag}`,
       name: `Biochar Application Facility ${tag}`,

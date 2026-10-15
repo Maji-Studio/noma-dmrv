@@ -11,14 +11,12 @@ import { useEffect, type ReactNode } from "react";
 import { entityKeys } from "./entity-query-keys";
 import { onboardingKeys } from "./use-onboarding";
 import type {
-  CreateSupplierData,
   CreateSupplierWithLocationsData,
   UpdateSupplierData,
 } from "@/schemas/suppliers";
 import type { Supplier, SupplierLocation } from "@/db/schema";
 
 const mocks = vi.hoisted(() => ({
-  createSupplierFn: vi.fn(),
   createSupplierWithLocationsFn: vi.fn(),
   getSupplierByIdFn: vi.fn(),
   getSupplierLocationsBySupplierFn: vi.fn(),
@@ -27,7 +25,6 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@/fn/suppliers", () => ({
-  createSupplierFn: mocks.createSupplierFn,
   createSupplierLocationFn: vi.fn(),
   createSupplierWithLocationsFn: mocks.createSupplierWithLocationsFn,
   deleteSupplierFn: mocks.deleteSupplierFn,
@@ -40,7 +37,6 @@ vi.mock("@/fn/suppliers", () => ({
 }));
 
 import {
-  useCreateSupplier,
   useCreateSupplierWithLocations,
   useDeleteSupplier,
   useSupplier,
@@ -55,7 +51,6 @@ const createdSupplier = {
   name: "New Supplier",
 };
 
-type CreateMutation = ReturnType<typeof useCreateSupplier>;
 type CreateWithLocationsMutation = ReturnType<
   typeof useCreateSupplierWithLocations
 >;
@@ -78,16 +73,6 @@ function DeleteSupplierHarness({
   onCapture: (mutation: DeleteMutation) => void;
 }) {
   const mutation = useDeleteSupplier();
-  useEffect(() => onCapture(mutation), [mutation, onCapture]);
-  return null;
-}
-
-function CreateSupplierHarness({
-  onCapture,
-}: {
-  onCapture: (mutation: CreateMutation) => void;
-}) {
-  const mutation = useCreateSupplier();
   useEffect(() => onCapture(mutation), [mutation, onCapture]);
   return null;
 }
@@ -142,7 +127,6 @@ beforeAll(() => {
 });
 
 beforeEach(() => {
-  mocks.createSupplierFn.mockReset();
   mocks.createSupplierWithLocationsFn.mockReset();
   mocks.getSupplierByIdFn.mockReset();
   mocks.getSupplierLocationsBySupplierFn.mockReset();
@@ -153,10 +137,6 @@ beforeEach(() => {
     data: createdSupplier,
   });
   mocks.deleteSupplierFn.mockResolvedValue({ success: true, data: undefined });
-  mocks.createSupplierFn.mockResolvedValue({
-    success: true,
-    data: createdSupplier,
-  });
   mocks.createSupplierWithLocationsFn.mockResolvedValue({
     success: true,
     data: createdSupplier,
@@ -262,61 +242,41 @@ describe("supplier detail hydration", () => {
   });
 });
 
-describe.each([
-  ["useCreateSupplier", false],
-  ["useCreateSupplierWithLocations", true],
-] as const)("%s EntitySelect cache behavior", (_name, withLocations) => {
+describe("useCreateSupplierWithLocations EntitySelect cache behavior", () => {
   it("seeds supplier detail and invalidates supplier lists after creation", async () => {
     const queryClient = new QueryClient({
       defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
     });
     const listKey = entityKeys.list("supplier");
     queryClient.setQueryData(listKey, []);
-    let capturedMutation:
-      | CreateMutation
-      | CreateWithLocationsMutation
-      | undefined;
+    let capturedMutation: CreateWithLocationsMutation | undefined;
     let renderer: ReactTestRenderer | undefined;
 
     await act(async () => {
       renderer = create(
         <TestProvider queryClient={queryClient}>
-          {withLocations ? (
-            <CreateSupplierWithLocationsHarness
-              onCapture={(mutation) => {
-                capturedMutation = mutation;
-              }}
-            />
-          ) : (
-            <CreateSupplierHarness
-              onCapture={(mutation) => {
-                capturedMutation = mutation;
-              }}
-            />
-          )}
+          <CreateSupplierWithLocationsHarness
+            onCapture={(mutation) => {
+              capturedMutation = mutation;
+            }}
+          />
         </TestProvider>,
       );
     });
 
     expect(capturedMutation).toBeDefined();
     await act(async () => {
-      if (withLocations) {
-        await (capturedMutation as CreateWithLocationsMutation).mutateAsync({
-          supplier: { name: "New Supplier" },
-          locations: [
-            {
-              country: "Switzerland",
-              gpsLatitude: 47,
-              gpsLongitude: 8,
-              isDefault: true,
-            },
-          ],
-        } as CreateSupplierWithLocationsData);
-      } else {
-        await (capturedMutation as CreateMutation).mutateAsync({
-          name: "New Supplier",
-        } as CreateSupplierData);
-      }
+      await (capturedMutation as CreateWithLocationsMutation).mutateAsync({
+        supplier: { name: "New Supplier" },
+        locations: [
+          {
+            country: "Switzerland",
+            gpsLatitude: 47,
+            gpsLongitude: 8,
+            isDefault: true,
+          },
+        ],
+      } as CreateSupplierWithLocationsData);
     });
 
     expect(
@@ -354,12 +314,12 @@ describe("supplier creation onboarding interaction", () => {
     });
     holdRefresh = true;
 
-    let capturedMutation: CreateMutation | undefined;
+    let capturedMutation: CreateWithLocationsMutation | undefined;
     let renderer: ReactTestRenderer | undefined;
     await act(async () => {
       renderer = create(
         <TestProvider queryClient={queryClient}>
-          <CreateSupplierHarness
+          <CreateSupplierWithLocationsHarness
             onCapture={(mutation) => {
               capturedMutation = mutation;
             }}
@@ -371,8 +331,9 @@ describe("supplier creation onboarding interaction", () => {
     let created: unknown;
     await act(async () => {
       created = await capturedMutation?.mutateAsync({
-        name: "New Supplier",
-      } as CreateSupplierData);
+        supplier: { name: "New Supplier" },
+          locations: [{ country: "Tanzania", gpsLatitude: 0, gpsLongitude: 0, isDefault: true }],
+      } as CreateSupplierWithLocationsData);
     });
 
     expect(created).toEqual(createdSupplier);
@@ -417,12 +378,12 @@ describe("supplier creation onboarding interaction", () => {
     );
     holdRefresh = true;
 
-    let capturedMutation: CreateMutation | undefined;
+    let capturedMutation: CreateWithLocationsMutation | undefined;
     let renderer: ReactTestRenderer | undefined;
     await act(async () => {
       renderer = create(
         <TestProvider queryClient={queryClient}>
-          <CreateSupplierHarness
+          <CreateSupplierWithLocationsHarness
             onCapture={(mutation) => {
               capturedMutation = mutation;
             }}
@@ -434,8 +395,9 @@ describe("supplier creation onboarding interaction", () => {
     let created: unknown;
     await act(async () => {
       created = await capturedMutation?.mutateAsync({
-        name: "New Supplier",
-      } as CreateSupplierData);
+        supplier: { name: "New Supplier" },
+          locations: [{ country: "Tanzania", gpsLatitude: 0, gpsLongitude: 0, isDefault: true }],
+      } as CreateSupplierWithLocationsData);
     });
 
     expect(created).toEqual(createdSupplier);
@@ -456,7 +418,7 @@ describe("supplier creation onboarding interaction", () => {
   });
 
   it("does not invalidate onboarding or seed a supplier when persistence fails", async () => {
-    mocks.createSupplierFn.mockResolvedValueOnce({
+    mocks.createSupplierWithLocationsFn.mockResolvedValueOnce({
       success: false,
       error: "Supplier was not created",
     });
@@ -466,12 +428,12 @@ describe("supplier creation onboarding interaction", () => {
     const onboardingKey = onboardingKeys.status("facility-1", "org-1");
     queryClient.setQueryData(onboardingKey, { supplierCount: 0 });
 
-    let capturedMutation: CreateMutation | undefined;
+    let capturedMutation: CreateWithLocationsMutation | undefined;
     let renderer: ReactTestRenderer | undefined;
     await act(async () => {
       renderer = create(
         <TestProvider queryClient={queryClient}>
-          <CreateSupplierHarness
+          <CreateSupplierWithLocationsHarness
             onCapture={(mutation) => {
               capturedMutation = mutation;
             }}
@@ -483,8 +445,9 @@ describe("supplier creation onboarding interaction", () => {
     await act(async () => {
       await expect(
         capturedMutation?.mutateAsync({
-          name: "New Supplier",
-        } as CreateSupplierData),
+          supplier: { name: "New Supplier" },
+          locations: [{ country: "Tanzania", gpsLatitude: 0, gpsLongitude: 0, isDefault: true }],
+        } as CreateSupplierWithLocationsData),
       ).rejects.toThrow("Supplier was not created");
     });
 
