@@ -5,10 +5,31 @@ import { createOrderSchema, orderFormSchema, updateOrderSchema } from "./orders"
 const UUID = "11111111-1111-4111-8111-111111111111";
 
 describe("order schemas", () => {
+  it.each([undefined, null, ""])("requires a delivery site on create: %s", (customerLocationId) => {
+    const result = createOrderSchema.safeParse({ facilityId: UUID, customerId: UUID, formulationId: UUID,
+      customerLocationId, orderDate: "2026-09-01", quantityKg: 100, packaging: "loose" });
+    expect(result.error?.issues).toEqual([expect.objectContaining({ path: ["customerLocationId"], message: "Select a customer location." })]);
+  });
+
+  it("keeps an omitted update destination and accepts a valid replacement", () => {
+    expect(updateOrderSchema.parse({ orderId: UUID, expectedVersion: 1 })).not.toHaveProperty("customerLocationId");
+    expect(updateOrderSchema.parse({ orderId: UUID, expectedVersion: 1, customerLocationId: UUID }).customerLocationId).toBe(UUID);
+  });
+
+  it.each([null, ""])("refuses clearing an update destination: %s", (customerLocationId) => {
+    expect(updateOrderSchema.safeParse({ orderId: UUID, expectedVersion: 1, customerLocationId }).error?.issues)
+      .toEqual([expect.objectContaining({ path: ["customerLocationId"], message: "Select a customer location." })]);
+  });
+
+  it("distinguishes a malformed destination from a missing selection", () => {
+    expect(updateOrderSchema.safeParse({ orderId: UUID, expectedVersion: 1, customerLocationId: "not-a-uuid" }).error?.issues)
+      .toEqual([expect.objectContaining({ path: ["customerLocationId"], message: "Choose a valid customer location." })]);
+  });
+
   it("reports a missing form quantity as required at quantityKg", () => {
     const result = orderFormSchema.safeParse({
       facilityId: UUID,
-      customerId: UUID,
+      customerId: UUID, customerLocationId: UUID,
       formulationId: UUID,
       orderDate: "2026-09-01",
       packaging: "loose",
@@ -23,7 +44,7 @@ describe("order schemas", () => {
   it("drops price and currency from a create payload", () => {
     const parsed = createOrderSchema.parse({
       facilityId: UUID,
-      customerId: UUID,
+      customerId: UUID, customerLocationId: UUID,
       formulationId: UUID,
       orderDate: "2026-09-01",
       quantityKg: 100,
@@ -41,7 +62,7 @@ describe("order schemas", () => {
   });
 
   for (const [label, schema, base] of [
-    ["create", createOrderSchema, { facilityId: UUID, customerId: UUID, formulationId: UUID, quantityKg: 100, packaging: "loose" }],
+    ["create", createOrderSchema, { facilityId: UUID, customerId: UUID, customerLocationId: UUID, formulationId: UUID, quantityKg: 100, packaging: "loose" }],
     ["update", updateOrderSchema, { orderId: UUID, expectedVersion: 1 }],
   ] as const) {
     it(`${label} accepts positive wet kg in 0.001 kg steps up to the shared cap`, () => {

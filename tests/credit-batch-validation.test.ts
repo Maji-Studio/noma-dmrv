@@ -3,7 +3,7 @@ import { labLogisticsVersion } from "./helpers/lab-logistics-version";
 import { productionVersion } from "./helpers/production-version";
 import { insertOutputApplicationFixture } from "./helpers/output-contract-fixtures";
 import { deleteOutputApplicationFixtures } from "./helpers/output-contract-fixtures";
-import { outputProductFixtureValues, outputOrderFixtureValues, insertOutputDeliveryFixture, deleteOutputDeliveryFixtures, deleteOutputProductFixtures, deleteOutputFacilityFixtures } from "./helpers/output-contract-fixtures";
+import { outputProductFixtureValues, outputOrderFixtureValues, deleteOutputOrderFixtures, insertOutputDeliveryFixture, deleteOutputDeliveryFixtures, deleteOutputProductFixtures, deleteOutputFacilityFixtures } from "./helpers/output-contract-fixtures";
 import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
 /**
  * Credit Batch Production-Run Validation Tests
@@ -442,9 +442,7 @@ afterAll(async () => {
       await deleteOutputDeliveryFixtures(tx, inArray(deliveries.id, createdIds.deliveries));
     }
     if (createdIds.orders.length > 0) {
-      await tx
-        .delete(orders)
-        .where(inArray(orders.id, createdIds.orders));
+      await deleteOutputOrderFixtures(tx, inArray(orders.id, createdIds.orders));
     }
     if (createdIds.biocharProducts.length > 0) {
       await deleteOutputProductFixtures(tx, inArray(biocharProducts.id, createdIds.biocharProducts));

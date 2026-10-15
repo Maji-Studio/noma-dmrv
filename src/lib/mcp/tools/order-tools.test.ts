@@ -76,7 +76,7 @@ it.each(["update_order", "delete_order"])("requires expectedVersion on %s", asyn
   await expect(tool(name).execute(context, { orderId: ID, requestKey: "write" })).rejects.toMatchObject({ code: "validation_failed", issues: [{ path: ["expectedVersion"] }] });
   expect(mocks.run).not.toHaveBeenCalled();
 });
-it("publishes calendar dates, clearable location and the conditional key rule", () => {
+it("publishes calendar dates, required location and the conditional key rule", () => {
   for (const candidate of orderWriteTools) {
     const published = toToolSchema(candidate.input)["~standard"].jsonSchema.input({ target: "draft-2020-12" });
     expect(published.required).not.toContain("requestKey");
@@ -85,7 +85,7 @@ it("publishes calendar dates, clearable location and the conditional key rule", 
     if (candidate.name !== "delete_order") expect(properties.orderDate).toMatchObject({ type: "string", format: "date" });
     expect(toolOutputSchema(candidate.output)["~standard"].jsonSchema.output({ target: "draft-2020-12" }).type).toBe("object");
   }
-  expect(tool("update_order").input.safeParse({ ...target, customerLocationId: null }).success).toBe(true);
+  expect(tool("update_order").input.safeParse({ ...target, customerLocationId: null }).success).toBe(false);
   expect(tool("record_order").input.safeParse({ ...create, orderDate: CLOCK }).success).toBe(false);
 });
 it("refuses unknown fields and invalid calendar dates", async () => {
@@ -132,4 +132,14 @@ it("grounds references and describes wet kg, defaults, calendar date and frozen 
   for (const name of ["find_customers", "find_customer_locations", "find_formulations", "whoami"]) expect(record.description).toContain(name);
   for (const candidate of orderWriteTools.slice(0, 2)) expect(candidate.description).toContain(ORDER_GUIDANCE);
   for (const candidate of orderWriteTools) expect(candidate.description).not.toMatch(/[–—]/);
+});
+
+it.each([undefined, null, ""])("refuses a missing delivery site in record_order: %s", async (customerLocationId) => {
+  await expect(tool("record_order").execute(context, { ...create, customerLocationId, requestKey: "write" }))
+    .rejects.toMatchObject({ code: "validation_failed", issues: [{ path: ["customerLocationId"] }] });
+});
+it.each([null, ""])("refuses clearing the delivery site in update_order: %s", async (customerLocationId) => {
+  await expect(tool("update_order").execute(context, { ...target, customerLocationId, requestKey: "write" }))
+    .rejects.toMatchObject({ code: "validation_failed", issues: [{ path: ["customerLocationId"] }] });
+  expect(mocks.run).not.toHaveBeenCalled();
 });

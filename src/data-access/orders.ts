@@ -283,7 +283,7 @@ export async function getOrdersForSelect(
 // ============================================
 
 type CreateOrderData = {
-  code: string; facilityId: string; customerId: string; customerLocationId?: string | null;
+  code: string; facilityId: string; customerId: string; customerLocationId: string;
   formulationId: string; orderDate: Date; quantityKg: number; packaging: "loose" | "bagged";
 };
 type UpdateOrderData = Partial<Omit<Order, "id" | "organizationId" | "createdAt" | "archivedAt" | "version">> & { expectedVersion: number };
@@ -297,13 +297,12 @@ async function lockOrderFormulation(ctx: OrgContext, tx: DbTransaction, formulat
 }
 
 async function validateOrderReferences(ctx: OrgContext, tx: DbTransaction, data: {
-  customerId: string; customerLocationId?: string | null; formulationId: string;
-}): Promise<string | null> {
+  customerId: string; customerLocationId: string; formulationId: string;
+}): Promise<string> {
   requireOrgScope(ctx);
   const [customer] = await tx.select({ id: customers.id }).from(customers)
     .where(and(eq(customers.id, data.customerId), eq(customers.organizationId, ctx.organizationId))).for("key share");
   if (!customer) throw orderReferenceNotFound("customerId");
-  if (!data.customerLocationId) return null;
   const [location] = await tx.select({ customerId: customerLocations.customerId }).from(customerLocations)
     .where(and(eq(customerLocations.id, data.customerLocationId), eq(customerLocations.organizationId, ctx.organizationId))).for("key share");
   if (!location) throw orderReferenceNotFound("customerLocationId");
@@ -317,7 +316,7 @@ export async function createOrderInTransaction(ctx: OrgContext, tx: DbTransactio
   await withFeedstockErrors(() => lockActiveFacilityReference(ctx, tx, input.facilityId), "not_found", ["facilityId"]);
   await lockOrderFormulation(ctx, tx, input.formulationId);
   const locationCustomerId = await validateOrderReferences(ctx, tx, input);
-  if (locationCustomerId && locationCustomerId !== input.customerId) throw orderCustomerLocationMismatch();
+  if (locationCustomerId !== input.customerId) throw orderCustomerLocationMismatch();
   const [order] = await tx.insert(orders).values({ ...input, organizationId: ctx.organizationId }).returning();
   return order;
 }
@@ -360,7 +359,7 @@ export async function updateOrderInTransaction(ctx: OrgContext, tx: DbTransactio
       if (data[field] !== undefined && data[field] !== existing[field]) throw orderRelationshipFrozen(field, delivery.code);
     }
   }
-  if (locationCustomerId && locationCustomerId !== merged.customerId) throw orderCustomerLocationMismatch();
+  if (locationCustomerId !== merged.customerId) throw orderCustomerLocationMismatch();
   if (data.quantityKg !== undefined) await assertOrderQuantityCoversAllocations(ctx, tx, { orderId, orderQuantityKg: data.quantityKg });
   return withUniqueCodeGuard(ctx, orders, orders.code, CODE_CONFLICT_MESSAGES.order, async () => {
     const [saved] = await tx.update(orders).set({ ...data, version: nextVersion(orders.version), updatedAt: new Date() })

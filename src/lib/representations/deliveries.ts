@@ -17,12 +17,12 @@ export const deliveryRepresentationSchema = z.object({
   distanceKmOverride: z.number().nullable().describe("One-way distance override in kilometres; the server counts the round trip. Null uses the destination distance. Stored as 32-bit floating-point real, about 6 significant decimal digits."),
   distanceSource: z.literal([...distanceSources, null]).describe("Distance provenance, or null when unspecified. Documentary evidence may be stored without an override."),
   distanceNote: z.string().nullable().describe("Distance evidence note, or null when unspecified."),
-  destinationCustomerLocationId: z.uuid().nullable().describe("Order destination customer location identifier, UUID, or null when the order has none."),
+  destinationCustomerLocationId: z.uuid().describe("Order destination customer location identifier, UUID."),
 }).omit({ name: true });
 export type DeliveryRepresentation = z.infer<typeof deliveryRepresentationSchema>;
 export type DeliveryRepresentationInput = LookupRepresentationInput<Omit<DeliveryRepresentation,
   "deliveredAt" | "moisturePercent" | "dryBiocharKg" | "destinationCustomerLocationId">> & {
-  deliveryDate: Date | string; moistureContentPercent: number | null; massDryKg: number | null; orderCustomerLocationId: string | null;
+  deliveryDate: Date | string; moistureContentPercent: number | null; massDryKg: number | null; orderCustomerLocationId: string;
 };
 
 /** Stored delivery fields and the order destination; stock movements describe drawn products. */

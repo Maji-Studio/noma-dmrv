@@ -35,6 +35,7 @@ import {
   deleteOutputApplicationFixtures,
   deleteOutputDeliveryFixtures,
   deleteOutputFacilityFixtures,
+  deleteOutputOrderFixtures,
   deleteOutputProductFixtures,
   insertOutputApplicationFixture,
   insertOutputDeliveryFixture,
@@ -335,7 +336,7 @@ export async function cleanupLineageFixture(fixture: LineageFixture): Promise<vo
     await tx.delete(creditBatches).where(eq(creditBatches.id, fixture.batchId));
     await deleteOutputApplicationFixtures(tx, eq(applications.id, fixture.applicationId));
     await deleteOutputDeliveryFixtures(tx, eq(deliveries.id, fixture.deliveryId));
-    await tx.delete(orders).where(eq(orders.id, fixture.orderId));
+    await deleteOutputOrderFixtures(tx, eq(orders.id, fixture.orderId));
     await deleteOutputProductFixtures(tx, eq(biocharProducts.id, fixture.productId));
     await tx.delete(samples).where(eq(samples.id, fixture.sampleId));
     await tx

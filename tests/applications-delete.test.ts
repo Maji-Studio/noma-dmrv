@@ -1,7 +1,7 @@
 import { labLogisticsVersion } from "./helpers/lab-logistics-version";
 import { insertOutputApplicationFixture } from "./helpers/output-contract-fixtures";
 import { deleteOutputApplicationFixtures } from "./helpers/output-contract-fixtures";
-import { outputProductFixtureValues, outputOrderFixtureValues, insertOutputDeliveryFixture, deleteOutputDeliveryFixtures, deleteOutputProductFixtures, deleteOutputFacilityFixtures } from "./helpers/output-contract-fixtures";
+import { outputProductFixtureValues, outputOrderFixtureValues, deleteOutputOrderFixtures, insertOutputDeliveryFixture, deleteOutputDeliveryFixtures, deleteOutputProductFixtures, deleteOutputFacilityFixtures } from "./helpers/output-contract-fixtures";
 import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
 import { beforeAll, describe, expect, it } from "vitest";
 import { eq, inArray } from "drizzle-orm";
@@ -180,7 +180,7 @@ async function cleanupDeleteFixture(fixture: DeleteFixture): Promise<void> {
     }
 
     await deleteOutputDeliveryFixtures(tx, eq(deliveries.id, fixture.deliveryId));
-    await tx.delete(orders).where(eq(orders.id, fixture.orderId));
+    await deleteOutputOrderFixtures(tx, eq(orders.id, fixture.orderId));
     await deleteOutputProductFixtures(tx, eq(biocharProducts.id, fixture.productId));
     await tx
       .delete(productionRuns)

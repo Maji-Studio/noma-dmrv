@@ -2,7 +2,7 @@ import { labLogisticsVersion } from "./helpers/lab-logistics-version";
 import { masterDataVersion } from "./helpers/master-data-version";
 import { insertOutputApplicationFixture } from "./helpers/output-contract-fixtures";
 import { deleteOutputApplicationFixtures } from "./helpers/output-contract-fixtures";
-import { deleteOutputFacilityFixtures, outputProductFixtureValues, outputOrderFixtureValues, deleteOutputProductFixtures, insertOutputDeliveryFixture, deleteOutputDeliveryFixtures } from "./helpers/output-contract-fixtures";
+import { deleteOutputFacilityFixtures, outputProductFixtureValues, outputOrderFixtureValues, deleteOutputOrderFixtures, deleteOutputProductFixtures, insertOutputDeliveryFixture, deleteOutputDeliveryFixtures } from "./helpers/output-contract-fixtures";
 import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
 import { beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
@@ -137,7 +137,7 @@ describe("delete dependency guards", () => {
       );
     } finally {
       await db.transaction(async (tx) => {
-        await tx.delete(orders).where(eq(orders.id, fixture.orderId));
+        await deleteOutputOrderFixtures(tx, eq(orders.id, fixture.orderId));
         await deleteOutputProductFixtures(tx, eq(biocharProducts.id, fixture.productId));
         await tx.delete(customers).where(eq(customers.id, fixture.customerId));
         await deleteOutputFacilityFixtures(tx, eq(facilities.id, fixture.facilityId));

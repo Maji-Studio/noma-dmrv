@@ -138,15 +138,15 @@ describe("three-way order parity", { timeout: TIMEOUT_MS }, () => {
     await outcomes(ids, outputs);
   });
 
-  it("updates the same stored row, representation and warnings, preserving omission and clearing null", async () => {
+  it("updates the same stored row, representation and warnings, preserving omitted fields", async () => {
     const ids = new Map<Transport, string | null>();
     const outputs = new Map<Transport, unknown>();
     for (const transport of TRANSPORTS) {
       const f = fixtures.get(transport)!;
       const made = await create(transport, f);
-      const changed = await update(transport, f, made.data.id, { quantityKg: UPDATED_KG, customerLocationId: null, orderDate: "2026-10-13", code: "E2E-PARITY-EDIT" });
+      const changed = await update(transport, f, made.data.id, { quantityKg: UPDATED_KG, orderDate: "2026-10-13", code: "E2E-PARITY-EDIT" });
       expect(changed.warnings).toEqual([]);
-      expect(changed.data).toMatchObject({ version: 2, customerLocationId: null, packaging: "bagged", formulationId: made.data.formulationId, quantityKg: UPDATED_KG, orderDate: "2026-10-13", code: "E2E-PARITY-EDIT" });
+      expect(changed.data).toMatchObject({ version: 2, customerLocationId: f.location.id, packaging: "bagged", formulationId: made.data.formulationId, quantityKg: UPDATED_KG, orderDate: "2026-10-13", code: "E2E-PARITY-EDIT" });
       expect((await readRestOrder(f, made.data.id)).row).toEqual(changed.data);
       ids.set(transport, made.data.id); outputs.set(transport, changed);
     }
@@ -206,7 +206,7 @@ describe("three-way order parity", { timeout: TIMEOUT_MS }, () => {
       else {
         await insertReadDelivery(f, id, DELIVERED_KG);
         if (setup === "quantity") changes = { quantityKg: BELOW_ALLOCATED_KG };
-        else if (setup !== "delivery") changes = { [setup]: ({ facilityId: f.otherFacility.id, customerId: f.otherCustomer.id, customerLocationId: null, formulationId: f.pure.id })[setup] };
+        else if (setup !== "delivery") changes = { [setup]: ({ facilityId: f.otherFacility.id, customerId: f.otherCustomer.id, customerLocationId: f.otherLocation.id, formulationId: f.pure.id })[setup] };
       }
       const beforeRows = await orderRows(f);
       const beforeAudits = await orderAudits(f);
