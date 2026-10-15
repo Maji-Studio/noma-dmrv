@@ -27,7 +27,8 @@ import { deleteDelivery } from "@/data-access/deliveries";
 import { createDelivery } from "./helpers/create-delivery";
 import { __setStorageProviderForTests } from "@/lib/storage";
 import { RetirementStorageProvider, insertManagedDocument } from "./helpers/document-retirement";
-import { updateDelivery } from "@/lib/operations/deliveries";
+import { updateDelivery, updateDeliveryOperation } from "@/lib/operations/deliveries";
+import { runOperationInProcess } from "@/lib/operations/runner";
 import {
   createFeedstockInTransaction,
   updateFeedstockInTransaction,
@@ -39,6 +40,8 @@ import {
 } from "./helpers/test-org";
 
 const ctx = makeTestOrgContext();
+const DELIVERY_WET_MASS_KG = 100;
+const DELIVERY_DISTANCE_KM = 25;
 
 describe("derived transport-leg transaction boundaries", () => {
   const created = {
@@ -352,6 +355,84 @@ describe("derived transport-leg transaction boundaries", () => {
       distanceKm: 30,
       distanceSource: "document",
     });
+  });
+
+  it.each(["update_delivery", "update_posted_delivery"])("%s sweeps retired derived-leg evidence after clearing the only distance", async (operationId) => {
+    const tag = crypto.randomUUID().slice(0, 8).toUpperCase();
+    const [facility] = await db.insert(facilities).values({
+      organizationId: TEST_ORG_ID, timezone: "UTC",
+      code: `FAC-RET-${tag}`, name: `Retirement Facility ${tag}`,
+    }).returning({ id: facilities.id });
+    created.facilityIds.push(facility.id);
+    const [customer] = await db.insert(customers).values({
+      organizationId: TEST_ORG_ID,
+      code: `CUS-RET-${tag}`, name: `Retirement Customer ${tag}`,
+    }).returning({ id: customers.id });
+    created.customerIds.push(customer.id);
+    const [location] = await db.insert(customerLocations).values({
+      organizationId: TEST_ORG_ID, customerId: customer.id,
+      name: `Retirement Site ${tag}`, distanceFromFacilityKm: null,
+    }).returning({ id: customerLocations.id });
+    created.customerLocationIds.push(location.id);
+    const [product] = await db.insert(biocharProducts).values(await outputProductFixtureValues(db, {
+      organizationId: TEST_ORG_ID, facilityId: facility.id,
+      code: `BP-RET-${tag}`, massKg: DELIVERY_WET_MASS_KG, moistureContentPercent: 0,
+    })).returning({ id: biocharProducts.id });
+    created.biocharProductIds.push(product.id);
+    const [order] = await db.insert(orders).values(await outputOrderFixtureValues(db, {
+      organizationId: TEST_ORG_ID, facilityId: facility.id,
+      customerId: customer.id, customerLocationId: location.id, biocharProductId: product.id,
+      code: `OR-RET-${tag}`, orderDate: new Date("2026-07-18T00:00:00Z"),
+      quantityKg: DELIVERY_WET_MASS_KG, packaging: "bagged",
+    })).returning({ id: orders.id });
+    created.orderIds.push(order.id);
+    const source = await preparePureOutputProductFixture(db, product.id);
+    const preview = await previewOutputStock(ctx, {
+      kind: "delivery", facilityId: facility.id, storageLocationId: source.storageLocationId,
+      occurredAt: "2026-07-19T12:00:00.000Z", wetMassKg: DELIVERY_WET_MASS_KG, moisturePercent: 0,
+    });
+    const delivery = await createDelivery(ctx, {
+      code: `DL-RET-${tag}`, orderId: order.id, facilityId: facility.id,
+      storageLocationId: source.storageLocationId, deliveryDate: new Date("2026-07-19T12:00:00Z"),
+      deliveredWetMassKg: DELIVERY_WET_MASS_KG, moistureContentPercent: 0,
+      distanceKmOverride: DELIVERY_DISTANCE_KM, distanceSource: "document",
+      basisFingerprint: preview.basisFingerprint, idempotencyKey: crypto.randomUUID(),
+    });
+    created.deliveryIds.push(delivery.id);
+    const [leg] = await db.select({ id: transportLegs.id }).from(transportLegs).where(and(
+      eq(transportLegs.organizationId, ctx.organizationId),
+      eq(transportLegs.entityId, product.id),
+      eq(transportLegs.isDerived, true),
+    ));
+    const provider = new RetirementStorageProvider();
+    const key = `transport_leg/${leg.id}/pdf/${tag}.pdf`;
+    const documentId = await insertManagedDocument(provider, "transport_leg", leg.id, key);
+    __setStorageProviderForTests(provider);
+
+    try {
+      const changes = { expectedVersion: delivery.version, distanceKmOverride: null };
+      const updated = operationId === "update_delivery"
+        ? await runOperationInProcess(updateDeliveryOperation, ctx, { deliveryId: delivery.id, ...changes })
+        : await updateDelivery(ctx, delivery.id, changes);
+
+      expect(updated).toMatchObject({ id: delivery.id, distanceKmOverride: null });
+      expect(await db.select().from(transportLegs).where(eq(transportLegs.id, leg.id))).toHaveLength(0);
+      expect(await db.select().from(documents).where(eq(documents.id, documentId))).toHaveLength(0);
+      expect(provider.deleteCalls).toContain(key);
+      expect(provider.objects.has(key)).toBe(false);
+      const [deletion] = await db.select().from(storageObjectDeletions).where(and(
+        eq(storageObjectDeletions.organizationId, ctx.organizationId),
+        eq(storageObjectDeletions.storageKey, key),
+      ));
+      expect(deletion).toMatchObject({ attemptCount: 1, completedAt: expect.any(Date) });
+    } finally {
+      __setStorageProviderForTests(null);
+      await db.delete(documents).where(eq(documents.id, documentId));
+      await db.delete(storageObjectDeletions).where(and(
+        eq(storageObjectDeletions.organizationId, ctx.organizationId),
+        eq(storageObjectDeletions.storageKey, key),
+      ));
+    }
   });
 
   it("preserves posted source relationships, recomputes location-affected legs and sweeps retired evidence without touching manual legs", async () => {
