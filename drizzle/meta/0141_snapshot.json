@@ -1,5 +1,5 @@
 {
-  "id": "8216a0b3-1c5d-41c7-8aef-667b08aad0ed",
+  "id": "c9e5d30d-935c-4b7d-8c13-67b6dc4074c7",
   "prevId": "b58ee4f4-db25-46e6-95cb-cc26d5e0dc97",
   "version": "7",
   "dialect": "postgresql",
@@ -5164,54 +5164,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "registry": {
-          "name": "registry",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "buffer_pool_percent": {
-          "name": "buffer_pool_percent",
-          "type": "numeric(9, 6)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "h_to_c_org_ratio": {
-          "name": "h_to_c_org_ratio",
-          "type": "numeric(7, 6)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "mean_random_reflectance_percent": {
-          "name": "mean_random_reflectance_percent",
-          "type": "numeric(9, 6)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "std_random_reflectance": {
-          "name": "std_random_reflectance",
-          "type": "numeric(9, 6)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "mean_non_reactive_carbon_percent": {
-          "name": "mean_non_reactive_carbon_percent",
-          "type": "numeric(9, 6)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "std_non_reactive_carbon_percent": {
-          "name": "std_non_reactive_carbon_percent",
-          "type": "numeric(9, 6)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "f_durable_calculated": {
-          "name": "f_durable_calculated",
-          "type": "numeric(7, 6)",
-          "primaryKey": false,
-          "notNull": false
-        },
         "site_management_notes": {
           "name": "site_management_notes",
           "type": "text",
@@ -5509,18 +5461,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "upload_storage_key": {
-          "name": "upload_storage_key",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "upload_expires_at": {
-          "name": "upload_expires_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false
-        },
         "file_name": {
           "name": "file_name",
           "type": "text",
@@ -5598,13 +5538,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "version": {
-          "name": "version",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 1
-        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp",
@@ -5668,22 +5601,6 @@
             }
           ],
           "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "documents_pending_upload_expires_idx": {
-          "name": "documents_pending_upload_expires_idx",
-          "columns": [
-            {
-              "expression": "upload_expires_at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "where": "\"documents\".\"upload_status\" = 'pending'",
           "concurrently": false,
           "method": "btree",
           "with": {}
@@ -5787,12 +5704,6 @@
         "last_error_code": {
           "name": "last_error_code",
           "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "not_before": {
-          "name": "not_before",
-          "type": "timestamp",
           "primaryKey": false,
           "notNull": false
         },
@@ -10329,7 +10240,7 @@
           "name": "credit_batch_id",
           "type": "uuid",
           "primaryKey": false,
-          "notNull": false
+          "notNull": true
         },
         "production_run_id": {
           "name": "production_run_id",
@@ -10463,78 +10374,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "arsenic_mg_kg": {
-          "name": "arsenic_mg_kg",
-          "type": "numeric(10, 4)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "cadmium_mg_kg": {
-          "name": "cadmium_mg_kg",
-          "type": "numeric(10, 4)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "chromium_mg_kg": {
-          "name": "chromium_mg_kg",
-          "type": "numeric(10, 4)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "copper_mg_kg": {
-          "name": "copper_mg_kg",
-          "type": "numeric(10, 4)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "lead_mg_kg": {
-          "name": "lead_mg_kg",
-          "type": "numeric(10, 4)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "mercury_mg_kg": {
-          "name": "mercury_mg_kg",
-          "type": "numeric(10, 4)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "nickel_mg_kg": {
-          "name": "nickel_mg_kg",
-          "type": "numeric(10, 4)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "zinc_mg_kg": {
-          "name": "zinc_mg_kg",
-          "type": "numeric(10, 4)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "pah_total_mg_kg": {
-          "name": "pah_total_mg_kg",
-          "type": "numeric(10, 4)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "pcb_total_mg_kg": {
-          "name": "pcb_total_mg_kg",
-          "type": "numeric(10, 4)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "dioxins_ng_kg": {
-          "name": "dioxins_ng_kg",
-          "type": "numeric(10, 4)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "furans_ng_kg": {
-          "name": "furans_ng_kg",
-          "type": "numeric(10, 4)",
-          "primaryKey": false,
-          "notNull": false
-        },
         "phosphorus_percent": {
           "name": "phosphorus_percent",
           "type": "real",
@@ -10607,18 +10446,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "r0_histogram_file_url": {
-          "name": "r0_histogram_file_url",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "tga_thermogram_file_url": {
-          "name": "tga_thermogram_file_url",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp",
@@ -10658,7 +10485,6 @@
             }
           ],
           "isUnique": false,
-          "where": "\"samples\".\"credit_batch_id\" is not null",
           "concurrently": false,
           "method": "btree",
           "with": {}

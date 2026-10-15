@@ -312,9 +312,6 @@ test.describe("Full Chain UI Smoke Test", () => {
               .delete(schema.incidentReports)
               .where(inArray(schema.incidentReports.productionRunId, productionRunIds));
             await tx
-              .delete(schema.samples)
-              .where(inArray(schema.samples.productionRunId, productionRunIds));
-            await tx
               .delete(schema.productionRunFeedstocks)
               .where(inArray(schema.productionRunFeedstocks.productionRunId, productionRunIds));
           }
@@ -399,6 +396,8 @@ test.describe("Full Chain UI Smoke Test", () => {
 
       await page.fill('input[name="name"]', `Chain Facility ${runId}`);
       await page.fill('input[name="country"]', "Tanzania");
+      await page.locator("#gps-latitude").fill("-8.3");
+      await page.locator("#gps-longitude").fill("35.3");
       await facilityDialog
         .getByRole("combobox", { name: "Timezone" })
         .fill("Dar es Salaam");

@@ -18,7 +18,7 @@ import type {
   PresignedUpload,
   StorageProvider,
 } from "@/lib/storage";
-import { TEST_ORG_ID } from "./test-org";
+import { TEST_SITE_POSITION, TEST_ORG_ID } from "./test-org";
 
 const SUBMISSION_VERSION = 1;
 const SWEEP_ATTEMPT_COUNT = 1;
@@ -68,7 +68,7 @@ export async function createReactorFixture(
   return db.transaction(async (tx) => {
     const [facility] = await tx
       .insert(facilities)
-      .values({ timezone: "UTC",
+      .values({ ...TEST_SITE_POSITION, timezone: "UTC",
         organizationId,
         code: `FAC-DOC-${tag}`,
         name: `Document retirement facility ${tag}`,

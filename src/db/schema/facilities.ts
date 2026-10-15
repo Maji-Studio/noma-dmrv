@@ -18,10 +18,10 @@ export const facilities = pgTable(
     code: text('code').notNull(),
     name: text('name').notNull(),
     location: text('location'),
-    gpsLatitude: doublePrecision('gps_latitude'),
-    gpsLongitude: doublePrecision('gps_longitude'),
+    gpsLatitude: doublePrecision('gps_latitude').notNull(),
+    gpsLongitude: doublePrecision('gps_longitude').notNull(),
     timezone: text('timezone').notNull(),
-    country: text('country').notNull().default('UNKNOWN'),
+    country: text('country').notNull(),
     address: text('address'),
     contactEmail: text('contact_email'),
     contactPhone: text('contact_phone'),
@@ -132,7 +132,8 @@ export const storageLocations = pgTable(
     storageMethod: text('storage_method'),
     storageDescription: text('storage_description'),
     supplierReferenceId: text('supplier_reference_id'),
-    // Enforces "one feedstock type per bin" — set on first intake, validated on subsequent
+    // Enforces "one feedstock type per bin": set at creation; a bin without a type gets one on its first intake.
+    // Validated on each intake.
     // No FK reference to avoid circular import with feedstock.ts; enforced at application layer
     feedstockTypeId: uuid('feedstock_type_id'),
     // Product bins only: enforces "one formulation per bin" so product bins stay clean.

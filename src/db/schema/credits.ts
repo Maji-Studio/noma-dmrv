@@ -13,7 +13,7 @@ import {
 } from 'drizzle-orm/pg-core';
 import { relations, sql } from 'drizzle-orm';
 import { creditBatchSampling, creditBatchStatus } from './common';
-import { fraction, massKg, percent, ppm } from './numeric-families';
+import { massKg, percent, ppm } from './numeric-families';
 import { facilities } from './facilities';
 import { feedstockTypes } from './feedstock';
 import { productionProcesses } from './production-processes';
@@ -40,8 +40,9 @@ export const creditBatches = pgTable(
       .notNull(),
     // --- Production-batch identity (ADR 0016) ---
     // The credit batch IS the Isometric protocol production batch: ONE
-    // feedstock, facility-scoped, <=1 month under Isometric. feedstockTypeId is
-    // declared at creation and asserted against every member run.
+    // feedstock, facility-scoped. noma conservatively caps it at <=1 month
+    // (ADR 0016). feedstockTypeId is declared at creation and asserted
+    // against every member run.
     feedstockTypeId: uuid('feedstock_type_id')
       .notNull()
       .references(() => feedstockTypes.id),
@@ -60,40 +61,13 @@ export const creditBatches = pgTable(
     startDate: date('start_date').notNull(),
     endDate: date('end_date').notNull(),
     certifier: text('certifier'),
-    registry: text('registry'), // e.g., "Isometric"
 
     // --- Credit Details (Isometric Protocol Section 8) ---
     // Applied weight is derived on read from member applications
     // (Σ biocharAppliedTons) — never stored (issue #285, ADR 0014).
 
-    // Isometric: Buffer pool contribution (risk-based 2-20%)
-    bufferPoolPercent: percent('buffer_pool_percent'),
-
-    // --- Durability Calculation (Isometric: Soil Storage Module Section 5.1) ---
-    // The durability tier (200-year / 1000-year) is NO LONGER stored per batch —
-    // it is declared once per facility and inherited (ADR 0021). Batch-loading
-    // queries JOIN `facilities` and expose `durabilityOption` on the returned
-    // batch object (join-derive on read), so downstream `batch.durabilityOption`
-    // reads keep working. The tier-specific evidence columns below stay; they
-    // now gate on the FACILITY tier.
-
-    // --- 200-Year Durability Fields ---
-    // Soil temperature inputs (soil_temperature_c, soil_temperature_source) live on applications
-    // Formula: F_durable,200 = min(0.95, 1 - [c + (a + b·ln(T_soil))·H/C_org])
-    // Where: a=-0.383, b=0.350, c=-0.048
-    hToCorgRatio: fraction('h_to_c_org_ratio'), // H:Corg ratio (calculated from samples)
-
-    // --- 1000-Year Durability Fields ---
-    // Based on petrographic analysis (R₀) and TGA (non-reactive carbon)
-    // Formula: F_durable,1000 = min(0.95, max(0, (R̄₀ - s_R₀) × (C̄_non-reactive - s_C_non-reactive)))
-    meanRandomReflectancePercent: percent('mean_random_reflectance_percent'), // Mean R₀ from samples
-    stdRandomReflectance: percent('std_random_reflectance'), // Standard deviation of R₀
-    meanNonReactiveCarbonPercent: percent('mean_non_reactive_carbon_percent'), // Mean from TGA
-    stdNonReactiveCarbonPercent: percent('std_non_reactive_carbon_percent'), // Std dev from TGA
-
-    // --- Calculated Durability Fraction ---
-    // Applies to all applications in this batch (max 0.95)
-    fDurableCalculated: fraction('f_durable_calculated'),
+    // Durability tier is inherited from the facility (ADR 0021).
+    // Chemistry and durability are derived from sample replicates.
 
     // --- Net CO2e Removal (Isometric GHG Accounting Module) ---
     // CO₂e stored is derived on read from member applications (co2eStored
@@ -158,8 +132,8 @@ export const creditBatches = pgTable(
       'credit_batches_certifier_is_isometric',
       sql`${table.certifier} is null or ${table.certifier} = 'isometric'`
     ),
-    // ADR 0016: a credit batch is the protocol production batch (< 1 month).
-    // Isometric-conditional DB backstop aligned with the shared calendar-month
+    // noma's conservative one-month cap (ADR 0016), applied when Isometric
+    // is the certifier. DB backstop aligned with the shared calendar-month
     // predicate used by Zod + server re-validation.
     check(
       'credit_batches_isometric_max_one_month',

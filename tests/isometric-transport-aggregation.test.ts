@@ -166,8 +166,6 @@ describe("enrichWithTransportLegs", () => {
     weightedOrganicCarbonPercent: 80,
     weightedHToCorgRatio: 0.4,
     weightedOToCorgRatio: 0.2,
-    weightedAshPercent: 5,
-    weightedMoisturePercent: 10,
     totalBiocharDryMassKg: 1000,
     totalFeedstockDryMassKg: 4000,
     totalStartupDieselLitres: 50,

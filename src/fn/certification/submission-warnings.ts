@@ -1,5 +1,5 @@
 import type { IsometricGhgEntryTemplate } from "@/lib/isometric";
-import type { ProductionRunWithSamples } from "@/lib/isometric/utils/aggregation";
+import type { ProductionRunForCertification } from "@/lib/isometric/utils/aggregation";
 
 // Group + blueprint + input keys for the volume-based fuel-usage component
 // that carries the combined diesel litres (genset + startup/preprocessing —
@@ -48,7 +48,7 @@ function utcMonth(date: Date): string {
 // attributed to the Reporting Period in which they occur", so surface the
 // straddle as an advisory (non-blocking; splitting is the operator's call).
 function buildStraddleWarning(args: {
-  runs: ProductionRunWithSamples[];
+  runs: ProductionRunForCertification[];
   lineages: { application: { applicationDate: Date } }[];
 }): string[] {
   const { runs, lineages } = args;
@@ -85,7 +85,7 @@ function buildStraddleWarning(args: {
 //      dates alone.
 export function buildSubmissionWarnings(args: {
   defaultTemplate: IsometricGhgEntryTemplate | null;
-  runs: ProductionRunWithSamples[];
+  runs: ProductionRunForCertification[];
   lineages: { application: { applicationDate: Date } }[];
 }): string[] {
   const { defaultTemplate, runs, lineages } = args;

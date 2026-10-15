@@ -1,3 +1,4 @@
+import { TEST_SITE_POSITION } from "./helpers/test-org";
 import { runOperationInProcess } from "@/lib/operations/runner";
 import { randomUUID } from "node:crypto";
 import { afterEach, describe, expect, it } from "vitest";
@@ -120,11 +121,10 @@ async function seedFixture(): Promise<Fixture> {
 
     const [facility] = await tx
       .insert(facilities)
-      .values({ timezone: "UTC",
+      .values({ ...TEST_SITE_POSITION, timezone: "UTC",
         organizationId,
         code: `E2E-EXVB-F-${tag}`,
         name: `E2E Lab logistics versions ${tag}`,
-        country: "Tanzania",
       })
       .returning({ id: facilities.id });
 
@@ -437,15 +437,18 @@ it("facility archive and restore bump orders, deliveries and credit batches", as
   await restoreFacility(f.ctx, f.facilityId, await masterDataVersion(f.ctx, "facilities", f.facilityId));
   for (const [i, entity] of entities.entries()) expect(await version(f, entity)).toBe(opened[i] + VERSION_INCREMENT * CASCADE_TRANSITIONS);
 });
-it("membership edits and batch deletion bump linked samples", async () => {
+it("membership edits preserve linked samples and batch deletion refuses them", async () => {
   const f = await fixture(); const opened = await version(f, "sample");
   const saved = await updateCreditBatch(f.ctx, f.ids.creditBatch, { expectedVersion: await version(f, "creditBatch"), productionRunIds: [] });
-  expect(await version(f, "sample")).toBeGreaterThan(opened);
+  expect(await version(f, "sample")).toBe(opened);
   const [sample] = await db.select().from(samples).where(eq(samples.id, f.ids.sample));
-  expect(sample.creditBatchId).toBeNull();
-  const relinked = await updateSample(f.ctx, sample.id, { expectedVersion: sample.version, creditBatchId: f.ids.creditBatch });
-  await deleteCreditBatch(f.ctx, f.ids.creditBatch, saved.version);
-  expect(await version(f, "sample")).toBe(relinked.version + VERSION_INCREMENT);
+  expect(sample.creditBatchId).toBe(f.ids.creditBatch);
+  await expect(deleteCreditBatch(f.ctx, f.ids.creditBatch, saved.version))
+    .rejects.toMatchObject({
+      name: "ActionConflictError",
+      conflict: { entity: "sample", id: sample.id, code: sample.sampleCode },
+    });
+  expect(await version(f, "sample")).toBe(opened);
 });
 it("derived transport upserts bump the existing row", async () => {
   const f = await fixture();

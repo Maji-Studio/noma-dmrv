@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   aggregateProductionRuns,
   enrichWithTransportLegs,
-  type ProductionRunWithSamples,
+  type ProductionRunForCertification,
 } from "@/lib/isometric";
 import type { ChainOfCustodyData } from "@/data-access/chain-of-custody";
 import type { RemovalRunSummary } from "@/lib/certification/mass-accounting";
@@ -38,8 +38,8 @@ function lineage(
   } as ChainOfCustodyData;
 }
 
-function run(id: string): ProductionRunWithSamples {
-  return { id, code: id.toUpperCase() } as ProductionRunWithSamples;
+function run(id: string): ProductionRunForCertification {
+  return { id, code: id.toUpperCase() } as ProductionRunForCertification;
 }
 
 const RUN_SUMMARY = {

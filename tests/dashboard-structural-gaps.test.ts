@@ -2,7 +2,7 @@ import { outputProductFixtureValues, deleteOutputProductFixtures, deleteOutputFa
 /**
  * DB-backed regression coverage for the dashboard's structural certification
  * gaps. The fixture exercises canonical supplier-origin GPS, all three parent
- * types that own transport legs, and strict sample parent precedence.
+ * types that own transport legs, and credit-batch scope for Samples.
  */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq, inArray, sql } from "drizzle-orm";
@@ -26,7 +26,7 @@ import {
   buildDashboardStructuralGaps,
   loadDashboardStructuralGapCounts,
 } from "@/data-access/dashboard-structural-gaps";
-import {
+import { TEST_SITE_POSITION,
   ensureTestOrg,
   makeTestOrgContext,
   TEST_ORG_ID,
@@ -93,12 +93,14 @@ beforeAll(async () => {
       .insert(facilities)
       .values([
         {
+          ...TEST_SITE_POSITION,
           organizationId: TEST_ORG_ID,
           timezone: "UTC",
           code: `FAC-DG-GAP-${tag}`,
           name: `Dashboard gap ${tag}`,
         },
         {
+          country: "Tanzania",
           organizationId: TEST_ORG_ID,
           timezone: "UTC",
           code: `FAC-DG-CLEAR-${tag}`,
@@ -107,6 +109,7 @@ beforeAll(async () => {
           gpsLongitude: 35.75,
         },
         {
+          country: "Tanzania",
           organizationId: TEST_ORG_ID,
           timezone: "UTC",
           code: `FAC-DG-OTHER-${tag}`,
@@ -139,9 +142,7 @@ beforeAll(async () => {
         {
           organizationId: TEST_ORG_ID,
           code: `SUP-DG-FALLBACK-${tag}`,
-          name: `Dashboard supplier fallback ${tag}`,
-          gpsLatitude: -6.81,
-          gpsLongitude: 39.29,
+          name: `Dashboard default location ${tag}`,
         },
         {
           organizationId: TEST_ORG_ID,
@@ -156,17 +157,10 @@ beforeAll(async () => {
       .insert(supplierLocations)
       .values([
         {
-          organizationId: TEST_ORG_ID,
-          supplierId: missingGpsSupplier.id,
-          name: "Incomplete default",
-          country: "TZ",
-          gpsLatitude: -6.82,
-          isDefault: true,
-        },
-        {
+          gpsLatitude: -8.3,
           organizationId: TEST_ORG_ID,
           supplierId: fallbackSupplier.id,
-          name: "Incomplete location falls back as a pair",
+          name: "Complete default location",
           country: "TZ",
           gpsLongitude: 39.3,
           isDefault: true,
@@ -254,27 +248,9 @@ beforeAll(async () => {
           status: "running",
           startTime: new Date("2026-07-01T08:00:00Z"),
         },
-        {
-          organizationId: TEST_ORG_ID,
-          code: `PR-DG-CANCELLED-${tag}`,
-          facilityId: gapFacility.id,
-          reactorId: reactor.id,
-          status: "cancelled",
-          cancellationReason: "Excluded from active dashboard gap metrics",
-          startTime: new Date("2026-07-02T08:00:00Z"),
-        },
-        {
-          organizationId: TEST_ORG_ID,
-          code: `PR-DG-ARCHIVED-${tag}`,
-          facilityId: gapFacility.id,
-          reactorId: reactor.id,
-          status: "running",
-          startTime: new Date("2026-07-03T08:00:00Z"),
-          archivedAt: new Date(),
-        },
       ])
       .returning({ id: productionRuns.id });
-    const [activeRun, cancelledRun, archivedRun] = productionRunRows;
+    const [activeRun] = productionRunRows;
 
     const processRows = await tx
       .insert(productionProcesses)
@@ -343,13 +319,6 @@ beforeAll(async () => {
         },
         {
           organizationId: TEST_ORG_ID,
-          productionRunId: activeRun.id,
-          sampleCode: `S-DG-RUN-${tag}`,
-          samplingTime: new Date("2026-07-06T10:00:00Z"),
-          ...SAMPLE_CHEMISTRY,
-        },
-        {
-          organizationId: TEST_ORG_ID,
           creditBatchId: excludedBatch.id,
           productionRunId: activeRun.id,
           sampleCode: `S-DG-CROSS-PARENT-${tag}`,
@@ -364,23 +333,9 @@ beforeAll(async () => {
           samplingTime: new Date("2026-07-08T10:00:00Z"),
           ...SAMPLE_CHEMISTRY,
         },
-        {
-          organizationId: TEST_ORG_ID,
-          productionRunId: cancelledRun.id,
-          sampleCode: `S-DG-CANCELLED-RUN-${tag}`,
-          samplingTime: new Date("2026-07-09T10:00:00Z"),
-          ...SAMPLE_CHEMISTRY,
-        },
-        {
-          organizationId: TEST_ORG_ID,
-          productionRunId: archivedRun.id,
-          sampleCode: `S-DG-ARCHIVED-RUN-${tag}`,
-          samplingTime: new Date("2026-07-10T10:00:00Z"),
-          ...SAMPLE_CHEMISTRY,
-        },
       ])
       .returning({ id: samples.id });
-    const [validBatchSample, validRunSample, ...excludedSamples] = sampleRows;
+    const [validBatchSample, ...excludedSamples] = sampleRows;
 
     const [activeBiocharProduct] = await tx
       .insert(biocharProducts)
@@ -428,16 +383,6 @@ beforeAll(async () => {
           destinationGpsLongitude: null,
           distanceKm: 25,
           distanceSource: "document",
-          transportMethodType: "road",
-          loadMassKg: 1,
-        },
-        {
-          organizationId: TEST_ORG_ID,
-          entityType: "sample",
-          entityId: validRunSample.id,
-          ...COMPLETE_ENDPOINTS,
-          distanceKm: 25,
-          distanceSource: "manual",
           transportMethodType: "road",
           loadMassKg: 1,
         },
@@ -536,7 +481,7 @@ afterAll(async () => {
 });
 
 describe("dashboard structural certification gaps", () => {
-  it("uses canonical supplier GPS and scopes all transport parent types", async (ctx) => {
+  it("uses default supplier location GPS and scopes all transport parent types", async (ctx) => {
     if (!dbReachable || !fixture) {
       ctx.skip();
       return;
@@ -548,7 +493,6 @@ describe("dashboard structural certification gaps", () => {
     );
 
     expect(counts).toEqual({
-      missingFacilityGps: 1,
       missingFeedstockGps: 1,
       transportEndpointGpsGaps: 2,
       missingFeedstockGpsSupplierId: fixture.missingGpsSupplierId,
@@ -562,12 +506,6 @@ describe("dashboard structural certification gaps", () => {
         ({ key, metadata, count, href }) => ({ key, metadata, count, href }),
       ),
     ).toEqual([
-      {
-        key: "facilityGps",
-        metadata: "Facility form · Location · 1 affected",
-        count: 1,
-        href: `/facilities?facility=${fixture.gapFacilityId}`,
-      },
       {
         key: "feedstockGps",
         metadata: "Supplier form · Location · 1 affected",
@@ -587,7 +525,6 @@ describe("dashboard structural certification gaps", () => {
     const facilityId = "00000000-0000-4000-8000-000000000001";
     const gaps = buildDashboardStructuralGaps(
       {
-        missingFacilityGps: 0,
         missingFeedstockGps: 0,
         transportEndpointGpsGaps: 1,
         missingFeedstockGpsSupplierId: null,
@@ -616,7 +553,6 @@ describe("dashboard structural certification gaps", () => {
     (entityType, formName) => {
       const gaps = buildDashboardStructuralGaps(
         {
-          missingFacilityGps: 0,
           missingFeedstockGps: 0,
           transportEndpointGpsGaps: 2,
           missingFeedstockGpsSupplierId: null,
@@ -646,7 +582,6 @@ describe("dashboard structural certification gaps", () => {
     );
 
     expect(counts).toEqual({
-      missingFacilityGps: 0,
       missingFeedstockGps: 0,
       transportEndpointGpsGaps: 0,
       missingFeedstockGpsSupplierId: null,

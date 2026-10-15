@@ -13,7 +13,7 @@ export const labSampleRepresentationSchema = z.object({
   id: z.uuid().describe("Lab sample identifier, UUID."),
   code: z.string().describe("Human-readable sample code, unique within the organization."),
   version: z.number().int().positive().describe("Positive row version for concurrency checks."),
-  creditBatchId: z.uuid().nullable().describe("Credit batch this replicate characterises, UUID, or null on a legacy sample that never had one."),
+  creditBatchId: z.uuid().describe("Credit batch this replicate characterises, UUID."),
   samplingTime: z.iso.datetime().describe("When the sample was taken, an instant in UTC, RFC 3339."),
   labName: z.string().nullable().describe("Laboratory that analysed the sample, untrusted plain text, or null."),
   labAccreditation: z.string().nullable().describe("The laboratory's accreditation, untrusted plain text, or null."),

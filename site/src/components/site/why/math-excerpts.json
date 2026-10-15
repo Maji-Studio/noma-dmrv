@@ -49,7 +49,7 @@
   {
     "title": "Durable fraction",
     "file": "src/lib/calculations/biochar-removal.ts",
-    "firstLine": 177,
+    "firstLine": 174,
     "hit": 7,
     "lines": [
       "export function computeFDurable200(input: FDurable200Input): FDurable200Result {",
@@ -75,7 +75,7 @@
   {
     "title": "CO₂e stored",
     "file": "src/lib/calculations/biochar-removal.ts",
-    "firstLine": 274,
+    "firstLine": 200,
     "hit": 2,
     "lines": [
       "export function computeCo2eStoredTonnes(input: Co2eStoredInput): number {",

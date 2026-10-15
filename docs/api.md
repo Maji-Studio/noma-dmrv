@@ -27,8 +27,7 @@ run through `src/lib/operations/lab-samples.ts`; the Server Actions in
 `src/fn/samples.ts` and REST/MCP share them. Every writer takes locks in one
 order (`src/data-access/samples/write-scope.ts`): certification artifacts for
 every lineage the write touches, then credit batches in id order, then the
-sample. The set includes the batch a legacy production run link reaches, and a
-transport leg whose parent is a sample takes the same scope. Lineage is
+sample. A transport leg whose parent is a sample takes the same scope. Lineage is
 re-resolved against the artifacts held, so a Removal assigned while the writer
 waited refuses the write (`certification_locked`) and no artifact is locked late.
 Existence, archive state, facility, window and time zone are read from the
@@ -293,7 +292,7 @@ restriction, and vehicles expose their stored identifier/plate and vehicle type.
 
 `GET /api/v1/suppliers/{id}/locations` accepts a supplier UUID only, checks the
 parent's organization before querying its children, and paginates locations with
-name search and coordinates in decimal degrees. Its cursor also binds the
+name search and required coordinates in decimal degrees. Its cursor also binds the
 supplier ID; a missing or foreign supplier returns 404, including when it has
 no locations. Supplier locations have no code or archive column.
 
@@ -301,7 +300,7 @@ no locations. Supplier locations have no code or archive column.
 
 `GET /api/v1/customers`, `/{idOrCode}` and `/{idOrCode}/locations` use
 `customers:read`. Customer representations exclude email, phone and address;
-locations include coordinates and one-way distance. Orders expose list and
+locations include required names and coordinates, plus optional one-way distance. Orders expose list and
 id-or-code reads under `orders:read`. Both read scopes are on by default.
 Storage locations expose `formulationId` at representation revision 3 and
 accept `type` and `formulationId` list filters.

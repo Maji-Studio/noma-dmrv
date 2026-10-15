@@ -27,12 +27,12 @@ export async function deleteSampleInTransaction(
   if (!links) throw sampleNotFound();
   const scope = await lockSampleWriteScope(ctx, tx, {
     lineage: [{ target: { entityType: "sample", entityId: sampleId }, mutation: "delete" }],
-    creditBatchIds: links.lineageBatchIds,
+    creditBatchIds: [links.creditBatchId],
     sampleId,
   });
   if (!scope.sample) throw sampleNotFound();
   assertRowVersion({ entity: "sample", id: sampleId, expectedVersion, actualVersion: scope.sample.version });
-  await assertSampleLinksHeld(ctx, tx, scope, sampleId, links);
+  assertSampleLinksHeld(scope, sampleId, links);
 
   const transportLegDocuments = await deleteTransportLegsForEntity(ctx, tx, "sample", sampleId);
   const deleted = await tx

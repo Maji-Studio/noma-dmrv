@@ -6,8 +6,8 @@ import type { EntityOption } from "@/components/forms/entity-select/types";
 import type { OrgContext } from "@/lib/auth/server";
 import { requireOrgScope } from "../utils";
 
-function toOption(row: { id: string; name: string | null }): EntityOption {
-  return { id: row.id, code: "", name: row.name ?? "Unnamed location" };
+function toOption(row: { id: string; name: string }): EntityOption {
+  return { id: row.id, code: "", name: row.name };
 }
 
 export async function getCustomerLocationsEntity(ctx: OrgContext, params: {

@@ -398,24 +398,22 @@ itself is **built and enforced** — see the invariants section,
 - **Per-leg evidence model deferred** (`isometric/transport-v1.1-evidence`).
   - Isometric Transportation v1.1 §6 + Appendix 1 require: emission-factor
     source citation, factor vintage by mode (road ≤3 y, ship/air ≤5 y,
-    rail/pipeline ≤7 y), round-trip vs. onward-leg evidence, distance-method
-    fallback justification (§3.1 "appropriately evidenced"), weigh-scale
+    rail/pipeline ≤7 y), round-trip vs. onward-leg evidence, weigh-scale
     calibration record, vehicle class/model year.
   - **Current state** (`src/db/schema/logistics.ts`): every leg counts its
     round trip (×2 of the stored one-way distance, no trip type since issue
     #852; see the invariants section in `open-questions.md`), and
     `billOfLading` and `weighScaleTicketRef` exist. There is **no**
     `emissionFactorSource` column anywhere in the schema, and none for factor
-    vintage, onward destination, or fallback evidence. Form text mentions §3.2
+    vintage or onward destination. Form text mentions §3.2
     but validators do not enforce.
   - **Resolve via:** a dedicated PR with a Drizzle migration adding the columns,
     condition-registry rules
     ([`docs/isometric/condition-registry.md`](./isometric/condition-registry.md)),
     refreshed [`docs/isometric/schema-mapping.md`](./isometric/schema-mapping.md)
-    rows 30–32, and three new entries on
+    transportation row, and the remaining entries on
     [`docs/isometric/p0-compliance-checklist.md`](./isometric/p0-compliance-checklist.md)
-    (P0-16 method-hierarchy + fallback evidence, P0-17 per-leg round-trip
-    default, P0-18 factor vintage by mode).
+    (P0-17 per-leg round-trip default, P0-18 factor vintage by mode).
 
 - **Mixed-mode transport** (`isometric/transport-mixed-mode`) — **deferred.** One
     `mass_distance` component carries one emission factor, so rail/ship legs
@@ -557,10 +555,9 @@ The independent items below require operator demand and registry confirmation.
 
 - **Per-column upload-URL field migration** (`storage/phase-2`). *(Misfiled — a
   storage concern sitting inside the Isometric section; move on next touch.)*
-  Four plain-text URL columns survive: `r0HistogramFileUrl` and
-  `tgaThermogramFileUrl` (`src/db/schema/production.ts`), `photoUrl` (same file,
-  `production_samples`), and `registryUrl` (`src/db/schema/feedstock.ts`).
-  (`plc_data_file_url` and `emissions.source_url` no longer exist.)
+  Two plain-text URL columns remain: `photoUrl`
+  (`src/db/schema/production.ts`, `production_samples`) and `registryUrl`
+  (`src/db/schema/feedstock.ts`).
   Phase 2 plan: add a `*_document_id` FK alongside each, backfill via UI, drop
   the URL column — routing all uploaded evidence through the single `documents`
   table (one audit trail, one storage-key convention, one visibility model, see

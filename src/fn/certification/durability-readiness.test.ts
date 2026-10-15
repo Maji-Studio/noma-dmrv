@@ -33,7 +33,6 @@ function batch(
     samples,
     runs: [],
     sampling: "sampled",
-    declaredHToCorgRatio: null,
     durabilityOption: "200_year",
   };
 }

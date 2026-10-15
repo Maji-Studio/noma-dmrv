@@ -1,4 +1,4 @@
-import {
+import { TEST_SITE_POSITION,
   ensureTestOrg,
   makeTestOrgContext,
   TEST_ORG_ID,
@@ -203,7 +203,7 @@ async function createFixture(): Promise<Fixture> {
   const isometricFeedstockTypeId = `${ISOMETRIC_FEEDSTOCK_TYPE_ID}_${runId}`;
   const [facility] = await db
     .insert(facilities)
-    .values({ timezone: "UTC",
+    .values({ ...TEST_SITE_POSITION, timezone: "UTC",
       organizationId: TEST_ORG_ID,
       name: `Boundary Facility ${runId}`,
       code: `FAC-BD-${runId}`,
@@ -455,7 +455,6 @@ function makeContext(
         creditBatchCode: "CB-BD-001",
         facilityTimezone: "UTC",
         sampling: "sampled",
-        declaredHToCorgRatio: null,
         durabilityOption: "200_year" as const,
         runs: [{ id: PRODUCTION_RUN_ID, code: "PR-BD-1", biocharDryMassKg: biocharMassKg }],
         samples: makeRun(biocharMassKg).samples,

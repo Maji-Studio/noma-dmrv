@@ -14,7 +14,6 @@ import {
   facilities,
   feedstocks,
   orders,
-  productionRuns,
   samples,
   supplierLocations,
   suppliers,
@@ -28,7 +27,6 @@ import {
   aggregateDistributionLegs,
   deriveTransportLeg,
   isDerivedLegPersistable,
-  positiveOrNull,
   resolveDeliveryTransportRoute,
   type DerivedTransportLeg,
 } from "@/lib/calculations/transport-leg";
@@ -73,7 +71,7 @@ const BIOCHAR_TRANSPORT_AGGREGATE_LOCK_SCOPE =
 const BIOCHAR_TRANSPORT_ROUTE_TOPOLOGY_LOCK_SCOPE =
   "biochar-transport-route-topology";
 
-// sample resolves indirectly via `production_runs.facility_id`; others have
+// sample resolves through its credit batch; others have
 // a direct `facility_id` column.
 async function resolveEntityFacility(
   ctx: OrgContext,
@@ -98,22 +96,14 @@ async function resolveEntityFacility(
     return { facilityId: row.facilityId };
   }
 
-  // sample: samples → credit_batches → facility (issue #309); legacy
-  // run-linked rows fall back to samples → production_runs → facility.
+  // sample: samples → credit_batches → facility.
   const [row] = await db
-    .select({
-      batchFacilityId: creditBatches.facilityId,
-      runFacilityId: productionRuns.facilityId,
-    })
+    .select({ facilityId: creditBatches.facilityId })
     .from(samples)
-    .leftJoin(creditBatches, and(eq(samples.creditBatchId, creditBatches.id), eq(creditBatches.organizationId, ctx.organizationId)))
-    .leftJoin(productionRuns, and(eq(samples.productionRunId, productionRuns.id), eq(productionRuns.organizationId, ctx.organizationId)))
+    .innerJoin(creditBatches, and(eq(samples.creditBatchId, creditBatches.id), eq(creditBatches.organizationId, ctx.organizationId)))
     .where(and(eq(samples.id, entityId), eq(samples.organizationId, ctx.organizationId)));
   if (!row) throw new SafeError(`${ENTITY_LABEL[entityType]} not found`);
-  const facilityId = row.batchFacilityId ?? row.runFacilityId;
-  if (!facilityId) {
-    throw new SafeError(`${ENTITY_LABEL[entityType]} has no facility`);
-  }
+  const facilityId = row.facilityId;
   return { facilityId };
 }
 
@@ -544,10 +534,6 @@ export async function syncFeedstockTransportLeg(
   const [row] = await tx
     .select({
       supplierName: suppliers.name,
-      supplierGpsLatitude: suppliers.gpsLatitude,
-      supplierGpsLongitude: suppliers.gpsLongitude,
-      supplierDistanceToFacilityKm: suppliers.distanceToFacilityKm,
-      supplierDistanceSource: suppliers.distanceSource,
       locationName: supplierLocations.name,
       locationGpsLatitude: supplierLocations.gpsLatitude,
       locationGpsLongitude: supplierLocations.gpsLongitude,
@@ -589,14 +575,8 @@ export async function syncFeedstockTransportLeg(
     throw new SafeError("Feedstock not found");
   }
 
-  const locationDistance = positiveOrNull(row.locationDistanceFromFacilityKm);
-  const storedDistanceKm = locationDistance ?? row.supplierDistanceToFacilityKm;
-  const storedDistanceSource =
-    locationDistance != null
-      ? row.locationDistanceSource
-      : row.supplierDistanceSource;
-  const locationHasGps =
-    row.locationGpsLatitude != null && row.locationGpsLongitude != null;
+  const storedDistanceKm = row.locationDistanceFromFacilityKm;
+  const storedDistanceSource = row.locationDistanceSource;
   const preserveExistingDistance =
     distanceOverride?.distanceKm === undefined &&
     distanceOverride?.resetDistanceToRoute !== true;
@@ -610,8 +590,8 @@ export async function syncFeedstockTransportLeg(
   const derived = deriveTransportLeg({
     origin: {
       name: row.locationName ?? row.supplierName,
-      gpsLatitude: locationHasGps ? row.locationGpsLatitude : row.supplierGpsLatitude,
-      gpsLongitude: locationHasGps ? row.locationGpsLongitude : row.supplierGpsLongitude,
+      gpsLatitude: row.locationGpsLatitude,
+      gpsLongitude: row.locationGpsLongitude,
     },
     destination: {
       name: row.facilityName,

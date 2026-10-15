@@ -1,4 +1,4 @@
-import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
+import { TEST_SITE_POSITION, ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
 /**
  * Real-Postgres lock-order regressions for GHG Statement remote-state writes.
  *
@@ -147,7 +147,7 @@ async function createFixture(): Promise<Fixture> {
   const externalProjectId = `prj_ggs_lock_${runId}`;
   const [facility] = await db
     .insert(facilities)
-    .values({ timezone: "UTC",
+    .values({ ...TEST_SITE_POSITION, timezone: "UTC",
       organizationId: TEST_ORG_ID,
       name: `GGS Lock Facility ${runId}`,
       code: `FAC-GL-${runId}`,

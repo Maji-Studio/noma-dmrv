@@ -41,6 +41,30 @@ The purge helpers are system seams that delete expired idempotency records and
 idle buckets across organizations. These waivers do not relax ordinary
 org-scoped reads or audit inserts.
 
+## Activity events
+
+`activity_events` is append-only by convention: its data-access module exports
+no update or delete. There is no append-only trigger because it would prevent
+E2E teardown. Writes use the caller's transaction and reads enforce org scope.
+The organization FK cascades like sibling tables because no organization-delete
+path exists and test fixtures delete organizations. The nullable facility reference
+uses the same-organization composite FK. Entity, credit-batch, production-run and
+actor references have no FKs, so history survives record
+deletion as tombstones. V1 stores field names only, never field
+values, alongside status transitions and attribution.
+
+`ACTIVITY_ENTITY_TYPES` in `src/db/schema/common.ts` allows only canonical
+snake_case names: `removal`, `ghg_statement`, `production_run`, `biochar_product`,
+`lab_sample`, `order`, `delivery`, `application`, `credit_batch`, `document`,
+`transport_leg`, `feedstock`, and `bin_movement`. The pure
+`toActivityEntityType` mapper in `src/lib/activity-entity-type.ts` preserves these
+names and maps existing runner/certification spellings (`productionRun`,
+`biocharProduct`, `labSample`, `binMovement`, `ghgStatement`) to them; unknown
+values throw.
+`occurred_at` and `registry_at` use millisecond precision to match JavaScript
+`Date`; `occurred_at` defaults to insert time (`clock_timestamp()`), and reads
+order by `occurred_at` then unique `sequence`, newest first.
+
 ## Row-Level Guards
 
 Frozen/locked rows are protected by dedicated modules in `src/data-access/`, not by DB constraints alone: `bin-stock-guards.ts`, `lock-bin-stocks.ts`, the `*-stock-locks.ts` family (`biochar-product`, `delivery`, `formulation`, `order`, `production-run`), `facility-durability-lock.ts`, `certification-lineage-guards.ts`, `unique-name-guards.ts`. A fresh `db.update()` that skips these silently bypasses the freeze — route mutations through the guarded helpers.
@@ -62,6 +86,12 @@ the run version. A change to the run itself bumps its version.
 - Over-precision now fails loudly with a Postgres `numeric field overflow` rather than rounding silently.
 
 ## Schema Shape
+
+Facilities and supplier/customer locations store required GPS coordinates and
+an explicitly supplied country, with no country default. Customer location
+names are required. Suppliers store neither GPS nor transport distance; these
+belong to supplier locations. Tightening these constraints requires valid rows
+in development/staging before migration; there is no automatic backfill.
 
 Source of truth: `src/db/schema/*.ts`, exported through `src/db/schema/index.ts`. Area-by-area breakdown: [`schema-overview.md`](./schema-overview.md). Shared domain enums live in `common.ts`.
 

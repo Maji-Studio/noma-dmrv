@@ -42,7 +42,7 @@ import {
   outputOrderFixtureValues,
   outputProductFixtureValues,
 } from "./output-contract-fixtures";
-import { TEST_ORG_ID } from "./test-org";
+import { TEST_SITE_POSITION, TEST_ORG_ID } from "./test-org";
 
 const CONCURRENCY_BARRIER_TIMEOUT_MS = 5_000;
 
@@ -74,7 +74,7 @@ export async function createLineageFixture(
   return db.transaction(async (tx) => {
     const [facility] = await tx
       .insert(facilities)
-      .values({ timezone: "UTC", organizationId: TEST_ORG_ID, code: `FAC-CLG-${tag}`, name: `CLG Facility ${tag}` })
+      .values({ ...TEST_SITE_POSITION, timezone: "UTC", organizationId: TEST_ORG_ID, code: `FAC-CLG-${tag}`, name: `CLG Facility ${tag}` })
       .returning({ id: facilities.id });
 
     const [reactor] = await tx
@@ -163,18 +163,6 @@ export async function createLineageFixture(
       feedstockId: feedstock.id,
       wetMassUsedKg: 1_000,
     });
-
-    const [sample] = await tx
-      .insert(samples)
-      .values({
-        organizationId: TEST_ORG_ID,
-        productionRunId: productionRun.id,
-        sampleCode: `S-CLG-${tag}`,
-        samplingTime: new Date("2026-06-13T10:00:00Z"),
-        totalCarbonPercent: 80,
-        organicCarbonPercent: 78,
-      })
-      .returning({ id: samples.id });
 
     const [product] = await tx
       .insert(biocharProducts)
@@ -265,6 +253,18 @@ export async function createLineageFixture(
       })
       .returning({ id: creditBatches.id });
 
+    const [sample] = await tx
+      .insert(samples)
+      .values({
+        organizationId: TEST_ORG_ID,
+        creditBatchId: batch.id,
+        sampleCode: `S-CLG-${tag}`,
+        samplingTime: new Date("2026-06-13T10:00:00Z"),
+        totalCarbonPercent: 80,
+        organicCarbonPercent: 78,
+      })
+      .returning({ id: samples.id });
+
     await tx.insert(creditBatchProductionRuns).values({
       organizationId: TEST_ORG_ID,
       creditBatchId: batch.id,
@@ -333,12 +333,12 @@ export async function cleanupLineageFixture(fixture: LineageFixture): Promise<vo
     await tx
       .delete(creditBatchApplications)
       .where(eq(creditBatchApplications.creditBatchId, fixture.batchId));
+    await tx.delete(samples).where(eq(samples.id, fixture.sampleId));
     await tx.delete(creditBatches).where(eq(creditBatches.id, fixture.batchId));
     await deleteOutputApplicationFixtures(tx, eq(applications.id, fixture.applicationId));
     await deleteOutputDeliveryFixtures(tx, eq(deliveries.id, fixture.deliveryId));
     await deleteOutputOrderFixtures(tx, eq(orders.id, fixture.orderId));
     await deleteOutputProductFixtures(tx, eq(biocharProducts.id, fixture.productId));
-    await tx.delete(samples).where(eq(samples.id, fixture.sampleId));
     await tx
       .delete(productionRunFeedstocks)
       .where(eq(productionRunFeedstocks.productionRunId, fixture.productionRunId));

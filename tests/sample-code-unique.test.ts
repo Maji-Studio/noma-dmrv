@@ -1,6 +1,6 @@
 import { createProductionRunOutputBin } from "./helpers/production-run-output-bin";
 import { labLogisticsVersion } from "./helpers/lab-logistics-version";
-import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
+import { TEST_SITE_POSITION, ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
 /**
  * DB-backed concurrency tests for DB-enforced sample_code uniqueness
  * (issue #395). The `samples_sample_code_unique` index is the sole
@@ -79,7 +79,7 @@ beforeAll(async () => {
 
   const [facility] = await db
     .insert(facilities)
-    .values({ timezone: "UTC",
+    .values({ ...TEST_SITE_POSITION, timezone: "UTC",
       organizationId: TEST_ORG_ID,
       name: `Sample-Code Facility ${suffix}`,
       code: `FAC-SC-${suffix}`,
@@ -153,7 +153,6 @@ beforeAll(async () => {
     productionRunIds: [run.id],
     startDate: new Date("2025-06-01"),
     endDate: new Date("2025-06-30"),
-    hToCorgRatio: 0.4,
     feedstockTypeId: feedstockType.id,
   });
   batchId = batch.id;

@@ -2,7 +2,7 @@ import { labLogisticsVersion } from "./helpers/lab-logistics-version";
 import { insertOutputApplicationFixture } from "./helpers/output-contract-fixtures";
 import { deleteOutputApplicationFixtures } from "./helpers/output-contract-fixtures";
 import { outputProductFixtureValues, outputOrderFixtureValues, deleteOutputOrderFixtures, insertOutputDeliveryFixture, deleteOutputDeliveryFixtures, deleteOutputProductFixtures, deleteOutputFacilityFixtures } from "./helpers/output-contract-fixtures";
-import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
+import { TEST_SITE_POSITION, ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
 import { beforeAll, describe, expect, it } from "vitest";
 import { eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
@@ -67,7 +67,7 @@ async function createDeleteFixture(runId: string): Promise<DeleteFixture> {
 
   const [facility] = await db
     .insert(facilities)
-    .values({ timezone: "UTC", organizationId: TEST_ORG_ID, name: `Delete Test Facility ${runId}`, code: `FAC-DEL-${runId}` })
+    .values({ ...TEST_SITE_POSITION, timezone: "UTC", organizationId: TEST_ORG_ID, name: `Delete Test Facility ${runId}`, code: `FAC-DEL-${runId}` })
     .returning({ id: facilities.id });
 
   const [productionProcess] = await db
@@ -244,9 +244,6 @@ async function createCreditBatchRecord(
   fixture: DeleteFixture,
   runId: string,
   status: "draft" | "pending" | "verified" | "issued" | "rejected",
-  fields?: {
-    fDurableCalculated?: number | null;
-  },
 ): Promise<string> {
   const [creditBatch] = await db
     .insert(creditBatches)
@@ -260,8 +257,6 @@ async function createCreditBatchRecord(
       startDate: "2025-06-01",
       endDate: "2025-06-30",
       certifier: "isometric",
-      hToCorgRatio: 0.4,
-      fDurableCalculated: fields?.fDurableCalculated ?? null,
     })
     .returning({ id: creditBatches.id });
 
@@ -320,7 +315,6 @@ describe("deleteApplication", () => {
         fixture,
         runId,
         "pending",
-        { fDurableCalculated: 0.85 },
       );
 
       // Derived on read (issue #285): Σ member applications' applied tons —
@@ -359,9 +353,6 @@ describe("deleteApplication", () => {
         skipPreview: true,
       });
       expect(batchAfter?.appliedWeightTons).toBe(2);
-      // fDurableCalculated is sample-derived (ADR 0013/0016) — an application
-      // delete no longer touches it.
-      expect(batchAfter?.fDurableCalculated).toBe(0.85);
     } finally {
       await cleanupDeleteFixture(fixture);
     }
@@ -377,9 +368,7 @@ describe("deleteApplication", () => {
         biocharAppliedDryTons: 4.5,
         co2eStoredTonnes: 3.6,
       });
-      await createCreditBatchRecord(fixture, runId, "issued", {
-        fDurableCalculated: 0.85,
-      });
+      await createCreditBatchRecord(fixture, runId, "issued");
 
       await expect(
         deleteApplication(makeTestOrgContext(TEST_USER_ID), applicationId, await labLogisticsVersion(makeTestOrgContext(TEST_USER_ID), "applications", applicationId)),
