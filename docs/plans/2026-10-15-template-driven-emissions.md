@@ -328,7 +328,7 @@ Operators can fill every line of the target Removal template ("LCA based templat
 Kenji's round 2 note asks to reopen general edits when Isometric pushes a submission back, as before submission.
 
 - **Change:** under the same conditions as §4.5 Corrections, unlock the lineage guard for the rest of the lineage, not only entries. Resubmitting relocks it.
-- **Ownership:** the app-wide edit-lock rule (Open, In use, Sent) being drafted in a parallel session owns the lock predicates (`BLOCKING_SUBMISSION_STATUSES`, `REMOVAL_LOCK_BY_KIND`). PR 4 and PR 5 call that rule's predicate rather than adding their own.
+- **Ownership:** the app-wide lock predicate (issue pending, see #687) owns the Open, In use and Sent levels and the lock predicates (`BLOCKING_SUBMISSION_STATUSES`, `REMOVAL_LOCK_BY_KIND`). PR 4 and PR 5 call that rule's predicate rather than adding their own.
 - **Shared lineage:** a record that also backs a verified Removal stays locked.
 - **Sync:** status comes from the refresh paths and from the scheduled registry sync of #1047 once it exists.
 - **Prerequisite:** none from Isometric, since Kenji decided the trigger on 2026-10-15. Folds item 1 of #687.
