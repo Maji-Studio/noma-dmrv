@@ -50,7 +50,8 @@ test.describe("Feedstock type filter", () => {
       organizationId: DEC_ORG_ID,
       code: `E2E-FST-ALT-${suffix}`,
       name: `E2E Alt Feedstock Type ${suffix}`,
-      category: "manure",
+      category: "agricultural" as const,
+      usage: "pyrolysis" as const,
     };
     const altFeedstock = {
       id: crypto.randomUUID(),

@@ -27,12 +27,14 @@ describe("getFeedstockStats", () => {
       .insert(feedstockTypes)
       .values([
         {
+          usage: "pyrolysis",
           organizationId: TEST_ORG_ID,
           code: `FS-STATS-A-${tag}`,
           name: `Feedstock Stats A ${tag}`,
           category: "forestry",
         },
         {
+          usage: "pyrolysis",
           organizationId: TEST_ORG_ID,
           code: `FS-STATS-B-${tag}`,
           name: `Feedstock Stats B ${tag}`,

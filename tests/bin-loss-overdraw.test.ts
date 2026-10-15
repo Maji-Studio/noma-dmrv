@@ -69,6 +69,7 @@ describe("bin loss stock guard", () => {
       const [feedstockType] = await tx
         .insert(feedstockTypes)
         .values({
+          usage: "pyrolysis",
           organizationId: TEST_ORG_ID,
           code: `FT-LOSS-${tag}`,
           name: `Loss Guard Feedstock ${tag}`,

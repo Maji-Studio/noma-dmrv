@@ -42,6 +42,36 @@ export const creditBatchStatus = pgEnum('credit_batch_status', [
 // Type Enums
 // ============================================
 
+export const REACTOR_TYPES = [
+  'fixed-bed',
+  'auger',
+  'rotary-kiln',
+  'batch',
+  'continuous',
+] as const;
+
+export const PYROLYSIS_FEEDSTOCK_CATEGORIES = [
+  'forestry',
+  'agricultural',
+  'industrial',
+  'municipal',
+  'invasive',
+] as const;
+
+export const BLEND_FEEDSTOCK_CATEGORIES = [
+  'compost',
+  'mineral',
+  'lime',
+  'binder',
+  'amendment',
+  'other',
+] as const;
+
+export const FEEDSTOCK_CATEGORIES = [
+  ...PYROLYSIS_FEEDSTOCK_CATEGORIES,
+  ...BLEND_FEEDSTOCK_CATEGORIES,
+] as const;
+
 export const storageLocationType = pgEnum('storage_location_type', [
   'feedstock_bin',
   'biochar_bin',

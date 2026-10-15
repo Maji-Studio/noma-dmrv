@@ -14,7 +14,7 @@ it("keeps fixture parents tracked when transactional cleanup rolls back", async 
     code: `E2E-FIXTURE-${tag}`, name: `E2E Fixture ${tag}`,
   }).returning();
   const [type] = await db.insert(feedstockTypes).values({
-    organizationId: TEST_ORG_ID, code: `E2E-FIXTURE-${tag}`, name: `E2E Fixture ${tag}`, category: "forestry",
+    usage: "pyrolysis", organizationId: TEST_ORG_ID, code: `E2E-FIXTURE-${tag}`, name: `E2E Fixture ${tag}`, category: "forestry",
   }).returning();
   try {
     const values = await feedstockFixtureValues(db, {

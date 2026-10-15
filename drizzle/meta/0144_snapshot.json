@@ -1,5 +1,5 @@
 {
-  "id": "bdf55efc-e264-4811-addb-3436895894d6",
+  "id": "5e7776e0-d908-4575-ab8d-74b7d32ca459",
   "prevId": "ea7eb85a-4423-4e7a-85e2-b64a260c8d5d",
   "version": "7",
   "dialect": "postgresql",
@@ -2552,10 +2552,6 @@
       },
       "policies": {},
       "checkConstraints": {
-        "bin_movements_feedstock_loss_time": {
-          "name": "bin_movements_feedstock_loss_time",
-          "value": "\"bin_movements\".\"lane\" <> 'feedstock' or \"bin_movements\".\"movement_type\" <> 'loss' or \"bin_movements\".\"occurred_at\" is not null"
-        },
         "bin_movements_output_contract": {
           "name": "bin_movements_output_contract",
           "value": "\"bin_movements\".\"output_kind\" is null or (\n      \"bin_movements\".\"lane\" in ('biochar', 'product') and \"bin_movements\".\"occurred_at\" is not null\n      and \"bin_movements\".\"idempotency_key\" is not null and length(\"bin_movements\".\"idempotency_key\") > 0\n      and \"bin_movements\".\"basis_fingerprint\" is not null and \"bin_movements\".\"input_snapshot\" is not null\n      and \"bin_movements\".\"balance_before_dry_kg\" >= 0 and \"bin_movements\".\"balance_after_dry_kg\" >= 0\n      and \"bin_movements\".\"balance_before_dry_kg\" is not null and \"bin_movements\".\"balance_after_dry_kg\" is not null\n      and \"bin_movements\".\"output_dry_delta_kg\" is not null\n      and \"bin_movements\".\"balance_after_dry_kg\" = \"bin_movements\".\"balance_before_dry_kg\" + \"bin_movements\".\"output_dry_delta_kg\"\n      and (\"bin_movements\".\"output_kind\" = 'reversal' or \"bin_movements\".\"output_dry_delta_kg\" <= 0)\n      and length(trim(\"bin_movements\".\"reason\")) > 0\n      and (\"bin_movements\".\"output_kind\" not in ('reversal', 'replacement') or \"bin_movements\".\"corrects_movement_id\" is not null)\n    )"
@@ -5765,6 +5761,18 @@
           "primaryKey": false,
           "notNull": false
         },
+        "upload_storage_key": {
+          "name": "upload_storage_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "upload_expires_at": {
+          "name": "upload_expires_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
         "file_name": {
           "name": "file_name",
           "type": "text",
@@ -5842,6 +5850,13 @@
           "primaryKey": false,
           "notNull": false
         },
+        "version": {
+          "name": "version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp",
@@ -5905,6 +5920,22 @@
             }
           ],
           "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "documents_pending_upload_expires_idx": {
+          "name": "documents_pending_upload_expires_idx",
+          "columns": [
+            {
+              "expression": "upload_expires_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"documents\".\"upload_status\" = 'pending'",
           "concurrently": false,
           "method": "btree",
           "with": {}
@@ -6008,6 +6039,12 @@
         "last_error_code": {
           "name": "last_error_code",
           "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "not_before": {
+          "name": "not_before",
+          "type": "timestamp",
           "primaryKey": false,
           "notNull": false
         },
@@ -6616,6 +6653,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "supplier_reference_id": {
+          "name": "supplier_reference_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "feedstock_type_id": {
           "name": "feedstock_type_id",
           "type": "uuid",
@@ -7159,17 +7202,29 @@
           "name": "delivery_date",
           "type": "timestamp",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "supplier_id": {
           "name": "supplier_id",
           "type": "uuid",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "vehicle_id": {
           "name": "vehicle_id",
           "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "gps_latitude": {
+          "name": "gps_latitude",
+          "type": "double precision",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "gps_longitude": {
+          "name": "gps_longitude",
+          "type": "double precision",
           "primaryKey": false,
           "notNull": false
         },
@@ -7195,7 +7250,7 @@
           "name": "mass_wet_kg",
           "type": "numeric(14, 3)",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "mass_dry_kg": {
           "name": "mass_dry_kg",
@@ -7207,13 +7262,76 @@
           "name": "moisture_content_percent",
           "type": "numeric(9, 6)",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
+        },
+        "co2e_feedstock_tons": {
+          "name": "co2e_feedstock_tons",
+          "type": "numeric(14, 6)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "feedstock_source_region": {
+          "name": "feedstock_source_region",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
         },
         "storage_location_id": {
           "name": "storage_location_id",
           "type": "uuid",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
+        },
+        "counterfactual_category": {
+          "name": "counterfactual_category",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "counterfactual_emissions_15_tons": {
+          "name": "counterfactual_emissions_15_tons",
+          "type": "numeric(14, 6)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "counterfactual_storage_50_tons": {
+          "name": "counterfactual_storage_50_tons",
+          "type": "numeric(14, 6)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "market_leakage_method": {
+          "name": "market_leakage_method",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "market_leakage_tons": {
+          "name": "market_leakage_tons",
+          "type": "numeric(14, 6)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "baseline_scenario": {
+          "name": "baseline_scenario",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'unknown'"
+        },
+        "baseline_description": {
+          "name": "baseline_description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "''"
+        },
+        "eligibility_status": {
+          "name": "eligibility_status",
+          "type": "feedstock_eligibility_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false
         },
         "notes": {
           "name": "notes",
@@ -7357,11 +7475,19 @@
         },
         "feedstocks_mass_dry_lte_wet": {
           "name": "feedstocks_mass_dry_lte_wet",
-          "value": "\"feedstocks\".\"mass_dry_kg\" <= \"feedstocks\".\"mass_wet_kg\""
+          "value": "\"feedstocks\".\"mass_wet_kg\" is null or \"feedstocks\".\"mass_dry_kg\" <= \"feedstocks\".\"mass_wet_kg\""
         },
         "feedstocks_moisture_content_percent_range": {
           "name": "feedstocks_moisture_content_percent_range",
-          "value": "(\"feedstocks\".\"moisture_content_percent\" >= 0 and \"feedstocks\".\"moisture_content_percent\" < 100)"
+          "value": "\"feedstocks\".\"moisture_content_percent\" is null or (\"feedstocks\".\"moisture_content_percent\" >= 0 and \"feedstocks\".\"moisture_content_percent\" <= 100)"
+        },
+        "feedstocks_gps_latitude_range": {
+          "name": "feedstocks_gps_latitude_range",
+          "value": "\"feedstocks\".\"gps_latitude\" is null or (\"feedstocks\".\"gps_latitude\" >= -90 and \"feedstocks\".\"gps_latitude\" <= 90)"
+        },
+        "feedstocks_gps_longitude_range": {
+          "name": "feedstocks_gps_longitude_range",
+          "value": "\"feedstocks\".\"gps_longitude\" is null or (\"feedstocks\".\"gps_longitude\" >= -180 and \"feedstocks\".\"gps_longitude\" <= 180)"
         }
       },
       "isRLSEnabled": false
@@ -8091,6 +8217,18 @@
           "primaryKey": false,
           "notNull": true,
           "default": false
+        },
+        "bill_of_lading": {
+          "name": "bill_of_lading",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "weigh_scale_ticket_ref": {
+          "name": "weigh_scale_ticket_ref",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
         },
         "created_at": {
           "name": "created_at",
@@ -12744,6 +12882,15 @@
       "schema": "public",
       "values": [
         "distance_based"
+      ]
+    },
+    "public.feedstock_eligibility_status": {
+      "name": "feedstock_eligibility_status",
+      "schema": "public",
+      "values": [
+        "eligible",
+        "ineligible",
+        "conditional"
       ]
     },
     "public.feedstock_status": {

@@ -6,6 +6,10 @@
     {
       "path": "/api/cron/purge-api-records",
       "schedule": "0 3 * * *"
+    },
+    {
+      "path": "/api/cron/sweep-document-uploads",
+      "schedule": "15 3 * * *"
     }
   ]
 }

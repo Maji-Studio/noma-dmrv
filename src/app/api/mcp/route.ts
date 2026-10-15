@@ -1,17 +1,22 @@
+import { OPERATION_DEADLINE_MS } from "@/config/operations";
 import { localhostAllowedOrigins, originValidationResponse } from "@modelcontextprotocol/server";
 import { env } from "@/config/env";
 import { readBoundedBody } from "@/lib/api/request-body";
 import { ApiHttpError } from "@/lib/api/http-error";
 import { apiRoute } from "@/lib/api/route";
-import { mcpRequestAccess, serveMcp } from "@/lib/mcp/server";
+import { mcpRequestAccess, mcpRequestDeadlineMs, serveMcp } from "@/lib/mcp/server";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
 
+const BASE_DEADLINE_MS = OPERATION_DEADLINE_MS;
+
 const authenticatedHandler = apiRoute("api.mcp", undefined, serveMcp, {
+  deadlineMs: BASE_DEADLINE_MS,
   deadlineInHandler: true,
   writesDisabledInHandler: true,
-  prepare: async (request, { ctx }) => {
+  prepare: async (request, context) => {
+    const { ctx } = context;
     const bytes = await readBoundedBody(request);
     // Malformed JSON is left to the SDK's protocol parser after admission.
     let body: unknown;
@@ -19,6 +24,8 @@ const authenticatedHandler = apiRoute("api.mcp", undefined, serveMcp, {
     if (Array.isArray(body)) {
       throw new ApiHttpError(400, "batch_not_supported", "Send one JSON-RPC message per request.");
     }
+    // Preserve the pre-auth start instant when the tool declares its own budget.
+    context.deadlineAt += mcpRequestDeadlineMs(ctx, body, BASE_DEADLINE_MS) - BASE_DEADLINE_MS;
     return {
       request: new Request(request.url, {
         method: request.method, headers: request.headers, body: bytes, signal: request.signal,

@@ -104,3 +104,12 @@ it("publishes time shapes, source grounding and the conditional key rule", () =>
   for (const text of ["log_feedstock_delivery", "find_orders", "get_order_balance", "remaining wet kg", "find_storage_locations", "type=product_bin", "formulationId", "get_bin_stock", "sub-bins", "wet kg", "percent of wet mass", "one-way km", "round trip", "above 0", "Omit distanceKmOverride", "deducts from the product bin", "Without sources", "drawOrder", "stockEffects", "allocations", "basisFingerprint", "order facility's zone", "{ date, time }", "cannot be in the future", "Never invent moisture readings", "ask the operator", "ignored when sources", "including ingredient solids", "recorded reading"]) expect(record.description).toContain(text);
   for (const text of ["metadata only", "code, driver, vehicle and distance", "Mass, moisture and time", "corrections made in the app", "expectedVersion"]) expect(tool("update_delivery").description).toContain(text);
 });
+
+it("keeps historical bill of lading warnings on replay", async () => {
+  const originalWarning = "No bill of lading is uploaded. Upload the bill of lading in the app.";
+  mocks.run.mockResolvedValueOnce({ data: { delivery: row, allocations, warnings: [originalWarning] }, replayed: true, dryRun: false });
+  const result = await tool("record_delivery").execute(context, { ...create, requestKey: "historical-delivery" });
+  expect(result.body.warnings).toEqual([originalWarning]);
+  expect(result.replayed).toBe(true);
+  expect(tool("record_delivery").description).toContain("request_document_upload (ownerType delivery, documentType bill_of_lading)");
+});

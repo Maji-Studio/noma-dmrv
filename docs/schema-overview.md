@@ -73,7 +73,16 @@ left by the old batch-delete and membership-edit paths. Delete those rows or
 run `pnpm db:reset` locally; shared staging uses the manual reset workflow in
 [database.md](./database.md), announced first.
 
-Migration `0144_feedstock_intake_required_fields` makes the five intake columns
+Migration `0145_facility_reactor_feedstock_type_rules` makes
+`certifier_projects.external_facility_id` NOT NULL, drops
+`certifier_projects.genset_energy_yield_kwh_per_litre` and the
+`feedstock_types.usage` default, and adds CHECKs on `reactors.reactor_type` and
+`feedstock_types.category` without a backfill. It fails while mappings with null
+facility IDs, unsupported reactor types, or unsupported feedstock categories
+exist. Run `pnpm db:reset` locally; shared staging uses the manual reset workflow
+in [database.md](./database.md), announced first.
+
+Migration `0146_feedstock_intake_required_fields` makes the five intake columns
 `feedstocks.delivery_date`, `supplier_id`, `mass_wet_kg`,
 `moisture_content_percent`, and `storage_location_id` NOT NULL, requires moisture
 below 100%, and adds a CHECK requiring `bin_movements.occurred_at` for

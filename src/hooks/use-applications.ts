@@ -2,7 +2,6 @@ import type { ActionResult } from "@/types/actions";
 import type { DeleteApplicationData } from "@/schemas/applications";
 import { StaleVersionError, throwActionError } from "@/lib/stale-version";
 import { patchListCachesWithSavedRow } from "./list-cache-utils";
-import { loadApplicationCertificationLock } from "@/fn/application-certification-lock";
 import {
   useMutation,
   useQueries,
@@ -17,7 +16,7 @@ import {
   deleteApplicationFn,
 } from "@/fn/applications";
 import { creditBatchKeys } from "@/hooks/use-credit-batches";
-import { certificationKeys, invalidateCertificationReadiness } from "@/hooks/use-certification";
+import { invalidateCertificationReadiness } from "@/hooks/use-certification";
 import type { ApplicationFormData, UpdateApplicationData } from "@/schemas/applications";
 import type { ApplicationListOptions } from "@/data-access/applications";
 import { unwrap } from "@/hooks/types";
@@ -34,7 +33,6 @@ export const applicationKeys = {
     [...applicationKeys.lists(), filters] as const,
   deliveryOptions: (facilityId?: string) =>
     [...applicationKeys.all, "deliveryOptions", facilityId] as const,
-  certificationLock: (id?: string) => [...certificationKeys.all, "application-lock", id] as const,
   details: () => [...applicationKeys.all, "detail"] as const,
   detail: (id: string) => [...applicationKeys.details(), id] as const,
 };
@@ -180,13 +178,5 @@ export function useDeleteApplication() {
       queryClient.invalidateQueries({ queryKey: creditBatchKeys.all });
       invalidateCertificationReadiness(queryClient);
     },
-  });
-}
-
-export function useApplicationCertificationLock(applicationId?: string) {
-  return useQuery({
-    queryKey: applicationKeys.certificationLock(applicationId),
-    enabled: !!applicationId,
-    queryFn: async () => unwrap(await loadApplicationCertificationLock(applicationId!)),
   });
 }

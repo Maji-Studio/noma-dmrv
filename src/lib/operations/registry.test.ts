@@ -64,3 +64,10 @@ it("publishes delivery create and metadata PATCH, keeping corrections and custom
     expect(update?.input.safeParse({ deliveryId: FEEDSTOCK_ID, expectedVersion: INITIAL_VERSION, [field]: null }).success).toBe(false);
   }
 });
+
+it("publishes only document upload requests, keeping confirm facts, renewal and app mutations private", () => {
+  const operation = getOperation("request_document_upload");
+  expect(operation?.supportsDryRun).toBe(false);
+  expect(operation?.input.safeParse({ ownerType: "feedstock", ownerId: FEEDSTOCK_ID, documentType: "bill_of_lading", fileName: "receipt.pdf", contentType: "application/pdf", sizeBytes: 8, sha256: "a".repeat(64) }).success).toBe(true);
+  for (const id of ["confirm_document_upload", "renew_document_upload", "delete_document", "request_document_upload_app", "confirm_document_upload_app", "delete_document_app"]) expect(getOperation(id)).toBeUndefined();
+});

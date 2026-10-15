@@ -107,6 +107,9 @@ export function getRemovalPreflightRefetchInterval(
 
 export const certificationKeys = {
   all: ["certification"] as const,
+  /** Whether a submitted Removal or GHG statement freezes the record's files. */
+  recordLock: (entityType: string, entityId?: string) =>
+    [...certificationKeys.all, "record-lock", entityType, entityId] as const,
   facilityMapping: (facilityId: string) =>
     [...certificationKeys.all, "facility-mapping", facilityId] as const,
   facilitySummary: (facilityId: string) =>

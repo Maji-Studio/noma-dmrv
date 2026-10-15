@@ -29,7 +29,7 @@ beforeEach(async () => {
   ]).returning();
   const [facility] = await db.insert(facilities).values({ ...TEST_SITE_POSITION, timezone: "UTC", organizationId: TEST_ORG_ID, code: `FAC-${tag}`, name: `Audit facility ${tag}` }).returning();
   facilityId = facility.id;
-  const [type] = await db.insert(feedstockTypes).values({ organizationId: TEST_ORG_ID, code: `FT-${tag}`, name: `Audit type ${tag}`, category: "forestry" }).returning();
+  const [type] = await db.insert(feedstockTypes).values({ usage: "pyrolysis", organizationId: TEST_ORG_ID, code: `FT-${tag}`, name: `Audit type ${tag}`, category: "forestry" }).returning();
   feedstockTypeId = type.id;
 });
 afterEach(async () => {

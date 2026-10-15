@@ -39,13 +39,113 @@ Ratios and warnings come from the merged locked row
 Reads (`src/data-access/api-lab-samples.ts`, `api-credit-batches.ts`) hide
 samples on archived batches from lists and still serve them by id.
 
+### Documents
+
+Feedstocks, deliveries and lab samples expose nested document reads and upload
+requests at `/{owner}/{idOrCode}/documents`. Reads use the owner's read scope;
+uploads and confirmation use its write scope. Files never travel in these API
+bodies. POST a declaration with its SHA-256 and a required `Idempotency-Key`
+(400 `idempotency_key_required` when missing), PUT the bytes to `upload.url` with `upload.headers`, then
+POST an empty object or no body to `/{documentId}/confirm`. Use the upload URL
+without the API key before `expiresAt`. Request returns 201 with the document
+GET `Location` and ETag; confirm returns 200 with the verified document and ETag.
+Neither command offers a dry run. There is no API document delete or edit.
+
+Use the owner UUID path for safe retries after owner deletion or code changes;
+the `Location` header uses that UUID. Reusing the request key on the UUID path
+returns 201 with `Idempotent-Replayed: true` and the stored `data`.
+Each pending replay mints a fresh upload link with a renewed
+lease. An uploaded, failed, deleted, expired, archived or submitted upload
+returns `upload: null` with `warnings`, preserving the historical success.
+
+Confirm has a 25 second budget, including inspection, promotion and the database
+transition, within a 30 second route duration. Missing bytes answer retryable
+409 `conflict` with `Retry-After`; the document stays pending. Deadline exhaustion
+answers retryable 500 `deadline_exceeded`. Submitted records refuse uploads
+with 409 `certification_locked`; submission between request and confirm fails
+the pending upload. Archived records remain readable but refuse new uploads.
+
+The published owners and types are:
+
+| REST owner | MCP `ownerType` | Allowed document types | Scopes |
+|---|---|---|---|
+| `feedstocks` | `feedstock` | `bill_of_lading`, `weighbridge_ticket`, `other_transport_evidence` | `feedstocks:read`, `feedstocks:write` |
+| `deliveries` | `delivery` | `bill_of_lading`, `weighbridge_ticket`, `other_transport_evidence`, `delivery_receipt`, `photo` | `deliveries:read`, `deliveries:write` |
+| `lab-samples` | `lab_sample` | `lab_report` | `lab-samples:read`, `lab-samples:write` |
+
+Applications are reserved for Phase 6b. There is no separate document scope.
+The app retains its internal owner and type table. API uploads stay private.
+
+Under `/api/v1/{owner}/{idOrCode}/documents`:
+
+| Method and suffix | Result |
+|---|---|
+| GET collection | Keyset page, newest first; `documentType` and `uploadStatus` filters, default `uploaded` |
+| GET `/{documentId}` | Document with a strong version and representation-revision ETag |
+| GET `/{documentId}/content` | 302 to a fresh five-minute GET capability, uploaded objects only |
+| POST collection | 201 upload request, required `Idempotency-Key` |
+| POST `/{documentId}/confirm` | 200 confirmed document; 422 committed refusal (409 for certification_locked); 409 conflict on a repeat of a failed upload |
+
+All reads enforce the owner and organization, including content; wrong-owner
+and foreign documents return 404. Content has `Cache-Control: private, no-store`
+and `Referrer-Policy: no-referrer`. Fetch the redirect without the API bearer.
+There is no public-visibility fallback. Legacy URL-only documents can appear
+with unknown content type and size, but have no API content link. Reads do not
+answer 304. Document writes do not bump owner versions or change owner ETags.
+
+MCP exposes `find_documents`, `get_document_download_url`,
+`request_document_upload` and `confirm_document_upload`. Downloads return a
+short-lived URL and expiry. A shell-capable client PUTs bytes separately; no
+MCP tool accepts file bytes. There is no document DELETE route or tool.
+A missing owner scope returns `missing_scope` in MCP, matching REST.
+
+Blocking lineage includes draft submission attempts as well as submitted and
+accepted Removal or GHG statement submissions. App upload, confirm, delete,
+reclassification and visibility changes share the refusal; server-generated
+ledgers and reports retain their own writers. A pending confirm that loses the
+submission race commits failure and queues its objects. See
+[storage lifecycle](./storage.md#abandoned-uploads-and-cleanup) for leases,
+promotion and the expiry sweep.
+
+REST problem responses expose `retryable: true` for any retryable domain error,
+including missing upload bytes and a lineage that changes while locks are
+acquired. MCP carries the same flag. A byte inspection refusal is 422
+`validation_failed` and commits the failed state; retrying that failed row
+returns 409 with its stored reason.
+
 ### Operation effects and API bookkeeping
+
+Document upload requests use the registered `request_document_upload` operation.
+Its output is the document representation, including the declared file name,
+size, MIME type and SHA-256, without storage locations or signed URLs. After
+both a first response and a replay, adapters call `mintDocumentUploadCapability`
+outside idempotency. It renews a pending upload under the document write locks
+and signs a PUT within that lease. An unavailable upload returns no link and
+plain-text guidance; the historical representation stays the same.
+
+REST and MCP confirmation share `confirmDocumentUpload`. Its client input
+contains only owner type, owner id and document id. The facts-carrying runner
+operation remains unregistered. Uploaded and failed retries read stored state
+without storage I/O. Refusals commit before the shared `mapConfirmOutcome`
+maps them to a problem: 422 `validation_failed`, or 409 `certification_locked`.
+A failed retry is 409 `conflict` with the stored reason; a missing document or
+owner mismatch is 404 `not_found`.
+
+Two named exceptions apply to this state-machine command:
+
+- **E1:** confirmation ignores `Idempotency-Key` and keeps no idempotency record.
+- **E2:** confirmation takes no `If-Match` or expected version. The declaration
+  is immutable and the row lock serializes its pending-to-uploaded or
+  pending-to-failed transition. A supplied `If-Match` is ignored, including an
+  invalid tag; confirm never answers 412 or requires a precondition.
 
 `src/lib/operations/runner.ts:Operation` optionally supplies `describe(input,
 output)`, which returns `src/lib/operation-effect.ts:OperationEffect`: outcome
 code (`created`, `updated`, `deleted`), entity type and ids, versions before and
 after, and changed field names. It contains no field values. The runner returns
-this transport-neutral effect alongside data.
+this transport-neutral effect alongside data. A state-machine operation can
+return no effect when its outcome changes no entity, so a gone confirmation
+writes no audit event.
 
 Dry-run stock writes also return `stockEffects` beside `data`. The runner supplies
 an optional `OperationScope.snapshotStock` observer, passed to transaction writers.
@@ -294,7 +394,7 @@ REST dry runs return 200 without Location or ETag, committed creates 201 with
 both, and PATCH 200.
 
 The non-blocking bill-of-lading warning is create-only, API-only and saved in
-the outcome for replay. Upload evidence in the app. The app create action has
+the outcome for replay. Upload it as a delivery document of type `bill_of_lading`. Older stored outcomes keep their original warning text. The app create action has
 no such warning because the form uploads evidence immediately after create.
 
 `deliveredAt` accepts an offset instant or facility-local `{ date, time }`;
@@ -419,7 +519,15 @@ get_feedstock. Each request captures its resolved context in a fresh server.
 and delete_feedstock through the same operation runner as REST. Each write needs
 one requestKey reused on retry; dryRun previews may omit it. Updates and deletes
 take expectedVersion from get_feedstock. Audit rows record transport `mcp`.
-Only tools authorized by `hasRoleAndScope` are registered or callable. Tool
+Existing tools keep their single `hasRoleAndScope` scope check. Document tools
+use `visible(ctx)` to appear when the role floor and any supported owner's
+scope allow them, then `authorize(ctx, args)` checks the selected owner before
+execution. A missing owner scope returns an `isError` `missing_scope` problem.
+`find_documents` and `get_document_download_url` use the owner's read scope;
+`request_document_upload` and `confirm_document_upload` use its write scope.
+The upload request requires `requestKey`; confirmation takes neither a key nor
+an expected version. Neither offers a dry run. Only confirmation gets the
+25 second budget, measured from before authentication. Tool
 schemas reuse REST query schemas and transport-neutral `lib/representations/`
 output envelopes. Numeric limits accept JSON numbers as well as REST strings.
 HTTP-only ETag builders live in `lib/api/representation-etags.ts`.
@@ -428,7 +536,8 @@ The SDK publishes schemas through `toToolSchema`. A low-level tools/call
 handler owns argument parsing so validation failures remain structured.
 Success structuredContent uses the matching REST response envelope. Expected
 failures use the REST problem code and JSON Pointer errors, named `issues` in
-MCP, without HTTP metadata. Both transports include query validation issues
+MCP, without HTTP metadata. Tool errors carry `retryable: true` for retryable
+domain errors. Both transports include query validation issues
 with JSON Pointers: REST uses `errors` and MCP uses `issues`. Each issue carries
 `pointer`, `code` and `detail`.
 Each output schema is a success/error union with `type: "object"` at its root.

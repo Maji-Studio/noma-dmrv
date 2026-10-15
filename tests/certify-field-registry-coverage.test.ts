@@ -3,6 +3,7 @@ import {
   AGGREGATED_PRODUCTION_DATA_KEYS,
   CERTIFY_FIELD_REGISTRY,
   resolveCertifyFieldInputTuples,
+  isCertifyFormField,
 } from "@/lib/certification/certify-field-registry";
 import {
   INPUT_MAPPING,
@@ -90,5 +91,18 @@ describe("CERTIFY_FIELD_REGISTRY drift guard", () => {
     }
 
     expect(mismatches).toEqual([]);
+  });
+});
+
+
+describe("conditional master-data certification fields", () => {
+  it("requires the facility reference soil temperature only for 200-year durability", () => {
+    expect(isCertifyFormField("facilityEmissionConfig", "defaultSoilTemperatureC", { durabilityOption: "200_year" })).toBe(true);
+    expect(isCertifyFormField("facilityEmissionConfig", "defaultSoilTemperatureC", { durabilityOption: "1000_year" })).toBe(false);
+  });
+
+  it("requires a registry feedstock mapping only for pyrolysis usage", () => {
+    expect(isCertifyFormField("feedstockType", "isometricFeedstockTypeId", { usage: "pyrolysis" })).toBe(true);
+    expect(isCertifyFormField("feedstockType", "isometricFeedstockTypeId", { usage: "blend" })).toBe(false);
   });
 });

@@ -159,6 +159,7 @@ describe("derived transport-leg transaction boundaries", () => {
     const [feedstockType] = await db
       .insert(feedstockTypes)
       .values({
+        usage: "pyrolysis",
         organizationId: TEST_ORG_ID,
         code: `FT-TL-${tag}`,
         name: `Transport Transaction Feedstock ${tag}`,
@@ -262,6 +263,7 @@ describe("derived transport-leg transaction boundaries", () => {
     const [feedstockType] = await db
       .insert(feedstockTypes)
       .values({
+        usage: "pyrolysis",
         organizationId: TEST_ORG_ID,
         code: `FT-OVR-${tag}`,
         name: `Override Feedstock ${tag}`,

@@ -31,7 +31,7 @@ test.describe("Feedstock UI CRUD", () => {
       organizationId: DEC_ORG_ID,
       code: `E2E-FST-BLEND-${suffix}`,
       name: `E2E Blend Material ${suffix}`,
-      category: "compost",
+      category: "compost" as const,
       usage: "blend" as const,
     };
     const { db, pool } = createDbConnection();
