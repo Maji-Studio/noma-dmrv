@@ -4,6 +4,7 @@ import type { IsometricGhgEntryTemplate } from "@/lib/isometric";
 import type { ProductionRunForCertification } from "@/lib/isometric/utils/aggregation";
 import { catalogCandidates, type AutomaticSourceId } from "@/lib/isometric/template-observations/catalog-sources";
 import { normalizeTemplateDefinition } from "@/lib/isometric/template-observations/normalize";
+import type { TransportLegsByCategory } from "./shared";
 import { ownValue } from "@/lib/isometric/semantic-binding-catalog";
 
 const RECORDED_AUTOMATIC_SOURCES = [
@@ -11,6 +12,12 @@ const RECORDED_AUTOMATIC_SOURCES = [
   { id: "run-startup-diesel", label: "Startup diesel", recorded: (run: ProductionRunForCertification) => (run.dieselOperationLiters ?? 0) > 0 },
   { id: "run-electricity", label: "Electricity", recorded: (run: ProductionRunForCertification) => (run.electricityKwh ?? 0) > 0 },
 ] as const satisfies readonly { id: AutomaticSourceId; label: string; recorded: (run: ProductionRunForCertification) => boolean }[];
+
+const RECORDED_TRANSPORT_SOURCES = [
+  { category: "feedstock", id: "feedstock-transport", label: "Feedstock transport" },
+  { category: "biochar", id: "delivery-transport", label: "Delivery transport" },
+  { category: "sample", id: "sample-transport", label: "Sample transport" },
+] as const satisfies readonly { category: keyof TransportLegsByCategory; id: AutomaticSourceId; label: string }[];
 
 function carriedAutomaticSources(template: IsometricGhgEntryTemplate, lineSources: LineSources): Set<AutomaticSourceId> {
   const carried = new Set<AutomaticSourceId>();
@@ -64,18 +71,28 @@ function buildStraddleWarning(args: {
   ];
 }
 
-// Warn when a recorded run fact has no effective automatic source in the live template.
+// Warn when a recorded fact has no effective automatic source in the live template.
 export function buildSubmissionWarnings(args: {
   removalTemplate: IsometricGhgEntryTemplate | null;
   lineSources: LineSources;
   runs: ProductionRunForCertification[];
   lineages: { application: { applicationDate: Date } }[];
+  transportLegs?: TransportLegsByCategory;
 }): string[] {
   const { removalTemplate, lineSources, runs, lineages } = args;
   const warnings = buildStraddleWarning({ runs, lineages });
   if (!removalTemplate) return warnings;
   const carried = carriedAutomaticSources(removalTemplate, lineSources);
-  const droppedFacts = RECORDED_AUTOMATIC_SOURCES.filter((source) => runs.some(source.recorded) && !carried.has(source.id));
+  const droppedFacts = [
+    ...RECORDED_AUTOMATIC_SOURCES.filter((source) => runs.some(source.recorded) && !carried.has(source.id)),
+    ...RECORDED_TRANSPORT_SOURCES.filter((source) => {
+      const legs = args.transportLegs?.[source.category] ?? [];
+      // Delivery legs are derived even for an unrecorded route; their mere
+      // existence does not mean a transport fact was captured.
+      const recorded = source.category === "biochar" ? legs.some((leg) => leg.distanceKm > 0) : legs.length > 0;
+      return recorded && !carried.has(source.id);
+    }),
+  ];
   return [
     ...droppedFacts.map((source) => `${source.label} is recorded, but the active Removal template has no automatic source for it. ${REMOVAL_TEMPLATE_BLOCKERS.templateLinesNeedReview}`),
     ...warnings,

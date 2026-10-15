@@ -1,4 +1,5 @@
 import { beforeEach, expect, it, vi } from "vitest";
+import { logger } from "@/lib/log";
 import { getCertifierProjectByFacility } from "@/data-access/certification";
 import { hasCertifierCredentials } from "@/data-access/certifier-credentials";
 import { listPinnedRemovalTemplateIds } from "@/data-access/credit-batch-removal-template";
@@ -20,6 +21,7 @@ vi.mock("@/lib/isometric", async (importOriginal) => ({
 const ctx = makeTestOrgContext();
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.spyOn(logger, "warn").mockImplementation(() => {});
   vi.mocked(hasCertifierCredentials).mockResolvedValue(true);
   vi.mocked(getCertifierProjectByFacility).mockResolvedValue({ externalProjectId: fixture.project_id, defaultRemovalTemplateId: null } as never);
   vi.mocked(listPinnedRemovalTemplateIds).mockResolvedValue([fixture.id]);
@@ -42,4 +44,12 @@ it("keeps the read available but fails closed when observation persistence fails
   expect(pinned.observation).toBeNull();
   expect(pinned.enrichmentProblems.length).toBeGreaterThan(0);
   expect(pinned.lineSourceProblems.some((problem) => problem.code === "missing-contract")).toBe(true);
+  expect(logger.warn).toHaveBeenCalledWith({ err: expect.any(Error), organizationId: ctx.organizationId,
+    externalProjectId: fixture.project_id, externalTemplateId: fixture.id,
+  }, "Removal template observation failed");
+});
+
+it.each([false, true])("threads the explicit enrichment refresh option (%s)", async (refreshEnrichment) => {
+  await loadFacilityCertifierFacts(ctx, "facility-id", { refreshEnrichment });
+  expect(observeRemovalTemplate).toHaveBeenCalledWith(ctx, expect.objectContaining({ refreshEnrichment }));
 });

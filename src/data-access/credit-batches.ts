@@ -697,7 +697,10 @@ export async function updateCreditBatch(
       excludeCreditBatchId: id,
     });
 
-    updateData.certifier = (await resolveCreditBatchCertifier(ctx, tx, targetFacilityId)).provider;
+    const targetCertifier = await resolveCreditBatchCertifier(ctx, tx, targetFacilityId);
+    updateData.certifier = targetCertifier.provider;
+    const facilityChanged = targetFacilityId !== existingBatch.facilityId;
+    if (facilityChanged) updateData.removalTemplateId = targetCertifier.removalTemplateId;
 
     if (resolvedProductionRunIds !== undefined) {
       await validateProductionRunIds(
@@ -766,6 +769,7 @@ export async function updateCreditBatch(
     const changedFields = Object.keys(updateFields).filter(
       field => field !== "expectedVersion" && updateFields[field as keyof typeof updateFields] !== undefined,
     );
+    if (facilityChanged) changedFields.push("removalTemplateId");
     const membershipChanged = shouldRefreshMembership && await recordMembershipActivity(
       ctx, tx, id, currentProductionRunIds, resolvedProductionRunIds ?? [], { changedFields },
     );

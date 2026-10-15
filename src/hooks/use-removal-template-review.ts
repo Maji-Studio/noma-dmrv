@@ -1,7 +1,7 @@
 import { throwActionError } from "@/lib/stale-version";
 import { patchArrayListCachesByPrefixWithSavedRow } from "./list-cache-utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { loadRemovalTemplateReview, reviewRemovalTemplateLines, switchCreditBatchRemovalTemplate } from "@/fn/certification/removal-template-review";
+import { loadRemovalTemplateReviewPreview, loadRemovalTemplateReview, reviewRemovalTemplateLines, switchCreditBatchRemovalTemplate } from "@/fn/certification/removal-template-review";
 import type { ReviewRemovalTemplateLinesInput, SwitchCreditBatchRemovalTemplateInput } from "@/schemas/removal-template-review";
 import { unwrap } from "./types";
 import { certificationKeys } from "./use-certification";
@@ -13,6 +13,16 @@ export function useRemovalTemplateReview(facilityId: string, enabled = true) {
     queryKey: certificationKeys.removalTemplateReview(facilityId),
     queryFn: async () => unwrap(await loadRemovalTemplateReview(facilityId)),
     enabled: enabled && !!facilityId, staleTime: REVIEW_STALE_MS,
+  });
+}
+
+/** Preview any selected registry template, even before it becomes a default or pin. */
+export function useRemovalTemplateReviewPreview(facilityId: string, removalTemplateId: string, enabled = true) {
+  return useQuery({
+    queryKey: certificationKeys.removalTemplateReviewPreview(facilityId, removalTemplateId),
+    queryFn: async () => unwrap(await loadRemovalTemplateReviewPreview({ facilityId, removalTemplateId })),
+    enabled: enabled && !!facilityId && !!removalTemplateId,
+    staleTime: REVIEW_STALE_MS,
   });
 }
 

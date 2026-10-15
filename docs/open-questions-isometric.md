@@ -94,6 +94,12 @@ forward. Owner/Admin assignment is limited to proposed, unassigned or invalid
 lines inside the change review. A general binding editor (#894) stays closed.
 The remaining #893 work is to include observation identity and contracts in
 immutable submission snapshots and draft recompilation checks (plan §4.5, PR 4).
+The entry-only period-input lines retain the sandbox zero-stub policy while
+production fails closed. Replace that policy with evidenced per-batch inputs
+when entries compile (plan §4.5). Sample transport legs still feed the known
+bootstrap sample lines that have an automatic source. Retire those legs and
+replace their contributions with per-line entries in the app, API and MCP
+when entries compile (plan §4.5).
 
 ### Fixed datapoint deprecation signal (`isometric/fixed-datapoint-deprecation`)
 

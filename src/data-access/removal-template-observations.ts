@@ -1,7 +1,6 @@
 import { REMOVAL_TEMPLATE_BLOCKERS } from "@/lib/certification/removal-template-blockers";
-import { and, desc, eq, ne } from "drizzle-orm";
-import { db } from "@/db";
-import { organizations } from "@/db/schema/auth";
+import { and, desc, eq, ne, sql } from "drizzle-orm";
+import { db, type DbTransaction } from "@/db";
 import { removalTemplateObservations as observations, type RemovalTemplateObservation } from "@/db/schema/removal-template-observations";
 import type { CertifierProvider } from "@/schemas/credit-batches";
 import { requireOrgRole, type OrgContext } from "@/lib/auth/server";
@@ -16,6 +15,12 @@ import { assertRowVersion, nextVersion, staleRowVersion } from "./row-version";
 import { requireOrgScope } from "./utils";
 
 const OBSERVATION_ORDER_TICK_MS = 1;
+
+/** Shared by observations and reviews, including the first observation of a template. */
+async function acquireTemplateObservationLock(ctx: OrgContext, tx: DbTransaction, provider: RemovalTemplateObservation["provider"], templateId: string) {
+  const key = JSON.stringify(["removal-template-observation", ctx.organizationId, provider, templateId]);
+  await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${key}, 0))`);
+}
 
 export async function getLatestTemplateObservation(ctx: OrgContext, provider: CertifierProvider, externalTemplateId: string): Promise<RemovalTemplateObservation | null> {
   requireOrgScope(ctx);
@@ -53,10 +58,7 @@ export async function observeTemplate(ctx: OrgContext, input: {
   const semantic = semanticFingerprint(definition, input.enrichment);
   const full = fullFingerprint(definition, input.enrichment);
   return db.transaction(async (tx) => {
-    // Serialize first observations too, when no template row exists to lock.
-    // Reviews take the same organization lock before locking their observation.
-    await tx.select({ id: organizations.id }).from(organizations)
-      .where(eq(organizations.id, ctx.organizationId)).for("update");
+    await acquireTemplateObservationLock(ctx, tx, input.provider, input.template.id);
     const templateScope = and(
       eq(observations.organizationId, ctx.organizationId), eq(observations.provider, input.provider),
       eq(observations.externalTemplateId, input.template.id),
@@ -97,8 +99,13 @@ export async function reviewLineContracts(ctx: OrgContext, input: ReviewLineCont
   requireOrgScope(ctx);
   requireOrgRole(ctx, "admin");
   return db.transaction(async (tx) => {
-    await tx.select({ id: organizations.id }).from(organizations)
-      .where(eq(organizations.id, ctx.organizationId)).for("update");
+    // Read immutable lock coordinates before taking any row lock. Observers take
+    // the advisory lock first too, so review and upsert use the same lock order.
+    const [target] = await tx.select({ provider: observations.provider, externalTemplateId: observations.externalTemplateId }).from(observations).where(and(
+      eq(observations.organizationId, ctx.organizationId), eq(observations.id, input.observationId),
+    )).limit(1);
+    if (!target) throw new SafeError("Removal template observation not found.");
+    await acquireTemplateObservationLock(ctx, tx, target.provider, target.externalTemplateId);
     const [row] = await tx.select().from(observations).where(and(
       eq(observations.organizationId, ctx.organizationId), eq(observations.id, input.observationId),
     )).for("update");

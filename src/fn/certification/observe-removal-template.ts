@@ -13,11 +13,13 @@ export async function observeRemovalTemplate(ctx: OrgContext, input: {
   externalProjectId: string;
   template: IsometricGhgEntryTemplate;
   blueprints: IsometricComponentBlueprint[];
+  /** Submission and claim checks must re-read registry units and fixed factors. */
+  refreshEnrichment?: boolean;
 }) {
   const previous = await getLatestTemplateObservation(ctx, ISOMETRIC_PROVIDER, input.template.id);
   const definition = normalizeTemplateDefinition(input.template);
   const age = previous ? Date.now() - previous.enrichedAt.getTime() : Infinity;
-  const reuse = previous && previous.externalProjectId === input.externalProjectId && age >= 0 && age < TEMPLATE_ENRICHMENT_TTL_MS &&
+  const reuse = !input.refreshEnrichment && previous && previous.externalProjectId === input.externalProjectId && age >= 0 && age < TEMPLATE_ENRICHMENT_TTL_MS &&
     canonicalJson(previous.definition) === canonicalJson(definition) && isEnrichmentComplete(definition, previous.enrichment);
   const enrichment = reuse ? previous.enrichment : await loadTemplateEnrichment(input.client, input.template, input.blueprints);
   return observeTemplate(ctx, {

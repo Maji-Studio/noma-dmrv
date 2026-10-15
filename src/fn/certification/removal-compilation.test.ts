@@ -122,6 +122,7 @@ describe("loadRemovalCompilation preparation blockers", () => {
       },
     });
     expect(compileRemovalSubmission).not.toHaveBeenCalled();
+    expect(loadRemovalSubmissionContext).toHaveBeenCalledWith(expect.anything(), REMOVAL_ID, { refreshEnrichment: true });
   });
 
   it("deduplicates template blockers from preparation and compilation", async () => {

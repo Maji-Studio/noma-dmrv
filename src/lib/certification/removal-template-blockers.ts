@@ -1,5 +1,6 @@
 export const REMOVAL_TEMPLATE_BLOCKERS = {
   forbiddenLine: "This line belongs at the project level in Isometric.",
+  notRemovalTemplate: "This template is not a Removal template. Choose a Removal template for this credit batch.",
   unpinnedTemplate: "Choose a Removal template for this credit batch.",
   mixedTemplatePins: "These credit batches use different Removal templates.",
   templateNotFound: "Template no longer exists in Isometric.",
@@ -19,6 +20,7 @@ export function removalTemplateBlocker(code: RemovalTemplateBlockerCode): Remova
 export type RemovalTemplateBlockerDestination = "creditBatchTemplate" | "templateLineReview";
 const BLOCKER_DESTINATIONS: Record<RemovalTemplateBlockerCode, RemovalTemplateBlockerDestination> = {
   forbiddenLine: "templateLineReview",
+  notRemovalTemplate: "creditBatchTemplate",
   unpinnedTemplate: "creditBatchTemplate",
   mixedTemplatePins: "creditBatchTemplate",
   templateNotFound: "creditBatchTemplate",

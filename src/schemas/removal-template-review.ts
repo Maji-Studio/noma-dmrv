@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { uuidSchema } from "./helpers";
 import { AUTOMATIC_SOURCE_IDS } from "@/lib/isometric/template-observations/catalog-sources";
 
 export const loadRemovalTemplateReviewSchema = z.uuid();
@@ -19,3 +20,9 @@ export const switchRemovalTemplateFormSchema = switchCreditBatchRemovalTemplateS
 export type ReviewRemovalTemplateLinesInput = z.infer<typeof reviewRemovalTemplateLinesSchema>;
 export type SwitchCreditBatchRemovalTemplateInput = z.infer<typeof switchCreditBatchRemovalTemplateSchema>;
 export type SwitchRemovalTemplateFormValues = z.infer<typeof switchRemovalTemplateFormSchema>;
+
+export const removalTemplateReviewPreviewSchema = z.object({
+  facilityId: uuidSchema(),
+  removalTemplateId: switchCreditBatchRemovalTemplateSchema.shape.removalTemplateId,
+});
+export type RemovalTemplateReviewPreviewInput = z.infer<typeof removalTemplateReviewPreviewSchema>;

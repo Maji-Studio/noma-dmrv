@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import templateFixture from "../../../tests/fixtures/isometric/sandbox-template-2026-10-15.json";
 import type { FacilityCertifierFacts } from "./facility-certifier-facts";
 import { resolveRemovalTemplate } from "./resolve-removal-template";
+import { pinnedRemovalTemplateId } from "./removal-submission-finalization";
 import { normalizeTemplateDefinition, resolveLineSources, validateLineSources, type GhgEntryTemplate } from "@/lib/isometric/template-observations";
 import { findUnbindableTemplateInputs, formatUnbindableTemplateInputsText } from "@/lib/isometric/template-binding-coverage";
 import { buildRemovalRequirementsChecklist, deriveRemovalReadiness } from "@/lib/certification/readiness";
@@ -77,9 +78,10 @@ it.each(["incompatible-carried", "duplicate-source"] as const)("routes %s contra
   templateFacts.unbindableTemplateInputs = findUnbindableTemplateInputs(changed, { lineSources });
   const diagnostics = templateFacts.unbindableTemplateInputs.filter((finding) => [gensetId, startupId].includes(finding.componentId));
   expect(diagnostics).toContainEqual(expect.objectContaining({ componentId: gensetId,
-    reason: problem === "duplicate-source" ? "ambiguous" : "unassigned" }));
+    reason: problem === "duplicate-source" ? "ambiguous" : "unmapped" }));
   expect(formatUnbindableTemplateInputsText(diagnostics)).toContain("Review the Removal template lines in Certification settings.");
-  expect(formatUnbindableTemplateInputsText(diagnostics)).not.toContain("ask support");
+  if (problem === "incompatible-carried") expect(formatUnbindableTemplateInputsText(diagnostics)).toContain("ask support");
+  else expect(formatUnbindableTemplateInputsText(diagnostics)).not.toContain("ask support");
   const resolved = resolveRemovalTemplate([{ removalTemplateId: template.id }], input);
   const readiness = {
     local: null, lockInFlight: false, hasMapping: true, hasOrgCredentials: true, hasRemovalTemplate: true,
@@ -98,4 +100,16 @@ it.each(["incompatible-carried", "duplicate-source"] as const)("routes %s contra
   expect(batchHealthFixLinkFor(batchCheck, "facility-1", "batch-1")).toEqual({
     label: "Review template lines", href: certificationRemovalTemplatesHref("facility-1"),
   });
+});
+
+it.each([
+  { pins: [] }, { pins: [null] }, { pins: [template.id, null] }, { pins: [template.id, "other-template"] },
+])("uses the same refusal in readiness and recovery for $pins", ({ pins }) => {
+  const batches = pins.map((removalTemplateId) => ({ removalTemplateId }));
+  const readiness = resolveRemovalTemplate(batches, facts());
+  expect(() => pinnedRemovalTemplateId(batches)).toThrow(readiness.templateBlockers[0].message);
+});
+
+it("recovers against the shared batch pin", () => {
+  expect(pinnedRemovalTemplateId([{ removalTemplateId: template.id }])).toBe(template.id);
 });

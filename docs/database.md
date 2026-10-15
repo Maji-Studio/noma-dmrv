@@ -346,8 +346,10 @@ require Owner/Admin permission; compilation requires complete enrichment and
 valid contracts. See [ADR 0032](./adr/0032-per-batch-emissions-entries-bound-to-template-lines.md).
 
 `credit_batches.removal_template_id` pins the facility default at creation.
-Only the audited Switch template action changes it. Removals compile against
-their member batches' pins, never the current default. Pre-existing rows receive
+Moving a batch to another facility copies the target facility's default and
+records the pin change in activity. Other pin changes use the audited Switch
+template action. Removals compile against their member batches' pins, never the
+current default. Pre-existing rows receive
 no backfill under the pre-production policy; local resets are supported and any
 shared staging reset requires notifying the user first.
 

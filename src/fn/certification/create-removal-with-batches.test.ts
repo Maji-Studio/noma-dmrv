@@ -87,7 +87,7 @@ const CONNECTED = {
 };
 function batchContext() {
   return {
-    facilityId: FACILITY_ID, removalId: null, memberBatches: [{ id: CREDIT_BATCH_ID, code: "CB-1" }],
+    facilityId: FACILITY_ID, removalId: null, memberBatches: [{ id: CREDIT_BATCH_ID, code: "CB-1", removalTemplateId: "pinned-reviewed" }],
     mapping: CONNECTED.mapping, removalTemplate: { id: "pinned-reviewed" }, templateBlockers: [] as import("@/lib/certification/removal-template-blockers").RemovalTemplateBlocker[],
     unresolvedBlueprintKeys: [], unbindableTemplateInputs: [], hasSubmittableRuns: true,
     requiredTransportCategories: [], submissionLineageBlockers: [], durabilityConfigurationBlockers: [],
@@ -132,4 +132,23 @@ it("rejects an unready pin even when the facility default is clean", async () =>
     CONNECTED as unknown as import("./facility-certifier-facts").FacilityCertifierFacts, mocks.buildCreditBatchContexts);
   expect(selectable.facilitySetupComplete).toBe(true);
   expect(selectable.batches[0].health.state).toBe("incomplete");
+});
+
+it.each(["pinned-reviewed", "other-template"])("groups only a shared selection pin (%s)", async (secondPin) => {
+  vi.clearAllMocks();
+  const secondId = "00000000-0000-4000-8000-000000000003";
+  const first = batchContext();
+  const second = { ...batchContext(), memberBatches: [{ id: secondId, code: "CB-2", removalTemplateId: secondPin }] };
+  mocks.requireOrgContext.mockResolvedValue(ORG_CONTEXT);
+  mocks.loadFacilityCertifierFacts.mockResolvedValue(CONNECTED);
+  mocks.buildCreditBatchContexts.mockResolvedValue({ contextsByBatch: { [CREDIT_BATCH_ID]: first, [secondId]: second }, accountingByBatch: {} });
+  mocks.createRemovalWithCreditBatches.mockResolvedValue("removal-1");
+  const result = await createRemovalWithBatchesAction({ facilityId: FACILITY_ID, creditBatchIds: [CREDIT_BATCH_ID, secondId] });
+  if (secondPin === "pinned-reviewed") {
+    expect(result).toEqual({ success: true, data: { removalId: "removal-1" } });
+    expect(mocks.createRemovalWithCreditBatches).toHaveBeenCalledOnce();
+  } else {
+    expect(result).toEqual({ success: false, error: "These credit batches use different Removal templates." });
+    expect(mocks.createRemovalWithCreditBatches).not.toHaveBeenCalled();
+  }
 });

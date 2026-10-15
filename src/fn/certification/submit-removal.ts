@@ -233,7 +233,7 @@ async function submitRemovalCore(
   log.info("removal submit started");
   onProgress?.({ step: "removal.checking_data", state: "active" });
 
-  const ctx = await loadRemovalSubmissionContext(orgCtx, removalId);
+  const ctx = await loadRemovalSubmissionContext(orgCtx, removalId, { refreshEnrichment: true });
   assertRemovalRegistryConnection(ctx);
   if (
     ctx.latestSubmission?.status === "submitted" &&

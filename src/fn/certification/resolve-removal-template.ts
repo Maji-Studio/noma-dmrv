@@ -1,3 +1,4 @@
+import { resolveBatchPin } from "@/lib/certification/resolve-batch-pin";
 import type { IsometricGhgEntryTemplate } from "@/lib/isometric";
 import type { LineSources } from "@/lib/isometric/template-observations/line-sources";
 import { removalTemplateBlocker, type RemovalTemplateBlocker } from "@/lib/certification/removal-template-blockers";
@@ -13,10 +14,9 @@ export function resolveRemovalTemplate(
     templateBlockers: [removalTemplateBlocker(code)],
     blueprintsForTemplate: [], unresolvedBlueprintKeys: [], unbindableTemplateInputs: [], requiredTransportCategories: [],
   });
-  if (!batches.length || batches.some((batch) => !batch.removalTemplateId)) return unresolved("unpinnedTemplate");
-  const pins = [...new Set(batches.map((batch) => batch.removalTemplateId))];
-  if (pins.length !== 1) return unresolved("mixedTemplatePins");
-  const facts = facilityFacts.templatesById[pins[0]!];
+  const result = resolveBatchPin(batches);
+  if ("code" in result) return unresolved(result.code);
+  const facts = facilityFacts.templatesById[result.pin];
   if (!facts) return unresolved("templateNotFound");
   const templateBlockers: RemovalTemplateBlocker[] = [];
   if (!facts.observation || facts.enrichmentProblems.length) templateBlockers.push(removalTemplateBlocker("templateNotFullyRead"));

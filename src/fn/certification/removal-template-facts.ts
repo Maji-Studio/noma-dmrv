@@ -22,12 +22,12 @@ export interface RemovalTemplateFacts {
 }
 
 export async function loadRemovalTemplateFacts(ctx: OrgContext, input: {
-  client: IsometricClient; externalProjectId: string; template: IsometricGhgEntryTemplate; blueprints: IsometricComponentBlueprint[];
+  client: IsometricClient; externalProjectId: string; template: IsometricGhgEntryTemplate; blueprints: IsometricComponentBlueprint[]; refreshEnrichment?: boolean;
 }): Promise<RemovalTemplateFacts> {
   let observation: RemovalTemplateObservation | null = null;
   try { observation = await observeRemovalTemplate(ctx, input); }
-  catch {
-    logger.warn({ organizationId: ctx.organizationId, externalProjectId: input.externalProjectId, externalTemplateId: input.template.id }, "Removal template observation failed");
+  catch (err) {
+    logger.warn({ err, organizationId: ctx.organizationId, externalProjectId: input.externalProjectId, externalTemplateId: input.template.id }, "Removal template observation failed");
   }
   const definition = normalizeTemplateDefinition(input.template);
   const lineSources = observation?.lineSources ?? {};

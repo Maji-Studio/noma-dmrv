@@ -34,6 +34,14 @@ describe("template enrichment reuse", () => {
     expect(loadTemplateEnrichment).not.toHaveBeenCalled();
     expect(observeTemplate).toHaveBeenCalledWith(ctx, expect.objectContaining({ enrichment, enrichmentReused: true }));
   });
+  it("re-reads enrichment for submission even inside the complete cache TTL", async () => {
+    vi.mocked(getLatestTemplateObservation).mockResolvedValue(previous(0));
+    const refreshed = { [group.components[0].id]: { electricity_use: { unit: "MWh", deprecated: null } } };
+    vi.mocked(loadTemplateEnrichment).mockResolvedValue(refreshed);
+    await observeRemovalTemplate(ctx, { ...input, refreshEnrichment: true });
+    expect(loadTemplateEnrichment).toHaveBeenCalledWith(input.client, template, []);
+    expect(observeTemplate).toHaveBeenCalledWith(ctx, expect.objectContaining({ enrichment: refreshed, enrichmentReused: false }));
+  });
   it.each([
     ["expired", () => previous(TEMPLATE_ENRICHMENT_TTL_MS + 1)],
     ["incomplete", () => previous(0, { enrichment: {} })],

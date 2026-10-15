@@ -91,7 +91,8 @@ export const BOOTSTRAP_LINE_SOURCES: Readonly<Record<string, Readonly<LineContra
   // Sampling consumables
   rtc_1KWKNGJZY1S0Y0X5: { scope: "operating", entryPolicy: "additive", origin: "bootstrap" },
   // Mass-distance-based CI emissions samples to EU. The only sample line here,
-  // so sample legs keep feeding it until PR 4 retires them (plan §4.5).
+  // so sample legs feed it. Retirement is tracked in docs/open-questions-isometric.md
+  // under template-component-source-wizard (plan §4.5).
   rtc_1KWKNGJZY1S0HNRT: { scope: "operating", automaticSource: "sample-transport", entryPolicy: "additive", origin: "bootstrap" },
   // Staff travel flights
   rtc_1KWKNGJZY1S05AMF: { scope: "operating", entryPolicy: "additive", origin: "bootstrap" },

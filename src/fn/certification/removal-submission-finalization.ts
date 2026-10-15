@@ -1,3 +1,4 @@
+import { resolveBatchPin } from "@/lib/certification/resolve-batch-pin";
 import {
   markSubmissionSubmitted,
   type CertificationSubmissionRow,
@@ -26,11 +27,9 @@ import { ISOMETRIC_PROVIDER, REMOVAL_ENTITY_TYPE } from "./shared";
 export function pinnedRemovalTemplateId(
   batches: readonly { removalTemplateId: string | null }[],
 ): string {
-  const pins = new Set(batches.map((batch) => batch.removalTemplateId));
-  const [pin] = pins;
-  if (pins.size > 1) throw new SafeError(REMOVAL_TEMPLATE_BLOCKERS.mixedTemplatePins);
-  if (!pin) throw new SafeError(REMOVAL_TEMPLATE_BLOCKERS.unpinnedTemplate);
-  return pin;
+  const result = resolveBatchPin(batches);
+  if ("code" in result) throw new SafeError(REMOVAL_TEMPLATE_BLOCKERS[result.code]);
+  return result.pin;
 }
 
 export async function persistRemovalReportingWindow(

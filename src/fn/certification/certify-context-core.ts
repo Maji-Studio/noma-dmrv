@@ -1,3 +1,4 @@
+import { TRANSPORT_CATEGORIES } from "@/lib/isometric/semantic-binding-catalog";
 import { resolveScopeForCreditBatch, resolveSingleBatchScope, resolveScopeForRemoval, type RemovalScope } from "./removal-scope";
 import { loadFacilityCertifierFacts, type FacilityCertifierFacts } from "./facility-certifier-facts";
 import { buildSubmissionLineageBlockers } from "./certify-lineage-blockers";
@@ -298,7 +299,14 @@ export async function buildRemovalContext(
     memberBatches: scope.memberBatches,
     requiredTransportCategories: templateFacts.requiredTransportCategories,
   });
-  const transportLegs = await loadTransportLegsByCategory(orgCtx, entityIds, lineages, requiredTransportCategories);
+  // Recorded facts must survive template drift for the dropped-source advisory.
+  // Compilation still receives only required delivery transport, so an omitted
+  // line cannot introduce unrelated route-completeness blockers.
+  const recordedTransportLegs = await loadTransportLegsByCategory(orgCtx, entityIds, lineages, TRANSPORT_CATEGORIES);
+  const transportLegs = {
+    ...recordedTransportLegs,
+    biochar: requiredTransportCategories.includes("biochar") ? recordedTransportLegs.biochar : [],
+  };
   const transportCoverage = buildTransportCoverage(transportLegs, entityIds);
   const submissionLineageBlockers = buildSubmissionLineageBlockers(
     lineages,
@@ -323,6 +331,7 @@ export async function buildRemovalContext(
     ...buildSubmissionWarnings({
       removalTemplate: templateFacts.removalTemplate,
       lineSources: templateFacts.lineSources,
+      transportLegs: recordedTransportLegs,
       runs,
       lineages,
     }),
@@ -381,11 +390,13 @@ export async function buildRemovalContext(
 export async function loadRemovalSubmissionContext(
   orgCtx: OrgContext,
   removalId: string,
+  options: { refreshEnrichment?: boolean } = {},
 ): Promise<RemovalSubmissionContext> {
   const scope = await resolveScopeForRemoval(orgCtx, removalId);
   const facilityFacts = await loadFacilityCertifierFacts(
     orgCtx,
     scope.facilityId,
+    options,
   );
   return buildRemovalContext(orgCtx, scope, facilityFacts);
 }

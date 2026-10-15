@@ -29,7 +29,7 @@ const UNRESOLVED_FACILITY_FACTS = {
   blueprintsForTemplate: [], unresolvedBlueprintKeys: [], unbindableTemplateInputs: [], requiredTransportCategories: [],
 };
 
-export async function loadFacilityCertifierFacts(orgCtx: OrgContext, facilityId: string): Promise<FacilityCertifierFacts> {
+export async function loadFacilityCertifierFacts(orgCtx: OrgContext, facilityId: string, options: { refreshEnrichment?: boolean } = {}): Promise<FacilityCertifierFacts> {
   const [mapping, hasOrgCredentials] = await Promise.all([
     getCertifierProjectByFacility(orgCtx, facilityId, ISOMETRIC_PROVIDER),
     hasCertifierCredentials(orgCtx, ISOMETRIC_PROVIDER),
@@ -47,10 +47,10 @@ export async function loadFacilityCertifierFacts(orgCtx: OrgContext, facilityId:
     safeListIfConfigured(() => listComponentBlueprints(client)),
   ]);
   const ids = new Set([mapping.defaultRemovalTemplateId, ...pinnedIds]);
-  // Keep observation transactions ordered; a first observation also locks its org.
+  // Keep observation transactions ordered to limit pool pressure.
   const templatesById: Record<string, RemovalTemplateFacts> = {};
   for (const template of templates.filter((template) => ids.has(template.id))) {
-    templatesById[template.id] = await loadRemovalTemplateFacts(orgCtx, { client, externalProjectId: mapping.externalProjectId, template, blueprints });
+    templatesById[template.id] = await loadRemovalTemplateFacts(orgCtx, { client, externalProjectId: mapping.externalProjectId, template, blueprints, ...options });
   }
   const defaultFacts = mapping.defaultRemovalTemplateId ? templatesById[mapping.defaultRemovalTemplateId] : null;
   return {

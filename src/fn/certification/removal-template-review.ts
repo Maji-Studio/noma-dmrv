@@ -11,10 +11,10 @@ import { requireOrgFacility } from "@/data-access/utils";
 import { requireOrgRole } from "@/lib/auth/server";
 import { SafeError } from "@/lib/errors";
 import { listComponentBlueprints, listGhgEntryTemplates } from "@/lib/isometric";
-import { allowedEntryPolicies, catalogCandidates, compareTemplateObservations, normalizeTemplateDefinition } from "@/lib/isometric/template-observations";
+import { allowedEntryPolicies, lineNeedsReview, catalogCandidates, compareTemplateObservations, normalizeTemplateDefinition } from "@/lib/isometric/template-observations";
 import {
-  loadRemovalTemplateReviewSchema, reviewRemovalTemplateLinesSchema, switchCreditBatchRemovalTemplateSchema,
-  type ReviewRemovalTemplateLinesInput, type SwitchCreditBatchRemovalTemplateInput,
+  loadRemovalTemplateReviewSchema, removalTemplateReviewPreviewSchema, reviewRemovalTemplateLinesSchema, switchCreditBatchRemovalTemplateSchema,
+  type RemovalTemplateReviewPreviewInput, type ReviewRemovalTemplateLinesInput, type SwitchCreditBatchRemovalTemplateInput,
 } from "@/schemas/removal-template-review";
 import { withAction } from "../with-action";
 import { loadFacilityCertifierFacts } from "./facility-certifier-facts";
@@ -67,8 +67,35 @@ export async function switchCreditBatchRemovalTemplate(input: SwitchCreditBatchR
     const templates = await listGhgEntryTemplates(client, mapping.externalProjectId);
     const template = templates.find((candidate) => candidate.id === parsed.removalTemplateId);
     if (!template) throw new SafeError(REMOVAL_TEMPLATE_BLOCKERS.templateNotFound);
-    if (template.credit_type !== "REMOVAL") throw new SafeError(REMOVAL_TEMPLATE_BLOCKERS.unpinnedTemplate);
+    if (template.credit_type !== "REMOVAL") throw new SafeError(REMOVAL_TEMPLATE_BLOCKERS.notRemovalTemplate);
     await loadRemovalTemplateFacts(ctx, { client, template, externalProjectId: mapping.externalProjectId, blueprints: await listComponentBlueprints(client) });
     return switchTemplate(ctx, parsed);
+  });
+}
+
+/** Any org member can preview a listed target, including one no batch has pinned yet. */
+export async function loadRemovalTemplateReviewPreview(input: RemovalTemplateReviewPreviewInput) {
+  return withAction(async (ctx) => {
+    const { facilityId, removalTemplateId } = removalTemplateReviewPreviewSchema.parse(input);
+    await requireOrgFacility(ctx, facilityId);
+    const mapping = await getCertifierProjectByFacility(ctx, facilityId, ISOMETRIC_PROVIDER);
+    if (!mapping) throw new SafeError("Link a facility to an Isometric project first.");
+    const client = await resolveIsometricClient(ctx);
+    const templates = await listGhgEntryTemplates(client, mapping.externalProjectId);
+    const template = templates.find((candidate) => candidate.id === removalTemplateId);
+    if (!template) throw new SafeError(REMOVAL_TEMPLATE_BLOCKERS.templateNotFound);
+    if (template.credit_type !== "REMOVAL") throw new SafeError(REMOVAL_TEMPLATE_BLOCKERS.notRemovalTemplate);
+    const facts = await loadRemovalTemplateFacts(ctx, {
+      client, template, externalProjectId: mapping.externalProjectId, blueprints: await listComponentBlueprints(client),
+    });
+    const definition = normalizeTemplateDefinition(template);
+    return {
+      templateId: template.id,
+      needsReviewCount: definition.groups.flatMap((group) => group.components).filter((component) =>
+        lineNeedsReview(component.id, facts.observation?.lineSources[component.id], facts.lineSourceProblems),
+      ).length,
+      enrichmentProblems: facts.enrichmentProblems,
+      lineSourceProblems: facts.lineSourceProblems,
+    };
   });
 }

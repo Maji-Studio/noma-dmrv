@@ -37,8 +37,6 @@ export const REMOVAL_PREPARATION_BLOCKERS = {
     "Configure organization Isometric credentials before submitting.",
   ...REMOVAL_TEMPLATE_BLOCKERS,
   noTemplate: REMOVAL_TEMPLATE_BLOCKERS.unpinnedTemplate,
-  notRemovalTemplate:
-    "This template is not a Removal template. Choose a Removal template for this credit batch.",
   templateOutOfDate:
     "The registry template is out of date. Refresh the facility link in settings before submitting.",
   // Detailed guidance comes from formatUnbindableTemplateInputs.
@@ -124,16 +122,13 @@ export function prepareRemovalSubmission(
       blockers: [connection ?? blocker("noProject")],
     };
   }
-  if (ctx.templateBlockers.length) {
-    return { prepared: null, blockers: ctx.templateBlockers };
-  }
   const removalTemplate = ctx.removalTemplate;
   if (!removalTemplate) {
-    return { prepared: null, blockers: [blocker("noTemplate")] };
+    return { prepared: null, blockers: ctx.templateBlockers.length ? ctx.templateBlockers : [blocker("noTemplate")] };
   }
 
   const hasDurabilityComponents = hasDurabilityMeasurementComponents(removalTemplate);
-  const blockers: RemovalPreparationBlocker[] = [];
+  const blockers: RemovalPreparationBlocker[] = [...ctx.templateBlockers];
   const isometricEnvironment = options.isometricEnvironment ?? env.ISOMETRIC_ENVIRONMENT;
   const unbindable = findUnbindableTemplateInputs(removalTemplate, { lineSources: ctx.lineSources, allowPeriodInputStub: allowsPeriodInputStub(isometricEnvironment) });
   // The template lives on Isometric and can change credit_type after binding;
@@ -157,7 +152,7 @@ export function prepareRemovalSubmission(
   }
   return {
     blockers,
-    prepared: {
+    prepared: ctx.templateBlockers.length ? null : {
       removalTemplate,
       lineSources: ctx.lineSources,
       blueprintsByKey: new Map(
