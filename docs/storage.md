@@ -344,6 +344,32 @@ same-origin.
 
 ## Testing
 
+`pnpm vitest run tests/s3-compatible-storage.integration.test.ts` exercises the
+S3-compatible adapter against disposable local MinIO. PR CI starts a pinned
+MinIO container in each Vitest shard with throwaway credentials; no cloud
+credentials are needed. For a local run, start MinIO separately and export:
+
+- `MINIO_TEST_ENDPOINT`
+- `MINIO_TEST_REGION`
+- `MINIO_TEST_ACCESS_KEY_ID`
+- `MINIO_TEST_SECRET_ACCESS_KEY`
+
+These map directly to adapter config, never to the app's `STORAGE_*` settings
+or singleton. The endpoint must be an HTTP loopback origin. The suite creates
+a unique bucket with a nested prefix, then removes its objects and bucket
+even after test failures. Without any MinIO test env it skips with one log
+line; partial configuration fails rather than silently skipping.
+
+Coverage includes server uploads, real HTTP presigned PUT and GET, metadata,
+`getObject` bytes/content type, deletion, missing objects and wrong credentials.
+The deadline case forwards a real MinIO response through a loopback proxy that
+stalls its body, then checks that the named `getObject` deadline aborts the
+connection. It takes the full storage read timeout to run.
+The adapter does not enforce an upload size limit: presigned PUT ignores
+`maxBytes`, and `putObject` has no size cap. There is therefore no adapter-level
+oversized-upload rejection test. Document confirmation enforces the application
+upload policy described above.
+
 `pnpm storage:smoke` (`scripts/storage-smoke.ts`) does a real round-trip against
 the configured bucket — presigned PUT → HEAD → signed GET byte-for-byte → DELETE →
 HEAD 404 — covering exactly what the unit-test fakes deliberately don't:
