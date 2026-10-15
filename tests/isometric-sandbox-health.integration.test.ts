@@ -128,8 +128,6 @@ function makeTransportLeg(distanceKm: number, loadMassKg: number): TransportLeg 
     loadMassKg,
     calculationMethodType: "distance_based",
     isDerived: false,
-    billOfLading: null,
-    weighScaleTicketRef: null,
     createdAt: new Date(),
     updatedAt: new Date(),
   } as TransportLeg;

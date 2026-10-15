@@ -1,71 +1,12 @@
 import { relations, sql } from 'drizzle-orm';
-import { check, integer, doublePrecision, foreignKey, pgTable, text, timestamp, uuid, unique } from 'drizzle-orm/pg-core';
-import { FEEDSTOCK_CATEGORIES, feedstockEligibilityStatus, feedstockStatus, feedstockTypeUsage } from './common';
-import { massKg, percent, tonnes } from './numeric-families';
+import { check, integer, foreignKey, pgTable, text, timestamp, uuid, unique } from 'drizzle-orm/pg-core';
+import { FEEDSTOCK_CATEGORIES, feedstockStatus, feedstockTypeUsage } from './common';
+import { massKg, percent } from './numeric-families';
 import { facilities, storageLocations } from './facilities';
 import { suppliers } from './parties';
 import { vehicles } from './logistics';
 import type { InferSelectModel } from 'drizzle-orm';
 import { organizations } from './auth';
-
-// ============================================
-// Feedstock Deliveries - Incoming biomass shipments
-// Tracks transport details separately from feedstock material info
-// ============================================
-
-export const feedstockDeliveries = pgTable(
-  'feedstock_deliveries',
-  {
-    id: uuid('id').primaryKey().defaultRandom(),
-    organizationId: text('organization_id')
-      .notNull()
-      .references(() => organizations.id),
-    code: text('code').notNull(), // e.g., "FD-2025-001"
-    facilityId: uuid('facility_id')
-      .notNull(),
-    status: feedstockStatus('status').default('missing_data').notNull(),
-
-    // --- Delivery Details ---
-    deliveryDate: timestamp('delivery_date').notNull(),
-    supplierId: uuid('supplier_id')
-      .notNull()
-      .references(() => suppliers.id),
-    vehicleId: uuid('vehicle_id').references(() => vehicles.id),
-    gpsLatitude: doublePrecision('gps_latitude'),
-    gpsLongitude: doublePrecision('gps_longitude'),
-
-    // --- Feedstock Details ---
-    feedstockTypeId: uuid('feedstock_type_id').references(
-      () => feedstockTypes.id
-    ),
-    wetMassKg: massKg('wet_mass_kg'),
-    moisturePercent: percent('moisture_percent'),
-
-    // --- Documentation ---
-    notes: text('notes'),
-
-    // Stamped by the facility archive cascade; NULL = active
-    archivedAt: timestamp('archived_at'),
-
-    createdAt: timestamp('created_at').defaultNow().notNull(),
-    updatedAt: timestamp('updated_at').defaultNow().notNull(),
-  },
-  (table) => [
-    unique('feedstock_deliveries_organization_id_code_unique').on(table.organizationId, table.code),
-    foreignKey({
-      columns: [table.facilityId, table.organizationId],
-      foreignColumns: [facilities.id, facilities.organizationId],
-    }),
-    check(
-      'feedstock_deliveries_gps_latitude_range',
-      sql`${table.gpsLatitude} is null or (${table.gpsLatitude} >= -90 and ${table.gpsLatitude} <= 90)`
-    ),
-    check(
-      'feedstock_deliveries_gps_longitude_range',
-      sql`${table.gpsLongitude} is null or (${table.gpsLongitude} >= -180 and ${table.gpsLongitude} <= 180)`
-    ),
-  ]
-);
 
 // ============================================
 // Feedstock Types - Biomass classification
@@ -126,16 +67,10 @@ export const feedstocks = pgTable(
       .notNull(),
     status: feedstockStatus('status').default('missing_data').notNull(),
 
-    // --- Delivery Reference (nullable for migration; will be dropped in Phase 2) ---
-    feedstockDeliveryId: uuid('feedstock_delivery_id')
-      .references(() => feedstockDeliveries.id),
-
-    // --- Delivery Details (absorbed from feedstock_deliveries) ---
-    deliveryDate: timestamp('delivery_date'),
-    supplierId: uuid('supplier_id').references(() => suppliers.id),
+    // --- Delivery Details ---
+    deliveryDate: timestamp('delivery_date').notNull(),
+    supplierId: uuid('supplier_id').notNull().references(() => suppliers.id),
     vehicleId: uuid('vehicle_id').references(() => vehicles.id),
-    gpsLatitude: doublePrecision('gps_latitude'),
-    gpsLongitude: doublePrecision('gps_longitude'),
 
     // --- Delivery Grouping (for split deliveries: one truck → multiple bins) ---
     deliveryGroupId: uuid('delivery_group_id'),
@@ -147,26 +82,16 @@ export const feedstocks = pgTable(
     feedstockTypeId: uuid('feedstock_type_id')
       .notNull()
       .references(() => feedstockTypes.id),
-    massWetKg: massKg('mass_wet_kg'), // Nullable: moisture changes over time in bins
+    massWetKg: massKg('mass_wet_kg').notNull(),
     massDryKg: massKg('mass_dry_kg').notNull(),
-    moistureContentPercent: percent('moisture_content_percent'),
-    co2eFeedstockTons: tonnes('co2e_feedstock_tons'),
-    feedstockSourceRegion: text('feedstock_source_region'),
-    storageLocationId: uuid('storage_location_id').references(
+    moistureContentPercent: percent('moisture_content_percent').notNull(),
+    storageLocationId: uuid('storage_location_id').notNull().references(
       () => storageLocations.id
     ),
 
-    // --- Counterfactual & Leakage (Isometric §3–4) ---
-    counterfactualCategory: text('counterfactual_category'),
-    counterfactualEmissions15Tons: tonnes('counterfactual_emissions_15_tons'),
-    counterfactualStorage50Tons: tonnes('counterfactual_storage_50_tons'),
-    marketLeakageMethod: text('market_leakage_method'),
-    marketLeakageTons: tonnes('market_leakage_tons'),
-    baselineScenario: text('baseline_scenario').notNull().default('unknown'),
-    baselineDescription: text('baseline_description').notNull().default(''),
-
-    // --- Isometric: Biomass eligibility (Feedstock Accounting Module — >25% ineligible cap) ---
-    eligibilityStatus: feedstockEligibilityStatus('eligibility_status'),
+    // Eligibility evidence is maintained outside noma (#942 q8).
+    // BFA v1.2.3 Appendix 3 gives FSC Mix and Controlled Wood sourcing
+    // recommendations, not a general ineligible-biomass cap.
 
     // --- Documentation ---
     notes: text('notes'),
@@ -189,19 +114,11 @@ export const feedstocks = pgTable(
     ),
     check(
       'feedstocks_mass_dry_lte_wet',
-      sql`${table.massWetKg} is null or ${table.massDryKg} <= ${table.massWetKg}`
+      sql`${table.massDryKg} <= ${table.massWetKg}`
     ),
     check(
       'feedstocks_moisture_content_percent_range',
-      sql`${table.moistureContentPercent} is null or (${table.moistureContentPercent} >= 0 and ${table.moistureContentPercent} <= 100)`
-    ),
-    check(
-      'feedstocks_gps_latitude_range',
-      sql`${table.gpsLatitude} is null or (${table.gpsLatitude} >= -90 and ${table.gpsLatitude} <= 90)`
-    ),
-    check(
-      'feedstocks_gps_longitude_range',
-      sql`${table.gpsLongitude} is null or (${table.gpsLongitude} >= -180 and ${table.gpsLongitude} <= 180)`
+      sql`(${table.moistureContentPercent} >= 0 and ${table.moistureContentPercent} < 100)`
     ),
   ]
 );
@@ -210,32 +127,8 @@ export const feedstocks = pgTable(
 // Relations
 // ============================================
 
-export const feedstockDeliveriesRelations = relations(
-  feedstockDeliveries,
-  ({ one, many }) => ({
-    facility: one(facilities, {
-      fields: [feedstockDeliveries.facilityId],
-      references: [facilities.id],
-    }),
-    supplier: one(suppliers, {
-      fields: [feedstockDeliveries.supplierId],
-      references: [suppliers.id],
-    }),
-    vehicle: one(vehicles, {
-      fields: [feedstockDeliveries.vehicleId],
-      references: [vehicles.id],
-    }),
-    feedstockType: one(feedstockTypes, {
-      fields: [feedstockDeliveries.feedstockTypeId],
-      references: [feedstockTypes.id],
-    }),
-    feedstocks: many(feedstocks),
-  })
-);
-
 export const feedstockTypesRelations = relations(feedstockTypes, ({ many }) => ({
   feedstocks: many(feedstocks),
-  feedstockDeliveries: many(feedstockDeliveries),
 }));
 
 export const feedstocksRelations = relations(feedstocks, ({ one }) => ({
@@ -243,12 +136,7 @@ export const feedstocksRelations = relations(feedstocks, ({ one }) => ({
     fields: [feedstocks.facilityId],
     references: [facilities.id],
   }),
-  // Legacy relation — will be removed in Phase 2
-  feedstockDelivery: one(feedstockDeliveries, {
-    fields: [feedstocks.feedstockDeliveryId],
-    references: [feedstockDeliveries.id],
-  }),
-  // Delivery relations (absorbed from feedstock_deliveries)
+  // Delivery relations
   supplier: one(suppliers, {
     fields: [feedstocks.supplierId],
     references: [suppliers.id],
@@ -271,6 +159,5 @@ export const feedstocksRelations = relations(feedstocks, ({ one }) => ({
 // Type Inference
 // ============================================
 
-export type FeedstockDelivery = InferSelectModel<typeof feedstockDeliveries>;
 export type FeedstockType = InferSelectModel<typeof feedstockTypes>;
 export type Feedstock = InferSelectModel<typeof feedstocks>;

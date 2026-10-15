@@ -83,7 +83,7 @@ describe("feedstock REST contract", { timeout: SUITE_TIMEOUT_MS }, () => {
   it("creates one stock addition, returns Location and ETag, and replays byte-identically", async () => {
     const first = await create();
     expect(first.response.headers.get("location")).toBe(`/api/v1/feedstocks/${first.row.id}`);
-    expect(first.etag).toBe('"1.1"');
+    expect(first.etag).toBe('"1.2"');
     expect(first.row).toMatchObject({ version: 1, deliveryDate: "2026-10-06", massWetKg: 4200, massDryKg: 2835, moistureContentPercent: 32.5 });
     expect(JSON.parse(first.text)).not.toHaveProperty("stockEffects");
     expect(first.row).not.toHaveProperty("supplierName");
@@ -226,12 +226,12 @@ describe("feedstock REST contract", { timeout: SUITE_TIMEOUT_MS }, () => {
     await problem(await patch(saved.row.id, {}, '"1.99"'), 412, "stale_version");
     const updated = await patch(saved.row.id, { moistureContentPercent: 0 }, saved.etag);
     expect(updated.status).toBe(200);
-    expect(updated.headers.get("etag")).toBe('"2.1"');
+    expect(updated.headers.get("etag")).toBe('"2.2"');
     const current = (await updated.json()).data;
     expect(current).toMatchObject({ version: 2, moistureContentPercent: 0, massDryKg: 4200, notes: "Keep this note" });
     const stale = await problem(await patch(saved.row.id, { notes: "Stale" }, saved.etag), 412, "stale_version");
     expect(stale.current).toEqual(current);
-    const cleared = await patch(saved.row.id, { notes: null, transportDistanceKm: null }, '"2.1"');
+    const cleared = await patch(saved.row.id, { notes: null, transportDistanceKm: null }, '"2.2"');
     expect(cleared.status).toBe(200);
     expect((await cleared.json()).data).toMatchObject({ version: 3, notes: null, moistureContentPercent: 0 });
   });
@@ -242,9 +242,9 @@ describe("feedstock REST contract", { timeout: SUITE_TIMEOUT_MS }, () => {
     const first = await patch(saved.row.id, { notes: "First patch" }, saved.etag, keyA, { "idempotency-key": key });
     const text = await first.text();
     expect(first.status).toBe(200);
-    expect((await patch(saved.row.id, { notes: "Later edit" }, '"2.1"')).status).toBe(200);
+    expect((await patch(saved.row.id, { notes: "Later edit" }, '"2.2"')).status).toBe(200);
     for (const deleted of [false, true]) {
-      if (deleted) expect((await DELETE(request("DELETE", `/${saved.row.id}`, undefined, { "if-match": '"3.1"' }), params(saved.row.id))).status).toBe(204);
+      if (deleted) expect((await DELETE(request("DELETE", `/${saved.row.id}`, undefined, { "if-match": '"3.2"' }), params(saved.row.id))).status).toBe(204);
       const replay = await patch(saved.row.id, { notes: "First patch" }, saved.etag, keyA, { "idempotency-key": key });
       expect(replay.status).toBe(200);
       expect(replay.headers.get("idempotent-replayed")).toBe("true");
@@ -273,7 +273,7 @@ describe("feedstock REST contract", { timeout: SUITE_TIMEOUT_MS }, () => {
     const body = { notes: "Bound patch" };
     expect((await patch(first.row.id, body, first.etag, keyA, { "idempotency-key": key })).status).toBe(200);
     await problem(await patch(second.row.id, body, second.etag, keyA, { "idempotency-key": key }), 422, "idempotency_key_reused");
-    await problem(await patch(first.row.id, body, '"2.1"', keyA, { "idempotency-key": key }), 422, "idempotency_key_reused");
+    await problem(await patch(first.row.id, body, '"2.2"', keyA, { "idempotency-key": key }), 422, "idempotency_key_reused");
     await problem(await DELETE(request("DELETE", `/${first.row.id}`, undefined, {
       "if-match": first.etag, "idempotency-key": key,
     }), params(first.row.id)), 422, "idempotency_key_reused");
@@ -337,6 +337,16 @@ describe("feedstock REST contract", { timeout: SUITE_TIMEOUT_MS }, () => {
     expect(response.headers.get("dry-run")).toBe("true");
     expect(await feedstockCount(a)).toBe(1);
     expect(await stock()).toBe(4200);
+  });
+
+  it("refuses removed or invalid intake PATCH fields with JSON Pointers", async () => {
+    const saved = await create();
+    for (const [field, value] of [["storageLocationId", null], ["massDryKg", 90], ["moistureContentPercent", 100]] as const) {
+      const failure = await problem(await patch(saved.row.id, { [field]: value }, saved.etag), 422, "validation_failed");
+      expect(failure.errors).toContainEqual(expect.objectContaining({ pointer: `/${field}` }));
+    }
+    expect(saved.row).not.toHaveProperty("gpsLatitude");
+    expect(saved.row).not.toHaveProperty("gpsLongitude");
   });
 
   it("rejects unknown top-level and nested properties with JSON Pointers", async () => {

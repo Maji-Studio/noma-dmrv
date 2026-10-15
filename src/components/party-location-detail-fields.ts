@@ -21,6 +21,7 @@ interface BuildPartyLocationDetailFieldsOptions {
   /** Label for the free-text location description. Defaults to the supplier wording. */
   descriptionLabel?: string;
   includeSoilTemperature?: boolean;
+  pending?: boolean;
 }
 
 const DEFAULT_DESCRIPTION_LABEL = "Address / description";
@@ -68,6 +69,6 @@ export function buildPartyLocationDetailFields(
       },
     );
 
-    return fields;
+    return fields.map((field) => ({ ...field, pending: options.pending }));
   });
 }

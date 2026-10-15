@@ -10,7 +10,6 @@ import {
   deliveries,
   customerLocations,
   facilities,
-  feedstockDeliveries,
   feedstockTypes,
   feedstocks,
   formulations,
@@ -295,10 +294,8 @@ async function loadLineageWithExecutor(
           deliveryDate: feedstocks.deliveryDate,
           massDryKg: feedstocks.massDryKg,
           wetMassUsedKg: productionRunFeedstocks.wetMassUsedKg,
-          eligibilityStatus: feedstocks.eligibilityStatus,
           supplierName: suppliers.name,
           feedstockTypeName: feedstockTypes.name,
-          feedstockDeliveryCode: feedstockDeliveries.code,
         })
         .from(productionRunFeedstocks)
         .innerJoin(
@@ -308,7 +305,6 @@ async function loadLineageWithExecutor(
             eq(feedstocks.organizationId, ctx.organizationId),
           ),
         )
-        .leftJoin(feedstockDeliveries, and(eq(feedstocks.feedstockDeliveryId, feedstockDeliveries.id), eq(feedstockDeliveries.organizationId, ctx.organizationId)))
         .leftJoin(suppliers, and(eq(feedstocks.supplierId, suppliers.id), eq(suppliers.organizationId, ctx.organizationId)))
         .leftJoin(feedstockTypes, and(eq(feedstocks.feedstockTypeId, feedstockTypes.id), eq(feedstockTypes.organizationId, ctx.organizationId)))
         .where(and(inArray(productionRunFeedstocks.productionRunId, runIds), eq(productionRunFeedstocks.organizationId, ctx.organizationId)))

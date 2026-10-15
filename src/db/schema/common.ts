@@ -130,6 +130,7 @@ export const documentationType = pgEnum('documentation_type', [
   'bill_of_lading',
   'other_transport_evidence',
   'lab_report',
+  'reflectance_histogram',
   'delivery_receipt',
   'invoice',
   'pdd',
@@ -254,13 +255,6 @@ export const emissionsCalculationMethod = pgEnum('emissions_calculation_method',
 // ============================================
 // Isometric Compliance Enums
 // ============================================
-
-// Feedstock eligibility status (Biomass Feedstock Accounting Module — >25% ineligible cap)
-export const feedstockEligibilityStatus = pgEnum('feedstock_eligibility_status', [
-  'eligible',
-  'ineligible',
-  'conditional',
-]);
 
 export const certifierProvider = pgEnum('certifier_provider', [
   'isometric',

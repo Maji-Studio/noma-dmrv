@@ -115,10 +115,8 @@ describe("biochar mass labels", () => {
         deliveryDate: new Date("2026-05-16T00:00:00Z"),
         massDryKg: 1_950,
         wetMassUsedKg: 3_000,
-        eligibilityStatus: "eligible",
         supplierName: "Supplier",
         feedstockTypeName: "Wood chips",
-        feedstockDeliveryCode: "FD-1",
         href: "/feedstocks",
       },
     ];
@@ -126,6 +124,7 @@ describe("biochar mass labels", () => {
     const details = buildLineageNodes(data).find(
       (node) => node.kind === "feedstock",
     )?.details;
+    expect(details).not.toContainEqual(expect.objectContaining({ label: "Inbound" }));
     expect(details).toContainEqual({
       label: "Wet allocation",
       value: "3,000 kg",
@@ -339,10 +338,8 @@ function rollForward(runId: string): ChainRunRollForward {
           deliveryDate: new Date("2026-05-16T00:00:00Z"),
           massDryKg: 1_950,
           wetMassUsedKg: 3_000,
-          eligibilityStatus: "eligible",
           supplierName: "Supplier",
           feedstockTypeName: "Wood chips",
-          feedstockDeliveryCode: "FD-1",
           href: "/feedstocks",
         },
       ],

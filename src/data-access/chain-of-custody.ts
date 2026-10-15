@@ -9,7 +9,6 @@ import {
   biocharProducts,
   deliveries,
   facilities,
-  feedstockDeliveries,
   feedstockTypes,
   feedstocks,
   formulations,
@@ -137,11 +136,8 @@ export interface ChainFeedstockLineage {
   deliveryDate: Date | null;
   massDryKg: number | null;
   wetMassUsedKg: number | null;
-  /** Drives the Sankey's derived ineligible-feedstock exit (issue #285). */
-  eligibilityStatus: "eligible" | "ineligible" | "conditional" | null;
   supplierName: string | null;
   feedstockTypeName: string | null;
-  feedstockDeliveryCode: string | null;
   href: string;
 }
 
@@ -500,14 +496,11 @@ async function getFeedstocksForRuns(
       deliveryDate: feedstocks.deliveryDate,
       massDryKg: feedstocks.massDryKg,
       wetMassUsedKg: productionRunFeedstocks.wetMassUsedKg,
-      eligibilityStatus: feedstocks.eligibilityStatus,
       supplierName: suppliers.name,
       feedstockTypeName: feedstockTypes.name,
-      feedstockDeliveryCode: feedstockDeliveries.code,
     })
     .from(productionRunFeedstocks)
     .innerJoin(feedstocks, and(eq(productionRunFeedstocks.feedstockId, feedstocks.id), eq(feedstocks.organizationId, ctx.organizationId)))
-    .leftJoin(feedstockDeliveries, and(eq(feedstocks.feedstockDeliveryId, feedstockDeliveries.id), eq(feedstockDeliveries.organizationId, ctx.organizationId)))
     .leftJoin(suppliers, and(eq(feedstocks.supplierId, suppliers.id), eq(suppliers.organizationId, ctx.organizationId)))
     .leftJoin(feedstockTypes, and(eq(feedstocks.feedstockTypeId, feedstockTypes.id), eq(feedstockTypes.organizationId, ctx.organizationId)))
     .where(

@@ -1,13 +1,13 @@
+import { feedstockFixtureValues, cleanupFeedstockFixtureParents } from "../../../../tests/helpers/feedstock-fixture";
 /** Point-in-time observations, not regression specifications. No remote calls. */
 import { beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
-import { facilities, feedstockTypes, storageLocations, binMovements, feedstocks, suppliers, supplierLocations, feedstockDeliveries } from "@/db/schema";
+import { facilities, feedstockTypes, storageLocations, binMovements, feedstocks } from "@/db/schema";
 import { updateStorageLocation } from "@/data-access/storage-locations";
 import { getStorageLocationLaneSummary } from "@/data-access/storage-location-lane-summary";
 import { createFeedstockType as quickCreateFeedstockType } from "@/data-access/quick-add";
 import { createFeedstockType as canonicalCreateFeedstockType, updateFeedstockType } from "@/data-access/feedstock-types";
-import { deleteSupplier } from "@/data-access/suppliers";
 import { updateFeedstockInTransaction } from "@/data-access/feedstocks";
 import { updateFacility } from "@/data-access/facility-mutations";
 import { updateFeedstockTypeSchema } from "@/schemas/feedstock-types";
@@ -111,11 +111,11 @@ describe("baseline defect observations (passing means reproduced)", () => {
 async function intakeFixture() {
   const f = await fixture();
   await db.delete(binMovements).where(eq(binMovements.storageLocationId, f.bin.id));
-  const [intake] = await db.insert(feedstocks).values({
+  const [intake] = await db.insert(feedstocks).values(await feedstockFixtureValues(db, {
     organizationId: TEST_ORG_ID, code: `AUD-${crypto.randomUUID()}`,
     facilityId: f.facility.id, feedstockTypeId: f.type.id, storageLocationId: f.bin.id,
     massWetKg: 100, massDryKg: 90, moistureContentPercent: 10, status: "complete",
-  }).returning();
+  })).returning();
   return { ...f, intake };
 }
 
@@ -123,17 +123,18 @@ describe("feedstock baseline observations", () => {
   it("F06: reducing intake below recorded withdrawal creates negative stock", async () => {
     const f = await intakeFixture();
     try {
-      await db.insert(binMovements).values({ organizationId: TEST_ORG_ID,
+      await db.insert(binMovements).values({ occurredAt: new Date("2026-01-01T00:00:00.000Z"), organizationId: TEST_ORG_ID,
         storageLocationId: f.bin.id, lane: "feedstock", movementType: "loss",
         massDeltaKg: -80, reason: "Disposable audit withdrawal fixture" });
       const before = await getStorageLocationLaneSummary(context, { facilityId: f.facility.id, archived: false });
       expect(before.feedstock_bin.onHandKg).toBe(20);
-      await db.transaction((tx) => updateFeedstockInTransaction(context, tx, f.intake.id, { expectedVersion: f.intake.version, massWetKg: 50, massDryKg: 45 }));
+      await db.transaction((tx) => updateFeedstockInTransaction(context, tx, f.intake.id, { expectedVersion: f.intake.version, massWetKg: 50 }));
       const after = await getStorageLocationLaneSummary(context, { facilityId: f.facility.id, archived: false });
       expect(after.feedstock_bin.onHandKg).toBe(-30);
       console.log("F06: 100 kg intake - 80 kg loss = 20 kg; edit intake to 50 kg succeeds; final stock=-30 kg");
     } finally {
       await db.delete(feedstocks).where(eq(feedstocks.id, f.intake.id));
+      await cleanupFeedstockFixtureParents(db);
       await cleanup(f);
     }
   });
@@ -148,32 +149,15 @@ describe("feedstock baseline observations", () => {
       console.log("F07: saved wet=100 kg moisture=50% dry=90 kg; consistent derived dry would be 50 kg");
     } finally {
       await db.delete(feedstocks).where(eq(feedstocks.id, f.intake.id));
+      await cleanupFeedstockFixtureParents(db);
       await cleanup(f);
     }
   });
 });
 
 describe("supplier deletion baseline observation", () => {
-  it("F08: a restrictive FK failure leaves the supplier but deletes its locations", async () => {
-    const f = await fixture();
-    const [supplier] = await db.insert(suppliers).values({ organizationId: TEST_ORG_ID,
-      code: `AUD-${crypto.randomUUID()}`, name: `Audit ${crypto.randomUUID()}` }).returning();
-    await db.insert(supplierLocations).values({ ...TEST_SITE_POSITION, organizationId: TEST_ORG_ID,
-      supplierId: supplier.id, name: "Disposable source location", country: "CHE" });
-    const [delivery] = await db.insert(feedstockDeliveries).values({ organizationId: TEST_ORG_ID,
-      code: `AUD-${crypto.randomUUID()}`, facilityId: f.facility.id, supplierId: supplier.id,
-      deliveryDate: new Date("2026-09-01T12:00:00Z") }).returning();
-    try {
-      await expect(deleteSupplier(context, supplier.id, supplier.version)).rejects.toThrow();
-      expect(await db.select().from(suppliers).where(eq(suppliers.id, supplier.id))).toHaveLength(1);
-      expect(await db.select().from(supplierLocations).where(eq(supplierLocations.supplierId, supplier.id))).toHaveLength(0);
-      console.log("F08: delete rejected by feedstock_deliveries FK; supplier remains; locations were deleted");
-    } finally {
-      await db.delete(feedstockDeliveries).where(eq(feedstockDeliveries.id, delivery.id));
-      await db.delete(supplierLocations).where(eq(supplierLocations.supplierId, supplier.id));
-      await db.delete(suppliers).where(eq(suppliers.id, supplier.id));
-      await cleanup(f);
-    }
+  it.skip("F08: a restrictive FK failure leaves the supplier but deletes its locations", () => {
+    // F08 used the retired feedstock_deliveries table.
   });
 });
 

@@ -91,7 +91,7 @@ it("publishes business dates as date, and preserves operation input types and co
   expect(properties.allocations).toMatchObject({ minItems: 1, maxItems: 200, items: { additionalProperties: false } });
   expect(createFeedstockSchema.safeParse(create.content["application/json"].example).success).toBe(true);
   expect(properties.transportDistanceSource).toMatchObject({ anyOf: [{ type: "string", enum: ["map_estimate", "manual", "document"] }, { type: "null" }] });
-  expect(document.components.schemas.feedstock.properties).toMatchObject({ deliveryDate: { anyOf: [{ type: "string", format: "date" }, { type: "null" }] } });
+  expect(document.components.schemas.feedstock.properties).toMatchObject({ deliveryDate: { type: "string", format: "date" } });
   const patch = document.paths["/feedstocks/{idOrCode}"].patch.requestBody as typeof create;
   const expected = toOperationJsonSchema(updateFeedstockSchema.omit({ feedstockId: true, expectedVersion: true }));
   expect(patch.content["application/json"].schema.properties).toEqual(expected.properties);

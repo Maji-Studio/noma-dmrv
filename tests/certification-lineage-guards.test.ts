@@ -426,7 +426,6 @@ describe("certification lineage guards", () => {
     await withLineageFixture(async (fixture) => {
       await expect(
         db.transaction((tx) => updateFeedstockInTransaction(makeTestOrgContext(TEST_USER_ID), tx, fixture.feedstockId, { expectedVersion: 1,
-          massDryKg: 901,
         })),
       ).rejects.toThrow(LOCKED_COPY);
     });
@@ -517,6 +516,7 @@ it("commits a run status update and feedstock edit on the same lineage and bin w
   const DRAW_WET_KG = 10;
   await withLineageFixture(async (fixture) => {
     const ctx = makeTestOrgContext(TEST_USER_ID);
+    const [originalIntake] = await db.select().from(feedstocks).where(eq(feedstocks.id, fixture.feedstockId));
     const [bin] = await db.insert(storageLocations).values({ organizationId: TEST_ORG_ID,
       facilityId: fixture.facilityId, code: `LOCK-${fixture.feedstockId}`, name: "Lock regression source",
       type: "feedstock_bin", feedstockTypeId: fixture.feedstockTypeId }).returning();
@@ -577,7 +577,7 @@ it("commits a run status update and feedstock edit on the same lineage and bin w
       await db.delete(productionRunFeedstocks).where(eq(productionRunFeedstocks.productionRunId, run.id));
       await db.delete(productionRunFeedstockDraws).where(eq(productionRunFeedstockDraws.productionRunId, run.id));
       await db.delete(productionRuns).where(eq(productionRuns.id, run.id));
-      await db.update(feedstocks).set({ storageLocationId: null }).where(eq(feedstocks.id, fixture.feedstockId));
+      await db.update(feedstocks).set({ storageLocationId: originalIntake.storageLocationId }).where(eq(feedstocks.id, fixture.feedstockId));
       await db.delete(storageLocations).where(eq(storageLocations.id, bin.id));
     }
   }, "none");

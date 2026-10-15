@@ -1,3 +1,4 @@
+import { feedstockFixtureValues, cleanupFeedstockFixtureParents } from "./helpers/feedstock-fixture";
 import { productionVersion } from "./helpers/production-version";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { eq, inArray } from "drizzle-orm";
@@ -155,7 +156,7 @@ describe("production-run wet feedstock stock", () => {
 
     const [feedstock] = await db
       .insert(feedstocks)
-      .values({
+      .values(await feedstockFixtureValues(db, {
         organizationId: TEST_ORG_ID,
         code: `FS-WET-${tag}`,
         facilityId,
@@ -164,13 +165,13 @@ describe("production-run wet feedstock stock", () => {
         massWetKg: AVAILABLE_WET_KG,
         massDryKg: INTAKE_ESTIMATED_DRY_KG,
         storageLocationId,
-      })
+      }))
       .returning({ id: feedstocks.id });
     feedstockId = feedstock.id;
 
     const [secondaryFeedstock] = await db
       .insert(feedstocks)
-      .values({
+      .values(await feedstockFixtureValues(db, {
         organizationId: TEST_ORG_ID,
         code: `FS-WET-SECOND-${tag}`,
         facilityId,
@@ -179,7 +180,7 @@ describe("production-run wet feedstock stock", () => {
         massWetKg: SECONDARY_AVAILABLE_WET_KG,
         massDryKg: 450,
         storageLocationId: secondaryStorageLocationId,
-      })
+      }))
       .returning({ id: feedstocks.id });
     secondaryFeedstockId = secondaryFeedstock.id;
   });
@@ -190,6 +191,7 @@ describe("production-run wet feedstock stock", () => {
     await cleanupProductionRuns();
     await db.delete(feedstocks).where(eq(feedstocks.id, secondaryFeedstockId));
     await db.delete(feedstocks).where(eq(feedstocks.id, feedstockId));
+    await cleanupFeedstockFixtureParents(db);
     await db
       .delete(storageLocations)
       .where(eq(storageLocations.id, secondaryStorageLocationId));

@@ -1,3 +1,4 @@
+import { cleanupFeedstockFixtureParents } from "../../helpers/feedstock-fixture";
 import "../../setup";
 import { deleteOutputApplicationFixtures } from "../../helpers/output-contract-fixtures";
 import { preparePureOutputProductFixture, outputProductFixtureValues, deleteOutputDeliveryFixtures, deleteOutputProductFixtures, deleteOutputFacilityFixtures } from "../../helpers/output-contract-fixtures";
@@ -33,7 +34,6 @@ export interface SeededChainData {
   biocharStorageLocation: { id: string; code: string; name: string };
   productStorageLocation: { id: string; code: string; name: string };
   vehicle: { id: string; code: string; name: string };
-  feedstockDelivery: { id: string; code: string };
   feedstock: { id: string; code: string };
 }
 
@@ -59,7 +59,6 @@ export async function seedChainData(
     const biocharStorageId = crypto.randomUUID();
     const productStorageId = crypto.randomUUID();
     const vehicleId = crypto.randomUUID();
-    const feedstockDeliveryId = crypto.randomUUID();
     const feedstockId = crypto.randomUUID();
 
     await db.transaction(async (tx) => {
@@ -212,26 +211,16 @@ export async function seedChainData(
         modelYear: 2022,
       });
 
-      // 10. Feedstock Delivery (needs facility + supplier)
+      // Intake date
       const deliveryDate = new Date();
-      await tx.insert(schema.feedstockDeliveries).values({
-        organizationId: DEC_ORG_ID,
-        id: feedstockDeliveryId,
-        code: `E2E-FSD-${testRunId}`,
-        facilityId: facilityId,
-        supplierId: supplierId,
-        deliveryDate,
-        feedstockTypeId: feedstockTypeId,
-      });
 
-      // 11. Feedstock (needs facility + delivery + type)
+      // 11. Feedstock (needs facility + supplier + type)
       await tx.insert(schema.feedstocks).values({
         organizationId: DEC_ORG_ID,
         id: feedstockId,
         code: `E2E-FS-${testRunId}`,
         facilityId: facilityId,
-        feedstockDeliveryId: feedstockDeliveryId,
-        // Delivery fields (absorbed from feedstock_deliveries)
+        // Delivery fields
         deliveryDate,
         supplierId: supplierId,
         // Material fields
@@ -261,7 +250,6 @@ export async function seedChainData(
       biocharStorageLocation: { id: biocharStorageId, code: `E2E-SL-BC-${testRunId}`, name: `E2E Biochar Pile ${testRunId}` },
       productStorageLocation: { id: productStorageId, code: `E2E-SL-PR-${testRunId}`, name: `E2E Product Bin ${testRunId}` },
       vehicle: { id: vehicleId, code: `E2E-VEH-${testRunId}`, name: `E2E Seed Vehicle ${testRunId}` },
-      feedstockDelivery: { id: feedstockDeliveryId, code: `E2E-FSD-${testRunId}` },
       feedstock: { id: feedstockId, code: `E2E-FS-${testRunId}` },
     };
   } finally {
@@ -744,11 +732,8 @@ export async function cleanupChainData(data: SeededChainData): Promise<void> {
       await tx
         .delete(schema.feedstocks)
         .where(eq(schema.feedstocks.facilityId, data.facility.id));
+      await cleanupFeedstockFixtureParents(tx);
 
-      // Feedstock deliveries
-      await tx
-        .delete(schema.feedstockDeliveries)
-        .where(eq(schema.feedstockDeliveries.facilityId, data.facility.id));
 
       // Vehicles
       await tx
@@ -812,6 +797,7 @@ export async function cleanupChainData(data: SeededChainData): Promise<void> {
       // Facility (must be last — everything references it)
       await deleteOutputFacilityFixtures(tx, eq(schema.facilities.id, data.facility.id));
     });
+    await cleanupFeedstockFixtureParents(db);
   } finally {
     await pool.end();
   }

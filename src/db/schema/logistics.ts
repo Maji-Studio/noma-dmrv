@@ -186,8 +186,8 @@ export const deliveries = pgTable(
       sql`${table.massDryKg} is null or ${table.deliveredWetMassKg} is null or ${table.massDryKg} <= ${table.deliveredWetMassKg}`
     ),
     check(
-      'deliveries_distance_km_override_non_negative',
-      sql`${table.distanceKmOverride} is null or ${table.distanceKmOverride} >= 0`
+      'deliveries_distance_km_override_positive',
+      sql`${table.distanceKmOverride} is null or ${table.distanceKmOverride} > 0`
     ),
   ]
 );
@@ -243,10 +243,6 @@ export const transportLegs = pgTable(
         .notNull()
         .default('distance_based'),
     isDerived: boolean('is_derived').notNull().default(false),
-
-    // --- Documentation ---
-    billOfLading: text('bill_of_lading'),
-    weighScaleTicketRef: text('weigh_scale_ticket_ref'),
 
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),

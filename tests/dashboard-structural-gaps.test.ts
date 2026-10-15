@@ -1,3 +1,4 @@
+import { feedstockFixtureValues, cleanupFeedstockFixtureParents } from "./helpers/feedstock-fixture";
 import { outputProductFixtureValues, deleteOutputProductFixtures, deleteOutputFacilityFixtures } from "./helpers/output-contract-fixtures";
 /**
  * DB-backed regression coverage for the dashboard's structural certification
@@ -180,7 +181,7 @@ beforeAll(async () => {
 
     const feedstockRows = await tx
       .insert(feedstocks)
-      .values([
+      .values(await feedstockFixtureValues(tx, [
         {
           organizationId: TEST_ORG_ID,
           code: `FS-DG-MISSING-${tag}`,
@@ -222,7 +223,7 @@ beforeAll(async () => {
           feedstockTypeId: feedstockType.id,
           massDryKg: 100,
         },
-      ])
+      ]))
       .returning({ id: feedstocks.id });
     const [activeFeedstock, , , archivedFeedstock, excludedFeedstock] =
       feedstockRows;
@@ -470,6 +471,7 @@ afterAll(async () => {
     .where(inArray(productionProcesses.id, ids.productionProcesses));
   await db.delete(reactors).where(inArray(reactors.id, ids.reactors));
   await db.delete(feedstocks).where(inArray(feedstocks.id, ids.feedstocks));
+  await cleanupFeedstockFixtureParents(db);
   await db
     .delete(supplierLocations)
     .where(inArray(supplierLocations.id, ids.supplierLocations));

@@ -1,3 +1,4 @@
+import { createOperationActivity } from "@/lib/operations/activity-links";
 import { beforeEach, expect, it, vi } from "vitest";
 import type { OperationScope } from "./runner";
 const mocks = vi.hoisted(() => ({ zone: vi.fn(), create: vi.fn(), update: vi.fn() }));
@@ -9,9 +10,13 @@ vi.mock("@/db", () => ({ db: {} }));
 import { startProductionRun, updateProductionRun } from "./production-runs";
 const id = "00000000-0000-4000-8000-000000000001";
 const otherId = "00000000-0000-4000-8000-000000000002";
-const scope = { ctx: { organizationId: id, userId: id, orgRole: "owner", isPlatformAdmin: false }, tx: {} as OperationScope["tx"], afterCommit: vi.fn() } satisfies OperationScope;
+const scope = { ctx: { organizationId: id, userId: id, orgRole: "owner", isPlatformAdmin: false }, tx: {} as OperationScope["tx"], activity: createOperationActivity(), afterCommit: vi.fn() } satisfies OperationScope;
 const local = { date: "2026-01-01", time: "10:00" };
-beforeEach(() => { vi.clearAllMocks(); });
+beforeEach(() => {
+  vi.clearAllMocks();
+  mocks.create.mockResolvedValue({ facilityId: id });
+  mocks.update.mockResolvedValue({ facilityId: id });
+});
 it("resolves create locals using the facility read through the operation transaction", async () => {
   mocks.zone.mockResolvedValue("Europe/Paris");
   const input = startProductionRun.input.parse({ facilityId: id, reactorId: id, startTime: local });

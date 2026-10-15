@@ -1,9 +1,10 @@
+import { cleanupFeedstockFixtureParents, feedstockFixtureValues } from "./helpers/feedstock-fixture";
 import { masterDataVersion } from "./helpers/master-data-version";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { eq, sql } from "drizzle-orm";
 import { db, type DbTransaction } from "@/db";
 import { pgErrorCode } from "@/db/errors";
-import { facilities, feedstockDeliveries, feedstocks, feedstockTypes, organizations, supplierLocations, suppliers } from "@/db/schema";
+import { facilities, feedstocks, feedstockTypes, organizations, supplierLocations, suppliers } from "@/db/schema";
 import { deleteSupplier } from "@/data-access/suppliers";
 import { SafeError } from "@/lib/errors";
 import { TEST_SITE_POSITION, ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
@@ -35,7 +36,7 @@ afterEach(async () => {
   vi.restoreAllMocks();
   if (supplierId) {
     await db.delete(feedstocks).where(eq(feedstocks.supplierId, supplierId));
-    await db.delete(feedstockDeliveries).where(eq(feedstockDeliveries.supplierId, supplierId));
+    await cleanupFeedstockFixtureParents(db);
     await db.delete(supplierLocations).where(eq(supplierLocations.supplierId, supplierId));
     await db.delete(suppliers).where(eq(suppliers.id, supplierId));
   }
@@ -43,13 +44,9 @@ afterEach(async () => {
   if (facilityId) await db.delete(facilities).where(eq(facilities.id, facilityId));
 });
 
-async function insertReference(kind: "intake" | "delivery") {
+async function insertReference() {
   const common = { organizationId: TEST_ORG_ID, supplierId, facilityId, code: `REF-${crypto.randomUUID()}` };
-  if (kind === "delivery") {
-    await db.insert(feedstockDeliveries).values({ ...common, deliveryDate: new Date() });
-  } else {
-    await db.insert(feedstocks).values({ ...common, feedstockTypeId, massDryKg: 10 });
-  }
+  await db.insert(feedstocks).values(await feedstockFixtureValues(db, { ...common, feedstockTypeId, massDryKg: 10 }));
 }
 async function expectUnchanged() {
   expect(await db.select().from(suppliers).where(eq(suppliers.id, supplierId))).toHaveLength(1);
@@ -85,11 +82,11 @@ function beforeParentDelete(work: (tx: DbTransaction) => Promise<void>) {
 }
 
 describe("supplier deletion PostgreSQL atomicity", () => {
-  it.each(["intake", "delivery"] as const)("retains every location when a %s is the only reference", async (kind) => {
-    await insertReference(kind);
+  it("retains every location when an intake is the only reference", async () => {
+    await insertReference();
     const result = await deleteSupplier(ctx, supplierId, await masterDataVersion(ctx, "suppliers", supplierId)).catch((error: unknown) => error);
     expect(result).toBeInstanceOf(SafeError);
-    expect(result).toMatchObject({ message: expect.stringContaining(kind === "intake" ? "intakes" : "deliveries") });
+    expect(result).toMatchObject({ message: expect.stringContaining("intakes") });
     await expectUnchanged();
   });
 
@@ -100,7 +97,7 @@ describe("supplier deletion PostgreSQL atomicity", () => {
     await expectUnchanged();
   });
 
-  it.each(["intake", "delivery"] as const)("blocks concurrent %s insertion until deletion commits, then refuses its FK", async (kind) => {
+  it("blocks concurrent intake insertion until deletion commits, then refuses its FK", async () => {
     let insertOutcome: Promise<PromiseSettledResult<void>[]> | undefined;
     const inserted = vi.fn(async (tx: DbTransaction) => {
       const backend = await tx.execute<{ pid: number }>(
@@ -109,7 +106,7 @@ describe("supplier deletion PostgreSQL atomicity", () => {
       const deleteBackendPid = backend.rows[0].pid;
       // The FK needs FOR KEY SHARE on the supplier, so awaiting the insert
       // here would deadlock the hook against the delete's FOR UPDATE lock.
-      insertOutcome = Promise.allSettled([insertReference(kind)]);
+      insertOutcome = Promise.allSettled([insertReference()]);
       await expect.poll(async () => {
         const result = await db.execute<{ insert_blocked: boolean }>(sql`
           select exists (
@@ -133,7 +130,6 @@ describe("supplier deletion PostgreSQL atomicity", () => {
       expect(await db.select().from(suppliers).where(eq(suppliers.id, supplierId))).toEqual([]);
       expect(await db.select().from(supplierLocations).where(eq(supplierLocations.supplierId, supplierId))).toEqual([]);
       expect(await db.select().from(feedstocks).where(eq(feedstocks.supplierId, supplierId))).toEqual([]);
-      expect(await db.select().from(feedstockDeliveries).where(eq(feedstockDeliveries.supplierId, supplierId))).toEqual([]);
     } finally {
       // Also drain the insert after a failed barrier/assertion: the delete has
       // committed or rolled back before fixture cleanup can remove its rows.

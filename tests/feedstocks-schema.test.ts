@@ -94,7 +94,6 @@ describe("feedstockFormSchema", () => {
       feedstockId,
       expectedVersion: INITIAL_VERSION,
       massWetKg: 0,
-      massDryKg: 0,
     });
 
     expect(result.success).toBe(false);
@@ -106,8 +105,6 @@ describe("feedstockFormSchema", () => {
         ]),
       );
       expect(issueMessages.get("massWetKg")).toBe("Must be greater than 0");
-      // Dry mass is derived, so a 100% moisture intake stays valid at zero.
-      expect(issueMessages.has("massDryKg")).toBe(false);
     }
 
     expect(
@@ -122,7 +119,6 @@ describe("feedstockFormSchema", () => {
         feedstockId,
         expectedVersion: INITIAL_VERSION,
         massWetKg: 1500,
-        massDryKg: 0,
       }).success,
     ).toBe(true);
   });

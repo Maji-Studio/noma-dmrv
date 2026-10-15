@@ -1,3 +1,4 @@
+import { cleanupFeedstockFixtureParents } from "../helpers/feedstock-fixture";
 import { deleteOutputApplicationFixtures, deleteOutputDeliveryFixtures, deleteOutputProductFixtures } from "../helpers/output-contract-fixtures";
 /**
  * Full Chain UI Smoke Test
@@ -25,7 +26,7 @@ import {
 } from "./fixtures/page-helpers";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
-import { eq, ilike, inArray } from "drizzle-orm";
+import { eq, ilike, inArray, or } from "drizzle-orm";
 import * as schema from "../../src/db/schema";
 import { fillStockMoisture } from "./helpers/stock-moisture";
 import { chooseRunStatus } from "./helpers/run-status";
@@ -196,14 +197,7 @@ test.describe("Full Chain UI Smoke Test", () => {
                 .from(schema.feedstocks)
                 .where(inArray(schema.feedstocks.facilityId, facilityIds))
             : [];
-          const feedstockDeliveryRows = facilityIds.length
-            ? await tx
-                .select({ id: schema.feedstockDeliveries.id })
-                .from(schema.feedstockDeliveries)
-                .where(inArray(schema.feedstockDeliveries.facilityId, facilityIds))
-            : [];
           const feedstockIds = feedstocksByFacility.map((f) => f.id);
-          const feedstockDeliveryIds = feedstockDeliveryRows.map((fd) => fd.id);
 
           const biocharProductsByFacility = facilityIds.length
             ? await tx
@@ -239,7 +233,6 @@ test.describe("Full Chain UI Smoke Test", () => {
             ...applicationIds,
             ...creditBatchIds,
             ...feedstockIds,
-            ...feedstockDeliveryIds,
             ...biocharProductIds,
             ...storageLocationIds,
           ]);
@@ -251,6 +244,13 @@ test.describe("Full Chain UI Smoke Test", () => {
                 .where(inArray(schema.documents.entityId, allEntityIds))
             : [];
           const documentIds = documentRows.map((d) => d.id);
+
+          if (allEntityIds.length) await tx.delete(schema.activityEvents).where(or(
+            facilityIds.length ? inArray(schema.activityEvents.facilityId, facilityIds) : undefined,
+            creditBatchIds.length ? inArray(schema.activityEvents.creditBatchId, creditBatchIds) : undefined,
+            productionRunIds.length ? inArray(schema.activityEvents.productionRunId, productionRunIds) : undefined,
+            allEntityIds.length ? inArray(schema.activityEvents.entityId, [...allEntityIds, ...documentIds]) : undefined,
+          ));
 
           if (documentIds.length) {
             await tx
@@ -333,13 +333,9 @@ test.describe("Full Chain UI Smoke Test", () => {
             await tx
               .delete(schema.feedstocks)
               .where(inArray(schema.feedstocks.id, feedstockIds));
+            await cleanupFeedstockFixtureParents(tx);
           }
 
-          if (feedstockDeliveryIds.length) {
-            await tx
-              .delete(schema.feedstockDeliveries)
-              .where(inArray(schema.feedstockDeliveries.id, feedstockDeliveryIds));
-          }
 
           if (reactorIds.length) {
             await tx
@@ -374,6 +370,7 @@ test.describe("Full Chain UI Smoke Test", () => {
               .where(inArray(schema.facilities.id, facilityIds));
           }
         });
+        await cleanupFeedstockFixtureParents(db);
       } finally {
         await pool.end();
       }

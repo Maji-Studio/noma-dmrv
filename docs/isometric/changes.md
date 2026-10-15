@@ -1,5 +1,40 @@
 # Isometric Docs Change Log
 
+## 2026-10-15: Sample moisture retained as evidence only (#942 q1)
+
+Kenji resolved `isometric/sample-moisture-submission`: Sample moisture stays
+readiness-gated on sampled credit batches, and noma sends no moisture
+measurement. `src/lib/certification/entity-readiness.ts:deriveEntityCertifyReadiness`
+keeps the gate through the Sample field descriptors in
+`src/lib/certification/certify-field-registry.ts`. The sequestration component's
+Sample inputs remain total carbon and measured inorganic carbon (both dry
+basis) plus `s_fraction`, built by
+`src/lib/isometric/transformers/measurement-sample.ts:build1000YearSequestrationSample`;
+dry biochar mass is computed and submitted separately.
+
+[Agricultural Soils v1.1, Chemical Characteristics, Table 2](https://registry.isometric.com/module/biochar-storage-agricultural-soils/1.1)
+requires moisture characterization per production batch, with at least three
+samples, to establish the dry mass of biochar applied. The
+[Certify measurement-samples guide](https://docs.isometric.com/user-guides/certify/measurement-samples)
+supports `mass_fraction_wet_basis` with `compound_h2o` on production-batch
+samples, but that optional encoding does not create a submission requirement.
+This records Kenji's decision and its source basis; readiness and payload
+behavior are unchanged.
+
+## 2026-10-15: App-only reflectance histograms and advisory (#942 q9, #1016)
+
+Kenji decided that reflectance histograms are uploaded in the app only, as
+`reflectance_histogram` documents owned by a Sample. PDF, image and tabular
+files use the lab-report size limit. REST/MCP owners and the published OpenAPI
+contract are unchanged. A sampled 1,000-year credit batch without an uploaded
+histogram on any of its Samples receives a warning; it can still submit the
+Removal. Histograms stay in noma and are not bound as Isometric Sources;
+`removal-source-bindings.ts` binds only `lab_report` documents for Samples.
+Pending and failed uploads do not count, and unloaded evidence does
+not produce a warning. This records the product decision, not a new registry
+verification. Sample moisture is retained as evidence only, per the decision
+above.
+
 ## 2026-10-15: Certification status changes recorded as activity (#1038)
 
 Certification status transitions are recorded in `activity_events` in the same
@@ -48,6 +83,20 @@ location. These are entry invariants, not a change to registry calculations.
 - The unused genset energy yield is removed. Diesel continues to submit by volume through `fuel_usage_by_volume` (#319).
 - Reference soil temperature has a CERT marker only for 200-year facilities, matching the submission gate. Pyrolysis feedstock types have a registry-mapping marker; blend types remain internal-only.
 - Reactor types and feedstock categories are constrained to the supported values. Feedstock usage must be supplied explicitly. Reactors with production runs cannot move between facilities.
+
+## 2026-10-15: Required intake fields and external eligibility evidence (#1013, #942 q8)
+
+Intakes require a delivery date, supplier, wet mass, moisture below 100%, and bin.
+Dry mass is derived; feedstock losses require an event time and switching a bin
+to mix requires a merge time. Manual transport legs expose model year; evidence
+uses uploads rather than unused document-reference columns. Eligibility,
+counterfactual and leakage evidence stays outside noma; intake eligibility
+columns and the ineligible-feedstock mass-balance exit are removed. Unused
+intake GPS, CO2e, source-region and storage-bin supplier-reference fields are
+removed. The legacy intake shipment table was subsequently retired (#1013).
+
+BFA v1.2.3 Appendix 3 gives FSC Mix and Controlled Wood sourcing recommendations,
+not a general 25% ineligible-biomass cap; the shortlist now reflects that scope.
 
 ## 2026-10-15: Optional TGA and mean reflectance (#942 q3, #1016)
 
@@ -696,4 +745,3 @@ Earlier implementation notes are archived by date:
 - [`2026-06-10 to 2026-06-20`](../archive/isometric-changes-archive-2026-06-10-to-06-20.md)
 - [`2026-05-26 to 2026-06-08`](../archive/isometric-changes-archive-2026-05-26-to-06-08.md)
 - [`2026-02 to 2026-05-24`](../archive/isometric-changes-archive-2026-02-to-05-24.md)
-

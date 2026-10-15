@@ -8,34 +8,6 @@ Current interpretation pin: Biochar Protocol v1.1 with the five module versions
 in [`docs/isometric/versions.json`](./isometric/versions.json). Resolved or
 retired questions do not belong in this file.
 
-### Sample moisture submission contract (`isometric/sample-moisture-submission`, opened 2026-10-15, `needs-registry-check`)
-
-- **Anchors:** `src/lib/certification/entity-readiness.ts:deriveEntityCertifyReadiness`,
-  `src/lib/isometric/transformers/measurement-sample.ts:build1000YearSequestrationSample`, and
-  `src/lib/isometric/generated/certify.d.ts:MeasurementProperty`.
-- **Question:** is Sample moisture a submitted measurement value or retained
-  evidence only? Agricultural Soils v1.1 [Table 2](https://registry.isometric.com/module/biochar-storage-agricultural-soils/1.1)
-  lists moisture as Required, measured per production batch with a minimum of
-  three samples. Certify `MeasurementProperty` has no dedicated moisture field.
-  Candidate encodings are `quantity_kind: mass_fraction` or
-  `mass_fraction_wet_basis` with `qualifier: compound_h2o`; neither is confirmed.
-- **Current handling:** noma gates readiness on moisture for every Sample on a
-  sampled credit batch but sends no moisture measurement.
-- **To resolve:** confirm the submission requirement and accepted encoding with
-  Isometric before adding any payload mapping.
-
-### Reflectance histogram document classification (`isometric/reflectance-histogram-document`, opened 2026-10-15)
-
-- **Anchors:** `src/schemas/documents.ts:DOCUMENT_TYPES` and
-  `src/lib/certification/sample-document-warnings.ts:sampleDocumentWarnings`.
-- **Question:** which document classification should identify the reflectance
-  histogram for #942 q9's advisory warning? `DOCUMENT_TYPES` has no such type,
-  so a lab report alone cannot establish that a histogram is present.
-- **Current handling:** the lab-report advisory exists; the histogram warning
-  remains deferred. Do not infer classification from filenames.
-- **To resolve:** the documents owner must add the classification and its upload
-  support before the certification warning can use it.
-
 ### Biochar Application claims retain a replaced Storage Location (`isometric/biochar-application-storage-location-replaced`, opened 2026-09-08, `needs-registry-check`)
 
 - **Observed** — `src/data-access/certifier-storage-locations.ts:replaceMissingStorageLocationRegistration`
@@ -403,7 +375,8 @@ itself is **built and enforced** — see the invariants section,
   - **Current state** (`src/db/schema/logistics.ts`): every leg counts its
     round trip (×2 of the stored one-way distance, no trip type since issue
     #852; see the invariants section in `open-questions.md`), and
-    `billOfLading` and `weighScaleTicketRef` exist. There is **no**
+    transport evidence is retained as uploaded documents (bill of lading,
+    weigh-scale ticket). There is **no**
     `emissionFactorSource` column anywhere in the schema, and none for factor
     vintage or onward destination. Form text mentions §3.2
     but validators do not enforce.

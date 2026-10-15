@@ -32,7 +32,7 @@ const tables: PgTable[] = [schema.applications, schema.applicationOutputAllocati
   schema.outputStockRunAllocations, schema.productionRuns, schema.creditBatchApplications,
   schema.creditBatchProductionRuns, schema.creditBatches, schema.facilities, schema.feedstockTypes,
   schema.formulations, schema.reactors, schema.storageLocations, schema.productionRunFeedstocks,
-  schema.feedstocks, schema.feedstockDeliveries, schema.suppliers];
+  schema.feedstocks, schema.suppliers];
 const quote = (name: string) => `"${name.replaceAll('"', '""')}"`;
 
 describe.skipIf(!available)("run roll-forward PostgreSQL queries", () => {

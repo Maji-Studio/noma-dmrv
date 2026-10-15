@@ -37,8 +37,6 @@ export interface FeedstockPileBatch {
 
 export interface FeedstockBinStock {
   currentWetKg: number;
-  /** True only when a completed intake lacks its mass basis. */
-  missingDryBasis: boolean;
   /** Oldest first. */
   entries: FeedstockLedgerEntry[];
   /** Oldest first. */

@@ -408,6 +408,32 @@ export function toDateInputValue(value: string | Date | null | undefined): strin
 }
 
 /**
+ * First instant of a facility calendar day, including skipped or repeated
+ * midnights. Unlike an entered wall clock, a day boundary is unambiguous:
+ * choose the first existing time, or the earlier occurrence of midnight.
+ * Invalid or entirely skipped calendar dates return an Invalid Date.
+ */
+export function startOfFacilityDay(dateStr: string, timeZone: string): Date {
+  if (!DATE_ONLY_PATTERN.test(dateStr)) return new Date(NaN);
+  const utcMidnight = Date.parse(`${dateStr}T00:00:00.000Z`);
+  if (!Number.isFinite(utcMidnight) || formatUtcDate(new Date(utcMidnight)) !== dateStr) {
+    return new Date(NaN);
+  }
+
+  // A day on either side brackets local midnight for every facility offset.
+  // Search calendar dates, so a missing midnight needs no invented wall time.
+  let before = utcMidnight - OFFSET_PROBE_MS;
+  let after = utcMidnight + OFFSET_PROBE_MS;
+  while (after - before > 1) {
+    const middle = Math.floor((before + after) / 2);
+    if (formatFacilityDate(new Date(middle), timeZone) < dateStr) before = middle;
+    else after = middle;
+  }
+  const start = new Date(after);
+  return formatFacilityDate(start, timeZone) === dateStr ? start : new Date(NaN);
+}
+
+/**
  * Returns a "YYYY-MM-DD" string shifted by `days`, treating the input as a UTC
  * calendar date so the result is purely arithmetic (no timezone drift). Used to
  * derive a GHG-statement reporting-period start from the prior period's end.

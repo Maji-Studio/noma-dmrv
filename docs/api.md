@@ -191,6 +191,10 @@ client id for API writes only. Audited operations must implement `describe`.
 `src/data-access/api-audit-events.ts:writeApiAuditEvent` records the effect and
 resolved organization/user inside the operation's transaction. UI writes do
 not pass `audit`; dry runs and idempotent replays add no audit row.
+Committed runner writes with a non-null `describe` effect also record value-free
+`activity_events` in that same transaction for UI, REST and MCP calls, with the source identifying the transport.
+The runner records one activity event per entity ID in the effect.
+No-ops, dry runs and idempotent replays add neither kind of event.
 
 Stored outcome v2 is `{ kind: "success", data, effect? }` in
 `api_idempotency_records`, with schema version 2. Effects retain outcome code,
@@ -232,7 +236,10 @@ representations plus the next position. REST and MCP share parsed-input readers 
 `(createdAt, id)` descending and keeps PostgreSQL microseconds in the cursor;
 cursors bind the resource, organization and filters, but not page size. The
 representation deliberately contains only feedstock-owned fields and reference
-ids, without joined transport data or entity names. Supplier-location and driver
+ids, without joined transport data or entity names. Feedstock representation
+revision 2 removes intake GPS fields; date, supplier, wet mass, moisture and bin
+are non-null. Moisture is below 100%. PATCH cannot clear the bin or supply derived
+`massDryKg`. Supplier-location and driver
 ids are not feedstock columns. Percent values use 0 to 100. Business dates use
 `YYYY-MM-DD`; creation/update instants use UTC RFC 3339.
 
