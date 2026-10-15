@@ -34,7 +34,7 @@ export const recordOutputStockMovement: Operation<typeof recordOutputStockMoveme
   id: "record_output_stock_movement",
   input: recordOutputStockMovementInput,
   supportsDryRun: true,
-  describe: (input, output) => describeRecordedMovement(input, output.movementId),
+  describe: (input, output) => output.replayed ? null : describeRecordedMovement(input, output.movementId),
   execute: ({ ctx, tx, snapshotStock }, { idempotencyKey, occurredAt, facilityId, requireLatestCorrection, ...command }) => withOutputStockErrors(async () => {
     // The bin supplies the facility and the zone a facility-local time is read in.
     const bin = await readOutputStockBin(ctx, tx, { storageLocationId: command.storageLocationId, facilityId });

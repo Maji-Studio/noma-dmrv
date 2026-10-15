@@ -70,6 +70,12 @@ describe("record_output_stock_movement", () => {
     await expect(execute(loss)).rejects.toMatchObject({ code: "validation_failed", message: "This load is used up before it reaches RUN-2. Untick RUN-2." });
   });
 
+  it("does not describe an already-posted movement as a new write", async () => {
+    mocks.record.mockResolvedValue({ movementId: "movement", replayed: true });
+    const output = await execute({ ...loss, idempotencyKey: "form-key" });
+    expect(recordOutputStockMovement.describe!(recordOutputStockMovementInput.parse(loss), output)).toBeNull();
+  });
+
   it("describes the movement it created without preconditions", async () => {
     const input = recordOutputStockMovementInput.parse({ ...loss, basisFingerprint: "basis", idempotencyKey: "form-key" });
     expect(recordOutputStockMovement.describe!(input, { movementId: "movement", basisFingerprint: "basis", preview: {} as never, savedProducts: [], savedDeliveries: [] })).toEqual({

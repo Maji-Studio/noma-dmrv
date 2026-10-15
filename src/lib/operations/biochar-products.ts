@@ -111,7 +111,7 @@ export const makeBiocharProduct: Operation<typeof makeBiocharProductInput, Creat
   id: "make_biochar_product",
   input: makeBiocharProductInput,
   supportsDryRun: true,
-  describe: (input, output) => describeMadeProduct(input, output.product),
+  describe: (input, output) => output.replayed ? null : describeMadeProduct(input, output.product),
   execute: (scope, input) => withOutputStockErrors(async () => {
     const { ctx, tx, snapshotStock } = scope;
     const committed = await findCommittedProduct(scope, input);

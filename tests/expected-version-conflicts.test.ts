@@ -147,6 +147,7 @@ async function cleanup(fixture: Fixture): Promise<void> {
   }
   await db.transaction(async (tx) => {
     for (const table of [
+      "activity_events",
       "bin_movements",
       "transport_legs",
       "feedstocks",

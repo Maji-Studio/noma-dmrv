@@ -220,6 +220,9 @@ async function persistOutputStock(ctx: OrgContext, tx: DbTransaction, input: Sto
 }
 export interface RecordedOutputStockMovement {
   movementId: string;
+  facilityId?: string;
+  /** The request returned an existing movement without writing it again. */
+  replayed?: true;
   /** The stock basis the movement was planned on; a dry run's value is what a write may send back. */
   basisFingerprint: string;
   preview: OutputStockPreview;
@@ -269,7 +272,7 @@ export async function recordOutputStockMovementInTransaction(ctx: OrgContext, tx
     locksTransportRoutes: true,
     replay: async (replayTx, existing) => {
       const preview = existing.inputSnapshot!.preview as unknown as OutputStockPreview;
-      return { savedDeliveries: existing.inputSnapshot?.deliveryId
+      return { replayed: true, facilityId: input.facilityId, savedDeliveries: existing.inputSnapshot?.deliveryId
         ? await replayTx.select().from(deliveries).where(and(eq(deliveries.organizationId, ctx.organizationId), eq(deliveries.id, String(existing.inputSnapshot.deliveryId))))
         : [], movementId: existing.id, basisFingerprint: existing.basisFingerprint ?? preview.basisFingerprint, preview,
         savedProducts: (await replayTx.select().from(biocharProducts).where(and(eq(biocharProducts.organizationId, ctx.organizationId), eq(biocharProducts.storageLocationId, input.storageLocationId)))).map(toBiocharProductRecord) };
@@ -277,7 +280,7 @@ export async function recordOutputStockMovementInTransaction(ctx: OrgContext, tx
     write: async (writeTx, post) => {
       if (options.requireLatestCorrection && input.correctsMovementId) await assertLatestOutputMovement(ctx, input.storageLocationId, input.correctsMovementId, writeTx);
       const result = await post();
-      return { movementId: result.movement.id, basisFingerprint: result.preview.basisFingerprint, preview: result.preview, savedProducts: result.savedProducts.map(toBiocharProductRecord), savedDeliveries: result.savedDeliveries };
+      return { movementId: result.movement.id, facilityId: input.facilityId, basisFingerprint: result.preview.basisFingerprint, preview: result.preview, savedProducts: result.savedProducts.map(toBiocharProductRecord), savedDeliveries: result.savedDeliveries };
     },
   }, options);
 }

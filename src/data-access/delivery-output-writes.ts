@@ -81,15 +81,23 @@ async function deliveryAllocations(ctx: OrgContext, tx: DbTransaction, movement:
     policy: allocationPolicySchema.parse(row.basisSnapshot.policy) }));
 }
 
-async function replayDelivery(ctx: OrgContext, tx: DbTransaction, movement: PostedOutputRequest) {
+interface PostedDelivery {
+  delivery: CreatedDelivery;
+  basisFingerprint: string;
+  allocations: Awaited<ReturnType<typeof deliveryAllocations>>;
+  /** The request returned an existing delivery without writing it again. */
+  replayed?: true;
+}
+
+async function replayDelivery(ctx: OrgContext, tx: DbTransaction, movement: PostedOutputRequest): Promise<PostedDelivery> {
   requireOrgScope(ctx);
   const [delivery] = await tx.select().from(deliveries).where(and(eq(deliveries.organizationId, ctx.organizationId), eq(deliveries.id, String(movement.inputSnapshot?.deliveryId))));
   if (!delivery) throw deliveryReferenceNotFound(['orderId'], 'Posted delivery');
-  return { delivery: { ...delivery, savedProducts: [] as BiocharProduct[] }, basisFingerprint: movement.basisFingerprint!, allocations: await deliveryAllocations(ctx, tx, movement) };
+  return { replayed: true, delivery: { ...delivery, savedProducts: [] as BiocharProduct[] }, basisFingerprint: movement.basisFingerprint!, allocations: await deliveryAllocations(ctx, tx, movement) };
 }
 
 /** All reference reads and code-generation savepoints use the caller's connection. */
-export async function createDeliveryInTransaction(ctx: OrgContext, tx: DbTransaction, raw: CreateDeliveryInput, options: CreateDeliveryOptions = {}) {
+export async function createDeliveryInTransaction(ctx: OrgContext, tx: DbTransaction, raw: CreateDeliveryInput, options: CreateDeliveryOptions = {}): Promise<PostedDelivery> {
   requireOrgScope(ctx);
   const { code, idempotencyKey, ...facts } = raw;
   const data = recordDeliveryInput.parse(facts);

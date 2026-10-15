@@ -66,6 +66,12 @@ test.describe("Full Chain UI Smoke Test", () => {
             .where(ilike(schema.facilities.name, `Chain Facility ${runId}%`));
           const facilityIds = chainFacilities.map((f) => f.id);
 
+          if (facilityIds.length) {
+            await tx
+              .delete(schema.activityEvents)
+              .where(inArray(schema.activityEvents.facilityId, facilityIds));
+          }
+
           const chainReactorsByFacility = facilityIds.length
             ? await tx
                 .select({ id: schema.reactors.id })

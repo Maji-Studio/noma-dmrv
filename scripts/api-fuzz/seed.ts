@@ -53,7 +53,8 @@ async function main(): Promise<void> {
   const { createFacility } = await import("@/data-access/facilities");
   const { createDriver, createVehicle } = await import("@/data-access/quick-add");
   const { feedstockEtag } = await import("@/lib/api/representation-etags");
-  const { runOperation } = await import("@/lib/operations/runner");
+  const { runOperation: runWithOptions } = await import("@/lib/operations/runner");
+  const runOperation: typeof runWithOptions = (operation, ctx, input, options) => runWithOptions(operation, ctx, input, { ...options, activitySource: "script" });
   const { logFeedstockDelivery } = await import("@/lib/operations/feedstocks");
   const { formatFacilityDate } = await import("@/lib/date-utils");
   const { createSupplierLocation } = await import("@/data-access/suppliers");

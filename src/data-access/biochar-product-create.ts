@@ -43,6 +43,8 @@ export interface CreateBiocharProductInput {
 
 export interface CreatedBiocharProduct<Product = BiocharProduct> {
   product: Product;
+  /** The request returned an existing product without writing it again. */
+  replayed?: true;
   /** The product's stock basis across its source, product and ingredient bins, before the write. */
   basisFingerprint: string;
 }
@@ -78,7 +80,7 @@ async function replayPostedProduct(ctx: OrgContext, tx: DbTransaction, existing:
   const [product] = await tx.select().from(biocharProducts).where(and(eq(biocharProducts.organizationId, ctx.organizationId), eq(biocharProducts.id, String(existing.inputSnapshot?.targetBiocharProductId))));
   if (!product) throw new SafeError('The posted product could not be found.');
   // Every output movement stores its basis (bin_movements check constraint).
-  return { product, basisFingerprint: existing.basisFingerprint ?? '' };
+  return { product, basisFingerprint: existing.basisFingerprint ?? '', replayed: true };
 }
 
 /**

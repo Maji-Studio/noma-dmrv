@@ -11,12 +11,12 @@ import type { OperationEffect } from "@/lib/operation-effect";
 import { GENERATED_MOVEMENT_KEY_PREFIX } from "./output-stock";
 import { runOperationInProcess, type Operation } from "./runner";
 
-const NOT_CHANGES = new Set(["basisFingerprint", "idempotencyKey", "deliveryId", "expectedVersion"]);
+const NOT_CHANGES = new Set(["basisFingerprint", "idempotencyKey", "deliveryId", "expectedVersion", "correctsMovementId"]);
 function changedFields(input: object): string[] {
   return Object.entries(input).filter(([key, value]) => value !== undefined && !NOT_CHANGES.has(key)).map(([key]) => key).sort();
 }
 
-export const describeRecordedDelivery = (input: object, output: { delivery: Pick<Delivery, "id" | "version"> }): OperationEffect => ({
+export const describeRecordedDelivery = (input: object, output: { delivery: Pick<Delivery, "id" | "version">; replayed?: true }): OperationEffect | null => output.replayed ? null : ({
   outcome: "created", entityType: "delivery", entityIds: [output.delivery.id],
   versionBefore: null, versionAfter: output.delivery.version, changedFields: changedFields(input),
 });
@@ -71,6 +71,7 @@ export const updatePostedDelivery: Operation<typeof updateDeliverySchema, Update
   id: "update_posted_delivery",
   input: updateDeliverySchema,
   supportsDryRun: false,
+  describe: describeUpdatedDelivery,
   execute: async ({ ctx, tx, afterCommit }, { deliveryId, ...changes }) => {
     const saved = await updateDeliveryInTransaction(ctx, tx, deliveryId, changes);
     afterCommit(async () => { await processPendingStorageObjectDeletions(ctx); });

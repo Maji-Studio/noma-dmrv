@@ -79,11 +79,15 @@ describe("make_biochar_product", () => {
   });
 
   it("returns a form request's committed product before reading the facility or the recipe (api/product-replay-recipe-edit)", async () => {
-    mocks.committed.mockResolvedValue(created);
+    const committed = { ...created, replayed: true as const };
+    mocks.committed.mockResolvedValue(committed);
     // Since the first submit the recipe gained a line and the facility was archived.
     mocks.lines.mockResolvedValue([line, { ...line, id: RUN_A }]);
     mocks.facility.mockRejectedValue(new DomainError("not_found", "Facility not found or archived"));
-    await expect(make({ ...blended, idempotencyKey: "form-key" })).resolves.toEqual(created);
+    const input = makeBiocharProductInput.parse({ ...blended, idempotencyKey: "form-key" });
+    const output = await makeBiocharProduct.execute(scope, input);
+    expect(output).toEqual(committed);
+    expect(makeBiocharProduct.describe!(input, output)).toBeNull();
     expect(mocks.facility).not.toHaveBeenCalled();
     expect(mocks.lines).not.toHaveBeenCalled();
     expect(mocks.create).not.toHaveBeenCalled();
@@ -109,6 +113,14 @@ describe("make_biochar_product", () => {
     await make({ ...blended, idempotencyKey: "form-key", placedAt: { date: "2026-09-14", time: "15:00" } });
     expect(mocks.committed).not.toHaveBeenCalled();
     expect(mocks.create).toHaveBeenCalledTimes(2);
+  });
+
+  it("describes no effect when the posting seam re-returns a facility-local request", async () => {
+    mocks.create.mockResolvedValue({ ...created, replayed: true });
+    const input = makeBiocharProductInput.parse({ ...blended, idempotencyKey: "local-form-key", placedAt: { date: "2026-09-14", time: "15:00" } });
+    const output = await makeBiocharProduct.execute(scope, input);
+    expect(mocks.committed).not.toHaveBeenCalled();
+    expect(makeBiocharProduct.describe!(input, output)).toBeNull();
   });
 
   it("records the composition in recipe order, whatever order the lines were sent in", async () => {
@@ -168,8 +180,8 @@ describe("make_biochar_product", () => {
   it("describes the created product without request facts", () => {
     const effect = makeBiocharProduct.describe!(makeBiocharProductInput.parse({ ...blended, basisFingerprint: "b", idempotencyKey: "k" }), created as never);
     expect(effect).toMatchObject({ outcome: "created", entityType: "biocharProduct", entityIds: [PRODUCT_ID], versionAfter: 1 });
-    expect(effect.changedFields).not.toContain("basisFingerprint");
-    expect(effect.changedFields).not.toContain("idempotencyKey");
+    expect(effect!.changedFields).not.toContain("basisFingerprint");
+    expect(effect!.changedFields).not.toContain("idempotencyKey");
   });
 });
 

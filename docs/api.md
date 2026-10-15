@@ -91,6 +91,9 @@ client id for API writes only. Audited operations must implement `describe`.
 `src/data-access/api-audit-events.ts:writeApiAuditEvent` records the effect and
 resolved organization/user inside the operation's transaction. UI writes do
 not pass `audit`; dry runs and idempotent replays add no audit row.
+Committed runner writes with a non-null `describe` effect also record value-free
+`activity_events` in that same transaction for UI, REST and MCP calls, with the source identifying the transport.
+No-ops, dry runs and idempotent replays add neither kind of event.
 
 Stored outcome v2 is `{ kind: "success", data, effect? }` in
 `api_idempotency_records`, with schema version 2. Effects retain outcome code,

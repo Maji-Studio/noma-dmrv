@@ -38,6 +38,9 @@ import { runOwnedTransaction } from "@/data-access/owned-transaction";
 import { deadlineExceeded, idempotencyInProgress } from "@/lib/domain-errors";
 import type { Jsonified } from "./jsonified";
 import { writeApiAuditEvent } from "@/data-access/api-audit-events";
+import { recordActivity, type ActivityEventInput } from "@/data-access/activity-events";
+import { toActivityEntityType } from "@/lib/activity-entity-type";
+import { operationActivityLinks } from "./activity-links";
 import type { OperationEffect } from "@/lib/operation-effect";
 
 export type { OperationEffect } from "@/lib/operation-effect";
@@ -60,7 +63,8 @@ export interface Operation<Input extends z.ZodType, Output> {
   input: Input;
   /** False for operations with irreversible external effects. */
   supportsDryRun: boolean;
-  describe?: (input: z.output<Input>, output: Output) => OperationEffect;
+  /** Null describes an idempotent no-op, which records no activity or API audit. */
+  describe?: (input: z.output<Input>, output: Output) => OperationEffect | null;
   execute: (scope: OperationScope, input: z.output<Input>) => Promise<Output>;
 }
 
@@ -74,6 +78,8 @@ export interface IdempotencyOptions {
 }
 
 export interface RunOptions {
+  /** Source for trusted callers without an API audit; audited transports take precedence. */
+  activitySource?: ActivityEventInput["source"];
   audit?: { transport: "rest" | "mcp"; requestId: string; credentialId: string; oauthClientId?: string | null };
   dryRun?: boolean;
   idempotency?: IdempotencyOptions;
@@ -265,10 +271,23 @@ async function runOperationCore<Input extends z.ZodType, Output, Result>(
         } : undefined;
         const output = await operation.execute({ ctx, tx, snapshotStock, afterCommit: (hook) => hooks.push(hook) }, decoded);
         const stockEffects = before ? diffStockBalances(before, await readStockBalances(ctx, tx, before.map((bin) => bin.storageLocationId))) : undefined;
-        const effect = operation.describe?.(decoded, output);
+        const effect = operation.describe?.(decoded, output) ?? undefined;
         const result = represent(output);
-        if (options.audit && !dryRun && effect) {
-          await writeApiAuditEvent(ctx, tx, { ...options.audit, operationId: operation.id, effect });
+        if (!dryRun && effect) {
+          const entityType = toActivityEntityType(effect.entityType);
+          for (const entityId of effect.entityIds) {
+            await recordActivity(ctx, tx, {
+              action: effect.outcome, entityType, entityId,
+              changedFields: effect.changedFields,
+              source: options.audit?.transport ?? options.activitySource ?? "form",
+              credentialId: options.audit?.credentialId,
+              requestId: options.audit?.requestId,
+              ...operationActivityLinks(output, entityType, entityId),
+            });
+          }
+          if (options.audit) {
+            await writeApiAuditEvent(ctx, tx, { ...options.audit, operationId: operation.id, effect });
+          }
         }
         if (recordId) {
           await recordIdempotencyOutcome(ctx, tx, recordId, result, effect);

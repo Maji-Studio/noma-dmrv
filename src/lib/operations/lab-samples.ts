@@ -10,7 +10,7 @@ import { samples } from "@/db/schema";
 import { withSampleErrors } from "@/lib/sample-domain-errors";
 import {
   deleteLabSampleInput, recordLabSampleInput, updateLabSampleInput,
-  type RecordLabSampleInput, type UpdateLabSampleInput,
+  type DeleteLabSampleInput, type RecordLabSampleInput, type UpdateLabSampleInput,
 } from "@/schemas/lab-sample-input";
 import type { Operation, OperationEffect } from "./runner";
 
@@ -76,17 +76,20 @@ export const updateLabSample: Operation<typeof updateLabSampleInput, SampleWrite
   )),
 };
 
-export const deleteLabSample: Operation<typeof deleteLabSampleInput, void> = {
+export const describeDeletedLabSample = (input: DeleteLabSampleInput): OperationEffect => ({
+  outcome: "deleted", entityType: ENTITY_TYPE, entityIds: [input.labSampleId],
+  versionBefore: input.expectedVersion, versionAfter: null, changedFields: [],
+});
+
+export const deleteLabSample: Operation<typeof deleteLabSampleInput, Awaited<ReturnType<typeof deleteSampleInTransaction>>> = {
   id: "delete_lab_sample",
   input: deleteLabSampleInput,
   supportsDryRun: true,
-  describe: (input) => ({
-    outcome: "deleted", entityType: ENTITY_TYPE, entityIds: [input.labSampleId],
-    versionBefore: input.expectedVersion, versionAfter: null, changedFields: [],
-  }),
+  describe: describeDeletedLabSample,
   execute: async ({ ctx, tx, afterCommit }, { labSampleId, expectedVersion }) => {
-    await withSampleErrors(() => deleteSampleInTransaction(ctx, tx, labSampleId, expectedVersion));
+    const links = await withSampleErrors(() => deleteSampleInTransaction(ctx, tx, labSampleId, expectedVersion));
     // Retired documents queue their storage deletions; drain them only once committed.
     afterCommit(async () => { await processPendingStorageObjectDeletions(ctx); });
+    return links;
   },
 };

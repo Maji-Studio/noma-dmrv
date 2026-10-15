@@ -363,5 +363,7 @@ omit registry credentials.
 API writes with runner audit context record operation and principal IDs, entity
 IDs, outcome, versions, and decoded input field names only. Audit inserts share
 the business transaction. Failed writes, dry runs, replays, and UI server actions
-do not add events. Stored idempotency outcome schema v2 includes effect metadata;
+do not add API audit rows. Runner writes with a non-null effect also land in
+`activity_events` in the same transaction, including UI server actions, with
+field names only and source attribution. Stored idempotency outcome schema v2 includes effect metadata;
 older outcomes answer `replay_unavailable` without a compatibility mapper.
