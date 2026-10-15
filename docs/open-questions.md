@@ -21,6 +21,17 @@ Deferred work lives here, never as a `TODO` in code.
 - `src/data-access/production-runs/delete.ts:deleteProductionRun` still uses the
   legacy deletion path without a run event. Route it through the operation runner
   or record on its own transaction; preserve document retirement events.
+- `src/lib/operations/activity-links.ts:linkDocumentActivity` links only direct
+  run or credit batch owners, leaving lifecycle events for nested documents
+  (feedstock, lab sample, incident, report) unlinked. The batch activity read
+  finds them through the live document row, so deleting it hides the delete
+  event and earlier unlinked events. `src/lib/operations/runner.ts:runOperationCore`
+  records one scope per event; add multi-scope recording there or resolve a
+  single scope for nested owners.
+
+Each activity page rebuilds batch member IDs using `loadCreditBatchRollups` with
+run forwards plus several queries. Infinite-query refetches therefore rebuild
+membership once per loaded page. This cost is acceptable for v1.
 
 ## Invariants an LLM must not violate
 

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { CreditBatchActivityPage, CreditBatchActivitySummary } from "@/data-access/credit-batch-activity";
 
 import type {
   PaginatedFacilities,
@@ -383,4 +384,26 @@ export function getDashboardOverviewRead(
   options?: ReadRequestOptions,
 ): Promise<ActionResult<DashboardOverview>> {
   return requestRead<DashboardOverview>("/api/reads/dashboard/overview", input, options);
+}
+
+export async function getCreditBatchActivityRead(
+  input: { creditBatchId: string; cursor?: string; limit?: number },
+  options?: ReadRequestOptions,
+): Promise<ActionResult<CreditBatchActivityPage>> {
+  const result = await requestRead<CreditBatchActivityPage>("/api/reads/credit-batches/activity", input, options);
+  return mapReadData(result, wire => ({
+    ...wire,
+    items: wire.items.map(item => decodeDates<CreditBatchActivityPage["items"][number]>(item, ACTIVITY_DATE_FIELDS)),
+  }));
+}
+
+const ACTIVITY_DATE_FIELDS = dateFields<CreditBatchActivityPage["items"][number]>()({ occurredAt: true, registryAt: true });
+
+export async function getCreditBatchActivitySummaryRead(
+  input: { creditBatchId: string }, options?: ReadRequestOptions,
+): Promise<ActionResult<CreditBatchActivitySummary>> {
+  const result = await requestRead<CreditBatchActivitySummary>("/api/reads/credit-batches/activity/summary", input, options);
+  return mapReadData(result, wire => ({ ...wire,
+    latest: wire.latest ? decodeDates<CreditBatchActivityPage["items"][number]>(wire.latest, ACTIVITY_DATE_FIELDS) : null,
+  }));
 }

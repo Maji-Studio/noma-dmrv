@@ -121,6 +121,23 @@ unclassified write exports. Its inventory distinguishes `direct` recording,
 transitions use `certification-status-activity.ts`. Reference data, energy,
 readings and incidents are outside this activity scope.
 
+The batch activity list and summary share one membership predicate: an explicit
+link to the requested batch, or a null batch link with a current member-run link
+or current member record identity. An explicit link to another batch never matches,
+including copies of fanned-out edits and membership events. Member identities
+come from `loadCreditBatchRollups` (including
+run forwards), lab samples, owned documents and transport legs. Removal and GHG
+Statement identities follow the application slice tables; multi-run stock movements
+follow saved output allocations. These identity matches
+recover best-effort links, including events written before membership existed;
+explicit batch links preserve detach and deletion history. One event-page query
+uses bound ID arrays and OR predicates, so overlapping matches do not duplicate
+rows. Pages order by descending millisecond timestamp and sequence, with a
+validated opaque cursor. Record labels and actor names resolve in batches at
+read time; missing records are tombstones, unknown types have generic labels,
+and documents never expose filenames. The summary counts every matching event by
+entity type and action and resolves the latest event with the same labels and actors.
+
 ## Row-Level Guards
 
 Frozen/locked rows are protected by dedicated modules in `src/data-access/`, not by DB constraints alone: `bin-stock-guards.ts`, `lock-bin-stocks.ts`, the `*-stock-locks.ts` family (`biochar-product`, `delivery`, `formulation`, `order`, `production-run`), `facility-durability-lock.ts`, `certification-lineage-guards.ts`, `unique-name-guards.ts`. A fresh `db.update()` that skips these silently bypasses the freeze — route mutations through the guarded helpers.

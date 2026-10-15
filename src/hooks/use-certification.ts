@@ -4,6 +4,7 @@
  * submission flow (N credit batches → 1 Isometric Removal — ADR 0003).
  */
 
+import { activityKeys } from "./activity-query-keys";
 import {
   type QueryClient,
   useMutation,
@@ -209,6 +210,7 @@ export function invalidateCertificationReadiness(
   options?: { creditBatchPreviews?: boolean },
 ) {
   const invalidations = [
+    queryClient.invalidateQueries({ queryKey: activityKeys.all }),
     queryClient.invalidateQueries({ queryKey: certificationKeys.all }),
   ];
   if (options?.creditBatchPreviews) {
