@@ -9,10 +9,10 @@ import { requireOrgScope } from "../utils";
 import { assertCarbonReconciliation } from "./carbon-reconciliation";
 import { assertSamplingTimeNotFuture } from "./future-time";
 import { getSampleById } from "./sample-by-id";
-import { derivedRatioColumns, entryWarnings, mergeOverLocked, optionalColumns, type SampleWriteResult, type UpdateSampleRequest } from "./write-values";
+import { derivedRatioColumns, batchEntryWarnings, mergeOverLocked, optionalColumns, type SampleWriteResult, type UpdateSampleRequest } from "./write-values";
 import {
-  assertBatchTierEvidence, assertSampleLinksHeld, lockSampleWriteScope, readSampleBatchFacility, readSampleLinks,
-  requireWritableBatch, resolveSamplingTimeForBatch,
+  assertSampleLinksHeld, lockSampleWriteScope, readSampleBatchFacility, readSampleLinks,
+  requireWritableBatch, resolveSamplingTimeForBatch, type LockedSampleBatch, type SampleBatchFacility,
 } from "./write-scope";
 
 const LEGACY_LOCAL_TIME_MESSAGE = "This Sample has no credit batch, so it has no facility clock. Enter the sampling time with a time zone offset.";
@@ -60,7 +60,7 @@ export async function updateSampleInTransaction(
   // Legacy batchless rows keep their batch-free behaviour until moved onto a batch.
   const creditBatchId = request.creditBatchId ?? locked.creditBatchId;
   let samplingTime: Date | undefined;
-  let warnings: string[] = [];
+  let warningScope: { batch: LockedSampleBatch; facility: SampleBatchFacility } | undefined;
   if (creditBatchId) {
     const batch = requireWritableBatch(scope, creditBatchId);
     const facility = await readSampleBatchFacility(ctx, tx, batch);
@@ -69,8 +69,7 @@ export async function updateSampleInTransaction(
     if (request.samplingTime !== undefined || moving) {
       samplingTime = resolveSamplingTimeForBatch(request.samplingTime ?? locked.samplingTime, batch, facility);
     }
-    assertBatchTierEvidence(facility, effective);
-    warnings = entryWarnings(effective, ratios.columns, batch, facility);
+    warningScope = { batch, facility };
   } else if (request.samplingTime !== undefined) {
     // No batch, so no facility clock: only an instant can be placed.
     samplingTime = resolveLegacySamplingTime(request.samplingTime);
@@ -93,7 +92,9 @@ export async function updateSampleInTransaction(
     // Read back inside the transaction (issue #769).
     sample: await getSampleById(ctx, sampleId, tx),
     notices: ratios.notices,
-    warnings,
+    warnings: warningScope
+      ? await batchEntryWarnings(ctx, tx, effective, ratios.columns, warningScope.batch, warningScope.facility)
+      : [],
   };
 }
 

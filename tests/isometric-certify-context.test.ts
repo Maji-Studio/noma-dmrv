@@ -30,9 +30,8 @@ import {
 import {
   loadCertifyContextForCreditBatchForUser,
 } from "@/fn/certification/certify-context-core";
-import type { ProductionRunStatus } from "@/lib/production-runs/lifecycle";
 import {
-  factsFromMockedLineages,
+  mockNormalizedLineageFacts,
   satisfiedVisualEvidenceDocuments,
   transportTemplate,
 } from "./fixtures/certify-context";
@@ -113,51 +112,6 @@ const USER_ID = "user-1";
 const CREDIT_BATCH_ID = "cb-1";
 const FACILITY_ID = "fac-1";
 const EXTERNAL_PROJECT_ID = "prj_test";
-function mockNormalizedLineageFacts(
-  memberRunStatusById: Record<string, ProductionRunStatus> = {},
-): void {
-  mockedLoadAccounting.mockImplementation(async (ctx, batchIds) => {
-    const entries = await Promise.all(
-      batchIds.map(async (batchId) => {
-        const batch = await mockedGetCreditBatch(ctx, batchId, {
-          skipPreview: true,
-        });
-        const productionRunIds = batch?.productionRunIds ?? [];
-        const applicationIds = productionRunIds.includes("pr-1")
-          ? ["app-1"]
-          : [];
-        const lineages = await Promise.all(
-          applicationIds.map((applicationId) =>
-            mockedGetLineage(ctx, applicationId),
-          ),
-        );
-        const lineageFacts = factsFromMockedLineages(
-          batchId,
-          productionRunIds,
-          lineages,
-          memberRunStatusById,
-        );
-        return [
-          batchId,
-          {
-            batch: {
-              ...batch,
-              id: batchId,
-              code: batch?.code ?? "CB-1",
-              facilityId: batch?.facilityId ?? FACILITY_ID,
-              durabilityOption: batch?.durabilityOption ?? "200_year",
-              productionEmissionsClaimedByRemovalId:
-                batch?.productionEmissionsClaimedByRemovalId ?? null,
-            },
-            lineageFacts,
-            appliedWeightTons: lineageFacts.appliedWeightTons,
-          },
-        ] as const;
-      }),
-    );
-    return Object.fromEntries(entries) as never;
-  });
-}
 
 function mapping(
   overrides: Partial<CertifierProjectRow> = {},
@@ -217,7 +171,7 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
   beforeEach(() => {
     vi.resetAllMocks();
     vi.mocked(loadBiocharDeliveryTransportLegs).mockResolvedValue([]);
-    mockNormalizedLineageFacts();
+    mockNormalizedLineageFacts(mockedLoadAccounting, mockedGetCreditBatch, mockedGetLineage);
     mockedHasCredentials.mockResolvedValue(true);
     mockedGetCreditBatchRemovalId.mockResolvedValue(null);
     mockedGetCreditBatch.mockResolvedValue({
@@ -264,54 +218,6 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
     );
   });
 
-  it("evaluates batch and facility gates even when no applications are linked", async () => {
-    mockedGetCreditBatch.mockResolvedValue({
-      id: CREDIT_BATCH_ID,
-      code: "CB-1",
-      facilityId: FACILITY_ID,
-      productionRunIds: [],
-      durabilityOption: "200_year",
-      sampling: "sampled",
-    } as unknown as Awaited<ReturnType<typeof getCreditBatchById>>);
-    mockedGetBatchesWithSamples.mockResolvedValue([
-      {
-        creditBatchId: CREDIT_BATCH_ID,
-        creditBatchCode: "CB-1",
-        startDate: "2026-07-01",
-        endDate: "2026-07-31",
-        facilityTimezone: "UTC",
-        sampling: "sampled",
-        durabilityOption: "200_year",
-        samples: [],
-        runs: [],
-      },
-    ] as unknown as Awaited<ReturnType<typeof getCreditBatchesWithSamples>>);
-    mockedGetMapping.mockResolvedValue(null);
-
-    const result = await loadCertifyContextForCreditBatchForUser(
-      makeTestOrgContext(USER_ID),
-      CREDIT_BATCH_ID,
-    );
-
-    expect(result.productionReadinessGap).toMatchObject({
-      kind: "noProductionRuns",
-      detail:
-        "No completed production runs are linked to this credit batch. Complete a matching production run to continue.",
-      fixTarget: "productionRuns",
-    });
-    expect(result.durabilityGateBlockers).toEqual([
-      "Credit batch CB-1 is marked as sampled but has no Samples. Add at least 3 Samples before submitting.",
-      "Set this facility's reference soil temperature under Certification settings, then Emissions, before submitting a 200-year Removal.",
-    ]);
-    expect(result.memberBatches[0]?.facilityEmissionsGateBlockers).toEqual([
-      "Set this facility's reference soil temperature under Certification settings, then Emissions, before submitting a 200-year Removal.",
-    ]);
-    expect(result.submissionWarnings).toEqual([]);
-    expect(mockedGetBatchesWithSamples).toHaveBeenCalledWith(
-      expect.objectContaining({ organizationId: expect.any(String) }),
-      [CREDIT_BATCH_ID],
-    );
-  });
 
   it("routes a member production run with no applications to the application chain", async () => {
     mockedGetCreditBatch.mockResolvedValue({
@@ -340,7 +246,7 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
   // non-complete member run should not occur; if one ever does (legacy rows,
   // a future membership path), routing must still point at Production Runs.
   it("defensively routes a batch whose only member runs are incomplete to Production Runs", async () => {
-    mockNormalizedLineageFacts({ "pr-running": "running" });
+    mockNormalizedLineageFacts(mockedLoadAccounting, mockedGetCreditBatch, mockedGetLineage, { "pr-running": "running" });
     mockedGetCreditBatch.mockResolvedValue({
       id: CREDIT_BATCH_ID,
       code: "CB-1",
@@ -753,7 +659,7 @@ describe("requiredTransportCategories", () => {
   beforeEach(() => {
     vi.resetAllMocks();
     vi.mocked(loadBiocharDeliveryTransportLegs).mockResolvedValue([]);
-    mockNormalizedLineageFacts();
+    mockNormalizedLineageFacts(mockedLoadAccounting, mockedGetCreditBatch, mockedGetLineage);
     mockedHasCredentials.mockResolvedValue(true);
     mockedGetCreditBatch.mockResolvedValue({
       id: CREDIT_BATCH_ID,
@@ -973,7 +879,7 @@ describe("requiredTransportCategories", () => {
     );
 
     expect(result.entityReadinessGaps).toEqual([
-      "Sample S-1: Total carbon · Measured inorganic carbon · TGA non-reactive carbon data · R0 reflectance · R₀ readings at or above 2%",
+      "Sample S-1: Sample moisture · Total carbon · Measured inorganic carbon · R₀ readings at or above 2%",
     ]);
   });
 

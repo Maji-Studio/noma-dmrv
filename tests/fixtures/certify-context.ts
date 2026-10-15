@@ -1,10 +1,13 @@
 import type { getChainOfCustodyData } from "@/data-access/chain-of-custody";
-import type { CreditBatchLineageFacts } from "@/data-access/credit-batch-accounting";
+import type { MockedFunction } from "vitest";
+import type { getCreditBatchById } from "@/data-access/credit-batches";
+import type { loadCreditBatchRollups, CreditBatchLineageFacts } from "@/data-access/credit-batch-accounting";
 import type { DocumentRow } from "@/data-access/documents";
 import type { ProductionRunStatus } from "@/lib/production-runs/lifecycle";
 import type { IsometricGhgEntryTemplate } from "@/lib/isometric";
 import { APPLICATION_VISUAL_EVIDENCE_ROLES } from "@/lib/certification/application-evidence";
 
+const DEFAULT_FACILITY_ID = "fac-1";
 const DEFAULT_FACT_DATE = new Date("2026-01-20T00:00:00Z");
 
 export function satisfiedVisualEvidenceDocuments(
@@ -17,6 +20,55 @@ export function satisfiedVisualEvidenceDocuments(
     fileUrl: null,
     metadata: { geotagStatus: "present", evidenceRole: role },
   })) as unknown as DocumentRow[];
+}
+
+export function mockNormalizedLineageFacts(
+  mockedLoadAccounting: MockedFunction<typeof loadCreditBatchRollups>,
+  mockedGetCreditBatch: MockedFunction<typeof getCreditBatchById>,
+  mockedGetLineage: MockedFunction<typeof getChainOfCustodyData>,
+  memberRunStatusById: Record<string, ProductionRunStatus> = {},
+): void {
+  mockedLoadAccounting.mockImplementation(async (ctx, batchIds) => {
+    const entries = await Promise.all(
+      batchIds.map(async (batchId) => {
+        const batch = await mockedGetCreditBatch(ctx, batchId, {
+          skipPreview: true,
+        });
+        const productionRunIds = batch?.productionRunIds ?? [];
+        const applicationIds = productionRunIds.includes("pr-1")
+          ? ["app-1"]
+          : [];
+        const lineages = await Promise.all(
+          applicationIds.map((applicationId) =>
+            mockedGetLineage(ctx, applicationId),
+          ),
+        );
+        const lineageFacts = factsFromMockedLineages(
+          batchId,
+          productionRunIds,
+          lineages,
+          memberRunStatusById,
+        );
+        return [
+          batchId,
+          {
+            batch: {
+              ...batch,
+              id: batchId,
+              code: batch?.code ?? "CB-1",
+              facilityId: batch?.facilityId ?? DEFAULT_FACILITY_ID,
+              durabilityOption: batch?.durabilityOption ?? "200_year",
+              productionEmissionsClaimedByRemovalId:
+                batch?.productionEmissionsClaimedByRemovalId ?? null,
+            },
+            lineageFacts,
+            appliedWeightTons: lineageFacts.appliedWeightTons,
+          },
+        ] as const;
+      }),
+    );
+    return Object.fromEntries(entries) as never;
+  });
 }
 
 export function factsFromMockedLineages(

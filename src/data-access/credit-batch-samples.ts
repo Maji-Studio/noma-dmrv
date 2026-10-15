@@ -9,6 +9,7 @@ import type { CreditBatchDurabilityInput } from "@/lib/isometric/utils/durabilit
 import { DURABILITY_TIER_FALLBACK } from "@/schemas/credit-batches";
 import type { CreditBatchSampling } from "@/schemas/credit-batches";
 import { requireOrgScope } from "./utils";
+import { getBatchesWithLabReports } from "./sample-document-evidence";
 
 const FALLBACK_FACILITY_TIMEZONE = "UTC";
 
@@ -22,6 +23,7 @@ const FALLBACK_FACILITY_TIMEZONE = "UTC";
  * directly.
  */
 export interface CreditBatchWithSamples extends CreditBatchDurabilityInput {
+  hasLabReport?: boolean;
   /** ISO date-only production window bounds from the credit-batch row. */
   startDate?: string | null;
   endDate?: string | null;
@@ -120,7 +122,9 @@ export async function getCreditBatchesWithSamples(
     samplesByBatch.set(s.creditBatchId, list);
   }
 
+  const batchesWithReports = await getBatchesWithLabReports(ctx, ids, db, sampleRows);
   return batchRows.map((batch) => ({
+    hasLabReport: batchesWithReports.has(batch.id),
     creditBatchId: batch.id,
     creditBatchCode: batch.code,
     startDate: batch.startDate,
