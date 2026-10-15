@@ -1,7 +1,6 @@
 /**
  * The lock order every lab Sample writer shares, and the checks that read the
- * locked credit batch (Phase 5a, plan review items 1 and 4). A delete first
- * takes KEY SHARE on the batch's facility (see `samples/delete.ts`):
+ * locked credit batch (Phase 5a, plan review items 1 and 4):
  *
  * 1. Certification artifacts: the union of every lineage the write touches
  *    (the Sample's own, the target batch on a create or move), one sorted pass.
