@@ -428,7 +428,7 @@
     "order_date": "Date the order was placed",
     "status": "Order lifecycle status (pending, delivered, etc.)",
     "customer_id": "FK to the purchasing customer",
-    "customer_location_id": "FK to the delivery destination location",
+    "customer_location_id": "Required FK to the delivery destination location",
     "biochar_product_id": "FK to the product being ordered",
     "quantity_kg": "Ordered quantity in kilograms",
     "packaging": "Packaging type (bulk_bags, drums, etc.)",

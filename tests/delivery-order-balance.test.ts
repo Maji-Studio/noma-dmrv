@@ -79,7 +79,7 @@ describe("completed delivery order balance", () => {
   });
   it("allows competing orders without reserving or over-allocating physical stock", async () => {
     const f = await fixture(800);
-    const other = await db.transaction(tx => createOrderInTransaction(f.ctx, tx, { code: `E2E-OTHER-${f.tag}`, facilityId: f.facility.id, customerId: f.customer.id, formulationId: f.pure.id, orderDate: new Date(STOCK_DATE), quantityKg: 800, packaging: "loose" }));
+    const other = await db.transaction(tx => createOrderInTransaction(f.ctx, tx, { code: `E2E-OTHER-${f.tag}`, facilityId: f.facility.id, customerId: f.customer.id, customerLocationId: f.location.id, formulationId: f.pure.id, orderDate: new Date(STOCK_DATE), quantityKg: 800, packaging: "loose" }));
     expect(await getOutputBinAllLayersDryKg(f.ctx, f.bin.id)).toBe(1000);
     await postDelivery(f, 800);
     await expect(postDelivery({ ...f, order: other }, 300)).rejects.toThrow(/Not enough dry biochar/);

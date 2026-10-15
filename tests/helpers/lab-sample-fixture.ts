@@ -52,7 +52,7 @@ async function addBatch(
 ): Promise<LabSampleBatch> {
   const organizationId = f.ctx.organizationId;
   const suffix = `${f.tag}-${args.label}`;
-  const order = await db.transaction(tx => createOrderInTransaction(f.ctx, tx, { code: `E2E-LAB-O-${suffix}`, facilityId: f.facility.id, customerId: f.customer.id,
+  const order = await db.transaction(tx => createOrderInTransaction(f.ctx, tx, { code: `E2E-LAB-O-${suffix}`, facilityId: f.facility.id, customerId: f.customer.id, customerLocationId: f.location.id,
     formulationId: f.pure.id, orderDate: new Date(DELIVERY_TIME), quantityKg: DELIVERED_KG, packaging: "loose" }));
   const [delivery] = await db.insert(deliveries).values({ organizationId, code: `E2E-LAB-D-${suffix}`, facilityId: f.facility.id, orderId: order.id,
     storageLocationId: f.bin.id, deliveryDate: new Date(DELIVERY_TIME), status: "delivered", deliveredWetMassKg: DELIVERED_KG, massDryKg: DELIVERED_KG }).returning();

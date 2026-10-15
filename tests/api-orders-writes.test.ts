@@ -52,6 +52,13 @@ const records = (f: Fixture) => db.select().from(apiIdempotencyRecords).where(eq
 const audits = (f: Fixture) => db.select().from(apiAuditEvents).where(eq(apiAuditEvents.organizationId, f.ctx.organizationId));
 
 describe("order POST", { timeout: TIMEOUT_MS }, () => {
+  it("refuses a missing delivery site with 422 and a field issue", async () => {
+    const body = await problem(await post(a, orderInput(a, { customerLocationId: undefined })), 422, "validation_failed", "/customerLocationId");
+    expect(body.errors).toContainEqual(expect.objectContaining({ pointer: "/customerLocationId", code: "invalid_type" }));
+    expect(await rows(a)).toEqual([]);
+    expect(await records(a)).toEqual([]);
+    expect(await audits(a)).toEqual([]);
+  });
   it("refuses quantities below one input step with 422, including dry runs", async () => {
     for (const query of ["", "?dryRun=true"]) {
       for (const quantityKg of [5e-324, 0.0009]) {
@@ -114,6 +121,12 @@ describe("order POST", { timeout: TIMEOUT_MS }, () => {
 });
 
 describe("order PATCH", { timeout: TIMEOUT_MS }, () => {
+  it("refuses a null delivery site with 422 and preserves the row", async () => {
+    const order = await saved();
+    const body = await problem(await patch(a, order.id, { customerLocationId: null }, INITIAL_ETAG), 422, "validation_failed", "/customerLocationId");
+    expect(body.errors).toContainEqual(expect.objectContaining({ pointer: "/customerLocationId", code: "invalid_type" }));
+    expect((await read(a, order.id)).row).toEqual(order);
+  });
   it("refuses subnormal and below-step quantities without changing the order", async () => {
     const order = await saved();
     for (const query of ["", "?dryRun=true"]) {
@@ -171,16 +184,16 @@ describe("order PATCH", { timeout: TIMEOUT_MS }, () => {
     expect((await audits(a)).filter((row) => row.operationId === "update_order")).toHaveLength(2);
     expect((await audits(b)).filter((row) => row.operationId === "update_order")).toHaveLength(1);
   });
-  it("requires If-Match, bumps the tag, preserves omitted fields, clears a null location and returns current for stale tags", async () => {
+  it("requires If-Match, bumps the tag, preserves omitted fields, replaces the location and returns current for stale tags", async () => {
     const order = await saved();
     await problem(await patch(a, order.id, {}, undefined, null), 428, "precondition_required");
-    const response = await patch(a, order.id, { customerLocationId: null }, INITIAL_ETAG, null);
+    const response = await patch(a, order.id, { customerLocationId: a.otherLocation.id }, INITIAL_ETAG, null);
     expect(response.status).toBe(200);
     expect(response.headers.get("etag")).toBe(NEXT_ETAG);
     const body = await response.json();
     expect(body).not.toHaveProperty("warnings");
     const current = body.data;
-    expect(current).toMatchObject({ ...order, customerLocationId: null, version: 2, updatedAt: expect.any(String) });
+    expect(current).toMatchObject({ ...order, customerLocationId: a.otherLocation.id, version: 2, updatedAt: expect.any(String) });
     expect(await read(a, order.id)).toEqual({ row: current, etag: NEXT_ETAG });
     expect((await audits(a)).filter((row) => row.operationId === "update_order")).toMatchObject([{
       changedFields: ["customerLocationId"], versionBefore: 1, versionAfter: 2,
@@ -203,7 +216,7 @@ describe("order PATCH", { timeout: TIMEOUT_MS }, () => {
   it.each([false, true])("freezes every relationship once a delivery exists (archived: %s)", async (archived) => {
     const order = await saved();
     await insertReadDelivery(a, order.id, ALLOCATED_KG, archived);
-    for (const [field, value] of Object.entries({ facilityId: a.otherFacility.id, customerId: a.otherCustomer.id, customerLocationId: null, formulationId: a.pure.id })) {
+    for (const [field, value] of Object.entries({ facilityId: a.otherFacility.id, customerId: a.otherCustomer.id, customerLocationId: a.otherLocation.id, formulationId: a.pure.id })) {
       await problem(await patch(a, order.id, { [field]: value }, INITIAL_ETAG, null), 409, "conflict", `/${field}`);
     }
     expect((await read(a, order.id)).row).toEqual(order);

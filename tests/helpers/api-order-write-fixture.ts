@@ -6,13 +6,13 @@ import { API_KEY_DEFAULT_EXPIRY_SECONDS } from "@/config/api-keys";
 import { createApiKey } from "@/data-access/api-keys";
 import { POST } from "@/app/api/v1/orders/route";
 import { GET, PATCH, DELETE } from "@/app/api/v1/orders/[idOrCode]/route";
-import { orderInput } from "./order-operation-fixture";
+import { createOrderDestination, orderInput } from "./order-operation-fixture";
 import { createApiOrderReadFixture, readParams, readRequest } from "./api-order-read-fixture";
 
 export async function createApiOrderWriteFixture() {
   const f = await createApiOrderReadFixture();
   const { key: deleteKey } = await createApiKey(f.ctx, { name: "Order deleter", scopes: ["orders:delete"], expiresIn: API_KEY_DEFAULT_EXPIRY_SECONDS });
-  return { ...f, deleteKey };
+  return { ...f, deleteKey, otherLocation: await createOrderDestination(f) };
 }
 export type ApiOrderWriteFixture = Awaited<ReturnType<typeof createApiOrderWriteFixture>>;
 function request(method: string, path: string, credential: string, body?: unknown, headers: Record<string, string> = {}) {

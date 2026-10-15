@@ -1,5 +1,5 @@
 import { preparePureOutputProductFixture } from "./helpers/output-contract-fixtures";
-import { outputProductFixtureValues, outputOrderFixtureValues, insertOutputDeliveryFixture, deleteOutputDeliveryFixtures, deleteOutputProductFixtures, deleteOutputFacilityFixtures } from "./helpers/output-contract-fixtures";
+import { outputProductFixtureValues, outputOrderFixtureValues, deleteOutputOrderFixtures, insertOutputDeliveryFixture, deleteOutputDeliveryFixtures, deleteOutputProductFixtures, deleteOutputFacilityFixtures } from "./helpers/output-contract-fixtures";
 /**
  * Integration coverage for the storage-location lane summary (DR-002 /
  * PB-26-001).
@@ -134,7 +134,7 @@ beforeAll(async () => {
 afterAll(async () => {
   if (!fixture) return;
   await deleteOutputDeliveryFixtures(db, inArray(deliveries.id, [fixture.deliveryId]));
-  await db.delete(orders).where(inArray(orders.id, [fixture.orderId]));
+  await deleteOutputOrderFixtures(db, inArray(orders.id, [fixture.orderId]));
   await deleteOutputProductFixtures(db, inArray(biocharProducts.id, [fixture.productId]));
   await db
     .delete(storageLocations)

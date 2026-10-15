@@ -63,3 +63,12 @@ POST /biochar-products removed the required property `data/expiresAt` from the r
 GET /biochar-products/{idOrCode} removed the required property `data/expiresAt` from the response with the `200` status [response-required-property-removed].
 PATCH /biochar-products/{idOrCode} removed the required property `data/expiresAt` from the response with the `200` status [response-required-property-removed].
 PATCH /biochar-products/{idOrCode} removed the required property `allOf[subschema #2]/current/expiresAt` from the response with the `412` status [response-required-property-removed]. This compared the `allOf` branches one at a time, so another branch may still guarantee what this one dropped. Run with --flatten-allof to merge the branches and compare what they describe together.
+
+# Issue #1015 (#942 q10): an order needs a delivery site.
+# Clients must supply customerLocationId on create and cannot clear it on PATCH.
+# Remove these entries once this contract reaches the base branch.
+POST /orders the request property `customerLocationId` became required [request-property-became-required].
+POST /orders request property `customerLocationId` list-of-types was narrowed by removing types `null` from media type `application/json` [request-property-list-of-types-narrowed].
+POST /orders added the pattern `^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$` to the request property `customerLocationId` [request-property-pattern-added]. This is a breaking change because adding a pattern restriction to a previously unrestricted parameter will reject values that were previously accepted, breaking existing clients
+PATCH /orders/{idOrCode} request property `customerLocationId` list-of-types was narrowed by removing types `null` from media type `application/json` [request-property-list-of-types-narrowed].
+PATCH /orders/{idOrCode} added the pattern `^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$` to the request property `customerLocationId` [request-property-pattern-added]. This is a breaking change because adding a pattern restriction to a previously unrestricted parameter will reject values that were previously accepted, breaking existing clients

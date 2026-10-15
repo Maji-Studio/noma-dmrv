@@ -1,4 +1,4 @@
-import { outputProductFixtureValues, outputOrderFixtureValues, insertOutputDeliveryFixture, deleteOutputDeliveryFixtures, deleteOutputProductFixtures, deleteOutputFacilityFixtures } from "./helpers/output-contract-fixtures";
+import { outputProductFixtureValues, outputOrderFixtureValues, deleteOutputOrderFixtures, insertOutputDeliveryFixture, deleteOutputDeliveryFixtures, deleteOutputProductFixtures, deleteOutputFacilityFixtures } from "./helpers/output-contract-fixtures";
 /**
  * Integration coverage for the biochar-product entity option's
  * `excludeOrderId` (DR-002 / OR-26-001).
@@ -135,9 +135,7 @@ beforeAll(async () => {
 afterAll(async () => {
   if (!fixture) return;
   await deleteOutputDeliveryFixtures(db, inArray(deliveries.id, [fixture.deliveryId]));
-  await db
-    .delete(orders)
-    .where(inArray(orders.id, [fixture.fulfilledOrderId, fixture.otherOrderId]));
+  await deleteOutputOrderFixtures(db, inArray(orders.id, [fixture.fulfilledOrderId, fixture.otherOrderId]));
   await deleteOutputProductFixtures(db, inArray(biocharProducts.id, [fixture.productId]));
   await db.delete(customers).where(inArray(customers.id, [fixture.customerId]));
   await deleteOutputFacilityFixtures(db, inArray(facilities.id, [fixture.facilityId]));

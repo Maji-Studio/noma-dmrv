@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
-import { apiAuditEvents, apiIdempotencyRecords, customerLocations, customers, facilities, documents, organizationSettings, orders, storageObjectDeletions } from "@/db/schema";
+import { apiAuditEvents, apiIdempotencyRecords, customerLocations, customers, facilities, documents, organizationSettings, storageObjectDeletions } from "@/db/schema";
 import { cleanupOutputStockFixture } from "./output-stock-cleanup";
 import { seedOutputStockParents } from "./output-stock-fixture";
 
@@ -8,15 +8,18 @@ export const ORDER_DAY = "2026-09-12";
 export const ORDER_WET_KG = 100;
 export async function createOrderFixture() {
   const f = await seedOutputStockParents(db);
-  const [location] = await db.insert(customerLocations).values({ organizationId: f.ctx.organizationId,
-    customerId: f.customer.id, name: `E2E Site ${f.tag}`, country: "CH" }).returning();
   const [otherCustomer] = await db.insert(customers).values({ organizationId: f.ctx.organizationId,
     code: `E2E-OC-${f.tag}`, name: `E2E Other ${f.tag}` }).returning();
   const [otherFacility] = await db.insert(facilities).values({ organizationId: f.ctx.organizationId,
     code: `E2E-OF-${f.tag}`, name: `E2E Other ${f.tag}`, timezone: "UTC" }).returning();
-  return { ...f, location, otherCustomer, otherFacility };
+  return { ...f, otherCustomer, otherFacility };
 }
 export type OrderFixture = Awaited<ReturnType<typeof createOrderFixture>>;
+export async function createOrderDestination(f: OrderFixture, customerId = f.customer.id) {
+  const [location] = await db.insert(customerLocations).values({ organizationId: f.ctx.organizationId,
+    customerId, name: `E2E Other site ${f.tag}`, country: "CH" }).returning();
+  return location;
+}
 export function orderInput(f: OrderFixture, changes: Record<string, unknown> = {}) {
   return { facilityId: f.facility.id, customerId: f.customer.id, customerLocationId: f.location.id,
     formulationId: f.recipe.id, orderDate: ORDER_DAY, quantityKg: ORDER_WET_KG, ...changes };
@@ -28,7 +31,5 @@ export async function cleanupOrderFixture(f: OrderFixture) {
   await db.delete(apiAuditEvents).where(eq(apiAuditEvents.organizationId, id));
   await db.delete(apiIdempotencyRecords).where(eq(apiIdempotencyRecords.organizationId, id));
   await db.delete(organizationSettings).where(eq(organizationSettings.organizationId, id));
-  await db.update(orders).set({ customerLocationId: null }).where(eq(orders.organizationId, id));
-  await db.delete(customerLocations).where(eq(customerLocations.organizationId, id));
   await cleanupOutputStockFixture(db, id);
 }

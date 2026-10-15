@@ -1,4 +1,4 @@
-import { outputProductFixtureValues, outputOrderFixtureValues, insertOutputDeliveryFixture, deleteOutputDeliveryFixtures, deleteOutputProductFixtures, deleteOutputFacilityFixtures } from "./helpers/output-contract-fixtures";
+import { outputProductFixtureValues, outputOrderFixtureValues, deleteOutputOrderFixtures, insertOutputDeliveryFixture, deleteOutputDeliveryFixtures, deleteOutputProductFixtures, deleteOutputFacilityFixtures } from "./helpers/output-contract-fixtures";
 import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
 /**
  * Real-DB regression coverage for the transport-leg evidence projections.
@@ -139,7 +139,7 @@ describe("getTransportLegsWithEvidenceForEntities — biochar delivery evidence"
     }
     await cleanup(() => deleteOutputDeliveryFixtures(db, eq(deliveries.orderId, orderId)));
     if (orderId) {
-      await cleanup(() => db.delete(orders).where(eq(orders.id, orderId)));
+      await cleanup(() => deleteOutputOrderFixtures(db, eq(orders.id, orderId)));
     }
     if (productId) {
       await cleanup(() =>

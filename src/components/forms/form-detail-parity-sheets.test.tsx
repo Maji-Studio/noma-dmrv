@@ -47,6 +47,7 @@ vi.mock("@/components/applications/application-evidence-panel", () => ({ Applica
 vi.mock("@/components/applications/application-storage-location-sync", () => ({ ApplicationStorageLocationSync: stub("Application site") }));
 vi.mock("@/components/applications/application-supporting-evidence-panel", () => ({ ApplicationSupportingEvidencePanel: stub("Supporting evidence") }));
 vi.mock("@/components/samples/sample-documents-panel", () => ({ SampleDocumentsPanel: stub("Sample documents") }));
+vi.mock("@/components/orders/order-location-read", () => ({ OrderLocationRead: stub("Delivery location") }));
 vi.mock("@/components/certification/facility-certifier-summary", () => ({ FacilityCertifierSummary: stub("Registry connection") }));
 
 import { renderBothLevels, sourceFiles } from "./form-detail-parity-harness";
@@ -87,7 +88,7 @@ const storageBin = (type: string, stockMode: string) => as<Arg<typeof storageLoc
 /** Every read-section builder, rendered through the shared side-sheet spine. */
 const READ_SECTION_CASES: { file: string; name: string; sections: DetailPanelSection[] }[] = [
   { file: "components/orders/order-read-sections.tsx", name: "order", sections: orderSheetSections(as({
-    id: "order", facilityId: "facility", formulationId: "formulation", formulationName: "Mix", customerName: "Customer", customerLocationName: "North field",
+    id: "order", facilityId: "facility", formulationId: "formulation", formulationName: "Mix", customerId: "customer", customerLocationId: "location", customerName: "Customer", customerLocationName: "North field",
     orderDate: new Date("2026-09-21"), quantityKg: 2000, packaging: "loose", fulfillmentStatus: "partial", deliveryCount: 1, deliveredWetMassKg: 1200,
   })) },
   { file: "components/biochar-products/product-read-details.tsx", name: "biochar product", sections: productSheetSections(as({

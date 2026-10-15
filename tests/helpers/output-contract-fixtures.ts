@@ -5,7 +5,7 @@ import { db, type DbTransaction } from "@/db";
 import {
   biocharProducts, biocharProductSourceAllocations, binMovements, deliveries,
   formulations, orders, outputStockAllocations, outputStockMoistureReadings, outputStockRunAllocations,
-  applicationOutputAllocations, applications, facilities, productionRuns,
+  applicationOutputAllocations, applications, customerLocations, facilities, productionRuns,
   reactors, storageLocations, users, productIngredientSnapshots, type Delivery,
 } from "@/db/schema";
 
@@ -23,8 +23,9 @@ type ProductFixture = Omit<ProductValues, "placedAt" | "productionDate" | "formu
   placedAt?: Date;
   formulationId?: string | null;
 };
-type OrderFixture = Omit<OrderValues, "formulationId"> & {
+type OrderFixture = Omit<OrderValues, "formulationId" | "customerLocationId"> & {
   formulationId?: string;
+  customerLocationId?: string;
   biocharProductId?: string;
 };
 /** biocharProductId declares allocation provenance only; it is never inserted into deliveries. */
@@ -34,6 +35,7 @@ const FIXTURE_PLACED_AT = new Date("2025-01-01T00:00:00.000Z");
 const FIXTURE_RUN_LEAD_MS = 60 * 60 * 1000;
 const sourceByOrder = new Map<string, string>();
 const ownedBins = new Set<string>();
+const ownedCustomerLocations = new Set<string>();
 const ownedRuns = new Set<string>();
 const ownedReactors = new Set<string>();
 const ownedFormulations = new Set<string>();
@@ -94,7 +96,16 @@ async function orderFixture(executor: Executor, input: OrderFixture): Promise<Or
     sourceByOrder.set(id, biocharProductId);
   }
   if (!formulationId) throw new Error("Fixture order requires a formulation");
-  return { ...values, id, formulationId };
+  let customerLocationId = input.customerLocationId;
+  if (customerLocationId === undefined) {
+    const [location] = await executor.insert(customerLocations).values({
+      organizationId: input.organizationId, customerId: input.customerId,
+      name: `E2E Order destination ${randomUUID()}`,
+    }).returning({ id: customerLocations.id });
+    customerLocationId = location.id;
+    ownedCustomerLocations.add(location.id);
+  }
+  return { ...values, id, formulationId, customerLocationId };
 }
 export function outputOrderFixtureValues(executor: Executor, input: OrderFixture): Promise<OrderValues>;
 export function outputOrderFixtureValues(executor: Executor, input: OrderFixture[]): Promise<OrderValues[]>;
@@ -216,6 +227,17 @@ export async function deleteOutputDeliveryFixtures(executor: Executor, predicate
     }
   }
   return executor.delete(deliveries).where(predicate);
+}
+
+export async function deleteOutputOrderFixtures(executor: Executor, predicate: SQL | undefined) {
+  const rows = await executor.select({ customerLocationId: orders.customerLocationId }).from(orders).where(predicate);
+  const result = await executor.delete(orders).where(predicate);
+  for (const customerLocationId of new Set(rows.map(row => row.customerLocationId))) {
+    if (!ownedCustomerLocations.has(customerLocationId)) continue;
+    const [order] = await executor.select({ id: orders.id }).from(orders).where(eq(orders.customerLocationId, customerLocationId));
+    if (!order) await executor.delete(customerLocations).where(eq(customerLocations.id, customerLocationId));
+  }
+  return result;
 }
 
 export async function cleanupOutputFixtureParents(executor: Executor, facilityId: string) {

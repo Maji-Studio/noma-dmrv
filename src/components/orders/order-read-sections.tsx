@@ -42,13 +42,13 @@ export function orderSheetSections(order: OrderWithRelations): DetailPanelSectio
         { label: "Customer location", value: order.customerLocationName },
       ],
       // Address, delivery route and map, where the form shows them.
-      content: order.customerLocationId ? (
+      content: (
         <OrderLocationRead
           customerId={order.customerId}
           customerLocationId={order.customerLocationId}
           facilityId={order.facilityId}
         />
-      ) : undefined,
+      ),
     },
     {
       title: "Product details",

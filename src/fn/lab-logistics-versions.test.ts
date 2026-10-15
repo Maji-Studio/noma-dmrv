@@ -15,7 +15,7 @@ vi.mock("@/data-access/applications", () => ({ updateApplication: mocks.write, d
 vi.mock("@/data-access/credit-batches", () => ({ updateCreditBatch: mocks.write, deleteCreditBatch: mocks.write, getCreditBatchById: mocks.read }));
 vi.mock("@/data-access/transport-legs", () => ({ updateTransportLeg: mocks.write, deleteTransportLeg: mocks.write }));
 import { updateSampleFn, deleteSampleFn } from "./samples";
-import { updateOrderFn, deleteOrderFn } from "./orders";
+import { createOrderFn, updateOrderFn, deleteOrderFn } from "./orders";
 import { updateDeliveryFn, deleteDeliveryFn } from "./deliveries";
 import { updateApplicationFn, deleteApplicationFn } from "./applications";
 import { updateCreditBatchFn, deleteCreditBatchFn } from "./credit-batches";
@@ -46,4 +46,11 @@ describe.each(cases)("$entity action versions", entry => {
     }
     expect(mocks.write).not.toHaveBeenCalled();
   });
+});
+
+it("refuses order creation without a delivery site before reaching the operation", async () => {
+  const result = await createOrderFn({ facilityId: ID, customerId: ID, formulationId: ID,
+    orderDate: new Date("2026-09-12T00:00:00Z"), quantityKg: 100, packaging: "loose" } as never);
+  expect(result).toMatchObject({ success: false, code: "validation_failed", issues: [{ path: ["customerLocationId"], message: "Select a customer location." }] });
+  expect(mocks.write).not.toHaveBeenCalled();
 });

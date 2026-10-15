@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { db as database } from '@/db';
-import { facilities, formulations, formulationIngredients, feedstockTypes, storageLocations, reactors, productionRuns, feedstocks, productionRunFeedstocks, productionRunFeedstockDraws, customers, users, organizations } from '@/db/schema';
+import { facilities, formulations, formulationIngredients, feedstockTypes, storageLocations, reactors, productionRuns, feedstocks, productionRunFeedstocks, productionRunFeedstockDraws, customers, customerLocations, users, organizations } from '@/db/schema';
 import type { OrgContext } from '@/lib/auth/server';
 
 /** Real DB parents shared by FIFO integration and browser fixtures. No auth bypass. */
@@ -31,5 +31,6 @@ export async function seedOutputStockParents(db: typeof database, options: { org
   await db.insert(productionRunFeedstockDraws).values(runs.map(run => ({ organizationId, productionRunId: run.id, storageLocationId: fuelBin.id, wetMassKg: 3000 })));
   await db.insert(productionRunFeedstocks).values(runs.map(run => ({ organizationId, productionRunId: run.id, feedstockId: intake.id, wetMassUsedKg: 3000 })));
   const [customer] = await db.insert(customers).values({ organizationId, code: `E2E-FIFO-C-${tag}`, name: `E2E Customer ${tag}` }).returning();
-  return { tag, ctx, facility, recipe, pure, ingredientType, ingredient, source, bin, runs, customer };
+  const [location] = await db.insert(customerLocations).values({ organizationId, customerId: customer.id, name: `E2E Site ${tag}`, country: "CH" }).returning();
+  return { location, tag, ctx, facility, recipe, pure, ingredientType, ingredient, source, bin, runs, customer };
 }

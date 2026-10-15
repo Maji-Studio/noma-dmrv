@@ -396,6 +396,7 @@ test("gallery order create and read", async ({ adminPage: page, testUsers }) => 
   await page.getByRole("button", { name: "New order", exact: true }).click();
   await page.locator("#orderDate").fill(FIFO_BROWSER_DATE);
   await selectEntity(page, "Customer", f.customer.id, f.customer.name);
+  await selectEntity(page, "Customer location", f.location.id, f.location.name ?? undefined);
   await selectEntity(page, "Formulation", f.recipe.id, f.recipe.name);
   await page.locator("#quantityKg").fill("1500");
   await page.locator("#packaging").selectOption("loose");

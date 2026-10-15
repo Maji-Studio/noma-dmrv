@@ -16,7 +16,7 @@ export async function createDeliveryFixture() {
     massKg: 1000, moistureContentPercent: 10, waterAddedKg: 0, idempotencyKey: randomUUID(),
     composition: { ingredients: [{ formulationIngredientId: f.ingredient.id, feedstockTypeId: f.ingredientType.id, massKg: 200, moistureContentPercent: 60 }] },
   });
-  const order = await runOperationInProcess(recordOrder, f.ctx, { facilityId: f.facility.id, customerId: f.customer.id, formulationId: f.recipe.id, orderDate: "2026-09-12", quantityKg: 100, packaging: "loose" });
+  const order = await runOperationInProcess(recordOrder, f.ctx, { facilityId: f.facility.id, customerId: f.customer.id, customerLocationId: f.location.id, formulationId: f.recipe.id, orderDate: "2026-09-12", quantityKg: 100, packaging: "loose" });
   const input = { orderId: order.id, storageLocationId: f.bin.id, deliveredAt: TIME, deliveredWetMassKg: 100, moisturePercent: 20, idempotencyKey: randomUUID() };
   return { ...f, product, order, input };
 }

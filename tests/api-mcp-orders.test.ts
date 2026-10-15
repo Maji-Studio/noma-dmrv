@@ -116,12 +116,12 @@ describe("customer and order MCP tools", { timeout: TIMEOUT_MS }, () => {
     }
   });
 
-  it("records, updates only present fields, clears a location, reports stale versions, then deletes", async () => {
+  it("records, updates only present fields, replaces a location, reports stale versions, then deletes", async () => {
     const row = await saved();
     expect(row).toMatchObject({ orderDate: "2026-09-12", quantityKg: 100, packaging: "loose" });
-    const changed = await write("update_order", { orderId: row.id.toUpperCase(), expectedVersion: row.version, customerLocationId: null, quantityKg: UPDATED_KG });
+    const changed = await write("update_order", { orderId: row.id.toUpperCase(), expectedVersion: row.version, customerLocationId: a.otherLocation.id, quantityKg: UPDATED_KG });
     expect(changed.isError).toBeUndefined();
-    expect(changed.structuredContent.data).toMatchObject({ ...row, version: 2, quantityKg: UPDATED_KG, customerLocationId: null, updatedAt: expect.any(String) });
+    expect(changed.structuredContent.data).toMatchObject({ ...row, version: 2, quantityKg: UPDATED_KG, customerLocationId: a.otherLocation.id, updatedAt: expect.any(String) });
     const current = (await readRestOrder(a, row.id)).row;
     for (const [name, key] of [["update_order", a.writeOnlyKey], ["delete_order", a.deleteKey]] as const) {
       expect(await write(name, { orderId: row.id, expectedVersion: row.version }, key)).toMatchObject({ isError: true, structuredContent: { code: "stale_version", current } });
@@ -132,6 +132,18 @@ describe("customer and order MCP tools", { timeout: TIMEOUT_MS }, () => {
     expect((await orderAudits(a)).map((audit) => [audit.operationId, audit.transport]).sort()).toEqual([
       ["delete_order", "mcp"], ["record_order", "mcp"], ["update_order", "mcp"],
     ]);
+  });
+
+  it("refuses a missing create destination and a null update destination with field issues", async () => {
+    expect(await write("record_order", orderInput(a, { customerLocationId: undefined }))).toMatchObject({
+      isError: true, structuredContent: { code: "validation_failed", issues: [{ pointer: "/customerLocationId", code: "invalid_type" }] },
+    });
+    await noWrites();
+    const row = await saved();
+    expect(await write("update_order", { orderId: row.id, expectedVersion: row.version, customerLocationId: null })).toMatchObject({
+      isError: true, structuredContent: { code: "validation_failed", issues: [{ pointer: "/customerLocationId", code: "invalid_type" }] },
+    });
+    expect((await readRestOrder(a, row.id)).row).toEqual(row);
   });
 
   it("requires requestKey on every real write and expectedVersion on update and delete", async () => {
@@ -234,7 +246,7 @@ describe("customer and order MCP tools", { timeout: TIMEOUT_MS }, () => {
     const row = await saved();
     await insertReadDelivery(a, row.id, DELIVERED_KG, archived);
     expect(await write("delete_order", { orderId: row.id, expectedVersion: row.version }, a.deleteKey)).toMatchObject({ isError: true, structuredContent: { code: "conflict", issues: [{ pointer: "/orderId" }] } });
-    for (const [field, value] of Object.entries({ facilityId: a.otherFacility.id, customerId: a.otherCustomer.id, formulationId: a.pure.id, customerLocationId: null })) {
+    for (const [field, value] of Object.entries({ facilityId: a.otherFacility.id, customerId: a.otherCustomer.id, formulationId: a.pure.id, customerLocationId: a.otherLocation.id })) {
       expect(await write("update_order", { orderId: row.id, expectedVersion: row.version, [field]: value })).toMatchObject({ isError: true, structuredContent: { code: "conflict", issues: [{ pointer: `/${field}` }] } });
     }
     expect((await readRestOrder(a, row.id)).row).toEqual(row);

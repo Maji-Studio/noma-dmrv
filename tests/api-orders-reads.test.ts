@@ -1,4 +1,5 @@
 /** Real handlers, credentials and Postgres. Not run by the implementation agent. */
+import { createOrderDestination } from "./helpers/order-operation-fixture";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { and, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
@@ -33,8 +34,8 @@ const ids = async (response: Response): Promise<string[]> => (await response.jso
 beforeEach(async () => {
   a = await createApiOrderReadFixture(); b = await createApiOrderReadFixture();
   first = await insertReadOrder(a, `OR-READ-1-${a.tag}`, { createdAt: sql`'2026-10-01 12:00:00.123455'::timestamp` });
-  second = await insertReadOrder(a, `OR-READ-2-${a.tag}`, { createdAt: sql`'2026-10-01 12:00:00.123456'::timestamp`, orderDate: new Date("2026-09-13T00:00:00Z"), customerLocationId: null, packaging: "bagged" });
-  other = await insertReadOrder(a, `OR-READ-3-${a.tag}`, { createdAt: new Date("2026-10-02T00:00:00Z"), customerId: a.otherCustomer.id, customerLocationId: null, formulationId: a.pure.id, facilityId: a.otherFacility.id, orderDate: new Date("2026-08-12T00:00:00Z") });
+  second = await insertReadOrder(a, `OR-READ-2-${a.tag}`, { createdAt: sql`'2026-10-01 12:00:00.123456'::timestamp`, orderDate: new Date("2026-09-13T00:00:00Z"), customerLocationId: a.location.id, packaging: "bagged" });
+  other = await insertReadOrder(a, `OR-READ-3-${a.tag}`, { createdAt: new Date("2026-10-02T00:00:00Z"), customerId: a.otherCustomer.id, customerLocationId: (await createOrderDestination(a, a.otherCustomer.id)).id, formulationId: a.pure.id, facilityId: a.otherFacility.id, orderDate: new Date("2026-08-12T00:00:00Z") });
 }, READ_TIMEOUT_MS);
 afterEach(async () => { await removeApiOrderReadFixture(a); await removeApiOrderReadFixture(b); }, READ_TIMEOUT_MS);
 
@@ -51,7 +52,7 @@ describe("order REST reads", { timeout: READ_TIMEOUT_MS }, () => {
       expect(data).toMatchObject({ id: first.id, facilityId: a.facility.id, customerId: a.customer.id, customerLocationId: a.location.id,
         formulationId: a.recipe.id, orderDate: "2026-09-12", quantityKg: 100, packaging: "loose", archivedAt: null });
     }
-    expect((await (await get(second.id)).json()).data).toMatchObject({ customerLocationId: null, packaging: "bagged", orderDate: "2026-09-13" });
+    expect((await (await get(second.id)).json()).data).toMatchObject({ customerLocationId: a.location.id, packaging: "bagged", orderDate: "2026-09-13" });
     expect(await (await get(first.id)).text()).toBe(await (await get(first.code)).text());
   });
 

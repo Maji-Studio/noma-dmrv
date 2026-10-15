@@ -27,7 +27,7 @@ afterEach(async () => { await removeApiProductFixture(f); });
 const etagAt = (version: number) => `"${version}.${BIOCHAR_PRODUCT_REPRESENTATION_REVISION}"`;
 
 async function deliverFromProductBin() {
-  const order = await db.transaction(tx => createOrderInTransaction(f.ctx, tx, { code: `E2E-API-O-${f.tag}`, facilityId: f.facility.id, customerId: f.customer.id,
+  const order = await db.transaction(tx => createOrderInTransaction(f.ctx, tx, { code: `E2E-API-O-${f.tag}`, facilityId: f.facility.id, customerId: f.customer.id, customerLocationId: f.location.id,
     formulationId: f.pure.id, orderDate: new Date(ORDER_DATE), quantityKg: ORDER_QUANTITY_KG, packaging: "loose" }));
   const preview = await previewOutputStock(f.ctx, { facilityId: f.facility.id, storageLocationId: f.pureBin.id, occurredAt: STOCK_TIME,
     kind: "delivery", wetMassKg: DELIVERY_WET_KG, moisturePercent: BIOCHAR_MOISTURE_PERCENT });

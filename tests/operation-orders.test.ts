@@ -7,7 +7,7 @@ import { db } from "@/db";
 import { orders, deliveries, facilities, organizationSettings, documents, apiAuditEvents } from "@/db/schema";
 import { recordOrder, updateOrder, deleteOrder } from "@/lib/operations/orders";
 import { runOperation } from "@/lib/operations/runner";
-import { cleanupOrderFixture, createOrderFixture, orderInput, type OrderFixture } from "./helpers/order-operation-fixture";
+import { cleanupOrderFixture, createOrderDestination, createOrderFixture, orderInput, type OrderFixture } from "./helpers/order-operation-fixture";
 
 import { __setStorageProviderForTests } from "@/lib/storage";
 import { certifyOutputLineage, cleanupCertifiedOutputLineage } from "./helpers/certified-output-lineage";
@@ -24,7 +24,7 @@ async function addDelivery(f: OrderFixture, orderId: string, archived = false) {
 const SUITE_TIMEOUT_MS = 60_000;
 const NO_SELF_WAIT_MS = 5_000;
 const fixtures: OrderFixture[] = [];
-async function fixture() { const f = await createOrderFixture(); fixtures.push(f); return f; }
+async function fixture() { const f = await createOrderFixture(); fixtures.push(f); return { ...f, otherLocation: await createOrderDestination(f) }; }
 afterEach(async () => { __setStorageProviderForTests(null); for (const f of fixtures.splice(0)) { await cleanupCertifiedOutputLineage(f.ctx.organizationId); await cleanupOrderFixture(f); } });
 const rows = (f: OrderFixture) => db.select().from(orders).where(eq(orders.organizationId, f.ctx.organizationId));
 const record = (f: OrderFixture, changes: Record<string, unknown> = {}) => runOperation(recordOrder, f.ctx, orderInput(f, changes));
@@ -53,7 +53,7 @@ describe("order PATCH guards", { timeout: SUITE_TIMEOUT_MS }, () => {
     const order = (await record(f)).data;
     await addDelivery(f, order.id, archived);
     const patch = { orderId: order.id, expectedVersion: 1 };
-    for (const [field, value] of Object.entries({ customerId: f.otherCustomer.id, customerLocationId: null,
+    for (const [field, value] of Object.entries({ customerId: f.otherCustomer.id, customerLocationId: f.otherLocation.id,
       formulationId: f.pure.id, facilityId: f.otherFacility.id })) {
       await expect(runOperation(updateOrder, f.ctx, { ...patch, [field]: value }))
         .rejects.toMatchObject({ code: "conflict", issues: [expect.objectContaining({ path: [field] })] });
@@ -83,11 +83,11 @@ describe("order PATCH guards", { timeout: SUITE_TIMEOUT_MS }, () => {
     expect(saved.data.quantityKg).toBe(ALLOCATED_KG);
   });
 
-  it("keeps omitted keys and clears an explicit null location", async () => {
+  it("keeps omitted keys and replaces an explicit location", async () => {
     const f = await fixture();
     const order = (await record(f)).data;
-    const saved = await runOperation(updateOrder, f.ctx, { orderId: order.id, expectedVersion: 1, customerLocationId: null });
-    expect(saved.data).toMatchObject({ customerLocationId: null, customerId: order.customerId, formulationId: order.formulationId,
+    const saved = await runOperation(updateOrder, f.ctx, { orderId: order.id, expectedVersion: 1, customerLocationId: f.otherLocation.id });
+    expect(saved.data).toMatchObject({ customerLocationId: f.otherLocation.id, customerId: order.customerId, formulationId: order.formulationId,
       facilityId: order.facilityId, orderDate: order.orderDate, quantityKg: order.quantityKg, packaging: order.packaging });
   });
 

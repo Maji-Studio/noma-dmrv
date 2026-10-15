@@ -36,7 +36,7 @@ export const orderWriteTools: WriteTool[] = [
   {
     kind: "write", name: "record_order", scope: "orders:write", input: createInput, output: itemOutput,
     annotations: { ...annotations, destructiveHint: false },
-    description: `Record one order. Call find_customers, find_customer_locations and find_formulations first, and whoami for facility ids. ${ORDER_GUIDANCE} ${guidance}`,
+    description: `Record one order with a required customer location for the delivery destination. Call find_customers, find_customer_locations and find_formulations first, and whoami for facility ids. ${ORDER_GUIDANCE} ${guidance}`,
     async execute(context, raw) {
       const { input, dryRun, requestKey } = parseControls(raw, createContract);
       const result = await runOperation(representationCheckedRecord, context.ctx, input, writeOptions(context, dryRun, requestKey));
@@ -50,7 +50,7 @@ export const orderWriteTools: WriteTool[] = [
   {
     kind: "write", name: "update_order", scope: "orders:write", input: updateInput, output: itemOutput,
     annotations: { ...annotations, destructiveHint: true },
-    description: `Update an order by UUID. Send only what changes; null clears customerLocationId. Archived orders cannot be updated. ${versionGuidance} ${ORDER_GUIDANCE} ${guidance}`,
+    description: `Update an order by UUID. Send only what changes; customerLocationId cannot be cleared. Archived orders cannot be updated. ${versionGuidance} ${ORDER_GUIDANCE} ${guidance}`,
     execute: (context, raw) => mutate(context, raw, "update"),
     summarize(body, dryRun) {
       const row = body.data as OrderRepresentation;

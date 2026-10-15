@@ -78,6 +78,7 @@ export const orders = pgTable('orders', {
     .notNull()
     .references(() => customers.id),
   customerLocationId: uuid('customer_location_id')
+    .notNull()
     .references(() => customerLocations.id),
   // --- Order Details ---
   formulationId: uuid('formulation_id').notNull().references(() => formulations.id),
