@@ -5,7 +5,7 @@
  * deliveries UPDATE; application UPDATE and version; revalidate lineage and
  * discovered sets; application slices UPDATE; writes and document retirement.
  * Never lock a newly discovered row late. See application-write-scope.ts for
- * the cross-writer proof and the run-before-artifact membership cycle left to 1b.
+ * the cross-writer proof, including artifacts-first credit-batch membership.
  */
 import { and, eq, ne, sum } from "drizzle-orm";
 import type { DbTransaction } from "@/db";

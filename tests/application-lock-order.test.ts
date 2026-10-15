@@ -4,7 +4,7 @@ import { DomainError } from "@/lib/domain-errors";
 import { Pool } from "pg";
 import { and, eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, expect, it, vi } from "vitest";
 import { db, type DbTransaction } from "@/db";
 import * as schema from "@/db/schema";
 import { getPgPoolConfig } from "@/lib/pg-pool-config";
@@ -204,6 +204,16 @@ it.each(["application", "removal"] as const)("create versus Removal create seria
   try { expect((await first).ok).toBe(true); const result = await second;
     // A newly discovered Removal answers retryable conflict rather than acquiring its artifact late.
     if (!result.ok) expect(result.error).toMatchObject({ code: "conflict", retryable: true });
+    const apps = await db.select().from(schema.applications).where(eq(schema.applications.deliveryId, f.deliveryId));
+    expect(apps).toHaveLength(firstKind === "application" || result.ok ? 2 : 1);
+    for (const app of apps) {
+      const shares = await db.select().from(schema.applicationOutputAllocations).where(eq(schema.applicationOutputAllocations.applicationId, app.id));
+      expect(shares.reduce((sum, row) => sum + Number(row.wetMassKg), 0)).toBeCloseTo(app.biocharAppliedTons * 1000);
+      const slices = await db.select().from(schema.creditBatchApplications).where(eq(schema.creditBatchApplications.applicationId, app.id));
+      expect(slices.map(row => [row.creditBatchId, row.removalId, row.allocatedWetMassKg, row.allocatedDryMassKg])).toEqual([
+        [f.batchId, firstKind === "application" || app.id === f.applicationId ? removalId : null, app.biocharAppliedTons * 1000, app.biocharAppliedDryTons! * 1000],
+      ]);
+    }
   } finally {
     if (removalId) {
       await db.update(schema.creditBatchApplications).set({ removalId: null }).where(eq(schema.creditBatchApplications.removalId, removalId));
@@ -218,4 +228,3 @@ it.each(["application", "removal"] as const)("create versus Removal create seria
     await cleanupLineageFixture(f);
   }
 }, TEST_TIMEOUT_MS);
-describe.todo("commit 1b: membership update/delete versus application update/delete, both interleavings");

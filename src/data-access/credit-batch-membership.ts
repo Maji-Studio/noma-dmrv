@@ -1,3 +1,33 @@
+/**
+ * Explicit credit-batch create, update and delete lock sequence:
+ * 1. Discover the batch (update/delete), current/prospective runs and artifacts
+ *    without row locks.
+ * 2. Lock the batch's certification artifacts. Both artifact helpers delegate
+ *    to acquireCertificationArtifactLocksSorted, using one global key order.
+ *    Create has no existing batch or certification lineage to guard.
+ * 3. Facilities FOR SHARE, sorted, before runs and batch: facility archive and
+ *    Removal create take the facility first, including before child FK checks.
+ * 4. Current/prospective runs FOR UPDATE, sorted, on create or membership refresh.
+ * 5. Production-process advisory scope. Keep runs before scope: auto-attachment
+ *    already holds its run before requesting this scope. Other scope holders
+ *    in production-processes.ts never request runs or certification artifacts.
+ *    Newly matching unassigned runs use late SKIP LOCKED acquisition: it
+ *    cannot wait on scope holders, these runs have no batch artifacts, and
+ *    their facility is already share-locked. A missed row answers conflict.
+ * 6. Batch FOR UPDATE and expected-version check (insert on create).
+ * 7. Revalidate artifact set, current/prospective member sets and cohort.
+ *    Changed artifacts/current membership answer a typed conflict.
+ * 8. Write membership and reconcile slices, whose inserts FK-check applications
+ *    with KEY SHARE. Application writers take artifacts, facility, runs SHARE,
+ *    batch SHARE, delivery, application, so they serialize before slice writes.
+ *
+ * Removal submission and lab Sample/document writers take artifacts before
+ * batch rows; lifecycle Removal row revalidation uses SKIP LOCKED. Membership
+ * refresh takes artifacts before runs, opposite production-run writers. It
+ * also takes artifacts before scope, opposite run auto-attachment. Both
+ * writers retry transaction aborts; these residuals remain in data/lock-order
+ * and data/production-run-artifact-order.
+ */
 import { assertRowVersion, nextVersion } from "./row-version";
 /**
  * Credit Batch Membership Rules
@@ -23,6 +53,7 @@ import {
 import type { DbTransaction } from "@/db";
 import type { OrgContext } from "@/lib/auth/server";
 import { creditBatches, creditBatchProductionRuns } from "@/db/schema/credits";
+import { facilities } from "@/db/schema/facilities";
 import { feedstocks } from "@/db/schema/feedstock";
 import {
   productionRuns,
@@ -31,9 +62,11 @@ import {
 import { assertCreditBatchProductionWindow } from "./credit-batch-production-window";
 import { productionRunDateExpr } from "./production-runs/date-expr";
 import { SafeError } from "@/lib/errors";
+import { DomainError } from "@/lib/domain-errors";
 import { formatCount, pluralize } from "@/lib/copy-utils";
 import { COMPLETED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
 import { lockProductionProcessScope } from "./production-processes";
+import { requireOrgScope } from "./utils";
 import { CreditBatchLineageChangedError, isCreditBatchMembershipLockedBySubmission, lockCreditBatchArtifacts } from "./credit-batch-certification-lock";
 
 export interface LockedCreditBatchProductionRun {
@@ -45,10 +78,10 @@ export interface LockedCreditBatchProductionRun {
 }
 
 /**
- * Lock every prospective/current member in deterministic order before a credit
- * batch, removal, or certification lock is taken. Production-run reopen takes
- * the same row lock before checking membership, so either the membership write
- * or the reopen wins; they cannot both validate stale state.
+ * Lock prospective/current members after artifacts and before batch/process
+ * scope, except newly matching unassigned runs acquired with SKIP LOCKED.
+ * Production-run reopen takes the same row lock before checking membership,
+ * so it cannot validate stale state alongside a membership write.
  */
 export async function lockCreditBatchProductionRuns(
   ctx: OrgContext,
@@ -88,23 +121,25 @@ export async function lockCreditBatchDeclarationRuns(
     endDate: string | Date;
     requestedProductionRunIds: string[];
     currentProductionRunIds?: string[];
+    matchingProductionRunIds?: string[];
   },
 ): Promise<{
   runIds: string[];
   lockedRuns: LockedCreditBatchProductionRun[];
 }> {
-  const matchingBeforeLock = await findMatchingUnassignedProductionRunIds(
+  const matchingBeforeLock = params.matchingProductionRunIds ?? await findMatchingUnassignedProductionRunIds(
     ctx,
     tx,
     params,
   );
-  let runIds = [
+  const runIds = [
     ...new Set([
       ...params.requestedProductionRunIds,
       ...matchingBeforeLock,
     ]),
   ].sort();
-  let lockedRuns = await lockCreditBatchProductionRuns(ctx, tx, [
+  await lockMembershipFacilities(ctx, tx, [params.facilityId]);
+  const lockedRuns = await lockCreditBatchProductionRuns(ctx, tx, [
     ...(params.currentProductionRunIds ?? []),
     ...runIds,
   ]);
@@ -115,36 +150,88 @@ export async function lockCreditBatchDeclarationRuns(
     tx,
     params,
   );
-  const beforeIds = new Set(matchingBeforeLock);
-  const selectedIds = new Set(runIds);
-  const concurrentlyCompletedRunIds = matchingAfterLock.filter(
-    (runId) => !beforeIds.has(runId) && !selectedIds.has(runId),
-  );
-  if (concurrentlyCompletedRunIds.length > 0) {
-    const concurrentlyLocked = await lockCreditBatchProductionRuns(
-      ctx,
-      tx,
-      concurrentlyCompletedRunIds,
-      { skipLocked: true },
+  const lockedIds = new Set(lockedRuns.map(run => run.id));
+  const lateRunIds = matchingAfterLock.filter(id => !lockedIds.has(id));
+  const lateRuns = await lockCreditBatchProductionRuns(ctx, tx, lateRunIds, { skipLocked: true });
+  if (lateRuns.length !== lateRunIds.length) {
+    throw membershipChanged(
+      "Matching production runs are being updated while this credit batch is being declared. Refresh and retry.",
     );
-    if (concurrentlyLocked.length !== concurrentlyCompletedRunIds.length) {
-      throw new SafeError(
-        "Matching production runs are being updated while this credit batch is being declared. Refresh and retry.",
-      );
-    }
-    runIds = [...new Set([...runIds, ...concurrentlyCompletedRunIds])].sort();
-    lockedRuns = [...lockedRuns, ...concurrentlyLocked];
   }
-  return { runIds, lockedRuns };
+  return {
+    runIds: [...new Set([...runIds, ...lateRunIds])].sort(),
+    lockedRuns: [...lockedRuns, ...lateRuns],
+  };
 }
 
 export interface LockedCreditBatchForUpdate {
   lockedRemovals: Awaited<ReturnType<typeof lockCreditBatchArtifacts>>;
   version: number;
+  code: string;
   facilityId: string;
   startDate: string;
   endDate: string;
   feedstockTypeId: string;
+}
+
+function membershipChanged(message = "The credit batch cohort changed while this update was being prepared. Refresh and retry.") {
+  return new DomainError("conflict", message, { retryable: true });
+}
+
+function sameIds(before: readonly string[], after: readonly string[]): boolean {
+  const sortedBefore = [...before].sort();
+  const sortedAfter = [...after].sort();
+  return sortedBefore.length === sortedAfter.length &&
+    sortedBefore.every((id, index) => id === sortedAfter[index]);
+}
+
+async function lockMembershipFacilities(ctx: OrgContext, tx: DbTransaction, ids: string[]) {
+  await tx.select({ id: facilities.id }).from(facilities)
+    .where(and(inArray(facilities.id, [...new Set(ids)].sort()), eq(facilities.organizationId, ctx.organizationId)))
+    .orderBy(facilities.id).for("share");
+}
+
+const batchMembershipFields = {
+  version: creditBatches.version,
+  code: creditBatches.code,
+  facilityId: creditBatches.facilityId,
+  startDate: creditBatches.startDate,
+  endDate: creditBatches.endDate,
+  feedstockTypeId: creditBatches.feedstockTypeId,
+};
+
+async function readMembershipRunIds(ctx: OrgContext, tx: DbTransaction, id: string) {
+  const links = await tx.select({ id: creditBatchProductionRuns.productionRunId })
+    .from(creditBatchProductionRuns)
+    .where(and(eq(creditBatchProductionRuns.creditBatchId, id), eq(creditBatchProductionRuns.organizationId, ctx.organizationId)))
+    .orderBy(creditBatchProductionRuns.productionRunId);
+  return links.map(link => link.id);
+}
+
+/** Discover before any row locks; update then locks its prospective runs too. */
+export async function prepareCreditBatchMembershipWrite(
+  ctx: OrgContext,
+  tx: DbTransaction,
+  id: string,
+  target: { facilityId?: string; feedstockTypeId?: string; startDate?: string | Date; endDate?: string | Date } = {},
+  refreshMembership = false,
+) {
+  requireOrgScope(ctx);
+  const [snapshot] = await tx.select(batchMembershipFields).from(creditBatches)
+    .where(and(eq(creditBatches.id, id), eq(creditBatches.organizationId, ctx.organizationId)));
+  if (!snapshot) throw new SafeError("Credit batch not found");
+  const currentProductionRunIds = await readMembershipRunIds(ctx, tx, id);
+  const matchingProductionRunIds = refreshMembership
+    ? await findMatchingUnassignedProductionRunIds(ctx, tx, {
+        facilityId: target.facilityId ?? snapshot.facilityId,
+        feedstockTypeId: target.feedstockTypeId ?? snapshot.feedstockTypeId,
+        startDate: target.startDate ?? snapshot.startDate,
+        endDate: target.endDate ?? snapshot.endDate,
+      })
+    : undefined;
+  const lockedRemovals = await lockCreditBatchArtifacts(ctx, tx, id);
+  await lockMembershipFacilities(ctx, tx, [snapshot.facilityId, target.facilityId ?? snapshot.facilityId]);
+  return { snapshot, currentProductionRunIds, matchingProductionRunIds, lockedRemovals };
 }
 
 export async function assertNoOverlappingCreditBatchCohort(
@@ -193,30 +280,19 @@ export async function lockCreditBatchForUpdate(
   tx: DbTransaction,
   id: string,
   target: { facilityId?: string; feedstockTypeId?: string; expectedVersion: number },
+  prepared?: Awaited<ReturnType<typeof prepareCreditBatchMembershipWrite>>,
 ): Promise<LockedCreditBatchForUpdate> {
-  const selectFields = {
-    version: creditBatches.version,
-    facilityId: creditBatches.facilityId,
-    startDate: creditBatches.startDate,
-    endDate: creditBatches.endDate,
-    feedstockTypeId: creditBatches.feedstockTypeId,
-  };
-  const [snapshot] = await tx
-    .select(selectFields)
-    .from(creditBatches)
-    .where(and(
-      eq(creditBatches.id, id),
-      eq(creditBatches.organizationId, ctx.organizationId),
-    ));
-  if (!snapshot) throw new SafeError("Credit batch not found");
-
+  const { snapshot, currentProductionRunIds, lockedRemovals } = prepared ??
+    await prepareCreditBatchMembershipWrite(ctx, tx, id, target);
+  // Membership refresh already locked the old/new run union. Scalar edits and
+  // delete need no run locks: batch UPDATE serializes with applications' SHARE
+  // before membership links or slices change, including delete's FK checks.
   await lockProductionProcessScope(tx, {
     facilityId: target.facilityId ?? snapshot.facilityId,
     feedstockTypeId: target.feedstockTypeId ?? snapshot.feedstockTypeId,
   });
-  const lockedRemovals = await lockCreditBatchArtifacts(ctx, tx, id);
   const [locked] = await tx
-    .select(selectFields)
+    .select(batchMembershipFields)
     .from(creditBatches)
     .where(and(
       eq(creditBatches.id, id),
@@ -231,9 +307,18 @@ export async function lockCreditBatchForUpdate(
     locked.startDate !== snapshot.startDate ||
     locked.endDate !== snapshot.endDate
   ) {
-    throw new SafeError(
-      "The credit batch cohort changed while this update was being prepared. Refresh and retry.",
-    );
+    throw membershipChanged();
+  }
+  if (!sameIds(currentProductionRunIds, await readMembershipRunIds(ctx, tx, id))) {
+    throw membershipChanged("Credit batch membership changed while this update was being prepared. Refresh and retry.");
+  }
+  try {
+    // Revalidate artifacts under the batch lock, including SKIP LOCKED Removal
+    // rows. The caller still applies its mutation-specific submission refusal.
+    await isCreditBatchMembershipLockedBySubmission(ctx, tx, id, lockedRemovals);
+  } catch (error) {
+    if (error instanceof CreditBatchLineageChangedError) throw membershipChanged(error.message);
+    throw error;
   }
   return { ...locked, lockedRemovals };
 }
@@ -639,8 +724,10 @@ export async function attachProductionRunToMatchingCreditBatch(
   if (existingMembership) return existingMembership.creditBatchId;
   if (!feedstockTypeId) return null;
   // Batch declarations and run completions share this predicate lock. The
-  // production-run transaction already holds the run row, so both paths order
-  // their locks run -> process scope before reading/writing membership.
+  // production-run transaction already holds the run row. Explicit membership
+  // writers take artifacts before runs/scope, while attachment takes run,
+  // scope, then batch artifacts. Both writers retry the residual inversions
+  // tracked in data/production-run-artifact-order and data/lock-order.
   await lockProductionProcessScope(tx, {
     facilityId: run.facilityId,
     feedstockTypeId,

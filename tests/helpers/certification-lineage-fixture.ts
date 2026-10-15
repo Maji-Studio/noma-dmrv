@@ -44,7 +44,7 @@ import {
 } from "./output-contract-fixtures";
 import { TEST_SITE_POSITION, TEST_ORG_ID } from "./test-org";
 
-const CONCURRENCY_BARRIER_TIMEOUT_MS = 5_000;
+export const CONCURRENCY_BARRIER_TIMEOUT_MS = 5_000;
 
 export interface LineageFixture {
   applicationId: string;

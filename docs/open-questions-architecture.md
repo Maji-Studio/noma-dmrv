@@ -187,6 +187,12 @@ inversion remains: fix the run writer to lock artifacts before the run row.
 Application writers are a new counterpart: they hold runs FOR SHARE from step 4
 through commit, while production-run update and delete take FOR UPDATE before
 artifacts; both use the runner, which retries deadlocks.
+Credit-batch membership refresh is another counterpart: it holds batch
+artifacts before locking current and prospective runs FOR UPDATE, opposite
+production-run writers. Membership create, update and delete now use the same
+bounded transaction retry policy as the runner, so either writer can retry a
+deadlock, serialization failure or lock timeout; exhaustion returns
+`concurrent_write_retry`.
 
 This is part of `data/lock-order` below.
 
@@ -194,11 +200,21 @@ This is part of `data/lock-order` below.
 
 Application create, update and delete now run through the operation runner and
 lock artifacts before facilities, runs, batches, deliveries and the application.
-This closes their document-write inversion. Membership still takes run locks
-before artifacts: it can hold a run needed by an application while waiting for
-that application's artifact. Its companion reorder must take artifacts first
-and revalidate membership. Application retries mitigate this remaining cycle;
-they do not replace the membership fix.
+This closes their document-write inversion. The companion membership reorder
+also closes the commit 1 application/membership cycle (C1 and C2): explicit
+batch create, update and delete now take artifacts, facility shares, sorted run
+UPDATE locks on create or membership refresh, process scope and batch UPDATE,
+then revalidate artifacts, member sets and cohort before reconciling slices.
+Both artifact helpers share the same
+global sorted acquisition helper. Facility shares serialize archive and Removal
+create; runs stay before process scope to match production-run auto-attachment.
+After scope, newly matching unassigned runs use non-blocking SKIP LOCKED
+acquisition; a missed row returns a typed conflict. Scalar edits and delete do
+not lock runs. Changed artifacts or current membership still refuse with a
+typed conflict. Membership now shares the runner's bounded retry policy.
+Production-run auto-attachment retains scope-before-batch-artifacts, opposite
+membership's artifacts-before-scope, as well as run-before-artifacts, opposite
+membership refresh. Both sides retry transaction aborts.
 
 - `src/data-access/production-runs/mutations.ts:updateProductionRunInTransaction`
   and `src/data-access/production-runs/delete.ts:deleteProductionRunInTransaction`
@@ -206,10 +222,10 @@ they do not replace the membership fix.
   `src/data-access/feedstocks.ts:updateFeedstockInTransaction` lock the intake
   row and lineage before bins, leaving a run-versus-feedstock deadlock cycle.
 - Moving run rows and lineage ahead of bins would introduce other inversions:
-  - `src/data-access/credit-batch-membership.ts:lockCreditBatchForUpdate` takes
-    the process scope before artifacts. Run attachment through
-    `updateProductionRunInTransaction` can already hold artifact locks before
-    requesting that scope.
+  - Explicit credit-batch membership takes artifacts before process scope.
+    Run attachment through `updateProductionRunInTransaction` still holds its
+    run before that scope and before the batch artifacts. Changing the run
+    writer's order must coordinate this residual too.
   - `src/data-access/output-stock-post.ts:withOutputStockPosting` takes bins
     before lineage or allocation foreign-key KEY SHARE locks on runs. A run
     writer holding its row or lineage while waiting for a bin would reverse

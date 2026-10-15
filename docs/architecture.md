@@ -410,8 +410,34 @@ slices `FOR UPDATE` and writing shares, slices or document retirement. Changed
 sets return retryable `conflict`; no newly discovered lock is taken late. The
 client retries changed-set conflicts. The runner retries deadlocks (40P01),
 serialization failures (40001) and lock timeouts (55P03), and owns after-commit
-storage draining. Membership still takes
-runs before artifacts until its companion reorder, leaving that cycle open.
+storage draining.
+
+Explicit credit-batch membership create, update and delete discover the batch,
+current/prospective runs and certification artifacts unlocked, then lock sorted
+artifacts, sorted facilities `FOR SHARE`, sorted runs `FOR UPDATE` on create or
+membership refresh, the target production-process advisory scope, and the batch
+`FOR UPDATE` with its version
+check (insert on create). Both artifact helpers use
+`acquireCertificationArtifactLocksSorted` and its global key ordering; create
+has no existing certification lineage to guard. Runs stay before process scope
+because production-run auto-attachment already holds its run when requesting
+that scope. Other process-scope holders never request runs or artifacts.
+Facility shares serialize archive and Removal create before child locks and FK
+checks. Membership revalidates artifacts, member sets and cohort before writing
+links or reconciling slices; changed artifacts or current membership return a
+typed conflict with the existing refresh-and-retry copy. After process scope,
+newly matching unassigned runs use `SKIP LOCKED`: they cannot wait, have no batch
+artifacts, and their facility is already share-locked. A missed row returns a
+typed conflict. Scalar edits and delete take no run locks; batch `FOR UPDATE`
+still serializes with applications' batch `FOR SHARE` before slice writes.
+Applications and membership serialize at artifacts or runs before
+batch/application locks and implicit slice FK checks, closing cycles C1 and C2.
+Two residual orders remain: membership refresh takes artifacts before runs,
+while production-run writers take runs first; membership takes artifacts before
+process scope, while run auto-attachment takes scope before batch artifacts.
+All three membership writers use the runner's shared bounded transaction retry
+for 40P01, 40001 and 55P03. Production-run writers retain the runner's retry and
+deadline handling. Exhausted attempts return `concurrent_write_retry`.
 
 `src/db/schema/*` defines tables and types; `src/data-access/*` owns queries and
 permission checks; pooling defaults are centralized in `src/db/pool-config.ts`
@@ -429,8 +455,9 @@ parent. Archive's `NO KEY UPDATE` conflicts with `FOR SHARE`. Parent retirement
 uses owner, mirror, document order; Source mirroring never locks an owner.
 Sample and delivery writers use artifacts before rows. Existing feedstock, order and production-run inversions remain subject to the runner's bounded
 retry. Application writers now use the runner and the artifacts-first sequence
-above, closing their document-write inversion. The remaining membership and
-production-run cycles are tracked in the [lock-order follow-up](./open-questions-architecture.md#run-writers-feedstock-edits-and-output-postings-lock-in-different-orders-datalock-order-opened-2026-10-09).
+above, closing their document-write inversion. Membership refresh also takes
+artifacts before runs. The remaining production-run and membership cycles are
+tracked in the [lock-order follow-up](./open-questions-architecture.md#run-writers-feedstock-edits-and-output-postings-lock-in-different-orders-datalock-order-opened-2026-10-09).
 
 Upload promotion, leases and the privileged expiry sweep are described in
 [Object storage](./storage.md#abandoned-uploads-and-cleanup).

@@ -22,9 +22,10 @@
  * re-locks our delivery/application; slice reconciliation touches this app only.
  * No transport topology lock: Removal transport is derived from frozen slices.
  *
- * Until commit 1b, membership can hold a run UPDATE lock while waiting for an
- * artifact held here, while we wait for that run SHARE. Runner retries mitigate
- * this remaining cycle; membership must move artifacts before runs in 1b.
+ * Explicit membership writers also take artifacts, facilities SHARE, runs
+ * UPDATE, then process scope and batch UPDATE. They serialize with our run
+ * SHARE before either writer reaches batch/application locks or slice FK checks.
+ * Production-run auto-attachment retains the recorded row-before-artifact residual.
  */
 
 import { and, eq, inArray } from "drizzle-orm";
