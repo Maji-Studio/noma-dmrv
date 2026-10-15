@@ -2,8 +2,9 @@ import { z } from "zod";
 import {
   expectedVersionSchema,
   gpsPairSuperRefine,
-  latitudeSchema,
-  longitudeSchema,
+  requiredLatitudeSchema,
+  toNumberOrUndefined,
+  requiredLongitudeSchema,
 } from "./helpers";
 import { ianaTimezoneSchema, requiredTimezoneSchema } from "./timezone";
 
@@ -101,8 +102,8 @@ const facilityFormBaseSchema = z.object({
     .optional()
     .or(z.literal("")),
   address: facilityAddressSchema,
-  gpsLatitude: latitudeSchema,
-  gpsLongitude: longitudeSchema,
+  gpsLatitude: z.preprocess(toNumberOrUndefined, requiredLatitudeSchema),
+  gpsLongitude: z.preprocess(toNumberOrUndefined, requiredLongitudeSchema),
   contactEmail: contactEmailSchema,
   contactPhone: contactPhoneSchema,
   // Authoritative durability tier for the facility (ADR 0021) — inherited by
@@ -141,8 +142,8 @@ export const updateFacilitySchema = z.object({
   country: countrySchema.optional(),
   location: z.string().max(255).optional().nullable(),
   address: z.string().max(500).optional().nullable(),
-  gpsLatitude: latitudeSchema,
-  gpsLongitude: longitudeSchema,
+  gpsLatitude: requiredLatitudeSchema.optional(),
+  gpsLongitude: requiredLongitudeSchema.optional(),
   contactEmail: z.string().email().max(255).optional().nullable().or(z.literal("")),
   contactPhone: z.string().max(30).optional().nullable().or(z.literal("")),
   durabilityOption: z.enum(durabilityOptions).optional(),

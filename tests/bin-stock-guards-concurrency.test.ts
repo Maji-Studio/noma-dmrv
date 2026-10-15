@@ -10,7 +10,7 @@ import {
   productionRuns,
 } from "@/db/schema/production";
 import { SafeError } from "@/lib/errors";
-import {
+import { TEST_SITE_POSITION,
   ensureTestOrg,
   makeTestOrgContext,
   TEST_ORG_ID,
@@ -35,7 +35,7 @@ describe("bin stock guard concurrency (issue #423)", () => {
   beforeAll(async () => {
     const [facility] = await db
       .insert(facilities)
-      .values({ timezone: "UTC",
+      .values({ ...TEST_SITE_POSITION, timezone: "UTC",
         organizationId: TEST_ORG_ID,
         code: `FAC-DRAW-${tag}`,
         name: `Concurrent Draw Facility ${tag}`,

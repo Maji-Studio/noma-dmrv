@@ -37,7 +37,7 @@ import {
   createFeedstockInTransaction,
   updateFeedstockInTransaction,
 } from "@/data-access/feedstocks";
-import {
+import { TEST_SITE_POSITION,
   ensureTestOrg,
   makeTestOrgContext,
   TEST_ORG_ID,
@@ -136,7 +136,7 @@ describe("derived transport-leg transaction boundaries", () => {
     const tag = crypto.randomUUID().slice(0, 8).toUpperCase();
     const [facility] = await db
       .insert(facilities)
-      .values({ timezone: "UTC",
+      .values({ ...TEST_SITE_POSITION, timezone: "UTC",
         organizationId: TEST_ORG_ID,
         code: `FAC-TL-${tag}`,
         name: `Transport Transaction Facility ${tag}`,
@@ -213,7 +213,7 @@ describe("derived transport-leg transaction boundaries", () => {
     const tag = crypto.randomUUID().slice(0, 8).toUpperCase();
     const [facility] = await db
       .insert(facilities)
-      .values({ timezone: "UTC",
+      .values({ ...TEST_SITE_POSITION, timezone: "UTC",
         organizationId: TEST_ORG_ID,
         code: `FAC-OVR-${tag}`,
         name: `Override Facility ${tag}`,
@@ -228,23 +228,26 @@ describe("derived transport-leg transaction boundaries", () => {
           organizationId: TEST_ORG_ID,
           code: `SUP-OVR-${tag}`,
           name: `Override Supplier ${tag}`,
-          distanceToFacilityKm: 10,
-          distanceSource: "map_estimate" as const,
         },
         {
           organizationId: TEST_ORG_ID,
           code: `SUP-ROUTE-${tag}`,
           name: `New Route Supplier ${tag}`,
-          distanceToFacilityKm: 35,
-          distanceSource: "manual" as const,
         },
       ])
       .returning({ id: suppliers.id });
     created.supplierIds.push(supplier.id, newRouteSupplier.id);
+    const [originalLocation] = await db.insert(supplierLocations).values({
+      organizationId: TEST_ORG_ID, supplierId: supplier.id, ...TEST_SITE_POSITION,
+      isDefault: true,
+      distanceFromFacilityKm: 10, distanceSource: "map_estimate",
+    }).returning();
+    created.supplierLocationIds.push(originalLocation.id);
 
     const [newDefaultLocation] = await db
       .insert(supplierLocations)
       .values({
+        ...TEST_SITE_POSITION,
         organizationId: TEST_ORG_ID,
         supplierId: newRouteSupplier.id,
         name: `New Route Source ${tag}`,
@@ -370,6 +373,7 @@ describe("derived transport-leg transaction boundaries", () => {
   it.each(["update_delivery", "update_posted_delivery"])("%s sweeps retired derived-leg evidence after clearing the only distance", async (operationId) => {
     const tag = crypto.randomUUID().slice(0, 8).toUpperCase();
     const [facility] = await db.insert(facilities).values({
+      ...TEST_SITE_POSITION,
       organizationId: TEST_ORG_ID, timezone: "UTC",
       code: `FAC-RET-${tag}`, name: `Retirement Facility ${tag}`,
     }).returning({ id: facilities.id });
@@ -380,6 +384,7 @@ describe("derived transport-leg transaction boundaries", () => {
     }).returning({ id: customers.id });
     created.customerIds.push(customer.id);
     const [location] = await db.insert(customerLocations).values({
+      ...TEST_SITE_POSITION,
       organizationId: TEST_ORG_ID, customerId: customer.id,
       name: `Retirement Site ${tag}`, distanceFromFacilityKm: null,
     }).returning({ id: customerLocations.id });
@@ -428,7 +433,7 @@ describe("derived transport-leg transaction boundaries", () => {
     const tag = crypto.randomUUID().slice(0, 8).toUpperCase();
     const [facility] = await db
       .insert(facilities)
-      .values({ timezone: "UTC",
+      .values({ ...TEST_SITE_POSITION, timezone: "UTC",
         organizationId: TEST_ORG_ID,
         code: `FAC-DIST-${tag}`,
         name: `Distribution Transaction Facility ${tag}`,
@@ -450,6 +455,7 @@ describe("derived transport-leg transaction boundaries", () => {
       .insert(customerLocations)
       .values([
         {
+          ...TEST_SITE_POSITION,
           organizationId: TEST_ORG_ID,
           customerId: customer.id,
           name: `First Site ${tag}`,
@@ -457,6 +463,7 @@ describe("derived transport-leg transaction boundaries", () => {
           distanceSource: "manual" as const,
         },
         {
+          ...TEST_SITE_POSITION,
           organizationId: TEST_ORG_ID,
           customerId: customer.id,
           name: `Second Site ${tag}`,

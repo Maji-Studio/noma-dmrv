@@ -108,19 +108,19 @@ describe("updateCustomerLocationFn", () => {
     });
   });
 
-  it("keeps populated values, including zero", async () => {
+  it("keeps positive distances and zero soil temperature", async () => {
     await updateCustomerLocationFn({ expectedVersion: 1,
       locationId: LOCATION_ID,
       stateRegion: "Iringa",
       city: "Mafinga",
-      distanceFromFacilityKm: 0,
+      distanceFromFacilityKm: 1,
       defaultSoilTemperatureC: 0,
     } as never);
 
     expect(lastPatch()).toMatchObject({
       stateRegion: "Iringa",
       city: "Mafinga",
-      distanceFromFacilityKm: 0,
+      distanceFromFacilityKm: 1,
       defaultSoilTemperatureC: 0,
       // A present distance typed without explicit provenance is operator-entered.
       distanceSource: "manual",

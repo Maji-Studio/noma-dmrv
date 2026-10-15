@@ -1,5 +1,5 @@
 {
-  "id": "cfe11fa0-0b1b-4dea-bbb9-61bb6b1429a4",
+  "id": "ea7eb85a-4423-4e7a-85e2-b64a260c8d5d",
   "prevId": "f7f93ee0-7209-4402-bde2-7b48deca7b9c",
   "version": "7",
   "dialect": "postgresql",
@@ -3605,6 +3605,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "genset_energy_yield_kwh_per_litre": {
+          "name": "genset_energy_yield_kwh_per_litre",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
         "default_soil_temperature_c": {
           "name": "default_soil_temperature_c",
           "type": "real",
@@ -3627,7 +3633,7 @@
           "name": "external_facility_id",
           "type": "text",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "metadata": {
           "name": "metadata",
@@ -6253,13 +6259,13 @@
           "name": "gps_latitude",
           "type": "double precision",
           "primaryKey": false,
-          "notNull": false
+          "notNull": true
         },
         "gps_longitude": {
           "name": "gps_longitude",
           "type": "double precision",
           "primaryKey": false,
-          "notNull": false
+          "notNull": true
         },
         "timezone": {
           "name": "timezone",
@@ -6271,8 +6277,7 @@
           "name": "country",
           "type": "text",
           "primaryKey": false,
-          "notNull": true,
-          "default": "'UNKNOWN'"
+          "notNull": true
         },
         "address": {
           "name": "address",
@@ -6543,12 +6548,7 @@
         }
       },
       "policies": {},
-      "checkConstraints": {
-        "reactors_reactor_type_valid": {
-          "name": "reactors_reactor_type_valid",
-          "value": "\"reactors\".\"reactor_type\" in ('fixed-bed', 'auger', 'rotary-kiln', 'batch', 'continuous')"
-        }
-      },
+      "checkConstraints": {},
       "isRLSEnabled": false
     },
     "public.storage_locations": {
@@ -7017,7 +7017,8 @@
           "type": "feedstock_type_usage",
           "typeSchema": "public",
           "primaryKey": false,
-          "notNull": true
+          "notNull": true,
+          "default": "'pyrolysis'"
         },
         "description": {
           "name": "description",
@@ -7103,12 +7104,7 @@
         }
       },
       "policies": {},
-      "checkConstraints": {
-        "feedstock_types_category_valid": {
-          "name": "feedstock_types_category_valid",
-          "value": "\"feedstock_types\".\"category\" in ('forestry', 'agricultural', 'industrial', 'municipal', 'invasive', 'compost', 'mineral', 'lime', 'binder', 'amendment', 'other')"
-        }
-      },
+      "checkConstraints": {},
       "isRLSEnabled": false
     },
     "public.feedstocks": {
@@ -8464,14 +8460,13 @@
           "name": "name",
           "type": "text",
           "primaryKey": false,
-          "notNull": false
+          "notNull": true
         },
         "country": {
           "name": "country",
           "type": "text",
           "primaryKey": false,
-          "notNull": true,
-          "default": "'UNKNOWN'"
+          "notNull": true
         },
         "state_region": {
           "name": "state_region",
@@ -8489,13 +8484,13 @@
           "name": "gps_latitude",
           "type": "double precision",
           "primaryKey": false,
-          "notNull": false
+          "notNull": true
         },
         "gps_longitude": {
           "name": "gps_longitude",
           "type": "double precision",
           "primaryKey": false,
-          "notNull": false
+          "notNull": true
         },
         "address": {
           "name": "address",
@@ -8641,9 +8636,9 @@
           "name": "customer_locations_gps_longitude_range",
           "value": "\"customer_locations\".\"gps_longitude\" is null or (\"customer_locations\".\"gps_longitude\" >= -180 and \"customer_locations\".\"gps_longitude\" <= 180)"
         },
-        "customer_locations_distance_from_facility_km_non_negative": {
-          "name": "customer_locations_distance_from_facility_km_non_negative",
-          "value": "\"customer_locations\".\"distance_from_facility_km\" is null or \"customer_locations\".\"distance_from_facility_km\" >= 0"
+        "customer_locations_distance_from_facility_km_positive": {
+          "name": "customer_locations_distance_from_facility_km_positive",
+          "value": "\"customer_locations\".\"distance_from_facility_km\" is null or \"customer_locations\".\"distance_from_facility_km\" > 0"
         },
         "customer_locations_default_soil_temperature_c_range": {
           "name": "customer_locations_default_soil_temperature_c_range",
@@ -9034,8 +9029,7 @@
           "name": "country",
           "type": "text",
           "primaryKey": false,
-          "notNull": true,
-          "default": "'UNKNOWN'"
+          "notNull": true
         },
         "state_region": {
           "name": "state_region",
@@ -9053,13 +9047,13 @@
           "name": "gps_latitude",
           "type": "double precision",
           "primaryKey": false,
-          "notNull": false
+          "notNull": true
         },
         "gps_longitude": {
           "name": "gps_longitude",
           "type": "double precision",
           "primaryKey": false,
-          "notNull": false
+          "notNull": true
         },
         "address": {
           "name": "address",
@@ -9190,9 +9184,9 @@
           "name": "supplier_locations_gps_longitude_range",
           "value": "\"supplier_locations\".\"gps_longitude\" is null or (\"supplier_locations\".\"gps_longitude\" >= -180 and \"supplier_locations\".\"gps_longitude\" <= 180)"
         },
-        "supplier_locations_distance_from_facility_km_non_negative": {
-          "name": "supplier_locations_distance_from_facility_km_non_negative",
-          "value": "\"supplier_locations\".\"distance_from_facility_km\" is null or \"supplier_locations\".\"distance_from_facility_km\" >= 0"
+        "supplier_locations_distance_from_facility_km_positive": {
+          "name": "supplier_locations_distance_from_facility_km_positive",
+          "value": "\"supplier_locations\".\"distance_from_facility_km\" is null or \"supplier_locations\".\"distance_from_facility_km\" > 0"
         }
       },
       "isRLSEnabled": false
@@ -9245,18 +9239,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "gps_latitude": {
-          "name": "gps_latitude",
-          "type": "double precision",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "gps_longitude": {
-          "name": "gps_longitude",
-          "type": "double precision",
-          "primaryKey": false,
-          "notNull": false
-        },
         "address": {
           "name": "address",
           "type": "text",
@@ -9284,19 +9266,6 @@
         "source_region": {
           "name": "source_region",
           "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "distance_to_facility_km": {
-          "name": "distance_to_facility_km",
-          "type": "real",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "distance_source": {
-          "name": "distance_source",
-          "type": "distance_source",
-          "typeSchema": "public",
           "primaryKey": false,
           "notNull": false
         },
@@ -9390,20 +9359,7 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
-      "checkConstraints": {
-        "suppliers_gps_latitude_range": {
-          "name": "suppliers_gps_latitude_range",
-          "value": "\"suppliers\".\"gps_latitude\" is null or (\"suppliers\".\"gps_latitude\" >= -90 and \"suppliers\".\"gps_latitude\" <= 90)"
-        },
-        "suppliers_gps_longitude_range": {
-          "name": "suppliers_gps_longitude_range",
-          "value": "\"suppliers\".\"gps_longitude\" is null or (\"suppliers\".\"gps_longitude\" >= -180 and \"suppliers\".\"gps_longitude\" <= 180)"
-        },
-        "suppliers_distance_to_facility_km_non_negative": {
-          "name": "suppliers_distance_to_facility_km_non_negative",
-          "value": "\"suppliers\".\"distance_to_facility_km\" is null or \"suppliers\".\"distance_to_facility_km\" >= 0"
-        }
-      },
+      "checkConstraints": {},
       "isRLSEnabled": false
     },
     "public.incident_reports": {

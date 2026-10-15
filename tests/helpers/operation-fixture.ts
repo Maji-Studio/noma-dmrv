@@ -1,3 +1,4 @@
+import { TEST_SITE_POSITION } from "./test-org";
 /**
  * A dedicated organization with one facility ready for feedstock intake, for
  * the operation-runner suites. Its own organization keeps generated feedstock
@@ -47,7 +48,7 @@ export async function createIntakeFixture(
   });
   const [facility] = await executor
     .insert(facilities)
-    .values({ timezone: "UTC", organizationId, code: `FAC-${tag}`, name: `Intake Facility ${tag}` })
+    .values({ ...TEST_SITE_POSITION, timezone: "UTC", organizationId, code: `FAC-${tag}`, name: `Intake Facility ${tag}` })
     .returning({ id: facilities.id });
   const [supplier] = await executor
     .insert(suppliers)

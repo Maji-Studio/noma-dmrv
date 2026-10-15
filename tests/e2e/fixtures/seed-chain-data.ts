@@ -98,8 +98,11 @@ export async function seedChainData(
         id: supplierId,
         code: `E2E-SUP-${testRunId}`,
         name: `E2E Seed Supplier ${testRunId}`,
-        gpsLatitude: -6.8,
-        gpsLongitude: 39.28,
+      });
+
+      await tx.insert(schema.supplierLocations).values({
+        organizationId: DEC_ORG_ID, supplierId, country: "Tanzania",
+        gpsLatitude: -6.8, gpsLongitude: 39.28, isDefault: true,
       });
 
       // 3. Feedstock Type
@@ -784,6 +787,8 @@ export async function cleanupChainData(data: SeededChainData): Promise<void> {
         .where(eq(schema.customers.id, data.customer.id));
 
       // Suppliers
+      await tx.delete(schema.supplierLocations)
+        .where(eq(schema.supplierLocations.supplierId, data.supplier.id));
       await tx
         .delete(schema.suppliers)
         .where(eq(schema.suppliers.id, data.supplier.id));

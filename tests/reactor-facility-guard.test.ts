@@ -7,7 +7,7 @@ import { facilities, organizations, productionRuns, reactors } from "@/db/schema
 import { createProductionRunInTransaction } from "@/data-access/production-runs";
 import { deleteReactor, updateReactor } from "@/data-access/reactors";
 import { nextVersion } from "@/data-access/row-version";
-import { makeTestOrgContext } from "./helpers/test-org";
+import { makeTestOrgContext, TEST_SITE_POSITION } from "./helpers/test-org";
 import { createTestPool } from "./helpers/operation-fixture";
 import { openOperationBarrier, waitForBlockedOperations } from "./helpers/operation-barrier";
 
@@ -34,6 +34,7 @@ async function fixture() {
   const ctx = { ...makeTestOrgContext(), organizationId: `reactor-move-${tag}` };
   await db.insert(organizations).values({ id: ctx.organizationId, name: "Reactor guard", slug: ctx.organizationId });
   const sites = await db.insert(facilities).values(["source", "destination"].map((name) => ({
+    ...TEST_SITE_POSITION,
     organizationId: ctx.organizationId, name, code: name, timezone: "Africa/Dar_es_Salaam", country: "Tanzania",
   }))).returning();
   const [source, destination] = sites;

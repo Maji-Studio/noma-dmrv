@@ -26,7 +26,7 @@ import {
 } from "@/data-access/certification";
 import { buildCreateStorageLocationRequest } from "@/lib/isometric/storage-locations";
 import type { OrgContext } from "@/lib/auth/server";
-import {
+import { TEST_SITE_POSITION,
   ensureTestOrg,
   makeTestOrgContext,
   TEST_ORG_ID,
@@ -76,7 +76,7 @@ async function createFixture(): Promise<Fixture> {
       .returning({ id: customerLocations.id });
     const [facility] = await tx
       .insert(facilities)
-      .values({ timezone: "UTC",
+      .values({ ...TEST_SITE_POSITION, timezone: "UTC",
         organizationId: TEST_ORG_ID,
         code: `FAC-SLC-${runId}`,
         name: `Storage Location Facility ${runId}`,
@@ -361,7 +361,7 @@ describe("certifier Storage Location data access", () => {
       const runId = crypto.randomUUID().slice(0, 8);
       const [secondFacility] = await db
         .insert(facilities)
-        .values({ timezone: "UTC",
+        .values({ ...TEST_SITE_POSITION, timezone: "UTC",
           organizationId: TEST_ORG_ID,
           code: `FAC-SLC-P2-${runId}`,
           name: `Storage Location Facility P2 ${runId}`,
@@ -500,7 +500,7 @@ describe("certifier Storage Location data access", () => {
       const runId = crypto.randomUUID().slice(0, 8);
       const [sharedFacility] = await db
         .insert(facilities)
-        .values({ timezone: "UTC",
+        .values({ ...TEST_SITE_POSITION, timezone: "UTC",
           organizationId: TEST_ORG_ID,
           code: `FAC-SLC-SHARED-${runId}`,
           name: `Storage Location Shared Facility ${runId}`,

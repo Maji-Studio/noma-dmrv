@@ -92,10 +92,10 @@ describe("CustomerLocationDialog distance origin", () => {
     }));
   });
 
-  it("does not substitute global coordinates when the supplied facility has none", () => {
-    renderDialog({ ...orderFacility, gpsLatitude: null, gpsLongitude: null });
+  it("uses valid zero coordinates from the supplied facility", () => {
+    renderDialog({ ...orderFacility, gpsLatitude: 0, gpsLongitude: 0 });
     expect(state.distanceField).toHaveBeenLastCalledWith(expect.objectContaining({
-      origin: null,
+      origin: { lat: 0, lng: 0 },
       originLabel: "facility Order plant",
     }));
   });

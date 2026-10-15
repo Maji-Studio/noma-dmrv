@@ -25,6 +25,16 @@
   Sample heavy-metal, PAH, PCB and dioxin/furan columns are removed. No submitted
   value or certification mapping changes.
 
+## 2026-10-15: Required facility and party-location data (#1012, #942 q15)
+
+Facility GPS is required to save by the q15 product decision. Supplier and
+customer locations retain required GPS on update, customer location names
+are required in storage, and countries have no placeholder default. Supplier
+and customer creates require at least one location. Recorded site distances
+must be positive. Supplier-level GPS, distance and the obsolete supplier
+Certify badge are removed; feedstock transport uses the default supplier
+location. These are entry invariants, not a change to registry calculations.
+
 ## 2026-10-15: Facility and feedstock setup rules aligned (#1012)
 
 - Facility registry links require an external facility ID in storage and setup readiness, matching save and Production Batch submission.

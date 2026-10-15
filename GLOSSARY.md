@@ -574,8 +574,8 @@ _Avoid_: treating a routed distance as a measurement.
 The provenance of a stored distance — `map_estimate` (routed via the
 map's routing service), `manual` (hand-entered), or `document`
 (bill-of-lading / weigh-ticket backed). Lives wherever a distance can be
-written (supplier, customer location, transport leg) and is inherited by
-a derived leg from its supplier/customer default. Orthogonal to a leg's
+written (supplier location, customer location, transport leg) and is inherited by
+a derived leg from its supplier-location/customer-location default. Orthogonal to a leg's
 `isDerived` flag. Without a configured routing key there is no
 `map_estimate` path — distance entry stays manual.
 
