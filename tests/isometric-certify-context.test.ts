@@ -311,7 +311,7 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
     expect(mockedListBlueprints).not.toHaveBeenCalled();
   });
 
-  it("returns an unpinned blocker when the default and batch pin are absent", async () => {
+  it("returns an unpinned blocker without remote calls when the default and batch pin are absent", async () => {
     mockedGetMapping.mockResolvedValue(
       mapping({ defaultRemovalTemplateId: null }),
     );
@@ -324,13 +324,13 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
     );
 
     expect(result.mapping?.externalProjectId).toBe(EXTERNAL_PROJECT_ID);
-    expect(result.project?.id).toBe(EXTERNAL_PROJECT_ID);
+    expect(result.project).toBeNull();
     expect(result.removalTemplate).toBeNull();
     expect(result.templateBlockers).toMatchObject([{ code: "unpinnedTemplate" }]);
     expect(result.blueprintsForTemplate).toEqual([]);
-    expect(mockedListProjects).toHaveBeenCalled();
-    expect(mockedListTemplates).toHaveBeenCalled();
-    expect(mockedListBlueprints).toHaveBeenCalled();
+    expect(mockedListProjects).not.toHaveBeenCalled();
+    expect(mockedListTemplates).not.toHaveBeenCalled();
+    expect(mockedListBlueprints).not.toHaveBeenCalled();
   });
 
   it("loads unapplied member runs for a whole-batch production claim", async () => {
