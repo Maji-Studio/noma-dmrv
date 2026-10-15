@@ -97,7 +97,7 @@ Re-run the migrate line after pulling new migrations. A worktree made with
 
 `pnpm eval:mcp` runs two feedstock intake requests, two chained production-run
 requests, two lab sample requests (three replicates; a replicate without organic
-carbon), a named sub-bin loss request, three delivery requests and a bill-of-lading upload through headless
+carbon), a named sub-bin loss request, three delivery requests, three application requests and a bill-of-lading upload through headless
 Claude Code and the local MCP server. It needs Docker with the test database schema ready,
 the worktree's `.env.test`, and a logged-in Claude Code subscription. It refuses
 non-test databases, creates a fresh organization and API key per case, and scores
@@ -119,6 +119,22 @@ delivery clarification or after a completed stock read followed by a dry run.
 The preview alone cannot pass. Historical
 moisture estimates can inform a preview but cannot supply missing operator readings
 for a commit, even if the server refuses it. Each case has its own organization and cleanup.
+
+The application cases seed a delivered load two facility-local days ago in
+Africa/Dar_es_Salaam, with a named customer site and GPS on unsubmitted lineage.
+Each uses a separate organization and a key with exactly `applications:read`,
+`applications:write` and `deliveries:read`, without delete scope or Bash.
+`application-complete` requires one 1.2 tonne application (1200 kg), 3 ha,
+field North, maize, exact site GPS and the site-default GPS warning in the
+successful record tool result. Yesterday is computed on the facility clock at
+scoring time; stored application dates remain UTC-midnight calendar dates.
+`application-missing-field-size` requires no saved application and a final
+request for area; previews are allowed but invented committed area is refused.
+`application-over-capacity` offers only 500 kg against a 1200 kg request.
+It requires no saved application, a successful balance read or capacity conflict,
+and a final remaining-amount explanation or question. Reducing the committed
+amount, editing applications or calling delete fails. All three have an eight
+MCP-call budget and use the shared allowlisted session environment.
 
 `delivery-bol-upload` seeds delivery DL-X on an unsubmitted lineage and generates a
 small valid PDF at an absolute temporary path. Its prompt asks the agent to attach
