@@ -3,7 +3,8 @@ import { db } from "@/db";
 import { certifierRemovals, creditBatchApplications, deliveries, documents, samples, transportLegs, outputStockAllocations, outputStockRunAllocations, productionSamples, incidentReports, certifierGhgStatementReports } from "@/db/schema";
 import { toActivityDocumentOwnerType } from "@/lib/activity-entity-type";
 import type { OrgContext } from "@/lib/auth/server";
-import { loadCreditBatchRollups } from "./credit-batch-accounting";
+import { SafeError } from "@/lib/errors";
+import { loadCreditBatchRollups, type CreditBatchRollup } from "./credit-batch-accounting";
 import { requireOrgScope } from "./utils";
 
 /** One bound array, including when a batch has thousands of members. */
@@ -16,7 +17,14 @@ export function activityIds(column: AnyColumn, ids: readonly string[]): SQL {
 
 export async function loadActivityMembers(ctx: OrgContext, batchId: string) {
   requireOrgScope(ctx);
-  const rollup = (await loadCreditBatchRollups(ctx, [batchId], { includeRunForwards: true }))[batchId];
+  let rollup: CreditBatchRollup | undefined;
+  try {
+    rollup = (await loadCreditBatchRollups(ctx, [batchId], { includeRunForwards: true }))[batchId];
+  } catch (error) {
+    // Activity membership is best-effort when downstream delivery provenance is invalid.
+    if (!(error instanceof SafeError)) throw error;
+    rollup = (await loadCreditBatchRollups(ctx, [batchId]))[batchId];
+  }
   if (!rollup) return null;
   const facts = rollup.lineageFacts;
   const forwards = Object.values(facts.runForwards ?? {}).flat();

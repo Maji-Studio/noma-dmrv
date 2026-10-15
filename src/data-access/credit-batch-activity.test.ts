@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { activityEvents, creditBatches, creditBatchProductionRuns, organizations, samples, documents, users, binMovements, outputStockAllocations, applications, creditBatchApplications, certifierRemovals, certifierGhgStatements, transportLegs, productionSamples } from "@/db/schema";
+import { activityEvents, creditBatches, creditBatchProductionRuns, organizations, samples, documents, users, binMovements, outputStockAllocations, applications, creditBatchApplications, certifierRemovals, certifierGhgStatements, transportLegs, productionSamples, deliveries } from "@/db/schema";
 import { readCreditBatchActivity, readCreditBatchActivitySummary } from "@/lib/read-models/credit-batch-activity";
 import { runOperationInProcess } from "@/lib/operations/runner";
 import { requestDocumentUploadApp, deleteDocumentApp } from "@/lib/operations/documents";
@@ -54,6 +54,23 @@ it("finds unlinked member records and runs, without duplicating multiple matches
   const run = await event({ entityType: "production_run", entityId: fixture.run.id, productionRunId: fixture.run.id });
   const product = await event({ entityType: "biochar_product", entityId: fixture.product.id, creditBatchId: null });
   expect((await listCreditBatchActivity(ctx, fixture.batch.id)).items.map(row => row.id)).toEqual([product.id, run.id, feedstock.id]);
+});
+it("lists and summarizes linked events and resolvable members despite invalid downstream delivery provenance", async () => {
+  await db.update(deliveries).set({ massDryKg: null }).where(and(
+    eq(deliveries.id, fixture.delivery.id), eq(deliveries.organizationId, ctx.organizationId),
+  ));
+  const linked = await event();
+  const feedstock = await event({ entityType: "feedstock", entityId: fixture.feedstock.id, creditBatchId: null });
+  const page = await listCreditBatchActivity(ctx, fixture.batch.id);
+  expect(page.items.map(row => row.id)).toEqual([feedstock.id, linked.id]);
+  expect(await getCreditBatchActivitySummary(ctx, fixture.batch.id)).toEqual({
+    total: 2,
+    counts: [
+      { entityType: "credit_batch", action: "updated", count: 1 },
+      { entityType: "feedstock", action: "updated", count: 1 },
+    ],
+    latest: page.items[0],
+  });
 });
 it("drops detached run activity but preserves the explicitly linked detach event", async () => {
   await event({ entityType: "production_run", entityId: fixture.run.id, productionRunId: fixture.run.id, creditBatchId: null });

@@ -210,6 +210,7 @@ export function invalidateCertificationReadiness(
   options?: { creditBatchPreviews?: boolean },
 ) {
   const invalidations = [
+    // Readiness-affecting mutations also change the batch activity history.
     queryClient.invalidateQueries({ queryKey: activityKeys.all }),
     queryClient.invalidateQueries({ queryKey: certificationKeys.all }),
   ];
