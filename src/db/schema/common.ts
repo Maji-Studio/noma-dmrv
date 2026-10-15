@@ -130,6 +130,7 @@ export const documentationType = pgEnum('documentation_type', [
   'bill_of_lading',
   'other_transport_evidence',
   'lab_report',
+  'reflectance_histogram',
   'delivery_receipt',
   'invoice',
   'pdd',

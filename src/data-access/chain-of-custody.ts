@@ -9,7 +9,6 @@ import {
   biocharProducts,
   deliveries,
   facilities,
-  feedstockDeliveries,
   feedstockTypes,
   feedstocks,
   formulations,
@@ -139,7 +138,6 @@ export interface ChainFeedstockLineage {
   wetMassUsedKg: number | null;
   supplierName: string | null;
   feedstockTypeName: string | null;
-  feedstockDeliveryCode: string | null;
   href: string;
 }
 
@@ -500,11 +498,9 @@ async function getFeedstocksForRuns(
       wetMassUsedKg: productionRunFeedstocks.wetMassUsedKg,
       supplierName: suppliers.name,
       feedstockTypeName: feedstockTypes.name,
-      feedstockDeliveryCode: feedstockDeliveries.code,
     })
     .from(productionRunFeedstocks)
     .innerJoin(feedstocks, and(eq(productionRunFeedstocks.feedstockId, feedstocks.id), eq(feedstocks.organizationId, ctx.organizationId)))
-    .leftJoin(feedstockDeliveries, and(eq(feedstocks.feedstockDeliveryId, feedstockDeliveries.id), eq(feedstockDeliveries.organizationId, ctx.organizationId)))
     .leftJoin(suppliers, and(eq(feedstocks.supplierId, suppliers.id), eq(suppliers.organizationId, ctx.organizationId)))
     .leftJoin(feedstockTypes, and(eq(feedstocks.feedstockTypeId, feedstockTypes.id), eq(feedstockTypes.organizationId, ctx.organizationId)))
     .where(

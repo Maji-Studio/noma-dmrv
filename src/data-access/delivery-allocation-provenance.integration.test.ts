@@ -38,7 +38,7 @@ const tables: PgTable[] = [schema.applications, schema.applicationOutputAllocati
   schema.deliveries, schema.orders, schema.outputStockAllocations, schema.outputStockRunAllocations,
   schema.productionRuns, schema.creditBatchApplications, schema.creditBatchProductionRuns, schema.creditBatches,
   schema.facilities, schema.feedstockTypes, schema.formulations, schema.reactors, schema.storageLocations,
-  schema.productionRunFeedstocks, schema.feedstocks, schema.feedstockDeliveries, schema.suppliers,
+  schema.productionRunFeedstocks, schema.feedstocks, schema.suppliers,
   schema.samples, schema.certifierRemovals, schema.certificationSubmissions, schema.documents];
 const quote = (name: string) => `"${name.replaceAll('"', '""')}"`;
 

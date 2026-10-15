@@ -103,3 +103,8 @@ describe("sampleEntryWarnings", () => {
     })).toEqual([]);
   });
 });
+
+it("does not return app-only histogram guidance on Sample entry", () => {
+  const facts = { ...complete, hasReflectanceHistogram: false };
+  expect(sampleEntryWarnings(facts)).toEqual([]);
+});

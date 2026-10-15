@@ -776,8 +776,8 @@ work remains Phase 6b. [Document contracts](../api.md#documents) and
 
 - The upload declaration lives in `metadata.uploadDeclaration`. Missing bytes
   return retryable `conflict` and leave the row pending. Visibility and
-  reclassification remain unregistered app operations. Legacy
-  `feedstock_delivery` lineage follows its constituent feedstocks.
+  reclassification remain unregistered app operations. The legacy intake
+  shipment owner was subsequently retired (#1013).
 - `getRecordCertificationLock` reuses `documentOwnerLineageTargets`; the
   application-only lock read was removed. `certificationKeys.recordLock` is
   invalidated with readiness. Blocking submissions include draft attempts.
