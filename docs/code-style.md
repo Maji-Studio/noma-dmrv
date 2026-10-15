@@ -61,6 +61,9 @@ trusted-context code in a directive-free module: `src/lib/operations/` for
 migrated writes, `src/lib/read-models/` for reads, or a legacy core under
 src/fn/**/*-core.ts. `pnpm check:server-action-exports` enforces this with
 the TypeScript type checker and has **no** waiver: fix the export instead.
+Inside `"use server"` modules, passing an `OrgContext`-taking function or class
+into an `any`/`unknown`/`Function`/`object` slot, or erasing an object carrying
+such methods, fails closed even for harmless uses and has no waiver.
 
 ## Style
 

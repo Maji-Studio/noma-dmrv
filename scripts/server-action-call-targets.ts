@@ -15,7 +15,12 @@ import {
 } from "./server-action-types";
 
 /** `Function.prototype` members that invoke or partially apply their receiver. */
-const FUNCTION_FORWARDERS = new Set(["call", "apply", "bind"]);
+type Forwarder = "call" | "apply" | "bind";
+type ReflectMethod = "apply" | "construct";
+const FUNCTION_FORWARDERS: ReadonlySet<string> = new Set<Forwarder>(["call", "apply", "bind"]);
+function isForwarder(method: string): method is Forwarder {
+  return FUNCTION_FORWARDERS.has(method);
+}
 
 /**
  * The function a call ultimately invokes and how its arguments line up with
@@ -26,6 +31,8 @@ const FUNCTION_FORWARDERS = new Set(["call", "apply", "bind"]);
  */
 export interface InvokedFunction {
   signatures: readonly ts.Signature[];
+  /** Callable consumed by a precisely checked invocation, rather than stored. */
+  target?: ts.Expression;
   /** Index of the first argument that binds a parameter. */
   firstArgument: number;
   /**
@@ -35,6 +42,8 @@ export interface InvokedFunction {
   boundParameters: number | null;
   /** `.apply`: the arguments arrive as one array. */
   applied: boolean;
+  /** Reflect invokes this built-in forwarder with its receiver as thisArg. */
+  appliedForwarder?: Forwarder;
 }
 
 /** Interfaces in the default lib that declare `call`/`apply`/`bind`. */
@@ -44,30 +53,53 @@ function isDefaultLib(declaration: ts.Declaration): boolean {
   return declaration.getSourceFile().hasNoDefaultLib;
 }
 
-/** Call signatures of a possibly nullable function (`maybeCore?.call(…)`). */
+/** Callable/constructable signatures, including nullable targets. */
 function signaturesOf(checker: ts.TypeChecker, target: ts.Expression): readonly ts.Signature[] {
-  return checker.getNonNullableType(checker.getTypeAtLocation(target)).getCallSignatures();
+  const type = checker.getNonNullableType(checker.getTypeAtLocation(target));
+  return [...type.getCallSignatures(), ...type.getConstructSignatures()];
+}
+
+/** Follow local callable aliases before a cast or annotation erased their type. */
+function callableSource(
+  checker: ts.TypeChecker,
+  expression: ts.Expression,
+  seen = new Set<ts.Node>(),
+): ts.Expression {
+  const source = unwrapExpression(expression);
+  if (seen.has(source)) return source;
+  seen.add(source);
+  const declaration = ts.isIdentifier(source)
+    ? checker.getSymbolAtLocation(source)?.valueDeclaration
+    : undefined;
+  return declaration && ts.isVariableDeclaration(declaration) && declaration.initializer
+    && ts.isVariableDeclarationList(declaration.parent)
+    && (declaration.parent.flags & ts.NodeFlags.Const)
+    ? callableSource(checker, declaration.initializer, seen)
+    : source;
+}
+
+function stringKey(checker: ts.TypeChecker, expression: ts.Expression): string | null {
+  const type = checker.getTypeAtLocation(expression);
+  return type.isStringLiteral() ? type.value : null;
 }
 
 /** `core.call`, `core["call"]`, `maybeCore?.call`: the built-in forwarder only. */
 function forwarderTarget(
   checker: ts.TypeChecker,
   callee: ts.Expression,
-): { method: string; target: ts.Expression } | null {
+): { method: Forwarder; target: ts.Expression } | null {
   let method: string | null = null;
   let target: ts.Expression | null = null;
   if (ts.isPropertyAccessExpression(callee)) {
     method = callee.name.text;
     target = callee.expression;
   } else if (
-    ts.isElementAccessExpression(callee) &&
-    ts.isStringLiteralLike(callee.argumentExpression)
+    ts.isElementAccessExpression(callee)
   ) {
-    method = callee.argumentExpression.text;
+    method = stringKey(checker, callee.argumentExpression);
     target = callee.expression;
   }
-  if (!method || !target || !FUNCTION_FORWARDERS.has(method)) return null;
-  if (signaturesOf(checker, target).length === 0) return null;
+  if (!method || !target || !isForwarder(method)) return null;
   // A callable object's own `call` method is not Function.prototype.call.
   const member = checker.getPropertyOfType(
     checker.getApparentType(checker.getNonNullableType(checker.getTypeAtLocation(target))),
@@ -85,30 +117,69 @@ function forwarderTarget(
   return { method, target };
 }
 
-/** `Reflect.apply(fn, thisArg, args)` from the default lib. */
-function isReflectApply(checker: ts.TypeChecker, callee: ts.Expression): boolean {
-  if (!ts.isPropertyAccessExpression(callee) || callee.name.text !== "apply") return false;
-  const declaration = checker.getSymbolAtLocation(callee.name)?.declarations?.[0];
+/** Default-lib Reflect methods, including element access and local aliases. */
+function reflectMethod(checker: ts.TypeChecker, expression: ts.Expression): ReflectMethod | null {
+  const callee = callableSource(checker, expression);
+  let symbol: ts.Symbol | undefined;
+  if (ts.isPropertyAccessExpression(callee)) {
+    symbol = checker.getSymbolAtLocation(callee.name);
+  } else if (
+    ts.isElementAccessExpression(callee)
+  ) {
+    symbol = checker.getPropertyOfType(
+      checker.getTypeAtLocation(callee.expression),
+      stringKey(checker, callee.argumentExpression) ?? "",
+    );
+  } else if (ts.isIdentifier(callee)) {
+    const binding = checker.getSymbolAtLocation(callee)?.valueDeclaration;
+    if (binding && ts.isBindingElement(binding) && ts.isObjectBindingPattern(binding.parent)) {
+      const variable = binding.parent.parent;
+      const name = binding.propertyName ?? binding.name;
+      if (ts.isVariableDeclaration(variable) && variable.initializer && ts.isIdentifier(name)
+        && ts.isVariableDeclarationList(variable.parent) && (variable.parent.flags & ts.NodeFlags.Const)) {
+        symbol = checker.getPropertyOfType(
+          checker.getTypeAtLocation(variable.initializer),
+          name.text,
+        );
+      }
+    }
+  }
+  const declaration = symbol?.declarations?.[0];
   const namespace = declaration?.parent?.parent;
-  return (
-    !!declaration &&
+  if (
+    declaration &&
     isDefaultLib(declaration) &&
-    !!namespace &&
+    namespace &&
     ts.isModuleDeclaration(namespace) &&
     namespace.name.getText() === "Reflect"
-  );
+  ) {
+    return symbol?.name === "apply" || symbol?.name === "construct" ? symbol.name : null;
+  }
+  return null;
 }
 
 export function invokedFunction(
   checker: ts.TypeChecker,
   call: ts.CallExpression | ts.NewExpression,
 ): InvokedFunction | null {
-  const callee = unwrapExpression(call.expression);
+  const callee = callableSource(checker, call.expression);
   // Overloads: the one implementation behind them receives the argument
   // whichever overload TypeScript picks for the forwarder, so every declared
   // signature is checked.
   const forwarded = forwarderTarget(checker, callee);
   if (forwarded) {
+    const inner = forwarderTarget(checker, callableSource(checker, forwarded.target));
+    // Calling a built-in forwarder supplies its receiver as the first argument.
+    // Preserve that receiver's signatures instead of the untyped lib signature.
+    if (inner && forwarded.method === "call" && call.arguments?.[0]) {
+      return {
+        target: inner.method === "bind" ? undefined : call.arguments[0],
+        signatures: signaturesOf(checker, call.arguments[0]),
+        firstArgument: 2,
+        boundParameters: 0,
+        applied: inner.method === "apply",
+      };
+    }
     return {
       signatures: signaturesOf(checker, forwarded.target),
       firstArgument: 1,
@@ -116,25 +187,40 @@ export function invokedFunction(
       applied: forwarded.method === "apply",
     };
   }
-  const [reflectTarget] = call.arguments ?? [];
-  if (reflectTarget && isReflectApply(checker, callee)) {
+  const reflectSlots = argumentSlots(checker, call.arguments ?? [], 0);
+  const reflectTarget = reflectSlots.find((slot) => slot.position === 0 && !slot.open)?.value;
+  const reflected = reflectMethod(checker, callee);
+  if (reflectTarget && (reflected === "apply" || reflected === "construct")) {
+    const forwarder = forwarderTarget(checker, callableSource(checker, reflectTarget));
+    const receiver = reflectSlots.find((slot) => slot.position === 1 && !slot.open)?.value;
+    if (reflected === "apply" && forwarder && receiver) {
+      return {
+        target: forwarder.method === "bind" ? undefined : receiver,
+        signatures: signaturesOf(checker, receiver),
+        firstArgument: 2,
+        boundParameters: 0,
+        applied: true,
+        appliedForwarder: forwarder.method,
+      };
+    }
     return {
+      target: reflectTarget,
       signatures: signaturesOf(checker, reflectTarget),
-      firstArgument: 2,
+      firstArgument: reflected === "apply" ? 2 : 1,
       boundParameters: 0,
       applied: true,
     };
   }
   // `fn.bind(this, a)(b)`: b binds the parameter after the bound ones.
   if (ts.isCallExpression(callee)) {
+    const nested = nestedBind(checker, callee);
+    if (nested) return { ...nested, firstArgument: 0, applied: false };
     const bound = forwarderTarget(checker, unwrapExpression(callee.expression));
     if (bound?.method === "bind") {
       return {
         signatures: signaturesOf(checker, bound.target),
         firstArgument: 0,
-        boundParameters: callee.arguments.some(ts.isSpreadElement)
-          ? null
-          : Math.max(0, callee.arguments.length - 1),
+        boundParameters: boundParameterCount(checker, callee.arguments),
         applied: false,
       };
     }
@@ -158,8 +244,44 @@ export function invokedFunction(
     : null;
 }
 
+/** A nested bind is consumed only by a later invocation we can check. */
+export function nestedBind(
+  checker: ts.TypeChecker,
+  call: ts.CallExpression,
+): Pick<InvokedFunction, "target" | "signatures" | "boundParameters"> | null {
+  const callee = callableSource(checker, call.expression);
+  const outer = forwarderTarget(checker, callee);
+  const inner = outer && forwarderTarget(checker, callableSource(checker, outer.target));
+  let target: ts.Expression | undefined;
+  let slots: ArgumentSlot[];
+  if (outer?.method === "call" && inner?.method === "bind") {
+    target = call.arguments[0];
+    slots = argumentSlots(checker, call.arguments.slice(1), 0);
+  } else if (reflectMethod(checker, callee) === "apply" && call.arguments[0] &&
+    forwarderTarget(checker, callableSource(checker, call.arguments[0]))?.method === "bind") {
+    target = call.arguments[1];
+    slots = appliedSlots(checker, call.arguments[2], 0, false);
+  } else return null;
+  if (!target) return null;
+  return {
+    target,
+    signatures: signaturesOf(checker, target),
+    boundParameters: slots.some((slot) => slot.open) ? null : Math.max(0, slots.length - 1),
+  };
+}
+
+/** Number of logical slots, expanding tuple-rest parameters. */
+export function parameterSlotCount(checker: ts.TypeChecker, signature: ts.Signature): number {
+  const parameters = signature.getParameters();
+  const last = parameters[parameters.length - 1];
+  const declaration = last?.valueDeclaration;
+  const elements = declaration && ts.isParameter(declaration) && declaration.dotDotDotToken
+    ? elementTypes(checker, checker.getTypeOfSymbol(last)) : null;
+  return parameters.length + Math.max(0, (elements?.length ?? 0) - 1);
+}
+
 /** The declared parameter types that may receive the value at `index`. */
-function parameterCandidates(
+export function parameterCandidates(
   checker: ts.TypeChecker,
   signature: ts.Signature,
   index: number,
@@ -189,6 +311,8 @@ interface ArgumentSlot {
   position: number;
   /** Position unknown past `position` (after a spread of unknown length). */
   open: boolean;
+  /** Available for ordinary arguments, but not individual spread elements. */
+  value?: ts.Expression;
 }
 
 /**
@@ -252,7 +376,9 @@ function argumentSlots(
   for (const argument of args) {
     const node = reportAs ?? argument;
     if (!ts.isSpreadElement(argument)) {
-      slots.push({ node, type: checker.getTypeAtLocation(argument), position, open });
+      slots.push({
+        node, value: argument, type: checker.getTypeAtLocation(argument), position, open,
+      });
       position += 1;
       continue;
     }
@@ -263,11 +389,20 @@ function argumentSlots(
       position,
       open,
     );
+    const literal = unwrapExpression(argument.expression);
+    if (ts.isArrayLiteralExpression(literal) && !literal.elements.some(ts.isSpreadElement)) {
+      spread.slots.forEach((slot, index) => { slot.value = literal.elements[index]; });
+    }
     slots.push(...spread.slots);
     position = spread.next;
     open = spread.open;
   }
   return slots;
+}
+
+function boundParameterCount(checker: ts.TypeChecker, args: readonly ts.Expression[]): number | null {
+  const slots = argumentSlots(checker, args, 0);
+  return slots.some((slot) => slot.open) ? null : Math.max(0, slots.length - 1);
 }
 
 /** `.apply(this, args)` / `Reflect.apply(fn, this, args)`: the list's values. */
@@ -297,21 +432,41 @@ export function declaredParameterFindings(
 ): Map<ts.Expression, string> {
   const findings = new Map<ts.Expression, string>();
   const allArgs = call.arguments ?? [];
-  // A spread before the first parameter-binding argument (`core.call(...xs)`)
-  // or inside `.bind` hides every position: match all arguments everywhere.
+  // Expand fixed tuples before removing thisArg. Only variable-length
+  // spreads can hide where the parameter-binding arguments begin.
+  const allSlots = argumentSlots(checker, allArgs, 0);
   const positionsKnown =
     invoked.boundParameters !== null &&
-    !allArgs.slice(0, invoked.firstArgument).some(ts.isSpreadElement);
-  const slots = !positionsKnown
-    ? argumentSlots(checker, allArgs, 0, true)
-    : invoked.applied
-      ? appliedSlots(checker, allArgs[invoked.firstArgument], invoked.boundParameters ?? 0, false)
-      : argumentSlots(checker, allArgs.slice(invoked.firstArgument), invoked.boundParameters ?? 0);
+    !allSlots.some((slot) => slot.open && slot.position < invoked.firstArgument);
+  const offset = invoked.boundParameters ?? 0;
+  const forwardedSlots = positionsKnown
+    ? allSlots.filter((slot) => slot.position >= invoked.firstArgument)
+    : allSlots;
+  const expandApplied = (slot: ArgumentSlot, open: boolean): ArgumentSlot[] => slot.value
+    ? appliedSlots(checker, slot.value, offset, open)
+    : spreadSlots(checker, slot.node, slot.type, offset, open).slots;
+  let slots = invoked.applied
+    ? forwardedSlots
+      .filter((slot) => !positionsKnown || slot.position === invoked.firstArgument)
+      .flatMap((slot) => expandApplied(slot, !positionsKnown))
+    : forwardedSlots.map((slot) => ({
+      ...slot,
+      position: positionsKnown ? slot.position - invoked.firstArgument + offset : 0,
+      open: slot.open || !positionsKnown,
+    }));
+  if (invoked.appliedForwarder === "apply") {
+    slots = slots.filter((slot) => slot.open || slot.position === 1).flatMap((slot) =>
+      expandApplied(slot, slot.open));
+  } else if (invoked.appliedForwarder === "call" || invoked.appliedForwarder === "bind") {
+    slots = slots.filter((slot) => slot.open || slot.position >= 1).map((slot) => ({
+      ...slot, position: Math.max(0, slot.position - 1),
+    }));
+  }
   for (const slot of slots) {
     if (findings.has(slot.node) || isExempt(slot.node)) continue;
     for (const signature of invoked.signatures) {
       const from = positionsKnown ? Math.max(0, slot.position) : 0;
-      const count = Math.max(signature.getParameters().length, from + 1);
+      const count = Math.max(parameterSlotCount(checker, signature), from + 1);
       const positions = slot.open
         ? Array.from({ length: count - from }, (_, i) => from + i)
         : [slot.position];
