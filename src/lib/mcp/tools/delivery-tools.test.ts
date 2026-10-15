@@ -21,7 +21,7 @@ const DEADLINE_MS = 10_000;
 const MASS_KG = 100;
 const row = { id: ID, code: "DL-1", version: 2, facilityId: ID, orderId: ID, storageLocationId: ID, deliveredAt: CLOCK,
   deliveredWetMassKg: MASS_KG, moisturePercent: 20, dryBiocharKg: 80, driverId: null, vehicleId: null,
-  distanceKmOverride: null, distanceSource: null, distanceNote: null, destinationCustomerLocationId: null,
+  distanceKmOverride: null, distanceSource: null, distanceNote: null, destinationCustomerLocationId: ID,
   archivedAt: null, createdAt: CLOCK, updatedAt: CLOCK };
 const allocations = [{ layerId: ID, code: "BP-1", dryBiocharKg: 80, solidsKg: 80, wetKg: MASS_KG, moisturePercent: 20, policy: "fifo" }];
 const create = { orderId: ID, storageLocationId: ID, deliveredAt: CLOCK, deliveredWetMassKg: MASS_KG, moisturePercent: 20 };

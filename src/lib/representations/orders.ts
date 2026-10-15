@@ -8,7 +8,7 @@ export const orderRepresentationSchema = z.object({
   version: lookupVersion,
   facilityId: z.uuid().describe("Owning facility identifier, UUID."),
   customerId: z.uuid().describe("Customer identifier, UUID."),
-  customerLocationId: z.uuid().nullable().describe("Destination customer location identifier, UUID, or null when unspecified."),
+  customerLocationId: z.uuid().describe("Destination customer location identifier, UUID."),
   formulationId: z.uuid().describe("Ordered formulation identifier, UUID."),
   orderDate: z.iso.date().describe("Order business date, YYYY-MM-DD. A calendar date, not an event instant."),
   quantityKg: orderQuantityKgSchema,

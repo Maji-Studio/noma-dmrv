@@ -6,9 +6,9 @@ import { deleteOrderInput, recordOrderInput, updateOrderApiInput, updateOrderInp
 import { orderFormSchema, updateOrderSchema } from "./orders";
 
 const ID = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee";
-const create = { facilityId: ID, customerId: ID, formulationId: ID, orderDate: "2026-10-14", quantityKg: 100.125 };
+const create = { facilityId: ID, customerId: ID, customerLocationId: ID, formulationId: ID, orderDate: "2026-10-14", quantityKg: 100.125 };
 const target = { orderId: ID, expectedVersion: 1 };
-const requiredFields = ["facilityId", "customerId", "formulationId", "orderDate", "quantityKg"];
+const requiredFields = ["facilityId", "customerId", "customerLocationId", "formulationId", "orderDate", "quantityKg"];
 const unpublished = ["value", "currency", "status", "organizationId", "version", "archivedAt", "deliveredWetMassKg", "remainingWetMassKg", "fulfillmentStatus", "idempotencyKey"];
 
 it.each([
@@ -48,8 +48,7 @@ describe("recordOrderInput", () => {
     expect(recordOrderInput.parse(create)).toEqual({ ...create, orderDate: new Date("2026-10-14T00:00:00Z") });
     expect(recordOrderInput.safeParse({}).error?.issues.map(issue => issue.path[0]).sort()).toEqual([...requiredFields].sort());
     expect(recordOrderInput.parse(create)).not.toHaveProperty("packaging");
-    expect(recordOrderInput.parse(create)).not.toHaveProperty("customerLocationId");
-    expect(recordOrderInput.parse({ ...create, customerLocationId: null }).customerLocationId).toBeNull();
+    for (const customerLocationId of [undefined, null, ""]) expect(recordOrderInput.safeParse({ ...create, customerLocationId }).success).toBe(false);
     for (const packaging of ["loose", "bagged"]) expect(recordOrderInput.parse({ ...create, packaging }).packaging).toBe(packaging);
     for (const packaging of [null, "boxed", ""]) expect(recordOrderInput.safeParse({ ...create, packaging }).success).toBe(false);
   });
@@ -92,12 +91,13 @@ describe("updateOrderInput", () => {
     expect(updateOrderInput.parse(target)).toEqual(target);
     expect(updateOrderApiInput.parse({ quantityKg: "0.001" })).toEqual({ quantityKg: 0.001 });
     expect(updateOrderApiInput.parse({ customerId: ID.toUpperCase() })).toEqual({ customerId: ID });
-    expect(updateOrderApiInput.parse({ customerLocationId: null })).toEqual({ customerLocationId: null });
+    expect(updateOrderApiInput.parse({ customerLocationId: ID })).toEqual({ customerLocationId: ID });
+    for (const customerLocationId of [null, ""]) expect(updateOrderApiInput.safeParse({ customerLocationId }).success).toBe(false);
     expect(updateOrderApiInput.parse({ code: "OR-26-002" })).toEqual({ code: "OR-26-002" });
     expect(updateOrderApiInput.parse({ orderDate: "2099-01-01" })).toEqual({ orderDate: new Date("2099-01-01T00:00:00Z") });
   });
 
-  it("clears only the customer location and refuses unknown fields", () => {
+  it("refuses clearing required fields and refuses unknown fields", () => {
     for (const field of ["code", ...requiredFields, "packaging"]) expect(updateOrderApiInput.safeParse({ [field]: null }).success, field).toBe(false);
     for (const field of ["orderId", "expectedVersion", "mystery", ...unpublished]) expect(updateOrderApiInput.safeParse({ [field]: 1 }).success, field).toBe(false);
     for (const code of ["", "or-26-002", "OR 2", "A".repeat(51)]) expect(updateOrderApiInput.safeParse({ code }).success).toBe(false);

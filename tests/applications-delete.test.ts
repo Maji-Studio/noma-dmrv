@@ -17,7 +17,7 @@ import {
 import { facilities, reactors } from "@/db/schema/facilities";
 import { feedstockTypes } from "@/db/schema/feedstock";
 import { deliveries, orders } from "@/db/schema/logistics";
-import { customers } from "@/db/schema/parties";
+import { customers, customerLocations } from "@/db/schema/parties";
 import { biocharProducts, formulations } from "@/db/schema/products";
 import { productionProcesses } from "@/db/schema/production-processes";
 import { productionRuns } from "@/db/schema/production";
@@ -46,6 +46,10 @@ async function createDeleteFixture(runId: string): Promise<DeleteFixture> {
     .insert(customers)
     .values({ organizationId: TEST_ORG_ID, name: `Delete Test Customer ${runId}`, code: `CU-DEL-${runId}` })
     .returning({ id: customers.id });
+  const [orderLocation] = await db
+    .insert(customerLocations)
+    .values({ organizationId: TEST_ORG_ID, customerId: customer.id, name: "E2E Order destination" })
+    .returning({ id: customerLocations.id });
 
   const [formulation] = await db
     .insert(formulations)
@@ -122,6 +126,7 @@ async function createDeleteFixture(runId: string): Promise<DeleteFixture> {
       facilityId: facility.id,
       biocharProductId: product.id,
       customerId: customer.id,
+      customerLocationId: orderLocation.id,
       orderDate: new Date("2025-06-01"),
       quantityKg: 1000,
       packaging: "bagged",
@@ -187,6 +192,7 @@ async function cleanupDeleteFixture(fixture: DeleteFixture): Promise<void> {
       .where(eq(productionRuns.id, fixture.productionRunId));
     await tx.delete(reactors).where(eq(reactors.id, fixture.reactorId));
     await tx.delete(formulations).where(eq(formulations.id, fixture.formulationId));
+    await tx.delete(customerLocations).where(eq(customerLocations.customerId, fixture.customerId));
     await tx.delete(customers).where(eq(customers.id, fixture.customerId));
     await tx
       .delete(productionProcesses)

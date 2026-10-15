@@ -50,7 +50,7 @@ async function postedTruck() {
       massKg: 500, moistureContentPercent: 60 }] },
   }));
   const order = await runOperationInProcess(recordOrder, f.ctx, {
-    facilityId: f.facility.id, customerId: f.customer.id,
+    facilityId: f.facility.id, customerId: f.customer.id, customerLocationId: f.location.id,
     formulationId: f.recipe.id, orderDate: '2026-09-12', quantityKg: 2000, packaging: 'loose',
   });
   const input = { storageLocationId: f.bin.id, facilityId: f.facility.id, occurredAt: '2026-09-14T12:00:00.000Z',

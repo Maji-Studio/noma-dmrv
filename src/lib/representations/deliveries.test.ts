@@ -6,7 +6,7 @@ const at = "2026-10-08T12:00:00.000Z";
 const row = { id, code: "DL-1", version: 1, facilityId: id, orderId: id, storageLocationId: id,
   deliveryDate: "2026-10-08T15:00:00+03:00", deliveredWetMassKg: 1234.567,
   moistureContentPercent: 12.345678, massDryKg: 1000.123, driverId: null, vehicleId: null,
-  distanceKmOverride: null, distanceSource: null, distanceNote: null, orderCustomerLocationId: null,
+  distanceKmOverride: null, distanceSource: null, distanceNote: null, orderCustomerLocationId: id,
   archivedAt: null, createdAt: new Date(at), updatedAt: at };
 
 it("publishes stored delivery fields with UTC instants and no joined or internal fields", () => {
@@ -14,8 +14,9 @@ it("publishes stored delivery fields with UTC instants and no joined or internal
   expect(data).toEqual({ id, code: "DL-1", version: 1, facilityId: id, orderId: id, storageLocationId: id,
     deliveredAt: at, deliveredWetMassKg: 1234.567, moisturePercent: 12.345678, dryBiocharKg: 1000.123,
     driverId: null, vehicleId: null, distanceKmOverride: null, distanceSource: null, distanceNote: null,
-    destinationCustomerLocationId: null, archivedAt: null, createdAt: at, updatedAt: at });
+    destinationCustomerLocationId: id, archivedAt: null, createdAt: at, updatedAt: at });
   expect(Object.keys(data).sort()).toEqual(Object.keys(deliveryRepresentationSchema.shape).sort());
+  expect(deliveryRepresentationSchema.safeParse({ ...data, destinationCustomerLocationId: null }).success).toBe(false);
 });
 
 it("preserves nullable stored masses and the stored distance precision", () => {

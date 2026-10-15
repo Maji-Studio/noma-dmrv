@@ -208,12 +208,14 @@ export function OrderForm({
             id="customerLocationId"
             control={control}
             name="customerLocationId"
+            required
             label="Customer location"
             entityType="customerLocation"
             onEditSelected={selectedLocation && selectedCustomerId
               ? () => setEditingLocation({ customerId: selectedCustomerId, location: selectedLocation })
               : undefined}
             placeholder={selectedCustomerId ? "Select location..." : "Select a customer first"}
+            emptyHint={{ message: "Add a location to this customer first." }}
             disabled={isSubmitting || !selectedCustomerId}
             filterBy={selectedCustomerId ? { customerId: selectedCustomerId } : undefined}
             dependsOn={watchedCustomerId}

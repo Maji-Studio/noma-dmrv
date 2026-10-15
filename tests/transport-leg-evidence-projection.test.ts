@@ -15,7 +15,7 @@ import { eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import { getTransportLegsWithEvidenceForEntities } from "@/data-access/transport-legs";
 import { facilities } from "@/db/schema/facilities";
-import { customers } from "@/db/schema/parties";
+import { customers, customerLocations } from "@/db/schema/parties";
 import { biocharProducts } from "@/db/schema/products";
 import { deliveries, orders, transportLegs } from "@/db/schema/logistics";
 import { documents } from "@/db/schema/documentation";
@@ -65,6 +65,10 @@ describe("getTransportLegsWithEvidenceForEntities — biochar delivery evidence"
         name: `TEP Customer ${tag}`,
       })
       .returning({ id: customers.id });
+    const [orderLocation] = await db
+      .insert(customerLocations)
+      .values({ organizationId: TEST_ORG_ID, customerId: customer.id, name: "E2E Order destination" })
+      .returning({ id: customerLocations.id });
     customerId = customer.id;
 
     const [order] = await db
@@ -75,6 +79,7 @@ describe("getTransportLegsWithEvidenceForEntities — biochar delivery evidence"
         facilityId,
         orderDate: new Date("2026-01-05T00:00:00Z"),
         customerId,
+        customerLocationId: orderLocation.id,
         biocharProductId: productId,
         quantityKg: 500,
         packaging: "bagged",
@@ -147,6 +152,7 @@ describe("getTransportLegsWithEvidenceForEntities — biochar delivery evidence"
       );
     }
     if (customerId) {
+      await cleanup(() => db.delete(customerLocations).where(eq(customerLocations.customerId, customerId)));
       await cleanup(() => db.delete(customers).where(eq(customers.id, customerId)));
     }
     if (facilityId) {

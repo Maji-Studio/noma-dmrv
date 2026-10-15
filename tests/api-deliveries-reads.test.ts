@@ -1,4 +1,5 @@
 /** Real handlers and credentials. Run only by explicit path on the worktree test database. */
+import { createOrderDestination } from "./helpers/order-operation-fixture";
 import { randomUUID } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
@@ -99,13 +100,14 @@ describe("delivery REST reads", { timeout: READ_TIMEOUT_MS }, () => {
     }
   });
 
-  it("resolves list and detail destinations from orders, including a missing destination", async () => {
-    const order = await insertReadOrder(a, `OR-NO-DEST-${a.tag}`, { customerLocationId: null });
+  it("resolves list and detail destinations from orders, including distinct destinations", async () => {
+    const otherLocation = await createOrderDestination(a);
+    const order = await insertReadOrder(a, `OR-OTHER-DEST-${a.tag}`, { customerLocationId: otherLocation.id });
     const row = await insert(a, order.id);
     const page = await (await list()).json();
     expect(page.data.find((item: { id: string }) => item.id === first.id).destinationCustomerLocationId).toBe(a.location.id);
-    expect(page.data.find((item: { id: string }) => item.id === row.id).destinationCustomerLocationId).toBeNull();
-    expect((await (await get(row.id)).json()).data.destinationCustomerLocationId).toBeNull();
+    expect(page.data.find((item: { id: string }) => item.id === row.id).destinationCustomerLocationId).toBe(otherLocation.id);
+    expect((await (await get(row.id)).json()).data.destinationCustomerLocationId).toBe(otherLocation.id);
   });
 
   it("rejects an orders cursor reused for deliveries", async () => {

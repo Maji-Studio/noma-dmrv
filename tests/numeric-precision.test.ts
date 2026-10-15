@@ -15,7 +15,7 @@ import { db } from "@/db";
 import { applications } from "@/db/schema/application";
 import { facilities, storageLocations } from "@/db/schema/facilities";
 import { orders } from "@/db/schema/logistics";
-import { customers } from "@/db/schema/parties";
+import { customers, customerLocations } from "@/db/schema/parties";
 import { samples } from "@/db/schema/production";
 import { biocharProducts } from "@/db/schema/products";
 import { biocharStorageInventory } from "@/db/schema/storage-inventory";
@@ -137,6 +137,10 @@ describe("numeric precision round-trips (issue #280)", () => {
         .insert(customers)
         .values({ organizationId: TEST_ORG_ID, code: `CU-NUM-${runId}`, name: `Numeric Customer ${runId}` })
         .returning({ id: customers.id });
+      const [orderLocation] = await tx
+        .insert(customerLocations)
+        .values({ organizationId: TEST_ORG_ID, customerId: customer.id, name: "E2E Order destination" })
+        .returning({ id: customerLocations.id });
 
       const [product] = await tx
         .insert(biocharProducts)
@@ -151,6 +155,7 @@ describe("numeric precision round-trips (issue #280)", () => {
           facilityId: facility.id,
           orderDate: new Date(),
           customerId: customer.id,
+          customerLocationId: orderLocation.id,
           biocharProductId: product.id,
           quantityKg: 1000,
           packaging: "loose",

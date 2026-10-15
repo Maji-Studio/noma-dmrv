@@ -16,6 +16,7 @@ import {
   creditBatchProductionRuns,
   creditBatches,
   customers,
+  customerLocations,
   deliveries,
   facilities,
   feedstockTypes,
@@ -192,6 +193,10 @@ export async function createLineageFixture(
       .insert(customers)
       .values({ organizationId: TEST_ORG_ID, code: `CU-CLG-${tag}`, name: `CLG Customer ${tag}` })
       .returning({ id: customers.id });
+    const [orderLocation] = await tx
+      .insert(customerLocations)
+      .values({ organizationId: TEST_ORG_ID, customerId: customer.id, name: "E2E Order destination" })
+      .returning({ id: customerLocations.id });
 
     const [order] = await tx
       .insert(orders)
@@ -200,6 +205,7 @@ export async function createLineageFixture(
         code: `OR-CLG-${tag}`,
         facilityId: facility.id,
         customerId: customer.id,
+        customerLocationId: orderLocation.id,
         biocharProductId: product.id,
         orderDate: new Date("2026-06-14T00:00:00Z"),
         quantityKg: 300,
@@ -377,6 +383,7 @@ export async function cleanupLineageFixture(fixture: LineageFixture): Promise<vo
       .where(eq(productionRuns.id, fixture.productionRunId));
     await tx.delete(storageLocations).where(eq(storageLocations.id, fixture.biocharBinId));
     await tx.delete(reactors).where(eq(reactors.id, fixture.reactorId));
+    await tx.delete(customerLocations).where(eq(customerLocations.customerId, fixture.customerId));
     await tx.delete(customers).where(eq(customers.id, fixture.customerId));
     await deleteOutputFacilityFixtures(tx, eq(facilities.id, fixture.facilityId));
   });

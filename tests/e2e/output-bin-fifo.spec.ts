@@ -108,6 +108,7 @@ test.describe("Output-bin conserved FIFO", () => {
     await waitForFacilityHydration(page, f.facility.name);
     await page.getByRole("button", { name: "New order", exact: true }).click();
     await selectEntity(page, "Customer", f.customer.id, f.customer.name);
+    await selectEntity(page, "Customer location", f.location.id, f.location.name ?? undefined);
     await selectEntity(page, "Formulation", f.pure.id, f.pure.name);
     await page.locator("#quantityKg").fill("100");
     await page.locator("#orderDate").fill(FIFO_BROWSER_DATE);

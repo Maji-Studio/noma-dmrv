@@ -47,7 +47,7 @@ import { documents } from "@/db/schema/documentation";
 import { facilities, reactors } from "@/db/schema/facilities";
 import { feedstockTypes } from "@/db/schema/feedstock";
 import { deliveries, orders } from "@/db/schema/logistics";
-import { customers } from "@/db/schema/parties";
+import { customers, customerLocations } from "@/db/schema/parties";
 import { biocharProducts, formulations } from "@/db/schema/products";
 import { productionProcesses } from "@/db/schema/production-processes";
 import { productionRuns } from "@/db/schema/production";
@@ -106,6 +106,10 @@ async function seedDeliveryChain(
     .insert(customers)
     .values({ organizationId: TEST_ORG_ID, name: `Gap Customer ${runId}`, code: `CU-GAP-${runId}` })
     .returning({ id: customers.id });
+  const [orderLocation] = await dbc
+    .insert(customerLocations)
+    .values({ organizationId: TEST_ORG_ID, customerId: customer.id, name: "E2E Order destination" })
+    .returning({ id: customerLocations.id });
 
   const [formulation] = await dbc
     .insert(formulations)
@@ -179,6 +183,7 @@ async function seedDeliveryChain(
       facilityId: facility.id,
       biocharProductId: product.id,
       customerId: customer.id,
+      customerLocationId: orderLocation.id,
       orderDate: new Date("2025-06-01"),
       quantityKg: 1000,
       packaging: "bagged",
@@ -270,6 +275,7 @@ async function cleanupFixture(target: Fixture): Promise<void> {
     await tx.delete(productionRuns).where(eq(productionRuns.id, target.productionRunId));
     await tx.delete(reactors).where(eq(reactors.id, target.reactorId));
     await tx.delete(formulations).where(eq(formulations.id, target.formulationId));
+    await tx.delete(customerLocations).where(eq(customerLocations.customerId, target.customerId));
     await tx.delete(customers).where(eq(customers.id, target.customerId));
     await tx
       .delete(productionProcesses)
