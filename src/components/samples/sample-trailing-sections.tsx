@@ -11,7 +11,7 @@
 import { useState } from "react";
 import { DOCUMENT_UPLOAD_MAX_MB } from "@/lib/documents/upload-policy";
 import { DOCUMENT_TYPE_LABELS } from "@/schemas/documents";
-import { SampleDocumentTypePicker, type SampleDocumentType } from "./sample-document-type-picker";
+import { SAMPLE_DOCUMENT_ACCEPT, SampleDocumentTypePicker, type SampleDocumentType } from "./sample-document-type-picker";
 import { ArrowRightIcon, PaperclipIcon, TruckIcon } from "@phosphor-icons/react/dist/ssr";
 import { FormField, FormFileUpload, FormSection } from "@/components/forms";
 import { FailedDeferredAttachments } from "@/components/forms/failed-deferred-attachments";
@@ -92,7 +92,7 @@ export function SampleEvidenceSection({
           <FormField id="sample-deferred-documents-upload" label={DOCUMENT_TYPE_LABELS[documentType]}>
             <FormFileUpload
               id="sample-deferred-documents-upload"
-              accept="image/*,.pdf,.csv,.xls,.xlsx"
+              accept={SAMPLE_DOCUMENT_ACCEPT}
               multiple
               maxSizeMb={DOCUMENT_UPLOAD_MAX_MB}
               disabled={isSubmitting}

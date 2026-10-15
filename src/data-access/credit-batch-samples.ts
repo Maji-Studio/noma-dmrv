@@ -114,7 +114,7 @@ export async function getCreditBatchesWithSamples(
   }
 
   const batchesWithReports = await getBatchesWithLabReports(ctx, ids, db, sampleRows);
-  const batchesWithHistograms = await getBatchesWithReflectanceHistograms(ctx, ids);
+  const batchesWithHistograms = await getBatchesWithReflectanceHistograms(ctx, ids, db, sampleRows);
   return batchRows.map((batch) => ({
     hasReflectanceHistogram: batchesWithHistograms.has(batch.id),
     hasLabReport: batchesWithReports.has(batch.id),

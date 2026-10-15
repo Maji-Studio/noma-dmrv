@@ -27,7 +27,7 @@ import type {
 
 import { DOCUMENT_UPLOAD_MAX_MB } from "@/lib/documents/upload-policy";
 import { DOCUMENT_TYPE_LABELS } from "@/schemas/documents";
-import { SampleDocumentTypePicker, type SampleDocumentType } from "./sample-document-type-picker";
+import { SAMPLE_DOCUMENT_ACCEPT, SampleDocumentTypePicker, type SampleDocumentType } from "./sample-document-type-picker";
 
 interface SampleDocumentsPanelProps {
   sampleId: string;
@@ -206,7 +206,7 @@ export function SampleDocumentsPanel({
           <FormField id={`sample-${sampleId}-documents-upload`} label={DOCUMENT_TYPE_LABELS[documentType]}>
             <FormFileUpload
               id={`sample-${sampleId}-documents-upload`}
-              accept="image/*,.pdf,.csv,.xls,.xlsx"
+              accept={SAMPLE_DOCUMENT_ACCEPT}
               multiple
               maxSizeMb={DOCUMENT_UPLOAD_MAX_MB}
               entityType={ENTITY_TYPE}

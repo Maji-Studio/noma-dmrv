@@ -4,6 +4,7 @@ import { SegmentedControl } from "@/components/forms/segmented-control";
 import { DOCUMENT_TYPE_LABELS } from "@/schemas/documents";
 
 const SAMPLE_DOCUMENT_TYPES = ["lab_report", "reflectance_histogram"] as const;
+export const SAMPLE_DOCUMENT_ACCEPT = "image/*,.pdf,.csv,.xls,.xlsx";
 export type SampleDocumentType = (typeof SAMPLE_DOCUMENT_TYPES)[number];
 
 export function SampleDocumentTypePicker({ id, value, onChange, disabled = false }: {

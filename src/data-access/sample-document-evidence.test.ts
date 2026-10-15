@@ -29,13 +29,13 @@ describe("getBatchesWithLabReports", () => {
     expect(evidence.params).toEqual(expect.arrayContaining(["uploaded", "lab_report", "sample-a", "batch-a", "batch-b"]));
     expect(evidence.sql).toContain(documents.uploadStatus.name);
   });
-  it("reuses loaded Samples and only reads documents", async () => {
+  it.each([getBatchesWithLabReports, getBatchesWithReflectanceHistograms])("%s reuses loaded Samples and only reads documents", async (getBatches) => {
     const select = vi.mocked(db.select);
     select.mockClear();
     select.mockReturnValue({
       from: () => ({ where: () => Promise.resolve([{ entityId: "sample-a", entityType: "sample" }]) }),
     } as unknown as ReturnType<typeof db.select>);
-    expect(await getBatchesWithLabReports(ctx, ["batch-a"], db, [
+    expect(await getBatches(ctx, ["batch-a"], db, [
       { id: "sample-a", creditBatchId: "batch-a" },
     ])).toEqual(new Set(["batch-a"]));
     expect(select).toHaveBeenCalledTimes(1);
@@ -45,13 +45,29 @@ describe("getBatchesWithLabReports", () => {
 
 it("counts uploaded histogram documents on org-scoped Samples only", async () => {
   const queries: unknown[] = [];
-  const results = [[{ creditBatchId: "batch-a" }]];
+  const results = [
+    [{ id: "sample-a", creditBatchId: "batch-a" }],
+    [{ entityId: "sample-a", entityType: "sample" }],
+  ];
   vi.mocked(db.select).mockImplementation(() => ({
-    from: () => ({ innerJoin() { return this; }, where: (query: unknown) => { queries.push(query); return Promise.resolve(results.shift()); } }),
+    from: () => ({ where: (query: unknown) => { queries.push(query); return Promise.resolve(results.shift()); } }),
   }) as unknown as ReturnType<typeof db.select>);
   expect(await getBatchesWithReflectanceHistograms(ctx, ["batch-a", "batch-b"])).toEqual(new Set(["batch-a"]));
   const dialect = new PgDialect();
-  const evidence = dialect.sqlToQuery(queries[queries.length - 1] as Parameters<typeof dialect.sqlToQuery>[0]);
-  expect(evidence.params).toEqual(expect.arrayContaining(["org-a", "uploaded", "reflectance_histogram", "sample", "batch-a", "batch-b"]));
+  const sampleQuery = dialect.sqlToQuery(queries[0] as Parameters<typeof dialect.sqlToQuery>[0]);
+  expect(sampleQuery.params).toEqual(expect.arrayContaining(["org-a", "batch-a", "batch-b"]));
+  const evidence = dialect.sqlToQuery(queries[1] as Parameters<typeof dialect.sqlToQuery>[0]);
+  expect(evidence.params).toEqual(expect.arrayContaining(["org-a", "uploaded", "reflectance_histogram", "sample", "sample-a"]));
   expect(evidence.params).not.toContain("credit_batch");
+});
+
+it("does not count histogram documents without loaded Samples", async () => {
+  const select = vi.mocked(db.select);
+  select.mockClear();
+  expect(await getBatchesWithReflectanceHistograms(ctx, ["batch-a"], db, [])).toEqual(new Set());
+  expect(select).not.toHaveBeenCalled();
+});
+
+it.each([getBatchesWithLabReports, getBatchesWithReflectanceHistograms])("%s requires organization scope even for no batches", async (getBatches) => {
+  await expect(getBatches({ ...ctx, organizationId: "" }, [])).rejects.toThrow();
 });
