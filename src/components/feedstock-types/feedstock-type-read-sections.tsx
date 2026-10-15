@@ -18,6 +18,7 @@ export function titleCase(value: string) {
 export function feedstockTypeSheetSections(
   feedstockType: FeedstockType,
   sampling: { facilityId: string; canManage: boolean } | null,
+  hasIsometricCertifier: boolean,
   /** Registry environment for the Certify link; sandbox when unknown. */
   isProduction = false,
 ): DetailPanelSection[] {
@@ -38,7 +39,9 @@ export function feedstockTypeSheetSections(
         { label: "State", value: feedstockType.archivedAt ? "Archived" : "Active" },
         {
           label: "Isometric feedstock type",
-          ...certificationDetailField("feedstockType", "isometricFeedstockTypeId", feedstockType),
+          ...(hasIsometricCertifier
+            ? certificationDetailField("feedstockType", "isometricFeedstockTypeId", feedstockType)
+            : { certifyRequired: false }),
           value: feedstockType.isometricFeedstockTypeId ? (
             <span className="inline-flex items-center gap-4">
               <span className="font-mono">{feedstockType.isometricFeedstockTypeId}</span>

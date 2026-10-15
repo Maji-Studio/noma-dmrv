@@ -186,7 +186,7 @@ const CERTIFIER_EXTERNAL_FACILITY_CONSTRAINT =
   "certifier_projects_provider_external_facility_unique";
 
 async function withExternalFacilityConflictGuard<T>(
-  externalFacilityId: string | null,
+  externalFacilityId: string,
   fn: () => Promise<T>,
 ): Promise<T> {
   try {
@@ -218,7 +218,7 @@ export async function upsertCertifierProject(
     metadata: input.metadata ?? null,
   };
 
-  if (!values.externalFacilityId?.trim()) {
+  if (!values.externalFacilityId.trim()) {
     throw new SafeError("Set an Isometric facility ID before saving the facility link.");
   }
 
@@ -245,31 +245,29 @@ export async function upsertCertifierProject(
       // only the fcl_ id is locked. Two concurrent upserts can each pass this
       // probe (each row-locks only its own facility), so the DB constraint
       // still fires for one — withExternalFacilityConflictGuard catches it.
-      if (values.externalFacilityId) {
-        const [collision] = await tx
-          .select({
-            code: facilities.code,
-            name: facilities.name,
-          })
-          .from(certifierProjects)
-          .innerJoin(facilities, and(eq(certifierProjects.facilityId, facilities.id), eq(facilities.organizationId, ctx.organizationId)))
-          .where(
-            and(
-              eq(certifierProjects.provider, input.provider),
-              eq(
-                certifierProjects.externalFacilityId,
-                values.externalFacilityId,
-              ),
-              ne(certifierProjects.facilityId, input.facilityId),
-              eq(certifierProjects.organizationId, ctx.organizationId),
+      const [collision] = await tx
+        .select({
+          code: facilities.code,
+          name: facilities.name,
+        })
+        .from(certifierProjects)
+        .innerJoin(facilities, and(eq(certifierProjects.facilityId, facilities.id), eq(facilities.organizationId, ctx.organizationId)))
+        .where(
+          and(
+            eq(certifierProjects.provider, input.provider),
+            eq(
+              certifierProjects.externalFacilityId,
+              values.externalFacilityId,
             ),
-          )
-          .limit(1);
-        if (collision) {
-          throw new SafeError(
-            `Isometric facility ID ${values.externalFacilityId} is already linked to ${collision.code}: ${collision.name}. Each Isometric facility maps to one noma facility.`,
-          );
-        }
+            ne(certifierProjects.facilityId, input.facilityId),
+            eq(certifierProjects.organizationId, ctx.organizationId),
+          ),
+        )
+        .limit(1);
+      if (collision) {
+        throw new SafeError(
+          `Isometric facility ID ${values.externalFacilityId} is already linked to ${collision.code}: ${collision.name}. Each Isometric facility maps to one noma facility.`,
+        );
       }
 
       // Rebinding either registry identifier requires superseding blocking submissions first.

@@ -16,7 +16,7 @@ const linked = {
 } as unknown as FeedstockType;
 
 function isometricField(feedstockType: FeedstockType, isProduction: boolean) {
-  const field = feedstockTypeSheetSections(feedstockType, null, isProduction)[0].fields.find(
+  const field = feedstockTypeSheetSections(feedstockType, null, true, isProduction)[0].fields.find(
     (f) => f.label === "Isometric feedstock type",
   );
   return field?.value;
@@ -40,4 +40,23 @@ describe("feedstockTypeSheetSections Isometric link", () => {
   it("shows no value for an unlinked record", () => {
     expect(isometricField({ ...linked, isometricFeedstockTypeId: null }, true)).toBeNull();
   });
+});
+
+describe("feedstockTypeSheetSections certification marker", () => {
+  it.each([
+    { hasIsometricCertifier: false, usage: "pyrolysis", certifyRequired: false },
+    { hasIsometricCertifier: true, usage: "pyrolysis", certifyRequired: true },
+    { hasIsometricCertifier: true, usage: "blend", certifyRequired: false },
+  ] as const)(
+    "sets certifyRequired to $certifyRequired for $usage with Isometric certifier $hasIsometricCertifier",
+    ({ hasIsometricCertifier, usage, certifyRequired }) => {
+      const field = feedstockTypeSheetSections(
+        { ...linked, usage, isometricFeedstockTypeId: null },
+        null,
+        hasIsometricCertifier,
+      )[0].fields.find((field) => field.label === "Isometric feedstock type");
+
+      expect(field?.certifyRequired).toBe(certifyRequired);
+    },
+  );
 });

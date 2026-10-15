@@ -162,7 +162,7 @@ export async function saveFacilityCertifierMapping(
       externalProjectId: parsed.externalProjectId,
       protocolSlug: parsed.protocolSlug,
       defaultRemovalTemplateId: parsed.defaultRemovalTemplateId ?? null,
-      externalFacilityId: parsed.externalFacilityId ?? null,
+      externalFacilityId: parsed.externalFacilityId,
     });
   });
 }

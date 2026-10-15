@@ -122,7 +122,7 @@ const READ_SECTION_CASES: { file: string; name: string; sections: DetailPanelSec
   })) },
   { file: "components/feedstock-types/feedstock-type-read-sections.tsx", name: "feedstock type", sections: feedstockTypeSheetSections(as({
     id: "type", name: "Maize cobs", code: "FT-001", category: "agricultural", usage: "pyrolysis", archivedAt: null, isometricFeedstockTypeId: null, registryUrl: null, description: null,
-  }), { facilityId: "facility", canManage: true }) },
+  }), { facilityId: "facility", canManage: true }, true) },
   { file: "components/feedstocks/feedstock-read-sections.tsx", name: "feedstock delivery", sections: feedstockSheetSections(as({
     id: "feedstock", deliveryDate: new Date("2026-08-01"), supplierName: "Supplier", vehiclePlateNumber: "T 123", transportDistanceKm: 20, transportDistanceSource: "supplier_default",
     feedstockTypeName: "Maize cobs", massWetKg: 1000, moistureContentPercent: 20, massDryKg: 800, storageLocationCode: "FB-01", storageLocationName: "Feedstock bin", overrideJustification: null, notes: null,
