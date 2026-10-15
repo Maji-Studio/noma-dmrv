@@ -40,8 +40,6 @@ function leg(distanceKm: number, loadMassKg: number | null): TransportLeg {
     loadMassKg,
     calculationMethodType: "distance_based",
     isDerived: false,
-    billOfLading: null,
-    weighScaleTicketRef: null,
     createdAt: new Date(),
     updatedAt: new Date(),
   };

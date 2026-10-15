@@ -1,3 +1,4 @@
+import { feedstockFixtureValues } from "./helpers/feedstock-fixture";
 /**
  * `make_biochar_product` and `update_biochar_product` against PostgreSQL,
  * through the operation runner: Pure and blended products, the blend derived
@@ -93,9 +94,9 @@ async function fixture() {
     code: `E2E-BP-PB-${f.tag}`, name: `E2E Pure bin ${f.tag}`, type: "product_bin" }).returning();
   const [ingredientBin] = await db.insert(storageLocations).values({ organizationId, facilityId: f.facility.id, feedstockTypeId: f.ingredientType.id,
     code: `E2E-BP-IB-${f.tag}`, name: `E2E Ingredient bin ${f.tag}`, type: "feedstock_bin" }).returning();
-  await db.insert(feedstocks).values({ organizationId, facilityId: f.facility.id, code: `E2E-BP-IN-${f.tag}`, status: "complete", feedstockTypeId: f.ingredientType.id,
+  await db.insert(feedstocks).values(await feedstockFixtureValues(db, { organizationId, facilityId: f.facility.id, code: `E2E-BP-IN-${f.tag}`, status: "complete", feedstockTypeId: f.ingredientType.id,
     storageLocationId: ingredientBin.id, massWetKg: INGREDIENT_STOCK_KG, massDryKg: INGREDIENT_STOCK_KG * (1 - INGREDIENT_MOISTURE / 100),
-    moistureContentPercent: INGREDIENT_MOISTURE, deliveryDate: new Date("2026-09-01") });
+    moistureContentPercent: INGREDIENT_MOISTURE, deliveryDate: new Date("2026-09-01") }));
   return { ...f, pureBin, ingredientBin, r1: f.runs[0].id, r2: f.runs[1].id };
 }
 type ProductFixture = Awaited<ReturnType<typeof fixture>>;
@@ -191,9 +192,9 @@ describe("creating products", () => {
     const [secondType] = await db.insert(feedstockTypes).values({ organizationId, code: `E2E-BP-T2-${f.tag}`, name: `E2E Second ${f.tag}`, category: "compost", usage: "blend" }).returning();
     const [secondBin] = await db.insert(storageLocations).values({ organizationId, facilityId: f.facility.id, feedstockTypeId: secondType.id,
       code: `E2E-BP-IB2-${f.tag}`, name: `E2E Second bin ${f.tag}`, type: "feedstock_bin" }).returning();
-    await db.insert(feedstocks).values({ organizationId, facilityId: f.facility.id, code: `E2E-BP-IN2-${f.tag}`, status: "complete", feedstockTypeId: secondType.id,
+    await db.insert(feedstocks).values(await feedstockFixtureValues(db, { organizationId, facilityId: f.facility.id, code: `E2E-BP-IN2-${f.tag}`, status: "complete", feedstockTypeId: secondType.id,
       storageLocationId: secondBin.id, massWetKg: INGREDIENT_STOCK_KG, massDryKg: INGREDIENT_STOCK_KG * (1 - INGREDIENT_MOISTURE / 100),
-      moistureContentPercent: INGREDIENT_MOISTURE, deliveryDate: new Date("2026-09-01") });
+      moistureContentPercent: INGREDIENT_MOISTURE, deliveryDate: new Date("2026-09-01") }));
     const [second] = await db.insert(formulationIngredients).values({ organizationId, formulationId: f.recipe.id, feedstockTypeId: secondType.id, ratio: 0.1 }).returning();
     await db.update(formulationIngredients).set({ sortOrder: 0 }).where(eq(formulationIngredients.id, f.ingredient.id));
     await db.update(formulationIngredients).set({ sortOrder: 1 }).where(eq(formulationIngredients.id, second.id));

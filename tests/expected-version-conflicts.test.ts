@@ -1,3 +1,4 @@
+import { feedstockFixtureValues, cleanupFeedstockFixtureParents } from "./helpers/feedstock-fixture";
 import { TEST_SITE_POSITION } from "./helpers/test-org";
 import { masterDataVersion } from "./helpers/master-data-version";
 /**
@@ -124,7 +125,7 @@ async function seedFixture(): Promise<Fixture> {
 
   const [feedstock] = await db
     .insert(feedstocks)
-    .values({
+    .values(await feedstockFixtureValues(db, {
       organizationId,
       code: `E2E-EXPV-FS-${tag}`,
       facilityId: facility.id,
@@ -134,7 +135,7 @@ async function seedFixture(): Promise<Fixture> {
       massWetKg: INTAKE_WET_KG,
       moistureContentPercent: MOISTURE_PERCENT,
       storageLocationId: bin.id,
-    })
+    }))
     .returning({ id: feedstocks.id });
 
   return { tag, ctx, facilityId: facility.id, feedstockId: feedstock.id };
@@ -158,10 +159,12 @@ async function cleanup(fixture: Fixture): Promise<void> {
       await tx.execute(
         sql`delete from ${sql.identifier(table)} where organization_id = ${organizationId}`,
       );
+      if (table === "feedstocks") await cleanupFeedstockFixtureParents(tx);
     }
     await tx.delete(organizations).where(eq(organizations.id, organizationId));
     await tx.delete(users).where(eq(users.id, fixture.ctx.userId));
   });
+  await cleanupFeedstockFixtureParents(db);
 }
 
 async function readFacility(fixture: Fixture) {
@@ -333,12 +336,12 @@ describe("feedstock row versions", () => {
   it("bumps every feedstock version on facility archive and again on restore", async () => {
     const f = await fixture();
     const opened = (await readFeedstock(f))!;
-    const [sibling] = await db.insert(feedstocks).values({
+    const [sibling] = await db.insert(feedstocks).values(await feedstockFixtureValues(db, {
       ...opened,
       id: randomUUID(),
       code: `E2E-EXPV-SIBLING-${f.tag}`,
       version: opened.version + VERSION_INCREMENT,
-    }).returning();
+    })).returning();
     const affected = [opened, sibling];
 
     const archivedFacility = await archiveFacility(f.ctx, f.facilityId, await masterDataVersion(f.ctx, "facilities", f.facilityId));

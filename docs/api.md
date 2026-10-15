@@ -235,7 +235,10 @@ representations plus the next position. REST and MCP share parsed-input readers 
 `(createdAt, id)` descending and keeps PostgreSQL microseconds in the cursor;
 cursors bind the resource, organization and filters, but not page size. The
 representation deliberately contains only feedstock-owned fields and reference
-ids, without joined transport data or entity names. Supplier-location and driver
+ids, without joined transport data or entity names. Feedstock representation
+revision 2 removes intake GPS fields; date, supplier, wet mass, moisture and bin
+are non-null. Moisture is below 100%. PATCH cannot clear the bin or supply derived
+`massDryKg`. Supplier-location and driver
 ids are not feedstock columns. Percent values use 0 to 100. Business dates use
 `YYYY-MM-DD`; creation/update instants use UTC RFC 3339.
 

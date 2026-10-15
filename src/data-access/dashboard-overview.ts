@@ -630,7 +630,7 @@ async function getAttentionItems(
         code: feedstocks.code,
         dateDay: noDay,
         dateMs: epochMs(
-          sql`coalesce(${feedstocks.deliveryDate}, ${feedstocks.createdAt})`,
+          feedstocks.deliveryDate,
         ),
         ord: branchOrdinal(desc(feedstocks.createdAt)),
       })

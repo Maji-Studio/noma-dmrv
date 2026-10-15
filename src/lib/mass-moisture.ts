@@ -86,6 +86,9 @@ export const MOISTURE_BASIS_HINT =
  */
 export const MOISTURE_RANGE_HELPER = "0 to 100% of wet mass";
 
+/** Intake moisture range: 100% would derive zero dry mass. */
+export const INTAKE_MOISTURE_RANGE_HELPER = "At least 0 and below 100% of wet mass";
+
 export interface MassSplit {
   /** As-received mass. */
   wetKg: number;

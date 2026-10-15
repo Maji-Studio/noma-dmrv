@@ -1,3 +1,4 @@
+import { cleanupFeedstockFixtureParents } from "../helpers/feedstock-fixture";
 import { deleteOutputApplicationFixtures, deleteOutputDeliveryFixtures, deleteOutputProductFixtures } from "../helpers/output-contract-fixtures";
 /**
  * Full Chain UI Smoke Test
@@ -339,6 +340,7 @@ test.describe("Full Chain UI Smoke Test", () => {
             await tx
               .delete(schema.feedstocks)
               .where(inArray(schema.feedstocks.id, feedstockIds));
+            await cleanupFeedstockFixtureParents(tx);
           }
 
           if (feedstockDeliveryIds.length) {
@@ -380,6 +382,7 @@ test.describe("Full Chain UI Smoke Test", () => {
               .where(inArray(schema.facilities.id, facilityIds));
           }
         });
+        await cleanupFeedstockFixtureParents(db);
       } finally {
         await pool.end();
       }
