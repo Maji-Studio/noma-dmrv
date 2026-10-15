@@ -1,3 +1,4 @@
+import { DOCUMENT_GUIDANCE, DOCUMENT_TYPE_GUIDANCE } from "@/lib/operations/document-guidance";
 import { readDescriptions } from "@/lib/operations/read-descriptions";
 import { API_IDEMPOTENCY_KEY_MAX_LENGTH, API_LIST_DEFAULT_LIMIT, API_LIST_MAX_LIMIT } from "@/config/api-rest";
 import { API_KEY_LIVE_PREFIX, API_KEY_TEST_PREFIX } from "@/config/api-keys";
@@ -57,7 +58,7 @@ export const deliveryGuide = `## Deliveries
 
 - GET /deliveries and /deliveries/{idOrCode} require deliveries:read. ${readDescriptions.deliveries}
 - POST /deliveries requires deliveries:write and an Idempotency-Key, including dry runs. It sends finished product from a product bin to a customer against an order and deducts from the bin. Feedstock intake uses POST /feedstocks. Read orders, matching product bins and bin stock first. Masses are wet kg; moisture is percent of wet mass. On create it is the reading; with sources, each source carries its own reading and the server stores the overall (1 minus solids divided by wet mass) times 100, including ingredient solids. deliveredAt resolves in the order facility time zone and cannot be in the future. Distances are one-way km; the server counts the round trip. distanceKmOverride must be above 0; omit it to use the customer location distance.
-- All delivery writes accept ?dryRun=true and answer 200 for previews. A create dry run shows the products drawn in allocations plus stockEffects and basisFingerprint. Pass that basisFingerprint on the real write; a stale basis answers 409 stock_basis_changed with a fresh stock preview when available. Committed creates answer 201 with Location, ETag and allocations. The non-blocking warning asks you to upload the bill of lading in the app.
+- All delivery writes accept ?dryRun=true and answer 200 for previews. A create dry run shows the products drawn in allocations plus stockEffects and basisFingerprint. Pass that basisFingerprint on the real write; a stale basis answers 409 stock_basis_changed with a fresh stock preview when available. Committed creates answer 201 with Location, ETag and allocations. The non-blocking warning asks you to upload the bill of lading as a delivery document of type bill_of_lading.
 - PATCH /deliveries/{id} requires deliveries:write and If-Match, UUID only. Only code, driverId, vehicleId and distance metadata can change. Omission preserves fields; null clears clearable fields. Use an optional Idempotency-Key to recover a lost response after later edits. PATCH adds no bill-of-lading warning. Mass, moisture and time corrections stay in the app. Deliveries cannot be deleted.
 - Read GET /storage-locations/{idOrCode}/stock-movements with biochar-products:read for the drawn products. Filter the returned rows by deliveryId.
 - MCP: find_deliveries and get_delivery use deliveries:read; record_delivery and update_delivery use deliveries:write. requestKey is required except on dry runs; update needs expectedVersion from get_delivery. Call find_orders, get_order_balance for remaining wet kg, find_storage_locations with type=product_bin and the order formulationId, then get_bin_stock for drawOrder and sub-bins. This is not log_feedstock_delivery. Never invent moisture readings; ask the operator. Top-level moisturePercent is ignored with sources. deliveredAt also accepts { date, time }. Read drawn products with find_output_stock_movements (biochar-products:read).
@@ -77,6 +78,10 @@ ${deliveryGuide}
 ## Documents
 
 Documents belong to a record. Read them under /feedstocks/{idOrCode}/documents, /deliveries/{idOrCode}/documents or /lab-samples/{idOrCode}/documents using the record's read scope. Lists show uploaded files by default. Read one file at {record path}/documents/{documentId}. Its /content route redirects to a signed link that expires in 5 minutes; follow that link without the API key. Archived records remain readable.
+
+${DOCUMENT_GUIDANCE}
+
+MCP: find_documents and get_document_download_url require the chosen owner's read scope. request_document_upload and confirm_document_upload require its write scope. ownerType is feedstock, delivery or lab_sample. ${DOCUMENT_TYPE_GUIDANCE} request_document_upload requires requestKey; repeating it returns a fresh link while pending, or upload: null with a warning naming why it is unavailable. Retry using the returned owner UUID. confirm_document_upload takes neither requestKey nor expectedVersion. Neither document write offers a dry run. Confirm refusals are isError results; follow the issue pointer and reason. REST uses POST on the record's documents path with Idempotency-Key to request, then POST on documents/{documentId}/confirm without If-Match to confirm.
 
 ## REST requests
 

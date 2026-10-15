@@ -36,7 +36,7 @@ export async function toolFailure(error: unknown, context: ApiRouteContext, name
     if (shouldLogDomainError(error)) logApiError(error, name, context.requestId);
     response = actionFailureResponse(toActionFailure(error, {
       fallbackMessage: "The request could not be completed.", log: { message: "MCP tool failed" }, logUnexpected: false,
-    }), context.instance, context.requestId);
+    }), context.instance, context.requestId, error);
   } else {
     logApiError(error, name, context.requestId);
     throw new ProtocolError(ProtocolErrorCode.InternalError, "The request could not be completed.");

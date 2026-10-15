@@ -7,8 +7,9 @@ import { DomainError, validationFailed } from "@/lib/operations/errors";
 import { toolFailure, toolOutputSchema } from "../results";
 import { writeTools as allWriteTools } from "./write-tools";
 
-const writeTools = allWriteTools.filter((tool) => tool.scope.startsWith("feedstocks:"));
+const writeTools = allWriteTools.filter((tool) => tool.scope?.startsWith("feedstocks:"));
 
+vi.mock("@/db", () => ({ db: {} }));
 vi.mock("@/data-access/delivery-output-writes", () => ({}));
 vi.mock("@/lib/read-models/api-deliveries", () => ({ readApiDelivery: vi.fn(), readApiDeliveryList: vi.fn() }));
 vi.mock("@/data-access/orders", () => ({}));
@@ -143,7 +144,7 @@ it.each(writeTools.slice(1))("validates the required expectedVersion for $name",
 });
 
 it("includes order writes under the existing write inventory", () => {
-  expect(allWriteTools.filter((tool) => tool.scope.startsWith("orders:")).map((tool) => [tool.name, tool.scope])).toEqual([
+  expect(allWriteTools.filter((tool) => tool.scope?.startsWith("orders:")).map((tool) => [tool.name, tool.scope])).toEqual([
     ["record_order", "orders:write"], ["update_order", "orders:write"], ["delete_order", "orders:delete"],
   ]);
 });

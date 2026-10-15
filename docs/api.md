@@ -344,7 +344,7 @@ REST dry runs return 200 without Location or ETag, committed creates 201 with
 both, and PATCH 200.
 
 The non-blocking bill-of-lading warning is create-only, API-only and saved in
-the outcome for replay. Upload evidence in the app. The app create action has
+the outcome for replay. Upload it as a delivery document of type `bill_of_lading`. Older stored outcomes keep their original warning text. The app create action has
 no such warning because the form uploads evidence immediately after create.
 
 `deliveredAt` accepts an offset instant or facility-local `{ date, time }`;
@@ -469,7 +469,15 @@ get_feedstock. Each request captures its resolved context in a fresh server.
 and delete_feedstock through the same operation runner as REST. Each write needs
 one requestKey reused on retry; dryRun previews may omit it. Updates and deletes
 take expectedVersion from get_feedstock. Audit rows record transport `mcp`.
-Only tools authorized by `hasRoleAndScope` are registered or callable. Tool
+Existing tools keep their single `hasRoleAndScope` scope check. Document tools
+use `visible(ctx)` to appear when the role floor and any supported owner's
+scope allow them, then `authorize(ctx, args)` checks the selected owner before
+execution. A missing owner scope returns an `isError` `missing_scope` problem.
+`find_documents` and `get_document_download_url` use the owner's read scope;
+`request_document_upload` and `confirm_document_upload` use its write scope.
+The upload request requires `requestKey`; confirmation takes neither a key nor
+an expected version. Neither offers a dry run. Only confirmation gets the
+25 second budget, measured from before authentication. Tool
 schemas reuse REST query schemas and transport-neutral `lib/representations/`
 output envelopes. Numeric limits accept JSON numbers as well as REST strings.
 HTTP-only ETag builders live in `lib/api/representation-etags.ts`.
@@ -478,7 +486,8 @@ The SDK publishes schemas through `toToolSchema`. A low-level tools/call
 handler owns argument parsing so validation failures remain structured.
 Success structuredContent uses the matching REST response envelope. Expected
 failures use the REST problem code and JSON Pointer errors, named `issues` in
-MCP, without HTTP metadata. Both transports include query validation issues
+MCP, without HTTP metadata. Tool errors carry `retryable: true` for retryable
+domain errors. Both transports include query validation issues
 with JSON Pointers: REST uses `errors` and MCP uses `issues`. Each issue carries
 `pointer`, `code` and `detail`.
 Each output schema is a success/error union with `type: "object"` at its root.

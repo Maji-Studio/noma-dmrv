@@ -6,7 +6,7 @@ import { RECORD_FILES_LOCKED_MESSAGE } from "@/lib/certification/lineage-lock-me
 import { metadataRecord } from "./metadata";
 export type ConfirmOutcome<Document = DocumentRow> = { kind: "uploaded"; document: Document } | { kind: "refused"; reason: UploadRefusalReason; pointer: string; document: Document; message: string } | { kind: "gone"; pointer?: string };
 export type ApiConfirmOutcome = ConfirmOutcome<DocumentRepresentation> | { kind: "failed"; reason: string; message: string };
-export const REFUSAL_POINTERS: Record<UploadRefusalReason, string> = { size: "/sizeBytes", type: "/contentType", checksum: "/sha256", format: "/fileName", certification_locked: "/entityId" };
+export const REFUSAL_POINTERS: Record<UploadRefusalReason, string> = { size: "/sizeBytes", type: "/contentType", checksum: "/sha256", format: "/fileName", certification_locked: "/ownerId" };
 export const REFUSAL_MESSAGES: Record<Exclude<UploadRefusalReason, "certification_locked">, string> = {
   size: "The document upload could not be completed. Upload the file again.",
   type: "The uploaded file type is not allowed for this document. Choose another file.",
