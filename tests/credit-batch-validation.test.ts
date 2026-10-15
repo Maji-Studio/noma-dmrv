@@ -510,7 +510,6 @@ describe("Credit Batch Production-Run Validation", () => {
     endDate: new Date("2025-06-30"),
     certifier: "isometric" as const,
     durabilityOption: "200_year" as const,
-    hToCorgRatio: 0.4,
     // Feedstock type is now DECLARED (ADR 0016 amendment) and guarded against the
     // member runs. A getter defers reading the module-scoped id until each test
     // spreads baseBatchData — after beforeAll has seeded it.

@@ -1,6 +1,6 @@
-import { and, desc, eq, gte, isNotNull, isNull, lt, or } from "drizzle-orm";
+import { and, desc, eq, gte, isNull, lt } from "drizzle-orm";
 import { db } from "@/db";
-import { creditBatches, productionRuns, samples } from "@/db/schema";
+import { creditBatches, samples } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import { DomainError } from "@/lib/domain-errors";
 import { requireOrgScope, type Executor } from "./utils";
@@ -11,7 +11,7 @@ export interface ApiLabSampleFilters {
   q?: string; facilityId?: string; creditBatchId?: string; code?: string; sampledFrom?: string; sampledBefore?: string;
 }
 
-/** Explicit columns: the heavy metal, contaminant, file URL and run link columns are never selected. */
+/** Explicit columns: only published lab measurements are selected. */
 function sampleFields(ctx: OrgContext) {
   requireOrgScope(ctx);
   return {
@@ -70,28 +70,16 @@ export async function findApiLabSample(ctx: OrgContext, identifier: ApiLookupIde
   return row;
 }
 
-/**
- * Newest first by (createdAt, id). The facility filter matches through the
- * credit batch, or through the production run on a legacy sample that has
- * none, as the app's list does. Samples on archived batches, and legacy
- * samples on archived production runs, are hidden.
- */
+/** Newest first by (createdAt, id), scoped through the batch. Lists hide archived batches. */
 export async function listApiLabSamples(ctx: OrgContext, filters: ApiLabSampleFilters, limit: number, cursor?: ApiLookupPosition) {
   requireOrgScope(ctx);
   await requireApiLookupFacility(ctx, filters.facilityId);
   if (filters.creditBatchId) await findApiCreditBatch(ctx, { id: filters.creditBatchId });
   return db.select(sampleFields(ctx)).from(samples)
-    .leftJoin(creditBatches, and(eq(samples.creditBatchId, creditBatches.id), eq(creditBatches.organizationId, ctx.organizationId)))
-    .leftJoin(productionRuns, and(eq(samples.productionRunId, productionRuns.id), eq(productionRuns.organizationId, ctx.organizationId)))
+    .innerJoin(creditBatches, and(eq(samples.creditBatchId, creditBatches.id), eq(creditBatches.organizationId, ctx.organizationId)))
     .where(and(
       eq(samples.organizationId, ctx.organizationId), isNull(creditBatches.archivedAt),
-      // The legacy run stands in only when the sample has no batch: for archive
-      // state and for the facility filter alike.
-      or(isNotNull(samples.creditBatchId), isNull(productionRuns.archivedAt)),
-      filters.facilityId ? or(
-        eq(creditBatches.facilityId, filters.facilityId),
-        and(isNull(samples.creditBatchId), eq(productionRuns.facilityId, filters.facilityId)),
-      ) : undefined,
+      filters.facilityId ? eq(creditBatches.facilityId, filters.facilityId) : undefined,
       filters.creditBatchId ? eq(samples.creditBatchId, filters.creditBatchId) : undefined,
       filters.code !== undefined ? eq(samples.sampleCode, filters.code) : undefined,
       filters.sampledFrom ? gte(samples.samplingTime, new Date(filters.sampledFrom)) : undefined,

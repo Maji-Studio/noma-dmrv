@@ -455,6 +455,7 @@ describe("credit batch automatic production-run membership", () => {
     const [sample] = await db
       .insert(samples)
       .values({
+        creditBatchId: batch.id,
         organizationId: TEST_ORG_ID,
         productionRunId: run.id,
         sampleCode: `S-CBAM-EDIT-GUARD-${tag}`,
@@ -662,6 +663,7 @@ describe("credit batch automatic production-run membership", () => {
     const [sample] = await db
       .insert(samples)
       .values({
+        creditBatchId: batch.id,
         organizationId: TEST_ORG_ID,
         productionRunId: run.id,
         sampleCode: `S-CBAM-UPDATE-DISCOVERY-${tag}`,

@@ -1,5 +1,5 @@
 {
-  "id": "9bdc61a0-c2e6-41e6-aaaa-56e814ece203",
+  "id": "c9e5d30d-935c-4b7d-8c13-67b6dc4074c7",
   "prevId": "b58ee4f4-db25-46e6-95cb-cc26d5e0dc97",
   "version": "7",
   "dialect": "postgresql",
@@ -2252,10 +2252,6 @@
       },
       "policies": {},
       "checkConstraints": {
-        "bin_movements_feedstock_loss_time": {
-          "name": "bin_movements_feedstock_loss_time",
-          "value": "\"bin_movements\".\"lane\" <> 'feedstock' or \"bin_movements\".\"movement_type\" <> 'loss' or \"bin_movements\".\"occurred_at\" is not null"
-        },
         "bin_movements_output_contract": {
           "name": "bin_movements_output_contract",
           "value": "\"bin_movements\".\"output_kind\" is null or (\n      \"bin_movements\".\"lane\" in ('biochar', 'product') and \"bin_movements\".\"occurred_at\" is not null\n      and \"bin_movements\".\"idempotency_key\" is not null and length(\"bin_movements\".\"idempotency_key\") > 0\n      and \"bin_movements\".\"basis_fingerprint\" is not null and \"bin_movements\".\"input_snapshot\" is not null\n      and \"bin_movements\".\"balance_before_dry_kg\" >= 0 and \"bin_movements\".\"balance_after_dry_kg\" >= 0\n      and \"bin_movements\".\"balance_before_dry_kg\" is not null and \"bin_movements\".\"balance_after_dry_kg\" is not null\n      and \"bin_movements\".\"output_dry_delta_kg\" is not null\n      and \"bin_movements\".\"balance_after_dry_kg\" = \"bin_movements\".\"balance_before_dry_kg\" + \"bin_movements\".\"output_dry_delta_kg\"\n      and (\"bin_movements\".\"output_kind\" = 'reversal' or \"bin_movements\".\"output_dry_delta_kg\" <= 0)\n      and length(trim(\"bin_movements\".\"reason\")) > 0\n      and (\"bin_movements\".\"output_kind\" not in ('reversal', 'replacement') or \"bin_movements\".\"corrects_movement_id\" is not null)\n    )"
@@ -5168,54 +5164,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "registry": {
-          "name": "registry",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "buffer_pool_percent": {
-          "name": "buffer_pool_percent",
-          "type": "numeric(9, 6)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "h_to_c_org_ratio": {
-          "name": "h_to_c_org_ratio",
-          "type": "numeric(7, 6)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "mean_random_reflectance_percent": {
-          "name": "mean_random_reflectance_percent",
-          "type": "numeric(9, 6)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "std_random_reflectance": {
-          "name": "std_random_reflectance",
-          "type": "numeric(9, 6)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "mean_non_reactive_carbon_percent": {
-          "name": "mean_non_reactive_carbon_percent",
-          "type": "numeric(9, 6)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "std_non_reactive_carbon_percent": {
-          "name": "std_non_reactive_carbon_percent",
-          "type": "numeric(9, 6)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "f_durable_calculated": {
-          "name": "f_durable_calculated",
-          "type": "numeric(7, 6)",
-          "primaryKey": false,
-          "notNull": false
-        },
         "site_management_notes": {
           "name": "site_management_notes",
           "type": "text",
@@ -6365,6 +6313,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "supplier_reference_id": {
+          "name": "supplier_reference_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "feedstock_type_id": {
           "name": "feedstock_type_id",
           "type": "uuid",
@@ -6908,17 +6862,29 @@
           "name": "delivery_date",
           "type": "timestamp",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "supplier_id": {
           "name": "supplier_id",
           "type": "uuid",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "vehicle_id": {
           "name": "vehicle_id",
           "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "gps_latitude": {
+          "name": "gps_latitude",
+          "type": "double precision",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "gps_longitude": {
+          "name": "gps_longitude",
+          "type": "double precision",
           "primaryKey": false,
           "notNull": false
         },
@@ -6944,7 +6910,7 @@
           "name": "mass_wet_kg",
           "type": "numeric(14, 3)",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "mass_dry_kg": {
           "name": "mass_dry_kg",
@@ -6956,13 +6922,76 @@
           "name": "moisture_content_percent",
           "type": "numeric(9, 6)",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
+        },
+        "co2e_feedstock_tons": {
+          "name": "co2e_feedstock_tons",
+          "type": "numeric(14, 6)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "feedstock_source_region": {
+          "name": "feedstock_source_region",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
         },
         "storage_location_id": {
           "name": "storage_location_id",
           "type": "uuid",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
+        },
+        "counterfactual_category": {
+          "name": "counterfactual_category",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "counterfactual_emissions_15_tons": {
+          "name": "counterfactual_emissions_15_tons",
+          "type": "numeric(14, 6)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "counterfactual_storage_50_tons": {
+          "name": "counterfactual_storage_50_tons",
+          "type": "numeric(14, 6)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "market_leakage_method": {
+          "name": "market_leakage_method",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "market_leakage_tons": {
+          "name": "market_leakage_tons",
+          "type": "numeric(14, 6)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "baseline_scenario": {
+          "name": "baseline_scenario",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'unknown'"
+        },
+        "baseline_description": {
+          "name": "baseline_description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "''"
+        },
+        "eligibility_status": {
+          "name": "eligibility_status",
+          "type": "feedstock_eligibility_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false
         },
         "notes": {
           "name": "notes",
@@ -7106,11 +7135,19 @@
         },
         "feedstocks_mass_dry_lte_wet": {
           "name": "feedstocks_mass_dry_lte_wet",
-          "value": "\"feedstocks\".\"mass_dry_kg\" <= \"feedstocks\".\"mass_wet_kg\""
+          "value": "\"feedstocks\".\"mass_wet_kg\" is null or \"feedstocks\".\"mass_dry_kg\" <= \"feedstocks\".\"mass_wet_kg\""
         },
         "feedstocks_moisture_content_percent_range": {
           "name": "feedstocks_moisture_content_percent_range",
-          "value": "(\"feedstocks\".\"moisture_content_percent\" >= 0 and \"feedstocks\".\"moisture_content_percent\" < 100)"
+          "value": "\"feedstocks\".\"moisture_content_percent\" is null or (\"feedstocks\".\"moisture_content_percent\" >= 0 and \"feedstocks\".\"moisture_content_percent\" <= 100)"
+        },
+        "feedstocks_gps_latitude_range": {
+          "name": "feedstocks_gps_latitude_range",
+          "value": "\"feedstocks\".\"gps_latitude\" is null or (\"feedstocks\".\"gps_latitude\" >= -90 and \"feedstocks\".\"gps_latitude\" <= 90)"
+        },
+        "feedstocks_gps_longitude_range": {
+          "name": "feedstocks_gps_longitude_range",
+          "value": "\"feedstocks\".\"gps_longitude\" is null or (\"feedstocks\".\"gps_longitude\" >= -180 and \"feedstocks\".\"gps_longitude\" <= 180)"
         }
       },
       "isRLSEnabled": false
@@ -7840,6 +7877,18 @@
           "primaryKey": false,
           "notNull": true,
           "default": false
+        },
+        "bill_of_lading": {
+          "name": "bill_of_lading",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "weigh_scale_ticket_ref": {
+          "name": "weigh_scale_ticket_ref",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
         },
         "created_at": {
           "name": "created_at",
@@ -10191,7 +10240,7 @@
           "name": "credit_batch_id",
           "type": "uuid",
           "primaryKey": false,
-          "notNull": false
+          "notNull": true
         },
         "production_run_id": {
           "name": "production_run_id",
@@ -10325,78 +10374,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "arsenic_mg_kg": {
-          "name": "arsenic_mg_kg",
-          "type": "numeric(10, 4)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "cadmium_mg_kg": {
-          "name": "cadmium_mg_kg",
-          "type": "numeric(10, 4)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "chromium_mg_kg": {
-          "name": "chromium_mg_kg",
-          "type": "numeric(10, 4)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "copper_mg_kg": {
-          "name": "copper_mg_kg",
-          "type": "numeric(10, 4)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "lead_mg_kg": {
-          "name": "lead_mg_kg",
-          "type": "numeric(10, 4)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "mercury_mg_kg": {
-          "name": "mercury_mg_kg",
-          "type": "numeric(10, 4)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "nickel_mg_kg": {
-          "name": "nickel_mg_kg",
-          "type": "numeric(10, 4)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "zinc_mg_kg": {
-          "name": "zinc_mg_kg",
-          "type": "numeric(10, 4)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "pah_total_mg_kg": {
-          "name": "pah_total_mg_kg",
-          "type": "numeric(10, 4)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "pcb_total_mg_kg": {
-          "name": "pcb_total_mg_kg",
-          "type": "numeric(10, 4)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "dioxins_ng_kg": {
-          "name": "dioxins_ng_kg",
-          "type": "numeric(10, 4)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "furans_ng_kg": {
-          "name": "furans_ng_kg",
-          "type": "numeric(10, 4)",
-          "primaryKey": false,
-          "notNull": false
-        },
         "phosphorus_percent": {
           "name": "phosphorus_percent",
           "type": "real",
@@ -10469,18 +10446,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "r0_histogram_file_url": {
-          "name": "r0_histogram_file_url",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "tga_thermogram_file_url": {
-          "name": "tga_thermogram_file_url",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp",
@@ -10520,7 +10485,6 @@
             }
           ],
           "isUnique": false,
-          "where": "\"samples\".\"credit_batch_id\" is not null",
           "concurrently": false,
           "method": "btree",
           "with": {}
@@ -12618,6 +12582,15 @@
       "schema": "public",
       "values": [
         "distance_based"
+      ]
+    },
+    "public.feedstock_eligibility_status": {
+      "name": "feedstock_eligibility_status",
+      "schema": "public",
+      "values": [
+        "eligible",
+        "ineligible",
+        "conditional"
       ]
     },
     "public.feedstock_status": {

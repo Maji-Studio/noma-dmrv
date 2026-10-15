@@ -3,7 +3,7 @@ import { outputProductFixtureValues, deleteOutputProductFixtures, deleteOutputFa
 /**
  * DB-backed regression coverage for the dashboard's structural certification
  * gaps. The fixture exercises canonical supplier-origin GPS, all three parent
- * types that own transport legs, and strict sample parent precedence.
+ * types that own transport legs, and credit-batch scope for Samples.
  */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq, inArray, sql } from "drizzle-orm";
@@ -255,27 +255,9 @@ beforeAll(async () => {
           status: "running",
           startTime: new Date("2026-07-01T08:00:00Z"),
         },
-        {
-          organizationId: TEST_ORG_ID,
-          code: `PR-DG-CANCELLED-${tag}`,
-          facilityId: gapFacility.id,
-          reactorId: reactor.id,
-          status: "cancelled",
-          cancellationReason: "Excluded from active dashboard gap metrics",
-          startTime: new Date("2026-07-02T08:00:00Z"),
-        },
-        {
-          organizationId: TEST_ORG_ID,
-          code: `PR-DG-ARCHIVED-${tag}`,
-          facilityId: gapFacility.id,
-          reactorId: reactor.id,
-          status: "running",
-          startTime: new Date("2026-07-03T08:00:00Z"),
-          archivedAt: new Date(),
-        },
       ])
       .returning({ id: productionRuns.id });
-    const [activeRun, cancelledRun, archivedRun] = productionRunRows;
+    const [activeRun] = productionRunRows;
 
     const processRows = await tx
       .insert(productionProcesses)
@@ -344,13 +326,6 @@ beforeAll(async () => {
         },
         {
           organizationId: TEST_ORG_ID,
-          productionRunId: activeRun.id,
-          sampleCode: `S-DG-RUN-${tag}`,
-          samplingTime: new Date("2026-07-06T10:00:00Z"),
-          ...SAMPLE_CHEMISTRY,
-        },
-        {
-          organizationId: TEST_ORG_ID,
           creditBatchId: excludedBatch.id,
           productionRunId: activeRun.id,
           sampleCode: `S-DG-CROSS-PARENT-${tag}`,
@@ -365,23 +340,9 @@ beforeAll(async () => {
           samplingTime: new Date("2026-07-08T10:00:00Z"),
           ...SAMPLE_CHEMISTRY,
         },
-        {
-          organizationId: TEST_ORG_ID,
-          productionRunId: cancelledRun.id,
-          sampleCode: `S-DG-CANCELLED-RUN-${tag}`,
-          samplingTime: new Date("2026-07-09T10:00:00Z"),
-          ...SAMPLE_CHEMISTRY,
-        },
-        {
-          organizationId: TEST_ORG_ID,
-          productionRunId: archivedRun.id,
-          sampleCode: `S-DG-ARCHIVED-RUN-${tag}`,
-          samplingTime: new Date("2026-07-10T10:00:00Z"),
-          ...SAMPLE_CHEMISTRY,
-        },
       ])
       .returning({ id: samples.id });
-    const [validBatchSample, validRunSample, ...excludedSamples] = sampleRows;
+    const [validBatchSample, ...excludedSamples] = sampleRows;
 
     const [activeBiocharProduct] = await tx
       .insert(biocharProducts)
@@ -429,16 +390,6 @@ beforeAll(async () => {
           destinationGpsLongitude: null,
           distanceKm: 25,
           distanceSource: "document",
-          transportMethodType: "road",
-          loadMassKg: 1,
-        },
-        {
-          organizationId: TEST_ORG_ID,
-          entityType: "sample",
-          entityId: validRunSample.id,
-          ...COMPLETE_ENDPOINTS,
-          distanceKm: 25,
-          distanceSource: "manual",
           transportMethodType: "road",
           loadMassKg: 1,
         },

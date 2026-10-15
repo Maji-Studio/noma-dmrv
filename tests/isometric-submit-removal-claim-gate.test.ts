@@ -8,7 +8,6 @@ import {
   USER_ID,
   fakeExternalIds,
   isometricClientFake,
-  makeBatchesWithSamples,
   makeContext,
   makeFreshScope,
   newLedgerRow,
@@ -460,7 +459,10 @@ describe("submitRemoval — production-emissions claim gate (§8.6.2, issue #349
         return {
           ...ctx,
           runs,
-          batchesWithSamples: makeBatchesWithSamples(runs),
+          batchesWithSamples: ctx.batchesWithSamples.map((batch) => ({
+            ...batch,
+            runs: batch.runs.map((run) => ({ ...run, biocharDryMassKg: CHANGED_RUN_OUTPUT_MASS_KG })),
+          })),
           ...buildMassAccounting(ctx.lineages, runs),
         };
       },

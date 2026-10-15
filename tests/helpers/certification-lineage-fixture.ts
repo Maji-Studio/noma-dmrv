@@ -165,18 +165,6 @@ export async function createLineageFixture(
       wetMassUsedKg: 1_000,
     });
 
-    const [sample] = await tx
-      .insert(samples)
-      .values({
-        organizationId: TEST_ORG_ID,
-        productionRunId: productionRun.id,
-        sampleCode: `S-CLG-${tag}`,
-        samplingTime: new Date("2026-06-13T10:00:00Z"),
-        totalCarbonPercent: 80,
-        organicCarbonPercent: 78,
-      })
-      .returning({ id: samples.id });
-
     const [product] = await tx
       .insert(biocharProducts)
       .values(await outputProductFixtureValues(tx, {
@@ -266,6 +254,18 @@ export async function createLineageFixture(
       })
       .returning({ id: creditBatches.id });
 
+    const [sample] = await tx
+      .insert(samples)
+      .values({
+        organizationId: TEST_ORG_ID,
+        creditBatchId: batch.id,
+        sampleCode: `S-CLG-${tag}`,
+        samplingTime: new Date("2026-06-13T10:00:00Z"),
+        totalCarbonPercent: 80,
+        organicCarbonPercent: 78,
+      })
+      .returning({ id: samples.id });
+
     await tx.insert(creditBatchProductionRuns).values({
       organizationId: TEST_ORG_ID,
       creditBatchId: batch.id,
@@ -334,12 +334,12 @@ export async function cleanupLineageFixture(fixture: LineageFixture): Promise<vo
     await tx
       .delete(creditBatchApplications)
       .where(eq(creditBatchApplications.creditBatchId, fixture.batchId));
+    await tx.delete(samples).where(eq(samples.id, fixture.sampleId));
     await tx.delete(creditBatches).where(eq(creditBatches.id, fixture.batchId));
     await deleteOutputApplicationFixtures(tx, eq(applications.id, fixture.applicationId));
     await deleteOutputDeliveryFixtures(tx, eq(deliveries.id, fixture.deliveryId));
     await deleteOutputOrderFixtures(tx, eq(orders.id, fixture.orderId));
     await deleteOutputProductFixtures(tx, eq(biocharProducts.id, fixture.productId));
-    await tx.delete(samples).where(eq(samples.id, fixture.sampleId));
     await tx
       .delete(productionRunFeedstocks)
       .where(eq(productionRunFeedstocks.productionRunId, fixture.productionRunId));

@@ -64,6 +64,14 @@ database reset before applying the constraint (`pnpm db:reset` locally; shared
 staging uses the manual reset workflow in [database.md](./database.md), announced
 first).
 
+Migration `0141_drop_dead_sample_and_batch_columns` sets `samples.credit_batch_id`
+NOT NULL and drops the unused Sample contaminant and histogram/thermogram URL
+columns and credit-batch durability, buffer percentage and registry columns
+without a backfill. It fails while any Sample has a null batch, including rows
+left by the old batch-delete and membership-edit paths. Delete those rows or
+run `pnpm db:reset` locally; shared staging uses the manual reset workflow in
+[database.md](./database.md), announced first.
+
 Production starts have no database time default. Physical feedstock sources
 live only in `production_run_feedstock_draws`; the run stores their total wet
 mass. Database CHECKs keep run moisture at or above 0% and below 100%.
@@ -106,7 +114,7 @@ All four tables live in `src/db/schema/api.ts`:
 - **`bin_movements` is append-only.** Rows are never UPDATEd or DELETEd — correct a mistake with a compensating signed movement. Movements never mutate `biochar_storage_inventory`; derived stock overlays their signed sum. See [ADR 0012](./adr/0012-bin-capability-from-held-feedstock-type.md). Every operator command that writes it (output posts, feedstock losses) carries a client-generated `idempotency_key`, unique per organization: a resubmit replays the saved row and a key reused with different values is refused.
 - **A production run belongs to at most one credit batch** — `credit_batch_production_runs` has composite PK `(credit_batch_id, production_run_id)` plus a unique on `production_run_id` alone. See [ADR 0014](./adr/0014-credit-batch-as-production-cohort.md), [ADR 0020](./adr/0020-production-emissions-front-loaded-per-credit-batch.md).
 - **Some rules live only in raw SQL**, not in Drizzle. Read the migration chain when a schema invariant is unclear; the current Method-B model deliberately has no sample-floor trigger because eligibility is a live read.
-- **`samples.credit_batch_id` and `samples.production_run_id` are both nullable.** Credit-batch attachment is the intended route ([ADR 0016](./adr/0016-credit-batch-is-production-batch-production-process-scopes-sampling.md)), but nothing in the schema requires either — validate in `fn/`.
+- **Every Sample requires `samples.credit_batch_id`.** It characterises one credit batch ([ADR 0016](./adr/0016-credit-batch-is-production-batch-production-process-scopes-sampling.md)); nullable `samples.production_run_id` is provenance only. Membership changes preserve Sample attachment, and a batch with Samples cannot be deleted.
 - **`credit_batches` stores no aggregate totals** — applied weight and CO2e stored are derived on read ([ADR 0019](./adr/0019-credit-batch-aggregates-derived-on-read.md)). The deliberate exception is Removal-owned `credit_batch_applications` mass: each assigned application-by-batch slice is an immutable submission snapshot, while unassigned slices are reconciled from live provenance. The batch also stores a permanent production-emissions Removal claim and a pre-POST submission reservation; the reservation's submission ledger row supplies its lock, status, and external-mutation state ([ADR 0020](./adr/0020-production-emissions-front-loaded-per-credit-batch.md)). Project emissions are registry-owned ([ADR 0018](./adr/0018-isometric-owns-project-emissions.md)); durability tier is inherited from the facility, not stored per batch ([ADR 0021](./adr/0021-durability-tier-is-facility-scoped.md)).
 - **`production_processes` owns the process epoch and Method-B prerequisites**, keyed `(facility, feedstock)`; `credit_batches.sampling` owns the immutable per-batch choice. Eligibility is computed, never stored. See [ADR 0022](./adr/0022-method-b-is-computed-eligibility-not-stored-unlock.md).
 - **`certifier_credentials` holds provider auth** (encrypted access token + client secret, unique per `(organization_id, provider)`) — separate from `certifier_projects`, which only maps facilities to provider project IDs plus emission-estimate config ([ADR 0015](./adr/0015-energy-single-combined-measurement-point.md)). Submission-unit shape: [ADR 0003](./adr/0003-removal-as-submission-unit.md), [ADR 0004](./adr/0004-ghg-statement-as-independent-artifact.md), [ADR 0008](./adr/0008-submission-ledger-internal-seam.md).

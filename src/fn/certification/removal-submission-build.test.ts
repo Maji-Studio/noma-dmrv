@@ -26,7 +26,7 @@ import type {
   IsometricComponentBlueprint,
   IsometricGhgEntryTemplate,
 } from "@/lib/isometric";
-import type { ProductionRunWithSamples } from "@/lib/isometric/utils/aggregation";
+import type { ProductionRunForCertification } from "@/lib/isometric/utils/aggregation";
 import { classifyRemovalSourceCandidate } from "@/lib/certification/removal-source-bindings";
 import {
   CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR,
@@ -470,7 +470,7 @@ describe("buildRemovalSubmissionBuild", () => {
       preprocessingFuelLiters: 0,
       electricityKwh: 0,
       samples: [],
-    } as unknown as ProductionRunWithSamples;
+    } as unknown as ProductionRunForCertification;
     const ctx = {
       submissionLineageBlockers: [],
       entityReadinessGaps: [],
@@ -647,7 +647,6 @@ describe("buildRemovalSubmissionBuild", () => {
               creditBatchCode: "CB-001",
               facilityTimezone: "UTC",
               sampling: "sampled",
-              declaredHToCorgRatio: null,
               durabilityOption: "1000_year",
               runs: [
                 {
