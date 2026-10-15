@@ -83,15 +83,6 @@ type IngredientMassFields = {
   moistureContentPercent?: number | null;
 };
 
-function ingredientMoistureRequiredRefinement(
-  ingredient: IngredientMassFields,
-  ctx: z.RefinementCtx,
-): void {
-  if (ingredient.massKg > 0 && ingredient.moistureContentPercent == null) {
-    ctx.addIssue({ code: "custom", path: ["moistureContentPercent"], message: INGREDIENT_MOISTURE_REQUIRED });
-  }
-}
-
 function ingredientDryMassRefinement(
   ingredient: IngredientMassFields,
   ctx: z.RefinementCtx,
@@ -143,9 +134,18 @@ function uniqueFormulationIngredientsRefinement(
   });
 }
 
-const ingredientBinsFormSchema = z
-  .array(ingredientBinFormSchema.superRefine(ingredientMoistureRequiredRefinement))
+/** Shared by entry and frozen edit, so array-level rules apply to both. */
+const ingredientBinsBaseFormSchema = z
+  .array(ingredientBinFormSchema)
   .superRefine(uniqueFormulationIngredientsRefinement);
+/** New ingredients must carry moisture; frozen edits keep saved legacy nulls. */
+const ingredientBinsFormSchema = ingredientBinsBaseFormSchema.superRefine((ingredients, ctx) => {
+  ingredients.forEach((ingredient, index) => {
+    if (ingredient.massKg > 0 && ingredient.moistureContentPercent == null) {
+      ctx.addIssue({ code: "custom", path: [index, "moistureContentPercent"], message: INGREDIENT_MOISTURE_REQUIRED });
+    }
+  });
+});
 const ingredientBinsUpdateSchema = z
   .array(ingredientBinUpdateSchema)
   .superRefine(uniqueFormulationIngredientsRefinement);
@@ -222,8 +222,7 @@ export const biocharProductEntrySchema = biocharProductFormSchema.superRefine((v
 
 /** Frozen allocations retain their saved ingredient moisture, including legacy nulls. */
 export const biocharProductFrozenEditSchema = biocharProductEntrySchema.safeExtend({
-  ingredientBins: z.array(ingredientBinFormSchema)
-    .superRefine(uniqueFormulationIngredientsRefinement).optional(),
+  ingredientBins: ingredientBinsBaseFormSchema.optional(),
 });
 
 // ============================================

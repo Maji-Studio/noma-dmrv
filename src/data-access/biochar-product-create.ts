@@ -15,6 +15,7 @@ import { findPostedOutputRequest, withOutputStockPostingInTransaction, type Outp
 import { postedMoisturePercent } from './output-stock-operations';
 import { requireOrgScope } from './utils';
 
+const BIOCHAR_MOISTURE_REQUIRED = 'Enter the measured biochar moisture.';
 const INGREDIENT_REPLAY_FACTS = ['formulationIngredientId', 'storageLocationId', 'massKg', 'moistureContentPercent'] as const;
 export const PRODUCT_FUTURE_TIME_MESSAGE = 'Placement time cannot be in the future. Enter a time at or before now.';
 
@@ -107,7 +108,7 @@ export async function createBiocharProductInTransaction(ctx: OrgContext, tx: DbT
   if (!data.sourceBiocharStorageLocationId || data.linkedProductionRunId) throw new SafeError('Choose a source biochar bin.');
   if (!data.storageLocationId) throw new SafeError('Choose a product bin.');
   if (data.massKg == null || !Number.isFinite(data.massKg) || data.massKg <= 0) throw new SafeError('Enter a positive wet mass.');
-  if (!data.sources?.length && (data.moistureContentPercent == null || !Number.isFinite(data.moistureContentPercent))) throw new SafeError('Enter the measured biochar moisture.');
+  if (!data.sources?.length && (data.moistureContentPercent == null || !Number.isFinite(data.moistureContentPercent))) throw new SafeError(BIOCHAR_MOISTURE_REQUIRED);
   if (data.waterAddedKg == null || !Number.isFinite(data.waterAddedKg) || data.waterAddedKg < 0) throw new SafeError('Water added must be zero or greater.');
   assertEventTimesNotFuture({ placedAt: new Date(data.placedAt) }, { placedAt: PRODUCT_FUTURE_TIME_MESSAGE }, options.now ?? new Date());
   const wet = deriveCompositionSourceBiocharMassKg(data.massKg, data.composition);
@@ -144,7 +145,7 @@ export async function createBiocharProductInTransaction(ctx: OrgContext, tx: DbT
     const drawnLayers = prepared.plan.allocations.map(a => prepared.layers.find(l => l.id === a.layerId)!);
     const firstLayer = drawnLayers.reduce((oldest, layer) => layer.placedAt < oldest.placedAt ? layer : oldest);
     const moistureContentPercent = postedMoisturePercent(prepared);
-    if (moistureContentPercent == null) throw new SafeError('Enter the measured biochar moisture.');
+    if (moistureContentPercent == null) throw new SafeError(BIOCHAR_MOISTURE_REQUIRED);
     const [product] = await writeTx.insert(biocharProducts).values({ organizationId: ctx.organizationId, code: data.code, facilityId: data.facilityId,
       formulationId: data.formulationId, biocharRatio: formulation.biocharRatio, placedAt: new Date(data.placedAt),
       productionDate: new Date(firstLayer.placedAt), status: data.status ?? 'testing',
