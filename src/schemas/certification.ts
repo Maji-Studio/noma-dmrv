@@ -4,6 +4,7 @@ import { isSettledPeriodEnd } from "@/lib/isometric/utils/ghg-reporting-window";
 import {
   defaultSoilTemperatureSchema,
   emptyToNull,
+  uuidSchema,
 } from "@/schemas/helpers";
 
 // Hard cap on the free-text "summary of changes" the operator writes when
@@ -240,7 +241,7 @@ export const loadGhgStatementReportsSchema = z.object({
 
 export const loadSubmissionStatusHistorySchema = z.object({
   entityType: z.enum(STATUS_HISTORY_ENTITY_TYPES),
-  entityId: z.uuid(),
+  entityId: uuidSchema(),
 });
 
 export type LoadSubmissionStatusHistoryInput = z.infer<

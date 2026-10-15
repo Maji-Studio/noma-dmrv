@@ -16,6 +16,7 @@ import type {
 } from "@/lib/certification/status-history";
 import { MISSING_VALUE } from "@/lib/copy-utils";
 import { formatDate, formatDateTime } from "@/lib/format-utils";
+import { describeStatusChangeActor } from "./status-change-actor";
 
 const EMPTY_ICON_SIZE = 32;
 
@@ -23,32 +24,6 @@ const RECORD_NAME: Record<StatusHistoryEntityType, string> = {
   removal: "Removal",
   ghg_statement: "GHG Statement",
 };
-
-const SOURCE_SUFFIX: Partial<Record<NonNullable<SubmissionStatusHistoryEntry["source"]>, string>> = {
-  rest: "REST API",
-  mcp: "MCP",
-  registry: "registry update",
-};
-
-const ACTORLESS_SOURCE_LABEL: Partial<Record<NonNullable<SubmissionStatusHistoryEntry["source"]>, string>> = {
-  registry: "Registry update",
-  system: "System",
-  script: "Script",
-};
-
-/** Who made a recorded change. Ledger entries predate recording: no one. */
-export function describeStatusChangeActor(
-  entry: Pick<SubmissionStatusHistoryEntry, "origin" | "source" | "actorName" | "actorUnavailable">,
-): string | null {
-  if (entry.origin === "ledger") return null;
-  const suffix = entry.source ? SOURCE_SUFFIX[entry.source] : undefined;
-  if (entry.actorName) {
-    return suffix ? `${entry.actorName} (${suffix})` : entry.actorName;
-  }
-  // The user record is gone or carries no name.
-  if (entry.actorUnavailable) return `Changed by: ${MISSING_VALUE.notAvailable}`;
-  return (entry.source && ACTORLESS_SOURCE_LABEL[entry.source]) ?? null;
-}
 
 export function SubmissionStatusHistory({
   entityType,

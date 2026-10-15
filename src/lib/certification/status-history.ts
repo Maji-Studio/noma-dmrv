@@ -57,6 +57,11 @@ export interface StatusHistoryEvent {
   source: StatusHistorySource;
   actorName: string | null;
   hasActor: boolean;
+  /**
+   * The registry's own time for the status it reported (registry-origin
+   * events only). Shown as the entry's time; ordering stays on `occurredAt`.
+   */
+  registryAt: Date | null;
 }
 
 export interface SubmissionStatusHistoryEntry {
@@ -224,9 +229,10 @@ function apply(states: Map<string, VersionState>, transition: Transition) {
 /**
  * The state an event says its version left. It differs from the replayed
  * state when the change before it was never recorded (it predates recording,
- * or fell outside the event window). Applied without an entry of its own,
- * since its start time is unknown, so the recorded change still shows even
- * when it returns to a label the ledger replay already reached.
+ * or fell outside the event window). Applied before the event, with an
+ * undated entry when its label is new, so neither the predecessor nor the
+ * recorded change is lost when the event returns to a label the ledger replay
+ * already reached.
  */
 function eventPredecessor(
   states: Map<string, VersionState>,
@@ -312,7 +318,23 @@ export function buildSubmissionStatusHistory(
     if (predecessor) {
       states.set(transition.key, predecessor);
       const before = latestState(states);
-      if (before) lastLabel = deriveHistoryStatus(entityType, before).label;
+      const derived = before ? deriveHistoryStatus(entityType, before) : null;
+      if (before && derived && derived.label !== lastLabel) {
+        // A status the record held, known only from this event's from-state.
+        // Shown undated like the ledger catch-up: when it began is unknown.
+        lastLabel = derived.label;
+        entries.push({
+          id: `${transition.id}:from`,
+          occurredAt: null,
+          version: before.version,
+          label: derived.label,
+          value: derived.value,
+          origin: "ledger",
+          source: null,
+          actorName: null,
+          actorUnavailable: false,
+        });
+      }
     }
     apply(states, transition);
     const latest = latestState(states);
@@ -323,7 +345,7 @@ export function buildSubmissionStatusHistory(
     const event = transition.event;
     entries.push({
       id: transition.id,
-      occurredAt: transition.undated ? null : transition.at,
+      occurredAt: transition.undated ? null : (event?.registryAt ?? transition.at),
       version: latest.version,
       label: derived.label,
       value: derived.value,

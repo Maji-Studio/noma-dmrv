@@ -36,14 +36,19 @@ export async function listEntityActivity(
   ctx: OrgContext,
   entityType: ActivityEntityType,
   entityId: string,
-  opts?: { limit?: number; action?: (typeof ACTIVITY_ACTIONS)[number] },
+  opts?: {
+    limit?: number;
+    action?: (typeof ACTIVITY_ACTIONS)[number];
+    /** Read inside the caller's transaction, e.g. to share its snapshot. */
+    executor?: DbTransaction;
+  },
 ) {
   requireOrgScope(ctx);
   const limit = opts?.limit ?? DEFAULT_ACTIVITY_LIMIT;
   if (!Number.isSafeInteger(limit) || limit <= 0) {
     throw new Error("Activity limit must be a positive integer");
   }
-  return db.select().from(activityEvents).where(and(
+  return (opts?.executor ?? db).select().from(activityEvents).where(and(
     eq(activityEvents.organizationId, ctx.organizationId),
     eq(activityEvents.entityType, entityType),
     eq(activityEvents.entityId, entityId),

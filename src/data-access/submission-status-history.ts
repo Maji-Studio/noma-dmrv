@@ -22,6 +22,7 @@ import { requireOrgScope } from "./utils";
 
 // Newest status changes kept per record; older ones fall back to the ledger.
 const STATUS_HISTORY_EVENT_LIMIT = 200;
+const HISTORY_SNAPSHOT = { isolationLevel: "repeatable read", accessMode: "read only" } as const;
 
 const LEDGER_KEY: Record<StatusHistoryEntityType, { localEntityType: string; submissionType: string }> = {
   removal: { localEntityType: REMOVAL_ENTITY_TYPE, submissionType: REMOVAL_SUBMISSION_TYPE },
@@ -42,8 +43,11 @@ export async function listSubmissionStatusHistory(
 ): Promise<SubmissionStatusHistory> {
   requireOrgScope(ctx);
   const key = LEDGER_KEY[entityType];
-  const [ledgerRows, eventRows] = await Promise.all([
-    db.select({
+  // One snapshot for both sources: a status change commits its ledger row and
+  // its event together, so reading them apart could pair a stale ledger with
+  // a newer event and fabricate a reversal.
+  const { ledgerRows, eventRows, actors } = await db.transaction(async (tx) => {
+    const ledgerRows = await tx.select({
       id: certificationSubmissions.id,
       version: certificationSubmissions.version,
       status: certificationSubmissions.status,
@@ -56,19 +60,21 @@ export async function listSubmissionStatusHistory(
       eq(certificationSubmissions.submissionType, key.submissionType),
       eq(certificationSubmissions.localEntityType, key.localEntityType),
       eq(certificationSubmissions.localEntityId, entityId),
-    )).orderBy(asc(certificationSubmissions.version)),
-    listEntityActivity(ctx, entityType, entityId, {
+    )).orderBy(asc(certificationSubmissions.version));
+    const eventRows = await listEntityActivity(ctx, entityType, entityId, {
       action: "status_changed",
       limit: STATUS_HISTORY_EVENT_LIMIT,
-    }),
-  ]);
+      executor: tx,
+    });
+    const actorIds = [...new Set(eventRows.flatMap((event) => event.actorUserId ? [event.actorUserId] : []))];
+    // org-scope-ok: users is a global identity table; ids come from this organization's events.
+    const actors = actorIds.length === 0 ? [] : await tx
+      .select({ id: users.id, name: users.name })
+      .from(users)
+      .where(inArray(users.id, actorIds));
+    return { ledgerRows, eventRows, actors };
+  }, HISTORY_SNAPSHOT);
 
-  const actorIds = [...new Set(eventRows.flatMap((event) => event.actorUserId ? [event.actorUserId] : []))];
-  // org-scope-ok: users is a global identity table; ids come from this organization's events.
-  const actors = actorIds.length === 0 ? [] : await db
-    .select({ id: users.id, name: users.name })
-    .from(users)
-    .where(inArray(users.id, actorIds));
   const actorNames = new Map(actors.map((actor) => [actor.id, actor.name?.trim() || null]));
 
   const ledger: StatusHistoryLedgerRow[] = ledgerRows.map((row) => {
@@ -96,6 +102,7 @@ export async function listSubmissionStatusHistory(
     source: event.source,
     actorName: event.actorUserId ? (actorNames.get(event.actorUserId) ?? null) : null,
     hasActor: event.actorUserId !== null,
+    registryAt: event.registryAt,
   }));
 
   return buildSubmissionStatusHistory(entityType, ledger, events);

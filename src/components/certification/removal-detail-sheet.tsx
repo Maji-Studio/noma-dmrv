@@ -94,6 +94,9 @@ function SubmissionStatusSection({
     <DetailSection title="Submission status" divider={false}>
       <DetailField
         label="Status"
+        // The label paints above the badge's 44px hit area, which reaches 6px
+        // into it, so a press on the label text stays on the label.
+        className="[&>span:first-child]:relative [&>span:first-child]:z-10"
         value={
           <CertificationStatusBadge
             entityType="removal"

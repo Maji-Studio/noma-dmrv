@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createGhgStatementSchema, saveMappingSchema } from "./certification";
+import { createGhgStatementSchema, loadSubmissionStatusHistorySchema, saveMappingSchema } from "./certification";
 
 const FACILITY_ID = "3f2b0b3a-3f0e-4a1c-9d4b-0f1a2b3c4d5e";
 
@@ -42,5 +42,21 @@ describe("createGhgStatementSchema.reportingPeriodEndOn", () => {
     for (const partial of ["0002-01-31", "0020-01-31", "0202-01-31"]) {
       expect(parseEnd(partial).success).toBe(false);
     }
+  });
+});
+
+describe("loadSubmissionStatusHistorySchema.entityId", () => {
+  it("lowercases the id so it matches the text-typed activity entity id", () => {
+    const parsed = loadSubmissionStatusHistorySchema.parse({
+      entityType: "removal",
+      entityId: "3F2504E0-4F89-41D3-9A0C-0305E82C3301",
+    });
+    expect(parsed.entityId).toBe("3f2504e0-4f89-41d3-9a0c-0305e82c3301");
+  });
+
+  it("rejects a value that is not a UUID", () => {
+    expect(
+      loadSubmissionStatusHistorySchema.safeParse({ entityType: "removal", entityId: "not-a-uuid" }).success,
+    ).toBe(false);
   });
 });

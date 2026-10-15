@@ -37,6 +37,7 @@ function event(overrides: Partial<StatusHistoryEvent> & Pick<StatusHistoryEvent,
     source: "form",
     actorName: "Ada Operator",
     hasActor: true,
+    registryAt: null,
     ...overrides,
   };
 }
@@ -67,6 +68,8 @@ describe("buildSubmissionStatusHistory", () => {
 
     expect(summary(history)).toEqual([
       { label: "In registry", occurredAt: "2026-10-16", origin: "activity", actorName: "Ada Operator" },
+      // Known from the resubmit's from-state; when it began is not.
+      { label: "Verification failed", occurredAt: null, origin: "ledger", actorName: null },
       { label: "In registry", occurredAt: "2026-09-02", origin: "ledger", actorName: null },
       { label: "Draft", occurredAt: "2026-09-01", origin: "ledger", actorName: null },
     ]);
@@ -105,13 +108,14 @@ describe("buildSubmissionStatusHistory", () => {
 
     expect(summary(history)).toEqual([
       { label: "In registry", occurredAt: "2026-10-20", origin: "activity", actorName: "Ada Operator" },
+      { label: "In verification", occurredAt: null, origin: "ledger", actorName: null },
       { label: "In registry", occurredAt: "2026-09-02", origin: "ledger", actorName: null },
       { label: "Draft", occurredAt: "2026-09-01", origin: "ledger", actorName: null },
     ]);
     expect(history.recordingBeganAt).toEqual(RECORDING_STARTED_AT);
   });
 
-  it("does not invent an entry for the unrecorded predecessor", () => {
+  it("shows an unrecorded predecessor undated, without inventing its start", () => {
     const row = ledgerRow({
       status: "accepted",
       remoteStatus: "VERIFIED",
@@ -128,7 +132,50 @@ describe("buildSubmissionStatusHistory", () => {
 
     const history = buildSubmissionStatusHistory("ghg_statement", [row], [verified], RECORDING_STARTED_AT);
 
-    expect(history.entries.map((entry) => entry.label)).toEqual(["Verified", "In registry", "Draft"]);
+    expect(summary(history)).toEqual([
+      { label: "Verified", occurredAt: "2026-10-20", origin: "activity", actorName: "Ada Operator" },
+      { label: "In verification", occurredAt: null, origin: "ledger", actorName: null },
+      { label: "In registry", occurredAt: "2026-09-02", origin: "ledger", actorName: null },
+      { label: "Draft", occurredAt: "2026-09-01", origin: "ledger", actorName: null },
+    ]);
+  });
+
+  it("adds no entry when the predecessor matches the replayed label", () => {
+    // From-state DRAFT where the ledger replay knows no remote yet: same label.
+    const row = ledgerRow({ status: "submitted", remoteStatus: "DRAFT", createdAt: day("2026-10-16") });
+    const submit = event({
+      occurredAt: day("2026-10-17"),
+      fromStatus: "draft",
+      toStatus: "submitted",
+      fromRemote: "DRAFT",
+      toRemote: "DRAFT",
+    });
+
+    const history = buildSubmissionStatusHistory("ghg_statement", [row], [submit], RECORDING_STARTED_AT);
+
+    expect(history.entries.map((entry) => entry.label)).toEqual(["In registry", "Draft"]);
+  });
+
+  it("dates a registry change by the registry's time but orders it by when noma recorded it", () => {
+    const row = ledgerRow({ status: "accepted", remoteStatus: "CREDITS_ISSUED", createdAt: day("2026-10-16") });
+    const submit = event({ occurredAt: day("2026-10-17"), fromStatus: "draft", toStatus: "submitted" });
+    // Issued on Oct 1 in the registry; noma synced it on Oct 20.
+    const issued = event({
+      occurredAt: day("2026-10-20"),
+      registryAt: day("2026-10-01"),
+      source: "registry",
+      fromStatus: "submitted",
+      toStatus: "accepted",
+      toRemote: "CREDITS_ISSUED",
+    });
+
+    const history = buildSubmissionStatusHistory("ghg_statement", [row], [issued, submit], RECORDING_STARTED_AT);
+
+    expect(summary(history)).toEqual([
+      { label: "Issued", occurredAt: "2026-10-01", origin: "activity", actorName: "Ada Operator" },
+      { label: "In registry", occurredAt: "2026-10-17", origin: "activity", actorName: "Ada Operator" },
+      { label: "Draft", occurredAt: "2026-10-16", origin: "ledger", actorName: null },
+    ]);
   });
 
   it("leaves an unrecorded change undated, however often the row was written since", () => {

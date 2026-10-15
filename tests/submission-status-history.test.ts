@@ -1,10 +1,26 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import { activityEvents, certificationSubmissions, organizations, users } from "@/db/schema";
 import { listSubmissionStatusHistory } from "@/data-access/submission-status-history";
 import { CERTIFICATION_STATUS_RECORDING_STARTED_AT } from "@/config/certification";
 import type { OrgContext } from "@/lib/auth/server";
+
+// Runs just before the status-event read, so a test can commit a concurrent
+// status change between the ledger read and the event read.
+const beforeEventRead = vi.hoisted(() => ({ hook: null as null | (() => Promise<void>) }));
+vi.mock("@/data-access/activity-events", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/data-access/activity-events")>();
+  return {
+    ...actual,
+    listEntityActivity: async (...args: Parameters<typeof actual.listEntityActivity>) => {
+      const hook = beforeEventRead.hook;
+      beforeEventRead.hook = null;
+      if (hook) await hook();
+      return actual.listEntityActivity(...args);
+    },
+  };
+});
 
 const AFTER_RECORDING = new Date("2026-10-16T08:00:00Z");
 const BEFORE_RECORDING = new Date("2026-09-01T08:00:00Z");
@@ -136,7 +152,11 @@ describe("listSubmissionStatusHistory", () => {
     await statusEvent(orgB, { entityId: removalId, occurredAt: at(AFTER_RECORDING, 10), fromStatus: "submitted", toStatus: "rejected", submission: { id: row.id, version: 1 } });
 
     const foreign = await listSubmissionStatusHistory(orgB, "removal", removalId);
-    expect(foreign.entries.map((entry) => entry.label)).toEqual(["Submission failed"]);
+    expect(foreign.entries.map((entry) => ({ label: entry.label, dated: entry.occurredAt !== null }))).toEqual([
+      { label: "Submission failed", dated: true },
+      // Its from-state, undated: org B knows nothing else about the record.
+      { label: "Submitted", dated: false },
+    ]);
     expect(foreign.recordingBeganAt).toBeNull();
 
     const own = await listSubmissionStatusHistory(orgA, "removal", removalId);
@@ -163,6 +183,61 @@ describe("listSubmissionStatusHistory", () => {
       { label: "Submitted", occurredAt: at(BEFORE_RECORDING, 2), origin: "ledger" },
       { label: "Not submitted", occurredAt: BEFORE_RECORDING, origin: "ledger" },
     ]);
+  });
+
+  it("reads the ledger and events from one snapshot when a status change commits between them", async () => {
+    const statementId = crypto.randomUUID();
+    const row = await ledgerRow(orgA, {
+      localEntityId: statementId, localEntityType: "ghgStatement", submissionType: "ghg_statement",
+      version: 1, status: "submitted", metadata: { remoteStatus: "DRAFT" },
+      createdAt: AFTER_RECORDING, submittedAt: at(AFTER_RECORDING, 5),
+    });
+    const submission = { id: row.id, version: 1, submissionType: "ghg_statement" };
+    await statusEvent(orgA, {
+      entityId: statementId, entityType: "ghg_statement", submission, occurredAt: at(AFTER_RECORDING, 5),
+      fromStatus: "draft", toStatus: "submitted", fromRemote: null, toRemote: "DRAFT",
+    });
+    // The registry verifies it while the history is being read: ledger and
+    // event commit together, as withCertificationStatusActivity writes them.
+    beforeEventRead.hook = () => db.transaction(async (tx) => {
+      await tx.update(certificationSubmissions)
+        .set({ status: "accepted", metadata: { remoteStatus: "VERIFIED" } })
+        .where(eq(certificationSubmissions.id, row.id));
+      await tx.insert(activityEvents).values({
+        organizationId: orgA.organizationId, entityType: "ghg_statement", entityId: statementId,
+        action: "status_changed", source: "registry", actorUserId: actorId, occurredAt: at(AFTER_RECORDING, 60),
+        fromStatus: "submitted", toStatus: "accepted", fromRemote: "DRAFT", toRemote: "VERIFIED",
+        submissionRef: { provider: "isometric", submissionType: "ghg_statement", submissionId: row.id, version: 1 },
+      });
+    });
+
+    const during = await listSubmissionStatusHistory(orgA, "ghg_statement", statementId);
+    expect(beforeEventRead.hook).toBeNull();
+    // Before the change, consistently: no Verified followed by a made-up reversal.
+    expect(during.entries.map((entry) => entry.label)).toEqual(["In registry", "Draft"]);
+
+    const after = await listSubmissionStatusHistory(orgA, "ghg_statement", statementId);
+    expect(after.entries.map((entry) => entry.label)).toEqual(["Verified", "In registry", "Draft"]);
+  });
+
+  it("dates a registry change by the registry's own time", async () => {
+    const statementId = crypto.randomUUID();
+    const row = await ledgerRow(orgA, {
+      localEntityId: statementId, localEntityType: "ghgStatement", submissionType: "ghg_statement",
+      version: 1, status: "accepted", metadata: { remoteStatus: "CREDITS_ISSUED" },
+      createdAt: AFTER_RECORDING, submittedAt: at(AFTER_RECORDING, 5),
+    });
+    const submission = { id: row.id, version: 1, submissionType: "ghg_statement" };
+    const statementEvent = { entityId: statementId, entityType: "ghg_statement" as const, submission };
+    await statusEvent(orgA, { ...statementEvent, occurredAt: at(AFTER_RECORDING, 5), fromStatus: "draft", toStatus: "submitted", toRemote: "DRAFT" });
+    // Issued in the registry 30 minutes before noma's sync recorded it.
+    await statusEvent(orgA, {
+      ...statementEvent, occurredAt: at(AFTER_RECORDING, 90), registryAt: at(AFTER_RECORDING, 60), source: "registry",
+      fromStatus: "submitted", toStatus: "accepted", fromRemote: "DRAFT", toRemote: "CREDITS_ISSUED",
+    });
+
+    const [issued] = (await listSubmissionStatusHistory(orgA, "ghg_statement", statementId)).entries;
+    expect(issued).toMatchObject({ label: "Issued", occurredAt: at(AFTER_RECORDING, 60), source: "registry" });
   });
 
   it("returns nothing for a record that was never submitted", async () => {
