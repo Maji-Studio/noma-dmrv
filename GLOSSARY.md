@@ -44,10 +44,9 @@ litres via a per-facility conversion yield.
 _Avoid_: generator power, backup power.
 
 **Readings file**:
-The original telemetry CSV an operator attaches to a production run.
-Operator upload stores the raw CSV unchanged as production-run sensor-data
-evidence. A retained importer, currently reachable only from the seed CLI,
-can load its rows as structured readings within the run's time window.
+The original telemetry CSV attached to a production run. noma keeps it
+unchanged as sensor-data evidence; the readings importer can also load its
+rows into structured readings within the run window.
 _Avoid_: sensor dump, log file, reactor-day file, channel mapping.
 
 **Emission estimate**:
@@ -85,7 +84,7 @@ disambiguates).
 
 **Feedstock bin**:
 A storage bin holding one **feedstock type**, set when the bin is created.
-Legacy bins created before a type was required get one on their first intake.
+A bin without a type gets one on its first intake.
 What a bin may feed follows from that type's declared usage:
 pyrolysis-usage stock may enter a production run and blend-usage stock may
 enter a formulation. An input bin has no kind of its own. Distinct from

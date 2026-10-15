@@ -34,10 +34,3 @@
 | Safety margin | Named `Safety margin` mapping in `src/lib/isometric/semantic-binding-catalog.ts` | implemented | noma submits removal dry mass only; the fixed carbon intensity and its justification remain registry-owned |
 | GHG Statement report | `certifier_ghg_statement_reports`, `src/fn/certification/ghg-statement-reports.ts` | implemented | Generated data summary is immutable after preparation/approval; external report URL remains supported for project-specific qualitative reports |
 | Reporting window | `src/fn/certification/removal-reporting-window.ts` | partial | End is latest application date; start still uses earliest production start instead of earliest feedstock sourcing |
-
-The distance-method justification is documented in the PDD (decision #942 q11,
-recorded in [#1012](https://github.com/Maji-Studio/noma-dmrv/issues/1012)). It
-explains why energy-usage data is unavailable. noma keeps its distance-based
-transport path without adding a justification field or submission gate. This
-resolves that part of `isometric/transport-v1.1-evidence`; the other transport
-evidence gaps remain open.

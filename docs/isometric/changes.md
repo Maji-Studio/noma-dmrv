@@ -1,5 +1,18 @@
 # Isometric Docs Change Log
 
+## 2026-10-15: Transport justification, bin typing and readings import (#942 q11, q22, q25)
+
+- **q11:** Distance-method fallback justification, including why energy-usage
+  data is unavailable, lives in the PDD, outside noma (#1012). noma keeps its
+  distance-based transport path without a justification field or submission gate.
+  Other transport evidence gaps remain open.
+- **q22:** A feedstock bin's type is set when the bin is created and validated
+  on each intake. A bin without a type gets one on its first intake.
+- **q25:** Keep the readings import (#1014). The original telemetry CSV stays
+  unchanged as sensor-data evidence; the importer can also load its rows as
+  structured readings within the run window. Operator wiring and query bounds
+  remain open in [`open-questions-audit-follow-ups.md`](../open-questions-audit-follow-ups.md#structured-readings-wiring-and-query-bounds-isometricstructured-telemetry-path-deferred).
+
 ## 2026-10-15: Samples require a credit batch; unused characterization columns removed
 
 - Issue #1016 makes every lab Sample belong to one credit batch and removes
