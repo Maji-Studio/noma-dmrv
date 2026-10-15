@@ -1,4 +1,4 @@
-import { calculateBiocharTransport } from "@/lib/calculations/biochar-transport";
+import { positiveOrNull } from "@/lib/calculations/transport-leg";
 import { countedRoundTripKm } from "@/lib/calculations/round-trip";
 import { kgToTonnes } from "@/lib/calculations/unit-conversions";
 import { formatCount } from "@/lib/copy-utils";
@@ -174,7 +174,7 @@ export function aggregateTransportMassDistance(
   // Every leg needs a load mass to contribute distⱼ × massⱼ. A leg without it
   // would silently drop its tonne·km, under-counting transport emissions.
   const missingMassLegs = legs.filter(
-    (leg) => leg.loadMassKg == null || leg.loadMassKg <= 0,
+    (leg) => positiveOrNull(leg.loadMassKg) == null,
   );
   if (missingMassLegs.length > 0) {
     const missingMassLegLabels = missingMassLegs.map(transportLegLabel);
@@ -211,16 +211,14 @@ export function aggregateTransportMassDistance(
 export function aggregateBiocharTransportMassDistance(legs: TransportLeg[]): TransportAggregationResult {
   const checked = aggregateTransportMassDistance(legs, "Biochar");
   if (checked.warning || !legs.length) return checked;
-  try {
-    const total = calculateBiocharTransport(legs.map(leg => ({
-      loadMassKg: leg.loadMassKg as number,
-      distanceKm: leg.distanceKm,
-    })));
-    return { massDistanceTonneKm: total.massDistanceTonneKm, warning: null };
-  } catch (error) {
-    if (error instanceof SafeError) return { massDistanceTonneKm: null, warning: error.message };
-    throw error;
+  const missingDistanceLegs = legs.filter((leg) => positiveOrNull(leg.distanceKm) == null);
+  if (missingDistanceLegs.length > 0) {
+    return {
+      massDistanceTonneKm: null,
+      warning: `Biochar transport has ${formatCount(missingDistanceLegs.length, "delivery", "deliveries")} without a positive distance (${missingDistanceLegs.map(transportLegLabel).join(", ")}). Record a positive distance for each delivery before submitting.`,
+    };
   }
+  return checked;
 }
 
 // Clamps a per-run attribution factor into [0, 1]. A removal can only count

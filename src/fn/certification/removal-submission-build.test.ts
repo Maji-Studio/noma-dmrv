@@ -481,7 +481,6 @@ describe("buildRemovalSubmissionBuild", () => {
       runSummary: {
         runCount: 1,
         totalBiocharOutputKg: 1_200,
-        deliveryBiocharOutputKg: 1_200,
         appliedDryKg: 600,
       },
       submissionWarnings: [],

@@ -2,6 +2,8 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { applicationOutputAllocations, biocharProducts, deliveries, transportLegs } from "@/db/schema";
+import { buildMassAccounting } from "@/lib/certification/mass-accounting";
+import { tonnesToKg } from "@/lib/calculations/unit-conversions";
 import { resolveScopeForRemoval } from "@/fn/certification/certify-context-core";
 import { loadTransportLegsByCategory } from "@/fn/certification/shared";
 import { updateTransportLeg } from "@/data-access/transport-legs";
@@ -51,6 +53,15 @@ describe("Removal delivery transport", () => {
           .toEqual([fixture.productId, product.id].sort());
         expect(scope.lineages.map(lineage => lineage.application.biocharAppliedTons))
           .toEqual([0.1, 0.1]);
+        const sourceRun = scope.lineages[0].productionRun!;
+        const accounting = buildMassAccounting(scope.lineages, [sourceRun]);
+        const expectedAppliedDryKg = HALF_DRY_KG * 2;
+        expect(accounting.runSummary.appliedDryKg).toBe(expectedAppliedDryKg);
+        expect(accounting.attributionByRunId.get(fixture.productionRunId))
+          .toBeCloseTo(expectedAppliedDryKg / sourceRun.biocharDryMassKg!);
+        expect(accounting.runSummary.appliedDryKg).toBe(tonnesToKg(
+          scope.memberBatches.reduce((total, batch) => total + batch.appliedDryWeightTons, 0),
+        ));
         const legs = await loadTransportLegsByCategory(ctx, {
           feedstockIds: [], biocharProductIds: [fixture.productId, product.id], sampleIds: [],
         }, scope.lineages, ["biochar"]);

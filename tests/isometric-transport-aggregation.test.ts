@@ -8,6 +8,7 @@ import type { TransportLeg } from "@/db/schema";
 import { ROUND_TRIP_DISTANCE_FACTOR } from "@/lib/calculations/round-trip";
 import {
   aggregateTransportMassDistance,
+  aggregateBiocharTransportMassDistance,
   enrichWithTransportLegs,
   type AggregatedProductionData,
 } from "@/lib/isometric/utils/aggregation";
@@ -119,6 +120,39 @@ describe("aggregateTransportMassDistance", () => {
     );
     expect(result.massDistanceTonneKm).toBe(200);
     expect(result.warning).toBeNull();
+  });
+});
+
+describe("aggregateBiocharTransportMassDistance", () => {
+  it("counts 25 kg applied from a 50 kg delivery at 10 km as 0.5 tonne-km, regardless of the 100 kg produced", () => {
+    expect(aggregateBiocharTransportMassDistance([leg(10, 25)]))
+      .toEqual({ massDistanceTonneKm: 0.5, warning: null });
+  });
+
+  it("sums two delivery slices at their own distances using wet mass", () => {
+    expect(aggregateBiocharTransportMassDistance([leg(10, 25), leg(30, 40)]))
+      .toEqual({ massDistanceTonneKm: 2.9, warning: null });
+  });
+
+  it.each([0, -1, NaN, Infinity])("names only affected deliveries for unusable distance %s", (distanceKm) => {
+    expect(aggregateBiocharTransportMassDistance([
+      { ...leg(10, 25), originName: "Facility", destinationName: "DL-1: Site A" },
+      { ...leg(distanceKm, 40), originName: "Facility", destinationName: "DL-2: Site B" },
+      { ...leg(0, 20), originName: "Facility", destinationName: "DL-3: Site C" },
+    ])).toEqual({
+      massDistanceTonneKm: null,
+      warning: "Biochar transport has 2 deliveries without a positive distance (Facility to DL-2: Site B, Facility to DL-3: Site C). Record a positive distance for each delivery before submitting.",
+    });
+  });
+
+  it.each([null, 0, -1, NaN, Infinity])("names the affected delivery for unusable wet mass %s", (loadMassKg) => {
+    expect(aggregateBiocharTransportMassDistance([
+      { ...leg(10, 25), originName: "Facility", destinationName: "DL-1: Site A" },
+      { ...leg(10, loadMassKg), originName: "Facility", destinationName: "DL-2: Site B" },
+    ])).toEqual({
+      massDistanceTonneKm: null,
+      warning: "Biochar transport has 1 leg without a load mass (Facility to DL-2: Site B). Record a load mass for each leg before submitting.",
+    });
   });
 });
 

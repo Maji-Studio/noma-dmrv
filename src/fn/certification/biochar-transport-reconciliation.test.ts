@@ -30,7 +30,7 @@ describe("biochar transport reconciliation", () => {
     const preview = buildRemovalLedgerPreview({
       removalId: "removal-1", memberBatchClaims: [], runs: [run], lineages: [],
       transportLegs, attributionByRunId,
-      runSummary: { runCount: 1, totalBiocharOutputKg: 100, deliveryBiocharOutputKg: 100, appliedDryKg: 25 },
+      runSummary: { runCount: 1, totalBiocharOutputKg: 100, appliedDryKg: 25 },
       requiredTransportCategories: ["biochar"],
     });
     const ledger = buildLedgerModel({ ...metadata, legsByCategory: transportLegs });

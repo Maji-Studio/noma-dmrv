@@ -32,11 +32,6 @@ export interface RemovalRunSummary {
   /** Σ run.biocharDryMassKg across every production-contributing member run. */
   totalBiocharOutputKg: number;
   /**
-   * Output only from runs represented by this Removal's Applications. This is
-   * the application-linked production denominator, excluding unapplied runs.
-   */
-  deliveryBiocharOutputKg: number;
-  /**
    * Σ applied biochar dry mass reaching this removal's applications (the
    * numerator), totalled across runs.
    */
@@ -59,7 +54,6 @@ export interface RemovalMassAccounting {
 export const EMPTY_RUN_SUMMARY: RemovalRunSummary = {
   runCount: 0,
   totalBiocharOutputKg: 0,
-  deliveryBiocharOutputKg: 0,
   appliedDryKg: 0,
 };
 
@@ -97,15 +91,11 @@ export function buildMassAccounting(
   }
 
   let totalBiocharOutputKg = 0;
-  let deliveryBiocharOutputKg = 0;
   const attributionByRunId = new Map<string, number>();
   for (const run of runs) {
     const output = run.biocharDryMassKg;
     totalBiocharOutputKg += output ?? 0;
     const appliedKg = appliedKgByRun.get(run.id) ?? 0;
-    if (appliedKgByRun.has(run.id)) {
-      deliveryBiocharOutputKg += output ?? 0;
-    }
     attributionByRunId.set(run.id, output && output > 0 ? appliedKg / output : 1);
   }
 
@@ -114,7 +104,6 @@ export function buildMassAccounting(
     runSummary: {
       runCount: runs.length,
       totalBiocharOutputKg,
-      deliveryBiocharOutputKg,
       appliedDryKg,
     },
   };

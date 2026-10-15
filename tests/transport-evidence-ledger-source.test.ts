@@ -139,7 +139,6 @@ function ctx(overrides?: {
     runSummary: {
       runCount: 1,
       totalBiocharOutputKg: 1000,
-      deliveryBiocharOutputKg: 1000,
       appliedDryKg: 1000,
     },
     transportLegs: overrides?.legs ?? {
