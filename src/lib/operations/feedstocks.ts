@@ -72,8 +72,8 @@ export const deleteFeedstock: Operation<typeof deleteFeedstockSchema, void> = {
   }),
   input: deleteFeedstockSchema,
   supportsDryRun: true,
-  execute: async ({ ctx, tx, afterCommit, snapshotStock, activity }, { feedstockId, expectedVersion }) => {
-    const row = await withFeedstockErrors(() => deleteFeedstockInTransaction(ctx, tx, feedstockId, expectedVersion, snapshotStock));
+  execute: async ({ ctx, tx, source, afterCommit, snapshotStock, activity }, { feedstockId, expectedVersion }) => {
+    const row = await withFeedstockErrors(() => deleteFeedstockInTransaction(ctx, tx, feedstockId, expectedVersion, source, snapshotStock));
     activity.link({ facilityId: row.facilityId });
     afterCommit(async () => { await processPendingStorageObjectDeletions(ctx); });
   },

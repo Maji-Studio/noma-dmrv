@@ -1,3 +1,4 @@
+import { recordScopedWriteActivity, resolveWriteActivityScopes } from "./write-activity";
 import { assertRowVersion, nextVersion } from "./row-version";
 import { db, type DbTransaction } from "@/db";
 import { numericAggregate } from "@/db/aggregate";
@@ -672,6 +673,10 @@ export async function createApplication(
       applicationIds: [application.id],
     });
 
+    await recordScopedWriteActivity(ctx, tx, {
+      entityType: "application", entityId: application.id, action: "created", source: "form",
+    }, await resolveWriteActivityScopes(ctx, tx, "application", application.id));
+
     return application;
   });
 }
@@ -821,6 +826,7 @@ export async function updateApplication(
     if (data.soilTemperatureSource !== undefined) updateData.soilTemperatureSource = data.soilTemperatureSource;
     if (data.soilTemperatureC !== undefined) updateData.soilTemperatureC = data.soilTemperatureC;
 
+    const previousScopes = await resolveWriteActivityScopes(ctx, tx, "application", id);
     const [application] = await tx
       .update(applications)
       .set({ ...updateData, version: nextVersion(applications.version) })
@@ -832,6 +838,14 @@ export async function updateApplication(
     await reconcileUnassignedCreditBatchApplicationSlices(ctx, tx, {
       applicationIds: [application.id],
     });
+
+    await recordScopedWriteActivity(ctx, tx, {
+      entityType: "application", entityId: application.id, action: "updated", source: "form",
+      changedFields: Object.keys(updateData).filter(field => field !== "updatedAt"),
+    }, [...new Map([
+      ...previousScopes,
+      ...await resolveWriteActivityScopes(ctx, tx, "application", application.id),
+    ].map(scope => [`${scope.creditBatchId ?? ""}:${scope.productionRunId ?? ""}`, scope])).values()]);
 
     return application;
   });
@@ -881,6 +895,11 @@ export async function deleteApplication(ctx: OrgContext, id: string, expectedVer
       );
     }
 
+    const activityScopes = await resolveWriteActivityScopes(ctx, tx, "application", id);
+    await recordScopedWriteActivity(ctx, tx, {
+      entityType: "application", entityId: id, action: "deleted", source: "form",
+    }, activityScopes);
+
     await tx
       .delete(creditBatchApplications)
       .where(and(eq(creditBatchApplications.applicationId, id), eq(creditBatchApplications.organizationId, ctx.organizationId)));
@@ -893,8 +912,8 @@ export async function deleteApplication(ctx: OrgContext, id: string, expectedVer
 
     await tx.delete(applications).where(and(eq(applications.id, id), eq(applications.organizationId, ctx.organizationId)));
     await retireDocumentsForEntities(ctx, tx, [
-      { entityType: "application", entityId: id },
-    ]);
+      { entityType: "application", entityId: id, activityScopes },
+    ], "form");
     // Batch aggregates (applied weight, CO2e stored) are derived on read
     // (issue #285) — no write-back sync is needed after removing a member.
   });

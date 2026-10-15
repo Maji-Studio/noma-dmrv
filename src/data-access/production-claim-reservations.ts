@@ -1,3 +1,5 @@
+import { recordActivity } from "./activity-events";
+import { toActivityEntityType } from "@/lib/activity-entity-type";
 import { nextVersion } from "./row-version";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
@@ -202,6 +204,10 @@ export async function reserveProductionEmissionsClaims(
         "Production-input reservation changed while submitting. Reload and retry.",
       );
     }
+    for (const creditBatchId of new Set(reserved.map(batch => batch.id))) await recordActivity(ctx, tx, {
+      entityType: toActivityEntityType("credit_batch"), entityId: creditBatchId, creditBatchId,
+      action: "updated", source: "form", changedFields: ["productionClaimReservation"],
+    });
   });
 }
 
@@ -251,7 +257,7 @@ export async function rejectSubmissionAndReleaseProductionClaims(
         expectedLockedAt: args.expectedLockedAt,
       });
     }
-    await tx
+    const released = await tx
       .update(creditBatches)
       .set({ version: nextVersion(creditBatches.version),
         productionEmissionsClaimReservedBySubmissionId: null,
@@ -265,6 +271,11 @@ export async function rejectSubmissionAndReleaseProductionClaims(
           ),
           eq(creditBatches.organizationId, ctx.organizationId),
         ),
-      );
+      )
+      .returning({ id: creditBatches.id });
+    for (const creditBatchId of new Set(released.map(batch => batch.id))) await recordActivity(ctx, tx, {
+      entityType: toActivityEntityType("credit_batch"), entityId: creditBatchId, creditBatchId,
+      action: "updated", source: "form", changedFields: ["productionClaimReservation"],
+    });
   });
 }

@@ -1,3 +1,4 @@
+import { recordDocumentActivity } from "./write-activity";
 import { and, desc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { db } from "@/db";
@@ -272,6 +273,7 @@ export async function insertPreparedGhgStatementReport(
         createdBy: ctx.userId,
       })
       .returning();
+    await recordDocumentActivity(ctx, tx, document, "created", { source: "form" });
     const [report] = await tx
       .insert(certifierGhgStatementReports)
       .values({

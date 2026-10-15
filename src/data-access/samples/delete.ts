@@ -1,4 +1,5 @@
 import { and, eq } from "drizzle-orm";
+import type { ActivityEventInput } from "../activity-events";
 import type { DbTransaction } from "@/db";
 import { samples } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
@@ -29,6 +30,7 @@ export async function deleteSampleInTransaction(
   tx: DbTransaction,
   sampleId: string,
   expectedVersion: number,
+  source: ActivityEventInput["source"],
 ): Promise<DeletedSampleLinks> {
   requireOrgScope(ctx);
   const links = await readSampleLinks(ctx, tx, sampleId);
@@ -43,16 +45,16 @@ export async function deleteSampleInTransaction(
   assertSampleLinksHeld(scope, sampleId, links);
   const facilityId = scope.batches.get(scope.sample.creditBatchId)?.facilityId;
 
-  const transportLegDocuments = await deleteTransportLegsForEntity(ctx, tx, "sample", sampleId);
+  const transportLegDocuments = await deleteTransportLegsForEntity(ctx, tx, "sample", sampleId, source);
   const deleted = await tx
     .delete(samples)
     .where(and(eq(samples.id, sampleId), eq(samples.organizationId, ctx.organizationId)))
     .returning({ id: samples.id });
   if (deleted.length === 0) throw sampleNotFound();
   await retireDocumentsForEntities(ctx, tx, [
-    { entityType: "sample", entityId: sampleId },
+    { entityType: "sample", entityId: sampleId, activityScopes: [{ creditBatchId: links.creditBatchId, productionRunId: scope.sample.productionRunId }] },
     ...transportLegDocuments,
-  ]);
+  ], source);
   return {
     id: sampleId, creditBatchId: scope.sample.creditBatchId, productionRunId: scope.sample.productionRunId,
     facilityId,

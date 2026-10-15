@@ -1,3 +1,6 @@
+import { toActivityEntityType } from "@/lib/activity-entity-type";
+import { recordActivity } from "./activity-events";
+import { recordMembershipActivity } from "./write-activity";
 import { assertRowVersion, nextVersion } from "./row-version";
 import {
   and,
@@ -446,6 +449,12 @@ export async function createCreditBatch(
       creditBatchIds: [batch.id],
     });
 
+    await recordActivity(ctx, tx, {
+      entityType: toActivityEntityType("credit_batch"), entityId: batch.id, creditBatchId: batch.id,
+      action: "created", source: "form",
+    });
+    await recordMembershipActivity(ctx, tx, batch.id, [], runIds, { recordBatchEvent: false });
+
     return readCommittedCreditBatch(ctx, tx, batch);
   });
 
@@ -751,6 +760,17 @@ export async function updateCreditBatch(
       });
     }
 
+    const changedFields = Object.keys(updateFields).filter(
+      field => field !== "expectedVersion" && updateFields[field as keyof typeof updateFields] !== undefined,
+    );
+    const membershipChanged = shouldRefreshMembership && await recordMembershipActivity(
+      ctx, tx, id, currentProductionRunIds, resolvedProductionRunIds ?? [], { changedFields },
+    );
+    if (!membershipChanged) await recordActivity(ctx, tx, {
+      entityType: toActivityEntityType("credit_batch"), entityId: id, creditBatchId: id,
+      action: "updated", source: "form", changedFields,
+    });
+
     // The member set after this write: the refreshed one when membership was
     // touched, otherwise the untouched links read under the same transaction.
     const memberProductionRunIds = shouldRefreshMembership
@@ -798,6 +818,12 @@ export async function deleteCreditBatch(ctx: OrgContext, id: string, expectedVer
       );
     }
 
+    await recordMembershipActivity(ctx, tx, id, await readMemberProductionRunIds(ctx, tx, id), [], { recordBatchEvent: false });
+    await recordActivity(ctx, tx, {
+      entityType: toActivityEntityType("credit_batch"), entityId: id, creditBatchId: id,
+      action: "deleted", source: "form",
+    });
+
     await tx
       .delete(creditBatchProductionRuns)
       .where(and(eq(creditBatchProductionRuns.creditBatchId, id), eq(creditBatchProductionRuns.organizationId, ctx.organizationId)));
@@ -806,7 +832,7 @@ export async function deleteCreditBatch(ctx: OrgContext, id: string, expectedVer
 
     await retireDocumentsForEntities(ctx, tx, [
       { entityType: "credit_batch", entityId: id },
-    ]);
+    ], "form");
   });
   await processPendingStorageObjectDeletions(ctx);
 }

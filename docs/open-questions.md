@@ -13,6 +13,15 @@ Deferred work lives here, never as a `TODO` in code.
 
 **`needs-registry-check`** marks a question that must be answered by the Isometric MCP server (`how_to`, then the protocol/OpenAPI tools) or a sandbox probe, **never** from `docs/isometric/*`, which are non-authoritative local summaries. Do not close one of these from a local doc.
 
+## Activity recording gaps (`activity/deferred-writers`) - **deferred**
+
+- `src/data-access/certifier-removals.ts:updateRemovalDates` changes Removal dates
+  without an event. Define value-free lifecycle events alongside the existing
+  registry status events.
+- `src/data-access/production-runs/delete.ts:deleteProductionRun` still uses the
+  legacy deletion path without a run event. Route it through the operation runner
+  or record on its own transaction; preserve document retirement events.
+
 ## Invariants an LLM must not violate
 
 Short, load-bearing rules that this file's entries assume. Each is enforced in
