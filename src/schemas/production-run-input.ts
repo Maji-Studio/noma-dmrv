@@ -8,9 +8,7 @@ import { publishedJsonSchemas } from "./published-json-schema";
 /** Run alias of the shared event instant (`./event-instant`); the same schema object, so contracts stay identical. */
 export const productionRunInstantSchema = eventInstantSchema;
 
-const { productionRunId, expectedVersion, code, feedstockWetMassKg, feedstockStorageLocationId, ...fields } = updateProductionRunSchema.shape;
-void feedstockWetMassKg;
-void feedstockStorageLocationId;
+const { productionRunId, expectedVersion, code, ...fields } = updateProductionRunSchema.shape;
 const drawShape = fields.feedstockDraws.unwrap().element.shape;
 publishedJsonSchemas.add(drawShape.storageLocationId, { jsonSchema: { ...z.toJSONSchema(drawShape.storageLocationId), description: "Source feedstock bin UUID in the run facility." } });
 publishedJsonSchemas.add(drawShape.wetMassKg, { jsonSchema: { ...z.toJSONSchema(drawShape.wetMassKg), description: "Explicit wet mass drawn from this bin in kilograms." } });

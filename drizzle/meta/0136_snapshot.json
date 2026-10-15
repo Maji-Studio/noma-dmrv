@@ -1,5 +1,5 @@
 {
-  "id": "97949573-7afc-4895-b8fe-05993e429731",
+  "id": "05ccc643-a9b4-4c7c-8f7a-a37a66845d41",
   "prevId": "631f1800-7c4a-4fd1-91cd-d3a7aa8e4238",
   "version": "7",
   "dialect": "postgresql",
@@ -10142,7 +10142,7 @@
         },
         "production_runs_feedstock_moisture_percent_range": {
           "name": "production_runs_feedstock_moisture_percent_range",
-          "value": "\"production_runs\".\"feedstock_moisture_percent\" is null or (\"production_runs\".\"feedstock_moisture_percent\" >= 0 and \"production_runs\".\"feedstock_moisture_percent\" <= 100)"
+          "value": "\"production_runs\".\"feedstock_moisture_percent\" >= 0 and \"production_runs\".\"feedstock_moisture_percent\" < 100"
         },
         "production_runs_feedstock_dry_lte_wet": {
           "name": "production_runs_feedstock_dry_lte_wet",
@@ -10150,7 +10150,7 @@
         },
         "production_runs_biochar_moisture_percent_range": {
           "name": "production_runs_biochar_moisture_percent_range",
-          "value": "\"production_runs\".\"biochar_moisture_percent\" is null or (\"production_runs\".\"biochar_moisture_percent\" >= 0 and \"production_runs\".\"biochar_moisture_percent\" <= 100)"
+          "value": "\"production_runs\".\"biochar_moisture_percent\" >= 0 and \"production_runs\".\"biochar_moisture_percent\" < 100"
         },
         "production_runs_biochar_dry_mass_non_negative": {
           "name": "production_runs_biochar_dry_mass_non_negative",
@@ -10337,7 +10337,16 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "production_samples_weight_grams_non_negative": {
+          "name": "production_samples_weight_grams_non_negative",
+          "value": "\"production_samples\".\"weight_grams\" is null or \"production_samples\".\"weight_grams\" >= 0"
+        },
+        "production_samples_volume_ml_non_negative": {
+          "name": "production_samples_volume_ml_non_negative",
+          "value": "\"production_samples\".\"volume_ml\" is null or \"production_samples\".\"volume_ml\" >= 0"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.samples": {

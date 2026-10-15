@@ -115,7 +115,7 @@ export const productionRuns = pgTable(
     ),
     check(
       'production_runs_feedstock_moisture_percent_range',
-      sql`${table.feedstockMoisturePercent} is null or (${table.feedstockMoisturePercent} >= 0 and ${table.feedstockMoisturePercent} <= 100)`
+      sql`${table.feedstockMoisturePercent} >= 0 and ${table.feedstockMoisturePercent} < 100`
     ),
     check(
       'production_runs_feedstock_dry_lte_wet',
@@ -123,7 +123,7 @@ export const productionRuns = pgTable(
     ),
     check(
       'production_runs_biochar_moisture_percent_range',
-      sql`${table.biocharMoisturePercent} is null or (${table.biocharMoisturePercent} >= 0 and ${table.biocharMoisturePercent} <= 100)`
+      sql`${table.biocharMoisturePercent} >= 0 and ${table.biocharMoisturePercent} < 100`
     ),
     check(
       'production_runs_biochar_dry_mass_non_negative',
@@ -434,6 +434,14 @@ export const productionSamples = pgTable('production_samples', {
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 }, (table) => [
   index('production_samples_organization_id_idx').on(table.organizationId),
+  check(
+    'production_samples_weight_grams_non_negative',
+    sql`${table.weightGrams} is null or ${table.weightGrams} >= 0`
+  ),
+  check(
+    'production_samples_volume_ml_non_negative',
+    sql`${table.volumeMl} is null or ${table.volumeMl} >= 0`
+  ),
   foreignKey({
     columns: [table.productionRunId, table.organizationId],
     foreignColumns: [productionRuns.id, productionRuns.organizationId],

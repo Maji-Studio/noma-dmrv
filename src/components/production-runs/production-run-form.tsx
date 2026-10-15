@@ -45,6 +45,7 @@ import {
 } from "./production-run-mass-balance";
 import {
   allowedProductionRunStatusesFrom,
+  isTerminalProductionRunStatus,
   PRODUCTION_RUN_CREATE_STATUSES,
   shouldClearProductionRunEndTime,
   shouldIncludeProductionRunEndTime,
@@ -206,6 +207,7 @@ export function ProductionRunForm({
   // Watch facility to filter reactors and storage locations
   const watchedFacilityId = useWatch({ control, name: "facilityId" });
   const watchedStatus = useWatch({ control, name: "status" });
+  const terminal = isTerminalProductionRunStatus(watchedStatus);
 
   // The zone the entered start/end are interpreted in — the facility picked in
   // the form, which can differ from the context facility.
@@ -489,7 +491,7 @@ export function ProductionRunForm({
           <FormField
             id="endDate"
             label="End date"
-            required={watchedStatus === "complete" || watchedStatus === "failed"}
+            required={terminal}
             error={errors.endDate?.message}
             helperText="Leave the end blank until the run finishes. For an overnight run, set the next day."
           >
@@ -502,7 +504,7 @@ export function ProductionRunForm({
             />
           </FormField>
 
-          <FormField id="endTime" label="End time" required={watchedStatus === "complete" || watchedStatus === "failed"} error={errors.endTime?.message}>
+          <FormField id="endTime" label="End time" required={terminal} error={errors.endTime?.message}>
             <FormInput
               id="endTime"
               type="time"
@@ -605,7 +607,7 @@ export function ProductionRunForm({
           <MoistureField
             id="feedstockMoisturePercent"
             materialLabel="Feedstock"
-            required={watchedStatus === "complete" || watchedStatus === "failed"}
+            required={terminal}
             error={errors.feedstockMoisturePercent?.message}
             disabled={isSubmitting}
             certifyRequired={isProductionRunCertifyField("feedstockMoisturePercent")}

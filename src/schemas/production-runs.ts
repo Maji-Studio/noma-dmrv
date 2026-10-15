@@ -268,14 +268,6 @@ const productionRunFormObject = z.object({
 
   // Feedstock Input (bin-based: system auto-allocates to M:M from bin contents)
   feedstockDraws: productionRunFeedstockDrawsFormSchema.optional(),
-  // Keep legacy fields in the parsed shape so the action schema can reject
-  // them explicitly instead of Zod silently stripping unknown keys.
-  feedstockWetMassKg: z.preprocess(
-    toNumberOrNull,
-    massKgSchema("Wet mass must be a positive number")
-      .positive("Wet mass must be a positive number")
-      .nullable(),
-  ).optional(),
   feedstockMoisturePercent: optionalStoredMoisture,
 
   // Processing Parameters (Isometric Protocol Section 9)
@@ -295,7 +287,6 @@ const productionRunFormObject = z.object({
   ).optional(),
   biocharMoisturePercent: optionalStoredMoisture,
   biocharStorageLocationId: emptyToNull.or(z.string().uuid()).nullable().optional(),
-  feedstockStorageLocationId: emptyToNull.or(z.string().uuid()).nullable().optional(),
 });
 
 /**
@@ -461,29 +452,6 @@ export const productionRunFormSchema = makeProductionRunFormSchema(
   UNKNOWN_FACILITY_TIMEZONE,
 );
 
-function rejectLegacyFeedstockFields(
-  data: {
-    feedstockWetMassKg?: number | null;
-    feedstockStorageLocationId?: string | null;
-  },
-  ctx: z.RefinementCtx,
-): void {
-  if (data.feedstockWetMassKg !== undefined) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["feedstockWetMassKg"],
-      message: "Use feedstock draws instead of the legacy wet mass field.",
-    });
-  }
-  if (data.feedstockStorageLocationId !== undefined) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["feedstockStorageLocationId"],
-      message: "Use feedstock draws instead of the legacy source bin field.",
-    });
-  }
-}
-
 // ============================================
 // Server Action Schemas
 // ============================================
@@ -493,7 +461,7 @@ function rejectLegacyFeedstockFields(
  */
 export const createProductionRunSchema = productionRunFormSchema.safeExtend({
   status: z.enum(PRODUCTION_RUN_CREATE_STATUSES, { error: PRODUCTION_RUN_CREATE_STATUS_MESSAGE }).default("running"),
-}).superRefine(rejectLegacyFeedstockFields);
+});
 
 /**
  * Schema for updating a production run (server action)
@@ -539,7 +507,6 @@ export const updateProductionRunSchema = z.object({
   ]).optional(),
   operatorId: emptyToNull.or(uuidSchema()).nullable().optional(),
   feedstockDraws: productionRunFeedstockDrawsSchema.optional(),
-  feedstockWetMassKg: massKgSchema().positive().optional().nullable(),
   feedstockMoisturePercent: storedMoistureSchema()
     .optional()
     .nullable(),
@@ -554,8 +521,7 @@ export const updateProductionRunSchema = z.object({
     .optional()
     .nullable(),
   biocharStorageLocationId: emptyToNull.or(uuidSchema()).nullable().optional(),
-  feedstockStorageLocationId: emptyToNull.or(uuidSchema()).nullable().optional(),
-}).superRefine(rejectLegacyFeedstockFields);
+});
 
 /**
  * Schema for deleting a production run

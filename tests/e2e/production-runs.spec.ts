@@ -31,6 +31,7 @@ import { eq, inArray } from "drizzle-orm";
 import { validateAndSaveMeasurement, validateAndSaveIncident } from "./helpers/production-child-forms";
 import { chooseRunStatus } from "./helpers/run-status";
 import { formatFacilityWallClock } from "@/lib/date-utils";
+import type { ProductionRunStatus } from "@/lib/production-runs/lifecycle";
 
 const FIRST_FEEDSTOCK_DRAW_WET_MASS_SELECTOR =
   'input[name="feedstockDraws.0.wetMassKg"]';
@@ -387,7 +388,7 @@ async function openRunForm(
     startTime: string;
     endDate?: string;
     endTime?: string;
-    status?: string;
+    status?: ProductionRunStatus;
     recordOutput?: boolean;
   },
 ) {

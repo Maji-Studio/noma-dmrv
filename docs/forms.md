@@ -209,7 +209,8 @@ Timezone fields use `requiredTimezoneSchema()` / `optionalTimezoneSchema()` / `i
 
 **Incident and in-process measurement times** use `EventTimeInput` and the
 parent production run's facility clock. Their shared schemas use
-`eventInstantSchema`; writers resolve `{ date, time }` through
+`createEventInstantSchema(<field message>)` so a cleared time gets a plain
+message. Writers resolve `{ date, time }` through
 `resolveEventInstant` with the saved parent run's facility zone. Offset-free
 datetime strings are refused. A measurement needs at least one recorded value
 (zero counts), with the empty-record error on Weight.

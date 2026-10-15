@@ -1,4 +1,3 @@
-import { updateProductionRunSchema } from "@/schemas/production-runs";
 import { updateOrder } from "@/lib/operations/orders";
 import { runOperationInProcess } from "@/lib/operations/runner";
 import { z } from "zod";
@@ -88,12 +87,6 @@ describe("certification lineage guards", () => {
         "Cannot change this credit batch's production membership because its applied mass belongs to a Removal.",
       );
     }, "none");
-  });
-
-  it("rejects a legacy wet-mass edit at the shared input boundary", () => {
-    expect(updateProductionRunSchema.safeParse({
-      productionRunId: "33333333-3333-4333-8333-333333333333", expectedVersion: 1, feedstockWetMassKg: 1_100,
-    }).success).toBe(false);
   });
 
   it("allows application edits while the lineage has no submitted certification artifact", async () => {

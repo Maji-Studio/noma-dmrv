@@ -36,7 +36,7 @@ type TerminalProductionRunStatus = Extract<
   "complete" | "failed"
 >;
 
-function isTerminalProductionRunStatus(
+export function isTerminalProductionRunStatus(
   status: ProductionRunStatus,
 ): status is TerminalProductionRunStatus {
   return status === "complete" || status === "failed";

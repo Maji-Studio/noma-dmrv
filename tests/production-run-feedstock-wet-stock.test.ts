@@ -1,4 +1,3 @@
-import { updateProductionRunSchema } from "@/schemas/production-runs";
 import { productionVersion } from "./helpers/production-version";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { eq, inArray } from "drizzle-orm";
@@ -301,8 +300,6 @@ describe("production-run wet feedstock stock", () => {
       await deriveFeedstockWetStockKg(ctx, db, secondaryStorageLocationId),
     ).toBe(300);
 
-    expect(updateProductionRunSchema.safeParse({ productionRunId: created.id, expectedVersion: mixed.version, feedstockWetMassKg: 500 }).success).toBe(false);
-    expect(updateProductionRunSchema.safeParse({ productionRunId: created.id, expectedVersion: mixed.version, feedstockStorageLocationId: storageLocationId }).success).toBe(false);
 
     const replaced = await updateProductionRun(ctx, created.id, { expectedVersion: mixed.version,
       feedstockDraws: [
