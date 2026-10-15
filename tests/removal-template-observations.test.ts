@@ -1,11 +1,11 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { organizations, users, removalTemplateObservations } from "@/db/schema";
+import { activityEvents, facilities, organizations, users, removalTemplateObservations } from "@/db/schema";
 import { getLatestTemplateObservation, getTemplateObservationById, observeTemplate, reviewLineContracts } from "@/data-access/removal-template-observations";
 import { normalizeTemplateDefinition, type GhgEntryTemplate, type TemplateEnrichment } from "@/lib/isometric/template-observations";
 import fixture from "./fixtures/isometric/sandbox-template-2026-10-15.json";
-import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
+import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID, TEST_SITE_POSITION } from "./helpers/test-org";
 
 // DB-backed: the supervisor generates/applies the schema migration before running.
 const tag = crypto.randomUUID();
@@ -14,6 +14,11 @@ const ctx = makeTestOrgContext(userId);
 const otherOrgId = `template-observation-other-${tag}`;
 const otherCtx = { ...ctx, organizationId: otherOrgId };
 const templateIds: string[] = [];
+/** A blocked statement fails after this long; an unblocked one finishes in a few ms. */
+const LOCK_TIMEOUT_MS = 1500;
+const BLOCKED_PROBE_MS = 300;
+const heldObservations: ReturnType<typeof observeTemplate>[] = [];
+const lockFacilityCode = `FAC-LOCK-${tag.slice(0, 8)}`;
 
 function template(): GhgEntryTemplate {
   const value = structuredClone(fixture) as GhgEntryTemplate;
@@ -45,6 +50,8 @@ afterAll(async () => {
     inArray(removalTemplateObservations.organizationId, [TEST_ORG_ID, otherOrgId]),
     inArray(removalTemplateObservations.externalTemplateId, templateIds),
   ));
+  await db.delete(activityEvents).where(eq(activityEvents.actorUserId, userId));
+  await db.delete(facilities).where(and(eq(facilities.organizationId, TEST_ORG_ID), eq(facilities.code, lockFacilityCode)));
   await db.delete(organizations).where(eq(organizations.id, otherOrgId));
   await db.delete(users).where(eq(users.id, userId));
 });
@@ -122,5 +129,58 @@ describe("org-scoped template observations", () => {
     const row = await observeTemplate(ctx, { provider: "isometric", externalProjectId: value.project_id, template: value, enrichment: {} });
     await expect(reviewLineContracts(ctx, { observationId: row.id, expectedVersion: row.version, assignments: {} }))
       .rejects.toThrow("Template not fully read. Try again.");
+  });
+  describe("per-template observation lock", () => {
+    // Same key as acquireTemplateObservationLock in removal-template-observations.ts.
+    const lockKey = (templateId: string) => JSON.stringify(["removal-template-observation", TEST_ORG_ID, "isometric", templateId]);
+    async function holdingLock<T>(templateId: string, work: () => Promise<T>): Promise<T> {
+      let release!: () => void;
+      const released = new Promise<void>((resolve) => { release = resolve; });
+      let acquired!: () => void;
+      const ready = new Promise<void>((resolve) => { acquired = resolve; });
+      const holder = db.transaction(async (tx) => {
+        await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${lockKey(templateId)}, 0))`);
+        acquired();
+        await released;
+      });
+      try {
+        await ready;
+        return await work();
+      } finally {
+        release();
+        await holder;
+      }
+    }
+    const withLockTimeout = <T,>(fn: () => Promise<T>) => Promise.race([
+      fn(), new Promise<never>((_, reject) => setTimeout(() => reject(new Error("blocked on the held lock")), LOCK_TIMEOUT_MS)),
+    ]);
+
+    it("blocks the same template while held (confirms the lock key)", async () => {
+      const value = template();
+      await holdingLock(value.id, async () => {
+        const pending = observe(value);
+        const outcome = await Promise.race([pending.then(() => "done"), new Promise((resolve) => setTimeout(() => resolve("waiting"), BLOCKED_PROBE_MS))]);
+        expect(outcome).toBe("waiting");
+        // Released in holdingLock's finally; surface the eventual result afterwards.
+        heldObservations.push(pending);
+      });
+      const [row] = await Promise.all(heldObservations.splice(0));
+      expect(row.externalTemplateId).toBe(value.id);
+    });
+    it("does not block org-scoped inserts while a template observation is held", async () => {
+      const value = template();
+      await holdingLock(value.id, async () => {
+        const [facility] = await withLockTimeout(() => db.insert(facilities).values({ ...TEST_SITE_POSITION, organizationId: TEST_ORG_ID, timezone: "UTC", code: lockFacilityCode, name: "Observation lock" }).returning());
+        await withLockTimeout(() => db.insert(activityEvents).values({ organizationId: TEST_ORG_ID, facilityId: facility.id, entityType: "credit_batch", entityId: facility.id, action: "created", source: "form", actorUserId: userId }));
+      });
+    });
+    it("does not block an observation of a different template in the same org", async () => {
+      const held = template();
+      const other = template();
+      await holdingLock(held.id, async () => {
+        const row = await withLockTimeout(() => observe(other));
+        expect(row.externalTemplateId).toBe(other.id);
+      });
+    });
   });
 });

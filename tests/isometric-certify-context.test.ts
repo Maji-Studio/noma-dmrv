@@ -668,9 +668,8 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
     if (!biocharRequired) {
       expect(toRemovalReadinessFacts(result).requiredTransport.map(item => item.category)).not.toContain("biochar");
     }
-    expect(loadBiocharDeliveryTransportLegs).toHaveBeenCalledTimes(
-      omit.some((category) => category === "biochar") ? 0 : 1,
-    );
+    // Recorded delivery transport loads even when the template omits it, so a dropped line warns.
+    expect(loadBiocharDeliveryTransportLegs).toHaveBeenCalledTimes(1);
     expect(coverage.biochar.entityIds).toEqual(["bp-1"]);
     expect(coverage.sample.count).toBe(1);
     expect(coverage.sample.entityIds.sort()).toEqual(["s-1", "s-2"]);

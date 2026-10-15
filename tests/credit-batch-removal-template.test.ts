@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { activityEvents, certifierProjects, creditBatches, facilities, feedstockTypes, productionProcesses } from "@/db/schema";
-import { createCreditBatch } from "@/data-access/credit-batches";
+import { createCreditBatch, updateCreditBatch } from "@/data-access/credit-batches";
 import { switchCreditBatchRemovalTemplate } from "@/data-access/credit-batch-removal-template";
 import { withLineageFixture } from "./helpers/certification-lineage-fixture";
 import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID, TEST_SITE_POSITION } from "./helpers/test-org";
@@ -12,6 +12,7 @@ const ctx = makeTestOrgContext();
 const tag = crypto.randomUUID().slice(0, 8).toUpperCase();
 let facilityId: string;
 let feedstockTypeId: string;
+const extraFacilityIds: string[] = [];
 const scope = () => and(eq(creditBatches.organizationId, ctx.organizationId), eq(creditBatches.facilityId, facilityId));
 beforeAll(async () => {
   await ensureTestOrg();
@@ -23,6 +24,13 @@ beforeAll(async () => {
 afterAll(async () => {
   await db.delete(activityEvents).where(and(eq(activityEvents.organizationId, ctx.organizationId), eq(activityEvents.facilityId, facilityId)));
   await db.delete(creditBatches).where(scope());
+  for (const id of extraFacilityIds) {
+    await db.delete(activityEvents).where(and(eq(activityEvents.organizationId, ctx.organizationId), eq(activityEvents.facilityId, id)));
+    await db.delete(creditBatches).where(and(eq(creditBatches.organizationId, ctx.organizationId), eq(creditBatches.facilityId, id)));
+    await db.delete(productionProcesses).where(and(eq(productionProcesses.organizationId, ctx.organizationId), eq(productionProcesses.facilityId, id)));
+    await db.delete(certifierProjects).where(and(eq(certifierProjects.organizationId, ctx.organizationId), eq(certifierProjects.facilityId, id)));
+    await db.delete(facilities).where(and(eq(facilities.organizationId, ctx.organizationId), eq(facilities.id, id)));
+  }
   await db.delete(productionProcesses).where(and(eq(productionProcesses.organizationId, ctx.organizationId), eq(productionProcesses.facilityId, facilityId)));
   await db.delete(certifierProjects).where(and(eq(certifierProjects.organizationId, ctx.organizationId), eq(certifierProjects.facilityId, facilityId)));
   await db.delete(facilities).where(and(eq(facilities.organizationId, ctx.organizationId), eq(facilities.id, facilityId)));
@@ -59,5 +67,46 @@ describe("credit batch Removal template pins", () => {
       const [batch] = await db.select().from(creditBatches).where(and(eq(creditBatches.organizationId, ctx.organizationId), eq(creditBatches.id, fixture.batchId)));
       await expect(switchCreditBatchRemovalTemplate(ctx, { creditBatchId: batch.id, removalTemplateId: "template-new", expectedVersion: batch.version })).rejects.toThrow("locked by a certification submission");
     }, "removal");
+  });
+  describe("facility moves", () => {
+    async function moveTarget(label: string, defaultTemplate: string | null) {
+      const [facility] = await db.insert(facilities).values({ ...TEST_SITE_POSITION, organizationId: TEST_ORG_ID, timezone: "UTC", code: `FAC-MV-${label}-${tag}`, name: `Move ${label} ${tag}` }).returning();
+      extraFacilityIds.push(facility.id);
+      if (defaultTemplate) {
+        await db.insert(certifierProjects).values({ organizationId: ctx.organizationId, facilityId: facility.id, provider: "isometric", externalProjectId: `project-mv-${label}-${tag}`, externalFacilityId: `facility-mv-${label}-${tag}`, defaultRemovalTemplateId: defaultTemplate });
+      }
+      return facility.id;
+    }
+    const pinOf = async (id: string) => (await db.select().from(creditBatches).where(and(eq(creditBatches.organizationId, ctx.organizationId), eq(creditBatches.id, id))))[0];
+    const updatedEvents = (id: string) => db.select().from(activityEvents).where(and(eq(activityEvents.organizationId, ctx.organizationId), eq(activityEvents.entityId, id), eq(activityEvents.action, "updated")));
+
+    it("replaces the pin with the new facility default and records removalTemplateId", async () => {
+      const batch = await create("05");
+      await db.update(creditBatches).set({ removalTemplateId: "template-old-pin" }).where(and(eq(creditBatches.organizationId, ctx.organizationId), eq(creditBatches.id, batch.id)));
+      const target = await moveTarget("a", "template-target-default");
+      await updateCreditBatch(ctx, batch.id, { facilityId: target, expectedVersion: (await pinOf(batch.id)).version });
+      const stored = await pinOf(batch.id);
+      expect(stored.facilityId).toBe(target);
+      expect(stored.removalTemplateId).toBe("template-target-default");
+      const events = await updatedEvents(batch.id);
+      expect(events).toHaveLength(1);
+      expect(events[0].changedFields).toEqual(expect.arrayContaining(["facilityId", "removalTemplateId"]));
+    });
+    it("clears the pin when the new facility has no default", async () => {
+      const batch = await create("06");
+      await db.update(creditBatches).set({ removalTemplateId: "template-old-pin" }).where(and(eq(creditBatches.organizationId, ctx.organizationId), eq(creditBatches.id, batch.id)));
+      const target = await moveTarget("b", null);
+      await updateCreditBatch(ctx, batch.id, { facilityId: target, expectedVersion: (await pinOf(batch.id)).version });
+      expect((await pinOf(batch.id)).removalTemplateId).toBeNull();
+    });
+    it("keeps the pin when the facility stays the same", async () => {
+      const batch = await create("07");
+      await db.update(creditBatches).set({ removalTemplateId: "template-kept-pin" }).where(and(eq(creditBatches.organizationId, ctx.organizationId), eq(creditBatches.id, batch.id)));
+      await updateCreditBatch(ctx, batch.id, { facilityId, siteManagementNotes: "same facility", expectedVersion: (await pinOf(batch.id)).version });
+      const stored = await pinOf(batch.id);
+      expect(stored.removalTemplateId).toBe("template-kept-pin");
+      expect(stored.siteManagementNotes).toBe("same facility");
+      for (const event of await updatedEvents(batch.id)) expect(event.changedFields).not.toContain("removalTemplateId");
+    });
   });
 });
