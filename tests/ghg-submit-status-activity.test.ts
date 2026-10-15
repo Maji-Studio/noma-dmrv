@@ -30,6 +30,7 @@ vi.mock("@/lib/isometric", async (importOriginal) => ({
 import * as registry from "@/lib/isometric";
 import { submitGhgStatementToVerifierCore } from "@/fn/certification/submit-ghg-statement";
 import { listEntityActivity } from "@/data-access/activity-events";
+import { TEST_SITE_POSITION } from "./helpers/test-org";
 
 const REGISTRY_AT = "2026-10-14T10:00:00Z";
 const REPORT_URL = "https://example.com/report.pdf";
@@ -44,6 +45,7 @@ beforeEach(async () => {
   await db.insert(organizations).values({ id, name: "Submit activity fixture", slug: id });
   facilityId = crypto.randomUUID();
   await db.insert(facilities).values({
+    ...TEST_SITE_POSITION,
     id: facilityId, organizationId: id, code: "ACTIVITY-TEST",
     name: "Submit activity facility", timezone: "UTC",
   });
