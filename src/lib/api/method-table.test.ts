@@ -80,7 +80,7 @@ it("exposes delivery creates and metadata patches without DELETE", async () => {
 });
 
 it("exposes document requests and keyless confirmations without delete or edit methods", () => {
-  for (const owner of ["feedstocks", "deliveries", "lab-samples"]) {
+  for (const owner of ["feedstocks", "deliveries", "lab-samples", "applications"]) {
     for (const suffix of ["", "/id", "/id/content"]) {
       expect(getApiMethodEntry(`/api/v1/${owner}/CODE/documents${suffix}`)).toMatchObject({
         methods: suffix ? ["GET", "HEAD", "OPTIONS"] : ["GET", "HEAD", "OPTIONS", "POST"],
@@ -90,5 +90,12 @@ it("exposes document requests and keyless confirmations without delete or edit m
     expect(getApiMethodEntry(`/api/v1/${owner}/CODE/documents/id/confirm`)).toMatchObject({
       methods: ["OPTIONS", "POST"], scopes: [`${owner}:write`], public: false,
     });
+  }
+});
+
+it("stages application resources as reads only until the REST write commit", () => {
+  for (const path of ["/applications", "/applications/AP-1", "/applications/AP-1/boundary", "/deliveries/DL-1/application-balance"]) {
+    expect(getApiMethodEntry(`/api/v1${path}`)).toMatchObject({ methods: ["GET", "HEAD", "OPTIONS"],
+      scopes: [path.startsWith("/applications") ? "applications:read" : "deliveries:read"] });
   }
 });

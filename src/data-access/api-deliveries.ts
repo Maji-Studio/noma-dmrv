@@ -1,4 +1,4 @@
-import { and, desc, eq, getTableColumns, gte, isNull, lt } from "drizzle-orm";
+import { and, desc, eq, getTableColumns, gt, gte, isNull, lt } from "drizzle-orm";
 import { db } from "@/db";
 import { deliveries, orders } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
@@ -6,10 +6,11 @@ import { DomainError } from "@/lib/domain-errors";
 import { requireOrgScope, type Executor } from "./utils";
 import { findApiOrder } from "./api-orders";
 import { findApiStorageLocation } from "./api-storage-locations";
+import { deliveryApplicationBalanceFields } from "./delivery-application-balance";
 import { lookupCursorCreatedAt, lookupPosition, lookupSearch, requireApiLookupFacility, type ApiLookupIdentifier, type ApiLookupPosition } from "./api-lookup-filters";
 
 export interface ApiDeliveryFilters {
-  q?: string; code?: string; facilityId?: string; orderId?: string; storageLocationId?: string; deliveredFrom?: string; deliveredBefore?: string;
+  q?: string; code?: string; facilityId?: string; orderId?: string; storageLocationId?: string; deliveredFrom?: string; deliveredBefore?: string; hasRemainingMass?: "true" | "false";
 }
 
 /** Archived deliveries remain readable by id or code. */
@@ -37,6 +38,8 @@ export async function listApiDeliveries(ctx: OrgContext, filters: ApiDeliveryFil
     filters.facilityId === undefined ? undefined : eq(deliveries.facilityId, filters.facilityId),
     filters.orderId === undefined ? undefined : eq(deliveries.orderId, filters.orderId),
     filters.storageLocationId === undefined ? undefined : eq(deliveries.storageLocationId, filters.storageLocationId),
+    filters.hasRemainingMass === undefined ? undefined : filters.hasRemainingMass === "true"
+      ? gt(deliveryApplicationBalanceFields(ctx).remainingWetMassKg, 0) : eq(deliveryApplicationBalanceFields(ctx).remainingWetMassKg, 0),
     filters.code === undefined ? undefined : eq(deliveries.code, filters.code),
     filters.deliveredFrom === undefined ? undefined : gte(deliveries.deliveryDate, new Date(filters.deliveredFrom)),
     filters.deliveredBefore === undefined ? undefined : lt(deliveries.deliveryDate, new Date(filters.deliveredBefore)),

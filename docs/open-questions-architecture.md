@@ -6,6 +6,16 @@ these areas; the entry rules and invariants live in
 
 ## Architecture
 
+### Align the Applications page credit batch filter (`app/application-batch-lineage-filter`, opened 2026-10-15)
+
+- `src/data-access/applications.ts:getApplications` filters by delivery lineage
+  (`inDeliveryCreditBatchLineage`), while the API uses each application's frozen
+  shares or slices (`inApplicationCreditBatchLineage` in
+  `src/data-access/credit-batch-lineage-filter.ts`). This includes mix-bin held-out
+  applications; `src/data-access/credit-batch-accounting.ts:loadCreditBatchAccounting`
+  requires a slice for its accounting view.
+- **Follow-up:** align the app page on `inApplicationCreditBatchLineage`.
+
 ### Simplification rollout follow-ups (`simplification/remaining-decisions`, opened 2026-10-14)
 
 - **A5:** Data-access consolidation is skipped for now. List-query duplication

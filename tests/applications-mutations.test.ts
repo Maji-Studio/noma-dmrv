@@ -8,6 +8,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import { getApplicationDeliveryOptions } from "@/data-access/applications";
+import { findApiDeliveryApplicationBalance } from "@/data-access/api-delivery-application-balance";
 import { applications } from "@/db/schema/application";
 import { certifierProjects } from "@/db/schema/certification";
 import { facilities } from "@/db/schema/facilities";
@@ -390,6 +391,9 @@ describe("application mutations", () => {
         destinationGpsLatitude: -3.3,
         destinationGpsLongitude: 37.3,
       });
+      const balance = await findApiDeliveryApplicationBalance(makeTestOrgContext(TEST_USER_ID), { id: fixture.deliveryIds[0] });
+      expect(balance.site).toMatchObject({ customerLocationId: fixture.customerLocationId,
+        gpsLatitude: deliveryOption!.destinationGpsLatitude, gpsLongitude: deliveryOption!.destinationGpsLongitude });
     } finally {
       await cleanupMutationFixture(fixture);
     }

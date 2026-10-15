@@ -89,9 +89,20 @@ export const deliveryListSchema = z.strictObject({
   ...paginationShape, facilityId: facilityIdSchema.describe("Shipping facility filter, UUID."), code: codeSchema,
   orderId: uuidSchema().optional().describe("Order filter, UUID."),
   storageLocationId: uuidSchema().optional().describe("Source product bin filter, UUID."),
+  hasRemainingMass: z.enum(["true", "false"]).optional().describe("true selects deliveries with at least 0.001 kg of remaining wet product mass. false selects exhausted deliveries. Uses the application balance arithmetic."),
   q: prefixSchema.describe("Case-insensitive literal prefix search on delivery code."),
   deliveredFrom: offsetInstantSchema().optional().describe("Only deliveries at or after this RFC 3339 instant with an explicit offset; encode + as %2B or use Z."),
   deliveredBefore: offsetInstantSchema().optional().describe("Only deliveries before this RFC 3339 instant with an explicit offset; encode + as %2B or use Z."),
+});
+export const applicationListSchema = z.strictObject({
+  ...paginationShape, facilityId: facilityIdSchema.describe("Delivery facility filter, UUID."), code: codeSchema,
+  deliveryId: uuidSchema().optional().describe("Source delivery filter, UUID."),
+  orderId: uuidSchema().optional().describe("Source delivery order filter, UUID."),
+  creditBatchId: uuidSchema().optional().describe("Application lineage filter, UUID. Matches applications whose frozen product shares come from a run in the credit batch or that hold a slice of it, including applications held out of credit batches because they draw from a mix bin. The representation does not say which applications are credited."),
+  evidenceMethod: z.enum(["location", "boundary", "visual"]).optional().describe("Stored evidence method filter, including legacy visual records."),
+  q: prefixSchema.describe("Case-insensitive literal prefix search on application code, field identifier or crop type."),
+  appliedFrom: orderedDateSchema.optional().describe("Applications on or after this calendar date, YYYY-MM-DD, on the delivery facility's clock."),
+  appliedBefore: orderedDateSchema.optional().describe("Applications before this calendar date, YYYY-MM-DD, on the delivery facility's clock. Exclusive upper bound."),
 });
 export const storageLocationListSchema = facilityLookupListSchema.extend({
   type: z.enum(storageLocationTypes).optional().describe("Material lane filter: feedstock_bin, biochar_bin or product_bin."),
@@ -101,6 +112,7 @@ export const outputStockMovementListSchema = z.strictObject(paginationShape);
 
 /** Shared by REST adapters and the public contract, without handler dependencies. */
 export const resourceQueries = {
+  applications: { list: applicationListSchema, get: lookupGetSchema },
   "production-runs": { list: productionRunListSchema, get: lookupGetSchema },
   reactors: { list: facilityLookupListSchema, get: lookupGetSchema },
   "biochar-products": { list: biocharProductListSchema, get: lookupGetSchema },

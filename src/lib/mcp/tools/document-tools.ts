@@ -30,7 +30,7 @@ const documentType = z.enum([...new Set(Object.values(API_DOCUMENT_OWNERS).flatM
 const unsupportedDryRun = controls.shape.dryRun.describe("Not supported; true is refused.");
 const ownerFields = {
   ownerType: z.enum(API_DOCUMENT_OWNER_TYPES),
-  ownerId: z.string().min(1).describe("Record UUID or exact code from find_deliveries, find_feedstocks or find_lab_samples."),
+  ownerId: z.string().min(1).describe("Record UUID or exact code from find_deliveries, find_feedstocks or find_lab_samples, or an application id from GET /applications."),
 };
 const ownerSchema = z.object({ ownerType: ownerFields.ownerType });
 const listInput = documentListSchema("delivery").extend({ ...ownerFields, documentType: documentType.optional() });

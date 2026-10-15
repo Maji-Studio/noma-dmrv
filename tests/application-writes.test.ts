@@ -4,7 +4,7 @@ import { getMixBinHeldApplicationIds } from "@/data-access/mix-bin-credit-hold";
 import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import { and, eq } from "drizzle-orm";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, expect, it, vi } from "vitest";
 import { db } from "@/db";
 import { applications, applicationOutputAllocations, creditBatchApplications, deliveries, documents, facilities, users, outputStockAllocations, soilTemperatureMeasurements } from "@/db/schema";
 import { getPgPoolConfig } from "@/lib/pg-pool-config";
@@ -144,8 +144,6 @@ it("allows metadata under a draft Removal and refuses a mass change", async () =
     await expect(runOperationInProcess(updateApplication, ctx, { applicationId: app.id, expectedVersion: saved.version, appliedWetMassKg: 1 }, options)).rejects.toMatchObject({ code: "certification_locked" });
   } finally { await cleanupLineageFixture(f); }
 });
-describe.todo("membership races move to artifacts before runs in commit 1b");
-
 it("recovers a forced auto-code collision inside its savepoint", () => fixtureTest(async f => {
   const existing = (await runOperationInProcess(recordApplication, ctx, input(f.deliveryIds[0], 1), options)).application;
   const original = writers.createApplicationInTransaction;

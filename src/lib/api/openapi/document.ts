@@ -1,4 +1,7 @@
 import { addDocumentReadPaths } from "./document-reads";
+import { addApplicationReadPaths } from "./application-reads";
+import { applicationBoundaryRepresentationSchema } from "@/lib/representations/applications";
+import { deliveryApplicationBalanceRepresentationSchema } from "@/lib/representations/delivery-application-balance";
 import { addDocumentWritePaths } from "./document-writes";
 import { documentRepresentationSchema } from "@/lib/representations/documents";
 import { customerLocationRepresentationSchema } from "@/lib/representations/customer-locations";
@@ -33,6 +36,7 @@ import { addLabSampleWritePaths } from "./lab-sample-writes";
 import { outputSchema, queryParameters, targetParameter, idempotencyParameter, ifMatchParameter, privateHeaders, requestIdHeader, etagHeader, stockEtagHeader, orderBalanceEtagHeader, writeHeaders, locationHeader, problemResponses, jsonResponse, headerComponents, problemResponseComponents } from "./transport";
 
 const resourceReadDescriptions: Partial<Record<(typeof resources)[number]["path"], { list: string; get: string }>> = {
+  applications: { list: `${readDescriptions.list} ${readDescriptions.applications}`, get: readDescriptions.applications },
   deliveries: { list: `${readDescriptions.list} ${readDescriptions.deliveries}`, get: readDescriptions.deliveries },
   orders: { list: `${readDescriptions.list} ${readDescriptions.orders}`, get: readDescriptions.orders },
   customers: { list: `${readDescriptions.list} ${readDescriptions.customers}`, get: readDescriptions.customers },
@@ -49,6 +53,8 @@ export function buildOpenApiDocument() {
   const published = resources;
   const representations: Record<string, z.ZodType> = Object.fromEntries(published.map((resource) => [resource.singular, resource.schema]));
   representations.document = documentRepresentationSchema;
+  representations.application_boundary = applicationBoundaryRepresentationSchema;
+  representations.delivery_application_balance = deliveryApplicationBalanceRepresentationSchema;
   representations.customer_location = customerLocationRepresentationSchema;
   representations.order_balance = orderBalanceRepresentationSchema;
   representations.supplier_location = supplierLocationRepresentationSchema;
@@ -128,6 +134,7 @@ export function buildOpenApiDocument() {
       [targetParameter(), ...queryParameters(resource.queries.get)],
     ) };
   }
+  addApplicationReadPaths(paths, publishOutput);
   addDocumentReadPaths(paths, publishOutput);
   paths["/customers/{idOrCode}/locations"] = { get: privateOperation(
     "find_customer_locations", "customers:read", readDescriptions.customerLocations,

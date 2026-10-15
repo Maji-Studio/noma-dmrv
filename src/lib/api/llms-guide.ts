@@ -76,9 +76,13 @@ ${biocharStockGuide}
 ${labSampleGuide}
 ${orderGuide}
 ${deliveryGuide}
+## Applications
+
+Find deliveries with GET /deliveries?hasRemainingMass=true, then read GET /deliveries/{idOrCode}/application-balance first. It returns remaining wet kilograms, the earliest application date and site defaults from one snapshot. Mass is wet kg of delivered product and dry biochar mass is derived by the server. Field size is hectares and applicationDate is a calendar date on the delivery facility's clock. GET /applications and /applications/{idOrCode} require applications:read. Full geometry is a separate read at /applications/{idOrCode}/boundary. Application photos and PDFs use /applications/{idOrCode}/documents with applications:read for reads and applications:write for upload requests and confirmation.
+
 ## Documents
 
-Documents belong to a record. Read them under /feedstocks/{idOrCode}/documents, /deliveries/{idOrCode}/documents or /lab-samples/{idOrCode}/documents using the record's read scope. Lists show uploaded files by default. Read one file at {record path}/documents/{documentId}. Its /content route redirects to a signed link that expires in ${DOCUMENT_DOWNLOAD_TTL_MINUTES} minutes; follow that link without the API key. Archived records remain readable.
+Documents belong to a record. Read them under /feedstocks/{idOrCode}/documents, /deliveries/{idOrCode}/documents, /lab-samples/{idOrCode}/documents or /applications/{idOrCode}/documents using the record's read scope. Lists show uploaded files by default. Read one file at {record path}/documents/{documentId}. Its /content route redirects to a signed link that expires in ${DOCUMENT_DOWNLOAD_TTL_MINUTES} minutes; follow that link without the API key. Archived records remain readable.
 
 ${DOCUMENT_GUIDANCE}
 

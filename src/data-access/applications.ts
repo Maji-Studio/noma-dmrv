@@ -1,7 +1,6 @@
 import { db } from "@/db";
 import { numericAggregate } from "@/db/aggregate";
 import { applications, type Application } from "@/db/schema/application";
-import { certifierProjects } from "@/db/schema/certification";
 import { facilities, storageLocations } from "@/db/schema/facilities";
 import { deliveries, orders } from "@/db/schema/logistics";
 import { customerLocations, customers } from "@/db/schema/parties";
@@ -17,6 +16,7 @@ import { applicationEvidenceGapCountSql } from "./application-evidence-sql";
 import { inDeliveryCreditBatchLineage } from "./credit-batch-lineage-filter";
 import { facilityTimestampDateExpr } from "./output-stock-dates";
 import { requireOrgScope } from "./utils";
+import { applicationSiteDefaultsQuery } from "./application-site-defaults";
 const DEFAULT_PAGE_SIZE = 100;
 
 export interface ApplicationDeliveryOptionData {
@@ -225,6 +225,8 @@ export async function getApplicationDeliveryOptions(
 ): Promise<ApplicationDeliveryOptionData[]> {
   requireOrgScope(ctx);
 
+  const site = applicationSiteDefaultsQuery(ctx).as("application_site_defaults");
+
   const conditions: SQL[] = [eq(deliveries.organizationId, ctx.organizationId), isNull(deliveries.archivedAt)];
   if (facilityId) {
     conditions.push(eq(deliveries.facilityId, facilityId));
@@ -248,30 +250,15 @@ export async function getApplicationDeliveryOptions(
         deliveredWetMassKg: deliveries.deliveredWetMassKg,
         orderQuantityKg: orders.quantityKg,
         moistureContentPercent: deliveries.moistureContentPercent,
-        defaultSoilTemperatureC: customerLocations.defaultSoilTemperatureC,
-        facilityDefaultSoilTemperatureC:
-          certifierProjects.defaultSoilTemperatureC,
-        destinationGpsLatitude: customerLocations.gpsLatitude,
-        destinationGpsLongitude: customerLocations.gpsLongitude,
+        defaultSoilTemperatureC: site.defaultSoilTemperatureC,
+        facilityDefaultSoilTemperatureC: site.facilityDefaultSoilTemperatureC,
+        destinationGpsLatitude: site.gpsLatitude,
+        destinationGpsLongitude: site.gpsLongitude,
       })
       .from(deliveries)
       .leftJoin(facilities, and(eq(facilities.id, deliveries.facilityId), eq(facilities.organizationId, ctx.organizationId)))
       .leftJoin(orders, and(eq(deliveries.orderId, orders.id), eq(orders.organizationId, ctx.organizationId)))
-      .leftJoin(
-        customerLocations,
-        and(
-          eq(customerLocations.id, orders.customerLocationId),
-          eq(customerLocations.organizationId, ctx.organizationId),
-        ),
-      )
-      .leftJoin(
-        certifierProjects,
-        and(
-          eq(certifierProjects.facilityId, deliveries.facilityId),
-          eq(certifierProjects.provider, "isometric"),
-          eq(certifierProjects.organizationId, ctx.organizationId),
-        ),
-      )
+      .leftJoin(site, eq(site.deliveryId, deliveries.id))
       .leftJoin(formulations, and(eq(formulations.id, sql`orders.formulation_id`), eq(formulations.organizationId, ctx.organizationId)))
       .leftJoin(
         storageLocations,
