@@ -349,14 +349,28 @@ Source visibility), `certifier_projects`,
 `certifier_ghg_statements`, `certifier_ghg_statement_reports`,
 `certifier_removals`, `certification_submissions`,
 `certifier_document_uploads`, `certifier_sync_events`,
-`certifier_production_batches`, `certifier_storage_locations`, and
-`certifier_biochar_applications`. The last three live in separate schema
-modules named after their tables. They are Isometric-specific registry journals
-and use provider payload types; `certification.ts` remains the provider-neutral
+`certifier_production_batches`, `certifier_storage_locations`,
+`certifier_biochar_applications`, and `removal_template_observations`. The last
+four live in separate schema modules named after their tables. They are
+Isometric-specific registry journals and template observations that use provider
+payload types; `certification.ts` remains the provider-neutral
 submission and configuration boundary. Purpose per table:
 [`schema-overview.md`](./schema-overview.md); submission-unit rationale:
 [ADR 0003](./adr/0003-removal-as-submission-unit.md), [ADR
 0008](./adr/0008-submission-ledger-internal-seam.md).
+
+`removal_template_observations` stores normalized Isometric templates, enriched
+input metadata, fingerprints and versioned component-ID line contracts. Reviews
+require Owner/Admin permission; compilation requires complete enrichment and
+valid contracts. See [ADR 0032](./adr/0032-per-batch-emissions-entries-bound-to-template-lines.md).
+
+`credit_batches.removal_template_id` pins the facility default at creation.
+Moving a batch to another facility copies the target facility's default and
+records the pin change in activity. Other pin changes use the audited Switch
+template action. Removals compile against their member batches' pins, never the
+current default. Pre-existing rows receive
+no backfill under the pre-production policy; local resets are supported and any
+shared staging reset requires notifying the user first.
 
 `certifier_biochar_applications` is an organization-scoped idempotency journal,
 not a second source of application facts. Every row links its Application and

@@ -10,6 +10,7 @@ export * from "./application";
 export * from "./auth";
 export * from "./bin-movements";
 export * from "./certification";
+export * from "./removal-template-observations";
 export * from "./certifier-biochar-applications";
 export * from "./certifier-production-batches";
 export * from "./certifier-storage-locations";

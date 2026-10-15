@@ -30,6 +30,9 @@ import {
   certifierRemovals,
 } from "@/db/schema/certification";
 import { facilities } from "@/db/schema/facilities";
+import { creditBatches } from "@/db/schema/credits";
+import { feedstockTypes } from "@/db/schema/feedstock";
+import { productionProcesses } from "@/db/schema/production-processes";
 import { acquireFacilityDurabilityLock } from "@/data-access/facility-durability-lock";
 import { markSubmissionRejected } from "@/data-access/certification";
 import { updateFacility } from "@/data-access/facilities";
@@ -248,49 +251,81 @@ async function whileHoldingMappingLock(
 }
 
 
+async function withPinnedBatch(
+  facilityId: string,
+  removalTemplateId: string,
+  run: (creditBatchId: string) => Promise<void>,
+): Promise<void> {
+  const runId = crypto.randomUUID().slice(0, 8);
+  const [feedstockType] = await db.insert(feedstockTypes).values({
+    organizationId: TEST_ORG_ID, code: `FT-CL-${runId}`, category: "forestry", name: `Claim pin ${runId}`, usage: "pyrolysis",
+  }).returning({ id: feedstockTypes.id });
+  const [process] = await db.insert(productionProcesses).values({
+    organizationId: TEST_ORG_ID, facilityId, feedstockTypeId: feedstockType.id,
+  }).returning({ id: productionProcesses.id });
+  const [batch] = await db.insert(creditBatches).values({
+    organizationId: TEST_ORG_ID, facilityId, code: `CB-CL-${runId}`, feedstockTypeId: feedstockType.id,
+    productionProcessId: process.id, startDate: "2026-09-01", endDate: "2026-09-30", removalTemplateId,
+  }).returning({ id: creditBatches.id });
+  try {
+    await run(batch.id);
+  } finally {
+    await db.delete(creditBatches).where(eq(creditBatches.id, batch.id));
+    await db.delete(productionProcesses).where(eq(productionProcesses.id, process.id));
+    await db.delete(feedstockTypes).where(eq(feedstockTypes.id, feedstockType.id));
+  }
+}
+
 beforeAll(() => ensureTestOrg());
 
 describe("claimSubmissionDraft — create path", () => {
-  it("throws when defaultRemovalTemplateId changed under the lock", async () => {
+  it("throws when a member batch's Removal template pin changed under the lock", async () => {
     const fixture = await createFixture();
-    await db
-      .update(certifierProjects)
-      .set({ defaultRemovalTemplateId: "rvt_other" })
-      .where(eq(certifierProjects.facilityId, fixture.facilityId));
+    await withPinnedBatch(fixture.facilityId, "rvt_pinned", async (creditBatchId) => {
+      await db
+        .update(creditBatches)
+        .set({ removalTemplateId: "rvt_other" })
+        .where(eq(creditBatches.id, creditBatchId));
 
-    await expect(
-      claimSubmissionDraft(
+      await expect(
+        claimSubmissionDraft(
+          makeTestOrgContext(USER_ID),
+          baseArgs(fixture, {
+            guard: {
+              ...fixture.guard,
+              expectedRemovalTemplatePin: { creditBatchIds: [creditBatchId], templateId: "rvt_pinned" },
+            },
+          }),
+        ),
+      ).rejects.toMatchObject({
+        message: expect.stringMatching(/template changed/i),
+      });
+      expect(await listRows(fixture.key)).toHaveLength(0);
+    });
+  });
+
+  it("ignores the facility default Removal template", async () => {
+    const fixture = await createFixture();
+    await withPinnedBatch(fixture.facilityId, "rvt_pinned", async (creditBatchId) => {
+      await db
+        .update(certifierProjects)
+        .set({ defaultRemovalTemplateId: "rvt_other" })
+        .where(eq(certifierProjects.facilityId, fixture.facilityId));
+
+      // A default change only affects batches created afterwards.
+      const outcome = await claimSubmissionDraft(
         makeTestOrgContext(USER_ID),
         baseArgs(fixture, {
           guard: {
             ...fixture.guard,
-            expectedDefaultRemovalTemplateId: "rvt_default",
+            expectedRemovalTemplatePin: { creditBatchIds: [creditBatchId], templateId: "rvt_pinned" },
           },
         }),
-      ),
-    ).rejects.toMatchObject({
-      message: expect.stringMatching(/template changed/i),
+      );
+
+      expect(outcome).toMatchObject({ kind: "claimed", resumed: false });
+      expect(await listRows(fixture.key)).toHaveLength(1);
     });
-    expect(await listRows(fixture.key)).toHaveLength(0);
-  });
-
-  it("ignores defaultRemovalTemplateId when the guard omits it", async () => {
-    const fixture = await createFixture();
-    await db
-      .update(certifierProjects)
-      .set({ defaultRemovalTemplateId: "rvt_other" })
-      .where(eq(certifierProjects.facilityId, fixture.facilityId));
-
-    // GHG Statement creation omits the template guard. Exercise that same
-    // guard shape with a Removal claim, independently of submission type.
-    expect(fixture.guard).not.toHaveProperty("expectedDefaultRemovalTemplateId");
-    const outcome = await claimSubmissionDraft(
-      makeTestOrgContext(USER_ID),
-      baseArgs(fixture),
-    );
-
-    expect(outcome).toMatchObject({ kind: "claimed", resumed: false });
-    expect(await listRows(fixture.key)).toHaveLength(1);
   });
 
   it("claims a v=1 draft on first submit and persists the built snapshot", async () => {

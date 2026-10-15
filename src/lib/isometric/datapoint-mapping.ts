@@ -1,21 +1,9 @@
+import { REMOVAL_TEMPLATE_BLOCKERS } from "@/lib/certification/removal-template-blockers";
+import { effectiveContract, type LineContract } from "./template-observations/line-sources";
+import { automaticSourceFact } from "./template-observations/catalog-sources";
 import { SafeError } from "@/lib/errors";
 import type { AggregatedProductionData } from "./utils/aggregation";
-import { normalizeComponentDisplayName, ownValue, SEMANTIC_BINDING_CATALOG } from "./semantic-binding-catalog";
 import { lookupBindingTriple, projectInputMapping, projectPeriodInputTuples, type InputMappingEntry, type InputMappingTable } from "./semantic-binding-projections";
-
-// Keep display copy outside INPUT_MAPPING: its serialized shape determines the
-// mapping revision, which must only change when bindings change.
-const COMPONENT_DISPLAY_NAMES = new Map(
-  Object.values(SEMANTIC_BINDING_CATALOG).flatMap((inputs) =>
-    Object.values(inputs).flatMap((input) =>
-      Object.values(input.roles).flatMap((role) =>
-        role.strategy === "aggregated-datapoint" && role.disambiguation
-          ? Object.keys(role.disambiguation.sources).map((name) => [normalizeComponentDisplayName(name), name] as const)
-          : [],
-      ),
-    ),
-  ),
-);
 
 // Maps (group_key, blueprint_key, input_key) tuples to a noma aggregated
 // source field. A projection of the semantic binding catalog
@@ -33,61 +21,40 @@ export function lookupInputMapping(
   groupKey: string,
   blueprintKey: string,
   inputKey: string,
+  contract?: LineContract,
 ): InputMappingEntry | undefined {
-  return lookupBindingTriple(
+  const mapping = lookupBindingTriple(
     INPUT_MAPPING,
     groupKey,
     blueprintKey,
     inputKey,
   );
+  if (!mapping || !contract) return mapping;
+  const effective = effectiveContract(contract);
+  if (effective.scope !== "operating") return undefined;
+  if (effective.automaticSource === "sequestration") return mapping;
+  if (effective.automaticSource) return { ...mapping, source: automaticSourceFact(effective.automaticSource), sourceByComponent: undefined };
+  // A contract without an automatic source is entry-only; the catalog default
+  // would feed one total to every such line (two sample shipping lines).
+  return undefined;
 }
 
-// Resolves the aggregated-source field for a mapping. Usually just
-// `mapping.source`; when the mapping carries a per-component override (the
-// catalog's disambiguation rule for a triple declared by >1 template
-// component — e.g. the pyrolysis diesel split), it resolves by normalized
-// component display name and FAILS CLOSED on an
-// unrecognized name so a rename/added component can never silently double-count
-// or land in the wrong bucket.
+// Shared triples require an effective automatic contract, including diesel.
 export function resolveDatapointSource(
   mapping: InputMappingEntry,
-  componentDisplayName: string | undefined,
+  contract?: LineContract,
 ): keyof AggregatedProductionData {
-  if (!mapping.sourceByComponent) return mapping.source;
-  const normalized = normalizeComponentDisplayName(componentDisplayName);
-  const resolved = ownValue(mapping.sourceByComponent, normalized);
-  if (!resolved) {
-    throw new SafeError(`The pyrolysis diesel component is not recognized. ${componentRenameGuidance(mapping)}`);
+  const effective = contract && effectiveContract(contract);
+  if (effective?.scope === "operating" && effective.automaticSource === "sequestration") return mapping.source;
+  if (effective?.scope === "operating" && effective.automaticSource) return automaticSourceFact(effective.automaticSource);
+  if (contract || mapping.sourceByComponent) {
+    throw new SafeError(REMOVAL_TEMPLATE_BLOCKERS.templateLinesNeedReview);
   }
-  return resolved;
+  return mapping.source;
 }
 
-/** Shared rename guidance for the builder and early template coverage. */
-export function componentRenameGuidance(
-  mapping: InputMappingEntry,
-  { count = 1, takenNames = [] }: { count?: number; takenNames?: readonly string[] } = {},
-): string | undefined {
-  const taken = new Set(takenNames.map(normalizeComponentDisplayName));
-  const names = Object.keys(mapping.sourceByComponent ?? {})
-    .map((name) => COMPONENT_DISPLAY_NAMES.get(name) ?? name)
-    .filter((name) => !taken.has(normalizeComponentDisplayName(name)));
-  if (names.length < count) return undefined;
-  const expected = names.map((name) => `"${name}"`).join(", ");
-  return `Rename ${count > 1 ? "each one" : "it"} in Isometric to ${names.length === 1 ? expected : `one of these names: ${expected}`}.`;
-}
-
-// Tuples that lived in INPUT_MAPPING as `zeroStub: true` families before ADR
-// 0005. Their data lives as `PROJECT`-scope Components authored and sourced
-// entirely in the Isometric UI (ADR 0018 - noma keeps no copy), except for an
-// explicitly named component in a mapping's `sourceByComponent` carve-out. A
-// Removal Template that declares any other component for these tuples is wrong
-// by construction. `buildCreateDatapointRequest` consults this set before the
-// INPUT_MAPPING lookup, so a conflicting entry without a named carve-out can
-// never bypass the guard and the resulting `SafeError` names the canonical
-// scope rather than just "missing mapping".
-//
-// A projection of the catalog's project-scope roles (ADR 0018): edit the
-// catalog, never this table.
+// Project-scope tuples remain registry-authored. An effective automatic
+// contract is the only carve-out; display labels carry no binding authority.
 const PERIOD_INPUT_TUPLES = projectPeriodInputTuples();
 
 /** ADR 0005: only sandbox submissions may use zero stubs for period inputs. */
@@ -99,12 +66,7 @@ export function lookupPeriodInputTuple(
   groupKey: string,
   blueprintKey: string,
   inputKey: string,
-  // Template component display name. A period tuple is released from the
-  // PROJECT-scope guard ONLY when an INPUT_MAPPING entry for the same triple
-  // names this exact component in `sourceByComponent` - i.e. the carve-out is
-  // per component, never per tuple. Omitting the name keeps the guard armed
-  // (fail-closed default).
-  componentDisplayName?: string,
+  contract?: LineContract,
 ): { category: string } | undefined {
   const tuple = lookupBindingTriple(
     PERIOD_INPUT_TUPLES,
@@ -113,10 +75,7 @@ export function lookupPeriodInputTuple(
     inputKey,
   );
   if (!tuple) return undefined;
-  const carveOut = lookupInputMapping(groupKey, blueprintKey, inputKey)
-    ?.sourceByComponent;
-  const normalized = normalizeComponentDisplayName(componentDisplayName);
-  if (carveOut && ownValue(carveOut, normalized)) return undefined;
+  const effective = contract && effectiveContract(contract);
+  if (effective?.scope === "operating" && effective.automaticSource) return undefined;
   return tuple;
 }
-
