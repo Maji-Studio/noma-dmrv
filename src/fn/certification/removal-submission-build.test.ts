@@ -108,8 +108,9 @@ describe("buildRemovalSubmissionBuild", () => {
       } as never,
     );
 
-    expect(blocker).toMatch(/uses 200-year durability/i);
-    expect(blocker).toMatch(/biochar_sequestration_1000_year/);
+    expect(blocker).toBe(
+      `This facility uses 200-year durability, but the credit batch's Removal template uses an incompatible storage component (${CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR}). Switch the credit batch to a 200-year template or change the facility's durability tier.`,
+    );
   });
 
   it("does not accept the deprecated key for a newly configured 1,000-year template", () => {
@@ -131,8 +132,9 @@ describe("buildRemovalSubmissionBuild", () => {
       } as never,
     );
 
-    expect(blocker).toMatch(/incompatible storage component/i);
-    expect(blocker).toContain(DEPRECATED_SEQUESTRATION_BLUEPRINT_1000_YEAR);
+    expect(blocker).toBe(
+      `This facility uses 1000-year durability, but the credit batch's Removal template uses an incompatible storage component (${DEPRECATED_SEQUESTRATION_BLUEPRINT_1000_YEAR}). Switch the credit batch to a 1000-year template or change the facility's durability tier.`,
+    );
   });
 
   it("returns compile blockers instead of constructing transport for missing readiness", async () => {

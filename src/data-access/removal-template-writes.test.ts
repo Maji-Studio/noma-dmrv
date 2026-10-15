@@ -68,6 +68,25 @@ describe("Removal template write boundaries", () => {
     expect(mocks.update).not.toHaveBeenCalled();
   });
 
+  it("saves line review when a fixed value must be set in Isometric", async () => {
+    const row = observation();
+    row.definition.groups = row.definition.groups.filter((group) => group.key === "pyrolysis");
+    row.definition.groups[0].components = row.definition.groups[0].components.filter((component) => component.id === GENSET);
+    const fixed = row.definition.groups[0].components[0].inputs.find((input) => input.type === "fixed")!;
+    delete fixed.fixedDatapointId;
+    row.enrichment = { [GENSET]: { volume_of_fuel: { unit: "l", fixedValue: 1 } } };
+    row.lineSources = { [GENSET]: { scope: "unassigned", entryPolicy: "none", origin: "proposed" } };
+    mocks.select.mockReturnValueOnce(query([row])).mockReturnValueOnce(query([row])).mockReturnValueOnce(query([{ id: row.id }]));
+    const updated = { set: vi.fn().mockReturnThis(), where: vi.fn().mockReturnThis(), returning: vi.fn().mockResolvedValue([row]) };
+    mocks.update.mockReturnValue(updated);
+    await expect(reviewLineContracts(ctx, { observationId: row.id, expectedVersion: row.version,
+      assignments: { [GENSET]: { scope: "operating", automaticSource: "run-genset-diesel", entryPolicy: "additive" } },
+    })).resolves.toEqual(row);
+    expect(updated.set).toHaveBeenCalledWith(expect.objectContaining({ lineSources: {
+      [GENSET]: { scope: "operating", automaticSource: "run-genset-diesel", entryPolicy: "additive", origin: "reviewed" },
+    } }));
+  });
+
   it.each(["batch", "facility"])("refuses a template switch on an archived %s with the current version", async (archived) => {
     const batch = { id: "batch-1", version: 4, facilityId: "facility-1", archivedAt: archived === "batch" ? new Date() : null };
     mocks.select.mockReturnValueOnce(query([{ facilityId: batch.facilityId }])).mockReturnValueOnce(query([batch]));

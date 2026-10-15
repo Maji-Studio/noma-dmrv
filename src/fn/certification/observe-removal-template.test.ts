@@ -34,6 +34,16 @@ describe("template enrichment reuse", () => {
     expect(loadTemplateEnrichment).not.toHaveBeenCalled();
     expect(observeTemplate).toHaveBeenCalledWith(ctx, expect.objectContaining({ enrichment, enrichmentReused: true }));
   });
+  it("reuses enrichment when a fixed input has no datapoint to read", async () => {
+    const changed = structuredClone(template);
+    const component = changed.groups[0].components[0];
+    component.inputs.push({ input_key: "grid_carbon_intensity", type: "fixed", quantity_kind: "energy_carbon_emission_factor", datapoint_id: null, display_name: "Grid carbon intensity" });
+    const cached = { [component.id]: { ...enrichment[component.id], grid_carbon_intensity: { status: "unknown" as const } } };
+    vi.mocked(getLatestTemplateObservation).mockResolvedValue(previous(0, { definition: normalizeTemplateDefinition(changed), enrichment: cached }));
+    await observeRemovalTemplate(ctx, { ...input, template: changed });
+    expect(loadTemplateEnrichment).not.toHaveBeenCalled();
+    expect(observeTemplate).toHaveBeenCalledWith(ctx, expect.objectContaining({ enrichment: cached, enrichmentReused: true }));
+  });
   it("re-reads enrichment for submission even inside the complete cache TTL", async () => {
     vi.mocked(getLatestTemplateObservation).mockResolvedValue(previous(0));
     const refreshed = { [group.components[0].id]: { electricity_use: { unit: "MWh", deprecated: null } } };

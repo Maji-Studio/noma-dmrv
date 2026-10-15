@@ -5,6 +5,7 @@ export const REMOVAL_TEMPLATE_BLOCKERS = {
   mixedTemplatePins: "These credit batches use different Removal templates.",
   templateNotFound: "Template no longer exists in Isometric.",
   templateNotFullyRead: "Template not fully read. Try again.",
+  missingFixedDatapoint: "Set each value in the Isometric template editor before submitting.",
   templateLinesNeedReview: "Review the Removal template lines in Certification settings.",
 } as const;
 export type RemovalTemplateBlockerCode = keyof typeof REMOVAL_TEMPLATE_BLOCKERS;
@@ -25,6 +26,8 @@ const BLOCKER_DESTINATIONS: Record<RemovalTemplateBlockerCode, RemovalTemplateBl
   mixedTemplatePins: "creditBatchTemplate",
   templateNotFound: "creditBatchTemplate",
   templateNotFullyRead: "templateLineReview",
+  // Line review cannot supply a fixed value. The operator can switch to a corrected template.
+  missingFixedDatapoint: "creditBatchTemplate",
   templateLinesNeedReview: "templateLineReview",
 };
 export function removalTemplateBlockerDestination(code: RemovalTemplateBlockerCode): RemovalTemplateBlockerDestination {

@@ -11,7 +11,7 @@ import {
 } from "@/lib/entity-deep-link";
 import { sampleCreateHref } from "@/lib/sample-create-intent";
 import { creditBatchRemovalTemplateHref } from "@/lib/credit-batch-links";
-import { certificationEmissionEstimatesHref, certificationRemovalTemplatesHref, certificationSettingsHref, CERTIFICATION_SETTINGS_TEMPLATE_MAPPING_SECTION } from "./links";
+import { certificationEmissionEstimatesHref, certificationRemovalTemplatesHref } from "./links";
 
 export interface BatchHealthFixLink {
   label: string;
@@ -75,7 +75,7 @@ export function batchHealthFixLinkFor(
   };
   switch (target) {
     case "certificationTemplates":
-      return { label: "Review Removal templates", href: certificationSettingsHref(facilityId, CERTIFICATION_SETTINGS_TEMPLATE_MAPPING_SECTION) };
+      return { label: "Review Removal templates", href: certificationRemovalTemplatesHref(facilityId) };
     case "creditBatchTemplate":
       return creditBatchId
         ? { label: "Switch template", href: creditBatchRemovalTemplateHref(creditBatchId, facilityId) }

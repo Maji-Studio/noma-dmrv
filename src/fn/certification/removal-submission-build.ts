@@ -239,9 +239,9 @@ export function removalTemplateTierCompatibilityBlocker(
 
   const tierLabel = facilityTier === "1000_year" ? "1000-year" : "200-year";
   return (
-    `This facility uses ${tierLabel} durability, but its default Removal ` +
+    `This facility uses ${tierLabel} durability, but the credit batch's Removal ` +
     `template uses an incompatible storage component (${mismatched}). ` +
-    `Choose a ${tierLabel} template or change the facility's durability tier.`
+    `Switch the credit batch to a ${tierLabel} template or change the facility's durability tier.`
   );
 }
 

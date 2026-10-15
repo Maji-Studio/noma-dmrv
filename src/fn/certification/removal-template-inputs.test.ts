@@ -7,6 +7,7 @@ import { normalizeTemplateDefinition, resolveLineSources, validateLineSources, t
 import type { AggregatedProductionData } from "@/lib/isometric/utils/aggregation";
 import type { IsometricComponentBlueprint } from "@/lib/isometric/projects";
 import { resolveTemplateInputs } from "./removal-template-inputs";
+import { REMOVAL_TEMPLATE_BLOCKERS } from "@/lib/certification/removal-template-blockers";
 
 const sandbox = sandboxFixture as GhgEntryTemplate;
 const cula = culaFixture as GhgEntryTemplate;
@@ -35,6 +36,15 @@ function compile(template: GhgEntryTemplate, lineSources: LineSources) {
     externalProjectId: template.project_id, sourceIds: [], sourceBindingPlan: [], allowPeriodInputStub: false, omitProductionComponents: false,
   });
 }
+
+it("keeps the shared Isometric-editor guidance for an unset fixed value during compilation", () => {
+  const changed = structuredClone(sandbox);
+  changed.groups = changed.groups.filter((group) => group.key === "pyrolysis");
+  changed.groups[0].components = changed.groups[0].components.filter((component) => component.blueprint_key === "grid_electricity_use");
+  changed.groups[0].components[0].inputs.find((input) => input.type === "fixed")!.datapoint_id = null;
+  const lineSources = resolveLineSources({ definition: normalizeTemplateDefinition(changed) });
+  expect(() => compile(changed, lineSources)).toThrow(REMOVAL_TEMPLATE_BLOCKERS.missingFixedDatapoint);
+});
 
 it.each([["sandbox 15 Oct", sandbox], ["Cula", cula]] as const)("compiles supported automatic lines from %s without a global shape assumption", (_, fixture) => {
   const definition = normalizeTemplateDefinition(fixture);

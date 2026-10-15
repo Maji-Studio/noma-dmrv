@@ -5,7 +5,7 @@ import type { IsometricClient } from "../client";
 import type { IsometricComponentBlueprint } from "../projects";
 import type { Datapoint } from "../submissions";
 import { loadTemplateEnrichment } from "./load-enrichment";
-import { isEnrichmentComplete } from "./enrichment";
+import { enrichmentProblems, isEnrichmentComplete } from "./enrichment";
 import { CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR } from "../storage-blueprints";
 import { normalizeTemplateDefinition } from "./normalize";
 import { canonicalUnit, unitsConvertible } from "./units";
@@ -57,6 +57,19 @@ describe("real template enrichment", () => {
       if (input.fixedDatapointId === failedId) expect(enrichment[component.id][input.key]).toEqual({ status: "unknown" });
       else expect(enrichment[component.id][input.key]).not.toHaveProperty("status");
     }
+  });
+  it("fully reads a template with an unset fixed value without retrying that input", async () => {
+    const changed = structuredClone(template);
+    const fixed = changed.groups.flatMap((group) => group.components).flatMap((component) => component.inputs)
+      .find((input) => input.type === "fixed")!;
+    const removedId = fixed.datapoint_id!;
+    fixed.datapoint_id = null;
+    const { api, get } = client();
+    const enrichment = await loadTemplateEnrichment(api, changed, blueprints);
+    const definition = normalizeTemplateDefinition(changed);
+    expect(isEnrichmentComplete(definition, enrichment)).toBe(true);
+    expect(enrichmentProblems(definition, enrichment)).toEqual([]);
+    expect(get.mock.calls.some(([path]) => path.endsWith(removedId))).toBe(false);
   });
 });
 

@@ -20,6 +20,9 @@ export function resolveRemovalTemplate(
   if (!facts) return unresolved("templateNotFound");
   const templateBlockers: RemovalTemplateBlocker[] = [];
   if (!facts.observation || facts.enrichmentProblems.length) templateBlockers.push(removalTemplateBlocker("templateNotFullyRead"));
+  if (facts.template.groups.some((group) => group.components.some((component) =>
+    component.inputs.some((input) => input.type === "fixed" && !input.datapoint_id),
+  ))) templateBlockers.push(removalTemplateBlocker("missingFixedDatapoint"));
   if (facts.lineSourceProblems.length) {
     templateBlockers.push(removalTemplateBlocker("templateLinesNeedReview"));
   }

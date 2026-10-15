@@ -163,7 +163,7 @@ export function resolveTemplateInputs(args: {
       new Set(unboundFixedInputs.map((input) => input.component)),
     ).join(", ");
     throw new SafeError(
-      `Removal template "${template.display_name}" has ${unboundFixedInputs.length} fixed ${pluralize(unboundFixedInputs.length, "value")} missing in ${components}. Set each value in the Isometric template editor before submitting.`,
+      `Removal template "${template.display_name}" has ${unboundFixedInputs.length} fixed ${pluralize(unboundFixedInputs.length, "value")} missing in ${components}. ${REMOVAL_TEMPLATE_BLOCKERS.missingFixedDatapoint}`,
     );
   }
 

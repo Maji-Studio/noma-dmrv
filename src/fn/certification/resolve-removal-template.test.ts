@@ -3,13 +3,15 @@ import templateFixture from "../../../tests/fixtures/isometric/sandbox-template-
 import type { FacilityCertifierFacts } from "./facility-certifier-facts";
 import { resolveRemovalTemplate } from "./resolve-removal-template";
 import { pinnedRemovalTemplateId } from "./removal-submission-finalization";
-import { normalizeTemplateDefinition, resolveLineSources, validateLineSources, type GhgEntryTemplate } from "@/lib/isometric/template-observations";
+import { enrichmentProblems, normalizeTemplateDefinition, resolveLineSources, validateLineSources, type GhgEntryTemplate } from "@/lib/isometric/template-observations";
 import { findUnbindableTemplateInputs, formatUnbindableTemplateInputsText } from "@/lib/isometric/template-binding-coverage";
 import { buildRemovalRequirementsChecklist, deriveRemovalReadiness } from "@/lib/certification/readiness";
 import { deriveBatchHealth } from "@/lib/certification/batch-health";
 import { toBatchHealthFacts } from "@/lib/certification/batch-health-facts";
 import { batchHealthFixLinkFor } from "@/lib/certification/batch-health-links";
 import { certificationRemovalTemplatesHref } from "@/lib/certification/links";
+import { REMOVAL_TEMPLATE_BLOCKERS } from "@/lib/certification/removal-template-blockers";
+import { creditBatchRemovalTemplateHref } from "@/lib/credit-batch-links";
 
 const template = templateFixture as GhgEntryTemplate;
 
@@ -52,6 +54,45 @@ describe("Removal template pins", () => {
     input.templatesById[template.id]!.lineSourceProblems = [{ code: "unassigned", componentId: "line" }];
     expect(resolveRemovalTemplate([{ removalTemplateId: template.id }], input).templateBlockers.map((blocker) => blocker.code))
       .toEqual(["templateNotFullyRead", "templateLinesNeedReview"]);
+  });
+  it("surfaces an unset fixed value as an Isometric-editor blocker, with a batch template repair link", () => {
+    const changed = structuredClone(template);
+    changed.groups = changed.groups.filter((group) => group.key === "pyrolysis");
+    changed.groups[0].components = changed.groups[0].components.filter((component) => component.blueprint_key === "grid_electricity_use");
+    const component = changed.groups[0].components[0];
+    component.inputs.find((input) => input.type === "fixed")!.datapoint_id = null;
+    const definition = normalizeTemplateDefinition(changed);
+    const lineSources = resolveLineSources({ definition });
+    const enrichment = { [component.id]: { electricity_use: { unit: "kWh" }, grid_carbon_intensity: { status: "unknown" as const } } };
+    const input = facts();
+    const templateFacts = input.templatesById[template.id]!;
+    templateFacts.template = changed;
+    templateFacts.observation = { ...templateFacts.observation!, definition, enrichment, lineSources };
+    templateFacts.enrichmentProblems = enrichmentProblems(definition, enrichment);
+    templateFacts.lineSourceProblems = validateLineSources(definition, lineSources);
+    const resolved = resolveRemovalTemplate([{ removalTemplateId: template.id }], input);
+    expect(resolved.templateBlockers).toEqual([{
+      code: "missingFixedDatapoint", message: REMOVAL_TEMPLATE_BLOCKERS.missingFixedDatapoint,
+    }]);
+    const readiness = {
+      local: null, lockInFlight: false, hasMapping: true, hasOrgCredentials: true, hasRemovalTemplate: true,
+      hasSubmittableRuns: true, requiredTransport: [], feedstockTypeMappingGaps: [], ...resolved,
+    };
+    expect(deriveRemovalReadiness(readiness).state).toBe("blocked");
+    const check = buildRemovalRequirementsChecklist(readiness).find((check) => check.key === "template")!;
+    expect(check.detail).toContain("Set each value in the Isometric template editor before submitting.");
+    expect(check.detail).not.toContain("Try again");
+    expect(check.templateBlockerCodes).toEqual(["missingFixedDatapoint"]);
+    const health = deriveBatchHealth(toBatchHealthFacts({
+      ...resolved, mapping: {}, memberBatches: [{ id: "batch-1", code: "CB-1" }],
+      hasSubmittableRuns: true, submissionLineageBlockers: [], durabilityConfigurationBlockers: [],
+      entityReadinessGaps: [], requiredTransportCategories: [],
+    } as unknown as import("./certify-context").RemovalCertifyContext, "batch-1"));
+    const batchCheck = health.checks.find((check) => check.key === "template")!;
+    expect(batchCheck).toMatchObject({ status: "unmet", detail: REMOVAL_TEMPLATE_BLOCKERS.missingFixedDatapoint });
+    expect(batchHealthFixLinkFor(batchCheck, "facility-1", "batch-1")).toEqual({
+      label: "Switch template", href: creditBatchRemovalTemplateHref("batch-1", "facility-1"),
+    });
   });
 });
 

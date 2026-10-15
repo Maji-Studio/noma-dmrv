@@ -3,7 +3,7 @@ import { canonicalDecimal, canonicalUnit } from "./units";
 import type { InputEnrichment, TemplateDefinition, TemplateEnrichment, TemplateInput } from "./types";
 
 export interface EnrichmentProblem {
-  code: "unknown-enrichment" | "unknown-unit" | "missing-fixed-value" | "missing-fixed-datapoint";
+  code: "unknown-enrichment" | "unknown-unit" | "missing-fixed-value";
   componentId: string;
   inputKey: string;
 }
@@ -27,9 +27,10 @@ export function enrichmentProblems(definition: TemplateDefinition, enrichment: T
   for (const group of definition.groups) {
     for (const component of group.components) {
       for (const input of component.inputs) {
+        // An absent fixed datapoint is a template defect, not a failed registry read.
+        if (input.type === "fixed" && !input.fixedDatapointId) continue;
         const ref = { componentId: component.id, inputKey: input.key };
         const enriched = inputEnrichment(enrichment, component.id, input.key);
-        if (input.type === "fixed" && !input.fixedDatapointId) problems.push({ ...ref, code: "missing-fixed-datapoint" });
         if (!enriched || "status" in enriched) {
           problems.push({ ...ref, code: "unknown-enrichment" });
           continue;

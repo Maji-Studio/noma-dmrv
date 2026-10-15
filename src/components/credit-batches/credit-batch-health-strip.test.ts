@@ -55,6 +55,13 @@ describe("batchHealthFixLinkFor", () => {
     affectedRecords,
   });
 
+  it.each([undefined, "certificationTemplates"] as const)("routes template target %s to Removal templates", (target) => {
+    expect(batchHealthFixLinkFor(check("template", target), facilityId)).toEqual({
+      label: "Review Removal templates",
+      href: `/certification/settings?section=removal-templates&facility=${facilityId}`,
+    });
+  });
+
   it("routes a carbon check with no explicit fixTarget to Lab Samples", () => {
     const link = batchHealthFixLinkFor(
       check("carbon"),
