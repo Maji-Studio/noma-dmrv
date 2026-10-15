@@ -1009,6 +1009,13 @@
       "when": 1792068476828,
       "tag": "0143_require_party_location_fields",
       "breakpoints": true
+    },
+    {
+      "idx": 144,
+      "version": "7",
+      "when": 1792071312713,
+      "tag": "0144_feedstock_intake_required_fields",
+      "breakpoints": true
     }
   ]
 }
