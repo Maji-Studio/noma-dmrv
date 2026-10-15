@@ -82,6 +82,19 @@ facility IDs, unsupported reactor types, or unsupported feedstock categories
 exist. Run `pnpm db:reset` locally; shared staging uses the manual reset workflow
 in [database.md](./database.md), announced first.
 
+Migration `0147_feedstock_intake_required_fields` makes the five intake columns
+`feedstocks.delivery_date`, `supplier_id`, `mass_wet_kg`,
+`moisture_content_percent`, and `storage_location_id` NOT NULL, requires moisture
+below 100%, and adds a CHECK requiring `bin_movements.occurred_at` for
+feedstock-lane losses. It drops intake GPS, CO2e, source-region, counterfactual,
+market-leakage, baseline and eligibility columns (and the eligibility enum),
+transport-leg bill-of-lading and weigh-scale reference columns, and the bin
+supplier-reference column. Feedstock-lane losses without an event time get
+their `created_at` (the time the ledger already used) before the CHECK is added;
+Kenji chose that one backfill on 2026-10-15. It fails on rows that violate the
+other requirements. Run `pnpm db:reset` locally; shared staging uses the manual
+reset workflow in [database.md](./database.md), announced first.
+
 Production starts have no database time default. Physical feedstock sources
 live only in `production_run_feedstock_draws`; the run stores their total wet
 mass. Database CHECKs keep run moisture at or above 0% and below 100%.
@@ -111,8 +124,11 @@ All four tables live in `src/db/schema/api.ts`:
 `activity_events` stores org-scoped, value-free entity changes, status
 transitions and actor/source attribution. The caller's transaction owns each
 insert; reads order by `occurred_at` then unique `sequence`, newest first.
-The organization FK cascades on delete; the nullable facility reference uses a
-same-organization composite FK. Entity references survive deletes. Entity types
+The organization FK cascades on delete; the nullable facility reference deliberately
+has no FK to avoid deadlocks against facility archive/restore. `recordActivity`
+checks same-org facility ownership with a non-locking read in the caller's
+transaction, including archived facilities. Facilities are never hard-deleted;
+entity references survive deletes. Entity types
 use canonical snake_case names from
 `ACTIVITY_ENTITY_TYPES`; `bin_movement` identifies `bin_movements` rows.
 `src/lib/activity-entity-type.ts` maps existing runner/certification aliases to
@@ -138,7 +154,7 @@ contract in [database.md](./database.md#activity-events).
 - **A production run belongs to at most one credit batch** — `credit_batch_production_runs` has composite PK `(credit_batch_id, production_run_id)` plus a unique on `production_run_id` alone. See [ADR 0014](./adr/0014-credit-batch-as-production-cohort.md), [ADR 0020](./adr/0020-production-emissions-front-loaded-per-credit-batch.md).
 - **Some rules live only in raw SQL**, not in Drizzle. Read the migration chain when a schema invariant is unclear; the current Method-B model deliberately has no sample-floor trigger because eligibility is a live read.
 - **Every Sample requires `samples.credit_batch_id`.** It characterises one credit batch ([ADR 0016](./adr/0016-credit-batch-is-production-batch-production-process-scopes-sampling.md)); nullable `samples.production_run_id` is provenance only. Membership changes preserve Sample attachment, and a batch with Samples cannot be deleted.
-- **`credit_batches` stores no aggregate totals** — applied weight, CO2e stored, and ineligible-biomass fraction are derived on read ([ADR 0019](./adr/0019-credit-batch-aggregates-derived-on-read.md)). The deliberate exception is Removal-owned `credit_batch_applications` mass: each assigned application-by-batch slice is an immutable submission snapshot, while unassigned slices are reconciled from live provenance. The batch also stores a permanent production-emissions Removal claim and a pre-POST submission reservation; the reservation's submission ledger row supplies its lock, status, and external-mutation state ([ADR 0020](./adr/0020-production-emissions-front-loaded-per-credit-batch.md)). Project emissions are registry-owned ([ADR 0018](./adr/0018-isometric-owns-project-emissions.md)); durability tier is inherited from the facility, not stored per batch ([ADR 0021](./adr/0021-durability-tier-is-facility-scoped.md)).
+- **`credit_batches` stores no aggregate totals** — applied weight and CO2e stored are derived on read ([ADR 0019](./adr/0019-credit-batch-aggregates-derived-on-read.md)). The deliberate exception is Removal-owned `credit_batch_applications` mass: each assigned application-by-batch slice is an immutable submission snapshot, while unassigned slices are reconciled from live provenance. The batch also stores a permanent production-emissions Removal claim and a pre-POST submission reservation; the reservation's submission ledger row supplies its lock, status, and external-mutation state ([ADR 0020](./adr/0020-production-emissions-front-loaded-per-credit-batch.md)). Project emissions are registry-owned ([ADR 0018](./adr/0018-isometric-owns-project-emissions.md)); durability tier is inherited from the facility, not stored per batch ([ADR 0021](./adr/0021-durability-tier-is-facility-scoped.md)).
 - **`production_processes` owns the process epoch and Method-B prerequisites**, keyed `(facility, feedstock)`; `credit_batches.sampling` owns the immutable per-batch choice. Eligibility is computed, never stored. See [ADR 0022](./adr/0022-method-b-is-computed-eligibility-not-stored-unlock.md).
 - **`certifier_credentials` holds provider auth** (encrypted access token + client secret, unique per `(organization_id, provider)`) — separate from `certifier_projects`, which only maps facilities to provider project IDs plus emission-estimate config ([ADR 0015](./adr/0015-energy-single-combined-measurement-point.md)). Submission-unit shape: [ADR 0003](./adr/0003-removal-as-submission-unit.md), [ADR 0004](./adr/0004-ghg-statement-as-independent-artifact.md), [ADR 0008](./adr/0008-submission-ledger-internal-seam.md).
 - **`certifier_production_batches` mirrors the registry's Production Batch id for a credit batch** (`external_production_batch_id` = `ptb_…`, one row per `(provider, credit_batch_id)`, provider pinned to `isometric`). The credit batch IS the protocol production batch ([ADR 0016](./adr/0016-credit-batch-is-production-batch-production-process-scopes-sampling.md)), so the row is written before its MeasurementSamples POST and is the idempotency journal for them: present ⇒ GET the exact `ptb_…` and verify its saved identity and current mapping before reuse; absent remotely or locally ⇒ reconcile by the `nm-ptb-…` supplier reference before POSTing. Only a 404 or the exact provider missing-ProductionBatch 400 permits replacement. Recovery validates current facts, refuses duplicate references or mismatched payloads, and replaces the old journal through an organization-scoped compare-and-set after confirmation. A live batch with a changed project/facility mapping blocks submission. It also mirrors the registered `mass_kg` (total dry biochar, `M_biochar (DM)` — NOT the attribution-scaled GHG-entry `product_mass`), window, and payload hash so local payload drift remains detectable while the live registry identity stays authoritative.

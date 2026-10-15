@@ -295,7 +295,6 @@ async function loadLineageWithExecutor(
           deliveryDate: feedstocks.deliveryDate,
           massDryKg: feedstocks.massDryKg,
           wetMassUsedKg: productionRunFeedstocks.wetMassUsedKg,
-          eligibilityStatus: feedstocks.eligibilityStatus,
           supplierName: suppliers.name,
           feedstockTypeName: feedstockTypes.name,
           feedstockDeliveryCode: feedstockDeliveries.code,

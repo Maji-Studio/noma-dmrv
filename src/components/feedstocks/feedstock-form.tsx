@@ -6,6 +6,7 @@
  */
 "use client";
 
+import { INTAKE_MOISTURE_RANGE_HELPER } from "@/lib/mass-moisture";
 import type { ReactNode } from "react";
 import { useEffect, useId, useState } from "react";
 import { useForm, useWatch, useFieldArray, type FieldError } from "react-hook-form";
@@ -122,13 +123,7 @@ export function FeedstockForm({
 
   const defaultValues = {
     facilityId: feedstock?.facilityId ?? contextFacilityId ?? "",
-    // New records default to today. Legacy records without a delivery date
-    // must stay empty in edit mode so the form matches read mode and a save
-    // cannot silently introduce today's date.
-    deliveryDate:
-      feedstock && !feedstock.deliveryDate
-        ? undefined
-        : toDateInputValue(feedstock?.deliveryDate ?? null),
+    deliveryDate: toDateInputValue(feedstock?.deliveryDate ?? null),
     supplierId: feedstock?.supplierId ?? "",
     vehicleId: feedstock?.vehicleId ?? "",
     transportDistanceKm: undefined as number | undefined,
@@ -666,6 +661,7 @@ export function FeedstockForm({
             }}
             moisture={{
               id: "moisturePercent",
+              rangeHelperText: INTAKE_MOISTURE_RANGE_HELPER,
               error: errors.moisturePercent?.message,
               required: true,
               disabled: isSubmitting,

@@ -4,6 +4,7 @@
  */
 
 import { z } from "zod";
+import { modelYearSchema } from "./model-year";
 
 // ============================================
 // Constants
@@ -117,13 +118,7 @@ export const vehicleFormSchema = z.object({
     .optional()
     .nullable(),
   // Optional Transportation module record copied onto feedstock legs for evidence.
-  modelYear: z
-    .number()
-    .int("Model year must be a whole number")
-    .min(1900, "Model year must be 1900 or later")
-    .max(new Date().getFullYear() + 1, "Model year cannot be in the future")
-    .optional()
-    .nullable(),
+  modelYear: modelYearSchema,
 });
 
 // ============================================

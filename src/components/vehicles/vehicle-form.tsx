@@ -1,5 +1,7 @@
 "use client";
 
+import { MODEL_YEAR_MIN, MODEL_YEAR_MAX } from "@/schemas/model-year";
+
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { numericValue } from "@/lib/form-utils";
@@ -152,8 +154,9 @@ export function VehicleForm({
           <FormInput
             id="modelYear"
             type="number"
-            min="1900"
-            max={new Date().getFullYear() + 1}
+            min={MODEL_YEAR_MIN}
+            max={MODEL_YEAR_MAX}
+            step="1"
             placeholder="e.g., 2020"
             disabled={isSubmitting}
             error={!!errors.modelYear}

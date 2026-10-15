@@ -2,6 +2,11 @@
 
 **Status: Accepted** (2026-10-01). [Plan](../archive/plans/2026-10-01-energy-page.md). Amends [ADR 0018](./0018-isometric-owns-project-emissions.md) for display only.
 
+> **Proposed amendment 2026-10-15**: [ADR 0032](./0032-per-batch-emissions-entries-bound-to-template-lines.md)
+> moves operating emissions onto Removals as per-batch emissions entries.
+> Estimates stay display only. The text below stays in force until ADR 0032 is
+> accepted and implemented.
+
 Operators asked how much a credit batch, production run, delivery or application emitted. ADR 0018 keeps every emission figure in Isometric, so noma had nothing to answer with: `/energy` listed four all-time activity totals. The registry's numbers are not a substitute. They arrive per Removal, after submission, and only for what was submitted.
 
 ## Decision

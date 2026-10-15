@@ -1,3 +1,4 @@
+import { cleanupFeedstockFixtureParents } from "../../helpers/feedstock-fixture";
 import "../../setup";
 import { deleteOutputApplicationFixtures } from "../../helpers/output-contract-fixtures";
 import { preparePureOutputProductFixture, outputProductFixtureValues, deleteOutputDeliveryFixtures, deleteOutputProductFixtures, deleteOutputFacilityFixtures } from "../../helpers/output-contract-fixtures";
@@ -744,6 +745,7 @@ export async function cleanupChainData(data: SeededChainData): Promise<void> {
       await tx
         .delete(schema.feedstocks)
         .where(eq(schema.feedstocks.facilityId, data.facility.id));
+      await cleanupFeedstockFixtureParents(tx);
 
       // Feedstock deliveries
       await tx
@@ -812,6 +814,7 @@ export async function cleanupChainData(data: SeededChainData): Promise<void> {
       // Facility (must be last — everything references it)
       await deleteOutputFacilityFixtures(tx, eq(schema.facilities.id, data.facility.id));
     });
+    await cleanupFeedstockFixtureParents(db);
   } finally {
     await pool.end();
   }

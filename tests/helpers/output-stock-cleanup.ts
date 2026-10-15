@@ -1,3 +1,4 @@
+import { cleanupFeedstockFixtureParents } from "./feedstock-fixture";
 import { sql } from 'drizzle-orm';
 import type { db as database } from '@/db';
 
@@ -8,7 +9,9 @@ export async function cleanupOutputStockFixture(db: typeof database, organizatio
     for (const table of ['application_output_allocations', 'output_stock_run_allocations', 'output_stock_allocations', 'output_stock_moisture_readings', 'product_ingredient_snapshots', 'bin_movements', 'transport_legs', 'biochar_storage_inventory', 'applications', 'deliveries', 'orders', 'biochar_product_source_allocations', 'biochar_products', 'production_run_feedstocks', 'production_run_feedstock_draws', 'production_runs', 'feedstocks', 'reactors', 'storage_locations', 'formulation_ingredients', 'formulations', 'feedstock_types', 'customer_locations', 'customers', 'facilities']) {
       await tx.execute(sql`delete from ${sql.identifier(table)} where organization_id = ${organizationId}`);
     }
+    await cleanupFeedstockFixtureParents(tx);
     await tx.execute(sql`delete from organizations where id = ${organizationId}`);
     await tx.execute(sql`delete from users where id = ${organizationId.replace('org-', 'user-')}`);
   });
+  await cleanupFeedstockFixtureParents(db);
 }

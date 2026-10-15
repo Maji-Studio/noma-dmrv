@@ -3,7 +3,7 @@ import { db, type DbTransaction } from "@/db";
 import { activityEvents } from "@/db/schema/activity";
 import { ACTORLESS_ACTIVITY_SOURCES, DEFAULT_ACTORLESS_ACTIVITY_SOURCES, isActivityEntityType, type ActivityEntityType } from "@/db/schema/common";
 import type { OrgContext } from "@/lib/auth/server";
-import { requireOrgScope } from "./utils";
+import { requireOrgFacility, requireOrgScope } from "./utils";
 
 const DEFAULT_ACTIVITY_LIMIT = 50;
 const MAX_ACTIVITY_LIMIT = 200;
@@ -20,6 +20,10 @@ export async function recordActivity(ctx: OrgContext, tx: DbTransaction, event: 
   const actorUserId = event.actorUserId === undefined ? defaultActorUserId : event.actorUserId;
   if (actorUserId === null && !ACTORLESS_ACTIVITY_SOURCES.some((source) => source === event.source)) {
     throw new Error(`Activity events require an actor unless the source is ${ACTORLESS_ACTIVITY_SOURCES.join(", ")}`);
+  }
+  if (event.facilityId != null) {
+    // This read must never lock the facility row: archive/restore lock it before children.
+    await requireOrgFacility(ctx, event.facilityId, tx);
   }
   await tx.insert(activityEvents).values({
     ...event,

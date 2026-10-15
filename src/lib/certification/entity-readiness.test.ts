@@ -300,7 +300,7 @@ describe("deriveEntityCertifyReadiness", () => {
     expect(readiness).toEqual({ state: "ready", gaps: [], warnings: [] });
   });
 
-  it("reports a feedstock missing wet mass via the entity column", () => {
+  it("does not repeat the wet mass save rule as a certification gap", () => {
     const readiness = deriveEntityCertifyReadiness("feedstock", {
       status: "complete",
       massWetKg: null,
@@ -310,10 +310,8 @@ describe("deriveEntityCertifyReadiness", () => {
       transportEvidenceDocumentCount: 1,
     });
 
-    expect(readiness.state).toBe("incomplete");
-    expect(readiness.gaps).toMatchObject([
-      { kind: "field", key: "massWetKg", fields: ["massWetKg"] },
-    ]);
+    expect(readiness.state).toBe("ready");
+    expect(readiness.gaps).toEqual([]);
   });
 
   it("accepts manual provenance when feedstock evidence is present", () => {
@@ -549,8 +547,8 @@ describe("isCertifyFormField", () => {
     expect(isCertifyEntityField("productionRun", "hasReadingsFile")).toBe(true);
   });
 
-  it("badges via formFields when the form name differs from the column", () => {
-    expect(isCertifyFormField("feedstock", "totalWetMassKg")).toBe(true);
+  it("does not badge the required intake mass", () => {
+    expect(isCertifyFormField("feedstock", "totalWetMassKg")).toBe(false);
     expect(isCertifyFormField("feedstock", "massWetKg")).toBe(false);
   });
 
@@ -566,8 +564,8 @@ describe("isCertifyFormField", () => {
 
 describe("isCertifyEntityField", () => {
   it("badges persisted fields used by read-only detail surfaces", () => {
-    expect(isCertifyEntityField("feedstock", "massWetKg")).toBe(true);
-    expect(isCertifyEntityField("feedstock", "totalWetMassKg")).toBe(true);
+    expect(isCertifyEntityField("feedstock", "massWetKg")).toBe(false);
+    expect(isCertifyEntityField("feedstock", "totalWetMassKg")).toBe(false);
     expect(isCertifyEntityField("delivery", "deliveredWetMassKg")).toBe(true);
   });
 

@@ -1,7 +1,13 @@
 import type { ReactNode } from "react";
+import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import type { StorageLocationWithFacility } from "@/data-access/storage-locations";
+
+vi.mock("@/components/ui/tooltip", () => ({
+  InfoHint: ({ label }: { label: string }) => <span aria-label={label} />,
+  Tooltip: ({ children }: { children: ReactNode }) => <span>{children}</span>,
+}));
 
 vi.mock("@/hooks/use-facility-context", () => ({ useFacilityClock: () => ({ timeZone: "UTC", hint: "Facility time: UTC" }) }));
 vi.mock("@/components/ui/slide-over-panel", () => {
@@ -33,12 +39,17 @@ vi.mock("@/components/ui/toast", () => ({
   useToast: () => ({ success: vi.fn() }),
 }));
 
+const lossMutation = vi.hoisted(() => ({ mutateAsync: vi.fn() }));
+
 vi.mock("@/hooks/use-bin-movements", () => ({
   RecordLossConflictError: class RecordLossConflictError extends Error {},
-  RecordLossFieldError: class RecordLossFieldError extends Error {},
-  useRecordLoss: () => ({ isPending: false, mutateAsync: vi.fn() }),
+  RecordLossFieldError: class RecordLossFieldError extends Error {
+    constructor(message: string, readonly field: "lossMassKg" | "occurredAt") { super(message); }
+  },
+  useRecordLoss: () => ({ isPending: false, mutateAsync: lossMutation.mutateAsync }),
 }));
 
+import { RecordLossFieldError } from "@/hooks/use-bin-movements";
 import { BinReconcileSheet } from "./bin-reconcile-sheet";
 
 const storageLocation: StorageLocationWithFacility = {
@@ -51,7 +62,6 @@ const storageLocation: StorageLocationWithFacility = {
   capacityKg: null,
   storageMethod: null,
   storageDescription: null,
-  supplierReferenceId: null,
   feedstockTypeId: null,
   formulationId: null,
   facilityId: "00000000-0000-4000-8000-000000000003",
@@ -91,6 +101,36 @@ const storageLocation: StorageLocationWithFacility = {
 };
 
 describe("BinReconcileSheet", () => {
+  it("shows a server time refusal on the time field and focuses it", async () => {
+    const message = "Check the date and time";
+    lossMutation.mutateAsync.mockRejectedValueOnce(new RecordLossFieldError(message, "occurredAt"));
+    const focus = vi.fn();
+    let renderer!: ReactTestRenderer;
+    await act(async () => {
+      renderer = create(<BinReconcileSheet open onOpenChange={() => undefined} storageLocation={storageLocation} />, {
+        createNodeMock: (element) => (element.props as { id?: string }).id === "occurredAt" ? { focus } : {},
+      });
+    });
+    try {
+      await act(async () => {
+        const mass = renderer.root.findAllByType("input").find(input => input.props.id === "loss-amount")!;
+        await mass.props.onChange({ target: { name: "lossMassKg", value: "10" }, type: "change" });
+        const reason = renderer.root.findByType("textarea");
+        await reason.props.onChange({ target: { name: "reason", value: "Spilled stock" }, type: "change" });
+      });
+      await act(async () => {
+        await renderer.root.findByType("form").props.onSubmit({ preventDefault() {}, persist() {} });
+      });
+      expect(lossMutation.mutateAsync).toHaveBeenCalled();
+      expect(JSON.stringify(renderer.toJSON())).toContain(message);
+      const time = renderer.root.findAllByType("input").find(input => input.props.id === "occurredAt")!;
+      expect(time.props["aria-invalid"]).toBe("true");
+      expect(focus).toHaveBeenCalled();
+    } finally {
+      await act(async () => renderer.unmount());
+    }
+  });
+
   it.each([
     {
       type: "feedstock_bin",

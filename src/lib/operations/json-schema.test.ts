@@ -37,6 +37,12 @@ const PERCENT = {
   maximum: 100,
   multipleOf: STORED_PERCENT_INPUT_STEP,
 };
+const INTAKE_MOISTURE_PERCENT = {
+  type: "number",
+  minimum: 0,
+  exclusiveMaximum: 100,
+  multipleOf: STORED_PERCENT_INPUT_STEP,
+};
 const DISTANCE_KM = { anyOf: [{ type: "number", minimum: 0 }, { type: "null" }] };
 const DISTANCE_SOURCE = {
   anyOf: [
@@ -92,7 +98,7 @@ describe("toOperationJsonSchema: feedstock intake", () => {
         transportDistanceSource: DISTANCE_SOURCE,
         feedstockTypeId: REQUIRED_UUID,
         totalWetMassKg: POSITIVE_MASS_KG,
-        moisturePercent: PERCENT,
+        moisturePercent: INTAKE_MOISTURE_PERCENT,
         allocations: {
           type: "array",
           minItems: 1,
@@ -134,14 +140,8 @@ describe("toOperationJsonSchema: feedstock intake", () => {
         transportDistanceSource: DISTANCE_SOURCE,
         feedstockTypeId: UUID,
         massWetKg: POSITIVE_MASS_KG,
-        moistureContentPercent: PERCENT,
-        massDryKg: {
-          type: "number",
-          minimum: 0,
-          maximum: MASS_INPUT_MAX_KG,
-          multipleOf: MASS_KG_INPUT_STEP,
-        },
-        storageLocationId: NULLABLE_UUID,
+        moistureContentPercent: INTAKE_MOISTURE_PERCENT,
+        storageLocationId: UUID,
         overrideJustification: { anyOf: [TEXT_2000, { type: "null" }] },
         notes: { anyOf: [TEXT_2000, { type: "null" }] },
       },

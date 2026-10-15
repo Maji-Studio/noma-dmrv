@@ -75,10 +75,6 @@ export const creditBatches = pgTable(
     // preview); project emissions / counterfactual are registry-owned
     // (ADR 0018) — no local copies are stored (issue #285).
 
-    // --- Feedstock Eligibility (Isometric: >25% ineligible-biomass cap, P0-01) ---
-    // Eligibility shares come from wet run-feedstock allocations; dry
-    // certification mass comes from productionRuns.feedstockMassDryKg.
-
     // --- Site Management Summary (Isometric: Section 5.2.1) ---
     // Aggregated info for GHG Statement submission
     siteManagementNotes: text('site_management_notes'), // Irrigation, tillage, fertilizer summary

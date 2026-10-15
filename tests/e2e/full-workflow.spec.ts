@@ -1,3 +1,4 @@
+import { feedstockFixtureValues, cleanupFeedstockFixtureParents } from "../helpers/feedstock-fixture";
 import { TEST_SITE_POSITION } from "../helpers/test-org";
 import { insertEstablishedOutputApplicationFixture as insertOutputApplicationFixture } from "../helpers/output-contract-fixtures";
 import { deleteOutputApplicationFixtures } from "../helpers/output-contract-fixtures";
@@ -198,7 +199,7 @@ async function createFullWorkflowData(): Promise<TestWorkflowData> {
     });
 
     // 9. Create feedstock (from delivery)
-    await tx.insert(schema.feedstocks).values({
+    await tx.insert(schema.feedstocks).values(await feedstockFixtureValues(tx, {
         organizationId: DEC_ORG_ID,
       id: ids.feedstock,
       code: `E2E-FS-${testRunId}`,
@@ -210,7 +211,7 @@ async function createFullWorkflowData(): Promise<TestWorkflowData> {
       moistureContentPercent: 15,
       status: "complete",
       storageLocationId: ids.storageLocation,
-    });
+    }));
 
     // 10. Create production run (links reactor, facility)
     const today = new Date().toISOString().split("T")[0];
@@ -463,6 +464,7 @@ async function cleanupWorkflowData(data: TestWorkflowData): Promise<void> {
       await tx
         .delete(schema.feedstocks)
         .where(eq(schema.feedstocks.feedstockDeliveryId, data.feedstockDelivery.id));
+      await cleanupFeedstockFixtureParents(tx);
 
       await tx
         .delete(schema.productionProcesses)
@@ -513,6 +515,7 @@ async function cleanupWorkflowData(data: TestWorkflowData): Promise<void> {
       // Facility
       await deleteOutputFacilityFixtures(tx, eq(schema.facilities.id, data.facility.id));
     });
+    await cleanupFeedstockFixtureParents(db);
   } finally {
     await pool.end();
   }
