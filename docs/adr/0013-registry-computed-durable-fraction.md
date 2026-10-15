@@ -10,6 +10,13 @@
 > submission path exists” describe the pre-2026-07-10 state and are
 > superseded by this metadata and the later amendments.
 
+> **Amendment (2026-10-15, issue #1016):** the batch-level Eq.6 preview
+> (`computeFDurable1000` using stored batch petrography/TGA columns) and the
+> operator-declared `credit_batches.h_to_c_org_ratio` reconciliation are removed.
+> The local 1,000-year preview uses Sample replicates via
+> `computeApplicationCo2eStoredBlueprint1000`. The historical descriptions below
+> of the removed preview and reconciliation no longer apply.
+
 ## Amendment (2026-08-13) — replacement sampled 1,000-year component
 
 The sampled 1,000-year executable contract is now

@@ -14,7 +14,7 @@ these areas; the entry rules and invariants live in
   helper when already working in an affected file.
 - **B1:** Keep `/schema` public, gate it to Platform Admins, or delete it? **Anchor:** `src/lib/auth/middleware.ts:PUBLIC_ROUTES`.
 - **B3:** Keep both diagnostic views, only the trace view, or replace the pane with the CLI report? **Anchor:** `src/components/certification/removal-template-diagnostic-panel.tsx:RemovalTemplateDiagnosticPanel`.
-- **B4:** Wire the 12 sample contaminant columns and two protocol constants, or retire them after registry verification? **Anchor:** `src/db/schema/production.ts:samples`, `src/lib/isometric/utils/constants.ts`.
+- **B4:** Wire the two protocol constants, or retire them after registry verification? Contaminant results stay outside noma (#942 q6), and the Sample contaminant columns are removed. **Anchor:** `src/lib/isometric/utils/constants.ts`.
 - **B5:** Batch hub shared facts with per-row retry and polling, or use a blocking facility-wide load? **Anchor:** `src/hooks/use-certification.ts:useRemovalPreflightSummaries`.
 - **B6:** Keep the three submission builds, or use an immutable guarded snapshot? **Anchor:** `src/fn/certification/biochar-application-intents.ts:compileBiocharApplicationIntents`.
 - **B7:** Preserve each existence-check message, or standardize the copy? **Anchor:** `src/data-access/utils.ts:assertSameOrg`.

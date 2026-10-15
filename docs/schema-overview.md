@@ -64,6 +64,14 @@ database reset before applying the constraint (`pnpm db:reset` locally; shared
 staging uses the manual reset workflow in [database.md](./database.md), announced
 first).
 
+Migration `0141_drop_dead_sample_and_batch_columns` sets `samples.credit_batch_id`
+NOT NULL and drops the unused Sample contaminant and histogram/thermogram URL
+columns and credit-batch durability, buffer percentage and registry columns
+without a backfill. It fails while any Sample has a null batch, including rows
+left by the old batch-delete and membership-edit paths. Delete those rows or
+run `pnpm db:reset` locally; shared staging uses the manual reset workflow in
+[database.md](./database.md), announced first.
+
 Production starts have no database time default. Physical feedstock sources
 live only in `production_run_feedstock_draws`; the run stores their total wet
 mass. Database CHECKs keep run moisture at or above 0% and below 100%.

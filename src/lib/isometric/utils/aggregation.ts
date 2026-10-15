@@ -58,6 +58,13 @@ export interface AggregatedProductionData {
   warnings: string[];
 }
 
+export type AggregatedProductionRunData = Omit<
+  AggregatedProductionData,
+  | "weightedOrganicCarbonPercent"
+  | "weightedHToCorgRatio"
+  | "weightedOToCorgRatio"
+>;
+
 // §8.6.2 emission-input buckets (issue #349, ADR 0020). PRODUCTION sources
 // front-load IN FULL on the credit batch's claiming GHG entry — no
 // applied-mass weighting. DELIVERY and STORED sources scale with the mass
@@ -239,7 +246,7 @@ export function aggregateProductionRuns(
   runs: ProductionRunForCertification[],
   attributionByRunId?: Map<string, number>,
   options?: { productionRunIds?: ReadonlySet<string> },
-): AggregatedProductionData {
+): AggregatedProductionRunData {
   if (runs.length === 0) {
     throw new Error("aggregateProductionRuns: no production runs supplied");
   }
@@ -306,10 +313,6 @@ export function aggregateProductionRuns(
   }
 
   return {
-    // The caller supplies credit-batch chemistry from its Sample replicates.
-    weightedOrganicCarbonPercent: null,
-    weightedHToCorgRatio: null,
-    weightedOToCorgRatio: null,
     totalBiocharDryMassKg,
     totalFeedstockDryMassKg,
     totalStartupDieselLitres,
@@ -341,10 +344,10 @@ export interface TransportLegsByCategory {
 // `agg.warnings`, which the submission pipeline short-circuits on.
 //
 // Biochar legs already carry the Removal's immutable wet application slices.
-export function enrichWithTransportLegs(
-  agg: AggregatedProductionData,
+export function enrichWithTransportLegs<T extends AggregatedProductionRunData>(
+  agg: T,
   legs: TransportLegsByCategory,
-): AggregatedProductionData {
+): Omit<T, keyof AggregatedProductionRunData> & AggregatedProductionRunData {
   const feedstock = aggregateTransportMassDistance(legs.feedstock, "Feedstock");
   const biochar = aggregateBiocharTransportMassDistance(legs.biochar);
   const sample = aggregateTransportMassDistance(legs.sample, "Sample");

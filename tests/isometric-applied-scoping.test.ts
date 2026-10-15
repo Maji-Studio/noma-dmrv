@@ -8,9 +8,11 @@
  * GHG entry, with no applied-mass weighting. These tests pin that split —
  * a regression back to uniform proration MUST fail here.
  */
-import { describe, expect, it } from "vitest";
+import { describe, expect, expectTypeOf, it } from "vitest";
 import {
   aggregateProductionRuns,
+  enrichWithTransportLegs,
+  type AggregatedProductionData,
   type ProductionRunForCertification,
 } from "@/lib/isometric/utils/aggregation";
 
@@ -122,10 +124,19 @@ describe("aggregateProductionRuns — emission-input buckets (§8.6.2)", () => {
 
   it("leaves chemistry to credit-batch Sample aggregation", () => {
     const agg = aggregateProductionRuns([run()]);
-    expect(agg.weightedOrganicCarbonPercent).toBeNull();
-    expect(agg.weightedHToCorgRatio).toBeNull();
-    expect(agg.weightedOToCorgRatio).toBeNull();
+    expectTypeOf(agg).not.toExtend<AggregatedProductionData>();
+    expect(agg).not.toHaveProperty("weightedOrganicCarbonPercent");
+    expect(agg).not.toHaveProperty("weightedHToCorgRatio");
+    expect(agg).not.toHaveProperty("weightedOToCorgRatio");
     expect(agg).not.toHaveProperty("weightedAshPercent");
     expect(agg).not.toHaveProperty("weightedMoisturePercent");
+
+    const enriched = enrichWithTransportLegs(agg, {
+      feedstock: [], biochar: [], sample: [],
+    });
+    expectTypeOf(enriched).not.toExtend<AggregatedProductionData>();
+    expect(enriched).not.toHaveProperty("weightedOrganicCarbonPercent");
+    expect(enriched).not.toHaveProperty("weightedHToCorgRatio");
+    expect(enriched).not.toHaveProperty("weightedOToCorgRatio");
   });
 });
