@@ -27,7 +27,8 @@ type OrderFixture = Omit<OrderValues, "formulationId"> & {
   formulationId?: string;
   biocharProductId?: string;
 };
-type DeliveryFixture = Omit<DeliveryValues, "storageLocationId"> & { storageLocationId?: string };
+/** biocharProductId declares allocation provenance only; it is never inserted into deliveries. */
+type DeliveryFixture = Omit<DeliveryValues, "storageLocationId"> & { storageLocationId?: string; biocharProductId?: string };
 const FIXTURE_PLACED_AT = new Date("2025-01-01T00:00:00.000Z");
 /** Fixture source runs end this long before the product they fill is placed. */
 const FIXTURE_RUN_LEAD_MS = 60 * 60 * 1000;
@@ -177,10 +178,10 @@ async function persistFixtureProvenance(executor: Executor, delivery: Delivery, 
 
 export async function insertOutputDeliveryFixture<T>(executor: Executor, input: DeliveryFixture | DeliveryFixture[], select: (row: Delivery) => T, requireEstablishedSource = false): Promise<T[]> {
   const result: T[] = [];
-  for (const values of Array.isArray(input) ? input : [input]) {
+  for (const { biocharProductId, ...values } of Array.isArray(input) ? input : [input]) {
     const [order] = await executor.select().from(orders).where(eq(orders.id, values.orderId));
     if (!order) throw new Error("Fixture order is missing");
-    const productId = values.biocharProductId ?? sourceByOrder.get(values.orderId);
+    const productId = biocharProductId ?? sourceByOrder.get(values.orderId);
     const [product] = productId ? await executor.select().from(biocharProducts).where(eq(biocharProducts.id, productId)) : [];
     let storageLocationId = values.storageLocationId ?? (product ? await ensureProductBin(executor, product) : undefined);
     if (!storageLocationId) {

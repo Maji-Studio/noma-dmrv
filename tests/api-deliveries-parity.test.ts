@@ -59,7 +59,7 @@ function scrub(value: unknown, f: ApiDeliveryWriteFixture): unknown {
 /** Refusals retain every field, including issue codes; only fixture-specific ids differ. */
 function normalizeFixtureIds<T>(value: T, f: ApiDeliveryWriteFixture): T {
   const labels = [[f.ctx.organizationId, "org"], [f.ctx.userId, "user"], [f.facility.id, "facility"], [f.bin.id, "bin"],
-    [f.order.id, "order"], [f.driver.id, "driver"], [f.vehicle.id, "vehicle"], [f.product.id, "product"], [f.recipe.id, "formulation"]];
+    [f.order.id, "order"], [f.location.id, "location"], [f.driver.id, "driver"], [f.vehicle.id, "vehicle"], [f.product.id, "product"], [f.recipe.id, "formulation"]];
   let text = JSON.stringify(value);
   for (const [id, label] of labels) text = text.replaceAll(id, `<${label}>`);
   return JSON.parse(text);
@@ -71,7 +71,7 @@ async function create(transport: Transport, changes: Record<string, unknown> = {
     const result = await createDeliveryFn(formInput(f, bases.get(transport)!, changes));
     if (!result.success) throw new Error(`Create refused: ${result.error}`);
     expect(result).not.toHaveProperty("warning");
-    return { data: representDelivery(result.data), warnings: [] };
+    return { data: representDelivery({ ...result.data, orderCustomerLocationId: f.order.customerLocationId }), warnings: [] };
   }
   if (transport === "rest") {
     const response = await postDelivery(f, deliveryInput(f, changes));
@@ -91,7 +91,7 @@ async function update(transport: Transport, id: string, changes: Record<string, 
     const result = await updateDeliveryFn({ deliveryId: id, expectedVersion: current.data.version, ...changes } as z.infer<typeof updateDeliverySchema>);
     if (!result.success) throw new Error(`Update refused: ${result.error}`);
     expect(result).not.toHaveProperty("warning");
-    return { data: representDelivery(result.data), warnings: [] };
+    return { data: representDelivery({ ...result.data, orderCustomerLocationId: f.order.customerLocationId }), warnings: [] };
   }
   if (transport === "rest") {
     const response = await patchDelivery(f, id, changes, current.etag);

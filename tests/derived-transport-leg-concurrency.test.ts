@@ -439,22 +439,18 @@ describe(
 
     it("keeps inherited delivery legs unchanged when an order repoint is rejected", async () => {
       const fixture = await createFixture("REPOINT", [20], 3);
-      const inherited = await createDelivered(
+      await createDelivered(
         fixture,
         "REPOINT-INHERITED",
         fixture.productIds[0],
         100,
       );
-      const explicit = await createDelivered(
+      const second = await createDelivered(
         fixture,
-        "REPOINT-EXPLICIT",
+        "REPOINT-SECOND",
         fixture.productIds[2],
         50,
       );
-      await db
-        .update(deliveries)
-        .set({ biocharProductId: null })
-        .where(eq(deliveries.id, inherited.id));
 
       const otherRecipe = await outputProductFixtureValues(db, { organizationId: TEST_ORG_ID, facilityId: fixture.facilityId, code: "unused" });
       await expect(
@@ -482,14 +478,14 @@ describe(
       ]));
       expect(legs.find((leg) => leg.entityId === fixture.productIds[1])).toBeUndefined();
 
-      const [explicitAfter] = await db
-        .select({ biocharProductId: deliveries.biocharProductId })
+      const [secondAfter] = await db
+        .select({ orderId: deliveries.orderId })
         .from(deliveries)
-        .where(eq(deliveries.id, explicit.id));
-      expect(explicitAfter.biocharProductId).toBeNull();
+        .where(eq(deliveries.id, second.id));
+      expect(secondAfter.orderId).toBe(fixture.orderId);
     });
 
-    it("updates inherited order distance without replacing a delivery location override", async () => {
+    it("keeps same-product deliveries at other destinations when a customer location changes", async () => {
       const fixture = await createFixture("LOCATION", [20, 60, 100], 1);
       const inherited = await createDelivered(
         fixture,
@@ -497,16 +493,27 @@ describe(
         fixture.productIds[0],
         100,
       );
-      const explicit = await createDelivered(
-        fixture,
-        "LOCATION-EXPLICIT",
+      const [secondOrder] = await db
+        .insert(orders)
+        .values(await outputOrderFixtureValues(db, {
+          organizationId: TEST_ORG_ID,
+          facilityId: fixture.facilityId,
+          customerId: fixture.customerId,
+          customerLocationId: fixture.locationIds[2],
+          biocharProductId: fixture.productIds[0],
+          code: `OR-LOCATION-${crypto.randomUUID().slice(0, 8).toUpperCase()}`,
+          orderDate: new Date("2026-07-18T00:00:00Z"),
+          quantityKg: 500,
+          packaging: "bagged",
+        }))
+        .returning({ id: orders.id });
+      created.orderIds.push(secondOrder.id);
+      const otherDestination = await createDelivered(
+        { ...fixture, orderId: secondOrder.id },
+        "LOCATION-OTHER-DESTINATION",
         fixture.productIds[0],
         100,
       );
-      await db
-        .update(deliveries)
-        .set({ customerLocationId: fixture.locationIds[2] })
-        .where(eq(deliveries.id, explicit.id));
       await db.transaction((tx) =>
         syncBiocharProductTransportLegs(ctx, tx, [fixture.productIds[0]]),
       );
@@ -528,12 +535,14 @@ describe(
       expect(derived).toEqual({ distanceKm: 80, loadMassKg: 200 });
 
       const deliveryLocations = await db
-        .select({ id: deliveries.id, customerLocationId: deliveries.customerLocationId })
+        .select({ id: deliveries.id, customerLocationId: orders.customerLocationId })
         .from(deliveries)
-        .where(inArray(deliveries.id, [inherited.id, explicit.id]));
+        .innerJoin(orders, eq(deliveries.orderId, orders.id))
+        .where(inArray(deliveries.id, [inherited.id, otherDestination.id]));
+      expect(deliveryLocations).toHaveLength(2);
       expect(deliveryLocations).toEqual(expect.arrayContaining([
-        { id: inherited.id, customerLocationId: null },
-        { id: explicit.id, customerLocationId: fixture.locationIds[2] },
+        { id: inherited.id, customerLocationId: fixture.locationIds[0] },
+        { id: otherDestination.id, customerLocationId: fixture.locationIds[2] },
       ]));
     });
   },

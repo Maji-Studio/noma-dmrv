@@ -67,14 +67,14 @@ describe("delivery REST reads", { timeout: READ_TIMEOUT_MS }, () => {
     for (const identifier of [first.id, first.code, first.id.toUpperCase()]) {
       const response = await get(identifier);
       expect(response.status).toBe(200);
-      expect(response.headers.get("etag")).toBe('"1.1"');
+      expect(response.headers.get("etag")).toBe('"1.2"');
       expect(response.headers.get("cache-control")).toBe("private, no-store");
       const { data } = await response.json();
-      expect(data).toEqual(representDelivery(first));
+      expect(data).toEqual(representDelivery({ ...first, orderCustomerLocationId: a.location.id }));
       expect(Object.keys(data).sort()).toEqual(Object.keys(deliveryRepresentationSchema.shape).sort());
       expect(data).toMatchObject({ deliveredAt: AT, deliveredWetMassKg: WET_KG, dryBiocharKg: DRY_KG, moisturePercent: MOISTURE,
         driverId: null, vehicleId: null, distanceKmOverride: null, distanceSource: null, distanceNote: null,
-        destinationCustomerLocationId: null, archivedAt: null });
+        destinationCustomerLocationId: a.location.id, archivedAt: null });
     }
   });
 
@@ -85,19 +85,27 @@ describe("delivery REST reads", { timeout: READ_TIMEOUT_MS }, () => {
       const [vehicle] = await db.insert(vehicles).values({ organizationId: a.ctx.organizationId,
         code: `VH-READ-${a.tag}`, name: `E2E Vehicle ${a.tag}`, vehicleType: "truck" }).returning();
       const row = await insert(a, first.orderId, { driverId: driver.id, vehicleId: vehicle.id,
-        distanceKmOverride: REQUESTED_DISTANCE_KM, distanceSource: "document", distanceNote: "Route evidence",
-        customerLocationId: a.location.id });
+        distanceKmOverride: REQUESTED_DISTANCE_KM, distanceSource: "document", distanceNote: "Route evidence" });
       const response = await get(row.id);
       expect(response.status).toBe(200);
       expect((await response.json()).data).toMatchObject({ driverId: driver.id, vehicleId: vehicle.id,
         distanceKmOverride: STORED_DISTANCE_KM, distanceSource: "document", distanceNote: "Route evidence",
         destinationCustomerLocationId: a.location.id });
     } finally {
-      await db.update(deliveries).set({ driverId: null, vehicleId: null, customerLocationId: null })
+      await db.update(deliveries).set({ driverId: null, vehicleId: null })
         .where(eq(deliveries.organizationId, a.ctx.organizationId));
       await db.delete(drivers).where(eq(drivers.organizationId, a.ctx.organizationId));
       await db.delete(vehicles).where(eq(vehicles.organizationId, a.ctx.organizationId));
     }
+  });
+
+  it("resolves list and detail destinations from orders, including a missing destination", async () => {
+    const order = await insertReadOrder(a, `OR-NO-DEST-${a.tag}`, { customerLocationId: null });
+    const row = await insert(a, order.id);
+    const page = await (await list()).json();
+    expect(page.data.find((item: { id: string }) => item.id === first.id).destinationCustomerLocationId).toBe(a.location.id);
+    expect(page.data.find((item: { id: string }) => item.id === row.id).destinationCustomerLocationId).toBeNull();
+    expect((await (await get(row.id)).json()).data.destinationCustomerLocationId).toBeNull();
   });
 
   it("rejects an orders cursor reused for deliveries", async () => {
@@ -174,7 +182,7 @@ describe("delivery REST reads", { timeout: READ_TIMEOUT_MS }, () => {
     const after = await get(first.id);
     expect(after.status).toBe(200);
     expect(after.headers.get("etag")).not.toBe(before.headers.get("etag"));
-    expect((await after.json()).data).toEqual(representDelivery(updated));
+    expect((await after.json()).data).toEqual(representDelivery({ ...updated, orderCustomerLocationId: a.location.id }));
     const unchanged = await (await get(first.id)).text();
     await db.update(orders).set({ quantityKg: 200, version: 2 }).where(and(eq(orders.organizationId, a.ctx.organizationId), eq(orders.id, first.orderId)));
     const afterOrder = await get(first.id);
@@ -193,12 +201,12 @@ describe("delivery REST reads", { timeout: READ_TIMEOUT_MS }, () => {
       storageLocationId: a.bin.id, deliveredAt: AT, deliveredWetMassKg: WET_KG, moisturePercent: 20 });
     const response = await get(posted.delivery.id);
     expect(response.status).toBe(200);
-    expect((await response.json()).data).toEqual(representDelivery(posted.delivery));
+    expect((await response.json()).data).toEqual(representDelivery({ ...posted.delivery, orderCustomerLocationId: a.location.id }));
     expect(posted.allocations.length).toBeGreaterThan(0);
     await runOperationInProcess(recordDelivery, a.ctx, { orderId: first.orderId,
       storageLocationId: a.bin.id, deliveredAt: LATER, deliveredWetMassKg: WET_KG, moisturePercent: 20 });
     const afterPosting = await get(posted.delivery.id);
     expect(afterPosting.headers.get("etag")).toBe(response.headers.get("etag"));
-    expect((await afterPosting.json()).data).toEqual(representDelivery(posted.delivery));
+    expect((await afterPosting.json()).data).toEqual(representDelivery({ ...posted.delivery, orderCustomerLocationId: a.location.id }));
   });
 });

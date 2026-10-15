@@ -67,6 +67,10 @@ Source of truth: `src/db/schema/*.ts`, exported through `src/db/schema/index.ts`
 
 Schema defaults and create/update defaults must stay aligned, especially for JSONB columns.
 
+Deliveries inherit their destination from `orders.customer_location_id`. Drawn
+products resolve through `output_stock_allocations`; deliveries have no destination
+override or direct product column. The nullable driver and vehicle references remain.
+
 ## Local Setup & Commands
 
 | Command | Use | Safety |

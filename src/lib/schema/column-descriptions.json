@@ -444,8 +444,6 @@
     "delivery_date": "Date the delivery was completed",
     "status": "Delivery lifecycle status (in_transit, completed, etc.)",
     "order_id": "FK to the parent order",
-    "customer_location_id": "FK to the destination customer location",
-    "biochar_product_id": "FK to the product being delivered",
     "storage_location_id": "FK to the source storage location",
     "moisture_content_percent": "Moisture content of delivered product as percentage",
     "delivered_wet_mass_kg": "Wet mass delivered in kilograms",
