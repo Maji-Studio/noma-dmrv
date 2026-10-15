@@ -1,3 +1,4 @@
+import { applicationReadTools } from "./application-tools";
 import { documentReadTools } from "./document-tools";
 import type { ToolAccess } from "./tool-access";
 import { readDeliveryListFromInput } from "@/lib/api/deliveries-queries";
@@ -49,7 +50,7 @@ import { orderRepresentationSchema } from "@/lib/representations/orders";
 import { orderBalanceRepresentationSchema } from "@/lib/representations/order-balance";
 import { customerLocationRepresentationSchema } from "@/lib/representations/customer-locations";
 
-// Application tools join in Phase 6b commit 5; REST reads are published first.
+// Application reads are appended separately to preserve the existing tool order.
 type ResourcePath = Exclude<keyof typeof resourceQueries, "applications">;
 
 const labels: Record<ResourcePath, { singular: string; plural: string }> = {
@@ -73,7 +74,7 @@ const labels: Record<ResourcePath, { singular: string; plural: string }> = {
 const guidance: Record<ResourcePath, string> = {
   "production-runs": PRODUCTION_RUN_GUIDANCE,
   customers: `${readDescriptions.customers} Use the customer id or code with find_customer_locations.`,
-  deliveries: `${readDescriptions.deliveries} Filter by shipping facilityId, orderId, storageLocationId, code or q; deliveredFrom is inclusive and deliveredBefore exclusive, with explicit offsets.`,
+  deliveries: `${readDescriptions.deliveries} Filter by shipping facilityId, orderId, storageLocationId, code or q; deliveredFrom is inclusive and deliveredBefore exclusive, with explicit offsets. hasRemainingMass: ${resourceQueries.deliveries.list.shape.hasRemainingMass.description}`,
   orders: `${readDescriptions.orders} Call whoami for facility ids. ${ORDER_GUIDANCE}`,
   reactors: "Call whoami first for the run facility. Use the reactor UUID with start_production_run.",
   facilities: "Call whoami first for the credential's active facilities and local dates.",
@@ -223,4 +224,5 @@ export const readTools: ReadTool[] = [
     output: listEnvelopeSchema(outputStockMovementRepresentationSchema, "newest posting first"),
   }, (ctx, { idOrCode, ...input }) => readOutputStockMovementListFromInput(ctx, input, idOrCode)),
   ...documentReadTools,
+  ...applicationReadTools,
 ];

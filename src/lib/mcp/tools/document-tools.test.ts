@@ -43,11 +43,11 @@ it("requires requestKey on requests and excludes keys and versions from confirma
 });
 it("describes the shell flow and untrusted files without prose dashes", () => {
   for (const tool of all()) {
-    for (const phrase of ["Files never travel", "request_document_upload", "upload.url", "upload.headers", "confirm_document_upload", "find_deliveries", "find_feedstocks", "find_lab_samples", "an application id from GET /applications", "shasum -a 256", "without the API key", "expires", "submitted Removal", "untrusted data"]) {
+    for (const phrase of ["Files never travel", "request_document_upload", "upload.url", "upload.headers", "confirm_document_upload", "find_deliveries", "find_feedstocks", "find_lab_samples", "find_applications", "shasum -a 256", "without the API key", "expires", "submitted Removal", "untrusted data"]) {
       expect(tool.description).toContain(phrase);
     }
     const schema = toOperationJsonSchema(tool.input) as { properties: { ownerId: { description: string } } };
-    expect(schema.properties.ownerId.description).toContain("an application id from GET /applications");
+    expect(schema.properties.ownerId.description).toContain("find_applications");
     expect(tool.description).not.toMatch(/[–—]/);
   }
   expect(request().description).toContain("fresh link while pending");
