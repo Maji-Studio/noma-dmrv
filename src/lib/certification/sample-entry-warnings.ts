@@ -69,7 +69,11 @@ function joinWithAnd(items: string[]): string {
 }
 
 export function sampleEntryWarnings(facts: SampleEntryFacts): string[] {
-  const warnings: string[] = sampleDocumentWarnings(facts);
+  const warnings: string[] = sampleDocumentWarnings({
+    sampling: facts.sampling,
+    creditBatchCode: facts.creditBatchCode,
+    hasLabReport: facts.hasLabReport,
+  });
   const is1000Year = facts.durabilityOption === "1000_year";
 
   // Same scope as the gate: sampled 1,000-year batches submit this tuple per Sample.

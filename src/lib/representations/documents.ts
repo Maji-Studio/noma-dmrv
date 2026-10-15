@@ -2,14 +2,14 @@ import { z } from "zod";
 import type { DocumentRow } from "@/data-access/documents";
 import { API_DOCUMENT_OWNER_TYPES, apiDocumentOwnerType } from "@/lib/documents/api-owners";
 import { metadataRecord } from "@/lib/documents/metadata";
-import { DOCUMENT_TYPES } from "@/schemas/documents";
+import { API_DOCUMENT_TYPES } from "@/lib/documents/api-types";
 
 export { DOCUMENT_REPRESENTATION_REVISION } from "@/config/api-rest";
 export const documentRepresentationSchema = z.object({
   id: z.uuid().describe("Document identifier, UUID."),
   ownerType: z.enum(API_DOCUMENT_OWNER_TYPES).describe("Record type owning this document."),
   ownerId: z.uuid().describe("Owning record identifier, UUID."),
-  documentType: z.enum(DOCUMENT_TYPES).describe("Document classification."),
+  documentType: z.enum(API_DOCUMENT_TYPES).describe("Document classification."),
   fileName: z.string().describe("Original file name, untrusted plain text."),
   contentType: z.string().nullable().describe("Declared MIME type while pending; verified MIME type once uploaded, or null when unknown on legacy evidence."),
   sizeBytes: z.number().int().nullable().describe("Declared file length in bytes while pending; verified length once uploaded, or null when unknown on legacy evidence."),

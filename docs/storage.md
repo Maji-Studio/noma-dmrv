@@ -237,6 +237,9 @@ mutation, including deletion of documents that are not registry Sources.
 Server-generated ledgers and GHG Statement reports retain their own writers.
 The storage layer itself does not perform authorization.
 
+`reflectance_histogram` is a Sample-only document type available through the app,
+not the public API.
+
 Per-documentType size and MIME rules live in `src/schemas/documents.ts`
 (`UPLOAD_RULES`, `isAllowedMime`, `maxBytesFor`) — read them there, they change.
 All user-uploaded document types currently share a 10 MB cap defined once in

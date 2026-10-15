@@ -232,3 +232,10 @@ describe("buildEntityReadinessResult", () => {
     expect(result.warnings).toEqual([]);
   });
 });
+
+it("keeps missing histogram evidence advisory for sampled 1,000-year batches", () => {
+  const batch = { ...batchWithSamples([]), creditBatchCode: "CB-001", durabilityOption: "1000_year" as const, hasReflectanceHistogram: false };
+  const result = buildEntityReadinessResult([], [batch], { feedstock: [], biochar: [], sample: [] }, []);
+  expect(result.gaps).toEqual([]);
+  expect(result.warnings).toEqual(["Credit batch CB-001 has no reflectance histogram document. Upload a reflectance histogram to one of its Samples. You can still submit the Removal."]);
+});

@@ -10,3 +10,15 @@ describe("sample document advisories", () => {
     expect(sampleDocumentWarnings({ sampling: "unsampled", creditBatchCode: "CB-1", hasLabReport: false })).toEqual([]);
   });
 });
+
+const histogramFacts = { sampling: "sampled" as const, creditBatchCode: "CB-1", durabilityOption: "1000_year" as const, hasReflectanceHistogram: false };
+it("warns about a missing histogram only for loaded, sampled 1,000-year evidence", () => {
+  expect(sampleDocumentWarnings(histogramFacts)).toEqual([
+    "Credit batch CB-1 has no reflectance histogram document. Upload a reflectance histogram to one of its Samples. You can still submit the Removal.",
+  ]);
+  expect(sampleDocumentWarnings({ ...histogramFacts, hasReflectanceHistogram: true })).toEqual([]);
+  expect(sampleDocumentWarnings({ ...histogramFacts, hasReflectanceHistogram: undefined })).toEqual([]);
+  expect(sampleDocumentWarnings({ ...histogramFacts, sampling: "unsampled" })).toEqual([]);
+  expect(sampleDocumentWarnings({ ...histogramFacts, durabilityOption: "200_year" })).toEqual([]);
+  expect(sampleDocumentWarnings({ ...histogramFacts, durabilityOption: null })).toEqual([]);
+});

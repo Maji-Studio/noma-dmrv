@@ -117,7 +117,6 @@ describe("biochar mass labels", () => {
         wetMassUsedKg: 3_000,
         supplierName: "Supplier",
         feedstockTypeName: "Wood chips",
-        feedstockDeliveryCode: "FD-1",
         href: "/feedstocks",
       },
     ];
@@ -125,6 +124,7 @@ describe("biochar mass labels", () => {
     const details = buildLineageNodes(data).find(
       (node) => node.kind === "feedstock",
     )?.details;
+    expect(details).not.toContainEqual(expect.objectContaining({ label: "Inbound" }));
     expect(details).toContainEqual({
       label: "Wet allocation",
       value: "3,000 kg",
@@ -340,7 +340,6 @@ function rollForward(runId: string): ChainRunRollForward {
           wetMassUsedKg: 3_000,
           supplierName: "Supplier",
           feedstockTypeName: "Wood chips",
-          feedstockDeliveryCode: "FD-1",
           href: "/feedstocks",
         },
       ],

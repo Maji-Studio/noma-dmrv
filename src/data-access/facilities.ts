@@ -12,7 +12,6 @@ import {
   facilities,
   reactors,
   storageLocations,
-  feedstockDeliveries,
   feedstocks,
   productionRuns,
   biocharProducts,
@@ -396,7 +395,6 @@ export { createFacility, updateFacility } from "./facility-mutations";
 export interface FacilityArchiveImpact {
   reactorCount: number;
   storageLocationCount: number;
-  feedstockDeliveryCount: number;
   feedstockCount: number;
   productionRunCount: number;
   biocharProductCount: number;
@@ -437,7 +435,6 @@ export async function getFacilityArchiveImpact(
   const [
     [reactorCount],
     [storageCount],
-    [feedstockDeliveryCount],
     [feedstockCount],
     [runCount],
     [productCount],
@@ -452,7 +449,6 @@ export async function getFacilityArchiveImpact(
   ] = await Promise.all([
     db.select({ count: count() }).from(reactors).where(and(eq(reactors.facilityId, facilityId), eq(reactors.organizationId, ctx.organizationId))),
     db.select({ count: count() }).from(storageLocations).where(and(eq(storageLocations.facilityId, facilityId), eq(storageLocations.organizationId, ctx.organizationId))),
-    db.select({ count: count() }).from(feedstockDeliveries).where(and(eq(feedstockDeliveries.facilityId, facilityId), eq(feedstockDeliveries.organizationId, ctx.organizationId))),
     db.select({ count: count() }).from(feedstocks).where(and(eq(feedstocks.facilityId, facilityId), eq(feedstocks.organizationId, ctx.organizationId))),
     db.select({ count: count() }).from(productionRuns).where(and(eq(productionRuns.facilityId, facilityId), eq(productionRuns.organizationId, ctx.organizationId))),
     db.select({ count: count() }).from(biocharProducts).where(and(eq(biocharProducts.facilityId, facilityId), eq(biocharProducts.organizationId, ctx.organizationId))),
@@ -491,7 +487,6 @@ export async function getFacilityArchiveImpact(
   return {
     reactorCount: Number(reactorCount.count),
     storageLocationCount: Number(storageCount.count),
-    feedstockDeliveryCount: Number(feedstockDeliveryCount.count),
     feedstockCount: Number(feedstockCount.count),
     productionRunCount: Number(runCount.count),
     biocharProductCount: Number(productCount.count),
@@ -582,7 +577,6 @@ export async function archiveFacility(
     // today because facility cascade is the only writer of archived_at).
     await tx.update(reactors).set({ version: nextVersion(reactors.version), archivedAt }).where(and(eq(reactors.facilityId, facilityId), eq(reactors.organizationId, ctx.organizationId), isNull(reactors.archivedAt)));
     await tx.update(storageLocations).set({ version: nextVersion(storageLocations.version), archivedAt }).where(and(eq(storageLocations.facilityId, facilityId), eq(storageLocations.organizationId, ctx.organizationId), isNull(storageLocations.archivedAt)));
-    await tx.update(feedstockDeliveries).set({ archivedAt }).where(and(eq(feedstockDeliveries.facilityId, facilityId), eq(feedstockDeliveries.organizationId, ctx.organizationId), isNull(feedstockDeliveries.archivedAt)));
     await tx.update(feedstocks).set({ archivedAt, version: nextVersion(feedstocks.version) }).where(and(eq(feedstocks.facilityId, facilityId), eq(feedstocks.organizationId, ctx.organizationId), isNull(feedstocks.archivedAt)));
     await tx.update(productionRuns).set({ archivedAt, version: nextVersion(productionRuns.version) }).where(and(eq(productionRuns.facilityId, facilityId), eq(productionRuns.organizationId, ctx.organizationId), isNull(productionRuns.archivedAt)));
     await tx.update(biocharProducts).set({ archivedAt, version: nextVersion(biocharProducts.version) }).where(and(eq(biocharProducts.facilityId, facilityId), eq(biocharProducts.organizationId, ctx.organizationId), isNull(biocharProducts.archivedAt)));
@@ -664,7 +658,6 @@ export async function restoreFacility(
     // individually keep their earlier stamp and remain archived.
     await tx.update(reactors).set({ version: nextVersion(reactors.version), archivedAt }).where(and(eq(reactors.facilityId, facilityId), eq(reactors.organizationId, ctx.organizationId), eq(reactors.archivedAt, cascadeArchiveStamp)));
     await tx.update(storageLocations).set({ version: nextVersion(storageLocations.version), archivedAt }).where(and(eq(storageLocations.facilityId, facilityId), eq(storageLocations.organizationId, ctx.organizationId), eq(storageLocations.archivedAt, cascadeArchiveStamp)));
-    await tx.update(feedstockDeliveries).set({ archivedAt }).where(and(eq(feedstockDeliveries.facilityId, facilityId), eq(feedstockDeliveries.organizationId, ctx.organizationId), eq(feedstockDeliveries.archivedAt, cascadeArchiveStamp)));
     await tx.update(feedstocks).set({ archivedAt, version: nextVersion(feedstocks.version) }).where(and(eq(feedstocks.facilityId, facilityId), eq(feedstocks.organizationId, ctx.organizationId), eq(feedstocks.archivedAt, cascadeArchiveStamp)));
     await tx.update(productionRuns).set({ archivedAt, version: nextVersion(productionRuns.version) }).where(and(eq(productionRuns.facilityId, facilityId), eq(productionRuns.organizationId, ctx.organizationId), eq(productionRuns.archivedAt, cascadeArchiveStamp)));
     await tx.update(biocharProducts).set({ archivedAt, version: nextVersion(biocharProducts.version) }).where(and(eq(biocharProducts.facilityId, facilityId), eq(biocharProducts.organizationId, ctx.organizationId), eq(biocharProducts.archivedAt, cascadeArchiveStamp)));

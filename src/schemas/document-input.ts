@@ -2,7 +2,8 @@ import { z } from "zod";
 import { API_DOCUMENT_OWNER_TYPES, allowsApiDocumentType } from "@/lib/documents/api-owners";
 import { DOCUMENT_UPLOAD_MAX_BYTES } from "@/lib/documents/upload-policy";
 import { getFutureEventFields } from "@/lib/future-event-times";
-import { DOCUMENT_TYPES, isAllowedMime, maxBytesFor } from "./documents";
+import { isAllowedMime, maxBytesFor } from "./documents";
+import { API_DOCUMENT_TYPES } from "@/lib/documents/api-types";
 import { offsetInstantSchema } from "./event-instant";
 import { requiredLatitudeSchema, requiredLongitudeSchema, gpsPairSuperRefine, uuidSchema } from "./helpers";
 
@@ -18,7 +19,7 @@ const ownerFields = {
 
 /** Public client declaration. Storage configuration and inspection facts are server owned. */
 export const requestDocumentUploadBodyInput = z.strictObject({
-  documentType: z.enum(DOCUMENT_TYPES).describe("Document classification allowed for this owner."),
+  documentType: z.enum(API_DOCUMENT_TYPES).describe("Document classification allowed for this owner."),
   fileName: z.string().min(1).max(FILE_NAME_MAX_LENGTH).describe("Original file name, untrusted plain text."),
   contentType: z.string().min(1).max(CONTENT_TYPE_MAX_LENGTH).describe("MIME type allowed for this document classification. Empty and text/plain are refused."),
   sizeBytes: z.number().int().min(1).max(DOCUMENT_UPLOAD_MAX_BYTES).describe("Exact declared file length in bytes."),

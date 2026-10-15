@@ -11,7 +11,6 @@ import type { AnyPgColumn, PgTable } from "drizzle-orm/pg-core";
 import type { DbTransaction } from "@/db";
 import {
   deliveries,
-  feedstockDeliveries,
   feedstocks,
   incidentReports,
   productionRuns,
@@ -32,7 +31,6 @@ interface UsageSource {
 const VEHICLE_USAGE: readonly UsageSource[] = [
   { table: feedstocks, organizationId: feedstocks.organizationId, reference: feedstocks.vehicleId, singular: "feedstock intake", plural: "feedstock intakes" },
   { table: deliveries, organizationId: deliveries.organizationId, reference: deliveries.vehicleId, singular: "delivery", plural: "deliveries" },
-  { table: feedstockDeliveries, organizationId: feedstockDeliveries.organizationId, reference: feedstockDeliveries.vehicleId, singular: "feedstock delivery", plural: "feedstock deliveries" },
 ];
 
 const DRIVER_USAGE: readonly UsageSource[] = [

@@ -4,7 +4,6 @@ import { db, type DbTransaction } from "@/db";
 import {
   creditBatches,
   facilities,
-  feedstockDeliveries,
   feedstocks,
   feedstockTypes,
   formulationIngredients,
@@ -210,11 +209,6 @@ async function findDeleteConflict(
       .where(and(eq(feedstocks.feedstockTypeId, feedstockTypeId), eq(feedstocks.organizationId, ctx.organizationId)))
       .limit(1)
       .then((rows) => rows.map((row): FeedstockTypeDeleteConflict => ({ entity: "feedstock", id: row.id, code: conflictCode(row.code) }))),
-    tx.select({ id: feedstockDeliveries.id, code: feedstockDeliveries.code })
-      .from(feedstockDeliveries)
-      .where(and(eq(feedstockDeliveries.feedstockTypeId, feedstockTypeId), eq(feedstockDeliveries.organizationId, ctx.organizationId)))
-      .limit(1)
-      .then((rows) => rows.map((row): FeedstockTypeDeleteConflict => ({ entity: "feedstock-delivery", id: row.id, code: conflictCode(row.code) }))),
     // A production process has no code of its own; point at its facility,
     // where the operator manages it.
     tx.select({ id: facilities.id, code: facilities.code })

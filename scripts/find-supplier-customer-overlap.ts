@@ -29,7 +29,7 @@ async function main(): Promise<void> {
   const { suppliers, customers, supplierLocations } = await import(
     "../src/db/schema/parties"
   );
-  const { feedstocks, feedstockDeliveries } = await import("../src/db/schema/feedstock");
+  const { feedstocks } = await import("../src/db/schema/feedstock");
   const { eq, sql } = await import("drizzle-orm");
 
   const normalizedName = (column: typeof suppliers.name | typeof customers.name) =>
@@ -45,10 +45,6 @@ async function main(): Promise<void> {
       feedstockCount: sql<number>`(
         select count(*)::int from ${feedstocks}
         where ${feedstocks.supplierId} = ${suppliers.id}
-      )`,
-      deliveryCount: sql<number>`(
-        select count(*)::int from ${feedstockDeliveries}
-        where ${feedstockDeliveries.supplierId} = ${suppliers.id}
       )`,
       supplierLocationCount: sql<number>`(
         select count(*)::int from ${supplierLocations}
@@ -67,10 +63,10 @@ async function main(): Promise<void> {
     );
     for (const row of overlaps) {
       const usage =
-        row.feedstockCount + row.deliveryCount + row.supplierLocationCount;
+        row.feedstockCount + row.supplierLocationCount;
       const referenced =
         usage > 0
-          ? `REFERENCED by ${row.feedstockCount} feedstock(s) + ${row.deliveryCount} delivery(ies) + ${row.supplierLocationCount} supplier_location(s) — do not delete blindly`
+          ? `REFERENCED by ${row.feedstockCount} feedstock(s) + ${row.supplierLocationCount} supplier_location(s) — do not delete blindly`
           : "unreferenced — safe to delete after review";
       console.log(`- supplier ${row.supplierCode}`);
       console.log(`    supplierId: ${row.supplierId}`);

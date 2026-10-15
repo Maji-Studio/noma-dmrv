@@ -12,7 +12,6 @@ import {
   deliveries,
   documents,
   facilities,
-  feedstockDeliveries,
   feedstocks,
   incidentReports,
   orders,
@@ -66,7 +65,6 @@ const DOCUMENT_ENTITY_LABELS: Record<DocumentEntityType, string> = {
   production_sample: "In-process measurement",
   biochar_product: "Biochar product",
   feedstock: "Feedstock",
-  feedstock_delivery: "Feedstock delivery",
   application: "Application",
   credit_batch: "Credit batch",
   facility: "Facility",
@@ -165,20 +163,6 @@ export async function assertCanManageDocumentEntity(
         .select({ id: feedstocks.id })
         .from(feedstocks)
         .where(and(eq(feedstocks.id, entityId), eq(feedstocks.organizationId, ctx.organizationId), isNull(feedstocks.archivedAt)));
-      if (!row) throw entityMissingError(entityType);
-      return;
-    }
-    case "feedstock_delivery": {
-      const [row] = await db
-        .select({ id: feedstockDeliveries.id })
-        .from(feedstockDeliveries)
-        .where(
-          and(
-            eq(feedstockDeliveries.id, entityId),
-            eq(feedstockDeliveries.organizationId, ctx.organizationId),
-            isNull(feedstockDeliveries.archivedAt)
-          )
-        );
       if (!row) throw entityMissingError(entityType);
       return;
     }

@@ -21,10 +21,10 @@ describe("toBatchHealthFacts", () => {
     transportCoverage: { feedstock: { count: 1, missingEntityIds: [], aggregationWarning: null, vehicleAdvisories: [] } },
   } as unknown as RemovalCertifyContext;
 
-  it("carries only the selected batch's lab-report warning without blocking", () => {
+  it("carries only the selected batch's document warnings without blocking", () => {
     const context = { ...readyContext,
       memberBatches: ["batch-1", "batch-2"].map((id) => ({
-        id, code: id, sampling: "sampled", hasLabReport: false,
+        id, code: id, sampling: "sampled", hasLabReport: false, durabilityOption: "1000_year", hasReflectanceHistogram: false,
       })),
       submissionWarnings: ["Soil floor", "Startup diesel", "Run warning", "Sampling advisory", "Run warning"],
     } as unknown as RemovalCertifyContext;
@@ -33,6 +33,7 @@ describe("toBatchHealthFacts", () => {
     expect(health.state).toBe("ready");
     expect(health.warnings).toEqual([
       "Credit batch batch-1 has no lab report document. Upload a lab report to one of its Samples. You can still submit the Removal.",
+      "Credit batch batch-1 has no reflectance histogram document. Upload a reflectance histogram to one of its Samples. You can still submit the Removal.",
     ]);
     expect(toBatchHealthFacts(context, "absent").warnings).toEqual([]);
     expect(readiness.state).toBe("ready");

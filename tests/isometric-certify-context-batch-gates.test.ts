@@ -139,6 +139,7 @@ describe("credit batch gates without applications", () => {
         facilityTimezone: "UTC",
         sampling: "sampled",
         hasLabReport: false,
+        hasReflectanceHistogram: false,
         durabilityOption: "200_year",
         samples: [],
         runs: [],
@@ -165,6 +166,7 @@ describe("credit batch gates without applications", () => {
       "Set this facility's reference soil temperature under Certification settings, then Emissions, before submitting a 200-year Removal.",
     ]);
     expect(result.memberBatches[0]?.hasLabReport).toBe(false);
+    expect(result.memberBatches[0]?.hasReflectanceHistogram).toBe(false);
     expect(toBatchHealthFacts(result, CREDIT_BATCH_ID).warnings).toEqual([
       "Credit batch CB-1 has no lab report document. Upload a lab report to one of its Samples. You can still submit the Removal.",
     ]);

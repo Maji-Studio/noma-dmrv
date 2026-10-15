@@ -98,7 +98,7 @@ describe("isDatabaseSchemaMismatchError", () => {
 });
 
 describe("Postgres foreign-key refusal", () => {
-  const constraint = "feedstock_deliveries_supplier_id_suppliers_id_fk";
+  const constraint = "feedstocks_supplier_id_suppliers_id_fk";
 
   it("recognizes a named FK refusal directly and through Drizzle", () => {
     const error = { code: "23503", constraint };

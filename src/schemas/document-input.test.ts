@@ -1,9 +1,12 @@
 import { afterEach, expect, it, vi } from "vitest";
-import { requestDocumentUploadInput, confirmDocumentUploadInput } from "./document-input";
+import { requestDocumentUploadInput, requestDocumentUploadBodyInput, confirmDocumentUploadInput } from "./document-input";
 import { API_DOCUMENT_OWNERS } from "@/lib/documents/api-owners";
+import { API_DOCUMENT_TYPES, APP_ONLY_DOCUMENT_TYPES } from "@/lib/documents/api-types";
+import { DOCUMENT_TYPES } from "./documents";
 
 const ID = "ABCDEFAB-1234-4234-8234-ABCDEFABCDEF";
-const input = { ownerType: "feedstock", ownerId: ID, documentType: "bill_of_lading", fileName: "receipt.pdf", contentType: "application/pdf", sizeBytes: 8, sha256: "a".repeat(64) };
+const body = { documentType: "bill_of_lading", fileName: "receipt.pdf", contentType: "application/pdf", sizeBytes: 8, sha256: "a".repeat(64) };
+const input = { ...body, ownerType: "feedstock", ownerId: ID };
 afterEach(() => vi.useRealTimers());
 
 it("accepts the declaration and canonicalizes owner UUIDs", () => {
@@ -51,4 +54,12 @@ it("confirm accepts only the public owner and document identifiers", () => {
   const confirm = { ownerType: "lab_sample", ownerId: ID, documentId: ID };
   expect(confirmDocumentUploadInput.parse(confirm)).toMatchObject({ ownerId: ID.toLowerCase(), documentId: ID.toLowerCase() });
   expect(confirmDocumentUploadInput.safeParse({ ...confirm, inspectedSha256: "a".repeat(64) }).success).toBe(false);
+});
+
+it("excludes app-only histograms from the API body schema and type list", () => {
+  expect(requestDocumentUploadBodyInput.safeParse({ ...body, documentType: "lab_report" }).success).toBe(true);
+  expect(requestDocumentUploadBodyInput.safeParse({ ...body, documentType: "reflectance_histogram" }).success).toBe(false);
+  expect(requestDocumentUploadInput.safeParse({ ...input, ownerType: "lab_sample", documentType: "reflectance_histogram" }).success).toBe(false);
+  expect(APP_ONLY_DOCUMENT_TYPES).toEqual(["reflectance_histogram"]);
+  expect(API_DOCUMENT_TYPES).toEqual(DOCUMENT_TYPES.filter((type) => type !== "reflectance_histogram"));
 });

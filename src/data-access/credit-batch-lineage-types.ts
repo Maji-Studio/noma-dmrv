@@ -10,7 +10,6 @@ export interface BatchLineageFeedstockFact {
   wetMassUsedKg: number | null;
   supplierName: string | null;
   feedstockTypeName: string | null;
-  feedstockDeliveryCode: string | null;
 }
 
 export interface BatchLineageRunFact {

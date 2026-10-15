@@ -10,6 +10,7 @@ export const DOCUMENT_TYPES = [
   "bill_of_lading",
   "other_transport_evidence",
   "lab_report",
+  "reflectance_histogram",
   "delivery_receipt",
   "invoice",
   "pdd",
@@ -28,6 +29,7 @@ export const DOCUMENT_TYPE_LABELS: Record<DocumentType, string> = {
   bill_of_lading: "Bill of lading",
   other_transport_evidence: "Other transport evidence",
   lab_report: "Lab report",
+  reflectance_histogram: "Reflectance histogram",
   delivery_receipt: "Delivery receipt",
   invoice: "Invoice",
   pdd: "PDD",
@@ -51,7 +53,6 @@ export const DOCUMENT_ENTITY_TYPES = [
   "production_sample",
   "biochar_product",
   "feedstock",
-  "feedstock_delivery",
   "application",
   "credit_batch",
   "facility",
@@ -98,6 +99,7 @@ export const UPLOAD_RULES: Record<DocumentType, UploadRule> = {
     ...IMAGE_MIMES,
     ...TABULAR_MIMES,
   ]),
+  reflectance_histogram: uploadRule([...PDF_MIMES, ...IMAGE_MIMES, ...TABULAR_MIMES]),
   delivery_receipt: uploadRule([...PDF_MIMES, ...IMAGE_MIMES]),
   invoice: uploadRule(PDF_MIMES),
   pdd: uploadRule(PDF_MIMES),
@@ -160,6 +162,9 @@ export const requestUploadSchema = z
   // document (typed PDF, weighbridge ticket, or affidavit), and the
   // visual and logbook classifications only on their supported document types.
   .superRefine((data, ctx) => {
+    if (data.documentType === "reflectance_histogram" && data.entityType !== "sample") {
+      ctx.addIssue({ code: "custom", path: ["documentType"], message: "Reflectance histograms can only be uploaded to a Sample." });
+    }
     if (
       data.applicationEvidenceRole !== undefined &&
       data.documentType !== "photo"
