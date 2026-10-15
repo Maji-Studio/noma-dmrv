@@ -16,8 +16,8 @@
  * payload share the same applied-mass numerator and application-linked run
  * output denominator, so the two can never drift (ADR 0003 as narrowed by ADR
  * 0020 — a removal's stored quantity counts only the biochar that reached
- * soil). `appliedDryKg / deliveryBiocharOutputKg` is the overall delivery
- * attribution; per run it's `aggregateProductionRuns`'s scoping factor.
+ * soil). Transport uses immutable wet application loads per delivery instead of
+ * this production-output ratio.
  *
  * Pure and dependency-light: it takes the two arrays the submission context
  * already resolves via narrow structural params, so it stays unit-testable and
@@ -33,8 +33,7 @@ export interface RemovalRunSummary {
   totalBiocharOutputKg: number;
   /**
    * Output only from runs represented by this Removal's Applications. This is
-   * the delivery-transport denominator; unapplied whole-batch production runs
-   * must not dilute the applied biochar transport share.
+   * the application-linked production denominator, excluding unapplied runs.
    */
   deliveryBiocharOutputKg: number;
   /**
@@ -63,22 +62,6 @@ export const EMPTY_RUN_SUMMARY: RemovalRunSummary = {
   deliveryBiocharOutputKg: 0,
   appliedDryKg: 0,
 };
-
-/**
- * Removal-wide applied-biochar fraction — the DELIVERY-bucket scaling factor
- * (§8.6.2, issue #349, ADR 0020): appliedDryKg / deliveryBiocharOutputKg,
- * falling back to full attribution (1) when output is zero/absent, mirroring
- * the per-run fallback in `buildMassAccounting`. The ONE shared definition: both
- * the submitted biochar-transport scalar (`submitRemoval` →
- * `enrichWithTransportLegs`) and the transport evidence-ledger PDF's explicit
- * "× applied share" line derive from it, so the ledger always reconciles to
- * the submitted datapoint by construction.
- */
-export function appliedBiocharFraction(summary: RemovalRunSummary): number {
-  return summary.deliveryBiocharOutputKg > 0
-    ? summary.appliedDryKg / summary.deliveryBiocharOutputKg
-    : 1;
-}
 
 // Only the fields the accounting reads — structurally satisfied by
 // `ChainOfCustodyData` / `ProductionRunWithSamples` at the call site.

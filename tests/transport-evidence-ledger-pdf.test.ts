@@ -71,7 +71,6 @@ describe("renderEvidenceLedgerPdf", () => {
       facilityName: "Dark Earth Hub",
       externalProjectId: "prj_TEST",
       generatedAtIso: "2026-07-13T00:00:00.000Z",
-      appliedBiocharFraction: 0.5,
     });
 
     expect(model.categories[0].roundingAdjustmentTkm).not.toBeUndefined();
@@ -83,7 +82,7 @@ describe("renderEvidenceLedgerPdf", () => {
     // Each row shows the counted round trip with the one-way distance under it.
     expect(compactText).toContain("1km·rt0.5oneway");
     expect(compactText).toContain("ROUNDINGADJUSTMENT");
-    expect(compactText).toContain("SCALINGADJUSTMENT");
+    expect(compactText).not.toContain("SCALINGADJUSTMENT");
 
     const apparatusPage = pages.find(
       (text) =>

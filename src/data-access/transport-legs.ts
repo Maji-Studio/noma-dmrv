@@ -312,6 +312,9 @@ export async function updateTransportLeg(
   if (!existing) {
     throw new SafeError("Transport leg not found");
   }
+  if (existing.entityType === "biochar") {
+    throw new SafeError("Biochar transport is derived from deliveries. Edit the delivery distance instead.");
+  }
   await resolveEntityFacility(ctx, existing.entityType, existing.entityId);
 
   const [row] = await db.transaction(async (tx) => {

@@ -13,7 +13,6 @@ import { describe, expect, it } from "vitest";
 import type { ChainOfCustodyData } from "@/data-access/chain-of-custody";
 import type { ProductionRunWithSamples } from "@/lib/isometric/utils/aggregation";
 import {
-  appliedBiocharFraction,
   buildMassAccounting,
   EMPTY_RUN_SUMMARY,
 } from "@/lib/certification/mass-accounting";
@@ -137,26 +136,5 @@ describe("buildMassAccounting — attributionByRunId", () => {
     );
     expect(runSummary.totalBiocharOutputKg).toBe(1_000);
     expect(runSummary.deliveryBiocharOutputKg).toBe(100);
-    expect(appliedBiocharFraction(runSummary)).toBe(0.5);
-  });
-});
-
-// §8.6.2 delivery bucket (issue #349, ADR 0020): the ONE shared removal-wide
-// fraction — the submitted biochar-transport scalar and the evidence-ledger
-// PDF's "× applied share" line both derive from it.
-describe("appliedBiocharFraction", () => {
-  it("is appliedDryKg over deliveryBiocharOutputKg", () => {
-    expect(
-      appliedBiocharFraction({
-        runCount: 1,
-        totalBiocharOutputKg: 1000,
-        deliveryBiocharOutputKg: 1000,
-        appliedDryKg: 400,
-      }),
-    ).toBe(0.4);
-  });
-
-  it("falls back to full attribution (1) when output is zero", () => {
-    expect(appliedBiocharFraction(EMPTY_RUN_SUMMARY)).toBe(1);
   });
 });

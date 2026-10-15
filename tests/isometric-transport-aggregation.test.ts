@@ -362,9 +362,9 @@ describe("enrichWithTransportLegs", () => {
   });
 
   // §8.6.2 buckets (issue #349, ADR 0020): biochar transport is the DELIVERY
-  // bucket and scales with the applied share; feedstock/sample transport are
+  // bucket and carries attributed wet loads; feedstock/sample transport are
   // PRODUCTION-bucket and always sum whole.
-  it("scales the biochar mass-distance by the applied-biochar fraction", () => {
+  it("counts already-attributed delivery loads without a second share factor", () => {
     const enriched = enrichWithTransportLegs(
       baseAgg,
       {
@@ -372,12 +372,11 @@ describe("enrichWithTransportLegs", () => {
         biochar: [roundTripLeg(10, 1000)], // 10 t·km
         sample: [],
       },
-      { appliedBiocharFraction: 0.4 },
     );
-    expect(enriched.biocharTransportMassDistanceTonneKm).toBeCloseTo(4);
+    expect(enriched.biocharTransportMassDistanceTonneKm).toBeCloseTo(10);
   });
 
-  it("leaves feedstock and sample mass-distance unscaled at a fraction below 1", () => {
+  it("leaves feedstock and sample mass-distance unscaled", () => {
     const enriched = enrichWithTransportLegs(
       baseAgg,
       {
@@ -385,13 +384,12 @@ describe("enrichWithTransportLegs", () => {
         biochar: [roundTripLeg(10, 1000)], // 10 t·km
         sample: [roundTripLeg(10, 500), roundTripLeg(30, 500)], // 20 t·km
       },
-      { appliedBiocharFraction: 0.4 },
     );
     // PRODUCTION-bucket categories stay whole.
     expect(enriched.feedstockTransportMassDistanceTonneKm).toBe(50);
     expect(enriched.sampleTransportMassDistanceTonneKm).toBe(20);
-    // Only the DELIVERY-bucket biochar category scales.
-    expect(enriched.biocharTransportMassDistanceTonneKm).toBeCloseTo(4);
+    // The DELIVERY bucket is already attributed.
+    expect(enriched.biocharTransportMassDistanceTonneKm).toBeCloseTo(10);
   });
 
   it("defaults to the full biochar mass-distance when no option is passed", () => {
@@ -403,23 +401,7 @@ describe("enrichWithTransportLegs", () => {
     expect(enriched.biocharTransportMassDistanceTonneKm).toBe(10);
   });
 
-  it("clamps an out-of-range applied-biochar fraction into [0, 1]", () => {
-    const legs = {
-      feedstock: [],
-      biochar: [roundTripLeg(10, 1000)], // 10 t·km
-      sample: [],
-    };
-    const above = enrichWithTransportLegs(baseAgg, legs, {
-      appliedBiocharFraction: 1.5,
-    });
-    expect(above.biocharTransportMassDistanceTonneKm).toBe(10);
-    const below = enrichWithTransportLegs(baseAgg, legs, {
-      appliedBiocharFraction: -0.5,
-    });
-    expect(below.biocharTransportMassDistanceTonneKm).toBe(0);
-  });
-
-  it("keeps a null biochar mass-distance null under a fraction", () => {
+  it("keeps missing biochar legs null", () => {
     const enriched = enrichWithTransportLegs(
       baseAgg,
       {
@@ -427,7 +409,6 @@ describe("enrichWithTransportLegs", () => {
         biochar: [], // no legs ⇒ null (fails closed at submit)
         sample: [],
       },
-      { appliedBiocharFraction: 0.4 },
     );
     expect(enriched.biocharTransportMassDistanceTonneKm).toBeNull();
   });

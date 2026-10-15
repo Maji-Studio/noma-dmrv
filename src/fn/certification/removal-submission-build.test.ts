@@ -331,6 +331,24 @@ describe("buildRemovalSubmissionBuild", () => {
     })).rejects.toThrow("Removal submission blocked:\nFeedstock FS-2 has no usable transport leg.");
   });
 
+  it("refuses a delivered delivery without distance before preparing registry inputs", async () => {
+    const lineages = [{ application: { id: "app-1", code: "AP-1" }, delivery: {
+      id: "delivery-1", code: "DL-1", status: "delivered", customerLocationId: "location-1",
+      distanceKmOverride: null, locationDistanceKm: null,
+    }, order: null }] as RemovalSubmissionContext["lineages"];
+    const ctx = {
+      entityReadinessGaps: [],
+      submissionLineageBlockers: buildSubmissionLineageBlockers(lineages, [], {}, ["biochar"]),
+    } as unknown as RemovalSubmissionContext;
+    await expect(buildRemovalSubmissionBuild({
+      orgCtx: TEST_ORG_CONTEXT, removalId: "rem-missing-distance", ctx,
+      prepared: {
+        defaultTemplate: { groups: [] } as never, blueprintsByKey: new Map(),
+        externalProjectId: "prj-test", allowPeriodInputStub: false, hasDurabilityComponents: false,
+      },
+    })).rejects.toThrow("Delivery DL-1 has no positive transport distance");
+  });
+
   it("builds the Safety margin from dry mass with the Inventory Source attached", async () => {
     const inventoryBinding = classifyRemovalSourceCandidate({
       documentType: "pdf",
