@@ -56,7 +56,7 @@ defaults, and drops `biochar_products.expires_at` without a backfill, so it
 fails on a database that still holds null legacy rows. Run `pnpm db:reset` locally; shared staging
 uses the manual reset workflow in [database.md](./database.md), announced first.
 
-Migration `0139_require_order_delivery_site` makes
+Migration `0140_require_order_delivery_site` makes
 `orders.customer_location_id` NOT NULL. The location must belong to the selected
 customer. Create requires it; updates may omit it to keep the saved destination
 and cannot clear it. Existing development rows without a destination require a
