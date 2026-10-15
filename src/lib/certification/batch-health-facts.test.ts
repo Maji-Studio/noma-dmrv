@@ -29,6 +29,7 @@ describe("toBatchHealthFacts", () => {
 
   it.each([
     ["orders", "/orders?"],
+    ["deliveries", "/deliveries?"],
     ["deliveryDistances", "/deliveries?"],
   ] as const)("routes %s blockers to the resolving workflow", (fixTarget, path) => {
     const health = deriveBatchHealth(toBatchHealthFacts({ ...readyContext, submissionLineageBlockers: [{
@@ -38,6 +39,11 @@ describe("toBatchHealthFacts", () => {
     expect(health.issueCount).toBe(1);
     expect(check.fixTarget).toBe(fixTarget);
     expect(batchHealthFixLinkFor(check, "facility-1").href).toContain(path);
+    expect(buildRemovalRequirementsChecklist(toRemovalReadinessFacts({ ...readyContext,
+      submissionLineageBlockers: [{ detail: "Resolve this submission blocker.", fixTarget, record: { id: "record-1", code: "RE-1" } }],
+    }))).toContainEqual(expect.objectContaining({ key: "entityReadiness", lineageIssues: [
+      expect.objectContaining({ fixTarget, record: { id: "record-1", code: "RE-1" } }),
+    ] }));
   });
 
   it("does not let one feedstock leg cover a second feedstock", () => {

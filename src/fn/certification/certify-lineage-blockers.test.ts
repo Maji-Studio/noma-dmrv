@@ -5,7 +5,7 @@ import { buildSubmissionLineageBlockers } from "./certify-lineage-blockers";
 const lineage = {
   application: { id: "app-1", code: "AP-1" },
   order: { id: "order-1", code: "OR-1" },
-  delivery: { id: "delivery-1", code: "DL-1", status: "delivered", customerLocationId: null, distanceKmOverride: null, locationDistanceKm: null },
+  delivery: { id: "delivery-1", code: "DL-1", status: "delivered", proofOfDeliveryCount: 1, customerLocationId: null, distanceKmOverride: null, locationDistanceKm: null },
 } as unknown as ChainOfCustodyData;
 
 describe("submission lineage blockers", () => {
@@ -29,5 +29,21 @@ describe("submission lineage blockers", () => {
     expect(blockers[1]).toMatchObject({ fixTarget: "feedstocks", record: { id: "fs-1", code: "FS-1" } });
     expect(blockers[1].detail).toContain("Feedstock FS-1");
     expect(blockers.map((blocker) => blocker.detail).join(" ")).not.toContain("internal-uuid");
+  });
+  it("requires proof on every delivery even without transport categories, deduplicating applications", () => {
+    const missing = { ...lineage, delivery: { ...lineage.delivery, customerLocationId: "location", proofOfDeliveryCount: 0 } };
+    expect(buildSubmissionLineageBlockers([missing, { ...missing, application: { ...missing.application, id: "app-2", code: "AP-2" } }], [], {}, [])).toEqual([{
+      proofOfDeliveryOnly: true,
+      detail: "Delivery DL-1 has no proof of delivery. Attach a delivery receipt, bill of lading or delivery photo before submitting.",
+      fixTarget: "deliveries", record: { id: "delivery-1", code: "DL-1" },
+    }]);
+  });
+
+  it("does not let another delivery's proof cover a missing delivery", () => {
+    const covered = { ...lineage, delivery: { ...lineage.delivery, customerLocationId: "location" } };
+    const missing = { ...covered, delivery: { ...covered.delivery, id: "delivery-2", code: "DL-2", proofOfDeliveryCount: 0 } };
+    expect(buildSubmissionLineageBlockers([covered, missing], [], {}, [])).toMatchObject([
+      { fixTarget: "deliveries", record: { id: "delivery-2", code: "DL-2" } },
+    ]);
   });
 });

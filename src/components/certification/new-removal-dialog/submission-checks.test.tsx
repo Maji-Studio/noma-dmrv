@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
-import type { RemovalRequirementCheck } from "@/lib/certification/readiness";
+import { ENTITY_READINESS_CHECK_DISPLAY_LIMIT, type RemovalRequirementCheck } from "@/lib/certification/readiness";
 import { SubmissionChecks } from "./submission-checks";
 
 vi.mock("next/link", () => ({
@@ -213,5 +213,28 @@ describe("SubmissionChecks", () => {
     expect(html).toContain("8 checks passed");
     expect(html).not.toContain("Registry value sources linked");
     expect(html).not.toContain("2 files will upload on submit");
+  });
+  it("links missing proof to the delivery evidence section", () => {
+    const html = renderToStaticMarkup(<SubmissionChecks
+      checks={withUnmet("entityReadiness", { lineageIssues: [{
+        proofOfDeliveryOnly: true, detail: "Delivery D-0012 has no proof of delivery.", fixTarget: "deliveries",
+        record: { id: "delivery-1", code: "D-0012" },
+      }] })} facilityId="facility-1"
+    />);
+    expect(html).toContain("delivery=delivery-1&amp;mode=edit&amp;focus=transport-evidence");
+    expect(html).toContain("Review D-0012 evidence");
+  });
+
+  it("caps proof links and names each delivery", () => {
+    const lineageIssues = Array.from({ length: ENTITY_READINESS_CHECK_DISPLAY_LIMIT + 1 }, (_, index) => ({
+      detail: "Missing proof", fixTarget: "deliveries" as const, proofOfDeliveryOnly: true,
+      record: { id: `delivery-${index}`, code: `D-${index}` },
+    }));
+    const html = renderToStaticMarkup(<SubmissionChecks
+      checks={withUnmet("entityReadiness", { lineageIssues })} facilityId="facility-1"
+    />);
+    expect(html.match(/focus=transport-evidence/g)).toHaveLength(ENTITY_READINESS_CHECK_DISPLAY_LIMIT);
+    expect(html).toContain("Review D-0 evidence");
+    expect(html).not.toContain(`Review D-${ENTITY_READINESS_CHECK_DISPLAY_LIMIT} evidence`);
   });
 });

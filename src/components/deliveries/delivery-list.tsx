@@ -175,7 +175,7 @@ function createColumns(
         <EntityCertifyReadinessBadge
           readiness={deriveEntityCertifyReadiness("delivery", row.original)}
           readyLabel="Fields complete"
-          readinessNoun="delivery fields"
+          readinessNoun="delivery fields and proof"
         />
       ),
     },

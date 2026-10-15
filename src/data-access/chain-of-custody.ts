@@ -78,6 +78,7 @@ export interface ChainDeliveryLineage {
   locationDistanceKm?: number | null;
   /** Resolved from the delivery's order. */
   customerLocationId?: string | null;
+  proofOfDeliveryCount?: number;
   massDryKg: number | null;
   href: string;
 }

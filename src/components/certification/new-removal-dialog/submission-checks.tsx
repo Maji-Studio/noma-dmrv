@@ -10,7 +10,7 @@
 import Link from "next/link";
 import { WarningIcon } from "@phosphor-icons/react/dist/ssr";
 import { InfoHint } from "@/components/ui/tooltip";
-import type { RemovalRequirementCheck } from "@/lib/certification/readiness";
+import { ENTITY_READINESS_CHECK_DISPLAY_LIMIT, type RemovalRequirementCheck } from "@/lib/certification/readiness";
 import { batchHealthFixLinkFor } from "@/lib/certification/batch-health-links";
 import { transportRepairDestination } from "@/lib/isometric/semantic-binding-catalog";
 import { certificationSettingsHref } from "@/lib/certification/links";
@@ -32,7 +32,7 @@ interface SubmissionChecksProps {
 function fixLinksFor(
   check: Pick<
     RemovalRequirementCheck,
-    "key" | "fixTarget" | "fixTargetId" | "transportCategory"
+    "key" | "fixTarget" | "fixTargetId" | "transportCategory" | "lineageIssues"
   >,
   facilityId: string,
 ): { label: string; href: string }[] {
@@ -50,6 +50,13 @@ function fixLinksFor(
   };
 
   switch (check.key) {
+    case "entityReadiness": {
+      const links = (check.lineageIssues ?? []).slice(0, ENTITY_READINESS_CHECK_DISPLAY_LIMIT).map((issue) => batchHealthFixLinkFor({
+        key: "entityReadiness", fixTarget: issue.fixTarget, proofOfDeliveryOnly: issue.proofOfDeliveryOnly,
+        affectedRecords: [{ ...issue.record, missing: [issue.detail] }],
+      }, facilityId));
+      return [...new Map(links.map((link) => [link.href, link])).values()];
+    }
     case "mapping":
     case "template":
       return [

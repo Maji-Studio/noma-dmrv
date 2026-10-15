@@ -663,7 +663,7 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
         code: "AP-MISSING",
         applicationDate: new Date("2026-01-20T00:00:00Z"),
       } as never,
-      delivery: { code: "DL-MISSING", status: "delivered", customerLocationId: null } as never,
+      delivery: { proofOfDeliveryCount: 1, code: "DL-MISSING", status: "delivered", customerLocationId: null } as never,
       order: null,
       biocharProduct: { id: "bp-1" } as never,
       productionRun: { id: "pr-1" } as never,

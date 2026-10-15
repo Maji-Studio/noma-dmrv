@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { hasDurabilityMeasurementComponents, applicationDestinationBlocker, deliveryDistanceBlocker, durabilityConfigurationBlockers, missingFeedstockTransportIds } from "./submission-readiness";
+import { deliveryProofBlocker, hasDurabilityMeasurementComponents, applicationDestinationBlocker, deliveryDistanceBlocker, durabilityConfigurationBlockers, missingFeedstockTransportIds } from "./submission-readiness";
 
 const sampled = { sampling: "sampled", durabilityOption: "1000_year" };
 
@@ -44,5 +44,14 @@ describe("submission readiness predicates", () => {
   });
   it("accepts one sampled 1000-year batch", () => {
     expect(durabilityConfigurationBlockers([sampled])).toEqual([]);
+  });
+});
+
+describe("delivery proof readiness", () => {
+  it("requires at least one uploaded proof document", () => {
+    expect(deliveryProofBlocker({ deliveryCode: "D-0012", proofOfDeliveryCount: 0 })).toBe(
+      "Delivery D-0012 has no proof of delivery. Attach a delivery receipt, bill of lading or delivery photo before submitting.",
+    );
+    expect(deliveryProofBlocker({ deliveryCode: "D-0012", proofOfDeliveryCount: 1 })).toBeNull();
   });
 });

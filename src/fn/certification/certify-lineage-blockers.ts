@@ -1,6 +1,6 @@
 import type { BatchLineageRunFact } from "@/data-access/credit-batch-lineage-types";
 import type { ChainOfCustodyData } from "@/data-access/chain-of-custody";
-import { applicationDestinationBlocker, deliveryDistanceBlocker, type SubmissionLineageBlocker } from "@/lib/certification/submission-readiness";
+import { applicationDestinationBlocker, deliveryDistanceBlocker, deliveryProofBlocker, type SubmissionLineageBlocker } from "@/lib/certification/submission-readiness";
 import type { TransportCategory } from "./certify-transport-coverage";
 
 export function collectFeedstockCodes(runs: readonly BatchLineageRunFact[]): Record<string, string> {
@@ -26,6 +26,11 @@ export function buildSubmissionLineageBlockers(
     });
   }
   for (const { application, delivery, order } of lineages) {
+    const proof = deliveryProofBlocker({
+      deliveryCode: delivery.code,
+      proofOfDeliveryCount: delivery.proofOfDeliveryCount ?? 0,
+    });
+    if (proof) blockers.push({ proofOfDeliveryOnly: true, detail: proof, fixTarget: "deliveries", record: { id: delivery.id, code: delivery.code } });
     const destination = applicationDestinationBlocker({
       applicationCode: application.code,
       // The lineage projection resolves this from the order destination.

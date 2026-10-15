@@ -35,6 +35,7 @@ export function toRemovalReadinessFacts(
     hasSubmittableRuns: ctx.hasSubmittableRuns,
     productionReadinessGap: ctx.productionReadinessGap ?? null,
     entityReadinessGaps: ctx.entityReadinessGaps ?? [],
+    submissionLineageIssues: ctx.submissionLineageBlockers.filter((blocker) => blocker.fixTarget !== "feedstocks"),
     submissionLineageBlockers: ctx.submissionLineageBlockers
       .filter((blocker) => blocker.fixTarget !== "feedstocks")
       .map((blocker) => blocker.detail),

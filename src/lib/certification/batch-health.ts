@@ -80,6 +80,8 @@ export interface BatchHealthCheck {
   issueKey?: string;
   /** Records that must be fixed in this check's single destination. */
   affectedRecords?: BatchHealthAffectedRecord[];
+  /** True only when every constituent check is a delivery proof gap. */
+  proofOfDeliveryOnly?: boolean;
 }
 
 export interface BatchHealthAffectedRecord {
@@ -362,6 +364,7 @@ function mergeUnmetChecksByDestination(
     const existing = merged[existingIndex];
     merged[existingIndex] = {
       ...existing,
+      proofOfDeliveryOnly: existing.proofOfDeliveryOnly === true && check.proofOfDeliveryOnly === true,
       label: mergeCheckText(existing.label, check.label) ?? existing.label,
       requirementLabel:
         mergeCheckText(existing.requirementLabel, check.requirementLabel) ??
@@ -423,6 +426,7 @@ function submissionChecks(facts: BatchHealthFacts): BatchHealthCheckBase[] {
     requirementLabel: "Resolve submission blockers",
     status: "unmet",
     detail: blocker.detail,
+    proofOfDeliveryOnly: blocker.proofOfDeliveryOnly,
     fixTarget: blocker.fixTarget,
     affectedRecords: [{ ...blocker.record, missing: [blocker.detail] }],
   }));

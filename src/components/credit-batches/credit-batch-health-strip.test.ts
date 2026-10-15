@@ -1,3 +1,4 @@
+import { deriveBatchHealth, type BatchHealthFacts } from "@/lib/certification/batch-health";
 import { describe, expect, it } from "vitest";
 import type { BatchHealthCheck } from "@/lib/certification/batch-health";
 import {
@@ -213,4 +214,39 @@ describe("batchHealthFixLinkFor", () => {
     expect(link.href).toContain("/production-runs");
   });
 
+  it("opens the delivery evidence section for missing proof", () => {
+    const deliveryId = "11111111-1111-4111-8111-111111111111";
+    const link = batchHealthFixLinkFor({ key: "entityReadiness", fixTarget: "deliveries", proofOfDeliveryOnly: true, affectedRecords: [
+      { id: deliveryId, code: "D-0012", missing: ["Proof of delivery"] },
+    ] }, "facility-1");
+    expect(link.href).toBe(`/deliveries?facility=facility-1&delivery=${deliveryId}&mode=edit&focus=transport-evidence`);
+  });
+
+  it.each(["multiple proofs", "distance", "production", "transport"] as const)(
+    "keeps the delivery list for merged %s gaps",
+    (kind) => {
+      const proof = {
+        detail: "Missing proof", fixTarget: "deliveries" as const, proofOfDeliveryOnly: true,
+        record: { id: "delivery-1", code: "D-1" },
+      };
+      const facts: BatchHealthFacts = {
+        carbonMissingInputs: [], facilityEmissionsBlockers: [], feedstockTypeMappingGaps: [],
+        entityReadinessGaps: [], hasSubmittableRuns: kind !== "production",
+        facilitySetupComplete: true,
+        requiredTransport: kind === "transport" ? [{ category: "biochar", present: false }] : [],
+        submissionLineageBlockers: [
+          proof,
+          ...(kind === "multiple proofs" ? [{ ...proof, record: { id: "delivery-2", code: "D-2" } }] : []),
+          ...(kind === "distance" ? [{ detail: "Missing distance", fixTarget: "deliveryDistances" as const, record: proof.record }] : []),
+        ],
+        ...(kind === "production" ? { productionReadinessGap: {
+          kind: "noApplications", detail: "Missing delivery", fixTarget: "deliveries",
+        } } : {}),
+      };
+      const row = deriveBatchHealth(facts).checks.find((item) => item.status === "unmet" &&
+        (item.fixTarget === "deliveries" || item.fixTarget === "deliveryDistances"))!;
+      expect(batchHealthFixLinkFor(row, "facility-1", "batch-1").href)
+        .toBe("/deliveries?facility=facility-1&creditBatch=batch-1");
+    },
+  );
 });

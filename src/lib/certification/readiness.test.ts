@@ -1,4 +1,4 @@
-import { applicationDestinationBlocker, deliveryDistanceBlocker, durabilityConfigurationBlockers } from "./submission-readiness";
+import { deliveryProofBlocker, applicationDestinationBlocker, deliveryDistanceBlocker, durabilityConfigurationBlockers } from "./submission-readiness";
 import production from "../../../tests/fixtures/isometric/production-template-2026-07-03.json";
 import type { components as RegistryComponents } from "@/lib/isometric/generated/certify";
 import { unsupportedTemplate } from "../../../tests/fixtures/isometric/unsupported-template";
@@ -810,6 +810,7 @@ describe("readiness matches submission refusals", () => {
   });
   it.each([
     "Feedstock FS-2 has no usable transport leg. Record a positive distance and load mass before submitting.",
+    deliveryProofBlocker({ deliveryCode: "D-0012", proofOfDeliveryCount: 0 })!,
     applicationDestinationBlocker({ applicationCode: "AP-1", customerLocationId: null })!,
     deliveryDistanceBlocker({ deliveryCode: "DL-1", deliveryStatus: "delivered", distanceKmOverride: null, locationDistanceKm: null })!,
   ])("shows the lineage refusal in readiness and the checklist: %s", (reason) => {

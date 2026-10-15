@@ -583,8 +583,11 @@ a derived leg from its supplier/customer default. Orthogonal to a leg's
 
 **Transport evidence**:
 Retained documents supporting a transported record, such as a bill of lading,
-weigh-scale ticket, or other classified transport file. Uploads are optional
-and do not block certification. The saved **Distance source** and uploaded
+weigh-scale ticket, or other classified transport file. Uploads are generally
+optional. Proof of delivery is the exception: each delivery in a Removal needs
+an uploaded delivery receipt, bill of lading or delivery photo before submission.
+This is mass evidence, independent of the template’s transport categories;
+saving a delivery without proof remains allowed. The saved **Distance source** and uploaded
 evidence remain separate facts: uploading a file never changes the source,
 and selecting `document` never proves that a file exists. _Avoid_: inferring
 classification from a filename; requiring document provenance and an upload

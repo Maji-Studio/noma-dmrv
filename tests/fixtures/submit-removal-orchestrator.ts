@@ -577,7 +577,7 @@ export function makeLineage(args: {
       applicationDate: args.applicationDate ?? new Date("2026-04-05T00:00:00Z"),
       biocharAppliedDryTons: biocharMassKg / 1000,
     } as never,
-    delivery: { id: "del-1" } as never,
+    delivery: { id: "del-1", code: "D-0012", customerLocationId: "location-1", proofOfDeliveryCount: 1 } as never,
     order: null,
     biocharProduct: { id: "bp-1" } as never,
     productionRun: { id: PRODUCTION_RUN_ID } as never,
