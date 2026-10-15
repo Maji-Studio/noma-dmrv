@@ -67,7 +67,7 @@ event times use the parent run's facility clock.
 
 Orders and credit batches store no price or currency, organization operating
 defaults have no default currency, and credit batches store no third-party sale
-verification fields (decision reference: #942 q27/q26).
+verification fields.
 
 ## API bookkeeping
 

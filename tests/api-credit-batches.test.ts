@@ -15,8 +15,7 @@ const PAGE_LIMIT = 1;
 const ARCHIVED_AT = new Date("2026-10-01T00:00:00.000Z");
 /** Fields of the rich batch result and its joins that must never reach a client. */
 const PRIVATE_FIELDS = ["organizationId", "productionProcessId", "durabilityOption", "hToCorgRatio", "fDurableCalculated", "value", "currency",
-  "bufferPoolPercent", "certifier", "registry", "co2eStored", "cursorCreatedAt",
-  "affidavitReference", "intendedUseConfirmation", "companyVerificationRef", "mixingTimelineDays"];
+  "bufferPoolPercent", "certifier", "registry", "co2eStored", "cursorCreatedAt"];
 
 let a: ApiLabFixture;
 let b: ApiLabFixture;

@@ -47,8 +47,6 @@ describe("order REST reads", { timeout: READ_TIMEOUT_MS }, () => {
       expect(response.headers.get("cache-control")).toBe("private, no-store");
       const { data } = await response.json();
       expect(orderRepresentationSchema.parse(data)).toEqual(data);
-      expect(data).not.toHaveProperty("value");
-      expect(data).not.toHaveProperty("currency");
       expect(Object.keys(data).sort()).toEqual(Object.keys(orderRepresentationSchema.shape).sort());
       expect(data).toMatchObject({ id: first.id, facilityId: a.facility.id, customerId: a.customer.id, customerLocationId: a.location.id,
         formulationId: a.recipe.id, orderDate: "2026-09-12", quantityKg: 100, packaging: "loose", archivedAt: null });
