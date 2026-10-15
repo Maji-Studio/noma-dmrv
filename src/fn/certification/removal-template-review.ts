@@ -1,5 +1,7 @@
 "use server";
 
+import { REMOVAL_TEMPLATE_BLOCKERS } from "@/lib/certification/removal-template-blockers";
+
 import { getCreditBatchById } from "@/data-access/credit-batches";
 import { getCertifierProjectByFacility } from "@/data-access/certification";
 import { resolveIsometricClient } from "@/data-access/certifier-credentials";
@@ -64,8 +66,8 @@ export async function switchCreditBatchRemovalTemplate(input: SwitchCreditBatchR
     const client = await resolveIsometricClient(ctx);
     const templates = await listGhgEntryTemplates(client, mapping.externalProjectId);
     const template = templates.find((candidate) => candidate.id === parsed.removalTemplateId);
-    if (!template) throw new SafeError("Template no longer exists in Isometric.");
-    if (template.credit_type !== "REMOVAL") throw new SafeError("Choose a Removal template for this credit batch.");
+    if (!template) throw new SafeError(REMOVAL_TEMPLATE_BLOCKERS.templateNotFound);
+    if (template.credit_type !== "REMOVAL") throw new SafeError(REMOVAL_TEMPLATE_BLOCKERS.unpinnedTemplate);
     await loadRemovalTemplateFacts(ctx, { client, template, externalProjectId: mapping.externalProjectId, blueprints: await listComponentBlueprints(client) });
     return switchTemplate(ctx, parsed);
   });

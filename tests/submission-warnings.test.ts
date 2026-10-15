@@ -43,6 +43,7 @@ function template(
         display_name: component.blueprintKey,
         inputs: (component.inputs ?? []).map((input) => ({
           input_key: input.inputKey,
+          quantity_kind: input.inputKey === "volume_of_fuel" ? "volume" : "energy",
           display_name: input.inputKey,
           type: input.type,
           datapoint_id: input.type === "fixed" ? "dtp_FIXED" : null,
@@ -100,8 +101,8 @@ describe("buildSubmissionWarnings — unmapped diesel (issue #319)", () => {
       lineages: [],
     });
     expect(warnings).toHaveLength(1);
-    expect(warnings[0]).toMatch(/monitored pyrolysis fuel input/);
-    expect(warnings[0]).toMatch(/before submitting these fuel emissions/);
+    expect(warnings[0]).toMatch(/Genset diesel is recorded/);
+    expect(warnings[0]).toMatch(/Review the Removal template lines/);
   });
 
   it("warns when startup/preprocessing diesel is recorded without the component", () => {
@@ -111,17 +112,17 @@ describe("buildSubmissionWarnings — unmapped diesel (issue #319)", () => {
       runs: [run({ dieselOperationLiters: 5, preprocessingFuelLiters: 3 })],
       lineages: [],
     });
-    expect(warnings).toHaveLength(1);
+    expect(warnings).toHaveLength(2);
   });
 
-  it("stays silent when the pyrolysis group declares fuel_usage_by_volume", () => {
+  it("warns for genset diesel when only the startup contract is carried", () => {
     const warnings = buildSubmissionWarnings({
       lineSources: DIESEL_CONTRACTS,
       removalTemplate: TEMPLATE_WITH_FUEL_COMPONENT,
       runs: [run({ dieselGensetLiters: 25, dieselOperationLiters: 5 })],
       lineages: [],
     });
-    expect(warnings).toEqual([]);
+    expect(warnings).toEqual([expect.stringContaining("Genset diesel is recorded")]);
   });
 
   it("ignores a fuel_usage_by_volume declared outside the pyrolysis group (cannot carry run diesel)", () => {
@@ -318,7 +319,7 @@ describe("buildSubmissionWarnings — combined advisories", () => {
       lineages: [lineage(new Date("2026-02-05T00:00:00Z"))],
     });
     expect(warnings).toHaveLength(2);
-    expect(warnings[0]).toContain("Genset or startup diesel");
+    expect(warnings[0]).toContain("Startup diesel");
     expect(warnings[1]).toContain("spans multiple months");
   });
 
@@ -335,7 +336,7 @@ describe("buildSubmissionWarnings — combined advisories", () => {
       lineages: [lineage(new Date("2026-01-25T00:00:00Z"))],
     });
     expect(warnings).toHaveLength(1);
-    expect(warnings[0]).toContain("Genset or startup diesel");
+    expect(warnings[0]).toContain("Genset diesel");
   });
 });
 

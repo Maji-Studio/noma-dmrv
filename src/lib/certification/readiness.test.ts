@@ -1,3 +1,4 @@
+import { removalTemplateBlocker } from "./removal-template-blockers";
 import { deliveryProofBlocker, applicationDestinationBlocker, deliveryDistanceBlocker, durabilityConfigurationBlockers } from "./submission-readiness";
 import production from "../../../tests/fixtures/isometric/production-template-2026-07-03.json";
 import type { components as RegistryComponents } from "@/lib/isometric/generated/certify";
@@ -37,7 +38,6 @@ function ready(
     hasMapping: true,
     hasOrgCredentials: true,
     hasRemovalTemplate: true,
-    missingRemovalTemplateId: null,
     unbindableTemplateInputs: [],
     unresolvedBlueprintKeys: [],
     feedstockTypeMappingGaps: [],
@@ -142,7 +142,7 @@ describe("deriveRemovalReadiness — blocked: linkage & template", () => {
 
   it("blocks when the configured template went missing on Isometric", () => {
     const r = deriveRemovalReadiness(
-      ready({ hasRemovalTemplate: false, missingRemovalTemplateId: "tmpl_9" }),
+      ready({ hasRemovalTemplate: false, templateBlockers: [removalTemplateBlocker("templateNotFound")] }),
     );
     expect(r.state).toBe("blocked");
     expect(r.reasons[0]).toBe("Template no longer exists in Isometric.");
@@ -411,7 +411,7 @@ describe("buildRemovalRequirementsChecklist — row semantics", () => {
 
   it("surfaces the missing-template detail using the shared phrasing", () => {
     const checks = buildRemovalRequirementsChecklist(
-      ready({ hasRemovalTemplate: false, missingRemovalTemplateId: "tmpl_9" }),
+      ready({ hasRemovalTemplate: false, templateBlockers: [removalTemplateBlocker("templateNotFound")] }),
     );
     expect(checkFor(checks, "template")).toMatchObject({
       key: "template",

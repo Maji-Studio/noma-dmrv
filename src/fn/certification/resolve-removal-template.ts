@@ -20,7 +20,7 @@ export function resolveRemovalTemplate(
   if (!facts) return unresolved("templateNotFound");
   const templateBlockers: RemovalTemplateBlocker[] = [];
   if (!facts.observation || facts.enrichmentProblems.length) templateBlockers.push(removalTemplateBlocker("templateNotFullyRead"));
-  if (facts.lineSourceProblems.some((problem) => problem.code === "unassigned" || problem.code === "missing-contract")) {
+  if (facts.lineSourceProblems.length) {
     templateBlockers.push(removalTemplateBlocker("templateLinesNeedReview"));
   }
   return {

@@ -1,5 +1,5 @@
 import { env } from "@/config/env";
-import type { RemovalTemplateObservation } from "@/db/schema/certification";
+import type { RemovalTemplateObservation } from "@/db/schema/removal-template-observations";
 import type { OrgContext } from "@/lib/auth/server";
 import type { IsometricClient, IsometricComponentBlueprint, IsometricGhgEntryTemplate } from "@/lib/isometric";
 import { allowsPeriodInputStub } from "@/lib/isometric/datapoint-mapping";

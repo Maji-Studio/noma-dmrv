@@ -1,13 +1,15 @@
+import { REMOVAL_TEMPLATE_BLOCKERS } from "@/lib/certification/removal-template-blockers";
 import { and, desc, eq, ne } from "drizzle-orm";
 import { db } from "@/db";
 import { organizations } from "@/db/schema/auth";
-import { removalTemplateObservations as observations, type RemovalTemplateObservation } from "@/db/schema/certification";
-import type { OrgContext } from "@/lib/auth/server";
+import { removalTemplateObservations as observations, type RemovalTemplateObservation } from "@/db/schema/removal-template-observations";
+import type { CertifierProvider } from "@/schemas/credit-batches";
+import { requireOrgRole, type OrgContext } from "@/lib/auth/server";
 import { canonicalJson } from "@/lib/canonical-json";
 import { SafeError } from "@/lib/errors";
 import {
   fullFingerprint, isEnrichmentComplete, normalizeTemplateDefinition, resolveLineSources,
-  semanticFingerprint, validateLineSources,
+  semanticFingerprint, validateLineSources, lineNeedsReview,
   type GhgEntryTemplate, type LineContract, type TemplateEnrichment,
 } from "@/lib/isometric/template-observations";
 import { assertRowVersion, nextVersion, staleRowVersion } from "./row-version";
@@ -15,7 +17,7 @@ import { requireOrgScope } from "./utils";
 
 const OBSERVATION_ORDER_TICK_MS = 1;
 
-export async function getLatestTemplateObservation(ctx: OrgContext, provider: string, externalTemplateId: string): Promise<RemovalTemplateObservation | null> {
+export async function getLatestTemplateObservation(ctx: OrgContext, provider: CertifierProvider, externalTemplateId: string): Promise<RemovalTemplateObservation | null> {
   requireOrgScope(ctx);
   const [row] = await db.select().from(observations).where(and(
     eq(observations.organizationId, ctx.organizationId), eq(observations.provider, provider),
@@ -32,7 +34,7 @@ export async function getTemplateObservationById(ctx: OrgContext, id: string): P
   return row ?? null;
 }
 
-export async function getPreviousTemplateObservation(ctx: OrgContext, provider: string, externalTemplateId: string, id: string): Promise<RemovalTemplateObservation | null> {
+export async function getPreviousTemplateObservation(ctx: OrgContext, provider: CertifierProvider, externalTemplateId: string, id: string): Promise<RemovalTemplateObservation | null> {
   requireOrgScope(ctx);
   const [row] = await db.select().from(observations).where(and(
     eq(observations.organizationId, ctx.organizationId), eq(observations.provider, provider),
@@ -42,7 +44,7 @@ export async function getPreviousTemplateObservation(ctx: OrgContext, provider: 
 }
 
 export async function observeTemplate(ctx: OrgContext, input: {
-  provider: string; externalProjectId: string; template: GhgEntryTemplate; enrichment: TemplateEnrichment;
+  provider: CertifierProvider; externalProjectId: string; template: GhgEntryTemplate; enrichment: TemplateEnrichment;
   /** True when `enrichment` was copied from a stored observation rather than read from the registry. */
   enrichmentReused?: boolean;
 }) {
@@ -93,6 +95,7 @@ export interface ReviewLineContractsInput {
 
 export async function reviewLineContracts(ctx: OrgContext, input: ReviewLineContractsInput) {
   requireOrgScope(ctx);
+  requireOrgRole(ctx, "admin");
   return db.transaction(async (tx) => {
     await tx.select({ id: organizations.id }).from(organizations)
       .where(eq(organizations.id, ctx.organizationId)).for("update");
@@ -107,11 +110,15 @@ export async function reviewLineContracts(ctx: OrgContext, input: ReviewLineCont
       eq(observations.externalTemplateId, row.externalTemplateId),
     )).orderBy(desc(observations.lastObservedAt), desc(observations.id)).limit(1);
     if (latest?.id !== row.id) throw staleRowVersion("removal_template_observation", row.id);
-    if (!isEnrichmentComplete(row.definition, row.enrichment)) throw new SafeError("Template not fully read. Try again.");
+    if (!isEnrichmentComplete(row.definition, row.enrichment)) throw new SafeError(REMOVAL_TEMPLATE_BLOCKERS.templateNotFullyRead);
     const componentIds = new Set(row.definition.groups.flatMap((group) => group.components.map((component) => component.id)));
+    const currentProblems = validateLineSources(row.definition, row.lineSources);
     const lineSources = { ...row.lineSources };
     for (const [id, assignment] of Object.entries(input.assignments)) {
       if (!componentIds.has(id)) throw new SafeError("Template line not found.");
+      if (!lineNeedsReview(id, row.lineSources[id], currentProblems)) {
+        throw new SafeError("This template line needs no review. Only assign sources to lines that need review.");
+      }
       if (assignment.scope !== "operating" && (assignment.automaticSource || assignment.entryPolicy !== "none")) {
         throw new SafeError("Only operating lines can use automatic sources or entries.");
       }

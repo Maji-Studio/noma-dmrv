@@ -1,7 +1,8 @@
 import { and, eq, isNotNull } from "drizzle-orm";
 import { db } from "@/db";
 import { creditBatches } from "@/db/schema/credits";
-import type { OrgContext } from "@/lib/auth/server";
+import { facilities } from "@/db/schema/facilities";
+import { requireOrgRole, type OrgContext } from "@/lib/auth/server";
 import { SafeError } from "@/lib/errors";
 import { recordActivity } from "./activity-events";
 import { assertCanMutateCertifiedLineage } from "./certification-lineage-guards";
@@ -25,6 +26,7 @@ export interface SwitchCreditBatchRemovalTemplateInput {
 
 export async function switchCreditBatchRemovalTemplate(ctx: OrgContext, input: SwitchCreditBatchRemovalTemplateInput) {
   requireOrgScope(ctx);
+  requireOrgRole(ctx, "admin");
   return db.transaction(async (tx) => {
     const [target] = await tx.select({ facilityId: creditBatches.facilityId }).from(creditBatches).where(and(
       eq(creditBatches.organizationId, ctx.organizationId), eq(creditBatches.id, input.creditBatchId),
@@ -38,6 +40,11 @@ export async function switchCreditBatchRemovalTemplate(ctx: OrgContext, input: S
     )).for("update");
     if (!batch) throw new SafeError("Credit batch not found.");
     assertRowVersion({ entity: "creditBatch", id: batch.id, expectedVersion: input.expectedVersion, actualVersion: batch.version });
+    if (batch.archivedAt) throw new SafeError("This credit batch is archived. Restore the facility before switching its template.");
+    const [facility] = await tx.select({ archivedAt: facilities.archivedAt }).from(facilities).where(and(
+      eq(facilities.organizationId, ctx.organizationId), eq(facilities.id, batch.facilityId),
+    ));
+    if (!facility || facility.archivedAt) throw new SafeError("Facility not found or archived.");
     await assertRemovalAllowsCreditBatchMutation(ctx, tx, batch.id, "update", lockedRemovals);
     await assertCanMutateCertifiedLineage(ctx, tx, { entityType: "creditBatch", entityId: batch.id }, "update");
     const [updated] = await tx.update(creditBatches).set({

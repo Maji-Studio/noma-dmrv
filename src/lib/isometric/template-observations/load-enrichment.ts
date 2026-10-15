@@ -1,3 +1,6 @@
+import { getSequestrationInputBinding } from "../sequestration-input-bindings";
+import { CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR } from "../storage-blueprints";
+import { canonicalUnit } from "./units";
 import type { IsometricClient } from "../client";
 import type { IsometricComponentBlueprint } from "../projects";
 import { getDatapoint } from "../submissions";
@@ -29,7 +32,17 @@ export async function loadTemplateEnrichment(
     component.id,
     Object.fromEntries(component.inputs.map((input): [string, InputEnrichment] => {
       if (input.type === "fixed") return [input.key, datapoints.get(input.fixedDatapointId ?? "") ?? { status: "unknown" }];
-      const unit = blueprintByKey.get(component.blueprintKey)?.inputs.find((candidate) => candidate.input_key === input.key)?.compatible_unit;
+      const blueprint = blueprintByKey.get(component.blueprintKey);
+      let unit = blueprint?.inputs.find((candidate) => candidate.input_key === input.key)?.compatible_unit;
+      // This supported blueprint is sometimes absent from the registry catalog.
+      // Fall back only to its exact validated input contracts, never to guessed units.
+      if (!blueprint && component.blueprintKey === CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR) {
+        const binding = getSequestrationInputBinding(component.blueprintKey, input.key);
+        const quantityKind = binding?.source === "measurement-property" ? binding.measurementProperty.quantity_kind : binding?.quantityKind;
+        if (binding && quantityKind === input.quantityKind && canonicalUnit(input.quantityKind, binding.sourceContract.wireUnit)) {
+          unit = binding.sourceContract.wireUnit;
+        }
+      }
       return [input.key, unit ? { unit, deprecated: null } : { status: "unknown" }];
     })),
   ])));

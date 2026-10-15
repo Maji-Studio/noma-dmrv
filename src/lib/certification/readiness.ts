@@ -1,3 +1,4 @@
+import { REMOVAL_TEMPLATE_BLOCKERS } from "@/lib/certification/removal-template-blockers";
 /**
  * Removal readiness classifier — the single pure decision behind every
  * "can this removal be submitted, and if not why?" surface: the Overview work
@@ -60,8 +61,6 @@ export interface RemovalReadinessFacts {
   /** The member batches' pinned Removal template resolved on Isometric. */
   hasRemovalTemplate: boolean;
   templateBlockers?: RemovalTemplateBlocker[];
-  /** Set when a configured template id no longer exists on Isometric. */
-  missingRemovalTemplateId: string | null;
   /** Template blueprint keys with no matching component blueprint. */
   unresolvedBlueprintKeys: string[];
   unbindableTemplateInputs: UnbindableTemplateInput[];
@@ -170,11 +169,8 @@ function describeCategories(categories: TransportCategory[]): string {
 // checklist so the two never phrase the same blocker differently.
 function templateBlockerReason(facts: RemovalReadinessFacts): string | null {
   if (facts.templateBlockers?.length) return facts.templateBlockers.map((blocker) => blocker.message).join(" ");
-  if (facts.missingRemovalTemplateId) {
-    return "Template no longer exists in Isometric.";
-  }
   if (!facts.hasRemovalTemplate) {
-    return "Choose a Removal template for this credit batch.";
+    return REMOVAL_TEMPLATE_BLOCKERS.unpinnedTemplate;
   }
   if (facts.unresolvedBlueprintKeys.length > 0) {
     const n = facts.unresolvedBlueprintKeys.length;
@@ -190,7 +186,6 @@ function templateResolvesCleanly(facts: RemovalReadinessFacts): boolean {
   return (
     facts.hasRemovalTemplate &&
     !facts.templateBlockers?.length &&
-    !facts.missingRemovalTemplateId &&
     facts.unresolvedBlueprintKeys.length === 0 &&
     facts.unbindableTemplateInputs.length === 0
   );

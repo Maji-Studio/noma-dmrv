@@ -1,5 +1,5 @@
 {
-  "id": "20e4d5e0-2549-489c-8b97-45c9faa53b6c",
+  "id": "f5e79c8a-77b0-4b17-935e-b47c92b0d277",
   "prevId": "5549cfa8-5899-44bf-a30f-54b5a92a31f6",
   "version": "7",
   "dialect": "postgresql",
@@ -4024,215 +4024,6 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.removal_template_observations": {
-      "name": "removal_template_observations",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "organization_id": {
-          "name": "organization_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "provider": {
-          "name": "provider",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "external_project_id": {
-          "name": "external_project_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "external_template_id": {
-          "name": "external_template_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "semantic_fingerprint": {
-          "name": "semantic_fingerprint",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "full_fingerprint": {
-          "name": "full_fingerprint",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "definition": {
-          "name": "definition",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "enrichment": {
-          "name": "enrichment",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "line_sources": {
-          "name": "line_sources",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "reviewed_at": {
-          "name": "reviewed_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "reviewed_by_user_id": {
-          "name": "reviewed_by_user_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "version": {
-          "name": "version",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 1
-        },
-        "first_observed_at": {
-          "name": "first_observed_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "last_observed_at": {
-          "name": "last_observed_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "enriched_at": {
-          "name": "enriched_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "removal_template_observations_latest_idx": {
-          "name": "removal_template_observations_latest_idx",
-          "columns": [
-            {
-              "expression": "organization_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "provider",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "external_template_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "last_observed_at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "removal_template_observations_organization_id_organizations_id_fk": {
-          "name": "removal_template_observations_organization_id_organizations_id_fk",
-          "tableFrom": "removal_template_observations",
-          "tableTo": "organizations",
-          "columnsFrom": [
-            "organization_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "removal_template_observations_reviewed_by_user_id_users_id_fk": {
-          "name": "removal_template_observations_reviewed_by_user_id_users_id_fk",
-          "tableFrom": "removal_template_observations",
-          "tableTo": "users",
-          "columnsFrom": [
-            "reviewed_by_user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "removal_template_observations_identity_unique": {
-          "name": "removal_template_observations_identity_unique",
-          "nullsNotDistinct": false,
-          "columns": [
-            "organization_id",
-            "provider",
-            "external_template_id",
-            "semantic_fingerprint",
-            "full_fingerprint"
-          ]
-        },
-        "removal_template_observations_id_org_unique": {
-          "name": "removal_template_observations_id_org_unique",
-          "nullsNotDistinct": false,
-          "columns": [
-            "id",
-            "organization_id"
-          ]
-        }
-      },
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
     "public.certifier_biochar_applications": {
       "name": "certifier_biochar_applications",
       "schema": "",
@@ -7490,6 +7281,216 @@
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.removal_template_observations": {
+      "name": "removal_template_observations",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "provider": {
+          "name": "provider",
+          "type": "certifier_provider",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "external_project_id": {
+          "name": "external_project_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "external_template_id": {
+          "name": "external_template_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "semantic_fingerprint": {
+          "name": "semantic_fingerprint",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "full_fingerprint": {
+          "name": "full_fingerprint",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "definition": {
+          "name": "definition",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "enrichment": {
+          "name": "enrichment",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "line_sources": {
+          "name": "line_sources",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "reviewed_at": {
+          "name": "reviewed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "reviewed_by_user_id": {
+          "name": "reviewed_by_user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "version": {
+          "name": "version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        },
+        "first_observed_at": {
+          "name": "first_observed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "last_observed_at": {
+          "name": "last_observed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "enriched_at": {
+          "name": "enriched_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "removal_template_observations_latest_idx": {
+          "name": "removal_template_observations_latest_idx",
+          "columns": [
+            {
+              "expression": "organization_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "provider",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "external_template_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "last_observed_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "removal_template_observations_organization_id_organizations_id_fk": {
+          "name": "removal_template_observations_organization_id_organizations_id_fk",
+          "tableFrom": "removal_template_observations",
+          "tableTo": "organizations",
+          "columnsFrom": [
+            "organization_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "removal_template_observations_reviewed_by_user_id_users_id_fk": {
+          "name": "removal_template_observations_reviewed_by_user_id_users_id_fk",
+          "tableFrom": "removal_template_observations",
+          "tableTo": "users",
+          "columnsFrom": [
+            "reviewed_by_user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "removal_template_observations_identity_unique": {
+          "name": "removal_template_observations_identity_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "organization_id",
+            "provider",
+            "external_template_id",
+            "semantic_fingerprint",
+            "full_fingerprint"
+          ]
+        },
+        "removal_template_observations_id_org_unique": {
+          "name": "removal_template_observations_id_org_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id",
+            "organization_id"
+          ]
+        }
+      },
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false

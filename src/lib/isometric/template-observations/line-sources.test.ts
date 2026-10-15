@@ -5,7 +5,7 @@ import production from "../../../../tests/fixtures/isometric/production-template
 import olderSandbox from "../../../../tests/fixtures/isometric/sandbox-template.json";
 import { acceptAllProposals } from "./test-support";
 import {
-  AUTOMATIC_SOURCE_IDS, allowedEntryPolicies, catalogCandidates, effectiveContract,
+  lineNeedsReview, AUTOMATIC_SOURCE_IDS, allowedEntryPolicies, catalogCandidates, effectiveContract,
   normalizeTemplateDefinition, resolveLineSources, validateLineSources,
   type GhgEntryTemplate, type LineSources, type TemplateComponent,
 } from "./index";
@@ -128,5 +128,19 @@ describe("line contracts", () => {
     const sources: LineSources = { rtc_new: { scope: "operating", automaticSource: "run-electricity", entryPolicy: "additive", origin: "reviewed" } };
     const next = { groups: [{ ...definition.groups.find((group) => group.key === "pyrolysis")!, components: [{ ...component(GENSET), id: "rtc_new" }] }] };
     expect(resolveLineSources({ definition: next, previous: { definition: { groups: [] }, lineSources: sources } }).rtc_new.scope).toBe("unassigned");
+  });
+});
+
+describe("lineNeedsReview", () => {
+  it.each(["bootstrap", "carried", "reviewed"] as const)("protects a settled %s contract", (origin) => {
+    const contract = { scope: "operating", automaticSource: "run-genset-diesel", entryPolicy: "additive", origin } as const;
+    expect(lineNeedsReview(GENSET, contract, [])).toBe(false);
+    expect(lineNeedsReview(GENSET, contract, [{ componentId: STARTUP, code: "ambiguous" }])).toBe(false);
+    expect(lineNeedsReview(GENSET, contract, [{ componentId: GENSET, code: "ambiguous" }])).toBe(true);
+    expect(lineNeedsReview(GENSET, { ...contract, scope: "unassigned" }, [])).toBe(true);
+  });
+  it("allows missing contracts and proposals", () => {
+    expect(lineNeedsReview(GENSET, undefined, [])).toBe(true);
+    expect(lineNeedsReview(GENSET, { scope: "operating", entryPolicy: "none", origin: "proposed" }, [])).toBe(true);
   });
 });

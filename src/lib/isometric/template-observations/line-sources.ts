@@ -16,6 +16,12 @@ export interface LineSourceProblem {
   componentId: string;
 }
 
+/** Assignment is a repair step, not an editor for settled contracts. */
+export function lineNeedsReview(componentId: string, contract: LineContract | undefined, problems: readonly LineSourceProblem[]): boolean {
+  return !contract || contract.origin === "proposed" || contract.scope === "unassigned" ||
+    problems.some((problem) => problem.componentId === componentId);
+}
+
 /** Proposals must be reviewed before they grant any contribution capability. */
 export function effectiveContract(contract: LineContract): LineContract {
   return contract.origin === "proposed" || contract.scope === "unassigned"

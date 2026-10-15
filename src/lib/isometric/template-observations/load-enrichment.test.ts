@@ -6,6 +6,7 @@ import type { IsometricComponentBlueprint } from "../projects";
 import type { Datapoint } from "../submissions";
 import { loadTemplateEnrichment } from "./load-enrichment";
 import { isEnrichmentComplete } from "./enrichment";
+import { CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR } from "../storage-blueprints";
 import { normalizeTemplateDefinition } from "./normalize";
 import { canonicalUnit, unitsConvertible } from "./units";
 import type { GhgEntryTemplate } from "./types";
@@ -69,4 +70,25 @@ it("parses products, chained division, parentheses, dimensions and scales", () =
   expect(canonicalUnit("mass", "(kg")).toBeUndefined();
   expect(canonicalUnit("mass", "kg nonsense")).toBeUndefined();
   expect(canonicalUnit("mass", "kg / )")).toBeUndefined();
+});
+
+it("enriches the exact supported sequestration inputs when its blueprint is omitted", async () => {
+  const component = template.groups.flatMap((group) => group.components).find((line) => line.blueprint_key === CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR)!;
+  expect(component.inputs.map((input) => input.input_key).sort()).toEqual(["inorganic_carbon_contents", "product_mass", "s_fraction", "total_carbon_contents"]);
+  const omitted = blueprints.filter((blueprint) => blueprint.key !== CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR);
+  const { api } = client();
+  const enrichment = await loadTemplateEnrichment(api, template, omitted);
+  expect(isEnrichmentComplete(normalizeTemplateDefinition(template), enrichment)).toBe(true);
+  expect(enrichment[component.id].product_mass).toMatchObject({ unit: "kg" });
+  for (const key of ["total_carbon_contents", "inorganic_carbon_contents", "s_fraction"]) {
+    expect(enrichment[component.id][key]).toMatchObject({ unit: "dimensionless" });
+  }
+  const drifted = structuredClone(template);
+  const changed = drifted.groups.flatMap((group) => group.components).find((line) => line.id === component.id)!;
+  changed.inputs.find((input) => input.input_key === "product_mass")!.quantity_kind = "volume";
+  changed.inputs.push({ ...changed.inputs[0], input_key: "unknown_input" });
+  const driftedEnrichment = await loadTemplateEnrichment(api, drifted, omitted);
+  expect(driftedEnrichment[component.id].product_mass).toEqual({ status: "unknown" });
+  expect(driftedEnrichment[component.id].unknown_input).toEqual({ status: "unknown" });
+  expect(isEnrichmentComplete(normalizeTemplateDefinition(drifted), driftedEnrichment)).toBe(false);
 });

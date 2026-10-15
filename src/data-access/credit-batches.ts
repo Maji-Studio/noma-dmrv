@@ -44,6 +44,7 @@ import {
 } from "./credit-batch-membership";
 import { assertCreditBatchProductionWindow } from "./credit-batch-production-window";
 import {
+  getFacilityCertifierWithExecutor,
   loadCreditBatchAccounting,
   loadCreditBatchAccountingSafely,
   loadCreditBatchRollups,
@@ -138,15 +139,17 @@ async function resolveCreditBatchCertifier(
   facilityId: string
 ): Promise<{ provider: "isometric" | null; removalTemplateId: string | null }> {
   requireOrgScope(ctx);
-  const [project] = await executor.select({
-    provider: certifierProjects.provider, removalTemplateId: certifierProjects.defaultRemovalTemplateId,
-  }).from(certifierProjects).where(and(
-    eq(certifierProjects.organizationId, ctx.organizationId), eq(certifierProjects.facilityId, facilityId),
-  )).orderBy(certifierProjects.provider).limit(1);
-  if (project && project.provider !== "isometric") {
+  const provider = await getFacilityCertifierWithExecutor(ctx, executor, facilityId);
+  if (provider && provider !== "isometric") {
     throw new SafeError("Credit batches currently support only Isometric certifier mappings.");
   }
-  return { provider: project ? "isometric" : null, removalTemplateId: project?.removalTemplateId ?? null };
+  if (!provider) return { provider: null, removalTemplateId: null };
+  const [project] = await executor.select({ removalTemplateId: certifierProjects.defaultRemovalTemplateId })
+    .from(certifierProjects).where(and(
+      eq(certifierProjects.organizationId, ctx.organizationId), eq(certifierProjects.facilityId, facilityId),
+      eq(certifierProjects.provider, provider),
+    )).limit(1);
+  return { provider, removalTemplateId: project?.removalTemplateId ?? null };
 }
 
 /**

@@ -63,6 +63,7 @@ describe("org-scoped template observations", () => {
   });
   it("carries surviving reviewed contracts and restores them when an old row reappears", async () => {
     const value = template();
+    value.groups[0].components[0].id = `new_carried_${tag}`;
     const original = await observe(value);
     const changed = structuredClone(value);
     const component = changed.groups[0].components[0];

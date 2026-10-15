@@ -1,9 +1,12 @@
+import { removalTemplateBlocker } from "@/lib/certification/removal-template-blockers";
+import { buildSelectableBatchesData } from "./selectable-batches";
 import { unsupportedTemplate } from "../../../tests/fixtures/isometric/unsupported-template";
 import { findUnbindableTemplateInputs } from "@/lib/isometric/template-binding-coverage";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createRemovalWithBatchesAction } from "./create-removal-with-batches";
 
 const mocks = vi.hoisted(() => ({
+  listUngroupedCreditBatches: vi.fn(),
   buildCreditBatchContexts: vi.fn(),
   createRemovalWithCreditBatches: vi.fn(),
   loadFacilityCertifierFacts: vi.fn(),
@@ -12,6 +15,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@/data-access/certifier-removals", () => ({
+  listUngroupedCreditBatches: mocks.listUngroupedCreditBatches,
   createRemovalWithCreditBatches: mocks.createRemovalWithCreditBatches,
 }));
 
@@ -57,18 +61,6 @@ describe("createRemovalWithBatchesAction", () => {
     });
   });
 
-  it("rejects unbindable templates before grouping batches", async () => {
-    mocks.loadFacilityCertifierFacts.mockResolvedValue({
-      hasOrgCredentials: true, mapping: {}, defaultTemplate: unsupportedTemplate(),
-      missingDefaultTemplateId: null, unresolvedBlueprintKeys: [],
-      unbindableTemplateInputs: findUnbindableTemplateInputs(unsupportedTemplate()),
-    });
-    const result = await createRemovalWithBatchesAction({ facilityId: FACILITY_ID, creditBatchIds: [CREDIT_BATCH_ID] });
-    expect(result.success).toBe(false);
-    expect(mocks.buildCreditBatchContexts).not.toHaveBeenCalled();
-    expect(mocks.createRemovalWithCreditBatches).not.toHaveBeenCalled();
-  });
-
   it("rejects incomplete facility setup before grouping any batches", async () => {
     const result = await createRemovalWithBatchesAction({
       facilityId: FACILITY_ID,
@@ -87,4 +79,57 @@ describe("createRemovalWithBatchesAction", () => {
     expect(mocks.buildCreditBatchContexts).not.toHaveBeenCalled();
     expect(mocks.createRemovalWithCreditBatches).not.toHaveBeenCalled();
   });
+});
+
+const CONNECTED = {
+  hasOrgCredentials: true, mapping: { externalFacilityId: "fcl-1" }, defaultTemplate: null,
+  missingDefaultTemplateId: null, unresolvedBlueprintKeys: [], unbindableTemplateInputs: [],
+};
+function batchContext() {
+  return {
+    facilityId: FACILITY_ID, removalId: null, memberBatches: [{ id: CREDIT_BATCH_ID, code: "CB-1" }],
+    mapping: CONNECTED.mapping, removalTemplate: { id: "pinned-reviewed" }, templateBlockers: [] as import("@/lib/certification/removal-template-blockers").RemovalTemplateBlocker[],
+    unresolvedBlueprintKeys: [], unbindableTemplateInputs: [], hasSubmittableRuns: true,
+    requiredTransportCategories: [], submissionLineageBlockers: [], durabilityConfigurationBlockers: [],
+  };
+}
+function contexts(context = batchContext()) {
+  return { contextsByBatch: { [CREDIT_BATCH_ID]: context }, accountingByBatch: {} };
+}
+
+it.each([
+  { defaultTemplate: null },
+  { missingDefaultTemplateId: "deleted-default" },
+  { unbindableTemplateInputs: findUnbindableTemplateInputs(unsupportedTemplate()) },
+  { unresolvedBlueprintKeys: ["unknown_default_blueprint"] },
+])("groups a ready pin regardless of default-template advice (%j)", async (advice) => {
+  mocks.requireOrgContext.mockResolvedValue(ORG_CONTEXT);
+  const facts = { ...CONNECTED, ...advice };
+  mocks.loadFacilityCertifierFacts.mockResolvedValue(facts);
+  mocks.buildCreditBatchContexts.mockResolvedValue(contexts());
+  mocks.createRemovalWithCreditBatches.mockResolvedValue("removal-1");
+  mocks.listUngroupedCreditBatches.mockResolvedValue([{ id: CREDIT_BATCH_ID }]);
+  const result = await createRemovalWithBatchesAction({ facilityId: FACILITY_ID, creditBatchIds: [CREDIT_BATCH_ID] });
+  expect(result).toEqual({ success: true, data: { removalId: "removal-1" } });
+  const selectable = await buildSelectableBatchesData(ORG_CONTEXT, FACILITY_ID,
+    facts as unknown as import("./facility-certifier-facts").FacilityCertifierFacts, mocks.buildCreditBatchContexts);
+  expect(selectable.facilitySetupGaps).toEqual([]);
+  expect(selectable.facilitySetupComplete).toBe(true);
+  expect(selectable.batches[0].health.state).toBe("ready");
+});
+
+it("rejects an unready pin even when the facility default is clean", async () => {
+  vi.clearAllMocks();
+  mocks.requireOrgContext.mockResolvedValue(ORG_CONTEXT);
+  const context = { ...batchContext(), templateBlockers: [removalTemplateBlocker("templateLinesNeedReview")] };
+  mocks.loadFacilityCertifierFacts.mockResolvedValue({ ...CONNECTED, defaultTemplate: { id: "clean-default" } });
+  mocks.buildCreditBatchContexts.mockResolvedValue(contexts(context));
+  const result = await createRemovalWithBatchesAction({ facilityId: FACILITY_ID, creditBatchIds: [CREDIT_BATCH_ID] });
+  expect(result.success).toBe(false);
+  expect(mocks.createRemovalWithCreditBatches).not.toHaveBeenCalled();
+  mocks.listUngroupedCreditBatches.mockResolvedValue([{ id: CREDIT_BATCH_ID }]);
+  const selectable = await buildSelectableBatchesData(ORG_CONTEXT, FACILITY_ID,
+    CONNECTED as unknown as import("./facility-certifier-facts").FacilityCertifierFacts, mocks.buildCreditBatchContexts);
+  expect(selectable.facilitySetupComplete).toBe(true);
+  expect(selectable.batches[0].health.state).toBe("incomplete");
 });

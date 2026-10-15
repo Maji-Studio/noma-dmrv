@@ -1,3 +1,4 @@
+import { REMOVAL_TEMPLATE_BLOCKERS } from "@/lib/certification/removal-template-blockers";
 import { effectiveContract, type LineContract } from "./template-observations/line-sources";
 import { automaticSourceFact } from "./template-observations/catalog-sources";
 import { SafeError } from "@/lib/errors";
@@ -47,7 +48,7 @@ export function resolveDatapointSource(
   if (effective?.scope === "operating" && effective.automaticSource === "sequestration") return mapping.source;
   if (effective?.scope === "operating" && effective.automaticSource) return automaticSourceFact(effective.automaticSource);
   if (contract || mapping.sourceByComponent) {
-    throw new SafeError("Review the Removal template lines in Certification settings.");
+    throw new SafeError(REMOVAL_TEMPLATE_BLOCKERS.templateLinesNeedReview);
   }
   return mapping.source;
 }

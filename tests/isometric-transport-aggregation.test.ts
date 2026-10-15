@@ -198,7 +198,6 @@ describe("enrichWithTransportLegs", () => {
       hasOrgCredentials: true,
       mapping: {},
       removalTemplate: {},
-      missingRemovalTemplateId: null,
       unbindableTemplateInputs: [],
       unresolvedBlueprintKeys: [],
       hasSubmittableRuns: true,
@@ -242,7 +241,6 @@ describe("enrichWithTransportLegs", () => {
       hasOrgCredentials: true,
       mapping: {},
       removalTemplate: {},
-      missingRemovalTemplateId: null,
       unbindableTemplateInputs: [],
       unresolvedBlueprintKeys: [],
       hasSubmittableRuns: true,
@@ -277,7 +275,7 @@ describe("enrichWithTransportLegs", () => {
   it("preserves the missing-mass warning and repair category in readiness", () => {
     const warning = aggregateTransportMassDistance([leg(10, null)], "Biochar").warning;
     const checks = buildRemovalRequirementsChecklist({
-      local: null, lockInFlight: false, missingRemovalTemplateId: null,
+      local: null, lockInFlight: false,
       hasMapping: true, hasOrgCredentials: true, hasRemovalTemplate: true,
       unbindableTemplateInputs: [],
       unresolvedBlueprintKeys: [], feedstockTypeMappingGaps: [], hasSubmittableRuns: true,

@@ -1,3 +1,4 @@
+import { REMOVAL_TEMPLATE_BLOCKERS } from "@/lib/certification/removal-template-blockers";
 import { getSequestrationInputBinding, hasExplicitSequestrationBinding } from "./sequestration-input-bindings";
 import type { components } from "./generated/certify";
 import { ownValue } from "./semantic-binding-catalog";
@@ -39,7 +40,7 @@ export function findUnbindableTemplateInputs(
         if (!contract || contract.scope === "unassigned") { findings.push({ ...target, reason: "unassigned" }); break; }
         if (contract.scope === "forbidden") { findings.push({ ...target, inputKey: component.inputs.find((candidate) => candidate.type === "monitored")?.input_key ?? input.input_key, reason: "project-scope" }); break; }
         if (componentProblems.some((problem) => problem.code === "ambiguous")) { findings.push({ ...target, reason: "ambiguous" }); break; }
-        if (componentProblems.length) { findings.push(target); break; }
+        if (componentProblems.length) { findings.push({ ...target, reason: "unassigned" }); break; }
         if (isSequestrationBlueprintFamily(component.blueprint_key)) {
           if (hasExplicitSequestrationBinding(component.blueprint_key) && !getSequestrationInputBinding(component.blueprint_key, input.input_key)) findings.push(target);
           continue;
@@ -75,11 +76,11 @@ function listNames(names: string[]): string {
 function formatInstruction(input: UnbindableTemplateInput, count = 1): string {
   const plural = count > 1;
   const target = plural ? "each one" : "it";
-  if (input.reason === "unassigned") return "Review the Removal template lines in Certification settings.";
+  if (input.reason === "unassigned") return REMOVAL_TEMPLATE_BLOCKERS.templateLinesNeedReview;
   if (input.reason === "project-scope" || input.reason === "unrecognized-component") {
     return `Add ${target} as a project component in Isometric, then remove ${plural ? "them" : "it"} from the Removal template.`;
   }
-  if (input.reason === "ambiguous") return "Review the Removal template lines in Certification settings. Choose a different automatic source for each line.";
+  if (input.reason === "ambiguous") return `${REMOVAL_TEMPLATE_BLOCKERS.templateLinesNeedReview} Choose a different automatic source for each line.`;
   if (input.blueprintKey === TRANSPORT_BLUEPRINT_KEY) return `Replace ${target} with a Mass-distance-based CI emissions component in Isometric, or pick another Removal template.`;
   return "Pick another Removal template or ask support to add the mapping.";
 }

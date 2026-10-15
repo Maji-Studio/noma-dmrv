@@ -1,7 +1,7 @@
 CREATE TABLE "removal_template_observations" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"organization_id" text NOT NULL,
-	"provider" text NOT NULL,
+	"provider" "certifier_provider" NOT NULL,
 	"external_project_id" text NOT NULL,
 	"external_template_id" text NOT NULL,
 	"semantic_fingerprint" text NOT NULL,

@@ -1,3 +1,4 @@
+import { REMOVAL_TEMPLATE_BLOCKERS } from "@/lib/certification/removal-template-blockers";
 import { effectiveContract, type LineSources } from "@/lib/isometric/template-observations/line-sources";
 import { ownValue } from "@/lib/isometric/semantic-binding-catalog";
 import { pluralize } from "@/lib/copy-utils";
@@ -68,9 +69,9 @@ export function resolveTemplateInputs(args: {
     for (const component of group.components) {
       const lineContract = ownValue(lineSources, component.id);
       if (!lineContract || effectiveContract(lineContract).scope === "unassigned") {
-        throw new SafeError("Review the Removal template lines in Certification settings.");
+        throw new SafeError(REMOVAL_TEMPLATE_BLOCKERS.templateLinesNeedReview);
       }
-      if (effectiveContract(lineContract).scope === "forbidden") throw new SafeError("This line belongs at the project level in Isometric.");
+      if (effectiveContract(lineContract).scope === "forbidden") throw new SafeError(REMOVAL_TEMPLATE_BLOCKERS.forbiddenLine);
       const monitoredMappings = component.inputs
         .filter((input) => input.type === "monitored")
         .map((input) =>

@@ -1,3 +1,4 @@
+import { REMOVAL_TEMPLATE_BLOCKERS } from "@/lib/certification/removal-template-blockers";
 import { effectiveContract, type LineContract } from "../template-observations/line-sources";
 import { SafeError } from "@/lib/errors";
 import type { components } from "../generated/certify";
@@ -189,8 +190,8 @@ export function buildCreateDatapointRequest(
     sourceIds,
     allowPeriodInputStub,
   } = args;
-  if (lineContract && effectiveContract(lineContract).scope === "forbidden") throw new SafeError("This line belongs at the project level in Isometric.");
-  if (lineContract && effectiveContract(lineContract).scope === "unassigned") throw new SafeError("Review the Removal template lines in Certification settings.");
+  if (lineContract && effectiveContract(lineContract).scope === "forbidden") throw new SafeError(REMOVAL_TEMPLATE_BLOCKERS.forbiddenLine);
+  if (lineContract && effectiveContract(lineContract).scope === "unassigned") throw new SafeError(REMOVAL_TEMPLATE_BLOCKERS.templateLinesNeedReview);
   const inputKey = rtcInput.input_key;
   const componentLabel =
     componentDisplayName?.trim() &&

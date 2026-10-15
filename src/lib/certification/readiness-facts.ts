@@ -31,7 +31,6 @@ export function toRemovalReadinessFacts(
     hasOrgCredentials: ctx.hasOrgCredentials,
     hasMapping: !!ctx.mapping,
     hasRemovalTemplate: !!ctx.removalTemplate,
-    missingRemovalTemplateId: null,
     templateBlockers: ctx.templateBlockers,
     unresolvedBlueprintKeys: ctx.unresolvedBlueprintKeys,
     unbindableTemplateInputs: ctx.unbindableTemplateInputs,
