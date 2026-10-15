@@ -21,7 +21,7 @@ import {
 import type { CreditBatchLineageFacts } from "./credit-batch-lineage-types";
 
 export interface ChainRollForwardDelivery {
-  delivery: ChainDeliveryLineage;
+  delivery: Omit<ChainDeliveryLineage, "proofOfDeliveryCount">;
   /** This run's share of the shipped product layer (reversals netted). */
   wetMassKg: number | null;
   dryMassKg: number;

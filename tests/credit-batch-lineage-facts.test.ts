@@ -4,6 +4,7 @@ import { outputProductFixtureValues, outputOrderFixtureValues, insertOutputDeliv
 import { beforeAll, describe, expect, it } from "vitest";
 import { eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
+import { getChainOfCustodyData } from "@/data-access/chain-of-custody";
 import {
   applications,
   biocharProductSourceAllocations,
@@ -16,6 +17,7 @@ import {
   certificationSubmissions,
   certifierRemovals,
   deliveries,
+  documents,
   facilities,
   feedstocks,
   feedstockTypes,
@@ -70,6 +72,10 @@ describe("credit batch accounting", () => {
       { organizationId: TEST_ORG_ID, facilityId: facility.id, orderId: ordersRows[1].id, biocharProductId: products[0].id, code: `LF-D1-${tag}`, distanceKmOverride: 7, deliveryDate: new Date("2026-07-04"), deliveredWetMassKg: 1_000, massDryKg: 500 },
       { organizationId: TEST_ORG_ID, facilityId: facility.id, orderId: ordersRows[1].id, code: `LF-D2-${tag}`, deliveryDate: new Date("2026-07-04"), deliveredWetMassKg: 2_000, massDryKg: 1_500 },
     ], row => row);
+    await db.insert(documents).values({ organizationId: TEST_ORG_ID,
+      entityType: "delivery", entityId: deliveryRows[0].id, documentType: "delivery_receipt",
+      uploadStatus: "uploaded", fileName: "receipt.pdf", fileUrl: "https://example.test/receipt.pdf",
+    });
     const appRows = await insertOutputApplicationFixture(db, deliveryRows.map((delivery, n) => ({ fieldSizeHa: 1, organizationId: TEST_ORG_ID, deliveryId: delivery.id, code: `LF-A${n}-${tag}`, applicationDate: new Date(`2026-08-1${n}T00:00:00Z`), biocharAppliedTons: n + 1, biocharAppliedDryTons: n + 0.5 })), row => row);
     const [multiRunOrder] = await db.insert(orders).values(await outputOrderFixtureValues(db, { organizationId: TEST_ORG_ID, facilityId: facility.id, customerId: customer.id, biocharProductId: multiRunProduct.id, code: `LF-OM-${tag}`, orderDate: new Date("2026-07-03"), quantityKg: 400, packaging: "loose" })).returning();
     const [multiRunDelivery] = await insertOutputDeliveryFixture(db, { organizationId: TEST_ORG_ID, facilityId: facility.id, orderId: multiRunOrder.id, biocharProductId: multiRunProduct.id, code: `LF-DM-${tag}`, deliveryDate: new Date("2026-07-04"), deliveredWetMassKg: 4_000, massDryKg: 2_000 }, row => row);
@@ -93,11 +99,16 @@ describe("credit batch accounting", () => {
       const facts = accounting.lineageFacts;
       const detail = await getCreditBatchById(makeTestOrgContext(), batch.id, { skipPreview: true });
       const chain = await getCreditBatchChainData(makeTestOrgContext(), batch.id);
+      for (const [index, application] of appRows.entries()) {
+        const applicationChain = await getChainOfCustodyData(makeTestOrgContext(), application.id);
+        expect(applicationChain.delivery.proofOfDeliveryCount).toBe(index === 0 ? 1 : 0);
+      }
       expect(facts.applications.find((application) => application.id === appRows[0].id)?.delivery).toMatchObject({
         customerLocationId: location.id,
         locationDistanceKm: 15,
         distanceKmOverride: 7,
         status: deliveryRows[0].status,
+        proofOfDeliveryCount: 1,
       });
       expect(facts.applications.find((application) => application.id === appRows[1].id)?.delivery).toMatchObject({
         customerLocationId: location.id, locationDistanceKm: 15,
@@ -306,6 +317,7 @@ describe("credit batch accounting", () => {
       await db.delete(creditBatchProductionRuns).where(eq(creditBatchProductionRuns.creditBatchId, batch.id));
       await db.delete(creditBatches).where(eq(creditBatches.id, batch.id));
       await deleteOutputApplicationFixtures(db, inArray(applications.id, applicationIds));
+      await db.delete(documents).where(eq(documents.entityId, deliveryRows[0].id));
       await deleteOutputDeliveryFixtures(db, inArray(deliveries.id, [...deliveryRows.map((row) => row.id), multiRunDelivery.id]));
       await db.delete(orders).where(inArray(orders.id, [...ordersRows.map((row) => row.id), multiRunOrder.id]));
       await db.delete(biocharProductSourceAllocations).where(inArray(biocharProductSourceAllocations.id, allocationRows.map((row) => row.id)));

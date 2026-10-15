@@ -1,3 +1,4 @@
+import { getDeliveryProofCounts } from "./delivery-proof";
 import { db, type DbTransaction } from "@/db";
 import {
   applications,
@@ -109,7 +110,7 @@ export type CreditBatchAccountingByBatch = Record<
 >;
 const uniqueSorted = (values: string[]) => [...new Set(values)].sort();
 const unique = (values: string[]) => [...new Set(values)];
-/** Four set-based queries regardless of batch/application count. */
+/** Set-based queries regardless of batch/application count. */
 async function loadLineageWithExecutor(
   ctx: OrgContext,
   batchIds: string[],
@@ -338,6 +339,7 @@ async function loadLineageWithExecutor(
     });
   }
 
+  const proofCounts = await getDeliveryProofCounts(ctx, applicationRows.map((row) => row.deliveryId), executor);
   const applicationsByBatchRun = new Map<
     string,
     BatchLineageApplicationFact[]
@@ -361,7 +363,7 @@ async function loadLineageWithExecutor(
       sourceAllocation: { productionRunId: effectiveRunId, allocatedWetMassKg: Number(row.allocatedWetMassKg), allocatedDryMassKg: Number(row.allocatedDryMassKg) },
       soilTemperatureC: row.soilTemperatureC,
       facility: { id: row.facilityId, code: row.facilityCode, name: row.facilityName },
-      delivery: { id: row.deliveryId, code: row.deliveryCode, status: row.deliveryStatus, deliveryDate: row.deliveryDate, deliveredWetMassKg: row.deliveryWetMassKg, massDryKg: row.deliveryMassDryKg, distanceKmOverride: row.distanceKmOverride, locationDistanceKm: row.locationDistanceKm, customerLocationId: row.customerLocationId },
+      delivery: { proofOfDeliveryCount: proofCounts.get(row.deliveryId) ?? 0, id: row.deliveryId, code: row.deliveryCode, status: row.deliveryStatus, deliveryDate: row.deliveryDate, deliveredWetMassKg: row.deliveryWetMassKg, massDryKg: row.deliveryMassDryKg, distanceKmOverride: row.distanceKmOverride, locationDistanceKm: row.locationDistanceKm, customerLocationId: row.customerLocationId },
       order: row.orderId ? { id: row.orderId, code: row.orderCode!, orderDate: row.orderDate!, quantityKg: row.orderQuantityKg } : null,
       biocharProduct: { id: row.productId, code: row.productCode, status: row.productStatus, productionDate: row.productionDate, massKg: row.productMassKg, moistureContentPercent: row.productMoisturePercent, formulationName: row.formulationName, linkedProductionRunId: effectiveRunId },
     };

@@ -11,6 +11,7 @@
  * (`templateResolved` + `analyzeCoverage` + `submitReady`), now extracted and
  * unit-tested — Stage 4 migrates the panel/pre-flight onto it.
  */
+import type { SubmissionLineageBlocker } from "./submission-readiness";
 import { formatUnbindableTemplateInputsText, type UnbindableTemplateInput } from "@/lib/isometric/template-binding-coverage";
 
 import {
@@ -74,8 +75,8 @@ export interface RemovalReadinessFacts {
   transportVehicleAdvisories?: string[];
   /** Compact labels from per-entity certifier-readiness checks. */
   entityReadinessGaps?: string[];
-  /** Shared submission checks for individual feedstocks, orders and deliveries. */
-  submissionLineageBlockers?: string[];
+  /** Structured submission checks with affected records and fix targets. */
+  submissionLineageIssues?: SubmissionLineageBlocker[];
   /** Documents discovered by the same lineage walk as the Sources panel. */
   supportingDocumentCount?: number;
   /** Supporting documents with an existing Isometric Source mirror. */
@@ -115,7 +116,7 @@ const ORG_CREDENTIALS_LABEL = "Organization Isometric credentials present";
 const TRANSPORT_COVERAGE_LABEL = "Transport coverage complete";
 const ENTITY_READINESS_LABEL = "Entity certifier fields complete";
 const ENTITY_READINESS_REASON_PREVIEW_LIMIT = 3;
-const ENTITY_READINESS_CHECK_DISPLAY_LIMIT = 5;
+export const ENTITY_READINESS_CHECK_DISPLAY_LIMIT = 5;
 const DURABILITY_LABEL = "Sampling & durability eligibility met";
 const EVIDENCE_LABEL = "Registry value sources linked";
 const MEASUREMENT_DATES_LABEL = "Production and application dates";
@@ -267,7 +268,7 @@ export function deriveRemovalReadiness(
     };
   }
 
-  const reasons: string[] = [...(facts.submissionLineageBlockers ?? [])];
+  const reasons: string[] = [...(facts.submissionLineageIssues?.map((issue) => issue.detail) ?? [])];
 
   const templateReason = templateBlockerReason(facts);
   if (templateReason) reasons.push(templateReason);
@@ -476,6 +477,7 @@ export type RemovalRequirementKey =
 
 export interface RemovalRequirementCheck {
   key: RemovalRequirementKey;
+  lineageIssues?: SubmissionLineageBlocker[];
   /** Affirmative label — what's true when the check is met. */
   label: string;
   /**
@@ -583,7 +585,7 @@ export function buildRemovalRequirementsChecklist(
   })();
 
   const entityReadiness = ((): RemovalRequirementCheckBase => {
-    const gaps = [...(facts.submissionLineageBlockers ?? []), ...(facts.entityReadinessGaps ?? [])];
+    const gaps = [...(facts.submissionLineageIssues?.map((issue) => issue.detail) ?? []), ...(facts.entityReadinessGaps ?? [])];
     return gaps.length === 0
       ? {
           key: "entityReadiness",
@@ -594,6 +596,7 @@ export function buildRemovalRequirementsChecklist(
           key: "entityReadiness",
           label: ENTITY_READINESS_LABEL,
           status: "unmet",
+          lineageIssues: facts.submissionLineageIssues,
           detail: gaps
             .slice(0, ENTITY_READINESS_CHECK_DISPLAY_LIMIT)
             .join(" · "),

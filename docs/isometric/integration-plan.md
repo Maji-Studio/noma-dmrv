@@ -301,6 +301,20 @@ is not confirmed, so no production-live Method-B submission is claimed.
 
 ## Sources and evidence
 
+Proof of delivery is a Removal-readiness requirement (#942 q12).
+Each delivery in the Removal lineage needs at least one delivery-owned,
+`uploaded` document classified as `delivery_receipt`, `bill_of_lading` or
+`photo`. A pending upload with a storage key is not proof. Weighbridge tickets
+and other transport evidence do not satisfy this requirement. Documents have
+no archive column or archive upload status; deleted document rows cannot count.
+Saving a delivery without proof remains allowed.
+
+This gate applies regardless of template transport categories: proof supports
+mass verification under [Biochar v1.1 §8.3.1.1](https://registry.isometric.com/protocol/biochar/1.1#measurement-of-mass-of-biochar-applied).
+The shared lineage predicate feeds Removal readiness, batch health and submission;
+the delivery badge uses the same predicate. The fix opens Delivery evidence.
+The gate does not change registry Source binding rules below.
+
 Source attribution is target-specific, not Removal-wide.
 
 `src/lib/certification/removal-source-bindings.ts` classifies operator
