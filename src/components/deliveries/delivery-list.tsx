@@ -64,7 +64,7 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { parseAsString, useQueryState } from "nuqs";
 import { useEffect, useState } from "react";
 import { DeliveryForm } from "./delivery-form";
-import { deliverySheetSections } from "./delivery-read-sections";
+import { deliverySheetSections, type DeliverySheetRecord } from "./delivery-read-sections";
 import { ILLUSTRATION_SIZE, DeliveryTruckArt } from "@/components/ui/illustrations";
 
 // ============================================
@@ -73,7 +73,7 @@ import { ILLUSTRATION_SIZE, DeliveryTruckArt } from "@/components/ui/illustratio
 
 function deliveryDetailToRelations(
   delivery: DeliveryDetail,
-): DeliveryWithRelations {
+): DeliverySheetRecord {
   return {
     ...delivery,
     status: "delivered",
@@ -90,7 +90,7 @@ function deliveryDetailToRelations(
 // ============================================
 
 function createColumns(
-  onEdit: (delivery: DeliveryWithRelations) => void,
+  onEdit: (delivery: DeliverySheetRecord) => void,
   facilities: readonly { id: string; timezone: string }[],
 ): ColumnDef<DeliveryWithRelations>[] {
   return [
@@ -175,7 +175,7 @@ function createColumns(
         <EntityCertifyReadinessBadge
           readiness={deriveEntityCertifyReadiness("delivery", row.original)}
           readyLabel="Fields complete"
-          readinessNoun="delivery fields"
+          readinessNoun="delivery fields and proof"
         />
       ),
     },
@@ -222,7 +222,7 @@ export function DeliveryList() {
   );
   // Unified side sheet state
   const [sideSheet, setSideSheet] = useState<{
-    entity: DeliveryWithRelations | null;
+    entity: DeliverySheetRecord | null;
     mode: SideSheetMode;
   } | null>(null);
 
@@ -288,7 +288,7 @@ export function DeliveryList() {
         facilityId: contextFacilityId,
       } as CreateDeliveryData;
       const created = await createDelivery.mutateAsync(createData);
-      const createdDelivery: DeliveryWithRelations = {
+      const createdDelivery: DeliverySheetRecord = {
         ...created,
         status: "delivered",
         orderCode: null,
@@ -338,7 +338,7 @@ export function DeliveryList() {
     setSideSheet({ entity: null, mode: "create" });
   };
 
-  const openView = (delivery: DeliveryWithRelations) => {
+  const openView = (delivery: DeliverySheetRecord) => {
     setFocusedDeliveryId(delivery.id);
     setDeepLinkMode(null);
     setDeepLinkFocus(null);
@@ -346,7 +346,7 @@ export function DeliveryList() {
     setSideSheet({ entity: delivery, mode: "view" });
   };
 
-  const openEdit = (delivery: DeliveryWithRelations) => {
+  const openEdit = (delivery: DeliverySheetRecord) => {
     setDeepLinkMode(null);
     setDeepLinkFocus(null);
     setFormError(null);

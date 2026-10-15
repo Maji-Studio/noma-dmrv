@@ -11,8 +11,6 @@ import { cleanupOutputStockFixture } from "./helpers/output-stock-cleanup";
 const organizations: string[] = [];
 afterEach(async () => {
   for (const id of organizations.splice(0)) {
-    await db.update(orders).set({ customerLocationId: null }).where(eq(orders.organizationId, id));
-    await db.delete(customerLocations).where(eq(customerLocations.organizationId, id));
     await cleanupOutputStockFixture(db, id);
   }
 });

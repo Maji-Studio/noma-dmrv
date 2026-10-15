@@ -6,7 +6,6 @@
 import { orderFulfillmentStatuses } from "@/lib/orders/fulfillment";
 import {
   calendarDateSchema,
-  emptyToNull,
   expectedVersionSchema,
   MASS_KG_INPUT_STEP,
   MASS_MIN_KG_MESSAGE,
@@ -24,6 +23,12 @@ import { z } from "zod";
 export const packagingTypes = ["loose", "bagged"] as const;
 
 export type PackagingType = (typeof packagingTypes)[number];
+
+export const orderCustomerLocationIdSchema = z.uuid({
+  error: (issue) => issue.input == null || issue.input === ""
+    ? "Select a customer location."
+    : "Choose a valid customer location.",
+}).toLowerCase();
 
 export const orderQuantityKgSchema = requiredPositiveMassKgSchema(
   "Quantity is required",
@@ -44,7 +49,7 @@ export const orderFormSchema = z.object({
   // Required fields
   facilityId: z.string().min(1, "Select a facility.").uuid("Choose a valid facility."),
   customerId: z.string().min(1, "Select a customer.").uuid("Choose a valid customer."),
-  customerLocationId: emptyToNull.or(z.string().uuid("Choose a valid customer location.")).optional().nullable(),
+  customerLocationId: orderCustomerLocationIdSchema,
   formulationId: z.string().min(1, "Select a formulation.").pipe(z.uuid("Choose a valid formulation.")),
   orderDate: calendarDateSchema(),
   quantityKg: orderQuantityKgSchema,
@@ -76,7 +81,7 @@ export const updateOrderSchema = z.object({
     .optional(),
   facilityId: z.string().uuid().optional(),
   customerId: z.string().uuid().optional(),
-  customerLocationId: z.string().uuid().optional().nullable(),
+  customerLocationId: orderCustomerLocationIdSchema.optional(),
   formulationId: z.uuid().optional(),
   orderDate: calendarDateSchema().optional(),
   quantityKg: orderQuantityKgSchema.optional(),

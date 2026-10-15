@@ -28,6 +28,7 @@ function application(): BatchLineageApplicationFact {
     soilTemperatureC: null,
     facility: { id: "facility-1", code: "Facility 1", name: "Facility" },
     delivery: {
+      proofOfDeliveryCount: 1,
       id: "delivery-1",
       code: "Delivery 1",
       status: "delivered",

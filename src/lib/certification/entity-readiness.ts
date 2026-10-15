@@ -1,3 +1,4 @@
+import { deliveryProofBlocker } from "./submission-readiness";
 import {
   certifyFieldConditionApplies,
   getCertifyFieldDescriptors,
@@ -28,7 +29,7 @@ export type EntityCertifyWarning = Omit<EntityCertifyGap, "kind">;
 export type EntityReadinessRecord = object;
 
 export const REMOVAL_FIELD_CHECK_SCOPE =
-  "Fields complete checks this record's own fields. Removal submission also checks production runs, Samples, transport legs, delivery distances and the order’s customer location.";
+  "Fields complete checks this record's own fields and, for deliveries, proof of delivery. Removal submission also checks linked production runs, Samples, transport legs, delivery distances and the order’s customer location.";
 
 const TERMINAL_STATUS_BY_ENTITY: Partial<Record<CertifyEntityKind, string[]>> = {
   productionRun: ["complete"],
@@ -151,6 +152,13 @@ export function deriveEntityCertifyReadiness(
 ): EntityCertifyReadiness {
   const gaps: EntityCertifyGap[] = [];
   const warnings: EntityCertifyWarning[] = [];
+  if (entityKind === "delivery") {
+    const detail = deliveryProofBlocker({
+      deliveryCode: String(fieldValue(entity, "code") ?? ""),
+      proofOfDeliveryCount: Number(fieldValue(entity, "proofOfDeliveryCount")),
+    });
+    if (detail) gaps.push({ kind: "field", key: "proofOfDelivery", label: "Proof of delivery", fields: [], detail });
+  }
   const effectiveLifecycleState =
     lifecycleState ?? (fieldValue(entity, "status") as string | null | undefined);
 

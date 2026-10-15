@@ -5,5 +5,5 @@ export const TRANSPORT_EVIDENCE_HINTS: Record<"feedstock" | "transport_leg" | "d
   transport_leg:
     "Optional. Attach a bill of lading, weigh-scale ticket, or other transport record if you have one.",
   delivery:
-    "Optional. Attach a delivery receipt, bill of lading, photo, or other delivery record.",
+    "Attach a delivery receipt, bill of lading or delivery photo before submitting a Removal. You can save the delivery without proof.",
 };

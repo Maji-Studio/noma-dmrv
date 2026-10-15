@@ -1,6 +1,6 @@
 import { insertOutputApplicationFixture } from "./helpers/output-contract-fixtures";
 import { deleteOutputApplicationFixtures } from "./helpers/output-contract-fixtures";
-import { outputProductFixtureValues, outputOrderFixtureValues, insertOutputDeliveryFixture, deleteOutputDeliveryFixtures, deleteOutputProductFixtures, deleteOutputFacilityFixtures } from "./helpers/output-contract-fixtures";
+import { outputProductFixtureValues, outputOrderFixtureValues, deleteOutputOrderFixtures, insertOutputDeliveryFixture, deleteOutputDeliveryFixtures, deleteOutputProductFixtures, deleteOutputFacilityFixtures } from "./helpers/output-contract-fixtures";
 import { beforeAll, describe, expect, it } from "vitest";
 import { eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
@@ -467,7 +467,7 @@ describe("Removal Application-slice assignment", () => {
       );
       await deleteOutputApplicationFixtures(db, eq(applications.id, application.id));
       await deleteOutputDeliveryFixtures(db, eq(deliveries.id, delivery.id));
-      await db.delete(orders).where(eq(orders.id, order.id));
+      await deleteOutputOrderFixtures(db, eq(orders.id, order.id));
       await db.delete(customers).where(eq(customers.id, customer.id));
       await db
         .delete(biocharProductSourceAllocations)

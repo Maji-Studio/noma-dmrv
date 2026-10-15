@@ -109,7 +109,7 @@ describe("OrderForm product details", () => {
     render(<QueryClientProvider client={client}>
       <OrderForm order={{
         id: "order-1", facilityId: "22222222-2222-4222-8222-222222222222",
-        customerId: "33333333-3333-4333-8333-333333333333", customerLocationId: null,
+        customerId: "33333333-3333-4333-8333-333333333333", customerLocationId: "11111111-1111-4111-8111-111111111111",
         formulationId: "44444444-4444-4444-8444-444444444444",
         orderDate: new Date("2026-09-01T00:00:00Z"), quantityKg: 1000, packaging: "loose",
       } as Order} onSubmit={submit} />
@@ -136,7 +136,7 @@ describe("OrderForm product details", () => {
       render(<QueryClientProvider client={client}>
         <OrderForm order={{
           id: "order-1", facilityId: "22222222-2222-4222-8222-222222222222",
-          customerId: "33333333-3333-4333-8333-333333333333", customerLocationId: null,
+          customerId: "33333333-3333-4333-8333-333333333333", customerLocationId: "11111111-1111-4111-8111-111111111111",
           formulationId: "44444444-4444-4444-8444-444444444444",
           orderDate: new Date("2026-09-01T00:00:00Z"), quantityKg: 1000, packaging: "loose",
         } as Order} onSubmit={submit} />
@@ -164,7 +164,7 @@ describe("OrderForm product details", () => {
 });
 
 describe("OrderForm customer field", () => {
-  it("submits null after the operator clears the customer's sole location", async () => {
+  it("requires a location after the operator clears the customer's sole location", async () => {
     const locationId = "11111111-1111-4111-8111-111111111111";
     state.locationOptions = [{ id: locationId, code: "", name: "Only location" }];
     const submit = vi.fn();
@@ -177,12 +177,13 @@ describe("OrderForm customer field", () => {
         orderDate: "2026-09-01", quantityKg: 1000, packaging: "loose",
       } as unknown as Order} onSubmit={submit} />
     </QueryClientProvider>);
-    const picker = screen.getByRole("combobox", { name: "Customer location" });
+    const picker = screen.getByRole("combobox", { name: /^Customer location/ });
     await waitFor(() => expect(picker.textContent).toBe("Only location"));
     fireEvent.click(within(picker.parentElement!).getByTestId("entity-select-clear"));
     expect(picker.textContent).toBe("Select location...");
     fireEvent.submit(picker.closest("form")!);
-    await waitFor(() => expect(submit).toHaveBeenCalledWith(expect.objectContaining({ customerLocationId: null })));
+    await screen.findByText("Select a customer location.");
+    expect(submit).not.toHaveBeenCalled();
     client.clear();
   });
 
@@ -196,7 +197,7 @@ describe("OrderForm customer field", () => {
     const client = new QueryClient();
     const view = <QueryClientProvider client={client}><OrderForm order={order} onSubmit={noop} /></QueryClientProvider>;
     const { rerender } = render(view);
-    fireEvent.click(screen.getByRole("combobox", { name: "Customer location" }));
+    fireEvent.click(screen.getByRole("combobox", { name: /^Customer location/ }));
     fireEvent.click(screen.getByTestId("entity-select-edit"));
     expect(state.editLocation).toHaveBeenLastCalledWith({ customerId: location.customerId, location, facility: orderFacility });
     state.locations = [{ ...location, version: 2, name: "Renamed field" }];
@@ -204,7 +205,7 @@ describe("OrderForm customer field", () => {
     rerender(<QueryClientProvider client={client}><OrderForm order={order} onSubmit={noop} /></QueryClientProvider>);
     expect(state.editLocation).toHaveBeenLastCalledWith({ customerId: location.customerId, location, facility: orderFacility });
     fireEvent.click(screen.getByRole("button", { name: "Close location editor" }));
-    expect(screen.getByRole("combobox", { name: "Customer location" }).textContent).toBe("Renamed field");
+    expect(screen.getByRole("combobox", { name: /^Customer location/ }).textContent).toBe("Renamed field");
     expect(state.optionRequests.filter((request) => request.entityType === "customerLocation").at(-1)?.enabled).toBe(false);
     expect(state.detailRequests).toContainEqual({ entityType: "customerLocation", id: location.id });
     client.clear();
@@ -214,7 +215,7 @@ describe("OrderForm customer field", () => {
     state.locationOptions = [{ id: "location-1", code: "", name: "North field" }];
     const client = new QueryClient();
     render(<QueryClientProvider client={client}><OrderForm order={{ customerId: "customer-1", customerLocationId: "location-1" } as Order} onSubmit={noop} /></QueryClientProvider>);
-    fireEvent.click(screen.getByRole("combobox", { name: "Customer location" }));
+    fireEvent.click(screen.getByRole("combobox", { name: /^Customer location/ }));
     expect(screen.queryByTestId("entity-select-edit")).toBeNull();
     client.clear();
   });

@@ -331,6 +331,20 @@ describe("buildRemovalSubmissionBuild", () => {
     })).rejects.toThrow("Removal submission blocked:\nFeedstock FS-2 has no usable transport leg.");
   });
 
+  it("refuses missing delivery proof even without transport inputs", async () => {
+    const lineages = [{ application: { id: "app-1", code: "AP-1" }, delivery: {
+      id: "delivery-1", code: "D-0012", customerLocationId: "location-1", proofOfDeliveryCount: 0,
+    }, order: null }] as RemovalSubmissionContext["lineages"];
+    const ctx = { entityReadinessGaps: [],
+      submissionLineageBlockers: buildSubmissionLineageBlockers(lineages, [], {}, []),
+    } as unknown as RemovalSubmissionContext;
+    await expect(buildRemovalSubmissionBuild({
+      orgCtx: TEST_ORG_CONTEXT, removalId: "rem-missing-proof", ctx,
+      prepared: { defaultTemplate: { groups: [] } as never, blueprintsByKey: new Map(),
+        externalProjectId: "prj-test", allowPeriodInputStub: false, hasDurabilityComponents: false },
+    })).rejects.toThrow("Delivery D-0012 has no proof of delivery");
+  });
+
   it("refuses a delivered delivery without distance before preparing registry inputs", async () => {
     const lineages = [{ application: { id: "app-1", code: "AP-1" }, delivery: {
       id: "delivery-1", code: "DL-1", status: "delivered", customerLocationId: "location-1",
@@ -467,7 +481,7 @@ describe("buildRemovalSubmissionBuild", () => {
             code: "APP-001",
             applicationDate: new Date("2026-01-03T00:00:00Z"),
           },
-          delivery: { id: "delivery-1", status: "delivered", customerLocationId: "location-1" },
+          delivery: { id: "delivery-1", proofOfDeliveryCount: 1, status: "delivered", customerLocationId: "location-1" },
           productionRun: { id: "run-1" },
           feedstocks: [],
           warnings: [],

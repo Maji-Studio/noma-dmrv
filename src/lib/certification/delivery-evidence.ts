@@ -41,3 +41,8 @@ export function isAcceptedDeliveryEvidenceDocument(document: {
     isDeliveryEvidenceDocumentType(document.documentType)
   );
 }
+
+/** Mass evidence required for each delivery before Removal submission. */
+export const PROOF_OF_DELIVERY_DOCUMENT_TYPES = [
+  "delivery_receipt", "bill_of_lading", "photo",
+] as const satisfies readonly DocumentType[];

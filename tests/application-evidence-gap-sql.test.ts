@@ -1,6 +1,6 @@
 import { insertOutputApplicationFixture } from "./helpers/output-contract-fixtures";
 import { deleteOutputApplicationFixtures } from "./helpers/output-contract-fixtures";
-import { outputProductFixtureValues, outputOrderFixtureValues, insertOutputDeliveryFixture, deleteOutputDeliveryFixtures, deleteOutputProductFixtures, deleteOutputFacilityFixtures } from "./helpers/output-contract-fixtures";
+import { outputProductFixtureValues, outputOrderFixtureValues, deleteOutputOrderFixtures, insertOutputDeliveryFixture, deleteOutputDeliveryFixtures, deleteOutputProductFixtures, deleteOutputFacilityFixtures } from "./helpers/output-contract-fixtures";
 /**
  * Integration coverage for the evidence-gap SQL — the fail-CLOSED certify
  * readiness signal.
@@ -265,7 +265,7 @@ async function cleanupFixture(target: Fixture): Promise<void> {
       await deleteOutputApplicationFixtures(tx, inArray(applications.id, applicationIds));
     }
     await deleteOutputDeliveryFixtures(tx, eq(deliveries.id, target.deliveryId));
-    await tx.delete(orders).where(eq(orders.id, target.orderId));
+    await deleteOutputOrderFixtures(tx, eq(orders.id, target.orderId));
     await deleteOutputProductFixtures(tx, eq(biocharProducts.id, target.productId));
     await tx.delete(productionRuns).where(eq(productionRuns.id, target.productionRunId));
     await tx.delete(reactors).where(eq(reactors.id, target.reactorId));
@@ -298,6 +298,7 @@ function lineageFor(app: SeededApplication): ChainOfCustodyData {
       href: `/applications/${app.id}`,
     },
     delivery: {
+      proofOfDeliveryCount: 1,
       id: "del",
       code: "DL",
       status: null,

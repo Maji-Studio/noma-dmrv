@@ -209,7 +209,10 @@ accept `type` and `formulationId` list filters.
 `src/lib/operations/orders.ts` shares create, update and delete between app
 actions and REST/MCP. `POST /api/v1/orders` and `PATCH /api/v1/orders/{id}`
 need opt-in `orders:write`; DELETE needs the separate `orders:delete`, off by
-default. PATCH and DELETE take UUIDs and `If-Match`. Packaging defaults from
+default. PATCH and DELETE take UUIDs and `If-Match`. Create requires
+`customerLocationId` for the delivery destination. PATCH may omit it to keep the
+saved location, but refuses null and empty values with 422 `validation_failed`
+at `/customerLocationId`. Packaging defaults from
 organization settings inside the transaction after replay. Order writes lock
 topology, sorted facilities, a supplied formulation, the order and lineage,
 then key-share locks on the customer and location,
