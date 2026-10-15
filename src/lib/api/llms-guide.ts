@@ -1,3 +1,4 @@
+import { DOCUMENT_DOWNLOAD_TTL_MINUTES } from "@/config/documents";
 import { DOCUMENT_GUIDANCE, DOCUMENT_TYPE_GUIDANCE } from "@/lib/operations/document-guidance";
 import { readDescriptions } from "@/lib/operations/read-descriptions";
 import { API_IDEMPOTENCY_KEY_MAX_LENGTH, API_LIST_DEFAULT_LIMIT, API_LIST_MAX_LIMIT } from "@/config/api-rest";
@@ -77,7 +78,7 @@ ${orderGuide}
 ${deliveryGuide}
 ## Documents
 
-Documents belong to a record. Read them under /feedstocks/{idOrCode}/documents, /deliveries/{idOrCode}/documents or /lab-samples/{idOrCode}/documents using the record's read scope. Lists show uploaded files by default. Read one file at {record path}/documents/{documentId}. Its /content route redirects to a signed link that expires in 5 minutes; follow that link without the API key. Archived records remain readable.
+Documents belong to a record. Read them under /feedstocks/{idOrCode}/documents, /deliveries/{idOrCode}/documents or /lab-samples/{idOrCode}/documents using the record's read scope. Lists show uploaded files by default. Read one file at {record path}/documents/{documentId}. Its /content route redirects to a signed link that expires in ${DOCUMENT_DOWNLOAD_TTL_MINUTES} minutes; follow that link without the API key. Archived records remain readable.
 
 ${DOCUMENT_GUIDANCE}
 

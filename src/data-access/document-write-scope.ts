@@ -122,7 +122,11 @@ export async function inspectDocumentOwner(ctx: OrgContext, tx: DbTransaction, e
   requireOrgScope(ctx);
   const links = await discoverOwner(ctx, tx, entityType, entityId);
   if (links.some((link) => link.archived)) throw documentNotFound(OWNER_FIELDS[entityType as DocumentEntityType]);
-  for (const target of await targetsFor(ctx, tx, links)) if ((await getCertifiedLineage(ctx, tx, target)).some(isSubmittedLineageRow)) return true;
+  return ownerHasSubmittedLineage(ctx, tx, await targetsFor(ctx, tx, links));
+}
+export async function ownerHasSubmittedLineage(ctx: OrgContext, tx: DbTransaction, targets: CertifiedLineageTarget[]): Promise<boolean> {
+  requireOrgScope(ctx);
+  for (const target of targets) if ((await getCertifiedLineage(ctx, tx, target)).some(isSubmittedLineageRow)) return true;
   return false;
 }
 export async function readDocumentForWrite(ctx: OrgContext, tx: DbTransaction, id: string, lock = false) {

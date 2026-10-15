@@ -208,7 +208,7 @@ it("stops the cross-org drain at its budget when a provider delete stalls", asyn
     const start = Date.now();
     const result = await drainStorageObjectDeletionsAcrossOrganizations(stallBudgetMs, [ctx.organizationId]);
     expect(Date.now() - start).toBeLessThan(maximumElapsedMs);
-    expect(result).toEqual({ completed: 0, failed: 1 });
+    expect(result).toEqual({ completed: 0, failed: 0, deferred: 1 });
     expect(stalled).toHaveBeenCalledOnce();
     const entries = await db.select().from(schema.storageObjectDeletions).where(eq(schema.storageObjectDeletions.organizationId, ctx.organizationId));
     expect(entries.every((entry) => entry.completedAt === null)).toBe(true);
@@ -238,4 +238,46 @@ it("returns 409 expired when a sweep wins against an inspected confirmation", as
   const outcome = await confirm;
   expect(outcome).toMatchObject({ kind: "failed", reason: "expired" });
   expect(mapConfirmOutcome(outcome)).toMatchObject({ status: 409, error: { issues: [{ code: "expired" }] } });
+});
+
+it.each(["provider", "bucket"] as const)("excludes a mismatched %s from the cross-org drain", async (mismatch) => {
+  const ctx = contexts[1];
+  await db.delete(schema.storageObjectDeletions).where(eq(schema.storageObjectDeletions.organizationId, ctx.organizationId));
+  await db.transaction((tx) => enqueueStorageObjectDeletion(ctx, tx, {
+    storageProvider: mismatch === "provider" ? "other-provider" : provider.name,
+    storageBucket: mismatch === "bucket" ? "other-bucket" : provider.bucket,
+    storageKey: `org/${ctx.organizationId}/uploads/${randomUUID()}`,
+  }));
+  const deleted = vi.spyOn(provider, "deleteObject");
+  try {
+    expect(await drainStorageObjectDeletionsAcrossOrganizations(DRAIN_BUDGET_MS, [ctx.organizationId])).toEqual({ completed: 0, failed: 0, deferred: 0 });
+    expect(deleted).not.toHaveBeenCalled();
+    const [entry] = await db.select().from(schema.storageObjectDeletions).where(eq(schema.storageObjectDeletions.organizationId, ctx.organizationId));
+    expect(entry).toMatchObject({ attemptCount: 0, lastErrorCode: null, completedAt: null });
+  } finally { deleted.mockRestore(); }
+});
+
+it("counts a provider delete error as a real drain failure", async () => {
+  const ctx = contexts[1];
+  await db.delete(schema.storageObjectDeletions).where(eq(schema.storageObjectDeletions.organizationId, ctx.organizationId));
+  await db.transaction((tx) => enqueueStorageObjectDeletion(ctx, tx, {
+    storageProvider: provider.name, storageBucket: provider.bucket, storageKey: `org/${ctx.organizationId}/uploads/${randomUUID()}`,
+  }));
+  const deleted = vi.spyOn(provider, "deleteObject").mockRejectedValue(new Error("provider unavailable"));
+  try { expect(await drainStorageObjectDeletionsAcrossOrganizations(DRAIN_BUDGET_MS, [ctx.organizationId])).toEqual({ completed: 0, failed: 1, deferred: 0 }); }
+  finally { deleted.mockRestore(); }
+});
+
+it("hands off every retained promotion candidate before retiring a failed row", async () => {
+  const row = await pending();
+  const candidate = `org/${contexts[0].organizationId}/final/${row.id}-candidate`;
+  await db.update(schema.documents).set({ uploadStatus: "failed", updatedAt: new Date(Date.now() - DOCUMENT_FAILED_RETENTION_MS - MINUTE_MS),
+    metadata: { promotionCandidates: [candidate, row.storageKey] },
+  }).where(eq(schema.documents.id, row.id));
+  await db.transaction((tx) => enqueueStorageObjectDeletion(contexts[0], tx, {
+    storageProvider: provider.name, storageBucket: provider.bucket, storageKey: row.uploadStorageKey!,
+  }));
+  await database.transaction((tx) => retireFailedDocumentUploadsInTransaction(tx, new Date(), organizationIds));
+  expect(await read(row.id)).toBeUndefined();
+  expect((await queued(candidate)).length).toBeGreaterThan(0);
 });

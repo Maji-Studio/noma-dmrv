@@ -18,3 +18,9 @@ it("maps API outcomes identically for REST and MCP after commit", () => {
   expect(mapConfirmOutcome({ kind: "refused", document: representation, reason: "certification_locked", pointer: "/ownerId", message: "Locked" })).toMatchObject({ status: 409, error: { code: "certification_locked", issues: [{ path: ["ownerId"] }] } });
   expect(mapConfirmOutcome({ kind: "failed", reason: "checksum", message: "Checksum mismatch" })).toMatchObject({ status: 409, error: { code: "conflict", issues: [{ path: ["documentId"], code: "checksum", message: "Checksum mismatch" }] } });
 });
+
+it.each(["checksum", "expired"])("maps the stored %s reason to an app conflict", (reason) => {
+  expect(() => documentFromConfirmOutcome({ kind: "failed", reason, message: "Stored refusal" })).toThrow(expect.objectContaining({
+    code: "conflict", issues: [{ path: ["documentId"], code: reason, message: "Stored refusal" }],
+  }));
+});

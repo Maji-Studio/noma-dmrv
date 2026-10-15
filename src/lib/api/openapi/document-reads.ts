@@ -1,3 +1,4 @@
+import { DOCUMENT_DOWNLOAD_TTL_MINUTES } from "@/config/documents";
 import type { z } from "zod";
 import { API_DOCUMENT_OWNERS, API_DOCUMENT_OWNER_TYPES } from "@/lib/documents/api-owners";
 import { documentRepresentationSchema } from "@/lib/representations/documents";
@@ -24,7 +25,7 @@ export function addDocumentReadPaths(paths: Paths, publishOutput: (schema: z.Zod
       [targetParameter(), documentParameter]) };
     paths[`${base}/{documentId}/content`] = { get: privateOperation(`get_${ownerType}_document_content`, owner.readScope, readDescriptions.documentContent,
       { ...problemResponses(READ_ERRORS), "302": { description: "Fresh signed download URL; no body.", headers: { ...privateHeaders,
-        Location: { description: "Signed GET URL expiring in 5 minutes. Fetch without the API key.", schema: { type: "string", format: "uri" } },
+        Location: { description: `Signed GET URL expiring in ${DOCUMENT_DOWNLOAD_TTL_MINUTES} minutes. Fetch without the API key.`, schema: { type: "string", format: "uri" } },
         "Cache-Control": { description: "Do not store this private capability.", schema: { type: "string", const: "private, no-store" } },
         "Referrer-Policy": { description: "Do not send a referrer when following this redirect.", schema: { type: "string", const: "no-referrer" } },
       } } }, [targetParameter(), documentParameter]) };

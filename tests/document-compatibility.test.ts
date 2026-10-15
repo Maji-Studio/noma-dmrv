@@ -14,7 +14,7 @@ import { createLineageFixture, cleanupLineageFixture } from "./helpers/certifica
 import { cleanupDocumentUploads } from "./helpers/document-upload-cleanup";
 import { makeTestOrgContext } from "./helpers/test-org";
 import type { RequestUploadInput } from "@/schemas/documents";
-vi.mock("@/lib/auth/server", () => ({ requireOrgContext: vi.fn() }));
+vi.mock("@/lib/auth/server", async (original) => ({ ...await original<typeof import("@/lib/auth/server")>(), requireOrgContext: vi.fn() }));
 import { requireOrgContext } from "@/lib/auth/server";
 import { importProductionRunReadingsFromDocumentFn } from "@/fn/production-run-reading-imports";
 const ctx = makeTestOrgContext();

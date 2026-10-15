@@ -1,9 +1,7 @@
+import { confirmInspectedUpload } from "./document-confirm";
 import { z } from "zod";
-import { confirmDocumentUploadInTransaction, type InspectedUploadFacts } from "@/data-access/document-writes";
-import { readDocumentForWrite } from "@/data-access/document-write-scope";
-import { processPendingStorageObjectDeletions } from "@/data-access/storage-object-deletions";
-import { DOCUMENT_STORAGE_DRAIN_BUDGET_MS } from "@/config/documents";
-import { failedDocumentUpload, type ApiConfirmOutcome } from "@/lib/documents/confirm-outcome";
+import { type InspectedUploadFacts } from "@/data-access/document-writes";
+import { type ApiConfirmOutcome } from "@/lib/documents/confirm-outcome";
 import { representDocument } from "@/lib/representations/documents";
 import type { Operation, OperationEffect } from "./runner";
 
@@ -16,15 +14,10 @@ export const confirmInspectedDocumentUpload: Operation<typeof input, ApiConfirmO
     return { outcome: "updated", entityType: "document", entityIds: [outcome.document.id], versionBefore: outcome.document.version - 1,
       versionAfter: outcome.document.version, changedFields: ["uploadStatus", "version"] };
   },
-  execute: async ({ ctx, tx, afterCommit, deadlineAt }, facts) => {
-    const outcome = await confirmDocumentUploadInTransaction(ctx, tx, facts);
-    afterCommit(async () => { await processPendingStorageObjectDeletions(ctx, { budgetMs: Math.max(0, Math.min(DOCUMENT_STORAGE_DRAIN_BUDGET_MS, Math.min(deadlineAt ?? Infinity, facts.cleanupDeadlineAt) - Date.now())) }); });
-    if (outcome.kind === "gone") {
-      // Another confirmation may have committed a refusal during inspection.
-      const row = await readDocumentForWrite(ctx, tx, facts.documentId);
-      if (row?.uploadStatus === "failed" && row.entityType === facts.entityType && row.entityId === facts.entityId) return failedDocumentUpload(row);
-      return { ...outcome, ...(outcome.pointer ? { pointer: "/ownerId" } : {}) };
-    }
+  execute: async (scope, facts) => {
+    const outcome = await confirmInspectedUpload(scope, facts);
+    if (outcome.kind === "failed") return outcome;
+    if (outcome.kind === "gone") return { ...outcome, ...(outcome.pointer ? { pointer: "/ownerId" } : {}) };
     return { ...outcome, document: representDocument(outcome.document), ...(outcome.kind === "refused" && outcome.reason === "certification_locked" ? { pointer: "/ownerId" } : {}) };
   },
 };

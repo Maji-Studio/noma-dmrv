@@ -1,8 +1,7 @@
 import { db } from "@/db";
 import type { OrgContext } from "@/lib/auth/server";
 import type { DocumentEntityType } from "@/schemas/documents";
-import { getCertifiedLineage, isSubmittedLineageRow } from "./certification-lineage-guards";
-import { documentOwnerLineageTargets } from "./document-write-scope";
+import { documentOwnerLineageTargets, ownerHasSubmittedLineage } from "./document-write-scope";
 import { requireOrgScope } from "./utils";
 
 export interface RecordCertificationLockInput {
@@ -21,9 +20,6 @@ export async function getRecordCertificationLock(ctx: OrgContext, input: RecordC
   requireOrgScope(ctx);
   return db.transaction(async (tx) => {
     const targets = await documentOwnerLineageTargets(ctx, tx, input.entityType, input.entityId);
-    for (const target of targets) {
-      if ((await getCertifiedLineage(ctx, tx, target)).some(isSubmittedLineageRow)) return true;
-    }
-    return false;
+    return ownerHasSubmittedLineage(ctx, tx, targets);
   });
 }

@@ -8,6 +8,8 @@ import { requireOrgScope } from "./utils";
 
 const DELETION_BATCH_SIZE = 50;
 const DELETION_RETRY_BACKOFF_MS = 60_000;
+const DELETION_BUDGET_EXHAUSTED = Symbol("deletion-budget-exhausted");
+const STORAGE_DEADLINE = "DEADLINE";
 const STORAGE_DELETE_FAILED = "storage_delete_failed";
 const STORAGE_CONFIGURATION_MISMATCH = "storage_configuration_mismatch";
 const log = logger.child({ mod: "storage-object-deletions" });
@@ -22,6 +24,7 @@ interface StorageObjectRef {
 export interface StorageDeletionRunResult {
   completed: number;
   failed: number;
+  deferred: number;
 }
 
 /** Enqueue irreversible cleanup in the same transaction that removes its row. */
@@ -41,7 +44,7 @@ async function processStorageObjectDeletion(
   organizationId: string,
   id: string,
   deadlineAt?: number,
-): Promise<"completed" | "failed" | "skipped"> {
+): Promise<"completed" | "failed" | "deferred" | "skipped"> {
   return db.transaction(async (tx) => {
     const [entry] = await tx
       .select()
@@ -103,23 +106,25 @@ async function processStorageObjectDeletion(
           await Promise.race([
             provider.deleteObject(entry.storageKey),
             new Promise<never>((_, reject) => {
-              timer = setTimeout(() => reject(new Error(STORAGE_DELETE_FAILED)), remaining);
+              timer = setTimeout(() => reject(DELETION_BUDGET_EXHAUSTED), remaining);
             }),
           ]);
         } finally {
           clearTimeout(timer);
         }
       }
-    } catch {
+    } catch (error) {
+      const deferred = error === DELETION_BUDGET_EXHAUSTED;
       await tx
         .update(storageObjectDeletions)
-        .set({ ...attemptPatch, lastErrorCode: STORAGE_DELETE_FAILED })
+        .set({ ...attemptPatch, lastErrorCode: deferred ? STORAGE_DEADLINE : STORAGE_DELETE_FAILED })
         .where(
           and(
             eq(storageObjectDeletions.id, id),
             eq(storageObjectDeletions.organizationId, organizationId),
           ),
         );
+      if (deferred) return "deferred";
       log.error(
         { deletionId: id, organizationId },
         "storage object deletion failed and remains pending",
@@ -154,7 +159,7 @@ export async function processPendingStorageObjectDeletions(
 ): Promise<StorageDeletionRunResult> {
   requireOrgScope(ctx);
   const deadlineAt = options ? Date.now() + options.budgetMs : undefined;
-  if (deadlineAt !== undefined && Date.now() >= deadlineAt) return { completed: 0, failed: 0 };
+  if (deadlineAt !== undefined && Date.now() >= deadlineAt) return { completed: 0, failed: 0, deferred: 0 };
   try {
     const provider = getStorageProvider();
     const mismatchUpdatedAt = new Date();
@@ -219,12 +224,14 @@ export async function processPendingStorageObjectDeletions(
     const result: StorageDeletionRunResult = {
       completed: 0,
       failed: mismatches.length,
+      deferred: 0,
     };
     for (const entry of entries) {
       if (deadlineAt !== undefined && Date.now() >= deadlineAt) break;
       const outcome = await processStorageObjectDeletion(ctx.organizationId, entry.id, deadlineAt);
       if (outcome === "completed") result.completed += 1;
       if (outcome === "failed") result.failed += 1;
+      if (outcome === "deferred") result.deferred += 1;
     }
     return result;
   } catch {
@@ -232,20 +239,23 @@ export async function processPendingStorageObjectDeletions(
       { organizationId: ctx.organizationId },
       "storage deletion outbox drain failed; pending entries remain retryable",
     );
-    return { completed: 0, failed: 1 };
+    return { completed: 0, failed: 1, deferred: 0 };
   }
 }
 
 /** Privileged cron drain; request-path drains remain organization scoped. */
 export async function drainStorageObjectDeletionsAcrossOrganizations(budgetMs: number, organizationIds?: string[]): Promise<StorageDeletionRunResult> {
   const deadlineAt = Date.now() + budgetMs;
-  const result = { completed: 0, failed: 0 };
+  const result = { completed: 0, failed: 0, deferred: 0 };
+  const provider = getStorageProvider();
   while (Date.now() < deadlineAt) {
     const now = new Date();
     // org-scope-ok: cron sweep drains due outbox entries across organizations; each mutation rechecks the stored org id.
     const entries = await db.select({ id: storageObjectDeletions.id, organizationId: storageObjectDeletions.organizationId })
       .from(storageObjectDeletions).where(and(
         organizationIds ? inArray(storageObjectDeletions.organizationId, organizationIds) : undefined,
+        eq(storageObjectDeletions.storageProvider, provider.name),
+        eq(storageObjectDeletions.storageBucket, provider.bucket),
         isNull(storageObjectDeletions.completedAt),
         or(isNull(storageObjectDeletions.notBefore), lte(storageObjectDeletions.notBefore, now)),
         or(isNull(storageObjectDeletions.lastAttemptAt), lte(storageObjectDeletions.lastAttemptAt, new Date(now.getTime() - DELETION_RETRY_BACKOFF_MS))),

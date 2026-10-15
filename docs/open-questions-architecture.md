@@ -530,17 +530,13 @@ Merged 2026-07-20 with the former `transport/storage-topology` — one question.
 
 ### Final objects left by a failed confirmation (`storage/orphaned-final-keys`, opened 2026-10-15)
 
-`src/lib/documents/upload-preparation.ts:preparePendingDocumentUpload` writes
-a content-addressed final object before the runner transaction. A deadline or
-transaction failure followed by a retry with different bytes can leave that
-object without a document row. `src/data-access/document-upload-sweep.ts:sweepDocumentUploads`
-only knows persisted document and queue keys. The storage provider has no object
-listing method, so the sweep cannot cheaply discover these objects.
-
-Choose a durable promotion-intent ledger or a separate inventory reconciliation
-job. Any inventory collector needs an age threshold and protection against
-in-flight confirmations before deleting unreferenced final objects. The upload
-namespace lifecycle rule does not cover final keys.
+Promotion candidates now persist on the pending document before PUT. Confirm,
+delete, owner retirement and the sweep hand off unused candidates to the deletion
+queue, excluding the committed live key. Candidate cleanup waits past in-flight
+preparation; a key handed off to cleanup cannot become live in a later confirm.
+A crash between recording the candidate and PUT is harmless: cleanup deletes an
+absent object. No final bytes from this upload path remain untracked. An inventory
+collector is no longer required for this residual.
 
 
 ### Index failed-document retention scans (`storage/failed-retention-index`, opened 2026-10-15)

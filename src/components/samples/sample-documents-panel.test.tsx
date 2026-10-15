@@ -4,7 +4,13 @@ import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { RECORD_FILES_LOCKED_MESSAGE } from "@/lib/certification/lineage-lock-message";
 
-const mocks = vi.hoisted(() => ({ locked: false, lockArgs: [] as unknown[][] }));
+const mocks = vi.hoisted(() => ({ role: "owner" as string | null, platformAdmin: false, locked: false, lockArgs: [] as unknown[][] }));
+
+vi.mock("@/hooks/use-is-admin", () => ({ useIsAdmin: () => mocks.platformAdmin }));
+vi.mock("@/lib/auth/client", () => ({ authClient: {
+  useSession: () => ({ data: { user: { id: "viewer" } } }),
+  useActiveOrganization: () => ({ data: { members: [{ userId: "viewer", role: mocks.role }] } }),
+} }));
 
 vi.mock("@/hooks/use-record-certification-lock", () => ({
   useIsRecordCertificationLocked: (...args: unknown[]) => {
@@ -51,6 +57,8 @@ afterEach(cleanup);
 
 describe("SampleDocumentsPanel certification lock", () => {
   beforeEach(() => {
+    mocks.role = "owner";
+    mocks.platformAdmin = false;
     mocks.locked = false;
     mocks.lockArgs = [];
   });
@@ -65,6 +73,17 @@ describe("SampleDocumentsPanel certification lock", () => {
     expect(screen.queryByRole("button", { name: "Delete lab.pdf" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Make public" })).toBeNull();
     expect(screen.queryByTestId("uploader")).toBeNull();
+  });
+
+  it.each([
+    ["owner", false, true], ["admin", false, true], ["member", false, false],
+    [null, true, true], [null, false, false],
+  ] as const)("gates visibility for role=%s platformAdmin=%s", (role, platformAdmin, allowed) => {
+    mocks.role = role;
+    mocks.platformAdmin = platformAdmin;
+    render(<SampleDocumentsPanel sampleId="sample-1" />);
+    expect(!!screen.queryByRole("button", { name: "Make public" })).toBe(allowed);
+    expect(screen.getByRole("button", { name: "Delete lab.pdf" })).toBeTruthy();
   });
 
   it("is unchanged while the sample is not locked", () => {

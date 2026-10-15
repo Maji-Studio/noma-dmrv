@@ -522,7 +522,7 @@ describe("parent document retirement", () => {
       provider.failKey = null;
       expect(
         await processPendingStorageObjectDeletions(ctx),
-      ).toEqual({ completed: 0, failed: 0 });
+      ).toEqual({ completed: 0, failed: 0, deferred: 0 });
       await db
         .update(storageObjectDeletions)
         .set({ lastAttemptAt: RETRY_BACKOFF_ELAPSED_AT })
@@ -533,13 +533,13 @@ describe("parent document retirement", () => {
           ),
         );
       const retryResult = await processPendingStorageObjectDeletions(ctx);
-      expect(retryResult).toEqual({ completed: 1, failed: 0 });
+      expect(retryResult).toEqual({ completed: 1, failed: 0, deferred: 0 });
       expect(provider.objects.has(keys[0])).toBe(false);
       expect(provider.objects.has(keys[1])).toBe(false);
       const callsAfterRetry = provider.deleteCalls.length;
       expect(
         await processPendingStorageObjectDeletions(ctx),
-      ).toEqual({ completed: 0, failed: 0 });
+      ).toEqual({ completed: 0, failed: 0, deferred: 0 });
       expect(provider.deleteCalls).toHaveLength(callsAfterRetry);
     } finally {
       await db
@@ -591,6 +591,7 @@ describe("parent document retirement", () => {
       ).resolves.toEqual({
         completed: 1,
         failed: DELETION_BATCH_SIZE,
+        deferred: 0,
       });
       expect(provider.deleteCalls).toEqual([validKey]);
       expect(provider.objects.has(validKey)).toBe(false);
@@ -655,7 +656,7 @@ describe("parent document retirement", () => {
 
       await expect(
         processPendingStorageObjectDeletions(ctx),
-      ).resolves.toEqual({ completed: DELETION_BATCH_SIZE, failed: 0 });
+      ).resolves.toEqual({ completed: DELETION_BATCH_SIZE, failed: 0, deferred: 0 });
       expect(provider.deleteCalls[0]).toBe(newKey);
       expect(provider.objects.has(newKey)).toBe(false);
       const remainingRetries = await db

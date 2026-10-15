@@ -39,12 +39,15 @@ it("bounds a stalled deletion and leaves subsequent entries queued", async () =>
   try {
     for (const storageKey of ["slow", "next"]) await db.transaction((tx) => enqueueStorageObjectDeletion(scoped, tx, { storageProvider: provider.name, storageBucket: provider.bucket, storageKey }));
     const began = Date.now();
-    await processPendingStorageObjectDeletions(scoped, { budgetMs });
+    const result = await processPendingStorageObjectDeletions(scoped, { budgetMs });
+    expect(result).toEqual({ completed: 0, failed: 0, deferred: 1 });
     expect(Date.now() - began).toBeLessThan(budgetMs + schedulingToleranceMs);
     expect(started).toBe(1);
     const rows = await db.select().from(storageObjectDeletions).where(eq(storageObjectDeletions.organizationId, organizationId));
     expect(rows.every((row) => row.completedAt === null)).toBe(true);
     expect(rows.filter((row) => row.attemptCount === 0)).toHaveLength(1);
+    expect(rows.find((row) => row.storageKey === "slow")).toMatchObject({ attemptCount: 1, lastAttemptAt: expect.any(Date), lastErrorCode: "DEADLINE" });
+    expect(rows.find((row) => row.storageKey === "next")).toMatchObject({ attemptCount: 0, lastAttemptAt: null, lastErrorCode: null });
   } finally {
     __setStorageProviderForTests(null);
     await db.delete(storageObjectDeletions).where(eq(storageObjectDeletions.organizationId, organizationId));

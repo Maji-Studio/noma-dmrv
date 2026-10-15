@@ -148,7 +148,9 @@ object returns retryable `conflict` and remains pending. A failed row returns
 
 Only pending rows undergo a bounded streaming read. The server verifies exact
 size, SHA-256, declared MIME, PDF/image magic bytes and the readings CSV rule,
-then writes the inspected buffer to its final content-addressed key. Storage
+then records the candidate final key on the pending row before writing the
+inspected buffer to that content-addressed key. The bounded candidate list
+retains cleanup ownership if preparation or the runner fails. Storage
 has a 20-second abort budget within the 25-second confirmation deadline.
 The runner revalidates all inspection bindings under the document write locks
 before promoting the row. Refusals are returned outcomes so the failed state
@@ -156,7 +158,9 @@ and deletion queue commit before the action returns an error. Losing confirms
 never delete a winning final key.
 
 All cleanup uses the deletion queue. Upload keys are eligible only after their
-lease plus a ten-minute grace period; final keys have no delay. Parent
+lease plus a ten-minute grace period; promotion candidates wait past the
+confirmation deadline so an in-flight PUT cannot recreate a deleted object.
+A candidate handed off to cleanup cannot become live in a later confirmation. Parent
 retirement queues both keys. Draining happens after commit and skips future
 `not_before` entries, so a late PUT can only recreate an upload object whose
 cleanup is still pending.

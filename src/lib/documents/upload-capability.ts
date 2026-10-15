@@ -1,3 +1,4 @@
+import { MILLISECONDS_PER_SECOND } from "@/config/api-keys";
 import type { OrgContext } from "@/lib/auth/server";
 import type { UploadUnavailableReason } from "@/data-access/document-upload-renewal";
 import { RECORD_FILES_LOCKED_MESSAGE } from "@/lib/certification/lineage-lock-message";
@@ -5,7 +6,7 @@ import { renewDocumentUpload } from "@/lib/operations/document-upload-renewal";
 import { runOperation, type RunOptions } from "@/lib/operations/runner";
 import { getStorageProvider } from "@/lib/storage";
 
-const MILLISECONDS_PER_SECOND = 1000;
+
 export const UPLOAD_UNAVAILABLE_WARNINGS: Record<UploadUnavailableReason, string> = {
   uploaded: "This file is already uploaded, so no upload link is needed.",
   failed: "This upload failed. Request a new upload to try again.",

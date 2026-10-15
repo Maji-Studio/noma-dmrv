@@ -2,7 +2,7 @@ import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 import type { DbTransaction } from "@/db";
 import { certifierDocumentUploads, documents } from "@/db/schema";
-import type { OrgContext } from "@/lib/auth/server";
+import { hasOrgRole, type OrgContext } from "@/lib/auth/server";
 import { DomainError } from "@/lib/domain-errors";
 import { SafeError } from "@/lib/errors";
 import { acquireMirrorLock } from "@/lib/isometric/utils/source-lock";
@@ -38,7 +38,7 @@ export async function deleteDocumentInTransaction(ctx: OrgContext, tx: DbTransac
 }
 export async function setDocumentVisibilityInTransaction(ctx: OrgContext, tx: DbTransaction, input: z.infer<typeof setVisibilitySchema>): Promise<DocumentRow> {
   requireOrgScope(ctx);
-  if (ctx.orgRole !== "owner" && ctx.orgRole !== "admin") throw new DomainError("forbidden", "Forbidden");
+  if (!hasOrgRole(ctx, "admin")) throw new DomainError("forbidden", "Only organization owners and admins can change file visibility.");
   const data = setVisibilitySchema.parse(input);
   const row = await lockDocument(ctx, tx, data.documentId);
   const [saved] = await tx.update(documents).set({ visibility: data.visibility, version: row.version + 1, updatedAt: new Date() }).where(and(eq(documents.id, row.id), eq(documents.organizationId, ctx.organizationId))).returning();

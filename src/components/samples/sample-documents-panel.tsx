@@ -1,5 +1,7 @@
 "use client";
 
+import { authClient } from "@/lib/auth/client";
+import { useIsAdmin } from "@/hooks/use-is-admin";
 import { useState } from "react";
 import { FileIcon, EyeIcon, EyeSlashIcon, TrashIcon, ArrowSquareOutIcon } from "@phosphor-icons/react/dist/ssr";
 import { FormField, ServerError } from "@/components/forms";
@@ -36,6 +38,11 @@ export function SampleDocumentsPanel({
   readOnly: readOnlyProp = false,
 }: SampleDocumentsPanelProps) {
   const toast = useToast();
+  const isPlatformAdmin = useIsAdmin();
+  const { data: session } = authClient.useSession();
+  const { data: organization } = authClient.useActiveOrganization();
+  const role = organization?.members.find((member) => member.userId === session?.user.id)?.role;
+  const canChangeVisibility = isPlatformAdmin || role === "owner" || role === "admin";
   // A submitted lineage freezes the files: download stays, changes are hidden.
   const locked = useIsRecordCertificationLocked(ENTITY_TYPE, sampleId);
   const readOnly = readOnlyProp || locked;
@@ -146,7 +153,7 @@ export function SampleDocumentsPanel({
               </a>
               {!readOnly && (
                 <>
-                  <Button
+                  {canChangeVisibility && <Button
                     variant="noOutline"
                     size="icon"
                     onClick={() =>
@@ -173,7 +180,7 @@ export function SampleDocumentsPanel({
                     ) : (
                       <EyeIcon size={16} weight="bold" />
                     )}
-                  </Button>
+                  </Button>}
                   <Button
                     variant="destructive"
                     size="icon"

@@ -1,5 +1,6 @@
 "use server";
 
+import { MILLISECONDS_PER_SECOND } from "@/config/api-keys";
 import { DOCUMENT_CONFIRM_DEADLINE_MS, DOCUMENT_CONFIRM_DB_RESERVE_MS } from "@/config/documents";
 import { listDocumentsForEntity, type DocumentRow } from "@/data-access/documents";
 import { getStorageProvider } from "@/lib/storage";
@@ -13,7 +14,7 @@ import { runOperationInProcess } from "@/lib/operations/runner";
 import type { ActionResult } from "@/types/actions";
 import { withAction } from "./with-action";
 
-const MILLISECONDS_PER_SECOND = 1000;
+
 export interface RequestUploadResult {
   documentId: string;
   uploadUrl: string;

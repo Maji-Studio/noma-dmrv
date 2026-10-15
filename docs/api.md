@@ -98,6 +98,7 @@ MCP exposes `find_documents`, `get_document_download_url`,
 `request_document_upload` and `confirm_document_upload`. Downloads return a
 short-lived URL and expiry. A shell-capable client PUTs bytes separately; no
 MCP tool accepts file bytes. There is no document DELETE route or tool.
+A missing owner scope returns `missing_scope` in MCP, matching REST.
 
 Blocking lineage includes draft submission attempts as well as submitted and
 accepted Removal or GHG statement submissions. App upload, confirm, delete,

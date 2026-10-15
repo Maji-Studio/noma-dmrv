@@ -1,5 +1,5 @@
 import { getStorageProvider } from "@/lib/storage";
-import { inspectUploadOwner } from "@/data-access/document-upload-preparation";
+import { inspectUploadOwner, recordDocumentPromotionCandidate } from "@/data-access/document-upload-preparation";
 import type { OrgContext } from "@/lib/auth/server";
 import type { StorageProvider } from "@/lib/storage/types";
 import { StorageError } from "@/lib/storage/types";
@@ -9,7 +9,7 @@ import { DomainError, deadlineExceeded } from "@/lib/domain-errors";
 import { getDocumentById, type DocumentRow } from "@/data-access/documents";
 import { documentNotFound } from "@/data-access/document-write-scope";
 import { uploadFactsFor, type InspectedUploadFacts } from "@/data-access/document-writes";
-import { metadataRecord } from "@/lib/documents/metadata";
+import { failedDocumentUpload } from "@/lib/documents/confirm-outcome";
 import { inspectUploadBytes } from "@/lib/documents/inspection";
 export type PreparedDocumentUpload = { kind: "uploaded"; document: DocumentRow } | { kind: "prepared"; facts: InspectedUploadFacts };
 
@@ -19,8 +19,8 @@ export async function prepareDocumentUpload(ctx: OrgContext, documentId: string,
   if (!row) throw documentNotFound();
   if (row.uploadStatus === "uploaded") return { kind: "uploaded", document: row };
   if (row.uploadStatus === "failed") {
-    const reason = metadataRecord(metadataRecord(row.metadata).uploadFailure).reason;
-    throw new DomainError("conflict", "This file is no longer waiting for confirmation. Upload it again.", { issues: [{ path: ["documentId"], code: typeof reason === "string" ? reason : "failed", message: "This file is no longer waiting for confirmation. Upload it again." }] });
+    const { reason, message } = failedDocumentUpload(row);
+    throw new DomainError("conflict", message, { issues: [{ path: ["documentId"], code: reason, message }] });
   }
   return preparePendingDocumentUpload(ctx, row, provider, deadlineAt);
 }
@@ -41,12 +41,17 @@ export async function preparePendingDocumentUpload(ctx: OrgContext, row: Documen
     const refusal = inspectUploadBytes({ entityType: row.entityType, documentType: row.documentType, fileName: row.fileName, contentType: facts.contentType, sizeBytes: facts.sizeBytes, sha256: facts.sha256 ?? undefined }, object);
     if (refusal) return { kind: "prepared", facts: { ...facts, refusal } };
     const finalKey = buildFinalStorageKey({ organizationId: ctx.organizationId, documentId: row.id, entityType: row.entityType, entityId: row.entityId, documentType: row.documentType, fileName: row.fileName, sha256: object.sha256 });
+    await recordDocumentPromotionCandidate(ctx, row.id, facts.uploadKey, finalKey);
+    signal.throwIfAborted();
     await provider.putObject(finalKey, object.bytes, object.contentType, { checksumSha256: object.sha256, signal });
     signal.throwIfAborted();
     return { kind: "prepared", facts: { ...facts, finalKey, inspectedSha256: object.sha256, inspectedSizeBytes: object.sizeBytes, inspectedContentType: object.contentType } };
   } catch (error) {
-    if (signal.aborted || (error instanceof Error && ["AbortError", "TimeoutError"].includes(error.name))) throw deadlineExceeded("while inspecting the upload", error);
+    if (signal.aborted || (error instanceof Error && ["AbortError", "TimeoutError"].includes(error.name))) throw deadlineExceeded("while inspecting the upload");
     if (error instanceof StorageError && error.code === "object_too_large") return { kind: "prepared", facts: { ...facts, refusal: "size" } };
-    throw error;
+    if (error instanceof DomainError) throw error;
+    // Provider errors can embed filenames, keys or signed URLs. Do not propagate
+    // their free text to adapter logs or retain it as a cause.
+    throw new StorageError("Document storage operation failed.", "document_storage_failed");
   }
 }

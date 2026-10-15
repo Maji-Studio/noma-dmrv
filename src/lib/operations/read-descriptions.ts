@@ -1,10 +1,11 @@
+import { DOCUMENT_DOWNLOAD_TTL_MINUTES } from "@/config/documents";
 import { OUTPUT_BIN_STOCK_ETAG, OUTPUT_BIN_STOCK_SOURCES } from "./agent-guidance";
 
 /** Shared REST and MCP operation descriptions. */
 export const readDescriptions = {
   "documents": "Documents belong to a record. List its API evidence newest first by (createdAt, id), including archived records. Lists show uploaded files by default; filter documentType or uploadStatus (uploaded, pending, failed or all). Cursors bind the organization, record and filters.",
   "document": "Read one document belonging to this record, including archived records. The strong ETag combines the document version and representation revision. Pending files publish declared facts; uploaded files publish verified content type, size and SHA-256.",
-  "documentContent": "Download an uploaded document belonging to this record. The {record path}/documents/{documentId}/content route redirects to a signed link that expires in 5 minutes; follow that link without the API key. The response is private and must not be stored. Pending, failed and legacy URL-only documents return 404. There is no public-visibility fallback.",
+  "documentContent": `Download an uploaded document belonging to this record. The {record path}/documents/{documentId}/content route redirects to a signed link that expires in ${DOCUMENT_DOWNLOAD_TTL_MINUTES} minutes; follow that link without the API key. The response is private and must not be stored. Pending, failed and legacy URL-only documents return 404. There is no public-visibility fallback.`,
   "list": "List a page ordered newest first by (createdAt, id). Cursors bind organization and filters; no totals or include. Lookup lists exclude archived rows where supported.",
   "get": "Read a stable resource representation by UUID or exact code; archived lookups remain readable.",
   "customers": "Read customer ids, codes and names without contact details. Customers do not support archiving.",

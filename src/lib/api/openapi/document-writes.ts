@@ -1,3 +1,5 @@
+import { DOCUMENT_CONFIRM_DEADLINE_MS } from "@/config/documents";
+import { MILLISECONDS_PER_SECOND } from "@/config/api-keys";
 import { z } from "zod";
 import { API_BODY_MAX_BYTES } from "@/config/api-rest";
 import { API_DOCUMENT_OWNERS, API_DOCUMENT_OWNER_TYPES } from "@/lib/documents/api-owners";
@@ -32,7 +34,7 @@ export function addDocumentWritePaths(paths: Paths, publishOutput: (schema: z.Zo
     };
     paths[`${base}/{documentId}/confirm`] = { post: {
       ...privateOperation(`confirm_${ownerType}_document_upload`, owner.writeScope,
-        `Confirm uploaded bytes within a 25 second budget. Empty JSON object or no body. E1: Idempotency-Key is accepted and ignored; no idempotency record is written. E2: If-Match is ignored, including malformed tags; no version precondition, 412 or 428. Uploaded repeats return 200 with ETag without storage I/O. Wrong bytes commit a failed transition, then answer 422 validation_failed at /sizeBytes, /contentType or /sha256. Failed repeats answer 409 conflict with the stored reason. A pending upload on a newly submitted owner becomes failed and answers 409 certification_locked at /ownerId. Gone documents, wrong owners and archived pending owners answer 404. Missing bytes answer retryable 409 conflict with Retry-After and stay pending. Budget exhaustion answers retryable 500 deadline_exceeded. ${REFUSALS}`, {
+        `Confirm uploaded bytes within a ${DOCUMENT_CONFIRM_DEADLINE_MS / MILLISECONDS_PER_SECOND} second budget. Empty JSON object or no body. E1: Idempotency-Key is accepted and ignored; no idempotency record is written. E2: If-Match is ignored, including malformed tags; no version precondition, 412 or 428. Uploaded repeats return 200 with ETag without storage I/O. Wrong bytes commit a failed transition, then answer 422 validation_failed at /sizeBytes, /contentType or /sha256. Failed repeats answer 409 conflict with the stored reason. A pending upload on a newly submitted owner becomes failed and answers 409 certification_locked at /ownerId. Gone documents, wrong owners and archived pending owners answer 404. Missing bytes answer retryable 409 conflict with Retry-After and stay pending. Budget exhaustion answers retryable 500 deadline_exceeded. ${REFUSALS}`, {
           ...problemResponses(WRITE_ERRORS),
           "200": jsonResponse("Confirmed document, or repeat confirmation of an uploaded document.", publishOutput(itemEnvelopeSchema(documentRepresentationSchema)), etagHeader),
         }, [targetParameter(), documentParameter, ...noDryRunParameters, { name: "Idempotency-Key", in: "header", required: false, description: "Accepted and ignored (E1). Confirm keeps no idempotency record.", schema: { type: "string" } }]),

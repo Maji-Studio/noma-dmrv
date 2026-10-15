@@ -6,7 +6,7 @@ vi.mock("@/data-access/storage-object-deletions", () => ({ drainStorageObjectDel
 vi.mock("@/lib/log", () => ({ logger: { info: mocks.info, error: mocks.error } }));
 import { GET } from "./route";
 import { DOCUMENT_SWEEP_DRAIN_BUDGET_MS } from "@/config/documents";
-beforeEach(() => { vi.resetAllMocks(); mocks.sweep.mockResolvedValue({ expired: 0, retired: 0, failedPhases: [] }); mocks.drain.mockResolvedValue({ completed: 0, failed: 0 }); mocks.env.CRON_SECRET = "cron-test-secret"; });
+beforeEach(() => { vi.resetAllMocks(); mocks.sweep.mockResolvedValue({ expired: 0, retired: 0, failedPhases: [] }); mocks.drain.mockResolvedValue({ completed: 0, failed: 0, deferred: 0 }); mocks.env.CRON_SECRET = "cron-test-secret"; });
 it("refuses when no secret is configured", async () => {
   mocks.env.CRON_SECRET = undefined;
   expect((await GET(new Request("http://localhost/api/cron/sweep-document-uploads"))).status).toBe(503);
@@ -21,12 +21,12 @@ it.each([undefined, "Bearer wrong"])("refuses missing or incorrect authorization
 });
 it("sweeps then drains with the configured budget and logs only counts", async () => {
   mocks.sweep.mockResolvedValue({ expired: 2, retired: 1, failedPhases: [] });
-  mocks.drain.mockResolvedValue({ completed: 3, failed: 0 });
+  mocks.drain.mockResolvedValue({ completed: 3, failed: 0, deferred: 0 });
   const response = await GET(new Request("http://localhost/api/cron/sweep-document-uploads", { headers: { authorization: "Bearer cron-test-secret" } }));
   expect(response.status).toBe(200);
-  expect(await response.json()).toEqual({ expired: 2, retired: 1, failedPhases: [], completed: 3, failed: 0 });
+  expect(await response.json()).toEqual({ expired: 2, retired: 1, failedPhases: [], completed: 3, failed: 0, deferred: 0 });
   expect(mocks.drain).toHaveBeenCalledWith(DOCUMENT_SWEEP_DRAIN_BUDGET_MS);
-  expect(mocks.info).toHaveBeenCalledWith({ expired: 2, retired: 1, failedPhases: [], completed: 3, failed: 0 }, "Document uploads swept");
+  expect(mocks.info).toHaveBeenCalledWith({ expired: 2, retired: 1, failedPhases: [], completed: 3, failed: 0, deferred: 0 }, "Document uploads swept");
 });
 
 it("drains after a sweep phase failed and returns 500", async () => {
@@ -37,9 +37,17 @@ it("drains after a sweep phase failed and returns 500", async () => {
 });
 it.each(["throw", "failed entry"])("returns 500 on drain failure: %s", async (mode) => {
   if (mode === "throw") mocks.drain.mockRejectedValue(new Error("private storage details"));
-  else mocks.drain.mockResolvedValue({ completed: 1, failed: 1 });
+  else mocks.drain.mockResolvedValue({ completed: 1, failed: 1, deferred: 0 });
   const response = await GET(new Request("http://localhost/api/cron/sweep-document-uploads", { headers: { authorization: "Bearer cron-test-secret" } }));
   expect(response.status).toBe(500);
   expect(await response.json()).toMatchObject({ failedPhases: ["drain"], failed: 1 });
   expect(JSON.stringify(mocks.error.mock.calls)).not.toContain("private storage details");
+});
+
+it("counts a deadline cutoff as deferred and returns 200", async () => {
+  mocks.drain.mockResolvedValue({ completed: 0, failed: 0, deferred: 1 });
+  const response = await GET(new Request("http://localhost/api/cron/sweep-document-uploads", { headers: { authorization: "Bearer cron-test-secret" } }));
+  expect(response.status).toBe(200);
+  expect(await response.json()).toMatchObject({ failedPhases: [], failed: 0, deferred: 1 });
+  expect(mocks.error).not.toHaveBeenCalled();
 });

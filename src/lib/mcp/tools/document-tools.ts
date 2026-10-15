@@ -1,3 +1,4 @@
+import { MILLISECONDS_PER_SECOND } from "@/config/api-keys";
 import { z } from "zod";
 import { DOCUMENT_CONFIRM_DEADLINE_MS, DOCUMENT_DOWNLOAD_TTL_SECONDS } from "@/config/documents";
 import type { ApiContext } from "@/lib/auth/api-context";
@@ -28,7 +29,7 @@ import type { ReadTool } from "./read-tools";
 import type { WriteTool } from "./write-tools";
 import { controls, parseControls, writeOptions } from "./write-controls";
 
-const MILLISECONDS_PER_SECOND = 1000;
+
 const documentType = z.enum([...new Set(Object.values(API_DOCUMENT_OWNERS).flatMap(owner => [...owner.documentTypes]))]).describe(DOCUMENT_TYPE_GUIDANCE);
 const unsupportedDryRun = controls.shape.dryRun.describe("Not supported; true is refused.");
 const ownerFields = {

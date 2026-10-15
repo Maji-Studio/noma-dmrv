@@ -52,3 +52,9 @@ export function metadataRecord(value: unknown): Record<string, unknown> {
     : {};
 }
 
+
+/** Only server preparation writes this bounded list; never accept it from clients. */
+export function promotionCandidates(metadata: unknown): string[] {
+  const candidates = metadataRecord(metadata).promotionCandidates;
+  return Array.isArray(candidates) ? candidates.filter((key): key is string => typeof key === "string") : [];
+}

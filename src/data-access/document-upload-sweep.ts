@@ -5,7 +5,7 @@ import { DOCUMENT_FAILED_RETENTION_MS, DOCUMENT_SWEEP_BATCH_SIZE, DOCUMENT_SWEEP
 import { logger } from "@/lib/log";
 import type { OrgContext } from "@/lib/auth/server";
 import { metadataRecord } from "@/lib/documents/metadata";
-import { enqueueDocumentKeys } from "./document-storage-deletions";
+import { enqueueDocumentKeys, enqueuePromotionCandidates } from "./document-storage-deletions";
 import { deleteDocumentRow } from "./documents";
 
 // org-scope-ok: cron sweep derives the scope only from locked database rows, never request input.
@@ -53,8 +53,8 @@ export async function retireFailedDocumentUploadsInTransaction(tx: DbTransaction
   )).orderBy(asc(documents.updatedAt), asc(documents.id))
     .limit(DOCUMENT_SWEEP_BATCH_SIZE).for("update", { skipLocked: true });
   for (const row of rows) {
-    // The existing enqueue helper handed off every key before this delete.
-    // Do not enqueue duplicates or acquire owner locks after the document lock.
+    await enqueuePromotionCandidates(sweepContext(row.organizationId), tx, row);
+    // Do not acquire owner locks after the document lock.
     // org-scope-ok: cron sweep uses the locked row organization and the existing scoped delete helper.
     await deleteDocumentRow(sweepContext(row.organizationId), row.id, tx);
   }
