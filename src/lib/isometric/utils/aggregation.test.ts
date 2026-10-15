@@ -6,7 +6,7 @@ import {
   aggregateProductionRuns,
   aggregateTransportMassDistance,
   transportVehicleAdvisories,
-  type ProductionRunWithSamples,
+  type ProductionRunForCertification,
 } from "./aggregation";
 
 function leg(
@@ -239,7 +239,7 @@ describe("aggregateProductionRuns production claims", () => {
         preprocessingFuelLiters: 0,
         electricityKwh: 10,
         samples: [],
-      }) as unknown as ProductionRunWithSamples;
+      }) as unknown as ProductionRunForCertification;
 
     const result = aggregateProductionRuns(
       [run("run-a", 500, 5), run("run-b", 700, 7)],
@@ -270,7 +270,7 @@ describe("aggregateProductionRuns production claims", () => {
         preprocessingFuelLiters: 0,
         electricityKwh: 2,
         samples: [],
-      }) as unknown as ProductionRunWithSamples;
+      }) as unknown as ProductionRunForCertification;
 
     const result = aggregateProductionRuns(
       [run("run-applied", 100, 500), run("run-unapplied", 200, 700)],

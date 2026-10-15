@@ -19,10 +19,14 @@ const validBase = {
   feedstockTypeId: "33333333-3333-4333-8333-333333333333",
   productionRunIds: ["22222222-2222-4222-8222-222222222222"],
   durabilityOption: "200_year" as const,
-  hToCorgRatio: 0.4,
 };
 
 describe("creditBatchFormSchema — production window", () => {
+  it("attributes the unchanged month cap to noma", () => {
+    expect(getCreditBatchProductionWindowIssue("2026-01-01", "2026-02-02"))
+      .toBe("A credit batch may span at most one month (one calendar month; noma rule).");
+  });
+
   it("accepts a window under one month", () => {
     const result = creditBatchFormSchema.safeParse({
       ...validBase,

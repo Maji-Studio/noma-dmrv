@@ -8,6 +8,12 @@ import {
 } from "./use-documents";
 
 describe("invalidateDeletedDocumentOwner", () => {
+  it.each(["sample", "credit_batch"] as const)("refreshes readiness after deleting %s evidence", (entityType) => {
+    const invalidateQueries = vi.fn();
+    invalidateDeletedDocumentOwner({ invalidateQueries } as unknown as QueryClient, { entityType, entityId: "record-1" });
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: certificationKeys.all });
+  });
+
   it("refreshes certification readiness for deleted application evidence", async () => {
     const invalidateQueries = vi.fn().mockResolvedValue(undefined);
     const queryClient = { invalidateQueries } as unknown as QueryClient;

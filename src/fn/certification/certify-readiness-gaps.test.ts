@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { ProductionRunWithSamples } from "@/lib/isometric/utils/aggregation";
+import type { ProductionRunForCertification } from "@/lib/isometric/utils/aggregation";
 import type { CreditBatchWithSamples } from "@/data-access/credit-batch-samples";
 import type { TransportLeg } from "@/db/schema";
 import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readiness";
@@ -15,6 +15,7 @@ function labSample(
     id,
     sampleCode,
     organicCarbonPercent: 78,
+    moistureContentPercent: 10,
     hToCOrgRatio: 0.32,
     oToCOrgRatio: 0.14,
     ...overrides,
@@ -37,7 +38,7 @@ function productionRun(
   id: string,
   code: string,
   electricityKwh: number | null,
-): ProductionRunWithSamples {
+): ProductionRunForCertification {
   return {
     id,
     code,
@@ -52,10 +53,17 @@ function productionRun(
     preprocessingFuelLiters: 3,
     electricityKwh,
     samples: [],
-  } as unknown as ProductionRunWithSamples;
+  } as unknown as ProductionRunForCertification;
 }
 
 describe("buildEntityReadinessResult", () => {
+  it("reports moisture on the same Sample walk used by submission and keeps documents advisory", () => {
+    const batch = { ...batchWithSamples([labSample("s1", "S-001", { moistureContentPercent: null })]), creditBatchCode: "CB-001", hasLabReport: false };
+    const result = buildEntityReadinessResult([], [batch], { feedstock: [], biochar: [], sample: [] }, []);
+    expect(result.gaps).toEqual(["Sample S-001: Sample moisture"]);
+    expect(result.warnings).toEqual(["Credit batch CB-001 has no lab report document. Upload a lab report to one of its Samples. You can still submit the Removal."]);
+  });
+
   it("keeps the ready-batch fixture ready when Application evidence is absent", () => {
     const fixtureRun = productionRun("fixture-run", "PR-FIXTURE", 50);
 

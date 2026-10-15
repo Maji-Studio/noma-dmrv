@@ -26,7 +26,7 @@ interface SampleDocumentsPanelProps {
 }
 
 const SAMPLE_DOC_TYPE: DocumentType = "lab_report";
-const ENTITY_TYPE: DocumentEntityType = "sample";
+const ENTITY_TYPE = "sample" satisfies DocumentEntityType;
 
 export function SampleDocumentsPanel({
   sampleId,
@@ -39,7 +39,7 @@ export function SampleDocumentsPanel({
   );
   const invalidateKey = documentKeys.forEntity(ENTITY_TYPE, sampleId);
   const setVisibilityMutation = useSetDocumentVisibility(invalidateKey);
-  const deleteMutation = useDeleteDocument(invalidateKey);
+  const deleteMutation = useDeleteDocument(invalidateKey, { entityType: ENTITY_TYPE, entityId: sampleId });
 
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);

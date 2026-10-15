@@ -14,14 +14,14 @@ export type {
   PaginatedProductionRuns,
   ProductionRunStats,
   ProductionRunReadingRecord,
-  ProductionRunWithSamples,
+  ProductionRunForCertification,
 } from "./types";
 
 export {
   getProductionRuns,
   getProductionRunById,
   getProductionRunStats,
-  getProductionRunsWithSamples,
+  getProductionRunsForCertification,
 } from "./queries";
 
 export {

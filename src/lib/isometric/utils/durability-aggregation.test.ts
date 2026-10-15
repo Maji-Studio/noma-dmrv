@@ -4,7 +4,6 @@ import {
   buildPerBatchDurabilityData,
   buildSoilTemperatureReconciliationWarnings,
   buildSoilTemperatureGate,
-  reconcileDeclaredHToCorg,
   resolveConservativeSoilTemperature,
   resolveFacilityReferenceSoilTemperature,
   resolveSoilTemperatureScope,
@@ -184,23 +183,6 @@ describe("resolveConservativeSoilTemperature (D2 soil-temp resolution)", () => {
   });
 });
 
-describe("reconcileDeclaredHToCorg (D5a divergence guard)", () => {
-  it("returns no warning when declared matches aggregated within tolerance", () => {
-    expect(reconcileDeclaredHToCorg(0.3, 0.305)).toBeNull();
-  });
-
-  it("warns when declared diverges beyond tolerance", () => {
-    const w = reconcileDeclaredHToCorg(0.3, 0.45);
-    expect(w).not.toBeNull();
-    expect(w).toMatch(/0\.3/);
-  });
-
-  it("returns no warning when either value is missing", () => {
-    expect(reconcileDeclaredHToCorg(null, 0.3)).toBeNull();
-    expect(reconcileDeclaredHToCorg(0.3, null)).toBeNull();
-  });
-});
-
 describe("resolveFacilityReferenceSoilTemperature (Phase 2 facility reference)", () => {
   it("rounds the declared value to one decimal and carries the source", () => {
     const r = resolveFacilityReferenceSoilTemperature({
@@ -224,7 +206,7 @@ describe("resolveFacilityReferenceSoilTemperature (Phase 2 facility reference)",
     expect(r!.declaredSoilTemperatureC).toBe(4.3);
     expect(r!.effectiveSoilTemperatureC).toBe(7);
     expect(r!.temperatureFloored).toBe(true);
-    expect(r!.warnings.some((w) => /floor/i.test(w))).toBe(true);
+    expect(r!.warnings).toContain("Soil temperature floored to 7 °C (noma rule).");
   });
 
   it("normalizes a blank source to null", () => {

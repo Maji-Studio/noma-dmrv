@@ -4,7 +4,7 @@ import { kgToTonnes } from "@/lib/calculations/unit-conversions";
 import {
   aggregateProductionRuns,
   enrichWithTransportLegs,
-  type ProductionRunWithSamples,
+  type ProductionRunForCertification,
   type TransportLegsByCategory,
 } from "@/lib/isometric";
 import { logger, sanitizeErrorMessage } from "@/lib/log";
@@ -64,7 +64,7 @@ function input(
 export function buildRemovalLedgerPreview(args: {
   removalId: string | null;
   memberBatchClaims: MemberBatchClaim[];
-  runs: ProductionRunWithSamples[];
+  runs: ProductionRunForCertification[];
   lineages: ChainOfCustodyData[];
   transportLegs: TransportLegsByCategory;
   attributionByRunId: Map<string, number>;

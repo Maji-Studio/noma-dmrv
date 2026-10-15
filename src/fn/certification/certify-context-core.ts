@@ -34,7 +34,7 @@ import {
 } from "@/data-access/credit-batch-accounting";
 import { getCreditBatchActiveScopeRemovalId } from "@/data-access/credit-batches";
 import type { CreditBatchWithSamples } from "@/data-access/credit-batch-samples";
-import { getProductionRunsWithSamples } from "@/data-access/production-runs";
+import { getProductionRunsForCertification } from "@/data-access/production-runs";
 import {
   buildMassAccounting,
   EMPTY_RUN_SUMMARY,
@@ -57,7 +57,7 @@ import {
   type IsometricGhgEntryTemplate,
 } from "@/lib/isometric";
 import { hasExplicitSequestrationBinding } from "@/lib/isometric/transformers/sequestration-binding";
-import type { ProductionRunWithSamples } from "@/lib/isometric/utils/aggregation";
+import type { ProductionRunForCertification } from "@/lib/isometric/utils/aggregation";
 import {
   buildSoilTemperatureGate,
   resolveFacilityReferenceSoilTemperature,
@@ -192,7 +192,7 @@ export interface RemovalCertifyContext {
 // Kept server-internal so the cached UI payload stays lean.
 export interface RemovalSubmissionContext extends Omit<RemovalCertifyContext, "emissionsLedger"> {
   lineages: ChainOfCustodyData[];
-  runs: ProductionRunWithSamples[];
+  runs: ProductionRunForCertification[];
   // The removal's member credit batches with their pooled lab Samples (by
   // `samples.creditBatchId`) — the CREDIT-BATCH-grained durability data plane
   // (ADR 0016). Drives the durability gates here and the per-batch
@@ -623,6 +623,7 @@ export async function buildRemovalContext(
   } = durabilityBatchData;
   const memberBatchesWithDurability = memberBatches.map((batch) => ({
     ...batch,
+    hasLabReport: batchesWithSamples.find((sampleBatch) => sampleBatch.creditBatchId === batch.id)?.hasLabReport,
     durabilityGateBlockers:
       durabilityBatchData.blockersByBatchId[batch.id] ?? [],
   }));
@@ -719,7 +720,7 @@ export async function buildRemovalContext(
   );
   const runs =
     runIds.length > 0
-      ? await getProductionRunsWithSamples(orgCtx, runIds)
+      ? await getProductionRunsForCertification(orgCtx, runIds)
       : [];
 
   // Batch-pooled Samples drive durability, transport, and readiness (ADR 0016).

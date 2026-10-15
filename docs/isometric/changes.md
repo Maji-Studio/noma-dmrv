@@ -1,5 +1,34 @@
 # Isometric Docs Change Log
 
+## 2026-10-15: Samples require a credit batch; unused characterization columns removed
+
+- Issue #1016 makes every lab Sample belong to one credit batch and removes
+  run-only attachment and membership-driven reattachment. Batches with Samples
+  must have those Samples moved or deleted before the batch can be deleted.
+- The unused histogram/thermogram URL columns and batch-level durability,
+  buffer percentage and registry columns are removed. Lab evidence uses the
+  document slots; live 1,000-year accounting continues to use sample replicates.
+- Decision #942 q6 keeps validation lab results outside noma. The unreachable
+  Sample heavy-metal, PAH, PCB and dioxin/furan columns are removed. No submitted
+  value or certification mapping changes.
+
+## 2026-10-15: Optional TGA and mean reflectance (#942 q3, #1016)
+
+Kenji resolved `isometric/tga-1000-year-requirement`: TGA reactive/residual
+carbon and mean R₀ are optional when saving and certifying 1,000-year Samples.
+The form, Sample writers and certification descriptors no longer require them.
+The submitted durability tuple still requires total carbon, measured inorganic
+carbon and `sReflectanceFraction` on each sampled 1,000-year Sample. Neither
+TGA nor mean R₀ feeds that tuple. This records the product decision, not a new
+registry verification.
+
+Sample moisture is required for certification on sampled batches (#942 q1),
+but remains optional at save. The existing measurement-sample payload has no
+moisture field mapping; no new registry field was invented.
+
+The one-calendar-month batch cap and 7 °C soil-temperature floor remain noma
+conservative rules (#942 q7), as recorded in ADR 0016. Behavior is unchanged.
+
 ## 2026-10-15: Proof of delivery required before submission (#942 q12)
 
 - Reverses the 2026-07-29 retained-records stance for proof of delivery:
@@ -390,26 +419,6 @@ the full pipeline can be restored from `archive/reactor-telemetry-upload`
 - Noma submits accounting inputs; Isometric remains authoritative for project
   emissions and the net removal result.
 
-## 2026-08-13 (Production Batch physical run windows)
-
-New Isometric Production Batches now submit the earliest member production-run
-start and latest completed member-run end as `started_at` and `ended_at`. These
-are physical instants, matching the checked-in Certify OpenAPI descriptions and
-the existing Production Batch mapping decision, rather than UTC day-boundary
-timestamps derived from the credit batch's date-only window. This keeps every
-member run inside the immutable remote Production Batch, preserves non-zero
-same-day windows, and renders the operator's physical run times consistently in
-positive- and negative-offset facility timezones.
-
-Reconciliation accepts the former UTC day-start/day-end representation for a
-remote batch carrying the same stable supplier reference and otherwise matching
-identity and records that compatibility claim in the sync audit trail. Stored
-payload hashes from that exact legacy representation migrate once to the
-physical-window hash; changes to mass, facility, feedstock, kind, supplier
-reference, or a later physical window still emit drift. Open member runs fail
-before that batch's registry POST.
-The behavior is covered hermetically; fresh sandbox verification is pending.
-
 ## 2026-08-15 (Storage Location and Biochar Application Removal integration)
 
 One customer location represents one reusable agricultural application site per
@@ -473,6 +482,56 @@ false template-admin blocker. Registry confirmation that this replacement
 governs the Protocol v1.1 project and a fresh end-to-end sandbox submission
 remain pending.
 
+## 2026-08-14 (sync-event key widened; stale-lock script re-keyed)
+
+- `certifier_sync_events.entity_id` widened from `uuid` to `text` (migration
+  0108). The column is polymorphic per `entity_type`: local UUIDs for removals,
+  GHG statements, and documents; `nm-slc-*` supplier references (or an
+  `unmapped:*` fallback) for Storage Locations, whose sync events previously
+  failed to insert and crashed the application sync panel on read.
+- `scripts/isometric-clear-stale-lock.ts` now targets the Removal ledger key
+  (`localEntityType='removal'`); it previously queried `creditBatch` and could
+  never find current rows. It refuses to clear a draft whose
+  `metadata.externalMutation` is `possible`/`confirmed` unless
+  `--force-confirmed` is passed, because rejecting such a draft re-versions
+  the supplier references and can duplicate registry entries.
+- GHG statement creates now persist the interrupted marker (`lastError`,
+  `lastAttemptOutcome`, `externalMutation`) when a timeout/5xx may have
+  reached the registry, matching the Removal pipeline.
+
+## Production batch identity readback and recovery
+
+Before binding durability measurements, read the exact persisted ProductionBatch
+ID ([GET Production Batch](https://docs.isometric.com/api-reference/certify/get-production-batch.md)).
+Verify its ID, stable supplier reference and saved facility; a live identity with
+a changed current project/facility mapping blocks submission. Preserve local
+payload-drift reporting and legacy date-hash migration for live same-mapping batches.
+Only a 404 or the provider 400 detail naming exactly the requested missing ID
+permits recovery. Reconcile the stable reference before POST, refuse duplicate
+references, and validate the complete current payload (including supported legacy
+windows). Keep the old journal until confirmation, then replace it with an
+organization/provider/batch/old-ID and row-version compare-and-set. Audit the old
+and new IDs. Other read errors never trigger replacement.
+## 2026-08-13 (Production Batch physical run windows)
+
+New Isometric Production Batches now submit the earliest member production-run
+start and latest completed member-run end as `started_at` and `ended_at`. These
+are physical instants, matching the checked-in Certify OpenAPI descriptions and
+the existing Production Batch mapping decision, rather than UTC day-boundary
+timestamps derived from the credit batch's date-only window. This keeps every
+member run inside the immutable remote Production Batch, preserves non-zero
+same-day windows, and renders the operator's physical run times consistently in
+positive- and negative-offset facility timezones.
+
+Reconciliation accepts the former UTC day-start/day-end representation for a
+remote batch carrying the same stable supplier reference and otherwise matching
+identity and records that compatibility claim in the sync audit trail. Stored
+payload hashes from that exact legacy representation migrate once to the
+physical-window hash; changes to mass, facility, feedstock, kind, supplier
+reference, or a later physical window still emit drift. Open member runs fail
+before that batch's registry POST.
+The behavior is covered hermetically; fresh sandbox verification is pending.
+
 ## 2026-08-13 (measurement Samples preserve local Sample grain)
 
 Sampled 1,000-year submission now creates one Isometric
@@ -506,6 +565,31 @@ continue to derive dry feedstock mass from their recorded wet mass and moisture
 for process calculations and certification inputs. Certification lineage uses
 the wet allocation shares to select contributing intake batches without
 changing the dry-mass values submitted for protocol calculations.
+
+## 2026-08-13 (replacement sampled 1,000-year component implemented locally)
+
+The current sampled component contract is
+`biochar_sequestration_1000_year_f_durable_max`, with paired list inputs
+`total_carbon_contents`, `inorganic_carbon_contents`, and `s_fraction`, plus
+scalar `product_mass`. Every submitted replicate requires directly measured
+inorganic carbon; noma does not derive it from total minus reported organic
+carbon on this path.
+
+The local explanatory preview now mirrors the component: calculate organic
+carbon per replicate as total minus inorganic, average it, calculate raw
+durability as the binomial lower estimate, bound credit-bearing organic carbon
+and durability at zero, cap durability at 0.95, and use the bounded value for
+stored CO2e. Evidence ledgers show the three per-replicate
+values, `s_fraction`, product mass, raw and capped durability, cap status,
+component key, and formula label. Isometric remains authoritative.
+
+The deprecated `biochar_sequestration_1000_year` remains readable and is
+labelled as legacy total-carbon/uncapped semantics. New template selection and
+submission compilation reject it. Production sampled submission remains
+blocked, and unsampled Method B remains unsupported. Protocol v1.1,
+Agricultural Soils module v1.1, and Standard v1.7 pins are unchanged. Isometric
+confirmation and external sandbox-template migration remain outstanding; no
+registry template was changed by this implementation.
 
 ## 2026-08-10 (customer location application evidence)
 
@@ -576,58 +660,3 @@ Earlier implementation notes are archived by date:
 - [`2026-05-26 to 2026-06-08`](../archive/isometric-changes-archive-2026-05-26-to-06-08.md)
 - [`2026-02 to 2026-05-24`](../archive/isometric-changes-archive-2026-02-to-05-24.md)
 
-## 2026-08-13 (replacement sampled 1,000-year component implemented locally)
-
-The current sampled component contract is
-`biochar_sequestration_1000_year_f_durable_max`, with paired list inputs
-`total_carbon_contents`, `inorganic_carbon_contents`, and `s_fraction`, plus
-scalar `product_mass`. Every submitted replicate requires directly measured
-inorganic carbon; noma does not derive it from total minus reported organic
-carbon on this path.
-
-The local explanatory preview now mirrors the component: calculate organic
-carbon per replicate as total minus inorganic, average it, calculate raw
-durability as the binomial lower estimate, bound credit-bearing organic carbon
-and durability at zero, cap durability at 0.95, and use the bounded value for
-stored CO2e. Evidence ledgers show the three per-replicate
-values, `s_fraction`, product mass, raw and capped durability, cap status,
-component key, and formula label. Isometric remains authoritative.
-
-The deprecated `biochar_sequestration_1000_year` remains readable and is
-labelled as legacy total-carbon/uncapped semantics. New template selection and
-submission compilation reject it. Production sampled submission remains
-blocked, and unsampled Method B remains unsupported. Protocol v1.1,
-Agricultural Soils module v1.1, and Standard v1.7 pins are unchanged. Isometric
-confirmation and external sandbox-template migration remain outstanding; no
-registry template was changed by this implementation.
-
-## 2026-08-14 (sync-event key widened; stale-lock script re-keyed)
-
-- `certifier_sync_events.entity_id` widened from `uuid` to `text` (migration
-  0108). The column is polymorphic per `entity_type`: local UUIDs for removals,
-  GHG statements, and documents; `nm-slc-*` supplier references (or an
-  `unmapped:*` fallback) for Storage Locations, whose sync events previously
-  failed to insert and crashed the application sync panel on read.
-- `scripts/isometric-clear-stale-lock.ts` now targets the Removal ledger key
-  (`localEntityType='removal'`); it previously queried `creditBatch` and could
-  never find current rows. It refuses to clear a draft whose
-  `metadata.externalMutation` is `possible`/`confirmed` unless
-  `--force-confirmed` is passed, because rejecting such a draft re-versions
-  the supplier references and can duplicate registry entries.
-- GHG statement creates now persist the interrupted marker (`lastError`,
-  `lastAttemptOutcome`, `externalMutation`) when a timeout/5xx may have
-  reached the registry, matching the Removal pipeline.
-
-## Production batch identity readback and recovery
-
-Before binding durability measurements, read the exact persisted ProductionBatch
-ID ([GET Production Batch](https://docs.isometric.com/api-reference/certify/get-production-batch.md)).
-Verify its ID, stable supplier reference and saved facility; a live identity with
-a changed current project/facility mapping blocks submission. Preserve local
-payload-drift reporting and legacy date-hash migration for live same-mapping batches.
-Only a 404 or the provider 400 detail naming exactly the requested missing ID
-permits recovery. Reconcile the stable reference before POST, refuse duplicate
-references, and validate the complete current payload (including supported legacy
-windows). Keep the old journal until confirmation, then replace it with an
-organization/provider/batch/old-ID and row-version compare-and-set. Audit the old
-and new IDs. Other read errors never trigger replacement.
