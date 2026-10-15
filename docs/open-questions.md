@@ -21,17 +21,21 @@ Deferred work lives here, never as a `TODO` in code.
 - `src/data-access/production-runs/delete.ts:deleteProductionRun` still uses the
   legacy deletion path without a run event. Route it through the operation runner
   or record on its own transaction; preserve document retirement events.
-- `src/lib/operations/activity-links.ts:linkDocumentActivity` links only direct
-  run or credit batch owners, leaving lifecycle events for nested documents
-  (feedstock, lab sample, incident, report) unlinked. The batch activity read
-  finds them through the live document row, so deleting it hides the delete
-  event and earlier unlinked events. `src/lib/operations/runner.ts:runOperationCore`
-  records one scope per event; add multi-scope recording there or resolve a
-  single scope for nested owners.
 
-Each activity page rebuilds batch member IDs using `loadCreditBatchRollups` with
-run forwards plus several queries. Infinite-query refetches therefore rebuild
-membership once per loaded page. This cost is acceptable for v1.
+## Activity reads
+
+- `src/data-access/credit-batch-activity-members.ts:loadActivityMembers` resolves
+  unlinked document events from current owner membership. Their reason codes
+  preserve document history after document deletion, but cannot recover owners
+  that have themselves been deleted or detached from the batch.
+- `src/data-access/credit-batch-activity-members.ts:loadActivityMembers` rebuilds
+  batch member IDs using `loadCreditBatchRollups` with run forwards plus several
+  queries for each activity page. Infinite-query refetches therefore rebuild
+  membership once per loaded page. This cost is acceptable for v1.
+- `src/hooks/activity-query-keys.ts:activityKeys` is invalidated through
+  `activityKeys.all` only by certification mutations. Batch membership,
+  production run, document, feedstock, delivery, order, transport leg and biochar
+  product mutation hooks do not yet invalidate activity; planned with #1043.
 
 ## Invariants an LLM must not violate
 

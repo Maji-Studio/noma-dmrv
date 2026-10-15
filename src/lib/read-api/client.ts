@@ -13,7 +13,7 @@ import type { CertifierProjectRow } from "@/data-access/certification";
 import type { CreditBatchWithRelations } from "@/data-access/credit-batches";
 import type { OnboardingStatus } from "@/data-access/onboarding";
 import type { DashboardOverview } from "@/data-access/dashboard-overview";
-import type { OnboardingStatusInput, DashboardOverviewInput } from "@/lib/read-models";
+import type { OnboardingStatusInput, DashboardOverviewInput, CreditBatchActivityInput, CreditBatchActivitySummaryInput } from "@/lib/read-models";
 import type { Facility, Organization } from "@/db/schema";
 import { missingRecordMessage } from "@/lib/errors";
 import type { FacilityCertifierSummary } from "@/lib/read-models";
@@ -387,7 +387,7 @@ export function getDashboardOverviewRead(
 }
 
 export async function getCreditBatchActivityRead(
-  input: { creditBatchId: string; cursor?: string; limit?: number },
+  input: CreditBatchActivityInput,
   options?: ReadRequestOptions,
 ): Promise<ActionResult<CreditBatchActivityPage>> {
   const result = await requestRead<CreditBatchActivityPage>("/api/reads/credit-batches/activity", input, options);
@@ -400,7 +400,7 @@ export async function getCreditBatchActivityRead(
 const ACTIVITY_DATE_FIELDS = dateFields<CreditBatchActivityPage["items"][number]>()({ occurredAt: true, registryAt: true });
 
 export async function getCreditBatchActivitySummaryRead(
-  input: { creditBatchId: string }, options?: ReadRequestOptions,
+  input: CreditBatchActivitySummaryInput, options?: ReadRequestOptions,
 ): Promise<ActionResult<CreditBatchActivitySummary>> {
   const result = await requestRead<CreditBatchActivitySummary>("/api/reads/credit-batches/activity/summary", input, options);
   return mapReadData(result, wire => ({ ...wire,

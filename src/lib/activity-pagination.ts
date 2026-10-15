@@ -13,7 +13,7 @@ export const activityPageOptionsSchema = z.object({
   cursor: z.string().optional(),
   limit: z.number().int().min(1).max(MAX_ACTIVITY_PAGE_SIZE).default(DEFAULT_ACTIVITY_PAGE_SIZE),
 });
-export type ActivityPageOptions = { cursor?: string; limit?: number };
+export type ActivityPageOptions = z.input<typeof activityPageOptionsSchema>;
 export function decodeActivityCursor(cursor: string) {
   try {
     if (!cursor || cursor.length > MAX_CURSOR_LENGTH || !/^[A-Za-z0-9_-]+$/.test(cursor)) throw new Error();

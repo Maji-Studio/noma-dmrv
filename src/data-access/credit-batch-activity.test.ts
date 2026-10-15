@@ -2,6 +2,11 @@ import { afterEach, beforeEach, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { activityEvents, creditBatches, creditBatchProductionRuns, organizations, samples, documents, users, binMovements, outputStockAllocations, applications, creditBatchApplications, certifierRemovals, certifierGhgStatements, transportLegs, productionSamples } from "@/db/schema";
+import { readCreditBatchActivity, readCreditBatchActivitySummary } from "@/lib/read-models/credit-batch-activity";
+import { runOperationInProcess } from "@/lib/operations/runner";
+import { requestDocumentUploadApp, deleteDocumentApp } from "@/lib/operations/documents";
+import { __setStorageProviderForTests } from "@/lib/storage";
+import { RetirementStorageProvider } from "../../tests/helpers/document-retirement";
 import type { OrgContext } from "@/lib/auth/server";
 import { createActivityWriteFixture, cleanupActivityWriteFixture } from "../../tests/helpers/activity-write-fixture";
 import { recordMembershipActivity, recordScopedWriteActivity } from "./write-activity";
@@ -21,10 +26,12 @@ async function event(overrides: Partial<typeof activityEvents.$inferInsert> = {}
 beforeEach(async () => {
   ctx = { organizationId: `activity_read_${crypto.randomUUID()}`, userId: crypto.randomUUID(), orgRole: "owner", isPlatformAdmin: false };
   fixture = await createActivityWriteFixture(ctx);
+  __setStorageProviderForTests(new RetirementStorageProvider());
   foreignOrg = `activity_foreign_${crypto.randomUUID()}`;
   await db.insert(organizations).values({ id: foreignOrg, slug: foreignOrg, name: "Foreign fixture" });
 });
 afterEach(async () => {
+  __setStorageProviderForTests(null);
   if (foreignOrg) await db.delete(organizations).where(eq(organizations.id, foreignOrg));
   if (ctx) {
     await db.delete(creditBatchApplications).where(eq(creditBatchApplications.organizationId, ctx.organizationId));
@@ -205,4 +212,60 @@ it("summarizes all events independently of page size and isolates tenants", asyn
   expect(summary.latest).toEqual((await listCreditBatchActivity(ctx, fixture.batch.id, { limit: 1 })).items[0]);
   expect(await getCreditBatchActivitySummary({ ...ctx, organizationId: foreignOrg }, fixture.batch.id))
     .toEqual({ total: 0, counts: [], latest: null });
+});
+
+async function createAndDeleteDocument(entityType: "feedstock" | "sample", entityId: string) {
+  const document = await runOperationInProcess(requestDocumentUploadApp, ctx, {
+    entityType, entityId, documentType: "pdf", fileName: "evidence.pdf",
+    contentType: "application/pdf", sizeBytes: 8, storageProvider: "local-fs", storageBucket: "local-fs",
+  });
+  await runOperationInProcess(deleteDocumentApp, ctx, { documentId: document.id, expectedVersion: document.version });
+  return document;
+}
+
+it.each(["feedstock", "sample"] as const)("retains real %s document create/delete events as tombstones and excludes another batch", async ownerType => {
+  const otherBatch = await secondBatch();
+  const sampleRows = await db.insert(samples).values([fixture.batch.id, otherBatch.id].map((creditBatchId, index) => ({
+    organizationId: ctx.organizationId, creditBatchId, sampleCode: `ACT-DOC-${index}`,
+    samplingTime: TIME, totalCarbonPercent: 80, organicCarbonPercent: 75,
+  }))).returning();
+  await createAndDeleteDocument("sample", sampleRows[1].id);
+  const document = await createAndDeleteDocument(ownerType, ownerType === "feedstock" ? fixture.feedstock.id : sampleRows[0].id);
+  const reasonCode = `document:pdf:${ownerType}:${document.entityId}`;
+  const page = await listCreditBatchActivity(ctx, fixture.batch.id);
+  expect(page.items).toEqual([
+    expect.objectContaining({ entityId: document.id, reasonCode, action: "deleted", record: { label: null, deleted: true } }),
+    expect.objectContaining({ entityId: document.id, reasonCode, action: "created", record: { label: null, deleted: true } }),
+  ]);
+  expect(await getCreditBatchActivitySummary(ctx, fixture.batch.id)).toEqual({
+    total: 2, counts: [
+      { entityType: "document", action: "created", count: 1 },
+      { entityType: "document", action: "deleted", count: 1 },
+    ], latest: page.items[0],
+  });
+});
+
+it("matches document reason owners only at the end after the document prefix", async () => {
+  const owner = `feedstock:${fixture.feedstock.id}`;
+  const valid = await event({ entityType: "document", entityId: crypto.randomUUID(), creditBatchId: null,
+    reasonCode: `document:custom:type:${owner}` });
+  for (const reasonCode of [`document:${owner}:sample:${crypto.randomUUID()}`, `other:document:pdf:${owner}`, `document:pdf:sample:${fixture.feedstock.id}`]) {
+    await event({ entityType: "document", entityId: crypto.randomUUID(), creditBatchId: null, reasonCode });
+  }
+  await event({ entityType: "feedstock", entityId: crypto.randomUUID(), creditBatchId: null, reasonCode: `document:pdf:${owner}` });
+  await event({ entityType: "document", entityId: crypto.randomUUID(), creditBatchId: (await secondBatch()).id, reasonCode: `document:pdf:${owner}` });
+  expect((await listCreditBatchActivity(ctx, fixture.batch.id)).items.map(row => row.id)).toEqual([valid.id]);
+  expect(await getCreditBatchActivitySummary(ctx, fixture.batch.id)).toMatchObject({ total: 1, latest: { id: valid.id } });
+});
+
+it("returns the same list and summary for uppercase and lowercase batch IDs", async () => {
+  const recorded = await event();
+  const input = { creditBatchId: fixture.batch.id };
+  const uppercase = { creditBatchId: fixture.batch.id.toUpperCase() };
+  const page = await readCreditBatchActivity(ctx, input);
+  expect(page.items.map(row => row.id)).toEqual([recorded.id]);
+  expect(await readCreditBatchActivity(ctx, uppercase)).toEqual(page);
+  const summary = await readCreditBatchActivitySummary(ctx, input);
+  expect(summary.total).toBe(1);
+  expect(await readCreditBatchActivitySummary(ctx, uppercase)).toEqual(summary);
 });

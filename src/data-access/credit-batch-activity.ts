@@ -1,4 +1,4 @@
-import { and, desc, eq, or, lt, isNull, count } from "drizzle-orm";
+import { and, desc, eq, or, lt, isNull, count, sql } from "drizzle-orm";
 import { activityPageOptionsSchema, decodeActivityCursor, encodeActivityCursor, type ActivityPageOptions } from "@/lib/activity-pagination";
 import { db } from "@/db";
 import { activityEvents, users } from "@/db/schema";
@@ -12,8 +12,18 @@ function batchActivityPredicate(creditBatchId: string, members: NonNullable<Awai
   return or(
     eq(activityEvents.creditBatchId, creditBatchId),
     and(isNull(activityEvents.creditBatchId), or(
-      activityIds(activityEvents.productionRunId, members.production_run),
-      ...Object.entries(members).map(([type, ids]) => and(
+      activityIds(activityEvents.productionRunId, members.ids.production_run),
+      and(
+        eq(activityEvents.entityType, "document"),
+        // Document types may contain colons. Only the final owner type/UUID
+        // identify membership; compare as text so malformed reasons cannot throw.
+        sql`${activityEvents.reasonCode} like 'document:%'`,
+        or(...Object.entries(members.documentOwners).map(([type, ids]) => and(
+          sql`split_part(${activityEvents.reasonCode}, ':', -2) = ${type}`,
+          sql`split_part(${activityEvents.reasonCode}, ':', -1) = any(${sql.param(ids)}::text[])`,
+        ))),
+      ),
+      ...Object.entries(members.ids).map(([type, ids]) => and(
         eq(activityEvents.entityType, type as typeof activityEvents.$inferSelect.entityType), activityIds(activityEvents.entityId, ids),
       )),
     )),

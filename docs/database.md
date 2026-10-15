@@ -108,9 +108,11 @@ Failed-upload retention deletes also use `deleteDocumentRow`, with source `syste
 and no actor. Lease renewal, promotion cleanup metadata and pending-upload expiry
 are internal upload bookkeeping and do not emit activity.
 
-Direct document events keep only the document ID, applicable batch/run IDs and a
+Direct and runner document events keep only the document ID, applicable batch/run IDs and a
 `document:<document_type>:<owner_type>:<owner_uuid>` reason code containing
-controlled type keys and the owning record ID. Events never copy filenames,
+controlled type keys and the owning record ID. Both paths use the shared
+`documentActivityReasonCode` helper for every owner type, including document
+creation, updates and deletion. Events never copy filenames,
 URLs, storage keys or descriptions. Parent deletes capture ownership before
 removing the rows needed to resolve it.
 

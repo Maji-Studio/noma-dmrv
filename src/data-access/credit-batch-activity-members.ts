@@ -1,6 +1,7 @@
 import { and, eq, or, sql, type SQL, type AnyColumn } from "drizzle-orm";
 import { db } from "@/db";
 import { certifierRemovals, creditBatchApplications, deliveries, documents, samples, transportLegs, outputStockAllocations, outputStockRunAllocations, productionSamples, incidentReports, certifierGhgStatementReports } from "@/db/schema";
+import { toActivityDocumentOwnerType } from "@/lib/activity-entity-type";
 import type { OrgContext } from "@/lib/auth/server";
 import { loadCreditBatchRollups } from "./credit-batch-accounting";
 import { requireOrgScope } from "./utils";
@@ -73,5 +74,10 @@ export async function loadActivityMembers(ctx: OrgContext, batchId: string) {
       and(eq(documents.entityType, "transport_leg"), activityIds(documents.entityId, ids.transport_leg)),
     )));
   ids.document = docs.map(row => row.id);
-  return ids;
+  const documentOwners: Record<string, string[]> = {};
+  for (const [type, values] of Object.entries({ ...owners, transport_leg: ids.transport_leg })) {
+    const ownerType = toActivityDocumentOwnerType(type === "biochar" ? "biochar_product" : type);
+    documentOwners[ownerType] = [...new Set([...(documentOwners[ownerType] ?? []), ...values])];
+  }
+  return { ids, documentOwners };
 }
