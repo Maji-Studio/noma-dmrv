@@ -1,5 +1,5 @@
 {
-  "id": "66d93b19-6bb6-455c-ad72-893dad52bad8",
+  "id": "a17ca625-e050-41b7-bf17-4db2edc805e6",
   "prevId": "5e7776e0-d908-4575-ab8d-74b7d32ca459",
   "version": "7",
   "dialect": "postgresql",
@@ -251,6 +251,21 @@
             "id"
           ],
           "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "activity_events_facility_id_organization_id_facilities_id_organization_id_fk": {
+          "name": "activity_events_facility_id_organization_id_facilities_id_organization_id_fk",
+          "tableFrom": "activity_events",
+          "tableTo": "facilities",
+          "columnsFrom": [
+            "facility_id",
+            "organization_id"
+          ],
+          "columnsTo": [
+            "id",
+            "organization_id"
+          ],
+          "onDelete": "no action",
           "onUpdate": "no action"
         }
       },
@@ -3590,12 +3605,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "genset_energy_yield_kwh_per_litre": {
-          "name": "genset_energy_yield_kwh_per_litre",
-          "type": "real",
-          "primaryKey": false,
-          "notNull": false
-        },
         "default_soil_temperature_c": {
           "name": "default_soil_temperature_c",
           "type": "real",
@@ -3618,7 +3627,7 @@
           "name": "external_facility_id",
           "type": "text",
           "primaryKey": false,
-          "notNull": false
+          "notNull": true
         },
         "metadata": {
           "name": "metadata",
@@ -6574,7 +6583,12 @@
         }
       },
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "reactors_reactor_type_valid": {
+          "name": "reactors_reactor_type_valid",
+          "value": "\"reactors\".\"reactor_type\" in ('fixed-bed', 'auger', 'rotary-kiln', 'batch', 'continuous')"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.storage_locations": {
@@ -7043,8 +7057,7 @@
           "type": "feedstock_type_usage",
           "typeSchema": "public",
           "primaryKey": false,
-          "notNull": true,
-          "default": "'pyrolysis'"
+          "notNull": true
         },
         "description": {
           "name": "description",
@@ -7130,7 +7143,12 @@
         }
       },
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "feedstock_types_category_valid": {
+          "name": "feedstock_types_category_valid",
+          "value": "\"feedstock_types\".\"category\" in ('forestry', 'agricultural', 'industrial', 'municipal', 'invasive', 'compost', 'mineral', 'lime', 'binder', 'amendment', 'other')"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.feedstocks": {

@@ -4,7 +4,6 @@ import { db } from "@/db";
 import { activityEvents, certificationSubmissions, certifierGhgStatements, facilities, organizations } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import type { GhgStatement } from "@/lib/isometric";
-import { TEST_SITE_POSITION } from "./helpers/test-org";
 
 // Keep ledger reads, status writes, and activity persistence real; stub the
 // registry and unrelated report/session-lock dependencies of the submit core.
@@ -31,6 +30,7 @@ vi.mock("@/lib/isometric", async (importOriginal) => ({
 import * as registry from "@/lib/isometric";
 import { submitGhgStatementToVerifierCore } from "@/fn/certification/submit-ghg-statement";
 import { listEntityActivity } from "@/data-access/activity-events";
+import { TEST_SITE_POSITION } from "./helpers/test-org";
 
 const REGISTRY_AT = "2026-10-14T10:00:00Z";
 const REPORT_URL = "https://example.com/report.pdf";

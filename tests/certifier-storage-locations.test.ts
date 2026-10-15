@@ -85,6 +85,7 @@ async function createFixture(): Promise<Fixture> {
     const [certifierProject] = await tx
       .insert(certifierProjects)
       .values({
+        externalFacilityId: `fcl_test_${facility.id}`,
         organizationId: TEST_ORG_ID,
         facilityId: facility.id,
         provider: "isometric",
@@ -370,6 +371,7 @@ describe("certifier Storage Location data access", () => {
       const [secondProject] = await db
         .insert(certifierProjects)
         .values({
+          externalFacilityId: `fcl_test_${secondFacility.id}`,
           organizationId: TEST_ORG_ID,
           facilityId: secondFacility.id,
           provider: "isometric",
@@ -469,6 +471,7 @@ describe("certifier Storage Location data access", () => {
 
       await expect(
         upsertCertifierProject(ctx, {
+          externalFacilityId: `fcl_test_${fixture.facilityId}`,
           facilityId: fixture.facilityId,
           provider: "isometric",
           externalProjectId: "prj_rebound",
@@ -505,6 +508,7 @@ describe("certifier Storage Location data access", () => {
         .returning({ id: facilities.id });
       sharedFacilityId = sharedFacility.id;
       await upsertCertifierProject(ctx, {
+        externalFacilityId: `fcl_test_${sharedFacility.id}`,
         facilityId: sharedFacility.id,
         provider: "isometric",
         externalProjectId: input.externalProjectId,
@@ -529,6 +533,7 @@ describe("certifier Storage Location data access", () => {
 
       await expect(
         upsertCertifierProject(ctx, {
+          externalFacilityId: `fcl_test_${sharedFacility.id}`,
           facilityId: sharedFacility.id,
           provider: "isometric",
           externalProjectId: `prj_rebound_${runId}`,

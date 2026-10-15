@@ -69,7 +69,7 @@ beforeAll(async () => {
         organizationId: TEST_ORG_ID,
         code: `FT-PRG-B-${tag}`,
         name: `PRG Blend ${tag}`,
-        category: "ingredient",
+        category: "compost",
         usage: "blend",
       })
       .returning({ id: feedstockTypes.id });

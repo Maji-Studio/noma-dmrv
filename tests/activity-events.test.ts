@@ -49,7 +49,7 @@ async function createFacility(context: OrgContext, archivedAt?: Date): Promise<s
 async function createCreditBatch(facilityId: string): Promise<string> {
   const organizationId = ctx.organizationId;
   const [feedstockType] = await db.insert(feedstockTypes).values({
-    organizationId, code: `activity_${crypto.randomUUID()}`, name: "Activity fixture", category: "forestry",
+    organizationId, code: `activity_${crypto.randomUUID()}`, name: "Activity fixture", category: "forestry", usage: "pyrolysis",
   }).returning({ id: feedstockTypes.id });
   const [process] = await db.insert(productionProcesses).values({
     organizationId, facilityId, feedstockTypeId: feedstockType.id,

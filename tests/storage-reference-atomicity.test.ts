@@ -131,7 +131,7 @@ async function createFixture(): Promise<Fixture> {
           organizationId: TEST_ORG_ID,
           code: `FT-SRA-B-${tag}`,
           name: `Storage Reference Atomicity B ${tag}`,
-          category: "agricultural_residue",
+          category: "agricultural",
           usage: "pyrolysis" as const,
         },
       ])

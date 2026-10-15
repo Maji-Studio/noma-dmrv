@@ -110,6 +110,7 @@ beforeAll(async () => {
   const [feedstockType] = await db
     .insert(feedstockTypes)
     .values({
+      usage: "pyrolysis",
       organizationId: TEST_ORG_ID,
       name: `Saved-Outcome Woodchips ${runId}`,
       code: `FT-SO-${runId}`,
