@@ -14,6 +14,9 @@ export type DomainErrorCode =
   | "forbidden"
   | "reference_not_found"
   | "reference_ambiguous"
+  | "registry_not_configured"
+  | "registry_read_refused"
+  | "registry_unavailable"
   // Runner outcomes.
   | "concurrent_write_retry"
   | "deadline_exceeded"
