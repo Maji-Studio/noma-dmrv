@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { activityEvents, applications, creditBatches, creditBatchProductionRuns, documents, productionRuns, samples, transportLegs, biocharProducts, biocharProductSourceAllocations } from "@/db/schema";
+import { activityEvents, applications, creditBatches, creditBatchProductionRuns, documents, productionRuns, samples, transportLegs, biocharProducts, biocharProductSourceAllocations, vehicles, feedstocks, outputStockAllocations, outputStockRunAllocations, binMovements, deliveries } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import * as activity from "@/data-access/activity-events";
 import { createApplication, updateApplication, deleteApplication } from "@/data-access/applications";
@@ -19,8 +19,14 @@ import { ACTIVITY_FIXTURE_DATE, cleanupActivityWriteFixture, createActivityWrite
 import { insertOutputDeliveryFixture } from "./helpers/output-contract-fixtures";
 import { runOperation, runOperationInProcess } from "@/lib/operations/runner";
 import { requestDocumentUploadApp, confirmDocumentUploadApp, deleteDocumentApp } from "@/lib/operations/documents";
+import { updateFeedstock } from "@/lib/operations/feedstocks";
+import { archiveFacility, restoreFacility } from "@/data-access/facilities";
+import { updateVehicle } from "@/data-access/vehicles";
+import { resolveWriteActivityScopes } from "@/data-access/write-activity";
 import { deleteLabSample } from "@/lib/operations/lab-samples";
 
+const INITIAL_MODEL_YEAR = 2020;
+const UPDATED_MODEL_YEAR = 2024;
 const APPLICATION_TONNES = 0.01;
 const DOCUMENT_SIZE_BYTES = 8;
 const SHA256_HEX_LENGTH = 64;
@@ -74,25 +80,30 @@ it("records exactly one event for each application write with its batch and sour
   expect(JSON.stringify(rows, (_, value) => typeof value === "bigint" ? String(value) : value)).not.toContain("private crop value");
 });
 
-it("records application delivery moves once on both the previous and next batches", async () => {
+it.each(["different", "same", "unbatched"] as const)("records both run scopes when moving applications between %s batches", async batchScope => {
+  if (batchScope === "unbatched") await db.delete(creditBatchProductionRuns).where(eq(creditBatchProductionRuns.creditBatchId, fixture.batch.id));
+  const nextDate = batchScope === "same" ? ACTIVITY_FIXTURE_DATE : NEXT_ACTIVITY_DATE;
+  const nextStart = batchScope === "same" ? OTHER_RUN_START : NEXT_RUN_START;
   const created = await createApplication(ctx, applicationInput());
-  const [nextRun] = await db.insert(productionRuns).values({ ...fixture.run, id: crypto.randomUUID(), code: "ACT-RUN-NEXT", startTime: NEXT_RUN_START, endTime: NEXT_ACTIVITY_DATE }).returning();
+  const [nextRun] = await db.insert(productionRuns).values({ ...fixture.run, id: crypto.randomUUID(), code: "ACT-RUN-NEXT", startTime: nextStart, endTime: nextDate }).returning();
   const [nextBatch] = await db.insert(creditBatches).values({ ...fixture.batch, id: crypto.randomUUID(), code: "ACT-CB-NEXT", startDate: "2026-02-01", endDate: "2026-02-28" }).returning();
-  await db.insert(creditBatchProductionRuns).values({ organizationId: ctx.organizationId, creditBatchId: nextBatch.id, productionRunId: nextRun.id });
-  const [nextProduct] = await db.insert(biocharProducts).values({ ...fixture.product, id: crypto.randomUUID(), code: "ACT-BP-NEXT", linkedProductionRunId: nextRun.id, productionDate: NEXT_ACTIVITY_DATE, placedAt: NEXT_ACTIVITY_DATE }).returning();
+  const previousBatchId = batchScope === "unbatched" ? null : fixture.batch.id;
+  const nextBatchId = batchScope === "same" ? fixture.batch.id : batchScope === "unbatched" ? null : nextBatch.id;
+  if (nextBatchId) await db.insert(creditBatchProductionRuns).values({ organizationId: ctx.organizationId, creditBatchId: nextBatchId, productionRunId: nextRun.id });
+  const [nextProduct] = await db.insert(biocharProducts).values({ ...fixture.product, id: crypto.randomUUID(), code: "ACT-BP-NEXT", linkedProductionRunId: nextRun.id, productionDate: nextDate, placedAt: nextDate }).returning();
   await db.insert(biocharProductSourceAllocations).values({
     organizationId: ctx.organizationId, biocharProductId: nextProduct.id, productionRunId: nextRun.id,
     sourceStorageLocationId: nextRun.biocharStorageLocationId!, allocatedWetMassKg: nextRun.biocharOutputKg!, allocatedDryMassKg: nextRun.biocharDryMassKg!,
   });
   const [nextDelivery] = await insertOutputDeliveryFixture(db, {
-    ...fixture.delivery, id: crypto.randomUUID(), code: "ACT-DL-NEXT", biocharProductId: nextProduct.id, deliveryDate: NEXT_ACTIVITY_DATE,
+    ...fixture.delivery, id: crypto.randomUUID(), code: "ACT-DL-NEXT", biocharProductId: nextProduct.id, deliveryDate: nextDate,
   }, row => row);
-  await updateApplication(ctx, created.id, { expectedVersion: created.version, deliveryId: nextDelivery.id, applicationDate: NEXT_ACTIVITY_DATE });
+  await updateApplication(ctx, created.id, { expectedVersion: created.version, deliveryId: nextDelivery.id, applicationDate: nextDate });
   const updates = (await events("application", created.id)).filter(row => row.action === "updated");
   expect(updates).toHaveLength(2);
   expect(updates).toEqual(expect.arrayContaining([
-    expect.objectContaining({ creditBatchId: fixture.batch.id, productionRunId: fixture.run.id }),
-    expect.objectContaining({ creditBatchId: nextBatch.id, productionRunId: nextRun.id }),
+    expect.objectContaining({ creditBatchId: previousBatchId, productionRunId: fixture.run.id }),
+    expect.objectContaining({ creditBatchId: nextBatchId, productionRunId: nextRun.id }),
   ]));
 });
 
@@ -161,7 +172,7 @@ it("records legacy document create/delete without any filename", async () => {
 
 it("records document retirement in its caller's transaction", async () => {
   const document = await insertDocument(ctx, documentInput("production_run", fixture.run.id));
-  await db.transaction(tx => retireDocumentsForEntities(ctx, tx, [{ entityType: "production_run", entityId: fixture.run.id }]));
+  await db.transaction(tx => retireDocumentsForEntities(ctx, tx, [{ entityType: "production_run", entityId: fixture.run.id }], "form"));
   expect(await events("document", document.id)).toMatchObject([
     { action: "deleted", productionRunId: fixture.run.id, creditBatchId: fixture.batch.id },
     { action: "created", productionRunId: fixture.run.id, creditBatchId: fixture.batch.id },
@@ -190,21 +201,23 @@ it("records cascade transport deletes and document retirement with captured owne
   const leg = await createTransportLeg(ctx, legInput());
   const document = await insertDocument(ctx, documentInput("transport_leg", leg.id));
   await db.transaction(async tx => {
-    const refs = await deleteTransportLegsForEntity(ctx, tx, "feedstock", fixture.feedstock.id);
-    await retireDocumentsForEntities(ctx, tx, refs);
+    const refs = await deleteTransportLegsForEntity(ctx, tx, "feedstock", fixture.feedstock.id, "form");
+    await retireDocumentsForEntities(ctx, tx, refs, "form");
   });
   expect((await events("transport_leg", leg.id))[0]).toMatchObject({ action: "deleted", creditBatchId: fixture.batch.id });
   expect((await events("document", document.id))[0]).toMatchObject({ action: "deleted", creditBatchId: fixture.batch.id });
 });
 
-it("skips identical derived syncs and records only changed fields on a real update", async () => {
+it("upserts identical derived syncs without events and records changed fields on a real update", async () => {
   const initialDistanceKm = 10.1;
   await db.transaction(tx => syncFeedstockTransportLeg(ctx, tx, fixture.feedstock.id, { distanceKm: initialDistanceKm }));
   const [leg] = await db.select().from(transportLegs).where(eq(transportLegs.organizationId, ctx.organizationId));
   await db.transaction(tx => syncFeedstockTransportLeg(ctx, tx, fixture.feedstock.id, { distanceKm: initialDistanceKm }));
   expect(await events("transport_leg", leg.id)).toHaveLength(1);
   const [unchanged] = await db.select().from(transportLegs).where(eq(transportLegs.id, leg.id));
-  expect(unchanged).toEqual(leg);
+  expect(unchanged.version).toBe(leg.version + 1);
+  expect(unchanged.updatedAt.getTime()).toBeGreaterThanOrEqual(leg.updatedAt.getTime());
+  expect({ ...unchanged, version: leg.version, updatedAt: leg.updatedAt }).toEqual(leg);
   await db.transaction(tx => syncFeedstockTransportLeg(ctx, tx, fixture.feedstock.id, { distanceKm: 20 }));
   await db.transaction(tx => syncFeedstockTransportLeg(ctx, tx, fixture.feedstock.id, { distanceKm: null }));
   const rows = await events("transport_leg", leg.id);
@@ -342,7 +355,7 @@ it("rolls back document retirement with a failed parent transaction", async () =
   const saved = await insertDocument(ctx, documentInput());
   const before = await allEvents();
   await expect(db.transaction(async tx => {
-    await retireDocumentsForEntities(ctx, tx, [{ entityType: "credit_batch", entityId: fixture.batch.id }]);
+    await retireDocumentsForEntities(ctx, tx, [{ entityType: "credit_batch", entityId: fixture.batch.id }], "form");
     throw FAILURE;
   })).rejects.toBe(FAILURE);
   expect(await allEvents()).toEqual(before);
@@ -417,4 +430,74 @@ it("rolls back certification-safe app deletion and activity on recording failure
   expect(await allEvents()).toEqual(before);
   const [stored] = await db.select().from(documents).where(eq(documents.id, saved.id));
   expect(stored).toEqual(saved);
+});
+
+
+it.each(["rest", "mcp", "script"] as const)("records derived document retirement as system when a %s update clears the leg", async source => {
+  await db.transaction(tx => syncFeedstockTransportLeg(ctx, tx, fixture.feedstock.id, { distanceKm: 10 }));
+  const [leg] = await db.select().from(transportLegs).where(eq(transportLegs.organizationId, ctx.organizationId));
+  const document = await insertDocument(ctx, documentInput("transport_leg", leg.id));
+  const input = { feedstockId: fixture.feedstock.id, expectedVersion: fixture.feedstock.version, transportDistanceKm: null };
+  if (source === "script") await runOperation(updateFeedstock, ctx, input, { activitySource: source });
+  else await runOperation(updateFeedstock, ctx, input, { audit: { transport: source, requestId: crypto.randomUUID(), credentialId: crypto.randomUUID() } });
+  expect((await events("document", document.id))[0]).toMatchObject({
+    action: "deleted", source: "system", actorUserId: ctx.userId, creditBatchId: fixture.batch.id, productionRunId: fixture.run.id,
+  });
+  expect(await db.select().from(transportLegs).where(eq(transportLegs.id, leg.id))).toEqual([]);
+});
+
+it("records only affected batch visibility changes on facility archive and restore", async () => {
+  const [otherBatch] = await db.insert(creditBatches).values({ ...fixture.batch, id: crypto.randomUUID(), code: "ACT-CB-ARCHIVED", archivedAt: OTHER_RUN_START }).returning();
+  const archived = await archiveFacility(ctx, fixture.facility.id, fixture.facility.version);
+  await restoreFacility(ctx, fixture.facility.id, archived.version);
+  expect(await events("credit_batch", fixture.batch.id)).toMatchObject([
+    { action: "updated", source: "form", actorUserId: ctx.userId, creditBatchId: fixture.batch.id, changedFields: ["archivedAt"] },
+    { action: "updated", source: "form", actorUserId: ctx.userId, creditBatchId: fixture.batch.id, changedFields: ["archivedAt"] },
+  ]);
+  expect(await events("credit_batch", otherBatch.id)).toEqual([]);
+  const [restored] = await db.select().from(creditBatches).where(eq(creditBatches.id, fixture.batch.id));
+  expect(restored.archivedAt).toBeNull();
+  const [untouched] = await db.select().from(creditBatches).where(eq(creditBatches.id, otherBatch.id));
+  expect(untouched).toEqual(otherBatch);
+});
+
+it("records vehicle snapshot refreshes as system leg updates with batch and run scope", async () => {
+  const [vehicle] = await db.insert(vehicles).values({ organizationId: ctx.organizationId, code: "ACT-VEHICLE", name: "Activity vehicle", vehicleType: "truck", modelYear: INITIAL_MODEL_YEAR }).returning();
+  await db.update(feedstocks).set({ vehicleId: vehicle.id }).where(eq(feedstocks.id, fixture.feedstock.id));
+  await db.transaction(tx => syncFeedstockTransportLeg(ctx, tx, fixture.feedstock.id, { distanceKm: 10 }));
+  const [leg] = await db.select().from(transportLegs).where(eq(transportLegs.organizationId, ctx.organizationId));
+  const updated = await updateVehicle(ctx, vehicle.id, { name: vehicle.name, vehicleType: "van", modelYear: UPDATED_MODEL_YEAR }, vehicle.version);
+  const rows = await events("transport_leg", leg.id);
+  expect(rows).toHaveLength(2);
+  expect(rows[0]).toMatchObject({ action: "updated", source: "system", actorUserId: ctx.userId,
+    changedFields: ["vehicleType", "modelYear"], creditBatchId: fixture.batch.id, productionRunId: fixture.run.id });
+  const [refreshed] = await db.select().from(transportLegs).where(eq(transportLegs.id, leg.id));
+  expect(refreshed).toMatchObject({ vehicleType: "van", modelYear: UPDATED_MODEL_YEAR, version: leg.version + 1 });
+  await updateVehicle(ctx, vehicle.id, { name: "Renamed vehicle", vehicleType: updated.vehicleType, modelYear: updated.modelYear }, updated.version);
+  expect(await events("transport_leg", leg.id)).toHaveLength(2);
+});
+
+it("excludes fully reversed product shares from delivery and order activity scopes", async () => {
+  const [nextRun] = await db.insert(productionRuns).values({ ...fixture.run, id: crypto.randomUUID(), code: "ACT-RUN-NEXT", startTime: NEXT_RUN_START, endTime: NEXT_ACTIVITY_DATE }).returning();
+  const [nextBatch] = await db.insert(creditBatches).values({ ...fixture.batch, id: crypto.randomUUID(), code: "ACT-CB-NEXT", startDate: "2026-02-01", endDate: "2026-02-28" }).returning();
+  await db.insert(creditBatchProductionRuns).values({ organizationId: ctx.organizationId, creditBatchId: nextBatch.id, productionRunId: nextRun.id });
+  const [nextProduct] = await db.insert(biocharProducts).values({ ...fixture.product, id: crypto.randomUUID(), code: "ACT-BP-NEXT", linkedProductionRunId: nextRun.id, productionDate: NEXT_ACTIVITY_DATE, placedAt: NEXT_ACTIVITY_DATE }).returning();
+  await db.insert(biocharProductSourceAllocations).values({ organizationId: ctx.organizationId, biocharProductId: nextProduct.id, productionRunId: nextRun.id,
+    sourceStorageLocationId: nextRun.biocharStorageLocationId!, allocatedWetMassKg: nextRun.biocharOutputKg!, allocatedDryMassKg: nextRun.biocharDryMassKg! });
+  const [original] = await db.select().from(outputStockAllocations).where(eq(outputStockAllocations.deliveryId, fixture.delivery.id));
+  const [movement] = await db.select().from(binMovements).where(eq(binMovements.id, original.movementId));
+  const [reversalMovement] = await db.insert(binMovements).values({ ...movement, id: crypto.randomUUID(), idempotencyKey: crypto.randomUUID(), outputKind: "reversal", correctsMovementId: movement.id,
+    massDeltaKg: -movement.massDeltaKg!, outputDryDeltaKg: String(-Number(movement.outputDryDeltaKg)),
+    balanceBeforeDryKg: movement.balanceAfterDryKg, balanceAfterDryKg: movement.balanceBeforeDryKg }).returning();
+  const [reversal] = await db.insert(outputStockAllocations).values({ ...original, id: crypto.randomUUID(), movementId: reversalMovement.id, reversesAllocationId: original.id,
+    dryMassKg: String(-Number(original.dryMassKg)), wetMassKg: String(-Number(original.wetMassKg)) }).returning();
+  await db.insert(outputStockRunAllocations).values({ organizationId: ctx.organizationId, allocationId: reversal.id, productionRunId: fixture.run.id, dryMassKg: reversal.dryMassKg });
+  const [replacementDelivery] = await insertOutputDeliveryFixture(db, { ...fixture.delivery, id: crypto.randomUUID(), code: "ACT-DL-REPLACEMENT", biocharProductId: nextProduct.id }, row => row);
+  await db.update(outputStockAllocations).set({ deliveryId: fixture.delivery.id }).where(eq(outputStockAllocations.deliveryId, replacementDelivery.id));
+  await db.delete(deliveries).where(eq(deliveries.id, replacementDelivery.id));
+  for (const [type, id] of [["delivery", fixture.delivery.id], ["order", fixture.delivery.orderId]] as const) {
+    expect(await db.transaction(tx => resolveWriteActivityScopes(ctx, tx, type, id))).toEqual([{ creditBatchId: nextBatch.id, productionRunId: nextRun.id }]);
+    const document = await insertDocument(ctx, documentInput(type, id));
+    expect(await events("document", document.id)).toMatchObject([{ creditBatchId: nextBatch.id, productionRunId: nextRun.id }]);
+  }
 });

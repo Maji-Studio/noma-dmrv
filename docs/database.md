@@ -60,7 +60,9 @@ snake_case names: `removal`, `ghg_statement`, `production_run`, `biochar_product
 `toActivityEntityType` mapper in `src/lib/activity-entity-type.ts` preserves these
 names and maps existing runner/certification spellings (`productionRun`,
 `biocharProduct`, `labSample`, `binMovement`, `ghgStatement`) to them; unknown
-values throw.
+values throw. Document owner normalization lives in the same module, preserves
+valid document-only owner types (including `ghg_statement_report`), and rejects
+unknown owners.
 `occurred_at` and `registry_at` use millisecond precision to match JavaScript
 `Date`; `occurred_at` defaults to insert time (`clock_timestamp()`), and reads
 order by `occurred_at` then unique `sequence`, newest first.
@@ -79,7 +81,11 @@ event per batch, including both former and current batches when an application
 moves. Membership changes emit a batch update per changed run and a run update
 with the former batch ID on detach, so each event retains its run scope.
 Automatic cohort attachment uses `system` with no actor; derived transport writes
-retain the initiating actor.
+retain the initiating actor, including document retirements when a derived leg
+is cleared. Identical derived syncs still upsert and bump the leg version without
+emitting activity. Vehicle snapshot refreshes record derived leg updates with
+source `system`; facility archive/restore records each affected batch update.
+Delivery and order scopes use net saved provenance, excluding fully reversed shares.
 
 Legacy certification reports and evidence ledgers use `insertDocument` and
 `deleteDocumentRow`, which record directly. Parent deletion uses

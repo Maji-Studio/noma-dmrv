@@ -501,7 +501,8 @@ export async function retireDocumentsForEntities(
   ctx: OrgContext,
   tx: DbTransaction,
   entities: readonly DocumentEntityRef[],
-  source: ActivityEventInput["source"] = "form",
+  source: ActivityEventInput["source"],
+  actorUserId?: ActivityEventInput["actorUserId"],
 ): Promise<void> {
   requireOrgScope(ctx);
   if (entities.length === 0) return;
@@ -587,7 +588,7 @@ export async function retireDocumentsForEntities(
 
   for (const document of ownedDocuments) {
     const owner = uniqueEntities.find(entity => entity.entityType === document.entityType && entity.entityId === document.entityId);
-    await recordDocumentActivity(ctx, tx, document, "deleted", owner?.activityScopes, source);
+    await recordDocumentActivity(ctx, tx, document, "deleted", owner?.activityScopes, source, actorUserId);
     await enqueueDocumentKeys(ctx, tx, document);
   }
 

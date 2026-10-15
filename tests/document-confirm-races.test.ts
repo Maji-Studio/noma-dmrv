@@ -69,7 +69,7 @@ it.each(["app", "owner"] as const)("cleans promotion after %s deletion wins", as
     if (mode === "app") await deleteDocumentInTransaction(ctx, tx, { documentId: row.id, expectedVersion: row.version });
     else {
       await tx.select().from(schema.facilities).where(eq(schema.facilities.id, owner.id)).for("update");
-      await retireDocumentsForEntities(ctx, tx, [{ entityType: "facility", entityId: owner.id }]);
+      await retireDocumentsForEntities(ctx, tx, [{ entityType: "facility", entityId: owner.id }], "form");
       await tx.delete(schema.facilities).where(eq(schema.facilities.id, owner.id));
     }
     removed.release(); await commit.promise;
@@ -173,7 +173,7 @@ it.each(["app", "owner", "submit"] as const)("lets confirm commit before a block
       if (mode === "app") return deleteDocumentInTransaction(ctx, tx, { documentId: row.id, expectedVersion: row.version + 1 });
       if (mode === "owner") {
         await tx.select().from(schema.samples).where(eq(schema.samples.id, fixture.sampleId)).for("update");
-        await retireDocumentsForEntities(ctx, tx, [{ entityType: "sample", entityId: fixture.sampleId }]);
+        await retireDocumentsForEntities(ctx, tx, [{ entityType: "sample", entityId: fixture.sampleId }], "form");
         await tx.delete(schema.samples).where(eq(schema.samples.id, fixture.sampleId));
       } else {
         await lockCertifiedLineageArtifacts(ctx, tx, [{ entityType: "sample", entityId: fixture.sampleId }]);
@@ -244,7 +244,7 @@ it.each(["sweep", "delete", "owner"] as const)("keeps a candidate durable after 
   expect(recorded).toMatchObject({ uploadStatus: "pending", metadata: { promotionCandidates: [finalKey] } });
   expect(await provider.headObject(finalKey)).not.toBeNull();
   if (cleanup === "delete") await db.transaction((tx) => deleteDocumentInTransaction(ctx, tx, { documentId: row.id, expectedVersion: row.version }));
-  else if (cleanup === "owner") await db.transaction((tx) => retireDocumentsForEntities(ctx, tx, [{ entityType: "facility", entityId: facilityId }]));
+  else if (cleanup === "owner") await db.transaction((tx) => retireDocumentsForEntities(ctx, tx, [{ entityType: "facility", entityId: facilityId }], "form"));
   else {
     await db.update(schema.documents).set({ uploadExpiresAt: new Date(Date.now() - DOCUMENT_UPLOAD_GRACE_MS - 1) }).where(eq(schema.documents.id, row.id));
     await db.transaction((tx) => expireDocumentUploadsInTransaction(tx, new Date(), [ctx.organizationId]));
@@ -282,7 +282,7 @@ it.each(["app", "owner"] as const)("defers live-key cleanup past an identical la
     const confirmed = await db.transaction(tx => confirmDocumentUploadInTransaction(ctx, tx, first));
     if (confirmed.kind !== "uploaded") throw new Error("Expected uploaded");
     if (mode === "app") await db.transaction(tx => deleteDocumentInTransaction(ctx, tx, { documentId: row.id, expectedVersion: confirmed.document.version }));
-    else await db.transaction(tx => retireDocumentsForEntities(ctx, tx, [{ entityType: "facility", entityId: row.entityId }]));
+    else await db.transaction(tx => retireDocumentsForEntities(ctx, tx, [{ entityType: "facility", entityId: row.entityId }], "form"));
     await processPendingStorageObjectDeletions(ctx);
     const [queued] = await db.select().from(schema.storageObjectDeletions).where(eq(schema.storageObjectDeletions.storageKey, first.finalKey!));
     expect(queued.notBefore!.getTime()).toBeGreaterThan(Date.now());

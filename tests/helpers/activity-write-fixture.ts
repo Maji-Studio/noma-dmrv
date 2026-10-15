@@ -94,7 +94,7 @@ export async function cleanupActivityWriteFixture(ctx: OrgContext) {
     schema.deliveries, schema.orders, schema.productIngredientSnapshots, schema.biocharProductSourceAllocations,
     schema.biocharProducts, schema.binMovements, schema.samples, schema.creditBatchProductionRuns,
     schema.creditBatches, schema.productionProcesses, schema.productionRunFeedstockDraws, schema.productionRunFeedstocks,
-    schema.productionRuns, schema.feedstocks, schema.storageLocations, schema.reactors, schema.formulations,
+    schema.productionRuns, schema.feedstocks, schema.vehicles, schema.storageLocations, schema.reactors, schema.formulations,
     schema.customerLocations, schema.customers, schema.suppliers, schema.feedstockTypes, schema.facilities,
   ];
   await db.transaction(async tx => {

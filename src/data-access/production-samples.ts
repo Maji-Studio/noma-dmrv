@@ -239,7 +239,7 @@ export async function deleteProductionSample(
     }
     await retireDocumentsForEntities(ctx, tx, [
       { entityType: "production_sample", entityId: id, activityScopes },
-    ]);
+    ], "form");
   });
   await processPendingStorageObjectDeletions(ctx);
 }

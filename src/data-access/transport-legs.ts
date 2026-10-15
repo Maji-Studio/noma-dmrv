@@ -395,7 +395,7 @@ export async function deleteTransportLeg(
       .returning({ id: transportLegs.id });
     await retireDocumentsForEntities(ctx, tx, [
       { entityType: "transport_leg", entityId: id, activityScopes },
-    ]);
+    ], "form");
     return rows;
   });
 
@@ -413,7 +413,7 @@ export async function deleteTransportLegsForEntity(
   tx: DbTransaction,
   entityType: TransportEntityType,
   entityId: string,
-  source: ActivityEventInput["source"] = "form",
+  source: ActivityEventInput["source"],
 ): Promise<DocumentEntityRef[]> {
   requireOrgScope(ctx);
   const scopes = await resolveWriteActivityScopes(ctx, tx, entityType, entityId);
@@ -438,7 +438,7 @@ export async function deleteTransportLegsForEntity(
 
 // Feedstock owns a SINGLE auto-derived leg, computed from records already held
 // (supplier/facility + vehicle + mass + stored distance).
-// Persist only changed derivations; clear the row when distance/load mass is
+// Upsert on every save; clear the row when distance/load mass is
 // missing. Manual legs remain untouched.
 async function replaceDerivedTransportLeg(
   ctx: OrgContext,
@@ -486,7 +486,7 @@ async function replaceDerivedTransportLeg(
     if (deferredRetirements) {
       deferredRetirements.push(...retirements);
     } else {
-      await retireDocumentsForEntities(ctx, tx, retirements);
+      await retireDocumentsForEntities(ctx, tx, retirements, "system", ctx.userId);
     }
     return;
   }
@@ -527,8 +527,6 @@ async function replaceDerivedTransportLeg(
       if (key === "loadMassKg") return existing.loadMassKg == null || massGrams(existing.loadMassKg) !== massGrams(fields.loadMassKg);
       return existing[key] !== fields[key];
     });
-  if (existing && changedFields.length === 0) return;
-
   const [saved] = await tx
     .insert(transportLegs)
     .values({ organizationId: ctx.organizationId, entityType, entityId, isDerived: true, ...fields })
@@ -537,7 +535,7 @@ async function replaceDerivedTransportLeg(
       targetWhere: sql`${transportLegs.isDerived} = true`,
       set: { ...fields, version: nextVersion(transportLegs.version), updatedAt: new Date() },
     }).returning();
-  await recordScopedWriteActivity(ctx, tx, {
+  if (!existing || changedFields.length > 0) await recordScopedWriteActivity(ctx, tx, {
     entityType: "transport_leg", entityId: saved.id,
     action: saved.version === INITIAL_TRANSPORT_LEG_VERSION ? "created" : "updated", source: "system", actorUserId: ctx.userId,
     changedFields: saved.version === INITIAL_TRANSPORT_LEG_VERSION ? [] : changedFields,

@@ -1,9 +1,9 @@
 import { and, eq, inArray } from "drizzle-orm";
 import type { DbTransaction } from "@/db";
-import { applicationOutputAllocations, biocharProductSourceAllocations, creditBatchProductionRuns, deliveries, incidentReports, outputStockAllocations, outputStockRunAllocations, productionRunFeedstocks, productionSamples, samples, transportLegs } from "@/db/schema";
-import { DOCUMENT_ENTITY_TYPES } from "@/schemas/documents";
+import { applicationOutputAllocations, biocharProductSourceAllocations, creditBatchProductionRuns, deliveries, incidentReports, productionRunFeedstocks, productionSamples, samples, transportLegs } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
-import { toActivityEntityType } from "@/lib/activity-entity-type";
+import { toActivityDocumentOwnerType, toActivityEntityType } from "@/lib/activity-entity-type";
+import { getDeliveryAllocationProvenance } from "./delivery-allocation-provenance";
 import { recordActivity, type ActivityEventInput } from "./activity-events";
 import { requireOrgScope } from "./utils";
 
@@ -35,11 +35,10 @@ export async function resolveWriteActivityScopes(
   if (entityType === "production_run") {
     runIds = [entityId];
   } else if (entityType === "delivery" || entityType === "order") {
-    const rows = await tx.selectDistinct({ id: outputStockRunAllocations.productionRunId }).from(outputStockRunAllocations)
-      .innerJoin(outputStockAllocations, and(eq(outputStockAllocations.id, outputStockRunAllocations.allocationId), eq(outputStockAllocations.organizationId, ctx.organizationId)))
-      .innerJoin(deliveries, and(eq(deliveries.id, outputStockAllocations.deliveryId), eq(deliveries.organizationId, ctx.organizationId)))
-      .where(and(eq(outputStockRunAllocations.organizationId, ctx.organizationId), entityType === "delivery" ? eq(deliveries.id, entityId) : eq(deliveries.orderId, entityId)));
-    runIds = rows.map(row => row.id);
+    const rows = await tx.select({ id: deliveries.id }).from(deliveries)
+      .where(and(eq(deliveries.organizationId, ctx.organizationId), entityType === "delivery" ? eq(deliveries.id, entityId) : eq(deliveries.orderId, entityId)));
+    const shares = await getDeliveryAllocationProvenance(ctx, rows.map(row => row.id), tx);
+    runIds = [...new Set(shares.filter(share => share.dryMassKg > 0 || share.wetMassKg > 0).map(share => share.productionRunId))];
   } else if (entityType === "application") {
     const rows = await tx.selectDistinct({ id: applicationOutputAllocations.productionRunId }).from(applicationOutputAllocations)
       .where(and(eq(applicationOutputAllocations.applicationId, entityId), eq(applicationOutputAllocations.organizationId, ctx.organizationId)));
@@ -104,14 +103,13 @@ export async function recordDocumentActivity(
   document: { id: string; documentType: string; entityType: string; entityId: string },
   action: "created" | "deleted", scopes?: ActivityScope[],
   source: ActivityEventInput["source"] = "form",
+  actorUserId?: ActivityEventInput["actorUserId"],
 ): Promise<void> {
   requireOrgScope(ctx);
-  const ownerType = DOCUMENT_ENTITY_TYPES.find(type => type === document.entityType)
-    ?? (document.entityType === "ghgStatement" ? "ghg_statement"
-      : document.entityType === "ghgStatementReport" ? "ghg_statement_report" : "other");
+  const ownerType = toActivityDocumentOwnerType(document.entityType);
   const resolvedScopes = scopes ?? await resolveWriteActivityScopes(ctx, tx, document.entityType, document.entityId);
   await recordScopedWriteActivity(ctx, tx, {
-    entityType: toActivityEntityType("document"), entityId: document.id, action, source,
+    entityType: toActivityEntityType("document"), entityId: document.id, action, source, actorUserId,
     reasonCode: `document:${document.documentType}:${ownerType}:${document.entityId}`,
   }, resolvedScopes);
 }

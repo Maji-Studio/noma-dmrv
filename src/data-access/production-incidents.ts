@@ -204,7 +204,7 @@ export async function deleteProductionIncident(
     }
     await retireDocumentsForEntities(ctx, tx, [
       { entityType: "production_incident", entityId: id, activityScopes },
-    ]);
+    ], "form");
   });
   await processPendingStorageObjectDeletions(ctx);
 }

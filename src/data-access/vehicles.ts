@@ -27,6 +27,7 @@ import {
 } from "./certification-lineage-guards";
 import { countVehicleUsage } from "./fleet-usage";
 import { assertRowVersion, nextVersion } from "./row-version";
+import { recordScopedWriteActivity, resolveWriteActivityScopes } from "./write-activity";
 import { requireOrgScope } from "./utils";
 
 const VEHICLE_CONFLICT_ENTITY = "vehicle";
@@ -256,7 +257,7 @@ async function updateVehicleOnce(
     .returning();
 
   if (refreshLegs.length > 0) {
-    await tx
+    const refreshed = await tx
       .update(transportLegs)
       .set({
         vehicleType: data.vehicleType,
@@ -269,7 +270,12 @@ async function updateVehicleOnce(
         eq(transportLegs.isDerived, true),
         inArray(transportLegs.entityId, refreshLegs),
         eq(transportLegs.organizationId, ctx.organizationId),
-      ));
+      ))
+      .returning({ id: transportLegs.id, entityType: transportLegs.entityType, entityId: transportLegs.entityId });
+    for (const leg of refreshed) await recordScopedWriteActivity(ctx, tx, {
+      entityType: "transport_leg", entityId: leg.id, action: "updated", source: "system", actorUserId: ctx.userId,
+      changedFields: ["vehicleType", "modelYear"],
+    }, await resolveWriteActivityScopes(ctx, tx, leg.entityType, leg.entityId));
   }
 
   return updated;

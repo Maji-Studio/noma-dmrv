@@ -829,7 +829,7 @@ export async function deleteCreditBatch(ctx: OrgContext, id: string, expectedVer
 
     await retireDocumentsForEntities(ctx, tx, [
       { entityType: "credit_batch", entityId: id },
-    ]);
+    ], "form");
   });
   await processPendingStorageObjectDeletions(ctx);
 }

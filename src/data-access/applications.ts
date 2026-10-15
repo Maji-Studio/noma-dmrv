@@ -845,7 +845,7 @@ export async function updateApplication(
     }, [...new Map([
       ...previousScopes,
       ...await resolveWriteActivityScopes(ctx, tx, "application", application.id),
-    ].map(scope => [scope.creditBatchId, scope])).values()]);
+    ].map(scope => [`${scope.creditBatchId ?? ""}:${scope.productionRunId ?? ""}`, scope])).values()]);
 
     return application;
   });
@@ -913,7 +913,7 @@ export async function deleteApplication(ctx: OrgContext, id: string, expectedVer
     await tx.delete(applications).where(and(eq(applications.id, id), eq(applications.organizationId, ctx.organizationId)));
     await retireDocumentsForEntities(ctx, tx, [
       { entityType: "application", entityId: id, activityScopes },
-    ]);
+    ], "form");
     // Batch aggregates (applied weight, CO2e stored) are derived on read
     // (issue #285) — no write-back sync is needed after removing a member.
   });
