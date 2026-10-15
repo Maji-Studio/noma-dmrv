@@ -517,7 +517,7 @@ export async function updateCustomerLocation(
   if (data.defaultSoilTemperatureC !== undefined) updateData.defaultSoilTemperatureC = data.defaultSoilTemperatureC;
   if (data.isDefault !== undefined) updateData.isDefault = data.isDefault;
 
-  return db.transaction(async (tx) => {
+  const updated = await db.transaction(async (tx) => {
     const routeAnchorCanChange =
       data.name !== undefined ||
       data.gpsLatitude !== undefined ||
@@ -595,6 +595,7 @@ export async function updateCustomerLocation(
     return updated;
   });
   await processPendingStorageObjectDeletions(ctx);
+  return updated;
 }
 
 /**

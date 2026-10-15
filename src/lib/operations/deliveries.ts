@@ -1,4 +1,5 @@
 import { createDeliveryInTransaction, updateDeliveryInTransaction, type UpdatedDelivery } from "@/data-access/delivery-output-writes";
+import { processPendingStorageObjectDeletions } from "@/data-access/storage-object-deletions";
 import type { OrgContext } from "@/lib/auth/server";
 import { updateDeliverySchema } from "@/schemas/deliveries";
 import { z } from "zod";
@@ -56,8 +57,9 @@ const updateDeliveryInput = updateDeliveryApiInput.extend({ deliveryId: uuidSche
 export const updateDeliveryOperation: Operation<typeof updateDeliveryInput, Delivery> = {
   id: "update_delivery", input: updateDeliveryInput, supportsDryRun: true,
   describe: describeUpdatedDelivery,
-  execute: async ({ ctx, tx }, { deliveryId, ...changes }) => {
+  execute: async ({ ctx, tx, afterCommit }, { deliveryId, ...changes }) => {
     const saved = await updateDeliveryInTransaction(ctx, tx, deliveryId, changes);
+    afterCommit(async () => { await processPendingStorageObjectDeletions(ctx); });
     const delivery: Partial<typeof saved> = { ...saved };
     delete delivery.savedProducts;
     return delivery as Delivery;
@@ -69,7 +71,11 @@ export const updatePostedDelivery: Operation<typeof updateDeliverySchema, Update
   id: "update_posted_delivery",
   input: updateDeliverySchema,
   supportsDryRun: false,
-  execute: ({ ctx, tx }, { deliveryId, ...changes }) => updateDeliveryInTransaction(ctx, tx, deliveryId, changes),
+  execute: async ({ ctx, tx, afterCommit }, { deliveryId, ...changes }) => {
+    const saved = await updateDeliveryInTransaction(ctx, tx, deliveryId, changes);
+    afterCommit(async () => { await processPendingStorageObjectDeletions(ctx); });
+    return saved;
+  },
 };
 
 export async function updateDelivery(ctx: OrgContext, deliveryId: string, changes: Omit<z.input<typeof updateDeliverySchema>, "deliveryId">): Promise<UpdatedDelivery> {
