@@ -5,7 +5,7 @@ import { customers, customerLocations, suppliers, supplierLocations, facilities,
 import { createSupplierLocation, deleteSupplier, deleteSupplierLocation, updateSupplierLocation } from "@/data-access/suppliers";
 import { createCustomerLocation, deleteCustomer, deleteCustomerLocation, updateCustomerLocation } from "@/data-access/customers";
 import { SafeError } from "@/lib/errors";
-import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
+import { TEST_SITE_POSITION, ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
 
 const ctx = makeTestOrgContext();
 const BARRIER_TIMEOUT_MS = 5_000;
@@ -34,8 +34,8 @@ describe.each(["supplier", "customer"] as const)("%s location parent-first locks
       organizationId: TEST_ORG_ID, code: `LOCK-${tag}`, name: `Lock order ${tag}`,
     }).returning();
     const create = () => kind === "supplier"
-      ? createSupplierLocation(ctx, { gpsLatitude: -8.3, gpsLongitude: 35.3,  supplierId: parent.id, country: "CH", isDefault: true })
-      : createCustomerLocation(ctx, { gpsLatitude: -8.3, gpsLongitude: 35.3,  customerId: parent.id, name: "Location", country: "CH", isDefault: true });
+      ? createSupplierLocation(ctx, { ...TEST_SITE_POSITION, country: "CH", supplierId: parent.id, isDefault: true })
+      : createCustomerLocation(ctx, { ...TEST_SITE_POSITION, country: "CH", customerId: parent.id, name: "Location", isDefault: true });
     const location = await create();
     const update = () => kind === "supplier"
       ? updateSupplierLocation(ctx, location.id, { expectedVersion: location.version, isDefault: true })
@@ -116,8 +116,8 @@ describe.each(["supplier", "customer"] as const)("%s location parent-first locks
     async (operation) => {
       const f = await fixture();
       const tag = crypto.randomUUID();
-      const [facility] = await db.insert(facilities).values({ gpsLatitude: -8.3, gpsLongitude: 35.3,  timezone: "UTC",
-        organizationId: TEST_ORG_ID, code: `FAC-${tag}`, name: `Lock facility ${tag}`, country: "CH",
+      const [facility] = await db.insert(facilities).values({ ...TEST_SITE_POSITION, country: "CH", timezone: "UTC",
+        organizationId: TEST_ORG_ID, code: `FAC-${tag}`, name: `Lock facility ${tag}`,
       }).returning();
       const [feedstockType] = await db.insert(feedstockTypes).values({
         organizationId: TEST_ORG_ID, code: `FT-${tag}`, name: `Lock feedstock ${tag}`, category: "forestry",

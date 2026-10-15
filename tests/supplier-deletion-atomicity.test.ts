@@ -6,7 +6,7 @@ import { pgErrorCode } from "@/db/errors";
 import { facilities, feedstockDeliveries, feedstocks, feedstockTypes, organizations, supplierLocations, suppliers } from "@/db/schema";
 import { deleteSupplier } from "@/data-access/suppliers";
 import { SafeError } from "@/lib/errors";
-import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
+import { TEST_SITE_POSITION, ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
 
 const ctx = makeTestOrgContext();
 const CONCURRENCY_BARRIER_TIMEOUT_MS = 5_000;
@@ -23,10 +23,10 @@ beforeEach(async () => {
   const [supplier] = await db.insert(suppliers).values({ organizationId: TEST_ORG_ID, code: `SUP-${tag}`, name: `Audit supplier ${tag}` }).returning();
   supplierId = supplier.id;
   originalLocations = await db.insert(supplierLocations).values([
-    { gpsLatitude: -8.3, gpsLongitude: 35.3,  organizationId: TEST_ORG_ID, supplierId, country: "Switzerland", city: "Zurich", isDefault: true },
-    { gpsLatitude: -8.3, gpsLongitude: 35.3,  organizationId: TEST_ORG_ID, supplierId, country: "France", city: "Lyon" },
+    { ...TEST_SITE_POSITION, country: "Switzerland", organizationId: TEST_ORG_ID, supplierId, city: "Zurich", isDefault: true },
+    { ...TEST_SITE_POSITION, country: "France", organizationId: TEST_ORG_ID, supplierId, city: "Lyon" },
   ]).returning();
-  const [facility] = await db.insert(facilities).values({ country: "Tanzania", gpsLatitude: -8.3, gpsLongitude: 35.3,  timezone: "UTC", organizationId: TEST_ORG_ID, code: `FAC-${tag}`, name: `Audit facility ${tag}` }).returning();
+  const [facility] = await db.insert(facilities).values({ ...TEST_SITE_POSITION, timezone: "UTC", organizationId: TEST_ORG_ID, code: `FAC-${tag}`, name: `Audit facility ${tag}` }).returning();
   facilityId = facility.id;
   const [type] = await db.insert(feedstockTypes).values({ organizationId: TEST_ORG_ID, code: `FT-${tag}`, name: `Audit type ${tag}`, category: "forestry" }).returning();
   feedstockTypeId = type.id;

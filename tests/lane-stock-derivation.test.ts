@@ -14,7 +14,7 @@ import {
   productionRuns,
 } from "@/db/schema/production";
 import { biocharProducts, formulations } from "@/db/schema/products";
-import {
+import { TEST_SITE_POSITION,
   ensureTestOrg,
   makeTestOrgContext,
   TEST_ORG_ID,
@@ -46,7 +46,7 @@ describe("shared lane-stock derivation", () => {
     await db.transaction(async (tx) => {
       const [facility] = await tx
         .insert(facilities)
-        .values({ country: "Tanzania", gpsLatitude: -8.3, gpsLongitude: 35.3,  timezone: "UTC",
+        .values({ ...TEST_SITE_POSITION, timezone: "UTC",
           organizationId: TEST_ORG_ID,
           code: `FAC-LANE-${tag}`,
           name: `Lane Stock Facility ${tag}`,

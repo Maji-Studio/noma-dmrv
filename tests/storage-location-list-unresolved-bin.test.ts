@@ -16,7 +16,7 @@ import { previewOutputStock } from "@/data-access/output-stock-operations";
 import { facilities } from "@/db/schema/facilities";
 import { productionRuns, reactors, storageLocations } from "@/db/schema";
 import { COMPLETED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
-import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
+import { TEST_SITE_POSITION, ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
 
 const RUN_ID_LENGTH = 8;
 
@@ -41,7 +41,7 @@ beforeAll(async () => {
   fixture = await db.transaction(async (tx) => {
     const [facility] = await tx
       .insert(facilities)
-      .values({ country: "Tanzania", gpsLatitude: -8.3, gpsLongitude: 35.3,  timezone: "UTC",
+      .values({ ...TEST_SITE_POSITION, timezone: "UTC",
         organizationId: TEST_ORG_ID,
         name: `Unresolved Bin Facility ${tag}`,
         code: `FAC-UNRES-${tag}`,

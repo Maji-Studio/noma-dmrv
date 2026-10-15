@@ -65,7 +65,7 @@ import {
   installFakeRegistry,
   type FakeIsometricRegistry,
 } from "./fixtures/fake-registry";
-import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
+import { TEST_SITE_POSITION, ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
 
 const OTHER_ORG_ID = "org_test_ghg_identity_other";
 const REPORTING_PERIOD_END = "2026-03-31";
@@ -91,7 +91,7 @@ async function createFacility(
   const runId = crypto.randomUUID().slice(0, 8);
   const [facility] = await db
     .insert(facilities)
-    .values({ country: "Tanzania", gpsLatitude: -8.3, gpsLongitude: 35.3,  timezone: "UTC",
+    .values({ ...TEST_SITE_POSITION, timezone: "UTC",
       organizationId,
       name: `GGS Identity ${label} ${runId}`,
       code: `FAC-GI-${runId}`,

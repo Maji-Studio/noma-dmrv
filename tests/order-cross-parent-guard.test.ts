@@ -2,7 +2,7 @@ import { updateOrder } from "@/lib/operations/orders";
 import { runOperationInProcess } from "@/lib/operations/runner";
 import { labLogisticsVersion } from "./helpers/lab-logistics-version";
 import { outputProductFixtureValues, outputOrderFixtureValues, deleteOutputProductFixtures, deleteOutputFacilityFixtures } from "./helpers/output-contract-fixtures";
-import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
+import { TEST_SITE_POSITION, ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq, inArray } from "drizzle-orm";
 import { createOrderInTransaction } from "@/data-access/orders";
@@ -36,7 +36,7 @@ beforeAll(async () => {
     const fixture = await db.transaction(async (tx) => {
       const [facility] = await tx
         .insert(facilities)
-        .values({ country: "Tanzania", gpsLatitude: -8.3, gpsLongitude: 35.3,  timezone: "UTC", organizationId: TEST_ORG_ID, code: `FAC-OCG-${tag}`, name: `OCG Facility ${tag}` })
+        .values({ ...TEST_SITE_POSITION, timezone: "UTC", organizationId: TEST_ORG_ID, code: `FAC-OCG-${tag}`, name: `OCG Facility ${tag}` })
         .returning({ id: facilities.id });
       const [product] = await tx
         .insert(biocharProducts)
@@ -88,23 +88,19 @@ beforeAll(async () => {
       const [locationA] = await tx
         .insert(customerLocations)
         .values({
-          gpsLatitude: -8.3,
-          gpsLongitude: 35.3,
+          ...TEST_SITE_POSITION,
           organizationId: TEST_ORG_ID,
           customerId: customerA.id,
           name: `OCG Location A ${tag}`,
-          country: "Tanzania",
         })
         .returning({ id: customerLocations.id });
       const [locationB] = await tx
         .insert(customerLocations)
         .values({
-          gpsLatitude: -8.3,
-          gpsLongitude: 35.3,
+          ...TEST_SITE_POSITION,
           organizationId: TEST_ORG_ID,
           customerId: customerB.id,
           name: `OCG Location B ${tag}`,
-          country: "Tanzania",
         })
         .returning({ id: customerLocations.id });
       const [order] = await tx

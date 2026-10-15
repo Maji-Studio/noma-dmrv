@@ -1,3 +1,4 @@
+import { TEST_SITE_POSITION } from "./helpers/test-org";
 import { addFixtureReactor } from "./helpers/operation-fixture";
 import { randomUUID } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -334,7 +335,7 @@ describe("production run review regressions", { timeout: TIMEOUT_MS }, () => {
       const refusal = await problem(await patch(saved.row.id, { biocharStorageLocationId }, saved.etag), 404, "not_found");
       expect(refusal.errors).toContainEqual(expect.objectContaining({ pointer: "/biocharStorageLocationId" }));
     }
-    const [facility] = await db.insert(facilities).values({ country: "Tanzania", gpsLatitude: -8.3, gpsLongitude: 35.3,  timezone: "UTC", organizationId: a.ctx.organizationId, code: "OTHER", name: "Other facility" }).returning();
+    const [facility] = await db.insert(facilities).values({ ...TEST_SITE_POSITION, timezone: "UTC", organizationId: a.ctx.organizationId, code: "OTHER", name: "Other facility" }).returning();
     const [bin] = await db.insert(storageLocations).values({ organizationId: a.ctx.organizationId, facilityId: facility.id,
       code: "OTHER-OUTPUT", name: "Other output", type: "biochar_bin" }).returning();
     const reactorId = await addFixtureReactor(a, `output-validation-${randomUUID()}`);

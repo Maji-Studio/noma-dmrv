@@ -1,6 +1,6 @@
 import { createProductionRunOutputBin } from "./helpers/production-run-output-bin";
 import { labLogisticsVersion } from "./helpers/lab-logistics-version";
-import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
+import { TEST_SITE_POSITION, ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
 /**
  * DB-backed tests for the credit-batch ↔ lab-sample linking write paths.
  * Since issue #309 a Sample anchors on ONE credit batch directly — the batch's
@@ -110,7 +110,7 @@ beforeAll(async () => {
 
   const [facility] = await db
     .insert(facilities)
-    .values({ country: "Tanzania", gpsLatitude: -8.3, gpsLongitude: 35.3,  timezone: "UTC",
+    .values({ ...TEST_SITE_POSITION, timezone: "UTC",
       organizationId: TEST_ORG_ID,
       name: `Sample-Link Facility ${runId}`,
       code: `FAC-SL-${runId}`,
@@ -335,7 +335,7 @@ describe("Server-side 1000-year evidence guard — batch tier is source of truth
     // main test facility is 200-year. Both batches here inherit 1000-year.
     const [tier1000Facility] = await db
       .insert(facilities)
-      .values({ country: "Tanzania", gpsLatitude: -8.3, gpsLongitude: 35.3,  timezone: "UTC",
+      .values({ ...TEST_SITE_POSITION, timezone: "UTC",
         organizationId: TEST_ORG_ID,
         name: `Sample-Link 1000yr Facility ${suffix}`,
         code: `FAC-SL-K-${suffix}`,

@@ -1,3 +1,4 @@
+import { TEST_SITE_POSITION } from "./helpers/test-org";
 import { rpc, rpcBody } from "./helpers/mcp";
 /** Real keys and handlers. Not run by the implementation agent; needs the supervisor. */
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -40,13 +41,13 @@ async function seed(fixture: LookupFixture) {
   const organizationId = fixture.ctx.organizationId;
   for (let index = 0; index < ROW_COUNT; index++) {
     const shared = { organizationId, code: `${PREFIX}${index}`, name: `MCP name ${index}` };
-    await db.insert(facilities).values({ country: "Tanzania", gpsLatitude: -8.3, gpsLongitude: 35.3,  ...shared, timezone: "UTC" });
+    await db.insert(facilities).values({ ...TEST_SITE_POSITION, ...shared, timezone: "UTC" });
     await db.insert(suppliers).values(shared);
     await db.insert(feedstockTypes).values({ ...shared, category: "forestry", usage: "pyrolysis" });
     await db.insert(storageLocations).values({ ...shared, facilityId: fixture.facilityId, type: "feedstock_bin" });
     await db.insert(vehicles).values({ ...shared, vehicleType: "truck", identifier: `MCP vehicle ${index}` });
     await db.insert(drivers).values(shared);
-    await db.insert(supplierLocations).values({ country: "Tanzania", gpsLatitude: -8.3, gpsLongitude: 35.3,  organizationId, supplierId: fixture.supplierId, name: `${PREFIX}${index}` });
+    await db.insert(supplierLocations).values({ ...TEST_SITE_POSITION, organizationId, supplierId: fixture.supplierId, name: `${PREFIX}${index}` });
   }
   return db.insert(feedstocks).values(Array.from({ length: ROW_COUNT }, (_, index) => ({
     organizationId, facilityId: fixture.facilityId, feedstockTypeId: fixture.feedstockTypeId,

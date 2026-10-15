@@ -7,7 +7,7 @@ import { customerLocations, customers, facilities, formulations, organizations, 
 import { getEntities, getEntityById } from "@/data-access/entities";
 import { STRICT_FORMULATION_MATCH } from "@/schemas/biochar-products";
 import { ENTITY_SEARCH_LIMIT } from "@/config/forms";
-import { makeTestOrgContext } from "./helpers/test-org";
+import { TEST_SITE_POSITION, makeTestOrgContext } from "./helpers/test-org";
 
 const tag = randomUUID();
 const orgId = `picker-org-${tag}`;
@@ -38,15 +38,13 @@ beforeAll(async () => {
       { organizationId: otherOrgId, code: "C-1", name: "Foreign customer" },
     ]).returning();
     const [location, unnamed, , foreignLocation] = await tx.insert(customerLocations).values([
-      { country: "Tanzania", gpsLatitude: -8.3, gpsLongitude: 35.3,  organizationId: orgId, customerId: customer.id, name: "North field" },
-      { country: "Tanzania", gpsLatitude: -8.3, gpsLongitude: 35.3,  organizationId: orgId, customerId: customer.id, name: "Unnamed site" },
-      { country: "Tanzania", gpsLatitude: -8.3, gpsLongitude: 35.3,  organizationId: orgId, customerId: otherCustomer.id, name: "North field" },
-      { country: "Tanzania", gpsLatitude: -8.3, gpsLongitude: 35.3,  organizationId: otherOrgId, customerId: foreignCustomer.id, name: "North field" },
+      { ...TEST_SITE_POSITION, organizationId: orgId, customerId: customer.id, name: "North field" },
+      { ...TEST_SITE_POSITION, organizationId: orgId, customerId: customer.id, name: "Unnamed site" },
+      { ...TEST_SITE_POSITION, organizationId: orgId, customerId: otherCustomer.id, name: "North field" },
+      { ...TEST_SITE_POSITION, organizationId: otherOrgId, customerId: foreignCustomer.id, name: "North field" },
     ]).returning();
     const [facility] = await tx.insert(facilities).values({
-      country: "Tanzania",
-      gpsLatitude: -8.3,
-      gpsLongitude: 35.3,
+      ...TEST_SITE_POSITION,
       organizationId: orgId, code: "FAC-1", name: "Picker facility", timezone: "UTC",
     }).returning();
     const [formulation, otherFormulation] = await tx.insert(formulations).values([

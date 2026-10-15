@@ -13,7 +13,7 @@ import { updateCustomer, deleteCustomer, createCustomerLocation, updateCustomerL
 import { updateFormulation, deleteFormulation } from "@/data-access/formulations";
 import { updateFeedstockType, archiveFeedstockType, unarchiveFeedstockType, deleteFeedstockType } from "@/data-access/feedstock-types";
 import { upsertFacilityEmissionFactors } from "@/data-access/facility-emission-factors";
-import { makeTestOrgContext } from "./helpers/test-org";
+import { TEST_SITE_POSITION, makeTestOrgContext } from "./helpers/test-org";
 
 const INITIAL_VERSION = 1;
 const VERSION_STEP = 1;
@@ -26,14 +26,14 @@ async function fixture({ unclaimedBin = false } = {}) {
   const tag = randomUUID();
   const ctx = { ...makeTestOrgContext(), organizationId: `master-version-${tag}` };
   await db.insert(organizations).values({ id: ctx.organizationId, name: "Version test", slug: `master-version-${tag}` });
-  const [facility] = await db.insert(facilities).values({ gpsLatitude: -8.3, gpsLongitude: 35.3,  timezone: "UTC", organizationId: ctx.organizationId, code: `FAC-${tag}`, name: `Facility ${tag}`, country: "Tanzania" }).returning();
+  const [facility] = await db.insert(facilities).values({ ...TEST_SITE_POSITION, timezone: "UTC", organizationId: ctx.organizationId, code: `FAC-${tag}`, name: `Facility ${tag}`, }).returning();
   const [reactor] = await db.insert(reactors).values({ organizationId: ctx.organizationId, facilityId: facility.id, code: `REA-${tag}`, identifier: "Reactor", reactorType: "batch" }).returning();
   const [feedstockType] = await db.insert(feedstockTypes).values({ organizationId: ctx.organizationId, code: `FST-${tag}`, name: "Feedstock type", category: "forestry", usage: "pyrolysis" }).returning();
   const [bin] = await db.insert(storageLocations).values({ organizationId: ctx.organizationId, facilityId: facility.id, code: `BIN-${tag}`, name: "Bin", type: "feedstock_bin", feedstockTypeId: unclaimedBin ? null : feedstockType.id }).returning();
   const [supplier] = await db.insert(suppliers).values({ organizationId: ctx.organizationId, code: `SUP-${tag}`, name: "Supplier" }).returning();
-  const [supplierLocation] = await db.insert(supplierLocations).values({ gpsLatitude: -8.3, gpsLongitude: 35.3,  organizationId: ctx.organizationId, supplierId: supplier.id, country: "Tanzania", isDefault: true }).returning();
+  const [supplierLocation] = await db.insert(supplierLocations).values({ ...TEST_SITE_POSITION, organizationId: ctx.organizationId, supplierId: supplier.id, isDefault: true }).returning();
   const [customer] = await db.insert(customers).values({ organizationId: ctx.organizationId, code: `CUS-${tag}`, name: "Customer" }).returning();
-  const [customerLocation] = await db.insert(customerLocations).values({ gpsLatitude: -8.3, gpsLongitude: 35.3,  organizationId: ctx.organizationId, customerId: customer.id, name: "Location", country: "Tanzania", isDefault: true }).returning();
+  const [customerLocation] = await db.insert(customerLocations).values({ ...TEST_SITE_POSITION, organizationId: ctx.organizationId, customerId: customer.id, name: "Location", isDefault: true }).returning();
   const [formulation] = await db.insert(formulations).values({ organizationId: ctx.organizationId, code: `FOR-${tag}`, name: "Formulation" }).returning();
   const factors = await upsertFacilityEmissionFactors(ctx, { facilityId: facility.id, expectedVersion: null, dieselKgCo2ePerLitre: 2, gridKgCo2ePerKwh: 1, roadFreightKgCo2ePerTonneKm: 1, sourceNote: null });
   return { ctx, facility, reactor, bin, supplier, supplierLocation, customer, customerLocation, formulation, feedstockType, factors };
@@ -125,8 +125,8 @@ it("bin and feedstock type archives and restores check and increment versions", 
 
 it("creating and promoting defaults increments every demoted sibling", async () => {
   const f = await seed();
-  const supplierNew = await createSupplierLocation(f.ctx, { gpsLatitude: -8.3, gpsLongitude: 35.3,  supplierId: f.supplier.id, country: "Kenya", isDefault: true });
-  const customerNew = await createCustomerLocation(f.ctx, { gpsLatitude: -8.3, gpsLongitude: 35.3,  customerId: f.customer.id, name: "New", country: "Kenya", isDefault: true });
+  const supplierNew = await createSupplierLocation(f.ctx, { ...TEST_SITE_POSITION, country: "Kenya", supplierId: f.supplier.id, isDefault: true });
+  const customerNew = await createCustomerLocation(f.ctx, { ...TEST_SITE_POSITION, country: "Kenya", customerId: f.customer.id, name: "New", isDefault: true });
   const [supplierOld] = await db.select().from(supplierLocations).where(and(eq(supplierLocations.id, f.supplierLocation.id), eq(supplierLocations.organizationId, f.ctx.organizationId)));
   const [customerOld] = await db.select().from(customerLocations).where(and(eq(customerLocations.id, f.customerLocation.id), eq(customerLocations.organizationId, f.ctx.organizationId)));
   expect(supplierOld.version).toBe(f.supplierLocation.version + VERSION_STEP);

@@ -1,4 +1,4 @@
-import {
+import { TEST_SITE_POSITION,
   ensureTestOrg,
   makeTestOrgContext,
   TEST_ORG_ID,
@@ -203,7 +203,7 @@ async function createFixture(): Promise<Fixture> {
   const isometricFeedstockTypeId = `${ISOMETRIC_FEEDSTOCK_TYPE_ID}_${runId}`;
   const [facility] = await db
     .insert(facilities)
-    .values({ country: "Tanzania", gpsLatitude: -8.3, gpsLongitude: 35.3,  timezone: "UTC",
+    .values({ ...TEST_SITE_POSITION, timezone: "UTC",
       organizationId: TEST_ORG_ID,
       name: `Boundary Facility ${runId}`,
       code: `FAC-BD-${runId}`,

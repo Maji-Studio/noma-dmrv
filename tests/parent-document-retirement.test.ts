@@ -43,7 +43,7 @@ import {
   insertManagedDocument,
   insertRemovalSnapshot,
 } from "./helpers/document-retirement";
-import {
+import { TEST_SITE_POSITION,
   ensureTestOrg,
   makeTestOrgContext,
   TEST_ORG_ID,
@@ -212,7 +212,7 @@ describe("parent document retirement", () => {
     const tag = crypto.randomUUID().slice(0, 8);
     const [facility] = await db
       .insert(facilities)
-      .values({ country: "Tanzania", gpsLatitude: -8.3, gpsLongitude: 35.3,  timezone: "UTC",
+      .values({ ...TEST_SITE_POSITION, timezone: "UTC",
         organizationId: TEST_ORG_ID,
         code: `FAC-DEL-${tag}`,
         name: `Delivery evidence facility ${tag}`,
@@ -229,9 +229,7 @@ describe("parent document retirement", () => {
     const [location] = await db
       .insert(customerLocations)
       .values({
-        country: "Tanzania",
-        gpsLatitude: -8.3,
-        gpsLongitude: 35.3,
+        ...TEST_SITE_POSITION,
         organizationId: TEST_ORG_ID,
         customerId: customer.id,
         name: `Delivery evidence site ${tag}`,
@@ -683,7 +681,7 @@ describe("parent document retirement", () => {
     const tag = crypto.randomUUID().slice(0, 8);
     const [facility] = await db
       .insert(facilities)
-      .values({ country: "Tanzania", gpsLatitude: -8.3, gpsLongitude: 35.3,  timezone: "UTC",
+      .values({ ...TEST_SITE_POSITION, timezone: "UTC",
         organizationId: TEST_ORG_ID,
         code: `FAC-DERIVED-${tag}`,
         name: `Derived leg facility ${tag}`,
@@ -795,7 +793,7 @@ describe("parent document retirement", () => {
     const tag = crypto.randomUUID().slice(0, 8);
     const [facility] = await db
       .insert(facilities)
-      .values({ country: "Tanzania", gpsLatitude: -8.3, gpsLongitude: 35.3,  timezone: "UTC",
+      .values({ ...TEST_SITE_POSITION, timezone: "UTC",
         organizationId: TEST_ORG_ID,
         code: `FAC-NEST-${tag}`,
         name: `Nested evidence facility ${tag}`,

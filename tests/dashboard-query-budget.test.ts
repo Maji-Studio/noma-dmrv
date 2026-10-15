@@ -24,7 +24,7 @@ import {
 import { getDashboardOverview } from "@/data-access/dashboard-overview";
 import { getOnboardingStatus } from "@/data-access/onboarding";
 import { deleteOutputFacilityFixtures } from "./helpers/output-contract-fixtures";
-import {
+import { TEST_SITE_POSITION,
   ensureTestOrg,
   makeTestOrgContext,
   TEST_ORG_ID,
@@ -60,7 +60,7 @@ beforeAll(async () => {
   const tag = crypto.randomUUID().slice(0, 8);
   const [facility] = await db
     .insert(facilities)
-    .values({ country: "Tanzania", gpsLatitude: -8.3, gpsLongitude: 35.3,  timezone: "UTC", organizationId: TEST_ORG_ID, code: `QB-F-${tag}`, name: `Query budget ${tag}` })
+    .values({ ...TEST_SITE_POSITION, timezone: "UTC", organizationId: TEST_ORG_ID, code: `QB-F-${tag}`, name: `Query budget ${tag}` })
     .returning({ id: facilities.id });
   const [feedstockType] = await db
     .insert(feedstockTypes)

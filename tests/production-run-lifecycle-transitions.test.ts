@@ -5,7 +5,7 @@ import { inArray } from "drizzle-orm";
 import { db } from "@/db";
 import { facilities, productionRuns, reactors, storageLocations } from "@/db/schema";
 import { updateProductionRun } from "@/data-access/production-runs";
-import {
+import { TEST_SITE_POSITION,
   ensureTestOrg,
   makeTestOrgContext,
   TEST_ORG_ID,
@@ -40,7 +40,7 @@ describe("updateProductionRun terminal to running", () => {
       const tag = crypto.randomUUID().slice(0, 8).toUpperCase();
       const [facility] = await db
         .insert(facilities)
-        .values({ country: "Tanzania", gpsLatitude: -8.3, gpsLongitude: 35.3,  timezone: "UTC",
+        .values({ ...TEST_SITE_POSITION, timezone: "UTC",
           organizationId: TEST_ORG_ID,
           code: `FAC-REOPEN-${tag}`,
           name: `Reopen Facility ${tag}`,

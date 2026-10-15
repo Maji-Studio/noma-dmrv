@@ -12,15 +12,15 @@ vi.mock("@/data-access/code-generator", () => ({
   CODE_CONFLICT_MESSAGES: { customer: "Duplicate customer" },
   withAutoCode: (_ctx: unknown, _prefix: unknown, _table: unknown, _column: unknown, _facility: unknown, write: (code: string) => unknown) => write("TEST-001"),
 }));
-import { createCustomerFn, createCustomerWithLocationsFn } from "./customers";
-import { createSupplierFn, createSupplierWithLocationsFn } from "./suppliers";
+import { createCustomerWithLocationsFn } from "./customers";
+import { createSupplierWithLocationsFn } from "./suppliers";
 
 beforeEach(() => {
   mocks.customer.mockReset().mockResolvedValue({ customer: { id: "customer" }, locations: [{ id: "location" }] });
   mocks.supplier.mockReset().mockResolvedValue({ id: "supplier" });
 });
 
-it.each([createCustomerFn, createCustomerWithLocationsFn, createSupplierFn, createSupplierWithLocationsFn])(
+it.each([createCustomerWithLocationsFn, createSupplierWithLocationsFn])(
   "refuses empty or missing locations at every callable create boundary", async (action) => {
     const parent = { customer: { name: "Customer" }, supplier: { name: "Supplier" } };
     for (const input of [parent, { ...parent, locations: [] }, { name: "Old bare create" }]) {
@@ -31,10 +31,10 @@ it.each([createCustomerFn, createCustomerWithLocationsFn, createSupplierFn, crea
   },
 );
 
-it("routes both aliases through the composite writer", async () => {
+it("creates both parties through their composite writers", async () => {
   const locations = [{ name: "Site", country: "Tanzania", gpsLatitude: 0, gpsLongitude: 0, isDefault: true }];
-  expect(await createCustomerFn({ customer: { name: "Customer" }, locations })).toMatchObject({ success: true, data: { id: "customer" } });
-  expect(await createSupplierFn({ supplier: { name: "Supplier" }, locations })).toMatchObject({ success: true, data: { id: "supplier" } });
+  expect(await createCustomerWithLocationsFn({ customer: { name: "Customer" }, locations })).toMatchObject({ success: true, data: { customer: { id: "customer" } } });
+  expect(await createSupplierWithLocationsFn({ supplier: { name: "Supplier" }, locations })).toMatchObject({ success: true, data: { id: "supplier" } });
   expect(mocks.customer.mock.calls[0][1].locations).toHaveLength(1);
   expect(mocks.supplier.mock.calls[0][1].locations).toHaveLength(1);
 });

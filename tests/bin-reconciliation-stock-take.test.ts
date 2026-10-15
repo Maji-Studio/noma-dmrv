@@ -11,7 +11,7 @@ import {
   users,
 } from "@/db/schema";
 import { getStorageLocationWithFacility } from "@/data-access/storage-locations";
-import {
+import { TEST_SITE_POSITION,
   ensureTestOrg,
   makeTestOrgContext,
   TEST_ORG_ID,
@@ -66,7 +66,7 @@ describe("bin reconciliation stock-take integrity", () => {
     const tag = crypto.randomUUID().slice(0, 8).toUpperCase();
     const [facility] = await db
       .insert(facilities)
-      .values({ country: "Tanzania", gpsLatitude: -8.3, gpsLongitude: 35.3,  timezone: "UTC",
+      .values({ ...TEST_SITE_POSITION, timezone: "UTC",
         organizationId: TEST_ORG_ID,
         code: `FAC-TAKE-${tag}`,
         name: `Stock Take Facility ${tag}`,

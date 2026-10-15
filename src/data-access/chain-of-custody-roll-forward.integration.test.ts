@@ -1,3 +1,4 @@
+import { TEST_SITE_POSITION } from "../../tests/helpers/test-org";
 /** Real PostgreSQL query tests in session-local TEMP tables, always rolled back.
  * Same harness as delivery-allocation-provenance.integration.test.ts.
  */
@@ -49,7 +50,7 @@ describe.skipIf(!available)("run roll-forward PostgreSQL queries", () => {
     vi.spyOn(db, "transaction").mockImplementation(async callback => callback(tx));
     vi.spyOn(db, "select").mockImplementation(executor.select.bind(executor));
 
-    await executor.insert(schema.facilities).values({ country: "Tanzania", gpsLatitude: -8.3, gpsLongitude: 35.3,  timezone: "UTC", ...org, id: ids.facility, code: "F", name: "Fixture" });
+    await executor.insert(schema.facilities).values({ ...TEST_SITE_POSITION, timezone: "UTC", ...org, id: ids.facility, code: "F", name: "Fixture" });
     await executor.insert(schema.storageLocations).values({ ...org, id: ids.bin, facilityId: ids.facility, code: "BIN", name: "Fixture bin", type: "product_bin" });
     // `outsideRun` is not a batch member but shares the shipped product layer.
     const [outputBin] = await executor.insert(schema.storageLocations).values({

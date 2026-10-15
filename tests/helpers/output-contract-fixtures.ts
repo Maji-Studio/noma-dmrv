@@ -1,3 +1,4 @@
+import { TEST_SITE_POSITION } from "./test-org";
 import type { OrgContext } from "@/lib/auth/server";
 import { randomUUID } from "node:crypto";
 import { eq, inArray, type SQL } from "drizzle-orm";
@@ -99,9 +100,7 @@ async function orderFixture(executor: Executor, input: OrderFixture): Promise<Or
   let customerLocationId = input.customerLocationId;
   if (customerLocationId === undefined) {
     const [location] = await executor.insert(customerLocations).values({
-      country: "Tanzania",
-      gpsLatitude: -8.3,
-      gpsLongitude: 35.3,
+      ...TEST_SITE_POSITION,
       organizationId: input.organizationId, customerId: input.customerId,
       name: `E2E Order destination ${randomUUID()}`,
     }).returning({ id: customerLocations.id });

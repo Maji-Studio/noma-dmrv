@@ -19,6 +19,7 @@ import { cleanupFixture } from "./fixture";
 import { DELIVERY_BIN_CODE, DELIVERY_ORDER_CODE, DELIVERY_SPLIT_BIN_CODE, FACILITY_TIME_ZONE, type DeliveryCaseId } from "./config";
 import { deliveryDays, type DeliveryDatabaseSnapshot, type DeliveryTarget } from "./score-delivery";
 
+const FIXTURE_GPS = { gpsLatitude: -8.3, gpsLongitude: 35.3 } as const;
 const DELIVERY_SCOPES = ["deliveries:read", "deliveries:write", "orders:read", "customers:read",
   "storage-locations:read", "facilities:read", "formulations:read", "biochar-products:read"];
 const CUSTOMER_CODE = "CUS-X";
@@ -66,7 +67,7 @@ export async function seedDeliveryFixture(caseId: DeliveryCaseId, now = new Date
     await db.update(facilities).set({ timezone: FACILITY_TIME_ZONE, archivedAt: null })
       .where(and(eq(facilities.organizationId, org), eq(facilities.id, fixture.facilityId)));
     const customer = await createCustomer(fixture.ctx, { code: CUSTOMER_CODE, name: "Evaluation customer" });
-    const location = await createCustomerLocation(fixture.ctx, { country: "Tanzania", gpsLatitude: -8.3, gpsLongitude: 35.3,  customerId: customer.id, name: "Evaluation destination",
+    const location = await createCustomerLocation(fixture.ctx, { country: "Tanzania", ...FIXTURE_GPS, customerId: customer.id, name: "Evaluation destination",
       isDefault: true, distanceFromFacilityKm: LOCATION_DISTANCE_KM, distanceSource: "manual" });
     const formulation = await createFormulation(fixture.ctx, { code: FORMULATION_CODE, name: "Evaluation pure biochar", biocharRatio: PURE_BIOCHAR_RATIO });
     const source = await createStorageLocation(fixture.ctx, { code: SOURCE_BIN_CODE, name: SOURCE_BIN_CODE,

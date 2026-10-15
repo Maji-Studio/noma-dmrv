@@ -1,3 +1,4 @@
+import { TEST_SITE_POSITION } from "./test-org";
 import { randomUUID } from 'node:crypto';
 import type { db as database } from '@/db';
 import { facilities, formulations, formulationIngredients, feedstockTypes, storageLocations, reactors, productionRuns, feedstocks, productionRunFeedstocks, productionRunFeedstockDraws, customers, customerLocations, users, organizations } from '@/db/schema';
@@ -11,7 +12,7 @@ export async function seedOutputStockParents(db: typeof database, options: { org
   if (!options.organizationId) await db.insert(organizations).values({ id: organizationId, name: `E2E FIFO ${tag}`, slug: `e2e-fifo-${tag.toLowerCase()}` });
   if (!options.userId) await db.insert(users).values({ id: userId, name: 'E2E FIFO operator', email: `fifo-${tag.toLowerCase()}@e2e.local`, emailVerified: true });
   const ctx: OrgContext = { organizationId, userId, orgRole: 'owner', isPlatformAdmin: false };
-  const [facility] = await db.insert(facilities).values({ country: "Tanzania", gpsLatitude: -8.3, gpsLongitude: 35.3,  timezone: "UTC", organizationId, code: `E2E-FIFO-F-${tag}`, name: `E2E FIFO ${tag}` }).returning();
+  const [facility] = await db.insert(facilities).values({ ...TEST_SITE_POSITION, timezone: "UTC", organizationId, code: `E2E-FIFO-F-${tag}`, name: `E2E FIFO ${tag}` }).returning();
   const [recipe] = await db.insert(formulations).values({ organizationId, code: `E2E-FIFO-M-${tag}`, name: `E2E FIFO mix ${tag}`, biocharRatio: 0.8 }).returning();
   const [pure] = await db.insert(formulations).values({ organizationId, code: `E2E-FIFO-P-${tag}`, name: `E2E Pure ${tag}`, biocharRatio: 1 }).returning();
   const [ingredientType] = await db.insert(feedstockTypes).values({ organizationId, code: `E2E-FIFO-I-${tag}`, name: `E2E Ingredient ${tag}`, category: 'compost', usage: 'blend' }).returning();
@@ -31,6 +32,6 @@ export async function seedOutputStockParents(db: typeof database, options: { org
   await db.insert(productionRunFeedstockDraws).values(runs.map(run => ({ organizationId, productionRunId: run.id, storageLocationId: fuelBin.id, wetMassKg: 3000 })));
   await db.insert(productionRunFeedstocks).values(runs.map(run => ({ organizationId, productionRunId: run.id, feedstockId: intake.id, wetMassUsedKg: 3000 })));
   const [customer] = await db.insert(customers).values({ organizationId, code: `E2E-FIFO-C-${tag}`, name: `E2E Customer ${tag}` }).returning();
-  const [location] = await db.insert(customerLocations).values({ gpsLatitude: -8.3, gpsLongitude: 35.3,  organizationId, customerId: customer.id, name: `E2E Site ${tag}`, country: "CH" }).returning();
+  const [location] = await db.insert(customerLocations).values({ ...TEST_SITE_POSITION, country: "CH", organizationId, customerId: customer.id, name: `E2E Site ${tag}`, }).returning();
   return { location, tag, ctx, facility, recipe, pure, ingredientType, ingredient, source, bin, runs, customer };
 }

@@ -26,7 +26,7 @@ import {
   buildDashboardStructuralGaps,
   loadDashboardStructuralGapCounts,
 } from "@/data-access/dashboard-structural-gaps";
-import {
+import { TEST_SITE_POSITION,
   ensureTestOrg,
   makeTestOrgContext,
   TEST_ORG_ID,
@@ -93,9 +93,7 @@ beforeAll(async () => {
       .insert(facilities)
       .values([
         {
-          country: "Tanzania",
-          gpsLatitude: -8.3,
-          gpsLongitude: 35.3,
+          ...TEST_SITE_POSITION,
           organizationId: TEST_ORG_ID,
           timezone: "UTC",
           code: `FAC-DG-GAP-${tag}`,

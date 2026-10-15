@@ -1,3 +1,4 @@
+import { TEST_SITE_POSITION } from "./helpers/test-org";
 /** Real handlers and Postgres. Written for reviewer execution; never run by the implementation agent. */
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/db";
@@ -25,7 +26,7 @@ async function locations(supplierId: string, query = "", key = a.key) {
 
 describe("facility filters and owned supplier locations", { timeout: LOOKUP_SUITE_TIMEOUT_MS }, () => {
   it("narrows storage lists and id/code gets to an org-checked facility", async () => {
-    const [secondFacility] = await db.insert(facilities).values({ country: "Tanzania", gpsLatitude: -8.3, gpsLongitude: 35.3,  timezone: "UTC", organizationId: a.ctx.organizationId, code: "FAC-SECOND", name: "Second facility" }).returning();
+    const [secondFacility] = await db.insert(facilities).values({ ...TEST_SITE_POSITION, timezone: "UTC", organizationId: a.ctx.organizationId, code: "FAC-SECOND", name: "Second facility" }).returning();
     const bins = await db.insert(storageLocations).values([a.facilityId, secondFacility.id].map((facilityId, index) => ({
       organizationId: a.ctx.organizationId, facilityId, code: `LOOKUP-BIN-${index}`, name: `Lookup bin ${index}`, type: "feedstock_bin" as const,
     }))).returning();
@@ -56,9 +57,9 @@ describe("facility filters and owned supplier locations", { timeout: LOOKUP_SUIT
     const owned = await db.insert(supplierLocations).values([
       { country: "Tanzania",  organizationId: a.ctx.organizationId, supplierId: a.supplierId, name: "Lookup orchard", gpsLatitude: 0, gpsLongitude: 32, address: "Hidden", createdAt: new Date("2026-10-08T12:00:00Z") },
       { country: "Tanzania",  organizationId: a.ctx.organizationId, supplierId: a.supplierId, name: "Lookup forest", gpsLatitude: 0, gpsLongitude: 0, createdAt: new Date("2026-10-08T12:00:01Z") },
-      { country: "Tanzania", gpsLatitude: -8.3, gpsLongitude: 35.3,  organizationId: a.ctx.organizationId, supplierId: a.supplierId, name: "Literal %_\\ location", createdAt: new Date("2026-10-08T12:00:02Z") },
+      { ...TEST_SITE_POSITION, organizationId: a.ctx.organizationId, supplierId: a.supplierId, name: "Literal %_\\ location", createdAt: new Date("2026-10-08T12:00:02Z") },
     ]).returning();
-    await db.insert(supplierLocations).values({ country: "Tanzania", gpsLatitude: -8.3, gpsLongitude: 35.3,  organizationId: a.ctx.organizationId, supplierId: otherSupplier.id, name: "Lookup foreign parent" });
+    await db.insert(supplierLocations).values({ ...TEST_SITE_POSITION, organizationId: a.ctx.organizationId, supplierId: otherSupplier.id, name: "Lookup foreign parent" });
     const firstResponse = await locations(a.supplierId, `?q=lookup&limit=${PAGE_LIMIT}`);
     expect(firstResponse.status).toBe(200);
     const first = await firstResponse.json();

@@ -1,3 +1,4 @@
+import { TEST_SITE_POSITION } from "./helpers/test-org";
 import { masterDataVersion } from "./helpers/master-data-version";
 /**
  * Expected-version conflict check (issue #768, F03).
@@ -90,11 +91,10 @@ async function seedFixture(): Promise<Fixture> {
 
   const [facility] = await db
     .insert(facilities)
-    .values({ gpsLatitude: -8.3, gpsLongitude: 35.3,  timezone: "UTC",
+    .values({ ...TEST_SITE_POSITION, timezone: "UTC",
       organizationId,
       code: `E2E-EXPV-F-${tag}`,
       name: `E2E Expected version ${tag}`,
-      country: "Tanzania",
     })
     .returning({ id: facilities.id });
 

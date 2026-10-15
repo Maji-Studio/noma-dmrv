@@ -1,3 +1,4 @@
+import { TEST_SITE_POSITION } from "../../helpers/test-org";
 import { deleteOutputFacilityFixtures, outputProductFixtureValues, deleteOutputProductFixtures } from "../../helpers/output-contract-fixtures";
 import { DEC_ORG_ID } from "@/db/org-defaults";
 /**
@@ -98,9 +99,7 @@ export async function createTestFacility(
     };
 
     await db.insert(schema.facilities).values({
-      country: "Tanzania",
-      gpsLatitude: -8.3,
-      gpsLongitude: 35.3,
+      ...TEST_SITE_POSITION,
       organizationId: DEC_ORG_ID,
       id: facility.id,
       code: facility.code,

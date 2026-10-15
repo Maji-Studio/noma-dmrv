@@ -1,3 +1,4 @@
+import { TEST_SITE_POSITION } from "./helpers/test-org";
 /**
  * Feedstock loss idempotency against a real database (issue #773).
  *
@@ -65,7 +66,7 @@ async function seedFeedstockBin() {
 
   const [facility] = await db
     .insert(facilities)
-    .values({ country: "Tanzania", gpsLatitude: -8.3, gpsLongitude: 35.3,  timezone: "UTC",
+    .values({ ...TEST_SITE_POSITION, timezone: "UTC",
       organizationId,
       code: `E2E-LOSS-F-${tag}`,
       name: `E2E Loss facility ${tag}`,

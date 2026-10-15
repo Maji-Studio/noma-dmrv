@@ -1,3 +1,4 @@
+import { TEST_SITE_POSITION } from "./helpers/test-org";
 import { masterDataVersion } from "./helpers/master-data-version";
 /**
  * The partial-update contract against the real database (issue #770).
@@ -86,7 +87,7 @@ async function seedFixture(): Promise<Fixture> {
 
   const [facility] = await db
     .insert(facilities)
-    .values({ country: "Tanzania", gpsLatitude: -8.3, gpsLongitude: 35.3,  timezone: "UTC",
+    .values({ ...TEST_SITE_POSITION, timezone: "UTC",
       organizationId,
       code: `E2E-PC-F-${tag}`,
       name: `E2E Patch contract ${tag}`,
@@ -114,8 +115,8 @@ async function seedFixture(): Promise<Fixture> {
     .returning({ id: suppliers.id });
 
   await db.insert(supplierLocations).values({
-    organizationId, supplierId: supplier.id, country: "Tanzania",
-    gpsLatitude: -8.3, gpsLongitude: 35.3, isDefault: true,
+    organizationId, supplierId: supplier.id, ...TEST_SITE_POSITION,
+    isDefault: true,
     distanceFromFacilityKm: SUPPLIER_DISTANCE_KM, distanceSource: "manual",
   });
 

@@ -9,7 +9,7 @@ import {
 } from "@/db/schema/certification";
 import { documents } from "@/db/schema/documentation";
 import { facilities } from "@/db/schema/facilities";
-import {
+import { TEST_SITE_POSITION,
   ensureTestOrg,
   makeTestOrgContext,
   TEST_ORG_ID,
@@ -79,7 +79,7 @@ beforeAll(async () => {
     role: "admin",
     emailVerified: true,
   });
-  await db.insert(facilities).values({ country: "Tanzania", gpsLatitude: -8.3, gpsLongitude: 35.3,  timezone: "UTC",
+  await db.insert(facilities).values({ ...TEST_SITE_POSITION, timezone: "UTC",
     id: FACILITY_ID,
     organizationId: TEST_ORG_ID,
     name: `Superseded Facility ${FACILITY_ID.slice(0, 8)}`,

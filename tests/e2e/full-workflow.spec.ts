@@ -1,3 +1,4 @@
+import { TEST_SITE_POSITION } from "../helpers/test-org";
 import { insertEstablishedOutputApplicationFixture as insertOutputApplicationFixture } from "../helpers/output-contract-fixtures";
 import { deleteOutputApplicationFixtures } from "../helpers/output-contract-fixtures";
 import { preparePureOutputProductFixture, outputProductFixtureValues, outputOrderFixtureValues, insertEstablishedOutputDeliveryFixture as insertOutputDeliveryFixture, deleteOutputDeliveryFixtures, deleteOutputProductFixtures, deleteOutputFacilityFixtures } from "../helpers/output-contract-fixtures";
@@ -107,13 +108,12 @@ async function createFullWorkflowData(): Promise<TestWorkflowData> {
     };
 
     // 1. Create facility (infrastructure foundation)
-    await tx.insert(schema.facilities).values({ gpsLatitude: -8.3, gpsLongitude: 35.3,  timezone: "UTC",
+    await tx.insert(schema.facilities).values({ ...TEST_SITE_POSITION, timezone: "UTC",
         organizationId: DEC_ORG_ID,
       id: ids.facility,
       code: codes.facility,
       name: `E2E Test Facility ${testRunId}`,
       location: "Test Location",
-      country: "Tanzania",
       durabilityOption: "200_year",
     });
 

@@ -127,8 +127,8 @@ export const customerLocations = pgTable(
       sql`${table.gpsLongitude} is null or (${table.gpsLongitude} >= -180 and ${table.gpsLongitude} <= 180)`
     ),
     check(
-      'customer_locations_distance_from_facility_km_non_negative',
-      sql`${table.distanceFromFacilityKm} is null or ${table.distanceFromFacilityKm} >= 0`
+      'customer_locations_distance_from_facility_km_positive',
+      sql`${table.distanceFromFacilityKm} is null or ${table.distanceFromFacilityKm} > 0`
     ),
     check(
       'customer_locations_default_soil_temperature_c_range',
@@ -186,8 +186,8 @@ export const supplierLocations = pgTable(
       sql`${table.gpsLongitude} is null or (${table.gpsLongitude} >= -180 and ${table.gpsLongitude} <= 180)`
     ),
     check(
-      'supplier_locations_distance_from_facility_km_non_negative',
-      sql`${table.distanceFromFacilityKm} is null or ${table.distanceFromFacilityKm} >= 0`
+      'supplier_locations_distance_from_facility_km_positive',
+      sql`${table.distanceFromFacilityKm} is null or ${table.distanceFromFacilityKm} > 0`
     ),
   ]
 );

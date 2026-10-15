@@ -82,15 +82,6 @@ export async function getSupplierByIdFn(
 // Supplier Create Operations
 // ============================================
 
-/**
- * Create a new supplier
- */
-export async function createSupplierFn(
-  data: z.infer<typeof createSupplierWithLocationsSchema>
-): Promise<ActionResult<Supplier>> {
-  return createSupplierWithLocationsFn(data);
-}
-
 export async function createSupplierWithLocationsFn(
   data: z.infer<typeof createSupplierWithLocationsSchema>
 ): Promise<ActionResult<Supplier>> {

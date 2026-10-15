@@ -27,7 +27,7 @@ import {
   suppliers,
   transportLegs,
 } from "@/db/schema";
-import {
+import { TEST_SITE_POSITION,
   ensureTestOrg,
   makeTestOrgContext,
   TEST_ORG_ID,
@@ -67,27 +67,21 @@ async function createFixture(): Promise<Fixture> {
       .insert(facilities)
       .values([
         {
-          country: "Tanzania",
-          gpsLatitude: -8.3,
-          gpsLongitude: 35.3,
+          ...TEST_SITE_POSITION,
           organizationId: TEST_ORG_ID,
           timezone: "UTC",
           code: `FAC-SRA-${tag}`,
           name: `Storage Reference Atomicity Facility ${tag}`,
         },
         {
-          country: "Tanzania",
-          gpsLatitude: -8.3,
-          gpsLongitude: 35.3,
+          ...TEST_SITE_POSITION,
           organizationId: TEST_ORG_ID,
           timezone: "UTC",
           code: `FAC-SRA-TARGET-${tag}`,
           name: `Storage Reference Atomicity Target ${tag}`,
         },
         {
-          country: "Tanzania",
-          gpsLatitude: -8.3,
-          gpsLongitude: 35.3,
+          ...TEST_SITE_POSITION,
           organizationId: TEST_ORG_ID,
           timezone: "UTC",
           code: `FAC-SRA-ARCH-${tag}`,

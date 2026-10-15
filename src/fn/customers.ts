@@ -119,16 +119,7 @@ export async function getCustomerLocationsFn(
 // Customer Create Operations
 // ============================================
 
-/**
- * Create a new customer
- */
-export async function createCustomerFn(
-  data: z.infer<typeof createCustomerWithLocationsSchema>
-): Promise<ActionResult<Customer>> {
-  const result = await createCustomerWithLocationsFn(data);
-  return result.success ? { success: true, data: result.data.customer } : result;
-}
-
+/** Create the customer and its locations in one transaction; any failure rolls back both. */
 export async function createCustomerWithLocationsFn(
   data: z.infer<typeof createCustomerWithLocationsSchema>
 ): Promise<ActionResult<CreatedCustomerWithLocations>> {
