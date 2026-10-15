@@ -182,13 +182,9 @@ export interface EvidenceTarget {
 }
 
 /**
- * A named exception for a provider key that is not stable. Where one (group,
- * blueprint, input) triple is declared by MORE THAN ONE template component,
- * Certify exposes no stable per-component semantic key, so the component
- * display name (compared trimmed and lowercased) is the only discriminator.
- * Each named component gets its own source fact; resolveDatapointSource fails
- * closed on any other name. The data-driven replacement is tracked in
- * docs/open-questions-isometric.md (template-component-source-wizard).
+ * Historical labels document a shared triple's candidate facts. Runtime source
+ * selection uses the component ID's reviewed automaticSource contract; names
+ * never authorize a binding. These labels also preserve the mapping revision.
  */
 export interface ComponentDisambiguationRule {
   name: string;
@@ -302,8 +298,7 @@ const REPORTED_TONNE_KM: DatapointContract = {
 // The Dark Earth removal template declares TWO pyrolysis `fuel_usage_by_volume`
 // components: "Generator diesel usage" (generator + preprocessing, the
 // "summarized" figure) and "Startup diesel usage" (reactor-startup / plant
-// diesel). Names MUST match the template component display names
-// (case/whitespace-insensitive).
+// diesel). These names document the original template; component contracts select the source.
 export const PYROLYSIS_DIESEL_SPLIT: ComponentDisambiguationRule = {
   name: "pyrolysis-diesel-split",
   sources: {

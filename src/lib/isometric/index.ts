@@ -24,6 +24,7 @@ export {
 } from "./feedstock-types";
 export {
   createDatapoint,
+  getDatapoint,
   patchDatapoint,
   createGhgEntry,
   deleteGhgEntry,

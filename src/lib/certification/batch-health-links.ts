@@ -10,7 +10,8 @@ import {
   FEEDSTOCK_TYPE_EDIT_LABEL,
 } from "@/lib/entity-deep-link";
 import { sampleCreateHref } from "@/lib/sample-create-intent";
-import { certificationEmissionEstimatesHref } from "./links";
+import { creditBatchRemovalTemplateHref } from "@/lib/credit-batch-links";
+import { certificationEmissionEstimatesHref, certificationRemovalTemplatesHref } from "./links";
 
 export interface BatchHealthFixLink {
   label: string;
@@ -26,6 +27,8 @@ export function fallbackBatchHealthFixTarget(
   key: BatchHealthCheckKey,
 ): BatchHealthFixTarget {
   switch (key) {
+    case "template":
+      return "certificationTemplates";
     case "carbon":
       // Carbon & durability inputs (organic carbon %, H:Corg ratio) are lab
       // sample measurements — they live on the run's samples, NOT the batch
@@ -71,6 +74,14 @@ export function batchHealthFixLinkFor(
     return params.toString();
   };
   switch (target) {
+    case "certificationTemplates":
+      return { label: "Review Removal templates", href: certificationRemovalTemplatesHref(facilityId) };
+    case "creditBatchTemplate":
+      return creditBatchId
+        ? { label: "Switch template", href: creditBatchRemovalTemplateHref(creditBatchId, facilityId) }
+        : { label: "Review credit batches", href: `/credit-batches?${query(undefined, false)}` };
+    case "templateLineReview":
+      return { label: "Review template lines", href: certificationRemovalTemplatesHref(facilityId) };
     case "batchDetails":
       return {
         label: "Edit details",

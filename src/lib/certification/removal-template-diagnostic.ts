@@ -1,3 +1,4 @@
+import type { LineSources, LineContract } from "@/lib/isometric/template-observations/line-sources";
 import type {
   IsometricComponentBlueprint,
   IsometricGhgEntryTemplate,
@@ -123,6 +124,7 @@ export interface RemovalTemplateDiagnosticModel {
 }
 
 export interface BuildRemovalTemplateDiagnosticArgs {
+  lineSources?: LineSources;
   template: IsometricGhgEntryTemplate;
   blueprints?: readonly IsometricComponentBlueprint[];
   compilation?: RemovalTemplateDiagnosticCompilation | null;
@@ -219,6 +221,7 @@ function inputRaw(args: {
 }
 
 function buildOrdinaryInputs(args: {
+  contract?: LineContract;
   template: IsometricGhgEntryTemplate;
   group: IsometricGhgEntryTemplate["groups"][number];
   component: IsometricGhgEntryTemplate["groups"][number]["components"][number];
@@ -241,6 +244,7 @@ function buildOrdinaryInputs(args: {
       groupKey: group.key,
       componentBlueprintKey: component.blueprint_key,
       componentDisplayName: component.display_name,
+      lineContract: args.contract,
       inputKey: input.input_key,
     });
     const expected = {
@@ -316,7 +320,7 @@ function buildOrdinaryInputs(args: {
       group.key,
       component.blueprint_key,
       input.input_key,
-      component.display_name,
+      args.contract,
     );
     if (periodTuple) {
       return {
@@ -364,7 +368,7 @@ function buildOrdinaryInputs(args: {
     let resolvedSource: string;
     try {
       resolvedSource = String(
-        resolveDatapointSource(mapping, component.display_name),
+        resolveDatapointSource(mapping, args.contract),
       );
     } catch {
       return {
@@ -410,6 +414,7 @@ function buildOrdinaryInputs(args: {
 }
 
 function buildSequestrationInputs(args: {
+  contract?: LineContract;
   template: IsometricGhgEntryTemplate;
   group: IsometricGhgEntryTemplate["groups"][number];
   component: IsometricGhgEntryTemplate["groups"][number]["components"][number];
@@ -474,6 +479,7 @@ function buildSequestrationInputs(args: {
       groupKey: group.key,
       componentBlueprintKey: component.blueprint_key,
       componentDisplayName: component.display_name,
+      lineContract: args.contract,
       inputKey,
     });
 
@@ -603,12 +609,14 @@ export function buildRemovalTemplateDiagnostic(
       const blueprint = blueprintByKey.get(component.blueprint_key);
       const inputs = isSequestrationBlueprintFamily(component.blueprint_key)
         ? buildSequestrationInputs({
+            contract: args.lineSources?.[component.id],
             template: args.template,
             group,
             component,
             blueprint,
           })
         : buildOrdinaryInputs({
+            contract: args.lineSources?.[component.id],
             template: args.template,
             group,
             component,

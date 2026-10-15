@@ -1,3 +1,4 @@
+import { reviewedTemplateSources } from "../../../tests/helpers/template-line-sources";
 import { buildSubmissionLineageBlockers } from "./certify-lineage-blockers";
 import { deriveRequiredTransportCategories } from "./certify-transport-coverage";
 import { missingFeedstockTransportIds } from "@/lib/certification/submission-readiness";
@@ -5,7 +6,7 @@ import production from "../../../tests/fixtures/isometric/production-template-20
 import type { components as RegistryComponents } from "@/lib/isometric/generated/certify";
 import * as ghgEntry from "@/lib/isometric/transformers/ghg-entry";
 import { unsupportedTemplate } from "../../../tests/fixtures/isometric/unsupported-template";
-import { findUnbindableTemplateInputs, formatUnbindableTemplateInputsText } from "@/lib/isometric/template-binding-coverage";
+import { findUnbindableTemplateInputs as findCoverage, formatUnbindableTemplateInputsText } from "@/lib/isometric/template-binding-coverage";
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("./source-candidates", async (importOriginal) => ({
@@ -107,8 +108,9 @@ describe("buildRemovalSubmissionBuild", () => {
       } as never,
     );
 
-    expect(blocker).toMatch(/uses 200-year durability/i);
-    expect(blocker).toMatch(/biochar_sequestration_1000_year/);
+    expect(blocker).toBe(
+      `This facility uses 200-year durability, but the credit batch's Removal template uses an incompatible storage component (${CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR}). Switch the credit batch to a 200-year template or change the facility's durability tier.`,
+    );
   });
 
   it("does not accept the deprecated key for a newly configured 1,000-year template", () => {
@@ -130,8 +132,9 @@ describe("buildRemovalSubmissionBuild", () => {
       } as never,
     );
 
-    expect(blocker).toMatch(/incompatible storage component/i);
-    expect(blocker).toContain(DEPRECATED_SEQUESTRATION_BLUEPRINT_1000_YEAR);
+    expect(blocker).toBe(
+      `This facility uses 1000-year durability, but the credit batch's Removal template uses an incompatible storage component (${DEPRECATED_SEQUESTRATION_BLUEPRINT_1000_YEAR}). Switch the credit batch to a 1000-year template or change the facility's durability tier.`,
+    );
   });
 
   it("returns compile blockers instead of constructing transport for missing readiness", async () => {
@@ -140,7 +143,8 @@ describe("buildRemovalSubmissionBuild", () => {
       removalId: "rem-test-missing-readiness",
       ctx: {} as RemovalSubmissionContext,
       prepared: {
-        defaultTemplate: {
+        lineSources: {},
+        removalTemplate: {
           id: "rvt-test",
           display_name: "Test template",
           groups: [],
@@ -169,7 +173,8 @@ describe("buildRemovalSubmissionBuild", () => {
         submissionWarnings: [],
       } as unknown as RemovalSubmissionContext,
       prepared: {
-        defaultTemplate: {
+        lineSources: {},
+        removalTemplate: {
           id: "rvt-test",
           display_name: "Emissions-only template",
           groups: [],
@@ -265,7 +270,8 @@ describe("buildRemovalSubmissionBuild", () => {
         removalId: "rem-test-missing-readiness",
         ctx,
         prepared: {
-          defaultTemplate: { groups: [] } as never,
+        lineSources: {},
+          removalTemplate: { groups: [] } as never,
           blueprintsByKey: new Map(),
           externalProjectId: "prj-test-missing-readiness",
           allowPeriodInputStub: false,
@@ -294,7 +300,8 @@ describe("buildRemovalSubmissionBuild", () => {
         removalId: "rem-test-1",
         ctx,
         prepared: {
-          defaultTemplate: { groups: [] } as never,
+        lineSources: {},
+          removalTemplate: { groups: [] } as never,
           blueprintsByKey: new Map(),
           externalProjectId: "prj-test-1",
           allowPeriodInputStub: false,
@@ -322,7 +329,8 @@ describe("buildRemovalSubmissionBuild", () => {
       removalId: "rem-missing-feedstock",
       ctx,
       prepared: {
-        defaultTemplate: { groups: [] } as never,
+        lineSources: {},
+        removalTemplate: { groups: [] } as never,
         blueprintsByKey: new Map(),
         externalProjectId: "prj-test",
         allowPeriodInputStub: false,
@@ -340,7 +348,8 @@ describe("buildRemovalSubmissionBuild", () => {
     } as unknown as RemovalSubmissionContext;
     await expect(buildRemovalSubmissionBuild({
       orgCtx: TEST_ORG_CONTEXT, removalId: "rem-missing-proof", ctx,
-      prepared: { defaultTemplate: { groups: [] } as never, blueprintsByKey: new Map(),
+      prepared: {
+        lineSources: {}, removalTemplate: { groups: [] } as never, blueprintsByKey: new Map(),
         externalProjectId: "prj-test", allowPeriodInputStub: false, hasDurabilityComponents: false },
     })).rejects.toThrow("Delivery D-0012 has no proof of delivery");
   });
@@ -357,7 +366,8 @@ describe("buildRemovalSubmissionBuild", () => {
     await expect(buildRemovalSubmissionBuild({
       orgCtx: TEST_ORG_CONTEXT, removalId: "rem-missing-distance", ctx,
       prepared: {
-        defaultTemplate: { groups: [] } as never, blueprintsByKey: new Map(),
+        lineSources: {},
+        removalTemplate: { groups: [] } as never, blueprintsByKey: new Map(),
         externalProjectId: "prj-test", allowPeriodInputStub: false, hasDurabilityComponents: false,
       },
     })).rejects.toThrow("Delivery DL-1 has no positive transport distance");
@@ -507,6 +517,7 @@ describe("buildRemovalSubmissionBuild", () => {
       memberBatches: [{ id: "batch-1" }],
       facilityReferenceSoilTemperature: null,
     } as unknown as RemovalSubmissionContext;
+    ctx.lineSources = reviewedTemplateSources(template, { "component-safety-margin": { scope: "operating", automaticSource: "safety-margin", entryPolicy: "additive", origin: "reviewed" } });
     ctx.submissionLineageBlockers = buildSubmissionLineageBlockers(
       ctx.lineages, ["feedstock-without-leg"], {},
       deriveRequiredTransportCategories(template),
@@ -523,7 +534,8 @@ describe("buildRemovalSubmissionBuild", () => {
       removalId: "removal-1",
       ctx,
       prepared: {
-        defaultTemplate: template,
+        lineSources: reviewedTemplateSources(template, { "component-safety-margin": { scope: "operating", entryPolicy: "additive", automaticSource: "safety-margin", origin: "reviewed" } }),
+        removalTemplate: template,
         blueprintsByKey,
         externalProjectId: "project-1",
         allowPeriodInputStub: false,
@@ -716,15 +728,21 @@ describe("buildRemovalSubmissionBuild", () => {
   });
 });
 
-it.each([unsupportedTemplate(), production as RegistryComponents["schemas"]["GhgEntryTemplate"]])("stops compilation before building a GHG entry for unbindable inputs", async (defaultTemplate) => {
+it.each([unsupportedTemplate(), production as RegistryComponents["schemas"]["GhgEntryTemplate"]])("stops compilation before building a GHG entry for unbindable inputs", async (removalTemplate) => {
   const builder = vi.spyOn(ghgEntry, "buildCreateGhgEntryRequest");
   const compiled = await compileRemovalSubmission({
     orgCtx: TEST_ORG_CONTEXT, removalId: "blocked-removal", ctx: {} as RemovalSubmissionContext,
-    prepared: { defaultTemplate, blueprintsByKey: new Map(), externalProjectId: "project", allowPeriodInputStub: false, hasDurabilityComponents: true },
+    prepared: {
+        lineSources: reviewedTemplateSources(removalTemplate),
+        removalTemplate, blueprintsByKey: new Map(), externalProjectId: "project", allowPeriodInputStub: false, hasDurabilityComponents: true },
   });
   expect(builder).not.toHaveBeenCalled();
   builder.mockRestore();
-  expect(compiled.blockers).toEqual([formatUnbindableTemplateInputsText(findUnbindableTemplateInputs(defaultTemplate))]);
+  expect(compiled.blockers).toEqual([formatUnbindableTemplateInputsText(findUnbindableTemplateInputs(removalTemplate))]);
   expect(compiled.transportPlan).toBeNull();
   expect(compiled.snapshot).toBeNull();
 });
+
+function findUnbindableTemplateInputs(template: Parameters<typeof findCoverage>[0], options: Parameters<typeof findCoverage>[1] = {}) {
+  return findCoverage(template, { lineSources: reviewedTemplateSources(template), ...options });
+}

@@ -60,8 +60,8 @@ import {
   type RemovalPreparationBlocker,
 } from "./removal-submission-prepare";
 import {
-  assertDefaultRemovalTemplateConfigured,
   finalizeRemovalSubmission,
+  pinnedRemovalTemplateId,
   removalReportingWindowNeedsRecovery,
   recoverSubmittedRemoval,
   recordRemovalConfirmedIdentity,
@@ -233,7 +233,7 @@ async function submitRemovalCore(
   log.info("removal submit started");
   onProgress?.({ step: "removal.checking_data", state: "active" });
 
-  const ctx = await loadRemovalSubmissionContext(orgCtx, removalId);
+  const ctx = await loadRemovalSubmissionContext(orgCtx, removalId, { refreshEnrichment: true });
   assertRemovalRegistryConnection(ctx);
   if (
     ctx.latestSubmission?.status === "submitted" &&
@@ -244,7 +244,7 @@ async function submitRemovalCore(
     })
   ) {
     assertProductionConfirmed(confirmProduction);
-    assertDefaultRemovalTemplateConfigured(ctx.mapping.defaultRemovalTemplateId);
+    const templateId = pinnedRemovalTemplateId(ctx.memberBatches);
     attempt.externalMutation = "confirmed";
     const client = await resolveIsometricClient(orgCtx);
     onProgress?.({ step: "removal.checking_data", state: "complete" });
@@ -257,7 +257,7 @@ async function submitRemovalCore(
       row: ctx.latestSubmission,
       externalRemovalId: ctx.latestSubmission.externalId,
       externalProjectId: ctx.mapping.externalProjectId,
-      templateId: ctx.mapping.defaultRemovalTemplateId,
+      templateId,
       reportingWindow: readRemovalReportingWindow(ctx.latestSubmission),
       biocharApplicationIntents: readRemovalBiocharApplicationIntents(
         ctx.latestSubmission,
@@ -295,7 +295,7 @@ async function submitRemovalCore(
   }
   const prepared = preparation.prepared;
   const {
-    defaultTemplate,
+    removalTemplate,
     blueprintsByKey,
     externalProjectId,
     hasDurabilityComponents,
@@ -319,7 +319,7 @@ async function submitRemovalCore(
   const facilityTier = ctx.batchesWithSamples[0]?.durabilityOption ?? null;
   const tierBlocker = removalTemplateTierCompatibilityBlocker(
     ctx,
-    defaultTemplate,
+    removalTemplate,
   );
   const submitBlockerMessage = firstSubmitBlockerMessage(
     preparation.blockers,
@@ -355,7 +355,10 @@ async function submitRemovalCore(
     facilityId: ctx.facilityId,
     provider: ISOMETRIC_PROVIDER,
     expectedExternalProjectId: externalProjectId,
-    expectedDefaultRemovalTemplateId: ctx.mapping.defaultRemovalTemplateId,
+    expectedRemovalTemplatePin: {
+      creditBatchIds: ctx.memberBatches.map((batch) => batch.id),
+      templateId: removalTemplate.id,
+    },
     expectedDurabilityOption: facilityTier,
   };
 
@@ -515,7 +518,7 @@ async function submitRemovalCore(
     buildSnapshot: ({ inputs, nextVersion, supersedePreviousId }) =>
       materializeRemovalSubmissionSnapshot({
         compiled: inputs,
-        template: defaultTemplate,
+        template: removalTemplate,
         externalProjectId,
         removalId,
         nextVersion,
@@ -632,7 +635,7 @@ async function submitRemovalCore(
           row: claimed.row,
           transport,
           fixed: effectiveFixed,
-          template: defaultTemplate,
+          template: removalTemplate,
           blueprintsByKey,
           reportingWindow: {
             startedOn: reportingWindow.startedOn,

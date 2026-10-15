@@ -1,3 +1,4 @@
+import { REMOVAL_TEMPLATE_BLOCKERS } from "@/lib/certification/removal-template-blockers";
 /**
  * Removal readiness classifier — the single pure decision behind every
  * "can this removal be submitted, and if not why?" surface: the Overview work
@@ -24,6 +25,7 @@ import {
   type ProductionReadinessGap,
 } from "./production-readiness";
 import { CERT_REQUIREMENT_META } from "./requirement-labels";
+import type { RemovalTemplateBlocker, RemovalTemplateBlockerCode } from "./removal-template-blockers";
 import { pluralize } from "@/lib/copy-utils";
 import {
   describeFeedstockTypeMappingGap,
@@ -56,10 +58,9 @@ export interface RemovalReadinessFacts {
   hasMapping: boolean;
   /** The organization has encrypted Isometric credentials configured. */
   hasOrgCredentials: boolean;
-  /** The facility's default removal template resolved on Isometric. */
-  hasDefaultTemplate: boolean;
-  /** Set when a configured template id no longer exists on Isometric. */
-  missingDefaultTemplateId: string | null;
+  /** The member batches' pinned Removal template resolved on Isometric. */
+  hasRemovalTemplate: boolean;
+  templateBlockers?: RemovalTemplateBlocker[];
   /** Template blueprint keys with no matching component blueprint. */
   unresolvedBlueprintKeys: string[];
   unbindableTemplateInputs: UnbindableTemplateInput[];
@@ -167,11 +168,9 @@ function describeCategories(categories: TransportCategory[]): string {
 // template chain resolves cleanly. Shared by the classifier and the pre-flight
 // checklist so the two never phrase the same blocker differently.
 function templateBlockerReason(facts: RemovalReadinessFacts): string | null {
-  if (facts.missingDefaultTemplateId) {
-    return `Default removal template ${facts.missingDefaultTemplateId} is no longer available`;
-  }
-  if (!facts.hasDefaultTemplate) {
-    return "No default Removal template selected for this facility";
+  if (facts.templateBlockers?.length) return facts.templateBlockers.map((blocker) => blocker.message).join(" ");
+  if (!facts.hasRemovalTemplate) {
+    return REMOVAL_TEMPLATE_BLOCKERS.unpinnedTemplate;
   }
   if (facts.unresolvedBlueprintKeys.length > 0) {
     const n = facts.unresolvedBlueprintKeys.length;
@@ -185,8 +184,8 @@ function templateBlockerReason(facts: RemovalReadinessFacts): string | null {
 
 function templateResolvesCleanly(facts: RemovalReadinessFacts): boolean {
   return (
-    facts.hasDefaultTemplate &&
-    !facts.missingDefaultTemplateId &&
+    facts.hasRemovalTemplate &&
+    !facts.templateBlockers?.length &&
     facts.unresolvedBlueprintKeys.length === 0 &&
     facts.unbindableTemplateInputs.length === 0
   );
@@ -495,6 +494,8 @@ export interface RemovalRequirementCheck {
   /** Local record to open when the fix target supports an exact edit link. */
   fixTargetId?: string;
   transportCategory?: TransportCategory;
+  /** Removal template blocker codes behind an unmet template check, for its fix links. */
+  templateBlockerCodes?: RemovalTemplateBlockerCode[];
   status: "met" | "unmet" | "skipped" | "warning";
   /** The blocker text when unmet, or context when met/skipped. */
   detail?: string;
@@ -519,7 +520,7 @@ function withRequirementMeta(
 /**
  * The New-Removal wizard's requirements step shows only the checks that are NOT
  * a single batch's concern (design doc §3): facility setup (project mapping +
- * default template) and the cross-batch transport uniformity that can only be
+ * pinned template) and the cross-batch transport uniformity that can only be
  * judged once batches are pooled into a removal, plus any production or entity
  * readiness blockers that can appear when an existing removal is resumed.
  * Transport-leg presence remains a batch-health concern. Pure projection of the
@@ -667,6 +668,9 @@ export function buildRemovalRequirementsChecklist(
         !linked || !credentialsConfigured
           ? undefined
           : (templateBlockerReason(facts) ?? undefined),
+      ...(linked && credentialsConfigured && facts.templateBlockers?.length
+        ? { templateBlockerCodes: facts.templateBlockers.map((blocker) => blocker.code) }
+        : {}),
     },
     ...transport,
     ...uniformity,

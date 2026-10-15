@@ -15,6 +15,10 @@ import { batchHealthFixLinkFor } from "@/lib/certification/batch-health-links";
 import { transportRepairDestination } from "@/lib/isometric/semantic-binding-catalog";
 import { certificationSettingsHref } from "@/lib/certification/links";
 import {
+  removalTemplateBlockerDestination,
+  type RemovalTemplateBlockerCode,
+} from "@/lib/certification/removal-template-blockers";
+import {
   buildFeedstockTypeEditDeepLink,
   FEEDSTOCK_TYPE_EDIT_LABEL,
 } from "@/lib/entity-deep-link";
@@ -24,17 +28,56 @@ const CHECK_ICON_SIZE = 14;
 /** Readiness details pack several records into one string. */
 const DETAIL_SEPARATOR = " · ";
 
+/** A member credit batch, for links that land on its Removal template. */
+interface CheckCreditBatch {
+  id: string;
+  code: string;
+}
+
 interface SubmissionChecksProps {
   checks: RemovalRequirementCheck[];
   facilityId: string;
+  /** The Removal's credit batches. Template pin blockers link to each one. */
+  creditBatches?: readonly CheckCreditBatch[];
+}
+
+/**
+ * A pin blocker is fixed on each credit batch (Switch template); a line blocker
+ * in the template line review. Without codes, fall back to Settings.
+ */
+function templateFixLinks(
+  codes: readonly RemovalTemplateBlockerCode[],
+  facilityId: string,
+  creditBatches: readonly CheckCreditBatch[],
+): { label: string; href: string }[] {
+  const destinations = new Set(
+    codes.map(removalTemplateBlockerDestination),
+  );
+  if (destinations.size === 0) {
+    return [{ label: "Open settings", href: certificationSettingsHref(facilityId) }];
+  }
+  const links: { label: string; href: string }[] = [];
+  if (destinations.has("creditBatchTemplate")) {
+    const target = { key: "template", fixTarget: "creditBatchTemplate" } as const;
+    if (creditBatches.length === 0) links.push(batchHealthFixLinkFor(target, facilityId));
+    for (const batch of creditBatches) {
+      const link = batchHealthFixLinkFor(target, facilityId, batch.id);
+      links.push(creditBatches.length === 1 ? link : { ...link, label: `${link.label} on ${batch.code}` });
+    }
+  }
+  if (destinations.has("templateLineReview")) {
+    links.push(batchHealthFixLinkFor({ key: "template", fixTarget: "templateLineReview" }, facilityId));
+  }
+  return links;
 }
 
 function fixLinksFor(
   check: Pick<
     RemovalRequirementCheck,
-    "key" | "fixTarget" | "fixTargetId" | "transportCategory" | "lineageIssues"
+    "key" | "fixTarget" | "fixTargetId" | "transportCategory" | "lineageIssues" | "templateBlockerCodes"
   >,
   facilityId: string,
+  creditBatches: readonly CheckCreditBatch[] = [],
 ): { label: string; href: string }[] {
   const productionRuns = {
     label: "Review production runs",
@@ -58,10 +101,11 @@ function fixLinksFor(
       return [...new Map(links.map((link) => [link.href, link])).values()];
     }
     case "mapping":
-    case "template":
       return [
         { label: "Open settings", href: certificationSettingsHref(facilityId) },
       ];
+    case "template":
+      return templateFixLinks(check.templateBlockerCodes ?? [], facilityId, creditBatches);
     case "measurementDates":
       if (check.fixTarget === "productionRuns") return [productionRuns];
       if (check.fixTarget === "labSamples") return [labSamples];
@@ -129,11 +173,13 @@ function dateGuidance(dateCount: number): string {
 function CheckRow({
   check,
   facilityId,
+  creditBatches,
 }: {
   check: RemovalRequirementCheck;
   facilityId: string;
+  creditBatches?: readonly CheckCreditBatch[];
 }) {
-  const fixes = fixLinksFor(check, facilityId);
+  const fixes = fixLinksFor(check, facilityId, creditBatches);
   const detailLines = check.detail?.split(DETAIL_SEPARATOR) ?? [];
 
   return (
@@ -191,6 +237,7 @@ function CheckRow({
 export function SubmissionChecks({
   checks,
   facilityId,
+  creditBatches,
 }: SubmissionChecksProps) {
   const actionChecks = actionableSubmissionChecks(checks);
   const passedCount = actionChecks.filter(
@@ -212,7 +259,7 @@ export function SubmissionChecks({
       </div>
       <ul className="flex flex-col gap-12">
         {attentionChecks.map((check) => (
-          <CheckRow key={`${check.key}-${check.transportCategory ?? ""}`} check={check} facilityId={facilityId} />
+          <CheckRow key={`${check.key}-${check.transportCategory ?? ""}`} check={check} facilityId={facilityId} creditBatches={creditBatches} />
         ))}
       </ul>
     </section>

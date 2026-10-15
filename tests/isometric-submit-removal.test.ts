@@ -121,7 +121,8 @@ describe("submitRemoval — happy path", () => {
       removalId: REMOVAL_ID,
       ctx,
       prepared: {
-        defaultTemplate: ctx.defaultTemplate!,
+        removalTemplate: ctx.removalTemplate!,
+        lineSources: ctx.lineSources,
         blueprintsByKey: new Map(
           ctx.blueprintsForTemplate.map((blueprint) => [
             blueprint.key,
@@ -147,7 +148,8 @@ describe("submitRemoval — happy path", () => {
       removalId: REMOVAL_ID,
       ctx,
       prepared: {
-        defaultTemplate: ctx.defaultTemplate!,
+        removalTemplate: ctx.removalTemplate!,
+        lineSources: ctx.lineSources,
         blueprintsByKey: new Map(
           ctx.blueprintsForTemplate.map((blueprint) => [
             blueprint.key,
@@ -714,7 +716,7 @@ describe("submitRemoval — happy path", () => {
     );
   });
 
-  it("names a missing default template before recovering a submitted Removal", async () => {
+  it("recovers a submitted Removal against the batch pin, not the facility default", async () => {
     vi.mocked(certifyContext.loadRemovalSubmissionContext).mockResolvedValue(
       makeContext(),
     );
@@ -732,29 +734,33 @@ describe("submitRemoval — happy path", () => {
     setStoredRemovalReportingWindow("2025-01-01", "2025-04-05");
     vi.mocked(removalsDA.updateRemovalDates).mockClear();
     const recoveryContext = makeContext();
-    vi.mocked(certifyContext.loadRemovalSubmissionContext).mockResolvedValue({
-      ...recoveryContext,
-      mapping: {
-        ...recoveryContext.mapping!,
-        defaultRemovalTemplateId: null,
-      },
-      defaultTemplate: null,
-    });
+    const recoverWith = (overrides: Partial<typeof recoveryContext>) => {
+      vi.mocked(certifyContext.loadRemovalSubmissionContext).mockResolvedValue({
+        ...recoveryContext,
+        ...overrides,
+      });
+      return submitRemoval({ orgCtx: makeTestOrgContext(USER_ID), removalId: REMOVAL_ID });
+    };
 
     await expect(
-      submitRemoval({
-        orgCtx: makeTestOrgContext(USER_ID),
-        removalId: REMOVAL_ID,
+      recoverWith({
+        memberBatches: recoveryContext.memberBatches.map((batch) => ({ ...batch, removalTemplateId: null })),
+        removalTemplate: null,
       }),
-    ).rejects.toThrow(/set a default Removal template in facility settings/i);
-    expect(isometric.createGhgEntry).toHaveBeenCalledTimes(1);
+    ).rejects.toThrow(/choose a removal template for this credit batch/i);
     expect(removalsDA.updateRemovalDates).not.toHaveBeenCalled();
+
+    await recoverWith({
+      mapping: { ...recoveryContext.mapping!, defaultRemovalTemplateId: null },
+    });
+    expect(isometric.createGhgEntry).toHaveBeenCalledTimes(1);
+    expect(removalsDA.updateRemovalDates).toHaveBeenCalledTimes(1);
   });
 
   it("marks absent datapoint and durability work as skipped when reusing a Removal", async () => {
     const fixedOnlyTemplate = {
-      ...makeContext().defaultTemplate!,
-      groups: makeContext().defaultTemplate!.groups.map((group) => ({
+      ...makeContext().removalTemplate!,
+      groups: makeContext().removalTemplate!.groups.map((group) => ({
         ...group,
         components: group.components.map((component) => ({
           ...component,
@@ -768,7 +774,7 @@ describe("submitRemoval — happy path", () => {
     } as IsometricGhgEntryTemplate;
     vi.mocked(certifyContext.loadRemovalSubmissionContext).mockImplementation(
       async () => makeContext(ORIGINAL_BIOCHAR_MASS_KG, {
-        defaultTemplate: fixedOnlyTemplate,
+        removalTemplate: fixedOnlyTemplate,
       }),
     );
     vi.mocked(isometric.createGhgEntry).mockImplementation(

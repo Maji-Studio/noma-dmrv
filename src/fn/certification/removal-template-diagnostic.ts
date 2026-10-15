@@ -68,6 +68,7 @@ export async function loadRemovalTemplateDiagnostic(
       diagnostic: facts.defaultTemplate
         ? buildRemovalTemplateDiagnostic({
             template: facts.defaultTemplate,
+            lineSources: facts.templatesById?.[facts.defaultTemplate.id]?.observation?.lineSources,
             blueprints: facts.blueprintsForTemplate,
           })
         : null,

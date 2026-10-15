@@ -17,6 +17,7 @@ import { SafeError } from "@/lib/errors";
 import {
   IsometricApiError,
   listProjects,
+  listComponentBlueprints,
   listGhgEntryTemplates,
   type IsometricProject,
   type IsometricGhgEntryTemplate,
@@ -31,6 +32,8 @@ import {
 import type { ActionResult } from "@/types/actions";
 import { withAction } from "../with-action";
 import { ISOMETRIC_PROVIDER, safeListIfConfigured } from "./shared";
+import { loadRemovalTemplateFacts } from "./removal-template-facts";
+
 export interface FacilityCertifierMapping {
   mapping: CertifierProjectRow | null;
   availableProjects: IsometricProject[];
@@ -154,6 +157,10 @@ export async function saveFacilityCertifierMapping(
         );
       }
       assertSequestrationTemplateSelectable(selectedTemplate);
+      await loadRemovalTemplateFacts(orgCtx, {
+        client, externalProjectId: parsed.externalProjectId, template: selectedTemplate,
+        blueprints: await listComponentBlueprints(client),
+      });
     }
 
     return upsertCertifierProject(orgCtx, {

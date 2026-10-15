@@ -1,3 +1,4 @@
+import type { LineContract } from "@/lib/isometric/template-observations/line-sources";
 // Tests for the ADR 0005 period-input scope guard + INPUT_MAPPING cleanup.
 //
 // Three guarantees:
@@ -106,7 +107,7 @@ describe("PERIOD_INPUT_TUPLES", () => {
         "miscellaneous",
         "mass_based_ci_emissions",
         "mass",
-        "  SAFETY Margin  ",
+        { scope: "operating", entryPolicy: "none", origin: "reviewed", automaticSource: "safety-margin" } satisfies LineContract,
       ),
     ).toBeUndefined();
     expect(
@@ -114,7 +115,7 @@ describe("PERIOD_INPUT_TUPLES", () => {
         "miscellaneous",
         "mass_based_ci_emissions",
         "mass",
-        "Some other overhead",
+        { scope: "operating", entryPolicy: "none", origin: "reviewed" } satisfies LineContract,
       ),
     ).toEqual({ category: "miscellaneous" });
     expect(
@@ -130,7 +131,7 @@ describe("PERIOD_INPUT_TUPLES", () => {
         "miscellaneous",
         "mass_based_ci_emissions",
         "mass",
-        "constructor",
+        { scope: "operating", entryPolicy: "none", origin: "reviewed" } satisfies LineContract,
       ),
     ).toEqual({ category: "miscellaneous" });
   });

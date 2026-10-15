@@ -37,7 +37,7 @@ export async function loadRemovalCompilation(
       throw new SafeError("Removal does not belong to requested facility");
     }
 
-    const ctx = await loadRemovalSubmissionContext(orgCtx, removalId);
+    const ctx = await loadRemovalSubmissionContext(orgCtx, removalId, { refreshEnrichment: true });
     const preparation = prepareRemovalSubmission(ctx);
     const preparationBlockers = preparation.blockers.map(
       (blocker) => blocker.message,

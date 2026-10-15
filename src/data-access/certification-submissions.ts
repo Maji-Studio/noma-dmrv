@@ -26,6 +26,7 @@ import {
   certifierProjects,
   certifierRemovals,
 } from "@/db/schema/certification";
+import { creditBatches } from "@/db/schema/credits";
 import { facilities } from "@/db/schema/facilities";
 import { SafeError } from "@/lib/errors";
 import { acquireCertificationArtifactLocksSorted } from "@/lib/certification/submission-lock";
@@ -74,7 +75,8 @@ export interface MappingClaimGuard {
   facilityCertificationBoundaryLockHeldBySession?: true;
   provider: CertifierProvider;
   expectedExternalProjectId: string;
-  expectedDefaultRemovalTemplateId?: string | null;
+  /** Removals compile against their member batches' pin; a switch must not land between read and claim. */
+  expectedRemovalTemplatePin?: { creditBatchIds: readonly string[]; templateId: string };
   expectedDurabilityOption?: (typeof facilities.$inferSelect)["durabilityOption"];
 }
 
@@ -569,7 +571,8 @@ async function readLatestSubmission(
 // Locks the facility's certifier mapping row FOR UPDATE and verifies it
 // still matches what the caller read before deciding to submit. Guard arms
 // are checked by presence: a GHG Statement has no template, so it simply
-// omits `expectedDefaultRemovalTemplateId`.
+// omits `expectedRemovalTemplatePin`. Template switches take the boundary lock
+// first, so the pin read here cannot change before the claim commits.
 //
 // The certification-boundary and facility-durability locks are acquired first,
 // followed by the mapping lock, so every submit path shares one order
@@ -611,10 +614,7 @@ async function lockAndVerifyMapping(
   }
 
   const [current] = await executor
-    .select({
-      externalProjectId: certifierProjects.externalProjectId,
-      defaultRemovalTemplateId: certifierProjects.defaultRemovalTemplateId,
-    })
+    .select({ externalProjectId: certifierProjects.externalProjectId })
     .from(certifierProjects)
     .where(
       and(
@@ -636,12 +636,33 @@ async function lockAndVerifyMapping(
       "Facility was repointed to a different certifier project mid-submission. Refresh and retry.",
     );
   }
+  if (guard.expectedRemovalTemplatePin) {
+    await assertRemovalTemplatePinCurrent(ctx, executor, guard.expectedRemovalTemplatePin);
+  }
+}
+
+async function assertRemovalTemplatePinCurrent(
+  ctx: OrgContext,
+  executor: DbTransaction,
+  pin: NonNullable<MappingClaimGuard["expectedRemovalTemplatePin"]>,
+): Promise<void> {
+  const rows = pin.creditBatchIds.length
+    ? await executor
+        .select({ removalTemplateId: creditBatches.removalTemplateId })
+        .from(creditBatches)
+        .where(
+          and(
+            inArray(creditBatches.id, [...pin.creditBatchIds]),
+            eq(creditBatches.organizationId, ctx.organizationId),
+          ),
+        )
+    : [];
   if (
-    guard.expectedDefaultRemovalTemplateId !== undefined &&
-    current.defaultRemovalTemplateId !== guard.expectedDefaultRemovalTemplateId
+    rows.length !== pin.creditBatchIds.length ||
+    rows.some((row) => row.removalTemplateId !== pin.templateId)
   ) {
     throw new SafeError(
-      "The facility's default Removal template changed during submission. Refresh and try again.",
+      "A credit batch's Removal template changed during submission. Refresh and try again.",
     );
   }
 }

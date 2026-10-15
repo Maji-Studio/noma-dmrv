@@ -1,3 +1,4 @@
+import { effectiveContract, type LineContract, type LineSources } from "@/lib/isometric/template-observations/line-sources";
 import { payloadHash } from "@/lib/isometric/utils/payload-hash";
 import type { IsometricGhgEntryTemplate } from "@/lib/isometric";
 import { SafeError } from "@/lib/errors";
@@ -60,6 +61,7 @@ export interface RemovalEvidenceTargetLookup {
   groupKey: string;
   componentBlueprintKey: string;
   componentDisplayName?: string;
+  lineContract?: LineContract;
   inputKey: string;
 }
 
@@ -306,15 +308,14 @@ export interface RemovalSourceBindingPlanEntry {
 
 function matchesIntendedComponent(
   blueprintKey: string,
-  componentDisplayName: string | undefined,
+  contract: LineContract | undefined,
   target: RemovalSourceIntendedTarget,
 ): boolean {
   return target.kind === "sequestration"
     ? isStorageBlueprintKey(blueprintKey)
     : blueprintKey === target.componentBlueprintKey &&
         (target.componentDisplayName === undefined ||
-          normalizeComponentDisplayName(componentDisplayName) ===
-            normalizeComponentDisplayName(target.componentDisplayName));
+          (contract !== undefined && effectiveContract(contract).scope === "operating" && effectiveContract(contract).automaticSource === "safety-margin"));
 }
 
 /**
@@ -342,7 +343,7 @@ export function removalEvidenceRoleLabelsForTarget(
           intendedTarget.inputKey === target.inputKey &&
           matchesIntendedComponent(
             target.componentBlueprintKey,
-            target.componentDisplayName,
+            target.lineContract,
             intendedTarget,
           ),
       )
@@ -416,6 +417,7 @@ export function listOptionalRemovalEvidenceTargets(): OptionalRemovalEvidenceTar
  */
 export function buildRemovalSourceBindingPlan(args: {
   candidates: SourceBindingCandidate[];
+  lineSources?: LineSources;
   template: IsometricGhgEntryTemplate;
   applicationIdsByCreditBatchId: Map<string, string[]>;
   sampleIdsByCreditBatchId?: Map<string, string[]>;
@@ -436,7 +438,7 @@ export function buildRemovalSourceBindingPlan(args: {
             (component) =>
               matchesIntendedComponent(
                 component.blueprint_key,
-                component.display_name,
+                args.lineSources?.[component.id],
                 target,
               ) &&
               component.inputs.some(

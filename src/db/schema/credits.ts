@@ -51,6 +51,7 @@ export const creditBatches = pgTable(
     productionProcessId: uuid('production_process_id')
       .notNull()
       .references(() => productionProcesses.id),
+    removalTemplateId: text('removal_template_id'),
     status: creditBatchStatus('status').default('pending').notNull(),
     // Fixed at creation. Unsampled is accepted only after the current process
     // clears its live Method-B eligibility gates (ADR 0022).

@@ -62,6 +62,10 @@ import {
 import { formatDateRange } from "@/lib/format-utils";
 import { COMPLETED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
 import { CREDIT_BATCH_DEEP_LINK_PARAM } from "@/lib/credit-batch-links";
+import {
+  ENTITY_DEEP_LINK_FOCUS_PARAM,
+  parseEntityFocusTarget,
+} from "@/lib/entity-deep-link";
 import { useCreditBatchHealthSummaries } from "@/hooks/use-certification";
 import type { CreditBatchFormData } from "@/schemas/credit-batches";
 import type { CreditBatchWithRelations } from "@/data-access/credit-batches";
@@ -127,6 +131,10 @@ export function CreditBatchList({
   // convention); local state handles sheets opened by clicks.
   const [focusedBatchId, setFocusedBatchId] = useQueryState(
     CREDIT_BATCH_DEEP_LINK_PARAM,
+    parseAsString.withOptions({ shallow: true, history: "replace" }),
+  );
+  const [deepLinkFocus, setDeepLinkFocus] = useQueryState(
+    ENTITY_DEEP_LINK_FOCUS_PARAM,
     parseAsString.withOptions({ shallow: true, history: "replace" }),
   );
   const handledInvalidBatchIdRef = useRef<string | null>(null);
@@ -365,6 +373,7 @@ export function CreditBatchList({
   const closeSideSheet = () => {
     createIntent.clear();
     void setFocusedBatchId(null);
+    void setDeepLinkFocus(null);
     setSideSheet(null);
     setCreateError(null);
     setUpdateError(null);
@@ -721,6 +730,12 @@ export function CreditBatchList({
                   ? undefined
                   : batchHealthSummaries[sideSheetEntity.id],
                 isHealthLoading: healthLoading && !healthError,
+                canManage,
+                locked: sideSheetLocked,
+                activeFocusTarget:
+                  sideSheetEntity.id === focusedBatchId
+                    ? parseEntityFocusTarget(deepLinkFocus)
+                    : null,
               })
             : undefined
         }

@@ -277,7 +277,8 @@ describe("submitRemoval — Source binding gate", () => {
       removalId: REMOVAL_ID,
       ctx,
       prepared: {
-        defaultTemplate: ctx.defaultTemplate!,
+        removalTemplate: ctx.removalTemplate!,
+        lineSources: ctx.lineSources,
         blueprintsByKey: new Map(
           ctx.blueprintsForTemplate.map((blueprint) => [
             blueprint.key,
@@ -488,7 +489,8 @@ describe("submitRemoval — Source binding gate", () => {
       removalId: REMOVAL_ID,
       ctx,
       prepared: {
-        defaultTemplate: ctx.defaultTemplate!,
+        removalTemplate: ctx.removalTemplate!,
+        lineSources: ctx.lineSources,
         blueprintsByKey: new Map(
           ctx.blueprintsForTemplate.map((blueprint) => [
             blueprint.key,

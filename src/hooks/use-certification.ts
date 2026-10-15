@@ -109,6 +109,8 @@ export function getRemovalPreflightRefetchInterval(
 }
 
 export const certificationKeys = {
+  removalTemplateReviewPreview: (facilityId: string, templateId: string) => ["certification", "removal-template-review-preview", facilityId, templateId] as const,
+  removalTemplateReview: (facilityId: string) => ["certification", "removal-template-review", facilityId] as const,
   all: ["certification"] as const,
   /** Whether a submitted Removal or GHG statement freezes the record's files. */
   recordLock: (entityType: string, entityId?: string) =>

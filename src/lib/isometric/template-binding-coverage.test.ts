@@ -1,171 +1,81 @@
-import { unsupportedTemplate } from "../../../tests/fixtures/isometric/unsupported-template";
 import { describe, expect, it } from "vitest";
 import sandbox from "../../../tests/fixtures/isometric/sandbox-template.json";
-import inventory from "../../../tests/fixtures/isometric-coverage.json";
-import type { components } from "./generated/certify";
-import { findUnbindableTemplateInputs, formatUnbindableTemplateInputs, formatUnbindableTemplateInputsText, type UnbindableTemplateInput } from "./template-binding-coverage";
-import { lookupInputMapping, lookupPeriodInputTuple } from "./datapoint-mapping";
-import { STORAGE_BLUEPRINTS, isSequestrationBlueprintFamily } from "./storage-blueprints";
+import realTemplate from "../../../tests/fixtures/isometric/sandbox-template-2026-10-15.json";
+import { unsupportedTemplate } from "../../../tests/fixtures/isometric/unsupported-template";
+import { reviewedTemplateSources } from "../../../tests/helpers/template-line-sources";
+import type { GhgEntryTemplate, LineSources } from "./template-observations";
+import { normalizeTemplateDefinition, resolveLineSources } from "./template-observations";
+import { findUnbindableTemplateInputs, formatUnbindableTemplateInputs, formatUnbindableTemplateInputsText } from "./template-binding-coverage";
+import { lookupInputMapping, resolveDatapointSource } from "./datapoint-mapping";
 
-type Template = components["schemas"]["GhgEntryTemplate"];
-const template = sandbox as Template;
+const template = sandbox as GhgEntryTemplate;
+const sourceLines = reviewedTemplateSources(template);
+function coverage(value: GhgEntryTemplate, lineSources: LineSources = reviewedTemplateSources(value), allowPeriodInputStub = false) {
+  return findUnbindableTemplateInputs(value, { lineSources, allowPeriodInputStub });
+}
 
-
-describe("template binding coverage", () => {
-  it.each([true, false])("accepts the sandbox template (stubs: %s)", (allowPeriodInputStub) => {
-    expect(template.id).toBe(inventory.facilities[0].defaultRemovalTemplateId);
-    expect(findUnbindableTemplateInputs(template, { allowPeriodInputStub })).toEqual([]);
+describe("contract-based template coverage", () => {
+  it.each([true, false])("accepts the bootstrap sandbox template (stubs: %s)", (stubs) => {
+    expect(coverage(template, sourceLines, stubs)).toEqual([]);
   });
-
-  it("flags both unsupported truck components without flagging sample transport", () => {
-    const changed = unsupportedTemplate();
-    const findings = findUnbindableTemplateInputs(changed);
-    expect(findings).toHaveLength(2);
-    expect(new Set(findings.map((input) => input.componentId)).size).toBe(2);
-    expect(findings.every((input) => input.blueprintKey === "transport" && input.reason === "unmapped")).toBe(true);
-    expect(formatUnbindableTemplateInputsText(findings)).toContain("Mass-distance-based CI emissions");
-    expect(changed).toEqual(unsupportedTemplate());
+  it("blocks every unassigned line", () => {
+    const findings = coverage(template, {});
+    expect(findings).toHaveLength(template.groups.flatMap((group) => group.components).length);
+    expect(findings.every((finding) => finding.reason === "unassigned")).toBe(true);
   });
-
-  it("rejects two sample components receiving the full aggregate", () => {
-    const copy = unsupportedTemplate();
-    const group = copy.groups.find((group) => group.key === "sampling-required-for-mrv")!;
-    const sample = group.components.find((component) => component.blueprint_key === "mass_distance_based_ci_emissions")!;
-    group.components.push({ ...structuredClone(sample), id: "sample-copy", display_name: "Second sample shipment" });
-    const findings = findUnbindableTemplateInputs(copy).filter((input) => input.reason === "ambiguous");
-    expect(findings.map((input) => input.reason)).toEqual(["ambiguous", "ambiguous"]);
-    expect(formatUnbindableTemplateInputsText(findings)).toContain(`${sample.display_name} and Second sample shipment would both receive the same sample transport mass-distance total`);
-  });
-
-  it("matches the builder lookup precedence for every sandbox input", () => {
-    for (const group of template.groups) for (const component of group.components) {
-      if (isSequestrationBlueprintFamily(component.blueprint_key)) continue;
-      for (const input of component.inputs) {
-        if (input.type === "fixed") continue;
-        expect(lookupPeriodInputTuple(group.key, component.blueprint_key, input.input_key, component.display_name) ?? lookupInputMapping(group.key, component.blueprint_key, input.input_key)).toBeDefined();
-      }
-    }
-  });
-
-it("keeps project-scope stubs and storage inputs under their existing guards", () => {
-  const copy = structuredClone(template);
-  const direct = copy.groups.find((group) => group.key === "direct-emissions")!;
-  direct.components.push({
-    ...structuredClone(template.groups.find((group) => group.key === "pyrolysis")!.components[0]),
-    id: "project-input", display_name: "Project emissions", blueprint_key: "ghg_direct_emissions",
-    inputs: [{ input_key: "mass_flow", type: "monitored", datapoint_id: null, display_name: "Gas mass", quantity_kind: "mass" }],
-  });
-  expect(findUnbindableTemplateInputs(copy, { allowPeriodInputStub: true })).toEqual([]);
-});
-
-it("names unsupported metered inputs and their component", () => {
-  const copy = structuredClone(template);
-  const component = copy.groups.find((group) => group.key === "pyrolysis")!.components[0];
-  component.blueprint_key = "metered_energy_based_ci_emissions";
-  component.inputs = [{ input_key: "final_readout", type: "monitored", datapoint_id: null, display_name: "Final reading", quantity_kind: "energy" }];
-  expect(formatUnbindableTemplateInputsText(findUnbindableTemplateInputs(copy))).toBe(
-    `The Removal template has 1 component noma cannot submit.\n${component.display_name}: Pick another Removal template or ask support to add the mapping.`,
-  );
-});
-
-  it("reports renamed diesel components with the builder rename guidance", () => {
+  it("blocks a proposal until review", () => {
     const copy = structuredClone(template);
-    const component = copy.groups.flatMap((group) => group.components).find((component) => component.display_name === "Generator diesel usage")!;
-    component.display_name = "Renamed generator";
-    const findings = findUnbindableTemplateInputs(copy);
-    expect(findings).toMatchObject([{ reason: "unrecognized-component", componentId: component.id }]);
-    expect(formatUnbindableTemplateInputsText(findings)).toContain('Rename it in Isometric to "Generator diesel usage".');
+    const electricity = copy.groups.flatMap((group) => group.components).find((component) => component.blueprint_key === "grid_electricity_use")!;
+    electricity.id = "new-electricity";
+    const sources = resolveLineSources({ definition: normalizeTemplateDefinition(copy) });
+    expect(coverage(copy, sources)).toContainEqual(expect.objectContaining({ componentId: electricity.id, reason: "unassigned" }));
   });
-
-  it.each([
-    { name: "Safety margin", groupKey: "miscellaneous", blueprintKey: "mass_based_ci_emissions" },
-    { name: "Generator diesel usage", groupKey: "pyrolysis", blueprintKey: "fuel_usage_by_volume" },
-  ])("does not offer an occupied carve-out name for $name", ({ name, groupKey, blueprintKey }) => {
-    const copy = structuredClone(template);
-    const group = copy.groups.find((group) => group.key === groupKey)!;
-    if (groupKey === "miscellaneous") {
-      group.components.push({
-        ...structuredClone(copy.groups.find((group) => group.key === "pyrolysis")!.components[0]),
-        id: "safety-margin", display_name: name, blueprint_key: blueprintKey,
-        inputs: [{ input_key: "mass", type: "monitored", datapoint_id: null, display_name: "Mass", quantity_kind: "mass" }],
-      });
-    }
-    const existing = group.components.find((component) => component.display_name === name)!;
-    existing.display_name = `  ${name.toUpperCase()}  `;
-    group.components.push({ ...structuredClone(existing), id: "extra", display_name: "Extra component" });
-    const findings = findUnbindableTemplateInputs(copy).filter((input) => input.componentId === "extra");
-    expect(findings.length).toBeGreaterThan(0);
-    expect(findings[0].blueprintKey).toBe(blueprintKey);
-    const text = formatUnbindableTemplateInputsText(findings);
-    expect(text).toContain("Add it as a project component in Isometric, then remove it from the Removal template.");
-    expect(text).not.toContain("Rename");
-  });
-
-  it.each([
-    {
-      groupKey: "biomass-feedstock-transport", blueprintKey: "transport", inputKey: "distance", reason: "unmapped",
-      singular: "Replace it with a Mass-distance-based CI emissions component in Isometric, or pick another Removal template.",
-      plural: "Replace each one with a Mass-distance-based CI emissions component in Isometric, or pick another Removal template.",
-    },
-    {
-      groupKey: "direct-emissions", blueprintKey: "ghg_direct_emissions", inputKey: "mass_flow", reason: "project-scope",
-      singular: "Add it as a project component in Isometric, then remove it from the Removal template.",
-      plural: "Add each one as a project component in Isometric, then remove them from the Removal template.",
-    },
-    {
-      groupKey: "miscellaneous", blueprintKey: "mass_based_ci_emissions", inputKey: "mass", reason: "project-scope",
-      singular: 'This component can stay on the Removal only under its expected name. Rename it in Isometric to "Safety margin".',
-      plural: "Add each one as a project component in Isometric, then remove them from the Removal template.",
-    },
-    {
-      groupKey: "pyrolysis", blueprintKey: "fuel_usage_by_volume", inputKey: "volume_of_fuel", reason: "unrecognized-component",
-      singular: 'Rename it in Isometric to one of these names: "Generator diesel usage", "Startup diesel usage".',
-      plural: 'Rename each one in Isometric to one of these names: "Generator diesel usage", "Startup diesel usage".',
-    },
-  ] as const)("agrees with the number of components for $blueprintKey", ({ singular, plural, ...tuple }) => {
-    const input: UnbindableTemplateInput = { ...tuple, componentId: "a", componentDisplayName: "A" };
-    expect(formatUnbindableTemplateInputsText([input, input])).toBe(
-      `The Removal template has 1 component noma cannot submit.\nA: ${singular}`,
-    );
-    expect(formatUnbindableTemplateInputsText([input, { ...input, componentId: "b", componentDisplayName: "B" }])).toBe(
-      `The Removal template has 2 components noma cannot submit.\nA and B: ${plural}`,
-    );
-  });
-
-  it.each(Object.entries(STORAGE_BLUEPRINTS).filter(([, blueprint]) => blueprint.support !== "bound"))(
-    "leaves gated, deprecated and unsupported storage %s to the existing gates",
-    (blueprintKey) => {
-      const copy = structuredClone(template);
-      const component = copy.groups.flatMap((group) => group.components).find((component) => isSequestrationBlueprintFamily(component.blueprint_key))!;
-      component.blueprint_key = blueprintKey;
-      expect(findUnbindableTemplateInputs(copy)).toEqual([]);
-    },
-  );
-
-  it("separates the Notice lead from instructions and preserves plain-text copy", () => {
-    const inputs = findUnbindableTemplateInputs(unsupportedTemplate());
-    const { lead, lines } = formatUnbindableTemplateInputs(inputs);
-    expect(lead).toBe("The Removal template has 2 components noma cannot submit.");
-    expect(lines).toHaveLength(1);
-    expect(lines[0]).toContain("Replace each one");
-    expect(formatUnbindableTemplateInputsText(inputs)).toBe([lead, ...lines].join("\n"));
-    expect(formatUnbindableTemplateInputs([])).toEqual({ lead: "", lines: [] });
-    expect(formatUnbindableTemplateInputsText([])).toBe("");
-  });
-
-  it("reports unknown monitored storage inputs", () => {
-    const copy = structuredClone(template);
-    const component = copy.groups.flatMap((group) => group.components).find((component) => isSequestrationBlueprintFamily(component.blueprint_key))!;
-    component.inputs.push({ ...component.inputs[0], input_key: "unknown_storage_input" });
-    expect(findUnbindableTemplateInputs(copy)).toMatchObject([{ componentId: component.id, inputKey: "unknown_storage_input", reason: "unmapped" }]);
-  });
-
-  it("uses all for three ambiguous components and names each once", () => {
+  it("gets ambiguity from shared automatic sources", () => {
     const copy = structuredClone(template);
     const group = copy.groups.find((group) => group.key === "biochar-transport")!;
-    const component = group.components[0];
-    component.display_name = "A";
-    group.components.push({ ...structuredClone(component), id: "b", display_name: "B" }, { ...structuredClone(component), id: "c", display_name: "C" });
-    expect(formatUnbindableTemplateInputsText(findUnbindableTemplateInputs(copy))).toContain("A, B and C would all receive");
+    const first = group.components[0];
+    group.components.push({ ...structuredClone(first), id: "second", display_name: "Second shipment" });
+    const findings = coverage(copy).filter((finding) => finding.reason === "ambiguous");
+    expect(findings.map((finding) => finding.componentId).sort()).toEqual([first.id, "second"].sort());
+    expect(formatUnbindableTemplateInputsText(findings)).toContain("Choose a different automatic source for each line.");
+  });
+  it("resolves a renamed diesel component with the same id", () => {
+    const copy = structuredClone(template);
+    const group = copy.groups.find((group) => group.key === "pyrolysis")!;
+    const diesel = group.components.find((component) => component.display_name === "Generator diesel usage")!;
+    diesel.display_name = "Renamed generator";
+    expect(coverage(copy, sourceLines)).toEqual([]);
+    const mapping = lookupInputMapping(group.key, diesel.blueprint_key, "volume_of_fuel", sourceLines[diesel.id])!;
+    expect(resolveDatapointSource(mapping, sourceLines[diesel.id])).toBe("totalGensetDieselLitres");
+    diesel.id = "replacement-id";
+    expect(coverage(copy, resolveLineSources({ definition: normalizeTemplateDefinition(copy), previous: { definition: normalizeTemplateDefinition(template), lineSources: sourceLines } })))
+      .toContainEqual(expect.objectContaining({ componentId: diesel.id, reason: "unassigned" }));
+  });
+  it("still fails closed on diesel without a contract", () => {
+    const mapping = lookupInputMapping("pyrolysis", "fuel_usage_by_volume", "volume_of_fuel")!;
+    expect(() => resolveDatapointSource(mapping)).toThrow("Review the Removal template lines in Certification settings.");
+  });
+  it("preserves production period guards and sandbox stubs for entry-only lines", () => {
+    const value = realTemplate as GhgEntryTemplate;
+    expect(coverage(value).some((finding) => finding.reason === "project-scope")).toBe(true);
+    // Sandbox stubs period lines only. Sample shipping lines have no automatic
+    // source, so they block instead of each receiving the full sample transport total.
+    const sampleLines = ["rtc_1M4ZRPH1RSBXADG2", "rtc_1M4ZRRN6PSBXHQ7C"];
+    expect(coverage(value, reviewedTemplateSources(value), true).map((finding) => finding.componentId).sort()).toEqual(sampleLines);
+  });
+  it("blocks forbidden lines even in sandbox", () => {
+    const first = template.groups.flatMap((group) => group.components)[0];
+    expect(coverage(template, { ...sourceLines, [first.id]: { scope: "forbidden", entryPolicy: "none", origin: "reviewed" } }, true))
+      .toContainEqual(expect.objectContaining({ componentId: first.id, reason: "project-scope" }));
+  });
+  it("reports unsupported paired transport with repair guidance", () => {
+    const findings = coverage(unsupportedTemplate());
+    expect(findings).toHaveLength(2);
+    expect(findings.every((finding) => finding.reason === "unmapped")).toBe(true);
+    const formatted = formatUnbindableTemplateInputs(findings);
+    expect(formatted.lead).toBe("The Removal template has 2 components noma cannot submit.");
+    expect(formatted.lines.join(" ")).toContain("Replace each one with a Mass-distance-based CI emissions component");
+    expect(formatUnbindableTemplateInputsText(findings)).toBe([formatted.lead, ...formatted.lines].join("\n"));
+    expect(formatUnbindableTemplateInputsText([])).toBe("");
   });
 });

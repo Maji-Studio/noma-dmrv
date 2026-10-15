@@ -16,7 +16,7 @@ import {
 } from "./removal-template-diagnostic-status";
 import { Notice } from "@/components/ui/notice";
 
-function RawIdentifiers({
+export function RawIdentifiers({
   summary,
   entries,
 }: {

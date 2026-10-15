@@ -59,24 +59,20 @@ export function facilityBlueprintLabel(key: string): string {
   );
 }
 
-/**
- * Derive the ordered setup gaps from the facility certifier facts. An empty
- * array means facility setup is complete (the wizard's old boolean is exactly
- * `deriveFacilitySetupGaps(facts).length === 0`). Prerequisites short-circuit
- * the way `loadFacilityCertifierFacts` does, most-fundamental first: org
- * credentials gate reaching the registry AT ALL — the project-link connector
- * disables itself until they exist — so a credential-less org must be told to
- * configure credentials, never to link a facility it structurally can't link.
- * Only then does the missing project link, then the template facts, surface.
- */
-export function deriveFacilitySetupGaps(
-  facts: FacilitySetupGapFacts,
+/** Connection prerequisites for grouping; template health belongs to each batch pin. */
+export function deriveFacilityConnectionGaps(
+  facts: Pick<FacilitySetupGapFacts, "hasOrgCredentials" | "mapping">,
 ): FacilitySetupGap[] {
   if (!facts.hasOrgCredentials) return [{ kind: "credentials" }];
   if (!facts.mapping) return [{ kind: "project_link" }];
-  if (!facts.mapping.externalFacilityId?.trim()) {
-    return [{ kind: "external_facility_id" }];
-  }
+  if (!facts.mapping.externalFacilityId?.trim()) return [{ kind: "external_facility_id" }];
+  return [];
+}
+
+/** Settings advice includes the default used when creating future batches. */
+export function deriveFacilitySetupGaps(facts: FacilitySetupGapFacts): FacilitySetupGap[] {
+  const connectionGaps = deriveFacilityConnectionGaps(facts);
+  if (connectionGaps.length) return connectionGaps;
   if (facts.missingDefaultTemplateId) {
     return [
       { kind: "template_resolution", templateId: facts.missingDefaultTemplateId },

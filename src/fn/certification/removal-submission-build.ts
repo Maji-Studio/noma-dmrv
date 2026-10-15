@@ -239,9 +239,9 @@ export function removalTemplateTierCompatibilityBlocker(
 
   const tierLabel = facilityTier === "1000_year" ? "1000-year" : "200-year";
   return (
-    `This facility uses ${tierLabel} durability, but its default Removal ` +
+    `This facility uses ${tierLabel} durability, but the credit batch's Removal ` +
     `template uses an incompatible storage component (${mismatched}). ` +
-    `Choose a ${tierLabel} template or change the facility's durability tier.`
+    `Switch the credit batch to a ${tierLabel} template or change the facility's durability tier.`
   );
 }
 
@@ -254,10 +254,10 @@ export async function compileRemovalSubmission(
     allowPendingSources?: boolean;
   },
 ): Promise<CompiledRemovalSubmission> {
-  const unbindable = findUnbindableTemplateInputs(args.prepared.defaultTemplate, { allowPeriodInputStub: args.prepared.allowPeriodInputStub });
+  const unbindable = findUnbindableTemplateInputs(args.prepared.removalTemplate, { lineSources: args.prepared.lineSources, allowPeriodInputStub: args.prepared.allowPeriodInputStub });
   if (unbindable.length > 0) {
     return {
-      review: emptyReview(args.prepared.defaultTemplate),
+      review: emptyReview(args.prepared.removalTemplate),
       transportPlan: null,
       blockers: [formatUnbindableTemplateInputsText(unbindable)],
       warnings: [...(args.ctx.submissionWarnings ?? [])],
@@ -266,13 +266,13 @@ export async function compileRemovalSubmission(
   }
   if (
     args.ctx.entityReadinessGaps?.length === 0 &&
-    !hasSupportedSequestrationComponent(args.prepared.defaultTemplate)
+    !hasSupportedSequestrationComponent(args.prepared.removalTemplate)
   ) {
     return {
-      review: emptyReview(args.prepared.defaultTemplate),
+      review: emptyReview(args.prepared.removalTemplate),
       transportPlan: null,
       blockers: [
-        "The default Removal template has no supported biochar sequestration component. Rebind a complete Removal template before submitting.",
+        "The Removal template has no supported biochar sequestration component. Choose a complete Removal template for this credit batch.",
       ],
       warnings: [...(args.ctx.submissionWarnings ?? [])],
       snapshot: null,
@@ -294,7 +294,7 @@ export async function compileRemovalSubmission(
       );
     }
     return {
-      review: emptyReview(args.prepared.defaultTemplate),
+      review: emptyReview(args.prepared.removalTemplate),
       transportPlan: null,
       blockers: [
         error instanceof SafeError
@@ -314,7 +314,7 @@ export async function compileRemovalSubmission(
   );
   const tierBlocker = removalTemplateTierCompatibilityBlocker(
     args.ctx,
-    args.prepared.defaultTemplate,
+    args.prepared.removalTemplate,
   );
   if (tierBlocker) blockers.push(tierBlocker);
   if (
@@ -349,7 +349,7 @@ export async function compileRemovalSubmission(
   });
 
   const templateComponentById = new Map(
-    args.prepared.defaultTemplate.groups
+    args.prepared.removalTemplate.groups
       .flatMap((group) => group.components)
       .map((component) => [component.id, component] as const),
   );
@@ -376,7 +376,7 @@ export async function compileRemovalSubmission(
       binding: "fixed" as const,
       fixedDatapointId: input.preboundDatapointId,
     })),
-    ...args.prepared.defaultTemplate.groups.flatMap((group) =>
+    ...args.prepared.removalTemplate.groups.flatMap((group) =>
       group.components
         .filter((component) =>
           isSequestrationBlueprintFamily(component.blueprint_key),
@@ -400,7 +400,7 @@ export async function compileRemovalSubmission(
   const directSequestrationDatapoints =
     build.durabilityMeasurementSampleArgs
       ? buildDirectSequestrationDatapoints({
-          template: args.prepared.defaultTemplate,
+          template: args.prepared.removalTemplate,
           measurementSampleSubmissions:
             buildVersionedMeasurementSampleSubmissions({
               ...build.durabilityMeasurementSampleArgs,
@@ -421,8 +421,8 @@ export async function compileRemovalSubmission(
 
   const review: RemovalSubmissionReview = {
     template: {
-      id: args.prepared.defaultTemplate.id,
-      displayName: args.prepared.defaultTemplate.display_name,
+      id: args.prepared.removalTemplate.id,
+      displayName: args.prepared.removalTemplate.display_name,
       mappingRevision: MAPPING_REVISION,
     },
     bindings,
@@ -638,7 +638,7 @@ export async function buildRemovalSubmissionBuild(args: {
 }): Promise<RemovalSubmissionBuild> {
   const { orgCtx, removalId, ctx, log } = args;
   const {
-    defaultTemplate,
+    removalTemplate,
     blueprintsByKey,
     externalProjectId,
     allowPeriodInputStub,
@@ -647,7 +647,7 @@ export async function buildRemovalSubmissionBuild(args: {
 
   assertSubmissionLineageResolved(ctx.submissionLineageBlockers);
   assertEntityReadinessGapsResolved(ctx.entityReadinessGaps);
-  assertSequestrationTemplateBindings(defaultTemplate);
+  assertSequestrationTemplateBindings(removalTemplate);
 
   const compiledBiocharApplicationIntents =
     await compileBiocharApplicationIntents({
@@ -753,7 +753,7 @@ export async function buildRemovalSubmissionBuild(args: {
     orgCtx,
     removalId,
     ctx,
-    template: defaultTemplate,
+    template: removalTemplate,
     compiledBiocharApplicationIntents,
     supplied: args,
   });
@@ -764,7 +764,8 @@ export async function buildRemovalSubmissionBuild(args: {
     datapointBodyByKey,
     omittedTemplateComponentIds,
   } = resolveTemplateInputs({
-    template: defaultTemplate,
+    template: removalTemplate,
+    lineSources: args.prepared.lineSources,
     blueprintsByKey,
     agg,
     externalProjectId,
@@ -805,10 +806,10 @@ export async function buildRemovalSubmissionBuild(args: {
     removalId,
     mappingRevision: MAPPING_REVISION,
     externalProjectId,
-    templateId: defaultTemplate.id,
+    templateId: removalTemplate.id,
     omittedTemplateComponentIds,
     sequestrationTemplate: normalizeSequestrationTemplateForHash(
-      defaultTemplate,
+      removalTemplate,
     ),
     sourceProductionRunIds: [...agg.sourceProductionRunIds].sort(),
     startedOn: reportingWindow.startedOn.toISOString(),

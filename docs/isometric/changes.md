@@ -1,5 +1,19 @@
 # Isometric Docs Change Log
 
+## 2026-10-15: Removal templates pinned per credit batch (#1067, #1058)
+
+`removal_template_observations` retains normalized definitions, enriched inputs
+and component-ID line contracts. Owner/Admin review settles proposed or invalid
+contracts. Credit batches copy the facility default on creation; only Switch
+template changes the pin. Removal grouping and compilation use member pins,
+with connection prerequisites kept separate from default-template setup advice.
+Pre-existing rows are not backfilled under the pre-production policy. See
+[ADR 0032](../adr/0032-per-batch-emissions-entries-bound-to-template-lines.md).
+
+Fixed-datapoint REST responses expose no deprecation flag. The deprecated-factor
+readiness advisory remains deferred pending a registry signal; see
+[the open question](../open-questions-isometric.md#fixed-datapoint-deprecation-signal-isometricfixed-datapoint-deprecation).
+
 ## 2026-10-15: Sample moisture retained as evidence only (#942 q1)
 
 Kenji resolved `isometric/sample-moisture-submission`: Sample moisture stays

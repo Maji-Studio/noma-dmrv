@@ -1,0 +1,10 @@
+export * from "./types";
+export { normalizeTemplateDefinition } from "./normalize";
+export { canonicalDecimal, canonicalUnit, unitsConvertible } from "./units";
+export { enrichmentProblems, isEnrichmentComplete, type EnrichmentProblem } from "./enrichment";
+export { semanticFingerprint, fullFingerprint } from "./fingerprints";
+export { AUTOMATIC_SOURCE_IDS, catalogCandidates, type AutomaticSourceId } from "./catalog-sources";
+export { allowedEntryPolicies } from "./entry-policies";
+export { lineNeedsReview, effectiveContract, resolveLineSources, validateLineSources, type LineContract, type LineSources, type LineSourceProblem } from "./line-sources";
+export { BOOTSTRAP_LINE_SOURCES } from "./bootstrap";
+export { compareTemplateObservations, isEntryCompatible, type ComponentChange } from "./compare";

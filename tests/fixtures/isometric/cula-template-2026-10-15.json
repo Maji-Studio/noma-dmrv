@@ -1,0 +1,472 @@
+{
+  "id": "rvt_1M2QJGQS21S0A8H5",
+  "supplier_reference_id": null,
+  "display_name": "LCA based template Cula",
+  "project_id": "prj_1K6G4S1PJ1S0TR4Z",
+  "credit_type": "REMOVAL",
+  "groups": [
+    {
+      "id": "rtg_1M2QJGQS21S0XXCT",
+      "key": "biomass-feedstock-sourcing",
+      "display_name": "Biomass feedstock sourcing",
+      "description": "Any embodied, energy and transport emissions associated with biomass cultivation and harvesting.",
+      "components": []
+    },
+    {
+      "id": "rtg_1M2QJGQS21S0HJ8F",
+      "key": "biomass-feedstock-transport",
+      "display_name": "Biomass feedstock transport",
+      "description": "Transport of biomass including to biomass processing site and all other transport of biomass ahead of production.",
+      "components": [
+        {
+          "id": "rtc_1M2QJGQS21S0XCMB",
+          "display_name": "Biomass transportation to processing site via truck",
+          "description": "Transport of biomass from sourcing locations, determined from actuals using prior production.",
+          "blueprint_key": "transport",
+          "inputs": [
+            {
+              "input_key": "carbon_intensity",
+              "type": "fixed",
+              "datapoint_id": "dtp_1KA382H6F1S0B6KY",
+              "display_name": "Emission factor of transport",
+              "quantity_kind": "mass_distance_carbon_emission_factor"
+            },
+            {
+              "input_key": "distance",
+              "type": "monitored",
+              "datapoint_id": null,
+              "display_name": "Distance traveled",
+              "quantity_kind": "distance"
+            },
+            {
+              "input_key": "mass",
+              "type": "monitored",
+              "datapoint_id": null,
+              "display_name": "Mass of load",
+              "quantity_kind": "mass"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "rtg_1M2QJGQS21S05744",
+      "key": "biomass-feedstock-processing",
+      "display_name": "Biomass feedstock processing",
+      "description": "Any embodied, energy and transport emissions associated with biomass feedstock processing.",
+      "components": []
+    },
+    {
+      "id": "rtg_1M2QJGQS21S0RVZS",
+      "key": "pyrolysis",
+      "display_name": "Pyrolysis",
+      "description": "Emissions associated with pyrolysis including:\n- Energy use.\n- Maintenance of the project site(s), equipment, vehicles, buildings and infrastructure including activities associated with maintenance, repair, replacement and refurbishment.\n- Use of consumables.\n- Waste processing, including the environmentally responsible disposal of non-solid residues.",
+      "components": [
+        {
+          "id": "rtc_1M2QJGQS21S04PBN",
+          "display_name": "Metered electricity use emissions",
+          "description": "Electricity usage emissions from total site. Emission factor sourced from https://unfccc.int/documents/198197 on 2025-11-15. \n\nNote that the data here is an overestimate as in 2024 the JN dam was opened which now provides ~50% of the grid power and the data here is from 2021\n\nAs we cannot categorize the electricity consumption based on the production step (pre-processing, processing or post-processing), we have assigned all the electricity consumption to the Pyrolysis section.",
+          "blueprint_key": "metered_energy_based_ci_emissions",
+          "inputs": [
+            {
+              "input_key": "carbon_intensity",
+              "type": "fixed",
+              "datapoint_id": "dtp_1KA3BZ3A61S0BBWB",
+              "display_name": "Electricity emission factor",
+              "quantity_kind": "energy_carbon_emission_factor"
+            },
+            {
+              "input_key": "final_readout",
+              "type": "monitored",
+              "datapoint_id": null,
+              "display_name": "Electricity final readout",
+              "quantity_kind": "energy"
+            },
+            {
+              "input_key": "initial_readout",
+              "type": "monitored",
+              "datapoint_id": null,
+              "display_name": "Electricity initial readout",
+              "quantity_kind": "energy"
+            }
+          ]
+        },
+        {
+          "id": "rtc_1M2QJGQS21S0RB7A",
+          "display_name": "Startup diesel usage",
+          "description": "Fuel used by diesel burnes to start up the machine. For stationary combustion of diesel in burners/boilers we apply a factor of 2.7 kgCO₂e per litre of diesel combusted (0.0027 tCO₂e/L). This is derived from the IPCC 2006 Guidelines default emission factors for gas/diesel oil in stationary combustion (74 100 kg CO₂/TJ, 3 kg CH₄/TJ, 0.6 kg N₂O/TJ) using standard diesel net calorific value and density. The resulting value is consistent with national GHG reporting factors such as the UK Government GHG Conversion Factors for Company Reporting, which give combustion-only diesel factors in the range 2.5–2.7 kgCO₂e per litre. \nAs we cannot categorize the fuel consumption based on the production step (pre-processing, processing or post-processing), we have assigned all the fuel consumption to the Pyrolysis section.",
+          "blueprint_key": "fuel_usage_by_volume",
+          "inputs": [
+            {
+              "input_key": "fuel_combustion_carbon_intensity",
+              "type": "fixed",
+              "datapoint_id": "dtp_1KA3HT7491S0N36B",
+              "display_name": "Fuel emission factor",
+              "quantity_kind": "volume_carbon_emission_factor"
+            },
+            {
+              "input_key": "volume_of_fuel",
+              "type": "monitored",
+              "datapoint_id": null,
+              "display_name": "Volume of fuel",
+              "quantity_kind": "volume"
+            }
+          ]
+        },
+        {
+          "id": "rtc_1M2QJGQS21S0H1G0",
+          "display_name": "Generator diesel usage",
+          "description": "Fuel used by diesel genset in case of power cuts. For stationary combustion of diesel in burners/boilers we apply a factor of 2.7 kgCO₂e per litre of diesel combusted (0.0027 tCO₂e/L). This is derived from the IPCC 2006 Guidelines default emission factors for gas/diesel oil in stationary combustion (74 100 kg CO₂/TJ, 3 kg CH₄/TJ, 0.6 kg N₂O/TJ) using standard diesel net calorific value and density. The resulting value is consistent with national GHG reporting factors such as the UK Government GHG Conversion Factors for Company Reporting, which give combustion-only diesel factors in the range 2.5–2.7 kgCO₂e per litre.\nThe amount of diesel is a conservative estimate. The logic of this estimate can be found in the source.\nAs we cannot categorize the fuel consumption based on the production step (pre-processing, processing or post-processing), we have assigned all the fuel consumption to the Pyrolysis section.",
+          "blueprint_key": "fuel_usage_by_volume",
+          "inputs": [
+            {
+              "input_key": "fuel_combustion_carbon_intensity",
+              "type": "fixed",
+              "datapoint_id": "dtp_1KA3HT7491S0N36B",
+              "display_name": "Fuel emission factor",
+              "quantity_kind": "volume_carbon_emission_factor"
+            },
+            {
+              "input_key": "volume_of_fuel",
+              "type": "monitored",
+              "datapoint_id": null,
+              "display_name": "Volume of fuel",
+              "quantity_kind": "volume"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "rtg_1M2QJGQS21S0CGVE",
+      "key": "direct-emissions",
+      "display_name": "Direct emissions",
+      "description": "Direct emissions released during pyrolysis.",
+      "components": [
+        {
+          "id": "rtc_1M2QJGQS21S0C02Z",
+          "display_name": "Pyrolyzer CO emissions",
+          "description": "CO emissions from emissions test done during FAT, highest value converted to ppm and then 100% uncertainty applied.\nThe direct CO emissions will be assigned for each reporting period based on the amount of dry biomass used.\nAs the annual mass flow of the gas (36,792 t) is based on an estimated  amount of 17,520t of dry feedstock, the total mass flow for each reporting period will be assigned in the following way:\nReporting period mass flow = reporting period dry feedstock use (t) * (36,792 t/ 17,520 t).",
+          "blueprint_key": "ghg_direct_emissions",
+          "inputs": [
+            {
+              "input_key": "concentration",
+              "type": "monitored",
+              "datapoint_id": null,
+              "display_name": "Concentration of warming species in emitted gas",
+              "quantity_kind": "mass_fraction"
+            },
+            {
+              "input_key": "global_warming_potential",
+              "type": "fixed",
+              "datapoint_id": "dtp_1KA41HTTD1S0SJVN",
+              "display_name": "100-year global warming potential",
+              "quantity_kind": "dimensionless"
+            },
+            {
+              "input_key": "mass_flow",
+              "type": "monitored",
+              "datapoint_id": null,
+              "display_name": "Total mass flow of gas",
+              "quantity_kind": "mass"
+            }
+          ]
+        },
+        {
+          "id": "rtc_1M2QJGQS21S0ZMYM",
+          "display_name": "Pyrolyzer CH₄ emissions",
+          "description": "CH4 emissions from emissions test done during FAT, highest value converted to ppm and then 100% uncertainty applied.\nThe direct CH4 emissions will be assigned for each reporting period based on the amount of dry biomass used.\nAs the annual mass flow of the gas (36,792 t) is based on an estimated  amount of 17,520t of dry feedstock, the total mass flow for each reporting period will be assigned in the following way:\nReporting period mass flow = reporting period dry feedstock use (t) * (36,792 t/ 17,520 t).",
+          "blueprint_key": "ghg_direct_emissions",
+          "inputs": [
+            {
+              "input_key": "concentration",
+              "type": "monitored",
+              "datapoint_id": null,
+              "display_name": "Concentration of warming species in emitted gas",
+              "quantity_kind": "mass_fraction"
+            },
+            {
+              "input_key": "global_warming_potential",
+              "type": "fixed",
+              "datapoint_id": "dtp_1KA41DG2E1S0WBYD",
+              "display_name": "100-year global warming potential",
+              "quantity_kind": "dimensionless"
+            },
+            {
+              "input_key": "mass_flow",
+              "type": "monitored",
+              "datapoint_id": null,
+              "display_name": "Total mass flow of gas",
+              "quantity_kind": "mass"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "rtg_1M2QJGQS21S005Q3",
+      "key": "biochar-processing",
+      "display_name": "Biochar processing",
+      "description": "Emissions associated with biochar processing and characterization including:\n- Energy use.\n- Maintenance of the project site(s), equipment, vehicles, buildings and infrastructure including activities associated with maintenance, repair, replacement and refurbishment.\n- Use of consumables.\n- Waste processing.",
+      "components": []
+    },
+    {
+      "id": "rtg_1M2QJGQS21S0KTJR",
+      "key": "biochar-transport",
+      "display_name": "Biochar transport",
+      "description": "All transport of biochar including to biochar processing site and to the biochar storage site.",
+      "components": [
+        {
+          "id": "rtc_1M2QJGQS21S0K9T9",
+          "display_name": "Biochar transportation to storage site via truck",
+          "description": "Emissions related to biochar transportation, based on a distance-mass method.",
+          "blueprint_key": "transport",
+          "inputs": [
+            {
+              "input_key": "carbon_intensity",
+              "type": "fixed",
+              "datapoint_id": "dtp_1KA3YYVS91S0BPD5",
+              "display_name": "Emission factor of transport",
+              "quantity_kind": "mass_distance_carbon_emission_factor"
+            },
+            {
+              "input_key": "distance",
+              "type": "monitored",
+              "datapoint_id": null,
+              "display_name": "Distance traveled",
+              "quantity_kind": "distance"
+            },
+            {
+              "input_key": "mass",
+              "type": "monitored",
+              "datapoint_id": null,
+              "display_name": "Mass of load",
+              "quantity_kind": "mass"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "rtg_1M2QJGQS21S07FED",
+      "key": "biochar-storage",
+      "display_name": "Biochar storage",
+      "description": "Emissions associated with biochar storage including:\n- Energy use through electricity or fuel consumption.\n- Maintenance of the project site(s), equipment, vehicles, buildings and infrastructure including activities associated with maintenance, repair, replacement and refurbishment.\n- Use of consumables.\n- Waste processing.\n- Land use change emissions associated with application requiring burial.",
+      "components": []
+    },
+    {
+      "id": "rtg_1M2QJGQS21S0V4A2",
+      "key": "co2-stored",
+      "display_name": "CO₂ stored",
+      "description": "The gross amount of CO₂ removed and durably stored from a biochar project over a reporting period.",
+      "components": [
+        {
+          "id": "rtc_1M2QJGQS21S06YNY",
+          "display_name": "CO₂ stored from biochar application",
+          "description": "Carbon sequestered via biochar application to fields",
+          "blueprint_key": "carbon_rich_substance_sequestration",
+          "inputs": [
+            {
+              "input_key": "carbon_content",
+              "type": "monitored",
+              "datapoint_id": null,
+              "display_name": "Carbon content of product",
+              "quantity_kind": "dimensionless"
+            },
+            {
+              "input_key": "product_mass",
+              "type": "monitored",
+              "datapoint_id": null,
+              "display_name": "Mass of product",
+              "quantity_kind": "mass"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "rtg_1M2QJGQS21S0ES5Q",
+      "key": "sampling-required-for-mrv",
+      "display_name": "Sampling required for MRV",
+      "description": "Any embodied, energy and transport emissions associated with sampling for MRV purposes, including transportation to collect samples, shipping of samples for laboratory analysis and sample processing.",
+      "components": [
+        {
+          "id": "rtc_1M2QJGQS21S0TKHK",
+          "display_name": "Laboratory analysis electricity use EU",
+          "description": "Estimated electricity usage. Conservative.",
+          "blueprint_key": "grid_electricity_use",
+          "inputs": [
+            {
+              "input_key": "electricity_use",
+              "type": "monitored",
+              "datapoint_id": null,
+              "display_name": "Total electricity usage",
+              "quantity_kind": "energy"
+            },
+            {
+              "input_key": "grid_carbon_intensity",
+              "type": "fixed",
+              "datapoint_id": "dtp_1KA6B4FE41S01SCW",
+              "display_name": "Electricity grid emission factor",
+              "quantity_kind": "energy_carbon_emission_factor"
+            }
+          ]
+        },
+        {
+          "id": "rtc_1M2QJGQS21S0E8D8",
+          "display_name": "Sampling consumables",
+          "description": "Plastic sampling bags etc. extremely conservative estimate, most likely closer to 10kg worth of plastic used.",
+          "blueprint_key": "mass_based_ci_emissions",
+          "inputs": [
+            {
+              "input_key": "carbon_intensity",
+              "type": "fixed",
+              "datapoint_id": "dtp_1KA6B1DQJ1S0CCZD",
+              "display_name": "Carbon emission factor",
+              "quantity_kind": "mass_carbon_emission_factor"
+            },
+            {
+              "input_key": "mass",
+              "type": "monitored",
+              "datapoint_id": null,
+              "display_name": "Mass",
+              "quantity_kind": "mass"
+            }
+          ]
+        },
+        {
+          "id": "rtc_1M2QJGQS21S01X8X",
+          "display_name": "Mass-distance-based CI emissions samples to EU",
+          "description": "DHL of samples to EU lab. 10 samples per year @4kg per sample going 7000km.",
+          "blueprint_key": "mass_distance_based_ci_emissions",
+          "inputs": [
+            {
+              "input_key": "carbon_intensity",
+              "type": "fixed",
+              "datapoint_id": "dtp_1KSEYKF561S0B52C",
+              "display_name": "Emission factor of transport",
+              "quantity_kind": "mass_distance_carbon_emission_factor"
+            },
+            {
+              "input_key": "mass_distance",
+              "type": "monitored",
+              "datapoint_id": null,
+              "display_name": "Mass multiplied by distance",
+              "quantity_kind": "mass_distance"
+            }
+          ]
+        },
+        {
+          "id": "rtc_1M2QJGQS21S0NJ4J",
+          "display_name": "Mass-distance-based CI emissions samples to India",
+          "description": "DHL of samples to India lab. 10 samples per year @4kg per sample going 4600km.",
+          "blueprint_key": "mass_distance_based_ci_emissions",
+          "inputs": [
+            {
+              "input_key": "carbon_intensity",
+              "type": "fixed",
+              "datapoint_id": "dtp_1KSEYKF561S0B52C",
+              "display_name": "Emission factor of transport",
+              "quantity_kind": "mass_distance_carbon_emission_factor"
+            },
+            {
+              "input_key": "mass_distance",
+              "type": "monitored",
+              "datapoint_id": null,
+              "display_name": "Mass multiplied by distance",
+              "quantity_kind": "mass_distance"
+            }
+          ]
+        },
+        {
+          "id": "rtc_1M2QJGQS21S09707",
+          "display_name": "Laboratory analysis electricity use India",
+          "description": "Estimated electricity usage. Conservative.",
+          "blueprint_key": "grid_electricity_use",
+          "inputs": [
+            {
+              "input_key": "electricity_use",
+              "type": "monitored",
+              "datapoint_id": null,
+              "display_name": "Total electricity usage",
+              "quantity_kind": "energy"
+            },
+            {
+              "input_key": "grid_carbon_intensity",
+              "type": "fixed",
+              "datapoint_id": "dtp_1M1H0ZAPD1S0DTG0",
+              "display_name": "Electricity grid emission factor",
+              "quantity_kind": "energy_carbon_emission_factor"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "rtg_1M2QJGQS21S02E1C",
+      "key": "staff-travel",
+      "display_name": "Staff travel",
+      "description": "Flight, car, train or other travel required for the project operations, including contractors and suppliers required on site.",
+      "components": [
+        {
+          "id": "rtc_1M2QJGQS21S0WVVW",
+          "display_name": "Staff travel local",
+          "description": "Estimated staff travel amounts for project, conservative estimate as all staff use public transport or walking primarily to get around. Small amounts of vehicle usage outside of operations which are already accounted for.",
+          "blueprint_key": "distance_based_ci_emissions",
+          "inputs": [
+            {
+              "input_key": "carbon_intensity",
+              "type": "fixed",
+              "datapoint_id": "dtp_1KSEYXK5Z1S0A3HE",
+              "display_name": "Distance emission factor",
+              "quantity_kind": "distance_carbon_emission_factor"
+            },
+            {
+              "input_key": "distance",
+              "type": "monitored",
+              "datapoint_id": null,
+              "display_name": "Distance traveled",
+              "quantity_kind": "distance"
+            }
+          ]
+        },
+        {
+          "id": "rtc_1M2QJGQS21S0GGQH",
+          "display_name": "Staff travel flights",
+          "description": "Intl flights by staff for project requirements, approximately 3 round trip flights from Tanzania to Europe per year related to the project, although in practice this has actually been zero round trip flights as we try not to travel unless needed.",
+          "blueprint_key": "distance_based_ci_emissions",
+          "inputs": [
+            {
+              "input_key": "carbon_intensity",
+              "type": "fixed",
+              "datapoint_id": "dtp_1KSEYZX4Z1S0291N",
+              "display_name": "Distance emission factor",
+              "quantity_kind": "distance_carbon_emission_factor"
+            },
+            {
+              "input_key": "distance",
+              "type": "monitored",
+              "datapoint_id": null,
+              "display_name": "Distance traveled",
+              "quantity_kind": "distance"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "rtg_1M2QJGQS21S0P2X1",
+      "key": "surveys",
+      "display_name": "Surveys",
+      "description": "Equipment, energy use and transport associated with surveys e.g. ecological surveys.",
+      "components": []
+    },
+    {
+      "id": "rtg_1M2QJGQS21S09QRP",
+      "key": "miscellaneous",
+      "display_name": "Miscellaneous",
+      "description": "Any SSRs not captured by other groups.",
+      "components": []
+    }
+  ]
+}
