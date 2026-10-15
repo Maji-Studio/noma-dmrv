@@ -29,9 +29,9 @@ it("projects exactly the published fields and drops joined, private and unpublis
   expect(representLabSample(JSON.parse(JSON.stringify(data)))).toEqual(data);
 });
 
-it("normalizes the sampling instant to UTC and keeps a legacy null batch", () => {
-  expect(representLabSample({ ...row, samplingTime: "2026-10-06T15:00:00+03:00", creditBatchId: null, createdAt: "2026-10-06T15:00:00+03:00" }))
-    .toMatchObject({ samplingTime: "2026-10-06T12:00:00.000Z", creditBatchId: null, createdAt: "2026-10-06T12:00:00.000Z" });
+it("normalizes the sampling instant to UTC and keeps its batch", () => {
+  expect(representLabSample({ ...row, samplingTime: "2026-10-06T15:00:00+03:00", creditBatchId: id, createdAt: "2026-10-06T15:00:00+03:00" }))
+    .toMatchObject({ samplingTime: "2026-10-06T12:00:00.000Z", creditBatchId: id, createdAt: "2026-10-06T12:00:00.000Z" });
 });
 
 it("describes every published field", () => {

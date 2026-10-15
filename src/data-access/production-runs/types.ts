@@ -2,7 +2,7 @@
  * Shared types for the production-runs data-access layer.
  */
 
-import type { ProductionRun, Sample } from "@/db/schema";
+import type { ProductionRun } from "@/db/schema";
 import type { ProductionRunStatus } from "@/lib/production-runs/lifecycle";
 
 export interface ProductionRunFeedstockWithDetails {
@@ -96,7 +96,6 @@ export interface ProductionRunReadingRecord {
   createdAt: Date;
 }
 
-export type ProductionRunWithSamples = ProductionRun & {
+export type ProductionRunForCertification = ProductionRun & {
   hasReadingsFile: boolean;
-  samples: Sample[];
 };

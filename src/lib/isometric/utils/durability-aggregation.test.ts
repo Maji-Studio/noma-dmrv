@@ -4,7 +4,6 @@ import {
   buildPerBatchDurabilityData,
   buildSoilTemperatureReconciliationWarnings,
   buildSoilTemperatureGate,
-  reconcileDeclaredHToCorg,
   resolveConservativeSoilTemperature,
   resolveFacilityReferenceSoilTemperature,
   resolveSoilTemperatureScope,
@@ -181,23 +180,6 @@ describe("resolveConservativeSoilTemperature (D2 soil-temp resolution)", () => {
     expect(r.effectiveSoilTemperatureC).toBeNull();
     expect(r.maxSoilTemperatureC).toBeNull();
     expect(r.warnings.length).toBeGreaterThan(0);
-  });
-});
-
-describe("reconcileDeclaredHToCorg (D5a divergence guard)", () => {
-  it("returns no warning when declared matches aggregated within tolerance", () => {
-    expect(reconcileDeclaredHToCorg(0.3, 0.305)).toBeNull();
-  });
-
-  it("warns when declared diverges beyond tolerance", () => {
-    const w = reconcileDeclaredHToCorg(0.3, 0.45);
-    expect(w).not.toBeNull();
-    expect(w).toMatch(/0\.3/);
-  });
-
-  it("returns no warning when either value is missing", () => {
-    expect(reconcileDeclaredHToCorg(null, 0.3)).toBeNull();
-    expect(reconcileDeclaredHToCorg(0.3, null)).toBeNull();
   });
 });
 

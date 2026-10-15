@@ -14,8 +14,7 @@ import { getBatchesWithLabReports } from "./sample-document-evidence";
  * A credit batch's durability inputs as loaded from the DB: its lab Samples
  * pooled on `samples.creditBatchId` (across member runs/days — ADR 0016 made the
  * credit batch the sampling unit and the run link nullable provenance), its
- * member production runs, and the sampling choice + declared H/C_org carried for
- * the gate and reconciliation. Structurally a superset of
+ * member production runs, and the sampling choice. Structurally a superset of
  * `CreditBatchDurabilityInput`, so it feeds `buildPerBatchDurabilityData`
  * directly.
  */
@@ -29,8 +28,6 @@ export interface CreditBatchWithSamples extends CreditBatchDurabilityInput {
   runs: Array<{ id: string; code: string; biocharDryMassKg: number | null }>;
   /** Immutable sampled/unsampled choice stored on this batch (ADR 0022). */
   sampling: CreditBatchSampling;
-  /** Operator-declared `credit_batches.h_to_c_org_ratio` (advisory; reconciled). */
-  declaredHToCorgRatio: number | null;
   /** The batch's declared durability tier — its samples inherit it (issue #309). */
   durabilityOption: "200_year" | "1000_year";
 }
@@ -58,7 +55,6 @@ export async function getCreditBatchesWithSamples(
       startDate: creditBatches.startDate,
       endDate: creditBatches.endDate,
       sampling: creditBatches.sampling,
-      declaredHToCorgRatio: creditBatches.hToCorgRatio,
       // Tier is inherited from the facility (ADR 0021), not a batch column.
       durabilityOption: facilities.durabilityOption,
       facilityTimezone: facilities.timezone,
@@ -100,10 +96,8 @@ export async function getCreditBatchesWithSamples(
     runsByBatch.set(row.creditBatchId, list);
   }
 
-  // Samples pooled by credit batch — the key re-grain. Skips the null-run filter
-  // `getProductionRunsWithSamples` applies, so commingled-batch chemistry is
-  // visible to the durability surfaces again. Ordered by id: Postgres gives no
-  // row order without one, and the 1000-year submission body (and thus its
+  // Samples pooled by credit batch, including commingled biochar. Ordered by id:
+  // Postgres gives no row order without one, and the 1000-year submission body (and thus its
   // change-detection hash) carries per-replicate values in this order — an
   // unordered read could flip the hash for unchanged rows.
   const sampleRows = await db
@@ -113,7 +107,6 @@ export async function getCreditBatchesWithSamples(
     .orderBy(asc(samples.id));
   const samplesByBatch = new Map<string, Sample[]>();
   for (const s of sampleRows) {
-    if (s.creditBatchId == null) continue;
     const list = samplesByBatch.get(s.creditBatchId) ?? [];
     list.push(s);
     samplesByBatch.set(s.creditBatchId, list);
@@ -128,7 +121,6 @@ export async function getCreditBatchesWithSamples(
     endDate: batch.endDate,
     facilityTimezone: batch.facilityTimezone,
     sampling: batch.sampling,
-    declaredHToCorgRatio: batch.declaredHToCorgRatio,
     durabilityOption: batch.durabilityOption,
     runs: runsByBatch.get(batch.id) ?? [],
     samples: samplesByBatch.get(batch.id) ?? [],
@@ -165,15 +157,5 @@ export async function getSamplesByCreditBatchIds(
     .from(samples)
     .where(and(inArray(samples.creditBatchId, ids), eq(samples.organizationId, ctx.organizationId)));
 
-  return rows.flatMap((row) =>
-    row.creditBatchId == null
-      ? []
-      : [
-          {
-            id: row.id,
-            creditBatchId: row.creditBatchId,
-            sampleCode: row.sampleCode,
-          },
-        ],
-  );
+  return rows;
 }

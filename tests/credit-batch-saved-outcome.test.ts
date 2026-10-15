@@ -62,8 +62,8 @@ let feedstockTypeId: string;
 
 const ACCOUNTING_LOAD_FAILURE_MESSAGE =
   "credit batch accounting could not be loaded after a committed write";
-const H_TO_CORG_BEFORE = 0.4;
-const H_TO_CORG_AFTER = 0.5;
+const NOTES_BEFORE = "Original notes";
+const NOTES_AFTER = "Updated notes";
 
 function monthWindow(month: string) {
   const startDate = new Date(`${month}-01T00:00:00.000Z`);
@@ -80,18 +80,18 @@ async function makeBatch(month: string, code: string) {
     facilityId,
     feedstockTypeId,
     productionRunIds: [],
-    hToCorgRatio: H_TO_CORG_BEFORE,
+    siteManagementNotes: NOTES_BEFORE,
   });
   createdBatchIds.push(batch.id);
   return batch;
 }
 
-async function storedRatio(id: string): Promise<number | null> {
+async function storedNotes(id: string): Promise<string | null> {
   const [row] = await db
-    .select({ hToCorgRatio: creditBatches.hToCorgRatio })
+    .select({ siteManagementNotes: creditBatches.siteManagementNotes })
     .from(creditBatches)
     .where(eq(creditBatches.id, id));
-  return row?.hToCorgRatio == null ? null : Number(row.hToCorgRatio);
+  return row?.siteManagementNotes ?? null;
 }
 
 beforeAll(async () => {
@@ -151,7 +151,7 @@ describe("credit batch writes describe what they committed", () => {
     expect(batch.previewAvailable).toBe(true);
     expect(batch.appliedWeightTons).toBe(0);
     expect(batch.applicationIds).toEqual([]);
-    expect(await storedRatio(batch.id)).toBe(H_TO_CORG_BEFORE);
+    expect(await storedNotes(batch.id)).toBe(NOTES_BEFORE);
   });
 
   it("create still answers the committed row when the roll-up does not load", async () => {
@@ -164,7 +164,7 @@ describe("credit batch writes describe what they committed", () => {
     expect(batch.applicationIds).toBeNull();
     expect(batch.applicationCount).toBeNull();
     expect(batch.productionRunIds).toEqual([]);
-    expect(await storedRatio(batch.id)).toBe(H_TO_CORG_BEFORE);
+    expect(await storedNotes(batch.id)).toBe(NOTES_BEFORE);
     expect(mocks.loggerError).toHaveBeenCalledWith(
       expect.objectContaining({ creditBatchId: batch.id }),
       ACCOUNTING_LOAD_FAILURE_MESSAGE,
@@ -175,14 +175,14 @@ describe("credit batch writes describe what they committed", () => {
     const batch = await makeBatch("2025-03", `CB-SO-UPDATE-OK-${Date.now()}`);
 
     const updated = await updateCreditBatch(ctx, batch.id, { expectedVersion: await labLogisticsVersion(ctx, "creditBatches", batch.id),
-      hToCorgRatio: H_TO_CORG_AFTER,
+      siteManagementNotes: NOTES_AFTER,
     });
 
     expect(updated.previewAvailable).toBe(true);
-    expect(Number(updated.hToCorgRatio)).toBe(H_TO_CORG_AFTER);
+    expect(updated.siteManagementNotes).toBe(NOTES_AFTER);
     expect(updated.facility?.name).toContain("Saved-Outcome Facility");
     expect(updated.feedstockTypeName).toContain("Saved-Outcome Woodchips");
-    expect(await storedRatio(batch.id)).toBe(H_TO_CORG_AFTER);
+    expect(await storedNotes(batch.id)).toBe(NOTES_AFTER);
   });
 
   it("update still answers the committed row when the roll-up does not load (issue #797)", async () => {
@@ -190,18 +190,18 @@ describe("credit batch writes describe what they committed", () => {
     mocks.rollupFailure = new Error("roll-up unavailable");
 
     const updated = await updateCreditBatch(ctx, batch.id, { expectedVersion: await labLogisticsVersion(ctx, "creditBatches", batch.id),
-      hToCorgRatio: H_TO_CORG_AFTER,
+      siteManagementNotes: NOTES_AFTER,
     });
 
     // The save landed and is described as such; only the roll-up is unknown.
     expect(updated.id).toBe(batch.id);
     expect(updated.previewAvailable).toBe(false);
-    expect(Number(updated.hToCorgRatio)).toBe(H_TO_CORG_AFTER);
+    expect(updated.siteManagementNotes).toBe(NOTES_AFTER);
     expect(updated.appliedWeightTons).toBeNull();
     expect(updated.applicationIds).toBeNull();
     expect(updated.co2eStoredPreview).toBeNull();
     expect(updated.productionRunIds).toEqual([]);
-    expect(await storedRatio(batch.id)).toBe(H_TO_CORG_AFTER);
+    expect(await storedNotes(batch.id)).toBe(NOTES_AFTER);
     expect(mocks.loggerError).toHaveBeenCalledWith(
       expect.objectContaining({ creditBatchId: batch.id }),
       ACCOUNTING_LOAD_FAILURE_MESSAGE,

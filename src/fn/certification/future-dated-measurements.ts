@@ -18,9 +18,9 @@
  * future, so is the maximum.
  */
 import { formatUtcDate } from "@/lib/date-utils";
-import type { ProductionRunWithSamples } from "@/lib/isometric/utils/aggregation";
+import type { ProductionRunForCertification } from "@/lib/isometric/utils/aggregation";
 
-type FutureDateRun = Pick<ProductionRunWithSamples, "code" | "endTime">;
+type FutureDateRun = Pick<ProductionRunForCertification, "code" | "endTime">;
 type FutureDateSample = {
   sampleCode: string;
   samplingTime?: Date | null;

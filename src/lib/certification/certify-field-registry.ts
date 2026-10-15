@@ -77,8 +77,6 @@ export const AGGREGATED_PRODUCTION_DATA_KEYS = [
   "weightedOrganicCarbonPercent",
   "weightedHToCorgRatio",
   "weightedOToCorgRatio",
-  "weightedAshPercent",
-  "weightedMoisturePercent",
   "totalBiocharDryMassKg",
   "totalFeedstockDryMassKg",
   "totalStartupDieselLitres",
