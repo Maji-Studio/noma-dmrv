@@ -182,8 +182,6 @@ export async function getOrders(
       orderDate: orders.orderDate,
       quantityKg: orders.quantityKg,
       packaging: orders.packaging,
-      value: orders.value,
-      currency: orders.currency,
       archivedAt: orders.archivedAt,
       createdAt: orders.createdAt,
       updatedAt: orders.updatedAt,

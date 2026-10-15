@@ -48,8 +48,6 @@ export async function getOrganizationDefaults(
 
 export async function upsertOrganizationDefaults(
   ctx: OrgContext,
-  // `default_currency` is not part of the defaults (see open-questions
-  // `orders/pricing`), so a save leaves the stored column alone.
   input: OrganizationDefaults,
 ): Promise<OrganizationDefaults> {
   requireOrgScope(ctx);

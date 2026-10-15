@@ -259,8 +259,6 @@ describe("OrderForm customer field", () => {
       orderDate: "2026-09-01",
       quantityKg: 1000,
       packaging: "loose",
-      value: null,
-      currency: "TZS",
     } as unknown as Order);
 
     expect(state.detailRequests).toContainEqual({

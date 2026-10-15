@@ -83,8 +83,6 @@ export const orders = pgTable('orders', {
   formulationId: uuid('formulation_id').notNull().references(() => formulations.id),
   quantityKg: real('quantity_kg').notNull(),
   packaging: packagingType('packaging').notNull(),
-  value: real('value'),
-  currency: text('currency').notNull().default('TZS'), // ISO 4217 code
 
   // Stamped by the facility archive cascade; NULL = active
   archivedAt: timestamp('archived_at'),

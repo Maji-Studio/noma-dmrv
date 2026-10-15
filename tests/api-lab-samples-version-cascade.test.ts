@@ -36,7 +36,7 @@ async function fixture(options: Parameters<typeof createApiLabFixture>[0] = {}) 
 /** A batch for run 2 that does not overlap batch A's early window (see `EARLY_WINDOW`). */
 async function laterBatch(f: ApiLabFixture, runIds: string[]) {
   return createCreditBatch(f.ctx, {
-    code: `CB-VC-${f.tag}`, facilityId: f.facility.id, feedstockTypeId: f.feedstockTypeId, ...LATER_WINDOW, productionRunIds: runIds, currency: "TZS",
+    code: `CB-VC-${f.tag}`, facilityId: f.facility.id, feedstockTypeId: f.feedstockTypeId, ...LATER_WINDOW, productionRunIds: runIds,
   });
 }
 

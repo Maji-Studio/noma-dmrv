@@ -48,7 +48,7 @@ export async function seedDistribution(infra: Infrastructure, counts: SeedCounts
   const order = await unwrap("create coffee farm order", createOrderFn(createOrderSchema.parse({
     facilityId, customerId: infra.customer.id, customerLocationId: infra.customerLocation.id,
     formulationId: infra.formulation.id, orderDate: ORDER.date, quantityKg: ORDER.quantityKg,
-    packaging: ORDER.packaging, currency: ORDER.currency,
+    packaging: ORDER.packaging,
   })));
   counts.add("orders");
   const deliveredAt = combineDateAndTime(SHIPMENT.date, SHIPMENT.time, TIME_ZONE).toISOString();

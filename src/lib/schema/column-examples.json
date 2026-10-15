@@ -432,8 +432,6 @@
     "biochar_product_id": "bp_001",
     "quantity_kg": 500,
     "packaging": "bulk_bags",
-    "value": 750000,
-    "currency": "TZS",
     "createdAt": "2025-06-14T09:00:00Z",
     "updatedAt": "2025-06-16T14:00:00Z"
   },
@@ -567,8 +565,6 @@
     "end_date": "2025-06-30",
     "certifier": "isometric",
     "registry": "Isometric Registry",
-    "value": 45000000,
-    "currency": "TZS",
     "buffer_pool_percent": 10,
     "h_to_corg_ratio": 0.27,
     "mean_random_reflectance_percent": 1.85,
@@ -585,10 +581,6 @@
     "n2o_composition_percent": 0.032,
     "n2o_ppm": 320,
     "site_management_notes": "No tillage, mulch cover",
-    "affidavit_reference": "AFF-2025-Q2-001",
-    "intended_use_confirmation": true,
-    "company_verification_ref": "CV-NBO-2025",
-    "mixing_timeline_days": 14,
     "createdAt": "2025-06-30T10:00:00Z",
     "updatedAt": "2025-06-30T10:00:00Z"
   },

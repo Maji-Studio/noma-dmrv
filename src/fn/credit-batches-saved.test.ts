@@ -66,7 +66,6 @@ const input = {
   endDate: new Date("2026-01-31T00:00:00.000Z"),
   sampling: "sampled" as const,
   productionRunIds: [],
-  currency: "TZS" as const,
 };
 
 /** The committed row, as the data-access layer answers it. */

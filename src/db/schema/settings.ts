@@ -2,10 +2,8 @@
  * Organization operating defaults.
  *
  * These are the facts an operator re-types on every record because the codebase
- * had nowhere to put them: the currency they trade in, the country and timezone
- * they work in, how they evidence an application, how they ship. Each was a
- * hardcoded literal repeated in three to five places — `'TZS'` in five files, `'UTC'` in three — which is a
- * multi-tenant app encoding one tenant's habits as physics.
+ * had nowhere to put them: the country and timezone they work in, how they
+ * evidence an application, and how they ship.
  *
  * Deliberately NOT here: anything protocol-derived. A settings row that could
  * move `SOIL_TEMPERATURE_FLOOR_C`, the Woolf/Sanei durability coefficients, the
@@ -37,8 +35,6 @@ export const organizationSettings = pgTable(
       .notNull()
       .references(() => organizations.id),
 
-    /** ISO 4217. Text, not an enum, matching `orders.currency`. */
-    defaultCurrency: text("default_currency").notNull().default("TZS"),
     /**
      * Nullable on purpose: most organizations work in one country, but "we have
      * not said" is a real state, and it is not the same as the `'UNKNOWN'` that

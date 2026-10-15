@@ -65,6 +65,10 @@ at least one measured value in the shared input schemas. Database CHECKs keep
 recorded weight and volume non-negative, allowing null. Both child
 event times use the parent run's facility clock.
 
+Orders and credit batches store no price or currency, organization operating
+defaults have no default currency, and credit batches store no third-party sale
+verification fields.
+
 ## API bookkeeping
 
 All four tables live in `src/db/schema/api.ts`:

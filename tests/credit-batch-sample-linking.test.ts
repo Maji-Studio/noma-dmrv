@@ -73,7 +73,6 @@ const baseBatchData = {
   // Durability tier is inherited from the facility (ADR 0021), no longer a batch
   // field — the main test facility is explicitly 200-year below.
   hToCorgRatio: 0.4,
-  currency: "TZS" as const,
   // Feedstock type is now DECLARED (ADR 0016 amendment) and guarded against the
   // member runs. Set in beforeAll to the single seeded type all runs share.
   feedstockTypeId: "",

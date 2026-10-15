@@ -527,7 +527,7 @@ Three ways to pick one of a few options. Choose by what the choice does.
 |---|---|---|
 | `ChoiceCardGroup` | The choice has a consequence the operator should read before picking: 2 to 6 options, each with a one-line caption and optionally a small drawing | evidence method, GIS boundary entry, stock mode |
 | `SegmentedControl` | Short, equal options that read as a mode: 2 to 5, labels only | loss / count, storage type, run status, severity, order packaging |
-| `FormSelect` | Hard-coded lists and secondary enum fields | currency, category, units |
+| `FormSelect` | Hard-coded lists and secondary enum fields | category, units |
 | `EntitySelect` / `FormEntitySelect` | Lists of user data, with search from six options | storage bins, customer locations, deliveries, registry projects and templates |
 
 A one-option enum is a fixed value, not a control.

@@ -233,6 +233,8 @@ first and never locks an existing delivery, so these writers cannot cycle.
 Delivery updates take artifacts before the facility share lock, then the delivery
 row, preserving the same archive ordering.
 
+REST/MCP order writes reject unknown keys.
+
 The order body contains stored fields only. `GET /api/v1/orders/{idOrCode}/balance`
 and `get_order_balance` use one repeatable-read snapshot for ordered, delivered
 and remaining wet kilograms and fulfillment status. Archived orders include

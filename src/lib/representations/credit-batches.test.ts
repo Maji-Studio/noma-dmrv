@@ -13,12 +13,14 @@ const row: CreditBatchRepresentationInput = {
 it("projects the narrow lookup fields and strips the rich batch row", () => {
   const rich = {
     ...row, organizationId: "foreign", productionProcessId: id, hToCorgRatio: 0.3, fDurableCalculated: 0.8, value: 1, currency: "TZS",
+    affidavitReference: "legacy", intendedUseConfirmation: "legacy", companyVerificationRef: "legacy", mixingTimelineDays: 14,
     durabilityOption: "1000_year", co2eStored: 12, rollups: { samples: 3 }, cursorCreatedAt: "2026-10-06T12:00:00.000000Z",
   };
   const data = representCreditBatch(rich as CreditBatchRepresentationInput);
   expect(Object.keys(data).sort()).toEqual(Object.keys(creditBatchRepresentationSchema.shape).sort());
   expect(data).toEqual({ ...row, createdAt: now.toISOString(), updatedAt: now.toISOString() });
-  for (const field of ["organizationId", "productionProcessId", "hToCorgRatio", "fDurableCalculated", "durabilityOption", "co2eStored", "rollups"]) {
+  for (const field of ["organizationId", "productionProcessId", "hToCorgRatio", "fDurableCalculated", "durabilityOption", "co2eStored", "rollups", "value", "currency",
+    "affidavitReference", "intendedUseConfirmation", "companyVerificationRef", "mixingTimelineDays"]) {
     expect(data).not.toHaveProperty(field);
   }
 });

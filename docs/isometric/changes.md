@@ -1,5 +1,15 @@
 # Isometric Docs Change Log
 
+## 2026-10-15: Third-party sale verification fields dropped
+
+Credit batches no longer store the third-party sale verification columns
+`affidavit_reference`, `intended_use_confirmation`, `company_verification_ref`,
+and `mixing_timeline_days` (decision #942 q26).
+`biochar.third_party_sale` is listed as **Not supported** in
+[`condition-registry.md`](./condition-registry.md). The old `G-SZZR-0` reference
+was not found in the pinned protocols. Supporting a third-party sale requires
+a new design; registry requirements still apply.
+
 ## 2026-10-13: Reactor time-series upload retired
 
 The reactor time-series upload pipeline was removed in issue #987. The approved

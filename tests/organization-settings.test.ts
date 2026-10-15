@@ -75,25 +75,6 @@ describe.sequential("organization operating defaults", () => {
     });
   });
 
-  it("leaves a stored default currency alone when defaults are saved", async () => {
-    const ctx = makeTestOrgContext();
-    await db
-      .insert(organizationSettings)
-      .values({ organizationId: TEST_ORG_ID, defaultCurrency: "EUR" });
-    await upsertOrganizationDefaults(ctx, {
-      defaultCountry: "Kenya",
-      defaultTimezone: "Africa/Nairobi",
-      defaultEvidenceMethod: "location",
-      defaultPackaging: "bagged",
-    });
-
-    const [row] = await db
-      .select({ defaultCurrency: organizationSettings.defaultCurrency })
-      .from(organizationSettings)
-      .where(eq(organizationSettings.organizationId, TEST_ORG_ID));
-    expect(row?.defaultCurrency).toBe("EUR");
-  });
-
   it("keeps an unset country null rather than storing a placeholder", async () => {
     // Facility and party rows persist `'UNKNOWN'` today. A default nobody chose
     // should not look chosen, so the organization-level field stays null.

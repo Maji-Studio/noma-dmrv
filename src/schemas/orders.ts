@@ -49,11 +49,6 @@ export const orderFormSchema = z.object({
   orderDate: calendarDateSchema(),
   quantityKg: orderQuantityKgSchema,
   packaging: z.enum(packagingTypes, { error: "Packaging type is required" }),
-
-  // Price and currency are not collected (open-questions `orders/pricing`).
-  // `orders.value` stays null and `orders.currency` takes its column default;
-  // both parse as unknown keys and are stripped, so an edit never touches
-  // stored values.
 });
 
 // ============================================
