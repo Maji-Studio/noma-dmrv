@@ -61,7 +61,7 @@ describe("buildEntityReadinessResult", () => {
     const batch = { ...batchWithSamples([labSample("s1", "S-001", { moistureContentPercent: null })]), creditBatchCode: "CB-001", hasLabReport: false };
     const result = buildEntityReadinessResult([], [batch], { feedstock: [], biochar: [], sample: [] }, []);
     expect(result.gaps).toEqual(["Sample S-001: Sample moisture"]);
-    expect(result.warnings).toEqual(["Credit batch CB-001 has no lab report document. Upload a lab report to a Sample or the credit batch. You can still submit the Removal."]);
+    expect(result.warnings).toEqual(["Credit batch CB-001 has no lab report document. Upload a lab report to one of its Samples. You can still submit the Removal."]);
   });
 
   it("keeps the ready-batch fixture ready when Application evidence is absent", () => {

@@ -29,4 +29,16 @@ describe("getBatchesWithLabReports", () => {
     expect(evidence.params).toEqual(expect.arrayContaining(["uploaded", "lab_report", "sample-a", "batch-a", "batch-b"]));
     expect(evidence.sql).toContain(documents.uploadStatus.name);
   });
+  it("reuses loaded Samples and only reads documents", async () => {
+    const select = vi.mocked(db.select);
+    select.mockClear();
+    select.mockReturnValue({
+      from: () => ({ where: () => Promise.resolve([{ entityId: "sample-a", entityType: "sample" }]) }),
+    } as unknown as ReturnType<typeof db.select>);
+    expect(await getBatchesWithLabReports(ctx, ["batch-a"], db, [
+      { id: "sample-a", creditBatchId: "batch-a" },
+    ])).toEqual(new Set(["batch-a"]));
+    expect(select).toHaveBeenCalledTimes(1);
+  });
+
 });

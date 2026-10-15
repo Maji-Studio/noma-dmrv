@@ -963,36 +963,90 @@ which supersedes the journal half of ADR 0005.
 
 ## 2026-07-29 (Safety margin mass is a Removal-scope datapoint — named carve-out)
 
-The 29 Jul Removal Template (`Dark Earth Carbon Template (29 Jul)`) added a `Safety margin` component under `miscellaneous / mass_based_ci_emissions`. Read-only inspection on 2026-07-29 observed its active-template fixed Datapoint `dtp_1KS4PMV99SBXX88K` at 20 kgCO2e/metric_ton. That value is registry-owned configuration, not a pinned protocol requirement. noma submits nothing for `carbon_intensity`; attaching its justification Source is an operator action in the registry UI. Its `mass` input is `monitored` and previously hit the ADR 0005/0018 PROJECT-scope guard: sandbox submitted a 0 kg no-sources stub, production failed closed.
+The 29 Jul Removal Template (`Dark Earth Carbon Template (29 Jul)`) added a
+`Safety margin` component under `miscellaneous / mass_based_ci_emissions`.
+Read-only inspection on 2026-07-29 observed its active-template fixed Datapoint
+`dtp_1KS4PMV99SBXX88K` at 20 kgCO2e/metric_ton. That value is registry-owned
+configuration, not a pinned protocol requirement. noma submits nothing for
+`carbon_intensity`; attaching its justification Source is an operator action
+in the registry UI. Its `mass` input is
+`monitored` and previously hit the ADR 0005/0018 PROJECT-scope guard: sandbox
+submitted a 0 kg no-sources stub, production failed closed.
 
-Because the deduction scales with the exact biochar mass each Removal claims, it cannot be amortized as a PROJECT-scope Component. The guard now supports a named-component carve-out: `lookupPeriodInputTuple` takes the template component display name and releases a period tuple only when the matching `INPUT_MAPPING` entry names that component in `sourceByComponent`. The only carve-out is `"safety margin"` → `totalBiocharDryMassKg` (dry mass, bucket `stored` — the identical attribution basis used by the sequestration `product_mass` claims). Every other `miscellaneous` component, and all six other period tuples, keep the fail-closed PROJECT-scope behavior; the guard's error text now lists the recognized carve-out names so a renamed registry component is self-explanatory.
+Because the deduction scales with the exact biochar mass each Removal claims,
+it cannot be amortized as a PROJECT-scope Component. The guard now supports a
+named-component carve-out: `lookupPeriodInputTuple` takes the template
+component display name and releases a period tuple only when the matching
+`INPUT_MAPPING` entry names that component in `sourceByComponent`. The only
+carve-out is `"safety margin"` → `totalBiocharDryMassKg` (dry mass, bucket
+`stored` — the identical attribution basis used by the sequestration
+`product_mass` claims). Every other `miscellaneous` component, and all six
+other period tuples, keep the fail-closed PROJECT-scope behavior; the guard's
+error text now lists the recognized carve-out names so a renamed registry
+component is self-explanatory.
 
-The Inventory Source rule (application-boundary logbook / weighbridge evidence) gained the safety-margin mass as an `additionalIntendedTargets` entry with `optionalInTemplate: true` (the two legacy templates declare an empty `miscellaneous` group), so the same mass evidence that backs `product_mass` now backs the deduction. `scripts/isometric-coverage-check.ts` threads component display names through the guard and validates `resolveDatapointSource` per tuple, so the nightly health run catches a renamed `Safety margin` (or diesel-split) component the same way submit does.
+The Inventory Source rule (application-boundary logbook / weighbridge
+evidence) gained the safety-margin mass as an `additionalIntendedTargets`
+entry with `optionalInTemplate: true` (the two legacy templates declare an
+empty `miscellaneous` group), so the same mass evidence that backs
+`product_mass` now backs the deduction. `scripts/isometric-coverage-check.ts`
+threads component display names through the guard and validates
+`resolveDatapointSource` per tuple, so the nightly health run catches a
+renamed `Safety margin` (or diesel-split) component the same way submit does.
 
-Both `MAPPING_REVISION` and `SOURCE_BINDING_MAPPING_REVISION` changed: a resubmission creates a superseding version carrying the real mass. Sandbox removals already submitted against the 29 Jul template carry a 0 kg safety margin and need a deliberate resubmission. Locked drafts replay their stored snapshot by design.
+Both `MAPPING_REVISION` and `SOURCE_BINDING_MAPPING_REVISION` changed: a
+resubmission creates a superseding version carrying the real mass. Sandbox
+removals already submitted against the 29 Jul template carry a 0 kg safety
+margin and need a deliberate resubmission. Locked drafts replay their stored
+snapshot by design.
 
 ## 2026-07-29 (application evidence is advisory)
 
-- Missing geotagged photos, boundary references, and boundary logbook records no longer block Removal submission.
-- Application evidence remains visible as an advisory warning for operator follow-up and verification.
-- This aligns the submission gate with the pinned agricultural-soils module: application evidence may be retained or supplied voluntarily, but it is not required in the Certify submission payload.
+- Missing geotagged photos, boundary references, and boundary logbook records
+  no longer block Removal submission.
+- Application evidence remains visible as an advisory warning for operator
+  follow-up and verification.
+- This aligns the submission gate with the pinned agricultural-soils module:
+  application evidence may be retained or supplied voluntarily, but it is not
+  required in the Certify submission payload.
 
 ## 2026-07-29 (mass-weighted biochar-bin provenance)
 
-- Biochar products now draw from a biochar bin. Each draw is allocated across every contributing production run in proportion to its remaining wet mass; wet and dry kilograms are stored separately on immutable allocation rows.
-- Certification, Sources discovery, credit-batch accounting, mutation guards, and direct application traceability now follow those allocation rows. A mixed-bin product exposes every contributing run and feedstock instead of presenting one arbitrary production-run code.
-- Seeded products use the same mass-weighted model. The seeded source bin balances from 2,550 kg wet produced to 2,480 kg allocated, 18 kg documented loss, and 52 kg wet remaining.
+- Biochar products now draw from a biochar bin. Each draw is allocated across
+  every contributing production run in proportion to its remaining wet mass;
+  wet and dry kilograms are stored separately on immutable allocation rows.
+- Certification, Sources discovery, credit-batch accounting, mutation guards,
+  and direct application traceability now follow those allocation rows. A
+  mixed-bin product exposes every contributing run and feedstock instead of
+  presenting one arbitrary production-run code.
+- Seeded products use the same mass-weighted model. The seeded source bin
+  balances from 2,550 kg wet produced to 2,480 kg allocated, 18 kg documented
+  loss, and 52 kg wet remaining.
 ## 2026-07-29 (GIS-only removal evidence)
 
-- The unconditional mapped-Source submission requirement is removed. A Removal with only GIS boundary evidence can now be submitted.
-- A `gis_boundary` document on Application lineage is deliberately excluded from the Removal Source binding plan until an Application `source_ids` or equivalent boundary target exists.
+- The unconditional mapped-Source submission requirement is removed. A
+  Removal with only GIS boundary evidence can now be submitted.
+- A `gis_boundary` document on Application lineage is deliberately excluded
+  from the Removal Source binding plan until an Application `source_ids` or
+  equivalent boundary target exists.
 - The partial-mirroring blocker is retained.
 
 ## 2026-08-14 (sync-event key widened; stale-lock script re-keyed)
 
-- `certifier_sync_events.entity_id` widened from `uuid` to `text` (migration 0108). The column is polymorphic per `entity_type`: local UUIDs for removals, GHG statements, and documents; `nm-slc-*` supplier references (or an `unmapped:*` fallback) for Storage Locations, whose sync events previously failed to insert and crashed the application sync panel on read.
-- `scripts/isometric-clear-stale-lock.ts` now targets the Removal ledger key (`localEntityType='removal'`); it previously queried `creditBatch` and could never find current rows. It refuses to clear a draft whose `metadata.externalMutation` is `possible`/`confirmed` unless `--force-confirmed` is passed, because rejecting such a draft re-versions the supplier references and can duplicate registry entries.
-- GHG statement creates now persist the interrupted marker (`lastError`, `lastAttemptOutcome`, `externalMutation`) when a timeout/5xx may have reached the registry, matching the Removal pipeline.
+- `certifier_sync_events.entity_id` widened from `uuid` to `text` (migration
+  0108). The column is polymorphic per `entity_type`: local UUIDs for removals,
+  GHG statements, and documents; `nm-slc-*` supplier references (or an
+  `unmapped:*` fallback) for Storage Locations, whose sync events previously
+  failed to insert and crashed the application sync panel on read.
+- `scripts/isometric-clear-stale-lock.ts` now targets the Removal ledger key
+  (`localEntityType='removal'`); it previously queried `creditBatch` and could
+  never find current rows. It refuses to clear a draft whose
+  `metadata.externalMutation` is `possible`/`confirmed` unless
+  `--force-confirmed` is passed, because rejecting such a draft re-versions
+  the supplier references and can duplicate registry entries.
+- GHG statement creates now persist the interrupted marker (`lastError`,
+  `lastAttemptOutcome`, `externalMutation`) when a timeout/5xx may have
+  reached the registry, matching the Removal pipeline.
 
 ## Production batch identity readback and recovery
 

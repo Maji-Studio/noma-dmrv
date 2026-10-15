@@ -83,8 +83,8 @@ export function sampleEntryWarnings(facts: SampleEntryFacts): string[] {
   if (facts.sampling === "sampled" && facts.totalHydrogenPercent == null) {
     warnings.push(`Sample ${facts.sampleCode} has no total hydrogen, so H/C_org cannot be calculated. The biochar module requires H/C_org for every production batch (Table 2).`);
   }
-  if (facts.moistureContentPercent == null) {
-    warnings.push(`Sample ${facts.sampleCode} has no moisture content. The biochar module requires moisture for every production batch (Table 2).`);
+  if (facts.sampling === "sampled" && facts.moistureContentPercent == null) {
+    warnings.push(`Sample ${facts.sampleCode} is missing moisture content. A Removal with credit batch ${facts.creditBatchCode} cannot be submitted until every Sample has it.`);
   }
   if (ratioWarning) warnings.push(ratioWarning);
   if (is1000Year && (facts.r0MeasurementCount == null || facts.r0MeasurementCount < R0_MEASUREMENTS_PER_SAMPLE_GUIDANCE)) {

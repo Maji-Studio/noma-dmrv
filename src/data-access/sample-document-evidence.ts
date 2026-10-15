@@ -9,10 +9,11 @@ export async function getBatchesWithLabReports(
   ctx: OrgContext,
   batchIds: string[],
   reader: DbTransaction | typeof db = db,
+  loadedSamples?: ReadonlyArray<{ id: string; creditBatchId: string | null }>,
 ): Promise<Set<string>> {
   requireOrgScope(ctx);
   if (batchIds.length === 0) return new Set();
-  const sampleRows = await reader.select({ id: samples.id, creditBatchId: samples.creditBatchId })
+  const sampleRows = loadedSamples ?? await reader.select({ id: samples.id, creditBatchId: samples.creditBatchId })
     .from(samples).where(and(eq(samples.organizationId, ctx.organizationId), inArray(samples.creditBatchId, batchIds)));
   const sampleBatches = new Map(sampleRows.map((row) => [row.id, row.creditBatchId]));
   const rows = await reader.select({ entityId: documents.entityId, entityType: documents.entityType })

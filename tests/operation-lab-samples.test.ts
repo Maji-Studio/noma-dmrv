@@ -417,7 +417,7 @@ describe("ratios", { timeout: SUITE_TIMEOUT_MS }, () => {
 });
 
 const missingReport = (f: LabSampleFixture) =>
-  `Credit batch ${f.batchA.code} has no lab report document. Upload a lab report to a Sample or the credit batch. You can still submit the Removal.`;
+  `Credit batch ${f.batchA.code} has no lab report document. Upload a lab report to one of its Samples. You can still submit the Removal.`;
 
 describe("warnings", { timeout: SUITE_TIMEOUT_MS }, () => {
   it("counts only uploaded, org-scoped lab reports on the batch or its Samples", async () => {
@@ -480,7 +480,7 @@ describe("warnings", { timeout: SUITE_TIMEOUT_MS }, () => {
     const created = await record(f, { totalHydrogenPercent: undefined, moistureContentPercent: undefined });
     // Without hydrogen or oxygen the Sample also lacks both ratios gate (c) counts.
     expect(created.data.warnings).toHaveLength(4);
-    expect(created.data.warnings.join(" ")).toMatch(/no total hydrogen.*no moisture content.*no H\/C_org and O\/C_org/);
+    expect(created.data.warnings.join(" ")).toMatch(/no total hydrogen.*missing moisture content.*no H\/C_org and O\/C_org/);
   });
 
   it("warns when a saved Sample has no O/C_org, then stops once oxygen is entered", async () => {

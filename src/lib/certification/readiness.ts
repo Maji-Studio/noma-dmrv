@@ -48,7 +48,6 @@ export interface TransportCoverageFact {
 }
 
 export interface RemovalReadinessFacts {
-  submissionWarnings?: string[];
   /** Latest ledger status, or null when no submission row exists yet. */
   local: LocalSubmissionStatus | null;
   /** A draft row holding a live submission lock. */
@@ -244,7 +243,7 @@ export function deriveRemovalReadiness(
   facts: RemovalReadinessFacts,
 ): RemovalReadiness {
   const transportVehicleAdvisories = facts.transportVehicleAdvisories ?? [];
-  const advisories = [...new Set([...evidenceAdvisories(facts), ...(facts.submissionWarnings ?? [])])];
+  const advisories = evidenceAdvisories(facts);
   const advisoryFields = { advisories, transportVehicleAdvisories };
   if (facts.lockInFlight) return { state: "inProgress", reasons: [], ...advisoryFields };
 

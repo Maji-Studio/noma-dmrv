@@ -1,4 +1,5 @@
 import { loadBiocharDeliveryTransportLegs } from "@/data-access/biochar-delivery-transport";
+import { toBatchHealthFacts } from "@/lib/certification/batch-health-facts";
 import { toRemovalReadinessFacts } from "@/lib/certification/readiness-facts";
 import { makeTestOrgContext } from "./helpers/test-org";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -281,6 +282,7 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
         endDate: "2026-07-31",
         facilityTimezone: "UTC",
         sampling: "sampled",
+        hasLabReport: false,
         durabilityOption: "200_year",
         samples: [],
         runs: [],
@@ -305,6 +307,10 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
     ]);
     expect(result.memberBatches[0]?.facilityEmissionsGateBlockers).toEqual([
       "Set this facility's reference soil temperature under Certification settings, then Emissions, before submitting a 200-year Removal.",
+    ]);
+    expect(result.memberBatches[0]?.hasLabReport).toBe(false);
+    expect(toBatchHealthFacts(result, CREDIT_BATCH_ID).warnings).toEqual([
+      "Credit batch CB-1 has no lab report document. Upload a lab report to one of its Samples. You can still submit the Removal.",
     ]);
     expect(result.submissionWarnings).toEqual([]);
     expect(mockedGetBatchesWithSamples).toHaveBeenCalledWith(

@@ -175,7 +175,7 @@ describe("deriveEntityCertifyReadiness", () => {
     "reports the O:Corg gap for a %s sample missing the oxygen ratio",
     (durabilityOption) => {
       const readiness = deriveEntityCertifyReadiness("sample", {
-      moistureContentPercent: 10,
+        moistureContentPercent: 10,
         sampling: "sampled",
         durabilityOption,
         totalCarbonPercent: 82,
@@ -266,7 +266,7 @@ describe("deriveEntityCertifyReadiness", () => {
   it.each([null, undefined])("keeps chemistry gaps without replicate gaps when sampling is %s", (sampling) => {
     for (const durabilityOption of ["200_year", "1000_year"]) {
       const readiness = deriveEntityCertifyReadiness("sample", {
-      moistureContentPercent: 10,
+        moistureContentPercent: 10,
         sampling,
         durabilityOption,
         randomReflectanceR0Percent: 1.2,

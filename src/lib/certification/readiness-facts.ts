@@ -26,7 +26,6 @@ export function toRemovalReadinessFacts(
     (blocker) => blocker.fixTarget !== "feedstocks",
   );
   return {
-    submissionWarnings: ctx.submissionWarnings ?? [],
     local: ctx.latestSubmission?.status ?? null,
     lockInFlight,
     hasOrgCredentials: ctx.hasOrgCredentials,

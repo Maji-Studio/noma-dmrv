@@ -55,7 +55,7 @@ const DESCRIPTIONS = {
   totalOxygenPercent: `Total oxygen, ${DRY_BASIS}, 0 to 100. When present, O/C_org is calculated from this and organicCarbonPercent.`,
   totalSulfurPercent: `Total sulfur, ${DRY_BASIS}, 0 to 100.`,
   ashContentPercent: `Ash, ${DRY_BASIS}, 0 to 100.`,
-  moistureContentPercent: "Moisture as percent of wet mass, 0 to 100.",
+  moistureContentPercent: "Moisture as percent of wet mass, 0 to 100. Optional when saving; every Sample on a sampled credit batch needs it before a Removal can be submitted.",
   bulkDensityKgPerM3: "Bulk density in kilograms per cubic metre.",
   ph: `pH, ${PH_MIN} to ${PH_MAX}.`,
   saltContentGPerKg: "Salt content in grams per kilogram.",

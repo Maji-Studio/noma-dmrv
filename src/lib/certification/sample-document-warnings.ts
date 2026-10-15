@@ -13,6 +13,6 @@ export function missingSampleLabReport(facts: SampleDocumentFacts): boolean {
 
 export function sampleDocumentWarnings(facts: SampleDocumentFacts): string[] {
   return missingSampleLabReport(facts)
-    ? [`Credit batch ${facts.creditBatchCode} has no lab report document. Upload a lab report to a Sample or the credit batch. You can still submit the Removal.`]
+    ? [`Credit batch ${facts.creditBatchCode} has no lab report document. Upload a lab report to one of its Samples. You can still submit the Removal.`]
     : [];
 }

@@ -58,7 +58,7 @@ export function SampleEvidenceSection({
       __spine={__spine}
     >
       <p className="body-small text-[var(--color-text-secondary)]">
-        Attach the lab report before submitting the Removal.
+        A lab report is recommended evidence. It does not block submission of the Removal.
       </p>
       {isEditMode && sample ? (
         <div className="flex flex-col gap-12">

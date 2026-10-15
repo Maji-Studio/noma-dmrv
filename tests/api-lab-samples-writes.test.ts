@@ -65,7 +65,7 @@ describe("lab sample create", { timeout: TIMEOUT_MS }, () => {
     expect(body.data.hToCOrgRatio).toBeNull();
     expect(body.warnings).toEqual(expect.arrayContaining([
       expect.stringMatching(/has no total hydrogen, so H\/C_org cannot be calculated/),
-      expect.stringMatching(/has no moisture content/),
+      expect.stringMatching(/is missing moisture content.*cannot be submitted/),
     ]));
     expect(body.warnings.some((warning: string) => warning.startsWith("H/C_org calculated"))).toBe(false);
   });

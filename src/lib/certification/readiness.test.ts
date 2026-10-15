@@ -51,12 +51,6 @@ function ready(
 }
 
 describe("deriveRemovalReadiness — precedence", () => {
-  it("keeps document advisories non-blocking", () => {
-    const result = deriveRemovalReadiness(ready({ submissionWarnings: ["Missing lab report"] }));
-    expect(result.state).toBe("ready");
-    expect(result.advisories).toContain("Missing lab report");
-  });
-
   it("reports inProgress above everything when a lock is live", () => {
     // Even with blockers present, the live lock wins.
     const r = deriveRemovalReadiness(

@@ -147,7 +147,7 @@ describe("SampleForm contextual CERT chips", () => {
     for (const field of ["totalCarbonPercent", "inorganicCarbonPercent"]) {
       expect(container.querySelector(`#${field}-cert`) !== null, field).toBe(shown);
     }
-    for (const field of ["organicCarbonPercent", "totalHydrogenPercent", "oToCOrgRatio"]) {
+    for (const field of ["organicCarbonPercent", "totalHydrogenPercent", "oToCOrgRatio", "moistureContentPercent"]) {
       expect(container.querySelector(`#${field}-cert`) !== null, field).toBe(sampling !== "unsampled");
     }
     for (const field of ["randomReflectanceR0Percent", "reactiveCarbonPercent", "residualCarbonPercent"]) {
