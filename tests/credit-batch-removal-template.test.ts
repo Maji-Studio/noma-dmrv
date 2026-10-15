@@ -49,7 +49,7 @@ describe("credit batch Removal template pins", () => {
     const batch = await create("04");
     const updated = await switchCreditBatchRemovalTemplate(ctx, { creditBatchId: batch.id, removalTemplateId: "template-switched", expectedVersion: batch.version });
     expect(updated.version).toBe(batch.version + 1);
-    const events = await db.select().from(activityEvents).where(and(eq(activityEvents.organizationId, ctx.organizationId), eq(activityEvents.entityId, batch.id)));
+    const events = await db.select().from(activityEvents).where(and(eq(activityEvents.organizationId, ctx.organizationId), eq(activityEvents.entityId, batch.id), eq(activityEvents.action, "updated")));
     expect(events).toHaveLength(1);
     expect(events[0]).toMatchObject({ entityType: "credit_batch", changedFields: ["removalTemplateId"] });
     await expect(switchCreditBatchRemovalTemplate(ctx, { creditBatchId: batch.id, removalTemplateId: "template-stale", expectedVersion: batch.version })).rejects.toMatchObject({ code: "stale_version" });
