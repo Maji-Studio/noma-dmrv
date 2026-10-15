@@ -96,13 +96,18 @@ it("publishes business dates as date, and preserves operation input types and co
 it("publishes pagination and search bounds on every list route", () => {
   const lists = Object.values(document.paths).map((methods) => methods.get)
     .filter((operation) => operation?.operationId.startsWith("find_"));
-  expect(lists).toHaveLength(19);
+  expect(lists).toHaveLength(22);
   for (const operation of lists) {
     const parameters = operation.parameters as { name: string; in: string; required: boolean; schema: JsonSchema }[];
     const query = Object.fromEntries(parameters.filter((parameter) => parameter.in === "query").map((parameter) => [parameter.name, parameter]));
     expect(query.limit).toMatchObject({ required: false, schema: { type: "integer", minimum: 1, maximum: API_LIST_MAX_LIMIT, default: API_LIST_DEFAULT_LIMIT } });
     expect(query.limit.schema).not.toHaveProperty("pattern");
     expect(query.cursor).toMatchObject({ required: false, schema: { type: "string", maxLength: API_CURSOR_MAX_LENGTH } });
+    if (operation.operationId.endsWith("_documents")) {
+      expect(Object.keys(query).sort()).toEqual(["cursor", "documentType", "limit", "uploadStatus"]);
+      expect(query.uploadStatus.schema).toMatchObject({ default: "uploaded" });
+      continue;
+    }
     if (operation.operationId === "find_output_stock_movements") {
       expect(Object.keys(query).sort()).toEqual(["cursor", "limit"]);
       continue;
@@ -454,4 +459,26 @@ it("publishes delivery write bodies, allocations, preconditions and complete pro
   expect(patch.responses["412"]).toEqual({ $ref: "#/components/responses/DeliveryProblem412" });
   expect(document.components.schemas.DeliveryPreconditionProblem.allOf).toContainEqual(expect.objectContaining({ properties: { current: expect.objectContaining({ $ref: "#/components/schemas/delivery" }) }, required: ["current"] }));
   expect(document.paths["/deliveries/{idOrCode}"]).not.toHaveProperty("delete");
+});
+
+it("publishes only document reads with owner scopes, validators and private expiring redirects", () => {
+  for (const owner of ["feedstocks", "deliveries", "lab-samples"]) {
+    const base = `/${owner}/{idOrCode}/documents`;
+    for (const suffix of ["", "/{documentId}", "/{documentId}/content"]) {
+      const methods = document.paths[base + suffix];
+      expect(Object.keys(methods)).toEqual(["get"]);
+      expect(methods.get["x-required-scope"]).toBe(`${owner}:read`);
+      for (const status of [400, 401, 403, 404, 429, 500]) expect(methods.get.responses).toHaveProperty(String(status));
+    }
+    expect(document.paths[`${base}/{documentId}`].get.responses["200"]).toMatchObject({ headers: { ETag: expect.any(Object) } });
+    expect(document.paths[`${base}/{documentId}`].get.responses).not.toHaveProperty("304");
+    expect(document.paths[`${base}/{documentId}`].get.parameters).not.toContainEqual(expect.objectContaining({ name: "If-None-Match" }));
+    expect(document.paths[`${base}/{documentId}/content`].get.responses["302"]).toMatchObject({ headers: {
+      Location: expect.any(Object), "Cache-Control": { schema: { const: "private, no-store" } }, "Referrer-Policy": { schema: { const: "no-referrer" } },
+    } });
+  }
+  for (const field of ["contentType", "sizeBytes"]) {
+    expect(document.components.schemas.document.properties).toMatchObject({ [field]: { anyOf: expect.arrayContaining([{ type: "null" }]) } });
+  }
+  expect(document.components.schemas.document.properties).not.toHaveProperty("storageKey");
 });

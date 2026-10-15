@@ -178,6 +178,29 @@
         "required": ["id", "code", "archivedAt", "createdAt", "updatedAt", "version", "facilityId", "orderId", "storageLocationId", "deliveredAt", "deliveredWetMassKg", "moisturePercent", "dryBiocharKg", "driverId", "vehicleId", "distanceKmOverride", "distanceSource", "distanceNote", "destinationCustomerLocationId"],
         "type": "object"
       },
+      "document": {
+        "additionalProperties": false,
+        "properties": {
+          "capturedAt": {"anyOf": [{"format": "date-time", "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$", "type": "string"}, {"type": "null"}], "description": "Client-declared capture instant in UTC, or null."},
+          "contentType": {"anyOf": [{"type": "string"}, {"type": "null"}], "description": "Declared MIME type while pending; verified MIME type once uploaded, or null when unknown on legacy evidence."},
+          "createdAt": {"description": "Creation instant in UTC.", "format": "date-time", "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$", "type": "string"},
+          "description": {"anyOf": [{"type": "string"}, {"type": "null"}], "description": "Document description, untrusted plain text, or null."},
+          "documentType": {"description": "Document classification.", "enum": ["weighbridge_ticket", "bill_of_lading", "other_transport_evidence", "lab_report", "delivery_receipt", "invoice", "pdd", "affidavit", "calibration_certificate", "photo", "video", "pdf", "sensor_data", "gis_boundary"], "type": "string"},
+          "fileName": {"description": "Original file name, untrusted plain text.", "type": "string"},
+          "gpsLatitude": {"anyOf": [{"type": "number"}, {"type": "null"}], "description": "Client-declared latitude in decimal degrees, or null."},
+          "gpsLongitude": {"anyOf": [{"type": "number"}, {"type": "null"}], "description": "Client-declared longitude in decimal degrees, or null."},
+          "id": {"description": "Document identifier, UUID.", "format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"},
+          "ownerId": {"description": "Owning record identifier, UUID.", "format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"},
+          "ownerType": {"description": "Record type owning this document.", "enum": ["feedstock", "delivery", "lab_sample"], "type": "string"},
+          "sha256": {"anyOf": [{"type": "string"}, {"type": "null"}], "description": "Declared lowercase hexadecimal SHA-256 while pending; verified lowercase hexadecimal SHA-256 once uploaded, or null on legacy evidence."},
+          "sizeBytes": {"anyOf": [{"maximum": 9007199254740991, "minimum": -9007199254740991, "type": "integer"}, {"type": "null"}], "description": "Declared file length in bytes while pending; verified length once uploaded, or null when unknown on legacy evidence."},
+          "updatedAt": {"description": "Last update instant in UTC.", "format": "date-time", "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$", "type": "string"},
+          "uploadStatus": {"description": "Upload state.", "enum": ["pending", "uploaded", "failed"], "type": "string"},
+          "version": {"description": "Document row version.", "exclusiveMinimum": 0, "maximum": 9007199254740991, "type": "integer"}
+        },
+        "required": ["id", "ownerType", "ownerId", "documentType", "fileName", "contentType", "sizeBytes", "sha256", "uploadStatus", "capturedAt", "gpsLatitude", "gpsLongitude", "description", "version", "createdAt", "updatedAt"],
+        "type": "object"
+      },
       "driver": {
         "additionalProperties": false,
         "properties": {
@@ -1085,6 +1108,55 @@
         "x-required-scope": "deliveries:write"
       }
     },
+    "/deliveries/{idOrCode}/documents": {
+      "get": {
+        "description": "Documents belong to a record. List its API evidence newest first by (createdAt, id), including archived records. Lists show uploaded files by default; filter documentType or uploadStatus (uploaded, pending, failed or all). Cursors bind the organization, record and filters. Required scope: deliveries:read.",
+        "operationId": "find_delivery_documents",
+        "parameters": [
+          {"description": "Resource UUID or exact human-readable code.", "in": "path", "name": "idOrCode", "required": true, "schema": {"type": "string"}},
+          {"description": "Page size as a decimal integer string; defaults to 50, maximum 200.", "in": "query", "name": "limit", "required": false, "schema": {"default": 50, "description": "Page size as a decimal integer string; defaults to 50, maximum 200.", "maximum": 200, "minimum": 1, "type": "integer"}},
+          {"description": "Opaque base64url continuation cursor bound to organization, resource and filters. Use only nextCursor from the same list and filters.", "in": "query", "name": "cursor", "required": false, "schema": {"description": "Opaque base64url continuation cursor bound to organization, resource and filters. Use only nextCursor from the same list and filters.", "maxLength": 4096, "minLength": 1, "pattern": "^[A-Za-z0-9_-]+$", "type": "string"}},
+          {"description": "Evidence type allowed for this record.", "in": "query", "name": "documentType", "required": false, "schema": {"description": "Evidence type allowed for this record.", "enum": ["bill_of_lading", "weighbridge_ticket", "other_transport_evidence", "delivery_receipt", "photo"], "type": "string"}},
+          {"description": "Upload state filter; defaults to uploaded. Use all to include every state.", "in": "query", "name": "uploadStatus", "required": false, "schema": {"default": "uploaded", "description": "Upload state filter; defaults to uploaded. Use all to include every state.", "enum": ["uploaded", "pending", "failed", "all"], "type": "string"}}
+        ],
+        "responses": {
+          "200": {"content": {"application/json": {"schema": {"additionalProperties": false, "properties": {"data": {"description": "Page of resources, newest first by (createdAt, id).", "items": {"$ref": "#/components/schemas/document"}, "type": "array"}, "nextCursor": {"anyOf": [{"type": "string"}, {"type": "null"}], "description": "Opaque cursor for the next page, or null at the end; keep filters unchanged."}}, "required": ["data", "nextCursor"], "type": "object"}}}, "description": "Document page.", "headers": {"RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}},
+          "400": {"$ref": "#/components/responses/Problem400"},
+          "401": {"$ref": "#/components/responses/Problem401"},
+          "403": {"$ref": "#/components/responses/Problem403"},
+          "404": {"$ref": "#/components/responses/Problem404"},
+          "429": {"$ref": "#/components/responses/Problem429"},
+          "500": {"$ref": "#/components/responses/Problem500"}
+        },
+        "x-required-scope": "deliveries:read"
+      }
+    },
+    "/deliveries/{idOrCode}/documents/{documentId}": {
+      "get": {
+        "description": "Read one document belonging to this record, including archived records. The strong ETag combines the document version and representation revision. Pending files publish declared facts; uploaded files publish verified content type, size and SHA-256. Required scope: deliveries:read.",
+        "operationId": "get_delivery_document",
+        "parameters": [{"description": "Resource UUID or exact human-readable code.", "in": "path", "name": "idOrCode", "required": true, "schema": {"type": "string"}}, {"description": "Document UUID belonging to this record.", "in": "path", "name": "documentId", "required": true, "schema": {"format": "uuid", "type": "string"}}],
+        "responses": {"200": {"content": {"application/json": {"schema": {"additionalProperties": false, "properties": {"data": {"$ref": "#/components/schemas/document", "description": "Resource representation."}}, "required": ["data"], "type": "object"}}}, "description": "Document representation.", "headers": {"ETag": {"$ref": "#/components/headers/ETag"}, "RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}}, "400": {"$ref": "#/components/responses/Problem400"}, "401": {"$ref": "#/components/responses/Problem401"}, "403": {"$ref": "#/components/responses/Problem403"}, "404": {"$ref": "#/components/responses/Problem404"}, "429": {"$ref": "#/components/responses/Problem429"}, "500": {"$ref": "#/components/responses/Problem500"}},
+        "x-required-scope": "deliveries:read"
+      }
+    },
+    "/deliveries/{idOrCode}/documents/{documentId}/content": {
+      "get": {
+        "description": "Download an uploaded document belonging to this record. The {record path}/documents/{documentId}/content route redirects to a signed link that expires in 5 minutes; follow that link without the API key. The response is private and must not be stored. Pending, failed and legacy URL-only documents return 404. There is no public-visibility fallback. Required scope: deliveries:read.",
+        "operationId": "get_delivery_document_content",
+        "parameters": [{"description": "Resource UUID or exact human-readable code.", "in": "path", "name": "idOrCode", "required": true, "schema": {"type": "string"}}, {"description": "Document UUID belonging to this record.", "in": "path", "name": "documentId", "required": true, "schema": {"format": "uuid", "type": "string"}}],
+        "responses": {
+          "302": {"description": "Fresh signed download URL; no body.", "headers": {"Cache-Control": {"description": "Do not store this private capability.", "schema": {"const": "private, no-store", "type": "string"}}, "Location": {"description": "Signed GET URL expiring in 5 minutes. Fetch without the API key.", "schema": {"format": "uri", "type": "string"}}, "RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "Referrer-Policy": {"description": "Do not send a referrer when following this redirect.", "schema": {"const": "no-referrer", "type": "string"}}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}},
+          "400": {"$ref": "#/components/responses/Problem400"},
+          "401": {"$ref": "#/components/responses/Problem401"},
+          "403": {"$ref": "#/components/responses/Problem403"},
+          "404": {"$ref": "#/components/responses/Problem404"},
+          "429": {"$ref": "#/components/responses/Problem429"},
+          "500": {"$ref": "#/components/responses/Problem500"}
+        },
+        "x-required-scope": "deliveries:read"
+      }
+    },
     "/drivers": {
       "get": {
         "description": "List a page ordered newest first by (createdAt, id). Cursors bind organization and filters; no totals or include. Lookup lists exclude archived rows where supported. Required scope: drivers:read.",
@@ -1348,6 +1420,55 @@
         "x-required-scope": "feedstocks:write"
       }
     },
+    "/feedstocks/{idOrCode}/documents": {
+      "get": {
+        "description": "Documents belong to a record. List its API evidence newest first by (createdAt, id), including archived records. Lists show uploaded files by default; filter documentType or uploadStatus (uploaded, pending, failed or all). Cursors bind the organization, record and filters. Required scope: feedstocks:read.",
+        "operationId": "find_feedstock_documents",
+        "parameters": [
+          {"description": "Resource UUID or exact human-readable code.", "in": "path", "name": "idOrCode", "required": true, "schema": {"type": "string"}},
+          {"description": "Page size as a decimal integer string; defaults to 50, maximum 200.", "in": "query", "name": "limit", "required": false, "schema": {"default": 50, "description": "Page size as a decimal integer string; defaults to 50, maximum 200.", "maximum": 200, "minimum": 1, "type": "integer"}},
+          {"description": "Opaque base64url continuation cursor bound to organization, resource and filters. Use only nextCursor from the same list and filters.", "in": "query", "name": "cursor", "required": false, "schema": {"description": "Opaque base64url continuation cursor bound to organization, resource and filters. Use only nextCursor from the same list and filters.", "maxLength": 4096, "minLength": 1, "pattern": "^[A-Za-z0-9_-]+$", "type": "string"}},
+          {"description": "Evidence type allowed for this record.", "in": "query", "name": "documentType", "required": false, "schema": {"description": "Evidence type allowed for this record.", "enum": ["bill_of_lading", "weighbridge_ticket", "other_transport_evidence"], "type": "string"}},
+          {"description": "Upload state filter; defaults to uploaded. Use all to include every state.", "in": "query", "name": "uploadStatus", "required": false, "schema": {"default": "uploaded", "description": "Upload state filter; defaults to uploaded. Use all to include every state.", "enum": ["uploaded", "pending", "failed", "all"], "type": "string"}}
+        ],
+        "responses": {
+          "200": {"content": {"application/json": {"schema": {"additionalProperties": false, "properties": {"data": {"description": "Page of resources, newest first by (createdAt, id).", "items": {"$ref": "#/components/schemas/document"}, "type": "array"}, "nextCursor": {"anyOf": [{"type": "string"}, {"type": "null"}], "description": "Opaque cursor for the next page, or null at the end; keep filters unchanged."}}, "required": ["data", "nextCursor"], "type": "object"}}}, "description": "Document page.", "headers": {"RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}},
+          "400": {"$ref": "#/components/responses/Problem400"},
+          "401": {"$ref": "#/components/responses/Problem401"},
+          "403": {"$ref": "#/components/responses/Problem403"},
+          "404": {"$ref": "#/components/responses/Problem404"},
+          "429": {"$ref": "#/components/responses/Problem429"},
+          "500": {"$ref": "#/components/responses/Problem500"}
+        },
+        "x-required-scope": "feedstocks:read"
+      }
+    },
+    "/feedstocks/{idOrCode}/documents/{documentId}": {
+      "get": {
+        "description": "Read one document belonging to this record, including archived records. The strong ETag combines the document version and representation revision. Pending files publish declared facts; uploaded files publish verified content type, size and SHA-256. Required scope: feedstocks:read.",
+        "operationId": "get_feedstock_document",
+        "parameters": [{"description": "Resource UUID or exact human-readable code.", "in": "path", "name": "idOrCode", "required": true, "schema": {"type": "string"}}, {"description": "Document UUID belonging to this record.", "in": "path", "name": "documentId", "required": true, "schema": {"format": "uuid", "type": "string"}}],
+        "responses": {"200": {"content": {"application/json": {"schema": {"additionalProperties": false, "properties": {"data": {"$ref": "#/components/schemas/document", "description": "Resource representation."}}, "required": ["data"], "type": "object"}}}, "description": "Document representation.", "headers": {"ETag": {"$ref": "#/components/headers/ETag"}, "RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}}, "400": {"$ref": "#/components/responses/Problem400"}, "401": {"$ref": "#/components/responses/Problem401"}, "403": {"$ref": "#/components/responses/Problem403"}, "404": {"$ref": "#/components/responses/Problem404"}, "429": {"$ref": "#/components/responses/Problem429"}, "500": {"$ref": "#/components/responses/Problem500"}},
+        "x-required-scope": "feedstocks:read"
+      }
+    },
+    "/feedstocks/{idOrCode}/documents/{documentId}/content": {
+      "get": {
+        "description": "Download an uploaded document belonging to this record. The {record path}/documents/{documentId}/content route redirects to a signed link that expires in 5 minutes; follow that link without the API key. The response is private and must not be stored. Pending, failed and legacy URL-only documents return 404. There is no public-visibility fallback. Required scope: feedstocks:read.",
+        "operationId": "get_feedstock_document_content",
+        "parameters": [{"description": "Resource UUID or exact human-readable code.", "in": "path", "name": "idOrCode", "required": true, "schema": {"type": "string"}}, {"description": "Document UUID belonging to this record.", "in": "path", "name": "documentId", "required": true, "schema": {"format": "uuid", "type": "string"}}],
+        "responses": {
+          "302": {"description": "Fresh signed download URL; no body.", "headers": {"Cache-Control": {"description": "Do not store this private capability.", "schema": {"const": "private, no-store", "type": "string"}}, "Location": {"description": "Signed GET URL expiring in 5 minutes. Fetch without the API key.", "schema": {"format": "uri", "type": "string"}}, "RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "Referrer-Policy": {"description": "Do not send a referrer when following this redirect.", "schema": {"const": "no-referrer", "type": "string"}}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}},
+          "400": {"$ref": "#/components/responses/Problem400"},
+          "401": {"$ref": "#/components/responses/Problem401"},
+          "403": {"$ref": "#/components/responses/Problem403"},
+          "404": {"$ref": "#/components/responses/Problem404"},
+          "429": {"$ref": "#/components/responses/Problem429"},
+          "500": {"$ref": "#/components/responses/Problem500"}
+        },
+        "x-required-scope": "feedstocks:read"
+      }
+    },
     "/formulations": {
       "get": {
         "description": "List a page ordered newest first by (createdAt, id). Cursors bind organization and filters; no totals or include. Lookup lists exclude archived rows where supported. Required scope: formulations:read.",
@@ -1602,6 +1723,55 @@
           "503": {"$ref": "#/components/responses/Problem503"}
         },
         "x-required-scope": "lab-samples:write"
+      }
+    },
+    "/lab-samples/{idOrCode}/documents": {
+      "get": {
+        "description": "Documents belong to a record. List its API evidence newest first by (createdAt, id), including archived records. Lists show uploaded files by default; filter documentType or uploadStatus (uploaded, pending, failed or all). Cursors bind the organization, record and filters. Required scope: lab-samples:read.",
+        "operationId": "find_lab_sample_documents",
+        "parameters": [
+          {"description": "Resource UUID or exact human-readable code.", "in": "path", "name": "idOrCode", "required": true, "schema": {"type": "string"}},
+          {"description": "Page size as a decimal integer string; defaults to 50, maximum 200.", "in": "query", "name": "limit", "required": false, "schema": {"default": 50, "description": "Page size as a decimal integer string; defaults to 50, maximum 200.", "maximum": 200, "minimum": 1, "type": "integer"}},
+          {"description": "Opaque base64url continuation cursor bound to organization, resource and filters. Use only nextCursor from the same list and filters.", "in": "query", "name": "cursor", "required": false, "schema": {"description": "Opaque base64url continuation cursor bound to organization, resource and filters. Use only nextCursor from the same list and filters.", "maxLength": 4096, "minLength": 1, "pattern": "^[A-Za-z0-9_-]+$", "type": "string"}},
+          {"description": "Evidence type allowed for this record.", "in": "query", "name": "documentType", "required": false, "schema": {"description": "Evidence type allowed for this record.", "enum": ["lab_report"], "type": "string"}},
+          {"description": "Upload state filter; defaults to uploaded. Use all to include every state.", "in": "query", "name": "uploadStatus", "required": false, "schema": {"default": "uploaded", "description": "Upload state filter; defaults to uploaded. Use all to include every state.", "enum": ["uploaded", "pending", "failed", "all"], "type": "string"}}
+        ],
+        "responses": {
+          "200": {"content": {"application/json": {"schema": {"additionalProperties": false, "properties": {"data": {"description": "Page of resources, newest first by (createdAt, id).", "items": {"$ref": "#/components/schemas/document"}, "type": "array"}, "nextCursor": {"anyOf": [{"type": "string"}, {"type": "null"}], "description": "Opaque cursor for the next page, or null at the end; keep filters unchanged."}}, "required": ["data", "nextCursor"], "type": "object"}}}, "description": "Document page.", "headers": {"RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}},
+          "400": {"$ref": "#/components/responses/Problem400"},
+          "401": {"$ref": "#/components/responses/Problem401"},
+          "403": {"$ref": "#/components/responses/Problem403"},
+          "404": {"$ref": "#/components/responses/Problem404"},
+          "429": {"$ref": "#/components/responses/Problem429"},
+          "500": {"$ref": "#/components/responses/Problem500"}
+        },
+        "x-required-scope": "lab-samples:read"
+      }
+    },
+    "/lab-samples/{idOrCode}/documents/{documentId}": {
+      "get": {
+        "description": "Read one document belonging to this record, including archived records. The strong ETag combines the document version and representation revision. Pending files publish declared facts; uploaded files publish verified content type, size and SHA-256. Required scope: lab-samples:read.",
+        "operationId": "get_lab_sample_document",
+        "parameters": [{"description": "Resource UUID or exact human-readable code.", "in": "path", "name": "idOrCode", "required": true, "schema": {"type": "string"}}, {"description": "Document UUID belonging to this record.", "in": "path", "name": "documentId", "required": true, "schema": {"format": "uuid", "type": "string"}}],
+        "responses": {"200": {"content": {"application/json": {"schema": {"additionalProperties": false, "properties": {"data": {"$ref": "#/components/schemas/document", "description": "Resource representation."}}, "required": ["data"], "type": "object"}}}, "description": "Document representation.", "headers": {"ETag": {"$ref": "#/components/headers/ETag"}, "RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}}, "400": {"$ref": "#/components/responses/Problem400"}, "401": {"$ref": "#/components/responses/Problem401"}, "403": {"$ref": "#/components/responses/Problem403"}, "404": {"$ref": "#/components/responses/Problem404"}, "429": {"$ref": "#/components/responses/Problem429"}, "500": {"$ref": "#/components/responses/Problem500"}},
+        "x-required-scope": "lab-samples:read"
+      }
+    },
+    "/lab-samples/{idOrCode}/documents/{documentId}/content": {
+      "get": {
+        "description": "Download an uploaded document belonging to this record. The {record path}/documents/{documentId}/content route redirects to a signed link that expires in 5 minutes; follow that link without the API key. The response is private and must not be stored. Pending, failed and legacy URL-only documents return 404. There is no public-visibility fallback. Required scope: lab-samples:read.",
+        "operationId": "get_lab_sample_document_content",
+        "parameters": [{"description": "Resource UUID or exact human-readable code.", "in": "path", "name": "idOrCode", "required": true, "schema": {"type": "string"}}, {"description": "Document UUID belonging to this record.", "in": "path", "name": "documentId", "required": true, "schema": {"format": "uuid", "type": "string"}}],
+        "responses": {
+          "302": {"description": "Fresh signed download URL; no body.", "headers": {"Cache-Control": {"description": "Do not store this private capability.", "schema": {"const": "private, no-store", "type": "string"}}, "Location": {"description": "Signed GET URL expiring in 5 minutes. Fetch without the API key.", "schema": {"format": "uri", "type": "string"}}, "RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "Referrer-Policy": {"description": "Do not send a referrer when following this redirect.", "schema": {"const": "no-referrer", "type": "string"}}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}},
+          "400": {"$ref": "#/components/responses/Problem400"},
+          "401": {"$ref": "#/components/responses/Problem401"},
+          "403": {"$ref": "#/components/responses/Problem403"},
+          "404": {"$ref": "#/components/responses/Problem404"},
+          "429": {"$ref": "#/components/responses/Problem429"},
+          "500": {"$ref": "#/components/responses/Problem500"}
+        },
+        "x-required-scope": "lab-samples:read"
       }
     },
     "/llms.txt": {"get": {"description": "Public agent guide.", "operationId": "get_llms_guide", "responses": {"200": {"content": {"text/plain": {"schema": {"description": "Plain-text guide for API agents.", "type": "string"}}}, "description": "Public agent guide.", "headers": {"Cache-Control": {"description": "Public cache, max-age=300 seconds.", "schema": {"type": "string"}}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}}}, "security": [], "x-required-scope": null}},

@@ -74,6 +74,10 @@ ${biocharStockGuide}
 ${labSampleGuide}
 ${orderGuide}
 ${deliveryGuide}
+## Documents
+
+Documents belong to a record. Read them under /feedstocks/{idOrCode}/documents, /deliveries/{idOrCode}/documents or /lab-samples/{idOrCode}/documents using the record's read scope. Lists show uploaded files by default. Read one file at {record path}/documents/{documentId}. Its /content route redirects to a signed link that expires in 5 minutes; follow that link without the API key. Archived records remain readable.
+
 ## REST requests
 
 - Authenticate private routes with Authorization: Bearer <key> only. Keys start with ${API_KEY_LIVE_PREFIX} or ${API_KEY_TEST_PREFIX}. Cookies and x-api-key do not authenticate.

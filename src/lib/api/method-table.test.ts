@@ -78,3 +78,13 @@ it("exposes delivery creates and metadata patches without DELETE", async () => {
     expect(response.status).toBe(405);
   }
 });
+
+it("stages documents as reads only for each owner", () => {
+  for (const owner of ["feedstocks", "deliveries", "lab-samples"]) {
+    for (const suffix of ["", "/id", "/id/content"]) {
+      expect(getApiMethodEntry(`/api/v1/${owner}/CODE/documents${suffix}`)).toMatchObject({
+        methods: ["GET", "HEAD", "OPTIONS"], scopes: [`${owner}:read`], public: false,
+      });
+    }
+  }
+});
