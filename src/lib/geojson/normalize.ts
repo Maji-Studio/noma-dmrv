@@ -409,7 +409,7 @@ function capError(
  * Normalize uploaded or pasted GeoJSON into the application boundary envelope.
  * The caller must run this on the server so capturedAt is server controlled.
  */
-function normalizeGeoJsonInput({
+export function normalizeGeoJson({
   text,
   source,
   fileName,
@@ -533,8 +533,4 @@ function normalizeGeoJsonInput({
   }
 
   return { ok: true, boundary: parseGisBoundary(boundary) };
-}
-
-export function normalizeGeoJson(input: NormalizeGeoJsonInput): NormalizeGeoJsonResult {
-  return normalizeGeoJsonInput(input);
 }

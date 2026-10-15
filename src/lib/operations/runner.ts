@@ -26,7 +26,7 @@ import type { Pool } from "pg";
 import type { DbTransaction } from "@/db";
 import { pgErrorCode, PG_LOCK_NOT_AVAILABLE, PG_QUERY_CANCELED } from "@/db/errors";
 import { OPERATION_DEADLINE_MS, OPERATION_MAX_ATTEMPTS } from "@/config/operations";
-import { isRetryableTransactionError, transactionRetryDelayMs } from "@/lib/db/transaction-retry";
+import { isRetryableTransactionError, nextRetryDelayOrThrow } from "@/lib/db/transaction-retry";
 import {
   assertIdempotencyKeyUnused,
   claimIdempotencyKey,
@@ -327,7 +327,7 @@ async function runOperationCore<Input extends z.ZodType, Output, Result>(
         // Only callback_threw proves COMMIT was never sent and the claim rolled back.
         if (isRetryableTransactionError(failure) && !(code === PG_LOCK_NOT_AVAILABLE && claimLockTimeout)) {
           if (remainingMs(deadlineAt) <= 0) throw deadlineExceeded("while saving");
-          const delayMs = transactionRetryDelayMs(attempt);
+          const delayMs = nextRetryDelayOrThrow(attempt);
           if (remainingMs(deadlineAt) <= delayMs) throw deadlineExceeded("before retrying");
           await new Promise((resolve) => setTimeout(resolve, delayMs));
           if (remainingMs(deadlineAt) <= 0) throw deadlineExceeded("before retrying");

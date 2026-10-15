@@ -442,7 +442,7 @@ Two residual orders remain: membership refresh takes artifacts before runs,
 while production-run writers take runs first; membership takes artifacts before
 process scope, while run auto-attachment takes scope before batch artifacts.
 All three membership writers use `src/lib/db/transaction-retry.ts`
-(`retryTransaction`, `isRetryableTransactionError`, `transactionRetryDelayMs`),
+(`retryTransaction`, `isRetryableTransactionError`, `nextRetryDelayOrThrow`),
 shared with the runner, for 40P01, 40001 and 55P03. Production-run writers retain
 the runner's retry and deadline handling. Exhausted attempts return `concurrent_write_retry`.
 

@@ -8,8 +8,8 @@ export function isRetryableTransactionError(error: unknown): boolean {
   return code === PG_DEADLOCK_DETECTED || code === PG_SERIALIZATION_FAILURE || code === PG_LOCK_NOT_AVAILABLE;
 }
 
-/** Backoff after a failed attempt; the final failure uses shared operator copy. */
-export function transactionRetryDelayMs(attempt: number): number {
+/** Backoff after a failed attempt; throws the shared concurrent_write_retry error once attempts are exhausted. */
+export function nextRetryDelayOrThrow(attempt: number): number {
   if (attempt === OPERATION_MAX_ATTEMPTS) {
     throw new DomainError("concurrent_write_retry", "Concurrent changes prevented saving. Retry shortly.", { retryable: true });
   }
@@ -25,7 +25,7 @@ export async function retryTransaction<T>(transaction: () => Promise<T>): Promis
       return await transaction();
     } catch (error) {
       if (!isRetryableTransactionError(error)) throw error;
-      const delayMs = transactionRetryDelayMs(attempt);
+      const delayMs = nextRetryDelayOrThrow(attempt);
       await new Promise(resolve => setTimeout(resolve, delayMs));
     }
   }

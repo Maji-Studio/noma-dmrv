@@ -1,6 +1,6 @@
 import { afterEach, expect, it, vi } from "vitest";
 import { OPERATION_MAX_ATTEMPTS, OPERATION_RETRY_MIN_DELAY_MS, OPERATION_RETRY_MAX_DELAY_MS } from "@/config/operations";
-import { isRetryableTransactionError, retryTransaction, transactionRetryDelayMs } from "./transaction-retry";
+import { isRetryableTransactionError, retryTransaction, nextRetryDelayOrThrow } from "./transaction-retry";
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -27,7 +27,7 @@ it("bounds attempts and returns a typed retryable refusal", async () => {
 
 it("uses the runner's inclusive jitter bounds", () => {
   const random = vi.spyOn(Math, "random").mockReturnValue(0);
-  expect(transactionRetryDelayMs(1)).toBe(OPERATION_RETRY_MIN_DELAY_MS);
+  expect(nextRetryDelayOrThrow(1)).toBe(OPERATION_RETRY_MIN_DELAY_MS);
   random.mockReturnValue(1 - Number.EPSILON);
-  expect(transactionRetryDelayMs(1)).toBe(OPERATION_RETRY_MAX_DELAY_MS);
+  expect(nextRetryDelayOrThrow(1)).toBe(OPERATION_RETRY_MAX_DELAY_MS);
 });

@@ -4,7 +4,7 @@ export const FIELD_SIZE_POSITIVE_MESSAGE = "Field size must be greater than 0";
 export const MIN_FIELD_SIZE_HA = 0.0001;
 export const MAX_FIELD_SIZE_HA = 1_000_000;
 export const FIELD_SIZE_MIN_MESSAGE = `Field size must be at least ${MIN_FIELD_SIZE_HA} ha`;
-export const FIELD_SIZE_MAX_MESSAGE = "Field size must be at most 1,000,000 ha";
+export const FIELD_SIZE_MAX_MESSAGE = `Field size must be at most ${MAX_FIELD_SIZE_HA.toLocaleString("en-US")} ha`;
 
 /** Shared persisted/form predicate for application area. */
 export function isPositiveApplicationFieldSize(
