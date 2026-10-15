@@ -25,9 +25,6 @@ export const ISOMETRIC_BASE_URLS = {
 } as const;
 
 const RETRYABLE_STATUS = new Set([408, 425, 429, 500, 502, 503, 504]);
-const PERMANENT_SERVER_ERROR_STATUS = new Set([501, 505, 511]);
-const SERVER_ERROR_STATUS_MIN = 500;
-const SERVER_ERROR_STATUS_MAX = 599;
 const MAX_ATTEMPTS = 3;
 const BASE_DELAY_MS = 500;
 const MAX_DELAY_MS = 8000;
@@ -51,19 +48,10 @@ function isIdempotentMethod(method: string): boolean {
   return IDEMPOTENT_METHODS.has(method);
 }
 
-function isRetryableStatus(method: string, status: number): boolean {
-  if (method === "GET") {
-    return RETRYABLE_STATUS.has(status) ||
-      (status >= SERVER_ERROR_STATUS_MIN && status <= SERVER_ERROR_STATUS_MAX &&
-        !PERMANENT_SERVER_ERROR_STATUS.has(status));
-  }
-  return RETRYABLE_STATUS.has(status);
-}
-
 export function isRetryableIsometricReadError(error: IsometricApiError): boolean {
   return error.code === "network" ||
     (error.code === "http" && error.status !== undefined &&
-      isRetryableStatus("GET", error.status));
+      RETRYABLE_STATUS.has(error.status));
 }
 
 export interface IsometricCredentials {
@@ -192,19 +180,6 @@ async function isometricRequest<T = unknown>(
       }
     } catch (err) {
       if (options.signal?.aborted) throw options.signal.reason ?? err;
-      if (
-        method === "GET" && response && !response.ok &&
-        !isRetryableStatus(method, response.status)
-      ) {
-        // A stalled error body cannot turn a known client refusal into a
-        // retryable network failure.
-        throw new IsometricApiError(
-          `Isometric ${method} ${path} → ${response.status}`,
-          response.status,
-          undefined,
-          "http"
-        );
-      }
       if (response?.ok && !timeoutController.signal.aborted) {
         // Headers confirmed acceptance: do not replay because its body failed.
         // Keep network classification so write reconciliation remains cautious.
@@ -265,7 +240,7 @@ async function isometricRequest<T = unknown>(
     const canRetryMethod = isIdempotentMethod(method);
     const shouldRetry =
       canRetryMethod &&
-      isRetryableStatus(method, response.status) &&
+      RETRYABLE_STATUS.has(response.status) &&
       attempt < MAX_ATTEMPTS;
     if (shouldRetry) {
       const retryAfterRaw = parseRetryAfter(

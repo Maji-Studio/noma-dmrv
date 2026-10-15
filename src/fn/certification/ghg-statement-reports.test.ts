@@ -12,6 +12,8 @@ const locks = vi.hoisted(() => ({
   connectionOpen: false,
   artifactHeld: false,
   facilityHeld: false,
+  unsettledFetches: 0,
+  unsettledFetchesAtRelease: [] as number[],
   released: vi.fn(),
 }));
 const warn = vi.hoisted(() => vi.fn());
@@ -28,6 +30,7 @@ vi.mock("@/db", () => ({
     locks.connectionOpen = true;
     try { return await fn({}); }
     finally {
+      locks.unsettledFetchesAtRelease.push(locks.unsettledFetches);
       locks.artifactHeld = false;
       locks.connectionOpen = false;
       locks.released();
@@ -78,6 +81,15 @@ const READ_DEADLINE_MS = 60_000;
 const READ_PER_ENTRY_MS = 5_000;
 const READ_MAX_DEADLINE_MS = 300_000;
 const READ_CONCURRENCY = 4;
+// client.ts: MAX_ATTEMPTS and BASE_DELAY_MS, with Math.random fixed at 1.
+const CLIENT_MAX_ATTEMPTS = 3;
+const CLIENT_BASE_DELAY_MS = 500;
+const RETRY_BACKOFF_BUDGET_MS = CLIENT_BASE_DELAY_MS * (2 ** (CLIENT_MAX_ATTEMPTS - 1) - 1);
+const INITIAL_ENTRY_READ_CALL_COUNT = 1 + READ_CONCURRENCY; // Statement plus the first worker wave.
+const RETRIED_ENTRY_READ_CALL_COUNT = INITIAL_ENTRY_READ_CALL_COUNT + CLIENT_MAX_ATTEMPTS - 1;
+// Eight waves at REPORT_REGISTRY_READ_CONCURRENCY finish before the capped deadline.
+const STALL_AFTER_ENTRY_COUNT = 32;
+const FETCH_ABORT_SETTLEMENT_MS = 1;
 const HEALTHY_ENTRY_COUNT = 100;
 const HEALTHY_ENTRY_LATENCY_MS = 3_000;
 const PREPARATION_KEY = "44444444-4444-4444-8444-444444444444";
@@ -112,13 +124,21 @@ function remoteEntry(id: string) {
 }
 
 function stalledFetch(_url: unknown, init?: RequestInit): Promise<Response> {
-  return new Promise((_resolve, reject) => {
-    init!.signal!.addEventListener("abort", () => reject(init!.signal!.reason), { once: true });
+  locks.unsettledFetches += 1;
+  return new Promise<Response>((_resolve, reject) => {
+    // Abort delivery precedes asynchronous transport cleanup and settlement.
+    init!.signal!.addEventListener("abort", () => {
+      setTimeout(() => reject(init!.signal!.reason), FETCH_ABORT_SETTLEMENT_MS);
+    }, { once: true });
+  }).finally(() => {
+    locks.unsettledFetches -= 1;
   });
 }
 
 beforeEach(() => {
   vi.clearAllMocks();
+  locks.unsettledFetches = 0;
+  locks.unsettledFetchesAtRelease = [];
   vi.useFakeTimers();
   vi.stubGlobal("fetch", fetchMock);
   fetchMock.mockReset();
@@ -137,6 +157,7 @@ afterEach(() => {
 function expectReleasedWithoutReport() {
   expect(locks).toMatchObject({ connectionOpen: false, artifactHeld: false, facilityHeld: false });
   expect(locks.released).toHaveBeenCalledOnce();
+  expect(locks.unsettledFetchesAtRelease).toEqual([0]);
   expect(renderGhgStatementReportPdf).not.toHaveBeenCalled();
   expect(getStorageProvider).not.toHaveBeenCalled();
   expect(insertPreparedGhgStatementReport).not.toHaveBeenCalled();
@@ -198,17 +219,18 @@ describe("report preparation registry budget", () => {
     })));
     fetchMock.mockImplementation(async (url, init) => {
       const index = Number(String(url).split("entry-").at(-1));
-      if (index >= 32) return stalledFetch(url, init);
+      if (index >= STALL_AFTER_ENTRY_COUNT) return stalledFetch(url, init);
       await new Promise((resolve) => setTimeout(resolve, CALL_TIMEOUT_MS - 1_000));
       return Response.json(remoteEntry(`entry-${index}`));
     });
-    const outcome = loadFacts().catch((error: unknown) => error);
+    const outcome = prepare();
     await vi.advanceTimersByTimeAsync(READ_MAX_DEADLINE_MS - 1);
     expect(warn).not.toHaveBeenCalled();
     await vi.advanceTimersByTimeAsync(1);
-    expect(await outcome).toMatchObject({ code: "deadline_exceeded", retryable: true });
+    await vi.advanceTimersByTimeAsync(FETCH_ABORT_SETTLEMENT_MS);
+    expect(await outcome).toMatchObject({ success: false, code: "deadline_exceeded" });
     expect(warn).toHaveBeenCalledOnce();
-    expect(vi.getTimerCount()).toBe(0);
+    expectReleasedWithoutReport();
   });
 
   it("starts queued reads as workers finish and preserves entry order", async () => {
@@ -270,13 +292,13 @@ describe("report preparation registry budget", () => {
       return stalledFetch(url, init);
     });
     const outcome = prepare();
-    await vi.advanceTimersByTimeAsync(1500);
+    await vi.advanceTimersByTimeAsync(RETRY_BACKOFF_BUDGET_MS + FETCH_ABORT_SETTLEMENT_MS);
     expect(await outcome).toMatchObject({
       success: false,
       code: status === 400 ? "registry_read_refused" : "registry_unavailable",
       error: status === 400 ? refusalMessage : retryMessage,
     });
-    expect(fetchMock).toHaveBeenCalledTimes(status === 400 ? 5 : 7);
+    expect(fetchMock).toHaveBeenCalledTimes(status === 400 ? INITIAL_ENTRY_READ_CALL_COUNT : RETRIED_ENTRY_READ_CALL_COUNT);
     expectReleasedWithoutReport();
     expect(warn).toHaveBeenCalledTimes(status === 400 ? 0 : 1);
   });
@@ -312,6 +334,7 @@ describe("report preparation registry budget", () => {
     expect(settled).toBe(false);
     expect(fetchMock).toHaveBeenCalledTimes(phase === "statement" ? 2 : 13);
     await vi.advanceTimersByTimeAsync(1);
+    await vi.advanceTimersByTimeAsync(FETCH_ABORT_SETTLEMENT_MS);
     expect(settled).toBe(true);
     expect(await outcome).toMatchObject({
       success: false,
@@ -328,7 +351,7 @@ describe("report preparation registry budget", () => {
   it("returns an actionable failure after a slow read followed by registry errors", async () => {
     fetchMock.mockImplementationOnce(stalledFetch).mockImplementation(async () => new Response("busy", { status: 503 }));
     const outcome = prepare();
-    await vi.advanceTimersByTimeAsync(CALL_TIMEOUT_MS);
+    await vi.advanceTimersByTimeAsync(CALL_TIMEOUT_MS + FETCH_ABORT_SETTLEMENT_MS);
     expect(fetchMock).toHaveBeenCalledOnce();
     expect(locks.artifactHeld).toBe(true);
     await vi.advanceTimersByTimeAsync(499);
