@@ -464,8 +464,6 @@
     "emission_factor_used": "2.68 kgCO2e/L",
     "emission_factor_source": "IPCC 2006",
     "transport_emissions_co2e_kg": 23.2,
-    "bill_of_lading": "BOL-2025-0012",
-    "weigh_scale_ticket_ref": "WST-0042",
     "createdAt": "2025-06-15T07:00:00Z",
     "updatedAt": "2025-06-15T12:00:00Z"
   },

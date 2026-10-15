@@ -23,10 +23,8 @@ import {
   and,
   eq,
   inArray,
-  isNull,
   lte,
   ne,
-  or,
   sql,
 } from "drizzle-orm";
 import { requireOrgScope } from "./utils";
@@ -117,10 +115,7 @@ export async function deriveLaneStock(
             and(
               eq(feedstocks.status, "complete"),
               sql`${feedstocks.massDryKg} > 0`,
-              or(
-                isNull(feedstocks.massWetKg),
-                lte(feedstocks.massWetKg, 0),
-              ),
+              lte(feedstocks.massWetKg, 0),
             ),
           ),
         })

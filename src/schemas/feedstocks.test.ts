@@ -51,6 +51,6 @@ it("requires moisture below 100 on create and update", () => {
   }
   expect(updateFeedstockSchema.safeParse({ ...patch, moistureContentPercent: 99.999999 }).success).toBe(true);
 });
-it("does not accept dry mass as a PATCH field", () => {
-  expect(updateFeedstockSchema.strict().safeParse({ ...patch, massDryKg: 90 }).success).toBe(false);
+it("strips dry mass from the in-process PATCH schema", () => {
+  expect(updateFeedstockSchema.parse({ ...patch, massDryKg: 90 })).not.toHaveProperty("massDryKg");
 });

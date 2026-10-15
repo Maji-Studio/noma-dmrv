@@ -169,6 +169,21 @@ describe("feedstock stock-take moisture integrity", () => {
         /^Check the source record, or record Lost mass if stock was lost\.$/,
       );
 
+      const futureTime = new Date();
+      futureTime.setFullYear(futureTime.getFullYear() + 1);
+      await expect(createBinMovement(ctx, {
+        storageLocationId: bin.id,
+        lane: "feedstock",
+        movementType: "loss",
+        occurredAt: futureTime,
+        idempotencyKey: crypto.randomUUID(),
+        massDeltaKg: -1,
+        reason: "Future loss must not change stock",
+      })).rejects.toMatchObject({
+        code: "validation_failed",
+        issues: [{ path: ["occurredAt"], code: "validation_failed", message: "Date and time cannot be in the future. Enter a time at or before now." }],
+      });
+
       const preciseSnapshot = await recordStockTakeFn({
         storageLocationId: bin.id,
         lane: "feedstock",

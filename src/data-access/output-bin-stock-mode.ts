@@ -51,7 +51,7 @@ export async function applyStockModeChange(ctx: OrgContext, tx: DbTransaction, e
   const target = next.stockMode ?? existing.stockMode;
   if (target === existing.stockMode) return target;
   if (target === 'mix' && (!next.mergedAt || !Number.isFinite(next.mergedAt.getTime()))) {
-    throw new SafeError('Enter when the stock was merged.');
+    throw new SafeError('Enter when the batches were merged.');
   }
   // A bin changes type only while it holds nothing (the identity guard sees to
   // that), so there is no pile to merge or sort.

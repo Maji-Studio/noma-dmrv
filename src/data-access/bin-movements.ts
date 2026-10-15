@@ -1,3 +1,4 @@
+import { assertEventTimesNotFuture } from "./future-event-time";
 /**
  * Bin Movements Data Access Layer (issue #194)
  *
@@ -218,6 +219,11 @@ export async function createBinMovement(
   if (!input.occurredAt || !Number.isFinite(input.occurredAt.getTime())) {
     throw new SafeError("Enter the date and time.");
   }
+  assertEventTimesNotFuture(
+    { occurredAt: input.occurredAt },
+    { occurredAt: "Date and time cannot be in the future. Enter a time at or before now." },
+    new Date(),
+  );
   const payload = {
     occurredAt: input.occurredAt.toISOString(),
     storageLocationId: input.storageLocationId,

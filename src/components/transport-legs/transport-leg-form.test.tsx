@@ -17,5 +17,8 @@ it("exposes model year as an editable optional input", () => {
   expect(input).toContain('type="number"');
   expect(input).toContain('name="modelYear"');
   expect(input).not.toContain("required");
+  expect(input).toContain('min="1900"');
+  expect(input).toContain(`max="${new Date().getFullYear() + 1}"`);
+  expect(input).toContain('step="1"');
   expect(transportLegFormSchema.parse({ distanceKm: 10, loadMassKg: 100, modelYear: "" }).modelYear).toBeNull();
 });

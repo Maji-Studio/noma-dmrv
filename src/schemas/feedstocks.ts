@@ -46,7 +46,7 @@ const requiredPositiveMass = requiredPositiveMassKgSchema(
 const requiredMoisturePercent = pipeToCanonicalNumber(
   requiredNumber(),
   storedPercentSchema()
-    .min(MOISTURE_MIN, "Moisture must be between 0 and 100")
+    .min(MOISTURE_MIN, "Moisture must be at least 0 and below 100")
     .lt(MOISTURE_MAX, "Moisture must be below 100"),
 );
 

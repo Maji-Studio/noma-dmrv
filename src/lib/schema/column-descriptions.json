@@ -464,8 +464,6 @@
     "emission_factor_used": "Emission factor value and unit applied",
     "emission_factor_source": "Source reference for the emission factor",
     "transport_emissions_co2e_kg": "Calculated transport emissions in kg CO2e",
-    "bill_of_lading": "Bill of lading document reference",
-    "weigh_scale_ticket_ref": "Weigh scale ticket reference number",
     "createdAt": "Timestamp when the record was created",
     "updatedAt": "Timestamp of last modification"
   },

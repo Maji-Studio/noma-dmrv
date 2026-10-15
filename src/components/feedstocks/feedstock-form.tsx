@@ -661,6 +661,7 @@ export function FeedstockForm({
             }}
             moisture={{
               id: "moisturePercent",
+              rangeHelperText: "At least 0 and below 100% of wet mass",
               error: errors.moisturePercent?.message,
               required: true,
               disabled: isSubmitting,

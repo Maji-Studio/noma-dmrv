@@ -42,7 +42,6 @@ const PRE_637_FIELD_SOURCES: Record<string, string[]> = {
   "sample.organicCarbonPercent": ["weightedOrganicCarbonPercent"],
   "sample.hToCOrgRatio": ["weightedHToCorgRatio"],
   "sample.oToCOrgRatio": ["weightedOToCorgRatio"],
-  "feedstock.massWetKg": ["feedstockTransportMassDistanceTonneKm"],
   "feedstock.transportLeg": ["feedstockTransportMassDistanceTonneKm"],
   "transportLeg.distanceKm": [
     "feedstockTransportMassDistanceTonneKm",
@@ -110,7 +109,6 @@ const RESOLVED_FIELD_TUPLES: Record<string, string[]> = {
   "sample.organicCarbonPercent": [
     "co2-stored/carbon_rich_substance_sequestration/carbon_content",
   ],
-  "feedstock.massWetKg": [FEEDSTOCK_MASS_DISTANCE],
   "feedstock.transportLeg": [FEEDSTOCK_MASS_DISTANCE],
   "transportLeg.distanceKm": TRANSPORT_TUPLES,
   "transportLeg.loadMassKg": TRANSPORT_TUPLES,

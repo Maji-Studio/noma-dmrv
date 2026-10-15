@@ -269,6 +269,7 @@ async function seedBatchChain(seededData: SeededChainData) {
       await tx.insert(schema.feedstocks).values(await feedstockFixtureValues(tx, {
         organizationId: DEC_ORG_ID,
         id: ids.secondFeedstock,
+        supplierId: seededData.supplier.id,
         code: codes.secondFeedstock,
         facilityId: seededData.facility.id,
         feedstockTypeId: seededData.feedstockType.id,
