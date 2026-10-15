@@ -35,6 +35,36 @@ afterEach(() => {
 });
 
 describe("registry response body deadline", () => {
+  it.each([400, 401, 403, 404, 422, 501, 505, 511])("does not retry a %i read refusal", async (status) => {
+    fetchMock.mockImplementation(async () => new Response("refused", { status }));
+    const outcome = client.get("/test").catch((error: unknown) => error);
+    await vi.runAllTimersAsync();
+    expect(await outcome).toMatchObject({ code: "http", status });
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
+  it.each([408, 425, 429, 500, 502, 503, 504, 599])("caps %i read retries and Retry-After waits", async (status) => {
+    fetchMock.mockImplementation(async () => new Response("busy", { status, headers: { "retry-after": "999999" } }));
+    const outcome = client.get("/test").catch((error: unknown) => error);
+    await vi.advanceTimersByTimeAsync(29_999);
+    expect(fetchMock).toHaveBeenCalledOnce();
+    await vi.advanceTimersByTimeAsync(1);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(await outcome).toMatchObject({ code: "http", status });
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it.each([400, 501, 505, 511])("does not retry a %i read refusal when its body stalls", async (status) => {
+    stalledResponse(status);
+    const outcome = client.get("/test").catch((error: unknown) => error);
+    await vi.runAllTimersAsync();
+    expect(await outcome).toMatchObject({ code: "http", status });
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
   it.each([200, 400, 503])("times out a stalled %i body without replaying POST", async (status) => {
     stalledResponse(status);
     const external = new AbortController();

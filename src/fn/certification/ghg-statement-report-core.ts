@@ -31,6 +31,9 @@ import {
 import { buildVerifierReportUrl } from "@/lib/certification/ghg-statement-report/verifier-url";
 import { redactReportUrlSecrets } from "@/lib/certification/report-url";
 import { SafeError } from "@/lib/errors";
+import { DomainError } from "@/lib/domain-errors";
+import { IsometricApiError, isRetryableIsometricReadError } from "@/lib/isometric/client";
+import { logger } from "@/lib/log";
 import {
   getGhgEntry,
   getGhgStatement,
@@ -46,6 +49,11 @@ import {
 const PINNED_STANDARD_VERSION =
   versions.certify_project_observation.current_standard_version;
 const PINNED_PROTOCOL_VERSION = versions.protocol.patch_version;
+// Per-call timeout, attempt cap and bounded backoff remain in the shared client.
+const REPORT_REGISTRY_READ_BASE_DEADLINE_MS = 60_000;
+const REPORT_REGISTRY_READ_PER_ENTRY_MS = 5_000;
+const REPORT_REGISTRY_READ_MAX_DEADLINE_MS = 300_000;
+const REPORT_REGISTRY_READ_CONCURRENCY = 4;
 
 export interface LiveReportFacts {
   input: BuildGhgStatementReportModelInput;
@@ -102,126 +110,203 @@ export async function loadLiveReportFacts(
   }
 
   const client = await resolveIsometricClient(orgCtx);
-  const remoteStatement = await getGhgStatement(
-    client,
-    statementSubmission.externalId,
+  const readFailureMessage =
+    `GHG Statement ${statementSubmission.externalId} could not be read from Isometric. Try again shortly.`;
+  const readFailure = new DomainError(
+    "deadline_exceeded",
+    readFailureMessage,
+    { retryable: true },
   );
-  if (
-    remoteStatement.id !== statementSubmission.externalId ||
-    remoteStatement.project_id !== project.externalProjectId ||
-    remoteStatement.reporting_period_start_at === null ||
-    remoteStatement.reporting_period_start_at !==
-      statement.reportingPeriodStartOn ||
-    remoteStatement.reporting_period_end_at !== statement.reportingPeriodEndOn
-  ) {
-    throw new SafeError(
-      "The live GHG Statement does not match the local project and reporting-period lineage. Refresh it before generating a report.",
-    );
-  }
-  if (
-    remoteStatement.pending_total_co2e_removed_kg === null ||
-    !Number.isFinite(remoteStatement.pending_total_co2e_removed_kg)
-  ) {
-    throw new SafeError(
-      "The live GHG Statement does not expose a pending net removed total. Refresh it or wait for Isometric to finish recalculating.",
-    );
-  }
-  if (remoteStatement.ghg_entry_ids.length === 0) {
-    throw new SafeError(
-      "This GHG Statement has no live GHG Entry membership. Submit a Removal first.",
-    );
-  }
-
-  const remoteEntries = await Promise.all(
-    remoteStatement.ghg_entry_ids.map((entryId) =>
-      getGhgEntry(client, entryId),
-    ),
+  const controller = new AbortController();
+  const startedAt = Date.now();
+  const abortAtDeadline = () => controller.abort(readFailure);
+  let deadline = setTimeout(
+    abortAtDeadline,
+    REPORT_REGISTRY_READ_BASE_DEADLINE_MS,
   );
-  for (const [index, entry] of remoteEntries.entries()) {
-    const requestedId = remoteStatement.ghg_entry_ids[index];
-    // noma supports only biochar removal credits; a REDUCTION entry's figures
-    // must never be presented as removals (see lib/isometric/projects.ts).
-    if (entry.credit_type !== "REMOVAL") {
+  try {
+    const remoteStatement = await getGhgStatement(
+      client,
+      statementSubmission.externalId,
+      { signal: controller.signal },
+    );
+    if (
+      remoteStatement.id !== statementSubmission.externalId ||
+      remoteStatement.project_id !== project.externalProjectId ||
+      remoteStatement.reporting_period_start_at === null ||
+      remoteStatement.reporting_period_start_at !==
+        statement.reportingPeriodStartOn ||
+      remoteStatement.reporting_period_end_at !== statement.reportingPeriodEndOn
+    ) {
       throw new SafeError(
-        `Live GHG Entry ${requestedId} is not a removal credit. This report supports only removal entries.`,
+        "The live GHG Statement does not match the local project and reporting-period lineage. Refresh it before generating a report.",
       );
     }
     if (
-      entry.id !== requestedId ||
-      entry.ghg_statement_id !== remoteStatement.id ||
-      entry.completed_on < remoteStatement.reporting_period_start_at ||
-      entry.completed_on > remoteStatement.reporting_period_end_at ||
-      entry.started_on > entry.completed_on
+      remoteStatement.pending_total_co2e_removed_kg === null ||
+      !Number.isFinite(remoteStatement.pending_total_co2e_removed_kg)
     ) {
       throw new SafeError(
-        `Live GHG Entry ${requestedId} does not match this statement and reporting period. Generate a new report after refreshing membership.`,
+        "The live GHG Statement does not expose a pending net removed total. Refresh it or wait for Isometric to finish recalculating.",
       );
     }
-  }
+    if (remoteStatement.ghg_entry_ids.length === 0) {
+      throw new SafeError(
+        "This GHG Statement has no live GHG Entry membership. Submit a Removal first.",
+      );
+    }
 
-  const documentControl = {
-    organizationName: organization.name,
-    facilityCode: facility.code,
-    externalProjectId: project.externalProjectId,
-    externalGhgStatementId: remoteStatement.id,
-    reportingPeriodStartOn: remoteStatement.reporting_period_start_at,
-    reportingPeriodEndOn: remoteStatement.reporting_period_end_at,
-    standardVersion: PINNED_STANDARD_VERSION,
-    protocolVersion: PINNED_PROTOCOL_VERSION,
-    configuredProtocolVersion: project.protocolVersion,
-  };
-  const normalizedEntries = remoteEntries.map((entry) => ({
-    id: entry.id,
-    startedOn: entry.started_on,
-    completedOn: entry.completed_on,
-    netRemovedKg: entry.co2e_net_removed_kg,
-    netRemovedWithoutDiscountKg:
-      entry.co2e_net_removed_without_discount_kg,
-    netRemovedStandardDeviationKg:
-      entry.co2e_net_removed_standard_deviation_kg,
-    ghgStatementId: entry.ghg_statement_id,
-  }));
-  const input: BuildGhgStatementReportModelInput = {
-    reportVersion: args.reportVersion,
-    preparedAt: args.preparedAt,
-    documentControl,
-    authoritativeStatement: {
-      externalEntryIds: remoteStatement.ghg_entry_ids,
-      pendingTotalCo2eRemovedKg:
-        remoteStatement.pending_total_co2e_removed_kg,
-      creditAllocation: remoteStatement.credit_allocation
-        ? {
-            supplierCreditKg:
-              remoteStatement.credit_allocation.supplier_allocation_kg,
-            bufferPoolKg:
-              remoteStatement.credit_allocation.buffer_pool_contribution_kg,
-          }
-        : null,
-    },
-    remoteEntries: normalizedEntries,
-  };
-  return {
-    input,
-    frozenInput: {
+    // Count the statement read against the same budget, then allow larger
+    // statements more time without holding the report locks indefinitely.
+    const deadlineMs = Math.min(
+      REPORT_REGISTRY_READ_BASE_DEADLINE_MS +
+        remoteStatement.ghg_entry_ids.length * REPORT_REGISTRY_READ_PER_ENTRY_MS,
+      REPORT_REGISTRY_READ_MAX_DEADLINE_MS,
+    );
+    clearTimeout(deadline);
+    controller.signal.throwIfAborted();
+    deadline = setTimeout(abortAtDeadline, Math.max(0, deadlineMs - (Date.now() - startedAt)));
+
+    const remoteEntries: Awaited<ReturnType<typeof getGhgEntry>>[] = [];
+    let nextIndex = 0;
+    const workers = Array.from({
+      length: Math.min(REPORT_REGISTRY_READ_CONCURRENCY, remoteStatement.ghg_entry_ids.length),
+    }, async () => {
+      try {
+        while (nextIndex < remoteStatement.ghg_entry_ids.length) {
+          controller.signal.throwIfAborted();
+          const index = nextIndex++;
+          remoteEntries[index] = await getGhgEntry(client, remoteStatement.ghg_entry_ids[index], {
+            signal: controller.signal,
+          });
+        }
+      } catch (error) {
+        controller.abort(error);
+        throw error;
+      }
+    });
+    try {
+      await Promise.all(workers);
+    } catch (error) {
+      // Cancel siblings and drain them before unwinding the lock scopes.
+      controller.abort(error);
+      await Promise.allSettled(workers);
+      throw error;
+    }
+    for (const [index, entry] of remoteEntries.entries()) {
+      const requestedId = remoteStatement.ghg_entry_ids[index];
+      // noma supports only biochar removal credits; a REDUCTION entry's figures
+      // must never be presented as removals (see lib/isometric/projects.ts).
+      if (entry.credit_type !== "REMOVAL") {
+        throw new SafeError(
+          `Live GHG Entry ${requestedId} is not a removal credit. This report supports only removal entries.`,
+        );
+      }
+      if (
+        entry.id !== requestedId ||
+        entry.ghg_statement_id !== remoteStatement.id ||
+        entry.completed_on < remoteStatement.reporting_period_start_at ||
+        entry.completed_on > remoteStatement.reporting_period_end_at ||
+        entry.started_on > entry.completed_on
+      ) {
+        throw new SafeError(
+          `Live GHG Entry ${requestedId} does not match this statement and reporting period. Generate a new report after refreshing membership.`,
+        );
+      }
+    }
+
+    const documentControl = {
+      organizationName: organization.name,
+      facilityCode: facility.code,
+      externalProjectId: project.externalProjectId,
+      externalGhgStatementId: remoteStatement.id,
+      reportingPeriodStartOn: remoteStatement.reporting_period_start_at,
+      reportingPeriodEndOn: remoteStatement.reporting_period_end_at,
+      standardVersion: PINNED_STANDARD_VERSION,
+      protocolVersion: PINNED_PROTOCOL_VERSION,
+      configuredProtocolVersion: project.protocolVersion,
+    };
+    const normalizedEntries = remoteEntries.map((entry) => ({
+      id: entry.id,
+      startedOn: entry.started_on,
+      completedOn: entry.completed_on,
+      netRemovedKg: entry.co2e_net_removed_kg,
+      netRemovedWithoutDiscountKg:
+        entry.co2e_net_removed_without_discount_kg,
+      netRemovedStandardDeviationKg:
+        entry.co2e_net_removed_standard_deviation_kg,
+      ghgStatementId: entry.ghg_statement_id,
+    }));
+    const input: BuildGhgStatementReportModelInput = {
+      reportVersion: args.reportVersion,
+      preparedAt: args.preparedAt,
       documentControl,
       authoritativeStatement: {
-        id: remoteStatement.id,
-        projectId: remoteStatement.project_id,
-        ghgEntryIds: [...remoteStatement.ghg_entry_ids],
+        externalEntryIds: remoteStatement.ghg_entry_ids,
         pendingTotalCo2eRemovedKg:
           remoteStatement.pending_total_co2e_removed_kg,
-        creditAllocation: remoteStatement.credit_allocation,
-        reportingPeriodStartOn:
-          remoteStatement.reporting_period_start_at,
-        reportingPeriodEndOn: remoteStatement.reporting_period_end_at,
-        status: remoteStatement.status,
-        priorReportUrl: redactReportUrlSecrets(
-          remoteStatement.ghg_statement_report_url,
-        ),
+        creditAllocation: remoteStatement.credit_allocation
+          ? {
+              supplierCreditKg:
+                remoteStatement.credit_allocation.supplier_allocation_kg,
+              bufferPoolKg:
+                remoteStatement.credit_allocation.buffer_pool_contribution_kg,
+            }
+          : null,
       },
-      liveGhgEntries: normalizedEntries,
-    },
-  };
+      remoteEntries: normalizedEntries,
+    };
+    return {
+      input,
+      frozenInput: {
+        documentControl,
+        authoritativeStatement: {
+          id: remoteStatement.id,
+          projectId: remoteStatement.project_id,
+          ghgEntryIds: [...remoteStatement.ghg_entry_ids],
+          pendingTotalCo2eRemovedKg:
+            remoteStatement.pending_total_co2e_removed_kg,
+          creditAllocation: remoteStatement.credit_allocation,
+          reportingPeriodStartOn:
+            remoteStatement.reporting_period_start_at,
+          reportingPeriodEndOn: remoteStatement.reporting_period_end_at,
+          status: remoteStatement.status,
+          priorReportUrl: redactReportUrlSecrets(
+            remoteStatement.ghg_statement_report_url,
+          ),
+        },
+        liveGhgEntries: normalizedEntries,
+      },
+    };
+  } catch (error) {
+    const aborted = error instanceof Error &&
+      (error.name === "AbortError" || error.name === "TimeoutError");
+    if (error === readFailure || aborted ||
+      (error instanceof IsometricApiError && isRetryableIsometricReadError(error))) {
+      logger.warn(
+        {
+          ghgStatementId: args.ghgStatementId,
+          externalGhgStatementId: statementSubmission.externalId,
+          reason: error === readFailure ? "deadline_exceeded" : "retry_budget_exhausted",
+        },
+        "GHG Statement report registry read stopped",
+      );
+      if (error === readFailure) throw readFailure;
+      throw new DomainError("registry_unavailable", readFailureMessage, { retryable: true });
+    }
+    if (error instanceof IsometricApiError) {
+      if (error.code === "not_configured") {
+        throw new DomainError("registry_not_configured", error.message);
+      }
+      throw new DomainError(
+        "registry_read_refused",
+        `GHG Statement ${statementSubmission.externalId} could not be read from Isometric. Check the GHG Statement in Isometric or the registry connection.`,
+      );
+    }
+    throw error;
+  } finally {
+    clearTimeout(deadline);
+  }
 }
 
 export async function rebuildGhgStatementReportModel(
