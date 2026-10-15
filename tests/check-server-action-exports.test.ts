@@ -23,7 +23,8 @@ const FIXTURE_OPTIONS: ts.CompilerOptions = {
   skipLibCheck: true,
 };
 // Loading the default lib for a fresh program is the slow part.
-const CHECK_TIMEOUT_MS = 30_000;
+// Each case builds its own TypeScript program; shared CI runners can spike well past 30 s.
+const CHECK_TIMEOUT_MS = 120_000;
 
 const SHARED_FILES: Record<string, string> = {
   "auth.ts": `
