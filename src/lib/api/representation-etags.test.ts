@@ -30,6 +30,11 @@ it("keeps delivery read and write tags on the same representation revision", () 
   expect(deliveryEtag({ version: 3 })).toBe('"3.2"');
 });
 
+it("keeps upload request and confirm tags on the document read revision", () => {
+  expect(documentEtag({ version: 1 })).toBe('"1.1"');
+  expect(documentEtag({ version: 2 })).toBe('"2.1"');
+});
+
 it("uses the current biochar product representation revision", () => {
   expect(biocharProductEtag({ version: 7 })).toBe(`"7.${BIOCHAR_PRODUCT_REPRESENTATION_REVISION}"`);
 });

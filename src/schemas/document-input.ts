@@ -17,18 +17,18 @@ const ownerFields = {
 };
 
 /** Public client declaration. Storage configuration and inspection facts are server owned. */
-export const requestDocumentUploadInput = z.strictObject({
-  ...ownerFields,
+export const requestDocumentUploadBodyInput = z.strictObject({
   documentType: z.enum(DOCUMENT_TYPES).describe("Document classification allowed for this owner."),
   fileName: z.string().min(1).max(FILE_NAME_MAX_LENGTH).describe("Original file name, untrusted plain text."),
   contentType: z.string().min(1).max(CONTENT_TYPE_MAX_LENGTH).describe("MIME type allowed for this document classification. Empty and text/plain are refused."),
   sizeBytes: z.number().int().min(1).max(DOCUMENT_UPLOAD_MAX_BYTES).describe("Exact declared file length in bytes."),
   sha256: z.string().regex(/^[a-f0-9]{64}$/).describe("Required SHA-256 of the file bytes, 64 lowercase hexadecimal characters."),
   capturedAt: offsetInstantSchema().optional().describe("Capture instant with explicit offset. Cannot be in the future."),
-  gpsLatitude: requiredLatitudeSchema.optional(),
-  gpsLongitude: requiredLongitudeSchema.optional(),
+  gpsLatitude: requiredLatitudeSchema.optional().describe("Declared latitude in decimal degrees; supply with gpsLongitude."),
+  gpsLongitude: requiredLongitudeSchema.optional().describe("Declared longitude in decimal degrees; supply with gpsLatitude."),
   description: z.string().max(DESCRIPTION_MAX_LENGTH).optional().describe("Document description, untrusted plain text."),
-}).superRefine((data, ctx) => {
+});
+export const requestDocumentUploadInput = requestDocumentUploadBodyInput.extend(ownerFields).superRefine((data, ctx) => {
   if (!allowsApiDocumentType(data.ownerType, data.documentType)) ctx.addIssue({ code: "custom", path: ["documentType"], message: "This document type is not allowed for this record. Choose another type." });
   const mime = data.contentType.split(";")[0].trim().toLowerCase();
   if (!mime || mime === "text/plain" || !isAllowedMime(data.documentType, data.contentType)) ctx.addIssue({ code: "custom", path: ["contentType"], message: "This file type is not allowed for this document. Choose another file." });

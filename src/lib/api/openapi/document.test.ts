@@ -461,12 +461,12 @@ it("publishes delivery write bodies, allocations, preconditions and complete pro
   expect(document.paths["/deliveries/{idOrCode}"]).not.toHaveProperty("delete");
 });
 
-it("publishes only document reads with owner scopes, validators and private expiring redirects", () => {
+it("publishes document reads with owner scopes, validators and private expiring redirects", () => {
   for (const owner of ["feedstocks", "deliveries", "lab-samples"]) {
     const base = `/${owner}/{idOrCode}/documents`;
     for (const suffix of ["", "/{documentId}", "/{documentId}/content"]) {
       const methods = document.paths[base + suffix];
-      expect(Object.keys(methods)).toEqual(["get"]);
+      expect(Object.keys(methods)).toEqual(suffix ? ["get"] : ["get", "post"]);
       expect(methods.get["x-required-scope"]).toBe(`${owner}:read`);
       for (const status of [400, 401, 403, 404, 429, 500]) expect(methods.get.responses).toHaveProperty(String(status));
     }
@@ -481,4 +481,36 @@ it("publishes only document reads with owner scopes, validators and private expi
     expect(document.components.schemas.document.properties).toMatchObject({ [field]: { anyOf: expect.arrayContaining([{ type: "null" }]) } });
   }
   expect(document.components.schemas.document.properties).not.toHaveProperty("storageKey");
+});
+
+it("publishes upload capabilities, keyless confirm and every document write refusal", () => {
+  for (const owner of ["feedstocks", "deliveries", "lab-samples"]) {
+    const base = `/${owner}/{idOrCode}/documents`;
+    const request = document.paths[base].post;
+    expect(request).toMatchObject({ "x-required-scope": `${owner}:write` });
+    expect(request.parameters).toContainEqual(expect.objectContaining({ name: "Idempotency-Key", required: true }));
+    expect(request.description).toContain("Files never travel in this call.");
+    expect(request.description).toContain("without the API key");
+    expect(request.description).toContain("fresh link");
+    expect(request.description).toContain("Use the owner UUID path for safe retries");
+    expect(request.description).toContain("400 idempotency_key_required");
+    expect(request.description).not.toContain("Dry-Run: true");
+    expect(request.responses["201"]).toMatchObject({ headers: { Location: expect.any(Object), ETag: expect.any(Object), "Idempotent-Replayed": expect.any(Object) },
+      content: { "application/json": { schema: { required: ["data", "upload"], properties: { upload: { anyOf: expect.arrayContaining([{ type: "null" }]) }, warnings: expect.any(Object) } } } } });
+    for (const status of [400, 401, 403, 404, 409, 413, 415, 422, 429, 500, 503]) expect(request.responses).toHaveProperty(String(status));
+    expect(request.responses).not.toHaveProperty("428");
+    expect(request.responses).not.toHaveProperty("412");
+    const confirm = document.paths[`${base}/{documentId}/confirm`].post;
+    expect(confirm).toMatchObject({ "x-required-scope": `${owner}:write` });
+    expect(confirm.parameters).toContainEqual(expect.objectContaining({ name: "Idempotency-Key", required: false, description: expect.stringContaining("ignored") }));
+    expect(confirm.parameters).not.toContainEqual(expect.objectContaining({ name: "If-Match" }));
+    expect(confirm.description).toContain("If-Match is ignored");
+    expect(confirm.responses["200"]).toMatchObject({ headers: { ETag: expect.any(Object) } });
+    for (const status of [400, 401, 403, 404, 409, 413, 415, 422, 429, 500, 503]) expect(confirm.responses).toHaveProperty(String(status));
+    expect(confirm.responses).not.toHaveProperty("412");
+    expect(confirm.responses).not.toHaveProperty("428");
+    for (const suffix of ["", "/{documentId}", "/{documentId}/content", "/{documentId}/confirm"]) {
+      for (const method of ["delete", "patch", "put"]) expect(document.paths[base + suffix]).not.toHaveProperty(method);
+    }
+  }
 });

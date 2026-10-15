@@ -1,4 +1,5 @@
 import { addDocumentReadPaths } from "./document-reads";
+import { addDocumentWritePaths } from "./document-writes";
 import { documentRepresentationSchema } from "@/lib/representations/documents";
 import { customerLocationRepresentationSchema } from "@/lib/representations/customer-locations";
 import { orderBalanceRepresentationSchema } from "@/lib/representations/order-balance";
@@ -225,6 +226,7 @@ export function buildOpenApiDocument() {
   addLabSampleWritePaths(paths, { publishOutput, writeErrors: WRITE_ERRORS });
   addOrderWritePaths(paths, { publishOutput, writeErrors: WRITE_ERRORS });
   addDeliveryWritePaths(paths, { publishOutput, writeErrors: WRITE_ERRORS });
+  addDocumentWritePaths(paths, publishOutput);
 
   for (const [path, operationId, mediaType, description] of [
     ["/openapi.json", "get_openapi_document", "application/json", "Public OpenAPI 3.1 contract."],

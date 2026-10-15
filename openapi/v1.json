@@ -1129,6 +1129,71 @@
           "500": {"$ref": "#/components/responses/Problem500"}
         },
         "x-required-scope": "deliveries:read"
+      },
+      "post": {
+        "description": "Request a private evidence upload. Files never travel in this call. Request an upload, PUT the bytes to upload.url with upload.headers, then confirm. Use the upload URL without the API key; it expires at expiresAt. A replay with the same key returns the stored data and a fresh link while the upload is pending. Otherwise upload is null with a warning explaining why (uploaded, failed, deleted, expired, archived or submitted). Missing or foreign owners answer 404 not_found. Submitted records refuse uploads with 409 certification_locked. Conflicts answer 409 conflict. Unknown properties and invalid declarations answer 422 validation_failed at the field pointer. No dry run: dryRun=true answers 422 validation_failed. No API delete. Reusing a request key with changed input answers 422 idempotency_key_reused. Use the owner UUID path for safe retries after owner deletion or code changes; Location uses that UUID. Archived owners refuse new requests with 404; committed UUID replays remain 201. Idempotency-Key is required (400 idempotency_key_required when missing; 400 idempotency_key_invalid when malformed). The response includes the document GET Location and ETag. Required scope: deliveries:write.",
+        "operationId": "request_delivery_document_upload",
+        "parameters": [{"description": "Resource UUID or exact human-readable code.", "in": "path", "name": "idOrCode", "required": true, "schema": {"type": "string"}}, {"description": "Dry runs are unavailable. true answers 422 validation_failed; false commits.", "in": "query", "name": "dryRun", "required": false, "schema": {"description": "Dry runs are unavailable. true answers 422 validation_failed; false commits.", "enum": ["true", "false"], "type": "string"}}, {"description": "Required unique key for this upload request. Reuse on retry to recover the stored document with a fresh pending upload capability. No dry run.", "in": "header", "name": "Idempotency-Key", "required": true, "schema": {"maxLength": 255, "minLength": 1, "pattern": "^[\\x21-\\x7e]+$", "type": "string"}}],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {"contentType": "application/pdf", "documentType": "bill_of_lading", "fileName": "receipt.pdf", "sha256": "cf9f6d7f6a764f117a86e8e0baaa26e7e0a36f4498aa78f7ff49275d9636fec0", "sizeBytes": 8},
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "capturedAt": {"description": "Capture instant with explicit offset. Cannot be in the future.", "format": "date-time", "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$", "type": "string"},
+                  "contentType": {"description": "MIME type allowed for this document classification. Empty and text/plain are refused.", "maxLength": 255, "minLength": 1, "type": "string"},
+                  "description": {"description": "Document description, untrusted plain text.", "maxLength": 2000, "type": "string"},
+                  "documentType": {"description": "Document classification allowed for this owner.", "enum": ["bill_of_lading", "weighbridge_ticket", "other_transport_evidence", "delivery_receipt", "photo"], "type": "string"},
+                  "fileName": {"description": "Original file name, untrusted plain text.", "maxLength": 255, "minLength": 1, "type": "string"},
+                  "gpsLatitude": {"description": "Declared latitude in decimal degrees; supply with gpsLongitude.", "maximum": 90, "minimum": -90, "type": "number"},
+                  "gpsLongitude": {"description": "Declared longitude in decimal degrees; supply with gpsLatitude.", "maximum": 180, "minimum": -180, "type": "number"},
+                  "sha256": {"description": "Required SHA-256 of the file bytes, 64 lowercase hexadecimal characters.", "pattern": "^[a-f0-9]{64}$", "type": "string"},
+                  "sizeBytes": {"description": "Exact declared file length in bytes.", "maximum": 10485760, "minimum": 1, "type": "integer"}
+                },
+                "required": ["documentType", "fileName", "contentType", "sizeBytes", "sha256"],
+                "type": "object"
+              }
+            }
+          },
+          "description": "JSON body, maximum 262144 bytes. Unknown properties are rejected.",
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {"$ref": "#/components/schemas/document", "description": "Resource representation."},
+                    "upload": {
+                      "anyOf": [{"additionalProperties": false, "properties": {"expiresAt": {"description": "UTC instant when the upload capability expires.", "format": "date-time", "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$", "type": "string"}, "headers": {"additionalProperties": {"type": "string"}, "description": "Headers required on the PUT, including Content-Type.", "propertyNames": {"type": "string"}, "type": "object"}, "method": {"const": "PUT", "description": "HTTP method for the file transfer.", "type": "string"}, "url": {"description": "Short-lived upload URL. PUT without the API key.", "format": "uri", "type": "string"}}, "required": ["url", "method", "headers", "expiresAt"], "type": "object"}, {"type": "null"}],
+                      "description": "Fresh upload capability while pending, or null when unavailable."
+                    },
+                    "warnings": {"description": "Plain-text guidance explaining an unavailable upload capability.", "items": {"type": "string"}, "type": "array"}
+                  },
+                  "required": ["data", "upload"],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Upload requested, or stored outcome replayed with a newly minted capability or warning.",
+            "headers": {"ETag": {"$ref": "#/components/headers/ETag"}, "Idempotent-Replayed": {"$ref": "#/components/headers/Idempotent-Replayed"}, "Location": {"$ref": "#/components/headers/Location"}, "RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}
+          },
+          "400": {"$ref": "#/components/responses/Problem400"},
+          "401": {"$ref": "#/components/responses/Problem401"},
+          "403": {"$ref": "#/components/responses/Problem403"},
+          "404": {"$ref": "#/components/responses/Problem404"},
+          "409": {"$ref": "#/components/responses/Problem409"},
+          "413": {"$ref": "#/components/responses/Problem413"},
+          "415": {"$ref": "#/components/responses/Problem415"},
+          "422": {"$ref": "#/components/responses/Problem422"},
+          "429": {"$ref": "#/components/responses/Problem429"},
+          "500": {"$ref": "#/components/responses/Problem500"},
+          "503": {"$ref": "#/components/responses/Problem503"}
+        },
+        "x-required-scope": "deliveries:write"
       }
     },
     "/deliveries/{idOrCode}/documents/{documentId}": {
@@ -1138,6 +1203,29 @@
         "parameters": [{"description": "Resource UUID or exact human-readable code.", "in": "path", "name": "idOrCode", "required": true, "schema": {"type": "string"}}, {"description": "Document UUID belonging to this record.", "in": "path", "name": "documentId", "required": true, "schema": {"format": "uuid", "type": "string"}}],
         "responses": {"200": {"content": {"application/json": {"schema": {"additionalProperties": false, "properties": {"data": {"$ref": "#/components/schemas/document", "description": "Resource representation."}}, "required": ["data"], "type": "object"}}}, "description": "Document representation.", "headers": {"ETag": {"$ref": "#/components/headers/ETag"}, "RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}}, "400": {"$ref": "#/components/responses/Problem400"}, "401": {"$ref": "#/components/responses/Problem401"}, "403": {"$ref": "#/components/responses/Problem403"}, "404": {"$ref": "#/components/responses/Problem404"}, "429": {"$ref": "#/components/responses/Problem429"}, "500": {"$ref": "#/components/responses/Problem500"}},
         "x-required-scope": "deliveries:read"
+      }
+    },
+    "/deliveries/{idOrCode}/documents/{documentId}/confirm": {
+      "post": {
+        "description": "Confirm uploaded bytes within a 25 second budget. Empty JSON object or no body. E1: Idempotency-Key is accepted and ignored; no idempotency record is written. E2: If-Match is ignored, including malformed tags; no version precondition, 412 or 428. Uploaded repeats return 200 with ETag without storage I/O. Wrong bytes commit a failed transition, then answer 422 validation_failed at /sizeBytes, /contentType or /sha256. Failed repeats answer 409 conflict with the stored reason. A pending upload on a newly submitted owner becomes failed and answers 409 certification_locked at /ownerId. Gone documents, wrong owners and archived pending owners answer 404. Missing bytes answer retryable 409 conflict with Retry-After and stay pending. Budget exhaustion answers retryable 500 deadline_exceeded. Missing or foreign owners answer 404 not_found. Submitted records refuse uploads with 409 certification_locked. Conflicts answer 409 conflict. Unknown properties and invalid declarations answer 422 validation_failed at the field pointer. No dry run: dryRun=true answers 422 validation_failed. No API delete. Required scope: deliveries:write.",
+        "operationId": "confirm_delivery_document_upload",
+        "parameters": [{"description": "Resource UUID or exact human-readable code.", "in": "path", "name": "idOrCode", "required": true, "schema": {"type": "string"}}, {"description": "Document UUID belonging to this record.", "in": "path", "name": "documentId", "required": true, "schema": {"format": "uuid", "type": "string"}}, {"description": "Dry runs are unavailable. true answers 422 validation_failed; false commits.", "in": "query", "name": "dryRun", "required": false, "schema": {"description": "Dry runs are unavailable. true answers 422 validation_failed; false commits.", "enum": ["true", "false"], "type": "string"}}, {"description": "Accepted and ignored (E1). Confirm keeps no idempotency record.", "in": "header", "name": "Idempotency-Key", "required": false, "schema": {"type": "string"}}],
+        "requestBody": {"content": {"application/json": {"example": {}, "schema": {"additionalProperties": false, "properties": {}, "type": "object"}}}, "description": "Optional empty JSON object, maximum 262144 bytes.", "required": false},
+        "responses": {
+          "200": {"content": {"application/json": {"schema": {"additionalProperties": false, "properties": {"data": {"$ref": "#/components/schemas/document", "description": "Resource representation."}}, "required": ["data"], "type": "object"}}}, "description": "Confirmed document, or repeat confirmation of an uploaded document.", "headers": {"ETag": {"$ref": "#/components/headers/ETag"}, "RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}},
+          "400": {"$ref": "#/components/responses/Problem400"},
+          "401": {"$ref": "#/components/responses/Problem401"},
+          "403": {"$ref": "#/components/responses/Problem403"},
+          "404": {"$ref": "#/components/responses/Problem404"},
+          "409": {"$ref": "#/components/responses/Problem409"},
+          "413": {"$ref": "#/components/responses/Problem413"},
+          "415": {"$ref": "#/components/responses/Problem415"},
+          "422": {"$ref": "#/components/responses/Problem422"},
+          "429": {"$ref": "#/components/responses/Problem429"},
+          "500": {"$ref": "#/components/responses/Problem500"},
+          "503": {"$ref": "#/components/responses/Problem503"}
+        },
+        "x-required-scope": "deliveries:write"
       }
     },
     "/deliveries/{idOrCode}/documents/{documentId}/content": {
@@ -1441,6 +1529,71 @@
           "500": {"$ref": "#/components/responses/Problem500"}
         },
         "x-required-scope": "feedstocks:read"
+      },
+      "post": {
+        "description": "Request a private evidence upload. Files never travel in this call. Request an upload, PUT the bytes to upload.url with upload.headers, then confirm. Use the upload URL without the API key; it expires at expiresAt. A replay with the same key returns the stored data and a fresh link while the upload is pending. Otherwise upload is null with a warning explaining why (uploaded, failed, deleted, expired, archived or submitted). Missing or foreign owners answer 404 not_found. Submitted records refuse uploads with 409 certification_locked. Conflicts answer 409 conflict. Unknown properties and invalid declarations answer 422 validation_failed at the field pointer. No dry run: dryRun=true answers 422 validation_failed. No API delete. Reusing a request key with changed input answers 422 idempotency_key_reused. Use the owner UUID path for safe retries after owner deletion or code changes; Location uses that UUID. Archived owners refuse new requests with 404; committed UUID replays remain 201. Idempotency-Key is required (400 idempotency_key_required when missing; 400 idempotency_key_invalid when malformed). The response includes the document GET Location and ETag. Required scope: feedstocks:write.",
+        "operationId": "request_feedstock_document_upload",
+        "parameters": [{"description": "Resource UUID or exact human-readable code.", "in": "path", "name": "idOrCode", "required": true, "schema": {"type": "string"}}, {"description": "Dry runs are unavailable. true answers 422 validation_failed; false commits.", "in": "query", "name": "dryRun", "required": false, "schema": {"description": "Dry runs are unavailable. true answers 422 validation_failed; false commits.", "enum": ["true", "false"], "type": "string"}}, {"description": "Required unique key for this upload request. Reuse on retry to recover the stored document with a fresh pending upload capability. No dry run.", "in": "header", "name": "Idempotency-Key", "required": true, "schema": {"maxLength": 255, "minLength": 1, "pattern": "^[\\x21-\\x7e]+$", "type": "string"}}],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {"contentType": "application/pdf", "documentType": "bill_of_lading", "fileName": "receipt.pdf", "sha256": "cf9f6d7f6a764f117a86e8e0baaa26e7e0a36f4498aa78f7ff49275d9636fec0", "sizeBytes": 8},
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "capturedAt": {"description": "Capture instant with explicit offset. Cannot be in the future.", "format": "date-time", "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$", "type": "string"},
+                  "contentType": {"description": "MIME type allowed for this document classification. Empty and text/plain are refused.", "maxLength": 255, "minLength": 1, "type": "string"},
+                  "description": {"description": "Document description, untrusted plain text.", "maxLength": 2000, "type": "string"},
+                  "documentType": {"description": "Document classification allowed for this owner.", "enum": ["bill_of_lading", "weighbridge_ticket", "other_transport_evidence"], "type": "string"},
+                  "fileName": {"description": "Original file name, untrusted plain text.", "maxLength": 255, "minLength": 1, "type": "string"},
+                  "gpsLatitude": {"description": "Declared latitude in decimal degrees; supply with gpsLongitude.", "maximum": 90, "minimum": -90, "type": "number"},
+                  "gpsLongitude": {"description": "Declared longitude in decimal degrees; supply with gpsLatitude.", "maximum": 180, "minimum": -180, "type": "number"},
+                  "sha256": {"description": "Required SHA-256 of the file bytes, 64 lowercase hexadecimal characters.", "pattern": "^[a-f0-9]{64}$", "type": "string"},
+                  "sizeBytes": {"description": "Exact declared file length in bytes.", "maximum": 10485760, "minimum": 1, "type": "integer"}
+                },
+                "required": ["documentType", "fileName", "contentType", "sizeBytes", "sha256"],
+                "type": "object"
+              }
+            }
+          },
+          "description": "JSON body, maximum 262144 bytes. Unknown properties are rejected.",
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {"$ref": "#/components/schemas/document", "description": "Resource representation."},
+                    "upload": {
+                      "anyOf": [{"additionalProperties": false, "properties": {"expiresAt": {"description": "UTC instant when the upload capability expires.", "format": "date-time", "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$", "type": "string"}, "headers": {"additionalProperties": {"type": "string"}, "description": "Headers required on the PUT, including Content-Type.", "propertyNames": {"type": "string"}, "type": "object"}, "method": {"const": "PUT", "description": "HTTP method for the file transfer.", "type": "string"}, "url": {"description": "Short-lived upload URL. PUT without the API key.", "format": "uri", "type": "string"}}, "required": ["url", "method", "headers", "expiresAt"], "type": "object"}, {"type": "null"}],
+                      "description": "Fresh upload capability while pending, or null when unavailable."
+                    },
+                    "warnings": {"description": "Plain-text guidance explaining an unavailable upload capability.", "items": {"type": "string"}, "type": "array"}
+                  },
+                  "required": ["data", "upload"],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Upload requested, or stored outcome replayed with a newly minted capability or warning.",
+            "headers": {"ETag": {"$ref": "#/components/headers/ETag"}, "Idempotent-Replayed": {"$ref": "#/components/headers/Idempotent-Replayed"}, "Location": {"$ref": "#/components/headers/Location"}, "RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}
+          },
+          "400": {"$ref": "#/components/responses/Problem400"},
+          "401": {"$ref": "#/components/responses/Problem401"},
+          "403": {"$ref": "#/components/responses/Problem403"},
+          "404": {"$ref": "#/components/responses/Problem404"},
+          "409": {"$ref": "#/components/responses/Problem409"},
+          "413": {"$ref": "#/components/responses/Problem413"},
+          "415": {"$ref": "#/components/responses/Problem415"},
+          "422": {"$ref": "#/components/responses/Problem422"},
+          "429": {"$ref": "#/components/responses/Problem429"},
+          "500": {"$ref": "#/components/responses/Problem500"},
+          "503": {"$ref": "#/components/responses/Problem503"}
+        },
+        "x-required-scope": "feedstocks:write"
       }
     },
     "/feedstocks/{idOrCode}/documents/{documentId}": {
@@ -1450,6 +1603,29 @@
         "parameters": [{"description": "Resource UUID or exact human-readable code.", "in": "path", "name": "idOrCode", "required": true, "schema": {"type": "string"}}, {"description": "Document UUID belonging to this record.", "in": "path", "name": "documentId", "required": true, "schema": {"format": "uuid", "type": "string"}}],
         "responses": {"200": {"content": {"application/json": {"schema": {"additionalProperties": false, "properties": {"data": {"$ref": "#/components/schemas/document", "description": "Resource representation."}}, "required": ["data"], "type": "object"}}}, "description": "Document representation.", "headers": {"ETag": {"$ref": "#/components/headers/ETag"}, "RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}}, "400": {"$ref": "#/components/responses/Problem400"}, "401": {"$ref": "#/components/responses/Problem401"}, "403": {"$ref": "#/components/responses/Problem403"}, "404": {"$ref": "#/components/responses/Problem404"}, "429": {"$ref": "#/components/responses/Problem429"}, "500": {"$ref": "#/components/responses/Problem500"}},
         "x-required-scope": "feedstocks:read"
+      }
+    },
+    "/feedstocks/{idOrCode}/documents/{documentId}/confirm": {
+      "post": {
+        "description": "Confirm uploaded bytes within a 25 second budget. Empty JSON object or no body. E1: Idempotency-Key is accepted and ignored; no idempotency record is written. E2: If-Match is ignored, including malformed tags; no version precondition, 412 or 428. Uploaded repeats return 200 with ETag without storage I/O. Wrong bytes commit a failed transition, then answer 422 validation_failed at /sizeBytes, /contentType or /sha256. Failed repeats answer 409 conflict with the stored reason. A pending upload on a newly submitted owner becomes failed and answers 409 certification_locked at /ownerId. Gone documents, wrong owners and archived pending owners answer 404. Missing bytes answer retryable 409 conflict with Retry-After and stay pending. Budget exhaustion answers retryable 500 deadline_exceeded. Missing or foreign owners answer 404 not_found. Submitted records refuse uploads with 409 certification_locked. Conflicts answer 409 conflict. Unknown properties and invalid declarations answer 422 validation_failed at the field pointer. No dry run: dryRun=true answers 422 validation_failed. No API delete. Required scope: feedstocks:write.",
+        "operationId": "confirm_feedstock_document_upload",
+        "parameters": [{"description": "Resource UUID or exact human-readable code.", "in": "path", "name": "idOrCode", "required": true, "schema": {"type": "string"}}, {"description": "Document UUID belonging to this record.", "in": "path", "name": "documentId", "required": true, "schema": {"format": "uuid", "type": "string"}}, {"description": "Dry runs are unavailable. true answers 422 validation_failed; false commits.", "in": "query", "name": "dryRun", "required": false, "schema": {"description": "Dry runs are unavailable. true answers 422 validation_failed; false commits.", "enum": ["true", "false"], "type": "string"}}, {"description": "Accepted and ignored (E1). Confirm keeps no idempotency record.", "in": "header", "name": "Idempotency-Key", "required": false, "schema": {"type": "string"}}],
+        "requestBody": {"content": {"application/json": {"example": {}, "schema": {"additionalProperties": false, "properties": {}, "type": "object"}}}, "description": "Optional empty JSON object, maximum 262144 bytes.", "required": false},
+        "responses": {
+          "200": {"content": {"application/json": {"schema": {"additionalProperties": false, "properties": {"data": {"$ref": "#/components/schemas/document", "description": "Resource representation."}}, "required": ["data"], "type": "object"}}}, "description": "Confirmed document, or repeat confirmation of an uploaded document.", "headers": {"ETag": {"$ref": "#/components/headers/ETag"}, "RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}},
+          "400": {"$ref": "#/components/responses/Problem400"},
+          "401": {"$ref": "#/components/responses/Problem401"},
+          "403": {"$ref": "#/components/responses/Problem403"},
+          "404": {"$ref": "#/components/responses/Problem404"},
+          "409": {"$ref": "#/components/responses/Problem409"},
+          "413": {"$ref": "#/components/responses/Problem413"},
+          "415": {"$ref": "#/components/responses/Problem415"},
+          "422": {"$ref": "#/components/responses/Problem422"},
+          "429": {"$ref": "#/components/responses/Problem429"},
+          "500": {"$ref": "#/components/responses/Problem500"},
+          "503": {"$ref": "#/components/responses/Problem503"}
+        },
+        "x-required-scope": "feedstocks:write"
       }
     },
     "/feedstocks/{idOrCode}/documents/{documentId}/content": {
@@ -1746,6 +1922,71 @@
           "500": {"$ref": "#/components/responses/Problem500"}
         },
         "x-required-scope": "lab-samples:read"
+      },
+      "post": {
+        "description": "Request a private evidence upload. Files never travel in this call. Request an upload, PUT the bytes to upload.url with upload.headers, then confirm. Use the upload URL without the API key; it expires at expiresAt. A replay with the same key returns the stored data and a fresh link while the upload is pending. Otherwise upload is null with a warning explaining why (uploaded, failed, deleted, expired, archived or submitted). Missing or foreign owners answer 404 not_found. Submitted records refuse uploads with 409 certification_locked. Conflicts answer 409 conflict. Unknown properties and invalid declarations answer 422 validation_failed at the field pointer. No dry run: dryRun=true answers 422 validation_failed. No API delete. Reusing a request key with changed input answers 422 idempotency_key_reused. Use the owner UUID path for safe retries after owner deletion or code changes; Location uses that UUID. Archived owners refuse new requests with 404; committed UUID replays remain 201. Idempotency-Key is required (400 idempotency_key_required when missing; 400 idempotency_key_invalid when malformed). The response includes the document GET Location and ETag. Required scope: lab-samples:write.",
+        "operationId": "request_lab_sample_document_upload",
+        "parameters": [{"description": "Resource UUID or exact human-readable code.", "in": "path", "name": "idOrCode", "required": true, "schema": {"type": "string"}}, {"description": "Dry runs are unavailable. true answers 422 validation_failed; false commits.", "in": "query", "name": "dryRun", "required": false, "schema": {"description": "Dry runs are unavailable. true answers 422 validation_failed; false commits.", "enum": ["true", "false"], "type": "string"}}, {"description": "Required unique key for this upload request. Reuse on retry to recover the stored document with a fresh pending upload capability. No dry run.", "in": "header", "name": "Idempotency-Key", "required": true, "schema": {"maxLength": 255, "minLength": 1, "pattern": "^[\\x21-\\x7e]+$", "type": "string"}}],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {"contentType": "application/pdf", "documentType": "lab_report", "fileName": "receipt.pdf", "sha256": "cf9f6d7f6a764f117a86e8e0baaa26e7e0a36f4498aa78f7ff49275d9636fec0", "sizeBytes": 8},
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "capturedAt": {"description": "Capture instant with explicit offset. Cannot be in the future.", "format": "date-time", "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$", "type": "string"},
+                  "contentType": {"description": "MIME type allowed for this document classification. Empty and text/plain are refused.", "maxLength": 255, "minLength": 1, "type": "string"},
+                  "description": {"description": "Document description, untrusted plain text.", "maxLength": 2000, "type": "string"},
+                  "documentType": {"description": "Document classification allowed for this owner.", "enum": ["lab_report"], "type": "string"},
+                  "fileName": {"description": "Original file name, untrusted plain text.", "maxLength": 255, "minLength": 1, "type": "string"},
+                  "gpsLatitude": {"description": "Declared latitude in decimal degrees; supply with gpsLongitude.", "maximum": 90, "minimum": -90, "type": "number"},
+                  "gpsLongitude": {"description": "Declared longitude in decimal degrees; supply with gpsLatitude.", "maximum": 180, "minimum": -180, "type": "number"},
+                  "sha256": {"description": "Required SHA-256 of the file bytes, 64 lowercase hexadecimal characters.", "pattern": "^[a-f0-9]{64}$", "type": "string"},
+                  "sizeBytes": {"description": "Exact declared file length in bytes.", "maximum": 10485760, "minimum": 1, "type": "integer"}
+                },
+                "required": ["documentType", "fileName", "contentType", "sizeBytes", "sha256"],
+                "type": "object"
+              }
+            }
+          },
+          "description": "JSON body, maximum 262144 bytes. Unknown properties are rejected.",
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {"$ref": "#/components/schemas/document", "description": "Resource representation."},
+                    "upload": {
+                      "anyOf": [{"additionalProperties": false, "properties": {"expiresAt": {"description": "UTC instant when the upload capability expires.", "format": "date-time", "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$", "type": "string"}, "headers": {"additionalProperties": {"type": "string"}, "description": "Headers required on the PUT, including Content-Type.", "propertyNames": {"type": "string"}, "type": "object"}, "method": {"const": "PUT", "description": "HTTP method for the file transfer.", "type": "string"}, "url": {"description": "Short-lived upload URL. PUT without the API key.", "format": "uri", "type": "string"}}, "required": ["url", "method", "headers", "expiresAt"], "type": "object"}, {"type": "null"}],
+                      "description": "Fresh upload capability while pending, or null when unavailable."
+                    },
+                    "warnings": {"description": "Plain-text guidance explaining an unavailable upload capability.", "items": {"type": "string"}, "type": "array"}
+                  },
+                  "required": ["data", "upload"],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Upload requested, or stored outcome replayed with a newly minted capability or warning.",
+            "headers": {"ETag": {"$ref": "#/components/headers/ETag"}, "Idempotent-Replayed": {"$ref": "#/components/headers/Idempotent-Replayed"}, "Location": {"$ref": "#/components/headers/Location"}, "RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}
+          },
+          "400": {"$ref": "#/components/responses/Problem400"},
+          "401": {"$ref": "#/components/responses/Problem401"},
+          "403": {"$ref": "#/components/responses/Problem403"},
+          "404": {"$ref": "#/components/responses/Problem404"},
+          "409": {"$ref": "#/components/responses/Problem409"},
+          "413": {"$ref": "#/components/responses/Problem413"},
+          "415": {"$ref": "#/components/responses/Problem415"},
+          "422": {"$ref": "#/components/responses/Problem422"},
+          "429": {"$ref": "#/components/responses/Problem429"},
+          "500": {"$ref": "#/components/responses/Problem500"},
+          "503": {"$ref": "#/components/responses/Problem503"}
+        },
+        "x-required-scope": "lab-samples:write"
       }
     },
     "/lab-samples/{idOrCode}/documents/{documentId}": {
@@ -1755,6 +1996,29 @@
         "parameters": [{"description": "Resource UUID or exact human-readable code.", "in": "path", "name": "idOrCode", "required": true, "schema": {"type": "string"}}, {"description": "Document UUID belonging to this record.", "in": "path", "name": "documentId", "required": true, "schema": {"format": "uuid", "type": "string"}}],
         "responses": {"200": {"content": {"application/json": {"schema": {"additionalProperties": false, "properties": {"data": {"$ref": "#/components/schemas/document", "description": "Resource representation."}}, "required": ["data"], "type": "object"}}}, "description": "Document representation.", "headers": {"ETag": {"$ref": "#/components/headers/ETag"}, "RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}}, "400": {"$ref": "#/components/responses/Problem400"}, "401": {"$ref": "#/components/responses/Problem401"}, "403": {"$ref": "#/components/responses/Problem403"}, "404": {"$ref": "#/components/responses/Problem404"}, "429": {"$ref": "#/components/responses/Problem429"}, "500": {"$ref": "#/components/responses/Problem500"}},
         "x-required-scope": "lab-samples:read"
+      }
+    },
+    "/lab-samples/{idOrCode}/documents/{documentId}/confirm": {
+      "post": {
+        "description": "Confirm uploaded bytes within a 25 second budget. Empty JSON object or no body. E1: Idempotency-Key is accepted and ignored; no idempotency record is written. E2: If-Match is ignored, including malformed tags; no version precondition, 412 or 428. Uploaded repeats return 200 with ETag without storage I/O. Wrong bytes commit a failed transition, then answer 422 validation_failed at /sizeBytes, /contentType or /sha256. Failed repeats answer 409 conflict with the stored reason. A pending upload on a newly submitted owner becomes failed and answers 409 certification_locked at /ownerId. Gone documents, wrong owners and archived pending owners answer 404. Missing bytes answer retryable 409 conflict with Retry-After and stay pending. Budget exhaustion answers retryable 500 deadline_exceeded. Missing or foreign owners answer 404 not_found. Submitted records refuse uploads with 409 certification_locked. Conflicts answer 409 conflict. Unknown properties and invalid declarations answer 422 validation_failed at the field pointer. No dry run: dryRun=true answers 422 validation_failed. No API delete. Required scope: lab-samples:write.",
+        "operationId": "confirm_lab_sample_document_upload",
+        "parameters": [{"description": "Resource UUID or exact human-readable code.", "in": "path", "name": "idOrCode", "required": true, "schema": {"type": "string"}}, {"description": "Document UUID belonging to this record.", "in": "path", "name": "documentId", "required": true, "schema": {"format": "uuid", "type": "string"}}, {"description": "Dry runs are unavailable. true answers 422 validation_failed; false commits.", "in": "query", "name": "dryRun", "required": false, "schema": {"description": "Dry runs are unavailable. true answers 422 validation_failed; false commits.", "enum": ["true", "false"], "type": "string"}}, {"description": "Accepted and ignored (E1). Confirm keeps no idempotency record.", "in": "header", "name": "Idempotency-Key", "required": false, "schema": {"type": "string"}}],
+        "requestBody": {"content": {"application/json": {"example": {}, "schema": {"additionalProperties": false, "properties": {}, "type": "object"}}}, "description": "Optional empty JSON object, maximum 262144 bytes.", "required": false},
+        "responses": {
+          "200": {"content": {"application/json": {"schema": {"additionalProperties": false, "properties": {"data": {"$ref": "#/components/schemas/document", "description": "Resource representation."}}, "required": ["data"], "type": "object"}}}, "description": "Confirmed document, or repeat confirmation of an uploaded document.", "headers": {"ETag": {"$ref": "#/components/headers/ETag"}, "RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}},
+          "400": {"$ref": "#/components/responses/Problem400"},
+          "401": {"$ref": "#/components/responses/Problem401"},
+          "403": {"$ref": "#/components/responses/Problem403"},
+          "404": {"$ref": "#/components/responses/Problem404"},
+          "409": {"$ref": "#/components/responses/Problem409"},
+          "413": {"$ref": "#/components/responses/Problem413"},
+          "415": {"$ref": "#/components/responses/Problem415"},
+          "422": {"$ref": "#/components/responses/Problem422"},
+          "429": {"$ref": "#/components/responses/Problem429"},
+          "500": {"$ref": "#/components/responses/Problem500"},
+          "503": {"$ref": "#/components/responses/Problem503"}
+        },
+        "x-required-scope": "lab-samples:write"
       }
     },
     "/lab-samples/{idOrCode}/documents/{documentId}/content": {

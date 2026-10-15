@@ -4,7 +4,7 @@ import type { OrgContext } from "@/lib/auth/server";
 import type { StorageProvider } from "@/lib/storage/types";
 import { StorageError } from "@/lib/storage/types";
 import { buildFinalStorageKey } from "@/lib/storage/keys";
-import { DOCUMENT_CONFIRM_DB_RESERVE_MS, DOCUMENT_CONFIRM_DEADLINE_MS } from "@/config/documents";
+import { DOCUMENT_CONFIRM_DB_RESERVE_MS, DOCUMENT_CONFIRM_DEADLINE_MS, DOCUMENT_CONFIRM_RETRY_AFTER_SECONDS } from "@/config/documents";
 import { DomainError, deadlineExceeded } from "@/lib/domain-errors";
 import { getDocumentById, type DocumentRow } from "@/data-access/documents";
 import { documentNotFound } from "@/data-access/document-write-scope";
@@ -37,7 +37,7 @@ export async function preparePendingDocumentUpload(ctx: OrgContext, row: Documen
   const signal = AbortSignal.timeout(storageBudget);
   try {
     const object = await provider.readObjectBounded({ key: facts.uploadKey, maxBytes: facts.sizeBytes, signal });
-    if (!object) throw new DomainError("conflict", "The uploaded file could not be found. Upload it again.", { retryable: true });
+    if (!object) throw new DomainError("conflict", "The uploaded file could not be found. Upload it again.", { retryable: true, retryAfterSeconds: DOCUMENT_CONFIRM_RETRY_AFTER_SECONDS });
     const refusal = inspectUploadBytes({ entityType: row.entityType, documentType: row.documentType, fileName: row.fileName, contentType: facts.contentType, sizeBytes: facts.sizeBytes, sha256: facts.sha256 ?? undefined }, object);
     if (refusal) return { kind: "prepared", facts: { ...facts, refusal } };
     const finalKey = buildFinalStorageKey({ organizationId: ctx.organizationId, documentId: row.id, entityType: row.entityType, entityId: row.entityId, documentType: row.documentType, fileName: row.fileName, sha256: object.sha256 });

@@ -40,6 +40,32 @@ Ratios and warnings come from the merged locked row
 Reads (`src/data-access/api-lab-samples.ts`, `api-credit-batches.ts`) hide
 samples on archived batches from lists and still serve them by id.
 
+### Documents
+
+Feedstocks, deliveries and lab samples expose nested document reads and upload
+requests at `/{owner}/{idOrCode}/documents`. Reads use the owner's read scope;
+uploads and confirmation use its write scope. Files never travel in these API
+bodies. POST a declaration with its SHA-256 and a required `Idempotency-Key`
+(400 `idempotency_key_required` when missing), PUT the bytes to `upload.url` with `upload.headers`, then
+POST an empty object or no body to `/{documentId}/confirm`. Use the upload URL
+without the API key before `expiresAt`. Request returns 201 with the document
+GET `Location` and ETag; confirm returns 200 with the verified document and ETag.
+Neither command offers a dry run. There is no API document delete or edit.
+
+Use the owner UUID path for safe retries after owner deletion or code changes;
+the `Location` header uses that UUID. Reusing the request key on the UUID path
+returns 201 with `Idempotent-Replayed: true` and the stored `data`.
+Each pending replay mints a fresh upload link with a renewed
+lease. An uploaded, failed, deleted, expired, archived or submitted upload
+returns `upload: null` with `warnings`, preserving the historical success.
+
+Confirm has a 25 second budget, including inspection, promotion and the database
+transition, within a 30 second route duration. Missing bytes answer retryable
+409 `conflict` with `Retry-After`; the document stays pending. Deadline exhaustion
+answers retryable 500 `deadline_exceeded`. Submitted records refuse uploads
+with 409 `certification_locked`; submission between request and confirm fails
+the pending upload. Archived records remain readable but refuse new uploads.
+
 ### Operation effects and API bookkeeping
 
 Document upload requests use the registered `request_document_upload` operation.
@@ -63,7 +89,8 @@ Two named exceptions apply to this state-machine command:
 - **E1:** confirmation ignores `Idempotency-Key` and keeps no idempotency record.
 - **E2:** confirmation takes no `If-Match` or expected version. The declaration
   is immutable and the row lock serializes its pending-to-uploaded or
-  pending-to-failed transition.
+  pending-to-failed transition. A supplied `If-Match` is ignored, including an
+  invalid tag; confirm never answers 412 or requires a precondition.
 
 `src/lib/operations/runner.ts:Operation` optionally supplies `describe(input,
 output)`, which returns `src/lib/operation-effect.ts:OperationEffect`: outcome
