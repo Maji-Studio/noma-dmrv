@@ -75,11 +75,9 @@ function FilterSelect({
 
 export function CreditBatchActivityView({
   creditBatchId,
-  facilityId,
   batchCode,
 }: {
   creditBatchId: string;
-  facilityId: string;
   /** Names the list for assistive tech; absent while the batch list loads. */
   batchCode?: string;
 }) {
@@ -121,6 +119,7 @@ export function CreditBatchActivityView({
             <Button
               variant="weak"
               size="small"
+              className="min-h-44"
               busy={activity.isFetching || summary.isFetching}
               onClick={() => {
                 void summary.refetch();
@@ -145,7 +144,8 @@ export function CreditBatchActivityView({
           icon={<FunnelSimpleIcon size={FILTERED_ICON_PX} weight="thin" />}
           title={ACTIVITY_FILTERED_EMPTY_TITLE}
           description={ACTIVITY_FILTERED_EMPTY_DESCRIPTION}
-          action={<Button variant="weak" onClick={() => setFilter({})}>{ACTIVITY_CLEAR_FILTERS_LABEL}</Button>}
+          // The card's action wrapper sets a 40px floor; the touch target needs 44px.
+          action={<Button variant="weak" className="!min-h-44" onClick={() => setFilter({})}>{ACTIVITY_CLEAR_FILTERS_LABEL}</Button>}
         />
       );
     }
@@ -170,7 +170,6 @@ export function CreditBatchActivityView({
             <ActivityEntry
               key={item.id}
               item={item}
-              facilityId={facilityId}
               creditBatchId={creditBatchId}
               focusRef={index === focusIndex ? focusFirstNew : undefined}
             />

@@ -95,6 +95,13 @@ describe("completed delivery order balance", () => {
     const listed = (await getOrders(f.ctx, { facilityId: f.order.facilityId, pageSize: 100 })).items.find(order => order.id === f.order.id);
     expect(listed).toMatchObject({ deliveredWetMassKg: 60, fulfillmentStatus: "partial" });
   });
+  it("narrows the list to one order with its derived fields for the ?order= deep link", async () => {
+    const f = await fixture(800); await postDelivery(f, 60);
+    await db.transaction(tx => createOrderInTransaction(f.ctx, tx, { code: `E2E-ONE-${f.tag}`, facilityId: f.facility.id, customerId: f.customer.id, customerLocationId: f.location.id, formulationId: f.pure.id, orderDate: new Date(STOCK_DATE), quantityKg: 100, packaging: "loose" }));
+    const page = await getOrders(f.ctx, { orderId: f.order.id, page: 1, pageSize: 1 });
+    expect(page.total).toBe(1);
+    expect(page.items).toEqual([expect.objectContaining({ id: f.order.id, deliveryCount: 1, fulfillmentStatus: "partial" })]);
+  });
   it("derives fulfillment from delivered wet mass in the list and its status filter", async () => {
     const f = await fixture(); await postDelivery(f, 60);
     const idsWith = async (status: "partial" | "fulfilled") =>

@@ -35,7 +35,9 @@ import {
 import type { OrderFilterData, OrderFormData } from "@/schemas/orders";
 import { PackageIcon, PlusIcon, TruckIcon, XIcon } from "@phosphor-icons/react/dist/ssr";
 import type { ColumnDef } from "@tanstack/react-table";
-import { useState } from "react";
+import { parseAsString, useQueryState } from "nuqs";
+import { useEffect, useRef, useState } from "react";
+import { ORDER_DEEP_LINK_PARAM } from "@/lib/order-links";
 import { OrderForm } from "./order-form";
 import { orderSheetSections } from "./order-read-sections";
 import { ILLUSTRATION_SIZE, OrderArt } from "@/components/ui/illustrations";
@@ -146,6 +148,14 @@ export function OrderList() {
     useListPagination(facilityId);
   const debouncedSearch = useDebounce(searchQuery, LIST_SEARCH_DEBOUNCE_MS);
 
+  // `?order=<id>` deep-links the view sheet (customer and credit-batch
+  // convention); local state handles sheets opened by clicks.
+  const [focusedOrderId, setFocusedOrderId] = useQueryState(
+    ORDER_DEEP_LINK_PARAM,
+    parseAsString.withOptions({ shallow: true, history: "replace" }),
+  );
+  const handledInvalidOrderIdRef = useRef<string | null>(null);
+
   // Unified side sheet state
   const [sideSheet, setSideSheet] = useState<{
     entity: OrderWithRelations | null;
@@ -176,6 +186,19 @@ export function OrderList() {
     { enabled: !!facilityId },
   );
 
+  // The list row shape (customer, fulfillment) for the deep-linked order, which
+  // may sit on another page or behind a filter.
+  const focusedOrder = useOrders(
+    { orderId: focusedOrderId ?? undefined, page: 1, pageSize: 1 },
+    { enabled: !!focusedOrderId },
+  );
+  const focusedOrderRow = focusedOrder.data?.items[0];
+  const deepLinkedSideSheet =
+    focusedOrderId && focusedOrderRow?.id === focusedOrderId
+      ? ({ entity: focusedOrderRow, mode: "view" } as const)
+      : null;
+  const displaySideSheet = sideSheet ?? deepLinkedSideSheet;
+
   const createOrder = useCreateOrder();
   const updateOrder = useUpdateOrder();
   const deleteOrder = useDeleteOrder();
@@ -195,12 +218,14 @@ export function OrderList() {
 
   // Side sheet helpers
   const openCreate = () => {
+    void setFocusedOrderId(null);
     setFormError(null);
     setSideSheet({ entity: null, mode: "create" });
   };
 
   const openView = (order: OrderWithRelations) => {
     setFormError(null);
+    void setFocusedOrderId(order.id);
     setSideSheet({ entity: order, mode: "view" });
   };
 
@@ -210,9 +235,36 @@ export function OrderList() {
   };
 
   const closeSideSheet = () => {
+    void setFocusedOrderId(null);
     setSideSheet(null);
     setFormError(null);
   };
+
+  // Clear a deep-linked `?order=` that cannot be opened (deleted or
+  // cross-org), with the same guard as the customer and credit-batch lists.
+  useEffect(() => {
+    if (!focusedOrderId) {
+      handledInvalidOrderIdRef.current = null;
+      return;
+    }
+    if (focusedOrder.isLoading || focusedOrder.isFetching || focusedOrder.isPending) return;
+    if (handledInvalidOrderIdRef.current === focusedOrderId) return;
+    if (focusedOrder.isError || (focusedOrder.isSuccess && !focusedOrder.data.items.some((order) => order.id === focusedOrderId))) {
+      handledInvalidOrderIdRef.current = focusedOrderId;
+      toast.error("Linked order could not be opened");
+      void setFocusedOrderId(null);
+    }
+  }, [
+    focusedOrder.data,
+    focusedOrder.isError,
+    focusedOrder.isFetching,
+    focusedOrder.isLoading,
+    focusedOrder.isPending,
+    focusedOrder.isSuccess,
+    focusedOrderId,
+    setFocusedOrderId,
+    toast,
+  ]);
 
   // Handlers
   const handleCreate = async (data: OrderFormData) => {
@@ -227,10 +279,10 @@ export function OrderList() {
   };
 
   const handleUpdate = async (data: OrderFormData) => {
-    if (!sideSheet?.entity) return;
+    if (!displaySideSheet?.entity) return;
     setFormError(null);
     try {
-      await updateOrder.mutateAsync({ orderId: sideSheet.entity.id, expectedVersion: sideSheet.entity.version, ...data });
+      await updateOrder.mutateAsync({ orderId: displaySideSheet.entity.id, expectedVersion: displaySideSheet.entity.version, ...data });
       closeSideSheet();
       toast.success("Order updated.");
     } catch (error) {
@@ -285,9 +337,9 @@ export function OrderList() {
   }
 
   // Derived values for the side sheet
-  const sideSheetOpen = !!sideSheet;
-  const sideSheetMode = sideSheet?.mode ?? "create";
-  const sideSheetEntity = sideSheet?.entity ?? null;
+  const sideSheetOpen = !!displaySideSheet;
+  const sideSheetMode = displaySideSheet?.mode ?? "create";
+  const sideSheetEntity = displaySideSheet?.entity ?? null;
 
   const sideSheetTitle =
     sideSheetMode === "create" ? "Create order" : sideSheetEntity?.code ?? "";
@@ -393,7 +445,7 @@ export function OrderList() {
           // Mode changes are navigation; a submit error from the previous
           // visit must not resurface on the next edit entry.
           setFormError(null);
-          setSideSheet((prev) => (prev ? { ...prev, mode } : null));
+          setSideSheet(displaySideSheet ? { entity: displaySideSheet.entity, mode } : null);
         }}
         title={sideSheetTitle}
         subtitle={sideSheetSubtitle}
@@ -402,7 +454,7 @@ export function OrderList() {
       >
         <OrderForm
           key={sideSheetEntity?.id ?? "create"}
-          order={sideSheet?.entity as Order | undefined}
+          order={displaySideSheet?.entity as Order | undefined}
           onSubmit={sideSheetMode === "create" ? handleCreate : handleUpdate}
           onCancel={closeSideSheet}
           isSubmitting={createOrder.isPending || updateOrder.isPending}

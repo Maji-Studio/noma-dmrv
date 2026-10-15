@@ -84,6 +84,7 @@ export async function getOrders(
     search,
     facilityId,
     customerId,
+    orderId,
     status,
     fromDate,
     toDate,
@@ -130,6 +131,10 @@ export async function getOrders(
 
   if (customerId) {
     conditions.push(eq(orders.customerId, customerId));
+  }
+
+  if (orderId) {
+    conditions.push(eq(orders.id, orderId));
   }
 
   if (status) {

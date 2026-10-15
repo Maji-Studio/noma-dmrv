@@ -86,17 +86,15 @@ function EntryBody({ item }: { item: ActivityItem }) {
 
 export function ActivityEntry({
   item,
-  facilityId,
   creditBatchId,
   focusRef,
 }: {
   item: ActivityItem;
-  facilityId: string;
   creditBatchId: string;
   /** Receives the row's focusable element, so "Show older activity" can move focus to the first new row. */
   focusRef?: (node: HTMLElement | null) => void;
 }) {
-  const href = activityRecordHref(item, { facilityId, creditBatchId });
+  const href = activityRecordHref(item, { creditBatchId });
   return (
     <li data-testid="activity-entry" data-kind={item.action} data-record-type={item.entityType}>
       {href ? (

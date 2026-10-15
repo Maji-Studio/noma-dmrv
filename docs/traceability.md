@@ -108,8 +108,9 @@ inside batch context, with a "Batch roll-up" button back.
     renders before the roll-up loads, for batches with no runs, and hides the
     run filter. Filters by kind and record type run server side; the summary
     counts behind the filter options always cover the whole history. Rows link
-    to the record's side sheet where one exists (a document opens its owner);
-    deleted records are tombstones with no link. Field names only, never
+    to the record's side sheet where one exists (a document opens its owner),
+    on the facility the record lives at now, which `resolveActivityRecords`
+    reads with the label; deleted records are tombstones with no link. Field names only, never
     values. Empty and complete lists name `ACTIVITY_RECORDING_STARTED_AT`
     (`src/config/activity.ts`). The credit batch side sheet's Activity section
     summarizes the same history and links here. Components:

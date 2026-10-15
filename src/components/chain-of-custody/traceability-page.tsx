@@ -729,12 +729,11 @@ export function TraceabilityPage() {
     if (!selectedBatchId) return null;
     // Activity reads the batch's own history, not its lineage, so it renders
     // without waiting for the roll-up and even for a batch with no runs.
-    if (batchView === TRACEABILITY_ACTIVITY_VIEW && facilityId) {
+    if (batchView === TRACEABILITY_ACTIVITY_VIEW) {
       return (
         <CreditBatchActivityView
           key={selectedBatchId}
           creditBatchId={selectedBatchId}
-          facilityId={facilityId}
           batchCode={batchSelection.batches.find((batch) => batch.id === selectedBatchId)?.code}
         />
       );

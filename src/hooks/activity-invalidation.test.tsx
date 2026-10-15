@@ -11,12 +11,14 @@ vi.mock("@/fn/feedstocks", () => ({ deleteFeedstockFn: vi.fn(ok) }));
 vi.mock("@/fn/deliveries", () => ({ deleteDeliveryFn: vi.fn(ok) }));
 vi.mock("@/fn/orders", () => ({ deleteOrderFn: vi.fn(ok) }));
 vi.mock("@/fn/biochar-products", () => ({ deleteBiocharProductFn: vi.fn(ok) }));
+vi.mock("@/fn/documents", () => ({ requestUpload: vi.fn(ok), setDocumentVisibility: vi.fn(ok) }));
 
 import { useDeleteTransportLeg } from "./use-transport-legs";
 import { useDeleteFeedstock } from "./use-feedstocks";
 import { useDeleteDelivery } from "./use-deliveries";
 import { useDeleteOrder } from "./use-orders";
 import { useDeleteBiocharProduct } from "./use-biochar-products";
+import { useRequestUpload, useSetDocumentVisibility } from "./use-documents";
 
 afterEach(cleanup);
 
@@ -31,6 +33,8 @@ it.each([
   ["delivery", () => useDeleteDelivery(), { deliveryId: RECORD_ID, expectedVersion: 1 }],
   ["order", () => useDeleteOrder(), { orderId: RECORD_ID, expectedVersion: 1 }],
   ["biochar product", () => useDeleteBiocharProduct(undefined, { optimistic: false }), { productId: RECORD_ID, expectedVersion: 1 }],
+  ["document upload request", () => useRequestUpload(), { entityType: "feedstock", entityId: RECORD_ID }],
+  ["document visibility", () => useSetDocumentVisibility(), { documentId: RECORD_ID, visibility: "internal", expectedVersion: 1 }],
 ] as const)("refreshes batch activity after a %s write", async (_family, useHook, variables) => {
   const client = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
   client.setQueryData(activityKeys.creditBatchSummary(BATCH_ID), { total: 0, counts: [], latest: null });

@@ -16,6 +16,8 @@ import { applicationDeepLinkHref } from "@/lib/application-links";
 import { certificationRemovalsHref, productionRunDeepLinkHref } from "@/lib/certification/links";
 import { creditBatchDeepLinkHref } from "@/lib/credit-batch-links";
 import { deliveryDeepLinkHref } from "@/lib/delivery-links";
+import { orderDeepLinkHref } from "@/lib/order-links";
+import { documentOwnerActivityType, parseDocumentActivityReasonCode } from "@/lib/activity-entity-type";
 import { humanizeEnum, MISSING_VALUE } from "@/lib/copy-utils";
 import { DRY_MASS_FIELD_LABEL, MOISTURE_FIELD_LABEL, WET_MASS_FIELD_LABEL } from "@/lib/mass-moisture";
 import { DOCUMENT_TYPE_LABELS, type DocumentType } from "@/schemas/documents";
@@ -106,6 +108,7 @@ const ACTIVITY_FIELD_LABELS: Record<string, string> = {
   productionClaimReservation: "Production claim reservation",
   productionClaim: "Production claim",
   uploadStatus: "Upload status",
+  removalTemplateId: "Removal template",
   // The shared mass and moisture names (docs/design-system.md, wet/dry mass).
   massWetKg: WET_MASS_FIELD_LABEL,
   wetMassKg: WET_MASS_FIELD_LABEL,
@@ -167,16 +170,6 @@ export function activityChangedFieldLabels(item: Pick<ActivityItem, "entityType"
   return [...new Set(labels)];
 }
 
-/** Document events keep their type and owner in the reason code. */
-export function parseDocumentReason(reasonCode: string | null):
-  { documentType: string; ownerType: string; ownerId: string } | null {
-  if (!reasonCode?.startsWith("document:")) return null;
-  const parts = reasonCode.split(":");
-  // Document types may contain colons; only the last two parts are the owner.
-  if (parts.length < 4) return null;
-  return { documentType: parts.slice(1, -2).join(":"), ownerType: parts.at(-2)!, ownerId: parts.at(-1)! };
-}
-
 function documentTypeLabel(documentType: string): string | null {
   return Object.hasOwn(DOCUMENT_TYPE_LABELS, documentType) ? DOCUMENT_TYPE_LABELS[documentType as DocumentType] : null;
 }
@@ -184,7 +177,7 @@ function documentTypeLabel(documentType: string): string | null {
 /** The record's name: its code, or for a document the document type. */
 export function activityRecordLabel(item: Pick<ActivityItem, "entityType" | "reasonCode" | "record">): string | null {
   if (item.entityType === "document") {
-    const reason = parseDocumentReason(item.reasonCode);
+    const reason = parseDocumentActivityReasonCode(item.reasonCode);
     // The type names the file; the server's generic "Document" would repeat the record type.
     return reason ? documentTypeLabel(reason.documentType) : null;
   }
@@ -203,28 +196,28 @@ export function activityStatusLabel(status: string): string {
   return humanizeEnum(status.toLowerCase());
 }
 
-/** Document owners use document entity names; map them onto activity types. */
-const DOCUMENT_OWNER_TYPES: Record<string, ActivityEntityType> = { sample: "lab_sample" };
-
 /**
- * Where the record opens: its list's side sheet, on the batch's facility.
- * Null for records with no sheet of their own (orders, legs, bin movements),
- * for tombstones, and for the batch the list is already about.
+ * Where the record opens: its list's side sheet, on the facility the record
+ * lives at now (resolved with its label, so a run moved to another facility
+ * still opens). A document opens its owner, which holds its files.
+ * Null for tombstones, records with no known facility or no sheet of their own
+ * (transport legs, bin movements), and the batch the list is already about.
  */
 export function activityRecordHref(
   item: Pick<ActivityItem, "entityType" | "entityId" | "reasonCode" | "record">,
-  context: { facilityId: string; creditBatchId: string },
+  context: { creditBatchId: string },
 ): string | null {
-  if (item.record.deleted) return null;
+  const facility = item.record.facilityId;
+  if (item.record.deleted || !facility) return null;
   let entityType: string = item.entityType;
   let entityId = item.entityId;
   if (entityType === "document") {
-    const reason = parseDocumentReason(item.reasonCode);
-    if (!reason) return null;
-    entityType = DOCUMENT_OWNER_TYPES[reason.ownerType] ?? reason.ownerType;
+    const reason = parseDocumentActivityReasonCode(item.reasonCode);
+    const ownerType = reason && documentOwnerActivityType(reason.ownerType);
+    if (!reason || !ownerType) return null;
+    entityType = ownerType;
     entityId = reason.ownerId;
   }
-  const facility = context.facilityId;
   const query = (param: string) => new URLSearchParams({ facility, [param]: entityId }).toString();
   switch (entityType) {
     case "credit_batch":
@@ -233,6 +226,7 @@ export function activityRecordHref(
     case "feedstock": return `/feedstocks?${query("feedstock")}`;
     case "biochar_product": return `/biochar-products?${query("biocharProduct")}`;
     case "lab_sample": return `/samples?${query("sample")}`;
+    case "order": return orderDeepLinkHref(entityId, facility);
     case "delivery": return deliveryDeepLinkHref(entityId, facility);
     case "application": return applicationDeepLinkHref(entityId, facility);
     case "removal": return certificationRemovalsHref({ facility, removal: entityId });

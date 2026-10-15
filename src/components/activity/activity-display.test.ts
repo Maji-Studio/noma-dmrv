@@ -13,14 +13,13 @@ import {
   activityRecordTypeLabel,
   activityStatusLabel,
   humanizeFieldName,
-  parseDocumentReason,
   type ActivityItem,
 } from "./activity-display";
 
 const FACILITY = "facility-1";
 const BATCH = "batch-1";
-const CONTEXT = { facilityId: FACILITY, creditBatchId: BATCH };
-const live = { label: "PR-001", deleted: false };
+const CONTEXT = { creditBatchId: BATCH };
+const live = { label: "PR-001", deleted: false, facilityId: FACILITY };
 
 function item(overrides: Partial<ActivityItem> = {}): ActivityItem {
   return {
@@ -70,6 +69,7 @@ describe("changed field names", () => {
     expect(activityFieldLabel("credit_batch", "production_runs")).toBe("Production runs");
     expect(activityFieldLabel("production_run", "readingsCsv")).toBe("Readings CSV file");
     expect(activityFieldLabel("feedstock", "massWetKg")).toBe("Wet mass (kg)");
+    expect(activityFieldLabel("credit_batch", "removalTemplateId")).toBe("Removal template");
     expect(activityFieldLabel("feedstock", "moistureContentPercent")).toBe("Moisture (%)");
   });
 
@@ -91,11 +91,8 @@ describe("changed field names", () => {
 describe("record names and meanings", () => {
   it("names a document by its type, even after it was deleted", () => {
     const reasonCode = "document:weighbridge_ticket:feedstock:feed-1";
-    expect(parseDocumentReason(reasonCode)).toEqual({ documentType: "weighbridge_ticket", ownerType: "feedstock", ownerId: "feed-1" });
-    expect(parseDocumentReason("document:a:b:c:owner:id")).toEqual({ documentType: "a:b:c", ownerType: "owner", ownerId: "id" });
-    expect(parseDocumentReason("detached")).toBeNull();
-    expect(activityRecordLabel(item({ entityType: "document", reasonCode, record: { label: null, deleted: true } }))).toBe("Weighbridge ticket");
-    expect(activityRecordLabel(item({ entityType: "document", record: { label: "Document", deleted: false } }))).toBeNull();
+    expect(activityRecordLabel(item({ entityType: "document", reasonCode, record: { label: null, deleted: true, facilityId: null } }))).toBe("Weighbridge ticket");
+    expect(activityRecordLabel(item({ entityType: "document", record: { label: "Document", deleted: false, facilityId: null } }))).toBeNull();
     expect(activityRecordLabel(item())).toBe("PR-001");
   });
 
@@ -112,7 +109,7 @@ describe("record names and meanings", () => {
 });
 
 describe("record links", () => {
-  it("opens each record's side sheet on the batch's facility", () => {
+  it("opens each record's side sheet on the facility it lives at", () => {
     expect(activityRecordHref(item(), CONTEXT)).toBe("/production-runs?facility=facility-1&run=run-1");
     expect(activityRecordHref(item({ entityType: "feedstock", entityId: "f-1" }), CONTEXT)).toBe("/feedstocks?facility=facility-1&feedstock=f-1");
     expect(activityRecordHref(item({ entityType: "biochar_product", entityId: "p-1" }), CONTEXT)).toBe("/biochar-products?facility=facility-1&biocharProduct=p-1");
@@ -122,6 +119,12 @@ describe("record links", () => {
     expect(activityRecordHref(item({ entityType: "removal", entityId: "r-1" }), CONTEXT)).toBe("/certification/removals?facility=facility-1&removal=r-1");
     expect(activityRecordHref(item({ entityType: "ghg_statement", entityId: "g-1" }), CONTEXT)).toBe("/certification/ghg-statements?facility=facility-1&statement=g-1");
     expect(activityRecordHref(item({ entityType: "credit_batch", entityId: "other" }), CONTEXT)).toBe("/credit-batches?facility=facility-1&batch=other");
+    expect(activityRecordHref(item({ entityType: "order", entityId: "o-1" }), CONTEXT)).toBe("/orders?facility=facility-1&order=o-1");
+  });
+
+  it("follows a record that moved to another facility", () => {
+    expect(activityRecordHref(item({ record: { ...live, facilityId: "facility-2" } }), CONTEXT))
+      .toBe("/production-runs?facility=facility-2&run=run-1");
   });
 
   it("opens a document's owner, the sheet that holds its files", () => {
@@ -129,9 +132,10 @@ describe("record links", () => {
       .toBe("/samples?facility=facility-1&sample=s-1");
   });
 
-  it("links nothing for tombstones, sheetless records and the batch itself", () => {
-    expect(activityRecordHref(item({ record: { label: null, deleted: true } }), CONTEXT)).toBeNull();
-    for (const entityType of ["order", "transport_leg", "bin_movement"] as const) {
+  it("links nothing for tombstones, unknown facilities, sheetless records and the batch itself", () => {
+    expect(activityRecordHref(item({ record: { label: null, deleted: true, facilityId: null } }), CONTEXT)).toBeNull();
+    expect(activityRecordHref(item({ record: { ...live, facilityId: null } }), CONTEXT)).toBeNull();
+    for (const entityType of ["transport_leg", "bin_movement"] as const) {
       expect(activityRecordHref(item({ entityType }), CONTEXT)).toBeNull();
     }
     expect(activityRecordHref(item({ entityType: "credit_batch", entityId: BATCH }), CONTEXT)).toBeNull();
