@@ -49,7 +49,17 @@
  * spreads, `.call`/`.apply`/`.bind` and generic forwarding, which are checked
  * against the declared parameters of the function actually invoked
  * (scripts/server-action-call-targets.ts). Guard callees are resolved through
- * import aliases and local aliases (`const check = requireOrgRole`).
+ * import aliases and local aliases (`const check = requireOrgRole`). Reflect
+ * apply/construct and constant-string computed keys use the same precise checks.
+ *
+ * Callable provenance must survive every conversion: casts, annotated locals,
+ * assignments, arguments, returns and array/object elements must preserve guarded
+ * signatures at every property depth, including namespaces and class instances.
+ * Passing a guarded callable or class to an untyped slot, or erasing an object
+ * carrying guarded methods to any/unknown/Function/object, deliberately fails
+ * closed, even if the recipient only logs or registers it. Callback parameter
+ * types must also preserve their trusted context contract. Precisely resolved
+ * forwarders consume their target under the argument checks above.
  *
  * There is no waiver: fix the export, do not suppress it. `unknown`/`any`
  * inputs stay allowed because they are ordinary action input; turning one into
@@ -62,6 +72,7 @@ import {
   declaredParameterFindings,
   invokedFunction,
 } from "./server-action-call-targets";
+import { losesGuardedSignature, provenanceTarget } from "./server-action-provenance";
 import {
   carriesAnyContext,
   ParameterInspector,
@@ -475,8 +486,29 @@ function checkServerBody(
   root: ts.Node,
   report: Report,
 ): void {
+  const consumedTargets = new Set<ts.Expression>();
   const visit = (node: ts.Node): void => {
     checkContextConversions(checker, inspector, node, report);
+    if (ts.isCallExpression(node) || ts.isNewExpression(node)) {
+      const target = invokedFunction(checker, node)?.target;
+      if (target) consumedTargets.add(target);
+    }
+    if (ts.isExpression(node) && !consumedTargets.has(node)) {
+      const target = provenanceTarget(checker, node);
+      if (target && losesGuardedSignature(checker, inspector, checker.getTypeAtLocation(node), target)) {
+        report(node, node.getText(), "callable provenance conversion drops a guarded parameter signature");
+      }
+    }
+    if (ts.isTaggedTemplateExpression(node) && ts.isTemplateExpression(node.template)) {
+      const signature = checker.getResolvedSignature(node);
+      node.template.templateSpans.forEach((span, index) => {
+        const parameter = signature?.getParameters()[index + 1];
+        if (parameter && carriesAnyContext(checker, inspector,
+          checker.getTypeAtLocation(span.expression), checker.getTypeOfSymbol(parameter))) {
+          report(span.expression, span.expression.getText(), "call argument passes an `any` value into a guarded template parameter");
+        }
+      });
+    }
     if (ts.isNewExpression(node)) {
       checkCallArguments(checker, inspector, node, undefined, report);
     }
