@@ -3,7 +3,7 @@
  * Reusable application form with React Hook Form integration
  *
  * Form sections:
- * 1. Application details — applicationDate, delivery, biocharAppliedTons + auto-calculated dry mass card
+ * 1. Application details — applicationDate, delivery, biocharAppliedKg + auto-calculated dry mass card
  * 2. Field details — fieldSizeHa, fieldIdentifier, cropType, GPS coordinates
  * 3. Evidence method: customer location or GIS reference
  * 4. Supporting evidence: optional images and documents
@@ -12,7 +12,7 @@
 "use client";
 
 import { nullableNumericValue, numericValue } from "@/lib/form-utils";
-import { formatLocalDate, formatUtcDate } from "@/lib/date-utils";
+import { formatUtcDate } from "@/lib/date-utils";
 import { formatDayString } from "@/lib/format-utils";
 import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
 
@@ -42,14 +42,13 @@ import { useOrganizationDefaultValues } from "@/hooks/use-organization-settings"
 import type { DurabilityOption } from "@/schemas/credit-batches";
 import { ApplicationEvidencePanel } from "./application-evidence-panel";
 import { ApplicationSupportingEvidencePanel } from "./application-supporting-evidence-panel";
-import { resolveApplicationEvidenceMethodDefault } from "./application-form-defaults";
+import { resolveApplicationDateDefault, resolveApplicationEvidenceMethodDefault } from "./application-form-defaults";
 import {
   FieldPositionField,
   resetFieldPosition,
 } from "./field-position-field";
 import type { FieldPositionMode } from "./field-position-field";
 import {
-  applicationKgToTons,
   applicationTonsToKg,
   applicationStockCues,
   formatApplicationDeliveryOptionLabel,
@@ -161,10 +160,10 @@ export function ApplicationForm({
 
   const defaultValues = {
     applicationDate: application?.applicationDate
-      ? formatLocalDate(new Date(application.applicationDate))
-      : formatLocalDate(new Date()),
+      ? formatUtcDate(new Date(application.applicationDate))
+      : resolveApplicationDateDefault(),
     deliveryId: application?.deliveryId ?? "",
-    biocharAppliedTons: applicationTonsToKg(application?.biocharAppliedTons) ?? undefined,
+    biocharAppliedKg: applicationTonsToKg(application?.biocharAppliedTons) ?? undefined,
     fieldSizeHa: application?.fieldSizeHa ?? "",
     fieldIdentifier: application?.fieldIdentifier ?? "",
     cropType: application?.cropType ?? "",
@@ -205,7 +204,7 @@ export function ApplicationForm({
   const defaultSubmitLabel = isEditMode ? "Update application" : "Create application";
   const selectedDeliveryId = useWatch({ control, name: "deliveryId" });
   const { field: deliveryField } = useController({ control, name: "deliveryId" });
-  const watchedAppliedKg = useWatch({ control, name: "biocharAppliedTons" });
+  const watchedAppliedKg = useWatch({ control, name: "biocharAppliedKg" });
   const evidenceMethod = useWatch({ control, name: "evidenceMethod" }) as ApplicationEvidenceMethod;
   const gpsLatitude = useWatch({ control, name: "gpsLatitude" }) as number | null | undefined;
   const gpsLongitude = useWatch({ control, name: "gpsLongitude" }) as number | null | undefined;
@@ -350,7 +349,7 @@ export function ApplicationForm({
     (message) => message === deliveryStockOverdrawMessage(),
   );
   const biocharAppliedError =
-    errors.biocharAppliedTons?.message ??
+    errors.biocharAppliedKg?.message ??
     applicationStockError ??
     routedServerError.inlineError;
   const stockCues = applicationStockCues({
@@ -391,16 +390,6 @@ export function ApplicationForm({
       return;
     }
 
-    const biocharAppliedTons = applicationKgToTons(data.biocharAppliedTons);
-
-    if (biocharAppliedTons == null) {
-      setError("biocharAppliedTons", {
-        type: "manual",
-        message: "Biochar product applied is required",
-      });
-      return;
-    }
-
     if (appliedDryBiocharKg == null) {
       setError("root.serverError", {
         type: "manual",
@@ -411,7 +400,6 @@ export function ApplicationForm({
 
     await onSubmit({
       ...data,
-      biocharAppliedTons,
       gisBoundary: data.evidenceMethod === "boundary" ? data.gisBoundary : null,
     });
   });
@@ -424,7 +412,7 @@ export function ApplicationForm({
       <FormSection
         title="Application details"
         icon={<PackageIcon size={14} weight="bold" />}
-        fields={["applicationDate", "deliveryId", "biocharAppliedTons"]}
+        fields={["applicationDate", "deliveryId", "biocharAppliedKg"]}
       >
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <FormField id="applicationDate" label="Application date" error={errors.applicationDate?.message} required>
@@ -455,7 +443,14 @@ export function ApplicationForm({
               error={!!errors.deliveryId}
               options={deliveryOptions}
               value={deliveryField.value}
-              onChange={deliveryField.onChange}
+              onChange={(id) => {
+                deliveryField.onChange(id);
+                if (!isEditMode && !getFieldState("applicationDate").isDirty) {
+                  setValue("applicationDate", resolveApplicationDateDefault(
+                    deliveries.find(delivery => delivery.id === id)?.facilityTimezone,
+                  ));
+                }
+              }}
               onBlur={deliveryField.onBlur}
             />
           </FormField>
@@ -463,24 +458,24 @@ export function ApplicationForm({
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <FormField
-            id="biocharAppliedTons"
+            id="biocharAppliedKg"
             label="Biochar product applied"
             unit="kg"
             error={biocharAppliedError}
             required
             certifyRequired={isApplicationCertifyField("biocharAppliedTons")}
-            certifyStatus={certStatus("biocharAppliedTons")}
+            certifyStatus={certStatus("biocharAppliedKg")}
             hint="As-received mass at delivery, water included."
             cue={stockCues.appliedMassCue}
           >
             <FormInput
-              id="biocharAppliedTons"
+              id="biocharAppliedKg"
               type="number"
               step="any"
               placeholder="e.g., 5000"
               disabled={isSubmitting}
               error={!!biocharAppliedError}
-              {...register("biocharAppliedTons", {
+              {...register("biocharAppliedKg", {
                 setValueAs: numericValue,
               })}
             />
@@ -593,6 +588,7 @@ export function ApplicationForm({
           applicationId={application?.id}
           mode={evidenceMethod ?? "location"}
           boundary={gisBoundary ?? null}
+          error={errors.gisBoundary?.message}
           disabled={isSubmitting}
           deferredAttachments={deferredAttachments}
           onModeChange={(nextMode) =>

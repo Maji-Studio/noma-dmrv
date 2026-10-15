@@ -102,7 +102,7 @@ test("adds, reads, replaces, and removes a GIS boundary", async ({
   await waitForSideSheet(page);
   await page.locator("#applicationDate").fill(today);
   await selectFirstEntity(page, "Delivery");
-  await page.locator("#biocharAppliedTons").fill("50");
+  await page.locator("#biocharAppliedKg").fill("50");
   await page.locator("#fieldSizeHa").fill("2");
   await page.locator("#fieldIdentifier").fill(fieldIdentifier);
 

@@ -1,3 +1,4 @@
+import { createTestApplication } from "./helpers/application-writers";
 import { updateOrder } from "@/lib/operations/orders";
 import { runOperationInProcess } from "@/lib/operations/runner";
 import { labLogisticsVersion } from "./helpers/lab-logistics-version";
@@ -9,7 +10,7 @@ import { deliveries, outputStockAllocations, orders } from "@/db/schema";
 import { deleteDelivery } from "@/data-access/deliveries";
 import { createDelivery } from "./helpers/create-delivery";
 import { updateDelivery } from "@/lib/operations/deliveries";
-import { createApplication } from "@/data-access/applications";
+
 import { createOrderInTransaction, getOrders } from "@/data-access/orders";
 import { getOrderEntityById } from "@/data-access/entities/orders";
 import { getStockAvailability } from "@/data-access/stock-availability";
@@ -73,7 +74,7 @@ describe("completed delivery order balance", () => {
   });
   it("blocks explicit stock correction after a downstream application exists", async () => {
     const f = await fixture(); const delivery = await postDelivery(f, 50);
-    await createApplication(f.ctx, { code: `E2E-AP-${f.tag}`, deliveryId: delivery.id, applicationDate: new Date(STOCK_DATE), biocharAppliedTons: 0.025, fieldSizeHa: 1, evidenceMethod: "location" });
+    await createTestApplication(f.ctx, { code: `E2E-AP-${f.tag}`, deliveryId: delivery.id, applicationDate: new Date(STOCK_DATE), appliedWetMassKg: 25, fieldSizeHa: 1, evidenceMethod: "location" });
     await expect(correction(f, delivery.id, 40)).rejects.toThrow(/application/i);
     await expect(updateDelivery(f.ctx, delivery.id, { expectedVersion: await labLogisticsVersion(f.ctx, "deliveries", delivery.id), deliveredWetMassKg: 40 })).rejects.toThrow(/application/i);
   });

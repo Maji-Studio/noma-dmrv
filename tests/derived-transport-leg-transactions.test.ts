@@ -1,4 +1,5 @@
-import { createApplication } from "@/data-access/applications";
+import { createTestApplication } from "./helpers/application-writers";
+
 import { getChainOfCustodyData } from "@/data-access/chain-of-custody";
 import { loadTransportLegsByCategory } from "@/fn/certification/shared";
 import { deleteOutputApplicationFixtures } from "./helpers/output-contract-fixtures";
@@ -535,10 +536,10 @@ describe("derived transport-leg transaction boundaries", () => {
     const secondDelivery = await postDelivery(1, secondOrder.id);
     const selectedApplicationIds: string[] = [];
     for (const deliveryId of [delivery.id, secondDelivery.id]) {
-      const application = await createApplication(ctx, {
+      const application = await createTestApplication(ctx, {
         code: `AP-DIST-${crypto.randomUUID().toUpperCase()}`,
         deliveryId, applicationDate: new Date("2026-07-20T12:00:00.000Z"),
-        biocharAppliedTons: 0.025, fieldSizeHa: 1,
+        appliedWetMassKg: 25, fieldSizeHa: 1,
       });
       created.applicationIds.push(application.id);
       selectedApplicationIds.push(application.id);

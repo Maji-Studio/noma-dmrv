@@ -1,10 +1,11 @@
+import { createTestApplication } from "./helpers/application-writers";
 import { masterDataVersion } from "./helpers/master-data-version";
 import { randomUUID } from "node:crypto";
 import { afterEach, describe, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { binMovements, outputStockAllocations, outputStockMoistureReadings, storageLocations } from "@/db/schema";
-import { createApplication } from "@/data-access/applications";
+
 import { createDelivery } from "./helpers/create-delivery";
 import { getMixBinHeldApplicationIds } from "@/data-access/mix-bin-credit-hold";
 import { getOutputStockHistory } from "@/data-access/output-stock-history";
@@ -92,7 +93,7 @@ describe("mix bin draws in PostgreSQL", () => {
     const [original] = await db.select().from(outputStockAllocations).where(eq(outputStockAllocations.deliveryId, delivery.id));
     const preview = await previewOutputStock(f.ctx, { facilityId: f.facility.id, storageLocationId: f.bin.id, occurredAt: STOCK_TIME, kind: "delivery", wetMassKg: 350, moisturePercent: 0, correctsMovementId: original.movementId });
     expect(preview.blockingMessage).toMatch(/^Correction blocked by the switch to split at /);
-    const app = await createApplication(f.ctx, { code: `E2E-MIX-AP-C-${f.tag}`, deliveryId: delivery.id, applicationDate: new Date(STOCK_DATE), biocharAppliedTons: 0.1, fieldSizeHa: 1, evidenceMethod: "location" });
+    const app = await createTestApplication(f.ctx, { code: `E2E-MIX-AP-C-${f.tag}`, deliveryId: delivery.id, applicationDate: new Date(STOCK_DATE), appliedWetMassKg: 100, fieldSizeHa: 1, evidenceMethod: "location" });
     expect(await getMixBinHeldApplicationIds(f.ctx, db, [app.id])).toEqual(new Set([app.id]));
   });
 
@@ -162,13 +163,13 @@ describe("mix bin credit hold", () => {
   it("holds out an application drawn from a mix bin, and not one from a split bin", async () => {
     const split = await twoBatches();
     const splitDelivery = await mixDelivery(split, 100, 0);
-    const splitApp = await createApplication(split.ctx, { code: `E2E-MIX-AP-S-${split.tag}`, deliveryId: splitDelivery.id, applicationDate: new Date(STOCK_DATE), biocharAppliedTons: 0.1, fieldSizeHa: 1, evidenceMethod: "location" });
+    const splitApp = await createTestApplication(split.ctx, { code: `E2E-MIX-AP-S-${split.tag}`, deliveryId: splitDelivery.id, applicationDate: new Date(STOCK_DATE), appliedWetMassKg: 100, fieldSizeHa: 1, evidenceMethod: "location" });
     expect(await getMixBinHeldApplicationIds(split.ctx, db, [splitApp.id])).toEqual(new Set());
 
     const mix = await twoBatches();
     await setMode(mix, "mix", new Date("2026-09-12T00:00:00.000Z"));
     const mixed = await mixDelivery(mix, 100, 0);
-    const mixApp = await createApplication(mix.ctx, { code: `E2E-MIX-AP-M-${mix.tag}`, deliveryId: mixed.id, applicationDate: new Date(STOCK_DATE), biocharAppliedTons: 0.1, fieldSizeHa: 1, evidenceMethod: "location" });
+    const mixApp = await createTestApplication(mix.ctx, { code: `E2E-MIX-AP-M-${mix.tag}`, deliveryId: mixed.id, applicationDate: new Date(STOCK_DATE), appliedWetMassKg: 100, fieldSizeHa: 1, evidenceMethod: "location" });
     expect(await getMixBinHeldApplicationIds(mix.ctx, db, [mixApp.id])).toEqual(new Set([mixApp.id]));
   });
 
@@ -180,7 +181,7 @@ describe("mix bin credit hold", () => {
     const preview = await previewOutputStock(f.ctx, { facilityId: f.facility.id, storageLocationId: f.bin.id, occurredAt: STOCK_TIME, kind: "delivery", wetMassKg: 100, moisturePercent: 0 });
     const delivery = await createDelivery(f.ctx, { code: `E2E-MIX-D-${f.tag}`, facilityId: f.facility.id, orderId: f.order.id, storageLocationId: f.bin.id,
       deliveryDate: new Date(STOCK_TIME), deliveredWetMassKg: 100, moistureContentPercent: 0, idempotencyKey: randomUUID(), basisFingerprint: preview.basisFingerprint });
-    const app = await createApplication(f.ctx, { code: `E2E-MIX-AP-P-${f.tag}`, deliveryId: delivery.id, applicationDate: new Date(STOCK_DATE), biocharAppliedTons: 0.1, fieldSizeHa: 1, evidenceMethod: "location" });
+    const app = await createTestApplication(f.ctx, { code: `E2E-MIX-AP-P-${f.tag}`, deliveryId: delivery.id, applicationDate: new Date(STOCK_DATE), appliedWetMassKg: 100, fieldSizeHa: 1, evidenceMethod: "location" });
     expect(await getMixBinHeldApplicationIds(f.ctx, db, [app.id])).toEqual(new Set([app.id]));
   });
 });

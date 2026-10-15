@@ -26,7 +26,7 @@ beforeAll(async () => {
   await ensureTestOrg();
   await db.insert(schema.users).values({ id: ctx.userId, email: "document-test@example.test" }).onConflictDoNothing();
   root = await mkdtemp(join(tmpdir(), "document-races-")); provider = new LocalFsProvider({ root, appUrl: "http://localhost", signingSecret: "test" });
-  const [facility] = await db.insert(schema.facilities).values({ ...TEST_SITE_POSITION, organizationId: ctx.organizationId, code: `RACE-${Date.now()}`, name: "Document race", timezone: "UTC" }).returning(); facilityId = facility.id;
+  const [facility] = await db.insert(schema.facilities).values({ ...TEST_SITE_POSITION, organizationId: ctx.organizationId, code: `RACE-${Date.now()}`, name: `Document race ${Date.now()}`, timezone: "UTC" }).returning(); facilityId = facility.id;
 });
 afterAll(async () => {
   await cleanupDocumentUploads(ctx, documentIds);

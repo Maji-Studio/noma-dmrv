@@ -1,3 +1,4 @@
+import { createTestApplication } from "./helpers/application-writers";
 import { masterDataVersion } from "./helpers/master-data-version";
 /** PostgreSQL regressions. Written for the DB runner; never uses timing sleeps. */
 import { randomUUID } from "node:crypto";
@@ -10,7 +11,7 @@ import { createSample, updateSample, deleteSample } from "@/data-access/samples"
 import { deleteDelivery } from "@/data-access/delivery-output-writes";
 import { updateDelivery } from "@/lib/operations/deliveries";
 import { updateCreditBatch } from "@/data-access/credit-batches";
-import { createApplication } from "@/data-access/applications";
+
 import { getLockedCertifiedLineage } from "@/data-access/certification-lineage-guards";
 import { archiveFacility, restoreFacility } from "@/data-access/facilities";
 import { previewOutputStock } from "@/data-access/output-stock-operations";
@@ -264,9 +265,9 @@ it("application creation holds artifacts before product edits can lock the produ
         )).for("key share", { noWait: true });
         return callback(tx);
       }, config));
-    creating = outcome(createApplication(f.ctx, {
+    creating = outcome(createTestApplication(f.ctx, {
       code: `E2E-LOCK-SECOND-AP-${f.tag}`, deliveryId: delivery.id, applicationDate: new Date(STOCK_TIME),
-      biocharAppliedTons: LOSS_KG / KG_PER_TON, fieldSizeHa: 1, evidenceMethod: "location",
+      appliedWetMassKg: (LOSS_KG / KG_PER_TON) * 1000, fieldSizeHa: 1, evidenceMethod: "location",
     }));
     await expect.poll(() => pid, { timeout: BARRIER_TIMEOUT_MS }).not.toBe(0);
     editing = outcome(updateBiocharProduct(f.ctx, f.product!.id, {
@@ -362,9 +363,9 @@ it.each(["update", "delete"] as const)("delivery %s waits for application creati
         )).for("update", { noWait: true });
         return callback(tx);
       }, config));
-    creating = outcome(createApplication(f.ctx, {
+    creating = outcome(createTestApplication(f.ctx, {
       code: `E2E-LOCK-SECOND-AP-${f.tag}`, deliveryId: delivery.id, applicationDate: new Date(STOCK_TIME),
-      biocharAppliedTons: LOSS_KG / KG_PER_TON, fieldSizeHa: 1, evidenceMethod: "location",
+      appliedWetMassKg: (LOSS_KG / KG_PER_TON) * 1000, fieldSizeHa: 1, evidenceMethod: "location",
     }));
     await expect.poll(() => pid, { timeout: BARRIER_TIMEOUT_MS }).not.toBe(0);
     mutating = outcome<unknown>(operation === "update"

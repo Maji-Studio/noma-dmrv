@@ -1,3 +1,4 @@
+import { createTestApplication, updateTestApplication, deleteTestApplication } from "./helpers/application-writers";
 import { TEST_SITE_POSITION } from "./helpers/test-org";
 import { runOperationInProcess } from "@/lib/operations/runner";
 import { randomUUID } from "node:crypto";
@@ -23,10 +24,7 @@ import {
   suppliers,
   users,
 } from "@/db/schema";
-import {
-  createApplication,
-  updateApplication, deleteApplication,
-} from "@/data-access/applications";
+
 import type { OrgContext } from "@/lib/auth/server";
 import {
   STALE_VERSION_CONFLICT_CODE,
@@ -88,7 +86,7 @@ const UPDATERS: UpdaterCase[] = [
   { entity: "order", save: (f, expectedVersion, label) => runOperationInProcess(updateOrder, f.ctx, { orderId: f.ids.order, expectedVersion, code: label }), remove: (f, v) => runOperationInProcess(deleteOrder, f.ctx, { orderId: f.ids.order, expectedVersion: v }) },
   { entity: "delivery", save: (f, expectedVersion, label) => updateDelivery(f.ctx, f.ids.delivery, { expectedVersion, code: label }), remove: (f, v) => deleteDelivery(f.ctx, f.ids.delivery, v) },
   { entity: "transportLeg", save: (f, expectedVersion, label) => updateTransportLeg(f.ctx, f.ids.transportLeg, { expectedVersion, originName: label }), remove: (f, v) => deleteTransportLeg(f.ctx, f.ids.transportLeg, v) },
-  { entity: "application", save: (f, expectedVersion, label) => updateApplication(f.ctx, f.ids.application, { expectedVersion, fieldIdentifier: label }), remove: (f, v) => deleteApplication(f.ctx, f.ids.application, v) },
+  { entity: "application", save: (f, expectedVersion, label) => updateTestApplication(f.ctx, f.ids.application, { expectedVersion, fieldIdentifier: label }), remove: (f, v) => deleteTestApplication(f.ctx, f.ids.application, v) },
   { entity: "creditBatch", save: (f, expectedVersion, label) => updateCreditBatch(f.ctx, f.ids.creditBatch, { expectedVersion, siteManagementNotes: label }), remove: (f, v) => deleteCreditBatch(f.ctx, f.ids.creditBatch, v) },
 ];
 const VERSION_INCREMENT = 1;
@@ -314,11 +312,11 @@ async function seedFixture(): Promise<Fixture> {
 
   // The creator writes the application's source allocations, which the updater
   // re-validates; a raw insert would fail that check.
-  const application = await createApplication(ctx, {
+  const application = await createTestApplication(ctx, {
     code: `E2E-EXVB-AP-${tag}`,
     deliveryId: seeded.deliveryId,
     applicationDate: APPLICATION_DATE,
-    biocharAppliedTons: APPLIED_TONS,
+    appliedWetMassKg: (APPLIED_TONS) * 1000,
     fieldSizeHa: FIELD_SIZE_HA,
     gpsLatitude: GPS.lat,
     gpsLongitude: GPS.lng,

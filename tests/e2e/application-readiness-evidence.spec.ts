@@ -72,7 +72,7 @@ async function seedFormCompleteApplication(
 
   await selectFirstEntity(page, "Delivery");
 
-  await page.fill('input[name="biocharAppliedTons"]', "5000");
+  await page.fill('input[name="biocharAppliedKg"]', "5000");
   await page.fill('input[name="fieldSizeHa"]', "2");
   await page.fill('input[name="fieldIdentifier"]', fieldIdentifier);
   await page.fill('input[name="cropType"]', "maize");

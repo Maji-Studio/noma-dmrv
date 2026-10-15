@@ -36,7 +36,8 @@ components (UI)
   output-stock movement, lab sample and order writes use this layer (`make_biochar_product`,
   `update_biochar_product`, `record_output_stock_movement`, `record_lab_sample`,
   `update_lab_sample`, `delete_lab_sample`, `record_order`, `update_order`,
-  `delete_order`). UI product deletes
+  `delete_order`). Application writes use the unregistered `record_application`,
+  `update_application` and `delete_application` operations. UI product deletes
   stay off the runner. Lost mass form edits run `record_output_stock_movement`
   with the unpublished `requireLatestCorrection` option. Delivery updates run
   the UI-only `update_posted_delivery` operation: the delivery row, stock
@@ -401,6 +402,17 @@ local, and deployed builds remain on the stable default.
 
 ## Database Boundaries
 
+Application writes use unlocked discovery, sorted lineage artifacts, facilities
+`FOR SHARE`, production runs `FOR SHARE`, credit batches `FOR SHARE`, deliveries
+`FOR UPDATE`, then the application `FOR UPDATE` and its version check. They
+revalidate lineage, parent identity and discovered sets before locking application
+slices `FOR UPDATE` and writing shares, slices or document retirement. Changed
+sets return retryable `conflict`; no newly discovered lock is taken late. The
+client retries changed-set conflicts. The runner retries deadlocks (40P01),
+serialization failures (40001) and lock timeouts (55P03), and owns after-commit
+storage draining. Membership still takes
+runs before artifacts until its companion reorder, leaving that cycle open.
+
 `src/db/schema/*` defines tables and types; `src/data-access/*` owns queries and
 permission checks; pooling defaults are centralized in `src/db/pool-config.ts`
 (`resolveAppPoolConfig`) and applied by `src/db/index.ts`. See
@@ -416,10 +428,9 @@ applications use their delivery; internal children use their archive-bearing
 parent. Archive's `NO KEY UPDATE` conflicts with `FOR SHARE`. Parent retirement
 uses owner, mirror, document order; Source mirroring never locks an owner.
 Sample and delivery writers use artifacts before rows. Existing feedstock, order and production-run inversions remain subject to the runner's bounded
-retry. Application update/delete still lock rows before artifacts and do not use the
-runner. They can deadlock with document writes on applications or their deliveries;
-Postgres may abort the non-retried application transaction. Phase 6b commit 1 moves
-application writers onto the runner with artifacts first, as documented in [lock-order follow-up](./open-questions-architecture.md#run-writers-feedstock-edits-and-output-postings-lock-in-different-orders-datalock-order-opened-2026-10-09).
+retry. Application writers now use the runner and the artifacts-first sequence
+above, closing their document-write inversion. The remaining membership and
+production-run cycles are tracked in the [lock-order follow-up](./open-questions-architecture.md#run-writers-feedstock-edits-and-output-postings-lock-in-different-orders-datalock-order-opened-2026-10-09).
 
 Upload promotion, leases and the privileged expiry sweep are described in
 [Object storage](./storage.md#abandoned-uploads-and-cleanup).

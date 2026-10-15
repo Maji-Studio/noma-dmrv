@@ -1,3 +1,4 @@
+import { GRAMS_PER_KG } from "@/lib/output-stock/exact";
 import { KG_PER_TONNE } from "@/lib/calculations/unit-conversions";
 import { UNKNOWN_FACILITY_TIMEZONE } from "@/lib/date-utils";
 import { formatDayString, formatFacilityDay, formatMassKg } from "@/lib/format-utils";
@@ -22,6 +23,7 @@ export interface ApplicationDeliveryOption {
   deliveryDate: Date | string;
   /** The delivery's calendar day on its facility clock ("YYYY-MM-DD"). */
   deliveryDay?: string | null;
+  facilityTimezone?: string | null;
   orderCode: string | null;
   formulationName: string | null;
   productBinName: string | null;
@@ -106,15 +108,7 @@ export function applicationTonsToKg(value: number | null | undefined): number | 
     return null;
   }
 
-  return value * KG_PER_TONNE;
-}
-
-export function applicationKgToTons(value: number | null | undefined): number | null {
-  if (value == null) {
-    return null;
-  }
-
-  return value / KG_PER_TONNE;
+  return Math.round(value * KG_PER_TONNE * Number(GRAMS_PER_KG)) / Number(GRAMS_PER_KG);
 }
 
 /** Kept as a named re-export so the application surfaces keep one import site. */

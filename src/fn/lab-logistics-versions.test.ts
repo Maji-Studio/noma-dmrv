@@ -13,7 +13,7 @@ vi.mock("@/lib/operations/lab-samples", () => ({ recordLabSample: {}, updateLabS
 vi.mock("@/data-access/orders", () => ({ updateOrder: mocks.write, deleteOrder: mocks.write }));
 vi.mock("@/lib/operations/deliveries", () => ({ updateDelivery: mocks.write }));
 vi.mock("@/data-access/deliveries", () => ({ deleteDelivery: mocks.write }));
-vi.mock("@/data-access/applications", () => ({ updateApplication: mocks.write, deleteApplication: mocks.write, getApplicationById: mocks.read }));
+vi.mock("@/lib/operations/applications", () => ({ recordApplication: {}, updateApplication: {}, deleteApplication: {} }));
 vi.mock("@/data-access/credit-batches", () => ({ updateCreditBatch: mocks.write, deleteCreditBatch: mocks.write, getCreditBatchById: mocks.read }));
 vi.mock("@/data-access/transport-legs", () => ({ updateTransportLeg: mocks.write, deleteTransportLeg: mocks.write }));
 import { updateSampleFn, deleteSampleFn } from "./samples";

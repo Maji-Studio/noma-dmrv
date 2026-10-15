@@ -184,16 +184,21 @@ If both share a not-yet-submitted Removal, this can raise 40P01. Delivery create
 now run through the operation runner in both the app and the registered API
 operation, so the whole transaction retries within its deadline. The lock-order
 inversion remains: fix the run writer to lock artifacts before the run row.
+Application writers are a new counterpart: they hold runs FOR SHARE from step 4
+through commit, while production-run update and delete take FOR UPDATE before
+artifacts; both use the runner, which retries deadlocks.
 
 This is part of `data/lock-order` below.
 
 ### Run writers, feedstock edits and output postings lock in different orders (`data/lock-order`, opened 2026-10-09)
 
-Application update/delete also take rows before artifacts outside the runner.
-Document writes on applications or their deliveries take artifacts first and can
-deadlock with them; Postgres may abort the non-retried application transaction.
-Phase 6b commit 1 moves application writers onto the runner with artifacts first.
-
+Application create, update and delete now run through the operation runner and
+lock artifacts before facilities, runs, batches, deliveries and the application.
+This closes their document-write inversion. Membership still takes run locks
+before artifacts: it can hold a run needed by an application while waiting for
+that application's artifact. Its companion reorder must take artifacts first
+and revalidate membership. Application retries mitigate this remaining cycle;
+they do not replace the membership fix.
 
 - `src/data-access/production-runs/mutations.ts:updateProductionRunInTransaction`
   and `src/data-access/production-runs/delete.ts:deleteProductionRunInTransaction`
