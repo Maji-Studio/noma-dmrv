@@ -3,7 +3,7 @@
 - **Owner:** Kenji Nguyen
 - **Status:** proposed; decisions settled 2026-10-15, no implementation yet
 - **Last reviewed:** 2026-10-15, against `staging` @ `d34135911`; adversarial review by gpt-6-astra the same day (§9)
-- **Decision record:** [ADR 0032](../adr/0032-per-batch-emissions-entries-bound-to-template-lines.md). The answers to two question rounds are stored on the decisions page `claude.ai/artifact/DUERWPkMjhkUa51bT7V4aL` (`decisions/emissions-round-1`, `decisions/emissions-round-2`).
+- **Decision record:** [ADR 0032](../adr/0032-per-batch-emissions-entries-bound-to-template-lines.md) and §2 below are authoritative. Provenance only: the raw answers to two question rounds were collected on an external decisions page.
 
 This plan authorizes no registry changes and no production submissions. Template re-authoring in Isometric is tracked separately in #1020.
 
@@ -143,7 +143,8 @@ Operators can fill every line of the target Removal template ("LCA based templat
 | `deletedAt` | Tombstone. A sent entry is never hard-deleted. |
 | `sentByRemovalId`, `sendReservedBySubmissionId` | Entry claim |
 
-- Partial unique index on `(creditBatchId, removalTemplateId, componentId)` where `lineRule = 'single'` and `deletedAt` is null.
+- Partial unique index on `(creditBatchId, removalTemplateId, componentId)` where `lineRule = 'single'`, `kind = 'value'` and `deletedAt` is null. A confirmed zero belongs to the Removal that confirmed it: it is written with that Removal's claim and is unique per `(Removal, componentId)`.
+- On a follow-up Removal of the same batch, a `single` line whose value an earlier Removal already sent counts as sent, not empty. It is omitted like a production component (ADR 0020) and needs no zero confirmation.
 
 **`emission_entry_values`**
 - Columns: `entryId`, `inputKey`, `magnitude` (numeric), `unit`. Unique on `(entryId, inputKey)`.
@@ -153,6 +154,7 @@ Operators can fill every line of the target Removal template ("LCA based templat
 **Evidence**
 - A new document entity type, `emission_entry`.
 - Attaching or retiring a document bumps the entry's `contentRevision` (in `src/data-access/documents.ts`).
+- Entry evidence follows the entry lock, not the batch lineage guard: while an entry is reserved or sent, attaching and retiring documents are both refused, outside an open correction window (§4.5). `assertCanManageDocumentEntity` enforces this for `emission_entry` under the entry row lock. Unsent entries on a batch whose earlier Removal is submitted stay editable.
 - The deferred-attachment flow (`useDeferredAttachments`) puts one file on several entries as one row per entry.
 
 **Entry policy per input shape** (code, next to the catalog)
@@ -262,6 +264,8 @@ Operators can fill every line of the target Removal template ("LCA based templat
 - `omitProductionComponents` keeps a production component on a follow-up Removal when it has entries to send, and sends only those.
 
 **Which entries a Removal sends**
+- Only a Removal that can still take contributions is a contender: a draft that has not been submitted, or a Removal whose correction window is open (Corrections, below). A submitted Removal's manifest is frozen.
+- The window of a Removal starts at the earliest production start among its member batches.
 - An entry is eligible for a Removal when all of these hold:
   - it belongs to a member batch;
   - it is not deleted;
@@ -313,10 +317,10 @@ Operators can fill every line of the target Removal template ("LCA based templat
 - This resolves `isometric/sample-transport-template-drift`.
 
 **Corrections**
-- "Correction needed" is derived, not stored: the snapshot's contribution manifest differs from the current entries.
+- "Correction needed" is derived, not stored, and only inside an open correction window: the snapshot's contribution manifest differs from the current entries.
 - Once a Removal is submitted, the entries it sent stay locked, as today. noma never corrects a submitted Removal on its own initiative.
 - Edits reopen only after Isometric changes the state, and only when all of these hold:
-  - a statement covering the lineage, freshly refreshed, is FAILED_VERIFICATION, or is back in DRAFT after noma submitted it (`ghgStatementSubmissionId` set);
+  - a statement covering the lineage, freshly refreshed, is FAILED_VERIFICATION, or is back in DRAFT after noma submitted it to the verifier. `ghgStatementSubmissionId` is not enough: creating a statement already marks its ledger row submitted with remote status DRAFT (`finalizeGhgStatement`). PR 4 records a verifier submission marker in `submitGhgStatementToVerifierCore` and requires it;
   - no other statement covering it is AWAITING_VERIFICATION, VERIFIED or CREDITS_ISSUED, and an unknown status fails closed;
   - no submission for the lineage is in flight;
   - the edit runs under the lineage locks of `getLockedCertifiedLineage`, serialized against statement submission.
@@ -328,7 +332,7 @@ Operators can fill every line of the target Removal template ("LCA based templat
 Kenji's round 2 note asks to reopen general edits when Isometric pushes a submission back, as before submission.
 
 - **Change:** under the same conditions as §4.5 Corrections, unlock the lineage guard for the rest of the lineage, not only entries. Resubmitting relocks it.
-- **Ownership:** the app-wide lock predicate (issue pending, see #687) owns the Open, In use and Sent levels and the lock predicates (`BLOCKING_SUBMISSION_STATUSES`, `REMOVAL_LOCK_BY_KIND`). PR 4 and PR 5 call that rule's predicate rather than adding their own.
+- **Ownership:** the app-wide lock predicate (issue pending, see #687; a prerequisite, §5) owns the Open, In use and Sent levels and the lock predicates (`BLOCKING_SUBMISSION_STATUSES`, `REMOVAL_LOCK_BY_KIND`). PR 4 and PR 5 call that rule's predicate rather than adding their own.
 - **Shared lineage:** a record that also backs a verified Removal stays locked.
 - **Sync:** status comes from the refresh paths and from the scheduled registry sync of #1047 once it exists.
 - **Prerequisite:** none from Isometric, since Kenji decided the trigger on 2026-10-15. Folds item 1 of #687.
@@ -343,9 +347,9 @@ Kenji's round 2 note asks to reopen general edits when Isometric pushes a submis
 | 4 | Contributions and claims, reservation, guard, snapshot and trigger, evidence targets, Lines sent step, sample-leg aggregation removed, corrections after push-back | #291 | gpt-6-astra, reviewed with pr-review-suite |
 | 5 | Lineage unlock on push-back | #687 item 1 | gpt-6-astra, after PR 4 |
 
-**Merge order:** 1, then 2, then 3, then 4. PR 3's server half can be developed next to PR 2 but merges after it.
+**Merge order:** 1, then 2, then 3, then 4. PR 3's server half can be developed next to PR 2 but merges after it. The app-wide lock predicate (§4.6) is a prerequisite of PR 4's Corrections part; if it has not landed when the rest of PR 4 is ready, the Corrections part moves to PR 5.
 
-**Activation gate:** one server-side flag, `EMISSIONS_ENTRIES_ENABLED`, read through `envSchema` and off by default. It covers entry UI, API and MCP availability, and the sample-leg retirement. PR 3 merges with it off, and it is switched on only once PR 4 is deployed. With it off, sample legs keep working as today.
+**Activation gate:** one server-side flag, `EMISSIONS_ENTRIES_ENABLED`, read through `envSchema` and off by default. It covers entry UI, API and MCP availability, and the sample-leg retirement, including PR 4's removal of sample legs from aggregation and the catalog. PR 3 merges with it off, and it is switched on only once PR 4 is deployed. With it off, sample legs keep working as today.
 
 **Working rules**
 - Claude verifies each PR, commits, and runs E2E in the PR's worktree (`scripts/worktree.sh`).
@@ -434,3 +438,11 @@ Round 2 (the same day) rated 9 findings fixed and 6 partly fixed, and added one 
 - **New P1, closed:** the line contract made automatic sources and entries exclusive, which would block diesel top-ups. It is now scope, automatic source and entry policy (§4.2).
 
 Per the two-round cap, there is no third round.
+
+The PR review suite on #1057 (Codex gpt-6-astra and Claude Opus) added five design fixes, all verified against the code and folded in:
+
+- the reopen trigger needs a recorded verifier submission, since a newly created statement is already DRAFT with its ledger row submitted (§4.5 Corrections);
+- only unsubmitted Removals, or one with an open correction window, take new entries (§4.5);
+- entry evidence follows the entry lock (§4.1 Evidence);
+- the `single` index covers values only, and confirmed zeros belong to their Removal (§4.1);
+- the app-wide lock predicate is a prerequisite of PR 4's Corrections part (§5).

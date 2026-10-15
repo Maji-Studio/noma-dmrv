@@ -205,12 +205,14 @@ companion inherits this file's schema, invariants, and resolution rules.
   carrying any transport component, and `isometric-health.yml` sets no
   `ISOMETRIC_DEMO_TEMPLATE_ID`.
 - **Registry check 2026-10-15:** the sandbox "Dark Earth Carbon Template (29 Jul)"
-  (`rvt_1KS4S43VPSBXA26X`, REST GET) has no component in
-  `sampling-required-for-mrv`, so the template genuinely dropped it. The
-  production template "LCA based template Cula" has two sample shipping lines
-  (EU, India). The [template-driven emissions plan](./plans/2026-10-15-template-driven-emissions.md)
+  (`rvt_1KS4S43VPSBXA26X`, REST GET) had no component in
+  `sampling-required-for-mrv`. Later that day the template was edited in place
+  as "Dark Earth Carbon Template (15 Oct)" and now has two sample shipping lines
+  (EU, India), as the production template "LCA based template Cula" does. The
+  [template-driven emissions plan](./plans/2026-10-15-template-driven-emissions.md)
   stops sample legs feeding Removals and fills both lines from emissions
-  entries; PR 2 of that plan drops the mapping row and resolves this entry.
+  entries. PR 4 of that plan (§4.5) drops the mapping row, behind the
+  `EMISSIONS_ENTRIES_ENABLED` gate, and resolves this entry.
 - **Resolve via:** inspect the live template (`pnpm tsx scripts/isometric-smoke.ts
   inspect-template <prj>` or the Isometric MCP server). If sample transport is
   gone, drop the mapping row and the authoring-doc row and record it in

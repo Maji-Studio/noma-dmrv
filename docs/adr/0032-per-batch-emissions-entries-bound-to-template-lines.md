@@ -28,16 +28,17 @@ noma records none of these numbers, so the template cannot be filled. The #291 d
    - Which record or entry fills each line is assigned by component ID. The three known templates are bootstrapped, surviving IDs carry forward, and new IDs are assigned in the review.
    - Each line's reviewed contract states its scope (operating, forbidden or unassigned), an optional automatic source, and its entry policy (none, additive or single). Only operating lines whose policy allows entries accept them.
 7. **Forms per input type, not a form engine.** The supported shapes are fuel volume, electricity, meter readings, mass, distance, mass × distance and gas concentration with mass flow. Any other monitored shape shows "Needs setup" and blocks.
-8. **When an entry is sent.** An entry goes out once, on the first Removal of its batch to reserve it whose reporting window (production start to that Removal's latest application) contains the entry's date. A retry or supersede of that Removal keeps it. If no later Removal of the batch can carry it, it goes on the facility's next Removal whose window covers its date (plan §7, #1059). A submitted Removal is not corrected for it.
+8. **When an entry is sent.** An entry goes out once. Only a Removal that is not yet submitted can take a new entry, and only when the entry's date falls in the Removal's window (production start to that Removal's latest application). This window is not the GHG Statement's reporting period. An existing reservation or claim wins; otherwise the eligible Removal with the earliest window end, then the earliest draft creation, then the lowest id takes it. A retry or supersede of that Removal keeps it. If no Removal of the batch can carry it, it goes on the facility's next Removal whose window covers its date (plan §7, #1059). A submitted Removal is not corrected for it.
 9. **Corrections only after Isometric changes the state.** noma never corrects a submitted Removal on its own initiative, and the entries it sent stay locked.
-   - Edits reopen when a statement covering the lineage fails verification, or is back in DRAFT after noma submitted it. Status is freshly read; unknown fails closed, and nothing may be in flight.
+   - Edits reopen when a statement covering the lineage fails verification, or is back in DRAFT after noma submitted it to the verifier. A statement noma only created is DRAFT too, so the reopen needs a recorded verifier submission, not the statement's creation.
+   - No other statement covering the lineage may be awaiting verification, verified or issued. Status is freshly read; unknown fails closed, nothing may be in flight, and the edit runs under the lineage locks.
    - The edited Removal shows "correction needed", and resubmitting supersedes it.
 
 ## What stays from earlier decisions
 
 - **ADR 0018:**
   - The journal deletion stands. Entries are per-batch evidence-backed measurements, not a period journal.
-  - Establishment and end-of-life lines stay project-level in Isometric and stay forbidden on Removals. The scope guard keeps those tuples; it releases a tuple only for a template line that an entry or record fills.
+  - Establishment and end-of-life lines stay project-level in Isometric and stay forbidden on Removals. The scope guard keeps those tuples; it releases a tuple only for a line whose reviewed contract is `operating` with an automatic source or an entry policy other than `none`.
   - The `Safety margin` carve-out stands.
 - **ADR 0020:**
   - Production-bucket record totals are still sent in full on the batch's claiming Removal.
