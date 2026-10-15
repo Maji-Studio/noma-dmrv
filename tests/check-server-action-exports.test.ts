@@ -18,7 +18,8 @@ import {
   type ServerActionViolation,
 } from "../scripts/check-server-action-exports";
 
-// Building and scanning all fixtures can exceed the default hook timeout under load.
+// The shared build and wrapper case's fresh program can exceed default timeouts under load.
+// Shared setup took about 30 s in a loaded review run; 60 s allows twice that.
 const SHARED_SETUP_TIMEOUT_MS = 60_000;
 
 const FIXTURE_OPTIONS: ts.CompilerOptions = {
@@ -636,7 +637,7 @@ describe("check-server-action-exports", () => {
     expect(violations).toEqual([
       expect.objectContaining({ name: target.node, reason: expect.stringMatching(/call argument/) }),
     ]);
-  });
+  }, SHARED_SETUP_TIMEOUT_MS);
 
   it.each([...REVIEW_BYPASSES, ...DELIBERATE_REJECTIONS])("rejects review case %s at its conversion or invocation", (_name, body, target) => {
     const findings = checkFixture(reviewSource(body));
