@@ -136,8 +136,10 @@ describe("lab sample writers race", { timeout: SUITE_TIMEOUT_MS }, () => {
     expect(first.ok).toBe(true);
     if (createFirst) {
       // A saved Sample keeps its batch; deletion must refuse.
+      const [sample] = await sampleRows(f);
       expect(second).toMatchObject({ ok: false, error: {
-        message: `Credit batch ${f.batchA.code} has Samples. Move them to another credit batch or delete them, then delete the batch.`,
+        name: "ActionConflictError",
+        conflict: { entity: "sample", id: sample.id, code: sample.sampleCode },
       } });
       expect(await sampleRows(f)).toMatchObject([{ creditBatchId: f.batchA.id }]);
     } else {

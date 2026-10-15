@@ -50,7 +50,8 @@ import {
   type CreditBatchRollup,
 } from "./credit-batch-accounting";
 import { formatUtcDate } from "@/lib/date-utils";
-import { SafeError } from "@/lib/errors";
+import { ActionConflictError, SafeError } from "@/lib/errors";
+import { conflictCode } from "@/lib/conflict-ref";
 import { assertUnsampledBatchEligibility } from "@/lib/certification/credit-batch-sampling";
 import { retireDocumentsForEntities } from "./documents";
 import { processPendingStorageObjectDeletions } from "./storage-object-deletions";
@@ -785,9 +786,14 @@ export async function deleteCreditBatch(ctx: OrgContext, id: string, expectedVer
 
     await assertRemovalAllowsCreditBatchMutation(ctx, tx, id, "delete", lockedRemovals);
 
-    const [sample] = await tx.select({ id: samples.id }).from(samples)
+    const [sample] = await tx.select({ id: samples.id, code: samples.sampleCode }).from(samples)
       .where(and(eq(samples.creditBatchId, id), eq(samples.organizationId, ctx.organizationId))).limit(1);
-    if (sample) throw new SafeError(`Credit batch ${batch.code} has Samples. Move them to another credit batch or delete them, then delete the batch.`);
+    if (sample) {
+      throw new ActionConflictError(
+        `Credit batch ${batch.code} has Samples. Move them to another credit batch or delete them, then delete the batch.`,
+        { entity: "sample", id: sample.id, code: conflictCode(sample.code) },
+      );
+    }
 
     await tx
       .delete(creditBatchProductionRuns)

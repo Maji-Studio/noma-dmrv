@@ -40,7 +40,10 @@ describe("lab sample version cascades", { timeout: TIMEOUT_MS }, () => {
     const saved = await seedRestLabSample(f);
     await expect(deleteCreditBatch(f.ctx, f.batchA.id,
       await labLogisticsVersion(f.ctx, "creditBatches", f.batchA.id)))
-      .rejects.toThrow(`Credit batch ${f.batchA.code} has Samples. Move them to another credit batch or delete them, then delete the batch.`);
+      .rejects.toMatchObject({
+        name: "ActionConflictError",
+        conflict: { entity: "sample", id: saved.row.id, code: saved.row.code },
+      });
     expect(await getCreditBatchById(f.ctx, f.batchA.id, { skipPreview: true })).toMatchObject({ id: f.batchA.id });
     expect((await readRestLabSample(f, saved.row.id)).row).toEqual(saved.row);
   });
