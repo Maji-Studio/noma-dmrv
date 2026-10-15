@@ -9,12 +9,10 @@ import { readApiDelivery } from "@/lib/read-models/api-deliveries";
 import { deliveryRepresentationSchema, type DeliveryRepresentation } from "@/lib/representations/deliveries";
 import { deliveryAllocationSchema } from "@/lib/representations/delivery-writes";
 import { recordDeliveryInput } from "@/schemas/delivery-input";
-import { representationEtag } from "./etag";
 import { ApiHttpError } from "./http-error";
 
 type RecordedDelivery = Awaited<ReturnType<typeof recordDelivery.execute>>;
-const LEGACY_DELIVERY_REPRESENTATION_REVISION = 1;
-interface DeliveryWriteOutput { representationRevision?: number; delivery: DeliveryRepresentation; warnings: string[] }
+interface DeliveryWriteOutput { delivery: DeliveryRepresentation; warnings: string[] }
 export interface DeliveryCreateOutput extends DeliveryWriteOutput {
   basisFingerprint: string;
   allocations: RecordedDelivery["allocations"];
@@ -26,7 +24,7 @@ export const representationCheckedRecord: Operation<typeof recordDeliveryInput, 
   describe: describeRecordedDelivery,
   execute: async (scope, input) => {
     const saved = await recordDelivery.execute(scope, input);
-    return { ...saved, representationRevision: DELIVERY_REPRESENTATION_REVISION, delivery: await readApiDelivery(scope.ctx, { id: saved.delivery.id }, scope.tx), warnings: [BILL_OF_LADING_WARNING] };
+    return { ...saved, delivery: await readApiDelivery(scope.ctx, { id: saved.delivery.id }, scope.tx), warnings: [BILL_OF_LADING_WARNING] };
   },
 };
 
@@ -42,7 +40,7 @@ export function representationCheckedUpdate(id: string, revision: number): Opera
         throw new DomainError("stale_version", "The representation has changed.");
       }
       const saved = await updateDeliveryOperation.execute(scope, input);
-      return { representationRevision: DELIVERY_REPRESENTATION_REVISION, delivery: await readApiDelivery(scope.ctx, { id: saved.id }, scope.tx), warnings: [] };
+      return { delivery: await readApiDelivery(scope.ctx, { id: saved.id }, scope.tx), warnings: [] };
     },
   };
 }
@@ -63,9 +61,4 @@ export function deliveryBody(output: DeliveryWriteOutput) {
 export function recordedDeliveryBody(result: OperationResult<DeliveryCreateOutput>, dryRun: boolean) {
   return { ...deliveryBody(result.data), allocations: result.data.allocations.map(allocation => deliveryAllocationSchema.parse(allocation)),
     ...(dryRun ? { stockEffects: result.stockEffects, basisFingerprint: result.data.basisFingerprint } : {}) };
-}
-
-/** Older stored outcomes predate the order-derived destination representation. */
-export function deliveryWriteEtag(output: DeliveryWriteOutput): string {
-  return representationEtag(output.delivery.version, output.representationRevision ?? LEGACY_DELIVERY_REPRESENTATION_REVISION);
 }

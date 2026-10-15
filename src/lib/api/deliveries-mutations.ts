@@ -6,9 +6,10 @@ import { recordDeliveryInput, updateDeliveryApiInput } from "@/schemas/delivery-
 import { canonicalUuid } from "./canonical-uuid";
 import { parseIfMatch } from "./etag";
 import { remainingDeadlineMs } from "./feedstock-write-checks";
-import { deliveryWriteEtag, deliveryBody, recordedDeliveryBody, representationCheckedRecord, representationCheckedUpdate, withCurrentOnStale } from "./delivery-write-checks";
+import { deliveryBody, recordedDeliveryBody, representationCheckedRecord, representationCheckedUpdate, withCurrentOnStale } from "./delivery-write-checks";
 import { mutationQuerySchema, parseApiQuery } from "./query";
 import { readIdempotencyKey, readJsonBody } from "./request-body";
+import { deliveryEtag } from "./representation-etags";
 import type { ApiRouteContext } from "./route";
 import { rejectUnknownFields } from "./unknown-fields";
 
@@ -30,7 +31,7 @@ export async function createDeliveryResponse(request: Request, { ctx, headers, d
   if (dryRun) headers.set("Dry-Run", "true");
   else {
     headers.set("Location", `/api/v1/deliveries/${responseBody.data.id}`);
-    headers.set("ETag", deliveryWriteEtag(result.data));
+    headers.set("ETag", deliveryEtag(responseBody.data));
   }
   return Response.json(responseBody, { status: dryRun ? 200 : 201, headers });
 }
@@ -53,7 +54,7 @@ export async function updateDeliveryResponse(request: Request, { ctx, headers, d
       idempotency: key ? { credentialId: ctx.credentialId, key, target: id, precondition: precondition! } : undefined,
     });
     const responseBody = deliveryBody(result.data);
-    if (!dryRun) headers.set("ETag", deliveryWriteEtag(result.data));
+    if (!dryRun) headers.set("ETag", deliveryEtag(responseBody.data));
     if (result.replayed) headers.set("Idempotent-Replayed", "true");
     if (dryRun) headers.set("Dry-Run", "true");
     return Response.json(responseBody, { headers });
