@@ -432,8 +432,6 @@
     "biochar_product_id": "FK to the product being ordered",
     "quantity_kg": "Ordered quantity in kilograms",
     "packaging": "Packaging type (bulk_bags, drums, etc.)",
-    "value": "Monetary value of the order",
-    "currency": "Currency code (TZS, USD, etc.)",
     "createdAt": "Timestamp when the record was created",
     "updatedAt": "Timestamp of last modification"
   },
@@ -529,8 +527,6 @@
     "end_date": "End of the crediting period",
     "certifier": "Certifier/registry name (e.g. isometric)",
     "registry": "Full registry name for display",
-    "value": "Monetary value of the batch",
-    "currency": "Currency code for the value",
     "buffer_pool_percent": "Percentage withheld for buffer pool",
     "h_to_corg_ratio": "Batch-level H:Corg molar ratio",
     "mean_random_reflectance_percent": "Mean R0 reflectance for the batch",
@@ -547,10 +543,6 @@
     "n2o_composition_percent": "Nitrous oxide composition as percentage of exhaust gas",
     "n2o_ppm": "Nitrous oxide concentration in parts per million",
     "site_management_notes": "Notes on site management practices",
-    "affidavit_reference": "Reference number for signed affidavit",
-    "intended_use_confirmation": "Whether intended use has been confirmed",
-    "company_verification_ref": "Company verification document reference",
-    "mixing_timeline_days": "Number of days between application and soil mixing",
     "createdAt": "Timestamp when the record was created",
     "updatedAt": "Timestamp of last modification"
   },

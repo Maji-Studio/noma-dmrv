@@ -42,12 +42,6 @@ export type DurabilityOption = (typeof durabilityOptions)[number];
  */
 export const DURABILITY_TIER_FALLBACK: DurabilityOption = "1000_year";
 
-/**
- * Currency codes (ISO 4217)
- */
-export const currencyCodes = ["TZS", "USD", "EUR", "GBP", "KES"] as const;
-export type CurrencyCode = (typeof currencyCodes)[number];
-
 // ============================================
 // Credit Batch Form Schema (Client-side validation)
 // ============================================
@@ -59,7 +53,7 @@ export type CurrencyCode = (typeof currencyCodes)[number];
  * 2. Production cohort — productionRunIds (membership via credit_batch_production_runs)
  * 3. Durability — durabilityOption toggle (200-year vs 1000-year) with conditional fields
  * 4. GHG Accounting — buffer pool % (CO2e figures are derived/registry-owned)
- * 5. Verification — registry, value, currency (applied weight is derived)
+ * 5. Verification — registry (applied weight is derived)
  */
 export const creditBatchFormSchema = z
   .object({
@@ -141,12 +135,6 @@ export const creditBatchFormSchema = z
       .max(100, "Registry must be less than 100 characters")
       .optional()
       .or(z.literal("")),
-    value: z
-      .number()
-      .min(0, "Value must be positive")
-      .optional()
-      .nullable(),
-    currency: z.enum(currencyCodes).default("TZS"),
 
     // === Site Management ===
     siteManagementNotes: z
@@ -209,8 +197,6 @@ export const updateCreditBatchSchema = z.object({
   fDurableCalculated: z.number().min(0).max(0.95).optional().nullable(),
   bufferPoolPercent: z.number().min(2).max(20).optional().nullable(),
   registry: z.string().max(100).optional().nullable(),
-  value: z.number().min(0).optional().nullable(),
-  currency: z.enum(currencyCodes).optional(),
   siteManagementNotes: z.string().max(2000).optional().nullable(),
   sampling: z.never({ error: "Sampling cannot be changed after creation" }).optional(),
 });

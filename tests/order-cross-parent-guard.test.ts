@@ -263,16 +263,16 @@ beforeAll(async () => {
     ).resolves.toMatchObject({ packaging: "bagged" });
   });
 
-  it("keeps a stored price and currency when an edit omits them", async () => {
-    // The order form no longer collects value or currency, so edits never send
-    // them. Rows that already hold a price must keep it.
-    await db.update(orders).set({ value: 500, currency: "KES" }).where(eq(orders.id, zeroProductOrderId));
-    await expect(
-      runOperationInProcess(updateOrder, makeTestOrgContext(TEST_USER_ID), { orderId: zeroProductOrderId, expectedVersion: await labLogisticsVersion(makeTestOrgContext(TEST_USER_ID), "orders", zeroProductOrderId), packaging: "loose" }),
-    ).resolves.toMatchObject({ packaging: "loose", value: 500, currency: "KES" });
+  it("returns an updated order without price or currency", async () => {
+    const updated = await runOperationInProcess(updateOrder, makeTestOrgContext(TEST_USER_ID), {
+      orderId: zeroProductOrderId,
+      expectedVersion: await labLogisticsVersion(makeTestOrgContext(TEST_USER_ID), "orders", zeroProductOrderId),
+      packaging: "loose",
+    });
+    expect(updated).toMatchObject({ packaging: "loose" });
   });
 
-  it("creates an order without a price and with the default currency", async () => {
+  it("creates an order without price or currency", async () => {
     const created = await db.transaction(async tx => createOrderInTransaction(makeTestOrgContext(TEST_USER_ID), tx, {
       code: `OR-OCG-NOPRICE-${tag}`,
       facilityId,
@@ -283,7 +283,7 @@ beforeAll(async () => {
       quantityKg: 10,
       packaging: "loose",
     }));
-    expect(created).toMatchObject({ value: null, currency: "TZS" });
+    expect(created).toMatchObject({ quantityKg: 10, packaging: "loose" });
     await db.delete(orders).where(eq(orders.id, created.id));
   });
 

@@ -249,8 +249,7 @@ export function CreditBatchList({
     safeCurrentPage * pageSize
   );
 
-  // Compact list summary — no monetary value, which is registry-owned and not
-  // an operational signal on a production cohort.
+  // Compact list summary of the visible production cohorts.
   const visibleCo2ePreviews = hydratedFilteredItems
     .map((b) => b.co2eStoredPreview)
     .filter((preview): preview is NonNullable<typeof preview> => Boolean(preview));

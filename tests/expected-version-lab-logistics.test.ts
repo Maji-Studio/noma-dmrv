@@ -327,7 +327,7 @@ async function seedFixture(): Promise<Fixture> {
   const batch = await createCreditBatch(ctx, {
     code: `E2E-LAB-CB-${tag}`, facilityId: seeded.facilityId,
     feedstockTypeId: seeded.feedstockTypeId, startDate: RUN_START, endDate: RUN_END,
-    productionRunIds: [seeded.productionRunId], sampling: "sampled", currency: "TZS",
+    productionRunIds: [seeded.productionRunId], sampling: "sampled",
   });
   const [sample] = await db.insert(samples).values({ organizationId, creditBatchId: batch.id,
     productionRunId: seeded.productionRunId, sampleCode: `E2E-LAB-SP-${tag}`, samplingTime: RUN_END,

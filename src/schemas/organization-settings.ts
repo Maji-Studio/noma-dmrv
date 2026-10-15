@@ -3,10 +3,8 @@
  *
  * Shared by `/settings/defaults` (react-hook-form + zodResolver) and
  * `src/fn/organization-settings.ts`, so client validation and the server trust
- * boundary cannot drift. The default currency is absent (open-questions
- * `orders/pricing`), so a save leaves the stored value alone. `organizationId`
- * is never in this payload — it is stamped server-side from the session's
- * active organization.
+ * boundary cannot drift. `organizationId` is never in this payload: it is
+ * stamped server-side from the session's active organization.
  */
 import { z } from "zod";
 import { applicationEvidenceMethods } from "./applications";

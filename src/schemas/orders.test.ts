@@ -35,7 +35,7 @@ describe("order schemas", () => {
     expect(parsed).not.toHaveProperty("currency");
   });
 
-  it("drops price and currency from an update payload so stored values survive", () => {
+  it("strips removed price and currency keys from an update payload", () => {
     const parsed = updateOrderSchema.parse({ expectedVersion: 1, orderId: UUID, value: 1, currency: "EUR" });
     expect(parsed).toEqual({ orderId: UUID, expectedVersion: 1 });
   });

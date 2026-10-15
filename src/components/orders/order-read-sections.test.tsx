@@ -27,8 +27,6 @@ const order = {
   orderDate: new Date("2026-09-21"),
   quantityKg: 130.125,
   packaging: "loose",
-  value: 500,
-  currency: "TZS",
   fulfillmentStatus: "no_deliveries",
   deliveryCount: 0,
   deliveredWetMassKg: 0,

@@ -16,6 +16,8 @@ it("publishes only stored fields with a null location and a calendar date", () =
   const data = representOrder(stored);
   expect(data).toEqual({ ...row, orderDate: "2026-09-12", archivedAt: null, createdAt: at });
   expect(Object.keys(data).sort()).toEqual(Object.keys(orderRepresentationSchema.shape).sort());
+  expect(data).not.toHaveProperty("value");
+  expect(data).not.toHaveProperty("currency");
   expect(representOrder({ ...row, orderDate: "2026-09-12", archivedAt: new Date(at), customerLocationId: id })).toMatchObject({ archivedAt: at, customerLocationId: id, orderDate: "2026-09-12" });
   expect(representOrder({ ...row, orderDate: "0001-01-01" }).orderDate).toBe("0001-01-01");
 });

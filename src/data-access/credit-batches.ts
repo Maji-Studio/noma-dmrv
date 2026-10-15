@@ -439,8 +439,6 @@ export async function createCreditBatch(
         fDurableCalculated: batchData.fDurableCalculated ?? null,
         bufferPoolPercent: batchData.bufferPoolPercent ?? null,
         registry: batchData.registry || null,
-        value: batchData.value ?? null,
-        currency: batchData.currency,
         siteManagementNotes: batchData.siteManagementNotes || null,
       })
       .returning();
@@ -606,9 +604,6 @@ export async function updateCreditBatch(
     updateData.bufferPoolPercent = updateFields.bufferPoolPercent;
   if (updateFields.registry !== undefined)
     updateData.registry = updateFields.registry || null;
-  if (updateFields.value !== undefined) updateData.value = updateFields.value;
-  if (updateFields.currency !== undefined)
-    updateData.currency = updateFields.currency;
   if (updateFields.siteManagementNotes !== undefined)
     updateData.siteManagementNotes = updateFields.siteManagementNotes || null;
 

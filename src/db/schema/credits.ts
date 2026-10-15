@@ -3,7 +3,6 @@ import {
   text,
   timestamp,
   uuid,
-  real,
   date,
   integer,
   primaryKey,
@@ -66,8 +65,6 @@ export const creditBatches = pgTable(
     // --- Credit Details (Isometric Protocol Section 8) ---
     // Applied weight is derived on read from member applications
     // (Σ biocharAppliedTons) — never stored (issue #285, ADR 0014).
-    value: real('value'),
-    currency: text('currency').notNull().default('TZS'), // ISO 4217 code
 
     // Isometric: Buffer pool contribution (risk-based 2-20%)
     bufferPoolPercent: percent('buffer_pool_percent'),
@@ -137,13 +134,6 @@ export const creditBatches = pgTable(
     productionEmissionsClaimReservedBySubmissionId: uuid(
       'production_emissions_claim_reserved_by_submission_id'
     ),
-
-    // --- Third-Party Sale Verification (Isometric: SubRequirement G-SZZR-0) ---
-    // Required when biochar is sold to third parties before application
-    affidavitReference: text('affidavit_reference'), // Legally binding declaration ref
-    intendedUseConfirmation: text('intended_use_confirmation'), // Explicit soil application intent
-    companyVerificationRef: text('company_verification_ref'), // 3+ years active ag company proof
-    mixingTimelineDays: integer('mixing_timeline_days'), // Days until mixed with soil
 
     // Stamped by the facility archive cascade; NULL = active
     archivedAt: timestamp('archived_at'),
