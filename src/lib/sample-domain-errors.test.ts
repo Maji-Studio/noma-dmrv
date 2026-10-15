@@ -13,7 +13,6 @@ import {
   sampleCarbonReconciliationError,
   sampleCreditBatchArchived,
   sampleCreditBatchNotFound,
-  sampleTierEvidenceError,
   withSampleErrors,
 } from "./sample-domain-errors";
 
@@ -26,8 +25,6 @@ async function outcome(error: unknown) {
 it("keeps the legacy operator copy byte for byte", () => {
   // The writers throw these strings today (src/data-access/samples.ts, src/fn/samples.ts).
   expect(sampleCreditBatchNotFound().message).toBe(new SafeError("Credit batch not found").message);
-  expect(sampleTierEvidenceError("randomReflectanceR0Percent").message).toBe("R₀ reflectance is required for a Sample on a 1000-year credit batch.");
-  expect(sampleTierEvidenceError("residualCarbonPercent").message).toBe("TGA non-reactive carbon is required for a Sample on a 1000-year credit batch.");
   expect(sampleBeforeBatchWindowError("2026-01-31", { code: "CB-26-001", startDate: "2026-02-01", endDate: "2026-02-28" }).message)
     .toBe("Sample date 2026-01-31 is before credit batch CB-26-001's production window, 2026-02-01 to 2026-02-28. Choose a date within or after the production window.");
   expect(sampleCarbonReconciliationError("organicCarbonPercent").message)
@@ -46,8 +43,6 @@ it("answers a missing or archived credit batch with not_found on /creditBatchId"
 });
 
 it.each([
-  ["randomReflectanceR0Percent", sampleTierEvidenceError("randomReflectanceR0Percent")],
-  ["residualCarbonPercent", sampleTierEvidenceError("residualCarbonPercent")],
   ["organicCarbonPercent", sampleCarbonReconciliationError("organicCarbonPercent")],
   ["inorganicCarbonPercent", sampleCarbonReconciliationError("inorganicCarbonPercent")],
   ["samplingTime", sampleBeforeBatchWindowError("2026-01-31", { code: "CB-26-001", startDate: "2026-02-01", endDate: "2026-02-28" })],
@@ -90,7 +85,8 @@ it("passes typed outcomes through, keeps conflicts and leaves unexpected failure
 });
 
 it("shows the operator the same text through a Server Action, typed or not", async () => {
-  const legacy = new SafeError("R₀ reflectance is required for a Sample on a 1000-year credit batch.");
-  const typed = await outcome(sampleTierEvidenceError("randomReflectanceR0Percent"));
+  const error = sampleCarbonReconciliationError("organicCarbonPercent");
+  const legacy = new SafeError(error.message);
+  const typed = await outcome(error);
   expect(toActionFailure(typed, failureOptions)).toMatchObject({ success: false, code: "validation_failed", error: legacy.message });
 });

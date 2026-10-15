@@ -15,6 +15,7 @@ import { and, eq } from "drizzle-orm";
 import type { Pool } from "pg";
 import { db } from "@/db";
 import { creditBatches, documents, facilities, samples, transportLegs } from "@/db/schema";
+import { getBatchesWithLabReports } from "@/data-access/sample-document-evidence";
 import { generateNextCodes } from "@/data-access/code-generator";
 import { updateCreditBatch } from "@/data-access/credit-batches";
 import { createTransportLeg } from "@/data-access/transport-legs";
@@ -119,8 +120,10 @@ describe("codes", { timeout: SUITE_TIMEOUT_MS }, () => {
     const barrier = await openOperationBarrier(barrierPool);
     let pending: ReturnType<typeof record> | undefined;
     try {
-      // Batchless, so the competitor holds no key-share lock on the batch: the create waits on the code alone.
-      await barrier.tx.insert(samples).values({ organizationId: f.ctx.organizationId, sampleCode: taken,
+      // The FK insert holds a key-share lock on the batch, so the create waits there.
+      // Its code is generated before the savepoint; after the barrier commits,
+      // that code collides and the retry generates another.
+      await barrier.tx.insert(samples).values({ creditBatchId: f.batchA.id, organizationId: f.ctx.organizationId, sampleCode: taken,
         samplingTime: new Date(IN_WINDOW), totalCarbonPercent: 80, organicCarbonPercent: 75 });
       pending = record(f);
       await waitForBlockedOperations(barrierPool, barrier.pid, 1);
@@ -310,7 +313,7 @@ describe("certification lineage", { timeout: SUITE_TIMEOUT_MS }, () => {
   });
 });
 
-describe("certification lineage of children and legacy links", { timeout: SUITE_TIMEOUT_MS }, () => {
+describe("certification lineage of children", { timeout: SUITE_TIMEOUT_MS }, () => {
   /** Holds `batch` and assigns its submitted Removal; `write` must queue behind the barrier. */
   async function assignWhileQueued(f: LabSampleFixture, batch: LabSampleBatch, write: () => Promise<unknown>) {
     const barrier = await openOperationBarrier(barrierPool);
@@ -339,29 +342,7 @@ describe("certification lineage of children and legacy links", { timeout: SUITE_
     expect(await legRows(f)).toEqual([]);
   });
 
-  /** A pre-re-grain row: on batch A directly, with its legacy run in batch B. */
-  async function legacySample(f: LabSampleFixture) {
-    const [row] = await db.insert(samples).values({ organizationId: f.ctx.organizationId, sampleCode: `E2E-LAB-LEGACY-${f.tag}`,
-      creditBatchId: f.batchA.id, productionRunId: f.batchB!.runId, samplingTime: new Date(IN_WINDOW),
-      totalCarbonPercent: 80, organicCarbonPercent: 75 }).returning();
-    return row;
-  }
 
-  it("locks the batch a legacy run link reaches, so its lineage cannot be assigned under an update", async () => {
-    const f = await fixture();
-    const legacy = await legacySample(f);
-    const update = () => runOperation(updateLabSample, f.ctx, { labSampleId: legacy.id, expectedVersion: 1, labName: "x" });
-    await expect(assignWhileQueued(f, f.batchB!, update)).rejects.toMatchObject(locked(LINEAGE_CHANGED));
-    expect(await sampleRows(f)).toMatchObject([{ id: legacy.id, version: 1, labName: null }]);
-  });
-
-  it("locks the batch a legacy run link reaches on delete too", async () => {
-    const f = await fixture();
-    const legacy = await legacySample(f);
-    const remove = () => runOperation(deleteLabSample, f.ctx, { labSampleId: legacy.id, expectedVersion: 1 });
-    await expect(assignWhileQueued(f, f.batchB!, remove)).rejects.toMatchObject(locked(LINEAGE_CHANGED));
-    expect(await sampleRows(f)).toHaveLength(1);
-  });
 });
 
 describe("ratios", { timeout: SUITE_TIMEOUT_MS }, () => {
@@ -415,19 +396,45 @@ describe("ratios", { timeout: SUITE_TIMEOUT_MS }, () => {
   });
 });
 
+const missingReport = (f: LabSampleFixture) =>
+  `Credit batch ${f.batchA.code} has no lab report document. Upload a lab report to one of its Samples. You can still submit the Removal.`;
+
 describe("warnings", { timeout: SUITE_TIMEOUT_MS }, () => {
+  it("counts only uploaded, org-scoped lab reports on the batch or its Samples", async () => {
+    const f = await fixture();
+    const other = await fixture();
+    const sample = (await record(f)).data.sample;
+    const [pending, foreign] = await db.insert(documents).values([
+      { organizationId: f.ctx.organizationId, entityType: "sample", entityId: sample.id,
+        documentType: "lab_report", fileName: "report.pdf", storageProvider: "local-fs", storageBucket: "local-fs", storageKey: `sample/${sample.id}/report.pdf`, fileUrl: "https://example.test/report.pdf", uploadStatus: "pending" as const },
+      { organizationId: other.ctx.organizationId, entityType: "credit_batch", entityId: f.batchA.id,
+        documentType: "lab_report", fileName: "report.pdf", fileUrl: "https://example.test/foreign-report.pdf", uploadStatus: "uploaded" as const },
+    ]).returning({ id: documents.id });
+    try {
+      expect(await getBatchesWithLabReports(f.ctx, [f.batchA.id])).toEqual(new Set());
+      await db.update(documents).set({ uploadStatus: "uploaded" }).where(and(eq(documents.id, pending.id), eq(documents.organizationId, f.ctx.organizationId)));
+      expect(await getBatchesWithLabReports(f.ctx, [f.batchA.id])).toEqual(new Set([f.batchA.id]));
+      await db.update(documents).set({ entityType: "credit_batch", entityId: f.batchA.id }).where(and(eq(documents.id, pending.id), eq(documents.organizationId, f.ctx.organizationId)));
+      expect(await getBatchesWithLabReports(f.ctx, [f.batchA.id])).toEqual(new Set([f.batchA.id]));
+    } finally {
+      await db.delete(documents).where(and(eq(documents.id, pending.id), eq(documents.organizationId, f.ctx.organizationId)));
+      await db.delete(documents).where(and(eq(documents.id, foreign.id), eq(documents.organizationId, other.ctx.organizationId)));
+    }
+  });
+
   it("saves and clears s_fraction on a 1,000-year Sample, warning that certification still needs it", async () => {
     const f = await fixture({ durabilityOption: "1000_year" });
-    const created = await record(f, { ...TIER_1000_EVIDENCE, sReflectanceFraction: undefined,
+    const created = await record(f, { sReflectanceFraction: undefined,
       inorganicCarbonPercent: 3, totalOxygenPercent: 6, r0MeasurementCount: 500 });
     expect(created.data.sample.sReflectanceFraction).toBeNull();
     expect(created.data.warnings).toEqual([
+      missingReport(f),
       `Sample ${created.data.sample.sampleCode} is missing the R₀ fraction at or above 2%. A 1,000-year Removal with credit batch ${f.batchA.code} cannot be submitted until every Sample has it.`,
     ]);
     const filled = await runOperation(updateLabSample, f.ctx, {
       labSampleId: created.data.sample.id, expectedVersion: 1, sReflectanceFraction: 0.92,
     });
-    expect(filled.data.warnings).toEqual([]);
+    expect(filled.data.warnings).toEqual([missingReport(f)]);
     const cleared = await runOperation(updateLabSample, f.ctx, {
       labSampleId: created.data.sample.id, expectedVersion: 2, sReflectanceFraction: null,
     });
@@ -440,19 +447,20 @@ describe("warnings", { timeout: SUITE_TIMEOUT_MS }, () => {
     const created = await record(f, { ...TIER_1000_EVIDENCE, totalOxygenPercent: 6, r0MeasurementCount: 120 });
     const code = created.data.sample.sampleCode;
     expect(created.data.warnings).toEqual([
+      missingReport(f),
       `Sample ${code} is missing measured inorganic carbon. A 1,000-year Removal with credit batch ${f.batchA.code} cannot be submitted until every Sample has it.`,
       `Sample ${code} has 120 R₀ measurements. For 1,000-year crediting the biochar module asks for at least 500 per Sample. You can still submit the Removal.`,
     ]);
     const complete = await runOperation(updateLabSample, f.ctx, { labSampleId: created.data.sample.id, expectedVersion: 1, inorganicCarbonPercent: 3, r0MeasurementCount: 500 });
-    expect(complete.data.warnings).toEqual([]);
+    expect(complete.data.warnings).toEqual([missingReport(f)]);
   });
 
   it("warns on any tier when hydrogen or moisture is missing", async () => {
     const f = await fixture();
     const created = await record(f, { totalHydrogenPercent: undefined, moistureContentPercent: undefined });
     // Without hydrogen or oxygen the Sample also lacks both ratios gate (c) counts.
-    expect(created.data.warnings).toHaveLength(3);
-    expect(created.data.warnings.join(" ")).toMatch(/no total hydrogen.*no moisture content.*no H\/C_org and O\/C_org/);
+    expect(created.data.warnings).toHaveLength(4);
+    expect(created.data.warnings.join(" ")).toMatch(/no total hydrogen.*missing moisture content.*no H\/C_org and O\/C_org/);
   });
 
   it("warns when a saved Sample has no O/C_org, then stops once oxygen is entered", async () => {
@@ -461,10 +469,11 @@ describe("warnings", { timeout: SUITE_TIMEOUT_MS }, () => {
     const code = created.data.sample.sampleCode;
     expect(created.data.sample.oToCOrgRatio).toBeNull();
     expect(created.data.warnings).toEqual([
+      missingReport(f),
       `Sample ${code} has no O/C_org, so it is not one of the 3 Samples with complete H/C_org and O/C_org results credit batch ${f.batchA.code} needs before submitting. Enter total oxygen, or the lab's O/C_org when the lab reported no oxygen.`,
     ]);
     const withOxygen = await runOperation(updateLabSample, f.ctx, { labSampleId: created.data.sample.id, expectedVersion: 1, totalOxygenPercent: 6 });
-    expect(withOxygen.data.warnings).toEqual([]);
+    expect(withOxygen.data.warnings).toEqual([missingReport(f)]);
   });
 
   it("warns when zero organic carbon leaves both ratios empty", async () => {
@@ -472,6 +481,7 @@ describe("warnings", { timeout: SUITE_TIMEOUT_MS }, () => {
     const created = await record(f, { organicCarbonPercent: 0, totalOxygenPercent: 6 });
     expect(created.data.sample).toMatchObject({ hToCOrgRatio: null, oToCOrgRatio: null });
     expect(created.data.warnings).toEqual([
+      missingReport(f),
       `Sample ${created.data.sample.sampleCode} has no H/C_org and O/C_org, so it is not one of the 3 Samples with complete H/C_org and O/C_org results credit batch ${f.batchA.code} needs before submitting. With organic carbon at 0, neither ratio can be calculated. Check the organic carbon value.`,
     ]);
   });

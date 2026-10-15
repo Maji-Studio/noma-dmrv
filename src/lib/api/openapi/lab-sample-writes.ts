@@ -10,7 +10,7 @@ import { etagHeader, idempotencyParameter, ifMatchParameter, jsonResponse, locat
 
 const EXAMPLE_CREDIT_BATCH_ID = "0b6b1c0e-5b8e-4a55-9c3c-2f6c8d1b7a10";
 
-const WRITE_GUIDANCE = "H/C_org is always calculated by the server from totalHydrogenPercent and organicCarbonPercent, and O/C_org from totalOxygenPercent when oxygen is present. The response says so in warnings, followed by what a registry submission will still need; neither blocks the write. A sample on a 1,000-year credit batch needs R0, S and TGA evidence. Send samplingTime as RFC 3339 with an explicit offset or as { date, time } in the credit batch facility's zone (facility timeZone, also shown by whoami); a time in the future is refused.";
+const WRITE_GUIDANCE = "H/C_org is always calculated by the server from totalHydrogenPercent and organicCarbonPercent, and O/C_org from totalOxygenPercent when oxygen is present. The response says so in warnings, followed by what a registry submission will still need; neither blocks the write. Every Sample on a sampled credit batch needs moistureContentPercent, and on a 1,000-year batch also sReflectanceFraction, before a Removal can be submitted; mean R0 and TGA are optional. Send samplingTime as RFC 3339 with an explicit offset or as { date, time } in the credit batch facility's zone (facility timeZone, also shown by whoami); a time in the future is refused.";
 const ERROR_GUIDANCE = "Refusals: 404 on /creditBatchId for a missing, foreign or archived credit batch, 409 conflict for a duplicate code or certification_locked once the sample's lineage is in a certification, 422 with a pointer for invalid input.";
 
 interface LabSampleWriteKit {

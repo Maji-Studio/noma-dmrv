@@ -11,7 +11,7 @@
  */
 import { describe, expect, it } from "vitest";
 import type { ChainOfCustodyData } from "@/data-access/chain-of-custody";
-import type { ProductionRunWithSamples } from "@/lib/isometric/utils/aggregation";
+import type { ProductionRunForCertification } from "@/lib/isometric/utils/aggregation";
 import {
   buildMassAccounting,
   EMPTY_RUN_SUMMARY,
@@ -30,8 +30,8 @@ function lineage(
 function run(
   id: string,
   biocharDryMassKg: number | null,
-): ProductionRunWithSamples {
-  return { id, biocharDryMassKg } as unknown as ProductionRunWithSamples;
+): ProductionRunForCertification {
+  return { id, biocharDryMassKg } as unknown as ProductionRunForCertification;
 }
 
 describe("buildMassAccounting — runSummary", () => {

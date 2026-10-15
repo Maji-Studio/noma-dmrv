@@ -15,6 +15,7 @@
 
 import type { RemovalCertifyContext } from "@/fn/certification/certify-context";
 import { MINIMUM_REPLICATES_PER_BATCH } from "@/lib/calculations/biochar-eligibility";
+import { sampleDocumentWarnings } from "./sample-document-warnings";
 import type { BatchHealthFacts } from "./batch-health";
 import { STORED_CO2E_PREVIEW_REVERIFICATION_GAP } from "./preview-gaps";
 
@@ -34,10 +35,6 @@ const CARBON_INPUT_LABELS: Record<string, string> = {
   soilTemperatureC: "Soil temperature",
   hToCorgRatio: "H:Corg ratio",
   thousandYearReplicates: `At least ${MINIMUM_REPLICATES_PER_BATCH} usable 1000-year Samples`,
-  meanRandomReflectancePercent: "Mean random reflectance (R₀)",
-  stdRandomReflectance: "Std dev of R₀",
-  meanNonReactiveCarbonPercent: "Mean non-reactive carbon",
-  stdNonReactiveCarbonPercent: "Std dev of non-reactive carbon",
 };
 
 /**
@@ -81,11 +78,11 @@ export function toBatchHealthFacts(
   batchId: string,
 ): BatchHealthFacts {
   const facilitySetupComplete = isFacilitySetupComplete(ctx);
+  const batch = ctx.memberBatches.find((member) => member.id === batchId);
   return {
+    warnings: batch ? sampleDocumentWarnings({ ...batch, creditBatchCode: batch.code }) : [],
     carbonMissingInputs: carbonMissingInputs(ctx, batchId),
-    facilityEmissionsBlockers:
-      ctx.memberBatches.find((batch) => batch.id === batchId)
-        ?.facilityEmissionsGateBlockers ?? [],
+    facilityEmissionsBlockers: batch?.facilityEmissionsGateBlockers ?? [],
     feedstockTypeMappingGaps: facilitySetupComplete
       ? (ctx.feedstockTypeMappingGaps ?? []).filter(
           (gap) => gap.creditBatchId === batchId,

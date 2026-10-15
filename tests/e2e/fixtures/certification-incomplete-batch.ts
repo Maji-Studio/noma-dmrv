@@ -4,8 +4,6 @@ import { DEC_ORG_ID } from "@/db/org-defaults";
 import * as schema from "../../../src/db/schema";
 import { createDbConnection } from "./db";
 
-const CREDIT_BATCH_H_TO_CORG_RATIO = 0.4;
-
 export interface SeededIncompleteBatch {
   creditBatchId: string;
   code: string;
@@ -43,7 +41,6 @@ export async function seedUngroupedIncompleteBatch(
         startDate: today,
         endDate: today,
         status: "draft",
-        hToCorgRatio: CREDIT_BATCH_H_TO_CORG_RATIO,
       });
     });
   } finally {

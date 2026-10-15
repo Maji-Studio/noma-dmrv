@@ -23,6 +23,7 @@ import {
   ArrowSquareOutIcon,
   CheckCircleIcon,
 } from "@phosphor-icons/react/dist/ssr";
+import { Notice } from "@/components/ui/notice";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { SectionLabel } from "@/components/forms";
 import { InfoHint, Tooltip } from "@/components/ui/tooltip";
@@ -293,6 +294,9 @@ export function CreditBatchHealthStrip({
           feedstockName={feedstockName}
         />
       )}
+      {health?.warnings?.map((warning) => (
+        <Notice key={warning} tone="warning">{warning}</Notice>
+      ))}
     </section>
   );
 }

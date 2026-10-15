@@ -76,8 +76,6 @@ export const AGGREGATED_PRODUCTION_DATA_KEYS = [
   "weightedOrganicCarbonPercent",
   "weightedHToCorgRatio",
   "weightedOToCorgRatio",
-  "weightedAshPercent",
-  "weightedMoisturePercent",
   "totalBiocharDryMassKg",
   "totalFeedstockDryMassKg",
   "totalStartupDieselLitres",
@@ -190,6 +188,12 @@ export const CERTIFY_FIELD_REGISTRY: Record<
   ],
   sample: [
     {
+      key: "moistureContentPercent",
+      label: "Sample moisture",
+      kind: "entered",
+      condition: { field: "sampling", notEquals: "unsampled", label: "sampled batches" },
+    },
+    {
       // durability-readiness.ts runs the 1,000-year replicate gate only for sampled batches.
       key: "totalCarbonPercent",
       label: "Total carbon",
@@ -251,34 +255,6 @@ export const CERTIFY_FIELD_REGISTRY: Record<
       kind: "entered",
       condition: { field: "sampling", notEquals: "unsampled", label: "sampled batches" },
       mappings: [mapping("weightedOToCorgRatio")],
-    },
-    {
-      // assertBatchTierEvidence requires either TGA measurement at save for every 1,000-year batch.
-      key: "tgaNonReactiveCarbonData",
-      label: "TGA non-reactive carbon data",
-      kind: "entered",
-      formFields: ["reactiveCarbonPercent", "residualCarbonPercent"],
-      condition: {
-        field: "durabilityOption",
-        equals: "1000_year",
-        label: "1000-year durability",
-      },
-      satisfaction: {
-        mode: "anyOf",
-        fields: ["reactiveCarbonPercent", "residualCarbonPercent"],
-        label: "Reactive or residual carbon percent",
-      },
-    },
-    {
-      // assertBatchTierEvidence requires mean R₀ at save for every 1,000-year batch.
-      key: "randomReflectanceR0Percent",
-      label: "R0 reflectance",
-      kind: "entered",
-      condition: {
-        field: "durabilityOption",
-        equals: "1000_year",
-        label: "1000-year durability",
-      },
     },
     {
       // Same sampled 1,000-year replicate gate in durability-readiness.ts as TC and IC.
