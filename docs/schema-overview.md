@@ -82,7 +82,7 @@ facility IDs, unsupported reactor types, or unsupported feedstock categories
 exist. Run `pnpm db:reset` locally; shared staging uses the manual reset workflow
 in [database.md](./database.md), announced first.
 
-Migration `0146_feedstock_intake_required_fields` makes the five intake columns
+Migration `0147_feedstock_intake_required_fields` makes the five intake columns
 `feedstocks.delivery_date`, `supplier_id`, `mass_wet_kg`,
 `moisture_content_percent`, and `storage_location_id` NOT NULL, requires moisture
 below 100%, and adds a CHECK requiring `bin_movements.occurred_at` for
