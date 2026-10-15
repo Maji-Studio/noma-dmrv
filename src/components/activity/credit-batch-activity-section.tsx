@@ -7,8 +7,7 @@
  */
 import Link from "next/link";
 import { ArrowRightIcon, ClockCounterClockwiseIcon } from "@phosphor-icons/react/dist/ssr";
-import { Button, EmptyState } from "@/components/ui";
-import { Notice } from "@/components/ui/notice";
+import { EmptyState } from "@/components/ui";
 import { StockRows } from "@/components/storage-locations/stock-figures";
 import { ACTIVITY_SHEET_PREVIEW_LIMIT } from "@/config/activity";
 import { useCreditBatchActivity, useCreditBatchActivitySummary } from "@/hooks/use-credit-batch-activity";
@@ -16,7 +15,6 @@ import { traceabilityActivityHref } from "@/lib/certification/links";
 import { formatDateTime } from "@/lib/format-utils";
 import {
   ACTIVITY_EMPTY_TITLE,
-  ACTIVITY_LOAD_ERROR,
   ACTIVITY_LOADING,
   ACTIVITY_OPEN_ALL_LABEL,
   activityChangeCount,
@@ -24,6 +22,7 @@ import {
 } from "./activity-copy";
 import { activityActorDisplay } from "./activity-display";
 import { ActivityEntry } from "./activity-entry";
+import { ActivityLoadError } from "./activity-load-error";
 import { activityKindTotals } from "./activity-filter-options";
 
 const EMPTY_ICON_PX = 32;
@@ -39,27 +38,7 @@ export function CreditBatchActivitySection({
   const latest = useCreditBatchActivity(creditBatchId, { limit: ACTIVITY_SHEET_PREVIEW_LIMIT });
 
   if (summary.isError || latest.isError) {
-    return (
-      <Notice
-        tone="warning"
-        action={
-          <Button
-            variant="weak"
-            size="small"
-            className="min-h-44"
-            busy={summary.isFetching || latest.isFetching}
-            onClick={() => {
-              void summary.refetch();
-              void latest.refetch();
-            }}
-          >
-            Retry
-          </Button>
-        }
-      >
-        {ACTIVITY_LOAD_ERROR}
-      </Notice>
-    );
+    return <ActivityLoadError queries={[summary, latest]} />;
   }
   if (summary.isPending || latest.isPending) {
     return <span role="status" className="body-caption text-[var(--color-text-tertiary)]">{ACTIVITY_LOADING}</span>;

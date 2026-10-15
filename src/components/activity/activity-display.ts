@@ -17,6 +17,9 @@ import { certificationRemovalsHref, productionRunDeepLinkHref } from "@/lib/cert
 import { creditBatchDeepLinkHref } from "@/lib/credit-batch-links";
 import { deliveryDeepLinkHref } from "@/lib/delivery-links";
 import { orderDeepLinkHref } from "@/lib/order-links";
+import { feedstockDeepLinkHref } from "@/lib/feedstock-links";
+import { biocharProductDeepLinkHref } from "@/lib/biochar-product-links";
+import { ghgStatementDeepLinkHref } from "@/lib/ghg-statement-links";
 import { sampleDetailHref } from "@/lib/sample-create-intent";
 import { documentOwnerActivityType, parseDocumentActivityReasonCode } from "@/lib/activity-entity-type";
 import { humanizeEnum, MISSING_VALUE } from "@/lib/copy-utils";
@@ -222,19 +225,18 @@ export function activityRecordHref(
     entityType = ownerType;
     entityId = reason.ownerId;
   }
-  const query = (param: string) => new URLSearchParams({ facility, [param]: entityId }).toString();
   switch (entityType) {
     case "credit_batch":
       return entityId === context.creditBatchId ? null : creditBatchDeepLinkHref(entityId, facility);
     case "production_run": return productionRunDeepLinkHref(entityId, facility);
-    case "feedstock": return `/feedstocks?${query("feedstock")}`;
-    case "biochar_product": return `/biochar-products?${query("biocharProduct")}`;
+    case "feedstock": return feedstockDeepLinkHref(entityId, facility);
+    case "biochar_product": return biocharProductDeepLinkHref(entityId, facility);
     case "lab_sample": return sampleDetailHref(facility, entityId);
     case "order": return orderDeepLinkHref(entityId, facility);
     case "delivery": return deliveryDeepLinkHref(entityId, facility);
     case "application": return applicationDeepLinkHref(entityId, facility);
     case "removal": return certificationRemovalsHref({ facility, removal: entityId });
-    case "ghg_statement": return `/certification/ghg-statements?${query("statement")}`;
+    case "ghg_statement": return ghgStatementDeepLinkHref(entityId, facility);
     default: return null;
   }
 }

@@ -95,8 +95,8 @@ function orderRowsQuery(ctx: OrgContext) {
 
   const fulfillmentExpr = orderFulfillmentExpression(orders.quantityKg, deliveryAgg.total, deliveryAgg.deliveredWetKg);
 
-  // org-scope-ok: every caller passes a where clause with the active organization predicate.
-  const selectRows = () => db
+  // Scoped here, not by the callers: `where` only narrows the organization's orders.
+  const selectRows = (where?: SQL) => db
     .select({
       id: orders.id,
       organizationId: orders.organizationId,
@@ -130,7 +130,8 @@ function orderRowsQuery(ctx: OrgContext) {
     .leftJoin(customers, and(eq(orders.customerId, customers.id), eq(customers.organizationId, ctx.organizationId)))
     .leftJoin(customerLocations, and(eq(orders.customerLocationId, customerLocations.id), eq(customerLocations.organizationId, ctx.organizationId)))
     .leftJoin(formulations, and(eq(orders.formulationId, formulations.id), eq(formulations.organizationId, ctx.organizationId)))
-    .leftJoin(deliveryAgg, eq(orders.id, deliveryAgg.orderId));
+    .leftJoin(deliveryAgg, eq(orders.id, deliveryAgg.orderId))
+    .where(and(eq(orders.organizationId, ctx.organizationId), where));
 
   return { deliveryAgg, fulfillmentExpr, selectRows };
 }
@@ -218,8 +219,7 @@ export async function getOrders(
   const offset = (page - 1) * pageSize;
 
   // Get orders with related entity names + delivery aggregate
-  const orderList = await selectRows()
-    .where(whereClause)
+  const orderList = await selectRows(whereClause)
     .orderBy(orderFn(sortColumn))
     .limit(pageSize)
     .offset(offset);
@@ -240,8 +240,7 @@ export async function getOrders(
  */
 export async function getOrderWithRelationsById(ctx: OrgContext, id: string): Promise<OrderWithRelations> {
   requireOrgScope(ctx);
-  const [record] = await orderRowsQuery(ctx).selectRows()
-    .where(and(eq(orders.organizationId, ctx.organizationId), eq(orders.id, id)));
+  const [record] = await orderRowsQuery(ctx).selectRows(eq(orders.id, id));
   if (!record) throw new SafeError("The record could not be found.");
   return record;
 }

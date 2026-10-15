@@ -8,14 +8,16 @@ import { activityKeys } from "./activity-query-keys";
 const ok = vi.hoisted(() => () => Promise.resolve({ success: true, data: undefined }));
 vi.mock("@/fn/transport-legs", () => ({ deleteTransportLegFn: vi.fn(ok) }));
 vi.mock("@/fn/feedstocks", () => ({ deleteFeedstockFn: vi.fn(ok) }));
-vi.mock("@/fn/deliveries", () => ({ deleteDeliveryFn: vi.fn(ok) }));
+const savedDelivery = vi.hoisted(() => () => Promise.resolve({ success: true, data: { id: "33333333-3333-4333-8333-333333333333", savedProducts: [] } }));
+vi.mock("@/fn/deliveries", () => ({ deleteDeliveryFn: vi.fn(ok), createDeliveryFn: vi.fn(savedDelivery), updateDeliveryFn: vi.fn(savedDelivery) }));
 vi.mock("@/fn/orders", () => ({ deleteOrderFn: vi.fn(ok) }));
 vi.mock("@/fn/biochar-products", () => ({ deleteBiocharProductFn: vi.fn(ok) }));
 vi.mock("@/fn/documents", () => ({ requestUpload: vi.fn(ok), setDocumentVisibility: vi.fn(ok) }));
 
 import { useDeleteTransportLeg } from "./use-transport-legs";
 import { useDeleteFeedstock } from "./use-feedstocks";
-import { useDeleteDelivery } from "./use-deliveries";
+import { useCreateDelivery, useDeleteDelivery, useUpdateDelivery } from "./use-deliveries";
+import { orderKeys } from "./use-orders";
 import { useDeleteOrder } from "./use-orders";
 import { useDeleteBiocharProduct } from "./use-biochar-products";
 import { useRequestUpload, useSetDocumentVisibility } from "./use-documents";
@@ -47,6 +49,28 @@ it.each([
   });
   expect(client.getQueryState(activityKeys.creditBatchSummary(BATCH_ID))?.isInvalidated).toBe(true);
   expect(client.getQueryState(activityKeys.creditBatch(BATCH_ID, 5))?.isInvalidated).toBe(true);
+  unmount();
+  client.clear();
+});
+
+// A delivery moves its order's derived fulfillment, so the `?order=` detail
+// read and the order lists must refetch after every delivery write.
+it.each([
+  ["create", () => useCreateDelivery(), { orderId: RECORD_ID }],
+  ["update", () => useUpdateDelivery(), { deliveryId: RECORD_ID, expectedVersion: 1 }],
+  ["delete", () => useDeleteDelivery(), { deliveryId: RECORD_ID, expectedVersion: 1 }],
+] as const)("refreshes the order detail and lists after a delivery %s", async (_kind, useHook, variables) => {
+  const client = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
+  client.setQueryData(orderKeys.detailWithRelations(RECORD_ID), { id: RECORD_ID });
+  client.setQueryData(orderKeys.list({}), { items: [] });
+  const { result, unmount } = renderHook(() => useHook(), {
+    wrapper: ({ children }: { children: ReactNode }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>,
+  });
+  await act(async () => {
+    await (result.current.mutateAsync as (input: unknown) => Promise<unknown>)(variables);
+  });
+  expect(client.getQueryState(orderKeys.detailWithRelations(RECORD_ID))?.isInvalidated).toBe(true);
+  expect(client.getQueryState(orderKeys.list({}))?.isInvalidated).toBe(true);
   unmount();
   client.clear();
 });

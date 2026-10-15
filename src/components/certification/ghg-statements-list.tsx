@@ -20,6 +20,7 @@
 import type { ColumnDef } from "@tanstack/react-table";
 import Link from "next/link";
 import { parseAsString, useQueryState } from "nuqs";
+import { GHG_STATEMENT_DEEP_LINK_PARAM } from "@/lib/ghg-statement-links";
 import { useState } from "react";
 import {
   ArrowsClockwiseIcon,
@@ -295,7 +296,7 @@ function ListBody({ facilityId }: { facilityId: string }) {
   const [createOpen, setCreateOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [statementId, setStatementId] = useQueryState(
-    "statement",
+    GHG_STATEMENT_DEEP_LINK_PARAM,
     parseAsString.withOptions({ shallow: true, history: "replace" }),
   );
 

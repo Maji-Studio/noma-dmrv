@@ -156,6 +156,9 @@ export function useCreateDelivery(
       void invalidateCertificationReadiness(queryClient);
       void queryClient.invalidateQueries({ queryKey: outputStockKeys.all });
       invalidateStockEntityQueries(queryClient, "delivery");
+      // Every delivery write moves its order's derived fulfillment: lists and the
+      // `?order=` detail read alike.
+      void queryClient.invalidateQueries({ queryKey: orderKeys.all });
       // Pre-populate the detail cache with the new delivery
       queryClient.setQueryData(deliveryKeys.detail(data.id), data);
 
@@ -250,7 +253,7 @@ export function useUpdateDelivery(
         queryClient.setQueryData(biocharProductKeys.detail(row.id), (old: object | undefined) => old ? { ...old, ...row } : old);
       }
       if (savedProducts.length) {
-        for (const key of [biocharProductKeys.all, storageLocationKeys.all, orderKeys.all, creditBatchKeys.all, chainOfCustodyKeys.all]) {
+        for (const key of [biocharProductKeys.all, storageLocationKeys.all, creditBatchKeys.all, chainOfCustodyKeys.all]) {
           void queryClient.invalidateQueries({ queryKey: key });
         }
       }
@@ -271,6 +274,9 @@ export function useUpdateDelivery(
       void invalidateCertificationReadiness(queryClient);
       void queryClient.invalidateQueries({ queryKey: outputStockKeys.all });
       invalidateStockEntityQueries(queryClient, "delivery");
+      // Every delivery write moves its order's derived fulfillment: lists and the
+      // `?order=` detail read alike.
+      void queryClient.invalidateQueries({ queryKey: orderKeys.all });
 
       await callbacks?.onSuccess?.(data, variables);
     },
@@ -369,6 +375,9 @@ export function useDeleteDelivery(callbacks?: MutationCallbacks<void, DeleteDeli
       void invalidateCertificationReadiness(queryClient);
       void queryClient.invalidateQueries({ queryKey: outputStockKeys.all });
       invalidateStockEntityQueries(queryClient, "delivery");
+      // Every delivery write moves its order's derived fulfillment: lists and the
+      // `?order=` detail read alike.
+      void queryClient.invalidateQueries({ queryKey: orderKeys.all });
 
       await callbacks?.onSuccess?.(undefined, variables);
     },

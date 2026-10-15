@@ -8,7 +8,6 @@
 import { useState } from "react";
 import { ClockCounterClockwiseIcon, FunnelSimpleIcon } from "@phosphor-icons/react/dist/ssr";
 import { Button, EmptyState } from "@/components/ui";
-import { Notice } from "@/components/ui/notice";
 import { DataTable } from "@/components/ui/data-table";
 import { ACTIVITY_LIST_PAGE_SIZE } from "@/config/activity";
 import { ACTIVITY_ACTIONS, ACTIVITY_ENTITY_TYPES } from "@/db/schema/common";
@@ -19,7 +18,6 @@ import {
   ACTIVITY_EMPTY_TITLE,
   ACTIVITY_FILTERED_EMPTY_DESCRIPTION,
   ACTIVITY_FILTERED_EMPTY_TITLE,
-  ACTIVITY_LOAD_ERROR,
   ACTIVITY_LOADING,
   ACTIVITY_SHOW_MORE_LABEL,
   ACTIVITY_TITLE,
@@ -30,6 +28,7 @@ import {
   activityRecordingStartLabel,
 } from "./activity-copy";
 import { ActivityEntry } from "./activity-entry";
+import { ActivityLoadError } from "./activity-load-error";
 import {
   ALL_FILTER_VALUE,
   activityFilterOptionLabel,
@@ -112,27 +111,7 @@ export function CreditBatchActivityView({
 
   const body = (() => {
     if (activity.isError || summary.isError) {
-      return (
-        <Notice
-          tone="warning"
-          action={
-            <Button
-              variant="weak"
-              size="small"
-              className="min-h-44"
-              busy={activity.isFetching || summary.isFetching}
-              onClick={() => {
-                void summary.refetch();
-                void activity.refetch();
-              }}
-            >
-              Retry
-            </Button>
-          }
-        >
-          {ACTIVITY_LOAD_ERROR}
-        </Notice>
-      );
+      return <ActivityLoadError queries={[summary, activity]} />;
     }
     if (activity.isPending || summary.isPending) {
       return <p role="status" className="body-small text-[var(--color-text-secondary)]">{ACTIVITY_LOADING}</p>;
