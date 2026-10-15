@@ -167,30 +167,6 @@ Registry-specific deferred decisions live in
 [Isometric Certify open questions](./open-questions-isometric.md). That
 companion inherits this file's schema, invariants, and resolution rules.
 
-### An archived research doc carries live corrections to shipped readings behavior (`isometric/readings-research-corrections`, opened 2026-07-29, `needs-registry-check`)
-
-- **Observed:** [`docs/archive/2026-07-29-production-run-readings-structured-data-research.md`](./archive/2026-07-29-production-run-readings-structured-data-research.md)
-  is filed as history, but two of its findings contradict behavior that is
-  shipped, so nothing tracks them.
-- Finding 1: the research reads Biochar Protocol v1.1.1 §9.1.2 as not containing
-  the `> 0.5 bar` pressure condition or the five-minute temperature cadence that
-  `src/db/schema/production.ts` documents on `productionRunReadings`. Either the
-  comments describe a Noma policy that the protocol does not impose, or the
-  research misread the pinned version.
-- Finding 2: §9.2.2 requires flow plus CH4, H2, CO, and CO2 concentrations for
-  the continuous direct-emissions method, and the canonical header set in
-  `src/lib/production-readings/readings-csv.ts:parseReadingsCsv` carries only
-  timestamp, temperature, and pressure. If any facility declares that method,
-  the current CSV cannot evidence it.
-- Both claims come from a local reading of the registry pages, so neither is
-  authoritative here. Confirm each against the registry before changing a gate
-  or a schema comment.
-- **Resolve via:** verify both findings through the Isometric MCP server
-  (`how_to`, then the protocol tools). Then correct the schema comments, decide
-  whether the direct-emissions channels need a canonical-CSV extension, and
-  record the outcome in [`docs/isometric/changes.md`](./isometric/changes.md)
-  (M).
-
 ### One sample transport source cannot fill the template's two sample shipping lines (`isometric/sample-transport-template-drift`, opened 2026-08-21)
 
 - **Observed:** the live sandbox check in

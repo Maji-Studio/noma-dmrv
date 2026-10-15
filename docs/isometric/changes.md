@@ -1,5 +1,44 @@
 # Isometric Docs Change Log
 
+## 2026-10-15: Correct reactor-monitoring citations and retain document-only gates (#627 slices 1, 2, 4)
+
+The registry text (Biochar v1.1, tag 1.1.1, read 2026-10-15)
+confirms §9.1.2's sub-atmospheric pressure alternative: records at one-minute
+intervals or more frequently, accuracy 2% FS or better, manufacturer calibration
+requirements met or exceeded and calibration at least annual, with raw data
+available on request. PDD B.19 supplies the project's five-year operational-record
+retention commitment; §9.1.2 itself says only that raw data must be available on
+request. The [project monitoring requirement](./requirements-shortlist.md#project-reactor-monitoring)
+records the exact quoted clauses, registry URL and approved-PDD basis.
+The schema's former Appendix II citation, five-minute reactor-temperature
+cadence and pressure-threshold condition were unsupported. The protocol's
+only appendix is Appendix 1: Risk of Reversal Questionnaire.
+
+This resolves `isometric/readings-research-corrections`. The approved PDD
+uses annual accredited emissions testing (E.1/E.3), so §9.2.4 requires flue-stack
+temperature during project operations within 10% of the emissions-test value(s),
+at one-minute intervals or more frequently, with 2% FS accuracy or better and
+calibration at least annual and meeting or exceeding manufacturer requirements.
+§9.2.4.1 requires raw pyrolyzer temperature data for the Reporting Period to be
+retained for at least five years. Both passages are quoted in the shortlist.
+The approved PDD's lack of a recurring temperature CSV requirement is a format
+question only, not a reason to omit that series. Its current retention/retrieval
+and whether noma should require it on the Production Run remain open for
+[Kenji/DEC](../open-questions-isometric.md#reporting-period-flue-stack-temperature-evidence-isometricflue-stack-temperature-retention-opened-2026-10-15).
+No continuous-gas CSV extension is needed for the approved emissions-testing
+route. A future project choosing another emissions method needs its own evidence
+contract. Historical research stays archived.
+
+The pressure CSV stays unchanged as uploaded `sensor_data` on the production
+run. Readiness and Removal submission use file presence, not parsed rows,
+Sensors, Parquet or reactor MeasurementSamples. Focused tests cover empty
+structured readings, missing/pending/failed files, and submission without
+telemetry calls. The optional readings importer retained by #942 q25 and
+#1014 is unchanged; its wiring/query-bounds deferral stays open with these
+tests as the safety net. The registry upload pipeline and TelemetryPanel
+were already retired in #987, as recorded on 2026-10-13; this slice removes
+no modules or schema.
+
 ## 2026-10-15: Sample moisture retained as evidence only (#942 q1)
 
 Kenji resolved `isometric/sample-moisture-submission`: Sample moisture stays

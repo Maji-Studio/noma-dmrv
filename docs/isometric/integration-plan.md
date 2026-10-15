@@ -407,10 +407,16 @@ claim seam.
 
 ## Reactor time-series upload
 
-The raw pressure CSV stays on the production run; there is no reactor time-series upload ([ADR 0006](../adr/0006-data-upload-submission-idempotency.md)).
+The raw pressure CSV stays unchanged on the production run as an uploaded
+`sensor_data` document, retrievable for verifier requests. Certification readiness
+and Removal submission use that retained-file fact, without parsing its contents.
+The [project monitoring requirement](./requirements-shortlist.md#project-reactor-monitoring)
+defines the pressure evidence; noma does not validate its cadence or sensor accuracy.
+There is no reactor time-series upload ([ADR 0006](../adr/0006-data-upload-submission-idempotency.md)).
 
 The legacy `production_run_readings` table and row importer are retained.
-Operator file upload does not populate row-level readings.
+Operator file upload does not populate row-level readings. Parsed rows, Sensors,
+Parquet and reactor MeasurementSamples are outside the approved submission route.
 
 ## Operational checks
 
