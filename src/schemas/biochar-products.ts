@@ -83,13 +83,19 @@ type IngredientMassFields = {
   moistureContentPercent?: number | null;
 };
 
-function ingredientDryMassRefinement(
+function ingredientMoistureRequiredRefinement(
   ingredient: IngredientMassFields,
   ctx: z.RefinementCtx,
 ): void {
   if (ingredient.massKg > 0 && ingredient.moistureContentPercent == null) {
     ctx.addIssue({ code: "custom", path: ["moistureContentPercent"], message: INGREDIENT_MOISTURE_REQUIRED });
   }
+}
+
+function ingredientDryMassRefinement(
+  ingredient: IngredientMassFields,
+  ctx: z.RefinementCtx,
+): void {
   if (
     ingredient.massDryKg == null ||
     ingredient.massDryKg <= ingredient.massKg
@@ -138,7 +144,7 @@ function uniqueFormulationIngredientsRefinement(
 }
 
 const ingredientBinsFormSchema = z
-  .array(ingredientBinFormSchema)
+  .array(ingredientBinFormSchema.superRefine(ingredientMoistureRequiredRefinement))
   .superRefine(uniqueFormulationIngredientsRefinement);
 const ingredientBinsUpdateSchema = z
   .array(ingredientBinUpdateSchema)
@@ -212,6 +218,12 @@ export const biocharProductEntrySchema = biocharProductFormSchema.superRefine((v
   if (!value.sources && value.moistureContentPercent == null) {
     ctx.addIssue({ code: "custom", path: ["moistureContentPercent"], message: "Required" });
   }
+});
+
+/** Frozen allocations retain their saved ingredient moisture, including legacy nulls. */
+export const biocharProductFrozenEditSchema = biocharProductEntrySchema.safeExtend({
+  ingredientBins: z.array(ingredientBinFormSchema)
+    .superRefine(uniqueFormulationIngredientsRefinement).optional(),
 });
 
 // ============================================

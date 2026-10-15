@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   biocharProductFormSchema,
+  biocharProductEntrySchema,
+  biocharProductFrozenEditSchema,
   updateBiocharProductSchema,
 } from "./biochar-products";
 
@@ -138,5 +140,32 @@ describe("ingredient moisture on the form", () => {
   });
   it.each([0, 100])("accepts measured moisture %s", (moistureContentPercent) => {
     expect(schema.safeParse([{ ...ingredientBin(20, 0), moistureContentPercent }]).success).toBe(true);
+  });
+});
+
+
+describe("frozen ingredient moisture", () => {
+  it.each([null, undefined])("allows status edits with saved moisture %s while refusing new entries", (moistureContentPercent) => {
+    const ingredientBins = [{ ...ingredientBin(20, 18), moistureContentPercent }];
+    const input = {
+      ...POSTING_FIELDS,
+      facilityId: FACILITY_ID,
+      sourceBiocharStorageLocationId: SOURCE_BIN_ID,
+      storageLocationId: PRODUCT_BIN_ID,
+      massKg: 100,
+      moistureContentPercent: 10,
+      waterAddedKg: 0,
+      status: "ready",
+      ingredientBins,
+    };
+    expect(biocharProductFrozenEditSchema.parse(input).status).toBe("ready");
+    expect(updateBiocharProductSchema.parse({
+      productId: PRODUCT_ID, expectedVersion: 1, status: "ready", ingredientBins,
+    }).ingredientBins?.[0].moistureContentPercent).toBe(moistureContentPercent);
+    const create = biocharProductEntrySchema.safeParse(input);
+    expect(create.success).toBe(false);
+    if (!create.success) expect(create.error.issues).toContainEqual(expect.objectContaining({
+      path: ["ingredientBins", 0, "moistureContentPercent"],
+    }));
   });
 });

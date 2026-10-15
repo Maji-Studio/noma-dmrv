@@ -19,6 +19,7 @@ import {
 import { generateNextCodes } from "@/data-access/code-generator";
 import { getOutputBinAllLayersDryKg } from "@/data-access/output-stock";
 import { getStorageLocationWithFacility } from "@/data-access/storage-locations";
+import { fromCompositionJsonb } from "@/lib/biochar-composition";
 import { deriveSourceBiocharMassKg } from "@/lib/biochar-composition/composition";
 import { prepareBiocharProductSubmission } from "@/lib/biochar-composition/product-submission";
 import { makeBiocharProduct, updateBiocharProduct } from "@/lib/operations/biochar-products";
@@ -386,6 +387,26 @@ describe("editing products", () => {
     expect(saved).toMatchObject({ code: `E2E-BP-${f.tag}`, status: "ready", densityKgM3: DENSITY_KG_M3, version: product.version + VERSION_STEP, massKg: product.massKg });
     const cleared = await runOperationInProcess(updateBiocharProduct, f.ctx, { biocharProductId: product.id, expectedVersion: saved.version, densityKgM3: null });
     expect(cleared).toMatchObject({ densityKgM3: null, status: "ready" });
+  });
+
+  it("edits status without changing a legacy ingredient's null moisture", async () => {
+    const f = await fixture();
+    const { product } = await runOperationInProcess(makeBiocharProduct, f.ctx, blended(f));
+    const composition = { ingredients: fromCompositionJsonb(product.composition).map(ingredient => ({
+      ...ingredient, moistureContentPercent: null,
+    })) };
+    await db.update(biocharProducts).set({ composition }).where(and(
+      eq(biocharProducts.organizationId, f.ctx.organizationId), eq(biocharProducts.id, product.id),
+    ));
+
+    const saved = await runOperationInProcess(updateBiocharProduct, f.ctx, {
+      biocharProductId: product.id, expectedVersion: product.version, status: "ready", composition,
+    });
+    expect(saved).toMatchObject({ status: "ready", version: product.version + VERSION_STEP, composition });
+    expect((await productsOf(f))[0].composition).toEqual(composition);
+    await expect(runOperationInProcess(updateBiocharProduct, f.ctx, {
+      biocharProductId: product.id, expectedVersion: saved.version, composition: product.composition,
+    })).rejects.toMatchObject({ code: "validation_failed", message: expect.stringContaining("immutable") });
   });
 
   it("refuses a stale version and an unknown product", async () => {

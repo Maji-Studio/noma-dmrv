@@ -43,6 +43,7 @@ import {
 } from "@/lib/stock-overdraw";
 import {
   biocharProductEntrySchema,
+  biocharProductFrozenEditSchema,
   PURE_PRODUCT_BIN_FILTER,
   type BiocharProductFormData,
 } from "@/schemas/biochar-products";
@@ -165,7 +166,7 @@ export function BiocharProductForm({
   const storageLocationDialog = useQuickAddDialog();
 
   const form = useForm({
-    resolver: zodResolver(biocharProductEntrySchema),
+    resolver: zodResolver(hasFrozenSourceAllocation ? biocharProductFrozenEditSchema : biocharProductEntrySchema),
     // onTouched so spine markers can flag errors on blur, not only on submit.
     mode: "onTouched",
     defaultValues: {

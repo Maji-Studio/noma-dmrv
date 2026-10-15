@@ -81,6 +81,22 @@ describe("updateBiocharProductFn composition handling", () => {
     expect(passedData.composition).toEqual({ ingredients: bins });
   });
 
+  it("accepts a status edit carrying saved ingredient mass with null moisture", async () => {
+    const ingredientBins = [{
+      formulationIngredientId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      feedstockTypeId: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+      feedstockTypeName: "Compost", feedstockTypeCategory: "compost",
+      massKg: 80, massDryKg: 64, moistureContentPercent: null,
+    }];
+    const result = await updateBiocharProductFn({
+      productId: PRODUCT_ID, expectedVersion: 1, status: "ready", ingredientBins,
+    });
+    expect(result.success).toBe(true);
+    expect(mockRunOperationInProcess.mock.calls[0][2]).toMatchObject({
+      status: "ready", composition: { ingredients: ingredientBins },
+    });
+  });
+
   it("explicit empty ingredientBins array clears composition", async () => {
     await updateBiocharProductFn({ expectedVersion: 1,
       productId: PRODUCT_ID,

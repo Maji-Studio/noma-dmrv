@@ -40,9 +40,9 @@ function remainingSourceBiocharDryMassKg(
 }
 
 function formatStockSubtitle(
-  massKg: number | null,
-  waterAddedKg: number | null,
-  moisturePercent: number | null,
+  massKg: number,
+  waterAddedKg: number,
+  moisturePercent: number,
   composition: unknown,
   deliveredWetKg: number,
   deliveredDryKg: number,
@@ -51,7 +51,7 @@ function formatStockSubtitle(
   labelVariant?: NonNullable<EntityOption["remainingMass"]>["labelVariant"],
 ): string {
   const remainingWetKg =
-    (massKg ?? 0) + (waterAddedKg ?? 0) - deliveredWetKg;
+    massKg + waterAddedKg - deliveredWetKg;
   const productDryKg = resolveProductDryBiocharKg({
     sourceAllocatedDryMassKg,
     blendMassKg: massKg,
@@ -114,9 +114,9 @@ export function toBiocharProductEntityOption(
     name: string | null;
     productCode: string;
     formulationName: string | null;
-    massKg: number | null;
-    waterAddedKg: number | null;
-    moisturePercent: number | null;
+    massKg: number;
+    waterAddedKg: number;
+    moisturePercent: number;
     composition?: unknown;
     totalDeliveredKg: number;
     totalDeliveredDryKg: number;
@@ -127,7 +127,7 @@ export function toBiocharProductEntityOption(
 ): EntityOption {
   const productLabel = r.formulationName ?? PURE_BIOCHAR_LABEL;
   const remainingWetKg =
-    (r.massKg ?? 0) + (r.waterAddedKg ?? 0) - r.totalDeliveredKg;
+    r.massKg + r.waterAddedKg - r.totalDeliveredKg;
   const productDryKg = resolveProductDryBiocharKg({
     sourceAllocatedDryMassKg: r.sourceAllocatedDryMassKg,
     blendMassKg: r.massKg,
