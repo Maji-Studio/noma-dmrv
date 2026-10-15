@@ -663,7 +663,7 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
         code: "AP-MISSING",
         applicationDate: new Date("2026-01-20T00:00:00Z"),
       } as never,
-      delivery: { code: "DL-MISSING", status: "delivered", customerLocationId: null } as never,
+      delivery: { proofOfDeliveryCount: 1, code: "DL-MISSING", status: "delivered", customerLocationId: null } as never,
       order: null,
       biocharProduct: { id: "bp-1" } as never,
       productionRun: { id: "pr-1" } as never,
@@ -727,8 +727,8 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
     ]));
     expect(result.submissionLineageBlockers?.some((reason) => reason.detail.includes("Feedstock FS-MISSING"))).toBe(!omit.some((category) => category === "feedstock"));
     expect(result.submissionLineageBlockers?.some((reason) => reason.detail.includes("Delivery DL-MISSING"))).toBe(!omit.some((category) => category === "biochar"));
-    expect(toRemovalReadinessFacts(result).submissionLineageBlockers).toEqual(
-      result.submissionLineageBlockers.filter((blocker) => blocker.fixTarget !== "feedstocks").map((blocker) => blocker.detail),
+    expect(toRemovalReadinessFacts(result).submissionLineageIssues).toEqual(
+      result.submissionLineageBlockers.filter((blocker) => blocker.fixTarget !== "feedstocks"),
     );
     expect(result.durabilityConfigurationBlockers).toEqual(storageKey === "carbon_rich_substance_sequestration" ? [] : ["200-year Removals cannot be submitted yet. Wait for support to confirm registry availability."]);
     const coverage = result.transportCoverage;

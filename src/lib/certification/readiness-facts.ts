@@ -22,6 +22,9 @@ export function toRemovalReadinessFacts(
     ? isLockedInFlight(ctx.latestSubmission) &&
       !canReclaimInterruptedSubmission(ctx.latestSubmission.metadata)
     : false;
+  const submissionLineageIssues = ctx.submissionLineageBlockers.filter(
+    (blocker) => blocker.fixTarget !== "feedstocks",
+  );
   return {
     local: ctx.latestSubmission?.status ?? null,
     lockInFlight,
@@ -35,9 +38,7 @@ export function toRemovalReadinessFacts(
     hasSubmittableRuns: ctx.hasSubmittableRuns,
     productionReadinessGap: ctx.productionReadinessGap ?? null,
     entityReadinessGaps: ctx.entityReadinessGaps ?? [],
-    submissionLineageBlockers: ctx.submissionLineageBlockers
-      .filter((blocker) => blocker.fixTarget !== "feedstocks")
-      .map((blocker) => blocker.detail),
+    submissionLineageIssues,
     durabilityGateBlockers: ctx.durabilityGateBlockers ?? [],
     durabilityConfigurationBlockers: ctx.durabilityConfigurationBlockers,
     futureDatedMeasurements: ctx.futureDatedMeasurements ?? [],

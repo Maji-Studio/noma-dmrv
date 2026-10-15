@@ -1,3 +1,6 @@
+import { buildSubmissionLineageBlockers } from "@/fn/certification/certify-lineage-blockers";
+import { deriveRemovalReadiness } from "@/lib/certification/readiness";
+import { toRemovalReadinessFacts } from "@/lib/certification/readiness-facts";
 /**
  * Pre-submit readiness and supporting-Source gates for `submitRemoval`.
  *
@@ -75,6 +78,26 @@ async function compileForReview(ctx: ReturnType<typeof makeContext>) {
 }
 
 describe("submitRemoval — entity readiness gate", () => {
+  it("agrees with readiness before and after adding delivery proof", async () => {
+    const ctx = makeContext();
+    ctx.lineages[0].delivery.proofOfDeliveryCount = 0;
+    ctx.submissionLineageBlockers = buildSubmissionLineageBlockers(ctx.lineages, [], {}, []);
+    const reason = "Delivery D-0012 has no proof of delivery. Attach a delivery receipt, bill of lading or delivery photo before submitting.";
+    expect(deriveRemovalReadiness(toRemovalReadinessFacts(ctx))).toMatchObject({ state: "blocked", reasons: [reason] });
+    vi.mocked(certifyContext.loadRemovalSubmissionContext).mockResolvedValue(ctx);
+    await expect(submitRemoval({ orgCtx: makeTestOrgContext(USER_ID), removalId: REMOVAL_ID })).rejects.toThrow(reason);
+    expect(isometric.createGhgEntry).not.toHaveBeenCalled();
+    expect(isometric.createDatapoint).not.toHaveBeenCalled();
+
+    ctx.lineages[0].delivery.proofOfDeliveryCount = 1;
+    ctx.submissionLineageBlockers = buildSubmissionLineageBlockers(ctx.lineages, [], {}, []);
+    expect(deriveRemovalReadiness(toRemovalReadinessFacts(ctx)).state).toBe("ready");
+    vi.mocked(isometric.createDatapoint).mockImplementation(fakeExternalIds("dp") as never);
+    vi.mocked(isometric.createGhgEntry).mockImplementation(fakeExternalIds("rmv") as never);
+    await submitRemoval({ orgCtx: makeTestOrgContext(USER_ID), removalId: REMOVAL_ID });
+    expect(isometric.createGhgEntry).toHaveBeenCalledOnce();
+  });
+
   it("preflights every Biochar Application before any registry or claim mutation", async () => {
     vi.mocked(certifyContext.loadRemovalSubmissionContext).mockResolvedValue(
       makeContext(),

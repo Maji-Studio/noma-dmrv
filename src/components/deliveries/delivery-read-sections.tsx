@@ -14,7 +14,9 @@ import type { DeliveryWithRelations } from "@/data-access/deliveries";
 const ROUTE_EMPTY =
   "No route to draw yet. Record the delivered wet mass and a distance to the destination.";
 
-export function deliverySheetSections(delivery: DeliveryWithRelations, facilities: readonly { id: string; timezone: string }[]): DetailPanelSection[] {
+export type DeliverySheetRecord = Omit<DeliveryWithRelations, "proofOfDeliveryCount">;
+
+export function deliverySheetSections(delivery: DeliverySheetRecord, facilities: readonly { id: string; timezone: string }[]): DetailPanelSection[] {
   return [
     {
       title: "Delivery information",

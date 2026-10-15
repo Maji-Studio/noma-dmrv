@@ -298,6 +298,7 @@ function lineageFor(app: SeededApplication): ChainOfCustodyData {
       href: `/applications/${app.id}`,
     },
     delivery: {
+      proofOfDeliveryCount: 1,
       id: "del",
       code: "DL",
       status: null,

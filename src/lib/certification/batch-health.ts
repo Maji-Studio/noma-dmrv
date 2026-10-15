@@ -43,6 +43,7 @@ export type BatchHealthFixTarget =
   | "batchDetails"
   | "orders"
   | "deliveries"
+  | "deliveryEvidence"
   | "deliveryDistances"
   | "feedstocks"
   | "feedstockTypes"
@@ -301,6 +302,7 @@ function transportCheck(facts: BatchHealthFacts): BatchHealthCheckBase[] {
 function resolutionDestination(check: BatchHealthCheck): string {
   switch (check.fixTarget) {
     case "deliveries":
+    case "deliveryEvidence":
     case "deliveryDistances":
       return "deliveries";
     case "productionRuns":
@@ -362,6 +364,11 @@ function mergeUnmetChecksByDestination(
     const existing = merged[existingIndex];
     merged[existingIndex] = {
       ...existing,
+      fixTarget: destination === "deliveries"
+        ? existing.fixTarget === "deliveryEvidence" && check.fixTarget === "deliveryEvidence"
+          ? "deliveryEvidence"
+          : "deliveries"
+        : existing.fixTarget,
       label: mergeCheckText(existing.label, check.label) ?? existing.label,
       requirementLabel:
         mergeCheckText(existing.requirementLabel, check.requirementLabel) ??

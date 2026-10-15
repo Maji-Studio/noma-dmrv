@@ -3,6 +3,7 @@
  * CRUD operations for deliveries with auth guards, pagination, and filtering
  */
 
+import { getDeliveryProofCounts } from "./delivery-proof";
 import { db } from "@/db";
 import {
   customerLocations,
@@ -39,6 +40,7 @@ export interface DeliveryWithRelations extends Delivery {
   effectiveDistanceKm: number | null;
   effectiveDistanceSource: "map_estimate" | "manual" | "document" | null;
   transportEvidenceDocumentCount: number;
+  proofOfDeliveryCount: number;
 }
 
 export interface PaginatedDeliveries {
@@ -306,8 +308,9 @@ export async function getDeliveries(
     .limit(pageSize)
     .offset(offset);
 
+  const proofCounts = await getDeliveryProofCounts(ctx, deliveryList.map((delivery) => delivery.id));
   return {
-    items: deliveryList,
+    items: deliveryList.map((delivery) => ({ ...delivery, proofOfDeliveryCount: proofCounts.get(delivery.id) ?? 0 })),
     total,
     page,
     pageSize,

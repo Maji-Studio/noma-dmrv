@@ -48,6 +48,15 @@ export function applicationDestinationBlocker(input: {
     : `Application ${input.applicationCode} has no customer location. Select a customer location on the order before submitting.`;
 }
 
+export function deliveryProofBlocker(input: {
+  deliveryCode: string;
+  proofOfDeliveryCount: number;
+}): string | null {
+  return input.proofOfDeliveryCount > 0
+    ? null
+    : `Delivery ${input.deliveryCode} has no proof of delivery. Attach a delivery receipt, bill of lading or delivery photo before submitting.`;
+}
+
 export function deliveryDistanceBlocker(input: {
   deliveryCode: string;
   deliveryStatus: string | null;
@@ -80,6 +89,6 @@ export function missingFeedstockTransportIds(
 
 export interface SubmissionLineageBlocker {
   detail: string;
-  fixTarget: "feedstocks" | "deliveryDistances" | "orders" | "deliveries";
+  fixTarget: "feedstocks" | "deliveryEvidence" | "deliveryDistances" | "orders" | "deliveries";
   record: { id: string; code: string };
 }

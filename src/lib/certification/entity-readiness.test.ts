@@ -378,6 +378,7 @@ describe("deriveEntityCertifyReadiness", () => {
 
   it("reports an upcoming delivery as a lifecycle gap", () => {
     const readiness = deriveEntityCertifyReadiness("delivery", {
+      proofOfDeliveryCount: 1,
       status: "upcoming",
       deliveredWetMassKg: 400,
       effectiveDistanceSource: "document",
@@ -392,6 +393,7 @@ describe("deriveEntityCertifyReadiness", () => {
 
   it("accepts a delivered delivery without a lifecycle gap", () => {
     const readiness = deriveEntityCertifyReadiness("delivery", {
+      proofOfDeliveryCount: 1,
       status: "delivered",
       deliveredWetMassKg: 400,
       effectiveDistanceSource: "document",
@@ -403,6 +405,7 @@ describe("deriveEntityCertifyReadiness", () => {
 
   it("keeps a delivered delivery ready with its physical wet mass", () => {
     const readiness = deriveEntityCertifyReadiness("delivery", {
+      proofOfDeliveryCount: 1,
       status: "delivered",
       deliveredWetMassKg: 400,
     });
@@ -410,15 +413,17 @@ describe("deriveEntityCertifyReadiness", () => {
     expect(readiness).toEqual({ state: "ready", gaps: [], warnings: [] });
   });
 
-  it("keeps a delivered delivery ready without evidence", () => {
+  it("blocks a delivered delivery without proof", () => {
     const readiness = deriveEntityCertifyReadiness("delivery", {
+      proofOfDeliveryCount: 0,
       status: "delivered",
       deliveredWetMassKg: 400,
       effectiveDistanceSource: "manual",
       transportEvidenceDocumentCount: 0,
     });
 
-    expect(readiness).toEqual({ state: "ready", gaps: [], warnings: [] });
+    expect(readiness.state).toBe("incomplete");
+    expect(readiness.gaps).toMatchObject([{ key: "proofOfDelivery" }]);
   });
 
   it.each([
@@ -437,6 +442,7 @@ describe("deriveEntityCertifyReadiness", () => {
       "delivery",
       {
         status: "delivered",
+        proofOfDeliveryCount: 1,
         deliveredWetMassKg: 400,
         effectiveDistanceSource: "manual",
         transportEvidenceDocumentCount: 0,

@@ -90,6 +90,7 @@ export function factsFromMockedLineages(
         distanceKmOverride: lineage.delivery.distanceKmOverride ?? null,
         locationDistanceKm: lineage.delivery.locationDistanceKm ?? null,
         customerLocationId: lineage.delivery.customerLocationId ?? null,
+        proofOfDeliveryCount: lineage.delivery.proofOfDeliveryCount ?? 1,
       },
       order: lineage.order
         ? {

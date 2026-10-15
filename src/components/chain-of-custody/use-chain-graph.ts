@@ -430,7 +430,7 @@ function productCardCode(product: ChainBiocharProductLineage): string {
   return `${product.code} · ${product.formulationName ?? "Pure biochar"}`;
 }
 
-function buildDeliveryNode(delivery: ChainDeliveryLineage): LineageGraphNode {
+function buildDeliveryNode(delivery: Omit<ChainDeliveryLineage, "proofOfDeliveryCount">): LineageGraphNode {
   const details: LineageDetailRow[] = [];
   addRow(
     details,
