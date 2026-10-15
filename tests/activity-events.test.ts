@@ -10,6 +10,7 @@ import { ACTORLESS_ACTIVITY_SOURCES, activityEvents, creditBatches, facilities, 
 import { listEntityActivity, recordActivity, type ActivityEventInput } from "@/data-access/activity-events";
 import { archiveFacility } from "@/data-access/facilities";
 import type { OrgContext } from "@/lib/auth/server";
+import { SafeError } from "@/lib/errors";
 import { openOperationBarrier, waitForBlockedOperations } from "./helpers/operation-barrier";
 import { createTestPool } from "./helpers/operation-fixture";
 import { TEST_SITE_POSITION } from "./helpers/test-org";
@@ -177,8 +178,9 @@ it("preserves an explicit actor and unlinked entity references", async () => {
 it("rejects a facility from another organization in recordActivity", async () => {
   const facilityId = await createFacility(otherCtx);
   await db.transaction(async (tx) => {
-    await expect(recordActivity(ctx, tx, event({ facilityId })))
-      .rejects.toThrow("Activity facility not found in the current organization");
+    const recording = recordActivity(ctx, tx, event({ facilityId }));
+    await expect(recording).rejects.toBeInstanceOf(SafeError);
+    await expect(recording).rejects.toThrow("Facility was not found in this Organization.");
     const rows = await tx.select().from(activityEvents).where(eq(activityEvents.organizationId, ctx.organizationId));
     expect(rows).toEqual([]);
   });
