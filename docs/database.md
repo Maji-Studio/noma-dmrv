@@ -139,6 +139,10 @@ validated opaque cursor. Record labels and actor names resolve in batches at
 read time; missing records are tombstones, unknown types have generic labels,
 and documents never expose filenames. The summary counts every matching event by
 entity type and action and resolves the latest event with the same labels and actors.
+The list optionally filters by action and entity type (the summary never does), and
+each record also resolves the facility it belongs to now (a document takes its
+owner's), so links follow records that moved; ids that are not UUIDs read as
+missing. The UI built on these reads: [traceability.md](./traceability.md).
 
 ## Row-Level Guards
 

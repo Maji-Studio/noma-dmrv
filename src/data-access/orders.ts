@@ -71,6 +71,72 @@ import { requireOrgScope } from "./utils";
 // ============================================
 
 /**
+ * The list row shape: an order with related entity names and its delivery
+ * aggregate (non-archived deliveries), which powers the derived fulfillment
+ * status. Shared by the list and the by-id read so the sheet sees one shape.
+ */
+function orderRowsQuery(ctx: OrgContext) {
+  requireOrgScope(ctx);
+  const deliveryAgg = db
+    .select({
+      orderId: deliveries.orderId,
+      total: count().as("delivery_total"),
+      deliveredWetKg: sql<number>`coalesce(sum(${deliveries.deliveredWetMassKg}) filter (where ${deliveries.status} = 'delivered'), 0)`.as(
+        "delivery_delivered_wet_kg",
+      ),
+    })
+    .from(deliveries)
+    .where(and(
+      isNull(deliveries.archivedAt),
+      eq(deliveries.organizationId, ctx.organizationId),
+    ))
+    .groupBy(deliveries.orderId)
+    .as("delivery_agg");
+
+  const fulfillmentExpr = orderFulfillmentExpression(orders.quantityKg, deliveryAgg.total, deliveryAgg.deliveredWetKg);
+
+  // Scoped here, not by the callers: `where` only narrows the organization's orders.
+  const selectRows = (where?: SQL) => db
+    .select({
+      id: orders.id,
+      organizationId: orders.organizationId,
+      code: orders.code,
+      facilityId: orders.facilityId,
+      customerId: orders.customerId,
+      customerLocationId: orders.customerLocationId,
+      formulationId: orders.formulationId,
+      orderDate: orders.orderDate,
+      quantityKg: orders.quantityKg,
+      packaging: orders.packaging,
+      archivedAt: orders.archivedAt,
+      createdAt: orders.createdAt,
+      updatedAt: orders.updatedAt,
+      version: orders.version,
+      facilityName: facilities.name,
+      customerName: customers.name,
+      customerLocationName: customerLocations.name,
+      formulationName: formulations.name,
+
+      deliveryCount: numericAggregate(
+        sql<number>`coalesce(${deliveryAgg.total}, 0)`,
+      ),
+      deliveredWetMassKg: numericAggregate(
+        sql<number>`coalesce(${deliveryAgg.deliveredWetKg}, 0)`,
+      ),
+      fulfillmentStatus: fulfillmentExpr,
+    })
+    .from(orders)
+    .leftJoin(facilities, and(eq(orders.facilityId, facilities.id), eq(facilities.organizationId, ctx.organizationId)))
+    .leftJoin(customers, and(eq(orders.customerId, customers.id), eq(customers.organizationId, ctx.organizationId)))
+    .leftJoin(customerLocations, and(eq(orders.customerLocationId, customerLocations.id), eq(customerLocations.organizationId, ctx.organizationId)))
+    .leftJoin(formulations, and(eq(orders.formulationId, formulations.id), eq(formulations.organizationId, ctx.organizationId)))
+    .leftJoin(deliveryAgg, eq(orders.id, deliveryAgg.orderId))
+    .where(and(eq(orders.organizationId, ctx.organizationId), where));
+
+  return { deliveryAgg, fulfillmentExpr, selectRows };
+}
+
+/**
  * Get all orders with pagination and filtering
  * Supports search, facility filter, customer filter, status filter, sorting, and pagination
  */
@@ -93,25 +159,7 @@ export async function getOrders(
     sortOrder = "desc",
   } = filters ?? {};
 
-  // Per-order delivery aggregate (non-archived): total count and delivered wet mass.
-  // Powers the derived fulfillment status.
-  const deliveryAgg = db
-    .select({
-      orderId: deliveries.orderId,
-      total: count().as("delivery_total"),
-      deliveredWetKg: sql<number>`coalesce(sum(${deliveries.deliveredWetMassKg}) filter (where ${deliveries.status} = 'delivered'), 0)`.as(
-        "delivery_delivered_wet_kg",
-      ),
-    })
-    .from(deliveries)
-    .where(and(
-      isNull(deliveries.archivedAt),
-      eq(deliveries.organizationId, ctx.organizationId),
-    ))
-    .groupBy(deliveries.orderId)
-    .as("delivery_agg");
-
-  const fulfillmentExpr = orderFulfillmentExpression(orders.quantityKg, deliveryAgg.total, deliveryAgg.deliveredWetKg);
+  const { deliveryAgg, fulfillmentExpr, selectRows } = orderRowsQuery(ctx);
 
   // Build where conditions — archived orders (facility archive cascade) are hidden
   const conditions: SQL[] = [
@@ -171,42 +219,7 @@ export async function getOrders(
   const offset = (page - 1) * pageSize;
 
   // Get orders with related entity names + delivery aggregate
-  const orderList = await db
-    .select({
-      id: orders.id,
-      organizationId: orders.organizationId,
-      code: orders.code,
-      facilityId: orders.facilityId,
-      customerId: orders.customerId,
-      customerLocationId: orders.customerLocationId,
-      formulationId: orders.formulationId,
-      orderDate: orders.orderDate,
-      quantityKg: orders.quantityKg,
-      packaging: orders.packaging,
-      archivedAt: orders.archivedAt,
-      createdAt: orders.createdAt,
-      updatedAt: orders.updatedAt,
-      version: orders.version,
-      facilityName: facilities.name,
-      customerName: customers.name,
-      customerLocationName: customerLocations.name,
-      formulationName: formulations.name,
-
-      deliveryCount: numericAggregate(
-        sql<number>`coalesce(${deliveryAgg.total}, 0)`,
-      ),
-      deliveredWetMassKg: numericAggregate(
-        sql<number>`coalesce(${deliveryAgg.deliveredWetKg}, 0)`,
-      ),
-      fulfillmentStatus: fulfillmentExpr,
-    })
-    .from(orders)
-    .leftJoin(facilities, and(eq(orders.facilityId, facilities.id), eq(facilities.organizationId, ctx.organizationId)))
-    .leftJoin(customers, and(eq(orders.customerId, customers.id), eq(customers.organizationId, ctx.organizationId)))
-    .leftJoin(customerLocations, and(eq(orders.customerLocationId, customerLocations.id), eq(customerLocations.organizationId, ctx.organizationId)))
-    .leftJoin(formulations, and(eq(orders.formulationId, formulations.id), eq(formulations.organizationId, ctx.organizationId)))
-    .leftJoin(deliveryAgg, eq(orders.id, deliveryAgg.orderId))
-    .where(whereClause)
+  const orderList = await selectRows(whereClause)
     .orderBy(orderFn(sortColumn))
     .limit(pageSize)
     .offset(offset);
@@ -218,6 +231,18 @@ export async function getOrders(
     pageSize,
     totalPages,
   };
+}
+
+/**
+ * One order in the list row shape, archived or not: a detail read must
+ * hydrate archived references (docs/database.md), unlike the list. Backs the
+ * order list's `?order=` deep link.
+ */
+export async function getOrderWithRelationsById(ctx: OrgContext, id: string): Promise<OrderWithRelations> {
+  requireOrgScope(ctx);
+  const [record] = await orderRowsQuery(ctx).selectRows(eq(orders.id, id));
+  if (!record) throw new SafeError("The record could not be found.");
+  return record;
 }
 
 /**

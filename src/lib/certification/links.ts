@@ -131,3 +131,19 @@ export function traceabilityApplicationHref(
   });
   return `/traceability?${params.toString()}`;
 }
+
+/** The Traceability view value of the batch Activity segment. */
+export const TRACEABILITY_ACTIVITY_VIEW = "activity";
+
+/** A credit batch's Activity segment on the Traceability page. */
+export function traceabilityActivityHref(
+  creditBatchId: string,
+  facilityId: string,
+): string {
+  const params = new URLSearchParams({
+    facility: facilityId,
+    batch: creditBatchId,
+    view: TRACEABILITY_ACTIVITY_VIEW,
+  });
+  return `/traceability?${params.toString()}`;
+}

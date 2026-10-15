@@ -51,6 +51,7 @@ vi.mock("@/components/samples/sample-documents-panel", () => ({ SampleDocumentsP
 vi.mock("@/components/orders/order-location-read", () => ({ OrderLocationRead: stub("Delivery location") }));
 vi.mock("@/components/credit-batches/credit-batch-removal-template", () => ({ CreditBatchRemovalTemplate: stub("Removal template") }));
 vi.mock("@/components/certification/facility-certifier-summary", () => ({ FacilityCertifierSummary: stub("Registry connection") }));
+vi.mock("@/components/activity", () => ({ CreditBatchActivitySection: stub("Batch activity") }));
 
 import { renderBothLevels, sourceFiles } from "./form-detail-parity-harness";
 import { EntitySideSheetSections } from "@/components/ui/entity-side-sheet";
@@ -161,7 +162,7 @@ describe("read sheet detail level parity", () => {
   it.each([
     { name: "formulation", keys: ["name", "Blend composition by volume", "description"], first: "Formulation name", last: "Description" },
     { name: "reactor", keys: ["identifier", "Reactor configuration"], first: "Identifier", last: "Nominal throughput (tph)" },
-    { name: "credit batch", keys: ["Certification progress", "Removal template", "Batch definition", "Production runs", "notes"], first: "Feedstock type", last: "Notes" },
+    { name: "credit batch", keys: ["Certification progress", "Removal template", "Batch definition", "Production runs", "notes", "Activity"], first: "Feedstock type", last: "Notes" },
   ])("keeps $name read groups and field order without generic headings", async ({ name, keys, first, last }) => {
     const { sections } = READ_SECTION_CASES.find(entry => entry.name === name)!;
     expect(sections.map(section => section.id ?? section.title)).toEqual(keys);

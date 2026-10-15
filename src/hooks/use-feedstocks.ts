@@ -27,7 +27,7 @@ import { StaleVersionError, throwActionError } from "@/lib/stale-version";
 import { storageLocationKeys } from "./use-storage-locations";
 import { unwrap, type MutationCallbacks } from "./types";
 import { dashboardOverviewKeys } from "./use-dashboard-overview";
-import { certificationKeys } from "./use-certification";
+import { invalidateCertificationReadiness } from "./use-certification";
 import { invalidateOnboardingProgress } from "./use-onboarding";
 import { invalidateStockEntityQueries } from "./entity-query-keys";
 
@@ -110,7 +110,7 @@ export function useCreateFeedstock(callbacks?: MutationCallbacks<CreateFeedstock
       queryClient.invalidateQueries({ queryKey: dashboardOverviewKeys.all });
       // Feedstock writes resync the derived transport leg (distance/provenance),
       // an input to certification readiness.
-      queryClient.invalidateQueries({ queryKey: certificationKeys.all });
+      void invalidateCertificationReadiness(queryClient);
       invalidateOnboardingProgress(queryClient, variables.facilityId);
       await callbacks?.onSuccess?.(data, variables);
     },
@@ -141,7 +141,7 @@ export function useUpdateFeedstock(callbacks?: MutationCallbacks<FeedstockWithRe
       queryClient.invalidateQueries({ queryKey: dashboardOverviewKeys.all });
       // Feedstock writes resync the derived transport leg (distance/provenance),
       // an input to certification readiness.
-      queryClient.invalidateQueries({ queryKey: certificationKeys.all });
+      void invalidateCertificationReadiness(queryClient);
       callbacks?.onSuccess?.(data, variables);
     },
     onError: callbacks?.onError,
@@ -167,7 +167,7 @@ export function useDeleteFeedstock(callbacks?: MutationCallbacks<void, DeleteFee
       queryClient.invalidateQueries({ queryKey: dashboardOverviewKeys.all });
       // Feedstock writes resync the derived transport leg (distance/provenance),
       // an input to certification readiness.
-      queryClient.invalidateQueries({ queryKey: certificationKeys.all });
+      void invalidateCertificationReadiness(queryClient);
       callbacks?.onSuccess?.(data, variables);
     },
     onError: (error, variables) => {

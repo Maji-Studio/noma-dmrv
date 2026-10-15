@@ -24,7 +24,7 @@ import { z } from "zod";
 import { recordOrder, updateOrder, deleteOrder } from "@/lib/operations/orders";
 import { runOperationInProcess } from "@/lib/operations/runner";
 import { withAction } from "./with-action";
-import { getOrderById } from "@/data-access/orders";
+import { getOrderById, getOrderWithRelationsById, type OrderWithRelations } from "@/data-access/orders";
 import { uuidSchema } from "@/schemas/helpers";
 
 // ============================================
@@ -136,4 +136,9 @@ export async function deleteOrderFn(
 
 export async function getOrderByIdFn(id: string) {
   return withAction((ctx) => getOrderById(ctx, uuidSchema().parse(id)));
+}
+
+/** One order in the list row shape, archived included: the `?order=` deep link. */
+export async function getOrderWithRelationsFn(id: string): Promise<ActionResult<OrderWithRelations>> {
+  return withAction((ctx) => getOrderWithRelationsById(ctx, uuidSchema().parse(id)));
 }

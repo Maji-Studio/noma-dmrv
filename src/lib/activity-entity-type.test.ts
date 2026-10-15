@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { toActivityDocumentOwnerType, toActivityEntityType } from "@/lib/activity-entity-type";
+import { documentOwnerActivityType, parseDocumentActivityReasonCode, toActivityDocumentOwnerType, toActivityEntityType } from "@/lib/activity-entity-type";
 import { DOCUMENT_ENTITY_TYPES } from "@/schemas/documents";
 import { GHG_STATEMENT_ENTITY_TYPE } from "@/lib/isometric/utils/constants";
 import { ACTIVITY_ENTITY_TYPES, isActivityEntityType } from "@/db/schema/common";
@@ -42,4 +42,17 @@ it.each([
 
 it("rejects unknown document owners instead of losing ownership to a fallback", () => {
   expect(() => toActivityDocumentOwnerType("unknown_owner")).toThrow("Unknown activity entity type: unknown_owner");
+});
+
+it("reads a document reason code back to its type and owner", () => {
+  expect(parseDocumentActivityReasonCode("document:weighbridge_ticket:feedstock:feed-1"))
+    .toEqual({ documentType: "weighbridge_ticket", ownerType: "feedstock", ownerId: "feed-1" });
+  expect(parseDocumentActivityReasonCode("document:a:b:c:owner:id")).toEqual({ documentType: "a:b:c", ownerType: "owner", ownerId: "id" });
+  for (const reason of [null, undefined, "detached", "document:owner:id"]) expect(parseDocumentActivityReasonCode(reason)).toBeNull();
+});
+
+it("maps document owners onto activity types where they have their own activity", () => {
+  expect(documentOwnerActivityType("sample")).toBe("lab_sample");
+  expect(documentOwnerActivityType("feedstock")).toBe("feedstock");
+  expect(documentOwnerActivityType("reactor")).toBeNull();
 });

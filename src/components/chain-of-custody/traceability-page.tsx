@@ -4,7 +4,8 @@
  * The page re-anchors on the credit batch — the unit whose provenance
  * verification actually cares about — with the single application's rollback
  * as the drill-down. Header selectors: a credit batch resolves to the
- * roll-up readings (merged DAG | transit Map | mass-balance Sankey), and a
+ * roll-up readings (merged DAG | transit Map | mass-balance Sankey) plus
+ * the batch's recorded Activity, and a
  * production-run filter (derived from the batch's rollbacks and roll-forwards) narrows the
  * roll-up to one run's flow. The application drill-down (Lineage | Map |
  * Split | Trail) opens by clicking an application card or via the
@@ -14,6 +15,7 @@
  */
 "use client";
 
+import { CreditBatchActivityView } from "@/components/activity";
 import { SelectFacilityEmptyState } from "@/components/navigation";
 import { Button, EmptyState, PageHeader } from "@/components/ui";
 import {
@@ -22,6 +24,7 @@ import {
 } from "@/hooks/use-chain-of-custody";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { buildBatchSankey } from "@/lib/chain-of-custody/sankey";
+import { TRACEABILITY_ACTIVITY_VIEW } from "@/lib/certification/links";
 import { cn } from "@/lib/utils";
 import { CertificateIcon, TreeStructureIcon } from "@phosphor-icons/react/dist/ssr";
 import {
@@ -75,7 +78,7 @@ const edgeTypes = {
 };
 
 type ApplicationViewMode = "lineage" | "map" | "split" | "trail";
-type BatchViewMode = "dag" | "map" | "sankey";
+type BatchViewMode = "dag" | "map" | "sankey" | typeof TRACEABILITY_ACTIVITY_VIEW;
 
 const APPLICATION_VIEW_MODES: Array<{ value: ApplicationViewMode; label: string }> = [
   { value: "lineage", label: "Lineage" },
@@ -88,6 +91,7 @@ const BATCH_VIEW_MODES: Array<{ value: BatchViewMode; label: string }> = [
   { value: "dag", label: "DAG" },
   { value: "map", label: "Map" },
   { value: "sankey", label: "Sankey" },
+  { value: TRACEABILITY_ACTIVITY_VIEW, label: "Activity" },
 ];
 
 const DEFAULT_APPLICATION_VIEW: ApplicationViewMode = "lineage";
@@ -723,6 +727,17 @@ export function TraceabilityPage() {
 
   const batchBody = (() => {
     if (!selectedBatchId) return null;
+    // Activity reads the batch's own history, not its lineage, so it renders
+    // without waiting for the roll-up and even for a batch with no runs.
+    if (batchView === TRACEABILITY_ACTIVITY_VIEW) {
+      return (
+        <CreditBatchActivityView
+          key={selectedBatchId}
+          creditBatchId={selectedBatchId}
+          batchCode={batchSelection.batches.find((batch) => batch.id === selectedBatchId)?.code}
+        />
+      );
+    }
     if (batchIsError) {
       return (
         <CenteredMessage tone="error">
@@ -829,6 +844,7 @@ export function TraceabilityPage() {
             onSelectBatch={handleBatchChange}
             anchor={anchor}
             runOptions={runOptions}
+            showRunFilter={batchView !== TRACEABILITY_ACTIVITY_VIEW}
             selectedRunId={selectedRunId}
             onRunChange={handleRunChange}
             runFilterDisabled={batchLoading || runOptions.length === 0}
