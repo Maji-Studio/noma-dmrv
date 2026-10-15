@@ -716,7 +716,7 @@ describe("submitRemoval — happy path", () => {
     );
   });
 
-  it("names a missing default template before recovering a submitted Removal", async () => {
+  it("recovers a submitted Removal against the batch pin, not the facility default", async () => {
     vi.mocked(certifyContext.loadRemovalSubmissionContext).mockResolvedValue(
       makeContext(),
     );
@@ -734,23 +734,27 @@ describe("submitRemoval — happy path", () => {
     setStoredRemovalReportingWindow("2025-01-01", "2025-04-05");
     vi.mocked(removalsDA.updateRemovalDates).mockClear();
     const recoveryContext = makeContext();
-    vi.mocked(certifyContext.loadRemovalSubmissionContext).mockResolvedValue({
-      ...recoveryContext,
-      mapping: {
-        ...recoveryContext.mapping!,
-        defaultRemovalTemplateId: null,
-      },
-      removalTemplate: null,
-    });
+    const recoverWith = (overrides: Partial<typeof recoveryContext>) => {
+      vi.mocked(certifyContext.loadRemovalSubmissionContext).mockResolvedValue({
+        ...recoveryContext,
+        ...overrides,
+      });
+      return submitRemoval({ orgCtx: makeTestOrgContext(USER_ID), removalId: REMOVAL_ID });
+    };
 
     await expect(
-      submitRemoval({
-        orgCtx: makeTestOrgContext(USER_ID),
-        removalId: REMOVAL_ID,
+      recoverWith({
+        memberBatches: recoveryContext.memberBatches.map((batch) => ({ ...batch, removalTemplateId: null })),
+        removalTemplate: null,
       }),
-    ).rejects.toThrow(/set a default Removal template in facility settings/i);
-    expect(isometric.createGhgEntry).toHaveBeenCalledTimes(1);
+    ).rejects.toThrow(/choose a removal template for this credit batch/i);
     expect(removalsDA.updateRemovalDates).not.toHaveBeenCalled();
+
+    await recoverWith({
+      mapping: { ...recoveryContext.mapping!, defaultRemovalTemplateId: null },
+    });
+    expect(isometric.createGhgEntry).toHaveBeenCalledTimes(1);
+    expect(removalsDA.updateRemovalDates).toHaveBeenCalledTimes(1);
   });
 
   it("marks absent datapoint and durability work as skipped when reusing a Removal", async () => {

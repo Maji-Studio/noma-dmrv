@@ -6,6 +6,7 @@ import { SafeError } from "@/lib/errors";
 import { recordActivity } from "./activity-events";
 import { assertCanMutateCertifiedLineage } from "./certification-lineage-guards";
 import { assertRemovalAllowsCreditBatchMutation, lockCreditBatchArtifacts } from "./credit-batch-certification-lock";
+import { acquireFacilityCertificationBoundaryLock } from "./facility-certification-boundary-lock";
 import { assertRowVersion, nextVersion } from "./row-version";
 import { requireOrgScope } from "./utils";
 
@@ -25,6 +26,12 @@ export interface SwitchCreditBatchRemovalTemplateInput {
 export async function switchCreditBatchRemovalTemplate(ctx: OrgContext, input: SwitchCreditBatchRemovalTemplateInput) {
   requireOrgScope(ctx);
   return db.transaction(async (tx) => {
+    const [target] = await tx.select({ facilityId: creditBatches.facilityId }).from(creditBatches).where(and(
+      eq(creditBatches.organizationId, ctx.organizationId), eq(creditBatches.id, input.creditBatchId),
+    ));
+    if (!target) throw new SafeError("Credit batch not found.");
+    // Submit paths take this lock first; holding it keeps a switch out of a claim in flight.
+    await acquireFacilityCertificationBoundaryLock(ctx, tx, target.facilityId);
     const lockedRemovals = await lockCreditBatchArtifacts(ctx, tx, input.creditBatchId);
     const [batch] = await tx.select().from(creditBatches).where(and(
       eq(creditBatches.organizationId, ctx.organizationId), eq(creditBatches.id, input.creditBatchId),

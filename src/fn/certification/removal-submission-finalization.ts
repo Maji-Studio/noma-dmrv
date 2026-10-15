@@ -7,6 +7,7 @@ import { updateRemovalDates } from "@/data-access/certifier-removals";
 import { withFacilityDurabilityLock } from "@/data-access/facility-durability-lock";
 import { withFacilityCertificationBoundarySessionLock } from "@/data-access/facility-certification-boundary-lock";
 import type { OrgContext } from "@/lib/auth/server";
+import { REMOVAL_TEMPLATE_BLOCKERS } from "@/lib/certification/removal-template-blockers";
 import { acquireCertificationArtifactLocksSorted } from "@/lib/certification/submission-lock";
 import { formatUtcDate } from "@/lib/date-utils";
 import { SafeError } from "@/lib/errors";
@@ -21,14 +22,15 @@ import { assertResumedSnapshotRevisionCurrent } from "./production-claim-gate";
 import { assertRemovalSnapshotConfigurationCurrent } from "./removal-snapshot-readers";
 import { ISOMETRIC_PROVIDER, REMOVAL_ENTITY_TYPE } from "./shared";
 
-export function assertDefaultRemovalTemplateConfigured(
-  templateId: string | null,
-): asserts templateId is string {
-  if (!templateId) {
-    throw new SafeError(
-      "Set a default Removal template in facility settings before retrying this Removal.",
-    );
-  }
+/** The Removal compiles against its member batches' pin, so recovery checks the snapshot against that pin. */
+export function pinnedRemovalTemplateId(
+  batches: readonly { removalTemplateId: string | null }[],
+): string {
+  const pins = new Set(batches.map((batch) => batch.removalTemplateId));
+  const [pin] = pins;
+  if (pins.size > 1) throw new SafeError(REMOVAL_TEMPLATE_BLOCKERS.mixedTemplatePins);
+  if (!pin) throw new SafeError(REMOVAL_TEMPLATE_BLOCKERS.unpinnedTemplate);
+  return pin;
 }
 
 export async function persistRemovalReportingWindow(
