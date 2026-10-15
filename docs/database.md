@@ -18,7 +18,7 @@ are not examples for new domain tables. Domain tenancy is enforced in
 - There is **no `requireAuth()` in this layer** — `requireAuth` is a route guard (`src/lib/auth/server.ts`), called once in `src/app/(app)/layout.tsx`. A data-access function relying on it is an unscoped cross-tenant read.
 - `organizationId` is **always stamped server-side** from the session's active organization and **never accepted from client input** or a Zod payload. Taking it as an action parameter is privilege escalation.
 - The column is **deliberately denormalized** onto child tables even though it is derivable through the parent facility. Never "simplify" a child query into a join through `facilities` to obtain org — that is the missed-join leak class that already bit `getSupplierOptions`.
-- Facility-scoped tables use a **composite foreign key** `(facility_id, organization_id) → (facilities.id, facilities.organization_id)` as the DB-level backstop against pointing at another org's facility. New facility-scoped tables must replicate it, not a plain FK to `facilities.id`.
+- Facility-scoped tables use a **composite foreign key** `(facility_id, organization_id) → (facilities.id, facilities.organization_id)` as the DB-level backstop against pointing at another org's facility. New facility-scoped tables must replicate it, not a plain FK to `facilities.id`. `activity_events.facility_id` is a deliberate exception documented in [ADR 0033](./adr/0033-activity-events-facility-without-fk.md).
 - `userId` columns are attribution, not a boundary. Do not access the DB from UI or hooks — go through `fn/` then `data-access/`.
 - Related helpers in `utils.ts`: `assertSameOrg`, `requireOrgFacility`.
 
@@ -47,8 +47,8 @@ org-scoped reads or audit inserts.
 no update or delete. There is no append-only trigger because it would prevent
 E2E teardown. Writes use the caller's transaction and reads enforce org scope.
 The organization FK cascades like sibling tables because no organization-delete
-path exists and test fixtures delete organizations. The nullable facility reference
-uses the same-organization composite FK. Entity, credit-batch, production-run and
+path exists and test fixtures delete organizations. The nullable `facility_id`
+has no FK under the exception documented in [ADR 0033](./adr/0033-activity-events-facility-without-fk.md). Entity, credit-batch, production-run and
 actor references have no FKs, so history survives record
 deletion as tombstones. V1 stores field names only, never field
 values, alongside status transitions and attribution.
