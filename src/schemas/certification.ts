@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { STATUS_HISTORY_ENTITY_TYPES } from "@/lib/certification/status-history";
 import { isSettledPeriodEnd } from "@/lib/isometric/utils/ghg-reporting-window";
 import {
   defaultSoilTemperatureSchema,
@@ -236,6 +237,15 @@ export type ApproveGhgStatementReportInput = z.infer<
 export const loadGhgStatementReportsSchema = z.object({
   ghgStatementId: z.uuid(),
 });
+
+export const loadSubmissionStatusHistorySchema = z.object({
+  entityType: z.enum(STATUS_HISTORY_ENTITY_TYPES),
+  entityId: z.uuid(),
+});
+
+export type LoadSubmissionStatusHistoryInput = z.infer<
+  typeof loadSubmissionStatusHistorySchema
+>;
 
 // Period-first GHG-statement creation. Isometric creates a statement from
 // only { project_id, end_on }; the user picks the period end and the server

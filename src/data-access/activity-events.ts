@@ -1,7 +1,7 @@
 import { and, desc, eq } from "drizzle-orm";
 import { db, type DbTransaction } from "@/db";
 import { activityEvents } from "@/db/schema/activity";
-import { ACTORLESS_ACTIVITY_SOURCES, DEFAULT_ACTORLESS_ACTIVITY_SOURCES, isActivityEntityType, type ActivityEntityType } from "@/db/schema/common";
+import { ACTORLESS_ACTIVITY_SOURCES, DEFAULT_ACTORLESS_ACTIVITY_SOURCES, isActivityEntityType, type ACTIVITY_ACTIONS, type ActivityEntityType } from "@/db/schema/common";
 import type { OrgContext } from "@/lib/auth/server";
 import { requireOrgFacility, requireOrgScope } from "./utils";
 
@@ -36,7 +36,7 @@ export async function listEntityActivity(
   ctx: OrgContext,
   entityType: ActivityEntityType,
   entityId: string,
-  opts?: { limit?: number },
+  opts?: { limit?: number; action?: (typeof ACTIVITY_ACTIONS)[number] },
 ) {
   requireOrgScope(ctx);
   const limit = opts?.limit ?? DEFAULT_ACTIVITY_LIMIT;
@@ -47,6 +47,7 @@ export async function listEntityActivity(
     eq(activityEvents.organizationId, ctx.organizationId),
     eq(activityEvents.entityType, entityType),
     eq(activityEvents.entityId, entityId),
+    opts?.action ? eq(activityEvents.action, opts.action) : undefined,
   )).orderBy(desc(activityEvents.occurredAt), desc(activityEvents.sequence))
     .limit(Math.min(limit, MAX_ACTIVITY_LIMIT));
 }

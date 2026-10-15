@@ -14,7 +14,6 @@ import { ArrowsClockwiseIcon } from "@phosphor-icons/react/dist/ssr";
 import { Button } from "@/components/ui";
 import { Accordion } from "@/components/ui/accordion";
 import { SlideOverPanel } from "@/components/ui/slide-over-panel";
-import { StatusBadge } from "@/components/ui/status-badge";
 import { useToast } from "@/components/ui/toast";
 import {
   useGhgStatementReports,
@@ -36,6 +35,7 @@ import { GhgStatementSubmitDialog } from "./ghg-statement-submit-dialog";
 import { GhgStatementTechnicalDetails } from "./ghg-statement-technical-details";
 import { RegistryRecordLink } from "./registry-record-link";
 import { RemovalBatchesAccordion } from "./removal-batches-accordion";
+import { CertificationStatusBadge } from "./certification-status-badge";
 import { SubmissionStatusBadge } from "./submission-status-badge";
 import { SyncEventList } from "./sync-event-log";
 import {
@@ -223,7 +223,14 @@ function DetailState({
           )}
           <DetailField
             label="Status"
-            value={<StatusBadge status={derived.value} label={derived.label} />}
+            value={
+              <CertificationStatusBadge
+                entityType="ghg_statement"
+                entityId={statement.id}
+                status={derived.value}
+                label={derived.label}
+              />
+            }
             valuePresent
           />
         </DetailSection>
