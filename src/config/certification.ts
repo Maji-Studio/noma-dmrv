@@ -22,3 +22,12 @@ export const METHOD_B_MINIMUM_METHOD_A_SAMPLES = 30;
  */
 export const DEFAULT_PROTOCOL_SLUG = "biochar";
 export const DEFAULT_PROTOCOL_LABEL = "Biochar";
+
+/**
+ * When certification status changes began to be recorded as activity events
+ * (#1038, merged to staging 2026-10-15). Submission ledger rows created before
+ * this have only their version timestamps, so their status history shows a
+ * "Recording began on" note. A shipped fact rather than a per-organization
+ * query: an organization's first recorded change can be later than this.
+ */
+export const CERTIFICATION_STATUS_RECORDING_STARTED_AT = "2026-10-15T13:40:53Z";

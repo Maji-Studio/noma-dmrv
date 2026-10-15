@@ -77,6 +77,9 @@ export { createRemovalWithBatchesAction } from "./create-removal-with-batches";
 // Deletes a never-finalized Removal, removing its draft GHG Entry and Biochar
 // Applications from the registry first.
 export { deleteRemovalAction } from "./delete-removal-action";
+// Status history behind a certification badge (ledger versions + recorded
+// status changes), read when the badge's popover opens.
+export { loadSubmissionStatusHistory } from "./submission-status-history";
 // GHG Statement flow — wired live by Phase 4.5. A GHG Statement is an
 // independent, period-anchored artifact that rolls up multiple Removals
 // (ADR 0003).

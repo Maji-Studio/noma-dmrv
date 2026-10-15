@@ -28,7 +28,6 @@ import {
 } from "@phosphor-icons/react/dist/ssr";
 import { Button, EmptyState, PageHeader } from "@/components/ui";
 import { DataTable } from "@/components/ui/data-table";
-import { StatusBadge } from "@/components/ui/status-badge";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import {
   useFacilityCertifierSummary,
@@ -42,6 +41,7 @@ import { certificationSettingsHref } from "@/lib/certification/links";
 import { isLockedInFlight } from "@/lib/isometric/utils/lock";
 import { formatDate, formatDateRange } from "@/lib/format-utils";
 import { formatCount, MISSING_VALUE } from "@/lib/copy-utils";
+import { CertificationStatusBadge } from "./certification-status-badge";
 import { GhgStatementCreateDialog } from "./ghg-statement-create-dialog";
 import { GhgStatementDetailSheet } from "./ghg-statement-detail-sheet";
 import { Notice } from "@/components/ui/notice";
@@ -239,7 +239,14 @@ function StatusCell({ item }: { item: GhgStatementListItem }) {
     "ghgStatement",
     "unknown",
   );
-  return <StatusBadge status={derived.value} label={derived.label} />;
+  return (
+    <CertificationStatusBadge
+      entityType="ghg_statement"
+      entityId={item.statement.id}
+      status={derived.value}
+      label={derived.label}
+    />
+  );
 }
 
 const columns: ColumnDef<GhgStatementListItem>[] = [

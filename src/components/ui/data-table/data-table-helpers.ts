@@ -42,12 +42,22 @@ export function columnLabel(column: {
     .replace(/\b\w/g, (character) => character.toUpperCase());
 }
 
+/**
+ * React events bubble through portals, so a press inside a popover or menu
+ * opened from a row reaches the row's handlers although its target sits
+ * outside the row's DOM. Such presses never activate the row.
+ */
+function isFromPortal(event: React.SyntheticEvent<HTMLElement>): boolean {
+  return !event.currentTarget.contains(event.target as Node);
+}
+
 /** Activate a clickable row or card with Enter/Space. */
 export function handleRowActivationKeyDown(
   event: React.KeyboardEvent<HTMLElement>,
   activate: () => void,
 ) {
   if (event.key !== "Enter" && event.key !== " ") return;
+  if (isFromPortal(event)) return;
   const interactive = (event.target as HTMLElement).closest(
     INTERACTIVE_ROW_CONTROL_SELECTOR,
   );
@@ -61,6 +71,7 @@ export function handleRowActivationClick(
   event: React.MouseEvent<HTMLElement>,
   activate: () => void,
 ) {
+  if (isFromPortal(event)) return;
   const interactive = (event.target as HTMLElement).closest(
     INTERACTIVE_ROW_CONTROL_SELECTOR,
   );

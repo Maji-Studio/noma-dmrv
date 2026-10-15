@@ -26,7 +26,6 @@ import {
 } from "@phosphor-icons/react/dist/ssr";
 import { DataTable } from "@/components/ui/data-table";
 import { Button, EmptyState, PageHeader } from "@/components/ui";
-import { StatusBadge } from "@/components/ui/status-badge";
 import { SelectFacilityEmptyState } from "@/components/navigation";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import {
@@ -36,6 +35,7 @@ import {
 import { deriveRemovalWorkflowStatus } from "@/lib/certification/status";
 import { formatDateRange } from "@/lib/format-utils";
 import { MISSING_VALUE } from "@/lib/copy-utils";
+import { CertificationStatusBadge } from "./certification-status-badge";
 import { NewRemovalDialog } from "./new-removal-dialog";
 import { RemovalDetailSheet } from "./removal-detail-sheet";
 import {
@@ -162,9 +162,16 @@ export function StatusCell({ summary }: { summary: RemovalListRow }) {
 
   return (
     <span className="flex flex-col items-start gap-4">
-      <StatusBadge status={status.value} label={status.label} />
+      <CertificationStatusBadge
+        entityType="removal"
+        entityId={summary.removalId}
+        status={status.value}
+        label={status.label}
+      />
       {firstReason && (
-        <span className="inline-flex items-start gap-6 body-caption text-[var(--color-text-secondary)]">
+        // `relative` paints the reason above the badge's expanded hit area,
+        // so pressing it opens the row like any other cell text.
+        <span className="relative inline-flex items-start gap-6 body-caption text-[var(--color-text-secondary)]">
           <WarningIcon
             size={14}
             weight="fill"
@@ -181,6 +188,8 @@ export function StatusCell({ summary }: { summary: RemovalListRow }) {
         <Button
           variant="default"
           size="small"
+          // Paints above the badge's expanded hit area just above it.
+          className="relative"
           onClick={(event) => {
             event.stopPropagation();
             void summary.retry?.();

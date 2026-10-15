@@ -18,7 +18,6 @@ import { Button, buttonVariants } from "@/components/ui";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { useToast } from "@/components/ui/toast";
 import { SlideOverPanel } from "@/components/ui/slide-over-panel";
-import { StatusBadge } from "@/components/ui/status-badge";
 import { DetailField, DetailSection } from "@/components/ui/detail-panel";
 import {
   useDeleteRemoval,
@@ -40,6 +39,7 @@ import { SourcesPanel } from "./sources-panel";
 import { SubmissionNotes } from "./submission-notes";
 import { buildSubmissionWarningNotes } from "./submission-warning-notes";
 import { SyncEventLog } from "./sync-event-log";
+import { CertificationStatusBadge } from "./certification-status-badge";
 import {
   canDeleteRemovalRow,
   removalDeletionTouchesRegistry,
@@ -94,7 +94,17 @@ function SubmissionStatusSection({
     <DetailSection title="Submission status" divider={false}>
       <DetailField
         label="Status"
-        value={<StatusBadge status={status.value} label={status.label} />}
+        // The label paints above the badge's 44px hit area, which reaches 6px
+        // into it, so a press on the label text stays on the label.
+        className="[&>span:first-child]:relative [&>span:first-child]:z-10"
+        value={
+          <CertificationStatusBadge
+            entityType="removal"
+            entityId={summary.removalId}
+            status={status.value}
+            label={status.label}
+          />
+        }
         valuePresent
       />
 
@@ -112,7 +122,8 @@ function SubmissionStatusSection({
         <Button
           variant="default"
           size="small"
-          className="self-start"
+          // `relative` paints it above the status badge's expanded hit area.
+          className="relative self-start"
           onClick={() => void summary.retry?.()}
         >
           Retry

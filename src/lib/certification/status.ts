@@ -25,6 +25,8 @@ import { hasPendingStatementTotal } from "@/lib/certification/pending-statement-
  */
 
 import type { StatusValue } from "@/components/ui/status-badge";
+// Type-only: erased at build time, used only to check the status list below.
+import type { certificationSubmissionStatus } from "@/db/schema/common";
 // Type-only — erased at build time, so the generated types never reach the
 // client bundle as runtime code.
 import type { components } from "@/lib/isometric/generated/certify";
@@ -34,16 +36,29 @@ import {
 import type { RemovalReadiness } from "./readiness";
 
 /**
- * Local certification-submission ledger status. Mirrors the DB enum in
+ * Local certification-submission ledger statuses. Mirrors the DB enum in
  * `src/db/schema/common.ts` (`certificationSubmissionStatus`); declared
- * locally so this module imports no server/schema runtime code.
+ * locally so this module imports no server/schema runtime code. The check
+ * below fails the build when the two drift apart in either direction.
  */
-export type LocalSubmissionStatus =
-  | "draft"
-  | "submitted"
-  | "accepted"
-  | "rejected"
-  | "superseded";
+export const LOCAL_SUBMISSION_STATUSES = [
+  "draft",
+  "submitted",
+  "accepted",
+  "rejected",
+  "superseded",
+] as const;
+
+export type LocalSubmissionStatus = (typeof LOCAL_SUBMISSION_STATUSES)[number];
+
+type DbSubmissionStatus = (typeof certificationSubmissionStatus.enumValues)[number];
+type MirrorsDbEnum = [LocalSubmissionStatus] extends [DbSubmissionStatus]
+  ? [DbSubmissionStatus] extends [LocalSubmissionStatus]
+    ? true
+    : false
+  : false;
+/** Compile-time proof that the list mirrors the DB enum: anything but `true` fails the build. */
+export const LOCAL_SUBMISSION_STATUSES_MIRROR_DB_ENUM: MirrorsDbEnum = true;
 
 /**
  * Local submission statuses that carry a live remote dependency, and so freeze
@@ -214,6 +229,41 @@ function interruptedWorkflowStatus(
   };
 }
 
+type RemovalStatusPresentation = Pick<RemovalWorkflowStatus, "value" | "label">;
+
+const REMOVAL_SUBMITTING: Pick<RemovalWorkflowStatus, "kind" | "value" | "label"> = {
+  kind: "submitting",
+  value: "running",
+  label: "Submitting",
+};
+
+const REMOVAL_SUBMISSION_FAILED: Pick<RemovalWorkflowStatus, "kind" | "value" | "label"> = {
+  kind: "failed",
+  value: "failed",
+  label: "Submission failed",
+};
+
+/**
+ * The label and color `deriveRemovalWorkflowStatus` gives a Removal's
+ * lifecycle on its own, without readiness: what status history entries show,
+ * so a history entry names a state the way the badge does. A Removal that
+ * was never submitted keeps its lifecycle label ("Not submitted"), since
+ * readiness at that time is not known.
+ */
+export function deriveRemovalLifecycleWorkflowStatus(
+  input: RemovalStatusInput,
+): RemovalStatusPresentation {
+  const lifecycle = deriveRemovalStatus(input);
+  switch (lifecycle.kind) {
+    case "in-progress":
+      return { value: REMOVAL_SUBMITTING.value, label: REMOVAL_SUBMITTING.label };
+    case "rejected":
+      return { value: REMOVAL_SUBMISSION_FAILED.value, label: REMOVAL_SUBMISSION_FAILED.label };
+    default:
+      return { value: lifecycle.value, label: lifecycle.label };
+  }
+}
+
 export interface RemovalWorkflowStatusInput extends RemovalStatusInput {
   enrichmentStatus: RemovalEnrichmentStatus;
   readiness: RemovalReadiness | null;
@@ -360,9 +410,7 @@ export function deriveRemovalWorkflowStatus({
 
   if (lifecycle.kind === "in-progress") {
     return {
-      kind: "submitting",
-      value: "running",
-      label: "Submitting",
+      ...REMOVAL_SUBMITTING,
       reasons: [],
       isActionable: false,
       canRetry: false,
@@ -375,9 +423,7 @@ export function deriveRemovalWorkflowStatus({
         ? readiness.reasons
         : ["Review submission history, then select Review & submit."];
     return {
-      kind: "failed",
-      value: "failed",
-      label: "Submission failed",
+      ...REMOVAL_SUBMISSION_FAILED,
       reasons,
       isActionable: true,
       canRetry: false,
@@ -427,9 +473,7 @@ export function deriveRemovalWorkflowStatus({
       };
     case "inProgress":
       return {
-        kind: "submitting",
-        value: "running",
-        label: "Submitting",
+        ...REMOVAL_SUBMITTING,
         reasons: [],
         isActionable: false,
         canRetry: false,
