@@ -1023,6 +1023,13 @@
       "when": 1792071750440,
       "tag": "0145_facility_reactor_feedstock_type_rules",
       "breakpoints": true
+    },
+    {
+      "idx": 146,
+      "version": "7",
+      "when": 1792073052958,
+      "tag": "0146_feedstock_intake_required_fields",
+      "breakpoints": true
     }
   ]
 }
