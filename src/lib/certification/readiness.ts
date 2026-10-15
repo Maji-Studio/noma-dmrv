@@ -77,6 +77,7 @@ export interface RemovalReadinessFacts {
   entityReadinessGaps?: string[];
   /** Shared submission checks for individual feedstocks, orders and deliveries. */
   submissionLineageBlockers?: string[];
+  /** Structured submission checks with affected records and fix targets. */
   submissionLineageIssues?: SubmissionLineageBlocker[];
   /** Documents discovered by the same lineage walk as the Sources panel. */
   supportingDocumentCount?: number;

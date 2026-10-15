@@ -1,5 +1,14 @@
 # Isometric Docs Change Log
 
+## 2026-10-15: Proof of delivery required before submission (#942 q12)
+
+- Reverses the 2026-07-29 retained-records stance for proof of delivery:
+  each delivery in a Removal needs an uploaded, delivery-owned delivery receipt,
+  bill of lading or delivery photo before submission, independent of the
+  template's transport categories.
+- Saving a delivery without proof remains allowed. Pending uploads do not
+  count as proof. Other retained records remain outside this requirement.
+
 ## 2026-10-15: Third-party sale verification fields dropped
 
 Credit batches no longer store the third-party sale verification columns

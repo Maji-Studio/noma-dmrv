@@ -156,10 +156,6 @@ export function batchHealthFixLinkFor(
           entityId: affectedIds[0], focus: ENTITY_FOCUS_TARGETS.transportEvidence,
         }),
       };
-      return {
-        label: "Review deliveries",
-        href: `/deliveries?${query(creditBatchId ? { creditBatch: creditBatchId } : undefined, false)}`,
-      };
     case "deliveryDistances":
       return {
         label: "Review deliveries",

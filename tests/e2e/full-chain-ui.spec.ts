@@ -577,11 +577,6 @@ test.describe("Full Chain UI Smoke Test", () => {
 
       await page.fill('input[name="deliveredWetMassKg"]', "95");
       await fillStockMoisture(page, "delivery", "10");
-      await page.getByRole("radio", { name: "Delivery receipt", exact: true }).check();
-      await page.locator("#delivery-deferred-transport-evidence").setInputFiles({
-        name: "delivery-receipt.pdf", mimeType: "application/pdf",
-        buffer: Buffer.from("%PDF-1.4\nE2E delivery receipt\n%%EOF"),
-      });
 
       await page.locator('[role="dialog"]').locator('button:has-text("Create delivery")').click();
       await waitForSideSheetClose(page);
