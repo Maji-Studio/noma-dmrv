@@ -37,6 +37,7 @@ async function createFixture(runId: string, feedstockIds?: readonly string[]): P
     const [feedstockType] = await tx
       .insert(feedstockTypes)
       .values({
+        usage: "pyrolysis",
         organizationId: TEST_ORG_ID,
         code: `FST-FS-STOCK-${runId}`,
         name: `Feedstock Stock Type ${runId}`,

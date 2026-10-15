@@ -253,6 +253,7 @@ beforeAll(async () => {
   const [primaryType] = await db
     .insert(feedstockTypes)
     .values({
+      usage: "pyrolysis",
       organizationId: TEST_ORG_ID,
       name: `Validation Woodchips ${runId}`,
       code: `FT-VAL-W-${runId}`,
@@ -262,6 +263,7 @@ beforeAll(async () => {
   const [secondaryType] = await db
     .insert(feedstockTypes)
     .values({
+      usage: "pyrolysis",
       organizationId: TEST_ORG_ID,
       name: `Validation Coffee Husk ${runId}`,
       code: `FT-VAL-C-${runId}`,

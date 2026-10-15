@@ -73,14 +73,14 @@ describe("updateFormulation ingredient identity", () => {
           organizationId: TEST_ORG_ID,
           code: `FT-FORM-A-${tag}`,
           name: `Blend A ${tag}`,
-          category: "ingredient",
+          category: "compost",
           usage: "blend",
         },
         {
           organizationId: TEST_ORG_ID,
           code: `FT-FORM-B-${tag}`,
           name: `Blend B ${tag}`,
-          category: "ingredient",
+          category: "compost",
           usage: "blend",
         },
       ])
@@ -178,7 +178,7 @@ describe("formulation unique blend material constraint", () => {
         organizationId: TEST_ORG_ID,
         code: `FT-DUP-${tag}`,
         name: `Blend Dup ${tag}`,
-        category: "ingredient",
+        category: "compost",
         usage: "blend",
       })
       .returning({ id: feedstockTypes.id });

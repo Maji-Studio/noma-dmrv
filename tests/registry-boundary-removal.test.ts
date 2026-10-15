@@ -212,6 +212,7 @@ async function createFixture(): Promise<Fixture> {
     .returning({ id: facilities.id });
   createdFacilityIds.push(facility.id);
   await db.insert(certifierProjects).values({
+    externalFacilityId: `fcl_test_${facility.id}`,
     organizationId: TEST_ORG_ID,
     facilityId: facility.id,
     provider: "isometric",
@@ -277,6 +278,7 @@ async function createFixture(): Promise<Fixture> {
 function makeMapping(fixture: Fixture): CertifierProjectRow {
   return {
     id: "cert-proj-boundary",
+    externalFacilityId: `fcl_test_${fixture.facilityId}`,
     facilityId: fixture.facilityId,
     provider: "isometric",
     externalProjectId: fixture.externalProjectId,
@@ -285,7 +287,6 @@ function makeMapping(fixture: Fixture): CertifierProjectRow {
     defaultRemovalTemplateId: TEMPLATE_ID,
     webhookSecret: null,
     metadata: null,
-    gensetEnergyYieldKwhPerLitre: 3.375,
     defaultSoilTemperatureC: 24.2,
     defaultSoilTemperatureSource: "Test dataset (annual mean)",
     createdAt: new Date(),

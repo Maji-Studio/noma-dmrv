@@ -44,8 +44,7 @@ export interface UpsertCertifierProjectInput {
   protocolVersion?: string | null;
   defaultRemovalTemplateId?: string | null;
   // Operator-pasted Isometric facility id (fcl_…).
-  // Optional registry facility identity for Production Batch registration.
-  externalFacilityId?: string | null;
+  externalFacilityId: string;
   metadata?: Record<string, unknown> | null;
 }
 
@@ -215,9 +214,13 @@ export async function upsertCertifierProject(
     protocolSlug: input.protocolSlug ?? DEFAULT_PROTOCOL_SLUG,
     protocolVersion: input.protocolVersion ?? null,
     defaultRemovalTemplateId: input.defaultRemovalTemplateId ?? null,
-    externalFacilityId: input.externalFacilityId ?? null,
+    externalFacilityId: input.externalFacilityId,
     metadata: input.metadata ?? null,
   };
+
+  if (!values.externalFacilityId?.trim()) {
+    throw new SafeError("Set an Isometric facility ID before saving the facility link.");
+  }
 
   const runUpsert = () =>
     db.transaction(async (tx) => {
@@ -269,18 +272,11 @@ export async function upsertCertifierProject(
         }
       }
 
-      // Adopting a facility id for the first time (null -> fcl_...) stays
-      // allowed even while submissions exist: none of them referenced any
-      // facility id, so there is no registry lineage to contradict, and
-      // production-batch registration (issue #630) cannot start until the id
-      // is set. Only rebinding away from an established identifier (project
-      // change, or a non-null facility id changing or clearing) requires
-      // superseding the submissions first.
+      // Rebinding either registry identifier requires superseding blocking submissions first.
       const mappingIdentifiersChanged =
         existing &&
         (existing.externalProjectId !== values.externalProjectId ||
-          (existing.externalFacilityId !== null &&
-            existing.externalFacilityId !== values.externalFacilityId));
+          existing.externalFacilityId !== values.externalFacilityId);
       if (mappingIdentifiersChanged) {
         const blocked = await hasBlockingFacilitySubmission(
           ctx,
@@ -360,17 +356,13 @@ export async function upsertCertifierProject(
 export interface FacilityEmissionConfigInput {
   facilityId: string;
   provider?: CertifierProvider;
-  // Vestigial local estimate since issue #319 (diesel submits by volume) —
-  // optional so a facility with no genset can save the soil-temp fields.
-  gensetEnergyYieldKwhPerLitre?: number | null;
   defaultSoilTemperatureC?: number | null;
   defaultSoilTemperatureSource?: string | null;
 }
 
 // Updates only the emission-config columns on an existing
-// certifier_projects row: the genset energy yield plus the reference
-// soil-temperature value + its dataset citation. ADR 0015 dropped the three
-// stage-split columns. The facility must already be linked to an Isometric
+// certifier_projects row: the reference soil-temperature value and its dataset
+// citation. ADR 0015 dropped the three stage-split columns. The facility must already be linked to an Isometric
 // project — the config has no meaning otherwise.
 export async function updateFacilityEmissionConfig(
   ctx: OrgContext,
@@ -381,7 +373,6 @@ export async function updateFacilityEmissionConfig(
   const [row] = await db
     .update(certifierProjects)
     .set({
-      gensetEnergyYieldKwhPerLitre: input.gensetEnergyYieldKwhPerLitre ?? null,
       defaultSoilTemperatureC: input.defaultSoilTemperatureC ?? null,
       defaultSoilTemperatureSource: input.defaultSoilTemperatureSource ?? null,
       updatedAt: sql`now()`,

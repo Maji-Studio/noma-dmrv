@@ -53,6 +53,7 @@ describe("upsertCertifierProject organization guard", () => {
     const facilityId = await createFacility();
     const ctx = makeTestOrgContext(USER_ID);
     const original = await upsertCertifierProject(ctx, {
+      externalFacilityId: `fcl_test_${facilityId}`,
       facilityId,
       provider: "isometric",
       externalProjectId: "prj_org_guard_original",
@@ -69,6 +70,7 @@ describe("upsertCertifierProject organization guard", () => {
 
     await expect(
       upsertCertifierProject(otherCtx, {
+        externalFacilityId: `fcl_test_${facilityId}`,
         facilityId,
         provider: "isometric",
         externalProjectId: "prj_org_guard_foreign",
@@ -129,12 +131,14 @@ describe("upsertCertifierProject protocol version", () => {
     const ctx = makeTestOrgContext(USER_ID);
 
     await upsertCertifierProject(ctx, {
+      externalFacilityId: `fcl_test_${facilityId}`,
       facilityId,
       provider: "isometric",
       externalProjectId: "prj_protocol_initial",
       protocolVersion: "1.2",
     });
     const updated = await upsertCertifierProject(ctx, {
+      externalFacilityId: `fcl_test_${facilityId}`,
       facilityId,
       provider: "isometric",
       externalProjectId: "prj_protocol_initial",
@@ -148,12 +152,14 @@ describe("upsertCertifierProject protocol version", () => {
     const ctx = makeTestOrgContext(USER_ID);
 
     await upsertCertifierProject(ctx, {
+      externalFacilityId: `fcl_test_${facilityId}`,
       facilityId,
       provider: "isometric",
       externalProjectId: "prj_protocol_old",
       protocolVersion: "1.2",
     });
     const updated = await upsertCertifierProject(ctx, {
+      externalFacilityId: `fcl_test_${facilityId}`,
       facilityId,
       provider: "isometric",
       externalProjectId: "prj_protocol_new",
@@ -167,12 +173,14 @@ describe("upsertCertifierProject protocol version", () => {
     const ctx = makeTestOrgContext(USER_ID);
 
     await upsertCertifierProject(ctx, {
+      externalFacilityId: `fcl_test_${facilityId}`,
       facilityId,
       provider: "isometric",
       externalProjectId: "prj_protocol_clear",
       protocolVersion: "1.2",
     });
     const updated = await upsertCertifierProject(ctx, {
+      externalFacilityId: `fcl_test_${facilityId}`,
       facilityId,
       provider: "isometric",
       externalProjectId: "prj_protocol_clear",
@@ -189,12 +197,14 @@ describe("upsertCertifierProject protocol version", () => {
 
     await Promise.all([
       upsertCertifierProject(ctx, {
+        externalFacilityId: `fcl_test_${facilityId}`,
         facilityId,
         provider: "isometric",
         externalProjectId,
         protocolVersion: "1.2",
       }),
       upsertCertifierProject(ctx, {
+        externalFacilityId: `fcl_test_${facilityId}`,
         facilityId,
         provider: "isometric",
         externalProjectId,
@@ -213,27 +223,16 @@ describe("upsertCertifierProject protocol version", () => {
 describe("upsertCertifierProject submission guard", () => {
   const PROJECT_ID = "prj_guard_project";
 
-  it("allows adopting a facility id (null to value) despite submissions", async () => {
+  it.each(["", "   "])("refuses an empty facility id (%s) before creating a link", async (externalFacilityId) => {
     const facilityId = await createFacility();
     const ctx = makeTestOrgContext(USER_ID);
-
-    await upsertCertifierProject(ctx, {
+    await expect(upsertCertifierProject(ctx, {
       facilityId,
       provider: "isometric",
       externalProjectId: PROJECT_ID,
-    });
-    await insertBlockingSubmission(facilityId);
-
-    const updated = await upsertCertifierProject(ctx, {
-      facilityId,
-      provider: "isometric",
-      externalProjectId: PROJECT_ID,
-      externalFacilityId: `fcl_adopt_${facilityId.slice(0, 8)}`,
-    });
-
-    expect(updated.externalFacilityId).toBe(
-      `fcl_adopt_${facilityId.slice(0, 8)}`,
-    );
+      externalFacilityId,
+    })).rejects.toThrow(/Set an Isometric facility ID/);
+    expect(await getCertifierProjectByFacility(ctx, facilityId, "isometric")).toBeNull();
   });
 
   it("allows re-saving the same facility id despite submissions", async () => {
@@ -298,9 +297,9 @@ describe("upsertCertifierProject submission guard", () => {
         facilityId,
         provider: "isometric",
         externalProjectId: PROJECT_ID,
-        externalFacilityId: null,
+        externalFacilityId: "",
       }),
-    ).rejects.toThrow(/Cannot change certifier project or facility ID/);
+    ).rejects.toThrow(/Set an Isometric facility ID/);
   });
 
   it("blocks rebinding the project while submissions exist", async () => {
@@ -308,6 +307,7 @@ describe("upsertCertifierProject submission guard", () => {
     const ctx = makeTestOrgContext(USER_ID);
 
     await upsertCertifierProject(ctx, {
+      externalFacilityId: `fcl_test_${facilityId}`,
       facilityId,
       provider: "isometric",
       externalProjectId: PROJECT_ID,
@@ -316,6 +316,7 @@ describe("upsertCertifierProject submission guard", () => {
 
     await expect(
       upsertCertifierProject(ctx, {
+        externalFacilityId: `fcl_test_${facilityId}`,
         facilityId,
         provider: "isometric",
         externalProjectId: "prj_guard_other",

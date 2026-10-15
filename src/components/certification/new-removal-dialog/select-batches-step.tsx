@@ -66,6 +66,11 @@ export function setupGapCopy(gap: FacilitySetupGap): {
           "This facility isn't linked to an Isometric project yet. Link it before grouping batches.",
         action: { label: "Link facility in certification settings", toSettings: true },
       };
+    case "external_facility_id":
+      return {
+        message: "Set this facility's Isometric facility ID in Certification settings before grouping batches.",
+        action: { label: "Set Isometric facility ID in certification settings", toSettings: true },
+      };
     case "credentials":
       return {
         message:

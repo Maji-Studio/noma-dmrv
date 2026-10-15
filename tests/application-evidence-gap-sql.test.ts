@@ -115,6 +115,7 @@ async function seedDeliveryChain(
   const [feedstockType] = await dbc
     .insert(feedstockTypes)
     .values({
+      usage: "pyrolysis",
       organizationId: TEST_ORG_ID,
       name: `Gap Feedstock ${runId}`,
       code: `FT-GAP-${runId}`,

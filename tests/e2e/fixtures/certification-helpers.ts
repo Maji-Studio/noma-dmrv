@@ -590,6 +590,7 @@ export async function seedUngroupedReadyBatchWithChain(
       } else {
         createdFacilityMappingId = crypto.randomUUID();
         await tx.insert(schema.certifierProjects).values({
+          externalFacilityId: `fcl_test_${refs.facilityId}`,
           id: createdFacilityMappingId,
           organizationId: DEC_ORG_ID,
           facilityId: refs.facilityId,

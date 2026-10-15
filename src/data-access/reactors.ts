@@ -322,6 +322,16 @@ export async function updateReactor(
     }
     assertRowVersion({ entity: REACTOR_CONFLICT_ENTITY, id: reactorId, expectedVersion, actualVersion: existing.version });
 
+    if (data.facilityId && data.facilityId !== existing.facilityId) {
+      const [run] = await tx.select({ id: productionRuns.id })
+        .from(productionRuns)
+        .where(and(eq(productionRuns.reactorId, reactorId), eq(productionRuns.organizationId, ctx.organizationId)))
+        .limit(1);
+      if (run) {
+        throw new SafeError("Cannot move a reactor with associated production runs to another facility. Create a reactor at the destination facility instead.");
+      }
+    }
+
     // A rename OR a facility move can collide with the per-facility identifier
     // index, and a code change with the org-scoped code index, so the update
     // translates both.

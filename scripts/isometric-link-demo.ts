@@ -65,6 +65,12 @@ async function main(): Promise<void> {
     process.exit(0);
   }
 
+  const externalFacilityId = process.env.ISOMETRIC_DEMO_FACILITY_ID;
+  if (!externalFacilityId?.trim()) {
+    console.error("Set ISOMETRIC_DEMO_FACILITY_ID before linking a facility.");
+    process.exit(1);
+  }
+
   const facility = facilityRows.find((f) => f.id === targetFacilityId);
   if (!facility) {
     console.error(`Facility ${targetFacilityId} not found.`);
@@ -101,6 +107,7 @@ async function main(): Promise<void> {
       facilityId: targetFacilityId,
       provider: "isometric",
       externalProjectId: demoExternalProjectId,
+      externalFacilityId,
       protocolSlug: "biochar",
       metadata: { externalProjectName: demoProjectName },
     })

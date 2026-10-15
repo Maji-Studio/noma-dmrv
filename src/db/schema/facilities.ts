@@ -84,7 +84,7 @@ export const reactors = pgTable(
     facilityId: uuid('facility_id')
       .notNull(),
     // Isometric Protocol: Reactor design requirements (Section 9.2)
-    reactorType: text('reactor_type').notNull(), // fixed-bed, auger, rotary-kiln
+    reactorType: text('reactor_type').notNull(),
     // Sampling is not a reactor property; each credit batch stores its own
     // sampled/unsampled choice within a facility/feedstock process (ADR 0022).
     nominalThroughputTph: real('nominal_throughput_tph'),
@@ -95,6 +95,7 @@ export const reactors = pgTable(
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },
   (table) => [
+    check('reactors_reactor_type_valid', sql`${table.reactorType} in ('fixed-bed', 'auger', 'rotary-kiln', 'batch', 'continuous')`),
     unique('reactors_organization_id_code_unique').on(table.organizationId, table.code),
     foreignKey({
       columns: [table.facilityId, table.organizationId],

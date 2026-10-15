@@ -65,6 +65,7 @@ describe("feedstock stock-take moisture integrity", () => {
     const [feedstockType] = await db
       .insert(feedstockTypes)
       .values({
+        usage: "pyrolysis",
         organizationId: TEST_ORG_ID,
         code: `FT-STOCK-MOIST-${tag}`,
         name: `Stock Moisture Feedstock ${tag}`,

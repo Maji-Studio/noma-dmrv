@@ -74,6 +74,7 @@ async function seedFeedstockBin() {
   const [feedstockType] = await db
     .insert(feedstockTypes)
     .values({
+      usage: "pyrolysis",
       organizationId,
       code: `E2E-LOSS-T-${tag}`,
       name: `E2E Loss feedstock ${tag}`,

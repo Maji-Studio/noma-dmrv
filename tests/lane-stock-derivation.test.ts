@@ -69,6 +69,7 @@ describe("shared lane-stock derivation", () => {
       const [feedstockType] = await tx
         .insert(feedstockTypes)
         .values({
+          usage: "pyrolysis",
           organizationId: TEST_ORG_ID,
           code: `FT-LANE-${tag}`,
           name: `Lane Stock Feedstock ${tag}`,

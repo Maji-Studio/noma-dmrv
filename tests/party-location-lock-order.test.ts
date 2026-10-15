@@ -120,6 +120,7 @@ describe.each(["supplier", "customer"] as const)("%s location parent-first locks
         organizationId: TEST_ORG_ID, code: `FAC-${tag}`, name: `Lock facility ${tag}`, country: "CH",
       }).returning();
       const [feedstockType] = await db.insert(feedstockTypes).values({
+        usage: "pyrolysis",
         organizationId: TEST_ORG_ID, code: `FT-${tag}`, name: `Lock feedstock ${tag}`, category: "forestry",
       }).returning();
       let write: Promise<PromiseSettledResult<unknown>[]> | undefined;

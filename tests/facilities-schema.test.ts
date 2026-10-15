@@ -3,7 +3,6 @@ import {
   createFacilitySchema,
   facilityFilterSchema,
   facilityFormSchema,
-  quickAddFacilitySchema,
   updateFacilitySchema,
 } from "@/schemas/facilities";
 
@@ -71,10 +70,6 @@ describe("facility schemas", () => {
     expect(result.success).toBe(true);
   });
 
-  // `facilityFormSchema` and `updateFacilitySchema` are the live request paths.
-  // `quickAddFacilitySchema` is exported but currently unwired; it is covered
-  // so the country rule cannot drift apart from the live ones before a surface
-  // adopts it.
   const countryEntryPaths = [
     {
       name: "facilityFormSchema",
@@ -90,14 +85,6 @@ describe("facility schemas", () => {
       schema: updateFacilitySchema,
       withCountry: (country: string) => ({
         facilityId: "55555555-5555-4555-8555-555555555555", expectedVersion: 1,
-        country,
-      }),
-    },
-    {
-      name: "quickAddFacilitySchema",
-      schema: quickAddFacilitySchema,
-      withCountry: (country: string) => ({
-        name: "Moshi Biochar Production Center",
         country,
       }),
     },

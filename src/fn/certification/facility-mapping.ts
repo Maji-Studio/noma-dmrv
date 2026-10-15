@@ -188,8 +188,7 @@ export async function loadIsometricProjectTemplates(
 }
 
 // Org Owner/Admin-only: this per-facility emission-estimate config feeds the
-// reference soil temperature submitted with every 200-year removal (the
-// genset yield is a vestigial local estimate since issue #319).
+// reference soil temperature submitted with every 200-year removal.
 export async function saveFacilityEmissionConfig(
   input: FacilityEmissionConfigFormData,
 ): Promise<ActionResult<CertifierProjectRow>> {
@@ -199,7 +198,6 @@ export async function saveFacilityEmissionConfig(
     return updateFacilityEmissionConfig(orgCtx, {
       facilityId: parsed.facilityId,
       provider: ISOMETRIC_PROVIDER,
-      gensetEnergyYieldKwhPerLitre: parsed.gensetEnergyYieldKwhPerLitre ?? null,
       defaultSoilTemperatureC: parsed.defaultSoilTemperatureC ?? null,
       defaultSoilTemperatureSource: parsed.defaultSoilTemperatureSource ?? null,
     });

@@ -3,13 +3,12 @@
  * Admin form for a facility's emission-estimate config on the certifier_projects
  * row. The only user-facing input is the reference soil temperature, which is a
  * 200-year-only durability input — so the form renders fields only for 200-year
- * facilities and an explanatory note for 1000-year ones (ADR 0021). Genset
- * energy yield is round-tripped as a hidden field: issue #319 made it vestigial
- * (diesel submits by volume) but the stored value is preserved without a
- * migration.
+ * facilities and an explanatory note for 1000-year ones (ADR 0021).
  */
 "use client";
 
+import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
+import { makeCertFieldStatus } from "@/components/forms/cert-field-status";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Button } from "@/components/ui";
@@ -45,6 +44,7 @@ export function EmissionEstimatesForm({
   mapping,
   durabilityOption,
 }: EmissionEstimatesFormProps) {
+  const certStatus = makeCertFieldStatus(mapping ?? undefined);
   const toast = useToast();
   const saveMutation = useSaveFacilityEmissionConfig();
 
@@ -57,8 +57,6 @@ export function EmissionEstimatesForm({
     resolver: zodResolver(facilityEmissionConfigSchema),
     defaultValues: {
       facilityId,
-      gensetEnergyYieldKwhPerLitre:
-        mapping?.gensetEnergyYieldKwhPerLitre ?? undefined,
       defaultSoilTemperatureC: mapping?.defaultSoilTemperatureC ?? undefined,
       defaultSoilTemperatureSource:
         mapping?.defaultSoilTemperatureSource ?? undefined,
@@ -107,18 +105,16 @@ export function EmissionEstimatesForm({
       className="content-measure-form flex flex-col gap-32"
     >
       <input type="hidden" {...register("facilityId")} />
-      {/* Genset energy yield is no longer user-configurable: issue #319 switched
-          genset diesel to submit by volume (`fuel_usage_by_volume`), so the
-          kWh-per-litre yield feeds no submission. Round-tripped as a hidden
-          field so saving soil estimates preserves the stored value without a
-          migration to drop the column. */}
-      <input type="hidden" {...register("gensetEnergyYieldKwhPerLitre")} />
 
       <div className="flex flex-col gap-16">
         <SectionLabel>Soil durability reference</SectionLabel>
         <FormField
           id="defaultSoilTemperatureC"
           label="Reference soil temperature (°C)"
+          certifyRequired={isCertifyFormField(
+            "facilityEmissionConfig", "defaultSoilTemperatureC", { durabilityOption },
+          )}
+          certifyStatus={certStatus("defaultSoilTemperatureC")}
           error={errors.defaultSoilTemperatureC?.message}
           helperText="Annual average soil temperature submitted to the registry for 200-year durability. Use an approved global dataset, such as Lembrechts 2022 SoilTemp. Air temperature is not accepted. Set this value before submitting a 200-year Removal. Values below 7 °C are submitted as 7 °C."
         >

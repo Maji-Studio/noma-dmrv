@@ -121,6 +121,7 @@ beforeAll(async () => {
     const [feedstockType] = await tx
       .insert(feedstockTypes)
       .values({
+        usage: "pyrolysis",
         organizationId: TEST_ORG_ID,
         code: `FT-DG-${tag}`,
         name: `Dashboard gap feedstock ${tag}`,
