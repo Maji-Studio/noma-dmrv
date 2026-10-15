@@ -162,8 +162,10 @@ export function entryWarnings(
   ratios: { hToCOrgRatio: number | null; oToCOrgRatio: number | null },
   batch: LockedSampleBatch,
   facility: SampleBatchFacility,
+  hasLabReport: boolean,
 ): string[] {
   return sampleEntryWarnings({
+    hasLabReport,
     ...values,
     hToCOrgRatio: ratios.hToCOrgRatio,
     oToCOrgRatio: ratios.oToCOrgRatio,

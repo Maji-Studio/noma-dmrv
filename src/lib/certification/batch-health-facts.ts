@@ -82,6 +82,7 @@ export function toBatchHealthFacts(
 ): BatchHealthFacts {
   const facilitySetupComplete = isFacilitySetupComplete(ctx);
   return {
+    warnings: ctx.submissionWarnings ?? [],
     carbonMissingInputs: carbonMissingInputs(ctx, batchId),
     facilityEmissionsBlockers:
       ctx.memberBatches.find((batch) => batch.id === batchId)

@@ -6,6 +6,22 @@ import { evaluateSampled1000YearReplicates } from "./durability-1000-replicates"
 const chemistryKeys = ["organicCarbonPercent", "hToCOrgRatio", "oToCOrgRatio"];
 
 describe("Sample certification descriptor scope", () => {
+  it("does not require mean R₀ or TGA for certification", () => {
+    const readiness = deriveEntityCertifyReadiness("sample", { durabilityOption: "1000_year", sampling: "sampled" });
+    expect(readiness.gaps.map((gap) => gap.key)).not.toContain("randomReflectanceR0Percent");
+    expect(readiness.gaps.map((gap) => gap.key)).not.toContain("tgaNonReactiveCarbonData");
+  });
+
+  it.each(["200_year", "1000_year"])("requires moisture for every sampled %s Sample, accepting zero", (durabilityOption) => {
+    for (const sampling of ["sampled", "unsampled"]) {
+      const record = { durabilityOption, sampling };
+      expect(deriveEntityCertifyReadiness("sample", record).gaps.some((gap) => gap.key === "moistureContentPercent"))
+        .toBe(sampling === "sampled");
+      expect(deriveEntityCertifyReadiness("sample", { ...record, moistureContentPercent: 0 }).gaps.some((gap) => gap.key === "moistureContentPercent"))
+        .toBe(false);
+    }
+  });
+
   it.each(["200_year", "1000_year"])("matches the chemistry gate for sampled and unsampled %s batches", (durabilityOption) => {
     for (const sampling of ["sampled", "unsampled"] as const) {
       const readiness = deriveEntityCertifyReadiness("sample", { durabilityOption, sampling });

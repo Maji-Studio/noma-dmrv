@@ -312,7 +312,7 @@ function batchSection(batch: LedgerBatch): ReactElement {
 function soilBlock(model: DurabilityLedgerModel): ReactElement {
   const s = model.soil;
   const floorLine = s.temperatureFloored
-    ? `Declared ${nf1(s.declaredSoilTemperatureC)} °C raised to the 7 °C floor (§5.1.1.3.1).`
+    ? `Declared ${nf1(s.declaredSoilTemperatureC)} °C raised to the 7 °C floor (noma rule).`
     : "The declared value is at or above the 7 °C floor. It is prepared as declared.";
   const left = v(styles.soilCell, {},
     t(styles.soilLabel, "Effective value prepared"),

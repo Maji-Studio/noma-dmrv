@@ -12,6 +12,7 @@
  * "Should" is guidance, so the R₀ count never blocks submission.
  */
 
+import { sampleDocumentWarnings } from "./sample-document-warnings";
 import type { CreditBatchSampling } from "@/schemas/credit-batches";
 import { MINIMUM_REPLICATES_PER_BATCH } from "@/lib/calculations/biochar-eligibility";
 import { missingSampled1000YearMeasurements } from "./durability-1000-replicates";
@@ -20,6 +21,7 @@ import { missingSampled1000YearMeasurements } from "./durability-1000-replicates
 export const R0_MEASUREMENTS_PER_SAMPLE_GUIDANCE = 500;
 
 export interface SampleEntryFacts {
+  hasLabReport?: boolean;
   sampleCode: string;
   creditBatchCode: string;
   /** The batch facility's declared tier; null when the batch has no facility tier. */
@@ -66,7 +68,7 @@ function joinWithAnd(items: string[]): string {
 }
 
 export function sampleEntryWarnings(facts: SampleEntryFacts): string[] {
-  const warnings: string[] = [];
+  const warnings: string[] = sampleDocumentWarnings(facts);
   const is1000Year = facts.durabilityOption === "1000_year";
 
   // Same scope as the gate: sampled 1,000-year batches submit this tuple per Sample.

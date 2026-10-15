@@ -14,11 +14,8 @@ describe("Sample form's unresolved durability tier", () => {
     expect(sampleFormSchema.parse({ ...form, durabilityOption }).durabilityOption).toBeNull();
   });
 
-  it("enforces the existing save requirements once the 1,000-year tier loads", () => {
-    const result = sampleFormSchema.safeParse({ ...form, durabilityOption: "1000_year" });
-    expect(result.error?.issues.map((issue) => issue.path)).toEqual([
-      ["randomReflectanceR0Percent"], ["residualCarbonPercent"],
-    ]);
+  it("allows saving a 1,000-year Sample without moisture, mean R₀ or TGA", () => {
+    expect(sampleFormSchema.safeParse({ ...form, durabilityOption: "1000_year" }).success).toBe(true);
   });
 
   it("accepts the nullable form-only tier mirror on an edit", () => {

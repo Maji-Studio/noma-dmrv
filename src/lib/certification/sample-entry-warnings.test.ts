@@ -10,6 +10,12 @@ const complete: SampleEntryFacts = {
 };
 
 describe("sampleEntryWarnings", () => {
+  it("includes the batch lab-report advisory in Sample save warnings", () => {
+    expect(sampleEntryWarnings({ ...complete, hasLabReport: false })).toEqual([
+      "Credit batch CB-26-001 has no lab report document. Upload a lab report to a Sample or the credit batch. You can still submit the Removal.",
+    ]);
+  });
+
   it("is silent for a complete 1,000-year Sample", () => {
     expect(sampleEntryWarnings(complete)).toEqual([]);
   });

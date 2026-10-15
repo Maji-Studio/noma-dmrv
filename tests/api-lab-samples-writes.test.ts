@@ -146,14 +146,10 @@ describe("lab sample create", { timeout: TIMEOUT_MS }, () => {
     await expectNoLabSampleWrite(a);
   });
 
-  it("answers 422 on the missing 1,000-year evidence", async () => {
+  it("saves 1,000-year Samples without mean R₀ or TGA", async () => {
     const tier = await createApiLabFixture({ durabilityOption: "1000_year" });
     try {
-      const refusal = await expectProblem(await postLabSample(tier, labSampleBody(tier)), 422, "validation_failed");
-      expect(refusal.errors.map((error: { pointer: string }) => error.pointer)).toEqual(expect.arrayContaining(["/randomReflectanceR0Percent"]));
-      await expectNoLabSampleWrite(tier);
-      const evidence = { randomReflectanceR0Percent: 2.4, sReflectanceFraction: 0.92, residualCarbonPercent: 65, inorganicCarbonPercent: 2 };
-      expect((await postLabSample(tier, labSampleBody(tier, evidence))).status).toBe(201);
+      expect((await postLabSample(tier, labSampleBody(tier))).status).toBe(201);
     } finally { await removeApiLabFixture(tier); }
   });
 

@@ -16,7 +16,7 @@
  * 3. Physical properties - bulkDensity, pH, saltContent, moisture
  * 4. Stability ratios - O:C ratio entered, H:C and O:C derived (durability tier
  *    shown, inherited from the batch)
- * (+2 conditional, 1000-year batches) R₀ reflectance · TGA non-reactive carbon
+ * Optional 1000-year measurements: mean R₀ reflectance and TGA carbon
  * 5. Nutrient claims (conditional) - P, K, Mg, Ca, Fe
  * 6. Evidence & documents
  * 7. Transport (lab shipment legs)
@@ -713,6 +713,8 @@ export function SampleForm({
 
                 <MoistureField
                   id="moistureContentPercent"
+                  certifyRequired={isSampleCertifyField("moistureContentPercent")}
+                  certifyStatus={certStatus("moistureContentPercent")}
                   error={errors.moistureContentPercent?.message}
                   disabled={isSubmitting}
                   placeholder="e.g. 5.0"
@@ -776,7 +778,6 @@ export function SampleForm({
                     id="randomReflectanceR0Percent"
                     label="Mean random reflectance R₀"
                     unit="%"
-                    required
                     error={errors.randomReflectanceR0Percent?.message}
                     certifyRequired={isSampleCertifyField("randomReflectanceR0Percent")}
                     certifyStatus={certStatus("randomReflectanceR0Percent")}
@@ -895,7 +896,6 @@ export function SampleForm({
                     id="residualCarbonPercent"
                     label="Residual carbon"
                     unit="%"
-                    helperText="Enter this or reactive carbon."
                     error={errors.residualCarbonPercent?.message}
                     certifyRequired={isSampleCertifyField("residualCarbonPercent")}
                     certifyStatus={certStatus("residualCarbonPercent")}

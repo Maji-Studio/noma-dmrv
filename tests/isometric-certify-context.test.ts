@@ -973,7 +973,7 @@ describe("requiredTransportCategories", () => {
     );
 
     expect(result.entityReadinessGaps).toEqual([
-      "Sample S-1: Total carbon · Measured inorganic carbon · TGA non-reactive carbon data · R0 reflectance · R₀ readings at or above 2%",
+      "Sample S-1: Sample moisture · Total carbon · Measured inorganic carbon · R₀ readings at or above 2%",
     ]);
   });
 

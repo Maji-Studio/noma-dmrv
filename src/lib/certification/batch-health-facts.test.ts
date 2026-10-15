@@ -21,6 +21,16 @@ describe("toBatchHealthFacts", () => {
     transportCoverage: { feedstock: { count: 1, missingEntityIds: [], aggregationWarning: null, vehicleAdvisories: [] } },
   } as unknown as RemovalCertifyContext;
 
+  it("carries document warnings through both readiness adapters without blocking", () => {
+    const context = { ...readyContext, submissionWarnings: ["Missing lab report"] };
+    const health = deriveBatchHealth(toBatchHealthFacts(context, "batch-1"));
+    const readiness = deriveRemovalReadiness(toRemovalReadinessFacts(context));
+    expect(health.state).toBe("ready");
+    expect(health.warnings).toEqual(["Missing lab report"]);
+    expect(readiness.state).toBe("ready");
+    expect(readiness.advisories).toContain("Missing lab report");
+  });
+
   it("includes durability configuration blockers in batch health", () => {
     const health = deriveBatchHealth(toBatchHealthFacts({ ...readyContext, durabilityConfigurationBlockers: ["Resolve this submission blocker."] }, "batch-1"));
     expect(health.state).toBe("incomplete");

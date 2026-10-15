@@ -10,6 +10,8 @@ import { DURABILITY_TIER_FALLBACK } from "@/schemas/credit-batches";
 import type { CreditBatchSampling } from "@/schemas/credit-batches";
 import { requireOrgScope } from "./utils";
 
+import { getBatchesWithLabReports } from "./sample-document-evidence";
+
 const FALLBACK_FACILITY_TIMEZONE = "UTC";
 
 /**
@@ -23,6 +25,7 @@ const FALLBACK_FACILITY_TIMEZONE = "UTC";
  */
 export interface CreditBatchWithSamples extends CreditBatchDurabilityInput {
   /** ISO date-only production window bounds from the credit-batch row. */
+  hasLabReport?: boolean;
   startDate?: string | null;
   endDate?: string | null;
   /** IANA timezone used to classify sampling instants by facility-local day. */
@@ -120,7 +123,9 @@ export async function getCreditBatchesWithSamples(
     samplesByBatch.set(s.creditBatchId, list);
   }
 
+  const batchesWithReports = await getBatchesWithLabReports(ctx, ids);
   return batchRows.map((batch) => ({
+    hasLabReport: batchesWithReports.has(batch.id),
     creditBatchId: batch.id,
     creditBatchCode: batch.code,
     startDate: batch.startDate,

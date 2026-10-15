@@ -23,6 +23,11 @@ const validBase = {
 };
 
 describe("creditBatchFormSchema — production window", () => {
+  it("attributes the unchanged month cap to noma", () => {
+    expect(getCreditBatchProductionWindowIssue("2026-01-01", "2026-02-02"))
+      .toBe("A credit batch may span at most one month (one calendar month; noma rule).");
+  });
+
   it("accepts a window under one month", () => {
     const result = creditBatchFormSchema.safeParse({
       ...validBase,

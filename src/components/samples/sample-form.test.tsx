@@ -151,7 +151,7 @@ describe("SampleForm contextual CERT chips", () => {
       expect(container.querySelector(`#${field}-cert`) !== null, field).toBe(sampling !== "unsampled");
     }
     for (const field of ["randomReflectanceR0Percent", "reactiveCarbonPercent", "residualCarbonPercent"]) {
-      expect(container.querySelector(`#${field}-cert`) !== null, field).toBe(tier === "1000_year");
+      expect(container.querySelector(`#${field}-cert`) !== null, field).toBe(false);
     }
     expect(container.querySelector("#sReflectanceFraction-cert") !== null).toBe(shown);
   });
