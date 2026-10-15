@@ -27,7 +27,7 @@ import {
   buildDashboardStructuralGaps,
   loadDashboardStructuralGapCounts,
 } from "@/data-access/dashboard-structural-gaps";
-import {
+import { TEST_SITE_POSITION,
   ensureTestOrg,
   makeTestOrgContext,
   TEST_ORG_ID,
@@ -94,12 +94,14 @@ beforeAll(async () => {
       .insert(facilities)
       .values([
         {
+          ...TEST_SITE_POSITION,
           organizationId: TEST_ORG_ID,
           timezone: "UTC",
           code: `FAC-DG-GAP-${tag}`,
           name: `Dashboard gap ${tag}`,
         },
         {
+          country: "Tanzania",
           organizationId: TEST_ORG_ID,
           timezone: "UTC",
           code: `FAC-DG-CLEAR-${tag}`,
@@ -108,6 +110,7 @@ beforeAll(async () => {
           gpsLongitude: 35.75,
         },
         {
+          country: "Tanzania",
           organizationId: TEST_ORG_ID,
           timezone: "UTC",
           code: `FAC-DG-OTHER-${tag}`,
@@ -140,9 +143,7 @@ beforeAll(async () => {
         {
           organizationId: TEST_ORG_ID,
           code: `SUP-DG-FALLBACK-${tag}`,
-          name: `Dashboard supplier fallback ${tag}`,
-          gpsLatitude: -6.81,
-          gpsLongitude: 39.29,
+          name: `Dashboard default location ${tag}`,
         },
         {
           organizationId: TEST_ORG_ID,
@@ -157,17 +158,10 @@ beforeAll(async () => {
       .insert(supplierLocations)
       .values([
         {
-          organizationId: TEST_ORG_ID,
-          supplierId: missingGpsSupplier.id,
-          name: "Incomplete default",
-          country: "TZ",
-          gpsLatitude: -6.82,
-          isDefault: true,
-        },
-        {
+          gpsLatitude: -8.3,
           organizationId: TEST_ORG_ID,
           supplierId: fallbackSupplier.id,
-          name: "Incomplete location falls back as a pair",
+          name: "Complete default location",
           country: "TZ",
           gpsLongitude: 39.3,
           isDefault: true,
@@ -489,7 +483,7 @@ afterAll(async () => {
 });
 
 describe("dashboard structural certification gaps", () => {
-  it("uses canonical supplier GPS and scopes all transport parent types", async (ctx) => {
+  it("uses default supplier location GPS and scopes all transport parent types", async (ctx) => {
     if (!dbReachable || !fixture) {
       ctx.skip();
       return;
@@ -501,7 +495,6 @@ describe("dashboard structural certification gaps", () => {
     );
 
     expect(counts).toEqual({
-      missingFacilityGps: 1,
       missingFeedstockGps: 1,
       transportEndpointGpsGaps: 2,
       missingFeedstockGpsSupplierId: fixture.missingGpsSupplierId,
@@ -515,12 +508,6 @@ describe("dashboard structural certification gaps", () => {
         ({ key, metadata, count, href }) => ({ key, metadata, count, href }),
       ),
     ).toEqual([
-      {
-        key: "facilityGps",
-        metadata: "Facility form · Location · 1 affected",
-        count: 1,
-        href: `/facilities?facility=${fixture.gapFacilityId}`,
-      },
       {
         key: "feedstockGps",
         metadata: "Supplier form · Location · 1 affected",
@@ -540,7 +527,6 @@ describe("dashboard structural certification gaps", () => {
     const facilityId = "00000000-0000-4000-8000-000000000001";
     const gaps = buildDashboardStructuralGaps(
       {
-        missingFacilityGps: 0,
         missingFeedstockGps: 0,
         transportEndpointGpsGaps: 1,
         missingFeedstockGpsSupplierId: null,
@@ -569,7 +555,6 @@ describe("dashboard structural certification gaps", () => {
     (entityType, formName) => {
       const gaps = buildDashboardStructuralGaps(
         {
-          missingFacilityGps: 0,
           missingFeedstockGps: 0,
           transportEndpointGpsGaps: 2,
           missingFeedstockGpsSupplierId: null,
@@ -599,7 +584,6 @@ describe("dashboard structural certification gaps", () => {
     );
 
     expect(counts).toEqual({
-      missingFacilityGps: 0,
       missingFeedstockGps: 0,
       transportEndpointGpsGaps: 0,
       missingFeedstockGpsSupplierId: null,

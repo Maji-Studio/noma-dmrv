@@ -281,7 +281,7 @@ export function CarbonTransitPanel({
         className={`relative ${PANEL_FRAME_CLASS}`}
         data-testid="carbon-viewer-panel"
       >
-        <ViewerEmptyState message="No record in this chain carries GPS coordinates yet. Set a position on the facility, suppliers, or application to plot it here." />
+        <ViewerEmptyState message="No record in this chain carries GPS coordinates yet. Set a position on supplier locations or applications to plot it here." />
       </div>
     );
   }

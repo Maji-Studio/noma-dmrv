@@ -1,4 +1,5 @@
 import { feedstockFixtureValues, cleanupFeedstockFixtureParents } from "./helpers/feedstock-fixture";
+import { TEST_SITE_POSITION } from "./helpers/test-org";
 import { masterDataVersion } from "./helpers/master-data-version";
 /**
  * Expected-version conflict check (issue #768, F03).
@@ -91,11 +92,10 @@ async function seedFixture(): Promise<Fixture> {
 
   const [facility] = await db
     .insert(facilities)
-    .values({ timezone: "UTC",
+    .values({ ...TEST_SITE_POSITION, timezone: "UTC",
       organizationId,
       code: `E2E-EXPV-F-${tag}`,
       name: `E2E Expected version ${tag}`,
-      country: "Tanzania",
     })
     .returning({ id: facilities.id });
 

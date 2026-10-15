@@ -104,7 +104,7 @@ test.describe("Dashboard (Flow Hero)", () => {
 
     try {
       await db.transaction(async (tx) => {
-        await tx.insert(facilities).values({ timezone: "UTC",
+        await tx.insert(facilities).values({ country: "Tanzania",  timezone: "UTC",
           id: facilityId,
           organizationId: DEC_ORG_ID,
           code: `E2E-DASH-GAP-${tag}`,
@@ -119,15 +119,16 @@ test.describe("Dashboard (Flow Hero)", () => {
           name: `E2E Dashboard Supplier ${tag}`,
         });
         await tx.insert(supplierLocations).values({
+          gpsLongitude: 35.3,
           id: supplierLocationId,
           organizationId: DEC_ORG_ID,
           supplierId,
-          name: "Incomplete source location",
+          name: "Source location awaiting default selection",
           country: "TZ",
           gpsLatitude: -6.8,
           distanceFromFacilityKm: 25,
           distanceSource: "manual",
-          isDefault: true,
+          isDefault: false,
         });
         await tx.insert(storageLocations).values({
           id: storageLocationId,
@@ -213,7 +214,7 @@ test.describe("Dashboard (Flow Hero)", () => {
       await db.transaction(async (tx) => {
         await tx
           .update(supplierLocations)
-          .set({ gpsLongitude: 39.28 })
+          .set({ gpsLongitude: 39.28, isDefault: true })
           .where(eq(supplierLocations.id, supplierLocationId));
         await tx
           .update(transportLegs)

@@ -23,13 +23,6 @@ import type { DistanceSourceValue } from "@/schemas/distance-source";
 import { guardCustomerName } from "./unique-name-guards";
 import { requireOrgScope } from "./utils";
 
-/**
- * Locations are identified by their GPS position, and the country column is
- * NOT NULL, so an unstated country is stored as this placeholder rather than
- * blocking the write.
- */
-const UNKNOWN_COUNTRY = "UNKNOWN";
-
 /** Any executor that can run a customer write: the pool or an open transaction. */
 type CustomerWriteExecutor = typeof db | DbTransaction;
 
@@ -44,11 +37,11 @@ export interface CustomerInsertInput {
 
 export interface CustomerLocationInsertInput {
   name: string;
-  country?: string;
+  country: string;
   stateRegion?: string | null;
   city?: string | null;
-  gpsLatitude?: number | null;
-  gpsLongitude?: number | null;
+  gpsLatitude: number;
+  gpsLongitude: number;
   address?: string | null;
   distanceFromFacilityKm?: number | null;
   distanceSource?: DistanceSourceValue | null;
@@ -157,11 +150,11 @@ export async function createCustomerLocationInTransaction(
       organizationId: ctx.organizationId,
       customerId,
       name: data.name,
-      country: data.country ?? UNKNOWN_COUNTRY,
+      country: data.country,
       stateRegion: data.stateRegion ?? null,
       city: data.city ?? null,
-      gpsLatitude: data.gpsLatitude ?? null,
-      gpsLongitude: data.gpsLongitude ?? null,
+      gpsLatitude: data.gpsLatitude,
+      gpsLongitude: data.gpsLongitude,
       address: data.address ?? null,
       distanceFromFacilityKm: data.distanceFromFacilityKm ?? null,
       distanceSource: data.distanceSource ?? null,
@@ -186,6 +179,10 @@ export async function createCustomerWithLocations(
   input: CreateCustomerWithLocationsInput,
 ): Promise<CreatedCustomerWithLocations> {
   requireOrgScope(ctx);
+
+  if (input.locations.length === 0) {
+    throw new SafeError("At least one location is required");
+  }
 
   return db.transaction(async (tx) => {
     const customer = await insertCustomer(ctx, tx, input.customer);

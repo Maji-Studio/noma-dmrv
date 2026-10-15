@@ -1,4 +1,5 @@
 import { feedstockFixtureValues, cleanupFeedstockFixtureParents } from "./helpers/feedstock-fixture";
+import { TEST_SITE_POSITION } from "./helpers/test-org";
 import { masterDataVersion } from "./helpers/master-data-version";
 /**
  * Bin stock integrity (issue #767).
@@ -107,7 +108,7 @@ async function seedFixture(intakeWetKg = INTAKE_WET_KG): Promise<Fixture> {
 
   const [facility] = await db
     .insert(facilities)
-    .values({ timezone: "UTC",
+    .values({ ...TEST_SITE_POSITION, timezone: "UTC",
       organizationId,
       code: `E2E-BINT-F-${tag}`,
       name: `E2E Bin integrity ${tag}`,
@@ -175,7 +176,7 @@ async function seedFixture(intakeWetKg = INTAKE_WET_KG): Promise<Fixture> {
 async function insertOtherFacility(organizationId: string, tag: string): Promise<string> {
   const [facility] = await db
     .insert(facilities)
-    .values({ timezone: "UTC",
+    .values({ ...TEST_SITE_POSITION, timezone: "UTC",
       organizationId,
       code: `E2E-BINT-F2-${tag}-${randomUUID().slice(0, FACILITY_CODE_SUFFIX_LENGTH).toUpperCase()}`,
       name: `E2E Bin integrity other facility ${tag}`,

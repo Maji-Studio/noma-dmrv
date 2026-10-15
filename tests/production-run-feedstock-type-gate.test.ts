@@ -1,5 +1,5 @@
 import { feedstockFixtureValues, cleanupFeedstockFixtureParents } from "./helpers/feedstock-fixture";
-import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
+import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID, TEST_SITE_POSITION } from "./helpers/test-org";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
@@ -36,7 +36,7 @@ describe("createProductionRun — feedstock type usage gate", () => {
 beforeAll(async () => {
     const [facility] = await db
       .insert(facilities)
-      .values({ timezone: "UTC", organizationId: TEST_ORG_ID, code: `FAC-PRG-${tag}`, name: `PRG Facility ${tag}` })
+      .values({ ...TEST_SITE_POSITION, timezone: "UTC", organizationId: TEST_ORG_ID, code: `FAC-PRG-${tag}`, name: `PRG Facility ${tag}` })
       .returning({ id: facilities.id });
     facilityId = facility.id;
 

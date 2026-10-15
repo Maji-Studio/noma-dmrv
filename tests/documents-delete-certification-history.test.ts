@@ -17,7 +17,7 @@ import type {
   PresignedUpload,
   StorageProvider,
 } from "@/lib/storage";
-import {
+import { TEST_SITE_POSITION,
   ensureTestOrg,
   makeTestOrgContext,
   TEST_ORG_ID,
@@ -78,7 +78,7 @@ afterEach(() => {
 async function createFixture(tag: string) {
   const [facility] = await db
     .insert(facilities)
-    .values({ timezone: "UTC",
+    .values({ ...TEST_SITE_POSITION, timezone: "UTC",
       organizationId: TEST_ORG_ID,
       code: `FAC-DEL-SRC-${tag}`,
       name: `Document source deletion facility ${tag}`,

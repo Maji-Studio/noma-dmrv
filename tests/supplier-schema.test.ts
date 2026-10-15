@@ -5,54 +5,8 @@ function fieldErrors(result: { success: false; error: { issues: { path: Property
   return result.error.issues.map((i) => i.path.join("."));
 }
 
-// Supplier-level GPS is now optional region metadata held as number | null
-// (set from the map picker, defaulting to null). Precise, required coordinates
-// moved per-location into supplierLocationFormSchema (mirrors customers).
-describe("supplierFormSchema GPS validation (optional, supplier-level)", () => {
-  const validSupplierInput = {
-    name: "Acme Biomass",
-    gpsLatitude: -1.2921,
-    gpsLongitude: 36.8219,
-  };
-
-  it("accepts numeric coordinates", () => {
-    const result = supplierFormSchema.safeParse(validSupplierInput);
-    expect(result.success).toBe(true);
-    if (result.success) {
-      expect(result.data.gpsLatitude).toBe(-1.2921);
-      expect(result.data.gpsLongitude).toBe(36.8219);
-    }
-  });
-
-  it("accepts omitted GPS (supplier-level coordinates are optional)", () => {
-    const result = supplierFormSchema.safeParse({ name: "No-GPS Supplier" });
-    expect(result.success).toBe(true);
-  });
-
-  it("accepts null GPS", () => {
-    const result = supplierFormSchema.safeParse({
-      name: "Null-GPS Supplier",
-      gpsLatitude: null,
-      gpsLongitude: null,
-    });
-    expect(result.success).toBe(true);
-  });
-
-  it("rejects latitude outside -90..90", () => {
-    const result = supplierFormSchema.safeParse({ ...validSupplierInput, gpsLatitude: 91 });
-    expect(result.success).toBe(false);
-    if (!result.success) {
-      expect(fieldErrors(result)).toContain("gpsLatitude");
-    }
-  });
-
-  it("rejects longitude outside -180..180", () => {
-    const result = supplierFormSchema.safeParse({ ...validSupplierInput, gpsLongitude: -181 });
-    expect(result.success).toBe(false);
-    if (!result.success) {
-      expect(fieldErrors(result)).toContain("gpsLongitude");
-    }
-  });
+it("keeps GPS and distance on supplier locations only", () => {
+  expect(supplierFormSchema.parse({ name: "Supplier", gpsLatitude: 1, gpsLongitude: 2, distanceToFacilityKm: 10 })).toEqual({ name: "Supplier" });
 });
 
 // Per-location GPS is required and coerced from form string inputs — the

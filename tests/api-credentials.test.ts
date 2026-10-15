@@ -13,7 +13,7 @@ import { getOrganizationApiAccess, setOrganizationApiAccess } from "@/data-acces
 import { disableOwnerApiKeys } from "@/data-access/api-credential-auth";
 import { removeMemberAsPlatformAdmin, updateMemberRoleAsPlatformAdmin } from "@/data-access/organizations";
 import { GET } from "@/app/api/v1/me/route";
-import { makeTestOrgContext } from "./helpers/test-org";
+import { TEST_SITE_POSITION, makeTestOrgContext } from "./helpers/test-org";
 import type { OrgContext } from "@/lib/auth/server";
 import * as sessionProvider from "@/lib/auth/providers/better-auth-server";
 
@@ -477,12 +477,14 @@ it("/me permits an empty scope set and returns only the key organization's facil
   await db.insert(facilities)
     .values([
       {
+        ...TEST_SITE_POSITION,
         organizationId: ctx.organizationId,
         code: "A",
         name: "Facility A",
         timezone: "Pacific/Kiritimati",
       },
       {
+        ...TEST_SITE_POSITION,
         organizationId: otherOrg,
         code: "B",
         name: "Facility B",

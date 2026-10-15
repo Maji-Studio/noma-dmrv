@@ -1,4 +1,5 @@
 import { feedstockFixtureValues, cleanupFeedstockFixtureParents } from "./helpers/feedstock-fixture";
+import { TEST_SITE_POSITION } from "./helpers/test-org";
 /**
  * Feedstock loss idempotency against a real database (issue #773).
  *
@@ -66,7 +67,7 @@ async function seedFeedstockBin() {
 
   const [facility] = await db
     .insert(facilities)
-    .values({ timezone: "UTC",
+    .values({ ...TEST_SITE_POSITION, timezone: "UTC",
       organizationId,
       code: `E2E-LOSS-F-${tag}`,
       name: `E2E Loss facility ${tag}`,

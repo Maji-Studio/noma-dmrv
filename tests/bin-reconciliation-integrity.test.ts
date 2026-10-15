@@ -27,7 +27,7 @@ import {
 import { createDelivery } from "./helpers/create-delivery";
 
 import { createProductionRun } from "@/data-access/production-runs";
-import {
+import { TEST_SITE_POSITION,
   ensureTestOrg,
   makeTestOrgContext,
   TEST_ORG_ID,
@@ -107,7 +107,7 @@ describe("bin reconciliation integrity", { timeout: CONCURRENCY_TEST_TIMEOUT_MS 
     const runCode = `PR-TAKE-RUN-${tag}`;
     const [facility] = await db
       .insert(facilities)
-      .values({ timezone: "UTC",
+      .values({ ...TEST_SITE_POSITION, timezone: "UTC",
         organizationId: TEST_ORG_ID,
         code: `FAC-TAKE-RUN-${tag}`,
         name: `Stock Take Run Facility ${tag}`,
