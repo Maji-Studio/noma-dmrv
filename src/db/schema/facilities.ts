@@ -132,7 +132,8 @@ export const storageLocations = pgTable(
     storageMethod: text('storage_method'),
     storageDescription: text('storage_description'),
     supplierReferenceId: text('supplier_reference_id'),
-    // Enforces "one feedstock type per bin": set when the bin is created, validated on each intake
+    // Enforces "one feedstock type per bin": set at creation, or on first intake for legacy untyped bins.
+    // Validated on each intake.
     // No FK reference to avoid circular import with feedstock.ts; enforced at application layer
     feedstockTypeId: uuid('feedstock_type_id'),
     // Product bins only: enforces "one formulation per bin" so product bins stay clean.
