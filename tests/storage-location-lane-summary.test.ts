@@ -1,5 +1,5 @@
 import { preparePureOutputProductFixture } from "./helpers/output-contract-fixtures";
-import { outputProductFixtureValues, outputOrderFixtureValues, insertOutputDeliveryFixture, deleteOutputDeliveryFixtures, deleteOutputProductFixtures, deleteOutputFacilityFixtures } from "./helpers/output-contract-fixtures";
+import { outputProductFixtureValues, outputOrderFixtureValues, deleteOutputOrderFixtures, insertOutputDeliveryFixture, deleteOutputDeliveryFixtures, deleteOutputProductFixtures, deleteOutputFacilityFixtures } from "./helpers/output-contract-fixtures";
 /**
  * Integration coverage for the storage-location lane summary (DR-002 /
  * PB-26-001).
@@ -20,7 +20,7 @@ import { db } from "@/db";
 import { getStorageLocations } from "@/data-access/storage-locations";
 import { facilities } from "@/db/schema/facilities";
 import { deliveries, orders } from "@/db/schema/logistics";
-import { customers, customerLocations } from "@/db/schema/parties";
+import { customers } from "@/db/schema/parties";
 import { biocharProducts } from "@/db/schema/products";
 import { storageLocations } from "@/db/schema";
 import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
@@ -68,10 +68,6 @@ beforeAll(async () => {
         code: `CU-LANE-${runId}`,
       })
       .returning({ id: customers.id });
-    const [orderLocation] = await tx
-      .insert(customerLocations)
-      .values({ organizationId: TEST_ORG_ID, customerId: customer.id, name: "E2E Order destination" })
-      .returning({ id: customerLocations.id });
 
     const [bin] = await tx
       .insert(storageLocations)
@@ -107,7 +103,6 @@ beforeAll(async () => {
         facilityId: facility.id,
         biocharProductId: product.id,
         customerId: customer.id,
-        customerLocationId: orderLocation.id,
         orderDate: new Date("2026-06-01"),
         quantityKg: DELIVERED_WET_KG,
         packaging: "bagged",
@@ -139,12 +134,11 @@ beforeAll(async () => {
 afterAll(async () => {
   if (!fixture) return;
   await deleteOutputDeliveryFixtures(db, inArray(deliveries.id, [fixture.deliveryId]));
-  await db.delete(orders).where(inArray(orders.id, [fixture.orderId]));
+  await deleteOutputOrderFixtures(db, inArray(orders.id, [fixture.orderId]));
   await deleteOutputProductFixtures(db, inArray(biocharProducts.id, [fixture.productId]));
   await db
     .delete(storageLocations)
     .where(inArray(storageLocations.id, [fixture.binId]));
-  await db.delete(customerLocations).where(inArray(customerLocations.customerId, [fixture.customerId]));
   await db.delete(customers).where(inArray(customers.id, [fixture.customerId]));
   await deleteOutputFacilityFixtures(db, inArray(facilities.id, [fixture.facilityId]));
 });

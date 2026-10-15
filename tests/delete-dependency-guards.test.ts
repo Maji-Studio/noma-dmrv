@@ -2,7 +2,7 @@ import { labLogisticsVersion } from "./helpers/lab-logistics-version";
 import { masterDataVersion } from "./helpers/master-data-version";
 import { insertOutputApplicationFixture } from "./helpers/output-contract-fixtures";
 import { deleteOutputApplicationFixtures } from "./helpers/output-contract-fixtures";
-import { deleteOutputFacilityFixtures, outputProductFixtureValues, outputOrderFixtureValues, deleteOutputProductFixtures, insertOutputDeliveryFixture, deleteOutputDeliveryFixtures } from "./helpers/output-contract-fixtures";
+import { deleteOutputFacilityFixtures, outputProductFixtureValues, outputOrderFixtureValues, deleteOutputOrderFixtures, deleteOutputProductFixtures, insertOutputDeliveryFixture, deleteOutputDeliveryFixtures } from "./helpers/output-contract-fixtures";
 import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
 import { beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
@@ -105,10 +105,6 @@ describe("delete dependency guards", () => {
         .insert(customers)
         .values({ organizationId: TEST_ORG_ID, code: `CU-DDG-${tag}`, name: `DDG Customer ${tag}` })
         .returning({ id: customers.id });
-      const [orderLocation] = await tx
-        .insert(customerLocations)
-        .values({ organizationId: TEST_ORG_ID, customerId: customer.id, name: "E2E Order destination" })
-        .returning({ id: customerLocations.id });
       const [product] = await tx
         .insert(biocharProducts)
         .values(await outputProductFixtureValues(tx, { organizationId: TEST_ORG_ID, code: `BP-DDG-CU-${tag}`, facilityId: facility.id }))
@@ -120,7 +116,6 @@ describe("delete dependency guards", () => {
           code: `OR-DDG-CU-${tag}`,
           facilityId: facility.id,
           customerId: customer.id,
-          customerLocationId: orderLocation.id,
           biocharProductId: product.id,
           orderDate: new Date("2026-06-13"),
           quantityKg: 100,
@@ -142,9 +137,8 @@ describe("delete dependency guards", () => {
       );
     } finally {
       await db.transaction(async (tx) => {
-        await tx.delete(orders).where(eq(orders.id, fixture.orderId));
+        await deleteOutputOrderFixtures(tx, eq(orders.id, fixture.orderId));
         await deleteOutputProductFixtures(tx, eq(biocharProducts.id, fixture.productId));
-        await tx.delete(customerLocations).where(eq(customerLocations.customerId, fixture.customerId));
         await tx.delete(customers).where(eq(customers.id, fixture.customerId));
         await deleteOutputFacilityFixtures(tx, eq(facilities.id, fixture.facilityId));
       });

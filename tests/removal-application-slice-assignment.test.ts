@@ -1,6 +1,6 @@
 import { insertOutputApplicationFixture } from "./helpers/output-contract-fixtures";
 import { deleteOutputApplicationFixtures } from "./helpers/output-contract-fixtures";
-import { outputProductFixtureValues, outputOrderFixtureValues, insertOutputDeliveryFixture, deleteOutputDeliveryFixtures, deleteOutputProductFixtures, deleteOutputFacilityFixtures } from "./helpers/output-contract-fixtures";
+import { outputProductFixtureValues, outputOrderFixtureValues, deleteOutputOrderFixtures, insertOutputDeliveryFixture, deleteOutputDeliveryFixtures, deleteOutputProductFixtures, deleteOutputFacilityFixtures } from "./helpers/output-contract-fixtures";
 import { beforeAll, describe, expect, it } from "vitest";
 import { eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
@@ -16,7 +16,6 @@ import {
   creditBatchProductionRuns,
   creditBatches,
   customers,
-  customerLocations,
   deliveries,
   facilities,
   feedstockTypes,
@@ -131,17 +130,12 @@ describe("Removal Application-slice assignment", () => {
         name: `Removal assignment ${tag}`,
       })
       .returning();
-    const [orderLocation] = await db
-      .insert(customerLocations)
-      .values({ organizationId: TEST_ORG_ID, customerId: customer.id, name: "E2E Order destination" })
-      .returning({ id: customerLocations.id });
     const [order] = await db
       .insert(orders)
       .values(await outputOrderFixtureValues(db, {
         organizationId: TEST_ORG_ID,
         facilityId: facility.id,
         customerId: customer.id,
-        customerLocationId: orderLocation.id,
         biocharProductId: product.id,
         code: `RAS-O-${tag}`,
         orderDate: new Date("2026-04-03T00:00:00Z"),
@@ -473,8 +467,7 @@ describe("Removal Application-slice assignment", () => {
       );
       await deleteOutputApplicationFixtures(db, eq(applications.id, application.id));
       await deleteOutputDeliveryFixtures(db, eq(deliveries.id, delivery.id));
-      await db.delete(orders).where(eq(orders.id, order.id));
-      await db.delete(customerLocations).where(eq(customerLocations.customerId, customer.id));
+      await deleteOutputOrderFixtures(db, eq(orders.id, order.id));
       await db.delete(customers).where(eq(customers.id, customer.id));
       await db
         .delete(biocharProductSourceAllocations)

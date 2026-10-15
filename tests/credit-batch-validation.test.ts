@@ -3,7 +3,7 @@ import { labLogisticsVersion } from "./helpers/lab-logistics-version";
 import { productionVersion } from "./helpers/production-version";
 import { insertOutputApplicationFixture } from "./helpers/output-contract-fixtures";
 import { deleteOutputApplicationFixtures } from "./helpers/output-contract-fixtures";
-import { outputProductFixtureValues, outputOrderFixtureValues, insertOutputDeliveryFixture, deleteOutputDeliveryFixtures, deleteOutputProductFixtures, deleteOutputFacilityFixtures } from "./helpers/output-contract-fixtures";
+import { outputProductFixtureValues, outputOrderFixtureValues, deleteOutputOrderFixtures, insertOutputDeliveryFixture, deleteOutputDeliveryFixtures, deleteOutputProductFixtures, deleteOutputFacilityFixtures } from "./helpers/output-contract-fixtures";
 import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
 /**
  * Credit Batch Production-Run Validation Tests
@@ -25,7 +25,7 @@ import {
 import { applications } from "@/db/schema/application";
 import { deliveries, orders } from "@/db/schema/logistics";
 import { biocharProducts, formulations } from "@/db/schema/products";
-import { customers, customerLocations } from "@/db/schema/parties";
+import { customers } from "@/db/schema/parties";
 import { feedstockTypes, feedstocks } from "@/db/schema/feedstock";
 import { productionRuns, productionRunFeedstocks } from "@/db/schema/production";
 import { productionProcesses } from "@/db/schema/production-processes";
@@ -84,10 +84,6 @@ beforeAll(async () => {
     .insert(customers)
     .values({ organizationId: TEST_ORG_ID, name: `Test Customer VAL ${runId}`, code: `CU-VAL-${runId}` })
     .returning({ id: customers.id });
-  const [orderLocation] = await db
-    .insert(customerLocations)
-    .values({ organizationId: TEST_ORG_ID, customerId: customer.id, name: "E2E Order destination" })
-    .returning({ id: customerLocations.id });
   createdIds.customers.push(customer.id);
 
   const [formulation] = await db
@@ -361,7 +357,6 @@ beforeAll(async () => {
       facilityId: facilityA.id,
       biocharProductId: productA.id,
       customerId: customer.id,
-      customerLocationId: orderLocation.id,
       orderDate: new Date("2025-06-01"),
       quantityKg: 1000,
       packaging: "bagged",
@@ -375,7 +370,6 @@ beforeAll(async () => {
       facilityId: facilityB.id,
       biocharProductId: productB.id,
       customerId: customer.id,
-      customerLocationId: orderLocation.id,
       orderDate: new Date("2025-06-01"),
       quantityKg: 1000,
       packaging: "bagged",
@@ -448,9 +442,7 @@ afterAll(async () => {
       await deleteOutputDeliveryFixtures(tx, inArray(deliveries.id, createdIds.deliveries));
     }
     if (createdIds.orders.length > 0) {
-      await tx
-        .delete(orders)
-        .where(inArray(orders.id, createdIds.orders));
+      await deleteOutputOrderFixtures(tx, inArray(orders.id, createdIds.orders));
     }
     if (createdIds.biocharProducts.length > 0) {
       await deleteOutputProductFixtures(tx, inArray(biocharProducts.id, createdIds.biocharProducts));
@@ -484,7 +476,6 @@ afterAll(async () => {
         .where(inArray(formulations.id, createdIds.formulations));
     }
     if (createdIds.customers.length > 0) {
-      await tx.delete(customerLocations).where(inArray(customerLocations.customerId, createdIds.customers));
       await tx
         .delete(customers)
         .where(inArray(customers.id, createdIds.customers));
