@@ -26,6 +26,11 @@ on:
     # same day. Minute 17 avoids the :00 cron pile-up on GH Actions.
     - cron: "17 9 * * *"
   workflow_dispatch:
+    inputs:
+      force_failure:
+        description: "Fail a probe job to verify GitHub issue notifications (skips health checks)"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -37,6 +42,7 @@ env:
 
 jobs:
   ping:
+    if: ${{ !inputs.force_failure }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
@@ -158,3 +164,35 @@ jobs:
               exit 1
             fi
           done
+
+  notification-probe:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.force_failure }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    permissions: {}
+    steps:
+      - name: Force a health failure notification
+        run: exit 1
+
+  notify-failure:
+    needs: [ping, notification-probe]
+    if: ${{ always() && (contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')) && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    concurrency:
+      group: health-failure-${{ github.workflow }}
+      cancel-in-progress: false
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+      - name: Open or reopen the workflow failure issue
+        run: node scripts/notify-health-failure.mjs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEALTH_WORKFLOW: isometric-health.yml
+          HEALTH_ENVIRONMENT: staging / Isometric sandbox

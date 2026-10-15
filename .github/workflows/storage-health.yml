@@ -30,6 +30,10 @@ on:
     - cron: "33 9 * * *"
   workflow_dispatch:
     inputs:
+      force_failure:
+        description: "Fail a probe job to verify GitHub issue notifications (skips health checks)"
+        type: boolean
+        default: false
       repair_cors:
         description: "Allow the exact staging app origin to upload (preserves existing bucket CORS rules)"
         type: boolean
@@ -49,6 +53,7 @@ env:
 
 jobs:
   smoke:
+    if: ${{ !inputs.force_failure }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     env:
@@ -108,3 +113,35 @@ jobs:
       - name: Storage round-trip smoke (staging bucket)
         if: ${{ env.LOAD_OP_SECRETS == 'true' }}
         run: pnpm storage:smoke
+
+  notification-probe:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.force_failure }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    permissions: {}
+    steps:
+      - name: Force a health failure notification
+        run: exit 1
+
+  notify-failure:
+    needs: [smoke, notification-probe]
+    if: ${{ always() && (contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')) && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    concurrency:
+      group: health-failure-${{ github.workflow }}
+      cancel-in-progress: false
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+      - name: Open or reopen the workflow failure issue
+        run: node scripts/notify-health-failure.mjs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEALTH_WORKFLOW: storage-health.yml
+          HEALTH_ENVIRONMENT: staging
