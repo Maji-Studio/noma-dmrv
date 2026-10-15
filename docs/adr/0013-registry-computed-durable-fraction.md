@@ -125,7 +125,7 @@ against it with a divergence warning.
   scalar; `weightedHToCorgRatio` is retained only as the local preview input.
 - **Blueprint selection is the Method A/B distinction** at submission (D6): sampled →
   `_c_org`, Method B unsampled → `_unsampled`.
-- **Soil temperature** is a project-area annual average (7 °C floor; subdivide if intra-area
+- **Soil temperature** is a project-area annual average (noma 7 °C floor per ADR 0016; subdivide if intra-area
   variation > 1 °C). noma submits a **facility-level reference value** sourced from a global
   soil-temperature database (Lembrechts et al. 2022 or equivalent — the protocol's sanctioned
   path when no on-site baselining exists; air temperature is explicitly prohibited as a proxy),

@@ -366,7 +366,8 @@ noma's production-cohort unit of carbon accounting — the production
 runs of **one feedstock** at one facility within a ≤1-month window.
 This makes a credit batch the Isometric protocol's **production
 batch**: the lab-characterisation and sampling unit (one feedstock,
-consistent pyrolysis conditions, < 1 month). A facility running
+consistent pyrolysis conditions). The one-calendar-month cap is noma’s
+conservative rule (ADR 0016), not a pinned Biochar v1.1 requirement. A facility running
 several feedstocks in a month therefore has several **concurrent**
 credit batches, one per feedstock. The `startDate`/`endDate` window
 means production period, not application period. Batch membership is

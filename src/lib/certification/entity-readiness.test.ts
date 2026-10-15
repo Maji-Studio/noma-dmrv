@@ -150,6 +150,7 @@ describe("deriveEntityCertifyReadiness", () => {
 
   it("does not require 1000-year durability fields for 200-year samples", () => {
     const readiness = deriveEntityCertifyReadiness("sample", {
+      moistureContentPercent: 10,
       sampling: "sampled",
       durabilityOption: "200_year",
       totalCarbonPercent: 82,
@@ -174,6 +175,7 @@ describe("deriveEntityCertifyReadiness", () => {
     "reports the O:Corg gap for a %s sample missing the oxygen ratio",
     (durabilityOption) => {
       const readiness = deriveEntityCertifyReadiness("sample", {
+        moistureContentPercent: 10,
         sampling: "sampled",
         durabilityOption,
         totalCarbonPercent: 82,
@@ -199,8 +201,9 @@ describe("deriveEntityCertifyReadiness", () => {
     },
   );
 
-  it("requires 1000-year durability fields when the condition applies", () => {
+  it("requires sReflectanceFraction for a sampled 1000-year Sample", () => {
     const readiness = deriveEntityCertifyReadiness("sample", {
+      moistureContentPercent: 10,
       sampling: "sampled",
       durabilityOption: "1000_year",
       totalCarbonPercent: 82,
@@ -215,14 +218,13 @@ describe("deriveEntityCertifyReadiness", () => {
 
     expect(readiness.state).toBe("incomplete");
     expect(readiness.gaps.map((gap) => gap.key)).toEqual([
-      "tgaNonReactiveCarbonData",
-      "randomReflectanceR0Percent",
       "sReflectanceFraction",
     ]);
   });
 
   it("reports paired carbon gaps for a sampled 1000-year Sample", () => {
     const readiness = deriveEntityCertifyReadiness("sample", {
+      moistureContentPercent: 10,
       sampling: "sampled",
       durabilityOption: "1000_year",
       totalCarbonPercent: null,
@@ -242,8 +244,9 @@ describe("deriveEntityCertifyReadiness", () => {
     ]);
   });
 
-  it("accepts either reactive or residual carbon for 1000-year samples", () => {
+  it("marks a sampled 1000-year Sample ready when all required inputs are present", () => {
     const readiness = deriveEntityCertifyReadiness("sample", {
+      moistureContentPercent: 10,
       sampling: "sampled",
       durabilityOption: "1000_year",
       totalCarbonPercent: 82,
@@ -263,6 +266,7 @@ describe("deriveEntityCertifyReadiness", () => {
   it.each([null, undefined])("keeps chemistry gaps without replicate gaps when sampling is %s", (sampling) => {
     for (const durabilityOption of ["200_year", "1000_year"]) {
       const readiness = deriveEntityCertifyReadiness("sample", {
+        moistureContentPercent: 10,
         sampling,
         durabilityOption,
         randomReflectanceR0Percent: 1.2,
@@ -277,6 +281,7 @@ describe("deriveEntityCertifyReadiness", () => {
 
   it.each(["200_year", "1000_year"])("skips chemistry only for an explicitly unsampled %s batch", (durabilityOption) => {
     expect(deriveEntityCertifyReadiness("sample", {
+      moistureContentPercent: 10,
       sampling: "unsampled", durabilityOption,
       randomReflectanceR0Percent: 1.2, residualCarbonPercent: 85,
     })).toEqual({ state: "ready", gaps: [], warnings: [] });
@@ -519,8 +524,8 @@ describe("isCertifyFormField", () => {
         expect(isCertifyEntityField("sample", field, context), field).toBe(required);
       }
       for (const field of ["randomReflectanceR0Percent", "reactiveCarbonPercent", "residualCarbonPercent"]) {
-        expect(isCertifyFormField("sample", field, context), field).toBe(durabilityOption === "1000_year");
-        expect(isCertifyEntityField("sample", field, context), field).toBe(durabilityOption === "1000_year");
+        expect(isCertifyFormField("sample", field, context), field).toBe(false);
+        expect(isCertifyEntityField("sample", field, context), field).toBe(false);
       }
     }
   });

@@ -58,7 +58,7 @@ export function SampleEvidenceSection({
       __spine={__spine}
     >
       <p className="body-small text-[var(--color-text-secondary)]">
-        Attach the lab report before submitting the Removal.
+        Upload the lab report here. You can still submit the Removal without it.
       </p>
       {isEditMode && sample ? (
         <div className="flex flex-col gap-12">

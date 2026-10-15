@@ -40,7 +40,7 @@ function invalidateTransportEvidenceOwner(
 type DocumentOwner =
   | { entityType: "production_run"; entityId: string }
   | {
-      entityType: "application" | "feedstock" | "delivery" | "transport_leg";
+      entityType: "application" | "feedstock" | "delivery" | "transport_leg" | "sample" | "credit_batch";
       entityId?: string;
     };
 

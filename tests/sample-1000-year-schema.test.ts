@@ -21,9 +21,8 @@ describe("1000-year Sample input", () => {
     expect(createSampleSchema.safeParse({ ...thousandYearSample, sReflectanceFraction:1.01 }).success).toBe(false);
   });
 
-  it.each(["randomReflectanceR0Percent", "residualCarbonPercent"])("keeps the save requirement for %s", (field) => {
+  it.each(["randomReflectanceR0Percent", "residualCarbonPercent"])("allows saving without %s", (field) => {
     const result = createSampleSchema.safeParse({ ...thousandYearSample, [field]: null });
-    expect(result.success).toBe(false);
-    expect(result.error?.issues).toContainEqual(expect.objectContaining({ path: [field] }));
+    expect(result.success).toBe(true);
   });
 });

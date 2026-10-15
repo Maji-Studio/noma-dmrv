@@ -10,6 +10,12 @@ const complete: SampleEntryFacts = {
 };
 
 describe("sampleEntryWarnings", () => {
+  it("includes the batch lab-report advisory in Sample save warnings", () => {
+    expect(sampleEntryWarnings({ ...complete, hasLabReport: false })).toEqual([
+      "Credit batch CB-26-001 has no lab report document. Upload a lab report to one of its Samples. You can still submit the Removal.",
+    ]);
+  });
+
   it("is silent for a complete 1,000-year Sample", () => {
     expect(sampleEntryWarnings(complete)).toEqual([]);
   });
@@ -58,7 +64,7 @@ describe("sampleEntryWarnings", () => {
     const warnings = sampleEntryWarnings({ ...complete, durabilityOption: "200_year", totalHydrogenPercent: null, moistureContentPercent: null });
     expect(warnings).toEqual([
       "Sample SAM-26-001 has no total hydrogen, so H/C_org cannot be calculated. The biochar module requires H/C_org for every production batch (Table 2).",
-      "Sample SAM-26-001 has no moisture content. The biochar module requires moisture for every production batch (Table 2).",
+      "Sample SAM-26-001 is missing moisture content. A Removal with credit batch CB-26-001 cannot be submitted until every Sample has it.",
     ]);
   });
 
@@ -90,12 +96,10 @@ describe("sampleEntryWarnings", () => {
     expect(sampleEntryWarnings({ ...noHydrogen, sampling: "unsampled" })).toEqual([]);
   });
 
-  it("keeps the moisture warning on unsampled batches without warning on their incidental chemistry", () => {
+  it("skips moisture and incidental chemistry warnings on unsampled batches", () => {
     expect(sampleEntryWarnings({ ...complete, durabilityOption: "200_year", sampling: "unsampled",
       organicCarbonPercent: null, totalHydrogenPercent: null, hToCOrgRatio: null, oToCOrgRatio: null,
       moistureContentPercent: null,
-    })).toEqual([
-      "Sample SAM-26-001 has no moisture content. The biochar module requires moisture for every production batch (Table 2).",
-    ]);
+    })).toEqual([]);
   });
 });

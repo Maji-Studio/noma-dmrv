@@ -12,6 +12,8 @@
  * "Should" is guidance, so the R₀ count never blocks submission.
  */
 
+import { isCertifyEntityField } from "./certify-field-registry";
+import { sampleDocumentWarnings } from "./sample-document-warnings";
 import type { CreditBatchSampling } from "@/schemas/credit-batches";
 import { MINIMUM_REPLICATES_PER_BATCH } from "@/lib/calculations/biochar-eligibility";
 import { missingSampled1000YearMeasurements } from "./durability-1000-replicates";
@@ -20,6 +22,7 @@ import { missingSampled1000YearMeasurements } from "./durability-1000-replicates
 export const R0_MEASUREMENTS_PER_SAMPLE_GUIDANCE = 500;
 
 export interface SampleEntryFacts {
+  hasLabReport?: boolean;
   sampleCode: string;
   creditBatchCode: string;
   /** The batch facility's declared tier; null when the batch has no facility tier. */
@@ -66,7 +69,7 @@ function joinWithAnd(items: string[]): string {
 }
 
 export function sampleEntryWarnings(facts: SampleEntryFacts): string[] {
-  const warnings: string[] = [];
+  const warnings: string[] = sampleDocumentWarnings(facts);
   const is1000Year = facts.durabilityOption === "1000_year";
 
   // Same scope as the gate: sampled 1,000-year batches submit this tuple per Sample.
@@ -81,8 +84,8 @@ export function sampleEntryWarnings(facts: SampleEntryFacts): string[] {
   if (facts.sampling === "sampled" && facts.totalHydrogenPercent == null) {
     warnings.push(`Sample ${facts.sampleCode} has no total hydrogen, so H/C_org cannot be calculated. The biochar module requires H/C_org for every production batch (Table 2).`);
   }
-  if (facts.moistureContentPercent == null) {
-    warnings.push(`Sample ${facts.sampleCode} has no moisture content. The biochar module requires moisture for every production batch (Table 2).`);
+  if (isCertifyEntityField("sample", "moistureContentPercent", facts) && facts.moistureContentPercent == null) {
+    warnings.push(`Sample ${facts.sampleCode} is missing moisture content. A Removal with credit batch ${facts.creditBatchCode} cannot be submitted until every Sample has it.`);
   }
   if (ratioWarning) warnings.push(ratioWarning);
   if (is1000Year && (facts.r0MeasurementCount == null || facts.r0MeasurementCount < R0_MEASUREMENTS_PER_SAMPLE_GUIDANCE)) {

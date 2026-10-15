@@ -2,6 +2,7 @@ import { addMonths } from "date-fns/addMonths";
 import { isAfter } from "date-fns/isAfter";
 import { formatUtcDate } from "@/lib/date-utils";
 
+// noma conservative production-window rule; see docs/adr/0016-credit-batch-is-production-batch-production-process-scopes-sampling.md.
 export const CREDIT_BATCH_WINDOW_DESCRIPTION = "one calendar month";
 
 function toDateString(value: string | Date): string {
@@ -44,7 +45,7 @@ export function getCreditBatchProductionWindowIssue(
   }
 
   if (isAfter(end, addMonths(start, 1))) {
-    return `A credit batch may span at most one month (${CREDIT_BATCH_WINDOW_DESCRIPTION}; Isometric production batch, §8.3.1)`;
+    return `A credit batch may span at most one month (${CREDIT_BATCH_WINDOW_DESCRIPTION}; noma rule).`;
   }
 
   return null;

@@ -92,7 +92,7 @@ async function main(): Promise<void> {
     await tx.insert(members).values({ id: randomUUID(), organizationId, userId, role: "owner" });
   });
   const ctx = { organizationId, userId, orgRole: "owner" as const, isPlatformAdmin: false };
-  // A 200-year facility: a lab sample there needs no R0 or TGA evidence.
+  // A 200-year facility. Mean R0 and TGA are optional for Samples at either tier.
   const facility = await createFacility(ctx, {
     code: "FUZZ-FAC", name: FIXTURE_LABEL, country: "FR", timezone: FACILITY_TIME_ZONE,
     durabilityOption: "200_year",

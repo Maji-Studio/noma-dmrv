@@ -54,6 +54,15 @@ amended 2026-07-04 (feedstock declared)
 > Certify project was observed on v1.1 on this date. Historical v1.2/v1.3
 > citations below do not change this ADR's production-batch/process grain.
 
+## Current conservative rules
+
+Kenji's #942 q7 decision retains the one-calendar-month credit-batch cap and
+7 °C soil-temperature floor as noma's own conservative rules. They are not
+requirements attributed to the pinned Biochar v1.1 interpretation. Historical
+Biochar v1.3 citations and protocol quotations below retain their original
+context; they do not change that attribution. The production-window validator
+and soil-temperature calculations keep their existing behavior.
+
 ## Context
 
 The Isometric Biochar Protocol (v1.3, §8.3.1) measures carbon content at the **production
@@ -109,7 +118,7 @@ feedstock)** spanning reactors.
    deviation opens a **new** process and resets the baseline to zero.
 
 3. **`production_processes` is registry-agnostic.** It is a generic production campaign; the
-   Isometric-specific behaviour (the ≤1-month cap, the ≥30-sample baseline, the Method-B
+   Isometric integration behaviour (the noma ≤1-month cap, the ≥30-sample baseline, the Method-B
    unlock, the unsampled estimate) is a set of **conditional gates** applied only when
    `certifier = 'isometric'`. No registry branding in the schema — the same separation already
    used for certifier-validated feedstock types.
@@ -128,7 +137,7 @@ Because DEC runs **Method A everywhere** with stable conditions, this branch shi
 
 - **Ships now:** the `production_processes` entity + (facility, feedstock) keying;
   `sampling_method` moved onto it; `credit_batches.feedstockTypeId` + `productionProcessId`;
-  the ≤1-month Isometric cap; `samples` re-pointed to the credit batch; ≥3-per-sampled-batch
+  the noma ≤1-month cap; `samples` re-pointed to the credit batch; ≥3-per-sampled-batch
   characterisation; per-process grouping of eligibility.
 - **Deferred to a future ADR tied to the super-admin Method-B unlock (e.g. ADR 0017):** the
   live Method-B compute — the 30-sample baseline counter, the μ − σ/√n unsampled estimate, the

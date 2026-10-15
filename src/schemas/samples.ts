@@ -255,11 +255,11 @@ export const sampleFormSchema = z
 
     // === Section 7: 1000-Year Durability (conditional) ===
     // Not user-selected: the form derives it from the chosen credit batch's
-    // declared tier (issue #309) and keeps it in form state so the conditional
-    // 1000-year validation below still applies.
+    // declared tier (issue #309) and keeps it in form state for durability
+    // field visibility and certification-readiness indicators.
     durabilityOption: z.enum(["200_year", "1000_year"]).nullable().default(null),
 
-    // R₀ reflectance (required for 1000-year)
+    // Optional mean R₀; s_fraction remains a certification input.
     randomReflectanceR0Percent: optionalPercentInput,
     // Proportion of the sample's ISO 7404-5 R₀ readings at or above 2%.
     // Stored/submitted as 0–1; the form presents it as a percentage.
@@ -271,7 +271,7 @@ export const sampleFormSchema = z
     r0AnalysisDate: optionalCalendarDateSchema(),
     r0HistogramFileUrl: z.string().max(2000).optional().nullable().or(z.literal("")),
 
-    // TGA non-reactive carbon (required for 1000-year)
+    // Optional TGA non-reactive carbon
     reactiveCarbonPercent: optionalPercentInput,
     residualCarbonPercent: optionalPercentInput,
     tgaAnalysisDate: optionalCalendarDateSchema(),
@@ -287,25 +287,6 @@ export const sampleFormSchema = z
   })
   .superRefine((value, ctx) => {
     carbonReconciliationSuperRefine(value, ctx);
-
-    // Conditional validation for 1000-year durability
-    if (value.durabilityOption === "1000_year") {
-      if (value.randomReflectanceR0Percent == null) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ["randomReflectanceR0Percent"],
-          message: "R₀ reflectance is required for 1000-year durability",
-        });
-      }
-
-      if (value.residualCarbonPercent == null && value.reactiveCarbonPercent == null) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ["residualCarbonPercent"],
-          message: "TGA non-reactive carbon data is required for 1000-year durability",
-        });
-      }
-    }
 
     // Conditional validation for nutrient claims
     if (value.nutrientClaimEnabled) {

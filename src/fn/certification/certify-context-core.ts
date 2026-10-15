@@ -623,6 +623,7 @@ export async function buildRemovalContext(
   } = durabilityBatchData;
   const memberBatchesWithDurability = memberBatches.map((batch) => ({
     ...batch,
+    hasLabReport: batchesWithSamples.find((sampleBatch) => sampleBatch.creditBatchId === batch.id)?.hasLabReport,
     durabilityGateBlockers:
       durabilityBatchData.blockersByBatchId[batch.id] ?? [],
   }));

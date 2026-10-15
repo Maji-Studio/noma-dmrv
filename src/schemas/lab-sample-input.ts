@@ -38,7 +38,6 @@ const optional = (canonical: z.ZodNumber) => pipeToCanonicalNumber(optionalNumbe
 const clearable = (canonical: z.ZodNumber) => pipeToCanonicalNumber(clearableNumber, canonical.nullable().optional());
 
 const DRY_BASIS = "percent of dry mass (dry basis)";
-const TIER_1000 = "Required on a credit batch whose facility claims 1,000-year durability.";
 
 /** Descriptions shared by create and PATCH, keyed by field. */
 const DESCRIPTIONS = {
@@ -56,17 +55,17 @@ const DESCRIPTIONS = {
   totalOxygenPercent: `Total oxygen, ${DRY_BASIS}, 0 to 100. When present, O/C_org is calculated from this and organicCarbonPercent.`,
   totalSulfurPercent: `Total sulfur, ${DRY_BASIS}, 0 to 100.`,
   ashContentPercent: `Ash, ${DRY_BASIS}, 0 to 100.`,
-  moistureContentPercent: "Moisture as percent of wet mass, 0 to 100.",
+  moistureContentPercent: "Moisture as percent of wet mass, 0 to 100. Optional when saving; every Sample on a sampled credit batch needs it before a Removal can be submitted.",
   bulkDensityKgPerM3: "Bulk density in kilograms per cubic metre.",
   ph: `pH, ${PH_MIN} to ${PH_MAX}.`,
   saltContentGPerKg: "Salt content in grams per kilogram.",
   oToCOrgRatio: `Atomic O/C_org ratio as the laboratory reported it, 0 to ${RATIO_INPUT_MAX}. Stored only when totalOxygenPercent is absent; with oxygen, O/C_org is calculated and this value is not used.`,
-  randomReflectanceR0Percent: `Mean random reflectance R0 in percent (ISO 7404-5). ${TIER_1000}`,
+  randomReflectanceR0Percent: "Mean random reflectance R0 in percent (ISO 7404-5). Optional for 1,000-year durability.",
   sReflectanceFraction: "Fraction of this sample's R0 readings at or above 2%, 0 to 1. Optional when saving; every Sample on a sampled 1,000-year credit batch needs it before a Removal can be submitted.",
   r0MeasurementCount: "Number of R0 readings behind randomReflectanceR0Percent.",
   r0AnalysisDate: "Date of the R0 analysis, YYYY-MM-DD.",
-  reactiveCarbonPercent: `TGA reactive carbon in percent. On a 1,000-year credit batch, this or residualCarbonPercent is required.`,
-  residualCarbonPercent: `TGA non-reactive (residual) carbon in percent. On a 1,000-year credit batch, this or reactiveCarbonPercent is required.`,
+  reactiveCarbonPercent: "TGA reactive carbon in percent. Optional for 1,000-year durability.",
+  residualCarbonPercent: "TGA non-reactive (residual) carbon in percent. Optional for 1,000-year durability.",
   tgaAnalysisDate: "Date of the TGA analysis, YYYY-MM-DD.",
   phosphorusPercent: `Phosphorus, ${DRY_BASIS}, 0 to 100.`,
   potassiumPercent: `Potassium, ${DRY_BASIS}, 0 to 100.`,

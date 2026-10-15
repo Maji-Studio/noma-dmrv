@@ -224,7 +224,7 @@ describe("resolveFacilityReferenceSoilTemperature (Phase 2 facility reference)",
     expect(r!.declaredSoilTemperatureC).toBe(4.3);
     expect(r!.effectiveSoilTemperatureC).toBe(7);
     expect(r!.temperatureFloored).toBe(true);
-    expect(r!.warnings.some((w) => /floor/i.test(w))).toBe(true);
+    expect(r!.warnings).toContain("Soil temperature floored to 7 °C (noma rule).");
   });
 
   it("normalizes a blank source to null", () => {

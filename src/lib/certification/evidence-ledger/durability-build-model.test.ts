@@ -197,7 +197,7 @@ describe("buildDurabilityLedgerModel", () => {
         source: null,
         temperatureFloored: true,
         method: "Facility reference soil temperature (annual average; 7 °C floor)",
-        warnings: ["Soil temperature floored to 7 °C (§5.1.1.3.1)."],
+        warnings: ["Soil temperature floored to 7 °C (noma rule)."],
       },
     });
     expect(model.soil.declaredSoilTemperatureC).toBe(5);

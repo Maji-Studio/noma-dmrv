@@ -19,12 +19,6 @@ type Path = (string | number)[];
 /** Legacy writer copy, shared so the operator prose stays byte-identical. */
 export const SAMPLE_CREDIT_BATCH_NOT_FOUND_MESSAGE = "Credit batch not found";
 
-/** The 1,000-year evidence each Sample needs at save, keyed by the input that supplies it. */
-export const SAMPLE_TIER_EVIDENCE_MESSAGES = {
-  randomReflectanceR0Percent: "R₀ reflectance is required for a Sample on a 1000-year credit batch.",
-  residualCarbonPercent: "TGA non-reactive carbon is required for a Sample on a 1000-year credit batch.",
-} as const;
-
 export const SAMPLE_FUTURE_TIME_MESSAGES = {
   samplingTime: "Sampling time cannot be in the future. Enter a time at or before now.",
 } as const;
@@ -34,9 +28,8 @@ const SAMPLE_CARBON_RECONCILIATION_MESSAGES = {
   inorganicCarbonPercent: COMBINED_CARBON_EXCEEDS_TOTAL_MESSAGE,
 } as const;
 
-export type SampleTierEvidenceField = keyof typeof SAMPLE_TIER_EVIDENCE_MESSAGES;
 export type SampleCarbonField = keyof typeof SAMPLE_CARBON_RECONCILIATION_MESSAGES;
-export type SampleRefusalField = SampleTierEvidenceField | SampleCarbonField | "samplingTime";
+export type SampleRefusalField = SampleCarbonField | "samplingTime";
 
 export interface SampleBatchWindow {
   code: string;
@@ -74,10 +67,6 @@ export function sampleCreditBatchNotFound(): SampleCreditBatchUnavailableError {
 
 export function sampleCreditBatchArchived(code: string): SampleCreditBatchUnavailableError {
   return new SampleCreditBatchUnavailableError(`Credit batch ${code} is archived. Choose an active credit batch.`);
-}
-
-export function sampleTierEvidenceError(field: SampleTierEvidenceField): SampleFieldError {
-  return new SampleFieldError(SAMPLE_TIER_EVIDENCE_MESSAGES[field], field);
 }
 
 /** Reconciliation is an excess check: organic, or organic plus inorganic, above total carbon. */

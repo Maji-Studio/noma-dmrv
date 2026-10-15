@@ -34,6 +34,13 @@ function checkFor(result: BatchHealth, key: BatchHealthCheckKey) {
 }
 
 describe("deriveBatchHealth", () => {
+  it("keeps document warnings separate from blocking issues", () => {
+    const result = deriveBatchHealth(facts({ warnings: ["Missing lab report"] }));
+    expect(result.state).toBe("ready");
+    expect(result.issueCount).toBe(0);
+    expect(result.warnings).toEqual(["Missing lab report"]);
+  });
+
   it("a fully-complete batch is ready with no issues", () => {
     const result = deriveBatchHealth(facts());
     expect(result.state).toBe("ready");

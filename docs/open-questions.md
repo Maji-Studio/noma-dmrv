@@ -214,22 +214,6 @@ companion inherits this file's schema, invariants, and resolution rules.
   `ISOMETRIC_DEMO_TEMPLATE_ID` in the workflow and restore the third category to
   the assertion (S).
 
-### The app requires TGA for 1,000-year durability but the module never mentions it (`isometric/tga-1000-year-requirement`, opened 2026-10-13, `needs-registry-check`)
-
-- **Observed:** `src/data-access/samples/write-scope.ts` refuses a 1,000-year
-  lab sample without TGA reactive or residual carbon, and readiness requires it
-  for submission. Biochar Agricultural Soils module v1.1 (Option 2) names R0 and
-  the fraction passing the 2% benchmark, and never mentions TGA.
-- The same text says proponents "should report a set of at least 500
-  measurements of R0" per sample. That is a "should", so
-  `src/lib/certification/sample-entry-warnings.ts` only warns below
-  `R0_MEASUREMENTS_PER_SAMPLE_GUIDANCE`; it does not block submission (round 7
-  Q53).
-- **Resolve via:** check the module text and the registry's accepted evidence
-  through the Isometric MCP server (`how_to`, then the protocol tools). Then
-  keep, relax or replace the TGA requirement and record the outcome in
-  [`docs/isometric/changes.md`](./isometric/changes.md).
-
 ### Unsampled batches with incidental Samples may still submit an H/C_org mean (`isometric/unsampled-incidental-chemistry`, opened 2026-10-13)
 
 - The durability gates skip chemistry checks when a credit batch's stored

@@ -1,5 +1,22 @@
 # Isometric Docs Change Log
 
+## 2026-10-15: Optional TGA and mean reflectance (#942 q3, #1016)
+
+Kenji resolved `isometric/tga-1000-year-requirement`: TGA reactive/residual
+carbon and mean R₀ are optional when saving and certifying 1,000-year Samples.
+The form, Sample writers and certification descriptors no longer require them.
+The submitted durability tuple still requires total carbon, measured inorganic
+carbon and `sReflectanceFraction` on each sampled 1,000-year Sample. Neither
+TGA nor mean R₀ feeds that tuple. This records the product decision, not a new
+registry verification.
+
+Sample moisture is required for certification on sampled batches (#942 q1),
+but remains optional at save. The existing measurement-sample payload has no
+moisture field mapping; no new registry field was invented.
+
+The one-calendar-month batch cap and 7 °C soil-temperature floor remain noma
+conservative rules (#942 q7), as recorded in ADR 0016. Behavior is unchanged.
+
 ## 2026-10-15: Proof of delivery required before submission (#942 q12)
 
 - Reverses the 2026-07-29 retained-records stance for proof of delivery:

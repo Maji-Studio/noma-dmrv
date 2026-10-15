@@ -39,20 +39,6 @@ test.describe("Credit Batches Form Schema", () => {
     expect(durability200Year.requiredFields).toContain("hToCorgRatio");
   });
 
-  test("durability option validation - 1000-year requires reflectance and non-reactive carbon", () => {
-    const durability1000Year = {
-      durabilityOption: "1000_year",
-      requiredFields: [
-        "meanRandomReflectancePercent",
-        "meanNonReactiveCarbonPercent",
-      ],
-    };
-    expect(durability1000Year.durabilityOption).toBe("1000_year");
-    expect(durability1000Year.requiredFields).toContain(
-      "meanRandomReflectancePercent"
-    );
-  });
-
   test("credit batches support production-run cohort membership", () => {
     const junctionTable = {
       name: "credit_batch_production_runs",

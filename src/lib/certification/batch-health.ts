@@ -115,6 +115,7 @@ export interface BatchTransportFact {
 }
 
 export interface BatchHealthFacts {
+  warnings?: string[];
   /**
    * Raw carbon and durability lab-input blockers (sample carbon content,
    * H/C_org, O/C_org, total carbon, s_fraction, and replicate coverage).
@@ -159,6 +160,7 @@ export interface BatchHealthFacts {
 }
 
 export interface BatchHealth {
+  warnings?: string[];
   state: BatchHealthState;
   /** Count of `unmet` checks; `skipped` checks do not count. */
   issueCount: number;
@@ -474,6 +476,7 @@ export function deriveBatchHealth(facts: BatchHealthFacts): BatchHealth {
     state: issueCount > 0 ? "incomplete" : "ready",
     issueCount,
     checks,
+    warnings: facts.warnings ?? [],
   };
 }
 
