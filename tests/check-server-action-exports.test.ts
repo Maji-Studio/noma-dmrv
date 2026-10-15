@@ -399,105 +399,61 @@ const EXOTIC_BYPASSES = [
   ["unknown list into a tuple rest", `
     const core = (...args: [string, OrgContext]) => args.length;
     return Reflect.apply(core, undefined, input);
-  `],
+  `, { line: "return Reflect", node: "input" }],
   ["open spread into a tuple rest", `
     const core = (...args: [string, OrgContext]) => args.length;
     return core(...input);
-  `],
+  `, { line: "return core", node: "...input" }],
   ["apply behind a leading spread", `
     const packed: [undefined, [any, string]] = [undefined, [input, "r"]];
     return issueUrl.apply(...packed);
-  `],
-  ["callee asserted as any", `return (issueUrl as any)(input, "r");`],
+  `, { line: "return issueUrl", node: "...packed" }],
+  ["callee asserted as any", `return (issueUrl as any)(input, "r");`, { line: "return (issueUrl", node: "issueUrl" }],
   ["any-typed callee alias", `
     const invoke: any = issueUrl;
     return invoke(input, "r");
-  `],
+  `, { line: "const invoke", node: "issueUrl" }],
   ["type-erased reflective invocation", `
     const invoke: any = Reflect.apply;
     return invoke(issueUrl, undefined, [input, "r"]);
-  `],
+  `, { line: "return invoke", node: "[input, \"r\"]", only: true }],
   ["type-erased nested forwarder", `
     const invoke: any = Function.prototype.call;
     return invoke.call(issueUrl, undefined, input, "r");
-  `],
+  `, { line: "return invoke", node: "issueUrl" }],
   ["Function.prototype nested forwarder", `
     return Function.prototype.call.call(issueUrl, undefined, input, "r");
-  `],
+  `, { line: "return Function", node: "input" }],
   ["receiver nested forwarder", `
     return issueUrl.call.call(issueUrl, undefined, input, "r");
-  `],
-  ["Reflect element access", `return Reflect["apply"](issueUrl, undefined, [input, "r"]);`],
+  `, { line: "return issueUrl", node: "input" }],
+  ["Reflect element access", `return Reflect["apply"](issueUrl, undefined, [input, "r"]);`, { line: "return Reflect", node: "[input, \"r\"]" }],
   ["destructured Reflect apply", `
     const { apply } = Reflect;
     return apply(issueUrl, undefined, [input, "r"]);
-  `],
+  `, { line: "return apply", node: "[input, \"r\"]" }],
   ["Reflect construct", `
     function Core(scope: OrgContext) { return { id: scope.userId }; }
     return Reflect.construct(Core, [input]);
-  `],
+  `, { line: "return Reflect", node: "[input]" }],
   ["tagged template substitution", `
     const core = (strings: TemplateStringsArray, scope: OrgContext) => scope.userId;
     return core\`report\${input}\`;
-  `],
+  `, { line: "return core", node: "input" }],
 ] as const;
 
-const EXOTIC_TARGETS: Record<string, { line: string; node: string }> = {
-  "unknown list into a tuple rest": {
-    "line": "return Reflect",
-    "node": "input"
-  },
-  "open spread into a tuple rest": {
-    "line": "return core",
-    "node": "...input"
-  },
-  "apply behind a leading spread": {
-    "line": "return issueUrl",
-    "node": "...packed"
-  },
-  "callee asserted as any": {
-    "line": "return (issueUrl",
-    "node": "issueUrl"
-  },
-  "any-typed callee alias": {
-    "line": "const invoke",
-    "node": "issueUrl"
-  },
-  "type-erased reflective invocation": {
-    "line": "return invoke",
-    "node": "[input, \"r\"]"
-  },
-  "type-erased nested forwarder": {
-    "line": "return invoke",
-    "node": "issueUrl"
-  },
-  "Function.prototype nested forwarder": {
-    "line": "return Function",
-    "node": "input"
-  },
-  "receiver nested forwarder": {
-    "line": "return issueUrl",
-    "node": "input"
-  },
-  "Reflect element access": {
-    "line": "return Reflect",
-    "node": "[input, \"r\"]"
-  },
-  "destructured Reflect apply": {
-    "line": "return apply",
-    "node": "[input, \"r\"]"
-  },
-  "Reflect construct": {
-    "line": "return Reflect",
-    "node": "[input]"
-  },
-  "tagged template substitution": {
-    "line": "return core",
-    "node": "input"
-  }
-};
-
 const REVIEW_BYPASSES = [
+  ["ternary any widening", "const f = input ? input : issueUrl; return f(input, \"r\");", "issueUrl"],
+  ["nullish any widening", "return (input ?? issueUrl)(input, \"r\");", "issueUrl"],
+  ["array any widening", "const fns = [input, issueUrl]; return fns[1](input, \"r\");", "issueUrl"],
+  ["object spread any widening", "const o = { ...input, issueUrl }; return o.issueUrl(input, \"r\");", "issueUrl"],
+  ["bind via call later invocation", "return Function.prototype.bind.call(issueUrl, undefined)(input, \"r\");", "input"],
+  ["bind via Reflect later invocation", "return Reflect.apply(Function.prototype.bind, issueUrl, [undefined])(input, \"r\");", "input"],
+  ["reassigned Reflect alias", "let invoke = Reflect.apply; invoke = (f: Function, _t: unknown, a: ArrayLike<any>) => f(a[1], a[0]); return invoke(issueUrl, undefined, [\"r\", input]);", "issueUrl"],
+  ["rest tag", "const core = (s: TemplateStringsArray, ...scopes: OrgContext[]) => scopes.length; return withAction(async ctx => core`${ctx}${input}`);", "input"],
+  ["tuple rest tag", "const core = (s: TemplateStringsArray, ...args: [string, OrgContext]) => args.length; return core`${\"r\"}${input}`;", "input"],
+  ["tuple rest alias erases context", "const core = (id: string, ctx: OrgContext) => id + ctx.userId; const alias: (...args: [string, any]) => string = core; return alias(\"r\", input);", "core"],
+
   ["Reflect invokes apply forwarder", "return Reflect.apply(Function.prototype.apply, issueUrl, [undefined, [input, \"r\"]]);", "[input, \"r\"]"],
   ["Reflect invokes bind forwarder", "return Reflect.apply(Function.prototype.bind, issueUrl, [undefined, input])(\"r\");", "[undefined, input]"],
 
@@ -541,6 +497,9 @@ const REVIEW_BYPASSES = [
 ] as const;
 
 const SAFE_REVIEW_CASES = [
+  ["tuple rest alias retains context", "const core = (id: string, ctx: OrgContext) => id + ctx.userId; const alias: (...args: [string, OrgContext]) => string = core; return withAction(async ctx => alias(\"r\", ctx));"],
+  ["tuple rest source retains context", "const core = (...args: [string, OrgContext]) => args[0] + args[1].userId; const alias: (id: string, ctx: OrgContext) => string = core; return withAction(async ctx => alias(\"r\", ctx));"],
+
   ["session Reflect invokes apply forwarder", "return withAction(async (ctx) => Reflect.apply(Function.prototype.apply, issueUrl, [undefined, [ctx, \"r\"]]));"],
   ["session Reflect invokes bind forwarder", "return withAction(async (ctx) => Reflect.apply(Function.prototype.bind, issueUrl, [undefined, ctx])(\"r\"));"],
 
@@ -622,25 +581,21 @@ export async function action(input: any) { ${body} }
 
   it.each(EXOTIC_BYPASSES)(
     "rejects %s",
-    (_shape, body) => {
+    (shape, body, target) => {
       const dir = mkdtempSync(join(tmpdir(), "server-action-exotic-"));
       try {
-        const files = writeFixture(dir, `"use server";
-import type { OrgContext } from "./auth";
-import { issueUrl } from "./report-core";
-export async function action(input: any) { ${body} }
-`);
-        const target = EXOTIC_TARGETS[_shape];
+        if (!target) throw new Error(`Missing exotic assertion target for ${shape}`);
         const source = `"use server";
 import type { OrgContext } from "./auth";
 import { issueUrl } from "./report-core";
 export async function action(input: any) { ${body} }
 `;
+        const files = writeFixture(dir, source);
         const line = source.split("\n").findIndex((text) => text.includes(target.line)) + 1;
         const findings = checkServerActionExports(dir, files, FIXTURE_OPTIONS);
         expect(findings.filter((finding) => finding.line === line && finding.name === target.node))
           .toEqual([expect.objectContaining({ reason: expect.stringMatching(/call argument|callable provenance/) })]);
-        if (_shape === "type-erased reflective invocation") expect(findings).toHaveLength(1);
+        if ("only" in target && target.only) expect(findings).toHaveLength(1);
       } finally {
         rmSync(dir, { recursive: true, force: true });
       }

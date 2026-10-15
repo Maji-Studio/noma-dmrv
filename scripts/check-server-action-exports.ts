@@ -57,7 +57,8 @@
  * signatures at every property depth, including namespaces and class instances.
  * Passing a guarded callable or class to an untyped slot, or erasing an object
  * carrying guarded methods to any/unknown/Function/object, deliberately fails
- * closed, even if the recipient only logs or registers it. Callback parameter
+ * closed, even if the recipient only logs or registers it. This broad rule is
+ * a deliberate product-owner decision for #882 / PR #1033. Callback parameter
  * types must also preserve their trusted context contract. Precisely resolved
  * forwarders consume their target under the argument checks above.
  *
@@ -71,6 +72,7 @@ import ts from "typescript";
 import {
   declaredParameterFindings,
   invokedFunction,
+  parameterCandidates,
 } from "./server-action-call-targets";
 import { losesGuardedSignature, provenanceTarget } from "./server-action-provenance";
 import {
@@ -501,10 +503,14 @@ function checkServerBody(
     }
     if (ts.isTaggedTemplateExpression(node) && ts.isTemplateExpression(node.template)) {
       const signature = checker.getResolvedSignature(node);
+      const declaration = signature?.getDeclaration();
+      const declared = declaration && ts.isFunctionLike(declaration)
+        ? checker.getSignatureFromDeclaration(declaration) : undefined;
+      const signatures = [signature, declared].filter((value): value is ts.Signature => !!value);
       node.template.templateSpans.forEach((span, index) => {
-        const parameter = signature?.getParameters()[index + 1];
-        if (parameter && carriesAnyContext(checker, inspector,
-          checker.getTypeAtLocation(span.expression), checker.getTypeOfSymbol(parameter))) {
+        const parameters = signatures.flatMap((candidate) => parameterCandidates(checker, candidate, index + 1));
+        if (parameters.some((parameter) => carriesAnyContext(checker, inspector,
+          checker.getTypeAtLocation(span.expression), parameter))) {
           report(span.expression, span.expression.getText(), "call argument passes an `any` value into a guarded template parameter");
         }
       });

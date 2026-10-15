@@ -67,16 +67,18 @@ function callableSource(
     ? checker.getSymbolAtLocation(source)?.valueDeclaration
     : undefined;
   return declaration && ts.isVariableDeclaration(declaration) && declaration.initializer
+    && ts.isVariableDeclarationList(declaration.parent)
+    && (declaration.parent.flags & ts.NodeFlags.Const)
     ? callableSource(checker, declaration.initializer, seen)
     : source;
 }
 
-/** `core.call`, `core["call"]`, `maybeCore?.call`: the built-in forwarder only. */
 function stringKey(checker: ts.TypeChecker, expression: ts.Expression): string | null {
   const type = checker.getTypeAtLocation(expression);
   return type.isStringLiteral() ? type.value : null;
 }
 
+/** `core.call`, `core["call"]`, `maybeCore?.call`: the built-in forwarder only. */
 function forwarderTarget(
   checker: ts.TypeChecker,
   callee: ts.Expression,
@@ -128,7 +130,8 @@ function reflectMethod(checker: ts.TypeChecker, expression: ts.Expression): stri
     if (binding && ts.isBindingElement(binding) && ts.isObjectBindingPattern(binding.parent)) {
       const variable = binding.parent.parent;
       const name = binding.propertyName ?? binding.name;
-      if (ts.isVariableDeclaration(variable) && variable.initializer && ts.isIdentifier(name)) {
+      if (ts.isVariableDeclaration(variable) && variable.initializer && ts.isIdentifier(name)
+        && ts.isVariableDeclarationList(variable.parent) && (variable.parent.flags & ts.NodeFlags.Const)) {
         symbol = checker.getPropertyOfType(
           checker.getTypeAtLocation(variable.initializer),
           name.text,
@@ -165,7 +168,7 @@ export function invokedFunction(
     // Preserve that receiver's signatures instead of the untyped lib signature.
     if (inner && forwarded.method === "call" && call.arguments?.[0]) {
       return {
-        target: call.arguments[0],
+        target: inner.method === "bind" ? undefined : call.arguments[0],
         signatures: signaturesOf(checker, call.arguments[0]),
         firstArgument: 2,
         boundParameters: 0,
@@ -187,7 +190,7 @@ export function invokedFunction(
     const receiver = reflectSlots.find((slot) => slot.position === 1 && !slot.open)?.value;
     if (reflected === "apply" && forwarder && receiver) {
       return {
-        target: receiver,
+        target: forwarder.method === "bind" ? undefined : receiver,
         signatures: signaturesOf(checker, receiver),
         firstArgument: 2,
         boundParameters: 0,
@@ -205,6 +208,8 @@ export function invokedFunction(
   }
   // `fn.bind(this, a)(b)`: b binds the parameter after the bound ones.
   if (ts.isCallExpression(callee)) {
+    const nested = nestedBind(checker, callee);
+    if (nested) return { ...nested, firstArgument: 0, applied: false };
     const bound = forwarderTarget(checker, unwrapExpression(callee.expression));
     if (bound?.method === "bind") {
       return {
@@ -234,8 +239,44 @@ export function invokedFunction(
     : null;
 }
 
+/** A nested bind is consumed only by a later invocation we can check. */
+function nestedBind(
+  checker: ts.TypeChecker,
+  call: ts.CallExpression,
+): Pick<InvokedFunction, "target" | "signatures" | "boundParameters"> | null {
+  const callee = callableSource(checker, call.expression);
+  const outer = forwarderTarget(checker, callee);
+  const inner = outer && forwarderTarget(checker, callableSource(checker, outer.target));
+  let target: ts.Expression | undefined;
+  let slots: ArgumentSlot[];
+  if (outer?.method === "call" && inner?.method === "bind") {
+    target = call.arguments[0];
+    slots = argumentSlots(checker, call.arguments.slice(1), 0);
+  } else if (reflectMethod(checker, callee) === "apply" && call.arguments[0] &&
+    forwarderTarget(checker, callableSource(checker, call.arguments[0]))?.method === "bind") {
+    target = call.arguments[1];
+    slots = appliedSlots(checker, call.arguments[2], 0, false);
+  } else return null;
+  if (!target) return null;
+  return {
+    target,
+    signatures: signaturesOf(checker, target),
+    boundParameters: slots.some((slot) => slot.open) ? null : Math.max(0, slots.length - 1),
+  };
+}
+
+/** Number of logical slots, expanding tuple-rest parameters. */
+export function parameterSlotCount(checker: ts.TypeChecker, signature: ts.Signature): number {
+  const parameters = signature.getParameters();
+  const last = parameters[parameters.length - 1];
+  const declaration = last?.valueDeclaration;
+  const elements = declaration && ts.isParameter(declaration) && declaration.dotDotDotToken
+    ? elementTypes(checker, checker.getTypeOfSymbol(last)) : null;
+  return parameters.length + Math.max(0, (elements?.length ?? 0) - 1);
+}
+
 /** The declared parameter types that may receive the value at `index`. */
-function parameterCandidates(
+export function parameterCandidates(
   checker: ts.TypeChecker,
   signature: ts.Signature,
   index: number,
@@ -421,19 +462,7 @@ export function declaredParameterFindings(
     if (findings.has(slot.node) || isExempt(slot.node)) continue;
     for (const signature of invoked.signatures) {
       const from = positionsKnown ? Math.max(0, slot.position) : 0;
-      const parameters = signature.getParameters();
-      const last = parameters[parameters.length - 1];
-      const declaration = last?.valueDeclaration;
-      const restElements = declaration && ts.isParameter(declaration) && declaration.dotDotDotToken
-        ? elementTypes(checker, checker.getTypeOfSymbol(last))
-        : null;
-      // Defense in depth alongside contextual checking: a tuple rest occupies
-      // several parameter slots despite having only
-      // one parameter symbol. Open arguments must meet its later elements too.
-      const count = Math.max(
-        parameters.length + Math.max(0, (restElements?.length ?? 0) - 1),
-        from + 1,
-      );
+      const count = Math.max(parameterSlotCount(checker, signature), from + 1);
       const positions = slot.open
         ? Array.from({ length: count - from }, (_, i) => from + i)
         : [slot.position];

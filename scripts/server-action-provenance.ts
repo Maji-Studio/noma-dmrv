@@ -1,5 +1,6 @@
 /** Reject conversions that discard a callable's trusted parameter contract. */
 import ts from "typescript";
+import { parameterCandidates, parameterSlotCount } from "./server-action-call-targets";
 import {
   carriesAnyContext,
   elementCandidates,
@@ -54,15 +55,14 @@ export function losesGuardedSignature(
   for (const kind of [ts.SignatureKind.Call, ts.SignatureKind.Construct]) {
     const receiving = checker.getSignaturesOfType(target, kind);
     for (const signature of checker.getSignaturesOfType(source, kind)) {
-      const guarded = signature.getParameters().map((parameter, index) => ({
-        type: checker.getTypeOfSymbol(parameter), index,
-      })).filter(({ type }) => describesContext(inspector, type));
+      const guarded = Array.from({ length: parameterSlotCount(checker, signature) }, (_, index) =>
+        parameterCandidates(checker, signature, index).map((type) => ({ type, index })))
+        .flat().filter(({ type }) => describesContext(inspector, type));
       if (!guarded.length) continue;
       if (!receiving.length || receiving.some((candidate) => guarded.some(({ type, index }) => {
-        const parameter = candidate.getParameters()[index];
-        if (!parameter) return true;
-        const supplied = checker.getTypeOfSymbol(parameter);
-        return !describesContext(inspector, supplied) || carriesAnyContext(checker, inspector, supplied, type);
+        const supplied = parameterCandidates(checker, candidate, index);
+        return !supplied.length || supplied.some((slot) =>
+          !describesContext(inspector, slot) || carriesAnyContext(checker, inspector, slot, type));
       }))) return true;
     }
   }
@@ -106,6 +106,18 @@ export function provenanceTarget(checker: ts.TypeChecker, node: ts.Expression): 
   if (contextual) return contextual;
   if ((ts.isCallExpression(parent) || ts.isNewExpression(parent)) && parent.arguments?.includes(node)) {
     return checker.getUnknownType();
+  }
+  // Inference can erase a guarded value without providing a contextual type.
+  // Object shorthand/property nodes sit between the value and its literal.
+  const container = ts.isShorthandPropertyAssignment(parent) || ts.isPropertyAssignment(parent)
+    ? parent.parent : parent;
+  if (ts.isExpression(container)) {
+    const inferred = checker.getTypeAtLocation(container);
+    if (inferred.flags & (ts.TypeFlags.Any | ts.TypeFlags.Unknown)) return inferred;
+    if (ts.isArrayLiteralExpression(container)) {
+      const elements = elementTypes(checker, inferred);
+      return elements?.find((type) => !!(type.flags & (ts.TypeFlags.Any | ts.TypeFlags.Unknown)));
+    }
   }
   return undefined;
 }
