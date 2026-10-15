@@ -19,7 +19,8 @@ const enrichment = { [group.components[0].id]: { electricity_use: { unit: "kWh",
 const input = { client: {} as IsometricClient, externalProjectId: template.project_id, template, blueprints: [] };
 function previous(age: number, overrides = {}) {
   return { definition: normalizeTemplateDefinition(template), enrichment, externalProjectId: template.project_id,
-    lastObservedAt: new Date(Date.now() - age), ...overrides } as unknown as Awaited<ReturnType<typeof getLatestTemplateObservation>>;
+    // Observed just now; only the enrichment read is `age` old.
+    lastObservedAt: new Date(), enrichedAt: new Date(Date.now() - age), ...overrides } as unknown as Awaited<ReturnType<typeof getLatestTemplateObservation>>;
 }
 
 beforeEach(() => {
@@ -31,7 +32,7 @@ describe("template enrichment reuse", () => {
     vi.mocked(getLatestTemplateObservation).mockResolvedValue(previous(0));
     await observeRemovalTemplate(ctx, input);
     expect(loadTemplateEnrichment).not.toHaveBeenCalled();
-    expect(observeTemplate).toHaveBeenCalledWith(ctx, expect.objectContaining({ enrichment }));
+    expect(observeTemplate).toHaveBeenCalledWith(ctx, expect.objectContaining({ enrichment, enrichmentReused: true }));
   });
   it.each([
     ["expired", () => previous(TEMPLATE_ENRICHMENT_TTL_MS + 1)],

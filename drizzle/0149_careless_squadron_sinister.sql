@@ -1,0 +1,1 @@
+ALTER TABLE "removal_template_observations" ADD COLUMN "enriched_at" timestamp with time zone DEFAULT now() NOT NULL;

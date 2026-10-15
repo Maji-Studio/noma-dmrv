@@ -70,6 +70,9 @@ describe("org-scoped template observations", () => {
     const newer = await observe(changed);
     expect(newer.id).not.toBe(original.id);
     expect(newer.lineSources[component.id].automaticSource).toBe("run-electricity");
+    // A review opened on the superseded row would never reach compilation.
+    await expect(reviewLineContracts(ctx, { observationId: original.id, expectedVersion: original.version, assignments: {} }))
+      .rejects.toMatchObject({ code: "stale_version" });
     const reviewed = await reviewLineContracts(ctx, {
       observationId: newer.id, expectedVersion: newer.version,
       assignments: { [component.id]: { scope: "operating", automaticSource: "run-electricity", entryPolicy: "none" } },

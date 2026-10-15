@@ -10,7 +10,7 @@ import {
   semanticFingerprint, validateLineSources,
   type GhgEntryTemplate, type LineContract, type TemplateEnrichment,
 } from "@/lib/isometric/template-observations";
-import { assertRowVersion, nextVersion } from "./row-version";
+import { assertRowVersion, nextVersion, staleRowVersion } from "./row-version";
 import { requireOrgScope } from "./utils";
 
 const OBSERVATION_ORDER_TICK_MS = 1;
@@ -43,6 +43,8 @@ export async function getPreviousTemplateObservation(ctx: OrgContext, provider: 
 
 export async function observeTemplate(ctx: OrgContext, input: {
   provider: string; externalProjectId: string; template: GhgEntryTemplate; enrichment: TemplateEnrichment;
+  /** True when `enrichment` was copied from a stored observation rather than read from the registry. */
+  enrichmentReused?: boolean;
 }) {
   requireOrgScope(ctx);
   const definition = normalizeTemplateDefinition(input.template);
@@ -69,12 +71,13 @@ export async function observeTemplate(ctx: OrgContext, input: {
     const [row] = await tx.insert(observations).values({
       organizationId: ctx.organizationId, provider: input.provider, externalProjectId: input.externalProjectId,
       externalTemplateId: input.template.id, semanticFingerprint: semantic, fullFingerprint: full,
-      definition, enrichment: input.enrichment, lineSources, lastObservedAt: now,
+      definition, enrichment: input.enrichment, lineSources, lastObservedAt: now, enrichedAt: now,
     }).onConflictDoUpdate({
       target: [observations.organizationId, observations.provider, observations.externalTemplateId,
         observations.semanticFingerprint, observations.fullFingerprint],
       set: {
         lastObservedAt: now,
+        ...(input.enrichmentReused ? {} : { enrichedAt: now }),
         ...(sourcesChanged ? { lineSources, version: nextVersion(observations.version), updatedAt: now } : {}),
       },
     }).returning();
@@ -98,6 +101,12 @@ export async function reviewLineContracts(ctx: OrgContext, input: ReviewLineCont
     )).for("update");
     if (!row) throw new SafeError("Removal template observation not found.");
     assertRowVersion({ entity: "removal_template_observation", id: row.id, expectedVersion: input.expectedVersion, actualVersion: row.version });
+    // Compilation reads the latest observation; a review of a superseded one would never apply.
+    const [latest] = await tx.select({ id: observations.id }).from(observations).where(and(
+      eq(observations.organizationId, ctx.organizationId), eq(observations.provider, row.provider),
+      eq(observations.externalTemplateId, row.externalTemplateId),
+    )).orderBy(desc(observations.lastObservedAt), desc(observations.id)).limit(1);
+    if (latest?.id !== row.id) throw staleRowVersion("removal_template_observation", row.id);
     if (!isEnrichmentComplete(row.definition, row.enrichment)) throw new SafeError("Template not fully read. Try again.");
     const componentIds = new Set(row.definition.groups.flatMap((group) => group.components.map((component) => component.id)));
     const lineSources = { ...row.lineSources };

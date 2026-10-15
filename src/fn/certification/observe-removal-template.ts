@@ -16,9 +16,11 @@ export async function observeRemovalTemplate(ctx: OrgContext, input: {
 }) {
   const previous = await getLatestTemplateObservation(ctx, ISOMETRIC_PROVIDER, input.template.id);
   const definition = normalizeTemplateDefinition(input.template);
-  const age = previous ? Date.now() - previous.lastObservedAt.getTime() : Infinity;
+  const age = previous ? Date.now() - previous.enrichedAt.getTime() : Infinity;
   const reuse = previous && previous.externalProjectId === input.externalProjectId && age >= 0 && age < TEMPLATE_ENRICHMENT_TTL_MS &&
     canonicalJson(previous.definition) === canonicalJson(definition) && isEnrichmentComplete(definition, previous.enrichment);
   const enrichment = reuse ? previous.enrichment : await loadTemplateEnrichment(input.client, input.template, input.blueprints);
-  return observeTemplate(ctx, { provider: ISOMETRIC_PROVIDER, externalProjectId: input.externalProjectId, template: input.template, enrichment });
+  return observeTemplate(ctx, {
+    provider: ISOMETRIC_PROVIDER, externalProjectId: input.externalProjectId, template: input.template, enrichment, enrichmentReused: !!reuse,
+  });
 }

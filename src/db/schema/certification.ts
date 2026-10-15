@@ -506,6 +506,8 @@ export const removalTemplateObservations = pgTable("removal_template_observation
   version: integer("version").notNull().default(1),
   firstObservedAt: timestamp("first_observed_at", { withTimezone: true }).notNull().defaultNow(),
   lastObservedAt: timestamp("last_observed_at", { withTimezone: true }).notNull().defaultNow(),
+  /** When enrichment was last read from the registry; the reuse TTL runs from here, not from lastObservedAt. */
+  enrichedAt: timestamp("enriched_at", { withTimezone: true }).notNull().defaultNow(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [
