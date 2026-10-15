@@ -59,6 +59,7 @@ interface MassMoistureInputProps {
   placeholder?: string;
   /** Explanation added behind the ⓘ, after `hint`. */
   helperText?: string;
+  rangeHelperText?: string;
   hint?: ReactNode;
   /** Overrides the short visible line under the input (a limit or unit). */
   cue?: string;
@@ -100,6 +101,7 @@ export function MoistureField({
   helperText,
   cue,
   hint = MOISTURE_BASIS_HINT,
+  rangeHelperText = MOISTURE_RANGE_HELPER,
   certifyRequired,
   certifyStatus,
   materialLabel,
@@ -117,7 +119,7 @@ export function MoistureField({
       error={error}
       warning={guidance?.warning ?? warning}
       // The 0 to 100% range sits behind the ⓘ with the basis (Kenji, cue review 2026-09-30).
-      helperText={[MOISTURE_RANGE_HELPER, helperText].filter(Boolean).join(" ")}
+      helperText={[rangeHelperText, helperText].filter(Boolean).join(" ")}
       cue={guidance?.cue ?? cue}
       hint={guidance?.basisText ? <>{guidance.basisText} {hint}</> : hint}
       required={required}

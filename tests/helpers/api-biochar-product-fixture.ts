@@ -1,3 +1,4 @@
+import { feedstockFixtureValues } from "./feedstock-fixture";
 import { randomUUID } from "node:crypto";
 import { expect } from "vitest";
 import { db } from "@/db";
@@ -62,9 +63,9 @@ export async function createApiProductFixture(): Promise<ApiProductFixture> {
     code: `E2E-API-PB-${f.tag}`, name: `E2E Pure bin ${f.tag}`, type: "product_bin" }).returning();
   const [ingredientBin] = await db.insert(storageLocations).values({ organizationId, facilityId: f.facility.id, feedstockTypeId: f.ingredientType.id,
     code: `E2E-API-IB-${f.tag}`, name: `E2E Ingredient bin ${f.tag}`, type: "feedstock_bin" }).returning();
-  await db.insert(feedstocks).values({ organizationId, facilityId: f.facility.id, code: `E2E-API-IN-${f.tag}`, status: "complete", feedstockTypeId: f.ingredientType.id,
+  await db.insert(feedstocks).values(await feedstockFixtureValues(db, { organizationId, facilityId: f.facility.id, code: `E2E-API-IN-${f.tag}`, status: "complete", feedstockTypeId: f.ingredientType.id,
     storageLocationId: ingredientBin.id, massWetKg: INGREDIENT_STOCK_KG, massDryKg: INGREDIENT_STOCK_KG * (1 - INGREDIENT_MOISTURE_PERCENT / 100),
-    moistureContentPercent: INGREDIENT_MOISTURE_PERCENT, deliveryDate: new Date("2026-09-01") });
+    moistureContentPercent: INGREDIENT_MOISTURE_PERCENT, deliveryDate: new Date("2026-09-01") }));
   const writer = await issueCredential(f, "Product writer", PRODUCT_WRITE_SCOPES);
   return {
     ...f, pureBin, ingredientBin, r1: f.runs[0].id, r2: f.runs[1].id,

@@ -101,7 +101,7 @@ async function prepare(fixture: ApiFeedstockFixture, scenario: Scenario) {
     await seedFeedstockDraw(fixture, [{ feedstockId: saved.row.id, wetMassUsedKg: DRAW_WET_KG }]);
   }
   if (scenario === "stock-blocked-delete") {
-    await db.insert(binMovements).values({
+    await db.insert(binMovements).values({ occurredAt: new Date("2026-01-01T00:00:00.000Z"),
       organizationId: fixture.ctx.organizationId, storageLocationId: fixture.binId,
       lane: "feedstock", movementType: "loss", massDeltaKg: -DRAW_WET_KG, reason: "Recorded loss",
     });

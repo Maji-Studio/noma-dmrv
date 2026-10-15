@@ -158,7 +158,7 @@ export function FeedstockBinBalance({ storageLocationId, facilityId, capacityKg,
     </StockCard>
     <StockChartCard history={<FeedstockStockHistory storageLocationId={storageLocationId} facilityId={facilityId}
       renderTrigger={(open, icon) => <CardTextButton icon={icon} onClick={open}>History</CardTextButton>} />}>
-      {stock.error ? <Notice tone="error">{stock.error.message}</Notice> : stock.isLoading ? <p role="status" className="body-caption">Loading stock history</p> : points.length > 0 ? <StockLevelChart compact points={points} timeZone={clock.timeZone} now={stock.dataUpdatedAt} solidLabel="Dry solids, estimated" /> : stock.data?.missingDryBasis ? <EmptyState icon={null} title="Stock composition unavailable" description="An intake is missing its mass basis. Wet movements are available in History." padding="sm" /> : undefined}
+      {stock.error ? <Notice tone="error">{stock.error.message}</Notice> : stock.isLoading ? <p role="status" className="body-caption">Loading stock history</p> : points.length > 0 ? <StockLevelChart compact points={points} timeZone={clock.timeZone} now={stock.dataUpdatedAt} solidLabel="Dry solids, estimated" /> : undefined}
     </StockChartCard>
   </div>;
 }

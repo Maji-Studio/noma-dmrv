@@ -1030,6 +1030,13 @@
       "when": 1792073485989,
       "tag": "0146_drop_activity_facility_fk",
       "breakpoints": true
+    },
+    {
+      "idx": 147,
+      "version": "7",
+      "when": 1792074519013,
+      "tag": "0147_feedstock_intake_required_fields",
+      "breakpoints": true
     }
   ]
 }

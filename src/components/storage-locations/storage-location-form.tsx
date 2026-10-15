@@ -18,6 +18,7 @@ import { SegmentedControl } from "@/components/forms/segmented-control";
 import { drawOrderOptions, stockModeOptions } from "./stock-mode-art";
 import { FormActions } from "@/components/forms/form-actions";
 import {
+  MERGE_TIME_REQUIRED_MESSAGE,
   storageLocationFormSchema,
   storageLocationTypes,
   STORAGE_LOCATION_TYPE_SHORT_LABELS,
@@ -145,7 +146,7 @@ export function StorageLocationForm({
     if (!isOutputBinType(normalized.type)) normalized.stockMode = "split";
     if (!merging) normalized.mergedAt = null;
     else if (!normalized.mergedAt) {
-      setError("mergedAt", { message: "Enter when the batches were merged." });
+      setError("mergedAt", { message: MERGE_TIME_REQUIRED_MESSAGE });
       return;
     }
     return onSubmit(normalized);

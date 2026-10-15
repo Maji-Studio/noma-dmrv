@@ -524,7 +524,7 @@ _Avoid_: timeline, ledger, audit log.
 **Mass balance**:
 The dry-mass flow reading of a **credit batch**: feedstock → production
 runs → biochar lots → applied, with every loss drawn as an explicit
-labeled exit — **ineligible feedstock**, **conversion loss**, in-storage
+labeled exit — **conversion loss**, in-storage
 mass. Ribbon widths always mean dry kg; columns are never normalized.
 _Avoid_: volume flow.
 

@@ -169,7 +169,6 @@ export async function getStorageLocations(
       capacityKg: storageLocations.capacityKg,
       storageMethod: storageLocations.storageMethod,
       storageDescription: storageLocations.storageDescription,
-      supplierReferenceId: storageLocations.supplierReferenceId,
       feedstockTypeId: storageLocations.feedstockTypeId,
       formulationId: storageLocations.formulationId,
       stockMode: storageLocations.stockMode,
@@ -268,7 +267,6 @@ export async function getStorageLocationWithFacility(
       capacityKg: storageLocations.capacityKg,
       storageMethod: storageLocations.storageMethod,
       storageDescription: storageLocations.storageDescription,
-      supplierReferenceId: storageLocations.supplierReferenceId,
       feedstockTypeId: storageLocations.feedstockTypeId,
       formulationId: storageLocations.formulationId,
       stockMode: storageLocations.stockMode,
@@ -337,7 +335,6 @@ export async function createStorageLocation(
     drawOrder?: OutputDrawOrder;
     storageMethod?: string | null;
     storageDescription?: string | null;
-    supplierReferenceId?: string | null;
   }
 ): Promise<StorageLocation> {
   requireOrgScope(ctx);
@@ -404,7 +401,6 @@ export async function createStorageLocation(
         drawOrder: data.drawOrder ?? "oldest_first",
         storageMethod: data.storageMethod ?? null,
         storageDescription: data.storageDescription ?? null,
-        supplierReferenceId: data.supplierReferenceId ?? null,
       })
       .returning()
   );
@@ -469,7 +465,6 @@ export async function updateStorageLocation(
     mergedAt?: Date;
     storageMethod?: string | null;
     storageDescription?: string | null;
-    supplierReferenceId?: string | null;
     /** `version` the edit form loaded; refuses a save built on a stale read. */
     expectedVersion: number;
   }

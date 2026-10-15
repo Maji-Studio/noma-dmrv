@@ -199,6 +199,7 @@ describe("FeedstockForm single-bin mass editing", () => {
     supplierId: "33333333-3333-4333-8333-333333333333",
     feedstockTypeId: "44444444-4444-4444-8444-444444444444",
     storageLocationId: "55555555-5555-4555-8555-555555555555",
+    deliveryDate: new Date("2026-10-06"),
     massWetKg: 100,
     moistureContentPercent: 25,
   } as FeedstockWithRelations;

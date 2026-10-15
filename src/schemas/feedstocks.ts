@@ -11,7 +11,6 @@ import {
   clearablePositiveNumber,
   emptyToNull,
   expectedVersionSchema,
-  massKgSchema,
   optionalPositiveNumber,
   pipeToCanonicalNumber,
   positiveMassKgSchema,
@@ -37,9 +36,7 @@ const ALLOCATION_OVERAGE_JUSTIFICATION_MESSAGE =
 // since the only way to hold one is a deliberate pre-fix entry and there is no
 // production data to grandfather. `updateFeedstockSchema` below applies the
 // same positive bound to a wet mass that is present, so the invariant holds at
-// the server boundary too; `mass_wet_kg` stays nullable in the database, and a
-// null (never a zero) is what `determineFeedstockStatus` reports as
-// `missing_data`.
+// the server boundary too. The database requires all intake measurements.
 const requiredPositiveMass = requiredPositiveMassKgSchema(
   "Required",
   "Enter a valid number.",
@@ -49,8 +46,8 @@ const requiredPositiveMass = requiredPositiveMassKgSchema(
 const requiredMoisturePercent = pipeToCanonicalNumber(
   requiredNumber(),
   storedPercentSchema()
-    .min(MOISTURE_MIN, "Moisture must be between 0 and 100")
-    .max(MOISTURE_MAX, "Moisture must be between 0 and 100"),
+    .min(MOISTURE_MIN, "Moisture must be at least 0 and below 100")
+    .lt(MOISTURE_MAX, "Moisture must be below 100"),
 );
 
 // A business date: the day the truck arrived, never an instant (section 3.2
@@ -83,9 +80,7 @@ export const feedstockFormSchema = z.object({
     .min(1, "Select a facility.")
     .uuid("Choose a valid facility.").toLowerCase()
     .describe("Receiving facility identifier, UUID."),
-  // Optional only for editing legacy records created before delivery dates.
-  // The create schema below restores the required constraint.
-  deliveryDate: deliveryDateSchema.optional().describe("Facility-local delivery business date, YYYY-MM-DD, never an instant."),
+  deliveryDate: deliveryDateSchema.describe("Facility-local delivery business date, YYYY-MM-DD, never an instant."),
   supplierId: z
     .string()
     .min(1, "Select a supplier.")
@@ -108,7 +103,7 @@ export const feedstockFormSchema = z.object({
     .uuid("Choose a valid feedstock type.").toLowerCase()
     .describe("Feedstock type identifier, UUID."),
   totalWetMassKg: requiredPositiveMass.describe("Declared delivery wet mass in kilograms."),
-  moisturePercent: requiredMoisturePercent.describe("Water as percent of wet mass, 0 to 100, not a fraction."),
+  moisturePercent: requiredMoisturePercent.describe("Water as percent of wet mass, 0 inclusive to 100 exclusive, not a fraction."),
 
   // --- Bin Allocations ---
   allocations: z
@@ -171,11 +166,8 @@ export const updateFeedstockSchema = z.object({
   transportDistanceSource: optionalDistanceSource.describe("Distance evidence: map_estimate is a mapped route, manual is operator-entered, document is documented evidence; null when unspecified."),
   feedstockTypeId: uuidSchema().optional().describe("Feedstock type identifier, UUID."),
   massWetKg: positiveMassKgSchema("Must be greater than 0").optional().describe("Allocated wet mass in kilograms."),
-  moistureContentPercent: storedPercentSchema().min(0).max(100).optional().describe("Water as percent of wet mass, 0 to 100, not a fraction."),
-  // Non-negative, not positive: dry mass is derived, and a 100% moisture
-  // intake legitimately derives to zero.
-  massDryKg: massKgSchema().optional().describe("Dry mass in kilograms, checked against wet mass and moisture."),
-  storageLocationId: emptyToNull.or(uuidSchema()).nullable().optional().describe("Receiving bin identifier, UUID; null clears the bin on update."),
+  moistureContentPercent: storedPercentSchema().min(MOISTURE_MIN).lt(MOISTURE_MAX).optional().describe("Water as percent of wet mass, 0 inclusive to 100 exclusive, not a fraction."),
+  storageLocationId: uuidSchema().optional().describe("Receiving bin identifier, UUID; omitted keeps the current bin."),
   overrideJustification: z.string().max(2000).optional().nullable().or(z.literal(""))
     .describe("Override justification, plain text."),
   notes: z.string().max(2000).optional().nullable().or(z.literal(""))

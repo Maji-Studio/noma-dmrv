@@ -96,14 +96,6 @@ async function seedGeoLineage(
 
   try {
     await db.transaction(async (tx) => {
-      if (!withGeo) {
-        // Operational records may lack GPS; the required facility pin remains.
-        await tx
-          .update(schema.feedstocks)
-          .set({ gpsLatitude: null, gpsLongitude: null })
-          .where(eq(schema.feedstocks.id, seededData.feedstock.id));
-      }
-
       await tx.insert(schema.productionRuns).values({
         organizationId: DEC_ORG_ID,
         id: ids.productionRun,

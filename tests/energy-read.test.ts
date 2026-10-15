@@ -1,3 +1,4 @@
+import { feedstockFixtureValues } from "./helpers/feedstock-fixture";
 /**
  * DB-backed tests for the energy read and the facility emission factors
  * (ADR 0031). Requires the real Postgres configured by the test environment.
@@ -55,7 +56,7 @@ beforeAll(async () => {
   const orgId = fixture.ctx.organizationId;
   const [feedstock] = await db
     .insert(feedstocks)
-    .values({
+    .values(await feedstockFixtureValues(db, {
       organizationId: orgId,
       facilityId: fixture.facility.id,
       code: `E2E-ENERGY-FS-${fixture.tag}`,
@@ -63,7 +64,7 @@ beforeAll(async () => {
       deliveryDate: new Date("2026-09-01T06:00:00Z"),
       massWetKg: FEEDSTOCK_WET_KG,
       massDryKg: FEEDSTOCK_WET_KG / 2,
-    })
+    }))
     .returning();
   feedstockId = feedstock.id;
   await db.insert(transportLegs).values({

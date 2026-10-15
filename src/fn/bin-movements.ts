@@ -16,6 +16,7 @@
 import { getFeedstockBinStock } from "@/data-access/feedstock-bin-ledger";
 import { uuidSchema } from "@/schemas/helpers";
 import { withAction } from "./with-action";
+import type { DomainIssue } from "@/lib/domain-errors";
 import type { ConflictRef } from "@/lib/conflict-ref";
 import { z } from "zod";
 import {
@@ -38,6 +39,7 @@ export type RecordLossActionResult =
       success: false;
       error: string;
       field?: "lossMassKg";
+      issues?: DomainIssue[];
       conflict?: ConflictRef;
     };
 
@@ -85,6 +87,7 @@ export async function recordLossFn(
       storageLocationId: validated.storageLocationId,
       lane: validated.lane,
       movementType: "loss",
+      occurredAt: new Date(validated.occurredAt),
       // Losses are stored as a negative delta.
       massDeltaKg: -validated.lossMassKg,
       reason: validated.reason,

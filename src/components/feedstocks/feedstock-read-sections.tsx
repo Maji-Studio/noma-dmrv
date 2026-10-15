@@ -1,11 +1,9 @@
 /** Feedstock delivery side-sheet view mode: the sections config for EntitySideSheet. */
 import { TRANSPORT_EVIDENCE_HINTS } from "@/components/transport-legs/transport-evidence-hints";
-import { certificationDetailField } from "@/lib/certification/certify-field-registry";
 import { formatDate, formatMassKg } from "@/lib/format-utils";
 import { formatMoisturePercent, MOISTURE_FIELD_LABEL } from "@/lib/mass-moisture";
 import { MoistureSplit } from "@/components/ui/moisture-split";
 import { TransportEvidencePanel, TransportLegsSummary } from "@/components/transport-legs";
-import { resolveCertFieldStatus } from "@/components/forms/cert-field-status";
 import type { DetailPanelSection } from "@/components/ui/detail-panel";
 import type { FeedstockWithRelations } from "@/data-access/feedstocks";
 
@@ -33,8 +31,6 @@ export function feedstockSheetSections(feedstock: FeedstockWithRelations): Detai
         { label: "Feedstock type", value: feedstock.feedstockTypeName },
         {
           label: "Total wet mass (kg)",
-          ...certificationDetailField("feedstock", "massWetKg"),
-          certifyStatus: resolveCertFieldStatus(true, feedstock.massWetKg !== null),
           value: formatMassKg(feedstock.massWetKg),
         },
         {

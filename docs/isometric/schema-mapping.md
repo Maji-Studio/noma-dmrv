@@ -6,10 +6,10 @@
 
 | Area | Current implementation evidence | Status | Remaining gap |
 |---|---|---|---|
-| Feedstock EC1-EC15 assessment | Ambient feedstock attributes in `src/db/schema/feedstock.ts` | missing | No criterion catalog or per-period assessment store; `feedstock_sc_assessments` was removed |
-| Ineligible biomass mass accounting | Read-time lineage and roll-ups in `src/data-access/credit-batch-accounting.ts`; eligibility flags on feedstocks | partial | No Reporting-Period issuance gate for the >25% rule |
-| Counterfactual storage | Counterfactual category and quantity inputs in `src/db/schema/feedstock.ts` | partial | No dated assessment, expiry, sourcing-change invalidation, or EC14 wildfire lifecycle |
-| Market leakage | Method/result fields on feedstocks | partial | v1.2 EC combination evidence and replacement-emissions structure are missing |
+| Feedstock EC1-EC15 assessment | Evidence maintained outside noma (#942 q8) | external | No local criterion assessment store or eligibility gate |
+| Feedstock eligibility evidence | Maintained outside noma (#942 q8) | external | No intake eligibility flag or ineligible-mass exit; BFA Appendix 3 sourcing recommendations are not a general 25% cap |
+| Counterfactual storage | Evidence maintained outside noma (#942 q8) | external | No delivery-level category, quantity or baseline columns |
+| Market leakage | Evidence maintained outside noma (#942 q8) | external | No delivery-level method or result columns |
 | Production-process sampling | `production_processes` epoch/prerequisites, immutable `credit_batches.sampling`, Method-B checks in current credit-batch paths | partial | Sampled path exists; unsampled registry representation remains sandbox-only/unconfirmed |
 | Credit-batch accounting | `src/data-access/credit-batch-accounting.ts` | implemented | This is the canonical lineage, roll-up, and stored-CO2e preview module; do not reintroduce summary columns |
 | Reactor diagram and gas-loss controls | Reactor specifications; `sensor_data` and calibration-certificate documents (the original readings CSV is retained unchanged) | partial | noma does not inspect or normalize the CSV's pressure values; no explicit diagram version approval or annual calibration/leak-test event model |

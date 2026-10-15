@@ -1,3 +1,4 @@
+import { feedstockFixtureValues, cleanupFeedstockFixtureParents } from "./helpers/feedstock-fixture";
 import { outputProductFixtureValues, deleteOutputProductFixtures, deleteOutputFacilityFixtures } from "./helpers/output-contract-fixtures";
 /**
  * Integration coverage for the `lastActivityAt` sort in `getStorageLocations`.
@@ -192,7 +193,7 @@ async function createFixture(runId: string): Promise<ActivitySortFixture> {
     // Branch 1: feedstock arriving in bin A.
     const insertedFeedstocks = await tx
       .insert(feedstocks)
-      .values({
+      .values(await feedstockFixtureValues(tx, {
         organizationId: TEST_ORG_ID,
         code: `FS-ACT-${runId}`,
         facilityId: facility.id,
@@ -203,7 +204,7 @@ async function createFixture(runId: string): Promise<ActivitySortFixture> {
         moistureContentPercent: 20,
         storageLocationId: binA.id,
         createdAt: T1_FEEDSTOCK_IN,
-      })
+      }))
       .returning({ id: feedstocks.id });
 
     // Branches 2 and 3: one run drawing from bin B, another filling bin C.
@@ -410,6 +411,7 @@ async function cleanupFixture(fixture: ActivitySortFixture): Promise<void> {
       .delete(productionRuns)
       .where(inArray(productionRuns.id, fixture.productionRunIds));
     await tx.delete(feedstocks).where(inArray(feedstocks.id, fixture.feedstockIds));
+    await cleanupFeedstockFixtureParents(tx);
     await tx
       .delete(formulations)
       .where(eq(formulations.id, fixture.formulationId));
@@ -424,6 +426,7 @@ async function cleanupFixture(fixture: ActivitySortFixture): Promise<void> {
     await tx.delete(reactors).where(eq(reactors.id, fixture.reactorId));
     await deleteOutputFacilityFixtures(tx, eq(facilities.id, fixture.facilityId));
   });
+  await cleanupFeedstockFixtureParents(db);
 }
 
 beforeAll(() => ensureTestOrg());

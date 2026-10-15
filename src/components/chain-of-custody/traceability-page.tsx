@@ -474,7 +474,7 @@ export function TraceabilityPage() {
         )
     : (batchData?.warnings ?? []);
   // A run-filtered sankey recomputes from the lineage subset; all figures
-  // (including the ineligible-feedstock exit) derive from the lineages
+  // derive from the lineages
   // themselves (issue #285), so no batch-level facts are needed.
   const filteredSankey =
     selectedRunId && batchLineages ? buildBatchSankey(batchLineages) : null;

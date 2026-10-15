@@ -1,4 +1,5 @@
-import { TEST_SITE_POSITION, ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
+import { feedstockFixtureValues, cleanupFeedstockFixtureParents } from "./helpers/feedstock-fixture";
+import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID, TEST_SITE_POSITION } from "./helpers/test-org";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
@@ -102,7 +103,7 @@ beforeAll(async () => {
 
     const insertedFeedstocks = await db
       .insert(feedstocks)
-      .values([
+      .values(await feedstockFixtureValues(db, [
         {
           organizationId: TEST_ORG_ID,
           code: `FS-PRG-P-${tag}`,
@@ -125,7 +126,7 @@ beforeAll(async () => {
           moistureContentPercent: 20,
           storageLocationId: blendBinId,
         },
-      ])
+      ]))
       .returning({ id: feedstocks.id });
     createdFeedstockIds.push(...insertedFeedstocks.map((feedstock) => feedstock.id));
   });
@@ -158,6 +159,7 @@ beforeAll(async () => {
       await cleanup(() =>
         db.delete(feedstocks).where(inArray(feedstocks.id, createdFeedstockIds)),
       );
+      await cleanupFeedstockFixtureParents(db);
     }
     if (pyrolysisBinId || blendBinId) {
       await cleanup(() =>

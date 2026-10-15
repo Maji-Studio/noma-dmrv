@@ -1,3 +1,4 @@
+import { feedstockFixtureValues, cleanupFeedstockFixtureParents } from "./helpers/feedstock-fixture";
 /**
  * Editing and deleting vehicles, drivers and operators (issue #945), against
  * the real test database: org scoping, the delete guard, and the vehicle evidence
@@ -126,7 +127,7 @@ async function withFleetFixture(
 /** A second intake, on no vehicle; in the same lineage (same production run) unless `linkToRun` is false. */
 async function insertSecondIntake(fixture: LineageFixture, linkToRun = true) {
   const [first] = await db.select().from(feedstocks).where(eq(feedstocks.id, fixture.feedstockId));
-  const [second] = await db.insert(feedstocks).values({
+  const [second] = await db.insert(feedstocks).values(await feedstockFixtureValues(db, {
     organizationId: TEST_ORG_ID,
     code: `${first.code}-B`,
     storageLocationId: first.storageLocationId,
@@ -136,7 +137,7 @@ async function insertSecondIntake(fixture: LineageFixture, linkToRun = true) {
     massDryKg: SECOND_INTAKE_WET_KG * 0.9,
     massWetKg: SECOND_INTAKE_WET_KG,
     moistureContentPercent: 10,
-  }).returning();
+  })).returning();
   if (linkToRun) {
     await db.insert(productionRunFeedstocks).values({
       organizationId: TEST_ORG_ID,
@@ -152,6 +153,7 @@ async function deleteSecondIntake(feedstockId: string) {
   await db.delete(productionRunFeedstocks).where(eq(productionRunFeedstocks.feedstockId, feedstockId));
   await db.delete(transportLegs).where(eq(transportLegs.entityId, feedstockId));
   await db.delete(feedstocks).where(eq(feedstocks.id, feedstockId));
+  await cleanupFeedstockFixtureParents(db);
 }
 
 async function derivedLeg(feedstockId: string) {

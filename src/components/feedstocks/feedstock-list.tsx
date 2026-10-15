@@ -47,7 +47,6 @@ import {
 } from "@/schemas/feedstocks";
 import type { FeedstockWithRelations } from "@/data-access/feedstocks";
 import { feedstockSheetSections } from "./feedstock-read-sections";
-import { deriveMassDryKg } from "@/lib/calculations/mass-dry";
 import {
   ENTITY_DEEP_LINK_FOCUS_PARAM,
   ENTITY_DEEP_LINK_MODE_PARAM,
@@ -339,11 +338,7 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
         feedstockTypeId: data.feedstockTypeId,
         massWetKg: data.allocations[0]?.allocatedWetMassKg ?? data.totalWetMassKg,
         moistureContentPercent: data.moisturePercent,
-        massDryKg: deriveMassDryKg(
-          data.allocations[0]?.allocatedWetMassKg ?? data.totalWetMassKg,
-          data.moisturePercent
-        ),
-        storageLocationId: data.allocations[0]?.storageLocationId || null,
+        storageLocationId: data.allocations[0].storageLocationId,
         overrideJustification: data.overrideJustification || null,
         notes: data.notes || null,
       });

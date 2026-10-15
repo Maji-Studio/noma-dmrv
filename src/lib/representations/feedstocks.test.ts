@@ -20,8 +20,10 @@ it("maps Dates and stored JSON to byte-identical date-only and instant fields", 
   expect(first).not.toHaveProperty("supplierName");
   expect(first).not.toHaveProperty("organizationId");
 });
-it("preserves null and zero", () => {
-  const data = representFeedstock({ ...row, deliveryDate: null, moistureContentPercent: 0 });
-  expect(data.deliveryDate).toBeNull();
+it("preserves optional nulls and zero moisture", () => {
+  const data = representFeedstock({ ...row, moistureContentPercent: 0 });
+  expect(data.vehicleId).toBeNull();
+  expect(data).not.toHaveProperty("gpsLatitude");
+  expect(data).not.toHaveProperty("gpsLongitude");
   expect(data.moistureContentPercent).toBe(0);
 });

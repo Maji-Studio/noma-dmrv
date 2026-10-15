@@ -11,6 +11,7 @@
 import { z } from "zod";
 import {
   massKgSchema,
+  stockEventInstantSchema,
   optionalCanonicalizableMassKgInputSchema,
   optionalPercent,
   requiredCanonicalizableMassKgSchema,
@@ -107,6 +108,7 @@ export type StockTakeFormData = z.infer<typeof stockTakeFormSchema>;
 
 /** Loss form. `lossMassKg` is the (positive) amount removed. */
 export const recordLossFormSchema = z.object({
+  occurredAt: stockEventInstantSchema(),
   lossMassKg: requiredPositiveMassKgSchema(
     "Loss amount is required",
     "Loss amount must be a number",
@@ -165,6 +167,7 @@ export const recordStockTakeSchema = z
 export type RecordStockTakeData = z.infer<typeof recordStockTakeSchema>;
 
 export const recordLossSchema = z.object({
+  occurredAt: stockEventInstantSchema(),
   storageLocationId: z.uuid("Choose a valid storage bin."),
   lane: z.enum(binMovementLanes),
   idempotencyKey: requestKeySchema,

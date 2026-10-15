@@ -244,10 +244,6 @@ export const transportLegs = pgTable(
         .default('distance_based'),
     isDerived: boolean('is_derived').notNull().default(false),
 
-    // --- Documentation ---
-    billOfLading: text('bill_of_lading'),
-    weighScaleTicketRef: text('weigh_scale_ticket_ref'),
-
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },

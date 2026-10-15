@@ -1,3 +1,7 @@
+import { DomainError } from "@/lib/domain-errors";
+import { OUTPUT_STOCK_FUTURE_TIME_MESSAGE } from "./output-stock-post";
+import { getFeedstockBinStock } from "./feedstock-bin-ledger";
+import { assertEventTimesNotFuture } from "./future-event-time";
 /**
  * Bin Movements Data Access Layer (issue #194)
  *
@@ -70,6 +74,7 @@ interface InsertBinMovementInput {
   moistureRatioUsed?: number | null;
   idempotencyKey?: string | null;
   inputSnapshot?: Record<string, unknown> | null;
+  occurredAt?: Date;
 }
 
 /**
@@ -79,7 +84,7 @@ interface InsertBinMovementInput {
 export type CreateBinMovementInput = Omit<
   InsertBinMovementInput,
   "idempotencyKey" | "inputSnapshot"
-> & { idempotencyKey: string };
+> & { idempotencyKey: string; occurredAt: Date };
 
 export interface RecordStockTakeMovementInput {
   storageLocationId: string;
@@ -181,6 +186,7 @@ async function createBinMovementInTransaction(
         moistureRatioUsed: input.moistureRatioUsed ?? null,
         idempotencyKey: input.idempotencyKey ?? null,
         inputSnapshot: input.inputSnapshot ?? null,
+        occurredAt: input.occurredAt,
       })
       .returning();
   } catch (error) {
@@ -213,7 +219,16 @@ export async function createBinMovement(
       "Check the source record, or record Lost mass if stock was lost.",
     );
   }
+  if (!input.occurredAt || !Number.isFinite(input.occurredAt.getTime())) {
+    throw new SafeError("Enter the date and time.");
+  }
+  assertEventTimesNotFuture(
+    { occurredAt: input.occurredAt },
+    { occurredAt: OUTPUT_STOCK_FUTURE_TIME_MESSAGE },
+    new Date(),
+  );
   const payload = {
+    occurredAt: input.occurredAt.toISOString(),
     storageLocationId: input.storageLocationId,
     lane: input.lane,
     movementType: input.movementType,
@@ -246,6 +261,20 @@ export async function createBinMovement(
       const requested = Math.abs(input.massDeltaKg);
       if (isOverdraw(requested, available)) {
         throw overdrawError(input.lane);
+      }
+      const stock = await getFeedstockBinStock(ctx, input.storageLocationId, tx);
+      const occurredAt = input.occurredAt.toISOString();
+      let availableAtTime = 0;
+      for (const entry of stock.entries) {
+        if (entry.occurredAt <= occurredAt) availableAtTime = entry.afterWetKg;
+      }
+      // Saved adjustments are deltas, so the loss also reduces every later balance.
+      if (isOverdraw(requested, availableAtTime) || stock.entries.some(entry =>
+        entry.occurredAt > occurredAt && isOverdraw(requested, entry.afterWetKg))) {
+        const message = "Not enough wet feedstock at this time or after a later movement. Check the date and time or reduce the loss.";
+        throw new DomainError("validation_failed", message, {
+          issues: [{ path: ["occurredAt"], code: "validation_failed", message }],
+        });
       }
     }
     return createBinMovementInTransaction(ctx, tx, {

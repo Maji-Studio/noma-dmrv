@@ -1,3 +1,4 @@
+import { cleanupFeedstockFixtureParents, feedstockFixtureValues } from "./helpers/feedstock-fixture";
 import { masterDataVersion } from "./helpers/master-data-version";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { eq, sql } from "drizzle-orm";
@@ -35,6 +36,7 @@ afterEach(async () => {
   vi.restoreAllMocks();
   if (supplierId) {
     await db.delete(feedstocks).where(eq(feedstocks.supplierId, supplierId));
+    await cleanupFeedstockFixtureParents(db);
     await db.delete(feedstockDeliveries).where(eq(feedstockDeliveries.supplierId, supplierId));
     await db.delete(supplierLocations).where(eq(supplierLocations.supplierId, supplierId));
     await db.delete(suppliers).where(eq(suppliers.id, supplierId));
@@ -48,7 +50,7 @@ async function insertReference(kind: "intake" | "delivery") {
   if (kind === "delivery") {
     await db.insert(feedstockDeliveries).values({ ...common, deliveryDate: new Date() });
   } else {
-    await db.insert(feedstocks).values({ ...common, feedstockTypeId, massDryKg: 10 });
+    await db.insert(feedstocks).values(await feedstockFixtureValues(db, { ...common, feedstockTypeId, massDryKg: 10 }));
   }
 }
 async function expectUnchanged() {

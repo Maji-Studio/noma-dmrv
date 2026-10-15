@@ -62,6 +62,8 @@ describe("savepointed auto-codes", { timeout: SUITE_TIMEOUT_MS }, () => {
         competitorDb,
       );
       await competitorDb.insert(feedstocks).values({
+        supplierId: fixture.supplierId, storageLocationId: fixture.binId,
+        deliveryDate: new Date("2026-10-06"), massWetKg: 1, moistureContentPercent: 0,
         organizationId: fixture.ctx.organizationId,
         code: competitorCode,
         facilityId: fixture.facilityId,

@@ -1,3 +1,4 @@
+import { cleanupFeedstockFixtureParents } from "../helpers/feedstock-fixture";
 /**
  * Dashboard + credit-batch detail.
  *
@@ -231,6 +232,7 @@ test.describe("Dashboard (Flow Hero)", () => {
     } finally {
       await db.delete(transportLegs).where(eq(transportLegs.id, transportLegId));
       await db.delete(feedstocks).where(eq(feedstocks.id, feedstockId));
+      await cleanupFeedstockFixtureParents(db);
       await db
         .delete(supplierLocations)
         .where(eq(supplierLocations.id, supplierLocationId));

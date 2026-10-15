@@ -1,3 +1,4 @@
+import { cleanupFeedstockFixtureParents } from "../helpers/feedstock-fixture";
 /**
  * Feedstocks E2E Tests
  *
@@ -182,6 +183,7 @@ test.describe("Feedstock UI CRUD", () => {
       try {
         await db.delete(schema.transportLegs).where(eq(schema.transportLegs.entityId, id));
         await db.delete(schema.feedstocks).where(eq(schema.feedstocks.id, id));
+        await cleanupFeedstockFixtureParents(db);
       } finally {
         await pool.end();
       }

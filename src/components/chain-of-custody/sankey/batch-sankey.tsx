@@ -83,13 +83,10 @@ const COLUMN_ROUTES: Record<SankeyColumnKey, string> = {
 
 /** Exits that are backed by inspectable records get a route too. */
 const EXIT_ROUTES: Partial<Record<SankeyExitKey, string>> = {
-  ineligible_feedstock: "/feedstocks",
   in_storage: "/biochar-products",
 };
 
 const EXIT_NOTES: Record<SankeyExitKey, string> = {
-  ineligible_feedstock:
-    "Feedstock mass excluded from the eligible balance for this batch.",
   conversion_loss:
     "Pyrolysis gas and heat, which are the expected conversion loss.",
   unallocated_output:

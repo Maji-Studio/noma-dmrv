@@ -107,7 +107,6 @@ export type BaseStorageLocationRow = {
   capacityKg: number | null;
   storageMethod: string | null;
   storageDescription: string | null;
-  supplierReferenceId: string | null;
   feedstockTypeId: string | null;
   formulationId: string | null;
   stockMode: StorageLocation["stockMode"];

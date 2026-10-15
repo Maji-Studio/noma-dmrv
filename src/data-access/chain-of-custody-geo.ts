@@ -16,7 +16,6 @@ import {
   customerLocations,
   deliveries,
   facilities,
-  feedstocks,
   orders,
   transportLegs,
 } from "@/db/schema";
@@ -146,10 +145,9 @@ export async function projectChainOfCustodyGeoData(
   requireOrgScope(ctx);
   const feedstockIds = chain.feedstocks.map((feedstock) => feedstock.id);
 
-  const [facilityGps, applicationGps, feedstockGpsById, feedstockLegs] = await Promise.all([
+  const [facilityGps, applicationGps, feedstockLegs] = await Promise.all([
     getFacilityGps(ctx, chain.facility.id),
     getApplicationGps(ctx, chain.application.id),
-    getFeedstockGps(ctx, feedstockIds),
     getFeedstockLegs(ctx, feedstockIds),
   ]);
   const products = chain.products?.map(p => p.product) ?? (chain.biocharProduct ? [chain.biocharProduct] : []);
@@ -163,7 +161,6 @@ export async function projectChainOfCustodyGeoData(
   const nodes = buildGeoNodes(chain, {
     facilityGps,
     applicationGps,
-    feedstockGpsById,
     legs,
   });
   const warnings = geoWarnings(facilityGps, chain.feedstocks.length, nodes);
@@ -202,9 +199,8 @@ export async function projectRunRollForwardGeoData(
     ).values(),
   ];
   const feedstockIds = feedstocks.map((feedstock) => feedstock.id);
-  const [facilityGps, feedstockGpsById, feedstockLegs] = await Promise.all([
+  const [facilityGps, feedstockLegs] = await Promise.all([
     getFacilityGps(ctx, facility.id),
-    getFeedstockGps(ctx, feedstockIds),
     getFeedstockLegs(ctx, feedstockIds),
   ]);
   const legs = feedstockLegs.map((leg) => enrichInboundLeg(leg, feedstocks));
@@ -229,7 +225,7 @@ export async function projectRunRollForwardGeoData(
         feedstock.id,
         feedstock.code,
         feedstock.supplierName,
-        feedstockGpsById.get(feedstock.id),
+        null,
         inboundLeg ? { lat: inboundLeg.originLat, lng: inboundLeg.originLng } : null
       )
     );
@@ -327,7 +323,6 @@ function enrichLegs(
 interface GeoNodeInputs {
   facilityGps: GpsPair;
   applicationGps: GpsPair;
-  feedstockGpsById: Map<string, GpsPair>;
   legs: ChainGeoLeg[];
 }
 
@@ -335,7 +330,7 @@ function buildGeoNodes(
   chain: ChainOfCustodyData,
   inputs: GeoNodeInputs
 ): ChainGeoNode[] {
-  const { facilityGps, applicationGps, feedstockGpsById, legs } = inputs;
+  const { facilityGps, applicationGps, legs } = inputs;
   const nodes: ChainGeoNode[] = [];
   const sources = resolveChainSources(chain);
   const resolve = geoNodeResolver(facilityGps);
@@ -358,7 +353,7 @@ function buildGeoNodes(
         feedstock.id,
         feedstock.code,
         feedstock.supplierName,
-        feedstockGpsById.get(feedstock.id),
+        null,
         inboundLeg ? { lat: inboundLeg.originLat, lng: inboundLeg.originLng } : null
       )
     );
@@ -463,21 +458,6 @@ async function getApplicationGps(ctx: OrgContext, applicationId: string): Promis
     .where(and(eq(applications.id, applicationId), eq(applications.organizationId, ctx.organizationId)))
     .limit(1);
   return row ?? { lat: null, lng: null };
-}
-
-async function getFeedstockGps(ctx: OrgContext, feedstockIds: string[]): Promise<Map<string, GpsPair>> {
-  if (feedstockIds.length === 0) {
-    return new Map();
-  }
-  const rows = await db
-    .select({
-      id: feedstocks.id,
-      lat: feedstocks.gpsLatitude,
-      lng: feedstocks.gpsLongitude,
-    })
-    .from(feedstocks)
-    .where(and(inArray(feedstocks.id, feedstockIds), eq(feedstocks.organizationId, ctx.organizationId)));
-  return new Map(rows.map((row) => [row.id, { lat: row.lat, lng: row.lng }]));
 }
 
 function positiveOrNull(value: number | null): number | null {

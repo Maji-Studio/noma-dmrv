@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { FUEL_TYPE_OPTIONS, VEHICLE_TYPE_OPTIONS, formatVehicleType, selectOptionsForStoredValue } from "./vehicles";
+import { FUEL_TYPE_OPTIONS, VEHICLE_TYPE_OPTIONS, vehicleFormSchema, formatVehicleType, selectOptionsForStoredValue } from "./vehicles";
 
 describe("formatVehicleType", () => {
   it("maps every stored slug to its option label", () => {
@@ -42,5 +42,15 @@ describe("selectOptionsForStoredValue", () => {
 
   it("leaves a blank value blank", () => {
     expect(selectOptionsForStoredValue(FUEL_TYPE_OPTIONS, null, { ignoreCase: true }).value).toBe("");
+  });
+});
+
+describe("vehicle model year", () => {
+  const nextYear = new Date().getFullYear() + 1;
+  it.each([1899, 2020.5, 99999999999, nextYear + 1])("rejects %s", (modelYear) => {
+    expect(vehicleFormSchema.shape.modelYear.safeParse(modelYear).success).toBe(false);
+  });
+  it.each([1900, nextYear, null, undefined])("accepts %s", (modelYear) => {
+    expect(vehicleFormSchema.shape.modelYear.safeParse(modelYear).success).toBe(true);
   });
 });

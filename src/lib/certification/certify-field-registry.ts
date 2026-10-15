@@ -273,22 +273,6 @@ export const CERTIFY_FIELD_REGISTRY: Record<
   ],
   feedstock: [
     {
-      // Form field `totalWetMassKg` persists as `massWetKg`; `satisfaction`
-      // checks the entity column while `formFields` drives the form badge.
-      // The wet mass becomes the auto-derived feedstock leg's load mass
-      // (data-access/transport-legs.ts → syncFeedstockTransportLeg).
-      key: "massWetKg",
-      label: "Feedstock wet mass",
-      kind: "entered",
-      formFields: ["totalWetMassKg"],
-      satisfaction: {
-        mode: "anyOf",
-        fields: ["massWetKg"],
-        label: "Feedstock wet mass",
-      },
-      mappings: [mapping("feedstockTransportMassDistanceTonneKm")],
-    },
-    {
       key: "transportLeg",
       gapDetail: "Record a transport leg with a positive distance and load mass",
       label: "Feedstock transport leg",

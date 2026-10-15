@@ -1,3 +1,4 @@
+import { feedstockFixtureValues } from "./helpers/feedstock-fixture";
 import { TEST_SITE_POSITION } from "./helpers/test-org";
 import { rpc, rpcBody } from "./helpers/mcp";
 /** Real keys and handlers. Not run by the implementation agent; needs the supervisor. */
@@ -49,11 +50,11 @@ async function seed(fixture: LookupFixture) {
     await db.insert(drivers).values(shared);
     await db.insert(supplierLocations).values({ ...TEST_SITE_POSITION, organizationId, supplierId: fixture.supplierId, name: `${PREFIX}${index}` });
   }
-  return db.insert(feedstocks).values(Array.from({ length: ROW_COUNT }, (_, index) => ({
+  return db.insert(feedstocks).values(await feedstockFixtureValues(db, Array.from({ length: ROW_COUNT }, (_, index) => ({
     organizationId, facilityId: fixture.facilityId, feedstockTypeId: fixture.feedstockTypeId,
     storageLocationId: fixture.binId, supplierId: fixture.supplierId, code: `${PREFIX}${index}`,
     status: "complete" as const, deliveryDate: new Date("2026-10-06T00:00:00Z"), massWetKg: 100, massDryKg: 70, moistureContentPercent: 30,
-  }))).returning({ id: feedstocks.id, code: feedstocks.code });
+  })))).returning({ id: feedstocks.id, code: feedstocks.code });
 }
 
 beforeEach(async () => {

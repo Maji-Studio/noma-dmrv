@@ -1,3 +1,4 @@
+import { feedstockFixtureValues, cleanupFeedstockFixtureParents } from "./helpers/feedstock-fixture";
 import { preparePureOutputProductFixture } from "./helpers/output-contract-fixtures";
 import { outputProductFixtureValues, deleteOutputProductFixtures, deleteOutputFacilityFixtures } from "./helpers/output-contract-fixtures";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -111,7 +112,7 @@ describe("shared lane-stock derivation", () => {
 
       const insertedFeedstocks = await tx
         .insert(feedstocks)
-        .values([
+        .values(await feedstockFixtureValues(tx, [
           {
             organizationId: TEST_ORG_ID,
             code: `FS-LANE-COMPLETE-${tag}`,
@@ -132,7 +133,7 @@ describe("shared lane-stock derivation", () => {
             massWetKg: 1000,
             storageLocationId: feedstockStorageLocationId,
           },
-        ])
+        ]))
         .returning({ id: feedstocks.id });
       feedstockIds.push(...insertedFeedstocks.map((feedstock) => feedstock.id));
 
@@ -238,7 +239,7 @@ describe("shared lane-stock derivation", () => {
       for (const product of products) await preparePureOutputProductFixture(tx, product.id);
 
       await tx.insert(binMovements).values([
-        {
+        { occurredAt: new Date("2026-01-01T00:00:00.000Z"),
           organizationId: TEST_ORG_ID,
           storageLocationId: feedstockStorageLocationId,
           lane: "feedstock",
@@ -254,7 +255,7 @@ describe("shared lane-stock derivation", () => {
           massDeltaKg: 3,
           reason: "Derivation regression fixture",
         },
-        {
+        { occurredAt: new Date("2026-01-01T00:00:00.000Z"),
           organizationId: TEST_ORG_ID,
           storageLocationId: biocharStorageLocationId,
           lane: "biochar",
@@ -291,6 +292,7 @@ describe("shared lane-stock derivation", () => {
         .delete(productionRuns)
         .where(inArray(productionRuns.id, productionRunIds));
       await tx.delete(feedstocks).where(inArray(feedstocks.id, feedstockIds));
+      await cleanupFeedstockFixtureParents(tx);
       await tx
         .delete(storageLocations)
         .where(inArray(storageLocations.id, storageLocationIds));
@@ -298,6 +300,7 @@ describe("shared lane-stock derivation", () => {
       await tx.delete(reactors).where(eq(reactors.id, reactorId));
       await deleteOutputFacilityFixtures(tx, eq(facilities.id, facilityId));
     });
+    await cleanupFeedstockFixtureParents(db);
   });
 
   it("derives unclamped lane stock from lineage and signed movements", async () => {
@@ -424,7 +427,7 @@ describe("shared lane-stock derivation", () => {
 
       const [loss] = await tx
         .insert(binMovements)
-        .values({
+        .values({ occurredAt: new Date("2026-01-01T00:00:00.000Z"),
           organizationId: TEST_ORG_ID,
           storageLocationId: storageLocationIds[0],
           lane: "feedstock",
