@@ -161,7 +161,7 @@ export function buildPerBatchDurabilityData(
 
 // ── Batch-grain weighted chemistry (issue #309) ──────────────────────────────
 
-/** The sample-derived chemistry scalars `AggregatedProductionData` carries. */
+/** Sample-derived chemistry scalars for credit-batch accounting. */
 export interface WeightedBatchChemistry {
   weightedOrganicCarbonPercent: number | null;
   weightedHToCorgRatio: number | null;

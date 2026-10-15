@@ -771,7 +771,7 @@ export async function deleteCreditBatch(ctx: OrgContext, id: string, expectedVer
     const lockedRemovals = await lockCreditBatchArtifacts(ctx, tx, id);
     // Lock the batch so a concurrent regroup/submit can't move it mid-delete.
     const [batch] = await tx
-      .select({ id: creditBatches.id, version: creditBatches.version })
+      .select({ id: creditBatches.id, code: creditBatches.code, version: creditBatches.version })
       .from(creditBatches)
       .where(and(eq(creditBatches.id, id), eq(creditBatches.organizationId, ctx.organizationId)))
       .for("update")
@@ -787,7 +787,7 @@ export async function deleteCreditBatch(ctx: OrgContext, id: string, expectedVer
 
     const [sample] = await tx.select({ id: samples.id }).from(samples)
       .where(and(eq(samples.creditBatchId, id), eq(samples.organizationId, ctx.organizationId))).limit(1);
-    if (sample) throw new SafeError("Delete or move this credit batch's Samples before deleting it.");
+    if (sample) throw new SafeError(`Credit batch ${batch.code} has Samples. Move them to another credit batch or delete them, then delete the batch.`);
 
     await tx
       .delete(creditBatchProductionRuns)

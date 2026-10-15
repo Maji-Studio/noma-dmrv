@@ -445,8 +445,6 @@ async function cleanupWorkflowData(data: TestWorkflowData): Promise<void> {
         .delete(schema.formulations)
         .where(eq(schema.formulations.id, data.formulation.id));
 
-      // Sample
-
       // Production run feedstocks
       await tx
         .delete(schema.productionRunFeedstocks)

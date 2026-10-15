@@ -4,7 +4,7 @@
  * Batch membership edits preserve sample identity; only a Sample write moves it.
  */
 import { afterEach, describe, expect, it } from "vitest";
-import { deleteCreditBatch, updateCreditBatch } from "@/data-access/credit-batches";
+import { deleteCreditBatch, getCreditBatchById, updateCreditBatch } from "@/data-access/credit-batches";
 import { createApiLabFixture, expectProblem, insertApiSample, removeApiLabFixture, type ApiLabFixture } from "./helpers/api-lab-sample-fixture";
 import { labLogisticsVersion } from "./helpers/lab-logistics-version";
 import { patchLabSample, readRestLabSample, seedRestLabSample } from "./helpers/api-lab-sample-write-fixture";
@@ -40,7 +40,8 @@ describe("lab sample version cascades", { timeout: TIMEOUT_MS }, () => {
     const saved = await seedRestLabSample(f);
     await expect(deleteCreditBatch(f.ctx, f.batchA.id,
       await labLogisticsVersion(f.ctx, "creditBatches", f.batchA.id)))
-      .rejects.toThrow("Delete or move this credit batch's Samples before deleting it.");
+      .rejects.toThrow(`Credit batch ${f.batchA.code} has Samples. Move them to another credit batch or delete them, then delete the batch.`);
+    expect(await getCreditBatchById(f.ctx, f.batchA.id, { skipPreview: true })).toMatchObject({ id: f.batchA.id });
     expect((await readRestLabSample(f, saved.row.id)).row).toEqual(saved.row);
   });
 

@@ -14,8 +14,6 @@ export interface AggregatedProductionData {
   weightedOrganicCarbonPercent: number | null;
   weightedHToCorgRatio: number | null;
   weightedOToCorgRatio: number | null;
-  weightedAshPercent: number | null;
-  weightedMoisturePercent: number | null;
   totalBiocharDryMassKg: number;
   totalFeedstockDryMassKg: number;
   // Diesel is recorded split by use (startup/plant vs genset) but submits as
@@ -312,8 +310,6 @@ export function aggregateProductionRuns(
     weightedOrganicCarbonPercent: null,
     weightedHToCorgRatio: null,
     weightedOToCorgRatio: null,
-    weightedAshPercent: null,
-    weightedMoisturePercent: null,
     totalBiocharDryMassKg,
     totalFeedstockDryMassKg,
     totalStartupDieselLitres,

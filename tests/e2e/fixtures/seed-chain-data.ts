@@ -307,9 +307,6 @@ export async function seedCreditBatch(
       productionProcessId,
       startDate: start,
       endDate: end,
-      // Durability tier is inherited from the facility (ADR 0021; the seed
-      // facility is 200-year). Carry a declared H/C_org so the batch has
-      // realistic chemistry; the spec doesn't depend on the durability calc.
     });
     return { id, code };
   } finally {

@@ -164,7 +164,6 @@ export async function createLineageFixture(
       wetMassUsedKg: 1_000,
     });
 
-
     const [product] = await tx
       .insert(biocharProducts)
       .values(await outputProductFixtureValues(tx, {
@@ -265,7 +264,6 @@ export async function createLineageFixture(
         organicCarbonPercent: 78,
       })
       .returning({ id: samples.id });
-
 
     await tx.insert(creditBatchProductionRuns).values({
       organizationId: TEST_ORG_ID,

@@ -4,7 +4,6 @@ import { DEC_ORG_ID } from "@/db/org-defaults";
 import * as schema from "../../../src/db/schema";
 import { createDbConnection } from "./db";
 
-
 export interface SeededIncompleteBatch {
   creditBatchId: string;
   code: string;

@@ -73,7 +73,7 @@ POST /orders added the pattern `^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]
 PATCH /orders/{idOrCode} request property `customerLocationId` list-of-types was narrowed by removing types `null` from media type `application/json` [request-property-list-of-types-narrowed].
 PATCH /orders/{idOrCode} added the pattern `^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$` to the request property `customerLocationId` [request-property-pattern-added]. This is a breaking change because adding a pattern restriction to a previously unrestricted parameter will reject values that were previously accepted, breaking existing clients
 
-# Issue #1016 (Sample batch references are required)
+# Issue #1016: Sample batch references are required.
 # oasdiff v1.32.1 reports response narrowing as INFO; no ERR suppression is needed.
 # info at openapi/v1.json, in API GET /lab-samples response property `data/items/creditBatchId` list-of-types was narrowed by removing types `null` from media type `application/json` of response `200` [response-property-list-of-types-narrowed].
 # info at openapi/v1.json, in API POST /lab-samples response property `data/creditBatchId` list-of-types was narrowed by removing types `null` from media type `application/json` of response `200` [response-property-list-of-types-narrowed].

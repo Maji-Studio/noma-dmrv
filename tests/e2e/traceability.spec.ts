@@ -372,8 +372,6 @@ async function seedBatchChain(seededData: SeededChainData) {
         productionProcessId: ids.productionProcess,
         startDate: "2026-03-01",
         endDate: "2026-03-31",
-        // Default durabilityOption='200_year' has a CHECK constraint that
-        // requires this field; the spec doesn't read the durability math.
       });
       await tx.insert(schema.creditBatchProductionRuns).values({
         organizationId: DEC_ORG_ID,

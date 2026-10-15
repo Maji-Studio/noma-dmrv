@@ -77,7 +77,7 @@ import { ILLUSTRATION_SIZE, CreditBatchArt } from "@/components/ui/illustrations
 
 const EMPTY_CREDIT_BATCHES: CreditBatchWithRelations[] = [];
 export const CREDIT_BATCH_DELETE_MESSAGE =
-  "Delete this credit batch? This removes the grouping, releases its production runs so they can be grouped again, and clears direct membership from its lab Samples. This cannot be undone.";
+  "Delete this credit batch? This removes the grouping, releases its production runs so they can be grouped again, and cannot be undone. A credit batch with Samples cannot be deleted until its Samples are moved to another credit batch or deleted.";
 
 export function closeCreditBatchCreate(
   clearCreateIntent: () => void,

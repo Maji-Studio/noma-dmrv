@@ -136,7 +136,9 @@ describe("lab sample writers race", { timeout: SUITE_TIMEOUT_MS }, () => {
     expect(first.ok).toBe(true);
     if (createFirst) {
       // A saved Sample keeps its batch; deletion must refuse.
-      expect(second.ok).toBe(false);
+      expect(second).toMatchObject({ ok: false, error: {
+        message: `Credit batch ${f.batchA.code} has Samples. Move them to another credit batch or delete them, then delete the batch.`,
+      } });
       expect(await sampleRows(f)).toMatchObject([{ creditBatchId: f.batchA.id }]);
     } else {
       expect(second).toMatchObject({ ok: false, error: { code: "not_found", message: BATCH_NOT_FOUND } });

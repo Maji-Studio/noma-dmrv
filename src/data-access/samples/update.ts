@@ -42,13 +42,13 @@ export async function updateSampleInTransaction(
   if (moving) {
     lineage.push({ target: { entityType: "creditBatch", entityId: request.creditBatchId! }, mutation: "update", subjectEntityType: "sample", lineageRelationship: "selected" });
   }
-  const scope = await lockSampleWriteScope(ctx, tx, { lineage, creditBatchIds: [...links.lineageBatchIds, request.creditBatchId], sampleId });
+  const scope = await lockSampleWriteScope(ctx, tx, { lineage, creditBatchIds: [links.creditBatchId, request.creditBatchId], sampleId });
   const locked = scope.sample;
   if (!locked) throw sampleNotFound();
   assertRowVersion({ entity: "sample", id: sampleId, expectedVersion: request.expectedVersion, actualVersion: locked.version });
   // A link change committed between the read and the lock bumps the version,
   // so this only fires for a caller that already held the newer version.
-  await assertSampleLinksHeld(ctx, tx, scope, sampleId, links);
+  assertSampleLinksHeld(scope, sampleId, links);
   // Moving off an archived batch is a write on it too (round 7 Q56).
   if (moving) requireWritableBatch(scope, locked.creditBatchId);
 

@@ -10,7 +10,8 @@ import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-o
  *
  *   1. Sample side — `createSample` links the given batch (and rejects an
  *      unknown one); `updateSample` can move a sample to another batch.
- *   2. Membership edits preserve the Sample's batch attachment. *
+ *   2. Membership edits preserve the Sample's batch attachment.
+ *
  * Requires a running database (uses DATABASE_URL from .env.test or test
  * defaults), mirroring tests/credit-batch-validation.test.ts.
  */

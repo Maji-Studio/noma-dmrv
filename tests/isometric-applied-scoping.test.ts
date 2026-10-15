@@ -125,7 +125,7 @@ describe("aggregateProductionRuns — emission-input buckets (§8.6.2)", () => {
     expect(agg.weightedOrganicCarbonPercent).toBeNull();
     expect(agg.weightedHToCorgRatio).toBeNull();
     expect(agg.weightedOToCorgRatio).toBeNull();
-    expect(agg.weightedAshPercent).toBeNull();
-    expect(agg.weightedMoisturePercent).toBeNull();
+    expect(agg).not.toHaveProperty("weightedAshPercent");
+    expect(agg).not.toHaveProperty("weightedMoisturePercent");
   });
 });

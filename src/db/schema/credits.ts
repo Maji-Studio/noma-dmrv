@@ -40,8 +40,9 @@ export const creditBatches = pgTable(
       .notNull(),
     // --- Production-batch identity (ADR 0016) ---
     // The credit batch IS the Isometric protocol production batch: ONE
-    // feedstock, facility-scoped, <=1 month under Isometric. feedstockTypeId is
-    // declared at creation and asserted against every member run.
+    // feedstock, facility-scoped. noma conservatively caps it at <=1 month
+    // (ADR 0016). feedstockTypeId is declared at creation and asserted
+    // against every member run.
     feedstockTypeId: uuid('feedstock_type_id')
       .notNull()
       .references(() => feedstockTypes.id),
@@ -131,8 +132,8 @@ export const creditBatches = pgTable(
       'credit_batches_certifier_is_isometric',
       sql`${table.certifier} is null or ${table.certifier} = 'isometric'`
     ),
-    // ADR 0016: a credit batch is the protocol production batch (< 1 month).
-    // Isometric-conditional DB backstop aligned with the shared calendar-month
+    // noma's conservative one-month cap (ADR 0016), applied when Isometric
+    // is the certifier. DB backstop aligned with the shared calendar-month
     // predicate used by Zod + server re-validation.
     check(
       'credit_batches_isometric_max_one_month',

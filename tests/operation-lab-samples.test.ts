@@ -119,7 +119,9 @@ describe("codes", { timeout: SUITE_TIMEOUT_MS }, () => {
     const barrier = await openOperationBarrier(barrierPool);
     let pending: ReturnType<typeof record> | undefined;
     try {
-      // Batchless, so the competitor holds no key-share lock on the batch: the create waits on the code alone.
+      // The FK insert holds a key-share lock on the batch, so the create waits there.
+      // Its code is generated before the savepoint; after the barrier commits,
+      // that code collides and the retry generates another.
       await barrier.tx.insert(samples).values({ creditBatchId: f.batchA.id, organizationId: f.ctx.organizationId, sampleCode: taken,
         samplingTime: new Date(IN_WINDOW), totalCarbonPercent: 80, organicCarbonPercent: 75 });
       pending = record(f);

@@ -33,7 +33,6 @@ import {
 import type { EventInstant } from "@/schemas/event-instant";
 import {
   assertLockedLineagesAllowMutation,
-  CertificationLineageChangedError,
   lockCertifiedLineageArtifacts,
   type CertifiedLineageCheck,
 } from "../certification-lineage-guards";
@@ -54,8 +53,6 @@ export interface LockedSampleBatch {
 
 export interface SampleWriteScope {
   batches: ReadonlyMap<string, LockedSampleBatch>;
-  /** Every batch id this writer asked to lock, found or not. */
-  lockedBatchIds: ReadonlySet<string>;
   /** The locked Sample on an update or delete; undefined when it is gone. */
   sample?: LockedSampleRow;
 }
@@ -96,7 +93,7 @@ export async function lockSampleWriteScope(
     .where(and(eq(samples.id, args.sampleId), eq(samples.organizationId, ctx.organizationId)))
     .for("update");
   await asCertificationLocked(() => assertLockedLineagesAllowMutation(ctx, tx, lockedKeys, args.lineage));
-  return { batches: new Map(batchRows.map((batch) => [batch.id, batch])), lockedBatchIds: new Set(batchIds), sample };
+  return { batches: new Map(batchRows.map((batch) => [batch.id, batch])), sample };
 }
 
 /** A locked batch a Sample may be written onto: present in the organization and not archived (round 7 Q56). */
@@ -165,7 +162,6 @@ export function assertBatchTierEvidence(facility: SampleBatchFacility, values: S
 /** The credit batch an existing Sample characterises. */
 export interface SampleLinks {
   creditBatchId: string;
-  lineageBatchIds: string[];
 }
 
 /** Unlocked read of the Sample's batch, to lock before locking the Sample. */
@@ -173,23 +169,18 @@ export async function readSampleLinks(ctx: OrgContext, tx: DbTransaction, sample
   requireOrgScope(ctx);
   const [link] = await tx.select({ creditBatchId: samples.creditBatchId }).from(samples)
     .where(and(eq(samples.id, sampleId), eq(samples.organizationId, ctx.organizationId)));
-  return link && { ...link, lineageBatchIds: [link.creditBatchId] };
+  return link;
 }
 
 /**
- * After the locks: the locked Sample still has the links that were read, and
- * its batch is held. A changed batch link is a stale version; a missing
- * batch lock is a lineage change, refused rather than locked late.
+ * After the locks: the locked Sample still has the batch link that was read.
+ * Every caller locks that batch before the Sample; a changed link is a stale
+ * version, refused rather than locked late.
  */
-export async function assertSampleLinksHeld(ctx: OrgContext, tx: DbTransaction, scope: SampleWriteScope, sampleId: string, read: SampleLinks): Promise<void> {
-  requireOrgScope(ctx);
+export function assertSampleLinksHeld(scope: SampleWriteScope, sampleId: string, read: SampleLinks): void {
   const locked = scope.sample;
   if (!locked) return;
   if (locked.creditBatchId !== read.creditBatchId) throw staleRowVersion("sample", sampleId);
-  const reached = [locked.creditBatchId];
-  if (reached.some((id) => !scope.lockedBatchIds.has(id))) {
-    await asCertificationLocked(async () => { throw new CertificationLineageChangedError(); });
-  }
 }
 
 /**
@@ -210,9 +201,9 @@ export async function lockSampleParent(
   if (!links) return undefined;
   const scope = await lockSampleWriteScope(ctx, tx, {
     lineage: [{ ...lineage, target: { entityType: "sample", entityId: sampleId } }],
-    creditBatchIds: links.lineageBatchIds,
+    creditBatchIds: [links.creditBatchId],
     sampleId,
   });
-  await assertSampleLinksHeld(ctx, tx, scope, sampleId, links);
+  assertSampleLinksHeld(scope, sampleId, links);
   return scope.sample;
 }

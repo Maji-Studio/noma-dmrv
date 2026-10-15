@@ -216,7 +216,6 @@ export interface ApplicationCo2eStoredInput {
   /** Optional Total/Inorganic carbon (%) for Eq.2 derivation + drift reconciliation. */
   totalCarbonPercent?: number | null;
   inorganicCarbonPercent?: number | null;
-
 }
 
 export interface ApplicationCo2eStoredResult {
