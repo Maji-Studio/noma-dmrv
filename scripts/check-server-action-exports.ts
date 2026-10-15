@@ -74,7 +74,7 @@ import {
   invokedFunction,
   parameterCandidates,
 } from "./server-action-call-targets";
-import { losesGuardedSignature, provenanceTarget } from "./server-action-provenance";
+import { guardedParameters, losesGuardedSignature, provenanceTarget } from "./server-action-provenance";
 import {
   carriesAnyContext,
   ParameterInspector,
@@ -492,8 +492,12 @@ function checkServerBody(
   const visit = (node: ts.Node): void => {
     checkContextConversions(checker, inspector, node, report);
     if (ts.isCallExpression(node) || ts.isNewExpression(node)) {
-      const target = invokedFunction(checker, node)?.target;
-      if (target) consumedTargets.add(target);
+      const invoked = invokedFunction(checker, node);
+      const target = invoked?.target;
+      if (target && target.pos >= node.pos && target.end <= node.end &&
+        invoked.signatures.some((signature) => guardedParameters(checker, inspector, signature).length > 0)) {
+        consumedTargets.add(target);
+      }
     }
     if (ts.isExpression(node) && !consumedTargets.has(node)) {
       const target = provenanceTarget(checker, node);

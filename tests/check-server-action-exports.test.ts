@@ -443,6 +443,14 @@ const EXOTIC_BYPASSES = [
 ] as const;
 
 const REVIEW_BYPASSES = [
+  ["union any signature", "const run = (f: typeof issueUrl | ((a: any, b: string) => Promise<string>), args: any[]) => Reflect.apply(f, undefined, args); return run(issueUrl, [input, \"r\"]);", "issueUrl"],
+  ["union Function", "const run = (f: typeof issueUrl | Function, args: any[]) => Reflect.apply(f, undefined, args); return run(issueUrl, [input, \"r\"]);", "issueUrl"],
+  ["cast to unrelated signature union", "const erased = issueUrl as (() => Promise<string>) | undefined; return Reflect.apply(erased!, undefined, [input, \"r\"]);", "issueUrl"],
+  ["hoisted bind alias", "const helper = (f: any, x: any) => f(x, \"r\"); function warm() { return r(\"x\"); } const r = Function.prototype.bind.call(issueUrl, undefined); return helper(r, input);", "issueUrl"],
+  ["unguarded invocation target", "const f: Function & { issueUrl: typeof issueUrl } = input; return Reflect.apply(f, undefined, [input, \"r\"]);", "f"],
+  ["Record<number, any>", "const original = [issueUrl]; const callbacks: Record<number, any> = original; return callbacks[0](input, \"r\");", "original"],
+  ["ArrayLike<any>", "const original = [issueUrl]; const callbacks: ArrayLike<any> = original; return callbacks[0](input, \"r\");", "original"],
+
   ["ternary any widening", "const f = input ? input : issueUrl; return f(input, \"r\");", "issueUrl"],
   ["nullish any widening", "return (input ?? issueUrl)(input, \"r\");", "issueUrl"],
   ["array any widening", "const fns = [input, issueUrl]; return fns[1](input, \"r\");", "issueUrl"],
@@ -497,6 +505,19 @@ const REVIEW_BYPASSES = [
 ] as const;
 
 const SAFE_REVIEW_CASES = [
+  ["union incompatible member preserves signature", "const run = (f: typeof issueUrl | ((a: number, b: string) => Promise<string>)) => 1; return run(issueUrl);"],
+  ["construct returns any", "const Make: new (ctx: OrgContext) => any = input; return withAction(async ctx => new Make(ctx));"],
+  ["immediate nested bind with session context", "return withAction(async ctx => Function.prototype.bind.call(issueUrl, undefined)(ctx, \"r\"));"],
+
+  ["Record<number, typeof issueUrl>", "const original = [issueUrl]; const callbacks: Record<number, typeof issueUrl> = original; return withAction(async ctx => callbacks[0](ctx, \"r\"));"],
+  ["ArrayLike<typeof issueUrl>", "const original = [issueUrl]; const callbacks: ArrayLike<typeof issueUrl> = original; return withAction(async ctx => callbacks[0](ctx, \"r\"));"],
+  ["direct returns any", "const parse = (ctx: OrgContext, raw: string): any => ctx.userId + raw; return withAction(async ctx => parse(ctx, \"r\"));"],
+  ["method returns any", "const obj = { method(ctx: OrgContext): any { return ctx.userId; } }; return withAction(async ctx => obj.method(ctx));"],
+  ["tag returns any", "const tag = (s: TemplateStringsArray, ctx: OrgContext): any => ctx.userId; return withAction(async ctx => tag`id ${ctx}`);"],
+  ["direct returns unknown", "const parse = (ctx: OrgContext, raw: string): unknown => ctx.userId + raw; return withAction(async ctx => parse(ctx, \"r\"));"],
+  ["method returns unknown", "const obj = { method(ctx: OrgContext): unknown { return ctx.userId; } }; return withAction(async ctx => obj.method(ctx));"],
+  ["tag returns unknown", "const tag = (s: TemplateStringsArray, ctx: OrgContext): unknown => ctx.userId; return withAction(async ctx => tag`id ${ctx}`);"],
+
   ["tuple rest alias retains context", "const core = (id: string, ctx: OrgContext) => id + ctx.userId; const alias: (...args: [string, OrgContext]) => string = core; return withAction(async ctx => alias(\"r\", ctx));"],
   ["tuple rest source retains context", "const core = (...args: [string, OrgContext]) => args[0] + args[1].userId; const alias: (id: string, ctx: OrgContext) => string = core; return withAction(async ctx => alias(\"r\", ctx));"],
 

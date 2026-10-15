@@ -1,6 +1,6 @@
 /** Reject conversions that discard a callable's trusted parameter contract. */
 import ts from "typescript";
-import { parameterCandidates, parameterSlotCount } from "./server-action-call-targets";
+import { nestedBind, parameterCandidates, parameterSlotCount } from "./server-action-call-targets";
 import {
   carriesAnyContext,
   elementCandidates,
@@ -20,6 +20,17 @@ function describesContext(inspector: ParameterInspector, type: ts.Type): string 
   }
   if (!cache.has(type)) cache.set(type, inspector.describe(type));
   return cache.get(type) ?? null;
+}
+
+/** Guarded slots shared by invocation consumption and provenance checks. */
+export function guardedParameters(
+  checker: ts.TypeChecker,
+  inspector: ParameterInspector,
+  signature: ts.Signature,
+): { type: ts.Type; index: number }[] {
+  return Array.from({ length: parameterSlotCount(checker, signature) }, (_, index) =>
+    parameterCandidates(checker, signature, index).map((type) => ({ type, index })))
+    .flat().filter(({ type }) => describesContext(inspector, type));
 }
 
 /**
@@ -49,15 +60,17 @@ export function losesGuardedSignature(
   if (source.isUnionOrIntersection()) return source.types.some((part) => loses(part, target));
   if (target.isUnion()) {
     const members = withoutNullish(target);
-    return members.length ? members.every((part) => loses(source, part)) : loses(source);
+    // Judge the members the source can flow into; when none accepts it (a cast to an
+    // unrelated signature), every member is a possible escape route.
+    const assignable = members.filter((part) => checker.isTypeAssignableTo(source, part));
+    const relevant = assignable.length ? assignable : members;
+    return relevant.length ? relevant.some((part) => loses(source, part)) : loses(source);
   }
   if (!(source.flags & ts.TypeFlags.Object)) return false;
   for (const kind of [ts.SignatureKind.Call, ts.SignatureKind.Construct]) {
     const receiving = checker.getSignaturesOfType(target, kind);
     for (const signature of checker.getSignaturesOfType(source, kind)) {
-      const guarded = Array.from({ length: parameterSlotCount(checker, signature) }, (_, index) =>
-        parameterCandidates(checker, signature, index).map((type) => ({ type, index })))
-        .flat().filter(({ type }) => describesContext(inspector, type));
+      const guarded = guardedParameters(checker, inspector, signature);
       if (!guarded.length) continue;
       if (!receiving.length || receiving.some((candidate) => guarded.some(({ type, index }) => {
         const supplied = parameterCandidates(checker, candidate, index);
@@ -70,7 +83,8 @@ export function losesGuardedSignature(
   if (elements) {
     return elements.some((element, index) => {
       const slots = elementCandidates(checker, target, index);
-      return slots.length ? slots.some((slot) => loses(element, slot)) : loses(element);
+      return slots.length ? slots.some((slot) => loses(element, slot))
+        : loses(element, checker.getIndexTypeOfType(target, ts.IndexKind.Number));
     });
   }
   for (const property of source.getProperties()) {
@@ -92,6 +106,13 @@ export function losesGuardedSignature(
 export function provenanceTarget(checker: ts.TypeChecker, node: ts.Expression): ts.Type | undefined {
   if (ts.isSpreadElement(node)) return undefined;
   const parent = node.parent;
+  const isInvoked = (value: ts.Node): boolean => {
+    const owner = value.parent;
+    return ((ts.isCallExpression(owner) || ts.isNewExpression(owner)) && owner.expression === value)
+      || (ts.isTaggedTemplateExpression(owner) && owner.tag === value);
+  };
+  if (isInvoked(node) || ((ts.isPropertyAccessExpression(parent) || ts.isElementAccessExpression(parent))
+    && parent.expression === node && isInvoked(parent))) return undefined;
   if (ts.isSatisfiesExpression(parent) ||
     (ts.isPropertyAssignment(parent) && parent.name === node)) return undefined;
   // An inferred destructuring binding has a contextual tuple of `any` slots,
@@ -102,6 +123,13 @@ export function provenanceTarget(checker: ts.TypeChecker, node: ts.Expression): 
   }
   if (ts.isBinaryExpression(parent) && parent.right === node &&
     parent.operatorToken.kind === ts.SyntaxKind.EqualsToken) return checker.getTypeAtLocation(parent.left);
+  // Nested bind inference can preserve the receiver's contextual type while
+  // returning `any`; only an enclosing precise invocation may consume it.
+  if (ts.isCallExpression(parent) && parent.arguments.includes(node)) {
+    const result = checker.getTypeAtLocation(parent);
+    if (result.flags & (ts.TypeFlags.Any | ts.TypeFlags.Unknown) &&
+      nestedBind(checker, parent)?.target === node) return result;
+  }
   const contextual = checker.getContextualType(node);
   if (contextual) return contextual;
   if ((ts.isCallExpression(parent) || ts.isNewExpression(parent)) && parent.arguments?.includes(node)) {

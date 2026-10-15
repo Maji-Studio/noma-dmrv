@@ -15,7 +15,12 @@ import {
 } from "./server-action-types";
 
 /** `Function.prototype` members that invoke or partially apply their receiver. */
-const FUNCTION_FORWARDERS = new Set(["call", "apply", "bind"]);
+type Forwarder = "call" | "apply" | "bind";
+type ReflectMethod = "apply" | "construct";
+const FUNCTION_FORWARDERS: ReadonlySet<string> = new Set<Forwarder>(["call", "apply", "bind"]);
+function isForwarder(method: string): method is Forwarder {
+  return FUNCTION_FORWARDERS.has(method);
+}
 
 /**
  * The function a call ultimately invokes and how its arguments line up with
@@ -38,7 +43,7 @@ export interface InvokedFunction {
   /** `.apply`: the arguments arrive as one array. */
   applied: boolean;
   /** Reflect invokes this built-in forwarder with its receiver as thisArg. */
-  appliedForwarder?: string;
+  appliedForwarder?: Forwarder;
 }
 
 /** Interfaces in the default lib that declare `call`/`apply`/`bind`. */
@@ -82,7 +87,7 @@ function stringKey(checker: ts.TypeChecker, expression: ts.Expression): string |
 function forwarderTarget(
   checker: ts.TypeChecker,
   callee: ts.Expression,
-): { method: string; target: ts.Expression } | null {
+): { method: Forwarder; target: ts.Expression } | null {
   let method: string | null = null;
   let target: ts.Expression | null = null;
   if (ts.isPropertyAccessExpression(callee)) {
@@ -94,7 +99,7 @@ function forwarderTarget(
     method = stringKey(checker, callee.argumentExpression);
     target = callee.expression;
   }
-  if (!method || !target || !FUNCTION_FORWARDERS.has(method)) return null;
+  if (!method || !target || !isForwarder(method)) return null;
   // A callable object's own `call` method is not Function.prototype.call.
   const member = checker.getPropertyOfType(
     checker.getApparentType(checker.getNonNullableType(checker.getTypeAtLocation(target))),
@@ -113,7 +118,7 @@ function forwarderTarget(
 }
 
 /** Default-lib Reflect methods, including element access and local aliases. */
-function reflectMethod(checker: ts.TypeChecker, expression: ts.Expression): string | null {
+function reflectMethod(checker: ts.TypeChecker, expression: ts.Expression): ReflectMethod | null {
   const callee = callableSource(checker, expression);
   let symbol: ts.Symbol | undefined;
   if (ts.isPropertyAccessExpression(callee)) {
@@ -148,7 +153,7 @@ function reflectMethod(checker: ts.TypeChecker, expression: ts.Expression): stri
     ts.isModuleDeclaration(namespace) &&
     namespace.name.getText() === "Reflect"
   ) {
-    return symbol?.name ?? null;
+    return symbol?.name === "apply" || symbol?.name === "construct" ? symbol.name : null;
   }
   return null;
 }
@@ -240,7 +245,7 @@ export function invokedFunction(
 }
 
 /** A nested bind is consumed only by a later invocation we can check. */
-function nestedBind(
+export function nestedBind(
   checker: ts.TypeChecker,
   call: ts.CallExpression,
 ): Pick<InvokedFunction, "target" | "signatures" | "boundParameters"> | null {
@@ -437,12 +442,13 @@ export function declaredParameterFindings(
   const forwardedSlots = positionsKnown
     ? allSlots.filter((slot) => slot.position >= invoked.firstArgument)
     : allSlots;
+  const expandApplied = (slot: ArgumentSlot, open: boolean): ArgumentSlot[] => slot.value
+    ? appliedSlots(checker, slot.value, offset, open)
+    : spreadSlots(checker, slot.node, slot.type, offset, open).slots;
   let slots = invoked.applied
     ? forwardedSlots
       .filter((slot) => !positionsKnown || slot.position === invoked.firstArgument)
-      .flatMap((slot) => slot.value
-        ? appliedSlots(checker, slot.value, offset, !positionsKnown)
-        : spreadSlots(checker, slot.node, slot.type, offset, !positionsKnown).slots)
+      .flatMap((slot) => expandApplied(slot, !positionsKnown))
     : forwardedSlots.map((slot) => ({
       ...slot,
       position: positionsKnown ? slot.position - invoked.firstArgument + offset : 0,
@@ -450,10 +456,8 @@ export function declaredParameterFindings(
     }));
   if (invoked.appliedForwarder === "apply") {
     slots = slots.filter((slot) => slot.open || slot.position === 1).flatMap((slot) =>
-      slot.value
-        ? appliedSlots(checker, slot.value, offset, slot.open)
-        : spreadSlots(checker, slot.node, slot.type, offset, slot.open).slots);
-  } else if (invoked.appliedForwarder) {
+      expandApplied(slot, slot.open));
+  } else if (invoked.appliedForwarder === "call" || invoked.appliedForwarder === "bind") {
     slots = slots.filter((slot) => slot.open || slot.position >= 1).map((slot) => ({
       ...slot, position: Math.max(0, slot.position - 1),
     }));
