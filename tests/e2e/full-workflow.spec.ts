@@ -237,17 +237,6 @@ async function createFullWorkflowData(): Promise<TestWorkflowData> {
       wetMassUsedKg: 400,
     });
 
-    // 12. Create Sample (from production run)
-    await tx.insert(schema.samples).values({
-        organizationId: DEC_ORG_ID,
-      id: ids.sample,
-      productionRunId: ids.productionRun,
-      sampleCode: codes.sample,
-      samplingTime: new Date(),
-      totalCarbonPercent: 85,
-      organicCarbonPercent: 82,
-    });
-
     // 13. Create formulation
     await tx.insert(schema.formulations).values({
         organizationId: DEC_ORG_ID,
@@ -361,7 +350,17 @@ async function createFullWorkflowData(): Promise<TestWorkflowData> {
       startDate: today,
       endDate: today,
       status: "draft",
-      hToCorgRatio: 0.4,
+    });
+
+    // Create a Sample on the credit batch.
+    await tx.insert(schema.samples).values({
+        organizationId: DEC_ORG_ID,
+      id: ids.sample,
+      creditBatchId: ids.creditBatch,
+      sampleCode: codes.sample,
+      samplingTime: new Date(),
+      totalCarbonPercent: 85,
+      organicCarbonPercent: 82,
     });
 
     // 21. Link production run to credit batch
@@ -415,6 +414,7 @@ async function cleanupWorkflowData(data: TestWorkflowData): Promise<void> {
         .where(eq(schema.creditBatchProductionRuns.creditBatchId, data.creditBatch.id));
 
       // Credit batch
+      await tx.delete(schema.samples).where(eq(schema.samples.id, data.sample.id));
       await tx
         .delete(schema.creditBatches)
         .where(eq(schema.creditBatches.id, data.creditBatch.id));
@@ -445,9 +445,6 @@ async function cleanupWorkflowData(data: TestWorkflowData): Promise<void> {
       await tx
         .delete(schema.formulations)
         .where(eq(schema.formulations.id, data.formulation.id));
-
-      // Sample
-      await tx.delete(schema.samples).where(eq(schema.samples.id, data.sample.id));
 
       // Production run feedstocks
       await tx

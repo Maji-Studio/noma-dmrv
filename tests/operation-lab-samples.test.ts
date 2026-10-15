@@ -120,8 +120,10 @@ describe("codes", { timeout: SUITE_TIMEOUT_MS }, () => {
     const barrier = await openOperationBarrier(barrierPool);
     let pending: ReturnType<typeof record> | undefined;
     try {
-      // Batchless, so the competitor holds no key-share lock on the batch: the create waits on the code alone.
-      await barrier.tx.insert(samples).values({ organizationId: f.ctx.organizationId, sampleCode: taken,
+      // The FK insert holds a key-share lock on the batch, so the create waits there.
+      // Its code is generated before the savepoint; after the barrier commits,
+      // that code collides and the retry generates another.
+      await barrier.tx.insert(samples).values({ creditBatchId: f.batchA.id, organizationId: f.ctx.organizationId, sampleCode: taken,
         samplingTime: new Date(IN_WINDOW), totalCarbonPercent: 80, organicCarbonPercent: 75 });
       pending = record(f);
       await waitForBlockedOperations(barrierPool, barrier.pid, 1);
@@ -311,7 +313,7 @@ describe("certification lineage", { timeout: SUITE_TIMEOUT_MS }, () => {
   });
 });
 
-describe("certification lineage of children and legacy links", { timeout: SUITE_TIMEOUT_MS }, () => {
+describe("certification lineage of children", { timeout: SUITE_TIMEOUT_MS }, () => {
   /** Holds `batch` and assigns its submitted Removal; `write` must queue behind the barrier. */
   async function assignWhileQueued(f: LabSampleFixture, batch: LabSampleBatch, write: () => Promise<unknown>) {
     const barrier = await openOperationBarrier(barrierPool);
@@ -340,29 +342,7 @@ describe("certification lineage of children and legacy links", { timeout: SUITE_
     expect(await legRows(f)).toEqual([]);
   });
 
-  /** A pre-re-grain row: on batch A directly, with its legacy run in batch B. */
-  async function legacySample(f: LabSampleFixture) {
-    const [row] = await db.insert(samples).values({ organizationId: f.ctx.organizationId, sampleCode: `E2E-LAB-LEGACY-${f.tag}`,
-      creditBatchId: f.batchA.id, productionRunId: f.batchB!.runId, samplingTime: new Date(IN_WINDOW),
-      totalCarbonPercent: 80, organicCarbonPercent: 75 }).returning();
-    return row;
-  }
 
-  it("locks the batch a legacy run link reaches, so its lineage cannot be assigned under an update", async () => {
-    const f = await fixture();
-    const legacy = await legacySample(f);
-    const update = () => runOperation(updateLabSample, f.ctx, { labSampleId: legacy.id, expectedVersion: 1, labName: "x" });
-    await expect(assignWhileQueued(f, f.batchB!, update)).rejects.toMatchObject(locked(LINEAGE_CHANGED));
-    expect(await sampleRows(f)).toMatchObject([{ id: legacy.id, version: 1, labName: null }]);
-  });
-
-  it("locks the batch a legacy run link reaches on delete too", async () => {
-    const f = await fixture();
-    const legacy = await legacySample(f);
-    const remove = () => runOperation(deleteLabSample, f.ctx, { labSampleId: legacy.id, expectedVersion: 1 });
-    await expect(assignWhileQueued(f, f.batchB!, remove)).rejects.toMatchObject(locked(LINEAGE_CHANGED));
-    expect(await sampleRows(f)).toHaveLength(1);
-  });
 });
 
 describe("ratios", { timeout: SUITE_TIMEOUT_MS }, () => {

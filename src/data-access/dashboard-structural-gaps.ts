@@ -11,7 +11,6 @@ import {
   eq,
   isNotNull,
   isNull,
-  ne,
   or,
   sql,
 } from "drizzle-orm";
@@ -22,14 +21,12 @@ import {
   biocharProducts,
   creditBatches,
   feedstocks,
-  productionRuns,
   samples,
   supplierLocations,
   suppliers,
   transportLegs,
 } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
-import { CANCELLED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
 import { requireOrgScope } from "./utils";
 import {
   buildEntityDeepLink,
@@ -268,13 +265,6 @@ export async function loadDashboardStructuralGapCounts(
         ),
       )
       .leftJoin(
-        productionRuns,
-        and(
-          eq(samples.productionRunId, productionRuns.id),
-          eq(productionRuns.organizationId, orgId),
-        ),
-      )
-      .leftJoin(
         creditBatches,
         and(
           eq(samples.creditBatchId, creditBatches.id),
@@ -294,16 +284,9 @@ export async function loadDashboardStructuralGapCounts(
               isNull(biocharProducts.archivedAt),
             ),
             and(
-              isNotNull(samples.creditBatchId),
+              isNotNull(samples.id),
               eq(creditBatches.facilityId, facilityId),
               isNull(creditBatches.archivedAt),
-            ),
-            and(
-              isNotNull(samples.id),
-              isNull(samples.creditBatchId),
-              eq(productionRuns.facilityId, facilityId),
-              isNull(productionRuns.archivedAt),
-              ne(productionRuns.status, CANCELLED_PRODUCTION_RUN_STATUS),
             ),
           ),
         ),

@@ -117,7 +117,7 @@ export {
   aggregateTransportMassDistance,
   enrichWithTransportLegs,
   type AggregatedProductionData,
-  type ProductionRunWithSamples,
+  type ProductionRunForCertification,
   type TransportLegsByCategory,
 } from "./utils/aggregation";
 export {

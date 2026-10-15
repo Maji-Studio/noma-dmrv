@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-  creditBatchConditionSchema,
   applicationSoilTemperatureSchema,
   sampleConditionSchema,
   transportLegConditionSchema,
@@ -30,20 +29,6 @@ describe("Isometric conditional required validation", () => {
     });
 
     expect(result.success).toBe(true);
-  });
-
-  it("requires h_to_c_org_ratio for 200-year durability on credit batch", () => {
-    const result = creditBatchConditionSchema.safeParse({
-      durability_option: "200_year",
-      h_to_c_org_ratio: null,
-    });
-
-    expect(result.success).toBe(false);
-    if (result.success) return;
-
-    expect(result.error.issues.map((issue) => issue.message)).toContain(
-      "H/C_org ratio is required for 200-year durability"
-    );
   });
 
   it("requires soil_temperature_c on application", () => {

@@ -12,21 +12,22 @@ import { ensureTestOrg, TEST_ORG_ID } from "./helpers/test-org";
 import { beforeAll, describe, expect, it } from "vitest";
 import { eq, TransactionRollbackError } from "drizzle-orm";
 import { db } from "@/db";
+import { creditBatches } from "@/db/schema/credits";
+import { feedstockTypes } from "@/db/schema/feedstock";
+import { productionProcesses } from "@/db/schema/production-processes";
 import { applications } from "@/db/schema/application";
 import { facilities, storageLocations } from "@/db/schema/facilities";
 import { orders } from "@/db/schema/logistics";
 import { customers } from "@/db/schema/parties";
-import { samples } from "@/db/schema/production";
 import { biocharProducts } from "@/db/schema/products";
 import { biocharStorageInventory } from "@/db/schema/storage-inventory";
 
 // 8 significant digits — float4 (~7 digits) rounds this to 33333.332.
 const MASS_KG_8_SIG_DIGITS = 33333.333;
-// 9 significant digits at scale 4 — float4 (~7 digits) rounds this to
-// 12345.679; numeric(10,4) must return it exactly.
-const PPM_9_SIG_DIGITS = 12345.6789;
 // 9 significant digits — exact at numeric(14,6), unrepresentable in float4.
 const TONNES_9_SIG_DIGITS = 123.456789;
+// 9 significant digits at scale 4, unrepresentable in float4.
+const PPM_9_SIG_DIGITS = 12345.6789;
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
@@ -94,29 +95,31 @@ describe("numeric precision round-trips (issue #280)", () => {
     });
   });
 
-  it("stores samples.arsenic_mg_kg exactly at scale 4", async () => {
+  it("stores credit_batches.ch4_ppm exactly at scale 4", async () => {
     const runId = crypto.randomUUID().slice(0, 8).toUpperCase();
 
     await withRollback(async (tx) => {
-      const [inserted] = await tx
-        .insert(samples)
-        .values({
-          organizationId: TEST_ORG_ID,
-          sampleCode: `SMP-NUM-${runId}`,
-          samplingTime: new Date(),
-          totalCarbonPercent: 80,
-          organicCarbonPercent: 75,
-          arsenicMgKg: PPM_9_SIG_DIGITS,
-        })
-        .returning({ id: samples.id });
+      const [facility] = await tx.insert(facilities).values({
+        country: "Tanzania", gpsLatitude: -8.3, gpsLongitude: 35.3, timezone: "UTC", organizationId: TEST_ORG_ID,
+        code: `FAC-NUM-PPM-${runId}`, name: `Numeric PPM Facility ${runId}`,
+      }).returning({ id: facilities.id });
+      const [feedstockType] = await tx.insert(feedstockTypes).values({
+        organizationId: TEST_ORG_ID, code: `FT-NUM-PPM-${runId}`,
+        name: `Numeric PPM Feedstock ${runId}`, category: "forestry",
+      }).returning({ id: feedstockTypes.id });
+      const [process] = await tx.insert(productionProcesses).values({
+        organizationId: TEST_ORG_ID, facilityId: facility.id, feedstockTypeId: feedstockType.id,
+      }).returning({ id: productionProcesses.id });
+      const [inserted] = await tx.insert(creditBatches).values({
+        organizationId: TEST_ORG_ID, code: `CB-NUM-PPM-${runId}`, facilityId: facility.id,
+        feedstockTypeId: feedstockType.id, productionProcessId: process.id,
+        startDate: "2026-06-01", endDate: "2026-06-30", ch4Ppm: PPM_9_SIG_DIGITS,
+      }).returning({ id: creditBatches.id });
+      const [row] = await tx.select({ ch4Ppm: creditBatches.ch4Ppm })
+        .from(creditBatches).where(eq(creditBatches.id, inserted.id));
 
-      const [row] = await tx
-        .select({ arsenicMgKg: samples.arsenicMgKg })
-        .from(samples)
-        .where(eq(samples.id, inserted.id));
-
-      expect(typeof row.arsenicMgKg).toBe("number");
-      expect(row.arsenicMgKg).toBe(PPM_9_SIG_DIGITS);
+      expect(typeof row.ch4Ppm).toBe("number");
+      expect(row.ch4Ppm).toBe(PPM_9_SIG_DIGITS);
     });
   });
 

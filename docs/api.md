@@ -27,8 +27,7 @@ run through `src/lib/operations/lab-samples.ts`; the Server Actions in
 `src/fn/samples.ts` and REST/MCP share them. Every writer takes locks in one
 order (`src/data-access/samples/write-scope.ts`): certification artifacts for
 every lineage the write touches, then credit batches in id order, then the
-sample. The set includes the batch a legacy production run link reaches, and a
-transport leg whose parent is a sample takes the same scope. Lineage is
+sample. A transport leg whose parent is a sample takes the same scope. Lineage is
 re-resolved against the artifacts held, so a Removal assigned while the writer
 waited refuses the write (`certification_locked`) and no artifact is locked late.
 Existence, archive state, facility, window and time zone are read from the

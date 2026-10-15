@@ -19,7 +19,6 @@ const validBase = {
   feedstockTypeId: "33333333-3333-4333-8333-333333333333",
   productionRunIds: ["22222222-2222-4222-8222-222222222222"],
   durabilityOption: "200_year" as const,
-  hToCorgRatio: 0.4,
 };
 
 describe("creditBatchFormSchema — production window", () => {

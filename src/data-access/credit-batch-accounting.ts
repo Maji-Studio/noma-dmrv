@@ -537,7 +537,6 @@ export function buildCo2eStoredPreview(
               : [],
           })
         : computeApplicationCo2eStored({
-            durabilityOption: batch.durabilityOption,
             dryMassTonnes: application?.biocharAppliedDryTons ?? null,
             soilTemperatureC: application?.soilTemperatureC ?? null,
             hToCorgRatio: chemistry.weightedHToCorgRatio,
@@ -832,7 +831,6 @@ export async function loadCreditBatchAccounting(
         .orderBy(asc(samples.id));
       const samplesByBatch = new Map<string, Sample[]>();
       for (const sample of sampleRows) {
-        if (!sample.creditBatchId) continue;
         const batchSamples = samplesByBatch.get(sample.creditBatchId) ?? [];
         batchSamples.push(sample);
         samplesByBatch.set(sample.creditBatchId, batchSamples);
