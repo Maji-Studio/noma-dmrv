@@ -35,12 +35,16 @@ export async function loadFacilityCertifierFacts(orgCtx: OrgContext, facilityId:
     hasCertifierCredentials(orgCtx, ISOMETRIC_PROVIDER),
   ]);
   if (!mapping || !hasOrgCredentials) return { hasOrgCredentials, mapping, project: null, ...UNRESOLVED_FACILITY_FACTS };
+  const pinnedIds = await listPinnedRemovalTemplateIds(orgCtx, facilityId);
+  // Avoid a remote registry dependency until a template id exists to resolve.
+  if (!mapping.defaultRemovalTemplateId && pinnedIds.length === 0) {
+    return { hasOrgCredentials, mapping, project: null, ...UNRESOLVED_FACILITY_FACTS };
+  }
   const client = await resolveIsometricClient(orgCtx);
-  const [projects, templates, blueprints, pinnedIds] = await Promise.all([
+  const [projects, templates, blueprints] = await Promise.all([
     safeListIfConfigured(() => listProjects(client)),
     safeListIfConfigured(() => listGhgEntryTemplates(client, mapping.externalProjectId)),
     safeListIfConfigured(() => listComponentBlueprints(client)),
-    listPinnedRemovalTemplateIds(orgCtx, facilityId),
   ]);
   const ids = new Set([mapping.defaultRemovalTemplateId, ...pinnedIds]);
   // Keep observation transactions ordered; a first observation also locks its org.
