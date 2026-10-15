@@ -111,8 +111,11 @@ All four tables live in `src/db/schema/api.ts`:
 `activity_events` stores org-scoped, value-free entity changes, status
 transitions and actor/source attribution. The caller's transaction owns each
 insert; reads order by `occurred_at` then unique `sequence`, newest first.
-The organization FK cascades on delete; the nullable facility reference uses a
-same-organization composite FK. Entity references survive deletes. Entity types
+The organization FK cascades on delete; the nullable facility reference deliberately
+has no FK to avoid deadlocks against facility archive/restore. `recordActivity`
+checks same-org facility ownership with a non-locking read in the caller's
+transaction, including archived facilities. Facilities are never hard-deleted;
+entity references survive deletes. Entity types
 use canonical snake_case names from
 `ACTIVITY_ENTITY_TYPES`; `bin_movement` identifies `bin_movements` rows.
 `src/lib/activity-entity-type.ts` maps existing runner/certification aliases to

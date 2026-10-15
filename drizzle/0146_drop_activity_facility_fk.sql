@@ -1,0 +1,1 @@
+ALTER TABLE "activity_events" DROP CONSTRAINT "activity_events_facility_id_organization_id_facilities_id_organization_id_fk";

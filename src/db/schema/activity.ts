@@ -1,13 +1,13 @@
 /**
  * Append-only activity history, value-free in v1: changed fields hold names only.
  * Written inside the caller's transaction. Entity references have no FKs so
- * history survives deletes as tombstones. Facilities are scoped to the organization.
+ * history survives deletes as tombstones. The writer checks facility ownership
+ * without row locks so activity does not join the facility archive lock order.
  */
 import { sql } from "drizzle-orm";
-import { bigserial, check, foreignKey, index, jsonb, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { bigserial, check, index, jsonb, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { organizations } from "./auth";
 import { ACTIVITY_ACTIONS, ACTIVITY_ENTITY_TYPES, ACTIVITY_SOURCES, ACTORLESS_ACTIVITY_SOURCES } from "./common";
-import { facilities } from "./facilities";
 
 export const activityEvents = pgTable("activity_events", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -38,10 +38,6 @@ export const activityEvents = pgTable("activity_events", {
   registryAt: timestamp("registry_at", { withTimezone: true, precision: 3 }),
   reasonCode: text("reason_code"),
 }, (table) => [
-  foreignKey({
-    columns: [table.facilityId, table.organizationId],
-    foreignColumns: [facilities.id, facilities.organizationId],
-  }),
   index("activity_events_org_entity_occurred_sequence_idx").on(
     table.organizationId, table.entityType, table.entityId, table.occurredAt, table.sequence,
   ),
