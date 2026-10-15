@@ -39,7 +39,7 @@ Operators can fill every line of the target Removal template ("LCA based templat
 | Empty lines | Shown as "0 so far" on the batch sheet. In the Removal flow, one confirmation covers all empty lines and records a zero per line. |
 | Extra fuel or electricity | Added on top of the run figures. The form shows the run total and the earlier entries, and the sum is sent. |
 | Meter readings | While a template asks for readings, the operator enters both. The form follows the template: two fields if it has two inputs, one if it has one. |
-| Late entries | Go on the next Removal from the same batch. What happens when none can carry them is open (§7). |
+| Late entries | Go on the next Removal from the same batch. If none is left, they go on the facility's next Removal covering their date (§7, deferred to #1059). |
 | Evidence | Required, marked as a certification requirement, and the Removal cannot be submitted without it. Recorded zeros are exempt. |
 | #291 chain | Superseded. #639, #640, #641, #642, #893, #626 and #638 are folded in, and #894 is closed. |
 | Testing | Kenji copies Cula into the sandbox (not 1:1). Tests use a fixture of Cula as read on 2026-10-15. A read-only production key is needed before the first real submission. |
@@ -268,7 +268,7 @@ Operators can fill every line of the target Removal template ("LCA based templat
   - an existing live reservation or claim wins;
   - otherwise the eligible Removal with the earliest window end, then the earliest draft creation, then the lowest id.
   - This rule is only for entry contenders. It does not reuse the production contender ordering (`listProductionClaimDraftContenders`, by reporting quarter).
-- An entry outside every window waits and blocks the batch with "No Removal can carry this entry yet". What happens when the batch is fully applied is open (§7).
+- An entry outside every window waits and blocks the batch with "No Removal can carry this entry yet". If the batch is fully applied, #1059 sends it on the facility's next Removal (§7).
 - A 200-year Removal grouping two batches that both have an entry on the same `single` line is refused in v1. Paired inputs are never summed one input at a time. Whether Isometric accepts list-shaped inputs (`InputDataShape: LIST`) for these lines is a follow-up.
 
 **Reservation and claims**
@@ -379,19 +379,17 @@ Kenji's round 2 note asks to reopen general edits when Isometric pushes a submis
 - Project-level components: establishment and end-of-life stay in Isometric.
 - List-shaped inputs for multi-batch `single` lines.
 
-## 7. Open: a late entry when its batch has no Removal left
+## 7. A late entry when its batch has no Removal left
 
-A batch's last Removal is submitted, and then an entry for that batch arrives, such as a flight or lab electricity. That Removal may not be corrected (§2), so the entry has nowhere to go.
-
-- **(a) Wait.** The entry shows "Not sent". It goes out only if Isometric pushes that Removal back.
-- **(b) The next Removal of the facility.** The entry goes on the next Removal of the facility whose window covers its date, even from another batch. The entry keeps its own batch and records which Removal sent it. This matches "CO2eOperations, RP emissions must be attributed to the Reporting Period in which they occur" (Biochar v1.1, https://registry.isometric.com/protocol/biochar/1.1).
-
-The choice is Kenji's. A short confirmation from Isometric is worth having either way.
+Decided by Kenji on 2026-10-15, and deferred to #1059, after PR 4:
+- The entry goes on the facility's next Removal whose window covers its date, even from another batch.
+- The entry keeps its own batch.
+- Until #1059 ships, the entry shows "Not sent" and blocks its batch.
 
 ## 8. Risks and checks
 
 - **Hash churn.** Entry edits supersede sent Removals. The derived "correction needed" state and the edit window keep this explicit.
-- **Window edge.** An entry dated after its batch's last application has no Removal to go on until §7 is decided. It shows as blocking on the batch, and is never silently dropped.
+- **Window edge.** An entry dated after its batch's last application has no Removal to go on until #1059 ships. It shows as blocking on the batch, and is never silently dropped.
 - **Additive double count.** It cannot be detected. The form shows the run total, and the batch panel lists run and entry sources side by side.
 - **Template fetch cost.** Observations are written on fetches that already happen. No new polling.
 - **Verify protocol wording verbatim before gating.** The quotes in ADR 0032 came through the MCP; re-read them against https://registry.isometric.com/protocol/biochar/1.1 before PR 4 merges.
