@@ -122,13 +122,7 @@ export function FeedstockForm({
 
   const defaultValues = {
     facilityId: feedstock?.facilityId ?? contextFacilityId ?? "",
-    // New records default to today. Legacy records without a delivery date
-    // must stay empty in edit mode so the form matches read mode and a save
-    // cannot silently introduce today's date.
-    deliveryDate:
-      feedstock && !feedstock.deliveryDate
-        ? undefined
-        : toDateInputValue(feedstock?.deliveryDate ?? null),
+    deliveryDate: toDateInputValue(feedstock?.deliveryDate ?? null),
     supplierId: feedstock?.supplierId ?? "",
     vehicleId: feedstock?.vehicleId ?? "",
     transportDistanceKm: undefined as number | undefined,

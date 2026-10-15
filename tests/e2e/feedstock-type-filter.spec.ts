@@ -1,3 +1,4 @@
+import { feedstockFixtureValues, cleanupFeedstockFixtureParents } from "../helpers/feedstock-fixture";
 /**
  * Feedstock-type filter E2E (issue #25)
  *
@@ -68,7 +69,7 @@ test.describe("Feedstock type filter", () => {
 
     try {
       await db.insert(schema.feedstockTypes).values(altType);
-      await db.insert(schema.feedstocks).values(altFeedstock);
+      await db.insert(schema.feedstocks).values(await feedstockFixtureValues(db, altFeedstock));
 
       await page.goto(`/feedstocks?facility=${seededData.facility.id}`);
       // Hydration gate: the sidebar facility name is client-resolved.
@@ -130,6 +131,7 @@ test.describe("Feedstock type filter", () => {
         await db
           .delete(schema.feedstocks)
           .where(eq(schema.feedstocks.id, altFeedstock.id));
+        await cleanupFeedstockFixtureParents(db);
         await db
           .delete(schema.feedstockTypes)
           .where(eq(schema.feedstockTypes.id, altType.id));

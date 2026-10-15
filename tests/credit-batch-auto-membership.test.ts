@@ -1,3 +1,4 @@
+import { feedstockFixtureValues, cleanupFeedstockFixtureParents } from "./helpers/feedstock-fixture";
 import { createProductionRunOutputBin } from "./helpers/production-run-output-bin";
 import { labLogisticsVersion } from "./helpers/lab-logistics-version";
 import { productionVersion } from "./helpers/production-version";
@@ -131,7 +132,7 @@ describe("credit batch automatic production-run membership", () => {
 
     const [feedstock] = await db
       .insert(feedstocks)
-      .values({
+      .values(await feedstockFixtureValues(db, {
         organizationId: TEST_ORG_ID,
         code: `FS-CBAM-${tag}`,
         facilityId,
@@ -141,7 +142,7 @@ describe("credit batch automatic production-run membership", () => {
         massWetKg: 2_500,
         moistureContentPercent: 20,
         storageLocationId,
-      })
+      }))
       .returning({ id: feedstocks.id });
     feedstockId = feedstock.id;
 
@@ -172,7 +173,7 @@ describe("credit batch automatic production-run membership", () => {
 
     const [alternateFeedstock] = await db
       .insert(feedstocks)
-      .values({
+      .values(await feedstockFixtureValues(db, {
         organizationId: TEST_ORG_ID,
         code: `FS-CBAM-ALT-${tag}`,
         facilityId,
@@ -182,7 +183,7 @@ describe("credit batch automatic production-run membership", () => {
         massWetKg: 125,
         moistureContentPercent: 20,
         storageLocationId: alternateStorageLocationId,
-      })
+      }))
       .returning({ id: feedstocks.id });
     alternateFeedstockId = alternateFeedstock.id;
 
@@ -224,7 +225,7 @@ describe("credit batch automatic production-run membership", () => {
 
     const [otherFeedstock] = await db
       .insert(feedstocks)
-      .values({
+      .values(await feedstockFixtureValues(db, {
         organizationId: TEST_ORG_ID,
         code: `FS-CBAM-OTHER-${tag}`,
         facilityId: otherFacilityId,
@@ -234,7 +235,7 @@ describe("credit batch automatic production-run membership", () => {
         massWetKg: 125,
         moistureContentPercent: 20,
         storageLocationId: otherStorageLocationId,
-      })
+      }))
       .returning({ id: feedstocks.id });
     otherFeedstockId = otherFeedstock.id;
   });
@@ -288,14 +289,17 @@ describe("credit batch automatic production-run membership", () => {
     }
     if (feedstockId) {
       await db.delete(feedstocks).where(eq(feedstocks.id, feedstockId));
+      await cleanupFeedstockFixtureParents(db);
     }
     if (alternateFeedstockId) {
       await db
         .delete(feedstocks)
         .where(eq(feedstocks.id, alternateFeedstockId));
+      await cleanupFeedstockFixtureParents(db);
     }
     if (otherFeedstockId) {
       await db.delete(feedstocks).where(eq(feedstocks.id, otherFeedstockId));
+      await cleanupFeedstockFixtureParents(db);
     }
     if (
       storageLocationId &&

@@ -1,3 +1,4 @@
+import { feedstockFixtureValues, cleanupFeedstockFixtureParents } from "../helpers/feedstock-fixture";
 /**
  * Production Run + Sample UI CRUD Tests
  *
@@ -121,7 +122,7 @@ test.describe("Production Run + Sample UI CRUD", () => {
         facilityId: seededData.facility.id,
         feedstockTypeId: secondaryTypeId,
       });
-      await db.insert(feedstocks).values({
+      await db.insert(feedstocks).values(await feedstockFixtureValues(db, {
         id: secondaryFeedstockId,
         organizationId: DEC_ORG_ID,
         code: `E2E-FS-MULTI-${tag}`,
@@ -132,7 +133,7 @@ test.describe("Production Run + Sample UI CRUD", () => {
         massDryKg: 270,
         moistureContentPercent: 10,
         storageLocationId: secondaryBinId,
-      });
+      }));
 
       await page.goto(`/production-runs?facility=${seededData.facility.id}`);
       await expect(
@@ -263,6 +264,7 @@ test.describe("Production Run + Sample UI CRUD", () => {
         await db.delete(productionRuns).where(inArray(productionRuns.id, runIds));
       }
       await db.delete(feedstocks).where(eq(feedstocks.id, secondaryFeedstockId));
+      await cleanupFeedstockFixtureParents(db);
       await db.delete(storageLocations).where(eq(storageLocations.id, secondaryBinId));
       await db.delete(feedstockTypes).where(eq(feedstockTypes.id, secondaryTypeId));
       await pool.end();

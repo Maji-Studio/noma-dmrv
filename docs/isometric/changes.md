@@ -1,5 +1,19 @@
 # Isometric Docs Change Log
 
+## 2026-10-15: Required intake fields and external eligibility evidence (#1013, #942 q8)
+
+Intakes require a delivery date, supplier, wet mass, moisture below 100%, and bin.
+Dry mass is derived; feedstock losses require an event time and switching a bin
+to mix requires a merge time. Manual transport legs expose model year; evidence
+uses uploads rather than unused document-reference columns. Eligibility,
+counterfactual and leakage evidence stays outside noma; intake eligibility
+columns and the ineligible-feedstock mass-balance exit are removed. Unused
+intake GPS, CO2e, source-region and storage-bin supplier-reference fields are
+removed. The feedstock-delivery table and its references remain.
+
+BFA v1.2.3 Appendix 3 gives FSC Mix and Controlled Wood sourcing recommendations,
+not a general 25% ineligible-biomass cap; the shortlist now reflects that scope.
+
 ## 2026-10-15: Optional TGA and mean reflectance (#942 q3, #1016)
 
 Kenji resolved `isometric/tga-1000-year-requirement`: TGA reactive/residual

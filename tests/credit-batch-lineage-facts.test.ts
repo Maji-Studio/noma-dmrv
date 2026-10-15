@@ -1,3 +1,4 @@
+import { feedstockFixtureValues, cleanupFeedstockFixtureParents } from "./helpers/feedstock-fixture";
 import { insertOutputApplicationFixture } from "./helpers/output-contract-fixtures";
 import { deleteOutputApplicationFixtures } from "./helpers/output-contract-fixtures";
 import { outputProductFixtureValues, outputOrderFixtureValues, insertOutputDeliveryFixture, deleteOutputDeliveryFixtures, deleteOutputProductFixtures, deleteOutputFacilityFixtures } from "./helpers/output-contract-fixtures";
@@ -57,7 +58,7 @@ describe("credit batch accounting", () => {
     const [feedstockType] = await db.insert(feedstockTypes).values({ organizationId: TEST_ORG_ID, code: `LF-FT-${tag}`, name: `Lineage ${tag}`, category: "forestry" }).returning();
     const [process] = await db.insert(productionProcesses).values({ organizationId: TEST_ORG_ID, facilityId: facility.id, feedstockTypeId: feedstockType.id }).returning();
     const runs = await db.insert(productionRuns).values([1, 2].map((n) => ({ organizationId: TEST_ORG_ID, facilityId: facility.id, reactorId: reactor.id, code: `LF-PR${n}-${tag}`, startTime: new Date(`2026-07-0${n}T10:00:00Z`), feedstockMassDryKg: 2_400 * n, biocharDryMassKg: 100 * n }))).returning();
-    const stocks = await db.insert(feedstocks).values(runs.map((run, n) => ({ organizationId: TEST_ORG_ID, facilityId: facility.id, feedstockTypeId: feedstockType.id, code: `LF-FS${n}-${tag}`, status: "complete" as const, massDryKg: 200, eligibilityStatus: "eligible" as const }))).returning();
+    const stocks = await db.insert(feedstocks).values(await feedstockFixtureValues(db, runs.map((run, n) => ({ organizationId: TEST_ORG_ID, facilityId: facility.id, feedstockTypeId: feedstockType.id, code: `LF-FS${n}-${tag}`, status: "complete" as const, massDryKg: 200 })))).returning();
     await db.insert(productionRunFeedstocks).values(runs.map((run, n) => ({ organizationId: TEST_ORG_ID, productionRunId: run.id, feedstockId: stocks[n].id, wetMassUsedKg: 100 })));
     const products = await db.insert(biocharProducts).values(await outputProductFixtureValues(db, runs.map((run, n) => ({ organizationId: TEST_ORG_ID, facilityId: facility.id, code: `LF-BP${n}-${tag}`, linkedProductionRunId: run.id, massKg: 100 })))).returning();
     const [multiRunProduct] = await db.insert(biocharProducts).values(await outputProductFixtureValues(db, { organizationId: TEST_ORG_ID, facilityId: facility.id, code: `LF-BPM-${tag}`, sourceBiocharStorageLocationId: sourceBin.id, linkedProductionRunId: null, massKg: 400 })).returning();
@@ -324,6 +325,7 @@ describe("credit batch accounting", () => {
       await deleteOutputProductFixtures(db, inArray(biocharProducts.id, [...products.map((row) => row.id), multiRunProduct.id]));
       await db.delete(productionRunFeedstocks).where(inArray(productionRunFeedstocks.productionRunId, runs.map((row) => row.id)));
       await db.delete(feedstocks).where(inArray(feedstocks.id, stocks.map((row) => row.id)));
+      await cleanupFeedstockFixtureParents(db);
       await db.delete(productionRuns).where(inArray(productionRuns.id, runs.map((row) => row.id)));
       await db.delete(productionProcesses).where(eq(productionProcesses.id, process.id));
       await db.delete(reactors).where(eq(reactors.id, reactor.id));

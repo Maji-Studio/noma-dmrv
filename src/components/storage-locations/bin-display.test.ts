@@ -28,7 +28,6 @@ function makeBin(
     capacityKg: null,
     storageMethod: null,
     storageDescription: null,
-    supplierReferenceId: null,
     feedstockTypeId: null,
     formulationId: null,
     facilityId: "facility-1",

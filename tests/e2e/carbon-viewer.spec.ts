@@ -103,10 +103,6 @@ async function seedGeoLineage(
           .update(schema.facilities)
           .set({ gpsLatitude: null, gpsLongitude: null })
           .where(eq(schema.facilities.id, seededData.facility.id));
-        await tx
-          .update(schema.feedstocks)
-          .set({ gpsLatitude: null, gpsLongitude: null })
-          .where(eq(schema.feedstocks.id, seededData.feedstock.id));
       }
 
       await tx.insert(schema.productionRuns).values({

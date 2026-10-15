@@ -6,6 +6,8 @@ import {
   FormInput,
   ResolvedErrorRevalidator,
 } from "@/components/forms";
+import { EventTimeInput } from "@/components/forms/event-time-input";
+import { useFacilityClock } from "@/hooks/use-facility-context";
 import { FormActions } from "@/components/forms/form-actions";
 import { LOST_MASS_LABEL, LOST_MASS_SUBMIT_LABEL } from "@/lib/output-stock/labels";
 import { SlideOverPanel } from "@/components/ui/slide-over-panel";
@@ -65,6 +67,7 @@ function LossForm({
   onRecorded?: () => void;
 }) {
   const toast = useToast();
+  const clock = useFacilityClock(storageLocation.facilityId);
   const [serverError, setServerError] = useState<string | null>(null);
   const [fieldServerError, setFieldServerError] = useState<{
     message: string;
@@ -88,7 +91,7 @@ function LossForm({
     formState: { errors },
   } = useForm({
     resolver: zodResolver(recordLossFormSchema),
-    defaultValues: { reason: "" },
+    defaultValues: { reason: "", occurredAt: new Date().toISOString() },
   });
   const lossInput = useWatch({ control, name: "lossMassKg" });
   const reasonInput = useWatch({ control, name: "reason" });
@@ -120,6 +123,7 @@ function LossForm({
         lane,
         idempotencyKey,
         reason: values.reason,
+        occurredAt: values.occurredAt,
         lossMassKg: values.lossMassKg,
       });
       setIdempotencyKey(crypto.randomUUID());
@@ -151,6 +155,9 @@ function LossForm({
   return (
     <form onSubmit={onSubmit} className="flex flex-1 flex-col space-y-20">
       <ResolvedErrorRevalidator control={control} trigger={trigger} />
+      <FormField id="occurredAt" label="Date and time" required error={errors.occurredAt?.message} cue={clock.hint}>
+        <EventTimeInput control={control} name="occurredAt" id="occurredAt" timeZone={clock.timeZone} disabled={recordLoss.isPending} />
+      </FormField>
       <FormField
         id="loss-amount"
         label={lane === "feedstock" ? "Wet mass lost" : "Amount lost"}

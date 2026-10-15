@@ -1,3 +1,4 @@
+import { feedstockFixtureValues, cleanupFeedstockFixtureParents } from "./helpers/feedstock-fixture";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
@@ -84,7 +85,7 @@ describe("feedstock stock-take moisture integrity", () => {
       .returning({ id: storageLocations.id });
     const [feedstock] = await db
       .insert(feedstocks)
-      .values({
+      .values(await feedstockFixtureValues(db, {
         organizationId: TEST_ORG_ID,
         facilityId: facility.id,
         feedstockTypeId: feedstockType.id,
@@ -94,7 +95,7 @@ describe("feedstock stock-take moisture integrity", () => {
         massDryKg: 100,
         massWetKg: 125,
         moistureContentPercent: 20,
-      })
+      }))
       .returning({ id: feedstocks.id });
 
     try {
@@ -159,7 +160,7 @@ describe("feedstock stock-take moisture integrity", () => {
         createBinMovement(ctx, {
           storageLocationId: bin.id,
           lane: "feedstock",
-          movementType: "adjustment",
+          movementType: "adjustment", occurredAt: new Date("2026-10-15T10:00:00Z"),
           idempotencyKey: crypto.randomUUID(),
           massDeltaKg: 1,
           reason: "Generic movement caller cannot bypass stock-take checks",
@@ -192,6 +193,7 @@ describe("feedstock stock-take moisture integrity", () => {
         .delete(binMovements)
         .where(eq(binMovements.storageLocationId, bin.id));
       await db.delete(feedstocks).where(eq(feedstocks.id, feedstock.id));
+      await cleanupFeedstockFixtureParents(db);
       await db.delete(storageLocations).where(eq(storageLocations.id, bin.id));
       await db
         .delete(feedstockTypes)

@@ -3,7 +3,7 @@ import { expect, it } from "vitest";
 import { driverEtag, facilityEtag, feedstockEtag, feedstockTypeEtag, storageLocationEtag, supplierEtag, vehicleEtag, productionRunEtag, biocharProductEtag, formulationEtag, labSampleEtag, creditBatchEtag, customerEtag, orderEtag, deliveryEtag } from "./representation-etags";
 
 it("builds strong ETags from row version and representation revision", () => {
-  for (const etag of [driverEtag, feedstockEtag, feedstockTypeEtag, supplierEtag, vehicleEtag, formulationEtag, labSampleEtag, creditBatchEtag, customerEtag, orderEtag]) {
+  for (const etag of [driverEtag, feedstockTypeEtag, supplierEtag, vehicleEtag, formulationEtag, labSampleEtag, creditBatchEtag, customerEtag, orderEtag]) {
     expect(etag({ version: 7 })).toBe('"7.1"');
   }
 });
@@ -32,4 +32,8 @@ it("keeps delivery read and write tags on the same representation revision", () 
 
 it("uses the current biochar product representation revision", () => {
   expect(biocharProductEtag({ version: 7 })).toBe(`"7.${BIOCHAR_PRODUCT_REPRESENTATION_REVISION}"`);
+});
+
+it("uses revision 2 for feedstocks without intake GPS", () => {
+  expect(feedstockEtag({ version: 7 })).toBe('"7.2"');
 });

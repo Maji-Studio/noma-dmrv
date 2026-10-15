@@ -51,7 +51,6 @@ const storageLocation: StorageLocationWithFacility = {
   capacityKg: null,
   storageMethod: null,
   storageDescription: null,
-  supplierReferenceId: null,
   feedstockTypeId: null,
   formulationId: null,
   facilityId: "00000000-0000-4000-8000-000000000003",

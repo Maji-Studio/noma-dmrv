@@ -1,3 +1,4 @@
+import { feedstockFixtureValues } from "../helpers/feedstock-fixture";
 import { setProductSourceFixture } from "./helpers/product-source-fixture";
 import { insertEstablishedOutputApplicationFixture as insertOutputApplicationFixture } from "../helpers/output-contract-fixtures";
 import { outputOrderFixtureValues, insertEstablishedOutputDeliveryFixture as insertOutputDeliveryFixture } from "../helpers/output-contract-fixtures";
@@ -213,11 +214,8 @@ async function seedBatchOptions(seededData: SeededChainData) {
  * Seeds a credit batch whose two member applications share one production run
  * and one biochar lot — the shared-run dedupe case — with masses chosen so
  * the Sankey emits all three planned exits:
- *   feedstock 1000 → (ineligible 100) → runs out 300 → allocated lots 250
+ *   feedstock 1000 → runs out 300 → allocated lots 250
  *   → applied 250 (0.1 t + 0.15 t); outside these applications 50; conversion loss 600.
- * The ineligible exit derives from a second feedstock flagged
- * `eligibilityStatus: 'ineligible'` with a 100 kg run allocation (issue #285)
- * — there is no batch-level ineligible-mass column anymore.
  */
 async function seedBatchChain(seededData: SeededChainData) {
   const { db, pool } = createDbConnection();
@@ -225,7 +223,7 @@ async function seedBatchChain(seededData: SeededChainData) {
 
   const ids = {
     productionRun: crypto.randomUUID(),
-    ineligibleFeedstock: crypto.randomUUID(),
+    secondFeedstock: crypto.randomUUID(),
     orderA: crypto.randomUUID(),
     orderB: crypto.randomUUID(),
     deliveryA: crypto.randomUUID(),
@@ -239,7 +237,7 @@ async function seedBatchChain(seededData: SeededChainData) {
   };
   const codes = {
     productionRun: `E2E-BPR-${suffix}`,
-    ineligibleFeedstock: `E2E-BFSI-${suffix}`,
+    secondFeedstock: `E2E-BFSI-${suffix}`,
     applicationA: `E2E-BAPA-${suffix}`,
     applicationB: `E2E-BAPB-${suffix}`,
     creditBatch: `E2E-CB-${suffix}`,
@@ -266,21 +264,20 @@ async function seedBatchChain(seededData: SeededChainData) {
 
       await tx.update(schema.feedstocks).set({ massWetKg: 900, massDryKg: 900, moistureContentPercent: 0 })
         .where(eq(schema.feedstocks.id, seededData.feedstock.id));
-      // 900 kg eligible + 100 kg ineligible allocations; the run's recorded
+      // 900 kg + 100 kg allocations; the run's recorded
       // 1000 kg input stays authoritative for the Sankey's feedstock column.
-      await tx.insert(schema.feedstocks).values({
+      await tx.insert(schema.feedstocks).values(await feedstockFixtureValues(tx, {
         organizationId: DEC_ORG_ID,
-        id: ids.ineligibleFeedstock,
-        code: codes.ineligibleFeedstock,
+        id: ids.secondFeedstock,
+        code: codes.secondFeedstock,
         facilityId: seededData.facility.id,
         feedstockTypeId: seededData.feedstockType.id,
         massDryKg: 100,
         massWetKg: 100,
         moistureContentPercent: 0,
         status: "complete",
-        eligibilityStatus: "ineligible",
         storageLocationId: seededData.feedstockStorageLocation.id,
-      });
+      }));
       await tx.insert(schema.productionRunFeedstocks).values([
         {
           organizationId: DEC_ORG_ID,
@@ -293,7 +290,7 @@ async function seedBatchChain(seededData: SeededChainData) {
           organizationId: DEC_ORG_ID,
           id: crypto.randomUUID(),
           productionRunId: ids.productionRun,
-          feedstockId: ids.ineligibleFeedstock,
+          feedstockId: ids.secondFeedstock,
           wetMassUsedKg: 100,
         },
       ]);
@@ -793,18 +790,15 @@ test.describe("Traceability Views (credit-batch anchor)", () => {
     const sankey = adminPage.getByTestId("batch-sankey");
     await expect(sankey).toBeVisible({ timeout: 15000 });
 
-    // Seeded balance: 1000 in − 100 ineligible − 300 out = 600 conversion
+    // Seeded balance: 1000 in − 300 out = 700 conversion
     // loss. Saved application shares are 100 + 150 kg, so this application-scoped
     // Sankey shows 250 kg through lots and 50 kg outside these applications.
-    const ineligible = sankey.getByTestId("sankey-exit-ineligible_feedstock");
-    await expect(ineligible).toBeVisible();
-    await expect(ineligible).toContainText("Ineligible feedstock");
-    await expect(ineligible).toContainText("100 kg");
+    await expect(sankey.getByTestId("sankey-exit-ineligible_feedstock")).toHaveCount(0);
 
     const conversion = sankey.getByTestId("sankey-exit-conversion_loss");
     await expect(conversion).toBeVisible();
     await expect(conversion).toContainText("Conversion loss");
-    await expect(conversion).toContainText("600 kg");
+    await expect(conversion).toContainText("700 kg");
 
     const outsideApplications = sankey.getByTestId("sankey-exit-unallocated_output");
     await expect(outsideApplications).toBeVisible();
@@ -833,7 +827,7 @@ test.describe("Traceability Views (credit-batch anchor)", () => {
     const trail = adminPage.getByTestId("application-trail");
     await expect(trail).toBeVisible({ timeout: 15000 });
 
-    // Full chain: 2 feedstocks (eligible + ineligible) → run → lot → order
+    // Full chain: 2 feedstocks → run → lot → order
     // → delivery → application.
     await expect(trail.getByTestId("trail-step")).toHaveCount(7);
     await expect(

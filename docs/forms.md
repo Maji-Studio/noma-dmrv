@@ -137,8 +137,7 @@ folding to `null` wiped a manual distance on every unrelated edit.
 **The server derives values it owns rather than trusting the patch.** Feedstock
 dry mass is derived from the *effective* wet mass and moisture (patch value
 falling back to the stored row) inside the same locked transaction, so a
-moisture-only edit yields the right dry mass. A client-sent `massDryKg` is
-advisory and is refused when it disagrees materially with the derivation.
+moisture-only edit yields the right dry mass. `massDryKg` is not a PATCH input.
 Cross-field rules work the same way: `updateFeedstockType` re-validates the
 merged category/usage pair against the stored row, because a refine on the
 patch alone never fires when only one half of the pair is present.

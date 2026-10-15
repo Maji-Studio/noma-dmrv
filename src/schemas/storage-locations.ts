@@ -215,7 +215,6 @@ export const updateStorageLocationSchema = z.object({
   mergedAt: mergedAtSchema,
   storageMethod: z.string().max(255).optional().nullable(),
   storageDescription: z.string().max(1000).optional().nullable(),
-  supplierReferenceId: z.string().max(100).optional().nullable(),
 }).superRefine((data, ctx) => {
   if (data.formulationId && data.type && data.type !== "product_bin") {
     ctx.addIssue({

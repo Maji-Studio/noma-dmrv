@@ -93,10 +93,6 @@ const baseTransportLegShape = {
   calculationMethodType: z
     .enum(emissionsCalculationMethods)
     .default("distance_based"),
-
-  // Documentation (Isometric §6 verification evidence — optional, attachable later).
-  billOfLading: z.string().trim().max(255).optional().nullable(),
-  weighScaleTicketRef: z.string().trim().max(255).optional().nullable(),
 };
 
 // ============================================

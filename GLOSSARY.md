@@ -84,8 +84,7 @@ _Avoid_: ingredient, material (the catalog is one thing; usage
 disambiguates).
 
 **Feedstock bin**:
-A storage bin holding a **feedstock type**, declared at creation or
-locked on first intake. What a bin may feed follows from its held
+A storage bin holding a **feedstock type**, chosen at bin creation. What a bin may feed follows from its held
 type's declared usage — pyrolysis-usage stock may enter a production
 run, blend-usage stock may enter a formulation — never from the bin
 itself; an input bin has no kind of its own. Distinct from output bins,
@@ -527,7 +526,7 @@ _Avoid_: timeline, ledger, audit log.
 **Mass balance**:
 The dry-mass flow reading of a **credit batch**: feedstock → production
 runs → biochar lots → applied, with every loss drawn as an explicit
-labeled exit — **ineligible feedstock**, **conversion loss**, in-storage
+labeled exit — **conversion loss**, in-storage
 mass. Ribbon widths always mean dry kg; columns are never normalized.
 _Avoid_: volume flow.
 

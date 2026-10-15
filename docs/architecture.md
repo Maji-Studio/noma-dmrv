@@ -567,7 +567,7 @@ roll-up, `?application=<id>` an application drill-down.
 Batch roll-up merges every member application's rollback, dedupes production
 runs, and exposes **DAG | Map | Sankey**. Drill-down exposes **Lineage | Map |
 Split | Trail**. The Sankey is a dry-mass balance with explicit exits for
-ineligible feedstock, conversion loss, and in-storage mass; no net-CO2e figure
+conversion loss and in-storage mass; no net-CO2e figure
 (registry-owned, ADR [0018](./adr/0018-isometric-owns-project-emissions.md)).
 Anchor model: ADR
 [0011](./adr/0011-credit-batch-anchored-chain-of-custody.md).

@@ -1,3 +1,4 @@
+import { feedstockFixtureValues, cleanupFeedstockFixtureParents } from "./helpers/feedstock-fixture";
 import { labLogisticsVersion } from "./helpers/lab-logistics-version";
 import { masterDataVersion } from "./helpers/master-data-version";
 import { insertOutputApplicationFixture } from "./helpers/output-contract-fixtures";
@@ -54,7 +55,7 @@ describe("delete dependency guards", () => {
         .returning({ id: storageLocations.id });
       const [feedstock] = await tx
         .insert(feedstocks)
-        .values({
+        .values(await feedstockFixtureValues(tx, {
           organizationId: TEST_ORG_ID,
           code: `FS-DDG-SL-${tag}`,
           facilityId: facility.id,
@@ -62,7 +63,7 @@ describe("delete dependency guards", () => {
           feedstockTypeId: feedstockType.id,
           massDryKg: 80,
           storageLocationId: storageLocation.id,
-        })
+        }))
         .returning({ id: feedstocks.id });
 
       return {
@@ -83,6 +84,7 @@ describe("delete dependency guards", () => {
     } finally {
       await db.transaction(async (tx) => {
         await tx.delete(feedstocks).where(eq(feedstocks.id, fixture.feedstockId));
+        await cleanupFeedstockFixtureParents(tx);
         await tx
           .delete(storageLocations)
           .where(eq(storageLocations.id, fixture.storageLocationId));
@@ -91,6 +93,7 @@ describe("delete dependency guards", () => {
           .where(eq(feedstockTypes.id, fixture.feedstockTypeId));
         await deleteOutputFacilityFixtures(tx, eq(facilities.id, fixture.facilityId));
       });
+      await cleanupFeedstockFixtureParents(db);
     }
   });
 

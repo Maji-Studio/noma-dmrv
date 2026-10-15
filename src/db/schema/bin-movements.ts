@@ -61,6 +61,7 @@ export const binMovements = pgTable(
     unique('bin_movements_org_idempotency_unique').on(table.organizationId, table.idempotencyKey),
     foreignKey({ columns: [table.storageLocationId, table.organizationId], foreignColumns: [storageLocations.id, storageLocations.organizationId] }),
     foreignKey({ columns: [table.correctsMovementId, table.organizationId], foreignColumns: [binMovements.id as AnyPgColumn, binMovements.organizationId as AnyPgColumn] }),
+    check('bin_movements_feedstock_loss_time', sql`${table.lane} <> 'feedstock' or ${table.movementType} <> 'loss' or ${table.occurredAt} is not null`),
     check('bin_movements_output_contract', sql`${table.outputKind} is null or (
       ${table.lane} in ('biochar', 'product') and ${table.occurredAt} is not null
       and ${table.idempotencyKey} is not null and length(${table.idempotencyKey}) > 0

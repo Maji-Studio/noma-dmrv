@@ -1,3 +1,4 @@
+import { feedstockFixtureValues } from "./feedstock-fixture";
 import { randomUUID } from 'node:crypto';
 import type { db as database } from '@/db';
 import { facilities, formulations, formulationIngredients, feedstockTypes, storageLocations, reactors, productionRuns, feedstocks, productionRunFeedstocks, productionRunFeedstockDraws, customers, customerLocations, users, organizations } from '@/db/schema';
@@ -22,8 +23,8 @@ export async function seedOutputStockParents(db: typeof database, options: { org
   const [fuelType] = await db.insert(feedstockTypes).values({ organizationId, code: `E2E-FIFO-FUEL-${tag}`, name: `E2E Fuel ${tag}`, category: 'forestry', usage: 'pyrolysis' }).returning();
   const [fuelBin] = await db.insert(storageLocations).values({ organizationId, facilityId: facility.id, feedstockTypeId: fuelType.id,
     code: `E2E-FIFO-FUEL-${tag}`, name: `E2E Fuel ${tag}`, type: 'feedstock_bin' }).returning();
-  const [intake] = await db.insert(feedstocks).values({ organizationId, facilityId: facility.id, feedstockTypeId: fuelType.id,
-    storageLocationId: fuelBin.id, code: `E2E-FIFO-FS-${tag}`, status: 'complete', massWetKg: 6000, moistureContentPercent: 10, massDryKg: 5400 }).returning();
+  const [intake] = await db.insert(feedstocks).values(await feedstockFixtureValues(db, { organizationId, facilityId: facility.id, feedstockTypeId: fuelType.id,
+    storageLocationId: fuelBin.id, code: `E2E-FIFO-FS-${tag}`, status: 'complete', massWetKg: 6000, moistureContentPercent: 10, massDryKg: 5400 })).returning();
   const runs = await db.insert(productionRuns).values([
     { organizationId, facilityId: facility.id, reactorId: reactor.id, code: `E2E-FIFO-R1-${tag}`, status: 'complete' as const, feedstockWetMassKg: 3000, feedstockMoisturePercent: 10, feedstockMassDryKg: 2700, startTime: new Date('2026-09-09T08:00:00Z'), endTime: new Date('2026-09-09T12:00:00Z'), biocharStorageLocationId: source.id, biocharOutputKg: 1000, biocharMoisturePercent: 10, biocharDryMassKg: 900 },
     { organizationId, facilityId: facility.id, reactorId: reactor.id, code: `E2E-FIFO-R2-${tag}`, status: 'complete' as const, feedstockWetMassKg: 3000, feedstockMoisturePercent: 10, feedstockMassDryKg: 2700, startTime: new Date('2026-09-11T08:00:00Z'), endTime: new Date('2026-09-11T12:00:00Z'), biocharStorageLocationId: source.id, biocharOutputKg: 750, biocharMoisturePercent: 20, biocharDryMassKg: 600 },

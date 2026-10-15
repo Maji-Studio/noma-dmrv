@@ -85,6 +85,7 @@ export async function recordLossFn(
       storageLocationId: validated.storageLocationId,
       lane: validated.lane,
       movementType: "loss",
+      occurredAt: new Date(validated.occurredAt),
       // Losses are stored as a negative delta.
       massDeltaKg: -validated.lossMassKg,
       reason: validated.reason,

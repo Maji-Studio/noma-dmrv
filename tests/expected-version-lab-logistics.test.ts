@@ -1,3 +1,4 @@
+import { feedstockFixtureValues } from "./helpers/feedstock-fixture";
 import { runOperationInProcess } from "@/lib/operations/runner";
 import { randomUUID } from "node:crypto";
 import { afterEach, describe, expect, it } from "vitest";
@@ -154,7 +155,7 @@ async function seedFixture(): Promise<Fixture> {
 
     const [feedstock] = await tx
       .insert(feedstocks)
-      .values({
+      .values(await feedstockFixtureValues(tx, {
         organizationId,
         code: `E2E-EXVB-FS-${tag}`,
         facilityId: facility.id,
@@ -164,7 +165,7 @@ async function seedFixture(): Promise<Fixture> {
         massWetKg: INTAKE_WET_KG,
         moistureContentPercent: INTAKE_MOISTURE_PERCENT,
         storageLocationId: bin.id,
-      })
+      }))
       .returning({ id: feedstocks.id });
 
     const [customer] = await tx

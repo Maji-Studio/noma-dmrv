@@ -1,3 +1,4 @@
+import { feedstockFixtureValues, cleanupFeedstockFixtureParents } from "./helpers/feedstock-fixture";
 import { createProductionRunOutputBin } from "./helpers/production-run-output-bin";
 import { countQueries } from "./helpers/query-counter";
 /**
@@ -95,16 +96,15 @@ beforeAll(async () => {
   const stocks = await db
     .insert(feedstocks)
     .values(
-      runs.map((_, n) => ({
+      await feedstockFixtureValues(db, runs.map((_, n) => ({
         organizationId: TEST_ORG_ID,
         facilityId: facility.id,
         feedstockTypeId: feedstockType.id,
         code: `QB-FS${n}-${tag}`,
         status: n === 0 ? ("missing_data" as const) : ("complete" as const),
         massDryKg: 500,
-        eligibilityStatus: "eligible" as const,
         deliveryDate: new Date(`2026-06-2${n}T00:00:00Z`),
-      })),
+      }))),
     )
     .returning({ id: feedstocks.id });
   const batches = await db
@@ -145,6 +145,7 @@ afterAll(async () => {
   await db.delete(creditBatchProductionRuns).where(inArray(creditBatchProductionRuns.creditBatchId, fixture.batchIds));
   await db.delete(creditBatches).where(inArray(creditBatches.id, fixture.batchIds));
   await db.delete(feedstocks).where(inArray(feedstocks.id, fixture.feedstockIds));
+  await cleanupFeedstockFixtureParents(db);
   await db.delete(productionRuns).where(inArray(productionRuns.id, fixture.runIds));
   await db.delete(storageLocations).where(eq(storageLocations.facilityId, fixture.facilityId));
   await db.delete(productionProcesses).where(eq(productionProcesses.id, fixture.processId));

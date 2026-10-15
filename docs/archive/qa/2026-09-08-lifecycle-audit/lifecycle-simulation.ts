@@ -1,3 +1,4 @@
+import { feedstockFixtureValues, cleanupFeedstockFixtureParents } from "../../../../tests/helpers/feedstock-fixture";
 /** Point-in-time observations, not regression specifications. No remote calls. */
 import { beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
@@ -111,11 +112,11 @@ describe("baseline defect observations (passing means reproduced)", () => {
 async function intakeFixture() {
   const f = await fixture();
   await db.delete(binMovements).where(eq(binMovements.storageLocationId, f.bin.id));
-  const [intake] = await db.insert(feedstocks).values({
+  const [intake] = await db.insert(feedstocks).values(await feedstockFixtureValues(db, {
     organizationId: TEST_ORG_ID, code: `AUD-${crypto.randomUUID()}`,
     facilityId: f.facility.id, feedstockTypeId: f.type.id, storageLocationId: f.bin.id,
     massWetKg: 100, massDryKg: 90, moistureContentPercent: 10, status: "complete",
-  }).returning();
+  })).returning();
   return { ...f, intake };
 }
 
@@ -123,17 +124,18 @@ describe("feedstock baseline observations", () => {
   it("F06: reducing intake below recorded withdrawal creates negative stock", async () => {
     const f = await intakeFixture();
     try {
-      await db.insert(binMovements).values({ organizationId: TEST_ORG_ID,
+      await db.insert(binMovements).values({ occurredAt: new Date("2026-01-01T00:00:00.000Z"), organizationId: TEST_ORG_ID,
         storageLocationId: f.bin.id, lane: "feedstock", movementType: "loss",
         massDeltaKg: -80, reason: "Disposable audit withdrawal fixture" });
       const before = await getStorageLocationLaneSummary(context, { facilityId: f.facility.id, archived: false });
       expect(before.feedstock_bin.onHandKg).toBe(20);
-      await db.transaction((tx) => updateFeedstockInTransaction(context, tx, f.intake.id, { expectedVersion: f.intake.version, massWetKg: 50, massDryKg: 45 }));
+      await db.transaction((tx) => updateFeedstockInTransaction(context, tx, f.intake.id, { expectedVersion: f.intake.version, massWetKg: 50 }));
       const after = await getStorageLocationLaneSummary(context, { facilityId: f.facility.id, archived: false });
       expect(after.feedstock_bin.onHandKg).toBe(-30);
       console.log("F06: 100 kg intake - 80 kg loss = 20 kg; edit intake to 50 kg succeeds; final stock=-30 kg");
     } finally {
       await db.delete(feedstocks).where(eq(feedstocks.id, f.intake.id));
+      await cleanupFeedstockFixtureParents(db);
       await cleanup(f);
     }
   });
@@ -148,6 +150,7 @@ describe("feedstock baseline observations", () => {
       console.log("F07: saved wet=100 kg moisture=50% dry=90 kg; consistent derived dry would be 50 kg");
     } finally {
       await db.delete(feedstocks).where(eq(feedstocks.id, f.intake.id));
+      await cleanupFeedstockFixtureParents(db);
       await cleanup(f);
     }
   });

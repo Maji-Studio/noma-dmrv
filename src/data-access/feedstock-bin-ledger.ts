@@ -64,7 +64,7 @@ export async function getFeedstockBinStock(ctx: OrgContext, storageLocationId: s
   });
   type Draft = Omit<FeedstockLedgerEntry, 'beforeWetKg' | 'afterWetKg' | 'estimatedDryKg'>;
   const drafts: Draft[] = [
-    ...batches.map((b): Draft => ({ id: b.id, sourceId: b.id, kind: 'intake', occurredAt: (b.deliveryDate ?? b.createdAt).toISOString(),
+    ...batches.map((b): Draft => ({ id: b.id, sourceId: b.id, kind: 'intake', occurredAt: b.deliveryDate.toISOString(),
       recordedAt: b.createdAt.toISOString(), actorName: null, code: b.code, reason: '', wetDeltaKg: b.wetKg, countedWetKg: null,
       moisturePercent: b.moisturePercent === null ? null : Number(b.moisturePercent) })),
     ...runDraws.map((d): Draft => ({ id: d.id, sourceId: d.sourceId, kind: 'run_draw', occurredAt: d.startTime.toISOString(), recordedAt: d.createdAt.toISOString(),
@@ -73,7 +73,7 @@ export async function getFeedstockBinStock(ctx: OrgContext, storageLocationId: s
       recordedAt: p.createdAt.toISOString(), actorName: null, code: p.code, reason: '', wetDeltaKg: -Number(p.ingredientWetKg), countedWetKg: null,
       moisturePercent: null })),
     ...movements.map(({ movement: m, actorName }): Draft => ({ id: m.id, sourceId: null, kind: m.movementType === 'loss' ? 'loss' : 'count',
-      occurredAt: (m.occurredAt ?? m.createdAt).toISOString(), recordedAt: m.createdAt.toISOString(), actorName, code: null, reason: m.reason,
+      occurredAt: (m.movementType === 'loss' ? m.occurredAt! : m.createdAt).toISOString(), recordedAt: m.createdAt.toISOString(), actorName, code: null, reason: m.reason,
       wetDeltaKg: Number(m.massDeltaKg), countedWetKg: m.countedWetMassKg ?? m.countedMassKg,
       moisturePercent: m.moistureRatioUsed === null ? null : Number(m.moistureRatioUsed) * PERCENT })),
   ].sort((a, b) => a.occurredAt.localeCompare(b.occurredAt) || a.recordedAt.localeCompare(b.recordedAt) || a.id.localeCompare(b.id));
@@ -100,9 +100,9 @@ export async function getFeedstockBinStock(ctx: OrgContext, storageLocationId: s
   const currentWetKg = round(wetKg);
   const shares = new Map(replay.batches.map(batch => [batch.id, batch]));
   const pile = batches.filter(b => Number(b.wetKg ?? 0) > 0)
-    .sort((a, b) => (a.deliveryDate ?? a.createdAt).getTime() - (b.deliveryDate ?? b.createdAt).getTime()
+    .sort((a, b) => a.deliveryDate.getTime() - b.deliveryDate.getTime()
       || a.createdAt.getTime() - b.createdAt.getTime() || a.id.localeCompare(b.id))
-    .map(b => ({ id: b.id, code: b.code, receivedAt: (b.deliveryDate ?? b.createdAt).toISOString(),
+    .map(b => ({ id: b.id, code: b.code, receivedAt: b.deliveryDate.toISOString(),
       wetKg: shares.get(b.id)?.wetKg ?? 0,
       intakeWetKg: Number(b.wetKg), dryKg: missingDryBasis || b.dryKg === null ? null : shares.get(b.id)?.dryKg ?? null, moisturePercent: b.moisturePercent === null ? null : Number(b.moisturePercent) }));
   if (entries.length && !missingDryBasis) entries[entries.length - 1].estimatedDryKg = round(pile.reduce((sum, batch) => sum + (batch.dryKg ?? 0), 0));

@@ -70,7 +70,6 @@ export async function loadBiocharDeliveryTransportLegs(
       organizationId: ctx.organizationId, version: delivery.version, isDerived: true,
       originName: facility.name,
       destinationName: `${delivery.code}: ${route.locationName ?? "Customer location not set"}`,
-      billOfLading: null, weighScaleTicketRef: null,
       createdAt: delivery.createdAt, updatedAt: delivery.updatedAt,
       transportEvidenceDocumentCount,
     };

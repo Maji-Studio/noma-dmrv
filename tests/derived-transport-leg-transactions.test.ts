@@ -1,3 +1,4 @@
+import { cleanupFeedstockFixtureParents } from "./helpers/feedstock-fixture";
 import { createApplication } from "@/data-access/applications";
 import { getChainOfCustodyData } from "@/data-access/chain-of-custody";
 import { loadTransportLegsByCategory } from "@/fn/certification/shared";
@@ -92,6 +93,7 @@ describe("derived transport-leg transaction boundaries", () => {
       await db
         .delete(feedstocks)
         .where(inArray(feedstocks.id, trackedFeedstocks.map((row) => row.id)));
+      await cleanupFeedstockFixtureParents(db);
     }
     if (created.orderIds.length > 0) {
       await db.delete(orders).where(inArray(orders.id, created.orderIds));

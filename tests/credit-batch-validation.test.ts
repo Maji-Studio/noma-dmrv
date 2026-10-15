@@ -1,3 +1,4 @@
+import { feedstockFixtureValues, cleanupFeedstockFixtureParents } from "./helpers/feedstock-fixture";
 import { createProductionRunOutputBin } from "./helpers/production-run-output-bin";
 import { labLogisticsVersion } from "./helpers/lab-logistics-version";
 import { productionVersion } from "./helpers/production-version";
@@ -273,33 +274,33 @@ beforeAll(async () => {
 
   const [feedstockAPrimary] = await db
     .insert(feedstocks)
-    .values({
+    .values(await feedstockFixtureValues(db, {
       organizationId: TEST_ORG_ID,
       code: `FS-VAL-A-W-${runId}`,
       facilityId: facilityA.id,
       feedstockTypeId: primaryType.id,
       massDryKg: 3000,
-    })
+    }))
     .returning({ id: feedstocks.id });
   const [feedstockASecondary] = await db
     .insert(feedstocks)
-    .values({
+    .values(await feedstockFixtureValues(db, {
       organizationId: TEST_ORG_ID,
       code: `FS-VAL-A-C-${runId}`,
       facilityId: facilityA.id,
       feedstockTypeId: secondaryType.id,
       massDryKg: 1500,
-    })
+    }))
     .returning({ id: feedstocks.id });
   const [feedstockBPrimary] = await db
     .insert(feedstocks)
-    .values({
+    .values(await feedstockFixtureValues(db, {
       organizationId: TEST_ORG_ID,
       code: `FS-VAL-B-W-${runId}`,
       facilityId: facilityB.id,
       feedstockTypeId: primaryType.id,
       massDryKg: 2800,
-    })
+    }))
     .returning({ id: feedstocks.id });
   createdIds.feedstocks.push(
     feedstockAPrimary.id,
@@ -464,6 +465,7 @@ afterAll(async () => {
       await tx
         .delete(feedstocks)
         .where(inArray(feedstocks.id, createdIds.feedstocks));
+      await cleanupFeedstockFixtureParents(tx);
     }
     if (createdIds.reactors.length > 0) {
       await tx
@@ -496,6 +498,7 @@ afterAll(async () => {
         .where(inArray(feedstockTypes.id, createdIds.feedstockTypes));
     }
   });
+  await cleanupFeedstockFixtureParents(db);
 });
 
 

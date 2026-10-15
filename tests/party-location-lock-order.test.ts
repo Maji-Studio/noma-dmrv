@@ -1,3 +1,4 @@
+import { feedstockFixtureValues, cleanupFeedstockFixtureParents } from "./helpers/feedstock-fixture";
 import { and, eq, sql } from "drizzle-orm";
 import { beforeAll, describe, expect, it } from "vitest";
 import { db } from "@/db";
@@ -139,11 +140,11 @@ describe.each(["supplier", "customer"] as const)("%s location parent-first locks
           // FOR NO KEY UPDATE admits its FOR KEY SHARE lock immediately.
           const [intake] = await db.transaction(async (insertTx) => {
             await insertTx.execute(sql`select set_config('lock_timeout', ${INTAKE_LOCK_TIMEOUT}, true)`);
-            return insertTx.insert(feedstocks).values({
+            return insertTx.insert(feedstocks).values(await feedstockFixtureValues(insertTx, {
               organizationId: TEST_ORG_ID, code: `FI-${tag}`, facilityId: facility.id,
               supplierId: f.parent.id, feedstockTypeId: feedstockType.id,
               massDryKg: INTAKE_DRY_MASS_KG,
-            }).returning({ id: feedstocks.id });
+            })).returning({ id: feedstocks.id });
           });
           expect(intake.id).toBeTruthy();
           // The writer is still paused: success cannot come from its release.
@@ -153,6 +154,7 @@ describe.each(["supplier", "customer"] as const)("%s location parent-first locks
       } finally {
         await write;
         await db.delete(feedstocks).where(and(eq(feedstocks.supplierId, f.parent.id), eq(feedstocks.organizationId, TEST_ORG_ID)));
+        await cleanupFeedstockFixtureParents(db);
         await db.delete(feedstockTypes).where(and(eq(feedstockTypes.id, feedstockType.id), eq(feedstockTypes.organizationId, TEST_ORG_ID)));
         await db.delete(facilities).where(and(eq(facilities.id, facility.id), eq(facilities.organizationId, TEST_ORG_ID)));
         await f.cleanup();

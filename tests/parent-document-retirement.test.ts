@@ -1,3 +1,4 @@
+import { feedstockFixtureValues, cleanupFeedstockFixtureParents } from "./helpers/feedstock-fixture";
 import { labLogisticsVersion } from "./helpers/lab-logistics-version";
 import { masterDataVersion } from "./helpers/master-data-version";
 import { productionVersion } from "./helpers/production-version";
@@ -697,14 +698,14 @@ describe("parent document retirement", () => {
       .returning({ id: feedstockTypes.id });
     const [feedstock] = await db
       .insert(feedstocks)
-      .values({
+      .values(await feedstockFixtureValues(db, {
         organizationId: TEST_ORG_ID,
         facilityId: facility.id,
         feedstockTypeId: feedstockType.id,
         code: `FS-DERIVED-${tag}`,
         status: "missing_data",
         massDryKg: 0,
-      })
+      }))
       .returning({ id: feedstocks.id });
     const [leg] = await db
       .insert(transportLegs)
@@ -783,6 +784,7 @@ describe("parent document retirement", () => {
       await db.delete(documents).where(eq(documents.id, documentId));
       await db.delete(transportLegs).where(eq(transportLegs.id, leg.id));
       await db.delete(feedstocks).where(eq(feedstocks.id, feedstock.id));
+      await cleanupFeedstockFixtureParents(db);
       await db.delete(feedstockTypes).where(eq(feedstockTypes.id, feedstockType.id));
       await deleteOutputFacilityFixtures(db, eq(facilities.id, facility.id));
     }
@@ -809,14 +811,14 @@ describe("parent document retirement", () => {
       .returning({ id: feedstockTypes.id });
     const [feedstock] = await db
       .insert(feedstocks)
-      .values({
+      .values(await feedstockFixtureValues(db, {
         organizationId: TEST_ORG_ID,
         facilityId: facility.id,
         feedstockTypeId: feedstockType.id,
         code: `FS-NEST-${tag}`,
         status: "missing_data",
         massDryKg: 0,
-      })
+      }))
       .returning({ id: feedstocks.id });
     const [leg] = await db
       .insert(transportLegs)
@@ -888,6 +890,7 @@ describe("parent document retirement", () => {
       await db.delete(productionRuns).where(eq(productionRuns.id, run.id));
       await db.delete(reactors).where(eq(reactors.id, reactor.id));
       await db.delete(feedstocks).where(eq(feedstocks.id, feedstock.id));
+      await cleanupFeedstockFixtureParents(db);
       await db.delete(feedstockTypes).where(eq(feedstockTypes.id, feedstockType.id));
       await deleteOutputFacilityFixtures(db, eq(facilities.id, facility.id));
     }

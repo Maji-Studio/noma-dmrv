@@ -225,13 +225,6 @@ export const emissionsCalculationMethod = pgEnum('emissions_calculation_method',
 // Isometric Compliance Enums
 // ============================================
 
-// Feedstock eligibility status (Biomass Feedstock Accounting Module — >25% ineligible cap)
-export const feedstockEligibilityStatus = pgEnum('feedstock_eligibility_status', [
-  'eligible',
-  'ineligible',
-  'conditional',
-]);
-
 export const certifierProvider = pgEnum('certifier_provider', [
   'isometric',
   'puro_earth',

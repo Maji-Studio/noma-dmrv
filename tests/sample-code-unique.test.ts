@@ -1,3 +1,4 @@
+import { feedstockFixtureValues, cleanupFeedstockFixtureParents } from "./helpers/feedstock-fixture";
 import { createProductionRunOutputBin } from "./helpers/production-run-output-bin";
 import { labLogisticsVersion } from "./helpers/lab-logistics-version";
 import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
@@ -113,13 +114,13 @@ beforeAll(async () => {
 
   const [feedstock] = await db
     .insert(feedstocks)
-    .values({
+    .values(await feedstockFixtureValues(db, {
       organizationId: TEST_ORG_ID,
       code: `FS-SC-${suffix}`,
       facilityId: facility.id,
       feedstockTypeId: feedstockType.id,
       massDryKg: 9000,
-    })
+    }))
     .returning({ id: feedstocks.id });
   createdIds.feedstocks.push(feedstock.id);
 
@@ -195,6 +196,7 @@ afterAll(async () => {
       await tx
         .delete(feedstocks)
         .where(inArray(feedstocks.id, createdIds.feedstocks));
+      await cleanupFeedstockFixtureParents(tx);
     }
     if (createdIds.facilities.length > 0) {
       await tx.delete(storageLocations).where(inArray(storageLocations.facilityId, createdIds.facilities));
@@ -214,6 +216,7 @@ afterAll(async () => {
         .where(inArray(feedstockTypes.id, createdIds.feedstockTypes));
     }
   });
+  await cleanupFeedstockFixtureParents(db);
 });
 
 

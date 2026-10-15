@@ -130,6 +130,12 @@ describe("mix bin draws in PostgreSQL", () => {
     expect(await db.select().from(binMovements).where(eq(binMovements.storageLocationId, f.bin.id))).toEqual([]);
   });
 
+  it("requires a merge time even for a never-stocked bin", async () => {
+    const f = await postedStockFixture({ stockKg: 0 });
+    fixtures.push(f);
+    await expect(updateStorageLocation(f.ctx, f.bin.id, { expectedVersion: await masterDataVersion(f.ctx, "storageLocations", f.bin.id), stockMode: "mix" })).rejects.toThrow("Enter when the stock was merged.");
+  });
+
   it("refuses a merge in the future", async () => {
     const f = await twoBatches();
     await expect(setMode(f, "mix", new Date(Date.now() + 60_000))).rejects.toThrow("Merged at cannot be in the future.");

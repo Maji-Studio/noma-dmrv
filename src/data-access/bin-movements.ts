@@ -70,6 +70,7 @@ interface InsertBinMovementInput {
   moistureRatioUsed?: number | null;
   idempotencyKey?: string | null;
   inputSnapshot?: Record<string, unknown> | null;
+  occurredAt?: Date;
 }
 
 /**
@@ -79,7 +80,7 @@ interface InsertBinMovementInput {
 export type CreateBinMovementInput = Omit<
   InsertBinMovementInput,
   "idempotencyKey" | "inputSnapshot"
-> & { idempotencyKey: string };
+> & { idempotencyKey: string; occurredAt: Date };
 
 export interface RecordStockTakeMovementInput {
   storageLocationId: string;
@@ -181,6 +182,7 @@ async function createBinMovementInTransaction(
         moistureRatioUsed: input.moistureRatioUsed ?? null,
         idempotencyKey: input.idempotencyKey ?? null,
         inputSnapshot: input.inputSnapshot ?? null,
+        occurredAt: input.occurredAt,
       })
       .returning();
   } catch (error) {
@@ -213,7 +215,11 @@ export async function createBinMovement(
       "Check the source record, or record Lost mass if stock was lost.",
     );
   }
+  if (!input.occurredAt || !Number.isFinite(input.occurredAt.getTime())) {
+    throw new SafeError("Enter the date and time.");
+  }
   const payload = {
+    occurredAt: input.occurredAt.toISOString(),
     storageLocationId: input.storageLocationId,
     lane: input.lane,
     movementType: input.movementType,

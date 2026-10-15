@@ -1,3 +1,4 @@
+import { feedstockFixtureValues } from "./helpers/feedstock-fixture";
 import { masterDataVersion } from "./helpers/master-data-version";
 import { randomUUID } from 'node:crypto';
 import { afterAll, describe, expect, it } from 'vitest';
@@ -53,7 +54,7 @@ describe('output stock event times in PostgreSQL', () => {
       .toEqual(['2026-09-15T22:30:00.000Z', '2026-09-15T23:30:00.000Z']);
   });
 
-  it('compares ingredient draws and movement fallbacks as instants while explicit movement times win', async () => {
+  it('compares ingredient draws and recorded loss times as instants', async () => {
     const f = await fixture();
     await db.transaction(async tx => {
       const organizationId = f.ctx.organizationId;
@@ -61,17 +62,17 @@ describe('output stock event times in PostgreSQL', () => {
         organizationId, facilityId: f.facility.id, code: `E2E-INGREDIENT-${f.tag}`,
         name: `E2E Ingredient ${f.tag}`, type: 'feedstock_bin',
       }).returning();
-      await tx.insert(feedstocks).values({
+      await tx.insert(feedstocks).values(await feedstockFixtureValues(tx, {
         organizationId, facilityId: f.facility.id, code: `E2E-INTAKE-${f.tag}`,
         feedstockTypeId: f.ingredientType.id, storageLocationId: bin.id, status: 'complete',
         deliveryDate: new Date('2026-09-15T00:00:00Z'), massWetKg: 100, massDryKg: 50,
-      });
+      }));
       // The second run starts at 22:30 UTC, the same instant the movement was recorded.
       expect(f.runs[1].id).not.toBe(f.runs[0].id);
       await tx.insert(productionRunFeedstockDraws).values({
         organizationId, productionRunId: f.runs[1].id, storageLocationId: bin.id, wetMassKg: 20,
       });
-      const [movement] = await tx.insert(binMovements).values({
+      const [movement] = await tx.insert(binMovements).values({ occurredAt: new Date("2026-09-15T22:30:00.000Z"),
         organizationId, storageLocationId: bin.id, lane: 'feedstock', movementType: 'loss',
         massDeltaKg: -10, reason: 'E2E ingredient time boundary', createdAt: new Date('2026-09-15T22:30:00Z'),
       }).returning();
@@ -89,7 +90,7 @@ describe('output stock event times in PostgreSQL', () => {
         await tx.update(binMovements).set({ occurredAt: new Date('2026-09-17T12:00:00.000Z') })
           .where(and(eq(binMovements.id, movement.id), eq(binMovements.organizationId, organizationId)));
         expect(await getIngredientStockBasis(f.ctx, bin.id, after, tx)).toEqual({ wetMassKg: 80, dryMassKg: 40 });
-        await tx.update(binMovements).set({ occurredAt: null })
+        await tx.update(binMovements).set({ occurredAt: new Date("2026-09-15T22:30:00.000Z") })
           .where(and(eq(binMovements.id, movement.id), eq(binMovements.organizationId, organizationId)));
       }
     });

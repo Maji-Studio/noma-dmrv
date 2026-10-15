@@ -69,8 +69,6 @@ function legToFormDefaults(
     modelYear: leg?.modelYear ?? null,
     loadMassKg: leg?.loadMassKg ?? null,
     calculationMethodType: "distance_based" as const,
-    billOfLading: leg?.billOfLading ?? "",
-    weighScaleTicketRef: leg?.weighScaleTicketRef ?? "",
   };
 }
 
@@ -312,6 +310,9 @@ export function TransportLegForm({
                 error={!!errors.vehicleType}
                 {...register("vehicleType")}
               />
+            </FormField>
+            <FormField id="modelYear" label="Model year" error={errors.modelYear?.message}>
+              <FormInput id="modelYear" type="number" step="1" error={!!errors.modelYear} {...register("modelYear")} />
             </FormField>
           </div>
         </div>

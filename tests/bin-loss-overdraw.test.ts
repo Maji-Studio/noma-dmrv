@@ -1,3 +1,4 @@
+import { feedstockFixtureValues, cleanupFeedstockFixtureParents } from "./helpers/feedstock-fixture";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
@@ -77,7 +78,7 @@ describe("bin loss stock guard", () => {
         .returning({ id: storageLocations.id });
       const [feedstock] = await tx
         .insert(feedstocks)
-        .values({
+        .values(await feedstockFixtureValues(tx, {
           organizationId: TEST_ORG_ID,
           facilityId: facility.id,
           feedstockTypeId: feedstockType.id,
@@ -86,7 +87,7 @@ describe("bin loss stock guard", () => {
           status: "complete",
           massDryKg: AVAILABLE_STOCK_KG,
           massWetKg: AVAILABLE_STOCK_KG,
-        })
+        }))
         .returning({ id: feedstocks.id });
 
       return {
@@ -103,7 +104,7 @@ describe("bin loss stock guard", () => {
         lane: "feedstock",
         idempotencyKey: crypto.randomUUID(),
         reason: "Overdraw regression check",
-        lossMassKg: OVERDRAW_LOSS_KG,
+        occurredAt: "2026-10-15T10:00:00.000Z", lossMassKg: OVERDRAW_LOSS_KG,
       });
 
       expect(rejected).toMatchObject({
@@ -125,7 +126,7 @@ describe("bin loss stock guard", () => {
         lane: "feedstock",
         idempotencyKey: crypto.randomUUID(),
         reason: "Exact available stock",
-        lossMassKg: AVAILABLE_STOCK_KG,
+        occurredAt: "2026-10-15T10:00:00.000Z", lossMassKg: AVAILABLE_STOCK_KG,
       });
 
       expect(accepted.success).toBe(true);
@@ -140,6 +141,7 @@ describe("bin loss stock guard", () => {
         eq(binMovements.storageLocationId, fixture.storageLocationId),
       );
       await db.delete(feedstocks).where(eq(feedstocks.id, fixture.feedstockId));
+      await cleanupFeedstockFixtureParents(db);
       await db
         .delete(storageLocations)
         .where(eq(storageLocations.id, fixture.storageLocationId));
