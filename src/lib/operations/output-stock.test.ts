@@ -18,7 +18,7 @@ const ctx = { organizationId: "org", userId: "user", orgRole: "owner" as const, 
 const tx = {} as OperationScope["tx"];
 const snapshotStock = vi.fn();
 let activity = createOperationActivity();
-const scope: OperationScope = { ctx, tx, snapshotStock, activity, afterCommit: vi.fn() };
+const scope: OperationScope = { ctx, tx, source: "form", snapshotStock, activity, afterCommit: vi.fn() };
 const loss = { storageLocationId: BIN_ID, kind: "loss", occurredAt: "2026-09-14T12:00:00Z", wetMassKg: 10, moisturePercent: 20, reason: "Spilled" };
 const execute = (input: unknown) => recordOutputStockMovement.execute(scope, recordOutputStockMovementInput.parse(input));
 

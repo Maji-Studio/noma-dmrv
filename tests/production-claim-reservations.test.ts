@@ -17,6 +17,7 @@ import {
 } from "@/data-access/production-claim-reservations";
 import { db } from "@/db";
 import {
+  activityEvents,
   certificationSubmissions,
   certifierRemovals,
   creditBatches,
@@ -62,6 +63,7 @@ afterAll(async () => {
       .where(inArray(certificationSubmissions.id, createdSubmissionIds));
   }
   if (createdBatchIds.length > 0) {
+    await db.delete(activityEvents).where(inArray(activityEvents.creditBatchId, createdBatchIds));
     await db
       .delete(creditBatches)
       .where(inArray(creditBatches.id, createdBatchIds));
@@ -281,6 +283,18 @@ describe("production-emissions claim reservations", () => {
       errorMessage: "Definitive pre-POST refusal.",
     });
     expect(await readReservation(fixture.batchId)).toBeNull();
+    const history = await db.select().from(activityEvents).where(eq(activityEvents.creditBatchId, fixture.batchId))
+      .orderBy(activityEvents.sequence);
+    // The successful reserve, its resume, and the release each update this batch.
+    expect(history).toHaveLength(3);
+    for (const event of history) expect(event).toMatchObject({
+      entityType: "credit_batch", entityId: fixture.batchId, creditBatchId: fixture.batchId,
+      action: "updated", changedFields: ["productionClaimReservation"], source: "form", actorUserId: ctx.userId,
+    });
+    await rejectSubmissionAndReleaseProductionClaims(ctx, {
+      submissionId: winner.id, expectedLockedAt: winner.lockedAt, errorMessage: "Repeated refusal",
+    });
+    expect(await db.select().from(activityEvents).where(eq(activityEvents.creditBatchId, fixture.batchId))).toHaveLength(history.length);
     const [rejected] = await db
       .select({ status: certificationSubmissions.status })
       .from(certificationSubmissions)

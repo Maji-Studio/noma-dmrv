@@ -1,3 +1,4 @@
+import type { ActivityEventInput } from "../activity-events";
 import { withFeedstockErrors } from "@/lib/feedstock-domain-errors";
 import type { SnapshotStock } from "../stock-effects";
 import { runReferenceNotFound } from "@/lib/production-run-domain-errors";
@@ -36,6 +37,7 @@ export async function deleteProductionRunInTransaction(
   tx: DbTransaction,
   productionRunId: string,
   expectedVersion: number,
+  source: ActivityEventInput["source"],
   snapshotStock?: SnapshotStock,
 ): Promise<{ facilityId: string }> {
   requireOrgScope(ctx);
@@ -181,13 +183,14 @@ export async function deleteProductionRunInTransaction(
     ...productionIncidents.map((incident) => ({
       entityType: "production_incident" as const,
       entityId: incident.id,
+      activityScopes: [{ productionRunId }],
     })),
-  ]);
+  ], source);
   return { facilityId: locked.facilityId };
 }
 
 export async function deleteProductionRun(ctx: OrgContext, id: string, expectedVersion: number): Promise<void> {
   requireOrgScope(ctx);
-  await db.transaction((tx) => deleteProductionRunInTransaction(ctx, tx, id, expectedVersion));
+  await db.transaction((tx) => deleteProductionRunInTransaction(ctx, tx, id, expectedVersion, "form"));
   await processPendingStorageObjectDeletions(ctx);
 }

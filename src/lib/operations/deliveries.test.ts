@@ -13,7 +13,7 @@ import { describeRecordedDelivery, describeUpdatedDelivery, recordDeliveryForUi,
 const ID = "00000000-0000-4000-8000-000000000001";
 const VERSION = 2;
 const ctx = { organizationId: "org", userId: "operator", orgRole: "owner" as const, isPlatformAdmin: false };
-const scope = { ctx, tx: {} as DbTransaction, activity: createOperationActivity(), afterCommit: vi.fn() };
+const scope = { ctx, source: "form" as const, tx: {} as DbTransaction, activity: createOperationActivity(), afterCommit: vi.fn() };
 const input = { deliveryId: ID, expectedVersion: VERSION };
 
 beforeEach(() => vi.resetAllMocks());
