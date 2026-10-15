@@ -91,7 +91,7 @@ describe.each([
     expect(html).toContain('disabled=""');
   });
 
-  it.each(["success", "error"] as const)("keeps Retry focused until %s, then shows loading for the next party", async (outcome) => {
+  it.each(["success", "error", "pending"] as const)("keeps Retry focused and shows loading for the next party when the retry is %s", async (outcome) => {
     let resolveRetry!: (data: NonNullable<PartyLocationsQueryState["data"]>) => void;
     let rejectRetry!: (error: Error) => void;
     const retryResult = new Promise<NonNullable<PartyLocationsQueryState["data"]>>((resolve, reject) => {
@@ -123,15 +123,17 @@ describe.each([
     expect(retry.disabled).toBe(true);
     expect(retry.getAttribute("aria-busy")).toBe("true");
 
-    await domAct(async () => {
-      if (outcome === "success") resolveRetry([location]);
-      else rejectRetry(new Error("Locations retry failed"));
-    });
+    if (outcome !== "pending") {
+      await domAct(async () => {
+        if (outcome === "success") resolveRetry([location]);
+        else rejectRetry(new Error("Locations retry failed"));
+      });
+    }
     if (outcome === "success") {
       await screen.findByText(location.name);
       expect(screen.queryByRole("button", { name: "Retry" })).toBeNull();
       expect(screen.queryByText(/locations unavailable/)).toBeNull();
-    } else {
+    } else if (outcome === "error") {
       await waitFor(() => expect(retry.disabled).toBe(false));
       expect(screen.getByRole("button", { name: "Retry" })).toBe(retry);
       expect(document.activeElement).toBe(retry);

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { UseQueryResult } from "@tanstack/react-query";
-import type { PartyLocationDetail } from "./party-location-detail-fields";
+import { buildPartyLocationDetailFields, type PartyLocationDetail } from "./party-location-detail-fields";
+import type { DetailPanelSection } from "@/components/ui/detail-panel";
 import { Button } from "@/components/ui/button";
 import { Notice } from "@/components/ui/notice";
 
@@ -16,6 +17,35 @@ interface PartyLocationsReadStateProps {
   isRetrying: boolean;
   hasCachedData?: boolean;
   onRetry: () => void;
+}
+
+export function partyLocationsSection(
+  partyLabel: PartyLocationsReadStateProps["partyLabel"],
+  partyId: string,
+  locationsQuery: PartyLocationsQueryState,
+  fieldOptions: Omit<Parameters<typeof buildPartyLocationDetailFields>[1], "pending">,
+): DetailPanelSection {
+  return {
+    title: "Locations",
+    fields:
+      locationsQuery.isError && locationsQuery.data === undefined
+        ? []
+        : buildPartyLocationDetailFields(locationsQuery.data ?? [], {
+            ...fieldOptions,
+            pending: locationsQuery.isPending,
+          }),
+    content: (
+      <PartyLocationsReadState
+        key={partyId}
+        partyLabel={partyLabel}
+        isPending={locationsQuery.isPending}
+        isError={locationsQuery.isError}
+        isRetrying={locationsQuery.isFetching}
+        hasCachedData={locationsQuery.data !== undefined}
+        onRetry={() => void locationsQuery.refetch()}
+      />
+    ),
+  };
 }
 
 export function PartyLocationsReadState({
