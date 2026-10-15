@@ -1,16 +1,26 @@
 /** Database contracts for transaction-owned, organization-scoped activity history. */
-import { afterEach, beforeEach, expect, it } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
+vi.hoisted(() => {
+  process.env.DB_POOL_LOCK_TIMEOUT_MS = "5000";
+});
 import { setTimeout as delay } from "node:timers/promises";
-import { eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { ACTORLESS_ACTIVITY_SOURCES, activityEvents, facilities, organizations } from "@/db/schema";
+import { ACTORLESS_ACTIVITY_SOURCES, activityEvents, creditBatches, facilities, feedstockTypes, organizations, productionProcesses } from "@/db/schema";
 import { listEntityActivity, recordActivity, type ActivityEventInput } from "@/data-access/activity-events";
+import { archiveFacility } from "@/data-access/facilities";
 import type { OrgContext } from "@/lib/auth/server";
+import { openOperationBarrier, waitForBlockedOperations } from "./helpers/operation-barrier";
+import { createTestPool } from "./helpers/operation-fixture";
 import { TEST_SITE_POSITION } from "./helpers/test-org";
 
 const EVENT_TIME = new Date("2026-10-15T10:00:00Z");
 const NEWER_EVENT_TIME = new Date("2026-10-15T11:00:00Z");
 const TRANSACTION_START_GAP_MS = 10;
+const BARRIER_POOL_SIZE = 2;
+const CONCURRENCY_TEST_TIMEOUT_MS = 15_000;
+const BATCH_START_DATE = "2026-10-01";
+const BATCH_END_DATE = "2026-10-31";
 const organizationIds: string[] = [];
 let ctx: OrgContext;
 let otherCtx: OrgContext;
@@ -23,15 +33,31 @@ async function createContext(): Promise<OrgContext> {
   return { organizationId, userId: `activity_user_${crypto.randomUUID()}`, orgRole: "owner", isPlatformAdmin: false };
 }
 
-async function createFacility(context: OrgContext): Promise<string> {
+async function createFacility(context: OrgContext, archivedAt?: Date): Promise<string> {
   const [facility] = await db.insert(facilities).values({
     ...TEST_SITE_POSITION,
     organizationId: context.organizationId,
     code: `activity_${crypto.randomUUID()}`,
     name: "Activity fixture",
     timezone: "UTC",
+    archivedAt,
   }).returning({ id: facilities.id });
   return facility.id;
+}
+
+async function createCreditBatch(facilityId: string): Promise<string> {
+  const organizationId = ctx.organizationId;
+  const [feedstockType] = await db.insert(feedstockTypes).values({
+    organizationId, code: `activity_${crypto.randomUUID()}`, name: "Activity fixture", category: "forestry",
+  }).returning({ id: feedstockTypes.id });
+  const [process] = await db.insert(productionProcesses).values({
+    organizationId, facilityId, feedstockTypeId: feedstockType.id,
+  }).returning({ id: productionProcesses.id });
+  const [batch] = await db.insert(creditBatches).values({
+    organizationId, facilityId, feedstockTypeId: feedstockType.id, productionProcessId: process.id,
+    code: `activity_${crypto.randomUUID()}`, startDate: BATCH_START_DATE, endDate: BATCH_END_DATE,
+  }).returning({ id: creditBatches.id });
+  return batch.id;
 }
 
 beforeEach(async () => {
@@ -43,6 +69,9 @@ beforeEach(async () => {
 afterEach(async () => {
   if (organizationIds.length) {
     await db.delete(activityEvents).where(inArray(activityEvents.organizationId, organizationIds));
+    await db.delete(creditBatches).where(inArray(creditBatches.organizationId, organizationIds));
+    await db.delete(productionProcesses).where(inArray(productionProcesses.organizationId, organizationIds));
+    await db.delete(feedstockTypes).where(inArray(feedstockTypes.organizationId, organizationIds));
     await db.delete(facilities).where(inArray(facilities.organizationId, organizationIds));
     await db.delete(organizations).where(inArray(organizations.id, organizationIds));
     organizationIds.length = 0;
@@ -145,12 +174,51 @@ it("preserves an explicit actor and unlinked entity references", async () => {
   expect((await listEntityActivity(ctx, "delivery", entityId))[0]).toMatchObject(input);
 });
 
-it("rejects a facility from another organization at the database boundary", async () => {
+it("rejects a facility from another organization in recordActivity", async () => {
   const facilityId = await createFacility(otherCtx);
-  await expect(db.insert(activityEvents).values({ ...event({ facilityId }),
-    organizationId: ctx.organizationId, actorUserId: ctx.userId }))
-    .rejects.toMatchObject({ cause: { code: "23503" } });
+  await db.transaction(async (tx) => {
+    await expect(recordActivity(ctx, tx, event({ facilityId })))
+      .rejects.toThrow("Activity facility not found in the current organization");
+    const rows = await tx.select().from(activityEvents).where(eq(activityEvents.organizationId, ctx.organizationId));
+    expect(rows).toEqual([]);
+  });
   expect(await listEntityActivity(ctx, "delivery", entityId)).toEqual([]);
+});
+
+it("accepts an archived facility from the same organization", async () => {
+  const facilityId = await createFacility(ctx, EVENT_TIME);
+  await db.transaction((tx) => recordActivity(ctx, tx, event({ facilityId })));
+  expect(await listEntityActivity(ctx, "delivery", entityId)).toMatchObject([{ facilityId }]);
+});
+
+it("records activity while a facility archive waits on the writer's credit batch lock", { timeout: CONCURRENCY_TEST_TIMEOUT_MS }, async () => {
+  const facilityId = await createFacility(ctx);
+  const creditBatchId = await createCreditBatch(facilityId);
+  const pool = createTestPool(BARRIER_POOL_SIZE);
+  try {
+    const writer = await openOperationBarrier(pool);
+    let archive: ReturnType<typeof archiveFacility> | undefined;
+    try {
+      await writer.tx.select({ id: creditBatches.id }).from(creditBatches).where(and(
+        eq(creditBatches.id, creditBatchId), eq(creditBatches.organizationId, ctx.organizationId),
+      )).for("update");
+      archive = archiveFacility(ctx, facilityId, 1);
+      // Observe rejection immediately, but assert the original promise below.
+      void archive.catch(() => undefined);
+      // Archive owns the facility FOR UPDATE before queuing on our batch row.
+      await waitForBlockedOperations(pool, writer.pid, 1);
+      // A facility FK or a locking ownership read would complete the lock cycle.
+      await recordActivity(ctx, writer.tx, event({ facilityId, creditBatchId }));
+      await writer.commit();
+      expect((await archive).archivedAt).toBeInstanceOf(Date);
+      expect(await listEntityActivity(ctx, "delivery", entityId)).toMatchObject([{ facilityId, creditBatchId }]);
+    } finally {
+      await writer.rollback();
+      if (archive) await Promise.allSettled([archive]);
+    }
+  } finally {
+    await pool.end();
+  }
 });
 
 it("rejects status changes without a local or remote target at the database boundary", async () => {

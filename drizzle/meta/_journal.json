@@ -1009,6 +1009,13 @@
       "when": 1792068476828,
       "tag": "0143_require_party_location_fields",
       "breakpoints": true
+    },
+    {
+      "idx": 144,
+      "version": "7",
+      "when": 1792071789847,
+      "tag": "0144_drop_activity_facility_fk",
+      "breakpoints": true
     }
   ]
 }
