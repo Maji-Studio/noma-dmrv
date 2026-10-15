@@ -242,7 +242,7 @@ async function loadLineageWithExecutor(
         .leftJoin(customerLocations, and(
           eq(
             customerLocations.id,
-            sql`coalesce(${deliveries.customerLocationId}, ${orders.customerLocationId})`,
+            orders.customerLocationId,
           ),
           eq(customerLocations.organizationId, ctx.organizationId),
         ))

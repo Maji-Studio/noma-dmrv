@@ -26,7 +26,7 @@ import {
 import { facilities, storageLocations } from './facilities';
 import { massKg, percent } from './numeric-families';
 import { customerLocations, customers, drivers } from './parties';
-import { biocharProducts, formulations } from './products';
+import { formulations } from './products';
 import { biocharStorageInventory } from './storage-inventory';
 
 // ============================================
@@ -123,11 +123,6 @@ export const deliveries = pgTable(
     orderId: uuid('order_id')
       .notNull(),
 
-    // Optional override when delivery destination differs from order destination.
-    customerLocationId: uuid('customer_location_id').references(
-      () => customerLocations.id
-    ),
-
     // Per-delivery road-distance override (km) for the distribution transport
     // leg. Defaults to the destination customer location's distance; set here
     // only when this trip's routing differs. Mirrors the feedstock-side
@@ -139,10 +134,7 @@ export const deliveries = pgTable(
     distanceSource: distanceSource('distance_source'),
     distanceNote: text('distance_note'),
 
-    // --- Product Batch ---
-    biocharProductId: uuid('biochar_product_id').references(
-      () => biocharProducts.id
-    ),
+    // --- Product bin; drawn products resolve through output stock allocations ---
     storageLocationId: uuid('storage_location_id').notNull().references(
       () => storageLocations.id
     ),
@@ -326,15 +318,6 @@ export const deliveriesRelations = relations(deliveries, ({ one }) => ({
   order: one(orders, {
     fields: [deliveries.orderId],
     references: [orders.id],
-  }),
-  customerLocation: one(customerLocations, {
-    fields: [deliveries.customerLocationId],
-    references: [customerLocations.id],
-    relationName: 'deliveryLocationOverride',
-  }),
-  biocharProduct: one(biocharProducts, {
-    fields: [deliveries.biocharProductId],
-    references: [biocharProducts.id],
   }),
   storageLocation: one(storageLocations, {
     fields: [deliveries.storageLocationId],

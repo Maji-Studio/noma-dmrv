@@ -967,6 +967,13 @@
       "when": 1792041836184,
       "tag": "0137_logistics_required_fields",
       "breakpoints": true
+    },
+    {
+      "idx": 138,
+      "version": "7",
+      "when": 1792047561155,
+      "tag": "0138_drop_unwritten_delivery_columns",
+      "breakpoints": true
     }
   ]
 }

@@ -138,10 +138,9 @@ export async function getStorageLocationRegistryInput(
       and(
         eq(
           customerLocations.id,
-          // Delivery destination overrides the order destination. Keeping the
-          // coalesce inside this org-scoped join also fails closed if an
-          // inconsistent row points at another organization's location.
-          sql`coalesce(${deliveries.customerLocationId}, ${orders.customerLocationId})`,
+          // Resolve the order destination within this organization, failing
+          // closed if an inconsistent row references another organization's location.
+          orders.customerLocationId,
         ),
         eq(customerLocations.organizationId, ctx.organizationId),
       ),

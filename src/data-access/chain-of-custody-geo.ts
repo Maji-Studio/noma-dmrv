@@ -23,7 +23,7 @@ import {
 import type { OrgContext } from "@/lib/auth/server";
 import { resolveChainSources } from "@/lib/chain-of-custody/sources";
 import type { DistanceSourceValue } from "@/schemas/distance-source";
-import { and, eq, inArray, or, sql, type SQL } from "drizzle-orm";
+import { and, eq, inArray, or, type SQL } from "drizzle-orm";
 import {
   getChainOfCustodyData,
   type ChainFacility,
@@ -573,7 +573,7 @@ async function getApplicationBiocharLeg(ctx: OrgContext, {
     .leftJoin(orders, and(eq(deliveries.orderId, orders.id), eq(orders.organizationId, ctx.organizationId)))
     .leftJoin(
       customerLocations,
-      and(eq(customerLocations.id, sql`coalesce(${deliveries.customerLocationId}, ${orders.customerLocationId})`), eq(customerLocations.organizationId, ctx.organizationId)),
+      and(eq(customerLocations.id, orders.customerLocationId), eq(customerLocations.organizationId, ctx.organizationId)),
     )
     .where(and(eq(deliveries.id, deliveryId), eq(deliveries.organizationId, ctx.organizationId)))
     .limit(1);

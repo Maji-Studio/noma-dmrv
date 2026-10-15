@@ -225,7 +225,7 @@ export async function getEnergyInputs(
         and(
           eq(
             customerLocations.id,
-            sql`coalesce(${deliveries.customerLocationId}, ${orders.customerLocationId})`,
+            orders.customerLocationId,
           ),
           eq(customerLocations.organizationId, orgId),
         ),

@@ -312,8 +312,7 @@ function resolveApplicationDryMassTons(
  */
 /**
  * Application list row enriched with distribution context (customer + field
- * location) resolved via the delivery → order chain. The location prefers the
- * delivery's override, falling back to the order's customer location.
+ * location) resolved from the delivery's order customer location.
  */
 export interface ApplicationListItem extends Application {
   allocationShares: ApplicationAllocationShare[];
@@ -416,7 +415,7 @@ export async function getApplications(
       and(
         eq(
           customerLocations.id,
-          sql`coalesce(${deliveries.customerLocationId}, ${orders.customerLocationId})`,
+          orders.customerLocationId,
         ),
         eq(customerLocations.organizationId, ctx.organizationId),
       ),
@@ -465,7 +464,7 @@ export async function getApplications(
       and(
         eq(
           customerLocations.id,
-          sql`coalesce(${deliveries.customerLocationId}, ${orders.customerLocationId})`,
+          orders.customerLocationId,
         ),
         eq(customerLocations.organizationId, ctx.organizationId),
       ),
@@ -526,7 +525,7 @@ export async function getApplicationDeliveryOptions(
       .leftJoin(
         customerLocations,
         and(
-          eq(customerLocations.id, sql`coalesce(${deliveries.customerLocationId}, ${orders.customerLocationId})`),
+          eq(customerLocations.id, orders.customerLocationId),
           eq(customerLocations.organizationId, ctx.organizationId),
         ),
       )

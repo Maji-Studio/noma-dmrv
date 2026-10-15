@@ -305,8 +305,13 @@ provenance exception remains. Overrides must be above zero and are one-way km;
 the server counts the round trip. Mass, moisture, sources, time, order and bin
 are not PATCH fields; corrections stay in the app.
 
-The representation uses stored delivery fields only: masses have 3 decimal
-places, moisture 6, and distance retains the column's 32-bit real precision.
+The representation uses stored delivery fields plus the order destination in
+`destinationCustomerLocationId`: masses have 3 decimal places, moisture 6, and
+distance retains the column's 32-bit real precision. Revision 2 sources
+`destinationCustomerLocationId` from the order. The destination is read-only
+and cannot be overridden on a delivery. Order relationships freeze once a
+delivery exists, so unrelated order edits leave the delivery response and ETag
+unchanged.
 Lists use `(createdAt desc, id desc)` keysets, shipping-facility filters and
 explicit-offset `deliveredFrom` inclusive / `deliveredBefore` exclusive bounds.
 Drawn products are available through stock movements under `biochar-products:read`.

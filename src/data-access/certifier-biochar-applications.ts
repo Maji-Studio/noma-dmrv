@@ -109,7 +109,7 @@ export async function getBiocharApplicationRegistryInputs(
       and(
         eq(
           customerLocations.id,
-          sql`coalesce(${deliveries.customerLocationId}, ${orders.customerLocationId})`,
+          orders.customerLocationId,
         ),
         eq(customerLocations.organizationId, ctx.organizationId),
       ),

@@ -5,7 +5,6 @@
 
 import { db } from "@/db";
 import {
-  biocharProducts,
   customerLocations,
   customers,
   deliveries,
@@ -28,14 +27,13 @@ export interface DeliveryWithRelations extends Delivery {
   orderCode: string | null;
   facilityName: string | null;
   customerName: string | null;
-  /** Delivery's own customer location, else the order's: where the goods went. */
+  /** The order's customer location: where the goods went. */
   destinationName: string | null;
   /** Route ends for the transport map: the facility, then the destination. */
   facilityGpsLatitude: number | null;
   facilityGpsLongitude: number | null;
   destinationGpsLatitude: number | null;
   destinationGpsLongitude: number | null;
-  biocharProductCode: string | null;
   driverName: string | null;
   vehicleName: string | null;
   effectiveDistanceKm: number | null;
@@ -72,10 +70,6 @@ export interface DeliveryDetail extends Delivery {
     id: string;
     code: string;
     name: string;
-  } | null;
-  biocharProduct: {
-    id: string;
-    code: string;
   } | null;
   driver: {
     id: string;
@@ -143,8 +137,6 @@ function getDeliveryBaseSelection(columns: DeliveryColumnAvailability) {
     code: deliveries.code,
     facilityId: deliveries.facilityId,
     orderId: deliveries.orderId,
-    customerLocationId: deliveries.customerLocationId,
-    biocharProductId: deliveries.biocharProductId,
     storageLocationId: deliveries.storageLocationId,
     biocharStorageInventoryId: deliveries.biocharStorageInventoryId,
     deliveryDate: deliveries.deliveryDate,
@@ -283,7 +275,6 @@ export async function getDeliveries(
       facilityGpsLongitude: facilities.gpsLongitude,
       destinationGpsLatitude: customerLocations.gpsLatitude,
       destinationGpsLongitude: customerLocations.gpsLongitude,
-      biocharProductCode: biocharProducts.code,
       driverName: drivers.name,
       vehicleName: vehicles.name,
       effectiveDistanceKm: effectiveDeliveryDistanceKm(deliveryColumns),
@@ -303,12 +294,11 @@ export async function getDeliveries(
       and(
         eq(
           customerLocations.id,
-          sql`coalesce(${deliveries.customerLocationId}, ${orders.customerLocationId})`,
+          orders.customerLocationId,
         ),
         eq(customerLocations.organizationId, ctx.organizationId),
       ),
     )
-    .leftJoin(biocharProducts, and(eq(deliveries.biocharProductId, biocharProducts.id), eq(biocharProducts.organizationId, ctx.organizationId)))
     .leftJoin(drivers, and(eq(deliveries.driverId, drivers.id), eq(drivers.organizationId, ctx.organizationId)))
     .leftJoin(vehicles, and(eq(deliveries.vehicleId, vehicles.id), eq(vehicles.organizationId, ctx.organizationId)))
     .where(whereClause)
@@ -350,7 +340,6 @@ export async function getDeliveryWithRelations(
       destinationGpsLongitude: customerLocations.gpsLongitude,
       facilityCode: facilities.code,
       facilityName: facilities.name,
-      biocharProductCode: biocharProducts.code,
       driverName: drivers.name,
       vehicleName: vehicles.name,
       vehicleIdentifier: vehicles.identifier,
@@ -370,13 +359,12 @@ export async function getDeliveryWithRelations(
       and(
         eq(
           customerLocations.id,
-          sql`coalesce(${deliveries.customerLocationId}, ${orders.customerLocationId})`,
+          orders.customerLocationId,
         ),
         eq(customerLocations.organizationId, ctx.organizationId),
       ),
     )
     .leftJoin(facilities, and(eq(deliveries.facilityId, facilities.id), eq(facilities.organizationId, ctx.organizationId)))
-    .leftJoin(biocharProducts, and(eq(deliveries.biocharProductId, biocharProducts.id), eq(biocharProducts.organizationId, ctx.organizationId)))
     .leftJoin(drivers, and(eq(deliveries.driverId, drivers.id), eq(drivers.organizationId, ctx.organizationId)))
     .leftJoin(vehicles, and(eq(deliveries.vehicleId, vehicles.id), eq(vehicles.organizationId, ctx.organizationId)))
     .where(and(eq(deliveries.id, deliveryId), eq(deliveries.organizationId, ctx.organizationId)));
@@ -391,8 +379,6 @@ export async function getDeliveryWithRelations(
     code: deliveryRow.code,
     facilityId: deliveryRow.facilityId,
     orderId: deliveryRow.orderId,
-    customerLocationId: deliveryRow.customerLocationId,
-    biocharProductId: deliveryRow.biocharProductId,
     storageLocationId: deliveryRow.storageLocationId,
     biocharStorageInventoryId: deliveryRow.biocharStorageInventoryId,
     deliveryDate: deliveryRow.deliveryDate,
@@ -432,12 +418,6 @@ export async function getDeliveryWithRelations(
           id: deliveryRow.facilityId,
           code: deliveryRow.facilityCode ?? "",
           name: deliveryRow.facilityName ?? "",
-        }
-      : null,
-    biocharProduct: deliveryRow.biocharProductId
-      ? {
-          id: deliveryRow.biocharProductId,
-          code: deliveryRow.biocharProductCode ?? "",
         }
       : null,
     driver: deliveryRow.driverId

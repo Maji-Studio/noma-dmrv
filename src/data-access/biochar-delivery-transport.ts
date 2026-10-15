@@ -35,16 +35,13 @@ export async function loadBiocharDeliveryTransportLegs(
     .leftJoin(orders, and(eq(orders.id, deliveries.orderId), eq(orders.organizationId, ctx.organizationId)))
     .where(and(inArray(deliveries.id, ids), eq(deliveries.organizationId, ctx.organizationId)));
   if (rows.length !== ids.length) throw new SafeError("A Removal delivery could not be loaded.");
-  const locationIds = rows.flatMap(({ delivery, orderLocationId }) => {
-    const id = delivery.customerLocationId ?? orderLocationId;
-    return id ? [id] : [];
-  });
+  const locationIds = rows.flatMap(({ orderLocationId }) => orderLocationId ? [orderLocationId] : []);
   const locations = locationIds.length ? await db.select().from(customerLocations).where(and(
     inArray(customerLocations.id, locationIds), eq(customerLocations.organizationId, ctx.organizationId),
   )) : [];
   const locationsById = new Map(locations.map(location => [location.id, location]));
   return rows.sort((a, b) => a.delivery.id.localeCompare(b.delivery.id)).map(({ delivery, facility, orderLocationId, transportEvidenceDocumentCount }) => {
-    const location = locationsById.get(delivery.customerLocationId ?? orderLocationId ?? "");
+    const location = locationsById.get(orderLocationId ?? "");
     const route = resolveDeliveryTransportRoute({ ...delivery, location: location ?? null });
     const derived = deriveTransportLeg({
       origin: facility, destination: {

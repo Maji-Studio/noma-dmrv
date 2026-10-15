@@ -686,7 +686,10 @@ test.describe("Full E2E Workflow - Database Operations", () => {
 
       expect(delivery).toBeDefined();
       expect(delivery.orderId).toBe(workflowData.order.id);
-      expect(delivery.biocharProductId).toBe(workflowData.biocharProduct.id);
+      const allocations = await db.select({ productId: schema.outputStockAllocations.biocharProductId })
+        .from(schema.outputStockAllocations)
+        .where(eq(schema.outputStockAllocations.deliveryId, delivery.id));
+      expect(allocations).toEqual([{ productId: workflowData.biocharProduct.id }]);
     } finally {
       await pool.end();
     }

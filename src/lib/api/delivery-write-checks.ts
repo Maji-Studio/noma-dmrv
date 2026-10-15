@@ -6,7 +6,7 @@ import { deliveryReferenceNotFound } from "@/lib/delivery-domain-errors";
 import { describeRecordedDelivery, describeUpdatedDelivery, recordDelivery, updateDeliveryOperation } from "@/lib/operations/deliveries";
 import type { Operation, OperationResult } from "@/lib/operations/runner";
 import { readApiDelivery } from "@/lib/read-models/api-deliveries";
-import { representDelivery, deliveryRepresentationSchema, type DeliveryRepresentation } from "@/lib/representations/deliveries";
+import { deliveryRepresentationSchema, type DeliveryRepresentation } from "@/lib/representations/deliveries";
 import { deliveryAllocationSchema } from "@/lib/representations/delivery-writes";
 import { recordDeliveryInput } from "@/schemas/delivery-input";
 import { ApiHttpError } from "./http-error";
@@ -24,7 +24,7 @@ export const representationCheckedRecord: Operation<typeof recordDeliveryInput, 
   describe: describeRecordedDelivery,
   execute: async (scope, input) => {
     const saved = await recordDelivery.execute(scope, input);
-    return { ...saved, delivery: representDelivery(saved.delivery), warnings: [BILL_OF_LADING_WARNING] };
+    return { ...saved, delivery: await readApiDelivery(scope.ctx, { id: saved.delivery.id }, scope.tx), warnings: [BILL_OF_LADING_WARNING] };
   },
 };
 
@@ -40,7 +40,7 @@ export function representationCheckedUpdate(id: string, revision: number): Opera
         throw new DomainError("stale_version", "The representation has changed.");
       }
       const saved = await updateDeliveryOperation.execute(scope, input);
-      return { delivery: representDelivery(saved), warnings: [] };
+      return { delivery: await readApiDelivery(scope.ctx, { id: saved.id }, scope.tx), warnings: [] };
     },
   };
 }

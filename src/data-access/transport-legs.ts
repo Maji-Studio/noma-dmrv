@@ -696,9 +696,7 @@ async function syncLockedBiocharProductTransportLeg(
     throw new SafeError("Biochar product or its facility not found");
   }
 
-  // The destination location lives on the order in the common flow; the
-  // delivery may also carry its own override. Resolve via
-  // COALESCE(delivery.customerLocationId, order.customerLocationId).
+  // Every delivery inherits its order's customer location.
   const allocated = deliveryProductAllocations(ctx, tx);
   const rows = await tx
     .select({
@@ -719,7 +717,7 @@ async function syncLockedBiocharProductTransportLeg(
     .leftJoin(
       customerLocations,
       and(
-        eq(customerLocations.id, sql`coalesce(${deliveries.customerLocationId}, ${orders.customerLocationId})`),
+        eq(customerLocations.id, orders.customerLocationId),
         eq(customerLocations.organizationId, ctx.organizationId),
       ),
     )
@@ -824,8 +822,7 @@ export async function syncBiocharLegsForCustomerLocation(
 ): Promise<void> {
   requireOrgScope(ctx);
 
-  // Match deliveries whose resolved destination is this location — either the
-  // delivery's own override or, in the common flow, its order's location.
+  // Match deliveries whose order destination is this location.
   const allocated = deliveryProductAllocations(ctx, tx);
   const rows = await tx
     .selectDistinct({
@@ -836,7 +833,7 @@ export async function syncBiocharLegsForCustomerLocation(
     .leftJoin(orders, and(eq(deliveries.orderId, orders.id), eq(orders.organizationId, ctx.organizationId)))
     .where(
       and(
-        eq(sql`coalesce(${deliveries.customerLocationId}, ${orders.customerLocationId})`, customerLocationId),
+        eq(orders.customerLocationId, customerLocationId),
         eq(deliveries.organizationId, ctx.organizationId),
       ),
     );
