@@ -80,7 +80,7 @@ export function toBatchHealthFacts(
   const facilitySetupComplete = isFacilitySetupComplete(ctx);
   const batch = ctx.memberBatches.find((member) => member.id === batchId);
   return {
-    templateBlockers: ctx.templateBlockers?.map((blocker) => blocker.message) ?? [],
+    templateBlockers: ctx.templateBlockers ?? [],
     warnings: batch ? sampleDocumentWarnings({ ...batch, creditBatchCode: batch.code }) : [],
     carbonMissingInputs: carbonMissingInputs(ctx, batchId),
     facilityEmissionsBlockers: batch?.facilityEmissionsGateBlockers ?? [],

@@ -16,7 +16,8 @@ export interface FacilityCertifierFacts {
   defaultTemplate: IsometricGhgEntryTemplate | null;
   missingDefaultTemplateId: string | null;
   removalTemplateIds: string[];
-  templatesById: Record<string, RemovalTemplateFacts>;
+  /** Only templates the registry still lists; a pinned id may be absent. */
+  templatesById: Partial<Record<string, RemovalTemplateFacts>>;
   blueprintsForTemplate: IsometricComponentBlueprint[];
   unresolvedBlueprintKeys: string[];
   unbindableTemplateInputs: UnbindableTemplateInput[];

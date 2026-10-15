@@ -274,7 +274,7 @@ export function SubmissionSummary({
       </div>
 
       {facts.checksAttention > 0 && (
-        <SubmissionChecks checks={checks} facilityId={facilityId} />
+        <SubmissionChecks checks={checks} facilityId={facilityId} creditBatches={facts.batches} />
       )}
 
       {factsInput.readiness.transportVehicleAdvisories.map((advisory) => (

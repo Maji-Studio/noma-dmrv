@@ -11,6 +11,8 @@ import type {
 import { creditBatchSheetSections } from "./credit-batch-view";
 
 vi.mock("next/link", () => ({ default: ({ children, href, ...props }: { children: ReactNode; href: string }) => <a href={href} {...props}>{children}</a> }));
+// The pinned template block reads live queries; its own suite covers it.
+vi.mock("./credit-batch-removal-template", () => ({ CreditBatchRemovalTemplate: () => <div>Removal template block</div> }));
 // The real InfoHint mounts a floating-ui tooltip, which reads `window` on
 // mount. These suites run in the node environment, so the hint renders as
 // plain text here and its behaviour is covered by the tooltip's own tests.

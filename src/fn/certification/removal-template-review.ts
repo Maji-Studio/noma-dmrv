@@ -36,7 +36,7 @@ export async function loadRemovalTemplateReview(facilityId: string) {
         availability: current ? "listed" as const : "missing" as const,
         changes,
         lines: definition?.groups.flatMap((group) => group.components.map((component) => ({
-          component, groupKey: group.key, contract: observation?.lineSources[component.id] ?? { scope: "unassigned" as const, entryPolicy: "none" as const, origin: "proposed" as const },
+          component, groupKey: group.key, groupName: group.displayName, contract: observation?.lineSources[component.id] ?? { scope: "unassigned" as const, entryPolicy: "none" as const, origin: "proposed" as const },
           catalogCandidates: catalogCandidates(component, group.key), allowedEntryPolicies: allowedEntryPolicies(component),
           change: changes[component.id] ?? "added" as const,
         }))) ?? [],

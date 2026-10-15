@@ -7,6 +7,8 @@ import {
   type BatchHealthFacts,
 } from "./batch-health";
 import { CERT_REQUIREMENT_META } from "./requirement-labels";
+import { batchHealthFixLinkFor } from "./batch-health-links";
+import { removalTemplateBlocker } from "./removal-template-blockers";
 
 // A fully-healthy batch: no missing carbon inputs, production linked, facility
 // set up, and every required transport category present.
@@ -34,6 +36,23 @@ function checkFor(result: BatchHealth, key: BatchHealthCheckKey) {
 }
 
 describe("deriveBatchHealth", () => {
+  it("sends pin blockers to the batch's Switch template and line blockers to the review", () => {
+    const result = deriveBatchHealth(facts({
+      templateBlockers: [
+        removalTemplateBlocker("unpinnedTemplate"),
+        removalTemplateBlocker("templateNotFullyRead"),
+        removalTemplateBlocker("templateLinesNeedReview"),
+      ],
+    }));
+    const links = result.checks
+      .filter((check) => check.key === "template")
+      .map((check) => batchHealthFixLinkFor(check, "facility-1", "batch-1"));
+    expect(links).toEqual([
+      { label: "Switch template", href: "/credit-batches?facility=facility-1&batch=batch-1&focus=removal-template" },
+      { label: "Review template lines", href: "/certification/settings?section=removal-templates&facility=facility-1" },
+    ]);
+  });
+
   it("keeps document warnings separate from blocking issues", () => {
     const result = deriveBatchHealth(facts({ warnings: ["Missing lab report"] }));
     expect(result.state).toBe("ready");

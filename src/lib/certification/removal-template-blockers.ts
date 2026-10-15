@@ -10,3 +10,19 @@ export interface RemovalTemplateBlocker { code: RemovalTemplateBlockerCode; mess
 export function removalTemplateBlocker(code: RemovalTemplateBlockerCode): RemovalTemplateBlocker {
   return { code, message: REMOVAL_TEMPLATE_BLOCKERS[code] };
 }
+
+/**
+ * Where an operator settles each blocker: the credit batch's own template pin,
+ * or the line review in Certification settings.
+ */
+export type RemovalTemplateBlockerDestination = "creditBatchTemplate" | "templateLineReview";
+const BLOCKER_DESTINATIONS: Record<RemovalTemplateBlockerCode, RemovalTemplateBlockerDestination> = {
+  unpinnedTemplate: "creditBatchTemplate",
+  mixedTemplatePins: "creditBatchTemplate",
+  templateNotFound: "creditBatchTemplate",
+  templateNotFullyRead: "templateLineReview",
+  templateLinesNeedReview: "templateLineReview",
+};
+export function removalTemplateBlockerDestination(code: RemovalTemplateBlockerCode): RemovalTemplateBlockerDestination {
+  return BLOCKER_DESTINATIONS[code];
+}

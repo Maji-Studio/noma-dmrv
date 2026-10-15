@@ -24,6 +24,7 @@ import {
   type ProductionReadinessGap,
 } from "./production-readiness";
 import { CERT_REQUIREMENT_META } from "./requirement-labels";
+import type { RemovalTemplateBlocker, RemovalTemplateBlockerCode } from "./removal-template-blockers";
 import { pluralize } from "@/lib/copy-utils";
 import {
   describeFeedstockTypeMappingGap,
@@ -58,7 +59,7 @@ export interface RemovalReadinessFacts {
   hasOrgCredentials: boolean;
   /** The member batches' pinned Removal template resolved on Isometric. */
   hasRemovalTemplate: boolean;
-  templateBlockers?: { code: string; message: string }[];
+  templateBlockers?: RemovalTemplateBlocker[];
   /** Set when a configured template id no longer exists on Isometric. */
   missingRemovalTemplateId: string | null;
   /** Template blueprint keys with no matching component blueprint. */
@@ -498,6 +499,8 @@ export interface RemovalRequirementCheck {
   /** Local record to open when the fix target supports an exact edit link. */
   fixTargetId?: string;
   transportCategory?: TransportCategory;
+  /** Removal template blocker codes behind an unmet template check, for its fix links. */
+  templateBlockerCodes?: RemovalTemplateBlockerCode[];
   status: "met" | "unmet" | "skipped" | "warning";
   /** The blocker text when unmet, or context when met/skipped. */
   detail?: string;
@@ -670,6 +673,9 @@ export function buildRemovalRequirementsChecklist(
         !linked || !credentialsConfigured
           ? undefined
           : (templateBlockerReason(facts) ?? undefined),
+      ...(linked && credentialsConfigured && facts.templateBlockers?.length
+        ? { templateBlockerCodes: facts.templateBlockers.map((blocker) => blocker.code) }
+        : {}),
     },
     ...transport,
     ...uniformity,

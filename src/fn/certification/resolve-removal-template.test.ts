@@ -38,8 +38,8 @@ describe("Removal template pins", () => {
   });
   it("blocks unread observations and proposals independently", () => {
     const input = facts();
-    input.templatesById[template.id].observation = null;
-    input.templatesById[template.id].lineSourceProblems = [{ code: "unassigned", componentId: "line" }];
+    input.templatesById[template.id]!.observation = null;
+    input.templatesById[template.id]!.lineSourceProblems = [{ code: "unassigned", componentId: "line" }];
     expect(resolveRemovalTemplate([{ removalTemplateId: template.id }], input).templateBlockers.map((blocker) => blocker.code))
       .toEqual(["templateNotFullyRead", "templateLinesNeedReview"]);
   });

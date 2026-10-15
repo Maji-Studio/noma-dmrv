@@ -31,14 +31,14 @@ beforeEach(() => {
 it("observes a pinned template even when the facility has no default", async () => {
   const facts = await loadFacilityCertifierFacts(ctx, "facility-id");
   expect(facts.defaultTemplate).toBeNull();
-  expect(facts.templatesById[fixture.id].template.id).toBe(fixture.id);
+  expect(facts.templatesById[fixture.id]!.template.id).toBe(fixture.id);
   expect(facts.removalTemplateIds).toEqual([fixture.id]);
   expect(listPinnedRemovalTemplateIds).toHaveBeenCalledOnce();
   expect(observeRemovalTemplate).toHaveBeenCalledWith(ctx, expect.objectContaining({ template: fixture }));
 });
 it("keeps the read available but fails closed when observation persistence fails", async () => {
   const facts = await loadFacilityCertifierFacts(ctx, "facility-id");
-  const pinned = facts.templatesById[fixture.id];
+  const pinned = facts.templatesById[fixture.id]!;
   expect(pinned.observation).toBeNull();
   expect(pinned.enrichmentProblems.length).toBeGreaterThan(0);
   expect(pinned.lineSourceProblems.some((problem) => problem.code === "missing-contract")).toBe(true);
