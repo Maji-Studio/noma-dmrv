@@ -1,9 +1,9 @@
 import { config } from "dotenv";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { assertThrowawayTestDatabase, resolveTestDatabaseUrl } from "../../tests/helpers/throwaway-database";
-import { CASES, DELIVERY_CASES, EVAL_PORT, LAB_CASES, STOCK_CASES } from "./config";
+import { CASES, DELIVERY_CASES, DOCUMENT_CASES, EVAL_PORT, LAB_CASES, STOCK_CASES } from "./config";
 import { runClaude } from "./claude";
 import type { ManagedProcess } from "./process";
 import { markdownReport, scoreCase, type CaseScore } from "./score";
@@ -16,6 +16,8 @@ import type { StockEvalFixture } from "./fixture-stock";
 import { scoreStockCase } from "./score-stock";
 import type { DeliveryEvalFixture } from "./fixture-delivery";
 import { scoreDeliveryCase } from "./score-delivery";
+import type { DocumentEvalFixture } from "./fixture-documents";
+import { scoreDocumentCase } from "./score-documents";
 
 async function main(): Promise<void> {
   const keep = process.argv.includes("--keep");
@@ -38,6 +40,10 @@ async function main(): Promise<void> {
   const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
   const runDirectory = join(tmpdir(), `eval-mcp-${timestamp}`);
   await mkdir(runDirectory, { mode: 0o700 });
+  // Set before any storage/env module is imported, and pass the same root to Next.
+  const storageRoot = join(runDirectory, "storage");
+  process.env.STORAGE_PROVIDER = "local-fs";
+  process.env.STORAGE_LOCAL_FS_ROOT = storageRoot;
   console.log(`Evaluation artifacts: ${runDirectory}`);
 
   const controller = new AbortController();
@@ -52,6 +58,7 @@ async function main(): Promise<void> {
   const labFixtures: LabEvalFixture[] = [];
   const stockFixtures: StockEvalFixture[] = [];
   const deliveryFixtures: DeliveryEvalFixture[] = [];
+  const documentFixtures: DocumentEvalFixture[] = [];
   // Every seeded organization, so cleanup covers all case families.
   const organizations: { id: string; remove: () => Promise<void> }[] = [];
   const keys: string[] = [];
@@ -63,6 +70,7 @@ async function main(): Promise<void> {
     const labModule = await import("./fixture-lab");
     const stockModule = await import("./fixture-stock");
     const deliveryModule = await import("./fixture-delivery");
+    const documentModule = await import("./fixture-documents");
     const { seedFixture, fixtureTarget, readSnapshot, evaluationExpectation, evaluationRunRequirements } = fixtureModule;
     const expectation = evaluationExpectation();
     console.log(`Case 2 expectation: ${expectation}.`);
@@ -96,6 +104,13 @@ async function main(): Promise<void> {
       deliveryFixtures.push(fixture);
       keys.push(fixture.key);
       organizations.push({ id: fixture.ctx.organizationId, remove: () => deliveryModule.cleanupDeliveryFixture(fixture) });
+    }
+    for (const testCase of DOCUMENT_CASES) {
+      controller.signal.throwIfAborted();
+      const fixture = await documentModule.seedDocumentFixture(join(runDirectory, "fixtures", testCase.id));
+      documentFixtures.push(fixture);
+      keys.push(fixture.key);
+      organizations.push({ id: fixture.ctx.organizationId, remove: () => documentModule.cleanupDocumentFixture(fixture) });
     }
     const server = startServer(process.cwd(), runDirectory, process.env, keys);
     children.add(server);
@@ -146,6 +161,17 @@ async function main(): Promise<void> {
       scores.push(score);
       results.push({ ...score, organizationId: fixture.ctx.organizationId, target, snapshot, ...run });
     }
+    for (const [index, testCase] of DOCUMENT_CASES.entries()) {
+      controller.signal.throwIfAborted();
+      const fixture = documentFixtures[index];
+      const target = fixture.documentTarget;
+      const run = await runClaude(testCase.id, testCase.text(target), fixture.key, baseUrl, runDirectory,
+        controller.signal, (child) => children.add(child), (child) => children.delete(child), fixture.fileDirectory);
+      const snapshot = await documentModule.readDocumentSnapshot(fixture);
+      const score = scoreDocumentCase(target, snapshot, run.transcript);
+      scores.push(score);
+      results.push({ ...score, organizationId: fixture.ctx.organizationId, target, snapshot, ...run });
+    }
     if (scores.some((score) => !score.passed)) process.exitCode = 1;
   } finally {
     // Stop writers before cleanup, also on startup failure and interrupted cases.
@@ -158,6 +184,8 @@ async function main(): Promise<void> {
         catch { console.error(`Could not remove evaluation organization ${organization.id}.`); process.exitCode = 1; }
       }
     }
+    if (!keep) await Promise.all([storageRoot, join(runDirectory, "fixtures")]
+      .map((directory) => rm(directory, { recursive: true, force: true })));
     process.removeListener("SIGINT", interrupt);
     process.removeListener("SIGTERM", interrupt);
     const report = markdownReport(scores);

@@ -16,6 +16,7 @@ import {
 import { TRANSPORT_EVIDENCE_HINTS } from "@/components/transport-legs/transport-evidence-hints";
 import type { Delivery } from "@/db/schema";
 import type { UseDeferredAttachmentsResult } from "@/hooks/use-deferred-attachments";
+import { useIsRecordCertificationLocked } from "@/hooks/use-record-certification-lock";
 import { ActionableFocusTarget } from "@/components/ui/actionable-focus-target";
 import type { EntityFocusTarget } from "@/lib/entity-deep-link";
 
@@ -37,6 +38,8 @@ export function DeliveryEvidenceSection({
   focusTarget,
   __spine,
 }: DeliveryEvidenceSectionProps) {
+  // The evidence panel shows the lock notice; queued retries must not run either.
+  const locked = useIsRecordCertificationLocked("delivery", isEditMode ? delivery?.id : undefined);
   return (
     <FormSection
       title="Delivery evidence"
@@ -59,6 +62,7 @@ export function DeliveryEvidenceSection({
                 }
                 onRemove={deferredAttachments.remove}
                 disabled={isSubmitting}
+                retryable={!locked}
               />
             )}
             <TransportEvidencePanel

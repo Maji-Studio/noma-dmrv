@@ -413,6 +413,74 @@ Decided 2026-10-12 (Kenji, round 6, Phase 4b):
 55. **Discovery reads:** `GET /formulations[/{idOrCode}]` with lines `{ id, feedstockTypeId, ratio }` (scope `formulations:read`, on by default) and `find_formulations`; `GET /storage-locations/{id}/stock-movements` (scope `biochar-products:read`, read-only) and `find_output_stock_movements`. Sub-bin reads shipped in [PR C](#20-pr-c-results-2026-10-14).
 56. **Future event times are refused** for product `placedAt` and movement `occurredAt`, in the app and the API, as for runs (`src/data-access/production-runs/future-time.ts`). Backdating stays allowed.
 
+Decided 2026-10-13 (Kenji, round 7, Phase 5a). The numbering continues from decision 56; no renumbering was needed.
+
+57. **Phase 5a is lab samples only** (Q48). Orders and deliveries get their own spec. Kenji asked about photographing a lab report and having AI fill the fields: issue #329 ("upload lab results file and autofill sample chemistry entries") already covers it and stays out of 5a.
+58. **Lab samples are created one at a time** (Q49). There is no `POST /lab-samples/batch` and no `record_lab_samples`. Kenji's note: it should be possible to save several samples, but they usually come from different production dates, so a future multi-sample endpoint must not assume one credit batch or one sampling time (`api/multi-sample-create` in [open questions](../open-questions-architecture.md#a-multi-sample-create-must-not-assume-one-credit-batch-or-one-sampling-time-apimulti-sample-create-opened-2026-10-13)).
+59. **The server derives the ratios** (Q50). H/C_org is always calculated from hydrogen and organic carbon, or empty when either is missing, including after an input is cleared. O/C_org is calculated whenever oxygen is present; a sent O/C_org is stored only when oxygen is absent. Values round to 4 decimals and anything above the column cap is refused, never clamped. The reply says the ratio was calculated, for example "H/C_org calculated from hydrogen and organic carbon: 0.2979"; the MCP result text says the same.
+60. **Sampling times are read in the facility's zone** (Q51). The form switches from the browser zone to the credit batch facility's zone. The zone comes back on requests: the facility representation has `timeZone`, and `whoami` and `/me` give the facility's current local time. Tool descriptions point agents there.
+61. **Certification gaps warn and do not block at entry** (Q52). The warnings mirror what readiness and the 1,000-year checks will require (complete H/C_org and O/C_org, measured inorganic carbon and S on every 1,000-year sample, sampling before the batch window).
+62. **TGA stays required for 1,000-year batches, and fewer than 500 R0 readings only warns** (Q53). Kenji asked whether a removal can still be submitted below 500 readings: yes, the module says "should", so it is a warning and not a submission blocker, and the warning text says so. Biochar Agricultural Soils module v1.1 never mentions TGA, so `isometric/tga-1000-year-requirement` stays a `needs-registry-check` question.
+63. **Submission blocks while a replicate in the submitted H/C mean lacks its paired O/C** (Q54). Separate small PR #948 with a four-replicate regression test, run in parallel with 5a. Operator copy follows `docs/ux-writing.md`.
+64. **Batch edits that move the window past existing samples are allowed** (Q55). Readiness flags samples before the new window (submission already blocks them); there is no batch-edit refusal.
+65. **Create, update and move are refused on an archived credit batch** (Q56), in the app and the API. Reads still work. Delete is not named in the answer and stays allowed.
+66. **`lab-samples:delete` is off by default** (Q57). PATCH accepts `code` and a move to another credit batch.
+67. **The sub-bin stock read is its own follow-up PR after 5a** (Q58). It shipped in [PR C](#20-pr-c-results-2026-10-14), designed as in the Phase 5a spec: one consistent snapshot and one evaluation instant, deterministic serialization, ETag = hash of the published body.
+68. **Stock corrections stay UI-only** (Q59). They stay in the backlog as `api/stock-corrections`.
+
+Decided 2026-10-13 (Kenji, round 8, PR C). These answers override the earlier round 8 placeholders.
+
+69. **Only output bins answer the stock read** (Q60). Biochar and product bins answer; a feedstock bin returns 422 `validation_failed`.
+70. **Mix bins show runs plus one pile moisture** (Q61). Held layers carry dry biochar and solids; each layer's wet mass, moisture and basis are null. The pile's figures are in `totals`.
+71. **Unresolved stock answers 200 as stock unknown** (Q62). The body has a fixed reason sentence, `totals: null` and no sub-bins. Kenji noted that a finished run's dry biochar mass will become required. Staging #960, commit `4cb221b94` ("require output bin and moisture on completed runs"), now requires output kg, output bin and moisture on completion, from which dry mass is derived. The unresolved run path remains for older data; no new completion rule is needed here.
+72. **The read carries stock figures only** (Q63). No recent movements or product source runs. Use movement history and the product detail read for those.
+
+Decided 2026-10-14 (Kenji, round 9, Phase 5b).
+
+73. **Phase 5b ships as two PRs** (Q64). 5b-1 `feat/api-orders` ships customer and customer location lookups, orders, the order balance read, and storage-location `formulationId` with `type` and `formulationId` filters. 5b-2 `feat/api-deliveries` follows. They are not stacked; shared files in 5b-2 integrate after rebasing on merged 5b-1.
+74. **Orders and deliveries keep their plain names** (Q65). 5b-1 ships `/orders` and `record_order`; 5b-2 ships `/deliveries`, `record_delivery` and `deliveredAt`. Descriptions distinguish a product delivery from feedstock intake (`log_feedstock_delivery`).
+75. **Order balance is a separate read** (Q66). 5b-1 ships `GET /orders/{id}/balance` and `get_order_balance`, with `{ orderId, quantityKg, deliveredWetMassKg, remainingWetMassKg, fulfillmentStatus }` from one snapshot and an ETag hashing the published body, as in decision 67. The order body carries stored fields only (decision 48); delivery writes in 5b-2 do not bump the order version.
+76. **The stock read carries the bin's draw order** (Q67). 5b-2 commit 3 adds `drawOrder: "oldest_first" | "newest_first" | null` to `get_bin_stock`, null for mix bins, and raises its representation revision to 2. Sub-bins stay listed oldest first.
+77. **Customer lookup excludes contact details** (Q68). 5b-1 returns customers as `{ id, code, name, version, createdAt, updatedAt }` and locations with `{ id, customerId, name, gpsLatitude, gpsLongitude, distanceFromFacilityKm, distanceSource, isDefault, version, createdAt, updatedAt }`. Distance is one-way km. No email, phone, address or soil temperature is published.
+78. **A submitted Removal locks the order against new deliveries** (Q69). 5b-2 keeps the app's refusal as typed `certification_locked` with a pointer. 5b-1 commit 1 records `certification/order-lineage-lock` in [open questions](../open-questions-architecture.md#a-submitted-removal-locks-an-order-against-further-deliveries-certificationorder-lineage-lock-opened-2026-10-14): allowing further deliveries needs a check that derived per-product transport legs of submitted products cannot move, in the app and the API. Long-running partial-delivery orders need a second order today.
+79. **Delivery previews and saved results show the drawn products** (Q70). 5b-2 returns `allocations[]` with `layerId`, product `code`, `dryBiocharKg`, `solidsKg`, `wetKg`, `moisturePercent` and `policy` on dry run and write. Bin-level `stockEffects` stays unchanged. Tool descriptions keep the promise that the dry run shows which products will be drawn.
+
+Confirmed without another question:
+
+- Delivery mass and moisture fixes in 5b-2 follow decisions 50, 54 and 68; the API does not expose corrections.
+- The optional `basisFingerprint` and stale-fingerprint 409 `stock_basis_changed` with a fresh preview in 5b-2 follow decisions 45 and 53.
+
+80. **Orders have their own delete scope and deliveries have no delete.** 5b-1 ships `orders:delete`, off by default as in decisions 4 and 66, and deletion works only while the order has no deliveries, including archived deliveries. 5b-2 adds no delivery DELETE route or delete scope.
+81. **Future delivery times are refused in the app and the API.** 5b-2 extends decision 56 to `deliveredAt`, closing the app's delivery-create gap. An instant equal to now is allowed.
+82. **A distance override must be greater than zero.** 5b-2 enforces this in the app and the API. Inputs remain one-way km and the server counts the round trip. Omit `distanceKmOverride` to use the customer location's distance; zero no longer silently falls back to it.
+83. **Archive rules apply at each write.** 5b-1 extends decision 65: order create on an archived facility and PATCH on an archived order or facility are refused; an archived order with no deliveries may still be deleted. 5b-2 refuses delivery create on an archived order or facility and PATCH on an archived delivery or facility. Archive refusals answer 404 `not_found` with a pointer, as feedstocks and lab samples do. Archived orders and deliveries remain readable.
+84. **Delivery evidence stays in app uploads until the field application phase.** 5b-1 keeps order uploads in the app; 5b-2 keeps receipts, bills of lading and delivery photos there too. A delivery with no bill of lading receives a non-blocking warning in 5b-2.
+85. **One delivery is recorded per request and its facility comes from the order.** 5b-2 publishes no delivery `facilityId`. The single-create pattern follows decision 58.
+86. **The shared app paths get copy and omitted-field fixes.** 5b-1 commit 1 fixes "Select a order" to "Select an order", choosing the article for every lineage label. 5b-2 fixes delivery edits so an omitted `distanceNote` keeps the stored note.
+
+Decided 2026-10-15 (Kenji, round 10, Phase 6).
+
+87. **Phase 6 ships documents first** (Q71). 6a `feat/api-documents` exposes evidence uploads for API records; 6b `feat/api-applications` follows. They are not stacked.
+88. **Document routes nest under their record** (Q72). `/{owner}/{id}/documents` uses the owner's read and write scopes; there is no documents scope.
+89. **Feedstocks, deliveries, lab samples and applications accept API uploads** (Q73), each with the document types its app uploader offers. The app keeps every record type it supports today.
+90. **Documents cannot be deleted over the API** (Q74). There is no DELETE route, MCP tool or `documents:delete` scope; deletion stays in the app with certification safety.
+91. **A submitted Removal freezes its records' documents** (Q75). Once a record's lineage holds a submitted Removal or GHG statement, uploads, confirmations, deletions, reclassification and visibility changes on that record are refused with `certification_locked`, in the app and the API. A confirmation that loses this race fails the upload and queues its files for deletion. Server-generated ledgers and reports are exempt.
+92. **Agents upload through a presigned link** (Q76). Files never travel in API bodies; chat connectors wait for the OAuth track.
+93. **Remaining delivery mass is a separate read** (Q77). `GET /deliveries/{id}/application-balance` and `get_delivery_application_balance` return remaining wet mass and site defaults from one snapshot with a body-hash ETag; `hasRemainingMass=true` filters the delivery list. Application writes do not bump the delivery version.
+94. **A new application copies site defaults** (Q78). An omitted GPS pair (location method) and soil temperature come from the customer location or facility default, and a warning names each copy. PATCH never fills defaults.
+95. **The GIS reference method needs a boundary** (Q79), in the app and the API, on create and after a PATCH merge. This settles #942 q14.
+
+Confirmed without another question:
+
+96. **Application scopes:** `applications:read` on by default, `applications:write` opt-in, `applications:delete` off by default.
+97. **Application names and units:** `/applications` and `record_application`; the API takes `appliedWetMassKg` and derives `dryBiocharKg`; the form field becomes kg-named and is converted once.
+98. **Application dates:** `applicationDate` is a calendar date compared with the delivery's facility-local day. It cannot be before the delivery or in the future, in the app and the API.
+99. **Application archive:** create and PATCH on an archived delivery or facility answer 404 `not_found`; delete stays allowed. One application per request.
+100. **No application stock fingerprint:** capacity is rechecked under the delivery lock, and the committed allocations are authoritative.
+101. **No Isometric over the API:** the `visual` method stays unavailable; Removal-owned slices refuse mass, delivery and delete edits; submitted lineage refuses every edit.
+102. **Upload rules:** upload request and confirm have no dry run, and REST upload requests require `Idempotency-Key`. Confirm keeps no idempotency record and takes no `If-Match` (named exceptions). Documents stay private on the API. Clients declare a SHA-256; the server verifies size and SHA-256 before promoting bytes to a server-only key.
+103. **The bill-of-lading warning** stays create-only and points to the API upload.
+
 ## 14. What review changed
 
 | Change | Raised by |
@@ -499,51 +567,6 @@ Four PRs: 2a #925 (API keys, `/api/v1/me`, the credential resolver), 2b-1 #929 (
 - Not changed: `null` clears for `massWetKg`/`moistureContentPercent` (the shared update schema forbids them, for UI parity), rate limits on the static public documents, and the rendered HTML reference (in `docs/open-questions.md`). Stock preview on PATCH/DELETE dry runs moves to Phase 4.
 
 **Phase 3 starts from:** where transport-neutral representations live (read models imported them from the REST folder; 3a moved them to `src/lib/representations`), whether MCP results reuse the REST representations, the `requestKey` contract, which lookups ship as tools first, and the agent-eval harness. The Phase 0 spike route (`src/app/api/mcp/route.ts`) is replaced. Tool names reuse the operationIds above.
-
-Decided 2026-10-13 (Kenji, round 7, Phase 5a). The numbering continues from decision 56; no renumbering was needed.
-
-57. **Phase 5a is lab samples only** (Q48). Orders and deliveries get their own spec. Kenji asked about photographing a lab report and having AI fill the fields: issue #329 ("upload lab results file and autofill sample chemistry entries") already covers it and stays out of 5a.
-58. **Lab samples are created one at a time** (Q49). There is no `POST /lab-samples/batch` and no `record_lab_samples`. Kenji's note: it should be possible to save several samples, but they usually come from different production dates, so a future multi-sample endpoint must not assume one credit batch or one sampling time (`api/multi-sample-create` in [open questions](../open-questions-architecture.md#a-multi-sample-create-must-not-assume-one-credit-batch-or-one-sampling-time-apimulti-sample-create-opened-2026-10-13)).
-59. **The server derives the ratios** (Q50). H/C_org is always calculated from hydrogen and organic carbon, or empty when either is missing, including after an input is cleared. O/C_org is calculated whenever oxygen is present; a sent O/C_org is stored only when oxygen is absent. Values round to 4 decimals and anything above the column cap is refused, never clamped. The reply says the ratio was calculated, for example "H/C_org calculated from hydrogen and organic carbon: 0.2979"; the MCP result text says the same.
-60. **Sampling times are read in the facility's zone** (Q51). The form switches from the browser zone to the credit batch facility's zone. The zone comes back on requests: the facility representation has `timeZone`, and `whoami` and `/me` give the facility's current local time. Tool descriptions point agents there.
-61. **Certification gaps warn and do not block at entry** (Q52). The warnings mirror what readiness and the 1,000-year checks will require (complete H/C_org and O/C_org, measured inorganic carbon and S on every 1,000-year sample, sampling before the batch window).
-62. **TGA stays required for 1,000-year batches, and fewer than 500 R0 readings only warns** (Q53). Kenji asked whether a removal can still be submitted below 500 readings: yes, the module says "should", so it is a warning and not a submission blocker, and the warning text says so. Biochar Agricultural Soils module v1.1 never mentions TGA, so `isometric/tga-1000-year-requirement` stays a `needs-registry-check` question.
-63. **Submission blocks while a replicate in the submitted H/C mean lacks its paired O/C** (Q54). Separate small PR #948 with a four-replicate regression test, run in parallel with 5a. Operator copy follows `docs/ux-writing.md`.
-64. **Batch edits that move the window past existing samples are allowed** (Q55). Readiness flags samples before the new window (submission already blocks them); there is no batch-edit refusal.
-65. **Create, update and move are refused on an archived credit batch** (Q56), in the app and the API. Reads still work. Delete is not named in the answer and stays allowed.
-66. **`lab-samples:delete` is off by default** (Q57). PATCH accepts `code` and a move to another credit batch.
-67. **The sub-bin stock read is its own follow-up PR after 5a** (Q58). It shipped in [PR C](#20-pr-c-results-2026-10-14), designed as in the Phase 5a spec: one consistent snapshot and one evaluation instant, deterministic serialization, ETag = hash of the published body.
-68. **Stock corrections stay UI-only** (Q59). They stay in the backlog as `api/stock-corrections`.
-
-Decided 2026-10-13 (Kenji, round 8, PR C). These answers override the earlier round 8 placeholders.
-
-69. **Only output bins answer the stock read** (Q60). Biochar and product bins answer; a feedstock bin returns 422 `validation_failed`.
-70. **Mix bins show runs plus one pile moisture** (Q61). Held layers carry dry biochar and solids; each layer's wet mass, moisture and basis are null. The pile's figures are in `totals`.
-71. **Unresolved stock answers 200 as stock unknown** (Q62). The body has a fixed reason sentence, `totals: null` and no sub-bins. Kenji noted that a finished run's dry biochar mass will become required. Staging #960, commit `4cb221b94` ("require output bin and moisture on completed runs"), now requires output kg, output bin and moisture on completion, from which dry mass is derived. The unresolved run path remains for older data; no new completion rule is needed here.
-72. **The read carries stock figures only** (Q63). No recent movements or product source runs. Use movement history and the product detail read for those.
-
-Decided 2026-10-14 (Kenji, round 9, Phase 5b).
-
-73. **Phase 5b ships as two PRs** (Q64). 5b-1 `feat/api-orders` ships customer and customer location lookups, orders, the order balance read, and storage-location `formulationId` with `type` and `formulationId` filters. 5b-2 `feat/api-deliveries` follows. They are not stacked; shared files in 5b-2 integrate after rebasing on merged 5b-1.
-74. **Orders and deliveries keep their plain names** (Q65). 5b-1 ships `/orders` and `record_order`; 5b-2 ships `/deliveries`, `record_delivery` and `deliveredAt`. Descriptions distinguish a product delivery from feedstock intake (`log_feedstock_delivery`).
-75. **Order balance is a separate read** (Q66). 5b-1 ships `GET /orders/{id}/balance` and `get_order_balance`, with `{ orderId, quantityKg, deliveredWetMassKg, remainingWetMassKg, fulfillmentStatus }` from one snapshot and an ETag hashing the published body, as in decision 67. The order body carries stored fields only (decision 48); delivery writes in 5b-2 do not bump the order version.
-76. **The stock read carries the bin's draw order** (Q67). 5b-2 commit 3 adds `drawOrder: "oldest_first" | "newest_first" | null` to `get_bin_stock`, null for mix bins, and raises its representation revision to 2. Sub-bins stay listed oldest first.
-77. **Customer lookup excludes contact details** (Q68). 5b-1 returns customers as `{ id, code, name, version, createdAt, updatedAt }` and locations with `{ id, customerId, name, gpsLatitude, gpsLongitude, distanceFromFacilityKm, distanceSource, isDefault, version, createdAt, updatedAt }`. Distance is one-way km. No email, phone, address or soil temperature is published.
-78. **A submitted Removal locks the order against new deliveries** (Q69). 5b-2 keeps the app's refusal as typed `certification_locked` with a pointer. 5b-1 commit 1 records `certification/order-lineage-lock` in [open questions](../open-questions-architecture.md#a-submitted-removal-locks-an-order-against-further-deliveries-certificationorder-lineage-lock-opened-2026-10-14): allowing further deliveries needs a check that derived per-product transport legs of submitted products cannot move, in the app and the API. Long-running partial-delivery orders need a second order today.
-79. **Delivery previews and saved results show the drawn products** (Q70). 5b-2 returns `allocations[]` with `layerId`, product `code`, `dryBiocharKg`, `solidsKg`, `wetKg`, `moisturePercent` and `policy` on dry run and write. Bin-level `stockEffects` stays unchanged. Tool descriptions keep the promise that the dry run shows which products will be drawn.
-
-Confirmed without another question:
-
-- Delivery mass and moisture fixes in 5b-2 follow decisions 50, 54 and 68; the API does not expose corrections.
-- The optional `basisFingerprint` and stale-fingerprint 409 `stock_basis_changed` with a fresh preview in 5b-2 follow decisions 45 and 53.
-
-80. **Orders have their own delete scope and deliveries have no delete.** 5b-1 ships `orders:delete`, off by default as in decisions 4 and 66, and deletion works only while the order has no deliveries, including archived deliveries. 5b-2 adds no delivery DELETE route or delete scope.
-81. **Future delivery times are refused in the app and the API.** 5b-2 extends decision 56 to `deliveredAt`, closing the app's delivery-create gap. An instant equal to now is allowed.
-82. **A distance override must be greater than zero.** 5b-2 enforces this in the app and the API. Inputs remain one-way km and the server counts the round trip. Omit `distanceKmOverride` to use the customer location's distance; zero no longer silently falls back to it.
-83. **Archive rules apply at each write.** 5b-1 extends decision 65: order create on an archived facility and PATCH on an archived order or facility are refused; an archived order with no deliveries may still be deleted. 5b-2 refuses delivery create on an archived order or facility and PATCH on an archived delivery or facility. Archive refusals answer 404 `not_found` with a pointer, as feedstocks and lab samples do. Archived orders and deliveries remain readable.
-84. **Delivery evidence stays in app uploads until the field application phase.** 5b-1 keeps order uploads in the app; 5b-2 keeps receipts, bills of lading and delivery photos there too. A delivery with no bill of lading receives a non-blocking warning in 5b-2.
-85. **One delivery is recorded per request and its facility comes from the order.** 5b-2 publishes no delivery `facilityId`. The single-create pattern follows decision 58.
-86. **The shared app paths get copy and omitted-field fixes.** 5b-1 commit 1 fixes "Select a order" to "Select an order", choosing the article for every lineage label. 5b-2 fixes delivery edits so an omitted `distanceNote` keeps the stored note.
 
 ## 17. Phase 3 results (2026-10-09)
 
@@ -705,3 +728,108 @@ Finished-product deliveries on REST and MCP, in seven commits on `feat/api-deliv
 **Verification for commit 7:** the supervisor ran the live seed and fuzz harness. Schemathesis passed 5,864 cases with 0 failures across 57 operations, including all four delivery operations.
 
 **Follow-ups:** the production-run writer still takes its run row before lineage artifacts, tracked as `data/production-run-artifact-order` in [architecture open questions](../open-questions-architecture.md). Runner retries cover residual lock inversions, but heavy local load can exhaust the app create deadline. Duplicate transport synchronization during corrections remains a pre-existing harmless version bump. The submitted-order lineage restriction, cursor-position validation, order date display, large order quantity precision and shared mass-input minimum remain the follow-ups listed in section 21. Stock corrections and document uploads remain outside the API scope.
+
+## 23. Phase 6a results (2026-10-15)
+
+Evidence documents on REST and MCP for feedstocks, deliveries and lab samples,
+on `feat/api-documents`. Decisions 87 to 103 record round 10; application API
+work remains Phase 6b. [Document contracts](../api.md#documents) and
+[storage lifecycle](../storage.md) describe current behavior.
+
+**What shipped, per commit:**
+
+1. Foundations (`f12e7290d`, schema foundation `4904d35d0`): document versions,
+   upload keys and leases, deferred queue entries, bounded inspection and
+   promotion to server-only content-addressed keys. App request, confirm,
+   delete, visibility and reclassification use transaction writers and the
+   runner, with submitted-lineage refusal and artifact-first document locks.
+   Storage reads and writes stay outside the operation transaction.
+1b. Read-only panels (`927baab16`): one per-record certification-lock read for
+   delivery, feedstock, sample, application and production evidence panels.
+   Downloads remain available while upload, delete, reclassification and retry
+   controls hide on a blocking submission.
+2. Services (`6bde97647`): API owner/type table, strict SHA-256 declarations,
+   representations and ETags, registered upload request, locked lease renewal
+   and replay capability minting, plus shared keyless confirmation.
+3. Reads (`91b2be410`): nested keyset lists, document detail and private content
+   redirects, archived-owner reads, owner and organization checks, OpenAPI.
+4. REST writes (`368fc29ed`): six thin request/confirm routes, fresh links on
+   replay, UUID paths that recover historical results after owner deletion,
+   committed refusals and retryable domain errors in problem responses.
+5. MCP (`546b8bb5f`): `find_documents`, `get_document_download_url`,
+   `request_document_upload` and `confirm_document_upload`, owner-based tool
+   visibility and invocation checks, action/REST/MCP parity and upload guidance
+   in the delivery warning. No document delete route, tool or scope.
+6. Agent evaluation (`428c0dc66`): `delivery-bol-upload` uses a physical PDF and
+   shell PUT, requiring one verified bill of lading with the fixture hash and
+   no bytes in MCP arguments. Evaluated sessions receive an allowlisted
+   environment; this case has plain Bash and starts in its fixture directory.
+   The supervisor recorded 11/11 eval passes before commit 7.
+7. Sweep, fuzz and docs: Production cron at 03:15 UTC, bounded expiry and
+   failed-row retention, and a timed cross-organization deletion drain. Fuzz
+   fixtures give all three owners one physically uploaded and one pending
+   document through real writers. Examples cover reads, content redirects,
+   fresh upload requests, uploaded repeat confirms and a separately named
+   pending-confirm refusal with an unchanged representation and ETag check.
+
+**Decisions made during implementation:**
+
+- The upload declaration lives in `metadata.uploadDeclaration`. Missing bytes
+  return retryable `conflict` and leave the row pending. Visibility and
+  reclassification remain unregistered app operations. Legacy
+  `feedstock_delivery` lineage follows its constituent feedstocks.
+- `getRecordCertificationLock` reuses `documentOwnerLineageTargets`; the
+  application-only lock read was removed. `certificationKeys.recordLock` is
+  invalidated with readiness. Blocking submissions include draft attempts.
+  Panels allow interaction while the lock read loads; the server is decisive.
+  Deferred attachments carry `retryable`.
+- Confirm remains unregistered: both adapters call `confirmDocumentUpload`,
+  while the facts-carrying runner operation is private. Overlapping confirms
+  emit one audit event using a transition flag. E1 keeps no idempotency record;
+  E2 takes no version precondition. Refusals commit state and cleanup first.
+- `mintDocumentUploadCapability` handles first requests and replays with one
+  signing instant. Renewal takes the row lock, caps the lease at creation plus
+  one hour and does not bump the version. Uploaded, failed, deleted, expired,
+  archived and submitted records return historical data without a PUT link.
+  Stored outcomes include the published file name, never keys or signed URLs.
+- `canAccessOwnerDocuments` wraps the existing role/scope check. Pending and
+  failed representations expose declared facts. Document representation
+  revision lives in `src/config/api-rest.ts`.
+- Reads share `documentReadHandler` and org-scoped queries. No conditional GET
+  was added. Legacy URL-only rows have null unknown size/type and content 404.
+  Tampered cursor-anchor validation remains outside the shared unsigned cursor
+  contract; queries stay within the organization and owner.
+- Missing request keys return 400 like other creates. UUID retries skip the
+  owner lookup; code paths resolve first. Confirmation ignores supplied key
+  and If-Match headers. Neither upload command handles a dry run. Removed
+  credential owners retain the shared 401 denial.
+- Document MCP tools require scope or explicit visibility plus authorization.
+  Confirmation alone gets the 25-second budget. API owner type lists constrain
+  descriptions and inputs. App refusals use owner-specific field pointers;
+  REST/MCP use `/ownerId`, normalized by parity tests.
+- The sweep uses 100-row expiry and retention batches, 30-day failed retention
+  from `updatedAt`, and a 20-second drain budget with 50-entry queue batches.
+  Thirty days preserves time for troubleshooting. Existing queued keys are
+  not enqueued again when failed rows retire. Production uses `vercel.json`;
+  Preview staging retains request-path drains without a scheduled sweep.
+- Final-key inventory cleanup was deferred: the provider has no listing seam,
+  and deleting an unreferenced key needs protection against in-flight confirms.
+
+**Verification for commit 7:** 26 offline Python hook tests and four mocked
+cron route tests pass. Typecheck passes; lint reports no errors and 13 existing
+warnings. OpenAPI regeneration leaves the snapshot unchanged. The supervisor
+must run the DB-backed sweep tests, physical seed and fuzz harness.
+
+**Follow-ups:** Phase 6b commit 1 must move application update/delete from
+row-before-artifact locking to artifact-first runner transactions, and take
+the merged #1021 topology checkpoint. Credit-batch membership ordering needs
+its matching fix. Existing feedstock, order and production-run inversions
+remain tracked in `data/lock-order`. `storage/orphaned-final-keys` tracks
+promotion objects left before a failed transaction; `certification/post-submission-evidence`
+tracks a receipt found after submission that currently needs a new record.
+Both are in the open-question docs. #942 q14 is settled by decision 95 for 6b;
+q10 (order site required) and q27 (price/currency removal) belong to the
+#1015/#1012 successor. The 6b balance read must follow the resulting site rule.
+After 6a merges, coordinate with noma-dmrv-e8 on `reflectance_histogram`
+(#942 q9, PR #1048 follow-up); publishing it for API lab samples needs Kenji's
+choice in `API_DOCUMENT_OWNERS`.

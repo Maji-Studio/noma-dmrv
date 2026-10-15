@@ -32,7 +32,7 @@ describe("local-fs storage", () => {
 
     const provider = getStorageProvider();
     const upload = await provider.createUploadUrl({
-      key: "application/app-1/photo/evidence.jpg",
+      key: "org/org-1/uploads/doc-1/upload",
       contentType: "image/jpeg",
       maxBytes: 1024,
     });
@@ -40,7 +40,7 @@ describe("local-fs storage", () => {
 
     expect(token).toBeTruthy();
     expect(verifyLocalFsToken(sharedSecret, token ?? "")).toMatchObject({
-      k: "application/app-1/photo/evidence.jpg",
+      k: "org/org-1/uploads/doc-1/upload",
       m: "PUT",
       c: "image/jpeg",
     });

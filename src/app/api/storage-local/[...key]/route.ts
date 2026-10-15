@@ -148,7 +148,7 @@ export async function PUT(
     return new NextResponse("Internal Server Error", { status: 500 });
   }
 
-  if (claims.c) {
+  if (claims.c !== undefined) {
     await writeFile(
       `${abs}.meta.json`,
       JSON.stringify({ contentType: claims.c }),

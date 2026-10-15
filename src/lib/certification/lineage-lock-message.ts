@@ -12,6 +12,10 @@ export type CertificationLineageLockEntityType =
 
 export type CertificationLineageMutation = "create" | "update" | "delete";
 
+/** The one line a document panel shows above its files once its record is locked. */
+export const RECORD_FILES_LOCKED_MESSAGE =
+  "This record is in a submitted Removal, so its files cannot change.";
+
 const ENTITY_LABELS: Record<CertificationLineageLockEntityType, string> = {
   creditBatch: "credit batch",
   productionRun: "production run",

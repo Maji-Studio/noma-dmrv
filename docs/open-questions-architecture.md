@@ -184,9 +184,16 @@ If both share a not-yet-submitted Removal, this can raise 40P01. Delivery create
 now run through the operation runner in both the app and the registered API
 operation, so the whole transaction retries within its deadline. The lock-order
 inversion remains: fix the run writer to lock artifacts before the run row.
+
 This is part of `data/lock-order` below.
 
 ### Run writers, feedstock edits and output postings lock in different orders (`data/lock-order`, opened 2026-10-09)
+
+Application update/delete also take rows before artifacts outside the runner.
+Document writes on applications or their deliveries take artifacts first and can
+deadlock with them; Postgres may abort the non-retried application transaction.
+Phase 6b commit 1 moves application writers onto the runner with artifacts first.
+
 
 - `src/data-access/production-runs/mutations.ts:updateProductionRunInTransaction`
   and `src/data-access/production-runs/delete.ts:deleteProductionRunInTransaction`
@@ -282,6 +289,17 @@ This is part of `data/lock-order` below.
 
 - Round 9 Q69 (decision 78 in the [data-entry API plan](./plans/2026-10-06-data-entry-api.md#13-decisions-kenji-2026-10-06)) keeps the refusal: a new delivery on an order whose earlier delivery is in a submitted Removal is refused (typed `certification_locked` from 5b-2). Long-running partial-delivery orders need a second order today. Pointer: `src/data-access/delivery-output-writes.ts:createDeliveryInTransaction` guards the order through `lockCertifiedLineageArtifacts` and `assertLockedLineagesAllowMutation`.
 - **Resolve via:** before allowing further deliveries, check that the derived per-product transport legs of submitted products cannot move. Enforce this in both the app and the API.
+
+### Evidence found after submission (`certification/post-submission-evidence`, opened 2026-10-15)
+
+`src/data-access/document-write-scope.ts:assertDocumentOwnerWritable` refuses
+document changes on blocking submitted lineage, including new receipts, in both
+the app and API. This follows round 10 Q75: affected records must not change
+after submission. A receipt discovered later has nowhere to go except a new
+record. Decide how operators should attach and relate that late evidence without
+changing the submitted record or its certification history. This is a product
+follow-up, not permission to weaken the current guard.
+
 
 ### A multi-sample create must not assume one credit batch or one sampling time (`api/multi-sample-create`, opened 2026-10-13)
 
@@ -509,3 +527,21 @@ Merged 2026-07-20 with the former `transport/storage-topology` — one question.
 - **Resolve via:** if a second ledger ever gains a checksum or a stored-artifact
   verification gate, move the canonicalizer next to `renderLedgerToBuffer` and
   apply it to every ledger rather than copying it (S).
+
+### Final objects left by a failed confirmation (`storage/orphaned-final-keys`, opened 2026-10-15)
+
+Promotion candidates now persist on the pending document before PUT. Confirm,
+delete, owner retirement and the sweep hand off unused candidates to the deletion
+queue, excluding the committed live key. Candidate cleanup waits past in-flight
+preparation; a key handed off to cleanup cannot become live in a later confirm.
+A crash between recording the candidate and PUT is harmless: cleanup deletes an
+absent object. No final bytes from this upload path remain untracked. An inventory
+collector is no longer required for this residual.
+
+
+### Index failed-document retention scans (`storage/failed-retention-index`, opened 2026-10-15)
+
+Consider a partial index `documents(updated_at) WHERE upload_status = 'failed'`
+to keep the retention sweep from scanning unrelated documents as the table grows.
+This requires a migration and is deferred from this PR. Measure the retention
+query plan and scan cost before adding it.

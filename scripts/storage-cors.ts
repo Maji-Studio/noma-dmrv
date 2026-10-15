@@ -10,12 +10,12 @@ async function main(): Promise<void> {
     throw new Error("Usage: pnpm storage:cors [--apply]");
   }
   const { env } = await import("../src/config/env");
-  const { getStorageProvider, buildStorageKey } = await import("../src/lib/storage");
+  const { getStorageProvider, buildUploadKey } = await import("../src/lib/storage");
   if (env.STORAGE_PROVIDER !== "s3-compatible") throw new Error("Storage CORS requires s3-compatible storage");
   const origin = appOrigin(env.NEXT_PUBLIC_APP_URL);
   const provider = getStorageProvider();
   const upload = await provider.createUploadUrl({
-    key: buildStorageKey({ entityType: "_smoke", entityId: "cors", documentType: "healthcheck", fileName: "probe.csv" }),
+    key: buildUploadKey({ organizationId: "_smoke", documentId: "cors" }),
     contentType: "text/csv",
     maxBytes: 1,
   });
