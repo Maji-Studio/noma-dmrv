@@ -397,7 +397,6 @@ export function makeBatchesWithSamples(
       endDate: "2026-01-31",
       facilityTimezone: "UTC",
       sampling: "sampled",
-      declaredHToCorgRatio: null,
       durabilityOption: "200_year" as const,
       runs: runs.map((r) => ({
         id: r.id,

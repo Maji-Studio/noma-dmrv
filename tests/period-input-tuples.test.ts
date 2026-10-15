@@ -190,8 +190,6 @@ describe("buildCreateDatapointRequest scope-conflict SafeError", () => {
     weightedOrganicCarbonPercent: 0,
     weightedHToCorgRatio: 0,
     weightedOToCorgRatio: 0,
-    weightedAshPercent: 0,
-    weightedMoisturePercent: 0,
     totalBiocharDryMassKg: 1,
     totalFeedstockDryMassKg: 1,
     totalStartupDieselLitres: 0,

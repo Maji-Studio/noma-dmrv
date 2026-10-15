@@ -149,11 +149,9 @@ export function SampleForm({
       sReflectanceFraction: sample?.sReflectanceFraction ?? undefined,
       r0MeasurementCount: sample?.r0MeasurementCount ?? undefined,
       r0AnalysisDate: sample?.r0AnalysisDate ?? "",
-      r0HistogramFileUrl: sample?.r0HistogramFileUrl ?? "",
       reactiveCarbonPercent: sample?.reactiveCarbonPercent ?? undefined,
       residualCarbonPercent: sample?.residualCarbonPercent ?? undefined,
       tgaAnalysisDate: sample?.tgaAnalysisDate ?? "",
-      tgaThermogramFileUrl: sample?.tgaThermogramFileUrl ?? "",
       nutrientClaimEnabled: sample?.nutrientClaimEnabled ?? false,
       phosphorusPercent: sample?.phosphorusPercent ?? undefined,
       potassiumPercent: sample?.potassiumPercent ?? undefined,
@@ -229,11 +227,9 @@ export function SampleForm({
       setValue("sReflectanceFraction", undefined);
       setValue("r0MeasurementCount", undefined);
       setValue("r0AnalysisDate", "");
-      setValue("r0HistogramFileUrl", "");
       setValue("reactiveCarbonPercent", undefined);
       setValue("residualCarbonPercent", undefined);
       setValue("tgaAnalysisDate", "");
-      setValue("tgaThermogramFileUrl", "");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [watchedDurabilityOption]);

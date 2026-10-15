@@ -59,7 +59,7 @@ export async function removeApiLabFixture(f: ApiLabFixture) {
 
 export interface ApiSampleSeed {
   code: string;
-  creditBatchId: string | null;
+  creditBatchId: string;
   samplingTime: string;
   createdAt: string;
   productionRunId?: string;

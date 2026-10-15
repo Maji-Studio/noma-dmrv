@@ -33,8 +33,6 @@ import {
   storageLocations,
   feedstocks,
   feedstockTypes,
-  samples,
-  type Sample,
 } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import { type Executor, requireOrgScope } from "../utils";
@@ -48,7 +46,7 @@ import type {
   ProductionRunWithRelations,
   PaginatedProductionRuns,
   ProductionRunStats,
-  ProductionRunWithSamples,
+  ProductionRunForCertification,
 } from "./types";
 import {
   CANCELLED_PRODUCTION_RUN_STATUS,
@@ -544,14 +542,11 @@ export async function getProductionRunStats(
   };
 }
 
-// Bulk loader used by the Certify submission orchestrator. Joins the lab-grade
-// `samples` table (carbon %, H/C and O/C ratios, ash) — NOT `productionSamples`,
-// which holds in-process proximate analysis. Runs missing from the lookup are
-// silently dropped; aggregation reports a per-run warning rather than failing.
-export async function getProductionRunsWithSamples(
+// Operational run facts for certification. Lab Samples are loaded by credit batch.
+export async function getProductionRunsForCertification(
   ctx: OrgContext,
   runIds: string[]
-): Promise<ProductionRunWithSamples[]> {
+): Promise<ProductionRunForCertification[]> {
   requireOrgScope(ctx);
   if (runIds.length === 0) return [];
 
@@ -567,28 +562,5 @@ export async function getProductionRunsWithSamples(
     .where(and(inArray(productionRuns.id, runIds), eq(productionRuns.organizationId, ctx.organizationId)));
   if (runs.length === 0) return [];
 
-  const sampleRows = await db
-    .select()
-    .from(samples)
-    .where(
-      and(
-        inArray(samples.productionRunId, runs.map((r) => r.id)),
-        eq(samples.organizationId, ctx.organizationId),
-      )
-    );
-
-  const samplesByRun = new Map<string, Sample[]>();
-  for (const s of sampleRows) {
-    // productionRunId is nullable since ADR 0016 (provenance, not the primary
-    // link). The query filters on it being in `runs`, so it is non-null here;
-    // the guard satisfies the type and skips any commingled-batch sample.
-    if (s.productionRunId == null) continue;
-    const list = samplesByRun.get(s.productionRunId) ?? [];
-    list.push(s);
-    samplesByRun.set(s.productionRunId, list);
-  }
-  return runs.map((r) => ({
-    ...r,
-    samples: samplesByRun.get(r.id) ?? [],
-  }));
+  return runs;
 }

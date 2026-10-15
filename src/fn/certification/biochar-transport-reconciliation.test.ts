@@ -1,14 +1,14 @@
 import { describe, expect, it } from "vitest";
 import type { TransportLeg } from "@/db/schema";
 import { buildLedgerModel } from "@/lib/certification/evidence-ledger/build-model";
-import { aggregateProductionRuns, enrichWithTransportLegs, type ProductionRunWithSamples } from "@/lib/isometric";
+import { aggregateProductionRuns, enrichWithTransportLegs, type ProductionRunForCertification } from "@/lib/isometric";
 import { buildRemovalLedgerPreview } from "./removal-ledger-preview";
 
 const run = {
   id: "run-1", code: "PR-1", biocharDryMassKg: 100, feedstockMassDryKg: 200,
   dieselOperationLiters: 0, dieselGensetLiters: 0, preprocessingFuelLiters: 0, electricityKwh: 0,
   startTime: new Date("2026-01-01"), endTime: new Date("2026-01-02"), samples: [],
-} as unknown as ProductionRunWithSamples;
+} as unknown as ProductionRunForCertification;
 const metadata = {
   memberBatchCodes: "CB-1", facilityName: "Facility", externalProjectId: null,
   generatedAtIso: "2026-01-03T00:00:00.000Z",

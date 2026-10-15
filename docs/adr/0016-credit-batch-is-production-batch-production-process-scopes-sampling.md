@@ -20,8 +20,8 @@ amended 2026-07-04 (feedstock declared)
 > legacy provenance only (nullable, never written). The sample also **inherits the batch's
 > declared durability tier** instead of carrying its own selection. This strengthens, not
 > changes, this ADR's grain decision: the "both links stay populated / derive the batch from
-> the run" mechanics below describe the pre-amendment write path and now apply only to the
-> batch-side back-fill of legacy run-linked rows.
+> the run" mechanics below describe the pre-amendment write path. Membership edits now
+> preserve each Sample's direct batch attachment, including legacy run-linked rows.
 >
 > **Amendment (2026-07-04, feedstock declared):** the batch's feedstock type flips from
 > **derived** to **declared**. It is now chosen on the credit-batch form up front (a required

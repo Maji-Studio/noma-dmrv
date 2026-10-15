@@ -4,10 +4,10 @@
  * `getSampleById` takes an executor.
  */
 
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { db } from "@/db";
-import { creditBatches, facilities, productionRuns, samples } from "@/db/schema";
+import { creditBatches, facilities, samples } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import type { CreditBatchSampling } from "@/schemas/credit-batches";
 import { sampleNotFound } from "@/lib/sample-domain-errors";
@@ -20,8 +20,7 @@ export interface SampleWithRelations {
   // (issue #309: the batch's runs are commingled, so no run is attributable).
   productionRunId: string | null;
   // The credit batch (protocol production batch) this replicate characterises.
-  // Required for new samples; nullable in the type for legacy rows.
-  creditBatchId: string | null;
+  creditBatchId: string;
   samplingTime: Date;
   weightGrams: number | null;
   volumeMl: number | null;
@@ -55,18 +54,16 @@ export interface SampleWithRelations {
   hToCOrgRatio: number | null;
   oToCOrgRatio: number | null;
   durabilityOption: "200_year" | "1000_year";
-  sampling: CreditBatchSampling | null;
+  sampling: CreditBatchSampling;
 
   // 1000-year durability
   randomReflectanceR0Percent: number | null;
   sReflectanceFraction: number | null;
   r0MeasurementCount: number | null;
   r0AnalysisDate: string | null;
-  r0HistogramFileUrl: string | null;
   reactiveCarbonPercent: number | null;
   residualCarbonPercent: number | null;
   tgaAnalysisDate: string | null;
-  tgaThermogramFileUrl: string | null;
 
   // Nutrients
   nutrientClaimEnabled: boolean;
@@ -84,11 +81,10 @@ export interface SampleWithRelations {
   creditBatchCode: string | null;
   facilityCode: string | null;
   facilityName: string | null;
-  /** The batch facility's zone (legacy rows: the run's), for showing samplingTime on its clock. */
+  /** The batch facility's zone, for showing samplingTime on its clock. */
   facilityTimezone: string | null;
 }
 
-export const sampleRunFacilities = alias(facilities, "sample_run_facilities");
 export const sampleBatchFacilities = alias(facilities, "sample_batch_facilities");
 
 /** The columns of `SampleWithRelations`, before `toSampleWithRelations` derives the tier and nutrient flag. */
@@ -123,9 +119,7 @@ export const sampleWithRelationsColumns = {
   reactiveCarbonPercent: samples.reactiveCarbonPercent,
   residualCarbonPercent: samples.residualCarbonPercent,
   r0AnalysisDate: samples.r0AnalysisDate,
-  r0HistogramFileUrl: samples.r0HistogramFileUrl,
   tgaAnalysisDate: samples.tgaAnalysisDate,
-  tgaThermogramFileUrl: samples.tgaThermogramFileUrl,
   phosphorusPercent: samples.phosphorusPercent,
   potassiumPercent: samples.potassiumPercent,
   magnesiumPercent: samples.magnesiumPercent,
@@ -137,21 +131,19 @@ export const sampleWithRelationsColumns = {
   creditBatchCode: creditBatches.code,
   sampling: creditBatches.sampling,
   batchDurabilityOption: sampleBatchFacilities.durabilityOption,
-  facilityCode: sql<string | null>`coalesce(${sampleBatchFacilities.code}, ${sampleRunFacilities.code})`,
-  facilityName: sql<string | null>`coalesce(${sampleBatchFacilities.name}, ${sampleRunFacilities.name})`,
-  facilityTimezone: sql<string | null>`coalesce(${sampleBatchFacilities.timezone}, ${sampleRunFacilities.timezone})`,
+  facilityCode: sampleBatchFacilities.code,
+  facilityName: sampleBatchFacilities.name,
+  facilityTimezone: sampleBatchFacilities.timezone,
 };
 
 type SampleRow = Omit<SampleWithRelations, "durabilityOption" | "nutrientClaimEnabled"> & {
-  batchDurabilityOption: "200_year" | "1000_year" | null;
+  batchDurabilityOption: "200_year" | "1000_year";
 };
 
 export function toSampleWithRelations({ batchDurabilityOption, ...sample }: SampleRow): SampleWithRelations {
   return {
     ...sample,
-    // The durability tier lives on the credit batch's facility (issue #309);
-    // infer from R₀ presence only for legacy batchless rows.
-    durabilityOption: batchDurabilityOption ?? (sample.randomReflectanceR0Percent != null ? "1000_year" : "200_year"),
+    durabilityOption: batchDurabilityOption,
     nutrientClaimEnabled: !!(
       sample.phosphorusPercent ||
       sample.potassiumPercent ||
@@ -176,10 +168,8 @@ export async function getSampleById(
   const [sample] = await executor
     .select(sampleWithRelationsColumns)
     .from(samples)
-    .leftJoin(productionRuns, and(eq(samples.productionRunId, productionRuns.id), eq(productionRuns.organizationId, ctx.organizationId)))
-    .leftJoin(creditBatches, and(eq(samples.creditBatchId, creditBatches.id), eq(creditBatches.organizationId, ctx.organizationId)))
-    .leftJoin(sampleRunFacilities, and(eq(productionRuns.facilityId, sampleRunFacilities.id), eq(sampleRunFacilities.organizationId, ctx.organizationId)))
-    .leftJoin(sampleBatchFacilities, and(eq(creditBatches.facilityId, sampleBatchFacilities.id), eq(sampleBatchFacilities.organizationId, ctx.organizationId)))
+    .innerJoin(creditBatches, and(eq(samples.creditBatchId, creditBatches.id), eq(creditBatches.organizationId, ctx.organizationId)))
+    .innerJoin(sampleBatchFacilities, and(eq(creditBatches.facilityId, sampleBatchFacilities.id), eq(sampleBatchFacilities.organizationId, ctx.organizationId)))
     .where(and(eq(samples.id, sampleId), eq(samples.organizationId, ctx.organizationId)));
 
   if (!sample) throw sampleNotFound();

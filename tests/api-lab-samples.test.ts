@@ -15,7 +15,6 @@ const PAGE_LIMIT = 1;
 const FIRST_SAMPLED = "2026-09-10T08:00:00.000Z";
 const SECOND_SAMPLED = "2026-09-11T08:00:00.000Z";
 const AUGUST_SAMPLED = "2026-08-10T08:00:00.000Z";
-const LEGACY_SAMPLED = "2026-07-01T08:00:00.000Z";
 const ARCHIVED_AT = new Date("2026-10-01T00:00:00.000Z");
 /** Fields that must never reach a client, whatever the row carries. */
 const PRIVATE_FIELDS = ["organizationId", "facilityId", "durabilityOption", "creditBatchCode", "productionRunId", "timeZone", "sampleCode", "arsenicMgKg", "r0HistogramFileUrl", "tgaThermogramFileUrl", "cursorCreatedAt"];
@@ -26,7 +25,6 @@ type Seeded = Awaited<ReturnType<typeof insertApiSample>>;
 let first: Seeded;
 let second: Seeded;
 let august: Seeded;
-let legacy: Seeded;
 const list = (query = "", key = a.key) => LIST(labApiRequest("lab-samples", query, key));
 const get = (identifier: string, key = a.key, query = "") =>
   GET(labApiRequest("lab-samples", `/${encodeURIComponent(identifier)}${query}`, key), labApiParams(identifier));
@@ -35,9 +33,6 @@ const ids = async (response: Response) => (await response.json()).data.map((row:
 beforeEach(async () => {
   a = await createApiLabFixture();
   b = await createApiLabFixture();
-  legacy = await insertApiSample(a, {
-    code: `SAM-API-LEGACY-${a.tag}`, creditBatchId: null, productionRunId: a.runs[0].id, samplingTime: LEGACY_SAMPLED, createdAt: "2026-10-01T10:00:00.000Z",
-  });
   first = await insertApiSample(a, {
     code: `SAM-API-1-${a.tag}`, creditBatchId: a.batchA.id, samplingTime: FIRST_SAMPLED, createdAt: "2026-10-01T11:00:00.000Z",
     values: {
@@ -47,7 +42,6 @@ beforeEach(async () => {
       hToCOrgRatio: 0.3815, oToCOrgRatio: 0.077, randomReflectanceR0Percent: 2.4, sReflectanceFraction: 0.5, r0MeasurementCount: 500,
       r0AnalysisDate: "2026-09-13", reactiveCarbonPercent: 10, residualCarbonPercent: 70, tgaAnalysisDate: "2026-09-14",
       phosphorusPercent: 0.2, potassiumPercent: 0.3, magnesiumPercent: 0.4, calciumPercent: 0.5, ironPercent: 0.6,
-      arsenicMgKg: 1, r0HistogramFileUrl: "https://example.test/private",
     },
   });
   second = await insertApiSample(a, { code: `SAM-API-2-${a.tag}`, creditBatchId: a.batchA.id, samplingTime: SECOND_SAMPLED, createdAt: "2026-10-01T12:00:00.000Z" });
@@ -87,12 +81,6 @@ describe("lab sample reads", { timeout: TIMEOUT_MS }, () => {
     expect(data).toMatchObject({ labName: null, weightGrams: null, hToCOrgRatio: null, oToCOrgRatio: null, r0MeasurementCount: null, tgaAnalysisDate: null, creditBatchId: a.batchA.id });
   });
 
-  it("reads a legacy sample that has no credit batch", async () => {
-    const { data } = await (await get(legacy.id)).json();
-    expect(data).toMatchObject({ id: legacy.id, creditBatchId: null, samplingTime: LEGACY_SAMPLED });
-    expect(data).not.toHaveProperty("productionRunId");
-  });
-
   it("bumps the ETag when the row version changes", async () => {
     const before = (await get(first.id)).headers.get("etag");
     await db.update(samples).set({ version: sql`${samples.version} + 1` }).where(and(eq(samples.id, first.id), eq(samples.organizationId, a.ctx.organizationId)));
@@ -101,7 +89,7 @@ describe("lab sample reads", { timeout: TIMEOUT_MS }, () => {
   });
 
   it("lists newest first and paginates by cursor without totals", async () => {
-    expect(await ids(await list())).toEqual([august.id, second.id, first.id, legacy.id]);
+    expect(await ids(await list())).toEqual([august.id, second.id, first.id]);
     const page = await (await list(`?limit=${PAGE_LIMIT}`)).json();
     expect(page.data.map((row: { id: string }) => row.id)).toEqual([august.id]);
     expect(page.nextCursor).toBeTruthy();
@@ -113,23 +101,23 @@ describe("lab sample reads", { timeout: TIMEOUT_MS }, () => {
       seen.push(...next.data.map((row: { id: string }) => row.id));
       cursor = next.nextCursor;
     }
-    expect(seen).toEqual([august.id, second.id, first.id, legacy.id]);
+    expect(seen).toEqual([august.id, second.id, first.id]);
   });
 
   it("filters by every published filter", async () => {
     const only = async (query: string) => ids(await list(`?${query}`));
     expect(await only(`creditBatchId=${a.batchA.id}`)).toEqual([second.id, first.id]);
     expect(await only(`creditBatchId=${a.batchB!.id}`)).toEqual([august.id]);
-    // The facility filter matches through the batch, and through the run for a legacy sample without one.
-    expect(await only(`facilityId=${a.facility.id}`)).toEqual([august.id, second.id, first.id, legacy.id]);
+    // The facility filter matches through the batch.
+    expect(await only(`facilityId=${a.facility.id}`)).toEqual([august.id, second.id, first.id]);
     expect(await only(`facilityId=${a.facility.id}&creditBatchId=${a.batchA.id}`)).toEqual([second.id, first.id]);
     expect(await only(`code=${encodeURIComponent(first.sampleCode)}`)).toEqual([first.id]);
     expect(await only("code=missing")).toEqual([]);
-    expect(await only("q=sam-api-")).toEqual([august.id, second.id, first.id, legacy.id]);
+    expect(await only("q=sam-api-")).toEqual([august.id, second.id, first.id]);
     expect(await only("q=sam-api-1")).toEqual([first.id]);
     expect(await only("q=%25")).toEqual([]);
     expect(await only(`sampledFrom=${encodeURIComponent(SECOND_SAMPLED)}`)).toEqual([second.id]);
-    expect(await only(`sampledBefore=${encodeURIComponent(SECOND_SAMPLED)}`)).toEqual([august.id, first.id, legacy.id]);
+    expect(await only(`sampledBefore=${encodeURIComponent(SECOND_SAMPLED)}`)).toEqual([august.id, first.id]);
     expect(await only(`sampledFrom=${encodeURIComponent(FIRST_SAMPLED)}&sampledBefore=${encodeURIComponent(SECOND_SAMPLED)}`)).toEqual([first.id]);
     expect(await only(`sampledFrom=${encodeURIComponent("2026-09-10T11:00:00+03:00")}&sampledBefore=${encodeURIComponent("2026-09-10T11:00:01+03:00")}`)).toEqual([first.id]);
   });
@@ -151,8 +139,8 @@ describe("lab sample reads", { timeout: TIMEOUT_MS }, () => {
   it("hides samples on an archived batch from lists but reads them by id and code", async () => {
     await db.update(creditBatches).set({ archivedAt: ARCHIVED_AT })
       .where(and(eq(creditBatches.id, a.batchB!.id), eq(creditBatches.organizationId, a.ctx.organizationId)));
-    expect(await ids(await list())).toEqual([second.id, first.id, legacy.id]);
-    expect(await ids(await list(`?facilityId=${a.facility.id}`))).toEqual([second.id, first.id, legacy.id]);
+    expect(await ids(await list())).toEqual([second.id, first.id]);
+    expect(await ids(await list(`?facilityId=${a.facility.id}`))).toEqual([second.id, first.id]);
     // The batch itself still exists for this organization, so filtering on it is an empty page, not a 404.
     expect(await ids(await list(`?creditBatchId=${a.batchB!.id}`))).toEqual([]);
     for (const identifier of [august.id, august.sampleCode]) {
@@ -162,23 +150,15 @@ describe("lab sample reads", { timeout: TIMEOUT_MS }, () => {
     }
   });
 
-  it("matches the legacy run's facility only for a sample with no credit batch", async () => {
+  it("uses the batch facility even when provenance points to another facility", async () => {
     const [other] = await db.insert(facilities).values({ timezone: "UTC", organizationId: a.ctx.organizationId, code: `E2E-LAB-F2-${a.tag}`, name: `E2E Lab F2 ${a.tag}` }).returning();
     const moved = await insertApiSample(a, {
       code: `SAM-API-MOVED-${a.tag}`, creditBatchId: a.batchA.id, productionRunId: a.runs[0].id, samplingTime: FIRST_SAMPLED, createdAt: "2026-10-01T14:00:00.000Z",
     });
     await db.update(productionRuns).set({ facilityId: other.id })
       .where(and(eq(productionRuns.id, a.runs[0].id), eq(productionRuns.organizationId, a.ctx.organizationId)));
-    expect(await ids(await list(`?facilityId=${other.id}`))).toEqual([legacy.id]);
+    expect(await ids(await list(`?facilityId=${other.id}`))).toEqual([]);
     expect(await ids(await list(`?facilityId=${a.facility.id}`))).toContain(moved.id);
-    expect(await ids(await list(`?facilityId=${a.facility.id}`))).not.toContain(legacy.id);
-  });
-
-  it("hides a legacy sample whose production run is archived from lists but reads it by id", async () => {
-    await db.update(productionRuns).set({ archivedAt: ARCHIVED_AT })
-      .where(and(eq(productionRuns.id, a.runs[0].id), eq(productionRuns.organizationId, a.ctx.organizationId)));
-    expect(await ids(await list())).not.toContain(legacy.id);
-    expect((await get(legacy.id)).status).toBe(200);
   });
 
   it("canonicalizes uppercase UUIDs in the path and in filters", async () => {
@@ -187,7 +167,7 @@ describe("lab sample reads", { timeout: TIMEOUT_MS }, () => {
     expect((await upper.json()).data.id).toBe(first.id);
     expect(upper.headers.get("etag")).toBe(`"${first.version}.1"`);
     expect(await ids(await list(`?creditBatchId=${a.batchA.id.toUpperCase()}`))).toEqual([second.id, first.id]);
-    expect(await ids(await list(`?facilityId=${a.facility.id.toUpperCase()}`))).toHaveLength(4);
+    expect(await ids(await list(`?facilityId=${a.facility.id.toUpperCase()}`))).toHaveLength(3);
     // One filter set, one cursor: a cursor made under the lowercase id works under the uppercase one.
     const page = await (await list(`?creditBatchId=${a.batchA.id}&limit=${PAGE_LIMIT}`)).json();
     expect(await ids(await list(`?creditBatchId=${a.batchA.id.toUpperCase()}&limit=${PAGE_LIMIT}&cursor=${page.nextCursor}`))).toEqual([first.id]);
@@ -195,7 +175,7 @@ describe("lab sample reads", { timeout: TIMEOUT_MS }, () => {
   });
 
   it("answers 404 for foreign ids, codes and filters without echoing them, and for unknown samples", async () => {
-    for (const identifier of [first.id, first.sampleCode, legacy.id, "missing"]) {
+    for (const identifier of [first.id, first.sampleCode, "missing"]) {
       const refusal = await expectProblem(await get(identifier, b.key), 404, "not_found");
       expect(refusal.errors).toEqual([{ pointer: "/labSampleId", code: "not_found", detail: expect.any(String) }]);
       // `instance` echoes the caller's own request path; nothing else may.

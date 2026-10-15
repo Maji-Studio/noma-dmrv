@@ -185,7 +185,6 @@ async function seedBatchOptions(seededData: SeededChainData) {
           status: "verified",
           startDate: "2026-01-01",
           endDate: "2026-01-31",
-          hToCorgRatio: 0.4,
           createdAt: new Date("2026-01-01T00:00:00.000Z"),
         },
         {
@@ -197,7 +196,6 @@ async function seedBatchOptions(seededData: SeededChainData) {
           status: "pending",
           startDate: "2026-02-01",
           endDate: "2026-02-28",
-          hToCorgRatio: 0.4,
           createdAt: new Date("2026-02-01T00:00:00.000Z"),
         },
       ]);
@@ -374,9 +372,6 @@ async function seedBatchChain(seededData: SeededChainData) {
         productionProcessId: ids.productionProcess,
         startDate: "2026-03-01",
         endDate: "2026-03-31",
-        // Default durabilityOption='200_year' has a CHECK constraint that
-        // requires this field; the spec doesn't read the durability math.
-        hToCorgRatio: 0.4,
       });
       await tx.insert(schema.creditBatchProductionRuns).values({
         organizationId: DEC_ORG_ID,

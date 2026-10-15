@@ -1,5 +1,5 @@
 import type { CreditBatchWithSamples } from "@/data-access/credit-batch-samples";
-import type { ProductionRunWithSamples } from "@/lib/isometric/utils/aggregation";
+import type { ProductionRunForCertification } from "@/lib/isometric/utils/aggregation";
 import type { TransportCategory } from "./certify-context-core";
 import type { TransportLegsByCategory } from "./shared";
 import { buildEntityReadinessResult } from "./certify-readiness-gaps";
@@ -10,7 +10,7 @@ import { buildEntityReadinessResult } from "./certify-readiness-gaps";
  * support, but is not a Removal-submission requirement under protocol v1.1.
  */
 export function buildCertifyEntityReadiness(args: {
-  runs: ProductionRunWithSamples[];
+  runs: ProductionRunForCertification[];
   batchesWithSamples: CreditBatchWithSamples[];
   transportLegs: TransportLegsByCategory;
   requiredTransportCategories: readonly TransportCategory[];

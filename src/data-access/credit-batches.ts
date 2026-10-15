@@ -3,8 +3,6 @@ import {
   and,
   desc,
   eq,
-  inArray,
-  isNotNull,
   isNull,
   sql,
 } from "drizzle-orm";
@@ -52,7 +50,8 @@ import {
   type CreditBatchRollup,
 } from "./credit-batch-accounting";
 import { formatUtcDate } from "@/lib/date-utils";
-import { SafeError } from "@/lib/errors";
+import { ActionConflictError, SafeError } from "@/lib/errors";
+import { conflictCode } from "@/lib/conflict-ref";
 import { assertUnsampledBatchEligibility } from "@/lib/certification/credit-batch-sampling";
 import { retireDocumentsForEntities } from "./documents";
 import { processPendingStorageObjectDeletions } from "./storage-object-deletions";
@@ -426,19 +425,6 @@ export async function createCreditBatch(
         endDate: formatUtcDate(batchData.endDate),
         certifier,
         sampling,
-        // durabilityOption is no longer a batch column — inherited from the
-        // facility (ADR 0021).
-        hToCorgRatio: batchData.hToCorgRatio ?? null,
-        meanRandomReflectancePercent:
-          batchData.meanRandomReflectancePercent ?? null,
-        stdRandomReflectance: batchData.stdRandomReflectance ?? null,
-        meanNonReactiveCarbonPercent:
-          batchData.meanNonReactiveCarbonPercent ?? null,
-        stdNonReactiveCarbonPercent:
-          batchData.stdNonReactiveCarbonPercent ?? null,
-        fDurableCalculated: batchData.fDurableCalculated ?? null,
-        bufferPoolPercent: batchData.bufferPoolPercent ?? null,
-        registry: batchData.registry || null,
         siteManagementNotes: batchData.siteManagementNotes || null,
       })
       .returning();
@@ -451,13 +437,6 @@ export async function createCreditBatch(
           productionRunId,
         }))
       );
-      // Back-fill the member runs' existing lab samples onto this batch so they
-      // characterise it (ADR 0016 — both links stay populated). The per-run
-      // unique constraint means these samples can't already belong elsewhere.
-      await tx
-        .update(samples)
-        .set({ version: nextVersion(samples.version), creditBatchId: batch.id, updatedAt: new Date() })
-        .where(and(inArray(samples.productionRunId, runIds), eq(samples.organizationId, ctx.organizationId)));
     }
 
     await reconcileUnassignedCreditBatchApplicationSlices(ctx, tx, {
@@ -584,26 +563,6 @@ export async function updateCreditBatch(
     updateData.startDate = formatUtcDate(updateFields.startDate);
   if (updateFields.endDate !== undefined)
     updateData.endDate = formatUtcDate(updateFields.endDate);
-  // durabilityOption is inherited from the facility (ADR 0021) — no batch write.
-  if (updateFields.hToCorgRatio !== undefined)
-    updateData.hToCorgRatio = updateFields.hToCorgRatio;
-  if (updateFields.meanRandomReflectancePercent !== undefined)
-    updateData.meanRandomReflectancePercent =
-      updateFields.meanRandomReflectancePercent;
-  if (updateFields.stdRandomReflectance !== undefined)
-    updateData.stdRandomReflectance = updateFields.stdRandomReflectance;
-  if (updateFields.meanNonReactiveCarbonPercent !== undefined)
-    updateData.meanNonReactiveCarbonPercent =
-      updateFields.meanNonReactiveCarbonPercent;
-  if (updateFields.stdNonReactiveCarbonPercent !== undefined)
-    updateData.stdNonReactiveCarbonPercent =
-      updateFields.stdNonReactiveCarbonPercent;
-  if (updateFields.fDurableCalculated !== undefined)
-    updateData.fDurableCalculated = updateFields.fDurableCalculated;
-  if (updateFields.bufferPoolPercent !== undefined)
-    updateData.bufferPoolPercent = updateFields.bufferPoolPercent;
-  if (updateFields.registry !== undefined)
-    updateData.registry = updateFields.registry || null;
   if (updateFields.siteManagementNotes !== undefined)
     updateData.siteManagementNotes = updateFields.siteManagementNotes || null;
 
@@ -784,34 +743,6 @@ export async function updateCreditBatch(
         );
       }
 
-      // Re-point this batch's sample links to match the new member-run set
-      // (ADR 0016): unlink samples whose run left the batch, then link the
-      // current member runs' samples. The per-run unique constraint guarantees a
-      // member run's samples can't already belong to another batch.
-      // Scope the unlink to RUN-BACKED samples — a commingled/batch-level sample
-      // linked directly with a null productionRunId has no run to leave, so it
-      // must survive a membership edit (it'd otherwise vanish from durability
-      // readiness, aggregation, and the source candidate walk).
-      await tx
-        .update(samples)
-        .set({ version: nextVersion(samples.version), creditBatchId: null, updatedAt: new Date() })
-        .where(
-          and(
-            eq(samples.creditBatchId, id),
-            isNotNull(samples.productionRunId),
-            eq(samples.organizationId, ctx.organizationId),
-          ),
-        );
-      if (
-        resolvedProductionRunIds &&
-        resolvedProductionRunIds.length > 0
-      ) {
-        await tx
-          .update(samples)
-          .set({ version: nextVersion(samples.version), creditBatchId: id, updatedAt: new Date() })
-          .where(and(inArray(samples.productionRunId, resolvedProductionRunIds), eq(samples.organizationId, ctx.organizationId)));
-      }
-
       await reconcileUnassignedCreditBatchApplicationSlices(ctx, tx, {
         creditBatchIds: [id],
       });
@@ -841,7 +772,7 @@ export async function deleteCreditBatch(ctx: OrgContext, id: string, expectedVer
     const lockedRemovals = await lockCreditBatchArtifacts(ctx, tx, id);
     // Lock the batch so a concurrent regroup/submit can't move it mid-delete.
     const [batch] = await tx
-      .select({ id: creditBatches.id, version: creditBatches.version })
+      .select({ id: creditBatches.id, code: creditBatches.code, version: creditBatches.version })
       .from(creditBatches)
       .where(and(eq(creditBatches.id, id), eq(creditBatches.organizationId, ctx.organizationId)))
       .for("update")
@@ -855,11 +786,15 @@ export async function deleteCreditBatch(ctx: OrgContext, id: string, expectedVer
 
     await assertRemovalAllowsCreditBatchMutation(ctx, tx, id, "delete", lockedRemovals);
 
-    // Clear app-layer sample links, then delete membership links and the batch.
-    await tx
-      .update(samples)
-      .set({ version: nextVersion(samples.version), creditBatchId: null, updatedAt: new Date() })
-      .where(and(eq(samples.creditBatchId, id), eq(samples.organizationId, ctx.organizationId)));
+    const [sample] = await tx.select({ id: samples.id, code: samples.sampleCode }).from(samples)
+      .where(and(eq(samples.creditBatchId, id), eq(samples.organizationId, ctx.organizationId))).limit(1);
+    if (sample) {
+      throw new ActionConflictError(
+        `Credit batch ${batch.code} has Samples. Move them to another credit batch or delete them, then delete the batch.`,
+        { entity: "sample", id: sample.id, code: conflictCode(sample.code) },
+      );
+    }
+
     await tx
       .delete(creditBatchProductionRuns)
       .where(and(eq(creditBatchProductionRuns.creditBatchId, id), eq(creditBatchProductionRuns.organizationId, ctx.organizationId)));

@@ -58,7 +58,7 @@ export const EMPTY_RUN_SUMMARY: RemovalRunSummary = {
 };
 
 // Only the fields the accounting reads — structurally satisfied by
-// `ChainOfCustodyData` / `ProductionRunWithSamples` at the call site.
+// `ChainOfCustodyData` / `ProductionRunForCertification` at the call site.
 interface AppliedLineage {
   productionRun: { id: string } | null;
   application: { biocharAppliedDryTons: number | null };

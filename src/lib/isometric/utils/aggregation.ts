@@ -3,21 +3,17 @@ import { countedRoundTripKm } from "@/lib/calculations/round-trip";
 import { kgToTonnes } from "@/lib/calculations/unit-conversions";
 import { formatCount } from "@/lib/copy-utils";
 import { SafeError } from "@/lib/errors";
-import type { ProductionRun, Sample, TransportLeg } from "@/db/schema";
+import type { ProductionRun, TransportLeg } from "@/db/schema";
 
 const TRANSPORT_FACTOR_REVIEW =
   "Check that the removal template's transport factor covers every vehicle used.";
 
-export type ProductionRunWithSamples = ProductionRun & {
-  samples: Sample[];
-};
+export type ProductionRunForCertification = ProductionRun;
 
 export interface AggregatedProductionData {
   weightedOrganicCarbonPercent: number | null;
   weightedHToCorgRatio: number | null;
   weightedOToCorgRatio: number | null;
-  weightedAshPercent: number | null;
-  weightedMoisturePercent: number | null;
   totalBiocharDryMassKg: number;
   totalFeedstockDryMassKg: number;
   // Diesel is recorded split by use (startup/plant vs genset) but submits as
@@ -61,6 +57,13 @@ export interface AggregatedProductionData {
   sourceProductionRunIds: string[];
   warnings: string[];
 }
+
+export type AggregatedProductionRunData = Omit<
+  AggregatedProductionData,
+  | "weightedOrganicCarbonPercent"
+  | "weightedHToCorgRatio"
+  | "weightedOToCorgRatio"
+>;
 
 // §8.6.2 emission-input buckets (issue #349, ADR 0020). PRODUCTION sources
 // front-load IN FULL on the credit batch's claiming GHG entry — no
@@ -234,16 +237,16 @@ export function clampFactor(value: number | null | undefined): number {
 
 // `attributionByRunId` carries the applied-biochar fraction for each run —
 // appliedDryKgFromThisRemoval / runTotalBiocharOutput. It scopes ONLY the
-// stored-bucket biochar mass and the chemistry weights (see SOURCE_BUCKETS):
+// stored-bucket biochar mass (see SOURCE_BUCKETS):
 // production-bucket inputs (feedstock mass, diesel, electricity) sum the FULL
 // run totals — §8.6.2 front-loads them once on the batch's claiming GHG entry
 // (issue #349, ADR 0020). Omitted or a missing entry defaults to 1.0 (the run
 // is fully attributed).
 export function aggregateProductionRuns(
-  runs: ProductionRunWithSamples[],
+  runs: ProductionRunForCertification[],
   attributionByRunId?: Map<string, number>,
   options?: { productionRunIds?: ReadonlySet<string> },
-): AggregatedProductionData {
+): AggregatedProductionRunData {
   if (runs.length === 0) {
     throw new Error("aggregateProductionRuns: no production runs supplied");
   }
@@ -310,31 +313,6 @@ export function aggregateProductionRuns(
   }
 
   return {
-    weightedOrganicCarbonPercent: weightedAverage(
-      runs,
-      (s) => s.organicCarbonPercent,
-      attributionByRunId,
-    ),
-    weightedHToCorgRatio: weightedAverage(
-      runs,
-      (s) => s.hToCOrgRatio,
-      attributionByRunId,
-    ),
-    weightedOToCorgRatio: weightedAverage(
-      runs,
-      (s) => s.oToCOrgRatio,
-      attributionByRunId,
-    ),
-    weightedAshPercent: weightedAverage(
-      runs,
-      (s) => s.ashContentPercent,
-      attributionByRunId,
-    ),
-    weightedMoisturePercent: weightedAverage(
-      runs,
-      (s) => s.moistureContentPercent,
-      attributionByRunId,
-    ),
     totalBiocharDryMassKg,
     totalFeedstockDryMassKg,
     totalStartupDieselLitres,
@@ -366,10 +344,10 @@ export interface TransportLegsByCategory {
 // `agg.warnings`, which the submission pipeline short-circuits on.
 //
 // Biochar legs already carry the Removal's immutable wet application slices.
-export function enrichWithTransportLegs(
-  agg: AggregatedProductionData,
+export function enrichWithTransportLegs<T extends AggregatedProductionRunData>(
+  agg: T,
   legs: TransportLegsByCategory,
-): AggregatedProductionData {
+): Omit<T, keyof AggregatedProductionRunData> & AggregatedProductionRunData {
   const feedstock = aggregateTransportMassDistance(legs.feedstock, "Feedstock");
   const biochar = aggregateBiocharTransportMassDistance(legs.biochar);
   const sample = aggregateTransportMassDistance(legs.sample, "Sample");
@@ -391,38 +369,6 @@ export function enrichWithTransportLegs(
     sampleTransportMassDistanceTonneKm: sample.massDistanceTonneKm ?? 0,
     warnings: [...agg.warnings, ...newWarnings],
   };
-}
-
-// Mass-weighted by the applied share of run.biocharDryMassKg using the
-// per-run mean of `pick` across that run's samples — so the carbon content
-// reflects the biochar that actually got applied. Runs with no usable
-// samples, zero mass, or a zero attribution factor are dropped from both
-// numerator and denominator.
-//
-// Chemistry weighting deliberately STAYS applied-mass-based (unlike the
-// production-bucket sums above): the weighted means characterise the stored
-// biochar, which is ex-post applied-scoped (§8.6.2, ADR 0020).
-function weightedAverage(
-  runs: ProductionRunWithSamples[],
-  pick: (s: Sample) => number | null,
-  attributionByRunId?: Map<string, number>,
-): number | null {
-  let weightSum = 0;
-  let weighted = 0;
-  for (const run of runs) {
-    const factor = clampFactor(attributionByRunId?.get(run.id));
-    const mass = run.biocharDryMassKg;
-    if (mass == null || mass <= 0 || factor <= 0) continue;
-    const values = run.samples
-      .map(pick)
-      .filter((v): v is number => v != null && Number.isFinite(v));
-    if (values.length === 0) continue;
-    const mean = values.reduce((a, b) => a + b, 0) / values.length;
-    const weight = mass * factor;
-    weighted += mean * weight;
-    weightSum += weight;
-  }
-  return weightSum === 0 ? null : weighted / weightSum;
 }
 
 function nz(value: number | null | undefined): number {

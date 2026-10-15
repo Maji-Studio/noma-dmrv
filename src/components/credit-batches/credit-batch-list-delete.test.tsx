@@ -1,5 +1,7 @@
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
-import { expect, it, vi } from "vitest";
+import type { ReactNode } from "react";
+import { beforeEach, expect, it, vi } from "vitest";
+import { ConflictError, conflictCode } from "@/lib/conflict-ref";
 import { CreditBatchList } from "./credit-batch-list";
 
 const harness = vi.hoisted(() => ({
@@ -24,7 +26,9 @@ vi.mock("@/hooks/use-credit-batches", () => ({
 vi.mock("@/hooks/use-certification", () => ({ useCreditBatchHealthSummaries: () => ({ data: {} }) }));
 vi.mock("@/components/ui/toast", () => ({ useToast: () => ({ error: harness.error, success: harness.success }) }));
 vi.mock("@/components/ui", () => ({ Button: () => null, EmptyState: () => null, ListPagination: () => null, PageHeader: () => null }));
-vi.mock("@/components/forms", () => ({ ServerError: () => null }));
+vi.mock("@/components/forms", () => ({ ServerError: ({ message, action }: { message?: string; action?: ReactNode }) =>
+  message ? <div role="alert">{message}{action}</div> : null }));
+vi.mock("next/link", () => ({ default: ({ href, children }: { href: string; children: ReactNode }) => <a href={href}>{children}</a> }));
 vi.mock("@/components/navigation", () => ({ SelectFacilityEmptyState: () => null }));
 vi.mock("@/components/ui/notice", () => ({ Notice: () => null }));
 vi.mock("@/components/ui/illustrations", () => ({ ILLUSTRATION_SIZE: { empty: 48 }, CreditBatchArt: () => null }));
@@ -44,6 +48,8 @@ vi.mock("@/components/ui/delete-confirm-dialog", () => ({ DeleteConfirmDialog: (
   return null;
 } }));
 
+beforeEach(() => { vi.clearAllMocks(); });
+
 it("shows the server's deletion refusal in the toast", async () => {
   const reason = "This credit batch is locked by a certification submission.";
   harness.remove.mockRejectedValueOnce(new Error(reason));
@@ -55,6 +61,30 @@ it("shows the server's deletion refusal in the toast", async () => {
     expect(harness.remove).toHaveBeenCalledWith({ creditBatchId: harness.batch.id, expectedVersion: harness.batch.version });
     expect(harness.error).toHaveBeenCalledWith(reason);
     expect(harness.success).not.toHaveBeenCalled();
+  } finally {
+    await act(async () => renderer?.unmount());
+  }
+});
+
+it("shows a blocked delete with a link to the Sample and clears it for the next attempt", async () => {
+  const reason = "This credit batch has Samples.";
+  harness.remove.mockRejectedValueOnce(new ConflictError(reason, {
+    conflict: { entity: "sample", id: "sample-1", code: conflictCode("SAM-1") },
+  }));
+  let renderer: ReactTestRenderer | undefined;
+  try {
+    await act(async () => { renderer = create(<CreditBatchList canManage />); });
+    await act(async () => { harness.onDelete!(harness.batch.id); });
+    await act(async () => { await harness.onConfirm!(); });
+    const alert = renderer!.root.findByProps({ role: "alert" });
+    expect(alert.children).toContain(reason);
+    const link = alert.findByType("a");
+    expect(link.props.href).toBe("/samples?facility=facility-1&sample=sample-1");
+    expect(link.children.join("")).toBe("Open SAM-1");
+    expect(harness.error).not.toHaveBeenCalled();
+    expect(harness.success).not.toHaveBeenCalled();
+    await act(async () => { harness.onDelete!(harness.batch.id); });
+    expect(renderer!.root.findAllByProps({ role: "alert" })).toHaveLength(0);
   } finally {
     await act(async () => renderer?.unmount());
   }

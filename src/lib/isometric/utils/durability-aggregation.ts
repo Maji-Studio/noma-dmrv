@@ -40,14 +40,6 @@ import {
 } from "@/lib/calculations/biochar-removal";
 import { clampFactor } from "./aggregation";
 
-/**
- * Absolute divergence (dimensionless) between the operator-declared
- * `credit_batches.h_to_c_org_ratio` and the sample-aggregated value beyond which
- * a reconciliation warning is raised (D5a). The submitted figure is always the
- * sample-derived one; the declared field is advisory.
- */
-export const H_TO_CORG_RECONCILIATION_TOLERANCE = 0.05;
-
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 // `isUsableNumber` is the eligibility module's predicate, so the H/C_org
@@ -169,7 +161,7 @@ export function buildPerBatchDurabilityData(
 
 // ── Batch-grain weighted chemistry (issue #309) ──────────────────────────────
 
-/** The sample-derived chemistry scalars `AggregatedProductionData` carries. */
+/** Sample-derived chemistry scalars for credit-batch accounting. */
 export interface WeightedBatchChemistry {
   weightedOrganicCarbonPercent: number | null;
   weightedHToCorgRatio: number | null;
@@ -500,29 +492,4 @@ export function buildSoilTemperatureGate(args: {
         .map((s) => s.soilTemperatureC),
     }),
   };
-}
-
-// ── Declared H/C reconciliation (D5a) ────────────────────────────────────────
-
-/**
- * Reconcile the operator-declared `credit_batches.h_to_c_org_ratio` against the
- * sample-aggregated value. The submitted figure is ALWAYS the sample-derived
- * one; this only surfaces a divergence warning so the declared field can't
- * silently disagree with what's credited (mirrors the carbon reconciliation in
- * `resolveOrganicCarbonPercent`). Returns null when within tolerance or when
- * either value is missing.
- */
-export function reconcileDeclaredHToCorg(
-  declared: number | null | undefined,
-  aggregated: number | null | undefined,
-): string | null {
-  if (!isUsableNumber(declared) || !isUsableNumber(aggregated)) return null;
-  if (Math.abs(declared - aggregated) <= H_TO_CORG_RECONCILIATION_TOLERANCE) {
-    return null;
-  }
-  return (
-    `Declared H/C_org ${declared} differs from the Sample-derived ` +
-    `${aggregated.toFixed(3)} (> ${H_TO_CORG_RECONCILIATION_TOLERANCE}). ` +
-    "The Sample-derived value is submitted. Review the declared H/C_org value for this credit batch."
-  );
 }

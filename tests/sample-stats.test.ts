@@ -19,10 +19,10 @@ const ORG_CONTEXT: OrgContext = {
 function queueSelectResult(result: unknown[]) {
   mockSelect.mockImplementationOnce(() => {
     const query = {
-      leftJoin: vi.fn(),
+      innerJoin: vi.fn(),
       where: vi.fn().mockResolvedValue(result),
     };
-    query.leftJoin.mockReturnValue(query);
+    query.innerJoin.mockReturnValue(query);
     return { from: vi.fn(() => query) };
   });
 }

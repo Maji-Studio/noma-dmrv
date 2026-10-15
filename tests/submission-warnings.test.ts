@@ -17,7 +17,7 @@
  */
 import { describe, expect, it } from "vitest";
 import type { IsometricGhgEntryTemplate } from "@/lib/isometric";
-import type { ProductionRunWithSamples } from "@/lib/isometric/utils/aggregation";
+import type { ProductionRunForCertification } from "@/lib/isometric/utils/aggregation";
 import { buildSubmissionWarnings } from "@/fn/certification/submission-warnings";
 
 interface ComponentSpec {
@@ -53,7 +53,7 @@ function template(
 
 function run(
   overrides: Partial<Record<string, unknown>> = {},
-): ProductionRunWithSamples {
+): ProductionRunForCertification {
   return {
     id: "run-1",
     code: "RUN-1",
@@ -62,7 +62,7 @@ function run(
     dieselGensetLiters: 0,
     samples: [],
     ...overrides,
-  } as unknown as ProductionRunWithSamples;
+  } as unknown as ProductionRunForCertification;
 }
 
 function lineage(applicationDate: Date): {

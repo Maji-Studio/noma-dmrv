@@ -35,10 +35,6 @@ const CARBON_INPUT_LABELS: Record<string, string> = {
   soilTemperatureC: "Soil temperature",
   hToCorgRatio: "H:Corg ratio",
   thousandYearReplicates: `At least ${MINIMUM_REPLICATES_PER_BATCH} usable 1000-year Samples`,
-  meanRandomReflectancePercent: "Mean random reflectance (R₀)",
-  stdRandomReflectance: "Std dev of R₀",
-  meanNonReactiveCarbonPercent: "Mean non-reactive carbon",
-  stdNonReactiveCarbonPercent: "Std dev of non-reactive carbon",
 };
 
 /**

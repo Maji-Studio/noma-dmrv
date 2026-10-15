@@ -18,8 +18,7 @@ function formatLabPercent(value: number | null | undefined): string {
 
 /**
  * Sampling time on the credit batch facility's clock, the clock it is entered
- * on (round 7 Q51). Only a legacy row with no batch or run facility falls back
- * to the viewer's clock.
+ * on (round 7 Q51). Without a configured facility zone, use the viewer's clock.
  */
 export function formatSamplingTime(sample: Pick<SampleWithRelations, "samplingTime" | "facilityTimezone">): string {
   return sample.facilityTimezone

@@ -13,10 +13,10 @@
  * for scripts and database tests.
  */
 
-import { and, asc, count, desc, eq, gte, ilike, lte, or, sql, SQL } from "drizzle-orm";
+import { and, asc, count, desc, eq, gte, ilike, lte, SQL } from "drizzle-orm";
 import { db } from "@/db";
 import { avgNumeric } from "@/db/aggregate";
-import { creditBatches, samples, productionRuns } from "@/db/schema";
+import { creditBatches, samples } from "@/db/schema";
 import type { SampleFilterData } from "@/schemas/samples";
 import type { OrgContext } from "@/lib/auth/server";
 import { CODE_CONFLICT_MESSAGES, withUniqueCodeGuard } from "./code-generator";
@@ -27,7 +27,6 @@ import { deleteSampleInTransaction } from "./samples/delete";
 import {
   getSampleById,
   sampleBatchFacilities,
-  sampleRunFacilities,
   sampleWithRelationsColumns,
   toSampleWithRelations,
   type SampleWithRelations,
@@ -100,12 +99,7 @@ export async function getSamples(
   }
 
   if (facilityId) {
-    conditions.push(
-      or(
-        eq(productionRuns.facilityId, facilityId),
-        eq(creditBatches.facilityId, facilityId),
-      )!,
-    );
+    conditions.push(eq(creditBatches.facilityId, facilityId));
   }
 
   // Note: durabilityOption is not in the DB schema, we'd need to add it or infer
@@ -136,8 +130,7 @@ export async function getSamples(
   const [{ totalCount }] = await db
     .select({ totalCount: count() })
     .from(samples)
-    .leftJoin(productionRuns, and(eq(samples.productionRunId, productionRuns.id), eq(productionRuns.organizationId, ctx.organizationId)))
-    .leftJoin(creditBatches, and(eq(samples.creditBatchId, creditBatches.id), eq(creditBatches.organizationId, ctx.organizationId)))
+    .innerJoin(creditBatches, and(eq(samples.creditBatchId, creditBatches.id), eq(creditBatches.organizationId, ctx.organizationId)))
     .where(whereClause);
 
   const total = Number(totalCount);
@@ -148,10 +141,8 @@ export async function getSamples(
   const sampleList = await db
     .select(sampleWithRelationsColumns)
     .from(samples)
-    .leftJoin(productionRuns, and(eq(samples.productionRunId, productionRuns.id), eq(productionRuns.organizationId, ctx.organizationId)))
-    .leftJoin(creditBatches, and(eq(samples.creditBatchId, creditBatches.id), eq(creditBatches.organizationId, ctx.organizationId)))
-    .leftJoin(sampleRunFacilities, and(eq(productionRuns.facilityId, sampleRunFacilities.id), eq(sampleRunFacilities.organizationId, ctx.organizationId)))
-    .leftJoin(sampleBatchFacilities, and(eq(creditBatches.facilityId, sampleBatchFacilities.id), eq(sampleBatchFacilities.organizationId, ctx.organizationId)))
+    .innerJoin(creditBatches, and(eq(samples.creditBatchId, creditBatches.id), eq(creditBatches.organizationId, ctx.organizationId)))
+    .innerJoin(sampleBatchFacilities, and(eq(creditBatches.facilityId, sampleBatchFacilities.id), eq(sampleBatchFacilities.organizationId, ctx.organizationId)))
     .where(whereClause)
     .orderBy(orderFn(sortColumn))
     .limit(pageSize)
@@ -184,12 +175,7 @@ export async function getSampleStats(
     conditions.push(eq(samples.creditBatchId, creditBatchId));
   }
   if (facilityId) {
-    conditions.push(
-      or(
-        eq(productionRuns.facilityId, facilityId),
-        eq(creditBatches.facilityId, facilityId),
-      )!,
-    );
+    conditions.push(eq(creditBatches.facilityId, facilityId));
   }
 
   const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
@@ -201,22 +187,16 @@ export async function getSampleStats(
       avgOrganicCarbonPercent: avgNumeric(samples.organicCarbonPercent),
     })
     .from(samples)
-    .leftJoin(productionRuns, and(eq(samples.productionRunId, productionRuns.id), eq(productionRuns.organizationId, ctx.organizationId)))
-    .leftJoin(creditBatches, and(eq(samples.creditBatchId, creditBatches.id), eq(creditBatches.organizationId, ctx.organizationId)))
+    .innerJoin(creditBatches, and(eq(samples.creditBatchId, creditBatches.id), eq(creditBatches.organizationId, ctx.organizationId)))
     .where(whereClause);
 
-  // Count 1000-year samples — the tier is inherited from the batch's facility
-  // (ADR 0021); legacy batchless rows fall back to R₀-reflectance presence.
-  const is1000Year = sql`(
-    ${sampleBatchFacilities.durabilityOption} = '1000_year'
-    or (${creditBatches.id} is null and ${samples.randomReflectanceR0Percent} is not null)
-  )`;
+  // Count 1000-year samples using the facility tier (ADR 0021).
+  const is1000Year = eq(sampleBatchFacilities.durabilityOption, "1000_year");
   const [samples1000Year] = await db
     .select({ count: count() })
     .from(samples)
-    .leftJoin(productionRuns, and(eq(samples.productionRunId, productionRuns.id), eq(productionRuns.organizationId, ctx.organizationId)))
-    .leftJoin(creditBatches, and(eq(samples.creditBatchId, creditBatches.id), eq(creditBatches.organizationId, ctx.organizationId)))
-    .leftJoin(sampleBatchFacilities, and(eq(creditBatches.facilityId, sampleBatchFacilities.id), eq(sampleBatchFacilities.organizationId, ctx.organizationId)))
+    .innerJoin(creditBatches, and(eq(samples.creditBatchId, creditBatches.id), eq(creditBatches.organizationId, ctx.organizationId)))
+    .innerJoin(sampleBatchFacilities, and(eq(creditBatches.facilityId, sampleBatchFacilities.id), eq(sampleBatchFacilities.organizationId, ctx.organizationId)))
     .where(whereClause ? and(whereClause, is1000Year) : is1000Year);
 
   const total = Number(stats.totalSamples);

@@ -30,47 +30,6 @@ export const transportLegConditionSchema = z
     }
   });
 
-// Soil temperature validation lives at the application level, not credit batch.
-// See applicationSoilTemperatureSchema below.
-export const creditBatchConditionSchema = z
-  .object({
-    durability_option: z.enum(['200_year', '1000_year']),
-    h_to_c_org_ratio: optionalNumber,
-    mean_random_reflectance_percent: optionalNumber,
-    mean_non_reactive_carbon_percent: optionalNumber,
-  })
-  .superRefine((value, ctx) => {
-    if (value.durability_option === '200_year') {
-      if (value.h_to_c_org_ratio == null) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ['h_to_c_org_ratio'],
-          message: "H/C_org ratio is required for 200-year durability",
-        });
-      }
-    }
-
-    if (value.durability_option === '1000_year') {
-      if (value.mean_random_reflectance_percent == null) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ['mean_random_reflectance_percent'],
-          message:
-            "Mean random reflectance is required for 1000-year durability",
-        });
-      }
-
-      if (value.mean_non_reactive_carbon_percent == null) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ['mean_non_reactive_carbon_percent'],
-          message:
-            "Mean non-reactive carbon is required for 1000-year durability",
-        });
-      }
-    }
-  });
-
 export const applicationSoilTemperatureSchema = z
   .object({
     soil_temperature_source: z.enum(['baseline', 'global_database']),

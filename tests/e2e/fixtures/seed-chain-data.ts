@@ -19,7 +19,6 @@ const SEEDED_CREDIT_BATCH_CODE_PREFIX = "E2E-CB";
 const SEEDED_CREDIT_BATCH_DURATION_DAYS = 30;
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 const MS_PER_HOUR = 60 * 60 * 1000;
-const SEEDED_H_TO_CORG_RATIO = 0.4;
 
 export interface SeededChainData {
   facility: { id: string; code: string; name: string };
@@ -308,10 +307,6 @@ export async function seedCreditBatch(
       productionProcessId,
       startDate: start,
       endDate: end,
-      // Durability tier is inherited from the facility (ADR 0021; the seed
-      // facility is 200-year). Carry a declared H/C_org so the batch has
-      // realistic chemistry; the spec doesn't depend on the durability calc.
-      hToCorgRatio: SEEDED_H_TO_CORG_RATIO,
     });
     return { id, code };
   } finally {
@@ -367,7 +362,6 @@ export async function seedCreditBatchProductionLineage(
         productionProcessId,
         startDate: start,
         endDate: end,
-        hToCorgRatio: SEEDED_H_TO_CORG_RATIO,
       });
       await tx.insert(schema.creditBatchProductionRuns).values({
         organizationId: DEC_ORG_ID,
@@ -494,7 +488,6 @@ export async function seedDurabilityBatch(
         productionProcessId,
         startDate: start,
         endDate: end,
-        hToCorgRatio: SEEDED_H_TO_CORG_RATIO,
       });
       await tx.insert(schema.creditBatchProductionRuns).values([
         { organizationId: DEC_ORG_ID, creditBatchId, productionRunId: run1Id },
@@ -533,8 +526,7 @@ export async function cleanupChainData(data: SeededChainData): Promise<void> {
       if (facilityBatches.length > 0) {
         const batchIds = facilityBatches.map((b) => b.id);
         // Samples anchor on the credit batch (issue #309) with a NO ACTION FK —
-        // delete them before their batches. (The by-run sample sweep further
-        // down only catches legacy run-linked rows.)
+        // delete them before their batches.
         await tx
           .delete(schema.samples)
           .where(inArray(schema.samples.creditBatchId, batchIds));
@@ -687,15 +679,6 @@ export async function cleanupChainData(data: SeededChainData): Promise<void> {
             .where(
               inArray(
                 schema.productionRunReadings.productionRunId,
-                facilityRunIds
-              )
-            );
-          // Delete samples linked to production runs
-          await tx
-            .delete(schema.samples)
-            .where(
-              inArray(
-                schema.samples.productionRunId,
                 facilityRunIds
               )
             );

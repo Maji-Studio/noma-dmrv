@@ -208,7 +208,7 @@ concurrent first save, serialized by the facility row lock) is refused as stale.
 A numeric version must match the locked factors row.
 
 Internal current-state commands bump without child preconditions: derived
-transport-leg sync, credit-batch auto-attachment and membership sample links, registry submission
+transport-leg sync, credit-batch auto-attachment, registry submission
 state, removal deletion, claim reservations, delivery stock-posting side effects,
 and facility archive/restore cascades.
 

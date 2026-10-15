@@ -142,15 +142,11 @@ function lineageQueryWhere(
       and(eq(productionRunFeedstocks.productionRunId, productionRuns.id), eq(productionRunFeedstocks.organizationId, ctx.organizationId)),
     )
     .leftJoin(feedstocks, and(eq(feedstocks.id, productionRunFeedstocks.feedstockId), eq(feedstocks.organizationId, ctx.organizationId)))
-    // A Sample anchors on the credit batch (issue #309); the run link is legacy
-    // provenance only, kept as a fallback so pre-re-grain rows stay guarded.
+    // A Sample anchors on its credit batch.
     .leftJoin(
       samples,
       and(
-        or(
-          eq(samples.creditBatchId, creditBatches.id),
-          eq(samples.productionRunId, productionRuns.id),
-        )!,
+        eq(samples.creditBatchId, creditBatches.id),
         eq(samples.organizationId, ctx.organizationId),
       ),
     )

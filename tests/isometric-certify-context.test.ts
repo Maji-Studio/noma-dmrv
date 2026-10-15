@@ -16,7 +16,7 @@ import {
 import {
   listDocumentsForEntityIds,
 } from "@/data-access/documents";
-import { getProductionRunsWithSamples } from "@/data-access/production-runs";
+import { getProductionRunsForCertification } from "@/data-access/production-runs";
 import { getCreditBatchesWithSamples } from "@/data-access/credit-batch-samples";
 import { getTransportLegsWithEvidenceForEntities } from "@/data-access/transport-legs";
 import {
@@ -62,7 +62,7 @@ vi.mock("@/data-access/credit-batch-accounting", () => ({
 }));
 
 vi.mock("@/data-access/production-runs", () => ({
-  getProductionRunsWithSamples: vi.fn(),
+  getProductionRunsForCertification: vi.fn(),
 }));
 
 vi.mock("@/data-access/credit-batch-samples", () => ({
@@ -100,7 +100,7 @@ const mockedGetMapping = vi.mocked(getCertifierProjectByFacility);
 const mockedHasCredentials = vi.mocked(hasCertifierCredentials);
 const mockedGetLineage = vi.mocked(getChainOfCustodyData);
 const mockedLoadAccounting = vi.mocked(loadCreditBatchRollups);
-const mockedGetRuns = vi.mocked(getProductionRunsWithSamples);
+const mockedGetRuns = vi.mocked(getProductionRunsForCertification);
 const mockedGetBatchesWithSamples = vi.mocked(getCreditBatchesWithSamples);
 const mockedListDocuments = vi.mocked(listDocumentsForEntityIds);
 const mockedGetLegs = vi.mocked(getTransportLegsWithEvidenceForEntities);
@@ -602,7 +602,6 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
         creditBatchCode: "CB-1",
         productionProcessId: null,
         sampling: "sampled",
-        declaredHToCorgRatio: null,
         durabilityOption: "200_year",
         runs: [{ id: "pr-1", code: "PR-1", biocharDryMassKg: 35 }],
         samples: [{ id: "s-1" } as never, { id: "s-2" } as never],
@@ -849,7 +848,6 @@ describe("requiredTransportCategories", () => {
         creditBatchCode: "CB-1",
         productionProcessId: null,
         sampling: "sampled",
-        declaredHToCorgRatio: null,
         durabilityOption: "1000_year",
         runs: [{ id: "pr-1", code: "PR-1", biocharDryMassKg: 35 }],
         samples: [

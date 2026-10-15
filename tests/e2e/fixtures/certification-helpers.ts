@@ -69,7 +69,6 @@ const DELIVERED_DRY_MASS_KG = deriveMassDryKg(
   DELIVERED_WET_MASS_KG,
   PRODUCT_MOISTURE_PCT,
 );
-const CREDIT_BATCH_H_TO_CORG_RATIO = 0.4;
 
 async function getFormulationBiocharRatio(
   tx: DbTransaction,
@@ -276,7 +275,6 @@ export async function seedGroupedRemovalWithChain(
         endDate: today,
         status: "draft",
         // Tier is inherited from the facility (ADR 0021), not a batch column.
-        hToCorgRatio: CREDIT_BATCH_H_TO_CORG_RATIO,
       });
       await tx.insert(schema.creditBatchProductionRuns).values({
         organizationId: DEC_ORG_ID,
@@ -434,9 +432,8 @@ export async function teardownWizardRemovalForBatch(
 //
 //   • a `samples` row carrying `organicCarbonPercent` + `hToCOrgRatio` — the
 //     CO₂e-stored preview's `weightedOrganicCarbonPercent`/`weightedHToCorgRatio`
-//     come from samples, NOT the credit batch's own `hToCorgRatio` column
-//     (lab-grade `samples`, not `production_samples` — see
-//     `getProductionRunsWithSamples`);
+//     come from batch-pooled lab `samples` via `getCreditBatchesWithSamples`,
+//     not the in-process `production_samples` measurements;
 //   • distance-based feedstock / sample legs; biochar inherits the delivery distance,
 //     so whichever categories the facility's default template requires are
 //     present AND aggregate cleanly (extra legs for unrequired categories are
@@ -779,7 +776,6 @@ export async function seedUngroupedReadyBatchWithChain(
         endDate: today,
         status: "draft",
         // Tier is inherited from the facility (ADR 0021), not a batch column.
-        hToCorgRatio: CREDIT_BATCH_H_TO_CORG_RATIO,
       });
       if (withLabAndRun) {
         await tx.insert(schema.creditBatchProductionRuns).values({

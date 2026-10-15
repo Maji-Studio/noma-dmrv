@@ -269,13 +269,11 @@ export const sampleFormSchema = z
       z.number({ error: R0_MEASUREMENT_COUNT_INTEGER_MESSAGE }).int(R0_MEASUREMENT_COUNT_INTEGER_MESSAGE).min(0).max(PG_INTEGER_MAX, "Measurement count is too large").nullable(),
     ).optional(),
     r0AnalysisDate: optionalCalendarDateSchema(),
-    r0HistogramFileUrl: z.string().max(2000).optional().nullable().or(z.literal("")),
 
     // Optional TGA non-reactive carbon
     reactiveCarbonPercent: optionalPercentInput,
     residualCarbonPercent: optionalPercentInput,
     tgaAnalysisDate: optionalCalendarDateSchema(),
-    tgaThermogramFileUrl: z.string().max(2000).optional().nullable().or(z.literal("")),
 
     // === Nutrient Claims (from sampleConditionSchema) ===
     nutrientClaimEnabled: z.boolean().default(false),
@@ -358,11 +356,9 @@ export const updateSampleSchema = z.object({
   sReflectanceFraction: z.number().min(0).max(1).optional().nullable(),
   r0MeasurementCount: z.number().int().min(0).max(PG_INTEGER_MAX, "Measurement count is too large").optional().nullable(),
   r0AnalysisDate: optionalCalendarDateSchema(),
-  r0HistogramFileUrl: z.string().max(2000).optional().nullable(),
   reactiveCarbonPercent: percentNumber.optional().nullable(),
   residualCarbonPercent: percentNumber.optional().nullable(),
   tgaAnalysisDate: optionalCalendarDateSchema(),
-  tgaThermogramFileUrl: z.string().max(2000).optional().nullable(),
   nutrientClaimEnabled: z.boolean().optional(),
   phosphorusPercent: percentNumber.optional().nullable(),
   potassiumPercent: percentNumber.optional().nullable(),

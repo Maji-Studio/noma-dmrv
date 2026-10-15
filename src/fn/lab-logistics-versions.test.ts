@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { DomainError } from "@/lib/domain-errors";
+import { ActionConflictError } from "@/lib/errors";
+import { conflictCode } from "@/lib/conflict-ref";
 import { STALE_VERSION_CONFLICT_CODE, STALE_VERSION_MESSAGE } from "@/lib/stale-version";
 const mocks = vi.hoisted(() => ({ write: vi.fn(), read: vi.fn() }));
 vi.mock("@/lib/auth/server", () => ({ requireOrgContext: async () => ({ organizationId: "org", userId: "user", orgRole: "owner", isPlatformAdmin: false }) }));
@@ -31,6 +33,13 @@ const cases = [
   { entity: "transportLeg", update: updateTransportLegFn, remove: deleteTransportLegFn, identity: { id: ID }, fields: { distanceKm: 10, loadMassKg: 1 } },
 ];
 beforeEach(() => { mocks.write.mockReset(); mocks.read.mockResolvedValue({ id: ID, code: "CODE" }); });
+it("preserves the Sample conflict from a refused credit batch delete", async () => {
+  const message = "This credit batch has Samples.";
+  const conflict = { entity: "sample", id: ID, code: conflictCode("SAM-1") };
+  mocks.write.mockRejectedValue(new ActionConflictError(message, conflict));
+  expect(await deleteCreditBatchFn({ creditBatchId: ID, expectedVersion: INITIAL_VERSION }))
+    .toEqual({ success: false, error: message, code: "conflict", conflict });
+});
 describe.each(cases)("$entity action versions", entry => {
   it("preserves the stale code and conflict from updates and deletes", async () => {
     const conflict = { entity: entry.entity, id: ID, code: STALE_VERSION_CONFLICT_CODE };

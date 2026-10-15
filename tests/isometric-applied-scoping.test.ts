@@ -3,21 +3,22 @@
  * issue #349, ADR 0020).
  *
  * `attributionByRunId` — the per-run applied fraction (linear mass
- * allocation) — scopes ONLY the STORED-bucket biochar mass and the chemistry
- * weights. PRODUCTION-bucket inputs (feedstock mass, diesel, electricity)
+ * allocation) — scopes ONLY the STORED-bucket biochar mass. PRODUCTION-bucket inputs (feedstock mass, diesel, electricity)
  * sum full run totals: they front-load once on the credit batch's claiming
  * GHG entry, with no applied-mass weighting. These tests pin that split —
  * a regression back to uniform proration MUST fail here.
  */
-import { describe, expect, it } from "vitest";
+import { describe, expect, expectTypeOf, it } from "vitest";
 import {
   aggregateProductionRuns,
-  type ProductionRunWithSamples,
+  enrichWithTransportLegs,
+  type AggregatedProductionData,
+  type ProductionRunForCertification,
 } from "@/lib/isometric/utils/aggregation";
 
 function run(
   overrides: Partial<Record<string, unknown>> = {},
-): ProductionRunWithSamples {
+): ProductionRunForCertification {
   return {
     id: "run-1",
     code: "RUN-1",
@@ -29,9 +30,8 @@ function run(
     preprocessingFuelLiters: 0,
     dieselGensetLiters: 50,
     electricityKwh: 200,
-    samples: [{ organicCarbonPercent: 80 }],
     ...overrides,
-  } as unknown as ProductionRunWithSamples;
+  } as unknown as ProductionRunForCertification;
 }
 
 describe("aggregateProductionRuns — emission-input buckets (§8.6.2)", () => {
@@ -122,49 +122,21 @@ describe("aggregateProductionRuns — emission-input buckets (§8.6.2)", () => {
     expect(agg.sourceProductionRunIds.sort()).toEqual(["a", "b"]);
   });
 
-  it("weights carbon content by applied mass, not raw output", () => {
-    const agg = aggregateProductionRuns(
-      [
-        run({
-          id: "a",
-          biocharDryMassKg: 1000,
-          samples: [{ organicCarbonPercent: 90 }],
-        }),
-        run({
-          id: "b",
-          biocharDryMassKg: 1000,
-          samples: [{ organicCarbonPercent: 70 }],
-        }),
-      ],
-      new Map([
-        ["a", 1.0], // weight 1000
-        ["b", 0.5], // weight 500
-      ]),
-    );
-    // (90·1000 + 70·500) / (1000 + 500) = 125000 / 1500
-    expect(agg.weightedOrganicCarbonPercent).toBeCloseTo(83.333, 2);
-  });
+  it("leaves chemistry to credit-batch Sample aggregation", () => {
+    const agg = aggregateProductionRuns([run()]);
+    expectTypeOf(agg).not.toExtend<AggregatedProductionData>();
+    expect(agg).not.toHaveProperty("weightedOrganicCarbonPercent");
+    expect(agg).not.toHaveProperty("weightedHToCorgRatio");
+    expect(agg).not.toHaveProperty("weightedOToCorgRatio");
+    expect(agg).not.toHaveProperty("weightedAshPercent");
+    expect(agg).not.toHaveProperty("weightedMoisturePercent");
 
-  it("drops a run with a zero attribution factor from weighted averages", () => {
-    const agg = aggregateProductionRuns(
-      [
-        run({
-          id: "a",
-          biocharDryMassKg: 1000,
-          samples: [{ organicCarbonPercent: 90 }],
-        }),
-        run({
-          id: "b",
-          biocharDryMassKg: 1000,
-          samples: [{ organicCarbonPercent: 10 }],
-        }),
-      ],
-      new Map([
-        ["a", 1.0],
-        ["b", 0],
-      ]),
-    );
-    // Run b contributes nothing — the average is run a's value alone.
-    expect(agg.weightedOrganicCarbonPercent).toBeCloseTo(90);
+    const enriched = enrichWithTransportLegs(agg, {
+      feedstock: [], biochar: [], sample: [],
+    });
+    expectTypeOf(enriched).not.toExtend<AggregatedProductionData>();
+    expect(enriched).not.toHaveProperty("weightedOrganicCarbonPercent");
+    expect(enriched).not.toHaveProperty("weightedHToCorgRatio");
+    expect(enriched).not.toHaveProperty("weightedOToCorgRatio");
   });
 });

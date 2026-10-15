@@ -6,7 +6,7 @@ import type {
   BatchHealthFixTarget,
 } from "@/lib/certification/batch-health";
 import { transportRepairDestination } from "@/lib/isometric/semantic-binding-catalog";
-import type { ProductionRunWithSamples } from "@/lib/isometric/utils/aggregation";
+import type { ProductionRunForCertification } from "@/lib/isometric/utils/aggregation";
 import type { CreditBatchWithSamples } from "@/data-access/credit-batch-samples";
 import type { TransportCategory } from "./certify-context-core";
 import type { TransportLegsByCategory } from "./shared";
@@ -49,7 +49,7 @@ function addIssueRecord(
 }
 
 export function buildEntityReadinessResult(
-  runs: ProductionRunWithSamples[],
+  runs: ProductionRunForCertification[],
   batchesWithSamples: CreditBatchWithSamples[],
   transportLegs: TransportLegsByCategory,
   requiredTransportCategories: readonly TransportCategory[],

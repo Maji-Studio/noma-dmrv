@@ -27,7 +27,6 @@ import { feedstocks } from "@/db/schema/feedstock";
 import {
   productionRuns,
   productionRunFeedstocks,
-  samples,
 } from "@/db/schema/production";
 import { assertCreditBatchProductionWindow } from "./credit-batch-production-window";
 import { productionRunDateExpr } from "./production-runs/date-expr";
@@ -708,15 +707,6 @@ export async function attachProductionRunToMatchingCreditBatch(
   await tx.update(creditBatches)
     .set({ version: nextVersion(creditBatches.version), updatedAt: new Date() })
     .where(and(eq(creditBatches.id, batch.id), eq(creditBatches.organizationId, ctx.organizationId)));
-  await tx
-    .update(samples)
-    .set({ version: nextVersion(samples.version), creditBatchId: batch.id, updatedAt: new Date() })
-    .where(
-      and(
-        eq(samples.productionRunId, productionRunId),
-        eq(samples.organizationId, ctx.organizationId),
-      ),
-    );
 
   return batch.id;
 }

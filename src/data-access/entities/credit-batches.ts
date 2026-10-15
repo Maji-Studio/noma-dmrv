@@ -37,7 +37,6 @@ export async function getCreditBatchesEntity(ctx: OrgContext, params: {
     conditions.push(
       or(
         ilike(creditBatches.code, searchPattern),
-        ilike(creditBatches.registry, searchPattern),
         sql`${creditBatches.startDate}::text ILIKE ${searchPattern}`,
         sql`${creditBatches.endDate}::text ILIKE ${searchPattern}`,
         sql`to_char(${creditBatches.startDate}, 'Mon FMDD') ILIKE ${searchPattern}`,
