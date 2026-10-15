@@ -7,7 +7,7 @@ import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { documents, facilities, storageObjectDeletions, users } from "@/db/schema";
 import { LocalFsProvider } from "@/lib/storage/local-fs";
-import { ensureTestOrg, makeTestOrgContext } from "./helpers/test-org";
+import { ensureTestOrg, makeTestOrgContext, TEST_SITE_POSITION } from "./helpers/test-org";
 import { requestDocumentUploadInTransaction, confirmDocumentUploadInTransaction } from "@/data-access/document-writes";
 import { prepareDocumentUpload } from "@/lib/documents/upload-preparation";
 vi.mock("@/lib/auth/server", () => ({ requireOrgContext: vi.fn() }));
@@ -21,7 +21,7 @@ beforeAll(async () => {
   await db.insert(users).values({ id: ctx.userId, email: "document-test@example.test" }).onConflictDoNothing();
   root = await mkdtemp(join(tmpdir(), "document-confirm-"));
   provider = new LocalFsProvider({ root, appUrl: "http://localhost", signingSecret: "test" });
-  const [facility] = await db.insert(facilities).values({ organizationId: ctx.organizationId, code: `DOC-${Date.now()}`, name: "Document test", timezone: "UTC" }).returning(); facilityId = facility.id;
+  const [facility] = await db.insert(facilities).values({ ...TEST_SITE_POSITION, organizationId: ctx.organizationId, code: `DOC-${Date.now()}`, name: "Document test", timezone: "UTC" }).returning(); facilityId = facility.id;
 });
 afterAll(async () => {
   await cleanupDocumentUploads(ctx, documentIds);

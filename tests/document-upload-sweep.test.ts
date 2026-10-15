@@ -15,6 +15,7 @@ import { __setStorageProviderForTests } from "@/lib/storage";
 import { RetirementStorageProvider } from "./helpers/document-retirement";
 import { waitForBlockedOperations } from "./helpers/operation-barrier";
 import { cleanupDocumentUploads } from "./helpers/document-upload-cleanup";
+import { TEST_SITE_POSITION } from "./helpers/test-org";
 
 const MINUTE_MS = 60_000;
 const DRAIN_BUDGET_MS = 2_000;
@@ -35,7 +36,7 @@ beforeAll(async () => {
     await db.insert(schema.organizations).values({ id: ctx.organizationId, name: "Upload sweep test", slug: ctx.organizationId });
     await db.insert(schema.users).values({ id: ctx.userId, email: `${ctx.userId}@example.test` });
   }
-  const [facility] = await db.insert(schema.facilities).values({ organizationId: contexts[0].organizationId, code: "SWEEP", name: "Sweep fixture", timezone: "UTC" }).returning();
+  const [facility] = await db.insert(schema.facilities).values({ ...TEST_SITE_POSITION, organizationId: contexts[0].organizationId, code: "SWEEP", name: "Sweep fixture", timezone: "UTC" }).returning();
   facilityId = facility.id;
   __setStorageProviderForTests(provider);
 });

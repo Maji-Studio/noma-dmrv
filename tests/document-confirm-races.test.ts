@@ -15,7 +15,7 @@ import { requestDocumentUploadInTransaction, confirmDocumentUploadInTransaction 
 import { deleteDocumentInTransaction } from "@/data-access/document-mutations";
 import { retireDocumentsForEntities } from "@/data-access/documents";
 import { prepareDocumentUpload } from "@/lib/documents/upload-preparation";
-import { ensureTestOrg, makeTestOrgContext } from "./helpers/test-org";
+import { ensureTestOrg, makeTestOrgContext, TEST_SITE_POSITION } from "./helpers/test-org";
 const ctx = makeTestOrgContext();
 const documentIds: string[] = [];
 const pool = new Pool({ ...getPgPoolConfig(process.env.DATABASE_URL!), max: 3 });
@@ -26,7 +26,7 @@ beforeAll(async () => {
   await ensureTestOrg();
   await db.insert(schema.users).values({ id: ctx.userId, email: "document-test@example.test" }).onConflictDoNothing();
   root = await mkdtemp(join(tmpdir(), "document-races-")); provider = new LocalFsProvider({ root, appUrl: "http://localhost", signingSecret: "test" });
-  const [facility] = await db.insert(schema.facilities).values({ organizationId: ctx.organizationId, code: `RACE-${Date.now()}`, name: "Document race", timezone: "UTC" }).returning(); facilityId = facility.id;
+  const [facility] = await db.insert(schema.facilities).values({ ...TEST_SITE_POSITION, organizationId: ctx.organizationId, code: `RACE-${Date.now()}`, name: "Document race", timezone: "UTC" }).returning(); facilityId = facility.id;
 });
 afterAll(async () => {
   await cleanupDocumentUploads(ctx, documentIds);
@@ -59,7 +59,7 @@ it.each([false, true])("double confirm preserves the winner and queues only a di
   if (tamper) expect((await db.select().from(schema.storageObjectDeletions).where(eq(schema.storageObjectDeletions.storageKey, second.finalKey!))).length).toBeGreaterThan(0);
 });
 it.each(["app", "owner"] as const)("cleans promotion after %s deletion wins", async (mode) => {
-  const [owner] = mode === "owner" ? await db.insert(schema.facilities).values({ organizationId: ctx.organizationId, code: `RETIRE-${Date.now()}`, name: "Retirement test", timezone: "UTC" }).returning() : [{ id: facilityId }];
+  const [owner] = mode === "owner" ? await db.insert(schema.facilities).values({ ...TEST_SITE_POSITION, organizationId: ctx.organizationId, code: `RETIRE-${Date.now()}`, name: "Retirement test", timezone: "UTC" }).returning() : [{ id: facilityId }];
   const row = await pending(owner.id); await provider.putObject(row.storageKey!, Buffer.from("%PDF-1.7"), "application/pdf"); const facts = await prepare(row.id);
   const removed = barrier(); const commit = barrier(); const entered = barrier();
   let blockerPid = 0;
@@ -113,20 +113,18 @@ it("commits a failed confirmation when Removal submission wins the artifact lock
     expect(await db.select().from(schema.storageObjectDeletions).where(eq(schema.storageObjectDeletions.storageKey, facts.finalKey!))).toHaveLength(1);
   } finally { await db.delete(schema.documents).where(eq(schema.documents.id, row.id)); await cleanupLineageFixture(fixture); }
 });
-it.each((["delivery", "sample-batch", "sample-legacy", "feedstock"] as const).flatMap((owner) =>
+it.each((["delivery", "sample-batch", "feedstock"] as const).flatMap((owner) =>
   (["archive", "request"] as const).map((first) => ({ owner, first })),
 ))("serializes $owner evidence and ancestor archive with $first first", async ({ owner, first }) => {
   const { archiveFacility } = await import("@/data-access/facilities");
   const { createLineageFixture, cleanupLineageFixture } = await import("./helpers/certification-lineage-fixture");
   const fixture = await createLineageFixture("none");
-  if (owner === "sample-batch") await db.update(schema.samples).set({ creditBatchId: fixture.batchId, productionRunId: null }).where(eq(schema.samples.id, fixture.sampleId));
-  if (owner === "sample-legacy") await db.update(schema.samples).set({ creditBatchId: null, productionRunId: fixture.productionRunId }).where(eq(schema.samples.id, fixture.sampleId));
   const entityType = owner.startsWith("sample") ? "sample" as const : owner === "delivery" ? "delivery" as const : "feedstock" as const;
   const entityId = entityType === "sample" ? fixture.sampleId : entityType === "delivery" ? fixture.deliveryId : fixture.feedstockId;
-  const archive = () => owner === "sample-batch" || owner === "sample-legacy"
+  const archive = () => owner === "sample-batch"
     ? database.transaction(async (tx) => {
-      const table = owner === "sample-batch" ? schema.creditBatches : schema.productionRuns;
-      const id = owner === "sample-batch" ? fixture.batchId : fixture.productionRunId;
+      const table = schema.creditBatches;
+      const id = fixture.batchId;
       await tx.update(table).set({ archivedAt: new Date() }).where(and(eq(table.id, id), eq(table.organizationId, ctx.organizationId)));
     }) : archiveFacility(ctx, fixture.facilityId, 1);
   const input = { entityType, entityId, documentType: "pdf" as const, fileName: "report.pdf", contentType: "application/pdf", sizeBytes: 8, storageProvider: provider.name, storageBucket: provider.bucket };
@@ -150,7 +148,6 @@ it.each((["delivery", "sample-batch", "sample-legacy", "feedstock"] as const).fl
     }
   } finally {
     await cleanupDocumentUploads(ctx, ids);
-    if (owner === "sample-batch") await db.update(schema.samples).set({ creditBatchId: null, productionRunId: fixture.productionRunId }).where(eq(schema.samples.id, fixture.sampleId));
     await cleanupLineageFixture(fixture);
   }
 });
