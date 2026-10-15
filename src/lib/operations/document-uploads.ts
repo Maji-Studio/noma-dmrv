@@ -4,17 +4,16 @@ import { representDocument, type DocumentRepresentation } from "@/lib/representa
 import { getStorageProvider } from "@/lib/storage";
 import { DomainError } from "@/lib/domain-errors";
 import { requestDocumentUploadInput } from "@/schemas/document-input";
+import { linkDocumentActivity } from "./activity-links";
+import { describeRequestedDocument } from "./document-effects";
 import type { Operation } from "./runner";
 
 export const requestDocumentUpload: Operation<typeof requestDocumentUploadInput, DocumentRepresentation> = {
   id: "request_document_upload",
   input: requestDocumentUploadInput,
   supportsDryRun: false,
-  describe: (input, output) => ({
-    outcome: "created", entityType: "document", entityIds: [output.id],
-    versionBefore: null, versionAfter: output.version, changedFields: Object.keys(input).sort(),
-  }),
-  execute: async ({ ctx, tx }, { ownerType, ownerId, capturedAt, ...declaration }) => {
+  describe: describeRequestedDocument,
+  execute: async ({ ctx, tx, activity }, { ownerType, ownerId, capturedAt, ...declaration }) => {
     const provider = getStorageProvider();
     try {
       const document = await requestDocumentUploadInTransaction(ctx, tx, {
@@ -22,6 +21,7 @@ export const requestDocumentUpload: Operation<typeof requestDocumentUploadInput,
         capturedAt: capturedAt ? new Date(capturedAt).toISOString() : undefined,
         storageProvider: provider.name, storageBucket: provider.bucket,
       });
+      linkDocumentActivity(activity, document);
       return representDocument(document);
     } catch (error) {
       if (error instanceof DomainError && (error.code === "not_found" || error.code === "certification_locked")) {

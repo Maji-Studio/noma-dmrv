@@ -5,6 +5,7 @@ import { STOCK_CONFLICT_ENTITY } from "@/lib/stock-conflict-entities";
 import { recordOutputStockMovementInput } from "@/schemas/output-stock-movement-input";
 import { resolveEventInstant } from "./event-times";
 import type { OperationEffect } from "@/lib/operation-effect";
+import { singleProductionRunId } from "./activity-links";
 import type { Operation } from "./runner";
 
 /**
@@ -35,15 +36,17 @@ export const recordOutputStockMovement: Operation<typeof recordOutputStockMoveme
   input: recordOutputStockMovementInput,
   supportsDryRun: true,
   describe: (input, output) => describeRecordedMovement(input, output.movementId),
-  execute: ({ ctx, tx, snapshotStock }, { idempotencyKey, occurredAt, facilityId, requireLatestCorrection, ...command }) => withOutputStockErrors(async () => {
+  execute: ({ ctx, tx, snapshotStock, activity }, { idempotencyKey, occurredAt, facilityId, requireLatestCorrection, ...command }) => withOutputStockErrors(async () => {
     // The bin supplies the facility and the zone a facility-local time is read in.
     const bin = await readOutputStockBin(ctx, tx, { storageLocationId: command.storageLocationId, facilityId });
-    return recordOutputStockMovementInTransaction(ctx, tx, {
+    const result = await recordOutputStockMovementInTransaction(ctx, tx, {
       ...command,
       facilityId: bin.facilityId,
       occurredAt: resolveEventInstant(occurredAt, bin.timeZone, ["occurredAt"]).toISOString(),
       idempotencyKey: idempotencyKey ?? `${GENERATED_MOVEMENT_KEY_PREFIX}${randomUUID()}`,
-    }, { snapshotStock, ...(requireLatestCorrection ? { requireLatestCorrection } : {}) });
+    }, { snapshotStock, onReplay: activity.skip, ...(requireLatestCorrection ? { requireLatestCorrection } : {}) });
+    activity.link({ facilityId: bin.facilityId, productionRunId: singleProductionRunId(result.preview.allocations.flatMap(allocation => allocation.runs.map(run => run.productionRunId))) });
+    return result;
   }, {
     // A short sub-bin points at its entry in `sources`; anything else at the mass.
     shortage: (detail) => {

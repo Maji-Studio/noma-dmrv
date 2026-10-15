@@ -6,7 +6,7 @@ import { db, type DbTransaction } from "@/db";
 import {
   biocharProducts, biocharProductSourceAllocations, binMovements, deliveries,
   formulations, orders, outputStockAllocations, outputStockMoistureReadings, outputStockRunAllocations,
-  applicationOutputAllocations, applications, customerLocations, facilities, productionRuns,
+  activityEvents, applicationOutputAllocations, applications, customerLocations, facilities, productionRuns,
   reactors, storageLocations, users, productIngredientSnapshots, type Delivery,
 } from "@/db/schema";
 
@@ -289,6 +289,7 @@ export async function deleteOutputProductFixtures(executor: Executor, predicate:
 
 export async function deleteOutputFacilityFixtures(executor: Executor, predicate: SQL | undefined) {
   const rows = await executor.select({ id: facilities.id }).from(facilities).where(predicate);
+  if (rows.length) await executor.delete(activityEvents).where(inArray(activityEvents.facilityId, rows.map(row => row.id)));
   for (const row of rows) await cleanupOutputFixtureParents(executor, row.id);
   return executor.delete(facilities).where(predicate);
 }

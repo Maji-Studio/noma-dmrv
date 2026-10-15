@@ -11,7 +11,7 @@ import { API_DOCUMENT_OWNERS, allowsApiDocumentType } from "./api-owners";
 import { failedDocumentUpload, type ApiConfirmOutcome } from "./confirm-outcome";
 import { preparePendingDocumentUpload } from "./upload-preparation";
 
-type ConfirmOptions = Pick<RunOptions, "audit" | "pool"> & { deadlineAt: number };
+type ConfirmOptions = Pick<RunOptions, "audit" | "pool" | "activitySource"> & { deadlineAt: number };
 
 /**
  * Shared REST/MCP command. E1: deliberately forwards no idempotency option.
@@ -38,7 +38,7 @@ export async function confirmDocumentUpload(ctx: OrgContext, input: unknown, opt
   if (prepared.kind !== "prepared") return prepared;
   const deadlineMs = deadlineAt - Date.now();
   const outcome = (await runOperation(confirmInspectedDocumentUpload, ctx, { ...prepared.facts, cleanupDeadlineAt: deadlineAt }, {
-    audit: options.audit, pool: options.pool, deadlineMs: Math.max(DOCUMENT_CONFIRM_DB_RESERVE_MS, deadlineMs),
+    activitySource: options.activitySource, audit: options.audit, pool: options.pool, deadlineMs: Math.max(DOCUMENT_CONFIRM_DB_RESERVE_MS, deadlineMs),
   })).data;
   delete outcome.transitioned;
   return outcome;
