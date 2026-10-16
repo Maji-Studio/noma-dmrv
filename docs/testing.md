@@ -101,6 +101,12 @@ echo "TEST_DATABASE_URL=postgresql://postgres:postgres@localhost:5433/noma_dmrv_
 Re-run the migrate line after pulling new migrations. A worktree made with
 `scripts/worktree.sh` gets its own test database.
 
+Vitest checks the test DB's migration count and latest timestamp before suites
+load and reports how to migrate a stale DB. A DB ahead of or diverged from this
+branch's journal must be reset or recreated. It never repairs the DB automatically.
+Set `VITEST_SKIP_MIGRATION_CHECK=1` for pure unit runs without a DB; the check
+also skips when no DB URL is configured.
+
 ## Agent evaluation
 
 `pnpm eval:mcp` runs two feedstock intake requests, two chained production-run
@@ -315,10 +321,7 @@ copies of `.env.local` and `.env.test`, installs, resets the dev DB and migrates
 the test DB. It cuts the branch with `--no-track`, so a bare `git push` never
 targets `staging`. It does not seed; run `pnpm db:seed` there if you need data.
 
-Vitest checks the test DB's migration count and latest timestamp before suites
-load and reports how to migrate or reset a stale or diverged worktree test DB.
-It never repairs the DB automatically. Set `VITEST_SKIP_MIGRATION_CHECK=1` for
-pure unit runs without a DB; the check also skips when no DB URL is configured.
+See [the Vitest migration preflight](#vitest-only-runs-against-a-throwaway-database) for migration and reset guidance.
 
 - Start the dev server with the one-line command `new` prints, in your own
   terminal: background commands from an agent stop after two hours. Don't use

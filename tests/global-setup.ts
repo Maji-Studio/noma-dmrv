@@ -33,10 +33,11 @@ export default async function setup() {
     const status = missing > 0 ? `is missing ${missing} migration(s)` : "has diverged migration history";
     const latestTag = journal.entries.find((entry) => entry.when === latest)?.tag ?? applied.latest ?? "none";
     const dbName = decodeURIComponent(new URL(databaseUrl).pathname.slice(1));
+    const remedy = missing > 0
+      ? "Run: TEST_DATABASE_URL=<test-db-url> DATABASE_URL=<test-db-url> pnpm db:migrate (or reset the worktree test DB)"
+      : "The test DB is ahead of or diverged from this branch's journal. Reset it: scripts/worktree.sh teardown <name> and new again, or drop the test DB and migrate it from empty";
     throw new Error(
-      `Test database ${dbName} ${status} (latest applied ${latestTag}, expected ${expected.tag}). Run: ` +
-      "TEST_DATABASE_URL=<test-db-url> DATABASE_URL=<test-db-url> pnpm db:migrate " +
-      "(or reset the worktree test DB)",
+      `Test database ${dbName} ${status} (latest applied ${latestTag}, expected ${expected.tag}). ${remedy}`,
     );
   } finally {
     await client.end();

@@ -26,9 +26,8 @@ vi.mock("@/lib/auth/server", async (importOriginal) => ({
 // env. Four slots allow two writers plus credential checks; barriers/observers
 // use a different pool. The lock budget exceeds the bounded observer polling.
 const poolEnv = vi.hoisted(() => {
-  const original = { max: process.env.DB_POOL_MAX, lockTimeout: process.env.DB_POOL_LOCK_TIMEOUT_MS };
+  const original = process.env.DB_POOL_MAX;
   process.env.DB_POOL_MAX = "4";
-  process.env.DB_POOL_LOCK_TIMEOUT_MS = "5000";
   return original;
 });
 
@@ -56,10 +55,8 @@ afterEach(async () => {
 });
 afterAll(async () => {
   await barrierPool.end();
-  if (poolEnv.max === undefined) delete process.env.DB_POOL_MAX;
-  else process.env.DB_POOL_MAX = poolEnv.max;
-  if (poolEnv.lockTimeout === undefined) delete process.env.DB_POOL_LOCK_TIMEOUT_MS;
-  else process.env.DB_POOL_LOCK_TIMEOUT_MS = poolEnv.lockTimeout;
+  if (poolEnv === undefined) delete process.env.DB_POOL_MAX;
+  else process.env.DB_POOL_MAX = poolEnv;
 });
 
 describe("feedstock REST concurrency", { timeout: SUITE_TIMEOUT_MS }, () => {
