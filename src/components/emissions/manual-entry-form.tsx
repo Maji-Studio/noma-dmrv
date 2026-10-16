@@ -25,7 +25,7 @@ import {
 import { useDeferredAttachments } from "@/hooks/use-deferred-attachments";
 import {
   useCreateEmissionEntry,
-  useDeleteEmissionEntry,
+  useReplaceEmissionEntry,
   useUpdateEmissionEntry,
   type EmissionBatchScope,
   invalidateEmissionEntryReads,
@@ -54,7 +54,7 @@ import {
 export type EntryFormMode =
   | { kind: "add" }
   | { kind: "edit"; entry: EmissionEntry }
-  /** Re-enter a stopped entry: save a new one, then delete the old. */
+  /** Re-enter a stopped entry: one replace call; its files move to the new entry. */
   | { kind: "again"; entry: EmissionEntry };
 
 const TITLES: Record<EntryFormMode["kind"], string> = {
@@ -90,8 +90,8 @@ export function ManualEntryForm({ line, batch, scope, today, mode, onCancel, onS
   const queryClient = useQueryClient();
   const createEntry = useCreateEmissionEntry(scope);
   const updateEntry = useUpdateEmissionEntry(scope);
-  const deleteEntry = useDeleteEmissionEntry(scope);
-  const saving = createEntry.isPending || updateEntry.isPending || deleteEntry.isPending || attachments.attachments.some((a) => a.status === "uploading");
+  const replaceEntry = useReplaceEmissionEntry(scope);
+  const saving = createEntry.isPending || updateEntry.isPending || replaceEntry.isPending || attachments.attachments.some((a) => a.status === "uploading");
   const replacesNothing = mode.kind !== "edit" && !!nothingEntry(line);
   const computed = draftMassDistanceFigure(line, draft);
   const idPrefix = `entry-${line.componentId}`;
@@ -104,7 +104,7 @@ export function ManualEntryForm({ line, batch, scope, today, mode, onCancel, onS
     const dateError = single ? null : validateEntryDate(date, today, batch.startDate);
     if (dateError) next.date = dateError;
     const trimmedNote = note.trim() || null;
-    // Checked here so Enter again never deletes the stopped entry before a create the server refuses.
+    // Checked here to fail fast, before the server call.
     if (trimmedNote && trimmedNote.length > MAX_NOTE_LENGTH) next.note = NOTE_TOO_LONG_MESSAGE;
     setErrors(next);
     setServerError(null);
@@ -120,11 +120,11 @@ export function ManualEntryForm({ line, batch, scope, today, mode, onCancel, onS
       if (mode.kind === "edit") {
         const saved = await updateEntry.mutateAsync({ id: mode.entry.id, expectedVersion: mode.entry.version, occurredOn, note: trimmedNote, values });
         entryId = saved.id;
+      } else if (mode.kind === "again") {
+        const replaced = await replaceEntry.mutateAsync({ id: mode.entry.id, expectedVersion: mode.entry.version, occurredOn, note: trimmedNote, values });
+        entryId = replaced.id;
       } else {
-        // A single line allows one value entry, so the stopped one goes first.
-        if (mode.kind === "again" && single) await deleteEntry.mutateAsync({ id: mode.entry.id, expectedVersion: mode.entry.version });
         const created = await createEntry.mutateAsync({ creditBatchId: scope.creditBatchId, componentId: line.componentId, occurredOn, note: trimmedNote, values });
-        if (mode.kind === "again" && !single) await deleteEntry.mutateAsync({ id: mode.entry.id, expectedVersion: mode.entry.version });
         entryId = created.id;
       }
       if (attachments.hasHeld) {
@@ -164,7 +164,7 @@ export function ManualEntryForm({ line, batch, scope, today, mode, onCancel, onS
           {replacesNothing && <Notice tone="warning">{`This replaces Nothing to record on ${line.displayName}.`}</Notice>}
           {mode.kind === "again" && (
             <p className="body-small text-[var(--color-text-secondary)]">
-              The earlier entry stopped counting after a template change. Saving replaces it.
+              The earlier entry stopped counting after a template change. Saving replaces it and keeps its files.
             </p>
           )}
           <div className={fields.length > 1 ? "grid grid-cols-1 gap-x-16 gap-y-20 sm:grid-cols-2" : "flex flex-col"}>
@@ -204,7 +204,7 @@ export function ManualEntryForm({ line, batch, scope, today, mode, onCancel, onS
           )}
           <FormField id={`${idPrefix}-file`} label="File" certifyRequired>
             <div className="flex flex-col gap-8">
-              {mode.kind === "edit" && mode.entry.documentCount > 0 && <EntryFileNames entry={mode.entry} />}
+              {mode.kind !== "add" && mode.entry.documentCount > 0 && <EntryFileNames entry={mode.entry} />}
               <FormFileUpload
                 id={`${idPrefix}-file`}
                 accept={ENTRY_FILE_ACCEPT}
