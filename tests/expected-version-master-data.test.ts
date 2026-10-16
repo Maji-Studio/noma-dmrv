@@ -18,7 +18,7 @@ import { updateFacility } from "@/data-access/facility-mutations";
 import { archiveFacility, restoreFacility } from "@/data-access/facilities";
 import { updateReactor, deleteReactor } from "@/data-access/reactors";
 import { updateStorageLocation, archiveStorageLocation, restoreStorageLocation, deleteStorageLocation } from "@/data-access/storage-locations";
-import { createSupplierLocation, updateSupplierLocation, deleteSupplierLocation } from "@/data-access/suppliers";
+import { createSupplierLocation, updateSupplierLocation, deleteSupplierLocation } from "./helpers/supplier-location-operations";
 import { createCustomerLocation, updateCustomerLocation, deleteCustomerLocation } from "@/data-access/customers";
 import { updateFormulationInTransaction, deleteFormulationInTransaction } from "@/data-access/formulation-writes";
 import { updateFeedstockType, archiveFeedstockType, unarchiveFeedstockType, deleteFeedstockType } from "@/data-access/feedstock-types";

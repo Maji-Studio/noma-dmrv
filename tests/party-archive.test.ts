@@ -15,7 +15,8 @@ import { runOperation, runOperationInProcess, type RunOptions } from "@/lib/oper
 import { orderInput, createOrderDestination } from "./helpers/order-operation-fixture";
 import { createPartyArchiveFixture, cleanupPartyArchiveFixture, partyIntakeInput, type PartyArchiveFixture as OrderFixture } from "./helpers/party-archive-fixture";
 
-import { getSuppliers, getSupplierById, getSupplierLocationsBySupplier, createSupplierLocation, updateSupplierLocation, deleteSupplierLocation } from "@/data-access/suppliers";
+import { getSuppliers, getSupplierById, getSupplierLocationsBySupplier } from "@/data-access/suppliers";
+import { createSupplierLocation, updateSupplierLocation, deleteSupplierLocation } from "./helpers/supplier-location-operations";
 import { createSupplierLocationInTransaction } from "@/data-access/supplier-writes";
 import { getCustomers, getCustomerWithRelations, getCustomerLocations, createCustomerLocation, updateCustomerLocation, deleteCustomerLocation } from "@/data-access/customers";
 import { getEntities, getEntityById } from "@/data-access/entities";
@@ -249,7 +250,7 @@ describe("archived parties on new references", { timeout: TIMEOUT_MS }, () => {
 });
 
 describe("archived party locations and reads", { timeout: TIMEOUT_MS }, () => {
-  it("refuses location add and update under archived parties, permits deletion and preserves parent versions", async () => {
+  it("refuses supplier location edits under archived parents and preserves parent versions", async () => {
     const f = await fixture();
     const supplier = (await runOperationInProcess(supplierOps.createSupplier, f.ctx, { name: "E2E Locations supplier", locations: [site] })).supplier;
     const [source] = await getSupplierLocationsBySupplier(f.ctx, supplier.id);
@@ -263,9 +264,9 @@ describe("archived party locations and reads", { timeout: TIMEOUT_MS }, () => {
       await expect(createCustomerLocation(f.ctx, { ...site, customerId: f.customer.id, facilityDistances, isDefault: true })).rejects.toMatchObject(issue("not_found", "customer"));
       await expect(updateCustomerLocation(f.ctx, f.location.id, { expectedVersion: f.location.version, isDefault: true, facilityDistances })).rejects.toMatchObject(issue("not_found", "customer"));
     }
-    await deleteSupplierLocation(f.ctx, source.id, source.version);
+    await expect(deleteSupplierLocation(f.ctx, source.id, source.version)).rejects.toMatchObject(issue("not_found", "supplier"));
     await deleteCustomerLocation(f.ctx, f.location.id, f.location.version);
-    expect(await getSupplierLocationsBySupplier(f.ctx, supplier.id)).toEqual([]);
+    expect(await getSupplierLocationsBySupplier(f.ctx, supplier.id)).toEqual([source]);
     expect(await getCustomerLocations(f.ctx, f.customer.id)).toEqual([]);
     expect(await getSupplierById(f.ctx, supplier.id)).toMatchObject({ version: 2, archivedAt: expect.any(Date) });
     expect(await getCustomerWithRelations(f.ctx, f.customer.id)).toMatchObject({ version: 2, archivedAt: expect.any(Date) });

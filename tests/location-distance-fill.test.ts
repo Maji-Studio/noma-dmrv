@@ -3,7 +3,7 @@ import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { customerLocations, deliveries, feedstocks, orders, supplierLocations } from "@/db/schema";
 import { updateCustomerLocation } from "@/data-access/customers";
-import { createSupplierLocation, updateSupplierLocation } from "@/data-access/suppliers";
+import { createSupplierLocation, updateSupplierLocation } from "./helpers/supplier-location-operations";
 import { getTransportLegsForEntity } from "@/data-access/transport-legs";
 import * as transportLegWriters from "@/data-access/transport-legs";
 import * as locationDistanceFill from "@/data-access/location-distance-fill";

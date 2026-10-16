@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { db } from "@/db";
 import { eq } from "drizzle-orm";
 import { createFeedstockInTransaction } from "@/data-access/feedstocks";
-import { createSupplierLocation, updateSupplierLocation } from "@/data-access/suppliers";
+import { createSupplierLocation, updateSupplierLocation } from "./helpers/supplier-location-operations";
 import { facilities, orders, feedstocks, supplierLocations } from "@/db/schema";
 import { updateCustomerLocation, getCustomerLocations } from "@/data-access/customers";
 import { getLocationFacilityDistances } from "@/data-access/location-facility-distances";

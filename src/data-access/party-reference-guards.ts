@@ -32,10 +32,22 @@ export async function lockCustomerReference(ctx: OrgContext, tx: DbTransaction, 
   return customer;
 }
 
-/** Acquire the complete facility set before inserting the parent or any child. */
-export async function lockPartyFacilities(ctx: OrgContext, tx: DbTransaction, locations: { facilityDistances?: FacilityDistanceInput[] }[]): Promise<void> {
+/**
+ * Lock non-null references in id order, retaining the caller's input pointers.
+ * Retained references (stored pairs a default promotion fills from) join the
+ * same sorted pass and point at `retained.pointer`, since the request omitted them.
+ */
+export async function lockLocationFacilities(
+  ctx: OrgContext, tx: DbTransaction, pairs: FacilityDistanceInput[] | undefined,
+  pointerPrefix: DomainIssue["path"],
+  retained: { facilityIds: string[]; pointer: DomainIssue["path"] } = { facilityIds: [], pointer: [] },
+): Promise<void> {
   requireOrgScope(ctx);
-  const references = locations.flatMap((location, i) => (location.facilityDistances ?? []).map((pair, j) => ({ id: pair.facilityId, path: ["locations", i, "facilityDistances", j, "facilityId"] })));
+  const supplied = (pairs ?? []).flatMap((pair, j) => pair.distanceKm === null ? [] : [{
+    id: pair.facilityId, path: [...pointerPrefix, "facilityDistances", j, "facilityId"],
+  }]);
+  const suppliedIds = new Set((pairs ?? []).map(pair => pair.facilityId));
+  const references = [...supplied, ...retained.facilityIds.filter(id => !suppliedIds.has(id)).map(id => ({ id, path: retained.pointer }))];
   references.sort((a, b) => a.id.localeCompare(b.id));
   const seen = new Set<string>();
   for (const reference of references) {
@@ -46,5 +58,13 @@ export async function lockPartyFacilities(ctx: OrgContext, tx: DbTransaction, lo
       throw error;
     }
     seen.add(reference.id);
+  }
+}
+
+/** Acquire each location's facility set before inserting the parent or children. */
+export async function lockPartyFacilities(ctx: OrgContext, tx: DbTransaction, locations: { facilityDistances?: FacilityDistanceInput[] }[]): Promise<void> {
+  requireOrgScope(ctx);
+  for (const [i, location] of locations.entries()) {
+    await lockLocationFacilities(ctx, tx, location.facilityDistances, ["locations", i]);
   }
 }

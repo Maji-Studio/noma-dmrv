@@ -29,7 +29,7 @@ import {
   suppliers,
   transportLegs,
 } from "@/db/schema";
-import { updateSupplierLocation } from "@/data-access/suppliers";
+import { updateSupplierLocation } from "./helpers/supplier-location-operations";
 import { getTransportDistanceFixLinks } from "@/data-access/transport-distance-fix-links";
 import { missingFeedstockTransportIds } from "@/lib/certification/submission-readiness";
 import { updateCustomerLocation } from "@/data-access/customers";

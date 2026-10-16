@@ -10,7 +10,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { beforeAll, describe, expect, it } from "vitest";
 import { db } from "@/db";
 import { customers, customerLocations, suppliers, supplierLocations, facilities, feedstockTypes, feedstocks } from "@/db/schema";
-import { createSupplierLocation, deleteSupplierLocation, updateSupplierLocation } from "@/data-access/suppliers";
+import { createSupplierLocation, deleteSupplierLocation, updateSupplierLocation } from "./helpers/supplier-location-operations";
 import { createCustomerLocation, deleteCustomerLocation, updateCustomerLocation } from "@/data-access/customers";
 import { TEST_SITE_POSITION, ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
 

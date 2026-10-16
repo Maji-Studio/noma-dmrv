@@ -34,3 +34,7 @@ export function customerHasOrders(orderCodes: string[] = []): DomainError {
 export function customerHasStorageSites(locationIds: string[] = []): DomainError {
   return partyRefusal("conflict", `Customer ${IN_USE_DELETE_MARKER} its locations are registered storage sites. Keep this customer.`, ["customerId"], { locationIds });
 }
+
+export function partyLocationNotFound(kind: Party): DomainError {
+  return partyRefusal("not_found", kind === "supplier" ? "Supplier location not found" : "Customer location not found", ["locationId"]);
+}
