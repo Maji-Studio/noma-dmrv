@@ -1,6 +1,6 @@
 "use server";
 
-// Orphaned: no mounted operator entry point. See docs/open-questions.md "isometric/structured-telemetry-path".
+// No mounted operator entry point. The retained-file workflow is described in docs/architecture.md.
 
 import { getStorageProvider } from "@/lib/storage";
 import { StorageError } from "@/lib/storage/types";

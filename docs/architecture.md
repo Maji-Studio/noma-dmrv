@@ -622,6 +622,11 @@ The operator UI does not inspect the CSV or import row-level
 `/api/documents/{id}` route and its signed-download flow. The legacy row importer remains separate from this operator workflow.
 There is no reactor time-series upload ([ADR 0006](./adr/0006-data-upload-submission-idempotency.md)).
 
+The separate `getProductionRunReadingsList` preview returns at most
+`PRODUCTION_RUN_READINGS_LIMIT` rows (500), ordered by timestamp then ID descending,
+with a `truncated` flag. The unmounted `ProductionRunReadingTable` uses the same cap
+and tells the operator when older readings are omitted; it is not virtualized.
+
 ## Traceability Visualization
 
 Credit-batch anchored lineage at `/traceability` (canonical).

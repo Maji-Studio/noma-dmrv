@@ -12,6 +12,7 @@ import { productionRunReadings, productionRuns } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import { requireOrgScope } from "./utils";
 import { SafeError } from "@/lib/errors";
+import { PRODUCTION_RUN_READINGS_LIMIT } from "@/config/production-run-readings";
 
 // ============================================
 // Types
@@ -29,6 +30,11 @@ export interface ProductionRunReadingWithRelations {
   createdAt: Date;
   productionRunCode: string | null;
   facilityId: string;
+}
+
+export interface ProductionRunReadingsList {
+  readings: ProductionRunReadingWithRelations[];
+  truncated: boolean;
 }
 
 // ============================================
@@ -57,7 +63,7 @@ export async function getProductionRunReadingsList(
   ctx: OrgContext,
   productionRunId?: string,
   facilityId?: string
-): Promise<ProductionRunReadingWithRelations[]> {
+): Promise<ProductionRunReadingsList> {
   requireOrgScope(ctx);
 
   const conditions: SQL[] = [
@@ -76,7 +82,7 @@ export async function getProductionRunReadingsList(
   }
 
   // org-scope-ok: conditions includes both joined organization predicates.
-  return db
+  const readings = await db
     .select(readingSelect)
     .from(productionRunReadings)
     .innerJoin(
@@ -84,7 +90,13 @@ export async function getProductionRunReadingsList(
       eq(productionRunReadings.productionRunId, productionRuns.id)
     )
     .where(and(...conditions))
-    .orderBy(desc(productionRunReadings.timestamp));
+    .orderBy(desc(productionRunReadings.timestamp), desc(productionRunReadings.id))
+    .limit(PRODUCTION_RUN_READINGS_LIMIT + 1);
+
+  return {
+    readings: readings.slice(0, PRODUCTION_RUN_READINGS_LIMIT),
+    truncated: readings.length > PRODUCTION_RUN_READINGS_LIMIT,
+  };
 }
 
 // ============================================

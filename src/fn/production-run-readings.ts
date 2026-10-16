@@ -12,7 +12,7 @@ import { z } from "zod";
 import {
   getProductionRunReadingsList as getListData,
   deleteAllProductionRunReadings as deleteAllData,
-  type ProductionRunReadingWithRelations,
+  type ProductionRunReadingsList,
 } from "@/data-access/production-run-readings";
 import { requireOrgFacility } from "@/data-access/utils";
 import {
@@ -24,7 +24,7 @@ import type { ActionResult } from "@/types/actions";
 export async function getProductionRunReadingsListFn(
   productionRunId?: string,
   facilityId?: string
-): Promise<ActionResult<ProductionRunReadingWithRelations[]>> {
+): Promise<ActionResult<ProductionRunReadingsList>> {
   return withAction(async (ctx) => {
     const filters = productionRunReadingListFiltersSchema.parse({
       productionRunId,

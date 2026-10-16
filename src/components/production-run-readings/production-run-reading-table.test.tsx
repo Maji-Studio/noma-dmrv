@@ -1,7 +1,9 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { PRODUCTION_RUN_READINGS_LIMIT } from "@/config/production-run-readings";
 
 const readingState = vi.hoisted(() => ({
+  truncated: false,
   readings: [] as Array<{
     id: string;
     timestamp: Date;
@@ -14,7 +16,7 @@ const readingState = vi.hoisted(() => ({
 
 vi.mock("@/hooks/use-production-run-readings", () => ({
   useProductionRunReadings: () => ({
-    data: readingState.readings,
+    data: { readings: readingState.readings, truncated: readingState.truncated },
     isLoading: false,
     error: null,
   }),
@@ -38,6 +40,7 @@ const originalTimeZone = process.env.TZ;
 
 beforeEach(() => {
   readingState.readings = [];
+  readingState.truncated = false;
 });
 
 afterEach(() => {
@@ -81,6 +84,31 @@ describe("ProductionRunReadingTable", () => {
     expect(html).toContain("max-h-[240px]");
     expect(html).toContain("550.0");
     expect(html).not.toContain("Production Reading Records");
+    expect(html).not.toContain("Older readings are not shown.");
+  });
+
+  it.each([false, true])("caps rendered rows and explains omitted readings (server truncated: %s)", (truncated) => {
+    readingState.truncated = truncated;
+    readingState.readings = Array.from({
+      length: PRODUCTION_RUN_READINGS_LIMIT + (truncated ? 0 : 1),
+    }, (_, index) => ({
+      id: `reading-${index}`,
+      timestamp: new Date("2026-07-21T08:00:00Z"),
+      temperatureC: 550,
+      pressureBar: 1,
+      dryerFrequencyHz: null,
+      reactorFrequencyHz: null,
+    }));
+
+    const html = renderToStaticMarkup(
+      <ProductionRunReadingTable productionRunId="run-1" timeZone="UTC" />,
+    );
+
+    const body = html.split("<tbody>")[1]?.split("</tbody>")[0];
+    expect(body?.match(/<tr\b/g)).toHaveLength(PRODUCTION_RUN_READINGS_LIMIT);
+    expect(html).toContain(`Imported readings (${PRODUCTION_RUN_READINGS_LIMIT})`);
+    expect(html).toContain(`Showing the latest ${PRODUCTION_RUN_READINGS_LIMIT} readings. Older readings are not shown.`);
+    expect(html).toContain('role="status"');
   });
 
   it("renders readings in the facility zone, not the browser zone", () => {
