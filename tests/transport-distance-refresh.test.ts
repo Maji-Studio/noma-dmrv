@@ -47,7 +47,7 @@ it.each(["feedstock", "delivery"] as const)("freezes %s defaults, reports drift,
       expect(refreshed).toMatchObject({ recordedDistanceKm: 55, hasDrift: false, expectedVersion: drift.expectedVersion + 1 });
       const legs = await getTransportLegsForEntity(ctx, entityType === "feedstock" ? "feedstock" : "biochar", entityType === "feedstock" ? fixture.feedstockId : fixture.productId);
       expect(legs).toEqual(expect.arrayContaining([expect.objectContaining({ isDerived: true, distanceKm: 55 })]));
-      await expect(refresh(ctx, { entityId, expectedVersion: drift.expectedVersion })).rejects.toMatchObject({ code: "stale_version" });
+      await expect(refresh(ctx, { entityId, expectedVersion: drift.expectedVersion })).rejects.toMatchObject({ code: "conflict" });
       if (entityType === "feedstock") await db.update(feedstocks).set({ distanceKmOverride: 25, distanceSource: "manual" }).where(eq(feedstocks.id, entityId));
       else await db.update(deliveries).set({ distanceKmOverride: 25, distanceSource: "manual" }).where(eq(deliveries.id, entityId));
       expect(await getTransportDistanceDrift(ctx, target)).toMatchObject({ hasDrift: false, isOverridden: true });
