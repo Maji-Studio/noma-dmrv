@@ -1,7 +1,7 @@
 import { TEST_SITE_POSITION } from "./test-org";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
-import { apiAuditEvents, apiIdempotencyRecords, customerLocations, customers, facilities, documents, organizationSettings, storageObjectDeletions } from "@/db/schema";
+import { activityEvents, apiIdempotencyRecords, customerLocations, customers, facilities, documents, organizationSettings, storageObjectDeletions } from "@/db/schema";
 import { cleanupOutputStockFixture } from "./output-stock-cleanup";
 import { seedOutputStockParents } from "./output-stock-fixture";
 
@@ -29,7 +29,7 @@ export async function cleanupOrderFixture(f: OrderFixture) {
   const id = f.ctx.organizationId;
   await db.delete(storageObjectDeletions).where(eq(storageObjectDeletions.organizationId, id));
   await db.delete(documents).where(eq(documents.organizationId, id));
-  await db.delete(apiAuditEvents).where(eq(apiAuditEvents.organizationId, id));
+  await db.delete(activityEvents).where(eq(activityEvents.organizationId, id));
   await db.delete(apiIdempotencyRecords).where(eq(apiIdempotencyRecords.organizationId, id));
   await db.delete(organizationSettings).where(eq(organizationSettings.organizationId, id));
   await cleanupOutputStockFixture(db, id);

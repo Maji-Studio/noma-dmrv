@@ -26,8 +26,6 @@ are not examples for new domain tables. Domain tenancy is enforced in
 
 `src/db/schema/api.ts` also defines:
 
-- `api_audit_events`: organization-scoped, value-free API write effects and
-  actor/credential/request ids. Inserts use the operation's transaction.
 - `api_rate_limit_buckets`: system seam keyed by IP hash, credential or
   organization and access type. It intentionally has no `organization_id`;
   request guards debit it outside business transactions.
@@ -39,7 +37,7 @@ are not examples for new domain tables. Domain tenancy is enforced in
 
 The purge helpers are system seams that delete expired idempotency records and
 idle buckets across organizations. These waivers do not relax ordinary
-org-scoped reads or audit inserts.
+org-scoped reads.
 
 ## Activity events
 
@@ -51,7 +49,14 @@ path exists and test fixtures delete organizations. The nullable `facility_id`
 has no FK under the exception documented in [ADR 0033](./adr/0033-activity-events-facility-without-fk.md). Entity, credit-batch, production-run and
 actor references have no FKs, so history survives record
 deletion as tombstones. V1 stores field names only, never field
-values, alongside status transitions and attribution.
+values, alongside status transitions and attribution. API writes are audited
+only here: an API audit row has `source in ('rest','mcp') and operation_id is not null`
+and carries operation, credential and request IDs, versions and field names.
+Nested document, membership, transport-leg and document-retirement rows from
+the same API call carry only actor and source attribution, without operation,
+credential or request IDs. Nullable `operation_id`, `version_before` and
+`version_after` also record described form and script runner writes.
+`oauth_client_id` is reserved and null until OAuth grants ship.
 
 `ACTIVITY_ENTITY_TYPES` in `src/db/schema/common.ts` allows only canonical
 snake_case names: `removal`, `ghg_statement`, `production_run`, `biochar_product`,
