@@ -379,11 +379,11 @@ it("only evidence gaps fail emissions; line review and setup gaps stay in Remova
     automaticFigure: null, entries: [], total: null };
   const missingEvidence = { ...line, state: "missingEvidence" as const,
     blocker: { code: "entryMissingEvidence" as const, message: "Add a file for each emissions entry with a value.", fixTarget: "emissions" as const } };
-  const health = deriveBatchHealth(facts({ emissionLines: [missingEvidence] }));
+  const health = deriveBatchHealth(facts({ emissionLines: [missingEvidence, missingEvidence, { ...line, state: "needsSetup", blocker: { code: "lineNeedsSetup", message: "Do not include this copy.", fixTarget: "templateLineReview" } }] }));
   expect(health.issueCount).toBe(1);
-  expect(health.checks.find((check) => check.key === "emissions")).toMatchObject({ status: "unmet", fixTarget: "emissions" });
+  expect(health.checks.find((check) => check.key === "emissions")).toMatchObject({ status: "unmet", fixTarget: "emissions", detail: "Add a file for Line." });
   expect(health.checks.some((check) => check.key === "template")).toBe(false);
-  for (const state of ["needsReview", "needsSetup", "empty"] as const) {
+  for (const state of ["needsReview", "needsSetup", "empty", "missingEvidence"] as const) {
     const result = deriveBatchHealth(facts({ emissionLines: [{ ...line, state,
       blocker: { code: "lineHasNoSource", message: "Review the line.", fixTarget: "templateLineReview" } }] }));
     // Template-level blockers arrive as templateBlockers; a line blocker alone

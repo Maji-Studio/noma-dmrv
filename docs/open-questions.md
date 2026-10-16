@@ -13,6 +13,12 @@ Deferred work lives here, never as a `TODO` in code.
 
 **`needs-registry-check`** marks a question that must be answered by the Isometric MCP server (`how_to`, then the protocol/OpenAPI tools) or a sandbox probe, **never** from `docs/isometric/*`, which are non-authoritative local summaries. Do not close one of these from a local doc.
 
+## Emissions entry dates (2026-10-16) - **deferred**
+
+- `src/lib/read-models/batch-emission-lines.ts:loadBatchEmissionLines` does not
+  recheck entry dates when a batch start date moves. Decide whether to refuse
+  the batch edit or stop counting entries dated before the new start date.
+
 ## Record-lock follow-ups
 
 - `src/lib/record-lock.ts:recordLocks`: type and consume the free-field declarations
@@ -36,6 +42,10 @@ Deferred work lives here, never as a `TODO` in code.
   fetch later movements from the same bin.
 
 ## Activity recording gaps (`activity/deferred-writers`) - **deferred**
+
+- 2026-10-16: `src/data-access/emission-entries.ts:tombstoneEmissionZeros` must
+  record activity in PR 4, before zero rows can be written. Its coverage
+  exemption is temporary until that writer is enabled.
 
 - `src/data-access/certifier-removals.ts:updateRemovalDates` changes Removal dates
   without an event. Define value-free lifecycle events alongside the existing
@@ -577,6 +587,12 @@ operational tradeoff, and this is not a registry requirement we verified.
   Production; the site deployment answers 404 to both. If growth matters, add
   scheduled GitHub Actions calls to the secret-authenticated
   `/api/cron/purge-api-records` and `/api/cron/sweep-document-uploads` routes.
+
+## Exact unit conversion for entries after a template unit change (2026-10-16)
+
+`src/lib/certification/emission-entry-rules.ts:emissionEntryCounts` requires re-entry
+when a monitored input changes unit. Define an exact decimal unit-conversion table
+before allowing confirmation to convert stored entry values to the new unit.
 
 ## Refusal UIs match server copy (`errors/action-error-code`) - **deferred**
 

@@ -18,7 +18,7 @@ describe("batch emission line states", () => {
     ["empty", false, []], ["filled", true, []],
     ["missingEvidence", true, [{ hasEvidence: false }]],
     ["filled", false, [{}]], ["confirmedZero", false, [{ kind: "zero", total: null, hasEvidence: false }]],
-    ["empty", false, [{ counts: false, hasEvidence: false }]],
+    ["needsReview", false, [{ counts: false, hasEvidence: false }]],
     ["filled", false, [{ kind: "zero", total: null }, {}]],
   ] as const)("derives %s with automatic=%s and entries=%j", (state, automatic, overrides) => {
     const f = facts();
@@ -37,7 +37,7 @@ describe("batch emission line states", () => {
     expect(deriveBatchEmissionLines(f)[0].total).toBeNull();
     f.automaticFigures = { "run-electricity": { magnitude: "1", unit: "Wh" } };
     f.entries = [entry(f)];
-    expect(() => deriveBatchEmissionLines(f)).toThrow("units must match");
+    expect(deriveBatchEmissionLines(f)[0]).toMatchObject({ state: "needsReview", total: null, blocker: { code: "lineNeedsReview" } });
   });
   it("review and setup take precedence over missing evidence", () => {
     const f = facts(); const id = f.definition.groups[0].components[0].id;
@@ -62,7 +62,7 @@ describe("batch emission line states", () => {
     const f = facts(); const id = f.definition.groups[0].components[0].id;
     f.lineSources[id] = { scope: "operating", origin: "reviewed", entryPolicy: "additive" };
     f.entries = [entry(f, overrides)];
-    expect(deriveBatchEmissionLines(f)[0]).toMatchObject({ state, blocker: { code: "lineHasNoSource" } });
+    expect(deriveBatchEmissionLines(f)[0]).toMatchObject({ state, blocker: { code: state === "missingEvidence" ? "entryMissingEvidence" : "lineHasNoSource" } });
   });
   it("exports the agreed labels", () => {
     expect(EMISSION_LINE_STATE_LABELS).toEqual({ filled: "Recorded", empty: "Not recorded", missingEvidence: "File missing", needsReview: "Needs review", needsSetup: "Needs setup", confirmedZero: "Recorded as zero" });
@@ -75,4 +75,16 @@ it.each(["single-with-automatic-source", "foreign-automatic-source", "disallowed
   f.automaticFigures = { "run-electricity": { magnitude: "10", unit: "kWh" } };
   f.entries = [entry(f, { hasEvidence: false })];
   expect(deriveBatchEmissionLines(f)[0]).toMatchObject({ state: "needsReview", blocker: { code: "lineNeedsReview", fixTarget: "templateLineReview" } });
+});
+
+it.each([
+  "Confirm this entry for the changed template line.",
+  "Enter the values again for the current template line.",
+])("keeps stale entries visible with the action: %s", (reason) => {
+  const f = facts();
+  f.entries = [entry(f, { counts: false, reason })];
+  expect(deriveBatchEmissionLines(f)[0]).toMatchObject({
+    state: "needsReview", total: null, entries: f.entries,
+    blocker: { code: "lineNeedsReview", message: reason },
+  });
 });

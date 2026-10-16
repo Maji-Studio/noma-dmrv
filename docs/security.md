@@ -89,6 +89,11 @@ integer columns.
 
 ## Environment Variables
 
+**`EMISSIONS_ENTRIES_ENABLED`** accepts `true` or `false` and defaults to `false`.
+The server refuses emissions entry writes and evidence changes while disabled.
+Existing entries stay visible in the batch display. Enabling it also refuses new sample transport legs. Keep
+it disabled until entry submission support is deployed.
+
 **App environment list: the `envSchema` object in `src/config/env.ts`.**
 The logger validates `LOG_LEVEL` locally; standalone Isometric scripts and health
 checks validate their credential pair and environment in `src/lib/isometric/client-env.ts`. Templates:

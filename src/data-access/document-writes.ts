@@ -1,3 +1,4 @@
+import { bumpEmissionEntryEvidence } from "./emission-entry-lock";
 import type { CaptureActivity } from "@/lib/activity-changes";
 import { nextVersion } from "./row-version";
 /**
@@ -139,5 +140,6 @@ export async function confirmDocumentUploadInTransaction(ctx: OrgContext, tx: Db
   if (reason) {
     return { kind: "refused", reason, pointer, message, document: saved };
   }
+  await bumpEmissionEntryEvidence(ctx, tx, saved.entityType, saved.entityId);
   return { kind: "uploaded", document: saved, transitioned: true };
 }

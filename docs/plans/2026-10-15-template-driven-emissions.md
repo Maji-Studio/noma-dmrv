@@ -259,7 +259,7 @@ Operators can fill every line of the target Removal template ("LCA based templat
 **Activity and #973**
 - Entry create, update and delete record activity under a new entity type `emission_entry`. Add it to `ACTIVITY_ENTITY_TYPES` (`src/db/schema/common.ts`) and to the DB CHECK, with a migration.
 - Writes that go through the operation runner are recorded by the runner from `describe()` (#1040), so they must not call `recordActivity` as well. Other writers call it in the same transaction.
-- Activity events carry only field names, never values, and set `creditBatchId`.
+- Entry activity follows the `src/lib/activity-field-policy.ts` classification (#1103): note and the values list are name-only. Events set `creditBatchId`.
 - A credit batch spans at most a month, so a batch-level fuel or electricity entry is the monthly bulk entry. #973 closes with this PR.
 
 ### 4.5 Submission, snapshots and claims (PR 4)

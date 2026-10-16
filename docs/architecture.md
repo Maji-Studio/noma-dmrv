@@ -476,6 +476,12 @@ above, closing their document-write inversion. Membership refresh also takes
 artifacts before runs. The remaining production-run and membership cycles are
 tracked in the [lock-order follow-up](./open-questions-architecture.md#run-writers-feedstock-edits-and-output-postings-lock-in-different-orders-datalock-order-opened-2026-10-09).
 
+Emission entry writers discover ancestors unlocked, then lock the facility
+`FOR SHARE`, credit batch `FOR UPDATE`, entry `FOR UPDATE`, and documents last.
+They revalidate the batch's facility and the entry's batch after locking; changed
+parents return retryable `conflict` without taking a new ancestor lock.
+This order matches facility archive and applies to confirmation and deletion too.
+
 Upload promotion, leases and the privileged expiry sweep are described in
 [Object storage](./storage.md#abandoned-uploads-and-cleanup).
 

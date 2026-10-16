@@ -1,3 +1,4 @@
+import { emissionEntries } from "@/db/schema/emission-entries";
 import type { ActivitySnapshot } from "@/lib/activity-changes";
 import { and, eq, gt, inArray, or } from "drizzle-orm";
 import type { DbTransaction } from "@/db";
@@ -16,6 +17,10 @@ export async function resolveWriteActivityScopes(
   ctx: OrgContext, tx: DbTransaction, entityType: string, entityId: string,
 ): Promise<ActivityScope[]> {
   requireOrgScope(ctx);
+  if (entityType === "emission_entry") {
+    const [entry] = await tx.select({ creditBatchId: emissionEntries.creditBatchId }).from(emissionEntries).where(and(eq(emissionEntries.organizationId, ctx.organizationId), eq(emissionEntries.id, entityId)));
+    return entry ? [entry] : [];
+  }
   if (entityType === "credit_batch") return [{ creditBatchId: entityId }];
   if (entityType === "sample") {
     const [sample] = await tx.select({ creditBatchId: samples.creditBatchId, productionRunId: samples.productionRunId })

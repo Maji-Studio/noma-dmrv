@@ -41,6 +41,7 @@ function isValidStoragePrefix(value: string): boolean {
  * Ensures all required env vars are present and valid
  */
 const envSchema = z.object({
+  EMISSIONS_ENTRIES_ENABLED: z.enum(["true", "false"]).default("false").transform((value) => value === "true"),
   // Database
   DATABASE_URL: z.string().url(),
 

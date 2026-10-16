@@ -1,4 +1,5 @@
 export const creditBatchKeys = {
+  emissionLines: (facilityId: string, creditBatchId: string) => ["creditBatches", "emissionLines", facilityId, creditBatchId] as const,
   all: ["creditBatches"] as const,
   lists: () => [...creditBatchKeys.all, "list"] as const,
   list: (filters?: Record<string, unknown>) =>
