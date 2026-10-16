@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { formatCalendarDate } from "@/lib/format-utils";
 import { enrichStorageLocationRows, type BaseStorageLocationRow } from "./storage-location-enrichment";
 
@@ -40,6 +40,15 @@ const row: BaseStorageLocationRow = {
 };
 
 describe("last-applied calendar day decoding", () => {
+  const originalTz = process.env.TZ;
+  beforeEach(() => {
+    process.env.TZ = "Europe/Zurich";
+  });
+  afterEach(() => {
+    if (originalTz === undefined) delete process.env.TZ;
+    else process.env.TZ = originalTz;
+  });
+
   it.each([`${APPLIED_DAY} 00:00:00`, null])("preserves the raw driver value %s through enrichment", async (lastAppliedAt) => {
     // Exercise Drizzle's real result mapper with node-postgres's zone-less value.
     query.mockImplementation(async (config: { text: string }) => ({

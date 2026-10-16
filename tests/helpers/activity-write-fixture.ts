@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import * as schema from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
+import { formatUtcDate } from "@/lib/date-utils";
 import { TEST_SITE_POSITION } from "./test-org";
 import { outputOrderFixtureValues, outputProductFixtureValues, insertOutputDeliveryFixture } from "./output-contract-fixtures";
 
@@ -63,7 +64,7 @@ export async function createActivityWriteFixture(ctx: OrgContext) {
     });
     const [product] = await tx.insert(schema.biocharProducts).values(await outputProductFixtureValues(tx, {
       organizationId, facilityId: facility.id, code: "ACT-BP", linkedProductionRunId: run.id,
-      productionDate: ACTIVITY_FIXTURE_DATE.toISOString().slice(0, 10), sourceBiocharStorageLocationId: outputBin.id,
+      productionDate: formatUtcDate(ACTIVITY_FIXTURE_DATE), sourceBiocharStorageLocationId: outputBin.id,
     })).returning();
     await tx.insert(schema.biocharProductSourceAllocations).values({
       organizationId, biocharProductId: product.id, productionRunId: run.id,

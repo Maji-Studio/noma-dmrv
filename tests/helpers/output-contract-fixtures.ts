@@ -1,5 +1,6 @@
 import { TEST_SITE_POSITION } from "./test-org";
 import type { OrgContext } from "@/lib/auth/server";
+import { formatUtcDate } from "@/lib/date-utils";
 import { randomUUID } from "node:crypto";
 import { eq, inArray, type SQL } from "drizzle-orm";
 import { db, type DbTransaction } from "@/db";
@@ -60,7 +61,7 @@ async function productFixture(executor: Executor, input: ProductFixture): Promis
   const sourceRun = input.linkedProductionRunId
     ? (await executor.select().from(productionRuns).where(eq(productionRuns.id, input.linkedProductionRunId)))[0]
     : undefined;
-  const productionDate = input.productionDate ?? sourceRun?.startTime.toISOString().slice(0, 10) ?? placedAt.toISOString().slice(0, 10);
+  const productionDate = input.productionDate ?? formatUtcDate(sourceRun?.startTime ?? placedAt);
   let sourceBiocharStorageLocationId = input.sourceBiocharStorageLocationId ?? sourceRun?.biocharStorageLocationId;
   let storageLocationId = input.storageLocationId;
   for (const type of ["biochar_bin", "product_bin"] as const) {

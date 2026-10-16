@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { MISSING_VALUE } from "./copy-utils";
 import { MASS_KG_STORAGE_DECIMALS } from "@/config/numeric-storage";
 import {
@@ -138,6 +138,15 @@ describe("formatDayString", () => {
 });
 
 describe("formatCalendarDate", () => {
+  const originalTz = process.env.TZ;
+  beforeEach(() => {
+    process.env.TZ = "America/Los_Angeles";
+  });
+  afterEach(() => {
+    if (originalTz === undefined) delete process.env.TZ;
+    else process.env.TZ = originalTz;
+  });
+
   it.each(["2026-07-06", "2026-07-06T00:00:00.000Z", new Date("2026-07-06T00:00:00.000Z")])(
     "renders a persisted business date on its UTC calendar: %s",
     value => expect(formatCalendarDate(value)).toBe("Jul 6, 2026"),

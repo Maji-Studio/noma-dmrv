@@ -1,11 +1,12 @@
 import { randomUUID } from "node:crypto";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/db";
 import { biocharProducts } from "@/db/schema";
 import { getBiocharProducts } from "@/data-access/biochar-products";
 import { getBiocharProducts as getProductOptions } from "@/data-access/entities/biochar-products";
 import { getStorageLocationWithFacility } from "@/data-access/storage-locations";
 import type { OrgContext } from "@/lib/auth/server";
+import { formatUtcDate } from "@/lib/date-utils";
 import { formatCalendarDate } from "@/lib/format-utils";
 import { cleanupActivityWriteFixture, createActivityWriteFixture } from "./helpers/activity-write-fixture";
 import { insertEstablishedOutputApplicationFixture, outputProductFixtureValues, preparePureOutputProductFixture } from "./helpers/output-contract-fixtures";
@@ -68,6 +69,15 @@ afterAll(async () => {
 });
 
 describe("calendar-day read regressions", () => {
+  const originalTz = process.env.TZ;
+  beforeEach(() => {
+    process.env.TZ = "Europe/Zurich";
+  });
+  afterEach(() => {
+    if (originalTz === undefined) delete process.env.TZ;
+    else process.env.TZ = originalTz;
+  });
+
   it.each([
     { sortOrder: "asc" as const, expected: ascendingIds },
     { sortOrder: "desc" as const, expected: descendingIds },
@@ -116,6 +126,6 @@ describe("calendar-day read regressions", () => {
       ...fixture.product,
       productionDate: undefined,
     });
-    expect(values.productionDate).toBe(fixture.run.startTime.toISOString().slice(0, 10));
+    expect(values.productionDate).toBe(formatUtcDate(fixture.run.startTime));
   });
 });

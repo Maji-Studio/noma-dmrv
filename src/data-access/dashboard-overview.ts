@@ -22,6 +22,7 @@ import {
   productionRuns,
 } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
+import { formatUtcDate } from "@/lib/date-utils";
 import { computeClampedDryMass } from "@/lib/calculations/mass-dry";
 import { tonnesToKg } from "@/lib/calculations/unit-conversions";
 import { creditBatchDeepLinkHref } from "@/lib/credit-batch-links";
@@ -278,7 +279,7 @@ export async function getDashboardOverview(
               eq(biocharProducts.facilityId, facilityId),
               isNull(biocharProducts.archivedAt),
               ne(biocharProducts.status, "draft"),
-              ...(fetchStart ? [gte(biocharProducts.productionDate, fetchStart.toISOString().slice(0, 10))] : []),
+              ...(fetchStart ? [gte(biocharProducts.productionDate, formatUtcDate(fetchStart))] : []),
             ),
           ),
         db
@@ -335,8 +336,7 @@ export async function getDashboardOverview(
     .map((row) => ({ ms: toMs(row.date), row }))
     .filter((p): p is { ms: number; row: (typeof runRows)[number] } => p.ms != null);
   const lotPoints = lotRows
-    // Calendar-day totals use UTC midnight, matching run and batch bucketing above.
-    .map((row) => ({ ms: toMs(`${row.productionDate}T00:00:00.000Z`), row }))
+    .map((row) => ({ ms: toMs(row.productionDate), row }))
     .filter((p): p is { ms: number; row: (typeof lotRows)[number] } => p.ms != null);
   const applicationPoints = applicationRows
     .map((row) => ({ ms: toMs(row.applicationDate), row }))

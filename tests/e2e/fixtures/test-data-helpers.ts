@@ -1,4 +1,5 @@
 import { TEST_SITE_POSITION } from "../../helpers/test-org";
+import { formatUtcDate } from "@/lib/date-utils";
 import { deleteOutputFacilityFixtures, outputProductFixtureValues, deleteOutputProductFixtures } from "../../helpers/output-contract-fixtures";
 import { DEC_ORG_ID } from "@/db/org-defaults";
 /**
@@ -309,7 +310,7 @@ export async function createTestBiocharProduct(
       code: overrides.code || `E2E-BP-${testId.toUpperCase()}`,
       facilityId,
       formulationId,
-      productionDate: overrides.productionDate ?? new Date().toISOString().slice(0, 10),
+      productionDate: overrides.productionDate ?? formatUtcDate(new Date()),
       status: overrides.status ?? "testing",
       massKg: overrides.massKg ?? 500,
       moistureContentPercent: overrides.moistureContentPercent ?? 10,

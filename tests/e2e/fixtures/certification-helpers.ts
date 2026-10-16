@@ -1,4 +1,5 @@
 import { insertEstablishedOutputApplicationFixture as insertOutputApplicationFixture } from "../../helpers/output-contract-fixtures";
+import { formatUtcDate } from "@/lib/date-utils";
 import { deleteOutputApplicationFixtures } from "../../helpers/output-contract-fixtures";
 import { preparePureOutputProductFixture, outputProductFixtureValues, outputOrderFixtureValues, insertEstablishedOutputDeliveryFixture as insertOutputDeliveryFixture, deleteOutputDeliveryFixtures, deleteOutputProductFixtures } from "../../helpers/output-contract-fixtures";
 /**
@@ -182,7 +183,7 @@ export async function seedGroupedRemovalWithChain(
         biocharRatio: productBiocharRatio,
         sourceBiocharStorageLocationId: refs.biocharStorageLocationId,
         linkedProductionRunId: id.productionRun,
-        productionDate: productionStartTime.toISOString().slice(0, 10),
+        productionDate: formatUtcDate(productionStartTime),
         status: "ready",
         massKg: PRODUCT_WET_MASS_KG,
         moistureContentPercent: PRODUCT_MOISTURE_PCT,
@@ -660,7 +661,7 @@ export async function seedUngroupedReadyBatchWithChain(
         biocharRatio: productBiocharRatio,
         sourceBiocharStorageLocationId: refs.biocharStorageLocationId,
         linkedProductionRunId: id.productionRun,
-        productionDate: productionStartTime.toISOString().slice(0, 10),
+        productionDate: formatUtcDate(productionStartTime),
         status: "ready",
         massKg: PRODUCT_WET_MASS_KG,
         moistureContentPercent: READY_BIOCHAR_MOISTURE_PCT,

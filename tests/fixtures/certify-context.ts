@@ -1,4 +1,5 @@
 import type { getChainOfCustodyData } from "@/data-access/chain-of-custody";
+import { formatUtcDate } from "@/lib/date-utils";
 import type { MockedFunction } from "vitest";
 import type { getCreditBatchById } from "@/data-access/credit-batches";
 import type { loadCreditBatchRollups, CreditBatchLineageFacts } from "@/data-access/credit-batch-accounting";
@@ -155,7 +156,7 @@ export function factsFromMockedLineages(
         code: lineage.biocharProduct?.code ?? `BP-${index + 1}`,
         status: lineage.biocharProduct?.status ?? "complete",
         productionDate:
-          lineage.biocharProduct?.productionDate ?? DEFAULT_FACT_DATE.toISOString().slice(0, 10),
+          lineage.biocharProduct?.productionDate ?? formatUtcDate(DEFAULT_FACT_DATE),
         massKg: lineage.biocharProduct?.massKg ?? 100,
         moistureContentPercent:
           lineage.biocharProduct?.moistureContentPercent ?? 0,
