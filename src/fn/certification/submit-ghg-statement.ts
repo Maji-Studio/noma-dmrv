@@ -1,3 +1,4 @@
+import { withGhgVerifierSubmissionLock } from "@/data-access/ghg-verifier-submission-lock";
 import { ghgStatusRegistryAt } from "@/lib/isometric/utils/ghg-status-registry-at";
 import { resolveIsometricClient } from "@/data-access/certifier-credentials";
 import {
@@ -300,7 +301,7 @@ export async function submitGhgStatementToVerifierCore(args: {
   const result = await withFacilityDurabilitySessionLock(
     orgCtx,
     statement.facilityId,
-    async (): Promise<SubmitGhgStatementResult> => {
+    () => withGhgVerifierSubmissionLock(orgCtx, ghgStatementId, async (): Promise<SubmitGhgStatementResult> => {
       const readCurrentSubmission = async () => {
         const current = await getLatestSubmission(
           orgCtx,
@@ -645,7 +646,7 @@ export async function submitGhgStatementToVerifierCore(args: {
         externalId: initialExternalId,
         remoteStatus: remoteAfter.status,
       };
-    },
+    }),
   );
   onProgress?.({ step: "ghg_statement.confirming", state: "complete" });
   onProgress?.({ step: "ghg_statement.complete", state: "complete" });

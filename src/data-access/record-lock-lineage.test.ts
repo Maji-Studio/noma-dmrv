@@ -1,3 +1,4 @@
+vi.mock("@/lib/isometric/ghg-statements", () => ({ getGhgStatement: vi.fn() }));
 import { expect, it, vi } from "vitest";
 import type { DbTransaction } from "@/db";
 import { certificationSubmissions } from "@/db/schema";
@@ -23,3 +24,30 @@ it("preserves null submission times and keeps the Removal locked", async () => {
   expect(isSentRemoval({ ...removal, statements: [{ id: "statement", status: "FAILED_VERIFICATION",
     fresh: true, submittedToVerifier: true, returnedAt: "2026-10-02", removalExternalIds: ["entry"] }] })).toBe(true);
 });
+
+it("discovers fresh REST submission evidence without a saved timestamp", async () => {
+  const { getGhgStatement } = await import("@/lib/isometric/ghg-statements");
+  vi.mocked(getGhgStatement).mockResolvedValue({ status: "DRAFT", submitted_at: "2026-10-02", ghg_entry_ids: ["entry"] } as Awaited<ReturnType<typeof getGhgStatement>>);
+  const [removal] = await readRecordLockLineage(makeTestOrgContext(), statementReader(), [{ removalId: "removal", ghgStatementId: "statement" }], true);
+  expect(getGhgStatement).toHaveBeenCalled();
+  expect(isSentRemoval(removal)).toBe(false);
+});
+
+it("logs only safe identifiers and error classification when refresh fails", async () => {
+  const { getGhgStatement } = await import("@/lib/isometric/ghg-statements");
+  const { logger } = await import("@/lib/log");
+  const warn = vi.spyOn(logger, "warn").mockImplementation(() => undefined);
+  vi.mocked(getGhgStatement).mockRejectedValue(Object.assign(new Error("secret response body"), { body: "credentials", code: "unsafe-secret" }));
+  const [removal] = await readRecordLockLineage(makeTestOrgContext(), statementReader(), [{ removalId: "removal", ghgStatementId: "statement" }], true);
+  expect(isSentRemoval(removal)).toBe(true);
+  expect(warn).toHaveBeenLastCalledWith({ organizationId: makeTestOrgContext().organizationId, statementId: "statement", errorName: "Error" }, "Record lock statement refresh failed");
+  warn.mockRestore();
+});
+
+function statementReader(): Pick<DbTransaction, "select"> {
+  let reads = 0;
+  const common = { createdAt: null, lockedAt: null, status: "submitted" };
+  const removal = { ...common, id: "removal-submission", localEntityId: "removal", externalId: "entry", submittedAt: new Date("2026-10-01"), metadata: {} };
+  const statement = { ...common, id: "statement-submission", localEntityId: "statement", externalId: "remote-statement", submittedAt: null, metadata: { remoteStatus: "DRAFT" } };
+  return { select: () => ({ from: (table: unknown) => ({ where: () => table === certificationSubmissions ? (reads++ === 0 ? [removal] : [statement]) : [] }) }) } as unknown as Pick<DbTransaction, "select">;
+}

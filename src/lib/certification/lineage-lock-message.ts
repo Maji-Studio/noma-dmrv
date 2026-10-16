@@ -48,17 +48,23 @@ export function formatCertificationLineageLockMessage({
   lineageRelationship,
   lock = SENT_LOCK,
 }: CertificationLineageLockMessageInput): string {
+  const holder = lock.heldBy.filter(item => item.id !== "removal").map(item => `${item.kind === "removal" ? "Removal" : "GHG Statement"} ${item.label ?? item.id}`).join(", ");
+  const holderDetail = holder ? ` Held by ${holder}.` : "";
   if (subjectEntityType === lineageEntityType) {
-    return withRecordLockGuidance(`Cannot ${mutation} this ${ENTITY_LABELS[subjectEntityType]} because it is locked by a certification submission.`, lock);
+    return withRecordLockGuidance(`Cannot ${mutation} this ${ENTITY_LABELS[subjectEntityType]} because it is locked by a certification submission.${holderDetail}`, lock);
   }
 
   const lineageLabel = ENTITY_LABELS[lineageEntityType];
   const article = /^[aeiou]/i.test(lineageLabel) ? "an" : "a";
   const relationship =
     lineageRelationship ?? (mutation === "create" ? "selected" : "linked");
-  const explanation = `Cannot ${mutation} this ${ENTITY_LABELS[subjectEntityType]} because the ${relationship} ${lineageLabel} is locked by a certification submission.`;
+  const explanation = `Cannot ${mutation} this ${ENTITY_LABELS[subjectEntityType]} because the ${relationship} ${lineageLabel} is locked by a certification submission.${holderDetail}`;
 
   return relationship === "selected"
     ? `${explanation} Select ${article} ${lineageLabel} that is not locked.`
     : withRecordLockGuidance(explanation, lock);
+}
+
+export function formatCertifierMappingLockMessage(action: "change" | "unlink"): string {
+  return `${action === "change" ? "Cannot change certifier project or facility ID" : "Cannot unlink"}: this facility has certifier submissions. Delete interrupted Removals and their registry records first. Completed Removal or GHG Statement submissions keep this mapping fixed.`;
 }

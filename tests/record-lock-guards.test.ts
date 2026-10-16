@@ -1,3 +1,6 @@
+import { withGhgVerifierSubmissionLock } from "@/data-access/ghg-verifier-submission-lock";
+import { withFacilityDurabilitySessionLock } from "@/data-access/facility-durability-lock";
+import { getOutputMovementCertificationLocks } from "@/data-access/output-stock-edit-lock";
 import { beforeEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { db } from "@/db";
 import { and, eq } from "drizzle-orm";
@@ -6,7 +9,7 @@ import { assertCanMutateCertifiedLineage, getRecordLock, getRecordLocks } from "
 import { outputMovementLockReason } from "@/data-access/output-stock-edit-lock";
 import { getOutputStockAllocationProjection } from "@/data-access/output-stock";
 import { hasBlockingFacilitySubmission } from "@/data-access/certification";
-import { lockCreditBatchArtifacts, isCreditBatchMembershipLockedBySubmission, CreditBatchLineageChangedError } from "@/data-access/credit-batch-certification-lock";
+import { lockCreditBatchArtifacts, assertRemovalAllowsCreditBatchMutation, isCreditBatchMembershipLockedBySubmission, CreditBatchLineageChangedError } from "@/data-access/credit-batch-certification-lock";
 import { withLineageFixture } from "./helpers/certification-lineage-fixture";
 import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
 
@@ -196,4 +199,71 @@ it('reads a shared statement once and skips registry reads while a Removal is in
     expect(locks.map(lock => lock.level)).toEqual(['sent', 'sent']);
     expect(remote.calls).toBe(0);
   }, 'ghgStatement');
+});
+
+it('serializes a paused verifier resubmission with a source edit', async () => {
+  remote.status = 'FAILED_VERIFICATION';
+  await withLineageFixture(async fixture => {
+    const ctx = makeTestOrgContext();
+    await expect(db.transaction(tx => assertCanMutateCertifiedLineage(ctx, tx,
+      { entityType: 'feedstock', entityId: fixture.feedstockId }, 'update'))).resolves.toBeUndefined();
+    let entered!: () => void;
+    let resume!: () => void;
+    const providerEntered = new Promise<void>(resolve => { entered = resolve; });
+    const providerResume = new Promise<void>(resolve => { resume = resolve; });
+    const resubmission = withFacilityDurabilitySessionLock(ctx, fixture.facilityId, () =>
+      withGhgVerifierSubmissionLock(ctx, fixture.ghgStatementId!, async () => {
+        entered();
+        await providerResume;
+        remote.status = 'AWAITING_VERIFICATION';
+        await db.update(certificationSubmissions).set({ metadata: { remoteStatus: remote.status } }).where(and(
+          eq(certificationSubmissions.organizationId, TEST_ORG_ID), eq(certificationSubmissions.localEntityId, fixture.ghgStatementId!),
+        ));
+      }));
+    await providerEntered;
+    let finished = false;
+    const edit = db.transaction(tx => assertCanMutateCertifiedLineage(ctx, tx,
+      { entityType: 'feedstock', entityId: fixture.feedstockId }, 'update'))
+      .then(() => { finished = true; return null; }, error => { finished = true; return error; });
+    try {
+      // Give the source writer time to reach the held artifact lock.
+      const OBSERVATION_MS = 100;
+      await new Promise(resolve => setTimeout(resolve, OBSERVATION_MS));
+      expect(finished).toBe(false);
+    } finally {
+      resume();
+      await resubmission;
+    }
+    expect(await edit).toMatchObject({ code: 'certification_locked' });
+  }, 'ghgStatement');
+});
+
+it('reads the registry once for N stock entries sharing a statement', async () => {
+  remote.status = 'FAILED_VERIFICATION';
+  await withLineageFixture(async fixture => {
+    const ctx = makeTestOrgContext();
+    const rows = await getOutputStockAllocationProjection(ctx, { deliveryId: fixture.deliveryId });
+    const ids = [crypto.randomUUID(), crypto.randomUUID(), crypto.randomUUID()];
+    const entries = ids.flatMap(id => rows.map(row => ({ ...row, movement: { ...row.movement, id } })));
+    const locks = await getOutputMovementCertificationLocks(ctx, db, ids, entries);
+    expect(locks.size).toBe(ids.length);
+    expect(remote.calls).toBe(1);
+    expect([...locks.values()].every(entry => entry.length > 0)).toBe(true);
+  }, 'ghgStatement');
+});
+
+it('membership refusal names an interrupted Removal and tells the operator to resume it', async () => {
+  await withLineageFixture(async fixture => {
+    await db.update(certificationSubmissions).set({ status: 'draft' }).where(and(
+      eq(certificationSubmissions.organizationId, TEST_ORG_ID), eq(certificationSubmissions.localEntityId, fixture.removalId),
+    ));
+    await db.transaction(async tx => {
+      const ctx = makeTestOrgContext();
+      const locked = await lockCreditBatchArtifacts(ctx, tx, fixture.batchId);
+      await expect(assertRemovalAllowsCreditBatchMutation(ctx, tx, fixture.batchId, 'update', locked)).rejects.toMatchObject({
+        code: 'certification_locked', message: expect.stringContaining(`Removal ${fixture.removalId}`),
+      });
+      await expect(assertRemovalAllowsCreditBatchMutation(ctx, tx, fixture.batchId, 'update', locked)).rejects.toThrow('Delete or resume the interrupted Removal');
+    });
+  });
 });

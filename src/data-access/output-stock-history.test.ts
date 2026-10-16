@@ -3,7 +3,7 @@ import { binMovements, outputStockAllocations, storageLocations } from '@/db/sch
 import { getOutputStockHistory } from './output-stock-history';
 
 const mocks = vi.hoisted(() => ({ select: vi.fn() }));
-vi.mock('./output-stock-edit-lock', () => ({ outputMovementLockReason: async () => null }));
+vi.mock('./output-stock-edit-lock', () => ({ outputMovementLockReason: async () => null, getOutputMovementCertificationLocks: async () => new Map() }));
 vi.mock('@/db', () => ({ db: { select: mocks.select } }));
 const ctx = { organizationId: 'org', userId: 'user', orgRole: 'owner' as const, isPlatformAdmin: false };
 const LAYER_A = '00000000-0000-4000-8000-00000000000a';

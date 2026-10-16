@@ -11,5 +11,5 @@ export async function correctOutputStockEntry(ctx: OrgContext, raw: OutputStockP
   requireOrgScope(ctx);
   const input = outputStockPostSchema.parse(raw);
   if (input.kind !== 'loss' || !input.correctsMovementId) throw new SafeError('Choose a Lost mass entry to edit.');
-  return runOperationInProcess(recordOutputStockMovement, ctx, { ...input, requireLatestCorrection: true });
+  return runOperationInProcess(recordOutputStockMovement, ctx, { ...input, checkFormEditLock: true });
 }

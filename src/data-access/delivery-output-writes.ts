@@ -32,7 +32,7 @@ import { lockBinStock } from './lock-bin-stocks';
 import { getOutputStockAllocationProjection } from './output-stock';
 import { withOutputStockPostingInTransaction, findPostedOutputRequest, OUTPUT_STOCK_FUTURE_TIME_MESSAGE, type PostedOutputRequest, type OutputStockPostingOptions, recordOutputStockMovementInTransaction } from './output-stock-post';
 import { lockMovementRequest } from './bin-movement-requests';
-import { assertLatestOutputMovement } from './output-stock-edit-lock';
+import { assertOutputMovementEditable } from './output-stock-edit-lock';
 import { lockBiocharTransportRouteTopology, syncBiocharProductTransportLegs } from './transport-legs';
 import { requireOrgScope } from './utils';
 
@@ -207,7 +207,7 @@ export async function updateDeliveryInTransaction(ctx: OrgContext, tx: DbTransac
         .where(and(eq(storageLocations.organizationId, ctx.organizationId), eq(storageLocations.id, existing.storageLocationId)));
       if (bin?.archivedAt) throw deliveryValidationFailed(['storageLocationId'], 'Source bin is archived. Unarchive it before editing delivery stock.');
       if (!current) throw new SafeError('Posted delivery stock entry not found.');
-      await assertLatestOutputMovement(ctx, existing.storageLocationId, current.id, tx);
+      await assertOutputMovementEditable(ctx, existing.storageLocationId, current.id, tx);
       if (data.correctsMovementId && data.correctsMovementId !== current.id) throw new SafeError('This delivery was corrected. Reload it before editing its mass.');
       const savedSources = current.inputSnapshot?.sources;
       if (moistureChanged && data.sources === undefined && Array.isArray(savedSources)) throw new SafeError('Edit the moisture reading for each sub-bin in this delivery.');
@@ -217,7 +217,7 @@ export async function updateDeliveryInTransaction(ctx: OrgContext, tx: DbTransac
         moisturePercent: data.moistureContentPercent ?? existing.moistureContentPercent, sources: data.sources,
         correctsMovementId: current.id, idempotencyKey: requestKey, basisFingerprint: data.basisFingerprint,
         reason: `Delivery ${data.code ?? existing.code}: mass or moisture edited`,
-      }, { requireLatestCorrection: true }));
+      }, { checkFormEditLock: true }));
     }
     const distanceSnapshot = existing.recordedDistanceKm == null
       ? await deliveryDistanceSnapshot(ctx, tx, existing) : {};

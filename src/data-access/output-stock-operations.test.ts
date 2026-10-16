@@ -52,18 +52,19 @@ it('keeps a correction fingerprint stable when product rows return in a differen
   expect((await prepare(changedLayers, editedVersion)).preview.basisFingerprint).not.toBe(original.preview.basisFingerprint);
 });
 
-it('returns certification artifact identities while checking both affected sources and the corrected delivery', async () => {
+it.each(['AWAITING_VERIFICATION', 'FAILED_VERIFICATION'])('names the actual holder with a %s statement', async status => {
+  mocks.lineage.mockClear();
   const binId = '00000000-0000-4000-8000-000000000001';
   const layers = [{ id: 'run', placedAt: '2026-09-01T12:00:00.000Z', postingSequence: BigInt(1), establishedDryBiocharKg: '100', ingredientDrySolidsKg: '0', remainingDryBiocharKg: '100', remainingSolidsKg: rational(BigInt(100)), runs: [{ productionRunId: 'run', establishedDryKg: '100', remainingDryKg: '100' }] }];
   // Bin, its mode changes (none), its movements (none), layer and run codes, then the corrected entry's readings (none).
   mocks.reads = [[{ id: binId, type: 'biochar_bin', name: 'Source', code: 'BC-001', formulationId: null }], [], [], [{ id: 'run', code: 'RUN-001' }], [{ id: 'run', code: 'RUN-001' }], []];
   mocks.state.mockResolvedValue({ layers });
   mocks.correction.mockResolvedValue({ original: { inputSnapshot: {} }, layers, allocations: [], deliveryId: 'delivery' });
-  mocks.lineage.mockResolvedValueOnce([{ recordLockRemoval: { id: 'removal', submissions: [{ status: 'submitted' }], statements: [] }, removalId: 'removal', removalSubmissionId: 'submitted', ghgStatementSubmissionId: null }]).mockResolvedValueOnce([{ recordLockRemoval: { id: 'removal', submissions: [{ status: 'submitted' }], statements: [] }, removalId: 'removal', ghgStatementId: 'statement', ghgStatementSubmissionId: 'submitted' }]);
+  mocks.lineage.mockResolvedValueOnce([{ recordLockRemoval: { id: 'removal', submissions: [{ status: 'submitted' }], statements: [] }, removalId: 'removal', removalSubmissionId: 'submitted', ghgStatementSubmissionId: null }]).mockResolvedValueOnce([{ recordLockRemoval: { id: 'removal', submissions: [{ status: 'submitted' }], statements: [{ id: 'statement', status, fresh: true, submittedToVerifier: true }] }, removalId: 'removal', ghgStatementId: 'statement', ghgStatementSubmissionId: 'submitted' }]);
   const ctx = { userId: 'operator', organizationId: 'org', orgRole: 'admin' as const, isPlatformAdmin: false };
   const result = await previewOutputStock(ctx, { storageLocationId: binId, facilityId: '00000000-0000-4000-8000-000000000002', correctsMovementId: '00000000-0000-4000-8000-000000000003', occurredAt: '2026-09-14T12:00:00.000Z', kind: 'loss', wetMassKg: 10, moisturePercent: 10 });
   expect(result.blockingMessage).toContain('certification');
-  expect(result.blockers).toEqual([{ entity: 'removal', id: 'removal', code: 'Removal' }, { entity: 'ghgStatement', id: 'statement', code: 'GHG Statement' }]);
+  expect(result.blockers).toEqual([{ entity: 'removal', id: 'removal', code: 'Removal' }, ...(status === 'AWAITING_VERIFICATION' ? [{ entity: 'ghgStatement', id: 'statement', code: 'GHG Statement' }] : [])]);
   expect(mocks.lineage.mock.calls.map(call => call[2])).toEqual([{ entityType: 'productionRun', entityId: 'run' }, { entityType: 'delivery', entityId: 'delivery' }]);
   expect(result.removedDryKg).toBe(9);
 });

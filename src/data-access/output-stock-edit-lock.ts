@@ -1,11 +1,12 @@
 import { db, type DbTransaction } from '@/db';
 import { binMovements, biocharProducts, productionRuns, storageLocations, outputStockMoistureReadings } from '@/db/schema';
 import type { OrgContext } from '@/lib/auth/server';
+import type { RecordLock } from '@/lib/record-lock';
 import { SafeError } from '@/lib/errors';
 import { DomainError } from '@/lib/domain-errors';
 import { conflictCode } from '@/lib/conflict-ref';
 import { stockReceiptMarker } from '@/lib/output-stock/edit-lock';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import { getRecordLocks, type CertifiedLineageTarget } from './certification-lineage-guards';
 import type { OutputStockLayer } from '@/lib/output-stock';
 import { requireOrgScope } from './utils';
@@ -37,6 +38,7 @@ export interface OutputMovementLockFacts {
   facilityId: string;
   all: Awaited<ReturnType<typeof getOutputStockAllocationProjection>>;
   layers: OutputStockLayer[] | null;
+  certificationLocks?: readonly RecordLock[];
 }
 
 /** Browser advisory checks both certification lineage and numeric dependencies. */
@@ -55,19 +57,11 @@ export async function outputMovementLockReason(ctx: OrgContext, storageLocationI
     if (!facts.layers) return UNVERIFIABLE_OUTPUT_ENTRY;
     const { original, facilityId, all, layers } = facts;
     const allocations = [...new Map(all.filter(row => row.movement.id === movementId).map(row => [row.allocation.id, row.allocation])).values()];
-    const targets: CertifiedLineageTarget[] = allocations.flatMap(allocation => [
-      ...(allocation.biocharProductId ? [{ entityType: 'biocharProduct' as const, entityId: allocation.biocharProductId }] : []),
-      ...(allocation.productionRunId ? [{ entityType: 'productionRun' as const, entityId: allocation.productionRunId }] : []),
-      ...(allocation.deliveryId ? [{ entityType: 'delivery' as const, entityId: allocation.deliveryId }] : []),
-    ]);
-    const readings = await reader.select().from(outputStockMoistureReadings).where(and(
-      eq(outputStockMoistureReadings.organizationId, ctx.organizationId), eq(outputStockMoistureReadings.movementId, movementId),
-    ));
-    for (const reading of readings) {
-      if (reading.biocharProductId) targets.push({ entityType: 'biocharProduct', entityId: reading.biocharProductId });
-      if (reading.productionRunId) targets.push({ entityType: 'productionRun', entityId: reading.productionRunId });
+    let locks = facts.certificationLocks;
+    if (!locks) {
+      const movementLocks = await getOutputMovementCertificationLocks(ctx, reader, [movementId], all);
+      locks = movementLocks.get(movementId) ?? [];
     }
-    const locks = await getRecordLocks(ctx, reader, targets);
     const sent = locks.find(lock => lock.level === 'sent');
     if (sent) return `This stock entry is locked by a certification submission. ${sent.howToFree}`;
     await assertOutputCorrectionDependencies(ctx, { storageLocationId, facilityId }, original, allocations, all, layers, reader);
@@ -79,12 +73,34 @@ export async function outputMovementLockReason(ctx: OrgContext, storageLocationI
   }
 }
 
-/** Legacy name: checks dependencies and Sent, not whether the entry is latest. Caller holds the bin lock. */
-export async function assertLatestOutputMovement(ctx: OrgContext, storageLocationId: string, movementId: string, tx: DbTransaction): Promise<void> {
+/** Checks dependencies and Sent. Caller holds the bin lock. */
+export async function assertOutputMovementEditable(ctx: OrgContext, storageLocationId: string, movementId: string, tx: DbTransaction): Promise<void> {
   requireOrgScope(ctx);
   const reason = await outputMovementLockReason(ctx, storageLocationId, movementId, tx);
   if (!reason) return;
   const [bin] = await tx.select({ code: storageLocations.code }).from(storageLocations).where(and(eq(storageLocations.organizationId, ctx.organizationId), eq(storageLocations.id, storageLocationId)));
   if (!bin) throw new SafeError('Storage bin not found.');
   throw new DomainError("certification_locked", reason, { conflict: { entity: 'storageLocation', id: storageLocationId, code: conflictCode(bin.code) } });
+}
+
+/** One lineage read and shared registry evidence for all history entries. */
+export async function getOutputMovementCertificationLocks(ctx: OrgContext, reader: Reader, movementIds: readonly string[], all: OutputMovementLockFacts['all']) {
+  requireOrgScope(ctx);
+  const readings = movementIds.length ? await reader.select().from(outputStockMoistureReadings).where(and(
+    eq(outputStockMoistureReadings.organizationId, ctx.organizationId), inArray(outputStockMoistureReadings.movementId, [...movementIds]),
+  )) : [];
+  const targetsByMovement = new Map(movementIds.map(id => {
+    const sources = [...all.filter(row => row.movement.id === id).map(row => row.allocation), ...readings.filter(row => row.movementId === id)];
+    const targets: CertifiedLineageTarget[] = sources.flatMap(source => [
+      ...(source.biocharProductId ? [{ entityType: 'biocharProduct' as const, entityId: source.biocharProductId }] : []),
+      ...(source.productionRunId ? [{ entityType: 'productionRun' as const, entityId: source.productionRunId }] : []),
+      ...('deliveryId' in source && source.deliveryId ? [{ entityType: 'delivery' as const, entityId: source.deliveryId }] : []),
+    ]);
+    return [id, targets] as const;
+  }));
+  const key = (target: CertifiedLineageTarget) => `${target.entityType}:${target.entityId}`;
+  const targets = [...new Map([...targetsByMovement.values()].flat().map(target => [key(target), target])).values()];
+  const locks = await getRecordLocks(ctx, reader, targets, { sentOnly: true });
+  const byTarget = new Map(targets.map((target, index) => [key(target), locks[index]]));
+  return new Map([...targetsByMovement].map(([id, targets]) => [id, targets.map(target => byTarget.get(key(target))!)]));
 }

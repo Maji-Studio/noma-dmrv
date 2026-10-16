@@ -13,6 +13,18 @@ Deferred work lives here, never as a `TODO` in code.
 
 **`needs-registry-check`** marks a question that must be answered by the Isometric MCP server (`how_to`, then the protocol/OpenAPI tools) or a sandbox probe, **never** from `docs/isometric/*`, which are non-authoritative local summaries. Do not close one of these from a local doc.
 
+## Record-lock follow-ups
+
+- `src/lib/record-lock.ts:recordLocks`: type and consume the free-field declarations
+  when the field-edit and deletion-reversal contract is implemented (#1120).
+- `src/data-access/record-lock-lineage.ts:readRecordLockLineage`: Isometric exposes
+  submission times but no return timestamp. Keep the conservative submission-time
+  lower bound until authoritative return evidence is available (`needs-registry-check`).
+- Independent guards in `src/data-access/reactors.ts`, `formulations.ts`,
+  `vehicles.ts`, `drivers.ts`, `document-write-scope.ts` and
+  `certifier-removal-deletion.ts` retain their own rules. Review conversion separately
+  from the operational record-lock predicate.
+
 ## Activity recording gaps (`activity/deferred-writers`) - **deferred**
 
 - `src/data-access/certifier-removals.ts:updateRemovalDates` changes Removal dates

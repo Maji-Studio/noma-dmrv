@@ -6,7 +6,7 @@ import { orderedSourcesSchema } from '@/schemas/output-stock';
 import type { OutputMoistureReset, OutputStockHistoryEntry, OutputStockPreview } from '@/types/output-stock';
 import { and, asc, eq, inArray } from 'drizzle-orm';
 import { getOutputStockAllocationProjection, readOutputBinAllLayers, UnresolvedOutputStockError } from './output-stock';
-import { outputMovementLockReason } from './output-stock-edit-lock';
+import { getOutputMovementCertificationLocks, outputMovementLockReason } from './output-stock-edit-lock';
 import { requireOrgScope } from './utils';
 import { deliveryAppliedLockedReason } from '@/lib/output-stock/labels';
 
@@ -109,11 +109,13 @@ export async function getOutputStockHistory(ctx: OrgContext, storageLocationId: 
   } catch (error) {
     if (!(error instanceof UnresolvedOutputStockError)) throw error;
   }
+  const editableIds = history.filter(entry => entry.kind !== 'reversal' && ['loss', 'delivery'].includes(entry.eventKind ?? entry.kind)).map(entry => entry.id);
+  const certificationLocks = await getOutputMovementCertificationLocks(ctx, reader, editableIds, rows);
   for (const entry of history) {
     if (entry.kind === 'reversal' || !['loss', 'delivery'].includes(entry.eventKind ?? entry.kind)) continue;
     const original = movements.find(row => row.movement.id === entry.id)?.movement;
     const code = entry.deliveryId ? applicationCode.get(entry.deliveryId) : undefined;
-    if (original) entry.editLockedReason = code ? deliveryAppliedLockedReason(code) : await outputMovementLockReason(ctx, storageLocationId, original.id, reader, { original, facilityId: bin.facilityId, all: rows, layers });
+    if (original) entry.editLockedReason = code ? deliveryAppliedLockedReason(code) : await outputMovementLockReason(ctx, storageLocationId, original.id, reader, { original, facilityId: bin.facilityId, all: rows, layers, certificationLocks: certificationLocks.get(original.id) ?? [] });
   }
   return history;
 }

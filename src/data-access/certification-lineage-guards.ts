@@ -116,7 +116,13 @@ function lineageQueryWhere(
       removalId: certifierRemovals.id,
       ghgStatementId: certifierRemovals.ghgStatementId,
       creditBatchId: creditBatchApplications.creditBatchId,
-      applicationId: applications.id,
+      applicationId: creditBatchApplications.applicationId,
+      productionRunId: productionRuns.id,
+      sampleId: samples.id,
+      biocharProductId: biocharProducts.id,
+      deliveryId: deliveries.id,
+      orderId: orders.id,
+      feedstockId: feedstocks.id,
       removalSubmissionId: removalSubmission.id,
       removalSubmissionType: removalSubmission.submissionType,
       removalSubmissionStatus: removalSubmission.status,
@@ -404,12 +410,20 @@ export async function getRecordLock(ctx: OrgContext, tx: DbTransaction, target: 
 }
 
 /** Resolve shared registry facts once for an entire advisory request. */
-export async function getRecordLocks(ctx: OrgContext, tx: Pick<DbTransaction, "select">, targets: readonly CertifiedLineageTarget[]) {
+export async function getRecordLocks(ctx: OrgContext, tx: Pick<DbTransaction, "select">, targets: readonly CertifiedLineageTarget[], options: { sentOnly?: boolean } = {}) {
   requireOrgScope(ctx);
-  const groups = await Promise.all(targets.map(target => lineageQueryWhere(ctx, tx, targetCondition(target))));
+  if (!targets.length) return [];
+  const rows = await lineageQueryWhere(ctx, tx, or(...targets.map(targetCondition))!);
+  const groups = targets.map(target => rows.filter(row => row[LINEAGE_TARGET_FIELDS[target.entityType]] === target.entityId));
   const facts = await readRecordLockLineage(ctx, tx, groups.flat(), true);
   return Promise.all(targets.map(async (target, index) => recordLocks[target.entityType]({
     removals: facts.filter(fact => groups[index].some(row => row.removalId === fact.id)),
-    dependents: await readRecordDependents(ctx, tx, target),
+    dependents: options.sentOnly ? [] : await readRecordDependents(ctx, tx, target),
   })));
 }
+
+const LINEAGE_TARGET_FIELDS = {
+  creditBatch: "creditBatchId", productionRun: "productionRunId", sample: "sampleId",
+  biocharProduct: "biocharProductId", delivery: "deliveryId", order: "orderId",
+  feedstock: "feedstockId", application: "applicationId",
+} as const;

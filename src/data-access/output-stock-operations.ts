@@ -1,3 +1,4 @@
+import { isReturnedStatement } from "@/lib/record-lock";
 import { DomainError } from '@/lib/domain-errors';
 import { db, type DbTransaction } from '@/db';
 import { binMovements, biocharProducts, formulations, productionRuns, storageLocations } from '@/db/schema';
@@ -225,11 +226,10 @@ export async function previewOutputStock(ctx: OrgContext, input: OutputStockPrev
         const targets = (await changedOutputLayerIds(ctx, tx, prepared)).map(layerId => outputLayerTarget(prepared.lane, layerId));
         const lineage = (await Promise.all(targets.map(target => getCertifiedLineage(ctx, tx, target)))).flat();
         if (prepared.correction.deliveryId) lineage.push(...await getCertifiedLineage(ctx, tx, { entityType: 'delivery', entityId: prepared.correction.deliveryId }));
-        const blockers = lineage.filter(isSubmittedLineageRow).map(row => ({
-          entity: row.ghgStatementSubmissionId ? 'ghgStatement' : 'removal',
-          id: row.ghgStatementSubmissionId ? row.ghgStatementId! : row.removalId,
-          code: row.ghgStatementSubmissionId ? 'GHG Statement' : 'Removal',
-        }));
+        const blockers = lineage.filter(isSubmittedLineageRow).map(row => {
+          const statement = row.recordLockRemoval.statements.find(statement => !isReturnedStatement(statement));
+          return { entity: statement ? 'ghgStatement' : 'removal', id: statement?.id ?? row.removalId, code: statement ? 'GHG Statement' : 'Removal' };
+        });
         if (blockers.length) return { ...prepared.preview, blockingMessage: 'Correction blocked by certification. Open the linked artifact to review its dependencies.', blockers: [...new Map(blockers.map(b => [b.id, b])).values()] };
       }
       return prepared.preview;

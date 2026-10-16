@@ -6,7 +6,7 @@ import {
 import { creditBatchApplications } from "@/db/schema/credits";
 import { acquireCertificationArtifactLocksSorted } from "@/lib/certification/submission-lock";
 import { formatCertificationLineageLockMessage } from "@/lib/certification/lineage-lock-message";
-import { isSentRemoval, recordLocks, withRecordLockGuidance } from "@/lib/record-lock";
+import { recordLocks, withRecordLockGuidance } from "@/lib/record-lock";
 import { DomainError } from "@/lib/domain-errors";
 import { readRecordLockLineage } from "./record-lock-lineage";
 import type { OrgContext } from "@/lib/auth/server";
@@ -87,12 +87,12 @@ export async function lockCreditBatchArtifacts(
 }
 
 /** Re-resolve under the batch lock; never acquire newly discovered artifacts here. */
-export async function isCreditBatchMembershipLockedBySubmission(
+async function creditBatchMembershipLock(
   ctx: OrgContext,
   tx: DbTransaction,
   creditBatchId: string,
   lockedRemovals: CreditBatchRemovals,
-): Promise<boolean> {
+) {
   const removals = await readCreditBatchRemovals(ctx, tx, creditBatchId, true);
   if (
     removals.length !== lockedRemovals.length ||
@@ -104,9 +104,13 @@ export async function isCreditBatchMembershipLockedBySubmission(
   ) {
     throw new CreditBatchLineageChangedError();
   }
-  if (removals.length === 0) return false;
+
   const facts = await readRecordLockLineage(ctx, tx, removals.map(row => ({ removalId: row.id, ghgStatementId: row.ghgStatementId })), true);
-  return facts.some(isSentRemoval);
+  return recordLocks.creditBatch({ removals: facts, dependents: [] });
+}
+
+export async function isCreditBatchMembershipLockedBySubmission(ctx: OrgContext, tx: DbTransaction, creditBatchId: string, lockedRemovals: CreditBatchRemovals): Promise<boolean> {
+  return (await creditBatchMembershipLock(ctx, tx, creditBatchId, lockedRemovals)).level === "sent";
 }
 
 export async function assertRemovalAllowsCreditBatchMutation(
@@ -116,20 +120,13 @@ export async function assertRemovalAllowsCreditBatchMutation(
   mutation: "update" | "delete",
   lockedRemovals: CreditBatchRemovals,
 ): Promise<void> {
-  if (
-    !(await isCreditBatchMembershipLockedBySubmission(
-      ctx,
-      tx,
-      creditBatchId,
-      lockedRemovals,
-    ))
-  ) {
-    return;
-  }
+  const lock = await creditBatchMembershipLock(ctx, tx, creditBatchId, lockedRemovals);
+  if (lock.level !== "sent") return;
 
   throw new DomainError(
     "certification_locked",
     formatCertificationLineageLockMessage({
+      lock,
       mutation,
       subjectEntityType: "creditBatch",
       lineageEntityType: "creditBatch",

@@ -200,8 +200,7 @@ afterAll(async () => {
 
 
 describe("updateFacility durability-tier guard", () => {
-  // Both locking statuses must be exercised — a regression that dropped one from
-  // the lock set would otherwise pass while only `issued` is tested.
+  // Neither unwritten legacy batch status locks the tier. Registry submissions do.
   for (const status of ["verified", "issued"] as const) {
     it(`ignores the unwritten legacy ${status} batch status`, async () => {
       const chain = await setupFacility(`blocked-${status}`, "200_year");

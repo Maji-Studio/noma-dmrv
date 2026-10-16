@@ -124,3 +124,11 @@ describe("formatCertificationLineageLockMessage", () => {
     );
   });
 });
+
+it("names the holding Removal and gives interrupted-attempt guidance", () => {
+  const message = formatCertificationLineageLockMessage({ mutation: "update", subjectEntityType: "creditBatch", lineageEntityType: "creditBatch",
+    lock: { level: "sent", heldBy: [{ kind: "removal", id: "removal-123" }], freeFields: [], howToFree: "Delete or resume the interrupted Removal." } });
+  expect(message).toContain("Removal removal-123");
+  expect(message).toContain("Delete or resume the interrupted Removal.");
+  expect(message).not.toContain("Wait for Isometric");
+});

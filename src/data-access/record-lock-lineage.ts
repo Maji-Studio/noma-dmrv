@@ -6,7 +6,7 @@ import { getMetadataValue } from "@/lib/certification/submission-metadata";
 import { getGhgStatement } from "@/lib/isometric/ghg-statements";
 import { isLockedInFlight } from "@/lib/isometric/utils/lock";
 import { REMOVAL_SCOPED_SUBMISSION_TYPES } from "@/lib/isometric/utils/constants";
-import { isSentRemoval, type RecordLockRemoval, type RecordLockStatement } from "@/lib/record-lock";
+import { isSentRemoval, isTerminalAttemptStatus, submissionHasRemoteEffect, type RecordLockRemoval, type RecordLockStatement } from "@/lib/record-lock";
 import { requireOrgScope } from "./utils";
 
 type Removal = { removalId: string; ghgStatementId: string | null };
@@ -47,13 +47,7 @@ export async function readRecordLockLineage(ctx: OrgContext, tx: Pick<DbTransact
       const members = getMetadataValue(row.metadata, "removalIds");
       return currentIds.has(row.localEntityId) || (Array.isArray(members) && members.some(member => externalIds.has(member)));
     });
-    const canRefresh = fresh && !submissions.some(row => isLockedInFlight(row) || !["submitted", "accepted", "rejected", "superseded"].includes(row.status)) &&
-      covering.every(row => {
-        const status = getMetadataValue(row.metadata, "remoteStatus");
-        const submitted = getMetadataValue(row.metadata, "submittedToVerifierAt");
-        return !isLockedInFlight(row) && (status === "FAILED_VERIFICATION" ||
-          (status === "DRAFT" && typeof submitted === "string" && Number.isFinite(Date.parse(submitted))));
-      });
+    const canRefresh = fresh && !submissions.some(row => isLockedInFlight(row) || !isTerminalAttemptStatus(row.status));
     return { id, submissions: submissions.map(submissionFact),
       statements: await Promise.all(covering.map(row => {
         const key = `${row.id}:${canRefresh}`;
@@ -70,10 +64,9 @@ async function readStatement(ctx: OrgContext, tx: Pick<DbTransaction, "select">,
     status: typeof savedStatus === "string" ? savedStatus : null,
     fresh: false, submittedToVerifier: typeof savedSubmitted === "string" && Number.isFinite(Date.parse(savedSubmitted)),
     removalExternalIds: Array.isArray(getMetadataValue(row.metadata, "removalIds")) ? getMetadataValue(row.metadata, "removalIds") as string[] : [],
-    inFlight: isLockedInFlight(row) || !["submitted", "accepted", "rejected", "superseded"].includes(row.status),
+    inFlight: isLockedInFlight(row) || !isTerminalAttemptStatus(row.status),
   };
-  if (!fresh || !row.externalId || fact.inFlight ||
-    !(fact.status === "FAILED_VERIFICATION" || (fact.status === "DRAFT" && fact.submittedToVerifier))) return fact;
+  if (!fresh || !row.externalId || fact.inFlight) return fact;
   try {
     const { resolveIsometricClient } = await import("./certifier-credentials");
     const remote = await getGhgStatement(await resolveIsometricClient(ctx, tx), row.externalId);
@@ -83,7 +76,11 @@ async function readStatement(ctx: OrgContext, tx: Pick<DbTransaction, "select">,
       returnedAt: remote.submitted_at ?? (typeof savedSubmitted === "string" ? savedSubmitted : null),
       removalExternalIds: remote.ghg_entry_ids,
       submittedToVerifier: fact.submittedToVerifier || Boolean(remote.submitted_at && Number.isFinite(Date.parse(remote.submitted_at))) };
-  } catch {
+  } catch (error) {
+    const { logger } = await import("@/lib/log");
+    logger.warn({ organizationId: ctx.organizationId, statementId: row.localEntityId,
+      errorName: error instanceof Error && ["Error", "TypeError", "IsometricApiError"].includes(error.name) ? error.name : "UnknownError",
+    }, "Record lock statement refresh failed");
     // A failed registry read cannot authorize an edit of previously sent data.
     return fact;
   }
@@ -91,5 +88,5 @@ async function readStatement(ctx: OrgContext, tx: Pick<DbTransaction, "select">,
 
 function submissionFact(row: Submission) {
   return { id: row.id, externalId: row.externalId, submittedAt: row.submittedAt?.toISOString() ?? null, createdAt: row.createdAt?.toISOString() ?? null, status: row.status, inFlight: isLockedInFlight(row),
-    hasRemoteMutation: Boolean(row.externalId) || ["possible", "confirmed"].includes(String(getMetadataValue(row.metadata, "externalMutation"))) };
+    hasRemoteMutation: submissionHasRemoteEffect(row) };
 }

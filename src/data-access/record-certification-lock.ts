@@ -1,3 +1,5 @@
+import { applications, biocharProducts, creditBatches, deliveries, feedstocks, orders, productionRuns, samples } from "@/db/schema";
+import { assertSameOrg } from "./utils";
 import { db } from "@/db";
 import type { OrgContext } from "@/lib/auth/server";
 import type { DocumentEntityType } from "@/schemas/documents";
@@ -32,10 +34,10 @@ export async function getRecordLockForTarget(ctx: OrgContext, target: CertifiedL
 
 export async function getRecordLocksForTargets(ctx: OrgContext, targets: readonly CertifiedLineageTarget[]) {
   requireOrgScope(ctx);
-  return db.transaction(async tx => {
-    const ownerTypes = { feedstock: "feedstock", productionRun: "production_run", sample: "sample",
-      biocharProduct: "biochar_product", order: "order", delivery: "delivery", application: "application", creditBatch: "credit_batch" } as const;
-    for (const target of targets) await documentOwnerLineageTargets(ctx, tx, ownerTypes[target.entityType], target.entityId);
-    return getRecordLocks(ctx, tx, targets);
-  });
+  // Explicit existence and tenancy checks, without discarded lineage discovery.
+  for (const target of targets) await assertSameOrg(ctx, TARGET_TABLES[target.entityType], target.entityId);
+  return getRecordLocks(ctx, db, targets);
 }
+
+const TARGET_TABLES = { feedstock: feedstocks, productionRun: productionRuns, sample: samples,
+  biocharProduct: biocharProducts, order: orders, delivery: deliveries, application: applications, creditBatch: creditBatches } as const;

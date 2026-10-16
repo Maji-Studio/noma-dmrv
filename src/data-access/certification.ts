@@ -1,3 +1,5 @@
+import { formatCertifierMappingLockMessage } from "@/lib/certification/lineage-lock-message";
+import { DomainError } from "@/lib/domain-errors";
 import { insertDocument } from "./documents";
 import { withCertificationStatusActivity, type CertificationActivityOrigin } from "./certification-status-activity";
 import { nextVersion } from "./row-version";
@@ -14,8 +16,8 @@ import {
 import { creditBatches } from "@/db/schema/credits";
 import { documents } from "@/db/schema/documentation";
 import { facilities } from "@/db/schema/facilities";
-import { isSentRemoval } from "@/lib/record-lock";
-import { SUBMISSION_METADATA_KEYS, getMetadataValue } from "@/lib/certification/submission-metadata";
+import { isTerminalAttemptStatus, isRemoteSubmission, submissionHasRemoteEffect } from "@/lib/record-lock";
+import { SUBMISSION_METADATA_KEYS } from "@/lib/certification/submission-metadata";
 import { DEFAULT_PROTOCOL_SLUG } from "@/config/certification";
 import {
   GHG_STATEMENT_ENTITY_TYPE,
@@ -134,8 +136,8 @@ export async function hasBlockingFacilitySubmission(
 ): Promise<boolean> {
   requireOrgScope(ctx);
   // Two facility-scoped artifacts can pin a mapping: a Removal (ADR 0003)
-  // and a GHG Statement (ADR 0004). Each carries facilityId directly — one hop, no lineage walk. Two small probes are
-  // clearer than a UNION/OR and let the planner use each artifact's own index.
+  // and a GHG Statement (ADR 0004). Read every ledger version through
+  // each artifact's facility index; a later failure cannot hide a remote effect.
   const [removalHit, ghgHit] = await Promise.all([
     executor
       .select({ id: certificationSubmissions.id, status: certificationSubmissions.status, externalId: certificationSubmissions.externalId, metadata: certificationSubmissions.metadata })
@@ -173,9 +175,8 @@ export async function hasBlockingFacilitySubmission(
         ),
       ),
   ]);
-  return isSentRemoval({ id: facilityId, submissions: [...removalHit, ...ghgHit].map(row => ({ status: row.status,
-    hasRemoteMutation: Boolean(row.externalId) || ["possible", "confirmed"].includes(String(getMetadataValue(row.metadata, "externalMutation"))),
-  })), statements: [] });
+  return [...removalHit, ...ghgHit].some(row => !isTerminalAttemptStatus(row.status) ||
+    isRemoteSubmission({ status: row.status, hasRemoteMutation: submissionHasRemoteEffect(row) }));
 }
 
 // DB-level backstop for the (provider, external_facility_id) 1:1 anchor. The
@@ -287,8 +288,9 @@ export async function upsertCertifierProject(
           input.provider,
         );
         if (blocked) {
-          throw new SafeError(
-            "Cannot change certifier project or facility ID: this facility has certifier submissions. Delete interrupted Removals and their registry records first. Completed submissions keep this mapping fixed.",
+          throw new DomainError(
+            "certification_locked",
+            formatCertifierMappingLockMessage("change"),
           );
         }
         if (
@@ -431,8 +433,9 @@ export async function deleteCertifierProject(
     // submission depends on this mapping.
     const blocked = await hasBlockingFacilitySubmission(ctx, tx, facilityId, provider);
     if (blocked) {
-      throw new SafeError(
-        "Cannot unlink: this facility has certifier submissions. Delete interrupted Removals and their registry records first. Completed submissions keep this mapping fixed.",
+      throw new DomainError(
+        "certification_locked",
+        formatCertifierMappingLockMessage("unlink"),
       );
     }
 

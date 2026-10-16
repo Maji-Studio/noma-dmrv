@@ -1,4 +1,26 @@
-const TERMINAL_ATTEMPT_STATUSES = new Set(["submitted", "accepted", "rejected", "superseded"]);
+import type { LocalSubmissionStatus } from "@/lib/certification/status";
+import { getMetadataValue } from "@/lib/certification/submission-metadata";
+
+const TERMINAL_ATTEMPT_STATUSES: ReadonlySet<LocalSubmissionStatus> = new Set(["submitted", "accepted", "rejected", "superseded"]);
+const REMOTELY_SUBMITTED_STATUSES: ReadonlySet<LocalSubmissionStatus> = new Set(["submitted", "accepted"]);
+
+export function isTerminalAttemptStatus(status: string): boolean {
+  return TERMINAL_ATTEMPT_STATUSES.has(status as LocalSubmissionStatus);
+}
+
+export function submissionHasRemoteEffect(row: { externalId?: string | null; metadata?: unknown; hasRemoteMutation?: boolean }): boolean {
+  const mutation = getMetadataValue(row.metadata, "externalMutation");
+  return Boolean(row.externalId || row.hasRemoteMutation) || mutation === "possible" || mutation === "confirmed";
+}
+
+export function isRemoteSubmission(submission: RecordLockSubmission): boolean {
+  return REMOTELY_SUBMITTED_STATUSES.has(submission.status as LocalSubmissionStatus) || submissionHasRemoteEffect(submission);
+}
+
+export function isReturnedStatement(statement: RecordLockStatement): boolean {
+  return statement.fresh && !statement.inFlight &&
+    (statement.status === "FAILED_VERIFICATION" || (statement.status === "DRAFT" && statement.submittedToVerifier));
+}
 
 /** Client-safe facts. Callers resolve dependencies and every ledger version. */
 export interface RecordLockHolder {
@@ -49,25 +71,20 @@ export interface RecordLock {
 
 export function isSentRemoval(removal: RecordLockRemoval): boolean {
   const unknownOrInFlight = removal.submissions.some(submission =>
-    submission.inFlight || !TERMINAL_ATTEMPT_STATUSES.has(submission.status),
+    submission.inFlight || !isTerminalAttemptStatus(submission.status),
   );
   if (unknownOrInFlight) return true;
-  const returned = (statement: RecordLockStatement) => statement.fresh && !statement.inFlight &&
-    (statement.status === "FAILED_VERIFICATION" || (statement.status === "DRAFT" && statement.submittedToVerifier));
-  const allStatementsSafe = removal.statements.length > 0 && removal.statements.every(returned);
-  const remoteAttempts = removal.submissions.filter(submission =>
-    submission.status === "submitted" || submission.status === "accepted" || submission.hasRemoteMutation);
+  const allStatementsSafe = removal.statements.length > 0 && removal.statements.every(isReturnedStatement);
+  const remoteAttempts = removal.submissions.filter(isRemoteSubmission);
   const allAttemptsReturned = remoteAttempts.every(submission => removal.statements.some(statement => {
-    if (!returned(statement) || !submission.externalId || !statement.removalExternalIds?.includes(submission.externalId)) return false;
+    if (!isReturnedStatement(statement) || !submission.externalId || !statement.removalExternalIds?.includes(submission.externalId)) return false;
     // Creation may predate the remote attempt, so it cannot prove a later return.
     const attemptedAt = Date.parse(submission.submittedAt ?? "");
     const returnedAt = Date.parse(statement.returnedAt ?? "");
     return Number.isFinite(attemptedAt) && Number.isFinite(returnedAt) && attemptedAt < returnedAt;
   }));
   if (allStatementsSafe && allAttemptsReturned) return false;
-  return removal.statements.length > 0 || removal.submissions.some(submission =>
-    submission.status === "submitted" || submission.status === "accepted" || submission.hasRemoteMutation,
-  );
+  return removal.statements.length > 0 || removal.submissions.some(isRemoteSubmission);
 }
 
 function recordLock(facts: RecordLockFacts, freeFields: readonly string[]): RecordLock {
