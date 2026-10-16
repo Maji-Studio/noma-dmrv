@@ -1,5 +1,5 @@
 import { and, eq, isNull } from "drizzle-orm";
-import { db, type DbTransaction } from "@/db";
+import type { DbTransaction } from "@/db";
 import { deliveries, feedstocks } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import { SafeError } from "@/lib/errors";
@@ -12,8 +12,6 @@ import { distanceRefreshLineageTargets, getTransportDistanceDrift } from "./tran
 import { assertRowVersion, nextVersion } from "./row-version";
 import { lockBiocharTransportRouteTopology, syncBiocharProductTransportLegs, syncFeedstockTransportLeg } from "./transport-legs";
 import { requireOrgScope } from "./utils";
-import { recordScopedWriteActivity, resolveWriteActivityScopes } from "./write-activity";
-import { processPendingStorageObjectDeletions } from "./storage-object-deletions";
 
 export { getTransportDistanceDrift } from "./transport-distance-drift";
 
@@ -36,58 +34,39 @@ async function guardRefresh(ctx: OrgContext, tx: DbTransaction, target: Transpor
   return { targets, lockedKeys };
 }
 
-async function recordRefresh(ctx: OrgContext, tx: DbTransaction, target: TransportDistanceTarget, facilityId: string, version: number) {
-  requireOrgScope(ctx);
-  await recordScopedWriteActivity(ctx, tx, {
-    entityType: target.entityType, entityId: target.entityId, facilityId, action: "updated", source: "form",
-    changedFields: target.entityType === "feedstock"
-      ? ["transportDistanceKm", "transportDistanceSource"] : ["recordedDistanceKm", "recordedDistanceSource"], versionBefore: version, versionAfter: version + 1,
-  }, await resolveWriteActivityScopes(ctx, tx, target.entityType, target.entityId));
-}
-
-export async function refreshFeedstockDistance(ctx: OrgContext, input: RefreshTransportDistanceInput) {
+export async function refreshFeedstockDistanceInTransaction(ctx: OrgContext, tx: DbTransaction, input: RefreshTransportDistanceInput) {
   requireOrgScope(ctx);
   const target = { entityType: "feedstock" as const, entityId: input.entityId };
-  const result = await db.transaction(async tx => {
-    await lockBiocharTransportRouteTopology(ctx, tx);
-    // Intake writers lock the feedstock before certification artifacts.
-    const [row] = await tx.select().from(feedstocks).where(and(eq(feedstocks.organizationId, ctx.organizationId),
-      eq(feedstocks.id, input.entityId), isNull(feedstocks.archivedAt))).for("update");
-    if (!row) throw new DomainError("not_found", "Feedstock not found or archived.");
-    assertRowVersion({ entity: "feedstock", id: row.id, expectedVersion: input.expectedVersion, actualVersion: row.version });
-    await guardRefresh(ctx, tx, target);
-    if (row.distanceKmOverride != null) throw new DomainError("validation_failed", "The distance was not refreshed because it has an override. Clear the override first.");
-    await syncFeedstockTransportLeg(ctx, tx, row.id, { refreshFromLocation: true, requireLocationDistance: true });
-    await tx.update(feedstocks).set({ version: nextVersion(feedstocks.version), updatedAt: new Date() })
-      .where(and(eq(feedstocks.organizationId, ctx.organizationId), eq(feedstocks.id, row.id)));
-    await recordRefresh(ctx, tx, target, row.facilityId, row.version);
-    return getTransportDistanceDrift(ctx, target, tx);
-  });
-  await processPendingStorageObjectDeletions(ctx);
-  return result;
+  await lockBiocharTransportRouteTopology(ctx, tx);
+  // Intake writers lock the feedstock before certification artifacts.
+  const [row] = await tx.select().from(feedstocks).where(and(eq(feedstocks.organizationId, ctx.organizationId),
+    eq(feedstocks.id, input.entityId), isNull(feedstocks.archivedAt))).for("update");
+  if (!row) throw new DomainError("not_found", "Feedstock not found or archived.");
+  assertRowVersion({ entity: "feedstock", id: row.id, expectedVersion: input.expectedVersion, actualVersion: row.version });
+  await guardRefresh(ctx, tx, target);
+  if (row.distanceKmOverride != null && row.distanceKmOverride > 0) throw new DomainError("validation_failed", "The distance was not refreshed because it has an override. Clear the override first.");
+  await syncFeedstockTransportLeg(ctx, tx, row.id, { refreshFromLocation: true, requireLocationDistance: true });
+  await tx.update(feedstocks).set({ version: nextVersion(feedstocks.version), updatedAt: new Date() })
+    .where(and(eq(feedstocks.organizationId, ctx.organizationId), eq(feedstocks.id, row.id)));
+  return getTransportDistanceDrift(ctx, target, tx);
 }
 
-export async function refreshDeliveryDistance(ctx: OrgContext, input: RefreshTransportDistanceInput) {
+export async function refreshDeliveryDistanceInTransaction(ctx: OrgContext, tx: DbTransaction, input: RefreshTransportDistanceInput) {
   requireOrgScope(ctx);
   const target = { entityType: "delivery" as const, entityId: input.entityId };
-  const result = await db.transaction(async tx => {
-    await lockBiocharTransportRouteTopology(ctx, tx);
-    const { targets, lockedKeys } = await guardRefresh(ctx, tx, target);
-    const [row] = await tx.select().from(deliveries).where(and(eq(deliveries.organizationId, ctx.organizationId),
-      eq(deliveries.id, input.entityId), isNull(deliveries.archivedAt))).for("update");
-    if (!row) throw new DomainError("not_found", "Delivery not found or archived.");
-    assertRowVersion({ entity: "delivery", id: row.id, expectedVersion: input.expectedVersion, actualVersion: row.version });
-    await withFeedstockErrors(() => assertLockedLineagesAllowMutation(ctx, tx, lockedKeys, targets.map(lineageTarget => ({ target: lineageTarget, mutation: "update" }))), "certification_locked");
-    if (row.distanceKmOverride != null) throw new DomainError("validation_failed", "The distance was not refreshed because it has an override. Clear the override first.");
-    const preview = await getTransportDistanceDrift(ctx, target, tx);
-    if (preview.currentDistanceKm == null) throw new DomainError("validation_failed", "The distance was not refreshed because the location has no distance for this facility. Save a location distance first.");
-    await tx.update(deliveries).set({ recordedDistanceKm: preview.currentDistanceKm, recordedDistanceSource: preview.currentDistanceSource,
-      version: nextVersion(deliveries.version), updatedAt: new Date() })
-      .where(and(eq(deliveries.organizationId, ctx.organizationId), eq(deliveries.id, row.id)));
-    await syncBiocharProductTransportLegs(ctx, tx, targets.filter(item => item.entityType === "biocharProduct").map(item => item.entityId));
-    await recordRefresh(ctx, tx, target, row.facilityId, row.version);
-    return getTransportDistanceDrift(ctx, target, tx);
-  });
-  await processPendingStorageObjectDeletions(ctx);
-  return result;
+  await lockBiocharTransportRouteTopology(ctx, tx);
+  const { targets, lockedKeys } = await guardRefresh(ctx, tx, target);
+  const [row] = await tx.select().from(deliveries).where(and(eq(deliveries.organizationId, ctx.organizationId),
+    eq(deliveries.id, input.entityId), isNull(deliveries.archivedAt))).for("update");
+  if (!row) throw new DomainError("not_found", "Delivery not found or archived.");
+  assertRowVersion({ entity: "delivery", id: row.id, expectedVersion: input.expectedVersion, actualVersion: row.version });
+  await withFeedstockErrors(() => assertLockedLineagesAllowMutation(ctx, tx, lockedKeys, targets.map(lineageTarget => ({ target: lineageTarget, mutation: "update" }))), "certification_locked");
+  if (row.distanceKmOverride != null && row.distanceKmOverride > 0) throw new DomainError("validation_failed", "The distance was not refreshed because it has an override. Clear the override first.");
+  const preview = await getTransportDistanceDrift(ctx, target, tx);
+  if (preview.currentDistanceKm == null) throw new DomainError("validation_failed", "The distance was not refreshed because the location has no distance for this facility. Save a location distance first.");
+  await tx.update(deliveries).set({ recordedDistanceKm: preview.currentDistanceKm, recordedDistanceSource: preview.currentDistanceSource, distanceSource: null,
+    version: nextVersion(deliveries.version), updatedAt: new Date() })
+    .where(and(eq(deliveries.organizationId, ctx.organizationId), eq(deliveries.id, row.id)));
+  await syncBiocharProductTransportLegs(ctx, tx, targets.filter(item => item.entityType === "biocharProduct").map(item => item.entityId));
+  return getTransportDistanceDrift(ctx, target, tx);
 }

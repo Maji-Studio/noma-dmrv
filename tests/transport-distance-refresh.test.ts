@@ -2,7 +2,9 @@ import { beforeAll, expect, it, vi } from "vitest";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { customerLocationFacilityDistances, supplierLocationFacilityDistances, customerLocations, deliveries, feedstocks, orders, supplierLocations } from "@/db/schema";
-import { getTransportDistanceDrift, refreshFeedstockDistance, refreshDeliveryDistance } from "@/data-access/transport-distance-refresh";
+import { getTransportDistanceDrift } from "@/data-access/transport-distance-drift";
+import { refreshFeedstockDistance, refreshDeliveryDistance } from "@/lib/operations/transport-distance-refresh";
+import { runOperationInProcess } from "@/lib/operations/runner";
 import * as transport from "@/data-access/transport-legs";
 import * as driftReads from "@/data-access/transport-distance-drift";
 import { getTransportLegsForEntity } from "@/data-access/transport-legs";
@@ -43,17 +45,17 @@ it.each(["feedstock", "delivery"] as const)("freezes %s defaults, reports drift,
       expect(drift).toMatchObject({ recordedDistanceKm: 42, currentDistanceKm: 55, hasDrift: true, isOverridden: false, hasSubmittedRemoval: false });
       expect(drift.expectedVersion).toBe(before.expectedVersion);
       const refresh = entityType === "feedstock" ? refreshFeedstockDistance : refreshDeliveryDistance;
-      await expect(refresh({ ...ctx, organizationId: "foreign-org" }, { entityId, expectedVersion: drift.expectedVersion })).rejects.toThrow();
+      await expect(runOperationInProcess(refresh, { ...ctx, organizationId: "foreign-org" }, { entityId, expectedVersion: drift.expectedVersion })).rejects.toThrow();
       await expect(getTransportDistanceDrift({ ...ctx, organizationId: "foreign-org" }, target)).rejects.toThrow();
-      const refreshed = await refresh(ctx, { entityId, expectedVersion: drift.expectedVersion });
+      const refreshed = await runOperationInProcess(refresh, ctx, { entityId, expectedVersion: drift.expectedVersion });
       expect(refreshed).toMatchObject({ recordedDistanceKm: 55, hasDrift: false, expectedVersion: drift.expectedVersion + 1 });
       const legs = await getTransportLegsForEntity(ctx, entityType === "feedstock" ? "feedstock" : "biochar", entityType === "feedstock" ? fixture.feedstockId : fixture.productId);
       expect(legs).toEqual(expect.arrayContaining([expect.objectContaining({ isDerived: true, distanceKm: 55 })]));
-      await expect(refresh(ctx, { entityId, expectedVersion: drift.expectedVersion })).rejects.toMatchObject({ code: "stale_version" });
+      await expect(runOperationInProcess(refresh, ctx, { entityId, expectedVersion: drift.expectedVersion })).rejects.toMatchObject({ code: "stale_version" });
       if (entityType === "feedstock") await db.update(feedstocks).set({ distanceKmOverride: 25, distanceSource: "manual" }).where(eq(feedstocks.id, entityId));
       else await db.update(deliveries).set({ distanceKmOverride: 25, distanceSource: "manual" }).where(eq(deliveries.id, entityId));
       expect(await getTransportDistanceDrift(ctx, target)).toMatchObject({ hasDrift: false, isOverridden: true });
-      await expect(refresh(ctx, { entityId, expectedVersion: refreshed.expectedVersion })).rejects.toThrow(/override/i);
+      await expect(runOperationInProcess(refresh, ctx, { entityId, expectedVersion: refreshed.expectedVersion })).rejects.toThrow(/override/i);
     } finally { await db.delete(supplierLocations).where(eq(supplierLocations.id, supplierLocation.id)); }
   }, "none");
 });
@@ -65,7 +67,7 @@ it.each(["removal", "ghgStatement"] as const)("refuses refresh through real %s l
       const before = await getTransportDistanceDrift(ctx, { entityType, entityId });
       expect(before.hasSubmittedRemoval).toBe(true);
       const refresh = entityType === "feedstock" ? refreshFeedstockDistance : refreshDeliveryDistance;
-      await expect(refresh(ctx, { entityId, expectedVersion: before.expectedVersion })).rejects.toThrow(
+      await expect(runOperationInProcess(refresh, ctx, { entityId, expectedVersion: before.expectedVersion })).rejects.toThrow(
         "The distance was not refreshed because its transport data belongs to a locked Removal. Ask an Organization Admin to review the linked Removal.",
       );
       expect(await getTransportDistanceDrift(ctx, { entityType, entityId })).toEqual(before);
@@ -84,7 +86,7 @@ it("protects a shared product even when the refreshed delivery has no applicatio
     try {
       const preview = await getTransportDistanceDrift(ctx, { entityType: "delivery", entityId: shared.id });
       expect(preview.hasSubmittedRemoval).toBe(true);
-      await expect(refreshDeliveryDistance(ctx, { entityId: shared.id, expectedVersion: shared.version }))
+      await expect(runOperationInProcess(refreshDeliveryDistance, ctx, { entityId: shared.id, expectedVersion: shared.version }))
         .rejects.toThrow("The distance was not refreshed because its transport data belongs to a locked Removal.");
     } finally { await deleteOutputDeliveryFixtures(db, eq(deliveries.id, shared.id)); }
   }, "removal");
@@ -123,7 +125,7 @@ it.each(["feedstock", "delivery"] as const)("refuses %s refresh when the pair di
       });
     try {
       const refresh = entityType === "feedstock" ? refreshFeedstockDistance : refreshDeliveryDistance;
-      await expect(refresh(ctx, { entityId: target.entityId, expectedVersion: before.expectedVersion }))
+      await expect(runOperationInProcess(refresh, ctx, { entityId: target.entityId, expectedVersion: before.expectedVersion }))
         .rejects.toMatchObject({ code: "validation_failed" });
       expect(await getTransportLegsForEntity(ctx, legType, legOwner)).toEqual(legs);
       expect(await getTransportDistanceDrift(ctx, target)).toMatchObject({
@@ -135,4 +137,29 @@ it.each(["feedstock", "delivery"] as const)("refuses %s refresh when the pair di
       await db.delete(supplierLocations).where(eq(supplierLocations.id, location.id));
     }
   }, "none");
+});
+
+it("refreshes a documented delivery using the pair provenance", async () => {
+  await withLineageFixture(async fixture => {
+    await db.update(deliveries).set({ distanceKmOverride: null, distanceSource: "document", recordedDistanceKm: 12 })
+      .where(eq(deliveries.id, fixture.deliveryId));
+    const target = { entityType: "delivery" as const, entityId: fixture.deliveryId };
+    const [order] = await db.select().from(orders).where(eq(orders.id, fixture.orderId));
+    await db.insert(customerLocationFacilityDistances).values({ organizationId: ctx.organizationId,
+      locationId: order.customerLocationId!, facilityId: fixture.facilityId, distanceKm: 55, distanceSource: "map_estimate" });
+    const before = await getTransportDistanceDrift(ctx, target);
+    expect(before).toMatchObject({ isOverridden: false, hasDrift: true });
+    const saved = await runOperationInProcess(refreshDeliveryDistance, ctx, { entityId: fixture.deliveryId, expectedVersion: before.expectedVersion });
+    expect(saved).toMatchObject({ recordedDistanceKm: before.currentDistanceKm, recordedDistanceSource: before.currentDistanceSource, hasDrift: false });
+    const [delivery] = await db.select().from(deliveries).where(eq(deliveries.id, fixture.deliveryId));
+    expect(delivery.distanceSource).toBeNull();
+    const legs = await getTransportLegsForEntity(ctx, "biochar", fixture.productId);
+    expect(legs).toEqual(expect.arrayContaining([expect.objectContaining({ isDerived: true,
+      distanceKm: before.currentDistanceKm, distanceSource: before.currentDistanceSource })]));
+  }, "none");
+});
+
+it("returns not_found for a missing drift record", async () => {
+  await expect(getTransportDistanceDrift(ctx, { entityType: "delivery", entityId: crypto.randomUUID() }))
+    .rejects.toMatchObject({ code: "not_found" });
 });

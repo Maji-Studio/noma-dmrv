@@ -160,7 +160,7 @@ export const updateFeedstockSchema = z.object({
   // Clearable, not optional-null: `syncFeedstockTransportLeg` preserves the
   // leg's stored distance only when this key is absent, so an omitted patch
   // must stay `undefined` instead of collapsing to an explicit clear.
-  transportDistanceKm: clearablePositiveNumber.describe("Explicit positive transport distance override in kilometres; null returns to the current location distance. Legacy zero is accepted as a clear."),
+  transportDistanceKm: clearablePositiveNumber.describe("Explicit positive transport distance override in kilometres; null returns to the current location distance. Legacy zero is accepted as a clear. On an already derived record, null and zero preserve the recorded leg, even when the location pair is missing."),
   distanceNote: z.string().max(DISTANCE_NOTE_MAX_LENGTH, DISTANCE_NOTE_MAX_MESSAGE).nullable().optional().describe("Distance override note, untrusted plain text, or null when absent."),
   transportDistanceSource: optionalDistanceSource.describe("Distance evidence: map_estimate is a mapped route, manual is operator-entered, document is documented evidence; null when unspecified."),
   feedstockTypeId: uuidSchema().optional().describe("Feedstock type identifier, UUID."),

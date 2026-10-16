@@ -2,7 +2,7 @@ import { and, eq } from "drizzle-orm";
 import { db, type DbTransaction } from "@/db";
 import { customerLocationFacilityDistances, deliveries, feedstocks, orders, supplierLocationFacilityDistances, supplierLocations, transportLegs } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
-import { SafeError } from "@/lib/errors";
+import { DomainError } from "@/lib/domain-errors";
 import type { DistanceSourceValue } from "@/schemas/distance-source";
 import type { TransportDistanceTarget } from "@/schemas/transport-distance-refresh";
 import { getCertifiedLineage, isSubmittedLineageRow } from "./certification-lineage-guards";
@@ -74,15 +74,15 @@ export async function getTransportDistanceDrift(
       .leftJoin(customerLocationFacilityDistances, and(eq(customerLocationFacilityDistances.organizationId, ctx.organizationId),
         eq(customerLocationFacilityDistances.locationId, orders.customerLocationId), eq(customerLocationFacilityDistances.facilityId, deliveries.facilityId)))
       .where(and(eq(deliveries.organizationId, ctx.organizationId), eq(deliveries.id, target.entityId)));
-  if (!row) throw new SafeError("Transport record not found.");
+  if (!row) throw new DomainError("not_found", "Transport record not found.");
   let hasSubmittedRemoval = false;
   for (const lineageTarget of await distanceRefreshLineageTargets(ctx, tx, target)) {
     if ((await getCertifiedLineage(ctx, tx, lineageTarget)).some(isSubmittedLineageRow)) hasSubmittedRemoval = true;
   }
   return {
     ...target, ...row,
-    isOverridden: row.distanceKmOverride != null,
-    hasDrift: row.distanceKmOverride == null && row.recordedDistanceKm !== row.currentDistanceKm,
+    isOverridden: row.distanceKmOverride != null && row.distanceKmOverride > 0,
+    hasDrift: !(row.distanceKmOverride != null && row.distanceKmOverride > 0) && row.recordedDistanceKm !== row.currentDistanceKm,
     hasSubmittedRemoval,
   };
 }

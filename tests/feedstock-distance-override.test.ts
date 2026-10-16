@@ -1,7 +1,7 @@
 import { beforeAll, expect, it, vi } from "vitest";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
-import { feedstocks, supplierLocations } from "@/db/schema";
+import { feedstocks, supplierLocations, supplierLocationFacilityDistances } from "@/db/schema";
 import { getFeedstockById, updateFeedstockInTransaction } from "@/data-access/feedstocks";
 import { createSupplierLocation, updateSupplierLocation } from "@/data-access/suppliers";
 import * as transport from "@/data-access/transport-legs";
@@ -39,7 +39,7 @@ it.each([null, 0])("persists an override, keeps it after a failed sync, and clea
       const cleared = await db.transaction(tx => updateFeedstockInTransaction(ctx, tx, original.id, {
         expectedVersion: saved.version, transportDistanceKm: clearDistance,
       }));
-      expect(cleared).toMatchObject({ distanceKmOverride: null, distanceSource: null, transportDistanceKm: 55, transportDistanceSource: "manual" });
+      expect(cleared).toMatchObject({ distanceKmOverride: null, distanceSource: null, distanceNote: null, transportDistanceKm: 55, transportDistanceSource: "manual" });
       await updateSupplierLocation(ctx, location.id, { expectedVersion: changedLocation.version,
         facilityDistances: [{ facilityId: fixture.facilityId, distanceKm: 70, distanceSource: "document" }],
       });
@@ -49,6 +49,28 @@ it.each([null, 0])("persists an override, keeps it after a failed sync, and clea
       expect(unchanged.transportDistanceKm).toBe(55);
       const [stored] = await db.select().from(feedstocks).where(eq(feedstocks.id, original.id));
       expect(stored.distanceKmOverride).toBeNull();
+    } finally { await db.delete(supplierLocations).where(eq(supplierLocations.id, location.id)); }
+  }, "none");
+});
+
+it.each([null, 0])("preserves a derived leg for a %s clear with a changed or missing pair", async transportDistanceKm => {
+  await withLineageFixture(async fixture => {
+    const original = await getFeedstockById(ctx, fixture.feedstockId);
+    const location = await createSupplierLocation(ctx, {
+      ...TEST_SITE_POSITION, supplierId: original.supplierId, isDefault: true,
+      facilityDistances: [{ facilityId: fixture.facilityId, distanceKm: 55, distanceSource: "document" }],
+    });
+    try {
+      let previous = await getFeedstockById(ctx, original.id);
+      for (const missingPair of [false, true]) {
+        if (missingPair) await db.delete(supplierLocationFacilityDistances).where(eq(supplierLocationFacilityDistances.locationId, location.id));
+        const saved = await db.transaction(tx => updateFeedstockInTransaction(ctx, tx, original.id, {
+          expectedVersion: previous.version, transportDistanceKm, transportDistanceSource: null,
+        }));
+        expect(saved).toMatchObject({ distanceKmOverride: null, transportDistanceKm: previous.transportDistanceKm,
+          transportDistanceSource: previous.transportDistanceSource });
+        previous = saved;
+      }
     } finally { await db.delete(supplierLocations).where(eq(supplierLocations.id, location.id)); }
   }, "none");
 });

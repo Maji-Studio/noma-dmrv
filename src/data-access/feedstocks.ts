@@ -586,7 +586,7 @@ function feedstockDistanceColumns(
   previous?: Pick<FeedstockWithRelations, "distanceKmOverride" | "distanceSource">,
   routeAnchorChanged = false,
 ) {
-  if (previous && input.transportDistanceKm === undefined && input.transportDistanceSource !== undefined
+  if (previous && input.transportDistanceKm === undefined && input.transportDistanceSource != null
     && (previous.distanceKmOverride == null || routeAnchorChanged)) {
     throw new DomainError("validation_failed", "The feedstock distance source was not changed. Set transportDistanceKm to change its source.");
   }
@@ -600,7 +600,7 @@ function feedstockDistanceColumns(
   return {
     distanceKmOverride,
     distanceSource: resolveDistanceSource(distanceKmOverride, source),
-    distanceNote: input.distanceNote === "" ? null : input.distanceNote,
+    distanceNote: distanceKmOverride === null || input.distanceNote === "" ? null : input.distanceNote,
   };
 }
 
@@ -735,7 +735,7 @@ export async function updateFeedstockInTransaction(
   }
 
   await syncFeedstockTransportLeg(ctx, tx, feedstockId, {
-    refreshFromLocation: (transportDistanceKm !== undefined && distanceColumns.distanceKmOverride === null) || routeAnchorChanged,
+    refreshFromLocation: (transportDistanceKm !== undefined && locked.distanceKmOverride != null && distanceColumns.distanceKmOverride === null) || routeAnchorChanged,
   });
 
   // Read the updated record back inside the transaction, so a failed read

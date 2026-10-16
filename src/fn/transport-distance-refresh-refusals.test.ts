@@ -11,11 +11,13 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@/lib/auth/server", () => ({
   requireOrgContext: async () => ({ organizationId: "session-org", userId: "actor", orgRole: "owner", isPlatformAdmin: false }),
 }));
-vi.mock("@/db", () => ({
-  db: { transaction: async (work: (tx: unknown) => Promise<unknown>) => work({
+vi.mock("@/data-access/owned-transaction", () => ({
+  runOwnedTransaction: async (_ctx: unknown, _deadline: unknown, work: (tx: unknown) => Promise<unknown>) => {
+    try { return { kind: "committed", data: await work({
     select: () => ({ from: () => ({ where: () => ({ for: mocks.row }) }) }),
     update: mocks.update,
-  }) },
+    }) }; } catch (error) { return { kind: "callback_threw", error }; }
+  },
 }));
 vi.mock("@/data-access/transport-distance-drift", () => ({
   distanceRefreshLineageTargets: async (_ctx: unknown, _tx: unknown, target: unknown) => [target],
@@ -32,10 +34,11 @@ vi.mock("@/data-access/transport-legs", () => ({
   syncBiocharProductTransportLegs: mocks.sync,
 }));
 vi.mock("@/data-access/write-activity", () => ({
-  recordScopedWriteActivity: mocks.activity,
-  resolveWriteActivityScopes: vi.fn(),
+  resolveWriteActivityScopes: async () => [{}],
 }));
 vi.mock("@/data-access/storage-object-deletions", () => ({ processPendingStorageObjectDeletions: vi.fn() }));
+
+vi.mock("@/data-access/activity-events", () => ({ recordActivity: mocks.activity }));
 
 const ID = "00000000-0000-4000-8000-000000000001";
 const VERSION = 1;
@@ -58,8 +61,8 @@ describe.each([
     expect(await refresh(INPUT)).toMatchObject({ success: true });
     expect(mocks.activity).toHaveBeenCalledWith(expect.anything(), expect.anything(), expect.objectContaining({
       changedFields: entityType === "feedstock" ? ["transportDistanceKm", "transportDistanceSource"]
-        : ["recordedDistanceKm", "recordedDistanceSource"],
-    }), undefined);
+        : ["recordedDistanceKm", "recordedDistanceSource", "distanceSource"],
+    }));
   });
 
   it("returns certification_locked when submission locks the lineage after preview", async () => {
@@ -99,4 +102,20 @@ it("preserves the delivery lock recheck message with a certification_locked code
   const message = formatCertificationLineageLockMessage({ mutation: "update", subjectEntityType: "delivery", lineageEntityType: "delivery" });
   mocks.recheck.mockRejectedValue(new SafeError(message));
   expect(await refreshDeliveryDistanceFn(INPUT)).toMatchObject({ success: false, code: "certification_locked", error: message });
+});
+
+it("treats a legacy zero delivery override as derived during refresh", async () => {
+  mocks.row.mockResolvedValue([{ ...ROW, distanceKmOverride: 0 }]);
+  expect(await refreshDeliveryDistanceFn(INPUT)).toMatchObject({ success: true });
+  expect(mocks.sync).toHaveBeenCalled();
+});
+
+it.each(["40001", "40P01"])("retries a refresh after %s and records one runner event", async code => {
+  mocks.sync.mockRejectedValueOnce(Object.assign(new Error("Retry transaction"), { code }));
+  expect(await refreshFeedstockDistanceFn(INPUT)).toMatchObject({ success: true });
+  expect(mocks.sync).toHaveBeenCalledTimes(2);
+  expect(mocks.activity).toHaveBeenCalledTimes(1);
+  expect(mocks.activity).toHaveBeenCalledWith(expect.anything(), expect.anything(), expect.objectContaining({
+    operationId: "refresh_feedstock_distance", source: "form", versionBefore: VERSION,
+  }));
 });

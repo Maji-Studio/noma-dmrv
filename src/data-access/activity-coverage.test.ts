@@ -8,8 +8,8 @@ type Coverage = { status: "direct" } | { status: "runner"; operations: string[] 
 // below scans the whole data-access tree so new modules cannot bypass it.
 const ACTIVITY_COVERAGE = {
   "transport-distance-refresh.ts": {
-    refreshFeedstockDistance: { status: "direct" },
-    refreshDeliveryDistance: { status: "direct" },
+    refreshFeedstockDistanceInTransaction: { status: "runner", operations: ["refresh_feedstock_distance"] },
+    refreshDeliveryDistanceInTransaction: { status: "runner", operations: ["refresh_delivery_distance"] },
   },
   "credit-batch-application-slices.ts": {
     reconcileUnassignedCreditBatchApplicationSlices: { status: "exempt", reason: "Derived unassigned slices; the initiating application or batch membership writer owns activity (ADR 0019)." },

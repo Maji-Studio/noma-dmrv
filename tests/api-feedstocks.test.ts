@@ -123,7 +123,7 @@ describe("feedstock REST contract", { timeout: SUITE_TIMEOUT_MS }, () => {
     expect((await overridden.json()).data).toMatchObject({ distanceKmOverride: 25, distanceSource: "document", distanceNote: "Measured route" });
     const cleared = await patch(created.row.id, { transportDistanceKm: 0 }, overridden.headers.get("etag")!);
     expect(cleared.status).toBe(200);
-    expect((await cleared.json()).data).toMatchObject({ distanceKmOverride: null, distanceSource: null });
+    expect((await cleared.json()).data).toMatchObject({ distanceKmOverride: null, distanceSource: null, distanceNote: null });
   });
 
   it("canonicalizes uppercase reference and path UUIDs, so either case replays one key (api/uuid-case)", async () => {

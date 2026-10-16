@@ -257,7 +257,10 @@ Input names remain `transportDistanceKm` and `transportDistanceSource`: omission
 preserves the override and recorded leg, a positive distance sets an override,
 and null clears it and captures the current supplier-location facility distance.
 Legacy zero remains accepted as a clear, so the v1 input contract stays additive;
-zero is never persisted as an override.
+zero is never persisted as an override. On an already derived record, null and
+zero preserve the recorded leg, including when the location pair is missing.
+Only clearing an existing override or changing the route captures the current
+location distance. Clearing an override also clears its note.
 Revision 2 removed intake GPS fields; date, supplier, wet mass, moisture and bin
 are non-null. Moisture is below 100%. PATCH cannot clear the bin or supply derived
 `massDryKg`. Supplier-location and driver

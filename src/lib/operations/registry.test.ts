@@ -57,6 +57,8 @@ it("publishes delivery create and metadata PATCH, keeping corrections and custom
   expect(recordDeliveryForUi.id).toBe("record_posted_delivery");
   expect(getOperation(recordDeliveryForUi.id)).toBeUndefined();
   expect(getOperation("update_posted_delivery")).toBeUndefined();
+  expect(getOperation("refresh_feedstock_distance")).toBeUndefined();
+  expect(getOperation("refresh_delivery_distance")).toBeUndefined();
   expect(getOperation("delete_delivery")).toBeUndefined();
   const input = { orderId: FEEDSTOCK_ID, storageLocationId: FEEDSTOCK_ID, deliveredAt: "2026-09-14T12:00:00Z", deliveredWetMassKg: 100, moisturePercent: 20 };
   expect(record?.input.safeParse(input).success).toBe(true);

@@ -69,7 +69,7 @@ export const writeTools: WriteTool[] = [
   {
     kind: "write", name: updateFeedstock.id, scope: "feedstocks:write", input: updateInput, output: itemOutput,
     annotations: { ...annotations, destructiveHint: true },
-    description: `Update a feedstock by UUID and adjust its bin stock and transport details. Omit transportDistanceKm to preserve its override and recorded leg; a positive value sets an override, and null clears it and captures the current supplier-location facility distance. Legacy zero also clears. ${versionGuidance} ${writeGuidance}`,
+    description: `Update a feedstock by UUID and adjust its bin stock and transport details. Omit transportDistanceKm to preserve its override and recorded leg; a positive value sets an override, and null clears it and captures the current supplier-location facility distance. Legacy zero also clears. On an already derived record, null and zero preserve the recorded leg, even when the location pair is missing. ${versionGuidance} ${writeGuidance}`,
     execute: (context, raw) => mutate(context, raw, "update"),
     summarize(body, dryRun) {
       const data = body.data as z.infer<typeof feedstockRepresentationSchema>;

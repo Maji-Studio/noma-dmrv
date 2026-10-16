@@ -22,6 +22,7 @@ import {
   type DistanceSourceValue,
 } from "./distance-source";
 import {
+  clearableNumber,
   emptyToNull,
   positiveMassKgSchema,
   requiredNumber,
@@ -210,7 +211,7 @@ export const updateDeliverySchema = z.object({
   status: z.enum(deliveryStatuses).optional(),
   deliveredWetMassKg: optionalWetMassKg,
   moistureContentPercent: requiredProductMoisturePercent.optional(),
-  distanceKmOverride: optionalNumber,
+  distanceKmOverride: clearableNumber.optional(),
   distanceSource: optionalDistanceSource,
   distanceNote: optionalNote,
 }).superRefine((value, ctx) => {
