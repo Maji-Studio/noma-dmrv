@@ -1,3 +1,4 @@
+import { liveOutputMovementPredicate } from './output-stock-active-movements';
 import { DomainError } from '@/lib/domain-errors';
 import { recordLocks, withRecordLockGuidance } from '@/lib/record-lock';
 import { readRecordDependents } from './record-lock-dependents';
@@ -41,8 +42,8 @@ export async function deleteDeliveryInTransaction(ctx: OrgContext, tx: DbTransac
   await assertLockedLineagesAllowMutation(ctx, tx, keys, targets.map(target => ({ target, mutation: 'delete' })));
   const lock = recordLocks.delivery({ removals: [], dependents: await readRecordDependents(ctx, tx, { entityType: 'delivery', entityId: deliveryId }) });
   if (lock.level !== 'open') throw new DomainError('certification_locked', withRecordLockGuidance('This delivery cannot be deleted.', lock));
-  const reversed = new Set(rows.filter(r => r.movement.outputKind === 'reversal').map(r => r.movement.correctsMovementId));
-  const original = rows.find(r => r.movement.outputKind !== 'reversal' && !reversed.has(r.movement.id))?.movement;
+  const isLive = liveOutputMovementPredicate(rows.map(row => row.movement));
+  const original = rows.find(r => isLive(r.movement))?.movement;
   if (!original) throw new SafeError('Posted delivery stock entry not found.');
   await assertOutputMovementEditable(ctx, existing.storageLocationId, original.id, tx);
   const activityScopes = await resolveWriteActivityScopes(ctx, tx, 'delivery', deliveryId);

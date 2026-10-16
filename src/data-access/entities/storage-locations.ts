@@ -1,3 +1,4 @@
+import { deletedProductIds } from '../output-stock-active-movements';
 import { getIngredientMoistureBasis } from '../ingredient-moisture-basis';
 import { getOutputBinStocks, getOutputBinStockView, type OutputBinStock } from '../output-stock';
 /** Storage-location options with live inventory subtitles. */
@@ -29,6 +30,7 @@ import {
   inArray,
   isNull,
   ne,
+  notInArray,
   or,
   sql,
   type SQL,
@@ -172,7 +174,7 @@ function buildInventoryAggregates(
     ) AS ingredient(value)`,
     sql`true`,
   )
-  .where(and(eq(biocharProducts.organizationId, ctx.organizationId), isNull(biocharProducts.archivedAt)))
+  .where(and(eq(biocharProducts.organizationId, ctx.organizationId), notInArray(biocharProducts.id, deletedProductIds(ctx, executor))))
   .groupBy(sql`ingredient.value ->> 'storageLocationId'`)
   .as("ingredient_consumption_agg");
 

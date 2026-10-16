@@ -61,10 +61,14 @@ export async function updateBiocharProductInTransaction(ctx: OrgContext, tx: DbT
   const [locked] = await tx.select().from(biocharProducts).where(and(eq(biocharProducts.organizationId, ctx.organizationId), eq(biocharProducts.id, productId))).for("update");
   if (!locked || locked.archivedAt) throw productNotFound();
   assertRowVersion({ entity: "biocharProduct", id: productId, expectedVersion: data.expectedVersion, actualVersion: locked.version });
-  assertRecordLockFields(recordLocks.biocharProduct({ removals: [], dependents: await readRecordDependents(ctx, tx, { entityType: "biocharProduct", entityId: productId }) }), locked, Object.fromEntries(Object.entries(data).filter(([key]) => key !== "expectedVersion")), IMMUTABLE_POSTING_MESSAGE);
   const placementChanged = data.placedAt !== undefined && new Date(data.placedAt).getTime() !== product.placedAt.getTime();
-  if (placementChanged || POSTED_FIELDS.some(key => data[key] !== undefined && !recordFieldEqual(key, product[key], data[key]))) throw new SafeError(IMMUTABLE_POSTING_MESSAGE);
-  if (data.composition && compositionAllocationChanged(product.composition as Record<string, unknown>, data.composition)) throw new SafeError(IMMUTABLE_INGREDIENTS_MESSAGE);
+  const postingChanged = placementChanged || POSTED_FIELDS.some(key => data[key] !== undefined && !recordFieldEqual(key, product[key], data[key]));
+  const ingredientsChanged = data.composition && compositionAllocationChanged(product.composition as Record<string, unknown>, data.composition);
+  if (postingChanged || ingredientsChanged) {
+    const message = postingChanged ? IMMUTABLE_POSTING_MESSAGE : IMMUTABLE_INGREDIENTS_MESSAGE;
+    assertRecordLockFields(recordLocks.biocharProduct({ removals: [], dependents: await readRecordDependents(ctx, tx, { entityType: "biocharProduct", entityId: productId }) }), locked, data, message);
+    throw new SafeError(message);
+  }
   const [saved] = await withUniqueCodeGuard(ctx, biocharProducts, biocharProducts.code, CODE_CONFLICT_MESSAGES.biocharProduct, () => tx.update(biocharProducts)
     .set({ version: nextVersion(biocharProducts.version), code: data.code, status: data.status, densityKgM3: data.densityKgM3, updatedAt: new Date() })
     .where(and(eq(biocharProducts.organizationId, ctx.organizationId), eq(biocharProducts.id, productId))).returning());

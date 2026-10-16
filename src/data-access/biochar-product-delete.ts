@@ -1,3 +1,4 @@
+import { liveOutputMovementPredicate } from './output-stock-active-movements';
 import { randomUUID } from 'node:crypto';
 import { and, eq, gte, isNotNull } from 'drizzle-orm';
 import { db, type DbTransaction } from '@/db';
@@ -35,8 +36,8 @@ export async function deleteBiocharProductInTransaction(ctx: OrgContext, tx: DbT
   for (const id of binIds) await lockBinStock(ctx, tx, id, { allowArchived: true });
   if (!snapshot.sourceBiocharStorageLocationId) throw new SafeError('Posted product source bin not found.');
   const rows = await getOutputStockAllocationProjection(ctx, { sourceStorageLocationId: snapshot.sourceBiocharStorageLocationId }, tx);
-  const reversedIds = new Set(rows.filter(row => row.movement.outputKind === 'reversal').map(row => row.movement.correctsMovementId));
-  const original = rows.find(row => row.allocation.targetBiocharProductId === productId && row.movement.outputKind !== 'reversal' && !reversedIds.has(row.movement.id))?.movement;
+  const isLive = liveOutputMovementPredicate(rows.map(row => row.movement));
+  const original = rows.find(row => row.allocation.targetBiocharProductId === productId && isLive(row.movement))?.movement;
   if (!original && rows.some(row => row.allocation.targetBiocharProductId === productId)) throw staleRowVersion('biocharProduct', productId);
   const allocations = [...new Map(rows.filter(row => row.movement.id === original?.id).map(row => [row.allocation.id, row.allocation])).values()];
   const targets: CertifiedLineageTarget[] = [{ entityType: 'biocharProduct', entityId: productId }, ...[...new Set(allocations.flatMap(row => row.productionRunId ? [row.productionRunId] : []))].map(entityId => ({ entityType: 'productionRun' as const, entityId }))];

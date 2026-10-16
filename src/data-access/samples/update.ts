@@ -56,7 +56,7 @@ export async function updateSampleInTransaction(
   // Moving off an archived batch is a write on it too (round 7 Q56).
   if (moving) requireWritableBatch(scope, locked.creditBatchId);
 
-  assertRecordLockFields(recordLocks.sample({ removals: [], dependents: await readRecordDependents(ctx, tx, { entityType: "sample", entityId: sampleId }) }), locked, Object.fromEntries(Object.entries(request).filter(([key]) => key !== "expectedVersion")));
+  assertRecordLockFields(recordLocks.sample({ removals: [], dependents: await readRecordDependents(ctx, tx, { entityType: "sample", entityId: sampleId }) }), locked, request);
   const effective = mergeOverLocked(locked, request);
   assertCarbonReconciliation(effective, {});
   const ratios = derivedRatioColumns(effective);

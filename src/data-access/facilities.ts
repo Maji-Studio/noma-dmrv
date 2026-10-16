@@ -1,3 +1,4 @@
+import { deletedProductIds } from './output-stock-active-movements';
 /**
  * Facilities Data Access Layer
  * CRUD operations for facilities with auth guards, pagination, and filtering
@@ -6,7 +7,7 @@
 import { recordActivityChange } from "./activity-events";
 import { toActivityEntityType } from "@/lib/activity-entity-type";
 import { FACILITY_CONFLICT_ENTITY } from "./facility-mutations";
-import { and, asc, desc, eq, ilike, inArray, isNotNull, isNull, ne, or, sql, SQL, count, countDistinct } from "drizzle-orm";
+import { notInArray, and, asc, desc, eq, ilike, inArray, isNotNull, isNull, ne, or, sql, SQL, count, countDistinct } from "drizzle-orm";
 import { db } from "@/db";
 import { numericAggregate, sumNumeric } from "@/db/aggregate";
 import type { OrgContext } from "@/lib/auth/server";
@@ -249,7 +250,7 @@ export async function getFacilities(
             `),
           })
           .from(biocharProducts)
-          .where(and(inArray(biocharProducts.facilityId, facilityIds), eq(biocharProducts.organizationId, ctx.organizationId), isNull(biocharProducts.archivedAt)))
+          .where(and(inArray(biocharProducts.facilityId, facilityIds), eq(biocharProducts.organizationId, ctx.organizationId), notInArray(biocharProducts.id, deletedProductIds(ctx, db))))
           .groupBy(biocharProducts.facilityId),
         db
           .select({
@@ -257,7 +258,7 @@ export async function getFacilities(
             totalProductKg: sumNumeric(biocharProducts.massKg),
           })
           .from(biocharProducts)
-          .where(and(inArray(biocharProducts.facilityId, facilityIds), eq(biocharProducts.organizationId, ctx.organizationId), isNull(biocharProducts.archivedAt)))
+          .where(and(inArray(biocharProducts.facilityId, facilityIds), eq(biocharProducts.organizationId, ctx.organizationId), notInArray(biocharProducts.id, deletedProductIds(ctx, db))))
           .groupBy(biocharProducts.facilityId),
       ])
     : [[], [], [], [], [], []];

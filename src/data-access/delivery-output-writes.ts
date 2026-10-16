@@ -1,3 +1,4 @@
+import { liveOutputMovementPredicate } from './output-stock-active-movements';
 import { readRecordDependents } from './record-lock-dependents';
 import { assertRecordLockFields, recordFieldEqual } from '@/lib/record-lock-fields';
 import { recordLocks } from '@/lib/record-lock';
@@ -193,7 +194,7 @@ export async function updateDeliveryInTransaction(ctx: OrgContext, tx: DbTransac
     const [existing] = await tx.select().from(deliveries).where(and(eq(deliveries.organizationId, ctx.organizationId), eq(deliveries.id, deliveryId))).for('update');
     if (!existing || existing.archivedAt) throw deliveryReferenceNotFound(['deliveryId'], 'Delivery');
     assertRowVersion({ entity: "delivery", id: deliveryId, expectedVersion: data.expectedVersion, actualVersion: existing.version });
-    const fields = Object.fromEntries(Object.entries(data).filter(([key]) => !["deliveryId", "expectedVersion", "idempotencyKey", "correctsMovementId", "basisFingerprint", "sources"].includes(key)));
+    const fields = { ...data, deliveryId: undefined };
     const lock = recordLocks.delivery({ removals: [], dependents: await readRecordDependents(ctx, tx, { entityType: 'delivery', entityId: deliveryId }) });
     for (const key of ['orderId', 'facilityId', 'storageLocationId'] as const) {
       if (data[key] !== undefined && data[key] !== existing[key]) {
@@ -204,8 +205,8 @@ export async function updateDeliveryInTransaction(ctx: OrgContext, tx: DbTransac
     if (data.deliveryDate && data.deliveryDate.getTime() !== existing.deliveryDate.getTime()) throw new SafeError('The date and time of a posted delivery cannot be changed. Edit its mass and moisture while no later stock entry depends on it.');
     assertRecordLockFields(lock, existing, fields);
     const rows = await getOutputStockAllocationProjection(ctx, { deliveryId }, tx);
-    const reversedIds = new Set(rows.filter(r => r.movement.outputKind === 'reversal').map(r => r.movement.correctsMovementId));
-    const current = rows.filter(r => r.movement.outputKind !== 'reversal' && !reversedIds.has(r.movement.id))
+    const isLive = liveOutputMovementPredicate(rows.map(row => row.movement));
+    const current = rows.filter(r => isLive(r.movement))
       .sort((a, b) => a.movement.postingSequence > b.movement.postingSequence ? -1 : 1)[0]?.movement;
     const massChanged = data.deliveredWetMassKg !== undefined && !recordFieldEqual('deliveredWetMassKg', existing.deliveredWetMassKg, data.deliveredWetMassKg);
     const moistureChanged = data.moistureContentPercent !== undefined && data.moistureContentPercent !== existing.moistureContentPercent;

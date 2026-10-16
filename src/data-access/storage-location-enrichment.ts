@@ -1,3 +1,4 @@
+import { deletedProductIds } from './output-stock-active-movements';
 import { getOutputBinStocks, type OutputBinStock } from './output-stock';
 import type { StorageLocationLaneSummary } from "./storage-location-lane-summary";
 /**
@@ -33,7 +34,7 @@ import {
   type StorageLocation
 } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
-import { and, count, eq, inArray, isNull, sql } from "drizzle-orm";
+import { notInArray, and, count, eq, inArray, sql } from "drizzle-orm";
 import {
   productDryBiocharKgSql,
   productWetMassKgSql,
@@ -226,7 +227,7 @@ export async function enrichStorageLocationRows(
                 storageLocationIds,
               ),
               eq(biocharProducts.organizationId, ctx.organizationId),
-              isNull(biocharProducts.archivedAt),
+              notInArray(biocharProducts.id, deletedProductIds(ctx, tx)),
             ),
           )
           .groupBy(biocharProducts.sourceBiocharStorageLocationId),
@@ -267,7 +268,7 @@ export async function enrichStorageLocationRows(
             and(
               inArray(biocharProducts.storageLocationId, storageLocationIds),
               eq(biocharProducts.organizationId, ctx.organizationId),
-              isNull(biocharProducts.archivedAt),
+              notInArray(biocharProducts.id, deletedProductIds(ctx, tx)),
             ),
           )
           .groupBy(biocharProducts.storageLocationId),

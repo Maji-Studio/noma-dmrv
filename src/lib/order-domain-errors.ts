@@ -34,8 +34,8 @@ export function orderQuantityBelowAllocated(allocatedWetKg: number): DomainError
     ["quantityKg"], { allocatedWetKg, unit: "kg" });
 }
 
-export function orderHasDeliveries(deliveryCode?: string): DomainError {
-  const lock = recordLocks.order({ removals: [], dependents: [{ kind: "delivery", id: deliveryCode ?? "delivery", label: deliveryCode }] });
+export function orderHasDeliveries(delivery: { id: string; code: string }): DomainError {
+  const lock = recordLocks.order({ removals: [], dependents: [{ kind: "delivery", id: delivery.id, label: delivery.code }] });
   return refusal("certification_locked", withRecordLockGuidance("Cannot delete an order with deliveries.", lock), ["orderId"]);
 }
 

@@ -1,3 +1,4 @@
+import { deletedProductIds } from './output-stock-active-movements';
 /**
  * Shared per-location stock derivation for the feedstock lane, plus the
  * all-time biochar allocated to products from each source bin.
@@ -23,8 +24,8 @@ import {
   and,
   eq,
   inArray,
-  isNull,
   ne,
+  notInArray,
   sql,
 } from "drizzle-orm";
 import { requireOrgScope } from "./utils";
@@ -74,6 +75,7 @@ export async function deriveLaneStock(
   }
 
   const sourceAllocationConditions = [
+    notInArray(biocharProductSourceAllocations.biocharProductId, deletedProductIds(ctx, executor)),
     inArray(
       biocharProductSourceAllocations.sourceStorageLocationId,
       options.storageLocationIds,
@@ -170,7 +172,7 @@ export async function deriveLaneStock(
           sql`true`,
         )
         .where(and(
-          eq(biocharProducts.organizationId, ctx.organizationId), isNull(biocharProducts.archivedAt),
+          eq(biocharProducts.organizationId, ctx.organizationId), notInArray(biocharProducts.id, deletedProductIds(ctx, executor)),
           inArray(
             sql<string>`ingredient.value ->> 'storageLocationId'`,
             options.storageLocationIds,

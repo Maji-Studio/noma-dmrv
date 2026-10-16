@@ -591,14 +591,13 @@ export async function updateProductionRunInTransaction(
     ]);
 
     const recordLock = recordLocks.productionRun({ removals: [], dependents: await readRecordDependents(ctx, tx, { entityType: "productionRun", entityId: productionRunId }) });
-    const changes = Object.fromEntries(Object.entries(data).filter(([key]) => key !== "expectedVersion"));
     try {
       await assertProductionRunOutputBasisChange(ctx, tx, productionRunId, locked, data);
     } catch (error) {
-      if (error instanceof SafeError) assertRecordLockFields(recordLock, locked, changes, error.message);
+      if (error instanceof SafeError) assertRecordLockFields(recordLock, locked, data, error.message);
       throw error;
     }
-    assertRecordLockFields(recordLock, locked, changes);
+    assertRecordLockFields(recordLock, locked, data);
 
     const lockedTargetStatus = data.status ?? locked.status;
     const lockedTargetStartTime = data.startTime ?? locked.startTime;

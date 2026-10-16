@@ -1,4 +1,4 @@
-import { and, eq, isNotNull, ne, notInArray } from 'drizzle-orm';
+import { and, eq, inArray, isNotNull, ne, notInArray } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import type { DbTransaction } from '@/db';
 import { binMovements, outputStockAllocations } from '@/db/schema';
@@ -20,5 +20,29 @@ export function deletedProductIds(ctx: OrgContext, tx: Pick<DbTransaction, 'sele
   requireOrgScope(ctx);
   return tx.select({ id: outputStockAllocations.targetBiocharProductId }).from(outputStockAllocations)
     .innerJoin(binMovements, and(eq(binMovements.organizationId, ctx.organizationId), eq(binMovements.id, outputStockAllocations.movementId)))
-    .where(and(eq(outputStockAllocations.organizationId, ctx.organizationId), isNotNull(outputStockAllocations.targetBiocharProductId), eq(binMovements.outputKind, 'reversal')));
+    .where(and(eq(outputStockAllocations.organizationId, ctx.organizationId), deletedProductReversalConditions()));
+}
+
+/** Deletion evidence shared by live predicates and historical placement rows. */
+export function deletedProductReversals(ctx: OrgContext, tx: Pick<DbTransaction, 'select'>, productIds: string[]) {
+  requireOrgScope(ctx);
+  return tx.select({ id: outputStockAllocations.targetBiocharProductId, movement: binMovements }).from(outputStockAllocations)
+    .innerJoin(binMovements, and(eq(binMovements.organizationId, ctx.organizationId), eq(binMovements.id, outputStockAllocations.movementId)))
+    .where(and(eq(outputStockAllocations.organizationId, ctx.organizationId), deletedProductReversalConditions(), inArray(outputStockAllocations.targetBiocharProductId, productIds)));
+}
+
+function deletedProductReversalConditions() {
+  return and(isNotNull(outputStockAllocations.targetBiocharProductId), eq(binMovements.outputKind, 'reversal'));
+}
+
+interface MovementFact {
+  id: string;
+  outputKind: string | null;
+  correctsMovementId: string | null;
+}
+
+/** Use the complete movement set, including reversals, before selecting live effects. */
+export function liveOutputMovementPredicate(movements: readonly MovementFact[]) {
+  const reversed = new Set(movements.filter(movement => movement.outputKind === 'reversal').map(movement => movement.correctsMovementId));
+  return (movement: MovementFact) => movement.outputKind !== 'reversal' && !reversed.has(movement.id);
 }

@@ -58,3 +58,16 @@ it('accepts unchanged 0.125005 t with a free reference edit on an In use applica
       appliedWetMassKg: 125.006 })).rejects.toMatchObject({ code: 'certification_locked' });
   }, 'none');
 });
+
+it('accepts equivalent placement and non-allocation composition on an In use product as staging does', async () => {
+  await withLineageFixture(async f => {
+    const ctx = makeTestOrgContext();
+    const [product] = await db.select().from(biocharProducts).where(eq(biocharProducts.id, f.productId));
+    await expect(updateBiocharProduct(ctx, product.id, {
+      expectedVersion: product.version,
+      code: `${product.code}-EDIT`,
+      placedAt: product.placedAt.toISOString().replace('.000Z', 'Z'),
+      composition: { ...(product.composition as Record<string, unknown>), reference: 'unchanged allocation' },
+    })).resolves.toMatchObject({ code: `${product.code}-EDIT`, composition: product.composition });
+  }, 'none');
+});
