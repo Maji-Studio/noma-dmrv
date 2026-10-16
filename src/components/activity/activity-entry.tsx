@@ -35,7 +35,7 @@ import { ACTIVITY_DELETED_RECORD_LABEL } from "./activity-copy";
 import { ChainStatusBadge } from "@/components/chain-of-custody/chain-status-badge";
 
 const TAG_CLASS = "inline-flex h-[20px] shrink-0 items-center border px-6 body-caption-fit font-medium";
-const RECORD_ICON_PX = 18;
+const RECORD_ICON_PX = 16;
 const TOMBSTONE_TAG_CLASS = `${TAG_CLASS} border-dashed border-[var(--color-border-primary)] text-[var(--color-text-secondary)]`;
 const CHANGE_ARROW_PX = 12;
 type ChangeSide = "from" | "to";

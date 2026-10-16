@@ -3,10 +3,11 @@ import { createElement, type ReactElement } from "react";
 import type { Icon } from "@phosphor-icons/react";
 import {
   CertificateIcon,
-  CloudArrowDownIcon,
   CubeIcon,
   FactoryIcon,
+  FileIcon,
   FileTextIcon,
+  StackIcon,
   HandshakeIcon,
   LeafIcon,
   LightningIcon,
@@ -19,7 +20,6 @@ import {
   TestTubeIcon,
   TruckIcon,
   UsersIcon,
-  FileCsvIcon,
   QuestionIcon,
 } from "@phosphor-icons/react/dist/ssr";
 import { isActivityEntityType, type ActivityEntityType } from "@/db/schema/common";
@@ -35,9 +35,9 @@ export const ACTIVITY_RECORD_TYPE_ICONS: Record<ActivityEntityType, Icon> = {
   delivery: TruckIcon,
   transport_leg: PathIcon,
   application: MapPinIcon,
-  document: FileTextIcon,
-  removal: CloudArrowDownIcon,
-  ghg_statement: FileCsvIcon,
+  document: FileIcon,
+  removal: StackIcon,
+  ghg_statement: FileTextIcon,
   emission_entry: LightningIcon,
   formulation: ListChecksIcon,
   supplier: HandshakeIcon,
@@ -49,5 +49,5 @@ export const ACTIVITY_RECORD_TYPE_ICONS: Record<ActivityEntityType, Icon> = {
 /** The icon element for a record type; built here so callers never create a component during render. */
 export function activityRecordTypeIcon(entityType: string, size: number): ReactElement {
   const icon = isActivityEntityType(entityType) ? ACTIVITY_RECORD_TYPE_ICONS[entityType] : QuestionIcon;
-  return createElement(icon, { size, weight: "regular" });
+  return createElement(icon, { size, weight: "bold" });
 }

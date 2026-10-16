@@ -2,7 +2,7 @@
 
 How the Traceability page resolves and renders chain-of-custody: the credit-batch
 roll-up, the single-application drill-down, the DAG / Map / Sankey / Trail
-readings, and the batch Activity segment. Read this before touching anything under
+readings, and the batch Activities segment. Read this before touching anything under
 `src/data-access/chain-of-custody*`, `src/lib/chain-of-custody/`, or
 `src/components/chain-of-custody/`. For "why credit-batch anchored" see
 [ADR 0011](adr/0011-credit-batch-anchored-chain-of-custody.md).
