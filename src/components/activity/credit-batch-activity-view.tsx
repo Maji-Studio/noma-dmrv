@@ -1,8 +1,8 @@
 "use client";
 
 /**
- * The Traceability page's Activity segment: every recorded change to the
- * selected credit batch and its records, newest first, filterable by kind and
+ * The Activities view (Traceability's Activity segment and the batch page tab): every recorded change to the
+ * selected credit batch and its records, newest first and grouped by day, filterable by kind and
  * record type, loaded a page at a time.
  */
 import { useState } from "react";
@@ -21,12 +21,12 @@ import {
   ACTIVITY_LOADING,
   ACTIVITY_SHOW_MORE_LABEL,
   ACTIVITY_TITLE,
-  activityChangeCount,
   activityEmptyDescription,
   activityHistoryStartNote,
   activityLoadedMessage,
-  activityRecordingStartLabel,
 } from "./activity-copy";
+import { activityTimeLabel, groupActivityByDay, type ActivityCluster } from "./activity-day-groups";
+import { activityActorDisplay } from "./activity-display";
 import { ActivityEntry } from "./activity-entry";
 import { ActivityLoadError } from "./activity-load-error";
 import {
@@ -41,8 +41,9 @@ import {
 
 const EMPTY_ICON_PX = 48;
 const FILTERED_ICON_PX = 40;
-/** The shared filter select at the 44px touch target, wide enough for counted options. */
-const SELECT_SIZE_CLASS = "h-44 sm:min-w-[200px]";
+const FILTER_ICON_PX = 14;
+/** A quiet compact select: 44px on phones for touch, 32px from the sm breakpoint. */
+const SELECT_SIZE_CLASS = "h-44 w-auto max-w-full px-8 body-caption sm:h-32";
 
 function FilterSelect({
   label,
@@ -60,25 +61,48 @@ function FilterSelect({
   testId: string;
 }) {
   return (
-    <label className="flex flex-col gap-4">
-      <span className="body-small font-medium text-[var(--color-text-secondary)]">{label}</span>
-      <DataTable.FilterSelect value={value} onChange={(event) => onChange(event.target.value)} className={SELECT_SIZE_CLASS} data-testid={testId}>
-        <option value={ALL_FILTER_VALUE}>{allLabel}</option>
-        {options.map((option) => (
-          <option key={option.value} value={option.value}>{activityFilterOptionLabel(option)}</option>
-        ))}
-      </DataTable.FilterSelect>
-    </label>
+    <DataTable.FilterSelect
+      aria-label={label}
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+      className={SELECT_SIZE_CLASS}
+      data-testid={testId}
+    >
+      <option value={ALL_FILTER_VALUE}>{allLabel}</option>
+      {options.map((option) => (
+        <option key={option.value} value={option.value}>{activityFilterOptionLabel(option)}</option>
+      ))}
+    </DataTable.FilterSelect>
+  );
+}
+
+/** Who and when, once, above a burst of changes by one actor. */
+function ClusterHeader({ cluster }: { cluster: ActivityCluster }) {
+  const head = cluster.items[0];
+  const actor = activityActorDisplay(head);
+  return (
+    <p className="flex flex-wrap items-baseline gap-x-8 px-8 pt-8 body-caption text-[var(--color-text-tertiary)]">
+      <span className={actor.missing ? undefined : "text-[var(--color-text-secondary)]"}>
+        {actor.name}{actor.channel ? ` ${actor.channel}` : ""}
+      </span>
+      <time dateTime={head.occurredAt.toISOString()} className="tabular-nums">{activityTimeLabel(head.occurredAt)}</time>
+    </p>
   );
 }
 
 export function CreditBatchActivityView({
   creditBatchId,
   batchCode,
+  inline = false,
 }: {
   creditBatchId: string;
   /** Names the list for assistive tech; absent while the batch list loads. */
   batchCode?: string;
+  /**
+   * Render in page flow (a tab on the credit batch page) instead of filling the
+   * Traceability canvas. Drops the overlay, the container and the heading.
+   */
+  inline?: boolean;
 }) {
   const [filters, setFilters] = useState<ActivityFilters>({});
   // Index of the first row a "Show older activity" press added; that row takes focus once.
@@ -87,6 +111,7 @@ export function CreditBatchActivityView({
   const summary = useCreditBatchActivitySummary(creditBatchId);
   const activity = useCreditBatchActivity(creditBatchId, { limit: ACTIVITY_LIST_PAGE_SIZE, filters });
   const items = activity.data?.pages.flatMap((page) => page.items) ?? [];
+  const dayGroups = groupActivityByDay(items);
   const counts = summary.data?.counts ?? [];
   const filtered = hasActivityFilters(filters);
 
@@ -141,17 +166,35 @@ export function CreditBatchActivityView({
     return (
       <div className="flex flex-col gap-16">
         <ul
-          aria-label={batchCode ? `Activity for credit batch ${batchCode}` : ACTIVITY_TITLE}
-          className="divide-y divide-[var(--color-border-tertiary)] border-y border-[var(--color-border-tertiary)]"
+          aria-label={batchCode ? `Activities for credit batch ${batchCode}` : ACTIVITY_TITLE}
+          className="flex flex-col gap-24"
           data-testid="activity-list"
         >
-          {items.map((item, index) => (
-            <ActivityEntry
-              key={item.id}
-              item={item}
-              creditBatchId={creditBatchId}
-              focusRef={index === focusIndex ? focusFirstNew : undefined}
-            />
+          {dayGroups.map((group) => (
+            <li key={group.key} className="flex flex-col gap-4">
+              <h3 className="body-small font-medium text-[var(--color-text-secondary)]">{group.label}</h3>
+              <div className="flex flex-col divide-y divide-[var(--color-border-tertiary)] border-y border-[var(--color-border-tertiary)]">
+                {group.clusters.map((cluster) => {
+                  const burst = cluster.items.length > 1;
+                  return (
+                    <div key={cluster.key}>
+                      {burst ? <ClusterHeader cluster={cluster} /> : null}
+                      <ul className="divide-y divide-[var(--color-border-tertiary)]">
+                        {cluster.items.map((item) => (
+                          <ActivityEntry
+                            key={item.id}
+                            item={item}
+                            creditBatchId={creditBatchId}
+                            hideMeta={burst}
+                            focusRef={items.indexOf(item) === focusIndex ? focusFirstNew : undefined}
+                          />
+                        ))}
+                      </ul>
+                    </div>
+                  );
+                })}
+              </div>
+            </li>
           ))}
         </ul>
         {activity.hasNextPage ? (
@@ -171,20 +214,12 @@ export function CreditBatchActivityView({
   })();
 
   const hasAnyActivity = (summary.data?.total ?? 0) > 0;
-  return (
-    <div className="absolute inset-0 overflow-auto bg-[var(--bg)]" data-testid="credit-batch-activity-view">
-      <div className="container-max flex flex-col gap-20 py-24">
-        <div className="content-measure-preview flex flex-col gap-20">
-          <div className="flex flex-col gap-4">
-            <h2 className="title-heading-3">{ACTIVITY_TITLE}</h2>
-            <p className="body-small text-[var(--color-text-secondary)]">
-              {hasAnyActivity
-                ? `${activityChangeCount(summary.data!.total)} to this credit batch and its records since ${activityRecordingStartLabel()}. Newest first.`
-                : "Changes to this credit batch and its records, newest first."}
-            </p>
-          </div>
+  const content = (
+        <div className="content-measure-preview flex flex-col gap-16">
+          {inline ? null : <h2 className="title-heading-3">{ACTIVITY_TITLE}</h2>}
           {hasAnyActivity ? (
-            <div className="flex flex-col gap-12 sm:flex-row sm:flex-wrap sm:items-end" role="group" aria-label="Filter activity">
+            <div className="flex flex-wrap items-center gap-8" role="group" aria-label="Filter activity">
+              <FunnelSimpleIcon size={FILTER_ICON_PX} aria-hidden className="text-[var(--color-text-tertiary)]" />
               <FilterSelect
                 label="Kind"
                 allLabel="All kinds"
@@ -203,7 +238,7 @@ export function CreditBatchActivityView({
               />
               {/* The filtered-empty card carries its own clear action; one is enough. */}
               {filtered && items.length > 0 ? (
-                <Button variant="noOutline" className="min-h-44 self-start sm:self-auto" onClick={() => setFilter({})}>
+                <Button variant="noOutline" size="small" className="min-h-44 sm:min-h-32" onClick={() => setFilter({})}>
                   {ACTIVITY_CLEAR_FILTERS_LABEL}
                 </Button>
               ) : null}
@@ -212,7 +247,13 @@ export function CreditBatchActivityView({
           {body}
           <p role="status" className="sr-only">{announcement}</p>
         </div>
-      </div>
+  );
+  if (inline) {
+    return <div data-testid="credit-batch-activity-view">{content}</div>;
+  }
+  return (
+    <div className="absolute inset-0 overflow-auto bg-[var(--bg)]" data-testid="credit-batch-activity-view">
+      <div className="container-max flex flex-col gap-20 py-24">{content}</div>
     </div>
   );
 }
