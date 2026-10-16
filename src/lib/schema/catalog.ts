@@ -255,9 +255,8 @@ const TABLE_META: Record<string, TableMeta> = {
   credit_batch_applications: {
     area: "Credits",
     modulePath: "src/db/schema/credits.ts",
-    summary: "Legacy application membership cache; applications are now derived from member production runs.",
-    useCases: ["Migration compatibility"],
-    isLegacy: true,
+    summary: "Immutable wet and dry mass allocations for each Application x Credit batch slice. A Removal owns frozen slices; unassigned slices remain available for a future Removal.",
+    useCases: ["Applied mass allocation", "Frozen Removal slices"],
   },
   documents: {
     area: "Documentation",
