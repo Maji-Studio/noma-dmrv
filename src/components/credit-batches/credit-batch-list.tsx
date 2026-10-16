@@ -752,6 +752,12 @@ export function CreditBatchList({
                   }), so its definition is locked. To change it, the Removal must be amended with the registry.`}
                 </p>
               )}
+              <Link
+                href={`/credit-batches/${sideSheetEntity.id}`}
+                className="self-start body-small font-medium underline"
+              >
+                Open batch page
+              </Link>
               <CreditBatchHealthStrip
                 creditBatchId={sideSheetEntity.id}
                 facilityId={sideSheetEntity.facilityId}
