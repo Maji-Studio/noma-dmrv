@@ -20,7 +20,7 @@ import {
   activityChangeCount,
   activityEmptyDescription,
 } from "./activity-copy";
-import { activityActorDisplay } from "./activity-display";
+import { activityActorDisplay, activityActorText } from "./activity-display";
 import { ActivityEntry } from "./activity-entry";
 import { ActivityLoadError } from "./activity-load-error";
 import { activityKindTotals } from "./activity-filter-options";
@@ -64,7 +64,7 @@ export function CreditBatchActivitySection({
         rows={[
           {
             label: "Last change",
-            value: `${formatDateTime(last.occurredAt)} by ${actor.name}${actor.channel ? ` ${actor.channel}` : ""}`,
+            value: `${formatDateTime(last.occurredAt)} by ${activityActorText(actor)}`,
           },
           ...activityKindTotals(summary.data.counts).map((kind) => ({ label: kind.label, value: kind.count.toLocaleString() })),
         ]}

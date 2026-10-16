@@ -89,7 +89,7 @@ remembered ids fall through; standalone `?application=` deep links stay
 application-only. With both `?batch=` and `?application=` the page is a drill-down
 inside batch context, with a "Batch roll-up" button back.
 
-- **Credit batch (roll-up)** — segments `DAG | Map | Sankey | Activity`:
+- **Credit batch (roll-up)** — segments `DAG | Map | Sankey | Activities`:
   - **DAG** — member rollbacks merged into one fan-out, then roll-forwards for
     whatever they lack; nodes/edges dedupe by id so a shared production run
     appears once. Application cards drill down
@@ -102,8 +102,9 @@ inside batch context, with a "Batch roll-up" button back.
     `src/lib/chain-of-custody/sankey.ts`. Rendered on a React Flow canvas; clicking
     a column or exit opens a tooltip with a "See details" link to the backing
     entity route — the Sankey doubles as navigation.
-  - **Activity** (`?view=activity`) — the batch's recorded changes, newest
-    first, from `useCreditBatchActivity` (membership and cardinality:
+  - **Activities** (`?view=activity`) — the batch's recorded changes, newest
+    first, grouped by day (consecutive changes by one actor within a minute
+    share one who-and-when header), from `useCreditBatchActivity` (membership and cardinality:
     [database.md](database.md#activity-events)). Not a lineage reading: it
     renders before the roll-up loads, for batches with no runs, and hides the
     run filter. Filters by kind and record type run server side; the summary

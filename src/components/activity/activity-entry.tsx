@@ -10,13 +10,13 @@
  */
 import Link from "next/link";
 import { ArrowRightIcon } from "@phosphor-icons/react/dist/ssr";
-import { formatDateTime } from "@/lib/format-utils";
-import { activityTimeLabel } from "./activity-day-groups";
+import { formatDateTime, formatTime } from "@/lib/format-utils";
 import { activityRecordTypeIcon } from "./activity-icons";
 import { cn } from "@/lib/utils";
 import {
   ACTIVITY_KIND_LABELS,
   activityActorDisplay,
+  activityActorText,
   activityChangeSummary,
   activityRecordHref,
   activityRecordLabel,
@@ -150,10 +150,7 @@ function EntryBody({ item, showDate, hideMeta }: { item: ActivityItem; showDate:
         // The burst header above carries the visible time and actor; the row keeps them for screen readers.
         <span className="sr-only">
           <time dateTime={item.occurredAt.toISOString()}>{formatDateTime(item.occurredAt)}</time>{" "}
-          <span>
-            {actor.name}
-            {actor.channel ? ` ${actor.channel}` : null}
-          </span>
+          <span>{activityActorText(actor)}</span>
         </span>
       ) : (
         <span
@@ -163,7 +160,7 @@ function EntryBody({ item, showDate, hideMeta }: { item: ActivityItem; showDate:
           )}
         >
           <time dateTime={item.occurredAt.toISOString()} title={formatDateTime(item.occurredAt)} className="tabular-nums">
-            {showDate ? formatDateTime(item.occurredAt) : activityTimeLabel(item.occurredAt)}
+            {showDate ? formatDateTime(item.occurredAt) : formatTime(item.occurredAt)}
           </time>
           <span>
             <span className={cn(!actor.missing && "text-[var(--color-text-secondary)]")}>{actor.name}</span>

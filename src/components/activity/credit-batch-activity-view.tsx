@@ -26,7 +26,7 @@ import {
   activityLoadedMessage,
 } from "./activity-copy";
 import { activityTimeLabel, groupActivityByDay, type ActivityCluster } from "./activity-day-groups";
-import { activityActorDisplay } from "./activity-display";
+import { activityActorDisplay, activityActorText } from "./activity-display";
 import { ActivityEntry } from "./activity-entry";
 import { ActivityLoadError } from "./activity-load-error";
 import {
@@ -42,8 +42,8 @@ import {
 const EMPTY_ICON_PX = 48;
 const FILTERED_ICON_PX = 40;
 const FILTER_ICON_PX = 14;
-/** A quiet compact select: 44px on phones for touch, 32px from the sm breakpoint. */
-const SELECT_SIZE_CLASS = "h-44 w-auto max-w-full px-8 body-caption sm:h-32";
+/** A quiet compact select: small text, 44px tall at every breakpoint for touch. */
+const SELECT_SIZE_CLASS = "h-44 w-auto max-w-full px-8 body-caption";
 
 function FilterSelect({
   label,
@@ -83,7 +83,7 @@ function ClusterHeader({ cluster }: { cluster: ActivityCluster }) {
   return (
     <p className="flex flex-wrap items-baseline gap-x-8 px-8 pt-8 body-caption text-[var(--color-text-tertiary)]">
       <span className={actor.missing ? undefined : "text-[var(--color-text-secondary)]"}>
-        {actor.name}{actor.channel ? ` ${actor.channel}` : ""}
+        {activityActorText(actor)}
       </span>
       <time dateTime={head.occurredAt.toISOString()} className="tabular-nums">{activityTimeLabel(head.occurredAt)}</time>
     </p>
@@ -238,7 +238,7 @@ export function CreditBatchActivityView({
               />
               {/* The filtered-empty card carries its own clear action; one is enough. */}
               {filtered && items.length > 0 ? (
-                <Button variant="noOutline" size="small" className="min-h-44 sm:min-h-32" onClick={() => setFilter({})}>
+                <Button variant="noOutline" size="small" className="min-h-44" onClick={() => setFilter({})}>
                   {ACTIVITY_CLEAR_FILTERS_LABEL}
                 </Button>
               ) : null}
