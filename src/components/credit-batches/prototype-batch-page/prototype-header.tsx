@@ -2,7 +2,7 @@
 
 /** PROTOTYPE (throwaway): page header, progress steps and key numbers. */
 import Link from "next/link";
-import { ArrowLeftIcon, CheckIcon, DotsThreeIcon, PencilSimpleIcon } from "@phosphor-icons/react/dist/ssr";
+import { ArrowLeftIcon, CheckIcon, DotsThreeIcon, LeafIcon, PencilSimpleIcon } from "@phosphor-icons/react/dist/ssr";
 import { PageHeader } from "@/components/ui";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu } from "@/components/ui/dropdown-menu";
@@ -10,6 +10,7 @@ import { formatDateRange, formatTonnes } from "@/lib/format-utils";
 import { cn } from "@/lib/utils";
 import { useProto } from "./prototype-context";
 import { SAMPLES_REQUIRED } from "./prototype-model";
+import { Chip, CountBadge } from "./prototype-parts";
 
 const MUTED = "text-[var(--color-text-secondary)]";
 
@@ -77,6 +78,7 @@ function ProgressSteps() {
               {step.state === "done" && <CheckIcon size={14} weight="bold" className="shrink-0 text-[var(--st-ok)]" aria-hidden />}
               {step.label}
               {step.state === "done" && <span className="sr-only"> (done)</span>}
+              {step.count != null && step.count > 0 && <CountBadge count={step.count} blocking label={`${step.count} blocking items`} />}
             </span>
             {step.caption && <span className={cn("body-caption", MUTED)}>{step.caption}</span>}
           </span>
@@ -112,11 +114,11 @@ export function BatchHeader() {
         <ArrowLeftIcon size={16} aria-hidden />
         All credit batches
       </Link>
-      <div className="flex flex-col gap-16">
+      <div className="flex flex-col gap-24">
+        <div className="flex flex-col gap-12">
         <PageHeader
           area="verification"
           title={batch.code}
-          subtitle={[batch.feedstockTypeName, batch.facility?.name, formatDateRange(batch.startDate, batch.endDate)].filter(Boolean).join(", ")}
           actions={
             <>
               <PrimaryAction />
@@ -125,6 +127,11 @@ export function BatchHeader() {
             </>
           }
         />
+        <div className="flex flex-wrap items-center gap-12">
+          {batch.feedstockTypeName && <Chip icon={<LeafIcon size={14} aria-hidden />}>{batch.feedstockTypeName}</Chip>}
+          <span className={cn("body-small", MUTED)}>{formatDateRange(batch.startDate, batch.endDate)}</span>
+        </div>
+        </div>
         <ProgressSteps />
       </div>
     </div>

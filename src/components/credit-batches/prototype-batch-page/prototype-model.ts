@@ -37,6 +37,8 @@ export interface ProgressStep {
   state: "done" | "current" | "todo";
   /** A date, a record or what is holding the step. Empty for later steps. */
   caption: string;
+  /** Blocking items holding this step, shown as a count badge. */
+  count?: number;
 }
 export const SAMPLES_REQUIRED = 3;
 
@@ -213,14 +215,20 @@ function realBlockingItems(health: BatchHealth | undefined, batch: CreditBatchWi
 
 /** PROTOTYPE: the four lifecycle steps with stub captions per scenario. */
 function progressFor(scenario: Scenario, blockingCount: number): ProgressStep[] {
-  const steps = ["Ready for a Removal", "Removal submitted", "Verified", "Credits issued"];
+  // Milestones, each named for what has happened, so a current step never reads as reached.
+  const steps = ["Data complete", "Removal submitted", "Verified", "Credits issued"];
   const plan: Record<Scenario, [ProgressStep["state"], string][]> = {
-    blocking: [["current", `${blockingCount} blocking ${blockingCount === 1 ? "item" : "items"} to fix`], ["todo", ""], ["todo", ""], ["todo", ""]],
+    blocking: [["current", ""], ["todo", ""], ["todo", ""], ["todo", ""]],
     clear: [["done", "Nothing blocking"], ["current", "Not started"], ["todo", ""], ["todo", ""]],
     "partly-sent": [["done", "Oct 10, 2026"], ["done", "R-07, Oct 12, 2026"], ["current", "GHG Statement Q3 in verification"], ["todo", ""]],
     issued: [["done", "Oct 10, 2026"], ["done", "R-07 and R-09"], ["done", "Nov 1, 2026"], ["done", "Nov 3, 2026"]],
   };
-  return steps.map((label, index) => ({ label, state: plan[scenario][index][0], caption: plan[scenario][index][1] }));
+  return steps.map((label, index) => ({
+    label,
+    state: plan[scenario][index][0],
+    caption: plan[scenario][index][1],
+    count: scenario === "blocking" && index === 0 ? blockingCount : undefined,
+  }));
 }
 
 export interface ModelInput {

@@ -25,6 +25,31 @@ export const GROUP_META: Record<ItemGroup, { title: string; help: string; dot: s
   waiting: { title: "Waiting", help: "With someone else. Nothing to do yet.", dot: "bg-[var(--st-off)]" },
 };
 
+/** A square chip for a record's identity facts (feedstock, code), as on the list cards. */
+export function Chip({ children, icon }: { children: ReactNode; icon?: ReactNode }) {
+  return (
+    <span className="inline-flex items-center gap-6 border border-[var(--clr-dark-purple-20)] bg-[var(--clr-dark-purple-10)] px-8 py-2 body-small text-[var(--clr-dark-purple)]">
+      {icon}
+      {children}
+    </span>
+  );
+}
+
+/** Round count badge: red when the count blocks, quiet otherwise. Same badge as the Overview tab. */
+export function CountBadge({ count, blocking, label }: { count: number; blocking: boolean; label: string }) {
+  return (
+    <span
+      aria-label={label}
+      className={cn(
+        "inline-flex min-w-20 items-center justify-center rounded-full px-6 body-caption font-medium tabular-nums",
+        blocking ? "bg-[var(--st-bad)] text-white" : "bg-[var(--sea)]",
+      )}
+    >
+      {count}
+    </span>
+  );
+}
+
 export function tonnes(value: number): string {
   return formatTonnes(value);
 }
