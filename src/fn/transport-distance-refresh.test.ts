@@ -7,7 +7,7 @@ const mocks = vi.hoisted(() => ({ read: vi.fn(), feedstock: vi.fn(), delivery: v
 vi.mock("@/data-access/transport-distance-drift", () => ({ getTransportDistanceDrift: mocks.read }));
 vi.mock("@/data-access/transport-distance-refresh", () => ({ refreshFeedstockDistanceInTransaction: mocks.feedstock, refreshDeliveryDistanceInTransaction: mocks.delivery }));
 vi.mock("@/lib/auth/server", () => ({ requireOrgContext: async () => ({ organizationId: "session-org", userId: "actor", orgRole: "owner", isPlatformAdmin: false }) }));
-vi.mock("@/lib/operations/runner", () => ({ runOperationInProcess: async (op: { execute: (scope: unknown, input: unknown) => unknown }, ctx: unknown, input: unknown) => op.execute({ ctx }, input) }));
+vi.mock("@/lib/operations/runner", () => ({ runOperationInProcess: async (op: { execute: (scope: unknown, input: unknown) => unknown }, ctx: unknown, input: unknown) => op.execute({ ctx, activity: { capture: vi.fn() } }, input) }));
 const ID = "00000000-0000-4000-8000-000000000001";
 beforeEach(() => { vi.clearAllMocks(); });
 

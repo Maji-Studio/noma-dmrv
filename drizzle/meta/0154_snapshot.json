@@ -1,5 +1,5 @@
 {
-  "id": "8aafc947-68c2-4754-a82d-113ab1d842c8",
+  "id": "87b99b91-0610-4399-ac3d-92f74b53a3bb",
   "prevId": "be4581e6-73bc-432c-ba2b-ef8323079e8b",
   "version": "7",
   "dialect": "postgresql",
@@ -64,6 +64,13 @@
           "primaryKey": false,
           "notNull": true,
           "default": "'{}'::text[]"
+        },
+        "changes": {
+          "name": "changes",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::jsonb"
         },
         "from_status": {
           "name": "from_status",
@@ -7064,25 +7071,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "distance_km_override": {
-          "name": "distance_km_override",
-          "type": "real",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "distance_source": {
-          "name": "distance_source",
-          "type": "distance_source",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "distance_note": {
-          "name": "distance_note",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
         "feedstock_type_id": {
           "name": "feedstock_type_id",
           "type": "uuid",
@@ -7236,10 +7224,6 @@
       },
       "policies": {},
       "checkConstraints": {
-        "feedstocks_distance_override_positive": {
-          "name": "feedstocks_distance_override_positive",
-          "value": "\"feedstocks\".\"distance_km_override\" is null or \"feedstocks\".\"distance_km_override\" > 0"
-        },
         "feedstocks_mass_dry_non_negative": {
           "name": "feedstocks_mass_dry_non_negative",
           "value": "\"feedstocks\".\"mass_dry_kg\" >= 0"

@@ -12,6 +12,7 @@ import {
   creditBatchProductionRuns,
   facilities,
   productionRuns,
+  productionRunFeedstockDraws,
   reactors,
   storageLocations,
 } from "@/db/schema";
@@ -81,6 +82,14 @@ const PREFLIGHT_OUTCOME_VIOLATIONS = [
   "complete-output-bin-required",
   "complete-output-moisture-required",
 ] as const;
+
+async function readRunDrawSnapshot(ctx: OrgContext, tx: DbTransaction, productionRunId: string) {
+  requireOrgScope(ctx);
+  return tx.select({ storageLocationId: productionRunFeedstockDraws.storageLocationId, wetMassKg: productionRunFeedstockDraws.wetMassKg })
+    .from(productionRunFeedstockDraws)
+    .where(and(eq(productionRunFeedstockDraws.productionRunId, productionRunId), eq(productionRunFeedstockDraws.organizationId, ctx.organizationId)))
+    .orderBy(productionRunFeedstockDraws.storageLocationId);
+}
 
 /**
  * Validate that an output storage location exists, belongs to the facility, and is a biochar bin.
@@ -306,6 +315,8 @@ export async function createProductionRunInTransaction(
 
     await attachProductionRunToMatchingCreditBatch(ctx, tx, created.id);
 
+    const savedDraws = await readRunDrawSnapshot(ctx, tx, created.id);
+    options.capture?.(created.id, null, { ...created, feedstockDraws: savedDraws });
     run = created;
   } catch (error) {
     if (isPgCheckViolation(error, END_AFTER_START_CONSTRAINT)) {
@@ -740,10 +751,11 @@ export async function updateProductionRunInTransaction(
       );
     }
 
-    await tx
+    const previousDraws = await readRunDrawSnapshot(ctx, tx, productionRunId);
+    const [saved] = await tx
       .update(productionRuns)
       .set({ ...transactionUpdateData, version: nextVersion(productionRuns.version) })
-      .where(and(eq(productionRuns.id, productionRunId), eq(productionRuns.organizationId, ctx.organizationId)));
+      .where(and(eq(productionRuns.id, productionRunId), eq(productionRuns.organizationId, ctx.organizationId))).returning();
 
     await assertProductionRunBiocharStockNotOverdrawn(
       ctx,
@@ -758,6 +770,11 @@ export async function updateProductionRunInTransaction(
         draws: normalizedFeedstockDraws,
       });
     }
+
+    const savedDraws = feedstockDrawsChanged
+      ? await readRunDrawSnapshot(ctx, tx, productionRunId)
+      : previousDraws;
+    options.capture?.(productionRunId, { ...locked, feedstockDraws: previousDraws }, { ...saved, feedstockDraws: savedDraws });
 
     const consumedFeedstockWetKg =
       await getProductionRunFeedstockDrawTotal(ctx, tx, productionRunId);

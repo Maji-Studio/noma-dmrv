@@ -10,13 +10,16 @@ import { lookupInputMapping, resolveDatapointSource } from "./datapoint-mapping"
 
 const template = sandbox as GhgEntryTemplate;
 const sourceLines = reviewedTemplateSources(template);
-function coverage(value: GhgEntryTemplate, lineSources: LineSources = reviewedTemplateSources(value), allowPeriodInputStub = false) {
-  return findUnbindableTemplateInputs(value, { lineSources, allowPeriodInputStub });
+function coverage(value: GhgEntryTemplate, lineSources: LineSources = reviewedTemplateSources(value)) {
+  return findUnbindableTemplateInputs(value, { lineSources });
 }
 
 describe("contract-based template coverage", () => {
-  it.each([true, false])("accepts the bootstrap sandbox template (stubs: %s)", (stubs) => {
-    expect(coverage(template, sourceLines, stubs)).toEqual([]);
+  it("accepts the bootstrap sandbox template", () => {
+    expect(coverage(template, sourceLines)).toEqual([]);
+  });
+  it("defers incomplete reads to the template-level blocker", () => {
+    expect(findUnbindableTemplateInputs(template, { enrichmentComplete: false })).toEqual([]);
   });
   it("blocks every unassigned line", () => {
     const findings = coverage(template, {});
@@ -55,17 +58,17 @@ describe("contract-based template coverage", () => {
     const mapping = lookupInputMapping("pyrolysis", "fuel_usage_by_volume", "volume_of_fuel")!;
     expect(() => resolveDatapointSource(mapping)).toThrow("Review the Removal template lines in Certification settings.");
   });
-  it("preserves production period guards and sandbox stubs for entry-only lines", () => {
+  it("blocks entry-only operating lines in both environments until entries can be submitted", () => {
     const value = realTemplate as GhgEntryTemplate;
-    expect(coverage(value).some((finding) => finding.reason === "project-scope")).toBe(true);
-    // Sandbox stubs period lines only. Sample shipping lines have no automatic
-    // source, so they block instead of each receiving the full sample transport total.
-    const sampleLines = ["rtc_1M4ZRPH1RSBXADG2", "rtc_1M4ZRRN6PSBXHQ7C"];
-    expect(coverage(value, reviewedTemplateSources(value), true).map((finding) => finding.componentId).sort()).toEqual(sampleLines);
+    const sources = reviewedTemplateSources(value);
+    const ids = Object.entries(sources).filter(([, contract]) => contract.scope === "operating" && !contract.automaticSource).map(([id]) => id).sort();
+    const findings = coverage(value, sources);
+    expect([...new Set(findings.map((finding) => finding.componentId))].sort()).toEqual(ids);
+    expect(findings.every((finding) => finding.reason === "unmapped")).toBe(true);
   });
   it("blocks forbidden lines even in sandbox", () => {
     const first = template.groups.flatMap((group) => group.components)[0];
-    expect(coverage(template, { ...sourceLines, [first.id]: { scope: "forbidden", entryPolicy: "none", origin: "reviewed" } }, true))
+    expect(coverage(template, { ...sourceLines, [first.id]: { scope: "forbidden", entryPolicy: "none", origin: "reviewed" } }))
       .toContainEqual(expect.objectContaining({ componentId: first.id, reason: "project-scope" }));
   });
   it("reports unsupported paired transport with repair guidance", () => {

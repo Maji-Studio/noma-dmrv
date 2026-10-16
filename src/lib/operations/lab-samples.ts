@@ -12,7 +12,8 @@ import {
   deleteLabSampleInput, recordLabSampleInput, updateLabSampleInput,
   type DeleteLabSampleInput, type RecordLabSampleInput, type UpdateLabSampleInput,
 } from "@/schemas/lab-sample-input";
-import type { Operation, OperationEffect } from "./runner";
+import type { Operation } from "./runner";
+import type { OperationDescription } from "@/lib/operation-effect";
 
 /**
  * Lab Sample writes (Phase 5a): one replicate's lab results on one credit
@@ -27,28 +28,23 @@ const AUTO_CODE_COUNT = 1;
 const SAMPLE_CODE_PREFIX = "SAM";
 const ENTITY_TYPE = "labSample";
 
-/** Preconditions and the target describe how a write was sent, not what it changed. */
-const NOT_CHANGES: ReadonlySet<string> = new Set(["labSampleId", "expectedVersion"]);
 
-function changedFields(input: object): string[] {
-  return Object.entries(input).filter(([key, value]) => value !== undefined && !NOT_CHANGES.has(key)).map(([key]) => key).sort();
-}
 
 interface SavedSample { id: string; version: number }
 
 /** Audit effect of a create, shared with the API adapter that publishes the saved row instead. */
-export function describeRecordedLabSample(input: RecordLabSampleInput, sample: SavedSample): OperationEffect {
+export function describeRecordedLabSample(input: RecordLabSampleInput, sample: SavedSample): OperationDescription {
   return {
     outcome: "created", entityType: ENTITY_TYPE, entityIds: [sample.id],
-    versionBefore: null, versionAfter: sample.version, changedFields: changedFields(input),
+    versionBefore: null, versionAfter: sample.version,
   };
 }
 
 /** Audit effect of an update, shared with the API adapter. */
-export function describeUpdatedLabSample(input: UpdateLabSampleInput, sample: SavedSample): OperationEffect {
+export function describeUpdatedLabSample(input: UpdateLabSampleInput, sample: SavedSample): OperationDescription {
   return {
     outcome: "updated", entityType: ENTITY_TYPE, entityIds: [sample.id],
-    versionBefore: input.expectedVersion, versionAfter: sample.version, changedFields: changedFields(input),
+    versionBefore: input.expectedVersion, versionAfter: sample.version,
   };
 }
 
@@ -61,7 +57,7 @@ export const recordLabSample: Operation<typeof recordLabSampleInput, SampleWrite
   execute: async ({ ctx, tx, activity }, input) => {
     const result = await withSampleErrors(() => withAutoCodes(
       ctx, tx, SAMPLE_CODE_PREFIX, samples, samples.sampleCode, AUTO_CODE_COUNT,
-      ([sampleCode], savepoint) => createSampleInTransaction(ctx, savepoint, { ...input, sampleCode }),
+      ([sampleCode], savepoint) => createSampleInTransaction(ctx, savepoint, { ...input, sampleCode }, { capture: activity.capture }),
       CODE_CONFLICT_MESSAGES.sample,
     ));
     activity.link({ creditBatchId: result.sample.creditBatchId, productionRunId: result.sample.productionRunId });
@@ -77,16 +73,16 @@ export const updateLabSample: Operation<typeof updateLabSampleInput, SampleWrite
   execute: async ({ ctx, tx, activity }, { labSampleId, code, ...changes }) => {
     const result = await withSampleErrors(() => withUniqueCodeGuard(
       ctx, samples, samples.sampleCode, CODE_CONFLICT_MESSAGES.sample,
-      () => updateSampleInTransaction(ctx, tx, labSampleId, { ...changes, sampleCode: code }),
+      () => updateSampleInTransaction(ctx, tx, labSampleId, { ...changes, sampleCode: code }, { capture: activity.capture }),
     ));
     activity.link({ creditBatchId: result.sample.creditBatchId, productionRunId: result.sample.productionRunId });
     return result;
   },
 };
 
-export const describeDeletedLabSample = (input: DeleteLabSampleInput): OperationEffect => ({
+export const describeDeletedLabSample = (input: DeleteLabSampleInput): OperationDescription => ({
   outcome: "deleted", entityType: ENTITY_TYPE, entityIds: [input.labSampleId],
-  versionBefore: input.expectedVersion, versionAfter: null, changedFields: [],
+  versionBefore: input.expectedVersion, versionAfter: null,
 });
 
 export const deleteLabSample: Operation<typeof deleteLabSampleInput, void> = {

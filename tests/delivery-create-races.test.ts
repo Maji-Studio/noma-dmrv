@@ -199,7 +199,7 @@ it("parallel API keys through a test-only runner operation create one audit row"
       const delivery = { ...result.delivery, savedProducts: undefined };
       return { ...result, delivery };
     },
-    describe: (_input, result) => ({ outcome: "created", entityType: "delivery", entityIds: [result.delivery.id], versionBefore: null, versionAfter: result.delivery.version, changedFields: [] }),
+    describe: (_input, result) => ({ outcome: "created", entityType: "delivery", entityIds: [result.delivery.id], versionBefore: null, versionAfter: result.delivery.version }),
   };
   const preview = await runOperation(operation, f.ctx, f.input, { dryRun: true });
   expect(preview.stockEffects).toMatchObject([{ storageLocationId: f.bin.id, stockKind: "product_bin", delta: { wetKg: null, dryKg: -72 } }]);

@@ -5,19 +5,15 @@ import { processPendingStorageObjectDeletions } from "@/data-access/storage-obje
 import { lockBiocharTransportRouteTopology } from "@/data-access/transport-legs";
 import { orders, type Order } from "@/db/schema";
 import { recordOrderInput, updateOrderInput, deleteOrderInput, type RecordOrderInput, type UpdateOrderInput } from "@/schemas/order-input";
-import type { OperationEffect } from "@/lib/operation-effect";
+import type { OperationDescription } from "@/lib/operation-effect";
 import type { Operation } from "./runner";
 
 const AUTO_CODE_COUNT = 1;
-const NOT_CHANGES = new Set(["orderId", "expectedVersion"]);
-function changedFields(input: object): string[] {
-  return Object.entries(input).filter(([key, value]) => value !== undefined && !NOT_CHANGES.has(key)).map(([key]) => key).sort();
-}
 
-export const describeRecordedOrder = (input: RecordOrderInput, output: Pick<Order, "id" | "version">): OperationEffect => ({ outcome: "created", entityType: "order", entityIds: [output.id],
-    versionBefore: null, versionAfter: output.version, changedFields: changedFields(input) });
-export const describeUpdatedOrder = (input: UpdateOrderInput, output: Pick<Order, "id" | "version">): OperationEffect => ({ outcome: "updated", entityType: "order", entityIds: [output.id],
-    versionBefore: input.expectedVersion, versionAfter: output.version, changedFields: changedFields(input) });
+export const describeRecordedOrder = (input: RecordOrderInput, output: Pick<Order, "id" | "version">): OperationDescription => ({ outcome: "created", entityType: "order", entityIds: [output.id],
+    versionBefore: null, versionAfter: output.version });
+export const describeUpdatedOrder = (input: UpdateOrderInput, output: Pick<Order, "id" | "version">): OperationDescription => ({ outcome: "updated", entityType: "order", entityIds: [output.id],
+    versionBefore: input.expectedVersion, versionAfter: output.version });
 
 export const recordOrder: Operation<typeof recordOrderInput, Order> = {
   id: "record_order", input: recordOrderInput, supportsDryRun: true,
@@ -29,6 +25,7 @@ export const recordOrder: Operation<typeof recordOrderInput, Order> = {
     const order = await withAutoCodes(ctx, tx, "OR", orders, orders.code, AUTO_CODE_COUNT,
       ([code], savepoint) => createOrderInTransaction(ctx, savepoint, { ...input, packaging, code }), CODE_CONFLICT_MESSAGES.order);
     activity.link({ facilityId: order.facilityId });
+    activity.capture(order.id, null, order);
     return order;
   },
 };
@@ -37,7 +34,7 @@ export const updateOrder: Operation<typeof updateOrderInput, Order> = {
   id: "update_order", input: updateOrderInput, supportsDryRun: true,
   describe: describeUpdatedOrder,
   execute: async ({ ctx, tx, activity }, input) => {
-    const order = await updateOrderInTransaction(ctx, tx, input);
+    const order = await updateOrderInTransaction(ctx, tx, input, activity.capture);
     activity.link({ facilityId: order.facilityId });
     return order;
   },
@@ -46,7 +43,7 @@ export const updateOrder: Operation<typeof updateOrderInput, Order> = {
 export const deleteOrder: Operation<typeof deleteOrderInput, void> = {
   id: "delete_order", input: deleteOrderInput, supportsDryRun: true,
   describe: (input) => ({ outcome: "deleted", entityType: "order", entityIds: [input.orderId],
-    versionBefore: input.expectedVersion, versionAfter: null, changedFields: [] }),
+    versionBefore: input.expectedVersion, versionAfter: null }),
   execute: async ({ ctx, tx, source, afterCommit, activity }, input) => {
     const order = await deleteOrderInTransaction(ctx, tx, input, source);
     activity.link({ facilityId: order.facilityId });

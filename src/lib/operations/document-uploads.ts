@@ -21,6 +21,7 @@ export const requestDocumentUpload: Operation<typeof requestDocumentUploadInput,
         capturedAt: capturedAt ? new Date(capturedAt).toISOString() : undefined,
         storageProvider: provider.name, storageBucket: provider.bucket,
       });
+      activity.capture(document.id, null, document);
       linkDocumentActivity(activity, document);
       return representDocument(document);
     } catch (error) {

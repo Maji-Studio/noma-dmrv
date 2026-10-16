@@ -1,3 +1,5 @@
+import type { CaptureActivity } from "@/lib/activity-changes";
+import { readFeedstockTransportSnapshot } from "./feedstocks";
 import { and, eq, isNull } from "drizzle-orm";
 import type { DbTransaction } from "@/db";
 import { deliveries, feedstocks } from "@/db/schema";
@@ -34,7 +36,7 @@ async function guardRefresh(ctx: OrgContext, tx: DbTransaction, target: Transpor
   return { targets, lockedKeys };
 }
 
-export async function refreshFeedstockDistanceInTransaction(ctx: OrgContext, tx: DbTransaction, input: RefreshTransportDistanceInput) {
+export async function refreshFeedstockDistanceInTransaction(ctx: OrgContext, tx: DbTransaction, input: RefreshTransportDistanceInput, capture?: CaptureActivity) {
   requireOrgScope(ctx);
   const target = { entityType: "feedstock" as const, entityId: input.entityId };
   await lockBiocharTransportRouteTopology(ctx, tx);
@@ -45,13 +47,15 @@ export async function refreshFeedstockDistanceInTransaction(ctx: OrgContext, tx:
   assertRowVersion({ entity: "feedstock", id: row.id, expectedVersion: input.expectedVersion, actualVersion: row.version });
   await guardRefresh(ctx, tx, target);
   if (row.distanceKmOverride != null && row.distanceKmOverride > 0) throw new DomainError("validation_failed", "The distance was not refreshed because it has an override. Clear the override first.");
+  const transportBefore = capture ? await readFeedstockTransportSnapshot(ctx, tx, row.id) : undefined;
   await syncFeedstockTransportLeg(ctx, tx, row.id, { refreshFromLocation: true, requireLocationDistance: true });
-  await tx.update(feedstocks).set({ version: nextVersion(feedstocks.version), updatedAt: new Date() })
-    .where(and(eq(feedstocks.organizationId, ctx.organizationId), eq(feedstocks.id, row.id)));
+  const [saved] = await tx.update(feedstocks).set({ version: nextVersion(feedstocks.version), updatedAt: new Date() })
+    .where(and(eq(feedstocks.organizationId, ctx.organizationId), eq(feedstocks.id, row.id))).returning();
+  if (capture) capture(row.id, { ...row, ...transportBefore }, { ...saved, ...await readFeedstockTransportSnapshot(ctx, tx, row.id) });
   return getTransportDistanceDrift(ctx, target, tx);
 }
 
-export async function refreshDeliveryDistanceInTransaction(ctx: OrgContext, tx: DbTransaction, input: RefreshTransportDistanceInput) {
+export async function refreshDeliveryDistanceInTransaction(ctx: OrgContext, tx: DbTransaction, input: RefreshTransportDistanceInput, capture?: CaptureActivity) {
   requireOrgScope(ctx);
   const target = { entityType: "delivery" as const, entityId: input.entityId };
   await lockBiocharTransportRouteTopology(ctx, tx);
@@ -64,9 +68,10 @@ export async function refreshDeliveryDistanceInTransaction(ctx: OrgContext, tx: 
   if (row.distanceKmOverride != null && row.distanceKmOverride > 0) throw new DomainError("validation_failed", "The distance was not refreshed because it has an override. Clear the override first.");
   const preview = await getTransportDistanceDrift(ctx, target, tx);
   if (preview.currentDistanceKm == null) throw new DomainError("validation_failed", "The distance was not refreshed because the location has no distance for this facility. Save a location distance first.");
-  await tx.update(deliveries).set({ recordedDistanceKm: preview.currentDistanceKm, recordedDistanceSource: preview.currentDistanceSource, distanceSource: null,
+  const [saved] = await tx.update(deliveries).set({ recordedDistanceKm: preview.currentDistanceKm, recordedDistanceSource: preview.currentDistanceSource, distanceSource: null,
     version: nextVersion(deliveries.version), updatedAt: new Date() })
-    .where(and(eq(deliveries.organizationId, ctx.organizationId), eq(deliveries.id, row.id)));
+    .where(and(eq(deliveries.organizationId, ctx.organizationId), eq(deliveries.id, row.id))).returning();
   await syncBiocharProductTransportLegs(ctx, tx, targets.filter(item => item.entityType === "biocharProduct").map(item => item.entityId));
+  capture?.(row.id, row, saved);
   return getTransportDistanceDrift(ctx, target, tx);
 }

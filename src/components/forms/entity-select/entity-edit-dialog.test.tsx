@@ -8,16 +8,19 @@ import type { EditableEntityType } from "@/hooks/use-entity-edit-record";
 
 const mocks = vi.hoisted(() => ({
   query: { data: undefined as unknown, isFetchedAfterMount: false, isFetching: true, isSuccess: false, isError: false, refetch: vi.fn() },
-  load: vi.fn(), update: vi.fn(), toast: vi.fn(),
+  load: vi.fn(), update: vi.fn(), toast: vi.fn(), restore: vi.fn(), success: vi.fn(),
 }));
 vi.mock("@/hooks/use-entity-edit-record", () => ({ useEntityEditRecord: (...args: unknown[]) => { mocks.load(...args); return mocks.query; } }));
-vi.mock("@/components/ui/toast", () => ({ useToast: () => ({ error: mocks.toast }) }));
+vi.mock("@/components/ui/toast", () => ({ useToast: () => ({ error: mocks.toast, success: mocks.success }) }));
 vi.mock("@/components/ui", () => ({ Modal: ({ children, isOpen }: { children: ReactNode; isOpen: boolean }) => isOpen ? createPortal(<div role="dialog">{children}</div>, document.body) : null }));
 vi.mock("@/hooks/use-customers", () => ({ useUpdateCustomer: () => ({ mutateAsync: mocks.update, isPending: false }) }));
 vi.mock("@/hooks/use-reactors", () => ({ useUpdateReactor: () => ({ mutateAsync: mocks.update, isPending: false }) }));
 vi.mock("@/hooks/use-orders", () => ({ useUpdateOrder: () => ({ mutateAsync: mocks.update, isPending: false }) }));
 vi.mock("@/hooks/use-suppliers", () => ({ useUpdateSupplier: () => ({ mutateAsync: mocks.update, isPending: false }) }));
-vi.mock("@/hooks/use-formulations", () => ({ useUpdateFormulation: () => ({ mutateAsync: mocks.update, isPending: false }) }));
+vi.mock("@/hooks/use-formulations", () => ({
+  useUpdateFormulation: () => ({ mutateAsync: mocks.update, isPending: false }),
+  useRestoreFormulation: () => ({ mutateAsync: mocks.restore, isPending: false }),
+}));
 vi.mock("@/hooks/use-feedstock-types", () => ({ useUpdateFeedstockType: () => ({ mutateAsync: mocks.update, isPending: false }) }));
 
 interface FormProps {
@@ -71,6 +74,27 @@ describe("EntityEditDialog", () => {
     expect(screen.queryByRole("form")).toBeNull();
     expect(screen.queryByRole("button", { name: "Save changes" })).toBeNull();
     expect(mocks.update).not.toHaveBeenCalled();
+  });
+  it("opens an archived formulation read-only with the archived notice and Restore", async () => {
+    loaded();
+    mocks.query.data = { ...record, code: "BCF-0003", archivedAt: new Date() };
+    mocks.restore.mockResolvedValue(record);
+    const close = vi.fn();
+    render(dialog("formulation", true, close));
+    expect(screen.getByRole("status").textContent).toContain("This formulation is archived. Pickers hide it and new products, orders and bins cannot use it.");
+    expect(screen.queryByRole("button", { name: "Save changes" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Restore" }));
+    await waitFor(() => expect(close).toHaveBeenCalledOnce());
+    expect(mocks.restore).toHaveBeenCalledWith({ formulationId: "one", expectedVersion: 7 });
+    expect(mocks.success).toHaveBeenCalledWith("Formulation BCF-0003 restored.");
+  });
+  it("shows a refused Restore inside the archived formulation dialog", async () => {
+    loaded();
+    mocks.query.data = { ...record, code: "BCF-0003", archivedAt: new Date() };
+    mocks.restore.mockRejectedValue(new Error("Restore refused"));
+    render(dialog("formulation"));
+    fireEvent.click(screen.getByRole("button", { name: "Restore" }));
+    expect((await screen.findByText("Restore refused"))).toBeTruthy();
   });
   it.each(types)("loads %s fresh before rendering its edit surface", (type) => {
     mocks.query.data = { ...record, name: "Cached" };

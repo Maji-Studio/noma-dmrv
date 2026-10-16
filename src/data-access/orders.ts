@@ -1,3 +1,4 @@
+import type { CaptureActivity } from "@/lib/activity-changes";
 import { customerLocationFacilityDistances } from "@/db/schema";
 import type { ActivityEventInput } from "./activity-events";
 import { assertRowVersion, nextVersion, staleRowVersion } from "./row-version";
@@ -57,6 +58,8 @@ export interface PaginatedOrders {
 import { SafeError } from "@/lib/errors";
 import { orderArchived, orderCustomerLocationMismatch, orderHasDeliveries, orderReferenceNotFound, orderRelationshipFrozen, type OrderRelationshipField } from "@/lib/order-domain-errors";
 import { withFeedstockErrors } from "@/lib/feedstock-domain-errors";
+import { formulationArchived } from "@/lib/formulation-domain-errors";
+import { lockFormulationReference } from "./formulation-reference-guards";
 import { lockActiveFacilityReference } from "./facility-reference-guards";
 import { CODE_CONFLICT_MESSAGES, withUniqueCodeGuard } from "./code-generator";
 import { assertCanMutateCertifiedLineage } from "./certification-lineage-guards";
@@ -321,13 +324,6 @@ type CreateOrderData = {
 type UpdateOrderData = Partial<Omit<Order, "id" | "organizationId" | "createdAt" | "archivedAt" | "version">> & { expectedVersion: number };
 const RELATIONSHIP_FIELDS: readonly OrderRelationshipField[] = ["formulationId", "facilityId", "customerId", "customerLocationId"];
 
-async function lockOrderFormulation(ctx: OrgContext, tx: DbTransaction, formulationId: string): Promise<void> {
-  requireOrgScope(ctx);
-  const [formulation] = await tx.select({ id: formulations.id }).from(formulations)
-    .where(and(eq(formulations.id, formulationId), eq(formulations.organizationId, ctx.organizationId))).for("share");
-  if (!formulation) throw orderReferenceNotFound("formulationId");
-}
-
 async function validateOrderReferences(ctx: OrgContext, tx: DbTransaction, data: {
   customerId: string; customerLocationId: string; formulationId: string;
 }): Promise<string> {
@@ -346,14 +342,14 @@ export async function createOrderInTransaction(ctx: OrgContext, tx: DbTransactio
   requireOrgScope(ctx);
   await lockBiocharTransportRouteTopology(ctx, tx);
   await withFeedstockErrors(() => lockActiveFacilityReference(ctx, tx, input.facilityId), "not_found", ["facilityId"]);
-  await lockOrderFormulation(ctx, tx, input.formulationId);
+  await lockFormulationReference(ctx, tx, input.formulationId);
   const locationCustomerId = await validateOrderReferences(ctx, tx, input);
   if (locationCustomerId !== input.customerId) throw orderCustomerLocationMismatch();
   const [order] = await tx.insert(orders).values({ ...input, organizationId: ctx.organizationId }).returning();
   return order;
 }
 
-export async function updateOrderInTransaction(ctx: OrgContext, tx: DbTransaction, input: UpdateOrderData & { orderId: string }): Promise<Order> {
+export async function updateOrderInTransaction(ctx: OrgContext, tx: DbTransaction, input: UpdateOrderData & { orderId: string }, capture?: CaptureActivity): Promise<Order> {
   requireOrgScope(ctx);
   const { orderId, expectedVersion, ...patch } = input;
   // Undefined is omitted even for in-process callers that materialize every form key.
@@ -372,7 +368,9 @@ export async function updateOrderInTransaction(ctx: OrgContext, tx: DbTransactio
   }
   // Stored references are protected by the foreign key. Lock only a supplied
   // formulation, before the order row, matching formulation deletion.
-  if (data.formulationId !== undefined) await lockOrderFormulation(ctx, tx, data.formulationId);
+  const formulation = data.formulationId !== undefined
+    ? await lockFormulationReference(ctx, tx, data.formulationId, { allowArchived: true })
+    : undefined;
   const [existing] = await tx.select().from(orders)
     .where(and(eq(orders.organizationId, ctx.organizationId), eq(orders.id, orderId))).for("update");
   if (!existing) throw orderReferenceNotFound("orderId");
@@ -381,6 +379,9 @@ export async function updateOrderInTransaction(ctx: OrgContext, tx: DbTransactio
     throw staleRowVersion("order", orderId);
   }
   if (existing.archivedAt) throw orderArchived(existing.code);
+  if (data.formulationId !== undefined && data.formulationId !== existing.formulationId && formulation?.archivedAt) {
+    throw formulationArchived(formulation.code);
+  }
   await withFeedstockErrors(() => assertCanMutateCertifiedLineage(ctx, tx, { entityType: "order", entityId: orderId }, "update"), "certification_locked", ["orderId"]);
   const merged = { ...existing, ...data };
   const locationCustomerId = await validateOrderReferences(ctx, tx, merged);
@@ -396,6 +397,7 @@ export async function updateOrderInTransaction(ctx: OrgContext, tx: DbTransactio
   return withUniqueCodeGuard(ctx, orders, orders.code, CODE_CONFLICT_MESSAGES.order, async () => {
     const [saved] = await tx.update(orders).set({ ...data, version: nextVersion(orders.version), updatedAt: new Date() })
       .where(and(eq(orders.organizationId, ctx.organizationId), eq(orders.id, orderId))).returning();
+    capture?.(saved.id, existing, saved);
     return saved;
   });
 }

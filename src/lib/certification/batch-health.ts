@@ -1,3 +1,4 @@
+import type { BatchEmissionLine } from "./emission-lines";
 /**
  * Per-credit-batch health classifier — the pure decision behind "is this batch
  * complete enough to group into a removal, and if not, what's missing?" It is
@@ -36,6 +37,7 @@ export type BatchHealthState =
   | "incomplete"; // one or more checks unmet (see `checks`)
 
 export type BatchHealthCheckKey =
+  | "emissions"
   | "template"
   | "carbon" // carbon & durability lab inputs resolved
   | "facilityEmissions" // facility emission-estimate inputs resolved
@@ -45,6 +47,7 @@ export type BatchHealthCheckKey =
   | "entityReadiness"; // certifier-required entity fields on the batch's own lineage
 
 export type BatchHealthFixTarget =
+  | "emissions"
   | "certificationTemplates"
   | "creditBatchTemplate"
   | "templateLineReview"
@@ -124,6 +127,7 @@ export interface BatchTransportFact {
 }
 
 export interface BatchHealthFacts {
+  emissionLines?: BatchEmissionLine[] | null;
   warnings?: string[];
   /**
    * Raw carbon and durability lab-input blockers (sample carbon content,
@@ -477,6 +481,13 @@ export function deriveBatchHealth(facts: BatchHealthFacts): BatchHealth {
         key: "template", label: "Removal template reviewed", status: "unmet", detail: blocker.message,
         fixTarget: removalTemplateBlockerDestination(blocker.code),
       })),
+      ...(facts.emissionLines != null ? [{
+        key: "emissions" as const, label: "Emissions", fixTarget: "emissions" as const,
+        status: facts.emissionLines.some((line) => line.state === "missingEvidence") ? "unmet" as const : "met" as const,
+        detail: facts.emissionLines.filter((line) => line.state === "missingEvidence").map((line) => line.blocker?.message).join(" ") || undefined,
+      }] : []),
+      // Line blockers that are not template blockers (no source, needs setup) are
+      // facility-level and stay in Removal readiness, like the rest of coverage.
       carbonCheck(facts),
       ...facilityEmissionsChecks(facts),
       feedstockTypeMappingCheck(facts),

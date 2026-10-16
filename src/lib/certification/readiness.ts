@@ -1,3 +1,4 @@
+import type { RemovalBlocker } from "./removal-blockers";
 import { REMOVAL_TEMPLATE_BLOCKERS } from "@/lib/certification/removal-template-blockers";
 /**
  * Removal readiness classifier — the single pure decision behind every
@@ -63,6 +64,7 @@ export interface RemovalReadinessFacts {
   /** The member batches' pinned Removal template resolved on Isometric. */
   hasRemovalTemplate: boolean;
   templateBlockers?: RemovalTemplateBlocker[];
+  emissionLineBlockers?: RemovalBlocker[];
   /** Template blueprint keys with no matching component blueprint. */
   unresolvedBlueprintKeys: string[];
   unbindableTemplateInputs: UnbindableTemplateInput[];
@@ -92,6 +94,7 @@ export interface RemovalReadinessFacts {
   durabilityGateBlockers?: string[];
   /** Registry capabilities shared with the measurement-sample builder. */
   durabilityConfigurationBlockers?: string[];
+  templateTierBlocker?: string | null;
   /**
    * Production-run ends, Sample times, or application dates that still lie in the
    * future, already phrased as blocker sentences. Computed SERVER-SIDE (this
@@ -181,6 +184,9 @@ function templateBlockerReason(facts: RemovalReadinessFacts): string | null {
   if (facts.unbindableTemplateInputs.length > 0) {
     return formatUnbindableTemplateInputsText(facts.unbindableTemplateInputs);
   }
+  // Coverage derives from the same line decision, so this only catches line
+  // blockers coverage has no wording for.
+  if (facts.emissionLineBlockers?.length) return [...new Set(facts.emissionLineBlockers.map((blocker) => blocker.message))].join(" ");
   return null;
 }
 
@@ -188,6 +194,7 @@ function templateResolvesCleanly(facts: RemovalReadinessFacts): boolean {
   return (
     facts.hasRemovalTemplate &&
     !facts.templateBlockers?.length &&
+    !facts.emissionLineBlockers?.length &&
     facts.unresolvedBlueprintKeys.length === 0 &&
     facts.unbindableTemplateInputs.length === 0
   );
@@ -271,6 +278,7 @@ export function deriveRemovalReadiness(
 
   const reasons: string[] = [...(facts.submissionLineageIssues?.map((issue) => issue.detail) ?? [])];
 
+  if (facts.templateTierBlocker) reasons.push(facts.templateTierBlocker);
   const templateReason = templateBlockerReason(facts);
   if (templateReason) reasons.push(templateReason);
 
@@ -625,7 +633,7 @@ export function buildRemovalRequirementsChecklist(
     if (!facts.hasSubmittableRuns) {
       return { key: "durability", label: DURABILITY_LABEL, status: "skipped" };
     }
-    const blockers = [...(facts.durabilityConfigurationBlockers ?? []), ...(facts.durabilityGateBlockers ?? [])];
+    const blockers = [...(facts.templateTierBlocker ? [facts.templateTierBlocker] : []), ...(facts.durabilityConfigurationBlockers ?? []), ...(facts.durabilityGateBlockers ?? [])];
     return blockers.length === 0
       ? { key: "durability", label: DURABILITY_LABEL, status: "met" }
       : {

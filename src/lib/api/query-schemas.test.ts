@@ -92,3 +92,14 @@ it("parses storage-location lane and formulation filters", () => {
     expect(() => parseApiQuery(request(query), storageLocationListSchema)).toThrow(expect.objectContaining({ code: "invalid_query" }));
   }
 });
+
+it("defaults formulations to active and accepts only explicit archive booleans", () => {
+  expect(parseApiQuery(request(""), resourceQueries.formulations.list)).toEqual({ limit: API_LIST_DEFAULT_LIMIT, archived: false });
+  for (const archived of [true, false]) {
+    expect(parseApiQuery(request(`?archived=${archived}`), resourceQueries.formulations.list)).toMatchObject({ archived });
+    expect(resourceQueries.formulations.list.parse({ archived })).toMatchObject({ archived });
+  }
+  for (const query of ["?archived=1", "?archived=", "?archived=yes", "?archived=true&archived=false"]) {
+    expect(() => parseApiQuery(request(query), resourceQueries.formulations.list)).toThrow();
+  }
+});

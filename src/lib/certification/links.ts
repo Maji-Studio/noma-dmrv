@@ -12,8 +12,6 @@
  */
 export const CERTIFICATION_SETTINGS_SECTION_PARAM = "section";
 export const CERTIFICATION_SETTINGS_EMISSIONS_SECTION = "emission-estimates";
-/** Per-facility emission factors for the energy page estimates (ADR 0031). */
-export const CERTIFICATION_SETTINGS_EMISSION_FACTORS_SECTION = "emission-factors";
 export const CERTIFICATION_SETTINGS_SOURCES_SECTION = "sources";
 export const CERTIFICATION_SETTINGS_DIAGNOSTICS_SECTION = "diagnostics";
 export const CERTIFICATION_SETTINGS_TEMPLATE_MAPPING_SECTION =
@@ -58,14 +56,6 @@ export function certificationRemovalTemplatesHref(facilityId: string): string {
   return certificationSettingsSectionHref(
     facilityId,
     CERTIFICATION_SETTINGS_REMOVAL_TEMPLATES_SECTION,
-  );
-}
-
-/** The emission-factors section the energy page sends admins to. */
-export function certificationEmissionFactorsHref(facilityId: string): string {
-  return certificationSettingsSectionHref(
-    facilityId,
-    CERTIFICATION_SETTINGS_EMISSION_FACTORS_SECTION,
   );
 }
 

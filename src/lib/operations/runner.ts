@@ -68,7 +68,7 @@ export interface Operation<Input extends z.ZodType, Output, Effect extends Opera
   /** False for operations with irreversible external effects. */
   supportsDryRun: boolean;
   /** Null or undefined describes a no-op, which records no activity. */
-  describe?: (input: z.output<Input>, output: Output) => Effect | null;
+  describe?: (input: z.output<Input>, output: Output) => (Effect extends OperationEffect ? Omit<Effect, "changedFields"> : Effect) | null;
   execute: (scope: OperationScope, input: z.output<Input>) => Promise<Output>;
 }
 
@@ -277,7 +277,12 @@ async function runOperationCore<Input extends z.ZodType, Output, Result>(
         const activity = createOperationActivity();
         const output = await operation.execute({ ctx, tx, source, activity, deadlineAt, snapshotStock, afterCommit: (hook) => hooks.push(hook) }, decoded);
         const stockEffects = before ? diffStockBalances(before, await readStockBalances(ctx, tx, before.map((bin) => bin.storageLocationId))) : undefined;
-        const effect = activity.skipped ? undefined : operation.describe?.(decoded, output) ?? undefined;
+        const description = activity.skipped ? undefined : operation.describe?.(decoded, output) ?? undefined;
+        let effect: OperationEffect | undefined;
+        if (description) {
+          const entityType = toActivityEntityType(description.entityType);
+          effect = { ...description, changedFields: [...new Set(description.entityIds.flatMap(id => activity.diff(entityType, id).changedFields))].sort() };
+        }
         const result = represent(output);
         if (!dryRun && effect) {
           const entityType = toActivityEntityType(effect.entityType);
@@ -286,7 +291,9 @@ async function runOperationCore<Input extends z.ZodType, Output, Result>(
             for (const links of activity.scopedLinks(entityType, entityId)) {
               await recordActivity(ctx, tx, {
                 action: effect.outcome, entityType, entityId,
-                changedFields: effect.changedFields,
+                ...(effect.fromStatus !== undefined ? { fromStatus: effect.fromStatus } : {}),
+                ...(effect.toStatus !== undefined ? { toStatus: effect.toStatus } : {}),
+                ...activity.diff(entityType, entityId),
                 operationId: operation.id,
                 versionBefore: effect.versionBefore,
                 versionAfter: effect.versionAfter,

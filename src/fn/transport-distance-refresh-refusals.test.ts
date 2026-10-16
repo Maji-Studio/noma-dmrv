@@ -6,7 +6,7 @@ import { STALE_VERSION_CONFLICT_CODE, STALE_VERSION_MESSAGE } from "@/lib/stale-
 import { refreshDeliveryDistanceFn, refreshFeedstockDistanceFn } from "./transport-distance-refresh";
 
 const mocks = vi.hoisted(() => ({
-  row: vi.fn(), preview: vi.fn(), guard: vi.fn(), recheck: vi.fn(), update: vi.fn(), sync: vi.fn(), activity: vi.fn(),
+  snapshot: vi.fn(), row: vi.fn(), preview: vi.fn(), guard: vi.fn(), recheck: vi.fn(), update: vi.fn(), sync: vi.fn(), activity: vi.fn(),
 }));
 vi.mock("@/lib/auth/server", () => ({
   requireOrgContext: async () => ({ organizationId: "session-org", userId: "actor", orgRole: "owner", isPlatformAdmin: false }),
@@ -19,6 +19,7 @@ vi.mock("@/data-access/owned-transaction", () => ({
     }) }; } catch (error) { return { kind: "callback_threw", error }; }
   },
 }));
+vi.mock("@/data-access/feedstocks", () => ({ readFeedstockTransportSnapshot: mocks.snapshot }));
 vi.mock("@/data-access/transport-distance-drift", () => ({
   distanceRefreshLineageTargets: async (_ctx: unknown, _tx: unknown, target: unknown) => [target],
   getTransportDistanceDrift: mocks.preview,
@@ -43,14 +44,18 @@ vi.mock("@/data-access/activity-events", () => ({ recordActivity: mocks.activity
 const ID = "00000000-0000-4000-8000-000000000001";
 const VERSION = 1;
 const INPUT = { entityId: ID, expectedVersion: VERSION };
-const ROW = { id: ID, version: VERSION, distanceKmOverride: null };
+const ROW = { id: ID, version: VERSION, distanceKmOverride: null, recordedDistanceKm: 42, recordedDistanceSource: "manual", distanceSource: null };
 const LOCKED_MESSAGE = "The distance was not refreshed because its transport data belongs to a locked Removal. Ask an Organization Admin to review the linked Removal.";
 
 beforeEach(() => {
   vi.resetAllMocks();
   mocks.row.mockResolvedValue([ROW]);
-  mocks.update.mockReturnValue({ set: () => ({ where: async () => undefined }) });
-  mocks.preview.mockResolvedValue({ currentDistanceKm: 55 });
+  mocks.update.mockReturnValue({ set: (data: object) => ({ where: () => ({ returning: async () => [
+    { ...ROW, ...data },
+  ] }) }) });
+  mocks.snapshot.mockResolvedValueOnce({ transportDistanceKm: 42, transportDistanceSource: "manual" })
+    .mockResolvedValue({ transportDistanceKm: 55, transportDistanceSource: "document" });
+  mocks.preview.mockResolvedValue({ currentDistanceKm: 55, currentDistanceSource: "document" });
 });
 
 describe.each([
@@ -61,7 +66,7 @@ describe.each([
     expect(await refresh(INPUT)).toMatchObject({ success: true });
     expect(mocks.activity).toHaveBeenCalledWith(expect.anything(), expect.anything(), expect.objectContaining({
       changedFields: entityType === "feedstock" ? ["transportDistanceKm", "transportDistanceSource"]
-        : ["recordedDistanceKm", "recordedDistanceSource", "distanceSource"],
+        : ["recordedDistanceKm", "recordedDistanceSource"],
     }));
   });
 

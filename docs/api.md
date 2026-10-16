@@ -196,10 +196,12 @@ the form contract before passing only operation fields to the runner.
 The `audit` run option supplies request and credential IDs for API writes only.
 Audited operations must implement `describe`.
 `src/data-access/activity-events.ts:recordActivity` is the single audit writer.
-Committed runner writes with a non-null `describe` effect record value-free
-`activity_events` in the operation's transaction for form, script, REST and MCP
-calls. Every runner event carries `operationId`, `versionBefore` and
-`versionAfter`. The API audit row contract is defined in [Activity events](./database.md#activity-events).
+Committed runner writes with a non-null `describe` effect record `activity_events`
+in the operation's transaction for form, script, REST and MCP calls. Events carry
+changed field names and, for allowlisted fields, old and new values per
+[Activity events](./database.md#activity-events). Every runner event carries
+`operationId`, `versionBefore` and `versionAfter`. API responses and idempotency
+outcomes stay value-free.
 Form writes have null credential IDs.
 No-op descriptions, dry runs, idempotent replays and `activity.skip()` add no
 events. An audited write whose effect yields no activity rows throws and rolls
@@ -326,6 +328,47 @@ parent's organization before querying its children, and paginates locations with
 name search and required coordinates in decimal degrees. Its cursor also binds the
 supplier ID; a missing or foreign supplier returns 404, including when it has
 no locations. Supplier locations have no code or archive column.
+
+### Master data on REST and MCP
+
+Formulations use revision 2 with `description`, `archivedAt` and ordered `lines`.
+Reads need `formulations:read`: REST list/detail and MCP `find_formulations`.
+Lists hide archived rows by default. `archived=true` (MCP `archived: true`)
+returns only archived rows, including exact code searches. Cursors bind that
+filter; a mismatched cursor returns 400. Detail reads still return archived rows.
+
+| REST method and path | MCP tool | Scope |
+|---|---|---|
+| POST `/formulations` | `create_formulation` | `formulations:write` |
+| PATCH `/formulations/{id}` | `update_formulation` | `formulations:write` |
+| DELETE `/formulations/{id}` | `delete_formulation` | `formulations:delete` |
+| POST `/formulations/{id}/archive` | `archive_formulation` | `formulations:write` |
+| POST `/formulations/{id}/restore` | `restore_formulation` | `formulations:write` |
+
+Creates generate codes. REST creates require `Idempotency-Key` even on dry runs;
+MCP `requestKey` is optional only on dry runs. REST returns 201 with ETag and
+Location; PATCH and commands return 200 with ETag; DELETE returns 204.
+Writes accept UUIDs only. REST mutations require strong `If-Match` (missing 428,
+stale 412 with `current`); MCP uses `expectedVersion` from `find_formulations`.
+Optional mutation keys replay before domain preconditions. Every write supports
+dry runs, rolling back rows, lines and Activity; REST returns 200 without ETag
+or Location. Archive/restore accept an empty object or no body and bump version.
+
+Archive keeps existing references and reserves codes. New references and edits
+of archived formulations return 404 at `/formulationId`; archived PATCH checks
+this before stale versions. Repeated transitions with a current version return
+409 at `/formulationId`. Restore before editing or adding a new reference.
+Products, bins and orders (including archived references) block deletion with
+409 at `/formulationId` and reference codes in metadata. Used line removal is
+409 at `/lines`. Unknown or newly referenced archived types return 404; retained
+archived types remain allowed. Type refusals point at `/lines/{index}/feedstockTypeId`;
+non-blend types return 422. Add missing types in the app first.
+
+Ratios are guidance only, from 0 to 1 in exact integer millionths (six decimals):
+`0.000001` passes, `0.0000001` fails. Known shares may sum to exactly 1, never
+more; sum refusals point at `/biocharRatio`. PATCH omission keeps, null clears,
+zero stays zero; supplied `lines` replace the full list. Unknown fields and
+invalid ratios return 422. REST pointers appear in `errors`; MCP uses `issues`.
 
 ### Customers and orders on REST and MCP
 

@@ -10,8 +10,15 @@ import {
   FEEDSTOCK_TYPE_EDIT_LABEL,
 } from "@/lib/entity-deep-link";
 import { sampleCreateHref } from "@/lib/sample-create-intent";
-import { creditBatchRemovalTemplateHref } from "@/lib/credit-batch-links";
+import { creditBatchDeepLinkHref, creditBatchRemovalTemplateHref } from "@/lib/credit-batch-links";
 import { certificationEmissionEstimatesHref, certificationRemovalTemplatesHref } from "./links";
+
+export const BATCH_DETAILS_FIX_LABEL = "Edit details";
+
+/** The facility's credit batch list, where a repair with no single batch lands. */
+export function creditBatchListHref(facilityId: string): string {
+  return `/credit-batches?${new URLSearchParams({ facility: facilityId })}`;
+}
 
 export interface BatchHealthFixLink {
   label: string;
@@ -27,6 +34,8 @@ export function fallbackBatchHealthFixTarget(
   key: BatchHealthCheckKey,
 ): BatchHealthFixTarget {
   switch (key) {
+    case "emissions":
+      return "emissions";
     case "template":
       return "certificationTemplates";
     case "carbon":
@@ -79,6 +88,8 @@ export function batchHealthFixLinkFor(
     return params.toString();
   };
   switch (target) {
+    case "emissions":
+      return { label: "Review emissions", href: creditBatchId ? creditBatchDeepLinkHref(creditBatchId, facilityId) : `/credit-batches?${query(undefined, false)}` };
     case "certificationTemplates":
       return { label: "Review Removal templates", href: certificationRemovalTemplatesHref(facilityId) };
     case "creditBatchTemplate":
@@ -89,7 +100,7 @@ export function batchHealthFixLinkFor(
       return { label: "Review template lines", href: certificationRemovalTemplatesHref(facilityId) };
     case "batchDetails":
       return {
-        label: "Edit details",
+        label: BATCH_DETAILS_FIX_LABEL,
         href: "#batch-details",
       };
     case "labSamples":

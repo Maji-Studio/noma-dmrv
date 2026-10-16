@@ -1,7 +1,7 @@
 import { beforeAll, expect, it, vi } from "vitest";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { customerLocationFacilityDistances, supplierLocationFacilityDistances, customerLocations, deliveries, feedstocks, orders, supplierLocations } from "@/db/schema";
+import { activityEvents, customerLocationFacilityDistances, supplierLocationFacilityDistances, customerLocations, deliveries, feedstocks, orders, supplierLocations } from "@/db/schema";
 import { getTransportDistanceDrift } from "@/data-access/transport-distance-drift";
 import { refreshFeedstockDistance, refreshDeliveryDistance } from "@/lib/operations/transport-distance-refresh";
 import { runOperationInProcess } from "@/lib/operations/runner";
@@ -49,6 +49,17 @@ it.each(["feedstock", "delivery"] as const)("freezes %s defaults, reports drift,
       await expect(getTransportDistanceDrift({ ...ctx, organizationId: "foreign-org" }, target)).rejects.toThrow();
       const refreshed = await runOperationInProcess(refresh, ctx, { entityId, expectedVersion: drift.expectedVersion });
       expect(refreshed).toMatchObject({ recordedDistanceKm: 55, hasDrift: false, expectedVersion: drift.expectedVersion + 1 });
+      const [event] = await db.select().from(activityEvents).where(and(
+        eq(activityEvents.organizationId, ctx.organizationId), eq(activityEvents.entityId, entityId),
+        eq(activityEvents.operationId, refresh.id),
+      ));
+      const distanceField = entityType === "feedstock" ? "transportDistanceKm" : "recordedDistanceKm";
+      const sourceField = entityType === "feedstock" ? "transportDistanceSource" : "recordedDistanceSource";
+      expect(event.changedFields).toEqual([distanceField, sourceField].sort());
+      expect(event.changes).toEqual({
+        [distanceField]: { from: entityType === "feedstock" ? 42 : "42", to: entityType === "feedstock" ? 55 : "55" },
+        [sourceField]: { from: "manual", to: "document" },
+      });
       const legs = await getTransportLegsForEntity(ctx, entityType === "feedstock" ? "feedstock" : "biochar", entityType === "feedstock" ? fixture.feedstockId : fixture.productId);
       expect(legs).toEqual(expect.arrayContaining([expect.objectContaining({ isDerived: true, distanceKm: 55 })]));
       await expect(runOperationInProcess(refresh, ctx, { entityId, expectedVersion: drift.expectedVersion })).rejects.toMatchObject({ code: "stale_version" });

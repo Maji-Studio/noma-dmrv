@@ -4,7 +4,7 @@ import { updateReactorSchema, deleteReactorSchema } from "./reactors";
 import { updateStorageLocationSchema, deleteStorageLocationSchema, archiveStorageLocationSchema, restoreStorageLocationSchema } from "./storage-locations";
 import { updateSupplierSchema, deleteSupplierSchema, updateSupplierLocationSchema, deleteSupplierLocationSchema } from "./suppliers";
 import { updateCustomerSchema, deleteCustomerSchema, updateCustomerLocationSchema, deleteCustomerLocationSchema } from "./customers";
-import { updateFormulationSchema, deleteFormulationSchema } from "./formulations";
+import { updateFormulationSchema, formulationVersionSchema } from "./formulations";
 import { updateFeedstockTypeSchema, deleteFeedstockTypeSchema } from "./feedstock-types";
 const ID = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee";
 const contracts = [
@@ -13,7 +13,7 @@ const contracts = [
   [updateStorageLocationSchema, { storageLocationId: ID }], [deleteStorageLocationSchema, { storageLocationId: ID }], [archiveStorageLocationSchema, { storageLocationId: ID }], [restoreStorageLocationSchema, { storageLocationId: ID }],
   [updateSupplierSchema, { supplierId: ID }], [deleteSupplierSchema, { supplierId: ID }], [updateSupplierLocationSchema, { locationId: ID }], [deleteSupplierLocationSchema, { locationId: ID }],
   [updateCustomerSchema, { customerId: ID }], [deleteCustomerSchema, { customerId: ID }], [updateCustomerLocationSchema, { locationId: ID }], [deleteCustomerLocationSchema, { locationId: ID }],
-  [updateFormulationSchema, { formulationId: ID }], [deleteFormulationSchema, { formulationId: ID }],
+  [updateFormulationSchema, { formulationId: ID }], [formulationVersionSchema, { formulationId: ID }],
   [updateFeedstockTypeSchema, { feedstockTypeId: ID }], [deleteFeedstockTypeSchema, { feedstockTypeId: ID }],
 ] as const;
 describe.each(contracts)("master-data write contract %#", (schema, identity) => {

@@ -12,8 +12,8 @@ import { REMOVAL_TEMPLATE_BLOCKERS } from "@/lib/certification/removal-template-
  * durability components. Review still compiles from a blocked bundle so the
  * operator sees the details; submit and freshness refuse on any blocker.
  *
- * Submit-only gates (feedstock-type mapping, entity readiness, template tier,
- * durability configuration, member batches) stay in `submit-removal.ts`. The
+ * The shared preflight gate collects mapping, entity, tier, configuration and
+ * member-batch blockers in `removal-blockers-gate.ts`. The
  * client readiness verdict stays in `lib/certification/readiness.ts` (ADR 0007).
  */
 import { allowsPeriodInputStub } from "@/lib/isometric/datapoint-mapping";
@@ -130,7 +130,7 @@ export function prepareRemovalSubmission(
   const hasDurabilityComponents = hasDurabilityMeasurementComponents(removalTemplate);
   const blockers: RemovalPreparationBlocker[] = [...ctx.templateBlockers];
   const isometricEnvironment = options.isometricEnvironment ?? env.ISOMETRIC_ENVIRONMENT;
-  const unbindable = findUnbindableTemplateInputs(removalTemplate, { lineSources: ctx.lineSources, allowPeriodInputStub: allowsPeriodInputStub(isometricEnvironment) });
+  const unbindable = findUnbindableTemplateInputs(removalTemplate, { lineSources: ctx.lineSources, enrichmentComplete: !ctx.templateBlockers.some((blocker) => blocker.code === "templateNotFullyRead") });
   // The template lives on Isometric and can change credit_type after binding;
   // a REDUCTION template must never mislabel a GHG entry.
   if (removalTemplate.credit_type !== "REMOVAL") {

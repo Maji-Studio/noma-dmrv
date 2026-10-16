@@ -11,10 +11,9 @@ export const refreshFeedstockDistance: Operation<typeof refreshTransportDistance
   describe: (input, output) => ({
     outcome: "updated", entityType: "feedstock", entityIds: [input.entityId],
     versionBefore: input.expectedVersion, versionAfter: output.expectedVersion,
-    changedFields: ["transportDistanceKm", "transportDistanceSource"],
   }),
   execute: async ({ ctx, tx, activity, afterCommit }, input) => {
-    const result = await refreshFeedstockDistanceInTransaction(ctx, tx, input);
+    const result = await refreshFeedstockDistanceInTransaction(ctx, tx, input, activity.capture);
     activity.link({ facilityId: result.facilityId });
     activity.scope(input.entityId, await resolveWriteActivityScopes(ctx, tx, "feedstock", input.entityId));
     afterCommit(async () => { await processPendingStorageObjectDeletions(ctx); });
@@ -27,10 +26,9 @@ export const refreshDeliveryDistance: Operation<typeof refreshTransportDistanceS
   describe: (input, output) => ({
     outcome: "updated", entityType: "delivery", entityIds: [input.entityId],
     versionBefore: input.expectedVersion, versionAfter: output.expectedVersion,
-    changedFields: ["recordedDistanceKm", "recordedDistanceSource", "distanceSource"],
   }),
   execute: async ({ ctx, tx, activity, afterCommit }, input) => {
-    const result = await refreshDeliveryDistanceInTransaction(ctx, tx, input);
+    const result = await refreshDeliveryDistanceInTransaction(ctx, tx, input, activity.capture);
     activity.link({ facilityId: result.facilityId });
     activity.scope(input.entityId, await resolveWriteActivityScopes(ctx, tx, "delivery", input.entityId));
     afterCommit(async () => { await processPendingStorageObjectDeletions(ctx); });

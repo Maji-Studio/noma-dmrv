@@ -12,7 +12,7 @@ export function drainBudgetMs(deadlineAt?: number, cleanupDeadlineAt?: number): 
 
 /** Shared app/API transition and post-commit cleanup, including concurrent refusals. */
 export async function confirmInspectedUpload({ ctx, tx, afterCommit, deadlineAt, activity }: OperationScope, facts: InspectedUploadFacts & { cleanupDeadlineAt?: number }) {
-  const outcome = await confirmDocumentUploadInTransaction(ctx, tx, facts);
+  const outcome = await confirmDocumentUploadInTransaction(ctx, tx, facts, activity.capture);
   afterCommit(async () => { await processPendingStorageObjectDeletions(ctx, { budgetMs: drainBudgetMs(deadlineAt, facts.cleanupDeadlineAt) }); });
   if (outcome.kind === "gone") {
     const row = await readDocumentForWrite(ctx, tx, facts.documentId);

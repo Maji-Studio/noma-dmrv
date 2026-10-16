@@ -10,7 +10,6 @@
  */
 "use client";
 
-import { MultilineDetail } from "../multiline-detail";
 import Link from "next/link";
 import {
   ArrowSquareOutIcon,
@@ -25,7 +24,7 @@ import { DerivedHeadline } from "@/components/forms/derived-headline";
 import { DetailField } from "@/components/ui/detail-panel";
 import { InfoHint } from "@/components/ui/tooltip";
 import { EnvBanner } from "../env-banner";
-import { CompilationWarnings } from "./compilation-notices";
+import { CompilationWarnings, RemovalAdvisoryList, RemovalBlockerList } from "./compilation-notices";
 import {
   batchDryTons,
   buildSubmissionFacts,
@@ -129,6 +128,7 @@ export function SubmissionSummary({
 }: SubmissionSummaryProps) {
   const facts = buildSubmissionFacts(factsInput);
   const { checks } = factsInput;
+  const memberBatchIds = facts.batches.map((batch) => batch.id);
   const environment = facts.isProduction ? "production" : "sandbox";
   const externalProjectId = factsInput.ctx.mapping?.externalProjectId ?? null;
   const externalFacilityId = factsInput.ctx.mapping?.externalFacilityId ?? null;
@@ -172,15 +172,7 @@ export function SubmissionSummary({
         </div>
       </div>
 
-      {facts.blockers.length > 0 && (
-        <Notice tone="error">
-          <ul className="list-disc pl-16">
-            {facts.blockers.map((blocker) => (
-              <li key={blocker}><MultilineDetail>{blocker}</MultilineDetail></li>
-            ))}
-          </ul>
-        </Notice>
-      )}
+      <RemovalBlockerList blockers={facts.blockers} facilityId={facilityId} memberBatchIds={memberBatchIds} />
 
       <DerivedHeadline
         label={
@@ -281,9 +273,12 @@ export function SubmissionSummary({
         <Notice key={advisory} tone="warning">{advisory}</Notice>
       ))}
 
-      {facts.warnings.length > 0 && (
+      {(facts.advisories.length > 0 || facts.warnings.length > 0) && (
         <Notice tone="warning" title="Submission notes">
-          <CompilationWarnings warnings={facts.warnings} />
+          <div className="flex flex-col gap-8">
+            <RemovalAdvisoryList advisories={facts.advisories} facilityId={facilityId} memberBatchIds={memberBatchIds} />
+            <CompilationWarnings warnings={facts.warnings} />
+          </div>
         </Notice>
       )}
 

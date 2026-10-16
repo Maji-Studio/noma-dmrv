@@ -78,7 +78,7 @@ function selectReturning(read: { rows: unknown[] } | { error: Error }) {
 function makeTx(enrichment: { rows: unknown[] } | { error: Error }) {
   const reads = [{ rows: [STORED_ROW] }, enrichment];
   const select = vi.fn(() => selectReturning(reads.shift() ?? { rows: [] }));
-  const update = vi.fn(() => ({ set: () => ({ where: async () => undefined }) }));
+  const update = vi.fn(() => ({ set: () => ({ where: () => ({ returning: async () => [STORED_ROW] }) }) }));
   return { select, update } as unknown as DbTransaction & {
     select: ReturnType<typeof vi.fn>;
     update: ReturnType<typeof vi.fn>;
@@ -142,7 +142,7 @@ it("clears the override note when the supplier route changes", async () => {
     { rows: [{ ...STORED_ROW, distanceKmOverride: 25, distanceSource: "document", distanceNote: "Old route" }] },
     { rows: [ENRICHED_ROW] },
   ];
-  const set = vi.fn(() => ({ where: async () => undefined }));
+  const set = vi.fn(() => ({ where: () => ({ returning: async () => [ENRICHED_ROW] }) }));
   const tx = { select: () => selectReturning(reads.shift() ?? { rows: [] }), update: () => ({ set }) } as unknown as DbTransaction;
   await updateFeedstockInTransaction(ctx, tx, FEEDSTOCK_ID, { expectedVersion: 1, supplierId: "other-supplier" });
   expect(set).toHaveBeenCalledWith(expect.objectContaining({ distanceKmOverride: null, distanceSource: null, distanceNote: null }));

@@ -20,6 +20,7 @@ import { recordDeliveryForUi } from "./deliveries";
 const FEEDSTOCK_ID = "11111111-1111-4111-8111-111111111111";
 const INITIAL_VERSION = 1;
 const UPDATE_INPUTS: Record<string, unknown> = {
+  update_formulation: { formulationId: FEEDSTOCK_ID, expectedVersion: INITIAL_VERSION },
   update_application: { applicationId: FEEDSTOCK_ID, expectedVersion: INITIAL_VERSION },
   update_delivery: { deliveryId: FEEDSTOCK_ID, expectedVersion: INITIAL_VERSION },
   update_order: { orderId: FEEDSTOCK_ID, expectedVersion: INITIAL_VERSION },
@@ -77,6 +78,12 @@ it("publishes only document upload requests, keeping confirm facts, renewal and 
 
 it("registers application writes with dry run support", () => {
   for (const id of ["record_application", "update_application", "delete_application"]) {
+    expect(getOperation(id)?.supportsDryRun).toBe(true);
+  }
+});
+
+it("registers all formulation commands with dry run support", () => {
+  for (const id of ["create_formulation", "update_formulation", "delete_formulation", "archive_formulation", "restore_formulation"]) {
     expect(getOperation(id)?.supportsDryRun).toBe(true);
   }
 });
