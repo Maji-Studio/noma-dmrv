@@ -13,6 +13,7 @@ import { CreditBatchRemovalTemplate } from "@/components/credit-batches/credit-b
 import { formatDate, formatTonnes } from "@/lib/format-utils";
 import { cn } from "@/lib/utils";
 import { useProto } from "./prototype-context";
+import { RemovalMassBar } from "./prototype-mass-bar";
 import type { ItemGroup, LockableField, OpenItem, RemovalRef } from "./prototype-model";
 
 export const PANEL = "border border-[var(--color-border-secondary)] bg-[var(--paper)]";
@@ -265,40 +266,22 @@ export function DetailsPanel({ className }: { className?: string }) {
 export function RemovalsPanel() {
   const { model, go } = useProto();
   const hasStatement = model.scenario === "partly-sent" || model.scenario === "issued";
-  const ROW = "-mx-12 grid w-[calc(100%+24px)] grid-cols-[minmax(0,1fr)_auto] items-center gap-x-16 gap-y-2 px-12 py-10 text-left";
   return (
-    <Panel title="Removals">
-      <p className={cn("body-small", MUTED)}>
-        {model.removals.length === 0
-          ? "This credit batch is ready. Select Start Removal to submit its applied biochar."
-          : `${tonnes(model.appliedTons)} of applied biochar, by Removal.`}
-      </p>
-      <ul className="flex flex-col">
-        {model.removalMass.map(({ removal, tons }) => (
-          <li key={removal?.code ?? "none"} className={ROW_RULE}>
-            {removal ? (
-              <button type="button" onClick={() => go("removals")} className={cn(ROW, "hover:bg-[var(--color-surface-medium)]")}>
-                <RemovalChip removal={removal} />
-                <span className="body-medium tabular-nums">{tonnes(tons)}</span>
-                <span className={cn("col-span-2 body-caption", MUTED)}>{removal.statusNote}</span>
-              </button>
-            ) : (
-              <div className={ROW}>
-                <span className="body-small font-medium">Not in a Removal</span>
-                <span className="body-medium tabular-nums">{tonnes(tons)}</span>
-              </div>
-            )}
-          </li>
-        ))}
-        {hasStatement && (
-          <li className={ROW_RULE}>
-            <button type="button" onClick={() => go("removals", "ghg")} className={cn(ROW, "hover:bg-[var(--color-surface-medium)]")}>
-              <span className="body-small font-medium">GHG Statement Q3</span>
-              <span className={cn("body-small", MUTED)}>{model.scenario === "issued" ? "Issued" : "In verification"}</span>
-            </button>
-          </li>
-        )}
-      </ul>
+    <Panel title="Removals" action={<span className="body-medium tabular-nums">{tonnes(model.appliedTons + model.masses.notApplied)} <span className={MUTED}>total</span></span>}>
+      {model.removals.length === 0 && (
+        <p className={cn("body-small", MUTED)}>This credit batch is ready. Select Start Removal to submit its applied biochar.</p>
+      )}
+      <RemovalMassBar onOpenRemoval={() => go("removals")} />
+      {hasStatement && (
+        <button
+          type="button"
+          onClick={() => go("removals", "ghg")}
+          className="-mx-12 flex w-[calc(100%+24px)] items-center justify-between gap-16 border-t border-[var(--color-border-tertiary)] px-12 pt-12 text-left hover:bg-[var(--color-surface-medium)]"
+        >
+          <span className="body-small font-medium">GHG Statement Q3</span>
+          <span className={cn("body-small", MUTED)}>{model.scenario === "issued" ? "Issued" : "In verification"}</span>
+        </button>
+      )}
     </Panel>
   );
 }
