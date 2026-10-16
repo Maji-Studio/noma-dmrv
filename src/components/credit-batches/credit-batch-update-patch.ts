@@ -1,15 +1,5 @@
-import { formatUtcDate } from "@/lib/date-utils";
 import type { RecordLockView } from "@/lib/record-lock-view";
 import type { CreditBatchFormData } from "@/schemas/credit-batches";
-
-/** Saved fields the membership guard compares against. */
-export interface SavedCreditBatchDefinition {
-  facilityId: string;
-  feedstockTypeId: string | null;
-  startDate: string;
-  endDate: string;
-  productionRunIds?: readonly string[];
-}
 
 const MEMBERSHIP_FIELDS = ["facilityId", "feedstockTypeId", "startDate", "endDate", "productionRunIds"] as const;
 
@@ -22,37 +12,17 @@ export function isCreditBatchMembershipLocked(lock: RecordLockView | undefined):
   return !!lock && (lock.level === "sent" || lock.usedBy.some((link) => link.kind === "removal"));
 }
 
-function sameDay(value: Date | string | undefined, saved: string): boolean {
-  if (value == null) return true;
-  return (value instanceof Date ? formatUtcDate(value) : value.slice(0, 10)) === saved;
-}
-
-function sameRuns(next: readonly string[] | undefined, saved: readonly string[] | undefined): boolean {
-  if (!next) return true;
-  const savedSet = new Set(saved ?? []);
-  return next.length === savedSet.size && next.every((id) => savedSet.has(id));
-}
-
 /**
- * The update payload with every unchanged membership field left out, so a
- * notes-only save never asks the server to refresh membership. While the
- * membership is locked it is always left out.
+ * The update payload. A free batch sends its whole definition, so every save
+ * re-resolves membership as before. A held batch leaves the membership out,
+ * so a notes-only save passes the slice guard instead of being refused.
  */
 export function creditBatchUpdatePatch(
   data: Omit<CreditBatchFormData, "sampling">,
-  saved: SavedCreditBatchDefinition,
   membershipLocked: boolean,
 ): Partial<Omit<CreditBatchFormData, "sampling">> {
-  const unchanged = {
-    facilityId: data.facilityId === saved.facilityId,
-    feedstockTypeId: data.feedstockTypeId === (saved.feedstockTypeId ?? ""),
-    startDate: sameDay(data.startDate, saved.startDate),
-    endDate: sameDay(data.endDate, saved.endDate),
-    productionRunIds: sameRuns(data.productionRunIds, saved.productionRunIds),
-  };
+  if (!membershipLocked) return data;
   const patch: Partial<Omit<CreditBatchFormData, "sampling">> = { ...data };
-  for (const field of MEMBERSHIP_FIELDS) {
-    if (membershipLocked || unchanged[field]) delete patch[field];
-  }
+  for (const field of MEMBERSHIP_FIELDS) delete patch[field];
   return patch;
 }

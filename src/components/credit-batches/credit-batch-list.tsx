@@ -305,9 +305,9 @@ export function CreditBatchList({
       const result = await updateCreditBatch.mutateAsync({
         creditBatchId: sideSheet.entity.id,
         expectedVersion: sideSheet.entity.version,
-        // Unchanged or held membership never reaches the server, so a
-        // notes-only save passes the slice guard.
-        ...creditBatchUpdatePatch(mutableData, sideSheet.entity, membershipLocked),
+        // A held membership never reaches the server, so a notes-only save
+        // passes the slice guard; a free batch re-resolves on every save.
+        ...creditBatchUpdatePatch(mutableData, membershipLocked),
       });
       if (result.success) {
         closeSideSheet();

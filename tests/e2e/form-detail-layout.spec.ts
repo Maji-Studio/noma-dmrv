@@ -101,6 +101,9 @@ test("feedstock read and edit reset detail without discarding field changes", as
   await expect(notes).toHaveValue("E2E detail toggle preserves this edit");
   await sheet.getByRole("button", { name: "Save changes", exact: true }).click();
   await expect(sheet).not.toBeVisible();
+  // A row opens its sheet from the list's row data, so wait for the list to
+  // refetch the saved feedstock before reopening it.
+  await page.waitForLoadState("networkidle");
   await page.locator("table tbody tr", { hasText: seededData.feedstock.code }).first().click();
   await waitForSideSheet(page);
   await expect(page.getByRole("button", { name: "Edit feedstock", exact: true })).toBeVisible();
