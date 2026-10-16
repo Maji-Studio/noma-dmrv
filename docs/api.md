@@ -252,7 +252,13 @@ representations plus the next position. REST and MCP share parsed-input readers 
 cursors bind the resource, organization and filters, but not page size. The
 representation deliberately contains only feedstock-owned fields and reference
 ids, without joined transport data or entity names. Feedstock representation
-revision 2 removes intake GPS fields; date, supplier, wet mass, moisture and bin
+revision 3 adds nullable `distanceKmOverride`, `distanceSource` and `distanceNote`.
+Input names remain `transportDistanceKm` and `transportDistanceSource`: omission
+preserves the override and recorded leg, a positive distance sets an override,
+and null clears it and captures the current supplier-location facility distance.
+Legacy zero remains accepted as a clear, so the v1 input contract stays additive;
+zero is never persisted as an override.
+Revision 2 removed intake GPS fields; date, supplier, wet mass, moisture and bin
 are non-null. Moisture is below 100%. PATCH cannot clear the bin or supply derived
 `massDryKg`. Supplier-location and driver
 ids are not feedstock columns. Percent values use 0 to 100. Business dates use

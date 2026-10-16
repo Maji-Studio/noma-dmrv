@@ -88,6 +88,7 @@ const mocks = vi.hoisted(() => ({
     | undefined,
   updateRejection: undefined as unknown,
   deleteMutation: vi.fn(),
+  updateMutation: vi.fn(),
 }));
 
 vi.mock("nuqs", () => ({
@@ -113,7 +114,7 @@ vi.mock("@/hooks/use-feedstocks", () => ({
   }),
   useCreateFeedstock: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useUpdateFeedstock: () => ({
-    mutateAsync: vi.fn().mockRejectedValue(mocks.updateRejection),
+    mutateAsync: mocks.updateMutation.mockRejectedValue(mocks.updateRejection),
     isPending: false,
   }),
   useDeleteFeedstock: () => ({ mutateAsync: mocks.deleteMutation, isPending: false }),
@@ -239,6 +240,9 @@ describe("FeedstockList update conflict", () => {
       await mocks.form?.onSubmit(draft);
     });
 
+    expect(mocks.updateMutation).toHaveBeenLastCalledWith(expect.objectContaining({
+      transportDistanceKm: undefined, transportDistanceSource: undefined,
+    }));
     // The sheet is still mounted on the same record, so the draft survived.
     expect(renderer.root.findAllByType("form")).toHaveLength(1);
     expect(textOf(renderer, "draft-code")).toBe("FS-001");

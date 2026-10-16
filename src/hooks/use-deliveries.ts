@@ -1,3 +1,4 @@
+import { transportDistanceKeys } from "./transport-distance-query-keys";
 import { throwDeliveryActionError } from "@/lib/delivery-action-errors";
 import { StaleVersionError } from "@/lib/stale-version";
 import { patchListCachesWithSavedRow } from "./list-cache-utils";
@@ -151,6 +152,7 @@ export function useCreateDelivery(
       // Invalidate stats
       queryClient.invalidateQueries({ queryKey: deliveryKeys.statsPrefix() });
       queryClient.invalidateQueries({ queryKey: dashboardOverviewKeys.all });
+      void queryClient.invalidateQueries({ queryKey: transportDistanceKeys.all });
       // Delivery writes resync the derived biochar distribution leg and its
       // evidence set, inputs to certification readiness.
       void invalidateCertificationReadiness(queryClient);
@@ -269,6 +271,7 @@ export function useUpdateDelivery(
       queryClient.invalidateQueries({ queryKey: deliveryKeys.lists() });
       queryClient.invalidateQueries({ queryKey: deliveryKeys.statsPrefix() });
       queryClient.invalidateQueries({ queryKey: dashboardOverviewKeys.all });
+      void queryClient.invalidateQueries({ queryKey: transportDistanceKeys.all });
       // Delivery writes resync the derived biochar distribution leg and its
       // evidence set, inputs to certification readiness.
       void invalidateCertificationReadiness(queryClient);
@@ -371,6 +374,7 @@ export function useDeleteDelivery(callbacks?: MutationCallbacks<void, DeleteDeli
       queryClient.invalidateQueries({ queryKey: deliveryKeys.lists() });
       queryClient.invalidateQueries({ queryKey: deliveryKeys.statsPrefix() });
       queryClient.invalidateQueries({ queryKey: dashboardOverviewKeys.all });
+      void queryClient.invalidateQueries({ queryKey: transportDistanceKeys.all });
       // Deleting a delivery shrinks the derived biochar leg's evidence set.
       void invalidateCertificationReadiness(queryClient);
       void queryClient.invalidateQueries({ queryKey: outputStockKeys.all });

@@ -126,6 +126,7 @@ export function FeedstockForm({
     deliveryDate: toDateInputValue(feedstock?.deliveryDate ?? null),
     supplierId: feedstock?.supplierId ?? "",
     vehicleId: feedstock?.vehicleId ?? "",
+    distanceNote: feedstock?.distanceNote ?? "",
     transportDistanceKm: undefined as number | undefined,
     transportDistanceSource:
       feedstock?.transportDistanceSource ?? (null as DistanceSourceValue | null),
@@ -376,7 +377,12 @@ export function FeedstockForm({
   }, [fields.length, getValues, hasEditedAllocationMass, isEditMode, setValue, watchWetMass, dirtyFields.allocations]);
 
   const handleFormSubmit = handleSubmit((data) => {
-    onSubmit(data as FeedstockFormData);
+    onSubmit({
+      ...data,
+      transportDistanceKm: dirtyFields.transportDistanceKm ? data.transportDistanceKm : undefined,
+      transportDistanceSource: dirtyFields.transportDistanceKm || dirtyFields.transportDistanceSource
+        ? data.transportDistanceSource : undefined,
+    } as FeedstockFormData);
   });
 
   return (

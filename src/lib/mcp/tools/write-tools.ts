@@ -52,7 +52,7 @@ export const writeTools: WriteTool[] = [
   {
     kind: "write", name: logFeedstockDelivery.id, scope: "feedstocks:write", input: createInput, output: feedstockCreateEnvelopeSchema,
     annotations: { ...annotations, destructiveHint: false },
-    description: `Log a feedstock delivery. Call whoami, find_suppliers, find_feedstock_types and find_storage_locations first. Adds the wet mass to each receiving bin. ${writeGuidance}`,
+    description: `Log a feedstock delivery. Call whoami, find_suppliers, find_feedstock_types and find_storage_locations first. Adds the wet mass to each receiving bin. A positive transportDistanceKm persists a one-way override; omit it to derive the supplier-location facility distance. ${writeGuidance}`,
     async execute(context, raw) {
       const { input, dryRun, requestKey } = parseControls(raw, createContract);
       checkFeedstockAllocations(input);
@@ -69,7 +69,7 @@ export const writeTools: WriteTool[] = [
   {
     kind: "write", name: updateFeedstock.id, scope: "feedstocks:write", input: updateInput, output: itemOutput,
     annotations: { ...annotations, destructiveHint: true },
-    description: `Update a feedstock by UUID and adjust its bin stock and transport details. ${versionGuidance} ${writeGuidance}`,
+    description: `Update a feedstock by UUID and adjust its bin stock and transport details. Omit transportDistanceKm to preserve its override and recorded leg; a positive value sets an override, and null clears it and captures the current supplier-location facility distance. Legacy zero also clears. ${versionGuidance} ${writeGuidance}`,
     execute: (context, raw) => mutate(context, raw, "update"),
     summarize(body, dryRun) {
       const data = body.data as z.infer<typeof feedstockRepresentationSchema>;

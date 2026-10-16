@@ -7,6 +7,10 @@ type Coverage = { status: "direct" } | { status: "runner"; operations: string[] 
 // Explicit inventory includes wrappers, cascades and derived writers. Discovery
 // below scans the whole data-access tree so new modules cannot bypass it.
 const ACTIVITY_COVERAGE = {
+  "transport-distance-refresh.ts": {
+    refreshFeedstockDistance: { status: "direct" },
+    refreshDeliveryDistance: { status: "direct" },
+  },
   "credit-batch-application-slices.ts": {
     reconcileUnassignedCreditBatchApplicationSlices: { status: "exempt", reason: "Derived unassigned slices; the initiating application or batch membership writer owns activity (ADR 0019)." },
   },

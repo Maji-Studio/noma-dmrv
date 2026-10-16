@@ -5,7 +5,6 @@ import {
   type FeedstockWithRelations,
   type CreateFeedstockResult,
 } from "@/data-access/feedstocks";
-import { resolveDistanceSource } from "@/schemas/distance-source";
 import { processPendingStorageObjectDeletions } from "@/data-access/storage-object-deletions";
 import { createFeedstockSchema, updateFeedstockSchema, deleteFeedstockSchema } from "@/schemas/feedstocks";
 import type { Operation } from "./runner";
@@ -31,13 +30,7 @@ export const logFeedstockDelivery: Operation<
   input: createFeedstockSchema,
   supportsDryRun: true,
   execute: async ({ ctx, tx, snapshotStock, activity }, data) => {
-    const result = await withFeedstockErrors(() => createFeedstockInTransaction(ctx, tx, {
-      ...data,
-      transportDistanceSource: resolveDistanceSource(
-        data.transportDistanceKm,
-        data.transportDistanceSource,
-      ),
-    }, snapshotStock));
+    const result = await withFeedstockErrors(() => createFeedstockInTransaction(ctx, tx, data, snapshotStock));
     for (const row of result.feedstocks) activity.link({ facilityId: row.facilityId }, row.id);
     return result;
   },
@@ -52,12 +45,8 @@ export const updateFeedstock: Operation<typeof updateFeedstockSchema, FeedstockW
   }),
   input: updateFeedstockSchema,
   supportsDryRun: true,
-  execute: async ({ ctx, tx, afterCommit, snapshotStock, activity }, { feedstockId, transportDistanceKm, transportDistanceSource, ...updateData }) => {
-    const result = await withFeedstockErrors(() => updateFeedstockInTransaction(ctx, tx, feedstockId, {
-      ...updateData,
-      transportDistanceKm,
-      transportDistanceSource: resolveDistanceSource(transportDistanceKm, transportDistanceSource),
-    }, snapshotStock));
+  execute: async ({ ctx, tx, afterCommit, snapshotStock, activity }, { feedstockId, ...updateData }) => {
+    const result = await withFeedstockErrors(() => updateFeedstockInTransaction(ctx, tx, feedstockId, updateData, snapshotStock));
     afterCommit(async () => { await processPendingStorageObjectDeletions(ctx); });
     activity.link({ facilityId: result.facilityId });
     return result;

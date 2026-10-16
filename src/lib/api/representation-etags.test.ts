@@ -39,6 +39,6 @@ it("uses the current biochar product representation revision", () => {
   expect(biocharProductEtag({ version: 7 })).toBe(`"7.${BIOCHAR_PRODUCT_REPRESENTATION_REVISION}"`);
 });
 
-it("uses revision 2 for feedstocks without intake GPS", () => {
-  expect(feedstockEtag({ version: 7 })).toBe('"7.2"');
+it("uses revision 3 for feedstocks with persisted distance overrides", () => {
+  expect(feedstockEtag({ version: 7 })).toBe('"7.3"');
 });

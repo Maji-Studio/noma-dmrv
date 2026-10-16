@@ -52,7 +52,7 @@ vi.mock("@/components/forms", async () => {
       ) : null;
     },
     FormField: Wrapper,
-    FormInput: () => null,
+    FormInput: (props: ComponentProps<"input">) => <input {...props} />,
     FormSection: Wrapper,
     FormSpine: Wrapper,
     FormTextarea: () => null,
@@ -119,7 +119,7 @@ vi.mock("@/hooks/use-suppliers", () => ({
   useSupplierLocationsBySupplier: () => ({ data: [] }),
 }));
 vi.mock("@/hooks/use-transport-legs", () => ({
-  useTransportLegsForEntity: () => ({ data: undefined }),
+  useTransportLegsForEntity: () => ({ data: [{ distanceKm: 42, distanceSource: "manual" }] }),
 }));
 vi.mock("@/hooks/use-facilities", () => ({
   useFacility: () => ({ data: undefined }),
@@ -222,6 +222,8 @@ describe("FeedstockForm single-bin mass editing", () => {
         await renderer.root.findByType("form").props.onSubmit();
       });
       expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({
+        transportDistanceKm: undefined,
+        transportDistanceSource: undefined,
         totalWetMassKg: mass,
         moisturePercent: 25,
         allocations: [{ storageLocationId: feedstock.storageLocationId, allocatedWetMassKg: mass }],
@@ -229,6 +231,24 @@ describe("FeedstockForm single-bin mass editing", () => {
     } finally {
       await act(async () => renderer.unmount());
     }
+  });
+
+  it.each([["60", 60], ["", null]] as const)("submits an explicit distance edit %s as %s", async (value, expected) => {
+    const onSubmit = vi.fn();
+    let renderer: ReactTestRenderer;
+    await act(async () => {
+      renderer = create(<FeedstockForm feedstock={feedstock} onSubmit={onSubmit} />);
+    });
+    try {
+      await act(async () => {
+        await renderer.root.findByType("form").findAllByType("input")
+          .find(input => input.props.name === "transportDistanceKm")!.props.onChange({
+            target: { name: "transportDistanceKm", value },
+          });
+      });
+      await act(async () => { await renderer.root.findByType("form").props.onSubmit(); });
+      expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ transportDistanceKm: expected }));
+    } finally { await act(async () => renderer.unmount()); }
   });
 
   it.each([90, 100])("keeps an intentional %s kg allocation override when the total changes", async (allocatedWetMassKg) => {

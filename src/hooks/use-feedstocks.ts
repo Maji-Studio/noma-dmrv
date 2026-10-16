@@ -1,3 +1,4 @@
+import { transportDistanceKeys } from "./transport-distance-query-keys";
 /**
  * Feedstock React Query Hooks
  * Client-side state management for the unified delivery + bin allocation workflow.
@@ -108,6 +109,7 @@ export function useCreateFeedstock(callbacks?: MutationCallbacks<CreateFeedstock
       queryClient.invalidateQueries({ queryKey: storageLocationKeys.all });
       invalidateStockEntityQueries(queryClient, "feedstock");
       queryClient.invalidateQueries({ queryKey: dashboardOverviewKeys.all });
+      void queryClient.invalidateQueries({ queryKey: transportDistanceKeys.all });
       // Feedstock writes resync the derived transport leg (distance/provenance),
       // an input to certification readiness.
       void invalidateCertificationReadiness(queryClient);
@@ -139,6 +141,7 @@ export function useUpdateFeedstock(callbacks?: MutationCallbacks<FeedstockWithRe
       queryClient.invalidateQueries({ queryKey: storageLocationKeys.all });
       invalidateStockEntityQueries(queryClient, "feedstock");
       queryClient.invalidateQueries({ queryKey: dashboardOverviewKeys.all });
+      void queryClient.invalidateQueries({ queryKey: transportDistanceKeys.all });
       // Feedstock writes resync the derived transport leg (distance/provenance),
       // an input to certification readiness.
       void invalidateCertificationReadiness(queryClient);
@@ -165,6 +168,7 @@ export function useDeleteFeedstock(callbacks?: MutationCallbacks<void, DeleteFee
       queryClient.invalidateQueries({ queryKey: storageLocationKeys.all });
       invalidateStockEntityQueries(queryClient, "feedstock");
       queryClient.invalidateQueries({ queryKey: dashboardOverviewKeys.all });
+      void queryClient.invalidateQueries({ queryKey: transportDistanceKeys.all });
       // Feedstock writes resync the derived transport leg (distance/provenance),
       // an input to certification readiness.
       void invalidateCertificationReadiness(queryClient);
