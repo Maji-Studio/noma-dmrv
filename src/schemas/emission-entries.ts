@@ -39,6 +39,12 @@ export const updateEmissionEntrySchema = emissionEntryVersionSchema.extend({
   note: fields.note,
   values: fields.values.optional(),
 });
+export const replaceEmissionEntrySchema = emissionEntryVersionSchema.extend({
+  occurredOn: fields.occurredOn.optional(),
+  note: fields.note,
+  values: fields.values,
+});
+export type ReplaceEmissionEntryInput = z.infer<typeof replaceEmissionEntrySchema>;
 export type CreateEmissionEntryInput = z.infer<typeof createEmissionEntrySchema>;
 export type UpdateEmissionEntryInput = z.infer<typeof updateEmissionEntrySchema>;
 
