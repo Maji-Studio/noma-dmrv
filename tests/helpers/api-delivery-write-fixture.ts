@@ -1,6 +1,7 @@
+import { apiActivityWhere } from "./api-activity";
 import { randomUUID } from "node:crypto";
 import { expect } from "vitest";
-import { and, eq, inArray, isNotNull } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { activityEvents, apiIdempotencyRecords, deliveries, drivers, storageLocations, vehicles } from "@/db/schema";
 import { API_KEY_DEFAULT_EXPIRY_SECONDS } from "@/config/api-keys";
@@ -52,7 +53,7 @@ export async function readDelivery(f: ApiDeliveryWriteFixture, id: string) {
 }
 export const deliveryRows = (f: ApiDeliveryWriteFixture) => db.select().from(deliveries).where(eq(deliveries.organizationId, f.ctx.organizationId));
 export const deliveryRecords = (f: ApiDeliveryWriteFixture) => db.select().from(apiIdempotencyRecords).where(eq(apiIdempotencyRecords.organizationId, f.ctx.organizationId));
-export const deliveryAudits = (f: ApiDeliveryWriteFixture) => db.select().from(activityEvents).where(and(inArray(activityEvents.source, ["rest", "mcp"]), isNotNull(activityEvents.operationId), eq(activityEvents.organizationId, f.ctx.organizationId)));
+export const deliveryAudits = (f: ApiDeliveryWriteFixture) => db.select().from(activityEvents).where(apiActivityWhere(f.ctx.organizationId));
 export async function removeApiDeliveryWriteFixture(f: ApiDeliveryWriteFixture) {
   await db.update(deliveries).set({ driverId: null, vehicleId: null }).where(eq(deliveries.organizationId, f.ctx.organizationId));
   await db.delete(drivers).where(eq(drivers.organizationId, f.ctx.organizationId));

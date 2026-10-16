@@ -363,9 +363,12 @@ omit registry credentials.
 ## API write audit
 
 API writes with runner audit context are audited only in `activity_events`.
-Events record operation and principal IDs, one entity ID per row, action,
-versions, and decoded input field names only. `credentialId`, `requestId` and
-optional `oauthClientId` identify the API caller; `source` is `rest` or `mcp`.
+An API audit row has `source in ('rest','mcp') and operation_id is not null`.
+It records operation, credential and request IDs, one entity ID per row, action,
+versions, and decoded input field names only. Nested document, membership,
+transport-leg and document-retirement rows from the same API call carry only
+actor and source attribution, without operation, credential or request IDs.
+`oauthClientId` is reserved and null until OAuth grants ship.
 Inserts share the business transaction. Failed writes, dry runs and replays add
 no events. Form and script runner writes use the same store and also record
 `operationId`, `versionBefore` and `versionAfter`, without API credentials.

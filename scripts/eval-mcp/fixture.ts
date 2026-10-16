@@ -1,5 +1,6 @@
+import { apiActivityWhere } from "../../tests/helpers/api-activity";
 import { randomUUID } from "node:crypto";
-import { and, eq, inArray, isNotNull, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { facilities, feedstocks, feedstockTypes, members, storageLocations, suppliers, users, activityEvents, reactors, productionRuns, productionRunFeedstockDraws } from "@/db/schema";
 import { createApiKey } from "@/data-access/api-keys";
@@ -92,7 +93,7 @@ export async function readSnapshot(fixture: EvalFixture): Promise<DatabaseSnapsh
     draws: await db.select({ productionRunId: productionRunFeedstockDraws.productionRunId,
       storageLocationId: productionRunFeedstockDraws.storageLocationId, wetMassKg: productionRunFeedstockDraws.wetMassKg,
     }).from(productionRunFeedstockDraws).where(eq(productionRunFeedstockDraws.organizationId, org)),
-    audits: await db.select({ transport: activityEvents.source, operationId: sql<string>`${activityEvents.operationId}` }).from(activityEvents).where(and(inArray(activityEvents.source, ["rest", "mcp"]), isNotNull(activityEvents.operationId), eq(activityEvents.organizationId, org))),
+    audits: await db.select({ transport: activityEvents.source, operationId: sql<string>`${activityEvents.operationId}` }).from(activityEvents).where(apiActivityWhere(org)),
   };
 }
 

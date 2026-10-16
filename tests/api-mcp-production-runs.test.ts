@@ -1,8 +1,9 @@
+import { apiActivityWhere } from "./helpers/api-activity";
 import { addFixtureReactor } from "./helpers/operation-fixture";
 import { productionRunEtag } from "@/lib/api/representation-etags";
 import { randomUUID } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { eq, and, inArray, isNotNull } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { activityEvents, productionRuns } from "@/db/schema";
 import { createApiKey } from "@/data-access/api-keys";
@@ -88,7 +89,7 @@ describe("production MCP tools", { timeout: TIMEOUT_MS }, () => {
     expect(result.content[0].text).toMatch(/^Replayed: Started production run/);
     expect(await rows()).toHaveLength(1);
     expect(await binWetStock(a)).toBe(3000);
-    expect(await db.select().from(activityEvents).where(and(inArray(activityEvents.source, ["rest", "mcp"]), isNotNull(activityEvents.operationId), eq(activityEvents.organizationId, a.ctx.organizationId))))
+    expect(await db.select().from(activityEvents).where(apiActivityWhere(a.ctx.organizationId)))
       .toMatchObject([{ source: "rest" }, { source: "rest" }]);
   });
 

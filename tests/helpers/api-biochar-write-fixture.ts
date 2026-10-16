@@ -1,5 +1,6 @@
+import { apiActivityWhere } from "./api-activity";
 import { randomUUID } from "node:crypto";
-import { and, eq, inArray, isNotNull } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { expect } from "vitest";
 import { db } from "@/db";
 import { activityEvents, apiIdempotencyRecords, binMovements, biocharProducts } from "@/db/schema";
@@ -91,10 +92,7 @@ export async function captureProductWriteState(f: ApiProductFixture) {
 }
 
 export async function productWriteAudits(f: ApiProductFixture, entityType: "product" | "movement" = "product") {
-  return db.select().from(activityEvents).where(and(inArray(activityEvents.source, ["rest", "mcp"]), isNotNull(activityEvents.operationId), and(
-    eq(activityEvents.organizationId, f.ctx.organizationId),
-    eq(activityEvents.entityType, entityType === "product" ? PRODUCT_AUDIT_ENTITY : MOVEMENT_AUDIT_ENTITY),
-  )));
+  return db.select().from(activityEvents).where(apiActivityWhere(f.ctx.organizationId, eq(activityEvents.entityType, entityType === "product" ? PRODUCT_AUDIT_ENTITY : MOVEMENT_AUDIT_ENTITY)));
 }
 export const writeIdempotencyRecords = (f: ApiProductFixture) =>
   db.select().from(apiIdempotencyRecords).where(eq(apiIdempotencyRecords.organizationId, f.ctx.organizationId));

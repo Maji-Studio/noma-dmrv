@@ -1,6 +1,7 @@
+import { apiActivityWhere } from "./api-activity";
 /** Request builders and state readers for the lab sample REST write suites. */
 import { randomUUID } from "node:crypto";
-import { and, eq, inArray, isNotNull } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { expect } from "vitest";
 import { db } from "@/db";
 import { activityEvents, apiIdempotencyRecords, samples } from "@/db/schema";
@@ -60,7 +61,7 @@ export const labSampleRows = (f: ApiLabFixture) =>
   db.select().from(samples).where(eq(samples.organizationId, f.ctx.organizationId)).orderBy(samples.sampleCode);
 
 export const labSampleAudits = (f: ApiLabFixture) =>
-  db.select().from(activityEvents).where(and(inArray(activityEvents.source, ["rest", "mcp"]), isNotNull(activityEvents.operationId), and(eq(activityEvents.organizationId, f.ctx.organizationId), eq(activityEvents.entityType, AUDIT_ENTITY))));
+  db.select().from(activityEvents).where(apiActivityWhere(f.ctx.organizationId, eq(activityEvents.entityType, AUDIT_ENTITY)));
 export const labIdempotencyRecords = (f: ApiLabFixture) =>
   db.select().from(apiIdempotencyRecords).where(eq(apiIdempotencyRecords.organizationId, f.ctx.organizationId));
 

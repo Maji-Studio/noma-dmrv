@@ -34,7 +34,7 @@ export const activityEvents = pgTable("activity_events", {
   source: text("source", { enum: ACTIVITY_SOURCES }).notNull(),
   actorUserId: text("actor_user_id"),
   credentialId: text("credential_id"),
-  /** OAuth client behind an MCP grant; null for API keys and non-API writes. */
+  /** Reserved for OAuth grants; null until OAuth grants ship. */
   oauthClientId: text("oauth_client_id"),
   /** Runner operation id (e.g. `update_feedstock`); null for writes outside the runner. */
   operationId: text("operation_id"),

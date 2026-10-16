@@ -1,5 +1,6 @@
+import { apiActivityWhere, stringifyWithBigint } from "./helpers/api-activity";
 import { randomUUID } from "node:crypto";
-import { and, eq, inArray, isNotNull } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { db } from "@/db";
 import { activityEvents, facilities, samples } from "@/db/schema";
@@ -83,7 +84,7 @@ describe("runner activity across transports", { timeout: TIMEOUT_MS }, () => {
       expect(audit).toBeDefined();
       expect(event.credentialId).toBe(audit!.credentialId);
     }
-    expect(JSON.stringify(events, (_key, value) => typeof value === "bigint" ? value.toString() : value))
+    expect(stringifyWithBigint(events))
       .not.toContain(input.packaging);
     expect(await orderAudits(fixture)).toHaveLength(2);
   });
@@ -149,7 +150,7 @@ describe("product resubmission activity", { timeout: TIMEOUT_MS }, () => {
     expect(repeated.data.product.id).toBe(first.product.id);
     expect(repeated).not.toHaveProperty("effect");
     expect(await activity(fixture.ctx.organizationId)).toEqual(events);
-    expect(await db.select().from(activityEvents).where(and(inArray(activityEvents.source, ["rest", "mcp"]), isNotNull(activityEvents.operationId), eq(activityEvents.organizationId, fixture.ctx.organizationId)))).toEqual([]);
+    expect(await db.select().from(activityEvents).where(apiActivityWhere(fixture.ctx.organizationId))).toEqual([]);
   });
 
   it("records exactly one event when resubmitting a stock movement's form key", async () => {
@@ -327,7 +328,7 @@ describe("UI document activity", { timeout: TIMEOUT_MS }, () => {
     expect(events[1].changedFields).toEqual(["uploadStatus", "version"]);
     expect(events[2].changedFields).toEqual(["visibility"]);
     expect(events[3].changedFields).toEqual([]);
-    const serialized = JSON.stringify(events, (_key, value) => typeof value === "bigint" ? value.toString() : value);
+    const serialized = stringifyWithBigint(events);
     for (const value of [declaration.fileName, declaration.sha256, declaration.contentType, facts.finalKey]) expect(serialized).not.toContain(value);
   });
 });

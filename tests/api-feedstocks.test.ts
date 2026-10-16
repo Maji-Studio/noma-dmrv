@@ -1,7 +1,8 @@
 /** Real handlers and Postgres. Written for reviewer execution; never run by the implementation agent. */
+import { apiActivityWhere, stringifyWithBigint } from "./helpers/api-activity";
 import { randomUUID } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { eq, inArray, sql, and, isNotNull } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { activityEvents, organizationApiAccess, apiIdempotencyRecords, facilities, feedstocks, members, storageLocations, users } from "@/db/schema";
 import { API_BODY_MAX_BYTES, API_FEEDSTOCK_MAX_ALLOCATIONS } from "@/config/api-rest";
@@ -447,7 +448,7 @@ describe("feedstock REST contract", { timeout: SUITE_TIMEOUT_MS }, () => {
 });
 
 
-const auditRows = () => db.select().from(activityEvents).where(and(inArray(activityEvents.source, ["rest", "mcp"]), isNotNull(activityEvents.operationId), eq(activityEvents.organizationId, a.ctx.organizationId)));
+const auditRows = () => db.select().from(activityEvents).where(apiActivityWhere(a.ctx.organizationId));
 
 describe("feedstock REST guards and audit", { timeout: SUITE_TIMEOUT_MS }, () => {
   it("audits create, update and delete once with field names and response request ids", async () => {
@@ -474,7 +475,7 @@ describe("feedstock REST guards and audit", { timeout: SUITE_TIMEOUT_MS }, () =>
         credentialId: credentialIdA, entityType: "feedstock", entityId: created.row.id,
       });
     }
-    expect(JSON.stringify(events, (_key, value) => typeof value === "bigint" ? String(value) : value)).not.toContain(privateNotes);
+    expect(stringifyWithBigint(events)).not.toContain(privateNotes);
   });
 
   it("adds no audit rows for dry runs or create, update and delete replays", async () => {

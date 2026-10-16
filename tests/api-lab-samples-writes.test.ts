@@ -1,3 +1,4 @@
+import { stringifyWithBigint } from "./helpers/api-activity";
 /** Real handlers, credentials and Postgres. Written for reviewer execution; never run by the implementation agent. */
 import { randomUUID } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -55,7 +56,7 @@ describe("lab sample create", { timeout: TIMEOUT_MS }, () => {
       entityId: data.id, versionBefore: null, versionAfter: 1,
     }]);
     expect(audits[0].changedFields).toEqual(expect.arrayContaining(["creditBatchId", "totalCarbonPercent", "totalHydrogenPercent"]));
-    expect(JSON.stringify(audits[0], (_key, value) => typeof value === "bigint" ? String(value) : value)).not.toContain(WRITE_SAMPLED_AT);
+    expect(stringifyWithBigint(audits[0])).not.toContain(WRITE_SAMPLED_AT);
   });
 
   it("answers with certification warnings but no calculated-ratio notice when hydrogen and moisture are missing", async () => {

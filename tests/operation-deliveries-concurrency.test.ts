@@ -1,6 +1,7 @@
+import { apiActivityWhere } from "./helpers/api-activity";
 import { randomUUID } from "node:crypto";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import { and, eq, inArray, isNotNull } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import type { Pool } from "pg";
 import { db } from "@/db";
 import { activityEvents, apiIdempotencyRecords, binMovements, deliveries, outputStockAllocations } from "@/db/schema";
@@ -91,7 +92,7 @@ describe("delivery operation races", { timeout: SUITE_TIMEOUT_MS }, () => {
     expect((await runOperation(recordDelivery, f.ctx, input(f), options)).replayed).toBe(true);
     expect(await rows(f)).toHaveLength(1);
     expect(await movements(f)).toHaveLength(1);
-    expect(await db.select().from(activityEvents).where(and(inArray(activityEvents.source, ["rest", "mcp"]), isNotNull(activityEvents.operationId), eq(activityEvents.organizationId, f.ctx.organizationId)))).toHaveLength(1);
+    expect(await db.select().from(activityEvents).where(apiActivityWhere(f.ctx.organizationId))).toHaveLength(1);
     expect(await db.select().from(apiIdempotencyRecords).where(eq(apiIdempotencyRecords.organizationId, f.ctx.organizationId))).toHaveLength(1);
   });
 
@@ -127,7 +128,7 @@ describe("delivery operation races", { timeout: SUITE_TIMEOUT_MS }, () => {
     expect(await movements(f)).toHaveLength(1);
     expect(await db.select().from(outputStockAllocations).where(eq(outputStockAllocations.deliveryId, saved.data.delivery.id)))
       .toMatchObject([{ movementId: movement.id }]);
-    expect(await db.select().from(activityEvents).where(and(inArray(activityEvents.source, ["rest", "mcp"]), isNotNull(activityEvents.operationId), eq(activityEvents.organizationId, f.ctx.organizationId)))).toHaveLength(1);
+    expect(await db.select().from(activityEvents).where(apiActivityWhere(f.ctx.organizationId))).toHaveLength(1);
     expect((await runOperation(recordDelivery, f.ctx, input(f), options)).data).toEqual(saved.data);
   });
 

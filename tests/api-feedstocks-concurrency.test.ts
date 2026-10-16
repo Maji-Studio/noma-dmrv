@@ -1,7 +1,8 @@
+import { apiActivityWhere } from "./helpers/api-activity";
 /** REST races on real, separate PostgreSQL connections. Reviewer execution only. */
 import { randomUUID } from "node:crypto";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { and, eq, inArray, isNotNull } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import type { Pool } from "pg";
 import { db } from "@/db";
 import { activityEvents, apiIdempotencyRecords, feedstocks } from "@/db/schema";
@@ -108,10 +109,7 @@ describe("feedstock REST concurrency", { timeout: SUITE_TIMEOUT_MS }, () => {
     expect(records).toHaveLength(1);
     expect(records[0]).toMatchObject({ idempotencyKey: key, operationId: "log_feedstock_delivery" });
     expect(records[0].outcome).not.toBeNull();
-    const audits = await db.select().from(activityEvents).where(and(inArray(activityEvents.source, ["rest", "mcp"]), isNotNull(activityEvents.operationId), and(
-      eq(activityEvents.organizationId, fixture.ctx.organizationId),
-      eq(activityEvents.credentialId, fixture.credentialId),
-    )));
+    const audits = await db.select().from(activityEvents).where(apiActivityWhere(fixture.ctx.organizationId, eq(activityEvents.credentialId, fixture.credentialId)));
     expect(audits).toHaveLength(1);
     expect(audits[0]).toMatchObject({ operationId: "log_feedstock_delivery", action: "created" });
   });

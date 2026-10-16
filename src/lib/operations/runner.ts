@@ -67,7 +67,7 @@ export interface Operation<Input extends z.ZodType, Output, Effect extends Opera
   input: Input;
   /** False for operations with irreversible external effects. */
   supportsDryRun: boolean;
-  /** Null or undefined describes a no-op, which records no activity or API audit. */
+  /** Null or undefined describes a no-op, which records no activity. */
   describe?: (input: z.output<Input>, output: Output) => Effect | null;
   execute: (scope: OperationScope, input: z.output<Input>) => Promise<Output>;
 }
@@ -281,6 +281,7 @@ async function runOperationCore<Input extends z.ZodType, Output, Result>(
         const result = represent(output);
         if (!dryRun && effect) {
           const entityType = toActivityEntityType(effect.entityType);
+          let activityCount = 0;
           for (const entityId of effect.entityIds) {
             for (const links of activity.scopedLinks(entityType, entityId)) {
               await recordActivity(ctx, tx, {
@@ -295,8 +296,10 @@ async function runOperationCore<Input extends z.ZodType, Output, Result>(
                 requestId: options.audit?.requestId,
                 ...links,
               });
+              activityCount++;
             }
           }
+          if (options.audit && activityCount === 0) throw new Error("Audited operation recorded no activity");
         }
         if (recordId) {
           await recordIdempotencyOutcome(ctx, tx, recordId, result, effect);

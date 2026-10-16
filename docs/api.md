@@ -187,14 +187,19 @@ facility, including a new facility on update. Native Dates are an in-process
 convenience and do not appear as a third published shape. UI actions validate
 the form contract before passing only operation fields to the runner.
 
-The `audit` run option supplies request id, credential id and optional OAuth
-client id for API writes only. Audited operations must implement `describe`.
+The `audit` run option supplies request and credential IDs for API writes only.
+Audited operations must implement `describe`.
 `src/data-access/activity-events.ts:recordActivity` is the single audit writer.
 Committed runner writes with a non-null `describe` effect record value-free
 `activity_events` in the operation's transaction for form, script, REST and MCP
 calls. Every runner event carries `operationId`, `versionBefore` and
-`versionAfter`; API events also carry `credentialId`, `requestId` and optional
-`oauthClientId`. Form writes have null credential and OAuth client IDs.
+`versionAfter`. An API audit row has
+`source in ('rest','mcp') and operation_id is not null`; it also carries
+`credentialId`, `requestId` and field names. Nested document, membership,
+transport-leg and document-retirement rows from the same API call carry only
+actor and source attribution, without operation, credential or request IDs.
+`oauthClientId` is reserved and null until OAuth grants ship.
+Form writes have null credential IDs.
 Dry runs, idempotent replays and `activity.skip()` add no events.
 The runner records one event per entity and distinct batch/run scope supplied by
 `activity.scope(entityId, scopes)` in `src/lib/operations/activity-links.ts`.

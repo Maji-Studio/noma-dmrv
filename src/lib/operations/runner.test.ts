@@ -57,6 +57,25 @@ describe("shared operation runner", () => {
     }
   });
 
+  it.each(["empty entities", "empty scopes"] as const)("rejects audited effects with %s before commit", async (mode) => {
+    const hook = vi.fn();
+    const op = {
+      ...described,
+      describe: () => ({ ...effect, entityIds: mode === "empty entities" ? [] : effect.entityIds }),
+      execute: async (scope: OperationScope, input: { amount: number }) => {
+        scope.afterCommit(hook);
+        if (mode === "empty scopes") for (const id of effect.entityIds) scope.activity.scope(id, []);
+        return operation.execute(scope, input);
+      },
+    };
+    await expect(runOperation(op, ctx, { amount: 1 }, { audit: auditOptions }))
+      .rejects.toThrow("Audited operation recorded no activity");
+    expect(activity).not.toHaveBeenCalled();
+    expect(hook).not.toHaveBeenCalled();
+    await runOperation(op, ctx, { amount: 1 });
+    expect(hook).toHaveBeenCalledOnce();
+  });
+
   it("preserves the OAuth client on every MCP activity row", async () => {
     const oauthClientId = "oauth-client";
     await runOperation(described, ctx, { amount: 1 }, { audit: { ...auditOptions, transport: "mcp", oauthClientId } });

@@ -1,10 +1,11 @@
+import { apiActivityWhere } from "./helpers/api-activity";
 import { API_BODY_MAX_BYTES } from "@/config/api-rest";
 import { guardApiMethod } from "@/lib/api/method-not-allowed";
 import * as boundary from "@/app/api/v1/applications/[idOrCode]/boundary/route";
 /** Real REST handlers, credentials and database. Run by explicit path only. */
 import { randomUUID } from "node:crypto";
 import { afterEach, beforeEach, expect, it } from "vitest";
-import { eq, and, inArray, isNotNull } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { applications, activityEvents, deliveries, documents, productionProcesses, creditBatches, creditBatchApplications, members, apiKeys } from "@/db/schema";
 import { saveApplicationOutputAllocations } from "@/data-access/delivery-allocation-provenance";
@@ -52,7 +53,7 @@ it("creates once in kg, returns GET's ETag, allocations, balance, warnings and a
   expect(response.headers.get("location")).toBe(`/api/v1/applications/${body.data.id}`);
   expect((await read(body.data.id)).headers.get("etag")).toBe(response.headers.get("etag"));
   expect(await rows()).toMatchObject([{ biocharAppliedTons: 4.001 }]);
-  const audits = await db.select().from(activityEvents).where(and(inArray(activityEvents.source, ["rest", "mcp"]), isNotNull(activityEvents.operationId), eq(activityEvents.organizationId, f.ctx.organizationId)));
+  const audits = await db.select().from(activityEvents).where(apiActivityWhere(f.ctx.organizationId));
   expect(new Set(audits.map(row => row.requestId)).size).toBe(1);
   expect(audits).toContainEqual(expect.objectContaining({ entityId: body.data.id, operationId: "record_application", source: "rest" }));
   const events = await db.select().from(activityEvents).where(eq(activityEvents.organizationId, f.ctx.organizationId));
@@ -65,7 +66,7 @@ it("requires keys even for previews; dry runs leave no application, audit or act
   expect(preview.headers.get("dry-run")).toBe("true"); expect(preview.headers.has("etag")).toBe(false);
   const body = await preview.json(); expect(body.allocations).toHaveLength(1); expect(body.deliveryBalance.remainingWetMassKgAfter).toBe(999);
   expect(await rows()).toEqual([]);
-  expect(await db.select().from(activityEvents).where(and(inArray(activityEvents.source, ["rest", "mcp"]), isNotNull(activityEvents.operationId), eq(activityEvents.organizationId, f.ctx.organizationId)))).toEqual([]);
+  expect(await db.select().from(activityEvents).where(apiActivityWhere(f.ctx.organizationId))).toEqual([]);
   expect(await db.select().from(activityEvents).where(eq(activityEvents.organizationId, f.ctx.organizationId))).toEqual([]);
   expect((await post(input(), requestKey)).status).toBe(201);
 }, TIMEOUT);
@@ -99,7 +100,7 @@ it.each([polygon, feature, { type: "FeatureCollection", features: [feature] }])(
   const requestKey = randomUUID(); const body = input({ gisBoundary, evidenceMethod: "boundary" });
   const first = await post(body, requestKey); expect(first.status).toBe(201); const text = await first.text();
   const replay = await post(body, requestKey); expect(replay.headers.get("idempotent-replayed")).toBe("true"); expect(await replay.text()).toBe(text);
-  const [audit] = await db.select().from(activityEvents).where(and(inArray(activityEvents.source, ["rest", "mcp"]), isNotNull(activityEvents.operationId), eq(activityEvents.organizationId, f.ctx.organizationId)));
+  const [audit] = await db.select().from(activityEvents).where(apiActivityWhere(f.ctx.organizationId));
   expect(audit.changedFields).toContain("gisBoundary");
   const [row] = await rows(); expect(row.gisBoundary).toMatchObject({ source: "api", fileName: null, collection: { type: "FeatureCollection" } });
   const response = await boundary.GET(readRequest(`/applications/${row.id}/boundary`, key), readParams(row.id));
@@ -254,7 +255,7 @@ it("refuses reuse of an idempotency key with changed raw GeoJSON", async () => {
 
 it("PATCH and DELETE dry runs leave audit and activity rows unchanged", async () => {
   const first = await saved();
-  const audits = () => db.select().from(activityEvents).where(and(inArray(activityEvents.source, ["rest", "mcp"]), isNotNull(activityEvents.operationId), eq(activityEvents.organizationId, f.ctx.organizationId)));
+  const audits = () => db.select().from(activityEvents).where(apiActivityWhere(f.ctx.organizationId));
   const activities = () => db.select().from(activityEvents).where(eq(activityEvents.organizationId, f.ctx.organizationId));
   const beforeAudits = await audits();
   const beforeActivities = await activities();

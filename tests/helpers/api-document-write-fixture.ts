@@ -1,5 +1,6 @@
+import { apiActivityWhere } from "./api-activity";
 import { createHash, randomUUID } from "node:crypto";
-import { and, eq, inArray, isNotNull } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { activityEvents, apiIdempotencyRecords, applications, certificationSubmissions, certifierRemovals, creditBatchApplications, creditBatchProductionRuns, creditBatches, documents, feedstocks, productionProcesses, samples } from "@/db/schema";
 import { createApiKey } from "@/data-access/api-keys";
@@ -91,4 +92,4 @@ export function callDocumentWrite(f: ApiDocumentWriteFixture, owner: ApiDocument
 }
 export const documentRows = (f: ApiDocumentWriteFixture) => db.select().from(documents).where(eq(documents.organizationId, f.ctx.organizationId));
 export const documentRecords = (f: ApiDocumentWriteFixture) => db.select().from(apiIdempotencyRecords).where(eq(apiIdempotencyRecords.organizationId, f.ctx.organizationId));
-export const documentAudits = (f: ApiDocumentWriteFixture) => db.select().from(activityEvents).where(and(inArray(activityEvents.source, ["rest", "mcp"]), isNotNull(activityEvents.operationId), and(eq(activityEvents.organizationId, f.ctx.organizationId), eq(activityEvents.credentialId, f.credentialId))));
+export const documentAudits = (f: ApiDocumentWriteFixture) => db.select().from(activityEvents).where(apiActivityWhere(f.ctx.organizationId, eq(activityEvents.credentialId, f.credentialId)));

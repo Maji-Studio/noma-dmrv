@@ -122,7 +122,7 @@ All three tables live in `src/db/schema/api.ts`:
 
 | Table | Purpose |
 |---|---|
-| `activity_events` | Shared audit store for entity changes and API writes. Nullable `operation_id`, `version_before`, `version_after` record runner effect metadata for every transport; `oauth_client_id`, `credential_id` and `request_id` attribute API calls. `source` identifies form, script, REST or MCP writes. |
+| `activity_events` | Shared audit store for entity changes and API writes. Nullable `operation_id`, `version_before`, `version_after` record runner effect metadata for every transport; `credential_id` and `request_id` attribute API audit rows (`source in ('rest','mcp') and operation_id is not null`). `oauth_client_id` is reserved and null until OAuth grants ship. `source` identifies form, script, REST or MCP writes. |
 
 `activity_events` stores org-scoped, value-free entity changes, status
 transitions and actor/source attribution. The caller's transaction owns each

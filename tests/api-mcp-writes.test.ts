@@ -1,5 +1,6 @@
+import { apiActivityWhere } from "./helpers/api-activity";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { eq, inArray, and, isNotNull } from "drizzle-orm";
+import { inArray } from "drizzle-orm";
 import { db } from "@/db";
 import { activityEvents, apiRateLimitBuckets } from "@/db/schema";
 import { updateApiKey } from "@/data-access/api-keys";
@@ -42,7 +43,7 @@ function intake() {
   const decoded = decodedIntake(fixture, MASS_KG);
   return { ...decoded, deliveryDate: decoded.deliveryDate.toISOString().split("T")[0] };
 }
-const audits = () => db.select().from(activityEvents).where(and(inArray(activityEvents.source, ["rest", "mcp"]), isNotNull(activityEvents.operationId), eq(activityEvents.organizationId, fixture.ctx.organizationId)));
+const audits = () => db.select().from(activityEvents).where(apiActivityWhere(fixture.ctx.organizationId));
 
 describe("MCP feedstock writes", { timeout: SUITE_TIMEOUT_MS }, () => {
   it("replays a REST create without another row, stock effect or audit", async () => {

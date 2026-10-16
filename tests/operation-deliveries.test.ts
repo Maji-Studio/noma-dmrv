@@ -1,6 +1,7 @@
+import { apiActivityWhere } from "./helpers/api-activity";
 import { randomUUID } from "node:crypto";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { and, eq, inArray, isNotNull } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { activityEvents, apiIdempotencyRecords, binMovements, deliveries, drivers, orders, vehicles } from "@/db/schema";
 import { getOutputBinAllLayersDryKg } from "@/data-access/output-stock";
@@ -103,7 +104,7 @@ describe("delivery record on the runner with one connection", { timeout: SUITE_T
     expect(await movements(f)).toEqual(beforeMovements);
     expect(await stock(f)).toBe(beforeStock);
     expect(await db.select().from(apiIdempotencyRecords).where(eq(apiIdempotencyRecords.organizationId, f.ctx.organizationId))).toEqual([]);
-    expect(await db.select().from(activityEvents).where(and(inArray(activityEvents.source, ["rest", "mcp"]), isNotNull(activityEvents.operationId), eq(activityEvents.organizationId, f.ctx.organizationId)))).toEqual([]);
+    expect(await db.select().from(activityEvents).where(apiActivityWhere(f.ctx.organizationId))).toEqual([]);
     const committedInput = input(f, { basisFingerprint: dry.data.basisFingerprint });
     const written = await runOperation(recordDelivery, f.ctx, committedInput, options);
     expect(written.data.basisFingerprint).toBe(dry.data.basisFingerprint);
@@ -124,7 +125,7 @@ describe("delivery record on the runner with one connection", { timeout: SUITE_T
     expect(replay).toMatchObject({ replayed: true, data: first.data, effect: first.effect });
     expect(await rows(f)).toHaveLength(1);
     expect(await movements(f)).toHaveLength(1);
-    expect(await db.select().from(activityEvents).where(and(inArray(activityEvents.source, ["rest", "mcp"]), isNotNull(activityEvents.operationId), eq(activityEvents.organizationId, f.ctx.organizationId)))).toHaveLength(1);
+    expect(await db.select().from(activityEvents).where(apiActivityWhere(f.ctx.organizationId))).toHaveLength(1);
     await expect(runOperation(recordDelivery, f.ctx, { ...facts, deliveredWetMassKg: WET_KG + 1 }, options))
       .rejects.toMatchObject({ code: "idempotency_key_reused" });
   });
@@ -205,7 +206,7 @@ describe("delivery metadata PATCH on the runner", { timeout: SUITE_TIMEOUT_MS },
     expect(await movements(f)).toEqual(beforeMovements);
     expect(await stock(f)).toBe(beforeStock);
     expect(await db.select().from(apiIdempotencyRecords).where(eq(apiIdempotencyRecords.organizationId, f.ctx.organizationId))).toEqual([]);
-    expect(await db.select().from(activityEvents).where(and(inArray(activityEvents.source, ["rest", "mcp"]), isNotNull(activityEvents.operationId), eq(activityEvents.organizationId, f.ctx.organizationId)))).toEqual([]);
+    expect(await db.select().from(activityEvents).where(apiActivityWhere(f.ctx.organizationId))).toEqual([]);
   });
 
   it("rolls back a metadata preview and replays a keyed PATCH after archive", async () => {

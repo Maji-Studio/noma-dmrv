@@ -1,5 +1,6 @@
+import { apiActivityWhere } from "./api-activity";
 import { randomUUID } from "node:crypto";
-import { eq, and, inArray, isNotNull } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { expect } from "vitest";
 import { db } from "@/db";
 import { activityEvents, apiIdempotencyRecords, productionRunFeedstockDraws, productionRunFeedstocks, productionRuns } from "@/db/schema";
@@ -72,6 +73,6 @@ export async function restoreProductionRunState(fixture: ApiProductionRunFixture
 }
 
 export async function productionRunAudits(fixture: ApiProductionRunFixture) {
-  return (await db.select().from(activityEvents).where(and(inArray(activityEvents.source, ["rest", "mcp"]), isNotNull(activityEvents.operationId), eq(activityEvents.organizationId, fixture.ctx.organizationId))))
+  return (await db.select().from(activityEvents).where(apiActivityWhere(fixture.ctx.organizationId)))
     .filter((event) => event.entityType === "production_run");
 }

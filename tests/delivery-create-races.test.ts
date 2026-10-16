@@ -1,3 +1,4 @@
+import { apiActivityWhere } from "./helpers/api-activity";
 import { getOutputBinStocks } from "@/data-access/output-stock";
 import { withOutputStockErrors } from "@/lib/output-stock-domain-errors";
 import { z } from "zod";
@@ -7,7 +8,7 @@ import { createBiocharProduct } from "@/data-access/biochar-product-create";
 import { certifyOutputLineage, cleanupCertifiedOutputLineage } from "./helpers/certified-output-lineage";
 import { randomUUID } from "node:crypto";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { eq, sql, and, inArray, isNotNull } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { deliveries, orders, binMovements, creditBatchApplications, activityEvents, apiIdempotencyRecords, type Delivery } from "@/db/schema";
 import { createDeliveryInTransaction, updateDeliveryInTransaction } from "@/data-access/delivery-output-writes";
@@ -209,7 +210,7 @@ it("parallel API keys through a test-only runner operation create one audit row"
   expect(results).toContainEqual(expect.objectContaining({ status: "fulfilled" }));
   const replay = await runOperation(operation, f.ctx, f.input, options);
   expect(replay.replayed).toBe(true);
-  expect(await db.select().from(activityEvents).where(and(inArray(activityEvents.source, ["rest", "mcp"]), isNotNull(activityEvents.operationId), eq(activityEvents.organizationId, f.ctx.organizationId)))).toHaveLength(1);
+  expect(await db.select().from(activityEvents).where(apiActivityWhere(f.ctx.organizationId))).toHaveLength(1);
   expect(await db.select().from(deliveries).where(eq(deliveries.organizationId, f.ctx.organizationId))).toHaveLength(1);
   expect(await db.select().from(binMovements).where(eq(binMovements.idempotencyKey, f.input.idempotencyKey))).toHaveLength(1);
 });
