@@ -45,7 +45,7 @@ export async function upsertLocationFacilityDistances(
   const table = kind === "supplier" ? supplierLocationFacilityDistances : customerLocationFacilityDistances;
   await assertSameOrg(ctx, kind === "supplier" ? supplierLocations : customerLocations, locationId, tx);
   for (const row of [...rows].sort((a, b) => a.facilityId.localeCompare(b.facilityId))) {
-    await lockActiveFacilityReference(ctx, tx, row.facilityId);
+    if (row.distanceKm !== null) await lockActiveFacilityReference(ctx, tx, row.facilityId);
   }
   for (const row of rows) {
     if (row.distanceKm === null) {

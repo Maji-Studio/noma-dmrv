@@ -200,7 +200,7 @@ describe("CustomerLocationDialog submission", () => {
       address: "E2E application site",
       gpsLatitude: GPS_LATITUDE,
       gpsLongitude: GPS_LONGITUDE,
-      facilityDistances: [{ facilityId: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee", distanceKm: DISTANCE_KM, distanceSource: "manual" }],
+      facilityDistances: [],
       defaultSoilTemperatureC: 25,
       isDefault: true,
     });
@@ -256,11 +256,12 @@ describe("SupplierLocationDialog submission", () => {
       locationId: SUPPLIER_LOCATION_ID,
       expectedVersion: 1,
       ...supplierFormData,
+      facilityDistances: [],
     });
     expect(harness.supplierUpdate.mock.calls[0]?.[0]).toMatchObject({
       gpsLatitude: GPS_LATITUDE,
       gpsLongitude: GPS_LONGITUDE,
-      facilityDistances: [{ facilityId: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee", distanceKm: DISTANCE_KM, distanceSource: "manual" }],
+      facilityDistances: [],
     });
   });
 
@@ -290,4 +291,22 @@ describe("SupplierLocationDialog submission", () => {
       "locationId",
     );
   });
+});
+
+it.each(["customer", "supplier"] as const)("%s name-only edit submits no distance rows", async kind => {
+  const onClose = vi.fn();
+  renderToStaticMarkup(kind === "customer"
+    ? <CustomerLocationDialog isOpen onClose={onClose} customerId={CUSTOMER_ID} location={customerLocation} />
+    : <SupplierLocationDialog isOpen onClose={onClose} supplierId={SUPPLIER_ID} location={supplierLocation} />);
+  const data = kind === "customer" ? customerFormData : supplierFormData;
+  const submit = kind === "customer" ? harness.customerOnSubmit : harness.supplierOnSubmit;
+  const update = kind === "customer" ? harness.customerUpdate : harness.supplierUpdate;
+  await submit?.({ ...data, facilityDistances: [
+    ...data.facilityDistances!,
+    { facilityId: SUPPLIER_LOCATION_ID, distanceKm: null, distanceSource: "manual" },
+  ] } as never);
+  expect(update).toHaveBeenCalledWith(expect.objectContaining({
+    name: data.name, facilityDistances: [],
+  }));
+  expect(onClose).toHaveBeenCalledOnce();
 });
