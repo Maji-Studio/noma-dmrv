@@ -181,7 +181,7 @@ it('stock history advisory sees the Sent lineage used by correction posting', as
     const [product] = await db.select().from(biocharProducts).where(and(eq(biocharProducts.organizationId, TEST_ORG_ID), eq(biocharProducts.id, fixture.productId)));
     const rows = await getOutputStockAllocationProjection(makeTestOrgContext(), { deliveryId: fixture.deliveryId });
     expect(rows.length).toBeGreaterThan(0);
-    expect(await outputMovementLockReason(makeTestOrgContext(), product.storageLocationId!, rows[0].movement.id, db, { original: rows[0].movement, facilityId: fixture.facilityId, all: rows, layers: [] })).toContain('certification submission');
+    expect(await outputMovementLockReason(makeTestOrgContext(), product.storageLocationId!, rows[0].movement.id, db, { original: rows[0].movement, facilityId: fixture.facilityId, all: rows, layers: [] })).toContain(`Held by Removal ${fixture.removalId}.`);
   });
 });
 

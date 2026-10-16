@@ -48,8 +48,7 @@ export function formatCertificationLineageLockMessage({
   lineageRelationship,
   lock = SENT_LOCK,
 }: CertificationLineageLockMessageInput): string {
-  const holder = lock.heldBy.filter(item => item.id !== "removal").map(item => `${item.kind === "removal" ? "Removal" : "GHG Statement"} ${item.label ?? item.id}`).join(", ");
-  const holderDetail = holder ? ` Held by ${holder}.` : "";
+  const holderDetail = formatCertificationHolderDetail(lock);
   if (subjectEntityType === lineageEntityType) {
     return withRecordLockGuidance(`Cannot ${mutation} this ${ENTITY_LABELS[subjectEntityType]} because it is locked by a certification submission.${holderDetail}`, lock);
   }
@@ -63,6 +62,11 @@ export function formatCertificationLineageLockMessage({
   return relationship === "selected"
     ? `${explanation} Select ${article} ${lineageLabel} that is not locked.`
     : withRecordLockGuidance(explanation, lock);
+}
+
+export function formatCertificationHolderDetail(lock: RecordLock): string {
+  const holder = lock.heldBy.filter(item => item.id !== "removal").map(item => `${item.kind === "removal" ? "Removal" : "GHG Statement"} ${item.label ?? item.id}`).join(", ");
+  return holder ? ` Held by ${holder}.` : "";
 }
 
 export function formatCertifierMappingLockMessage(action: "change" | "unlink"): string {

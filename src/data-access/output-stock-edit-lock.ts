@@ -2,6 +2,7 @@ import { db, type DbTransaction } from '@/db';
 import { binMovements, biocharProducts, productionRuns, storageLocations, outputStockMoistureReadings } from '@/db/schema';
 import type { OrgContext } from '@/lib/auth/server';
 import type { RecordLock } from '@/lib/record-lock';
+import { formatCertificationHolderDetail } from '@/lib/certification/lineage-lock-message';
 import { SafeError } from '@/lib/errors';
 import { DomainError } from '@/lib/domain-errors';
 import { conflictCode } from '@/lib/conflict-ref';
@@ -63,7 +64,7 @@ export async function outputMovementLockReason(ctx: OrgContext, storageLocationI
       locks = movementLocks.get(movementId) ?? [];
     }
     const sent = locks.find(lock => lock.level === 'sent');
-    if (sent) return `This stock entry is locked by a certification submission. ${sent.howToFree}`;
+    if (sent) return `This stock entry is locked by a certification submission.${formatCertificationHolderDetail(sent)} ${sent.howToFree}`;
     await assertOutputCorrectionDependencies(ctx, { storageLocationId, facilityId }, original, allocations, all, layers, reader);
     return null;
   } catch (error) {
