@@ -49,6 +49,13 @@ FORMULATION_FIXTURE = {
     "archiveFormulationId": ARCHIVE_FORMULATION_ID, "archiveFormulationEtag": FORMULATION_ETAG,
     "restoreFormulationId": RESTORE_FORMULATION_ID, "restoreFormulationEtag": RESTORE_FORMULATION_ETAG,
 }
+PARTY_FIXTURE = {"facilityId": FIXTURE_ID, "supplierId": FIXTURE_ID, "customerId": FIXTURE_ID,
+                 "supplierEtag": '\"1.2\"', "customerEtag": '\"1.2\"'}
+for index, party in enumerate(("Supplier", "Customer")):
+    for offset, purpose in enumerate(("delete", "archive", "restore")):
+        target = f"{index + 1}{offset + 1}111111-1111-4111-8111-111111111111"
+        PARTY_FIXTURE[purpose + party + "Id"] = target
+        PARTY_FIXTURE[purpose + party + "Etag"] = '\"2.2\"' if purpose == "restore" else '\"1.2\"'
 FLOAT_MULTIPLE_OF_ARTIFACT = 330796.723
 TARGET_KINDS = ("FACILITY", "SUPPLIER", "FEEDSTOCK_TYPE", "BIN", "DRIVER", "VEHICLE", "FEEDSTOCK", "REACTOR", "PRODUCTION_RUN", "BIOCHAR_BIN", "BIOCHAR_PRODUCT", "PURE_FORMULATION", "CREDIT_BATCH", "LAB_SAMPLE", "CUSTOMER", "ORDER", "DELIVERY")
 for kind in TARGET_KINDS:
@@ -70,7 +77,7 @@ document_fixtures = [
     for owner in ("delivery", "feedstock", "lab_sample", "application")
 ]
 document_fixture_path = Path(document_fixture_directory.name) / "fixture.json"
-document_fixture_path.write_text(json.dumps({**FORMULATION_FIXTURE, "documents": document_fixtures, "applicationId": FIXTURE_ID, "applicationCode": "AP-FUZZ",
+document_fixture_path.write_text(json.dumps({**FORMULATION_FIXTURE, **PARTY_FIXTURE, "documents": document_fixtures, "applicationId": FIXTURE_ID, "applicationCode": "AP-FUZZ",
     "applicationEtag": '"1.1"', "applicationDeliveryId": RUN_BIN_ID, "applicationDeliveryCode": "DL-FUZZ-APP",
     "applicationDate": "2026-10-09", "applicationGpsLatitude": -8.3, "applicationGpsLongitude": 35.3}))
 os.environ["API_FUZZ_FIXTURE"] = str(document_fixture_path)
@@ -154,6 +161,76 @@ class HarnessTests(unittest.TestCase):
                 self.assertIn("412", checks.positive_data_acceptance.expected_statuses)
                 self.assertIn("412", checks.negative_data_rejection.expected_statuses)
                 self.assertIn("428", checks.missing_required_header.expected_statuses)
+
+    def party_examples(self, path, method):
+        operation = schema[path][method]
+        examples = []
+        hook("before_add_examples")(HookContext(operation=operation), examples)
+        return examples
+
+    def test_party_commands_use_distinct_targets_in_the_required_start_state(self):
+        check = hook("after_load_schema").__globals__["seeded_example_success"]
+        for plural, party in (("suppliers", "Supplier"), ("customers", "Customer")):
+            for command, expected_version in (("archive", 1), ("restore", 2)):
+                case, = self.party_examples(f"/{plural}/{{idOrCode}}/{command}", "POST")
+                parameter, = case.operation.path_parameters
+                self.assertEqual(case.path_parameters, {parameter.name: PARTY_FIXTURE[command + party + "Id"]})
+                self.assertNotEqual(case.path_parameters[parameter.name], PARTY_FIXTURE["delete" + party + "Id"])
+                self.assertEqual(case.headers["If-Match"], f'"{expected_version}.2"')
+                self.assertEqual(case.body, {})
+                self.assertEqual(case.query, {"dryRun": "true"})
+                self.assertTrue(case.meta.generation.mode.is_positive)
+                states = {
+                    PARTY_FIXTURE["archive" + party + "Id"]: {"version": 1, "archived": False},
+                    PARTY_FIXTURE["restore" + party + "Id"]: {"version": 2, "archived": True},
+                }
+                state = states[case.path_parameters[parameter.name]]
+                version = int(case.headers["If-Match"].strip('"').split(".")[0])
+                status = 200 if state["version"] == version and state["archived"] == (command == "restore") else 409
+                check(None, SimpleNamespace(status_code=status), case)
+                for status in (404, 409, 412, 422):
+                    with self.assertRaises(AssertionError):
+                        check(None, SimpleNamespace(status_code=status), case)
+            patch_case, = self.party_examples(f"/{plural}/{{idOrCode}}", "PATCH")
+            delete_case, = self.party_examples(f"/{plural}/{{idOrCode}}", "DELETE")
+            self.assertEqual(patch_case.headers["If-Match"], PARTY_FIXTURE[party.lower() + "Etag"])
+            self.assertEqual(delete_case.path_parameters, {"idOrCode": PARTY_FIXTURE["delete" + party + "Id"]})
+
+    def test_party_create_examples_exercise_distance_and_location_count_boundaries(self):
+        for plural in ("suppliers", "customers"):
+            cases = self.party_examples(f"/{plural}", "POST")
+            self.assertEqual(len(cases), 6)
+            self.assertEqual([case.body["locations"][0]["facilityDistances"][0]["distanceKm"] for case in cases[:3]], [0.001, 20000, 20000.001])
+            self.assertEqual([len(case.body["locations"]) for case in cases[4:]], [50, 51])
+            self.assertEqual(cases[3].body["locations"][0]["facilityDistances"][0]["distanceKm"], 5e-324)
+            for case, valid in zip(cases, (True, True, False, False, True, False)):
+                self.assertEqual(case._validate_component(ParameterLocation.BODY, case.body, schema.adapter.jsonschema_validator_cls), valid)
+                self.assertEqual(case.meta.generation.mode.is_positive, valid)
+                self.assertEqual(case.query, {"dryRun": "true"})
+                self.assertTrue(case.headers["Idempotency-Key"])
+                check = hook("after_load_schema").__globals__["seeded_example_success" if valid else "seeded_party_boundary_rejection"]
+                problem = {"code": "validation_failed", "errors": [{"pointer": "/locations/0/facilityDistances/0/distanceKm"}]}
+                check(None, SimpleNamespace(status_code=201 if valid else 422, json=lambda: problem), case)
+                with self.assertRaises(AssertionError):
+                    check(None, SimpleNamespace(status_code=409 if valid else 201), case)
+
+    def test_party_boundary_refusals_identify_locations_validation(self):
+        check = hook("after_load_schema").__globals__["seeded_party_boundary_rejection"]
+        for plural in ("suppliers", "customers"):
+            for case in self.party_examples(f"/{plural}", "POST"):
+                if case.meta.generation.mode.is_positive:
+                    continue
+                for pointer in ("/locations", "/locations/50", "/locations/0/facilityDistances/0/distanceKm"):
+                    problem = {"code": "validation_failed", "errors": [{"pointer": pointer}]}
+                    check(None, SimpleNamespace(status_code=422, json=lambda: problem), case)
+                for problem in (
+                    {"code": "conflict", "errors": [{"pointer": "/locations"}]},
+                    {"code": "validation_failed", "errors": []},
+                    {"code": "validation_failed", "errors": [{"pointer": "/name"}]},
+                    {"code": "validation_failed", "errors": [{"pointer": "/locationsElsewhere"}]},
+                ):
+                    with self.assertRaises(AssertionError):
+                        check(None, SimpleNamespace(status_code=422, json=lambda: problem), case)
 
     def test_formulation_commands_are_distinct_successful_transitions(self):
         for command, target, etag, archived in (
@@ -251,8 +328,9 @@ class HarnessTests(unittest.TestCase):
             cases = ExamplesGenerator(operation=operation, as_strategy_kwargs={}, feedback=FeedbackSources(), fill_missing=False)
             seeded.extend(case for case in cases if case.meta.phase.data.description.startswith("Seeded fixture"))
         # Earlier phases contribute 44 cases. Formulations add two successful
-        # creates and four mutations; the ratio refusal is counted separately.
-        self.assertEqual(len(seeded), 50)
+        # creates and four mutations. Parties add six creates and eight mutations;
+        # ratio and party boundary refusals are counted separately.
+        self.assertEqual(len(seeded), 64)
         stock = next(case for case in seeded if case.operation.label == "GET /storage-locations/{idOrCode}/stock")
         self.assertEqual(stock.path_parameters, {"idOrCode": FIXTURE_ID})
         self.assertTrue(stock.meta.generation.mode.is_positive)
@@ -480,6 +558,14 @@ class HarnessTests(unittest.TestCase):
                 target = ARCHIVE_FORMULATION_ID
             elif operation.path.endswith("/restore"):
                 target = RESTORE_FORMULATION_ID
+            for plural, party in (("suppliers", "Supplier"), ("customers", "Customer")):
+                if operation.path.startswith(f"/{plural}/"):
+                    if operation.method.upper() == "DELETE":
+                        target = PARTY_FIXTURE["delete" + party + "Id"]
+                    elif operation.path.endswith("/archive"):
+                        target = PARTY_FIXTURE["archive" + party + "Id"]
+                    elif operation.path.endswith("/restore"):
+                        target = PARTY_FIXTURE["restore" + party + "Id"]
             self.assertEqual(examples[0].path_parameters, {"idOrCode": target})
             if operation.method.upper() == "POST" and not operation.path.endswith(("/archive", "/restore")):
                 # The stock-movement create: a dry run with its own key.
@@ -491,11 +577,11 @@ class HarnessTests(unittest.TestCase):
             self.assertFalse("If-Match" in for_operation(schema.config, operation=operation).headers)
             if operation.method.upper() in {"PATCH", "DELETE"}:
                 self.assertEqual(examples[0].query, {"dryRun": "true"})
-                etags = {"/deliveries/": DELIVERY_ETAG, "/production-runs/": RUN_ETAG, "/biochar-products/": PRODUCT_ETAG, "/lab-samples/": LAB_SAMPLE_ETAG, "/formulations/": FORMULATION_ETAG, "/orders/": DELETE_ORDER_ETAG if operation.method.upper() == "DELETE" else ORDER_ETAG}
+                etags = {"/deliveries/": DELIVERY_ETAG, "/production-runs/": RUN_ETAG, "/biochar-products/": PRODUCT_ETAG, "/lab-samples/": LAB_SAMPLE_ETAG, "/formulations/": FORMULATION_ETAG, "/suppliers/": PARTY_FIXTURE["supplierEtag"], "/customers/": PARTY_FIXTURE["customerEtag"], "/orders/": DELETE_ORDER_ETAG if operation.method.upper() == "DELETE" else ORDER_ETAG}
                 etag = etags.get(next((prefix for prefix in etags if operation.path.startswith(prefix)), ""), FEEDSTOCK_ETAG)
                 self.assertEqual(examples[0].headers["If-Match"], etag)
             count += 1
-        self.assertEqual(count, 39)
+        self.assertEqual(count, 47)
 
     def test_seeded_positive_examples_must_return_2xx(self):
         check = hook("after_load_schema").__globals__["seeded_example_success"]
@@ -755,7 +841,7 @@ class HarnessTests(unittest.TestCase):
         for result in schema.get_all_operations():
             operation = result.ok()
             checks = schema.config.checks_config_for(operation=operation, phase="coverage")
-            has_if_match = operation.method.upper() in {"PATCH", "DELETE"} or operation.path in {"/formulations/{idOrCode}/archive", "/formulations/{idOrCode}/restore"}
+            has_if_match = operation.method.upper() in {"PATCH", "DELETE"} or operation.path.endswith(("/archive", "/restore"))
             self.assertEqual(has_if_match, any(parameter.name == "If-Match" for parameter in operation.headers))
             self.assertEqual("428" in checks.missing_required_header.expected_statuses, has_if_match)
             self.assertNotIn("400", checks.positive_data_acceptance.expected_statuses)

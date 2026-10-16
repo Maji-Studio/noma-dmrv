@@ -63,6 +63,8 @@ vi.mock("@/hooks/use-customers", () => ({
   useCreateCustomerWithLocations: () => ({ isPending: false, mutateAsync: harness.create }),
   useUpdateCustomer: () => ({ isPending: false, mutateAsync: harness.update }),
   useDeleteCustomer: () => ({ isPending: false, mutateAsync: vi.fn() }),
+  useArchiveCustomer: () => ({ isPending: false, mutateAsync: vi.fn() }),
+  useRestoreCustomer: () => ({ isPending: false, mutateAsync: vi.fn() }),
 }));
 vi.mock("@/hooks/use-debounce", () => ({ useDebounce: (value: unknown) => value }));
 vi.mock("@/hooks/use-list-pagination", () => ({

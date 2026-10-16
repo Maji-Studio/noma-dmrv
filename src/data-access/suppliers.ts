@@ -8,14 +8,12 @@ import type { FacilityDistanceInput } from "@/schemas/facility-distances";
  * CRUD operations for suppliers with auth guards, pagination, and filtering
  */
 
-import { ne, and, asc, desc, eq, ilike, inArray, or, SQL, count } from "drizzle-orm";
+import { isNull, isNotNull, ne, and, asc, desc, eq, ilike, inArray, or, SQL, count } from "drizzle-orm";
 import { db } from "@/db";
-import { isPgForeignKeyViolation } from "@/db/errors";
 import type { OrgContext } from "@/lib/auth/server";
 import {
   suppliers,
   supplierLocations,
-  feedstocks,
   type Supplier,
   type SupplierLocation,
 } from "@/db/schema";
@@ -29,17 +27,7 @@ import {
 } from "./supplier-detail";
 
 /** Entity keys on a supplier's and a supplier location's version conflicts. */
-const SUPPLIER_CONFLICT_ENTITY = "supplier";
 const SUPPLIER_LOCATION_CONFLICT_ENTITY = "supplierLocation";
-
-const SUPPLIER_INTAKE_BLOCKER =
-  "Supplier was not deleted because feedstock intakes still use it. Review the linked intakes or keep this supplier.";
-const SUPPLIER_LOCATION_BLOCKER =
-  "Cannot delete this supplier because it has linked locations. Refresh and try again.";
-const SUPPLIER_DELETE_CONSTRAINTS = [
-  ["feedstocks_supplier_id_suppliers_id_fk", SUPPLIER_INTAKE_BLOCKER],
-  ["supplier_locations_supplier_id_suppliers_id_fk", SUPPLIER_LOCATION_BLOCKER],
-] as const;
 
 // ============================================
 // Types
@@ -49,29 +37,6 @@ export type SupplierWithRelations = Supplier & {
   /** Default (or first) structured source-location label for list display. */
   defaultLocationDisplay?: string | null;
 };
-
-interface SupplierCreateFields {
-  code: string;
-  name: string;
-  location?: string | null;
-  address?: string | null;
-  contactName?: string | null;
-  contactEmail?: string | null;
-  contactPhone?: string | null;
-  sourceRegion?: string | null;
-}
-
-interface SupplierLocationCreateFields {
-  name?: string | null;
-  country: string;
-  stateRegion?: string | null;
-  city?: string | null;
-  gpsLatitude: number;
-  gpsLongitude: number;
-  address?: string | null;
-  facilityDistances?: FacilityDistanceInput[];
-  isDefault?: boolean;
-}
 
 export interface PaginatedSuppliers {
   items: SupplierWithRelations[];
@@ -86,8 +51,8 @@ export interface PaginatedSuppliers {
 // ============================================
 
 import { requireOrgScope } from "./utils";
+import { partyArchived } from "@/lib/party-domain-errors";
 import { SafeError } from "@/lib/errors";
-import { guardSupplierName } from "./unique-name-guards";
 
 // Supplier records are organization-owned. `suppliers.userId` is retained for
 // create-time attribution.
@@ -156,6 +121,7 @@ export async function getSuppliers(
 
   const {
     search,
+    archived = false,
     location,
     page = 1,
     pageSize = 20,
@@ -165,6 +131,7 @@ export async function getSuppliers(
 
   const conditions: SQL[] = [
     eq(suppliers.organizationId, ctx.organizationId),
+    archived ? isNotNull(suppliers.archivedAt) : isNull(suppliers.archivedAt),
   ];
 
   if (search) {
@@ -224,6 +191,7 @@ export async function getSuppliers(
       createdAt: suppliers.createdAt,
       version: suppliers.version,
       updatedAt: suppliers.updatedAt,
+      archivedAt: suppliers.archivedAt,
     })
     .from(suppliers)
     .where(whereClause)
@@ -298,274 +266,6 @@ export async function getSupplierById(
   return supplier;
 }
 
-// ============================================
-// Supplier Create Operations
-// ============================================
-
-/**
- * Create a new supplier
- */
-export async function createSupplier(
-  ctx: OrgContext,
-  data: SupplierCreateFields
-): Promise<Supplier> {
-  requireOrgScope(ctx);
-
-  // Insert-time code violations stay raw so `withAutoCode` can retry races.
-  const [supplier] = await guardSupplierName(ctx, data.name, () =>
-    db
-      .insert(suppliers)
-      .values({
-        organizationId: ctx.organizationId,
-        userId: ctx.userId,
-        code: data.code,
-        name: data.name,
-        location: data.location ?? null,
-        address: data.address ?? null,
-        contactName: data.contactName ?? null,
-        contactEmail: data.contactEmail ?? null,
-        contactPhone: data.contactPhone ?? null,
-        sourceRegion: data.sourceRegion ?? null,
-      })
-      .returning()
-  );
-
-  return supplier;
-}
-
-export async function createSupplierWithLocations(
-  ctx: OrgContext,
-  data: SupplierCreateFields & { locations: SupplierLocationCreateFields[] }
-): Promise<Supplier> {
-  requireOrgScope(ctx);
-
-  if (data.locations.length === 0) {
-    throw new SafeError("At least one location is required");
-  }
-
-  // Supplier + all initial locations commit (or roll back) together. The
-  // in-transaction pre-check covers an already-committed duplicate code; an
-  // insert-time unique violation (concurrent auto-code collision) propagates
-  // raw so withAutoCode can detect and retry it. Mirrors createFacility.
-  return guardSupplierName(ctx, data.name, () =>
-    db.transaction(async (tx) => {
-    const [existing] = await tx
-      .select({ id: suppliers.id })
-      .from(suppliers)
-      .where(
-        and(
-          eq(suppliers.code, data.code),
-          eq(suppliers.organizationId, ctx.organizationId),
-        ),
-      );
-
-    if (existing) {
-      throw new SafeError("A supplier with this code already exists");
-    }
-
-    const [supplier] = await tx
-      .insert(suppliers)
-      .values({
-        organizationId: ctx.organizationId,
-        userId: ctx.userId,
-        code: data.code,
-        name: data.name,
-        location: data.location ?? null,
-        address: data.address ?? null,
-        contactName: data.contactName ?? null,
-        contactEmail: data.contactEmail ?? null,
-        contactPhone: data.contactPhone ?? null,
-        sourceRegion: data.sourceRegion ?? null,
-      })
-      .returning();
-
-    let defaultIndex = 0;
-    data.locations.forEach((location, index) => {
-      if (location.isDefault === true) defaultIndex = index;
-    });
-
-    const insertedLocations = await tx.insert(supplierLocations).values(
-      data.locations.map((location, index) => ({
-        organizationId: ctx.organizationId,
-        supplierId: supplier.id,
-        name: location.name ?? null,
-        country: location.country,
-        stateRegion: location.stateRegion ?? null,
-        city: location.city ?? null,
-        gpsLatitude: location.gpsLatitude,
-        gpsLongitude: location.gpsLongitude,
-        address: location.address ?? null,
-        isDefault: index === defaultIndex,
-      }))
-    ).returning();
-    for (const [index, location] of insertedLocations.entries()) {
-      await upsertLocationFacilityDistances(ctx, tx, "supplier", location.id, data.locations[index].facilityDistances);
-    }
-
-    return supplier;
-    })
-  );
-}
-
-// ============================================
-// Supplier Update Operations
-// ============================================
-
-/**
- * Update an existing supplier
- */
-export async function updateSupplier(
-  ctx: OrgContext,
-  supplierId: string,
-  data: {
-    code?: string;
-    name?: string;
-    location?: string | null;
-    address?: string | null;
-    contactName?: string | null;
-    contactEmail?: string | null;
-    contactPhone?: string | null;
-    sourceRegion?: string | null;
-    /** `version` the edit form loaded; refuses a save built on a stale read. */
-    expectedVersion: number;
-  }
-): Promise<Supplier> {
-  requireOrgScope(ctx);
-  await ensureSupplierExists(ctx, supplierId);
-  const { expectedVersion, ...supplierData } = data;
-
-  // One transaction so the row lock below spans the version check, the code
-  // duplicate probe and the write they guard.
-  return db.transaction(async (tx) => {
-    const [existing] = await tx
-      .select()
-      .from(suppliers)
-      .where(
-        and(
-          eq(suppliers.id, supplierId),
-          eq(suppliers.organizationId, ctx.organizationId),
-        ),
-      )
-      .for("update");
-
-    if (!existing) {
-      throw new SafeError("Supplier not found");
-    }
-    assertRowVersion({
-      entity: SUPPLIER_CONFLICT_ENTITY,
-      id: supplierId,
-      expectedVersion,
-      actualVersion: existing.version,
-    });
-
-    // If code is being changed, check for duplicates
-    if (supplierData.code && supplierData.code !== existing.code) {
-      const [duplicate] = await tx
-        .select({ id: suppliers.id })
-        .from(suppliers)
-        .where(
-          and(
-            eq(suppliers.code, supplierData.code),
-            eq(suppliers.organizationId, ctx.organizationId),
-          ),
-        );
-
-      if (duplicate) {
-        throw new SafeError("A supplier with this code already exists");
-      }
-    }
-
-    const [updated] = await guardSupplierName(
-      ctx,
-      supplierData.name ?? existing.name,
-      () =>
-        tx
-          .update(suppliers)
-          .set({
-            ...supplierData,
-            version: nextVersion(suppliers.version),
-            updatedAt: new Date(),
-          })
-          .where(
-            and(
-              eq(suppliers.id, supplierId),
-              eq(suppliers.organizationId, ctx.organizationId),
-            ),
-          )
-          .returning()
-    );
-
-    if (!updated) {
-      throw new SafeError("Supplier not found");
-    }
-
-    return updated;
-  });
-}
-
-// ============================================
-// Supplier Delete Operations
-// ============================================
-
-/**
- * Delete a supplier
- * Refuses linked intakes or deliveries without removing any locations.
- */
-export async function deleteSupplier(
-  ctx: OrgContext,
-  supplierId: string,
-  expectedVersion: number
-): Promise<void> {
-  requireOrgScope(ctx);
-  try {
-    await db.transaction(async (tx) => {
-    const [versioned] = await tx.select({ version: suppliers.version })
-      .from(suppliers)
-      .where(and(eq(suppliers.id, supplierId), eq(suppliers.organizationId, ctx.organizationId)))
-      .for("update");
-    if (!versioned) throw new SafeError("Supplier not found");
-    assertRowVersion({ entity: SUPPLIER_CONFLICT_ENTITY, id: supplierId, expectedVersion, actualVersion: versioned.version });
-
-      // These are the restrictive references to suppliers. No schema table
-      // references supplier_locations; their own parent FK is handled below.
-      const [intake] = await tx
-        .select({ id: feedstocks.id })
-        .from(feedstocks)
-        .where(and(
-          eq(feedstocks.supplierId, supplierId),
-          eq(feedstocks.organizationId, ctx.organizationId),
-        ))
-        .limit(1);
-      if (intake) throw new SafeError(SUPPLIER_INTAKE_BLOCKER);
-
-      // FKs remain the race backstop after prechecks. Any refusal rolls back
-      // every child deletion together with the parent, before error mapping.
-      await tx.delete(supplierLocations).where(and(
-        eq(supplierLocations.supplierId, supplierId),
-        eq(supplierLocations.organizationId, ctx.organizationId),
-      ));
-      const [deleted] = await tx.delete(suppliers).where(and(
-        eq(suppliers.id, supplierId),
-        eq(suppliers.organizationId, ctx.organizationId),
-      )).returning({ id: suppliers.id });
-      if (!deleted) throw new SafeError("Supplier not found");
-    });
-  } catch (error) {
-    for (const [constraint, message] of SUPPLIER_DELETE_CONSTRAINTS) {
-      if (isPgForeignKeyViolation(error, constraint)) throw new SafeError(message);
-    }
-    throw error;
-  }
-}
-
-// ============================================
-// Utility Operations
-// ============================================
-
-// ============================================
-// Supplier Location Operations
-// ============================================
-
 export async function getSupplierLocationsBySupplier(
   ctx: OrgContext,
   supplierId: string
@@ -602,11 +302,12 @@ export async function createSupplierLocation(
     // Serialize location writers with parent deletion before locking children.
     // Pair saves also wait for intake FK inserts, so fill-only cannot miss an
     // intake committing with a missing distance. The lock does not bump version.
-    const [parent] = await tx.select({ id: suppliers.id })
+    const [parent] = await tx.select({ id: suppliers.id, code: suppliers.code, archivedAt: suppliers.archivedAt })
       .from(suppliers)
       .where(and(eq(suppliers.id, data.supplierId), eq(suppliers.organizationId, ctx.organizationId)))
       .for(data.facilityDistances?.length ? "update" : "no key update");
     if (!parent) throw new SafeError("Supplier not found");
+    if (parent.archivedAt) throw partyArchived("supplier", parent.code);
 
     // The supplier's first location is always its default.
     const [{ value: existingCount }] = await tx
@@ -696,11 +397,12 @@ export async function updateSupplierLocation(
     // Serialize location writers with parent deletion before locking children.
     // Pair saves also wait for intake FK inserts, so fill-only cannot miss an
     // intake committing with a missing distance. The lock does not bump version.
-    const [parent] = await tx.select({ id: suppliers.id })
+    const [parent] = await tx.select({ id: suppliers.id, code: suppliers.code, archivedAt: suppliers.archivedAt })
       .from(suppliers)
       .where(and(eq(suppliers.id, supplierId), eq(suppliers.organizationId, ctx.organizationId)))
       .for(data.facilityDistances?.length || promotionPairs.length ? "update" : "no key update");
     if (!parent) throw new SafeError("Supplier not found");
+    if (parent.archivedAt) throw partyArchived("supplier", parent.code);
 
     const [locked] = await tx
       .select({ version: supplierLocations.version, isDefault: supplierLocations.isDefault })

@@ -42,6 +42,9 @@ import { OrderForm } from "./order-form";
 import { orderSheetSections } from "./order-read-sections";
 import { ILLUSTRATION_SIZE, OrderArt } from "@/components/ui/illustrations";
 
+/** The customer filter also lists archived customers, so their orders stay findable. */
+const ORDER_CUSTOMER_FILTER_OPTIONS = { includeArchived: "true" };
+
 // ============================================
 // Column Definitions
 // ============================================
@@ -428,6 +431,8 @@ export function OrderList() {
               onChange={(value) => { setCustomerFilter(value ?? ""); setCurrentPage(1); }}
               placeholder="Filter by customer"
               noneOption={{ label: "All customers" }}
+              // Orders of an archived customer stay findable, so the filter lists it too.
+              filterBy={ORDER_CUSTOMER_FILTER_OPTIONS}
               alwaysShowSearch
               className="w-full sm:w-[200px]"
             />

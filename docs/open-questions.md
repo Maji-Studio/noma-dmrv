@@ -598,7 +598,7 @@ before allowing confirmation to convert stored entry values to the new unit.
 
 - `src/lib/stale-version.ts:throwActionError` rethrows a failed action as a plain
   `Error` carrying only the message, so the server's refusal `code` and meta are
-  lost. `src/components/formulations/formulation-notices.tsx:isFormulationInUseRefusal`
+  lost. `src/components/ui/lifecycle-notices.tsx:isInUseDeleteRefusal` (marker in `src/lib/delete-refusal.ts`)
   therefore matches the message text to offer "Archive instead". Carry the action
   error code and meta to the client (for example on a typed error subclass) so
   refusal UIs branch on the code, not on copy.
