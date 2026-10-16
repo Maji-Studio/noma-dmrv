@@ -995,5 +995,10 @@ Supplier-location-update and customer-field-missing-gps move to 7c because they
 need `add_*_location`. Supplier/customer UI and Playwright are Claude's commit 6.
 Customer-location archive/restore, default reassignment and last-active refusal
 ship in 7c with its migration and location write tools.
+Review round 2 on #1133 left two P2s for 7c: point the app party schemas
+(`src/schemas/customers.ts`, `suppliers.ts`, `facility-distances.ts`) at the
+`src/config/party-input.ts` bounds so app create and location saves refuse what
+the runner refuses; and refresh or close a deep-linked archived sheet after a
+stale Restore, so a retry uses the refreshed detail version.
 
 The plan file was 984 lines before this fix round; 7c must move Phase 7 results to `docs/archive/` first, as Phase 6a did.
