@@ -221,7 +221,8 @@ async function changeFormulationArchiveState(
     version: nextVersion(formulations.version), updatedAt: sql`now()`,
   }).where(and(eq(formulations.organizationId, ctx.organizationId), eq(formulations.id, formulationId), archive ? isNull(formulations.archivedAt) : isNotNull(formulations.archivedAt))).returning();
   if (!saved) throw formulationArchiveConflict(locked.code, archive);
-  capture?.(formulationId, locked, saved);
+  // Status transitions record from/to status without field changes.
+  capture?.(formulationId, saved, saved);
   return readBack(ctx, tx, formulationId);
 }
 

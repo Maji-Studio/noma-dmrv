@@ -56,8 +56,8 @@ async function compareEvents(ids: string[], operation: string) {
   const effects = {
     create_formulation: { action: "created", versionBefore: null, versionAfter: 1, changedFields: ["biocharRatio", "code", "lines", "name"] },
     update_formulation: { action: "updated", versionBefore: 1, versionAfter: 2, changedFields: ["biocharRatio", "description", "lines", "name"] },
-    archive_formulation: { action: "status_changed", versionBefore: 2, versionAfter: 3, changedFields: ["archivedAt"], fromStatus: "active", toStatus: "archived" },
-    restore_formulation: { action: "status_changed", versionBefore: 3, versionAfter: 4, changedFields: ["archivedAt"], fromStatus: "archived", toStatus: "active" },
+    archive_formulation: { action: "status_changed", versionBefore: 2, versionAfter: 3, changedFields: [], fromStatus: "active", toStatus: "archived" },
+    restore_formulation: { action: "status_changed", versionBefore: 3, versionAfter: 4, changedFields: [], fromStatus: "archived", toStatus: "active" },
     delete_formulation: { action: "deleted", versionBefore: 4, versionAfter: null, changedFields: [] },
   };
   for (const [event] of rows) expect(event).toMatchObject(effects[operation as keyof typeof effects]);
@@ -68,11 +68,6 @@ async function compareEvents(ids: string[], operation: string) {
     } else if (operation === "update_formulation") {
       expect(event.changes).toEqual({ biocharRatio: { from: "0.7", to: "0.6" },
         name: { from: "Compost blend", to: "Changed blend" } });
-    } else if (operation === "archive_formulation") {
-      expect(event.changes).toEqual({ archivedAt: { from: null, to: (await read(event.entityId)).archivedAt } });
-    } else if (operation === "restore_formulation") {
-      const archived = (await events(event.entityId)).find(row => row.operationId === "archive_formulation")!;
-      expect(event.changes).toEqual({ archivedAt: { from: archived.changes.archivedAt.to, to: null } });
     } else expect(event.changes).toEqual({});
   }
   const normalize = (event: typeof rows[number][number]) => Object.fromEntries(
