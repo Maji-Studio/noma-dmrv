@@ -160,12 +160,13 @@ async function events(ids: string[], operation: string) {
   const rows = await db.select().from(activityEvents).where(eq(activityEvents.organizationId, a.ctx.organizationId)).orderBy(activityEvents.sequence);
   return rows.filter(event => ids.includes(event.entityId) && event.operationId === operation);
 }
-function comparableEvents(rows: Awaited<ReturnType<typeof events>>, kind: Kind) {
-  // App creates and updates describe private parent form fields, which APIs cannot send.
-  const privateFields = kind === "supplier" ? ["address", "location", "contactName", "contactEmail", "contactPhone"] : ["address", "contactEmail", "contactPhone"];
+function comparableEvents(rows: Awaited<ReturnType<typeof events>>) {
   return rows.map(event => ({ action: event.action, entityType: event.entityType, operationId: event.operationId,
     versionBefore: event.versionBefore, versionAfter: event.versionAfter, fromStatus: event.fromStatus, toStatus: event.toStatus,
-    changedFields: event.entityType === kind ? event.changedFields.filter(field => !privateFields.includes(field)) : event.changedFields })).sort((x, y) => JSON.stringify(x).localeCompare(JSON.stringify(y)));
+    changedFields: event.changedFields,
+    // Separate fixture organizations generate different codes and parent IDs.
+    changes: domainFields(event.changes),
+  })).sort((x, y) => JSON.stringify(x).localeCompare(JSON.stringify(y)));
 }
 
 describe.each(["supplier", "customer"] as const)("%s three-way parity", kind => {
@@ -209,12 +210,12 @@ describe.each(["supplier", "customer"] as const)("%s three-way parity", kind => 
         }
         if (command === "create" || command === "patch") {
           const parent = activity.find(event => event.entityType === kind)!;
-          const common = command === "create" ? ["locations", "name", kind === "supplier" ? "sourceRegion" : "cropType"] : ["name", kind === "supplier" ? "sourceRegion" : "cropType"];
-          const privateFields = kind === "supplier" ? ["address", "location", "contactName", "contactEmail", "contactPhone"] : ["address", "contactEmail", "contactPhone"];
-          expect(parent.changedFields).toEqual([...common, ...(surface === "form" ? privateFields : [])].sort());
+          expect(parent.changedFields).toEqual([
+            ...(command === "create" ? ["code"] : []), "name", kind === "supplier" ? "sourceRegion" : "cropType",
+          ].sort());
         }
         const normalized = { ...state, pairs: state.pairs.map(pair => ({ ...pair, locationId: undefined })) };
-        observations.push({ state: domainFields(normalized), activity: comparableEvents(activity, kind) });
+        observations.push({ state: domainFields(normalized), activity: comparableEvents(activity) });
       };
       await observe("create");
       for (const [command, version] of [["patch", 1], ["archive", 2], ["restore", 3], ["delete", 4]] as const) {

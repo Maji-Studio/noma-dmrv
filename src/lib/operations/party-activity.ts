@@ -1,26 +1,18 @@
+import type { CaptureActivity } from "@/lib/activity-changes";
 import type { OperationScope } from "./runner";
 
-const INITIAL_VERSION = 1;
-/** Queue child effects for the runner to audit alongside the parent effect. */
+/** Capture each persisted child transition before queuing its event. */
 export function recordPartyLocationActivity(
   { activity }: OperationScope,
   kind: "supplier" | "customer",
-  action: "created" | "deleted",
-  locations: { id: string; version: number }[],
-): void {
-  for (const location of locations) {
+): CaptureActivity {
+  return (id, before, after) => {
+    activity.capture(id, before, after);
     activity.extra({
-      outcome: action, entityType: `${kind}_location`, entityIds: [location.id],
-      versionBefore: action === "created" ? null : location.version,
-      versionAfter: action === "created" ? INITIAL_VERSION : null,
-      changedFields: [],
+      outcome: after === null ? "deleted" : before === null ? "created" : "updated",
+      entityType: `${kind}_location`, entityIds: [id],
+      versionBefore: before === null ? null : Number(before.version),
+      versionAfter: after === null ? null : Number(after.version),
     });
-    if (action === "created" && location.version > INITIAL_VERSION) {
-      activity.extra({
-        outcome: "updated", entityType: `${kind}_location`, entityIds: [location.id],
-        versionBefore: INITIAL_VERSION,
-        versionAfter: location.version, changedFields: ["isDefault"],
-      });
-    }
-  }
+  };
 }

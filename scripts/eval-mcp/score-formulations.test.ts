@@ -6,9 +6,9 @@ import type { Transcript } from "./transcript";
 const baseline: FormulationSnapshot = {
   formulations: [{ id: "target", code: "BCF-1", name: "Original", biocharRatio: 1, version: 1, archivedAt: null, updatedAt: "before" },
     { id: "other", code: "BCF-2", name: "Other", biocharRatio: 1, version: 1, archivedAt: null }],
-  lines: [], feedstockTypes: [{ id: "compost", name: "Compost", usage: "blend" }], orders: [],
+  lines: [], feedstockTypes: [{ id: "compost", name: "Compost", usage: "blend" }], orders: [], products: [], stock: [],
 };
-const target: FormulationTarget = { formulationId: "target", code: "BCF-1", compostTypeId: "compost", before: baseline };
+const target: FormulationTarget = { formulationId: "target", code: "BCF-1", name: "Original", compostTypeId: "compost", before: baseline };
 const transcript = (finalText = "Done.", calls: Transcript["calls"] = []): Transcript =>
   ({ calls, finalText, completed: true, durationMs: null, turns: null });
 const blend = (): FormulationSnapshot => ({ ...structuredClone(baseline),
@@ -47,6 +47,7 @@ it("requires an unchanged database and app-first feedstock-type advice for an un
 
 it.each([
   ['Add a "Rock dust" feedstock type with blend usage in Noma first', true],
+  [`I haven't created the formulation yet. Your organization has no rock dust feedstock type for it to use. ... The 30% rock dust has to be a line that points to a blend-usage feedstock type, and I can't create feedstock types through this connection. How do you want to go ahead? 1. **Add a "Rock dust" feedstock type in the Noma app** (blend usage), then tell me. I'll create "Compost blend" with 70% biochar and 30% rock dust.`, true],
   ["You don't need to add a feedstock type in the app first", false],
 ])("scores app-first feedstock-type advice: %s", (finalText, expected) => {
   expect(scoreFormulationCase("formulation-unknown-ingredient", target, baseline, transcript(finalText)).passed).toBe(expected);
@@ -67,7 +68,7 @@ it("requires the order delete guard explanation and no changes", () => {
 it("archives only the requested row, preserving all other facts and bumping its version once", () => {
   const snapshot = structuredClone(baseline);
   Object.assign(snapshot.formulations[0], { version: 2, archivedAt: "2026-10-16T12:00:00.000Z", updatedAt: "after" });
-  const score = (state = snapshot) => scoreFormulationCase("formulation-archived", target, state, transcript());
+  const score = (state = snapshot) => scoreFormulationCase("formulation-archive", target, state, transcript());
   expect(score().passed).toBe(true);
   for (const change of [{ version: 1 }, { version: 3 }, { archivedAt: null }, { archivedAt: "invalid" }, { name: "Changed" }]) {
     const wrong = structuredClone(snapshot); Object.assign(wrong.formulations[0], change);
@@ -110,7 +111,49 @@ it("gives each case only the scopes its grounding and write need", () => {
     ["formulation-blend", ["formulations:write", "feedstock-types:read"], 5],
     ["formulation-unknown-ingredient", ["formulations:write", "feedstock-types:read"], 5],
     ["formulation-guarded-delete", ["formulations:read", "formulations:delete"], 4],
-    ["formulation-archived", ["formulations:read", "formulations:write"], 4],
+    ["formulation-archive", ["formulations:read", "formulations:write"], 4],
+    ["formulation-archived", ["biochar-products:write", "biochar-products:read", "storage-locations:read", "facilities:read", "production-runs:read", "formulations:read"], 8],
     ["formulation-restore", ["formulations:read", "formulations:write"], 4],
   ]);
+});
+
+const archivedBaseline = structuredClone(baseline);
+archivedBaseline.formulations[0].archivedAt = "2026-10-16T00:00:00Z";
+const archivedTarget = { ...target, before: archivedBaseline };
+
+it.each([
+  ["The formulation is archived, so I could not make the product.", true],
+  ["Original has been archived. Nothing was saved.", true],
+  ["BCF-1 is currently archived in Noma. Restore it in the app before making product.", true],
+  ["I found an archived formulation named Original and left it unchanged.", true],
+  ["Original's status is archived. Please choose another formulation.", true],
+  ["The formulation is not archived. I could not make the product.", false],
+  ["Original isn't archived.", false],
+  ["Original has not been archived.", false],
+  ["Original is no longer archived.", false],
+  ["I cannot confirm whether Original is archived.", false],
+  ["If Original is archived, restore it first.", false],
+  ["The product bin is archived.", false],
+  ["Nothing was saved. Please choose another formulation.", false],
+])("scores an archived product request explanation: %s", (text, expected) => {
+  expect(scoreFormulationCase("formulation-archived", archivedTarget, archivedBaseline, transcript(text)).passed).toBe(expected);
+});
+
+it("requires an unchanged snapshot, an archived target and no successful restore", () => {
+  const text = "Original is archived in Noma, so no product was saved.";
+  const score = (state = archivedBaseline, calls: Transcript["calls"] = []) =>
+    scoreFormulationCase("formulation-archived", archivedTarget, state, transcript(text, calls));
+  expect(score().passed).toBe(true);
+  for (const field of ["products", "stock", "orders", "lines"] as const) {
+    const state = structuredClone(archivedBaseline);
+    Object.assign(state, { [field]: [{ id: "unexpected" }] });
+    expect(score(state).passed).toBe(false);
+  }
+  expect(score(baseline).passed).toBe(false);
+  expect(scoreFormulationCase("formulation-archived", target, baseline, transcript(text)).passed).toBe(false);
+  const restore = { id: "restore", name: "mcp__noma__restore_formulation", arguments: { formulationId: "target" }, isError: false };
+  expect(score(archivedBaseline, [restore]).passed).toBe(false);
+  expect(score(archivedBaseline, [{ ...restore, isError: true }]).passed).toBe(true);
+  expect(FORMULATION_CASES.find(({ id }) => id === "formulation-archived")!.text(target))
+    .toBe("Make 500 kg of product with Original.");
 });

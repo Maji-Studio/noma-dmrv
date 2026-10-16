@@ -3,15 +3,19 @@
 import { getCertifierRemovalById } from "@/data-access/certifier-removals";
 import { getCo2eStoredPreviews } from "@/data-access/credit-batch-accounting";
 import { requireOrgFacility } from "@/data-access/utils";
+import { logger } from "@/lib/log";
 import { SafeError } from "@/lib/errors";
 import type { ActionResult } from "@/types/actions";
 import { withAction } from "../with-action";
 import { loadRemovalSubmissionContext } from "./certify-context-core";
 import {
   compileRemovalSubmission,
+  REMOVAL_COMPILATION_FAILED_MESSAGE,
   type CompiledRemovalSubmission,
   type RemovalSubmissionReview,
 } from "./removal-submission-build";
+import { evaluateRemovalBlockers } from "./removal-blockers-gate";
+import { legacyBlocker, type RemovalAdvisory, type RemovalBlocker } from "@/lib/certification/removal-blockers";
 import { prepareRemovalSubmission } from "./removal-submission-prepare";
 import { reviewPayloadHash } from "@/lib/certification/removal-review-hash";
 
@@ -19,6 +23,9 @@ export interface RemovalCompilationView {
   /** Null when preparation is blocked before anything could be compiled. */
   review: RemovalSubmissionReview | null;
   blockers: string[];
+  removalBlockers: RemovalBlocker[];
+  /** Non-blocking: recorded facts the active template cannot carry. Each has one repair destination. */
+  submissionAdvisories: RemovalAdvisory[];
   warnings: string[];
   snapshot: CompiledRemovalSubmission["snapshot"];
   compilationHash: string | null;
@@ -39,13 +46,24 @@ export async function loadRemovalCompilation(
 
     const ctx = await loadRemovalSubmissionContext(orgCtx, removalId, { refreshEnrichment: true });
     const preparation = prepareRemovalSubmission(ctx);
-    const preparationBlockers = preparation.blockers.map(
-      (blocker) => blocker.message,
-    );
+    let removalBlockers: RemovalBlocker[];
+    try {
+      removalBlockers = await evaluateRemovalBlockers({ orgCtx, removalId, ctx });
+    } catch (error) {
+      if (error instanceof SafeError) throw error;
+      logger.error(
+        { organizationId: orgCtx.organizationId, removalId },
+        "removal preflight build failed",
+      );
+      removalBlockers = [legacyBlocker(REMOVAL_COMPILATION_FAILED_MESSAGE)];
+    }
+    const blockers = removalBlockers.map((blocker) => blocker.message);
     if (!preparation.prepared) {
       return {
         review: null,
-        blockers: preparationBlockers,
+        blockers,
+        removalBlockers,
+        submissionAdvisories: [...(ctx.submissionAdvisories ?? [])],
         warnings: [...(ctx.submissionWarnings ?? [])],
         snapshot: null,
         compilationHash: null,
@@ -61,6 +79,14 @@ export async function loadRemovalCompilation(
       prepared: preparation.prepared,
       allowPendingSources: true,
     });
+    // Rich review compilation also walks candidate Sources. Append its blockers
+    // after the gate's list, deduplicated by message, so operators see all details
+    // and any blocker still prevents a snapshot or hash.
+    for (const message of compiled.blockers) {
+      if (blockers.includes(message)) continue;
+      removalBlockers.push(legacyBlocker(message));
+      blockers.push(message);
+    }
     const previews = await getCo2eStoredPreviews(
       orgCtx,
       ctx.memberBatches.map((batch) => batch.id),
@@ -77,11 +103,12 @@ export async function loadRemovalCompilation(
         batchPreviews.flatMap((preview) => preview?.missingInputs ?? []),
       ),
     ];
-    const blockers = [...new Set([...preparationBlockers, ...compiled.blockers])];
 
     return {
       review: compiled.review,
       blockers,
+      removalBlockers,
+      submissionAdvisories: [...(ctx.submissionAdvisories ?? [])],
       warnings: compiled.warnings,
       snapshot: blockers.length === 0 ? compiled.snapshot : null,
       compilationHash:

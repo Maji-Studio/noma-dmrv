@@ -1,9 +1,9 @@
+import { diffActivityChanges } from "@/lib/activity-changes";
 import { supplierLocationFacilityDistances } from "@/db/schema";
-import { recordScopedWriteActivity, resolveWriteActivityScopes } from "./write-activity";
+import { recordScopedActivityChange, resolveWriteActivityScopes } from "./write-activity";
 import type { ActivityEventInput } from "./activity-events";
 import { assertRowVersion, nextVersion } from "./row-version";
 import { deliveryProductAllocations } from "./delivery-allocation-provenance";
-import { massGrams } from "./delivery-allocation-math";
 // `transport_legs.entity_id` is polymorphic and not FK-constrained, so every
 // read of a single leg and every write resolves the parent chain back to a
 // facility via `resolveEntityFacility`. Swap for `requireFacilityAccess` once
@@ -280,9 +280,9 @@ export async function createTransportLeg(
       })
       .returning();
     const [saved] = rows;
-    if (saved) await recordScopedWriteActivity(ctx, tx, {
+    if (saved) await recordScopedActivityChange(ctx, tx, {
       entityType: "transport_leg", entityId: saved.id, action: "created", source: "form",
-    }, await resolveWriteActivityScopes(ctx, tx, saved.entityType, saved.entityId));
+    }, await resolveWriteActivityScopes(ctx, tx, saved.entityType, saved.entityId), null, saved);
     return rows;
   });
 
@@ -340,10 +340,9 @@ export async function updateTransportLeg(
       .where(and(eq(transportLegs.id, id), eq(transportLegs.organizationId, ctx.organizationId)))
       .returning();
     const [saved] = rows;
-    if (saved) await recordScopedWriteActivity(ctx, tx, {
+    if (saved) await recordScopedActivityChange(ctx, tx, {
       entityType: "transport_leg", entityId: saved.id, action: "updated", source: "form",
-      changedFields: Object.keys(input).filter(field => field !== "expectedVersion" && input[field as keyof typeof input] !== undefined),
-    }, await resolveWriteActivityScopes(ctx, tx, saved.entityType, saved.entityId));
+    }, await resolveWriteActivityScopes(ctx, tx, saved.entityType, saved.entityId), versionRow, saved);
     return rows;
   });
 
@@ -387,9 +386,9 @@ export async function deleteTransportLeg(
     if (!versionRow) throw new SafeError("Transport leg not found");
     assertRowVersion({ entity: "transportLeg", id, expectedVersion, actualVersion: versionRow.version });
     const activityScopes = await resolveWriteActivityScopes(ctx, tx, versionRow.entityType, versionRow.entityId);
-    await recordScopedWriteActivity(ctx, tx, {
+    await recordScopedActivityChange(ctx, tx, {
       entityType: "transport_leg", entityId: id, action: "deleted", source: "form",
-    }, activityScopes);
+    }, activityScopes, versionRow, null);
     const rows = await tx
       .delete(transportLegs)
       .where(and(eq(transportLegs.id, id), eq(transportLegs.organizationId, ctx.organizationId)))
@@ -423,9 +422,9 @@ export async function deleteTransportLegsForEntity(
     eq(transportLegs.entityId, entityId),
     eq(transportLegs.organizationId, ctx.organizationId),
   )).returning({ id: transportLegs.id });
-  for (const leg of legs) await recordScopedWriteActivity(ctx, tx, {
+  for (const leg of legs) await recordScopedActivityChange(ctx, tx, {
     entityType: "transport_leg", entityId: leg.id, action: "deleted", source,
-  }, scopes);
+  }, scopes, leg, null);
   return legs.map((leg) => ({
     entityType: "transport_leg",
     entityId: leg.id,
@@ -466,9 +465,9 @@ async function replaceDerivedTransportLeg(
       )
       .for("update");
     const scopes = await resolveWriteActivityScopes(ctx, tx, entityType, entityId);
-    for (const leg of derivedLegs) await recordScopedWriteActivity(ctx, tx, {
+    for (const leg of derivedLegs) await recordScopedActivityChange(ctx, tx, {
       entityType: "transport_leg", entityId: leg.id, action: "deleted", source: "system", actorUserId: ctx.userId,
-    }, scopes);
+    }, scopes, leg, null);
     await tx
       .delete(transportLegs)
       .where(
@@ -519,15 +518,6 @@ async function replaceDerivedTransportLeg(
     eq(transportLegs.entityId, entityId),
     eq(transportLegs.isDerived, true),
   ));
-  const changedFields = (Object.keys(fields) as (keyof typeof fields)[])
-    .filter(key => {
-      if (!existing) return true;
-      // Compare at PostgreSQL real precision, including its text round-trip.
-      if (key === "distanceKm") return Math.fround(existing.distanceKm) !== Math.fround(fields.distanceKm);
-      // Aggregated load masses can contain floating-point addition noise.
-      if (key === "loadMassKg") return existing.loadMassKg == null || massGrams(existing.loadMassKg) !== massGrams(fields.loadMassKg);
-      return existing[key] !== fields[key];
-    });
   const [saved] = await tx
     .insert(transportLegs)
     .values({ organizationId: ctx.organizationId, entityType, entityId, isDerived: true, ...fields })
@@ -536,11 +526,10 @@ async function replaceDerivedTransportLeg(
       targetWhere: sql`${transportLegs.isDerived} = true`,
       set: { ...fields, version: nextVersion(transportLegs.version), updatedAt: new Date() },
     }).returning();
-  if (!existing || changedFields.length > 0) await recordScopedWriteActivity(ctx, tx, {
+  if (!existing || diffActivityChanges("transport_leg", existing, saved).changedFields.length > 0) await recordScopedActivityChange(ctx, tx, {
     entityType: "transport_leg", entityId: saved.id,
     action: saved.version === INITIAL_TRANSPORT_LEG_VERSION ? "created" : "updated", source: "system", actorUserId: ctx.userId,
-    changedFields: saved.version === INITIAL_TRANSPORT_LEG_VERSION ? [] : changedFields,
-  }, await resolveWriteActivityScopes(ctx, tx, entityType, entityId));
+  }, await resolveWriteActivityScopes(ctx, tx, entityType, entityId), existing ?? null, saved);
 }
 
 // ============================================

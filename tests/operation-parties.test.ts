@@ -86,6 +86,9 @@ describe("registered supplier operations", { timeout: TIMEOUT_MS }, () => {
     const reordered = { locations: [{ gpsLongitude: 34, city: "City", country: "TZ", name: "Source", gpsLatitude: -8, stateRegion: "Region" }], name: input.name };
     const replay = await runOperation(create, f.ctx, reordered, options);
     expect(replay.replayed).toBe(true);
+    expect(committed.effect?.changedFields).toEqual(["code", "name"]);
+    expect(preview.effect?.changedFields).toEqual(committed.effect?.changedFields);
+    expect(replay.effect).toEqual(committed.effect);
     const parsed = { supplier: supplierRepresentationSchema.parse(replay.data.supplier), locations: replay.data.locations.map(row => supplierLocationRepresentationSchema.parse(row)) };
     expect(JSON.stringify(parsed)).toBe(JSON.stringify(committed.data));
     await expect(runOperation(create, f.ctx, { ...input, name: "Other" }, options)).rejects.toMatchObject({ code: "idempotency_key_reused" });
@@ -187,6 +190,9 @@ describe("registered customer operations", { timeout: TIMEOUT_MS }, () => {
     const reordered = { locations: [{ gpsLongitude: 34, city: "City", country: "TZ", name: "Source", gpsLatitude: -8, stateRegion: "Region" }], name: input.name };
     const replay = await runOperation(create, f.ctx, reordered, options);
     expect(replay.replayed).toBe(true);
+    expect(committed.effect?.changedFields).toEqual(["code", "name"]);
+    expect(preview.effect?.changedFields).toEqual(committed.effect?.changedFields);
+    expect(replay.effect).toEqual(committed.effect);
     const parsed = { customer: customerRepresentationSchema.parse(replay.data.customer), locations: replay.data.locations.map(row => customerLocationRepresentationSchema.parse(row)) };
     expect(JSON.stringify(parsed)).toBe(JSON.stringify(committed.data));
     await expect(runOperation(create, f.ctx, { ...input, name: "Other" }, options)).rejects.toMatchObject({ code: "idempotency_key_reused" });

@@ -1,3 +1,4 @@
+import type { ActivityChanges } from "@/db/schema/activity";
 import { and, desc, eq, or, lt, isNull, count, sql } from "drizzle-orm";
 import { activityPageOptionsSchema, decodeActivityCursor, encodeActivityCursor, type ActivityPageOptions } from "@/lib/activity-pagination";
 import { activityFiltersSchema, type ActivityFilters } from "@/lib/activity-filters";
@@ -5,7 +6,7 @@ import { db } from "@/db";
 import { activityEvents, users } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import { activityIds, loadActivityMembers } from "./credit-batch-activity-members";
-import { resolveActivityRecords } from "./activity-record-labels";
+import { resolveActivityRecords, activityChangeLabels } from "./activity-record-labels";
 import { requireOrgScope } from "./utils";
 
 /** Explicit batch links take precedence over current membership fallbacks. */
@@ -61,7 +62,7 @@ async function resolveItems(ctx: OrgContext, items: typeof activityEvents.$infer
   const actorsById = new Map(actors.map(actor => [actor.id, actor]));
   return items.map(row => ({
     id: row.id, action: row.action, entityType: row.entityType, entityId: row.entityId,
-    changedFields: row.changedFields, fromStatus: row.fromStatus, toStatus: row.toStatus,
+    changedFields: row.changedFields, ...changePayload(row, records), fromStatus: row.fromStatus, toStatus: row.toStatus,
     fromRemote: row.fromRemote, toRemote: row.toRemote, source: row.source,
     occurredAt: row.occurredAt, registryAt: row.registryAt, reasonCode: row.reasonCode,
     actor: row.actorUserId ? actorsById.get(row.actorUserId) ?? { id: row.actorUserId, name: null } : null,
@@ -93,3 +94,10 @@ export type CreditBatchActivitySummary = {
   counts: (Pick<typeof activityEvents.$inferSelect, "entityType" | "action"> & { count: number })[];
   latest: CreditBatchActivityPage["items"][number] | null;
 };
+
+function changePayload(row: typeof activityEvents.$inferSelect, records: Awaited<ReturnType<typeof resolveActivityRecords>>): {
+  changes?: ActivityChanges; changeLabels?: ReturnType<typeof activityChangeLabels>;
+} {
+  if (row.action !== "updated") return {};
+  return { changes: row.changes, changeLabels: activityChangeLabels(row.entityType, row.changes, records, row.reasonCode) };
+}

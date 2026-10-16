@@ -50,6 +50,23 @@ describe("party runner writes", () => {
       source: "mcp", credentialId: "party-credential", requestId: "party-request", oauthClientId: "party-client", operationId: `create_${kind}`,
     });
   });
+  it("records persisted value changes and only names contact changes", async () => {
+    const f = await fixture();
+    const { supplier } = await runOperationInProcess(createSupplier, f.ctx, {
+      name: "Snapshot supplier", sourceRegion: "Mbeya", contactEmail: "before@example.test", locations: [location],
+    });
+    const result = await runOperation(updateSupplier, f.ctx, {
+      supplierId: supplier.id, expectedVersion: 1, name: supplier.name,
+      sourceRegion: "Iringa", contactEmail: "after@example.test",
+    });
+    expect(result.effect?.changedFields).toEqual(["contactEmail", "sourceRegion"]);
+    const [event] = await db.select().from(activityEvents).where(and(
+      eq(activityEvents.entityId, supplier.id), eq(activityEvents.action, "updated"),
+    ));
+    expect(event.changedFields).toEqual(["contactEmail", "sourceRegion"]);
+    expect(event.changes).toEqual({ sourceRegion: { from: "Mbeya", to: "Iringa" } });
+    expect(JSON.stringify(event, (_key, value: unknown) => typeof value === "bigint" ? value.toString() : value)).not.toContain("@example.test");
+  });
   it("creates three locations, keeps the last default, saves pairs and leaves locations alone on metadata edits", async () => {
     const f = await fixture();
     expect(db.$client.options.max).toBe(1);
@@ -72,7 +89,12 @@ describe("party runner writes", () => {
     expect(await db.select().from(supplierLocationFacilityDistances).where(eq(supplierLocationFacilityDistances.locationId, result.locations[0].id))).toEqual([]);
     const events = await db.select().from(activityEvents).where(eq(activityEvents.organizationId, f.ctx.organizationId));
     expect(events.filter(event => event.entityType === "supplier_location" && event.action === "created")).toHaveLength(3);
-    expect(events.filter(event => event.entityType === "supplier_location" && event.action === "updated")).toHaveLength(1);
+    expect(events.filter(event => event.entityType === "supplier_location" && event.action === "updated")).toMatchObject([
+      { changedFields: ["isDefault"], changes: { isDefault: { from: true, to: false } } },
+    ]);
+    expect(events.find(event => event.entityId === result.locations[0].id && event.action === "created")?.changes).toMatchObject({
+      isDefault: { from: null, to: true }, country: { from: null, to: "TZ" },
+    });
     expect(events.filter(event => event.entityType === "supplier_location" && event.action === "deleted")).toHaveLength(3);
   });
   it("deletes a customer and its locations together", async () => {

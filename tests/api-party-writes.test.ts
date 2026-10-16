@@ -354,6 +354,11 @@ describe.each(["supplier", "customer"] as const)("%s REST writes", kind => {
       { id: expect.any(String), version: 1, isDefault: true, facilityDistances: location().facilityDistances },
     ]);
     expect(new Set(committed.locations.map((row: { id: string }) => row.id)).size).toBe(body.locations.length);
+    const childEvents = await db.select().from(activityEvents).where(eq(activityEvents.entityId, committed.locations[0].id)).orderBy(activityEvents.sequence);
+    expect(childEvents).toMatchObject([
+      { action: "created", versionBefore: null, versionAfter: 1, changes: { isDefault: { from: null, to: true } } },
+      { action: "updated", versionBefore: 1, versionAfter: 2, changedFields: ["isDefault"], changes: { isDefault: { from: true, to: false } } },
+    ]);
     expect(domainFields(committed)).toEqual(domainFields(previewBody));
     const table = kind === "supplier" ? supplierLocations : customerLocations;
     const rows = await db.select().from(table).where(eq(table.organizationId, a.ctx.organizationId));

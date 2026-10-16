@@ -1,5 +1,5 @@
 {
-  "id": "a40c705e-69ea-489e-9072-a9135705e33c",
+  "id": "87b99b91-0610-4399-ac3d-92f74b53a3bb",
   "prevId": "be4581e6-73bc-432c-ba2b-ef8323079e8b",
   "version": "7",
   "dialect": "postgresql",
@@ -64,6 +64,13 @@
           "primaryKey": false,
           "notNull": true,
           "default": "'{}'::text[]"
+        },
+        "changes": {
+          "name": "changes",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::jsonb"
         },
         "from_status": {
           "name": "from_status",
@@ -325,7 +332,7 @@
       "checkConstraints": {
         "activity_events_entity_type": {
           "name": "activity_events_entity_type",
-          "value": "\"activity_events\".\"entity_type\" in ('removal', 'ghg_statement', 'production_run', 'biochar_product', 'lab_sample', 'order', 'delivery', 'application', 'credit_batch', 'document', 'transport_leg', 'feedstock', 'bin_movement', 'supplier', 'supplier_location', 'customer', 'customer_location', 'formulation')"
+          "value": "\"activity_events\".\"entity_type\" in ('removal', 'ghg_statement', 'production_run', 'biochar_product', 'lab_sample', 'order', 'delivery', 'application', 'credit_batch', 'document', 'transport_leg', 'feedstock', 'bin_movement')"
         },
         "activity_events_action": {
           "name": "activity_events_action",
@@ -11566,12 +11573,6 @@
         "description": {
           "name": "description",
           "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "archived_at": {
-          "name": "archived_at",
-          "type": "timestamp",
           "primaryKey": false,
           "notNull": false
         },

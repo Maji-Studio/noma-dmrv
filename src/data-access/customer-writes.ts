@@ -17,6 +17,7 @@
  * updates and deletes never request facility or downstream locks, so no reverse
  * edge is introduced against pair writers, facility archive or formulation writes.
  */
+import type { CaptureActivity } from "@/lib/activity-changes";
 import { and, asc, isNull, isNotNull, sql, eq } from "drizzle-orm";
 import { isPgForeignKeyViolation } from "@/db/errors";
 import type { DbTransaction } from "@/db";
@@ -40,7 +41,7 @@ export interface CreatedCustomerWithLocations {
   customer: Customer;
   locations: CustomerLocation[];
 }
-export async function createCustomerInTransaction(ctx: OrgContext, tx: DbTransaction, input: CreateCustomerInput & { code: string }): Promise<CreatedCustomerWithLocations> {
+export async function createCustomerInTransaction(ctx: OrgContext, tx: DbTransaction, input: CreateCustomerInput & { code: string }, capture?: CaptureActivity, captureLocation?: CaptureActivity): Promise<CreatedCustomerWithLocations> {
   requireOrgScope(ctx);
   const { code, ...body } = input;
   const parsed = createCustomerInput.safeParse(body);
@@ -58,10 +59,16 @@ export async function createCustomerInTransaction(ctx: OrgContext, tx: DbTransac
   }
   const saved = await tx.select().from(customerLocations).where(and(eq(customerLocations.organizationId, ctx.organizationId), eq(customerLocations.customerId, parent.id)));
   const enriched = await withLocationFacilityDistances(ctx, "customer", saved, tx);
+  capture?.(parent.id, null, parent);
+  for (const row of inserted) {
+    captureLocation?.(row.id, null, row);
+    const final = enriched.find(saved => saved.id === row.id)!;
+    if (final.version !== row.version) captureLocation?.(row.id, row, final);
+  }
   return { customer: parent, locations: inserted.map(row => enriched.find(saved => saved.id === row.id)!) };
 }
 
-export async function updateCustomerInTransaction(ctx: OrgContext, tx: DbTransaction, input: UpdateCustomerInput): Promise<Customer> {
+export async function updateCustomerInTransaction(ctx: OrgContext, tx: DbTransaction, input: UpdateCustomerInput, capture?: CaptureActivity): Promise<Customer> {
   requireOrgScope(ctx);
   const parsed = updateCustomerInput.safeParse(input);
   if (!parsed.success) throw validationFailed(parsed.error);
@@ -75,12 +82,13 @@ export async function updateCustomerInTransaction(ctx: OrgContext, tx: DbTransac
     guardCustomerName(ctx, tx, fields.name ?? locked.name, async savepoint => {
       const [saved] = await savepoint.update(customers).set({ ...fields, version: nextVersion(customers.version), updatedAt: new Date() })
         .where(and(eq(customers.organizationId, ctx.organizationId), eq(customers.id, customerId))).returning();
+      capture?.(saved.id, locked, saved);
       return saved;
     }));
 }
 
 /** Return deleted locations so the operation can record each child event. */
-export async function deleteCustomerInTransaction(ctx: OrgContext, tx: DbTransaction, input: CustomerVersionInput): Promise<(typeof customerLocations.$inferSelect)[]> {
+export async function deleteCustomerInTransaction(ctx: OrgContext, tx: DbTransaction, input: CustomerVersionInput, capture?: CaptureActivity, captureLocation?: CaptureActivity): Promise<(typeof customerLocations.$inferSelect)[]> {
   requireOrgScope(ctx);
   const { customerId, expectedVersion } = input;
   const [locked] = await tx.select().from(customers).where(and(eq(customers.organizationId, ctx.organizationId), eq(customers.id, customerId))).for("update");
@@ -112,6 +120,8 @@ export async function deleteCustomerInTransaction(ctx: OrgContext, tx: DbTransac
     if (isPgForeignKeyViolation(error, "certifier_storage_locations_customer_location_id_organization_i")) throw customerHasStorageSites(deletingLocationId ? [deletingLocationId] : []);
     throw error;
   }
+  capture?.(locked.id, locked, null);
+  for (const child of children) captureLocation?.(child.id, child, null);
   return children;
 }
 
@@ -121,6 +131,7 @@ async function changeCustomerArchiveState(
   tx: DbTransaction,
   { customerId, expectedVersion }: CustomerVersionInput,
   archive: boolean,
+  capture?: CaptureActivity,
 ): Promise<Customer> {
   requireOrgScope(ctx);
   const [locked] = await tx.select().from(customers)
@@ -133,15 +144,16 @@ async function changeCustomerArchiveState(
     version: nextVersion(customers.version), updatedAt: sql`now()`,
   }).where(and(eq(customers.organizationId, ctx.organizationId), eq(customers.id, customerId), archive ? isNull(customers.archivedAt) : isNotNull(customers.archivedAt))).returning();
   if (!saved) throw partyArchiveConflict("customer", locked.code, archive);
+  capture?.(saved.id, locked, locked);
   return saved;
 }
 
-export async function archiveCustomerInTransaction(ctx: OrgContext, tx: DbTransaction, input: CustomerVersionInput): Promise<Customer> {
+export async function archiveCustomerInTransaction(ctx: OrgContext, tx: DbTransaction, input: CustomerVersionInput, capture?: CaptureActivity): Promise<Customer> {
   requireOrgScope(ctx);
-  return changeCustomerArchiveState(ctx, tx, input, true);
+  return changeCustomerArchiveState(ctx, tx, input, true, capture);
 }
 
-export async function restoreCustomerInTransaction(ctx: OrgContext, tx: DbTransaction, input: CustomerVersionInput): Promise<Customer> {
+export async function restoreCustomerInTransaction(ctx: OrgContext, tx: DbTransaction, input: CustomerVersionInput, capture?: CaptureActivity): Promise<Customer> {
   requireOrgScope(ctx);
-  return changeCustomerArchiveState(ctx, tx, input, false);
+  return changeCustomerArchiveState(ctx, tx, input, false, capture);
 }

@@ -12,7 +12,7 @@ import { randomUUID } from "node:crypto";
 import { afterEach, describe, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { feedstocks, transportLegs, organizations, facilities, reactors, storageLocations, suppliers, supplierLocations, customers, customerLocations, formulations, feedstockTypes, facilityEmissionFactors } from "@/db/schema";
+import { feedstocks, transportLegs, organizations, facilities, reactors, storageLocations, suppliers, supplierLocations, customers, customerLocations, formulations, feedstockTypes } from "@/db/schema";
 import { createFeedstockInTransaction } from "@/data-access/feedstocks";
 import { updateFacility } from "@/data-access/facility-mutations";
 import { archiveFacility, restoreFacility } from "@/data-access/facilities";
@@ -22,7 +22,6 @@ import { createSupplierLocation, updateSupplierLocation, deleteSupplierLocation 
 import { createCustomerLocation, updateCustomerLocation, deleteCustomerLocation } from "@/data-access/customers";
 import { updateFormulationInTransaction, deleteFormulationInTransaction } from "@/data-access/formulation-writes";
 import { updateFeedstockType, archiveFeedstockType, unarchiveFeedstockType, deleteFeedstockType } from "@/data-access/feedstock-types";
-import { upsertFacilityEmissionFactors } from "@/data-access/facility-emission-factors";
 import { TEST_SITE_POSITION, makeTestOrgContext } from "./helpers/test-org";
 
 const INITIAL_VERSION = 1;
@@ -45,14 +44,13 @@ async function fixture({ unclaimedBin = false } = {}) {
   const [customer] = await db.insert(customers).values({ organizationId: ctx.organizationId, code: `CUS-${tag}`, name: "Customer" }).returning();
   const [customerLocation] = await db.insert(customerLocations).values({ ...TEST_SITE_POSITION, organizationId: ctx.organizationId, customerId: customer.id, name: "Location", isDefault: true }).returning();
   const [formulation] = await db.insert(formulations).values({ organizationId: ctx.organizationId, code: `FOR-${tag}`, name: "Formulation" }).returning();
-  const factors = await upsertFacilityEmissionFactors(ctx, { facilityId: facility.id, expectedVersion: null, dieselKgCo2ePerLitre: 2, gridKgCo2ePerKwh: 1, roadFreightKgCo2ePerTonneKm: 1, sourceNote: null });
-  return { ctx, facility, reactor, bin, supplier, supplierLocation, customer, customerLocation, formulation, feedstockType, factors };
+  return { ctx, facility, reactor, bin, supplier, supplierLocation, customer, customerLocation, formulation, feedstockType };
 }
 type Fixture = Awaited<ReturnType<typeof fixture>>;
 async function seed(options: Parameters<typeof fixture>[0] = {}) { const f = await fixture(options); fixtures.push(f); return f; }
 afterEach(async () => {
   for (const f of fixtures.splice(0)) {
-    for (const table of [transportLegs, feedstocks, facilityEmissionFactors, supplierLocations, customerLocations, reactors, storageLocations, formulations, feedstockTypes, suppliers, customers, facilities]) {
+    for (const table of [transportLegs, feedstocks, supplierLocations, customerLocations, reactors, storageLocations, formulations, feedstockTypes, suppliers, customers, facilities]) {
       await db.delete(table).where(eq(table.organizationId, f.ctx.organizationId));
     }
     await db.delete(organizations).where(eq(organizations.id, f.ctx.organizationId));
@@ -74,7 +72,6 @@ const cases: VersionCase[] = [
   { name: "customer location", update: (f, expectedVersion, address) => updateCustomerLocation(f.ctx, f.customerLocation.id, { expectedVersion, address }), remove: (f, v) => deleteCustomerLocation(f.ctx, f.customerLocation.id, v) },
   { name: "formulation", update: (f, expectedVersion, description) => db.transaction(tx => updateFormulationInTransaction(f.ctx, tx, { formulationId: f.formulation.id, ...{ expectedVersion, description } })), remove: (f, v) => db.transaction(tx => deleteFormulationInTransaction(f.ctx, tx, { formulationId: f.formulation.id, expectedVersion: v })) },
   { name: "feedstock type", update: (f, expectedVersion, description) => updateFeedstockType(f.ctx, { feedstockTypeId: f.feedstockType.id, expectedVersion, description }), remove: (f, v) => deleteFeedstockType(f.ctx, f.feedstockType.id, v) },
-  { name: "emission factors", update: (f, expectedVersion, sourceNote) => upsertFacilityEmissionFactors(f.ctx, { facilityId: f.facility.id, expectedVersion, sourceNote, dieselKgCo2ePerLitre: 2, gridKgCo2ePerKwh: 1, roadFreightKgCo2ePerTonneKm: 1 }) },
 ];
 
 describe.each(cases)("$name integer versions", ({ update, remove }) => {

@@ -1,9 +1,9 @@
 /**
- * The pieces of one energy record row: the per-source bar, and the expanded
- * breakdown with what was recorded, its estimate and any missing readings.
+ * The pieces of one energy record row: the diesel bar, and the expanded
+ * breakdown with what was recorded per source and any missing readings.
  */
 import { formatCount, MISSING_VALUE } from "@/lib/copy-utils";
-import { recordDieselLitres, recordKg } from "@/lib/energy/selection";
+import { recordDieselLitres } from "@/lib/energy/selection";
 import {
   DIESEL_SOURCE_KEYS,
   ENERGY_SOURCES,
@@ -12,7 +12,7 @@ import {
 } from "@/lib/energy/sources";
 import type { EnergyRecord, ReadingGap } from "@/lib/energy/types";
 import { formatMass } from "@/lib/format-utils";
-import { ENERGY_SOURCE_FILL, formatActivity, formatEstimate } from "./energy-display";
+import { ENERGY_SOURCE_FILL, formatActivity } from "./energy-display";
 
 const PERCENT = 100;
 const BAR_MIN_WIDTH_CLASS = "min-w-[96px]";
@@ -28,13 +28,11 @@ function sourcesFor(record: EnergyRecord): EnergySourceKey[] {
   return [...keys];
 }
 
-/** One bar per record, split by source: CO2e, or diesel litres without factors. */
+/** One bar per record, split by diesel use: the one unit shared across sources. */
 export function EnergySourceBar({ record }: { record: EnergyRecord }) {
-  const kg = record.footprint.kg;
-  const amounts = kg ?? record.footprint.activity;
-  const keys: readonly EnergySourceKey[] = kg ? sourcesFor(record) : DIESEL_SOURCE_KEYS;
-  const total = kg ? (recordKg(record) ?? 0) : recordDieselLitres(record);
-  const parts = keys.filter((key) => amounts[key] > 0);
+  const amounts = record.footprint.activity;
+  const total = recordDieselLitres(record);
+  const parts: EnergySourceKey[] = DIESEL_SOURCE_KEYS.filter((key) => amounts[key] > 0);
   const label = ENERGY_SOURCES.filter((s) => parts.includes(s.key))
     .map((s) => `${s.label} ${Math.round((amounts[s.key] / total) * PERCENT)}%`)
     .join(", ");
@@ -54,10 +52,9 @@ export function EnergySourceBar({ record }: { record: EnergyRecord }) {
   );
 }
 
-function gapText(gap: ReadingGap, leading: boolean): string {
+function gapText(gap: ReadingGap): string {
   const [singular, plural] = GAP_UNITS[gap.unit];
-  const text = `${gap.missing} of ${formatCount(gap.of, singular, plural)}`;
-  return leading ? `Not recorded on ${text}` : `not recorded on ${text}`;
+  return `Not recorded on ${gap.missing} of ${formatCount(gap.of, singular, plural)}`;
 }
 
 /** Caption under a source with no reading at all; null when there was one record. */
@@ -83,14 +80,14 @@ function recordNote(record: EnergyRecord): string | null {
 
 export function EnergyRecordBreakdown({ record }: { record: EnergyRecord }) {
   const note = recordNote(record);
-  const { activity, kg, gaps } = record.footprint;
+  const { activity, gaps } = record.footprint;
   return (
     <div className="flex flex-col gap-12 px-16 pb-16 pt-4">
       <dl className="grid grid-cols-1 gap-x-32 gap-y-8 sm:grid-cols-2 lg:grid-cols-3">
         {ENERGY_SOURCES.filter((source) => sourcesFor(record).includes(source.key)).map((source) => {
           const gap = gaps[source.key];
           // Absence is not a zero: with nothing recorded for the source, the
-          // readout is the token without a unit, never "0 kWh" or "est. 0 kg CO2e".
+          // readout is the token without a unit, never "0 kWh".
           const wholeGap = gap != null && !gap.recorded;
           return (
             <div key={source.key} className="flex items-start justify-between gap-12">
@@ -106,20 +103,10 @@ export function EnergyRecordBreakdown({ record }: { record: EnergyRecord }) {
                 <span className="body-small tabular-nums">
                   {wholeGap
                     ? MISSING_VALUE.notRecorded
-                    : kg
-                      ? formatEstimate(kg[source.key])
-                      : formatActivity(activity[source.key], source.unit)}
+                    : formatActivity(activity[source.key], source.unit)}
                 </span>
                 <span className="body-caption text-[var(--color-text-secondary)]">
-                  {wholeGap ? (
-                    wholeGapText(gap)
-                  ) : (
-                    <>
-                      {kg ? formatActivity(activity[source.key], source.unit) : null}
-                      {kg && gap ? ", " : null}
-                      {gap ? gapText(gap, !kg) : null}
-                    </>
-                  )}
+                  {wholeGap ? wholeGapText(gap) : gap ? gapText(gap) : null}
                 </span>
               </dd>
             </div>

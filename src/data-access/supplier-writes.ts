@@ -16,6 +16,7 @@
  * updates and deletes never request facility or downstream locks, so no reverse
  * edge is introduced against pair writers, facility archive or formulation writes.
  */
+import type { CaptureActivity } from "@/lib/activity-changes";
 import { and, asc, isNull, isNotNull, sql, count, eq } from "drizzle-orm";
 import { isPgForeignKeyViolation } from "@/db/errors";
 import type { DbTransaction } from "@/db";
@@ -38,7 +39,7 @@ export interface CreatedSupplierWithLocations {
   supplier: Supplier;
   locations: SupplierLocation[];
 }
-export async function createSupplierInTransaction(ctx: OrgContext, tx: DbTransaction, input: CreateSupplierInput & { code: string }): Promise<CreatedSupplierWithLocations> {
+export async function createSupplierInTransaction(ctx: OrgContext, tx: DbTransaction, input: CreateSupplierInput & { code: string }, capture?: CaptureActivity, captureLocation?: CaptureActivity): Promise<CreatedSupplierWithLocations> {
   requireOrgScope(ctx);
   const { code, ...body } = input;
   const parsed = createSupplierInput.safeParse(body);
@@ -55,10 +56,16 @@ export async function createSupplierInTransaction(ctx: OrgContext, tx: DbTransac
   }
   const saved = await tx.select().from(supplierLocations).where(and(eq(supplierLocations.organizationId, ctx.organizationId), eq(supplierLocations.supplierId, parent.id)));
   const enriched = await withLocationFacilityDistances(ctx, "supplier", saved, tx);
+  capture?.(parent.id, null, parent);
+  for (const row of inserted) {
+    captureLocation?.(row.id, null, row);
+    const final = enriched.find(saved => saved.id === row.id)!;
+    if (final.version !== row.version) captureLocation?.(row.id, row, final);
+  }
   return { supplier: parent, locations: inserted.map(row => enriched.find(saved => saved.id === row.id)!) };
 }
 
-export async function updateSupplierInTransaction(ctx: OrgContext, tx: DbTransaction, input: UpdateSupplierInput): Promise<Supplier> {
+export async function updateSupplierInTransaction(ctx: OrgContext, tx: DbTransaction, input: UpdateSupplierInput, capture?: CaptureActivity): Promise<Supplier> {
   requireOrgScope(ctx);
   const parsed = updateSupplierInput.safeParse(input);
   if (!parsed.success) throw validationFailed(parsed.error);
@@ -72,6 +79,7 @@ export async function updateSupplierInTransaction(ctx: OrgContext, tx: DbTransac
     guardSupplierName(ctx, tx, fields.name ?? locked.name, async savepoint => {
       const [saved] = await savepoint.update(suppliers).set({ ...fields, version: nextVersion(suppliers.version), updatedAt: new Date() })
         .where(and(eq(suppliers.organizationId, ctx.organizationId), eq(suppliers.id, supplierId))).returning();
+      capture?.(saved.id, locked, saved);
       return saved;
     }));
 }
@@ -167,7 +175,7 @@ export async function createSupplierLocationInTransaction(
 
 
 /** Return deleted locations so the operation can record each child event. */
-export async function deleteSupplierInTransaction(ctx: OrgContext, tx: DbTransaction, input: SupplierVersionInput): Promise<(typeof supplierLocations.$inferSelect)[]> {
+export async function deleteSupplierInTransaction(ctx: OrgContext, tx: DbTransaction, input: SupplierVersionInput, capture?: CaptureActivity, captureLocation?: CaptureActivity): Promise<(typeof supplierLocations.$inferSelect)[]> {
   requireOrgScope(ctx);
   const { supplierId, expectedVersion } = input;
   const [locked] = await tx.select().from(suppliers).where(and(eq(suppliers.organizationId, ctx.organizationId), eq(suppliers.id, supplierId))).for("update");
@@ -187,6 +195,8 @@ export async function deleteSupplierInTransaction(ctx: OrgContext, tx: DbTransac
     if (isPgForeignKeyViolation(error, "supplier_locations_supplier_id_suppliers_id_fk")) throw partyRefusal("conflict", "Cannot delete this supplier because it has linked locations. Refresh and try again.", ["supplierId"]);
     throw error;
   }
+  capture?.(locked.id, locked, null);
+  for (const child of children) captureLocation?.(child.id, child, null);
   return children;
 }
 
@@ -196,6 +206,7 @@ async function changeSupplierArchiveState(
   tx: DbTransaction,
   { supplierId, expectedVersion }: SupplierVersionInput,
   archive: boolean,
+  capture?: CaptureActivity,
 ): Promise<Supplier> {
   requireOrgScope(ctx);
   const [locked] = await tx.select().from(suppliers)
@@ -208,15 +219,16 @@ async function changeSupplierArchiveState(
     version: nextVersion(suppliers.version), updatedAt: sql`now()`,
   }).where(and(eq(suppliers.organizationId, ctx.organizationId), eq(suppliers.id, supplierId), archive ? isNull(suppliers.archivedAt) : isNotNull(suppliers.archivedAt))).returning();
   if (!saved) throw partyArchiveConflict("supplier", locked.code, archive);
+  capture?.(saved.id, locked, locked);
   return saved;
 }
 
-export async function archiveSupplierInTransaction(ctx: OrgContext, tx: DbTransaction, input: SupplierVersionInput): Promise<Supplier> {
+export async function archiveSupplierInTransaction(ctx: OrgContext, tx: DbTransaction, input: SupplierVersionInput, capture?: CaptureActivity): Promise<Supplier> {
   requireOrgScope(ctx);
-  return changeSupplierArchiveState(ctx, tx, input, true);
+  return changeSupplierArchiveState(ctx, tx, input, true, capture);
 }
 
-export async function restoreSupplierInTransaction(ctx: OrgContext, tx: DbTransaction, input: SupplierVersionInput): Promise<Supplier> {
+export async function restoreSupplierInTransaction(ctx: OrgContext, tx: DbTransaction, input: SupplierVersionInput, capture?: CaptureActivity): Promise<Supplier> {
   requireOrgScope(ctx);
-  return changeSupplierArchiveState(ctx, tx, input, false);
+  return changeSupplierArchiveState(ctx, tx, input, false, capture);
 }

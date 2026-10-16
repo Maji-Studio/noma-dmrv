@@ -22,6 +22,9 @@ export function toRemovalReadinessFacts(
     ? isLockedInFlight(ctx.latestSubmission) &&
       !canReclaimInterruptedSubmission(ctx.latestSubmission.metadata)
     : false;
+  // Feedstock issues are built from the same missingEntityIds used below.
+  // Transport readiness blocks them and carries their fix targets; including
+  // them here too would duplicate the entity-readiness row (#1024).
   const submissionLineageIssues = ctx.submissionLineageBlockers.filter(
     (blocker) => blocker.fixTarget !== "feedstocks",
   );
@@ -32,6 +35,7 @@ export function toRemovalReadinessFacts(
     hasMapping: !!ctx.mapping,
     hasRemovalTemplate: !!ctx.removalTemplate,
     templateBlockers: ctx.templateBlockers,
+    emissionLineBlockers: ctx.emissionLines?.flatMap((line) => line.blocker ? [line.blocker] : []),
     unresolvedBlueprintKeys: ctx.unresolvedBlueprintKeys,
     unbindableTemplateInputs: ctx.unbindableTemplateInputs,
     feedstockTypeMappingGaps: ctx.feedstockTypeMappingGaps ?? [],
@@ -41,6 +45,7 @@ export function toRemovalReadinessFacts(
     submissionLineageIssues,
     durabilityGateBlockers: ctx.durabilityGateBlockers ?? [],
     durabilityConfigurationBlockers: ctx.durabilityConfigurationBlockers,
+    templateTierBlocker: ctx.templateTierBlocker,
     futureDatedMeasurements: ctx.futureDatedMeasurements ?? [],
     supportingDocumentCount: ctx.supportingDocuments.total,
     mirroredDocumentCount: ctx.supportingDocuments.mirrored,

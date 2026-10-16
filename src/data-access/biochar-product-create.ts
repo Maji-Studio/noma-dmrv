@@ -1,6 +1,7 @@
+import type { CaptureActivity } from "@/lib/activity-changes";
 import { nextVersion } from "./row-version";
 import { db, type DbTransaction } from '@/db';
-import { biocharProducts, facilities, outputStockAllocations, productIngredientSnapshots, productionRuns, storageLocations, type BiocharProduct, type ProductIngredientSnapshot } from '@/db/schema';
+import { biocharProductSourceAllocations, biocharProducts, facilities, outputStockAllocations, productIngredientSnapshots, productionRuns, storageLocations, type BiocharProduct, type ProductIngredientSnapshot } from '@/db/schema';
 import type { OrgContext } from '@/lib/auth/server';
 import { SafeError } from '@/lib/errors';
 import { lockFormulationReference } from './formulation-reference-guards';
@@ -51,6 +52,7 @@ export interface CreatedBiocharProduct<Product = BiocharProduct> {
 }
 
 export interface CreateBiocharProductOptions extends OutputStockPostingOptions {
+  capture?: CaptureActivity;
   /** Injectable server clock for exact-boundary tests. */
   now?: Date;
   /** Operations supply only operator facts; resolve recipe metadata under its lock. */
@@ -182,6 +184,9 @@ export async function createBiocharProductInTransaction(ctx: OrgContext, tx: DbT
         moistureEstimate: (ingredient.moistureEstimate ?? null) as ProductIngredientSnapshot['moistureEstimate'], drySolidsKg: kilograms(grams(Number(ingredient.massDryKg))) });
     }
     if (!bin.formulationId) await writeTx.update(storageLocations).set({ version: nextVersion(storageLocations.version), formulationId: data.formulationId, updatedAt: new Date() }).where(and(eq(storageLocations.organizationId, ctx.organizationId), eq(storageLocations.id, bin.id)));
+    const sources = await writeTx.select().from(biocharProductSourceAllocations).where(and(eq(biocharProductSourceAllocations.organizationId, ctx.organizationId), eq(biocharProductSourceAllocations.biocharProductId, product.id)));
+    const ingredients = await writeTx.select().from(productIngredientSnapshots).where(and(eq(productIngredientSnapshots.organizationId, ctx.organizationId), eq(productIngredientSnapshots.biocharProductId, product.id)));
+    options.capture?.(product.id, null, { ...product, sources, ingredients });
     return { product, basisFingerprint: productBasis.basisFingerprint };
   } }, { snapshotStock: options.snapshotStock, onReplay: options.onReplay });
 }

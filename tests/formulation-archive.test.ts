@@ -46,6 +46,7 @@ describe("formulation archive and restore", { timeout: TIMEOUT_MS }, () => {
       { action: "status_changed", fromStatus: "active", toStatus: "archived", changedFields: [], versionBefore: 1, versionAfter: 2 },
       { action: "status_changed", fromStatus: "archived", toStatus: "active", changedFields: [], versionBefore: 2, versionAfter: 3 },
     ]);
+    expect(events.map(event => event.changes)).toEqual([{}, {}]);
   });
 
   it("replays a keyed archive after restore without touching the restored row or Activity", async () => {

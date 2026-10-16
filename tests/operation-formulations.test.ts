@@ -61,6 +61,21 @@ describe("registered formulation operations", { timeout: TIMEOUT_MS }, () => {
     await expect(readApiFormulation(f.ctx, { id: first.id })).rejects.toMatchObject({ code: "not_found" });
   });
 
+  it("records persisted ratio changes and omits unchanged re-sent fields and private values", async () => {
+    const f = await fixture();
+    const created = await runOperation(create, f.ctx, input);
+    const row = created.data.formulation;
+    const result = await runOperation(update, f.ctx, { formulationId: row.id, expectedVersion: 1,
+      name: row.name, biocharRatio: 0.75, description: "Private guidance", lines: [] });
+    const [event] = await db.select().from(activityEvents).where(and(
+      eq(activityEvents.entityId, row.id), eq(activityEvents.operationId, update.id),
+    ));
+    expect(event.changedFields).toEqual(["biocharRatio", "description"]);
+    expect(event.changes).toEqual({ biocharRatio: { from: "1", to: "0.75" } });
+    expect(result.effect?.changedFields).toEqual(event.changedFields);
+    expect(result.effect).not.toHaveProperty("changes");
+  });
+
   it("previews create without claiming a key, then replays reordered input and refuses changed input", async () => {
     const f = await fixture(); const options = keyOptions();
     const preview = await runOperation(create, f.ctx, input, { ...options, dryRun: true });

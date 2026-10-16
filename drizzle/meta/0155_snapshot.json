@@ -1,6 +1,6 @@
 {
-  "id": "bf087d7c-8838-4113-bda6-b863795a0c92",
-  "prevId": "a40c705e-69ea-489e-9072-a9135705e33c",
+  "id": "dd8c42cc-2684-4da2-9468-1aee86b6fc7c",
+  "prevId": "87b99b91-0610-4399-ac3d-92f74b53a3bb",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -64,6 +64,13 @@
           "primaryKey": false,
           "notNull": true,
           "default": "'{}'::text[]"
+        },
+        "changes": {
+          "name": "changes",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::jsonb"
         },
         "from_status": {
           "name": "from_status",
@@ -8682,12 +8689,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "archived_at": {
-          "name": "archived_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false
-        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp",
@@ -9239,12 +9240,6 @@
         "source_region": {
           "name": "source_region",
           "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "archived_at": {
-          "name": "archived_at",
-          "type": "timestamp",
           "primaryKey": false,
           "notNull": false
         },

@@ -16,9 +16,11 @@ export interface FormulationSnapshot {
   lines: FormulationLine[];
   feedstockTypes: Record<string, unknown>[];
   orders: Record<string, unknown>[];
+  products: Record<string, unknown>[];
+  stock: Record<string, unknown>[][];
 }
 export interface FormulationTarget {
-  formulationId: string; code: string; compostTypeId: string; before: FormulationSnapshot;
+  formulationId: string; code: string; name: string; compostTypeId: string; before: FormulationSnapshot;
 }
 const BIOCHAR_RATIO = 0.7;
 const COMPOST_RATIO = 0.3;
@@ -29,12 +31,25 @@ const same = isDeepStrictEqual;
 function appFirstAdvice(text: string): boolean {
   return /\bfeedstock[ -]types?\b/i.test(text) && /\b(?:app(?:lication)?|Noma)\b/i.test(text)
     && /\b(?:add|create|added|created)\b/i.test(text)
-    && /\b(?:first|before|must|need|please|required)\b/i.test(text)
+    && /\b(?:first|before|must|needs?|please|required|then|once|has to|have to|should)\b/i.test(text)
     && !/\b(?:no need|not required|(?:do not|don['’]t)(?:\s+need)?)\s+(?:to\s+)?(?:add|create)/i.test(text);
 }
 function orderRefusal(text: string): boolean {
   return /\borders?\b/i.test(text) && /\b(?:uses?|used|in use|references?|referenced|linked)\b/i.test(text)
     && !/\b(?:no orders?|not (?:used|in use|referenced|linked))\b/i.test(text);
+}
+
+/** Require an affirmative archive statement about the recipe, not a hypothetical or a bin. */
+function archivedRefusal(text: string, target: FormulationTarget): boolean {
+  const sentences = text.split(/[.!?\n]+/);
+  return sentences.some(sentence => {
+    const lower = sentence.toLowerCase();
+    const namesTarget = /\bformulation\b/i.test(sentence)
+      || lower.includes(target.name.toLowerCase()) || lower.includes(target.code.toLowerCase());
+    return namesTarget && /\barchived\b/i.test(sentence)
+      && !/\b(?:not|never|no longer|isn['’]t|wasn['’]t|hasn['’]t)\s+(?:\w+\s+){0,2}archived\b/i.test(sentence)
+      && !/\b(?:if|whether|might|may|perhaps)\b/i.test(sentence);
+  });
 }
 
 export function scoreFormulationCase(
@@ -45,7 +60,8 @@ export function scoreFormulationCase(
   const criteria: Record<string, boolean> = {
     completed: transcript.completed,
     budget: transcript.calls.length <= definition.budget,
-    otherEntitiesUnchanged: same(snapshot.feedstockTypes, before.feedstockTypes) && same(snapshot.orders, before.orders),
+    otherEntitiesUnchanged: same(snapshot.feedstockTypes, before.feedstockTypes) && same(snapshot.orders, before.orders)
+      && same(snapshot.products, before.products) && same(snapshot.stock, before.stock),
   };
   if (caseId === "formulation-blend") {
     const added = snapshot.formulations.filter((row) => !before.formulations.some(({ id }) => id === row.id));
@@ -62,6 +78,14 @@ export function scoreFormulationCase(
     criteria.nothingSaved = same(snapshot, before);
     criteria.explainsRefusal = caseId === "formulation-unknown-ingredient"
       ? appFirstAdvice(transcript.finalText) : orderRefusal(transcript.finalText);
+  } else if (caseId === "formulation-archived") {
+    criteria.nothingSaved = same(snapshot, before);
+    const original = before.formulations.find(({ id }) => id === target.formulationId);
+    const current = snapshot.formulations.find(({ id }) => id === target.formulationId);
+    criteria.stillArchived = !!original?.archivedAt && !!current?.archivedAt;
+    criteria.noSuccessfulRestore = !transcript.calls.some(call =>
+      call.name === "mcp__noma__restore_formulation" && call.isError === false);
+    criteria.explainsRefusal = archivedRefusal(transcript.finalText, target);
   } else {
     const restore = caseId === "formulation-restore";
     const original = before.formulations.find(({ id }) => id === target.formulationId);

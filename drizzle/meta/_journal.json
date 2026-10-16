@@ -1083,15 +1083,22 @@
     {
       "idx": 154,
       "version": "7",
-      "when": 1792142468820,
-      "tag": "0154_formulation_archive_master_data_activity",
+      "when": 1792142515357,
+      "tag": "0154_activity_field_values",
       "breakpoints": true
     },
     {
       "idx": 155,
       "version": "7",
-      "when": 1792145517420,
-      "tag": "0155_party_archive",
+      "when": 1792154763676,
+      "tag": "0155_formulation_archive_master_data_activity",
+      "breakpoints": true
+    },
+    {
+      "idx": 156,
+      "version": "7",
+      "when": 1792156808029,
+      "tag": "0156_party_archive",
       "breakpoints": true
     }
   ]

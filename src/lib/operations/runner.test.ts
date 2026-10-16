@@ -33,7 +33,10 @@ describe("shared operation runner", () => {
     const op = { ...operation, describe: () => effect, execute: async (scope: OperationScope, input: { amount: number }) => {
       scope.activity.link({ facilityId: "facility-id" });
       scope.activity.scope("location-id", [{ creditBatchId: "batch-id" }]);
-      await recordPartyLocationActivity(scope, "supplier", "created", [{ id: "location-id", version: 2 }]);
+      const capture = recordPartyLocationActivity(scope, "supplier");
+      const inserted = { id: "location-id", version: 1, country: "TZ", isDefault: true };
+      capture(inserted.id, null, inserted);
+      capture(inserted.id, inserted, { ...inserted, version: 2, isDefault: false });
       return operation.execute(scope, input);
     } };
     const audit = { transport: "mcp" as const, credentialId: "credential-id", requestId: "request-id", oauthClientId: "oauth-client-id" };
@@ -43,8 +46,8 @@ describe("shared operation runner", () => {
       expect(event).toMatchObject({ credentialId: audit.credentialId, requestId: audit.requestId, oauthClientId: audit.oauthClientId, source: "mcp", facilityId: "facility-id", operationId: operation.id });
     }
     expect(activity.mock.calls.filter(([, , event]) => event.entityType === "supplier_location").map(([, , event]) => event)).toMatchObject([
-      { action: "created", creditBatchId: "batch-id", versionBefore: null, versionAfter: 1 },
-      { action: "updated", creditBatchId: "batch-id", versionBefore: 1, versionAfter: 2, changedFields: ["isDefault"] },
+      { action: "created", creditBatchId: "batch-id", versionBefore: null, versionAfter: 1, changedFields: ["country", "isDefault"], changes: { country: { from: null, to: "TZ" }, isDefault: { from: null, to: true } } },
+      { action: "updated", creditBatchId: "batch-id", versionBefore: 1, versionAfter: 2, changedFields: ["isDefault"], changes: { isDefault: { from: true, to: false } } },
     ]);
     activity.mockClear();
     await runOperation(op, ctx, { amount: 1 }, { audit, dryRun: true });
@@ -60,7 +63,7 @@ describe("shared operation runner", () => {
 
   it.each([false, true])("includes queued effects in the audited row count, empty scopes: %s", async empty => {
     const op = { ...operation, describe: () => ({ outcome: "created" as const, entityType: "supplier", entityIds: [], versionBefore: null, versionAfter: 1, changedFields: [] }), execute: async (scope: OperationScope, input: { amount: number }) => {
-      recordPartyLocationActivity(scope, "supplier", "created", [{ id: "location-id", version: 1 }]);
+      recordPartyLocationActivity(scope, "supplier")("location-id", null, { id: "location-id", version: 1 });
       if (empty) scope.activity.scope("location-id", []);
       return operation.execute(scope, input);
     } };
@@ -87,7 +90,7 @@ describe("shared operation runner", () => {
 
   it.each(["form", "rest", "mcp", "script"] as const)("passes %s source to nested writers and uses it for runner activity", async source => {
     const execute = vi.fn(operation.execute);
-    const op = { ...operation, execute, describe: () => ({ outcome: "updated", entityType: "labSample", entityIds: ["sample-id"], versionBefore: 1, versionAfter: 2, changedFields: [] }) } satisfies Operation<typeof operation.input, { date: Date; amount: number }>;
+    const op = { ...operation, execute, describe: () => ({ outcome: "updated", entityType: "labSample", entityIds: ["sample-id"], versionBefore: 1, versionAfter: 2 }) } satisfies Operation<typeof operation.input, { date: Date; amount: number }>;
     if (source === "form") await runOperationInProcess(op, ctx, { amount: 1 });
     else if (source === "script") await runOperation(op, ctx, { amount: 1 }, { activitySource: source });
     else await runOperation(op, ctx, { amount: 1 }, { audit: { transport: source, requestId: "request-id", credentialId: "credential-id" } });
@@ -95,11 +98,15 @@ describe("shared operation runner", () => {
     expect(activity.mock.calls[0][2].source).toBe(source);
   });
 
-  const effect = { outcome: "created" as const, entityType: "productionRun", entityIds: ["run-a", "run-b"], versionBefore: null, versionAfter: 1, changedFields: ["amount"] };
-  const described = { ...operation, describe: () => effect };
+  const description = { outcome: "created" as const, entityType: "productionRun", entityIds: ["run-a", "run-b"], versionBefore: null, versionAfter: 1 };
+  const effect = { ...description, changedFields: ["amount"] };
+  const described = { ...operation, describe: () => ({ ...description }), execute: async (scope: OperationScope, input: { amount: number }) => {
+    for (const id of effect.entityIds) scope.activity.capture(id, null, { amount: input.amount });
+    return operation.execute(scope, input);
+  } };
   const auditOptions = { transport: "rest" as const, credentialId: "credential", requestId: "request" };
 
-  it.each(["form", "rest", "mcp", "script"] as const)("records one value-free activity per entity on %s using the runner transaction", async (source) => {
+  it.each(["form", "rest", "mcp", "script"] as const)("records one policy-filtered activity per entity on %s using the runner transaction", async (source) => {
     if (source === "form") await runOperationInProcess(described, ctx, { amount: 1 });
     else if (source === "script") await runOperation(described, ctx, { amount: 1 }, { activitySource: source });
     else await runOperation(described, ctx, { amount: 1 }, { audit: { ...auditOptions, transport: source } });
@@ -108,7 +115,7 @@ describe("shared operation runner", () => {
       expect(activity).toHaveBeenNthCalledWith(index + 1, ctx, tx, {
         operationId: operation.id, versionBefore: null, versionAfter: 1, oauthClientId: null,
         action: "created", entityType: "production_run", entityId, productionRunId: entityId,
-        facilityId: undefined, creditBatchId: undefined, changedFields: ["amount"], source,
+        facilityId: undefined, creditBatchId: undefined, changedFields: ["amount"], changes: {}, source,
         credentialId: (source === "form" || source === "script") ? undefined : auditOptions.credentialId,
         requestId: (source === "form" || source === "script") ? undefined : auditOptions.requestId,
       });
@@ -119,7 +126,7 @@ describe("shared operation runner", () => {
     const hook = vi.fn();
     const op = {
       ...described,
-      describe: () => ({ ...effect, entityIds: mode === "empty entities" ? [] : effect.entityIds }),
+      describe: () => ({ ...description, entityIds: mode === "empty entities" ? [] : effect.entityIds }),
       execute: async (scope: OperationScope, input: { amount: number }) => {
         scope.afterCommit(hook);
         if (mode === "empty scopes") for (const id of effect.entityIds) scope.activity.scope(id, []);
@@ -148,7 +155,7 @@ describe("shared operation runner", () => {
     const linked = { ...described, execute: async (scope: OperationScope, input: { amount: number }) => {
       scope.activity.link({ facilityId: "facility" });
       scope.activity.link({ creditBatchId: "batch" }, "run-a");
-      return operation.execute(scope, input);
+      return described.execute(scope, input);
     } };
     const result = await runOperation(linked, ctx, { amount: 1 }, {
       audit: auditOptions, idempotency: { credentialId: "credential", key: "linked" },
@@ -405,4 +412,22 @@ describe("transaction retries", () => {
     expect(owned).toHaveBeenCalledOnce();
     expect(warn).not.toHaveBeenCalled();
   });
+});
+
+it("records per-entity values, returns value-free union names and retains empty saves", async () => {
+  const op = { ...operation,
+    describe: () => ({ outcome: "updated" as const, entityType: "feedstock", entityIds: ["a", "b"], versionBefore: 1, versionAfter: 2 }),
+    execute: async (scope: OperationScope, input: { amount: number }) => {
+      scope.activity.capture("a", { massWetKg: "1", notes: "private old" }, { massWetKg: "2", notes: "private new" });
+      scope.activity.capture("b", { massWetKg: "3.00" }, { massWetKg: "3" });
+      return operation.execute(scope, input);
+    },
+  };
+  const result = await runOperation(op, ctx, { amount: 1 });
+  expect(result.effect?.changedFields).toEqual(["massWetKg", "notes"]);
+  expect(result.effect).not.toHaveProperty("changes");
+  expect(activity).toHaveBeenCalledTimes(2);
+  expect(activity.mock.calls[0][2]).toMatchObject({ changedFields: ["massWetKg", "notes"], changes: { massWetKg: { from: "1", to: "2" } } });
+  expect(activity.mock.calls[1][2]).toMatchObject({ changedFields: [], changes: {} });
+  expect(JSON.stringify(activity.mock.calls)).not.toContain("private");
 });

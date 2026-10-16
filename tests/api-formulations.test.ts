@@ -1,3 +1,4 @@
+/** Real handlers, credentials and Postgres. Written for reviewer execution; never run by the implementation agent. */
 import { createApiKey } from "@/data-access/api-keys";
 import { API_KEY_DEFAULT_EXPIRY_SECONDS } from "@/config/api-keys";
 import { resolveApiContext } from "@/lib/auth/api-context";
@@ -5,7 +6,6 @@ import { hasRoleAndScope, type ApiScope } from "@/lib/auth/api-scopes";
 import { apiRoute } from "@/lib/api/route";
 import { toolFailure } from "@/lib/mcp/results";
 import { readTools } from "@/lib/mcp/tools/read-tools";
-/** Real handlers, credentials and Postgres. Written for reviewer execution; never run by the implementation agent. */
 import { randomUUID } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { sql } from "drizzle-orm";
@@ -101,7 +101,7 @@ describe("formulation lines", { timeout: LOOKUP_SUITE_TIMEOUT_MS }, () => {
         const scope: ApiScope = operation === "delete" ? "formulations:delete" : "formulations:write";
         const allowed = operation === "delete" ? permissions.delete : permissions.write;
         expect(hasRoleAndScope(resolution.ctx, scope)).toBe(allowed);
-        // Exercise the shared admission boundary before commit 3 adds the write routes.
+        // Exercise the shared admission boundary with a stub handler.
         const handler = apiRoute(`${operation}_formulation`, scope, async () => new Response(null, { status: 204 }));
         const response = await handler(new Request("http://localhost:3100/api/v1/formulations", { method: "POST", headers: { authorization: `Bearer ${permissions.key}` } }));
         if (allowed) expect(response.status).toBe(204);

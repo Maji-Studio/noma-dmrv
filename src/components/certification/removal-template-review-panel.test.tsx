@@ -143,7 +143,7 @@ describe("RemovalTemplateReviewPanel", () => {
     const startup = screen.getByText("Startup diesel usage").closest("li")!;
     const lab = screen.getByText("Lab electricity").closest("li")!;
 
-    expect([...startup.querySelectorAll("th")].map((cell) => cell.textContent)).toEqual(["Input", "Quantity kind", "Unit"]);
+    expect([...startup.querySelectorAll("th")].map((cell) => cell.textContent)).toEqual(["Input", "Measures", "Unit"]);
     expect([...startup.querySelectorAll("tbody td")].map((cell) => cell.textContent)).toEqual(["volume", "Volume", "L"]);
     expect([...lab.querySelectorAll("tbody td")].map((cell) => cell.textContent)).toEqual(["volume", "Volume", "Not available"]);
   });

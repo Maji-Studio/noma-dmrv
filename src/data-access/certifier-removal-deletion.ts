@@ -1,4 +1,4 @@
-import { recordActivity } from "./activity-events";
+import { recordActivityChange } from "./activity-events";
 import { toActivityEntityType } from "@/lib/activity-entity-type";
 import { withCertificationStatusActivity } from "./certification-status-activity";
 import { nextVersion } from "./row-version";
@@ -566,6 +566,7 @@ export async function finalizeRemovalDeletion(
 
     await assertLedgerUnchangedSinceClaim(ctx, tx, claim);
 
+    const previousActivityBatches: (typeof creditBatches.$inferSelect)[] = [];
     let releasedReservations: { id: string }[] = [];
     let releasedDocumentMirrors: ReleasedDocumentUpload[] = [];
     if (claim.submissionIds.length > 0) {
@@ -628,28 +629,39 @@ export async function finalizeRemovalDeletion(
               eq(certificationSubmissions.organizationId, ctx.organizationId),
             ),
           );
-      }, tx);
 
-      releasedReservations = await tx
-        .update(creditBatches)
-        .set({ version: nextVersion(creditBatches.version),
-          productionEmissionsClaimReservedBySubmissionId: null,
-          updatedAt: sql`now()`,
-        })
-        .where(
-          and(
-            inArray(
-              creditBatches.productionEmissionsClaimReservedBySubmissionId,
-              claim.submissionIds,
+        // Lock order: submissions, then their reserved credit batches.
+        previousActivityBatches.push(...await tx.select().from(creditBatches).where(and(
+          eq(creditBatches.organizationId, ctx.organizationId),
+          inArray(creditBatches.productionEmissionsClaimReservedBySubmissionId, claim.submissionIds),
+        )).orderBy(creditBatches.id).for("update"));
+        releasedReservations = await tx
+          .update(creditBatches)
+          .set({ version: nextVersion(creditBatches.version),
+            productionEmissionsClaimReservedBySubmissionId: null,
+            updatedAt: sql`now()`,
+          })
+          .where(
+            and(
+              inArray(
+                creditBatches.productionEmissionsClaimReservedBySubmissionId,
+                claim.submissionIds,
+              ),
+              eq(creditBatches.organizationId, ctx.organizationId),
             ),
-            eq(creditBatches.organizationId, ctx.organizationId),
-          ),
-        )
-        .returning({ id: creditBatches.id });
+          )
+          .returning({ id: creditBatches.id });
+      }, tx);
     }
 
     if (!claim.submissionIds.length) await clearDeletedRemovalProductionBatches(ctx, claim, registry.productionBatches ?? [], tx);
 
+    // Lock order: submission/reservation release, then removal-claimed batches.
+    const previousClaimedBatches = await tx.select().from(creditBatches).where(and(
+      eq(creditBatches.organizationId, ctx.organizationId),
+      eq(creditBatches.productionEmissionsClaimedByRemovalId, claim.removalId),
+    )).orderBy(creditBatches.id).for("update");
+    previousActivityBatches.push(...previousClaimedBatches.filter(row => !previousActivityBatches.some(previous => previous.id === row.id)));
     const releasedClaims = await tx
       .update(creditBatches)
       .set({ version: nextVersion(creditBatches.version),
@@ -673,7 +685,7 @@ export async function finalizeRemovalDeletion(
           eq(creditBatchApplications.organizationId, ctx.organizationId),
         ),
       )
-      .returning({ id: creditBatchApplications.id, creditBatchId: creditBatchApplications.creditBatchId });
+      .returning({ id: creditBatchApplications.id, creditBatchId: creditBatchApplications.creditBatchId, removalId: creditBatchApplications.removalId });
 
     const [deleted] = await tx
       .delete(certifierRemovals)
@@ -687,20 +699,22 @@ export async function finalizeRemovalDeletion(
       .returning({ id: certifierRemovals.id });
     if (!deleted) throw new SafeError(REMOVAL_DELETE_CHANGED_ERROR);
 
-    const batchFields = new Map<string, Set<string>>();
-    for (const [ids, field] of [
-      [releasedReservations.map(batch => batch.id), "productionClaimReservation"],
-      [releasedClaims.map(batch => batch.id), "productionClaim"],
-      [released.map(slice => slice.creditBatchId), "removalAssignment"],
-    ] as const) for (const id of ids) {
-      const fields = batchFields.get(id) ?? new Set<string>();
-      fields.add(field);
-      batchFields.set(id, fields);
+    const affectedBatchIds = [...new Set([
+      ...releasedReservations.map(batch => batch.id), ...releasedClaims.map(batch => batch.id),
+      ...released.map(slice => slice.creditBatchId),
+    ])];
+    const savedActivityBatches = affectedBatchIds.length ? await tx.select().from(creditBatches).where(and(
+      eq(creditBatches.organizationId, ctx.organizationId), inArray(creditBatches.id, affectedBatchIds),
+    )) : [];
+    for (const batch of savedActivityBatches) {
+      const previous = previousActivityBatches.find(row => row.id === batch.id) ?? batch;
+      const assignments = released.filter(slice => slice.creditBatchId === batch.id);
+      await recordActivityChange(ctx, tx, {
+        entityType: toActivityEntityType("credit_batch"), entityId: batch.id, creditBatchId: batch.id,
+        action: "updated", source: "form",
+      }, { ...previous, removalAssignment: assignments.map(slice => ({ ...slice, removalId: claim.removalId })) },
+      { ...batch, removalAssignment: assignments });
     }
-    for (const [creditBatchId, fields] of batchFields) await recordActivity(ctx, tx, {
-      entityType: toActivityEntityType("credit_batch"), entityId: creditBatchId, creditBatchId,
-      action: "updated", source: "form", changedFields: [...fields],
-    });
 
     logger.info(
       {

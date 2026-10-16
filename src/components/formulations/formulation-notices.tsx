@@ -9,12 +9,11 @@ import { ArchiveIcon, ArrowCounterClockwiseIcon } from "@phosphor-icons/react/di
 import { Button } from "@/components/ui/button";
 import { Notice } from "@/components/ui/notice";
 
-/** The server's refusal for a delete that stored records still depend on. */
-const DELETE_IN_USE_MARKER = "was not deleted because";
+import { FORMULATION_IN_USE_PREFIX } from "@/lib/formulation-domain-errors";
 
 /** True when `message` is the typed "in use" delete refusal. */
 export function isFormulationInUseRefusal(message: string): boolean {
-  return message.includes(DELETE_IN_USE_MARKER);
+  return message.includes(FORMULATION_IN_USE_PREFIX);
 }
 
 export function FormulationDeleteConflictNotice({

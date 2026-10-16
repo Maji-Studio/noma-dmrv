@@ -68,7 +68,7 @@ describe("make_biochar_product", () => {
     expect(mocks.autoCodes).toHaveBeenCalledWith(ctx, tx, "BP", expect.anything(), expect.anything(), 1, expect.any(Function), "A biochar product with this code already exists");
     const [, writer, data, options] = mocks.create.mock.calls[0];
     expect(writer).toBe(savepoint);
-    expect(options).toEqual({ snapshotStock, onReplay: scope.activity.skip, resolveComposition: expect.any(Function) });
+    expect(options).toEqual({ snapshotStock, capture: scope.activity.capture, onReplay: scope.activity.skip, resolveComposition: expect.any(Function) });
     const composition = await options.resolveComposition(writer);
     expect(mocks.lines).toHaveBeenCalledTimes(1);
     expect({ ...data, composition }).toMatchObject({
@@ -201,8 +201,7 @@ describe("make_biochar_product", () => {
   it("describes the created product without request facts", () => {
     const effect = makeBiocharProduct.describe!(makeBiocharProductInput.parse({ ...blended, basisFingerprint: "b", idempotencyKey: "k" }), created as never);
     expect(effect).toMatchObject({ outcome: "created", entityType: "biocharProduct", entityIds: [PRODUCT_ID], versionAfter: 1 });
-    expect(effect!.changedFields).not.toContain("basisFingerprint");
-    expect(effect!.changedFields).not.toContain("idempotencyKey");
+    expect(effect).not.toHaveProperty("changedFields");
   });
 });
 
@@ -210,7 +209,7 @@ describe("update_biochar_product", () => {
   it("edits the named product with the version it was read at", async () => {
     mocks.update.mockResolvedValue({ id: PRODUCT_ID, version: 3 });
     await updateBiocharProduct.execute(scope, updateBiocharProductInput.parse({ biocharProductId: PRODUCT_ID, expectedVersion: 2, status: "ready", densityKgM3: null }));
-    expect(mocks.update).toHaveBeenCalledWith(ctx, tx, PRODUCT_ID, { expectedVersion: 2, status: "ready", densityKgM3: null });
+    expect(mocks.update).toHaveBeenCalledWith(ctx, tx, PRODUCT_ID, { expectedVersion: 2, status: "ready", densityKgM3: null }, scope.activity.capture);
   });
 
   it("keeps an immutable-fact refusal a validation failure and a lineage refusal typed", async () => {

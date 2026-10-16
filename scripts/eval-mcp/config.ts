@@ -114,6 +114,9 @@ export type ApplicationCaseId = typeof APPLICATION_CASES[number]["id"];
 
 const FORMULATION_CREATE_BUDGET = 5;
 const FORMULATION_COMMAND_BUDGET = 4;
+const FORMULATION_ARCHIVED_BUDGET = 8;
+const FORMULATION_PRODUCT_SCOPES = ["biochar-products:write", "biochar-products:read", "storage-locations:read",
+  "facilities:read", "production-runs:read", "formulations:read"];
 const FORMULATION_CREATE_SCOPES = ["formulations:write", "feedstock-types:read"];
 const FORMULATION_COMMAND_SCOPES = ["formulations:read", "formulations:write"];
 export const FORMULATION_CASES = [
@@ -123,8 +126,10 @@ export const FORMULATION_CASES = [
     text: () => "Add a formulation called Compost blend: 70% biochar and 30% rock dust." },
   { id: "formulation-guarded-delete", budget: FORMULATION_COMMAND_BUDGET, scopes: ["formulations:read", "formulations:delete"],
     text: ({ code }: { code: string }) => `Delete the formulation ${code}.` },
-  { id: "formulation-archived", budget: FORMULATION_COMMAND_BUDGET, scopes: FORMULATION_COMMAND_SCOPES,
+  { id: "formulation-archive", budget: FORMULATION_COMMAND_BUDGET, scopes: FORMULATION_COMMAND_SCOPES,
     text: ({ code }: { code: string }) => `Archive formulation ${code}.` },
+  { id: "formulation-archived", budget: FORMULATION_ARCHIVED_BUDGET, scopes: FORMULATION_PRODUCT_SCOPES,
+    text: ({ name }: { name: string }) => `Make 500 kg of product with ${name}.` },
   { id: "formulation-restore", budget: FORMULATION_COMMAND_BUDGET, scopes: FORMULATION_COMMAND_SCOPES,
     text: ({ code }: { code: string }) => `We use ${code} again.` },
 ] as const;

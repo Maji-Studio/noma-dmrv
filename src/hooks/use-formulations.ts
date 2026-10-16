@@ -391,6 +391,7 @@ function useFormulationLifecycle(
       return result.data;
     },
     onSuccess: async (data, variables) => {
+      patchListCachesWithSavedRow<FormulationWithIngredients>(queryClient, formulationKeys.lists(), data);
       invalidateEntityTypeQueries(queryClient, "formulation");
       queryClient.setQueryData(formulationKeys.detail(data.id), data);
       await Promise.all([

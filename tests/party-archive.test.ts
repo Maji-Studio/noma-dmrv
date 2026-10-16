@@ -167,8 +167,8 @@ for (const kind of ["supplier", "customer"] as const) {
       await expect(restore(f, row.id, 3)).rejects.toMatchObject({ ...issue("conflict", kind), message: `${noun} ${row.code} is not archived.` });
       expect(await db.select().from(table).where(eq(table.id, row.id))).toMatchObject([{ version: 3, archivedAt: null }]);
       expect(await db.select().from(activityEvents).where(eq(activityEvents.entityId, row.id)).orderBy(activityEvents.sequence)).toMatchObject([
-        { action: "status_changed", fromStatus: "active", toStatus: "archived", changedFields: [], versionBefore: 1, versionAfter: 2 },
-        { action: "status_changed", fromStatus: "archived", toStatus: "active", changedFields: [], versionBefore: 2, versionAfter: 3 },
+        { action: "status_changed", fromStatus: "active", toStatus: "archived", changedFields: [], changes: {}, versionBefore: 1, versionAfter: 2 },
+        { action: "status_changed", fromStatus: "archived", toStatus: "active", changedFields: [], changes: {}, versionBefore: 2, versionAfter: 3 },
       ]);
     });
   });

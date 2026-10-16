@@ -15,6 +15,7 @@
  * formulation lock. Formulation writers never request facility, bin, product or
  * order locks, so they cannot reverse those writers' or facility archive's order.
  */
+import type { CaptureActivity } from "@/lib/activity-changes";
 import { and, asc, eq, inArray, isNull, isNotNull, sql } from "drizzle-orm";
 import type { DbTransaction } from "@/db";
 import {
@@ -86,10 +87,18 @@ async function readBack(ctx: OrgContext, tx: DbTransaction, id: string): Promise
   if (!row) throw formulationNotFound();
   return row;
 }
+function activitySnapshot({ ingredients, ...row }: FormulationWithIngredients) {
+  return { ...row, lines: ingredients.map(({ feedstockType: _type, ...line }) => {
+    void _type;
+    return line;
+  }) };
+}
+
 export async function createFormulationInTransaction(
   ctx: OrgContext,
   tx: DbTransaction,
   input: CreateFormulationInput & { code: string },
+  capture?: CaptureActivity,
 ): Promise<FormulationWithIngredients> {
   requireOrgScope(ctx);
   const { code, ...body } = input;
@@ -107,12 +116,15 @@ export async function createFormulationInTransaction(
       feedstockTypeId: line.feedstockTypeId, ratio: line.ratio ?? null, sortOrder,
     })));
   }
-  return readBack(ctx, tx, row.id);
+  const saved = await readBack(ctx, tx, row.id);
+  capture?.(row.id, null, activitySnapshot(saved));
+  return saved;
 }
 export async function updateFormulationInTransaction(
   ctx: OrgContext,
   tx: DbTransaction,
   input: UpdateFormulationInput,
+  capture?: CaptureActivity,
 ): Promise<FormulationWithIngredients> {
   requireOrgScope(ctx);
   const parsed = updateFormulationInput.safeParse(input);
@@ -163,10 +175,12 @@ export async function updateFormulationInTransaction(
           .where(and(eq(formulationIngredients.organizationId, ctx.organizationId), eq(formulationIngredients.formulationId, formulationId), inArray(formulationIngredients.id, removed.map(line => line.id))));
       }
     }
-    return readBack(ctx, tx, formulationId);
+    const saved = await readBack(ctx, tx, formulationId);
+    capture?.(formulationId, { ...locked, lines: existing }, activitySnapshot(saved));
+    return saved;
   });
 }
-export async function deleteFormulationInTransaction(ctx: OrgContext, tx: DbTransaction, input: FormulationVersionInput): Promise<void> {
+export async function deleteFormulationInTransaction(ctx: OrgContext, tx: DbTransaction, input: FormulationVersionInput, capture?: CaptureActivity): Promise<void> {
   requireOrgScope(ctx);
   const { formulationId, expectedVersion } = input;
   const [locked] = await tx.select().from(formulations).where(and(eq(formulations.organizationId, ctx.organizationId), eq(formulations.id, formulationId))).for("update");
@@ -184,6 +198,7 @@ export async function deleteFormulationInTransaction(ctx: OrgContext, tx: DbTran
     .where(and(eq(orders.organizationId, ctx.organizationId), eq(orders.formulationId, formulationId)))
     .orderBy(asc(orders.code)).limit(BLOCKER_LIMIT);
   if (uses.length) throw formulationInUse("orders", uses.map(row => row.code));
+  capture?.(formulationId, activitySnapshot(await readBack(ctx, tx, formulationId)), null);
   await tx.delete(formulations).where(and(eq(formulations.organizationId, ctx.organizationId), eq(formulations.id, formulationId)));
 }
 
@@ -193,6 +208,7 @@ async function changeFormulationArchiveState(
   tx: DbTransaction,
   { formulationId, expectedVersion }: FormulationVersionInput,
   archive: boolean,
+  capture?: CaptureActivity,
 ): Promise<FormulationWithIngredients> {
   requireOrgScope(ctx);
   // Explicit UPDATE strength also serializes with reference SHARE locks.
@@ -205,15 +221,17 @@ async function changeFormulationArchiveState(
     version: nextVersion(formulations.version), updatedAt: sql`now()`,
   }).where(and(eq(formulations.organizationId, ctx.organizationId), eq(formulations.id, formulationId), archive ? isNull(formulations.archivedAt) : isNotNull(formulations.archivedAt))).returning();
   if (!saved) throw formulationArchiveConflict(locked.code, archive);
+  // Status transitions record from/to status without field changes.
+  capture?.(formulationId, saved, saved);
   return readBack(ctx, tx, formulationId);
 }
 
-export async function archiveFormulationInTransaction(ctx: OrgContext, tx: DbTransaction, input: FormulationVersionInput): Promise<FormulationWithIngredients> {
+export async function archiveFormulationInTransaction(ctx: OrgContext, tx: DbTransaction, input: FormulationVersionInput, capture?: CaptureActivity): Promise<FormulationWithIngredients> {
   requireOrgScope(ctx);
-  return changeFormulationArchiveState(ctx, tx, input, true);
+  return changeFormulationArchiveState(ctx, tx, input, true, capture);
 }
 
-export async function restoreFormulationInTransaction(ctx: OrgContext, tx: DbTransaction, input: FormulationVersionInput): Promise<FormulationWithIngredients> {
+export async function restoreFormulationInTransaction(ctx: OrgContext, tx: DbTransaction, input: FormulationVersionInput, capture?: CaptureActivity): Promise<FormulationWithIngredients> {
   requireOrgScope(ctx);
-  return changeFormulationArchiveState(ctx, tx, input, false);
+  return changeFormulationArchiveState(ctx, tx, input, false, capture);
 }
