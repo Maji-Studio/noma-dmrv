@@ -24,17 +24,17 @@ calibration at least annual and meeting or exceeding manufacturer requirements.
 §9.2.4.1 requires raw pyrolyzer temperature data for the Reporting Period to be
 retained for at least five years. Both passages are quoted in the shortlist.
 The approved PDD's lack of a recurring temperature CSV requirement is a format
-question only, not a reason to omit that series. Kenji decided
-(2026-10-16) that the reactor CSV uploaded on each Production Run is the retained
-raw record: noma stores it unchanged as `sensor_data` and does not check its
-contents, so file presence stays the readiness gate.
+question only, not a reason to omit that series. Decision added 2026-10-16:
+Kenji confirmed that the Readings file (`sensor_data`) uploaded on each production
+run is the retained raw record for both the pressure and flue-stack temperature
+series. noma stores it unchanged and does not check its contents, which are the
+operator's responsibility, so file presence stays the readiness gate.
 No continuous-gas CSV extension is needed for the approved emissions-testing
 route. A future project choosing another emissions method needs its own evidence
 contract. Historical research stays archived.
 
-The pressure CSV stays unchanged as uploaded `sensor_data` on the production
-run. Readiness and Removal submission use file presence, not parsed rows,
-Sensors, Parquet or reactor MeasurementSamples. Focused tests cover empty
+The Readings file stays unchanged on the production run. Readiness and Removal
+submission use file presence, not parsed rows, Sensors, Parquet or reactor MeasurementSamples. Focused tests cover empty
 structured readings, missing/pending/failed files, and submission without
 telemetry calls. The optional readings importer retained by #942 q25 and
 #1014 is unchanged; its wiring/query-bounds deferral stays open with these
@@ -179,7 +179,7 @@ a new design; registry requirements still apply.
 ## 2026-10-13: Reactor time-series upload retired
 
 The reactor time-series upload pipeline was removed in issue #987. The approved
-MVP retains the original pressure CSV on each production run and needs no
+MVP retains the Readings file (`sensor_data`) on each production run and needs no
 registry sensor registration or bulk time-series upload. ADR 0006 is retired;
 the full pipeline can be restored from `archive/reactor-telemetry-upload`
 (staging commit `5b7a252c2`).

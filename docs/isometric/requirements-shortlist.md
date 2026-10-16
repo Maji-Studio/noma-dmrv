@@ -72,15 +72,14 @@ verbatim from the registry (read 2026-10-15; [...] marks omitted text):
 
 > The Project Proponent must maintain the following records as evidence supporting calculation of direct emissions from the biomass conversion process for a period of at least five years: * Results of emissions tests [...] including a signed report from the accredited emissions testing entity; * Raw data provided via pyrolyzer temperature measurements for the Reporting Period, $RP$; * Calibration records for all temperature measurement equipment; and * Manufacturer operating manuals [...]
 
-The approved PDD evidence in #627 says no recurring temperature CSV is required.
-That is a file-format statement; it does not remove the operational temperature
-measurements or five-year raw-data retention required above. Kenji decided
-(2026-10-16): the reactor CSV uploaded on each Production Run is the retained
-raw record. noma stores it unchanged as `sensor_data` and does not check its
-contents; file presence is the readiness gate.
+The Readings file (`sensor_data`) uploaded on each production run is the retained
+raw record, stored unchanged; file presence is the readiness gate
+(Kenji, 2026-10-16; [decision](./changes.md#2026-10-15-correct-reactor-monitoring-citations-and-retain-document-only-gates-627-slices-1-2-4)).
+This one file is the retained evidence for both the §9.1.2 pressure series and the
+§9.2.4 / §9.2.4.1 flue-stack temperature series; noma does not check its contents,
+which are the operator's responsibility.
 The approved project route does not require continuous gas telemetry.
 
-The pressure file is retained unchanged on the production run as `sensor_data`.
 See the [integration contract](./integration-plan.md#reactor-time-series-upload)
 for the file-presence gate and the separate optional readings importer.
 

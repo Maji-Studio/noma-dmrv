@@ -138,7 +138,7 @@ export const productionRuns = pgTable(
 
 // ============================================
 // Production Run Readings - optional structured imports, outside certification.
-// Readiness and Removal submission use the retained sensor_data file on the
+// Readiness and Removal submission use the Readings file (`sensor_data`) on the
 // Production Run, without requiring rows here. Monitoring requirements:
 // docs/isometric/requirements-shortlist.md#project-reactor-monitoring
 // ============================================
@@ -158,7 +158,7 @@ export const productionRunReadings = pgTable(
     // Optional parsed temperature; this column does not identify the sensor channel.
     temperatureC: real('temperature_c'),
 
-    // Optional parsed pressure; the retained file is the project evidence.
+    // Optional parsed pressure; the Readings file is the project evidence.
     pressureBar: real('pressure_bar'),
 
     gasFlowRate: real('gas_flow_rate'), // m³/s or equivalent — retained for legacy imports; not in the canonical CSV format
