@@ -15,9 +15,9 @@ import {
   type SeededChainData,
 } from "./fixtures";
 import {
+  chainSeedRefs,
   seedCertifierMapping,
   seedUngroupedReadyBatchWithChain,
-  type ChainSeedRefs,
   type SeededReadyBatch,
 } from "./fixtures/certification-helpers";
 import { createDbConnection } from "./fixtures/db";
@@ -36,21 +36,6 @@ const DECLARED_FEEDSTOCK_ERROR =
   "The selected production runs are a different feedstock than the one chosen for this batch. " +
   "A credit batch contains one feedstock. Choose production runs that use the selected feedstock, " +
   "or change the batch's feedstock type.";
-
-function chainRefs(data: SeededChainData): ChainSeedRefs {
-  return {
-    facilityId: data.facility.id,
-    reactorId: data.reactor.id,
-    formulationId: data.formulation.id,
-    feedstockId: data.feedstock.id,
-    feedstockStorageLocationId: data.feedstockStorageLocation.id,
-    biocharStorageLocationId: data.biocharStorageLocation.id,
-    productStorageLocationId: data.productStorageLocation.id,
-    customerId: data.customer.id,
-    customerLocationId: data.customerLocation.id,
-    vehicleId: data.vehicle.id,
-  };
-}
 
 async function openBatchEditor(
   page: Page,
@@ -158,10 +143,10 @@ test("concurrent same-month credit batches keep separate feedstock cohorts and r
       ));
     });
 
-    const first = await seedUngroupedReadyBatchWithChain(chainRefs(seededData), `${tag}-A`);
+    const first = await seedUngroupedReadyBatchWithChain(chainSeedRefs(seededData), `${tag}-A`);
     cleanups.push(first.cleanup);
     const second = await seedUngroupedReadyBatchWithChain({
-      ...chainRefs(seededData),
+      ...chainSeedRefs(seededData),
       feedstockId: alternateFeedstockId,
       feedstockStorageLocationId: alternateInputBin.id,
       biocharStorageLocationId: alternateOutputBin.id,
@@ -233,6 +218,14 @@ test("concurrent same-month credit batches keep separate feedstock cohorts and r
     // credentials cannot fetch the fake template from the real registry.
     await mapping.cleanup();
 
+    // Leave both completed runs unassigned so the first editor must separate
+    // them by feedstock, and saving must resolve membership on the server.
+    await connection.db.delete(schema.creditBatchProductionRuns).where(and(
+      eq(schema.creditBatchProductionRuns.organizationId, DEC_ORG_ID),
+      inArray(schema.creditBatchProductionRuns.creditBatchId, batchIds),
+    ));
+    expect(await readMembership()).toEqual([]);
+
     for (const [batch, ownRun, otherRun] of [
       [first, firstRun, secondRun],
       [second, secondRun, firstRun],
@@ -244,8 +237,8 @@ test("concurrent same-month credit batches keep separate feedstock cohorts and r
       await expect(previews).toHaveCount(1);
       await expect(previews).toHaveAttribute("data-production-run-id", ownRun.runId);
       await expect(dialog.locator(`[data-production-run-id="${otherRun.runId}"]`)).toHaveCount(0);
-      // Re-save through the UI so the server re-resolves both real cohorts,
-      // rather than relying only on the helper's explicit membership inserts.
+      // The editor starts without saved members. The server must attach the
+      // matching unassigned run using the declared feedstock and window.
       await dialog.getByRole("button", { name: "Update credit batch", exact: true }).click();
       await expect(dialog).toBeHidden();
     }
