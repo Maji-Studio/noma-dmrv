@@ -7,6 +7,8 @@
  * bulk "delete all" used to clear a run before re-importing.
  */
 
+// Retained non-MVP seam (#942 q25, #1014): called by src/hooks/use-production-run-readings.ts for the unmounted structured readings preview; no mounted operator entry point. See docs/architecture.md#production-run-extensions.
+
 import { withAction } from "./with-action";
 import { z } from "zod";
 import {

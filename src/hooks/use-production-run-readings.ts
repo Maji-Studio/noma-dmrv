@@ -5,6 +5,8 @@
  * limited to clearing all readings for a run ("delete all").
  */
 
+// Retained non-MVP seam (#942 q25, #1014): consumed by the unmounted ProductionRunReadingTable; retained for the structured readings preview with no mounted operator entry point. See docs/architecture.md#production-run-extensions.
+
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   getProductionRunReadingsListFn,

@@ -1,4 +1,4 @@
-// Retained non-MVP seam (#942 q25, #1014): current consumer is the seed importer (src/lib/cli/seed/readings.ts); no mounted operator entry point. See docs/architecture.md#production-run-extensions.
+// Retained non-MVP seam (#942 q25, #1014): called by src/fn/production-run-reading-imports.ts on the seed importer path; no mounted operator entry point. See docs/architecture.md#production-run-extensions.
 
 import { pluralize } from "@/lib/copy-utils";
 

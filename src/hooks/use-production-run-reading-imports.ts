@@ -1,6 +1,6 @@
 "use client";
 
-// Retained non-MVP seam (#942 q25, #1014): current consumer is the seed importer (src/lib/cli/seed/readings.ts); no mounted operator entry point. See docs/architecture.md#production-run-extensions.
+// Retained non-MVP seam (#942 q25, #1014): no current consumer; retained for structured readings imports. See docs/architecture.md#production-run-extensions.
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {

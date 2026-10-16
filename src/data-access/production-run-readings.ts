@@ -6,6 +6,8 @@
  * bulk "delete all" used to clear a run before re-importing a corrected CSV.
  */
 
+// Retained non-MVP seam (#942 q25, #1014): called by src/fn/production-run-readings.ts for the unmounted structured readings preview; no mounted operator entry point. See docs/architecture.md#production-run-extensions.
+
 import { and, desc, eq, SQL } from "drizzle-orm";
 import { db } from "@/db";
 import { productionRunReadings, productionRuns } from "@/db/schema";
