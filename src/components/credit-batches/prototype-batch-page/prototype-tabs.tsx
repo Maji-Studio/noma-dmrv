@@ -15,7 +15,7 @@ import { cn } from "@/lib/utils";
 import { EMISSION_LINE_STATE_LABELS, type EmissionLineState } from "@/lib/certification/emission-lines";
 import { productionRunDeepLinkHref } from "@/lib/certification/links";
 import { useProto } from "./prototype-context";
-import { RemovalMassBar, SEGMENTS, SEGMENT_BY_KEY, Swatch, segmentOfRemoval } from "./prototype-mass-bar";
+import { RemovalMassBar, SEGMENT_BY_KEY, Swatch, segmentOfRemoval, useBarTotal } from "./prototype-mass-bar";
 import { FocusRow, PANEL, Panel, RemovalChip, tonnes } from "./prototype-parts";
 
 const MUTED = "text-[var(--color-text-secondary)]";
@@ -139,10 +139,9 @@ export function EmissionsTab() {
 
 function MassSplit() {
   const { model, go } = useProto();
-  const { masses } = model;
-  const total = SEGMENTS.reduce((sum, segment) => sum + masses[segment.key], 0);
+  const total = useBarTotal();
   return (
-    <Panel title="Biochar in Removals" action={<span className="body-medium tabular-nums">{tonnes(total)} <span className={MUTED}>total</span></span>}>
+    <Panel title="Biochar in Removals" action={<span className="body-medium tabular-nums">{total}</span>}>
       <RemovalMassBar />
       {model.blocking.length > 0 && (
         <button type="button" onClick={() => go("overview")} className="self-start body-small underline underline-offset-2">
@@ -179,7 +178,7 @@ export function RemovalsTab() {
             </li>
           ))}
         </ul>
-        <FocusRow rowId="not-applied" className="grid grid-cols-[12px_minmax(0,1fr)_auto] items-center gap-x-12 border-t border-[var(--color-border-tertiary)] pt-12 sm:gap-x-16">
+        <FocusRow rowId="not-applied" className="grid grid-cols-[12px_minmax(0,1fr)_auto] items-center gap-x-12 mt-8 border-t border-[var(--color-border-secondary)] pt-12 sm:gap-x-16">
           <Swatch segment="notApplied" />
           <span className="flex flex-col">
             <span className="body-medium font-medium">Not applied yet</span>

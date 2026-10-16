@@ -9,6 +9,7 @@ import { DropdownMenu } from "@/components/ui/dropdown-menu";
 import { formatDateRange, formatTonnes } from "@/lib/format-utils";
 import { cn } from "@/lib/utils";
 import { useProto } from "./prototype-context";
+import { useBarOption } from "./prototype-mass-bar";
 import { SAMPLES_REQUIRED } from "./prototype-model";
 import { Chip, CountBadge } from "./prototype-parts";
 
@@ -143,12 +144,15 @@ export function BatchHeader() {
 export function KeyNumbers() {
   const { model } = useProto();
   const { masses } = model;
+  const bar = useBarOption();
   const cells = [
-    {
-      label: "Applied biochar",
-      value: formatTonnes(model.appliedTons),
-      sub: masses.notIn > 0 ? `${formatTonnes(masses.notIn)} not in a Removal` : "All in Removals",
-    },
+    bar === "c"
+      ? { label: "Produced biochar", value: formatTonnes(model.appliedTons + masses.notApplied), sub: `${formatTonnes(model.appliedTons)} applied` }
+      : {
+          label: "Applied biochar",
+          value: formatTonnes(model.appliedTons),
+          sub: masses.notIn > 0 ? `${formatTonnes(masses.notIn)} not in a Removal` : "All in Removals",
+        },
     { label: "Carbon estimate", value: `≈ ${formatTonnes(model.co2eTons ?? 0, { unit: "t CO₂e" })}`, sub: "Before project emissions" },
     {
       label: "Samples",
