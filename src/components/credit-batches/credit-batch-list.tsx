@@ -40,6 +40,7 @@ import { CreditBatchForm } from "./credit-batch-form";
 import { CreditBatchCard } from "./credit-batch-card";
 import { CreditBatchHealthStrip } from "./credit-batch-health-strip";
 import { CreditBatchDurabilityPanel } from "./credit-batch-durability-panel";
+import { InjectedBatchSheetEmissionsPanel } from "@/components/emissions";
 import { creditBatchSheetSections } from "./credit-batch-view";
 import {
   CreditBatchFilters,
@@ -762,6 +763,8 @@ export function CreditBatchList({
                 creditBatchId={sideSheetEntity.id}
                 facilityId={sideSheetEntity.facilityId}
               />
+              {/* PROTOTYPE: shows only with ?prototype=emissions, never in production. */}
+              <InjectedBatchSheetEmissionsPanel creditBatchId={sideSheetEntity.id} />
             </>
           ) : undefined
         }
