@@ -1,5 +1,6 @@
 import { TEST_SITE_POSITION } from "./test-org";
 import type { OrgContext } from "@/lib/auth/server";
+import { formatUtcDate } from "@/lib/date-utils";
 import { randomUUID } from "node:crypto";
 import { eq, inArray, type SQL } from "drizzle-orm";
 import { db, type DbTransaction } from "@/db";
@@ -15,7 +16,7 @@ type ProductValues = typeof biocharProducts.$inferInsert;
 type OrderValues = typeof orders.$inferInsert;
 type DeliveryValues = typeof deliveries.$inferInsert;
 type ProductFixture = Omit<ProductValues, "placedAt" | "productionDate" | "formulationId" | "massKg" | "moistureContentPercent" | "waterAddedKg" | "storageLocationId" | "sourceBiocharStorageLocationId"> & {
-  productionDate?: Date;
+  productionDate?: string;
   massKg?: number;
   moistureContentPercent?: number;
   waterAddedKg?: number;
@@ -57,10 +58,10 @@ async function productFixture(executor: Executor, input: ProductFixture): Promis
     ownedFormulations.add(recipe.id);
   }
   const placedAt = input.placedAt ?? (input.productionDate ? new Date(input.productionDate) : FIXTURE_PLACED_AT);
-  const productionDate = input.productionDate ?? placedAt;
   const sourceRun = input.linkedProductionRunId
     ? (await executor.select().from(productionRuns).where(eq(productionRuns.id, input.linkedProductionRunId)))[0]
     : undefined;
+  const productionDate = input.productionDate ?? formatUtcDate(sourceRun?.startTime ?? placedAt);
   let sourceBiocharStorageLocationId = input.sourceBiocharStorageLocationId ?? sourceRun?.biocharStorageLocationId;
   let storageLocationId = input.storageLocationId;
   for (const type of ["biochar_bin", "product_bin"] as const) {

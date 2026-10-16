@@ -14,7 +14,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { and, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
-  binMovements, biocharProducts, biocharProductSourceAllocations, facilities, feedstocks, feedstockTypes, formulationIngredients, outputStockAllocations, productIngredientSnapshots, storageLocations,
+  binMovements, biocharProducts, biocharProductSourceAllocations, facilities, feedstocks, feedstockTypes, formulationIngredients, outputStockAllocations, productIngredientSnapshots, productionRuns, storageLocations,
   type BiocharProduct,
 } from "@/db/schema";
 import { generateNextCodes } from "@/data-access/code-generator";
@@ -22,6 +22,7 @@ import { getOutputBinAllLayersDryKg } from "@/data-access/output-stock";
 import { getStorageLocationWithFacility } from "@/data-access/storage-locations";
 import { fromCompositionJsonb } from "@/lib/biochar-composition";
 import { deriveSourceBiocharMassKg } from "@/lib/biochar-composition/composition";
+import { formatDate } from "@/lib/format-utils";
 import { prepareBiocharProductSubmission } from "@/lib/biochar-composition/product-submission";
 import { makeBiocharProduct, updateBiocharProduct } from "@/lib/operations/biochar-products";
 import { recordOutputStockMovement } from "@/lib/operations/output-stock";
@@ -115,6 +116,15 @@ const orphanAllocations = async (f: ProductFixture) => (await db.execute<{ count
 const locked = { code: "certification_locked", message: expect.stringContaining(LINEAGE_LOCKED_COPY) };
 
 describe("creating products", () => {
+  it("stores and renders July 6 for a run dated 2026-07-06 even when it finishes the next day", async () => {
+    const f = await fixture();
+    await db.update(productionRuns).set({ startTime: new Date("2026-07-06T23:00:00Z"), endTime: new Date("2026-07-07T01:00:00Z") })
+      .where(and(eq(productionRuns.organizationId, f.ctx.organizationId), eq(productionRuns.id, f.r1)));
+    const { product } = await runOperationInProcess(makeBiocharProduct, f.ctx, pure(f));
+    expect({ day: product.productionDate, displayed: formatDate(product.productionDate), runId: product.linkedProductionRunId })
+      .toEqual({ day: "2026-07-06", displayed: "Jul 6, 2026", runId: f.r1 });
+  });
+
   it("creates a Pure biochar product from the oldest run and records the basis it returns", async () => {
     const f = await fixture();
     const result = await runOperation(makeBiocharProduct, f.ctx, pure(f));
@@ -126,6 +136,17 @@ describe("creating products", () => {
     const [movement] = await movementsOf(f);
     expect(movement).toMatchObject({ outputKind: "production_draw", basisFingerprint });
     expect(movement.idempotencyKey).toMatch(/^api:/);
+  });
+
+  it("keeps the oldest drawn run's day when the newer sub-bin is emptied first", async () => {
+    const f = await fixture();
+    const { product } = await runOperationInProcess(makeBiocharProduct, f.ctx, pure(f, {
+      biocharWetMassKg: R1_WET_KG, biocharMoisturePercent: undefined,
+      sources: [{ layerId: f.r2, moisturePercent: 20 }, { layerId: f.r1, moisturePercent: BIOCHAR_MOISTURE }],
+    }));
+    expect(product.productionDate).toBe("2026-09-09");
+    expect(product.linkedProductionRunId).toBeNull();
+    expect(product.placedAt.toISOString()).toBe(PLACED_AT);
   });
 
   it("creates a blended product: the stored blend, the formulation line snapshot and the ingredient draw", async () => {
@@ -451,7 +472,7 @@ describe("retries (astra finding 5)", () => {
       // Uncommitted, the code still reads as free; the first attempt's insert then waits on this row.
       // Archived so this code-reservation fixture is not an active stock layer.
       await barrier.tx.insert(biocharProducts).values({ organizationId: f.ctx.organizationId, code: taken, facilityId: f.facility.id,
-        formulationId: f.pure.id, placedAt: new Date(PLACED_AT), productionDate: new Date(PLACED_AT),
+        formulationId: f.pure.id, placedAt: new Date(PLACED_AT), productionDate: "2026-09-12",
         massKg: 1, moistureContentPercent: 0, waterAddedKg: 0, archivedAt: new Date(PLACED_AT), storageLocationId: f.pureBin.id, sourceBiocharStorageLocationId: f.source.id });
       pending = create();
       await waitForBlockedOperations(barrierPool, barrier.pid, 1);

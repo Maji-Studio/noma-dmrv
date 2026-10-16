@@ -2,6 +2,8 @@ name: CI
 
 on:
   pull_request:
+  merge_group:
+    types: [checks_requested]
   push:
     branches: [main, staging]
 
@@ -43,9 +45,6 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Documentation references
-        run: pnpm docs:check
-
       - name: Hash route file paths
         id: lint-routes
         # The Next link rule reads filenames; include paths so identical-content renames invalidate it too.
@@ -68,44 +67,11 @@ jobs:
           restore-keys: |
             ${{ steps.lint-routes.outputs.prefix }}
 
-      - name: Lint
-        run: pnpm lint
-
-      - name: Typecheck
-        run: pnpm typecheck
-
-      - name: OpenAPI TypeScript client check
-        run: pnpm openapi:client-check
-
-      - name: Org-scoping check
-        run: pnpm check:org-scoping
-
-      # Every export of a "use server" module is a public action the browser
-      # can call with any arguments; this fails any export that accepts an
-      # OrgContext, a db/tx handle or a Parameters<> passthrough.
-      - name: Server-action export check
-        run: pnpm check:server-action-exports
-
-      - name: Action-boundary check
-        run: pnpm check:action-boundaries
-
-      # Tailwind's spacing scale is an allow-list here (`--spacing-*: initial`),
-      # so an off-scale utility compiles to nothing and fails silently at
-      # runtime rather than at build time. Nothing else catches it.
-      - name: Spacing-scale check
-        run: pnpm check:spacing-scale
-
-      # The same silence for custom properties: a var(--x) that nothing
-      # defines leaves the property at its initial value with no error.
-      - name: CSS custom-property check
-        run: pnpm check:css-vars
-
-      # docs/ux-writing.md bans en and em dashes in user-facing copy; this
-      # parses string literals and JSX text (never comments) to enforce it.
-      - name: UX-copy dash check
-        run: pnpm check:ux-copy
+      - name: Static quality checks
+        run: pnpm verify:static
 
   openapi-breaking:
+    # PR merge-base comparisons have no meaning for a merge group.
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -114,13 +80,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event.pull_request.head.sha }}
-          persist-credentials: false
-
-      - name: Checkout comparison base
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ github.event.pull_request.base.sha }}
-          path: .openapi-base
+          fetch-depth: 0
           persist-credentials: false
 
       - name: Compare public API contracts
@@ -129,13 +89,18 @@ jobs:
         # in the same PR. --err-ignore accepts only those listed findings.
         # Remove stale acceptances once the changed contract reaches the base.
         shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           set -euo pipefail
-          base=.openapi-base/openapi/v1.json
-          if [[ ! -f "$base" ]]; then
-            echo "Base branch has no openapi/v1.json; first release has no breaking-change baseline."
+          merge_base=$(git merge-base "$BASE_SHA" "$HEAD_SHA")
+          base="$RUNNER_TEMP/openapi-base.json"
+          if ! git cat-file -e "$merge_base:openapi/v1.json"; then
+            echo "Merge base has no openapi/v1.json; first release has no breaking-change baseline."
             exit 0
           fi
+          git show "$merge_base:openapi/v1.json" > "$base"
           curl --fail --silent --show-error --location \
             https://github.com/oasdiff/oasdiff/releases/download/v1.32.1/oasdiff_1.32.1_linux_amd64.tar.gz \
             --output "$RUNNER_TEMP/oasdiff.tar.gz"

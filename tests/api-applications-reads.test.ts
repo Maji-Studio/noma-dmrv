@@ -101,7 +101,7 @@ describe("application REST reads", { timeout: READ_TIMEOUT_MS }, () => {
     await db.insert(creditBatchProductionRuns).values({ organizationId: a.ctx.organizationId, creditBatchId: batch.id, productionRunId: a.runs[0].id });
     const [product, mixProduct] = await db.insert(biocharProducts).values(["CREDITED", "MIX"].map(suffix => ({ organizationId: a.ctx.organizationId, facilityId: a.facility.id,
       code: `BP-AP-${suffix}-${a.tag}`, formulationId: a.recipe.id, sourceBiocharStorageLocationId: a.source.id, storageLocationId: a.bin.id,
-      productionDate: new Date("2026-09-12"), placedAt: new Date("2026-09-12"), massKg: 100, moistureContentPercent: 20, waterAddedKg: 0 }))).returning();
+      productionDate: "2026-09-12", placedAt: new Date("2026-09-12"), massKg: 100, moistureContentPercent: 20, waterAddedKg: 0 }))).returning();
     // A frozen pro-rata product draw keeps only its applications out of credit slices.
     const [movement] = await db.insert(binMovements).values({ organizationId: a.ctx.organizationId, storageLocationId: a.source.id,
       lane: "biochar", movementType: "adjustment", massDeltaKg: -80, reason: "Product draw", outputKind: "product_draw",

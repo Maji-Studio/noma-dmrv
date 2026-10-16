@@ -111,7 +111,7 @@ describe("biochar product and movement REST races", { timeout: TIMEOUT_MS }, () 
     const state = await captureProductWriteState(f);
     expect(state.products).toHaveLength(1);
     expect(state.movements).toHaveLength(1);
-    expect(await productWriteAudits(f)).toMatchObject([{ operationId: "make_biochar_product", outcomeCode: "created", transport: "rest" }]);
+    expect(await productWriteAudits(f)).toMatchObject([{ operationId: "make_biochar_product", action: "created", source: "rest" }]);
     const records = await writeIdempotencyRecords(f);
     expect(records).toMatchObject([{ idempotencyKey: key, operationId: "make_biochar_product", credentialId: f.writeCredentialId }]);
     expect(records[0].outcome).not.toBeNull();

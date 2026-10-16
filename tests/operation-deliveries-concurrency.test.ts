@@ -1,9 +1,10 @@
+import { apiActivityWhere } from "./helpers/api-activity";
 import { randomUUID } from "node:crypto";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { and, eq } from "drizzle-orm";
 import type { Pool } from "pg";
 import { db } from "@/db";
-import { apiAuditEvents, apiIdempotencyRecords, binMovements, deliveries, outputStockAllocations } from "@/db/schema";
+import { activityEvents, apiIdempotencyRecords, binMovements, deliveries, outputStockAllocations } from "@/db/schema";
 import { lockBiocharTransportRouteTopology } from "@/data-access/transport-legs";
 import { getOutputStockHistory } from "@/data-access/output-stock-history";
 import * as ownedTransaction from "@/data-access/owned-transaction";
@@ -31,7 +32,7 @@ afterEach(async () => {
   vi.restoreAllMocks();
   for (const f of fixtures.splice(0)) {
     await db.delete(apiIdempotencyRecords).where(eq(apiIdempotencyRecords.organizationId, f.ctx.organizationId));
-    await db.delete(apiAuditEvents).where(eq(apiAuditEvents.organizationId, f.ctx.organizationId));
+    await db.delete(activityEvents).where(eq(activityEvents.organizationId, f.ctx.organizationId));
     await cleanupOutputStockFixture(db, f.ctx.organizationId);
   }
 });
@@ -90,7 +91,7 @@ describe("delivery operation races", { timeout: SUITE_TIMEOUT_MS }, () => {
     expect((await runOperation(recordDelivery, f.ctx, input(f), options)).replayed).toBe(true);
     expect(await rows(f)).toHaveLength(1);
     expect(await movements(f)).toHaveLength(1);
-    expect(await db.select().from(apiAuditEvents).where(eq(apiAuditEvents.organizationId, f.ctx.organizationId))).toHaveLength(1);
+    expect(await db.select().from(activityEvents).where(apiActivityWhere(f.ctx.organizationId))).toHaveLength(1);
     expect(await db.select().from(apiIdempotencyRecords).where(eq(apiIdempotencyRecords.organizationId, f.ctx.organizationId))).toHaveLength(1);
   });
 
@@ -126,7 +127,7 @@ describe("delivery operation races", { timeout: SUITE_TIMEOUT_MS }, () => {
     expect(await movements(f)).toHaveLength(1);
     expect(await db.select().from(outputStockAllocations).where(eq(outputStockAllocations.deliveryId, saved.data.delivery.id)))
       .toMatchObject([{ movementId: movement.id }]);
-    expect(await db.select().from(apiAuditEvents).where(eq(apiAuditEvents.organizationId, f.ctx.organizationId))).toHaveLength(1);
+    expect(await db.select().from(activityEvents).where(apiActivityWhere(f.ctx.organizationId))).toHaveLength(1);
     expect((await runOperation(recordDelivery, f.ctx, input(f), options)).data).toEqual(saved.data);
   });
 
