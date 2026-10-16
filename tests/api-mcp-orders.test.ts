@@ -245,9 +245,9 @@ describe("customer and order MCP tools", { timeout: TIMEOUT_MS }, () => {
   it.each([false, true])("refuses deletion and relationship edits with a delivery (archived: %s)", async (archived) => {
     const row = await saved();
     await insertReadDelivery(a, row.id, DELIVERED_KG, archived);
-    expect(await write("delete_order", { orderId: row.id, expectedVersion: row.version }, a.deleteKey)).toMatchObject({ isError: true, structuredContent: { code: "conflict", issues: [{ pointer: "/orderId" }] } });
+    expect(await write("delete_order", { orderId: row.id, expectedVersion: row.version }, a.deleteKey)).toMatchObject({ isError: true, structuredContent: { code: "certification_locked", issues: [{ pointer: "/orderId" }] } });
     for (const [field, value] of Object.entries({ facilityId: a.otherFacility.id, customerId: a.otherCustomer.id, formulationId: a.pure.id, customerLocationId: a.otherLocation.id })) {
-      expect(await write("update_order", { orderId: row.id, expectedVersion: row.version, [field]: value })).toMatchObject({ isError: true, structuredContent: { code: "conflict", issues: [{ pointer: `/${field}` }] } });
+      expect(await write("update_order", { orderId: row.id, expectedVersion: row.version, [field]: value })).toMatchObject({ isError: true, structuredContent: { code: "certification_locked", issues: [{ pointer: `/${field}` }] } });
     }
     expect((await readRestOrder(a, row.id)).row).toEqual(row);
     expect(await orderAudits(a)).toHaveLength(1);

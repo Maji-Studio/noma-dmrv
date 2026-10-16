@@ -60,26 +60,6 @@ type MirrorsDbEnum = [LocalSubmissionStatus] extends [DbSubmissionStatus]
 /** Compile-time proof that the list mirrors the DB enum: anything but `true` fails the build. */
 export const LOCAL_SUBMISSION_STATUSES_MIRROR_DB_ENUM: MirrorsDbEnum = true;
 
-/**
- * Local submission statuses that carry a live remote dependency, and so freeze
- * what their removal represents: while one is present the removal's credit-batch
- * membership can't be regrouped and its facility's certifier mapping can't be
- * repointed/unlinked (ADR 0003). Terminal `rejected`/`superseded` rows are
- * excluded — they have no live remote resource a change could orphan.
- *
- * The single client-safe source for this list: the server guards in
- * `data-access/certification.ts` (`hasBlockingFacilitySubmission`) and
- * `data-access/credit-batch-certification-lock.ts`
- * (`assertRemovalAllowsCreditBatchMutation`) and the client gate in
- * `lib/certification/readiness.ts` (`canRegroupRemoval`) both import it from
- * here, so the UI never offers a control the server will refuse.
- */
-export const BLOCKING_SUBMISSION_STATUSES: readonly LocalSubmissionStatus[] = [
-  "draft",
-  "submitted",
-  "accepted",
-];
-
 /** Remote Isometric GHG-statement status (verifier lifecycle). */
 export type RemoteGhgStatus = components["schemas"]["GhgStatementStatus"];
 
@@ -118,44 +98,6 @@ const IN_PROGRESS: DerivedStatus = {
   isActionable: false,
   isTerminal: false,
 };
-
-/**
- * Kinds in which the record definition behind a Removal is locked (interim
- * certification lock, design review DR-003): the removal has left noma (or a
- * submission is in flight), so editing or deleting the records that back it
- * would silently contradict what the registry holds. `rejected` and
- * `verification-failed` stay editable — the operator must amend data to
- * resubmit. This predicate drives the UI affordances only; the server-side
- * enforcement is `assertCanMutateCertifiedLineage` /
- * `assertRemovalAllowsCreditBatchMutation` (data-access), which block on
- * `BLOCKING_SUBMISSION_STATUSES` and are deliberately stricter (a stale
- * draft submission still blocks there). The full amendment flow is a DEC +
- * Isometric decision (docs/open-questions.md).
- */
-// Exhaustive by construction: adding a DerivedStatusKind without deciding its
-// lock stance is a typecheck error, so a new kind can never silently default
-// to editable (the unsafe direction for a certification gate).
-const REMOVAL_LOCK_BY_KIND: Record<DerivedStatusKind, boolean> = {
-  "in-progress": true,
-  interrupted: true,
-  "not-submitted": false,
-  submitted: true,
-  draft: false,
-  "in-registry": true,
-  "in-verification": true,
-  "pending-changes": true,
-  verified: true,
-  issued: true,
-  rejected: false,
-  "verification-failed": false,
-  superseded: true,
-};
-
-export function isRemovalStatusLocked(
-  status: Pick<DerivedStatus, "kind"> | null | undefined,
-): boolean {
-  return status != null && REMOVAL_LOCK_BY_KIND[status.kind];
-}
 
 export interface RemovalStatusInput {
   /** Latest ledger status, or `null` when no submission row exists yet. */

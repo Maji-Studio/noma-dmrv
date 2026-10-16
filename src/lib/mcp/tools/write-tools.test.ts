@@ -10,6 +10,7 @@ import { writeTools as allWriteTools } from "./write-tools";
 const writeTools = allWriteTools.filter((tool) => tool.scope?.startsWith("feedstocks:"));
 
 vi.mock("@/db", () => ({ db: {} }));
+vi.mock("@/data-access/certifier-credentials", () => ({ resolveIsometricClient: vi.fn() }));
 vi.mock("@/data-access/delivery-output-writes", () => ({}));
 vi.mock("@/lib/read-models/api-deliveries", () => ({ readApiDelivery: vi.fn(), readApiDeliveryList: vi.fn() }));
 vi.mock("@/data-access/orders", () => ({}));

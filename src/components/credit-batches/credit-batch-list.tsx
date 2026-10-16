@@ -35,7 +35,6 @@ import {
   PageHeader,
 } from "@/components/ui";
 import { ServerError } from "@/components/forms";
-import { isRemovalStatusLocked } from "@/lib/certification/status";
 import { CreditBatchForm } from "./credit-batch-form";
 import { CreditBatchCard } from "./credit-batch-card";
 import { CreditBatchHealthStrip } from "./credit-batch-health-strip";
@@ -534,7 +533,7 @@ export function CreditBatchList({
   const sideSheetHealth = sideSheetEntity
     ? batchHealthSummaries[sideSheetEntity.id]
     : undefined;
-  const sideSheetLocked = isRemovalStatusLocked(sideSheetHealth?.removalStatus);
+  const sideSheetLocked = sideSheetHealth?.recordLock?.level === "sent";
 
   return (
     <div className="container-max page-shell">

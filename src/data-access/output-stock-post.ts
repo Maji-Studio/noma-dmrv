@@ -24,7 +24,7 @@ import { postedMoisturePercent, prepareOutputStock, stockFingerprint } from './o
 import type { SnapshotStock } from './stock-effects';
 import { lockBiocharTransportRouteTopology, syncBiocharProductTransportLegs } from './transport-legs';
 import { requireOrgScope } from './utils';
-import { assertLatestOutputMovement, outputReceiptMarker } from './output-stock-edit-lock';
+import { assertOutputMovementEditable, outputReceiptMarker } from './output-stock-edit-lock';
 
 const OUTPUT_REQUEST_CONFLICT_MESSAGE = 'This request key was already used with different values.';
 const OUTPUT_BIN_NOT_FOUND_MESSAGE = 'Output bin not found or archived';
@@ -235,8 +235,8 @@ export interface RecordedOutputStockMovement {
 
 export interface RecordOutputStockMovementOptions extends OutputStockPostingOptions {
   capture?: CaptureActivity;
-  /** Own-form edits require the entry to be the bin's latest, regardless of layer dependencies. */
-  requireLatestCorrection?: boolean;
+  /** Own-form edits check dependencies and Sent. */
+  checkFormEditLock?: boolean;
   /** Injectable server clock for exact-boundary tests. */
   now?: Date;
 }
@@ -282,7 +282,7 @@ export async function recordOutputStockMovementInTransaction(ctx: OrgContext, tx
         savedProducts: (await replayTx.select().from(biocharProducts).where(and(eq(biocharProducts.organizationId, ctx.organizationId), eq(biocharProducts.storageLocationId, input.storageLocationId)))).map(toBiocharProductRecord) };
     },
     write: async (writeTx, post) => {
-      if (options.requireLatestCorrection && input.correctsMovementId) await assertLatestOutputMovement(ctx, input.storageLocationId, input.correctsMovementId, writeTx);
+      if (options.checkFormEditLock && input.correctsMovementId) await assertOutputMovementEditable(ctx, input.storageLocationId, input.correctsMovementId, writeTx);
       const result = await post();
       const allocations = await writeTx.select().from(outputStockAllocations).where(and(eq(outputStockAllocations.organizationId, ctx.organizationId), eq(outputStockAllocations.movementId, result.movement.id)));
       options.capture?.(result.movement.id, null, { ...result.movement, sources: result.movement.inputSnapshot?.sources, allocations });
