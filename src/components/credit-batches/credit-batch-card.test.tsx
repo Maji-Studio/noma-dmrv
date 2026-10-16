@@ -195,8 +195,8 @@ describe("CreditBatchCard", () => {
         }),
       );
 
-    expect(renderCardText(unavailableBatch)).not.toContain("CO₂e stored");
-    expect(renderCardText(availableBatch)).toContain("CO₂e stored12.50 t");
+    expect(renderCardText(unavailableBatch)).not.toContain("Estimated CO₂e stored");
+    expect(renderCardText(availableBatch)).toContain("Estimated CO₂e stored12.50 t");
   });
 
   it("places readiness beside the open lifecycle state", () => {
