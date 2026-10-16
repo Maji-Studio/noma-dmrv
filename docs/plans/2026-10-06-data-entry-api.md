@@ -482,6 +482,27 @@ Confirmed without another question:
 102. **Upload rules:** upload request and confirm have no dry run, and REST upload requests require `Idempotency-Key`. Confirm keeps no idempotency record and takes no `If-Match` (named exceptions). Documents stay private on the API. Clients declare a SHA-256; the server verifies size and SHA-256 before promoting bytes to a server-only key.
 103. **The bill-of-lading warning** stays create-only and points to the API upload.
 
+Decided 2026-10-16 (Kenji, round 11, Phase 7).
+
+104. **Phase 7 ships in three PRs** (Q80). 7a `feat/api-formulations` starts now and merges after #1080; 7b `feat/api-parties` (supplier and customer create, update, delete) follows #1080; 7c `feat/api-party-locations` (location writes, the distance fill on older records, the storage-site fence) follows 7b.
+105. **Agents read and write places and site defaults, not contact details** (Q81). Country, region, city, site description, default soil temperature, facility distances, the customer's crop type and the supplier's source region join the API. Contact names, emails, phones and addresses stay in the app (Q68 stands for them).
+106. **Supplier, customer, location and formulation changes show in Activity** (Q82). Supplier, Supplier location, Customer, Customer location and Formulation become Activity record types with their own filter, after the custody chain and before Removals. Every write leaves one entry, from the app or the API.
+107. **Suppliers, customers and formulations get archive and restore now** (Q83, against the recommendation). An archived record leaves the pickers and cannot be used for new intakes, orders, products or bin claims (decision 83 pattern); old records keep it. Archive and restore are their own operations.
+108. **Deleting a customer deletes its locations** (Q84), as for suppliers, in the app and the API. It is refused while an order uses the customer or any of its locations is a registered Isometric storage site; then nothing is deleted.
+109. **A registered storage site keeps its name and GPS** (Q85). Changes are refused in the app and the API; a save that sets them back to the registered values passes. Other fields stay editable. A real move means a new location.
+110. **A feedstock type used by a formulation keeps its blend-ingredient use** (Q86). The change is refused until the ingredient is replaced.
+
+Confirmed without another question:
+
+111. **Scopes:** `formulations|suppliers|customers:write` opt-in, `:delete` off by default. Location deletes use the party's delete scope.
+112. **In-use records cannot be deleted:** a supplier, customer, location or formulation used by an intake, order, delivery, product or bin is refused with the users listed. Three cases that fail with a database error today get this message, in the app too.
+113. **Codes are server-generated** and can be changed later.
+114. **Facility distances follow #1080:** one-way kilometres, the server doubles for the round trip, older intakes and deliveries without a distance are filled, submitted lineage is never touched.
+115. **Formulations stay editable after products are made;** each product keeps its recipe. Removing an ingredient that products used is refused.
+116. **Nothing goes to Isometric over the API;** storage sites are registered only in the app.
+117. **One supplier or customer per request with 1 to 50 locations; one formulation per request.**
+118. **Bin saves lock the formulation:** bin create, update and quick-add take the formulation `FOR SHARE`, so a bin cannot point at a formulation being deleted (found in review, fixed in the app too).
+
 ## 14. What review changed
 
 | Change | Raised by |
