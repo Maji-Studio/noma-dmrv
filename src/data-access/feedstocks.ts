@@ -1,3 +1,6 @@
+import { readRecordDependents } from "./record-lock-dependents";
+import { assertRecordLockFields } from "@/lib/record-lock-fields";
+import { recordLocks } from "@/lib/record-lock";
 import type { CaptureActivity } from "@/lib/activity-changes";
 import type { ActivityEventInput } from "./activity-events";
 import { withFeedstockTransportReadiness } from "./feedstock-transport-readiness";
@@ -648,6 +651,7 @@ export async function updateFeedstockInTransaction(
     "update",
   ), "certification_locked");
 
+  assertRecordLockFields(recordLocks.feedstock({ removals: [], dependents: await readRecordDependents(ctx, tx, { entityType: "feedstock", entityId: feedstockId }) }), locked, feedstockData);
   // Derive before anything reads the new masses: the status, the stock-lane
   // check, and the write below must all see the same dry figure.
   const derivedMassDryKg = resolveFeedstockDryMass(locked, feedstockData);

@@ -1,3 +1,5 @@
+import { lockStorageLocationRecords } from './storage-location-record-lock';
+import { assertRecordLockFields } from '@/lib/record-lock-fields';
 /**
  * Storage Locations Data Access Layer
  * CRUD operations for storage locations with auth guards, pagination, and filtering
@@ -466,6 +468,7 @@ export async function updateStorageLocation(
     // vocabulary, and an edit needs the restore instruction instead.
     await readEditableStorageLocation(ctx, tx, storageLocationId);
     await lockBinStock(ctx, tx, storageLocationId);
+    const recordLock = await lockStorageLocationRecords(ctx, tx, storageLocationId);
     // `FOR UPDATE` on the bin row itself: the advisory lock above serializes
     // stock writes, but archive and restore change `updatedAt` without taking
     // it, so only the row lock makes the version check below race-free.
@@ -481,6 +484,8 @@ export async function updateStorageLocation(
       expectedVersion: data.expectedVersion,
       actualVersion: existing.version,
     });
+
+    if (recordLock.level === 'sent') assertRecordLockFields(recordLock, existing, data);
 
     // If code is being changed, check for duplicates
     if (data.code && data.code !== existing.code) {
@@ -599,6 +604,7 @@ export async function updateStorageLocation(
       }
     }
 
+    assertRecordLockFields(recordLock, existing, data);
     const stockMode = await applyStockModeChange(ctx, tx, existing, { type: effectiveType as StorageLocationType, stockMode: data.stockMode, mergedAt: data.mergedAt });
 
     const dataWithoutNormalized: Partial<typeof data> = { ...data };

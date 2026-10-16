@@ -137,7 +137,7 @@ protected values. Unrelated intake alone does not lock an entry. An explicitly
 ordered draw from another sub-bin does not lock stock it did not use. History
 and the delivery form show the same dependency reason as the server, which
 rechecks under the posting path's bin-stock lock. Delivery source, order,
-date/time and deletion retain their existing posting restrictions.
+and date/time retain their existing posting restrictions.
 Old counts remain readable without an edit action. Feedstock Lost mass supports
 creation only; feedstock intake changes retain ADR 0027's wet-lane guard.
 
@@ -187,7 +187,16 @@ Preview fingerprints are checked again while holding bin and request locks.
 Repeated request keys return the saved result; changing the payload for a reused
 key fails. Delivery corrections also lock the delivery before checking for
 applications. Posted product measurements stay immutable. Delivery mass edits append corrections;
-posted products and deliveries cannot be deleted through ordinary CRUD forms.
+Open products and deliveries can be deleted through app operations. The writer
+appends an exact inverse of the frozen source allocations under the bin stock
+lock before removing the live record. History retains the original and its
+linked reversal. Later active draws, counts, applications and Sent lineage
+refuse deletion with `certification_locked` and record-lock guidance. Reversed
+draws no longer block earlier delivery corrections or deletion. Product layers
+referenced by historical allocations remain protected. Orders, including archived
+orders and orders that never had deliveries, can be deleted when no delivery
+remains; archived deliveries still count. These product and delivery deletes
+are not exposed in REST or MCP.
 
 ## API stock read
 

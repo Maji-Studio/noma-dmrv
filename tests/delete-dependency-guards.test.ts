@@ -216,7 +216,7 @@ describe("delete dependency guards", () => {
 
     try {
       await expect(deleteDelivery(makeTestOrgContext(TEST_USER_ID), fixture.deliveryId, await labLogisticsVersion(makeTestOrgContext(TEST_USER_ID), "deliveries", fixture.deliveryId))).rejects.toThrow(
-        /Posted deliveries retain their history/,
+        /application/i,
       );
     } finally {
       await db.transaction(async (tx) => {

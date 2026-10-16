@@ -37,8 +37,8 @@ components (UI)
   `update_biochar_product`, `record_output_stock_movement`, `record_lab_sample`,
   `update_lab_sample`, `delete_lab_sample`, `record_order`, `update_order`,
   `delete_order`). Application writes use the registered `record_application`,
-  `update_application` and `delete_application` operations. UI product deletes
-  stay off the runner. Lost mass form edits run `record_output_stock_movement`
+  `update_application` and `delete_application` operations. Product and delivery deletes use the app-only `delete_posted_biochar_product`
+  and `delete_posted_delivery` operations, with activity capture and document cleanup. Lost mass form edits run `record_output_stock_movement`
   with the unpublished `checkFormEditLock` option. Delivery updates run
   the UI-only `update_posted_delivery` operation: the delivery row, stock
   correction and transport legs share its transaction. Both use the shared

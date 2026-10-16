@@ -1,5 +1,3 @@
-import { assertRowVersion } from "./row-version";
-import { lockBinStocks } from './lock-bin-stocks';
 /**
  * Biochar Products Data Access Layer
  * CRUD operations for biochar products with auth guards, pagination, filtering, and relations
@@ -100,7 +98,6 @@ export interface PaginatedBiocharProducts {
 // ============================================
 
 import { SafeError } from "@/lib/errors";
-import { assertCanMutateCertifiedLineage } from "./certification-lineage-guards";
 import { requireOrgScope } from "./utils";
 
 // ============================================
@@ -518,19 +515,4 @@ export { createBiocharProduct } from "./biochar-product-create";
 
 export { updateBiocharProduct, updateBiocharProductInTransaction, type UpdateBiocharProductInput } from "./biochar-product-update";
 
-export async function deleteBiocharProduct(ctx: OrgContext, productId: string, expectedVersion: number): Promise<void> {
-  requireOrgScope(ctx);
-  await db.transaction(async tx => {
-    const [snapshot] = await tx.select({ storageLocationId: biocharProducts.storageLocationId, sourceBiocharStorageLocationId: biocharProducts.sourceBiocharStorageLocationId })
-      .from(biocharProducts).where(and(eq(biocharProducts.organizationId, ctx.organizationId), eq(biocharProducts.id, productId)));
-    if (!snapshot) throw new SafeError('Biochar product not found');
-    // Match updates: serialize with stock before taking artifact locks, then the product row.
-    await lockBinStocks(ctx, tx, [snapshot.storageLocationId, snapshot.sourceBiocharStorageLocationId]);
-    // Application allocation FKs take product KEY SHARE after artifact locks.
-    await assertCanMutateCertifiedLineage(ctx, tx, { entityType: 'biocharProduct', entityId: productId }, 'delete');
-    const [product] = await tx.select({ id: biocharProducts.id, version: biocharProducts.version }).from(biocharProducts).where(and(eq(biocharProducts.organizationId, ctx.organizationId), eq(biocharProducts.id, productId))).for("update");
-    if (!product) throw new SafeError('Biochar product not found');
-    assertRowVersion({ entity: "biocharProduct", id: productId, expectedVersion, actualVersion: product.version });
-    throw new SafeError('Posted products retain their source allocations and history. Use an explicit stock correction.');
-  });
-}
+export { deleteBiocharProduct, deleteBiocharProductInTransaction } from './biochar-product-delete';

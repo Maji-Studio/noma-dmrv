@@ -65,7 +65,8 @@ export async function assertOutputCorrectionDependencies(
   // A later oldest-first or pro-rata draw would have split differently had the
   // affected layers held other stock; an operator-ordered draw took only the
   // sub-bins it names, so it depends on the correction only if it touched one.
-  const later = all.find(r => r.movement.postingSequence > original.postingSequence &&
+  const reversed = new Set(all.filter(row => row.movement.outputKind === 'reversal').map(row => row.movement.correctsMovementId));
+  const later = all.find(r => r.movement.outputKind !== 'reversal' && !reversed.has(r.movement.id) && r.movement.postingSequence > original.postingSequence &&
     (affected.has(r.allocation.biocharProductId ?? r.allocation.productionRunId) ||
       (r.allocation.basisSnapshot.policy !== 'operator_order' &&
         affectedLayers.some(l => l.placedAt <= r.movement.occurredAt!.toISOString()))));
@@ -85,7 +86,8 @@ export async function assertOutputCorrectionDependencies(
   };
   if (later) throw await blockedBy(later.movement, at => `Correction blocked by a later ${outputStockEventLabel(later.movement.outputKind!).toLowerCase()}: ${later.movement.reason} (${at}).`);
   const counts = await reader.select().from(binMovements).where(and(eq(binMovements.organizationId, ctx.organizationId), eq(binMovements.storageLocationId, input.storageLocationId), gt(binMovements.postingSequence, original.postingSequence)));
-  const count = counts.find(m => isCountMovement(m) && layers.some(l => affected.has(l.id) && l.placedAt <= m.occurredAt!.toISOString()));
+  for (const movement of counts) if (movement.outputKind === 'reversal') reversed.add(movement.correctsMovementId);
+  const count = counts.find(m => !reversed.has(m.id) && isCountMovement(m) && layers.some(l => affected.has(l.id) && l.placedAt <= m.occurredAt!.toISOString()));
   if (count) throw await blockedBy({ ...count, reason: 'Count' }, () => 'Correction blocked by a later count.');
   // A bin switched back to split held nothing then; restoring stock across the switch would put a mixed pile back as sub-bins.
   const split = counts.find(m => m.outputKind === 'split');

@@ -1,3 +1,6 @@
+import { readRecordDependents } from "./record-lock-dependents";
+import { assertRecordLockFields } from "@/lib/record-lock-fields";
+import { recordLocks } from "@/lib/record-lock";
 import type { CaptureActivity } from "@/lib/activity-changes";
 import { db, type DbTransaction } from "@/db";
 import { biocharProducts, type BiocharProduct } from "@/db/schema";
@@ -58,6 +61,7 @@ export async function updateBiocharProductInTransaction(ctx: OrgContext, tx: DbT
   const [locked] = await tx.select().from(biocharProducts).where(and(eq(biocharProducts.organizationId, ctx.organizationId), eq(biocharProducts.id, productId))).for("update");
   if (!locked) throw productNotFound();
   assertRowVersion({ entity: "biocharProduct", id: productId, expectedVersion: data.expectedVersion, actualVersion: locked.version });
+  assertRecordLockFields(recordLocks.biocharProduct({ removals: [], dependents: await readRecordDependents(ctx, tx, { entityType: "biocharProduct", entityId: productId }) }), locked, Object.fromEntries(Object.entries(data).filter(([key]) => key !== "expectedVersion")), IMMUTABLE_POSTING_MESSAGE);
   const placementChanged = data.placedAt !== undefined && new Date(data.placedAt).getTime() !== product.placedAt.getTime();
   if (placementChanged || POSTED_FIELDS.some(key => data[key] !== undefined && data[key] !== product[key])) throw new SafeError(IMMUTABLE_POSTING_MESSAGE);
   if (data.composition && compositionAllocationChanged(product.composition as Record<string, unknown>, data.composition)) throw new SafeError(IMMUTABLE_INGREDIENTS_MESSAGE);

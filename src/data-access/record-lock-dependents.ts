@@ -1,6 +1,6 @@
 import { and, eq, isNotNull } from "drizzle-orm";
 import type { DbTransaction } from "@/db";
-import { applications, biocharProductSourceAllocations, creditBatchApplications, creditBatchProductionRuns, deliveries, outputStockAllocations, productionRunFeedstocks, samples, outputStockRunAllocations, binMovements, productionRuns } from "@/db/schema";
+import { applications, biocharProductSourceAllocations, creditBatchApplications, creditBatchProductionRuns, deliveries, outputStockAllocations, productionRunFeedstocks, samples, outputStockRunAllocations, binMovements, productionRuns, biocharProducts } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import type { RecordLockHolder } from "@/lib/record-lock";
 import type { CertifiedLineageTarget } from "./certification-lineage-guards";
@@ -36,7 +36,10 @@ export async function readRecordDependents(ctx: OrgContext, tx: Pick<DbTransacti
     case "biocharProduct": {
       const rows = await tx.select({ id: outputStockAllocations.movementId }).from(outputStockAllocations)
         .where(and(eq(outputStockAllocations.organizationId, ctx.organizationId), eq(outputStockAllocations.biocharProductId, id)));
-      return rows.map(row => ({ kind: "stockEntry", id: row.id }));
+      const [product] = await tx.select().from(biocharProducts).where(and(eq(biocharProducts.organizationId, ctx.organizationId), eq(biocharProducts.id, id)));
+      const movements = !product?.storageLocationId ? [] : await tx.select().from(binMovements).where(and(eq(binMovements.organizationId, ctx.organizationId), eq(binMovements.storageLocationId, product.storageLocationId)));
+      const counts = movements.filter(movement => isCountMovement(movement) && product!.createdAt <= movement.createdAt && movement.occurredAt && product!.placedAt <= movement.occurredAt);
+      return [...rows.map(row => ({ kind: "stockEntry", id: row.id })), ...counts.map(row => ({ kind: "stockEntry", id: row.id }))];
     }
     case "order": {
       const rows = await tx.select({ id: deliveries.id, label: deliveries.code }).from(deliveries)

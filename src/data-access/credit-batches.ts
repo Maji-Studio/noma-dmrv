@@ -1,3 +1,6 @@
+import { readRecordDependents } from './record-lock-dependents';
+import { assertRecordLockFields } from '@/lib/record-lock-fields';
+import { recordLocks } from '@/lib/record-lock';
 import { toActivityEntityType } from "@/lib/activity-entity-type";
 import { recordActivityChange } from "./activity-events";
 import { recordMembershipActivity } from "./write-activity";
@@ -622,6 +625,9 @@ export async function updateCreditBatch(
     if (shouldRefreshMembership) {
       await assertCreditBatchSlicesAreUnassigned(ctx, tx, id);
     }
+    assertRecordLockFields(recordLocks.creditBatch({ removals: [], dependents: await readRecordDependents(ctx, tx, { entityType: 'creditBatch', entityId: id }) }),
+      { ...existingBatch, productionRunIds: currentProductionRunIds },
+      { ...updateFields, startDate: updateData.startDate, endDate: updateData.endDate, productionRunIds });
 
     const targetFacilityId = updateFields.facilityId ?? existingBatch.facilityId;
     // Resolve the effective date window after update
