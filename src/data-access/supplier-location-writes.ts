@@ -3,11 +3,12 @@ import type { DbTransaction } from "@/db";
 import { suppliers, supplierLocations, type SupplierLocation } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import type { CaptureActivity } from "@/lib/activity-changes";
+import { locationDistanceFillWarnings } from "@/lib/location-write-warnings";
 import { partyNotFound, partyLocationNotFound, partyArchived, partyArchivedForEdit } from "@/lib/party-domain-errors";
 import { validationFailed } from "@/lib/operations/errors";
 import { addSupplierLocationInput, updateSupplierLocationInput, supplierLocationVersionInput, type AddSupplierLocationInput, type UpdateSupplierLocationInput, type SupplierLocationVersionInput } from "@/schemas/supplier-location-input";
 import type { FacilityDistanceInput } from "@/schemas/facility-distances";
-import { fillMissingLocationDistances } from "./location-distance-fill";
+import { fillMissingLocationDistances, type LocationDistanceFillResult } from "./location-distance-fill";
 import { lockLocationFacilities } from "./party-reference-guards";
 import { upsertLocationFacilityDistances, withLocationFacilityDistances } from "./location-facility-distances";
 import { assertRowVersion, nextVersion } from "./row-version";
@@ -15,6 +16,8 @@ import { SUPPLIER_LOCATION_ORDER } from "./supplier-detail";
 import { requireOrgScope } from "./utils";
 
 const SUPPLIER_LOCATION_CONFLICT_ENTITY = "supplierLocation";
+
+export type SupplierLocationWriteOutput = SupplierLocation & { warnings: string[] };
 
 export interface SupplierLocationInsertInput {
   name?: string | null;
@@ -39,7 +42,8 @@ export async function createSupplierLocationInTransaction(
   tx: DbTransaction,
   supplierId: string,
   data: SupplierLocationInsertInput,
-): Promise<SupplierLocation> {
+  captureLocation?: CaptureActivity,
+): Promise<{ location: SupplierLocation; fill: LocationDistanceFillResult }> {
   requireOrgScope(ctx);
 
   await lockLocationFacilities(ctx, tx, data.facilityDistances, []);
@@ -76,7 +80,10 @@ export async function createSupplierLocationInTransaction(
 
   // Clear the prior default first so the partial unique index never sees two.
   if (makeDefault) {
-    await tx
+    const siblings = await tx.select().from(supplierLocations).where(and(
+      eq(supplierLocations.supplierId, supplierId), eq(supplierLocations.organizationId, ctx.organizationId), eq(supplierLocations.isDefault, true),
+    ));
+    const demoted = await tx
       .update(supplierLocations)
       .set({ version: nextVersion(supplierLocations.version), isDefault: false, updatedAt: new Date() })
       .where(
@@ -85,7 +92,8 @@ export async function createSupplierLocationInTransaction(
           eq(supplierLocations.organizationId, ctx.organizationId),
           eq(supplierLocations.isDefault, true),
         ),
-      );
+      ).returning();
+    for (const sibling of demoted) captureLocation?.(sibling.id, siblings.find(row => row.id === sibling.id)!, sibling);
   }
 
   const [location] = await tx
@@ -104,8 +112,8 @@ export async function createSupplierLocationInTransaction(
     })
     .returning();
 
-  await upsertLocationFacilityDistances(ctx, tx, "supplier", location.id, data.facilityDistances);
-  return (await withLocationFacilityDistances(ctx, "supplier", [location], tx))[0];
+  const fill = await upsertLocationFacilityDistances(ctx, tx, "supplier", location.id, data.facilityDistances);
+  return { location: (await withLocationFacilityDistances(ctx, "supplier", [location], tx))[0], fill };
 }
 
 
@@ -116,14 +124,14 @@ export async function createSupplierLocationInTransaction(
  * artifacts, skip submitted, leg FOR UPDATE, syncFeedstockTransportLeg); tx
  * readback. The operation drains storage after commit. Parent version is unchanged.
  */
-export async function addSupplierLocationInTransaction(ctx: OrgContext, tx: DbTransaction, input: AddSupplierLocationInput, capture?: CaptureActivity): Promise<SupplierLocation> {
+export async function addSupplierLocationInTransaction(ctx: OrgContext, tx: DbTransaction, input: AddSupplierLocationInput, capture?: CaptureActivity, captureLocation?: CaptureActivity): Promise<SupplierLocationWriteOutput> {
   requireOrgScope(ctx);
   const parsed = addSupplierLocationInput.safeParse(input);
   if (!parsed.success) throw validationFailed(parsed.error);
   const { supplierId, ...data } = parsed.data;
-  const saved = await createSupplierLocationInTransaction(ctx, tx, supplierId, data);
+  const { location: saved, fill } = await createSupplierLocationInTransaction(ctx, tx, supplierId, data, captureLocation);
   capture?.(saved.id, null, saved);
-  return saved;
+  return { ...saved, warnings: locationDistanceFillWarnings("supplier", fill) };
 }
 
 /** Unlocked discovery on the runner connection; no global-db preflight. */
@@ -142,7 +150,7 @@ async function discoverSupplier(ctx: OrgContext, tx: DbTransaction, input: Suppl
  * update; pairs with one deferred fill pass on promotion; tx readback; operation
  * afterCommit storage drain. Parent locks never bump its version.
  */
-export async function updateSupplierLocationInTransaction(ctx: OrgContext, tx: DbTransaction, input: UpdateSupplierLocationInput, capture?: CaptureActivity): Promise<SupplierLocation> {
+export async function updateSupplierLocationInTransaction(ctx: OrgContext, tx: DbTransaction, input: UpdateSupplierLocationInput, capture?: CaptureActivity, captureLocation?: CaptureActivity): Promise<SupplierLocationWriteOutput> {
   requireOrgScope(ctx);
   const parsed = updateSupplierLocationInput.safeParse(input);
   if (!parsed.success) throw validationFailed(parsed.error);
@@ -200,7 +208,11 @@ export async function updateSupplierLocationInTransaction(ctx: OrgContext, tx: D
 
   // Promoting this location to default demotes the supplier's current default.
   if (data.isDefault === true) {
-    await tx
+    const siblings = await tx.select().from(supplierLocations).where(and(
+      eq(supplierLocations.supplierId, supplierId), eq(supplierLocations.organizationId, ctx.organizationId),
+      eq(supplierLocations.isDefault, true), ne(supplierLocations.id, locationId),
+    ));
+    const demoted = await tx
       .update(supplierLocations)
       .set({ version: nextVersion(supplierLocations.version), isDefault: false, updatedAt: new Date() })
       .where(
@@ -210,7 +222,8 @@ export async function updateSupplierLocationInTransaction(ctx: OrgContext, tx: D
           eq(supplierLocations.isDefault, true),
           ne(supplierLocations.id, locationId)
         )
-      );
+      ).returning();
+    for (const sibling of demoted) captureLocation?.(sibling.id, siblings.find(row => row.id === sibling.id)!, sibling);
   }
 
   const [updated] = await tx
@@ -236,13 +249,13 @@ export async function updateSupplierLocationInTransaction(ctx: OrgContext, tx: D
   const promotingDefault = data.isDefault === true && !locked.isDefault;
   // Promotion must lock all eligible feedstocks in one ascending-id pass,
   // matching vehicle edits, rather than filling changed pairs first.
-  await upsertLocationFacilityDistances(ctx, tx, "supplier", locationId, facilityDistances, { deferFill: promotingDefault });
+  let fill = await upsertLocationFacilityDistances(ctx, tx, "supplier", locationId, facilityDistances, { deferFill: promotingDefault });
   const result = (await withLocationFacilityDistances(ctx, "supplier", [updated], tx))[0];
   if (promotingDefault) {
-    await fillMissingLocationDistances(ctx, tx, "supplier", locationId, result.facilityDistances);
+    fill = await fillMissingLocationDistances(ctx, tx, "supplier", locationId, result.facilityDistances);
   }
   capture?.(result.id, before, result);
-  return result;
+  return { ...result, warnings: locationDistanceFillWarnings("supplier", fill) };
 }
 
 /**
@@ -251,7 +264,7 @@ export async function updateSupplierLocationInTransaction(ctx: OrgContext, tx: D
  * FOR UPDATE, promote with a version bump. No fill on delete promotion and no
  * parent version bump. Parent discovery is an unlocked tx read.
  */
-export async function deleteSupplierLocationInTransaction(ctx: OrgContext, tx: DbTransaction, input: SupplierLocationVersionInput, capture?: CaptureActivity): Promise<SupplierLocation> {
+export async function deleteSupplierLocationInTransaction(ctx: OrgContext, tx: DbTransaction, input: SupplierLocationVersionInput, capture?: CaptureActivity, captureLocation?: CaptureActivity): Promise<SupplierLocationWriteOutput> {
   requireOrgScope(ctx);
   const parsed = supplierLocationVersionInput.safeParse(input);
   if (!parsed.success) throw validationFailed(parsed.error);
@@ -296,9 +309,10 @@ export async function deleteSupplierLocationInTransaction(ctx: OrgContext, tx: D
   // Deleting the default promotes the first remaining location (in list
   // order) so a supplier with locations always has a default.
   const [gone] = deleted;
+  const warnings: string[] = [];
   if (gone.isDefault) {
     const [next] = await tx
-      .select({ id: supplierLocations.id })
+      .select()
       .from(supplierLocations)
       .where(
         and(
@@ -310,13 +324,15 @@ export async function deleteSupplierLocationInTransaction(ctx: OrgContext, tx: D
       .limit(1)
       .for("update");
     if (next) {
-      await tx
+      const [promoted] = await tx
         .update(supplierLocations)
         .set({ version: nextVersion(supplierLocations.version), isDefault: true, updatedAt: new Date() })
-        .where(and(eq(supplierLocations.id, next.id), eq(supplierLocations.organizationId, ctx.organizationId)));
+        .where(and(eq(supplierLocations.id, next.id), eq(supplierLocations.organizationId, ctx.organizationId))).returning();
+      captureLocation?.(next.id, next, promoted);
+      warnings.push(`${promoted.name || promoted.country} is now the default location. New intakes use its distances.`);
     }
   }
 
   capture?.(before.id, before, null);
-  return before;
+  return { ...before, warnings };
 }

@@ -55,7 +55,7 @@ export async function createCustomerInTransaction(ctx: OrgContext, tx: DbTransac
   const inserted: CustomerLocation[] = [];
   for (const location of locations) {
     const { siteDescription, ...fields } = location;
-    inserted.push(await createCustomerLocationInTransaction(ctx, tx, parent.id, { ...fields, address: siteDescription }));
+    inserted.push((await createCustomerLocationInTransaction(ctx, tx, parent.id, { ...fields, address: siteDescription })).location);
   }
   const saved = await tx.select().from(customerLocations).where(and(eq(customerLocations.organizationId, ctx.organizationId), eq(customerLocations.customerId, parent.id)));
   const enriched = await withLocationFacilityDistances(ctx, "customer", saved, tx);

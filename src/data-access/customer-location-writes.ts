@@ -3,6 +3,8 @@ import type { DbTransaction } from "@/db";
 import { customers, customerLocations, type CustomerLocation } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import type { CaptureActivity } from "@/lib/activity-changes";
+import { locationDistanceFillWarnings } from "@/lib/location-write-warnings";
+import type { CaptureFilledDelivery } from "./location-distance-fill";
 import { partyNotFound, partyLocationNotFound, partyArchived, partyArchivedForEdit, customerLocationHasOrders, customerLocationHasStorageSite } from "@/lib/party-domain-errors";
 import { validationFailed } from "@/lib/operations/errors";
 import { addCustomerLocationInput, updateCustomerLocationInput, customerLocationVersionInput, type AddCustomerLocationInput, type UpdateCustomerLocationInput, type CustomerLocationVersionInput } from "@/schemas/customer-location-input";
@@ -20,20 +22,22 @@ import { isPgForeignKeyViolation } from "@/db/errors";
 
 const CUSTOMER_LOCATION_CONFLICT_ENTITY = "customerLocation";
 
+export type CustomerLocationWriteOutput = CustomerLocation & { warnings: string[] };
+
 /**
  * Customer add lock order: non-null facilities FOR SHARE sorted; customer FOR
  * NO KEY UPDATE; demote default with version bump; insert; pairs (no deliveries
  * exist for a new location); tx readback. No topology or registration fence.
  * Parent version is unchanged.
  */
-export async function addCustomerLocationInTransaction(ctx: OrgContext, tx: DbTransaction, input: AddCustomerLocationInput, capture?: CaptureActivity): Promise<CustomerLocation> {
+export async function addCustomerLocationInTransaction(ctx: OrgContext, tx: DbTransaction, input: AddCustomerLocationInput, capture?: CaptureActivity, captureLocation?: CaptureActivity): Promise<CustomerLocationWriteOutput> {
   requireOrgScope(ctx);
   const parsed = addCustomerLocationInput.safeParse(input);
   if (!parsed.success) throw validationFailed(parsed.error);
   const { customerId, ...data } = parsed.data;
-  const saved = await createCustomerLocationInTransaction(ctx, tx, customerId, data);
+  const { location: saved, fill } = await createCustomerLocationInTransaction(ctx, tx, customerId, data, captureLocation);
   capture?.(saved.id, null, saved);
-  return saved;
+  return { ...saved, warnings: locationDistanceFillWarnings("customer", fill) };
 }
 
 /** Unlocked discovery on the runner connection; no global-db preflight. */
@@ -56,7 +60,7 @@ async function discoverCustomer(ctx: OrgContext, tx: DbTransaction, input: Custo
  * this writer holds the fence and can wait for that artifact in the fill. The
  * pool's lock_timeout breaks it (55P03, retried by the runner).
  */
-export async function updateCustomerLocationInTransaction(ctx: OrgContext, tx: DbTransaction, input: UpdateCustomerLocationInput, capture?: CaptureActivity): Promise<CustomerLocation> {
+export async function updateCustomerLocationInTransaction(ctx: OrgContext, tx: DbTransaction, input: UpdateCustomerLocationInput, capture?: CaptureActivity, captureLocation?: CaptureActivity, captureDelivery?: CaptureFilledDelivery): Promise<CustomerLocationWriteOutput> {
   requireOrgScope(ctx);
   const parsed = updateCustomerLocationInput.safeParse(input);
   if (!parsed.success) throw validationFailed(parsed.error);
@@ -106,7 +110,11 @@ export async function updateCustomerLocationInTransaction(ctx: OrgContext, tx: D
 
   // Promoting this location to default demotes the customer's current default.
   if (data.isDefault === true) {
-    await tx
+    const siblings = await tx.select().from(customerLocations).where(and(
+      eq(customerLocations.customerId, customerId), eq(customerLocations.organizationId, ctx.organizationId),
+      eq(customerLocations.isDefault, true), ne(customerLocations.id, locationId),
+    ));
+    const demoted = await tx
       .update(customerLocations)
       .set({ version: nextVersion(customerLocations.version), isDefault: false, updatedAt: new Date() })
       .where(
@@ -116,7 +124,8 @@ export async function updateCustomerLocationInTransaction(ctx: OrgContext, tx: D
           eq(customerLocations.isDefault, true),
           ne(customerLocations.id, locationId)
         )
-      );
+      ).returning();
+    for (const sibling of demoted) captureLocation?.(sibling.id, siblings.find(row => row.id === sibling.id)!, sibling);
   }
 
   const [updated] = await tx
@@ -139,10 +148,10 @@ export async function updateCustomerLocationInTransaction(ctx: OrgContext, tx: D
     throw partyLocationNotFound("customer");
   }
 
-  await upsertLocationFacilityDistances(ctx, tx, "customer", locationId, facilityDistances);
+  const fill = await upsertLocationFacilityDistances(ctx, tx, "customer", locationId, facilityDistances, { captureDelivery });
   const result = (await withLocationFacilityDistances(ctx, "customer", [updated], tx))[0];
   capture?.(result.id, before, result);
-  return result;
+  return { ...result, warnings: locationDistanceFillWarnings("customer", fill) };
 }
 
 /**
@@ -152,7 +161,7 @@ export async function updateCustomerLocationInTransaction(ctx: OrgContext, tx: D
  * FOR UPDATE, promote with a version bump. No fill on delete promotion and no
  * parent version bump. Parent discovery is an unlocked tx read.
  */
-export async function deleteCustomerLocationInTransaction(ctx: OrgContext, tx: DbTransaction, input: CustomerLocationVersionInput, capture?: CaptureActivity): Promise<CustomerLocation> {
+export async function deleteCustomerLocationInTransaction(ctx: OrgContext, tx: DbTransaction, input: CustomerLocationVersionInput, capture?: CaptureActivity, captureLocation?: CaptureActivity): Promise<CustomerLocationWriteOutput> {
   requireOrgScope(ctx);
   const parsed = customerLocationVersionInput.safeParse(input);
   if (!parsed.success) throw validationFailed(parsed.error);
@@ -205,9 +214,10 @@ export async function deleteCustomerLocationInTransaction(ctx: OrgContext, tx: D
   // Deleting the default promotes the first remaining location (in list
   // order) so a customer with locations always has a default.
   const [gone] = deleted;
+  const warnings: string[] = [];
   if (gone.isDefault) {
     const [next] = await tx
-      .select({ id: customerLocations.id })
+      .select()
       .from(customerLocations)
       .where(
         and(
@@ -219,13 +229,15 @@ export async function deleteCustomerLocationInTransaction(ctx: OrgContext, tx: D
       .limit(1)
       .for("update");
     if (next) {
-      await tx
+      const [promoted] = await tx
         .update(customerLocations)
         .set({ version: nextVersion(customerLocations.version), isDefault: true, updatedAt: new Date() })
-        .where(and(eq(customerLocations.id, next.id), eq(customerLocations.organizationId, ctx.organizationId)));
+        .where(and(eq(customerLocations.id, next.id), eq(customerLocations.organizationId, ctx.organizationId))).returning();
+      captureLocation?.(next.id, next, promoted);
+      warnings.push(`${promoted.name} is now the default location.`);
     }
   }
 
   capture?.(before.id, before, null);
-  return before;
+  return { ...before, warnings };
 }

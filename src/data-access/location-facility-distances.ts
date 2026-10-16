@@ -4,7 +4,7 @@ import { facilities, customerLocations, supplierLocations, customerLocationFacil
 import type { OrgContext } from "@/lib/auth/server";
 import { facilityDistancesInputSchema, type FacilityDistanceInput } from "@/schemas/facility-distances";
 import { assertSameOrg, requireOrgScope, type Executor } from "./utils";
-import { fillMissingLocationDistances } from "./location-distance-fill";
+import { fillMissingLocationDistances, type LocationDistanceFillResult, type CaptureFilledDelivery } from "./location-distance-fill";
 import { lockActiveFacilityReference } from "./facility-reference-guards";
 import { nextVersion } from "./row-version";
 
@@ -38,11 +38,11 @@ export async function withLocationFacilityDistances<T extends { id: string }>(
 export async function upsertLocationFacilityDistances(
   ctx: OrgContext, tx: DbTransaction, kind: LocationKind, locationId: string,
   input: FacilityDistanceInput[] | undefined,
-  options: { deferFill?: boolean } = {},
-) {
+  options: { deferFill?: boolean; captureDelivery?: CaptureFilledDelivery } = {},
+): Promise<LocationDistanceFillResult> {
   requireOrgScope(ctx);
   const rows = facilityDistancesInputSchema.parse(input);
-  if (rows === undefined) return;
+  if (rows === undefined) return { filled: 0, skipped: { submitted: 0, concurrent: 0, repointed: 0 } };
   const table = kind === "supplier" ? supplierLocationFacilityDistances : customerLocationFacilityDistances;
   await assertSameOrg(ctx, kind === "supplier" ? supplierLocations : customerLocations, locationId, tx);
   for (const row of [...rows].sort((a, b) => a.facilityId.localeCompare(b.facilityId))) {
@@ -60,7 +60,8 @@ export async function upsertLocationFacilityDistances(
     }
   }
   if (!options.deferFill) {
-    await fillMissingLocationDistances(ctx, tx, kind, locationId,
-      rows.flatMap(row => row.distanceKm === null ? [] : [{ ...row, distanceKm: row.distanceKm }]));
+    return fillMissingLocationDistances(ctx, tx, kind, locationId,
+      rows.flatMap(row => row.distanceKm === null ? [] : [{ ...row, distanceKm: row.distanceKm }]), options.captureDelivery);
   }
+  return { filled: 0, skipped: { submitted: 0, concurrent: 0, repointed: 0 } };
 }

@@ -53,7 +53,7 @@ export async function createSupplierInTransaction(ctx: OrgContext, tx: DbTransac
   }).returning());
   const inserted: SupplierLocation[] = [];
   for (const location of locations) {
-    inserted.push(await createSupplierLocationInTransaction(ctx, tx, parent.id, location));
+    inserted.push((await createSupplierLocationInTransaction(ctx, tx, parent.id, location)).location);
   }
   const saved = await tx.select().from(supplierLocations).where(and(eq(supplierLocations.organizationId, ctx.organizationId), eq(supplierLocations.supplierId, parent.id)));
   const enriched = await withLocationFacilityDistances(ctx, "supplier", saved, tx);

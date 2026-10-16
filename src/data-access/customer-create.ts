@@ -3,6 +3,8 @@ import { and, count, eq } from "drizzle-orm";
 import type { DbTransaction } from "@/db";
 import { customers, customerLocations, type CustomerLocation } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
+import type { CaptureActivity } from "@/lib/activity-changes";
+import type { LocationDistanceFillResult } from "./location-distance-fill";
 import type { FacilityDistanceInput } from "@/schemas/facility-distances";
 import { partyArchived, partyNotFound } from "@/lib/party-domain-errors";
 import { upsertLocationFacilityDistances, withLocationFacilityDistances } from "./location-facility-distances";
@@ -34,7 +36,8 @@ export async function createCustomerLocationInTransaction(
   tx: DbTransaction,
   customerId: string,
   data: CustomerLocationInsertInput,
-): Promise<CustomerLocation> {
+  captureLocation?: CaptureActivity,
+): Promise<{ location: CustomerLocation; fill: LocationDistanceFillResult }> {
   requireOrgScope(ctx);
 
   await lockLocationFacilities(ctx, tx, data.facilityDistances, []);
@@ -70,7 +73,10 @@ export async function createCustomerLocationInTransaction(
 
   // Clear the prior default first so the partial unique index never sees two.
   if (makeDefault) {
-    await tx
+    const siblings = await tx.select().from(customerLocations).where(and(
+      eq(customerLocations.customerId, customerId), eq(customerLocations.organizationId, ctx.organizationId), eq(customerLocations.isDefault, true),
+    ));
+    const demoted = await tx
       .update(customerLocations)
       .set({ version: nextVersion(customerLocations.version), isDefault: false, updatedAt: new Date() })
       .where(
@@ -79,7 +85,8 @@ export async function createCustomerLocationInTransaction(
           eq(customerLocations.organizationId, ctx.organizationId),
           eq(customerLocations.isDefault, true),
         ),
-      );
+      ).returning();
+    for (const sibling of demoted) captureLocation?.(sibling.id, siblings.find(row => row.id === sibling.id)!, sibling);
   }
 
   const [location] = await tx
@@ -99,6 +106,6 @@ export async function createCustomerLocationInTransaction(
     })
     .returning();
 
-  await upsertLocationFacilityDistances(ctx, tx, "customer", location.id, data.facilityDistances);
-  return (await withLocationFacilityDistances(ctx, "customer", [location], tx))[0];
+  const fill = await upsertLocationFacilityDistances(ctx, tx, "customer", location.id, data.facilityDistances);
+  return { location: (await withLocationFacilityDistances(ctx, "customer", [location], tx))[0], fill };
 }
