@@ -43,6 +43,14 @@ const value: EntryValueInput = {
   magnitude: "0.100000000000000001",
   unit: "kWh",
 };
+it("does not require entry confirmation when display order is captured or changed", () => {
+  const previous = observation();
+  const current = observation();
+  current.lineSources.line.templateOrder = { groupPosition: 8, position: 2 };
+  expect(emissionEntryCounts(previous, current, "line")).toMatchObject({ counts: true });
+  previous.lineSources.line.templateOrder = { groupPosition: 1, position: 0 };
+  expect(emissionEntryCounts(previous, current, "line")).toMatchObject({ counts: true });
+});
 function args() {
   return {
     observation: observation(),

@@ -7,6 +7,7 @@ import {
   updateEmissionEntry,
   confirmEmissionEntry,
   deleteEmissionEntry,
+  restoreEmissionEntry,
 } from "@/data-access/emission-entries";
 import { loadFacilityEmissionsOverview, type FacilityEmissionsOverview } from "@/lib/read-models/facility-emissions-overview";
 import { loadBatchEmissionLines } from "@/lib/read-models/batch-emission-lines";
@@ -44,6 +45,11 @@ export async function deleteEmissionEntryFn(
     const data = emissionEntryVersionSchema.parse(input);
     return deleteEmissionEntry(ctx, data.id, data.expectedVersion);
   });
+}
+export async function restoreEmissionEntryFn(
+  input: z.input<typeof emissionEntryVersionSchema>,
+): Promise<ActionResult<Awaited<ReturnType<typeof restoreEmissionEntry>>>> {
+  return withAction((ctx) => restoreEmissionEntry(ctx, emissionEntryVersionSchema.parse(input)));
 }
 export async function getBatchEmissionLinesFn(input: {
   facilityId: string;

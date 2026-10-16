@@ -33,6 +33,7 @@ export const emissionEntryVersionSchema = z.object({
   id: uuidSchema(),
   expectedVersion: expectedVersionSchema,
 });
+export type RestoreEmissionEntryInput = z.infer<typeof emissionEntryVersionSchema>;
 export const updateEmissionEntrySchema = emissionEntryVersionSchema.extend({
   occurredOn: fields.occurredOn.optional(),
   note: fields.note,

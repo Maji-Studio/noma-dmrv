@@ -9,6 +9,7 @@ import {
   emissionEntryValues,
   documents,
   certificationSubmissions,
+  creditBatches,
 } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import { resolveBatchPin } from "@/lib/certification/resolve-batch-pin";
@@ -25,8 +26,10 @@ import {
 import {
   createEmissionEntrySchema,
   updateEmissionEntrySchema,
+  emissionEntryVersionSchema,
   type CreateEmissionEntryInput,
   type UpdateEmissionEntryInput,
+  type RestoreEmissionEntryInput,
 } from "@/schemas/emission-entries";
 import { requireOrgScope, type Executor } from "./utils";
 import { assertRowVersion, nextVersion } from "./row-version";
@@ -408,6 +411,72 @@ export async function deleteEmissionEntry(ctx: OrgContext, id: string, expectedV
     },
     true,
   );
+}
+
+/** Undo keeps the original values and files. Batch deletion alone retires their documents. */
+export async function restoreEmissionEntry(ctx: OrgContext, input: RestoreEmissionEntryInput) {
+  requireOrgScope(ctx);
+  requireEmissionsEntriesEnabled();
+  const data = emissionEntryVersionSchema.parse(input);
+  const [initial] = await db.select().from(emissionEntries).where(and(
+    eq(emissionEntries.organizationId, ctx.organizationId), eq(emissionEntries.id, data.id),
+  ));
+  if (!initial) throw new SafeError("Emissions entry was not found.");
+  // Like markNothingToRecord, read automatic figures before holding the write connection.
+  const initialFacilityId = initial.kind === "zero" ? await getBatchFacilityForRestore(ctx, initial.creditBatchId) : null;
+  const automatic = initialFacilityId
+    ? await loadBatchAutomaticFigures(ctx, initialFacilityId, initial.creditBatchId)
+    : {};
+  return db.transaction(async (tx) => {
+    const { batch, facility, observation } = await lockedBatch(ctx, tx, initial.creditBatchId);
+    if (initialFacilityId && batch.facilityId !== initialFacilityId) throw emissionEntryParentChanged();
+    const entry = await lockWritableEmissionEntry(ctx, tx, data.id, { includeDeleted: true });
+    if (entry.creditBatchId !== initial.creditBatchId || entry.kind !== initial.kind) throw emissionEntryParentChanged();
+    assertRowVersion({ entity: "emission_entry", id: entry.id, expectedVersion: data.expectedVersion, actualVersion: entry.version });
+    if (!entry.deletedAt) throw new SafeError("This emissions entry is already active. Refresh the page.");
+    if (entry.confirmedForRemovalId !== null)
+      throw new SafeError("Recorded zeros can only be changed through their Removal.");
+    const previous = await getTemplateObservationById(ctx, entry.observationId, tx);
+    if (!previous || !emissionEntryCounts(previous, observation, entry.componentId).counts)
+      throw new SafeError("This entry no longer matches the template. Enter the values again.");
+    const values = await tx.select().from(emissionEntryValues).where(and(
+      eq(emissionEntryValues.organizationId, ctx.organizationId), eq(emissionEntryValues.entryId, entry.id),
+    ));
+    const siblings = await tx.select().from(emissionEntries).where(and(
+      eq(emissionEntries.organizationId, ctx.organizationId), eq(emissionEntries.creditBatchId, batch.id),
+      eq(emissionEntries.componentId, entry.componentId), isNull(emissionEntries.deletedAt),
+    ));
+    const common = { observation, componentId: entry.componentId, occurredOn: entry.occurredOn,
+      batchStartDate: batch.startDate, timezone: facility.timezone, dateDefaulted: true,
+      activeValueCount: siblings.filter((sibling) => sibling.kind === "value").length };
+    if (entry.kind === "value") {
+      validateEmissionEntry({ ...common, values: values.map((value) => ({ ...value,
+        quantityKind: entry.inputShape.find((shape) => shape.key === value.inputKey)!.quantityKind,
+      })) });
+      await tombstoneEmissionZeros(ctx, tx, entry);
+    } else {
+      const source = entryLine(observation, entry.componentId)?.contract.automaticSource;
+      validateOperatorZero({ ...common, note: entry.note,
+        activeOperatorZeroCount: siblings.filter((sibling) => sibling.kind === "zero" && sibling.confirmedForRemovalId === null).length,
+        automaticFigure: source ? automatic[source] ?? null : null,
+      });
+    }
+    const [saved] = await tx.update(emissionEntries).set({
+      deletedAt: null, updatedAt: new Date(), version: nextVersion(emissionEntries.version),
+      contentRevision: nextVersion(emissionEntries.contentRevision),
+    }).where(and(eq(emissionEntries.organizationId, ctx.organizationId), eq(emissionEntries.id, entry.id))).returning();
+    await recordEmissionEntryActivity(ctx, tx, "updated", { ...entry, values }, { ...saved, values });
+    return getEmissionEntry(ctx, entry.id, tx);
+  });
+}
+
+async function getBatchFacilityForRestore(ctx: OrgContext, creditBatchId: string) {
+  requireOrgScope(ctx);
+  const [batch] = await db.select({ facilityId: creditBatches.facilityId }).from(creditBatches).where(and(
+    eq(creditBatches.organizationId, ctx.organizationId), eq(creditBatches.id, creditBatchId),
+  ));
+  if (!batch) throw new SafeError("Credit batch was not found.");
+  return batch.facilityId;
 }
 
 /** The automatic read is server-owned and precedes the write transaction to avoid pool starvation. */

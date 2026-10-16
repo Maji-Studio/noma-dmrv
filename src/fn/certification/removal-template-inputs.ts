@@ -1,6 +1,7 @@
 import { removalLineBlockerMessage } from "@/lib/certification/removal-blockers";
 import { deriveBatchEmissionLines, type BatchEmissionLine } from "@/lib/certification/emission-lines";
 import { normalizeTemplateDefinition } from "@/lib/isometric/template-observations/normalize";
+import { withTemplateOrder } from "@/lib/isometric/template-observations/template-order";
 import { REMOVAL_TEMPLATE_BLOCKERS } from "@/lib/certification/removal-template-blockers";
 import { type LineSources } from "@/lib/isometric/template-observations/line-sources";
 import { ownValue } from "@/lib/isometric/semantic-binding-catalog";
@@ -66,7 +67,7 @@ export function resolveTemplateInputs(args: {
 
   // Keep compilation capability guards until PR 4 supplies entry contributions.
   const lineDecisions = [...(args.emissionLines ?? []), ...deriveBatchEmissionLines({
-    definition: normalizeTemplateDefinition(template), lineSources, problems: [],
+    definition: normalizeTemplateDefinition(template), lineSources: withTemplateOrder(template, lineSources), problems: [],
     enrichmentComplete: args.enrichmentComplete ?? true, automaticFigures: {}, entries: [],
   })];
 
