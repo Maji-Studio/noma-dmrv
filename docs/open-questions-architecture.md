@@ -19,15 +19,17 @@ these areas; the entry rules and invariants live in
   across the facilities/products schema import cycle. Preserve the writer locks
   and archived-reference checks; the foreign key only backs up deletion safety.
 
-### Runner effects for party cascades (`api/runner-extra-effects`, opened 2026-10-16)
+### Deterministic stale-version agent eval (`api/eval-stale-version`, opened 2026-10-16)
 
-- **Anchor:** `src/lib/operations/runner.ts:runOperation` and
-  `src/lib/operation-effect.ts:OperationEffect`.
-- The runner records the initiating operation's described effect. Formulations
-  need no sibling or child events, so Phase 7a adds no extra-effect queue.
-- **Follow-up in 7b:** queue transaction-local effects for location default
-  changes and party cascades. Flush only on commit, with the initiating source;
-  dry runs and keyed replays must emit no additional events.
+- **Anchor:** `scripts/eval-mcp/claude.ts:runClaude` and
+  `scripts/eval-mcp/run.ts`.
+- `customer-stale-version` needs one concurrent customer update after the agent
+  receives its read and before its write. The harness consumes subprocess
+  output but has no deterministic tool-result barrier; a scheduled timer can
+  run before the read or after the write and cannot test this behavior reliably.
+- **Follow-up:** add a test-only interception seam, bump the customer once through
+  its operation, then release the agent. Score one stale write, a new read and
+  one retry with the requested final change. Keep the case skipped until then.
 
 ### Align the Applications page credit batch filter (`app/application-batch-lineage-filter`, opened 2026-10-15)
 

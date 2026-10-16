@@ -314,28 +314,6 @@ Lists exclude archived rows where supported; detail reads return them with
 `archivedAt`. Facilities, suppliers, feedstock types, storage locations, vehicles
 and drivers return row versions and strong version/revision ETags on detail reads.
 Vehicles and drivers have no archive column and return `archivedAt: null`.
-Supplier and customer writes use the shared runner and revision 2
-representations. Parties include `sourceRegion` or `cropType` and `archivedAt`:
-
-| Method and path | Scope | Contract |
-|---|---|---|
-| POST `/suppliers` | `suppliers:write` | Required `Idempotency-Key`, including dry runs; 201 with `data` and `locations`, ETag and Location |
-| PATCH `/suppliers/{id}` | `suppliers:write` | UUID and strong `If-Match`; 200 with ETag; archived target is 404 before stale checks |
-| DELETE `/suppliers/{id}` | `suppliers:delete` | UUID and strong `If-Match`; removes unreferenced locations and pairs; bodyless 204, or 409 with blocker metadata |
-| POST `/suppliers/{id}/archive` | `suppliers:write` | Empty object or no body; UUID and strong `If-Match`; 200 with ETag; already archived is 409 |
-| POST `/suppliers/{id}/restore` | `suppliers:write` | Empty object or no body; UUID and strong `If-Match`; 200 with ETag; active target is 409 |
-| POST `/customers` | `customers:write` | Required `Idempotency-Key`, including dry runs; 201 with `data` and `locations`, ETag and Location |
-| PATCH `/customers/{id}` | `customers:write` | UUID and strong `If-Match`; 200 with ETag; archived target is 404 before stale checks |
-| DELETE `/customers/{id}` | `customers:delete` | UUID and strong `If-Match`; removes unreferenced locations and pairs; bodyless 204, or 409 with blocker metadata |
-| POST `/customers/{id}/archive` | `customers:write` | Empty object or no body; UUID and strong `If-Match`; 200 with ETag; already archived is 409 |
-| POST `/customers/{id}/restore` | `customers:write` | Empty object or no body; UUID and strong `If-Match`; 200 with ETag; active target is 409 |
-
-Every write supports `dryRun=true`, returning 200 without ETag or Location and
-committing no parent, child, distance pair or Activity event. Missing If-Match answers 428; stale
-tags answer 412 with `current`. Optional mutation keys replay before domain
-preconditions. Unknown properties answer 422. PATCH omission keeps, null clears,
-and zero stays zero.
-
 Output projections exclude contact fields and driver license numbers. Facilities expose `timeZone`, storage
 locations expose the material lane, capacity in kilograms and feedstock-type
 restriction, and vehicles expose their stored identifier/plate and vehicle type.
@@ -348,48 +326,13 @@ no locations. Supplier locations have no code or archive column.
 
 ### Master data on REST and MCP
 
-Formulations use revision 2 with `description`, `archivedAt` and ordered `lines`.
-Reads need `formulations:read`: REST list/detail and MCP `find_formulations`.
-Lists hide archived rows by default. `archived=true` (MCP `archived: true`)
-returns only archived rows, including exact code searches. Cursors bind that
-filter; a mismatched cursor returns 400. Detail reads still return archived rows.
-
-| REST method and path | MCP tool | Scope |
-|---|---|---|
-| POST `/formulations` | `create_formulation` | `formulations:write` |
-| PATCH `/formulations/{id}` | `update_formulation` | `formulations:write` |
-| DELETE `/formulations/{id}` | `delete_formulation` | `formulations:delete` |
-| POST `/formulations/{id}/archive` | `archive_formulation` | `formulations:write` |
-| POST `/formulations/{id}/restore` | `restore_formulation` | `formulations:write` |
-
-Creates generate codes. REST creates require `Idempotency-Key` even on dry runs;
-MCP `requestKey` is optional only on dry runs. REST returns 201 with ETag and
-Location; PATCH and commands return 200 with ETag; DELETE returns 204.
-Writes accept UUIDs only. REST mutations require strong `If-Match` (missing 428,
-stale 412 with `current`); MCP uses `expectedVersion` from `find_formulations`.
-Optional mutation keys replay before domain preconditions. Every write supports
-dry runs, rolling back rows, lines and Activity; REST returns 200 without ETag
-or Location. Archive/restore accept an empty object or no body and bump version.
-
-Archive keeps existing references and reserves codes. New references and edits
-of archived formulations return 404 at `/formulationId`; archived PATCH checks
-this before stale versions. Repeated transitions with a current version return
-409 at `/formulationId`. Restore before editing or adding a new reference.
-Products, bins and orders (including archived references) block deletion with
-409 at `/formulationId` and reference codes in metadata. Used line removal is
-409 at `/lines`. Unknown or newly referenced archived types return 404; retained
-archived types remain allowed. Type refusals point at `/lines/{index}/feedstockTypeId`;
-non-blend types return 422. Add missing types in the app first.
-
-Ratios are guidance only, from 0 to 1 in exact integer millionths (six decimals):
-`0.000001` passes, `0.0000001` fails. Known shares may sum to exactly 1, never
-more; sum refusals point at `/biocharRatio`. PATCH omission keeps, null clears,
-zero stays zero; supplied `lines` replace the full list. Unknown fields and
-invalid ratios return 422. REST pointers appear in `errors`; MCP uses `issues`.
+[Master data writes](./api-master-data.md) owns supplier, customer and formulation
+operations on REST and MCP: scopes, locations on create, name uniqueness,
+archive/restore, archived list filters, delete blockers and write preconditions.
 
 ### Customers and orders on REST and MCP
 
-Customer reads publish cropType, supplier reads publish sourceRegion, both publish archivedAt and default to active lists (archived=true lists only archived rows), both location lists publish country, stateRegion, city and isDefault, and customer locations also publish siteDescription and defaultSoilTemperatureC.
+See [master-data read fields and archived filters](./api-master-data.md#suppliers-and-customers) for supplier, customer and location projections.
 
 `GET /api/v1/customers`, `/{idOrCode}` and `/{idOrCode}/locations` use
 `customers:read`. Customer representations exclude email, phone and address;

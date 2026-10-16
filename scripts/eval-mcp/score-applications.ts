@@ -32,6 +32,7 @@ const RECORD = "mcp__noma__record_application";
 const BALANCE = "mcp__noma__get_delivery_application_balance";
 const DELETE = "mcp__noma__delete_application";
 const UPDATE = "mcp__noma__update_application";
+const SENTENCE_BOUNDARY = /(?<=[!?;\n])|(?<=\.)(?!\d)/;
 const normalized = (value: string | null) => value?.trim().toLowerCase();
 const object = (value: unknown): Record<string, unknown> =>
   value !== null && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
@@ -44,10 +45,11 @@ function capacityConflict(call: ToolCall, target: ApplicationTarget): boolean {
 }
 
 function asksForArea(text: string): boolean {
-  return text.split(/(?<=[.!?;\n])/).some((sentence) =>
-    /\b(?:hectares?|field size|area)\b/i.test(sentence)
-    && /\?|\b(?:provide|tell|specify|share|supply|what|how|need|requires?|required)\b/i.test(sentence)
-    && !/\b(?:no need|not needed|not required|don['’]t need|do not need|doesn['’]t need)\b/i.test(sentence));
+  // Keep each list item's trailing sentences together as another request unit.
+  return [...text.split("\n"), ...text.split(SENTENCE_BOUNDARY)].some((unit) =>
+    /\b(?:hectares?|field size|area)\b/i.test(unit)
+    && /\?|\b(?:provide|tell|specify|share|supply|what|how|need|requires?|required)\b/i.test(unit)
+    && !/\b(?:no need|not needed|not required|don['’]t need|do not need|doesn['’]t need)\b/i.test(unit));
 }
 
 function capacityResponse(text: string, remaining: number): boolean {

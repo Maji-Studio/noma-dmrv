@@ -33,7 +33,6 @@ const SAMPLE_HYDROGEN_PERCENT = 2.5;
 const ORDER_QUANTITY_KG = 10_000;
 const DELIVERY_WET_MASS_KG = 0.1;
 const DELIVERY_HOURS_AGO = 1;
-const CUSTOMER_DISTANCE_KM = 25;
 const MS_PER_HOUR = 3_600_000;
 const MS_PER_DAY = 24 * MS_PER_HOUR;
 const PRIVATE_FILE_MODE = 0o600;
@@ -60,7 +59,7 @@ async function main(): Promise<void> {
   const runOperation: typeof runWithOptions = (operation, ctx, input, options) => runWithOptions(operation, ctx, input, { ...options, activitySource: "script" });
   const { logFeedstockDelivery } = await import("@/lib/operations/feedstocks");
   const { formatFacilityDate } = await import("@/lib/date-utils");
-  const { createSupplierInTransaction } = await import("@/data-access/supplier-writes");
+  const { seedParties } = await import("./seed-parties");
   const { createFeedstockType } = await import("@/data-access/feedstock-types");
   const { createReactor } = await import("@/data-access/reactors");
   const { startProductionRun, updateProductionRun } = await import("@/lib/operations/production-runs");
@@ -73,7 +72,6 @@ async function main(): Promise<void> {
   const { biocharProductEtag, creditBatchEtag, labSampleEtag, orderEtag, deliveryEtag } = await import("@/lib/api/representation-etags");
   const { createCreditBatch } = await import("@/data-access/credit-batches");
   const { recordLabSample } = await import("@/lib/operations/lab-samples");
-  const { createCustomerInTransaction } = await import("@/data-access/customer-writes");
   const { recordDelivery } = await import("@/lib/operations/deliveries");
   const { recordOrder } = await import("@/lib/operations/orders");
   const { createApiKey } = await import("@/data-access/api-keys");
@@ -100,7 +98,7 @@ async function main(): Promise<void> {
     ...TEST_SITE_POSITION, code: "FUZZ-FAC", name: FIXTURE_LABEL, country: "FR", timezone: FACILITY_TIME_ZONE,
     durabilityOption: "200_year",
   });
-  const { supplier, locations: [supplierLocation] } = await db.transaction(tx => createSupplierInTransaction(ctx, tx, { code: "FUZZ-SUP", name: FIXTURE_LABEL, locations: [{ ...TEST_SITE_POSITION, name: FIXTURE_LABEL, country: "FR" }] }));
+  const { supplier, supplierLocation, customer, customerLocation, fields: partyFields } = await seedParties(ctx, facility.id);
   const feedstockType = await createFeedstockType(ctx, {
     code: "FUZZ-WOOD", name: FIXTURE_LABEL, category: "forestry", usage: "pyrolysis",
   });
@@ -187,10 +185,6 @@ async function main(): Promise<void> {
     occurredAt: new Date(now - LOSS_HOURS_AGO * MS_PER_HOUR).toISOString(),
     wetMassKg: LOSS_WET_MASS_KG, moisturePercent: BIOCHAR_MOISTURE_PERCENT, reason: "API fuzz fixture loss",
   })).data;
-  const { customer, locations: [customerLocation] } = await db.transaction(tx => createCustomerInTransaction(ctx, tx, { code: "FUZZ-CUS", name: FIXTURE_LABEL, locations: [{
-    ...TEST_SITE_POSITION, name: FIXTURE_LABEL, country: "FR",
-    facilityDistances: [{ facilityId: facility.id, distanceKm: CUSTOMER_DISTANCE_KM, distanceSource: "manual" }], isDefault: true,
-  }] }));
   const orderInput = {
     facilityId: facility.id, customerId: customer.id, customerLocationId: customerLocation.id,
     formulationId: pure.id, orderDate: formatFacilityDate(new Date(now), FACILITY_TIME_ZONE),
@@ -216,7 +210,7 @@ async function main(): Promise<void> {
   const { seedDocuments } = await import("./seed-documents");
   const documents = await seedDocuments(ctx, { delivery: delivery.id, feedstock: feedstock.id, lab_sample: labSample.id, application: applicationFixture.applicationId }, { activitySource: "script" });
   const credential = await createApiKey(ctx, {
-    // All published scopes include formulations:write and formulations:delete.
+    // Deliberately includes suppliers/customers write and delete, plus formulation writes/deletes.
     name: FIXTURE_LABEL, scopes: API_SCOPES.filter(scope => scope !== "applications:delete"), expiresIn: API_KEY_DEFAULT_EXPIRY_SECONDS,
   });
   // Mask before the workflow extracts the key into GITHUB_ENV. Outside Actions
@@ -238,6 +232,7 @@ async function main(): Promise<void> {
     supplierLocationId: supplierLocation.id,
     biocharBinId: biocharBin.id, biocharBinCode: biocharBin.code, productBinId: productBin.id,
     ...formulationFields,
+    ...partyFields,
     biocharProductId: product.id, biocharProductCode: product.code, biocharProductEtag: biocharProductEtag(currentProduct),
     customerId: customer.id, customerCode: customer.code,
     // Customer locations, like supplier locations, have no code column.
