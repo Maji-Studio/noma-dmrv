@@ -2,9 +2,9 @@ import { addFixtureReactor } from "./helpers/operation-fixture";
 import { productionRunEtag } from "@/lib/api/representation-etags";
 import { randomUUID } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { eq } from "drizzle-orm";
+import { eq, and, inArray, isNotNull } from "drizzle-orm";
 import { db } from "@/db";
-import { apiAuditEvents, productionRuns } from "@/db/schema";
+import { activityEvents, productionRuns } from "@/db/schema";
 import { createApiKey } from "@/data-access/api-keys";
 import { API_KEY_DEFAULT_EXPIRY_SECONDS } from "@/config/api-keys";
 import { POST as MCP } from "@/app/api/mcp/route";
@@ -88,8 +88,8 @@ describe("production MCP tools", { timeout: TIMEOUT_MS }, () => {
     expect(result.content[0].text).toMatch(/^Replayed: Started production run/);
     expect(await rows()).toHaveLength(1);
     expect(await binWetStock(a)).toBe(3000);
-    expect(await db.select().from(apiAuditEvents).where(eq(apiAuditEvents.organizationId, a.ctx.organizationId)))
-      .toMatchObject([{ transport: "rest" }, { transport: "rest" }]);
+    expect(await db.select().from(activityEvents).where(and(inArray(activityEvents.source, ["rest", "mcp"]), isNotNull(activityEvents.operationId), eq(activityEvents.organizationId, a.ctx.organizationId))))
+      .toMatchObject([{ source: "rest" }, { source: "rest" }]);
   });
 
   it("starts, reads, updates and deletes with REST envelopes and versions", async () => {

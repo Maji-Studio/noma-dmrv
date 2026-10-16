@@ -6,9 +6,8 @@ import { DomainError } from "@/lib/domain-errors";
 import { toActionFailure } from "@/fn/action-errors";
 import { runOperation, runOperationInProcess, type Operation, type OperationScope, type RunOptions } from "./runner";
 
-const { owned, record, claim, warn, balances, activity, audit } = vi.hoisted(() => ({ owned: vi.fn(), record: vi.fn(), claim: vi.fn(), warn: vi.fn(), balances: vi.fn(), activity: vi.fn(), audit: vi.fn() }));
+const { owned, record, claim, warn, balances, activity } = vi.hoisted(() => ({ owned: vi.fn(), record: vi.fn(), claim: vi.fn(), warn: vi.fn(), balances: vi.fn(), activity: vi.fn() }));
 vi.mock("@/data-access/stock-effects", () => ({ readStockBalances: balances }));
-vi.mock("@/data-access/api-audit-events", () => ({ writeApiAuditEvent: audit }));
 vi.mock("@/data-access/activity-events", () => ({ recordActivity: activity }));
 vi.mock("@/data-access/owned-transaction", () => ({ runOwnedTransaction: owned }));
 vi.mock("@/data-access/api-idempotency-records", () => ({ recordIdempotencyOutcome: record, claimIdempotencyKey: claim, assertIdempotencyKeyUnused: vi.fn() }));
@@ -49,13 +48,22 @@ describe("shared operation runner", () => {
     expect(activity).toHaveBeenCalledTimes(effect.entityIds.length);
     for (const [index, entityId] of effect.entityIds.entries()) {
       expect(activity).toHaveBeenNthCalledWith(index + 1, ctx, tx, {
+        operationId: operation.id, versionBefore: null, versionAfter: 1, oauthClientId: null,
         action: "created", entityType: "production_run", entityId, productionRunId: entityId,
         facilityId: undefined, creditBatchId: undefined, changedFields: ["amount"], source,
         credentialId: (source === "form" || source === "script") ? undefined : auditOptions.credentialId,
         requestId: (source === "form" || source === "script") ? undefined : auditOptions.requestId,
       });
     }
-    expect(audit).toHaveBeenCalledTimes((source === "form" || source === "script") ? 0 : 1);
+  });
+
+  it("preserves the OAuth client on every MCP activity row", async () => {
+    const oauthClientId = "oauth-client";
+    await runOperation(described, ctx, { amount: 1 }, { audit: { ...auditOptions, transport: "mcp", oauthClientId } });
+    expect(activity).toHaveBeenCalledTimes(effect.entityIds.length);
+    for (const [, , event] of activity.mock.calls) {
+      expect(event).toMatchObject({ oauthClientId, source: "mcp", operationId: operation.id });
+    }
   });
 
   it("takes links from the core execution and keeps them out of responses and stored outcomes", async () => {
@@ -74,7 +82,7 @@ describe("shared operation runner", () => {
     expect(record).toHaveBeenCalledWith(ctx, tx, "linked", result.data, effect);
   });
 
-  it("suppresses both event writers and the stored effect on a core replay", async () => {
+  it("suppresses activity and the stored effect on a core replay", async () => {
     claim.mockResolvedValueOnce({ kind: "claimed", recordId: "re-return" });
     const replay = { ...described, execute: async (scope: OperationScope, input: { amount: number }) => {
       scope.activity.skip();
@@ -86,16 +94,15 @@ describe("shared operation runner", () => {
     expect(result).not.toHaveProperty("effect");
     expect(record).toHaveBeenCalledWith(ctx, tx, "re-return", result.data, undefined);
     expect(activity).not.toHaveBeenCalled();
-    expect(audit).not.toHaveBeenCalled();
   });
 
   it("keeps the audited transport as the activity source when an override is supplied", async () => {
     await runOperation(described, ctx, { amount: 1 }, { audit: auditOptions, activitySource: "script" });
+    expect(activity).toHaveBeenCalledTimes(effect.entityIds.length);
     expect(activity.mock.calls.every(([, , event]) => event.source === "rest")).toBe(true);
-    expect(audit).toHaveBeenCalledOnce();
   });
 
-  it("records neither activity nor API audit for a null effect, including the stored outcome", async () => {
+  it("records no activity for a null effect, including the stored outcome", async () => {
     claim.mockResolvedValueOnce({ kind: "claimed", recordId: "no-op" });
     const result = await runOperation({ ...described, describe: () => null }, ctx, { amount: 1 }, {
       audit: auditOptions, idempotency: { credentialId: "credential", key: "no-op" },
@@ -103,10 +110,9 @@ describe("shared operation runner", () => {
     expect(result).not.toHaveProperty("effect");
     expect(record).toHaveBeenCalledWith(ctx, tx, "no-op", result.data, undefined);
     expect(activity).not.toHaveBeenCalled();
-    expect(audit).not.toHaveBeenCalled();
   });
 
-  it("skips both event writers for dry runs and idempotent replays", async () => {
+  it("skips activity for dry runs and idempotent replays", async () => {
     await runOperation(described, ctx, { amount: 1 }, { dryRun: true, audit: auditOptions });
     claim.mockResolvedValueOnce({ kind: "replay", outcome: {}, effect });
     const execute = vi.fn(described.execute);
@@ -115,7 +121,6 @@ describe("shared operation runner", () => {
     });
     expect(execute).not.toHaveBeenCalled();
     expect(activity).not.toHaveBeenCalled();
-    expect(audit).not.toHaveBeenCalled();
   });
 
   it("snapshots through the writer transaction only on dry runs", async () => {

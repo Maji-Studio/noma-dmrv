@@ -13,7 +13,7 @@ migrations, and soft-delete semantics live in [`database.md`](./database.md).
 |---|---|
 | Auth, orgs, members, invitations | `src/db/schema/auth.ts` |
 | API credentials (`api_keys`) and management records (`api_key_owners`) | `src/db/schema/api-keys.ts` |
-| API bookkeeping (`api_idempotency_records`, `api_audit_events`, `api_rate_limit_buckets`, `organization_api_access`) | `src/db/schema/api.ts` |
+| API bookkeeping (`api_idempotency_records`, `api_rate_limit_buckets`, `organization_api_access`) | `src/db/schema/api.ts` |
 | Activity history (`activity_events`) | `src/db/schema/activity.ts` |
 | Facilities, reactors, storage locations | `src/db/schema/facilities.ts` |
 | Suppliers, customers, their locations, drivers, operators | `src/db/schema/parties.ts` |
@@ -110,16 +110,19 @@ verification fields.
 
 ## API bookkeeping
 
-All four tables live in `src/db/schema/api.ts`:
+All three tables live in `src/db/schema/api.ts`:
 
 | Table | Grain and scope |
 |---|---|
 | `api_idempotency_records` | Unique organization/credential/key claim with fingerprint, expiry and stored outcome v2. Normal claims are org-scoped; expiry purge is a system seam. |
-| `api_audit_events` | One committed API write effect with organization, actor, credential, optional OAuth client, operation, entity ids, field names, versions, request id, outcome code and transport (`rest` or `mcp`, default `rest`). No field values; inserts are org-scoped in the write transaction. |
 | `api_rate_limit_buckets` | Token balance and refill time per bucket key. Organization-neutral system seam for hashed-IP, credential and organization budgets; no org column. |
 | `organization_api_access` | Organization primary key, enabled flag, changing user id and time. Missing row means on. Credential lookup and Platform Admin directory/toggle are privileged seams; non-Platform-Admins cannot administer it. |
 
 ## Activity history
+
+| Table | Purpose |
+|---|---|
+| `activity_events` | Shared audit store for entity changes and API writes. Nullable `operation_id`, `version_before`, `version_after` record runner effect metadata for every transport; `oauth_client_id`, `credential_id` and `request_id` attribute API calls. `source` identifies form, script, REST or MCP writes. |
 
 `activity_events` stores org-scoped, value-free entity changes, status
 transitions and actor/source attribution. The caller's transaction owns each

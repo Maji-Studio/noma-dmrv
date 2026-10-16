@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
-  apiAuditEvents, binMovements, facilities, members, outputStockAllocations, outputStockMoistureReadings,
+  activityEvents, binMovements, facilities, members, outputStockAllocations, outputStockMoistureReadings,
   outputStockRunAllocations, productionRuns, storageLocations, users,
 } from "@/db/schema";
 import { createApiKey } from "@/data-access/api-keys";
@@ -53,8 +53,8 @@ export async function readStockSnapshot(fixture: StockEvalFixture): Promise<Stoc
     db.select({ movementId: outputStockAllocations.movementId, binId: outputStockAllocations.sourceStorageLocationId,
       layerId: outputStockAllocations.productionRunId, wetMassKg: outputStockAllocations.wetMassKg })
       .from(outputStockAllocations).where(eq(outputStockAllocations.organizationId, org)),
-    db.select({ transport: apiAuditEvents.transport, operationId: apiAuditEvents.operationId })
-      .from(apiAuditEvents).where(eq(apiAuditEvents.organizationId, org)),
+    db.select({ transport: activityEvents.source, operationId: sql<string>`${activityEvents.operationId}` })
+      .from(activityEvents).where(and(inArray(activityEvents.source, ["rest", "mcp"]), isNotNull(activityEvents.operationId), eq(activityEvents.organizationId, org))),
   ]);
   return { movements, allocations: allocations.map((row) => ({ ...row, wetMassKg: row.wetMassKg === null ? null : Number(row.wetMassKg) })), audits };
 }

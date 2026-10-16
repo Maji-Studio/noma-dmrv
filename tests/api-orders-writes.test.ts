@@ -1,9 +1,9 @@
 /** Real routes and Postgres. Not run by the implementation agent. */
 import { randomUUID } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { eq } from "drizzle-orm";
+import { eq, and, inArray, isNotNull } from "drizzle-orm";
 import { db } from "@/db";
-import { apiAuditEvents, apiIdempotencyRecords, organizationSettings, orders } from "@/db/schema";
+import { activityEvents, apiIdempotencyRecords, organizationSettings, orders } from "@/db/schema";
 import { createApiKey } from "@/data-access/api-keys";
 import { API_KEY_DEFAULT_EXPIRY_SECONDS } from "@/config/api-keys";
 import { orderRepresentationSchema } from "@/lib/representations/orders";
@@ -49,7 +49,7 @@ async function problem(response: Response, status: number, code: string, pointer
 }
 const rows = (f: Fixture) => db.select().from(orders).where(eq(orders.organizationId, f.ctx.organizationId));
 const records = (f: Fixture) => db.select().from(apiIdempotencyRecords).where(eq(apiIdempotencyRecords.organizationId, f.ctx.organizationId));
-const audits = (f: Fixture) => db.select().from(apiAuditEvents).where(eq(apiAuditEvents.organizationId, f.ctx.organizationId));
+const audits = (f: Fixture) => db.select().from(activityEvents).where(and(inArray(activityEvents.source, ["rest", "mcp"]), isNotNull(activityEvents.operationId), eq(activityEvents.organizationId, f.ctx.organizationId)));
 
 describe("order POST", { timeout: TIMEOUT_MS }, () => {
   it("refuses a missing delivery site with 422 and a field issue", async () => {
@@ -85,7 +85,7 @@ describe("order POST", { timeout: TIMEOUT_MS }, () => {
     expect(response.headers.get("location")).toBe(`/api/v1/orders/${body.data.id}`);
     expect(response.headers.get("etag")).toBe(INITIAL_ETAG);
     expect(await read(a, body.data.id)).toEqual({ row: body.data, etag: INITIAL_ETAG });
-    expect(await audits(a)).toMatchObject([{ operationId: "record_order", outcomeCode: "created", transport: "rest" }]);
+    expect(await audits(a)).toMatchObject([{ operationId: "record_order", action: "created", source: "rest" }]);
   });
   it("requires a key even for dry runs, and never claims a preview key or saves a row", async () => {
     for (const query of ["", "?dryRun=true"]) await problem(await post(a, orderInput(a), null, query), 400, "idempotency_key_required");

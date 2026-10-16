@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { eq, inArray } from "drizzle-orm";
+import { eq, inArray, and, isNotNull } from "drizzle-orm";
 import { db } from "@/db";
-import { apiAuditEvents, apiRateLimitBuckets } from "@/db/schema";
+import { activityEvents, apiRateLimitBuckets } from "@/db/schema";
 import { updateApiKey } from "@/data-access/api-keys";
 import { ProtocolErrorCode } from "@modelcontextprotocol/server";
 import { API_RATE_LIMITS } from "@/config/api-rate-limits";
@@ -42,7 +42,7 @@ function intake() {
   const decoded = decodedIntake(fixture, MASS_KG);
   return { ...decoded, deliveryDate: decoded.deliveryDate.toISOString().split("T")[0] };
 }
-const audits = () => db.select().from(apiAuditEvents).where(eq(apiAuditEvents.organizationId, fixture.ctx.organizationId));
+const audits = () => db.select().from(activityEvents).where(and(inArray(activityEvents.source, ["rest", "mcp"]), isNotNull(activityEvents.operationId), eq(activityEvents.organizationId, fixture.ctx.organizationId)));
 
 describe("MCP feedstock writes", { timeout: SUITE_TIMEOUT_MS }, () => {
   it("replays a REST create without another row, stock effect or audit", async () => {
@@ -54,7 +54,7 @@ describe("MCP feedstock writes", { timeout: SUITE_TIMEOUT_MS }, () => {
     expect(result.content[0].text).toMatch(/^Replayed: Logged feedstock/);
     expect(await committedFeedstocks(fixture)).toHaveLength(1);
     expect(await binWetStock(fixture)).toBe(MASS_KG);
-    expect(await audits()).toMatchObject([{ transport: "rest" }]);
+    expect(await audits()).toMatchObject([{ source: "rest" }]);
     const refused = await call("log_feedstock_delivery", { ...intake(), notes: "Different", requestKey: key });
     expect(refused).toMatchObject({ isError: true, structuredContent: { code: "idempotency_key_reused" } });
   });
@@ -104,7 +104,7 @@ describe("MCP feedstock writes", { timeout: SUITE_TIMEOUT_MS }, () => {
     const deleted = await call("delete_feedstock", { feedstockId: next.id, expectedVersion: next.version, requestKey: crypto.randomUUID() });
     expect(deleted.structuredContent).toEqual({ deleted: { id: next.id, code: next.code } });
     expect(await audits()).toHaveLength(3);
-    expect((await audits()).every((row) => row.transport === "mcp")).toBe(true);
+    expect((await audits()).every((row) => row.source === "mcp")).toBe(true);
     expect(await binWetStock(fixture)).toBe(0);
   });
   it.each([

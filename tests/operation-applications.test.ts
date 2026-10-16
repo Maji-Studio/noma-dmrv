@@ -1,10 +1,10 @@
 import * as siteDefaults from "@/data-access/application-site-defaults";
 import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
-import { eq, inArray } from "drizzle-orm";
+import { eq, inArray, and, isNotNull } from "drizzle-orm";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
 import { db } from "@/db";
-import { applications, users, customerLocations, certifierProjects, facilities, outputStockAllocations, apiAuditEvents, apiIdempotencyRecords, organizations, documents, storageObjectDeletions } from "@/db/schema";
+import { applications, users, customerLocations, certifierProjects, facilities, outputStockAllocations, activityEvents, apiIdempotencyRecords, organizations, documents, storageObjectDeletions } from "@/db/schema";
 import { getPgPoolConfig } from "@/lib/pg-pool-config";
 import { PRO_RATA_POLICY } from "@/lib/output-stock";
 import { TEST_GIS_BOUNDARY } from "./helpers/application-evidence-fixtures";
@@ -25,7 +25,7 @@ beforeAll(async () => {
   await db.insert(users).values({ id: ctx.userId, email: `operation-applications-${tag}@example.test` }).onConflictDoNothing();
 });
 afterAll(async () => {
-  await db.delete(apiAuditEvents).where(eq(apiAuditEvents.organizationId, ctx.organizationId));
+  await db.delete(activityEvents).where(eq(activityEvents.organizationId, ctx.organizationId));
   await db.delete(apiIdempotencyRecords).where(eq(apiIdempotencyRecords.organizationId, ctx.organizationId));
   await db.delete(storageObjectDeletions).where(eq(storageObjectDeletions.organizationId, ctx.organizationId));
   await db.delete(organizations).where(eq(organizations.id, ctx.organizationId));
@@ -196,11 +196,11 @@ it("parallel duplicate keys give one application, one outcome and one audit even
     expect(responses.filter(result => result.replayed)).toHaveLength(1);
     expect(responses[0].data).toEqual(responses[1].data);
     expect(await db.select().from(applications).where(eq(applications.deliveryId, f.deliveryIds[0]))).toHaveLength(1);
-    expect(await db.select().from(apiAuditEvents).where(eq(apiAuditEvents.credentialId, credentialId))).toHaveLength(1);
+    expect(await db.selectDistinct({ requestId: activityEvents.requestId }).from(activityEvents).where(and(inArray(activityEvents.source, ["rest", "mcp"]), isNotNull(activityEvents.operationId), eq(activityEvents.credentialId, credentialId)))).toHaveLength(1);
     expect(await db.select().from(apiIdempotencyRecords).where(eq(apiIdempotencyRecords.credentialId, credentialId))).toHaveLength(1);
   } finally {
     await otherPool.end();
-    await db.delete(apiAuditEvents).where(eq(apiAuditEvents.credentialId, credentialId));
+    await db.delete(activityEvents).where(eq(activityEvents.credentialId, credentialId));
     await db.delete(apiIdempotencyRecords).where(eq(apiIdempotencyRecords.credentialId, credentialId));
   }
 }));

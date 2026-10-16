@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { facilities, feedstocks, feedstockTypes, members, storageLocations, suppliers, users, apiAuditEvents, reactors, productionRuns, productionRunFeedstockDraws } from "@/db/schema";
+import { facilities, feedstocks, feedstockTypes, members, storageLocations, suppliers, users, activityEvents, reactors, productionRuns, productionRunFeedstockDraws } from "@/db/schema";
 import { createApiKey } from "@/data-access/api-keys";
 import { deriveFeedstockWetStockKg } from "@/data-access/feedstock-wet-stock";
 import { API_KEY_DEFAULT_EXPIRY_SECONDS } from "@/config/api-keys";
@@ -92,7 +92,7 @@ export async function readSnapshot(fixture: EvalFixture): Promise<DatabaseSnapsh
     draws: await db.select({ productionRunId: productionRunFeedstockDraws.productionRunId,
       storageLocationId: productionRunFeedstockDraws.storageLocationId, wetMassKg: productionRunFeedstockDraws.wetMassKg,
     }).from(productionRunFeedstockDraws).where(eq(productionRunFeedstockDraws.organizationId, org)),
-    audits: await db.select({ transport: apiAuditEvents.transport, operationId: apiAuditEvents.operationId }).from(apiAuditEvents).where(eq(apiAuditEvents.organizationId, org)),
+    audits: await db.select({ transport: activityEvents.source, operationId: sql<string>`${activityEvents.operationId}` }).from(activityEvents).where(and(inArray(activityEvents.source, ["rest", "mcp"]), isNotNull(activityEvents.operationId), eq(activityEvents.organizationId, org))),
   };
 }
 

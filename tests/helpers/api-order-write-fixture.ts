@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
-import { eq } from "drizzle-orm";
+import { eq, and, inArray, isNotNull } from "drizzle-orm";
 import { db } from "@/db";
-import { apiAuditEvents, apiIdempotencyRecords, orders } from "@/db/schema";
+import { activityEvents, apiIdempotencyRecords, orders } from "@/db/schema";
 import { API_KEY_DEFAULT_EXPIRY_SECONDS } from "@/config/api-keys";
 import { createApiKey } from "@/data-access/api-keys";
 import { POST } from "@/app/api/v1/orders/route";
@@ -37,5 +37,5 @@ export async function readRestOrder(f: ApiOrderWriteFixture, id: string) {
   return { row: (await response.json()).data, etag: response.headers.get("etag")! };
 }
 export const orderRows = (f: ApiOrderWriteFixture) => db.select().from(orders).where(eq(orders.organizationId, f.ctx.organizationId));
-export const orderAudits = (f: ApiOrderWriteFixture) => db.select().from(apiAuditEvents).where(eq(apiAuditEvents.organizationId, f.ctx.organizationId));
+export const orderAudits = (f: ApiOrderWriteFixture) => db.select().from(activityEvents).where(and(inArray(activityEvents.source, ["rest", "mcp"]), isNotNull(activityEvents.operationId), eq(activityEvents.organizationId, f.ctx.organizationId)));
 export const orderRecords = (f: ApiOrderWriteFixture) => db.select().from(apiIdempotencyRecords).where(eq(apiIdempotencyRecords.organizationId, f.ctx.organizationId));

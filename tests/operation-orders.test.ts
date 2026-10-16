@@ -2,9 +2,9 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import { createTestPool } from "./helpers/operation-fixture";
 import { randomUUID } from "node:crypto";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { eq } from "drizzle-orm";
+import { eq, and, inArray, isNotNull } from "drizzle-orm";
 import { db } from "@/db";
-import { orders, deliveries, facilities, organizationSettings, documents, apiAuditEvents } from "@/db/schema";
+import { orders, deliveries, facilities, organizationSettings, documents, activityEvents } from "@/db/schema";
 import { recordOrder, updateOrder, deleteOrder } from "@/lib/operations/orders";
 import { runOperation } from "@/lib/operations/runner";
 import { cleanupOrderFixture, createOrderDestination, createOrderFixture, orderInput, type OrderFixture } from "./helpers/order-operation-fixture";
@@ -221,7 +221,7 @@ describe("order idempotency", { timeout: SUITE_TIMEOUT_MS }, () => {
     const replay = await runOperation(recordOrder, f.ctx, input, options);
     expect(replay.replayed).toBe(true);
     expect(replay.data.packaging).toBe(saved[0].packaging);
-    expect(await db.select().from(apiAuditEvents).where(eq(apiAuditEvents.organizationId, f.ctx.organizationId))).toHaveLength(1);
+    expect(await db.select().from(activityEvents).where(and(inArray(activityEvents.source, ["rest", "mcp"]), isNotNull(activityEvents.operationId), eq(activityEvents.organizationId, f.ctx.organizationId)))).toHaveLength(1);
     await expect(runOperation(recordOrder, f.ctx, { ...input, quantityKg: 200 }, options)).rejects.toMatchObject({ code: "idempotency_key_reused" });
   });
 

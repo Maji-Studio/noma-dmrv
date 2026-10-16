@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray, isNotNull } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { db } from "@/db";
-import { activityEvents, apiAuditEvents, facilities, samples } from "@/db/schema";
+import { activityEvents, facilities, samples } from "@/db/schema";
 import { uploadFactsFor } from "@/data-access/document-writes";
 import { requestDocumentUploadApp, confirmDocumentUploadApp, deleteDocumentApp, setDocumentVisibilityApp } from "@/lib/operations/documents";
 import * as activityWriter from "@/data-access/activity-events";
@@ -149,7 +149,7 @@ describe("product resubmission activity", { timeout: TIMEOUT_MS }, () => {
     expect(repeated.data.product.id).toBe(first.product.id);
     expect(repeated).not.toHaveProperty("effect");
     expect(await activity(fixture.ctx.organizationId)).toEqual(events);
-    expect(await db.select().from(apiAuditEvents).where(eq(apiAuditEvents.organizationId, fixture.ctx.organizationId))).toEqual([]);
+    expect(await db.select().from(activityEvents).where(and(inArray(activityEvents.source, ["rest", "mcp"]), isNotNull(activityEvents.operationId), eq(activityEvents.organizationId, fixture.ctx.organizationId)))).toEqual([]);
   });
 
   it("records exactly one event when resubmitting a stock movement's form key", async () => {

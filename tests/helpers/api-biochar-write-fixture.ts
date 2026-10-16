@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray, isNotNull } from "drizzle-orm";
 import { expect } from "vitest";
 import { db } from "@/db";
-import { apiAuditEvents, apiIdempotencyRecords, binMovements, biocharProducts } from "@/db/schema";
+import { activityEvents, apiIdempotencyRecords, binMovements, biocharProducts } from "@/db/schema";
 import { POST as POST_PRODUCT } from "@/app/api/v1/biochar-products/route";
 import { PATCH as PATCH_PRODUCT } from "@/app/api/v1/biochar-products/[idOrCode]/route";
 import { POST as POST_MOVEMENT } from "@/app/api/v1/storage-locations/[idOrCode]/stock-movements/route";
@@ -17,8 +17,8 @@ const API_URL = "http://localhost:3100/api/v1";
 export const WRITE_LOSS_AT = "2026-09-14T12:00:00.000Z";
 export const WRITE_LOSS_WET_KG = 100;
 export const FUTURE_AT = "2099-01-01T00:00:00.000Z";
-const PRODUCT_AUDIT_ENTITY = "biocharProduct";
-const MOVEMENT_AUDIT_ENTITY = "binMovement";
+const PRODUCT_AUDIT_ENTITY = "biochar_product";
+const MOVEMENT_AUDIT_ENTITY = "bin_movement";
 
 export function writeRequest(f: ApiProductFixture, method: string, path: string, body?: unknown, headers: Record<string, string> = {}, key = f.writeKey) {
   return new Request(`${API_URL}${path}`, {
@@ -91,10 +91,10 @@ export async function captureProductWriteState(f: ApiProductFixture) {
 }
 
 export async function productWriteAudits(f: ApiProductFixture, entityType: "product" | "movement" = "product") {
-  return db.select().from(apiAuditEvents).where(and(
-    eq(apiAuditEvents.organizationId, f.ctx.organizationId),
-    eq(apiAuditEvents.entityType, entityType === "product" ? PRODUCT_AUDIT_ENTITY : MOVEMENT_AUDIT_ENTITY),
-  ));
+  return db.select().from(activityEvents).where(and(inArray(activityEvents.source, ["rest", "mcp"]), isNotNull(activityEvents.operationId), and(
+    eq(activityEvents.organizationId, f.ctx.organizationId),
+    eq(activityEvents.entityType, entityType === "product" ? PRODUCT_AUDIT_ENTITY : MOVEMENT_AUDIT_ENTITY),
+  )));
 }
 export const writeIdempotencyRecords = (f: ApiProductFixture) =>
   db.select().from(apiIdempotencyRecords).where(eq(apiIdempotencyRecords.organizationId, f.ctx.organizationId));

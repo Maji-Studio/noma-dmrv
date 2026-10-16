@@ -1,9 +1,9 @@
 /** Real server actions, REST and MCP over the worktree test database. */
 import { randomUUID } from "node:crypto";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { eq } from "drizzle-orm";
+import { eq, and, inArray, isNotNull } from "drizzle-orm";
 import { db } from "@/db";
-import { apiAuditEvents, apiIdempotencyRecords, activityEvents, applications, deliveries, members, apiKeys } from "@/db/schema";
+import { apiIdempotencyRecords, activityEvents, applications, deliveries, members, apiKeys } from "@/db/schema";
 import { createApiKey } from "@/data-access/api-keys";
 import { API_KEY_DEFAULT_EXPIRY_SECONDS } from "@/config/api-keys";
 import { createApplicationFn, updateApplicationFn, deleteApplicationFn } from "@/fn/applications";
@@ -129,8 +129,8 @@ it("deletes the same row and restores its delivery balance, with transport-speci
     expect(await applicationRows(f)).toEqual([]);
     const balance = await applicationTool(f, "get_delivery_application_balance", { idOrCode: f.chain.deliveryIds[0] });
     outputs.push(scrub(balance.structuredContent, f));
-    const audits = await db.select().from(apiAuditEvents).where(eq(apiAuditEvents.organizationId, f.ctx.organizationId));
-    expect(audits.map(row => row.transport)).toEqual(transport === "action" ? [] : [transport, transport]);
+    const audits = await db.selectDistinct({ requestId: activityEvents.requestId, source: activityEvents.source }).from(activityEvents).where(and(inArray(activityEvents.source, ["rest", "mcp"]), isNotNull(activityEvents.operationId), eq(activityEvents.organizationId, f.ctx.organizationId)));
+    expect(audits.map(row => row.source)).toEqual(transport === "action" ? [] : [transport, transport]);
     const events = await db.select().from(activityEvents).where(eq(activityEvents.organizationId, f.ctx.organizationId));
     expect(events.length).toBeGreaterThan(0); expect(events.every(row => row.source === (transport === "action" ? "form" : transport))).toBe(true);
   }
@@ -170,7 +170,7 @@ it.each([
     const failure = await refuse(transport, f, input); expect(failure).toMatchObject({ code, issues: expect.arrayContaining([expect.objectContaining({ pointer })]) });
     if (name === "capacity") expect(failure.issues[0].meta).toEqual({ measure: "delivery_remaining_wet", availableWetKg: 5000, requestedWetKg: 5000.001, unit: "kg" });
     outputs.push(failure); expect(await applicationRows(f)).toEqual([]);
-    expect(await db.select().from(apiAuditEvents).where(eq(apiAuditEvents.organizationId, f.ctx.organizationId))).toEqual([]);
+    expect(await db.select().from(activityEvents).where(and(inArray(activityEvents.source, ["rest", "mcp"]), isNotNull(activityEvents.operationId), eq(activityEvents.organizationId, f.ctx.organizationId)))).toEqual([]);
     expect(await db.select().from(apiIdempotencyRecords).where(eq(apiIdempotencyRecords.organizationId, f.ctx.organizationId))).toEqual([]);
   }
   equalAcross(outputs);

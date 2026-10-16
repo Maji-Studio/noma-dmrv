@@ -1,9 +1,9 @@
 /** Real MCP endpoint, REST handlers, credentials and Postgres. Run only by explicit path. */
 import { randomUUID } from "node:crypto";
 import { afterEach, beforeEach, expect, it } from "vitest";
-import { eq } from "drizzle-orm";
+import { eq, and, inArray, isNotNull } from "drizzle-orm";
 import { db } from "@/db";
-import { activityEvents, apiAuditEvents, apiKeys, members } from "@/db/schema";
+import { activityEvents, apiKeys, members } from "@/db/schema";
 import { POST as MCP } from "@/app/api/mcp/route";
 import { createApiKey } from "@/data-access/api-keys";
 import { API_KEY_DEFAULT_EXPIRY_SECONDS } from "@/config/api-keys";
@@ -48,8 +48,8 @@ it("finds remaining delivery mass, previews, records raw GeoJSON, gets, updates,
   expect(deleted.structuredContent).toEqual({ deleted: { id: row.id, code: row.code } });
   await failure("get_application", { idOrCode: row.id }, "not_found");
   expect((await call("get_delivery_application_balance", { idOrCode: row.deliveryId })).structuredContent.data.remainingWetMassKg).toBe(5000);
-  const audits = await db.select().from(apiAuditEvents).where(eq(apiAuditEvents.organizationId, f.ctx.organizationId));
-  expect(audits.map(row => [row.operationId, row.transport]).sort()).toEqual([["delete_application", "mcp"], ["record_application", "mcp"], ["update_application", "mcp"]]);
+  const audits = await db.selectDistinct({ requestId: activityEvents.requestId, operationId: activityEvents.operationId, source: activityEvents.source }).from(activityEvents).where(and(inArray(activityEvents.source, ["rest", "mcp"]), isNotNull(activityEvents.operationId), eq(activityEvents.organizationId, f.ctx.organizationId)));
+  expect(audits.map(row => [row.operationId, row.source]).sort()).toEqual([["delete_application", "mcp"], ["record_application", "mcp"], ["update_application", "mcp"]]);
   const events = await db.select().from(activityEvents).where(eq(activityEvents.organizationId, f.ctx.organizationId));
   expect(events.length).toBeGreaterThan(0); expect(events.every(row => row.source === "mcp")).toBe(true);
 }, TIMEOUT);

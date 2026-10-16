@@ -38,7 +38,6 @@ import { DomainError, validationFailed } from "./errors";
 import { runOwnedTransaction } from "@/data-access/owned-transaction";
 import { deadlineExceeded, idempotencyInProgress } from "@/lib/domain-errors";
 import type { Jsonified } from "./jsonified";
-import { writeApiAuditEvent } from "@/data-access/api-audit-events";
 import { recordActivity, type ActivityEventInput } from "@/data-access/activity-events";
 import { toActivityEntityType } from "@/lib/activity-entity-type";
 import { createOperationActivity, type OperationActivity } from "./activity-links";
@@ -287,15 +286,16 @@ async function runOperationCore<Input extends z.ZodType, Output, Result>(
               await recordActivity(ctx, tx, {
                 action: effect.outcome, entityType, entityId,
                 changedFields: effect.changedFields,
+                operationId: operation.id,
+                versionBefore: effect.versionBefore,
+                versionAfter: effect.versionAfter,
+                oauthClientId: options.audit?.oauthClientId ?? null,
                 source,
                 credentialId: options.audit?.credentialId,
                 requestId: options.audit?.requestId,
                 ...links,
               });
             }
-          }
-          if (options.audit) {
-            await writeApiAuditEvent(ctx, tx, { ...options.audit, operationId: operation.id, effect });
           }
         }
         if (recordId) {

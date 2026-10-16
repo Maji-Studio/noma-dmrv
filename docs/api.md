@@ -146,7 +146,7 @@ code (`created`, `updated`, `deleted`), entity type and ids, versions before and
 after, and changed field names. It contains no field values. The runner returns
 this transport-neutral effect alongside data. A state-machine operation can
 return no effect when its outcome changes no entity, so a gone confirmation
-writes no audit event.
+writes no activity event.
 
 Dry-run stock writes also return `stockEffects` beside `data`. The runner supplies
 an optional `OperationScope.snapshotStock` observer, passed to transaction writers.
@@ -189,11 +189,13 @@ the form contract before passing only operation fields to the runner.
 
 The `audit` run option supplies request id, credential id and optional OAuth
 client id for API writes only. Audited operations must implement `describe`.
-`src/data-access/api-audit-events.ts:writeApiAuditEvent` records the effect and
-resolved organization/user inside the operation's transaction. UI writes do
-not pass `audit`; dry runs and idempotent replays add no audit row.
-Committed runner writes with a non-null `describe` effect also record value-free
-`activity_events` in that same transaction for UI, REST and MCP calls, with the source identifying the transport.
+`src/data-access/activity-events.ts:recordActivity` is the single audit writer.
+Committed runner writes with a non-null `describe` effect record value-free
+`activity_events` in the operation's transaction for form, script, REST and MCP
+calls. Every runner event carries `operationId`, `versionBefore` and
+`versionAfter`; API events also carry `credentialId`, `requestId` and optional
+`oauthClientId`. Form writes have null credential and OAuth client IDs.
+Dry runs, idempotent replays and `activity.skip()` add no events.
 The runner records one event per entity and distinct batch/run scope supplied by
 `activity.scope(entityId, scopes)` in `src/lib/operations/activity-links.ts`.
 Application create resolves its scopes after saving; update includes the batches
@@ -501,7 +503,7 @@ A missing If-Match on PATCH or DELETE answers 428; a stale tag answers 412 with
 `current`, the current application representation. Optional mutation keys replay
 before precondition checks. DELETE returns 204; a DELETE dry run returns the
 representation that would be removed. Create and PATCH dry runs return 200
-without Location or ETag and commit no application, audit or activity event.
+without Location or ETag and commit no application or activity event.
 Deletion retires documents in the same transaction and drains storage after
 commit. Submitted lineage refuses every edit; Removal-owned slices refuse mass,
 delivery and delete changes. Verified or issued linked batches refuse deletion.
@@ -618,7 +620,7 @@ get_feedstock. Each request captures its resolved context in a fresh server.
 `src/lib/mcp/tools/write-tools.ts` adds log_feedstock_delivery, update_feedstock
 and delete_feedstock through the same operation runner as REST. Each write needs
 one requestKey reused on retry; dryRun previews may omit it. Updates and deletes
-take expectedVersion from get_feedstock. Audit rows record transport `mcp`.
+take expectedVersion from get_feedstock. Activity audit rows record source `mcp`.
 Existing tools keep their single `hasRoleAndScope` scope check. Document tools
 use `visible(ctx)` to appear when the role floor and any supported owner's
 scope allow them, then `authorize(ctx, args)` checks the selected owner before
