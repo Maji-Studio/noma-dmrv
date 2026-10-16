@@ -138,13 +138,9 @@ export const productionRuns = pgTable(
 
 // ============================================
 // Production Run Readings - optional structured imports, outside certification.
-// The project uses Biochar v1.1.1 §9.1.2's sub-atmospheric pressure alternative:
-// 1-minute intervals at minimum, accuracy 2% FS or better, manufacturer calibration
-// requirements met or exceeded and calibration at least annual; raw data available
-// on request. PDD B.19 commits to retaining operational records for at least five
-// years. The pressure CSV stays unchanged as a sensor_data
-// document on the Production Run; readiness and Removal submission need no rows here.
-// https://registry.isometric.com/protocol/biochar/1.1?tag=1.1.1
+// Readiness and Removal submission use the retained sensor_data file on the
+// Production Run, without requiring rows here. Monitoring requirements:
+// docs/isometric/requirements-shortlist.md#project-reactor-monitoring
 // ============================================
 
 export const productionRunReadings = pgTable(
@@ -160,8 +156,6 @@ export const productionRunReadings = pgTable(
     timestamp: timestamp('timestamp').notNull(),
 
     // Optional parsed temperature; this column does not identify the sensor channel.
-    // Flue-stack measurements during operations fall under §9.2.4's 1-minute cadence;
-    // §9.2.4.1 requires Reporting Period raw temperature data retained for five years.
     temperatureC: real('temperature_c'),
 
     // Optional parsed pressure; the retained file is the project evidence.

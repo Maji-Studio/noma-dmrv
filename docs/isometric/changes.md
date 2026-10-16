@@ -2,7 +2,9 @@
 
 ## 2026-10-15: Correct reactor-monitoring citations and retain document-only gates (#627 slices 1, 2, 4)
 
-The registry text (Biochar v1.1, tag 1.1.1, read 2026-10-15)
+The passages were read through the Isometric MCP (`how_to`, then
+`protocols_get_content` for Biochar v1.1, tag 1.1.1) on 2026-10-15.
+The [authoritative registry text](https://registry.isometric.com/protocol/biochar/1.1?tag=1.1.1)
 confirms §9.1.2's sub-atmospheric pressure alternative: records at one-minute
 intervals or more frequently, accuracy 2% FS or better, manufacturer calibration
 requirements met or exceeded and calibration at least annual, with raw data
