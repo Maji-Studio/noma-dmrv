@@ -102,11 +102,12 @@ export function getStatusStateColor(status: string): string {
 }
 
 /**
- * Record lock levels (ADR 0035) on the same ramp, so the Open, In use and Sent
- * chip reads the same on every list and sheet. Sent matches a submitted Removal.
+ * Record lock chip (ADR 0035), the same on every list and sheet. Open and In
+ * use stay calm: Open is an outline, In use the neutral fill. Only Sent stands
+ * out, in the purple of a submitted Removal.
  */
-export const RECORD_LOCK_STATUS_STATES = {
-  open: "neutral",
-  inUse: "warning",
-  sent: "in-progress",
-} as const satisfies Record<"open" | "inUse" | "sent", StatusStateClass>;
+export const RECORD_LOCK_CHIP_CLASSES: Record<"open" | "inUse" | "sent", string> = {
+  open: "bg-[var(--color-background-white)] text-[var(--color-text-secondary)] border-[var(--color-border-primary)]",
+  inUse: STATUS_STATE_BADGE_CLASSES.neutral,
+  sent: STATUS_STATE_BADGE_CLASSES["in-progress"],
+};

@@ -1,4 +1,5 @@
-import { formatDateRange } from "@/lib/format-utils";
+import { formatDate, formatDateRange } from "@/lib/format-utils";
+import { ghgStatementDeepLinkHref } from "@/lib/ghg-statement-links";
 import { applicationDeepLinkHref } from "@/lib/application-links";
 import { biocharProductDeepLinkHref } from "@/lib/biochar-product-links";
 import { certificationRemovalsHref, productionRunDeepLinkHref } from "@/lib/certification/links";
@@ -19,7 +20,7 @@ export const RECORD_LOCK_LEVEL_LABELS: Record<RecordLockView["level"], string> =
 const KIND_NOUNS: Record<string, string> = {
   feedstock: "feedstock", productionRun: "production run", sample: "Sample", biocharProduct: "biochar product",
   order: "order", delivery: "delivery", application: "application", creditBatch: "credit batch",
-  removal: "Removal", stockEntry: "stock entry", storageLocation: "storage bin",
+  removal: "Removal", stockEntry: "stock entry", storageLocation: "storage bin", ghgStatement: "GHG Statement",
 };
 
 function capitalize(text: string): string {
@@ -32,6 +33,10 @@ export function recordLockLinkText(link: RecordLockLink): string {
   const noun = KIND_NOUNS[link.kind] ?? "record";
   if (link.kind === "removal") {
     return link.period ? `${noun} ${formatDateRange(link.period.startedOn, link.period.completedOn)}` : noun;
+  }
+  if (link.kind === "ghgStatement") {
+    if (link.period) return `${noun} ${formatDateRange(link.period.startedOn, link.period.completedOn)}`;
+    return link.endsOn ? `${noun} ending ${formatDate(link.endsOn)}` : noun;
   }
   if (link.kind === "stockEntry") return link.label ? `${noun} in ${link.label}` : noun;
   return link.label ? `${noun} ${link.label}` : noun;
@@ -58,6 +63,7 @@ export function recordLockLinkHref(link: RecordLockLink): string | null {
     case "application": return applicationDeepLinkHref(link.id, facility);
     case "creditBatch": return creditBatchDeepLinkHref(link.id, facility);
     case "removal": return certificationRemovalsHref({ ...(facility ? { facility } : {}), removal: link.id });
+    case "ghgStatement": return ghgStatementDeepLinkHref(link.id, facility);
     default: return null;
   }
 }

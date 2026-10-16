@@ -1,7 +1,5 @@
 "use client";
 
-import { RecordLockChip, RecordLockNotice, RecordUsedBy } from "@/components/record-locks";
-import { useRecordLock, useRecordLocks } from "@/hooks/use-record-locks";
 import { toDeleteErrorMessage } from "@/lib/stale-version";
 /**
  * CreditBatchList component
@@ -39,6 +37,8 @@ import {
 import { ServerError } from "@/components/forms";
 import { CreditBatchForm } from "./credit-batch-form";
 import { CreditBatchCard } from "./credit-batch-card";
+import { RecordLockChip, RecordLockNotice, RecordUsedBy } from "@/components/record-locks";
+import { useRecordLock, useRecordLocks } from "@/hooks/use-record-locks";
 import { CreditBatchHealthStrip } from "./credit-batch-health-strip";
 import { CreditBatchDurabilityPanel } from "./credit-batch-durability-panel";
 import { creditBatchSheetSections } from "./credit-batch-view";

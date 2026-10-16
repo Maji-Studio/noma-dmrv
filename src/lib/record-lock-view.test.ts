@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { isRecordDeletable, isRecordEditable, isRecordFieldLocked, type RecordLockView } from "./record-lock-view";
 
 const lock = (level: RecordLockView["level"]): RecordLockView => ({
-  level, heldBy: [], usedBy: [], freeFields: level === "sent" ? [] : ["code", "quantityKg"], howToFree: null,
+  level, heldBy: [], usedBy: [], freeFields: level === "sent" ? [] : ["code", "quantityKg"], howToFree: null, returnedBy: [],
 });
 
 describe("record lock view helpers", () => {

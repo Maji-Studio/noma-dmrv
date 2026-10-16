@@ -62,12 +62,20 @@ export interface RecordLockFacts {
   removals: readonly RecordLockRemoval[];
 }
 
+/** A sent Removal whose covering statements Isometric returned, so Sent was lifted. */
+export interface RecordLockReturn {
+  removalId: string;
+  statements: readonly { id: string; status: string | null }[];
+}
+
 export interface RecordLock {
   level: "open" | "inUse" | "sent";
   heldBy: readonly RecordLockHolder[];
   /** Fields accepted while In use, subject to ordinary validation and stock sufficiency. */
   freeFields: readonly string[];
   howToFree: string | null;
+  /** Open or In use only: the returned Removals whose resubmission will carry corrections. */
+  returnedBy?: readonly RecordLockReturn[];
 }
 
 export function isSentRemoval(removal: RecordLockRemoval): boolean {
@@ -88,6 +96,23 @@ export function isSentRemoval(removal: RecordLockRemoval): boolean {
   return removal.statements.length > 0 || removal.submissions.some(isRemoteSubmission);
 }
 
+/**
+ * Reopened, not merely Open: the Removal reached Isometric, every covering
+ * statement came back fresh, and no attempt is newer than the return (a
+ * newer attempt keeps it Sent).
+ */
+export function isReturnedRemoval(removal: RecordLockRemoval): boolean {
+  return !isSentRemoval(removal) && removal.submissions.some(isRemoteSubmission) &&
+    removal.statements.length > 0 && removal.statements.every(isReturnedStatement);
+}
+
+function returnedBy(facts: RecordLockFacts): Pick<RecordLock, "returnedBy"> {
+  const returned = facts.removals.filter(isReturnedRemoval).map(removal => ({
+    removalId: removal.id, statements: removal.statements.map(statement => ({ id: statement.id, status: statement.status })),
+  }));
+  return returned.length ? { returnedBy: returned } : {};
+}
+
 function recordLock(facts: RecordLockFacts, freeFields: readonly string[]): RecordLock {
   const heldBy = [...new Map(facts.removals.filter(isSentRemoval).map(removal => [removal.id, { kind: "removal", id: removal.id, ...(removal.label ? { label: removal.label } : {}) }])).values()];
   if (heldBy.length) {
@@ -98,8 +123,8 @@ function recordLock(facts: RecordLockFacts, freeFields: readonly string[]): Reco
       : "Wait for Isometric to return the covering GHG Statement, then refresh its status." };
   }
   if (facts.dependents.length) return { level: "inUse", heldBy: facts.dependents, freeFields,
-    howToFree: "Correct or remove the records that use it first." };
-  return { level: "open", heldBy: [], freeFields, howToFree: null };
+    howToFree: "Correct or remove the records that use it first.", ...returnedBy(facts) };
+  return { level: "open", heldBy: [], freeFields, howToFree: null, ...returnedBy(facts) };
 }
 
 export const recordLocks = {

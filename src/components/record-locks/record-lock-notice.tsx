@@ -31,18 +31,54 @@ function HolderList({ holders }: { holders: readonly RecordLockLink[] }) {
   );
 }
 
+/** What Isometric said about the returned statement, in the operator's words. */
+export function returnedStatementPhrase(status: string | null): string {
+  return status === "FAILED_VERIFICATION" ? "failed verification" : "is back in draft";
+}
+
+/**
+ * Option A of #1101 open point 2: a returned record keeps its real level and
+ * says where its corrections go. One line per returned Removal.
+ */
+export function RecordReturnedNotice({ lock }: { lock: RecordLockView | undefined }) {
+  if (!lock || lock.level === "sent" || lock.returnedBy.length === 0) return null;
+  return (
+    <>
+      {lock.returnedBy.map((returned) => (
+        <Notice key={`${returned.removal.id}:${returned.statement.id}`} tone="info" title="Returned by Isometric" data-record-lock-notice="returned">
+          <HolderLink link={returned.statement} /> {returnedStatementPhrase(returned.statementStatus)}. Changes here go to{" "}
+          <HolderLink link={returned.removal} /> when you resubmit it.
+        </Notice>
+      ))}
+    </>
+  );
+}
+
 /**
  * The one lock line: what holds the record, as links, and how to free it.
  * Open records have no line. Storage bins name their stock history instead
- * of a record, because no single record holds a bin.
+ * of a record, because no single record holds a bin. A record Isometric
+ * returned gets the returned line first.
  */
-export function RecordLockNotice({ lock, subject = "record", inUseLocksNothing = false }: {
+export function RecordLockNotice(props: {
   lock: RecordLockView | undefined;
   subject?: "record" | "storageBin";
   /** The kind keeps every field free while In use (a Sample), so only Sent has a line. */
   inUseLocksNothing?: boolean;
 }) {
-  if (!lock || lock.level === "open") return null;
+  return (
+    <>
+      <RecordReturnedNotice lock={props.lock} />
+      <LockLine {...props} />
+    </>
+  );
+}
+
+function LockLine({ lock, subject = "record", inUseLocksNothing = false }: {
+  lock: RecordLockView | undefined;
+  subject?: "record" | "storageBin";
+  inUseLocksNothing?: boolean;
+}) {  if (!lock || lock.level === "open") return null;
   if (lock.level === "inUse" && inUseLocksNothing) return null;
   if (subject === "storageBin") {
     return (

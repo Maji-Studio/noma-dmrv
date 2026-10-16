@@ -151,6 +151,7 @@ const SENT: RecordLockView = {
   usedBy: [{ kind: "removal", id: REMOVAL_ID, label: null, facilityId: FACILITY_ID, period: { startedOn: "2026-01-01", completedOn: "2026-03-31" } }],
   freeFields: [],
   howToFree: "Wait for Isometric to return the covering GHG Statement, then refresh its status.",
+  returnedBy: [],
 };
 const IN_USE: RecordLockView = { ...SENT, level: "inUse", howToFree: "Correct or remove the records that use it first." };
 

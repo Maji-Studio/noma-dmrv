@@ -3,7 +3,7 @@ import type { RecordLock } from "./record-lock";
 /** Record kinds a screen can ask about: every lineage kind plus storage bins. */
 export const RECORD_LOCK_VIEW_KINDS = [
   "feedstock", "productionRun", "sample", "biocharProduct", "order", "delivery",
-  "application", "creditBatch", "storageLocation",
+  "application", "creditBatch", "storageLocation", "removal",
 ] as const;
 export type RecordLockViewKind = (typeof RECORD_LOCK_VIEW_KINDS)[number];
 
@@ -21,7 +21,17 @@ export interface RecordLockLink {
   label: string | null;
   facilityId: string | null;
   period?: { startedOn: string; completedOn: string } | null;
+  /** A GHG Statement known only by its reporting-period end. */
+  endsOn?: string | null;
   count?: number;
+}
+
+/** Isometric returned the statement covering a sent Removal; corrections ride on its resubmission. */
+export interface RecordLockReturnView {
+  removal: RecordLockLink;
+  statement: RecordLockLink;
+  /** Certify status read fresh: FAILED_VERIFICATION, or DRAFT after verifier submission. */
+  statementStatus: string | null;
 }
 
 /** What a screen needs from the predicate: the level, who holds it, who uses it. */
@@ -33,6 +43,8 @@ export interface RecordLockView {
   usedBy: RecordLockLink[];
   freeFields: string[];
   howToFree: string | null;
+  /** Open or In use after Isometric returned a sent Removal; empty otherwise. */
+  returnedBy: RecordLockReturnView[];
 }
 
 export type RecordLockViews = Record<string, RecordLockView>;

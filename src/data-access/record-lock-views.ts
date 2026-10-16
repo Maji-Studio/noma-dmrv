@@ -8,7 +8,7 @@
 import { and, eq, inArray, isNotNull } from "drizzle-orm";
 import { db } from "@/db";
 import {
-  applications, biocharProducts, binMovements, certifierRemovals, creditBatches, deliveries, feedstocks, orders,
+  applications, biocharProducts, binMovements, certifierGhgStatements, certifierRemovals, creditBatches, deliveries, feedstocks, orders,
   outputStockAllocations, productionRuns, samples, storageLocations,
 } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
@@ -16,6 +16,7 @@ import { recordLocks, type RecordLock, type RecordLockHolder } from "@/lib/recor
 import type { RecordLockLink, RecordLockView, RecordLockViews } from "@/lib/record-lock-view";
 import { getRecordLocks, type CertifiedLineageEntityType, type CertifiedLineageTarget } from "./certification-lineage-guards";
 import { readRecordDependents } from "./record-lock-dependents";
+import { readRecordLockLineage } from "./record-lock-lineage";
 import { countStorageLocationReferences } from "./storage-location-references";
 import { requireOrgScope } from "./utils";
 
@@ -46,11 +47,35 @@ export async function getRecordLockViews(ctx: OrgContext, entityType: CertifiedL
   // "Used by" stays complete even when a Removal holds the record.
   const sent = await getRecordLocks(ctx, db, targets, { sentOnly: true });
   const dependents = await Promise.all(targets.map(target => readRecordDependents(ctx, db, target)));
+  // The Sent pass also names any returned Removal; keep it on the dependency lock.
   const locks: RecordLock[] = targets.map((target, index) => sent[index].level === "sent"
     ? sent[index]
-    : recordLocks[target.entityType]({ dependents: dependents[index], removals: [] }));
-  const links = await resolveRecordLockLinks(ctx, [...locks.flatMap(lock => lock.heldBy), ...dependents.flat()]);
+    : { ...recordLocks[target.entityType]({ dependents: dependents[index], removals: [] }), returnedBy: sent[index].returnedBy });
+  const links = await resolveRecordLockLinks(ctx, [...locks.flatMap(lock => [...lock.heldBy, ...returnHolders(lock)]), ...dependents.flat()]);
   return Object.fromEntries(owned.map((id, index) => [id, toView(locks[index], dependents[index], links)]));
+}
+
+/**
+ * A Removal's own lock, for the Removals list and sheet: Sent, or returned by
+ * Isometric with the statement that came back ("Correction needed").
+ */
+export async function getRemovalLockViews(ctx: OrgContext, ids: readonly string[]): Promise<RecordLockViews> {
+  requireOrgScope(ctx);
+  const unique = [...new Set(ids)];
+  if (!unique.length) return {};
+  const rows = await db.select({ removalId: certifierRemovals.id, ghgStatementId: certifierRemovals.ghgStatementId }).from(certifierRemovals)
+    .where(and(eq(certifierRemovals.organizationId, ctx.organizationId), inArray(certifierRemovals.id, unique)));
+  const facts = await readRecordLockLineage(ctx, db, rows, true);
+  const locks = facts.map(fact => [fact.id, recordLocks.removal({ dependents: [], removals: [fact] })] as const);
+  const links = await resolveRecordLockLinks(ctx, locks.flatMap(([id, lock]) => [...lock.heldBy, ...returnHolders(lock), { kind: "removal", id }]));
+  return Object.fromEntries(locks.map(([id, lock]) => [id, toView(lock, [], links)]));
+}
+
+function returnHolders(lock: RecordLock): RecordLockHolder[] {
+  return (lock.returnedBy ?? []).flatMap(returned => [
+    { kind: "removal", id: returned.removalId },
+    ...returned.statements.map(statement => ({ kind: "ghgStatement", id: statement.id })),
+  ]);
 }
 
 /**
@@ -71,7 +96,7 @@ export async function getStorageBinLockViews(ctx: OrgContext, ids: readonly stri
     const usedBy: RecordLockLink[] = references.map(reference => ({
       kind: "binReference", id: reference.blocker, label: reference.blocker, facilityId: bin.facilityId, count: reference.count,
     }));
-    const view: RecordLockView = { level: lock.level, heldBy: usedBy, usedBy, freeFields: [...lock.freeFields], howToFree: lock.howToFree };
+    const view: RecordLockView = { level: lock.level, heldBy: usedBy, usedBy, freeFields: [...lock.freeFields], howToFree: lock.howToFree, returnedBy: [] };
     return [bin.id, view] as const;
   }));
   return Object.fromEntries(views);
@@ -84,7 +109,12 @@ function toView(lock: RecordLock, dependents: readonly RecordLockHolder[], links
     const resolved = holders.map(holder => links.get(linkKey(holder)) ?? { kind: holder.kind, id: holder.id, label: holder.label ?? null, facilityId: null });
     return [...new Map(resolved.map(link => [linkKey(link), link])).values()];
   };
-  return { level: lock.level, heldBy: resolve(lock.heldBy), usedBy: resolve(dependents), freeFields: [...lock.freeFields], howToFree: lock.howToFree };
+  const returnedBy = (lock.returnedBy ?? []).flatMap(returned => returned.statements.map(statement => ({
+    removal: resolve([{ kind: "removal", id: returned.removalId }])[0],
+    statement: resolve([{ kind: "ghgStatement", id: statement.id }])[0],
+    statementStatus: statement.status,
+  })));
+  return { level: lock.level, heldBy: resolve(lock.heldBy), usedBy: resolve(dependents), freeFields: [...lock.freeFields], howToFree: lock.howToFree, returnedBy };
 }
 
 /**
@@ -147,6 +177,17 @@ export async function resolveRecordLockLinks(ctx: OrgContext, holders: readonly 
         .leftJoin(creditBatches, and(eq(creditBatches.id, samples.creditBatchId), eq(creditBatches.organizationId, org)))
         .where(and(eq(samples.organizationId, org), inArray(samples.id, wanted)));
       for (const row of rows) put(`sample:${row.id}`, { kind: "sample", id: row.id, label: row.code, facilityId: row.facilityId });
+    })(),
+    (async () => {
+      const wanted = ids("ghgStatement");
+      if (!wanted.length) return;
+      const rows = await db.select({ id: certifierGhgStatements.id, facilityId: certifierGhgStatements.facilityId,
+        startOn: certifierGhgStatements.reportingPeriodStartOn, endOn: certifierGhgStatements.reportingPeriodEndOn })
+        .from(certifierGhgStatements).where(and(eq(certifierGhgStatements.organizationId, org), inArray(certifierGhgStatements.id, wanted)));
+      for (const row of rows) {
+        put(`ghgStatement:${row.id}`, { kind: "ghgStatement", id: row.id, label: null, facilityId: row.facilityId,
+          period: row.startOn ? { startedOn: row.startOn, completedOn: row.endOn } : null, endsOn: row.endOn });
+      }
     })(),
     (async () => {
       const wanted = ids("removal");

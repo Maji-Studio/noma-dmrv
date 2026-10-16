@@ -1,6 +1,6 @@
 "use server";
 import { z } from "zod";
-import { getRecordLockViews, getStorageBinLockViews } from "@/data-access/record-lock-views";
+import { getRecordLockViews, getRemovalLockViews, getStorageBinLockViews } from "@/data-access/record-lock-views";
 import { RECORD_LOCK_VIEW_KINDS, RECORD_LOCK_VIEW_MAX_IDS, type RecordLockViewKind, type RecordLockViews } from "@/lib/record-lock-view";
 import { withAction } from "./with-action";
 
@@ -13,8 +13,8 @@ const recordLocksSchema = z.object({
 export async function loadRecordLocks(entityType: RecordLockViewKind, ids: string[]) {
   return withAction<RecordLockViews>((ctx) => {
     const input = recordLocksSchema.parse({ entityType, ids });
-    return input.entityType === "storageLocation"
-      ? getStorageBinLockViews(ctx, input.ids)
-      : getRecordLockViews(ctx, input.entityType, input.ids);
+    if (input.entityType === "storageLocation") return getStorageBinLockViews(ctx, input.ids);
+    if (input.entityType === "removal") return getRemovalLockViews(ctx, input.ids);
+    return getRecordLockViews(ctx, input.entityType, input.ids);
   }, { fallbackMessage: "Record locks could not be loaded." });
 }

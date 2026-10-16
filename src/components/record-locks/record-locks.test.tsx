@@ -24,20 +24,28 @@ function view(level: RecordLockView["level"], heldBy: RecordLockLink[], usedBy =
     howToFree: level === "sent"
       ? "Wait for Isometric to return the covering GHG Statement, then refresh its status."
       : level === "inUse" ? "Correct or remove the records that use it first." : null,
+    returnedBy: [],
   };
 }
 
 describe("RecordLockChip", () => {
   it.each([
-    ["open", "Open", "neutral"],
-    ["inUse", "In use", "warning"],
-    ["sent", "Sent", "in-progress"],
-  ] as const)("renders %s as %s on the %s ramp", (level, label, state) => {
+    ["open", "Open", "--color-background-white"],
+    ["inUse", "In use", "--st-off-bg"],
+    ["sent", "Sent", "--st-run-bg"],
+  ] as const)("renders %s as %s on %s", (level, label, fill) => {
     render(<RecordLockChip level={level} />);
     const chip = screen.getByText(label);
     expect(chip.getAttribute("data-record-lock")).toBe(level);
-    const ramp = { neutral: "--st-off-bg", warning: "--st-wait-bg", "in-progress": "--st-run-bg" }[state];
-    expect(chip.className).toContain(ramp);
+    expect(chip.className).toContain(fill);
+  });
+
+  it("keeps Open and In use calm and apart, and only Sent in colour", () => {
+    render(<><RecordLockChip level="open" /><RecordLockChip level="inUse" /><RecordLockChip level="sent" /></>);
+    const [open, inUse, sent] = ["Open", "In use", "Sent"].map((label) => screen.getByText(label).className);
+    expect(open).not.toBe(inUse);
+    expect([open, inUse].some((classes) => /--st-(wait|run|ok|bad)/.test(classes))).toBe(false);
+    expect(sent).toContain("--st-run");
   });
 });
 
@@ -82,6 +90,44 @@ describe("RecordLockNotice", () => {
   it("names a storage bin's stock history instead of a record", () => {
     render(<RecordLockNotice lock={view("inUse", [])} subject="storageBin" />);
     expect(screen.getByRole("status").textContent).toBe("In use by its stock history, so the storage type and feedstock type are locked.");
+  });
+});
+
+describe("returned by Isometric", () => {
+  const STATEMENT: RecordLockLink = {
+    kind: "ghgStatement", id: "statement-1", label: null, facilityId: FACILITY,
+    period: { startedOn: "2026-07-01", completedOn: "2026-09-30" }, endsOn: "2026-09-30",
+  };
+  const returnedView = (level: RecordLockView["level"], status: string) => ({
+    ...view(level, level === "inUse" ? [RUN] : []),
+    returnedBy: [{ removal: REMOVAL, statement: STATEMENT, statementStatus: status }],
+  });
+
+  it("says where the corrections go, then keeps the In use line", () => {
+    render(<RecordLockNotice lock={returnedView("inUse", "FAILED_VERIFICATION")} />);
+    const [returned, inUse] = screen.getAllByRole("status");
+    expect(returned.textContent).toBe(
+      "Returned by IsometricGHG Statement Jul 1 to Sep 30, 2026 failed verification. Changes here go to Removal Jan 1 to Mar 31, 2026 when you resubmit it.",
+    );
+    expect(screen.getByRole("link", { name: "GHG Statement Jul 1 to Sep 30, 2026" }).getAttribute("href"))
+      .toBe(`/certification/ghg-statements?facility=${FACILITY}&statement=statement-1`);
+    expect(inUse.textContent).toContain("In use by production run PR-26-004");
+  });
+
+  it("names a statement back in draft, and shows the line on an Open record too", () => {
+    render(<RecordLockNotice lock={returnedView("open", "DRAFT")} />);
+    expect(screen.getByRole("status").textContent).toContain("GHG Statement Jul 1 to Sep 30, 2026 is back in draft.");
+  });
+
+  it("shows the returned line even for a kind whose In use locks nothing", () => {
+    render(<RecordLockNotice lock={returnedView("inUse", "FAILED_VERIFICATION")} inUseLocksNothing />);
+    expect(screen.getAllByRole("status")).toHaveLength(1);
+    expect(screen.getByText("Returned by Isometric")).toBeTruthy();
+  });
+
+  it("names a statement without a start by its end date", () => {
+    render(<RecordLockNotice lock={{ ...returnedView("open", "FAILED_VERIFICATION"), returnedBy: [{ removal: REMOVAL, statement: { ...STATEMENT, period: null }, statementStatus: "FAILED_VERIFICATION" }] }} />);
+    expect(screen.getByRole("link", { name: "GHG Statement ending Sep 30, 2026" })).toBeTruthy();
   });
 });
 
