@@ -26,9 +26,9 @@ const predicates: SQL[] = [];
 const patches: Array<{ table: unknown; value: Record<string, unknown> }> = [];
 const order: string[] = [];
 function query(rows: unknown[], table?: unknown) {
-  const chain = { from: vi.fn(), where: vi.fn(), for: vi.fn(), limit: vi.fn(), returning: vi.fn(), set: vi.fn(),
+  const chain = { from: vi.fn(), where: vi.fn(), orderBy: vi.fn(), for: vi.fn(), limit: vi.fn(), returning: vi.fn(), set: vi.fn(),
     then: (resolve: (value: unknown[]) => unknown) => Promise.resolve(rows).then(resolve) };
-  chain.from.mockReturnValue(chain); chain.for.mockReturnValue(chain);
+  chain.from.mockReturnValue(chain); chain.orderBy.mockReturnValue(chain); chain.for.mockReturnValue(chain);
   chain.where.mockImplementation((predicate: SQL) => { predicates.push(predicate); return chain; });
   chain.set.mockImplementation((value: Record<string, unknown>) => { patches.push({ table, value }); return chain; });
   chain.limit.mockResolvedValue(rows); chain.returning.mockResolvedValue(rows);
@@ -38,7 +38,10 @@ beforeEach(() => {
   vi.resetAllMocks(); predicates.length = 0; patches.length = 0; order.length = 0;
   mocks.transaction.mockImplementation(async (run) => run(mocks));
   mocks.select.mockReturnValueOnce(query([{ id: claim.removalId, ghgStatementId: null, metadata: { removalDeletionLockedAt: lockedAt.toISOString() } }]))
-    .mockReturnValueOnce(query([{ id: "sub-1", status: "draft", lockedAt }]));
+    .mockReturnValueOnce(query([{ id: "sub-1", status: "draft", lockedAt }]))
+    // No batches retain a submission reservation or a Removal claim in this fixture.
+    .mockReturnValueOnce(query([]))
+    .mockReturnValueOnce(query([]));
   mocks.delete.mockImplementation((table) => {
     if (table === certifierBiocharApplications) order.push("applications");
     if (table === certifierRemovals) order.push("removal");

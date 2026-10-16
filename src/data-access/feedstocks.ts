@@ -1,3 +1,4 @@
+import type { CaptureActivity } from "@/lib/activity-changes";
 import type { ActivityEventInput } from "./activity-events";
 import { withFeedstockTransportReadiness } from "./feedstock-transport-readiness";
 import type { SnapshotStock } from "./stock-effects";
@@ -435,6 +436,21 @@ export async function getFeedstockStats(
 // Create Operations
 // ============================================
 
+/** Persisted distance belongs to the derived leg, rather than the feedstock row. */
+async function readFeedstockTransportSnapshot(ctx: OrgContext, tx: DbTransaction, feedstockId: string) {
+  requireOrgScope(ctx);
+  const [leg] = await tx.select({
+    transportDistanceKm: transportLegs.distanceKm,
+    transportDistanceSource: transportLegs.distanceSource,
+  }).from(transportLegs).where(and(
+    eq(transportLegs.organizationId, ctx.organizationId),
+    eq(transportLegs.entityType, "feedstock"),
+    eq(transportLegs.entityId, feedstockId),
+    eq(transportLegs.isDerived, true),
+  ));
+  return { transportDistanceKm: leg?.transportDistanceKm ?? null, transportDistanceSource: leg?.transportDistanceSource ?? null };
+}
+
 /**
  * Record a feedstock delivery and its bin allocations inside a caller-owned
  * transaction owned by the operation runner. Every
@@ -446,6 +462,7 @@ export async function createFeedstockInTransaction(
   tx: DbTransaction,
   data: CreateFeedstockInput,
   snapshotStock?: SnapshotStock,
+  capture?: CaptureActivity,
 ): Promise<CreateFeedstockResult> {
   requireOrgScope(ctx);
   await withFeedstockErrors(() => assertSameOrg(ctx, feedstockTypes, data.feedstockTypeId, tx), "not_found", ["feedstockTypeId"]);
@@ -535,7 +552,7 @@ export async function createFeedstockInTransaction(
             storageLocationId: allocation.storageLocationId,
             notes: data.notes || null,
           })
-          .returning({ id: feedstocks.id });
+          .returning();
 
         results.push(feedstock.id);
 
@@ -543,6 +560,7 @@ export async function createFeedstockInTransaction(
           distanceKm: data.transportDistanceKm,
           distanceSource: data.transportDistanceSource,
         });
+        if (capture) capture(feedstock.id, null, { ...feedstock, ...await readFeedstockTransportSnapshot(ctx, savepoint, feedstock.id) });
 
         // Lock feedstock type on bin (first-use lock)
         await savepoint
@@ -584,6 +602,7 @@ export async function updateFeedstockInTransaction(
   feedstockId: string,
   data: UpdateFeedstockInput,
   snapshotStock?: SnapshotStock,
+  capture?: CaptureActivity,
 ): Promise<FeedstockWithRelations> {
   requireOrgScope(ctx);
   const {
@@ -620,6 +639,7 @@ export async function updateFeedstockInTransaction(
     expectedVersion,
     actualVersion: locked.version,
   });
+  const transportBefore = capture ? await readFeedstockTransportSnapshot(ctx, tx, feedstockId) : undefined;
 
   await withFeedstockErrors(() => assertCanMutateCertifiedLineage(
     ctx,
@@ -682,7 +702,7 @@ export async function updateFeedstockInTransaction(
 
   await snapshotStock?.(tx, stockDerivationChanged || storageReferenceNeedsValidation ? [locked.storageLocationId, effectiveStorageLocationId] : []);
 
-  await tx
+  const [saved] = await tx
     .update(feedstocks)
     .set({
       ...effectiveChanges,
@@ -690,7 +710,7 @@ export async function updateFeedstockInTransaction(
       version: nextVersion(feedstocks.version),
       updatedAt: new Date(),
     })
-    .where(and(eq(feedstocks.id, feedstockId), eq(feedstocks.organizationId, ctx.organizationId)));
+    .where(and(eq(feedstocks.id, feedstockId), eq(feedstocks.organizationId, ctx.organizationId))).returning();
 
   // Re-derive the affected lanes now that the new row is visible, while the
   // bin locks above are still held. Validating the bin reference only proves
@@ -712,6 +732,7 @@ export async function updateFeedstockInTransaction(
       !explicitDistanceSupplied &&
       !explicitDistanceSourceSupplied,
   });
+  if (capture) capture(feedstockId, { ...locked, ...transportBefore }, { ...saved, ...await readFeedstockTransportSnapshot(ctx, tx, feedstockId) });
 
   // Read the updated record back inside the transaction, so a failed read
   // rolls the update back instead of reporting a saved feedstock as

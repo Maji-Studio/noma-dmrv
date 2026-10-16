@@ -1,3 +1,4 @@
+import type { CaptureActivity } from "@/lib/activity-changes";
 import { nextVersion } from "./row-version";
 /**
  * Document write lock order:
@@ -85,7 +86,7 @@ async function cleanupFinal(ctx: OrgContext, tx: DbTransaction, facts: Inspected
   else if (facts.finalKey && facts.finalKey !== liveKey) await enqueueStorageObjectDeletion(ctx, tx, { storageProvider: facts.provider, storageBucket: facts.bucket, storageKey: facts.finalKey,
     notBefore: new Date(Date.now() + DOCUMENT_CONFIRM_DEADLINE_MS) });
 }
-export async function confirmDocumentUploadInTransaction(ctx: OrgContext, tx: DbTransaction, facts: InspectedUploadFacts): Promise<ConfirmOutcome & { transitioned?: boolean }> {
+export async function confirmDocumentUploadInTransaction(ctx: OrgContext, tx: DbTransaction, facts: InspectedUploadFacts, capture?: CaptureActivity): Promise<ConfirmOutcome & { transitioned?: boolean }> {
   requireOrgScope(ctx);
   const discovered = await readDocumentForWrite(ctx, tx, facts.documentId);
   if (!discovered) { await cleanupFinal(ctx, tx, facts); return { kind: "gone" }; }
@@ -134,6 +135,7 @@ export async function confirmDocumentUploadInTransaction(ctx: OrgContext, tx: Db
   // Keep the committed content-addressed key out of every cleanup path.
   await enqueueDocumentKeys(ctx, tx, { ...row, metadata: {}, storageKey: row.uploadStorageKey });
   await cleanupFinal(ctx, tx, facts, row, reason ? null : saved.storageKey);
+  capture?.(saved.id, row, saved);
   if (reason) {
     return { kind: "refused", reason, pointer, message, document: saved };
   }
