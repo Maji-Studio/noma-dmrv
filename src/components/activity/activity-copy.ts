@@ -31,6 +31,8 @@ export const ACTIVITY_LOAD_ERROR = "Activity could not be loaded. Retry to load 
 export const ACTIVITY_LOADING = "Loading activity…";
 export const ACTIVITY_SHOW_MORE_LABEL = "Show older activity";
 export const ACTIVITY_DELETED_RECORD_LABEL = "Deleted record";
+/** Leads the field names a creation recorded. */
+export const ACTIVITY_CREATED_FIELDS_LABEL = "Recorded";
 export const ACTIVITY_OPEN_ALL_LABEL = "Open all activity";
 
 export function activityChangeCount(count: number): string {

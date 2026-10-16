@@ -1,9 +1,9 @@
 /**
- * How one activity event reads: record type, kind, who, changed field names and
- * the record's deep link. Pure so the copy rules are unit-tested; the list and
- * the side sheet render through it so both read alike.
- *
- * Allowlisted values live in activity_events.changes; this display currently renders field names only.
+ * How one activity event reads: record type, kind, who, the record's deep link
+ * and the names of the fields it touched. Pure so the copy rules are
+ * unit-tested; the list and the side sheet render through it so both read
+ * alike. The values an update recorded (`changes`, with current link names in
+ * `changeLabels`) become one line per field in `activity-change-lines.ts`.
  */
 import type { CreditBatchActivityPage } from "@/data-access/credit-batch-activity";
 import {
@@ -119,9 +119,24 @@ const ACTIVITY_FIELD_LABELS: Record<string, string> = {
   dryMassKg: DRY_MASS_FIELD_LABEL,
   moistureContentPercent: MOISTURE_FIELD_LABEL,
   moisturePercent: MOISTURE_FIELD_LABEL,
+  ph: "pH",
+  gisBoundary: "Boundary",
+  gpsLatitude: "GPS latitude",
+  gpsLongitude: "GPS longitude",
+  originGpsLatitude: "Origin GPS latitude",
+  originGpsLongitude: "Origin GPS longitude",
+  destinationGpsLatitude: "Destination GPS latitude",
+  destinationGpsLongitude: "Destination GPS longitude",
+  // A document's or transport leg's owner.
+  entityType: "Linked record type",
+  entityId: "Linked record",
 };
 /** Bookkeeping fields every save touches; they say nothing to an operator. */
 const HIDDEN_FIELDS = new Set(["version", "expectedVersion", "facilityId", "organizationId"]);
+
+export function isHiddenActivityField(field: string): boolean {
+  return HIDDEN_FIELDS.has(field);
+}
 
 const CERTIFY_KIND_BY_ENTITY: Partial<Record<ActivityEntityType, CertifyEntityKind>> = {
   production_run: "productionRun",
@@ -132,29 +147,56 @@ const CERTIFY_KIND_BY_ENTITY: Partial<Record<ActivityEntityType, CertifyEntityKi
   application: "application",
 };
 
-/** Unit suffixes on field keys, read as the unit symbol the forms show. */
+/**
+ * Unit suffixes on field keys, read as the unit symbol the forms show. The
+ * first match wins, so compound units come before the plain ones they end in.
+ */
 const UNIT_SUFFIXES: ReadonlyArray<[RegExp, string]> = [
+  [/ kg hr$/, " (kg/h)"],
+  [/ kg (per )?m3$/, " (kg/m³)"],
+  [/ g ?per kg$/, " (g/kg)"], // "GPerKg" splits as "gper kg"
   [/ kg$/, " (kg)"],
   [/ km$/, " (km)"],
   [/ kwh$/, " (kWh)"],
   [/ (litres|liters)$/, " (L)"],
   [/ percent$/, " (%)"],
-  [/ tons$/, " (t)"],
+  [/ (tons|tonnes)$/, " (t)"],
+  [/ ha$/, " (ha)"],
+  [/ c$/, " (°C)"],
+  [/ minutes$/, " (min)"],
+  [/ grams$/, " (g)"],
+  [/ ml$/, " (mL)"],
+  [/ ppm$/, " (ppm)"],
 ];
 
-/** "biocharOutputKg" → "Biochar output (kg)"; a trailing id names the relation. */
-export function humanizeFieldName(field: string): string {
-  let words = field
+function fieldWords(field: string): string {
+  return field
     .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
     .replaceAll("_", " ")
     .trim()
     .toLowerCase()
     .replace(/ ids?$/, (match) => (match.endsWith("s") ? "s" : ""));
-  for (const [suffix, unit] of UNIT_SUFFIXES) words = words.replace(suffix, unit);
+}
+
+/** "biocharOutputKg" → "Biochar output (kg)"; a trailing id names the relation. */
+export function humanizeFieldName(field: string): string {
+  let words = fieldWords(field);
+  const unit = UNIT_SUFFIXES.find(([suffix]) => suffix.test(words));
+  if (unit) words = words.replace(unit[0], unit[1]);
   return words.charAt(0).toUpperCase() + words.slice(1);
 }
 
-/** The form label for a changed field where one is known, else a readable name. */
+/** The unit a field key names, as its label suffix (" (kg)"), or "". */
+function fieldUnitSuffix(field: string): string {
+  const words = fieldWords(field);
+  return UNIT_SUFFIXES.find(([suffix]) => suffix.test(words))?.[1] ?? "";
+}
+
+/**
+ * The form label for a changed field where one is known, else a readable name.
+ * Registry labels name the quantity without its unit, so the unit the key
+ * carries is added: values on an activity line never repeat it.
+ */
 export function activityFieldLabel(entityType: string, field: string): string {
   const known = ACTIVITY_FIELD_LABELS[field];
   if (known) return known;
@@ -162,15 +204,8 @@ export function activityFieldLabel(entityType: string, field: string): string {
   const descriptor = kind
     ? CERTIFY_FIELD_REGISTRY[kind].find((entry) => entry.key === field || entry.formFields?.includes(field))
     : undefined;
-  return descriptor?.label ?? humanizeFieldName(field);
-}
-
-/** Changed field labels, deduplicated, bookkeeping fields dropped. */
-export function activityChangedFieldLabels(item: Pick<ActivityItem, "entityType" | "changedFields">): string[] {
-  const labels = item.changedFields
-    .filter((field) => !HIDDEN_FIELDS.has(field))
-    .map((field) => activityFieldLabel(item.entityType, field));
-  return [...new Set(labels)];
+  if (!descriptor) return humanizeFieldName(field);
+  return descriptor.label.includes("(") ? descriptor.label : `${descriptor.label}${fieldUnitSuffix(field)}`;
 }
 
 function documentTypeLabel(documentType: string): string | null {

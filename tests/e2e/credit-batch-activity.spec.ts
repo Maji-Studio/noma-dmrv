@@ -64,6 +64,7 @@ async function seedBatchActivity(seededData: SeededChainData, creditBatchId: str
     {
       ...base, entityType: "feedstock", entityId: seededData.feedstock.id, action: "updated", source: "form",
       actorUserId: adminUserId, changedFields: ["massWetKg", "notes"], occurredAt: at(40),
+      changes: { massWetKg: { from: "600", to: "650" } },
     },
     {
       // A sample that no longer exists: its history stays as a tombstone.
@@ -105,7 +106,7 @@ test.describe("credit batch activity", () => {
     expect(await latest.evaluateAll(rows => rows.map(row => `${row.getAttribute("data-kind")}:${row.getAttribute("data-record-type")}`))).toEqual([
       "updated:credit_batch", "updated:order", "deleted:lab_sample", "updated:feedstock", "status_changed:credit_batch",
     ]);
-    await expect(latest.first()).toContainText("Changed: Removal template");
+    await expect(latest.first().getByTestId("activity-field-change")).toHaveText("Removal template: changed");
 
     await section.getByRole("link", { name: new RegExp(`Open all activity \\(${total} changes\\)`) }).click();
 
@@ -117,8 +118,9 @@ test.describe("credit batch activity", () => {
     // Actorless and API changes read as their source.
     await expect(view.getByText("System", { exact: true })).toBeVisible();
     await expect(view.getByText("via API")).toBeVisible();
-    // Field names only, in human terms.
-    await expect(view.getByText("Changed: Wet mass (kg), Notes")).toBeVisible();
+    // One line per field: a recorded value reads old to new, a name-only field reads changed.
+    const fieldLines = view.locator("[data-record-type='feedstock']").getByTestId("activity-field-change");
+    await expect(fieldLines).toHaveText(["Wet mass (kg): from 600 to 650", "Notes: changed"]);
 
     await view.getByLabel("Kind").selectOption("deleted");
     await expect(entries).toHaveCount(1);
