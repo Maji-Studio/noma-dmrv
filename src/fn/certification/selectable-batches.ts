@@ -9,7 +9,7 @@ import {
 } from "@/lib/certification/batch-health";
 import { toBatchHealthFacts } from "@/lib/certification/batch-health-facts";
 import {
-  deriveFacilitySetupGaps,
+  deriveFacilityConnectionGaps,
   type FacilitySetupGap,
 } from "@/lib/certification/facility-setup-gaps";
 import type { OrgContext } from "@/lib/auth/server";
@@ -28,7 +28,7 @@ export interface SelectableBatch extends UngroupedCreditBatchRow {
 
 export interface SelectableBatchesData {
   batches: SelectableBatch[];
-  // Facility setup (project mapping + cleanly-resolving default template) is
+  // Facility connection (credentials, project mapping and registry facility id) is
   // done. When false the wizard shows a "finish facility setup" banner and the
   // transport health check on each batch reads `skipped` (design doc §8).
   facilitySetupComplete: boolean;
@@ -72,7 +72,7 @@ export async function buildSelectableBatchesData(
       appliedWeightTons: accounting?.appliedWeightTons ?? 0,
     };
   });
-  const facilitySetupGaps = deriveFacilitySetupGaps(facilityFacts);
+  const facilitySetupGaps = deriveFacilityConnectionGaps(facilityFacts);
   return {
     batches,
     facilitySetupComplete: facilitySetupGaps.length === 0,

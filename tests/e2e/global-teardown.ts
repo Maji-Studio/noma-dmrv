@@ -18,7 +18,7 @@
  */
 import { Pool } from "pg";
 import { DEC_ORG_ID } from "@/db/org-defaults";
-import { isLocalDatabaseHost } from "../helpers/throwaway-database";
+import { isLocalHost } from "../helpers/local-host";
 import { E2E_CERTIFIER_ORG_ID_PREFIX } from "./fixtures/certifier-credentials";
 
 export default async function globalTeardown() {
@@ -33,7 +33,7 @@ export default async function globalTeardown() {
   // deletes), so the name is not checked; a remote host never is allowed.
   // pg lets a host/hostaddr query parameter override the URL's host.
   const hostOverridden = url.searchParams.has("host") || url.searchParams.has("hostaddr");
-  if (!isLocalDatabaseHost(hostname) || hostOverridden) {
+  if (!isLocalHost(hostname) || hostOverridden) {
     console.error(
       `[global-teardown] ABORTED: database "${dbName}" is on host "${hostname}". ` +
       `The E2E sweep only runs against a local database.`

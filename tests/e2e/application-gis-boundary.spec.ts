@@ -55,7 +55,7 @@ const PASTE_BOUNDARY = {
   ],
 };
 
-test("adds, reads, replaces, and removes a GIS boundary", async ({
+test("adds, reads and replaces a GIS boundary, and keeps it when removal would leave GIS reference empty", async ({
   adminPage: page,
   seededData,
 }) => {
@@ -102,7 +102,7 @@ test("adds, reads, replaces, and removes a GIS boundary", async ({
   await waitForSideSheet(page);
   await page.locator("#applicationDate").fill(today);
   await selectFirstEntity(page, "Delivery");
-  await page.locator("#biocharAppliedTons").fill("50");
+  await page.locator("#biocharAppliedKg").fill("50");
   await page.locator("#fieldSizeHa").fill("2");
   await page.locator("#fieldIdentifier").fill(fieldIdentifier);
 
@@ -170,18 +170,20 @@ test("adds, reads, replaces, and removes a GIS boundary", async ({
   await expect(page.getByText("Pasted GeoJSON")).toBeVisible({
     timeout: COLD_COMPILE_TIMEOUT_MS,
   });
+  // Q79: the GIS reference method needs a boundary, so removing it cannot be saved.
   await page.getByRole("button", { name: "Edit application" }).click();
   await page.getByRole("button", { name: "Remove" }).click();
   await page
     .locator('[role="dialog"]')
     .getByRole("button", { name: "Update application" })
     .click();
-  await waitForSideSheetClose(page);
+  await expect(page.getByText("Add a boundary file, or choose Customer location.")).toBeVisible();
+  await expect(page.locator('[role="dialog"]')).toBeVisible();
 
-  await applicationRow.click();
+  // The sheet reopens from the URL in view mode, showing the stored boundary.
+  await page.reload();
   await waitForSideSheet(page);
-  await expect(page.getByText("No GIS reference")).toBeVisible({
+  await expect(page.getByText("Pasted GeoJSON")).toBeVisible({
     timeout: COLD_COMPILE_TIMEOUT_MS,
   });
-  await expect(page.getByText("Choose Edit to add the field boundary.")).toBeVisible();
 });

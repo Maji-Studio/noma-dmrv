@@ -3,6 +3,7 @@ import type { DocumentRepresentation } from "@/lib/representations/documents";
 import { findApiFeedstock } from "@/data-access/api-feedstocks";
 import { findApiDelivery } from "@/data-access/api-deliveries";
 import { findApiLabSample } from "@/data-access/api-lab-samples";
+import { findApiApplication } from "@/data-access/api-applications";
 import { requireOrgScope } from "@/data-access/utils";
 import type { OrgContext } from "@/lib/auth/server";
 import { DomainError } from "@/lib/domain-errors";
@@ -16,7 +17,7 @@ export { documentNotFound } from "@/data-access/api-documents";
 /** Direct resource resolvers deliberately retain archived records and ancestors. */
 export async function resolveApiDocumentOwner(ctx: OrgContext, ownerType: ApiDocumentOwnerType, identifier: ApiLookupIdentifier) {
   requireOrgScope(ctx);
-  const resolvers = { feedstock: findApiFeedstock, delivery: findApiDelivery, lab_sample: findApiLabSample };
+  const resolvers = { feedstock: findApiFeedstock, delivery: findApiDelivery, lab_sample: findApiLabSample, application: findApiApplication };
   try {
     return (await resolvers[ownerType](ctx, identifier)).id;
   } catch (error) {

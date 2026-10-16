@@ -4,8 +4,10 @@
  * One question drives the order: is this batch ready to become credits, and
  * what needs fixing if not? Certification progress leads, then the batch's
  * identity (mirroring the edit form's section titles), the member production
- * runs closed by the carbon estimate they produce, and notes. The interactive certification checklist and lab-sample
- * panels mount below via `viewModeChildren` because they fetch their own data.
+ * runs closed by the carbon estimate they produce, notes, and the batch's
+ * recorded activity (which fetches its own summary). The interactive
+ * certification checklist and lab-sample panels mount below via
+ * `viewModeChildren` because they fetch their own data.
  */
 import { CompositionCard, DerivedHeadline } from "@/components/forms";
 import Link from "next/link";
@@ -21,6 +23,7 @@ import { StockRows } from "@/components/storage-locations/stock-figures";
 import { formatDate, formatTonnes } from "@/lib/format-utils";
 import { formatWetDryMass, PERCENT_SCALE } from "@/lib/mass-moisture";
 import { CreditBatchLifecycleSteps } from "./credit-batch-lifecycle";
+import { CreditBatchRemovalTemplate } from "./credit-batch-removal-template";
 import { SheetLinkRow, SheetLinkRows } from "./sheet-link-row";
 import { COMPLETED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
 import { MISSING_VALUE } from "@/lib/copy-utils";
@@ -33,6 +36,7 @@ import {
   productionRunDeepLinkHref,
 } from "@/lib/certification/links";
 import { Notice } from "@/components/ui/notice";
+import { CreditBatchActivitySection } from "@/components/activity";
 
 /** Names the figure, so the headline needs no label of its own. */
 const CARBON_ESTIMATE_TITLE = "Carbon estimate, before project emissions";
@@ -264,6 +268,12 @@ interface CreditBatchSheetSectionsOptions extends CreditBatchRunsContentProps {
   /** Removal/GHG lifecycle summary; undefined while loading or unavailable. */
   healthSummary?: CreditBatchHealthSummary;
   isHealthLoading: boolean;
+  /** Owner or Admin: may switch the batch's Removal template. */
+  canManage?: boolean;
+  /** A submitted Removal holds the batch, so its definition is locked. */
+  locked?: boolean;
+  /** The deep-link focus target the sheet was opened with. */
+  activeFocusTarget?: string | null;
 }
 
 export function creditBatchSheetSections({
@@ -275,6 +285,9 @@ export function creditBatchSheetSections({
   onRetryRuns,
   healthSummary,
   isHealthLoading,
+  canManage = false,
+  locked = false,
+  activeFocusTarget,
 }: CreditBatchSheetSectionsOptions): DetailPanelSection[] {
   const removalId = creditBatch.productionEmissionsClaimedByRemovalId ?? healthSummary?.removalId ?? null;
   const preview = creditBatch.co2eStoredPreview;
@@ -305,6 +318,20 @@ export function creditBatchSheetSections({
               those fields rather than past them. */}
           <span id="batch-details" className="scroll-mt-24" aria-hidden />
         </>
+      ),
+    },
+    {
+      // Read and switched here, never in the edit form: a switch is its own
+      // audited action with its own lock and version checks.
+      title: "Removal template",
+      fields: [],
+      content: (
+        <CreditBatchRemovalTemplate
+          creditBatch={creditBatch}
+          canManage={canManage}
+          locked={locked}
+          activeFocusTarget={activeFocusTarget}
+        />
       ),
     },
     {
@@ -362,6 +389,16 @@ export function creditBatchSheetSections({
     {
       id: "notes",
       fields: [{ label: "Notes", value: creditBatch.siteManagementNotes }],
+    },
+    {
+      title: "Activity",
+      fields: [],
+      content: (
+        <CreditBatchActivitySection
+          creditBatchId={creditBatch.id}
+          facilityId={creditBatch.facilityId}
+        />
+      ),
     },
   ];
 }

@@ -64,8 +64,8 @@ describe("biochar product create", { timeout: TIMEOUT_MS }, () => {
     expect(state.products).toMatchObject([{ id: data.id, massKg: BIOCHAR_WET_KG, code: data.code }]);
     expect(state.movements).toMatchObject([{ outputKind: "production_draw", storageLocationId: a.source.id }]);
     expect(await productWriteAudits(a)).toMatchObject([{
-      operationId: "make_biochar_product", outcomeCode: "created", transport: "rest", credentialId: a.writeCredentialId,
-      entityIds: [data.id], versionBefore: null, versionAfter: 1,
+      operationId: "make_biochar_product", action: "created", source: "rest", credentialId: a.writeCredentialId,
+      entityId: data.id, versionBefore: null, versionAfter: 1,
     }]);
     expect((await productWriteAudits(a))[0].changedFields).not.toContain("basisFingerprint");
   });
@@ -235,7 +235,7 @@ describe("biochar product update", { timeout: TIMEOUT_MS }, () => {
     expect(state.products).toMatchObject([{ id: saved.row.id, version: 2, status: "ready", massKg: BIOCHAR_WET_KG }]);
     expect(await productWriteAudits(a)).toHaveLength(2);
     expect((await productWriteAudits(a)).find((row) => row.operationId === "update_biochar_product")).toMatchObject({
-      outcomeCode: "updated", transport: "rest", credentialId: a.writeCredentialId, entityIds: [saved.row.id],
+      action: "updated", source: "rest", credentialId: a.writeCredentialId, entityId: saved.row.id,
       versionBefore: 1, versionAfter: 2, changedFields: ["densityKgM3", "status"],
     });
     const cleared = await patchProductRest(a, saved.row.id, { densityKgM3: null }, `"2.${BIOCHAR_PRODUCT_REPRESENTATION_REVISION}"`);

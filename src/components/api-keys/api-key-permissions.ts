@@ -2,6 +2,7 @@ import { API_SCOPES, type ApiScope } from "@/lib/auth/api-scopes";
 import { MISSING_VALUE } from "@/lib/copy-utils";
 
 const ENTITY_LABELS: Record<string, string> = {
+  applications: "Applications",
   "production-runs": "Production runs",
   reactors: "Reactors",
   "biochar-products": "Biochar products and output stock",

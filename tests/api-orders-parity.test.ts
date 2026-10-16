@@ -178,7 +178,7 @@ describe("three-way order parity", { timeout: TIMEOUT_MS }, () => {
       expect(await orderRows(f)).toEqual([]);
       const audits = await orderAudits(f);
       if (transport === "action") expect(audits).toEqual([]);
-      else expect(audits.map((audit) => [audit.operationId, audit.transport]).sort()).toEqual([["delete_order", transport], ["record_order", transport]]);
+      else expect(audits.map((audit) => [audit.operationId, audit.source]).sort()).toEqual([["delete_order", transport], ["record_order", transport]]);
     }
     await outcomes(ids, outputs);
   });

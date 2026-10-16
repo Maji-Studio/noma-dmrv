@@ -1,4 +1,5 @@
 import { deliveryRepresentationSchema } from "@/lib/representations/deliveries";
+import { applicationRepresentationSchema } from "@/lib/representations/applications";
 import { customerRepresentationSchema } from "@/lib/representations/customers";
 import { orderRepresentationSchema } from "@/lib/representations/orders";
 import { productionRunRepresentationSchema } from "@/lib/representations/production-runs";
@@ -19,6 +20,7 @@ import type { ApiScope } from "@/lib/auth/api-scopes";
 
 /** Route-specific seams without importing handlers or their database dependencies. */
 export const resources = ([
+  { path: "applications", singular: "application", schema: applicationRepresentationSchema },
   { path: "production-runs", singular: "production_run", schema: productionRunRepresentationSchema },
   { path: "reactors", singular: "reactor", schema: reactorRepresentationSchema },
   { path: "feedstocks", singular: "feedstock", schema: feedstockRepresentationSchema },

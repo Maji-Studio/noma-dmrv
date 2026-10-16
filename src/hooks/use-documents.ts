@@ -23,6 +23,7 @@ import { dashboardOverviewKeys } from "./use-dashboard-overview";
 import { invalidateCertificationReadiness } from "./use-certification";
 import { transportLegKeys } from "./use-transport-legs";
 import { productionRunKeys } from "./use-production-runs";
+import { activityKeys } from "./activity-query-keys";
 
 function unwrap<T>(result: ActionResult<T>): T {
   if (!result.success) throwActionError(result);
@@ -108,10 +109,13 @@ export function useDocumentsForEntity(
 }
 
 export function useRequestUpload() {
+  const qc = useQueryClient();
   return useMutation({
     mutationFn: async (
       input: Parameters<typeof requestUpload>[0]
     ): Promise<RequestUploadResult> => unwrap(await requestUpload(input)),
+    // The request records the document's creation in the owner's batch activity.
+    onSuccess: () => qc.invalidateQueries({ queryKey: activityKeys.all }),
   });
 }
 
@@ -141,6 +145,8 @@ export function useSetDocumentVisibility(invalidateKey?: readonly unknown[]) {
     },
     onSuccess: () => {
       if (invalidateKey) qc.invalidateQueries({ queryKey: invalidateKey });
+      // A visibility change is a recorded document update.
+      void qc.invalidateQueries({ queryKey: activityKeys.all });
     },
   });
 }

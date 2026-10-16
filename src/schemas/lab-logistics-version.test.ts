@@ -3,7 +3,7 @@ import { updateSampleSchema, deleteSampleSchema } from "./samples";
 import { updateOrderSchema, deleteOrderSchema } from "./orders";
 import { updateDeliverySchema, deleteDeliverySchema } from "./deliveries";
 import { updateTransportLegSchema, deleteTransportLegSchema } from "./transport-legs";
-import { updateApplicationSchema, deleteApplicationSchema } from "./applications";
+import { updateApplicationInput, deleteApplicationInput } from "./application-input";
 import { updateCreditBatchSchema, deleteCreditBatchSchema } from "./credit-batches";
 const ID = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee";
 const INITIAL_VERSION = 1;
@@ -16,8 +16,8 @@ const cases = [
   ["delete Delivery", deleteDeliverySchema, { deliveryId: ID }],
   ["update TransportLeg", updateTransportLegSchema, { id: ID, distanceKm: 10, loadMassKg: 1 }],
   ["delete TransportLeg", deleteTransportLegSchema, { id: ID }],
-  ["update Application", updateApplicationSchema, { applicationId: ID }],
-  ["delete Application", deleteApplicationSchema, { applicationId: ID }],
+  ["update Application", updateApplicationInput, { applicationId: ID }],
+  ["delete Application", deleteApplicationInput, { applicationId: ID }],
   ["update CreditBatch", updateCreditBatchSchema, { creditBatchId: ID }],
   ["delete CreditBatch", deleteCreditBatchSchema, { creditBatchId: ID }],
  ] as const;

@@ -90,6 +90,9 @@ it("returns the shared domain guidance during initialize", async () => {
   expect(llmsGuide).toContain(orderGuide);
   expect(llmsGuide).toContain(deliveryGuide);
   expect(result.instructions).not.toContain(DOCUMENT_GUIDANCE);
+  for (const name of ["find_applications", "get_application", "get_delivery_application_balance", "record_application", "update_application", "delete_application"]) {
+    expect(llmsGuide).toContain(name); expect(result.instructions).not.toContain(name);
+  }
   expect(llmsGuide).toContain(DOCUMENT_GUIDANCE);
   expect(result.instructions).not.toContain(deliveryGuide);
   expect(result.instructions).not.toContain(orderGuide);
@@ -133,9 +136,9 @@ describe("authenticated MCP read route", () => {
     for (const [key, value] of Object.entries(rateHeaders)) expect(response.headers.get(key)).toBe(value);
     expect(response.headers.get("x-request-id")).toBeTruthy();
     const { result } = await body(response);
-    expect(result.tools).toHaveLength(49);
+    expect(result.tools).toHaveLength(55);
     expect(result.tools[0]).toMatchObject({ annotations: { readOnlyHint: true } });
-    expect(result.tools.filter((tool: { name: string }) => !["request_document_upload", "confirm_document_upload", "log_feedstock_delivery", "update_feedstock", "delete_feedstock", "start_production_run", "update_production_run", "delete_production_run", "make_biochar_product", "update_biochar_product", "record_output_stock_movement", "record_lab_sample", "update_lab_sample", "delete_lab_sample", "record_order", "update_order", "delete_order", "record_delivery", "update_delivery"].includes(tool.name)).every((tool: { annotations: { readOnlyHint: boolean } }) => tool.annotations.readOnlyHint)).toBe(true);
+    expect(result.tools.filter((tool: { name: string }) => !["record_application", "update_application", "delete_application", "request_document_upload", "confirm_document_upload", "log_feedstock_delivery", "update_feedstock", "delete_feedstock", "start_production_run", "update_production_run", "delete_production_run", "make_biochar_product", "update_biochar_product", "record_output_stock_movement", "record_lab_sample", "update_lab_sample", "delete_lab_sample", "record_order", "update_order", "delete_order", "record_delivery", "update_delivery"].includes(tool.name)).every((tool: { annotations: { readOnlyHint: boolean } }) => tool.annotations.readOnlyHint)).toBe(true);
     const find = result.tools.find((tool: { name: string }) => tool.name === "find_feedstocks");
     expect(find.inputSchema.additionalProperties).toBe(false);
     expect(find.inputSchema.properties.limit).toMatchObject({ type: "integer", minimum: 1, maximum: API_LIST_MAX_LIMIT,
@@ -322,7 +325,7 @@ it("returns invalid_query for an invalid document owner type", async () => {
   });
 });
 
-it.each(["request_document_upload", "confirm_document_upload", "log_feedstock_delivery", "update_feedstock", "delete_feedstock", "record_order", "update_order", "delete_order", "record_delivery", "update_delivery"])("charges %s and dry runs as writes", async (name) => {
+it.each(["record_application", "update_application", "delete_application", "request_document_upload", "confirm_document_upload", "log_feedstock_delivery", "update_feedstock", "delete_feedstock", "record_order", "update_order", "delete_order", "record_delivery", "update_delivery"])("charges %s and dry runs as writes", async (name) => {
   for (const dryRun of [false, true]) {
     expect(mcpRequestAccess((await mocks.resolve()).ctx, { method: "tools/call", params: { name, arguments: { dryRun } } })).toBe("write");
     await call(name, { dryRun });
@@ -394,6 +397,9 @@ it("publishes the delete annotations", async () => {
 it.each([
   ["confirm_document_upload", DOCUMENT_CONFIRM_DEADLINE_MS],
   ["request_document_upload", OPERATION_DEADLINE_MS],
+  ["record_application", OPERATION_DEADLINE_MS],
+  ["update_application", OPERATION_DEADLINE_MS],
+  ["delete_application", OPERATION_DEADLINE_MS],
 ] as const)("gives %s its budget without restarting it after authentication", async (name, budget) => {
   const resolution = await mocks.resolve();
   const started = Date.now();
@@ -406,7 +412,7 @@ it.each([
     expect(vi.mocked(serveMcp).mock.calls.at(-1)![1].deadlineAt).toBe(started + budget);
   } finally { clock.mockRestore(); }
 });
-it.each(["request_document_upload", "confirm_document_upload"])("enforces the write switch for %s", async name => {
+it.each(["record_application", "update_application", "delete_application", "request_document_upload", "confirm_document_upload"])("enforces the write switch for %s", async name => {
   mocks.env.API_WRITES_DISABLED = true;
   expect(await body(await call(name, { ownerType: "delivery" }))).toMatchObject({
     result: { isError: true, structuredContent: { code: "api_writes_disabled" } },

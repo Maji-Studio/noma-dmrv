@@ -52,13 +52,15 @@ os.environ.update(
 document_fixture_directory = TemporaryDirectory()
 document_fixtures = [
     {"ownerType": owner, "ownerId": FIXTURE_ID,
-     "documentType": "lab_report" if owner == "lab_sample" else "bill_of_lading",
+     "documentType": "photo" if owner == "application" else "lab_report" if owner == "lab_sample" else "bill_of_lading",
      "uploaded": {"id": PRODUCT_BIN_ID, "etag": '"2.1"', "physicalObject": True},
      "pending": {"id": DELETE_ORDER_ID, "etag": '"1.1"', "data": {"id": DELETE_ORDER_ID, "uploadStatus": "pending", "version": 1}}}
-    for owner in ("delivery", "feedstock", "lab_sample")
+    for owner in ("delivery", "feedstock", "lab_sample", "application")
 ]
 document_fixture_path = Path(document_fixture_directory.name) / "fixture.json"
-document_fixture_path.write_text(json.dumps({"documents": document_fixtures}))
+document_fixture_path.write_text(json.dumps({"documents": document_fixtures, "applicationId": FIXTURE_ID, "applicationCode": "AP-FUZZ",
+    "applicationEtag": '"1.1"', "applicationDeliveryId": RUN_BIN_ID, "applicationDeliveryCode": "DL-FUZZ-APP",
+    "applicationDate": "2026-10-09", "applicationGpsLatitude": -8.3, "applicationGpsLongitude": 35.3}))
 os.environ["API_FUZZ_FIXTURE"] = str(document_fixture_path)
 config = SchemathesisConfig.from_path("schemathesis.toml")
 with patch("datetime.datetime", wraps=datetime) as fixture_clock:
@@ -77,7 +79,7 @@ class HarnessTests(unittest.TestCase):
         return [case for case in cases if case.meta.phase.data.description.startswith("Document fixture")]
 
     def test_documents_have_seeded_reads_uploads_and_distinct_confirms(self):
-        for owner in ("deliveries", "feedstocks", "lab-samples"):
+        for owner in ("deliveries", "feedstocks", "lab-samples", "applications"):
             for suffix in ("", "/{documentId}", "/{documentId}/content"):
                 case, = self.document_examples(owner, suffix)
                 self.assertEqual(case.path_parameters["idOrCode"], FIXTURE_ID)
@@ -100,6 +102,46 @@ class HarnessTests(unittest.TestCase):
             with self.assertRaises(AssertionError):
                 check(None, SimpleNamespace(status_code=409), positive)
             check(None, SimpleNamespace(status_code=409), negative)
+
+    def test_applications_have_seeded_reads_and_a_small_create_without_mutating_examples(self):
+        expected = {
+            "GET /applications": None,
+            "GET /applications/{idOrCode}": FIXTURE_ID,
+            "GET /applications/{idOrCode}/boundary": FIXTURE_ID,
+            "GET /deliveries/{idOrCode}/application-balance": RUN_BIN_ID,
+            "POST /applications": None,
+        }
+        for label, target in expected.items():
+            method, path = label.split(" ", 1)
+            operation = schema[path][method]
+            examples = []
+            hook("before_add_examples")(HookContext(operation=operation), examples)
+            case, = examples
+            self.assertTrue(case.meta.generation.mode.is_positive)
+            if target:
+                self.assertEqual(case.path_parameters, {"idOrCode": target})
+            if method == "POST":
+                again = []
+                hook("before_add_examples")(HookContext(operation=operation), again)
+                self.assertNotEqual(case.headers["Idempotency-Key"], again[0].headers["Idempotency-Key"])
+                self.assertEqual(case.query, {"dryRun": "true"})
+                self.assertEqual(case.body, {"deliveryId": RUN_BIN_ID, "appliedWetMassKg": 0.001,
+                    "applicationDate": "2026-10-09", "fieldSizeHa": 1, "evidenceMethod": "location",
+                    "gpsLatitude": -8.3, "gpsLongitude": 35.3})
+            check = hook("after_load_schema").__globals__["seeded_example_success"]
+            check(None, SimpleNamespace(status_code=200), case)
+            with self.assertRaises(AssertionError):
+                check(None, SimpleNamespace(status_code=404), case)
+        for method in ("PATCH", "DELETE"):
+            operation = schema["/applications/{idOrCode}"][method]
+            examples = []
+            hook("before_add_examples")(HookContext(operation=operation), examples)
+            self.assertEqual(examples, [])
+            for phase in ("fuzzing", "coverage", "stateful"):
+                checks = schema.config.checks_config_for(operation=operation, phase=phase)
+                self.assertIn("412", checks.positive_data_acceptance.expected_statuses)
+                self.assertIn("412", checks.negative_data_rejection.expected_statuses)
+                self.assertIn("428", checks.missing_required_header.expected_statuses)
 
     def test_content_does_not_follow_capabilities_or_require_2xx(self):
         case, = self.document_examples(suffix="/{documentId}/content")
@@ -136,10 +178,10 @@ class HarnessTests(unittest.TestCase):
             operation = result.ok()
             cases = ExamplesGenerator(operation=operation, as_strategy_kwargs={}, feedback=FeedbackSources(), fill_missing=False)
             seeded.extend(case for case in cases if case.meta.phase.data.description.startswith("Seeded fixture"))
-        # 32 by-id targets (the stock-movement create is one of them), the feedstock
+        # 35 by-id targets, an application list and create, plus the feedstock
         # create and its oversize twin, the run create, the product create, the
         # lab sample create, order create and delivery create.
-        self.assertEqual(len(seeded), 39)
+        self.assertEqual(len(seeded), 44)
         stock = next(case for case in seeded if case.operation.label == "GET /storage-locations/{idOrCode}/stock")
         self.assertEqual(stock.path_parameters, {"idOrCode": FIXTURE_ID})
         self.assertTrue(stock.meta.generation.mode.is_positive)
@@ -356,8 +398,11 @@ class HarnessTests(unittest.TestCase):
                 continue
             examples = []
             hook("before_add_examples")(HookContext(operation=operation), examples)
+            if operation.path == "/applications/{idOrCode}" and operation.method.upper() in {"PATCH", "DELETE"}:
+                self.assertEqual(examples, [])
+                continue
             self.assertEqual(len(examples), 1, operation.label)
-            target = DELETE_ORDER_ID if operation.label == "DELETE /orders/{idOrCode}" else FIXTURE_ID
+            target = RUN_BIN_ID if operation.path.endswith("/application-balance") else DELETE_ORDER_ID if operation.label == "DELETE /orders/{idOrCode}" else FIXTURE_ID
             self.assertEqual(examples[0].path_parameters, {"idOrCode": target})
             if operation.method.upper() == "POST":
                 # The stock-movement create: a dry run with its own key.
@@ -373,7 +418,7 @@ class HarnessTests(unittest.TestCase):
                 etag = etags.get(next((prefix for prefix in etags if operation.path.startswith(prefix)), ""), FEEDSTOCK_ETAG)
                 self.assertEqual(examples[0].headers["If-Match"], etag)
             count += 1
-        self.assertEqual(count, 32)
+        self.assertEqual(count, 35)
 
     def test_seeded_positive_examples_must_return_2xx(self):
         check = hook("after_load_schema").__globals__["seeded_example_success"]

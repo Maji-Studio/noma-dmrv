@@ -16,6 +16,7 @@ export * from "./mass-pair";
 export * from "./noma-logo";
 export * from "./moisture-split";
 export * from "./page-header";
+export * from "./popover";
 export * from "./product-composition-preview";
 export * from "./row-actions-menu";
 export * from "./split-button";

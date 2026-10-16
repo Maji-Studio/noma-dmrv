@@ -86,22 +86,27 @@ retired questions do not belong in this file.
   `src/data-access/certifier-removal-deletion.ts:finalizeRemovalDeletion` is
   the natural carrier.
 
-### Template component → dmrv source mapping is hardcoded by display name (`certification/template-component-source-wizard`, opened 2026-07-04)
+### Template component source assignments (`certification/template-component-source-wizard`)
 
-- **Decision needed** — where should the "this template component carries this
-  dmrv aggregated source" assignment live? Today it's the named disambiguation
-  rules `PYROLYSIS_DIESEL_SPLIT` and `SAFETY_MARGIN_CARVE_OUT`
-  (`src/lib/isometric/semantic-binding-catalog.ts`), keyed by component
-  **display name** because Certify exposes no stable per-component semantic
-  key. Full rationale is in the code comment on `ComponentDisambiguationRule`;
-  do not restate it here.
-- **Why it matters** — a display-name rename in the Isometric UI fails closed
-  with a `SafeError` (can't mis-submit) but blocks the submit until code catches
-  up, coupling the registry template to a deploy no operator can do.
-- **To resolve** — persist the template-component ID to catalog role
-  assignment at the project/template scope, seeded from today's names
-  (**#893**, storage owner per #657), then a binding editor in the Removal
-  template diagnostic (**#894**). Both are sub-issues of **#638**.
+PR #1067 resolves runtime display-name binding: observations persist contracts
+by component ID, bootstrap the three known templates and carry surviving IDs
+forward. Owner/Admin assignment is limited to proposed, unassigned or invalid
+lines inside the change review. A general binding editor (#894) stays closed.
+The remaining #893 work is to include observation identity and contracts in
+immutable submission snapshots and draft recompilation checks (plan §4.5, PR 4).
+The entry-only period-input lines retain the sandbox zero-stub policy while
+production fails closed. Replace that policy with evidenced per-batch inputs
+when entries compile (plan §4.5). Sample transport legs still feed the known
+bootstrap sample lines that have an automatic source. Retire those legs and
+replace their contributions with per-line entries in the app, API and MCP
+when entries compile (plan §4.5).
+
+### Fixed datapoint deprecation signal (`isometric/fixed-datapoint-deprecation`)
+
+Isometric REST reports no deprecation flag for fixed datapoints. Enrichment
+records `deprecated: null`, so the plan §4.1 deprecated-factor readiness advisory
+cannot fire yet. Confirm an authoritative registry signal before implementing
+the advisory. Deprecation is non-blocking; missing enrichment still blocks.
 
 ### Replacement 1,000-year component confirmation and template migration (`certification/fdurable-1000-r0-semantics`, opened 2026-07-03; updated 2026-08-13)
 

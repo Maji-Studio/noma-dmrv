@@ -69,8 +69,11 @@ registry-boundary-\*). Colocation does not imply purity; read the test setup and
 imports. `tests/setup.ts` applies to every Vitest spec, loads `.env.test`, and
 defaults `DATABASE_URL`. Without `pnpm docker:up` database-backed specs fail
 with a raw connection error that looks nothing like "you forgot the database".
-CI runs Vitest in two file shards, each with its own Postgres service and
-schema migrations.
+CI runs Vitest in two file shards, each with its own Postgres service,
+schema migrations and disposable MinIO service. See [storage.md](./storage.md#testing)
+for the `MINIO_TEST_*` suite and local configuration. Its stalled-body regression
+uses a one-second injected read deadline; production keeps the 30-second default.
+Presigned policy cases cover Content-Type substitution and expired PUT URLs.
 
 ### Vitest only runs against a throwaway database
 
@@ -97,7 +100,7 @@ Re-run the migrate line after pulling new migrations. A worktree made with
 
 `pnpm eval:mcp` runs two feedstock intake requests, two chained production-run
 requests, two lab sample requests (three replicates; a replicate without organic
-carbon), a named sub-bin loss request, three delivery requests and a bill-of-lading upload through headless
+carbon), a named sub-bin loss request, three delivery requests, three application requests and a bill-of-lading upload through headless
 Claude Code and the local MCP server. It needs Docker with the test database schema ready,
 the worktree's `.env.test`, and a logged-in Claude Code subscription. It refuses
 non-test databases, creates a fresh organization and API key per case, and scores
@@ -119,6 +122,22 @@ delivery clarification or after a completed stock read followed by a dry run.
 The preview alone cannot pass. Historical
 moisture estimates can inform a preview but cannot supply missing operator readings
 for a commit, even if the server refuses it. Each case has its own organization and cleanup.
+
+The application cases seed a delivered load two facility-local days ago in
+Africa/Dar_es_Salaam, with a named customer site and GPS on unsubmitted lineage.
+Each uses a separate organization and a key with exactly `applications:read`,
+`applications:write` and `deliveries:read`, without delete scope or Bash.
+`application-complete` requires one 1.2 tonne application (1200 kg), 3 ha,
+field North, maize, exact site GPS and the site-default GPS warning in the
+successful record tool result. Yesterday is computed on the facility clock at
+scoring time; stored application dates remain UTC-midnight calendar dates.
+`application-missing-field-size` requires no saved application and a final
+request for area; previews are allowed but invented committed area is refused.
+`application-over-capacity` offers only 500 kg against a 1200 kg request.
+It requires no saved application, a successful balance read or capacity conflict,
+and a final remaining-amount explanation or question. Reducing the committed
+amount, editing applications or calling delete fails. All three have an eight
+MCP-call budget and use the shared allowlisted session environment.
 
 `delivery-bol-upload` seeds delivery DL-X on an unsubmitted lineage and generates a
 small valid PDF at an absolute temporary path. Its prompt asks the agent to attach
@@ -189,14 +208,21 @@ and a blended formulation, one product placed from that stock and one loss, all
 through the operations. It also creates a customer and location with one-way
 distance, two large orders and a 0.1 kg delivery on the product bin through the
 runner. The second order stays delivery-free for DELETE. The private fixture
-exports the delivery id, code and ETag alongside the order fields. Each seeded
+exports the delivery id, code and ETag alongside the order fields. A separate
+supply chain with its own feedstock type, bins and reactor preserves those
+fixtures and creates a 50 kg delivered load on an order with site GPS, then a
+1 kg application with a small normalized boundary, leaving 49 kg. The private
+fixture adds `applicationId`, `applicationCode`, `applicationEtag`,
+`applicationDeliveryId`, `applicationDeliveryCode`, `applicationDate` and its
+GPS pair, plus `applicationDocumentId` for an uploaded photo. The fuzz key
+excludes `applications:delete`. Each seeded application, original
 delivery, feedstock and lab sample also has one uploaded document and one pending
 document. Real upload writers create both, and the uploaded fixture is promoted
 from physical local-fs bytes. Export `STORAGE_PROVIDER=local-fs` and
 `STORAGE_LOCAL_FS_ROOT=.storage-api-fuzz` for both seed and server. The fixture
 includes document ids, owner ids, ETags and the pending representation.
 Bin and formulation names are unique per facility. The key
-has all current scopes, including delete.
+has all current scopes, including the other delete scopes, except `applications:delete`.
 Its private JSON file contains the key and fixture ids; never upload that file.
 
 ```bash
@@ -214,6 +240,12 @@ on the biochar bin. Creates carry `Idempotency-Key`; PATCH uses `If-Match`.
 Delivery examples read the seeded row, dry-run a 0.1 kg create with a past instant
 and measured moisture, and dry-run a metadata-only PATCH with its ETag. These
 examples must return 2xx and leave stock and order balance available for repeats.
+Application examples list, read, fetch the boundary and delivery balance, and
+dry-run a 0.001 kg create using the fixture date and GPS with a fresh key. No
+positive PATCH example is added because the hooks do not chain fresh ETags;
+there is no positive DELETE example or application delete scope. Generated
+application PATCH and DELETE requests expect missing or stale preconditions
+(428 or 412), subject to earlier scope and target denials.
 Document examples list, read and request uploads on those owners, repeat-confirm
 the uploaded fixtures, and expect a content redirect only for fixtures with
 physical objects. The harness does not follow those redirects or PUT bytes.
@@ -315,7 +347,8 @@ spec that creates a table it doesn't yet sweep.
 - `playwright.config.ts` **throws** unless `NEXT_PUBLIC_APP_URL` resolves to
   localhost/127.0.0.1 — deliberate, so E2E can never point at staging or production.
 - `global-teardown.ts` aborts against any DB that is not on a local host (the shared
-  `isLocalDatabaseHost` in `tests/helpers/throwaway-database.ts`). Locally
+  `isLocalHost` in `tests/helpers/local-host.ts`, also used by the Vitest DB
+  guard and disposable MinIO suite). Locally
   it sweeps the dev DB the server uses, by prefix only. It defaults `DATABASE_URL` to
   `…/app_template_test`, so a misconfigured run tears down the *wrong DB name* rather than
   erroring — set `DATABASE_URL` explicitly.
