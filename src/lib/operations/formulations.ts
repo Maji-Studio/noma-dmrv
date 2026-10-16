@@ -3,13 +3,10 @@ import { createFormulationInTransaction, updateFormulationInTransaction, deleteF
 import type { FormulationWithIngredients } from "@/data-access/formulations";
 import { formulations } from "@/db/schema";
 import { createFormulationInput, updateFormulationInput, formulationVersionInput } from "@/schemas/formulation-input";
+import { changedFields } from "./changed-fields";
 import type { Operation } from "./runner";
 
 const AUTO_CODE_COUNT = 1;
-const NOT_CHANGES = new Set(["formulationId", "expectedVersion"]);
-function changedFields(input: object): string[] {
-  return Object.entries(input).filter(([key, value]) => value !== undefined && !NOT_CHANGES.has(key)).map(([key]) => key).sort();
-}
 export const createFormulation: Operation<typeof createFormulationInput, FormulationWithIngredients> = {
   id: "create_formulation", input: createFormulationInput, supportsDryRun: true,
   describe: (input, output) => ({ outcome: "created", entityType: "formulation", entityIds: [output.id], versionBefore: null, versionAfter: output.version, changedFields: changedFields(input) }),

@@ -279,26 +279,29 @@ async function runOperationCore<Input extends z.ZodType, Output, Result>(
         const stockEffects = before ? diffStockBalances(before, await readStockBalances(ctx, tx, before.map((bin) => bin.storageLocationId))) : undefined;
         const effect = activity.skipped ? undefined : operation.describe?.(decoded, output) ?? undefined;
         const result = represent(output);
-        if (!dryRun && effect) {
-          const entityType = toActivityEntityType(effect.entityType);
+        const effects = activity.skipped ? [] : [...(effect ? [effect] : []), ...activity.extraEffects];
+        if (!dryRun && effects.length) {
           let activityCount = 0;
-          for (const entityId of effect.entityIds) {
-            for (const links of activity.scopedLinks(entityType, entityId)) {
-              await recordActivity(ctx, tx, {
-                action: effect.outcome, entityType, entityId,
-                ...(effect.fromStatus !== undefined ? { fromStatus: effect.fromStatus } : {}),
-                ...(effect.toStatus !== undefined ? { toStatus: effect.toStatus } : {}),
-                changedFields: effect.changedFields,
-                operationId: operation.id,
-                versionBefore: effect.versionBefore,
-                versionAfter: effect.versionAfter,
-                oauthClientId: options.audit?.oauthClientId ?? null,
-                source,
-                credentialId: options.audit?.credentialId,
-                requestId: options.audit?.requestId,
-                ...links,
-              });
-              activityCount++;
+          for (const recordedEffect of effects) {
+            const entityType = toActivityEntityType(recordedEffect.entityType);
+            for (const entityId of recordedEffect.entityIds) {
+              for (const links of activity.scopedLinks(entityType, entityId)) {
+                await recordActivity(ctx, tx, {
+                  action: recordedEffect.outcome, entityType, entityId,
+                  ...(recordedEffect.fromStatus !== undefined ? { fromStatus: recordedEffect.fromStatus } : {}),
+                  ...(recordedEffect.toStatus !== undefined ? { toStatus: recordedEffect.toStatus } : {}),
+                  changedFields: recordedEffect.changedFields,
+                  operationId: operation.id,
+                  versionBefore: recordedEffect.versionBefore,
+                  versionAfter: recordedEffect.versionAfter,
+                  oauthClientId: options.audit?.oauthClientId ?? null,
+                  source,
+                  credentialId: options.audit?.credentialId,
+                  requestId: options.audit?.requestId,
+                  ...links,
+                });
+                activityCount++;
+              }
             }
           }
           if (options.audit && activityCount === 0) throw new Error("Audited operation recorded no activity");

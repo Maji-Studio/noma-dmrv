@@ -388,7 +388,7 @@ export function SupplierList() {
       <DeleteConfirmDialog
         isOpen={!!deletingSupplier}
         title="Delete supplier"
-        message="Are you sure you want to delete this supplier? This action cannot be undone. Note: Suppliers with associated feedstock deliveries cannot be deleted."
+        message="Are you sure you want to delete this supplier and its locations? This action cannot be undone. Note: Suppliers with associated feedstock deliveries cannot be deleted."
         onConfirm={handleDeleteConfirm}
         onCancel={() => {
           setDeletingSupplier(null);

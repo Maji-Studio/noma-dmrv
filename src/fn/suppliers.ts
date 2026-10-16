@@ -7,15 +7,13 @@ import { withAction } from "./with-action";
  * Server-side functions for supplier CRUD operations
  */
 
+import { createSupplier, updateSupplier, deleteSupplier } from "@/lib/operations/suppliers";
+import { runOperationInProcess } from "@/lib/operations/runner";
 import { z } from "zod";
-import { type Supplier, type SupplierLocation, suppliers } from "@/db/schema";
-import { withAutoCode } from "@/data-access/code-generator";
+import { type Supplier, type SupplierLocation } from "@/db/schema";
 import {
-  createSupplierWithLocations,
-  deleteSupplier,
   getSuppliers as getSuppliersData,
   getSupplierById as getSupplierByIdData,
-  updateSupplier,
   getSupplierLocationsBySupplier as getSupplierLocationsBySupplierData,
   createSupplierLocation,
   updateSupplierLocation,
@@ -87,37 +85,27 @@ export async function createSupplierWithLocationsFn(
   return withAction(async (ctx) => {
     const validated = createSupplierWithLocationsSchema.parse(data);
 
-    const supplier = await withAutoCode(
-      ctx,
-      "SUP",
-      suppliers,
-      suppliers.code,
-      undefined,
-      (code) =>
-        createSupplierWithLocations(ctx, {
-          code,
-          name: validated.supplier.name,
-          location: validated.supplier.location || null,
-          address: validated.supplier.address || null,
-          contactName: validated.supplier.contactName || null,
-          contactEmail: validated.supplier.contactEmail || null,
-          contactPhone: validated.supplier.contactPhone || null,
-          sourceRegion: validated.supplier.sourceRegion || null,
-          locations: validated.locations.map((location) => ({
-            name: location.name || null,
-            country: location.country,
-            stateRegion: location.stateRegion || null,
-            city: location.city || null,
-            gpsLatitude: location.gpsLatitude,
-            gpsLongitude: location.gpsLongitude,
-            address: location.address || null,
-            facilityDistances: location.facilityDistances,
-            isDefault: location.isDefault,
-          })),
-        })
-    );
-
-    return supplier;
+      const result = await runOperationInProcess(createSupplier, ctx, {
+        name: validated.supplier.name,
+        location: validated.supplier.location || null,
+        address: validated.supplier.address || null,
+        contactName: validated.supplier.contactName || null,
+        contactEmail: validated.supplier.contactEmail || null,
+        contactPhone: validated.supplier.contactPhone || null,
+        sourceRegion: validated.supplier.sourceRegion || null,
+        locations: validated.locations.map(location => ({
+          name: location.name || null,
+          country: location.country,
+          stateRegion: location.stateRegion || null,
+          city: location.city || null,
+          gpsLatitude: location.gpsLatitude,
+          gpsLongitude: location.gpsLongitude,
+          address: location.address || null,
+          facilityDistances: location.facilityDistances,
+          isDefault: location.isDefault,
+        })),
+      });
+      return result.supplier;
   }, {
     fallbackMessage: "Failed to create supplier",
     log: { message: LOG_MESSAGE, context: { op: "supplier:create-with-locations" } },
@@ -138,7 +126,8 @@ export async function updateSupplierFn(
 
     const validated = updateSupplierSchema.parse(data);
 
-    const supplier = await updateSupplier(ctx, validated.supplierId, {
+    const supplier = await runOperationInProcess(updateSupplier, ctx, {
+      supplierId: validated.supplierId,
       expectedVersion: validated.expectedVersion,
       code: validated.code,
       name: validated.name,
@@ -167,7 +156,7 @@ export async function deleteSupplierFn(
   return withAction(async (ctx) => {
 
     const validated = deleteSupplierSchema.parse(data);
-    await deleteSupplier(ctx, validated.supplierId, validated.expectedVersion);
+    await runOperationInProcess(deleteSupplier, ctx, validated);
 
     return undefined;
   }, { fallbackMessage: "Failed to delete supplier", log: { message: LOG_MESSAGE, context: { op: "supplier:delete" } } });

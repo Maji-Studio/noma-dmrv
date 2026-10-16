@@ -9,12 +9,13 @@
 
 import { isPgUniqueViolation } from "@/db/errors";
 import type { OrgContext } from "@/lib/auth/server";
+import { partyNameConflict } from "@/lib/party-domain-errors";
 import { SafeError } from "@/lib/errors";
 import { requireOrgScope } from "./utils";
 
 /**
  * Run `fn`; if it fails with the named unique-index violation (23505), rethrow
- * a friendly SafeError built from the trimmed name. Every other error — notably
+ * a friendly error built from the trimmed name (typed for suppliers/customers). Every other error — notably
  * the `_code_unique` 23505 that `withAutoCode` retries on — propagates
  * unchanged, so matching the *specific* constraint is essential.
  */
@@ -30,7 +31,9 @@ async function withUniqueNameGuard<T>(
     return await fn();
   } catch (err) {
     if (isPgUniqueViolation(err, constraint)) {
-      throw new SafeError(message(name.trim()));
+      const detail = message(name.trim());
+      if (constraint === "suppliers_organization_id_name_unique" || constraint === "customers_organization_id_name_unique") throw partyNameConflict(detail);
+      throw new SafeError(detail);
     }
     throw err;
   }

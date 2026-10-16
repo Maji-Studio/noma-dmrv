@@ -201,8 +201,12 @@ Committed runner writes with a non-null `describe` effect record value-free
 calls. Every runner event carries `operationId`, `versionBefore` and
 `versionAfter`. The API audit row contract is defined in [Activity events](./database.md#activity-events).
 Form writes have null credential IDs.
-No-op descriptions, dry runs, idempotent replays and `activity.skip()` add no
-events. An audited write whose effect yields no activity rows throws and rolls
+Operations can queue child effects with `activity.extra(effect)`. The runner
+records them alongside the parent with the same audit fields and scoped-link
+resolution, and includes them in the audited activity count. Extra effects stay
+private to the attempt; the response and stored outcome retain the parent effect.
+Descriptions with no effect and no queued extras, dry runs, idempotent replays
+and `activity.skip()` add no events. An audited write whose effect yields no activity rows throws and rolls
 back.
 The runner records one event per entity and distinct batch/run scope supplied by
 `activity.scope(entityId, scopes)` in `src/lib/operations/activity-links.ts`.

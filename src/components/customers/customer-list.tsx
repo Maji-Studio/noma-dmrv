@@ -402,7 +402,7 @@ export function CustomerList() {
       <DeleteConfirmDialog
         isOpen={!!deletingCustomer}
         title="Delete customer"
-        message="Are you sure you want to delete this customer? This action cannot be undone. Note: Customers with locations cannot be deleted."
+        message="Are you sure you want to delete this customer and its locations? This action cannot be undone. Note: Customers used by orders, or with a location registered with Isometric as a storage site, cannot be deleted."
         onConfirm={handleDeleteConfirm}
         onCancel={() => {
           setDeletingCustomer(null);

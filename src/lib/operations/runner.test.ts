@@ -1,3 +1,4 @@
+import { recordPartyLocationActivity } from "./party-activity";
 import { OPERATION_MAX_ATTEMPTS, OPERATION_RETRY_MAX_DELAY_MS } from "@/config/operations";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
@@ -27,6 +28,48 @@ beforeEach(() => {
   });
 });
 describe("shared operation runner", () => {
+  it("audits location effects with their parent and suppresses all effects on previews and replays", async () => {
+    const effect = { outcome: "created" as const, entityType: "supplier", entityIds: ["supplier-id"], versionBefore: null, versionAfter: 1, changedFields: ["name"] };
+    const op = { ...operation, describe: () => effect, execute: async (scope: OperationScope, input: { amount: number }) => {
+      scope.activity.link({ facilityId: "facility-id" });
+      scope.activity.scope("location-id", [{ creditBatchId: "batch-id" }]);
+      await recordPartyLocationActivity(scope, "supplier", "created", [{ id: "location-id", version: 2 }]);
+      return operation.execute(scope, input);
+    } };
+    const audit = { transport: "mcp" as const, credentialId: "credential-id", requestId: "request-id", oauthClientId: "oauth-client-id" };
+    await runOperation(op, ctx, { amount: 1 }, { audit });
+    expect(activity).toHaveBeenCalledTimes(3);
+    for (const [, , event] of activity.mock.calls) {
+      expect(event).toMatchObject({ credentialId: audit.credentialId, requestId: audit.requestId, oauthClientId: audit.oauthClientId, source: "mcp", facilityId: "facility-id", operationId: operation.id });
+    }
+    expect(activity.mock.calls.filter(([, , event]) => event.entityType === "supplier_location").map(([, , event]) => event)).toMatchObject([
+      { action: "created", creditBatchId: "batch-id", versionBefore: null, versionAfter: 1 },
+      { action: "updated", creditBatchId: "batch-id", versionBefore: 1, versionAfter: 2, changedFields: ["isDefault"] },
+    ]);
+    activity.mockClear();
+    await runOperation(op, ctx, { amount: 1 }, { audit, dryRun: true });
+    claim.mockResolvedValueOnce({ kind: "replay", outcome: {}, effect });
+    await runOperation(op, ctx, { amount: 1 }, { audit, idempotency: { credentialId: audit.credentialId, key: "party" } });
+    await runOperation({ ...op, execute: async (scope, input) => {
+      const output = await op.execute(scope, input);
+      scope.activity.skip();
+      return output;
+    } }, ctx, { amount: 1 }, { audit });
+    expect(activity).not.toHaveBeenCalled();
+  });
+
+  it.each([false, true])("includes queued effects in the audited row count, empty scopes: %s", async empty => {
+    const op = { ...operation, describe: () => ({ outcome: "created" as const, entityType: "supplier", entityIds: [], versionBefore: null, versionAfter: 1, changedFields: [] }), execute: async (scope: OperationScope, input: { amount: number }) => {
+      recordPartyLocationActivity(scope, "supplier", "created", [{ id: "location-id", version: 1 }]);
+      if (empty) scope.activity.scope("location-id", []);
+      return operation.execute(scope, input);
+    } };
+    const result = runOperation(op, ctx, { amount: 1 }, { audit: { transport: "rest", credentialId: "credential", requestId: "request" } });
+    if (empty) await expect(result).rejects.toThrow("Audited operation recorded no activity");
+    else await expect(result).resolves.toMatchObject({ dryRun: false });
+    expect(activity).toHaveBeenCalledTimes(empty ? 0 : 1);
+  });
+
   it("forwards status transitions to Activity and records nothing on dry run or replay", async () => {
     const effect = { outcome: "status_changed" as const, entityType: "formulation", entityIds: ["recipe-id"], versionBefore: 1, versionAfter: 2, changedFields: [], fromStatus: "active", toStatus: "archived" };
     const op = { ...operation, describe: () => effect };

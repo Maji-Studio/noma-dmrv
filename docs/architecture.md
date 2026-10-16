@@ -408,6 +408,22 @@ local, and deployed builds remain on the stable default.
 
 ## Database Boundaries
 
+Supplier and customer creates lock all named facilities `FOR SHARE` in id order,
+then insert the party, ordered locations and pairs inside the `withAutoCodes`
+savepoint and read back through `tx`. Last explicit default wins, otherwise the
+first location wins; pair filling on a new party has no references to fill.
+Metadata edits take `NO KEY UPDATE`, code edits take `UPDATE`, then check the
+version and code/name constraints. Deletes take the party `UPDATE`, check all
+intakes/orders including archived rows, lock children in id order, check each
+customer location's orders and storage-site mappings, then delete children and
+the party atomically. Intake writes take facility `SHARE`, then supplier `KEY SHARE`, before their row;
+orders take customer then location `KEY SHARE`. Deletes never lock references,
+facilities, formulations or certification artifacts. Pair saves can take facility
+and downstream locks; creates only fill new, unreferenced parents, while party
+updates/deletes never request those locks. Registration takes the location FK
+lock without a later parent lock. These paths introduce no reverse edge against
+facility archive or formulation writes.
+
 Formulation creates lock referenced feedstock types `FOR SHARE` in id order,
 then insert the parent and lines inside the `withAutoCodes` BCF savepoint and
 read back through `tx`. Updates lock the formulation `FOR UPDATE`, check its

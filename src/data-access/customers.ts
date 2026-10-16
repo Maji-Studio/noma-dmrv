@@ -11,7 +11,6 @@ import type { OrgContext } from "@/lib/auth/server";
 import {
   customers,
   customerLocations,
-  orders,
   type Customer,
   type CustomerLocation,
 } from "@/db/schema";
@@ -20,7 +19,6 @@ import type { FacilityDistance } from "@/schemas/facility-distances";
 import { assertRowVersion, nextVersion } from "./row-version";
 
 /** Entity keys on a customer's and a customer location's version conflicts. */
-const CUSTOMER_CONFLICT_ENTITY = "customer";
 const CUSTOMER_LOCATION_CONFLICT_ENTITY = "customerLocation";
 
 /** Customer location list order; promotion on delete uses the same order. */
@@ -59,7 +57,6 @@ export interface CustomerLocationDetail extends CustomerLocation {
 
 import { requireOrgScope } from "./utils";
 import { SafeError } from "@/lib/errors";
-import { guardCustomerName } from "./unique-name-guards";
 import {
   lockBiocharTransportRouteTopology,
 } from "./transport-legs";
@@ -70,19 +67,12 @@ import {
 } from "./customer-detail";
 import {
   createCustomerLocationInTransaction,
-  insertCustomer,
-  type CustomerInsertInput,
   type CustomerLocationInsertInput,
 } from "./customer-create";
 
 export type { CustomerDetail } from "./customer-detail";
-export {
-  createCustomerWithLocations,
-  type CreateCustomerWithLocationsInput,
-  type CreatedCustomerWithLocations,
-  type CustomerInsertInput,
-  type CustomerLocationInsertInput,
-} from "./customer-create";
+export type { CustomerLocationInsertInput } from "./customer-create";
+export type { CreatedCustomerWithLocations } from "./customer-writes";
 
 // ============================================
 // Customer Read Operations
@@ -300,148 +290,6 @@ export async function getCustomerLocations(
     .where(and(eq(customerLocations.customerId, customerId), eq(customerLocations.organizationId, ctx.organizationId)))
     .orderBy(...CUSTOMER_LOCATION_ORDER);
   return withLocationFacilityDistances(ctx, "customer", locations);
-}
-
-// ============================================
-// Customer Create Operations
-// ============================================
-
-/**
- * Create a new customer on its own. Customers created together with their
- * locations go through `createCustomerWithLocations` instead.
- */
-export async function createCustomer(
-  ctx: OrgContext,
-  data: CustomerInsertInput
-): Promise<Customer> {
-  return insertCustomer(ctx, db, data);
-}
-
-// ============================================
-// Customer Update Operations
-// ============================================
-
-/**
- * Update an existing customer
- */
-export async function updateCustomer(
-  ctx: OrgContext,
-  customerId: string,
-  data: {
-    code?: string;
-    name?: string;
-    cropType?: string | null;
-    address?: string | null;
-    contactEmail?: string | null;
-    contactPhone?: string | null;
-    /** `version` the edit form loaded; refuses a save built on a stale read. */
-    expectedVersion: number;
-  }
-): Promise<Customer> {
-  requireOrgScope(ctx);
-  const { expectedVersion, ...customerData } = data;
-
-  // One transaction so the row lock below spans the version check, the code
-  // duplicate probe and the write they guard.
-  return db.transaction(async (tx) => {
-    const [existing] = await tx
-      .select()
-      .from(customers)
-      .where(and(eq(customers.id, customerId), eq(customers.organizationId, ctx.organizationId)))
-      .for("update");
-
-    if (!existing) {
-      throw new SafeError("Customer not found");
-    }
-    assertRowVersion({
-      entity: CUSTOMER_CONFLICT_ENTITY,
-      id: customerId,
-      expectedVersion,
-      actualVersion: existing.version,
-    });
-
-    // If code is being changed, check for duplicates
-    if (customerData.code && customerData.code !== existing.code) {
-      const [duplicate] = await tx
-        .select({ id: customers.id })
-        .from(customers)
-        .where(and(eq(customers.code, customerData.code), eq(customers.organizationId, ctx.organizationId)));
-
-      if (duplicate) {
-        throw new SafeError("A customer with this code already exists");
-      }
-    }
-
-    const [updated] = await guardCustomerName(
-      ctx,
-      customerData.name ?? existing.name,
-      () =>
-        tx
-          .update(customers)
-          .set({
-            ...customerData,
-            version: nextVersion(customers.version),
-            updatedAt: new Date(),
-          })
-          .where(and(eq(customers.id, customerId), eq(customers.organizationId, ctx.organizationId)))
-          .returning()
-    );
-
-    return updated;
-  });
-}
-
-// ============================================
-// Customer Delete Operations
-// ============================================
-
-/**
- * Delete a customer
- * Will fail if customer has associated locations
- */
-export async function deleteCustomer(
-  ctx: OrgContext,
-  customerId: string,
-  expectedVersion: number
-): Promise<void> {
-  requireOrgScope(ctx);
-  return db.transaction(async (tx) => {
-    const [versioned] = await tx.select({ version: customers.version })
-      .from(customers)
-      .where(and(eq(customers.id, customerId), eq(customers.organizationId, ctx.organizationId)))
-      .for("update");
-    if (!versioned) throw new SafeError("Customer not found");
-    assertRowVersion({ entity: CUSTOMER_CONFLICT_ENTITY, id: customerId, expectedVersion, actualVersion: versioned.version });
-
-    const [[{ value: locationCount }], [{ value: orderCount }]] =
-      await Promise.all([
-        tx
-          .select({ value: count() })
-          .from(customerLocations)
-          .where(and(eq(customerLocations.customerId, customerId), eq(customerLocations.organizationId, ctx.organizationId))),
-        tx
-          .select({ value: count() })
-          .from(orders)
-          .where(and(eq(orders.customerId, customerId), eq(orders.organizationId, ctx.organizationId))),
-      ]);
-
-    if (Number(orderCount) > 0) {
-      // Orders have no cancellation state, so the copy can only offer the two
-      // actions that exist: reassign the order, or keep the customer (#774).
-      throw new SafeError(
-        "Customer was not deleted because orders still use it. Open Orders and review them. Reassign them where appropriate, or keep this customer."
-      );
-    }
-
-    if (Number(locationCount) > 0) {
-      throw new SafeError(
-        "Customer was not deleted because it still has locations. Edit the customer and remove its locations first."
-      );
-    }
-
-    await tx.delete(customers).where(and(eq(customers.id, customerId), eq(customers.organizationId, ctx.organizationId)));
-
-  });
 }
 
 // ============================================
