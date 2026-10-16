@@ -1,5 +1,5 @@
 {
-  "id": "7d002d51-8788-462a-ac17-3d2f8708cffb",
+  "id": "240830f7-8d62-41ed-ad24-c4756f55175b",
   "prevId": "c95b515b-8d34-4635-bd22-0d0cf554a750",
   "version": "7",
   "dialect": "postgresql",
@@ -125,9 +125,33 @@
           "primaryKey": false,
           "notNull": false
         },
+        "oauth_client_id": {
+          "name": "oauth_client_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "operation_id": {
+          "name": "operation_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "request_id": {
           "name": "request_id",
           "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "version_before": {
+          "name": "version_before",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "version_after": {
+          "name": "version_after",
+          "type": "integer",
           "primaryKey": false,
           "notNull": false
         },
@@ -677,153 +701,6 @@
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.api_audit_events": {
-      "name": "api_audit_events",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "organization_id": {
-          "name": "organization_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "user_id": {
-          "name": "user_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "credential_id": {
-          "name": "credential_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "oauth_client_id": {
-          "name": "oauth_client_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "operation_id": {
-          "name": "operation_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "entity_type": {
-          "name": "entity_type",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "entity_ids": {
-          "name": "entity_ids",
-          "type": "text[]",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "changed_fields": {
-          "name": "changed_fields",
-          "type": "text[]",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "version_before": {
-          "name": "version_before",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "version_after": {
-          "name": "version_after",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "request_id": {
-          "name": "request_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "outcome_code": {
-          "name": "outcome_code",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "transport": {
-          "name": "transport",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'rest'"
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "api_audit_events_org_created_idx": {
-          "name": "api_audit_events_org_created_idx",
-          "columns": [
-            {
-              "expression": "organization_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "created_at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "api_audit_events_organization_id_organizations_id_fk": {
-          "name": "api_audit_events_organization_id_organizations_id_fk",
-          "tableFrom": "api_audit_events",
-          "tableTo": "organizations",
-          "columnsFrom": [
-            "organization_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {
-        "api_audit_events_transport": {
-          "name": "api_audit_events_transport",
-          "value": "\"api_audit_events\".\"transport\" in ('rest', 'mcp')"
-        }
-      },
       "isRLSEnabled": false
     },
     "public.api_idempotency_records": {
@@ -11147,7 +11024,7 @@
         },
         "production_date": {
           "name": "production_date",
-          "type": "date",
+          "type": "timestamp",
           "primaryKey": false,
           "notNull": true
         },

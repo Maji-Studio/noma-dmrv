@@ -1,3 +1,4 @@
+import { apiActivityWhere } from "./helpers/api-activity";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
 vi.hoisted(() => { process.env.DB_POOL_MAX = "1"; });
 import { createHash, randomUUID } from "node:crypto";
@@ -6,7 +7,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
-import { apiAuditEvents, apiIdempotencyRecords, certificationSubmissions, documents, feedstocks, users } from "@/db/schema";
+import { activityEvents, apiIdempotencyRecords, certificationSubmissions, documents, feedstocks, users } from "@/db/schema";
 import { DOCUMENT_CONFIRM_DEADLINE_MS, DOCUMENT_UPLOAD_LEASE_MS, DOCUMENT_UPLOAD_MAX_LIFETIME_MS } from "@/config/documents";
 import { mintDocumentUploadCapability } from "@/lib/documents/upload-capability";
 import { confirmDocumentUpload } from "@/lib/documents/confirm-upload";
@@ -40,7 +41,7 @@ afterAll(async () => {
   __setStorageProviderForTests(null);
   if (!fixture) return;
   await cleanupDocumentUploads(ctx, ids);
-  await db.delete(apiAuditEvents).where(and(eq(apiAuditEvents.organizationId, ctx.organizationId), eq(apiAuditEvents.credentialId, credentialId)));
+  await db.delete(activityEvents).where(and(eq(activityEvents.organizationId, ctx.organizationId), eq(activityEvents.credentialId, credentialId)));
   await db.delete(apiIdempotencyRecords).where(and(eq(apiIdempotencyRecords.organizationId, ctx.organizationId), eq(apiIdempotencyRecords.credentialId, credentialId)));
   if (fixture) await cleanupLineageFixture(fixture);
   if (root) await rm(root, { recursive: true, force: true });
@@ -215,8 +216,8 @@ it("audits the committed failed transition once, with no audit for failed or gon
   expect(mapConfirmOutcome(await confirmDocumentUpload(ctx, publicInput, options))).toMatchObject({ status: 422 });
   expect(mapConfirmOutcome(await confirmDocumentUpload(ctx, publicInput, options))).toMatchObject({ status: 409 });
   expect(mapConfirmOutcome(await confirmDocumentUpload(ctx, { ...publicInput, documentId: randomUUID() }, options))).toMatchObject({ status: 404 });
-  const events = await db.select().from(apiAuditEvents).where(and(eq(apiAuditEvents.organizationId, ctx.organizationId), eq(apiAuditEvents.requestId, audit.requestId)));
-  expect(events).toMatchObject([{ operationId: "confirm_document_upload", outcomeCode: "updated", entityType: "document", entityIds: [data.id], versionBefore: 1, versionAfter: 2 }]);
+  const events = await db.select().from(activityEvents).where(apiActivityWhere(ctx.organizationId, eq(activityEvents.requestId, audit.requestId)));
+  expect(events).toMatchObject([{ operationId: "confirm_document_upload", action: "updated", entityType: "document", entityId: data.id, versionBefore: 1, versionAfter: 2 }]);
   expect(events).toHaveLength(1);
 });
 
@@ -307,7 +308,7 @@ it("answers overlapping confirms successfully and audits only the transition", a
       { status: 200, data: { id: data.id, version: 2 } }, { status: 200, data: { id: data.id, version: 2 } },
     ]);
     for (const result of results) expect(result).not.toHaveProperty("transitioned");
-    const events = await db.select().from(apiAuditEvents).where(and(eq(apiAuditEvents.organizationId, ctx.organizationId), eq(apiAuditEvents.requestId, audit.requestId)));
+    const events = await db.select().from(activityEvents).where(apiActivityWhere(ctx.organizationId, eq(activityEvents.requestId, audit.requestId)));
     expect(events).toMatchObject([{ operationId: "confirm_document_upload", versionBefore: 1, versionAfter: 2 }]);
     expect(events).toHaveLength(1);
   } finally { read.mockRestore(); }

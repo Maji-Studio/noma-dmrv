@@ -68,7 +68,7 @@ describe("MCP documents", { timeout: READ_TIMEOUT_MS }, () => {
     expect(new Date(link.structuredContent.expiresAt).getTime()).toBeGreaterThan(Date.now());
     expect(await downloadDocument(link.structuredContent.url)).toEqual(DOCUMENT_BYTES);
     expect((await documentTool(a, "confirm_document_upload", args)).structuredContent).toEqual(confirmed.structuredContent);
-    expect((await documentAudits(a)).map(row => [row.operationId, row.transport]).sort()).toEqual([
+    expect((await documentAudits(a)).map(row => [row.operationId, row.source]).sort()).toEqual([
       ["confirm_document_upload", "mcp"], ["request_document_upload", "mcp"],
     ]);
     expect(await documentRecords(a)).toHaveLength(1);

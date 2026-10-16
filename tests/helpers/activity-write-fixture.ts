@@ -89,7 +89,7 @@ export async function cleanupActivityWriteFixture(ctx: OrgContext) {
   const { organizationId } = ctx;
   // All tables are private to this fixture.
   const tables = [
-    schema.activityEvents, schema.apiAuditEvents, schema.documents, schema.storageObjectDeletions, schema.transportLegs,
+    schema.activityEvents, schema.documents, schema.storageObjectDeletions, schema.transportLegs,
     schema.creditBatchApplications, schema.soilTemperatureMeasurements, schema.applicationOutputAllocations, schema.applications,
     schema.outputStockRunAllocations, schema.outputStockAllocations, schema.outputStockMoistureReadings,
     schema.deliveries, schema.orders, schema.productIngredientSnapshots, schema.biocharProductSourceAllocations,

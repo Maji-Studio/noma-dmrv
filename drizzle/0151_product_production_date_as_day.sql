@@ -1,1 +1,0 @@
-ALTER TABLE "biochar_products" ALTER COLUMN "production_date" SET DATA TYPE date;

@@ -1,3 +1,4 @@
+import { stringifyWithBigint } from "./helpers/api-activity";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
@@ -105,7 +106,7 @@ it("records exactly one event for each application write with its batch and sour
   expect(rows.map(row => row.action)).toEqual(["deleted", "updated", "created"]);
   for (const row of rows) expect(row).toMatchObject({ creditBatchId: fixture.batch.id, productionRunId: fixture.run.id, source: "form", actorUserId: ctx.userId });
   expect(rows[1].changedFields).toEqual(["cropType"]);
-  expect(JSON.stringify(rows, (_, value) => typeof value === "bigint" ? String(value) : value)).not.toContain("private crop value");
+  expect(stringifyWithBigint(rows)).not.toContain("private crop value");
 });
 
 it.each(["different", "same", "unbatched"] as const)("records both run scopes when moving applications between %s batches", async batchScope => {
@@ -193,7 +194,7 @@ it("records legacy document create/delete without any filename", async () => {
   const rows = await events("document", document.id);
   expect(rows.map(row => row.action)).toEqual(["deleted", "created"]);
   for (const row of rows) expect(row).toMatchObject({ creditBatchId: fixture.batch.id, reasonCode: `document:pdf:credit_batch:${fixture.batch.id}`, changedFields: [] });
-  expect(JSON.stringify(rows, (_, value) => typeof value === "bigint" ? String(value) : value)).not.toContain(PRIVATE_FILENAME);
+  expect(stringifyWithBigint(rows)).not.toContain(PRIVATE_FILENAME);
   expect(await deleteWriter(ctx, document.id, "form")).toBeNull();
   expect(await events("document", document.id)).toHaveLength(2);
 });
@@ -408,7 +409,7 @@ it("records exactly one document event for each app upload request, confirm and 
   const rows = await events("document", document.id);
   expect(rows.map(row => row.action)).toEqual(["deleted", "updated", "created"]);
   for (const row of rows) expect(row).toMatchObject({ entityType: "document", source: "form", creditBatchId: fixture.batch.id });
-  const serialized = JSON.stringify(rows, (_key, value) => typeof value === "bigint" ? String(value) : value);
+  const serialized = stringifyWithBigint(rows);
   for (const value of [PRIVATE_FILENAME, declaration.sha256, facts.finalKey]) expect(serialized).not.toContain(value);
 });
 
