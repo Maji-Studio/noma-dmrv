@@ -308,6 +308,7 @@ Lists exclude archived rows where supported; detail reads return them with
 `archivedAt`. Facilities, suppliers, feedstock types, storage locations, vehicles
 and drivers return row versions and strong version/revision ETags on detail reads.
 Vehicles and drivers have no archive column and return `archivedAt: null`.
+`GET /formulations` lists active rows by default; `archived=true` lists only archived rows, including exact code lookups, and a cursor stays bound to that choice.
 Output projections exclude contact fields and driver license numbers. Facilities expose `timeZone`, storage
 locations expose the material lane, capacity in kilograms and feedstock-type
 restriction, and vehicles expose their stored identifier/plate and vehicle type.
