@@ -32,8 +32,9 @@ export const lookupListSchema = z.strictObject({
 });
 const archivedSchema = z.union([z.boolean(), z.enum(["true", "false"])])
   .transform(value => value === true || value === "true").default(false)
-  .describe("false lists active formulations (default); true lists only archived formulations. Exact code lookups use the selected set.");
+  .describe("false lists active records (default); true lists only archived records. Exact code lookups use the selected set.");
 publishedJsonSchemas.add(archivedSchema, { jsonSchema: { type: "boolean", default: false } });
+export const partyListSchema = lookupListSchema.extend({ archived: archivedSchema });
 export const formulationListSchema = lookupListSchema.extend({ archived: archivedSchema });
 export const facilityLookupListSchema = lookupListSchema.extend({ facilityId: facilityIdSchema });
 export const supplierLocationListSchema = z.strictObject({
@@ -124,10 +125,10 @@ export const resourceQueries = {
   formulations: { list: formulationListSchema, get: lookupGetSchema },
   feedstocks: { list: feedstockListSchema, get: lookupGetSchema },
   facilities: { list: lookupListSchema, get: lookupGetSchema },
-  customers: { list: lookupListSchema, get: lookupGetSchema },
+  customers: { list: partyListSchema, get: lookupGetSchema },
   deliveries: { list: deliveryListSchema, get: lookupGetSchema },
   orders: { list: orderListSchema, get: lookupGetSchema },
-  suppliers: { list: lookupListSchema, get: lookupGetSchema },
+  suppliers: { list: partyListSchema, get: lookupGetSchema },
   "feedstock-types": { list: lookupListSchema, get: lookupGetSchema },
   "storage-locations": { list: storageLocationListSchema, get: facilityLookupGetSchema },
   vehicles: { list: lookupListSchema, get: lookupGetSchema },

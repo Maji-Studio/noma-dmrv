@@ -70,8 +70,8 @@ describe("facility filters and owned supplier locations", { timeout: LOOKUP_SUIT
     expect(secondResponse.status).toBe(200);
     const second = await secondResponse.json();
     expect(second.data).toHaveLength(1);
-    expect(second.data[0]).toMatchObject({ id: owned[0].id, name: "Lookup orchard", gpsLatitude: 0, gpsLongitude: 32, version: 1, archivedAt: null });
-    for (const field of ["address", "country", "organizationId", "code"]) expect(second.data[0]).not.toHaveProperty(field);
+    expect(second.data[0]).toMatchObject({ id: owned[0].id, name: "Lookup orchard", gpsLatitude: 0, gpsLongitude: 32, version: 1, archivedAt: null, country: "Tanzania", stateRegion: null, city: null, isDefault: false });
+    for (const field of ["address", "contactName", "contactEmail", "contactPhone", "organizationId", "code"]) expect(second.data[0]).not.toHaveProperty(field);
     expect(second.nextCursor).toBeNull();
     const literal = await (await locations(a.supplierId, `?q=${encodeURIComponent("literal %_\\")}`)).json();
     expect(literal.data.map((row: { id: string }) => row.id)).toEqual([owned[2].id]);

@@ -294,6 +294,8 @@ negative net movements. The operator message remains unchanged.
 
 ### Intake lookup REST adapters
 
+Supplier and customer lists hide archived rows by default; `archived=true` lists only archived rows, cursors bind this filter, and detail reads retain archived rows.
+
 Facilities, suppliers, feedstock types, storage locations, vehicles and drivers
 expose read-only list and id-or-code routes through `lib/api/route.ts` and their
 resource scopes. `lib/api/*-queries.ts` validates strict query schemas and calls
@@ -342,6 +344,8 @@ supplier ID; a missing or foreign supplier returns 404, including when it has
 no locations. Supplier locations have no code or archive column.
 
 ### Customers and orders on REST and MCP
+
+Customer reads publish cropType, supplier reads publish sourceRegion, both publish archivedAt and default to active lists (archived=true lists only archived rows), both location lists publish country, stateRegion, city and isDefault, and customer locations also publish siteDescription and defaultSoilTemperatureC.
 
 `GET /api/v1/customers`, `/{idOrCode}` and `/{idOrCode}/locations` use
 `customers:read`. Customer representations exclude email, phone and address;

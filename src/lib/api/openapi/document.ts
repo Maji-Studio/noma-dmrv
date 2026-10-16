@@ -42,6 +42,7 @@ const resourceReadDescriptions: Partial<Record<(typeof resources)[number]["path"
   applications: { list: `${readDescriptions.list} ${readDescriptions.applications}`, get: readDescriptions.applications },
   deliveries: { list: `${readDescriptions.list} ${readDescriptions.deliveries}`, get: readDescriptions.deliveries },
   orders: { list: `${readDescriptions.list} ${readDescriptions.orders}`, get: readDescriptions.orders },
+  suppliers: { list: `${readDescriptions.list} ${readDescriptions.suppliers}`, get: readDescriptions.suppliers },
   customers: { list: `${readDescriptions.list} ${readDescriptions.customers}`, get: readDescriptions.customers },
 };
 

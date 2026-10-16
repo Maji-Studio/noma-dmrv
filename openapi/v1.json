@@ -196,31 +196,38 @@
       "customer": {
         "additionalProperties": false,
         "properties": {
+          "archivedAt": {"anyOf": [{"format": "date-time", "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$", "type": "string"}, {"type": "null"}], "description": "Archive event instant in UTC (RFC 3339), or null when active."},
           "code": {"description": "Exact human-readable code, unique within the organization.", "type": "string"},
           "createdAt": {"description": "Creation event instant in UTC (RFC 3339).", "format": "date-time", "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$", "type": "string"},
+          "cropType": {"anyOf": [{"type": "string"}, {"type": "null"}], "description": "Crop type, or null when unspecified."},
           "id": {"description": "Resource identifier, UUID.", "format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"},
           "name": {"description": "Human-readable display name, plain text.", "type": "string"},
           "updatedAt": {"description": "Last update event instant in UTC (RFC 3339).", "format": "date-time", "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$", "type": "string"},
           "version": {"description": "Positive integer row version for concurrency checks.", "exclusiveMinimum": 0, "maximum": 9007199254740991, "type": "integer"}
         },
-        "required": ["id", "code", "name", "createdAt", "updatedAt", "version"],
+        "required": ["id", "code", "name", "archivedAt", "createdAt", "updatedAt", "version", "cropType"],
         "type": "object"
       },
       "customer_location": {
         "additionalProperties": false,
         "properties": {
+          "city": {"anyOf": [{"type": "string"}, {"type": "null"}], "description": "City, or null when unspecified."},
+          "country": {"description": "Country of the location.", "type": "string"},
           "createdAt": {"description": "Creation event instant in UTC (RFC 3339).", "format": "date-time", "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$", "type": "string"},
           "customerId": {"description": "Owning customer identifier, UUID.", "format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"},
+          "defaultSoilTemperatureC": {"anyOf": [{"type": "number"}, {"type": "null"}], "description": "Default soil temperature in degrees Celsius, or null when unspecified."},
           "facilityDistances": {"description": "One-way road distances by facility, in kilometres. Missing pairs have no recorded default. GPS-derived values are estimates. The server counts the round trip.", "items": {"additionalProperties": false, "properties": {"distanceKm": {"description": "Positive one-way road distance in kilometres.", "exclusiveMinimum": 0, "type": "number"}, "distanceSource": {"description": "Distance provenance: manual entry, GPS route estimate, or supporting document.", "enum": ["map_estimate", "manual", "document"], "type": "string"}, "facilityId": {"description": "Organization facility identifier, UUID.", "format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"}}, "required": ["facilityId", "distanceKm", "distanceSource"], "type": "object"}, "type": "array"},
           "gpsLatitude": {"description": "WGS 84 latitude in decimal degrees.", "type": "number"},
           "gpsLongitude": {"description": "WGS 84 longitude in decimal degrees.", "type": "number"},
           "id": {"description": "Resource identifier, UUID.", "format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"},
           "isDefault": {"description": "Whether this is the customer's default destination.", "type": "boolean"},
           "name": {"description": "Customer location display name, plain text.", "type": "string"},
+          "siteDescription": {"anyOf": [{"type": "string"}, {"type": "null"}], "description": "Site description, or null when unspecified."},
+          "stateRegion": {"anyOf": [{"type": "string"}, {"type": "null"}], "description": "State or region, or null when unspecified."},
           "updatedAt": {"description": "Last update event instant in UTC (RFC 3339).", "format": "date-time", "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$", "type": "string"},
           "version": {"description": "Positive integer row version for concurrency checks.", "exclusiveMinimum": 0, "maximum": 9007199254740991, "type": "integer"}
         },
-        "required": ["id", "name", "createdAt", "updatedAt", "customerId", "facilityDistances", "gpsLatitude", "gpsLongitude", "isDefault", "version"],
+        "required": ["id", "name", "createdAt", "updatedAt", "siteDescription", "defaultSoilTemperatureC", "customerId", "facilityDistances", "gpsLatitude", "gpsLongitude", "isDefault", "country", "stateRegion", "city", "version"],
         "type": "object"
       },
       "delivery": {
@@ -459,7 +466,11 @@
           },
           "organization": {"additionalProperties": false, "description": "Organization bound to the authenticated credential.", "properties": {"id": {"description": "Credential-bound organization identifier, opaque string.", "type": "string"}, "name": {"description": "Organization display name, plain text.", "type": "string"}}, "required": ["id", "name"], "type": "object"},
           "role": {"description": "Live organization role: owner owns the organization; admin administers it.", "enum": ["owner", "admin"], "type": "string"},
-          "scopes": {"description": "Credential scopes intersected with the live membership role.", "items": {"description": "Per-resource permission: read lists and retrieves, write creates and updates, delete removes; no wildcards. Additional resource scopes may be introduced in v1.", "type": "string", "x-extensible-enum": ["applications:read", "applications:write", "applications:delete", "production-runs:read", "production-runs:write", "production-runs:delete", "reactors:read", "biochar-products:read", "biochar-products:write", "formulations:read", "formulations:write", "formulations:delete", "feedstocks:read", "feedstocks:write", "feedstocks:delete", "facilities:read", "suppliers:read", "feedstock-types:read", "storage-locations:read", "vehicles:read", "drivers:read", "deliveries:read", "deliveries:write", "customers:read", "orders:read", "orders:write", "orders:delete", "lab-samples:read", "lab-samples:write", "lab-samples:delete", "credit-batches:read"]}, "type": "array"}
+          "scopes": {
+            "description": "Credential scopes intersected with the live membership role.",
+            "items": {"description": "Per-resource permission: read lists and retrieves, write creates and updates, delete removes; no wildcards. Additional resource scopes may be introduced in v1.", "type": "string", "x-extensible-enum": ["applications:read", "applications:write", "applications:delete", "production-runs:read", "production-runs:write", "production-runs:delete", "reactors:read", "biochar-products:read", "biochar-products:write", "formulations:read", "formulations:write", "formulations:delete", "feedstocks:read", "feedstocks:write", "feedstocks:delete", "facilities:read", "suppliers:read", "suppliers:write", "suppliers:delete", "feedstock-types:read", "storage-locations:read", "vehicles:read", "drivers:read", "deliveries:read", "deliveries:write", "customers:read", "customers:write", "customers:delete", "orders:read", "orders:write", "orders:delete", "lab-samples:read", "lab-samples:write", "lab-samples:delete", "credit-batches:read"]},
+            "type": "array"
+          }
         },
         "required": ["organization", "facilities", "role", "scopes", "credential"],
         "type": "object"
@@ -660,32 +671,37 @@
       "supplier": {
         "additionalProperties": false,
         "properties": {
-          "archivedAt": {"anyOf": [{"format": "date-time", "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$", "type": "string"}, {"type": "null"}], "description": "Archive event instant in UTC (RFC 3339), or null when active or archiving is unsupported."},
+          "archivedAt": {"anyOf": [{"format": "date-time", "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$", "type": "string"}, {"type": "null"}], "description": "Archive event instant in UTC (RFC 3339), or null when active."},
           "code": {"description": "Exact human-readable code, unique within the organization.", "type": "string"},
           "createdAt": {"description": "Creation event instant in UTC (RFC 3339).", "format": "date-time", "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$", "type": "string"},
           "id": {"description": "Resource identifier, UUID.", "format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"},
           "name": {"description": "Human-readable display name, plain text.", "type": "string"},
+          "sourceRegion": {"anyOf": [{"type": "string"}, {"type": "null"}], "description": "Source region, or null when unspecified."},
           "updatedAt": {"description": "Last update event instant in UTC (RFC 3339).", "format": "date-time", "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$", "type": "string"},
           "version": {"description": "Positive integer row version for concurrency checks.", "exclusiveMinimum": 0, "maximum": 9007199254740991, "type": "integer"}
         },
-        "required": ["id", "code", "name", "archivedAt", "createdAt", "updatedAt", "version"],
+        "required": ["id", "code", "name", "archivedAt", "createdAt", "updatedAt", "version", "sourceRegion"],
         "type": "object"
       },
       "supplier_location": {
         "additionalProperties": false,
         "properties": {
-          "archivedAt": {"anyOf": [{"format": "date-time", "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$", "type": "string"}, {"type": "null"}], "description": "Archive event instant in UTC (RFC 3339), or null when active or archiving is unsupported."},
+          "archivedAt": {"description": "Always null; a location follows its supplier archive state.", "type": "null"},
+          "city": {"anyOf": [{"type": "string"}, {"type": "null"}], "description": "City, or null when unspecified."},
+          "country": {"description": "Country of the location.", "type": "string"},
           "createdAt": {"description": "Creation event instant in UTC (RFC 3339).", "format": "date-time", "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$", "type": "string"},
           "facilityDistances": {"description": "One-way road distances by facility, in kilometres. Missing pairs have no recorded default. GPS-derived values are estimates. The server counts the round trip.", "items": {"additionalProperties": false, "properties": {"distanceKm": {"description": "Positive one-way road distance in kilometres.", "exclusiveMinimum": 0, "type": "number"}, "distanceSource": {"description": "Distance provenance: manual entry, GPS route estimate, or supporting document.", "enum": ["map_estimate", "manual", "document"], "type": "string"}, "facilityId": {"description": "Organization facility identifier, UUID.", "format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"}}, "required": ["facilityId", "distanceKm", "distanceSource"], "type": "object"}, "type": "array"},
           "gpsLatitude": {"description": "WGS 84 latitude in decimal degrees.", "type": "number"},
           "gpsLongitude": {"description": "WGS 84 longitude in decimal degrees.", "type": "number"},
           "id": {"description": "Resource identifier, UUID.", "format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"},
+          "isDefault": {"description": "Whether this is the supplier default source.", "type": "boolean"},
           "name": {"anyOf": [{"type": "string"}, {"type": "null"}], "description": "Source location display name, plain text, or null when unspecified."},
+          "stateRegion": {"anyOf": [{"type": "string"}, {"type": "null"}], "description": "State or region, or null when unspecified."},
           "supplierId": {"description": "Owning supplier identifier, UUID.", "format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"},
           "updatedAt": {"description": "Last update event instant in UTC (RFC 3339).", "format": "date-time", "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$", "type": "string"},
           "version": {"description": "Positive integer row version for concurrency checks.", "exclusiveMinimum": 0, "maximum": 9007199254740991, "type": "integer"}
         },
-        "required": ["id", "name", "archivedAt", "createdAt", "updatedAt", "version", "supplierId", "facilityDistances", "gpsLatitude", "gpsLongitude"],
+        "required": ["id", "name", "archivedAt", "createdAt", "updatedAt", "country", "stateRegion", "city", "version", "isDefault", "supplierId", "facilityDistances", "gpsLatitude", "gpsLongitude"],
         "type": "object"
       },
       "vehicle": {
@@ -1347,13 +1363,14 @@
     },
     "/customers": {
       "get": {
-        "description": "List a page ordered newest first by (createdAt, id). Cursors bind organization and filters; no totals or include. Lookup lists exclude archived rows where supported. Read customer ids, codes and names without contact details. Customers do not support archiving. Required scope: customers:read.",
+        "description": "List a page ordered newest first by (createdAt, id). Cursors bind organization and filters; no totals or include. Lookup lists exclude archived rows where supported. Read customer ids, codes, names and crop types without contact details. Lists hide archived customers by default; archived=true lists only archived customers. Cursors bind the archive filter. Detail reads retain archived customers with archivedAt. Required scope: customers:read.",
         "operationId": "find_customers",
         "parameters": [
           {"description": "Page size as a decimal integer string; defaults to 50, maximum 200.", "in": "query", "name": "limit", "required": false, "schema": {"default": 50, "description": "Page size as a decimal integer string; defaults to 50, maximum 200.", "maximum": 200, "minimum": 1, "type": "integer"}},
           {"description": "Opaque base64url continuation cursor bound to organization, resource and filters. Use only nextCursor from the same list and filters.", "in": "query", "name": "cursor", "required": false, "schema": {"description": "Opaque base64url continuation cursor bound to organization, resource and filters. Use only nextCursor from the same list and filters.", "maxLength": 4096, "minLength": 1, "pattern": "^[A-Za-z0-9_-]+$", "type": "string"}},
           {"description": "Case-insensitive literal prefix search on code or name.", "in": "query", "name": "q", "required": false, "schema": {"description": "Case-insensitive literal prefix search on code or name.", "maxLength": 255, "pattern": "^[^\\x00-\\x1f\\x7f-\\x9f]*$(?![\\s\\S])", "type": "string"}},
-          {"description": "Exact human-readable resource code.", "in": "query", "name": "code", "required": false, "schema": {"description": "Exact human-readable resource code.", "maxLength": 255, "pattern": "^[^\\x00-\\x1f\\x7f-\\x9f]*$(?![\\s\\S])", "type": "string"}}
+          {"description": "Exact human-readable resource code.", "in": "query", "name": "code", "required": false, "schema": {"description": "Exact human-readable resource code.", "maxLength": 255, "pattern": "^[^\\x00-\\x1f\\x7f-\\x9f]*$(?![\\s\\S])", "type": "string"}},
+          {"description": "false lists active records (default); true lists only archived records. Exact code lookups use the selected set.", "in": "query", "name": "archived", "required": false, "schema": {"default": false, "description": "false lists active records (default); true lists only archived records. Exact code lookups use the selected set.", "type": "boolean"}}
         ],
         "responses": {
           "200": {"content": {"application/json": {"schema": {"additionalProperties": false, "properties": {"data": {"description": "Page of resources, newest first by (createdAt, id).", "items": {"$ref": "#/components/schemas/customer"}, "type": "array"}, "nextCursor": {"anyOf": [{"type": "string"}, {"type": "null"}], "description": "Opaque cursor for the next page, or null at the end; keep filters unchanged."}}, "required": ["data", "nextCursor"], "type": "object"}}}, "description": "Resource page.", "headers": {"RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}},
@@ -1368,7 +1385,7 @@
     },
     "/customers/{idOrCode}": {
       "get": {
-        "description": "Read customer ids, codes and names without contact details. Customers do not support archiving. Required scope: customers:read.",
+        "description": "Read customer ids, codes, names and crop types without contact details. Lists hide archived customers by default; archived=true lists only archived customers. Cursors bind the archive filter. Detail reads retain archived customers with archivedAt. Required scope: customers:read.",
         "operationId": "get_customer",
         "parameters": [{"description": "Resource UUID or exact human-readable code.", "in": "path", "name": "idOrCode", "required": true, "schema": {"type": "string"}}],
         "responses": {"200": {"content": {"application/json": {"schema": {"additionalProperties": false, "properties": {"data": {"$ref": "#/components/schemas/customer", "description": "Resource representation."}}, "required": ["data"], "type": "object"}}}, "description": "Resource representation.", "headers": {"ETag": {"$ref": "#/components/headers/ETag"}, "RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}}, "400": {"$ref": "#/components/responses/Problem400"}, "401": {"$ref": "#/components/responses/Problem401"}, "403": {"$ref": "#/components/responses/Problem403"}, "404": {"$ref": "#/components/responses/Problem404"}, "429": {"$ref": "#/components/responses/Problem429"}, "500": {"$ref": "#/components/responses/Problem500"}},
@@ -1377,7 +1394,7 @@
     },
     "/customers/{idOrCode}/locations": {
       "get": {
-        "description": "List customer destinations by parent UUID or exact code. Search matches a literal name prefix; the cursor binds the parent. facilityDistances lists one-way kilometres by facility with distanceSource; missing pairs are absent. Location edits leave existing transport legs frozen; the server counts the round trip. No contact details, address or soil temperature. Required scope: customers:read.",
+        "description": "List customer destinations by parent UUID or exact code. Search matches a literal name prefix; the cursor binds the parent. facilityDistances lists one-way kilometres by facility with distanceSource; missing pairs are absent. Location edits leave existing transport legs frozen; the server counts the round trip. Includes country, stateRegion, city, siteDescription and defaultSoilTemperatureC. Contact details stay private. Required scope: customers:read.",
         "operationId": "find_customer_locations",
         "parameters": [
           {"description": "Resource UUID or exact human-readable code.", "in": "path", "name": "idOrCode", "required": true, "schema": {"type": "string"}},
@@ -2229,7 +2246,7 @@
           {"description": "Opaque base64url continuation cursor bound to organization, resource and filters. Use only nextCursor from the same list and filters.", "in": "query", "name": "cursor", "required": false, "schema": {"description": "Opaque base64url continuation cursor bound to organization, resource and filters. Use only nextCursor from the same list and filters.", "maxLength": 4096, "minLength": 1, "pattern": "^[A-Za-z0-9_-]+$", "type": "string"}},
           {"description": "Case-insensitive literal prefix search on code or name.", "in": "query", "name": "q", "required": false, "schema": {"description": "Case-insensitive literal prefix search on code or name.", "maxLength": 255, "pattern": "^[^\\x00-\\x1f\\x7f-\\x9f]*$(?![\\s\\S])", "type": "string"}},
           {"description": "Exact human-readable resource code.", "in": "query", "name": "code", "required": false, "schema": {"description": "Exact human-readable resource code.", "maxLength": 255, "pattern": "^[^\\x00-\\x1f\\x7f-\\x9f]*$(?![\\s\\S])", "type": "string"}},
-          {"description": "false lists active formulations (default); true lists only archived formulations. Exact code lookups use the selected set.", "in": "query", "name": "archived", "required": false, "schema": {"default": false, "description": "false lists active formulations (default); true lists only archived formulations. Exact code lookups use the selected set.", "type": "boolean"}}
+          {"description": "false lists active records (default); true lists only archived records. Exact code lookups use the selected set.", "in": "query", "name": "archived", "required": false, "schema": {"default": false, "description": "false lists active records (default); true lists only archived records. Exact code lookups use the selected set.", "type": "boolean"}}
         ],
         "responses": {
           "200": {"content": {"application/json": {"schema": {"additionalProperties": false, "properties": {"data": {"description": "Page of resources, newest first by (createdAt, id).", "items": {"$ref": "#/components/schemas/formulation"}, "type": "array"}, "nextCursor": {"anyOf": [{"type": "string"}, {"type": "null"}], "description": "Opaque cursor for the next page, or null at the end; keep filters unchanged."}}, "required": ["data", "nextCursor"], "type": "object"}}}, "description": "Resource page.", "headers": {"RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}},
@@ -3382,13 +3399,14 @@
     },
     "/suppliers": {
       "get": {
-        "description": "List a page ordered newest first by (createdAt, id). Cursors bind organization and filters; no totals or include. Lookup lists exclude archived rows where supported. Required scope: suppliers:read.",
+        "description": "List a page ordered newest first by (createdAt, id). Cursors bind organization and filters; no totals or include. Lookup lists exclude archived rows where supported. Read supplier ids, codes, names and sourceRegion without contact details. Lists hide archived suppliers by default; archived=true lists only archived suppliers. Cursors bind the archive filter. Detail reads retain archived suppliers with archivedAt. Required scope: suppliers:read.",
         "operationId": "find_suppliers",
         "parameters": [
           {"description": "Page size as a decimal integer string; defaults to 50, maximum 200.", "in": "query", "name": "limit", "required": false, "schema": {"default": 50, "description": "Page size as a decimal integer string; defaults to 50, maximum 200.", "maximum": 200, "minimum": 1, "type": "integer"}},
           {"description": "Opaque base64url continuation cursor bound to organization, resource and filters. Use only nextCursor from the same list and filters.", "in": "query", "name": "cursor", "required": false, "schema": {"description": "Opaque base64url continuation cursor bound to organization, resource and filters. Use only nextCursor from the same list and filters.", "maxLength": 4096, "minLength": 1, "pattern": "^[A-Za-z0-9_-]+$", "type": "string"}},
           {"description": "Case-insensitive literal prefix search on code or name.", "in": "query", "name": "q", "required": false, "schema": {"description": "Case-insensitive literal prefix search on code or name.", "maxLength": 255, "pattern": "^[^\\x00-\\x1f\\x7f-\\x9f]*$(?![\\s\\S])", "type": "string"}},
-          {"description": "Exact human-readable resource code.", "in": "query", "name": "code", "required": false, "schema": {"description": "Exact human-readable resource code.", "maxLength": 255, "pattern": "^[^\\x00-\\x1f\\x7f-\\x9f]*$(?![\\s\\S])", "type": "string"}}
+          {"description": "Exact human-readable resource code.", "in": "query", "name": "code", "required": false, "schema": {"description": "Exact human-readable resource code.", "maxLength": 255, "pattern": "^[^\\x00-\\x1f\\x7f-\\x9f]*$(?![\\s\\S])", "type": "string"}},
+          {"description": "false lists active records (default); true lists only archived records. Exact code lookups use the selected set.", "in": "query", "name": "archived", "required": false, "schema": {"default": false, "description": "false lists active records (default); true lists only archived records. Exact code lookups use the selected set.", "type": "boolean"}}
         ],
         "responses": {
           "200": {"content": {"application/json": {"schema": {"additionalProperties": false, "properties": {"data": {"description": "Page of resources, newest first by (createdAt, id).", "items": {"$ref": "#/components/schemas/supplier"}, "type": "array"}, "nextCursor": {"anyOf": [{"type": "string"}, {"type": "null"}], "description": "Opaque cursor for the next page, or null at the end; keep filters unchanged."}}, "required": ["data", "nextCursor"], "type": "object"}}}, "description": "Resource page.", "headers": {"RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}},
@@ -3403,7 +3421,7 @@
     },
     "/suppliers/{idOrCode}": {
       "get": {
-        "description": "Read a stable resource representation by UUID or exact code; archived lookups remain readable. Required scope: suppliers:read.",
+        "description": "Read supplier ids, codes, names and sourceRegion without contact details. Lists hide archived suppliers by default; archived=true lists only archived suppliers. Cursors bind the archive filter. Detail reads retain archived suppliers with archivedAt. Required scope: suppliers:read.",
         "operationId": "get_supplier",
         "parameters": [{"description": "Resource UUID or exact human-readable code.", "in": "path", "name": "idOrCode", "required": true, "schema": {"type": "string"}}],
         "responses": {"200": {"content": {"application/json": {"schema": {"additionalProperties": false, "properties": {"data": {"$ref": "#/components/schemas/supplier", "description": "Resource representation."}}, "required": ["data"], "type": "object"}}}, "description": "Resource representation.", "headers": {"ETag": {"$ref": "#/components/headers/ETag"}, "RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}}, "400": {"$ref": "#/components/responses/Problem400"}, "401": {"$ref": "#/components/responses/Problem401"}, "403": {"$ref": "#/components/responses/Problem403"}, "404": {"$ref": "#/components/responses/Problem404"}, "429": {"$ref": "#/components/responses/Problem429"}, "500": {"$ref": "#/components/responses/Problem500"}},
@@ -3412,7 +3430,7 @@
     },
     "/suppliers/{idOrCode}/locations": {
       "get": {
-        "description": "List supplier source locations by parent UUID only. Search matches a literal name prefix; the cursor also binds the parent. facilityDistances lists one-way kilometres by facility with distanceSource; missing pairs are absent. GPS-derived distances are estimates. Location edits leave existing transport legs frozen. Required scope: suppliers:read.",
+        "description": "List supplier source locations by parent UUID only. Search matches a literal name prefix; the cursor also binds the parent. facilityDistances lists one-way kilometres by facility with distanceSource; missing pairs are absent. GPS-derived distances are estimates. Location edits leave existing transport legs frozen. Includes country, stateRegion, city and isDefault. Required scope: suppliers:read.",
         "operationId": "find_supplier_locations",
         "parameters": [
           {"description": "Target identifier, UUID; codes are not accepted on this method.", "in": "path", "name": "idOrCode", "required": true, "schema": {"format": "uuid", "type": "string"}},
