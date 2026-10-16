@@ -177,7 +177,7 @@ export function LineDetails({ line, onAdd }: { line: PrototypeLine; onAdd?: () =
   if (def.recordsLabel) {
     rows.push({
       label: "From records",
-      value: auto ? `${formatFigure(auto.value, def.unit)} from ${def.recordsLabel.toLowerCase()} (${auto.detail})` : `None yet from ${def.recordsLabel.toLowerCase()}`,
+      value: auto ? `${formatFigure(auto.value, def.unit)} from ${def.recordsLabel.toLowerCase()} (${auto.count} ${auto.label})` : `None yet from ${def.recordsLabel.toLowerCase()}`,
     });
   }
   if (def.rule !== "none") rows.push({ label: "Entries", value: <EntryList line={line} /> });
