@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { and, eq, gte, isNotNull } from 'drizzle-orm';
 import { db, type DbTransaction } from '@/db';
-import { biocharProducts, biocharProductSourceAllocations, binMovements, facilities, outputStockAllocations, productIngredientSnapshots } from '@/db/schema';
+import { biocharProducts, binMovements, facilities, productIngredientSnapshots } from '@/db/schema';
 import type { OrgContext } from '@/lib/auth/server';
 import type { CaptureActivity } from '@/lib/activity-changes';
 import { DomainError } from '@/lib/domain-errors';
@@ -17,7 +17,7 @@ import { assertOutputMovementEditable } from './output-stock-edit-lock';
 import { stockFingerprint } from './output-stock-operations';
 import { appendOutputStockReversal } from './output-stock-reversal';
 import { readRecordDependents } from './record-lock-dependents';
-import { assertRowVersion } from './row-version';
+import { assertRowVersion, nextVersion, staleRowVersion } from './row-version';
 import { deleteTransportLegsForEntity, lockBiocharTransportRouteTopology } from './transport-legs';
 import { requireOrgScope } from './utils';
 import { resolveWriteActivityScopes } from './write-activity';
@@ -29,19 +29,21 @@ export async function deleteBiocharProductInTransaction(ctx: OrgContext, tx: DbT
   const requestKey = randomUUID();
   await lockMovementRequest(ctx, tx, requestKey);
   const [snapshot] = await tx.select().from(biocharProducts).where(and(eq(biocharProducts.organizationId, ctx.organizationId), eq(biocharProducts.id, productId)));
-  if (!snapshot) throw new SafeError('Biochar product not found');
+  if (!snapshot) throw staleRowVersion('biocharProduct', productId);
   const ingredients = await tx.select().from(productIngredientSnapshots).where(and(eq(productIngredientSnapshots.organizationId, ctx.organizationId), eq(productIngredientSnapshots.biocharProductId, productId)));
   const binIds = [...new Set([snapshot.storageLocationId, snapshot.sourceBiocharStorageLocationId, ...ingredients.map(row => row.sourceStorageLocationId)].filter((id): id is string => id !== null))].sort();
   for (const id of binIds) await lockBinStock(ctx, tx, id, { allowArchived: true });
   if (!snapshot.sourceBiocharStorageLocationId) throw new SafeError('Posted product source bin not found.');
   const rows = await getOutputStockAllocationProjection(ctx, { sourceStorageLocationId: snapshot.sourceBiocharStorageLocationId }, tx);
-  const original = rows.find(row => row.allocation.targetBiocharProductId === productId)?.movement;
+  const reversedIds = new Set(rows.filter(row => row.movement.outputKind === 'reversal').map(row => row.movement.correctsMovementId));
+  const original = rows.find(row => row.allocation.targetBiocharProductId === productId && row.movement.outputKind !== 'reversal' && !reversedIds.has(row.movement.id))?.movement;
+  if (!original && rows.some(row => row.allocation.targetBiocharProductId === productId)) throw staleRowVersion('biocharProduct', productId);
   const allocations = [...new Map(rows.filter(row => row.movement.id === original?.id).map(row => [row.allocation.id, row.allocation])).values()];
   const targets: CertifiedLineageTarget[] = [{ entityType: 'biocharProduct', entityId: productId }, ...[...new Set(allocations.flatMap(row => row.productionRunId ? [row.productionRunId] : []))].map(entityId => ({ entityType: 'productionRun' as const, entityId }))];
   const keys = await lockCertifiedLineageArtifacts(ctx, tx, targets);
   await tx.select({ id: facilities.id }).from(facilities).where(and(eq(facilities.organizationId, ctx.organizationId), eq(facilities.id, snapshot.facilityId))).for('share');
   const [product] = await tx.select().from(biocharProducts).where(and(eq(biocharProducts.organizationId, ctx.organizationId), eq(biocharProducts.id, productId))).for('update');
-  if (!product) throw new SafeError('Biochar product not found');
+  if (!product) throw staleRowVersion('biocharProduct', productId);
   assertRowVersion({ entity: 'biocharProduct', id: productId, expectedVersion, actualVersion: product.version });
   await assertLockedLineagesAllowMutation(ctx, tx, keys, targets.map(target => ({ target, mutation: 'delete' })));
   const lock = recordLocks.biocharProduct({ removals: [], dependents: await readRecordDependents(ctx, tx, { entityType: 'biocharProduct', entityId: productId }) });
@@ -62,11 +64,7 @@ export async function deleteBiocharProductInTransaction(ctx: OrgContext, tx: DbT
     idempotencyKey: requestKey, basisFingerprint: stockFingerprint(stock.layers), payloadHash: stockFingerprint({ productId, expectedVersion }), balanceBeforeDryKg: stock.allLayersDryKg });
   const documents = await deleteTransportLegsForEntity(ctx, tx, 'biochar', productId, source);
   await retireDocumentsForEntities(ctx, tx, [...documents, { entityType: 'biochar_product', entityId: productId, activityScopes }], source);
-  // Only live owner links are removed; the movement snapshot and source effects remain.
-  await tx.update(outputStockAllocations).set({ targetBiocharProductId: null }).where(and(eq(outputStockAllocations.organizationId, ctx.organizationId), eq(outputStockAllocations.targetBiocharProductId, productId)));
-  await tx.delete(productIngredientSnapshots).where(and(eq(productIngredientSnapshots.organizationId, ctx.organizationId), eq(productIngredientSnapshots.biocharProductId, productId)));
-  await tx.delete(biocharProductSourceAllocations).where(and(eq(biocharProductSourceAllocations.organizationId, ctx.organizationId), eq(biocharProductSourceAllocations.biocharProductId, productId)));
-  await tx.delete(biocharProducts).where(and(eq(biocharProducts.organizationId, ctx.organizationId), eq(biocharProducts.id, productId)));
+  await tx.update(biocharProducts).set({ archivedAt: new Date(), updatedAt: new Date(), version: nextVersion(biocharProducts.version) }).where(and(eq(biocharProducts.organizationId, ctx.organizationId), eq(biocharProducts.id, productId)));
   capture?.(productId, { ...product, ingredients, allocations }, null);
   return { product, activityScopes };
 }

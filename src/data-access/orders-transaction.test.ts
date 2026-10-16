@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { db, type DbTransaction } from '@/db';
 import type { OrgContext } from '@/lib/auth/server';
+vi.mock("./record-lock-dependents", () => ({ readRecordDependents: async () => [] }));
 vi.mock('./certification-lineage-guards', () => ({ assertCanMutateCertifiedLineage: vi.fn() }));
 vi.mock('./transport-legs', () => ({ lockBiocharTransportRouteTopology: vi.fn() }));
 import { updateOrderInTransaction } from './orders';

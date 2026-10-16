@@ -4,11 +4,11 @@ import type { SnapshotStock } from "../stock-effects";
 import { runReferenceNotFound } from "@/lib/production-run-domain-errors";
 import { DomainError } from "@/lib/domain-errors";
 import { db, type DbTransaction } from "@/db";
-import { creditBatches, creditBatchProductionRuns, incidentReports, productionRuns, productionRunFeedstockDraws, productionRunFeedstocks, productionRunReadings } from "@/db/schema";
+import { outputStockRunAllocations, creditBatches, creditBatchProductionRuns, incidentReports, productionRuns, productionRunFeedstockDraws, productionRunFeedstocks, productionRunReadings } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import { conflictCode, type ConflictRef } from "@/lib/conflict-ref";
 import { and, eq } from "drizzle-orm";
-import { assertRowVersion } from "../row-version";
+import { assertRowVersion, nextVersion } from "../row-version";
 import { assertCanMutateCertifiedLineage } from "../certification-lineage-guards";
 import { retireDocumentsForEntities } from "../documents";
 import { lockBinStocks } from "../lock-bin-stocks";
@@ -175,9 +175,14 @@ export async function deleteProductionRunInTransaction(
     .delete(incidentReports)
     .where(and(eq(incidentReports.productionRunId, productionRunId), eq(incidentReports.organizationId, ctx.organizationId)));
 
-  await tx
-    .delete(productionRuns)
-    .where(and(eq(productionRuns.id, productionRunId), eq(productionRuns.organizationId, ctx.organizationId)));
+  const [history] = await tx.select({ id: outputStockRunAllocations.id }).from(outputStockRunAllocations)
+    .where(and(eq(outputStockRunAllocations.organizationId, ctx.organizationId), eq(outputStockRunAllocations.productionRunId, productionRunId))).limit(1);
+  if (history) {
+    await tx.update(productionRuns).set({ archivedAt: new Date(), status: 'cancelled', cancellationReason: 'Deleted production run.', version: nextVersion(productionRuns.version), updatedAt: new Date() })
+      .where(and(eq(productionRuns.id, productionRunId), eq(productionRuns.organizationId, ctx.organizationId)));
+  } else {
+    await tx.delete(productionRuns).where(and(eq(productionRuns.id, productionRunId), eq(productionRuns.organizationId, ctx.organizationId)));
+  }
   await retireDocumentsForEntities(ctx, tx, [
     { entityType: "production_run", entityId: productionRunId },
     ...productionIncidents.map((incident) => ({

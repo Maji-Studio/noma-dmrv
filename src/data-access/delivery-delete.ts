@@ -17,7 +17,7 @@ import { getOutputStockAllocationProjection, readOutputBinAllLayers } from './ou
 import { assertOutputMovementEditable } from './output-stock-edit-lock';
 import { stockFingerprint } from './output-stock-operations';
 import { appendOutputStockReversal } from './output-stock-reversal';
-import { assertRowVersion, nextVersion } from './row-version';
+import { assertRowVersion, nextVersion, staleRowVersion } from './row-version';
 import { lockBiocharTransportRouteTopology, syncBiocharProductTransportLegs } from './transport-legs';
 import { requireOrgScope } from './utils';
 import { resolveWriteActivityScopes } from './write-activity';
@@ -29,14 +29,14 @@ export async function deleteDeliveryInTransaction(ctx: OrgContext, tx: DbTransac
   const requestKey = randomUUID();
   await lockMovementRequest(ctx, tx, requestKey);
   const [snapshot] = await tx.select().from(deliveries).where(and(eq(deliveries.organizationId, ctx.organizationId), eq(deliveries.id, deliveryId)));
-  if (!snapshot) throw new SafeError('Delivery not found');
+  if (!snapshot) throw staleRowVersion('delivery', deliveryId);
   await lockBinStock(ctx, tx, snapshot.storageLocationId, { allowArchived: true });
   const rows = await getOutputStockAllocationProjection(ctx, { deliveryId }, tx);
   const targets: CertifiedLineageTarget[] = [{ entityType: 'delivery', entityId: deliveryId }, ...[...new Set(rows.flatMap(r => r.allocation.biocharProductId ? [r.allocation.biocharProductId] : []))].map(entityId => ({ entityType: 'biocharProduct' as const, entityId }))];
   const keys = await lockCertifiedLineageArtifacts(ctx, tx, targets);
   await tx.select({ id: facilities.id }).from(facilities).where(and(eq(facilities.organizationId, ctx.organizationId), eq(facilities.id, snapshot.facilityId))).for('share');
   const [existing] = await tx.select().from(deliveries).where(and(eq(deliveries.organizationId, ctx.organizationId), eq(deliveries.id, deliveryId))).for('update');
-  if (!existing) throw new SafeError('Delivery not found');
+  if (!existing) throw staleRowVersion('delivery', deliveryId);
   assertRowVersion({ entity: 'delivery', id: deliveryId, expectedVersion, actualVersion: existing.version });
   await assertLockedLineagesAllowMutation(ctx, tx, keys, targets.map(target => ({ target, mutation: 'delete' })));
   const lock = recordLocks.delivery({ removals: [], dependents: await readRecordDependents(ctx, tx, { entityType: 'delivery', entityId: deliveryId }) });

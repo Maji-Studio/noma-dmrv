@@ -21,7 +21,7 @@ export async function getIngredientStockBasis(ctx: OrgContext, storageLocationId
       eq(feedstocks.status, 'complete'), isNull(feedstocks.archivedAt),
       at ? sql`${feedstocks.deliveryDate}::date <= (${at.toISOString()}::timestamptz at time zone ${facilities.timezone})::date` : undefined));
   const products = await reader.select({ composition: biocharProducts.composition }).from(biocharProducts)
-    .where(and(eq(biocharProducts.organizationId, ctx.organizationId), excludeProductId ? ne(biocharProducts.id, excludeProductId) : undefined,
+    .where(and(eq(biocharProducts.organizationId, ctx.organizationId), isNull(biocharProducts.archivedAt), excludeProductId ? ne(biocharProducts.id, excludeProductId) : undefined,
       at ? lte(biocharProducts.placedAt, at) : undefined,
       sql`${biocharProducts.composition}->'ingredients' @> ${JSON.stringify([{ storageLocationId }])}::jsonb`));
   const draws = await reader.select({ wet: productionRunFeedstockDraws.wetMassKg })

@@ -1,7 +1,7 @@
 import { beforeAll, expect, it } from 'vitest';
 import { eq } from 'drizzle-orm';
 import { db } from '@/db';
-import { applications, biocharProducts, creditBatches, feedstocks, productionRuns, samples, storageLocations } from '@/db/schema';
+import { applications, applicationOutputAllocations, creditBatchApplications, biocharProducts, creditBatches, feedstocks, productionRuns, samples, storageLocations } from '@/db/schema';
 import { updateFeedstockInTransaction } from '@/data-access/feedstocks';
 import { updateProductionRun } from '@/data-access/production-runs/mutations';
 import { updateSample } from '@/data-access/samples';
@@ -40,4 +40,21 @@ it.each(['none', 'removal'] as const)('existing notes and codes save In use and 
     const version = blocking === 'none' ? product.version + 1 : product.version;
     await expect(updateBiocharProduct(ctx, product.id, { expectedVersion: version, massKg: 1 })).rejects.toMatchObject({ code: 'certification_locked' });
   }, blocking);
+});
+
+
+it('accepts unchanged 0.125005 t with a free reference edit on an In use application', async () => {
+  await withLineageFixture(async f => {
+    const ctx = makeTestOrgContext();
+    const [application] = await db.update(applications).set({ biocharAppliedTons: 0.125005, biocharAppliedDryTons: 0.118755 }).where(eq(applications.id, f.applicationId)).returning();
+    await db.update(applicationOutputAllocations).set({ wetMassKg: '125.005', dryMassKg: '118.755' }).where(eq(applicationOutputAllocations.applicationId, application.id));
+    await db.update(creditBatchApplications).set({ allocatedWetMassKg: 125.005, allocatedDryMassKg: 118.755 }).where(eq(creditBatchApplications.applicationId, application.id));
+    await expect(runOperationInProcess(updateApplication, ctx, { applicationId: application.id, expectedVersion: application.version,
+      appliedWetMassKg: 125.005, code: `${application.code}-EDIT` })).resolves.toBeDefined();
+    const [saved] = await db.select().from(applications).where(eq(applications.id, application.id));
+    expect(saved.biocharAppliedTons).toBe(0.125005);
+    expect(saved.code).toBe(`${application.code}-EDIT`);
+    await expect(runOperationInProcess(updateApplication, ctx, { applicationId: saved.id, expectedVersion: saved.version,
+      appliedWetMassKg: 125.006 })).rejects.toMatchObject({ code: 'certification_locked' });
+  }, 'none');
 });

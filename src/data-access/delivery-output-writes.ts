@@ -1,5 +1,5 @@
 import { readRecordDependents } from './record-lock-dependents';
-import { assertRecordLockFields } from '@/lib/record-lock-fields';
+import { assertRecordLockFields, recordFieldEqual } from '@/lib/record-lock-fields';
 import { recordLocks } from '@/lib/record-lock';
 import type { CaptureActivity } from "@/lib/activity-changes";
 import { deliveryDistanceSnapshot } from "./delivery-distance-snapshot";
@@ -207,7 +207,7 @@ export async function updateDeliveryInTransaction(ctx: OrgContext, tx: DbTransac
     const reversedIds = new Set(rows.filter(r => r.movement.outputKind === 'reversal').map(r => r.movement.correctsMovementId));
     const current = rows.filter(r => r.movement.outputKind !== 'reversal' && !reversedIds.has(r.movement.id))
       .sort((a, b) => a.movement.postingSequence > b.movement.postingSequence ? -1 : 1)[0]?.movement;
-    const massChanged = data.deliveredWetMassKg !== undefined && data.deliveredWetMassKg !== existing.deliveredWetMassKg;
+    const massChanged = data.deliveredWetMassKg !== undefined && !recordFieldEqual('deliveredWetMassKg', existing.deliveredWetMassKg, data.deliveredWetMassKg);
     const moistureChanged = data.moistureContentPercent !== undefined && data.moistureContentPercent !== existing.moistureContentPercent;
     let savedProducts: BiocharProductRecord[] = [];
     const sourcesChanged = data.sources !== undefined && JSON.stringify(data.sources) !== JSON.stringify(current?.inputSnapshot?.sources);

@@ -23,6 +23,7 @@ import {
   and,
   eq,
   inArray,
+  isNull,
   ne,
   sql,
 } from "drizzle-orm";
@@ -169,7 +170,7 @@ export async function deriveLaneStock(
           sql`true`,
         )
         .where(and(
-          eq(biocharProducts.organizationId, ctx.organizationId),
+          eq(biocharProducts.organizationId, ctx.organizationId), isNull(biocharProducts.archivedAt),
           inArray(
             sql<string>`ingredient.value ->> 'storageLocationId'`,
             options.storageLocationIds,

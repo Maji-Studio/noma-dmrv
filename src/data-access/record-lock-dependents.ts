@@ -1,4 +1,5 @@
-import { and, eq, isNotNull } from "drizzle-orm";
+import { activeOutputMovement, deletedProductIds } from './output-stock-active-movements';
+import { and, eq, isNotNull, notInArray } from "drizzle-orm";
 import type { DbTransaction } from "@/db";
 import { applications, biocharProductSourceAllocations, creditBatchApplications, creditBatchProductionRuns, deliveries, outputStockAllocations, productionRunFeedstocks, samples, outputStockRunAllocations, binMovements, productionRuns, biocharProducts } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
@@ -19,12 +20,13 @@ export async function readRecordDependents(ctx: OrgContext, tx: Pick<DbTransacti
     }
     case "productionRun": {
       const rows = await tx.select({ id: biocharProductSourceAllocations.biocharProductId }).from(biocharProductSourceAllocations)
-        .where(and(eq(biocharProductSourceAllocations.organizationId, ctx.organizationId), eq(biocharProductSourceAllocations.productionRunId, id)));
+        .where(and(eq(biocharProductSourceAllocations.organizationId, ctx.organizationId), eq(biocharProductSourceAllocations.productionRunId, id), notInArray(biocharProductSourceAllocations.biocharProductId, deletedProductIds(ctx, tx))));
       const batches = await tx.select({ id: creditBatchProductionRuns.creditBatchId }).from(creditBatchProductionRuns)
         .where(and(eq(creditBatchProductionRuns.organizationId, ctx.organizationId), eq(creditBatchProductionRuns.productionRunId, id)));
       const effects = await tx.select({ id: outputStockAllocations.movementId }).from(outputStockRunAllocations)
         .innerJoin(outputStockAllocations, and(eq(outputStockAllocations.organizationId, ctx.organizationId), eq(outputStockAllocations.id, outputStockRunAllocations.allocationId)))
-        .where(and(eq(outputStockRunAllocations.organizationId, ctx.organizationId), eq(outputStockRunAllocations.productionRunId, id)));
+        .innerJoin(binMovements, and(eq(binMovements.organizationId, ctx.organizationId), eq(binMovements.id, outputStockAllocations.movementId)))
+        .where(and(eq(outputStockRunAllocations.organizationId, ctx.organizationId), eq(outputStockRunAllocations.productionRunId, id), activeOutputMovement(ctx, tx)));
       const [run] = await tx.select().from(productionRuns).where(and(eq(productionRuns.organizationId, ctx.organizationId), eq(productionRuns.id, id)));
       const movements = !run?.biocharStorageLocationId ? [] : await tx.select().from(binMovements)
         .where(and(eq(binMovements.organizationId, ctx.organizationId), eq(binMovements.storageLocationId, run.biocharStorageLocationId)));
@@ -35,7 +37,8 @@ export async function readRecordDependents(ctx: OrgContext, tx: Pick<DbTransacti
     }
     case "biocharProduct": {
       const rows = await tx.select({ id: outputStockAllocations.movementId }).from(outputStockAllocations)
-        .where(and(eq(outputStockAllocations.organizationId, ctx.organizationId), eq(outputStockAllocations.biocharProductId, id)));
+        .innerJoin(binMovements, and(eq(binMovements.organizationId, ctx.organizationId), eq(binMovements.id, outputStockAllocations.movementId)))
+        .where(and(eq(outputStockAllocations.organizationId, ctx.organizationId), eq(outputStockAllocations.biocharProductId, id), activeOutputMovement(ctx, tx)));
       const [product] = await tx.select().from(biocharProducts).where(and(eq(biocharProducts.organizationId, ctx.organizationId), eq(biocharProducts.id, id)));
       const movements = !product?.storageLocationId ? [] : await tx.select().from(binMovements).where(and(eq(binMovements.organizationId, ctx.organizationId), eq(binMovements.storageLocationId, product.storageLocationId)));
       const counts = movements.filter(movement => isCountMovement(movement) && product!.createdAt <= movement.createdAt && movement.occurredAt && product!.placedAt <= movement.occurredAt);
