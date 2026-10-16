@@ -5,11 +5,24 @@ export const STORAGE_GET_OBJECT_TIMEOUT_MS = 30_000;
 /** Fallback when a stored object carries no content type of its own. */
 export const BINARY_CONTENT_TYPE = "application/octet-stream";
 
-export async function fetchStoredObject(url: string): Promise<StoredObject> {
+export async function fetchStoredObject(
+  url: string,
+  timeoutMs = STORAGE_GET_OBJECT_TIMEOUT_MS,
+): Promise<StoredObject> {
+  if (
+    !Number.isInteger(timeoutMs) ||
+    timeoutMs <= 0 ||
+    timeoutMs > STORAGE_GET_OBJECT_TIMEOUT_MS
+  ) {
+    throw new RangeError(
+      `Storage getObject timeout must be an integer between 1 and ${STORAGE_GET_OBJECT_TIMEOUT_MS} ms`,
+    );
+  }
+
   const controller = new AbortController();
   const timer = setTimeout(
     () => controller.abort(),
-    STORAGE_GET_OBJECT_TIMEOUT_MS,
+    timeoutMs,
   );
 
   try {

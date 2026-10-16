@@ -93,9 +93,9 @@ export class S3CompatibleProvider implements StorageProvider {
     return getSignedUrl(this.client, cmd, { expiresIn: ttl });
   }
 
-  async getObject(args: GetObjectArgs): Promise<StoredObject> {
+  async getObject(args: GetObjectArgs, timeoutMs?: number): Promise<StoredObject> {
     const url = await this.createDownloadUrl(args);
-    return fetchStoredObject(url);
+    return fetchStoredObject(url, timeoutMs);
   }
 
   async readObjectBounded(args: ReadObjectBoundedArgs) {
