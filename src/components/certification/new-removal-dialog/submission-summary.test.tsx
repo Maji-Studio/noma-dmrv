@@ -129,9 +129,10 @@ describe("SubmissionSummary", () => {
       } as unknown as RemovalCompilationView,
     });
     expect(html).toContain("Choose a Removal template for this credit batch.");
-    expect(html).toContain("Review credit batches");
+    expect(html).toContain("Switch template");
     expect(html).toContain("Record Sample moisture");
-    expect(html.split("Review credit batches")).toHaveLength(2);
+    expect(html.split("Switch template")).toHaveLength(2);
+    expect(html).not.toContain("#batch-details");
     expect(html).not.toContain("Review template lines");
   });
 

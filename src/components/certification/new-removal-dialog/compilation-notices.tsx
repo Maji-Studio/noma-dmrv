@@ -54,16 +54,18 @@ export function CompilationWarnings({
 
 interface FindingListProps {
   facilityId: string;
+  /** Ids of the Removal's credit batches; one batch makes batch-level links land on it. */
+  memberBatchIds?: readonly string[];
 }
 
 /** The finding's one repair destination, or nothing when it has none. */
-function FindingFixLink({ finding, facilityId }: { finding: Pick<RemovalBlocker, "fixTarget">; facilityId: string }) {
-  const fix = removalFindingFixLink(finding, facilityId);
+function FindingFixLink({ finding, facilityId, memberBatchIds }: { finding: Pick<RemovalBlocker, "fixTarget"> } & FindingListProps) {
+  const fix = removalFindingFixLink(finding, facilityId, memberBatchIds);
   if (!fix) return null;
   return (
     <Link
       href={fix.href}
-      className="body-caption font-medium text-[var(--color-interaction)] underline-offset-2 hover:underline"
+      className="inline-flex min-h-44 items-center body-caption font-medium text-[var(--color-interaction)] underline-offset-2 hover:underline"
     >
       {fix.label}
     </Link>
@@ -71,15 +73,15 @@ function FindingFixLink({ finding, facilityId }: { finding: Pick<RemovalBlocker,
 }
 
 /** Blockers stop submission. Each names the affected line where it has one and links to its fix. */
-export function RemovalBlockerList({ blockers, facilityId }: FindingListProps & { blockers: RemovalBlocker[] }) {
+export function RemovalBlockerList({ blockers, facilityId, memberBatchIds }: FindingListProps & { blockers: RemovalBlocker[] }) {
   if (blockers.length === 0) return null;
   return (
     <Notice tone="error">
-      <ul className="flex flex-col gap-8">
+      <ul role="list" className="flex flex-col gap-8">
         {blockers.map((blocker) => (
           <li key={`${blocker.code}:${blocker.lineRef?.componentId ?? ""}:${blocker.message}`} className="flex flex-col gap-2">
             <span><MultilineDetail>{removalLineBlockerMessage(blocker)}</MultilineDetail></span>
-            <FindingFixLink finding={blocker} facilityId={facilityId} />
+            <FindingFixLink finding={blocker} facilityId={facilityId} memberBatchIds={memberBatchIds} />
           </li>
         ))}
       </ul>
@@ -88,14 +90,14 @@ export function RemovalBlockerList({ blockers, facilityId }: FindingListProps & 
 }
 
 /** Advisories never block. They render as plain list items for a warning Notice. */
-export function RemovalAdvisoryList({ advisories, facilityId }: FindingListProps & { advisories: RemovalAdvisory[] }) {
+export function RemovalAdvisoryList({ advisories, facilityId, memberBatchIds }: FindingListProps & { advisories: RemovalAdvisory[] }) {
   if (advisories.length === 0) return null;
   return (
-    <ul className="flex flex-col gap-8 body-small text-[var(--color-text-secondary)]">
+    <ul role="list" className="flex flex-col gap-8 body-small text-[var(--color-text-secondary)]">
       {advisories.map((advisory) => (
         <li key={`${advisory.code}:${advisory.message}`} className="flex flex-col gap-2">
           <span>{advisory.message}</span>
-          <FindingFixLink finding={advisory} facilityId={facilityId} />
+          <FindingFixLink finding={advisory} facilityId={facilityId} memberBatchIds={memberBatchIds} />
         </li>
       ))}
     </ul>

@@ -128,6 +128,7 @@ export function SubmissionSummary({
 }: SubmissionSummaryProps) {
   const facts = buildSubmissionFacts(factsInput);
   const { checks } = factsInput;
+  const memberBatchIds = facts.batches.map((batch) => batch.id);
   const environment = facts.isProduction ? "production" : "sandbox";
   const externalProjectId = factsInput.ctx.mapping?.externalProjectId ?? null;
   const externalFacilityId = factsInput.ctx.mapping?.externalFacilityId ?? null;
@@ -171,7 +172,7 @@ export function SubmissionSummary({
         </div>
       </div>
 
-      <RemovalBlockerList blockers={facts.blockerItems} facilityId={facilityId} />
+      <RemovalBlockerList blockers={facts.blockerItems} facilityId={facilityId} memberBatchIds={memberBatchIds} />
 
       <DerivedHeadline
         label={
@@ -275,7 +276,7 @@ export function SubmissionSummary({
       {(facts.advisories.length > 0 || facts.warnings.length > 0) && (
         <Notice tone="warning" title="Submission notes">
           <div className="flex flex-col gap-8">
-            <RemovalAdvisoryList advisories={facts.advisories} facilityId={facilityId} />
+            <RemovalAdvisoryList advisories={facts.advisories} facilityId={facilityId} memberBatchIds={memberBatchIds} />
             <CompilationWarnings warnings={facts.warnings} />
           </div>
         </Notice>
