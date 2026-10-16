@@ -21,6 +21,7 @@ import { type ReactNode, useEffect, useRef } from "react";
 import { Dialog } from "@base-ui/react/dialog";
 import { cn } from "@/lib/utils";
 import { FormDialogContext } from "@/components/ui/form-dialog-context";
+import { RequirednessLegendContext } from "@/components/forms/requiredness-legend-context";
 import { SideSheetActionsContext } from "@/components/ui/entity-side-sheet/side-sheet-context";
 
 /**
@@ -184,7 +185,10 @@ export function Modal({
               navigate the sheet underneath. */}
           <SideSheetActionsContext.Provider value={null}>
             <FormDialogContext.Provider value={null}>
-              <div className={contentClassName}>{children}</div>
+              {/* Same barrier: a dialog's CERT chips never light the sheet's legend. */}
+              <RequirednessLegendContext.Provider value={null}>
+                <div className={contentClassName}>{children}</div>
+              </RequirednessLegendContext.Provider>
             </FormDialogContext.Provider>
           </SideSheetActionsContext.Provider>
         </Dialog.Popup>

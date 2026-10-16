@@ -11,6 +11,10 @@ import {
   type CertFieldStatus,
 } from "@/components/ui/certification-field-tag";
 import { cn } from "@/lib/utils";
+import { RequirednessLegendSource } from "./requiredness-legend-context";
+
+/** What the red asterisk says to assistive tech; the sheet legend reuses it. */
+export const REQUIRED_FIELD_TEXT = "Required";
 
 /**
  * Room the control keeps at its end for a `unit` suffix: the unit's own width
@@ -208,7 +212,7 @@ export function FormField({
         {required && (
           <>
             <span className="text-[var(--color-signal-red)] ml-2" aria-hidden="true">*</span>
-            <span className="sr-only">Required</span>
+            <span className="sr-only">{REQUIRED_FIELD_TEXT}</span>
           </>
         )}
       </label>
@@ -216,6 +220,7 @@ export function FormField({
         // The 24px row centres the CERT chip on the ⓘ's line.
         <span className="inline-flex min-h-24 items-center">
           <CertificationFieldTag status={certifyStatus} descriptionId={certId} />
+          <RequirednessLegendSource />
         </span>
       )}
       {hasExplanation && (

@@ -14,6 +14,8 @@
 
 import * as React from "react";
 import { FormDetailProvider, FormDetailControl } from "@/components/forms/form-detail-context";
+import { RequirednessLegendProvider } from "@/components/forms/requiredness-legend-context";
+import { RequirednessLegendHint } from "@/components/forms/requiredness-legend";
 import { SlideOverPanel } from "@/components/ui/slide-over-panel";
 import { Button } from "@/components/ui/button";
 import { DiscardChangesDialog } from "@/components/ui/discard-changes-dialog";
@@ -209,6 +211,7 @@ function EntitySideSheet({
     || (detailToggle === "form" && !isViewMode);
   return (
     <FormDetailProvider scope={`${open}:${mode}:${detailScope}`} enabled={showDetailToggle}>
+    <RequirednessLegendProvider>
     <SlideOverPanel.Root open={open} onOpenChange={handleOpenChange}>
       <SlideOverPanel.Content size={size}>
         {/* Header */}
@@ -227,7 +230,10 @@ function EntitySideSheet({
               </Button>
             )}
             <div className="flex flex-col gap-4 min-w-0">
-              <SlideOverPanel.Title>{title}</SlideOverPanel.Title>
+              <div className="flex min-w-0 items-start gap-6">
+                <SlideOverPanel.Title className="min-w-0">{title}</SlideOverPanel.Title>
+                <RequirednessLegendHint />
+              </div>
               {subtitle && (
                 <SlideOverPanel.Description className={showDetailToggle ? "truncate" : undefined}>
                   {subtitle}
@@ -296,6 +302,7 @@ function EntitySideSheet({
         />
       </SlideOverPanel.Content>
     </SlideOverPanel.Root>
+    </RequirednessLegendProvider>
     </FormDetailProvider>
   );
 }

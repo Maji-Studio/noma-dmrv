@@ -16,6 +16,7 @@
 
 import { CompositionCard } from "@/components/forms/composition-card";
 import { DerivedHeadline } from "@/components/forms/derived-headline";
+import { RequirednessLegendSource } from "@/components/forms/requiredness-legend-context";
 import { CertificationFieldTag } from "@/components/ui/certification-field-tag";
 import type { CertFieldStatus } from "@/components/ui/certification-field-tag";
 import { MISSING_VALUE } from "@/lib/copy-utils";
@@ -35,7 +36,12 @@ function DerivedRatio({ label, value, certifyRequired, certifyStatus }: {
     <DerivedHeadline
       label={<span className="flex min-h-24 items-center gap-8">
         <span>{label}</span>
-        {certifyRequired && <CertificationFieldTag status={certifyStatus} />}
+        {certifyRequired && (
+          <>
+            <CertificationFieldTag status={certifyStatus} />
+            <RequirednessLegendSource />
+          </>
+        )}
       </span>}
       value={value == null ? null : formatRatio(value)}
     />

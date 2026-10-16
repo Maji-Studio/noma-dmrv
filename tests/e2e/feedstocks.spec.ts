@@ -281,7 +281,7 @@ test.describe("Feedstock UI CRUD", () => {
     ).toHaveCount(0);
   });
 
-  test("explains the CERT chip once in the sheet header and on hover", async ({
+  test("explains the CERT chip on hover, with the legend in the create header only", async ({
     adminPage: page,
     seededData,
   }) => {
@@ -295,6 +295,13 @@ test.describe("Feedstock UI CRUD", () => {
     const seals = dialog.locator("[data-cert-field]");
     await expect(seals.first()).toBeVisible();
 
+    // The sheet header carries one requiredness legend while the form shows
+    // CERT chips, and none in the read view of the same record.
+    const legend = dialog.getByRole("button", {
+      name: "What the red asterisk and CERT chip mean",
+    });
+    await expect(legend).toBeVisible();
+
     // Each chip carries the same explanation as an sr-only string; hovering a
     // chip mounts a tooltip with it. The tooltip portals to <body>, so count
     // page-wide matches.
@@ -302,6 +309,18 @@ test.describe("Feedstock UI CRUD", () => {
     const beforeHover = await explanationOnPage.count();
     await seals.first().hover();
     await expect(explanationOnPage).toHaveCount(beforeHover + 1);
+
+    // Read view of a record: no form chips, so no legend.
+    await page.keyboard.press("Escape");
+    await waitForSideSheetClose(page);
+    await page
+      .locator("table tbody tr", { hasText: seededData.feedstock.code })
+      .first()
+      .click();
+    await waitForSideSheet(page);
+    await expect(
+      dialog.getByRole("button", { name: "What the red asterisk and CERT chip mean" }),
+    ).toHaveCount(0);
   });
 
   test("the ⓘ opens on a click, closes on a second click and on Escape, and never focuses the field", async ({
@@ -315,7 +334,8 @@ test.describe("Feedstock UI CRUD", () => {
     await waitForSideSheet(page);
 
     const dialog = page.locator('[role="dialog"]');
-    const trigger = dialog.locator("[data-toggletip-trigger]").first();
+    // A field label's ⓘ, not the sheet header's legend.
+    const trigger = dialog.locator('[data-toggletip-trigger][aria-label^="More about"]').first();
     await expect(trigger).toBeVisible();
     // The explanation is the trigger's description: a FormField ⓘ points at
     // the field's screen-reader copy, any other ⓘ carries aria-description.

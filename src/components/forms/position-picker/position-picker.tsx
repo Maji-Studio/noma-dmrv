@@ -15,7 +15,7 @@
 
 import dynamic from "next/dynamic";
 import { useState } from "react";
-import { FormField } from "@/components/forms/form-field";
+import { FormField, REQUIRED_FIELD_TEXT } from "@/components/forms/form-field";
 import { FormInput } from "@/components/forms/form-input";
 import { InfoHint } from "@/components/ui/tooltip";
 import { GEOCODE_DEBOUNCE_MS } from "@/config/geo";
@@ -152,7 +152,7 @@ export function PositionPicker({
               <span className="text-[var(--color-signal-red)] ml-2" aria-hidden="true">
                 *
               </span>
-              <span className="sr-only">Required</span>
+              <span className="sr-only">{REQUIRED_FIELD_TEXT}</span>
             </>
           )}
         </span>

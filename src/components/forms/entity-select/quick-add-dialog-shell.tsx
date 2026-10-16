@@ -9,6 +9,8 @@
 import { useId, type SyntheticEvent } from "react";
 import type { ModalWidth } from "@/components/ui/modal";
 import { FormDialog } from "@/components/ui/form-dialog";
+import { RequirednessLegendProvider } from "@/components/forms/requiredness-legend-context";
+import { RequirednessLegendHint } from "@/components/forms/requiredness-legend";
 
 /**
  * A dialog renders through a portal but still sits inside the entry form in
@@ -60,12 +62,15 @@ export function QuickAddDialogShell({
       // own all spacing here.
       contentClassName=""
     >
+      <RequirednessLegendProvider>
       <div className="flex flex-col" data-testid={testId}>
-        {/* Header */}
-        <div className="flex flex-col gap-4 p-24 border-b border-[var(--color-border-primary)]">
-          <h2 id={titleId} className="title-heading-3">
+        {/* Header. The right padding keeps the title clear of Modal's close
+            button (top-16 right-16, 32px wide). */}
+        <div className="flex items-start gap-6 p-24 pr-48 border-b border-[var(--color-border-primary)]">
+          <h2 id={titleId} className="title-heading-3 min-w-0">
             {title}
           </h2>
+          <RequirednessLegendHint />
         </div>
 
         {/* Form content */}
@@ -73,6 +78,7 @@ export function QuickAddDialogShell({
           {children}
         </div>
       </div>
+      </RequirednessLegendProvider>
     </FormDialog>
   );
 }

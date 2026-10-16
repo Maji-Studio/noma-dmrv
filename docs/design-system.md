@@ -256,8 +256,11 @@ caption.
   certification carries a "CERT" chip on its label row
   (`CertificationFieldTag`): neutral when no record is saved, orange with a
   warning mark when the saved record lacks it, green with a check when it has
-  it. It shows in Simple and Detailed alike. There is no sheet legend: the
-  chip explains itself through its tooltip and screen-reader text.
+  it. It shows in Simple and Detailed alike. The chip explains itself
+  through its tooltip and screen-reader text, and the sheet or dialog header carries one
+  requiredness legend ⓘ beside the title on forms that show CERT chips: red
+  asterisk blocks saving, CERT chip blocks certification (Kenji, 2026-10-16,
+  reversing the 2026-09-30 call; see [forms.md](./forms.md#cert-chip-status)).
 - **Spacing, one rhythm per level:** the form `space-y-20` between sections,
   `FormSection` `space-y-16` inside one ([forms.md](./forms.md#vertical-rhythm)),
   derived blocks `gap-12` between their parts, key lines and captions

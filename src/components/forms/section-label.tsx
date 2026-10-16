@@ -15,6 +15,7 @@ import {
   CertificationFieldTag,
   type CertFieldStatus,
 } from "@/components/ui/certification-field-tag";
+import { RequirednessLegendSource } from "./requiredness-legend-context";
 
 export function SectionLabel({
   children,
@@ -40,7 +41,12 @@ export function SectionLabel({
         </span>
       )}
       {children}
-      {certifyRequired && <CertificationFieldTag status={certifyStatus} />}
+      {certifyRequired && (
+        <>
+          <CertificationFieldTag status={certifyStatus} />
+          <RequirednessLegendSource />
+        </>
+      )}
       {hint != null && <InfoHint side="top">{hint}</InfoHint>}
     </h3>
   );
