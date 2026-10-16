@@ -7,7 +7,7 @@
  */
 "use client";
 
-// No mounted operator entry point. The retained-file workflow is described in docs/architecture.md.
+// Retained non-MVP seam (#942 q25, #1014): current consumer is the seed importer (src/lib/cli/seed/readings.ts); no mounted operator entry point. See docs/architecture.md#production-run-extensions.
 
 import { useState } from "react";
 import { TrashIcon } from "@phosphor-icons/react/dist/ssr";
@@ -23,7 +23,6 @@ import { TableSkeleton } from "@/components/ui/loading-skeleton";
 import { useToast } from "@/components/ui/toast";
 import { formatFacilityDateTimeWithOffset } from "@/lib/format-utils";
 import { MISSING_VALUE } from "@/lib/copy-utils";
-import { PRODUCTION_RUN_READINGS_LIMIT } from "@/config/production-run-readings";
 
 const TABLE_MAX_HEIGHT_CLASS = "max-h-[420px]";
 const COMPACT_TABLE_MAX_HEIGHT_CLASS = "max-h-[240px]";
@@ -65,8 +64,8 @@ export function ProductionRunReadingTable({
 
   const [confirmingDeleteAll, setConfirmingDeleteAll] = useState(false);
 
-  const readings = data?.readings.slice(0, PRODUCTION_RUN_READINGS_LIMIT) ?? [];
-  const truncated = data?.truncated || (data?.readings.length ?? 0) > PRODUCTION_RUN_READINGS_LIMIT;
+  const readings = data?.readings ?? [];
+  const truncated = data?.truncated ?? false;
   const readingCount = readings.length;
 
   if (!isLoading && !error && readingCount === 0) {

@@ -87,10 +87,10 @@ describe("ProductionRunReadingTable", () => {
     expect(html).not.toContain("Older readings are not shown.");
   });
 
-  it.each([false, true])("caps rendered rows and explains omitted readings (server truncated: %s)", (truncated) => {
-    readingState.truncated = truncated;
+  it("renders the bounded server preview and explains omitted readings", () => {
+    readingState.truncated = true;
     readingState.readings = Array.from({
-      length: PRODUCTION_RUN_READINGS_LIMIT + (truncated ? 0 : 1),
+      length: PRODUCTION_RUN_READINGS_LIMIT,
     }, (_, index) => ({
       id: `reading-${index}`,
       timestamp: new Date("2026-07-21T08:00:00Z"),

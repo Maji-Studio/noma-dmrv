@@ -10,7 +10,6 @@ import {
   getProductionRunReadingsListFn,
   deleteAllProductionRunReadingsFn,
 } from "@/fn/production-run-readings";
-import { productionRunKeys } from "@/hooks/use-production-runs";
 import { invalidateCertificationReadiness } from "@/hooks/use-certification";
 import { unwrap, type MutationCallbacks } from "./types";
 
@@ -70,10 +69,6 @@ export function useDeleteAllProductionRunReadings(
     onSuccess: async (deletedCount, productionRunId) => {
       queryClient.invalidateQueries({
         queryKey: productionRunReadingKeys.lists(),
-      });
-      // Also refresh the inline readings cache keyed under production runs.
-      queryClient.invalidateQueries({
-        queryKey: productionRunKeys.readings(productionRunId),
       });
       invalidateCertificationReadiness(queryClient);
       await callbacks?.onSuccess?.(deletedCount, productionRunId);

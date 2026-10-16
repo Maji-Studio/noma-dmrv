@@ -621,6 +621,7 @@ The operator UI does not inspect the CSV or import row-level
 `production_run_readings`. Stored files remain openable through the authorized
 `/api/documents/{id}` route and its signed-download flow. The legacy row importer remains separate from this operator workflow.
 There is no reactor time-series upload ([ADR 0006](./adr/0006-data-upload-submission-idempotency.md)).
+Per #942 q25 and #1014, the seed importer (`src/lib/cli/seed/readings.ts:seedReadings`) is the current consumer of the retained row importer; the importer and table are non-MVP seams with no mounted operator entry point.
 
 The separate `getProductionRunReadingsList` preview returns at most
 `PRODUCTION_RUN_READINGS_LIMIT` rows (500), ordered by timestamp then ID descending,

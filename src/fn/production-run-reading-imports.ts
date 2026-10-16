@@ -1,6 +1,6 @@
 "use server";
 
-// No mounted operator entry point. The retained-file workflow is described in docs/architecture.md.
+// Retained non-MVP seam (#942 q25, #1014): current consumer is the seed importer (src/lib/cli/seed/readings.ts); no mounted operator entry point. See docs/architecture.md#production-run-extensions.
 
 import { getStorageProvider } from "@/lib/storage";
 import { StorageError } from "@/lib/storage/types";
