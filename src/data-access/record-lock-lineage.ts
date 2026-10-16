@@ -1,13 +1,20 @@
 import { and, eq, inArray } from "drizzle-orm";
-import type { DbTransaction } from "@/db";
+import { db, type DbTransaction } from "@/db";
 import { certificationSubmissions, certifierGhgStatements, certifierRemovals } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import { getMetadataValue } from "@/lib/certification/submission-metadata";
-import { getGhgStatement } from "@/lib/isometric/ghg-statements";
+import { getTransactionDeadline } from "@/lib/db/transaction-deadline";
+import { getGhgStatement, type GhgStatement } from "@/lib/isometric/ghg-statements";
 import { isLockedInFlight } from "@/lib/isometric/utils/lock";
 import { REMOVAL_SCOPED_SUBMISSION_TYPES } from "@/lib/isometric/utils/constants";
 import { isSentRemoval, isTerminalAttemptStatus, submissionHasRemoteEffect, type RecordLockRemoval, type RecordLockStatement } from "@/lib/record-lock";
 import { requireOrgScope } from "./utils";
+
+const STATEMENT_REFRESH_TIMEOUT_MS = 1_000;
+const TRANSACTION_FINISH_RESERVE_MS = 100;
+type StatementReads = Map<string, Promise<GhgStatement>>;
+// Transaction objects are short lived. Never retain fresh facts on the shared DB reader.
+const transactionStatementReads = new WeakMap<object, StatementReads>();
 
 type Removal = { removalId: string; ghgStatementId: string | null };
 type Submission = typeof certificationSubmissions.$inferSelect;
@@ -36,7 +43,12 @@ export async function readRecordLockLineage(ctx: OrgContext, tx: Pick<DbTransact
     eq(certificationSubmissions.localEntityType, "ghgStatement"),
     eq(certificationSubmissions.submissionType, "ghg_statement"),
   ));
-  const statementFacts = new Map<string, Promise<RecordLockStatement>>();
+  const labels = await tx.select({ id: certifierRemovals.id, startedOn: certifierRemovals.startedOn, completedOn: certifierRemovals.completedOn })
+    .from(certifierRemovals).where(and(eq(certifierRemovals.organizationId, ctx.organizationId), inArray(certifierRemovals.id, ids)));
+  const labelsById = new Map(labels.map(row => [row.id, row.startedOn && row.completedOn ? `${row.startedOn} to ${row.completedOn}` : undefined]));
+  const reads = (tx !== db && transactionStatementReads.get(tx)) || new Map<string, Promise<GhgStatement>>();
+  if (tx !== db) transactionStatementReads.set(tx, reads);
+  const busyStatements = new Set(statementRows.filter(row => isLockedInFlight(row) || !isTerminalAttemptStatus(row.status)).map(row => row.localEntityId));
   return Promise.all(ids.map(async id => {
     const submissions = removalRows.filter(row => row.localEntityId === id);
     const externalIds = new Set(submissions.map(row => row.externalId).filter(Boolean));
@@ -48,16 +60,13 @@ export async function readRecordLockLineage(ctx: OrgContext, tx: Pick<DbTransact
       return currentIds.has(row.localEntityId) || (Array.isArray(members) && members.some(member => externalIds.has(member)));
     });
     const canRefresh = fresh && !submissions.some(row => isLockedInFlight(row) || !isTerminalAttemptStatus(row.status));
-    return { id, submissions: submissions.map(submissionFact),
-      statements: await Promise.all(covering.map(row => {
-        const key = `${row.id}:${canRefresh}`;
-        if (!statementFacts.has(key)) statementFacts.set(key, readStatement(ctx, tx, row, canRefresh));
-        return statementFacts.get(key)!;
-      })) };
+    return { id, label: labelsById.get(id), submissions: submissions.map(submissionFact),
+      statements: await Promise.all(covering.map(row => readStatement(ctx, tx, row, canRefresh && !busyStatements.has(row.localEntityId), reads))) };
+
   }));
 }
 
-async function readStatement(ctx: OrgContext, tx: Pick<DbTransaction, "select">, row: Submission, fresh: boolean): Promise<RecordLockStatement> {
+async function readStatement(ctx: OrgContext, tx: Pick<DbTransaction, "select">, row: Submission, fresh: boolean, reads: StatementReads): Promise<RecordLockStatement> {
   const savedStatus = getMetadataValue(row.metadata, "remoteStatus");
   const savedSubmitted = getMetadataValue(row.metadata, "submittedToVerifierAt");
   const fact: RecordLockStatement = { id: row.localEntityId,
@@ -66,10 +75,22 @@ async function readStatement(ctx: OrgContext, tx: Pick<DbTransaction, "select">,
     removalExternalIds: Array.isArray(getMetadataValue(row.metadata, "removalIds")) ? getMetadataValue(row.metadata, "removalIds") as string[] : [],
     inFlight: isLockedInFlight(row) || !isTerminalAttemptStatus(row.status),
   };
-  if (!fresh || !row.externalId || fact.inFlight) return fact;
+  const canReopen = savedStatus === "FAILED_VERIFICATION" || (savedStatus === "DRAFT" && fact.submittedToVerifier);
+  if (!fresh || !row.externalId || fact.inFlight || !canReopen) return fact;
   try {
     const { resolveIsometricClient } = await import("./certifier-credentials");
-    const remote = await getGhgStatement(await resolveIsometricClient(ctx, tx), row.externalId);
+    const key = `${ctx.organizationId}:${row.externalId}`;
+    if (!reads.has(key)) {
+      reads.set(key, (async () => {
+        const client = await resolveIsometricClient(ctx, tx);
+        const deadline = getTransactionDeadline(tx);
+        const timeoutMs = Math.min(STATEMENT_REFRESH_TIMEOUT_MS,
+          deadline === undefined ? STATEMENT_REFRESH_TIMEOUT_MS : deadline - Date.now() - TRANSACTION_FINISH_RESERVE_MS);
+        if (timeoutMs <= 0) throw new Error("No statement refresh budget remains");
+        return getGhgStatement(client, row.externalId!, { signal: AbortSignal.timeout(timeoutMs) });
+      })());
+    }
+    const remote = await reads.get(key)!;
     return { ...fact, status: remote.status, fresh: true,
       // REST has no return timestamp. A verifier submission is a conservative
       // lower bound for its subsequent return, never the time of this read.

@@ -20,10 +20,20 @@ Deferred work lives here, never as a `TODO` in code.
 - `src/data-access/record-lock-lineage.ts:readRecordLockLineage`: Isometric exposes
   submission times but no return timestamp. Keep the conservative submission-time
   lower bound until authoritative return evidence is available (`needs-registry-check`).
-- Independent guards in `src/data-access/reactors.ts`, `formulations.ts`,
-  `vehicles.ts`, `drivers.ts`, `document-write-scope.ts` and
-  `certifier-removal-deletion.ts` retain their own rules. Review conversion separately
+- Independent guards in `src/data-access/reactors.ts:updateReactor`,
+  `src/data-access/formulations.ts:updateFormulation`,
+  `src/data-access/vehicles.ts:updateVehicle`, `src/data-access/drivers.ts:updateDriver`,
+  `src/data-access/document-write-scope.ts:ownerHasSubmittedLineage` and
+  `src/data-access/certifier-removal-deletion.ts:claimRemovalDeletion` retain their own rules. Review conversion separately
   from the operational record-lock predicate.
+
+- `src/data-access/record-lock-lineage.ts:readStatement`: read Certify GraphQL
+  `GhgStatement.submissions` when a client is available (#737,
+  `needs-registry-check`). Certify-only submissions returned to DRAFT without a
+  REST or saved submission timestamp stay Sent until that history can be proved.
+- `src/data-access/output-stock-history.ts:getOutputStockHistory`: batch the
+  per-entry correction-dependency reads so opening history does not repeatedly
+  fetch later movements from the same bin.
 
 ## Activity recording gaps (`activity/deferred-writers`) - **deferred**
 

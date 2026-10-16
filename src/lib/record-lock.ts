@@ -52,6 +52,7 @@ export interface RecordLockStatement {
 
 export interface RecordLockRemoval {
   id: string;
+  label?: string;
   submissions: readonly RecordLockSubmission[];
   statements: readonly RecordLockStatement[];
 }
@@ -88,7 +89,7 @@ export function isSentRemoval(removal: RecordLockRemoval): boolean {
 }
 
 function recordLock(facts: RecordLockFacts, freeFields: readonly string[]): RecordLock {
-  const heldBy = [...new Set(facts.removals.filter(isSentRemoval).map(removal => removal.id))].map(id => ({ kind: "removal", id }));
+  const heldBy = [...new Map(facts.removals.filter(isSentRemoval).map(removal => [removal.id, { kind: "removal", id: removal.id, ...(removal.label ? { label: removal.label } : {}) }])).values()];
   if (heldBy.length) {
     const interrupted = facts.removals.some(removal => isSentRemoval(removal) && !removal.statements.length &&
       removal.submissions.some(submission => submission.status !== "submitted" && submission.status !== "accepted"));
@@ -123,5 +124,20 @@ export type RecordLockKind = keyof typeof recordLocks;
 
 /** Every lock refusal names its holder, then explains how to free the record. */
 export function withRecordLockGuidance(message: string, lock: RecordLock): string {
-  return lock.howToFree ? `${message} ${lock.howToFree}` : message;
+  if (lock.level === "open") return message;
+  return `${message}${formatRecordLockHolders(lock)} ${lock.howToFree ?? "Correct or remove the records that use it first."}`;
+}
+
+const HOLDER_LABELS: Record<string, string> = {
+  removal: "Removal", ghgStatement: "GHG Statement", feedstock: "feedstock", productionRun: "production run",
+  sample: "sample", biocharProduct: "biochar product", order: "order", delivery: "delivery",
+  application: "application", creditBatch: "credit batch", stockEntry: "stock entry", storageLocation: "storage bin",
+};
+
+export function formatRecordLockHolders(lock: RecordLock): string {
+  const holders = lock.heldBy.map(holder => {
+    const kind = HOLDER_LABELS[holder.kind] ?? "record";
+    return holder.label ? `${kind} ${holder.label}` : `${/^[aeiou]/i.test(kind) ? "an" : "a"} ${kind}`;
+  });
+  return holders.length ? ` Held by ${[...new Set(holders)].join(", ")}.` : "";
 }

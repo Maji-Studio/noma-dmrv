@@ -1,4 +1,4 @@
-import { recordLocks, withRecordLockGuidance, type RecordLock } from "@/lib/record-lock";
+import { recordLocks, withRecordLockGuidance, formatRecordLockHolders, type RecordLock } from "@/lib/record-lock";
 
 const SENT_LOCK = recordLocks.removal({ dependents: [], removals: [{ id: "removal", submissions: [{ status: "submitted" }], statements: [] }] });
 
@@ -48,25 +48,23 @@ export function formatCertificationLineageLockMessage({
   lineageRelationship,
   lock = SENT_LOCK,
 }: CertificationLineageLockMessageInput): string {
-  const holderDetail = formatCertificationHolderDetail(lock);
   if (subjectEntityType === lineageEntityType) {
-    return withRecordLockGuidance(`Cannot ${mutation} this ${ENTITY_LABELS[subjectEntityType]} because it is locked by a certification submission.${holderDetail}`, lock);
+    return withRecordLockGuidance(`Cannot ${mutation} this ${ENTITY_LABELS[subjectEntityType]} because it is locked by a certification submission.`, lock);
   }
 
   const lineageLabel = ENTITY_LABELS[lineageEntityType];
   const article = /^[aeiou]/i.test(lineageLabel) ? "an" : "a";
   const relationship =
     lineageRelationship ?? (mutation === "create" ? "selected" : "linked");
-  const explanation = `Cannot ${mutation} this ${ENTITY_LABELS[subjectEntityType]} because the ${relationship} ${lineageLabel} is locked by a certification submission.${holderDetail}`;
+  const explanation = `Cannot ${mutation} this ${ENTITY_LABELS[subjectEntityType]} because the ${relationship} ${lineageLabel} is locked by a certification submission.`;
 
   return relationship === "selected"
-    ? `${explanation} Select ${article} ${lineageLabel} that is not locked.`
+    ? withRecordLockGuidance(`${explanation} Select ${article} ${lineageLabel} that is not locked.`, lock)
     : withRecordLockGuidance(explanation, lock);
 }
 
 export function formatCertificationHolderDetail(lock: RecordLock): string {
-  const holder = lock.heldBy.filter(item => item.id !== "removal").map(item => `${item.kind === "removal" ? "Removal" : "GHG Statement"} ${item.label ?? item.id}`).join(", ");
-  return holder ? ` Held by ${holder}.` : "";
+  return formatRecordLockHolders(lock);
 }
 
 export function formatCertifierMappingLockMessage(action: "change" | "unlink"): string {

@@ -79,3 +79,13 @@ it.each([null, undefined, "invalid"])("keeps a remote attempt locked without a k
       submittedToVerifier: true, returnedAt, removalExternalIds: ["entry"] }],
   }] }).level).toBe("sent");
 });
+
+
+it.each(["sent", "inUse"] as const)("names holders and gives release guidance for %s", async level => {
+  const { withRecordLockGuidance } = await import("./record-lock");
+  const message = withRecordLockGuidance("Cannot edit this record.", {
+    level, heldBy: [{ kind: "productionRun", id: "internal-id", label: "RUN-42" }], freeFields: [],
+    howToFree: "Correct the production run first.",
+  });
+  expect(message).toBe("Cannot edit this record. Held by production run RUN-42. Correct the production run first.");
+});

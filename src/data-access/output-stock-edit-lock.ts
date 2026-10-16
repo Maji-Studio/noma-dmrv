@@ -14,7 +14,7 @@ import { requireOrgScope } from './utils';
 import { assertOutputCorrectionDependencies } from './output-stock-corrections';
 import { getOutputStockAllocationProjection, readOutputBinAllLayers, UnresolvedOutputStockError } from './output-stock';
 
-type Reader = Pick<DbTransaction, 'select'>;
+type Reader = Pick<DbTransaction, 'select' | 'selectDistinct'>;
 
 /** Receipts live outside the movement sequence, including future and archived receipts. */
 export async function outputBinReceipts(ctx: OrgContext, storageLocationId: string, reader: Reader): Promise<{ id: string; recordedAt: Date }[]> {

@@ -108,7 +108,7 @@ it("product deletion waits for stock's bin before taking the product row or arti
       write: async (tx, post) => {
         const lineage = await getLockedCertifiedLineage(f.ctx, tx, { entityType: "biocharProduct", entityId: f.product!.id });
         expect(lineage.length).toBeGreaterThan(0);
-        expect(lineage.every(row => row.removalSubmissionId === null && row.ghgStatementSubmissionId === null)).toBe(true);
+        expect(lineage.every(row => row.recordLockRemoval.submissions.length === 0 && row.recordLockRemoval.statements.length === 0)).toBe(true);
         pid = await backendPid(tx);
         await resume.promise;
         // Old delete owns this row while waiting for our artifact: fail immediately.
@@ -257,7 +257,7 @@ it("application creation holds artifacts before product edits can lock the produ
         // before allocation FKs acquire product KEY SHARE. No DB results are mocked.
         const lineage = await getLockedCertifiedLineage(f.ctx, tx, { entityType: "delivery", entityId: delivery.id });
         expect(lineage.length).toBeGreaterThan(0);
-        expect(lineage.every(row => row.removalSubmissionId === null && row.ghgStatementSubmissionId === null)).toBe(true);
+        expect(lineage.every(row => row.recordLockRemoval.submissions.length === 0 && row.recordLockRemoval.statements.length === 0)).toBe(true);
         pid = await backendPid(tx);
         await resume.promise;
         await tx.select({ id: biocharProducts.id }).from(biocharProducts).where(and(
@@ -310,7 +310,7 @@ it.each(["update", "delete"] as const)("sample %s waits for artifacts before loc
       originalTransaction(async tx => {
         const lineage = await getLockedCertifiedLineage(f.ctx, tx, { entityType: "creditBatch", entityId: batch.id });
         expect(lineage.length).toBeGreaterThan(0);
-        expect(lineage.every(row => row.removalSubmissionId === null && row.ghgStatementSubmissionId === null)).toBe(true);
+        expect(lineage.every(row => row.recordLockRemoval.submissions.length === 0 && row.recordLockRemoval.statements.length === 0)).toBe(true);
         pid = await backendPid(tx);
         await resume.promise;
         // Creation's batch FK must remain available while the other writer waits.
@@ -354,7 +354,7 @@ it.each(["update", "delete"] as const)("delivery %s waits for application creati
       originalTransaction(async tx => {
         const lineage = await getLockedCertifiedLineage(f.ctx, tx, { entityType: "delivery", entityId: delivery.id });
         expect(lineage.length).toBeGreaterThan(0);
-        expect(lineage.every(row => row.removalSubmissionId === null && row.ghgStatementSubmissionId === null)).toBe(true);
+        expect(lineage.every(row => row.recordLockRemoval.submissions.length === 0 && row.recordLockRemoval.statements.length === 0)).toBe(true);
         pid = await backendPid(tx);
         await resume.promise;
         // Probe the next real createApplication lock, without waiting out a deadlock.
@@ -406,7 +406,7 @@ it.each(["update", "delete"] as const)("sample %s holds artifacts before a batch
       originalTransaction(async tx => {
         const lineage = await getLockedCertifiedLineage(f.ctx, tx, { entityType: "sample", entityId: sample.id });
         expect(lineage.length).toBeGreaterThan(0);
-        expect(lineage.every(row => row.removalSubmissionId === null && row.ghgStatementSubmissionId === null)).toBe(true);
+        expect(lineage.every(row => row.recordLockRemoval.submissions.length === 0 && row.recordLockRemoval.statements.length === 0)).toBe(true);
         pid = await backendPid(tx);
         await resume.promise;
         // The batch writer must wait for our artifact without owning the batch.

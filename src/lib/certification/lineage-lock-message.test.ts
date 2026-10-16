@@ -4,7 +4,7 @@ import { formatCertificationLineageLockMessage } from "./lineage-lock-message";
 describe("formatCertificationLineageLockMessage", () => {
   it("offers an unlocked order when creating a delivery", () => {
     expect(formatCertificationLineageLockMessage({ mutation: "create", subjectEntityType: "delivery", lineageEntityType: "order" })).toBe(
-      "Cannot create this delivery because the selected order is locked by a certification submission. Select an order that is not locked.",
+      "Cannot create this delivery because the selected order is locked by a certification submission. Select an order that is not locked. Held by a Removal. Wait for Isometric to return the covering GHG Statement, then refresh its status.",
     );
   });
 
@@ -26,7 +26,7 @@ describe("formatCertificationLineageLockMessage", () => {
         lineageEntityType: "delivery",
       }),
     ).toBe(
-      "Cannot create this application because the selected delivery is locked by a certification submission. Select a delivery that is not locked.",
+      "Cannot create this application because the selected delivery is locked by a certification submission. Select a delivery that is not locked. Held by a Removal. Wait for Isometric to return the covering GHG Statement, then refresh its status.",
     );
   });
 
@@ -38,7 +38,7 @@ describe("formatCertificationLineageLockMessage", () => {
         lineageEntityType: "productionRun",
       }),
     ).toBe(
-      "Cannot create this biochar product because the selected production run is locked by a certification submission. Select a production run that is not locked.",
+      "Cannot create this biochar product because the selected production run is locked by a certification submission. Select a production run that is not locked. Held by a Removal. Wait for Isometric to return the covering GHG Statement, then refresh its status.",
     );
   });
 
@@ -57,7 +57,7 @@ describe("formatCertificationLineageLockMessage", () => {
           lineageRelationship: "linked",
         }),
       ).toBe(
-        `Cannot create this transport leg because the linked ${label} is locked by a certification submission. Wait for Isometric to return the covering GHG Statement, then refresh its status.`,
+        `Cannot create this transport leg because the linked ${label} is locked by a certification submission. Held by a Removal. Wait for Isometric to return the covering GHG Statement, then refresh its status.`,
       );
     },
   );
@@ -70,7 +70,7 @@ describe("formatCertificationLineageLockMessage", () => {
         lineageEntityType: "application",
       }),
     ).toBe(
-      "Cannot update this application because it is locked by a certification submission. Wait for Isometric to return the covering GHG Statement, then refresh its status.",
+      "Cannot update this application because it is locked by a certification submission. Held by a Removal. Wait for Isometric to return the covering GHG Statement, then refresh its status.",
     );
   });
 
@@ -82,7 +82,7 @@ describe("formatCertificationLineageLockMessage", () => {
         lineageEntityType: "feedstock",
       }),
     ).toBe(
-      "Cannot update this transport leg because the linked feedstock is locked by a certification submission. Wait for Isometric to return the covering GHG Statement, then refresh its status.",
+      "Cannot update this transport leg because the linked feedstock is locked by a certification submission. Held by a Removal. Wait for Isometric to return the covering GHG Statement, then refresh its status.",
     );
   });
 
@@ -95,7 +95,7 @@ describe("formatCertificationLineageLockMessage", () => {
         lineageRelationship: "linked",
       }),
     ).toBe(
-      "Cannot create this biochar product because the linked production run is locked by a certification submission. Wait for Isometric to return the covering GHG Statement, then refresh its status.",
+      "Cannot create this biochar product because the linked production run is locked by a certification submission. Held by a Removal. Wait for Isometric to return the covering GHG Statement, then refresh its status.",
     );
   });
 
@@ -108,7 +108,7 @@ describe("formatCertificationLineageLockMessage", () => {
         lineageRelationship: "selected",
       }),
     ).toBe(
-      "Cannot update this application because the selected delivery is locked by a certification submission. Select a delivery that is not locked.",
+      "Cannot update this application because the selected delivery is locked by a certification submission. Select a delivery that is not locked. Held by a Removal. Wait for Isometric to return the covering GHG Statement, then refresh its status.",
     );
   });
 
@@ -120,15 +120,23 @@ describe("formatCertificationLineageLockMessage", () => {
         lineageEntityType: "creditBatch",
       }),
     ).toBe(
-      "Cannot delete this credit batch because it is locked by a certification submission. Wait for Isometric to return the covering GHG Statement, then refresh its status.",
+      "Cannot delete this credit batch because it is locked by a certification submission. Held by a Removal. Wait for Isometric to return the covering GHG Statement, then refresh its status.",
     );
   });
 });
 
 it("names the holding Removal and gives interrupted-attempt guidance", () => {
   const message = formatCertificationLineageLockMessage({ mutation: "update", subjectEntityType: "creditBatch", lineageEntityType: "creditBatch",
-    lock: { level: "sent", heldBy: [{ kind: "removal", id: "removal-123" }], freeFields: [], howToFree: "Delete or resume the interrupted Removal." } });
-  expect(message).toContain("Removal removal-123");
+    lock: { level: "sent", heldBy: [{ kind: "removal", id: "removal-123", label: "REM-123" }], freeFields: [], howToFree: "Delete or resume the interrupted Removal." } });
+  expect(message).toContain("Removal REM-123");
   expect(message).toContain("Delete or resume the interrupted Removal.");
   expect(message).not.toContain("Wait for Isometric");
+});
+
+
+it("never prints internal holder IDs when a human label is missing", () => {
+  const message = formatCertificationLineageLockMessage({ mutation: "update", subjectEntityType: "creditBatch", lineageEntityType: "creditBatch",
+    lock: { level: "sent", heldBy: [{ kind: "removal", id: "internal-uuid" }], freeFields: [], howToFree: "Resume the Removal." } });
+  expect(message).toContain("Held by a Removal.");
+  expect(message).not.toContain("internal-uuid");
 });

@@ -1,10 +1,12 @@
 vi.mock("@/lib/isometric/ghg-statements", () => ({ getGhgStatement: vi.fn() }));
-import { expect, it, vi } from "vitest";
+import { beforeEach, expect, it, vi } from "vitest";
 import type { DbTransaction } from "@/db";
 import { certificationSubmissions } from "@/db/schema";
 import { isSentRemoval } from "@/lib/record-lock";
 import { makeTestOrgContext } from "../../tests/helpers/test-org";
 import { readRecordLockLineage } from "./record-lock-lineage";
+
+beforeEach(() => vi.clearAllMocks());
 
 vi.mock("@/data-access/certifier-credentials", () => ({ resolveIsometricClient: vi.fn() }));
 
@@ -25,7 +27,7 @@ it("preserves null submission times and keeps the Removal locked", async () => {
     fresh: true, submittedToVerifier: true, returnedAt: "2026-10-02", removalExternalIds: ["entry"] }] })).toBe(true);
 });
 
-it("discovers fresh REST submission evidence without a saved timestamp", async () => {
+it("discovers fresh REST submission evidence for saved FAILED_VERIFICATION", async () => {
   const { getGhgStatement } = await import("@/lib/isometric/ghg-statements");
   vi.mocked(getGhgStatement).mockResolvedValue({ status: "DRAFT", submitted_at: "2026-10-02", ghg_entry_ids: ["entry"] } as Awaited<ReturnType<typeof getGhgStatement>>);
   const [removal] = await readRecordLockLineage(makeTestOrgContext(), statementReader(), [{ removalId: "removal", ghgStatementId: "statement" }], true);
@@ -48,6 +50,17 @@ function statementReader(): Pick<DbTransaction, "select"> {
   let reads = 0;
   const common = { createdAt: null, lockedAt: null, status: "submitted" };
   const removal = { ...common, id: "removal-submission", localEntityId: "removal", externalId: "entry", submittedAt: new Date("2026-10-01"), metadata: {} };
-  const statement = { ...common, id: "statement-submission", localEntityId: "statement", externalId: "remote-statement", submittedAt: null, metadata: { remoteStatus: "DRAFT" } };
+  const statement = { ...common, id: "statement-submission", localEntityId: "statement", externalId: "remote-statement", submittedAt: null, metadata: { remoteStatus: "FAILED_VERIFICATION" } };
   return { select: () => ({ from: (table: unknown) => ({ where: () => table === certificationSubmissions ? (reads++ === 0 ? [removal] : [statement]) : [] }) }) } as unknown as Pick<DbTransaction, "select">;
 }
+
+
+it("keeps Sent without making a request when the transaction has no refresh budget", async () => {
+  const { setTransactionDeadline } = await import("@/lib/db/transaction-deadline");
+  const { getGhgStatement } = await import("@/lib/isometric/ghg-statements");
+  const tx = statementReader();
+  setTransactionDeadline(tx, Date.now());
+  const [removal] = await readRecordLockLineage(makeTestOrgContext(), tx, [{ removalId: "removal", ghgStatementId: "statement" }], true);
+  expect(isSentRemoval(removal)).toBe(true);
+  expect(getGhgStatement).not.toHaveBeenCalled();
+});

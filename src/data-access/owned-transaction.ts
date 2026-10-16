@@ -7,6 +7,7 @@ import * as schema from "@/db/schema";
 import { pgErrorCode, PG_TRANSACTION_TIMEOUT } from "@/db/errors";
 import type { OrgContext } from "@/lib/auth/server";
 import { DomainError, deadlineExceeded } from "@/lib/domain-errors";
+import { setTransactionDeadline } from "@/lib/db/transaction-deadline";
 import { requireOrgScope } from "./utils";
 
 const DEFINITE_ROLLBACK_SQLSTATE_CLASSES = ["23", "40"];
@@ -93,6 +94,7 @@ export async function runOwnedTransaction<T>(
         if (budget <= 0) throw deadlineExceeded("before it started");
         await tx.execute(sql.raw(`set local transaction_timeout = ${budget}`));
         await tx.execute(sql.raw(`set local statement_timeout = ${budget}`));
+        setTransactionDeadline(tx, deadlineAt);
         const result = await callback(tx);
         if (connectionError) throw connectionError;
         if (remainingMs(deadlineAt) <= 0) throw deadlineExceeded("before saving");

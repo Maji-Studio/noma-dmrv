@@ -14,7 +14,7 @@ import { deliveryAppliedLockedReason } from '@/lib/output-stock/labels';
  * Intake facts retain their recorded wet mass; movement facts remain immutable.
  * A snapshot read passes its transaction as `reader`, so history and stock agree.
  */
-export async function getOutputStockHistory(ctx: OrgContext, storageLocationId: string, reader: Pick<DbTransaction, 'select'> = db): Promise<OutputStockHistoryEntry[]> {
+export async function getOutputStockHistory(ctx: OrgContext, storageLocationId: string, reader: Pick<DbTransaction, 'select' | 'selectDistinct'> = db): Promise<OutputStockHistoryEntry[]> {
   requireOrgScope(ctx);
   const [bin] = await reader.select().from(storageLocations).where(and(eq(storageLocations.organizationId, ctx.organizationId), eq(storageLocations.id, storageLocationId)));
   if (!bin) throw new SafeError('Storage bin not found');
