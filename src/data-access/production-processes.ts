@@ -1,6 +1,6 @@
 /** Production-process epochs and computed Method-B eligibility (ADR 0022). */
 
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, lte, sql } from "drizzle-orm";
 import { METHOD_B_MINIMUM_METHOD_A_SAMPLES } from "@/config/certification";
 import { db, type DbTransaction } from "@/db";
 import {
@@ -34,29 +34,39 @@ export async function lockProductionProcessScope(
   );
 }
 
-async function findCurrentProductionProcess(
+async function findProductionProcessAtDate(
   ctx: OrgContext,
-  params: { facilityId: string; feedstockTypeId: string },
+  params: { facilityId: string; feedstockTypeId: string; asOfDate: Date },
   executor: Executor,
 ): Promise<ProductionProcess | null> {
+  const conditions = [
+    eq(productionProcesses.facilityId, params.facilityId),
+    eq(productionProcesses.feedstockTypeId, params.feedstockTypeId),
+    eq(productionProcesses.organizationId, ctx.organizationId),
+  ];
   const [process] = await executor
     .select()
     .from(productionProcesses)
     .where(
-      and(
-        eq(productionProcesses.facilityId, params.facilityId),
-        eq(productionProcesses.feedstockTypeId, params.feedstockTypeId),
-        eq(productionProcesses.organizationId, ctx.organizationId),
-      ),
+      and(...conditions, lte(productionProcesses.establishedAt, params.asOfDate)),
     )
-    .orderBy(desc(productionProcesses.establishedAt), desc(productionProcesses.createdAt))
+    .orderBy(desc(productionProcesses.establishedAt), desc(productionProcesses.createdAt), desc(productionProcesses.id))
     .limit(1);
-  return process ?? null;
+  if (process) return process;
+
+  // Back-entry before every epoch belongs to the earliest known process (#445).
+  const [earliest] = await executor
+    .select()
+    .from(productionProcesses)
+    .where(and(...conditions))
+    .orderBy(asc(productionProcesses.establishedAt), desc(productionProcesses.createdAt), desc(productionProcesses.id))
+    .limit(1);
+  return earliest ?? null;
 }
 
 export async function findOrCreateProductionProcess(
   ctx: OrgContext,
-  params: { facilityId: string; feedstockTypeId: string },
+  params: { facilityId: string; feedstockTypeId: string; startDate: Date },
   executor: Executor = db,
 ): Promise<ProductionProcess> {
   requireOrgScope(ctx);
@@ -69,7 +79,9 @@ export async function findOrCreateProductionProcess(
   await assertSameOrg(ctx, facilities, params.facilityId, executor);
   await assertSameOrg(ctx, feedstockTypes, params.feedstockTypeId, executor);
   await lockProductionProcessScope(executor, params);
-  const existing = await findCurrentProductionProcess(ctx, params, executor);
+  const existing = await findProductionProcessAtDate(
+    ctx, { ...params, asOfDate: params.startDate }, executor,
+  );
   if (existing) return existing;
 
   const [created] = await executor
@@ -168,7 +180,8 @@ export async function getMethodBEligibility(
   requireOrgScope(ctx);
   await assertSameOrg(ctx, facilities, params.facilityId);
   await assertSameOrg(ctx, feedstockTypes, params.feedstockTypeId);
-  const process = await findCurrentProductionProcess(ctx, params, db);
+  const asOfDate = params.asOfDate ?? new Date();
+  const process = await findProductionProcessAtDate(ctx, { ...params, asOfDate }, db);
   if (!process) {
     return deriveMethodBEligibility({
       productionProcessId: null,
@@ -182,6 +195,6 @@ export async function getMethodBEligibility(
     ctx,
     process,
     db,
-    params.asOfDate ?? new Date(),
+    asOfDate,
   );
 }

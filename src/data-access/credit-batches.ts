@@ -397,7 +397,11 @@ export async function createCreditBatch(
     const feedstockTypeId = batchData.feedstockTypeId;
     const process = await findOrCreateProductionProcess(
       ctx,
-      { facilityId: batchData.facilityId, feedstockTypeId },
+      {
+        facilityId: batchData.facilityId,
+        feedstockTypeId,
+        startDate: new Date(formatUtcDate(batchData.startDate)),
+      },
       tx,
     );
     await validateProductionRunIds(
@@ -665,15 +669,18 @@ export async function updateCreditBatch(
 
     // ADR 0016 (amended 2026-07-04): feedstock type is DECLARED, not derived.
     // Re-guard the membership against the effective declared type + refresh the
-    // (facility, feedstock) production process whenever the runs, the facility,
-    // or the declared type changes — any of the three can shift which process
-    // this batch belongs to, or make the member runs mismatch the declaration.
+    // production process using the effective start date when the cohort changes.
+    // Sampling stays fixed at creation, including moves across process epochs.
     const feedstockRunIds = resolvedProductionRunIds;
     if (feedstockRunIds !== undefined) {
       await assertDeclaredFeedstockType(ctx, tx, feedstockRunIds, effectiveFeedstockTypeId);
       const process = await findOrCreateProductionProcess(
         ctx,
-        { facilityId: targetFacilityId, feedstockTypeId: effectiveFeedstockTypeId },
+        {
+          facilityId: targetFacilityId,
+          feedstockTypeId: effectiveFeedstockTypeId,
+          startDate: new Date(effectiveStartDate),
+        },
         tx,
       );
       attemptUpdateData.feedstockTypeId = effectiveFeedstockTypeId;
