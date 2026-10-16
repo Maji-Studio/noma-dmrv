@@ -273,7 +273,7 @@ function LinePane({ line, detail, nextName, onBack, onDone }: PaneProps) {
             <DisclosureButton open={open === "records"} onToggle={() => toggle("records")}>Figures from records</DisclosureButton>
             {open === "records" && (
               <p className="pb-8 pl-24 body-small">
-                {line.auto ? `${formatFigure(line.auto.value, def.unit)} from ${def.recordsLabel.toLowerCase()} (${line.auto.detail})` : `None yet from ${def.recordsLabel.toLowerCase()}`}
+                {line.auto ? `${formatFigure(line.auto.value, def.unit)} from ${def.recordsLabel.toLowerCase()} (${line.auto.count} ${line.auto.label})` : `None yet from ${def.recordsLabel.toLowerCase()}`}
               </p>
             )}
           </>

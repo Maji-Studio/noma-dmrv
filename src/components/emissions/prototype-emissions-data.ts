@@ -118,27 +118,39 @@ export interface PrototypeBatch {
   runCount: number;
 }
 
-interface AutoFigure { value: number; detail: string }
+export type RecordsLabel = "production runs" | "transport legs" | "deliveries" | "applications";
+/** value null = the records source exists but holds nothing for this line. */
+export interface AutoFigure { value: number | null; count: number; label: RecordsLabel }
 const RICH_AUTO: Record<string, AutoFigure> = {
-  feedTruck: { value: 52836, detail: "14 legs" },
-  meterElec: { value: 18420, detail: `${STUB_RUNS} production runs` },
-  genset: { value: 120, detail: `${STUB_RUNS} production runs` },
-  startup: { value: 640, detail: `${STUB_RUNS} production runs` },
-  biocharTruck: { value: 11940, detail: "4 deliveries" },
-  stored: { value: 2140.6, detail: "31 applications" },
+  feedTruck: { value: 52836, count: 14, label: "transport legs" },
+  meterElec: { value: 18420, count: STUB_RUNS, label: "production runs" },
+  genset: { value: 120, count: STUB_RUNS, label: "production runs" },
+  startup: { value: 640, count: STUB_RUNS, label: "production runs" },
+  biocharTruck: { value: 11940, count: 4, label: "deliveries" },
+  stored: { value: 2140.6, count: 31, label: "applications" },
+};
+/** The "open" batch shows every case: some sources exist but hold nothing. */
+const OPEN_AUTO: Record<string, AutoFigure> = {
+  ...RICH_AUTO,
+  genset: { value: null, count: STUB_RUNS, label: "production runs" },
+  startup: { value: null, count: STUB_RUNS, label: "production runs" },
+  biocharTruck: { value: null, count: 0, label: "deliveries" },
 };
 const FRESH_SCALE = 0.4;
 const FINISHED_SCALE = 0.95;
 
 function scaledAuto(scale: number, without: string[] = []): Record<string, AutoFigure> {
   return Object.fromEntries(
-    Object.entries(RICH_AUTO)
-      .filter(([id]) => !without.includes(id))
-      .map(([id, figure]) => [id, { value: Math.round(figure.value * scale * 10) / 10, detail: figure.detail }]),
+    Object.entries(RICH_AUTO).map(([id, figure]) => [
+      id,
+      without.includes(id)
+        ? { value: null, count: 0, label: figure.label }
+        : { ...figure, value: figure.value == null ? null : Math.round(figure.value * scale * 10) / 10 },
+    ]),
   );
 }
 export function autoFigures(batch: PrototypeBatch): Record<string, AutoFigure> {
-  if (batch.scenario === "open") return RICH_AUTO;
+  if (batch.scenario === "open") return OPEN_AUTO;
   // A fresh batch has runs but no deliveries or applications yet.
   if (batch.scenario === "fresh") return scaledAuto(FRESH_SCALE, ["biocharTruck", "stored"]);
   return scaledAuto(FINISHED_SCALE);
@@ -146,7 +158,7 @@ export function autoFigures(batch: PrototypeBatch): Record<string, AutoFigure> {
 
 /** Lines the batch's template cannot take entries for yet. */
 export function setupLines(batch: PrototypeBatch): string[] {
-  return batch.scenario === "fresh" ? ["local"] : [];
+  return batch.scenario === "fresh" || batch.scenario === "open" ? ["local"] : [];
 }
 
 function dayIn(batch: PrototypeBatch, dayOfMonth: number): string {
@@ -162,15 +174,15 @@ function seedEntries(batch: PrototypeBatch): PrototypeEntry[] {
   if (batch.scenario === "fresh") return [];
   if (batch.scenario === "open") {
     return [
-      e("e1", { lineId: "meterElec", kind: "value", date: dayIn(batch, 28), value: 1150, files: ["TANESCO-bill.pdf"], note: "Workshop and office meter, monthly bill" }),
-      e("e2", { lineId: "genset", kind: "value", date: dayIn(batch, 18), value: 45, note: "Power cut, genset refuelled from the drum" }),
+      e("e1", { lineId: "meterElec", kind: "value", date: dayIn(batch, 28), value: 1150, files: ["TANESCO-bill.pdf"], note: "Workshop and office meter" }),
+      e("e1b", { lineId: "meterElec", kind: "value", date: dayIn(batch, 30), value: 310, files: ["office-meter.jpg"] }),
+      e("e2", { lineId: "genset", kind: "value", date: dayIn(batch, 18), value: 45, files: ["fuel-drum-log.jpg"], note: "Power cut, refuelled from the drum" }),
       e("e3", { lineId: "co", kind: "value", date: dayIn(batch, 2), concentration: 412, massFlow: 2487660, files: ["emissions-test-report-2026.pdf"] }),
       e("e4", { lineId: "consumables", kind: "value", date: dayIn(batch, 12), value: 2.4, files: ["sampling-bags-receipt.jpg"], note: "Sample bags and labels for 3 Samples" }),
-      e("e5", { lineId: "labEU", kind: "value", date: dayIn(batch, 20), value: 22, files: ["lab-eu-statement.pdf"] }),
+      e("e5", { lineId: "labEU", kind: "value", date: dayIn(batch, 20), value: 22 }),
       e("e6", { lineId: "labIN", kind: "value", date: dayIn(batch, 26), value: 38, files: ["lab-india-statement.pdf"], counts: false }),
       e("e7", { lineId: "sampleIN", kind: "value", date: dayIn(batch, 24), mass: 12, distance: 4600, files: ["DHL-waybill-4471.pdf"], note: "3 Samples in one parcel" }),
       e("e8", { lineId: "flights", kind: "nothing", date: dayIn(batch, 28), note: `No staff flights in ${monthName(batch)}` }),
-      e("e9", { lineId: "local", kind: "value", date: dayIn(batch, 15), value: 180, files: ["travel-log.xlsx"] }),
     ];
   }
   const finished = [
@@ -247,7 +259,10 @@ export interface PrototypeLine {
   def: LineDef;
   state: PrototypeLineState;
   open: boolean;
-  auto: AutoFigure | null;
+  /** The records figure when it holds a value; null otherwise. */
+  auto: (AutoFigure & { value: number }) | null;
+  /** The records source, even when it holds nothing for this line. */
+  records: AutoFigure | null;
   entries: PrototypeEntry[];
   /** Counting value entries. */
   values: PrototypeEntry[];
@@ -292,7 +307,8 @@ export function deriveLines(batch: PrototypeBatch, entries: PrototypeEntry[]): P
     const values = counting.filter((entry) => entry.kind === "value");
     const review = lineEntries.filter((entry) => !entry.counts);
     const nothing = counting.find((entry) => entry.kind === "nothing") ?? null;
-    const figure = auto[def.id] ?? null;
+    const records = auto[def.id] ?? null;
+    const figure = records && records.value != null ? (records as AutoFigure & { value: number }) : null;
     let lineState: PrototypeLineState;
     if (setup.includes(def.id)) lineState = "needsSetup";
     else if (review.length && !values.length) lineState = "needsReview";
@@ -310,8 +326,8 @@ export function deriveLines(batch: PrototypeBatch, entries: PrototypeEntry[]): P
     else if (lineState === "nothingToRecord") totalText = `0 ${def.unit}`;
     else totalText = PROTOTYPE_STATE_LABELS.empty;
     return {
-      def, state: lineState, open: OPEN_STATES.includes(lineState), auto: figure,
-      entries: lineEntries, values, review, nothing, total, totalText,
+      def, state: lineState, open: OPEN_STATES.includes(lineState),
+      auto: figure, records, entries: lineEntries, values, review, nothing, total, totalText,
     };
   });
 }

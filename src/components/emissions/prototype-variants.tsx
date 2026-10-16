@@ -34,14 +34,20 @@ import { LedgerOverview, OVERVIEW_SUBTITLE as SUBTITLE } from "./prototype-overv
 import { DETAIL_C1_NAME, DetailC1 } from "./prototype-detail-c1";
 import { DETAIL_C2_NAME, DetailC2 } from "./prototype-detail-c2";
 import { DETAIL_C3_NAME, DetailC3 } from "./prototype-detail-c3";
+import { DETAIL_C3A_NAME, DetailC3A } from "./prototype-detail-c3a";
+import { DETAIL_C3B_NAME, DetailC3B } from "./prototype-detail-c3b";
+import { DETAIL_C3C_NAME, DetailC3C } from "./prototype-detail-c3c";
 import Link from "next/link";
 
 const VARIANTS = [
   { key: "C1", name: DETAIL_C1_NAME },
   { key: "C2", name: DETAIL_C2_NAME },
   { key: "C3", name: DETAIL_C3_NAME },
+  { key: "C3a", name: DETAIL_C3A_NAME },
+  { key: "C3b", name: DETAIL_C3B_NAME },
+  { key: "C3c", name: DETAIL_C3C_NAME },
 ] as const;
-const DETAILS = { C1: DetailC1, C2: DetailC2, C3: DetailC3 } as const;
+const DETAILS = { C1: DetailC1, C2: DetailC2, C3: DetailC3, C3a: DetailC3A, C3b: DetailC3B, C3c: DetailC3C } as const;
 
 export function EmissionsPrototype({ creditBatchId }: { creditBatchId?: string }) {
   const searchParams = useSearchParams();
