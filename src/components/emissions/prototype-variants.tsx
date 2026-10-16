@@ -6,15 +6,19 @@
  * (epic #1058 PR 3, plan docs/plans/2026-10-15-template-driven-emissions.md
  * §4.4).
  *
- * Plan: three structurally different variants of `/emissions` (overview) and
- * `/emissions/[creditBatchId]` (the batch's template lines), switchable via
- * `?variant=A|B|C` and the floating bottom bar.
- *   A "Checklist": batch list, then a Needs you / Done checklist page.
- *   B "Rail and tasks": batches as a persistent rail, open lines as tasks.
- *   C "Ledger": batches × states table, then a line ledger with inline add.
+ * Round 2 (Kenji 2026-10-16: "C is the best ... make 3 more detail
+ * variants"): A and B are retired (files kept, unused). The switcher cycles
+ * `?variant=C1|C2|C3`; `?variant=C` (or any unknown key) maps to C1. All three
+ * share the fleshed-out ledger overview (prototype-overview.tsx) and differ
+ * only on `/emissions/[creditBatchId]`.
+ *   C1 "Refined ledger": prototype-detail-c1.tsx
+ *   C2, C3: prototype-detail-c2.tsx, prototype-detail-c3.tsx
+ * Shared detail API: prototype-detail-shared.tsx. URL keys:
+ * prototype-ledger-query.ts.
  *
  * Real: the shell, facility and credit batches (dev DB, read only). Stubbed in
- * memory: template lines, states and entries (prototype-emissions-data.ts).
+ * memory: template lines, states, entries and 9 older credit batches
+ * (prototype-emissions-data.ts).
  */
 "use client";
 
@@ -26,16 +30,18 @@ import { Skeleton } from "@/components/ui/loading-skeleton";
 import { PrototypeSwitcher, resolveVariant } from "@/components/ui/prototype-switcher";
 import { prototypeActions } from "./prototype-emissions-data";
 import { useEmissionsHref, usePrototypeEmissions } from "./prototype-emissions-shared";
-import { SUBTITLE, VariantA } from "./prototype-variant-a";
-import { VariantB } from "./prototype-variant-b";
-import { VariantC } from "./prototype-variant-c";
+import { LedgerOverview, OVERVIEW_SUBTITLE as SUBTITLE } from "./prototype-overview";
+import { DETAIL_C1_NAME, DetailC1 } from "./prototype-detail-c1";
+import { DETAIL_C2_NAME, DetailC2 } from "./prototype-detail-c2";
+import { DETAIL_C3_NAME, DetailC3 } from "./prototype-detail-c3";
 import Link from "next/link";
 
 const VARIANTS = [
-  { key: "A", name: "Checklist" },
-  { key: "B", name: "Rail and tasks" },
-  { key: "C", name: "Ledger" },
+  { key: "C1", name: DETAIL_C1_NAME },
+  { key: "C2", name: DETAIL_C2_NAME },
+  { key: "C3", name: DETAIL_C3_NAME },
 ] as const;
+const DETAILS = { C1: DetailC1, C2: DetailC2, C3: DetailC3 } as const;
 
 export function EmissionsPrototype({ creditBatchId }: { creditBatchId?: string }) {
   const searchParams = useSearchParams();
@@ -71,9 +77,10 @@ export function EmissionsPrototype({ creditBatchId }: { creditBatchId?: string }
         />
       </div>
     );
-  } else if (variant.key === "B") body = <VariantB data={data} batchId={creditBatchId} />;
-  else if (variant.key === "C") body = <VariantC data={data} batchId={creditBatchId} />;
-  else body = <VariantA data={data} batchId={creditBatchId} />;
+  } else if (creditBatchId) {
+    const Detail = DETAILS[variant.key as keyof typeof DETAILS] ?? DetailC1;
+    body = <Detail data={data} batchId={creditBatchId} />;
+  } else body = <LedgerOverview data={data} />;
 
   return (
     <>
@@ -87,10 +94,15 @@ export function EmissionsPrototype({ creditBatchId }: { creditBatchId?: string }
   );
 }
 
+const URL_STATE_KEYS = ["q", "status", "period", "from", "to", "sort", "dir", "lines", "lsort"];
+
 function StubState({ data, variant, route }: { data: ReturnType<typeof usePrototypeEmissions>; variant: string; route: string }) {
+  const searchParams = useSearchParams();
+  const urlState = URL_STATE_KEYS.filter((key) => searchParams.get(key)).map((key) => `${key}=${searchParams.get(key)}`).join(", ");
   return (
     <div className="flex flex-col gap-8">
       <div>{`Variant ${variant} on ${route}. Last action: ${data.store.lastAction}. Store version ${data.store.version}.`}</div>
+      <div>{`URL state: ${urlState || "defaults (all batches, period newest first; lines in template order)"}.`}</div>
       <table className="w-full">
         <thead>
           <tr className="text-left">
@@ -106,7 +118,7 @@ function StubState({ data, variant, route }: { data: ReturnType<typeof useProtot
               <td className="whitespace-nowrap py-2 pr-8">{batch.code}</td>
               <td className="py-2 pr-8">{batch.real ? "dev DB" : "stub"}</td>
               <td className="py-2 pr-8">{batch.scenario}</td>
-              <td className="py-2">{open.length ? open.map((line) => `${line.def.name} (${line.state})`).join("; ") : "none"}</td>
+              <td className="py-2">{open.length ? `${open.length}: ${Object.entries(Object.groupBy(open, (line) => line.state)).map(([state, lines]) => `${state} ${lines?.length}`).join(", ")}` : "none"}</td>
             </tr>
           ))}
         </tbody>

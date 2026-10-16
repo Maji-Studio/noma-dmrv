@@ -99,7 +99,12 @@ export interface PrototypeEntry {
   counts: boolean;
 }
 
-export type Scenario = "fresh" | "open" | "finished";
+/**
+ * fresh: no entries yet. open: one of each open state. finished: all done.
+ * files: two entries without a file. review: two entries that stopped
+ * counting. almost: one line not recorded.
+ */
+export type Scenario = "fresh" | "open" | "finished" | "files" | "review" | "almost";
 export interface PrototypeBatch {
   id: string;
   code: string;
@@ -168,7 +173,7 @@ function seedEntries(batch: PrototypeBatch): PrototypeEntry[] {
       e("e9", { lineId: "local", kind: "value", date: dayIn(batch, 15), value: 180, files: ["travel-log.xlsx"] }),
     ];
   }
-  return [
+  const finished = [
     e("f1", { lineId: "ch4", kind: "value", date: dayIn(batch, 3), concentration: 96, massFlow: 2310400, files: ["emissions-test-report-2026.pdf"] }),
     e("f2", { lineId: "co", kind: "value", date: dayIn(batch, 3), concentration: 398, massFlow: 2310400, files: ["emissions-test-report-2026.pdf"] }),
     e("f3", { lineId: "sampleEU", kind: "value", date: dayIn(batch, 9), mass: 8, distance: 7000, files: ["DHL-waybill-4402.pdf"] }),
@@ -179,6 +184,12 @@ function seedEntries(batch: PrototypeBatch): PrototypeEntry[] {
     e("f8", { lineId: "flights", kind: "nothing", date: dayIn(batch, 28), note: `No staff flights in ${monthName(batch)}` }),
     e("f9", { lineId: "local", kind: "value", date: dayIn(batch, 14), value: 140, files: ["travel-log.xlsx"] }),
   ];
+  const tweak = (ids: string[], change: Partial<PrototypeEntry>) =>
+    finished.map((entry) => (ids.some((id) => entry.id.endsWith(`-${id}`)) ? { ...entry, ...change } : entry));
+  if (batch.scenario === "files") return tweak(["f5", "f9"], { files: [] });
+  if (batch.scenario === "review") return tweak(["f6", "f2"], { counts: false }).map((entry) => (entry.id.endsWith("-f3") ? { ...entry, files: [] } : entry));
+  if (batch.scenario === "almost") return finished.filter((entry) => !entry.id.endsWith("-f8"));
+  return finished;
 }
 
 /* ---------- store ---------- */
@@ -350,9 +361,10 @@ function stubCode(code: string, offset: number): string {
   const match = /^(.*-)(\d{2})-(\d+)$/.exec(code);
   if (!match) return `${code}-${offset > 0 ? "next" : "prev"}`;
   const [, prefix, year, number] = match;
-  const next = Number(number) + offset;
-  if (next >= 1) return `${prefix}${year}-${String(next).padStart(number.length, "0")}`;
-  return `${prefix}${String(Number(year) - 1).padStart(2, "0")}-${String(MONTHS_PER_YEAR).padStart(number.length, "0")}`;
+  let next = Number(number) + offset;
+  let yy = Number(year);
+  while (next < 1) { next += MONTHS_PER_YEAR; yy -= 1; }
+  return `${prefix}${String(yy).padStart(2, "0")}-${String(next).padStart(number.length, "0")}`;
 }
 
 /**
@@ -382,5 +394,25 @@ export function prototypeBatches(real: CreditBatchWithRelations[]): PrototypeBat
     const start = shiftMonth(anchorStart, -1);
     stubs.push({ id: "stub-finished", code: stubCode(anchorCode, -1), startDate: start, endDate: monthEnd(start), status: "pending", real: false, scenario: "finished", dryFeedstockT: 1131.2, runCount: 21 });
   }
-  return [...fromReal, ...stubs].sort((a, b) => b.startDate.localeCompare(a.startDate));
+  return [...fromReal, ...stubs, ...olderStubs([...fromReal, ...stubs])].sort((a, b) => b.startDate.localeCompare(a.startDate));
+}
+
+/** Older stub batches, one per month before the oldest batch, so filters and sorts have something to bite on. */
+const OLDER_SCENARIOS: readonly Scenario[] = ["files", "finished", "review", "finished", "almost", "finished", "files", "finished", "finished"];
+const OLDER_FEEDSTOCK_T = [1096.4, 1210.9, 987.3, 1150.2, 1032.8, 1189.5, 905.6, 1121.7, 1064.1];
+const OLDER_RUNS = [20, 23, 18, 21, 19, 22, 17, 21, 20];
+function olderStubs(batches: PrototypeBatch[]): PrototypeBatch[] {
+  const oldest = [...batches].sort((a, b) => a.startDate.localeCompare(b.startDate))[0];
+  if (!oldest) return [];
+  return OLDER_SCENARIOS.map((scenario, index) => {
+    const start = shiftMonth(oldest.startDate, -(index + 1));
+    return {
+      id: `stub-older-${index + 1}`,
+      code: stubCode(oldest.code, -(index + 1)),
+      startDate: start, endDate: monthEnd(start),
+      status: index < 3 ? "pending" : "verified",
+      real: false, scenario,
+      dryFeedstockT: OLDER_FEEDSTOCK_T[index], runCount: OLDER_RUNS[index],
+    };
+  });
 }
