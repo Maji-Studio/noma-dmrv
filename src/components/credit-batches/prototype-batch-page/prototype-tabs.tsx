@@ -3,57 +3,78 @@
 /** PROTOTYPE (throwaway): the four non-overview tab bodies, shared by all variants. */
 import Link from "next/link";
 import { FlaskIcon, PlusIcon } from "@phosphor-icons/react/dist/ssr";
-import { CohortInputLedger } from "@/components/credit-batches/cohort-input-ledger";
+import { computeCohortInputTotals } from "@/components/credit-batches/cohort-input-ledger";
 import { CreditBatchDurabilityPanel } from "@/components/credit-batches/credit-batch-durability-panel";
 import { CreditBatchActivityView } from "@/components/activity";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { formatDate, formatTonnes } from "@/lib/format-utils";
+import { MISSING_VALUE } from "@/lib/copy-utils";
+import { formatDate } from "@/lib/format-utils";
 import { cn } from "@/lib/utils";
 import { EMISSION_LINE_STATE_LABELS, type EmissionLineState } from "@/lib/certification/emission-lines";
 import { productionRunDeepLinkHref } from "@/lib/certification/links";
 import { useProto } from "./prototype-context";
+import type { MassSegmentKey } from "./prototype-model";
 import { FocusRow, PANEL, Panel, RemovalChip, tonnes } from "./prototype-parts";
 
 const MUTED = "text-[var(--color-text-secondary)]";
 
+const KG_PER_TONNE = 1000;
+const COLUMNS = "grid grid-cols-[minmax(0,1fr)_88px_88px] gap-x-12 sm:grid-cols-[minmax(0,1fr)_140px_140px] sm:gap-x-16";
+
+function kgAsTonnes(kg: number | null): string {
+  return kg == null ? MISSING_VALUE.notRecorded : tonnes(kg / KG_PER_TONNE);
+}
+
 export function ProductionTab() {
-  const { batch, runs, runsLoading, model } = useProto();
+  const { batch, runs, runsLoading } = useProto();
   const memberIds = new Set(batch.productionRunIds);
   const members = runs.filter((run) => memberIds.has(run.id));
+  const totals = computeCohortInputTotals(members);
   return (
-    <div className="flex flex-col gap-20">
-      <Panel title="Production runs" action={<span className={cn("body-small", MUTED)}>{batch.productionRunCount} in this batch</span>}>
-        {runsLoading ? (
-          <p className={cn("body-small", MUTED)} aria-busy>Loading production runs...</p>
-        ) : members.length === 0 ? (
-          <EmptyState padding="sm" icon={<FlaskIcon size={32} weight="thin" />} title="No production runs linked" description="Completed runs in this credit batch's window join automatically." />
-        ) : (
+    <Panel title="Production runs" action={<span className={cn("body-small", MUTED)}>{batch.productionRunCount} in this batch</span>}>
+      {runsLoading ? (
+        <p className={cn("body-small", MUTED)} aria-busy>Loading production runs...</p>
+      ) : members.length === 0 ? (
+        <EmptyState padding="sm" icon={<FlaskIcon size={32} weight="thin" />} title="No production runs linked" description="Completed runs in this credit batch's window join automatically." />
+      ) : (
+        <div className="relative">
+          <div className={cn(COLUMNS, "border-b border-[var(--color-border-secondary)] pb-8 body-caption", MUTED)}>
+            <span>Run</span>
+            <span className="text-right">Feedstock dry mass</span>
+            <span className="text-right">Dry biochar</span>
+          </div>
           <ul className="flex flex-col">
             {members.map((run) => (
-              <li key={run.id} className="flex items-center justify-between gap-12 border-t border-[var(--color-border-tertiary)] py-10 first:border-t-0">
+              <li key={run.id} className={cn(COLUMNS, "items-center border-t border-[var(--color-border-tertiary)] py-10 first:border-t-0")}>
                 <Link href={productionRunDeepLinkHref(run.id, batch.facilityId)} className="flex min-w-0 flex-col underline-offset-2 hover:underline">
                   <span className="body-medium font-medium">{run.code} on {formatDate(run.date)}</span>
-                  <span className={cn("body-caption", MUTED)}>{run.biocharStorageName ?? "Not recorded"}</span>
+                  <span className={cn("body-caption", MUTED)}>{run.biocharStorageName ?? MISSING_VALUE.notRecorded}</span>
                 </Link>
-                <span className="body-small tabular-nums">{run.biocharDryMassKg != null ? `${tonnes(run.biocharDryMassKg / 1000)} dry` : "Not recorded"}</span>
+                <span className="body-small text-right tabular-nums">{kgAsTonnes(run.feedstockMassDryKg)}</span>
+                <span className="body-small text-right tabular-nums">{kgAsTonnes(run.biocharDryMassKg)}</span>
               </li>
             ))}
           </ul>
-        )}
-      </Panel>
-      <Panel title="Mass balance and inputs">
-        <CohortInputLedger runs={members} />
-        <p className={cn("body-small", MUTED)}>
-          Carbon estimate before project emissions: <span className="font-medium text-[var(--color-text-primary)]">{"≈"} {formatTonnes(model.co2eTons ?? 0, { unit: "t CO₂e" })}</span>
-        </p>
-      </Panel>
-      {/* The real Samples block brings its own heading and one add action; the sheet's top rule is dropped here. */}
-      <FocusRow rowId="samples" className={cn(PANEL, "p-20 sm:p-24 [&>*:first-child]:border-t-0 [&>*:first-child]:pt-0")}>
-        <CreditBatchDurabilityPanel creditBatchId={batch.id} facilityId={batch.facilityId} />
-      </FocusRow>
-    </div>
+          <div className={cn(COLUMNS, "border-t border-[var(--color-border-secondary)] pt-10 body-medium font-medium")}>
+            <span>Total</span>
+            <span className="text-right tabular-nums">{kgAsTonnes(totals.feedstockDryKg)}</span>
+            <span className="text-right tabular-nums">{kgAsTonnes(totals.dryOutputKg)}</span>
+          </div>
+        </div>
+      )}
+    </Panel>
+  );
+}
+
+export function SamplesTab() {
+  const { batch } = useProto();
+  // The real Samples block brings its own heading and one add action.
+  return (
+    <FocusRow rowId="samples" className={cn(PANEL, "p-20 sm:p-24 [&>*:first-child]:border-t-0 [&>*:first-child]:pt-0")}>
+      <CreditBatchDurabilityPanel creditBatchId={batch.id} facilityId={batch.facilityId} />
+    </FocusRow>
   );
 }
 
@@ -67,7 +88,16 @@ const LINE_TONE: Record<EmissionLineState, string> = {
 };
 
 export function EmissionsTab() {
-  const { model, say } = useProto();
+  const { model, say, batch, runs } = useProto();
+  // Diesel and electricity come from the real production runs; the stub figure is the fallback.
+  const memberIds = new Set(batch.productionRunIds);
+  const members = runs.filter((run) => memberIds.has(run.id));
+  const totals = computeCohortInputTotals(members);
+  const fromRuns = `From ${members.length} production ${members.length === 1 ? "run" : "runs"}`;
+  const realFigures: Record<string, { figure: string; caption: string } | null> = {
+    "em-diesel": totals.dieselLiters == null ? null : { figure: `${Math.round(totals.dieselLiters).toLocaleString()} L`, caption: fromRuns },
+    "em-grid": totals.electricityKwh == null ? null : { figure: `${Math.round(totals.electricityKwh).toLocaleString()} kWh`, caption: fromRuns },
+  };
   return (
     <Panel
       title="Emission lines"
@@ -80,12 +110,15 @@ export function EmissionsTab() {
     >
       <p className={cn("body-small", MUTED)}>One line per component of the Removal template. Entries are stubbed in this prototype.</p>
       <ul className="flex flex-col">
-        {model.emissionLines.map((line) => (
+        {model.emissionLines.map((rawLine) => {
+          const real = realFigures[rawLine.id];
+          const line = real ? { ...rawLine, figure: real.figure } : rawLine;
+          return (
           <li key={line.id} className="border-t border-[var(--color-border-tertiary)] first:border-t-0">
             <FocusRow rowId={line.id} className="flex flex-col gap-4 py-12 sm:flex-row sm:items-center sm:justify-between sm:gap-16">
               <div className="flex min-w-0 flex-col">
                 <span className="body-medium font-medium">{line.name}</span>
-                <span className={cn("body-caption", MUTED)}>{line.figure ?? "No figure yet"}</span>
+                <span className={cn("body-caption", MUTED)}>{line.figure ?? "No figure yet"}{real ? `. ${real.caption}` : ""}</span>
               </div>
               <div className="flex items-center gap-12">
                 <span className={cn("body-small font-medium", LINE_TONE[line.state])}>{EMISSION_LINE_STATE_LABELS[line.state]}</span>
@@ -97,28 +130,87 @@ export function EmissionsTab() {
               </div>
             </FocusRow>
           </li>
-        ))}
+          );
+        })}
       </ul>
     </Panel>
   );
 }
 
-export function RemovalsTab() {
+/** Quiet meaning colours: submitted strongest, draft the same hue lighter, attention for the actionable part, grey for the rest. */
+const HATCH = "repeating-linear-gradient(135deg, var(--st-off-border) 0 2px, transparent 2px 6px)";
+const SEGMENTS: { key: MassSegmentKey; label: string; fill: string; background?: string }[] = [
+  { key: "sent", label: "In submitted Removals", fill: "var(--st-run)" },
+  { key: "inRemoval", label: "In draft Removals", fill: "color-mix(in srgb, var(--st-run) 40%, var(--paper))" },
+  { key: "notIn", label: "Applied, not in a Removal", fill: "var(--st-wait)" },
+  { key: "notApplied", label: "Not applied yet", fill: "var(--st-off-bg)", background: HATCH },
+];
+const SEGMENT_BY_KEY = Object.fromEntries(SEGMENTS.map((segment, index) => [segment.key, { ...segment, order: index }])) as Record<MassSegmentKey, (typeof SEGMENTS)[number] & { order: number }>;
+
+function Swatch({ segment, className }: { segment: MassSegmentKey; className?: string }) {
+  const { fill, background } = SEGMENT_BY_KEY[segment];
+  return <span aria-hidden className={cn("inline-block size-12 shrink-0 border border-[var(--st-off-border)]", className)} style={{ backgroundColor: fill, backgroundImage: background }} />;
+}
+
+function segmentOfRemoval(removal: { status: string } | null): MassSegmentKey {
+  if (!removal) return "notIn";
+  return removal.status === "draft" ? "inRemoval" : "sent";
+}
+
+function MassSplit() {
   const { model, go } = useProto();
   const { masses } = model;
+  const total = SEGMENTS.reduce((sum, segment) => sum + masses[segment.key], 0);
+  const shown = SEGMENTS.filter((segment) => masses[segment.key] > 0);
+  const summary = shown.map((segment) => `${tonnes(masses[segment.key])} ${segment.label.toLowerCase()}`).join(", ");
+  return (
+    <Panel title="Biochar in Removals" action={<span className="body-medium tabular-nums">{tonnes(total)} <span className={MUTED}>total</span></span>}>
+      <div role="img" aria-label={summary} className="flex h-24 gap-2 bg-[var(--paper)]">
+        {shown.map((segment) => (
+          <span
+            key={segment.key}
+            className="h-full min-w-4 border border-[var(--st-off-border)]"
+            style={{ flexGrow: masses[segment.key], flexBasis: 0, backgroundColor: segment.fill, backgroundImage: segment.background }}
+          />
+        ))}
+      </div>
+      <ul className="flex flex-col gap-8 sm:flex-row sm:flex-wrap sm:gap-x-24">
+        {shown.map((segment) => (
+          <li key={segment.key} className="flex items-center gap-8 body-small">
+            <Swatch segment={segment.key} />
+            <span className={MUTED}>{segment.label}</span>
+            <span className="font-medium tabular-nums">{tonnes(masses[segment.key])}</span>
+          </li>
+        ))}
+      </ul>
+      {model.blocking.length > 0 && (
+        <button type="button" onClick={() => go("overview")} className="self-start body-small underline underline-offset-2">
+          See blocking items ({model.blocking.length})
+        </button>
+      )}
+    </Panel>
+  );
+}
+
+export function RemovalsTab() {
+  const { model } = useProto();
+  const { masses } = model;
+  const orderedSlices = [...model.slices].sort((a, b) => SEGMENT_BY_KEY[segmentOfRemoval(a.removal)].order - SEGMENT_BY_KEY[segmentOfRemoval(b.removal)].order);
   return (
     <div className="flex flex-col gap-20">
+      <MassSplit />
       <Panel title="Applied biochar by delivery">
         <ul className="flex flex-col">
-          {model.slices.map((slice) => (
+          {orderedSlices.map((slice) => (
             <li key={slice.id} className="border-t border-[var(--color-border-tertiary)] first:border-t-0">
-              <FocusRow rowId={slice.id} className="grid gap-4 py-12 sm:grid-cols-[1fr_auto_220px] sm:items-center sm:gap-16">
+              <FocusRow rowId={slice.id} className="grid grid-cols-[12px_minmax(0,1fr)_auto] gap-x-12 gap-y-4 py-12 sm:grid-cols-[12px_1fr_auto_220px] sm:items-center sm:gap-x-16">
+                <Swatch segment={segmentOfRemoval(slice.removal)} />
                 <div className="flex min-w-0 flex-col">
                   <span className="body-medium font-medium">{slice.label}</span>
                   <span className={cn("body-caption", MUTED)}>{slice.meta}</span>
                 </div>
                 <span className="body-medium tabular-nums">{tonnes(slice.tons)}</span>
-                <div className="flex flex-col gap-2">
+                <div className="col-start-2 col-end-4 flex flex-col gap-2 sm:col-auto">
                   <RemovalChip removal={slice.removal} />
                   {slice.removal && <span className={cn("body-caption", MUTED)}>{slice.removal.statusNote}</span>}
                 </div>
@@ -126,28 +218,14 @@ export function RemovalsTab() {
             </li>
           ))}
         </ul>
-        <FocusRow rowId="not-applied" className="flex items-center justify-between gap-12 border-t border-[var(--color-border-tertiary)] pt-12">
+        <FocusRow rowId="not-applied" className="grid grid-cols-[12px_minmax(0,1fr)_auto] items-center gap-x-12 border-t border-[var(--color-border-tertiary)] pt-12 sm:gap-x-16">
+          <Swatch segment="notApplied" />
           <span className="flex flex-col">
             <span className="body-medium font-medium">Not applied yet</span>
             <span className={cn("body-caption", MUTED)}>Produced in this credit batch, no application recorded</span>
           </span>
           <span className="body-medium tabular-nums">{tonnes(masses.notApplied)}</span>
         </FocusRow>
-      </Panel>
-      <Panel title="Not in a Removal">
-        <p className="body-medium">
-          <span className="font-medium tabular-nums">{tonnes(masses.notIn)}</span> of applied biochar is not in a Removal.
-        </p>
-        <p className={cn("body-small", MUTED)}>
-          {model.blocking.length > 0
-            ? `${model.blocking.length} blocking ${model.blocking.length === 1 ? "item holds" : "items hold"} it back.`
-            : masses.notIn > 0
-              ? "Nothing blocks it. Select Start Removal."
-              : "Every applied tonne is in a Removal."}
-        </p>
-        {model.blocking.length > 0 && (
-          <Button variant="default" size="small" className="self-start" onClick={() => go("overview")}>See blocking items</Button>
-        )}
       </Panel>
       <FocusRow rowId="ghg">
         <Panel title="GHG Statement">
@@ -176,9 +254,10 @@ export function ActivityTab() {
 export function TabBody({ tab }: { tab: string }) {
   switch (tab) {
     case "production": return <ProductionTab />;
+    case "samples": return <SamplesTab />;
     case "emissions": return <EmissionsTab />;
     case "removals": return <RemovalsTab />;
-    case "activity": return <ActivityTab />;
+    case "activities": return <ActivityTab />;
     default: return null;
   }
 }

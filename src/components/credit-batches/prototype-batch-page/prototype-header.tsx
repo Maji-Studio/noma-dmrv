@@ -31,11 +31,12 @@ function PrimaryAction() {
       if (next.rowId === "template" || next.rowId === "details") setEditing(true);
       go(next.tab, next.rowId);
     }
+    else if (primary.kind === "draft") say(`Prototype: this opens ${primary.label.replace("Open ", "")} to add the biochar that is not in a Removal.`);
     else if (primary.kind === "start") say("Prototype: this opens the New Removal wizard with the unassigned mass.");
     else go("removals", "ghg");
   };
   return (
-    <Button variant="primary" onClick={onClick} title={primary.hint}>
+    <Button variant={primary.secondary ? "default" : "primary"} onClick={onClick} title={primary.hint}>
       {primary.label}
     </Button>
   );
