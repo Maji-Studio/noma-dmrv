@@ -1,5 +1,5 @@
 /**
- * PROTOTYPE (throwaway): the view model behind the credit batch page variants.
+ * PROTOTYPE (throwaway): the view model behind the credit batch page.
  *
  * Real inputs come from HEAD (batch, health checks, member runs, sample count).
  * Everything marked PROTOTYPE below is a stub that the `?scenario=` key swaps:
@@ -46,10 +46,8 @@ export interface OpenItem {
   /** Row to highlight in the target tab (?focus=). */
   rowId?: string;
   actionLabel: string;
-  /** Real fix page for a real health check. */
+  /** Repair page for a real health check fixed elsewhere; the row opens it instead of a tab. */
   externalHref?: string;
-  /** Which mass segment this item holds back (mass-first variant). */
-  affects: MassSegmentKey;
   stub: boolean;
 }
 
@@ -169,6 +167,12 @@ const CHECK_TAB: Record<string, TabKey> = {
   biocharProducts: "overview",
 };
 
+/** Health fix targets that live on this page, mapped to the row they focus. */
+const IN_PAGE_FIX: Record<string, string> = {
+  creditBatchTemplate: "template",
+  batchDetails: "details",
+};
+
 function tabForCheck(check: BatchHealthCheck): TabKey {
   return CHECK_TAB[resolveBatchHealthFixTarget(check)] ?? "removals";
 }
@@ -181,15 +185,17 @@ function realBlockingItems(health: BatchHealth | undefined, batch: CreditBatchWi
     .filter((check) => check.key !== "emissions" && check.key !== "facilityEmissions")
     .map((check, index) => {
       const fix = batchHealthFixLinkFor(check, batch.facilityId, batch.id);
+      // Fixed on this page (template, details): jump in-page. Anything else opens its repair page.
+      const inPage = IN_PAGE_FIX[resolveBatchHealthFixTarget(check)];
       return {
         id: `health-${check.key}-${check.issueKey ?? index}`,
         group: "blocking" as const,
         title: check.requirementLabel,
         detail: check.detail?.replace(/^Missing:\s*/i, ""),
         tab: tabForCheck(check),
+        rowId: inPage,
         actionLabel: fix.label,
-        externalHref: fix.href.startsWith("/") ? fix.href : undefined,
-        affects: "notIn" as const,
+        externalHref: !inPage && fix.href.startsWith("/") ? fix.href : undefined,
         stub: false,
       };
     });
@@ -237,7 +243,6 @@ export function buildBatchModel({ batch, health, realSampleCount, scenario }: Mo
         tab: "emissions",
         rowId: line.id,
         actionLabel: "Fix in Emissions",
-        affects: "notIn",
         stub: true,
       });
     }
@@ -250,7 +255,6 @@ export function buildBatchModel({ batch, health, realSampleCount, scenario }: Mo
         tab: "production",
         rowId: "samples",
         actionLabel: "Add lab sample",
-        affects: "notIn",
         stub: true,
       });
     }
@@ -264,7 +268,6 @@ export function buildBatchModel({ batch, health, realSampleCount, scenario }: Mo
       tab: "production",
       rowId: "sample-2",
       actionLabel: "Review sample",
-      affects: "notIn",
       stub: true,
     });
   }
@@ -278,7 +281,6 @@ export function buildBatchModel({ batch, health, realSampleCount, scenario }: Mo
       tab: "emissions",
       rowId: gridLine.id,
       actionLabel: "Review line",
-      affects: scenario === "partly-sent" ? "inRemoval" : "notIn",
       stub: true,
     });
   }
@@ -292,7 +294,6 @@ export function buildBatchModel({ batch, health, realSampleCount, scenario }: Mo
         tab: "removals",
         rowId: "slice-1",
         actionLabel: "See in Removals",
-        affects: "sent",
         stub: true,
       },
       {
@@ -303,7 +304,6 @@ export function buildBatchModel({ batch, health, realSampleCount, scenario }: Mo
         tab: "removals",
         rowId: "ghg",
         actionLabel: "See in Removals",
-        affects: "sent",
         stub: true,
       },
     );
@@ -317,7 +317,6 @@ export function buildBatchModel({ batch, health, realSampleCount, scenario }: Mo
       tab: "removals",
       rowId: "not-applied",
       actionLabel: "See in Removals",
-      affects: "notApplied",
       stub: true,
     });
   }

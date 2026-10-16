@@ -33,7 +33,7 @@ function isTypingTarget(target: EventTarget | null): boolean {
 }
 
 export function resolveVariant(variants: readonly PrototypeVariant[], value: string | null): PrototypeVariant {
-  return variants.find((variant) => variant.key === value?.toUpperCase()) ?? variants[0];
+  return variants.find((variant) => variant.key.toUpperCase() === value?.toUpperCase()) ?? variants[0];
 }
 
 export function PrototypeSwitcher({ variants, param = "variant", title = "Prototype", children }: PrototypeSwitcherProps) {
