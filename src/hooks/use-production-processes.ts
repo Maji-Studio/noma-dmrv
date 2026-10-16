@@ -15,25 +15,25 @@ import { formatUtcDate } from "@/lib/date-utils";
 
 const productionProcessKeys = {
   all: ["production-processes"] as const,
-  eligibility: (facilityId?: string, feedstockTypeId?: string, asOfDate?: string) =>
-    ["production-processes", "eligibility", facilityId, feedstockTypeId, asOfDate] as const,
+  eligibility: (facilityId?: string, feedstockTypeId?: string, batchStartDate?: string) =>
+    ["production-processes", "eligibility", facilityId, feedstockTypeId, batchStartDate] as const,
 };
 
 export function useMethodBEligibility(
   facilityId?: string,
   feedstockTypeId?: string,
   enabled = true,
-  asOfDate?: Date,
+  batchStartDate?: Date,
 ) {
-  const batchStartDate = asOfDate ? formatUtcDate(asOfDate) : undefined;
+  const batchStartDay = batchStartDate ? formatUtcDate(batchStartDate) : undefined;
   return useQuery({
-    queryKey: productionProcessKeys.eligibility(facilityId, feedstockTypeId, batchStartDate),
+    queryKey: productionProcessKeys.eligibility(facilityId, feedstockTypeId, batchStartDay),
     queryFn: async () =>
       unwrap(
         await getMethodBEligibilityFn({
           facilityId,
           feedstockTypeId,
-          asOfDate: batchStartDate,
+          batchStartDate: batchStartDay,
         }),
       ),
     enabled: enabled && Boolean(facilityId && feedstockTypeId),

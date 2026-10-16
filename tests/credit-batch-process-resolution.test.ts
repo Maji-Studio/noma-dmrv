@@ -1,17 +1,19 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { and, count, eq, inArray } from "drizzle-orm";
 import { METHOD_B_MINIMUM_METHOD_A_SAMPLES } from "@/config/certification";
 import { db } from "@/db";
-import { activityEvents, creditBatches, facilities, feedstockTypes, productionProcesses, samples } from "@/db/schema";
+import { activityEvents, certifierCredentials, certifierProjects, creditBatches, facilities, feedstockTypes, organizations, productionProcesses, samples } from "@/db/schema";
 import { createCreditBatch, updateCreditBatch } from "@/data-access/credit-batches";
 import { findOrCreateProductionProcess, getMethodBEligibility } from "@/data-access/production-processes";
 import { countEligibleSamplesByProcess } from "@/data-access/isometric";
-import { ensureTestOrg, makeTestOrgContext, TEST_SITE_POSITION } from "./helpers/test-org";
+import { makeTestOrgContext, TEST_SITE_POSITION } from "./helpers/test-org";
 
-const ctx = makeTestOrgContext();
+const ctx = { ...makeTestOrgContext(), organizationId: `org_process_epochs_${crypto.randomUUID()}` };
 const EARLIEST_EPOCH = new Date("2025-01-01T00:00:00Z");
 const MIDDLE_EPOCH = new Date("2025-06-01T00:00:00Z");
 const LATEST_EPOCH = new Date("2025-09-01T00:00:00Z");
+const ELIGIBILITY_NOW = new Date("2026-10-16T12:00:00Z");
+const FUTURE_SAMPLE_TIME = new Date("2026-10-17T12:00:00Z");
 
 describe("credit batch production-process resolution", () => {
   let facilityId: string;
@@ -24,7 +26,7 @@ describe("credit batch production-process resolution", () => {
   const feedstockTypeIds: string[] = [];
 
   beforeEach(async () => {
-    await ensureTestOrg();
+    await db.insert(organizations).values({ id: ctx.organizationId, name: "Process epochs", slug: ctx.organizationId });
     tag = crypto.randomUUID();
     const [facility] = await db.insert(facilities).values({
       ...TEST_SITE_POSITION, organizationId: ctx.organizationId, timezone: "UTC",
@@ -50,6 +52,7 @@ describe("credit batch production-process resolution", () => {
   });
 
   afterEach(async () => {
+    vi.useRealTimers();
     if (facilityIds.length) {
       await db.delete(activityEvents).where(and(eq(activityEvents.organizationId, ctx.organizationId), inArray(activityEvents.facilityId, facilityIds)));
       await db.delete(samples).where(and(eq(samples.organizationId, ctx.organizationId), inArray(samples.creditBatchId,
@@ -57,6 +60,7 @@ describe("credit batch production-process resolution", () => {
       )));
       await db.delete(creditBatches).where(and(eq(creditBatches.organizationId, ctx.organizationId), inArray(creditBatches.facilityId, facilityIds)));
       await db.delete(productionProcesses).where(and(eq(productionProcesses.organizationId, ctx.organizationId), inArray(productionProcesses.facilityId, facilityIds)));
+      await db.delete(certifierProjects).where(and(eq(certifierProjects.organizationId, ctx.organizationId), inArray(certifierProjects.facilityId, facilityIds)));
       await db.delete(facilities).where(and(eq(facilities.organizationId, ctx.organizationId), inArray(facilities.id, facilityIds)));
       facilityIds.length = 0;
     }
@@ -64,6 +68,8 @@ describe("credit batch production-process resolution", () => {
       await db.delete(feedstockTypes).where(and(eq(feedstockTypes.organizationId, ctx.organizationId), inArray(feedstockTypes.id, feedstockTypeIds)));
       feedstockTypeIds.length = 0;
     }
+    await db.delete(certifierCredentials).where(eq(certifierCredentials.organizationId, ctx.organizationId));
+    await db.delete(organizations).where(eq(organizations.id, ctx.organizationId));
   });
 
   function create(startDate: Date) {
@@ -89,7 +95,7 @@ describe("credit batch production-process resolution", () => {
     await insertSamples(batch.id, Array.from({ length: METHOD_B_MINIMUM_METHOD_A_SAMPLES }, () => new Date("2025-02-15T12:00:00Z")));
 
     expect(await getMethodBEligibility(ctx, {
-      facilityId, feedstockTypeId, asOfDate: new Date("2025-03-01T00:00:00Z"),
+      facilityId, feedstockTypeId, batchStartDate: new Date("2025-03-01T00:00:00Z"),
     })).toMatchObject({
       productionProcessId: earliestProcessId, eligibleSampleCount: METHOD_B_MINIMUM_METHOD_A_SAMPLES,
       prerequisitesRecorded: true, unsampledAllowed: true,
@@ -97,6 +103,51 @@ describe("credit batch production-process resolution", () => {
     expect(await getMethodBEligibility(ctx, { facilityId, feedstockTypeId })).toMatchObject({
       productionProcessId: latestProcessId, eligibleSampleCount: 0, unsampledAllowed: false,
     });
+  });
+
+  it.each([
+    ["current-month", "2026-10-01", "2026-09-01", "2026-10-10T12:00:00Z", "latest"],
+    ["back-entered", "2025-03-01", "2025-02-01", "2025-04-15T12:00:00Z", "earliest"],
+  ] as const)("agrees on preview and save eligibility for a %s batch using Samples up to now", async (_label, startDay, baselineDay, sampleTime, epoch) => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(ELIGIBILITY_NOW);
+    const processId = epoch === "earliest" ? earliestProcessId : latestProcessId;
+    await db.insert(certifierProjects).values({
+      organizationId: ctx.organizationId, facilityId, provider: "isometric",
+      externalProjectId: `project-${tag}`, externalFacilityId: `facility-${tag}`,
+    });
+    await db.insert(certifierCredentials).values({
+      organizationId: ctx.organizationId, provider: "isometric",
+      accessTokenEncrypted: "unused-test-placeholder", clientSecretEncrypted: "unused-test-placeholder",
+    });
+    await db.update(productionProcesses).set({
+      agreedBaselineSize: METHOD_B_MINIMUM_METHOD_A_SAMPLES,
+      randomSamplingPlanRef: "Agreed sampling plan", moisturePathway: "measured_every_batch",
+    }).where(and(eq(productionProcesses.organizationId, ctx.organizationId), eq(productionProcesses.id, processId)));
+    const baselineBatch = await create(new Date(baselineDay));
+    const baselineSamples = await insertSamples(baselineBatch.id, [
+      ...Array.from({ length: METHOD_B_MINIMUM_METHOD_A_SAMPLES - 1 }, () => new Date(sampleTime)),
+      FUTURE_SAMPLE_TIME,
+    ]);
+    const batchStartDate = new Date(startDay);
+    const input = {
+      facilityId, feedstockTypeId, code: `CB-UNSAMPLED-${tag}`, productionRunIds: [],
+      startDate: batchStartDate, endDate: batchStartDate, sampling: "unsampled" as const,
+    };
+    expect(await getMethodBEligibility(ctx, { facilityId, feedstockTypeId, batchStartDate })).toMatchObject({
+      productionProcessId: processId, eligibleSampleCount: METHOD_B_MINIMUM_METHOD_A_SAMPLES - 1,
+      prerequisitesRecorded: true, unsampledAllowed: false,
+    });
+    await expect(createCreditBatch(ctx, input)).rejects.toThrow("qualifying Method-A Samples");
+
+    await db.update(samples).set({ samplingTime: new Date(sampleTime) }).where(and(
+      eq(samples.organizationId, ctx.organizationId), eq(samples.id, baselineSamples.at(-1)!.id),
+    ));
+    expect(await getMethodBEligibility(ctx, { facilityId, feedstockTypeId, batchStartDate })).toMatchObject({
+      productionProcessId: processId, eligibleSampleCount: METHOD_B_MINIMUM_METHOD_A_SAMPLES,
+      prerequisitesRecorded: true, unsampledAllowed: true,
+    });
+    expect(await createCreditBatch(ctx, input)).toMatchObject({ productionProcessId: processId, sampling: "unsampled" });
   });
 
   it("preserves Sample attachments and recomputes both process counts when a batch crosses an epoch", async () => {
@@ -154,15 +205,25 @@ describe("credit batch production-process resolution", () => {
     expect(batch.productionProcessId).toBe(earliestProcessId);
   });
 
-  it("resolves the persisted batch day consistently on create and update", async () => {
+  it.each([
+    ["midnight", "2025-06-01T00:00:00Z"],
+    ["same UTC day through an offset instant", "2025-05-31T23:30:00-02:00"],
+  ])("uses the new process on its UTC established day for preview, create and update (%s)", async (_label, start) => {
     await db.update(productionProcesses).set({ establishedAt: new Date("2025-06-01T12:00:00Z") }).where(and(
       eq(productionProcesses.organizationId, ctx.organizationId), eq(productionProcesses.id, middleProcessId),
     ));
-    const startDate = new Date("2025-06-01T18:00:00Z");
+    const startDate = new Date(start);
+    expect(await getMethodBEligibility(ctx, { facilityId, feedstockTypeId, batchStartDate: startDate })).toMatchObject({
+      productionProcessId: middleProcessId,
+    });
     const batch = await create(startDate);
-    expect(batch).toMatchObject({ startDate: "2025-06-01", productionProcessId: earliestProcessId });
-    const updated = await updateCreditBatch(ctx, batch.id, { expectedVersion: batch.version, startDate });
-    expect(updated.productionProcessId).toBe(earliestProcessId);
+    expect(batch).toMatchObject({ startDate: "2025-06-01", productionProcessId: middleProcessId });
+    const previousDay = await updateCreditBatch(ctx, batch.id, {
+      expectedVersion: batch.version, startDate: new Date("2025-05-31T00:00:00Z"),
+    });
+    expect(previousDay.productionProcessId).toBe(earliestProcessId);
+    const updated = await updateCreditBatch(ctx, batch.id, { expectedVersion: previousDay.version, startDate });
+    expect(updated.productionProcessId).toBe(middleProcessId);
   });
 
   it.each([
@@ -257,8 +318,8 @@ describe("credit batch production-process resolution", () => {
     ["boundary", MIDDLE_EPOCH, "middle"],
     ["pre-epoch", new Date("2024-12-01T00:00:00Z"), "earliest"],
     ["current", undefined, "latest"],
-  ] as const)("uses the same epoch rules for %s Method-B eligibility reads", async (_label, asOfDate, expectedEpoch) => {
-    const eligibility = await getMethodBEligibility(ctx, { facilityId, feedstockTypeId, asOfDate });
+  ] as const)("uses the same epoch rules for %s Method-B eligibility reads", async (_label, batchStartDate, expectedEpoch) => {
+    const eligibility = await getMethodBEligibility(ctx, { facilityId, feedstockTypeId, batchStartDate });
     expect(eligibility.productionProcessId).toBe(expectedEpoch === "middle" ? middleProcessId : expectedEpoch === "earliest" ? earliestProcessId : latestProcessId);
   });
 

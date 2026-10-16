@@ -1,6 +1,6 @@
 /** Production-process epochs and computed Method-B eligibility (ADR 0022). */
 
-import { and, asc, desc, eq, lte, sql } from "drizzle-orm";
+import { and, asc, desc, eq, lt, sql } from "drizzle-orm";
 import { METHOD_B_MINIMUM_METHOD_A_SAMPLES } from "@/config/certification";
 import { db, type DbTransaction } from "@/db";
 import {
@@ -24,6 +24,7 @@ import {
 
 type Executor = DbTransaction | typeof db;
 const PRODUCTION_PROCESS_CURRENT_LOCK_SCOPE = "production-process-current";
+const NEXT_CALENDAR_DAY = 1;
 
 export async function lockProductionProcessScope(
   executor: Executor,
@@ -36,9 +37,13 @@ export async function lockProductionProcessScope(
 
 async function findProductionProcessAtDate(
   ctx: OrgContext,
-  params: { facilityId: string; feedstockTypeId: string; asOfDate: Date },
+  params: { facilityId: string; feedstockTypeId: string; batchStartDate: Date },
   executor: Executor,
 ): Promise<ProductionProcess | null> {
+  // Batch dates are UTC calendar days, so a reset anywhere on that day applies.
+  const nextDay = new Date(params.batchStartDate);
+  nextDay.setUTCHours(0, 0, 0, 0);
+  nextDay.setUTCDate(nextDay.getUTCDate() + NEXT_CALENDAR_DAY);
   const conditions = [
     eq(productionProcesses.facilityId, params.facilityId),
     eq(productionProcesses.feedstockTypeId, params.feedstockTypeId),
@@ -48,7 +53,7 @@ async function findProductionProcessAtDate(
     .select()
     .from(productionProcesses)
     .where(
-      and(...conditions, lte(productionProcesses.establishedAt, params.asOfDate)),
+      and(...conditions, lt(productionProcesses.establishedAt, nextDay)),
     )
     .orderBy(desc(productionProcesses.establishedAt), desc(productionProcesses.createdAt), desc(productionProcesses.id))
     .limit(1);
@@ -80,7 +85,7 @@ export async function findOrCreateProductionProcess(
   await assertSameOrg(ctx, feedstockTypes, params.feedstockTypeId, executor);
   await lockProductionProcessScope(executor, params);
   const existing = await findProductionProcessAtDate(
-    ctx, { ...params, asOfDate: params.startDate }, executor,
+    ctx, { ...params, batchStartDate: params.startDate }, executor,
   );
   if (existing) return existing;
 
@@ -156,13 +161,13 @@ export async function getMethodBEligibilityForProcess(
   ctx: OrgContext,
   process: ProductionProcess,
   executor: Executor = db,
-  asOfDate: Date = new Date(),
 ): Promise<MethodBEligibility> {
   requireOrgScope(ctx);
   await assertSameOrg(ctx, productionProcesses, process.id, executor);
   const counts = await countEligibleSamplesByProcess(ctx, executor, {
     facilityId: process.facilityId,
-    asOfDate,
+    // Preview and save both count up to now, independently of the batch start day.
+    asOfDate: new Date(),
   });
   return deriveMethodBEligibility({
     productionProcessId: process.id,
@@ -175,13 +180,13 @@ export async function getMethodBEligibilityForProcess(
 
 export async function getMethodBEligibility(
   ctx: OrgContext,
-  params: { facilityId: string; feedstockTypeId: string; asOfDate?: Date },
+  params: { facilityId: string; feedstockTypeId: string; batchStartDate?: Date },
 ): Promise<MethodBEligibility> {
   requireOrgScope(ctx);
   await assertSameOrg(ctx, facilities, params.facilityId);
   await assertSameOrg(ctx, feedstockTypes, params.feedstockTypeId);
-  const asOfDate = params.asOfDate ?? new Date();
-  const process = await findProductionProcessAtDate(ctx, { ...params, asOfDate }, db);
+  const batchStartDate = params.batchStartDate ?? new Date();
+  const process = await findProductionProcessAtDate(ctx, { ...params, batchStartDate }, db);
   if (!process) {
     return deriveMethodBEligibility({
       productionProcessId: null,
@@ -191,10 +196,5 @@ export async function getMethodBEligibility(
       moisturePathway: null,
     });
   }
-  return getMethodBEligibilityForProcess(
-    ctx,
-    process,
-    db,
-    asOfDate,
-  );
+  return getMethodBEligibilityForProcess(ctx, process);
 }

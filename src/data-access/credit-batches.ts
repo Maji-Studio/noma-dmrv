@@ -420,7 +420,7 @@ export async function createCreditBatch(
       sampling,
       certifier,
       hasIsometricCredentials: await hasCertifierCredentials(ctx, "isometric", tx),
-      methodBEligibility: await getMethodBEligibilityForProcess(ctx, process, tx, new Date()),
+      methodBEligibility: await getMethodBEligibilityForProcess(ctx, process, tx),
     } : { sampling });
     if (!eligibility.eligible) throw new SafeError(eligibility.message);
 

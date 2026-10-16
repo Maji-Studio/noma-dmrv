@@ -17,7 +17,7 @@ describe("useMethodBEligibility", () => {
     const [historical] = mocks.useQuery.mock.calls.at(-1)!;
     await expect(historical.queryFn()).resolves.toEqual({ productionProcessId: "historical" });
     expect(mocks.eligibility).toHaveBeenLastCalledWith({
-      facilityId: "facility", feedstockTypeId: "feedstock", asOfDate: "2025-06-02",
+      facilityId: "facility", feedstockTypeId: "feedstock", batchStartDate: "2025-06-02",
     });
     expect(historical.queryKey).toEqual(["production-processes", "eligibility", "facility", "feedstock", "2025-06-02"]);
 
@@ -30,7 +30,7 @@ describe("useMethodBEligibility", () => {
     expect(current.queryKey).not.toEqual(historical.queryKey);
     await current.queryFn();
     expect(mocks.eligibility).toHaveBeenLastCalledWith({
-      facilityId: "facility", feedstockTypeId: "feedstock", asOfDate: undefined,
+      facilityId: "facility", feedstockTypeId: "feedstock", batchStartDate: undefined,
     });
   });
 
