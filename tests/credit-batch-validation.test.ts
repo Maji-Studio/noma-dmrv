@@ -32,9 +32,15 @@ import { productionRuns, productionRunFeedstocks } from "@/db/schema/production"
 import { productionProcesses } from "@/db/schema/production-processes";
 import {
   createCreditBatch,
+  getCreditBatchProductionRunOptions,
   updateCreditBatch,
 } from "@/data-access/credit-batches";
-import { validateProductionRunIds } from "@/data-access/credit-batch-membership";
+import {
+  assertNoOverlappingCreditBatchCohort,
+  findMatchingUnassignedProductionRunIds,
+  lockCreditBatchDeclarationRuns,
+  validateProductionRunIds,
+} from "@/data-access/credit-batch-membership";
 import { updateProductionRun } from "@/data-access/production-runs";
 
 // Fake userId for requireAuth (just needs to be truthy)
@@ -528,6 +534,64 @@ describe("Credit Batch Production-Run Validation", () => {
     return { ...baseBatchData, startDate, endDate };
   }
 
+  it("accepts multi-month periods across uncertified batch writes, membership, and run options", async () => {
+    const ctx = makeTestOrgContext(TEST_USER_ID);
+    const startDate = new Date("2027-01-01");
+    const endDate = new Date("2027-04-30");
+    const batch = await createCreditBatch(ctx, {
+      ...baseBatchData,
+      code: batchCode("CB-VAL-UNCERTIFIED"),
+      facilityId: facilityA.id,
+      startDate,
+      endDate,
+      productionRunIds: [],
+    });
+    createdIds.creditBatches.push(batch.id);
+    expect(batch).toMatchObject({ certifier: null, endDate: "2027-04-30" });
+
+    const updated = await updateCreditBatch(ctx, batch.id, {
+      expectedVersion: batch.version,
+      endDate: new Date("2027-06-30"),
+    });
+    expect(updated.endDate).toBe("2027-06-30");
+
+    const runPeriod = { startDate: new Date("2025-06-01"), endDate: new Date("2025-09-30") };
+    await expect(db.transaction((tx) => validateProductionRunIds(
+      ctx, tx, [runInFacilityA.id], facilityA.id, null, runPeriod.startDate, runPeriod.endDate,
+    ))).resolves.toBeUndefined();
+    const options = await getCreditBatchProductionRunOptions(ctx, { facilityId: facilityA.id, ...runPeriod });
+    expect(options.map((run) => run.id)).toContain(runInFacilityA.id);
+  });
+
+  it.each([null, "isometric"])("applies the month cap consistently in membership helpers for %s", async (certifier) => {
+    const ctx = makeTestOrgContext(TEST_USER_ID);
+    const period = {
+      facilityId: facilityA.id,
+      feedstockTypeId: primaryFeedstockTypeId,
+      certifier,
+      startDate: "2025-06-01",
+      endDate: "2025-09-30",
+    };
+    const message = "A credit batch may span at most one month (one calendar month; noma rule).";
+    const calls = [
+      () => db.transaction((tx) => assertNoOverlappingCreditBatchCohort(ctx, tx, period)),
+      () => db.transaction((tx) => findMatchingUnassignedProductionRunIds(ctx, tx, period)),
+      () => db.transaction((tx) => lockCreditBatchDeclarationRuns(ctx, tx, {
+        ...period, requestedProductionRunIds: [runInFacilityA.id],
+      })),
+      () => db.transaction((tx) => validateProductionRunIds(
+        ctx, tx, [runInFacilityA.id], period.facilityId, certifier, period.startDate, period.endDate,
+      )),
+    ];
+    for (const call of calls) {
+      if (certifier === "isometric") {
+        await expect(call()).rejects.toThrow(message);
+      } else {
+        await call();
+      }
+    }
+  });
+
   it("rejects missing production run IDs", async () => {
     const fakeId = "00000000-0000-0000-0000-000000000999";
     await expect(
@@ -561,6 +625,7 @@ describe("Credit Batch Production-Run Validation", () => {
           tx,
           [runInFacilityA.id, runInFacilityA.id],
           facilityA.id,
+          null,
         ),
       ),
     ).rejects.toThrow("selected production runs include a duplicate");

@@ -27,6 +27,7 @@ import {
 
 import { requireOrgScope } from "./utils";
 import { assertCreditBatchProductionWindow } from "./credit-batch-production-window";
+import { getFacilityCertifierWithExecutor } from "./credit-batch-accounting";
 import { productionRunDateExpr } from "./production-runs/date-expr";
 
 const CREDIT_BATCH_PREVIEW_PRODUCTION_RUN_STATUSES = [
@@ -87,9 +88,11 @@ export async function getCreditBatchProductionRunOptions(
   ];
 
   if (params.startDate && params.endDate) {
+    const certifier = await getFacilityCertifierWithExecutor(ctx, db, params.facilityId);
     const { startStr, endStr } = assertCreditBatchProductionWindow(
       params.startDate,
       params.endDate,
+      certifier,
     );
     conditions.push(
       gte(productionRunDateExpr(), startStr),

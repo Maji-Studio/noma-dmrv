@@ -1,14 +1,31 @@
 // @vitest-environment jsdom
 import type { ReactNode } from "react";
-import { cleanup, render } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { useController, type Control } from "react-hook-form";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { CreditBatch } from "@/db/schema/credits";
 import { CreditBatchForm } from "./credit-batch-form";
+
+const mocks = vi.hoisted(() => ({ certifierSummary: vi.fn(), showFacilitySelect: false }));
+
+const ISOMETRIC_FACILITY_ID = "00000000-0000-4000-8000-000000000002";
+const UNMAPPED_FACILITY_ID = "00000000-0000-4000-8000-000000000004";
+const MONTH_REFUSAL = "A credit batch may span at most one month (one calendar month; noma rule).";
+
+function FacilitySelect({ control }: { control: Control<{ facilityId: string }> }) {
+  const { field } = useController({ control, name: "facilityId" });
+  return (
+    <select aria-label="Facility" {...field}>
+      <option value={ISOMETRIC_FACILITY_ID}>Isometric facility</option>
+      <option value={UNMAPPED_FACILITY_ID}>Facility without a certifier</option>
+    </select>
+  );
+}
 
 vi.mock("@/hooks/use-facility-context", () => ({ useFacilityContext: () => ({ facilityId: "facility" }) }));
 vi.mock("@/hooks/use-certification", async (importOriginal) => ({
   ...await importOriginal<typeof import("@/hooks/use-certification")>(),
-  useFacilityCertifierSummary: () => ({ data: undefined }),
+  useFacilityCertifierSummary: mocks.certifierSummary,
 }));
 vi.mock("@/hooks/use-feedstock-types", async (importOriginal) => ({
   ...await importOriginal<typeof import("@/hooks/use-feedstock-types")>(),
@@ -24,7 +41,9 @@ vi.mock("@/hooks/use-credit-batches", async (importOriginal) => ({
 }));
 vi.mock("@/components/forms", async (importOriginal) => ({
   ...await importOriginal<typeof import("@/components/forms")>(),
-  FormEntitySelect: () => null,
+  // Expose the form's facility field without coupling this test to the entity picker.
+  FormEntitySelect: ({ control }: { control: Control<{ facilityId: string }> }) =>
+    mocks.showFacilitySelect ? <FacilitySelect control={control} /> : null,
 }));
 vi.mock("@/components/ui/tooltip", () => ({
   InfoHint: () => null,
@@ -32,6 +51,10 @@ vi.mock("@/components/ui/tooltip", () => ({
 }));
 
 afterEach(cleanup);
+beforeEach(() => {
+  mocks.showFacilitySelect = false;
+  mocks.certifierSummary.mockReturnValue({ data: undefined });
+});
 
 describe("CreditBatchForm required dates", () => {
   it.each(["create", "edit"])("marks both date labels required in %s mode", (mode) => {
@@ -45,5 +68,85 @@ describe("CreditBatchForm required dates", () => {
       expect(label.textContent).toContain("Required");
       expect(label.querySelector('[aria-hidden="true"]')?.textContent).toBe("*");
     }
+  });
+});
+
+describe("CreditBatchForm certifier period policy", () => {
+  const creditBatch = {
+    id: "00000000-0000-4000-8000-000000000001",
+    facilityId: "00000000-0000-4000-8000-000000000002",
+    feedstockTypeId: "00000000-0000-4000-8000-000000000003",
+    startDate: "2026-01-01",
+    endDate: "2026-04-30",
+    sampling: "sampled",
+    certifier: null,
+    productionRunIds: [],
+  } as unknown as CreditBatch;
+
+  it("submits a multi-month period for a facility without a certifier", async () => {
+    mocks.certifierSummary.mockReturnValue({ data: { mapping: null } });
+    const onSubmit = vi.fn();
+    const { container } = render(<CreditBatchForm creditBatch={creditBatch} onSubmit={onSubmit} />);
+    fireEvent.submit(container.querySelector("form")!);
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({
+      startDate: new Date("2026-01-01"),
+      endDate: new Date("2026-04-30"),
+    })));
+  });
+
+  it("refuses the same period for an Isometric facility", async () => {
+    mocks.certifierSummary.mockReturnValue({ data: { mapping: { provider: "isometric" } } });
+    const onSubmit = vi.fn();
+    const { container } = render(<CreditBatchForm creditBatch={creditBatch} onSubmit={onSubmit} />);
+    fireEvent.submit(container.querySelector("form")!);
+    await waitFor(() => expect(screen.getByText("A credit batch may span at most one month (one calendar month; noma rule).")).toBeTruthy());
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it("lifts the month refusal when switching to an unmapped facility and restores it on switching back", async () => {
+    mocks.showFacilitySelect = true;
+    mocks.certifierSummary.mockImplementation((facilityId: string) => ({
+      data: { mapping: facilityId === ISOMETRIC_FACILITY_ID ? { provider: "isometric" } : null },
+    }));
+    const onSubmit = vi.fn();
+    const { container } = render(<CreditBatchForm creditBatch={creditBatch} onSubmit={onSubmit} />);
+    const form = container.querySelector("form")!;
+    fireEvent.submit(form);
+    await screen.findByText(MONTH_REFUSAL);
+
+    fireEvent.change(screen.getByRole("combobox", { name: "Facility" }), {
+      target: { value: UNMAPPED_FACILITY_ID },
+    });
+    await waitFor(() => expect(screen.queryByText(MONTH_REFUSAL)).toBeNull());
+    expect(mocks.certifierSummary).toHaveBeenLastCalledWith(UNMAPPED_FACILITY_ID, true);
+    fireEvent.submit(form);
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ facilityId: UNMAPPED_FACILITY_ID })));
+
+    onSubmit.mockClear();
+    fireEvent.change(screen.getByRole("combobox", { name: "Facility" }), {
+      target: { value: ISOMETRIC_FACILITY_ID },
+    });
+    await screen.findByText(MONTH_REFUSAL);
+    await act(async () => { fireEvent.submit(form); });
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it("revalidates when the selected facility's certifier summary changes without a field edit", async () => {
+    const onSubmit = vi.fn();
+    const { container, rerender } = render(<CreditBatchForm creditBatch={creditBatch} onSubmit={onSubmit} />);
+    await screen.findByText(MONTH_REFUSAL);
+
+    mocks.certifierSummary.mockReturnValue({ data: { mapping: null } });
+    rerender(<CreditBatchForm creditBatch={creditBatch} onSubmit={onSubmit} />);
+    await waitFor(() => expect(screen.queryByText(MONTH_REFUSAL)).toBeNull());
+    fireEvent.submit(container.querySelector("form")!);
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
+
+    onSubmit.mockClear();
+    mocks.certifierSummary.mockReturnValue({ data: { mapping: { provider: "isometric" } } });
+    rerender(<CreditBatchForm creditBatch={creditBatch} onSubmit={onSubmit} />);
+    await screen.findByText(MONTH_REFUSAL);
+    await act(async () => { fireEvent.submit(container.querySelector("form")!); });
+    expect(onSubmit).not.toHaveBeenCalled();
   });
 });

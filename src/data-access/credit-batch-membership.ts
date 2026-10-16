@@ -35,7 +35,7 @@ import { assertRowVersion, nextVersion } from "./row-version";
  *
  * The integrity checks a credit batch's production-run membership must satisfy
  * before it is persisted (ADR 0016): the runs exist, belong to the batch's
- * facility and ≤1-month window, are not already claimed by another batch, and
+ * facility and production window, are not already claimed by another batch, and
  * resolve to exactly one feedstock type (a credit batch IS the protocol
  * production batch — one feedstock). Extracted from `credit-batches.ts` to keep
  * that module under the 1000-line cap; both helpers are transaction-scoped so
@@ -61,6 +61,7 @@ import {
   productionRunFeedstocks,
 } from "@/db/schema/production";
 import { assertCreditBatchProductionWindow } from "./credit-batch-production-window";
+import { getFacilityCertifierWithExecutor } from "./credit-batch-accounting";
 import { productionRunDateExpr } from "./production-runs/date-expr";
 import { SafeError } from "@/lib/errors";
 import { DomainError } from "@/lib/domain-errors";
@@ -118,6 +119,7 @@ export async function lockCreditBatchDeclarationRuns(
   params: {
     facilityId: string;
     feedstockTypeId: string;
+    certifier: string | null;
     startDate: string | Date;
     endDate: string | Date;
     requestedProductionRunIds: string[];
@@ -222,17 +224,19 @@ export async function prepareCreditBatchMembershipWrite(
     .where(and(eq(creditBatches.id, id), eq(creditBatches.organizationId, ctx.organizationId)));
   if (!snapshot) throw new SafeError("Credit batch not found");
   const currentProductionRunIds = await readMembershipRunIds(ctx, tx, id);
+  const certifier = await getFacilityCertifierWithExecutor(ctx, tx, target.facilityId ?? snapshot.facilityId);
   const matchingProductionRunIds = refreshMembership
     ? await findMatchingUnassignedProductionRunIds(ctx, tx, {
         facilityId: target.facilityId ?? snapshot.facilityId,
         feedstockTypeId: target.feedstockTypeId ?? snapshot.feedstockTypeId,
+        certifier,
         startDate: target.startDate ?? snapshot.startDate,
         endDate: target.endDate ?? snapshot.endDate,
       })
     : undefined;
   const lockedRemovals = await lockCreditBatchArtifacts(ctx, tx, id);
   await lockMembershipFacilities(ctx, tx, [snapshot.facilityId, target.facilityId ?? snapshot.facilityId]);
-  return { snapshot, currentProductionRunIds, matchingProductionRunIds, lockedRemovals };
+  return { snapshot, currentProductionRunIds, matchingProductionRunIds, lockedRemovals, certifier };
 }
 
 export async function assertNoOverlappingCreditBatchCohort(
@@ -241,6 +245,7 @@ export async function assertNoOverlappingCreditBatchCohort(
   params: {
     facilityId: string;
     feedstockTypeId: string;
+    certifier: string | null;
     startDate: string | Date;
     endDate: string | Date;
     excludeCreditBatchId?: string;
@@ -249,6 +254,7 @@ export async function assertNoOverlappingCreditBatchCohort(
   const { startStr, endStr } = assertCreditBatchProductionWindow(
     params.startDate,
     params.endDate,
+    params.certifier,
   );
   const [overlap] = await tx
     .select({ code: creditBatches.code })
@@ -333,6 +339,7 @@ export async function validateProductionRunIds(
   tx: DbTransaction,
   productionRunIds: string[],
   facilityId: string,
+  certifier: string | null,
   startDate?: string | Date,
   endDate?: string | Date,
   excludeCreditBatchId?: string,
@@ -393,6 +400,7 @@ export async function validateProductionRunIds(
     const { startStr, endStr } = assertCreditBatchProductionWindow(
       startDate,
       endDate,
+      certifier,
     );
     const outsideWindow = rows.filter((r) => {
       return r.date < startStr || r.date > endStr;
@@ -574,6 +582,7 @@ export async function findMatchingUnassignedProductionRunIds(
   params: {
     facilityId: string;
     feedstockTypeId: string;
+    certifier: string | null;
     startDate: string | Date;
     endDate: string | Date;
   },
@@ -581,6 +590,7 @@ export async function findMatchingUnassignedProductionRunIds(
   const { startStr, endStr } = assertCreditBatchProductionWindow(
     params.startDate,
     params.endDate,
+    params.certifier,
   );
   const rows = await tx
     .selectDistinct({

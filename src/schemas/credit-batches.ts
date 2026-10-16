@@ -1,6 +1,6 @@
 import { expectedVersionSchema } from "./helpers";
 import { z } from "zod";
-import { getCreditBatchProductionWindowIssue } from "@/lib/credit-batch-production-window";
+import { validateBatchPeriod } from "@/lib/certifier-policy";
 
 // ============================================
 // Constants and Enums
@@ -53,7 +53,7 @@ export const DURABILITY_TIER_FALLBACK: DurabilityOption = "1000_year";
  * 2. Production cohort — productionRunIds (membership via credit_batch_production_runs)
  * 3. Site management — siteManagementNotes
  */
-export const creditBatchFormSchema = z
+export const creditBatchFormSchemaForCertifier = (certifier: string | null) => z
   .object({
     // === Section 1: Overview ===
     facilityId: z.string().min(1, "Select a facility.").uuid("Choose a valid facility."),
@@ -80,10 +80,7 @@ export const creditBatchFormSchema = z
       .or(z.literal("")),
   })
   .superRefine((data, ctx) => {
-    const windowIssue = getCreditBatchProductionWindowIssue(
-      data.startDate,
-      data.endDate,
-    );
+    const windowIssue = validateBatchPeriod({ certifier, startDate: data.startDate, endDate: data.endDate });
     if (windowIssue) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
@@ -95,6 +92,8 @@ export const creditBatchFormSchema = z
     // Missing lab data is represented in the CO2e preview instead of blocking
     // credit-batch creation.
   });
+
+export const creditBatchFormSchema = creditBatchFormSchemaForCertifier("isometric");
 
 // ============================================
 // Server Action Schemas
