@@ -8,6 +8,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRef, useState } from "react";
 import type { FacilityDistanceInput } from "@/schemas/facility-distances";
+import { facilityDistanceDefaults } from "@/lib/facility-distance-defaults";
 import { PartyFacilityDistances } from "@/components/party-facility-distances";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { useController, useForm, useWatch } from "react-hook-form";
@@ -62,7 +63,7 @@ export function SupplierQuickAddDialog({
     defaultValues: {
       name: "",
       country: defaultCountry,
-      facilityDistances: [],
+      facilityDistances: facilityDistanceDefaults(selectedFacility ? [selectedFacility] : []),
       gpsLatitude: undefined,
       gpsLongitude: undefined,
     },
@@ -124,7 +125,7 @@ export function SupplierQuickAddDialog({
     reset({
       name: "",
       country: defaultCountry,
-      facilityDistances: [],
+      facilityDistances: facilityDistanceDefaults(selectedFacility ? [selectedFacility] : []),
       gpsLatitude: undefined,
       gpsLongitude: undefined,
     });

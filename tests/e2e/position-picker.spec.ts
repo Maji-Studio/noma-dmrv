@@ -422,9 +422,13 @@ test.describe("PositionPicker + CALC (stub geo provider)", () => {
     });
     await expect(customerAddDialog).toBeVisible();
     await customerAddDialog.getByRole("button", { name: "Close" }).click();
-    await expect(customerAddDialog).not.toBeVisible();
+    await expect(page.getByTestId("location-quick-add-dialog")).not.toBeVisible();
+    await expect(page.getByRole("dialog", { name: "Discard unsaved changes?", exact: true })).not.toBeVisible();
 
-    await page.getByRole("button", { name: /^Edit / }).first().click();
+    await page.getByRole("button", {
+      name: `Edit ${seededData.customerLocation.name}`,
+      exact: true,
+    }).click();
     const customerEditDialog = page.getByRole("dialog", {
       name: "Edit location",
     });

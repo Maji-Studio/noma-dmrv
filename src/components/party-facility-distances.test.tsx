@@ -54,8 +54,8 @@ it("merges a delayed estimate into the current form value without reverting anot
   value = [...value, { facilityId: "second", distanceKm: 90, distanceSource: "manual" }];
   pendingEstimate(35, "map_estimate");
   expect(onChange).toHaveBeenCalledWith([
-    { facilityId: "second", distanceKm: 90, distanceSource: "manual" },
     { facilityId: "first", distanceKm: 35, distanceSource: "map_estimate" },
+    { facilityId: "second", distanceKm: 90, distanceSource: "manual" },
   ]);
 });
 

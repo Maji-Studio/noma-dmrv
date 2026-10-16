@@ -42,10 +42,13 @@ export function PartyFacilityDistances({ value = [], savedValue = [], isEditMode
         error={rowErrors?.[valueIndex]?.distanceKm?.message ?? error}
         distanceKm={draftRow?.distanceKm}
         distanceSource={draftRow?.distanceSource}
-        onDistanceChange={(distanceKm, source) => onChange([
-          ...(getValue?.() ?? value).filter(row => row.facilityId !== item.id),
-          { facilityId: item.id, distanceKm, distanceSource: source ?? "manual" },
-        ])}
+        onDistanceChange={(distanceKm, source) => {
+          const current = getValue?.() ?? value;
+          const nextRow = { facilityId: item.id, distanceKm, distanceSource: source ?? "manual" };
+          onChange(current.some(row => row.facilityId === item.id)
+            ? current.map(row => row.facilityId === item.id ? { ...row, ...nextRow } : row)
+            : [...current, nextRow]);
+        }}
         origin={fromFacility ? { lat: item.gpsLatitude, lng: item.gpsLongitude } : locationPoint}
         destination={fromFacility ? locationPoint : { lat: item.gpsLatitude, lng: item.gpsLongitude }}
         originLabel={fromFacility ? `facility ${item.name}` : "location"}

@@ -5,6 +5,8 @@
  */
 "use client";
 
+import { facilityDistanceDefaults } from "@/lib/facility-distance-defaults";
+import { useFacilityContext } from "@/hooks/use-facility-context";
 import { Notice } from "@/components/ui/notice";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -93,6 +95,7 @@ export function CustomerLocationForm({
   submitLabel,
 }: CustomerLocationFormProps) {
   const isEditMode = !!location;
+  const { facilities } = useFacilityContext();
   const { defaults: organizationDefaults } = useOrganizationDefaultValues();
   const defaultValues = {
     name: location?.name ?? "",
@@ -105,8 +108,8 @@ export function CustomerLocationForm({
     gpsLatitude: location?.gpsLatitude ?? undefined,
     gpsLongitude: location?.gpsLongitude ?? undefined,
     address: location?.address ?? "",
-    facilityDistances: location?.facilityDistances ?? [],
-    defaultSoilTemperatureC: location?.defaultSoilTemperatureC ?? undefined,
+    facilityDistances: facilityDistanceDefaults(facility ? [facility] : facilities, location?.facilityDistances),
+    defaultSoilTemperatureC: location?.defaultSoilTemperatureC ?? "",
     isDefault: location?.isDefault ?? initialIsDefault,
   };
 

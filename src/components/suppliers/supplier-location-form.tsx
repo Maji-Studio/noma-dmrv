@@ -23,6 +23,8 @@ import {
 } from "@/schemas/suppliers";
 import type { SupplierLocation } from "@/db/schema/parties";
 import { useOrganizationDefaultValues } from "@/hooks/use-organization-settings";
+import { facilityDistanceDefaults } from "@/lib/facility-distance-defaults";
+import { useFacilityContext } from "@/hooks/use-facility-context";
 import { Notice } from "@/components/ui/notice";
 import { resolveLocationCountry } from "@/lib/location-defaults";
 
@@ -79,6 +81,7 @@ export function SupplierLocationForm({
   submitLabel,
 }: SupplierLocationFormProps) {
   const isEditMode = !!location;
+  const { facilities } = useFacilityContext();
   // The default moves only by setting another location as default.
   const isCurrentDefault = location?.isDefault === true;
   const { defaults: organizationDefaults } = useOrganizationDefaultValues();
@@ -93,7 +96,7 @@ export function SupplierLocationForm({
     gpsLatitude: location?.gpsLatitude ?? undefined,
     gpsLongitude: location?.gpsLongitude ?? undefined,
     address: location?.address ?? "",
-    facilityDistances: location?.facilityDistances ?? [],
+    facilityDistances: facilityDistanceDefaults(facilities, location?.facilityDistances),
     isDefault: location?.isDefault ?? initialIsDefault,
   };
 
