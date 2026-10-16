@@ -26,11 +26,11 @@ Completion: brief file written, feature branch checked out, board moved (if appl
 Spawn ONE subagent with only the brief path, the repo root, and a pointer to `.claude/CLAUDE.md`. Its task:
 
 - Implement the change through the layered flow (schema → data-access+guards → fn → hooks → components), reusing existing hooks/utilities. Per the model rubric in CLAUDE.md, bulk/mechanical briefs (clear-spec implementation, migrations, sweeps) may be delegated to gpt-6-astra via the **codex-implementation** skill — the subagent then owns inspecting the diff and verifying, and codex output is evidence, not authority. User-facing work (UI, copy, API design) stays with Claude.
-- Keep `pnpm lint` and `pnpm typecheck` green — never trust exit 0 from a piped command; read the real output.
+- Keep `pnpm verify:static` green — never trust exit 0 from a piped command; read the real output.
 - Commit on the feature branch (conventional commits; body says *why*).
 - **Verify the changed behaviour** per the playbook's UI verification section — the path depends on session mode. Interactive session: ensure the dev server is up on :3100 and delegate to the **codex-computer-use** skill (the user approves the full-access prompt); judge the screenshots + report yourself. Auto/unattended session: the permission classifier blocks codex full-access and credential extraction — write or extend a Playwright e2e spec (HTTP-auth fixtures) covering the flow and run it; do not attempt the codex path. Claude-in-chrome fallback per playbook (user signs in themselves in auto mode). For a backend-only change with no UI surface, exercise the relevant `pnpm test:e2e` spec or unit path instead and say which.
 
-Completion: change committed, lint+typecheck green, the changed behaviour observed working. If verify goes red, send the failure back to the same subagent (SendMessage) to fix — never open a PR on red.
+Completion: change committed, verify:static green, the changed behaviour observed working. If verify goes red, send the failure back to the same subagent (SendMessage) to fix — never open a PR on red.
 
 ## Phase 3 — Publish (one subagent)
 
@@ -56,7 +56,7 @@ Spawn a FRESH resolver subagent with the PR number. For every comment — fresh 
 - Fix valid findings with the **minimal** change. Resist over-engineering: a fix that balloons scope is itself a smell to push back on, not follow.
 - Decline false positives and gold-plating with a one-line written reason.
 - Reply to each thread; resolve the ones addressed or declined; leave genuinely open questions unresolved.
-- One commit per addressed comment; keep lint+typecheck green; push.
+- One commit per addressed comment; keep verify:static green; push.
 
 Completion: every comment triaged (fixed / declined+reason), replies posted, threads resolved, branch pushed.
 

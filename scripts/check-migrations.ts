@@ -24,6 +24,7 @@ export function checkMigrations(entries: readonly MigrationEntry[], files: reado
   const fileNames = new Set(files);
   const tags = new Set(entries.map((entry) => entry.tag));
   const prefixes = new Map<string, string>();
+  let latest: MigrationEntry | undefined;
 
   entries.forEach((entry, index) => {
     if (entry.idx !== index) {
@@ -41,17 +42,20 @@ export function checkMigrations(entries: readonly MigrationEntry[], files: reado
       entry.idx === HISTORIC_TIMESTAMP_INVERSION.idx &&
       previous.when === HISTORIC_TIMESTAMP_INVERSION.previousWhen &&
       entry.when === HISTORIC_TIMESTAMP_INVERSION.when;
-    if (previous && !(entry.when > previous.when) && !historicInversion) {
-      failures.push(`Journal entry ${entry.idx} when ${entry.when} must be greater than entry ${previous.idx} when ${previous.when}.`);
+    // Drizzle skips a migration older than the newest one applied, not just its neighbour.
+    if (latest && !(entry.when > latest.when) && !historicInversion) {
+      failures.push(`Journal entry ${entry.idx} when ${entry.when} must be greater than entry ${latest.idx} when ${latest.when}.`);
     }
+    if (!latest || entry.when > latest.when) latest = entry;
   });
 
   for (const file of files) {
-    const prefix = file.match(MIGRATION_FILE)?.[1];
-    if (prefix === undefined) continue;
+    if (!file.endsWith(".sql")) continue;
     if (!tags.has(file.slice(0, -".sql".length))) {
       failures.push(`drizzle/${file} has no journal entry.`);
     }
+    const prefix = file.match(MIGRATION_FILE)?.[1];
+    if (prefix === undefined) continue;
     const existing = prefixes.get(prefix);
     if (existing) {
       failures.push(`Migration prefix ${prefix} is shared by ${existing} and ${file}.`);

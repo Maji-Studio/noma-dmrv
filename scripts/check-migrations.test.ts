@@ -23,12 +23,13 @@ describe("checkMigrations", () => {
   });
 
   it("rejects missing files, missing entries, out-of-order indexes and mismatched prefixes", () => {
-    const failures = checkMigrations([{ ...ENTRIES[0], idx: 1 }], ["0002_other.sql"]);
+    const failures = checkMigrations([{ ...ENTRIES[0], idx: 1 }], ["0002_other.sql", "151_fix.sql"]);
     expect(failures).toEqual([
       "Journal entry 0 has idx 1; expected 0.",
       "Journal entry 1 is missing drizzle/0000_first.sql.",
       "Journal tag 0000_first has a numeric prefix different from idx 1.",
       "drizzle/0002_other.sql has no journal entry.",
+      "drizzle/151_fix.sql has no journal entry.",
     ]);
   });
 
@@ -43,6 +44,9 @@ describe("checkMigrations", () => {
     expect(checkMigrations(entries, files)).toHaveLength(1);
     entries[10].when += 1;
     entries[11].when = entries[10].when;
+    expect(checkMigrations(entries, files)).toHaveLength(1);
+    // Newer than its neighbour but older than idx 9: Drizzle would still skip it.
+    entries[11].when = entries[10].when + 1;
     expect(checkMigrations(entries, files)).toHaveLength(1);
   });
 });
