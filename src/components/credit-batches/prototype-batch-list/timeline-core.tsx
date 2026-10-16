@@ -3,19 +3,18 @@
 /**
  * PROTOTYPE (throwaway): what the three timeline versions share. Year maths,
  * the year switcher, the month axis, the Today line, the state legend and the
- * hover details (the app's shared Tooltip).
+ * hover card (batch-hover-card.tsx).
  *
  * A credit batch window is at most one month but need not follow calendar
  * months, and one feedstock's windows never overlap, so one row per feedstock
  * always fits and a batch is drawn from its start to its end date.
  */
-import Link from "next/link";
 import type { ReactNode } from "react";
 import { CaretLeftIcon, CaretRightIcon } from "@phosphor-icons/react/dist/ssr";
 import { Button } from "@/components/ui/button";
-import { Tooltip } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { BATCHES, matchesStage, STATE_META, STATE_ORDER, YEARS, type BatchState, type StubBatch } from "./list-model";
+import { BatchHoverCard } from "./batch-hover-card";
 import { batchHref, MUTED, periodLabel, tons, useList } from "./list-parts";
 
 export const MONTH_LABELS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -26,7 +25,7 @@ export const TODAY = "2026-10-16";
 /** Solid and tint per state, for bars, edges and the legend. */
 export const STATE_TONE: Record<BatchState, { solid: string; tint: string; text: string }> = {
   blocking: { solid: "bg-[var(--st-bad)]", tint: "bg-[var(--st-bad-bg)]", text: "text-[var(--st-bad)]" },
-  ready: { solid: "bg-[var(--ink)]", tint: "bg-[var(--color-surface-medium)]", text: "text-[var(--ink)]" },
+  ready: { solid: "bg-[var(--st-wait)]", tint: "bg-[var(--st-wait-bg)]", text: "text-[var(--st-wait)]" },
   submitted: { solid: "bg-[var(--st-run)]", tint: "bg-[var(--st-run-bg)]", text: "text-[var(--st-run)]" },
   issued: { solid: "bg-[var(--st-ok)]", tint: "bg-[var(--st-ok-bg)]", text: "text-[var(--st-ok)]" },
 };
@@ -162,27 +161,6 @@ export function TodayLine({ year, label = true }: { year: number; label?: boolea
   );
 }
 
-/** What hover shows: identity, window, state, mass and Removals. */
-export function BatchDetails({ batch }: { batch: StubBatch }) {
-  const state = STATE_META[batch.state];
-  return (
-    <span className="flex flex-col gap-4">
-      <span className="body-small font-medium">
-        {batch.code}, {batch.feedstock}
-      </span>
-      <span>{periodLabel(batch)}</span>
-      <span>
-        {state.title}
-        {batch.state === "blocking" && `, ${batch.blocking} blocking ${batch.blocking === 1 ? "item" : "items"}`}
-      </span>
-      <span className="tabular-nums">
-        {tons(batch.produced)} produced, {tons(batch.applied)} applied
-      </span>
-      {batch.removals.length > 0 && <span>In {batch.removals.join(" and ")}</span>}
-    </span>
-  );
-}
-
 /**
  * A positioned bar slot: the link to the batch page, with hover details. The
  * link fills the slot; `children` draws the bar.
@@ -193,15 +171,14 @@ export function BarLink({ batch, spot, className, children }: { batch: StubBatch
   const dimmed = !matchesStage(batch, stage);
   return (
     <div className={cn("absolute inset-y-0", dimmed && "opacity-30")} style={{ left: `${spot.left}%`, width: `${spot.width}%` }}>
-      <Tooltip content={<BatchDetails batch={batch} />} side="top">
-        <Link
-          href={batchHref(realBatchId, batch)}
-          aria-label={`${batch.code}, ${batch.feedstock}, ${periodLabel(batch)}, ${STATE_META[batch.state].title}`}
-          className={cn("absolute inset-0 block outline-offset-2", className)}
-        >
-          {children}
-        </Link>
-      </Tooltip>
+      <BatchHoverCard
+        batch={batch}
+        href={batchHref(realBatchId, batch)}
+        label={`${batch.code}, ${batch.feedstock}, ${periodLabel(batch)}, ${STATE_META[batch.state].title}`}
+        className={cn("absolute inset-0 block outline-offset-2", className)}
+      >
+        {children}
+      </BatchHoverCard>
     </div>
   );
 }
