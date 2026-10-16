@@ -7,7 +7,7 @@
  */
 "use client";
 
-// Orphaned: no mounted operator entry point. See docs/open-questions.md "isometric/structured-telemetry-path".
+// Retained non-MVP seam (#942 q25, #1014): no current consumer; retained for the structured readings preview. See docs/architecture.md#production-run-extensions.
 
 import { useState } from "react";
 import { TrashIcon } from "@phosphor-icons/react/dist/ssr";
@@ -16,7 +16,8 @@ import {
   useDeleteAllProductionRunReadings,
 } from "@/hooks/use-production-run-readings";
 import { Button } from "@/components/ui";
-import { ServerError } from "@/components/forms";
+import { ServerError } from "@/components/forms/server-error";
+import { Notice } from "@/components/ui/notice";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { TableSkeleton } from "@/components/ui/loading-skeleton";
 import { useToast } from "@/components/ui/toast";
@@ -43,7 +44,7 @@ interface ProductionRunReadingTableProps {
   productionRunId: string;
   timeZone: string;
   readOnly?: boolean;
-  /** Keep the inline form preview short while preserving access to every row. */
+  /** Keep the bounded preview in a shorter scroll area. */
   compact?: boolean;
 }
 
@@ -54,7 +55,7 @@ export function ProductionRunReadingTable({
   compact = false,
 }: ProductionRunReadingTableProps) {
   const {
-    data: readings,
+    data,
     isLoading,
     error,
   } = useProductionRunReadings(productionRunId);
@@ -63,7 +64,9 @@ export function ProductionRunReadingTable({
 
   const [confirmingDeleteAll, setConfirmingDeleteAll] = useState(false);
 
-  const readingCount = readings?.length ?? 0;
+  const readings = data?.readings ?? [];
+  const truncated = data?.truncated ?? false;
+  const readingCount = readings.length;
 
   if (!isLoading && !error && readingCount === 0) {
     return null;
@@ -107,6 +110,12 @@ export function ProductionRunReadingTable({
 
       {/* Error */}
       {error && <ServerError message={error.message} />}
+
+      {truncated && (
+        <Notice tone="info">
+          {`Showing the latest ${readingCount} readings. Older readings are not shown.`}
+        </Notice>
+      )}
 
       {/* Table */}
       {isLoading ? (
@@ -159,7 +168,7 @@ export function ProductionRunReadingTable({
         <DeleteConfirmDialog
           isOpen={confirmingDeleteAll}
           title="Delete all readings"
-          message={`This permanently deletes all ${readingCount} reading${readingCount === 1 ? "" : "s"} for this production run. To restore them, re-upload a readings CSV and import it. This cannot be undone.`}
+          message="This permanently deletes all readings for this production run, including readings not shown here. To restore them, re-upload a readings CSV and import it. This cannot be undone."
           onConfirm={handleDeleteAllConfirm}
           onCancel={() => setConfirmingDeleteAll(false)}
           isPending={deleteAll.isPending}

@@ -1,6 +1,6 @@
 "use client";
 
-// Orphaned: no mounted operator entry point. See docs/open-questions.md "isometric/structured-telemetry-path".
+// Retained non-MVP seam (#942 q25, #1014): no current consumer; retained for structured readings imports. See docs/architecture.md#production-run-extensions.
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
@@ -33,9 +33,6 @@ export function useImportProductionRunReadings() {
       });
       queryClient.invalidateQueries({
         queryKey: productionRunReadingKeys.lists(),
-      });
-      queryClient.invalidateQueries({
-        queryKey: productionRunKeys.readings(data.productionRunId),
       });
       invalidateCertificationReadiness(queryClient);
     },

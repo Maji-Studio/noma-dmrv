@@ -9,9 +9,7 @@ import { z } from "zod";
 
 import {
   getProductionRunById as getProductionRunByIdData,
-  getProductionRunReadings as getProductionRunReadingsData,
   type ProductionRunWithRelations,
-  type ProductionRunReadingRecord,
 } from "@/data-access/production-runs";
 import {
   createProductionRunSchema,
@@ -46,21 +44,6 @@ export async function getProductionRunByIdFn(
     {
       fallbackMessage: "Failed to load production run",
       log: logFor("production-run:get"),
-    },
-  );
-}
-
-/**
- * Get production run readings (time-series data)
- */
-export async function getProductionRunReadingsFn(
-  productionRunId: string
-): Promise<ActionResult<ProductionRunReadingRecord[]>> {
-  return withAction(
-    (ctx) => getProductionRunReadingsData(ctx, productionRunId),
-    {
-      fallbackMessage: "Failed to load production run readings",
-      log: logFor("production-run:readings"),
     },
   );
 }

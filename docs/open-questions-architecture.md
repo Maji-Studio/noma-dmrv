@@ -287,7 +287,7 @@ membership refresh. Both sides retry transaction aborts.
   [data-entry API plan section 8](./plans/2026-10-06-data-entry-api.md#8-batches-and-offline-design-now-build-later)
   and incident endpoints are deferred by decision 39. The existing seams are
   `src/lib/operations/production-runs.ts:startProductionRun`,
-  `src/data-access/production-runs/readings.ts:getProductionRunReadings` and
+  `src/data-access/production-run-readings.ts:getProductionRunReadingsList` and
   `src/fn/production-incidents.ts:createProductionIncidentFn`.
 - Incident time (`src/schemas/production-incidents.ts:productionIncidentFormSchema.incidentTime`)
   still reads any string through `new Date(value)`, so a time without an offset

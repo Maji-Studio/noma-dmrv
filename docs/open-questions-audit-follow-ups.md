@@ -123,24 +123,6 @@ decision or larger than a review-fix. Execution summary archived in
 [`docs/archive/2026-06-07-whole-repo-audit-snapshot.md`](./archive/2026-06-07-whole-repo-audit-snapshot.md).
 Sizing: (S) small, (M) medium, (L) large.
 
-### Structured readings wiring and query bounds (`isometric/structured-telemetry-path`): **deferred**
-
-- **Anchor:** `src/fn/production-run-reading-imports.ts:importProductionRunReadingsFromDocumentFn`
-  and `src/data-access/production-run-readings.ts:getProductionRunReadingsList`.
-- The readings importer is kept (#942 q25, #1014), as recorded in
-  [`isometric/changes.md`](./isometric/changes.md). Its retention is settled.
-- Operator upload (`src/components/production-runs/production-readings-field.tsx`)
-  stores the original CSV unchanged as a `sensor_data` document.
-  It does not parse rows, populate `production_run_readings`, or gate on row count.
-- `src/lib/cli/seed/readings.ts:seedReadings` calls the importer; the hook in
-  `src/hooks/use-production-run-reading-imports.ts` has no mounted operator caller.
-- `getProductionRunReadingsList` has no `.limit`, and
-  `src/components/production-run-readings/production-run-reading-table.tsx:ProductionRunReadingTable`
-  has no virtualization.
-- Safety net for later changes: #627 slice 2's `tests/production-readings-readiness.test.ts` and `tests/isometric-submit-removal-readings.test.ts` lock readiness and Removal submission to retained-file evidence.
-- **Resolve via:** define the operator upload/import flow and bound the readings
-  query and table rendering.
-
 ### Certification readiness loader lineage fan-out (`perf/overview-lineage-nplus1`) — **deferred**
 
 - `loadCertificationOverview` rebuilds a full submission context per removal;
