@@ -1,4 +1,4 @@
-import { lockEmissionEntry, lockWritableEmissionEntry } from "./emission-entry-lock";
+import { lockEmissionEntryDocumentOwner, lockWritableEmissionEntry } from "./emission-entry-lock";
 import { emissionEntries } from "@/db/schema/emission-entries";
 import { and, eq, sql } from "drizzle-orm";
 import type { AnyPgColumn, AnyPgTable } from "drizzle-orm/pg-core";
@@ -75,7 +75,10 @@ export async function lockDocumentOwner(ctx: OrgContext, tx: DbTransaction, enti
   requireOrgScope(ctx);
   if (!DOCUMENT_ENTITY_TYPES.includes(entityType as DocumentEntityType)) throw documentNotFound("entityId");
   const type = entityType as DocumentEntityType;
-  if (type === "emission_entry") await lockEmissionEntry(ctx, tx, entityId);
+  if (type === "emission_entry") {
+    const { archived } = await lockEmissionEntryDocumentOwner(ctx, tx, entityId);
+    return { links: [{ type, id: entityId, archived, parentId: null, legacyId: null, parentType: null }], targets: [], keys: new Set(), field: OWNER_FIELDS[type] };
+  }
   const links = await discover(ctx, tx, type, entityId);
   const targets = targetsFor(links);
   const keys = await lockCertifiedLineageArtifacts(ctx, tx, targets);

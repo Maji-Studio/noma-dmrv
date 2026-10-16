@@ -37,16 +37,24 @@ it("maps each transport category through the existing round-trip aggregators", (
 });
 
 it("preserves DB decimal text and never accumulates energy in floats", () => {
-  const figures = batchAutomaticFigures([run({ id: "a", electricityKwh: 0.1 }), run({ id: "b", electricityKwh: 0.2 })], emptyLegs, {
-    runs: { a: { feedstockMassDryKg: "9007199254740993.001", biocharDryMassKg: null }, b: { feedstockMassDryKg: "0.002", biocharDryMassKg: null } }, legs: {},
+  const figures = batchAutomaticFigures([
+    run({ id: "a", electricityKwh: 0.1 }), run({ id: "b", electricityKwh: 0.2 }),
+  ], emptyLegs, {
+    runs: {
+      a: { feedstockMassDryKg: "9007199254740993.001", biocharDryMassKg: null },
+      b: { feedstockMassDryKg: "0.002", biocharDryMassKg: null },
+    },
+    legs: {},
   });
   expect(figures["feedstock-dry-mass"]?.magnitude).toBe("9007199254740993.003");
   expect(figures["run-electricity"]?.magnitude).toBe("0.3");
 });
 
-it.each(["empty", "missing-mass", "mixed-mode", "biochar-zero-distance"])("matches submission transport availability for %s", async scenario => {
+it.each(["empty", "missing-mass", "mixed-mode", "biochar-zero-distance"])("matches submission transport availability for %s", async (scenario) => {
   const { aggregateTransportMassDistance, aggregateBiocharTransportMassDistance } = await import("@/lib/isometric/utils/aggregation");
-  const base = { id: "one", distanceKm: 10, loadMassKg: 1000, transportMethodType: "road", calculationMethodType: "distance_based" } as TransportLegsByCategory["feedstock"][number];
+  const base = {
+    id: "one", distanceKm: 10, loadMassKg: 1000, transportMethodType: "road", calculationMethodType: "distance_based",
+  } as TransportLegsByCategory["feedstock"][number];
   let legs = [base];
   if (scenario === "empty") legs = [];
   if (scenario === "missing-mass") legs = [{ ...base, loadMassKg: null }];

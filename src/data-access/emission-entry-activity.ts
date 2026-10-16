@@ -9,9 +9,25 @@ type EntrySnapshot = typeof emissionEntries.$inferSelect & {
 };
 
 /** Compare persisted entry content; values and notes record field names only. */
-export async function recordEmissionEntryActivity(ctx: OrgContext, tx: DbTransaction,
-  action: ActivityEventInput["action"], before: EntrySnapshot | null, after: EntrySnapshot) {
+export async function recordEmissionEntryActivity(
+  ctx: OrgContext,
+  tx: DbTransaction,
+  action: ActivityEventInput["action"],
+  before: EntrySnapshot | null,
+  after: EntrySnapshot,
+) {
   requireOrgScope(ctx);
-  await recordActivityChange(ctx, tx, { entityType: "emission_entry", entityId: after.id,
-    creditBatchId: after.creditBatchId, action, source: "form" }, before, after);
+  await recordActivityChange(
+    ctx,
+    tx,
+    {
+      entityType: "emission_entry",
+      entityId: after.id,
+      creditBatchId: after.creditBatchId,
+      action,
+      source: "form",
+    },
+    before,
+    after,
+  );
 }

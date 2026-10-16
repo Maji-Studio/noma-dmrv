@@ -37,7 +37,7 @@ describe("batch emission line states", () => {
     expect(deriveBatchEmissionLines(f)[0].total).toBeNull();
     f.automaticFigures = { "run-electricity": { magnitude: "1", unit: "Wh" } };
     f.entries = [entry(f)];
-    expect(() => deriveBatchEmissionLines(f)).toThrow("values use different units");
+    expect(deriveBatchEmissionLines(f)[0]).toMatchObject({ state: "needsReview", total: null, blocker: { code: "lineNeedsReview" } });
   });
   it("review and setup take precedence over missing evidence", () => {
     const f = facts(); const id = f.definition.groups[0].components[0].id;

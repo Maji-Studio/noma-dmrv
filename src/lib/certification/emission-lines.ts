@@ -15,7 +15,7 @@ export type EmissionLineState = keyof typeof EMISSION_LINE_STATE_LABELS;
 export interface EmissionFigure { magnitude: string; unit: string }
 export interface EmissionLineEntryFact {
   componentId: string; kind: "value" | "zero"; hasEvidence: boolean;
-  total: EmissionFigure | null; counts: boolean;
+  total: EmissionFigure | null; counts: boolean; unitMismatch?: boolean;
 }
 export interface BatchEmissionLineFacts {
   definition: TemplateDefinition; lineSources: LineSources; problems: readonly LineSourceProblem[];
@@ -67,7 +67,15 @@ export function deriveBatchEmissionLines(facts: BatchEmissionLineFacts) {
     else if (counting.some((entry) => entry.kind === "zero")) state = "confirmedZero";
     else { state = "empty"; blocker = decision?.blocker; }
     // A paired-input value has no scalar total. Do not show a partial sum.
-    const total = values.some((entry) => entry.total === null) ? null : sumFigures([
+    const figures = [
+      ...(automaticFigure ? [automaticFigure] : []), ...values.flatMap((entry) => entry.total ? [entry.total] : []),
+    ];
+    const unitMismatch = entries.some((entry) => entry.unitMismatch) || figures.some((figure) => figure.unit !== figures[0]?.unit);
+    if (unitMismatch) {
+      state = "needsReview";
+      blocker = { code: "lineNeedsReview", message: "Emissions values use different units. Use the same unit before adding them.", fixTarget: "emissions", lineRef: { componentId: component.id, displayName: component.displayName } };
+    }
+    const total = unitMismatch || values.some((entry) => entry.total === null) ? null : sumFigures([
       ...(automaticFigure ? [automaticFigure] : []), ...values.flatMap((entry) => entry.total ? [entry.total] : []),
     ]);
     return { componentId: component.id, displayName: component.displayName, groupKey: group.key,
