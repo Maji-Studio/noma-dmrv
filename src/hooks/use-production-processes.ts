@@ -11,25 +11,29 @@ import type {
   StartNewProcessInput,
 } from "@/schemas/production-process";
 import { unwrap } from "@/hooks/types";
+import { formatUtcDate } from "@/lib/date-utils";
 
 const productionProcessKeys = {
   all: ["production-processes"] as const,
-  eligibility: (facilityId?: string, feedstockTypeId?: string) =>
-    ["production-processes", "eligibility", facilityId, feedstockTypeId] as const,
+  eligibility: (facilityId?: string, feedstockTypeId?: string, asOfDate?: string) =>
+    ["production-processes", "eligibility", facilityId, feedstockTypeId, asOfDate] as const,
 };
 
 export function useMethodBEligibility(
   facilityId?: string,
   feedstockTypeId?: string,
   enabled = true,
+  asOfDate?: Date,
 ) {
+  const batchStartDate = asOfDate ? formatUtcDate(asOfDate) : undefined;
   return useQuery({
-    queryKey: productionProcessKeys.eligibility(facilityId, feedstockTypeId),
+    queryKey: productionProcessKeys.eligibility(facilityId, feedstockTypeId, batchStartDate),
     queryFn: async () =>
       unwrap(
         await getMethodBEligibilityFn({
           facilityId,
           feedstockTypeId,
+          asOfDate: batchStartDate,
         }),
       ),
     enabled: enabled && Boolean(facilityId && feedstockTypeId),

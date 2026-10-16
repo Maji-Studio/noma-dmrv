@@ -9,6 +9,7 @@ import {
 } from "@/data-access/production-processes";
 import type { ProductionProcess } from "@/db/schema";
 import { requireOrgRole } from "@/lib/auth/server";
+import { formatUtcDate } from "@/lib/date-utils";
 import {
   recordMethodBPrerequisitesSchema,
   startNewProcessSchema,
@@ -19,6 +20,7 @@ import { withAction } from "./with-action";
 const methodBEligibilityInputSchema = z.object({
   facilityId: z.uuid(),
   feedstockTypeId: z.uuid(),
+  asOfDate: z.coerce.date().transform((date) => new Date(formatUtcDate(date))).optional(),
 });
 
 export async function getMethodBEligibilityFn(

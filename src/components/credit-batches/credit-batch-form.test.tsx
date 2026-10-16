@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { CreditBatch } from "@/db/schema/credits";
 import { CreditBatchForm } from "./credit-batch-form";
 
-const mocks = vi.hoisted(() => ({ certifierSummary: vi.fn(), showFacilitySelect: false }));
+const mocks = vi.hoisted(() => ({ certifierSummary: vi.fn(), methodBEligibility: vi.fn(), showFacilitySelect: false }));
 
 const ISOMETRIC_FACILITY_ID = "00000000-0000-4000-8000-000000000002";
 const UNMAPPED_FACILITY_ID = "00000000-0000-4000-8000-000000000004";
@@ -33,7 +33,7 @@ vi.mock("@/hooks/use-feedstock-types", async (importOriginal) => ({
 }));
 vi.mock("@/hooks/use-production-processes", async (importOriginal) => ({
   ...await importOriginal<typeof import("@/hooks/use-production-processes")>(),
-  useMethodBEligibility: () => ({ data: undefined }),
+  useMethodBEligibility: mocks.methodBEligibility,
 }));
 vi.mock("@/hooks/use-credit-batches", async (importOriginal) => ({
   ...await importOriginal<typeof import("@/hooks/use-credit-batches")>(),
@@ -52,11 +52,22 @@ vi.mock("@/components/ui/tooltip", () => ({
 
 afterEach(cleanup);
 beforeEach(() => {
+  mocks.methodBEligibility.mockClear();
+  mocks.methodBEligibility.mockReturnValue({ data: undefined });
   mocks.showFacilitySelect = false;
   mocks.certifierSummary.mockReturnValue({ data: undefined });
 });
 
 describe("CreditBatchForm required dates", () => {
+  it("passes the watched start date to the Method-B preview and clears it when empty", async () => {
+    const { container } = render(<CreditBatchForm onSubmit={vi.fn()} />);
+    const startDate = container.querySelector('input[name="startDate"]')!;
+    fireEvent.change(startDate, { target: { value: "2025-03-01" } });
+    await waitFor(() => expect(mocks.methodBEligibility).toHaveBeenLastCalledWith("facility", "", false, new Date("2025-03-01")));
+    fireEvent.change(startDate, { target: { value: "" } });
+    await waitFor(() => expect(mocks.methodBEligibility).toHaveBeenLastCalledWith("facility", "", false, undefined));
+  });
+
   it.each(["create", "edit"])("marks both date labels required in %s mode", (mode) => {
     const creditBatch = mode === "edit" ? {
       id: "batch", facilityId: "facility", startDate: "2026-09-01", endDate: "2026-09-30",

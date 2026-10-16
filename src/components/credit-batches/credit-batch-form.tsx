@@ -160,10 +160,12 @@ export function CreditBatchForm({
   const showSamplingControl =
     Boolean(certifierSummary.data?.mapping) &&
     selectedFeedstockType?.usage === "pyrolysis";
+  const startDate = parseWatchedDate(watchedStartDate);
   const methodBEligibility = useMethodBEligibility(
     effectiveFacilityId,
     declaredFeedstockTypeId,
     showSamplingControl && !isEditMode,
+    startDate ?? undefined,
   );
   const displayedSampling =
     isEditMode ||
@@ -172,7 +174,6 @@ export function CreditBatchForm({
       ? selectedSampling
       : "sampled";
 
-  const startDate = parseWatchedDate(watchedStartDate);
   const endDate = parseWatchedDate(watchedEndDate);
   const hasBothDates = startDate != null && endDate != null && endDate >= startDate;
 

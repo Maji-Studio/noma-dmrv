@@ -1,9 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, count, eq, inArray } from "drizzle-orm";
+import { METHOD_B_MINIMUM_METHOD_A_SAMPLES } from "@/config/certification";
 import { db } from "@/db";
-import { activityEvents, creditBatches, facilities, feedstockTypes, productionProcesses } from "@/db/schema";
+import { activityEvents, creditBatches, facilities, feedstockTypes, productionProcesses, samples } from "@/db/schema";
 import { createCreditBatch, updateCreditBatch } from "@/data-access/credit-batches";
 import { findOrCreateProductionProcess, getMethodBEligibility } from "@/data-access/production-processes";
+import { countEligibleSamplesByProcess } from "@/data-access/isometric";
 import { ensureTestOrg, makeTestOrgContext, TEST_SITE_POSITION } from "./helpers/test-org";
 
 const ctx = makeTestOrgContext();
@@ -50,6 +52,9 @@ describe("credit batch production-process resolution", () => {
   afterEach(async () => {
     if (facilityIds.length) {
       await db.delete(activityEvents).where(and(eq(activityEvents.organizationId, ctx.organizationId), inArray(activityEvents.facilityId, facilityIds)));
+      await db.delete(samples).where(and(eq(samples.organizationId, ctx.organizationId), inArray(samples.creditBatchId,
+        db.select({ id: creditBatches.id }).from(creditBatches).where(and(eq(creditBatches.organizationId, ctx.organizationId), inArray(creditBatches.facilityId, facilityIds))),
+      )));
       await db.delete(creditBatches).where(and(eq(creditBatches.organizationId, ctx.organizationId), inArray(creditBatches.facilityId, facilityIds)));
       await db.delete(productionProcesses).where(and(eq(productionProcesses.organizationId, ctx.organizationId), inArray(productionProcesses.facilityId, facilityIds)));
       await db.delete(facilities).where(and(eq(facilities.organizationId, ctx.organizationId), inArray(facilities.id, facilityIds)));
@@ -67,6 +72,77 @@ describe("credit batch production-process resolution", () => {
       startDate, endDate: startDate,
     });
   }
+
+  function insertSamples(creditBatchId: string, samplingTimes: Date[]) {
+    return db.insert(samples).values(samplingTimes.map((samplingTime, index) => ({
+      organizationId: ctx.organizationId, creditBatchId, samplingTime,
+      sampleCode: `S-EPOCH-${creditBatchId}-${index}`, totalCarbonPercent: 80, organicCarbonPercent: 78,
+    }))).returning();
+  }
+
+  it("previews A's eligibility for an A-era date after an ineligible B is established", async () => {
+    await db.update(productionProcesses).set({
+      agreedBaselineSize: METHOD_B_MINIMUM_METHOD_A_SAMPLES,
+      randomSamplingPlanRef: "Agreed sampling plan", moisturePathway: "measured_every_batch",
+    }).where(and(eq(productionProcesses.organizationId, ctx.organizationId), eq(productionProcesses.id, earliestProcessId)));
+    const batch = await create(new Date("2025-02-01T00:00:00Z"));
+    await insertSamples(batch.id, Array.from({ length: METHOD_B_MINIMUM_METHOD_A_SAMPLES }, () => new Date("2025-02-15T12:00:00Z")));
+
+    expect(await getMethodBEligibility(ctx, {
+      facilityId, feedstockTypeId, asOfDate: new Date("2025-03-01T00:00:00Z"),
+    })).toMatchObject({
+      productionProcessId: earliestProcessId, eligibleSampleCount: METHOD_B_MINIMUM_METHOD_A_SAMPLES,
+      prerequisitesRecorded: true, unsampledAllowed: true,
+    });
+    expect(await getMethodBEligibility(ctx, { facilityId, feedstockTypeId })).toMatchObject({
+      productionProcessId: latestProcessId, eligibleSampleCount: 0, unsampledAllowed: false,
+    });
+  });
+
+  it("preserves Sample attachments and recomputes both process counts when a batch crosses an epoch", async () => {
+    const [earliestBatch, middleBatch, movingBatch] = await db.insert(creditBatches).values([
+      { startDate: "2025-04-01", endDate: "2025-04-30", productionProcessId: earliestProcessId, suffix: "A" },
+      { startDate: "2025-06-21", endDate: "2025-06-30", productionProcessId: middleProcessId, suffix: "B" },
+      { startDate: "2025-06-10", endDate: "2025-06-20", productionProcessId: middleProcessId, suffix: "MOVE" },
+    ].map(({ suffix, ...batch }) => ({
+      ...batch, organizationId: ctx.organizationId, facilityId, feedstockTypeId,
+      code: `CB-EPOCH-${suffix}-${tag}`, sampling: "sampled" as const,
+    }))).returning();
+    await insertSamples(earliestBatch.id, [new Date("2025-04-15T12:00:00Z")]);
+    await insertSamples(middleBatch.id, [new Date("2025-06-26T12:00:00Z")]);
+    const movingSamples = await insertSamples(movingBatch.id, [
+      new Date("2025-05-25T12:00:00Z"), new Date("2025-06-15T12:00:00Z"),
+    ]);
+    const asOfDate = new Date("2025-07-01T00:00:00Z");
+
+    async function expectCounts(sampleCounts: number[], eligibleCounts: number[]) {
+      const counts = await db.select({ processId: creditBatches.productionProcessId, sampleCount: count(samples.id) })
+        .from(samples).innerJoin(creditBatches, eq(samples.creditBatchId, creditBatches.id))
+        .where(and(eq(samples.organizationId, ctx.organizationId), eq(creditBatches.organizationId, ctx.organizationId), eq(creditBatches.facilityId, facilityId)))
+        .groupBy(creditBatches.productionProcessId);
+      const sampleCountsByProcess = new Map(counts.map(row => [row.processId, row.sampleCount]));
+      const eligibleCountsByProcess = await countEligibleSamplesByProcess(ctx, db, { facilityId, asOfDate });
+      const processIds = [earliestProcessId, middleProcessId];
+      expect(processIds.map(id => sampleCountsByProcess.get(id) ?? 0)).toEqual(sampleCounts);
+      expect(processIds.map(id => eligibleCountsByProcess.get(id) ?? 0)).toEqual(eligibleCounts);
+      const attached = await db.select({ id: samples.id, creditBatchId: samples.creditBatchId }).from(samples)
+        .where(and(eq(samples.organizationId, ctx.organizationId), inArray(samples.id, movingSamples.map(sample => sample.id))));
+      expect(attached).toHaveLength(movingSamples.length);
+      expect(attached.every(sample => sample.creditBatchId === movingBatch.id)).toBe(true);
+    }
+
+    await expectCounts([1, 3], [1, 2]);
+    const moved = await updateCreditBatch(ctx, movingBatch.id, {
+      expectedVersion: movingBatch.version, startDate: new Date("2025-05-20T00:00:00Z"),
+    });
+    expect(moved).toMatchObject({ productionProcessId: earliestProcessId, sampling: "sampled" });
+    await expectCounts([3, 1], [3, 1]);
+    const restored = await updateCreditBatch(ctx, movingBatch.id, {
+      expectedVersion: moved.version, startDate: MIDDLE_EPOCH,
+    });
+    expect(restored).toMatchObject({ productionProcessId: middleProcessId, sampling: "sampled" });
+    await expectCounts([1, 3], [1, 2]);
+  });
 
   it("attaches historical production to the epoch containing its start", async () => {
     const batch = await create(new Date("2025-03-01T00:00:00Z"));
