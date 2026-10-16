@@ -2,6 +2,8 @@ import { DomainError, type DomainErrorCode, type DomainIssue } from "@/lib/domai
 import { SafeError } from "@/lib/errors";
 import { RATIO_SUM_EXCEEDED_MESSAGE } from "./formulation-ratios";
 
+export const FORMULATION_IN_USE_PREFIX = "Formulation was not deleted because";
+
 function refusal(code: DomainErrorCode, message: string, path: DomainIssue["path"], meta?: DomainIssue["meta"]): DomainError {
   const detail = new SafeError(message).message;
   return new DomainError(code, detail, { issues: [{ path, code, message: detail, ...(meta ? { meta } : {}) }] });
@@ -32,7 +34,7 @@ export function formulationLineInUse(formulationIngredientId: string, feedstockT
 }
 export function formulationInUse(kind: "biochar products" | "product bins" | "orders", codes: string[]): DomainError {
   const key = kind === "biochar products" ? "productCodes" : kind === "product bins" ? "binCodes" : "orderCodes";
-  return refusal("conflict", `Formulation was not deleted because ${kind} use it. Keep this formulation.`, ["formulationId"], { [key]: codes });
+  return refusal("conflict", `${FORMULATION_IN_USE_PREFIX} ${kind} use it. Keep this formulation.`, ["formulationId"], { [key]: codes });
 }
 export function formulationFreezesTypeUsage(name: string): DomainError {
   return refusal("conflict", `This feedstock type is used by formulation ${name}, so its usage cannot change.`, ["usage"]);

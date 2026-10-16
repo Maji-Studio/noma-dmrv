@@ -43,9 +43,9 @@ export const formulationWriteTools: WriteTool[] = commands.map(command => {
         const result = await runOperation(createFormulationApi, context.ctx, input, writeOptions(context, dryRun, requestKey));
         return { ...result, body: { data: formulationRepresentationSchema.parse(result.data.formulation) } };
       }
-      const parsed = (command === "update" ? updateFormulationInput : formulationVersionInput).safeParse(input);
+      const parsed = schema.safeParse(input);
       if (!parsed.success) throw validationFailed(parsed.error);
-      const { formulationId, expectedVersion } = parsed.data;
+      const { formulationId, expectedVersion } = parsed.data as z.infer<typeof formulationVersionInput>;
       const options = writeOptions(context, dryRun, requestKey, formulationId, expectedVersion, FORMULATION_REPRESENTATION_REVISION);
       return withCurrentOnStale(context.ctx, formulationId, async () => {
         if (command === "delete") {

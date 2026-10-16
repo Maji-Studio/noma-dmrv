@@ -236,7 +236,9 @@ async function main(): Promise<void> {
     const report = markdownReport(scores);
     console.log(report);
     await writeFile(join(runDirectory, "report.md"), report, { mode: 0o600 });
-    await writeFile(join(runDirectory, "report.json"), redactKeys(JSON.stringify({ scores: results }, null, 2), keys), { mode: 0o600 });
+    // Snapshots carry bigint stock posting sequences, which JSON cannot encode natively.
+    const json = JSON.stringify({ scores: results }, (_key, value: unknown) => typeof value === "bigint" ? value.toString() : value, 2);
+    await writeFile(join(runDirectory, "report.json"), redactKeys(json, keys), { mode: 0o600 });
   }
 }
 
