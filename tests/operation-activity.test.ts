@@ -84,8 +84,7 @@ describe("runner activity across transports", { timeout: TIMEOUT_MS }, () => {
       expect(audit).toBeDefined();
       expect(event.credentialId).toBe(audit!.credentialId);
     }
-    expect(stringifyWithBigint(events))
-      .not.toContain(input.packaging);
+    expect(events[0].changes.packaging).toEqual({ from: null, to: input.packaging });
     expect(await orderAudits(fixture)).toHaveLength(2);
   });
 
@@ -325,7 +324,8 @@ describe("UI document activity", { timeout: TIMEOUT_MS }, () => {
       productionRunId: entityType === "production_run" ? entityId : null,
       creditBatchId: entityType === "credit_batch" ? entityId : null,
     });
-    expect(events[1].changedFields).toEqual(["uploadStatus", "version"]);
+    expect(events[1].changedFields).toEqual(["checksumSha256", "uploadStatus"]);
+    expect(events[1].changes).not.toHaveProperty("checksumSha256");
     expect(events[2].changedFields).toEqual(["visibility"]);
     expect(events[3].changedFields).toEqual([]);
     const serialized = stringifyWithBigint(events);

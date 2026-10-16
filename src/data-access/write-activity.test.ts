@@ -1,12 +1,12 @@
 import { beforeEach, expect, it, vi } from "vitest";
 import type { DbTransaction } from "@/db";
 import type { OrgContext } from "@/lib/auth/server";
-import { recordActivity } from "./activity-events";
+import { recordActivity, recordActivityChange } from "./activity-events";
 import { SafeError } from "@/lib/errors";
 import { deliveryProductAllocations, getDeliveryAllocationProvenance } from "./delivery-allocation-provenance";
 import { recordDocumentActivity, recordMembershipActivity, resolveWriteActivityScopes } from "./write-activity";
 
-vi.mock("./activity-events", () => ({ recordActivity: vi.fn() }));
+vi.mock("./activity-events", () => ({ recordActivity: vi.fn(), recordActivityChange: vi.fn() }));
 vi.mock("./delivery-allocation-provenance", () => ({ deliveryProductAllocations: vi.fn(() => ({ deliveryId: "deliveryId" })), getDeliveryAllocationProvenance: vi.fn() }));
 
 const ctx = { organizationId: "org", userId: "actor", orgRole: "owner", isPlatformAdmin: false } satisfies OrgContext;
@@ -15,16 +15,21 @@ beforeEach(() => vi.clearAllMocks());
 
 it("keeps both sides of automatic membership scoped to the changed run", async () => {
   await recordMembershipActivity(ctx, tx, "batch", [], ["run"], { source: "system" });
-  expect(recordActivity).toHaveBeenCalledTimes(2);
-  for (const [, , event] of vi.mocked(recordActivity).mock.calls) {
+  expect(recordActivityChange).toHaveBeenCalledTimes(2);
+  for (const [eventCtx, eventTx, event, before, after] of vi.mocked(recordActivityChange).mock.calls) {
+    expect(eventCtx).toBe(ctx);
+    expect(eventTx).toBe(tx);
     expect(event).toMatchObject({ creditBatchId: "batch", productionRunId: "run", source: "system" });
     expect(event).not.toHaveProperty("actorUserId");
+    expect(before).toEqual(event.entityType === "credit_batch" ? { production_runs: [] } : { credit_batch: null });
+    expect(after).toEqual(event.entityType === "credit_batch" ? { production_runs: ["run"] } : { credit_batch: "batch" });
   }
 });
 
 it("emits one batch and one run event per changed run, excluding unchanged members", async () => {
   await recordMembershipActivity(ctx, tx, "batch", ["kept", "removed"], ["kept", "added"]);
-  const events = vi.mocked(recordActivity).mock.calls.map(([, , event]) => event);
+  const calls = vi.mocked(recordActivityChange).mock.calls;
+  const events = calls.map(([, , event]) => event);
   expect(events).toHaveLength(4);
   expect(events.filter(event => event.entityType === "credit_batch").map(event => event.productionRunId).sort())
     .toEqual(["added", "removed"]);
@@ -32,13 +37,25 @@ it("emits one batch and one run event per changed run, excluding unchanged membe
     expect.objectContaining({ entityId: "added", reasonCode: "attached" }),
     expect.objectContaining({ entityId: "removed", reasonCode: "detached" }),
   ]));
+  for (const [, , event, before, after] of calls) {
+    if (event.entityType === "credit_batch") {
+      expect(before).toEqual({ production_runs: ["kept", "removed"] });
+      expect(after).toEqual({ production_runs: ["added", "kept"] });
+    } else {
+      expect(before).toEqual({ credit_batch: event.entityId === "removed" ? "batch" : null });
+      expect(after).toEqual({ credit_batch: event.entityId === "added" ? "batch" : null });
+    }
+  }
 });
 
 it("leaves batch lifecycle events to the caller and skips unchanged membership", async () => {
   expect(await recordMembershipActivity(ctx, tx, "batch", ["run"], ["run"])).toBe(false);
   expect(recordActivity).not.toHaveBeenCalled();
+  expect(recordActivityChange).not.toHaveBeenCalled();
   await recordMembershipActivity(ctx, tx, "batch", ["run"], [], { recordBatchEvent: false });
-  expect(recordActivity).toHaveBeenCalledExactlyOnceWith(ctx, tx, expect.objectContaining({ entityType: "production_run", reasonCode: "detached" }));
+  expect(recordActivityChange).toHaveBeenCalledExactlyOnceWith(ctx, tx,
+    expect.objectContaining({ entityType: "production_run", reasonCode: "detached" }),
+    { credit_batch: "batch" }, { credit_batch: null });
 });
 
 it.each(["form", "rest", "mcp", "script", "system"] as const)("records document retirement with %s source and captured ownership", async source => {
@@ -97,8 +114,11 @@ it.each([true, false])("uses unscoped activity only for SafeError provenance fai
 
 it("passes script membership source through without overriding the central actor default", async () => {
   await recordMembershipActivity(ctx, tx, "batch", [], ["run"], { source: "script" });
-  for (const [, , event] of vi.mocked(recordActivity).mock.calls) {
+  expect(recordActivityChange).toHaveBeenCalledTimes(2);
+  for (const [, , event, before, after] of vi.mocked(recordActivityChange).mock.calls) {
     expect(event.source).toBe("script");
     expect(event).not.toHaveProperty("actorUserId");
+    expect(before).toEqual(event.entityType === "credit_batch" ? { production_runs: [] } : { credit_batch: null });
+    expect(after).toEqual(event.entityType === "credit_batch" ? { production_runs: ["run"] } : { credit_batch: "batch" });
   }
 });

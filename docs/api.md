@@ -196,10 +196,12 @@ the form contract before passing only operation fields to the runner.
 The `audit` run option supplies request and credential IDs for API writes only.
 Audited operations must implement `describe`.
 `src/data-access/activity-events.ts:recordActivity` is the single audit writer.
-Committed runner writes with a non-null `describe` effect record value-free
-`activity_events` in the operation's transaction for form, script, REST and MCP
-calls. Every runner event carries `operationId`, `versionBefore` and
-`versionAfter`. The API audit row contract is defined in [Activity events](./database.md#activity-events).
+Committed runner writes with a non-null `describe` effect record `activity_events`
+in the operation's transaction for form, script, REST and MCP calls. Events carry
+changed field names and, for allowlisted fields, old and new values per
+[Activity events](./database.md#activity-events). Every runner event carries
+`operationId`, `versionBefore` and `versionAfter`. API responses and idempotency
+outcomes stay value-free.
 Form writes have null credential IDs.
 No-op descriptions, dry runs, idempotent replays and `activity.skip()` add no
 events. An audited write whose effect yields no activity rows throws and rolls

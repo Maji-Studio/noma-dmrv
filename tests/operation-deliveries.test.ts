@@ -66,7 +66,7 @@ describe("delivery record on the runner with one connection", { timeout: SUITE_T
     expect(result.data.allocations).toMatchObject([{ layerId: f.product.id, code: f.product.code,
       solidsKg: SOLIDS_KG, dryBiocharKg: DRY_BIOCHAR_KG, wetKg: WET_KG, moisturePercent: MOISTURE_PERCENT, policy: "pro_rata" }]);
     expect(result.effect).toEqual({ outcome: "created", entityType: "delivery", entityIds: [result.data.delivery.id],
-      versionBefore: null, versionAfter: FIRST_VERSION, changedFields: ["deliveredAt", "deliveredWetMassKg", "moisturePercent", "orderId", "storageLocationId"] });
+      versionBefore: null, versionAfter: FIRST_VERSION, changedFields: ["allocations", "code", "deliveredWetMassKg", "deliveryDate", "facilityId", "massDryKg", "moistureContentPercent", "orderId", "status", "storageLocationId"] });
     const [movement] = await movements(f);
     expect(movement.idempotencyKey).toMatch(new RegExp(`^${GENERATED_MOVEMENT_KEY_PREFIX}`));
     expect(movement.basisFingerprint).toBe(result.data.basisFingerprint);

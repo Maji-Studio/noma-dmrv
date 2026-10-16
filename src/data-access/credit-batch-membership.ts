@@ -169,6 +169,7 @@ export async function lockCreditBatchDeclarationRuns(
 }
 
 export interface LockedCreditBatchForUpdate {
+  row: typeof creditBatches.$inferSelect;
   lockedRemovals: Awaited<ReturnType<typeof lockCreditBatchArtifacts>>;
   version: number;
   code: string;
@@ -300,7 +301,7 @@ export async function lockCreditBatchForUpdate(
     feedstockTypeId: target.feedstockTypeId ?? snapshot.feedstockTypeId,
   });
   const [locked] = await tx
-    .select(batchMembershipFields)
+    .select()
     .from(creditBatches)
     .where(and(
       eq(creditBatches.id, id),
@@ -328,7 +329,7 @@ export async function lockCreditBatchForUpdate(
     if (error instanceof CreditBatchLineageChangedError) throw membershipChanged(error.message);
     throw error;
   }
-  return { ...locked, lockedRemovals };
+  return { ...locked, lockedRemovals, row: locked };
 }
 
 /**

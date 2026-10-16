@@ -1,4 +1,4 @@
-import { recordActivity } from "./activity-events";
+import { recordActivityChange } from "./activity-events";
 import { toActivityEntityType } from "@/lib/activity-entity-type";
 import { hasFreshRemovalDeletionLease } from "@/lib/certification/removal-deletion-lease";
 import { assertNoRemovalBatchDeletion } from "./removal-production-batch-deletion";
@@ -431,6 +431,7 @@ export async function createRemovalWithCreditBatches(
       .select({
         creditBatchId: creditBatchApplications.creditBatchId,
         applicationId: creditBatchApplications.applicationId,
+        removalId: creditBatchApplications.removalId,
       })
       .from(creditBatchApplications)
       .where(
@@ -522,7 +523,7 @@ export async function createRemovalWithCreditBatches(
           eq(creditBatchApplications.organizationId, ctx.organizationId),
         ),
       )
-      .returning({ applicationId: creditBatchApplications.applicationId });
+      .returning({ creditBatchId: creditBatchApplications.creditBatchId, applicationId: creditBatchApplications.applicationId, removalId: creditBatchApplications.removalId });
     const expectedAssignmentCount = splitsApplicationsByBatch
       ? unassignedSiblingSlices.filter((slice) =>
           selectedIdSet.has(slice.creditBatchId),
@@ -534,10 +535,11 @@ export async function createRemovalWithCreditBatches(
       );
     }
 
-    for (const creditBatchId of new Set(slices.map(slice => slice.creditBatchId))) await recordActivity(ctx, tx, {
+    for (const creditBatchId of new Set(slices.map(slice => slice.creditBatchId))) await recordActivityChange(ctx, tx, {
       entityType: toActivityEntityType("credit_batch"), entityId: creditBatchId, creditBatchId,
-      action: "updated", source: "form", changedFields: ["removalAssignment"],
-    });
+      action: "updated", source: "form",
+    }, { removalAssignment: slices.filter(slice => slice.creditBatchId === creditBatchId) },
+    { removalAssignment: assigned.filter(slice => slice.creditBatchId === creditBatchId) });
 
     return removal.id;
   });
@@ -675,7 +677,7 @@ export async function discardLocalRemovalDraft(
           eq(creditBatchApplications.organizationId, ctx.organizationId),
         ),
       )
-      .returning({ id: creditBatchApplications.id, creditBatchId: creditBatchApplications.creditBatchId });
+      .returning({ id: creditBatchApplications.id, creditBatchId: creditBatchApplications.creditBatchId, removalId: creditBatchApplications.removalId });
 
     const [deleted] = await tx
       .delete(certifierRemovals)
@@ -691,10 +693,11 @@ export async function discardLocalRemovalDraft(
       throw new SafeError(DISCARD_REMOVAL_ERROR);
     }
 
-    for (const creditBatchId of new Set(released.map(slice => slice.creditBatchId))) await recordActivity(ctx, tx, {
+    for (const creditBatchId of new Set(released.map(slice => slice.creditBatchId))) await recordActivityChange(ctx, tx, {
       entityType: toActivityEntityType("credit_batch"), entityId: creditBatchId, creditBatchId,
-      action: "updated", source: "form", changedFields: ["removalAssignment"],
-    });
+      action: "updated", source: "form",
+    }, { removalAssignment: released.filter(slice => slice.creditBatchId === creditBatchId).map(slice => ({ ...slice, removalId })) },
+    { removalAssignment: released.filter(slice => slice.creditBatchId === creditBatchId) });
 
     logger.info(
       { removalId, releasedSliceCount: released.length },

@@ -27,7 +27,7 @@ import {
 } from "./certification-lineage-guards";
 import { countVehicleUsage } from "./fleet-usage";
 import { assertRowVersion, nextVersion } from "./row-version";
-import { recordScopedWriteActivity, resolveWriteActivityScopes } from "./write-activity";
+import { recordScopedActivityChange, resolveWriteActivityScopes } from "./write-activity";
 import { requireOrgScope } from "./utils";
 
 const VEHICLE_CONFLICT_ENTITY = "vehicle";
@@ -256,6 +256,11 @@ async function updateVehicleOnce(
     .returning();
 
   if (refreshLegs.length > 0) {
+    // Lock order: lineage and vehicle locks, then derived transport legs.
+    const previousLegs = await tx.select().from(transportLegs).where(and(
+      eq(transportLegs.entityType, "feedstock"), eq(transportLegs.isDerived, true),
+      inArray(transportLegs.entityId, refreshLegs), eq(transportLegs.organizationId, ctx.organizationId),
+    )).orderBy(transportLegs.id).for("update");
     const refreshed = await tx
       .update(transportLegs)
       .set({
@@ -270,11 +275,10 @@ async function updateVehicleOnce(
         inArray(transportLegs.entityId, refreshLegs),
         eq(transportLegs.organizationId, ctx.organizationId),
       ))
-      .returning({ id: transportLegs.id, entityType: transportLegs.entityType, entityId: transportLegs.entityId });
-    for (const leg of refreshed) await recordScopedWriteActivity(ctx, tx, {
+      .returning();
+    for (const leg of refreshed) await recordScopedActivityChange(ctx, tx, {
       entityType: "transport_leg", entityId: leg.id, action: "updated", source: "system", actorUserId: ctx.userId,
-      changedFields: ["vehicleType", "modelYear"],
-    }, await resolveWriteActivityScopes(ctx, tx, leg.entityType, leg.entityId));
+    }, await resolveWriteActivityScopes(ctx, tx, leg.entityType, leg.entityId), previousLegs.find(row => row.id === leg.id)!, leg, { skipEmpty: true });
   }
 
   return updated;

@@ -16,6 +16,7 @@ export const requestDocumentUploadApp: Operation<typeof requestInput, DocumentRo
   describe: describeRequestedDocument,
   execute: async ({ ctx, tx, activity }, input) => {
     const document = await requestDocumentUploadInTransaction(ctx, tx, input);
+    activity.capture(document.id, null, document);
     linkDocumentActivity(activity, document);
     return document;
   },
@@ -45,7 +46,7 @@ export const setDocumentVisibilityApp: Operation<typeof visibilityInput, Documen
   id: "set_document_visibility_app", input: visibilityInput, supportsDryRun: false,
   describe: describeUpdatedDocument,
   execute: async ({ ctx, tx, activity }, input) => {
-    const document = await setDocumentVisibilityInTransaction(ctx, tx, input);
+    const document = await setDocumentVisibilityInTransaction(ctx, tx, input, activity.capture);
     linkDocumentActivity(activity, document);
     return document;
   },
@@ -54,7 +55,7 @@ export const reclassifyApplicationEvidenceApp: Operation<typeof reclassifyInput,
   id: "reclassify_application_evidence_app", input: reclassifyInput, supportsDryRun: false,
   describe: describeUpdatedDocument,
   execute: async ({ ctx, tx, activity }, input) => {
-    const document = await updateApplicationEvidenceMetadataInTransaction(ctx, tx, input);
+    const document = await updateApplicationEvidenceMetadataInTransaction(ctx, tx, input, activity.capture);
     linkDocumentActivity(activity, document);
     return document;
   },

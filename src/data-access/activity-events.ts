@@ -1,3 +1,4 @@
+import { diffActivityChanges, type ActivitySnapshot } from "@/lib/activity-changes";
 import { and, desc, eq } from "drizzle-orm";
 import { db, type DbTransaction } from "@/db";
 import { activityEvents } from "@/db/schema/activity";
@@ -30,6 +31,19 @@ export async function recordActivity(ctx: OrgContext, tx: DbTransaction, event: 
     organizationId: ctx.organizationId,
     actorUserId,
   });
+}
+
+/** Capture and append with the same transaction and attribution rules as status events. */
+export async function recordActivityChange(
+  ctx: OrgContext, tx: DbTransaction,
+  event: Omit<ActivityEventInput, "changedFields" | "changes">,
+  before: ActivitySnapshot | null, after: ActivitySnapshot | null,
+  options: { skipEmpty?: boolean } = {},
+): Promise<void> {
+  requireOrgScope(ctx);
+  const diff = diffActivityChanges(event.entityType, before, after);
+  if (options.skipEmpty && diff.changedFields.length === 0) return;
+  await recordActivity(ctx, tx, { ...event, ...diff });
 }
 
 export async function listEntityActivity(

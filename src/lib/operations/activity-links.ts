@@ -1,3 +1,4 @@
+import { diffActivityChanges, type CaptureActivity, type ActivitySnapshot } from "@/lib/activity-changes";
 import type { ActivityEntityType } from "@/db/schema/common";
 import type { ActivityEventInput } from "@/data-access/activity-events";
 import { documentActivityReasonCode } from "@/lib/activity-entity-type";
@@ -7,6 +8,8 @@ type ActivityLinks = Pick<ActivityEventInput, "facilityId" | "productionRunId" |
 /** Private to one execution attempt; never included in business results. */
 export function createOperationActivity() {
   let skipped = false;
+  const snapshots = new Map<string, { before: ActivitySnapshot | null; after: ActivitySnapshot | null }>();
+  const capture: CaptureActivity = (id, before, after) => { snapshots.set(id, { before, after }); };
   let shared: ActivityLinks = {};
   const entities = new Map<string, ActivityLinks>();
   const scopes = new Map<string, ActivityLinks[]>();
@@ -17,6 +20,11 @@ export function createOperationActivity() {
     ...(entityType === "credit_batch" ? { creditBatchId: entityId } : {}),
   });
   return {
+    capture,
+    diff: (type: ActivityEntityType, id: string) => {
+      const snapshot = snapshots.get(id);
+      return diffActivityChanges(type, snapshot?.before ?? null, snapshot?.after ?? null);
+    },
     skip: () => { skipped = true; },
     link: (links: ActivityLinks, entityId?: string) => {
       if (entityId === undefined) shared = { ...shared, ...links };
@@ -34,7 +42,7 @@ export function createOperationActivity() {
   };
 }
 
-export type OperationActivity = Pick<ReturnType<typeof createOperationActivity>, "skip" | "link" | "scope">;
+export type OperationActivity = Pick<ReturnType<typeof createOperationActivity>, "skip" | "link" | "scope" | "capture">;
 
 export function singleProductionRunId(ids: readonly (string | null | undefined)[]): string | undefined {
   const unique = [...new Set(ids.filter((id): id is string => id != null))];

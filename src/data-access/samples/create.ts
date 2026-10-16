@@ -1,3 +1,4 @@
+import type { CaptureActivity } from "@/lib/activity-changes";
 import type { DbTransaction } from "@/db";
 import { samples } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
@@ -22,7 +23,7 @@ export async function createSampleInTransaction(
   ctx: OrgContext,
   tx: DbTransaction,
   request: CreateSampleRequest,
-  options: { now?: Date } = {},
+  options: { now?: Date; capture?: CaptureActivity } = {},
 ): Promise<SampleWriteResult> {
   requireOrgScope(ctx);
   const scope = await lockSampleWriteScope(ctx, tx, {
@@ -64,7 +65,8 @@ export async function createSampleInTransaction(
       totalCarbonPercent: request.totalCarbonPercent,
       organicCarbonPercent: request.organicCarbonPercent,
     })
-    .returning({ id: samples.id });
+    .returning();
+  options.capture?.(created.id, null, created);
   return {
     // Read back inside the transaction, so a failed read never reports a saved sample as missing (issue #769).
     sample: await getSampleById(ctx, created.id, tx),

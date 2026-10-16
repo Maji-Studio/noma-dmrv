@@ -3,12 +3,12 @@ import { ACTIVITY_ENTITY_TYPES } from "@/db/schema/common";
 import { MISSING_VALUE } from "@/lib/copy-utils";
 import { getStatusState } from "@/lib/status-state";
 import { toBadgeProps } from "@/components/chain-of-custody/chain-status-badge";
+import { activityFieldLines } from "./activity-change-lines";
 import {
   ACTIVITY_RECORD_TYPE_LABELS,
   ACTIVITY_RECORD_TYPE_ORDER,
   activityActorDisplay,
   activityChangeSummary,
-  activityChangedFieldLabels,
   activityFieldLabel,
   activityRecordHref,
   activityRecordLabel,
@@ -21,7 +21,7 @@ import {
 const FACILITY = "facility-1";
 const BATCH = "batch-1";
 const CONTEXT = { creditBatchId: BATCH };
-const live = { label: "PR-001", deleted: false, facilityId: FACILITY };
+const live = { label: "PR-001", deleted: false, facilityId: FACILITY, facilityTimezone: null };
 
 function item(overrides: Partial<ActivityItem> = {}): ActivityItem {
   return {
@@ -86,15 +86,16 @@ describe("changed field names", () => {
   });
 
   it("drops bookkeeping fields and repeats", () => {
-    expect(activityChangedFieldLabels(item({ changedFields: ["version", "notes", "notes", "facilityId"] }))).toEqual(["Notes"]);
+    expect(activityFieldLines(item({ changedFields: ["version", "notes", "notes", "facilityId"] })))
+      .toEqual([{ kind: "changed", key: "notes", label: "Notes" }]);
   });
 });
 
 describe("record names and meanings", () => {
   it("names a document by its type, even after it was deleted", () => {
     const reasonCode = "document:weighbridge_ticket:feedstock:feed-1";
-    expect(activityRecordLabel(item({ entityType: "document", reasonCode, record: { label: null, deleted: true, facilityId: null } }))).toBe("Weighbridge ticket");
-    expect(activityRecordLabel(item({ entityType: "document", record: { label: "Document", deleted: false, facilityId: null } }))).toBeNull();
+    expect(activityRecordLabel(item({ entityType: "document", reasonCode, record: { label: null, deleted: true, facilityId: null, facilityTimezone: null } }))).toBe("Weighbridge ticket");
+    expect(activityRecordLabel(item({ entityType: "document", record: { label: "Document", deleted: false, facilityId: null, facilityTimezone: null } }))).toBeNull();
     expect(activityRecordLabel(item())).toBe("PR-001");
   });
 
@@ -136,7 +137,7 @@ describe("record links", () => {
   });
 
   it("links nothing for tombstones, unknown facilities, sheetless records and the batch itself", () => {
-    expect(activityRecordHref(item({ record: { label: null, deleted: true, facilityId: null } }), CONTEXT)).toBeNull();
+    expect(activityRecordHref(item({ record: { label: null, deleted: true, facilityId: null, facilityTimezone: null } }), CONTEXT)).toBeNull();
     expect(activityRecordHref(item({ record: { ...live, facilityId: null } }), CONTEXT)).toBeNull();
     for (const entityType of ["transport_leg", "bin_movement"] as const) {
       expect(activityRecordHref(item({ entityType }), CONTEXT)).toBeNull();

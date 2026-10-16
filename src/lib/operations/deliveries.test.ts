@@ -22,11 +22,11 @@ it("returns only delivery facts from registered PATCH, leaving native UI rows av
   const delivery = { id: ID, code: "DL-001", version: VERSION + 1 } as Delivery;
   mocks.update.mockResolvedValue({ ...delivery, savedProducts: [] });
   expect(await updateDeliveryOperation.execute(scope, input)).toEqual(delivery);
-  expect(mocks.update).toHaveBeenCalledWith(ctx, scope.tx, ID, { expectedVersion: VERSION });
+  expect(mocks.update).toHaveBeenCalledWith(ctx, scope.tx, ID, { expectedVersion: VERSION }, scope.activity.capture);
   expect(await updatePostedDelivery.execute(scope, updatePostedDelivery.input.parse(input))).toEqual({ ...delivery, savedProducts: [] });
   expect(updatePostedDelivery.describe!(input, { ...delivery, savedProducts: [] })).toEqual({
     outcome: "updated", entityType: "delivery", entityIds: [ID], versionBefore: VERSION,
-    versionAfter: VERSION + 1, changedFields: [],
+    versionAfter: VERSION + 1,
   });
 });
 
@@ -43,9 +43,9 @@ it("does not describe an already-posted UI delivery as a new write", async () =>
   expect(describeRecordedDelivery(input, { delivery: output.delivery })?.outcome).toBe("created");
 });
 
-it("excludes the correction precondition from a delivery's changed fields", () => {
+it("leaves changed fields to the runner even with a correction precondition", () => {
   const changes = { ...input, correctsMovementId: ID, deliveredWetMassKg: 10 };
   expect(describeUpdatedDelivery(changes, {
     id: ID, version: VERSION + 1,
-  }).changedFields).toEqual(["deliveredWetMassKg"]);
+  })).not.toHaveProperty("changedFields");
 });

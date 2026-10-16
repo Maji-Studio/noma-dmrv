@@ -1,3 +1,4 @@
+import type { ActivitySnapshot } from "@/lib/activity-changes";
 import { and, eq, gt, inArray, or } from "drizzle-orm";
 import type { DbTransaction } from "@/db";
 import { applicationOutputAllocations, biocharProductSourceAllocations, creditBatchProductionRuns, deliveries, incidentReports, productionRunFeedstocks, productionSamples, samples, transportLegs } from "@/db/schema";
@@ -5,7 +6,7 @@ import type { OrgContext } from "@/lib/auth/server";
 import { documentActivityReasonCode, toActivityEntityType } from "@/lib/activity-entity-type";
 import { SafeError } from "@/lib/errors";
 import { deliveryProductAllocations, getDeliveryAllocationProvenance } from "./delivery-allocation-provenance";
-import { recordActivity, type ActivityEventInput } from "./activity-events";
+import { recordActivity, recordActivityChange, type ActivityEventInput } from "./activity-events";
 import { requireOrgScope } from "./utils";
 
 export type ActivityScope = Pick<ActivityEventInput, "creditBatchId" | "productionRunId">;
@@ -79,13 +80,23 @@ export async function recordScopedWriteActivity(
   for (const scope of scopes) await recordActivity(ctx, tx, { ...event, ...scope, entityType: toActivityEntityType(event.entityType) });
 }
 
+/** Scoped snapshot capture uses the same policy as the operation runner. */
+export async function recordScopedActivityChange(
+  ctx: OrgContext, tx: DbTransaction, event: Omit<ActivityEventInput, "changedFields" | "changes">,
+  scopes: ActivityScope[], before: ActivitySnapshot | null, after: ActivitySnapshot | null,
+  options: { skipEmpty?: boolean } = {},
+): Promise<void> {
+  requireOrgScope(ctx);
+  for (const scope of scopes) await recordActivityChange(ctx, tx, { ...event, ...scope }, before, after, options);
+}
+
 export async function recordMembershipActivity(
   ctx: OrgContext,
   tx: DbTransaction,
   creditBatchId: string,
   previousRunIds: readonly string[],
   nextRunIds: readonly string[],
-  options: { source?: ActivityEventInput["source"]; changedFields?: string[]; recordBatchEvent?: boolean } = {},
+  options: { source?: ActivityEventInput["source"]; before?: ActivitySnapshot; after?: ActivitySnapshot; recordBatchEvent?: boolean } = {},
 ): Promise<boolean> {
   requireOrgScope(ctx);
   const source = options.source ?? "form";
@@ -94,15 +105,15 @@ export async function recordMembershipActivity(
   const changed = [...new Set([...previous, ...next])].filter(id => previous.has(id) !== next.has(id));
   if (changed.length === 0) return false;
   // Batch create/delete already records its lifecycle; edits record membership here.
-  if (options.recordBatchEvent !== false) for (const productionRunId of changed) await recordActivity(ctx, tx, {
+  if (options.recordBatchEvent !== false) for (const productionRunId of changed) await recordActivityChange(ctx, tx, {
     entityType: toActivityEntityType("credit_batch"), entityId: creditBatchId, creditBatchId, productionRunId,
-    action: "updated", changedFields: ["production_runs", ...(options.changedFields ?? [])], source,
-  });
-  for (const productionRunId of changed) await recordActivity(ctx, tx, {
+    action: "updated", source,
+  }, { ...options.before, production_runs: [...previous].sort() }, { ...options.after, production_runs: [...next].sort() });
+  for (const productionRunId of changed) await recordActivityChange(ctx, tx, {
     entityType: toActivityEntityType("productionRun"), entityId: productionRunId, productionRunId, creditBatchId,
-    action: "updated", changedFields: ["credit_batch"], source,
+    action: "updated", source,
     reasonCode: next.has(productionRunId) ? "attached" : "detached",
-  });
+  }, { credit_batch: previous.has(productionRunId) ? creditBatchId : null }, { credit_batch: next.has(productionRunId) ? creditBatchId : null });
   return true;
 }
 

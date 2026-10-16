@@ -1,6 +1,7 @@
 /**
- * Append-only activity history, value-free in v1: changed fields hold names only.
- * Written inside the caller's transaction. Entity references have no FKs so
+ * Append-only activity history. `changed_fields` names every changed field;
+ * `changes` holds old and new values only for fields the activity field policy
+ * allowlists. Written inside the caller's transaction. Entity references have no FKs so
  * history survives deletes as tombstones. The writer checks facility ownership
  * without row locks so activity does not join the facility archive lock order.
  */
@@ -8,6 +9,11 @@ import { sql } from "drizzle-orm";
 import { bigserial, check, index, integer, jsonb, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { organizations } from "./auth";
 import { ACTIVITY_ACTIONS, ACTIVITY_ENTITY_TYPES, ACTIVITY_SOURCES, ACTORLESS_ACTIVITY_SOURCES } from "./common";
+
+/** A stored field value: JSON scalars only. Numerics keep their exact decimal string. */
+export type ActivityValue = string | number | boolean | null;
+/** Old and new values per allowlisted field; fields recorded by name only are absent. */
+export type ActivityChanges = Record<string, { from: ActivityValue; to: ActivityValue }>;
 
 export const activityEvents = pgTable("activity_events", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -19,6 +25,7 @@ export const activityEvents = pgTable("activity_events", {
   entityId: text("entity_id").notNull(),
   action: text("action", { enum: ACTIVITY_ACTIONS }).notNull(),
   changedFields: text("changed_fields").array().notNull().default(sql`'{}'::text[]`),
+  changes: jsonb("changes").$type<ActivityChanges>().notNull().default(sql`'{}'::jsonb`),
   fromStatus: text("from_status"),
   toStatus: text("to_status"),
   fromRemote: text("from_remote"),

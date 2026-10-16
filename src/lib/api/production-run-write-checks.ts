@@ -18,7 +18,7 @@ export function checkProductionRunDraws(body: unknown) {
 /** Read the public projection inside the write transaction for saved and replayed outcomes. */
 export const representationCheckedStart: Operation<typeof startProductionRun.input, ProductionRunRepresentation> = {
   ...startProductionRun,
-  describe: (input, output) => ({ outcome: "created", entityType: "productionRun", entityIds: [output.id], versionBefore: null, versionAfter: output.version, changedFields: Object.keys(input).filter((key) => input[key as keyof typeof input] !== undefined).sort() }),
+  describe: (input, output) => ({ outcome: "created", entityType: "productionRun", entityIds: [output.id], versionBefore: null, versionAfter: output.version }),
   execute: async (scope, input) => {
     const run = await startProductionRun.execute(scope, input);
     return readApiProductionRun(scope.ctx, { id: run.id }, scope.tx);
@@ -34,7 +34,7 @@ async function checkRepresentation(scope: OperationScope, id: string, revision: 
 export function representationCheckedUpdate(id: string, revision: number): Operation<typeof updateProductionRun.input, ProductionRunRepresentation> {
   return {
     ...updateProductionRun,
-    describe: (input, output) => ({ outcome: "updated", entityType: "productionRun", entityIds: [output.id], versionBefore: input.expectedVersion, versionAfter: output.version, changedFields: Object.keys(input).filter((key) => key !== "expectedVersion" && key !== "productionRunId" && input[key as keyof typeof input] !== undefined).sort() }),
+    describe: (input, output) => ({ outcome: "updated", entityType: "productionRun", entityIds: [output.id], versionBefore: input.expectedVersion, versionAfter: output.version }),
     execute: async (scope, input) => {
       await checkRepresentation(scope, id, revision);
       await updateProductionRun.execute(scope, input);

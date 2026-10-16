@@ -4,7 +4,7 @@ import { creditBatches } from "@/db/schema/credits";
 import { facilities } from "@/db/schema/facilities";
 import { requireOrgRole, type OrgContext } from "@/lib/auth/server";
 import { SafeError } from "@/lib/errors";
-import { recordActivity } from "./activity-events";
+import { recordActivityChange } from "./activity-events";
 import { assertCanMutateCertifiedLineage } from "./certification-lineage-guards";
 import { assertRemovalAllowsCreditBatchMutation, lockCreditBatchArtifacts } from "./credit-batch-certification-lock";
 import { acquireFacilityCertificationBoundaryLock } from "./facility-certification-boundary-lock";
@@ -50,10 +50,10 @@ export async function switchCreditBatchRemovalTemplate(ctx: OrgContext, input: S
     const [updated] = await tx.update(creditBatches).set({
       removalTemplateId: input.removalTemplateId, version: nextVersion(creditBatches.version), updatedAt: new Date(),
     }).where(and(eq(creditBatches.organizationId, ctx.organizationId), eq(creditBatches.id, batch.id))).returning();
-    await recordActivity(ctx, tx, {
+    await recordActivityChange(ctx, tx, {
       entityType: "credit_batch", entityId: batch.id, creditBatchId: batch.id, facilityId: batch.facilityId,
-      action: "updated", source: "form", changedFields: ["removalTemplateId"],
-    });
+      action: "updated", source: "form",
+    }, batch, updated);
     return updated;
   });
 }

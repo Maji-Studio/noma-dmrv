@@ -11,20 +11,13 @@ import { withOutputStockErrors } from "@/lib/output-stock-domain-errors";
 import { makeBiocharProductInput, updateBiocharProductInput, type MakeBiocharProductInput } from "@/schemas/biochar-product-input";
 import { hasLocalEventInstant, resolveEventInstant } from "./event-times";
 import { GENERATED_MOVEMENT_KEY_PREFIX } from "./output-stock";
-import type { OperationEffect } from "@/lib/operation-effect";
+import type { OperationDescription } from "@/lib/operation-effect";
 import type { Operation, OperationScope } from "./runner";
 
 const AUTO_CODE_COUNT = 1;
 const PRODUCT_ENTITY = "biocharProduct";
 const NOT_A_LINE_MESSAGE = "This ingredient is not part of the chosen formulation.";
 const MISSING_LINES_MESSAGE = "Enter a mass for every ingredient of the formulation, 0 kg for one not used.";
-
-/** Preconditions, request keys and the target describe how a write was sent, not what it changed. */
-const NOT_CHANGES: ReadonlySet<string> = new Set(["basisFingerprint", "idempotencyKey", "expectedVersion", "biocharProductId"]);
-
-function changedFields(input: object): string[] {
-  return Object.entries(input).filter(([key, value]) => value !== undefined && !NOT_CHANGES.has(key)).map(([key]) => key).sort();
-}
 
 /**
  * The composition a product records: each formulation line as mixed, with the
@@ -93,17 +86,17 @@ async function findCommittedProduct({ ctx, tx }: OperationScope, input: MakeBioc
 }
 
 /** The audit effects of a created and an updated product; adapters that publish a different output reuse them. */
-export function describeMadeProduct(input: object, product: { id: string; version: number }): OperationEffect {
+export function describeMadeProduct(input: object, product: { id: string; version: number }): OperationDescription {
   return {
     outcome: "created", entityType: PRODUCT_ENTITY, entityIds: [product.id],
-    versionBefore: null, versionAfter: product.version, changedFields: changedFields(input),
+    versionBefore: null, versionAfter: product.version,
   };
 }
 
-export function describeUpdatedProduct(input: object, product: { id: string; version: number }, versionBefore: number): OperationEffect {
+export function describeUpdatedProduct(input: object, product: { id: string; version: number }, versionBefore: number): OperationDescription {
   return {
     outcome: "updated", entityType: PRODUCT_ENTITY, entityIds: [product.id],
-    versionBefore, versionAfter: product.version, changedFields: changedFields(input),
+    versionBefore, versionAfter: product.version,
   };
 }
 
@@ -128,7 +121,7 @@ export const makeBiocharProduct: Operation<typeof makeBiocharProductInput, Creat
     const request = productRequest(input, placedAt, idempotencyKey);
     // Each code attempt runs the whole create, posting seam included, in its own savepoint.
     const created = await withAutoCodes(ctx, tx, "BP", biocharProducts, biocharProducts.code, AUTO_CODE_COUNT,
-      ([code], savepoint) => createBiocharProductInTransaction(ctx, savepoint, { code, ...request, composition }, { snapshotStock, onReplay: activity.skip }),
+      ([code], savepoint) => createBiocharProductInTransaction(ctx, savepoint, { code, ...request, composition }, { snapshotStock, capture: activity.capture, onReplay: activity.skip }),
       CODE_CONFLICT_MESSAGES.biocharProduct);
     activity.link({ facilityId: created.product.facilityId, productionRunId: created.product.linkedProductionRunId ?? undefined });
     return { ...created, product: toBiocharProductRecord(created.product) };
@@ -152,7 +145,7 @@ export const updateBiocharProduct: Operation<typeof updateBiocharProductInput, B
   supportsDryRun: true,
   describe: (input, output) => describeUpdatedProduct(input, output, input.expectedVersion),
   execute: ({ ctx, tx, activity }, { biocharProductId, ...changes }) => withOutputStockErrors(async () => {
-    const product = toBiocharProductRecord(await updateBiocharProductInTransaction(ctx, tx, biocharProductId, changes));
+    const product = toBiocharProductRecord(await updateBiocharProductInTransaction(ctx, tx, biocharProductId, changes, activity.capture));
     activity.link({ facilityId: product.facilityId, productionRunId: product.linkedProductionRunId ?? undefined });
     return product;
   }),

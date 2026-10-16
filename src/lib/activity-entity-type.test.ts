@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { documentOwnerActivityType, parseDocumentActivityReasonCode, toActivityDocumentOwnerType, toActivityEntityType } from "@/lib/activity-entity-type";
+import { documentOwnerActivityType, polymorphicOwnerActivityType, parseDocumentActivityReasonCode, toActivityDocumentOwnerType, toActivityEntityType } from "@/lib/activity-entity-type";
 import { DOCUMENT_ENTITY_TYPES } from "@/schemas/documents";
 import { GHG_STATEMENT_ENTITY_TYPE } from "@/lib/isometric/utils/constants";
 import { ACTIVITY_ENTITY_TYPES, isActivityEntityType } from "@/db/schema/common";
@@ -55,4 +55,14 @@ it("maps document owners onto activity types where they have their own activity"
   expect(documentOwnerActivityType("sample")).toBe("lab_sample");
   expect(documentOwnerActivityType("feedstock")).toBe("feedstock");
   expect(documentOwnerActivityType("reactor")).toBeNull();
+});
+
+it.each([
+  ["sample", "lab_sample"],
+  ["biochar", "biochar_product"],
+  ["feedstock", "feedstock"],
+  ["reactor", "reactor"],
+  ["unknown_owner", "unknown_owner"],
+])("maps the polymorphic owner %s to %s", (owner, activityType) => {
+  expect(polymorphicOwnerActivityType(owner)).toBe(activityType);
 });
