@@ -10,3 +10,7 @@ export function locationDistanceFillWarnings(kind: "supplier" | "customer", { fi
   if (skipped.repointed) warnings.push(`${skipped.repointed} ${skipped.repointed === 1 ? singular : plural} moved to another ${kind === "supplier" ? "supplier or facility" : "location or facility"} and ${skipped.repointed === 1 ? "was" : "were"} left unchanged.`);
   return warnings;
 }
+
+export function customerLocationDefaultMovedWarning(name: string): string {
+  return `${name} is now the default location.`;
+}

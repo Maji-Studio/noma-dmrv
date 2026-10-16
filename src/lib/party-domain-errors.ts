@@ -52,3 +52,16 @@ export function storageSiteRegistrationBusy(): DomainError {
   const message = "This location is being registered with Isometric. Try again in a moment.";
   return new DomainError("conflict", message, { retryable: true, issues: [{ path: ["locationId"], code: "conflict", message }] });
 }
+
+export function customerLocationArchived(name: string, path: DomainIssue["path"] = ["customerLocationId"]): DomainError {
+  return partyRefusal("not_found", `Customer location ${name} is archived. Restore it or choose another location.`, path);
+}
+export function customerLocationArchivedForEdit(name: string): DomainError {
+  return partyRefusal("not_found", `Customer location ${name} is archived. Restore it before editing it.`, ["locationId"]);
+}
+export function customerLocationArchiveConflict(name: string, archived: boolean): DomainError {
+  return partyRefusal("conflict", `Customer location ${name} is ${archived ? "already archived" : "not archived"}.`, ["locationId"]);
+}
+export function customerLocationLastActive(name: string): DomainError {
+  return partyRefusal("conflict", `${name} is this customer's only active location, so it cannot be archived. Add or restore another location first.`, ["locationId"]);
+}

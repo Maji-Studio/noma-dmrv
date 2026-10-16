@@ -159,7 +159,7 @@ export async function getCustomers(
             count: count(),
           })
           .from(customerLocations)
-          .where(and(inArray(customerLocations.customerId, customerIds), eq(customerLocations.organizationId, ctx.organizationId)))
+          .where(and(inArray(customerLocations.customerId, customerIds), eq(customerLocations.organizationId, ctx.organizationId), isNull(customerLocations.archivedAt)))
           .groupBy(customerLocations.customerId)
       : [];
 

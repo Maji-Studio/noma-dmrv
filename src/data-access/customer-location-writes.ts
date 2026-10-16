@@ -1,11 +1,11 @@
-import { and, eq, ne } from "drizzle-orm";
+import { and, eq, isNull, ne } from "drizzle-orm";
 import type { DbTransaction } from "@/db";
 import { customers, customerLocations, type CustomerLocation } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import type { CaptureActivity } from "@/lib/activity-changes";
-import { locationDistanceFillWarnings } from "@/lib/location-write-warnings";
+import { customerLocationDefaultMovedWarning, locationDistanceFillWarnings } from "@/lib/location-write-warnings";
 import type { CaptureFilledDelivery } from "./location-distance-fill";
-import { partyNotFound, partyLocationNotFound, partyArchived, partyArchivedForEdit, customerLocationHasOrders, customerLocationHasStorageSite } from "@/lib/party-domain-errors";
+import { partyNotFound, partyLocationNotFound, partyArchived, partyArchivedForEdit, customerLocationArchivedForEdit, customerLocationHasOrders, customerLocationHasStorageSite } from "@/lib/party-domain-errors";
 import { validationFailed } from "@/lib/operations/errors";
 import { addCustomerLocationInput, updateCustomerLocationInput, customerLocationVersionInput, type AddCustomerLocationInput, type UpdateCustomerLocationInput, type CustomerLocationVersionInput } from "@/schemas/customer-location-input";
 import { lockLocationFacilities } from "./party-reference-guards";
@@ -95,6 +95,7 @@ export async function updateCustomerLocationInTransaction(ctx: OrgContext, tx: D
   if (!locked) {
     throw partyLocationNotFound("customer");
   }
+  if (locked.archivedAt) throw customerLocationArchivedForEdit(locked.name);
   assertRowVersion({
     entity: CUSTOMER_LOCATION_CONFLICT_ENTITY,
     id: locationId,
@@ -222,6 +223,7 @@ export async function deleteCustomerLocationInTransaction(ctx: OrgContext, tx: D
       .where(
         and(
           eq(customerLocations.customerId, gone.customerId),
+          isNull(customerLocations.archivedAt),
           eq(customerLocations.organizationId, ctx.organizationId),
         ),
       )
@@ -234,10 +236,12 @@ export async function deleteCustomerLocationInTransaction(ctx: OrgContext, tx: D
         .set({ version: nextVersion(customerLocations.version), isDefault: true, updatedAt: new Date() })
         .where(and(eq(customerLocations.id, next.id), eq(customerLocations.organizationId, ctx.organizationId))).returning();
       captureLocation?.(next.id, next, promoted);
-      warnings.push(`${promoted.name} is now the default location.`);
+      warnings.push(customerLocationDefaultMovedWarning(promoted.name));
     }
   }
 
   capture?.(before.id, before, null);
   return { ...before, warnings };
 }
+
+export { archiveCustomerLocationInTransaction, restoreCustomerLocationInTransaction } from "./customer-location-archive";

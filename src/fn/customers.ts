@@ -6,7 +6,7 @@
  */
 
 import { createCustomer, updateCustomer, deleteCustomer, archiveCustomer, restoreCustomer } from "@/lib/operations/customers";
-import { addCustomerLocation, updateCustomerLocation, deleteCustomerLocation } from "@/lib/operations/customer-locations";
+import { archiveCustomerLocation, restoreCustomerLocation, addCustomerLocation, updateCustomerLocation, deleteCustomerLocation } from "@/lib/operations/customer-locations";
 import { runOperationInProcess } from "@/lib/operations/runner";
 import { z } from "zod";
 import { type Customer, type CustomerLocation } from "@/db/schema";
@@ -26,6 +26,7 @@ import {
   updateCustomerLocationSchema,
   deleteCustomerLocationSchema,
 } from "@/schemas/customers";
+import { customerLocationVersionInput } from "@/schemas/customer-location-input";
 import { customerVersionInput } from "@/schemas/customer-input";
 import type { ActionResult } from "@/types/actions";
 import { withAction } from "./with-action";
@@ -297,4 +298,22 @@ export async function restoreCustomerFn(
     const validated = customerVersionInput.parse(data);
     return runOperationInProcess(restoreCustomer, ctx, validated);
   }, { fallbackMessage: "Failed to restore customer", log: { message: LOG_MESSAGE, context: { op: "customer:restore" } } });
+}
+
+export async function archiveCustomerLocationFn(
+  data: z.infer<typeof customerLocationVersionInput>
+): Promise<ActionResult<CustomerLocation & { warnings: string[] }>> {
+  return withAction(async (ctx) => {
+    const validated = customerLocationVersionInput.parse(data);
+    return runOperationInProcess(archiveCustomerLocation, ctx, validated);
+  }, { fallbackMessage: "Failed to archive customer location", log: { message: LOG_MESSAGE, context: { op: "customer-location:archive" } } });
+}
+
+export async function restoreCustomerLocationFn(
+  data: z.infer<typeof customerLocationVersionInput>
+): Promise<ActionResult<CustomerLocation & { warnings: string[] }>> {
+  return withAction(async (ctx) => {
+    const validated = customerLocationVersionInput.parse(data);
+    return runOperationInProcess(restoreCustomerLocation, ctx, validated);
+  }, { fallbackMessage: "Failed to restore customer location", log: { message: LOG_MESSAGE, context: { op: "customer-location:restore" } } });
 }

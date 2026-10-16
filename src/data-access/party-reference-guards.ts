@@ -1,10 +1,11 @@
 import { and, eq } from "drizzle-orm";
 import type { DbTransaction } from "@/db";
-import { suppliers, customers } from "@/db/schema";
+import { suppliers, customers, customerLocations } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import { SafeError } from "@/lib/errors";
+import { orderReferenceNotFound } from "@/lib/order-domain-errors";
 import type { DomainIssue } from "@/lib/domain-errors";
-import { partyArchived, partyNotFound, partyRefusal } from "@/lib/party-domain-errors";
+import { customerLocationArchived, partyArchived, partyNotFound, partyRefusal } from "@/lib/party-domain-errors";
 import type { FacilityDistanceInput } from "@/schemas/facility-distances";
 import { lockActiveFacilityReference } from "./facility-reference-guards";
 import { requireOrgScope } from "./utils";
@@ -67,4 +68,18 @@ export async function lockPartyFacilities(ctx: OrgContext, tx: DbTransaction, lo
   for (const [i, location] of locations.entries()) {
     await lockLocationFacilities(ctx, tx, location.facilityDistances, ["locations", i]);
   }
+}
+
+/** Archive takes FOR UPDATE, so a new reference waits for its final state. */
+export async function lockCustomerLocationReference(ctx: OrgContext, tx: DbTransaction, locationId: string, options: ReferenceOptions = {}) {
+  requireOrgScope(ctx);
+  const pointer = options.pointer ?? ["customerLocationId"];
+  const [location] = await tx.select({ customerId: customerLocations.customerId, name: customerLocations.name, archivedAt: customerLocations.archivedAt })
+    .from(customerLocations).where(and(eq(customerLocations.organizationId, ctx.organizationId), eq(customerLocations.id, locationId))).for("key share");
+  if (!location) {
+    const missing = orderReferenceNotFound("customerLocationId");
+    throw partyRefusal("not_found", missing.message, pointer);
+  }
+  if (location.archivedAt && !options.allowArchived) throw customerLocationArchived(location.name, pointer);
+  return location;
 }
