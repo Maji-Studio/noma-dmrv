@@ -10,8 +10,8 @@ import { TEST_SITE_POSITION, ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } fr
  * flip collapses a soil-temp-evidenced batch's CO₂e-stored preview to null, and
  * invalidates any registry data built under the old tier).
  *
- * `updateFacility` guards this: once the facility owns a consequential
- * (verified/issued, non-archived) credit batch, the tier is locked. This mirrors
+ * `updateFacility` guards this: once the facility owns a blocking
+ * registry submission, the tier is locked. This mirrors
  * the externalProjectId/externalFacilityId registry-invalidation guard in
  * `certification.ts`.
  *
@@ -200,10 +200,9 @@ afterAll(async () => {
 
 
 describe("updateFacility durability-tier guard", () => {
-  // Both locking statuses must be exercised — a regression that dropped one from
-  // the lock set would otherwise pass while only `issued` is tested.
+  // Neither unwritten legacy batch status locks the tier. Registry submissions do.
   for (const status of ["verified", "issued"] as const) {
-    it(`rejects a tier change when a ${status} batch exists`, async () => {
+    it(`ignores the unwritten legacy ${status} batch status`, async () => {
       const chain = await setupFacility(`blocked-${status}`, "200_year");
       await insertBatch(chain, status);
 
@@ -211,10 +210,9 @@ describe("updateFacility durability-tier guard", () => {
         updateFacility(makeTestOrgContext(TEST_USER_ID), chain.facilityId, { expectedVersion: await masterDataVersion(makeTestOrgContext(TEST_USER_ID), "facilities", chain.facilityId),
           durabilityOption: "1000_year",
         }),
-      ).rejects.toBeInstanceOf(SafeError);
+      ).resolves.toMatchObject({ durabilityOption: "1000_year" });
 
-      // The write must not have landed.
-      expect(await tierOf(chain.facilityId)).toBe("200_year");
+      expect(await tierOf(chain.facilityId)).toBe("1000_year");
     });
   }
 

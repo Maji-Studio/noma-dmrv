@@ -188,10 +188,10 @@ describe("three-way order parity", { timeout: TIMEOUT_MS }, () => {
     { name: "foreign reference on update", operation: "update", setup: "foreign", code: "not_found", pointer: "/customerId" },
     { name: "another customer's location on create", operation: "create", setup: "location", code: "validation_failed", pointer: "/customerLocationId" },
     { name: "another customer's location on update", operation: "update", setup: "location", code: "validation_failed", pointer: "/customerLocationId" },
-    ...["facilityId", "customerId", "customerLocationId", "formulationId"].map((field) => ({ name: `frozen ${field}`, operation: "update", setup: field, code: "conflict", pointer: `/${field}` })),
+    ...["facilityId", "customerId", "customerLocationId", "formulationId"].map((field) => ({ name: `frozen ${field}`, operation: "update", setup: field, code: "certification_locked", pointer: `/${field}` })),
     { name: "quantity below allocated wet kg", operation: "update", setup: "quantity", code: "validation_failed", pointer: "/quantityKg" },
     { name: "archived order", operation: "update", setup: "archive", code: "not_found", pointer: "/orderId" },
-    { name: "delete with a delivery", operation: "delete", setup: "delivery", code: "conflict", pointer: "/orderId" },
+    { name: "delete with a delivery", operation: "delete", setup: "delivery", code: "certification_locked", pointer: "/orderId" },
   ] as const;
   it.each(refusalCases)("returns the same codes, issue paths and metadata for $name with no side effect", async ({ operation, setup, code, pointer }) => {
     const failures = new Map<Transport, Refusal>();

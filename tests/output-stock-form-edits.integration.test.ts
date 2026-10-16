@@ -1,8 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { afterEach, expect, it, vi } from "vitest";
 import { db } from "@/db";
-import { binMovements } from "@/db/schema";
+import { binMovements, productionRuns } from "@/db/schema";
 import { eq } from "drizzle-orm";
+import { getRecordLock } from "@/data-access/certification-lineage-guards";
 import { getOutputStockHistory } from "@/data-access/output-stock-history";
 import { previewOutputStock } from "@/data-access/output-stock-operations";
 import { correctOutputStockEntry } from "@/lib/operations/output-stock-form-edits";
@@ -79,19 +80,17 @@ it("refuses delivery corrections through the Lost mass form boundary", async () 
     .toMatchObject({ deliveryDate: delivery.deliveryDate, deliveredWetMassKg: 40 });
 });
 
-it("refuses a Lost mass edit after a newer movement even from an unrelated sub-bin", async () => {
+it("allows a Lost mass edit after a newer draw from an unrelated sub-bin", async () => {
   const f = await fixture();
   const other = await postProduct(f, { massKg: 100 });
   const original = await postMeasurement(f, { kind: "loss", wetMassKg: 100, sources: [{ layerId: other.id, moisturePercent: 0 }] });
   const input = { facilityId: f.facility.id, storageLocationId: f.bin.id, occurredAt: STOCK_TIME, kind: "loss" as const,
     wetMassKg: 40, sources: [{ layerId: other.id, moisturePercent: 0 }], correctsMovementId: original.movementId };
-  const preview = await previewOutputStock(f.ctx, input);
   await postMeasurement(f, { kind: "loss", wetMassKg: 10, sources: [{ layerId: f.product!.id, moisturePercent: 0 }], occurredAt: "2026-09-13T12:00:00.000Z" });
-  expect((await previewOutputStock(f.ctx, input)).blockingMessage).toBeNull();
+  const refreshed = await previewOutputStock(f.ctx, input);
+  expect(refreshed.blockingMessage).toBeNull();
   await expect(correctOutputStockEntry(f.ctx, { ...input, reason: "Wrong reading", idempotencyKey: randomUUID(),
-    basisFingerprint: preview.basisFingerprint, expectedProductVersions: preview.expectedProductVersions })).rejects.toMatchObject({
-    message: "Locked because newer stock entries were recorded on this bin after it.", conflict: { entity: "storageLocation", id: f.bin.id },
-  });
+    basisFingerprint: refreshed.basisFingerprint, expectedProductVersions: refreshed.expectedProductVersions })).resolves.toBeDefined();
 });
 
 it("corrects a latest delivery wet mass and keeps its row and stock movement in agreement", async () => {
@@ -112,7 +111,7 @@ it("refuses delivery mass changes after a newer movement but allows transport ed
   const delivery = await postDelivery(f, 100);
   await postMeasurement(f, { kind: "loss", wetMassKg: 10 });
   await expect(updateDelivery(f.ctx, delivery.id, { expectedVersion: delivery.version, deliveredWetMassKg: 40 })).rejects.toMatchObject({
-    message: "Locked because newer stock entries were recorded on this bin after it.", conflict: { entity: "storageLocation", id: f.bin.id },
+    code: "certification_locked", conflict: { entity: "storageLocation", id: f.bin.id },
   });
   expect(await updateDelivery(f.ctx, delivery.id, { expectedVersion: delivery.version, distanceNote: "Route note" })).toMatchObject({ deliveredWetMassKg: 100 });
 });
@@ -132,16 +131,38 @@ it("corrects the delivery's split-bin draw and per-sub-bin moisture and can edit
   expect(again).toMatchObject({ deliveredWetMassKg: 25, moistureContentPercent: 20, massDryKg: 20 });
 });
 
-it("locks a latest loss when a newer product is added, including a physically older placement", async () => {
+it("keeps a loss editable after a newer intake, including a backdated placement", async () => {
   const f = await fixture();
   const original = await postMeasurement(f, { kind: "loss", wetMassKg: 100 });
   const input = { facilityId: f.facility.id, storageLocationId: f.bin.id, occurredAt: STOCK_TIME, kind: "loss" as const,
     wetMassKg: 40, moisturePercent: 0, correctsMovementId: original.movementId };
-  const preview = await previewOutputStock(f.ctx, input);
   await postProduct(f, { massKg: 100, placedAt: "2026-09-11T12:00:00.000Z" });
+  expect((await getOutputStockHistory(f.ctx, f.bin.id)).find(e => e.id === original.movementId)?.editLockedReason).toBeNull();
+  const preview = await previewOutputStock(f.ctx, input);
   await expect(correctOutputStockEntry(f.ctx, { ...input, reason: "Wrong reading", idempotencyKey: randomUUID(),
-    basisFingerprint: preview.basisFingerprint, expectedProductVersions: preview.expectedProductVersions })).rejects.toMatchObject({
-    message: "Locked because newer stock entries were recorded on this bin after it.",
-  });
-  expect((await getOutputStockHistory(f.ctx, f.bin.id)).find(e => e.id === original.movementId)?.editLockedReason).toMatch(/^Locked/);
+    basisFingerprint: preview.basisFingerprint, expectedProductVersions: preview.expectedProductVersions })).resolves.toBeDefined();
+});
+
+it('locks a loss after a product draws from the same source bin', async () => {
+  const f = await fixture();
+  const loss = await postMeasurement(f, { storageLocationId: f.source.id, kind: 'loss', wetMassKg: 10, occurredAt: '2026-09-13T12:00:00.000Z' });
+  await postProduct(f, { massKg: 100, placedAt: STOCK_TIME });
+  const history = await getOutputStockHistory(f.ctx, f.source.id);
+  expect(history.find(entry => entry.id === loss.movementId)?.editLockedReason).toContain('later');
+});
+it('keeps history readable when an archived intake cannot be projected', async () => {
+  const f = await fixture();
+  const loss = await postMeasurement(f, { storageLocationId: f.source.id, kind: 'loss', wetMassKg: 10 });
+  await db.update(productionRuns).set({ biocharDryMassKg: null, archivedAt: new Date() }).where(eq(productionRuns.biocharStorageLocationId, f.source.id));
+  const history = await getOutputStockHistory(f.ctx, f.source.id);
+  expect(history.find(entry => entry.id === loss.movementId)?.editLockedReason).toContain('cannot be verified');
+});
+
+it.each(['loss', 'count'] as const)('reports a run In use when only a stock %s consumes it', async kind => {
+  const f = await postedStockFixture({ stockKg: 0 }); fixtures.push(f);
+  expect((await db.transaction(tx => getRecordLock(f.ctx, tx, { entityType: 'productionRun', entityId: f.runs[0].id }))).level).toBe('open');
+  await postMeasurement(f, { storageLocationId: f.source.id, kind, wetMassKg: kind === 'loss' ? 10 : 1400 });
+  const lock = await db.transaction(tx => getRecordLock(f.ctx, tx, { entityType: 'productionRun', entityId: f.runs[0].id }));
+  expect(lock.level).toBe('inUse');
+  expect(lock.heldBy).toEqual(expect.arrayContaining([expect.objectContaining({ kind: 'stockEntry' })]));
 });

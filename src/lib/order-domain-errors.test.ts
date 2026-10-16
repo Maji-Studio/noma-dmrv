@@ -22,7 +22,7 @@ describe("order errors", () => {
   it.each(["formulationId", "facilityId", "customerId", "customerLocationId"] as const)("freezes %s with a 409 and its pointer", field => {
     const error = orderRelationshipFrozen(field, "DL-26-001");
     expect(error).toBeInstanceOf(DomainError);
-    expect(error).toMatchObject({ code: "conflict", issues: [{ path: [field], code: "conflict", message: error.message }], retryable: false });
+    expect(error).toMatchObject({ code: "certification_locked", issues: [{ path: [field], code: "certification_locked", message: error.message }], retryable: false });
     expect(ACTION_STATUS[error.code]).toBe(409);
     expect(jsonPointer(error.issues[0].path)).toBe(`/${field}`);
   });
@@ -80,7 +80,7 @@ describe("order errors", () => {
   });
 
   it("refuses deletion with deliveries and mismatched customer locations", () => {
-    expect(orderHasDeliveries()).toMatchObject({ code: "conflict", issues: [{ path: ["orderId"], code: "conflict" }] });
+    expect(orderHasDeliveries()).toMatchObject({ code: "certification_locked", issues: [{ path: ["orderId"], code: "certification_locked" }] });
     expect(orderHasDeliveries().message).not.toContain("Remove deliveries first");
     expect(orderCustomerLocationMismatch()).toMatchObject({ code: "validation_failed", issues: [{ path: ["customerLocationId"], code: "validation_failed" }] });
     expect(ACTION_STATUS.validation_failed).toBe(422);

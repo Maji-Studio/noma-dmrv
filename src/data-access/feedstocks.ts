@@ -795,7 +795,7 @@ export async function deleteFeedstockInTransaction(
     .where(and(eq(productionRunFeedstocks.feedstockId, feedstockId), eq(productionRunFeedstocks.organizationId, ctx.organizationId)));
 
   if (Number(usageCount.count) > 0) {
-    throw new DomainError("conflict",
+    throw new DomainError("certification_locked",
       "Cannot delete feedstock that is used in production runs. Remove production run associations first."
     );
   }

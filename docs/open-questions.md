@@ -19,6 +19,28 @@ Deferred work lives here, never as a `TODO` in code.
   recheck entry dates when a batch start date moves. Decide whether to refuse
   the batch edit or stop counting entries dated before the new start date.
 
+## Record-lock follow-ups
+
+- `src/lib/record-lock.ts:recordLocks`: type and consume the free-field declarations
+  when the field-edit and deletion-reversal contract is implemented (#1120).
+- `src/data-access/record-lock-lineage.ts:readRecordLockLineage`: Isometric exposes
+  submission times but no return timestamp. Keep the conservative submission-time
+  lower bound until authoritative return evidence is available (`needs-registry-check`).
+- Independent guards in `src/data-access/reactors.ts:updateReactor`,
+  `src/data-access/formulations.ts:updateFormulation`,
+  `src/data-access/vehicles.ts:updateVehicle`, `src/data-access/drivers.ts:updateDriver`,
+  `src/data-access/document-write-scope.ts:ownerHasSubmittedLineage` and
+  `src/data-access/certifier-removal-deletion.ts:claimRemovalDeletion` retain their own rules. Review conversion separately
+  from the operational record-lock predicate.
+
+- `src/data-access/record-lock-lineage.ts:readStatement`: read Certify GraphQL
+  `GhgStatement.submissions` when a client is available (#737,
+  `needs-registry-check`). Certify-only submissions returned to DRAFT without a
+  REST or saved submission timestamp stay Sent until that history can be proved.
+- `src/data-access/output-stock-history.ts:getOutputStockHistory`: batch the
+  per-entry correction-dependency reads so opening history does not repeatedly
+  fetch later movements from the same bin.
+
 ## Activity recording gaps (`activity/deferred-writers`) - **deferred**
 
 - 2026-10-16: `src/data-access/emission-entries.ts:tombstoneEmissionZeros` must
