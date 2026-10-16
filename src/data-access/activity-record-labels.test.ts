@@ -4,14 +4,14 @@ it("keeps future entity types readable without asserting they were deleted", asy
   const labels = await resolveActivityRecords({ organizationId: "org", userId: "user", orgRole: "owner", isPlatformAdmin: false }, [
     { entityType: "emission_entry", entityId: "entry-1", action: "created" },
   ]);
-  expect(labels.get("emission_entry:entry-1")).toEqual({ label: "emission entry entry-1", deleted: false, facilityId: null });
+  expect(labels.get("emission_entry:entry-1")).toEqual({ label: "emission entry entry-1", deleted: false, facilityId: null, facilityTimezone: null });
 });
 
 it("resolves each polymorphic link side to its activity entity type", () => {
   const changes = { entityType: { from: "sample", to: "biochar" }, entityId: { from: "sample-id", to: "product-id" } };
   const records = new Map([
-    ["lab_sample:sample-id", { label: "LS-1", deleted: false, facilityId: null }],
-    ["biochar_product:product-id", { label: "BP-1", deleted: false, facilityId: null }],
+    ["lab_sample:sample-id", { label: "LS-1", deleted: false, facilityId: null, facilityTimezone: null }],
+    ["biochar_product:product-id", { label: "BP-1", deleted: false, facilityId: null, facilityTimezone: null }],
   ]);
   expect(activityChangeLabels("transport_leg", changes, records)).toEqual({ entityId: {
     from: { label: "LS-1", deleted: false, type: "lab_sample" },

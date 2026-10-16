@@ -83,6 +83,14 @@ const PREFLIGHT_OUTCOME_VIOLATIONS = [
   "complete-output-moisture-required",
 ] as const;
 
+async function readRunDrawSnapshot(ctx: OrgContext, tx: DbTransaction, productionRunId: string) {
+  requireOrgScope(ctx);
+  return tx.select({ storageLocationId: productionRunFeedstockDraws.storageLocationId, wetMassKg: productionRunFeedstockDraws.wetMassKg })
+    .from(productionRunFeedstockDraws)
+    .where(and(eq(productionRunFeedstockDraws.productionRunId, productionRunId), eq(productionRunFeedstockDraws.organizationId, ctx.organizationId)))
+    .orderBy(productionRunFeedstockDraws.storageLocationId);
+}
+
 /**
  * Validate that an output storage location exists, belongs to the facility, and is a biochar bin.
  */
@@ -307,8 +315,7 @@ export async function createProductionRunInTransaction(
 
     await attachProductionRunToMatchingCreditBatch(ctx, tx, created.id);
 
-    const savedDraws = await tx.select({ storageLocationId: productionRunFeedstockDraws.storageLocationId, wetMassKg: productionRunFeedstockDraws.wetMassKg })
-      .from(productionRunFeedstockDraws).where(and(eq(productionRunFeedstockDraws.productionRunId, created.id), eq(productionRunFeedstockDraws.organizationId, ctx.organizationId)));
+    const savedDraws = await readRunDrawSnapshot(ctx, tx, created.id);
     options.capture?.(created.id, null, { ...created, feedstockDraws: savedDraws });
     run = created;
   } catch (error) {
@@ -744,8 +751,7 @@ export async function updateProductionRunInTransaction(
       );
     }
 
-    const previousDraws = await tx.select({ storageLocationId: productionRunFeedstockDraws.storageLocationId, wetMassKg: productionRunFeedstockDraws.wetMassKg })
-      .from(productionRunFeedstockDraws).where(and(eq(productionRunFeedstockDraws.productionRunId, productionRunId), eq(productionRunFeedstockDraws.organizationId, ctx.organizationId)));
+    const previousDraws = await readRunDrawSnapshot(ctx, tx, productionRunId);
     const [saved] = await tx
       .update(productionRuns)
       .set({ ...transactionUpdateData, version: nextVersion(productionRuns.version) })
@@ -766,8 +772,7 @@ export async function updateProductionRunInTransaction(
     }
 
     const savedDraws = feedstockDrawsChanged
-      ? await tx.select({ storageLocationId: productionRunFeedstockDraws.storageLocationId, wetMassKg: productionRunFeedstockDraws.wetMassKg })
-        .from(productionRunFeedstockDraws).where(and(eq(productionRunFeedstockDraws.productionRunId, productionRunId), eq(productionRunFeedstockDraws.organizationId, ctx.organizationId)))
+      ? await readRunDrawSnapshot(ctx, tx, productionRunId)
       : previousDraws;
     options.capture?.(productionRunId, { ...locked, feedstockDraws: previousDraws }, { ...saved, feedstockDraws: savedDraws });
 

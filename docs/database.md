@@ -60,6 +60,8 @@ also captures its unchanged partner in `changes`, without adding it to
 Link labels resolve from current org-scoped records as `{ label, deleted, type }`.
 A deleted target has `label: null` and `deleted: true`; `type` is its activity
 entity type, or null when the target type cannot be resolved. A null link stays null.
+Read records include `facilityTimezone`, the current facility's IANA time zone or
+null when unavailable, for displaying captured instants on the facility clock.
 API writes are audited
 only here: an API audit row has `source in ('rest','mcp') and operation_id is not null`
 and carries operation, credential and request IDs, versions, field names and allowlisted values.
@@ -117,8 +119,10 @@ activity records one unscoped event so invalid lineage cannot block a write or t
 failed-upload sweep. Unexpected errors still propagate.
 
 Removal slice assignment/release and production-claim reservation/release record
-one value-free batch update per affected batch in the write transaction, using
-`removalAssignment`, `productionClaimReservation` and `productionClaim` field names.
+one batch update per affected batch by diffing the batch row in the write transaction.
+`productionEmissionsClaimReservedBySubmissionId` and
+`productionEmissionsClaimedByRemovalId` capture link values; `removalAssignment`
+records its name only. Resumes and no-op system refreshes record nothing.
 Removal deletion combines these changes into one event per batch; local draft
 discard records the released slice assignments.
 

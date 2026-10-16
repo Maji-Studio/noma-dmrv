@@ -113,7 +113,17 @@ it("returns current actor and record names and actorless sources", async () => {
   const page = await listCreditBatchActivity(ctx, fixture.batch.id);
   expect(page.items.slice(0, 2).map(row => [row.id, row.actor])).toEqual([[registry.id, null], [system.id, null]]);
   expect(page.items[2].actor).toEqual({ id: ctx.userId, name: "Activity reader" });
-  expect(page.items[2].record).toEqual({ label: "ACT-CB", deleted: false, facilityId: fixture.facility.id });
+  expect(page.items[2].record).toEqual({ label: "ACT-CB", deleted: false, facilityId: fixture.facility.id, facilityTimezone: fixture.facility.timezone });
+});
+it("returns the current facility zone alongside captured instants in list and summary reads", async () => {
+  const timezone = "Europe/Zurich";
+  await db.update(facilities).set({ timezone }).where(and(eq(facilities.id, fixture.facility.id), eq(facilities.organizationId, ctx.organizationId)));
+  const changes = { startTime: { from: null, to: TIME.toISOString() } };
+  await event({ entityType: "production_run", entityId: fixture.run.id, changedFields: ["startTime"], changes });
+  const page = await readCreditBatchActivity(ctx, { creditBatchId: fixture.batch.id });
+  expect(page.items[0]).toMatchObject({ changes, record: { facilityId: fixture.facility.id, facilityTimezone: timezone } });
+  const summary = await readCreditBatchActivitySummary(ctx, { creditBatchId: fixture.batch.id });
+  expect(summary.latest).toEqual(page.items[0]);
 });
 it("retains deleted record history as a tombstone", async () => {
   const [sample] = await db.insert(samples).values({ organizationId: ctx.organizationId, creditBatchId: fixture.batch.id,
@@ -122,7 +132,7 @@ it("retains deleted record history as a tombstone", async () => {
   const deleted = await event({ entityType: "lab_sample", entityId: deletedId, action: "deleted" });
   await db.delete(samples).where(and(eq(samples.id, deletedId), eq(samples.organizationId, ctx.organizationId)));
   const page = await listCreditBatchActivity(ctx, fixture.batch.id);
-  expect(page.items[0]).toMatchObject({ id: deleted.id, record: { label: null, deleted: true } });
+  expect(page.items[0]).toMatchObject({ id: deleted.id, record: { label: null, deleted: true, facilityTimezone: null } });
 });
 
 it("finds unlinked documents through member owners without exposing filenames", async () => {
@@ -132,7 +142,7 @@ it("finds unlinked documents through member owners without exposing filenames", 
   await event({ entityType: "document", entityId: document.id, creditBatchId: null, reasonCode: "document:weighbridge_ticket:feedstock" });
   const page = await listCreditBatchActivity(ctx, fixture.batch.id);
   expect(page.items).toHaveLength(1);
-  expect(page.items[0].record).toEqual({ label: "Document", deleted: false, facilityId: null });
+  expect(page.items[0].record).toEqual({ label: "Document", deleted: false, facilityId: null, facilityTimezone: null });
   expect(JSON.stringify(page)).not.toContain("private-filename");
 });
 
@@ -145,7 +155,7 @@ it("finds stock movement history through member allocations when the writer has 
     productionRunId: fixture.run.id, dryMassKg: "1", basisSnapshot: {} });
   const recorded = await event({ entityType: "bin_movement", entityId: movement.id, creditBatchId: null });
   expect((await listCreditBatchActivity(ctx, fixture.batch.id)).items).toEqual([
-    expect.objectContaining({ id: recorded.id, record: { label: "Lost mass", deleted: false, facilityId: null } }),
+    expect.objectContaining({ id: recorded.id, record: { label: "Lost mass", deleted: false, facilityId: null, facilityTimezone: null } }),
   ]);
 });
 
@@ -165,7 +175,7 @@ it("finds aggregate Removal and GHG Statement events through the batch slices", 
 });
 it("links each record to the facility it lives at now, and a document to its owner's", async () => {
   const [elsewhere] = await db.insert(facilities).values({ ...TEST_SITE_POSITION, organizationId: ctx.organizationId,
-    code: "ACT-FAC-2", name: "Activity second facility", timezone: "UTC" }).returning();
+    code: "ACT-FAC-2", name: "Activity second facility", timezone: "Africa/Dar_es_Salaam" }).returning();
   // A run detached from the batch and moved keeps its history; its link must follow it.
   await db.update(productionRuns).set({ facilityId: elsewhere.id })
     .where(and(eq(productionRuns.id, fixture.run.id), eq(productionRuns.organizationId, ctx.organizationId)));
@@ -178,17 +188,17 @@ it("links each record to the facility it lives at now, and a document to its own
   const documentEvent = await event({ entityType: "document", entityId: document.id, reasonCode: `document:lab_report:production_run:${fixture.run.id}` });
   const orphanDocument = await event({ entityType: "document", entityId: crypto.randomUUID(), reasonCode: `document:lab_report:production_run:${fixture.run.id}` });
   const byId = new Map((await listCreditBatchActivity(ctx, fixture.batch.id)).items.map(row => [row.id, row.record]));
-  expect(byId.get(run.id)).toEqual({ label: fixture.run.code, deleted: false, facilityId: elsewhere.id });
-  expect(byId.get(sampleEvent.id)?.facilityId).toBe(fixture.facility.id);
-  expect(byId.get(documentEvent.id)).toEqual({ label: "Document", deleted: false, facilityId: elsewhere.id });
-  expect(byId.get(orphanDocument.id)).toEqual({ label: null, deleted: true, facilityId: null });
+  expect(byId.get(run.id)).toEqual({ label: fixture.run.code, deleted: false, facilityId: elsewhere.id, facilityTimezone: elsewhere.timezone });
+  expect(byId.get(sampleEvent.id)).toMatchObject({ facilityId: fixture.facility.id, facilityTimezone: fixture.facility.timezone });
+  expect(byId.get(documentEvent.id)).toEqual({ label: "Document", deleted: false, facilityId: elsewhere.id, facilityTimezone: elsewhere.timezone });
+  expect(byId.get(orphanDocument.id)).toEqual({ label: null, deleted: true, facilityId: null, facilityTimezone: null });
 });
 it("reads malformed owner ids in legacy document reason codes as no link instead of failing", async () => {
   const [document] = await db.insert(documents).values({ organizationId: ctx.organizationId,
     entityType: "production_run", entityId: fixture.run.id, documentType: "lab_report", fileName: "f.pdf", fileUrl: "https://example.test/f" }).returning();
   const malformed = await event({ entityType: "document", entityId: document.id, reasonCode: "document:lab_report:production_run:not-a-uuid" });
   const page = await listCreditBatchActivity(ctx, fixture.batch.id);
-  expect(page.items.find(row => row.id === malformed.id)?.record).toEqual({ label: "Document", deleted: false, facilityId: null });
+  expect(page.items.find(row => row.id === malformed.id)?.record).toEqual({ label: "Document", deleted: false, facilityId: null, facilityTimezone: null });
 });
 it("finds sample transport events even without batch or run links", async () => {
   const [sample] = await db.insert(samples).values({ organizationId: ctx.organizationId, creditBatchId: fixture.batch.id,
@@ -198,7 +208,7 @@ it("finds sample transport events even without batch or run links", async () => 
     originName: "Facility", destinationName: "Lab" }).returning();
   const recorded = await event({ entityType: "transport_leg", entityId: leg.id, creditBatchId: null });
   expect((await listCreditBatchActivity(ctx, fixture.batch.id)).items).toEqual([
-    expect.objectContaining({ id: recorded.id, record: { label: "Facility to Lab", deleted: false, facilityId: null } }),
+    expect.objectContaining({ id: recorded.id, record: { label: "Facility to Lab", deleted: false, facilityId: null, facilityTimezone: null } }),
   ]);
 });
 
@@ -292,8 +302,8 @@ it.each(["feedstock", "sample"] as const)("retains real %s document create/delet
   const reasonCode = `document:pdf:${ownerType}:${document.entityId}`;
   const page = await listCreditBatchActivity(ctx, fixture.batch.id);
   expect(page.items).toEqual([
-    expect.objectContaining({ entityId: document.id, reasonCode, action: "deleted", record: { label: null, deleted: true, facilityId: null } }),
-    expect.objectContaining({ entityId: document.id, reasonCode, action: "created", record: { label: null, deleted: true, facilityId: null } }),
+    expect.objectContaining({ entityId: document.id, reasonCode, action: "deleted", record: { label: null, deleted: true, facilityId: null, facilityTimezone: null } }),
+    expect.objectContaining({ entityId: document.id, reasonCode, action: "created", record: { label: null, deleted: true, facilityId: null, facilityTimezone: null } }),
   ]);
   expect(await getCreditBatchActivitySummary(ctx, fixture.batch.id)).toEqual({
     total: 2, counts: [

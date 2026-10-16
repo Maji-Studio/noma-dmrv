@@ -76,6 +76,12 @@ async function saveShares(ctx: OrgContext, tx: DbTransaction, application: Appli
   requireOrgScope(ctx);
   await withFeedstockErrors(() => saveApplicationOutputAllocations(ctx, tx, application), "conflict", ["deliveryId"]);
 }
+async function readApplicationAllocations(ctx: OrgContext, tx: DbTransaction, applicationId: string) {
+  requireOrgScope(ctx);
+  return tx.select().from(applicationOutputAllocations)
+    .where(and(eq(applicationOutputAllocations.applicationId, applicationId), eq(applicationOutputAllocations.organizationId, ctx.organizationId)))
+    .orderBy(applicationOutputAllocations.id);
+}
 export async function createApplicationInTransaction(ctx: OrgContext, tx: DbTransaction, input: RecordApplicationInput & { code: string }, capture?: CaptureActivity) {
   requireOrgScope(ctx);
   validateFieldSize(input.fieldSizeHa, input.code);
@@ -93,7 +99,7 @@ export async function createApplicationInTransaction(ctx: OrgContext, tx: DbTran
   }).returning();
   await saveShares(ctx, tx, application);
   await reconcileUnassignedCreditBatchApplicationSlices(ctx, tx, { applicationIds: [application.id] });
-  const allocations = await tx.select().from(applicationOutputAllocations).where(and(eq(applicationOutputAllocations.applicationId, application.id), eq(applicationOutputAllocations.organizationId, ctx.organizationId))).orderBy(applicationOutputAllocations.id);
+  const allocations = await readApplicationAllocations(ctx, tx, application.id);
   capture?.(application.id, null, { ...application, allocations });
   return getApplicationOperationOutput(ctx, tx, application, remainingBefore);
 }
@@ -102,7 +108,7 @@ export async function updateApplicationInTransaction(ctx: OrgContext, tx: DbTran
   const { applicationId, expectedVersion, appliedWetMassKg, applicationMethod, ...fields } = input;
   const scope = await lockApplicationWriteScope(ctx, tx, { applicationId, expectedVersion, deliveryId: fields.deliveryId, mutation: "update" });
   const existing = scope.application!;
-  const previousAllocations = await tx.select().from(applicationOutputAllocations).where(and(eq(applicationOutputAllocations.applicationId, existing.id), eq(applicationOutputAllocations.organizationId, ctx.organizationId))).orderBy(applicationOutputAllocations.id);
+  const previousAllocations = await readApplicationAllocations(ctx, tx, existing.id);
   const previousActivityScopes = await resolveWriteActivityScopes(ctx, tx, "application", existing.id);
   if (scope.deliveries.some(row => row.archivedAt) || scope.facilities.some(row => row.archivedAt)) throw applicationNotFound("delivery");
   const patch = Object.fromEntries(Object.entries(input).filter(([, value]) => value !== undefined));
@@ -125,7 +131,7 @@ export async function updateApplicationInTransaction(ctx: OrgContext, tx: DbTran
   await reconcileUnassignedCreditBatchApplicationSlices(ctx, tx, { applicationIds: [application.id] });
   const output = await getApplicationOperationOutput(ctx, tx, application, remainingBefore);
   // A repoint records under the batches it leaves and the ones it joins.
-  const allocations = await tx.select().from(applicationOutputAllocations).where(and(eq(applicationOutputAllocations.applicationId, application.id), eq(applicationOutputAllocations.organizationId, ctx.organizationId))).orderBy(applicationOutputAllocations.id);
+  const allocations = await readApplicationAllocations(ctx, tx, application.id);
   capture?.(application.id, { ...existing, allocations: previousAllocations }, { ...application, allocations });
   return { output, activityScopes: [...previousActivityScopes, ...await resolveWriteActivityScopes(ctx, tx, "application", application.id)] };
 }

@@ -6,13 +6,17 @@ export { activityFieldPolicies } from "./activity-field-policy";
 export type ActivitySnapshot = Readonly<Record<string, unknown>>;
 export type CaptureActivity = (entityId: string, before: ActivitySnapshot | null, after: ActivitySnapshot | null) => void;
 
+const MAX_DECIMAL_EXPONENT = 1000;
+
 /** Decimal normalization without binary floating-point conversion. */
 function decimal(value: unknown): string {
   const text = String(value);
   const match = /^([+-]?)(\d+)(?:\.(\d*))?(?:e([+-]?\d+))?$/i.exec(text);
   if (!match) return text;
   const [, sign, whole, fraction = "", exponent = "0"] = match;
-  const point = whole.length + Number(exponent);
+  const exponentValue = Number(exponent);
+  if (Math.abs(exponentValue) > MAX_DECIMAL_EXPONENT) return text;
+  const point = whole.length + exponentValue;
   const digits = whole + fraction;
   const expanded = point <= 0 ? `0.${"0".repeat(-point)}${digits}`
     : point >= digits.length ? digits + "0".repeat(point - digits.length)
@@ -30,7 +34,7 @@ function canonical(value: unknown, nested = false): unknown {
   if (Array.isArray(value)) return value.map(item => canonical(item, true))
     .sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
   if (typeof value === "object") return Object.fromEntries(Object.entries(value).filter(([key]) => !NESTED_BOOKKEEPING_KEYS.has(key)).sort(([a], [b]) => a.localeCompare(b)).map(([key, item]) => [key, canonical(item, true)]));
-  if (nested && (typeof value === "number" || typeof value === "string")) return decimal(value);
+  if (nested && typeof value === "number") return decimal(value);
   return value;
 }
 

@@ -45,6 +45,13 @@ export function parseDocumentActivityReasonCode(reasonCode: string | null | unde
 
 /** The activity type of a document owner, when the owner is a record with activity of its own. */
 export function documentOwnerActivityType(ownerType: string): ActivityEntityType | null {
+  const type = polymorphicOwnerActivityType(ownerType);
+  return isActivityEntityType(type) ? type : null;
+}
+
+/** Shared owner spellings for documents and transport legs; reference-data types pass through. */
+export function polymorphicOwnerActivityType(ownerType: string): string {
   if (ownerType === "sample") return "lab_sample";
-  return isActivityEntityType(ownerType) ? ownerType : null;
+  if (ownerType === "biochar") return "biochar_product";
+  return ownerType;
 }

@@ -11,7 +11,7 @@ import { formatDate, formatDateRange } from "@/lib/format-utils";
 import { outputStockEventLabel } from "@/lib/output-stock/labels";
 import { activityIds } from "./credit-batch-activity-members";
 import { requireOrgScope } from "./utils";
-import { documentOwnerActivityType, parseDocumentActivityReasonCode } from "@/lib/activity-entity-type";
+import { documentOwnerActivityType, polymorphicOwnerActivityType, parseDocumentActivityReasonCode } from "@/lib/activity-entity-type";
 
 const SHORT_RECORD_ID_LENGTH = 8;
 /**
@@ -53,7 +53,7 @@ const sources: Record<string, LabelSource> = {
   bin_movement: { table: binMovements, id: binMovements.id, organizationId: binMovements.organizationId,
     label: sql<string>`coalesce(${binMovements.outputKind}, ${binMovements.movementType}::text)`, facility: null },
 };
-export type ActivityRecordLabel = { label: string | null; deleted: boolean; facilityId: string | null };
+export type ActivityRecordLabel = { label: string | null; deleted: boolean; facilityId: string | null; facilityTimezone: string | null };
 type LoadedRecord = { label: string | null; facilityId: string | null };
 
 /** Postgres accepts any 8-4-4-4-12 hex id; anything else would fail the `::uuid[]` cast. */
@@ -121,17 +121,26 @@ export async function resolveActivityRecords(
     const loaded = await loadRecords(ctx, type, ids);
     for (const id of ids) {
       if (!loaded) {
-        result.set(`${type}:${id}`, { label: `${type.replaceAll("_", " ")} ${id}`, deleted: false, facilityId: null });
+        result.set(`${type}:${id}`, { label: `${type.replaceAll("_", " ")} ${id}`, deleted: false, facilityId: null, facilityTimezone: null });
         continue;
       }
       const record = loaded.get(id);
-      result.set(`${type}:${id}`, { label: record?.label ?? null, deleted: !record, facilityId: record?.facilityId ?? null });
+      result.set(`${type}:${id}`, { label: record?.label ?? null, deleted: !record, facilityId: record?.facilityId ?? null, facilityTimezone: null });
     }
   }));
 
   for (const owner of owners) {
     const document = result.get(`document:${owner.documentId}`)!;
     if (!document.deleted) result.set(`document:${owner.documentId}`, { ...document, facilityId: result.get(`${owner.type}:${owner.id}`)?.facilityId ?? null });
+  }
+  const facilityIds = [...new Set([...result.values()].flatMap(record => record.facilityId ? [record.facilityId] : []))];
+  if (facilityIds.length > 0) {
+    const zones = await db.select({ id: facilities.id, timezone: facilities.timezone }).from(facilities)
+      .where(and(eq(facilities.organizationId, ctx.organizationId), activityIds(facilities.id, facilityIds)));
+    const zonesById = new Map(zones.map(row => [row.id, row.timezone]));
+    for (const record of result.values()) {
+      record.facilityTimezone = record.facilityId ? zonesById.get(record.facilityId) ?? null : null;
+    }
   }
   return result;
 }
@@ -143,7 +152,7 @@ function changeLinkTarget(entityType: string, field: string, changes: ActivityCh
   if (policy.link !== "$entityType") return policy.link;
   const owner = changes.entityType?.[side] ?? parseDocumentActivityReasonCode(reasonCode)?.ownerType;
   if (typeof owner !== "string") return null;
-  return owner === "sample" ? "lab_sample" : owner === "biochar" ? "biochar_product" : owner;
+  return polymorphicOwnerActivityType(owner);
 }
 
 export type ActivityChangeLabel = { label: string | null; deleted: boolean; type: string | null };

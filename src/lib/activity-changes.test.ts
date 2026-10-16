@@ -44,6 +44,24 @@ it("compares nested objects deeply and records changed lists by name only", () =
   expect(diffActivityChanges("production_run", { feedstockDraws: [{ storageLocationId: "a" }] }, { feedstockDraws: [{ storageLocationId: "b" }] })).toEqual({ changedFields: ["feedstockDraws"], changes: {} });
 });
 
+it("compares exponent-shaped boundary properties verbatim without expanding them", () => {
+  const before = { gisBoundary: { properties: { reference_id: "1e1000000000" } } };
+  expect(diffActivityChanges("application", before, before)).toEqual({ changedFields: [], changes: {} });
+  expect(diffActivityChanges("application", before, { gisBoundary: { properties: { reference_id: "1e1000000001" } } }))
+    .toEqual({ changedFields: ["gisBoundary"], changes: {} });
+});
+
+it("preserves leading zeroes in boundary string properties", () => {
+  expect(diffActivityChanges("application", { gisBoundary: { properties: { reference_id: "001" } } },
+    { gisBoundary: { properties: { reference_id: "1" } } }))
+    .toEqual({ changedFields: ["gisBoundary"], changes: {} });
+});
+
+it.each(["1e1000000000", "1e-1000000000"])("bounds decimal expansion for %s", value => {
+  expect(diffActivityChanges("feedstock", null, { massWetKg: value }).changes)
+    .toEqual({ massWetKg: { from: null, to: value } });
+});
+
 it("captures each entity independently without leaking values into links", async () => {
   const { createOperationActivity } = await import("./operations/activity-links");
   const activity = createOperationActivity();
@@ -92,17 +110,22 @@ it.each([
   });
 });
 
-it("normalizes nested list bookkeeping, exact decimals and element order", () => {
+it("normalizes nested list bookkeeping and element order with persisted decimal strings", () => {
   const before = { allocations: [
     { id: "old", organizationId: "org", createdAt: new Date(), updatedAt: new Date(), version: 1,
       sourceId: "a", nested: { mass: "1.500", precise: "9007199254740993.10" } },
     { sourceId: "b", mass: "2e1" },
   ] };
   const after = { allocations: [
-    { sourceId: "b", mass: 20 },
-    { id: "new", version: 2, sourceId: "a", nested: { precise: "9007199254740993.1", mass: 1.5 } },
+    { sourceId: "b", mass: "2e1" },
+    { id: "new", version: 2, sourceId: "a", nested: { precise: "9007199254740993.10", mass: "1.500" } },
   ] };
   expect(diffActivityChanges("application", before, after)).toEqual({ changedFields: [], changes: {} });
   expect(diffActivityChanges("application", before, { allocations: [...after.allocations, { sourceId: "c", mass: 1 }] }))
     .toEqual({ changedFields: ["allocations"], changes: {} });
+});
+
+it("normalizes nested JS numbers to exact decimal strings", () => {
+  expect(diffActivityChanges("production_run", { feedstockDraws: [{ mass: 1e21 }] },
+    { feedstockDraws: [{ mass: "1000000000000000000000" }] })).toEqual({ changedFields: [], changes: {} });
 });
