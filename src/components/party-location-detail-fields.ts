@@ -62,7 +62,7 @@ export function buildPartyLocationDetailFields(
     fields.push(
       {
         label: `${prefix}${options.distanceLabel}`,
-        value: location?.facilityDistances.map(row => `${row.facilityName ?? row.facilityId}: ${formatDistanceKm(row.distanceKm)} (${row.distanceSource === "map_estimate" ? "GPS estimate" : DISTANCE_SOURCE_LABELS[row.distanceSource]})`).join("; ") || null,
+        value: location?.facilityDistances.map(row => `${row.facilityName ?? row.facilityId}: ${formatDistanceKm(row.distanceKm)} (${DISTANCE_SOURCE_LABELS[row.distanceSource]})`).join("; ") || null,
       },
       {
         label: `${prefix}${options.defaultLabel}`,

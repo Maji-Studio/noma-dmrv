@@ -153,7 +153,7 @@ describe("customer and supplier location patches", () => {
       isDefault: true,
     });
 
-    expect(result.facilityDistances?.[0]?.distanceKm).toBeUndefined();
+    expect(result.facilityDistances).toBeUndefined();
     expect(result.defaultSoilTemperatureC).toBeUndefined();
     expect(result.stateRegion).toBeUndefined();
     expect(result.city).toBeUndefined();
@@ -185,7 +185,7 @@ describe("customer and supplier location patches", () => {
   it("applies the same contract to supplier distances", () => {
     expect(
       parsed(updateSupplierLocationSchema, { expectedVersion: 1, locationId: LOCATION_ID })
-        .facilityDistances?.[0]?.distanceKm,
+        .facilityDistances,
     ).toBeUndefined();
     expect(
       parsed(updateSupplierLocationSchema, { expectedVersion: 1,

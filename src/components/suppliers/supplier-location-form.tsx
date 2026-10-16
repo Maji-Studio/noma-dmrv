@@ -132,10 +132,10 @@ export function SupplierLocationForm({
   const positionIdPrefix = fieldId(idPrefix, "gps");
   const distanceId = idPrefix
     ? fieldId(idPrefix, "distance")
-    : "distanceFromFacilityKm";
+    : "facilityDistances";
   const defaultId = idPrefix ? fieldId(idPrefix, "default") : "isDefault";
 
-  // CALC endpoints: this source location → the globally selected facility.
+  // Each facility row estimates its route from this source location.
   const locationPoint =
     gpsLatitude != null && gpsLongitude != null
       ? { lat: gpsLatitude, lng: gpsLongitude }
@@ -153,7 +153,7 @@ export function SupplierLocationForm({
       }}
       className="space-y-20"
     >
-      {isEditMode && <Notice tone="info">Existing transport legs keep their recorded distances.</Notice>}
+      {isEditMode && <Notice tone="info">Saving fills a missing distance; never changes a recorded one.</Notice>}
       {/* Location Details Section */}
       <FormSection title="Location details" divider={false}>
         <FormField
@@ -257,6 +257,8 @@ export function SupplierLocationForm({
       {/* Logistics Section */}
       <FormSection title="Logistics">
         <PartyFacilityDistances
+          isEditMode={isEditMode}
+          savedValue={location?.facilityDistances}
           idPrefix={distanceId}
           value={facilityDistancesField.value as FacilityDistanceInput[] | undefined}
           getValue={() => getValues("facilityDistances") as FacilityDistanceInput[] | undefined}

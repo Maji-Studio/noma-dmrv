@@ -1,3 +1,6 @@
+import { deliveryKeys } from "./use-deliveries";
+import { transportLegKeys } from "./use-transport-legs";
+import { invalidateCertificationReadiness } from "./use-certification";
 /**
  * Customers React Query Hooks
  * Client-side state management for customer and customer location operations
@@ -497,6 +500,11 @@ export function useCreateCustomerLocation(
 
       queryClient.invalidateQueries({ queryKey: orderKeys.selects() });
 
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: deliveryKeys.all }),
+        queryClient.invalidateQueries({ queryKey: transportLegKeys.all }),
+        invalidateCertificationReadiness(queryClient, { creditBatchPreviews: true }),
+      ]);
       await callbacks?.onSuccess?.(data, variables);
     },
     onError: async (error, variables) => {
@@ -544,6 +552,11 @@ export function useUpdateCustomerLocation(
 
       queryClient.invalidateQueries({ queryKey: orderKeys.selects() });
 
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: deliveryKeys.all }),
+        queryClient.invalidateQueries({ queryKey: transportLegKeys.all }),
+        invalidateCertificationReadiness(queryClient, { creditBatchPreviews: true }),
+      ]);
       await callbacks?.onSuccess?.(data, variables);
     },
     onError: async (error, variables) => {

@@ -26,6 +26,7 @@ async function fillDeliveryDistances(ctx: OrgContext, tx: DbTransaction, locatio
   const candidates = await tx.select({ id: deliveries.id, facilityId: deliveries.facilityId }).from(deliveries)
     .innerJoin(orders, and(eq(orders.id, deliveries.orderId), eq(orders.organizationId, ctx.organizationId)))
     .where(and(eq(deliveries.organizationId, ctx.organizationId), eq(orders.customerLocationId, locationId),
+      isNull(deliveries.archivedAt), isNull(orders.archivedAt),
       inArray(deliveries.facilityId, [...byFacility.keys()]), isNull(deliveries.recordedDistanceKm)))
     .orderBy(asc(deliveries.id));
   // Delivery writers acquire the complete artifact union before delivery rows.
@@ -36,7 +37,7 @@ async function fillDeliveryDistances(ctx: OrgContext, tx: DbTransaction, locatio
     const pair = byFacility.get(candidate.facilityId)!;
     const target = { entityType: "delivery" as const, entityId: candidate.id };
     const [locked] = await tx.select({ distanceKm: deliveries.recordedDistanceKm }).from(deliveries)
-      .where(and(eq(deliveries.organizationId, ctx.organizationId), eq(deliveries.id, candidate.id))).for("update");
+      .where(and(eq(deliveries.organizationId, ctx.organizationId), eq(deliveries.id, candidate.id), isNull(deliveries.archivedAt))).for("update");
     if (!locked || locked.distanceKm != null) continue;
     if ((await getCertifiedLineage(ctx, tx, target)).some(isSubmittedLineageRow)) continue;
     await assertLockedLineagesAllowMutation(ctx, tx, lockedKeys, [{ target, mutation: "update" }]);
@@ -62,13 +63,13 @@ async function fillFeedstockDistances(ctx: OrgContext, tx: DbTransaction, locati
       eq(supplierLocations.organizationId, ctx.organizationId), eq(supplierLocations.id, locationId), eq(supplierLocations.isDefault, true)))
     .leftJoin(transportLegs, and(eq(transportLegs.organizationId, ctx.organizationId),
       eq(transportLegs.entityType, "feedstock"), eq(transportLegs.entityId, feedstocks.id), eq(transportLegs.isDerived, true)))
-    .where(and(eq(feedstocks.organizationId, ctx.organizationId), inArray(feedstocks.facilityId, facilityIds), isNull(transportLegs.distanceKm)))
+    .where(and(eq(feedstocks.organizationId, ctx.organizationId), inArray(feedstocks.facilityId, facilityIds), isNull(feedstocks.archivedAt), isNull(transportLegs.distanceKm)))
     .orderBy(asc(feedstocks.id));
   if (!candidates.length) return;
   // Match intake writers: intake rows before certification artifacts. Lock the
   // complete sets in stable order, including when the form saves several pairs.
   const locked = await tx.select({ id: feedstocks.id, supplierId: feedstocks.supplierId, facilityId: feedstocks.facilityId }).from(feedstocks)
-    .where(and(eq(feedstocks.organizationId, ctx.organizationId), inArray(feedstocks.id, candidates.map(row => row.id))))
+    .where(and(eq(feedstocks.organizationId, ctx.organizationId), inArray(feedstocks.id, candidates.map(row => row.id)), isNull(feedstocks.archivedAt)))
     .orderBy(asc(feedstocks.id)).for("update");
   const lockedKeys = await lockCertifiedLineageArtifacts(ctx, tx,
     locked.map(row => ({ entityType: "feedstock", entityId: row.id })));

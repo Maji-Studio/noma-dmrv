@@ -119,8 +119,15 @@ Delivery `recorded_distance_km` and `recorded_distance_source` snapshot the reso
 pair independently of an optional override, preserving per-delivery accounting
 when the location's defaults change. Pair upserts fill null delivery snapshots
 and missing feedstock legs in the same transaction, skipping locked certification
-lineage. They never overwrite a non-null recorded distance. Missing pairs permit entry and block
+lineage and archived cargo. Saving a pair fills a missing distance; never changes a recorded one. Missing pairs permit entry and block
 certification readiness where transport is required.
+
+Migration 0151 contains Kenji's approved one-off copy: pair defaults are copied
+only for organizations with exactly one active facility. All existing deliveries,
+including archived and lineage-locked deliveries in multi-facility organizations,
+keep their old location scalar as a recorded snapshot before the scalar columns
+are dropped. Multi-facility organizations must enter new pair defaults. Existing
+feedstock legs retain their stamped distances. See [ADR 0034](./adr/0034-per-facility-location-distances-frozen-on-record.md).
 
 ## API bookkeeping
 

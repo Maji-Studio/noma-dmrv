@@ -1,10 +1,11 @@
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull } from "drizzle-orm";
 import { db, type DbTransaction } from "@/db";
 import { facilities, customerLocations, supplierLocations, customerLocationFacilityDistances, supplierLocationFacilityDistances } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import { facilityDistancesInputSchema, type FacilityDistanceInput } from "@/schemas/facility-distances";
-import { assertSameOrg, requireOrgFacility, requireOrgScope, type Executor } from "./utils";
+import { assertSameOrg, requireOrgScope, type Executor } from "./utils";
 import { fillMissingLocationDistances } from "./location-distance-fill";
+import { lockActiveFacilityReference } from "./facility-reference-guards";
 import { nextVersion } from "./row-version";
 
 type LocationKind = "supplier" | "customer";
@@ -27,7 +28,7 @@ export async function withLocationFacilityDistances<T extends { id: string }>(
   const table = kind === "supplier" ? supplierLocationFacilityDistances : customerLocationFacilityDistances;
   const rows = locations.length ? await executor.select({
     locationId: table.locationId, facilityName: facilities.name, facilityId: table.facilityId, distanceKm: table.distanceKm, distanceSource: table.distanceSource,
-  }).from(table).innerJoin(facilities, and(eq(facilities.id, table.facilityId), eq(facilities.organizationId, ctx.organizationId))).where(and(eq(table.organizationId, ctx.organizationId), inArray(table.locationId, locations.map(row => row.id))))
+  }).from(table).innerJoin(facilities, and(eq(facilities.id, table.facilityId), eq(facilities.organizationId, ctx.organizationId), isNull(facilities.archivedAt))).where(and(eq(table.organizationId, ctx.organizationId), inArray(table.locationId, locations.map(row => row.id))))
     .orderBy(asc(table.facilityId)) : [];
   return locations.map(location => ({ ...location, facilityDistances: rows.filter(row => row.locationId === location.id)
     .map(({ facilityId, facilityName, distanceKm, distanceSource }) => ({ facilityId, facilityName, distanceKm, distanceSource })) }));
@@ -43,8 +44,10 @@ export async function upsertLocationFacilityDistances(
   if (rows === undefined) return;
   const table = kind === "supplier" ? supplierLocationFacilityDistances : customerLocationFacilityDistances;
   await assertSameOrg(ctx, kind === "supplier" ? supplierLocations : customerLocations, locationId, tx);
+  for (const row of [...rows].sort((a, b) => a.facilityId.localeCompare(b.facilityId))) {
+    await lockActiveFacilityReference(ctx, tx, row.facilityId);
+  }
   for (const row of rows) {
-    await requireOrgFacility(ctx, row.facilityId, tx);
     if (row.distanceKm === null) {
       await tx.delete(table).where(and(eq(table.organizationId, ctx.organizationId), eq(table.locationId, locationId), eq(table.facilityId, row.facilityId)));
     } else {

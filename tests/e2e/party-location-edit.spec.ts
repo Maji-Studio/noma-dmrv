@@ -48,7 +48,7 @@ async function editLocationName(
 
   const dialog = page.getByTestId(dialogTestId);
   await expect(dialog).toBeVisible();
-  await expect(dialog.getByText("Existing transport legs keep their recorded distances.")).toBeVisible();
+  await expect(dialog.getByText("Saving fills a missing distance; never changes a recorded one.")).toBeVisible();
   await expect(dialog.getByTestId("facility-distances")).toBeVisible();
   expect(await dialog.getByTestId("facility-distances").getByRole("spinbutton").count()).toBeGreaterThanOrEqual(2);
   await dialog.locator('input[name="name"]').fill(updatedName);

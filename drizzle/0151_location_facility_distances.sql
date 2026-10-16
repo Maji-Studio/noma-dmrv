@@ -40,27 +40,28 @@ ALTER TABLE "supplier_location_facility_distances" ADD CONSTRAINT "supplier_loca
 CREATE INDEX "customer_location_facility_distances_org_idx" ON "customer_location_facility_distances" USING btree ("organization_id");--> statement-breakpoint
 CREATE INDEX "supplier_location_facility_distances_org_idx" ON "supplier_location_facility_distances" USING btree ("organization_id");--> statement-breakpoint
 -- One-off staging copy (approved by Kenji 2026-10-16, #456): an organization
--- with exactly one facility had one meaning for the old per-location distance,
--- so copy it into that facility's pair row and stamp existing deliveries.
--- Multi-facility organizations re-enter distances per facility.
+-- with exactly one active facility gets a reusable pair default.
+-- Multi-facility organizations re-enter defaults per facility. Independently,
+-- stamp ALL existing deliveries from the old scalar they actually used, including
+-- archived and lineage-locked deliveries. Never substitute a pair default.
 INSERT INTO "customer_location_facility_distances" ("organization_id", "location_id", "facility_id", "distance_km", "distance_source")
 SELECT cl."organization_id", cl."id", f."id", cl."distance_from_facility_km", COALESCE(cl."distance_source", 'manual')
 FROM "customer_locations" cl
-JOIN "facilities" f ON f."organization_id" = cl."organization_id"
+JOIN "facilities" f ON f."organization_id" = cl."organization_id" AND f."archived_at" IS NULL
 WHERE cl."distance_from_facility_km" IS NOT NULL
-  AND (SELECT count(*) FROM "facilities" f2 WHERE f2."organization_id" = cl."organization_id") = 1;--> statement-breakpoint
+  AND (SELECT count(*) FROM "facilities" f2 WHERE f2."organization_id" = cl."organization_id" AND f2."archived_at" IS NULL) = 1;--> statement-breakpoint
 INSERT INTO "supplier_location_facility_distances" ("organization_id", "location_id", "facility_id", "distance_km", "distance_source")
 SELECT sl."organization_id", sl."id", f."id", sl."distance_from_facility_km", COALESCE(sl."distance_source", 'manual')
 FROM "supplier_locations" sl
-JOIN "facilities" f ON f."organization_id" = sl."organization_id"
+JOIN "facilities" f ON f."organization_id" = sl."organization_id" AND f."archived_at" IS NULL
 WHERE sl."distance_from_facility_km" IS NOT NULL
-  AND (SELECT count(*) FROM "facilities" f2 WHERE f2."organization_id" = sl."organization_id") = 1;--> statement-breakpoint
+  AND (SELECT count(*) FROM "facilities" f2 WHERE f2."organization_id" = sl."organization_id" AND f2."archived_at" IS NULL) = 1;--> statement-breakpoint
 UPDATE "deliveries" d
-SET "recorded_distance_km" = p."distance_km", "recorded_distance_source" = p."distance_source"
+SET "recorded_distance_km" = cl."distance_from_facility_km", "recorded_distance_source" = cl."distance_source"
 FROM "orders" o
-JOIN "customer_location_facility_distances" p ON p."location_id" = o."customer_location_id" AND p."organization_id" = o."organization_id"
+JOIN "customer_locations" cl ON cl."id" = o."customer_location_id" AND cl."organization_id" = o."organization_id"
 WHERE d."order_id" = o."id" AND d."organization_id" = o."organization_id"
-  AND p."facility_id" = d."facility_id" AND d."recorded_distance_km" IS NULL;--> statement-breakpoint
+  AND d."recorded_distance_km" IS NULL;--> statement-breakpoint
 ALTER TABLE "customer_locations" DROP COLUMN "distance_from_facility_km";--> statement-breakpoint
 ALTER TABLE "customer_locations" DROP COLUMN "distance_source";--> statement-breakpoint
 ALTER TABLE "supplier_locations" DROP COLUMN "distance_from_facility_km";--> statement-breakpoint

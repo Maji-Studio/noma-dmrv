@@ -8,7 +8,7 @@
 import { Notice } from "@/components/ui/notice";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { FormActions, makeCertFieldStatus } from "@/components/forms";
+import { FormActions } from "@/components/forms";
 import {
   customerLocationFormSchema,
   type CustomerLocationFormData,
@@ -118,7 +118,6 @@ export function CustomerLocationForm({
     resolver: zodResolver(customerLocationFormSchema),
     defaultValues,
   });
-  const certStatus = makeCertFieldStatus(isEditMode ? defaultValues : undefined);
 
   const defaultSubmitLabel = isEditMode ? "Update location" : "Add location";
 
@@ -134,14 +133,15 @@ export function CustomerLocationForm({
       }}
       className="space-y-20"
     >
-      {isEditMode && <Notice tone="info">Existing transport legs keep their recorded distances.</Notice>}
+      {isEditMode && <Notice tone="info">Saving fills a missing distance; never changes a recorded one.</Notice>}
       <CustomerLocationFields
         form={form}
         facility={facility}
         isSubmitting={isSubmitting}
         isCurrentDefault={location?.isDefault === true}
         idPrefix={idPrefix}
-        certStatus={certStatus}
+        isEditMode={isEditMode}
+        savedDistances={location?.facilityDistances}
       />
 
       <FormActions

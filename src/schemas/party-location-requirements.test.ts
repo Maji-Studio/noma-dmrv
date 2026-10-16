@@ -35,8 +35,8 @@ describe("required site data", () => {
   });
   it.each([updateSupplierLocationSchema, updateCustomerLocationSchema])("preserves omitted patch distances and clears explicit empty values", (schema) => {
     const input = { locationId: id, expectedVersion: 1 };
-    expect(schema.parse(input).facilityDistances?.[0]?.distanceKm).toBeUndefined();
-    expect(schema.parse({ ...input, facilityDistances: undefined }).facilityDistances?.[0]?.distanceKm).toBeUndefined();
+    expect(schema.parse(input).facilityDistances).toBeUndefined();
+    expect(schema.parse({ ...input, facilityDistances: undefined }).facilityDistances).toBeUndefined();
     for (const distance of [null, "", "   "]) {
       expect(schema.parse({ ...input, facilityDistances: [{ facilityId: id, distanceKm: distance, distanceSource: "manual" }] }).facilityDistances?.[0]?.distanceKm).toBeNull();
     }

@@ -150,4 +150,14 @@ describe("location facility distances", () => {
     })).rejects.toThrow();
     expect(await getLocationFacilityDistances(f.ctx, "customer", f.location.id)).toEqual([]);
   });
+  it("rejects archived facility pairs without changing the location", async () => {
+    const f = await fixture();
+    await db.update(facilities).set({ archivedAt: new Date() }).where(eq(facilities.id, f.facility.id));
+    await expect(updateCustomerLocation(f.ctx, f.location.id, {
+      expectedVersion: f.location.version,
+      facilityDistances: [{ facilityId: f.facility.id, distanceKm: 20, distanceSource: "manual" }],
+    })).rejects.toThrow(/Facility .*not found.*archived/);
+    expect(await getLocationFacilityDistances(f.ctx, "customer", f.location.id)).toEqual([]);
+  });
+
 });

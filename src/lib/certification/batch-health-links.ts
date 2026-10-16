@@ -60,9 +60,12 @@ export function batchHealthFixLinkFor(
   facilityId: string,
   creditBatchId?: string,
 ): BatchHealthFixLink {
-  const locationHref = check.affectedRecords?.find(record => record.href)?.href;
-  if (locationHref) return { label: "Edit location distances", href: locationHref };
   const target = resolveBatchHealthFixTarget(check);
+  const locationHref = check.affectedRecords?.[0]?.href;
+  if ((target === "deliveryDistances" || target === "feedstocks") && locationHref &&
+      check.affectedRecords?.every(record => record.href === locationHref)) {
+    return { label: "Edit location distances", href: locationHref };
+  }
   const affectedIds = check.affectedRecords?.map((record) => record.id) ?? [];
   const affectedCount = affectedIds.length;
   const query = (

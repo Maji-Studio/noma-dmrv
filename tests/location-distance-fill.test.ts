@@ -45,3 +45,28 @@ it.each(["removal", "ghgStatement", "none"] as const)("fills only unlocked missi
     }
   }, blockingVia);
 });
+
+it("does not fill archived deliveries or feedstocks at an active facility", async () => {
+  await withLineageFixture(async fixture => {
+    const [order] = await db.select().from(orders).where(eq(orders.id, fixture.orderId));
+    const [location] = await db.select().from(customerLocations).where(eq(customerLocations.id, order.customerLocationId));
+    await db.update(deliveries).set({ recordedDistanceKm: null, recordedDistanceSource: null, archivedAt: new Date() })
+      .where(eq(deliveries.id, fixture.deliveryId));
+    await updateCustomerLocation(ctx, location.id, { expectedVersion: location.version,
+      facilityDistances: [{ facilityId: fixture.facilityId, distanceKm: 25, distanceSource: "manual" }] });
+    expect((await getDeliveryWithRelations(ctx, fixture.deliveryId)).recordedDistanceKm).toBeNull();
+
+    const [feedstock] = await db.update(feedstocks).set({ archivedAt: new Date() })
+      .where(eq(feedstocks.id, fixture.feedstockId)).returning();
+    const [supplierLocation] = await db.insert(supplierLocations).values({
+      ...TEST_SITE_POSITION, organizationId: TEST_ORG_ID, supplierId: feedstock.supplierId, isDefault: true,
+    }).returning();
+    try {
+      await updateSupplierLocation(ctx, supplierLocation.id, { expectedVersion: supplierLocation.version,
+        facilityDistances: [{ facilityId: fixture.facilityId, distanceKm: 35, distanceSource: "manual" }] });
+      expect(await getTransportLegsForEntity(ctx, "feedstock", feedstock.id)).toEqual([]);
+    } finally {
+      await db.delete(supplierLocations).where(eq(supplierLocations.id, supplierLocation.id));
+    }
+  }, "none");
+});

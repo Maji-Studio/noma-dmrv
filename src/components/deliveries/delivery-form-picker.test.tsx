@@ -8,7 +8,8 @@ import { DeliveryForm } from "./delivery-form";
 import { useCreateCustomerLocation, useUpdateCustomerLocation, useDeleteCustomerLocation } from "@/hooks/use-customers";
 import { orderKeys } from "@/hooks/use-orders";
 
-const state = vi.hoisted(() => ({ locked: false, distance: 12, save: vi.fn(), read: vi.fn() }));
+const state = vi.hoisted(() => ({ refreshed: undefined as Delivery | undefined, locked: false, distance: 12, save: vi.fn(), read: vi.fn() }));
+vi.mock("@/fn/deliveries", () => ({ getDeliveryWithRelationsFn: async () => ({ success: true, data: state.refreshed }) }));
 vi.mock("@/fn/orders", () => ({
   getOrdersForSelectFn: () => {
     state.read();
@@ -57,6 +58,7 @@ function wrapper({ children }: { children: ReactNode }) {
 }
 beforeEach(() => {
   client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity }, mutations: { retry: false } } });
+  state.refreshed = undefined;
   state.distance = 12;
   state.locked = false;
   vi.clearAllMocks();
@@ -164,4 +166,28 @@ it("reports a handled mass refusal and focuses its field", async () => {
   fireEvent.submit(container.querySelector("form")!);
   await screen.findByText("Only 100 kg remains on this order.");
   expect(document.activeElement).toBe(screen.getByRole("spinbutton", { name: /Biochar product wet mass/ }));
+});
+
+it("refreshes a missing snapshot after a nested repair without discarding the delivery draft", async () => {
+  const opened = { ...delivery, orderId: "00000000-0000-4000-8000-000000000001", storageLocationId: "00000000-0000-4000-8000-000000000002", version: 3, recordedDistanceKm: null, recordedDistanceSource: null };
+  state.refreshed = opened;
+  const parentSave = vi.fn();
+  const { container } = render(<DeliveryForm delivery={opened} onSubmit={parentSave} />, { wrapper });
+  fireEvent.change(screen.getByRole("spinbutton", { name: /Biochar product wet mass/ }), { target: { value: "125" } });
+  const { result } = renderHook(() => useUpdateCustomerLocation(), { wrapper });
+  state.save.mockImplementation(async () => {
+    state.refreshed = { ...opened, version: 4, recordedDistanceKm: 34, recordedDistanceSource: "manual" };
+    return { success: true, data: { id: "location-one", customerId: "customer-one", version: 2 } };
+  });
+  await act(async () => {
+    await result.current.mutateAsync({ locationId: "location-one", expectedVersion: 1,
+      facilityDistances: [{ facilityId: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee", distanceKm: 34, distanceSource: "manual" }] });
+  });
+  await waitFor(() => expect((screen.getByRole("spinbutton", { name: /One-way distance/ }) as HTMLInputElement).value).toBe("34"));
+  expect((screen.getByRole("spinbutton", { name: /Biochar product wet mass/ }) as HTMLInputElement).value).toBe("125");
+  expect(parentSave).not.toHaveBeenCalled();
+  fireEvent.submit(container.querySelector("form")!);
+  await waitFor(() => expect(parentSave).toHaveBeenCalledWith(
+    expect.objectContaining({ deliveredWetMassKg: 125 }), expect.any(Function), 4,
+  ));
 });

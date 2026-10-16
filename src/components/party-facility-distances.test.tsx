@@ -58,3 +58,22 @@ it("merges a delayed estimate into the current form value without reverting anot
     { facilityId: "first", distanceKm: 35, distanceSource: "map_estimate" },
   ]);
 });
+
+it("uses saved per-facility CERT status while the draft changes and shows the counted round trip", () => {
+  renderToStaticMarkup(<PartyFacilityDistances isEditMode
+    savedValue={[{ facilityId: "first", distanceKm: 20, distanceSource: "manual" }]}
+    value={[{ facilityId: "second", distanceKm: 30, distanceSource: "manual" }]}
+    onChange={vi.fn()} idPrefix="distance" locationPoint={null} />);
+  expect(captured.rows.map(row => row.certifyStatus)).toEqual(["satisfied", "missing"]);
+  expect(captured.rows.every(row => row.certifyRequired)).toBe(true);
+  expect(captured.rows[1].cue).toBe("60 km round trip counted");
+});
+
+it("keeps create chips neutral and excludes archived contextual facilities", () => {
+  renderToStaticMarkup(<PartyFacilityDistances value={[]} onChange={vi.fn()} idPrefix="distance" locationPoint={null} />);
+  expect(captured.rows.map(row => row.certifyStatus)).toEqual(["neutral", "neutral"]);
+  captured.rows = [];
+  renderToStaticMarkup(<PartyFacilityDistances facility={{ ...facilities[0], archivedAt: new Date() }}
+    value={[]} onChange={vi.fn()} idPrefix="distance" locationPoint={null} />);
+  expect(captured.rows).toEqual([]);
+});

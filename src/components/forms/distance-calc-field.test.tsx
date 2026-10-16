@@ -91,3 +91,10 @@ describe("DistanceCalcField estimate button", () => {
     expect(markup).toMatch(/<button[^>]*>Estimate from GPS<\/button>/);
   });
 });
+
+it("omits estimation outside location forms while retaining manual distance entry", () => {
+  const markup = render({ allowEstimate: false, distanceKm: 25, distanceSource: "manual" });
+  expect(inputTag(markup)).toContain('value="25"');
+  expect(markup).not.toContain("Estimate from GPS");
+  expect(calculateTabStops(markup)).toBe(0);
+});

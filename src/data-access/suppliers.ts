@@ -1,3 +1,5 @@
+import { lockActiveFacilityReference } from "./facility-reference-guards";
+import { processPendingStorageObjectDeletions } from "./storage-object-deletions";
 import { upsertLocationFacilityDistances, withLocationFacilityDistances } from "./location-facility-distances";
 import type { FacilityDistanceInput } from "@/schemas/facility-distances";
 /**
@@ -591,7 +593,11 @@ export async function createSupplierLocation(
   requireOrgScope(ctx);
   await ensureSupplierExists(ctx, data.supplierId);
 
-  return db.transaction(async (tx) => {
+  const saved = await db.transaction(async (tx) => {
+    // Match intake writers: active facilities before the supplier parent.
+    for (const row of [...(data.facilityDistances ?? [])].sort((a, b) => a.facilityId.localeCompare(b.facilityId))) {
+      await lockActiveFacilityReference(ctx, tx, row.facilityId);
+    }
     // Serialize location writers with parent deletion before locking children.
     // Pair saves also wait for intake FK inserts, so fill-only cannot miss an
     // intake committing with a missing distance. The lock does not bump version.
@@ -646,6 +652,8 @@ export async function createSupplierLocation(
     await upsertLocationFacilityDistances(ctx, tx, "supplier", location.id, data.facilityDistances);
     return (await withLocationFacilityDistances(ctx, "supplier", [location], tx))[0];
   });
+  await processPendingStorageObjectDeletions(ctx);
+  return saved;
 }
 
 export async function updateSupplierLocation(
@@ -669,7 +677,11 @@ export async function updateSupplierLocation(
   const { supplierId } = await ensureSupplierLocationExists(ctx, locationId);
   const { expectedVersion, facilityDistances, ...locationData } = data;
 
-  return db.transaction(async (tx) => {
+  const saved = await db.transaction(async (tx) => {
+    // Match intake writers: active facilities before the supplier parent.
+    for (const row of [...(facilityDistances ?? [])].sort((a, b) => a.facilityId.localeCompare(b.facilityId))) {
+      await lockActiveFacilityReference(ctx, tx, row.facilityId);
+    }
     // Serialize location writers with parent deletion before locking children.
     // Pair saves also wait for intake FK inserts, so fill-only cannot miss an
     // intake committing with a missing distance. The lock does not bump version.
@@ -741,6 +753,8 @@ export async function updateSupplierLocation(
     await upsertLocationFacilityDistances(ctx, tx, "supplier", locationId, facilityDistances);
     return (await withLocationFacilityDistances(ctx, "supplier", [updated], tx))[0];
   });
+  await processPendingStorageObjectDeletions(ctx);
+  return saved;
 }
 
 export async function deleteSupplierLocation(

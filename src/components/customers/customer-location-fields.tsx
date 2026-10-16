@@ -10,7 +10,6 @@ import {
   FormSection,
   FormTextarea,
   PositionPicker,
-  type CertFieldStatus,
 } from "@/components/forms";
 import type { Facility } from "@/db/schema";
 import type {
@@ -26,13 +25,14 @@ type CustomerLocationFormApi = UseFormReturn<
 
 interface CustomerLocationFieldsProps {
   form: CustomerLocationFormApi;
-  /** Calculation origin; standalone callers fall back to the selected facility. */
+  /** Contextual editors restrict distances to this facility; standalone forms show all active facilities. */
   facility?: Facility;
   isSubmitting?: boolean;
   /** The edited location is the party's default; it stays checked until another is set. */
   isCurrentDefault?: boolean;
   idPrefix?: string;
-  certStatus?: (fieldName: string) => CertFieldStatus;
+  isEditMode?: boolean;
+  savedDistances?: FacilityDistanceInput[];
 }
 
 function fieldId(idPrefix: string | undefined, fieldName: string): string {
@@ -45,6 +45,8 @@ export function CustomerLocationFields({
   isSubmitting = false,
   isCurrentDefault = false,
   idPrefix,
+  isEditMode,
+  savedDistances,
 }: CustomerLocationFieldsProps) {
   const {
     register,
@@ -65,7 +67,7 @@ export function CustomerLocationFields({
   const gpsLatitude = gpsLatitudeField.value as number | null | undefined;
   const gpsLongitude = gpsLongitudeField.value as number | null | undefined;
 
-  // CALC endpoints: the caller's facility (or global selection) → this site.
+  // Each facility row estimates its route to this site.
   const locationPoint =
     gpsLatitude != null && gpsLongitude != null
       ? { lat: gpsLatitude, lng: gpsLongitude }
@@ -80,7 +82,7 @@ export function CustomerLocationFields({
   const soilTemperatureId = fieldId(idPrefix, "soil-temperature");
   const distanceId = idPrefix
     ? fieldId(idPrefix, "distance")
-    : "distanceFromFacilityKm";
+    : "facilityDistances";
   const defaultId = idPrefix ? fieldId(idPrefix, "default") : "isDefault";
 
   return (
@@ -205,6 +207,8 @@ export function CustomerLocationFields({
 
       <FormSection title="Logistics">
         <PartyFacilityDistances
+          isEditMode={isEditMode}
+          savedValue={savedDistances}
           fromFacility
           idPrefix={distanceId}
           value={facilityDistancesField.value as FacilityDistanceInput[] | undefined}

@@ -123,15 +123,17 @@ export const deliveries = pgTable(
       .notNull(),
 
     // Per-delivery road-distance override (km) for the distribution transport
-    // leg. Defaults to the destination customer location's distance; set here
+    // leg. Falls back to the frozen recorded distance; set here
     // only when this trip's routing differs. Mirrors the feedstock-side
     // transportDistanceKm override.
     distanceKmOverride: real('distance_km_override'),
+    // Facility-pair snapshot captured on save, or filled later only while missing.
     recordedDistanceKm: real('recorded_distance_km'),
+    // Provenance captured with the recorded distance.
     recordedDistanceSource: distanceSource('recorded_distance_source'),
     // Provenance of the effective trip distance. Usually null when no distance
     // override is stored; `document` may be persisted alone when this delivery
-    // has trip-specific evidence for the inherited customer-location distance.
+    // has trip-specific evidence for the recorded distance.
     distanceSource: distanceSource('distance_source'),
     distanceNote: text('distance_note'),
 
