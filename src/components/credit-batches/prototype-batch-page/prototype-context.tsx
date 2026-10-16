@@ -15,6 +15,9 @@ export interface ProtoContextValue {
   go: (tab: TabKey, focus?: string | null) => void;
   runs: CreditBatchProductionRunOption[];
   runsLoading: boolean;
+  /** Batch details in edit mode, started from the header's Edit button. */
+  editing: boolean;
+  setEditing: (editing: boolean) => void;
   /** What an inert prototype button would do, shown under the tabs. */
   message: string | null;
   /** Inert prototype buttons call this to say what they would do. */

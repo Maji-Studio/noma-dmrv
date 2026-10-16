@@ -1,12 +1,12 @@
 "use client";
 
-/** PROTOTYPE (throwaway): the five non-overview tab bodies, shared by all variants. */
+/** PROTOTYPE (throwaway): the four non-overview tab bodies, shared by all variants. */
 import Link from "next/link";
-import { ArrowSquareOutIcon, FlaskIcon, PlusIcon } from "@phosphor-icons/react/dist/ssr";
+import { FlaskIcon, PlusIcon } from "@phosphor-icons/react/dist/ssr";
 import { CohortInputLedger } from "@/components/credit-batches/cohort-input-ledger";
 import { CreditBatchDurabilityPanel } from "@/components/credit-batches/credit-batch-durability-panel";
 import { CreditBatchActivityView } from "@/components/activity";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { formatDate, formatTonnes } from "@/lib/format-utils";
@@ -14,12 +14,12 @@ import { cn } from "@/lib/utils";
 import { EMISSION_LINE_STATE_LABELS, type EmissionLineState } from "@/lib/certification/emission-lines";
 import { productionRunDeepLinkHref } from "@/lib/certification/links";
 import { useProto } from "./prototype-context";
-import { FocusRow, Panel, RemovalChip, tonnes } from "./prototype-parts";
+import { FocusRow, PANEL, Panel, RemovalChip, tonnes } from "./prototype-parts";
 
 const MUTED = "text-[var(--color-text-secondary)]";
 
 export function ProductionTab() {
-  const { batch, runs, runsLoading, say, model } = useProto();
+  const { batch, runs, runsLoading, model } = useProto();
   const memberIds = new Set(batch.productionRunIds);
   const members = runs.filter((run) => memberIds.has(run.id));
   return (
@@ -49,20 +49,9 @@ export function ProductionTab() {
           Carbon estimate before project emissions: <span className="font-medium text-[var(--color-text-primary)]">{"≈"} {formatTonnes(model.co2eTons ?? 0, { unit: "t CO₂e" })}</span>
         </p>
       </Panel>
-      <FocusRow rowId="samples">
-        <Panel
-          title="Samples and durability"
-          action={
-            <Button variant="weak" size="small" onClick={() => say("Prototype: opens the new Sample form for this credit batch.")}>
-              <PlusIcon size={14} aria-hidden />
-              Add Sample
-            </Button>
-          }
-        >
-          <FocusRow rowId="sample-2">
-            <CreditBatchDurabilityPanel creditBatchId={batch.id} facilityId={batch.facilityId} />
-          </FocusRow>
-        </Panel>
+      {/* The real Samples block brings its own heading and one add action; the sheet's top rule is dropped here. */}
+      <FocusRow rowId="samples" className={cn(PANEL, "p-20 sm:p-24 [&>*:first-child]:border-t-0 [&>*:first-child]:pt-0")}>
+        <CreditBatchDurabilityPanel creditBatchId={batch.id} facilityId={batch.facilityId} />
       </FocusRow>
     </div>
   );
@@ -179,35 +168,6 @@ export function RemovalsTab() {
   );
 }
 
-export function TraceabilityTab() {
-  const { batch, model } = useProto();
-  const href = `/traceability?${new URLSearchParams({ facility: batch.facilityId, batch: batch.id })}`;
-  const nodes = ["Feedstock deliveries", "Production runs", "Biochar products", "Deliveries", "Applications"];
-  const counts = [3, batch.productionRunCount, 2, 1, batch.applicationCount];
-  return (
-    <Panel
-      title="Chain of custody"
-      action={
-        <Link href={href} className={cn(buttonVariants({ variant: "weak", size: "small" }))}>
-          Open full Traceability
-          <ArrowSquareOutIcon size={14} aria-hidden />
-        </Link>
-      }
-    >
-      <p className={cn("body-small", MUTED)}>A static preview of the roll-up. The full page has the graph, map and Sankey views.</p>
-      <ol className="grid gap-0 sm:grid-cols-5">
-        {nodes.map((node, index) => (
-          <li key={node} className="flex flex-col gap-4 border border-[var(--color-border-secondary)] p-12 sm:border-l-0 sm:first:border-l">
-            <span className="title-heading-3 tabular-nums">{counts[index]}</span>
-            <span className="body-small">{node}</span>
-          </li>
-        ))}
-      </ol>
-      <p className={cn("body-small", MUTED)}>{tonnes(model.appliedTons)} applied across {batch.applicationCount} applications.</p>
-    </Panel>
-  );
-}
-
 export function ActivityTab() {
   const { batch } = useProto();
   return <CreditBatchActivityView creditBatchId={batch.id} batchCode={batch.code} inline />;
@@ -218,7 +178,6 @@ export function TabBody({ tab }: { tab: string }) {
     case "production": return <ProductionTab />;
     case "emissions": return <EmissionsTab />;
     case "removals": return <RemovalsTab />;
-    case "traceability": return <TraceabilityTab />;
     case "activity": return <ActivityTab />;
     default: return null;
   }

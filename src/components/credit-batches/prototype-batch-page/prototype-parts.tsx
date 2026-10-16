@@ -2,8 +2,8 @@
 
 /** PROTOTYPE (throwaway): panels and rows used by the overview and the tabs. */
 import Link from "next/link";
-import { useState, type ReactNode } from "react";
-import { ArrowRightIcon, ArrowSquareOutIcon, CheckCircleIcon, LockSimpleIcon, PencilSimpleIcon } from "@phosphor-icons/react/dist/ssr";
+import type { ReactNode } from "react";
+import { ArrowRightIcon, ArrowSquareOutIcon, CheckCircleIcon, LockSimpleIcon, LockSimpleOpenIcon } from "@phosphor-icons/react/dist/ssr";
 import { EmptyState } from "@/components/ui";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -57,7 +57,7 @@ export function FocusRow({ rowId, className, children }: { rowId: string; classN
           node.scrollIntoView({ block: "center" });
         }
       }}
-      className={cn(focused && "outline outline-2 outline-offset-4 outline-[var(--color-interaction)]", className)}
+      className={cn(className, focused && "bg-[var(--st-run-bg)] outline outline-1 outline-[var(--st-run-border)]")}
     >
       {children}
     </div>
@@ -79,7 +79,7 @@ const ROW_TARGET = "group -mx-12 flex min-h-44 w-[calc(100%+24px)] flex-col gap-
 
 /** One open item. The whole row is the target: an in-page jump, or the repair page when the fix lives elsewhere. */
 export function OpenItemRow({ item }: { item: OpenItem }) {
-  const { go } = useProto();
+  const { go, setEditing } = useProto();
   const body = (
     <>
       <span className="flex min-w-0 flex-col gap-2">
@@ -99,7 +99,14 @@ export function OpenItemRow({ item }: { item: OpenItem }) {
           {body}
         </Link>
       ) : (
-        <button type="button" className={ROW_TARGET} onClick={() => go(item.tab, item.rowId)}>
+        <button
+          type="button"
+          className={ROW_TARGET}
+          onClick={() => {
+            if (item.rowId === "template" || item.rowId === "details") setEditing(true);
+            go(item.tab, item.rowId);
+          }}
+        >
           {body}
         </button>
       )}
@@ -164,10 +171,15 @@ function DetailRow({ field, label, value, editing, input }: { field: LockableFie
   );
 }
 
-/** Batch details: definition, Removal template, sampling, gas composition, notes. */
+const LOCK_TEXT = {
+  Open: "All fields editable",
+  "Partly sent": "Some fields locked",
+  "Fully sent": "All fields locked",
+} as const;
+
+/** Batch details: definition, Removal template, sampling, gas composition, notes. Edit starts from the header. */
 export function DetailsPanel({ className }: { className?: string }) {
-  const { batch, canManage, model, say } = useProto();
-  const [editing, setEditing] = useState(false);
+  const { batch, canManage, model, editing, setEditing, say } = useProto();
   const gas = [
     ["CH₄", batch.ch4CompositionPercent],
     ["CO", batch.coCompositionPercent],
@@ -176,27 +188,15 @@ export function DetailsPanel({ className }: { className?: string }) {
   ] as const;
   const gasText = gas.every(([, v]) => v == null) ? "Not recorded" : gas.map(([name, v]) => (v == null ? `${name} not recorded` : `${name} ${v}%`)).join(", ");
   const allLocked = model.lockLevel === "Fully sent";
+  const LockIcon = model.lockLevel === "Open" ? LockSimpleOpenIcon : LockSimpleIcon;
   return (
     <FocusRow rowId="details">
-      <Panel
-        title="Batch details"
-        className={className}
-        action={
-          !allLocked && (
-            <Button variant="noOutline" size="small" onClick={() => (editing ? (setEditing(false), say("Prototype: changes would save here.")) : setEditing(true))}>
-              <PencilSimpleIcon size={16} aria-hidden />
-              {editing ? "Save" : "Edit"}
-            </Button>
-          )
-        }
-      >
-        {allLocked && model.locks.startDate && (
-          <p className={cn("inline-flex items-center gap-6 body-small", MUTED)}>
-            <LockSimpleIcon size={16} className="shrink-0" aria-hidden />
-            {model.locks.startDate.reason}
-            <InfoHint label="How to change a locked batch">{model.locks.startDate.howTo}</InfoHint>
-          </p>
-        )}
+      <Panel title="Batch details" className={className}>
+        <p className={cn("inline-flex items-center gap-6 body-small", MUTED)}>
+          <LockIcon size={16} className="shrink-0" aria-hidden />
+          {allLocked && model.locks.startDate ? model.locks.startDate.reason : LOCK_TEXT[model.lockLevel]}
+          {allLocked && model.locks.startDate && <InfoHint label="How to change a locked credit batch">{model.locks.startDate.howTo}</InfoHint>}
+        </p>
         <dl className="flex flex-col">
           <DetailRow field="feedstock" label="Feedstock" value={batch.feedstockTypeName ?? "Not recorded"} editing={editing} />
           <DetailRow field="startDate" label="Start date" value={formatDate(batch.startDate)} editing={editing} input={<Input type="date" defaultValue={String(batch.startDate).slice(0, 10)} aria-label="Start date" />} />
@@ -206,9 +206,16 @@ export function DetailsPanel({ className }: { className?: string }) {
           <DetailRow field={null} label="Gas composition" value={gasText} editing={editing} input={<Input defaultValue={gasText} aria-label="Gas composition" />} />
           <DetailRow field={null} label="Notes" value={batch.siteManagementNotes || "Not recorded"} editing={editing} input={<Input defaultValue={batch.siteManagementNotes ?? ""} aria-label="Notes" />} />
         </dl>
+        {editing && (
+          <div className="flex flex-wrap gap-12">
+            <Button variant="primary" onClick={() => (setEditing(false), say("Prototype: changes would save here."))}>Save changes</Button>
+            <Button variant="noOutline" onClick={() => setEditing(false)}>Cancel</Button>
+          </div>
+        )}
+        {/* Switching the template is an edit: its action shows in Edit mode only, one CTA per screen. */}
         <FocusRow rowId="template" className="border-t border-[var(--color-border-secondary)] pt-16">
           {model.scenario === "blocking" ? (
-            <CreditBatchRemovalTemplate creditBatch={batch} canManage={canManage} locked={model.locks.template != null} />
+            <CreditBatchRemovalTemplate creditBatch={batch} canManage={canManage && editing} locked={model.locks.template != null} />
           ) : (
             // PROTOTYPE: a sent Removal needs a template, so these scenarios show a stub pin.
             <dl>
@@ -221,36 +228,44 @@ export function DetailsPanel({ className }: { className?: string }) {
   );
 }
 
-/** The Removals and GHG Statement this batch goes into. */
-export function FedPanel({ className }: { className?: string }) {
+/** Where the applied biochar sits: each Removal with its mass, the part in none, and the GHG Statement. */
+export function RemovalsPanel() {
   const { model, go } = useProto();
   const hasStatement = model.scenario === "partly-sent" || model.scenario === "issued";
+  const ROW = "-mx-12 grid w-[calc(100%+24px)] grid-cols-[minmax(0,1fr)_auto] items-center gap-x-16 gap-y-2 px-12 py-10 text-left";
   return (
-    <Panel title="Removals" className={className}>
-      {model.removals.length === 0 ? (
-        <p className={cn("body-small", MUTED)}>
-          No Removal includes this credit batch yet. {model.blocking.length > 0 ? "Clear the blocking items first." : "Select Start Removal to add the applied biochar."}
-        </p>
-      ) : (
-        <ul className="flex flex-col">
-          {model.removals.map((removal) => (
-            <li key={removal.code} className={ROW_RULE}>
-              <button type="button" onClick={() => go("removals")} className="-mx-12 flex w-[calc(100%+24px)] flex-col gap-2 px-12 py-10 text-left hover:bg-[var(--color-surface-medium)]">
+    <Panel title="Removals">
+      <p className={cn("body-small", MUTED)}>
+        {model.removals.length === 0
+          ? "This credit batch is ready. Select Start Removal to submit its applied biochar."
+          : `${tonnes(model.appliedTons)} of applied biochar, by Removal.`}
+      </p>
+      <ul className="flex flex-col">
+        {model.removalMass.map(({ removal, tons }) => (
+          <li key={removal?.code ?? "none"} className={ROW_RULE}>
+            {removal ? (
+              <button type="button" onClick={() => go("removals")} className={cn(ROW, "hover:bg-[var(--color-surface-medium)]")}>
                 <RemovalChip removal={removal} />
-                <span className={cn("body-caption", MUTED)}>{removal.statusNote}</span>
+                <span className="body-medium tabular-nums">{tonnes(tons)}</span>
+                <span className={cn("col-span-2 body-caption", MUTED)}>{removal.statusNote}</span>
               </button>
-            </li>
-          ))}
-          {hasStatement && (
-            <li className={ROW_RULE}>
-              <button type="button" onClick={() => go("removals", "ghg")} className="-mx-12 flex w-[calc(100%+24px)] flex-col gap-2 px-12 py-10 text-left hover:bg-[var(--color-surface-medium)]">
-                <span className="body-small font-medium">GHG Statement Q3</span>
-                <span className={cn("body-caption", MUTED)}>{model.scenario === "issued" ? "Issued" : "In verification"}</span>
-              </button>
-            </li>
-          )}
-        </ul>
-      )}
+            ) : (
+              <div className={ROW}>
+                <span className="body-small font-medium">Not in a Removal</span>
+                <span className="body-medium tabular-nums">{tonnes(tons)}</span>
+              </div>
+            )}
+          </li>
+        ))}
+        {hasStatement && (
+          <li className={ROW_RULE}>
+            <button type="button" onClick={() => go("removals", "ghg")} className={cn(ROW, "hover:bg-[var(--color-surface-medium)]")}>
+              <span className="body-small font-medium">GHG Statement Q3</span>
+              <span className={cn("body-small", MUTED)}>{model.scenario === "issued" ? "Issued" : "In verification"}</span>
+            </button>
+          </li>
+        )}
+      </ul>
     </Panel>
   );
 }
