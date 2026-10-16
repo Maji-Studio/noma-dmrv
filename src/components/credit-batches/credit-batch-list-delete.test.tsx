@@ -33,6 +33,17 @@ vi.mock("@/components/navigation", () => ({ SelectFacilityEmptyState: () => null
 vi.mock("@/components/ui/notice", () => ({ Notice: () => null }));
 vi.mock("@/components/ui/illustrations", () => ({ ILLUSTRATION_SIZE: { empty: 48 }, CreditBatchArt: () => null }));
 vi.mock("@phosphor-icons/react/dist/ssr", () => ({ CertificateIcon: () => null, LeafIcon: () => null, PlusIcon: () => null }));
+vi.mock("@/hooks/use-record-locks", () => ({
+  useRecordLocks: () => ({ locks: {} }),
+  useRecordLock: () => ({ lock: undefined, isLoading: false }),
+}));
+vi.mock("@/components/record-locks", () => ({
+  RecordLockChip: () => null,
+  RecordLockNotice: () => null,
+  RecordUsedBy: () => null,
+  recordLockColumn: () => ({ id: "recordLock", header: "Lock", cell: () => null }),
+}));
+
 vi.mock("./credit-batch-form", () => ({ CreditBatchForm: () => null }));
 vi.mock("./credit-batch-filters", () => ({ CreditBatchFilters: () => null }));
 vi.mock("./credit-batch-health-strip", () => ({ CreditBatchHealthStrip: () => null }));

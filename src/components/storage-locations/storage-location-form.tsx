@@ -31,6 +31,8 @@ import {
 } from "@/schemas/storage-locations";
 import type { FeedstockTypeUsage } from "@/schemas/feedstock-types";
 import type { StorageLocation } from "@/db/schema/facilities";
+import { RecordLockNotice } from "@/components/record-locks/record-lock-notice";
+import type { RecordLockView } from "@/lib/record-lock-view";
 
 const STOCK_MODE_HINT =
   "Split keeps every production run or batch in its own bay, bag or heap, and each draw records which ones it came from. Mix is one blended pile: every draw takes from each in proportion to what it holds.";
@@ -58,6 +60,8 @@ interface StorageLocationFormProps {
   defaultFormulationId?: string;
   /** Pre-selects the facility when rendered outside FacilityProvider context */
   defaultFacilityId?: string;
+  /** The saved bin's lock: stock history fixes its storage type and feedstock type. */
+  lock?: RecordLockView;
 }
 
 export function StorageLocationForm({
@@ -74,8 +78,12 @@ export function StorageLocationForm({
   lockFeedstockType = false,
   defaultFormulationId,
   defaultFacilityId,
+  lock,
 }: StorageLocationFormProps) {
   const isEditMode = !!storageLocation;
+  // The identity guard (#767) refuses these two once any stock row points at
+  // the bin. Stock mode and formulation keep their own inline rules.
+  const identityLocked = isEditMode && !!lock && lock.level !== "open";
   const { facilityId: contextFacilityId } = useFacilityContext();
 
   const typeChoices = allowedTypes ?? storageLocationTypes;
@@ -155,6 +163,7 @@ export function StorageLocationForm({
   return (
     <form onSubmit={handleFormSubmit} className="space-y-20">
       <ResolvedErrorRevalidator control={control} trigger={trigger} />
+      {isEditMode && <RecordLockNotice lock={lock} subject="storageBin" />}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
         {fixedType ? (
           <div className="flex flex-col gap-6">
@@ -175,7 +184,7 @@ export function StorageLocationForm({
             <SegmentedControl
               id="type"
               legend="Storage type"
-              disabled={isSubmitting}
+              disabled={isSubmitting || identityLocked}
               error={!!errors.type}
               options={storageTypeOptions}
               {...register("type")}
@@ -283,7 +292,7 @@ export function StorageLocationForm({
             entityType="feedstockType"
             allowEdit
             placeholder="Select feedstock type..."
-            disabled={isSubmitting}
+            disabled={isSubmitting || identityLocked}
             selectionLocked={lockFeedstockType}
             required
             helperText={feedstockTypeHelperText}

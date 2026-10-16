@@ -72,6 +72,17 @@ vi.mock("@phosphor-icons/react/dist/ssr", () => ({
   PlusIcon: () => null,
   XIcon: () => null,
 }));
+vi.mock("@/hooks/use-record-locks", () => ({
+  useRecordLocks: () => ({ locks: {} }),
+  useRecordLock: () => ({ lock: undefined, isLoading: false }),
+}));
+vi.mock("@/components/record-locks", () => ({
+  RecordLockChip: () => null,
+  RecordLockNotice: () => null,
+  RecordUsedBy: () => null,
+  recordLockColumn: () => ({ id: "recordLock", header: "Lock", cell: () => null }),
+}));
+
 vi.mock("@/components/ui", () => ({
   Button: ({ children }: { children?: ReactNode }) => <button type="button">{children}</button>,
   EmptyState: () => null,

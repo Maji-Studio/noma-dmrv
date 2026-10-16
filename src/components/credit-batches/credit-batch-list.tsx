@@ -1,5 +1,7 @@
 "use client";
 
+import { RecordLockChip, RecordLockNotice, RecordUsedBy } from "@/components/record-locks";
+import { useRecordLock, useRecordLocks } from "@/hooks/use-record-locks";
 import { toDeleteErrorMessage } from "@/lib/stale-version";
 /**
  * CreditBatchList component
@@ -443,6 +445,8 @@ export function CreditBatchList({
     displaySideSheet?.entity ?? null,
     co2eStoredPreviews,
   );
+  const batchLocks = useRecordLocks("creditBatch", paginatedItems.map((batch) => batch.id));
+  const { lock: sheetLock } = useRecordLock("creditBatch", viewEntity?.id);
   const runOptionsQuery = useCreditBatchProductionRunOptions({
     facilityId: viewEntity?.facilityId,
     startDate: viewEntity?.startDate,
@@ -533,7 +537,7 @@ export function CreditBatchList({
   const sideSheetHealth = sideSheetEntity
     ? batchHealthSummaries[sideSheetEntity.id]
     : undefined;
-  const sideSheetLocked = sideSheetHealth?.recordLock?.level === "sent";
+  const sideSheetLocked = (sheetLock?.level ?? sideSheetHealth?.recordLock?.level) === "sent";
 
   return (
     <div className="container-max page-shell">
@@ -664,6 +668,7 @@ export function CreditBatchList({
                 onView={openView}
                 onEdit={openEdit}
                 onDelete={handleDelete}
+                lock={batchLocks.locks[batch.id]}
               />
             ))}
           </div>
@@ -715,6 +720,8 @@ export function CreditBatchList({
         subtitle={sideSheetSubtitle}
         editLabel="Edit credit batch"
         canEdit={!sideSheetLocked}
+        titleBadge={sheetLock && <RecordLockChip level={sheetLock.level} />}
+        viewModeNotice={<RecordLockNotice lock={sheetLock} />}
         size="wide"
         sections={
           sideSheetEntity
@@ -741,16 +748,6 @@ export function CreditBatchList({
         viewModeChildren={
           sideSheetEntity ? (
             <>
-              {sideSheetLocked && (
-                <p
-                  role="note"
-                  className="border border-[var(--color-border-secondary)] bg-[var(--color-background-light)] px-16 py-12 body-small text-[var(--color-text-secondary)]"
-                >
-                  {`This credit batch backs a Removal (${
-                    sideSheetHealth?.removalStatus?.label ?? "submitted"
-                  }), so its definition is locked. To change it, the Removal must be amended with the registry.`}
-                </p>
-              )}
               <CreditBatchHealthStrip
                 creditBatchId={sideSheetEntity.id}
                 facilityId={sideSheetEntity.facilityId}
@@ -761,6 +758,7 @@ export function CreditBatchList({
                 creditBatchId={sideSheetEntity.id}
                 facilityId={sideSheetEntity.facilityId}
               />
+              <RecordUsedBy lock={sheetLock} />
             </>
           ) : undefined
         }

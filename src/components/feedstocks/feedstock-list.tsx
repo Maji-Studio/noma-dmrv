@@ -12,6 +12,9 @@ import { parseAsString, useQueryState } from "nuqs";
 import { FEEDSTOCK_DEEP_LINK_PARAM } from "@/lib/feedstock-links";
 import { DataTable } from "@/components/ui/data-table";
 import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
+import { RecordLockChip, RecordLockNotice, RecordUsedBy, recordLockColumn } from "@/components/record-locks";
+import { useRecordLock, useRecordLocks } from "@/hooks/use-record-locks";
+import { isRecordDeletable, isRecordEditable, type RecordLockViews } from "@/lib/record-lock-view";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
@@ -67,6 +70,7 @@ import { ILLUSTRATION_SIZE, FeedstockArt } from "@/components/ui/illustrations";
 function createColumns(
   onEdit: (feedstock: FeedstockWithRelations) => void,
   onDelete: (feedstock: FeedstockWithRelations) => void,
+  locks: RecordLockViews,
 ): ColumnDef<FeedstockWithRelations>[] {
   return [
     {
@@ -170,21 +174,23 @@ function createColumns(
         />
       ),
     },
+    recordLockColumn<FeedstockWithRelations>(locks),
     {
       id: "actions",
       meta: { stickyEnd: true },
       header: "",
-      cell: ({ row }) => (
-        <div className="flex items-center justify-end">
-          <RowActionsMenu
-            label={`Actions for ${row.original.code}`}
-            actions={[
-              { label: "Edit", onSelect: () => onEdit(row.original) },
-              { label: "Delete", destructive: true, onSelect: () => onDelete(row.original) },
-            ]}
-          />
-        </div>
-      ),
+      cell: ({ row }) => {
+        const lock = locks[row.original.id];
+        const actions = [
+          ...(isRecordEditable(lock) ? [{ label: "Edit", onSelect: () => onEdit(row.original) }] : []),
+          ...(isRecordDeletable(lock) ? [{ label: "Delete", destructive: true, onSelect: () => onDelete(row.original) }] : []),
+        ];
+        return (
+          <div className="flex items-center justify-end">
+            {actions.length > 0 && <RowActionsMenu label={`Actions for ${row.original.code}`} actions={actions} />}
+          </div>
+        );
+      },
       enableSorting: false,
     },
   ];
@@ -415,9 +421,9 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
   };
   useOpenCreateIntent(openCreate);
 
-  const columns = createColumns(openEdit, handleDelete);
-
   const feedstockItems = feedstocksData?.items ?? [];
+  const feedstockLocks = useRecordLocks("feedstock", feedstockItems.map((item) => item.id));
+  const columns = createColumns(openEdit, handleDelete, feedstockLocks.locks);
   const totalPages = feedstocksData?.totalPages ?? 0;
   useReconcileListPage({
     currentPage,
@@ -485,6 +491,7 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
         ? ({ entity: focusedFeedstock.data, mode: "view" } as const)
         : null;
   const displaySideSheet = sideSheet ?? deepLinkedSideSheet;
+  const { lock: sheetLock } = useRecordLock("feedstock", displaySideSheet?.entity?.id);
   const activeFocusTarget = sideSheet
     ? null
     : parseEntityFocusTarget(deepLinkFocus);
@@ -650,6 +657,10 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
         }
         title={sideSheetTitle}
         subtitle={sideSheetSubtitle}
+        titleBadge={sheetLock && <RecordLockChip level={sheetLock.level} />}
+        viewModeNotice={<RecordLockNotice lock={sheetLock} />}
+        viewModeChildren={<RecordUsedBy lock={sheetLock} />}
+        canEdit={isRecordEditable(sheetLock)}
         editLabel="Edit feedstock"
         sections={sideSheetEntity ? feedstockSheetSections(sideSheetEntity) : undefined}
       >

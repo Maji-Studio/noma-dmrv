@@ -12,6 +12,8 @@ import type { CreditBatchHealthSummary } from "@/fn/certification";
 import type { CreditBatchWithRelations } from "@/data-access/credit-batches";
 import { CreditBatchLifecycleRail } from "./credit-batch-lifecycle";
 import { MISSING_VALUE } from "@/lib/copy-utils";
+import { RecordLockChip } from "@/components/record-locks/record-lock-chip";
+import type { RecordLockView } from "@/lib/record-lock-view";
 
 interface CreditBatchCardProps {
   creditBatch: CreditBatchWithRelations;
@@ -21,6 +23,16 @@ interface CreditBatchCardProps {
   onView: (creditBatch: CreditBatchWithRelations) => void;
   onEdit: (creditBatch: CreditBatchWithRelations) => void;
   onDelete: (creditBatchId: string) => void;
+  /** The batch's record lock, from the list's one batched read. */
+  lock?: RecordLockView;
+}
+
+/**
+ * Delete is refused once a Removal is Sent or a Sample uses the batch. A draft
+ * Removal alone does not stop it: deleting the batch releases its slices.
+ */
+export function isCreditBatchDeletable(lock: RecordLockView | undefined): boolean {
+  return !lock || (lock.level !== "sent" && !lock.usedBy.some((link) => link.kind === "sample"));
 }
 
 export function CreditBatchCard({
@@ -30,12 +42,13 @@ export function CreditBatchCard({
   onView,
   onEdit,
   onDelete,
+  lock,
 }: CreditBatchCardProps) {
   const co2eStored = creditBatch.co2eStoredPreview?.co2eStoredTonnes ?? null;
   // Interim certification lock (DR-003): once the batch backs a submitted
   // removal its definition is frozen, so the menu offers no Edit or Delete.
   // The view sheet explains the lock; the server guard enforces it.
-  const locked = health?.recordLock?.level === "sent";
+  const locked = (lock?.level ?? health?.recordLock?.level) === "sent";
 
   return (
     <article
@@ -50,6 +63,7 @@ export function CreditBatchCard({
             <CertificateIcon size={12} weight="bold" />
             {creditBatch.code}
           </span>
+          <span className="ml-auto">{lock && <RecordLockChip level={lock.level} />}</span>
           <RowActionsMenu
             label={`Actions for credit batch ${creditBatch.code}`}
             actions={[
@@ -66,13 +80,17 @@ export function CreditBatchCard({
                       icon: <PencilSimpleIcon size={16} />,
                       onSelect: () => onEdit(creditBatch),
                     },
+                  ]),
+              ...(!locked && isCreditBatchDeletable(lock)
+                ? [
                     {
                       label: "Delete",
                       destructive: true,
                       icon: <TrashIcon size={16} />,
                       onSelect: () => onDelete(creditBatch.id),
                     },
-                  ]),
+                  ]
+                : []),
             ]}
           />
         </div>

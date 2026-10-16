@@ -73,6 +73,8 @@ interface EntitySideSheetProps {
   title: string;
   /** Optional subtitle (entity name or helper text) */
   subtitle?: string;
+  /** A chip beside the title in view and edit mode (the record lock chip). */
+  titleBadge?: React.ReactNode;
   /** View-mode section config — rendered as read-only detail fields */
   sections?: DetailPanelSection[];
   /** Mirror a paired edit form's FormSpine numbering in read mode. */
@@ -117,6 +119,7 @@ function EntitySideSheet({
   onModeChange,
   title,
   subtitle,
+  titleBadge,
   sections,
   numberedSections = false,
   viewModeChildren,
@@ -233,7 +236,10 @@ function EntitySideSheet({
               </Button>
             )}
             <div className="flex flex-col gap-4 min-w-0">
-              <SlideOverPanel.Title>{title}</SlideOverPanel.Title>
+              <div className="flex min-w-0 flex-wrap items-center gap-8">
+                <SlideOverPanel.Title>{title}</SlideOverPanel.Title>
+                {mode !== "create" && titleBadge}
+              </div>
               {subtitle && (
                 <SlideOverPanel.Description className={showDetailToggle ? "truncate" : undefined}>
                   {subtitle}

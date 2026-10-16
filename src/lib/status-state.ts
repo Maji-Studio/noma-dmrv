@@ -100,3 +100,13 @@ export function getStatusState(status: string): StatusStateClass {
 export function getStatusStateColor(status: string): string {
   return STATUS_STATE_COLOR_TOKENS[getStatusState(status)];
 }
+
+/**
+ * Record lock levels (ADR 0035) on the same ramp, so the Open, In use and Sent
+ * chip reads the same on every list and sheet. Sent matches a submitted Removal.
+ */
+export const RECORD_LOCK_STATUS_STATES = {
+  open: "neutral",
+  inUse: "warning",
+  sent: "in-progress",
+} as const satisfies Record<"open" | "inUse" | "sent", StatusStateClass>;

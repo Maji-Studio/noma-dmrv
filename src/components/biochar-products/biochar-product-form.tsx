@@ -60,6 +60,8 @@ import { formProductComposition, type FormProductComposition } from "./form-prod
 import { IngredientBinRows } from "./ingredient-bin-rows";
 import { ZeroSourceBiocharWarning } from "./zero-source-biochar-warning";
 import { Notice } from "@/components/ui/notice";
+import { RecordLockNotice } from "@/components/record-locks/record-lock-notice";
+import { isRecordFieldLocked, type RecordLockView } from "@/lib/record-lock-view";
 
 const PRODUCT_BIN_QUICK_ADD_TYPES = ["product_bin"] as const satisfies readonly StorageLocationType[];
 const SET_VALUE_OPTS = { shouldDirty: true, shouldTouch: true, shouldValidate: true } as const;
@@ -137,7 +139,12 @@ interface BiocharProductFormProps {
    */
   children?: React.ReactNode;
   focusTarget?: EntityFocusTarget | null;
+  /** The saved product's lock; Sent disables every field before typing. */
+  lock?: RecordLockView;
 }
+
+/** Shown on the posted fields a saved product keeps (`POSTED_FIELDS` on the server). */
+const POSTED_FIELD_HINT = "Fixed once the product is posted to stock. Record a stock correction in the bin to change it.";
 
 export function BiocharProductForm({
   product,
@@ -148,10 +155,13 @@ export function BiocharProductForm({
   submitLabel,
   children,
   focusTarget,
+  lock,
 }: BiocharProductFormProps) {
   const formId = useId();
   const [idempotencyKey] = useState(() => crypto.randomUUID());
   const isEditMode = !!product;
+  // Posted fields are refused on every saved product; the rest follow the lock.
+  const locked = (field: string) => isEditMode && isRecordFieldLocked(lock, field);
   const hasFrozenSourceAllocation = Boolean(
     product?.sourceBiocharStorageLocationId,
   );
@@ -393,6 +403,7 @@ export function BiocharProductForm({
         return handleFormSubmit(event);
       }} className="space-y-20">
       <ResolvedErrorRevalidator control={control} trigger={form.trigger} />
+      {isEditMode && <RecordLockNotice lock={lock} />}
       <ZeroSourceBiocharWarning
         sourceBiocharMassKg={initialSourceBiocharMassKg}
       />
@@ -490,9 +501,9 @@ export function BiocharProductForm({
             id: "moistureContentPercent",
             error: errors.moistureContentPercent?.message,
             required: true,
-            disabled: isSubmitting,
+            disabled: isSubmitting || isEditMode,
             placeholder: "e.g. 2",
-            helperText: "Typically 1 to 2% for biochar",
+            helperText: isEditMode ? POSTED_FIELD_HINT : "Typically 1 to 2% for biochar",
             estimate: isEditMode ? undefined : sourceMoistureEstimate,
             reading: watchedMoisture,
             registration: register("moistureContentPercent", { setValueAs: nullableNumericValue }),
@@ -561,7 +572,7 @@ export function BiocharProductForm({
             id="waterAddedKg"
             label="Water added (kg)"
             error={errors.waterAddedKg?.message}
-            helperText="Water added to reach target moisture"
+            helperText={isEditMode ? POSTED_FIELD_HINT : "Water added to reach target moisture"}
             hint="Dry mass is unchanged by added water."
             required
           >
@@ -571,7 +582,7 @@ export function BiocharProductForm({
               step={MASS_KG_INPUT_STEP}
               min="0"
               placeholder="e.g., 50"
-              disabled={isSubmitting}
+              disabled={isSubmitting || isEditMode}
               error={!!errors.waterAddedKg}
               {...register("waterAddedKg", { setValueAs: nullableNumericValue })}
             />
@@ -587,7 +598,7 @@ export function BiocharProductForm({
               step="any"
               min="0"
               placeholder="e.g., 350"
-              disabled={isSubmitting}
+              disabled={isSubmitting || locked("densityKgM3")}
               error={!!errors.densityKgM3}
               {...register("densityKgM3")}
             />
@@ -599,9 +610,11 @@ export function BiocharProductForm({
           label="Product bin"
           error={errors.storageLocationId?.message}
           helperText={
-            selectedFormulationId
-              ? "Bins for this formulation, or unassigned bins (claimed on first use)."
-              : "Pure-biochar or unassigned bins."
+            isEditMode
+              ? POSTED_FIELD_HINT
+              : selectedFormulationId
+                ? "Bins for this formulation, or unassigned bins (claimed on first use)."
+                : "Pure-biochar or unassigned bins."
           }
           required
         >
@@ -624,13 +637,14 @@ export function BiocharProductForm({
                   />
                 )}
                 disabled={isSubmitting}
+                selectionLocked={isEditMode}
                 error={!!fieldState.error}
                 filterBy={{
                   ...(selectedFacilityId ? { facilityId: selectedFacilityId } : {}),
                   type: "product_bin",
                   formulationId: selectedFormulationId || PURE_PRODUCT_BIN_FILTER,
                 }}
-                allowCreate
+                allowCreate={!isEditMode}
                 onCreateNew={() => storageLocationDialog.open()}
               />
             )}

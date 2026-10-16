@@ -12,6 +12,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import type { CustomerLocation, Facility, Order } from "@/db/schema";
 import type { EntityOption, EntityType } from "@/components/forms/entity-select/types";
+import type { RecordLockView } from "@/lib/record-lock-view";
 
 const state = vi.hoisted(() => ({
   /** Every entity list request the form issues, in order. */
@@ -272,5 +273,60 @@ describe("OrderForm customer field", () => {
       id: "customer-1",
     });
     expect(html).toContain("Kilimo Farms");
+  });
+});
+
+describe("OrderForm record lock (#1119)", () => {
+  const ORDER = {
+    id: "order-1", facilityId: "22222222-2222-4222-8222-222222222222",
+    customerId: "33333333-3333-4333-8333-333333333333", customerLocationId: "11111111-1111-4111-8111-111111111111",
+    formulationId: "44444444-4444-4444-8444-444444444444",
+    orderDate: new Date("2026-09-01T00:00:00Z"), quantityKg: 1000, packaging: "loose",
+  } as Order;
+  const DELIVERY = { kind: "delivery", id: "55555555-5555-4555-8555-555555555555", label: "DL-26-004", facilityId: "22222222-2222-4222-8222-222222222222" };
+  const lockAt = (level: RecordLockView["level"]): RecordLockView => ({
+    level,
+    heldBy: level === "open" ? [] : [DELIVERY],
+    usedBy: level === "open" ? [] : [DELIVERY],
+    freeFields: level === "sent" ? [] : ["code", "quantityKg", "orderDate", "packaging"],
+    howToFree: level === "open" ? null : "Correct or remove the records that use it first.",
+  });
+
+  function renderLocked(level: RecordLockView["level"]) {
+    const client = new QueryClient();
+    render(<QueryClientProvider client={client}>
+      <OrderForm order={ORDER} onSubmit={noop} lock={lockAt(level)} />
+    </QueryClientProvider>);
+    return {
+      customer: screen.getByRole("combobox", { name: /^Customer(Required)?$/ }),
+      location: screen.getByRole("combobox", { name: /^Customer location/ }),
+      formulation: screen.getByRole("combobox", { name: /^Formulation/ }),
+      date: screen.getByLabelText(/^Order date/) as HTMLInputElement,
+      quantity: screen.getByRole("spinbutton", { name: /^Requested wet mass/ }) as HTMLInputElement,
+      packaging: screen.getByRole("combobox", { name: /^Packaging/ }) as HTMLSelectElement,
+    };
+  }
+  const isDisabled = (element: HTMLElement) => element.hasAttribute("disabled") || element.getAttribute("aria-disabled") === "true";
+
+  it("leaves every field editable and shows no lock line while Open", () => {
+    const fields = renderLocked("open");
+    expect(Object.values(fields).some(isDisabled)).toBe(false);
+    expect(screen.queryByText(/In use by/)).toBeNull();
+  });
+
+  it("disables the fields a delivery holds while In use and names the delivery as a link", () => {
+    const fields = renderLocked("inUse");
+    expect([fields.customer, fields.location, fields.formulation].every(isDisabled)).toBe(true);
+    expect([fields.date, fields.quantity, fields.packaging].some(isDisabled)).toBe(false);
+    const link = screen.getByRole("link", { name: "delivery DL-26-004" });
+    expect(link.getAttribute("href")).toBe("/deliveries?facility=22222222-2222-4222-8222-222222222222&delivery=55555555-5555-4555-8555-555555555555");
+    expect(link.closest("[role=status]")?.textContent).toBe(
+      "In use by delivery DL-26-004, so fields that feed its numbers are locked. Correct or remove the records that use it first.",
+    );
+  });
+
+  it("disables every field while Sent", () => {
+    const fields = renderLocked("sent");
+    expect(Object.values(fields).every(isDisabled)).toBe(true);
   });
 });

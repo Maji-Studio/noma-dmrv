@@ -19,6 +19,8 @@ import { LIST_PAGE_SIZE_OPTIONS } from "@/config/list-controls";
 import type { StorageLocationLaneSummary } from "@/data-access/storage-location-lane-summary";
 import type { StorageLocationWithFacility } from "@/data-access/storage-locations";
 import { MISSING_VALUE } from "@/lib/copy-utils";
+import { useRecordLocks } from "@/hooks/use-record-locks";
+import { isRecordDeletable, type RecordLockView } from "@/lib/record-lock-view";
 import { formatMass } from "@/lib/format-utils";
 import {
   ArchiveIcon,
@@ -144,6 +146,7 @@ function binRowActions(
     StorageBinBoardProps,
     "onEdit" | "onArchive" | "onRestore" | "onDelete" | "onReconcile"
   >,
+  lock: RecordLockView | undefined,
 ): BinRowAction[] {
   if (bin.archivedAt != null) {
     return [
@@ -170,12 +173,15 @@ function binRowActions(
       icon: <ArchiveIcon size={16} />,
       onSelect: () => handlers.onArchive(bin.id),
     },
-    {
-      label: "Delete permanently",
-      icon: <TrashIcon size={16} />,
-      destructive: true,
-      onSelect: () => handlers.onDelete(bin.id),
-    },
+    // A bin with stock history is archived, never deleted.
+    ...(isRecordDeletable(lock)
+      ? [{
+          label: "Delete permanently",
+          icon: <TrashIcon size={16} />,
+          destructive: true,
+          onSelect: () => handlers.onDelete(bin.id),
+        }]
+      : []),
   ];
 }
 
@@ -200,6 +206,7 @@ export function StorageBinBoard(props: StorageBinBoardProps) {
     onView,
     onReconcile,
   } = props;
+  const binLocks = useRecordLocks("storageLocation", bins.map((bin) => bin.id));
 
   return (
     <div className="flex flex-col gap-16 lg:flex-row lg:items-start lg:gap-24">
@@ -358,7 +365,8 @@ export function StorageBinBoard(props: StorageBinBoardProps) {
               <StorageBinTile
                 key={bin.id}
                 bin={bin}
-                actions={binRowActions(bin, props)}
+                actions={binRowActions(bin, props, binLocks.locks[bin.id])}
+                lock={binLocks.locks[bin.id]}
                 onView={onView}
                 onReconcile={onReconcile}
               />

@@ -11,6 +11,9 @@ import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui"
 import { DataTable } from "@/components/ui/data-table";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
+import { RecordLockChip, RecordLockNotice, RecordUsedBy, recordLockColumn } from "@/components/record-locks";
+import { useRecordLock, useRecordLocks } from "@/hooks/use-record-locks";
+import { isRecordEditable, type RecordLockViews } from "@/lib/record-lock-view";
 import { MassPair } from "@/components/ui/mass-pair";
 import { StatCard } from "@/components/ui/stat-card";
 import { useToast } from "@/components/ui/toast";
@@ -117,7 +120,7 @@ function productEffectiveMoisturePercent(
 
 function createColumns(
   onEdit: (product: BiocharProductWithRelations) => void,
-  onDelete: (productId: string) => void
+  locks: RecordLockViews,
 ): ColumnDef<BiocharProductWithRelations>[] {
   return [
     {
@@ -183,19 +186,21 @@ function createColumns(
       cell: ({ row }) =>
         row.original.storageLocation?.name || MISSING_VALUE.notSet,
     },
+    recordLockColumn<BiocharProductWithRelations>(locks),
     {
       id: "actions",
       meta: { stickyEnd: true },
       header: "",
+      // No Delete: the server keeps every posted product and its history
+      // (deleting with a reversal arrives with #1120). Sent hides Edit too.
       cell: ({ row }) => (
         <div className="flex items-center justify-end">
-          <RowActionsMenu
-            label={`Actions for ${row.original.code}`}
-            actions={[
-              { label: "Edit", onSelect: () => onEdit(row.original) },
-              { label: "Delete", destructive: true, onSelect: () => onDelete(row.original.id) },
-            ]}
-          />
+          {isRecordEditable(locks[row.original.id]) && (
+            <RowActionsMenu
+              label={`Actions for ${row.original.code}`}
+              actions={[{ label: "Edit", onSelect: () => onEdit(row.original) }]}
+            />
+          )}
         </div>
       ),
       enableSorting: false,
@@ -319,7 +324,13 @@ export function BiocharProductList() {
           entity: deepLinkMode === "edit" ? deepLinkSnapshot ?? focusedProduct.data : focusedProduct.data,
         } as const)
       : null;
-  const displaySideSheet = sideSheet ?? deepLinkedSideSheet;
+  const requestedSideSheet = sideSheet ?? deepLinkedSideSheet;
+  const productLocks = useRecordLocks("biocharProduct", products.map((product) => product.id));
+  const { lock: sheetLock } = useRecordLock("biocharProduct", requestedSideSheet?.entity?.id);
+  // A Sent product never opens in edit, not even from an edit deep link.
+  const displaySideSheet = requestedSideSheet?.mode === "edit" && sheetLock?.level === "sent"
+    ? { ...requestedSideSheet, mode: "view" as const }
+    : requestedSideSheet;
   const activeFocusTarget = sideSheet
     ? null
     : parseEntityFocusTarget(deepLinkFocus);
@@ -394,8 +405,6 @@ export function BiocharProductList() {
     }
   };
 
-  const handleDelete = (productId: string) => setDeletingProductId(productId);
-
   const handleDeleteConfirm = async () => {
     if (!deleting) return;
     setDeleteError(null);
@@ -448,7 +457,7 @@ export function BiocharProductList() {
     displaySideSheet?.mode === "view" ? displaySideSheet.entity : null;
   const isSubmitting = createProduct.isPending || updateProduct.isPending;
 
-  const columns = createColumns(openEdit, handleDelete);
+  const columns = createColumns(openEdit, productLocks.locks);
 
   if (!contextFacilityId) {
     return (
@@ -603,12 +612,17 @@ export function BiocharProductList() {
         onModeChange={handleModeChange}
         title={displaySideSheet?.mode === "create" ? "Create biochar product" : (displaySideSheet?.entity?.code ?? "")}
         subtitle={displaySideSheet?.mode === "create" ? undefined : (displaySideSheet?.entity ? formatDayString(displaySideSheet.entity.productionDate) : undefined)}
+        titleBadge={sheetLock && <RecordLockChip level={sheetLock.level} />}
+        viewModeNotice={<RecordLockNotice lock={sheetLock} />}
+        viewModeChildren={<RecordUsedBy lock={sheetLock} />}
+        canEdit={isRecordEditable(sheetLock)}
         editLabel="Edit product"
         sections={viewedEntity ? productSheetSections(viewedEntity, resolveFacilityTimezone(facilities, viewedEntity.facilityId)) : undefined}
       >
         <BiocharProductForm
           key={editingEntity?.id ?? "create"}
           product={editingEntity ?? undefined}
+          lock={sheetLock}
           onSubmit={displaySideSheet?.mode === "edit" ? handleUpdate : handleCreate}
           onCancel={closeSideSheet}
           isSubmitting={isSubmitting}

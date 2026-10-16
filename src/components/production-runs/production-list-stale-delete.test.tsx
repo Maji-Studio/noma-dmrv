@@ -21,6 +21,10 @@ vi.mock("@/hooks/use-biochar-products", () => ({
 }));
 vi.mock("@/hooks/use-credit-batches", () => ({ useCreditBatches: () => ({ data: [] }) }));
 vi.mock("@/hooks/use-debounce", () => ({ useDebounce: (value: string) => value }));
+vi.mock("@/hooks/use-record-locks", () => ({
+  useRecordLocks: () => ({ locks: {} }),
+  useRecordLock: () => ({ lock: undefined, isLoading: false }),
+}));
 vi.mock("@/hooks/use-open-create-intent", () => ({ useOpenCreateIntent: () => undefined }));
 vi.mock("@/hooks/use-list-pagination", () => ({
   useListPagination: () => ({ currentPage: 1, pageSize: 25, setCurrentPage: vi.fn(), onPaginationChange: vi.fn() }),
@@ -62,16 +66,16 @@ vi.mock("../biochar-products/biochar-product-form", () => ({ BiocharProductForm:
 vi.mock("../biochar-products/product-read-details", () => ({ productSheetSections: () => [] }));
 
 import { ProductionRunList } from "./production-run-list";
-import { BiocharProductList } from "../biochar-products/biochar-product-list";
 
 beforeEach(() => {
   vi.clearAllMocks();
   state.row = { ...state.row, version: INITIAL_VERSION };
 });
 
+// Biochar products offer no Delete until #1120 lands the reversal: the server
+// refuses every posted product today (#1119), so only runs are exercised here.
 for (const [label, entity, idKey, Component] of [
   ["Production run", "productionRun", "productionRunId", ProductionRunList],
-  ["Biochar product", "biocharProduct", "productId", BiocharProductList],
 ] as const) {
   describe(`${label} delete confirmation`, () => {
     it("closes a stale confirmation and reopens with the refetched version", async () => {
