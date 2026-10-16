@@ -680,6 +680,52 @@ CI secrets come from 1Password via `1password/load-secrets-action` plus the
 `OP_SERVICE_ACCOUNT_TOKEN` repo secret; only `CLAUDE_CODE_OAUTH_TOKEN` remains a
 plain Actions secret. See [security.md](./security.md) → Secrets Management.
 
+### Health failure response
+
+The Maji product owner owns triage of `storage-health.yml`, `isometric-health.yml` and
+`e2e-live.yml` for Maji, coordinating with DEC operators when needed. The owner
+must watch repository issues in GitHub and keep issue notifications enabled.
+If response ownership changes, update this section and hand over issue watching.
+
+Failed or cancelled scheduled runs, including timeouts and a manual cancel of a
+scheduled run, call the reusable `health-failure-notify.yml` workflow, which runs
+`scripts/notify-health-failure.mjs` with the runner's preinstalled Node and `gh`.
+Manually dispatched runs notify only on failure with `force_failure=true`; other
+dispatched runs stay quiet whether they fail or are cancelled.
+The monitored destination is a `ci-health` issue created by `github-actions[bot]`
+with the exact stable title `CI health failure: <workflow filename>`.
+The notifier ensures the label exists. Keep that label and title unchanged. An open
+match gets a comment; otherwise the most recently closed match is reopened and
+commented on, or an issue is created. Notification jobs serialize by workflow
+to avoid concurrent issue creation. Only these jobs have `issues: write`.
+No extra secret is required. Successful runs stay quiet and never close issues.
+Pull requests never send notifications.
+
+Issue bodies and failure comments contain only workflow, environment, run URL
+(including rerun attempt), and UTC failure time recorded by the notifier. Storage
+checks use staging; Isometric health uses staging credentials against the sandbox;
+live E2E uses an ephemeral CI database against the sandbox. No credentials, PII,
+or log excerpts belong in the notification.
+
+1. Open the linked run and inspect the failed step. For storage, check the
+   staging bucket credentials, endpoint, permissions and CORS using
+   [storage.md](./storage.md#testing). For Isometric, follow the run's health
+   summary and [testing.md](./testing.md#isometric-health-workflow). For live E2E,
+   inspect the restricted Playwright artifacts and sandbox availability.
+2. Record the diagnosis and response owner in the issue without copying secrets,
+   PII or raw logs. Repair the cause, then rerun or dispatch the affected workflow
+   with `force_failure=false` and confirm the real checks pass.
+3. Close the issue manually after recovery. A later failure reopens it. If the
+   notification job itself fails, check its token permissions and GitHub API
+   availability, then rerun the failed job.
+
+To verify delivery, dispatch any of the three workflows with `force_failure=true`
+(leave storage's `repair_cors=false`). This skips the real health job and fails a
+small probe with no secrets, database work or Playwright. Confirm that the failure issue appears
+with all four fields; dispatch again to verify a comment on the same issue.
+Close that issue and dispatch again to verify reopening. Finally dispatch with
+`force_failure=false`, confirm recovery, and close the issue manually.
+
 ## Output stock
 
 See [Output stock and completed deliveries](output-stock.md) for physical FIFO,

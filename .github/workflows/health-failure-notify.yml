@@ -1,0 +1,33 @@
+name: Health failure notification
+
+on:
+  workflow_call:
+    inputs:
+      workflow-file:
+        description: Health workflow file name
+        required: true
+        type: string
+      environment:
+        description: Environment checked by the health workflow
+        required: true
+        type: string
+
+jobs:
+  notify-failure:
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    concurrency:
+      group: health-failure-${{ github.workflow }}
+      cancel-in-progress: false
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+      - name: Open or reopen the workflow failure issue
+        run: node scripts/notify-health-failure.mjs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEALTH_WORKFLOW: ${{ inputs.workflow-file }}
+          HEALTH_ENVIRONMENT: ${{ inputs.environment }}
