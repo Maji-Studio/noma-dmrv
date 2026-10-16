@@ -10,8 +10,9 @@
 import { and, eq } from "drizzle-orm";
 import type { Page } from "@playwright/test";
 import * as schema from "../../src/db/schema";
-import { test, expect, type SeededChainData } from "./fixtures";
+import { test, expect } from "./fixtures";
 import {
+  chainSeedRefs,
   type SeededReadyBatch,
   seedUngroupedReadyBatchWithChain,
 } from "./fixtures/certification-helpers";
@@ -55,21 +56,6 @@ const GIS_BOUNDARY: GisBoundary = {
   },
   notes: [],
 };
-
-function chainRefs(seededData: SeededChainData) {
-  return {
-    facilityId: seededData.facility.id,
-    reactorId: seededData.reactor.id,
-    formulationId: seededData.formulation.id,
-    feedstockId: seededData.feedstock.id,
-    feedstockStorageLocationId: seededData.feedstockStorageLocation.id,
-    biocharStorageLocationId: seededData.biocharStorageLocation.id,
-    productStorageLocationId: seededData.productStorageLocation.id,
-    customerId: seededData.customer.id,
-    customerLocationId: seededData.customerLocation.id,
-    vehicleId: seededData.vehicle.id,
-  };
-}
 
 /**
  * Strip every evidence document from the Application and put it on the boundary
@@ -144,7 +130,7 @@ test.describe("application evidence and certification readiness", () => {
 
     try {
       batch = await seedUngroupedReadyBatchWithChain(
-        chainRefs(seededData),
+        chainSeedRefs(seededData),
         `READINESS-${testRunId}`,
       );
       await clearEvidenceDocumentsAndSetBoundary(batch);
