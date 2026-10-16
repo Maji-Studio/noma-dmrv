@@ -5,7 +5,7 @@ import { runWithStockBasisPreview } from "@/lib/operations/stock-basis-preview";
 import { makeBiocharProductApiInput, updateBiocharProductApiInput } from "@/schemas/biochar-product-input";
 import { biocharProductEtag } from "./representation-etags";
 import { madeProductBody, productBodyData, representationCheckedMake, representationCheckedUpdate, withCurrentOnStale } from "./biochar-product-write-checks";
-import { remainingDeadlineMs } from "./feedstock-write-checks";
+import { remainingDeadlineMs } from "./write-checks";
 import { parseIfMatch } from "./etag";
 import { mutationQuerySchema, parseApiQuery } from "./query";
 import { readIdempotencyKey, readJsonBody } from "./request-body";

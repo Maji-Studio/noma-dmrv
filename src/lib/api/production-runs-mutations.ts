@@ -1,4 +1,4 @@
-import { remainingDeadlineMs } from "./feedstock-write-checks";
+import { remainingDeadlineMs } from "./write-checks";
 import { z } from "zod";
 import { checkProductionRunDraws, productionRunBody, representationCheckedStart, representationCheckedUpdate, representationCheckedDelete, withCurrentOnStale } from "./production-run-write-checks";
 import { DomainError } from "@/lib/domain-errors";

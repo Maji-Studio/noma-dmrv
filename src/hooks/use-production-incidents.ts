@@ -19,6 +19,7 @@ import {
   deleteProductionIncidentFn,
 } from "@/fn/production-incidents";
 import { productionRunKeys } from "@/hooks/use-production-runs";
+import { activityKeys } from "./activity-query-keys";
 import { unwrap, type MutationCallbacks } from "./types";
 
 export const productionIncidentKeys = {
@@ -106,6 +107,7 @@ export function useDeleteProductionIncident(
       if (!result.success) throwActionError(result);
     },
     onSuccess: (_data, variables) => {
+      void queryClient.invalidateQueries({ queryKey: activityKeys.all });
       if (productionRunId) {
         queryClient.invalidateQueries({
           queryKey: productionIncidentKeys.list(productionRunId),

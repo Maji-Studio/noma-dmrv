@@ -133,6 +133,8 @@ export async function prepareGhgStatementReport(
             ghgStatementId: parsed.ghgStatementId,
             preparationKey: parsed.preparationKey,
           });
+          // This key is an idempotency key, not a request hash. Reusing it
+          // returns the first report; later request bodies are ignored.
           if (existing) return reportView(existing);
           if (parsed.ensureFirst) {
             const [firstReport] = await listGhgStatementReports(

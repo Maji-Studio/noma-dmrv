@@ -8,7 +8,7 @@ import type { Operation } from "@/lib/operations/runner";
 import type { ApplicationOperationOutput } from "@/data-access/application-operation-output";
 import { readApiApplication } from "@/lib/read-models/api-applications";
 import type { ApplicationRepresentation } from "@/lib/representations/applications";
-import { ApiHttpError } from "./http-error";
+import { withCurrentOnStale as withCurrentOnStaleRepresentation } from "./write-checks";
 
 interface ApplicationWriteOutput extends Omit<ApplicationOperationOutput, "application"> { application: ApplicationRepresentation }
 export const representationCheckedRecord: Operation<typeof recordApplicationApi.input, ApplicationWriteOutput> = {
@@ -45,13 +45,7 @@ export function representationCheckedDelete(id: string, revision: number): Opera
   };
 }
 export async function withCurrentOnStale<T>(ctx: ApiContext, id: string, fn: () => Promise<T>): Promise<T> {
-  try { return await fn(); } catch (error) {
-    if (error instanceof DomainError && error.code === "stale_version") {
-      const current = await readApiApplication(ctx, { id });
-      throw new ApiHttpError(412, "stale_version", "The application has changed. Read the current representation before retrying.", current);
-    }
-    throw error;
-  }
+  return withCurrentOnStaleRepresentation(fn, { noun: "application", readCurrent: () => readApiApplication(ctx, { id }) });
 }
 export function applicationBody(output: ApplicationWriteOutput) {
   return applicationWriteEnvelopeSchema.parse({ data: output.application, allocations: output.allocations,

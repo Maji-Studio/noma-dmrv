@@ -425,6 +425,8 @@ export function useSaveFacilityCertifierMapping() {
         queryKey: certificationKeys.facilityMapping(variables.facilityId),
       });
       queryClient.invalidateQueries({ queryKey: certificationKeys.all });
+      queryClient.invalidateQueries({ queryKey: creditBatchKeys.all });
+      queryClient.invalidateQueries({ queryKey: activityKeys.all });
       invalidateOnboardingProgress(queryClient, variables.facilityId);
     },
   });
@@ -632,6 +634,9 @@ export function useSubmitRemoval() {
       // lock, if any, gates the next attempt.
       queryClient.invalidateQueries({ queryKey: certificationKeys.all });
     },
+    // Claim reservation and release record activity even when the registry
+    // call fails afterwards.
+    onSettled: () => queryClient.invalidateQueries({ queryKey: activityKeys.all }),
   });
 }
 
@@ -646,6 +651,7 @@ export function useCreateRemovalWithBatches() {
     mutationFn: async (input: CreateRemovalWithBatchesInput) =>
       unwrap(await createRemovalWithBatchesAction(input)),
     onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: activityKeys.all });
       queryClient.invalidateQueries({ queryKey: certificationKeys.all });
     },
   });
@@ -716,6 +722,7 @@ export function useSyncGhgStatementsFromRegistry() {
     mutationFn: async (facilityId: string) =>
       unwrap(await reconcileGhgStatementsFromRegistry(facilityId)),
     onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: activityKeys.all });
       queryClient.invalidateQueries({ queryKey: certificationKeys.all });
     },
   });
@@ -769,6 +776,7 @@ export function usePrepareGhgStatementReport() {
     mutationFn: async (input: PrepareGhgStatementReportInput) =>
       unwrap(await prepareGhgStatementReport(input)),
     onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: activityKeys.all });
       queryClient.invalidateQueries({ queryKey: certificationKeys.all });
     },
   });
@@ -806,6 +814,8 @@ export function useCreateGhgStatement() {
       unwrap(await createGhgStatementDraft(input)),
     onSuccess: () =>
       queryClient.invalidateQueries({ queryKey: certificationKeys.all }),
+    // A definitive registry refusal records rejection activity before the create fails.
+    onSettled: () => queryClient.invalidateQueries({ queryKey: activityKeys.all }),
   });
 }
 
@@ -832,6 +842,9 @@ export function useSubmitGhgStatementToVerifier() {
     onError: () => {
       queryClient.invalidateQueries({ queryKey: certificationKeys.all });
     },
+    // The report attachment records document activity before the provider
+    // submission, so a failed submission still leaves new activity.
+    onSettled: () => queryClient.invalidateQueries({ queryKey: activityKeys.all }),
   });
 }
 
@@ -842,6 +855,7 @@ export function useRefreshGhgStatementStatus() {
     mutationFn: async (submissionId: string) =>
       unwrap(await refreshGhgStatementStatus(submissionId)),
     onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: activityKeys.all });
       queryClient.invalidateQueries({ queryKey: certificationKeys.all });
     },
   });

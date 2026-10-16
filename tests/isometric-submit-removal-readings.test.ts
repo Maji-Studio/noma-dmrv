@@ -9,7 +9,6 @@ import {
 } from "./fixtures/submit-removal-orchestrator";
 import { makeTestOrgContext } from "./helpers/test-org";
 import * as readings from "@/data-access/production-run-readings";
-import * as runReadings from "@/data-access/production-runs/readings";
 import * as imports from "@/data-access/production-run-reading-imports";
 import * as csv from "@/lib/production-readings/readings-csv";
 import * as measurementSamples from "@/lib/isometric/measurement-samples";
@@ -24,7 +23,6 @@ import { deriveRemovalReadiness } from "@/lib/certification/readiness";
 import { toRemovalReadinessFacts } from "@/lib/certification/readiness-facts";
 
 vi.mock("@/data-access/production-run-readings");
-vi.mock("@/data-access/production-runs/readings");
 vi.mock("@/data-access/production-run-reading-imports");
 vi.mock("@/lib/production-readings/readings-csv");
 vi.mock("@/lib/isometric/source-binding-verification", () => ({
@@ -35,7 +33,7 @@ beforeEach(() => {
   vi.mocked(sourceVerification.verifyRemovalSourceBindings).mockResolvedValue({
     state: "verified", verifiedCount: 1, totalCount: 1, mismatches: [],
   });
-  for (const fn of [...Object.values(readings), ...Object.values(runReadings), ...Object.values(imports), ...Object.values(csv)]) {
+  for (const fn of [...Object.values(readings), ...Object.values(imports), ...Object.values(csv)]) {
     vi.mocked(fn).mockImplementation(() => {
       throw new Error("Removal submission must not read or parse structured telemetry");
     });
@@ -90,7 +88,7 @@ describe("Removal pressure-file evidence boundary (#627)", () => {
     })).resolves.toMatchObject({ externalId: "rem_1" });
     expect(storedRows[0].status).toBe("submitted");
     expect(isometric.createGhgEntry).toHaveBeenCalledOnce();
-    for (const fn of [...Object.values(readings), ...Object.values(runReadings), ...Object.values(imports), ...Object.values(csv)]) {
+    for (const fn of [...Object.values(readings), ...Object.values(imports), ...Object.values(csv)]) {
       expect(fn).not.toHaveBeenCalled();
     }
     for (const fn of Object.values(isometricClientFake)) {

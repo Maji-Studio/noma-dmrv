@@ -8,6 +8,7 @@ import { invalidateCertificationReadiness } from "./use-certification";
  */
 
 import { orderKeys } from "./use-orders";
+import { activityKeys } from "./activity-query-keys";
 import {
   keepPreviousData,
   queryOptions,
@@ -537,6 +538,7 @@ export function useUpdateCustomerLocation(
     },
     onSuccess: async (data, variables) => {
       patchArrayListCacheByExactKeyWithSavedRow<CustomerLocation>(queryClient, customerKeys.locations(data.customerId), data);
+      void queryClient.invalidateQueries({ queryKey: activityKeys.all });
       // Update cache with actual server data
       queryClient.setQueryData(customerLocationKeys.detail(data.id), data);
       invalidateEntityTypeQueries(queryClient, CUSTOMER_LOCATION_ENTITY_TYPE);
