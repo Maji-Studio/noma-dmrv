@@ -6,6 +6,7 @@ import type { ReviewRemovalTemplateLinesInput, SwitchCreditBatchRemovalTemplateI
 import { unwrap } from "./types";
 import { certificationKeys } from "./use-certification";
 import { creditBatchKeys } from "./credit-batch-query-keys";
+import { activityKeys } from "./activity-query-keys";
 
 const REVIEW_STALE_MS = 60_000;
 export function useRemovalTemplateReview(facilityId: string, enabled = true) {
@@ -47,6 +48,7 @@ export function useSwitchCreditBatchRemovalTemplate() {
       return result.data;
     },
     onSuccess: async (batch) => {
+      void client.invalidateQueries({ queryKey: activityKeys.all });
       patchArrayListCachesByPrefixWithSavedRow(client, creditBatchKeys.lists(), batch);
       client.setQueryData(creditBatchKeys.detail(batch.id), (old: object | undefined) => old ? { ...old, ...batch } : old);
       await Promise.all([

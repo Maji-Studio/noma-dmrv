@@ -6,7 +6,7 @@ import { applicationRepresentationSchema } from "@/lib/representations/applicati
 import { recordApplicationApiInput, updateApplicationApiInput } from "@/schemas/application-api-input";
 import { canonicalUuid } from "./canonical-uuid";
 import { parseIfMatch } from "./etag";
-import { remainingDeadlineMs } from "./feedstock-write-checks";
+import { remainingDeadlineMs } from "./write-checks";
 import {
   applicationBody, representationCheckedDelete, representationCheckedRecord, representationCheckedUpdate, withCurrentOnStale,
 } from "./application-write-checks";
