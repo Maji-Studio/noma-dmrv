@@ -466,7 +466,7 @@
     "id": "Unique credit batch identifier",
     "code": "Human-readable credit batch code",
     "facility_id": "FK to the facility generating these credits",
-    "status": "Batch lifecycle status (draft, submitted, issued)",
+    "status": "Batch lifecycle status (draft, pending, verified, issued, rejected)",
     "sampling": "Immutable per-batch sampling choice (sampled or unsampled)",
     "start_date": "Start of the crediting period",
     "end_date": "End of the crediting period",
@@ -486,7 +486,7 @@
   "credit_batch_applications": {
     "id": "Unique join record identifier",
     "credit_batch_id": "FK to the credit batch",
-    "application_id": "FK to the application event included in this batch",
+    "application_id": "FK to the Application whose wet and dry mass is allocated to this Credit batch slice",
     "createdAt": "Timestamp when the record was created"
   },
   "emission_factors": {
