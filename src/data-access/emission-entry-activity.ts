@@ -1,12 +1,17 @@
 import type { DbTransaction } from "@/db";
+import type { emissionEntries, emissionEntryValues } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
-import { recordActivity, type ActivityEventInput } from "./activity-events";
+import { recordActivityChange, type ActivityEventInput } from "./activity-events";
 import { requireOrgScope } from "./utils";
 
-/** Keep the value-free entry audit contract in one place. */
+type EntrySnapshot = typeof emissionEntries.$inferSelect & {
+  values: (typeof emissionEntryValues.$inferSelect)[];
+};
+
+/** Compare persisted entry content; values and notes record field names only. */
 export async function recordEmissionEntryActivity(ctx: OrgContext, tx: DbTransaction,
-  entry: { id: string; creditBatchId: string }, action: ActivityEventInput["action"], changedFields: string[]) {
+  action: ActivityEventInput["action"], before: EntrySnapshot | null, after: EntrySnapshot) {
   requireOrgScope(ctx);
-  await recordActivity(ctx, tx, { entityType: "emission_entry", entityId: entry.id,
-    creditBatchId: entry.creditBatchId, action, changedFields, source: "form" });
+  await recordActivityChange(ctx, tx, { entityType: "emission_entry", entityId: after.id,
+    creditBatchId: after.creditBatchId, action, source: "form" }, before, after);
 }

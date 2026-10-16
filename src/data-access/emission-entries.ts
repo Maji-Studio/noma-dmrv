@@ -39,7 +39,7 @@ async function lockedBatch(ctx: OrgContext, tx: DbTransaction, creditBatchId: st
 async function writeValues(ctx: OrgContext, tx: DbTransaction, id: string, values: EntryValueInput[]) {
   requireOrgScope(ctx);
   await tx.delete(emissionEntryValues).where(and(eq(emissionEntryValues.organizationId, ctx.organizationId), eq(emissionEntryValues.entryId, id)));
-  await tx.insert(emissionEntryValues).values(values.map(({ inputKey, magnitude, unit, massDistanceDetail }) => ({ organizationId: ctx.organizationId, entryId: id, inputKey, magnitude, unit, massDistanceDetail })));
+  return tx.insert(emissionEntryValues).values(values.map(({ inputKey, magnitude, unit, massDistanceDetail }) => ({ organizationId: ctx.organizationId, entryId: id, inputKey, magnitude, unit, massDistanceDetail }))).returning();
 }
 /** A value invalidates every unsubmitted draft's confirmation for this line. */
 export async function tombstoneEmissionZeros(ctx: OrgContext, tx: DbTransaction, entry: { creditBatchId: string; removalTemplateId: string; componentId: string }) {
@@ -56,9 +56,9 @@ export async function createEmissionEntry(ctx: OrgContext, input: CreateEmission
     const active = await tx.select({ id: emissionEntries.id }).from(emissionEntries).where(and(eq(emissionEntries.organizationId, ctx.organizationId), eq(emissionEntries.creditBatchId, batch.id), eq(emissionEntries.removalTemplateId, observation.externalTemplateId), eq(emissionEntries.componentId, data.componentId), eq(emissionEntries.kind, "value"), isNull(emissionEntries.deletedAt)));
     const binding = validateEmissionEntry({ ...data, observation, batchStartDate: batch.startDate, timezone: facility.timezone, activeValueCount: active.length });
     const [entry] = await tx.insert(emissionEntries).values({ organizationId: ctx.organizationId, creditBatchId: batch.id, removalTemplateId: observation.externalTemplateId, observationId: observation.id, componentId: data.componentId, ...binding, kind: "value", occurredOn: data.occurredOn, note: data.note, createdBy: ctx.userId }).returning();
-    await writeValues(ctx, tx, entry.id, data.values);
+    const values = await writeValues(ctx, tx, entry.id, data.values);
     await tombstoneEmissionZeros(ctx, tx, entry);
-    await recordEmissionEntryActivity(ctx, tx, entry, "created", ["values", "occurredOn", "note"]);
+    await recordEmissionEntryActivity(ctx, tx, "created", null, { ...entry, values });
     return getEmissionEntry(ctx, entry.id, tx);
   });
 }
@@ -72,14 +72,14 @@ export async function updateEmissionEntry(ctx: OrgContext, input: UpdateEmission
       if (!previous || !emissionEntryCounts(previous, context.observation, entry.componentId).counts) throw new SafeError("Review the template change before editing this entry's values or date.");
       validateEmissionEntry({ observation: context.observation, componentId: entry.componentId, values, occurredOn: data.occurredOn ?? entry.occurredOn, batchStartDate: context.batch.startDate, timezone: context.facility.timezone, activeValueCount: 0 });
     }
-    if (data.values) await writeValues(ctx, tx, entry.id, data.values);
-    await tx.update(emissionEntries).set({ ...(data.occurredOn !== undefined ? { occurredOn: data.occurredOn } : {}), ...(data.note !== undefined ? { note: data.note } : {}), version: nextVersion(emissionEntries.version), ...(data.values || data.occurredOn !== undefined ? { contentRevision: nextVersion(emissionEntries.contentRevision) } : {}), updatedAt: new Date() }).where(and(eq(emissionEntries.organizationId, ctx.organizationId), eq(emissionEntries.id, entry.id)));
-    await recordEmissionEntryActivity(ctx, tx, entry, "updated", [data.values ? "values" : null, data.occurredOn !== undefined ? "occurredOn" : null, data.note !== undefined ? "note" : null].filter((field): field is string => field !== null));
+    const values = data.values ? await writeValues(ctx, tx, entry.id, data.values) : entry.values;
+    const [saved] = await tx.update(emissionEntries).set({ ...(data.occurredOn !== undefined ? { occurredOn: data.occurredOn } : {}), ...(data.note !== undefined ? { note: data.note } : {}), version: nextVersion(emissionEntries.version), ...(data.values || data.occurredOn !== undefined ? { contentRevision: nextVersion(emissionEntries.contentRevision) } : {}), updatedAt: new Date() }).where(and(eq(emissionEntries.organizationId, ctx.organizationId), eq(emissionEntries.id, entry.id))).returning();
+    await recordEmissionEntryActivity(ctx, tx, "updated", entry, { ...saved, values });
     return getEmissionEntry(ctx, entry.id, tx);
   });
 }
 async function mutateEntry<T>(ctx: OrgContext, id: string, expectedVersion: number,
-  write: (tx: DbTransaction, entry: Awaited<ReturnType<typeof getEmissionEntry>>, context: Awaited<ReturnType<typeof lockedBatch>>) => Promise<T>, deleting = false) {
+  write: (tx: DbTransaction, entry: Omit<Awaited<ReturnType<typeof getEmissionEntry>>, "documentCount">, context: Awaited<ReturnType<typeof lockedBatch>>) => Promise<T>, deleting = false) {
   requireOrgScope(ctx);
   return db.transaction(async tx => {
     const initial = await getEmissionEntry(ctx, id, tx);
@@ -88,7 +88,8 @@ async function mutateEntry<T>(ctx: OrgContext, id: string, expectedVersion: numb
     const locked = await lockWritableEmissionEntry(ctx, tx, id);
     assertRowVersion({ entity: "emission_entry", id, expectedVersion, actualVersion: locked.version });
     if (locked.kind !== "value") throw new SafeError("Recorded zeros can only be changed through their Removal.");
-    return write(tx, await getEmissionEntry(ctx, id, tx), context);
+    const { values } = await getEmissionEntry(ctx, id, tx);
+    return write(tx, { ...locked, values }, context);
   });
 }
 export async function confirmEmissionEntry(ctx: OrgContext, id: string, expectedVersion: number) {
@@ -96,16 +97,16 @@ export async function confirmEmissionEntry(ctx: OrgContext, id: string, expected
   return mutateEntry(ctx, id, expectedVersion, async (tx, entry, { observation }) => {
     const [previous] = await tx.select().from(removalTemplateObservations).where(and(eq(removalTemplateObservations.organizationId, ctx.organizationId), eq(removalTemplateObservations.id, entry.observationId)));
     if (!previous || !emissionEntryCounts(previous, observation, entry.componentId).canConfirm) throw new SafeError("This entry no longer matches the template. Enter the values again.");
-    await tx.update(emissionEntries).set({ observationId: observation.id, version: nextVersion(emissionEntries.version), contentRevision: nextVersion(emissionEntries.contentRevision), updatedAt: new Date() }).where(and(eq(emissionEntries.organizationId, ctx.organizationId), eq(emissionEntries.id, id)));
-    await recordEmissionEntryActivity(ctx, tx, entry, "updated", ["observationId"]);
+    const [saved] = await tx.update(emissionEntries).set({ observationId: observation.id, version: nextVersion(emissionEntries.version), contentRevision: nextVersion(emissionEntries.contentRevision), updatedAt: new Date() }).where(and(eq(emissionEntries.organizationId, ctx.organizationId), eq(emissionEntries.id, id))).returning();
+    await recordEmissionEntryActivity(ctx, tx, "updated", entry, { ...saved, values: entry.values });
     return getEmissionEntry(ctx, id, tx);
   });
 }
 export async function deleteEmissionEntry(ctx: OrgContext, id: string, expectedVersion: number) {
   requireOrgScope(ctx); requireEmissionsEntriesEnabled();
   return mutateEntry(ctx, id, expectedVersion, async (tx, entry) => {
-    await tx.update(emissionEntries).set({ deletedAt: new Date(), updatedAt: new Date(), version: nextVersion(emissionEntries.version), contentRevision: nextVersion(emissionEntries.contentRevision) }).where(and(eq(emissionEntries.organizationId, ctx.organizationId), eq(emissionEntries.id, id)));
-    await recordEmissionEntryActivity(ctx, tx, entry, "deleted", ["deletedAt"]);
+    const [saved] = await tx.update(emissionEntries).set({ deletedAt: new Date(), updatedAt: new Date(), version: nextVersion(emissionEntries.version), contentRevision: nextVersion(emissionEntries.contentRevision) }).where(and(eq(emissionEntries.organizationId, ctx.organizationId), eq(emissionEntries.id, id))).returning();
+    await recordEmissionEntryActivity(ctx, tx, "deleted", entry, { ...saved, values: entry.values });
     return { id };
   }, true);
 }

@@ -1,5 +1,5 @@
 import type { PgTable } from "drizzle-orm/pg-core";
-import { feedstocks, productionRuns, biocharProducts, samples, orders, deliveries, applications, documents, transportLegs, creditBatches, binMovements, certifierRemovals, certifierGhgStatements } from "@/db/schema";
+import { emissionEntries, feedstocks, productionRuns, biocharProducts, samples, orders, deliveries, applications, documents, transportLegs, creditBatches, binMovements, certifierRemovals, certifierGhgStatements } from "@/db/schema";
 
 export type ActivityFieldPolicy = "value" | "name" | "ignore" | { link: string };
 export type ActivityEntityPolicy = { table: PgTable; fields: Record<string, ActivityFieldPolicy> };
@@ -12,6 +12,29 @@ export const activityCoordinatePairs: Readonly<Record<string, readonly (readonly
 
 /** Explicit column decisions. New columns must be classified before they ship. */
 export const activityFieldPolicies: Record<string, ActivityEntityPolicy> = {
+  emission_entry: { table: emissionEntries, fields: {
+    id: "ignore",
+    organizationId: "ignore",
+    creditBatchId: { link: "credit_batch" },
+    removalTemplateId: { link: "removal_template" },
+    componentId: "value",
+    inputShape: "name",
+    lineRule: "value",
+    observationId: { link: "removal_template_observation" },
+    kind: "value",
+    confirmedForRemovalId: { link: "removal" },
+    occurredOn: "value",
+    note: "name",
+    createdBy: { link: "user" },
+    version: "ignore",
+    contentRevision: "ignore",
+    deletedAt: "value",
+    sentByRemovalId: { link: "removal" },
+    sendReservedBySubmissionId: { link: "submission" },
+    createdAt: "ignore",
+    updatedAt: "ignore",
+    values: "name",
+  } },
   feedstock: { table: feedstocks, fields: {
     id: "ignore",
     organizationId: "ignore",
