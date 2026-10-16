@@ -8,6 +8,7 @@ import { formulations } from "@/db/schema";
 import type { EntityOption } from "@/components/forms/entity-select/types";
 import type { OrgContext } from "@/lib/auth/server";
 import { requireOrgScope } from "../utils";
+import { ARCHIVED_OPTION_SUBTITLE } from "@/lib/archived-option";
 
 export async function getFormulationsEntity(ctx: OrgContext, params: {
   search?: string;
@@ -65,6 +66,7 @@ export async function getFormulationEntityById(ctx: OrgContext, id: string): Pro
     id: result.id,
     code: result.code,
     name: result.name,
-    subtitle: result.archivedAt ? "Archived" : result.biocharRatio !== null ? `${Math.round(result.biocharRatio * 100)}% biochar by volume` : undefined,
+    ...(result.archivedAt ? { archived: true } : {}),
+    subtitle: result.archivedAt ? ARCHIVED_OPTION_SUBTITLE : result.biocharRatio !== null ? `${Math.round(result.biocharRatio * 100)}% biochar by volume` : undefined,
   };
 }
