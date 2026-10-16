@@ -36,6 +36,7 @@ import {
   TagIcon,
   ListChecksIcon,
   LightningIcon,
+  CloudIcon,
   GearSixIcon,
   BuildingsIcon,
   SignOutIcon,
@@ -119,6 +120,8 @@ const navSections: NavSection[] = [
       { href: "/storage-locations", label: "Storage Bins", icon: PackageIcon },
       { href: "/feedstock-types", label: "Feedstock Types", icon: TagIcon },
       { href: "/energy", label: "Energy", icon: LightningIcon },
+      // PROTOTYPE (prototype/emissions-variants): the remodelled Emissions page.
+      { href: "/emissions", label: "Emissions", icon: CloudIcon },
     ],
   },
   {
