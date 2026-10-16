@@ -21,18 +21,23 @@ import {
 export const SCENARIOS = ["blocking", "clear", "partly-sent", "issued"] as const;
 export type Scenario = (typeof SCENARIOS)[number];
 
-export const TABS = ["overview", "production", "emissions", "removals", "traceability", "activity"] as const;
+// Traceability is a link out, not a tab: the Traceability page already opens on a credit batch (round 2).
+export const TABS = ["overview", "production", "emissions", "removals", "activity"] as const;
 export type TabKey = (typeof TABS)[number];
 export const TAB_LABELS: Record<TabKey, string> = {
   overview: "Overview",
   production: "Production",
   emissions: "Emissions",
   removals: "Removals",
-  traceability: "Traceability",
   activity: "Activity",
 };
 
-export const PROGRESS_STEPS = ["Open", "Removal submitted", "Verified", "Credits issued"] as const;
+export interface ProgressStep {
+  label: string;
+  state: "done" | "current" | "todo";
+  /** A date, a record or what is holding the step. Empty for later steps. */
+  caption: string;
+}
 export const SAMPLES_REQUIRED = 3;
 
 export type ItemGroup = "blocking" | "check" | "waiting";
@@ -99,7 +104,11 @@ export interface BatchModel {
   slices: MassSlice[];
   masses: Record<MassSegmentKey, number>;
   emissionLines: EmissionLineStub[];
-  progressIndex: number;
+  progress: ProgressStep[];
+  /** Mass per Removal plus the part in none, for the overview Removals panel. */
+  removalMass: { removal: RemovalRef | null; tons: number }[];
+  /** Show the Removals panel: the batch has a Removal or is ready for one. */
+  showRemovals: boolean;
   lockLevel: "Open" | "Partly sent" | "Fully sent";
   locks: Partial<Record<LockableField, LockInfo>>;
   primary: PrimaryAction;
@@ -202,6 +211,18 @@ function realBlockingItems(health: BatchHealth | undefined, batch: CreditBatchWi
     });
 }
 
+/** PROTOTYPE: the four lifecycle steps with stub captions per scenario. */
+function progressFor(scenario: Scenario, blockingCount: number): ProgressStep[] {
+  const steps = ["Ready for a Removal", "Removal submitted", "Verified", "Credits issued"];
+  const plan: Record<Scenario, [ProgressStep["state"], string][]> = {
+    blocking: [["current", `${blockingCount} blocking ${blockingCount === 1 ? "item" : "items"} to fix`], ["todo", ""], ["todo", ""], ["todo", ""]],
+    clear: [["done", "Nothing blocking"], ["current", "Not started"], ["todo", ""], ["todo", ""]],
+    "partly-sent": [["done", "Oct 10, 2026"], ["done", "R-07, Oct 12, 2026"], ["current", "GHG Statement Q3 in verification"], ["todo", ""]],
+    issued: [["done", "Oct 10, 2026"], ["done", "R-07 and R-09"], ["done", "Nov 1, 2026"], ["done", "Nov 3, 2026"]],
+  };
+  return steps.map((label, index) => ({ label, state: plan[scenario][index][0], caption: plan[scenario][index][1] }));
+}
+
 export interface ModelInput {
   batch: CreditBatchWithRelations;
   health: BatchHealth | undefined;
@@ -267,7 +288,7 @@ export function buildBatchModel({ batch, health, realSampleCount, scenario }: Mo
       title: "SAM-26-002 H/Corg is well above the other Samples",
       detail: "It may be an outlier. Check the lab report before the next Removal.",
       tab: "production",
-      rowId: "sample-2",
+      rowId: "samples",
       actionLabel: "Review sample",
       stub: true,
     });
@@ -360,7 +381,12 @@ export function buildBatchModel({ batch, health, realSampleCount, scenario }: Mo
     slices,
     masses,
     emissionLines,
-    progressIndex: scenario === "issued" ? 3 : scenario === "partly-sent" ? 1 : 0,
+    progress: progressFor(scenario, blocking.length),
+    removalMass: [
+      ...removals.map((removal) => ({ removal, tons: slices.filter((slice) => slice.removal?.code === removal.code).reduce((sum, slice) => sum + slice.tons, 0) })),
+      ...(masses.notIn > 0 ? [{ removal: null, tons: masses.notIn }] : []),
+    ],
+    showRemovals: removals.length > 0 || blocking.length === 0,
     lockLevel: scenario === "issued" ? "Fully sent" : scenario === "partly-sent" ? "Partly sent" : "Open",
     locks,
     primary,

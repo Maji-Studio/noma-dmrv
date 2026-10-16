@@ -1,26 +1,20 @@
 "use client";
 
-/** PROTOTYPE (throwaway): page header, progress line and key numbers. */
+/** PROTOTYPE (throwaway): page header, progress steps and key numbers. */
 import Link from "next/link";
-import { ArrowLeftIcon, CheckIcon, DotsThreeIcon, LockSimpleIcon, LockSimpleOpenIcon } from "@phosphor-icons/react/dist/ssr";
+import { ArrowLeftIcon, CheckIcon, DotsThreeIcon, PencilSimpleIcon } from "@phosphor-icons/react/dist/ssr";
 import { PageHeader } from "@/components/ui";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu } from "@/components/ui/dropdown-menu";
 import { formatDateRange, formatTonnes } from "@/lib/format-utils";
 import { cn } from "@/lib/utils";
 import { useProto } from "./prototype-context";
-import { PROGRESS_STEPS, SAMPLES_REQUIRED } from "./prototype-model";
+import { SAMPLES_REQUIRED } from "./prototype-model";
 
 const MUTED = "text-[var(--color-text-secondary)]";
 
-const LOCK_TEXT = {
-  Open: "All fields editable",
-  "Partly sent": "Some fields locked",
-  "Fully sent": "All fields locked",
-} as const;
-
 function PrimaryAction() {
-  const { model, go, say } = useProto();
+  const { model, go, say, setEditing } = useProto();
   const { primary } = model;
   if (primary.kind === "none") {
     return (
@@ -31,7 +25,11 @@ function PrimaryAction() {
     );
   }
   const onClick = () => {
-    if (primary.kind === "fix") go(model.blocking[0].tab, model.blocking[0].rowId);
+    if (primary.kind === "fix") {
+      const next = model.blocking[0];
+      if (next.rowId === "template" || next.rowId === "details") setEditing(true);
+      go(next.tab, next.rowId);
+    }
     else if (primary.kind === "start") say("Prototype: this opens the New Removal wizard with the unassigned mass.");
     else go("removals", "ghg");
   };
@@ -58,49 +56,51 @@ function OverflowMenu() {
   );
 }
 
-/** The four lifecycle steps as one compact track. */
+/** The four lifecycle steps as segments: a bar, the step, and what it is at (a date, a record, a holder). */
 function ProgressSteps() {
   const { model } = useProto();
-  const finished = model.progressIndex === PROGRESS_STEPS.length - 1;
   return (
-    <ol className="grid w-full grid-cols-4 sm:max-w-[560px]" aria-label="Batch progress">
-      {PROGRESS_STEPS.map((step, index) => {
-        const done = index < model.progressIndex || (finished && index === model.progressIndex);
-        const current = index === model.progressIndex && !done;
-        return (
-          <li key={step} aria-current={current ? "step" : undefined} className="flex min-w-0 flex-col gap-6">
-            <span className="flex items-center" aria-hidden>
-              <span
-                className={cn(
-                  "flex size-16 shrink-0 items-center justify-center rounded-full border",
-                  done && "border-[var(--st-ok)] bg-[var(--st-ok)] text-white",
-                  current && "border-[var(--ink)] bg-[var(--ink)]",
-                  !done && !current && "border-[var(--color-border-secondary)] bg-[var(--paper)]",
-                )}
-              >
-                {done && <CheckIcon size={9} weight="bold" />}
-              </span>
-              {index < PROGRESS_STEPS.length - 1 && <span className={cn("mx-6 h-px flex-1", done ? "bg-[var(--st-ok)]" : "bg-[var(--color-border-secondary)]")} />}
+    <ol className="grid grid-cols-2 gap-x-4 gap-y-16 sm:grid-cols-4" aria-label="Batch progress">
+      {model.progress.map((step) => (
+        <li key={step.label} aria-current={step.state === "current" ? "step" : undefined} className="flex min-w-0 flex-col gap-8">
+          <span
+            aria-hidden
+            className={cn(
+              "h-4 w-full",
+              step.state === "done" && "bg-[var(--st-ok)]",
+              step.state === "current" && "bg-[var(--ink)]",
+              step.state === "todo" && "bg-[var(--color-border-tertiary)]",
+            )}
+          />
+          <span className="flex min-w-0 flex-col gap-2 pr-12">
+            <span className={cn("inline-flex items-center gap-6 body-small", step.state === "todo" ? MUTED : "font-medium")}>
+              {step.state === "done" && <CheckIcon size={14} weight="bold" className="shrink-0 text-[var(--st-ok)]" aria-hidden />}
+              {step.label}
+              {step.state === "done" && <span className="sr-only"> (done)</span>}
             </span>
-            <span className={cn("body-caption pr-8", current ? "font-medium" : done ? "" : MUTED)}>
-              {step}
-              {done && <span className="sr-only"> (done)</span>}
-            </span>
-          </li>
-        );
-      })}
+            {step.caption && <span className={cn("body-caption", MUTED)}>{step.caption}</span>}
+          </span>
+        </li>
+      ))}
     </ol>
   );
 }
 
-function LockNote() {
-  const { model } = useProto();
-  const LockIcon = model.lockLevel === "Open" ? LockSimpleOpenIcon : LockSimpleIcon;
+function EditAction() {
+  const { model, editing, setEditing, go } = useProto();
+  if (model.lockLevel === "Fully sent") return null;
   return (
-    <span className={cn("inline-flex shrink-0 items-center gap-6 body-caption", MUTED)}>
-      <LockIcon size={14} aria-hidden />
-      {LOCK_TEXT[model.lockLevel]}
-    </span>
+    <Button
+      variant="default"
+      aria-pressed={editing}
+      onClick={() => {
+        setEditing(!editing);
+        go("overview", "details");
+      }}
+    >
+      <PencilSimpleIcon size={20} aria-hidden />
+      Edit
+    </Button>
   );
 }
 
@@ -120,14 +120,12 @@ export function BatchHeader() {
           actions={
             <>
               <PrimaryAction />
+              <EditAction />
               <OverflowMenu />
             </>
           }
         />
-        <div className="flex flex-col gap-12 sm:flex-row sm:items-end sm:justify-between sm:gap-24">
-          <ProgressSteps />
-          <LockNote />
-        </div>
+        <ProgressSteps />
       </div>
     </div>
   );
