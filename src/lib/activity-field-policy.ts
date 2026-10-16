@@ -1,11 +1,13 @@
 import type { PgTable } from "drizzle-orm/pg-core";
-import { emissionEntries, feedstocks, productionRuns, biocharProducts, samples, orders, deliveries, applications, documents, transportLegs, creditBatches, binMovements, certifierRemovals, certifierGhgStatements } from "@/db/schema";
+import { emissionEntries, formulations, suppliers, supplierLocations, customers, customerLocations, feedstocks, productionRuns, biocharProducts, samples, orders, deliveries, applications, documents, transportLegs, creditBatches, binMovements, certifierRemovals, certifierGhgStatements } from "@/db/schema";
 
 export type ActivityFieldPolicy = "value" | "name" | "ignore" | { link: string };
 export type ActivityEntityPolicy = { table: PgTable; fields: Record<string, ActivityFieldPolicy> };
 
 /** A coordinate change captures the whole point, while naming only changed fields. */
 export const activityCoordinatePairs: Readonly<Record<string, readonly (readonly [string, string])[]>> = {
+  supplier_location: [["gpsLatitude", "gpsLongitude"]],
+  customer_location: [["gpsLatitude", "gpsLongitude"]],
   application: [["gpsLatitude", "gpsLongitude"]],
   transport_leg: [["originGpsLatitude", "originGpsLongitude"], ["destinationGpsLatitude", "destinationGpsLongitude"]],
 };
@@ -34,6 +36,32 @@ export const activityFieldPolicies: Record<string, ActivityEntityPolicy> = {
     createdAt: "ignore",
     updatedAt: "ignore",
     values: "name",
+  } },
+  formulation: { table: formulations, fields: {
+    id: "ignore", organizationId: "ignore", version: "ignore", createdAt: "ignore", updatedAt: "ignore",
+    code: "value", name: "value", biocharRatio: "value", archivedAt: "value",
+    description: "name", lines: "name",
+  } },
+  supplier: { table: suppliers, fields: {
+    id: "ignore", organizationId: "ignore", version: "ignore", createdAt: "ignore", updatedAt: "ignore", userId: "ignore",
+    code: "value", name: "name", location: "value", sourceRegion: "value",
+    address: "name", contactName: "name", contactEmail: "name", contactPhone: "name",
+  } },
+  customer: { table: customers, fields: {
+    id: "ignore", organizationId: "ignore", version: "ignore", createdAt: "ignore", updatedAt: "ignore",
+    code: "value", name: "name", cropType: "value",
+    address: "name", contactEmail: "name", contactPhone: "name",
+  } },
+  supplier_location: { table: supplierLocations, fields: {
+    id: "ignore", organizationId: "ignore", version: "ignore", createdAt: "ignore", updatedAt: "ignore",
+    supplierId: { link: "supplier" }, name: "value", country: "value", stateRegion: "value", city: "value",
+    gpsLatitude: "value", gpsLongitude: "value", isDefault: "value", address: "name", facilityDistances: "name",
+  } },
+  customer_location: { table: customerLocations, fields: {
+    id: "ignore", organizationId: "ignore", version: "ignore", createdAt: "ignore", updatedAt: "ignore",
+    customerId: { link: "customer" }, name: "value", country: "value", stateRegion: "value", city: "value",
+    gpsLatitude: "value", gpsLongitude: "value", isDefault: "value", defaultSoilTemperatureC: "value",
+    address: "name", facilityDistances: "name",
   } },
   feedstock: { table: feedstocks, fields: {
     id: "ignore",

@@ -4,7 +4,7 @@
  * Covers the Infrastructure catalogue page that replaced the old
  * /certification/production-processes surface (ADR 0022):
  * - navigation: Feedstock Types under Infrastructure, Production Processes gone
- * - UI CRUD lifecycle: create → edit → archive → unarchive → delete (unused)
+ * - UI CRUD lifecycle: create → edit → archive → restore → delete (unused)
  *   The lifecycle ends in deletion so the spec leaves no rows behind (feedstock
  *   type codes are auto-generated and would escape the E2E- teardown sweep).
  * - sampling gating: without an Isometric registry connection the detail panel
@@ -45,7 +45,7 @@ test.describe("Feedstock Types navigation", () => {
 });
 
 test.describe("Feedstock Types UI CRUD", () => {
-  test("admin can create, edit, archive, unarchive, and delete an unused type", async ({
+  test("admin can create, edit, archive, restore, and delete an unused type", async ({
     adminPage: page,
   }) => {
     const uniqueName = `E2E FT Walnut Shells ${Date.now()}`;
@@ -114,9 +114,9 @@ test.describe("Feedstock Types UI CRUD", () => {
       "all",
     );
 
-    // ── Unarchive ─────────────────────────────────────────────────────────
+    // ── Restore ─────────────────────────────────────────────────────────
     await openRowActions(editedName);
-    await page.getByRole("menuitem", { name: "Unarchive" }).click();
+    await page.getByRole("menuitem", { name: "Restore" }).click();
     await expect(editedRow).toContainText("Active", { timeout: 10000 });
 
     // ── Delete (unused → allowed, and cleans up this spec's row) ─────────

@@ -32,6 +32,15 @@ Deferred work lives here, never as a `TODO` in code.
   legacy deletion path without a run event. Route it through the operation runner
   or record on its own transaction; preserve document retirement events.
 
+## Energy estimates paused (`energy/emission-factors`) - **dormant**
+
+- `src/db/schema/emission-factors.ts:facilityEmissionFactors` has no reader and
+  no writer since 2026-10-16: Kenji removed estimated CO₂e from the Energy page
+  and the settings form (#1091, [ADR 0031](./adr/0031-operator-energy-estimates.md)),
+  "for now". Decide whether to resume estimates (rebuild the settings form and
+  the read) or drop the table with a migration. Until then the table, its test
+  cleanup in `tests/e2e/global-teardown.ts` and the dev-seed delete stay.
+
 ## DataTable mobile cards (`ui/data-table`) - **deferred**
 
 - `src/components/ui/data-table/index.tsx:DataTable` renders each mobile card as
@@ -562,3 +571,12 @@ operational tradeoff, and this is not a registry requirement we verified.
 `src/lib/certification/emission-entry-rules.ts:emissionEntryCounts` requires re-entry
 when a monitored input changes unit. Define an exact decimal unit-conversion table
 before allowing confirmation to convert stored entry values to the new unit.
+
+## Refusal UIs match server copy (`errors/action-error-code`) - **deferred**
+
+- `src/lib/stale-version.ts:throwActionError` rethrows a failed action as a plain
+  `Error` carrying only the message, so the server's refusal `code` and meta are
+  lost. `src/components/formulations/formulation-notices.tsx:isFormulationInUseRefusal`
+  therefore matches the message text to offer "Archive instead". Carry the action
+  error code and meta to the client (for example on a typed error subclass) so
+  refusal UIs branch on the code, not on copy.

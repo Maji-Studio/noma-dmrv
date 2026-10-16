@@ -4,6 +4,8 @@
  * Minimal field requirements for rapid entity creation
  */
 
+import { lockFormulationReference } from "./formulation-reference-guards";
+
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import type { OrgContext } from "@/lib/auth/server";
@@ -12,7 +14,6 @@ import {
   operators,
   vehicles,
   feedstockTypes,
-  formulations,
   storageLocations,
 } from "@/db/schema";
 import type { EntityOption } from "@/components/forms/entity-select/types";
@@ -257,7 +258,7 @@ export async function createStorageLocation(
       await assertSameOrg(ctx, feedstockTypes, data.feedstockTypeId, tx);
     }
     if (data.formulationId) {
-      await assertSameOrg(ctx, formulations, data.formulationId, tx);
+      await lockFormulationReference(ctx, tx, data.formulationId);
     }
 
     const [location] = await guardStorageLocationName(ctx, data.name, () =>

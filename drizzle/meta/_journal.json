@@ -1086,6 +1086,20 @@
       "when": 1792142515357,
       "tag": "0154_activity_field_values",
       "breakpoints": true
+    },
+    {
+      "idx": 155,
+      "version": "7",
+      "when": 1792154763676,
+      "tag": "0155_formulation_archive_master_data_activity",
+      "breakpoints": true
+    },
+    {
+      "idx": 156,
+      "version": "7",
+      "when": 1792161637668,
+      "tag": "0156_emission_entries",
+      "breakpoints": true
     }
   ]
 }

@@ -1,29 +1,19 @@
-import { assertRowVersion, nextVersion } from "./row-version";
 /**
  * Formulations Data Access Layer
- * CRUD operations for formulations with auth guards, pagination, and filtering
+ * Read operations for formulations with auth guards, pagination, and filtering
  */
 
-import { and, asc, desc, eq, ilike, inArray, or, SQL, count } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, or, SQL, count, isNull, isNotNull } from "drizzle-orm";
 import type { OrgContext } from "@/lib/auth/server";
 import { db } from "@/db";
 import {
-  feedstockTypes,
   formulations,
   formulationIngredients,
-  storageLocations,
   type Formulation,
   type FeedstockType,
   type FormulationIngredient,
 } from "@/db/schema";
-import { biocharProducts } from "@/db/schema/products";
-import {
-  RATIO_SUM_EXCEEDED_MESSAGE,
-  exceedsFormulationRatioSum,
-  type FormulationFilterData,
-} from "@/schemas/formulations";
-
-const FORMULATION_CONFLICT_ENTITY = "formulation";
+import type { FormulationFilterData } from "@/schemas/formulations";
 
 // ============================================
 // Types
@@ -45,63 +35,12 @@ export interface PaginatedFormulations {
   totalPages: number;
 }
 
-export type IngredientInput = {
-  feedstockTypeId: string;
-  ratio?: number | null;
-};
-
 // ============================================
 // Auth Guards
 // ============================================
 
 import { requireOrgScope } from "./utils";
 import { SafeError } from "@/lib/errors";
-import { formatCount } from "@/lib/copy-utils";
-
-async function assertBlendFeedstockTypes(ctx: OrgContext, ingredients?: IngredientInput[]) {
-  const feedstockTypeIds = [
-    ...new Set((ingredients ?? []).map((ingredient) => ingredient.feedstockTypeId)),
-  ];
-  if (feedstockTypeIds.length === 0) return;
-
-  const rows = await db
-    .select({
-      id: feedstockTypes.id,
-      usage: feedstockTypes.usage,
-    })
-    .from(feedstockTypes)
-    .where(and(
-      inArray(feedstockTypes.id, feedstockTypeIds),
-      eq(feedstockTypes.organizationId, ctx.organizationId),
-    ));
-
-  if (rows.length !== feedstockTypeIds.length) {
-    const returnedIds = new Set(rows.map((row) => row.id));
-    const missingIds = feedstockTypeIds.filter((id) => !returnedIds.has(id));
-    throw new SafeError(
-      `${formatCount(missingIds.length, "Feedstock type")} ${missingIds.length === 1 ? "was" : "were"} not found. Refresh the formulation and choose the feedstock types again.`,
-    );
-  }
-
-  if (rows.some((row) => row.usage !== "blend")) {
-    throw new SafeError("Formulation lines must use blend-usage feedstock types");
-  }
-}
-
-/**
- * Hard-block a formulation whose biochar + ingredient ratios over-allocate the
- * solid blend (> 100%). Enforced here in addition to the Zod refine because
- * ingredients are child rows the update layer can reconcile against existing
- * state (issue #282).
- */
-function assertRatioSumWithinBounds(
-  biocharRatio: number | null | undefined,
-  ingredients: ReadonlyArray<{ ratio?: number | null }> | null | undefined,
-) {
-  if (exceedsFormulationRatioSum(biocharRatio, ingredients)) {
-    throw new SafeError(RATIO_SUM_EXCEEDED_MESSAGE);
-  }
-}
 
 // ============================================
 // Formulation Read Operations
@@ -123,10 +62,14 @@ export async function getFormulations(
     pageSize = 20,
     sortBy = "name",
     sortOrder = "asc",
+    archived = false,
   } = filters ?? {};
 
   // Build where conditions
-  const conditions: SQL[] = [eq(formulations.organizationId, ctx.organizationId)];
+  const conditions: SQL[] = [
+    eq(formulations.organizationId, ctx.organizationId),
+    archived ? isNotNull(formulations.archivedAt) : isNull(formulations.archivedAt),
+  ];
 
   if (search) {
     const searchPattern = `%${search}%`;
@@ -220,330 +163,3 @@ export async function getFormulationById(
 
   return formulation;
 }
-
-// ============================================
-// Formulation Create Operations
-// ============================================
-
-/**
- * Create a new formulation with optional ingredients (transactional)
- */
-export async function createFormulation(
-  ctx: OrgContext,
-  data: {
-    code: string;
-    name: string;
-    biocharRatio?: number | null;
-    description?: string | null;
-    ingredients?: IngredientInput[];
-  }
-): Promise<FormulationWithIngredients> {
-  requireOrgScope(ctx);
-
-  await assertBlendFeedstockTypes(ctx, data.ingredients);
-  assertRatioSumWithinBounds(data.biocharRatio, data.ingredients);
-
-  return db.transaction(async (tx) => {
-    const [formulation] = await tx
-      .insert(formulations)
-      .values({
-        organizationId: ctx.organizationId,
-        code: data.code,
-        name: data.name,
-        biocharRatio: data.biocharRatio ?? null,
-        description: data.description ?? null,
-      })
-      .returning();
-
-    let ingredients: FormulationIngredientWithFeedstockType[] = [];
-
-    if (data.ingredients && data.ingredients.length > 0) {
-      await tx
-        .insert(formulationIngredients)
-        .values(
-          data.ingredients.map((ing, index) => ({
-            organizationId: ctx.organizationId,
-            formulationId: formulation.id,
-            feedstockTypeId: ing.feedstockTypeId,
-            ratio: ing.ratio ?? null,
-            sortOrder: index,
-          }))
-        );
-
-      ingredients = await tx.query.formulationIngredients.findMany({
-        where: and(
-          eq(formulationIngredients.formulationId, formulation.id),
-          eq(formulationIngredients.organizationId, ctx.organizationId),
-        ),
-        orderBy: [asc(formulationIngredients.sortOrder)],
-        with: {
-          feedstockType: true,
-        },
-      });
-    }
-
-    return { ...formulation, ingredients };
-  });
-}
-
-// ============================================
-// Formulation Update Operations
-// ============================================
-
-/**
- * Update an existing formulation with ingredients while preserving stable line ids.
- */
-export async function updateFormulation(
-  ctx: OrgContext,
-  formulationId: string,
-  data: {
-    expectedVersion: number;
-    code?: string;
-    name?: string;
-    biocharRatio?: number | null;
-    description?: string | null;
-    ingredients?: IngredientInput[];
-  }
-): Promise<FormulationWithIngredients> {
-  requireOrgScope(ctx);
-
-  // Verify formulation exists
-  const [existing] = await db
-    .select()
-    .from(formulations)
-    .where(and(
-      eq(formulations.id, formulationId),
-      eq(formulations.organizationId, ctx.organizationId),
-    ));
-
-  if (!existing) {
-    throw new SafeError("Formulation not found");
-  }
-
-  // If code is being changed, check for duplicates
-  if (data.code && data.code !== existing.code) {
-    const [duplicate] = await db
-      .select({ id: formulations.id })
-      .from(formulations)
-      .where(and(
-        eq(formulations.code, data.code),
-        eq(formulations.organizationId, ctx.organizationId),
-      ));
-
-    if (duplicate) {
-      throw new SafeError("A formulation with this code already exists");
-    }
-  }
-
-  await assertBlendFeedstockTypes(ctx, data.ingredients);
-
-  // Separate ingredients from formulation fields
-  const { ingredients: ingredientData, expectedVersion, ...formulationFields } = data;
-
-  return db.transaction(async (tx) => {
-    // Lock the parent row so concurrent updates serialize and the ratio guard
-    // below always reconciles against the latest committed state — validating
-    // outside the transaction lets two partial updates (one changing the
-    // biochar ratio, one changing ingredients) jointly commit > 100%.
-    const [locked] = await tx
-      .select()
-      .from(formulations)
-      .where(and(
-        eq(formulations.id, formulationId),
-        eq(formulations.organizationId, ctx.organizationId),
-      ))
-      .for("update");
-
-    if (!locked) {
-      throw new SafeError("Formulation not found");
-    }
-    assertRowVersion({ entity: FORMULATION_CONFLICT_ENTITY, id: formulationId, expectedVersion, actualVersion: locked.version });
-
-    // Guard the effective post-update blend: a partial payload may change only
-    // the biochar ratio or only the ingredients, so reconcile each side against
-    // what is already stored before checking the sum.
-    const effectiveBiocharRatio =
-      data.biocharRatio !== undefined ? data.biocharRatio : locked.biocharRatio;
-    const effectiveIngredients =
-      ingredientData !== undefined
-        ? ingredientData
-        : await tx
-            .select({ ratio: formulationIngredients.ratio })
-            .from(formulationIngredients)
-            .where(and(
-              eq(formulationIngredients.formulationId, formulationId),
-              eq(formulationIngredients.organizationId, ctx.organizationId),
-            ));
-    assertRatioSumWithinBounds(effectiveBiocharRatio, effectiveIngredients);
-
-    const [updated] = await tx
-      .update(formulations)
-      .set({
-        ...formulationFields,
-        version: nextVersion(formulations.version),
-        updatedAt: new Date(),
-      })
-      .where(and(
-        eq(formulations.id, formulationId),
-        eq(formulations.organizationId, ctx.organizationId),
-      ))
-      .returning();
-
-    let ingredients: FormulationIngredientWithFeedstockType[] = [];
-
-    // Match recipe lines by their stable feedstock-type identity. Updating a
-    // ratio or sort order preserves the line id referenced by saved product
-    // compositions; only genuinely added/removed materials create/drop ids.
-    if (ingredientData !== undefined) {
-      const existingIngredients = await tx
-        .select({
-          id: formulationIngredients.id,
-          feedstockTypeId: formulationIngredients.feedstockTypeId,
-        })
-        .from(formulationIngredients)
-        .where(and(
-          eq(formulationIngredients.formulationId, formulationId),
-          eq(formulationIngredients.organizationId, ctx.organizationId),
-        ))
-        .orderBy(asc(formulationIngredients.sortOrder))
-        .for("update");
-      const availableByFeedstockType = new Map<
-        string,
-        typeof existingIngredients
-      >();
-      for (const ingredient of existingIngredients) {
-        const matches =
-          availableByFeedstockType.get(ingredient.feedstockTypeId) ?? [];
-        matches.push(ingredient);
-        availableByFeedstockType.set(ingredient.feedstockTypeId, matches);
-      }
-
-      const retainedIngredientIds = new Set<string>();
-      for (const [index, ingredient] of ingredientData.entries()) {
-        const existingIngredient = availableByFeedstockType
-          .get(ingredient.feedstockTypeId)
-          ?.shift();
-        if (existingIngredient) {
-          retainedIngredientIds.add(existingIngredient.id);
-          await tx
-            .update(formulationIngredients)
-            .set({
-              ratio: ingredient.ratio ?? null,
-              sortOrder: index,
-            })
-            .where(and(
-              eq(formulationIngredients.id, existingIngredient.id),
-              eq(formulationIngredients.formulationId, formulationId),
-              eq(formulationIngredients.organizationId, ctx.organizationId),
-            ));
-        } else {
-          await tx
-            .insert(formulationIngredients)
-            .values({
-              organizationId: ctx.organizationId,
-              formulationId,
-              feedstockTypeId: ingredient.feedstockTypeId,
-              ratio: ingredient.ratio ?? null,
-              sortOrder: index,
-            });
-        }
-      }
-
-      const removedIngredientIds = existingIngredients
-        .filter(({ id }) => !retainedIngredientIds.has(id))
-        .map(({ id }) => id);
-      if (removedIngredientIds.length > 0) {
-        await tx
-          .delete(formulationIngredients)
-          .where(and(
-            inArray(formulationIngredients.id, removedIngredientIds),
-            eq(formulationIngredients.formulationId, formulationId),
-            eq(formulationIngredients.organizationId, ctx.organizationId),
-          ));
-      }
-
-      ingredients = await tx.query.formulationIngredients.findMany({
-        where: and(
-          eq(formulationIngredients.formulationId, formulationId),
-          eq(formulationIngredients.organizationId, ctx.organizationId),
-        ),
-        orderBy: [asc(formulationIngredients.sortOrder)],
-        with: {
-          feedstockType: true,
-        },
-      });
-    } else {
-      // If ingredients not provided, fetch existing ones
-      ingredients = await tx.query.formulationIngredients.findMany({
-        where: and(
-          eq(formulationIngredients.formulationId, formulationId),
-          eq(formulationIngredients.organizationId, ctx.organizationId),
-        ),
-        orderBy: [asc(formulationIngredients.sortOrder)],
-        with: {
-          feedstockType: true,
-        },
-      });
-    }
-
-    return { ...updated, ingredients };
-  });
-}
-
-// ============================================
-// Formulation Delete Operations
-// ============================================
-
-/**
- * Delete a formulation (ingredients cascade via FK)
- * Will fail if formulation has associated biochar products
- */
-export async function deleteFormulation(
-  ctx: OrgContext,
-  formulationId: string,
-  expectedVersion: number
-): Promise<void> {
-  requireOrgScope(ctx);
-  return db.transaction(async (tx) => {
-    const [versioned] = await tx.select({ version: formulations.version })
-      .from(formulations)
-      .where(and(eq(formulations.id, formulationId), eq(formulations.organizationId, ctx.organizationId)))
-      .for("update");
-    if (!versioned) throw new SafeError("Formulation not found");
-    assertRowVersion({ entity: FORMULATION_CONFLICT_ENTITY, id: formulationId, expectedVersion, actualVersion: versioned.version });
-
-    const [productCountResult, binCountResult] = await Promise.all([
-      tx
-        .select({ count: count() })
-        .from(biocharProducts)
-        .where(and(eq(biocharProducts.formulationId, formulationId), eq(biocharProducts.organizationId, ctx.organizationId))),
-      tx
-        .select({ count: count() })
-        .from(storageLocations)
-        .where(and(eq(storageLocations.formulationId, formulationId), eq(storageLocations.organizationId, ctx.organizationId))),
-    ]);
-
-    if (Number(productCountResult[0].count) > 0) {
-      throw new SafeError(
-        "Cannot delete formulation with associated biochar products. Remove products first."
-      );
-    }
-
-    if (Number(binCountResult[0].count) > 0) {
-      throw new SafeError(
-        "Cannot delete formulation used by product bins. Clear those bins first."
-      );
-    }
-
-    // Ingredients cascade-delete via FK onDelete: 'cascade'
-    await tx.delete(formulations).where(and(
-      eq(formulations.id, formulationId),
-      eq(formulations.organizationId, ctx.organizationId),
-    ));
-
-  });
-}
-
-// ============================================
-// Utility Operations
-// ============================================
