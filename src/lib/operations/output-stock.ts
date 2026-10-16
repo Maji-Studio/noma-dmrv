@@ -16,18 +16,13 @@ import type { Operation } from "./runner";
  */
 export const GENERATED_MOVEMENT_KEY_PREFIX = "api:";
 
-/** Preconditions and the request key describe how a command was sent, not what it changed. */
-const NOT_CHANGES: ReadonlySet<string> = new Set(["basisFingerprint", "expectedProductVersions", "idempotencyKey", "facilityId", "requireLatestCorrection"]);
 
-function changedFields(input: object): string[] {
-  return Object.entries(input).filter(([key, value]) => value !== undefined && !NOT_CHANGES.has(key)).map(([key]) => key).sort();
-}
 
 /** The audit effect of a posted movement; adapters that publish a different output reuse it. */
 export function describeRecordedMovement(input: object, movementId: string): OperationEffect {
   return {
     outcome: "created", entityType: STOCK_CONFLICT_ENTITY.binMovement, entityIds: [movementId],
-    versionBefore: null, versionAfter: null, changedFields: changedFields(input),
+    versionBefore: null, versionAfter: null, changedFields: [],
   };
 }
 
@@ -44,7 +39,7 @@ export const recordOutputStockMovement: Operation<typeof recordOutputStockMoveme
       facilityId: bin.facilityId,
       occurredAt: resolveEventInstant(occurredAt, bin.timeZone, ["occurredAt"]).toISOString(),
       idempotencyKey: idempotencyKey ?? `${GENERATED_MOVEMENT_KEY_PREFIX}${randomUUID()}`,
-    }, { snapshotStock, onReplay: activity.skip, ...(requireLatestCorrection ? { requireLatestCorrection } : {}) });
+    }, { snapshotStock, capture: activity.capture, onReplay: activity.skip, ...(requireLatestCorrection ? { requireLatestCorrection } : {}) });
     activity.link({ facilityId: bin.facilityId, productionRunId: singleProductionRunId(result.preview.allocations.flatMap(allocation => allocation.runs.map(run => run.productionRunId))) });
     return result;
   }, {

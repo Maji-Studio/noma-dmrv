@@ -48,10 +48,16 @@ The organization FK cascades like sibling tables because no organization-delete
 path exists and test fixtures delete organizations. The nullable `facility_id`
 has no FK under the exception documented in [ADR 0033](./adr/0033-activity-events-facility-without-fk.md). Entity, credit-batch, production-run and
 actor references have no FKs, so history survives record
-deletion as tombstones. V1 stores field names only, never field
-values, alongside status transitions and attribution. API writes are audited
+deletion as tombstones. `changed_fields` lists real changes, sorted by name.
+`changes` stores old and new JSON scalars for allowlisted numbers, dates,
+choices, short labels, places and linked record IDs. Notes, reasons, document
+file details, boundaries and lists record names only. Bookkeeping is ignored.
+The exhaustive policy and semantic comparison live in `src/lib/activity-changes.ts`
+and `src/lib/activity-field-policy.ts`. Unknown fields default to name only.
+Values are internal, retained forever, with no backfill. Link labels resolve at
+read time from current org-scoped records; deleted targets resolve to null. API writes are audited
 only here: an API audit row has `source in ('rest','mcp') and operation_id is not null`
-and carries operation, credential and request IDs, versions and field names.
+and carries operation, credential and request IDs, versions, field names and allowlisted values.
 Nested document, membership, transport-leg and document-retirement rows from
 the same API call carry only actor and source attribution, without operation,
 credential or request IDs. Nullable `operation_id`, `version_before` and
@@ -72,7 +78,12 @@ unknown owners.
 `Date`; `occurred_at` defaults to insert time (`clock_timestamp()`), and reads
 order by `occurred_at` then unique `sequence`, newest first.
 
-The operation runner appends activity from `describe()` in its write transaction.
+The operation runner appends activity in its write transaction using metadata
+from `describe()` and before/after snapshots captured under each writer's own
+locks. Effect metadata, including the effect stored in idempotency outcomes,
+contains field names only; captured values live only in `activity_events.changes`.
+An unchanged save still records an event
+with no changed fields.
 This covers feedstock intake, production runs, products, stock movements, lab
 samples, orders, deliveries, applications, app/API document requests and
 confirmations, and app document deletes. App document visibility and evidence classification edits

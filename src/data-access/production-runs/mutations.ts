@@ -12,6 +12,7 @@ import {
   creditBatchProductionRuns,
   facilities,
   productionRuns,
+  productionRunFeedstockDraws,
   reactors,
   storageLocations,
 } from "@/db/schema";
@@ -306,6 +307,7 @@ export async function createProductionRunInTransaction(
 
     await attachProductionRunToMatchingCreditBatch(ctx, tx, created.id);
 
+    options.capture?.(created.id, null, { ...created, feedstockDraws });
     run = created;
   } catch (error) {
     if (isPgCheckViolation(error, END_AFTER_START_CONSTRAINT)) {
@@ -740,10 +742,14 @@ export async function updateProductionRunInTransaction(
       );
     }
 
-    await tx
+    const previousDraws = await tx.select({ storageLocationId: productionRunFeedstockDraws.storageLocationId, wetMassKg: productionRunFeedstockDraws.wetMassKg })
+      .from(productionRunFeedstockDraws).where(and(eq(productionRunFeedstockDraws.productionRunId, productionRunId), eq(productionRunFeedstockDraws.organizationId, ctx.organizationId)));
+    const [saved] = await tx
       .update(productionRuns)
       .set({ ...transactionUpdateData, version: nextVersion(productionRuns.version) })
-      .where(and(eq(productionRuns.id, productionRunId), eq(productionRuns.organizationId, ctx.organizationId)));
+      .where(and(eq(productionRuns.id, productionRunId), eq(productionRuns.organizationId, ctx.organizationId))).returning();
+    options.capture?.(productionRunId, { ...locked, feedstockDraws: previousDraws },
+      { ...saved, feedstockDraws: normalizedFeedstockDraws ?? previousDraws });
 
     await assertProductionRunBiocharStockNotOverdrawn(
       ctx,

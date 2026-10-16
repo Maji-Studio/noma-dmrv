@@ -11,15 +11,11 @@ import type { OperationEffect } from "@/lib/operation-effect";
 import type { Operation } from "./runner";
 
 const AUTO_CODE_COUNT = 1;
-const NOT_CHANGES = new Set(["applicationId", "expectedVersion"]);
-function changedFields(input: object): string[] {
-  return Object.entries(input).filter(([key, value]) => value !== undefined && !NOT_CHANGES.has(key)).map(([key]) => key).sort();
-}
 
 export const describeRecordedApplication = (input: object, output: Pick<Application, "id" | "version">): OperationEffect => ({ outcome: "created", entityType: "application", entityIds: [output.id],
-    versionBefore: null, versionAfter: output.version, changedFields: changedFields(input) });
+    versionBefore: null, versionAfter: output.version, changedFields: [] });
 export const describeUpdatedApplication = (input: { expectedVersion: number }, output: Pick<Application, "id" | "version">): OperationEffect => ({ outcome: "updated", entityType: "application", entityIds: [output.id],
-    versionBefore: input.expectedVersion, versionAfter: output.version, changedFields: changedFields(input) });
+    versionBefore: input.expectedVersion, versionAfter: output.version, changedFields: [] });
 
 export const recordApplication: Operation<typeof recordApplicationInput, ApplicationOperationOutput> = {
   id: "record_application", input: recordApplicationInput, supportsDryRun: true,
@@ -42,7 +38,7 @@ export const recordApplication: Operation<typeof recordApplicationInput, Applica
         : "Soil temperature copied from the facility default.");
     }
     const saved = await withAutoCodes(ctx, tx, "AP", applications, applications.code, AUTO_CODE_COUNT,
-      ([code], savepoint) => createApplicationInTransaction(ctx, savepoint, { ...resolved, code }), CODE_CONFLICT_MESSAGES.application);
+      ([code], savepoint) => createApplicationInTransaction(ctx, savepoint, { ...resolved, code }, activity.capture), CODE_CONFLICT_MESSAGES.application);
     activity.scope(saved.application.id, await resolveWriteActivityScopes(ctx, tx, "application", saved.application.id));
     return { ...saved, warnings: [...warnings, ...saved.warnings] };
   },
@@ -52,7 +48,7 @@ export const updateApplication: Operation<typeof updateApplicationInput, Applica
   id: "update_application", input: updateApplicationInput, supportsDryRun: true,
   describe: (input, output) => describeUpdatedApplication(input, output.application),
   execute: async ({ ctx, tx, activity }, input) => {
-    const { output, activityScopes } = await updateApplicationInTransaction(ctx, tx, input);
+    const { output, activityScopes } = await updateApplicationInTransaction(ctx, tx, input, activity.capture);
     activity.scope(output.application.id, activityScopes);
     return output;
   },

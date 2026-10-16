@@ -1,3 +1,4 @@
+import type { CaptureActivity } from "@/lib/activity-changes";
 import type { SnapshotStock } from "../stock-effects";
 import { assertEventTimesNotFuture } from "../future-event-time";
 import {
@@ -7,6 +8,7 @@ import {
 
 export type ProductionRunMutationOptions = {
   snapshotStock?: SnapshotStock;
+  capture?: CaptureActivity;
   /** Injectable server clock for exact-boundary tests. */
   now?: Date;
 };

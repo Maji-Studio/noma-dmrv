@@ -1,3 +1,4 @@
+import type { CaptureActivity } from "@/lib/activity-changes";
 import { OPERATOR_ORDER_POLICY } from '@/lib/output-stock/planner';
 import { assertRowVersion, nextVersion } from "./row-version";
 import { db, type DbTransaction } from '@/db';
@@ -233,6 +234,7 @@ export interface RecordedOutputStockMovement {
 }
 
 export interface RecordOutputStockMovementOptions extends OutputStockPostingOptions {
+  capture?: CaptureActivity;
   /** Own-form edits require the entry to be the bin's latest, regardless of layer dependencies. */
   requireLatestCorrection?: boolean;
   /** Injectable server clock for exact-boundary tests. */
@@ -282,6 +284,7 @@ export async function recordOutputStockMovementInTransaction(ctx: OrgContext, tx
     write: async (writeTx, post) => {
       if (options.requireLatestCorrection && input.correctsMovementId) await assertLatestOutputMovement(ctx, input.storageLocationId, input.correctsMovementId, writeTx);
       const result = await post();
+      options.capture?.(result.movement.id, null, { ...result.movement, sources: result.movement.inputSnapshot?.sources, allocations: result.preview.allocations });
       return { movementId: result.movement.id, basisFingerprint: result.preview.basisFingerprint, preview: result.preview, savedProducts: result.savedProducts.map(toBiocharProductRecord), savedDeliveries: result.savedDeliveries };
     },
   }, options);

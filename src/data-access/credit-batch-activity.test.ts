@@ -327,3 +327,25 @@ it("returns the same list and summary for uppercase and lowercase batch IDs", as
   expect(summary.total).toBe(1);
   expect(await readCreditBatchActivitySummary(ctx, uppercase)).toEqual(summary);
 });
+
+it("returns captured IDs with current org-scoped link names and null for missing targets", async () => {
+  const missing = crypto.randomUUID();
+  const changes = { credit_batch: { from: missing, to: fixture.batch.id } };
+  const saved = await event({ entityType: "production_run", entityId: fixture.run.id, changedFields: ["credit_batch"], changes });
+  const renamedCode = "ACT-CB-RENAMED";
+  await db.update(creditBatches).set({ code: renamedCode }).where(and(eq(creditBatches.id, fixture.batch.id), eq(creditBatches.organizationId, ctx.organizationId)));
+  const page = await listCreditBatchActivity(ctx, fixture.batch.id);
+  expect(page.items).toHaveLength(1);
+  expect(page.items[0]).toMatchObject({ id: saved.id, changes, changeLabels: { credit_batch: { from: null, to: renamedCode } } });
+  // A live ID belonging to another org must look just like a deleted ID.
+  const [foreign] = await db.insert(facilities).values({ ...TEST_SITE_POSITION, organizationId: foreignOrg, timezone: "UTC", code: "FOREIGN", name: "Foreign private name" }).returning();
+  try {
+    await event({ changes: { facilityId: { from: foreign.id, to: fixture.facility.id } } });
+    const rows = await listCreditBatchActivity(ctx, fixture.batch.id);
+    expect(rows.items).toHaveLength(2);
+    expect(rows.items[0].changeLabels?.facilityId).toEqual({ from: null, to: fixture.facility.name });
+    expect(JSON.stringify(rows)).not.toContain(foreign.name);
+  } finally {
+    await db.delete(facilities).where(and(eq(facilities.id, foreign.id), eq(facilities.organizationId, foreignOrg)));
+  }
+});

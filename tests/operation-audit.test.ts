@@ -12,6 +12,7 @@ import { createIntakeFixture, feedstockCount, removeIntakeFixture, type IntakeFi
 let fixture: IntakeFixture;
 beforeEach(async () => { fixture = await createIntakeFixture("audit"); });
 afterEach(async () => { vi.restoreAllMocks(); await removeIntakeFixture(fixture); });
+const MASS_INCREMENT_KG = 100;
 const audit = () => ({ transport: "rest" as const, requestId: crypto.randomUUID(), credentialId: "audit-credential" });
 const rows = () => db.select().from(activityEvents).where(apiActivityWhere(fixture.ctx.organizationId));
 const records = () => db.select().from(apiIdempotencyRecords).where(eq(apiIdempotencyRecords.organizationId, fixture.ctx.organizationId));
@@ -23,7 +24,7 @@ it("commits one audit and replays its effect without another event", async () =>
   expect(first.effect).toEqual({
     outcome: "created", entityType: "feedstock", entityIds: first.data.feedstocks.map((item) => item.id),
     versionBefore: null, versionAfter: 1,
-    changedFields: ["allocations", "deliveryDate", "facilityId", "feedstockTypeId", "moisturePercent", "notes", "supplierId", "totalWetMassKg", "transportDistanceKm"],
+    changedFields: ["code", "deliveryDate", "facilityId", "feedstockTypeId", "massDryKg", "massWetKg", "moistureContentPercent", "notes", "status", "storageLocationId", "supplierId"],
   });
   const events = await rows();
   expect(events).toHaveLength(1);
@@ -149,4 +150,49 @@ it.each(["empty entities", "empty scopes"] as const)("rolls back an audited writ
 
   await runOperation(operation, fixture.ctx, fixture.input());
   expect(await feedstockCount(fixture)).toBe(1);
+});
+
+it("stores mass and link changes but only the note name, and omits re-sent unchanged fields", async () => {
+  const created = await runOperation(logFeedstockDelivery, fixture.ctx, fixture.input());
+  const before = created.data.feedstocks[0];
+  const { suppliers } = await import("@/db/schema");
+  const [supplier] = await db.insert(suppliers).values({ organizationId: fixture.ctx.organizationId, code: "AUDIT-NEXT", name: "Private supplier name" }).returning();
+  const notes = "Private activity change note";
+  const massWetKg = before.massWetKg + MASS_INCREMENT_KG;
+  const updated = await runOperation(updateFeedstock, fixture.ctx, {
+    feedstockId: before.id, expectedVersion: before.version, massWetKg, supplierId: supplier.id, notes, code: before.code,
+  }, { audit: audit() });
+  const events = await rows();
+  expect(events).toHaveLength(1);
+  expect(events[0].changes).toMatchObject({
+    massWetKg: { from: String(before.massWetKg), to: String(massWetKg) },
+    supplierId: { from: before.supplierId, to: supplier.id },
+  });
+  expect(events[0].changedFields).toEqual(["massDryKg", "massWetKg", "notes", "supplierId"]);
+  expect(updated.effect?.changedFields).toEqual(events[0].changedFields);
+  expect(updated.effect).not.toHaveProperty("changes");
+  expect(events[0].changes).not.toHaveProperty("notes");
+  expect(stringifyWithBigint(events)).not.toContain(notes);
+  expect(stringifyWithBigint(events)).not.toContain(supplier.name);
+});
+
+it("rolls back an updated mass and its captured values together", async () => {
+  const created = await runOperation(logFeedstockDelivery, fixture.ctx, fixture.input());
+  const before = created.data.feedstocks[0];
+  const { feedstocks } = await import("@/db/schema");
+  const write = auditWriter.recordActivity;
+  const failure = new Error("Abort captured update");
+  vi.spyOn(auditWriter, "recordActivity").mockImplementation(async (ctx, tx, event) => {
+    await write(ctx, tx, event);
+    if (event.operationId === updateFeedstock.id) {
+      expect(event.changes).toHaveProperty("massWetKg");
+      throw failure;
+    }
+  });
+  await expect(runOperation(updateFeedstock, fixture.ctx, {
+    feedstockId: before.id, expectedVersion: before.version, massWetKg: before.massWetKg + MASS_INCREMENT_KG,
+  }, { audit: audit() })).rejects.toBe(failure);
+  expect(await rows()).toEqual([]);
+  const [stored] = await db.select().from(feedstocks).where(and(eq(feedstocks.organizationId, fixture.ctx.organizationId), eq(feedstocks.id, before.id)));
+  expect(stored).toMatchObject({ massWetKg: before.massWetKg, version: before.version });
 });

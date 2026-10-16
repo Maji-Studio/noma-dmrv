@@ -1,3 +1,4 @@
+import type { CaptureActivity } from "@/lib/activity-changes";
 import type { ActivityEventInput } from "./activity-events";
 import { withFeedstockTransportReadiness } from "./feedstock-transport-readiness";
 import type { SnapshotStock } from "./stock-effects";
@@ -446,6 +447,7 @@ export async function createFeedstockInTransaction(
   tx: DbTransaction,
   data: CreateFeedstockInput,
   snapshotStock?: SnapshotStock,
+  capture?: CaptureActivity,
 ): Promise<CreateFeedstockResult> {
   requireOrgScope(ctx);
   await withFeedstockErrors(() => assertSameOrg(ctx, feedstockTypes, data.feedstockTypeId, tx), "not_found", ["feedstockTypeId"]);
@@ -535,7 +537,8 @@ export async function createFeedstockInTransaction(
             storageLocationId: allocation.storageLocationId,
             notes: data.notes || null,
           })
-          .returning({ id: feedstocks.id });
+          .returning();
+        capture?.(feedstock.id, null, feedstock);
 
         results.push(feedstock.id);
 
@@ -584,6 +587,7 @@ export async function updateFeedstockInTransaction(
   feedstockId: string,
   data: UpdateFeedstockInput,
   snapshotStock?: SnapshotStock,
+  capture?: CaptureActivity,
 ): Promise<FeedstockWithRelations> {
   requireOrgScope(ctx);
   const {
@@ -682,7 +686,7 @@ export async function updateFeedstockInTransaction(
 
   await snapshotStock?.(tx, stockDerivationChanged || storageReferenceNeedsValidation ? [locked.storageLocationId, effectiveStorageLocationId] : []);
 
-  await tx
+  const [saved] = await tx
     .update(feedstocks)
     .set({
       ...effectiveChanges,
@@ -690,7 +694,8 @@ export async function updateFeedstockInTransaction(
       version: nextVersion(feedstocks.version),
       updatedAt: new Date(),
     })
-    .where(and(eq(feedstocks.id, feedstockId), eq(feedstocks.organizationId, ctx.organizationId)));
+    .where(and(eq(feedstocks.id, feedstockId), eq(feedstocks.organizationId, ctx.organizationId))).returning();
+  capture?.(feedstockId, locked, saved);
 
   // Re-derive the affected lanes now that the new row is visible, while the
   // bin locks above are still held. Validating the bin reference only proves

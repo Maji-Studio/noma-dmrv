@@ -277,7 +277,11 @@ async function runOperationCore<Input extends z.ZodType, Output, Result>(
         const activity = createOperationActivity();
         const output = await operation.execute({ ctx, tx, source, activity, deadlineAt, snapshotStock, afterCommit: (hook) => hooks.push(hook) }, decoded);
         const stockEffects = before ? diffStockBalances(before, await readStockBalances(ctx, tx, before.map((bin) => bin.storageLocationId))) : undefined;
-        const effect = activity.skipped ? undefined : operation.describe?.(decoded, output) ?? undefined;
+        let effect = activity.skipped ? undefined : operation.describe?.(decoded, output) ?? undefined;
+        if (effect) {
+          const entityType = toActivityEntityType(effect.entityType);
+          effect = { ...effect, changedFields: [...new Set(effect.entityIds.flatMap(id => activity.diff(entityType, id).changedFields))].sort() };
+        }
         const result = represent(output);
         if (!dryRun && effect) {
           const entityType = toActivityEntityType(effect.entityType);
@@ -286,7 +290,7 @@ async function runOperationCore<Input extends z.ZodType, Output, Result>(
             for (const links of activity.scopedLinks(entityType, entityId)) {
               await recordActivity(ctx, tx, {
                 action: effect.outcome, entityType, entityId,
-                changedFields: effect.changedFields,
+                ...activity.diff(entityType, entityId),
                 operationId: operation.id,
                 versionBefore: effect.versionBefore,
                 versionAfter: effect.versionAfter,

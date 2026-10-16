@@ -39,7 +39,7 @@ describe("record_output_stock_movement", () => {
     expect(first).toMatchObject({ facilityId: FACILITY_ID, occurredAt: "2026-09-14T12:00:00.000Z", kind: "loss", wetMassKg: 10 });
     expect(first.idempotencyKey).toMatch(new RegExp(`^${GENERATED_MOVEMENT_KEY_PREFIX}[0-9a-f-]{36}$`));
     expect(second.idempotencyKey).not.toBe(first.idempotencyKey);
-    expect(mocks.record.mock.calls[0][3]).toEqual({ snapshotStock, onReplay: scope.activity.skip });
+    expect(mocks.record.mock.calls[0][3]).toEqual({ snapshotStock, capture: activity.capture, onReplay: scope.activity.skip });
   });
 
   it("keeps the form's request key, facility, preview versions and fingerprint", async () => {
@@ -50,7 +50,7 @@ describe("record_output_stock_movement", () => {
 
   it("requires the latest correction only when the in-process caller asks for it", async () => {
     await execute({ ...loss, correctsMovementId: LAYER_A, requireLatestCorrection: true });
-    expect(mocks.record.mock.calls[0][3]).toEqual({ snapshotStock, onReplay: scope.activity.skip, requireLatestCorrection: true });
+    expect(mocks.record.mock.calls[0][3]).toEqual({ snapshotStock, capture: activity.capture, onReplay: scope.activity.skip, requireLatestCorrection: true });
     expect(mocks.record.mock.calls[0][2]).not.toHaveProperty("requireLatestCorrection");
   });
 
@@ -87,7 +87,7 @@ describe("record_output_stock_movement", () => {
     const input = recordOutputStockMovementInput.parse({ ...loss, basisFingerprint: "basis", idempotencyKey: "form-key" });
     expect(recordOutputStockMovement.describe!(input, { movementId: "movement", basisFingerprint: "basis", preview: {} as never, savedProducts: [], savedDeliveries: [] })).toEqual({
       outcome: "created", entityType: "binMovement", entityIds: ["movement"], versionBefore: null, versionAfter: null,
-      changedFields: ["kind", "moisturePercent", "occurredAt", "reason", "storageLocationId", "wetMassKg"],
+      changedFields: [],
     });
   });
 });

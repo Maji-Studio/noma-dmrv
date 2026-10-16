@@ -58,7 +58,7 @@ describe("make_biochar_product", () => {
     expect(mocks.autoCodes).toHaveBeenCalledWith(ctx, tx, "BP", expect.anything(), expect.anything(), 1, expect.any(Function), "A biochar product with this code already exists");
     const [, writer, data, options] = mocks.create.mock.calls[0];
     expect(writer).toBe(savepoint);
-    expect(options).toEqual({ snapshotStock, onReplay: scope.activity.skip });
+    expect(options).toEqual({ snapshotStock, capture: scope.activity.capture, onReplay: scope.activity.skip });
     expect(data).toMatchObject({
       code: "BP-26-001", facilityId: FACILITY_ID, placedAt: "2026-09-14T12:00:00.000Z", status: "testing",
       // 100.125 kg biochar and 20.25 kg ingredient, before the 5 kg of water.
@@ -193,7 +193,7 @@ describe("update_biochar_product", () => {
   it("edits the named product with the version it was read at", async () => {
     mocks.update.mockResolvedValue({ id: PRODUCT_ID, version: 3 });
     await updateBiocharProduct.execute(scope, updateBiocharProductInput.parse({ biocharProductId: PRODUCT_ID, expectedVersion: 2, status: "ready", densityKgM3: null }));
-    expect(mocks.update).toHaveBeenCalledWith(ctx, tx, PRODUCT_ID, { expectedVersion: 2, status: "ready", densityKgM3: null });
+    expect(mocks.update).toHaveBeenCalledWith(ctx, tx, PRODUCT_ID, { expectedVersion: 2, status: "ready", densityKgM3: null }, scope.activity.capture);
   });
 
   it("keeps an immutable-fact refusal a validation failure and a lineage refusal typed", async () => {

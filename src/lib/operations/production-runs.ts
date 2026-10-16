@@ -14,11 +14,6 @@ import type { Operation } from "./runner";
 
 const AUTO_CODE_COUNT = 1;
 
-function changedFields(input: object): string[] {
-  return Object.entries(input)
-    .filter(([key, value]) => value !== undefined && key !== "expectedVersion" && key !== "productionRunId")
-    .map(([key]) => key).sort();
-}
 
 export const startProductionRun: Operation<typeof createProductionRunInput, ProductionRunWithRelations> = {
   id: "start_production_run",
@@ -26,7 +21,7 @@ export const startProductionRun: Operation<typeof createProductionRunInput, Prod
   supportsDryRun: true,
   describe: (input, output) => ({
     outcome: "created", entityType: "productionRun", entityIds: [output.id],
-    versionBefore: null, versionAfter: output.version, changedFields: changedFields(input),
+    versionBefore: null, versionAfter: output.version, changedFields: [],
   }),
   execute: async ({ ctx, tx, snapshotStock, activity }, validated) => {
     const timeZone = hasLocalRunInstant(validated.startTime, validated.endTime)
@@ -54,7 +49,7 @@ export const startProductionRun: Operation<typeof createProductionRunInput, Prod
         biocharOutputKg: validated.biocharOutputKg ?? null,
         biocharMoisturePercent: validated.biocharMoisturePercent ?? null,
         biocharStorageLocationId: validated.biocharStorageLocationId || null,
-      }, { snapshotStock }),
+      }, { snapshotStock, capture: activity.capture }),
       CODE_CONFLICT_MESSAGES.productionRun,
     ));
     activity.link({ facilityId: run.facilityId });
@@ -68,7 +63,7 @@ export const updateProductionRun: Operation<typeof updateProductionRunInput, Pro
   supportsDryRun: true,
   describe: (input, output) => ({
     outcome: "updated", entityType: "productionRun", entityIds: [output.id],
-    versionBefore: input.expectedVersion, versionAfter: output.version, changedFields: changedFields(input),
+    versionBefore: input.expectedVersion, versionAfter: output.version, changedFields: [],
   }),
   execute: async ({ ctx, tx, snapshotStock, activity }, validated) => {
     const timeZone = hasLocalRunInstant(validated.startTime, validated.endTime)
@@ -94,7 +89,7 @@ export const updateProductionRun: Operation<typeof updateProductionRunInput, Pro
       biocharOutputKg: validated.biocharOutputKg,
       biocharMoisturePercent: validated.biocharMoisturePercent,
       biocharStorageLocationId: validated.biocharStorageLocationId,
-    }, { snapshotStock }));
+    }, { snapshotStock, capture: activity.capture }));
     activity.link({ facilityId: run.facilityId });
     return run;
   },

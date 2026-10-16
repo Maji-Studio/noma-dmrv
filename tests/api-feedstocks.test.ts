@@ -462,7 +462,7 @@ describe("feedstock REST guards and audit", { timeout: SUITE_TIMEOUT_MS }, () =>
     expect(events).toHaveLength(3);
     const expected = [
       { response: created.response, operationId: "log_feedstock_delivery", action: "created", versionBefore: null, versionAfter: 1,
-        changedFields: ["allocations", "deliveryDate", "facilityId", "feedstockTypeId", "moisturePercent", "notes", "supplierId", "totalWetMassKg", "transportDistanceKm"] },
+        changedFields: ["code", "deliveryDate", "facilityId", "feedstockTypeId", "massDryKg", "massWetKg", "moistureContentPercent", "notes", "status", "storageLocationId", "supplierId"] },
       { response: updated, operationId: "update_feedstock", action: "updated", versionBefore: 1, versionAfter: 2, changedFields: ["notes"] },
       { response: deleted, operationId: "delete_feedstock", action: "deleted", versionBefore: 2, versionAfter: null, changedFields: [] },
     ];
@@ -475,6 +475,9 @@ describe("feedstock REST guards and audit", { timeout: SUITE_TIMEOUT_MS }, () =>
         credentialId: credentialIdA, entityType: "feedstock", entityId: created.row.id,
       });
     }
+    expect(events.find(event => event.action === "created")?.changes).toMatchObject({
+      massWetKg: { from: null, to: String(created.row.massWetKg) }, supplierId: { from: null, to: a.supplierId },
+    });
     expect(stringifyWithBigint(events)).not.toContain(privateNotes);
   });
 

@@ -11,12 +11,6 @@ import { createFeedstockSchema, updateFeedstockSchema, deleteFeedstockSchema } f
 import type { Operation } from "./runner";
 import { withFeedstockErrors } from "@/lib/feedstock-domain-errors";
 
-/** Names of the fields the request supplied; the target id and precondition are not changes. */
-function changedFields(input: object): string[] {
-  return Object.entries(input)
-    .filter(([key, value]) => value !== undefined && key !== "expectedVersion" && key !== "feedstockId")
-    .map(([key]) => key).sort();
-}
 
 export const logFeedstockDelivery: Operation<
   typeof createFeedstockSchema,
@@ -26,7 +20,7 @@ export const logFeedstockDelivery: Operation<
   describe: (input, output) => ({
     outcome: "created", entityType: "feedstock", entityIds: output.feedstocks.map((item) => item.id),
     versionBefore: null, versionAfter: output.feedstocks[0]?.version ?? null,
-    changedFields: changedFields(input),
+    changedFields: [],
   }),
   input: createFeedstockSchema,
   supportsDryRun: true,
@@ -37,7 +31,7 @@ export const logFeedstockDelivery: Operation<
         data.transportDistanceKm,
         data.transportDistanceSource,
       ),
-    }, snapshotStock));
+    }, snapshotStock, activity.capture));
     for (const row of result.feedstocks) activity.link({ facilityId: row.facilityId }, row.id);
     return result;
   },
@@ -48,7 +42,7 @@ export const updateFeedstock: Operation<typeof updateFeedstockSchema, FeedstockW
   describe: (input, output) => ({
     outcome: "updated", entityType: "feedstock", entityIds: [output.id],
     versionBefore: input.expectedVersion, versionAfter: output.version,
-    changedFields: changedFields(input),
+    changedFields: [],
   }),
   input: updateFeedstockSchema,
   supportsDryRun: true,
@@ -57,7 +51,7 @@ export const updateFeedstock: Operation<typeof updateFeedstockSchema, FeedstockW
       ...updateData,
       transportDistanceKm,
       transportDistanceSource: resolveDistanceSource(transportDistanceKm, transportDistanceSource),
-    }, snapshotStock));
+    }, snapshotStock, activity.capture));
     afterCommit(async () => { await processPendingStorageObjectDeletions(ctx); });
     activity.link({ facilityId: result.facilityId });
     return result;

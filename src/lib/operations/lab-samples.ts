@@ -27,12 +27,7 @@ const AUTO_CODE_COUNT = 1;
 const SAMPLE_CODE_PREFIX = "SAM";
 const ENTITY_TYPE = "labSample";
 
-/** Preconditions and the target describe how a write was sent, not what it changed. */
-const NOT_CHANGES: ReadonlySet<string> = new Set(["labSampleId", "expectedVersion"]);
 
-function changedFields(input: object): string[] {
-  return Object.entries(input).filter(([key, value]) => value !== undefined && !NOT_CHANGES.has(key)).map(([key]) => key).sort();
-}
 
 interface SavedSample { id: string; version: number }
 
@@ -40,7 +35,7 @@ interface SavedSample { id: string; version: number }
 export function describeRecordedLabSample(input: RecordLabSampleInput, sample: SavedSample): OperationEffect {
   return {
     outcome: "created", entityType: ENTITY_TYPE, entityIds: [sample.id],
-    versionBefore: null, versionAfter: sample.version, changedFields: changedFields(input),
+    versionBefore: null, versionAfter: sample.version, changedFields: [],
   };
 }
 
@@ -48,7 +43,7 @@ export function describeRecordedLabSample(input: RecordLabSampleInput, sample: S
 export function describeUpdatedLabSample(input: UpdateLabSampleInput, sample: SavedSample): OperationEffect {
   return {
     outcome: "updated", entityType: ENTITY_TYPE, entityIds: [sample.id],
-    versionBefore: input.expectedVersion, versionAfter: sample.version, changedFields: changedFields(input),
+    versionBefore: input.expectedVersion, versionAfter: sample.version, changedFields: [],
   };
 }
 
@@ -61,7 +56,7 @@ export const recordLabSample: Operation<typeof recordLabSampleInput, SampleWrite
   execute: async ({ ctx, tx, activity }, input) => {
     const result = await withSampleErrors(() => withAutoCodes(
       ctx, tx, SAMPLE_CODE_PREFIX, samples, samples.sampleCode, AUTO_CODE_COUNT,
-      ([sampleCode], savepoint) => createSampleInTransaction(ctx, savepoint, { ...input, sampleCode }),
+      ([sampleCode], savepoint) => createSampleInTransaction(ctx, savepoint, { ...input, sampleCode }, { capture: activity.capture }),
       CODE_CONFLICT_MESSAGES.sample,
     ));
     activity.link({ creditBatchId: result.sample.creditBatchId, productionRunId: result.sample.productionRunId });
@@ -77,7 +72,7 @@ export const updateLabSample: Operation<typeof updateLabSampleInput, SampleWrite
   execute: async ({ ctx, tx, activity }, { labSampleId, code, ...changes }) => {
     const result = await withSampleErrors(() => withUniqueCodeGuard(
       ctx, samples, samples.sampleCode, CODE_CONFLICT_MESSAGES.sample,
-      () => updateSampleInTransaction(ctx, tx, labSampleId, { ...changes, sampleCode: code }),
+      () => updateSampleInTransaction(ctx, tx, labSampleId, { ...changes, sampleCode: code }, { capture: activity.capture }),
     ));
     activity.link({ creditBatchId: result.sample.creditBatchId, productionRunId: result.sample.productionRunId });
     return result;

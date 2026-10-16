@@ -3,8 +3,7 @@
  * the record's deep link. Pure so the copy rules are unit-tested; the list and
  * the side sheet render through it so both read alike.
  *
- * Activity is value-free (docs/database.md "Activity events"): changed fields
- * carry names only, so nothing here ever shows a field's value.
+ * Allowlisted values live in activity_events.changes; this display currently renders field names only.
  */
 import type { CreditBatchActivityPage } from "@/data-access/credit-batch-activity";
 import {

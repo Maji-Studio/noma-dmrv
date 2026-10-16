@@ -1,3 +1,4 @@
+import type { CaptureActivity } from "@/lib/activity-changes";
 /**
  * Delivery create lock order: organization route topology, movement request
  * (replay exits without writes), sorted advisory bin locks, lineage artifact
@@ -171,7 +172,7 @@ export async function createDeliveryInTransaction(ctx: OrgContext, tx: DbTransac
   }, { shortage: ['deliveredWetMassKg'], validation: ['storageLocationId'] });
 }
 
-export async function updateDeliveryInTransaction(ctx: OrgContext, tx: DbTransaction, deliveryId: string, raw: Omit<z.input<typeof updateDeliverySchema>, 'deliveryId'>): Promise<UpdatedDelivery> {
+export async function updateDeliveryInTransaction(ctx: OrgContext, tx: DbTransaction, deliveryId: string, raw: Omit<z.input<typeof updateDeliverySchema>, 'deliveryId'>, capture?: CaptureActivity): Promise<UpdatedDelivery> {
   requireOrgScope(ctx);
   return withUniqueCodeGuard(ctx, deliveries, deliveries.code, CODE_CONFLICT_MESSAGES.delivery, async () => {
     const data = updateDeliverySchema.parse({ ...raw, deliveryId });
@@ -221,6 +222,7 @@ export async function updateDeliveryInTransaction(ctx: OrgContext, tx: DbTransac
       distanceSource: resolveDeliveryDistanceSource(data.distanceKmOverride === undefined && data.distanceSource !== undefined ? existing.distanceKmOverride : data.distanceKmOverride, data.distanceSource), distanceNote: data.distanceNote === '' ? null : data.distanceNote, updatedAt: new Date() }).where(and(eq(deliveries.organizationId, ctx.organizationId), eq(deliveries.id, deliveryId))).returning();
     const savedRows = await getOutputStockAllocationProjection(ctx, { deliveryId }, tx);
     await syncBiocharProductTransportLegs(ctx, tx, [...new Set(savedRows.flatMap(r => r.allocation.biocharProductId ? [r.allocation.biocharProductId] : []))]);
+    capture?.(deliveryId, { ...existing, allocations: rows.map(row => row.allocation) }, { ...saved, allocations: savedRows.map(row => row.allocation) });
     return { ...saved, savedProducts };
   });
 }

@@ -3,7 +3,7 @@
  * CRUD operations for facilities with auth guards, pagination, and filtering
  */
 
-import { recordActivity } from "./activity-events";
+import { recordActivityChange } from "./activity-events";
 import { toActivityEntityType } from "@/lib/activity-entity-type";
 import { FACILITY_CONFLICT_ENTITY } from "./facility-mutations";
 import { and, asc, desc, eq, ilike, inArray, isNotNull, isNull, ne, or, sql, SQL, count, countDistinct } from "drizzle-orm";
@@ -570,7 +570,7 @@ export async function archiveFacility(
       .orderBy(asc(biocharProducts.id)).for("no key update");
     // Sample writers lock credit batches in id order; the bulk update below
     // would take them in scan order and could deadlock against a sample move.
-    await tx.select({ id: creditBatches.id }).from(creditBatches)
+    const previousBatches = await tx.select().from(creditBatches)
       .where(and(eq(creditBatches.facilityId, facilityId), eq(creditBatches.organizationId, ctx.organizationId), isNull(creditBatches.archivedAt)))
       .orderBy(asc(creditBatches.id)).for("no key update");
 
@@ -584,11 +584,11 @@ export async function archiveFacility(
     await tx.update(biocharProducts).set({ archivedAt, version: nextVersion(biocharProducts.version) }).where(and(eq(biocharProducts.facilityId, facilityId), eq(biocharProducts.organizationId, ctx.organizationId), isNull(biocharProducts.archivedAt)));
     await tx.update(orders).set({ version: nextVersion(orders.version), archivedAt }).where(and(eq(orders.facilityId, facilityId), eq(orders.organizationId, ctx.organizationId), isNull(orders.archivedAt)));
     await tx.update(deliveries).set({ version: nextVersion(deliveries.version), archivedAt }).where(and(eq(deliveries.facilityId, facilityId), eq(deliveries.organizationId, ctx.organizationId), isNull(deliveries.archivedAt)));
-    const batches = await tx.update(creditBatches).set({ version: nextVersion(creditBatches.version), archivedAt }).where(and(eq(creditBatches.facilityId, facilityId), eq(creditBatches.organizationId, ctx.organizationId), isNull(creditBatches.archivedAt))).returning({ id: creditBatches.id });
-    for (const batch of batches) await recordActivity(ctx, tx, {
+    const batches = await tx.update(creditBatches).set({ version: nextVersion(creditBatches.version), archivedAt }).where(and(eq(creditBatches.facilityId, facilityId), eq(creditBatches.organizationId, ctx.organizationId), isNull(creditBatches.archivedAt))).returning();
+    for (const batch of batches) await recordActivityChange(ctx, tx, {
       entityType: toActivityEntityType("credit_batch"), entityId: batch.id, creditBatchId: batch.id,
-      action: "updated", source: "form", changedFields: ["archivedAt"],
-    });
+      action: "updated", source: "form",
+    }, previousBatches.find(row => row.id === batch.id)!, batch);
     await tx.update(stockpileEvents).set({ archivedAt }).where(and(eq(stockpileEvents.facilityId, facilityId), eq(stockpileEvents.organizationId, ctx.organizationId), isNull(stockpileEvents.archivedAt)));
     await tx.update(powerProcurementEvidence).set({ archivedAt }).where(and(eq(powerProcurementEvidence.facilityId, facilityId), eq(powerProcurementEvidence.organizationId, ctx.organizationId), isNull(powerProcurementEvidence.archivedAt)));
 
@@ -660,6 +660,10 @@ export async function restoreFacility(
       .where(and(eq(biocharProducts.facilityId, facilityId), eq(biocharProducts.organizationId, ctx.organizationId), eq(biocharProducts.archivedAt, cascadeArchiveStamp)))
       .orderBy(asc(biocharProducts.id)).for("no key update");
 
+    const previousBatches = await tx.select().from(creditBatches)
+      .where(and(eq(creditBatches.facilityId, facilityId), eq(creditBatches.organizationId, ctx.organizationId), eq(creditBatches.archivedAt, cascadeArchiveStamp)))
+      .orderBy(asc(creditBatches.id)).for("no key update");
+
     // Restore only children stamped by this facility archive. Rows archived
     // individually keep their earlier stamp and remain archived.
     await tx.update(reactors).set({ version: nextVersion(reactors.version), archivedAt }).where(and(eq(reactors.facilityId, facilityId), eq(reactors.organizationId, ctx.organizationId), eq(reactors.archivedAt, cascadeArchiveStamp)));
@@ -669,11 +673,11 @@ export async function restoreFacility(
     await tx.update(biocharProducts).set({ archivedAt, version: nextVersion(biocharProducts.version) }).where(and(eq(biocharProducts.facilityId, facilityId), eq(biocharProducts.organizationId, ctx.organizationId), eq(biocharProducts.archivedAt, cascadeArchiveStamp)));
     await tx.update(orders).set({ version: nextVersion(orders.version), archivedAt }).where(and(eq(orders.facilityId, facilityId), eq(orders.organizationId, ctx.organizationId), eq(orders.archivedAt, cascadeArchiveStamp)));
     await tx.update(deliveries).set({ version: nextVersion(deliveries.version), archivedAt }).where(and(eq(deliveries.facilityId, facilityId), eq(deliveries.organizationId, ctx.organizationId), eq(deliveries.archivedAt, cascadeArchiveStamp)));
-    const batches = await tx.update(creditBatches).set({ version: nextVersion(creditBatches.version), archivedAt }).where(and(eq(creditBatches.facilityId, facilityId), eq(creditBatches.organizationId, ctx.organizationId), eq(creditBatches.archivedAt, cascadeArchiveStamp))).returning({ id: creditBatches.id });
-    for (const batch of batches) await recordActivity(ctx, tx, {
+    const batches = await tx.update(creditBatches).set({ version: nextVersion(creditBatches.version), archivedAt }).where(and(eq(creditBatches.facilityId, facilityId), eq(creditBatches.organizationId, ctx.organizationId), eq(creditBatches.archivedAt, cascadeArchiveStamp))).returning();
+    for (const batch of batches) await recordActivityChange(ctx, tx, {
       entityType: toActivityEntityType("credit_batch"), entityId: batch.id, creditBatchId: batch.id,
-      action: "updated", source: "form", changedFields: ["archivedAt"],
-    });
+      action: "updated", source: "form",
+    }, previousBatches.find(row => row.id === batch.id)!, batch);
     await tx.update(stockpileEvents).set({ archivedAt }).where(and(eq(stockpileEvents.facilityId, facilityId), eq(stockpileEvents.organizationId, ctx.organizationId), eq(stockpileEvents.archivedAt, cascadeArchiveStamp)));
     await tx.update(powerProcurementEvidence).set({ archivedAt }).where(and(eq(powerProcurementEvidence.facilityId, facilityId), eq(powerProcurementEvidence.organizationId, ctx.organizationId), eq(powerProcurementEvidence.archivedAt, cascadeArchiveStamp)));
 

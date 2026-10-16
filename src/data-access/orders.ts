@@ -1,3 +1,4 @@
+import type { CaptureActivity } from "@/lib/activity-changes";
 import type { ActivityEventInput } from "./activity-events";
 import { assertRowVersion, nextVersion, staleRowVersion } from "./row-version";
 /**
@@ -347,7 +348,7 @@ export async function createOrderInTransaction(ctx: OrgContext, tx: DbTransactio
   return order;
 }
 
-export async function updateOrderInTransaction(ctx: OrgContext, tx: DbTransaction, input: UpdateOrderData & { orderId: string }): Promise<Order> {
+export async function updateOrderInTransaction(ctx: OrgContext, tx: DbTransaction, input: UpdateOrderData & { orderId: string }, capture?: CaptureActivity): Promise<Order> {
   requireOrgScope(ctx);
   const { orderId, expectedVersion, ...patch } = input;
   // Undefined is omitted even for in-process callers that materialize every form key.
@@ -390,6 +391,7 @@ export async function updateOrderInTransaction(ctx: OrgContext, tx: DbTransactio
   return withUniqueCodeGuard(ctx, orders, orders.code, CODE_CONFLICT_MESSAGES.order, async () => {
     const [saved] = await tx.update(orders).set({ ...data, version: nextVersion(orders.version), updatedAt: new Date() })
       .where(and(eq(orders.organizationId, ctx.organizationId), eq(orders.id, orderId))).returning();
+    capture?.(saved.id, existing, saved);
     return saved;
   });
 }

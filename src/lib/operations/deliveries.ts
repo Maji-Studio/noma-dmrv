@@ -11,19 +11,15 @@ import type { OperationEffect } from "@/lib/operation-effect";
 import { GENERATED_MOVEMENT_KEY_PREFIX } from "./output-stock";
 import { runOperationInProcess, type Operation } from "./runner";
 
-const NOT_CHANGES = new Set(["basisFingerprint", "idempotencyKey", "deliveryId", "expectedVersion", "correctsMovementId"]);
-function changedFields(input: object): string[] {
-  return Object.entries(input).filter(([key, value]) => value !== undefined && !NOT_CHANGES.has(key)).map(([key]) => key).sort();
-}
 
 export const describeRecordedDelivery = (input: object, output: { delivery: Pick<Delivery, "id" | "version"> }): OperationEffect => ({
   outcome: "created", entityType: "delivery", entityIds: [output.delivery.id],
-  versionBefore: null, versionAfter: output.delivery.version, changedFields: changedFields(input),
+  versionBefore: null, versionAfter: output.delivery.version, changedFields: [],
 });
 
 export const describeUpdatedDelivery = (input: { expectedVersion: number }, output: Pick<Delivery, "id" | "version">): OperationEffect => ({
   outcome: "updated", entityType: "delivery", entityIds: [output.id],
-  versionBefore: input.expectedVersion, versionAfter: output.version, changedFields: changedFields(input),
+  versionBefore: input.expectedVersion, versionAfter: output.version, changedFields: [],
 });
 
 /** Custom codes and stock request keys belong only to the native app path. */
@@ -40,6 +36,9 @@ export const recordDeliveryForUi: Operation<typeof recordDeliveryUiInput, Posted
     const result = await createDeliveryInTransaction(ctx, tx, {
       ...input, idempotencyKey: input.idempotencyKey ?? `${GENERATED_MOVEMENT_KEY_PREFIX}${randomUUID()}`,
     }, { snapshotStock, onReplay: activity.skip });
+    const row: Partial<typeof result.delivery> = { ...result.delivery };
+    delete row.savedProducts;
+    activity.capture(result.delivery.id, null, { ...row, allocations: result.allocations });
     activity.link({ facilityId: result.delivery.facilityId });
     return result;
   },
@@ -62,7 +61,7 @@ export const updateDeliveryOperation: Operation<typeof updateDeliveryInput, Deli
   id: "update_delivery", input: updateDeliveryInput, supportsDryRun: true,
   describe: describeUpdatedDelivery,
   execute: async ({ ctx, tx, afterCommit, activity }, { deliveryId, ...changes }) => {
-    const saved = await updateDeliveryInTransaction(ctx, tx, deliveryId, changes);
+    const saved = await updateDeliveryInTransaction(ctx, tx, deliveryId, changes, activity.capture);
     activity.link({ facilityId: saved.facilityId });
     afterCommit(async () => { await processPendingStorageObjectDeletions(ctx); });
     const delivery: Partial<typeof saved> = { ...saved };
@@ -78,7 +77,7 @@ export const updatePostedDelivery: Operation<typeof updateDeliverySchema, Update
   supportsDryRun: false,
   describe: describeUpdatedDelivery,
   execute: async ({ ctx, tx, afterCommit, activity }, { deliveryId, ...changes }) => {
-    const saved = await updateDeliveryInTransaction(ctx, tx, deliveryId, changes);
+    const saved = await updateDeliveryInTransaction(ctx, tx, deliveryId, changes, activity.capture);
     activity.link({ facilityId: saved.facilityId });
     afterCommit(async () => { await processPendingStorageObjectDeletions(ctx); });
     return saved;
