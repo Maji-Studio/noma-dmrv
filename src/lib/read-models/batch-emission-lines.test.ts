@@ -1,4 +1,6 @@
 vi.mock("@/data-access/emission-entries", () => ({ listEmissionEntries: vi.fn() }));
+vi.mock("@/db", () => ({ db: {} }));
+vi.mock("@/lib/certification/emissions-entry-gate", () => ({ emissionsEntriesEnabled: () => true }));
 vi.mock("@/data-access/emission-automatic-masses", () => ({ getEmissionAutomaticMasses: vi.fn() }));
 vi.mock("@/data-access/utils", () => ({ requireOrgFacility: vi.fn(), requireOrgScope: vi.fn() }));
 import { beforeEach, expect, it, vi } from "vitest";
@@ -27,6 +29,9 @@ import { getEmissionAutomaticMasses } from "@/data-access/emission-automatic-mas
 import { getTemplateObservationById } from "@/data-access/removal-template-observations";
 import { getLatestTemplateObservation } from "@/data-access/removal-template-observations";
 import { loadBatchEmissionLines } from "./batch-emission-lines";
+import fixture from "../../../tests/fixtures/isometric/sandbox-template-2026-10-15.json";
+import { normalizeTemplateDefinition, resolveLineSources, type GhgEntryTemplate } from "@/lib/isometric/template-observations";
+import { withTemplateOrder } from "@/lib/isometric/template-observations/template-order";
 
 beforeEach(() => {
   vi.resetAllMocks();
@@ -37,6 +42,23 @@ beforeEach(() => {
   vi.mocked(getLatestTemplateObservation).mockResolvedValue({} as never);
   vi.mocked(getProductionRunsForCertification).mockResolvedValue([]);
   vi.mocked(getSamplesByCreditBatchIds).mockResolvedValue([]);
+});
+
+it("loads saved template order and group names without registry access", async () => {
+  const definition = normalizeTemplateDefinition(fixture as GhgEntryTemplate);
+  vi.mocked(getLatestTemplateObservation).mockResolvedValue({ externalTemplateId: "template", definition,
+    enrichment: {}, lineSources: withTemplateOrder(fixture as GhgEntryTemplate, resolveLineSources({ definition })),
+  } as never);
+  vi.mocked(listEmissionEntries).mockResolvedValue([]);
+  vi.mocked(loadCreditBatchRollups).mockResolvedValue({ batch: { lineageFacts: { runs: [], runForwards: {} } } } as never);
+  vi.mocked(getTransportLegsForEntities).mockResolvedValue([]);
+  vi.mocked(loadBiocharDeliveryTransportLegs).mockResolvedValue([]);
+  vi.mocked(getEmissionAutomaticMasses).mockResolvedValue({ runs: {}, legs: {} });
+  const lines = await loadBatchEmissionLines(makeTestOrgContext(), "facility", "batch");
+  expect(lines.map(({ componentId, groupName, groupPosition, position }) => ({ componentId, groupName, groupPosition, position })))
+    .toEqual(fixture.groups.flatMap((group, groupPosition) => group.components.map((component, position) => ({
+      componentId: component.id, groupName: group.display_name, groupPosition, position,
+    }))));
 });
 
 it("names the first delivery without load mass before requesting any transport legs", async () => {

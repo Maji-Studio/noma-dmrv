@@ -1,6 +1,7 @@
 import type { BatchEmissionContext } from "./batch-emission-context";
 import { deriveBatchEmissionLines, type BatchEmissionLine } from "@/lib/certification/emission-lines";
 import { normalizeTemplateDefinition } from "@/lib/isometric/template-observations/normalize";
+import { withTemplateOrder } from "@/lib/isometric/template-observations/template-order";
 import { resolveBatchPin } from "@/lib/certification/resolve-batch-pin";
 import type { IsometricGhgEntryTemplate } from "@/lib/isometric";
 import type { LineSources } from "@/lib/isometric/template-observations/line-sources";
@@ -33,7 +34,7 @@ export function resolveRemovalTemplate(
     templateBlockers.push(removalTemplateBlocker("templateLinesNeedReview"));
   }
   const derive = (batchId?: string) => deriveBatchEmissionLines({
-    definition: normalizeTemplateDefinition(facts.template), lineSources: facts.observation!.lineSources,
+    definition: normalizeTemplateDefinition(facts.template), lineSources: withTemplateOrder(facts.template, facts.observation!.lineSources),
     problems: facts.lineSourceProblems, enrichmentComplete: facts.enrichmentProblems.length === 0,
     automaticFigures: batchId ? batchFacts[batchId]?.automaticFigures ?? {} : {},
     entries: batchId ? batchFacts[batchId]?.entries ?? [] : [],

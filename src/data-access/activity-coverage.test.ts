@@ -13,6 +13,7 @@ const ACTIVITY_COVERAGE = {
     updateEmissionEntry: { status: "direct" },
     confirmEmissionEntry: { status: "direct" },
     deleteEmissionEntry: { status: "direct" },
+    restoreEmissionEntry: { status: "direct" },
     tombstoneEmissionZeros: { status: "direct" },
   },
   "emission-entry-lock.ts": {

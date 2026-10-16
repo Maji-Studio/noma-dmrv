@@ -158,8 +158,8 @@ export function emissionEntryCounts(
     return incompatible;
   const change = compareTemplateObservations(previous, current)[componentId];
   const contractsMatch =
-    canonicalJson({ ...before.contract, origin: undefined }) ===
-    canonicalJson({ ...after.contract, origin: undefined });
+    canonicalJson({ ...before.contract, origin: undefined, templateOrder: undefined }) ===
+    canonicalJson({ ...after.contract, origin: undefined, templateOrder: undefined });
   if ((change === "unchanged" || change === "cosmetic") && contractsMatch)
     return { counts: true, reason: null, canConfirm: true };
   return { counts: false, reason: "Confirm this entry for the changed template line.", canConfirm: true };

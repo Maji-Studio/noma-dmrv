@@ -66,7 +66,8 @@ export function sumFigures(figures: EmissionFigure[]): EmissionFigure | null {
 export function deriveBatchEmissionLines(facts: BatchEmissionLineFacts) {
   // Revalidate as well as accepting observation problems: callers cannot hide an invalid contract.
   const problems = [...facts.problems, ...validateLineSources(facts.definition, facts.lineSources)];
-  return facts.definition.groups.flatMap((group) => group.components.map((component) => {
+  const fallbackGroupOffset = Math.max(-1, ...Object.values(facts.lineSources).map((source) => source.templateOrder?.groupPosition ?? -1)) + 1;
+  return facts.definition.groups.flatMap((group, groupIndex) => group.components.map((component, componentIndex) => {
     const stored = ownValue(facts.lineSources, component.id);
     const contract = stored ? effectiveContract(stored) : undefined;
     const decision = emissionLineBindingDecision({ component, groupKey: group.key, contract: stored, problems, enrichmentComplete: facts.enrichmentComplete });
@@ -107,8 +108,11 @@ export function deriveBatchEmissionLines(facts: BatchEmissionLineFacts) {
     }
     const total = unitMismatch || values.some((entry) => entry.total === null) ? null : sumFigures(figures);
     return { componentId: component.id, displayName: component.displayName, groupKey: group.key,
+      groupName: group.displayName,
+      groupPosition: stored?.templateOrder?.groupPosition ?? fallbackGroupOffset + groupIndex,
+      position: stored?.templateOrder?.position ?? componentIndex,
       blueprintKey: component.blueprintKey, description: component.description,
       entryPolicy: contract?.entryPolicy ?? "none", records, contract, state, automaticFigure, entries, total, ...(blocker ? { blocker } : {}) };
-  }));
+  })).sort((a, b) => a.groupPosition - b.groupPosition || a.position - b.position);
 }
 export type BatchEmissionLine = ReturnType<typeof deriveBatchEmissionLines>[number];

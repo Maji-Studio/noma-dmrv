@@ -13,6 +13,7 @@ import {
 } from "@/lib/isometric/template-observations";
 import { assertRowVersion, nextVersion, staleRowVersion } from "./row-version";
 import { requireOrgScope, type Executor } from "./utils";
+import { withTemplateOrder } from "@/lib/isometric/template-observations/template-order";
 
 const OBSERVATION_ORDER_TICK_MS = 1;
 
@@ -91,8 +92,9 @@ export async function observeTemplate(ctx: OrgContext, input: {
     const [existing] = await tx.select().from(observations).where(and(templateScope,
       eq(observations.semanticFingerprint, semantic), eq(observations.fullFingerprint, full),
     )).limit(1);
-    const lineSources = existing && latest?.id === existing.id ? existing.lineSources
-      : resolveLineSources({ definition, previous: latest });
+    const lineSources = withTemplateOrder(input.template,
+      existing && latest?.id === existing.id ? existing.lineSources
+        : resolveLineSources({ definition, previous: latest }));
     const sourcesChanged = existing && canonicalJson(existing.lineSources) !== canonicalJson(lineSources);
     const now = new Date(Math.max(Date.now(), (latest?.lastObservedAt.getTime() ?? 0) + OBSERVATION_ORDER_TICK_MS));
     const [row] = await tx.insert(observations).values({
@@ -152,7 +154,7 @@ export async function reviewLineContracts(ctx: OrgContext, input: ReviewLineCont
       if (assignment.scope !== "operating" && (assignment.automaticSource || assignment.entryPolicy !== "none")) {
         throw new SafeError("Only operating lines can use automatic sources or entries.");
       }
-      lineSources[id] = { ...assignment, origin: "reviewed" };
+      lineSources[id] = { ...assignment, origin: "reviewed", templateOrder: lineSources[id]?.templateOrder };
     }
     const problems = validateLineSources(row.definition, lineSources).filter((problem) => problem.code !== "unassigned");
     if (problems.length) throw new SafeError("Choose valid, distinct sources and entry policies for the Removal template lines.");

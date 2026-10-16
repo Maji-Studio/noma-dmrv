@@ -13,6 +13,25 @@ function facts(): BatchEmissionLineFacts {
 function entry(f: BatchEmissionLineFacts, overrides: Partial<EmissionLineEntryFact> = {}): EmissionLineEntryFact {
   return { componentId: f.definition.groups[0].components[0].id, counts: true, kind: "value", hasEvidence: true, total: { magnitude: "0.2", unit: "kWh" }, ...overrides };
 }
+it("returns the raw template order and group names without changing the normalized definition", () => {
+  const definition = normalizeTemplateDefinition(fixture as GhgEntryTemplate);
+  const before = structuredClone(definition);
+  const sources = resolveLineSources({ definition });
+  const lineSources = Object.fromEntries(fixture.groups.flatMap((group, groupPosition) =>
+    group.components.map((component, position) => [component.id, {
+      ...sources[component.id], templateOrder: { groupPosition, position },
+    }]),
+  ));
+  const lines = deriveBatchEmissionLines({ definition, lineSources,
+    problems: [], enrichmentComplete: true, automaticFigures: {}, entries: [],
+  });
+  expect(lines.map((line) => line.componentId)).toEqual(fixture.groups.flatMap((group) => group.components.map((component) => component.id)));
+  for (const [index, expected] of fixture.groups.flatMap((group, groupPosition) =>
+    group.components.map((component, position) => ({ componentId: component.id,
+      groupName: group.display_name, groupPosition, position })),
+  ).entries()) expect(lines[index]).toMatchObject(expected);
+  expect(definition).toEqual(before);
+});
 describe("batch emission line states", () => {
   it.each([
     ["empty", false, []], ["filled", true, []],
