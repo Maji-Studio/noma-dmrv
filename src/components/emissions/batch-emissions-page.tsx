@@ -144,6 +144,8 @@ function BatchEmissions({ scope, entriesEnabled }: { scope: EmissionBatchScope; 
   const removeEntry = async (line: EmissionLine, entry: EmissionEntry) => {
     try {
       await deleteEntry.mutateAsync({ id: entry.id, expectedVersion: entry.version });
+      // Undo lives in the page bar, outside the drawer's focus trap, so the drawer closes.
+      setDrawer(null);
       setUndo({ id: Date.now(), kind: "delete", line, entry });
     } catch (error) {
       toast.error(toSaveErrorMessage(error, `The manual entry on ${line.displayName} was not deleted. Try again.`));
@@ -223,6 +225,10 @@ function BatchEmissions({ scope, entriesEnabled }: { scope: EmissionBatchScope; 
         <Notice tone="error" action={<Button size="small" variant="default" onClick={() => void linesQuery.refetch()}>Try again</Button>}>
           {linesQuery.error.message || "The emission lines could not be loaded."}
         </Notice>
+      ) : overview.error && !overview.data ? (
+        <Notice tone="error" action={<Button size="small" variant="default" onClick={() => void overview.refetch()}>Try again</Button>}>
+          {overview.error.message || "The credit batch could not be loaded."}
+        </Notice>
       ) : linesQuery.isLoading || !batch ? (
         <Skeleton className={LIST_SKELETON} />
       ) : (
@@ -237,7 +243,8 @@ function BatchEmissions({ scope, entriesEnabled }: { scope: EmissionBatchScope; 
               onDone={() => setRecording(false)}
               onEnterAgain={(line) => {
                 const entry = line.entries.find((candidate) => !candidate.counts);
-                if (entry) openDrawer(line, { kind: "form", mode: { kind: "again", entry } });
+                // A line removed from the template takes no new entry; its ledger offers Delete.
+                if (entry) openDrawer(line, line.entryPolicy === "none" ? { kind: "ledger" } : { kind: "form", mode: { kind: "again", entry } });
               }}
             />
           ) : (

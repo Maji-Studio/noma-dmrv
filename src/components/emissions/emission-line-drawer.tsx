@@ -31,7 +31,6 @@ import {
   addEntryRefusal,
   entriesFigure,
   formatFigure,
-  groupLabel,
   nothingRefusalText,
   hasRecordsFigure,
   lineRecords,
@@ -171,12 +170,13 @@ function LedgerView({ line, batch, scope, focusNote, canWrite, onForm, onNothing
           entry={entry}
           scope={scope}
           canWrite={canWrite}
+          canEnterAgain={takesEntries}
           onEnterAgain={() => onForm({ kind: "again", entry })}
           onDelete={() => onDeleteEntry(line, entry)}
         />
       ))}
       {zero && !values.length && (
-        <NothingEntryItem key={zero.id} line={line} entry={zero} scope={scope} startEditing={focusNote} onUndo={() => onDeleteEntry(line, zero)} />
+        <NothingEntryItem key={zero.id} line={line} entry={zero} scope={scope} canWrite={canWrite} startEditing={focusNote} onUndo={() => onDeleteEntry(line, zero)} />
       )}
       {!values.length && !stopped.length && !zero && <li className="body-caption text-[var(--color-text-tertiary)]">{MISSING_VALUE.none}</li>}
     </ul>
@@ -206,8 +206,9 @@ function LedgerView({ line, batch, scope, focusNote, canWrite, onForm, onNothing
             <span className="body-caption text-[var(--color-text-tertiary)]">No records source. Nothing on another page feeds this line.</span>
           )}
         </LedgerRow>
-        <LedgerRow op="+" label="Manual entries" figure={takesEntries ? (entriesSum ? formatFigure(entriesSum) : values.length ? undefined : MISSING_VALUE.none) : undefined} muted={!values.length}>
-          {takesEntries ? entryList : <span className="body-caption text-[var(--color-text-tertiary)]">Takes no manual entries. Records fill this line.</span>}
+        <LedgerRow op="+" label="Manual entries" figure={takesEntries || stopped.length ? (entriesSum ? formatFigure(entriesSum) : values.length ? undefined : MISSING_VALUE.none) : undefined} muted={!values.length}>
+          {/* Stopped entries stay listed with their Delete on a line that takes no new ones (a removed template line). */}
+          {takesEntries || stopped.length ? entryList : <span className="body-caption text-[var(--color-text-tertiary)]">Takes no manual entries. Records fill this line.</span>}
         </LedgerRow>
         <LedgerRow op="=" label="Total" figure={lineTotalText(line)} total muted={!line.total && line.state !== "confirmedZero"} />
       </div>
@@ -221,7 +222,7 @@ function LedgerView({ line, batch, scope, focusNote, canWrite, onForm, onNothing
       <SlideOverPanelHeader>
         <div className="flex min-w-0 flex-col gap-2">
           <SlideOverPanelTitle>{line.displayName}</SlideOverPanelTitle>
-          <SlideOverPanelDescription>{`${groupLabel(line)}, ${batch.code}`}</SlideOverPanelDescription>
+          <SlideOverPanelDescription>{`${line.groupName}, ${batch.code}`}</SlideOverPanelDescription>
         </div>
       </SlideOverPanelHeader>
       <SlideOverPanelBody>

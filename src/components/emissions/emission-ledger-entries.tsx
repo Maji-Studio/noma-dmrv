@@ -105,12 +105,14 @@ interface StoppedEntryItemProps {
   entry: EmissionEntry;
   scope: EmissionBatchScope;
   canWrite: boolean;
+  /** False when the line takes no new entries (removed from the template): only Delete clears it. */
+  canEnterAgain: boolean;
   onEnterAgain: () => void;
   onDelete: () => void;
 }
 
 /** An entry that stopped counting after a template change: struck through, with Confirm or Enter again. */
-export function StoppedEntryItem({ line, entry, scope, canWrite, onEnterAgain, onDelete }: StoppedEntryItemProps) {
+export function StoppedEntryItem({ line, entry, scope, canWrite, canEnterAgain, onEnterAgain, onDelete }: StoppedEntryItemProps) {
   const toast = useToast();
   const confirm = useConfirmEmissionEntry(scope);
   const [error, setError] = useState<string | null>(null);
@@ -134,13 +136,15 @@ export function StoppedEntryItem({ line, entry, scope, canWrite, onEnterAgain, o
         <p className="body-caption text-[var(--st-wait)]">
           {entry.canConfirm
             ? "Stopped counting after a template change. It counts again once you confirm it."
-            : "Stopped counting after a template change. Enter the values again for the current line."}
+            : canEnterAgain
+              ? "Stopped counting after a template change. Enter the values again for the current line."
+              : "Stopped counting after a template change. This line takes no manual entries now, so delete the entry."}
         </p>
         <div className="flex flex-wrap gap-8">
           {!canWrite ? null : entry.canConfirm ? (
             <Button size="small" variant="primary" busy={confirm.isPending} onClick={() => void confirmEntry()}>Confirm</Button>
           ) : (
-            <Button size="small" variant="primary" onClick={onEnterAgain}>Enter again</Button>
+            canEnterAgain && <Button size="small" variant="primary" onClick={onEnterAgain}>Enter again</Button>
           )}
         </div>
         {error && <ServerError message={error} />}
@@ -154,15 +158,17 @@ interface NothingEntryItemProps {
   line: EmissionLine;
   entry: EmissionEntry;
   scope: EmissionBatchScope;
+  /** False while manual entries are switched off: the note and Undo are read-only. */
+  canWrite: boolean;
   /** Open with the note editor (Add note from the undo bar). */
   startEditing: boolean;
   onUndo: () => void;
 }
 
-export function NothingEntryItem({ line, entry, scope, startEditing, onUndo }: NothingEntryItemProps) {
+export function NothingEntryItem({ line, entry, scope, canWrite, startEditing, onUndo }: NothingEntryItemProps) {
   const toast = useToast();
   const update = useUpdateEmissionEntry(scope);
-  const [editing, setEditing] = useState(startEditing);
+  const [editing, setEditing] = useState(canWrite && startEditing);
   const [note, setNote] = useState(entry.note ?? "");
   const [error, setError] = useState<string | null>(null);
   const noteId = `nothing-note-${entry.id}`;
@@ -199,17 +205,21 @@ export function NothingEntryItem({ line, entry, scope, startEditing, onUndo }: N
       ) : entry.note ? (
         <div className="flex flex-wrap items-baseline gap-x-8">
           <p className="body-small text-[var(--color-text-secondary)]">{entry.note}</p>
-          <button type="button" className={LINK} onClick={() => setEditing(true)}>Edit note</button>
+          {canWrite && <button type="button" className={LINK} onClick={() => setEditing(true)}>Edit note</button>}
         </div>
       ) : (
-        <div>
-          <Button size="small" variant="weak" onClick={() => setEditing(true)}>Add note</Button>
-        </div>
+        canWrite && (
+          <div>
+            <Button size="small" variant="weak" onClick={() => setEditing(true)}>Add note</Button>
+          </div>
+        )
       )}
       <p className="body-caption text-[var(--color-text-tertiary)]">{ZERO_SENT_COPY}</p>
-      <div>
-        <button type="button" className={LINK} onClick={onUndo}>Undo Nothing to record</button>
-      </div>
+      {canWrite && (
+        <div>
+          <button type="button" className={LINK} onClick={onUndo}>Undo Nothing to record</button>
+        </div>
+      )}
     </li>
   );
 }

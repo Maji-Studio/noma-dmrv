@@ -205,29 +205,32 @@ export function RecordMonthGrid({ lines, batch, scope, today, onDone, onEnterAga
         </Button>
       </div>
       <div className="bg-[var(--paper)] [border:var(--panel-border)]">
-        <ul aria-label="Open lines">
-          {openLines.map((line) => (
-            <RecordMonthRow
-              key={line.componentId}
-              line={line}
-              scope={scope}
-              draft={draftOf(line)}
-              errors={attempted && touched(line, draftOf(line)) ? validate(line, draftOf(line)) : {}}
-              serverError={serverErrors[line.componentId] ?? null}
-              today={today}
-              startDate={batch.startDate}
-              onChange={(change) => {
-                patch(line, change);
-                if (serverErrors[line.componentId]) {
-                  setServerErrors((all) => Object.fromEntries(Object.entries(all).filter(([id]) => id !== line.componentId)));
-                }
-              }}
-              onConfirm={(target) => void confirmLine(target)}
-              onEnterAgain={onEnterAgain}
-              confirming={confirming === line.componentId}
-            />
-          ))}
-        </ul>
+        {/* Locked while Save all runs, so a draft typed mid-save is neither saved stale nor dropped. */}
+        <fieldset disabled={saving} className="min-w-0">
+          <ul aria-label="Open lines">
+            {openLines.map((line) => (
+              <RecordMonthRow
+                key={line.componentId}
+                line={line}
+                scope={scope}
+                draft={draftOf(line)}
+                errors={attempted && touched(line, draftOf(line)) ? validate(line, draftOf(line)) : {}}
+                serverError={serverErrors[line.componentId] ?? null}
+                today={today}
+                startDate={batch.startDate}
+                onChange={(change) => {
+                  patch(line, change);
+                  if (serverErrors[line.componentId]) {
+                    setServerErrors((all) => Object.fromEntries(Object.entries(all).filter(([id]) => id !== line.componentId)));
+                  }
+                }}
+                onConfirm={(target) => void confirmLine(target)}
+                onEnterAgain={onEnterAgain}
+                confirming={confirming === line.componentId}
+              />
+            ))}
+          </ul>
+        </fieldset>
         {showDone && (
           <>
             <p className="bg-[var(--sea)] px-16 py-8 body-caption font-medium text-[var(--color-text-tertiary)] [border-top:var(--row-divider)]">Done lines</p>

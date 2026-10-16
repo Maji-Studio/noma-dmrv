@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 
 const query = vi.hoisted(() => ({ data: undefined as unknown, isLoading: false, error: null as Error | null }));
-vi.mock("@/hooks/use-batch-emission-lines", () => ({
+vi.mock("@/hooks/use-emission-entries", () => ({
   useBatchEmissionLines: () => ({ ...query, refetch: vi.fn(), isRefetching: false }),
 }));
 vi.mock("next/link", () => ({ default: ({ href, children, ...rest }: { href: string; children: React.ReactNode }) => <a href={href} {...rest}>{children}</a> }));

@@ -1,8 +1,8 @@
 /**
  * Emissions entries on one credit batch (epic #1058): the batch's emission
  * lines and the manual entry writes. Every write refreshes the lines, the
- * facility Emissions overview, batch health and the Energy page, because all
- * four read the same entries.
+ * facility Emissions overview, certification readiness and the Energy page,
+ * because all of them read the same entries.
  */
 "use client";
 
@@ -19,9 +19,8 @@ import {
 import { throwActionError } from "@/lib/stale-version";
 import type { ActionResult } from "@/types/actions";
 import type { EmissionLineRecords, EmissionRecordSource } from "@/lib/certification/emission-lines";
-import { activityKeys } from "./activity-query-keys";
 import { creditBatchKeys } from "./credit-batch-query-keys";
-import { certificationKeys } from "./use-certification";
+import { invalidateCertificationReadiness } from "./use-certification";
 import { energyKeys } from "./use-energy";
 
 type LinesResult = Awaited<ReturnType<typeof getBatchEmissionLinesFn>>;
@@ -29,8 +28,7 @@ type ServerLine = Extract<LinesResult, { success: true }>["data"][number];
 
 export type RecordsSource = EmissionRecordSource;
 export type LineRecords = EmissionLineRecords;
-/** A line as the page reads it. `groupName` (the template group's display name) is optional until the server sends it. */
-export type EmissionLine = ServerLine & { groupName?: string };
+export type EmissionLine = ServerLine;
 export type EmissionEntry = EmissionLine["entries"][number];
 export type EmissionInput = EmissionLine["inputShape"][number];
 
@@ -62,9 +60,9 @@ export function invalidateEmissionEntryReads(queryClient: QueryClient, scope: Em
   return Promise.all([
     queryClient.invalidateQueries({ queryKey: creditBatchKeys.emissionLines(scope.facilityId, scope.creditBatchId) }),
     queryClient.invalidateQueries({ queryKey: creditBatchKeys.emissionsOverview(scope.facilityId) }),
-    queryClient.invalidateQueries({ queryKey: certificationKeys.batchHealth(scope.creditBatchId) }),
     queryClient.invalidateQueries({ queryKey: energyKeys.all }),
-    queryClient.invalidateQueries({ queryKey: activityKeys.all }),
+    // Batch health, batch-health summaries, the certification overview, removal preflight and activity.
+    invalidateCertificationReadiness(queryClient),
   ]);
 }
 

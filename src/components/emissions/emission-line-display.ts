@@ -8,7 +8,7 @@
  * entry). Records made on other pages read "From records" with their origin.
  */
 import type { EmissionEntry, EmissionLine, LineRecords, RecordsSource } from "@/hooks/use-emission-entries";
-import { EMISSION_LINE_STATE_LABELS, type EmissionFigure, type EmissionLineState } from "@/lib/certification/emission-lines";
+import { EMISSION_LINE_STATE_LABELS, sumFigures, type EmissionFigure, type EmissionLineState } from "@/lib/certification/emission-lines";
 import { canonicalDecimal, canonicalUnit } from "@/lib/isometric/template-observations/units";
 import type { QuantityKind } from "@/lib/isometric/template-observations/types";
 import { MISSING_VALUE, pluralize } from "@/lib/copy-utils";
@@ -32,6 +32,12 @@ export const DATE_INVALID_MESSAGE = "Enter a valid entry date.";
 export const NEEDS_SETUP_COPY = "noma cannot fill this template line yet. An admin sets it up in the template review.";
 export const SINGLE_LINE_CAPTION = "One manual entry per credit batch. It counts for the whole credit batch.";
 export const ZERO_SENT_COPY = "Isometric receives 0 for this line. The note stays in noma.";
+/**
+ * The server's note limit (MAX_ENTRY_TEXT_LENGTH in src/schemas/emission-entries.ts).
+ * That module imports node-only rules, so the client mirrors the number.
+ */
+export const MAX_NOTE_LENGTH = 4000;
+export const NOTE_TOO_LONG_MESSAGE = `Use ${NUMBER_FORMAT.format(MAX_NOTE_LENGTH)} characters or fewer.`;
 
 const OPEN_STATES: readonly EmissionLineState[] = ["needsSetup", "missingEvidence", "needsReview", "empty"];
 const DONE_STATES: readonly EmissionLineState[] = ["filled", "confirmedZero"];
@@ -218,8 +224,12 @@ export function entriesFigure(line: EmissionLine): EmissionFigure | null {
   if (!totals.length || totals.some((total) => !total)) return null;
   const unit = totals[0]!.unit;
   if (totals.some((total) => total!.unit !== unit)) return null;
-  const sum = totals.reduce((acc, total) => acc + Number(total!.magnitude), 0);
-  return { magnitude: String(sum), unit };
+  try {
+    return sumFigures(totals as EmissionFigure[]);
+  } catch {
+    // An unreadable magnitude: show no sum rather than a wrong one.
+    return null;
+  }
 }
 
 /** The row Total: the server total, the single entry's pair, a zero, or a missing token. */
@@ -297,20 +307,12 @@ export function sortLines(lines: EmissionLine[], sort: LineSort): EmissionLine[]
   );
 }
 
-/** "biomass-feedstock-transport" reads "Biomass feedstock transport" until the server sends the name. */
-export function groupLabel(line: EmissionLine): string {
-  if (line.groupName) return line.groupName;
-  const words = line.groupKey.split("-").map((word) => (word === "co2" ? "CO₂" : word === "mrv" ? "MRV" : word));
-  const text = words.join(" ");
-  return text.charAt(0).toUpperCase() + text.slice(1);
-}
-
 export function groupLines(lines: EmissionLine[]): { key: string; label: string; lines: EmissionLine[] }[] {
   const groups: { key: string; label: string; lines: EmissionLine[] }[] = [];
   for (const line of lines) {
     const last = groups.at(-1);
     if (last?.key === line.groupKey) last.lines.push(line);
-    else groups.push({ key: line.groupKey, label: groupLabel(line), lines: [line] });
+    else groups.push({ key: line.groupKey, label: line.groupName, lines: [line] });
   }
   return groups;
 }

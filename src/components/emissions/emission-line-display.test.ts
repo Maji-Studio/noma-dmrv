@@ -5,6 +5,7 @@ import {
   displayUnit,
   draftFromEntry,
   draftMassDistanceFigure,
+  entriesFigure,
   entryFields,
   entryValues,
   groupLines,
@@ -159,6 +160,18 @@ describe("dates", () => {
   });
 });
 
+describe("entries sum", () => {
+  it("adds decimal strings exactly", () => {
+    const line = makeLine({
+      entries: [
+        makeEntry({ id: "a", total: { magnitude: "0.1", unit: "kWh" } }),
+        makeEntry({ id: "b", total: { magnitude: "0.2", unit: "kWh" } }),
+      ],
+    });
+    expect(entriesFigure(line)).toEqual({ magnitude: "0.3", unit: "kWh" });
+  });
+});
+
 describe("filters and groups", () => {
   it("matches the state chips", () => {
     expect(lineMatches(makeLine({ state: "missingEvidence" }), "open")).toBe(true);
@@ -166,11 +179,11 @@ describe("filters and groups", () => {
     expect(lineMatches(makeLine({ state: "empty" }), "notRecorded")).toBe(true);
     expect(lineMatches(makeLine({ state: "filled" }), "open")).toBe(false);
   });
-  it("groups template lines in order with readable names", () => {
+  it("groups template lines in order under the server's group names", () => {
     const groups = groupLines([
-      makeLine({ componentId: "a", groupKey: "co2-stored" }),
-      makeLine({ componentId: "b", groupKey: "co2-stored" }),
-      makeLine({ componentId: "c", groupKey: "sampling-required-for-mrv" }),
+      makeLine({ componentId: "a", groupKey: "co2-stored", groupName: "CO₂ stored" }),
+      makeLine({ componentId: "b", groupKey: "co2-stored", groupName: "CO₂ stored" }),
+      makeLine({ componentId: "c", groupKey: "sampling-required-for-mrv", groupName: "Sampling required for MRV" }),
     ]);
     expect(groups.map((group) => `${group.label} ${group.lines.length}`)).toEqual(["CO₂ stored 2", "Sampling required for MRV 1"]);
   });

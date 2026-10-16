@@ -20,7 +20,6 @@ import {
   addEntryRefusal,
   draftMassDistanceFigure,
   entryFields,
-  groupLabel,
   nothingApplies,
   nothingRefusal,
   stoppedEntries,
@@ -117,7 +116,9 @@ export function RecordMonthRow({ line, scope, draft, errors, serverError, today,
           {stopped.canConfirm ? (
             <Button size="small" variant="primary" busy={confirming} onClick={() => onConfirm(line)}>Confirm</Button>
           ) : (
-            <Button size="small" variant="primary" onClick={() => onEnterAgain(line)}>Enter again</Button>
+            <Button size="small" variant="primary" onClick={() => onEnterAgain(line)}>
+              {line.entryPolicy === "none" ? "Open entry" : "Enter again"}
+            </Button>
           )}
         </div>
       </div>
@@ -217,7 +218,7 @@ export function RecordMonthRow({ line, scope, draft, errors, serverError, today,
     <li className="grid gap-12 px-16 py-12 [border-top:var(--row-divider)] first:[border-top:none] lg:grid-cols-[240px_minmax(0,1fr)] lg:gap-24">
       <div className="flex flex-col items-start gap-4">
         <span className="body-small font-medium">{line.displayName}</span>
-        <span className="body-caption text-[var(--color-text-tertiary)]">{groupLabel(line)}</span>
+        <span className="body-caption text-[var(--color-text-tertiary)]">{line.groupName}</span>
         {line.state !== "empty" && <EmissionLineBadge state={line.state} />}
       </div>
       <div className="flex min-w-0 flex-col gap-8">

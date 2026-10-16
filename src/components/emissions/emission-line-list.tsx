@@ -19,7 +19,6 @@ import { cn } from "@/lib/utils";
 import { EmissionLineBadge } from "./emission-line-badge";
 import {
   addEntryRefusal,
-  groupLabel,
   groupLines,
   nothingRefusalText,
   isOpen,
@@ -131,7 +130,7 @@ function LineRow({ line, showGroup, scope, actions, canWrite }: LineRowProps) {
         >
           {line.displayName}
         </button>
-        {showGroup && <span className="block body-caption text-[var(--color-text-tertiary)]">{groupLabel(line)}</span>}
+        {showGroup && <span className="block body-caption text-[var(--color-text-tertiary)]">{line.groupName}</span>}
       </div>
       <div className="col-start-1 row-start-3 self-center md:col-start-2 md:row-start-1">
         <EmissionLineBadge state={line.state} />

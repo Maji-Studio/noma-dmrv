@@ -9,7 +9,7 @@
 "use client";
 
 import { useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { FormField } from "@/components/forms/form-field";
 import { FormFileUpload } from "@/components/forms/form-file-upload";
 import { FormTextarea } from "@/components/forms/form-textarea";
@@ -34,6 +34,8 @@ import { toSaveErrorMessage } from "@/lib/stale-version";
 import { EntryFileNames, ENTRY_ENTITY_TYPE } from "./emission-entry-files";
 import {
   ENTRY_FILE_ACCEPT,
+  MAX_NOTE_LENGTH,
+  NOTE_TOO_LONG_MESSAGE,
   SINGLE_LINE_CAPTION,
   defaultEntryDate,
   draftFromEntry,
@@ -93,11 +95,17 @@ export function ManualEntryForm({ line, batch, scope, today, mode, onCancel, onS
   const replacesNothing = mode.kind !== "edit" && !!nothingEntry(line);
   const computed = draftMassDistanceFigure(line, draft);
   const idPrefix = `entry-${line.componentId}`;
+  // Pending flags update after a render; this blocks a second Enter or click in the same tick.
+  const inFlight = useRef(false);
 
   const save = async () => {
+    if (inFlight.current) return;
     const next = validateFields(line, draft);
     const dateError = single ? null : validateEntryDate(date, today, batch.startDate);
     if (dateError) next.date = dateError;
+    const trimmedNote = note.trim() || null;
+    // Checked here so Enter again never deletes the stopped entry before a create the server refuses.
+    if (trimmedNote && trimmedNote.length > MAX_NOTE_LENGTH) next.note = NOTE_TOO_LONG_MESSAGE;
     setErrors(next);
     setServerError(null);
     if (Object.keys(next).length) {
@@ -106,7 +114,7 @@ export function ManualEntryForm({ line, batch, scope, today, mode, onCancel, onS
     }
     const values = entryValues(line, draft);
     const occurredOn = single ? undefined : date;
-    const trimmedNote = note.trim() || null;
+    inFlight.current = true;
     try {
       let entryId: string;
       if (mode.kind === "edit") {
@@ -131,6 +139,8 @@ export function ManualEntryForm({ line, batch, scope, today, mode, onCancel, onS
       onSaved({});
     } catch (error) {
       setServerError(toSaveErrorMessage(error, SAVE_FALLBACK));
+    } finally {
+      inFlight.current = false;
     }
   };
 
@@ -148,7 +158,7 @@ export function ManualEntryForm({ line, batch, scope, today, mode, onCancel, onS
           className="flex flex-col gap-20"
           onSubmit={(event) => {
             event.preventDefault();
-            void save();
+            if (!saving) void save();
           }}
         >
           {replacesNothing && <Notice tone="warning">{`This replaces Nothing to record on ${line.displayName}.`}</Notice>}
@@ -205,12 +215,12 @@ export function ManualEntryForm({ line, batch, scope, today, mode, onCancel, onS
               />
             </div>
           </FormField>
-          <FormField id={`${idPrefix}-note`} label="Note">
+          <FormField id={`${idPrefix}-note`} label="Note" error={errors.note}>
             <FormTextarea id={`${idPrefix}-note`} value={note} onChange={(event) => setNote(event.target.value)} />
           </FormField>
           {serverError && <ServerError message={serverError} />}
           {/* Lets Enter in a field submit; the visible buttons sit in the footer. */}
-          <button type="submit" hidden aria-hidden="true" tabIndex={-1} />
+          <button type="submit" hidden aria-hidden="true" tabIndex={-1} disabled={saving} />
         </form>
       </SlideOverPanelBody>
       <SlideOverPanelFooter>

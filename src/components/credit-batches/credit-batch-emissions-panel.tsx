@@ -12,7 +12,7 @@ import { SectionLabel } from "@/components/forms/section-label";
 import { Notice } from "@/components/ui/notice";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { StatusBadge, type StatusValue } from "@/components/ui/status-badge";
-import { useBatchEmissionLines } from "@/hooks/use-batch-emission-lines";
+import { useBatchEmissionLines } from "@/hooks/use-emission-entries";
 import { EMISSION_LINE_STATE_LABELS, type EmissionLineState } from "@/lib/certification/emission-lines";
 import { cn } from "@/lib/utils";
 import { SheetLinkRows } from "./sheet-link-row";
@@ -58,7 +58,9 @@ export function CreditBatchEmissionsPanel({
   /** The server's EMISSIONS_ENTRIES_ENABLED flag, passed down by the page. */
   enabled: boolean;
 }) {
-  const { data: lines, isLoading, error, refetch, isRefetching } = useBatchEmissionLines(facilityId, creditBatchId, enabled);
+  const { data: lines, isLoading, error, refetch, isRefetching } = useBatchEmissionLines(
+    enabled && facilityId && creditBatchId ? { facilityId, creditBatchId } : null,
+  );
   if (!enabled) return null;
 
   if (error) {
