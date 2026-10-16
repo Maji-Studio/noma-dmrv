@@ -1,3 +1,4 @@
+import { archiveStorageLocation } from '@/data-access/storage-locations';
 import { loadRunForwardFactsWithExecutor } from '@/data-access/credit-batch-run-forward-facts';
 import { feedstockFixtureValues } from './helpers/feedstock-fixture';
 import { archiveFacility, getFacilities } from '@/data-access/facilities';
@@ -13,7 +14,7 @@ import { buildStockLevelSeries } from '@/components/storage-locations/stock-leve
 import { afterEach, beforeAll, expect, it } from 'vitest';
 import { and, eq } from 'drizzle-orm';
 import { db } from '@/db';
-import { activityEvents, binMovements, biocharProducts, deliveries, orders, storageLocations, feedstocks, outputStockAllocations, outputStockMoistureReadings, productionRuns, productionRunFeedstocks, productionRunFeedstockDraws } from '@/db/schema';
+import { activityEvents, facilities, binMovements, biocharProducts, deliveries, orders, storageLocations, feedstocks, outputStockAllocations, outputStockMoistureReadings, productionRuns, productionRunFeedstocks, productionRunFeedstockDraws } from '@/db/schema';
 import { getOutputBinStockView, readOutputBinAllLayers, getLayerMoistureBases } from '@/data-access/output-stock';
 import { getOutputStockHistory } from '@/data-access/output-stock-history';
 import { deleteDelivery } from '@/data-access/delivery-delete';
@@ -229,6 +230,10 @@ it('restores ingredient stock and keeps the crossed-out ingredient history and p
   const product = await postProduct(f, { formulationId: f.recipe.id, massKg: 100, composition: { ingredients: [{ formulationIngredientId: f.ingredient.id,
     feedstockTypeId: f.ingredientType.id, storageLocationId: ingredientBin.id, massKg: 20, moistureContentPercent: 20 }] } });
   expect((await getFeedstockBinStock(f.ctx, ingredientBin.id)).currentWetKg).toBe(80);
+  await db.update(storageLocations).set({ archivedAt: new Date() }).where(eq(storageLocations.id, ingredientBin.id));
+  await expect(deleteBiocharProduct(f.ctx, product.id, product.version)).rejects.toThrow('Storage bin was not found or is archived.');
+  expect((await getFeedstockBinStock(f.ctx, ingredientBin.id)).currentWetKg).toBe(80);
+  await db.update(storageLocations).set({ archivedAt: null }).where(eq(storageLocations.id, ingredientBin.id));
   await deleteBiocharProduct(f.ctx, product.id, product.version);
   const stock = await getFeedstockBinStock(f.ctx, ingredientBin.id);
   expect(stock.currentWetKg).toBe(100);
@@ -282,4 +287,43 @@ it('preserves inventory totals when a facility archives its products', async () 
   expect(after).toEqual(before);
   const [bin] = await enrichStorageLocationRows(f.ctx, [{ ...f.bin, facilityName: f.facility.name, facilityCode: f.facility.code, feedstockTypeName: null, formulationName: f.pure.name }]);
   expect(bin.productInventory).toMatchObject({ batchCount: 1, currentMassKg: 50 });
+});
+
+
+it.each(['count', 'loss'] as const)('releases a product after its covering %s is reversed before placement', async kind => {
+  const f = await fixture({ stockKg: 0 });
+  if (kind === 'loss') await postProduct(f, { massKg: 100, placedAt: '2026-09-10T12:00:00Z' });
+  const placed = await postProduct(f, { massKg: 1000 });
+  const original = await postMeasurement(f, { kind, wetMassKg: kind === 'count' ? 1000 : 110 });
+  const target = { entityType: 'biocharProduct' as const, entityId: placed.id };
+  expect(await readRecordDependents(f.ctx, db, target)).not.toEqual([]);
+  await postMeasurement(f, { kind, wetMassKg: kind === 'count' ? 0 : 10, occurredAt: '2026-09-11T12:00:00Z', correctsMovementId: original.movementId });
+  expect(await readRecordDependents(f.ctx, db, target)).toEqual([]);
+  const [product] = await db.select().from(biocharProducts).where(eq(biocharProducts.id, placed.id));
+  await deleteBiocharProduct(f.ctx, product.id, product.version);
+  expect(await getOutputBinStockView(f.ctx, f.source.id)).toMatchObject({ dryMassKg: kind === 'count' ? 1500 : 1400 });
+});
+
+it.each(['delivery', 'product'] as const)('refuses %s deletion into an archived bin without changing stock or history', async kind => {
+  const f = await fixture({ stockKg: kind === 'product' ? 1500 : 1000 });
+  const record = kind === 'delivery' ? await postDelivery(f, 1000) : f.product!;
+  const bin = kind === 'delivery' ? f.bin : f.source;
+  const before = await getOutputStockHistory(f.ctx, bin.id);
+  await archiveStorageLocation(f.ctx, bin.id, bin.version);
+  const remove = kind === 'delivery' ? deleteDelivery : deleteBiocharProduct;
+  await expect(remove(f.ctx, record.id, record.version)).rejects.toThrow('Storage bin was not found or is archived.');
+  expect(await getOutputStockHistory(f.ctx, bin.id)).toEqual(before);
+  expect(Number((await readOutputBinAllLayers(f.ctx, bin.id, db, { includeArchived: true })).allLayersDryKg)).toBe(0);
+});
+
+it.each(['delivery', 'product'] as const)('refuses %s deletion in an archived facility even with an active bin', async kind => {
+  const f = await fixture();
+  const record = kind === 'delivery' ? await postDelivery(f, 100) : f.product!;
+  const bin = kind === 'delivery' ? f.bin : f.source;
+  const before = await getOutputStockHistory(f.ctx, bin.id);
+  // Isolate the parent guard from the normal cascade's archived-bin guard.
+  await db.update(facilities).set({ archivedAt: new Date() }).where(eq(facilities.id, f.facility.id));
+  const remove = kind === 'delivery' ? deleteDelivery : deleteBiocharProduct;
+  await expect(remove(f.ctx, record.id, record.version)).rejects.toThrow('Facility was not found or is archived.');
+  expect(await getOutputStockHistory(f.ctx, bin.id)).toEqual(before);
 });

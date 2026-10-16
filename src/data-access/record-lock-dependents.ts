@@ -1,4 +1,4 @@
-import { activeOutputMovement, deletedProductIds } from './output-stock-active-movements';
+import { activeOutputMovement, deletedProductIds, liveOutputMovementPredicate } from './output-stock-active-movements';
 import { and, eq, isNotNull, notInArray } from "drizzle-orm";
 import type { DbTransaction } from "@/db";
 import { applications, biocharProductSourceAllocations, creditBatchApplications, creditBatchProductionRuns, deliveries, outputStockAllocations, productionRunFeedstocks, samples, outputStockRunAllocations, binMovements, productionRuns, biocharProducts } from "@/db/schema";
@@ -41,7 +41,7 @@ export async function readRecordDependents(ctx: OrgContext, tx: Pick<DbTransacti
         .where(and(eq(outputStockAllocations.organizationId, ctx.organizationId), eq(outputStockAllocations.biocharProductId, id), activeOutputMovement(ctx, tx)));
       const [product] = await tx.select().from(biocharProducts).where(and(eq(biocharProducts.organizationId, ctx.organizationId), eq(biocharProducts.id, id)));
       const movements = !product?.storageLocationId ? [] : await tx.select().from(binMovements).where(and(eq(binMovements.organizationId, ctx.organizationId), eq(binMovements.storageLocationId, product.storageLocationId)));
-      const counts = movements.filter(movement => isCountMovement(movement) && product!.createdAt <= movement.createdAt && movement.occurredAt && product!.placedAt <= movement.occurredAt);
+      const counts = movements.filter(liveOutputMovementPredicate(movements)).filter(movement => isCountMovement(movement) && product!.createdAt <= movement.createdAt && movement.occurredAt && product!.placedAt <= movement.occurredAt);
       return [...rows.map(row => ({ kind: "stockEntry", id: row.id })), ...counts.map(row => ({ kind: "stockEntry", id: row.id }))];
     }
     case "order": {

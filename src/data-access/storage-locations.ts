@@ -1,4 +1,4 @@
-import { lockStorageLocationRecords } from './storage-location-record-lock';
+import { readStorageLocationRecordLock } from './storage-location-record-lock';
 import { assertRecordLockFields } from '@/lib/record-lock-fields';
 /**
  * Storage Locations Data Access Layer
@@ -468,7 +468,7 @@ export async function updateStorageLocation(
     // vocabulary, and an edit needs the restore instruction instead.
     await readEditableStorageLocation(ctx, tx, storageLocationId);
     await lockBinStock(ctx, tx, storageLocationId);
-    const recordLock = await lockStorageLocationRecords(ctx, tx, storageLocationId);
+    const recordLock = await readStorageLocationRecordLock(ctx, tx, storageLocationId);
     // `FOR UPDATE` on the bin row itself: the advisory lock above serializes
     // stock writes, but archive and restore change `updatedAt` without taking
     // it, so only the row lock makes the version check below race-free.
