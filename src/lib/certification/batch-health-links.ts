@@ -13,6 +13,13 @@ import { sampleCreateHref } from "@/lib/sample-create-intent";
 import { creditBatchDeepLinkHref, creditBatchRemovalTemplateHref } from "@/lib/credit-batch-links";
 import { certificationEmissionEstimatesHref, certificationRemovalTemplatesHref } from "./links";
 
+export const BATCH_DETAILS_FIX_LABEL = "Edit details";
+
+/** The facility's credit batch list, where a repair with no single batch lands. */
+export function creditBatchListHref(facilityId: string): string {
+  return `/credit-batches?${new URLSearchParams({ facility: facilityId })}`;
+}
+
 export interface BatchHealthFixLink {
   label: string;
   href: string;
@@ -93,7 +100,7 @@ export function batchHealthFixLinkFor(
       return { label: "Review template lines", href: certificationRemovalTemplatesHref(facilityId) };
     case "batchDetails":
       return {
-        label: "Edit details",
+        label: BATCH_DETAILS_FIX_LABEL,
         href: "#batch-details",
       };
     case "labSamples":

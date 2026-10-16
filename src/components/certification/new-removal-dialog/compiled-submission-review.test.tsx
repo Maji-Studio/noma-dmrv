@@ -68,6 +68,7 @@ describe("CompiledSubmissionReview", () => {
             },
           },
           removalBlockers: [],
+          submissionAdvisories: [],
           blockers: [],
           warnings: ["Captured startup diesel is not represented."],
           compilationHash:
@@ -122,6 +123,7 @@ describe("CompiledSubmissionReview", () => {
         compilation={{
           review: null,
           removalBlockers: [],
+          submissionAdvisories: [],
           blockers: [
             "Configure organization Isometric credentials before submitting.",
           ],

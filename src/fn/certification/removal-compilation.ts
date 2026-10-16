@@ -15,7 +15,7 @@ import {
   type RemovalSubmissionReview,
 } from "./removal-submission-build";
 import { evaluateRemovalBlockers } from "./removal-blockers-gate";
-import { legacyBlocker, type RemovalBlocker } from "@/lib/certification/removal-blockers";
+import { legacyBlocker, type RemovalAdvisory, type RemovalBlocker } from "@/lib/certification/removal-blockers";
 import { prepareRemovalSubmission } from "./removal-submission-prepare";
 import { reviewPayloadHash } from "@/lib/certification/removal-review-hash";
 
@@ -24,6 +24,8 @@ export interface RemovalCompilationView {
   review: RemovalSubmissionReview | null;
   blockers: string[];
   removalBlockers: RemovalBlocker[];
+  /** Non-blocking: recorded facts the active template cannot carry. Each has one repair destination. */
+  submissionAdvisories: RemovalAdvisory[];
   warnings: string[];
   snapshot: CompiledRemovalSubmission["snapshot"];
   compilationHash: string | null;
@@ -61,6 +63,7 @@ export async function loadRemovalCompilation(
         review: null,
         blockers,
         removalBlockers,
+        submissionAdvisories: [...(ctx.submissionAdvisories ?? [])],
         warnings: [...(ctx.submissionWarnings ?? [])],
         snapshot: null,
         compilationHash: null,
@@ -105,6 +108,7 @@ export async function loadRemovalCompilation(
       review: compiled.review,
       blockers,
       removalBlockers,
+      submissionAdvisories: [...(ctx.submissionAdvisories ?? [])],
       warnings: compiled.warnings,
       snapshot: blockers.length === 0 ? compiled.snapshot : null,
       compilationHash:
