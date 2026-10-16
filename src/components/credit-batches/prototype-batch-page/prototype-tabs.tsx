@@ -15,7 +15,7 @@ import { cn } from "@/lib/utils";
 import { EMISSION_LINE_STATE_LABELS, type EmissionLineState } from "@/lib/certification/emission-lines";
 import { productionRunDeepLinkHref } from "@/lib/certification/links";
 import { useProto } from "./prototype-context";
-import type { MassSegmentKey } from "./prototype-model";
+import { RemovalMassBar, SEGMENTS, SEGMENT_BY_KEY, Swatch, segmentOfRemoval } from "./prototype-mass-bar";
 import { FocusRow, PANEL, Panel, RemovalChip, tonnes } from "./prototype-parts";
 
 const MUTED = "text-[var(--color-text-secondary)]";
@@ -137,52 +137,13 @@ export function EmissionsTab() {
   );
 }
 
-/** Quiet meaning colours: submitted strongest, draft the same hue lighter, attention for the actionable part, grey for the rest. */
-const HATCH = "repeating-linear-gradient(135deg, var(--st-off-border) 0 2px, transparent 2px 6px)";
-const SEGMENTS: { key: MassSegmentKey; label: string; fill: string; background?: string }[] = [
-  { key: "sent", label: "In submitted Removals", fill: "var(--st-run)" },
-  { key: "inRemoval", label: "In draft Removals", fill: "color-mix(in srgb, var(--st-run) 40%, var(--paper))" },
-  { key: "notIn", label: "Applied, not in a Removal", fill: "var(--st-wait)" },
-  { key: "notApplied", label: "Not applied yet", fill: "var(--st-off-bg)", background: HATCH },
-];
-const SEGMENT_BY_KEY = Object.fromEntries(SEGMENTS.map((segment, index) => [segment.key, { ...segment, order: index }])) as Record<MassSegmentKey, (typeof SEGMENTS)[number] & { order: number }>;
-
-function Swatch({ segment, className }: { segment: MassSegmentKey; className?: string }) {
-  const { fill, background } = SEGMENT_BY_KEY[segment];
-  return <span aria-hidden className={cn("inline-block size-12 shrink-0 border border-[var(--st-off-border)]", className)} style={{ backgroundColor: fill, backgroundImage: background }} />;
-}
-
-function segmentOfRemoval(removal: { status: string } | null): MassSegmentKey {
-  if (!removal) return "notIn";
-  return removal.status === "draft" ? "inRemoval" : "sent";
-}
-
 function MassSplit() {
   const { model, go } = useProto();
   const { masses } = model;
   const total = SEGMENTS.reduce((sum, segment) => sum + masses[segment.key], 0);
-  const shown = SEGMENTS.filter((segment) => masses[segment.key] > 0);
-  const summary = shown.map((segment) => `${tonnes(masses[segment.key])} ${segment.label.toLowerCase()}`).join(", ");
   return (
     <Panel title="Biochar in Removals" action={<span className="body-medium tabular-nums">{tonnes(total)} <span className={MUTED}>total</span></span>}>
-      <div role="img" aria-label={summary} className="flex h-24 gap-2 bg-[var(--paper)]">
-        {shown.map((segment) => (
-          <span
-            key={segment.key}
-            className="h-full min-w-4 border border-[var(--st-off-border)]"
-            style={{ flexGrow: masses[segment.key], flexBasis: 0, backgroundColor: segment.fill, backgroundImage: segment.background }}
-          />
-        ))}
-      </div>
-      <ul className="flex flex-col gap-8 sm:flex-row sm:flex-wrap sm:gap-x-24">
-        {shown.map((segment) => (
-          <li key={segment.key} className="flex items-center gap-8 body-small">
-            <Swatch segment={segment.key} />
-            <span className={MUTED}>{segment.label}</span>
-            <span className="font-medium tabular-nums">{tonnes(masses[segment.key])}</span>
-          </li>
-        ))}
-      </ul>
+      <RemovalMassBar />
       {model.blocking.length > 0 && (
         <button type="button" onClick={() => go("overview")} className="self-start body-small underline underline-offset-2">
           See blocking items ({model.blocking.length})
