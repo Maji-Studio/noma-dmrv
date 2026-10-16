@@ -26,9 +26,11 @@ import {
 import {
   createEmissionEntrySchema,
   updateEmissionEntrySchema,
+  replaceEmissionEntrySchema,
   emissionEntryVersionSchema,
   type CreateEmissionEntryInput,
   type UpdateEmissionEntryInput,
+  type ReplaceEmissionEntryInput,
   type RestoreEmissionEntryInput,
 } from "@/schemas/emission-entries";
 import { requireOrgScope, type Executor } from "./utils";
@@ -231,55 +233,101 @@ export async function createEmissionEntry(ctx: OrgContext, input: CreateEmission
   const data = createEmissionEntrySchema.parse(input);
   return db.transaction(async (tx) => {
     const { batch, facility, observation } = await lockedBatch(ctx, tx, data.creditBatchId);
-    const active = await tx
-      .select({ id: emissionEntries.id })
-      .from(emissionEntries)
-      .where(
-        and(
-          eq(emissionEntries.organizationId, ctx.organizationId),
-          eq(emissionEntries.creditBatchId, batch.id),
-          eq(emissionEntries.removalTemplateId, observation.externalTemplateId),
-          eq(emissionEntries.componentId, data.componentId),
-          eq(emissionEntries.kind, "value"),
-          isNull(emissionEntries.deletedAt),
-        ),
-      );
-    const entryPolicy = entryLine(observation, data.componentId)?.entryPolicy ?? "none";
-    const occurredOn = resolveEmissionEntryDate({
-      entryPolicy,
-      occurredOn: data.occurredOn, batchStartDate: batch.startDate,
-      batchEndDate: batch.endDate, timezone: facility.timezone,
-    });
-    const binding = validateEmissionEntry({
-      ...data,
-      occurredOn,
-      dateDefaulted: entryPolicy === "single" || data.occurredOn === undefined,
-      observation,
-      batchStartDate: batch.startDate,
-      timezone: facility.timezone,
-      activeValueCount: active.length,
-    });
-    const [entry] = await tx
-      .insert(emissionEntries)
-      .values({
-        organizationId: ctx.organizationId,
-        creditBatchId: batch.id,
-        removalTemplateId: observation.externalTemplateId,
-        observationId: observation.id,
-        componentId: data.componentId,
-        ...binding,
-        kind: "value",
-        occurredOn,
-        note: data.note,
-        createdBy: ctx.userId,
-      })
-      .returning();
-    const values = await writeValues(ctx, tx, entry.id, data.values);
-    await tombstoneEmissionZeros(ctx, tx, entry);
-    await recordEmissionEntryActivity(ctx, tx, "created", null, { ...entry, values });
-    return getEmissionEntry(ctx, entry.id, tx);
+    return createEmissionEntryInTransaction(ctx, tx, data, { batch, facility, observation });
   });
 }
+/** Caller holds the facility and batch locks; replacement also holds its old entry. */
+async function createEmissionEntryInTransaction(
+  ctx: OrgContext,
+  tx: DbTransaction,
+  data: CreateEmissionEntryInput,
+  { batch, facility, observation }: Awaited<ReturnType<typeof lockedBatch>>,
+) {
+  requireOrgScope(ctx);
+  const active = await tx
+    .select({ id: emissionEntries.id })
+    .from(emissionEntries)
+    .where(
+      and(
+        eq(emissionEntries.organizationId, ctx.organizationId),
+        eq(emissionEntries.creditBatchId, batch.id),
+        eq(emissionEntries.removalTemplateId, observation.externalTemplateId),
+        eq(emissionEntries.componentId, data.componentId),
+        eq(emissionEntries.kind, "value"),
+        isNull(emissionEntries.deletedAt),
+      ),
+    );
+  const entryPolicy = entryLine(observation, data.componentId)?.entryPolicy ?? "none";
+  const occurredOn = resolveEmissionEntryDate({
+    entryPolicy,
+    occurredOn: data.occurredOn, batchStartDate: batch.startDate,
+    batchEndDate: batch.endDate, timezone: facility.timezone,
+  });
+  const binding = validateEmissionEntry({
+    ...data,
+    occurredOn,
+    dateDefaulted: entryPolicy === "single" || data.occurredOn === undefined,
+    observation,
+    batchStartDate: batch.startDate,
+    timezone: facility.timezone,
+    activeValueCount: active.length,
+  });
+  const [entry] = await tx
+    .insert(emissionEntries)
+    .values({
+      organizationId: ctx.organizationId,
+      creditBatchId: batch.id,
+      removalTemplateId: observation.externalTemplateId,
+      observationId: observation.id,
+      componentId: data.componentId,
+      ...binding,
+      kind: "value",
+      occurredOn,
+      note: data.note,
+      createdBy: ctx.userId,
+    })
+    .returning();
+  const values = await writeValues(ctx, tx, entry.id, data.values);
+  await tombstoneEmissionZeros(ctx, tx, entry);
+  await recordEmissionEntryActivity(ctx, tx, "created", null, { ...entry, values });
+  return getEmissionEntry(ctx, entry.id, tx);
+}
+
+/** Retire a stopped value and carry its evidence to a fresh current-template entry. */
+export async function replaceEmissionEntry(ctx: OrgContext, input: ReplaceEmissionEntryInput) {
+  requireOrgScope(ctx);
+  requireEmissionsEntriesEnabled();
+  const data = replaceEmissionEntrySchema.parse(input);
+  return mutateEntry(ctx, data.id, data.expectedVersion, async (tx, entry, context) => {
+    if (entry.kind !== "value") throw new SafeError("Only value entries can be entered again.");
+    const previous = await getTemplateObservationById(ctx, entry.observationId, tx);
+    if (!previous) throw new SafeError("The entry's template observation was not found.");
+    if (emissionEntryCounts(previous, context.observation, entry.componentId).counts)
+      throw new SafeError("This entry still counts. Edit that entry instead.");
+    const [deleted] = await tx.update(emissionEntries).set({
+      deletedAt: new Date(), updatedAt: new Date(),
+      version: nextVersion(emissionEntries.version),
+      contentRevision: nextVersion(emissionEntries.contentRevision),
+    }).where(and(eq(emissionEntries.organizationId, ctx.organizationId), eq(emissionEntries.id, entry.id))).returning();
+    await recordEmissionEntryActivity(ctx, tx, "deleted", entry, { ...deleted, values: entry.values });
+    const replacement = await createEmissionEntryInTransaction(ctx, tx, {
+      creditBatchId: entry.creditBatchId, componentId: entry.componentId,
+      occurredOn: data.occurredOn, note: data.note, values: data.values,
+    }, context);
+    // Documents have polymorphic owners, not an entry-document join table.
+    // Keep retained evidence and live uploads; failed uploads remain on the old row.
+    // Owner locks precede these document row locks, matching the upload writers.
+    await tx.update(documents).set({
+      entityId: replacement.id, version: nextVersion(documents.version), updatedAt: new Date(),
+    }).where(and(
+      eq(documents.organizationId, ctx.organizationId),
+      eq(documents.entityType, "emission_entry"), eq(documents.entityId, entry.id),
+      inArray(documents.uploadStatus, ["uploaded", "pending"]),
+    ));
+    return getEmissionEntry(ctx, replacement.id, tx);
+  });
+}
+
 export async function updateEmissionEntry(ctx: OrgContext, input: UpdateEmissionEntryInput) {
   requireOrgScope(ctx);
   requireEmissionsEntriesEnabled();
