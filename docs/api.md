@@ -195,14 +195,15 @@ Committed runner writes with a non-null `describe` effect record value-free
 calls. Every runner event carries `operationId`, `versionBefore` and
 `versionAfter`. The API audit row contract is defined in [Activity events](./database.md#activity-events).
 Form writes have null credential IDs.
-Dry runs, idempotent replays and `activity.skip()` add no events.
+No-op descriptions, dry runs, idempotent replays and `activity.skip()` add no
+events. An audited write whose effect yields no activity rows throws and rolls
+back.
 The runner records one event per entity and distinct batch/run scope supplied by
 `activity.scope(entityId, scopes)` in `src/lib/operations/activity-links.ts`.
 Application create resolves its scopes after saving; update includes the batches
 it leaves and joins; delete captures scopes before removing shares. Activity
 source is `rest`, `mcp` or `form` for the corresponding transport, or `script`
 for a trusted script call.
-No-ops, dry runs and idempotent replays add neither kind of event.
 
 Stored outcome v2 is `{ kind: "success", data, effect? }` in
 `api_idempotency_records`, with schema version 2. Effects retain outcome code,

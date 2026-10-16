@@ -37,7 +37,7 @@ are not examples for new domain tables. Domain tenancy is enforced in
 
 The purge helpers are system seams that delete expired idempotency records and
 idle buckets across organizations. These waivers do not relax ordinary
-org-scoped reads or audit inserts.
+org-scoped reads.
 
 ## Activity events
 
