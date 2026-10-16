@@ -88,6 +88,11 @@ interface EntitySideSheetProps {
    * the fields and the CTA.
    */
   viewModeChildren?: React.ReactNode;
+  /**
+   * View-mode banner rendered before the sections, so a state that changes how
+   * the whole record reads (for example "archived") is seen first.
+   */
+  viewModeNotice?: React.ReactNode;
   /** Label for the Edit button shown in view-mode footer */
   editLabel?: string;
   /** Whether the view-mode footer exposes the edit action. */
@@ -115,6 +120,7 @@ function EntitySideSheet({
   sections,
   numberedSections = false,
   viewModeChildren,
+  viewModeNotice,
   editLabel = "Edit",
   canEdit = true,
   children,
@@ -248,6 +254,7 @@ function EntitySideSheet({
         >
           {isViewMode ? (
             <>
+              {viewModeNotice}
               {sections && (
                 <EntitySideSheetSections
                   sections={sections}

@@ -85,7 +85,7 @@ const guidance: Record<ResourcePath, string> = {
   drivers: "Use the driver id to identify the driver.",
   feedstocks: `Call whoami first for facility ids. ${FEEDSTOCK_UNITS} ${FEEDSTOCK_DATES}`,
   "biochar-products": `Call whoami first for facility ids. Filter by facilityId, formulationId, status or storageLocationId. ${BIOCHAR_PRODUCT_MASS}`,
-  formulations: "Each formulation lists its lines as { id, feedstockTypeId, ratio }. Pass a line id as formulationIngredientId in make_biochar_product.",
+  formulations: `${readDescriptions.formulations} Each formulation lists its lines as { id, feedstockTypeId, ratio }. Pass a line id as formulationIngredientId in make_biochar_product.`,
   "lab-samples": `Filter by creditBatchId or facilityId; sampledFrom and sampledBefore take RFC 3339 instants with an explicit offset. Samples of archived credit batches are not listed. ${LAB_SAMPLE_UNITS}`,
   "credit-batches": "Call whoami first for facility ids. A lab sample belongs to one credit batch; the batch's facility sets its durability tier and time zone.",
 };

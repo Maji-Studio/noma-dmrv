@@ -52,14 +52,21 @@ export const ACTIVITY_RECORD_TYPE_LABELS: Record<ActivityEntityType, string> = {
   transport_leg: "Transport leg",
   application: "Application",
   document: "Document",
+  supplier: "Supplier",
+  supplier_location: "Supplier location",
+  customer: "Customer",
+  customer_location: "Customer location",
+  formulation: "Formulation",
   removal: "Removal",
   ghg_statement: "GHG Statement",
 };
 
-/** Record types in custody order, for the record type filter. */
+/** Record types in custody order, then master data, for the record type filter. */
 export const ACTIVITY_RECORD_TYPE_ORDER: readonly ActivityEntityType[] = [
   "credit_batch", "feedstock", "production_run", "biochar_product", "bin_movement", "lab_sample",
-  "order", "delivery", "transport_leg", "application", "document", "removal", "ghg_statement",
+  "order", "delivery", "transport_leg", "application", "document",
+  "supplier", "supplier_location", "customer", "customer_location", "formulation",
+  "removal", "ghg_statement",
 ];
 
 export function activityRecordTypeLabel(entityType: string): string {

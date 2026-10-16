@@ -37,6 +37,8 @@ export const formulations = pgTable(
     name: text('name').notNull(), // e.g., "Raw Biochar", "BCF-01 - Organic"
     biocharRatio: fraction('biochar_ratio'), // Recipe biochar share in [0, 1]
     description: text('description'),
+    // Archived formulations keep their code reserved so a restore can't collide.
+    archivedAt: timestamp('archived_at'),
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },
