@@ -7,6 +7,8 @@ import { canonicalDecimal } from "@/lib/isometric/template-observations/units";
 import { emissionLineBindingDecision } from "./emission-line-binding";
 import type { RemovalBlocker } from "./removal-blockers";
 
+const UNIT_MISMATCH_MESSAGE = "Emissions values use different units. Use the same unit before adding them.";
+
 export const EMISSION_LINE_STATE_LABELS = {
   filled: "Recorded", empty: "Not recorded", missingEvidence: "File missing",
   needsReview: "Needs review", needsSetup: "Needs setup", confirmedZero: "Recorded as zero",
@@ -15,7 +17,7 @@ export type EmissionLineState = keyof typeof EMISSION_LINE_STATE_LABELS;
 export interface EmissionFigure { magnitude: string; unit: string }
 export interface EmissionLineEntryFact {
   componentId: string; kind: "value" | "zero"; hasEvidence: boolean;
-  total: EmissionFigure | null; counts: boolean; unitMismatch?: boolean;
+  total: EmissionFigure | null; counts: boolean; reason?: string | null; unitMismatch?: boolean;
 }
 export interface BatchEmissionLineFacts {
   definition: TemplateDefinition; lineSources: LineSources; problems: readonly LineSourceProblem[];
@@ -30,7 +32,7 @@ export interface BatchEmissionLineFacts {
 export function sumFigures(figures: EmissionFigure[]): EmissionFigure | null {
   if (!figures.length) return null;
   const unit = figures[0].unit;
-  if (figures.some((figure) => figure.unit !== unit)) throw new DomainError("validation_failed", "Emissions values use different units. Use the same unit before adding them.");
+  if (figures.some((figure) => figure.unit !== unit)) throw new DomainError("validation_failed", UNIT_MISMATCH_MESSAGE);
   const values = figures.map(({ magnitude }) => {
     const value = canonicalDecimal(magnitude);
     if (value === undefined) throw new DomainError("validation_failed", "An emissions value could not be read. Check the recorded values.");
@@ -73,11 +75,14 @@ export function deriveBatchEmissionLines(facts: BatchEmissionLineFacts) {
     const unitMismatch = entries.some((entry) => entry.unitMismatch) || figures.some((figure) => figure.unit !== figures[0]?.unit);
     if (unitMismatch) {
       state = "needsReview";
-      blocker = { code: "lineNeedsReview", message: "Emissions values use different units. Use the same unit before adding them.", fixTarget: "emissions", lineRef: { componentId: component.id, displayName: component.displayName } };
+      blocker = { code: "lineNeedsReview", message: UNIT_MISMATCH_MESSAGE, fixTarget: "emissions", lineRef: { componentId: component.id, displayName: component.displayName } };
     }
-    const total = unitMismatch || values.some((entry) => entry.total === null) ? null : sumFigures([
-      ...(automaticFigure ? [automaticFigure] : []), ...values.flatMap((entry) => entry.total ? [entry.total] : []),
-    ]);
+    const stale = entries.find((entry) => !entry.counts);
+    if (stale) {
+      state = "needsReview";
+      blocker = { code: "lineNeedsReview", message: stale.reason ?? "Enter the values again for the current template line.", fixTarget: "emissions", lineRef: { componentId: component.id, displayName: component.displayName } };
+    }
+    const total = unitMismatch || values.some((entry) => entry.total === null) ? null : sumFigures(figures);
     return { componentId: component.id, displayName: component.displayName, groupKey: group.key,
       blueprintKey: component.blueprintKey, contract, state, automaticFigure, entries, total, ...(blocker ? { blocker } : {}) };
   }));

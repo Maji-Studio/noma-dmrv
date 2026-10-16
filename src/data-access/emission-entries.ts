@@ -1,8 +1,6 @@
 import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { db, type DbTransaction } from "@/db";
 import {
-  creditBatches,
-  facilities,
   emissionEntries,
   emissionEntryValues,
   documents,
@@ -26,7 +24,7 @@ import {
 } from "@/schemas/emission-entries";
 import { requireOrgScope, type Executor } from "./utils";
 import { assertRowVersion, nextVersion } from "./row-version";
-import { lockWritableEmissionEntry } from "./emission-entry-lock";
+import { lockWritableEmissionEntry, lockEmissionEntryBatch, emissionEntryParentChanged } from "./emission-entry-lock";
 import { recordEmissionEntryActivity } from "./emission-entry-activity";
 
 export async function getEmissionEntry(ctx: OrgContext, id: string, executor: Executor = db) {
@@ -119,29 +117,9 @@ async function lockedBatch(
   fallbackObservationId?: string,
 ) {
   requireOrgScope(ctx);
-  const [batch] = await tx
-    .select()
-    .from(creditBatches)
-    .where(
-      and(
-        eq(creditBatches.organizationId, ctx.organizationId),
-        eq(creditBatches.id, creditBatchId),
-        isNull(creditBatches.archivedAt),
-      ),
-    )
-    .for("update");
-  if (!batch) throw new SafeError("Credit batch was not found.");
-  const [facility] = await tx
-    .select()
-    .from(facilities)
-    .where(
-      and(
-        eq(facilities.organizationId, ctx.organizationId),
-        eq(facilities.id, batch.facilityId),
-        isNull(facilities.archivedAt),
-      ),
-    );
-  if (!facility) throw new SafeError("Facility was not found.");
+  const { batch, facility } = await lockEmissionEntryBatch(ctx, tx, creditBatchId);
+  if (batch.archivedAt) throw new SafeError("Credit batch was not found.");
+  if (facility.archivedAt) throw new SafeError("Facility was not found.");
   const [observation] = await tx
     .select()
     .from(removalTemplateObservations)
@@ -342,7 +320,7 @@ async function mutateEntry<T>(
   requireOrgScope(ctx);
   return db.transaction(async (tx) => {
     const initial = await getEmissionEntry(ctx, id, tx);
-    // Batch first, including confirmation and deletion. No lineage guard applies.
+    // Facility, batch, then entry, including confirmation and deletion. No lineage guard applies.
     const context = await lockedBatch(
       ctx,
       tx,
@@ -350,6 +328,7 @@ async function mutateEntry<T>(
       deleting ? initial.observationId : undefined,
     );
     const locked = await lockWritableEmissionEntry(ctx, tx, id);
+    if (locked.creditBatchId !== initial.creditBatchId) throw emissionEntryParentChanged();
     assertRowVersion({ entity: "emission_entry", id, expectedVersion, actualVersion: locked.version });
     if (locked.kind !== "value")
       throw new SafeError("Recorded zeros can only be changed through their Removal.");

@@ -34,6 +34,26 @@ export async function lockWritableEmissionEntry(ctx: OrgContext, tx: DbTransacti
     );
   return entry;
 }
+/** Discover unlocked, then lock facility before batch, matching facility archive. */
+export async function lockEmissionEntryBatch(ctx: OrgContext, tx: DbTransaction, creditBatchId: string) {
+  requireOrgScope(ctx);
+  const [initial] = await tx.select().from(creditBatches)
+    .where(and(eq(creditBatches.organizationId, ctx.organizationId), eq(creditBatches.id, creditBatchId)));
+  if (!initial) throw new DomainError("not_found", "Credit batch was not found.");
+  const [facility] = await tx.select().from(facilities)
+    .where(and(eq(facilities.organizationId, ctx.organizationId), eq(facilities.id, initial.facilityId)))
+    .for("share");
+  if (!facility) throw new DomainError("not_found", "Facility was not found.");
+  const [batch] = await tx.select().from(creditBatches)
+    .where(and(eq(creditBatches.organizationId, ctx.organizationId), eq(creditBatches.id, creditBatchId)))
+    .for("update");
+  if (!batch) throw new DomainError("not_found", "Credit batch was not found.");
+  if (batch.facilityId !== initial.facilityId) throw emissionEntryParentChanged();
+  return { batch, facility };
+}
+export function emissionEntryParentChanged() {
+  return new DomainError("conflict", "Certification lineage changed while it was being locked. Refresh and retry.", { retryable: true });
+}
 /** Lock ancestors before the entry, without applying the batch lineage guard. */
 export async function lockEmissionEntryDocumentOwner(ctx: OrgContext, tx: DbTransaction, id: string) {
   requireOrgScope(ctx);
@@ -48,21 +68,9 @@ export async function lockEmissionEntryDocumentOwner(ctx: OrgContext, tx: DbTran
       ),
     );
   if (!initial) throw new DomainError("not_found", "Emissions entry was not found.");
-  const [batch] = await tx
-    .select()
-    .from(creditBatches)
-    .where(
-      and(eq(creditBatches.organizationId, ctx.organizationId), eq(creditBatches.id, initial.creditBatchId)),
-    )
-    .for("update");
-  if (!batch) throw new DomainError("not_found", "Credit batch was not found.");
-  const [facility] = await tx
-    .select()
-    .from(facilities)
-    .where(and(eq(facilities.organizationId, ctx.organizationId), eq(facilities.id, batch.facilityId)))
-    .for("share");
-  if (!facility) throw new DomainError("not_found", "Facility was not found.");
+  const { batch, facility } = await lockEmissionEntryBatch(ctx, tx, initial.creditBatchId);
   const entry = await lockEmissionEntry(ctx, tx, id);
+  if (entry.creditBatchId !== initial.creditBatchId) throw emissionEntryParentChanged();
   return { entry, archived: batch.archivedAt !== null || facility.archivedAt !== null };
 }
 export async function assertEmissionEntryDocumentWritable(

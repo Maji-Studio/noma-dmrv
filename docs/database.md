@@ -74,7 +74,7 @@ credential or request IDs. Nullable `operation_id`, `version_before` and
 `ACTIVITY_ENTITY_TYPES` in `src/db/schema/common.ts` allows only canonical
 snake_case names: `removal`, `ghg_statement`, `production_run`, `biochar_product`,
 `lab_sample`, `order`, `delivery`, `application`, `credit_batch`, `document`,
-`transport_leg`, `feedstock`, and `bin_movement`. The pure
+`transport_leg`, `feedstock`, `emission_entry`, and `bin_movement`. The pure
 `toActivityEntityType` mapper in `src/lib/activity-entity-type.ts` preserves these
 names and maps existing runner/certification spellings (`productionRun`,
 `biocharProduct`, `labSample`, `binMovement`, `ghgStatement`) to them; unknown

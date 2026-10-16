@@ -18,7 +18,7 @@ describe("batch emission line states", () => {
     ["empty", false, []], ["filled", true, []],
     ["missingEvidence", true, [{ hasEvidence: false }]],
     ["filled", false, [{}]], ["confirmedZero", false, [{ kind: "zero", total: null, hasEvidence: false }]],
-    ["empty", false, [{ counts: false, hasEvidence: false }]],
+    ["needsReview", false, [{ counts: false, hasEvidence: false }]],
     ["filled", false, [{ kind: "zero", total: null }, {}]],
   ] as const)("derives %s with automatic=%s and entries=%j", (state, automatic, overrides) => {
     const f = facts();
@@ -75,4 +75,16 @@ it.each(["single-with-automatic-source", "foreign-automatic-source", "disallowed
   f.automaticFigures = { "run-electricity": { magnitude: "10", unit: "kWh" } };
   f.entries = [entry(f, { hasEvidence: false })];
   expect(deriveBatchEmissionLines(f)[0]).toMatchObject({ state: "needsReview", blocker: { code: "lineNeedsReview", fixTarget: "templateLineReview" } });
+});
+
+it.each([
+  "Confirm this entry for the changed template line.",
+  "Enter the values again for the current template line.",
+])("keeps stale entries visible with the action: %s", (reason) => {
+  const f = facts();
+  f.entries = [entry(f, { counts: false, reason })];
+  expect(deriveBatchEmissionLines(f)[0]).toMatchObject({
+    state: "needsReview", total: null, entries: f.entries,
+    blocker: { code: "lineNeedsReview", message: reason },
+  });
 });

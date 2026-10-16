@@ -150,7 +150,13 @@ export function emissionEntryCounts(
     validateLineSources(current.definition, current.lineSources).some(
       (problem) => problem.componentId === componentId,
     ) ||
-    !isEntryCompatible(before, after)
+    !isEntryCompatible(before, after) ||
+    before.component.inputs.filter((input) => input.type === "monitored").some((input) => {
+      const oldInput = ownValue(before.enrichment, input.key);
+      const newInput = ownValue(after.enrichment, input.key);
+      return !oldInput || !newInput || "status" in oldInput || "status" in newInput ||
+        canonicalUnit(input.quantityKind, oldInput.unit) !== canonicalUnit(input.quantityKind, newInput.unit);
+    })
   )
     return incompatible;
   const change = compareTemplateObservations(previous, current)[componentId];

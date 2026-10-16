@@ -152,11 +152,11 @@ describe("entries after template changes", () => {
     after.definition.groups[0].components[0].displayName = "Power";
     expect(emissionEntryCounts(before, after, "line").counts).toBe(true);
   });
-  it("requires confirmation for convertible units and fixed-factor changes", () => {
+  it("requires re-entry for a changed unit", () => {
     const before = observation();
     const after = structuredClone(before);
     after.enrichment.line.electricity_use = { unit: "Wh" };
-    expect(emissionEntryCounts(before, after, "line")).toMatchObject({ counts: false, canConfirm: true });
+    expect(emissionEntryCounts(before, after, "line")).toMatchObject({ counts: false, canConfirm: false, reason: "Enter the values again for the current template line." });
     expect(emissionEntryCounts(after, after, "line").counts).toBe(true);
   });
   it.each(["removed", "kind", "policy", "scope", "template", "unknown-unit"])(
@@ -205,4 +205,17 @@ it("normalizes decimal spelling, detail and input order for content comparison",
     ]),
   );
   expect(normalizedEntryValues([first])).not.toEqual(normalizedEntryValues([{ ...first, magnitude: "2" }]));
+});
+
+it("still allows confirmation for a fixed-factor change with unchanged entry units", () => {
+  const before = observation();
+  before.definition.groups[0].components[0].inputs.push({
+    key: "factor", type: "fixed", quantityKind: "energy",
+  });
+  before.enrichment.line.factor = { unit: "kWh", fixedValue: "1" };
+  const after = structuredClone(before);
+  after.enrichment.line.factor = { unit: "kWh", fixedValue: "2" };
+  expect(emissionEntryCounts(before, after, "line")).toMatchObject({
+    counts: false, canConfirm: true, reason: "Confirm this entry for the changed template line.",
+  });
 });

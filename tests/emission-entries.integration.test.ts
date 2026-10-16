@@ -24,6 +24,7 @@ import {
   getEmissionEntry,
   listEmissionEntries,
 } from "@/data-access/emission-entries";
+import { deleteCreditBatch } from "@/data-access/credit-batches";
 import { insertDocument } from "@/data-access/documents";
 import {
   requestDocumentUploadInTransaction,
@@ -397,7 +398,7 @@ it("refuses sample legs with the flag on before touching the sample", async () =
   ).rejects.toThrow("sample shipping");
 });
 
-it("confirms a compatible change with a version check and field-only audit", async () => {
+it("refuses unit-change confirmation and reads the re-entry state", async () => {
   const entry = await create();
   const source = definition();
   source.enrichment.energy.electricity_use = { unit: "Wh" };
@@ -414,23 +415,19 @@ it("confirms a compatible change with a version check and field-only audit", asy
     })
     .returning();
   await expect(confirmEmissionEntry(ctx, entry.id, 99)).rejects.toMatchObject({ code: "stale_version" });
-  expect(await confirmEmissionEntry(ctx, entry.id, 1)).toMatchObject({
-    observationId: next.id,
-    version: 2,
-    contentRevision: 2,
+  await expect(confirmEmissionEntry(ctx, entry.id, 1)).rejects.toThrow(
+    "This entry no longer matches the template. Enter the values again.",
+  );
+  expect(await getEmissionEntry(ctx, entry.id)).toMatchObject({ observationId, version: 1 });
+  const lines = await loadBatchEmissionLines(ctx, lineage.facilityId, lineage.batchId);
+  expect(lines.find(line => line.componentId === "energy")).toMatchObject({
+    state: "needsReview", total: null,
+    blocker: { message: "Enter the values again for the current template line." },
+    entries: expect.arrayContaining([expect.objectContaining({
+      id: entry.id, counts: false, canConfirm: false,
+      reason: "Enter the values again for the current template line.",
+    })]),
   });
-  const events = await db
-    .select()
-    .from(activityEvents)
-    .where(
-      and(
-        eq(activityEvents.entityType, "emission_entry"),
-        eq(activityEvents.entityId, entry.id),
-        eq(activityEvents.action, "updated"),
-      ),
-    );
-  expect(events).toHaveLength(1);
-  expect(events[0].changedFields).toEqual(["observationId"]);
   await db
     .update(removalTemplateObservations)
     .set({ lastObservedAt: new Date(0) })
@@ -715,4 +712,55 @@ it("refuses supported but different entry units at create and update", async () 
     version: 1,
     values: [{ magnitude: "0.1", unit: "kWh" }],
   });
+});
+
+
+it.each(["live", "deleted", "reserved", "sent", "confirmed"] as const)(
+  "deletes a batch only with unclaimed tombstones: %s", async (state) => {
+  const [original] = await db.select().from(creditBatches).where(eq(creditBatches.id, lineage.batchId));
+  const [batch] = await db.insert(creditBatches).values({
+    ...original, id: crypto.randomUUID(), code: `CB-ENTRY-${crypto.randomUUID()}`,
+    productionEmissionsClaimedByRemovalId: null,
+  }).returning();
+  const entry = await createEmissionEntry(ctx, {
+    creditBatchId: batch.id, componentId: "energy", occurredOn: "2026-06-13",
+    values: [{ inputKey: "electricity_use", quantityKind: "energy", magnitude: "1", unit: "kWh" }],
+  });
+  entryIds.push(entry.id);
+  const document = await insertDocument(ctx, {
+    entityType: "emission_entry", entityId: entry.id, documentType: "pdf",
+    fileUrl: "https://example.test/evidence", fileName: "Evidence",
+  });
+  try {
+    if (state === "reserved" || state === "sent") {
+      await claim(entry.id, state);
+      await db.update(emissionEntries).set({ deletedAt: new Date() }).where(eq(emissionEntries.id, entry.id));
+    }
+    if (state === "confirmed") {
+      await db.update(emissionEntries).set({
+        kind: "zero", confirmedForRemovalId: lineage.removalId, deletedAt: new Date(),
+      }).where(eq(emissionEntries.id, entry.id));
+    }
+    if (state === "deleted") {
+      const current = await getEmissionEntry(ctx, entry.id);
+      await deleteEmissionEntry(ctx, entry.id, current.version);
+      await deleteCreditBatch(ctx, batch.id, batch.version);
+      expect(await db.select().from(creditBatches).where(eq(creditBatches.id, batch.id))).toEqual([]);
+      expect(await db.select().from(emissionEntries).where(eq(emissionEntries.id, entry.id))).toEqual([]);
+      expect(await db.select().from(emissionEntryValues).where(eq(emissionEntryValues.entryId, entry.id))).toEqual([]);
+      expect(await db.select().from(documents).where(eq(documents.id, document.id))).toEqual([]);
+    } else {
+      await expect(deleteCreditBatch(ctx, batch.id, batch.version)).rejects.toMatchObject({
+        name: "ActionConflictError",
+        message: "Delete or move this credit batch's emissions entries before deleting it.",
+      });
+      expect(await db.select().from(emissionEntries).where(eq(emissionEntries.id, entry.id)))
+        .toHaveLength(1);
+    }
+  } finally {
+    await db.delete(documents).where(eq(documents.entityId, entry.id));
+    await db.delete(emissionEntryValues).where(eq(emissionEntryValues.entryId, entry.id));
+    await db.delete(emissionEntries).where(eq(emissionEntries.id, entry.id));
+    await db.delete(creditBatches).where(eq(creditBatches.id, batch.id));
+  }
 });

@@ -14,6 +14,7 @@ import {
   creditBatches,
   deliveries,
   documents,
+  emissionEntries,
   facilities,
   feedstocks,
   incidentReports,
@@ -481,6 +482,24 @@ export async function releaseUnreferencedIsometricMapping(
   return "released";
 }
 
+/** Batch deletion already holds the facility and batch locks before these entry locks. */
+export async function retireTombstonedEmissionEntryDocuments(
+  ctx: OrgContext, tx: DbTransaction, entryIds: string[],
+): Promise<void> {
+  requireOrgScope(ctx);
+  if (!entryIds.length) return;
+  const entries = await tx.select().from(emissionEntries)
+    .where(and(eq(emissionEntries.organizationId, ctx.organizationId), inArray(emissionEntries.id, entryIds)))
+    .for("update");
+  if (entries.length !== entryIds.length || entries.some(entry => !entry.deletedAt ||
+    entry.sentByRemovalId || entry.sendReservedBySubmissionId || entry.confirmedForRemovalId)) {
+    throw new SafeError("Delete or move this credit batch's emissions entries before deleting it.");
+  }
+  await retireOwnedDocuments(ctx, tx, entries.map(entry => ({
+    entityType: "emission_entry" as const, entityId: entry.id,
+  })), "form", undefined, true);
+}
+
 /**
  * Retire documents owned by entities that are about to be hard-deleted.
  *
@@ -501,6 +520,15 @@ export async function retireDocumentsForEntities(
   actorUserId?: ActivityEventInput["actorUserId"],
 ): Promise<void> {
   requireOrgScope(ctx);
+  return retireOwnedDocuments(ctx, tx, entities, source, actorUserId);
+}
+
+async function retireOwnedDocuments(
+  ctx: OrgContext, tx: DbTransaction, entities: readonly DocumentEntityRef[],
+  source: ActivityEventInput["source"], actorUserId?: ActivityEventInput["actorUserId"],
+  tombstonedEntries = false,
+): Promise<void> {
+  requireOrgScope(ctx);
   if (entities.length === 0) return;
 
   const uniqueEntities = [
@@ -512,7 +540,7 @@ export async function retireDocumentsForEntities(
     ).values(),
   ];
   for (const entity of uniqueEntities.filter(entity => entity.entityType === "emission_entry").sort((a, b) => a.entityId.localeCompare(b.entityId))) {
-    await assertEmissionEntryDocumentWritable(ctx, entity.entityId, tx);
+    if (!tombstonedEntries) await assertEmissionEntryDocumentWritable(ctx, entity.entityId, tx);
   }
   const ownershipConditions = uniqueEntities.map((entity) =>
     and(
@@ -586,7 +614,7 @@ export async function retireDocumentsForEntities(
   }
 
   for (const document of ownedDocuments) {
-    await bumpEmissionEntryEvidence(ctx, tx, document.entityType, document.entityId);
+    if (!tombstonedEntries) await bumpEmissionEntryEvidence(ctx, tx, document.entityType, document.entityId);
     const owner = uniqueEntities.find(entity => entity.entityType === document.entityType && entity.entityId === document.entityId);
     await recordDocumentActivity(ctx, tx, document, "deleted", { scopes: owner?.activityScopes, source, actorUserId });
     await enqueueDocumentKeys(ctx, tx, document);

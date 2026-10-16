@@ -90,8 +90,8 @@ integer columns.
 ## Environment Variables
 
 **`EMISSIONS_ENTRIES_ENABLED`** accepts `true` or `false` and defaults to `false`.
-The server refuses emissions entry writes while disabled and returns no entries
-in the batch display. Enabling it also refuses new sample transport legs. Keep
+The server refuses emissions entry writes and evidence changes while disabled.
+Existing entries stay visible in the batch display. Enabling it also refuses new sample transport legs. Keep
 it disabled until entry submission support is deployed.
 
 **App environment list: the `envSchema` object in `src/config/env.ts`.**

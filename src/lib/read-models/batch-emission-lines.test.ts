@@ -146,7 +146,7 @@ it("returns typed entry details and retains removed lines for re-entry", async (
   });
 });
 
-it("isolates stale entry units after a compatible template change", async () => {
+it("shows re-entry for unit changes and keeps other lines healthy", async () => {
   const current = {
     externalTemplateId: "template",
     definition: {
@@ -178,7 +178,9 @@ it("isolates stale entry units after a compatible template change", async () => 
     ),
   };
   vi.mocked(getLatestTemplateObservation).mockResolvedValue(current as never);
-  vi.mocked(getTemplateObservationById).mockResolvedValue(current as never);
+  const previous = structuredClone(current);
+  previous.enrichment.changed.electricity_use.unit = "kWh";
+  vi.mocked(getTemplateObservationById).mockResolvedValue(previous as never);
   vi.mocked(loadCreditBatchRollups).mockResolvedValue({
     batch: { lineageFacts: { runs: [], runForwards: {} } },
   } as never);
@@ -196,6 +198,6 @@ it("isolates stale entry units after a compatible template change", async () => 
     })) as never,
   );
   const lines = await loadBatchEmissionLines(makeTestOrgContext(), "facility", "batch");
-  expect(lines[0]).toMatchObject({ state: "needsReview", total: null, blocker: { code: "lineNeedsReview" } });
+  expect(lines[0]).toMatchObject({ state: "needsReview", total: null, blocker: { code: "lineNeedsReview", message: "Enter the values again for the current template line." }, entries: [expect.objectContaining({ counts: false, canConfirm: false })] });
   expect(lines[1]).toMatchObject({ state: "filled", total: { magnitude: "1", unit: "kWh" } });
 });

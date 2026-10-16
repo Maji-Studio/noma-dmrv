@@ -546,3 +546,9 @@ operational tradeoff, and this is not a registry requirement we verified.
   Production; the site deployment answers 404 to both. If growth matters, add
   scheduled GitHub Actions calls to the secret-authenticated
   `/api/cron/purge-api-records` and `/api/cron/sweep-document-uploads` routes.
+
+## Exact unit conversion for entries after a template unit change (2026-10-16)
+
+`src/lib/certification/emission-entry-rules.ts:emissionEntryCounts` requires re-entry
+when a monitored input changes unit. Define an exact decimal unit-conversion table
+before allowing confirmation to convert stored entry values to the new unit.

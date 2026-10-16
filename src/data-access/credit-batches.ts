@@ -1,3 +1,4 @@
+import { emissionEntries, emissionEntryValues } from "@/db/schema/emission-entries";
 import { toActivityEntityType } from "@/lib/activity-entity-type";
 import { recordActivityChange } from "./activity-events";
 import { recordMembershipActivity } from "./write-activity";
@@ -7,6 +8,7 @@ import {
   desc,
   eq,
   isNull,
+  inArray,
   sql,
 } from "drizzle-orm";
 import type { OrgContext } from "@/lib/auth/server";
@@ -58,7 +60,7 @@ import { formatUtcDate } from "@/lib/date-utils";
 import { ActionConflictError, SafeError } from "@/lib/errors";
 import { conflictCode } from "@/lib/conflict-ref";
 import { isBatchEligible } from "@/lib/certifier-policy";
-import { retireDocumentsForEntities } from "./documents";
+import { retireDocumentsForEntities, retireTombstonedEmissionEntryDocuments } from "./documents";
 import { processPendingStorageObjectDeletions } from "./storage-object-deletions";
 import {
   assertCreditBatchSlicesAreUnassigned,
@@ -748,6 +750,27 @@ export async function deleteCreditBatch(ctx: OrgContext, id: string, expectedVer
         `Credit batch ${batch.code} has Samples. Move them to another credit batch or delete them, then delete the batch.`,
         { entity: "sample", id: sample.id, code: conflictCode(sample.code) },
       );
+    }
+
+    const entries = await tx.select().from(emissionEntries)
+      .where(and(eq(emissionEntries.organizationId, ctx.organizationId), eq(emissionEntries.creditBatchId, id)))
+      .for("update");
+    if (entries.some(entry => !entry.deletedAt || entry.sendReservedBySubmissionId ||
+      entry.sentByRemovalId || entry.confirmedForRemovalId)) {
+      throw new ActionConflictError(
+        "Delete or move this credit batch's emissions entries before deleting it.",
+        { entity: "credit_batch", id, code: conflictCode(batch.code) },
+      );
+    }
+    const entryIds = entries.map(entry => entry.id);
+    if (entryIds.length) {
+      await retireTombstonedEmissionEntryDocuments(ctx, tx, entryIds);
+      await tx.delete(emissionEntryValues).where(and(
+        eq(emissionEntryValues.organizationId, ctx.organizationId), inArray(emissionEntryValues.entryId, entryIds),
+      ));
+      await tx.delete(emissionEntries).where(and(
+        eq(emissionEntries.organizationId, ctx.organizationId), inArray(emissionEntries.id, entryIds),
+      ));
     }
 
     await recordMembershipActivity(ctx, tx, id, await readMemberProductionRunIds(ctx, tx, id), [], { recordBatchEvent: false });
