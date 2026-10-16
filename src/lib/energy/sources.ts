@@ -1,5 +1,5 @@
 /**
- * The six energy sources the energy page estimates (ADR 0031).
+ * The six energy sources the energy page reports (ADR 0031).
  *
  * Activity is what the operator recorded, in its own unit. The four
  * production sources are columns on the production run; the two transport
@@ -15,8 +15,6 @@ export type EnergySourceKey =
   | "feedstockTransport"
   | "biocharTransport";
 
-export type EnergyStage = "production" | "transport";
-
 /** The unit the operator records the activity in. */
 export type EnergyActivityUnit = "L" | "kWh" | "t·km";
 
@@ -24,16 +22,15 @@ export interface EnergySourceMeta {
   key: EnergySourceKey;
   label: string;
   unit: EnergyActivityUnit;
-  stage: EnergyStage;
 }
 
 export const ENERGY_SOURCES: readonly EnergySourceMeta[] = [
-  { key: "startup", label: "Startup diesel", unit: "L", stage: "production" },
-  { key: "genset", label: "Genset diesel", unit: "L", stage: "production" },
-  { key: "preprocessing", label: "Preprocessing fuel", unit: "L", stage: "production" },
-  { key: "grid", label: "Grid electricity", unit: "kWh", stage: "production" },
-  { key: "feedstockTransport", label: "Feedstock transport", unit: "t·km", stage: "transport" },
-  { key: "biocharTransport", label: "Biochar delivery", unit: "t·km", stage: "transport" },
+  { key: "startup", label: "Startup diesel", unit: "L" },
+  { key: "genset", label: "Genset diesel", unit: "L" },
+  { key: "preprocessing", label: "Preprocessing fuel", unit: "L" },
+  { key: "grid", label: "Grid electricity", unit: "kWh" },
+  { key: "feedstockTransport", label: "Feedstock transport", unit: "t·km" },
+  { key: "biocharTransport", label: "Biochar delivery", unit: "t·km" },
 ];
 
 export const ENERGY_SOURCE_KEYS: readonly EnergySourceKey[] = ENERGY_SOURCES.map(
@@ -64,11 +61,6 @@ export const DIESEL_SOURCE_KEYS = [
 export const PRODUCTION_FOOTPRINT_KEYS: readonly EnergySourceKey[] = [
   ...RUN_SOURCE_KEYS,
   "feedstockTransport",
-];
-
-export const ENERGY_STAGES: readonly { key: EnergyStage; label: string }[] = [
-  { key: "production", label: "Production energy" },
-  { key: "transport", label: "Transport" },
 ];
 
 /** One number per source. */

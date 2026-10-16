@@ -15,7 +15,7 @@
  * It is now a console — a category rail plus a detail pane:
  *
  *   ORGANIZATION   Certifier · Sources
- *   FACILITY       Removal templates · Emission factors · Emissions
+ *   FACILITY       Removal templates · Emissions
  *   PLATFORM       Diagnostics · Template mapping  (platform admin only)
  *
  * Three consequences of that shape worth knowing before editing:
@@ -46,7 +46,6 @@
 import type { ReactNode } from "react";
 import { parseAsString, useQueryState } from "nuqs";
 import {
-  CalculatorIcon,
   GaugeIcon,
   GlobeIcon,
   ListChecksIcon,
@@ -66,7 +65,6 @@ import { useOrgCertifierCredentialsStatus } from "@/hooks/use-certifier-credenti
 import {
   CERTIFICATION_SETTINGS_CERTIFIER_SECTION,
   CERTIFICATION_SETTINGS_DIAGNOSTICS_SECTION,
-  CERTIFICATION_SETTINGS_EMISSION_FACTORS_SECTION,
   CERTIFICATION_SETTINGS_EMISSIONS_SECTION,
   CERTIFICATION_SETTINGS_LEGACY_CONNECTION_SECTION,
   CERTIFICATION_SETTINGS_REMOVAL_TEMPLATES_SECTION,
@@ -77,7 +75,6 @@ import {
 import { CertificationHealthPanel } from "./certification-health-panel";
 import { CertifierSettingsPanel } from "./certifier-settings-panel";
 import { EnvBanner } from "./env-banner";
-import { FacilityEmissionFactorsForm } from "./facility-emission-factors-form";
 import { RegistrySourceVisibilitySettings } from "./registry-source-visibility-settings";
 import { SettingsRail, type SettingsSectionMeta } from "@/components/ui";
 import { RemovalTemplateDiagnosticPanel } from "./removal-template-diagnostic-panel";
@@ -86,7 +83,6 @@ import { RemovalTemplateReviewPanel } from "./removal-template-review-panel";
 const SECTION_CERTIFIER = CERTIFICATION_SETTINGS_CERTIFIER_SECTION;
 const SECTION_SOURCES = CERTIFICATION_SETTINGS_SOURCES_SECTION;
 const SECTION_EMISSIONS = CERTIFICATION_SETTINGS_EMISSIONS_SECTION;
-const SECTION_EMISSION_FACTORS = CERTIFICATION_SETTINGS_EMISSION_FACTORS_SECTION;
 const SECTION_DIAGNOSTICS = CERTIFICATION_SETTINGS_DIAGNOSTICS_SECTION;
 const SECTION_TEMPLATE_MAPPING =
   CERTIFICATION_SETTINGS_TEMPLATE_MAPPING_SECTION;
@@ -231,19 +227,6 @@ export function CertificationSettings() {
         canManage={viewerCanManage}
       />
     ) : null,
-  });
-
-  // Listed for every viewer and independent of the registry link: the Energy
-  // page estimates need it, and members read the saved values here (ADR 0031).
-  sections.push({
-    key: SECTION_EMISSION_FACTORS,
-    tier: "facility",
-    label: "Emission factors",
-    icon: CalculatorIcon,
-    caption:
-      "Factors the Energy page uses to estimate CO₂e for this facility. Not sent to the registry.",
-    access: "Owners and Admins",
-    content: facilityId ? <FacilityEmissionFactorsForm facilityId={facilityId} /> : null,
   });
 
   if (viewerCanManage) {
