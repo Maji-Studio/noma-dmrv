@@ -34,7 +34,6 @@ import { NeedsSetupText, ProtoNote, ReviewBlock, YEARLY_REPORT_FILE, batchPeriod
 import { DetailKpiStrip, DetailTopBar, LineSortSelect, LineStateChips, NoLinesMatch, useBatchDetail, type BatchDetail } from "./prototype-detail-shared";
 import { compositionCaption, lineCase, nothingToRecordRefusal, recordsSource, rowMenuItems, totalAfter } from "./prototype-line-sources";
 import {
-  BeforeAfter,
   EntriesCell,
   LinePanel,
   Op,
@@ -682,8 +681,8 @@ function GridRow({ line, detail, draft, errors, onChange, onAgain }: GridRowProp
     <span className="body-small text-[var(--color-text-tertiary)]">One entry per credit batch</span>
   ) : <RecordsCell line={line} warn={gap} />;
   const total = def.shape === "gas"
-    ? <BeforeAfter before={line.totalText} after={gasAfter} />
-    : <BeforeAfter before={preview.before} after={amount == null ? null : preview.after} />;
+    ? <span className="tabular-nums">{gasAfter ?? line.totalText}</span>
+    : <span className="tabular-nums">{amount == null ? preview.before : preview.after}</span>;
   const hasRecords = source.kind === "records";
 
   return (

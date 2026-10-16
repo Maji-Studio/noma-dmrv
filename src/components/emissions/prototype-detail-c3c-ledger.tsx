@@ -21,8 +21,6 @@ import { useState, useSyncExternalStore, type ReactNode } from "react";
 import Link from "next/link";
 import type { Icon } from "@phosphor-icons/react";
 import {
-  ArrowLeftIcon,
-  ArrowRightIcon,
   ArrowUpRightIcon,
   DotsThreeVerticalIcon,
   FileIcon,
@@ -64,7 +62,7 @@ import {
   type RecordsLabel,
 } from "./prototype-emissions-data";
 import { DisclosureButton, LineStateBadge, YEARLY_REPORT_FILE, type usePrototypeEmissions } from "./prototype-emissions-shared";
-import { compositionCaption, entriesText, entryGuard, lineCase, nothingToRecordRefusal, recordsSource, recordsText, totalAfter } from "./prototype-line-sources";
+import { compositionCaption, entriesText, lineCase, nothingToRecordRefusal, recordsSource, recordsText } from "./prototype-line-sources";
 
 type Data = ReturnType<typeof usePrototypeEmissions>;
 const KG_PER_TONNE = 1000;
@@ -547,7 +545,6 @@ const FORM_TITLES = { add: "Add entry", edit: "Edit entry", again: "Enter again"
 function EntryForm({ batch, line, mode, onBack }: { batch: PrototypeBatch; line: PrototypeLine; mode: Extract<DrawerMode, { view: "form" }>; onBack: () => void }) {
   const toast = useToast();
   const { def } = line;
-  const kind = lineCase(line);
   const editing = mode.mode === "edit" ? line.values.find((e) => e.id === mode.entryId) : undefined;
   const again = mode.mode === "again" ? line.review[0] : undefined;
   const seed = editing ?? again;
@@ -560,17 +557,10 @@ function EntryForm({ batch, line, mode, onBack }: { batch: PrototypeBatch; line:
   const set = (key: keyof FormValues) => (event: { target: { value: string } }) => setValues((v) => ({ ...v, [key]: event.target.value }));
 
   const gas = def.shape === "gas";
-  const others = line.values.filter((e) => e.id !== editing?.id);
   const replacesZero = !!line.nothing && !editing;
   const mass = parseAmount(values.mass);
   const distance = parseAmount(values.distance);
   const draftFigure = def.shape === "massDistance" ? (mass != null && distance != null ? (mass * distance) / KG_PER_TONNE : null) : gas ? null : parseAmount(values.value);
-  const base = (line.auto?.value ?? 0) + sumOf(line, others);
-  const before = totalAfter(line, null).before;
-  const after = draftFigure == null ? null : formatFigure(base + draftFigure, def.unit);
-  const guard = entryGuard(line);
-  const gapWarning = kind === "B1" || kind === "B2" || kind === "F" || (kind === "Z" && hasRecordsGap(line));
-  const showRecords = !!line.records || others.length > 0;
 
   const save = () => {
     const next: FormErrors = {};
@@ -605,38 +595,10 @@ function EntryForm({ batch, line, mode, onBack }: { batch: PrototypeBatch; line:
         <SlideOverPanelTitle>{FORM_TITLES[mode.mode]}</SlideOverPanelTitle>
         <SlideOverPanelDescription>{`${def.name}, ${batch.code}`}</SlideOverPanelDescription>
       </SlideOverPanelHeader>
-      <SlideOverPanelBody className="pt-0 pb-0">
-        {/* Pinned: what this entry adds to. It never scrolls away. */}
-        <div className="sticky top-0 z-[1] -mx-24 flex flex-col gap-8 border-b border-[var(--color-border-tertiary)] bg-[var(--paper)] px-24 pt-12 pb-12">
-          <button type="button" onClick={onBack} className="inline-flex min-h-44 items-center gap-6 self-start body-small font-medium text-[var(--color-text-interaction-primary)]">
-            <ArrowLeftIcon size={16} weight="bold" aria-hidden="true" />
-            Back to ledger
-          </button>
-          {showRecords && !gas && (
-            <div className="flex flex-col gap-8 bg-[var(--sea)] px-12 py-10">
-              {line.records && (
-                <div className="flex flex-col gap-4">
-                  <div className="flex items-baseline justify-between gap-12">
-                    <span className="body-caption font-medium text-[var(--color-text-secondary)]">From records</span>
-                    {line.auto && <span className="body-small font-medium tabular-nums">{formatFigure(line.auto.value, def.unit)}</span>}
-                  </div>
-                  <RecordsDetail line={line} pinned />
-                </div>
-              )}
-              {others.length > 0 && (
-                <div className="flex items-baseline justify-between gap-12 [border-top:var(--row-divider)] pt-6 first:[border-top:none] first:pt-0">
-                  <span className="body-caption font-medium text-[var(--color-text-secondary)]">{`${line.records ? "+ " : ""}${entriesWord(others.length)} already`}</span>
-                  <span className="body-small tabular-nums">{formatFigure(sumOf(line, others), def.unit)}</span>
-                </div>
-              )}
-            </div>
-          )}
-          {guard && !gas && (gapWarning ? <Notice tone="warning">{guard}</Notice> : <p className="body-caption text-[var(--color-text-secondary)]">{guard}</p>)}
-        </div>
-        <div className="flex flex-col gap-20 pt-20">
+      <SlideOverPanelBody>
+        <div className="flex flex-col gap-20">
           {replacesZero && <Notice tone="warning">{`This replaces Nothing to record on ${def.name}.`}</Notice>}
           {again && <p className="body-small text-[var(--color-text-secondary)]">{`Replaces ${entryText(def, again)} from ${formatDate(again.date)}, which stopped counting after a template change.`}</p>}
-          <p className="body-caption font-medium text-[var(--color-text-secondary)]">{line.auto || others.length ? "Entry, on top" : "Entry"}</p>
           {gas ? (
             <>
               {GAS_INPUTS.map((input) => (
@@ -687,18 +649,6 @@ function EntryForm({ batch, line, mode, onBack }: { batch: PrototypeBatch; line:
             <FormTextarea id="c3c-note" value={values.note} onChange={set("note")} />
           </FormField>
         </div>
-        {gas && <div className="h-24" aria-hidden="true" />}
-        {/* Pinned: the total this entry produces, live while typing. */}
-        {!gas && (
-          <div className="sticky bottom-0 z-[1] -mx-24 mt-20 flex flex-wrap items-center justify-between gap-x-16 gap-y-8 [border-top:var(--hair)] bg-[var(--paper)] px-24 py-12">
-            <span className="body-caption font-medium text-[var(--color-text-secondary)]">Total after save</span>
-            <span className="flex items-center gap-12" aria-live="polite">
-              <span className="[border:var(--hair-2)] px-12 py-8 body-small tabular-nums text-[var(--color-text-secondary)]">{before}</span>
-              <ArrowRightIcon size={16} weight="bold" aria-hidden="true" className="text-[var(--color-text-tertiary)]" />
-              <span className={cn("[border:var(--hair)] px-12 py-8 body-small font-medium tabular-nums", !after && "text-[var(--color-text-tertiary)]")}>{after ?? "Type a value"}</span>
-            </span>
-          </div>
-        )}
       </SlideOverPanelBody>
       <SlideOverPanelFooter>
         <Button variant="weak" onClick={onBack}>Cancel</Button>
