@@ -43,7 +43,7 @@ vi.mock("@/lib/operations/production-runs", () => ({
   deleteProductionRun: { id: "delete_production_run" },
 }));
 vi.mock("@/data-access/production-runs", () => ({
-  getProductionRunById: vi.fn(), getProductionRunReadings: vi.fn(),
+  getProductionRunById: vi.fn(),
 }));
 
 vi.mock("@/lib/log", () => ({

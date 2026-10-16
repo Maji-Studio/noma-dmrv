@@ -1,4 +1,4 @@
-// Orphaned: no mounted operator entry point. See docs/open-questions.md "isometric/structured-telemetry-path".
+// Retained non-MVP seam (#942 q25, #1014): called by src/fn/production-run-reading-imports.ts on the seed importer path; no mounted operator entry point. See docs/architecture.md#production-run-extensions.
 
 import { and, eq, sql } from "drizzle-orm";
 import { db } from "@/db";

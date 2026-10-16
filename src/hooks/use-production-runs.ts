@@ -24,7 +24,6 @@ import type {
 } from "@/data-access/production-runs";
 import {
   getProductionRunByIdFn,
-  getProductionRunReadingsFn,
   createProductionRunFn,
   updateProductionRunFn,
   deleteProductionRunFn,
@@ -79,8 +78,6 @@ export const productionRunKeys = {
   // Prefix that matches every stats variant regardless of facilityId — use for
   // invalidation so a facility-scoped stats query is refetched.
   statsPrefix: () => [...productionRunKeys.all, "stats"] as const,
-  readings: (productionRunId: string) =>
-    [...productionRunKeys.all, productionRunId, "readings"] as const,
   codeCheck: (code: string, excludeId?: string) =>
     [...productionRunKeys.all, "codeCheck", code, excludeId] as const,
 };
@@ -155,21 +152,6 @@ export function useProductionRunStats(facilityId?: string, enabled = true) {
     queryKey: productionRunKeys.stats(facilityId),
     queryFn: async ({ signal }) => unwrap(await getProductionRunStatsRead(facilityId, { signal })),
     enabled,
-    staleTime: 30000,
-  });
-}
-
-/**
- * Hook to fetch production run readings (time-series data)
- */
-export function useProductionRunReadings(
-  productionRunId: string,
-  enabled = true
-) {
-  return useQuery({
-    queryKey: productionRunKeys.readings(productionRunId),
-    queryFn: async () => unwrap(await getProductionRunReadingsFn(productionRunId)),
-    enabled: enabled && !!productionRunId,
     staleTime: 30000,
   });
 }
@@ -446,9 +428,6 @@ export function useDeleteProductionRun(
       // Remove specific run from cache
       queryClient.removeQueries({
         queryKey: productionRunKeys.detail(variables.productionRunId),
-      });
-      queryClient.removeQueries({
-        queryKey: productionRunKeys.readings(variables.productionRunId),
       });
       // Invalidate lists for consistency
       queryClient.invalidateQueries({ queryKey: productionRunKeys.lists() });

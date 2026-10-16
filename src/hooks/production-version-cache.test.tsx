@@ -6,7 +6,7 @@ import { STALE_VERSION_CONFLICT_CODE, STALE_VERSION_MESSAGE, StaleVersionError }
 const mocks = vi.hoisted(() => ({ update: vi.fn(), remove: vi.fn(), post: vi.fn(), createDelivery: vi.fn() }));
 vi.mock("@/fn/production-incidents", () => ({ getProductionIncidentsFn: vi.fn(), createProductionIncidentFn: vi.fn(), updateProductionIncidentFn: mocks.update, deleteProductionIncidentFn: mocks.remove }));
 vi.mock("@/fn/production-samples", () => ({ getProductionSamplesFn: vi.fn(), createProductionSampleFn: vi.fn(), updateProductionSampleFn: mocks.update, deleteProductionSampleFn: mocks.remove }));
-vi.mock("@/fn/production-runs", () => ({ getProductionRunByIdFn: vi.fn(), getProductionRunReadingsFn: vi.fn(), createProductionRunFn: vi.fn(), updateProductionRunFn: mocks.update, deleteProductionRunFn: mocks.remove }));
+vi.mock("@/fn/production-runs", () => ({ getProductionRunByIdFn: vi.fn(), createProductionRunFn: vi.fn(), updateProductionRunFn: mocks.update, deleteProductionRunFn: mocks.remove }));
 vi.mock("@/fn/biochar-products", () => ({ getBiocharProductsFn: vi.fn(), getBiocharProductByIdFn: vi.fn(), createBiocharProductFn: vi.fn(), updateBiocharProductFn: mocks.update, deleteBiocharProductFn: mocks.remove }));
 vi.mock("@/fn/output-stock", () => ({ getMatchingOutputBinsFn: vi.fn(), getOutputStockHistoryFn: vi.fn(), getOutputSubBinsFn: vi.fn(), postOutputStockFn: mocks.post, previewOutputStockFn: vi.fn() }));
 // Keep indirectly imported query-key factories without loading server modules.
