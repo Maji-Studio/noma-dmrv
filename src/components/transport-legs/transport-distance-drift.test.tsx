@@ -68,7 +68,7 @@ describe("TransportDistanceDriftNotice", () => {
     renderNotice();
     fireEvent.click(await screen.findByRole("button", { name: "Refresh from location" }));
     expect(screen.getByText("Refresh distance from location?")).toBeTruthy();
-    expect(screen.getByText("The recorded distance changes from 42 km to 55 km, and the feedstock's transport is recalculated.")).toBeTruthy();
+    expect(screen.getByText("The recorded distance changes from 42 km to 55 km, the location's current distance, and the feedstock's transport is recalculated.")).toBeTruthy();
     const confirm = screen.getAllByRole("button", { name: "Refresh from location" }).at(-1)!;
     await act(async () => { fireEvent.click(confirm); });
     expect(mocks.refresh).toHaveBeenCalledWith({ entityId: target.entityId, expectedVersion: 3 });
@@ -78,7 +78,7 @@ describe("TransportDistanceDriftNotice", () => {
   it("blocks the refresh when the record feeds a submitted Removal", async () => {
     renderNotice({ hasSubmittedRemoval: true });
     fireEvent.click(await screen.findByRole("button", { name: "Refresh from location" }));
-    expect(screen.getByText(/This feedstock feeds a submitted Removal, so its transport data is locked\./)).toBeTruthy();
+    expect(screen.getByText(/This feedstock feeds a submitted Removal, so its distance cannot be refreshed\./)).toBeTruthy();
     const confirm = screen.getAllByRole("button", { name: "Refresh from location" }).at(-1)! as HTMLButtonElement;
     expect(confirm.disabled).toBe(true);
   });

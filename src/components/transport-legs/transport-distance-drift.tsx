@@ -40,38 +40,87 @@ export function driftSummary(drift: TransportDistanceDrift & { currentDistanceKm
   return `${recorded} Location now ${formatDistanceKm(drift.currentDistanceKm)}.`;
 }
 
+type VisibleDrift = TransportDistanceDrift & { currentDistanceKm: number };
+
+/**
+ * The one confirmation for a deliberate refresh from location, shared by the
+ * read view's notice and the edit form's compact action.
+ */
+function DistanceRefreshDialog({
+  open, onClose, target, drift, recordCode, onRefused, onRefreshed,
+}: {
+  open: boolean;
+  onClose: () => void;
+  target: TransportDistanceTarget;
+  drift: VisibleDrift;
+  recordCode: string;
+  /** A refused version or a new lock changes what the next attempt sees. */
+  onRefused: () => void;
+  onRefreshed?: (refreshed: TransportDistanceDrift) => void;
+}) {
+  const refresh = useRefreshTransportDistance(target.entityType);
+  const toast = useToast();
+  const [error, setError] = useState<string | null>(null);
+  const noun = RECORD_NOUNS[target.entityType];
+  const close = () => {
+    setError(null);
+    onClose();
+  };
+  const confirm = async () => {
+    setError(null);
+    try {
+      const refreshed = await refresh.mutateAsync({ entityId: target.entityId, expectedVersion: drift.expectedVersion });
+      close();
+      toast.success(`Distance for ${recordCode} refreshed to ${formatDistanceKm(refreshed.recordedDistanceKm)}.`);
+      onRefreshed?.(refreshed);
+    } catch (refusal) {
+      setError(toSaveErrorMessage(refusal, REFRESH_FAILED_MESSAGE));
+      onRefused();
+    }
+  };
+
+  return (
+    <ConfirmActionDialog
+      isOpen={open}
+      onClose={close}
+      onConfirm={() => void confirm()}
+      title={CONFIRM_TITLE}
+      body={
+        <div className="flex flex-col gap-12">
+          <p>
+            {drift.recordedDistanceKm == null
+              ? `The ${noun} records ${formatDistanceKm(drift.currentDistanceKm)}, the location's current distance, and its transport is recalculated.`
+              : `The recorded distance changes from ${formatDistanceKm(drift.recordedDistanceKm)} to ${formatDistanceKm(drift.currentDistanceKm)}, the location's current distance, and the ${noun}'s transport is recalculated.`}
+          </p>
+          {drift.hasSubmittedRemoval && (
+            <Notice tone="error" title="Locked by a submitted Removal">
+              {`This ${noun} feeds a submitted Removal, so its distance cannot be refreshed. Ask an Organization Admin to review the linked Removal.`}
+            </Notice>
+          )}
+        </div>
+      }
+      confirmLabel={REFRESH_FROM_LOCATION_LABEL}
+      busyLabel="Refreshing…"
+      variant="neutral"
+      isPending={refresh.isPending}
+      confirmDisabled={drift.hasSubmittedRemoval}
+      errorMessage={error ?? undefined}
+    />
+  );
+}
+
 interface TransportDistanceDriftNoticeProps {
   target: TransportDistanceTarget;
   /** Stable record code for the confirmation toast. */
   recordCode: string;
 }
 
+/** Read view: a warning notice with the drift and its refresh action. */
 export function TransportDistanceDriftNotice({ target, recordCode }: TransportDistanceDriftNoticeProps) {
   const drift = useTransportDistanceDrift(target);
-  const refresh = useRefreshTransportDistance(target.entityType);
-  const toast = useToast();
   const [confirming, setConfirming] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const data = drift.data;
   if (!visibleDrift(data)) return null;
-
-  const noun = RECORD_NOUNS[target.entityType];
-  const close = () => {
-    setConfirming(false);
-    setError(null);
-  };
-  const confirm = async () => {
-    setError(null);
-    try {
-      const refreshed = await refresh.mutateAsync({ entityId: target.entityId, expectedVersion: data.expectedVersion });
-      close();
-      toast.success(`Distance for ${recordCode} refreshed to ${formatDistanceKm(refreshed.recordedDistanceKm)}.`);
-    } catch (refusal) {
-      setError(toSaveErrorMessage(refusal, REFRESH_FAILED_MESSAGE));
-      // A refused version or a new lock changes what the next attempt sees.
-      void drift.refetch();
-    }
-  };
 
   return (
     <>
@@ -87,32 +136,61 @@ export function TransportDistanceDriftNotice({ target, recordCode }: TransportDi
       >
         {driftSummary(data)}
       </Notice>
-      <ConfirmActionDialog
-        isOpen={confirming}
-        onClose={close}
-        onConfirm={() => void confirm()}
-        title={CONFIRM_TITLE}
-        body={
-          <div className="flex flex-col gap-12">
-            <p>
-              {data.recordedDistanceKm == null
-                ? `The ${noun} records ${formatDistanceKm(data.currentDistanceKm)}, and its transport is recalculated.`
-                : `The recorded distance changes from ${formatDistanceKm(data.recordedDistanceKm)} to ${formatDistanceKm(data.currentDistanceKm)}, and the ${noun}'s transport is recalculated.`}
-            </p>
-            {data.hasSubmittedRemoval && (
-              <Notice tone="error" title="Feeds a submitted Removal">
-                {`This ${noun} feeds a submitted Removal, so its transport data is locked. Ask an Organization Admin to review the linked Removal.`}
-              </Notice>
-            )}
-          </div>
-        }
-        confirmLabel={REFRESH_FROM_LOCATION_LABEL}
-        busyLabel="Refreshing…"
-        variant="neutral"
-        isPending={refresh.isPending}
-        confirmDisabled={data.hasSubmittedRemoval}
-        errorMessage={error ?? undefined}
+      <DistanceRefreshDialog
+        open={confirming}
+        onClose={() => setConfirming(false)}
+        target={target}
+        drift={data}
+        recordCode={recordCode}
+        onRefused={() => void drift.refetch()}
       />
     </>
+  );
+}
+
+export const SAVE_BEFORE_REFRESH_REASON = "Save or discard your changes first.";
+
+interface DistanceDriftActionProps extends TransportDistanceDriftNoticeProps {
+  /** Why the action is unavailable, shown beside it (unsaved form edits). */
+  disabledReason?: string | null;
+  /** The refresh committed a new version: the form must reload the record. */
+  onRefreshed: (refreshed: TransportDistanceDrift) => void;
+}
+
+/**
+ * Edit form: one compact line under the derived distance, "Location now
+ * 55 km." with a small Refresh from location action and the same dialog.
+ */
+export function DistanceDriftAction({ target, recordCode, disabledReason, onRefreshed }: DistanceDriftActionProps) {
+  const drift = useTransportDistanceDrift(target);
+  const [confirming, setConfirming] = useState(false);
+  const data = drift.data;
+  if (!visibleDrift(data)) return null;
+
+  return (
+    <div className="flex flex-wrap items-center gap-x-8" data-testid="transport-distance-drift-action">
+      <p className="body-caption text-[var(--color-text-secondary)]">
+        {`Location now ${formatDistanceKm(data.currentDistanceKm)}.`}
+        {disabledReason ? ` ${disabledReason}` : ""}
+      </p>
+      <Button
+        type="button"
+        size="small"
+        variant="noOutline"
+        disabled={!!disabledReason}
+        onClick={() => setConfirming(true)}
+      >
+        {REFRESH_FROM_LOCATION_LABEL}
+      </Button>
+      <DistanceRefreshDialog
+        open={confirming}
+        onClose={() => setConfirming(false)}
+        target={target}
+        drift={data}
+        recordCode={recordCode}
+        onRefused={() => void drift.refetch()}
+        onRefreshed={onRefreshed}
+      />
+    </div>
   );
 }

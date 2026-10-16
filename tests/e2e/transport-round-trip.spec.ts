@@ -80,7 +80,7 @@ test.describe("Transport round trip (#852)", () => {
       seededData.feedstockType.name
     );
     // The seeded supplier location has no facility distance: enter one as an override.
-    await dialog.getByRole("button", { name: "Override", exact: true }).click();
+    await dialog.getByRole("button", { name: "Override the one-way distance" }).click();
     await page.fill('input[name="transportDistanceKm"]', "40");
     // The route under the entry counts the round trip.
     await expect(

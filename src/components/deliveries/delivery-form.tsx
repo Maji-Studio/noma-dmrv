@@ -23,6 +23,7 @@ import { TransportRoutePreview } from "@/components/transport-legs";
 import type { Delivery } from "@/db/schema";
 import { useClearOnDependencyChange } from "@/hooks/use-clear-on-dependency-change";
 import { DistanceOverrideField } from "@/components/transport-legs/distance-override-field";
+import { DistanceDriftAction, SAVE_BEFORE_REFRESH_REASON } from "@/components/transport-legs/transport-distance-drift";
 import { distanceOverridePatch, emptyToNullSource, hasSavedOverride, overrideDistanceError } from "@/components/transport-legs/distance-override";
 import { customerLocationDistanceLink } from "@/lib/location-distance-links";
 import type { UseDeferredAttachmentsResult } from "@/hooks/use-deferred-attachments";
@@ -79,9 +80,11 @@ interface DeliveryFormProps {
   submitLabel?: string;
   deferredAttachments?: UseDeferredAttachmentsResult;
   focusTarget?: EntityFocusTarget | null;
+  /** A refresh from location saved a new version: reopen the form on it. */
+  onDistanceRefreshed?: () => void;
 }
 
-export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = false, errorMessage, submitLabel, deferredAttachments, focusTarget }: DeliveryFormProps) {
+export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = false, errorMessage, submitLabel, deferredAttachments, focusTarget, onDistanceRefreshed }: DeliveryFormProps) {
   const refreshedDelivery = useDeliveryWithRelations(delivery?.id ?? "");
   const distanceRecord = delivery ? deliveryAfterDistanceFill(delivery, refreshedDelivery.data) : undefined;
   const isEditMode = !!delivery;
@@ -136,7 +139,7 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
     setValue,
     setError,
     clearErrors,
-    formState: { errors },
+    formState: { errors, isDirty },
   } = useForm({
     resolver: zodResolver(deliveryFormSchema),
     // onTouched so spine markers can flag errors on blur, not only on submit.
@@ -405,6 +408,14 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
             locationName={selectedOrder?.destinationName ?? null}
             awaitingMessage={watchOrderId ? null : "Select an order to load the destination's distance."}
             repairHref={customerLocationRepairHref}
+            footer={delivery && !hasSavedOverride(savedOverride) ? (
+              <DistanceDriftAction
+                target={{ entityType: "delivery", entityId: delivery.id }}
+                recordCode={delivery.code}
+                disabledReason={isDirty ? SAVE_BEFORE_REFRESH_REASON : null}
+                onRefreshed={() => onDistanceRefreshed?.()}
+              />
+            ) : undefined}
             distanceRegistration={register("distanceKmOverride", { setValueAs: nullableNumericValue })}
             sourceRegistration={register("distanceSource", { setValueAs: emptyToNullSource })}
             noteRegistration={register("distanceNote")}

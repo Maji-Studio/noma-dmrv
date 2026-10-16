@@ -100,6 +100,19 @@ export function useDeliveryWithRelations(deliveryId: string, enabled = true) {
 }
 
 /**
+ * Reads one delivery fresh, for a sheet that must reopen its form on the
+ * record's new version (after a deliberate refresh from location).
+ */
+export function useFetchDeliveryWithRelations() {
+  const queryClient = useQueryClient();
+  return (deliveryId: string) => queryClient.fetchQuery({
+    queryKey: deliveryKeys.detailWithRelations(deliveryId),
+    queryFn: async () => unwrap(await getDeliveryWithRelationsFn(deliveryId)),
+    staleTime: 0,
+  });
+}
+
+/**
  * Hook to fetch delivery statistics
  */
 export function useDeliveryStats(

@@ -18,10 +18,8 @@ export const DISTANCE_FIELD_LABEL = "One-way distance";
 export const DISTANCE_SOURCE_FIELD_LABEL = "Distance source";
 export const DISTANCE_NOTE_FIELD_LABEL = "Distance note";
 export const OVERRIDE_BUTTON_LABEL = "Override";
-export const CLEAR_OVERRIDE_BUTTON_LABEL = "Clear override";
-export const DERIVED_BASIS_LABEL = "Location default";
-export const OVERRIDE_BASIS_LABEL = "Override";
-export const OVERRIDE_DISTANCE_REQUIRED_MESSAGE = "Enter a distance, or clear the override.";
+export const RESET_OVERRIDE_BUTTON_LABEL = "Reset override";
+export const OVERRIDE_DISTANCE_REQUIRED_MESSAGE = "Enter a distance, or reset the override.";
 /** The schemas' own positive-distance message, so the field and the server agree. */
 export const OVERRIDE_DISTANCE_POSITIVE_MESSAGE = DELIVERY_DISTANCE_MESSAGE;
 
@@ -128,20 +126,48 @@ export function sourceLabel(source: DistanceSourceValue | null | undefined): str
   return source ? DISTANCE_SOURCE_LABELS[source] : null;
 }
 
-const BASIS_LABEL = "Basis";
+/**
+ * Where the distance comes from, for the ⓘ beside the One-way distance label
+ * on the form and the read view alike.
+ */
+export function distanceProvenance({
+  overriding, locationName, source, locationDefaultKm,
+}: {
+  overriding: boolean;
+  /** The location the default comes from; null when not known. */
+  locationName: string | null | undefined;
+  /** The derived distance's source. */
+  source: DistanceSourceValue | null | undefined;
+  /** What resetting an override returns to; null when the location has none. */
+  locationDefaultKm: number | null | undefined;
+}): string {
+  if (overriding) {
+    return locationDefaultKm == null
+      ? "Override. The location has no distance for this facility."
+      : `Override. Location default is ${formatDistanceKm(locationDefaultKm)}.`;
+  }
+  const from = `From ${locationName ?? "the location default"}.`;
+  const label = sourceLabel(source);
+  return label ? `${from} Source: ${label}.` : from;
+}
 
 /**
  * The read view's mirror of the form's One-way distance field: the distance
- * the record counts, and whether it is the location default or an override.
+ * the record counts, with its provenance behind the ⓘ as on the form.
  */
 export function distanceReadFields({
-  overrideKm, effectiveKm, note, pending = false,
+  overrideKm, effectiveKm, note, pending = false, locationName, derivedSource, locationDefaultKm,
 }: {
   overrideKm: number | null;
   /** The distance the record counts. */
   effectiveKm: number | null | undefined;
   note: string | null;
   pending?: boolean;
+  locationName?: string | null;
+  /** The recorded location distance's source. */
+  derivedSource?: DistanceSourceValue | null;
+  /** What resetting the override returns to. */
+  locationDefaultKm?: number | null;
 }): DetailPanelField[] {
   const overridden = isOverrideDistance(overrideKm);
   return [
@@ -149,7 +175,7 @@ export function distanceReadFields({
       label: DISTANCE_FIELD_LABEL,
       value: effectiveKm == null ? null : formatDistanceKm(effectiveKm),
       pending,
-      secondary: { label: BASIS_LABEL, value: overridden ? OVERRIDE_BASIS_LABEL : DERIVED_BASIS_LABEL },
+      hint: distanceProvenance({ overriding: overridden, locationName, source: derivedSource, locationDefaultKm }),
     },
     ...(overridden ? [{ label: DISTANCE_NOTE_FIELD_LABEL, value: note }] : []),
   ];

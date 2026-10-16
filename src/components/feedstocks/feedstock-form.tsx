@@ -49,6 +49,7 @@ import { TransportRoutePreview } from "@/components/transport-legs";
 import { useFacility } from "@/hooks/use-facilities";
 import type { EntityFocusTarget } from "@/lib/entity-deep-link";
 import { DistanceOverrideField } from "@/components/transport-legs/distance-override-field";
+import { DistanceDriftAction, SAVE_BEFORE_REFRESH_REASON } from "@/components/transport-legs/transport-distance-drift";
 import { distanceOverridePatch, emptyToNullSource, hasSavedOverride, overrideDistanceError } from "@/components/transport-legs/distance-override";
 import { useClearOnDependencyChange } from "@/hooks/use-clear-on-dependency-change";
 import { supplierLocationDistanceLink } from "@/lib/location-distance-links";
@@ -80,6 +81,8 @@ interface FeedstockFormProps {
   /** All rows a failed create produced, so evidence retry reaches each. */
   retryEntityIds?: string[];
   focusTarget?: EntityFocusTarget | null;
+  /** A refresh from location saved a new version: reopen the form on it. */
+  onDistanceRefreshed?: () => void;
 }
 
 export function FeedstockForm({
@@ -93,6 +96,7 @@ export function FeedstockForm({
   deferredAttachments,
   retryEntityIds,
   focusTarget,
+  onDistanceRefreshed,
 }: FeedstockFormProps) {
   const isEditMode = !!feedstock;
   // Returning to the saved mass clears RHF dirtiness, but is still an override.
@@ -143,7 +147,7 @@ export function FeedstockForm({
     getValues,
     setError,
     clearErrors,
-    formState: { errors, dirtyFields },
+    formState: { errors, dirtyFields, isDirty },
   } = useForm({
     resolver: zodResolver(
       isEditMode ? feedstockFormSchema : createFeedstockSchema,
@@ -438,6 +442,14 @@ export function FeedstockForm({
                 locationName={defaultSupplierLocation?.name ?? selectedSupplier?.name ?? null}
                 awaitingMessage={watchedSupplierId ? null : "Select a supplier to load its location distance."}
                 repairHref={supplierLocationRepairHref}
+                footer={feedstock && usesSavedLeg ? (
+                  <DistanceDriftAction
+                    target={{ entityType: "feedstock", entityId: feedstock.id }}
+                    recordCode={feedstock.code}
+                    disabledReason={isDirty ? SAVE_BEFORE_REFRESH_REASON : null}
+                    onRefreshed={() => onDistanceRefreshed?.()}
+                  />
+                ) : undefined}
                 distanceRegistration={register("transportDistanceKm")}
                 sourceRegistration={register("transportDistanceSource", { setValueAs: emptyToNullSource })}
                 noteRegistration={register("distanceNote")}

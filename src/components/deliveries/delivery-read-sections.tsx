@@ -57,6 +57,10 @@ export function deliverySheetSections(delivery: DeliverySheetRecord, facilities:
         overrideKm: delivery.distanceKmOverride,
         effectiveKm: delivery.effectiveDistanceKm,
         note: delivery.distanceNote,
+        locationName: delivery.destinationName,
+        derivedSource: delivery.recordedDistanceSource,
+        // Resetting a delivery override restores its recorded pair snapshot.
+        locationDefaultKm: delivery.recordedDistanceKm,
       }),
       // The leg this delivery adds to its product's biochar distribution.
       content: (

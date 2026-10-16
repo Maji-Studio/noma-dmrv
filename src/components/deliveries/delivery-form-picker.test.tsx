@@ -153,7 +153,7 @@ it("shows typed server refusals beside the delivery field", async () => {
 
 it("refuses a typed zero override with the server's message", async () => {
   render(<DeliveryForm delivery={delivery} onSubmit={vi.fn()} />, { wrapper });
-  fireEvent.click(screen.getByRole("button", { name: "Override" }));
+  fireEvent.click(screen.getByRole("button", { name: "Override the one-way distance" }));
   const input = screen.getByRole("spinbutton", { name: /One-way distance/ });
   fireEvent.change(input, { target: { value: "0" } });
   fireEvent.blur(input);

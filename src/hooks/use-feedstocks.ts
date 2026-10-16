@@ -75,6 +75,19 @@ export function useFeedstock(feedstockId: string, enabled = true) {
   });
 }
 
+/**
+ * Reads one feedstock fresh, for a sheet that must reopen its form on the
+ * record's new version (after a deliberate refresh from location).
+ */
+export function useFetchFeedstock() {
+  const queryClient = useQueryClient();
+  return (feedstockId: string) => queryClient.fetchQuery({
+    queryKey: feedstockKeys.detail(feedstockId),
+    queryFn: async () => unwrap(await getFeedstockByIdFn(feedstockId)),
+    staleTime: 0,
+  });
+}
+
 export function useFeedstockStats(
   scope?: Partial<FeedstockStatsFilterData>,
   options?: { enabled?: boolean },

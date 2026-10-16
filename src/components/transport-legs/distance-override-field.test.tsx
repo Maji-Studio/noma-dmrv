@@ -34,54 +34,69 @@ function Harness(props: Overrides) {
 }
 
 const distance = () => screen.getByRole("spinbutton", { name: /One-way distance/ }) as HTMLInputElement;
+const OVERRIDE = "Override the one-way distance";
+const RESET = "Reset override to the location default";
 
 describe("DistanceOverrideField", () => {
-  it("shows a derived distance greyed, read-only and with its provenance", () => {
+  it("shows a derived distance greyed and read-only, its provenance behind the ⓘ", () => {
     render(<Harness />);
     expect(distance().readOnly).toBe(true);
     expect(distance().value).toBe("42");
-    expect(screen.getByText("Location default")).toBeTruthy();
+    expect(screen.queryByText("Location default")).toBeNull();
+    // FormField renders the ⓘ text once for screen readers; the hover shows the same.
     expect(screen.getByText("From Kilolo depot. Source: Route calculation.")).toBeTruthy();
-    expect(distance().getAttribute("aria-describedby")).toContain("km-basis");
     expect(screen.queryByRole("combobox", { name: /Distance source/ })).toBeNull();
     expect(screen.queryByRole("textbox", { name: /Distance note/ })).toBeNull();
   });
 
-  it("unlocks manual entry from the Override button", () => {
+  it("puts the Override action inside the input, beside the unit", () => {
     const onOverride = vi.fn();
     render(<Harness onOverride={onOverride} />);
-    fireEvent.click(screen.getByRole("button", { name: "Override" }));
+    const action = screen.getByRole("button", { name: OVERRIDE });
+    expect(action.textContent).toBe("Override");
+    expect(action.parentElement).toBe(distance().parentElement);
+    expect(distance().parentElement?.textContent).toContain("km");
+    fireEvent.click(action);
     expect(onOverride).toHaveBeenCalledOnce();
   });
 
-  it("shows an override as manual, with its source and note, and what clearing returns to", () => {
+  it("shows an override with its source and note, and Reset override in the input", () => {
     const onClear = vi.fn();
     render(<Harness overriding onClear={onClear} />);
     expect(distance().readOnly).toBe(false);
-    expect(screen.getByText("Override")).toBeTruthy();
-    expect(screen.queryByText("Location default")).toBeNull();
-    expect(screen.getByText("Clearing returns to the location default, 42 km.")).toBeTruthy();
+    expect(screen.getByText("Override. Location default is 42 km.")).toBeTruthy();
+    expect(screen.queryByText("Clearing returns to the location default, 42 km.")).toBeNull();
     expect(screen.getByRole("combobox", { name: /Distance source/ })).toBeTruthy();
     expect(screen.getByRole("textbox", { name: /Distance note/ })).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Clear override" }));
+    const reset = screen.getByRole("button", { name: RESET });
+    expect(reset.textContent).toBe("Reset override");
+    expect(reset.parentElement).toBe(distance().parentElement);
+    fireEvent.click(reset);
     expect(onClear).toHaveBeenCalledOnce();
   });
 
-  it("moves focus to the control that replaced the pressed button", () => {
+  it("moves focus to the control that replaced the pressed one", () => {
     const { rerender } = render(<Harness />);
-    fireEvent.click(screen.getByRole("button", { name: "Override" }));
+    fireEvent.click(screen.getByRole("button", { name: OVERRIDE }));
     rerender(<Harness overriding />);
     expect(document.activeElement).toBe(distance());
-    fireEvent.click(screen.getByRole("button", { name: "Clear override" }));
+    fireEvent.click(screen.getByRole("button", { name: RESET }));
     rerender(<Harness />);
-    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Override" }));
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: OVERRIDE }));
+  });
+
+  it("shows the footer under a derived distance only", () => {
+    const { rerender } = render(<Harness footer={<span>Location now 55 km.</span>} />);
+    expect(screen.getByText("Location now 55 km.")).toBeTruthy();
+    rerender(<Harness overriding footer={<span>Location now 55 km.</span>} />);
+    expect(screen.queryByText("Location now 55 km.")).toBeNull();
   });
 
   it("says when the location has no distance and links the fix in a new tab", () => {
     render(<Harness derived={{ distanceKm: null, source: null }} repairHref="/suppliers?supplier=s&mode=edit" />);
     expect(distance().value).toBe("");
     expect(distance().placeholder).toBe("Not recorded");
-    expect(screen.queryByText("Location default")).toBeNull();
+    expect(screen.queryByText(/^From /)).toBeNull();
     expect(screen.getByText(/Kilolo depot has no distance for this facility\./)).toBeTruthy();
     const link = screen.getByRole("link", { name: /Add the location distance/ });
     expect(link.getAttribute("href")).toBe("/suppliers?supplier=s&mode=edit");
@@ -101,9 +116,9 @@ describe("DistanceOverrideField", () => {
   });
 
   it("shows the distance error only while overriding", () => {
-    const { rerender } = render(<Harness errors={{ distanceKm: "Enter a distance, or clear the override." }} />);
-    expect(screen.queryByText("Enter a distance, or clear the override.")).toBeNull();
-    rerender(<Harness overriding errors={{ distanceKm: "Enter a distance, or clear the override." }} />);
-    expect(screen.getByText("Enter a distance, or clear the override.")).toBeTruthy();
+    const { rerender } = render(<Harness errors={{ distanceKm: "Enter a distance, or reset the override." }} />);
+    expect(screen.queryByText("Enter a distance, or reset the override.")).toBeNull();
+    rerender(<Harness overriding errors={{ distanceKm: "Enter a distance, or reset the override." }} />);
+    expect(screen.getByText("Enter a distance, or reset the override.")).toBeTruthy();
   });
 });

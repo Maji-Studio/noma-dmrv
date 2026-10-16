@@ -212,7 +212,7 @@ test("gallery delivery and application create read edit", async ({ adminPage: pa
   await capture(page, "delivery-create-1440-simple-blocker");
   await page.locator("#deliveredWetMassKg").fill("2000");
   await fillStockMoisture(page, "delivery", "30");
-  await page.getByRole("button", { name: "Override", exact: true }).click();
+  await page.getByRole("button", { name: "Override the one-way distance" }).click();
   await page.locator("#distanceKmOverride").fill("25");
   await page.locator("#distanceKmOverride").blur();
   await pairs(page, "delivery-create", ["Mass and moisture", "Transport"]);

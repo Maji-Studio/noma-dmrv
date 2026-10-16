@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   distanceOverridePatch,
+  distanceProvenance,
   distanceReadFields,
   hasSavedOverride,
   OVERRIDE_DISTANCE_POSITIVE_MESSAGE,
@@ -114,18 +115,36 @@ describe("overrideSourceOptions", () => {
   });
 });
 
+describe("distanceProvenance", () => {
+  it("names the location and source of a derived distance", () => {
+    expect(distanceProvenance({ overriding: false, locationName: "Kilolo depot", source: "manual", locationDefaultKm: 42 }))
+      .toBe("From Kilolo depot. Source: Manual entry.");
+    expect(distanceProvenance({ overriding: false, locationName: null, source: null, locationDefaultKm: 42 }))
+      .toBe("From the location default.");
+  });
+
+  it("names what resetting an override returns to", () => {
+    expect(distanceProvenance({ overriding: true, locationName: "Kilolo depot", source: "manual", locationDefaultKm: 42 }))
+      .toBe("Override. Location default is 42 km.");
+    expect(distanceProvenance({ overriding: true, locationName: null, source: null, locationDefaultKm: null }))
+      .toBe("Override. The location has no distance for this facility.");
+  });
+});
+
 describe("distanceReadFields", () => {
-  it("reads a derived distance as the location default", () => {
-    expect(distanceReadFields({ overrideKm: null, effectiveKm: 42, note: "Old note" })).toEqual([
-      expect.objectContaining({ label: "One-way distance", value: "42 km", secondary: { label: "Basis", value: "Location default" } }),
+  it("reads a derived distance with its provenance behind the ⓘ", () => {
+    expect(distanceReadFields({ overrideKm: null, effectiveKm: 42, note: "Old note", locationName: "Dar farm", derivedSource: "map_estimate" })).toEqual([
+      expect.objectContaining({ label: "One-way distance", value: "42 km", hint: "From Dar farm. Source: Route calculation." }),
     ]);
   });
 
-  it("reads an override with its note", () => {
-    expect(distanceReadFields({ overrideKm: 60, effectiveKm: 60, note: "Detour" })).toEqual([
-      expect.objectContaining({ value: "60 km", secondary: { label: "Basis", value: "Override" } }),
+  it("reads an override with its note and the location default it replaces", () => {
+    const fields = distanceReadFields({ overrideKm: 60, effectiveKm: 60, note: "Detour", locationDefaultKm: 42 });
+    expect(fields).toEqual([
+      expect.objectContaining({ value: "60 km", hint: "Override. Location default is 42 km." }),
       { label: "Distance note", value: "Detour" },
     ]);
+    expect(fields[0]).not.toHaveProperty("secondary");
   });
 
   it("leaves a missing distance to the shared empty token", () => {

@@ -4,11 +4,11 @@
  * DistanceOverrideField: the two-state one-way distance of a feedstock or a
  * delivery (GLOSSARY "Distance override").
  *
- * Derived: the location's facility distance shows greyed and read-only with
- * its provenance, and a tertiary "Override" button unlocks manual entry.
+ * Derived: the location's facility distance shows greyed and read-only, with
+ * an "Override" action inside the input that unlocks manual entry.
  * Override: an editable distance with its source and an optional note, and
- * "Clear override" returns to the derived value. The label row names the
- * state in both, so derived and manual never read the same.
+ * the same in-field action reads "Reset override" and returns to the derived
+ * value. Where the value comes from reads behind the label's ⓘ.
  *
  * The owning form keeps the values in React Hook Form and maps them to its
  * request with `distanceOverridePatch`.
@@ -17,33 +17,39 @@ import { useState, type ComponentProps, type ReactNode } from "react";
 import type { UseFormRegisterReturn } from "react-hook-form";
 import { ArrowSquareOutIcon } from "@phosphor-icons/react/dist/ssr";
 import { Button } from "@/components/ui/button";
-import { ControlUnitSuffix, FormField, unitEndPadding } from "@/components/forms/form-field";
+import { FormField } from "@/components/forms/form-field";
 import { FormInput } from "@/components/forms/form-input";
 import { FormSelect } from "@/components/forms/form-select";
 import { FormTextarea } from "@/components/forms/form-textarea";
 import { DISTANCE_UNIT, formatDistance } from "@/components/forms/distance-calc-field";
 import type { CertFieldStatus } from "@/components/forms/cert-field-status";
 import { MISSING_VALUE } from "@/lib/copy-utils";
-import { formatDistanceKm } from "@/lib/format-utils";
 import { cn } from "@/lib/utils";
 import type { DistanceSourceValue } from "@/schemas/distance-source";
 import {
-  CLEAR_OVERRIDE_BUTTON_LABEL,
-  DERIVED_BASIS_LABEL,
   DISTANCE_FIELD_LABEL,
   DISTANCE_NOTE_FIELD_LABEL,
   DISTANCE_SOURCE_FIELD_LABEL,
-  OVERRIDE_BASIS_LABEL,
+  distanceProvenance,
   OVERRIDE_BUTTON_LABEL,
   overrideSourceOptions,
-  sourceLabel,
+  RESET_OVERRIDE_BUTTON_LABEL,
 } from "./distance-override";
 
 export const LOCATION_DISTANCE_LINK_LABEL = "Add the location distance";
 
-const DISTANCE_INPUT_STYLE = { paddingInlineEnd: unitEndPadding(DISTANCE_UNIT) } as const;
-const DERIVED_INPUT_CLASSES =
-  "bg-[var(--color-background-medium)] text-[color:var(--color-text-secondary)] cursor-default";
+/**
+ * The input group draws the flat-control frame (border, fill, focus ring,
+ * error border) around a borderless input, its unit and the in-field action,
+ * so the action never overlaps typed digits and the field keeps its 40px box.
+ */
+const GROUP_CLASSES =
+  "flex h-40 w-full items-center border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] transition-all has-[input:focus-visible]:border-[var(--color-interaction)] has-[input:focus-visible]:ring-1 has-[input:focus-visible]:ring-[var(--color-interaction)]";
+const GROUP_DERIVED_CLASSES = "bg-[var(--color-background-medium)]";
+const GROUP_ERROR_CLASSES = "border-[var(--color-signal-red)]";
+const INPUT_IN_GROUP_CLASSES =
+  "h-full min-w-0 flex-1 border-0 bg-transparent focus-visible:border-0 focus-visible:ring-0";
+const DERIVED_INPUT_CLASSES = "text-[color:var(--color-text-secondary)] cursor-default";
 const LINK_ICON_SIZE = 14;
 
 type FocusTarget = "input" | "override" | null;
@@ -53,7 +59,7 @@ export interface DistanceOverrideFieldProps {
   id: string;
   sourceId: string;
   noteId: string;
-  /** Explanation behind the ⓘ: where the derived value comes from and when to override. */
+  /** Explanation behind the ⓘ, after the provenance line: when to override. */
   hint: string;
   overriding: boolean;
   onOverride: () => void;
@@ -71,6 +77,8 @@ export interface DistanceOverrideFieldProps {
   awaitingMessage?: string | null;
   /** Where the missing location distance is fixed. Opens in a new tab so the draft survives. */
   repairHref?: string | null;
+  /** A compact line under the derived input, such as the refresh from location action. */
+  footer?: ReactNode;
   distanceRegistration: UseFormRegisterReturn;
   sourceRegistration: UseFormRegisterReturn;
   noteRegistration: UseFormRegisterReturn;
@@ -100,55 +108,54 @@ function RepairLink({ href }: { href: string }) {
 
 /**
  * FormField clones its single child to attach `aria-describedby` and
- * `aria-invalid`. The input sits beside a button, so this row takes those
- * props and hands them to the input, adding the provenance line.
+ * `aria-invalid`. The input shares a frame with its unit and action, so this
+ * group takes those props and hands them to the input.
  */
-function DistanceRow({
+function DistanceInputGroup({
   inputProps,
   action,
   captionId,
+  derived,
+  invalid,
   ...aria
 }: {
   inputProps: ComponentProps<typeof FormInput>;
   action: ReactNode;
-  captionId: string;
+  captionId: string | undefined;
+  derived: boolean;
+  invalid: boolean;
   "aria-describedby"?: string;
   "aria-invalid"?: boolean | "true" | "false";
 }) {
-  const describedBy = [aria["aria-describedby"], captionId].filter(Boolean).join(" ");
+  const describedBy = [aria["aria-describedby"], captionId].filter(Boolean).join(" ") || undefined;
   return (
-    <div className="flex items-start gap-8">
-      <div className="relative grow">
-        <FormInput
-          {...inputProps}
-          className={cn("peer w-full", inputProps.className)}
-          style={DISTANCE_INPUT_STYLE}
-          aria-describedby={describedBy}
-          {...(aria["aria-invalid"] === true ? { "aria-invalid": true } : {})}
-        />
-        <ControlUnitSuffix unit={DISTANCE_UNIT} />
-      </div>
+    <div className={cn(GROUP_CLASSES, derived && GROUP_DERIVED_CLASSES, invalid && GROUP_ERROR_CLASSES)}>
+      <FormInput
+        {...inputProps}
+        className={cn(INPUT_IN_GROUP_CLASSES, inputProps.className)}
+        aria-describedby={describedBy}
+        {...(aria["aria-invalid"] === true ? { "aria-invalid": true } : {})}
+      />
+      <span aria-hidden="true" className="px-8 text-[length:var(--text-s)] text-[var(--color-text-tertiary)]">
+        {DISTANCE_UNIT}
+      </span>
       {action}
     </div>
   );
 }
 
+/** The visible line under the field: only what the operator can act on. */
 function caption({
   overriding, derived, pending, locationName, awaitingMessage,
 }: Pick<DistanceOverrideFieldProps, "overriding" | "derived" | "pending" | "locationName" | "awaitingMessage">): {
   text: string; missing: boolean;
-} {
-  if (pending) return { text: "", missing: false };
+} | null {
+  if (pending) return null;
   if (awaitingMessage) return { text: awaitingMessage, missing: false };
-  if (derived.distanceKm == null) {
+  if (!overriding && derived.distanceKm == null) {
     return { text: `${locationName ?? "The location"} has no distance for this facility.`, missing: true };
   }
-  if (overriding) {
-    return { text: `Clearing returns to the location default, ${formatDistanceKm(derived.distanceKm)}.`, missing: false };
-  }
-  const source = sourceLabel(derived.source);
-  const from = `From ${locationName ?? "the location"}.`;
-  return { text: source ? `${from} Source: ${source}.` : from, missing: false };
+  return null;
 }
 
 export function DistanceOverrideField({
@@ -164,6 +171,7 @@ export function DistanceOverrideField({
   locationName,
   awaitingMessage,
   repairHref,
+  footer,
   distanceRegistration,
   sourceRegistration,
   noteRegistration,
@@ -177,33 +185,32 @@ export function DistanceOverrideField({
   // Focus follows the switch, so keyboard users land on the control that
   // replaced the one they pressed. Applied only on mount (autoFocus).
   const [focusTarget, setFocusTarget] = useState<FocusTarget>(null);
-  const captionId = `${id}-basis`;
-  const { text, missing } = caption({ overriding, derived, pending, locationName, awaitingMessage });
+  const captionId = `${id}-caption`;
+  const line = caption({ overriding, derived, pending, locationName, awaitingMessage });
+  const provenance = pending || awaitingMessage || (!overriding && derived.distanceKm == null)
+    ? undefined
+    : distanceProvenance({ overriding, locationName, source: derived.source, locationDefaultKm: derived.distanceKm });
 
-  const toggle = overriding ? (
+  const action = (
     <Button
       type="button"
+      size="small"
       variant="noOutline"
+      className="mr-4 shrink-0"
       disabled={disabled}
+      autoFocus={!overriding && focusTarget === "override"}
+      aria-label={overriding ? `${RESET_OVERRIDE_BUTTON_LABEL} to the location default` : `${OVERRIDE_BUTTON_LABEL} the ${DISTANCE_FIELD_LABEL.toLowerCase()}`}
       onClick={() => {
-        setFocusTarget("override");
-        onClear();
+        if (overriding) {
+          setFocusTarget("override");
+          onClear();
+        } else {
+          setFocusTarget("input");
+          onOverride();
+        }
       }}
     >
-      {CLEAR_OVERRIDE_BUTTON_LABEL}
-    </Button>
-  ) : (
-    <Button
-      type="button"
-      variant="noOutline"
-      disabled={disabled}
-      autoFocus={focusTarget === "override"}
-      onClick={() => {
-        setFocusTarget("input");
-        onOverride();
-      }}
-    >
-      {OVERRIDE_BUTTON_LABEL}
+      {overriding ? RESET_OVERRIDE_BUTTON_LABEL : OVERRIDE_BUTTON_LABEL}
     </Button>
   );
 
@@ -214,17 +221,19 @@ export function DistanceOverrideField({
           id={id}
           label={DISTANCE_FIELD_LABEL}
           labelUnit={DISTANCE_UNIT}
-          hint={hint}
+          hint={provenance}
+          helperText={hint}
           error={overriding ? errors?.distanceKm : undefined}
           certifyRequired={certifyRequired}
           certifyStatus={certifyStatus}
-          aside={overriding ? OVERRIDE_BASIS_LABEL : derived.distanceKm != null && !pending ? DERIVED_BASIS_LABEL : undefined}
         >
-          <DistanceRow
-            // A fresh row per state, so autoFocus moves focus with the switch.
+          <DistanceInputGroup
+            // A fresh group per state, so autoFocus moves focus with the switch.
             key={overriding ? "override" : "derived"}
-            captionId={captionId}
-            action={toggle}
+            captionId={line ? captionId : undefined}
+            action={action}
+            derived={!overriding}
+            invalid={overriding && !!errors?.distanceKm}
             inputProps={overriding ? {
               id,
               type: "number",
@@ -246,13 +255,16 @@ export function DistanceOverrideField({
             }}
           />
         </FormField>
-        {/* The margin sits on a wrapper: type classes beat margin utilities. */}
-        <div className="mt-6">
-          <p id={captionId} className="body-caption text-[var(--color-text-tertiary)]">
-            {text}
-            {missing && repairHref ? <> <RepairLink href={repairHref} /></> : null}
-          </p>
-        </div>
+        {line && (
+          // The margin sits on a wrapper: type classes beat margin utilities.
+          <div className="mt-6">
+            <p id={captionId} className="body-caption text-[var(--color-text-tertiary)]">
+              {line.text}
+              {line.missing && repairHref ? <> <RepairLink href={repairHref} /></> : null}
+            </p>
+          </div>
+        )}
+        {!overriding && footer != null && <div className="mt-6">{footer}</div>}
       </div>
 
       {overriding && (

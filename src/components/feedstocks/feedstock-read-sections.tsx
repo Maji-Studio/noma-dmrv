@@ -8,10 +8,14 @@ import { distanceReadFields, isOverrideDistance } from "@/components/transport-l
 import { TransportDistanceDriftNotice } from "@/components/transport-legs/transport-distance-drift";
 import type { DetailPanelSection } from "@/components/ui/detail-panel";
 import type { FeedstockWithRelations } from "@/data-access/feedstocks";
+import type { DistanceSourceValue } from "@/schemas/distance-source";
 
 /** The derived leg's recorded distance, read beside the record (the drift read). */
 export interface FeedstockRecordedDistance {
   distanceKm: number | null | undefined;
+  source?: DistanceSourceValue | null;
+  /** The supplier location's current facility distance: what resetting an override returns to. */
+  locationDefaultKm?: number | null;
   pending: boolean;
 }
 
@@ -38,6 +42,9 @@ export function feedstockSheetSections(
           effectiveKm: overridden ? overrideKm : recordedDistance.distanceKm,
           note: feedstock.distanceNote,
           pending: !overridden && recordedDistance.pending,
+          locationName: feedstock.supplierName,
+          derivedSource: recordedDistance.source,
+          locationDefaultKm: recordedDistance.locationDefaultKm,
         }),
       ],
       // The saved leg reads in the step that records it, as on the form.

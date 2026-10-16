@@ -31,6 +31,7 @@ import {
   useDeliveries,
   useDeliveryStats,
   useDeliveryWithRelations,
+  useFetchDeliveryWithRelations,
   useUpdateDelivery,
 } from "@/hooks/use-deliveries";
 import { useFacilityContext } from "@/hooks/use-facility-context";
@@ -275,6 +276,7 @@ export function DeliveryList() {
   // Mutations
   const createDelivery = useCreateDelivery();
   const updateDelivery = useUpdateDelivery();
+  const fetchDelivery = useFetchDeliveryWithRelations();
   const toast = useToast();
   const createWithEvidence = useCreateWithEvidence({
     entityType: "delivery",
@@ -614,7 +616,9 @@ export function DeliveryList() {
         }
       >
         <DeliveryForm
-          key={sideSheetEntity?.id ?? "create"}
+          // The version keys the form too, so a refresh from location reopens
+          // it on the record it saved instead of a stale draft.
+          key={sideSheetEntity ? `${sideSheetEntity.id}:${sideSheetEntity.version}` : "create"}
           delivery={sideSheetEntity as Delivery | undefined}
           onSubmit={sideSheetMode === "create" ? handleCreate : handleUpdate}
           onCancel={attemptCloseSideSheet}
@@ -623,6 +627,11 @@ export function DeliveryList() {
           submitLabel={sideSheetMode === "create" ? "Create delivery" : "Save changes"}
           deferredAttachments={deferredAttachments}
           focusTarget={sideSheetMode === "edit" ? activeFocusTarget : null}
+          onDistanceRefreshed={async () => {
+            if (!sideSheetEntity) return;
+            const fresh = await fetchDelivery(sideSheetEntity.id);
+            setSideSheet({ entity: deliveryDetailToRelations(fresh), mode: "edit" });
+          }}
         />
       </EntitySideSheet>
 

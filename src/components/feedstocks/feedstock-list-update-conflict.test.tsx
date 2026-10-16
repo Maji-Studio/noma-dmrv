@@ -107,6 +107,7 @@ vi.mock("@/hooks/use-feedstocks", () => ({
     isLoading: false,
     error: null,
   }),
+  useFetchFeedstock: () => vi.fn(),
   useFeedstock: () => ({
     data: feedstock,
     error: null,

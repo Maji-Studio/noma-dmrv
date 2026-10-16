@@ -6,6 +6,7 @@ import type { Control, FieldValues } from "react-hook-form";
 import type { EntityOption } from "@/components/forms/entity-select/types";
 
 const mocks = vi.hoisted(() => ({
+  driftActionReason: undefined as string | null | undefined,
   supplierSelectProps: undefined as
     | {
         allowCreate?: boolean;
@@ -117,6 +118,14 @@ vi.mock("@/hooks/use-facility-context", () => ({
 vi.mock("@/hooks/use-suppliers", () => ({
   useSupplier: () => ({ data: undefined }),
   useSupplierLocationsBySupplier: () => ({ data: [] }),
+}));
+// The edit-mode refresh action has its own DOM test.
+vi.mock("@/components/transport-legs/transport-distance-drift", () => ({
+  DistanceDriftAction: (props: { disabledReason?: string | null }) => {
+    mocks.driftActionReason = props.disabledReason;
+    return null;
+  },
+  SAVE_BEFORE_REFRESH_REASON: "Save or discard your changes first.",
 }));
 vi.mock("@/hooks/use-transport-legs", () => ({
   useTransportLegsForEntity: () => ({ data: [{ distanceKm: 42, distanceSource: "manual" }] }),
@@ -268,6 +277,17 @@ describe("FeedstockForm single-bin mass editing", () => {
     } finally { await act(async () => renderer.unmount()); }
   });
 
+  it("offers the refresh from location until the form has unsaved edits", async () => {
+    const { renderer } = await renderForm(feedstock);
+    try {
+      expect(mocks.driftActionReason).toBeNull();
+      await act(async () => {
+        await renderer.root.findByProps({ name: "totalWetMassKg" }).props.onChange({ target: { name: "totalWetMassKg", value: 150 } });
+      });
+      expect(mocks.driftActionReason).toBe("Save or discard your changes first.");
+    } finally { await act(async () => renderer.unmount()); }
+  });
+
   it("sets an override with its source after Override unlocks entry", async () => {
     const { renderer, onSubmit } = await renderForm(feedstock);
     try {
@@ -339,7 +359,7 @@ describe("FeedstockForm single-bin mass editing", () => {
   it("clears a saved override back to the derived distance with null", async () => {
     const { renderer, onSubmit } = await renderForm(overridden);
     try {
-      await act(async () => { buttonByText(renderer, "Clear override").props.onClick(); });
+      await act(async () => { buttonByText(renderer, "Reset override").props.onClick(); });
       expect(distanceInput(renderer)).toBeUndefined();
       await submit(renderer);
       expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({

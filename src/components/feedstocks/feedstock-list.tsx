@@ -33,6 +33,7 @@ import { FeedstockForm } from "./feedstock-form";
 import {
   useFeedstocks,
   useFeedstock,
+  useFetchFeedstock,
   useCreateFeedstock,
   useUpdateFeedstock,
   useDeleteFeedstock,
@@ -281,6 +282,7 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
   );
   const createFeedstock = useCreateFeedstock();
   const updateFeedstock = useUpdateFeedstock();
+  const fetchFeedstock = useFetchFeedstock();
   const deleteFeedstock = useDeleteFeedstock();
   const toast = useToast();
   const createWithEvidence = useCreateWithEvidence({
@@ -669,11 +671,15 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
         editLabel="Edit feedstock"
         sections={sideSheetEntity ? feedstockSheetSections(sideSheetEntity, {
           distanceKm: recordedDistance.data?.recordedDistanceKm,
+          source: recordedDistance.data?.recordedDistanceSource,
+          locationDefaultKm: recordedDistance.data?.currentDistanceKm,
           pending: recordedDistance.isPending,
         }) : undefined}
       >
         <FeedstockForm
-          key={sideSheetEntity?.id ?? "create"}
+          // The version keys the form too, so a refresh from location reopens
+          // it on the record it saved instead of a stale draft.
+          key={sideSheetEntity ? `${sideSheetEntity.id}:${sideSheetEntity.version}` : "create"}
           feedstock={sideSheetEntity ?? undefined}
           onSubmit={sideSheetEntity && sideSheetMode === "edit" ? handleUpdate : handleCreate}
           onCancel={attemptCloseSideSheet}
@@ -691,6 +697,11 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
           deferredAttachments={deferredAttachments}
           retryEntityIds={createdFeedstockIds}
           focusTarget={sideSheetMode === "edit" ? activeFocusTarget : null}
+          onDistanceRefreshed={async () => {
+            if (!sideSheetEntity) return;
+            const fresh = await fetchFeedstock(sideSheetEntity.id);
+            setSideSheet({ entity: fresh, mode: "edit" });
+          }}
         />
       </EntitySideSheet>
     </div>
