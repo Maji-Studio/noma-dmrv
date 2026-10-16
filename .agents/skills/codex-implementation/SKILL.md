@@ -1,6 +1,6 @@
 ---
 name: codex-implementation
-description: Ask Codex CLI (gpt-6.1-sol at high reasoning effort) to implement scoped code changes in the current repository, then have Claude inspect the resulting diff and verification. This is how the Codex model is invoked for implementation work. Use only when the user explicitly asks to delegate implementation to Codex/gpt-6.1-sol; by default implementation goes to Claude agents and gpt-6.1-sol cross-checks.
+description: Ask Codex CLI (gpt-6.1-sol at high reasoning effort) to implement scoped code changes in the current repository, then have Claude inspect the resulting diff and verification. This is how the Codex model is invoked for implementation work. This is the default for non-UI implementation: Claude (Opus or Fable) scopes, coordinates and reviews, Codex writes the code, and the other Codex model cross-reviews. UI and frontend work stays with Claude agents.
 ---
 
 Delegate a **bounded** implementation task to the Codex CLI (gpt-6.1-sol, high reasoning, explicitly selected below), then bring the diff
