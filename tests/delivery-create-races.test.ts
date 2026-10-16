@@ -1,3 +1,4 @@
+import { apiActivityWhere } from "./helpers/api-activity";
 import { getOutputBinStocks } from "@/data-access/output-stock";
 import { withOutputStockErrors } from "@/lib/output-stock-domain-errors";
 import { z } from "zod";
@@ -9,7 +10,7 @@ import { randomUUID } from "node:crypto";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { eq, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { deliveries, orders, binMovements, creditBatchApplications, apiAuditEvents, apiIdempotencyRecords, type Delivery } from "@/db/schema";
+import { deliveries, orders, binMovements, creditBatchApplications, activityEvents, apiIdempotencyRecords, type Delivery } from "@/db/schema";
 import { createDeliveryInTransaction, updateDeliveryInTransaction } from "@/data-access/delivery-output-writes";
 import { updateOrderInTransaction } from "@/data-access/orders";
 import { createApiDeliveryWriteFixture, removeApiDeliveryWriteFixture, postDelivery, deliveryProblem, DELIVERY_AT } from "./helpers/api-delivery-write-fixture";
@@ -23,7 +24,7 @@ import { cleanupOutputStockFixture } from "./helpers/output-stock-cleanup";
 const WAIT_MS = 5000;
 const POLL_MS = 10;
 const organizations: string[] = [];
-afterEach(async () => { vi.restoreAllMocks(); for (const id of organizations.splice(0)) { await db.delete(apiAuditEvents).where(eq(apiAuditEvents.organizationId, id)); await db.delete(apiIdempotencyRecords).where(eq(apiIdempotencyRecords.organizationId, id)); await cleanupCertifiedOutputLineage(id); await cleanupOutputStockFixture(db, id); } });
+afterEach(async () => { vi.restoreAllMocks(); for (const id of organizations.splice(0)) { await db.delete(activityEvents).where(eq(activityEvents.organizationId, id)); await db.delete(apiIdempotencyRecords).where(eq(apiIdempotencyRecords.organizationId, id)); await cleanupCertifiedOutputLineage(id); await cleanupOutputStockFixture(db, id); } });
 async function fixture() { const f = await createDeliveryFixture(); organizations.push(f.ctx.organizationId); return f; }
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -209,7 +210,7 @@ it("parallel API keys through a test-only runner operation create one audit row"
   expect(results).toContainEqual(expect.objectContaining({ status: "fulfilled" }));
   const replay = await runOperation(operation, f.ctx, f.input, options);
   expect(replay.replayed).toBe(true);
-  expect(await db.select().from(apiAuditEvents).where(eq(apiAuditEvents.organizationId, f.ctx.organizationId))).toHaveLength(1);
+  expect(await db.select().from(activityEvents).where(apiActivityWhere(f.ctx.organizationId))).toHaveLength(1);
   expect(await db.select().from(deliveries).where(eq(deliveries.organizationId, f.ctx.organizationId))).toHaveLength(1);
   expect(await db.select().from(binMovements).where(eq(binMovements.idempotencyKey, f.input.idempotencyKey))).toHaveLength(1);
 });

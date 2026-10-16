@@ -1,3 +1,4 @@
+import { stringifyWithBigint } from "./helpers/api-activity";
 /** Real handlers, credentials and Postgres. Written for reviewer execution; never run by the implementation agent. */
 import { randomUUID } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -51,11 +52,11 @@ describe("lab sample create", { timeout: TIMEOUT_MS }, () => {
     expect(await labSampleRows(a)).toMatchObject([{ id: data.id, sampleCode: data.code, hToCOrgRatio: EXPECTED_H_TO_C }]);
     const audits = await labSampleAudits(a);
     expect(audits).toMatchObject([{
-      operationId: "record_lab_sample", outcomeCode: "created", transport: "rest", credentialId: a.writeCredentialId,
-      entityIds: [data.id], versionBefore: null, versionAfter: 1,
+      operationId: "record_lab_sample", action: "created", source: "rest", credentialId: a.writeCredentialId,
+      entityId: data.id, versionBefore: null, versionAfter: 1,
     }]);
     expect(audits[0].changedFields).toEqual(expect.arrayContaining(["creditBatchId", "totalCarbonPercent", "totalHydrogenPercent"]));
-    expect(JSON.stringify(audits[0])).not.toContain(WRITE_SAMPLED_AT);
+    expect(stringifyWithBigint(audits[0])).not.toContain(WRITE_SAMPLED_AT);
   });
 
   it("answers with certification warnings but no calculated-ratio notice when hydrogen and moisture are missing", async () => {
@@ -193,7 +194,7 @@ describe("lab sample update", { timeout: TIMEOUT_MS }, () => {
     expect(await readRestLabSample(a, saved.row.id)).toEqual({ row: body.data, etag: '"2.1"' });
     const audit = (await labSampleAudits(a)).find((row) => row.operationId === "update_lab_sample");
     expect(audit).toMatchObject({
-      outcomeCode: "updated", transport: "rest", credentialId: a.writeCredentialId, entityIds: [saved.row.id],
+      action: "updated", source: "rest", credentialId: a.writeCredentialId, entityId: saved.row.id,
       versionBefore: 1, versionAfter: 2, changedFields: ["labName", "totalHydrogenPercent"],
     });
   });
@@ -378,7 +379,7 @@ describe("lab sample delete", { timeout: TIMEOUT_MS }, () => {
     expect(await response.text()).toBe("");
     expect(await labSampleRows(a)).toEqual([]);
     expect((await labSampleAudits(a)).find((row) => row.operationId === "delete_lab_sample")).toMatchObject({
-      outcomeCode: "deleted", transport: "rest", entityIds: [saved.row.id], versionBefore: 1, versionAfter: null,
+      action: "deleted", source: "rest", entityId: saved.row.id, versionBefore: 1, versionAfter: null,
     });
     const again = await seedRestLabSample(a);
     expect((await deleteLabSample(a, again.row.id, again.etag, "", {})).status).toBe(204);

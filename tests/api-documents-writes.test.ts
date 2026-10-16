@@ -338,7 +338,7 @@ describe("document REST writes", { timeout: READ_TIMEOUT_MS }, () => {
     for (const spy of [storageRead, storageHead, storagePut]) expect(spy).not.toHaveBeenCalled();
     const audits = await documentAudits(a);
     expect(audits).toHaveLength(2);
-    expect(audits.filter(event => event.operationId === "confirm_document_upload")).toMatchObject([{ outcomeCode: "updated", versionBefore: 1, versionAfter: 2 }]);
+    expect(audits.filter(event => event.operationId === "confirm_document_upload")).toMatchObject([{ action: "updated", versionBefore: 1, versionAfter: 2 }]);
     const records = await documentRecords(a);
     expect(records).toHaveLength(1);
     expect(records.some(record => record.idempotencyKey === key)).toBe(false);

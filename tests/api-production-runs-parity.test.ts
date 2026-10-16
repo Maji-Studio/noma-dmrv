@@ -124,21 +124,21 @@ describe("production run three-way parity", { timeout: TIMEOUT_MS }, () => {
       else {
         expect(audits).toHaveLength(3);
         for (const audit of audits) {
-          expect(audit.transport).toBe(transport);
-          expect(audit.entityIds).toEqual([created.row.id]);
+          expect(audit.source).toBe(transport);
+          expect(audit.entityId).toBe(created.row.id);
           expect(audit.credentialId).toBe(fixture.credentialId);
         }
       }
-      auditEffects.push(audits.map(({ operationId, outcomeCode, versionBefore, versionAfter, changedFields }) =>
-        ({ operationId, outcomeCode, versionBefore, versionAfter, changedFields })).sort((a, b) => a.operationId.localeCompare(b.operationId)));
+      auditEffects.push(audits.map(({ operationId, action, versionBefore, versionAfter, changedFields }) =>
+        ({ operationId, action, versionBefore, versionAfter, changedFields })).sort((a, b) => (a.operationId ?? "").localeCompare(b.operationId ?? "")));
     }
     expect(states[1]).toEqual(states[0]);
     expect(states[2]).toEqual(states[0]);
     expect(auditEffects[2]).toEqual(auditEffects[1]);
     expect(auditEffects[1]).toEqual(expect.arrayContaining([
-      expect.objectContaining({ operationId: "start_production_run", outcomeCode: "created", versionBefore: null, versionAfter: INITIAL_RUN_VERSION }),
-      expect.objectContaining({ operationId: "update_production_run", outcomeCode: "updated", versionBefore: INITIAL_RUN_VERSION, versionAfter: NEXT_RUN_VERSION }),
-      expect.objectContaining({ operationId: "delete_production_run", outcomeCode: "deleted", versionBefore: NEXT_RUN_VERSION, versionAfter: null }),
+      expect.objectContaining({ operationId: "start_production_run", action: "created", versionBefore: null, versionAfter: INITIAL_RUN_VERSION }),
+      expect.objectContaining({ operationId: "update_production_run", action: "updated", versionBefore: INITIAL_RUN_VERSION, versionAfter: NEXT_RUN_VERSION }),
+      expect.objectContaining({ operationId: "delete_production_run", action: "deleted", versionBefore: NEXT_RUN_VERSION, versionAfter: null }),
     ]));
   });
 });

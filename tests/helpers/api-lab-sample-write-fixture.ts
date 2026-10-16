@@ -1,16 +1,17 @@
+import { apiActivityWhere } from "./api-activity";
 /** Request builders and state readers for the lab sample REST write suites. */
 import { randomUUID } from "node:crypto";
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { expect } from "vitest";
 import { db } from "@/db";
-import { apiAuditEvents, apiIdempotencyRecords, samples } from "@/db/schema";
+import { activityEvents, apiIdempotencyRecords, samples } from "@/db/schema";
 import { POST } from "@/app/api/v1/lab-samples/route";
 import { DELETE, GET, PATCH } from "@/app/api/v1/lab-samples/[idOrCode]/route";
 import { labSampleRepresentationSchema } from "@/lib/representations/lab-samples";
 import { labApiParams, type ApiLabFixture } from "./api-lab-sample-fixture";
 
 const API_URL = "http://localhost:3100/api/v1";
-const AUDIT_ENTITY = "labSample";
+const AUDIT_ENTITY = "lab_sample";
 /** Inside batch A's September window, before now. */
 export const WRITE_SAMPLED_AT = "2026-09-10T08:00:00.000Z";
 export const FUTURE_AT = "2099-01-01T00:00:00.000Z";
@@ -60,7 +61,7 @@ export const labSampleRows = (f: ApiLabFixture) =>
   db.select().from(samples).where(eq(samples.organizationId, f.ctx.organizationId)).orderBy(samples.sampleCode);
 
 export const labSampleAudits = (f: ApiLabFixture) =>
-  db.select().from(apiAuditEvents).where(and(eq(apiAuditEvents.organizationId, f.ctx.organizationId), eq(apiAuditEvents.entityType, AUDIT_ENTITY)));
+  db.select().from(activityEvents).where(apiActivityWhere(f.ctx.organizationId, eq(activityEvents.entityType, AUDIT_ENTITY)));
 export const labIdempotencyRecords = (f: ApiLabFixture) =>
   db.select().from(apiIdempotencyRecords).where(eq(apiIdempotencyRecords.organizationId, f.ctx.organizationId));
 

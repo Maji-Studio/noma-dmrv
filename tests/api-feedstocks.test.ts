@@ -1,9 +1,10 @@
 /** Real handlers and Postgres. Written for reviewer execution; never run by the implementation agent. */
+import { apiActivityWhere, stringifyWithBigint } from "./helpers/api-activity";
 import { randomUUID } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { apiAuditEvents, organizationApiAccess, apiIdempotencyRecords, facilities, feedstocks, members, storageLocations, users } from "@/db/schema";
+import { activityEvents, organizationApiAccess, apiIdempotencyRecords, facilities, feedstocks, members, storageLocations, users } from "@/db/schema";
 import { API_BODY_MAX_BYTES, API_FEEDSTOCK_MAX_ALLOCATIONS } from "@/config/api-rest";
 import { OPERATION_DEADLINE_MS } from "@/config/operations";
 import { API_KEY_DEFAULT_EXPIRY_SECONDS } from "@/config/api-keys";
@@ -447,7 +448,7 @@ describe("feedstock REST contract", { timeout: SUITE_TIMEOUT_MS }, () => {
 });
 
 
-const auditRows = () => db.select().from(apiAuditEvents).where(eq(apiAuditEvents.organizationId, a.ctx.organizationId));
+const auditRows = () => db.select().from(activityEvents).where(apiActivityWhere(a.ctx.organizationId));
 
 describe("feedstock REST guards and audit", { timeout: SUITE_TIMEOUT_MS }, () => {
   it("audits create, update and delete once with field names and response request ids", async () => {
@@ -460,21 +461,21 @@ describe("feedstock REST guards and audit", { timeout: SUITE_TIMEOUT_MS }, () =>
     const events = await auditRows();
     expect(events).toHaveLength(3);
     const expected = [
-      { response: created.response, operationId: "log_feedstock_delivery", outcomeCode: "created", versionBefore: null, versionAfter: 1,
+      { response: created.response, operationId: "log_feedstock_delivery", action: "created", versionBefore: null, versionAfter: 1,
         changedFields: ["allocations", "deliveryDate", "facilityId", "feedstockTypeId", "moisturePercent", "notes", "supplierId", "totalWetMassKg", "transportDistanceKm"] },
-      { response: updated, operationId: "update_feedstock", outcomeCode: "updated", versionBefore: 1, versionAfter: 2, changedFields: ["notes"] },
-      { response: deleted, operationId: "delete_feedstock", outcomeCode: "deleted", versionBefore: 2, versionAfter: null, changedFields: [] },
+      { response: updated, operationId: "update_feedstock", action: "updated", versionBefore: 1, versionAfter: 2, changedFields: ["notes"] },
+      { response: deleted, operationId: "delete_feedstock", action: "deleted", versionBefore: 2, versionAfter: null, changedFields: [] },
     ];
     for (const { response, ...effect } of expected) {
       const requestId = response.headers.get("x-request-id");
       expect(requestId).toBeTruthy();
       expect(events.filter((event) => event.requestId === requestId)).toHaveLength(1);
       expect(events.find((event) => event.requestId === requestId)).toMatchObject({
-        ...effect, organizationId: a.ctx.organizationId, userId: a.ctx.userId,
-        credentialId: credentialIdA, entityType: "feedstock", entityIds: [created.row.id],
+        ...effect, organizationId: a.ctx.organizationId, actorUserId: a.ctx.userId,
+        credentialId: credentialIdA, entityType: "feedstock", entityId: created.row.id,
       });
     }
-    expect(JSON.stringify(events)).not.toContain(privateNotes);
+    expect(stringifyWithBigint(events)).not.toContain(privateNotes);
   });
 
   it("adds no audit rows for dry runs or create, update and delete replays", async () => {

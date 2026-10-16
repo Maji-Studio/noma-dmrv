@@ -162,7 +162,7 @@ describe("lab sample action and REST parity", { timeout: TIMEOUT_MS }, () => {
     expect(await labSampleRows(fixtures.get("rest")!)).toEqual([]);
     expect((await labSampleAudits(fixtures.get("action")!))).toEqual([]);
     expect((await labSampleAudits(fixtures.get("rest")!)).map((row) => row.operationId).sort()).toEqual(["delete_lab_sample", "record_lab_sample"]);
-    expect((await labSampleAudits(fixtures.get("mcp")!)).map((row) => [row.operationId, row.transport]).sort())
+    expect((await labSampleAudits(fixtures.get("mcp")!)).map((row) => [row.operationId, row.source]).sort())
       .toEqual([["delete_lab_sample", "mcp"], ["record_lab_sample", "mcp"]]);
   });
 

@@ -55,8 +55,8 @@ describe("output bin stock movement writes", { timeout: TIMEOUT_MS }, () => {
     expect(history.data[0]).toEqual(data);
     expect((await captureProductWriteState(a)).movements).toMatchObject([{ id: data.id, outputKind: "loss", storageLocationId: a.source.id }]);
     expect(await productWriteAudits(a, "movement")).toMatchObject([{
-      operationId: "record_output_stock_movement", outcomeCode: "created", transport: "rest", credentialId: a.writeCredentialId,
-      entityIds: [data.id], versionBefore: null, versionAfter: null,
+      operationId: "record_output_stock_movement", action: "created", source: "rest", credentialId: a.writeCredentialId,
+      entityId: data.id, versionBefore: null, versionAfter: null,
     }]);
     expect((await productWriteAudits(a, "movement"))[0].changedFields).not.toContain("basisFingerprint");
   });

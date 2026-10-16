@@ -36,7 +36,7 @@ it("creates a delivery with allocations, an upload warning, Location and the GET
   expect(body.data).not.toHaveProperty("savedProducts");
   expect(body).not.toHaveProperty("stockEffects");
   expect(body).not.toHaveProperty("basisFingerprint");
-  expect(await audits(a)).toMatchObject([{ operationId: "record_delivery", outcomeCode: "created", transport: "rest" }]);
+  expect(await audits(a)).toMatchObject([{ operationId: "record_delivery", action: "created", source: "rest" }]);
 }, DELIVERY_TEST_TIMEOUT_MS);
 
 describe("delivery create idempotency", { timeout: DELIVERY_TEST_TIMEOUT_MS }, () => {

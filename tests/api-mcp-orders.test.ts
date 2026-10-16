@@ -129,7 +129,7 @@ describe("customer and order MCP tools", { timeout: TIMEOUT_MS }, () => {
     const deleted = await write("delete_order", { orderId: row.id, expectedVersion: current.version }, a.deleteKey);
     expect(deleted.structuredContent).toEqual({ deleted: { id: row.id, code: row.code } });
     expect(await orderRows(a)).toEqual([]);
-    expect((await orderAudits(a)).map((audit) => [audit.operationId, audit.transport]).sort()).toEqual([
+    expect((await orderAudits(a)).map((audit) => [audit.operationId, audit.source]).sort()).toEqual([
       ["delete_order", "mcp"], ["record_order", "mcp"], ["update_order", "mcp"],
     ]);
   });

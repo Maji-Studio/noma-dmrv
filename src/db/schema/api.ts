@@ -8,8 +8,7 @@
  * is inserted at the start of the write's transaction, which is the claim: a
  * concurrent duplicate waits on the uncommitted row and cannot see it.
  */
-import { sql } from "drizzle-orm";
-import { boolean, check, doublePrecision, index, integer, jsonb, pgTable, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
+import { boolean, doublePrecision, index, integer, jsonb, pgTable, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
 import { organizations } from "./auth";
 
 export const apiIdempotencyRecords = pgTable(
@@ -40,28 +39,6 @@ export const apiIdempotencyRecords = pgTable(
     index("api_idempotency_records_expires_at_idx").on(table.expiresAt),
   ],
 );
-
-export const apiAuditEvents = pgTable("api_audit_events", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  organizationId: text("organization_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),
-  userId: text("user_id").notNull(),
-  credentialId: text("credential_id").notNull(),
-  oauthClientId: text("oauth_client_id"),
-  operationId: text("operation_id").notNull(),
-  entityType: text("entity_type").notNull(),
-  entityIds: text("entity_ids").array().notNull(),
-  changedFields: text("changed_fields").array().notNull(),
-  versionBefore: integer("version_before"),
-  versionAfter: integer("version_after"),
-  requestId: text("request_id").notNull(),
-  outcomeCode: text("outcome_code").notNull(),
-  /** The API surface that carried the write: `rest` (/api/v1) or `mcp` (/api/mcp). */
-  transport: text("transport", { enum: ["rest", "mcp"] }).notNull().default("rest"),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-}, (table) => [
-  index("api_audit_events_org_created_idx").on(table.organizationId, table.createdAt),
-  check("api_audit_events_transport", sql`${table.transport} in ('rest', 'mcp')`),
-]);
 
 export const apiRateLimitBuckets = pgTable("api_rate_limit_buckets", {
   bucketKey: text("bucket_key").primaryKey(),

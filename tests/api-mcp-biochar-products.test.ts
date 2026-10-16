@@ -92,7 +92,7 @@ describe("biochar product MCP tools", { timeout: TIMEOUT_MS }, () => {
     const state = await captureProductWriteState(a);
     expect(state.products).toHaveLength(1);
     expect(state.movements).toHaveLength(1);
-    expect(await productWriteAudits(a)).toMatchObject([{ operationId: "make_biochar_product", transport: "mcp", credentialId: a.writeCredentialId, versionAfter: 1 }]);
+    expect(await productWriteAudits(a)).toMatchObject([{ operationId: "make_biochar_product", source: "mcp", credentialId: a.writeCredentialId, versionAfter: 1 }]);
   });
 
   it("makes a blend from the parts as weighed", async () => {
@@ -111,7 +111,7 @@ describe("biochar product MCP tools", { timeout: TIMEOUT_MS }, () => {
     expect(stale).toMatchObject({ isError: true, structuredContent: { code: "stale_version", current: updated.structuredContent.data } });
     const refused = await write("update_biochar_product", { biocharProductId: seeded.id, expectedVersion: 2, massKg: 1 });
     expect(refused.isError).toBe(true);
-    expect(await productWriteAudits(a)).toMatchObject([{ transport: "mcp" }, { transport: "mcp" }]);
+    expect(await productWriteAudits(a)).toMatchObject([{ source: "mcp" }, { source: "mcp" }]);
   });
 
   it("records a loss and a count, previews them key-free and audits them as mcp", async () => {
@@ -124,7 +124,7 @@ describe("biochar product MCP tools", { timeout: TIMEOUT_MS }, () => {
     expect(loss.structuredContent).not.toHaveProperty("basisFingerprint");
     const count = await write("record_output_stock_movement", movementArgs(countBody(0)));
     expect(count.structuredContent.data).toMatchObject({ kind: "count", wetMassKg: 0 });
-    expect(await productWriteAudits(a, "movement")).toMatchObject([{ transport: "mcp" }, { transport: "mcp" }]);
+    expect(await productWriteAudits(a, "movement")).toMatchObject([{ source: "mcp" }, { source: "mcp" }]);
     const history = await call("find_output_stock_movements", { idOrCode: a.source.code }, a.key);
     expect(history.structuredContent.data.map((row: { kind: string }) => row.kind)).toEqual(expect.arrayContaining(["count", "loss"]));
   });
@@ -167,7 +167,7 @@ describe("biochar product MCP tools", { timeout: TIMEOUT_MS }, () => {
     const state = await captureProductWriteState(a);
     expect(state.products).toHaveLength(1);
     expect(state.movements).toHaveLength(2);
-    expect(await productWriteAudits(a)).toMatchObject([{ transport: "rest" }]);
+    expect(await productWriteAudits(a)).toMatchObject([{ source: "rest" }]);
   });
 
   it("replays an uppercase-UUID REST key over MCP in lowercase for a product and a movement (api/uuid-case)", async () => {

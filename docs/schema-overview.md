@@ -13,7 +13,7 @@ migrations, and soft-delete semantics live in [`database.md`](./database.md).
 |---|---|
 | Auth, orgs, members, invitations | `src/db/schema/auth.ts` |
 | API credentials (`api_keys`) and management records (`api_key_owners`) | `src/db/schema/api-keys.ts` |
-| API bookkeeping (`api_idempotency_records`, `api_audit_events`, `api_rate_limit_buckets`, `organization_api_access`) | `src/db/schema/api.ts` |
+| API bookkeeping (`api_idempotency_records`, `api_rate_limit_buckets`, `organization_api_access`) | `src/db/schema/api.ts` |
 | Activity history (`activity_events`) | `src/db/schema/activity.ts` |
 | Facilities, reactors, storage locations | `src/db/schema/facilities.ts` |
 | Suppliers, customers, their locations, drivers, operators | `src/db/schema/parties.ts` |
@@ -110,30 +110,17 @@ verification fields.
 
 ## API bookkeeping
 
-All four tables live in `src/db/schema/api.ts`:
+All three tables live in `src/db/schema/api.ts`:
 
 | Table | Grain and scope |
 |---|---|
 | `api_idempotency_records` | Unique organization/credential/key claim with fingerprint, expiry and stored outcome v2. Normal claims are org-scoped; expiry purge is a system seam. |
-| `api_audit_events` | One committed API write effect with organization, actor, credential, optional OAuth client, operation, entity ids, field names, versions, request id, outcome code and transport (`rest` or `mcp`, default `rest`). No field values; inserts are org-scoped in the write transaction. |
 | `api_rate_limit_buckets` | Token balance and refill time per bucket key. Organization-neutral system seam for hashed-IP, credential and organization budgets; no org column. |
 | `organization_api_access` | Organization primary key, enabled flag, changing user id and time. Missing row means on. Credential lookup and Platform Admin directory/toggle are privileged seams; non-Platform-Admins cannot administer it. |
 
 ## Activity history
 
-`activity_events` stores org-scoped, value-free entity changes, status
-transitions and actor/source attribution. The caller's transaction owns each
-insert; reads order by `occurred_at` then unique `sequence`, newest first.
-The organization FK cascades on delete; the nullable facility reference deliberately
-has no FK to avoid deadlocks against facility archive/restore. `recordActivity`
-checks same-org facility ownership with a non-locking read in the caller's
-transaction, including archived facilities. Facilities are never hard-deleted;
-entity references survive deletes. Entity types
-use canonical snake_case names from
-`ACTIVITY_ENTITY_TYPES`; `bin_movement` identifies `bin_movements` rows.
-`src/lib/activity-entity-type.ts` maps existing runner/certification aliases to
-these names and rejects unknown values. See the full vocabulary and mapper
-contract in [database.md](./database.md#activity-events).
+`activity_events` stores entity changes and API writes under the [Activity events contract](./database.md#activity-events).
 
 ## Invariants and traps
 
