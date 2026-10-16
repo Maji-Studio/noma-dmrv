@@ -40,7 +40,7 @@ const SIDE_CLASS: Record<ChangeSide, string> = {
   from: "text-[var(--color-text-tertiary)]",
   to: "text-[var(--color-text-primary)]",
 };
-/** "Not set" takes the placeholder treatment; a deleted record is struck through. */
+/** A missing value takes the placeholder treatment; a deleted record is struck through. */
 const TONE_CLASS: Record<ActivityValueText["tone"], string | null> = {
   value: null,
   missing: "text-[var(--color-text-tertiary)]",

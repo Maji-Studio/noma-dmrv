@@ -9,7 +9,8 @@ import {
 } from "./activity-change-lines";
 import { activityFieldLabel, type ActivityItem } from "./activity-display";
 
-const live = { label: "AP-001", deleted: false, facilityId: "facility-1" };
+const FACILITY_TIME_ZONE = "Africa/Dar_es_Salaam";
+const live = { label: "AP-001", deleted: false, facilityId: "facility-1", facilityTimezone: FACILITY_TIME_ZONE };
 const SUPPLIER_ID = "0b8f8a52-7a8c-4d71-9a3e-0d7c2f1f7e11";
 const OTHER_ID = "5c1e6f0e-2a8b-4c4f-8d0a-6f9b1d2e3a44";
 
@@ -32,7 +33,7 @@ const grouped = (value: number, digits: number) =>
   value.toLocaleString(undefined, { minimumFractionDigits: digits, maximumFractionDigits: digits });
 
 describe("one line per changed field", () => {
-  it("shows old and new values, Not set for null, and changed for name-only fields", () => {
+  it("shows old and new values, Not recorded for a missing value, and changed for name-only fields", () => {
     const lines = activityFieldLines(item({
       entityType: "feedstock",
       changedFields: ["massWetKg", "notes", "moistureContentPercent"],
@@ -41,7 +42,7 @@ describe("one line per changed field", () => {
     expect(lines).toEqual([
       { kind: "value", key: "massWetKg", label: "Wet mass (kg)", from: { text: "600", tone: "value" }, to: { text: "650", tone: "value" } },
       { kind: "changed", key: "notes", label: "Notes" },
-      { kind: "value", key: "moistureContentPercent", label: "Moisture (%)", from: { text: "Not set", tone: "missing" }, to: { text: "14.2", tone: "value" } },
+      { kind: "value", key: "moistureContentPercent", label: "Moisture (%)", from: { text: "Not recorded", tone: "missing" }, to: { text: "14.2", tone: "value" } },
     ]);
   });
 
@@ -83,7 +84,7 @@ describe("GPS points", () => {
     }]);
   });
 
-  it("names origin and destination points on a transport leg, and reads an unset point as Not set", () => {
+  it("names origin and destination points on a transport leg, and reads a missing point as Not recorded", () => {
     const lines = activityFieldLines(item({
       entityType: "transport_leg",
       changedFields: ["destinationGpsLatitude", "destinationGpsLongitude", "originGpsLatitude", "originGpsLongitude"],
@@ -93,7 +94,7 @@ describe("GPS points", () => {
       },
     }));
     expect(lines.map((line) => line.label)).toEqual(["Destination GPS point", "Origin GPS point"]);
-    expect(lines[0]).toMatchObject({ from: { text: "Not set", tone: "missing" }, to: { text: "1.5, 2.5" } });
+    expect(lines[0]).toMatchObject({ from: { text: "Not recorded", tone: "missing" }, to: { text: "1.5, 2.5" } });
     expect(lines[1]).toMatchObject({ from: { text: "3, 5" }, to: { text: "4, 6" } });
   });
 
@@ -110,6 +111,15 @@ describe("GPS points", () => {
   it("shows only the coordinate that changed on older rows without the partner", () => {
     expect(activityFieldLines(item({ changedFields: ["gpsLatitude"], changes: { gpsLatitude: { from: "-8.1", to: "-8.2" } } })))
       .toEqual([{ kind: "value", key: "gpsLatitude", label: "GPS latitude", from: { text: "-8.1", tone: "value" }, to: { text: "-8.2", tone: "value" } }]);
+    expect(activityFieldLines(item({ changedFields: ["gpsLatitude"], changes: { gpsLatitude: { from: null, to: "-8.2" } } }))[0])
+      .toMatchObject({ from: { text: "Not recorded", tone: "missing" } });
+  });
+
+  it("names a missing coordinate inside a point", () => {
+    expect(activityFieldLines(item({
+      changedFields: ["gpsLatitude"],
+      changes: { gpsLatitude: { from: null, to: "-8.2" }, gpsLongitude: { from: "35.5", to: "35.5" } },
+    }))[0]).toMatchObject({ from: { text: "Not recorded, 35.5" }, to: { text: "-8.2, 35.5" } });
   });
 });
 
@@ -172,6 +182,27 @@ describe("values", () => {
     expect(formatActivityValue("samplingTime", "2026-10-15T08:30:00.000Z").text).toBe(formatDateTime("2026-10-15T08:30:00.000Z"));
   });
 
+  it("reads an instant on the record's facility clock", () => {
+    expect(formatActivityValue("samplingTime", "2026-10-15T08:30:00.000Z", FACILITY_TIME_ZONE).text).toBe("Oct 15, 2026, 11:30");
+    const [line] = activityFieldLines(item({
+      entityType: "lab_sample", changedFields: ["samplingTime"],
+      changes: { samplingTime: { from: "2026-10-15T08:30:00.000Z", to: "2026-10-15T21:15:00.000Z" } },
+    }));
+    expect(line).toMatchObject({ from: { text: "Oct 15, 2026, 11:30" }, to: { text: "Oct 16, 2026, 00:15" } });
+    // Calendar days and UTC-midnight business dates do not move with the clock.
+    expect(formatActivityValue("analysisDate", "2026-10-15", FACILITY_TIME_ZONE).text).toBe("Oct 15, 2026");
+    expect(formatActivityValue("applicationDate", "2026-10-15T00:00:00.000Z", FACILITY_TIME_ZONE).text).toBe("Oct 15, 2026");
+  });
+
+  it("reads a missing choice as Not set and any other missing value as Not recorded", () => {
+    for (const field of ["evidenceMethod", "distanceSource", "documentType", "entityType"]) {
+      expect(formatActivityValue(field, null)).toEqual({ text: "Not set", tone: "missing" });
+    }
+    for (const field of ["massWetKg", "analysisDate", "samplingTime", "labName", "gpsLatitude"]) {
+      expect(formatActivityValue(field, null)).toEqual({ text: "Not recorded", tone: "missing" });
+    }
+  });
+
   it("reads choices in the forms' words, unknown ones humanized", () => {
     expect(formatActivityValue("evidenceMethod", "boundary").text).toBe("GIS reference");
     expect(formatActivityValue("evidenceMethod", "future_method").text).toBe("Future method");
@@ -181,6 +212,9 @@ describe("values", () => {
     expect(formatActivityValue("soilTemperatureSource", "global_database").text).toBe("Global Database");
     expect(formatActivityValue("sampling", "unsampled").text).toBe("Unsampled");
     expect(formatActivityValue("vehicleType", "truck").text).toBe("Truck");
+    // Owner types read as the link labels do.
+    expect(formatActivityValue("entityType", "biochar").text).toBe("Biochar product");
+    expect(formatActivityValue("entityType", "sample").text).toBe("Sample");
   });
 });
 

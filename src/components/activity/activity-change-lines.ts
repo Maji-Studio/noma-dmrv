@@ -20,9 +20,9 @@ import {
   soilTemperatureSources,
 } from "@/schemas/applications";
 import { formatVehicleType } from "@/schemas/vehicles";
-import { documentOwnerActivityType } from "@/lib/activity-entity-type";
+import { polymorphicOwnerActivityType } from "@/lib/activity-entity-type";
 import { humanizeEnum, MISSING_VALUE } from "@/lib/copy-utils";
-import { formatCalendarDate, formatDateTime, formatDayString } from "@/lib/format-utils";
+import { formatCalendarDate, formatDateTime, formatDayString, formatFacilityDateTime } from "@/lib/format-utils";
 import { outputStockEventLabel } from "@/lib/output-stock/labels";
 // By file, not the barrel (the forms barrel pulls in the form components).
 import { ENTITY_TYPE_LABELS } from "@/components/forms/entity-select/entity-labels";
@@ -57,7 +57,6 @@ export type ActivityFieldLine =
   | { kind: "status"; key: string; label: string; from: string | null; to: string | null };
 
 export const ACTIVITY_CHANGED_WORD = "changed";
-export const ACTIVITY_NOT_SET = MISSING_VALUE.notSet;
 
 // ─── GPS pairs ───────────────────────────────────────────────────────────────
 
@@ -128,7 +127,7 @@ const ENUM_FORMATTERS: Record<string, (value: string) => string> = {
   lane: labelMap(BIN_MOVEMENT_LANE_LABELS),
   outputKind: outputStockEventLabel,
   vehicleType: formatVehicleType,
-  entityType: (value) => activityRecordTypeLabel(documentOwnerActivityType(value) ?? value),
+  entityType: (value) => activityRecordTypeLabel(polymorphicOwnerActivityType(value)),
   movementType: humanizeEnum,
   sampling: humanizeEnum,
   certifier: humanizeEnum,
@@ -152,16 +151,31 @@ export function formatStoredDecimal(text: string): string {
 }
 
 const value = (text: string): ActivityValueText => ({ text, tone: "value" });
-const NOT_SET: ActivityValueText = { text: ACTIVITY_NOT_SET, tone: "missing" };
+/**
+ * Missing values (docs/ux-writing.md): a link or a choice nobody picked is
+ * "Not set"; a measurement, date or label nobody entered is "Not recorded".
+ */
+const NOT_SET: ActivityValueText = { text: MISSING_VALUE.notSet, tone: "missing" };
+const NOT_RECORDED: ActivityValueText = { text: MISSING_VALUE.notRecorded, tone: "missing" };
 
-/** One stored value as it reads on the line. */
-export function formatActivityValue(field: string, stored: ActivityValue): ActivityValueText {
-  if (stored === null) return NOT_SET;
+/**
+ * An instant of a physical event reads on the record's facility clock
+ * (docs/design-system.md, Date and time display); the viewer's clock only
+ * when the facility is unknown.
+ */
+function formatInstant(text: string, timeZone: string | null): string {
+  return timeZone ? formatFacilityDateTime(text, timeZone) : formatDateTime(text);
+}
+
+/** One stored value as it reads on the line. `timeZone` is the record's facility zone. */
+export function formatActivityValue(field: string, stored: ActivityValue, timeZone: string | null = null): ActivityValueText {
+  const choice = Object.hasOwn(ENUM_FORMATTERS, field);
+  if (stored === null) return choice ? NOT_SET : NOT_RECORDED;
   const text = String(stored);
-  if (Object.hasOwn(ENUM_FORMATTERS, field)) return value(ENUM_FORMATTERS[field](text));
+  if (choice) return value(ENUM_FORMATTERS[field](text));
   if (VERBATIM_FIELDS.has(field)) return value(text);
   if (DAY_PATTERN.test(text)) return value(formatDayString(text));
-  if (INSTANT_PATTERN.test(text)) return value(CALENDAR_DATE_FIELDS.has(field) ? formatCalendarDate(text) : formatDateTime(text));
+  if (INSTANT_PATTERN.test(text)) return value(CALENDAR_DATE_FIELDS.has(field) ? formatCalendarDate(text) : formatInstant(text, timeZone));
   if (DECIMAL_PATTERN.test(text)) return value(formatStoredDecimal(text));
   return value(text);
 }
@@ -213,8 +227,8 @@ const STATUS_FIELD = "status";
 const MEMBERSHIP_FIELD = "credit_batch";
 
 function coordinateText(latitude: ActivityValue, longitude: ActivityValue): ActivityValueText {
-  if (latitude === null && longitude === null) return NOT_SET;
-  const part = (coordinate: ActivityValue) => (coordinate === null ? ACTIVITY_NOT_SET : String(coordinate));
+  if (latitude === null && longitude === null) return NOT_RECORDED;
+  const part = (coordinate: ActivityValue) => (coordinate === null ? MISSING_VALUE.notRecorded : String(coordinate));
   return value(`${part(latitude)}, ${part(longitude)}`);
 }
 
@@ -235,13 +249,13 @@ function gpsLine(item: Pick<ActivityItem, "entityType">, changes: ActivityChange
   const change = changes[field];
   return {
     kind: "value", key: field, label: activityFieldLabel(item.entityType, field),
-    from: change.from === null ? NOT_SET : value(String(change.from)),
-    to: change.to === null ? NOT_SET : value(String(change.to)),
+    from: change.from === null ? NOT_RECORDED : value(String(change.from)),
+    to: change.to === null ? NOT_RECORDED : value(String(change.to)),
   };
 }
 
 function fieldLine(
-  item: Pick<ActivityItem, "entityType" | "changes" | "changeLabels">,
+  item: Pick<ActivityItem, "entityType" | "changes" | "changeLabels" | "record">,
   field: string,
 ): ActivityFieldLine {
   const label = activityFieldLabel(item.entityType, field);
@@ -259,7 +273,12 @@ function fieldLine(
     return from && to ? { kind: "value", key: field, label, from, to } : changed;
   }
   if (isRawId(change.from) || isRawId(change.to)) return changed;
-  return { kind: "value", key: field, label, from: formatActivityValue(field, change.from), to: formatActivityValue(field, change.to) };
+  const timeZone = item.record.facilityTimezone;
+  return {
+    kind: "value", key: field, label,
+    from: formatActivityValue(field, change.from, timeZone),
+    to: formatActivityValue(field, change.to, timeZone),
+  };
 }
 
 /**
