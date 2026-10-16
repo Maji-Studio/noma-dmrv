@@ -1100,6 +1100,13 @@
       "when": 1792161637668,
       "tag": "0156_emission_entries",
       "breakpoints": true
+    },
+    {
+      "idx": 157,
+      "version": "7",
+      "when": 1792168089742,
+      "tag": "0157_emission_entry_operator_zero",
+      "breakpoints": true
     }
   ]
 }

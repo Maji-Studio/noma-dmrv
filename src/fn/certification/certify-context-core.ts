@@ -1,3 +1,4 @@
+import { loadBatchEmissionContext } from "./batch-emission-context";
 import { removalTemplateTierCompatibilityBlocker } from "@/lib/certification/removal-template-tier";
 import { getTransportDistanceFixLinks } from "@/data-access/transport-distance-fix-links";
 import type { SubmissionLineageBlocker } from "@/lib/certification/submission-readiness";
@@ -92,7 +93,8 @@ export async function buildRemovalContext(
   scope: RemovalScope,
   facilityFacts: FacilityCertifierFacts,
 ): Promise<RemovalSubmissionContext> {
-  const templateFacts = resolveRemovalTemplate(scope.memberBatches, facilityFacts);
+  const batchEmissionFacts = await loadBatchEmissionContext(orgCtx, scope.facilityId, scope.memberBatches, facilityFacts);
+  const templateFacts = resolveRemovalTemplate(scope.memberBatches, facilityFacts, batchEmissionFacts);
   const isProduction = env.ISOMETRIC_ENVIRONMENT === "production";
   const memberBatches: MemberCreditBatch[] =
     scope.memberBatches.map(toMemberCreditBatchView);
@@ -439,6 +441,7 @@ function projectUiContext(
     lineSources: ctx.lineSources,
     templateBlockers: ctx.templateBlockers,
     emissionLines: ctx.emissionLines,
+    emissionLinesByBatchId: ctx.emissionLinesByBatchId,
     blueprintsForTemplate: ctx.blueprintsForTemplate,
     unresolvedBlueprintKeys: ctx.unresolvedBlueprintKeys,
     unbindableTemplateInputs: ctx.unbindableTemplateInputs,

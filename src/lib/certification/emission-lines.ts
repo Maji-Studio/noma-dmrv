@@ -17,6 +17,7 @@ export type EmissionLineState = keyof typeof EMISSION_LINE_STATE_LABELS;
 export interface EmissionFigure { magnitude: string; unit: string }
 export interface EmissionLineEntryFact {
   componentId: string; kind: "value" | "zero"; hasEvidence: boolean;
+  confirmedForRemovalId?: string | null;
   total: EmissionFigure | null; counts: boolean; reason?: string | null; unitMismatch?: boolean;
 }
 export interface BatchEmissionLineFacts {
@@ -57,6 +58,7 @@ export function deriveBatchEmissionLines(facts: BatchEmissionLineFacts) {
     const decision = emissionLineBindingDecision({ component, groupKey: group.key, contract: stored, problems, enrichmentComplete: facts.enrichmentComplete });
     const entries = facts.entries.filter((entry) => entry.componentId === component.id);
     const counting = entries.filter((entry) => entry.counts);
+    const operatorZero = counting.some((entry) => entry.kind === "zero" && entry.confirmedForRemovalId === null);
     const values = counting.filter((entry) => entry.kind === "value");
     const automaticFigure = contract?.automaticSource ? ownValue(facts.automaticFigures, contract.automaticSource) ?? null : null;
     let state: EmissionLineState;
@@ -65,9 +67,11 @@ export function deriveBatchEmissionLines(facts: BatchEmissionLineFacts) {
     else if (values.some((entry) => !entry.hasEvidence)) {
       state = "missingEvidence";
       blocker = { code: "entryMissingEvidence", message: "Add a file for each emissions entry with a value.", fixTarget: "emissions", lineRef: { componentId: component.id, displayName: component.displayName } };
-    } else if (automaticFigure || values.length) state = "filled";
-    else if (counting.some((entry) => entry.kind === "zero")) state = "confirmedZero";
+    } else if (!values.length && counting.some((entry) => entry.kind === "zero") &&
+      (!automaticFigure || (operatorZero && Number(automaticFigure.magnitude) === 0))) state = "confirmedZero";
+    else if (automaticFigure || values.length) state = "filled";
     else { state = "empty"; blocker = decision?.blocker; }
+    if (state === "confirmedZero" && operatorZero && blocker?.code === "lineHasNoSource") blocker = undefined;
     // A paired-input value has no scalar total. Do not show a partial sum.
     const figures = [
       ...(automaticFigure ? [automaticFigure] : []), ...values.flatMap((entry) => entry.total ? [entry.total] : []),

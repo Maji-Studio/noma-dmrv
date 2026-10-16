@@ -88,3 +88,13 @@ it.each([
     blocker: { code: "lineNeedsReview", message: reason },
   });
 });
+
+it("operator zeros take precedence over a zero automatic figure and need no file or source blocker", () => {
+  const f = facts();
+  f.entries = [entry(f, { kind: "zero", total: null, hasEvidence: false, confirmedForRemovalId: null })];
+  f.automaticFigures = { "run-electricity": { magnitude: "0", unit: "kWh" } };
+  expect(deriveBatchEmissionLines(f)[0]).toMatchObject({ state: "confirmedZero" });
+  expect(deriveBatchEmissionLines(f)[0].blocker).toBeUndefined();
+  f.lineSources[f.entries[0].componentId] = { scope: "operating", origin: "reviewed", entryPolicy: "additive" };
+  expect(deriveBatchEmissionLines(f)[0].blocker).toBeUndefined();
+});
