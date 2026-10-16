@@ -307,8 +307,21 @@ no locations. Supplier locations have no code or archive column.
 
 `GET /api/v1/customers`, `/{idOrCode}` and `/{idOrCode}/locations` use
 `customers:read`. Customer representations exclude email, phone and address;
-locations include required names and coordinates, plus optional one-way distance. Orders expose list and
-id-or-code reads under `orders:read`. Both read scopes are on by default.
+locations include required names and coordinates plus `facilityDistances`, an array
+of `{ facilityId, distanceKm, distanceSource }`. Supplier locations expose the
+same array, replacing the customer scalar distance and adding supplier facility
+distances. These list-only location endpoints do not emit revision ETags. Missing
+pairs are absent from the array. Distances are positive one-way kilometres; GPS-derived values carry
+`map_estimate`. These REST/MCP location endpoints remain read-only. App location
+writes upsert supplied facility pairs and leave omitted arrays/pairs unchanged;
+each supplied pair requires `distanceKm`. A null value removes a pair; empty
+form input normalizes to null, while an omitted key is rejected.
+Pair saves fill missing delivery snapshots and feedstock transport distances in
+the same transaction, skipping certification-locked lineage. Non-null recorded
+distances remain unchanged. Delivery snapshots store the pair independently of
+an override; effective distance is override ?? recorded. Clearing an override
+restores the snapshot, and provenance-only edits do not refresh it. Orders expose
+list and id-or-code reads under `orders:read`. Both read scopes are on by default.
 Storage locations expose `formulationId` at representation revision 3 and
 accept `type` and `formulationId` list filters.
 

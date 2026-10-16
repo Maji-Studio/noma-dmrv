@@ -1,3 +1,4 @@
+import { getTransportDistanceFixLinks } from "@/data-access/transport-distance-fix-links";
 import type { SubmissionLineageBlocker } from "@/lib/certification/submission-readiness";
 import { buildSubmissionLineageBlockers, collectFeedstockCodes } from "./certify-lineage-blockers";
 import { hasDurabilityMeasurementComponents, durabilityConfigurationBlockers } from "@/lib/certification/submission-readiness";
@@ -748,6 +749,15 @@ export async function buildRemovalContext(
     scope.feedstockCodes,
     requiredTransportCategories,
   );
+  const distanceFixLinks = await getTransportDistanceFixLinks(orgCtx,
+    submissionLineageBlockers.filter(blocker => blocker.fixTarget === "feedstocks").map(blocker => blocker.record.id),
+    submissionLineageBlockers.filter(blocker => blocker.fixTarget === "deliveryDistances").map(blocker => blocker.record.id),
+  );
+  for (const blocker of submissionLineageBlockers) {
+    if (blocker.fixTarget === "feedstocks" || blocker.fixTarget === "deliveryDistances") {
+      blocker.record.href = distanceFixLinks.get(blocker.record.id);
+    }
+  }
   const entityReadiness = await buildCertifyEntityReadiness({
     runs,
     batchesWithSamples,

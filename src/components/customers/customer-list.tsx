@@ -36,6 +36,7 @@ import type { CustomerWithRelations } from "@/data-access/customers";
 import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
 import { MISSING_VALUE } from "@/lib/copy-utils";
 import { toSaveErrorMessage, StaleVersionError, toDeleteErrorMessage } from "@/lib/stale-version";
+import { ENTITY_DEEP_LINK_EDIT_MODE, ENTITY_DEEP_LINK_MODE_PARAM } from "@/lib/entity-deep-link";
 import { CUSTOMER_DEEP_LINK_PARAM } from "@/lib/customer-links";
 import { customerSheetSections } from "./customer-read-sections";
 import { Notice } from "@/components/ui/notice";
@@ -116,6 +117,10 @@ export function CustomerList() {
     CUSTOMER_DEEP_LINK_PARAM,
     parseAsString.withOptions({ shallow: true, history: "replace" }),
   );
+  const [deepLinkMode, setDeepLinkMode] = useQueryState(
+    ENTITY_DEEP_LINK_MODE_PARAM,
+    parseAsString.withOptions({ shallow: true, history: "replace" }),
+  );
   const handledInvalidCustomerIdRef = useRef<string | null>(null);
   const [sideSheet, setSideSheet] = useState<{
     entity: CustomerWithRelations | null;
@@ -146,7 +151,7 @@ export function CustomerList() {
             ...focusedCustomer.data,
             locationCount: focusedCustomer.data.locations.length,
           },
-          mode: "view",
+          mode: deepLinkMode === ENTITY_DEEP_LINK_EDIT_MODE ? "edit" : "view",
         } as const)
       : null;
   const displaySideSheet = sideSheet ?? deepLinkedSideSheet;
@@ -176,6 +181,7 @@ export function CustomerList() {
   // Side sheet helpers
   const openCreate = () => {
     void setFocusedCustomerId(null);
+    void setDeepLinkMode(null);
     setCreateError(null);
     setUpdateError(null);
     setSideSheet({ entity: null, mode: "create" });
@@ -196,6 +202,7 @@ export function CustomerList() {
 
   const closeSideSheet = () => {
     void setFocusedCustomerId(null);
+    void setDeepLinkMode(null);
     setSideSheet(null);
     setCreateError(null);
     setUpdateError(null);
@@ -215,6 +222,7 @@ export function CustomerList() {
       handledInvalidCustomerIdRef.current = focusedCustomerId;
       toast.error("Linked customer could not be opened");
       void setFocusedCustomerId(null);
+      void setDeepLinkMode(null);
     }
   }, [
     focusedCustomer.data,
@@ -225,6 +233,7 @@ export function CustomerList() {
     focusedCustomer.isSuccess,
     focusedCustomerId,
     setFocusedCustomerId,
+    setDeepLinkMode,
     toast,
   ]);
 

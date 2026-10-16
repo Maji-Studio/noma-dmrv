@@ -61,7 +61,7 @@ describe("buildPartyLocationDetailFields", () => {
       address: null,
       gpsLatitude: -3.3,
       gpsLongitude: 37.3,
-      distanceFromFacilityKm: 12,
+      facilityDistances: [{ facilityId: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee", facilityName: "Test facility", distanceKm: 12, distanceSource: "manual" as const }],
       defaultSoilTemperatureC: 24,
       isDefault: true,
     };
@@ -69,6 +69,6 @@ describe("buildPartyLocationDetailFields", () => {
 
     expect(fields[0].label).toBe("Location 1 · Location name");
     expect(fields[10].label).toBe("Location 2 · Location name");
-    expect(fields[8].value).toBe("12 km");
+    expect(fields[8].value).toBe("Test facility: 12 km (Manual entry)");
   });
 });

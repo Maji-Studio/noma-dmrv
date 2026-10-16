@@ -152,18 +152,11 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
   }) as number | null | undefined;
   const draftDistanceSource = useWatch({ control, name: "distanceSource" });
 
-  // Destination's stored distance (+ provenance) — the value the derived
-  // transport leg falls back to when this delivery has no override
-  // (data-access/transport-legs.ts, map-integration plan decision 3).
   const selectedOrder = orders.find((o) => o.id === watchOrderId);
-  const storedDistanceKm = selectedOrder?.destinationDistanceKm ?? null;
-  const storedDistanceSource = selectedOrder?.destinationDistanceSource ?? null;
+  const storedDistanceKm = delivery ? delivery.recordedDistanceKm ?? null : selectedOrder?.destinationDistanceKm ?? null;
+  const storedDistanceSource = delivery ? delivery.recordedDistanceSource ?? null : selectedOrder?.destinationDistanceSource ?? null;
 
-  // The field displays the effective distance: override beats stored. The
-  // override is persisted only when the value genuinely differs from the
-  // stored distance, so later corrections on the customer location keep
-  // propagating to deliveries that never overrode (null-override invariant,
-  // schemas/distance-source.ts header).
+  // An override changes the effective distance; clearing it restores the snapshot.
   const effectiveDistanceKm = distanceKmOverride ?? storedDistanceKm;
   const effectiveDraftDistanceSource: DistanceSourceValue | null =
     draftDistanceSource === "document"

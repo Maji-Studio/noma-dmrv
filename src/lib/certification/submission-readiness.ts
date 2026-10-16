@@ -90,5 +90,5 @@ export function missingFeedstockTransportIds(
 export interface SubmissionLineageBlocker {
   detail: string;
   fixTarget: "feedstocks" | "deliveryEvidence" | "deliveryDistances" | "orders" | "deliveries";
-  record: { id: string; code: string };
+  record: { id: string; code: string; href?: string };
 }

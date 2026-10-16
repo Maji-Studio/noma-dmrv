@@ -45,9 +45,9 @@ const cases = [
     json: () => representDriver({ ...base, version: 7, createdAt: instant, updatedAt: instant }),
     expected: { ...expected, version: 7 } },
   { name: "supplier location", schema: supplierLocationRepresentationSchema,
-    map: () => representSupplierLocation({ ...base, ...privateFields, name: null, version: 7, supplierId: id, gpsLatitude: 0, gpsLongitude: 0 }),
-    json: () => representSupplierLocation({ ...base, name: null, version: 7, supplierId: id, gpsLatitude: 0, gpsLongitude: 0, createdAt: instant, updatedAt: instant }),
-    expected: { id, name: null, version: 7, supplierId: id, gpsLatitude: 0, gpsLongitude: 0, archivedAt: null, createdAt: instant, updatedAt: instant } },
+    map: () => representSupplierLocation({ ...base, ...privateFields, name: null, version: 7, supplierId: id, facilityDistances: [], gpsLatitude: 0, gpsLongitude: 0 }),
+    json: () => representSupplierLocation({ ...base, name: null, version: 7, supplierId: id, facilityDistances: [], gpsLatitude: 0, gpsLongitude: 0, createdAt: instant, updatedAt: instant }),
+    expected: { id, name: null, version: 7, supplierId: id, facilityDistances: [], gpsLatitude: 0, gpsLongitude: 0, archivedAt: null, createdAt: instant, updatedAt: instant } },
 ];
 
 describe.each(cases)("$name representation", ({ schema, map, json, expected: output }) => {

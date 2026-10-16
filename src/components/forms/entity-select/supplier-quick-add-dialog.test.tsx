@@ -59,6 +59,10 @@ vi.mock("@/components/ui/modal", async (importOriginal) => {
   };
 });
 
+vi.mock("@/hooks/use-facility-context", () => ({
+  useFacilityContext: () => ({ facilities: [], selectedFacility: undefined }),
+}));
+
 vi.mock("@/hooks/use-geo", () => ({
   useGeoCapabilities: () => ({ data: { routingConfigured: true } }),
   useGeocodeSearch: () => ({
@@ -194,6 +198,7 @@ describe("SupplierQuickAddDialog", () => {
           gpsLatitude: 47.3769,
           gpsLongitude: 8.5417,
           isDefault: true,
+          facilityDistances: [],
         },
       ],
     });
@@ -308,6 +313,7 @@ describe("SupplierQuickAddDialog", () => {
           gpsLatitude: 47.3769,
           gpsLongitude: 8.5417,
           isDefault: true,
+          facilityDistances: [],
         },
       ],
     });

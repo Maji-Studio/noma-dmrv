@@ -1,0 +1,60 @@
+import { and, asc, eq, inArray } from "drizzle-orm";
+import { db, type DbTransaction } from "@/db";
+import { facilities, customerLocations, supplierLocations, customerLocationFacilityDistances, supplierLocationFacilityDistances } from "@/db/schema";
+import type { OrgContext } from "@/lib/auth/server";
+import { facilityDistancesInputSchema, type FacilityDistanceInput } from "@/schemas/facility-distances";
+import { assertSameOrg, requireOrgFacility, requireOrgScope, type Executor } from "./utils";
+import { fillMissingLocationDistances } from "./location-distance-fill";
+import { nextVersion } from "./row-version";
+
+type LocationKind = "supplier" | "customer";
+
+export async function getLocationFacilityDistances(
+  ctx: OrgContext, kind: LocationKind, locationId: string, executor: Executor = db,
+) {
+  requireOrgScope(ctx);
+  const table = kind === "supplier" ? supplierLocationFacilityDistances : customerLocationFacilityDistances;
+  await assertSameOrg(ctx, kind === "supplier" ? supplierLocations : customerLocations, locationId, executor);
+  return executor.select({ facilityId: table.facilityId, distanceKm: table.distanceKm, distanceSource: table.distanceSource })
+    .from(table).where(and(eq(table.organizationId, ctx.organizationId), eq(table.locationId, locationId)))
+    .orderBy(asc(table.facilityId));
+}
+
+export async function withLocationFacilityDistances<T extends { id: string }>(
+  ctx: OrgContext, kind: LocationKind, locations: T[], executor: Executor = db,
+) {
+  requireOrgScope(ctx);
+  const table = kind === "supplier" ? supplierLocationFacilityDistances : customerLocationFacilityDistances;
+  const rows = locations.length ? await executor.select({
+    locationId: table.locationId, facilityName: facilities.name, facilityId: table.facilityId, distanceKm: table.distanceKm, distanceSource: table.distanceSource,
+  }).from(table).innerJoin(facilities, and(eq(facilities.id, table.facilityId), eq(facilities.organizationId, ctx.organizationId))).where(and(eq(table.organizationId, ctx.organizationId), inArray(table.locationId, locations.map(row => row.id))))
+    .orderBy(asc(table.facilityId)) : [];
+  return locations.map(location => ({ ...location, facilityDistances: rows.filter(row => row.locationId === location.id)
+    .map(({ facilityId, facilityName, distanceKm, distanceSource }) => ({ facilityId, facilityName, distanceKm, distanceSource })) }));
+}
+
+/** Pair writes and filling missing transport facts share the location writer's transaction. */
+export async function upsertLocationFacilityDistances(
+  ctx: OrgContext, tx: DbTransaction, kind: LocationKind, locationId: string,
+  input: FacilityDistanceInput[] | undefined,
+) {
+  requireOrgScope(ctx);
+  const rows = facilityDistancesInputSchema.parse(input);
+  if (rows === undefined) return;
+  const table = kind === "supplier" ? supplierLocationFacilityDistances : customerLocationFacilityDistances;
+  await assertSameOrg(ctx, kind === "supplier" ? supplierLocations : customerLocations, locationId, tx);
+  for (const row of rows) {
+    await requireOrgFacility(ctx, row.facilityId, tx);
+    if (row.distanceKm === null) {
+      await tx.delete(table).where(and(eq(table.organizationId, ctx.organizationId), eq(table.locationId, locationId), eq(table.facilityId, row.facilityId)));
+    } else {
+      await tx.insert(table).values({ ...row, distanceKm: row.distanceKm, locationId, organizationId: ctx.organizationId })
+        .onConflictDoUpdate({ target: [table.locationId, table.facilityId], set: {
+          distanceKm: row.distanceKm, distanceSource: row.distanceSource,
+          version: nextVersion(table.version), updatedAt: new Date(),
+        }, setWhere: eq(table.organizationId, ctx.organizationId) });
+    }
+  }
+  await fillMissingLocationDistances(ctx, tx, kind, locationId,
+    rows.flatMap(row => row.distanceKm === null ? [] : [{ ...row, distanceKm: row.distanceKm }]));
+}

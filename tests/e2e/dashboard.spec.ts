@@ -1,3 +1,4 @@
+import { supplierLocationFacilityDistances } from "@/db/schema";
 import { cleanupFeedstockFixtureParents } from "../helpers/feedstock-fixture";
 /**
  * Dashboard + credit-batch detail.
@@ -126,10 +127,9 @@ test.describe("Dashboard (Flow Hero)", () => {
           name: "Source location awaiting default selection",
           country: "TZ",
           gpsLatitude: -6.8,
-          distanceFromFacilityKm: 25,
-          distanceSource: "manual",
           isDefault: false,
         });
+        await tx.insert(supplierLocationFacilityDistances).values({ organizationId: DEC_ORG_ID, locationId: supplierLocationId, facilityId, distanceKm: 25, distanceSource: "manual" });
         await tx.insert(storageLocations).values({
           id: storageLocationId,
           organizationId: DEC_ORG_ID,

@@ -190,7 +190,7 @@ async function loadLineageWithExecutor(
           deliveryCode: deliveries.code,
           deliveryStatus: deliveries.status,
           distanceKmOverride: deliveries.distanceKmOverride,
-          locationDistanceKm: customerLocations.distanceFromFacilityKm,
+          locationDistanceKm: deliveries.recordedDistanceKm,
           customerLocationId: customerLocations.id,
           deliveryDate: deliveries.deliveryDate,
           deliveryWetMassKg: deliveries.deliveredWetMassKg,

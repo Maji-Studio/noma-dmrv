@@ -1,3 +1,4 @@
+import { supplierLocationFacilityDistances } from "@/db/schema";
 import { recordScopedWriteActivity, resolveWriteActivityScopes } from "./write-activity";
 import type { ActivityEventInput } from "./activity-events";
 import { assertRowVersion, nextVersion } from "./row-version";
@@ -572,8 +573,8 @@ export async function syncFeedstockTransportLeg(
       locationName: supplierLocations.name,
       locationGpsLatitude: supplierLocations.gpsLatitude,
       locationGpsLongitude: supplierLocations.gpsLongitude,
-      locationDistanceFromFacilityKm: supplierLocations.distanceFromFacilityKm,
-      locationDistanceSource: supplierLocations.distanceSource,
+      locationDistanceFromFacilityKm: supplierLocationFacilityDistances.distanceKm,
+      locationDistanceSource: supplierLocationFacilityDistances.distanceSource,
       facilityName: facilities.name,
       facilityGpsLatitude: facilities.gpsLatitude,
       facilityGpsLongitude: facilities.gpsLongitude,
@@ -604,6 +605,11 @@ export async function syncFeedstockTransportLeg(
         eq(transportLegs.organizationId, ctx.organizationId),
       ),
     )
+    .leftJoin(supplierLocationFacilityDistances, and(
+      eq(supplierLocationFacilityDistances.organizationId, ctx.organizationId),
+      eq(supplierLocationFacilityDistances.locationId, supplierLocations.id),
+      eq(supplierLocationFacilityDistances.facilityId, feedstocks.facilityId),
+    ))
     .where(and(eq(feedstocks.id, feedstockId), eq(feedstocks.organizationId, ctx.organizationId)));
 
   if (!row) {
@@ -719,8 +725,8 @@ async function syncLockedBiocharProductTransportLeg(
       distanceKmOverride: deliveries.distanceKmOverride,
       distanceSource: deliveries.distanceSource,
       location: {
-        distanceFromFacilityKm: customerLocations.distanceFromFacilityKm,
-        distanceSource: customerLocations.distanceSource,
+        distanceKm: deliveries.recordedDistanceKm,
+        distanceSource: deliveries.recordedDistanceSource,
         name: customerLocations.name,
         gpsLatitude: customerLocations.gpsLatitude,
         gpsLongitude: customerLocations.gpsLongitude,
@@ -827,8 +833,9 @@ export async function syncBiocharProductTransportLegs(
 /**
  * Resync the derived biochar legs of every product delivered to a given
  * customer location. The leg's distance comes from
- * `customer_locations.distance_from_facility_km`, so editing that distance must
- * recompute the affected products' legs. Call after a customer-location update.
+ * recorded delivery snapshots. Reserved for deliberate refresh workflows;
+ * location edits never call this function. A refresh must guard certified
+ * lineage and capture new delivery snapshots before recomputing products.
  */
 export async function syncBiocharLegsForCustomerLocation(
   ctx: OrgContext,

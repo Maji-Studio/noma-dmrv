@@ -1,3 +1,4 @@
+vi.mock("@/data-access/transport-distance-fix-links", () => ({ getTransportDistanceFixLinks: vi.fn(async () => new Map()) }));
 import { loadBiocharDeliveryTransportLegs } from "@/data-access/biochar-delivery-transport";
 import { toRemovalReadinessFacts } from "@/lib/certification/readiness-facts";
 import { makeTestOrgContext } from "./helpers/test-org";

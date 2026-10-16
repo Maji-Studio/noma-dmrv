@@ -53,6 +53,9 @@ export function toRemovalReadinessFacts(
         category,
         count: bucket.count,
         missingEntityIds: bucket.missingEntityIds,
+        lineageIssues: category === "feedstock"
+          ? ctx.submissionLineageBlockers.filter(blocker => blocker.fixTarget === "feedstocks")
+          : undefined,
         aggregationWarning: bucket.aggregationWarning,
       };
     }),

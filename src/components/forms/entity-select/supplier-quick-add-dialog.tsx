@@ -7,7 +7,10 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRef, useState } from "react";
-import { useForm, useWatch } from "react-hook-form";
+import type { FacilityDistanceInput } from "@/schemas/facility-distances";
+import { PartyFacilityDistances } from "@/components/party-facility-distances";
+import { useFacilityContext } from "@/hooks/use-facility-context";
+import { useController, useForm, useWatch } from "react-hook-form";
 import { FormActions } from "@/components/forms/form-actions";
 import { FormField } from "@/components/forms/form-field";
 import { FormInput } from "@/components/forms/form-input";
@@ -37,6 +40,7 @@ export function SupplierQuickAddDialog({
   onClose,
   onSuccess = () => undefined,
 }: SupplierQuickAddDialogProps) {
+  const { selectedFacility } = useFacilityContext();
   const [error, setError] = useState<string | null>(null);
   const activePayloadRef = useRef<CreateSupplierWithLocationsData | null>(null);
   const { defaults: organizationDefaults } = useOrganizationDefaultValues();
@@ -46,6 +50,7 @@ export function SupplierQuickAddDialog({
   );
   const {
     control,
+    getValues,
     formState: { errors },
     handleSubmit,
     register,
@@ -57,10 +62,12 @@ export function SupplierQuickAddDialog({
     defaultValues: {
       name: "",
       country: defaultCountry,
+      facilityDistances: [],
       gpsLatitude: undefined,
       gpsLongitude: undefined,
     },
   });
+  const { field: facilityDistances } = useController({ control, name: "facilityDistances" });
   const gpsLatitude = useWatch({
     control,
     name: "gpsLatitude",
@@ -95,6 +102,7 @@ export function SupplierQuickAddDialog({
       locations: [
         {
           country: data.country,
+          facilityDistances: data.facilityDistances,
           gpsLatitude: data.gpsLatitude,
           gpsLongitude: data.gpsLongitude,
           isDefault: true,
@@ -116,6 +124,7 @@ export function SupplierQuickAddDialog({
     reset({
       name: "",
       country: defaultCountry,
+      facilityDistances: [],
       gpsLatitude: undefined,
       gpsLongitude: undefined,
     });
@@ -200,6 +209,17 @@ export function SupplierQuickAddDialog({
           disabled={createSupplier.isPending}
         />
 
+        {selectedFacility && <PartyFacilityDistances
+          facility={selectedFacility}
+          idPrefix="supplier-quick-add-distance"
+          value={facilityDistances.value as FacilityDistanceInput[] | undefined}
+          getValue={() => getValues("facilityDistances") as FacilityDistanceInput[] | undefined}
+          onChange={facilityDistances.onChange}
+          locationPoint={gpsLatitude != null && gpsLongitude != null ? { lat: gpsLatitude, lng: gpsLongitude } : null}
+          disabled={createSupplier.isPending}
+          error={errors.facilityDistances?.message}
+          rowErrors={errors.facilityDistances}
+        />}
         <FormActions
           control={control}
           onCancel={handleClose}

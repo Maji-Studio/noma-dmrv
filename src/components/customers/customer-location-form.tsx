@@ -5,6 +5,7 @@
  */
 "use client";
 
+import { Notice } from "@/components/ui/notice";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { FormActions, makeCertFieldStatus } from "@/components/forms";
@@ -34,12 +35,10 @@ export type CustomerLocationInitialValues = Pick<CustomerLocation, "country"> &
       | "gpsLatitude"
       | "gpsLongitude"
       | "address"
-      | "distanceFromFacilityKm"
-      | "distanceSource"
       | "defaultSoilTemperatureC"
       | "isDefault"
     >
-  >;
+  > & { facilityDistances?: import("@/schemas/facility-distances").FacilityDistanceInput[] };
 
 export type EditableCustomerLocation = Pick<
   CustomerLocation,
@@ -50,8 +49,7 @@ export type EditableCustomerLocation = Pick<
   | "gpsLatitude"
   | "gpsLongitude"
   | "address"
-  | "distanceFromFacilityKm"
-  | "distanceSource"
+  | "facilityDistances"
   | "defaultSoilTemperatureC"
   | "isDefault"
 > &
@@ -107,8 +105,7 @@ export function CustomerLocationForm({
     gpsLatitude: location?.gpsLatitude ?? undefined,
     gpsLongitude: location?.gpsLongitude ?? undefined,
     address: location?.address ?? "",
-    distanceFromFacilityKm: location?.distanceFromFacilityKm ?? undefined,
-    distanceSource: location?.distanceSource ?? null,
+    facilityDistances: location?.facilityDistances ?? [],
     defaultSoilTemperatureC: location?.defaultSoilTemperatureC ?? undefined,
     isDefault: location?.isDefault ?? initialIsDefault,
   };
@@ -137,6 +134,7 @@ export function CustomerLocationForm({
       }}
       className="space-y-20"
     >
+      {isEditMode && <Notice tone="info">Existing transport legs keep their recorded distances.</Notice>}
       <CustomerLocationFields
         form={form}
         facility={facility}

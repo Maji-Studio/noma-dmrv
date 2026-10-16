@@ -201,7 +201,7 @@ async function main(): Promise<void> {
   const customer = await createCustomer(ctx, { code: "FUZZ-CUS", name: FIXTURE_LABEL });
   const customerLocation = await createCustomerLocation(ctx, {
     ...TEST_SITE_POSITION, customerId: customer.id, name: FIXTURE_LABEL, country: "FR",
-    distanceFromFacilityKm: CUSTOMER_DISTANCE_KM, distanceSource: "manual", isDefault: true,
+    facilityDistances: [{ facilityId: facility.id, distanceKm: CUSTOMER_DISTANCE_KM, distanceSource: "manual" }], isDefault: true,
   });
   const orderInput = {
     facilityId: facility.id, customerId: customer.id, customerLocationId: customerLocation.id,

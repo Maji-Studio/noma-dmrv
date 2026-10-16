@@ -260,6 +260,16 @@ describe("enrichWithTransportLegs", () => {
     expect(enriched.warnings).toEqual([]);
   });
 
+  it("does not duplicate feedstock blockers when they carry a location fix link", () => {
+    const blocker = { fixTarget: "feedstocks", detail: "Missing distance", record: { id: "feedstock-one", href: "/suppliers?location=one" } };
+    const facts = toRemovalReadinessFacts({
+      submissionLineageBlockers: [blocker], latestSubmission: null,
+      supportingDocuments: { total: 0, mirrored: 0 }, requiredTransportCategories: [],
+    } as unknown as RemovalCertifyContext);
+    expect(facts.submissionLineageIssues).toEqual([]);
+    expect(blocker.record.href).toBe("/suppliers?location=one");
+  });
+
   it("omits mixed sample vehicles when the template has no sample component", () => {
     const coverage = buildTransportCoverage({
       feedstock: [], biochar: [],

@@ -6,26 +6,24 @@
 "use client";
 
 import { useController, useForm } from "react-hook-form";
-import { ONE_WAY_EACH_DELIVERY_CUE, oneWayDistanceCue } from "@/lib/format-utils";
+import type { FacilityDistanceInput } from "@/schemas/facility-distances";
+import { PartyFacilityDistances } from "@/components/party-facility-distances";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
-  DistanceCalcField,
   FormActions,
   FormField,
   FormInput,
   FormSection,
   FormTextarea,
   PositionPicker,
-  makeCertFieldStatus,
 } from "@/components/forms";
-import { useFacilityContext } from "@/hooks/use-facility-context";
 import {
   supplierLocationFormSchema,
   type SupplierLocationFormData,
 } from "@/schemas/suppliers";
 import type { SupplierLocation } from "@/db/schema/parties";
 import { useOrganizationDefaultValues } from "@/hooks/use-organization-settings";
-import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
+import { Notice } from "@/components/ui/notice";
 import { resolveLocationCountry } from "@/lib/location-defaults";
 
 // ============================================
@@ -43,11 +41,9 @@ export type SupplierLocationInitialValues = Pick<SupplierLocation, "country"> &
       | "gpsLatitude"
       | "gpsLongitude"
       | "address"
-      | "distanceFromFacilityKm"
-      | "distanceSource"
       | "isDefault"
     >
-  >;
+  > & { facilityDistances?: FacilityDistanceInput[] };
 
 interface SupplierLocationFormProps {
   /** Existing location data for editing (undefined for create mode) */
@@ -97,13 +93,13 @@ export function SupplierLocationForm({
     gpsLatitude: location?.gpsLatitude ?? undefined,
     gpsLongitude: location?.gpsLongitude ?? undefined,
     address: location?.address ?? "",
-    distanceFromFacilityKm: location?.distanceFromFacilityKm ?? undefined,
-    distanceSource: location?.distanceSource ?? null,
+    facilityDistances: location?.facilityDistances ?? [],
     isDefault: location?.isDefault ?? initialIsDefault,
   };
 
   const {
     control,
+    getValues,
     register,
     handleSubmit,
     formState: { errors },
@@ -111,7 +107,6 @@ export function SupplierLocationForm({
     resolver: zodResolver(supplierLocationFormSchema),
     defaultValues,
   });
-  const certStatus = makeCertFieldStatus(isEditMode ? defaultValues : undefined);
 
   const defaultSubmitLabel = isEditMode ? "Update location" : "Add location";
 
@@ -124,21 +119,9 @@ export function SupplierLocationForm({
     control,
     name: "gpsLongitude",
   });
-  const { field: distanceFromFacilityField } = useController({
-    control,
-    name: "distanceFromFacilityKm",
-  });
-  const { field: distanceSourceField } = useController({
-    control,
-    name: "distanceSource",
-  });
+  const { field: facilityDistancesField } = useController({ control, name: "facilityDistances" });
   const gpsLatitude = gpsLatitudeField.value as number | null | undefined;
   const gpsLongitude = gpsLongitudeField.value as number | null | undefined;
-  const distanceFromFacilityKm = distanceFromFacilityField.value as
-    | number
-    | null
-    | undefined;
-  const distanceSource = distanceSourceField.value;
   const nameId = fieldId(idPrefix, "name");
   const countryId = fieldId(idPrefix, "country");
   const stateRegionId = idPrefix
@@ -153,14 +136,9 @@ export function SupplierLocationForm({
   const defaultId = idPrefix ? fieldId(idPrefix, "default") : "isDefault";
 
   // CALC endpoints: this source location → the globally selected facility.
-  const { selectedFacility } = useFacilityContext();
   const locationPoint =
     gpsLatitude != null && gpsLongitude != null
       ? { lat: gpsLatitude, lng: gpsLongitude }
-      : null;
-  const facilityPoint =
-    selectedFacility?.gpsLatitude != null && selectedFacility?.gpsLongitude != null
-      ? { lat: selectedFacility.gpsLatitude, lng: selectedFacility.gpsLongitude }
       : null;
 
   const handleFormSubmit = handleSubmit((data) => {
@@ -175,6 +153,7 @@ export function SupplierLocationForm({
       }}
       className="space-y-20"
     >
+      {isEditMode && <Notice tone="info">Existing transport legs keep their recorded distances.</Notice>}
       {/* Location Details Section */}
       <FormSection title="Location details" divider={false}>
         <FormField
@@ -277,30 +256,16 @@ export function SupplierLocationForm({
 
       {/* Logistics Section */}
       <FormSection title="Logistics">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-          <DistanceCalcField
-            id={distanceId}
-            label="Distance to facility"
-            error={errors.distanceFromFacilityKm?.message}
-            certifyRequired={isCertifyFormField("supplierLocation", "distanceFromFacilityKm")}
-            certifyStatus={certStatus("distanceFromFacilityKm")}
-            helperText="One-way road distance from this source location to the facility. Every feedstock delivery counts the round trip, twice this distance, in emissions."
-            cue={oneWayDistanceCue(distanceFromFacilityKm, ONE_WAY_EACH_DELIVERY_CUE)}
-            disabled={isSubmitting}
-            distanceKm={distanceFromFacilityKm}
-            distanceSource={distanceSource}
-            onDistanceChange={(km, source) => {
-              // `null` is the explicit clear; `undefined` would read as
-              // "field omitted" and leave the stored distance in place.
-              distanceFromFacilityField.onChange(km);
-              distanceSourceField.onChange(source);
-            }}
-            origin={locationPoint}
-            destination={facilityPoint}
-            originLabel="source location position"
-            destinationLabel="selected facility"
-          />
-        </div>
+        <PartyFacilityDistances
+          idPrefix={distanceId}
+          value={facilityDistancesField.value as FacilityDistanceInput[] | undefined}
+          getValue={() => getValues("facilityDistances") as FacilityDistanceInput[] | undefined}
+          onChange={facilityDistancesField.onChange}
+          locationPoint={locationPoint}
+          disabled={isSubmitting}
+          error={errors.facilityDistances?.message}
+          rowErrors={errors.facilityDistances}
+        />
 
         <div className="flex flex-col gap-4">
           <label

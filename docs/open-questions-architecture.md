@@ -424,10 +424,11 @@ Merged 2026-07-20 with the former `transport/storage-topology` — one question.
   removal template — plus whether storage-site transfers become first-class
   custody events in the trail. Touches `aggregateDistributionLegs`, the
   one-derived-per-entity index, and the batch readiness transport gate.
-- **Route freezing (#420):** `src/data-access/biochar-delivery-transport.ts:loadBiocharDeliveryTransportLegs`
-  uses live customer-location
-  distances even for submitted Removals; only the submitted payload snapshot is
-  immutable. Decide when and how to freeze routes separately from applied loads.
+- **Route freezing (resolved by #456):** location and facility pair edits leave
+  recorded transport unchanged, including per-delivery Removal accounting.
+  Delivery saves capture the pair independently of their overrides. Pair upserts
+  fill missing distances only, skipping locked certification lineage.
+  #420 retains deliberate refresh and explicit per-leg override UX.
 - **See also:** #456, #420.
 
 ### Order dates display the previous day west of UTC (`orders/order-date-display`, opened 2026-10-14)

@@ -14,13 +14,13 @@ export const SUPPLIERS = [
 ] as const;
 export const SUPPLIER_LOCATION = {
   name: "Mafinga Airport source", country: "Tanzania", stateRegion: "Iringa", city: "Mafinga",
-  gpsLatitude: -8.32, gpsLongitude: 35.29, isDefault: true, distanceSource: "manual",
+  gpsLatitude: -8.32, gpsLongitude: 35.29, isDefault: true,
 } as const;
 export const CUSTOMER = { name: "Demo Mbeya Coffee Farm", cropType: "Coffee" };
 export const CUSTOMER_LOCATION = {
   name: "Demo coffee field", country: "Tanzania", stateRegion: "Mbeya", city: "Mbeya",
-  gpsLatitude: -8.91, gpsLongitude: 33.46, distanceFromFacilityKm: 240,
-  distanceSource: "manual", isDefault: true,
+  gpsLatitude: -8.91, gpsLongitude: 33.46, distanceKm: 240,
+  isDefault: true,
 } as const;
 export const FORMULATION = { name: "Chicken manure 50/50", biocharPercent: 50, ingredientPercent: 50 };
 export const DELIVERIES = [

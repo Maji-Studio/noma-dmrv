@@ -70,8 +70,7 @@ export function CustomerLocationDialog({
         address: data.address,
         gpsLatitude: data.gpsLatitude,
         gpsLongitude: data.gpsLongitude,
-        distanceFromFacilityKm: data.distanceFromFacilityKm,
-        distanceSource: data.distanceSource,
+        facilityDistances: data.facilityDistances,
         defaultSoilTemperatureC: data.defaultSoilTemperatureC,
         isDefault: data.isDefault,
       };

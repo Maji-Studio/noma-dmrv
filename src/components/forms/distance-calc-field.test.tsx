@@ -80,14 +80,14 @@ describe("DistanceCalcField estimate button", () => {
       const button = buttonTag(markup);
       expect(button).toContain('aria-busy="true"');
       expect(hasAttr(button, "disabled")).toBe(true);
-      expect(markup).toMatch(/<button[^>]*>.*Estimate<\/button>/);
+      expect(markup).toMatch(/<button[^>]*>.*Estimate from GPS<\/button>/);
     } finally {
       routeState.isPending = false;
     }
   });
 
-  it("labels the button Estimate", () => {
+  it("labels the button Estimate from GPS", () => {
     const markup = render({ origin: point, destination: point });
-    expect(markup).toMatch(/<button[^>]*>Estimate<\/button>/);
+    expect(markup).toMatch(/<button[^>]*>Estimate from GPS<\/button>/);
   });
 });

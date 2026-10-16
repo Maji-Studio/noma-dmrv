@@ -4,6 +4,7 @@
  * Used in both create and edit views for customers
  */
 "use client";
+import { useSearchParams } from "next/navigation";
 import { toDeleteErrorMessage } from "@/lib/stale-version";
 import { useToast } from "@/components/ui/toast";
 
@@ -421,6 +422,16 @@ function LocationsSection({ customerId }: { customerId: string }) {
 
   const { data: locations, isLoading, isError } = useCustomerLocations(customerId);
   const deleteLocation = useDeleteCustomerLocation(customerId);
+
+  const searchParams = useSearchParams();
+  const locationIntent = searchParams.get("location");
+  const [handledIntent, setHandledIntent] = useState<string | null>(null);
+  const intendedLocation = locations?.find(row => row.id === locationIntent);
+  if (intendedLocation && locationIntent !== handledIntent) {
+    setHandledIntent(locationIntent);
+    setEditingLocation(intendedLocation);
+    setIsLocationDialogOpen(true);
+  }
 
   const handleDeleteConfirm = async () => {
     if (!deletingLocation) return;

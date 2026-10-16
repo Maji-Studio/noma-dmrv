@@ -214,6 +214,17 @@ describe("SubmissionChecks", () => {
     expect(html).not.toContain("Registry value sources linked");
     expect(html).not.toContain("2 files will upload on submit");
   });
+  it("keeps the location repair link on the single feedstock transport check", () => {
+    const html = renderToStaticMarkup(<SubmissionChecks
+      checks={withUnmet("transport", { transportCategory: "feedstock", lineageIssues: [{
+        detail: "Missing transport distance", fixTarget: "feedstocks",
+        record: { id: "feedstock-one", code: "FS-1", href: "/suppliers?location=location-one&mode=edit" },
+      }] })} facilityId="facility-1"
+    />);
+    expect(html).toContain('href="/suppliers?location=location-one&amp;mode=edit"');
+    expect(html).toContain("Edit location distances");
+  });
+
   it("links missing proof to the delivery evidence section", () => {
     const html = renderToStaticMarkup(<SubmissionChecks
       checks={withUnmet("entityReadiness", { lineageIssues: [{

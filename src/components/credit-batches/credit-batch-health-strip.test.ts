@@ -253,3 +253,9 @@ describe("batchHealthFixLinkFor", () => {
     },
   );
 });
+
+ it("opens the exact location form for a missing facility pair", () => {
+  const href = "/customers?facility=f1&customer=c1&mode=edit&location=l1";
+  expect(batchHealthFixLinkFor({ key: "entityReadiness", fixTarget: "deliveryDistances", affectedRecords: [{ id: "d1", code: "DL-1", href, missing: ["Distance"] }] }, "f1"))
+    .toEqual({ label: "Edit location distances", href });
+});

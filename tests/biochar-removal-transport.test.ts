@@ -1,5 +1,7 @@
+import { updateCustomerLocation } from "@/data-access/customers";
+import { customerLocations, customerLocationFacilityDistances, certificationSubmissions } from "@/db/schema";
 import { beforeAll, describe, expect, it } from "vitest";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { applicationOutputAllocations, applications, biocharProducts, creditBatchApplications, deliveries, orders, productionRuns, transportLegs } from "@/db/schema";
 import { buildMassAccounting } from "@/lib/certification/mass-accounting";
@@ -29,6 +31,34 @@ const EDITED_APPLIED_TONS = 0.05;
 beforeAll(async () => { await ensureTestOrg(); await ensureOutputFixtureActor(ctx); });
 
 describe("Removal delivery transport", () => {
+  it.each([
+    { blockingVia: "removal", status: "submitted" },
+    { blockingVia: "removal", status: "accepted" },
+    { blockingVia: "ghgStatement", status: "submitted" },
+  ] as const)("freezes location and pair edits under $status $blockingVia", async ({ blockingVia, status }) => {
+    await withLineageFixture(async fixture => {
+      await db.update(certificationSubmissions).set({ status }).where(and(
+        eq(certificationSubmissions.organizationId, TEST_ORG_ID),
+        eq(certificationSubmissions.localEntityId, fixture.ghgStatementId ?? fixture.removalId),
+      ));
+      const [order] = await db.select().from(orders).where(eq(orders.id, fixture.orderId));
+      const [location] = await db.select().from(customerLocations).where(eq(customerLocations.id, order.customerLocationId));
+      await db.insert(customerLocationFacilityDistances).values({ organizationId: TEST_ORG_ID, locationId: location.id, facilityId: fixture.facilityId, distanceKm: DISTANCE_KM, distanceSource: "manual" });
+      await db.update(deliveries).set({ distanceKmOverride: null, recordedDistanceKm: DISTANCE_KM, recordedDistanceSource: "manual" }).where(eq(deliveries.id, fixture.deliveryId));
+      const readTransport = async () => {
+        const scope = await resolveScopeForRemoval(ctx, fixture.removalId);
+        return loadTransportLegsByCategory(ctx, { feedstockIds: [], biocharProductIds: [fixture.productId], sampleIds: [] }, scope.lineages, ["biochar"]);
+      };
+      const before = await readTransport();
+      const edited = await updateCustomerLocation(ctx, location.id, { expectedVersion: location.version, name: "E2E renamed locked route" });
+      await updateCustomerLocation(ctx, location.id, { expectedVersion: edited.version, facilityDistances: [{ facilityId: fixture.facilityId, distanceKm: LATER_DISTANCE_KM, distanceSource: "map_estimate" }] });
+      const after = await readTransport();
+      expect(after.biochar.map(leg => ({ distanceKm: leg.distanceKm, distanceSource: leg.distanceSource, loadMassKg: leg.loadMassKg })))
+        .toEqual(before.biochar.map(leg => ({ distanceKm: leg.distanceKm, distanceSource: leg.distanceSource, loadMassKg: leg.loadMassKg })));
+      expect(aggregateBiocharTransportMassDistance(after.biochar).massDistanceTonneKm).toBe(EXPECTED_TONNE_KM);
+    }, blockingVia);
+  });
+
   it("keeps both frozen product slices from one application and source run", async () => {
     await withLineageFixture(async (fixture) => {
       const [product] = await db.insert(biocharProducts).values(await outputProductFixtureValues(db, {

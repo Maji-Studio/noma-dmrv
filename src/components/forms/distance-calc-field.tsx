@@ -229,7 +229,7 @@ export function DistanceCalcField({
                 aria-label={`Estimate road distance ${originLabel} to ${destinationLabel}`}
                 onClick={handleCalc}
               >
-                Estimate
+                Estimate from GPS
               </Button>
             </span>
           </Tooltip>

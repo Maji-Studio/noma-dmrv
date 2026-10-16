@@ -1,3 +1,4 @@
+import { DISTANCE_SOURCE_LABELS } from "@/schemas/distance-source";
 import type { DetailPanelField } from "@/components/ui/detail-panel";
 import { formatDistanceKm } from "@/lib/format-utils";
 
@@ -9,7 +10,7 @@ export interface PartyLocationDetail {
   address: string | null;
   gpsLatitude: number | null;
   gpsLongitude: number | null;
-  distanceFromFacilityKm: number | null;
+  facilityDistances: import("@/schemas/facility-distances").FacilityDistance[];
   isDefault: boolean;
   defaultSoilTemperatureC?: number | null;
 }
@@ -61,7 +62,7 @@ export function buildPartyLocationDetailFields(
     fields.push(
       {
         label: `${prefix}${options.distanceLabel}`,
-        value: formatDistanceKm(location?.distanceFromFacilityKm),
+        value: location?.facilityDistances.map(row => `${row.facilityName ?? row.facilityId}: ${formatDistanceKm(row.distanceKm)} (${row.distanceSource === "map_estimate" ? "GPS estimate" : DISTANCE_SOURCE_LABELS[row.distanceSource]})`).join("; ") || null,
       },
       {
         label: `${prefix}${options.defaultLabel}`,

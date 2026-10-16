@@ -1,10 +1,10 @@
 "use client";
 
 
-import { ONE_WAY_EACH_DELIVERY_CUE, oneWayDistanceCue } from "@/lib/format-utils";
+import type { FacilityDistanceInput } from "@/schemas/facility-distances";
+import { PartyFacilityDistances } from "@/components/party-facility-distances";
 import { useController, type UseFormReturn } from "react-hook-form";
 import {
-  DistanceCalcField,
   FormField,
   FormInput,
   FormSection,
@@ -12,9 +12,7 @@ import {
   PositionPicker,
   type CertFieldStatus,
 } from "@/components/forms";
-import { useFacilityContext } from "@/hooks/use-facility-context";
 import type { Facility } from "@/db/schema";
-import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
 import type {
   CustomerLocationFormData,
   CustomerLocationFormInput,
@@ -47,7 +45,6 @@ export function CustomerLocationFields({
   isSubmitting = false,
   isCurrentDefault = false,
   idPrefix,
-  certStatus = () => "neutral",
 }: CustomerLocationFieldsProps) {
   const {
     register,
@@ -64,36 +61,14 @@ export function CustomerLocationFields({
     control,
     name: "gpsLongitude",
   });
-  const { field: distanceFromFacilityField } = useController({
-    control,
-    name: "distanceFromFacilityKm",
-  });
-  const { field: distanceSourceField } = useController({
-    control,
-    name: "distanceSource",
-  });
+  const { field: facilityDistancesField } = useController({ control, name: "facilityDistances" });
   const gpsLatitude = gpsLatitudeField.value as number | null | undefined;
   const gpsLongitude = gpsLongitudeField.value as number | null | undefined;
-  const distanceFromFacilityKm = distanceFromFacilityField.value as
-    | number
-    | null
-    | undefined;
-  const distanceSource = distanceSourceField.value;
 
   // CALC endpoints: the caller's facility (or global selection) → this site.
-  const { selectedFacility } = useFacilityContext();
-  const originFacility = facility ?? selectedFacility;
   const locationPoint =
     gpsLatitude != null && gpsLongitude != null
       ? { lat: gpsLatitude, lng: gpsLongitude }
-      : null;
-  const facilityPoint =
-    originFacility?.gpsLatitude != null &&
-    originFacility?.gpsLongitude != null
-      ? {
-          lat: originFacility.gpsLatitude,
-          lng: originFacility.gpsLongitude,
-        }
       : null;
 
   const nameId = fieldId(idPrefix, "name");
@@ -229,33 +204,18 @@ export function CustomerLocationFields({
       </FormSection>
 
       <FormSection title="Logistics">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-          <DistanceCalcField
-            id={distanceId}
-            label="Distance from facility"
-            error={errors.distanceFromFacilityKm?.message}
-            certifyRequired={isCertifyFormField(
-              "customerLocation",
-              "distanceFromFacilityKm",
-            )}
-            certifyStatus={certStatus("distanceFromFacilityKm")}
-            helperText="One-way road distance to this site. Every delivery counts the round trip, twice this distance, in emissions."
-            cue={oneWayDistanceCue(distanceFromFacilityKm, ONE_WAY_EACH_DELIVERY_CUE)}
-            disabled={isSubmitting}
-            distanceKm={distanceFromFacilityKm}
-            distanceSource={distanceSource}
-            onDistanceChange={(km, source) => {
-              // `null` is the explicit clear; `undefined` would read as
-              // "field omitted" and leave the stored distance in place.
-              distanceFromFacilityField.onChange(km);
-              distanceSourceField.onChange(source);
-            }}
-            origin={facilityPoint}
-            destination={locationPoint}
-            originLabel={facility ? `facility ${facility.name}` : "selected facility"}
-            destinationLabel="application site position"
-          />
-        </div>
+        <PartyFacilityDistances
+          fromFacility
+          idPrefix={distanceId}
+          value={facilityDistancesField.value as FacilityDistanceInput[] | undefined}
+          getValue={() => form.getValues("facilityDistances") as FacilityDistanceInput[] | undefined}
+          onChange={facilityDistancesField.onChange}
+          locationPoint={locationPoint}
+          disabled={isSubmitting}
+          error={errors.facilityDistances?.message}
+          rowErrors={errors.facilityDistances}
+          facility={facility}
+        />
 
         <div className="flex flex-col gap-4">
           <label

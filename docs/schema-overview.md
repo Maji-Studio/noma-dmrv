@@ -108,6 +108,20 @@ Orders and credit batches store no price or currency, organization operating
 defaults have no default currency, and credit batches store no third-party sale
 verification fields.
 
+## Location distances
+
+`supplier_location_facility_distances` and `customer_location_facility_distances`
+store one positive one-way `distance_km` and `distance_source` per location and
+facility. Both carry organization scope, integer versions and timestamps, unique
+location/facility pairs, composite organization-safe foreign keys, and cascade
+on location deletion. Locations and parties have no scalar distance columns.
+Delivery `recorded_distance_km` and `recorded_distance_source` snapshot the resolved
+pair independently of an optional override, preserving per-delivery accounting
+when the location's defaults change. Pair upserts fill null delivery snapshots
+and missing feedstock legs in the same transaction, skipping locked certification
+lineage. They never overwrite a non-null recorded distance. Missing pairs permit entry and block
+certification readiness where transport is required.
+
 ## API bookkeeping
 
 All four tables live in `src/db/schema/api.ts`:

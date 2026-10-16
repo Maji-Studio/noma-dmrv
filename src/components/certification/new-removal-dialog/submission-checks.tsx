@@ -49,13 +49,15 @@ function fixLinksFor(
     href: `/samples?facility=${facilityId}`,
   };
 
+  const links = (check.lineageIssues ?? []).slice(0, ENTITY_READINESS_CHECK_DISPLAY_LIMIT).map((issue) => batchHealthFixLinkFor({
+    key: check.key === "transport" ? "transport" : "entityReadiness", fixTarget: issue.fixTarget,
+    affectedRecords: [{ ...issue.record, missing: [issue.detail] }],
+  }, facilityId));
+  const lineageLinks = [...new Map(links.map((link) => [link.href, link])).values()];
+
   switch (check.key) {
     case "entityReadiness": {
-      const links = (check.lineageIssues ?? []).slice(0, ENTITY_READINESS_CHECK_DISPLAY_LIMIT).map((issue) => batchHealthFixLinkFor({
-        key: "entityReadiness", fixTarget: issue.fixTarget,
-        affectedRecords: [{ ...issue.record, missing: [issue.detail] }],
-      }, facilityId));
-      return [...new Map(links.map((link) => [link.href, link])).values()];
+      return lineageLinks;
     }
     case "mapping":
     case "template":
@@ -81,6 +83,7 @@ function fixLinksFor(
       return [];
     case "transportUniformity":
     case "transport":
+      if (lineageLinks.length) return lineageLinks;
       if (!check.transportCategory) return [];
       return [{
         ...batchHealthFixLinkFor({

@@ -7,7 +7,6 @@
  */
 
 import { TransportRoutePreview } from "@/components/transport-legs";
-import type { DistanceSourceValue } from "@/schemas/distance-source";
 
 export interface CustomerLocationDetailsLocation {
   name: string | null;
@@ -17,11 +16,11 @@ export interface CustomerLocationDetailsLocation {
   country: string;
   gpsLatitude: number | null;
   gpsLongitude: number | null;
-  distanceFromFacilityKm: number | null;
-  distanceSource: DistanceSourceValue | null;
+  facilityDistances: import("@/schemas/facility-distances").FacilityDistance[];
 }
 
 export interface CustomerLocationDetailsFacility {
+  id: string;
   name: string;
   gpsLatitude: number | null;
   gpsLongitude: number | null;
@@ -37,6 +36,7 @@ export function CustomerLocationDetails({
   location,
   facility,
 }: CustomerLocationDetailsProps) {
+  const pair = location.facilityDistances.find(row => row.facilityId === facility?.id);
   const localityLine = [location.city, location.stateRegion, location.country]
     .filter(Boolean)
     .join(", ");
@@ -73,8 +73,8 @@ export function CustomerLocationDetails({
           destinationName={location.name}
           originPoint={{ lat: facility?.gpsLatitude, lng: facility?.gpsLongitude }}
           destinationPoint={{ lat: location.gpsLatitude, lng: location.gpsLongitude }}
-          distanceKm={location.distanceFromFacilityKm}
-          distanceSource={location.distanceSource}
+          distanceKm={pair?.distanceKm}
+          distanceSource={pair?.distanceSource}
           loadMassKg={null}
           plannedRoute
           emptyMessage="Distance from facility not recorded."

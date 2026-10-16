@@ -43,6 +43,8 @@ export interface TransportCoverageFact {
   /** Transport legs found for this category across the removal's members. */
   count: number;
   missingEntityIds?: readonly string[];
+  /** Repair targets belonging to this existing transport check. */
+  lineageIssues?: SubmissionLineageBlocker[];
   /** A per-leg uniformity/completeness warning from aggregation, if any. */
   aggregationWarning: string | null;
 }
@@ -580,6 +582,7 @@ export function buildRemovalRequirementsChecklist(
           label: TRANSPORT_COVERAGE_LABEL,
           status: "unmet",
           transportCategory: category,
+          lineageIssues: facts.requiredTransport.find(fact => fact.category === category)?.lineageIssues,
           detail: `Missing ${category} transport legs`,
         }));
   })();

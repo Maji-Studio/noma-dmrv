@@ -9,6 +9,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { CustomerForm } from "./customers/customer-form";
 import { SupplierForm } from "./suppliers/supplier-form";
 
+vi.mock("next/navigation", () => ({ useSearchParams: () => new URLSearchParams() }));
+
 const harness = vi.hoisted(() => ({
   query: { data: undefined as unknown[] | undefined, isLoading: false, isError: false },
   isFirstLocation: undefined as boolean | undefined,

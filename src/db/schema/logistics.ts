@@ -127,6 +127,8 @@ export const deliveries = pgTable(
     // only when this trip's routing differs. Mirrors the feedstock-side
     // transportDistanceKm override.
     distanceKmOverride: real('distance_km_override'),
+    recordedDistanceKm: real('recorded_distance_km'),
+    recordedDistanceSource: distanceSource('recorded_distance_source'),
     // Provenance of the effective trip distance. Usually null when no distance
     // override is stored; `document` may be persisted alone when this delivery
     // has trip-specific evidence for the inherited customer-location distance.
