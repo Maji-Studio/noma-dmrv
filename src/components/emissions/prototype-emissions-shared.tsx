@@ -26,6 +26,7 @@ import { useCreditBatches } from "@/hooks/use-credit-batches";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { formatDate, formatDateRange } from "@/lib/format-utils";
 import { cn } from "@/lib/utils";
+import { useLedgerHref } from "./prototype-ledger-query";
 import {
   GAS_INPUTS,
   PROTOTYPE_STATE_LABELS,
@@ -69,19 +70,8 @@ export function usePrototypeEmissions() {
   return { facilityId, facilityName: selectedFacility?.name ?? null, isLoading, batches, store };
 }
 
-/** Links keep `?variant=` and `?facility=` so a variant survives navigation. */
-export function useEmissionsHref() {
-  const searchParams = useSearchParams();
-  return (batchId?: string) => {
-    const params = new URLSearchParams();
-    for (const key of ["variant", "facility"]) {
-      const value = searchParams.get(key);
-      if (value) params.set(key, value);
-    }
-    const query = params.toString();
-    return `/emissions${batchId ? `/${batchId}` : ""}${query ? `?${query}` : ""}`;
-  };
-}
+/** Links keep `?variant=`, `?facility=` and the overview filter and sort (prototype-ledger-query.ts). */
+export const useEmissionsHref = useLedgerHref;
 
 export function batchPeriod(batch: PrototypeBatch): string {
   return formatDateRange(batch.startDate, batch.endDate);
