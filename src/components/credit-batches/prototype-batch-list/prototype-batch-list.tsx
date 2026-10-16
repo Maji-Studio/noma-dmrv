@@ -2,7 +2,7 @@
 
 /**
  * PROTOTYPE (throwaway): the credit batch overview with a made-up full
- * production (two feedstocks, October 2025 to October 2026). Three layouts on
+ * production (two feedstocks, October 2025 to October 2026). Three timeline refinements on
  * ?variant=A|B|C share the mass strip on top. Each batch opens the batch page
  * prototype in the scenario that matches its state. ?real=1 shows today's list.
  */
@@ -17,14 +17,12 @@ import { useCreditBatches } from "@/hooks/use-credit-batches";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { BATCHES, type PipelineStage } from "./list-model";
 import { ListProvider, MassPipeline, StageFilterNote } from "./list-parts";
-import { CardsVariant } from "./list-variant-cards";
-import { KanbanVariant } from "./list-variant-kanban";
-import { TimelineVariant } from "./list-variant-timeline";
+import { QuietTimeline, TrackTimeline, VolumeTimeline } from "./timeline-versions";
 
 const VARIANTS = [
-  { key: "A", name: "Board" },
-  { key: "B", name: "Timeline" },
-  { key: "C", name: "Cards" },
+  { key: "A", name: "Quiet bars" },
+  { key: "B", name: "Thin track" },
+  { key: "C", name: "Bars and volume" },
 ] as const;
 
 export function PrototypeBatchList() {
@@ -51,9 +49,9 @@ export function PrototypeBatchList() {
         />
         <MassPipeline />
         <StageFilterNote />
-        {variant.key === "A" && <KanbanVariant />}
-        {variant.key === "B" && <TimelineVariant />}
-        {variant.key === "C" && <CardsVariant />}
+        {variant.key === "A" && <QuietTimeline />}
+        {variant.key === "B" && <TrackTimeline />}
+        {variant.key === "C" && <VolumeTimeline />}
       </div>
       <PrototypeSwitcher variants={VARIANTS} title="Credit batch overview">
         <ul className="list-disc pl-16">
