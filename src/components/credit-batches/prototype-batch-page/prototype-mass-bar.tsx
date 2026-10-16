@@ -6,10 +6,26 @@
  * open parts: applied but not in a Removal, and not applied yet.
  */
 import { useState } from "react";
+import { parseAsStringLiteral, useQueryState } from "nuqs";
 import { cn } from "@/lib/utils";
 import { useProto } from "./prototype-context";
 import type { MassSegmentKey, RemovalRef } from "./prototype-model";
 import { RemovalChip, tonnes } from "./prototype-parts";
+
+/** ?bar= a: spans produced mass; b: spans applied mass; c: like a, with a produced headline number. */
+export const BAR_OPTIONS = ["a", "b", "c"] as const;
+
+export function useBarOption() {
+  const [bar] = useQueryState("bar", parseAsStringLiteral(BAR_OPTIONS).withDefault("b"));
+  return bar;
+}
+
+/** The total beside the bar's title, named for what the bar spans. */
+export function useBarTotal(): string {
+  const { model } = useProto();
+  const bar = useBarOption();
+  return bar === "b" ? `${tonnes(model.appliedTons)} applied` : `${tonnes(model.appliedTons + model.masses.notApplied)} produced`;
+}
 
 const MUTED = "text-[var(--color-text-secondary)]";
 const HATCH = "repeating-linear-gradient(135deg, var(--st-off-border) 0 2px, transparent 2px 6px)";
@@ -50,6 +66,7 @@ interface Group {
 
 function useGroups(): Group[] {
   const { model } = useProto();
+  const bar = useBarOption();
   const groups: Group[] = [];
   for (const removal of model.removals) {
     const slices = model.slices.filter((slice) => slice.removal?.code === removal.code);
@@ -67,7 +84,7 @@ function useGroups(): Group[] {
   if (model.masses.notIn > 0) {
     groups.push({ id: "notIn", segment: "notIn", name: "Not in a Removal", removal: null, tons: model.masses.notIn, parts: open.map((slice) => ({ id: slice.id, label: slice.label, tons: slice.tons })) });
   }
-  if (model.masses.notApplied > 0) {
+  if (model.masses.notApplied > 0 && bar !== "b") {
     groups.push({ id: "notApplied", segment: "notApplied", name: "Not applied yet", removal: null, tons: model.masses.notApplied, parts: [{ id: "notApplied", label: "Not applied yet", tons: model.masses.notApplied }] });
   }
   return groups;
@@ -100,7 +117,23 @@ function compactLabel(group: Group): string {
   return `${tonnes(group.tons)} ${group.segment === "notIn" ? "not in a Removal" : "not applied"}`;
 }
 
-export function RemovalMassBar({ onOpenRemoval, compact }: { onOpenRemoval?: (code: string) => void; compact?: boolean }) {
+function NotAppliedCaption() {
+  const { model } = useProto();
+  const bar = useBarOption();
+  if (bar !== "b" || model.masses.notApplied <= 0) return null;
+  return <p className={cn("body-small", MUTED)}>{tonnes(model.masses.notApplied)} produced but not applied yet</p>;
+}
+
+export function RemovalMassBar(props: { onOpenRemoval?: (code: string) => void; compact?: boolean }) {
+  return (
+    <div className="flex flex-col gap-12">
+      <BarBody {...props} />
+      <NotAppliedCaption />
+    </div>
+  );
+}
+
+function BarBody({ onOpenRemoval, compact }: { onOpenRemoval?: (code: string) => void; compact?: boolean }) {
   const groups = useGroups();
   const [active, setActive] = useState<{ text: string; center: number } | null>(null);
   const total = groups.reduce((sum, group) => sum + group.tons, 0);

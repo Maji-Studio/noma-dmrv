@@ -5,7 +5,7 @@
  * of round 1). Horizontal tabs; on Overview the work (Removals, open items) leads.
  *
  * URL keys: ?tab=overview|production|samples|emissions|removals|activities
- *           ?scenario=blocking|clear|partly-sent|issued  ?focus=<rowId>
+ *           ?scenario=blocking|clear|partly-sent|issued  ?focus=<rowId>  ?bar=a|b|c
  * Real: batch, member runs, lab samples, health checks, activity, Removal template.
  * Stub (PROTOTYPE): lock levels, Removal slices, progress, header button, Check and
  * Waiting items, emission lines. See prototype-model.ts.
@@ -147,6 +147,7 @@ export function PrototypeBatchPage({ batch, canManage }: { batch: CreditBatchWit
       </div>
       <PrototypeSwitcher variants={SWITCHER_ITEMS} param="scenario" title="Batch page">
         <ul className="list-disc pl-16">
+          <li>Bar: ?bar=a produced, b applied (default), c produced headline</li>
           <li>Lock level: {model.lockLevel}</li>
           <li>Header button: {model.primary.kind === "none" ? "none" : model.primary.label}</li>
           <li>Open: {model.blocking.length} blocking, {model.check.length} check, {model.waiting.length} waiting</li>

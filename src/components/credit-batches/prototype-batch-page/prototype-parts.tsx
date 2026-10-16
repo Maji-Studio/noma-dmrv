@@ -13,7 +13,7 @@ import { CreditBatchRemovalTemplate } from "@/components/credit-batches/credit-b
 import { formatDate, formatTonnes } from "@/lib/format-utils";
 import { cn } from "@/lib/utils";
 import { useProto } from "./prototype-context";
-import { RemovalMassBar } from "./prototype-mass-bar";
+import { RemovalMassBar, useBarTotal } from "./prototype-mass-bar";
 import type { ItemGroup, LockableField, OpenItem, RemovalRef } from "./prototype-model";
 
 export const PANEL = "border border-[var(--color-border-secondary)] bg-[var(--paper)]";
@@ -265,12 +265,13 @@ export function DetailsPanel({ className }: { className?: string }) {
 /** Where the applied biochar sits: each Removal with its mass, the part in none, and the GHG Statement. */
 export function RemovalsPanel() {
   const { model, go } = useProto();
+  const total = useBarTotal();
   return (
     <Panel
       title="Removals"
       action={
         <span className="inline-flex items-center gap-16">
-          <span className="body-medium tabular-nums">{tonnes(model.appliedTons + model.masses.notApplied)} <span className={MUTED}>total</span></span>
+          <span className="body-medium tabular-nums">{total}</span>
           <button type="button" onClick={() => go("removals")} className={cn("inline-flex items-center gap-4 body-small underline-offset-2 hover:underline", MUTED)}>
             Details
             <ArrowRightIcon size={14} aria-hidden />
