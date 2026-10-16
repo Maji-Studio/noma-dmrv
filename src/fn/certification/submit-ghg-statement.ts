@@ -68,6 +68,7 @@ import {
   GHG_STATEMENT_SUBMISSION_TYPE,
   ISOMETRIC_PROVIDER,
 } from "./shared";
+import { verifyStoredGhgStatementReport } from "./stored-ghg-statement-report-core";
 
 export interface SubmitGhgStatementResult {
   externalId: string;
@@ -448,6 +449,7 @@ export async function submitGhgStatementToVerifierCore(args: {
       }
       if (generatedReport) {
         await assertGhgStatementReportFresh(orgCtx, generatedReport);
+        await verifyStoredGhgStatementReport(orgCtx, generatedReport);
       }
 
       const reportUrl = generatedReport

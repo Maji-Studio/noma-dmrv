@@ -1,5 +1,6 @@
 import type { Readable } from "node:stream";
 import { readBoundedStream } from "./bounded-read";
+import { boundedReadError } from "./bounded-read-error";
 import { StorageError, type ReadObjectBoundedArgs, type PutObjectOptions } from "./types";
 import {
   S3Client,
@@ -104,8 +105,9 @@ export class S3CompatibleProvider implements StorageProvider {
       if (!res.Body) return null;
       return await readBoundedStream(res.Body as Readable, args.maxBytes, res.ContentType ?? "application/octet-stream", args.signal);
     } catch (error) {
-      if (error instanceof NoSuchKey || error instanceof NotFound || (error as { $metadata?: { httpStatusCode?: number } }).$metadata?.httpStatusCode === 404) return null;
-      throw error;
+      const failure = boundedReadError(error, "s3");
+      if (failure.code === "object_not_found") return null;
+      throw failure;
     }
   }
 

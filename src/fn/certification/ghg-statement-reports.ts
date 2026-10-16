@@ -1,5 +1,6 @@
 "use server";
 
+import { ulid } from "ulid";
 import { randomUUID } from "node:crypto";
 import { requireOrgRole } from "@/lib/auth/server";
 import {
@@ -27,7 +28,9 @@ import {
 } from "@/lib/certification/ghg-statement-report/verifier-url";
 import { SafeError } from "@/lib/errors";
 import { logger } from "@/lib/log";
-import { buildStorageKey, getStorageProvider } from "@/lib/storage";
+import { getStorageProvider } from "@/lib/storage";
+import { ghgStatementReportKeyPrefix } from "@/lib/storage/keys";
+import { PDF_MIME_TYPE } from "@/lib/storage/types";
 import {
   approveGhgStatementReportSchema,
   loadGhgStatementReportsSchema,
@@ -42,9 +45,10 @@ import {
   loadLiveReportFacts,
   rebuildGhgStatementReportModel,
 } from "./ghg-statement-report-core";
+import { verifyStoredGhgStatementReport } from "./stored-ghg-statement-report-core";
 import { ISOMETRIC_PROVIDER } from "./shared";
 
-const PDF_MIME_TYPE = "application/pdf";
+
 /** Shown when the renderer emits a PDF this build cannot make byte stable. */
 const reportPdfNotCanonicalMessage = (ghgStatementId: string): string =>
   `The GHG Statement report PDF for ${ghgStatementId} was not prepared. Preparing it again will not help. Contact support with this ID.`;
@@ -158,12 +162,7 @@ export async function prepareGhgStatementReport(
           const checksum = sha256Hex(pdf);
           const storage = getStorageProvider();
           const fileName = `ghg-statement-report-v${version}.pdf`;
-          const storageKey = `org/${orgCtx.organizationId}/${buildStorageKey({
-            entityType: "ghgStatementReport",
-            entityId: reportId,
-            documentType: "pdf",
-            fileName,
-          })}`;
+          const storageKey = `${ghgStatementReportKeyPrefix(orgCtx.organizationId, reportId)}${ulid().toLowerCase()}.pdf`;
           await storage.putObject(storageKey, pdf, PDF_MIME_TYPE);
           try {
             const artifact = await insertPreparedGhgStatementReport(orgCtx, {
@@ -218,6 +217,7 @@ export async function approveGhgStatementReport(
         "This report is stale because live inputs changed. Generate and review a new report.",
       );
     }
+    await verifyStoredGhgStatementReport(orgCtx, report);
     const approved = await approveReportRow(orgCtx, {
       reportId: report.id,
       ghgStatementId: report.ghgStatementId,

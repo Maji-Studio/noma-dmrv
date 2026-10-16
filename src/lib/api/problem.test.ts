@@ -21,6 +21,9 @@ const expectedActionStatuses = {
   registry_not_configured: 409,
   registry_read_refused: 422,
   registry_unavailable: 503,
+  storage_not_configured: 409,
+  storage_unavailable: 503,
+  report_verification_failed: 409,
   deadline_exceeded: 500,
   outcome_unknown: 500,
   idempotency_in_progress: 409,
@@ -175,4 +178,14 @@ it("omits the preview when none was computed and never shows it on a server fail
   expect(withoutPreview).not.toHaveProperty("preview");
   const internal = await problemResponse({ status: 500, code: "internal_error", detail: "x", instance: "/api/v1/biochar-products", requestId: "id", preview }).json();
   expect(internal).not.toHaveProperty("preview");
+});
+
+it.each([
+  ["storage_unavailable", 503, true],
+  ["storage_not_configured", 409, false],
+  ["report_verification_failed", 409, false],
+] as const)("maps %s retryability", async (code, status, retryable) => {
+  const response = actionFailureResponse({ success: false, code, error: "Safe detail" }, "/api/v1/me", "request");
+  expect(response.status).toBe(status);
+  expect(await response.json()).toMatchObject({ code, retryable });
 });
