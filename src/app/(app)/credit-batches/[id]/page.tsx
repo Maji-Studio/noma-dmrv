@@ -5,8 +5,8 @@ import { getCreditBatchById } from "@/data-access/credit-batches";
 import { getOrgContext, requireOrgContext } from "@/lib/auth/server";
 
 /**
- * PROTOTYPE (throwaway): routed credit batch page with three layout variants
- * (?variant=A|B|C). The batch is loaded through the org-scoped read path.
+ * PROTOTYPE (throwaway): routed credit batch page (variant A, scenarios via ?scenario=)
+ * The batch is loaded through the org-scoped read path.
  */
 interface CreditBatchPageProps {
   params: Promise<{ id: string }>;
