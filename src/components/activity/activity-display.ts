@@ -111,6 +111,11 @@ export function activityActorDisplay(item: Pick<ActivityItem, "actor" | "source"
   };
 }
 
+/** The actor as one phrase: the name, then "via API" and the like when the change came through a channel. */
+export function activityActorText(actor: ActivityActorDisplay): string {
+  return actor.channel ? `${actor.name} ${actor.channel}` : actor.name;
+}
+
 /** Field names the activity writers use that no form owns. */
 const ACTIVITY_FIELD_LABELS: Record<string, string> = {
   production_runs: "Production runs",

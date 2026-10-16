@@ -1,17 +1,22 @@
 "use client";
 
 /**
- * One activity event as one row: kind, record, what changed (one line per
- * field, old value muted, an arrow, the new value), then who and when. A record with a side sheet makes the whole row a link (the sheet's
- * SheetLinkRow shape); a deleted record is a tombstone with no link.
+ * One activity event as one row: a record-type icon, then what happened (the
+ * record and the kind as the primary line, one line per changed field below
+ * it: old value muted, an arrow, the new value), with the time and who made
+ * the change quiet at the trailing edge (under the details on narrow rows).
+ * A record with a side sheet makes the whole row a link; a deleted record is
+ * a tombstone with no link.
  */
 import Link from "next/link";
 import { ArrowRightIcon } from "@phosphor-icons/react/dist/ssr";
-import { formatDateTime } from "@/lib/format-utils";
+import { formatDateTime, formatTime } from "@/lib/format-utils";
+import { activityRecordTypeIcon } from "./activity-icons";
 import { cn } from "@/lib/utils";
 import {
   ACTIVITY_KIND_LABELS,
   activityActorDisplay,
+  activityActorText,
   activityChangeSummary,
   activityRecordHref,
   activityRecordLabel,
@@ -30,7 +35,7 @@ import { ACTIVITY_DELETED_RECORD_LABEL } from "./activity-copy";
 import { ChainStatusBadge } from "@/components/chain-of-custody/chain-status-badge";
 
 const TAG_CLASS = "inline-flex h-[20px] shrink-0 items-center border px-6 body-caption-fit font-medium";
-const KIND_TAG_CLASS = `${TAG_CLASS} border-[var(--color-border-secondary)] text-[var(--color-text-secondary)]`;
+const RECORD_ICON_PX = 16;
 const TOMBSTONE_TAG_CLASS = `${TAG_CLASS} border-dashed border-[var(--color-border-primary)] text-[var(--color-text-secondary)]`;
 const CHANGE_ARROW_PX = 12;
 type ChangeSide = "from" | "to";
@@ -102,7 +107,7 @@ function FieldChange({ line }: { line: ActivityFieldLine }) {
   );
 }
 
-function EntryBody({ item }: { item: ActivityItem }) {
+function EntryBody({ item, showDate, hideMeta }: { item: ActivityItem; showDate: boolean; hideMeta: boolean }) {
   const typeLabel = activityRecordTypeLabel(item.entityType);
   const label = activityRecordLabel(item);
   const deleted = item.record.deleted;
@@ -110,64 +115,92 @@ function EntryBody({ item }: { item: ActivityItem }) {
   const lines = activityFieldLines(item);
   const actor = activityActorDisplay(item);
   return (
-    <span className="flex min-w-0 flex-col gap-4">
-      <span className="flex min-w-0 flex-wrap items-center gap-x-8 gap-y-4">
-        <span className={KIND_TAG_CLASS}>{ACTIVITY_KIND_LABELS[item.action]}</span>
-        <span className="min-w-0 body-small text-[var(--color-text-primary)]">
-          <span className="text-[var(--color-text-secondary)]">{typeLabel}</span>
-          {label ? <span className="ml-6 font-medium group-hover:underline">{label}</span> : null}
+    <>
+      <span
+        aria-hidden
+        className="row-span-2 mt-2 flex size-32 shrink-0 items-center justify-center border border-[var(--color-border-tertiary)] text-[var(--color-text-secondary)]"
+      >
+        {activityRecordTypeIcon(item.entityType, RECORD_ICON_PX)}
+      </span>
+      <span className="flex min-w-0 flex-col gap-4">
+        <span className="flex min-w-0 flex-wrap items-center gap-x-8 gap-y-4">
+          <span className="min-w-0 body-small text-[var(--color-text-primary)]">
+            <span className="font-medium group-hover:underline">{label ? `${typeLabel} ${label}` : typeLabel}</span>
+            {" "}
+            <span className="text-[var(--color-text-secondary)]">{ACTIVITY_KIND_LABELS[item.action].toLowerCase()}</span>
+          </span>
+          {deleted ? (
+            <span className={TOMBSTONE_TAG_CLASS} data-testid="activity-tombstone">{ACTIVITY_DELETED_RECORD_LABEL}</span>
+          ) : null}
         </span>
-        {deleted ? (
-          <span className={TOMBSTONE_TAG_CLASS} data-testid="activity-tombstone">{ACTIVITY_DELETED_RECORD_LABEL}</span>
+        {summary ? <span className="body-caption text-[var(--color-text-secondary)]">{summary}</span> : null}
+        {lines.length > 0 ? (
+          <span className="flex min-w-0 flex-col gap-2">
+            {lines.map((line) => <FieldChange key={line.key} line={line} />)}
+          </span>
+        ) : null}
+        {item.action === "status_changed" ? (
+          <>
+            <StatusChange label="Status" from={item.fromStatus} to={item.toStatus} />
+            <StatusChange label="Registry status" from={item.fromRemote} to={item.toRemote} />
+          </>
         ) : null}
       </span>
-      {summary ? <span className="body-caption text-[var(--color-text-secondary)]">{summary}</span> : null}
-      {lines.length > 0 ? (
-        <span className="flex min-w-0 flex-col gap-2">
-          {lines.map((line) => <FieldChange key={line.key} line={line} />)}
+      {hideMeta ? (
+        // The burst header above carries the visible time and actor; the row keeps them for screen readers.
+        <span className="sr-only">
+          <time dateTime={item.occurredAt.toISOString()}>{formatDateTime(item.occurredAt)}</time>{" "}
+          <span>{activityActorText(actor)}</span>
         </span>
-      ) : null}
-      {item.action === "status_changed" ? (
-        <>
-          <StatusChange label="Status" from={item.fromStatus} to={item.toStatus} />
-          <StatusChange label="Registry status" from={item.fromRemote} to={item.toRemote} />
-        </>
-      ) : null}
-      <span className="body-caption text-[var(--color-text-tertiary)]">
-        <span className={cn(!actor.missing && "text-[var(--color-text-secondary)]")}>{actor.name}</span>
-        {actor.channel ? ` ${actor.channel}` : null}
-        {" · "}
-        <time dateTime={item.occurredAt.toISOString()}>{formatDateTime(item.occurredAt)}</time>
-      </span>
-    </span>
+      ) : (
+        <span
+          className={cn(
+            "col-start-2 flex flex-wrap items-baseline gap-x-8 body-caption text-[var(--color-text-tertiary)]",
+            "@min-[34rem]:col-start-3 @min-[34rem]:row-span-2 @min-[34rem]:row-start-1 @min-[34rem]:flex-col @min-[34rem]:items-end @min-[34rem]:gap-x-0 @min-[34rem]:text-right",
+          )}
+        >
+          <time dateTime={item.occurredAt.toISOString()} title={formatDateTime(item.occurredAt)} className="tabular-nums">
+            {showDate ? formatDateTime(item.occurredAt) : formatTime(item.occurredAt)}
+          </time>
+          <span>
+            <span className={cn(!actor.missing && "text-[var(--color-text-secondary)]")}>{actor.name}</span>
+            {actor.channel ? ` ${actor.channel}` : null}
+          </span>
+        </span>
+      )}
+    </>
   );
 }
+
+/** The row turns to three columns once its own box (not the viewport) is 34rem wide. Class names are literal so Tailwind sees them. */
+const ROW_CLASS = "grid min-h-44 min-w-0 grid-cols-[auto_minmax(0,1fr)] items-start gap-x-12 gap-y-4 px-8 py-8 @min-[34rem]:grid-cols-[auto_minmax(0,1fr)_auto] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)]";
 
 export function ActivityEntry({
   item,
   creditBatchId,
   focusRef,
+  showDate = false,
+  hideMeta = false,
 }: {
   item: ActivityItem;
   creditBatchId: string;
   /** Receives the row's focusable element, so "Show older activity" can move focus to the first new row. */
   focusRef?: (node: HTMLElement | null) => void;
+  /** Show the full date with the time, for a list with no day headings above it. */
+  showDate?: boolean;
+  /** Omit the actor and time, when a cluster header above the row carries them. */
+  hideMeta?: boolean;
 }) {
   const href = activityRecordHref(item, { creditBatchId });
   return (
-    <li data-testid="activity-entry" data-kind={item.action} data-record-type={item.entityType}>
+    <li data-testid="activity-entry" data-kind={item.action} data-record-type={item.entityType} className="@container relative">
       {href ? (
         <Link
           ref={focusRef}
           href={href}
-          className="group flex min-h-44 min-w-0 items-center justify-between gap-12 py-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)]"
+          className={cn(ROW_CLASS, "group hover:bg-[var(--color-background-light)]")}
         >
-          <EntryBody item={item} />
-          <ArrowRightIcon
-            size={14}
-            aria-hidden
-            className="shrink-0 text-[var(--color-text-tertiary)] group-hover:text-[var(--color-text-primary)]"
-          />
+          <EntryBody item={item} showDate={showDate} hideMeta={hideMeta} />
         </Link>
       ) : (
         <div
@@ -175,9 +208,9 @@ export function ActivityEntry({
           // Focusable by script only, so focus can land here after "Show older
           // activity" and stay once the ref moves on.
           tabIndex={-1}
-          className="flex min-h-44 min-w-0 items-center py-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)]"
+          className={ROW_CLASS}
         >
-          <EntryBody item={item} />
+          <EntryBody item={item} showDate={showDate} hideMeta={hideMeta} />
         </div>
       )}
     </li>
