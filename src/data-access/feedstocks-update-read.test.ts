@@ -95,6 +95,15 @@ afterEach(() => {
 });
 
 describe("updateFeedstockInTransaction", () => {
+  it("refuses a source-only patch without a saved override before writing", async () => {
+    const tx = makeTx({ rows: [ENRICHED_ROW] });
+    await expect(updateFeedstockInTransaction(ctx, tx, FEEDSTOCK_ID, {
+      expectedVersion: 1, transportDistanceSource: "document",
+    })).rejects.toMatchObject({ code: "validation_failed",
+      message: "The feedstock distance source was not changed. Set transportDistanceKm to change its source." });
+    expect(tx.update).not.toHaveBeenCalled();
+  });
+
   it("reads the updated feedstock back through its own transaction", async () => {
     const tx = makeTx({ rows: [ENRICHED_ROW] });
     const globalRead = watchGlobalReads();

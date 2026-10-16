@@ -99,6 +99,20 @@ describe("feedstock REST contract", { timeout: SUITE_TIMEOUT_MS }, () => {
     await problem(await POST(request("POST", "", a.input(100), { "idempotency-key": first.key })), 422, "idempotency_key_reused");
   });
 
+  it("refuses source-only patches on derived distances and accepts them on overrides", async () => {
+    const created = await create({ ...a.input(), transportDistanceKm: 0 });
+    const refusal = await problem(await patch(created.row.id, { transportDistanceSource: "document" }, created.etag), 422, "validation_failed");
+    expect(refusal.detail).toBe("The feedstock distance source was not changed. Set transportDistanceKm to change its source.");
+    const unchanged = await GET(request("GET", `/${created.row.id}`), params(created.row.id));
+    expect(unchanged.headers.get("etag")).toBe(created.etag);
+    expect((await unchanged.json()).data).toEqual(created.row);
+    const overridden = await patch(created.row.id, { transportDistanceKm: 25 }, created.etag);
+    expect(overridden.status).toBe(200);
+    const changed = await patch(created.row.id, { transportDistanceSource: "document" }, overridden.headers.get("etag")!);
+    expect(changed.status).toBe(200);
+    expect((await changed.json()).data).toMatchObject({ distanceKmOverride: 25, distanceSource: "document" });
+  });
+
   it("returns persisted override metadata and accepts legacy zero without storing a zero override", async () => {
     const created = await create({ ...a.input(), transportDistanceKm: 0 });
     expect(created.row).toMatchObject({ distanceKmOverride: null, distanceSource: null, distanceNote: null });

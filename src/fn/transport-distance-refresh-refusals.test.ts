@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { DomainError } from "@/lib/domain-errors";
 import { SafeError } from "@/lib/errors";
 import { formatCertificationLineageLockMessage } from "@/lib/certification/lineage-lock-message";
 import { STALE_VERSION_CONFLICT_CODE, STALE_VERSION_MESSAGE } from "@/lib/stale-version";
@@ -45,6 +46,7 @@ const LOCKED_MESSAGE = "The distance was not refreshed because its transport dat
 beforeEach(() => {
   vi.resetAllMocks();
   mocks.row.mockResolvedValue([ROW]);
+  mocks.update.mockReturnValue({ set: () => ({ where: async () => undefined }) });
   mocks.preview.mockResolvedValue({ currentDistanceKm: 55 });
 });
 
@@ -52,6 +54,14 @@ describe.each([
   { entityType: "feedstock" as const, refresh: refreshFeedstockDistanceFn, noun: "Feedstock" },
   { entityType: "delivery" as const, refresh: refreshDeliveryDistanceFn, noun: "Delivery" },
 ])("$entityType refresh refusal codes", ({ entityType, refresh, noun }) => {
+  it("records the entity's distance fields on refresh", async () => {
+    expect(await refresh(INPUT)).toMatchObject({ success: true });
+    expect(mocks.activity).toHaveBeenCalledWith(expect.anything(), expect.anything(), expect.objectContaining({
+      changedFields: entityType === "feedstock" ? ["transportDistanceKm", "transportDistanceSource"]
+        : ["recordedDistanceKm", "recordedDistanceSource"],
+    }), undefined);
+  });
+
   it("returns certification_locked when submission locks the lineage after preview", async () => {
     mocks.guard.mockRejectedValue(new SafeError(formatCertificationLineageLockMessage({
       mutation: "update", subjectEntityType: entityType, lineageEntityType: entityType,
@@ -66,6 +76,8 @@ describe.each([
 
   it("returns validation_failed for a missing pair distance", async () => {
     mocks.preview.mockResolvedValue({ currentDistanceKm: null });
+    mocks.sync.mockRejectedValue(new DomainError("validation_failed",
+      "The distance was not refreshed because the location has no distance for this facility. Save a location distance first."));
     expect(await refresh(INPUT)).toMatchObject({ success: false, code: "validation_failed",
       error: "The distance was not refreshed because the location has no distance for this facility. Save a location distance first." });
   });
@@ -76,9 +88,9 @@ describe.each([
       error: "The distance was not refreshed because it has an override. Clear the override first." });
   });
 
-  it("returns conflict with the stale-version reference", async () => {
+  it("returns stale_version with the stale-version reference", async () => {
     mocks.row.mockResolvedValue([{ ...ROW, version: VERSION + 1 }]);
-    expect(await refresh(INPUT)).toMatchObject({ success: false, code: "conflict", error: STALE_VERSION_MESSAGE,
+    expect(await refresh(INPUT)).toMatchObject({ success: false, code: "stale_version", error: STALE_VERSION_MESSAGE,
       conflict: { entity: entityType, id: ID, code: STALE_VERSION_CONFLICT_CODE } });
   });
 });

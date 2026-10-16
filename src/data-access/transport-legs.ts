@@ -34,6 +34,7 @@ import {
   resolveDeliveryTransportRoute,
   type DerivedTransportLeg,
 } from "@/lib/calculations/transport-leg";
+import { DomainError } from "@/lib/domain-errors";
 import { SafeError } from "@/lib/errors";
 import type { TransportEntityTypeValue } from "@/schemas/transport-legs";
 import { and, asc, eq, getTableColumns, inArray, isNull, sql } from "drizzle-orm";
@@ -556,7 +557,7 @@ export async function syncFeedstockTransportLeg(
   ctx: OrgContext,
   tx: DbTransaction,
   feedstockId: string,
-  options?: { refreshFromLocation?: boolean },
+  options?: { refreshFromLocation?: boolean; requireLocationDistance?: boolean },
 ): Promise<void> {
   requireOrgScope(ctx);
 
@@ -611,6 +612,10 @@ export async function syncFeedstockTransportLeg(
     throw new SafeError("Feedstock not found");
   }
 
+  // Validate the same snapshot passed to derivation, before replacing any leg.
+  if (options?.requireLocationDistance && row.locationDistanceFromFacilityKm == null) {
+    throw new DomainError("validation_failed", "The distance was not refreshed because the location has no distance for this facility. Save a location distance first.");
+  }
   const storedDistanceKm = row.locationDistanceFromFacilityKm;
   const storedDistanceSource = row.locationDistanceSource;
   const preserveExistingDistance = !options?.refreshFromLocation && row.existingDistanceKm != null;

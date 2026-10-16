@@ -1,8 +1,10 @@
-import { beforeAll, expect, it } from "vitest";
+import { beforeAll, expect, it, vi } from "vitest";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
-import { customerLocations, deliveries, feedstocks, orders, supplierLocations } from "@/db/schema";
+import { customerLocationFacilityDistances, supplierLocationFacilityDistances, customerLocations, deliveries, feedstocks, orders, supplierLocations } from "@/db/schema";
 import { getTransportDistanceDrift, refreshFeedstockDistance, refreshDeliveryDistance } from "@/data-access/transport-distance-refresh";
+import * as transport from "@/data-access/transport-legs";
+import * as driftReads from "@/data-access/transport-distance-drift";
 import { getTransportLegsForEntity } from "@/data-access/transport-legs";
 import { createSupplierLocation, updateSupplierLocation } from "@/data-access/suppliers";
 import { updateCustomerLocation } from "@/data-access/customers";
@@ -47,7 +49,7 @@ it.each(["feedstock", "delivery"] as const)("freezes %s defaults, reports drift,
       expect(refreshed).toMatchObject({ recordedDistanceKm: 55, hasDrift: false, expectedVersion: drift.expectedVersion + 1 });
       const legs = await getTransportLegsForEntity(ctx, entityType === "feedstock" ? "feedstock" : "biochar", entityType === "feedstock" ? fixture.feedstockId : fixture.productId);
       expect(legs).toEqual(expect.arrayContaining([expect.objectContaining({ isDerived: true, distanceKm: 55 })]));
-      await expect(refresh(ctx, { entityId, expectedVersion: drift.expectedVersion })).rejects.toMatchObject({ code: "conflict" });
+      await expect(refresh(ctx, { entityId, expectedVersion: drift.expectedVersion })).rejects.toMatchObject({ code: "stale_version" });
       if (entityType === "feedstock") await db.update(feedstocks).set({ distanceKmOverride: 25, distanceSource: "manual" }).where(eq(feedstocks.id, entityId));
       else await db.update(deliveries).set({ distanceKmOverride: 25, distanceSource: "manual" }).where(eq(deliveries.id, entityId));
       expect(await getTransportDistanceDrift(ctx, target)).toMatchObject({ hasDrift: false, isOverridden: true });
@@ -86,4 +88,51 @@ it("protects a shared product even when the refreshed delivery has no applicatio
         .rejects.toThrow("The distance was not refreshed because its transport data belongs to a locked Removal.");
     } finally { await deleteOutputDeliveryFixtures(db, eq(deliveries.id, shared.id)); }
   }, "removal");
+});
+
+
+it.each(["feedstock", "delivery"] as const)("refuses %s refresh when the pair disappears after preview, keeping recorded transport intact", async entityType => {
+  await withLineageFixture(async fixture => {
+    const [feedstock] = await db.select().from(feedstocks).where(eq(feedstocks.id, fixture.feedstockId));
+    const location = await createSupplierLocation(ctx, {
+      ...TEST_SITE_POSITION, supplierId: feedstock.supplierId, isDefault: true,
+      facilityDistances: [{ facilityId: fixture.facilityId, distanceKm: 55, distanceSource: "document" }],
+    });
+    const target = { entityType, entityId: entityType === "feedstock" ? fixture.feedstockId : fixture.deliveryId };
+    const legType = entityType === "feedstock" ? "feedstock" : "biochar";
+    const legOwner = entityType === "feedstock" ? fixture.feedstockId : fixture.productId;
+    const before = await getTransportDistanceDrift(ctx, target);
+    const legs = await getTransportLegsForEntity(ctx, legType, legOwner);
+    const originalSync = transport.syncFeedstockTransportLeg;
+    const originalDrift = driftReads.getTransportDistanceDrift;
+    const removePair = async () => {
+      if (entityType === "feedstock") {
+        await db.delete(supplierLocationFacilityDistances).where(eq(supplierLocationFacilityDistances.locationId, location.id));
+      } else {
+        await db.delete(customerLocationFacilityDistances).where(eq(customerLocationFacilityDistances.locationId, before.locationId!));
+      }
+    };
+    const intercept = entityType === "feedstock"
+      ? vi.spyOn(transport, "syncFeedstockTransportLeg").mockImplementationOnce(async (...args) => {
+        await removePair();
+        return originalSync(...args);
+      })
+      : vi.spyOn(driftReads, "getTransportDistanceDrift").mockImplementationOnce(async (...args) => {
+        await removePair();
+        return originalDrift(...args);
+      });
+    try {
+      const refresh = entityType === "feedstock" ? refreshFeedstockDistance : refreshDeliveryDistance;
+      await expect(refresh(ctx, { entityId: target.entityId, expectedVersion: before.expectedVersion }))
+        .rejects.toMatchObject({ code: "validation_failed" });
+      expect(await getTransportLegsForEntity(ctx, legType, legOwner)).toEqual(legs);
+      expect(await getTransportDistanceDrift(ctx, target)).toMatchObject({
+        expectedVersion: before.expectedVersion, recordedDistanceKm: before.recordedDistanceKm,
+        recordedDistanceSource: before.recordedDistanceSource, currentDistanceKm: null,
+      });
+    } finally {
+      intercept.mockRestore();
+      await db.delete(supplierLocations).where(eq(supplierLocations.id, location.id));
+    }
+  }, "none");
 });

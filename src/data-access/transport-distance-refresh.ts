@@ -19,17 +19,6 @@ export { getTransportDistanceDrift } from "./transport-distance-drift";
 
 const LOCKED_REFRESH_MESSAGE = "The distance was not refreshed because its transport data belongs to a locked Removal. Ask an Organization Admin to review the linked Removal.";
 
-function assertRefreshVersion(input: Parameters<typeof assertRowVersion>[0]) {
-  try {
-    assertRowVersion(input);
-  } catch (error) {
-    if (error instanceof DomainError && error.code === "stale_version") {
-      throw new DomainError("conflict", error.message, { conflict: error.conflict });
-    }
-    throw error;
-  }
-}
-
 async function guardRefresh(ctx: OrgContext, tx: DbTransaction, target: TransportDistanceTarget) {
   requireOrgScope(ctx);
   const targets = await distanceRefreshLineageTargets(ctx, tx, target);
@@ -51,7 +40,8 @@ async function recordRefresh(ctx: OrgContext, tx: DbTransaction, target: Transpo
   requireOrgScope(ctx);
   await recordScopedWriteActivity(ctx, tx, {
     entityType: target.entityType, entityId: target.entityId, facilityId, action: "updated", source: "form",
-    changedFields: ["recordedDistanceKm", "recordedDistanceSource"], versionBefore: version, versionAfter: version + 1,
+    changedFields: target.entityType === "feedstock"
+      ? ["transportDistanceKm", "transportDistanceSource"] : ["recordedDistanceKm", "recordedDistanceSource"], versionBefore: version, versionAfter: version + 1,
   }, await resolveWriteActivityScopes(ctx, tx, target.entityType, target.entityId));
 }
 
@@ -64,14 +54,12 @@ export async function refreshFeedstockDistance(ctx: OrgContext, input: RefreshTr
     const [row] = await tx.select().from(feedstocks).where(and(eq(feedstocks.organizationId, ctx.organizationId),
       eq(feedstocks.id, input.entityId), isNull(feedstocks.archivedAt))).for("update");
     if (!row) throw new DomainError("not_found", "Feedstock not found or archived.");
-    assertRefreshVersion({ entity: "feedstock", id: row.id, expectedVersion: input.expectedVersion, actualVersion: row.version });
+    assertRowVersion({ entity: "feedstock", id: row.id, expectedVersion: input.expectedVersion, actualVersion: row.version });
     await guardRefresh(ctx, tx, target);
     if (row.distanceKmOverride != null) throw new DomainError("validation_failed", "The distance was not refreshed because it has an override. Clear the override first.");
-    const preview = await getTransportDistanceDrift(ctx, target, tx);
-    if (preview.currentDistanceKm == null) throw new DomainError("validation_failed", "The distance was not refreshed because the location has no distance for this facility. Save a location distance first.");
+    await syncFeedstockTransportLeg(ctx, tx, row.id, { refreshFromLocation: true, requireLocationDistance: true });
     await tx.update(feedstocks).set({ version: nextVersion(feedstocks.version), updatedAt: new Date() })
       .where(and(eq(feedstocks.organizationId, ctx.organizationId), eq(feedstocks.id, row.id)));
-    await syncFeedstockTransportLeg(ctx, tx, row.id, { refreshFromLocation: true });
     await recordRefresh(ctx, tx, target, row.facilityId, row.version);
     return getTransportDistanceDrift(ctx, target, tx);
   });
@@ -88,7 +76,7 @@ export async function refreshDeliveryDistance(ctx: OrgContext, input: RefreshTra
     const [row] = await tx.select().from(deliveries).where(and(eq(deliveries.organizationId, ctx.organizationId),
       eq(deliveries.id, input.entityId), isNull(deliveries.archivedAt))).for("update");
     if (!row) throw new DomainError("not_found", "Delivery not found or archived.");
-    assertRefreshVersion({ entity: "delivery", id: row.id, expectedVersion: input.expectedVersion, actualVersion: row.version });
+    assertRowVersion({ entity: "delivery", id: row.id, expectedVersion: input.expectedVersion, actualVersion: row.version });
     await withFeedstockErrors(() => assertLockedLineagesAllowMutation(ctx, tx, lockedKeys, targets.map(lineageTarget => ({ target: lineageTarget, mutation: "update" }))), "certification_locked");
     if (row.distanceKmOverride != null) throw new DomainError("validation_failed", "The distance was not refreshed because it has an override. Clear the override first.");
     const preview = await getTransportDistanceDrift(ctx, target, tx);

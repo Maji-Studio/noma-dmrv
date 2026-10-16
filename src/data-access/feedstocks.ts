@@ -586,6 +586,10 @@ function feedstockDistanceColumns(
   previous?: Pick<FeedstockWithRelations, "distanceKmOverride" | "distanceSource">,
   routeAnchorChanged = false,
 ) {
+  if (previous && input.transportDistanceKm === undefined && input.transportDistanceSource !== undefined
+    && (previous.distanceKmOverride == null || routeAnchorChanged)) {
+    throw new DomainError("validation_failed", "The feedstock distance source was not changed. Set transportDistanceKm to change its source.");
+  }
   // The v1 input contract accepts zero; it means derived, never a stored override.
   const distanceKmOverride = input.transportDistanceKm !== undefined
     ? input.transportDistanceKm === 0 ? null : input.transportDistanceKm
