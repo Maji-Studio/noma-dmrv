@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * PROTOTYPE (throwaway): what the three timeline versions share. Year maths,
+ * PROTOTYPE (throwaway): what the timeline shares. Year maths,
  * the year switcher, the month axis, the Today line, the state legend and the
  * hover card (batch-hover-card.tsx).
  *
@@ -48,7 +48,7 @@ export interface Spot {
 }
 
 /** Position as percentages of the year track; null when the batch is outside the year. */
-export function place(batch: StubBatch, year: number): Spot | null {
+export function place(batch: { start: string; end: string }, year: number): Spot | null {
   const { first, days } = yearSpan(year);
   const start = dayOf(batch.start) - first;
   const end = dayOf(batch.end) - first + 1;
@@ -120,7 +120,7 @@ export function YearSummary({ year }: { year: number }) {
   );
 }
 
-/** The month labels over a track; `shade` tints the current month. */
+/** The month labels over a track; the current month is set in medium weight. */
 export function MonthAxis({ year, className }: { year: number; className?: string }) {
   const currentMonth = Number(TODAY.slice(0, 4)) === year ? Number(TODAY.slice(5, 7)) - 1 : -1;
   return (
@@ -150,15 +150,10 @@ export function MonthGrid({ year, shadeCurrent = true }: { year: number; shadeCu
 }
 
 /** The Today line over a whole track area. */
-export function TodayLine({ year, label = true }: { year: number; label?: boolean }) {
+export function TodayLine({ year }: { year: number }) {
   const pct = todayPct(year);
   if (pct == null) return null;
-  return (
-    <span className="pointer-events-none absolute inset-y-0 z-20 flex flex-col items-center" style={{ left: `${pct}%` }} aria-hidden>
-      <span className="w-px flex-1 -translate-x-1/2 bg-[var(--ink)]" />
-      {label && <span className="-translate-x-1/2 bg-[var(--ink)] px-4 body-caption font-medium text-white">Today</span>}
-    </span>
-  );
+  return <span className="pointer-events-none absolute inset-y-0 z-20 w-px -translate-x-1/2 bg-[var(--ink)]" style={{ left: `${pct}%` }} aria-hidden />;
 }
 
 /**

@@ -1,12 +1,10 @@
 "use client";
 
 /** PROTOTYPE (throwaway): pieces shared by the credit batch overview variants. */
-import Link from "next/link";
 import { createContext, useContext, type ReactNode } from "react";
 import { formatDateRange, formatTonnes } from "@/lib/format-utils";
 import { cn } from "@/lib/utils";
-import { CountBadge } from "../prototype-batch-page/prototype-parts";
-import { BATCHES, matchesStage, pipeline, SCENARIO_FOR, type PipelineStage, type StubBatch } from "./list-model";
+import { BATCHES, pipeline, SCENARIO_FOR, type PipelineStage, type StubBatch } from "./list-model";
 
 export const MUTED = "text-[var(--color-text-secondary)]";
 export const PANEL = "border border-[var(--color-border-secondary)] bg-[var(--paper)]";
@@ -34,11 +32,6 @@ export function batchHref(realBatchId: string | null, batch: StubBatch): string 
   return realBatchId ? `/credit-batches/${realBatchId}?scenario=${SCENARIO_FOR[batch.state]}` : "#";
 }
 
-export function useVisible(batch: StubBatch): boolean {
-  const { stage } = useList();
-  return matchesStage(batch, stage);
-}
-
 /** The batch window as the shared range formatter prints it ("Sep 1 to Sep 30, 2026"). */
 export function periodLabel(batch: StubBatch): string {
   return formatDateRange(batch.start, batch.end);
@@ -46,42 +39,6 @@ export function periodLabel(batch: StubBatch): string {
 
 export function tons(value: number): string {
   return formatTonnes(value);
-}
-
-/** Milestones reached per state: Data complete, Removal submitted, Verified, Credits issued. */
-const DONE_STEPS: Record<StubBatch["state"], number> = { blocking: 0, ready: 1, submitted: 2, issued: 4 };
-
-/** Four milestone bars, the batch page's progress at card size. */
-export function MiniProgress({ batch }: { batch: StubBatch }) {
-  const done = DONE_STEPS[batch.state];
-  return (
-    <span className="grid grid-cols-4 gap-2" aria-hidden>
-      {[0, 1, 2, 3].map((index) => (
-        <span
-          key={index}
-          className={cn(
-            "h-4",
-            index < done && "bg-[var(--st-ok)]",
-            index === done && (batch.state === "blocking" ? "bg-[var(--st-bad)]" : "bg-[var(--ink)]"),
-            index > done && "bg-[var(--color-border-tertiary)]",
-          )}
-        />
-      ))}
-    </span>
-  );
-}
-
-/** The state line for a batch: a dot or red count, then what is next. */
-export function StateNote({ batch }: { batch: StubBatch }) {
-  if (batch.state === "blocking") {
-    return (
-      <span className="inline-flex items-center gap-8 body-small">
-        <CountBadge count={batch.blocking} blocking label={`${batch.blocking} blocking items`} />
-        Needs work
-      </span>
-    );
-  }
-  return <span className={cn("body-small", batch.state === "ready" ? "font-medium" : MUTED)}>{batch.note}</span>;
 }
 
 /**
@@ -132,14 +89,5 @@ export function StageFilterNote() {
         Show all
       </button>
     </p>
-  );
-}
-
-export function BatchLink({ batch, className, title, children }: { batch: StubBatch; className?: string; title?: string; children: ReactNode }) {
-  const { realBatchId } = useList();
-  return (
-    <Link href={batchHref(realBatchId, batch)} className={className} title={title}>
-      {children}
-    </Link>
   );
 }
