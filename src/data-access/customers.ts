@@ -5,7 +5,7 @@ import type { FacilityDistanceInput } from "@/schemas/facility-distances";
  * CRUD operations for customers and customer locations with auth guards, pagination, and filtering
  */
 
-import { ne, and, asc, desc, eq, ilike, inArray, or, sql, SQL, count } from "drizzle-orm";
+import { isNull, isNotNull, ne, and, asc, desc, eq, ilike, inArray, or, sql, SQL, count } from "drizzle-orm";
 import { db } from "@/db";
 import type { OrgContext } from "@/lib/auth/server";
 import {
@@ -56,6 +56,7 @@ export interface CustomerLocationDetail extends CustomerLocation {
 // ============================================
 
 import { requireOrgScope } from "./utils";
+import { partyArchived } from "@/lib/party-domain-errors";
 import { SafeError } from "@/lib/errors";
 import {
   lockBiocharTransportRouteTopology,
@@ -90,6 +91,7 @@ export async function getCustomers(
 
   const {
     search,
+    archived = false,
     cropType,
     page = 1,
     pageSize = 20,
@@ -98,7 +100,7 @@ export async function getCustomers(
   } = filters ?? {};
 
   // Build where conditions
-  const conditions: SQL[] = [eq(customers.organizationId, ctx.organizationId)];
+  const conditions: SQL[] = [eq(customers.organizationId, ctx.organizationId), archived ? isNotNull(customers.archivedAt) : isNull(customers.archivedAt)];
 
   if (search) {
     const searchPattern = `%${search}%`;
@@ -378,11 +380,12 @@ export async function updateCustomerLocation(
     if (!location) throw new SafeError("Customer location not found");
 
     // Keep topology -> parent -> child order. Locking does not bump the parent version.
-    const [parent] = await tx.select({ id: customers.id })
+    const [parent] = await tx.select({ id: customers.id, code: customers.code, archivedAt: customers.archivedAt })
       .from(customers)
       .where(and(eq(customers.id, location.customerId), eq(customers.organizationId, ctx.organizationId)))
       .for("no key update");
     if (!parent) throw new SafeError("Customer not found");
+    if (parent.archivedAt) throw partyArchived("customer", parent.code);
 
     // Locked read after the topology lock, so the version check and the write
     // it guards see the same row.

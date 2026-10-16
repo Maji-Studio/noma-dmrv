@@ -2,7 +2,7 @@
  * Customer options for searchable entity selection.
  */
 
-import { and, ilike, or, eq, type SQL } from "drizzle-orm";
+import { and, ilike, or, eq, isNull, type SQL } from "drizzle-orm";
 import { db } from "@/db";
 import { customers } from "@/db/schema";
 import type { EntityOption } from "@/components/forms/entity-select/types";
@@ -11,6 +11,7 @@ import { requireOrgScope } from "../utils";
 
 export async function getCustomers(ctx: OrgContext, params: {
   search?: string;
+  includeArchived?: boolean;
   limit: number;
 }): Promise<EntityOption[]> {
   requireOrgScope(ctx);
@@ -31,17 +32,18 @@ export async function getCustomers(ctx: OrgContext, params: {
       id: customers.id,
       code: customers.code,
       name: customers.name,
+      archivedAt: customers.archivedAt,
       cropType: customers.cropType,
     })
     .from(customers)
-    .where(and(eq(customers.organizationId, ctx.organizationId), whereClause))
+    .where(and(eq(customers.organizationId, ctx.organizationId), params.includeArchived ? undefined : isNull(customers.archivedAt), whereClause))
     .limit(limit);
 
   return results.map((r) => ({
     id: r.id,
     code: r.code,
     name: r.name,
-    subtitle: r.cropType ?? undefined,
+    subtitle: r.archivedAt ? "Archived" : r.cropType ?? undefined,
   }));
 }
 
@@ -52,6 +54,7 @@ export async function getCustomerById(ctx: OrgContext, id: string): Promise<Enti
       id: customers.id,
       code: customers.code,
       name: customers.name,
+      archivedAt: customers.archivedAt,
       cropType: customers.cropType,
     })
     .from(customers)
@@ -64,6 +67,6 @@ export async function getCustomerById(ctx: OrgContext, id: string): Promise<Enti
     id: result.id,
     code: result.code,
     name: result.name,
-    subtitle: result.cropType ?? undefined,
+    subtitle: result.archivedAt ? "Archived" : result.cropType ?? undefined,
   };
 }

@@ -5,7 +5,7 @@
  * Server-side functions for customer and customer location CRUD operations
  */
 
-import { createCustomer, updateCustomer, deleteCustomer } from "@/lib/operations/customers";
+import { createCustomer, updateCustomer, deleteCustomer, archiveCustomer, restoreCustomer } from "@/lib/operations/customers";
 import { runOperationInProcess } from "@/lib/operations/runner";
 import { z } from "zod";
 import { type Customer, type CustomerLocation } from "@/db/schema";
@@ -22,13 +22,13 @@ import {
 } from "@/data-access/customers";
 import {
   createCustomerWithLocationsSchema,
-  deleteCustomerSchema,
   updateCustomerSchema,
   customerFilterSchema,
   createCustomerLocationSchema,
   updateCustomerLocationSchema,
   deleteCustomerLocationSchema,
 } from "@/schemas/customers";
+import { customerVersionInput } from "@/schemas/customer-input";
 import type { ActionResult } from "@/types/actions";
 import { withAction } from "./with-action";
 
@@ -188,11 +188,11 @@ export async function updateCustomerFn(
  * Delete a customer
  */
 export async function deleteCustomerFn(
-  data: z.infer<typeof deleteCustomerSchema>
+  data: z.infer<typeof customerVersionInput>
 ): Promise<ActionResult<void>> {
   return withAction(async (ctx) => {
 
-    const validated = deleteCustomerSchema.parse(data);
+    const validated = customerVersionInput.parse(data);
     await runOperationInProcess(deleteCustomer, ctx, validated);
 
     return undefined;
@@ -280,4 +280,22 @@ export async function deleteCustomerLocationFn(
 
     return undefined;
   }, { fallbackMessage: "Failed to delete customer location", log: { message: LOG_MESSAGE, context: { op: "customer-location:delete" } } });
+}
+
+export async function archiveCustomerFn(
+  data: z.infer<typeof customerVersionInput>
+): Promise<ActionResult<Customer>> {
+  return withAction(async (ctx) => {
+    const validated = customerVersionInput.parse(data);
+    return runOperationInProcess(archiveCustomer, ctx, validated);
+  }, { fallbackMessage: "Failed to archive customer", log: { message: LOG_MESSAGE, context: { op: "customer:archive" } } });
+}
+
+export async function restoreCustomerFn(
+  data: z.infer<typeof customerVersionInput>
+): Promise<ActionResult<Customer>> {
+  return withAction(async (ctx) => {
+    const validated = customerVersionInput.parse(data);
+    return runOperationInProcess(restoreCustomer, ctx, validated);
+  }, { fallbackMessage: "Failed to restore customer", log: { message: LOG_MESSAGE, context: { op: "customer:restore" } } });
 }

@@ -2,7 +2,7 @@
  * Supplier options for searchable entity selection.
  */
 
-import { and, ilike, or, eq, type SQL } from "drizzle-orm";
+import { and, ilike, or, eq, isNull, type SQL } from "drizzle-orm";
 import { db } from "@/db";
 import { suppliers } from "@/db/schema";
 import type { EntityOption } from "@/components/forms/entity-select/types";
@@ -34,7 +34,7 @@ export async function getSuppliers(ctx: OrgContext, params: {
       location: suppliers.location,
     })
     .from(suppliers)
-    .where(and(eq(suppliers.organizationId, ctx.organizationId), whereClause))
+    .where(and(eq(suppliers.organizationId, ctx.organizationId), isNull(suppliers.archivedAt), whereClause))
     .limit(limit);
 
   return results.map((r) => ({
@@ -52,6 +52,7 @@ export async function getSupplierById(ctx: OrgContext, id: string): Promise<Enti
       id: suppliers.id,
       code: suppliers.code,
       name: suppliers.name,
+      archivedAt: suppliers.archivedAt,
       location: suppliers.location,
     })
     .from(suppliers)
@@ -64,6 +65,6 @@ export async function getSupplierById(ctx: OrgContext, id: string): Promise<Enti
     id: result.id,
     code: result.code,
     name: result.name,
-    subtitle: result.location ?? undefined,
+    subtitle: result.archivedAt ? "Archived" : result.location ?? undefined,
   };
 }

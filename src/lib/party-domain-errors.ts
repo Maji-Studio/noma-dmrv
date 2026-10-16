@@ -9,8 +9,20 @@ export function partyRefusal(code: DomainErrorCode, message: string, path: Domai
 export function partyNotFound(kind: Party): DomainError {
   return partyRefusal("not_found", kind === "supplier" ? "Supplier not found" : "Customer not found", [`${kind}Id`]);
 }
-export function partyNameConflict(message: string): DomainError {
-  return partyRefusal("conflict", message, ["name"]);
+export function partyArchived(kind: Party, code: string, path: DomainIssue["path"] = [`${kind}Id`]): DomainError {
+  const noun = kind === "supplier" ? "Supplier" : "Customer";
+  return partyRefusal("not_found", `${noun} ${code} is archived. Restore it or choose another ${kind}.`, path);
+}
+export function partyArchivedForEdit(kind: Party, code: string): DomainError {
+  const noun = kind === "supplier" ? "Supplier" : "Customer";
+  return partyRefusal("not_found", `${noun} ${code} is archived. Restore it before editing it.`, [`${kind}Id`]);
+}
+export function partyArchiveConflict(kind: Party, code: string, archived: boolean): DomainError {
+  const noun = kind === "supplier" ? "Supplier" : "Customer";
+  return partyRefusal("conflict", `${noun} ${code} is ${archived ? "already archived" : "not archived"}.`, [`${kind}Id`]);
+}
+export function partyNameConflict(message: string, meta?: DomainIssue["meta"]): DomainError {
+  return partyRefusal("conflict", message, ["name"], meta);
 }
 export function supplierHasIntakes(feedstockCodes: string[] = []): DomainError {
   return partyRefusal("conflict", "Supplier was not deleted because feedstock intakes still use it. Review the linked intakes or keep this supplier.", ["supplierId"], { feedstockCodes });

@@ -1,3 +1,4 @@
+import { partyArchived } from "@/lib/party-domain-errors";
 import { lockSupplierReference } from "./party-reference-guards";
 import type { ActivityEventInput } from "./activity-events";
 import { withFeedstockTransportReadiness } from "./feedstock-transport-readiness";
@@ -600,7 +601,9 @@ export async function updateFeedstockInTransaction(
   if (feedstockData.facilityId !== undefined) {
     await withFeedstockErrors(() => lockActiveFacilityReference(ctx, tx, feedstockData.facilityId!), "not_found", ["facilityId"]);
   }
-  if (feedstockData.supplierId !== undefined) await lockSupplierReference(ctx, tx, feedstockData.supplierId);
+  const supplier = feedstockData.supplierId !== undefined
+    ? await lockSupplierReference(ctx, tx, feedstockData.supplierId, { allowArchived: true })
+    : undefined;
 
   const [locked] = await tx
     .select()
@@ -621,6 +624,9 @@ export async function updateFeedstockInTransaction(
     expectedVersion,
     actualVersion: locked.version,
   });
+  if (feedstockData.supplierId !== undefined && feedstockData.supplierId !== locked.supplierId && supplier?.archivedAt) {
+    throw partyArchived("supplier", supplier.code);
+  }
 
   await withFeedstockErrors(() => assertCanMutateCertifiedLineage(
     ctx,

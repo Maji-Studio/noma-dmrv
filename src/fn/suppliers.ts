@@ -7,7 +7,7 @@ import { withAction } from "./with-action";
  * Server-side functions for supplier CRUD operations
  */
 
-import { createSupplier, updateSupplier, deleteSupplier } from "@/lib/operations/suppliers";
+import { createSupplier, updateSupplier, deleteSupplier, archiveSupplier, restoreSupplier } from "@/lib/operations/suppliers";
 import { runOperationInProcess } from "@/lib/operations/runner";
 import { z } from "zod";
 import { type Supplier, type SupplierLocation } from "@/db/schema";
@@ -24,13 +24,13 @@ import { DomainError } from "@/lib/domain-errors";
 import { validationFailed } from "@/lib/operations/errors";
 import {
   createSupplierWithLocationsSchema,
-  deleteSupplierSchema,
   updateSupplierSchema,
   supplierFilterSchema,
   createSupplierLocationSchema,
   updateSupplierLocationSchema,
   deleteSupplierLocationSchema,
 } from "@/schemas/suppliers";
+import { supplierVersionInput } from "@/schemas/supplier-input";
 import type { ActionResult } from "@/types/actions";
 
 const LOG_MESSAGE = "supplier action failed";
@@ -151,11 +151,11 @@ export async function updateSupplierFn(
  * Delete a supplier
  */
 export async function deleteSupplierFn(
-  data: z.infer<typeof deleteSupplierSchema>
+  data: z.infer<typeof supplierVersionInput>
 ): Promise<ActionResult<void>> {
   return withAction(async (ctx) => {
 
-    const validated = deleteSupplierSchema.parse(data);
+    const validated = supplierVersionInput.parse(data);
     await runOperationInProcess(deleteSupplier, ctx, validated);
 
     return undefined;
@@ -245,4 +245,22 @@ export async function deleteSupplierLocationFn(
 
     return undefined;
   }, { fallbackMessage: "Failed to delete supplier location", log: { message: "supplier-location action failed", context: { op: "supplier-location:delete" } } });
+}
+
+export async function archiveSupplierFn(
+  data: z.infer<typeof supplierVersionInput>
+): Promise<ActionResult<Supplier>> {
+  return withAction(async (ctx) => {
+    const validated = supplierVersionInput.parse(data);
+    return runOperationInProcess(archiveSupplier, ctx, validated);
+  }, { fallbackMessage: "Failed to archive supplier", log: { message: LOG_MESSAGE, context: { op: "supplier:archive" } } });
+}
+
+export async function restoreSupplierFn(
+  data: z.infer<typeof supplierVersionInput>
+): Promise<ActionResult<Supplier>> {
+  return withAction(async (ctx) => {
+    const validated = supplierVersionInput.parse(data);
+    return runOperationInProcess(restoreSupplier, ctx, validated);
+  }, { fallbackMessage: "Failed to restore supplier", log: { message: LOG_MESSAGE, context: { op: "supplier:restore" } } });
 }

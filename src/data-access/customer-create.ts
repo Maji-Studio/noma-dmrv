@@ -4,7 +4,7 @@ import type { DbTransaction } from "@/db";
 import { customers, customerLocations, type CustomerLocation } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import type { FacilityDistanceInput } from "@/schemas/facility-distances";
-import { partyNotFound } from "@/lib/party-domain-errors";
+import { partyArchived, partyNotFound } from "@/lib/party-domain-errors";
 import { upsertLocationFacilityDistances, withLocationFacilityDistances } from "./location-facility-distances";
 import { nextVersion } from "./row-version";
 import { requireOrgScope } from "./utils";
@@ -37,7 +37,7 @@ export async function createCustomerLocationInTransaction(
   requireOrgScope(ctx);
 
   const [customer] = await tx
-    .select({ id: customers.id })
+    .select({ id: customers.id, code: customers.code, archivedAt: customers.archivedAt })
     .from(customers)
     .where(
       and(
@@ -51,6 +51,8 @@ export async function createCustomerLocationInTransaction(
   if (!customer) {
     throw partyNotFound("customer");
   }
+
+  if (customer.archivedAt) throw partyArchived("customer", customer.code);
 
   // The customer's first location is always its default.
   const [{ value: existingCount }] = await tx

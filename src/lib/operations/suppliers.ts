@@ -1,5 +1,5 @@
 import { CODE_CONFLICT_MESSAGES, withAutoCodes } from "@/data-access/code-generator";
-import { createSupplierInTransaction, updateSupplierInTransaction, deleteSupplierInTransaction, type CreatedSupplierWithLocations } from "@/data-access/supplier-writes";
+import { createSupplierInTransaction, updateSupplierInTransaction, deleteSupplierInTransaction, archiveSupplierInTransaction, restoreSupplierInTransaction, type CreatedSupplierWithLocations } from "@/data-access/supplier-writes";
 import { lockPartyFacilities } from "@/data-access/party-reference-guards";
 import { suppliers, type Supplier } from "@/db/schema";
 import { createSupplierInput, updateSupplierInput, supplierVersionInput } from "@/schemas/supplier-input";
@@ -32,4 +32,16 @@ export const deleteSupplier: Operation<typeof supplierVersionInput, void> = {
     const deleted = await deleteSupplierInTransaction(scope.ctx, scope.tx, input);
     recordPartyLocationActivity(scope, "supplier", "deleted", deleted);
   },
+};
+
+export const archiveSupplier: Operation<typeof supplierVersionInput, Supplier> = {
+  id: "archive_supplier", input: supplierVersionInput, supportsDryRun: true,
+  describe: (input, output) => ({ outcome: "status_changed", fromStatus: "active", toStatus: "archived", entityType: "supplier", entityIds: [output.id], versionBefore: input.expectedVersion, versionAfter: output.version, changedFields: [] }),
+  execute: ({ ctx, tx }, input) => archiveSupplierInTransaction(ctx, tx, input),
+};
+
+export const restoreSupplier: Operation<typeof supplierVersionInput, Supplier> = {
+  id: "restore_supplier", input: supplierVersionInput, supportsDryRun: true,
+  describe: (input, output) => ({ outcome: "status_changed", fromStatus: "archived", toStatus: "active", entityType: "supplier", entityIds: [output.id], versionBefore: input.expectedVersion, versionAfter: output.version, changedFields: [] }),
+  execute: ({ ctx, tx }, input) => restoreSupplierInTransaction(ctx, tx, input),
 };

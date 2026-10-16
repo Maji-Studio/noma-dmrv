@@ -8,7 +8,7 @@ import type { FacilityDistanceInput } from "@/schemas/facility-distances";
  * CRUD operations for suppliers with auth guards, pagination, and filtering
  */
 
-import { ne, and, asc, desc, eq, ilike, inArray, or, SQL, count } from "drizzle-orm";
+import { isNull, isNotNull, ne, and, asc, desc, eq, ilike, inArray, or, SQL, count } from "drizzle-orm";
 import { db } from "@/db";
 import type { OrgContext } from "@/lib/auth/server";
 import {
@@ -51,6 +51,7 @@ export interface PaginatedSuppliers {
 // ============================================
 
 import { requireOrgScope } from "./utils";
+import { partyArchived } from "@/lib/party-domain-errors";
 import { SafeError } from "@/lib/errors";
 
 // Supplier records are organization-owned. `suppliers.userId` is retained for
@@ -120,6 +121,7 @@ export async function getSuppliers(
 
   const {
     search,
+    archived = false,
     location,
     page = 1,
     pageSize = 20,
@@ -129,6 +131,7 @@ export async function getSuppliers(
 
   const conditions: SQL[] = [
     eq(suppliers.organizationId, ctx.organizationId),
+    archived ? isNotNull(suppliers.archivedAt) : isNull(suppliers.archivedAt),
   ];
 
   if (search) {
@@ -299,11 +302,12 @@ export async function createSupplierLocation(
     // Serialize location writers with parent deletion before locking children.
     // Pair saves also wait for intake FK inserts, so fill-only cannot miss an
     // intake committing with a missing distance. The lock does not bump version.
-    const [parent] = await tx.select({ id: suppliers.id })
+    const [parent] = await tx.select({ id: suppliers.id, code: suppliers.code, archivedAt: suppliers.archivedAt })
       .from(suppliers)
       .where(and(eq(suppliers.id, data.supplierId), eq(suppliers.organizationId, ctx.organizationId)))
       .for(data.facilityDistances?.length ? "update" : "no key update");
     if (!parent) throw new SafeError("Supplier not found");
+    if (parent.archivedAt) throw partyArchived("supplier", parent.code);
 
     // The supplier's first location is always its default.
     const [{ value: existingCount }] = await tx
@@ -393,11 +397,12 @@ export async function updateSupplierLocation(
     // Serialize location writers with parent deletion before locking children.
     // Pair saves also wait for intake FK inserts, so fill-only cannot miss an
     // intake committing with a missing distance. The lock does not bump version.
-    const [parent] = await tx.select({ id: suppliers.id })
+    const [parent] = await tx.select({ id: suppliers.id, code: suppliers.code, archivedAt: suppliers.archivedAt })
       .from(suppliers)
       .where(and(eq(suppliers.id, supplierId), eq(suppliers.organizationId, ctx.organizationId)))
       .for(data.facilityDistances?.length || promotionPairs.length ? "update" : "no key update");
     if (!parent) throw new SafeError("Supplier not found");
+    if (parent.archivedAt) throw partyArchived("supplier", parent.code);
 
     const [locked] = await tx
       .select({ version: supplierLocations.version, isDefault: supplierLocations.isDefault })

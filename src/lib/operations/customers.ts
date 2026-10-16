@@ -1,5 +1,5 @@
 import { CODE_CONFLICT_MESSAGES, withAutoCodes } from "@/data-access/code-generator";
-import { createCustomerInTransaction, updateCustomerInTransaction, deleteCustomerInTransaction, type CreatedCustomerWithLocations } from "@/data-access/customer-writes";
+import { createCustomerInTransaction, updateCustomerInTransaction, deleteCustomerInTransaction, archiveCustomerInTransaction, restoreCustomerInTransaction, type CreatedCustomerWithLocations } from "@/data-access/customer-writes";
 import { lockPartyFacilities } from "@/data-access/party-reference-guards";
 import { customers, type Customer } from "@/db/schema";
 import { createCustomerInput, updateCustomerInput, customerVersionInput } from "@/schemas/customer-input";
@@ -32,4 +32,16 @@ export const deleteCustomer: Operation<typeof customerVersionInput, void> = {
     const deleted = await deleteCustomerInTransaction(scope.ctx, scope.tx, input);
     recordPartyLocationActivity(scope, "customer", "deleted", deleted);
   },
+};
+
+export const archiveCustomer: Operation<typeof customerVersionInput, Customer> = {
+  id: "archive_customer", input: customerVersionInput, supportsDryRun: true,
+  describe: (input, output) => ({ outcome: "status_changed", fromStatus: "active", toStatus: "archived", entityType: "customer", entityIds: [output.id], versionBefore: input.expectedVersion, versionAfter: output.version, changedFields: [] }),
+  execute: ({ ctx, tx }, input) => archiveCustomerInTransaction(ctx, tx, input),
+};
+
+export const restoreCustomer: Operation<typeof customerVersionInput, Customer> = {
+  id: "restore_customer", input: customerVersionInput, supportsDryRun: true,
+  describe: (input, output) => ({ outcome: "status_changed", fromStatus: "archived", toStatus: "active", entityType: "customer", entityIds: [output.id], versionBefore: input.expectedVersion, versionAfter: output.version, changedFields: [] }),
+  execute: ({ ctx, tx }, input) => restoreCustomerInTransaction(ctx, tx, input),
 };

@@ -6,6 +6,9 @@
  * so pair filling takes no downstream row locks.
  * Update: parent FOR NO KEY UPDATE for metadata, FOR UPDATE for a supplied code,
  * version, code and name guards, update. Children are untouched.
+ * Archive/restore: only the parent FOR UPDATE, no child/reference locks.
+ * Explicit UPDATE strength conflicts with reference KEY SHARE; no locks follow it,
+ * so archive cannot cycle with intake/order, location, update or delete writers.
  * Delete: parent FOR UPDATE, version, intake check, delete children then parent.
  * Intakes lock facility SHARE, supplier KEY SHARE, then the intake row.
  * Deletes never lock referencing intakes.
@@ -13,12 +16,12 @@
  * updates and deletes never request facility or downstream locks, so no reverse
  * edge is introduced against pair writers, facility archive or formulation writes.
  */
-import { and, asc, count, eq } from "drizzle-orm";
+import { and, asc, isNull, isNotNull, sql, count, eq } from "drizzle-orm";
 import { isPgForeignKeyViolation } from "@/db/errors";
 import type { DbTransaction } from "@/db";
 import { feedstocks, suppliers, supplierLocations, type Supplier, type SupplierLocation } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
-import { partyNotFound, partyRefusal, supplierHasIntakes } from "@/lib/party-domain-errors";
+import { partyNotFound, partyArchived, partyArchivedForEdit, partyArchiveConflict, partyRefusal, supplierHasIntakes } from "@/lib/party-domain-errors";
 import { createSupplierInput, updateSupplierInput, type CreateSupplierInput, type UpdateSupplierInput, type SupplierVersionInput } from "@/schemas/supplier-input";
 import { validationFailed } from "@/lib/operations/errors";
 import { CODE_CONFLICT_MESSAGES, withUniqueCodeGuard } from "./code-generator";
@@ -43,7 +46,7 @@ export async function createSupplierInTransaction(ctx: OrgContext, tx: DbTransac
   const { locations, ...fields } = parsed.data;
   await lockPartyFacilities(ctx, tx, locations);
   // Code violations remain raw so withAutoCodes can roll back and retry its savepoint.
-  const [parent] = await guardSupplierName(ctx, fields.name, () => tx.insert(suppliers).values({
+  const [parent] = await guardSupplierName(ctx, tx, fields.name, savepoint => savepoint.insert(suppliers).values({
     ...fields, code, organizationId: ctx.organizationId, userId: ctx.userId,
   }).returning());
   const inserted: SupplierLocation[] = [];
@@ -63,10 +66,11 @@ export async function updateSupplierInTransaction(ctx: OrgContext, tx: DbTransac
   const [locked] = await tx.select().from(suppliers).where(and(eq(suppliers.organizationId, ctx.organizationId), eq(suppliers.id, supplierId)))
     .for(fields.code === undefined ? "no key update" : "update");
   if (!locked) throw partyNotFound("supplier");
+  if (locked.archivedAt) throw partyArchivedForEdit("supplier", locked.code);
   assertRowVersion({ entity: "supplier", id: supplierId, expectedVersion, actualVersion: locked.version });
   return withUniqueCodeGuard(ctx, suppliers, suppliers.code, CODE_CONFLICT_MESSAGES.supplier, () =>
-    guardSupplierName(ctx, fields.name ?? locked.name, async () => {
-      const [saved] = await tx.update(suppliers).set({ ...fields, version: nextVersion(suppliers.version), updatedAt: new Date() })
+    guardSupplierName(ctx, tx, fields.name ?? locked.name, async savepoint => {
+      const [saved] = await savepoint.update(suppliers).set({ ...fields, version: nextVersion(suppliers.version), updatedAt: new Date() })
         .where(and(eq(suppliers.organizationId, ctx.organizationId), eq(suppliers.id, supplierId))).returning();
       return saved;
     }));
@@ -98,7 +102,7 @@ export async function createSupplierLocationInTransaction(
   requireOrgScope(ctx);
 
   const [supplier] = await tx
-    .select({ id: suppliers.id })
+    .select({ id: suppliers.id, code: suppliers.code, archivedAt: suppliers.archivedAt })
     .from(suppliers)
     .where(
       and(
@@ -112,6 +116,8 @@ export async function createSupplierLocationInTransaction(
   if (!supplier) {
     throw partyNotFound("supplier");
   }
+
+  if (supplier.archivedAt) throw partyArchived("supplier", supplier.code);
 
   // The supplier's first location is always its default.
   const [{ value: existingCount }] = await tx
@@ -182,4 +188,35 @@ export async function deleteSupplierInTransaction(ctx: OrgContext, tx: DbTransac
     throw error;
   }
   return children;
+}
+
+/** Lock only the party, including against reference KEY SHARE locks. */
+async function changeSupplierArchiveState(
+  ctx: OrgContext,
+  tx: DbTransaction,
+  { supplierId, expectedVersion }: SupplierVersionInput,
+  archive: boolean,
+): Promise<Supplier> {
+  requireOrgScope(ctx);
+  const [locked] = await tx.select().from(suppliers)
+    .where(and(eq(suppliers.organizationId, ctx.organizationId), eq(suppliers.id, supplierId))).for("update");
+  if (!locked) throw partyNotFound("supplier");
+  assertRowVersion({ entity: "supplier", id: supplierId, expectedVersion, actualVersion: locked.version });
+  if (Boolean(locked.archivedAt) === archive) throw partyArchiveConflict("supplier", locked.code, archive);
+  const [saved] = await tx.update(suppliers).set({
+    archivedAt: archive ? sql`now()` : null,
+    version: nextVersion(suppliers.version), updatedAt: sql`now()`,
+  }).where(and(eq(suppliers.organizationId, ctx.organizationId), eq(suppliers.id, supplierId), archive ? isNull(suppliers.archivedAt) : isNotNull(suppliers.archivedAt))).returning();
+  if (!saved) throw partyArchiveConflict("supplier", locked.code, archive);
+  return saved;
+}
+
+export async function archiveSupplierInTransaction(ctx: OrgContext, tx: DbTransaction, input: SupplierVersionInput): Promise<Supplier> {
+  requireOrgScope(ctx);
+  return changeSupplierArchiveState(ctx, tx, input, true);
+}
+
+export async function restoreSupplierInTransaction(ctx: OrgContext, tx: DbTransaction, input: SupplierVersionInput): Promise<Supplier> {
+  requireOrgScope(ctx);
+  return changeSupplierArchiveState(ctx, tx, input, false);
 }
