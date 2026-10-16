@@ -5,7 +5,8 @@ import { loadBatchAutomaticFigures } from "@/data-access/batch-emission-automati
 import type { BatchEmissionLineFacts } from "@/lib/certification/emission-lines";
 import type { FacilityCertifierFacts } from "./facility-certifier-facts";
 
-export type BatchEmissionContext = Record<string, Pick<BatchEmissionLineFacts, "entries" | "automaticFigures">>;
+export type BatchEmissionContext = Record<string,
+  Pick<BatchEmissionLineFacts, "automaticFigures"> & Awaited<ReturnType<typeof loadBatchEmissionEntryFacts>>>;
 
 /** Batch-wide facts, even when the Removal carries only some applications. */
 export async function loadBatchEmissionContext(
@@ -19,9 +20,9 @@ export async function loadBatchEmissionContext(
     const observation = batch.removalTemplateId
       ? facilityFacts.templatesById[batch.removalTemplateId]?.observation : null;
     if (!observation) continue;
-    const { entries } = await loadBatchEmissionEntryFacts(ctx, batch.id, observation);
+    const { entries, previousObservations } = await loadBatchEmissionEntryFacts(ctx, batch.id, observation);
     const automaticFigures = await loadBatchAutomaticFigures(ctx, facilityId, batch.id);
-    result[batch.id] = { entries, automaticFigures };
+    result[batch.id] = { entries, previousObservations, automaticFigures };
   }
   return result;
 }

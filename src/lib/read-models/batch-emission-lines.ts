@@ -7,6 +7,7 @@ import { getCreditBatchById } from "@/data-access/credit-batches";
 import { getLatestTemplateObservation } from "@/data-access/removal-template-observations";
 import { resolveBatchPin } from "@/lib/certification/resolve-batch-pin";
 import { deriveBatchEmissionLines } from "@/lib/certification/emission-lines";
+import { withRemovedEntryComponents } from "@/lib/certification/emission-line-definition";
 import { REMOVAL_TEMPLATE_BLOCKERS } from "@/lib/certification/removal-template-blockers";
 import { isEnrichmentComplete, validateLineSources } from "@/lib/isometric/template-observations";
 import type { EntryObservation } from "@/lib/certification/emission-entry-rules";
@@ -34,23 +35,7 @@ export function buildBatchEmissionLines(
   previousObservations: ReadonlyMap<string, EntryObservation | null>,
   automaticFacts: Pick<BatchEmissionLineFacts, "automaticFigures" | "automaticRecordCounts">,
 ) {
-  const definition = structuredClone(observation.definition);
-  // Keep removed-line entries visible for correction or deletion, with their original label.
-  const present = new Set(
-    definition.groups.flatMap((group) => group.components.map((component) => component.id)),
-  );
-  for (const entry of entries) {
-    if (present.has(entry.componentId)) continue;
-    const previous = previousObservations.get(entry.observationId);
-    const group = previous?.definition.groups.find((group) =>
-      group.components.some((component) => component.id === entry.componentId),
-    );
-    const component = group?.components.find((component) => component.id === entry.componentId);
-    if (group && component) {
-      definition.groups.push({ ...group, components: [component] });
-      present.add(component.id);
-    }
-  }
+  const definition = withRemovedEntryComponents(observation.definition, entries, previousObservations);
   return deriveBatchEmissionLines({
     definition,
     lineSources: observation.lineSources,
