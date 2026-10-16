@@ -114,7 +114,7 @@ function reportingWindow(summary: RemovalListRow): string | null {
 function RemovalCell({ summary }: { summary: RemovalListRow }) {
   const window = reportingWindow(summary);
   return (
-    <div className="flex flex-col gap-2 min-w-0">
+    <span className="flex flex-col gap-2 min-w-0">
       <span className="body-small font-mono text-[var(--color-text-primary)] truncate">
         {shortId(summary.removalId)}…
       </span>
@@ -123,7 +123,7 @@ function RemovalCell({ summary }: { summary: RemovalListRow }) {
           {window}
         </span>
       )}
-    </div>
+    </span>
   );
 }
 

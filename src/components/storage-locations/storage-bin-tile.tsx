@@ -72,17 +72,13 @@ export function StorageBinTile({
   return (
     <article
       style={binAccentStyle(bin.type)}
-      // Reachable by keyboard, same contract as `application-card.tsx`: the
-      // whole tile opens the detail sheet, so it has to answer Enter and Space.
-      role="button"
-      tabIndex={0}
-      onClick={() => onView(bin)}
-      onKeyDown={(event) => {
-        if (event.key !== "Enter" && event.key !== " ") return;
-        // Only when the tile itself has focus — Space on the nested actions
-        // menu belongs to that menu.
-        if (event.target !== event.currentTarget) return;
-        event.preventDefault();
+      // Pointer-only convenience: the material heading below is the link and
+      // the only keyboard / screen-reader target. No role or tabIndex here, so
+      // the actions menu is not nested inside an interactive element.
+      onClick={(event) => {
+        // Controls inside the tile (actions menu, Reconcile) keep their press.
+        if ((event.target as HTMLElement).closest("button, a")) return;
+        if (!event.currentTarget.contains(event.target as Node)) return;
         onView(bin);
       }}
       // Named for the bin, not for the material: several tiles can hold the same
@@ -90,7 +86,7 @@ export function StorageBinTile({
       // Bin names are unique per org (`guardStorageLocationName`), so the name
       // alone identifies it — no need to read the code aloud either.
       aria-label={bin.name}
-      className={`group flex cursor-pointer items-stretch bg-[var(--panel-bg)] [border:var(--panel-border)] transition-colors hover:[border-color:var(--bin-accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)] ${
+      className={`group flex cursor-pointer items-stretch bg-[var(--panel-bg)] [border:var(--panel-border)] transition-colors hover:[border-color:var(--bin-accent)] ${
         isEmpty ? "opacity-70" : ""
       } ${needsReconciliation ? "[border-color:var(--st-bad-border)]" : ""}`}
     >
@@ -125,8 +121,18 @@ export function StorageBinTile({
           <span style={{ color: ink }} className="shrink-0">
             <Icon size={16} weight="bold" />
           </span>
-          <h3 className="min-w-0 flex-1 truncate body-small font-semibold" title={material}>
-            {material}
+          <h3 className="min-w-0 flex-1 body-small font-semibold">
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                onView(bin);
+              }}
+              title={material}
+              className="block max-w-full cursor-pointer truncate text-left underline-offset-4 hover:underline focus-visible:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)]"
+            >
+              {material}
+            </button>
           </h3>
           <span className="shrink-0">
             <RowActionsMenu label={`Actions for ${bin.code}`} actions={actions} />

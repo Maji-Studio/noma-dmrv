@@ -51,22 +51,11 @@ function isFromPortal(event: React.SyntheticEvent<HTMLElement>): boolean {
   return !event.currentTarget.contains(event.target as Node);
 }
 
-/** Activate a clickable row or card with Enter/Space. */
-export function handleRowActivationKeyDown(
-  event: React.KeyboardEvent<HTMLElement>,
-  activate: () => void,
-) {
-  if (event.key !== "Enter" && event.key !== " ") return;
-  if (isFromPortal(event)) return;
-  const interactive = (event.target as HTMLElement).closest(
-    INTERACTIVE_ROW_CONTROL_SELECTOR,
-  );
-  if (interactive && interactive !== event.currentTarget) return;
-  event.preventDefault();
-  activate();
-}
-
-/** Activate a clickable row or card unless a nested control was clicked. */
+/**
+ * Pointer-only row click. Keyboard and screen-reader users activate the
+ * first-cell link instead (see `row-link.tsx`); a nested control keeps its own
+ * press.
+ */
 export function handleRowActivationClick(
   event: React.MouseEvent<HTMLElement>,
   activate: () => void,

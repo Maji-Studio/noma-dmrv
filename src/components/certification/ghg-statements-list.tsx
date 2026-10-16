@@ -193,14 +193,14 @@ function statementPeriod(item: GhgStatementListItem): {
 function PeriodCell({ item }: { item: GhgStatementListItem }) {
   const { primary, secondary } = statementPeriod(item);
   return (
-    <div className="flex flex-col gap-2 min-w-0">
+    <span className="flex flex-col gap-2 min-w-0">
       <span className="body-small font-mono text-[var(--color-text-primary)] truncate">
         {primary}
       </span>
       <span className="body-caption text-[var(--color-text-tertiary)]">
         {secondary}
       </span>
-    </div>
+    </span>
   );
 }
 

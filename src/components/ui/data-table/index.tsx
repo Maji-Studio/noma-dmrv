@@ -8,6 +8,7 @@ import {
   getPaginationRowModel,
   getSortedRowModel,
   useReactTable,
+  type Cell,
   type ColumnDef,
   type ColumnFiltersState,
   type PaginationState,
@@ -38,8 +39,8 @@ import {
   STICKY_END_HEADER_CLASSES,
   columnLabel,
   handleRowActivationClick,
-  handleRowActivationKeyDown,
 } from "./data-table-helpers";
+import { RowLink, rowLinkColumnId } from "./row-link";
 
 /* ------------------------------------------------------------------ */
 /*  Data Table Context                                                  */
@@ -340,6 +341,18 @@ function DataTableRoot<TData, TValue>({
     getRowId,
   });
 
+  // With `onRowClick`, the first data cell is the record's link and the only
+  // keyboard / screen-reader activation target; the row itself stays a plain
+  // row (see `row-link.tsx`).
+  const linkColumnId = onRowClick
+    ? rowLinkColumnId(table.getVisibleLeafColumns())
+    : undefined;
+  const renderCell = (cell: Cell<TData, unknown>, record: TData) => {
+    const content = flexRender(cell.column.columnDef.cell, cell.getContext());
+    if (!onRowClick || cell.column.id !== linkColumnId) return content;
+    return <RowLink onActivate={() => onRowClick(record)}>{content}</RowLink>;
+  };
+
   const contextValue = React.useMemo(
     () => ({ table }),
     [table]
@@ -470,27 +483,14 @@ function DataTableRoot<TData, TValue>({
                         hoverable: hoverable || !!onRowClick,
                         selected: row.getIsSelected(),
                       }),
-                      onRowClick &&
-                        "cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-interaction)]"
+                      onRowClick && "cursor-pointer"
                     )}
+                    // Pointer-only convenience. No role, tabIndex or key
+                    // handler: the first-cell link is the accessible target.
                     onClick={
                       onRowClick
                         ? (event) =>
                             handleRowActivationClick(event, () =>
-                              onRowClick(row.original),
-                            )
-                        : undefined
-                    }
-                    // A clickable row must be reachable and activatable by
-                    // keyboard: focusable with Enter/Space activation, but
-                    // WITHOUT role="button" — that would override the implicit
-                    // role="row" and sever the cell to column-header
-                    // association for screen readers.
-                    tabIndex={onRowClick ? 0 : undefined}
-                    onKeyDown={
-                      onRowClick
-                        ? (event) =>
-                            handleRowActivationKeyDown(event, () =>
                               onRowClick(row.original),
                             )
                         : undefined
@@ -508,7 +508,7 @@ function DataTableRoot<TData, TValue>({
                             STICKY_END_CELL_CLASSES
                         )}
                       >
-                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                        {renderCell(cell, row.original)}
                       </td>
                     ))}
                   </tr>
@@ -540,22 +540,12 @@ function DataTableRoot<TData, TValue>({
                   "border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] px-16 py-8",
                   row.getIsSelected() && "bg-[var(--color-interaction)]/10",
                   onRowClick &&
-                    "cursor-pointer transition-colors hover:bg-[var(--color-background-medium)] active:bg-[var(--color-background-medium)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-interaction)]",
+                    "cursor-pointer transition-colors hover:bg-[var(--color-background-medium)] active:bg-[var(--color-background-medium)]",
                 )}
                 onClick={
                   onRowClick
                     ? (event) =>
                         handleRowActivationClick(event, () =>
-                          onRowClick(row.original),
-                        )
-                    : undefined
-                }
-                role={onRowClick ? "button" : undefined}
-                tabIndex={onRowClick ? 0 : undefined}
-                onKeyDown={
-                  onRowClick
-                    ? (event) =>
-                        handleRowActivationKeyDown(event, () =>
                           onRowClick(row.original),
                         )
                     : undefined
@@ -578,10 +568,7 @@ function DataTableRoot<TData, TValue>({
                         </span>
                       )}
                       <div className="body-small min-w-0 break-words text-right">
-                        {flexRender(
-                          cell.column.columnDef.cell,
-                          cell.getContext(),
-                        )}
+                        {renderCell(cell, row.original)}
                       </div>
                     </div>
                   );

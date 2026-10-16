@@ -664,8 +664,10 @@ The one outcome screen for auth pages (check your email, email verified, verific
   sentence case.
 - **`DropdownMenu` / `RowActionsMenu`** — `RowActionsMenu` is *the* single
   row-action pattern for table and card lists: a quiet ⋮ per row, verbs in the
-  menu. Row click opens the detail side sheet everywhere; explicit "View"
-  buttons are retired (detail routes become an "Open details" item).
+  menu. The first cell of a clickable `DataTable` is the record link (the
+  only keyboard / screen-reader target); rows and mobile cards carry no role
+  or `tabIndex`, and a whole-row click is a pointer-only convenience. It opens
+  the detail side sheet everywhere; explicit "View" buttons are retired (detail routes become an "Open details" item).
   `destructive: true` for irreversible actions only — **archive, restore, and
   unlink are reversible and stay neutral.** The wrapper stops propagation so
   menu clicks never fire the row click.
