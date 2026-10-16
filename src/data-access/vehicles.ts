@@ -256,10 +256,11 @@ async function updateVehicleOnce(
     .returning();
 
   if (refreshLegs.length > 0) {
+    // Lock order: lineage and vehicle locks, then derived transport legs.
     const previousLegs = await tx.select().from(transportLegs).where(and(
       eq(transportLegs.entityType, "feedstock"), eq(transportLegs.isDerived, true),
       inArray(transportLegs.entityId, refreshLegs), eq(transportLegs.organizationId, ctx.organizationId),
-    )).for("update");
+    )).orderBy(transportLegs.id).for("update");
     const refreshed = await tx
       .update(transportLegs)
       .set({

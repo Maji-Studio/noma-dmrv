@@ -143,6 +143,7 @@ export const activityFieldPolicies: Record<string, ActivityEntityPolicy> = {
     updatedAt: "ignore",
   } },
   delivery: { table: deliveries, fields: {
+    recordedDistanceKm: "value", recordedDistanceSource: "value",
     allocations: "name", sources: "name",
     version: "ignore",
     id: "ignore",

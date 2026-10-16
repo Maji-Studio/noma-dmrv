@@ -22,11 +22,15 @@ function decimal(value: unknown): string {
   return sign === "-" && normalized !== "0" ? `-${normalized}` : normalized;
 }
 
-function canonical(value: unknown): unknown {
+const NESTED_BOOKKEEPING_KEYS = new Set(["id", "organizationId", "createdAt", "updatedAt", "version"]);
+
+function canonical(value: unknown, nested = false): unknown {
   if (value == null) return null;
   if (value instanceof Date) return value.toISOString();
-  if (Array.isArray(value)) return value.map(canonical);
-  if (typeof value === "object") return Object.fromEntries(Object.entries(value).sort(([a], [b]) => a.localeCompare(b)).map(([key, item]) => [key, canonical(item)]));
+  if (Array.isArray(value)) return value.map(item => canonical(item, true))
+    .sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
+  if (typeof value === "object") return Object.fromEntries(Object.entries(value).filter(([key]) => !NESTED_BOOKKEEPING_KEYS.has(key)).sort(([a], [b]) => a.localeCompare(b)).map(([key, item]) => [key, canonical(item, true)]));
+  if (nested && (typeof value === "number" || typeof value === "string")) return decimal(value);
   return value;
 }
 

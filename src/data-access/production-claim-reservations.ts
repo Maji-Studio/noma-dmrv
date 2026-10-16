@@ -251,6 +251,7 @@ export async function rejectSubmissionAndReleaseProductionClaims(
         expectedLockedAt: args.expectedLockedAt,
       });
     }
+    // Lock order: submission, then reserved credit batches.
     const previousBatches = await tx.select().from(creditBatches).where(and(
       eq(creditBatches.productionEmissionsClaimReservedBySubmissionId, args.submissionId),
       eq(creditBatches.organizationId, ctx.organizationId),

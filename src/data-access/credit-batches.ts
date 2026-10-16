@@ -451,11 +451,12 @@ export async function createCreditBatch(
       creditBatchIds: [batch.id],
     });
 
+    const savedRunIds = await readMemberProductionRunIds(ctx, tx, batch.id);
     await recordActivityChange(ctx, tx, {
       entityType: toActivityEntityType("credit_batch"), entityId: batch.id, creditBatchId: batch.id,
       action: "created", source: "form",
-    }, null, { ...batch, production_runs: runIds });
-    await recordMembershipActivity(ctx, tx, batch.id, [], runIds, { recordBatchEvent: false });
+    }, null, { ...batch, production_runs: savedRunIds });
+    await recordMembershipActivity(ctx, tx, batch.id, [], savedRunIds, { recordBatchEvent: false });
 
     return { ...(await readCommittedCreditBatch(ctx, tx, batch)), memberProductionRunIds: runIds };
   }));
@@ -706,19 +707,14 @@ export async function updateCreditBatch(
       });
     }
 
+    const memberProductionRunIds = await readMemberProductionRunIds(ctx, tx, id);
     const membershipChanged = shouldRefreshMembership && await recordMembershipActivity(
-      ctx, tx, id, currentProductionRunIds, resolvedProductionRunIds ?? [], { before: existingBatch.row, after: updatedBatch },
+      ctx, tx, id, currentProductionRunIds, memberProductionRunIds, { before: existingBatch.row, after: updatedBatch },
     );
     if (!membershipChanged) await recordActivityChange(ctx, tx, {
       entityType: toActivityEntityType("credit_batch"), entityId: id, creditBatchId: id,
       action: "updated", source: "form",
     }, existingBatch.row, updatedBatch);
-
-    // The member set after this write: the refreshed one when membership was
-    // touched, otherwise the untouched links read under the same transaction.
-    const memberProductionRunIds = shouldRefreshMembership
-      ? (resolvedProductionRunIds ?? [])
-      : await readMemberProductionRunIds(ctx, tx, id);
 
     return {
       ...(await readCommittedCreditBatch(ctx, tx, updatedBatch)),

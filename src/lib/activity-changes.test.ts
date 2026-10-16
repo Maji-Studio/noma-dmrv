@@ -41,7 +41,7 @@ it("never stores notes, filenames, document metadata or unknown values", () => {
 });
 it("compares nested objects deeply and records changed lists by name only", () => {
   expect(diffActivityChanges("production_run", { feedstockDraws: [{ id: "a", mass: 1 }] }, { feedstockDraws: [{ mass: 1, id: "a" }] }).changedFields).toEqual([]);
-  expect(diffActivityChanges("production_run", { feedstockDraws: [{ id: "a" }] }, { feedstockDraws: [{ id: "b" }] })).toEqual({ changedFields: ["feedstockDraws"], changes: {} });
+  expect(diffActivityChanges("production_run", { feedstockDraws: [{ storageLocationId: "a" }] }, { feedstockDraws: [{ storageLocationId: "b" }] })).toEqual({ changedFields: ["feedstockDraws"], changes: {} });
 });
 
 it("captures each entity independently without leaking values into links", async () => {
@@ -65,4 +65,19 @@ it("covers every canonical activity entity and keeps choices, places and people 
   expect(diffActivityChanges("bin_movement", null, { outputKind: "loss", correctsMovementId: "prior", id: "movement" })).toEqual({
     changedFields: ["outputKind"], changes: { outputKind: { from: null, to: "loss" } },
   });
+});
+
+it("normalizes nested list bookkeeping, exact decimals and element order", () => {
+  const before = { allocations: [
+    { id: "old", organizationId: "org", createdAt: new Date(), updatedAt: new Date(), version: 1,
+      sourceId: "a", nested: { mass: "1.500", precise: "9007199254740993.10" } },
+    { sourceId: "b", mass: "2e1" },
+  ] };
+  const after = { allocations: [
+    { sourceId: "b", mass: 20 },
+    { id: "new", version: 2, sourceId: "a", nested: { precise: "9007199254740993.1", mass: 1.5 } },
+  ] };
+  expect(diffActivityChanges("application", before, after)).toEqual({ changedFields: [], changes: {} });
+  expect(diffActivityChanges("application", before, { allocations: [...after.allocations, { sourceId: "c", mass: 1 }] }))
+    .toEqual({ changedFields: ["allocations"], changes: {} });
 });

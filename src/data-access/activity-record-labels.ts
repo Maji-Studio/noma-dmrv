@@ -20,7 +20,7 @@ const SHORT_RECORD_ID_LENGTH = 8;
  * without one; a document takes its owner's.
  */
 type LabelSource = {
-  table: PgTable; id: AnyPgColumn; organizationId: AnyPgColumn; label: AnyPgColumn | SQL<string>;
+  table: PgTable; id: AnyPgColumn; organizationId: AnyPgColumn; label: AnyPgColumn | SQL<string | null>;
   facility: AnyPgColumn | SQL<string | null> | null;
 };
 const coded = <T extends PgTable & { id: AnyPgColumn; organizationId: AnyPgColumn; code: AnyPgColumn; facilityId: AnyPgColumn }>(table: T): LabelSource =>
@@ -28,7 +28,7 @@ const coded = <T extends PgTable & { id: AnyPgColumn; organizationId: AnyPgColum
 const named = <T extends PgTable & { id: AnyPgColumn; organizationId: AnyPgColumn; name: AnyPgColumn }>(table: T): LabelSource =>
   ({ table, id: table.id, organizationId: table.organizationId, label: table.name, facility: null });
 const identified = <T extends PgTable & { id: AnyPgColumn; organizationId: AnyPgColumn }>(table: T): LabelSource =>
-  ({ table, id: table.id, organizationId: table.organizationId, label: table.id, facility: null });
+  ({ table, id: table.id, organizationId: table.organizationId, label: sql<string | null>`null`, facility: null });
 const sources: Record<string, LabelSource> = {
   facility: named(facilities), supplier: named(suppliers), customer: named(customers),
   customer_location: named(customerLocations), vehicle: named(vehicles), driver: named(drivers), operator: named(operators),
@@ -54,7 +54,7 @@ const sources: Record<string, LabelSource> = {
     label: sql<string>`coalesce(${binMovements.outputKind}, ${binMovements.movementType}::text)`, facility: null },
 };
 export type ActivityRecordLabel = { label: string | null; deleted: boolean; facilityId: string | null };
-type LoadedRecord = { label: string; facilityId: string | null };
+type LoadedRecord = { label: string | null; facilityId: string | null };
 
 /** Postgres accepts any 8-4-4-4-12 hex id; anything else would fail the `::uuid[]` cast. */
 const uuidLike = z.guid();
@@ -82,7 +82,7 @@ async function loadRecords(ctx: OrgContext, type: string, ids: readonly string[]
   const rows = await db.select({ id: source.id, label: source.label, facilityId: facility }).from(source.table)
     .where(and(eq(source.organizationId, ctx.organizationId), activityIds(source.id, ids)));
   return new Map(rows.map(row => [String(row.id), {
-    label: type === "bin_movement" ? outputStockEventLabel(String(row.label)) : String(row.label),
+    label: row.label == null ? null : type === "bin_movement" ? outputStockEventLabel(String(row.label)) : String(row.label),
     facilityId: row.facilityId == null ? null : String(row.facilityId),
   }]));
 }
@@ -146,16 +146,21 @@ function changeLinkTarget(entityType: string, field: string, changes: ActivityCh
   return owner === "sample" ? "lab_sample" : owner === "biochar" ? "biochar_product" : owner;
 }
 
-/** Add current labels separately from persisted IDs. Missing targets resolve to null. */
+export type ActivityChangeLabel = { label: string | null; deleted: boolean };
+export type ActivityChangeLabels = Record<string, { from: ActivityChangeLabel | null; to: ActivityChangeLabel | null }>;
+
+/** Current labels and tombstones, separate from persisted IDs. */
 export function activityChangeLabels(entityType: string, changes: ActivityChanges, records: Map<string, ActivityRecordLabel>, reasonCode?: string | null) {
-  const result: Record<string, { from: string | null; to: string | null }> = {};
+  const result: ActivityChangeLabels = {};
   for (const [field, change] of Object.entries(changes)) {
     const policy = activityFieldPolicies[entityType]?.fields[field];
     if (typeof policy !== "object") continue;
     const label = (side: "from" | "to") => {
       const target = changeLinkTarget(entityType, field, changes, side, reasonCode);
-      return target && Object.hasOwn(sources, target) && typeof change[side] === "string"
-        ? records.get(`${target}:${change[side]}`)?.label ?? null : null;
+      if (change[side] === null) return null;
+      const record = target && Object.hasOwn(sources, target) && typeof change[side] === "string"
+        ? records.get(`${target}:${change[side]}`) : undefined;
+      return { label: record?.label ?? null, deleted: record?.deleted ?? false };
     };
     result[field] = { from: label("from"), to: label("to") };
   }

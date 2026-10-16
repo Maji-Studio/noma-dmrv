@@ -284,7 +284,8 @@ export async function recordOutputStockMovementInTransaction(ctx: OrgContext, tx
     write: async (writeTx, post) => {
       if (options.requireLatestCorrection && input.correctsMovementId) await assertLatestOutputMovement(ctx, input.storageLocationId, input.correctsMovementId, writeTx);
       const result = await post();
-      options.capture?.(result.movement.id, null, { ...result.movement, sources: result.movement.inputSnapshot?.sources, allocations: result.preview.allocations });
+      const allocations = await writeTx.select().from(outputStockAllocations).where(and(eq(outputStockAllocations.organizationId, ctx.organizationId), eq(outputStockAllocations.movementId, result.movement.id)));
+      options.capture?.(result.movement.id, null, { ...result.movement, sources: result.movement.inputSnapshot?.sources, allocations });
       return { movementId: result.movement.id, basisFingerprint: result.preview.basisFingerprint, preview: result.preview, savedProducts: result.savedProducts.map(toBiocharProductRecord), savedDeliveries: result.savedDeliveries };
     },
   }, options);

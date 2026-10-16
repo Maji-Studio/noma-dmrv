@@ -5,7 +5,7 @@ import { nextVersion } from "./row-version";
 import { REMOVAL_DELETION_LEASE_KEY, hasFreshRemovalDeletionLease, removalDeletionLeaseTimestamp } from "@/lib/certification/removal-deletion-lease";
 import { removalOwnedMeasurements, type RemovalOwnedMeasurement } from "@/lib/certification/removal-deletion-artifacts";
 import { removalProductionBatchTargets, clearDeletedRemovalProductionBatches, type RemovalProductionBatch, type ProductionBatchDeletionOutcome } from "./removal-production-batch-deletion";
-import { or, and, eq, inArray, ne, sql } from "drizzle-orm";
+import { and, eq, inArray, ne, sql } from "drizzle-orm";
 import { db, withDedicatedLockConnection } from "@/db";
 import {
   certificationSubmissions,
@@ -566,11 +566,7 @@ export async function finalizeRemovalDeletion(
 
     await assertLedgerUnchangedSinceClaim(ctx, tx, claim);
 
-    const previousActivityBatches = await tx.select().from(creditBatches).where(and(
-      eq(creditBatches.organizationId, ctx.organizationId),
-      or(eq(creditBatches.productionEmissionsClaimedByRemovalId, claim.removalId),
-        claim.submissionIds.length ? inArray(creditBatches.productionEmissionsClaimReservedBySubmissionId, claim.submissionIds) : undefined),
-    )).orderBy(creditBatches.id).for("update");
+    const previousActivityBatches: (typeof creditBatches.$inferSelect)[] = [];
     let releasedReservations: { id: string }[] = [];
     let releasedDocumentMirrors: ReleasedDocumentUpload[] = [];
     if (claim.submissionIds.length > 0) {
@@ -633,28 +629,39 @@ export async function finalizeRemovalDeletion(
               eq(certificationSubmissions.organizationId, ctx.organizationId),
             ),
           );
-      }, tx);
 
-      releasedReservations = await tx
-        .update(creditBatches)
-        .set({ version: nextVersion(creditBatches.version),
-          productionEmissionsClaimReservedBySubmissionId: null,
-          updatedAt: sql`now()`,
-        })
-        .where(
-          and(
-            inArray(
-              creditBatches.productionEmissionsClaimReservedBySubmissionId,
-              claim.submissionIds,
+        // Lock order: submissions, then their reserved credit batches.
+        previousActivityBatches.push(...await tx.select().from(creditBatches).where(and(
+          eq(creditBatches.organizationId, ctx.organizationId),
+          inArray(creditBatches.productionEmissionsClaimReservedBySubmissionId, claim.submissionIds),
+        )).orderBy(creditBatches.id).for("update"));
+        releasedReservations = await tx
+          .update(creditBatches)
+          .set({ version: nextVersion(creditBatches.version),
+            productionEmissionsClaimReservedBySubmissionId: null,
+            updatedAt: sql`now()`,
+          })
+          .where(
+            and(
+              inArray(
+                creditBatches.productionEmissionsClaimReservedBySubmissionId,
+                claim.submissionIds,
+              ),
+              eq(creditBatches.organizationId, ctx.organizationId),
             ),
-            eq(creditBatches.organizationId, ctx.organizationId),
-          ),
-        )
-        .returning({ id: creditBatches.id });
+          )
+          .returning({ id: creditBatches.id });
+      }, tx);
     }
 
     if (!claim.submissionIds.length) await clearDeletedRemovalProductionBatches(ctx, claim, registry.productionBatches ?? [], tx);
 
+    // Lock order: submission/reservation release, then removal-claimed batches.
+    const previousClaimedBatches = await tx.select().from(creditBatches).where(and(
+      eq(creditBatches.organizationId, ctx.organizationId),
+      eq(creditBatches.productionEmissionsClaimedByRemovalId, claim.removalId),
+    )).orderBy(creditBatches.id).for("update");
+    previousActivityBatches.push(...previousClaimedBatches.filter(row => !previousActivityBatches.some(previous => previous.id === row.id)));
     const releasedClaims = await tx
       .update(creditBatches)
       .set({ version: nextVersion(creditBatches.version),
@@ -678,7 +685,7 @@ export async function finalizeRemovalDeletion(
           eq(creditBatchApplications.organizationId, ctx.organizationId),
         ),
       )
-      .returning({ id: creditBatchApplications.id, creditBatchId: creditBatchApplications.creditBatchId });
+      .returning({ id: creditBatchApplications.id, creditBatchId: creditBatchApplications.creditBatchId, removalId: creditBatchApplications.removalId });
 
     const [deleted] = await tx
       .delete(certifierRemovals)
@@ -706,7 +713,7 @@ export async function finalizeRemovalDeletion(
         entityType: toActivityEntityType("credit_batch"), entityId: batch.id, creditBatchId: batch.id,
         action: "updated", source: "form",
       }, { ...previous, removalAssignment: assignments.map(slice => ({ ...slice, removalId: claim.removalId })) },
-      { ...batch, removalAssignment: assignments.map(slice => ({ ...slice, removalId: null })) });
+      { ...batch, removalAssignment: assignments });
     }
 
     logger.info(

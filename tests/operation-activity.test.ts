@@ -324,7 +324,8 @@ describe("UI document activity", { timeout: TIMEOUT_MS }, () => {
       productionRunId: entityType === "production_run" ? entityId : null,
       creditBatchId: entityType === "credit_batch" ? entityId : null,
     });
-    expect(events[1].changedFields).toEqual(["uploadStatus"]);
+    expect(events[1].changedFields).toEqual(["checksumSha256", "uploadStatus"]);
+    expect(events[1].changes).not.toHaveProperty("checksumSha256");
     expect(events[2].changedFields).toEqual(["visibility"]);
     expect(events[3].changedFields).toEqual([]);
     const serialized = stringifyWithBigint(events);

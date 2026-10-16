@@ -289,8 +289,11 @@ describe("production-emissions claim reservations", () => {
     expect(history).toHaveLength(3);
     for (const event of history) expect(event).toMatchObject({
       entityType: "credit_batch", entityId: fixture.batchId, creditBatchId: fixture.batchId,
-      action: "updated", changedFields: ["productionEmissionsClaimReservedBySubmissionId"], source: "form", actorUserId: ctx.userId,
+      action: "updated", source: "form", actorUserId: ctx.userId,
     });
+    expect(history[0].changedFields).toEqual(["productionEmissionsClaimReservedBySubmissionId"]);
+    expect(history[1].changedFields).toEqual([]);
+    expect(history[2].changedFields).toEqual(["productionEmissionsClaimReservedBySubmissionId"]);
     await rejectSubmissionAndReleaseProductionClaims(ctx, {
       submissionId: winner.id, expectedLockedAt: winner.lockedAt, errorMessage: "Repeated refusal",
     });

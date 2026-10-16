@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { activityEvents, creditBatches, creditBatchProductionRuns, facilities, organizations, productionRuns, samples, documents, users, binMovements, outputStockAllocations, applications, creditBatchApplications, certifierRemovals, certifierGhgStatements, transportLegs, productionSamples, deliveries } from "@/db/schema";
+import { activityEvents, certificationSubmissions, creditBatches, creditBatchProductionRuns, facilities, organizations, productionRuns, samples, documents, users, binMovements, outputStockAllocations, applications, creditBatchApplications, certifierRemovals, certifierGhgStatements, transportLegs, productionSamples, deliveries } from "@/db/schema";
 import { TEST_SITE_POSITION } from "../../tests/helpers/test-org";
 import { readCreditBatchActivity, readCreditBatchActivitySummary } from "@/lib/read-models/credit-batch-activity";
 import { runOperationInProcess } from "@/lib/operations/runner";
@@ -328,7 +328,7 @@ it("returns the same list and summary for uppercase and lowercase batch IDs", as
   expect(await readCreditBatchActivitySummary(ctx, uppercase)).toEqual(summary);
 });
 
-it("returns captured IDs with current org-scoped link names and null for missing targets", async () => {
+it("returns captured IDs with current org-scoped link names and tombstones for missing targets", async () => {
   const missing = crypto.randomUUID();
   const changes = { credit_batch: { from: missing, to: fixture.batch.id } };
   const saved = await event({ entityType: "production_run", entityId: fixture.run.id, changedFields: ["credit_batch"], changes });
@@ -336,16 +336,35 @@ it("returns captured IDs with current org-scoped link names and null for missing
   await db.update(creditBatches).set({ code: renamedCode }).where(and(eq(creditBatches.id, fixture.batch.id), eq(creditBatches.organizationId, ctx.organizationId)));
   const page = await listCreditBatchActivity(ctx, fixture.batch.id);
   expect(page.items).toHaveLength(1);
-  expect(page.items[0]).toMatchObject({ id: saved.id, changes, changeLabels: { credit_batch: { from: null, to: renamedCode } } });
+  expect(page.items[0]).toMatchObject({ id: saved.id, changes, changeLabels: { credit_batch: { from: { label: null, deleted: true }, to: { label: renamedCode, deleted: false } } } });
   // A live ID belonging to another org must look just like a deleted ID.
   const [foreign] = await db.insert(facilities).values({ ...TEST_SITE_POSITION, organizationId: foreignOrg, timezone: "UTC", code: "FOREIGN", name: "Foreign private name" }).returning();
   try {
     await event({ changes: { facilityId: { from: foreign.id, to: fixture.facility.id } } });
     const rows = await listCreditBatchActivity(ctx, fixture.batch.id);
     expect(rows.items).toHaveLength(2);
-    expect(rows.items[0].changeLabels?.facilityId).toEqual({ from: null, to: fixture.facility.name });
+    expect(rows.items[0].changeLabels?.facilityId).toEqual({ from: { label: null, deleted: true }, to: { label: fixture.facility.name, deleted: false } });
     expect(JSON.stringify(rows)).not.toContain(foreign.name);
   } finally {
     await db.delete(facilities).where(and(eq(facilities.id, foreign.id), eq(facilities.organizationId, foreignOrg)));
   }
+});
+
+it("keeps null sides, deleted suppliers and unlabeled targets distinct without exposing IDs", async () => {
+  const { resolveActivityRecords, activityChangeLabels } = await import("./activity-record-labels");
+  const missing = crypto.randomUUID();
+  const [submission] = await db.insert(certificationSubmissions).values({ organizationId: ctx.organizationId,
+    submissionType: "production_batch", localEntityType: "credit_batch", localEntityId: fixture.batch.id }).returning();
+  const events: { entityType: string; entityId: string; changes: import("@/db/schema/activity").ActivityChanges }[] = [
+    { entityType: "feedstock", entityId: fixture.run.id, changes: { supplierId: { from: missing, to: null } } },
+    { entityType: "credit_batch", entityId: fixture.batch.id, changes: { removalTemplateId: { from: null, to: missing }, productionProcessId: { from: missing, to: fixture.batch.productionProcessId }, productionEmissionsClaimReservedBySubmissionId: { from: null, to: submission.id } } },
+  ];
+  const records = await resolveActivityRecords(ctx, events);
+  expect(activityChangeLabels("feedstock", events[0].changes, records)).toEqual({ supplierId: { from: { label: null, deleted: true }, to: null } });
+  expect(activityChangeLabels("credit_batch", events[1].changes, records)).toEqual({
+    removalTemplateId: { from: null, to: { label: null, deleted: false } },
+    productionProcessId: { from: { label: null, deleted: true }, to: { label: null, deleted: false } },
+    productionEmissionsClaimReservedBySubmissionId: { from: null, to: { label: null, deleted: false } },
+  });
+  await db.delete(certificationSubmissions).where(and(eq(certificationSubmissions.organizationId, ctx.organizationId), eq(certificationSubmissions.id, submission.id)));
 });
