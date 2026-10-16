@@ -153,6 +153,7 @@ export async function getCustomers(
       createdAt: customers.createdAt,
       version: customers.version,
       updatedAt: customers.updatedAt,
+      archivedAt: customers.archivedAt,
     })
     .from(customers)
     .where(whereClause)

@@ -24,6 +24,8 @@ export const suppliers = pgTable(
     contactEmail: text('contact_email'),
     contactPhone: text('contact_phone'),
     sourceRegion: text('source_region'),
+    // Archived parties keep their name and code reserved so a restore can't collide.
+    archivedAt: timestamp('archived_at'),
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },
@@ -56,6 +58,8 @@ export const customers = pgTable(
     address: text('address'),
     contactEmail: text('contact_email'),
     contactPhone: text('contact_phone'),
+    // Archived parties keep their name and code reserved so a restore can't collide.
+    archivedAt: timestamp('archived_at'),
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },

@@ -188,6 +188,7 @@ export async function getSuppliers(
       createdAt: suppliers.createdAt,
       version: suppliers.version,
       updatedAt: suppliers.updatedAt,
+      archivedAt: suppliers.archivedAt,
     })
     .from(suppliers)
     .where(whereClause)
