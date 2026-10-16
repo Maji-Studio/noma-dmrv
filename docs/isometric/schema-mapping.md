@@ -4,6 +4,34 @@
 > the pinned sources in [`versions.json`](./versions.json). `Implemented` means
 > the cited code path exists; it does not imply Isometric or verifier approval.
 
+## Which write rules live where
+
+`src/lib/certifier-policy/isometric.ts` owns unsampled Credit batch eligibility:
+an Isometric facility connection, organization credentials, and computed Method-B
+eligibility are required. Data-access gathers these facts in the write transaction
+under the existing lock sequence; the module has no database or auth dependencies.
+
+`validateBatchPeriod` applies noma's conservative one-calendar-month cap only to
+Isometric batches (D14, [#368](https://github.com/Maji-Studio/noma-dmrv/issues/368)).
+The shared date helper owns date validity and ordering for every certifier.
+Create, update, membership, run options, and the certifier-aware form check use
+this split. The Isometric-conditional DB constraint
+`credit_batches_isometric_max_one_month` remains the backstop.
+
+As an implementation decision of [#368](https://github.com/Maji-Studio/noma-dmrv/issues/368)'s
+D14 follow-through, linking a facility to Isometric refuses archived facilities
+and active credit batches with overlong periods under mapping and facility locks.
+In the same transaction, it stamps active null-certifier batches `isometric` and
+records activity, leaving archived batches unchanged. This app decision does not
+change the protocol pin or claim a pinned v1.1 requirement; see
+[ADR 0016](../adr/0016-credit-batch-is-production-batch-production-process-scopes-sampling.md).
+
+To move a rule between noma-wide and Isometric-only, record the decision here or
+in the owning ADR, move its shared check or certifier condition, and align every
+caller and any DB backstop. Cover Isometric and provider `null` in regression
+tests. Keep provider-specific rules concrete until a second certifier needs a
+shared interface.
+
 | Area | Current implementation evidence | Status | Remaining gap |
 |---|---|---|---|
 | Feedstock EC1-EC15 assessment | Evidence maintained outside noma (#942 q8) | external | No local criterion assessment store or eligibility gate |
