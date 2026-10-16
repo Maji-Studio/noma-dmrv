@@ -12,7 +12,8 @@ import { useEffect, useId, useState } from "react";
 import { useForm, useWatch, useFieldArray, type FieldError } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { CalendarIcon, MapPinIcon, NoteIcon, PlantIcon, PlusIcon, StackIcon } from "@phosphor-icons/react/dist/ssr";
-import { nullableNumericValue, numericValue } from "@/lib/form-utils";
+import { numericValue } from "@/lib/form-utils";
+import { toNumberOrNull } from "@/schemas/helpers";
 import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
 import { toDateInputValue } from "@/lib/date-utils";
 import { useFacilityContext } from "@/hooks/use-facility-context";
@@ -171,20 +172,19 @@ export function FeedstockForm({
   const watchedFacilityId = useWatch({ control, name: "facilityId" });
   const watchedFeedstockTypeId = useWatch({ control, name: "feedstockTypeId" });
   const watchedSupplierId = useWatch({ control, name: "supplierId" });
-  const transportDistanceKm = useWatch({
-    control,
-    name: "transportDistanceKm",
-  }) as number | null | undefined;
+  // The schema coerces the raw input (`optionalPositiveNumber`); the live
+  // route preview reads the draft through the same helper.
+  const transportDistanceDraft = toNumberOrNull(useWatch({ control, name: "transportDistanceKm" }));
   const draftTransportDistanceSource = useWatch({
     control,
     name: "transportDistanceSource",
   }) as DistanceSourceValue | null | undefined;
   // The one-way entry as a number; the route preview adds the round trip.
   const oneWayTransportDistanceKm =
-    typeof transportDistanceKm === "number" &&
-    Number.isFinite(transportDistanceKm) &&
-    transportDistanceKm >= 0
-      ? transportDistanceKm
+    typeof transportDistanceDraft === "number" &&
+    Number.isFinite(transportDistanceDraft) &&
+    transportDistanceDraft >= 0
+      ? transportDistanceDraft
       : null;
 
   const defaultStorageBinType = "feedstock_bin";
@@ -438,7 +438,7 @@ export function FeedstockForm({
                 locationName={defaultSupplierLocation?.name ?? selectedSupplier?.name ?? null}
                 awaitingMessage={watchedSupplierId ? null : "Select a supplier to load its location distance."}
                 repairHref={supplierLocationRepairHref}
-                distanceRegistration={register("transportDistanceKm", { setValueAs: nullableNumericValue })}
+                distanceRegistration={register("transportDistanceKm")}
                 sourceRegistration={register("transportDistanceSource", { setValueAs: emptyToNullSource })}
                 noteRegistration={register("distanceNote")}
                 source={draftTransportDistanceSource}

@@ -291,6 +291,18 @@ describe("FeedstockForm single-bin mass editing", () => {
     } finally { await act(async () => renderer.unmount()); }
   });
 
+  it.each(["", "0"])("refuses a typed override of %j instead of sending it", async (value) => {
+    const { renderer, onSubmit } = await renderForm(feedstock);
+    try {
+      await act(async () => { buttonByText(renderer, "Override").props.onClick(); });
+      await act(async () => {
+        await distanceInput(renderer)!.props.onChange({ target: { name: "transportDistanceKm", value } });
+      });
+      await submit(renderer);
+      expect(onSubmit).not.toHaveBeenCalled();
+    } finally { await act(async () => renderer.unmount()); }
+  });
+
   const overridden = { ...feedstock, distanceKmOverride: 60, distanceSource: "document", distanceNote: "Detour" } as FeedstockWithRelations;
 
   it("preserves a saved override by omitting it", async () => {

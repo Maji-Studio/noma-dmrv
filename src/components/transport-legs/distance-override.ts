@@ -10,6 +10,7 @@
  */
 import type { DetailPanelField } from "@/components/ui/detail-panel";
 import { formatDistanceKm } from "@/lib/format-utils";
+import { DELIVERY_DISTANCE_MESSAGE } from "@/schemas/delivery-input";
 import { DISTANCE_SOURCE_LABELS, type DistanceSourceValue } from "@/schemas/distance-source";
 
 /** One label per field on the form and its read view (design-system "A label and its mirror"). */
@@ -21,7 +22,8 @@ export const CLEAR_OVERRIDE_BUTTON_LABEL = "Clear override";
 export const DERIVED_BASIS_LABEL = "Location default";
 export const OVERRIDE_BASIS_LABEL = "Override";
 export const OVERRIDE_DISTANCE_REQUIRED_MESSAGE = "Enter a distance, or clear the override.";
-export const OVERRIDE_DISTANCE_POSITIVE_MESSAGE = "Distance must be greater than 0";
+/** The schemas' own positive-distance message, so the field and the server agree. */
+export const OVERRIDE_DISTANCE_POSITIVE_MESSAGE = DELIVERY_DISTANCE_MESSAGE;
 
 /** Sources an operator can give an override. A legacy route calculation stays shown, never offered. */
 const OVERRIDE_SOURCES = ["manual", "document"] as const satisfies readonly DistanceSourceValue[];
@@ -54,9 +56,13 @@ function normalizeNote(note: string | null | undefined): string | null {
   return trimmed === "" ? null : trimmed;
 }
 
-/** A saved override counts only when positive; a legacy zero means derived. */
+/** An override distance counts only when positive; a legacy zero means derived. */
+export function isOverrideDistance(distanceKm: number | null | undefined): distanceKm is number {
+  return distanceKm != null && distanceKm > 0;
+}
+
 export function hasSavedOverride(saved: SavedDistanceOverride | null | undefined): boolean {
-  return saved?.distanceKm != null && saved.distanceKm > 0;
+  return isOverrideDistance(saved?.distanceKm);
 }
 
 /**
@@ -137,7 +143,7 @@ export function distanceReadFields({
   note: string | null;
   pending?: boolean;
 }): DetailPanelField[] {
-  const overridden = overrideKm != null && overrideKm > 0;
+  const overridden = isOverrideDistance(overrideKm);
   return [
     {
       label: DISTANCE_FIELD_LABEL,

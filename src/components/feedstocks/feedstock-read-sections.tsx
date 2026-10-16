@@ -4,7 +4,7 @@ import { formatCalendarDate, formatMassKg } from "@/lib/format-utils";
 import { formatMoisturePercent, MOISTURE_FIELD_LABEL } from "@/lib/mass-moisture";
 import { MoistureSplit } from "@/components/ui/moisture-split";
 import { TransportEvidencePanel, TransportLegsSummary } from "@/components/transport-legs";
-import { distanceReadFields } from "@/components/transport-legs/distance-override";
+import { distanceReadFields, isOverrideDistance } from "@/components/transport-legs/distance-override";
 import { TransportDistanceDriftNotice } from "@/components/transport-legs/transport-distance-drift";
 import type { DetailPanelSection } from "@/components/ui/detail-panel";
 import type { FeedstockWithRelations } from "@/data-access/feedstocks";
@@ -20,7 +20,7 @@ export function feedstockSheetSections(
   recordedDistance: FeedstockRecordedDistance = { distanceKm: null, pending: false },
 ): DetailPanelSection[] {
   const overrideKm = feedstock.distanceKmOverride;
-  const overridden = overrideKm != null && overrideKm > 0;
+  const overridden = isOverrideDistance(overrideKm);
   return [
     {
       title: "Delivery information",
