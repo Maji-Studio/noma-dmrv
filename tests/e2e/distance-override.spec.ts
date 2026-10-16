@@ -50,10 +50,18 @@ async function expectFormProvenance(dialog: Locator, provenance: RegExp) {
   await expect(dialog.getByRole("button", { name: DISTANCE_HINT })).toHaveAccessibleDescription(provenance);
 }
 
-/** The read view's ⓘ shows the same provenance on hover. */
+/**
+ * The read view's ⓘ shows the same provenance. It is pressed, not hovered: a
+ * press pins the toggletip, while a hover-opened tip closes when the sheet's
+ * async sections (the delivery stock block) shift the ⓘ from under the pointer.
+ */
 async function expectReadProvenance(page: Page, dialog: Locator, provenance: string) {
-  await dialog.getByRole("button", { name: DISTANCE_HINT }).hover();
-  await expect(page.getByText(provenance, { exact: true })).toBeVisible({ timeout: 15000 });
+  const hint = dialog.getByRole("button", { name: DISTANCE_HINT });
+  await expect(hint).toHaveAttribute("aria-description", provenance, { timeout: 15000 });
+  await hint.click();
+  await expect(page.getByText(provenance, { exact: true })).toBeVisible();
+  // A second press closes it (Escape would also close the side sheet).
+  await hint.click();
   await page.mouse.move(0, 0);
 }
 
