@@ -20,6 +20,7 @@ import type { DocumentType } from "@/schemas/documents";
 import type { GisBoundary } from "@/schemas/gis-boundary";
 import { GisReferenceDialog } from "./gis-reference-dialog";
 import { GisReferenceSummary } from "./gis-reference-summary";
+import { FormError } from "@/components/forms/form-error";
 import { ChoiceCardGroup } from "@/components/forms/choice-card-group";
 import { EVIDENCE_METHOD_ART } from "./evidence-method-art";
 
@@ -53,6 +54,7 @@ interface ApplicationEvidencePanelProps {
   applicationId?: string;
   /** Set where a sibling panel already shows the lock notice, so a sheet shows it once. */
   hideLockNotice?: boolean;
+  error?: string;
   mode: ApplicationEvidenceMethod;
   boundary: GisBoundary | null;
   disabled?: boolean;
@@ -152,6 +154,7 @@ function GisReferenceField({
 export function ApplicationEvidencePanel({
   applicationId,
   hideLockNotice = false,
+  error,
   mode,
   boundary,
   disabled = false,
@@ -218,6 +221,8 @@ export function ApplicationEvidencePanel({
           onRemove={removeBoundary}
         />
       )}
+
+      <FormError id="gisBoundary-error" message={error} />
 
       {!readOnly && (
         <GisReferenceDialog

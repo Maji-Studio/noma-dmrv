@@ -8,6 +8,7 @@ import {
   certificationRemovalsHref,
   certificationSettingsHref,
   productionRunDeepLinkHref,
+  traceabilityActivityHref,
   traceabilityApplicationHref,
 } from "./links";
 
@@ -146,6 +147,9 @@ describe("record deep links", () => {
     );
     expect(traceabilityApplicationHref("batch/1", "application 1")).toBe(
       "/traceability?batch=batch%2F1&application=application+1",
+    );
+    expect(traceabilityActivityHref("batch/1", "facility 1")).toBe(
+      "/traceability?facility=facility+1&batch=batch%2F1&view=activity",
     );
   });
 });

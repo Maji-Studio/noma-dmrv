@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { dirname, isAbsolute, join } from "node:path";
 import { afterEach, expect, it, vi } from "vitest";
 import { runClaude, subscriptionEnvironment } from "./claude";
-import { CASES, CLAUDE_FLAGS, DELIVERY_CASES, DOCUMENT_CASES, LAB_CASES, STOCK_CASES } from "./config";
+import { APPLICATION_CASES, CASES, CLAUDE_FLAGS, DELIVERY_CASES, DOCUMENT_CASES, LAB_CASES, STOCK_CASES } from "./config";
 import { startProcess } from "./process";
 
 vi.mock("./process", () => ({ startProcess: vi.fn() }));
@@ -35,7 +35,7 @@ it("does not supply missing runtime variables or inherit the parent implicitly",
   expect(subscriptionEnvironment({})).toEqual({});
 });
 
-it.each([...CASES, ...LAB_CASES, ...STOCK_CASES, ...DELIVERY_CASES, ...DOCUMENT_CASES].map(({ id }) => id))(
+it.each([...CASES, ...LAB_CASES, ...STOCK_CASES, ...DELIVERY_CASES, ...DOCUMENT_CASES, ...APPLICATION_CASES].map(({ id }) => id))(
   "starts %s with a file-based MCP config, filtered environment and the case's working directory",
   async (caseId) => {
     const runDirectory = await mkdtemp(join(tmpdir(), "noma-mcp-launch-test-"));

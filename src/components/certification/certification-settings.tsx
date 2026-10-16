@@ -15,7 +15,7 @@
  * It is now a console — a category rail plus a detail pane:
  *
  *   ORGANIZATION   Certifier · Sources
- *   FACILITY       Emission factors · Emissions
+ *   FACILITY       Removal templates · Emission factors · Emissions
  *   PLATFORM       Diagnostics · Template mapping  (platform admin only)
  *
  * Three consequences of that shape worth knowing before editing:
@@ -49,6 +49,7 @@ import {
   CalculatorIcon,
   GaugeIcon,
   GlobeIcon,
+  ListChecksIcon,
   PlugsIcon,
   PulseIcon,
   TreeStructureIcon,
@@ -68,6 +69,7 @@ import {
   CERTIFICATION_SETTINGS_EMISSION_FACTORS_SECTION,
   CERTIFICATION_SETTINGS_EMISSIONS_SECTION,
   CERTIFICATION_SETTINGS_LEGACY_CONNECTION_SECTION,
+  CERTIFICATION_SETTINGS_REMOVAL_TEMPLATES_SECTION,
   CERTIFICATION_SETTINGS_SECTION_PARAM,
   CERTIFICATION_SETTINGS_SOURCES_SECTION,
   CERTIFICATION_SETTINGS_TEMPLATE_MAPPING_SECTION,
@@ -79,6 +81,7 @@ import { FacilityEmissionFactorsForm } from "./facility-emission-factors-form";
 import { RegistrySourceVisibilitySettings } from "./registry-source-visibility-settings";
 import { SettingsRail, type SettingsSectionMeta } from "@/components/ui";
 import { RemovalTemplateDiagnosticPanel } from "./removal-template-diagnostic-panel";
+import { RemovalTemplateReviewPanel } from "./removal-template-review-panel";
 
 const SECTION_CERTIFIER = CERTIFICATION_SETTINGS_CERTIFIER_SECTION;
 const SECTION_SOURCES = CERTIFICATION_SETTINGS_SOURCES_SECTION;
@@ -209,6 +212,25 @@ export function CertificationSettings() {
       "Whether new Isometric Sources start private to verifiers or public on the registry.",
     access: "Owners and Admins",
     content: <RegistrySourceVisibilitySettings />,
+  });
+
+  // Listed for every viewer: Removal readiness blockers link here, and members
+  // read which lines block a Removal. Only Owners and Admins assign lines.
+  sections.push({
+    key: CERTIFICATION_SETTINGS_REMOVAL_TEMPLATES_SECTION,
+    tier: "facility",
+    label: "Removal templates",
+    icon: ListChecksIcon,
+    caption:
+      "Where each template line gets its figure. Lines that need review block Removals.",
+    access: "Owners and Admins",
+    content: facilityId ? (
+      <RemovalTemplateReviewPanel
+        key={`removal-template-review-${facilityId}`}
+        facilityId={facilityId}
+        canManage={viewerCanManage}
+      />
+    ) : null,
   });
 
   // Listed for every viewer and independent of the registry link: the Energy

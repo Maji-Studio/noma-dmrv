@@ -9,6 +9,7 @@ import { useEffect, useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { CalendarIcon, PackageIcon, PlusIcon, XIcon } from "@phosphor-icons/react/dist/ssr";
 import { parseAsString, useQueryState } from "nuqs";
+import { FEEDSTOCK_DEEP_LINK_PARAM } from "@/lib/feedstock-links";
 import { DataTable } from "@/components/ui/data-table";
 import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -225,7 +226,7 @@ const BLOCKERS_LEAD = "Drawing on this bin:";
 export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
   const { facilityId: contextFacilityId } = useFacilityContext();
   const [focusedFeedstockId, setFocusedFeedstockId] = useQueryState(
-    "feedstock",
+    FEEDSTOCK_DEEP_LINK_PARAM,
     parseAsString.withOptions({ shallow: true, history: "replace" }),
   );
   const [deepLinkMode, setDeepLinkMode] = useQueryState(

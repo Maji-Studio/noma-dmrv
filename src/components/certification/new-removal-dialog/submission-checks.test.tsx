@@ -38,6 +38,19 @@ function withUnmet(
 }
 
 describe("SubmissionChecks", () => {
+  it("links template pin blockers to each batch's Switch template and line blockers to the review", () => {
+    const html = renderToStaticMarkup(<SubmissionChecks
+      checks={withUnmet("template", { templateBlockerCodes: ["mixedTemplatePins", "templateLinesNeedReview"] })}
+      facilityId="facility-1"
+      creditBatches={[{ id: "batch-1", code: "CB-1" }, { id: "batch-2", code: "CB-2" }]}
+    />);
+    expect(html).toContain('href="/credit-batches?facility=facility-1&amp;batch=batch-1&amp;focus=removal-template"');
+    expect(html).toContain(">Switch template on CB-2</a>");
+    expect(html).toContain('href="/certification/settings?section=removal-templates&amp;facility=facility-1"');
+    expect(html).toContain(">Review template lines</a>");
+    expect(html).not.toContain(">Open settings</a>");
+  });
+
   it.each([
     ["feedstock", "/feedstocks", "Review feedstock transport"],
     ["biochar", "/deliveries", "Review biochar transport"],

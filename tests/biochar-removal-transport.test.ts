@@ -1,5 +1,6 @@
 import { updateCustomerLocation } from "@/data-access/customers";
 import { customerLocations, customerLocationFacilityDistances, certificationSubmissions } from "@/db/schema";
+import { createTestApplication } from "./helpers/application-writers";
 import { beforeAll, describe, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
@@ -9,7 +10,7 @@ import { tonnesToKg } from "@/lib/calculations/unit-conversions";
 import { resolveScopeForRemoval } from "@/fn/certification/certify-context-core";
 import { loadTransportLegsByCategory } from "@/fn/certification/shared";
 import { updateTransportLeg } from "@/data-access/transport-legs";
-import { createApplication } from "@/data-access/applications";
+
 import { previewOutputStock } from "@/data-access/output-stock-operations";
 import { aggregateBiocharTransportMassDistance } from "@/lib/isometric/utils/aggregation";
 import { withLineageFixture } from "./helpers/certification-lineage-fixture";
@@ -156,10 +157,10 @@ describe("Removal delivery transport", () => {
         });
         let laterApplicationId: string | null = null;
         try {
-          const laterApplication = await createApplication(ctx, {
+          const laterApplication = await createTestApplication(ctx, {
             code: `AP-FROZEN-${crypto.randomUUID().toUpperCase()}`, deliveryId: laterDelivery.id,
             applicationDate: new Date("2026-06-19T12:00:00Z"),
-            biocharAppliedTons: 0.1, fieldSizeHa: 1,
+            appliedWetMassKg: 100, fieldSizeHa: 1,
           });
           laterApplicationId = laterApplication.id;
           const [laterSlice] = await db.select().from(creditBatchApplications)

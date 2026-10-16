@@ -271,3 +271,11 @@ describe("ApplicationSupportingEvidencePanel", () => {
     expect(html).toContain('aria-label="Delete field-boundary.geojson"');
   });
 });
+
+it("shows the boundary field refusal in the evidence panel", () => {
+  const message = "Add a boundary file, or choose Customer location.";
+  const html = renderToStaticMarkup(<QueryClientProvider client={new QueryClient()}>
+    <ApplicationEvidencePanel mode="boundary" boundary={null} error={message} />
+  </QueryClientProvider>);
+  expect(html).toContain(message);
+});

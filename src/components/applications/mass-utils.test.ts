@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import type { ApplicationDeliveryOption } from "./mass-utils";
 import {
   applicationStockCues,
+  applicationTonsToKg,
   formatApplicationDeliveryHelperText,
   formatApplicationDeliveryOptionLabel,
   getApplicationDeliveryMassLabel,
@@ -151,4 +152,8 @@ describe("application delivery option day", () => {
     );
     expect(label).toContain("May 17, 2026");
   });
+});
+
+it("seeds exactly 4001 kg from the stored 4.001 tonnes", () => {
+  expect(applicationTonsToKg(4.001)).toBe(4001);
 });

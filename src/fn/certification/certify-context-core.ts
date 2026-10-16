@@ -1,17 +1,12 @@
 import { getTransportDistanceFixLinks } from "@/data-access/transport-distance-fix-links";
 import type { SubmissionLineageBlocker } from "@/lib/certification/submission-readiness";
+import { TRANSPORT_CATEGORIES } from "@/lib/isometric/semantic-binding-catalog";
+import { resolveScopeForCreditBatch, resolveSingleBatchScope, resolveScopeForRemoval, type RemovalScope } from "./removal-scope";
+import { loadFacilityCertifierFacts, type FacilityCertifierFacts } from "./facility-certifier-facts";
 import { buildSubmissionLineageBlockers, collectFeedstockCodes } from "./certify-lineage-blockers";
 import { hasDurabilityMeasurementComponents, durabilityConfigurationBlockers } from "@/lib/certification/submission-readiness";
-import { allowsPeriodInputStub } from "@/lib/isometric/datapoint-mapping";
-import { findUnbindableTemplateInputs, type UnbindableTemplateInput } from "@/lib/isometric/template-binding-coverage";
 import type { OrgContext } from "@/lib/auth/server";
 import { env } from "@/config/env";
-import { hasCertifierCredentials, resolveIsometricClient } from "@/data-access/certifier-credentials";
-import {
-  getCertifierProjectByFacility,
-  type CertificationSubmissionRow,
-  type CertifierProjectRow,
-} from "@/data-access/certification";
 import { requireOrgFacility } from "@/data-access/utils";
 import {
   getLatestSubmission,
@@ -20,49 +15,24 @@ import {
 import { removalMayHaveExternalMutation } from "@/lib/certification/removal-external-mutation";
 import {
   getCertifierRemovalById,
-  getCreditBatchesByRemovalId,
-  type CertifierRemovalRow,
 } from "@/data-access/certifier-removals";
 import {
-  projectChainOfCustodyFromBatchFacts,
-  type ChainOfCustodyData,
-} from "@/data-access/chain-of-custody";
-import {
   loadCreditBatchRollups,
-  type BatchLineageRunFact,
-  type CreditBatchRollup,
   type CreditBatchRollupsByBatch,
 } from "@/data-access/credit-batch-accounting";
-import { getCreditBatchActiveScopeRemovalId } from "@/data-access/credit-batches";
-import type { CreditBatchWithSamples } from "@/data-access/credit-batch-samples";
 import { getProductionRunsForCertification } from "@/data-access/production-runs";
 import {
   buildMassAccounting,
   EMPTY_RUN_SUMMARY,
-  type RemovalRunSummary,
 } from "@/lib/certification/mass-accounting";
-import type { ProductionReadinessGap } from "@/lib/certification/production-readiness";
 import {
   collectFeedstockTypeMappingGaps,
-  type FeedstockTypeMappingGap,
 } from "@/lib/certification/feedstock-type-mapping";
 import { attributeSoilTemperatureBlockers } from "@/lib/certification/member-batch-gates";
-import { COMPLETED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
 import { SafeError } from "@/lib/errors";
-import {
-  listComponentBlueprints,
-  listProjects,
-  listGhgEntryTemplates,
-  type IsometricComponentBlueprint,
-  type IsometricProject,
-  type IsometricGhgEntryTemplate,
-} from "@/lib/isometric";
-import { hasExplicitSequestrationBinding } from "@/lib/isometric/transformers/sequestration-binding";
-import type { ProductionRunForCertification } from "@/lib/isometric/utils/aggregation";
 import {
   buildSoilTemperatureGate,
   resolveFacilityReferenceSoilTemperature,
-  type FacilityReferenceSoilTemperature,
 } from "@/lib/isometric/utils/durability-aggregation";
 import type { ActionResult } from "@/types/actions";
 import { withAction } from "../with-action";
@@ -71,39 +41,33 @@ import {
   REMOVAL_ENTITY_TYPE,
   REMOVAL_SUBMISSION_TYPE,
   loadTransportLegsByCategory,
-  safeListIfConfigured,
-  type TransportLegsByCategory,
 } from "./shared";
 import { buildCertifyEntityReadiness } from "./certify-entity-readiness";
 import { loadDurabilityBatchData } from "./durability-readiness";
 import { collectFutureDatedMeasurements } from "./future-dated-measurements";
 import { buildSubmissionWarnings } from "./submission-warnings";
 import { productionReadinessGapForScope } from "@/lib/certification/production-readiness-from-lineage";
-import { loadEvidenceMirrorSummaryForScope, type EvidenceMirrorSummary } from "./evidence-mirror-summary";
+import { loadEvidenceMirrorSummaryForScope } from "./evidence-mirror-summary";
 import {
   loadLinkedGhgStatementStatus,
-  type LinkedGhgStatementStatus,
 } from "./linked-ghg-statement-status";
 import {
   buildSelectableBatchesData,
   type SelectableBatchesData,
 } from "./selectable-batches";
 import {
-  toMemberCreditBatch,
   toMemberCreditBatchView,
   type MemberCreditBatch,
 } from "./member-credit-batch";
 import { collectProductionClaimAwareRequiredTransportCategories, collectProductionClaimAwareTransportEntityIds } from "./production-claim-transport-scope";
 import { includesProductionInputs } from "./production-claim-policy";
-import { summarizeApplicationSlices } from "./application-slice-summary";
-import { buildRemovalLedgerPreview, type RemovalLedgerPreview } from "./removal-ledger-preview";
+import { buildRemovalLedgerPreview } from "./removal-ledger-preview";
 import {
   buildTransportCoverage,
-  deriveRequiredTransportCategories,
   EMPTY_TRANSPORT_COVERAGE,
-  type TransportCategory,
-  type TransportCoverage,
 } from "./certify-transport-coverage";
+export { resolveScopeForRemoval } from "./removal-scope";
+export { loadFacilityCertifierFacts, type FacilityCertifierFacts } from "./facility-certifier-facts";
 export type { LinkedGhgStatementStatus } from "./linked-ghg-statement-status";
 export type { SelectableBatch, SelectableBatchesData } from "./selectable-batches";
 export type { MemberCreditBatch } from "./member-credit-batch";
@@ -117,417 +81,9 @@ export type {
   TransportCoverageBucket,
 } from "./certify-transport-coverage";
 
-type DurabilityOption = "200_year" | "1000_year";
-// UI-facing removal context — the lean payload React Query caches.
-export interface RemovalCertifyContext {
-  facilityId: string;
-  hasOrgCredentials: boolean;
-  // Null when the credit batch is not yet grouped into a removal (a 1:1
-  // removal is created lazily on first submit).
-  removalId: string | null;
-  // Persisted §8.6.2 registry reporting window for this Removal.
-  reportingWindowStartedOn: string | null;
-  reportingWindowCompletedOn: string | null;
-  mapping: CertifierProjectRow | null;
-  project: IsometricProject | null;
-  defaultTemplate: IsometricGhgEntryTemplate | null;
-  missingDefaultTemplateId: string | null;
-  blueprintsForTemplate: IsometricComponentBlueprint[];
-  unresolvedBlueprintKeys: string[];
-  unbindableTemplateInputs: UnbindableTemplateInput[];
-  memberBatches: MemberCreditBatch[];
-  emissionsLedger: RemovalLedgerPreview;
-  feedstockTypeMappingGaps: FeedstockTypeMappingGap[];
-  transportCoverage: TransportCoverage;
-  requiredTransportCategories: TransportCategory[];
-  // True once member-batch lineage resolves at least one production run —
-  // i.e. there is something to submit. Surfaced on the UI context so the
-  // client-side readiness classifier (review pre-flight) sees the same
-  // `hasSubmittableRuns` fact the server-owned Overview loader does, without
-  // shipping the heavy `runs` array to the client.
-  hasSubmittableRuns: boolean;
-  // Specific blocker when production lineage does not resolve a run. This keeps
-  // no-applications / broken-product-link cases out of the generic production
-  // bucket on health and readiness surfaces.
-  productionReadinessGap: ProductionReadinessGap | null;
-  // Compact labels from the per-entity certifier-readiness layer; the submit
-  // pipeline gates on this same list, so [] means entity-ready.
-  entityReadinessGaps: string[];
-  submissionLineageBlockers: SubmissionLineageBlocker[];
-  durabilityConfigurationBlockers: string[];
-  entityReadinessIssues?: import("@/lib/certification/batch-health").BatchEntityReadinessIssue[];
-  // Fail-closed durability sampling/eligibility blockers (D3) — the EXACT list
-  // the submit pipeline blocks on, so readiness predicts the gate. [] ⇒ ready.
-  durabilityGateBlockers: string[];
-  // Production-run end times / biochar application dates that still lie in the
-  // future, phrased as blocker sentences. The SAME verdict the submit-time
-  // guard `assertRemovalDatesNotFuture` reaches, computed here against the
-  // server clock so the readiness classifier can stay pure and clock-free.
-  // [] ⇒ every measurement date has already happened.
-  futureDatedMeasurements: string[];
-  // Non-blocking submission advisories — e.g. recorded startup/plant diesel the
-  // active template has no component to carry (ADR 0015). Unlike
-  // durabilityGateBlockers / entityReadinessGaps, these do NOT gate submission;
-  // they tell the operator a recorded value will not be submitted.
-  submissionWarnings: string[];
-  supportingDocuments: EvidenceMirrorSummary;
-  // Focused run aggregation (run count, total biochar output, applied dry kg)
-  // surfaced on the lean UI context so the Review step can show what's being
-  // submitted without shipping the heavy `runs` array.
-  runSummary: RemovalRunSummary;
-  latestSubmission: CertificationSubmissionRow | null;
-  // Any ledger version reached submitted/accepted/superseded. The latest row
-  // alone cannot say (a superseding draft sits above a submitted prior); the
-  // delete gate needs it because the server refuses on any finalized row.
-  hasFinalizedSubmission: boolean;
-  // A submit attempt opened the registry boundary (Source mirroring) before
-  // any ledger row existed. Deletion treats it as registry exposure.
-  registryBoundaryOpened: boolean;
-  // The GHG Statement this removal rolls into + its verifier status, or null
-  // when the removal isn't linked to one. See `LinkedGhgStatementStatus`.
-  linkedGhgStatement: LinkedGhgStatementStatus | null;
-  isProduction: boolean;
-}
-
-// Extends the UI context with the raw chain data the submit pipeline needs.
-// Kept server-internal so the cached UI payload stays lean.
-export interface RemovalSubmissionContext extends Omit<RemovalCertifyContext, "emissionsLedger"> {
-  lineages: ChainOfCustodyData[];
-  runs: ProductionRunForCertification[];
-  // The removal's member credit batches with their pooled lab Samples (by
-  // `samples.creditBatchId`) — the CREDIT-BATCH-grained durability data plane
-  // (ADR 0016). Drives the durability gates here and the per-batch
-  // measurement-sample submission step (Phase 3). Each batch's `runs` are scoped
-  // to the removal's applied run set so product mass is attribution-correct.
-  batchesWithSamples: CreditBatchWithSamples[];
-  // Per-run applied-biochar fraction (linear mass allocation). Passed to
-  // `aggregateProductionRuns`, where it scopes ONLY stored/delivery-bucket
-  // quantities + chemistry weights — production-bucket inputs sum full run
-  // totals (§8.6.2 front-loading, issue #349, ADR 0020).
-  attributionByRunId: Map<string, number>;
-  // §8.6.2 per-member-batch production-bucket claim state (issue #349) —
-  // drives the submit-path foreign-claim assertion and the claim write. The
-  // sorted lineage arrays are the fingerprint the post-claim fresh re-assert
-  // compares to a fresh scope read, failing closed when membership or run
-  // lineage drifted between context load and the draft claim (ADR 0020).
-  memberBatchClaims: {
-    creditBatchId: string;
-    code: string;
-    durabilityOption: DurabilityOption;
-    claimedByRemovalId: string | null;
-    productionRunIds: string[];
-    applicationIds: string[];
-    applicationSlices?: {
-      applicationId: string;
-      allocatedWetMassKg: number;
-      allocatedDryMassKg: number;
-    }[];
-  }[];
-  // Transport legs pooled across every member batch's lineage, deduped by
-  // entity id. Fed to `enrichWithTransportLegs` by the submit pipeline.
-  transportLegs: TransportLegsByCategory;
-  // The facility's resolved reference soil temperature (declared value, 7 °C
-  // floored, one decimal) submitted as the `biochar_soil` measurement for a
-  // 200-year removal (Phase 2). Null when the facility has not configured one —
-  // when there are credit batches to submit, that null is fail-closed via a
-  // durability gate blocker, so the Phase-3 step can assume non-null here.
-  facilityReferenceSoilTemperature: FacilityReferenceSoilTemperature | null;
-}
-
-
-// The set of credit batches that compose one removal, with their facility.
-interface RemovalScope {
-  facilityId: string;
-  removalId: string | null;
-  removal: CertifierRemovalRow | null;
-  memberBatches: (MemberCreditBatch & {
-    productionRunIds: string[];
-    // Member runs with status "complete" — drives the readiness routing between
-    // "complete a run" and "review the application chain" when nothing is
-    // submittable. Membership writes already reject non-complete runs and block
-    // reopening a member run, so this filter is defensive (legacy rows, future
-    // membership paths); it also keeps the routing honest with the gap copy's
-    // "completed" claim.
-    completedProductionRunIds: string[];
-    productionFeedstockIds: string[];
-    applicationIds: string[];
-    applicationSlices: {
-      applicationId: string;
-      allocatedWetMassKg: number;
-      allocatedDryMassKg: number;
-    }[];
-    durabilityOption: DurabilityOption;
-    // §8.6.2 production-bucket claim state (issue #349, ADR 0020): the removal
-    // that already claimed this batch's production emissions, or null.
-    productionEmissionsClaimedByRemovalId: string | null;
-  })[];
-  lineages: ChainOfCustodyData[];
-  feedstockCodes: Record<string, string>;
-}
-
-function completedRunIds(runs: BatchLineageRunFact[]): string[] {
-  return runs
-    .filter((run) => run.status === COMPLETED_PRODUCTION_RUN_STATUS)
-    .map((run) => run.id);
-}
-
-// Resolves the removal scope for a credit batch. When the batch is already
-// grouped, the scope is every member of that removal; otherwise it is the
-// batch alone (a 1:1 removal that will be created lazily on submit).
-async function resolveScopeForCreditBatch(
-  orgCtx: OrgContext,
-  creditBatchId: string,
-  options?: { singleBatch?: boolean },
-): Promise<RemovalScope> {
-  if (!options?.singleBatch) {
-    const removalId = await getCreditBatchActiveScopeRemovalId(
-      orgCtx,
-      creditBatchId,
-    );
-    if (removalId) {
-      return resolveScopeForRemoval(orgCtx, removalId);
-    }
-  }
-
-  const accounting = (
-    await loadCreditBatchRollups(orgCtx, [creditBatchId], {
-      unassignedOnly: !options?.singleBatch,
-    })
-  )[creditBatchId];
-  if (!options?.singleBatch) {
-    const racedRemovalId = await getCreditBatchActiveScopeRemovalId(
-      orgCtx,
-      creditBatchId,
-    );
-    if (racedRemovalId) return resolveScopeForRemoval(orgCtx, racedRemovalId);
-  }
-  if (!accounting) throw new SafeError("Credit batch not found");
-
-  return resolveSingleBatchScope(accounting);
-}
-
-function resolveSingleBatchScope(
-  accounting: CreditBatchRollup,
-): RemovalScope {
-  const { batch, lineageFacts } = accounting;
-  const runById = new Map(
-    lineageFacts.runs.map((run) => [run.id, run]),
-  );
-  return {
-    facilityId: batch.facilityId,
-    removalId: null,
-    removal: null,
-    feedstockCodes: collectFeedstockCodes(lineageFacts.runs),
-    memberBatches: [
-      {
-        ...toMemberCreditBatch(accounting),
-        productionRunIds: lineageFacts.productionRunIds,
-        completedProductionRunIds: completedRunIds(lineageFacts.runs),
-        productionFeedstockIds: Array.from(
-          new Set(
-            lineageFacts.runs.flatMap((run) =>
-              run.feedstocks.map((feedstock) => feedstock.id),
-            ),
-          ),
-        ),
-        applicationIds: lineageFacts.applicationIds,
-        applicationSlices: summarizeApplicationSlices(lineageFacts.applications),
-        durabilityOption: batch.durabilityOption,
-        productionEmissionsClaimedByRemovalId:
-          batch.productionEmissionsClaimedByRemovalId,
-      },
-    ],
-    lineages: lineageFacts.applications.map((application) =>
-      projectChainOfCustodyFromBatchFacts(
-        application,
-        runById.get(application.biocharProduct.linkedProductionRunId),
-      ),
-    ),
-  };
-}
-
-// Resolves the removal scope from a removal id — every member credit batch.
-export async function resolveScopeForRemoval(
-  orgCtx: OrgContext,
-  removalId: string,
-): Promise<RemovalScope> {
-  const removal = await getCertifierRemovalById(orgCtx, removalId);
-  if (!removal) throw new SafeError("Removal not found");
-
-  const batches = await getCreditBatchesByRemovalId(orgCtx, removalId);
-  const batchIds = batches.map((batch) => batch.id);
-  const accountingByBatch = await loadCreditBatchRollups(orgCtx, batchIds, {
-    removalId,
-  });
-  const memberBatches = batches.map((batch) => {
-      const accounting = accountingByBatch[batch.id];
-      if (!accounting) {
-        throw new SafeError(`Credit batch ${batch.id} could not be loaded`);
-      }
-      const { lineageFacts, batch: accountingBatch } = accounting;
-      return {
-        ...toMemberCreditBatch(accounting),
-        productionRunIds: lineageFacts.productionRunIds,
-        completedProductionRunIds: completedRunIds(lineageFacts.runs),
-        productionFeedstockIds: Array.from(
-          new Set(
-            lineageFacts.runs.flatMap((run) =>
-              run.feedstocks.map((feedstock) => feedstock.id),
-            ),
-          ),
-        ),
-        applicationIds: lineageFacts.applicationIds,
-        applicationSlices: summarizeApplicationSlices(lineageFacts.applications),
-        durabilityOption: accountingBatch.durabilityOption,
-        productionEmissionsClaimedByRemovalId:
-          accountingBatch.productionEmissionsClaimedByRemovalId,
-      };
-    });
-  const lineages = Object.values(accountingByBatch).flatMap((accounting) => {
-    const { lineageFacts } = accounting;
-    const runById = new Map(
-      lineageFacts.runs.map((run) => [run.id, run]),
-    );
-    return lineageFacts.applications.map((application) =>
-      projectChainOfCustodyFromBatchFacts(
-        application,
-        runById.get(application.biocharProduct.linkedProductionRunId),
-      ),
-    );
-  });
-  return {
-    facilityId: removal.facilityId,
-    removalId,
-    removal,
-    memberBatches,
-    feedstockCodes: collectFeedstockCodes(
-      Object.values(accountingByBatch).flatMap((accounting) => accounting.lineageFacts.runs),
-    ),
-    lineages: [
-      ...new Map(
-        lineages.map((lineage) => [
-          `${lineage.application.id}:${lineage.biocharProduct?.id ?? "missing"}:${lineage.productionRun?.id ?? "missing"}`,
-          lineage,
-        ]),
-      ).values(),
-    ],
-  };
-}
-
-// The facility-scoped half of a removal's submission context: the Isometric
-// mapping + (when it resolves cleanly) the project / default template /
-// referenced component blueprints, and the transport categories that template
-// requires. These depend only on the facility, so the Overview work queue
-// resolves them ONCE and feeds them to every removal's `buildRemovalContext`
-// instead of re-pulling the same template/blueprint data per row.
-export interface FacilityCertifierFacts {
-  hasOrgCredentials: boolean;
-  mapping: CertifierProjectRow | null;
-  project: IsometricProject | null;
-  defaultTemplate: IsometricGhgEntryTemplate | null;
-  missingDefaultTemplateId: string | null;
-  blueprintsForTemplate: IsometricComponentBlueprint[];
-  unresolvedBlueprintKeys: string[];
-  unbindableTemplateInputs: UnbindableTemplateInput[];
-  requiredTransportCategories: TransportCategory[];
-}
-
-// Template-dependent fields shared by each unresolved short-circuit.
-const UNRESOLVED_FACILITY_FACTS: Omit<
-  FacilityCertifierFacts,
-  "hasOrgCredentials" | "mapping" | "project"
-> = {
-  defaultTemplate: null,
-  missingDefaultTemplateId: null,
-  blueprintsForTemplate: [],
-  unresolvedBlueprintKeys: [],
-  unbindableTemplateInputs: [],
-  requiredTransportCategories: [],
-};
-
-// Resolves the mapping, credentials, remote project/template, and referenced
-// blueprints once per facility. Unresolved prerequisites skip downstream calls.
-export async function loadFacilityCertifierFacts(
-  orgCtx: OrgContext,
-  facilityId: string,
-): Promise<FacilityCertifierFacts> {
-  const [mapping, hasOrgCredentials] = await Promise.all([
-    getCertifierProjectByFacility(orgCtx, facilityId, ISOMETRIC_PROVIDER),
-    hasCertifierCredentials(orgCtx, ISOMETRIC_PROVIDER),
-  ]);
-  if (!mapping) {
-    return { hasOrgCredentials, mapping: null, project: null, ...UNRESOLVED_FACILITY_FACTS };
-  }
-  if (!hasOrgCredentials) {
-    return { hasOrgCredentials: false, mapping, project: null, ...UNRESOLVED_FACILITY_FACTS };
-  }
-  // Avoid remote registry dependency until a template id exists to resolve.
-  if (!mapping.defaultRemovalTemplateId) {
-    return {
-      hasOrgCredentials,
-      mapping,
-      project: null,
-      ...UNRESOLVED_FACILITY_FACTS,
-    };
-  }
-
-  const client = await resolveIsometricClient(orgCtx);
-
-  const [projects, templates] = await Promise.all([
-    safeListIfConfigured(() => listProjects(client)),
-    safeListIfConfigured(() => listGhgEntryTemplates(client, mapping.externalProjectId)),
-  ]);
-  const project =
-    projects.find((p) => p.id === mapping.externalProjectId) ?? null;
-
-  const defaultTemplate =
-    templates.find((t) => t.id === mapping.defaultRemovalTemplateId) ?? null;
-  if (!defaultTemplate) {
-    return {
-      hasOrgCredentials,
-      mapping,
-      project,
-      ...UNRESOLVED_FACILITY_FACTS,
-      missingDefaultTemplateId: mapping.defaultRemovalTemplateId,
-    };
-  }
-
-  const referencedKeys = Array.from(
-    new Set(
-      defaultTemplate.groups.flatMap((group) =>
-        group.components.map((component) => component.blueprint_key),
-      ),
-    ),
-  );
-  const allBlueprints = await safeListIfConfigured(() =>
-    listComponentBlueprints(client),
-  );
-  const blueprintByKey = new Map(allBlueprints.map((bp) => [bp.key, bp]));
-  const blueprintsForTemplate: IsometricComponentBlueprint[] = [];
-  const unresolvedBlueprintKeys: string[] = [];
-  for (const key of referencedKeys) {
-    const found = blueprintByKey.get(key);
-    if (found) blueprintsForTemplate.push(found);
-    // Explicit bindings are the fail-closed source of truth for template
-    // components intentionally absent from the global blueprint catalogue.
-    else if (!hasExplicitSequestrationBinding(key)) {
-      unresolvedBlueprintKeys.push(key);
-    }
-  }
-
-  return {
-    hasOrgCredentials,
-    mapping,
-    project,
-    defaultTemplate,
-    missingDefaultTemplateId: null,
-    blueprintsForTemplate,
-    unresolvedBlueprintKeys,
-    unbindableTemplateInputs: findUnbindableTemplateInputs(defaultTemplate, { allowPeriodInputStub: allowsPeriodInputStub(env.ISOMETRIC_ENVIRONMENT) }),
-    requiredTransportCategories:
-      deriveRequiredTransportCategories(defaultTemplate),
-  };
-}
+import { resolveRemovalTemplate } from "./resolve-removal-template";
+import type { RemovalCertifyContext, RemovalSubmissionContext } from "./certify-context-types";
+export type { RemovalCertifyContext, RemovalSubmissionContext } from "./certify-context-types";
 
 // Composes one removal's scope, submission, lineage, transport, and mass facts.
 export async function buildRemovalContext(
@@ -535,15 +91,16 @@ export async function buildRemovalContext(
   scope: RemovalScope,
   facilityFacts: FacilityCertifierFacts,
 ): Promise<RemovalSubmissionContext> {
+  const templateFacts = resolveRemovalTemplate(scope.memberBatches, facilityFacts);
   const isProduction = env.ISOMETRIC_ENVIRONMENT === "production";
   const memberBatches: MemberCreditBatch[] =
     scope.memberBatches.map(toMemberCreditBatchView);
   const feedstockTypeMappingGaps =
     facilityFacts.mapping &&
-    facilityFacts.defaultTemplate &&
-    !facilityFacts.missingDefaultTemplateId &&
-    facilityFacts.unresolvedBlueprintKeys.length === 0 &&
-    facilityFacts.unbindableTemplateInputs.length === 0
+    templateFacts.removalTemplate &&
+    templateFacts.templateBlockers.length === 0 &&
+    templateFacts.unresolvedBlueprintKeys.length === 0 &&
+    templateFacts.unbindableTemplateInputs.length === 0
       ? collectFeedstockTypeMappingGaps(memberBatches)
       : [];
   // §8.6.2 claim state per member batch (issue #349) — kept off
@@ -653,7 +210,7 @@ export async function buildRemovalContext(
             soilTemperatureC: l.application.soilTemperatureC,
           })),
   });
-  const durabilityConfigBlockers = hasDurabilityMeasurementComponents(facilityFacts.defaultTemplate)
+  const durabilityConfigBlockers = hasDurabilityMeasurementComponents(templateFacts.removalTemplate)
     ? durabilityConfigurationBlockers(batchesWithSamples) : [];
   const durabilityGateBlockers = [
     ...durabilityBatchBlockers,
@@ -674,7 +231,10 @@ export async function buildRemovalContext(
       removalId: scope.removalId,
       reportingWindowStartedOn: scope.removal?.startedOn ?? null,
       reportingWindowCompletedOn: scope.removal?.completedOn ?? null,
-      ...facilityFacts,
+      hasOrgCredentials: facilityFacts.hasOrgCredentials,
+      mapping: facilityFacts.mapping,
+      project: facilityFacts.project,
+      ...templateFacts,
       memberBatches: memberBatchesWithSubmissionGates,
       feedstockTypeMappingGaps,
       transportCoverage: EMPTY_TRANSPORT_COVERAGE,
@@ -739,9 +299,16 @@ export async function buildRemovalContext(
   const requiredTransportCategories = collectProductionClaimAwareRequiredTransportCategories({
     removalId: scope.removalId,
     memberBatches: scope.memberBatches,
-    requiredTransportCategories: facilityFacts.requiredTransportCategories,
+    requiredTransportCategories: templateFacts.requiredTransportCategories,
   });
-  const transportLegs = await loadTransportLegsByCategory(orgCtx, entityIds, lineages, requiredTransportCategories);
+  // Recorded facts must survive template drift for the dropped-source advisory.
+  // Compilation still receives only required delivery transport, so an omitted
+  // line cannot introduce unrelated route-completeness blockers.
+  const recordedTransportLegs = await loadTransportLegsByCategory(orgCtx, entityIds, lineages, TRANSPORT_CATEGORIES);
+  const transportLegs = {
+    ...recordedTransportLegs,
+    biochar: requiredTransportCategories.includes("biochar") ? recordedTransportLegs.biochar : [],
+  };
   const transportCoverage = buildTransportCoverage(transportLegs, entityIds);
   const submissionLineageBlockers = buildSubmissionLineageBlockers(
     lineages,
@@ -773,7 +340,9 @@ export async function buildRemovalContext(
 
   const submissionWarnings = [
     ...buildSubmissionWarnings({
-      defaultTemplate: facilityFacts.defaultTemplate,
+      removalTemplate: templateFacts.removalTemplate,
+      lineSources: templateFacts.lineSources,
+      transportLegs: recordedTransportLegs,
       runs,
       lineages,
     }),
@@ -787,7 +356,10 @@ export async function buildRemovalContext(
     removalId: scope.removalId,
     reportingWindowStartedOn: scope.removal?.startedOn ?? null,
     reportingWindowCompletedOn: scope.removal?.completedOn ?? null,
-    ...facilityFacts,
+    hasOrgCredentials: facilityFacts.hasOrgCredentials,
+    mapping: facilityFacts.mapping,
+    project: facilityFacts.project,
+    ...templateFacts,
     requiredTransportCategories,
     memberBatches: memberBatchesWithSubmissionGates,
     feedstockTypeMappingGaps,
@@ -829,11 +401,13 @@ export async function buildRemovalContext(
 export async function loadRemovalSubmissionContext(
   orgCtx: OrgContext,
   removalId: string,
+  options: { refreshEnrichment?: boolean } = {},
 ): Promise<RemovalSubmissionContext> {
   const scope = await resolveScopeForRemoval(orgCtx, removalId);
   const facilityFacts = await loadFacilityCertifierFacts(
     orgCtx,
     scope.facilityId,
+    options,
   );
   return buildRemovalContext(orgCtx, scope, facilityFacts);
 }
@@ -849,8 +423,9 @@ function projectUiContext(
     reportingWindowCompletedOn: ctx.reportingWindowCompletedOn,
     mapping: ctx.mapping,
     project: ctx.project,
-    defaultTemplate: ctx.defaultTemplate,
-    missingDefaultTemplateId: ctx.missingDefaultTemplateId,
+    removalTemplate: ctx.removalTemplate,
+    lineSources: ctx.lineSources,
+    templateBlockers: ctx.templateBlockers,
     blueprintsForTemplate: ctx.blueprintsForTemplate,
     unresolvedBlueprintKeys: ctx.unresolvedBlueprintKeys,
     unbindableTemplateInputs: ctx.unbindableTemplateInputs,

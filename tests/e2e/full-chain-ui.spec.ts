@@ -595,7 +595,7 @@ test.describe("Full Chain UI Smoke Test", () => {
       // Select first delivery
       await selectFirstEntity(page, "Delivery");
 
-      await page.fill('input[name="biocharAppliedTons"]', "50");
+      await page.fill('input[name="biocharAppliedKg"]', "50");
       await page.fill('input[name="fieldSizeHa"]', "2");
       await page.fill('input[name="fieldIdentifier"]', `E2E-Field-${runId}`);
       await page.fill('input[name="cropType"]', "maize");

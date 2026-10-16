@@ -4,7 +4,9 @@ import { createRemovalWithCreditBatches } from "@/data-access/certifier-removals
 import { requireOrgFacility } from "@/data-access/utils";
 import { deriveBatchHealth } from "@/lib/certification/batch-health";
 import { toBatchHealthFacts } from "@/lib/certification/batch-health-facts";
-import { deriveFacilitySetupGaps } from "@/lib/certification/facility-setup-gaps";
+import { deriveFacilityConnectionGaps } from "@/lib/certification/facility-setup-gaps";
+import { resolveBatchPin } from "@/lib/certification/resolve-batch-pin";
+import { REMOVAL_TEMPLATE_BLOCKERS } from "@/lib/certification/removal-template-blockers";
 import { SafeError } from "@/lib/errors";
 import { logger } from "@/lib/log";
 import {
@@ -46,7 +48,7 @@ export async function createRemovalWithBatchesAction(
     // certifier facts (incl. its Isometric registry calls) ONCE and reuse them
     // across the per-batch re-validation instead of re-fetching per batch.
     const facilityFacts = await loadFacilityCertifierFacts(orgCtx, facilityId);
-    if (deriveFacilitySetupGaps(facilityFacts).length > 0) {
+    if (deriveFacilityConnectionGaps(facilityFacts).length > 0) {
       throw new SafeError(
         "Complete this facility's certification setup before grouping credit batches.",
       );
@@ -83,6 +85,9 @@ export async function createRemovalWithBatchesAction(
         );
       }
     }
+
+    const pin = resolveBatchPin(uniqueIds.flatMap((id) => contextsByBatch[id].memberBatches));
+    if ("code" in pin) throw new SafeError(REMOVAL_TEMPLATE_BLOCKERS[pin.code]);
 
     const removalId = await createRemovalWithCreditBatches(
       orgCtx,

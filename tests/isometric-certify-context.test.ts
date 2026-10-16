@@ -1,4 +1,10 @@
 vi.mock("@/data-access/transport-distance-fix-links", () => ({ getTransportDistanceFixLinks: vi.fn(async () => new Map()) }));
+import { normalizeTemplateDefinition } from "@/lib/isometric/template-observations";
+import { reviewedTemplateSources } from "./helpers/template-line-sources";
+import { listPinnedRemovalTemplateIds } from "@/data-access/credit-batch-removal-template";
+import { observeRemovalTemplate } from "@/fn/certification/observe-removal-template";
+vi.mock("@/data-access/credit-batch-removal-template", () => ({ listPinnedRemovalTemplateIds: vi.fn() }));
+vi.mock("@/fn/certification/observe-removal-template", () => ({ observeRemovalTemplate: vi.fn() }));
 import { loadBiocharDeliveryTransportLegs } from "@/data-access/biochar-delivery-transport";
 import { toRemovalReadinessFacts } from "@/lib/certification/readiness-facts";
 import { makeTestOrgContext } from "./helpers/test-org";
@@ -173,6 +179,24 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
     vi.resetAllMocks();
     vi.mocked(loadBiocharDeliveryTransportLegs).mockResolvedValue([]);
     mockNormalizedLineageFacts(mockedLoadAccounting, mockedGetCreditBatch, mockedGetLineage);
+    const loadRollups = mockedLoadAccounting.getMockImplementation()!;
+    mockedLoadAccounting.mockImplementation(async (...args) => {
+      const rows = await loadRollups(...args);
+      const project = await mockedGetMapping(args[0], FACILITY_ID, "isometric");
+      for (const row of Object.values(rows)) row.batch.removalTemplateId = project?.defaultRemovalTemplateId ?? null;
+      return rows;
+    });
+    vi.mocked(listPinnedRemovalTemplateIds).mockImplementation(async () => {
+      const project = await mockedGetMapping(makeTestOrgContext(USER_ID), FACILITY_ID, "isometric");
+      return project?.defaultRemovalTemplateId ? [project.defaultRemovalTemplateId] : [];
+    });
+    vi.mocked(observeRemovalTemplate).mockImplementation(async (_ctx, input) => ({
+      definition: normalizeTemplateDefinition(input.template), lineSources: reviewedTemplateSources(input.template),
+      enrichment: Object.fromEntries(input.template.groups.flatMap((group) => group.components.map((component) => [
+        component.id, Object.fromEntries(component.inputs.map((input) => [input.input_key, { unit: "tonne * km" }])),
+      ]))),
+    }) as never);
+    mockedListBlueprints.mockResolvedValue([]);
     mockedHasCredentials.mockResolvedValue(true);
     mockedGetCreditBatchRemovalId.mockResolvedValue(null);
     mockedGetCreditBatch.mockResolvedValue({
@@ -203,8 +227,8 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
       facilityId: FACILITY_ID,
       mapping: null,
       project: null,
-      defaultTemplate: null,
-      missingDefaultTemplateId: null,
+      removalTemplate: null,
+      templateBlockers: [{ code: "unpinnedTemplate" }],
       blueprintsForTemplate: [],
       unbindableTemplateInputs: [],
       unresolvedBlueprintKeys: [],
@@ -281,14 +305,14 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
       hasOrgCredentials: false,
       mapping: { externalProjectId: EXTERNAL_PROJECT_ID },
       project: null,
-      defaultTemplate: null,
+      removalTemplate: null,
     });
     expect(mockedListProjects).not.toHaveBeenCalled();
     expect(mockedListTemplates).not.toHaveBeenCalled();
     expect(mockedListBlueprints).not.toHaveBeenCalled();
   });
 
-  it("returns linked-no-default shape without remote calls when defaultRemovalTemplateId is null", async () => {
+  it("returns an unpinned blocker without remote calls when the default and batch pin are absent", async () => {
     mockedGetMapping.mockResolvedValue(
       mapping({ defaultRemovalTemplateId: null }),
     );
@@ -302,8 +326,8 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
 
     expect(result.mapping?.externalProjectId).toBe(EXTERNAL_PROJECT_ID);
     expect(result.project).toBeNull();
-    expect(result.defaultTemplate).toBeNull();
-    expect(result.missingDefaultTemplateId).toBeNull();
+    expect(result.removalTemplate).toBeNull();
+    expect(result.templateBlockers).toMatchObject([{ code: "unpinnedTemplate" }]);
     expect(result.blueprintsForTemplate).toEqual([]);
     expect(mockedListProjects).not.toHaveBeenCalled();
     expect(mockedListTemplates).not.toHaveBeenCalled();
@@ -371,7 +395,7 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
       CREDIT_BATCH_ID,
     );
 
-    expect(result.defaultTemplate).toBeNull();
+    expect(result.removalTemplate).toBeNull();
     expect(result.runSummary).toMatchObject({
       runCount: 2,
       totalBiocharOutputKg: 1_500,
@@ -454,11 +478,11 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
       CREDIT_BATCH_ID,
     );
 
-    expect(result.defaultTemplate).toBeNull();
-    expect(result.missingDefaultTemplateId).toBe("rvt_stale");
+    expect(result.removalTemplate).toBeNull();
+    expect(result.templateBlockers).toMatchObject([{ code: "templateNotFound" }]);
     expect(result.blueprintsForTemplate).toEqual([]);
     expect(result.unresolvedBlueprintKeys).toEqual([]);
-    expect(mockedListBlueprints).not.toHaveBeenCalled();
+    expect(mockedListBlueprints).toHaveBeenCalled();
   });
 
   it("reports unresolvedBlueprintKeys when the catalog is missing keys referenced by the template", async () => {
@@ -476,8 +500,8 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
       CREDIT_BATCH_ID,
     );
 
-    expect(result.defaultTemplate?.id).toBe("rvt_resolved");
-    expect(result.missingDefaultTemplateId).toBeNull();
+    expect(result.removalTemplate?.id).toBe("rvt_resolved");
+    expect(result.templateBlockers).toEqual([]);
     expect(result.blueprintsForTemplate.map((bp) => bp.key)).toEqual([
       "key_known",
     ]);
@@ -502,7 +526,7 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
       CREDIT_BATCH_ID,
     );
 
-    expect(result.defaultTemplate?.id).toBe("rvt_resolved");
+    expect(result.removalTemplate?.id).toBe("rvt_resolved");
     expect(result.blueprintsForTemplate.map((bp) => bp.key)).toEqual([
       "key_known",
     ]);
@@ -528,8 +552,8 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
       CREDIT_BATCH_ID,
     );
 
-    expect(result.defaultTemplate?.id).toBe("rvt_resolved");
-    expect(result.missingDefaultTemplateId).toBeNull();
+    expect(result.removalTemplate?.id).toBe("rvt_resolved");
+    expect(result.templateBlockers).toEqual([]);
     expect(result.unresolvedBlueprintKeys).toEqual([]);
     expect(result.blueprintsForTemplate.map((bp) => bp.key).sort()).toEqual([
       "key_a",
@@ -645,9 +669,8 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
     if (!biocharRequired) {
       expect(toRemovalReadinessFacts(result).requiredTransport.map(item => item.category)).not.toContain("biochar");
     }
-    expect(loadBiocharDeliveryTransportLegs).toHaveBeenCalledTimes(
-      omit.some((category) => category === "biochar") ? 0 : 1,
-    );
+    // Recorded delivery transport loads even when the template omits it, so a dropped line warns.
+    expect(loadBiocharDeliveryTransportLegs).toHaveBeenCalledTimes(1);
     expect(coverage.biochar.entityIds).toEqual(["bp-1"]);
     expect(coverage.sample.count).toBe(1);
     expect(coverage.sample.entityIds.sort()).toEqual(["s-1", "s-2"]);
@@ -660,6 +683,24 @@ describe("requiredTransportCategories", () => {
     vi.resetAllMocks();
     vi.mocked(loadBiocharDeliveryTransportLegs).mockResolvedValue([]);
     mockNormalizedLineageFacts(mockedLoadAccounting, mockedGetCreditBatch, mockedGetLineage);
+    const loadRollups = mockedLoadAccounting.getMockImplementation()!;
+    mockedLoadAccounting.mockImplementation(async (...args) => {
+      const rows = await loadRollups(...args);
+      const project = await mockedGetMapping(args[0], FACILITY_ID, "isometric");
+      for (const row of Object.values(rows)) row.batch.removalTemplateId = project?.defaultRemovalTemplateId ?? null;
+      return rows;
+    });
+    vi.mocked(listPinnedRemovalTemplateIds).mockImplementation(async () => {
+      const project = await mockedGetMapping(makeTestOrgContext(USER_ID), FACILITY_ID, "isometric");
+      return project?.defaultRemovalTemplateId ? [project.defaultRemovalTemplateId] : [];
+    });
+    vi.mocked(observeRemovalTemplate).mockImplementation(async (_ctx, input) => ({
+      definition: normalizeTemplateDefinition(input.template), lineSources: reviewedTemplateSources(input.template),
+      enrichment: Object.fromEntries(input.template.groups.flatMap((group) => group.components.map((component) => [
+        component.id, Object.fromEntries(component.inputs.map((input) => [input.input_key, { unit: "tonne * km" }])),
+      ]))),
+    }) as never);
+    mockedListBlueprints.mockResolvedValue([]);
     mockedHasCredentials.mockResolvedValue(true);
     mockedGetCreditBatch.mockResolvedValue({
       id: CREDIT_BATCH_ID,

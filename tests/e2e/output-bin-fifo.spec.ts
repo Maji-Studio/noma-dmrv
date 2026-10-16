@@ -188,7 +188,7 @@ test.describe("Output-bin conserved FIFO", () => {
     await page.getByRole("button", { name: "New application", exact: true }).click();
     await page.locator("#applicationDate").fill(FIFO_BROWSER_DATE);
     await selectEntity(page, "Delivery", delivery.id, delivery.code);
-    await page.locator("#biocharAppliedTons").fill("1000");
+    await page.locator("#biocharAppliedKg").fill("1000");
     await page.locator("#fieldSizeHa").fill("1");
     await page.getByRole("button", { name: "Create application", exact: true }).click();
     await expect(page.getByRole("dialog")).toHaveCount(0);

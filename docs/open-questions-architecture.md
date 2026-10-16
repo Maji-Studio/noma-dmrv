@@ -6,6 +6,25 @@ these areas; the entry rules and invariants live in
 
 ## Architecture
 
+### Align the Applications page credit batch filter (`app/application-batch-lineage-filter`, opened 2026-10-15)
+
+- `src/data-access/applications.ts:getApplications` filters by delivery lineage
+  (`inDeliveryCreditBatchLineage`), while the API uses each application's frozen
+  shares or slices (`inApplicationCreditBatchLineage` in
+  `src/data-access/credit-batch-lineage-filter.ts`). This includes mix-bin held-out
+  applications; `src/data-access/credit-batch-accounting.ts:loadCreditBatchAccounting`
+  requires a slice for its accounting view.
+- **Follow-up:** align the app page on `inApplicationCreditBatchLineage`.
+
+### Large application boundaries over the API (`api/large-gis-boundary`, opened 2026-10-15)
+
+- REST and MCP bodies cap at 256 KiB (`API_BODY_MAX_BYTES`), while the app accepts
+  raw boundary input up to 768 KiB and normalized geometry up to 512 KiB
+  (`src/config/geo.ts`). Phase 6b accepts raw GeoJSON in the body and serves
+  geometry through the separate boundary read; it does not expand that cap.
+- **Follow-up:** decide whether larger geometry needs its own bounded transfer
+  path. Until then, add larger boundaries in the app and tell API clients so.
+
 ### Simplification rollout follow-ups (`simplification/remaining-decisions`, opened 2026-10-14)
 
 - **A5:** Data-access consolidation is skipped for now. List-query duplication
@@ -184,16 +203,39 @@ If both share a not-yet-submitted Removal, this can raise 40P01. Delivery create
 now run through the operation runner in both the app and the registered API
 operation, so the whole transaction retries within its deadline. The lock-order
 inversion remains: fix the run writer to lock artifacts before the run row.
+Application writers are a new counterpart: they hold runs FOR SHARE from step 4
+through commit, while production-run update and delete take FOR UPDATE before
+artifacts; both use the runner, which retries deadlocks.
+Credit-batch membership refresh is another counterpart: it holds batch
+artifacts before locking current and prospective runs FOR UPDATE, opposite
+production-run writers. Membership create, update and delete now use the same
+bounded transaction retry policy in `src/lib/db/transaction-retry.ts` as the
+runner, so either writer can retry a deadlock, serialization failure or lock
+timeout; exhaustion returns
+`concurrent_write_retry`.
 
 This is part of `data/lock-order` below.
 
 ### Run writers, feedstock edits and output postings lock in different orders (`data/lock-order`, opened 2026-10-09)
 
-Application update/delete also take rows before artifacts outside the runner.
-Document writes on applications or their deliveries take artifacts first and can
-deadlock with them; Postgres may abort the non-retried application transaction.
-Phase 6b commit 1 moves application writers onto the runner with artifacts first.
-
+Application create, update and delete now run through the operation runner and
+lock artifacts before facilities, runs, batches, deliveries and the application.
+This closes their document-write inversion. The companion membership reorder
+also closes the commit 1 application/membership cycle (C1 and C2): explicit
+batch create, update and delete now take artifacts, facility shares, sorted run
+UPDATE locks on create or membership refresh, process scope and batch UPDATE,
+then revalidate artifacts, member sets and cohort before reconciling slices.
+Both artifact helpers share the same
+global sorted acquisition helper. Facility shares serialize archive and Removal
+create; runs stay before process scope to match production-run auto-attachment.
+After scope, newly matching unassigned runs use non-blocking SKIP LOCKED
+acquisition; a missed row returns a typed conflict. Scalar edits and delete do
+not lock runs. Changed artifacts or current membership still refuse with a
+typed conflict. Membership now shares the runner's bounded retry policy through
+`src/lib/db/transaction-retry.ts`.
+Production-run auto-attachment retains scope-before-batch-artifacts, opposite
+membership's artifacts-before-scope, as well as run-before-artifacts, opposite
+membership refresh. Both sides retry transaction aborts.
 
 - `src/data-access/production-runs/mutations.ts:updateProductionRunInTransaction`
   and `src/data-access/production-runs/delete.ts:deleteProductionRunInTransaction`
@@ -201,10 +243,10 @@ Phase 6b commit 1 moves application writers onto the runner with artifacts first
   `src/data-access/feedstocks.ts:updateFeedstockInTransaction` lock the intake
   row and lineage before bins, leaving a run-versus-feedstock deadlock cycle.
 - Moving run rows and lineage ahead of bins would introduce other inversions:
-  - `src/data-access/credit-batch-membership.ts:lockCreditBatchForUpdate` takes
-    the process scope before artifacts. Run attachment through
-    `updateProductionRunInTransaction` can already hold artifact locks before
-    requesting that scope.
+  - Explicit credit-batch membership takes artifacts before process scope.
+    Run attachment through `updateProductionRunInTransaction` still holds its
+    run before that scope and before the batch artifacts. Changing the run
+    writer's order must coordinate this residual too.
   - `src/data-access/output-stock-post.ts:withOutputStockPosting` takes bins
     before lineage or allocation foreign-key KEY SHARE locks on runs. A run
     writer holding its row or lineage while waiting for a bin would reverse

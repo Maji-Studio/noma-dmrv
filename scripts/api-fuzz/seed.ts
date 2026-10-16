@@ -219,15 +219,23 @@ async function main(): Promise<void> {
   })).data.delivery;
   // Delivery posting bumps the product version; PATCH must use its current ETag.
   const currentProduct = await readApiBiocharProduct(ctx, { id: product.id });
+  const { seedApplications } = await import("./seed-applications");
+  const applicationFixture = await seedApplications(ctx, {
+    facilityId: facility.id, supplierId: supplier.id,
+    formulationId: pure.id, customerId: customer.id, customerLocationId: customerLocation.id,
+    gpsLatitude: customerLocation.gpsLatitude, gpsLongitude: customerLocation.gpsLongitude, timeZone: FACILITY_TIME_ZONE,
+  });
   const { seedDocuments } = await import("./seed-documents");
-  const documents = await seedDocuments(ctx, { delivery: delivery.id, feedstock: feedstock.id, lab_sample: labSample.id }, { activitySource: "script" });
+  const documents = await seedDocuments(ctx, { delivery: delivery.id, feedstock: feedstock.id, lab_sample: labSample.id, application: applicationFixture.applicationId }, { activitySource: "script" });
   const credential = await createApiKey(ctx, {
-    name: FIXTURE_LABEL, scopes: [...API_SCOPES], expiresIn: API_KEY_DEFAULT_EXPIRY_SECONDS,
+    name: FIXTURE_LABEL, scopes: API_SCOPES.filter(scope => scope !== "applications:delete"), expiresIn: API_KEY_DEFAULT_EXPIRY_SECONDS,
   });
   // Mask before the workflow extracts the key into GITHUB_ENV. Outside Actions
   // the key is only written to the private JSON file, never to the terminal.
   if (process.env.GITHUB_ACTIONS === "true") console.log(`::add-mask::${credential.key}`);
   await writeFile(outputPath, JSON.stringify({
+    ...applicationFixture,
+    applicationDocumentId: documents.find(document => document.ownerType === "application")?.uploaded.id,
     documents,
     key: credential.key, credentialId: credential.id, organizationId, userId,
     facilityId: facility.id, facilityCode: facility.code,

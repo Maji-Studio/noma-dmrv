@@ -12,6 +12,9 @@ import { and, eq } from "drizzle-orm";
 import { DEC_ORG_ID } from "@/db/org-defaults";
 import type { IsometricGhgEntryTemplate } from "@/lib/isometric";
 import { CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR } from "@/lib/isometric/storage-blueprints";
+import { allowsPeriodInputStub } from "@/lib/isometric/datapoint-mapping";
+import { findUnbindableTemplateInputs } from "@/lib/isometric/template-binding-coverage";
+import { normalizeTemplateDefinition, resolveLineSources } from "@/lib/isometric/template-observations";
 import * as schema from "../../../src/db/schema";
 import { createDbConnection } from "./db";
 
@@ -116,7 +119,20 @@ function templateHasUnboundFixedInput(template: RawRemovalTemplate): boolean {
   );
 }
 
-/** Resolve a sandbox removal template whose fixed inputs are all bound. */
+/**
+ * A fresh observation compiles only when every line has a settled contract
+ * that binds, the same coverage submission runs (entry-only lines block).
+ */
+function templateCompilesOnFirstRead(template: RawRemovalTemplate): boolean {
+  const ghgTemplate = template as unknown as IsometricGhgEntryTemplate;
+  const lineSources = resolveLineSources({ definition: normalizeTemplateDefinition(ghgTemplate) });
+  if (Object.values(lineSources).some((contract) => contract.origin === "proposed")) return false;
+  return findUnbindableTemplateInputs(ghgTemplate, {
+    lineSources, allowPeriodInputStub: allowsPeriodInputStub(process.env.ISOMETRIC_ENVIRONMENT ?? "sandbox"),
+  }).length === 0;
+}
+
+/** Resolve a sandbox removal template that the submission compiler accepts. */
 export async function fetchSubmittableSandboxRemovalTemplate(
   projectId: string,
 ): Promise<{ id: string; componentBlueprintKeys: string[] } | null> {
@@ -149,7 +165,7 @@ export async function fetchSubmittableSandboxRemovalTemplate(
     }
     const json = (await response.json()) as { nodes?: RawRemovalTemplate[] };
     for (const node of json.nodes ?? []) {
-      if (node.id && !templateHasUnboundFixedInput(node)) {
+      if (node.id && !templateHasUnboundFixedInput(node) && templateCompilesOnFirstRead(node)) {
         return {
           id: node.id,
           componentBlueprintKeys: (node.groups ?? []).flatMap((group) =>

@@ -9,17 +9,23 @@ import { documentEtag } from "@/lib/api/representation-etags";
 import { getStorageProvider } from "@/lib/storage";
 import { billOfLadingPdf } from "../eval-mcp/fixture-document-file";
 
-export async function seedDocuments(ctx: OrgContext, owners: { delivery: string; feedstock: string; lab_sample: string }, options: Pick<RunOptions, "activitySource">) {
+// A complete one-pixel PNG for the application photo fixture.
+const APPLICATION_PHOTO_BASE64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII=";
+
+export async function seedDocuments(ctx: OrgContext, owners: { delivery: string; feedstock: string; lab_sample: string; application: string }, options: Pick<RunOptions, "activitySource">) {
   const provider = getStorageProvider();
   if (provider.name !== "local-fs") throw new Error("API fuzz documents require local-fs storage.");
-  const bytes = billOfLadingPdf();
-  const sha256 = createHash("sha256").update(bytes).digest("hex");
+  const pdf = billOfLadingPdf();
+  const photo = Buffer.from(APPLICATION_PHOTO_BASE64, "base64");
   const fixtures = [];
-  for (const ownerType of ["delivery", "feedstock", "lab_sample"] as const) {
+  for (const ownerType of ["delivery", "feedstock", "lab_sample", "application"] as const) {
     const ownerId = owners[ownerType];
+    const isPhoto = ownerType === "application";
+    const bytes = isPhoto ? photo : pdf;
+    const sha256 = createHash("sha256").update(bytes).digest("hex");
     const declaration = {
-      ownerType, ownerId, documentType: ownerType === "lab_sample" ? "lab_report" as const : "bill_of_lading" as const,
-      fileName: "fuzz-evidence.pdf", contentType: "application/pdf", sizeBytes: bytes.length, sha256,
+      ownerType, ownerId, documentType: isPhoto ? "photo" as const : ownerType === "lab_sample" ? "lab_report" as const : "bill_of_lading" as const,
+      fileName: isPhoto ? "fuzz-evidence.png" : "fuzz-evidence.pdf", contentType: isPhoto ? "image/png" : "application/pdf", sizeBytes: bytes.length, sha256,
     };
     const requested = (await runOperation(requestDocumentUpload, ctx, declaration, options)).data;
     const row = await getDocumentById(ctx, requested.id);

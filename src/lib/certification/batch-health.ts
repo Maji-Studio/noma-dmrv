@@ -23,6 +23,10 @@ import {
 } from "./production-readiness";
 import { CERT_REQUIREMENT_META } from "./requirement-labels";
 import {
+  removalTemplateBlockerDestination,
+  type RemovalTemplateBlocker,
+} from "./removal-template-blockers";
+import {
   describeFeedstockTypeMappingGap,
   type FeedstockTypeMappingGap,
 } from "./feedstock-type-mapping";
@@ -32,6 +36,7 @@ export type BatchHealthState =
   | "incomplete"; // one or more checks unmet (see `checks`)
 
 export type BatchHealthCheckKey =
+  | "template"
   | "carbon" // carbon & durability lab inputs resolved
   | "facilityEmissions" // facility emission-estimate inputs resolved
   | "feedstockTypeMapping" // declared pyrolysis feedstock type linked to Isometric
@@ -40,6 +45,9 @@ export type BatchHealthCheckKey =
   | "entityReadiness"; // certifier-required entity fields on the batch's own lineage
 
 export type BatchHealthFixTarget =
+  | "certificationTemplates"
+  | "creditBatchTemplate"
+  | "templateLineReview"
   | "batchDetails"
   | "orders"
   | "deliveries"
@@ -152,6 +160,7 @@ export interface BatchHealthFacts {
    * transport coverage is only evaluable once this is true.
    */
   facilitySetupComplete: boolean;
+  templateBlockers?: RemovalTemplateBlocker[];
   /**
    * Transport coverage for the categories the facility's default template
    * requires. Empty when the template requires none — or when facility setup is
@@ -463,6 +472,11 @@ function submissionChecks(facts: BatchHealthFacts): BatchHealthCheckBase[] {
 export function deriveBatchHealth(facts: BatchHealthFacts): BatchHealth {
   const checks = mergeUnmetChecksByDestination(
     [
+      // A pin problem is fixed on the batch; a line problem in the template review.
+      ...(facts.templateBlockers ?? []).map((blocker): BatchHealthCheckBase => ({
+        key: "template", label: "Removal template reviewed", status: "unmet", detail: blocker.message,
+        fixTarget: removalTemplateBlockerDestination(blocker.code),
+      })),
       carbonCheck(facts),
       ...facilityEmissionsChecks(facts),
       feedstockTypeMappingCheck(facts),
