@@ -35,7 +35,7 @@ const LABEL_OFFSET = "left-[128px]";
 
 const EDGE: Record<BatchState, string> = {
   blocking: "border-[var(--st-bad)]",
-  ready: "border-[var(--ink)]",
+  ready: "border-[var(--st-wait)]",
   submitted: "border-[var(--st-run)]",
   issued: "border-[var(--st-ok)]",
 };

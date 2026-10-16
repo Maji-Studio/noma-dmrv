@@ -40,9 +40,21 @@ export interface StubBatch {
 
 export const STATE_META: Record<BatchState, { title: string; lane: string; help: string; bar: string; dot: string }> = {
   blocking: { title: "Needs work", lane: "Needs work", help: "Blocking items stop the next Removal.", bar: "bg-[var(--st-bad)]", dot: "bg-[var(--st-bad)]" },
-  ready: { title: "Ready", lane: "Ready for a Removal", help: "Nothing blocking. Applied biochar waits for a Removal.", bar: "bg-[var(--ink)]", dot: "bg-[var(--ink)]" },
+  ready: { title: "Ready", lane: "Ready for a Removal", help: "Nothing blocking. Applied biochar waits for a Removal.", bar: "bg-[var(--st-wait)]", dot: "bg-[var(--st-wait)]" },
   submitted: { title: "Submitted", lane: "Submitted", help: "In a submitted Removal. The GHG Statement is with the verifier.", bar: "bg-[var(--st-run)]", dot: "bg-[var(--st-run)]" },
   issued: { title: "Issued", lane: "Issued", help: "Credits issued. Nothing to do.", bar: "bg-[var(--st-ok)]", dot: "bg-[var(--st-ok)]" },
+};
+
+/**
+ * The status tag per state, through the shared StatusBadge mapping (status-state.ts):
+ * Needs work is an error, Ready waits for a Removal (warning), Submitted is in
+ * progress, Issued is success. Timeline colours follow the same ramp.
+ */
+export const STATE_BADGE: Record<BatchState, { status: "failed" | "pending" | "running" | "issued"; label: string }> = {
+  blocking: { status: "failed", label: "Needs work" },
+  ready: { status: "pending", label: "Ready" },
+  submitted: { status: "running", label: "Submitted" },
+  issued: { status: "issued", label: "Issued" },
 };
 
 export const STATE_ORDER: BatchState[] = ["blocking", "ready", "submitted", "issued"];
