@@ -33,10 +33,12 @@ const MAX_DIFF_CHARS = 500_000;
 // Generated payloads the models read nothing useful from: one drizzle snapshot
 // alone (~390k chars) used to push a routine schema PR past MAX_DIFF_CHARS.
 // They stay in the changed-file list, and the report names what was left out.
+// openapi/v1.json is generated from the route schemas the diff already shows.
 // SQL migrations, lockfiles and the generated Certify types (the registry
 // contract) stay in.
 const GENERATED_PAYLOAD_GLOBS = [
   "drizzle/meta/*_snapshot.json",
+  "openapi/v1.json",
   "site/src/components/site/contours/*.svg",
 ];
 const MAX_COMMENT_CHARS = 60_000;
