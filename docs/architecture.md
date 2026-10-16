@@ -473,13 +473,19 @@ Upload promotion, leases and the privileged expiry sweep are described in
 
 `production_processes` stores the process epoch and the all-or-none prerequisite
 record; it does not store a sampling regime or an unlock. Each credit batch
-stores its immutable `sampled`/`unsampled` choice. A process is find-or-created
-per `(facility, feedstock)` when a credit batch is created.
+stores its immutable `sampled`/`unsampled` choice. A batch resolves to the process
+for its `(facility, feedstock type)` whose epoch contains its start, using the
+half-open timestamp interval `[establishedAt, next establishedAt)` and UTC
+midnight of the batch start day. The earliest process takes pre-epoch starts;
+if the pair has no process, batch creation auto-creates one. Resolution re-runs
+when the start date, facility or feedstock type changes; sampling stays fixed.
 
 For a newly created batch, unsampled processing is allowed only when the
 organization and facility are connected to Isometric, all three prerequisites
-are recorded, and the live eligible-sample count since the current process epoch
-meets the agreed baseline (minimum 30). See ADR
+are recorded, and the live eligible-sample count since the resolved process epoch
+meets the agreed baseline (minimum 30). The preview resolves the process for the
+batch start date, or today when there is no date, and counts Samples up to now.
+See ADR
 [0016](./adr/0016-credit-batch-is-production-batch-production-process-scopes-sampling.md)
 and [0022](./adr/0022-method-b-is-computed-eligibility-not-stored-unlock.md).
 

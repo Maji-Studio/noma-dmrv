@@ -9,6 +9,7 @@ import {
 } from "@/data-access/production-processes";
 import type { ProductionProcess } from "@/db/schema";
 import { requireOrgRole } from "@/lib/auth/server";
+import { calendarDateSchema } from "@/schemas/helpers";
 import {
   recordMethodBPrerequisitesSchema,
   startNewProcessSchema,
@@ -19,6 +20,7 @@ import { withAction } from "./with-action";
 const methodBEligibilityInputSchema = z.object({
   facilityId: z.uuid(),
   feedstockTypeId: z.uuid(),
+  batchStartDate: calendarDateSchema().optional(),
 });
 
 export async function getMethodBEligibilityFn(
