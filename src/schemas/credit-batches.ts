@@ -1,6 +1,7 @@
 import { expectedVersionSchema } from "./helpers";
+import type { certifierProvider } from "@/db/schema/common";
 import { z } from "zod";
-import { getCreditBatchProductionWindowIssue } from "@/lib/credit-batch-production-window";
+import { validateBatchPeriod } from "@/lib/certifier-policy";
 
 // ============================================
 // Constants and Enums
@@ -21,11 +22,7 @@ export type CreditBatchStatus = (typeof creditBatchStatuses)[number];
 export const creditBatchSamplingChoices = ["sampled", "unsampled"] as const;
 export type CreditBatchSampling = (typeof creditBatchSamplingChoices)[number];
 
-/**
- * Certifier provider options
- */
-export const certifierProviders = ["isometric"] as const;
-export type CertifierProvider = (typeof certifierProviders)[number];
+export type CertifierProvider = (typeof certifierProvider.enumValues)[number];
 
 /**
  * Durability options (Isometric Protocol)
@@ -53,7 +50,7 @@ export const DURABILITY_TIER_FALLBACK: DurabilityOption = "1000_year";
  * 2. Production cohort — productionRunIds (membership via credit_batch_production_runs)
  * 3. Site management — siteManagementNotes
  */
-export const creditBatchFormSchema = z
+export const creditBatchFormSchemaForCertifier = (certifier: CertifierProvider | null) => z
   .object({
     // === Section 1: Overview ===
     facilityId: z.string().min(1, "Select a facility.").uuid("Choose a valid facility."),
@@ -80,10 +77,7 @@ export const creditBatchFormSchema = z
       .or(z.literal("")),
   })
   .superRefine((data, ctx) => {
-    const windowIssue = getCreditBatchProductionWindowIssue(
-      data.startDate,
-      data.endDate,
-    );
+    const windowIssue = validateBatchPeriod({ certifier, startDate: data.startDate, endDate: data.endDate });
     if (windowIssue) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
@@ -96,13 +90,13 @@ export const creditBatchFormSchema = z
     // credit-batch creation.
   });
 
+export const creditBatchFormSchema = creditBatchFormSchemaForCertifier("isometric");
+
 // ============================================
 // Server Action Schemas
 // ============================================
 
-/**
- * Schema for creating a credit batch (server action)
- */
+/** Isometric-default create shape for inferred types and Isometric demo seeds. */
 export const createCreditBatchSchema = creditBatchFormSchema;
 
 /**

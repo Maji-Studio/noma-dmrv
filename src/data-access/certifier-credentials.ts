@@ -1,6 +1,6 @@
 import { and, eq, sql } from "drizzle-orm";
 import { env } from "@/config/env";
-import { db } from "@/db";
+import { db, type DbTransaction } from "@/db";
 import { certifierCredentials } from "@/db/schema/certification";
 import { requireOrgRole, type OrgContext } from "@/lib/auth/server";
 import { decryptSecret, encryptSecret } from "@/lib/crypto/secrets";
@@ -168,9 +168,10 @@ export async function deleteCertifierCredentials(
 export async function hasCertifierCredentials(
   ctx: OrgContext,
   provider: CertifierProvider,
+  executor: typeof db | DbTransaction = db,
 ): Promise<boolean> {
   requireOrgScope(ctx);
-  const [row] = await db
+  const [row] = await executor
     .select({ organizationId: certifierCredentials.organizationId })
     .from(certifierCredentials)
     .where(

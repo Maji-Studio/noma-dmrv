@@ -54,6 +54,9 @@ const ACTIVITY_COVERAGE = {
   "credit-batch-removal-template.ts": {
     switchCreditBatchRemovalTemplate: { status: "direct" },
   },
+  "certifier-project-credit-batches.ts": {
+    adoptCreditBatchesForIsometric: { status: "direct" },
+  },
   "credit-batch-membership.ts": {
     attachProductionRunToMatchingCreditBatch: { status: "direct" },
   },

@@ -409,6 +409,7 @@ it("answers conflict without waiting when a newly matching unassigned run is bus
     declaration = outcome(db.transaction(tx => lockCreditBatchDeclarationRuns(ctx, tx, {
       facilityId: f.facilityId, feedstockTypeId: f.feedstockTypeId,
       startDate: "2026-06-01", endDate: "2026-06-30", requestedProductionRunIds: [],
+      certifier: null,
       // Discovery happened before this run completed. Its row is still held
       // by another writer when declaration refreshes the matching set.
       matchingProductionRunIds: [],

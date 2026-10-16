@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { activityEvents, certifierProjects, creditBatches, facilities, feedstockTypes, productionProcesses } from "@/db/schema";
-import { createCreditBatch, updateCreditBatch } from "@/data-access/credit-batches";
+import { createCreditBatch, getCreditBatchProductionRunOptions, updateCreditBatch } from "@/data-access/credit-batches";
 import { switchCreditBatchRemovalTemplate } from "@/data-access/credit-batch-removal-template";
 import { withLineageFixture } from "./helpers/certification-lineage-fixture";
 import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID, TEST_SITE_POSITION } from "./helpers/test-org";
@@ -108,5 +108,45 @@ describe("credit batch Removal template pins", () => {
       expect(stored.siteManagementNotes).toBe("same facility");
       for (const event of await updatedEvents(batch.id)) expect(event.changedFields).not.toContain("removalTemplateId");
     });
+
+    it("validates a changed period against the target facility's certifier in both directions", async () => {
+      const startDate = new Date("2027-01-01");
+      const shortEndDate = new Date("2027-01-31");
+      const longEndDate = new Date("2027-04-30");
+      const batch = await createCreditBatch(ctx, {
+        facilityId, feedstockTypeId, code: `CB-MV-PERIOD-${tag}`,
+        productionRunIds: [], startDate, endDate: shortEndDate,
+      });
+      expect(batch.certifier).toBe("isometric");
+      const target = await moveTarget("period", null);
+
+      const moved = await updateCreditBatch(ctx, batch.id, {
+        facilityId: target, endDate: longEndDate, expectedVersion: batch.version,
+      });
+      expect(moved).toMatchObject({ facilityId: target, certifier: null, endDate: "2027-04-30" });
+
+      await expect(updateCreditBatch(ctx, batch.id, {
+        facilityId, expectedVersion: moved.version,
+      })).rejects.toThrow("A credit batch may span at most one month (one calendar month; noma rule).");
+      expect(await pinOf(batch.id)).toMatchObject({ facilityId: target, certifier: null, version: moved.version });
+
+      const restored = await updateCreditBatch(ctx, batch.id, {
+        facilityId, endDate: shortEndDate, expectedVersion: moved.version,
+      });
+      expect(restored).toMatchObject({ facilityId, certifier: "isometric", endDate: "2027-01-31" });
+    });
+  });
+
+  it("keeps the Isometric month cap on create, update, and run options", async () => {
+    const batch = await create("08");
+    const period = { startDate: new Date("2026-09-01"), endDate: new Date("2026-12-31") };
+    const message = "A credit batch may span at most one month (one calendar month; noma rule).";
+    await expect(createCreditBatch(ctx, {
+      facilityId, feedstockTypeId, code: `CB-PIN-POLICY-${tag}`, productionRunIds: [], ...period,
+    })).rejects.toThrow(message);
+    await expect(updateCreditBatch(ctx, batch.id, {
+      expectedVersion: batch.version, endDate: period.endDate,
+    })).rejects.toThrow(message);
+    await expect(getCreditBatchProductionRunOptions(ctx, { facilityId, ...period })).rejects.toThrow(message);
   });
 });
